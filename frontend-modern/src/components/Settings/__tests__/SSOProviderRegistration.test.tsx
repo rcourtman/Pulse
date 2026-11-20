@@ -82,8 +82,7 @@ describe('SSO sign-in restrictions and role mapping guidance', () => {
     fireEvent.click(
       dialog.getByRole('button', { name: 'Show access restrictions & role mapping' }),
     );
-    const rule =
-      'Sign-in must match one entry in each list you fill in. A blank list skips only that check.';
+    const rule = 'Each filled list needs a match. Blank skips only that check.';
     const allowedGroups = dialog.getByRole('textbox', { name: 'Allowed Groups' });
     const allowedDomains = dialog.getByRole('textbox', { name: 'Allowed Domains' });
     const allowedEmails = dialog.getByRole('textbox', { name: 'Allowed Emails' });
@@ -91,14 +90,14 @@ describe('SSO sign-in restrictions and role mapping guidance', () => {
     expect(allowedDomains).toHaveValue('example.test');
     expect(allowedEmails).toHaveValue('operator@example.test');
     expect(allowedGroups).toHaveAccessibleDescription(
-      `${rule} Separate with commas or new lines. Group names may contain spaces.`,
+      `${rule} Use commas or new lines. Names can have spaces.`,
     );
     expect(allowedDomains).toHaveAccessibleDescription(`${rule} Email domains (without @)`);
     expect(allowedEmails).toHaveAccessibleDescription(rule);
     expect(
       dialog.getByRole('textbox', { name: 'Group Role Mappings' }),
     ).toHaveAccessibleDescription(
-      'Assigns roles after sign-in checks. Use group=roleId, separated by commas or new lines. Group names may contain spaces.',
+      'Assigns roles after sign-in checks. Use group=roleId; commas or new lines. Names can have spaces.',
     );
     expect(dialog.queryByText(/Empty allows all/)).toBeNull();
     readOnlyRequests();

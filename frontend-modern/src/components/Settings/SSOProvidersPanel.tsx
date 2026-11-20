@@ -994,19 +994,21 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
                       </div>
                     </Show>
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <p id={signInRestrictionsId} class={`${formHelpText} md:col-span-2`}>
-                        Sign-in must match one entry in each list you fill in. A blank list skips
-                        only that check.
-                      </p>
                       <FormTextarea
                         label="Allowed Groups"
-                        aria-describedby={signInRestrictionsId}
                         rows={2}
                         value={form.allowedGroups}
                         onInput={(e) => setForm('allowedGroups', e.currentTarget.value)}
                         placeholder="admin, sso-users"
                         textareaBaseClass={controlClass('min-h-[60px]')}
-                        help="Separate with commas or new lines. Group names may contain spaces."
+                        help={
+                          <>
+                            <span id={signInRestrictionsId}>
+                              Each filled list needs a match. Blank skips only that check.
+                            </span>{' '}
+                            Use commas or new lines. Names can have spaces.
+                          </>
+                        }
                       />
                       <FormTextarea
                         label="Allowed Domains"
@@ -1034,7 +1036,7 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
                         onInput={(e) => setForm('groupRoleMappings', e.currentTarget.value)}
                         placeholder="admins=admin, ops=operator"
                         textareaBaseClass={controlClass('min-h-[60px]')}
-                        help="Assigns roles after sign-in checks. Use group=roleId, separated by commas or new lines. Group names may contain spaces."
+                        help="Assigns roles after sign-in checks. Use group=roleId; commas or new lines. Names can have spaces."
                       />
                     </div>
                   </div>
