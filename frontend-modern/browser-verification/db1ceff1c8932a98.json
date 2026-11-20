@@ -1,0 +1,35 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "9137afffbe152ccf9ecdad2889104e7c839df203",
+  "verified_at": "2026-11-20T10:40:53Z",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/SSOProvidersPanel.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/SSOProvidersPanel.tsx": "9a961e856c9221d4f989c2f3c03447a700471fed9a99c1ada98487491586e0b2"
+  },
+  "routes": [
+    "/settings/security-sso (actual Pulse App; offline synthetic session and Test responses)"
+  ],
+  "viewports": [
+    {
+      "width": 1366,
+      "height": 820
+    },
+    {
+      "width": 320,
+      "height": 700
+    }
+  ],
+  "states": [
+    "Chromium 141.0.7390.37 desktop light and WebKit 26.0 narrow dark with touch, Playwright 1.56.1.",
+    "New manual SAML: disabled when empty, one pending test, successful URL-format-only result with an empty certificate, rejected URL.",
+    "Saved SAML with metadata and a manual URL: incomplete metadata, still-reachable certificate, and metadata success after a draft URL edit. OIDC discovery remains distinct."
+  ],
+  "interactions": [
+    "Keyboard and touch activate exactly the existing non-saving Test. Pending activation does not repeat it or enable Save; settlement preserves keyboard/touch focus and the existing certificate field position.",
+    "Opening the header summary focuses and scrolls to the original details. Dismiss restores Test focus; Escape and Cancel close the editor. Save and Cancel remain visible.",
+    "198 baseline and 198 candidate browser assertions; all ten matched before/after pairs opened natively. No live IdP, saving, or sign-in was attempted."
+  ]
+}

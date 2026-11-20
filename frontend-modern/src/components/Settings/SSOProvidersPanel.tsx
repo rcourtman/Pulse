@@ -122,7 +122,17 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
   const testResultSummaryId = `${summaryIdPrefix}-test-summary`;
   const testResultId = `${summaryIdPrefix}-test-result`;
   const testResultTitleId = `${summaryIdPrefix}-test-result-title`;
-  const testResultLabel = () => (testResult()?.success ? 'Test passed' : 'Test failed');
+  // The server checks only URL format on the manual SAML path. Either
+  // metadata source takes precedence, even when the draft also has an SSO URL.
+  const isSamlUrlFormatCheck = () =>
+    form.type === 'saml' &&
+    !!form.samlIdpSsoUrl.trim() &&
+    !form.samlIdpMetadataUrl.trim() &&
+    !form.samlIdpMetadataXml.trim();
+  const testResultLabel = () => {
+    if (!testResult()?.success) return 'Test failed';
+    return isSamlUrlFormatCheck() ? 'URL format OK' : 'Test passed';
+  };
   let inventoryRegion: HTMLDivElement | undefined;
   let editorScroll: HTMLDivElement | undefined;
   let testButton: HTMLButtonElement | undefined;
@@ -177,7 +187,9 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
       variant="secondary"
       size="mdCompact"
       class={`whitespace-nowrap aria-disabled:cursor-not-allowed aria-disabled:opacity-50 ${button.class ?? ''}`}
-      title="Test connection to IdP"
+      title={
+        isSamlUrlFormatCheck() ? 'Check the IdP SSO URL format only' : 'Test connection to IdP'
+      }
     >
       {testing() ? 'Testing...' : 'Test'}
     </Button>
