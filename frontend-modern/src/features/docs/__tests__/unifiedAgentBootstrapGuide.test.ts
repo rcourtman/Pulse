@@ -3,13 +3,18 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { renderDocMarkdown } from '../docMarkdown';
+import { createGuideFixture } from './guideFixture';
 
 const frontendRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../..');
 const source = readFileSync(path.join(frontendRoot, '../docs/UNIFIED_AGENT.md'), 'utf8');
+// All cases query the same guide. Only clone the sections each case uses.
+const agentGuide = createGuideFixture(() => source)('UNIFIED_AGENT');
 
 function docSection(markdown: string, docPath: string, id: string) {
-  const article = document.createElement('article');
-  article.innerHTML = renderDocMarkdown(markdown, docPath);
+  const article =
+    docPath === 'UNIFIED_AGENT' && markdown === source
+      ? agentGuide
+      : createGuideFixture(() => markdown)(docPath);
   const heading = article.querySelector(`#${id}`);
   expect(heading, `${docPath}#${id} must be a real rendered destination`).not.toBeNull();
   const section = document.createElement('section');
@@ -197,8 +202,6 @@ describe('Stopped agent-command help', () => {
 
   it('links to existing private preparation and recovery without another executable recipe', () => {
     const section = docSection(source, 'UNIFIED_AGENT', failureId);
-    const article = document.createElement('article');
-    article.innerHTML = renderDocMarkdown(source, 'UNIFIED_AGENT');
     for (const id of [
       'private-file-installation-linux-macos-and-nas',
       'agent-lookup-returns-http-401-or-403',
@@ -206,7 +209,7 @@ describe('Stopped agent-command help', () => {
       'uninstall',
     ]) {
       expect(section.querySelector(`a[href="#${id}"]`)).not.toBeNull();
-      expect(article.querySelector(`#${id}`)).not.toBeNull();
+      expect(agentGuide.querySelector(`#${id}`)).not.toBeNull();
     }
     expect(section.querySelector('pre')).toBeNull();
     for (const boundary of [
@@ -249,15 +252,13 @@ describe('Agent update failure help', () => {
   it('offers existing evidence and safe destinations instead of a diagnostic update recipe', () => {
     const help = section();
     const text = help.textContent!.replace(/\s+/g, ' ');
-    const article = document.createElement('article');
-    article.innerHTML = renderDocMarkdown(source, 'UNIFIED_AGENT');
     for (const id of [
       'collect-agent-logs-safely',
       'agent-lookup-returns-http-401-or-403',
       'copied-agent-command-fails-before-installation',
     ]) {
       expect(help.querySelector(`a[href="#${id}"]`)).not.toBeNull();
-      expect(article.querySelector(`#${id}`)).not.toBeNull();
+      expect(agentGuide.querySelector(`#${id}`)).not.toBeNull();
     }
     for (const id of ['find-the-running-server-and-agent-versions', '-getting-help']) {
       expect(help.querySelector(`a[href="/docs/TROUBLESHOOTING#${id}"]`)).not.toBeNull();
