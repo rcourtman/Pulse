@@ -288,8 +288,7 @@ func (m *Monitor) pollStorageBackupsWithNodes(ctx context.Context, instanceName 
 	deniedReads := map[pveLocalBackupStorage]struct{}{}
 	readState := m.backupReadStateForInstance(instanceName)
 
-	// Tasks and carry-forward storage rows must share one primary-state read,
-	// but neither needs a copy of guests or unrelated provider inventories.
+	// Carry-forward needs the primary storage rows, not the fleet inventory.
 	previousBackups := m.state.GetPVEBackups()
 	// Build guest lookup map to find actual node for each VMID
 	guestInfo := buildProxmoxGuestInfoIndex(readState)
@@ -297,31 +296,13 @@ func (m *Monitor) pollStorageBackupsWithNodes(ctx context.Context, instanceName 
 	populateGuestNodeMapFromReadState(readState, instanceName, guestNodeMap)
 
 	// vzdump writes archives under their final name, so a backup that is
-	// still running is already listed by the storage content API as a
-	// growing partial file. Correlate content entries with the live vzdump
-	// tasks polled just before this pass (pollBackupTasks runs first in the
-	// cycle): a guest backup file created at or after a running task's start
-	// is that task's partial output, not a completed backup.
+	// still running can appear in storage inventory as a growing file. An
+	// unresolved writer that could own a file prevents it counting as a
+	// completed backup. Use accepted writer evidence, not the display window.
 	// Local archive paths belong to the disk on the task's executing node,
 	// not to the guest's current placement. Shared/remote repositories and
 	// tasks without a node retain the conservative instance/VMID fallback.
-	runningVzdumpStart := make(map[int]map[string]time.Time) // VMID -> task node -> earliest start
-	for _, task := range previousBackups.BackupTasks {
-		if task.Instance != instanceName || task.VMID <= 0 || !task.EndTime.IsZero() {
-			continue
-		}
-		status := strings.ToLower(strings.TrimSpace(task.Status))
-		if status != "" && status != "running" {
-			continue
-		}
-		if runningVzdumpStart[task.VMID] == nil {
-			runningVzdumpStart[task.VMID] = make(map[string]time.Time)
-		}
-		byNode := runningVzdumpStart[task.VMID]
-		if existing, ok := byNode[task.Node]; !ok || task.StartTime.Before(existing) {
-			byNode[task.Node] = task.StartTime
-		}
-	}
+	runningVzdumpStart := m.pveArchiveWriterStarts(instanceName)
 
 	// For each node, get storage and check content
 	for _, node := range nodes {
@@ -557,8 +538,8 @@ func (m *Monitor) pollStorageBackupsWithNodes(ctx context.Context, instanceName 
 					}
 				}
 
-				// Partial-output window: the file belongs to a vzdump task
-				// that is still running. PBS-type storages additionally list
+				// Partial-output window: an unresolved vzdump writer
+				// could own the file. PBS-type storages additionally list
 				// in-flight snapshots without a size (no manifest yet), which
 				// covers backups submitted by another cluster or host.
 				inProgress := false
@@ -1816,7 +1797,8 @@ func (m *Monitor) resetAuthFailures(instanceName string, nodeType string) {
 func (m *Monitor) removeFailedPVENode(instanceName string) {
 	// Get instance config to get host URL
 	var hostURL string
-	m.mu.RLock()
+	m.mu.Lock()
+	delete(m.pveArchiveWriters, instanceName)
 	if m.config != nil {
 		for _, cfg := range m.config.PVEInstances {
 			if cfg.Name == instanceName {
@@ -1825,7 +1807,7 @@ func (m *Monitor) removeFailedPVENode(instanceName string) {
 			}
 		}
 	}
-	m.mu.RUnlock()
+	m.mu.Unlock()
 
 	// Create a failed node entry to show in UI with error status
 	failedNode := models.Node{
@@ -2880,6 +2862,7 @@ func (m *Monitor) pollBackupTasks(ctx context.Context, instanceName string, clie
 	// An unread node can carry a visible parent, but not widen the history window.
 	published := m.retainUnreadBackupTasks(instanceName, history.Nodes, liveTasks, jobUPIDs)
 	m.pruneVzdumpJobTaskCache(instanceName, jobUPIDs, published[len(liveTasks):])
+	m.recordPVEArchiveWriters(instanceName, history.Nodes, backupTasks, jobTasks)
 	m.state.UpdateBackupTasksForInstance(instanceName, published)
 
 	// Retain execution history before qualifying collection coverage. Task rows
