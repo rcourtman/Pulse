@@ -8579,6 +8579,15 @@ windows. `/api/metrics-store/history` must accept `resourceType=disk`, keep
 `MetricsTarget.ResourceID` that unified resources already expose, instead of
 leaving storage drawers or other callers to fork a disk-local history route or
 invent an alternate disk identity.
+An all-metric disk reply with native temperature, mixed measured origins, or a
+ring series selected over a sparse stored series returns optional
+`metricSources` instead of the response-wide `source`. It covers every
+nonempty series with `store`, `memory` or `native`; only `smart_temp` can be
+`native`. The hint describes the selected series, not whether individual
+observations were persisted too. The existing whole-reply hint remains for
+uniform stored, memory-only fallback, live and mock replies; the single-metric
+shape is unchanged. Chart clients validate the map against the issued disk
+response and keep origins distinct without changing values, the window or access.
 When a disk range has no samples, the `smart_temp` live fallback (single-metric
 and all-metrics) is served only for a temperature that is collected
 (`diskinventory.TemperatureCollected`). A temperature that normalization kept

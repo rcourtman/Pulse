@@ -202,31 +202,41 @@ func (m *Monitor) GetDiskMetrics(resourceID string, metricType string, duration 
 // display, preferring in-memory data for freshness and falling back to the
 // persistent store and source-native temperature history when coverage is shallow.
 func (m *Monitor) GetDiskMetricsForChart(resourceID string, metricType string, duration time.Duration) []MetricPoint {
+	points, _ := m.GetDiskMetricsForChartWithSource(resourceID, metricType, duration)
+	return points
+}
+
+// GetDiskMetricsForChartWithSource identifies the selected series, not every
+// source that was tried. A native temperature series replaces, never splices
+// with, the local observations.
+func (m *Monitor) GetDiskMetricsForChartWithSource(resourceID string, metricType string, duration time.Duration) ([]MetricPoint, string) {
 	inMemoryPoints := m.GetDiskMetrics(resourceID, metricType, duration)
 	if mock.IsMockEnabled() {
-		return m.mockDiskMetricsForChart(resourceID, metricType, duration, inMemoryPoints)
+		return m.mockDiskMetricsForChart(resourceID, metricType, duration, inMemoryPoints), "mock_synthetic"
 	}
 
 	if hasSufficientChartSeriesCoverage(inMemoryPoints, duration) {
-		return inMemoryPoints
+		return inMemoryPoints, "memory"
 	}
 
 	best := cloneMetricSeries(inMemoryPoints)
+	source := "memory"
 	if converted, ok := m.queryStoreMetricMapWithGapFill("disk", resourceID, duration); ok {
 		if candidate := converted[metricType]; shouldPreferMetricSeries(best, candidate, duration) {
 			best = cloneMetricSeries(candidate)
+			source = "store"
 		}
 	}
 	if metricType == "smart_temp" && !hasSufficientChartSeriesCoverage(best, duration) {
 		if nativePoints := m.nativePhysicalDiskTemperatureHistory(duration)[resourceID]; len(nativePoints) > 0 {
 			nativePoints = lttb(nativePoints, chartDownsampleTarget)
 			if shouldPreferMetricSeries(best, nativePoints, duration) {
-				best = cloneMetricSeries(nativePoints)
+				return cloneMetricSeries(nativePoints), "native"
 			}
 		}
 	}
 
-	return best
+	return best, source
 }
 
 // GetStorageMetricsForChart returns storage metrics, falling back to SQLite +

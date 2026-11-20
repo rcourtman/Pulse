@@ -1,0 +1,39 @@
+{
+  "version": 1,
+  "base_sha": "e4e1335f0999b7141a9012adb62475e1c7066fb4",
+  "verified_at": "2026-11-19T23:20:43Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/api/charts.ts",
+    "frontend-modern/src/components/Workloads/GuestDrawerHistory.tsx",
+    "frontend-modern/src/components/shared/historyChartModel.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/api/charts.ts": "f0a5652962090f961606e32efc882282d4d7f4f8d570b604798442a2640ff2df",
+    "frontend-modern/src/components/Workloads/GuestDrawerHistory.tsx": "964f41ffae72faae99204ff62120cbe1dd3d1b1b1b2e21f9cee7d49def9efd96",
+    "frontend-modern/src/components/shared/historyChartModel.ts": "5ce68152d0da1eaae4f2fe51258132f178d6522e28969f14c66691e0041ab4c7"
+  },
+  "routes": [
+    "/truenas/storage?kind=disks — Physical disks → selected disk Overview"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 360,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Read and write remain stored when the displayed Temperature series comes from memory and overlaps a persisted sample.",
+    "Temperature selected from memory over sparse storage also does not say the store is empty when it is the only plotted metric.",
+    "Device Temperature and memory readings are both identified; controls cover stored-only, device-only, mixed stored and device, genuine memory-only, and empty ranges."
+  ],
+  "interactions": [
+    "Opened the production disk Overview with keyboard on desktop and touch on a narrow screen using matched replies from the authenticated route.",
+    "Inspected both ends of the 24-hour I/O curves and the 31°C start sample. Confirmed 93 I/O positions, independent series, and no repeat fetch on phone disclosure or inspection.",
+    "Expanded and collapsed the phone History with the selected reading and collapse visible above navigation, and inspected 44 snapshots including the returned copy controls."
+  ]
+}

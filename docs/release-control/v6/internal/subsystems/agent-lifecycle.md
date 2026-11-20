@@ -9329,7 +9329,9 @@ resource surfaces may show host SMART-backed disk telemetry through the shared
 `/api/metrics-store/history` route, but they must read the canonical disk
 metrics target that monitoring projects for the resource instead of reviving a
 browser-local disk collector, agent/device concatenation scheme, or other
-surface-local history identity.
+surface-local history identity. The route's optional per-metric origin can
+differentiate stored agent I/O from a device's own temperature history.
+It does not change the target or qualify a disk reading as current.
 The browser-side runtime boundary is now explicit too. Lifecycle-owned
 settings hooks such as
 `frontend-modern/src/components/Settings/useAgentProfilesPanelState.ts` and

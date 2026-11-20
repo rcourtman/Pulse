@@ -24,7 +24,7 @@ import {
   formatHistoryChartTimeLabel,
   getHistoryReadoutLabel,
   getHistorySourceNotice,
-  type HistorySource,
+  type HistoryReadoutSource,
   withoutRepeatedHistoryAxisLabels,
 } from '@/components/shared/historyChartModel';
 import { getAPIReadAccessErrorMessage } from '@/utils/apiAccessError';
@@ -86,7 +86,7 @@ interface GuestDrawerHistoryGroupChartProps {
   metrics: Record<string, AggregatedMetricPoint[] | undefined>;
   range: HistoryTimeRange;
   /** Where the reply's readings came from; names the readout's time. */
-  source?: HistorySource;
+  source?: HistoryReadoutSource;
   sourceKey: string;
   timeBounds: GuestDrawerHistoryTimeBounds | null;
   touchInspection: boolean;
@@ -449,7 +449,13 @@ const GuestDrawerHistoryGroupChart: Component<GuestDrawerHistoryGroupChartProps>
     if (timestamp !== null) return observationValueText(timestamp);
     const count = observationTimes().length;
     if (count === 0) return inspectionValueText();
-    return `${count} stored observation ${count === 1 ? 'time' : 'times'}. ${inspectionValueText()}`;
+    const origin =
+      props.source === 'native'
+        ? 'device'
+        : props.source === 'mixed' || props.source === 'memory'
+          ? 'recorded'
+          : 'stored';
+    return `${count} ${origin} observation ${count === 1 ? 'time' : 'times'}. ${inspectionValueText()}`;
   });
   const segmentedSeries = createMemo(() =>
     series().map((item) => ({
@@ -1047,7 +1053,11 @@ const GuestDrawerHistoryGroupChart: Component<GuestDrawerHistoryGroupChartProps>
             }}
           />
           <p id={`${inspectionId}-help`} class="sr-only">
-            Use arrow keys, Home or End to inspect stored observations.
+            Use arrow keys, Home or End to inspect{' '}
+            {props.source === 'native' || props.source === 'mixed' || props.source === 'memory'
+              ? 'readings'
+              : 'stored observations'}
+            .
           </p>
         </div>
       </Show>
@@ -1090,6 +1100,31 @@ export const GuestDrawerHistory: Component<GuestDrawerHistoryProps> = (props) =>
 
   const metrics = createMemo(() => historyQuery.value().metrics ?? {});
   const groups = createMemo(() => props.groups ?? GUEST_DRAWER_HISTORY_GROUPS);
+  const sourceForGroup = (
+    group: GuestDrawerHistoryGroupConfig,
+  ): HistoryReadoutSource | undefined => {
+    const { source, metricSources } = historyQuery.value();
+    if (!metricSources) return source;
+    const origins = new Set(
+      group.series.map(({ metric }) => metricSources[metric]).filter(Boolean),
+    );
+    // The time readout belongs to the whole chart, including all of its
+    // directions. Don't call it stored if the plotted series disagree.
+    return origins.size === 1 ? origins.values().next().value : 'mixed';
+  };
+  const sourceNotice = () => {
+    const { source, metricSources } = historyQuery.value();
+    if (!metricSources) return getHistorySourceNotice(source)?.detail;
+    // This describes the series we drew, not where each sample might also
+    // have been saved.
+    const hasMemory = Object.values(metricSources).includes('memory');
+    if (metricSources.smart_temp === 'native') {
+      return hasMemory
+        ? 'Temperature from the device. Some readings from memory.'
+        : 'Temperature history comes from the device.';
+    }
+    return hasMemory ? 'This view includes readings from memory.' : undefined;
+  };
   const sourceKey = () =>
     `${props.target?.resourceType}:${props.target?.resourceId}:${props.range}`;
   const normalizedGroups = createMemo(() =>
@@ -1257,11 +1292,10 @@ export const GuestDrawerHistory: Component<GuestDrawerHistoryProps> = (props) =>
           </Show>
         </div>
         <Show when={!historyQuery.error() || hasHistoryPoints()} fallback={liveReadings()}>
-          {/* A reply that is not stored history says so once, above its charts. */}
-          <Show when={hasHistoryPoints() && getHistorySourceNotice(historyQuery.value().source)}>
+          <Show when={hasHistoryPoints() && sourceNotice()}>
             {(notice) => (
               <p class="text-xs text-muted" data-testid="history-source-notice">
-                {notice().detail}
+                {notice()}
               </p>
             )}
           </Show>
@@ -1280,7 +1314,7 @@ export const GuestDrawerHistory: Component<GuestDrawerHistoryProps> = (props) =>
                   currentMetrics={liveCurrentMetrics()}
                   deferredMetrics={props.deferredMetrics}
                   range={props.range}
-                  source={historyQuery.value().source}
+                  source={sourceForGroup(group)}
                   sourceKey={sourceKey()}
                   timeBounds={timeBounds()}
                   touchInspection={touchInspection()}

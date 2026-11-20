@@ -178,19 +178,21 @@ export function getHistoryChartDataMax(points: AggregatedMetricPoint[]) {
 }
 
 export type HistorySource = 'store' | 'memory' | 'live' | 'mock_synthetic';
+export type HistoryReadoutSource = HistorySource | 'native' | 'mixed';
 
 /**
- * Names where a History reply's readings came from. `store` is the history
- * store; `memory` means the store had nothing for the range, so the readings
- * are the recent ones Pulse holds in memory; `live` is one current reading
- * because no history exists yet. Demo data reads like stored history.
+ * Names the displayed reading's origin, not its durability. `memory` readings
+ * came from Pulse's memory and may also exist in the store. `live` is one
+ * current reading because no history exists yet. Demo data reads like stored
+ * history.
  */
 export function getHistoryReadoutLabel(
-  source: HistorySource | null | undefined,
+  source: HistoryReadoutSource | null | undefined,
   inspected: boolean,
 ): string {
   if (source === 'live') return 'Current';
-  if (source === 'memory') return inspected ? 'Recorded' : 'Latest recorded';
+  if (source === 'native') return inspected ? 'Device' : 'Latest from device';
+  if (source === 'memory' || source === 'mixed') return inspected ? 'Recorded' : 'Latest recorded';
   return inspected ? 'Stored' : 'Latest stored';
 }
 

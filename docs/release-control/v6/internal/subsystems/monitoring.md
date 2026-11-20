@@ -5895,6 +5895,13 @@ exists but thermal coverage does not. API single/all-metric supplementation
 keeps independent stored metrics, issued-window filtering, existing aggregate
 bounds and store-error behaviour; complete local coverage makes no native
 call. The connected authenticated route includes ordinary store-backed controls.
+When the chart selector returns a physical-disk series, it knows whether it
+selected local memory, the store, or the device's native temperature series.
+The all-metric API reports that origin without an additional read. Choosing
+the device series replaces a shallow local temperature series without
+relabelling independent stored I/O or claiming that its day history is empty.
+Choosing wider ring temperature over sparse stored temperature does not imply
+that the observations are only in the ring: the two sources can overlap.
 
 The existing disk drawer's `smart_temp` chart consumes the same tenant-scoped
 native temperature-history provider as physical-disk sparklines when local
