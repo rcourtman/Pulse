@@ -123,7 +123,7 @@ describe.each(['scope', 'rename'] as const)('API token %s refusal feedback', (op
       ).not.toBeInTheDocument();
       if (operation === 'scope') {
         expect(within(dialog).getByRole('checkbox', { name: /Settings \(read\)/ })).toBeChecked();
-        expect(dialog).toHaveTextContent('The token value and expiry do not change.');
+        expect(dialog).toHaveTextContent('The value and expiry do not change.');
       } else {
         expect(within(dialog).getByLabelText('Token name')).toHaveValue('Current collector');
         expect(dialog).toHaveTextContent('The token value and connected agents stay unchanged.');

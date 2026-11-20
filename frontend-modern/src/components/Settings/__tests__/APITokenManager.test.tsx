@@ -1013,7 +1013,9 @@ describe('APITokenManager', () => {
     fireEvent.click(within(row).getByRole('button', { name: /^Edit scopes / }));
 
     const dialog = await screen.findByRole('dialog', { name: /^Edit API token scopes / });
-    expect(within(dialog).getByText(/take effect on its next request/i)).toBeInTheDocument();
+    expect(
+      within(dialog).getByText(/take effect on the token's next request/i),
+    ).toBeInTheDocument();
     const dockerReport = within(dialog).getByRole('checkbox', {
       name: /Docker \/ Podman reporting/i,
     });
@@ -1079,9 +1081,16 @@ describe('APITokenManager', () => {
     fireEvent.click(revokeTrigger);
 
     const revokeDialog = await screen.findByRole('dialog', { name: /^Revoke API token / });
-    fireEvent.click(within(revokeDialog).getByRole('button', { name: 'Cancel' }));
+    expect(revokeDialog).toHaveAccessibleName('Revoke API token for Keyboard token (pulse…1234)');
+    expect(revokeDialog).toHaveAccessibleDescription(
+      'Revocation is permanent. Agents, scripts, and integrations using it need a replacement token to authenticate.',
+    );
+    const cancelRevoke = within(revokeDialog).getByRole('button', { name: 'Cancel' });
+    await waitFor(() => expect(cancelRevoke).toHaveFocus());
+    fireEvent.click(cancelRevoke);
 
     await waitFor(() => expect(revokeTrigger).toHaveFocus());
+    expect(deleteTokenMock).not.toHaveBeenCalled();
   });
 
   it('returns a confirmed last-token revocation to New token without creating a replacement', async () => {
