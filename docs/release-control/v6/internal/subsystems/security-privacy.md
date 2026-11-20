@@ -5228,6 +5228,11 @@ was not collected by the current observation. This only withholds a value the
 caller was already authorized to read; the route, its authentication and scope
 checks, tenant resolution and response shape are unchanged.
 
+The optional all-metric disk History origin map carries only closed origin
+labels for series already returned by the authorized disk read. It exposes no
+provider identity, raw response, or display name and grants no independent
+history access. A denied or failed store read must not become native success.
+
 The same endpoint also withholds the live point for host agent, Proxmox node,
 guest, integration host, Docker host and app container rows it judges to have
 stopped reporting, and answers a lapsed agent linked to a Proxmox node from

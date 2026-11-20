@@ -8335,7 +8335,12 @@ through the shared `HistoryChart` API contract using the disk resource's
 canonical history target. Storage must not keep a drawer-local live metrics
 collector, agent-id/device fallback stream, or separate "real-time" history
 store once monitoring and `/api/metrics-store/history` already own the disk
-timeline.
+timeline. When the shared disk reply supplies individual metric origins,
+device Temperature must not label neighboring stored I/O as memory-only.
+Likewise, a displayed series from memory must not imply that its observations
+were never written to the history store.
+A successful empty range still shows no stored history, not an inferred
+device or storage state.
 The same shell/runtime split now applies to websocket consumers:
 `frontend-modern/src/components/Storage/useStoragePageResources.ts` may consume
 websocket state only through `frontend-modern/src/contexts/appRuntime.ts`.

@@ -126,6 +126,56 @@ describe('metrics History response admission', () => {
     },
   );
 
+  const diskRequest: MetricsHistoryParams = { ...request, resourceType: 'disk' };
+  const diskHistory = {
+    ...all(),
+    resourceType: 'disk',
+    source: undefined,
+    metrics: { diskread: [point], diskwrite: [], smart_temp: [point] },
+    metricSources: { diskread: 'store', smart_temp: 'native' },
+  };
+
+  it('preserves a complete provenance map on an all-metric disk reply', async () => {
+    expect(await read(diskHistory, diskRequest)).toEqual(diskHistory);
+    const nativeOnly = {
+      ...diskHistory,
+      metrics: { smart_temp: [point] },
+      metricSources: { smart_temp: 'native' },
+    };
+    expect(await read(nativeOnly, diskRequest)).toEqual(nativeOnly);
+  });
+
+  it.each([
+    { metricSources: null },
+    { metricSources: { smart_temp: 'native' } },
+    { metricSources: { diskread: 'native', smart_temp: 'native' } },
+    { metricSources: { diskread: 'store', ignored: 'store', smart_temp: 'native' } },
+    { metricSources: { diskread: 'store', diskwrite: 'store', smart_temp: 'native' } },
+    { source: 'memory' },
+  ])('rejects invalid or conflicting disk provenance %#', async (change) => {
+    await expect(read({ ...diskHistory, ...change }, diskRequest)).rejects.toThrow(
+      'Invalid metrics history response.',
+    );
+  });
+
+  it('does not admit the disk provenance map for other types or single-metric replies', async () => {
+    await expect(
+      read({ ...all(), source: undefined, metricSources: { cpu: 'store' } }),
+    ).rejects.toThrow('Invalid metrics history response.');
+    await expect(
+      read(
+        {
+          ...envelope(),
+          resourceType: 'disk',
+          metric: 'smart_temp',
+          points: [point],
+          metricSources: { smart_temp: 'native' },
+        },
+        { ...diskRequest, metric: 'smart_temp' },
+      ),
+    ).rejects.toThrow('Invalid metrics history response.');
+  });
+
   it('accepts observed empty responses, zero readings and the existing invalid-window fallback', async () => {
     for (const metrics of [{}, { cpu: [] }, { cpu: [point] }]) {
       const body = { ...all(), start: 0, end: 0, metrics };
