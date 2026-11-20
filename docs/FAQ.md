@@ -250,7 +250,23 @@ steps; do not reset a working installation to retrieve that token.
 Set `HTTPS_ENABLED=true` and provide `TLS_CERT_FILE` and `TLS_KEY_FILE` environment variables. See [Configuration](CONFIGURATION.md#-https--tls).
 
 ### Can I use Single Sign-On (SSO)?
-Yes. Pulse supports **OIDC** and **SAML** SSO providers, with multi-provider support (multiple IdPs active simultaneously). Configure in **Settings → Security → Single Sign-On**. Pulse also supports Proxy Auth (Authentik, Authelia, Cloudflare). See [Proxy Auth Guide](PROXY_AUTH.md).
+
+Yes. You can keep more than one **OIDC** or **SAML** provider active in
+**Settings → Security → Single Sign-On**. Follow the [OIDC setup guide](OIDC.md#-quick-start)
+for OIDC. If your reverse proxy handles sign-in instead, see the
+[Proxy Auth Guide](PROXY_AUTH.md) for Authentik, Authelia and Cloudflare.
+
+**Keep an independent administrator login and leave its session open.**
+For SAML, use your identity provider's metadata or enter its SSO URL and
+certificate manually. **URL format OK** only checks the format of the URL.
+A passed metadata **Test** does not test sign-in. Read and resolve any warnings
+before relying on the provider.
+
+Use **SP Metadata** from the saved, enabled provider's card to configure Pulse
+in your identity provider. If it asks where to send the sign-in response, use
+**ACS URL** from the same card. Sign in with the new provider in a separate
+browser profile or private window and check that the account has the expected
+Pulse permissions. Keep your independent administrator login available.
 
 ---
 
