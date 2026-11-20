@@ -362,9 +362,13 @@ class WorkflowTest(unittest.TestCase):
         package = 'example.invalid/empty'
         def event(action, **fields):
             return json.dumps({'Package': package, 'Action': action, **fields}) + '\n'
-        cases = [(event('start') + event(action), 0) for action in ('pass', 'skip')]
+        cases = [(event('start') + event('output', Output=message) + event(action), 0)
+                 for action, message in (('pass', 'PASS\n'), ('skip', '[no test files]\n'))]
         cases += [(stream, 1) for stream in (
             '', 'not-json\n', event('start'), event('start') + event('fail'),
+            event('pass'), event('skip'), event('output', Output='PASS\n') + event('pass'),
+            event('start') + event('start') + event('pass'),
+            event('output', Output='before start\n') + event('start') + event('skip'),
             event('pass') + event('pass'), event('pass') + event('output', Output='late'),
             event('start') + event('pass', Package='example.invalid/other'),
             event('run', Test='TestUnexpected') + event('pass'),
