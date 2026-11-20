@@ -3067,6 +3067,7 @@ run_upgrade_readiness_preflight() {
 
 check_existing_installation() {
     CURRENT_VERSION=""  # Make it global so we can use it later
+    CURRENT_BINARY_IS_PRO=false
     local BINARY_PATH=""
     local detected_service="$SERVICE_NAME"
     local service_available=false
@@ -3118,7 +3119,10 @@ check_existing_installation() {
         if version_output=$(timeout -k 1 5 "$BINARY_PATH" --version 2>/dev/null); then
             version_line=${version_output%%$'\n'*}
             case "$version_line" in
-                "Pulse Pro "*) reported_version=${version_line#Pulse Pro } ;;
+                "Pulse Pro "*)
+                    CURRENT_BINARY_IS_PRO=true
+                    reported_version=${version_line#Pulse Pro }
+                    ;;
                 "Pulse "*) reported_version=${version_line#Pulse } ;;
             esac
             if is_orderable_pulse_release_tag "$reported_version"; then
@@ -3872,6 +3876,16 @@ install_pulse_archive() {
         print_error "Staged Pulse binary could not report its version; Pulse has not been stopped"
         rm -rf "$binary_stage" "$temp_extract"
         return 1
+    fi
+    if [[ "${CURRENT_BINARY_IS_PRO:-false}" == true ]]; then
+        # A signed archive and its filename do not identify the edition. Use
+        # the staged executable's own first line, as for the installed binary.
+        version_output=${version_output%%$'\n'*}
+        if [[ "$version_output" != 'Pulse Pro '* ]]; then
+            print_error "The signed archive does not contain Pulse Pro; the installed service has not been stopped"
+            rm -rf "$binary_stage" "$temp_extract"
+            return 1
+        fi
     fi
     installed_version=$(printf '%s\n' "$version_output" | grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9\.]+)?' | head -1 || true)
     if [[ -z "$installed_version" || ( -n "$expected_release" && "$installed_version" != "$expected_release" ) ]]; then
@@ -5728,6 +5742,22 @@ main() {
         return "$existing_install_status"
     fi
     if [[ "$existing_install_status" -eq 0 ]]; then
+        if [[ "${CURRENT_BINARY_IS_PRO:-false}" == true ]]; then
+            if [[ -z "$ARCHIVE_OVERRIDE" ]]; then
+                print_error "Refusing to use a public build for an installed Pulse Pro runtime. Existing installation is unchanged."
+                print_info "Use the in-app updater, or follow the matching signed-archive instructions on https://pulserelay.pro/download.html (install.sh --archive)."
+                return 1
+            fi
+            if [[ -z "$FORCE_VERSION" ]]; then
+                # The documented local-archive path selects its own version,
+                # not the public update menu. Keep the ordinary version check.
+                ARCHIVE_OVERRIDE=$(resolve_archive_override "$ARCHIVE_OVERRIDE") || return 1
+                if ! FORCE_VERSION=$(infer_release_from_archive_name "$ARCHIVE_OVERRIDE"); then
+                    print_error "Cannot determine the archive version. Keep its original filename or supply a matching --version. Existing installation is unchanged."
+                    return 1
+                fi
+            fi
+        fi
         # If building from source was requested, skip the update prompt
         if [[ "$BUILD_FROM_SOURCE" == "true" ]]; then
             preflight_systemd_service_installation || return 1
