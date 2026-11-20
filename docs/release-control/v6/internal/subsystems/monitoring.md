@@ -4974,6 +4974,17 @@ cleanup so readers cannot retain orphaned runtime or alert projections.
 
 ## Shared Boundaries
 
+A native TrueNAS record carries an agent-shaped identity for host facts and
+History. The connected-infrastructure projection must not use it as an agent
+surface, profile target or uninstall target without genuine agent provenance
+for that exact ID in the captured read view. A same-name reporter, a provider
+mirror or a presentation-derived agent source is not evidence of a host
+registration. Retained registrations waiting to report after a restart still
+qualify as identities, not as new sightings. The native provider's readings and
+identity stay intact.
+`TestConnectedInfrastructureTrueNASDoesNotImitateAHostAgent` checks
+provider-only and dual-source rows.
+
 Helper-backed Proxmox inventories carry explicit complete/partial status and omitted VMIDs. Before cache mutation the monitor validates this shared contract. A complete inventory replaces only the exact linked-node/agent cache; a partial inventory removes that agent's explicitly omitted guests without renewing their data. Legacy reports retain legacy row admission and expiry.
 
 PBS polling owns the internal `PBSInstance.NodeMetricsUnavailable` discriminator:

@@ -1,16 +1,18 @@
 package monitoring
 
 import (
+	"slices"
 	"testing"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/truenas"
 	unifiedresources "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
 func TestBuildConnectedInfrastructure_AppliesIgnoreStateToActiveSurfaces(t *testing.T) {
 	now := time.Unix(1_700_000_000, 0)
-	items := buildConnectedInfrastructure([]unifiedresources.Resource{
+	items := buildConnectedInfrastructure(nil, []unifiedresources.Resource{
 		{
 			ID:       "tower-resource",
 			Name:     "Tower",
@@ -78,7 +80,7 @@ func TestBuildConnectedInfrastructure_AppliesIgnoreStateToActiveSurfaces(t *test
 
 func TestBuildConnectedInfrastructure_UsesSharedDisplayNameFallback(t *testing.T) {
 	now := time.Unix(1_700_000_000, 0)
-	items := buildConnectedInfrastructure([]unifiedresources.Resource{
+	items := buildConnectedInfrastructure(nil, []unifiedresources.Resource{
 		{
 			ID:       "tower-resource",
 			LastSeen: now,
@@ -113,7 +115,7 @@ func TestBuildConnectedInfrastructure_UsesSharedDisplayNameFallback(t *testing.T
 
 func TestBuildConnectedInfrastructure_UsesSharedTopLevelSystemGrouping(t *testing.T) {
 	now := time.Unix(1_700_000_000, 0)
-	items := buildConnectedInfrastructure([]unifiedresources.Resource{
+	items := buildConnectedInfrastructure(nil, []unifiedresources.Resource{
 		{
 			ID:       "tower-agent",
 			Name:     "Tower Agent",
@@ -157,7 +159,7 @@ func TestBuildConnectedInfrastructure_UsesSharedTopLevelSystemGrouping(t *testin
 
 func TestBuildConnectedInfrastructure_KeepsPlatformConnectionsActiveWhenHostTelemetryIgnored(t *testing.T) {
 	now := time.Unix(1_700_000_000, 0)
-	items := buildConnectedInfrastructure([]unifiedresources.Resource{
+	items := buildConnectedInfrastructure(nil, []unifiedresources.Resource{
 		{
 			ID:       "tower-agent",
 			Name:     "Tower Agent",
@@ -222,7 +224,7 @@ func TestBuildConnectedInfrastructure_KeepsPlatformConnectionsActiveWhenHostTele
 
 func TestBuildConnectedInfrastructure_ProjectsTrueNASSurface(t *testing.T) {
 	now := time.Unix(1_700_000_000, 0)
-	items := buildConnectedInfrastructure([]unifiedresources.Resource{
+	items := buildConnectedInfrastructure(nil, []unifiedresources.Resource{
 		{
 			ID:       "truenas-main",
 			Name:     "Tower NAS",
@@ -254,9 +256,118 @@ func TestBuildConnectedInfrastructure_ProjectsTrueNASSurface(t *testing.T) {
 	}
 }
 
+func TestConnectedInfrastructureTrueNASDoesNotImitateAHostAgent(t *testing.T) {
+	const connectionID, hostname, realID = "native-connection", "nas", "reporting-agent"
+	now := time.Now().UTC()
+	provider := truenas.NewLiveProviderForConnection(nil, connectionID)
+	registry := unifiedresources.NewRegistry(nil)
+	registry.IngestRecords(unifiedresources.SourceTrueNAS, provider.RecordsFromSnapshot(&truenas.FixtureSnapshot{
+		CollectedAt: now,
+		System:      truenas.SystemInfo{Hostname: hostname, Version: "25.10.8", Healthy: true},
+	}))
+	native := registry.ListByType(unifiedresources.ResourceTypeAgent)
+	if len(native) != 1 || native[0].Agent == nil || native[0].Agent.AgentID != connectionID {
+		t.Fatal("fixture must contain the native adapter's agent-shaped history identity")
+	}
+
+	for _, tc := range []struct {
+		name        string
+		sources     []unifiedresources.DataSource
+		agent       *unifiedresources.AgentData
+		addReporter bool
+		retained    bool
+		wantHost    bool
+	}{
+		{name: "native only"},
+		{
+			name:        "inferred presentation source and real namesake",
+			sources:     []unifiedresources.DataSource{unifiedresources.SourceTrueNAS, unifiedresources.SourceAgent},
+			addReporter: true,
+		},
+		{
+			name:    "actual reporter on the appliance",
+			sources: []unifiedresources.DataSource{unifiedresources.SourceTrueNAS, unifiedresources.SourceAgent},
+			agent: &unifiedresources.AgentData{
+				AgentID: realID, Hostname: hostname, AgentVersion: "6.9.0",
+				LinkedVMID: "fixture-node-110", CommandsEnabled: true,
+			},
+			addReporter: true,
+			wantHost:    true,
+		},
+		{
+			name:    "saved reporter waiting after restart",
+			sources: []unifiedresources.DataSource{unifiedresources.SourceTrueNAS, unifiedresources.SourceAgent},
+			agent: &unifiedresources.AgentData{
+				AgentID: realID, Hostname: hostname, AgentVersion: "6.9.0",
+			},
+			addReporter: true,
+			retained:    true,
+			wantHost:    true,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			r := native[0]
+			if tc.sources != nil {
+				r.Sources = tc.sources
+			}
+			if tc.agent != nil {
+				r.Agent = tc.agent
+			}
+			adapter := unifiedresources.NewMonitorAdapter(registry)
+			observations := adapter.GetAll()
+			if tc.addReporter {
+				host := models.Host{ID: realID, Hostname: hostname, Status: "online", LastSeen: now}
+				if tc.retained {
+					host.Status = "pending"
+				}
+				report := unifiedresources.HostIngestRecord(host)
+				if tc.retained {
+					overlay := unifiedresources.ReadStateWithHostContinuity(adapter, []unifiedresources.IngestRecord{report})
+					observations = overlay.(*unifiedresources.MonitorAdapter).GetAll()
+				} else {
+					capture := unifiedresources.NewRegistry(nil)
+					capture.IngestResources(observations)
+					capture.IngestRecords(unifiedresources.SourceAgent, []unifiedresources.IngestRecord{report})
+					observations = capture.List()
+				}
+			}
+			input := []unifiedresources.Resource{r}
+			// The continuity branch is present in the read view but not in
+			// snapshot.Hosts. No fake SourceAgent on the rendered row can
+			// pass without the corresponding identity in that view.
+			items := buildConnectedInfrastructure(observations, input, models.StateSnapshot{})
+			if len(items) != 1 {
+				t.Fatalf("want one monitored NAS system, got %d", len(items))
+			}
+			item := items[0]
+			kinds := make([]string, 0, len(item.Surfaces))
+			for _, surface := range item.Surfaces {
+				kinds = append(kinds, surface.Kind)
+				if surface.Kind == "agent" && surface.ControlID != realID {
+					t.Fatalf("agent surface targets %q, want %q", surface.ControlID, realID)
+				}
+			}
+			wantKinds := []string{"truenas"}
+			if tc.wantHost {
+				wantKinds = []string{"agent", "truenas"}
+				if item.ScopeAgentID != realID || item.UninstallAgentID != realID ||
+					item.LinkedVMID != tc.agent.LinkedVMID || item.CommandsEnabled != tc.agent.CommandsEnabled {
+					t.Fatalf("missing actual reporter target or association: %+v", item)
+				}
+			} else if item.ScopeAgentID != "" || item.UninstallAgentID != "" || item.CommandsEnabled ||
+				item.Version != "25.10.8" {
+				t.Fatalf("provider-only system either gained agent controls or lost its version: %+v", item)
+			}
+			if !slices.Equal(kinds, wantKinds) || item.Hostname != hostname || input[0].Agent != r.Agent {
+				t.Fatalf("got surfaces %v, hostname %q, or a mutated provider fact", kinds, item.Hostname)
+			}
+		})
+	}
+}
+
 func TestBuildConnectedInfrastructure_PreservesLinkedGuestIdentity(t *testing.T) {
 	now := time.Unix(1_700_000_000, 0)
-	items := buildConnectedInfrastructure([]unifiedresources.Resource{
+	items := buildConnectedInfrastructure(nil, []unifiedresources.Resource{
 		{
 			ID:       "guest-agent",
 			Name:     "debian-go",
@@ -314,7 +425,7 @@ func TestBuildConnectedInfrastructure_PreservesLinkedGuestIdentity(t *testing.T)
 
 func TestBuildConnectedInfrastructure_IgnoresChildPlatformResources(t *testing.T) {
 	now := time.Unix(1_700_000_000, 0)
-	items := buildConnectedInfrastructure([]unifiedresources.Resource{
+	items := buildConnectedInfrastructure(nil, []unifiedresources.Resource{
 		{
 			ID:       "vm-100",
 			Type:     unifiedresources.ResourceTypeVM,
@@ -373,7 +484,7 @@ func TestBuildConnectedInfrastructure_ResolvesLegacyAgentUpgradePlatform(t *test
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			items := buildConnectedInfrastructure([]unifiedresources.Resource{
+			items := buildConnectedInfrastructure(nil, []unifiedresources.Resource{
 				{
 					ID:       "host-resource",
 					Name:     "Host",
@@ -407,7 +518,7 @@ func TestBuildConnectedInfrastructure_AmbiguousFallbackKeepsEverySurface(t *test
 		{ID: "platform-b", Type: unifiedresources.ResourceTypeAgent, Name: "Platform B", Proxmox: &unifiedresources.ProxmoxData{SourceID: "pve-b", NodeName: "tower.lab"}},
 		{ID: "host", Type: unifiedresources.ResourceTypeAgent, Name: "Host", Agent: &unifiedresources.AgentData{AgentID: "host-agent", Hostname: "tower"}},
 	}
-	items := buildConnectedInfrastructure(resources, models.StateSnapshot{})
+	items := buildConnectedInfrastructure(nil, resources, models.StateSnapshot{})
 	if len(items) != 3 {
 		t.Fatalf("ambiguous hostname attached to arbitrary platform: %d items", len(items))
 	}

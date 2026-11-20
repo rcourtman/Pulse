@@ -4848,7 +4848,7 @@ func (m *Monitor) buildBroadcastFrontendStateFromSnapshotWithClock(snapshot mode
 	frontendState.ActionReadinessCatalog = broadcastCatalogs.actionReadiness
 	frontendState.PolicyCatalog = broadcastCatalogs.policies
 	frontendState.AISafeSummaryCatalog = broadcastCatalogs.aiSafeSummaries
-	frontendState.ConnectedInfrastructure = buildConnectedInfrastructure(broadcastResources, snapshot)
+	frontendState.ConnectedInfrastructure = buildConnectedInfrastructure(unifiedView.resources, broadcastResources, snapshot)
 	if !unifiedView.freshness.IsZero() {
 		frontendState.LastUpdate = unifiedView.freshness.UnixMilli()
 	}

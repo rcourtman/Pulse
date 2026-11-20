@@ -52,7 +52,7 @@ func legacyFrontendProjectionForTest(m *Monitor, snapshot models.StateSnapshot, 
 	out.CapabilityCatalog = catalogs.capabilities
 	out.PolicyCatalog = catalogs.policies
 	out.AISafeSummaryCatalog = catalogs.aiSafeSummaries
-	out.ConnectedInfrastructure = buildConnectedInfrastructure(rows, snapshot)
+	out.ConnectedInfrastructure = buildConnectedInfrastructure(resources, rows, snapshot)
 	return out
 }
 
@@ -237,8 +237,8 @@ var completeProjectionSink models.StateFrontend
 var completeProjectionJSONSink []byte
 
 // Exact parent broadcast shape (one coalesce, copy-to-attach, then conversion),
-// not the older two-coalesce content oracle above. The unchanged conversion,
-// metadata/health decoration and snapshot projection are part of both costs.
+// not the older two-coalesce content oracle above. Both variants include the
+// current reporting gate, conversion and metadata/health decoration.
 func parentFrontendProjectionForTest(m *Monitor, snapshot models.StateSnapshot, resources []unifiedresources.Resource, resolver MetricsTargetResourceStore, now time.Time) models.StateFrontend {
 	rows := unifiedresources.CoalescePresentationHostResources(resources)
 	healthAlerts := resourceHealthAlerts(snapshot.ActiveAlerts)
@@ -253,7 +253,7 @@ func parentFrontendProjectionForTest(m *Monitor, snapshot models.StateSnapshot, 
 	out.CapabilityCatalog = catalogs.capabilities
 	out.PolicyCatalog = catalogs.policies
 	out.AISafeSummaryCatalog = catalogs.aiSafeSummaries
-	out.ConnectedInfrastructure = buildConnectedInfrastructure(rows, snapshot)
+	out.ConnectedInfrastructure = buildConnectedInfrastructure(resources, rows, snapshot)
 	if freshness := latestUnifiedResourceLastSeen(resources); !freshness.IsZero() {
 		out.LastUpdate = freshness.UnixMilli()
 	}

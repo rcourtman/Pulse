@@ -526,7 +526,7 @@ func TestBroadcastResourceProjectionCoalescesSplitHostIdentities(t *testing.T) {
 		"frontendState.CapabilityCatalog = broadcastCatalogs.capabilities",
 		"frontendState.PolicyCatalog = broadcastCatalogs.policies",
 		"frontendState.AISafeSummaryCatalog = broadcastCatalogs.aiSafeSummaries",
-		"frontendState.ConnectedInfrastructure = buildConnectedInfrastructure(broadcastResources, snapshot)",
+		"frontendState.ConnectedInfrastructure = buildConnectedInfrastructure(unifiedView.resources, broadcastResources, snapshot)",
 		"func attachBroadcastMetricsTargets(",
 		"allResources = unifiedresources.CoalescePresentationHostResources(allResources)",
 	} {
@@ -2040,7 +2040,7 @@ func TestBroadcastProjectionMatchesPreviousPipeline(t *testing.T) {
 	want.CapabilityCatalog = catalogs.capabilities
 	want.PolicyCatalog = catalogs.policies
 	want.AISafeSummaryCatalog = catalogs.aiSafeSummaries
-	want.ConnectedInfrastructure = buildConnectedInfrastructure(previousResources, snapshot)
+	want.ConnectedInfrastructure = buildConnectedInfrastructure(view.resources, previousResources, snapshot)
 	if !view.freshness.IsZero() {
 		want.LastUpdate = view.freshness.UnixMilli()
 	}
