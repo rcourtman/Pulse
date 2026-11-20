@@ -61,6 +61,10 @@ const navigateMock = vi.fn();
 const getUpgradeActionDestinationMock = vi.hoisted(() => vi.fn());
 const getUpgradeActionUrlOrFallbackMock = vi.hoisted(() => vi.fn());
 const fetchAgentOperationsLoopStatusMock = vi.hoisted(() => vi.fn());
+const checkProRuntimeSwitchMock = vi.hoisted(() => vi.fn());
+const applyProRuntimeSwitchMock = vi.hoisted(() => vi.fn());
+const getUpdateStatusMock = vi.hoisted(() => vi.fn());
+const getVersionMock = vi.hoisted(() => vi.fn());
 
 const buildOperationsLoopStatus = (
   overrides: Partial<AgentOperationsLoopStatus> = {},
@@ -144,6 +148,15 @@ vi.mock('@/api/agentCapabilities', () => ({
     fetchAgentOperationsLoopStatusMock(...args),
 }));
 
+vi.mock('@/api/updates', () => ({
+  UpdatesAPI: {
+    checkProRuntimeSwitch: (...args: unknown[]) => checkProRuntimeSwitchMock(...args),
+    applyProRuntimeSwitch: (...args: unknown[]) => applyProRuntimeSwitchMock(...args),
+    getUpdateStatus: (...args: unknown[]) => getUpdateStatusMock(...args),
+    getVersion: (...args: unknown[]) => getVersionMock(...args),
+  },
+}));
+
 vi.mock('@/stores/notifications', () => ({
   notificationStore: {
     success: (...args: unknown[]) => notificationSuccessMock(...args),
@@ -188,10 +201,38 @@ describe('ProLicensePanel', () => {
     getUpgradeActionDestinationMock.mockReset();
     getUpgradeActionUrlOrFallbackMock.mockReset();
     fetchAgentOperationsLoopStatusMock.mockReset();
+    checkProRuntimeSwitchMock.mockReset();
+    applyProRuntimeSwitchMock.mockReset();
+    getUpdateStatusMock.mockReset();
+    getVersionMock.mockReset();
     loadRuntimeLicenseStatusMock.mockResolvedValue(undefined);
     loadCommercialPostureMock.mockResolvedValue(undefined);
     loadLicenseEntitlementsMock.mockResolvedValue(undefined);
     fetchAgentOperationsLoopStatusMock.mockResolvedValue(buildOperationsLoopStatus());
+    checkProRuntimeSwitchMock.mockResolvedValue({
+      available: false,
+      reason: 'unavailable',
+      currentVersion: '6.8.0',
+      installInPlace: false,
+    });
+    applyProRuntimeSwitchMock.mockResolvedValue({
+      status: 'started',
+      message: 'Pulse Pro runtime switch started',
+    });
+    getUpdateStatusMock.mockResolvedValue({
+      status: 'extracting',
+      progress: 45,
+      message: 'Extracting Pulse Pro update...',
+      updatedAt: '2026-11-20T23:00:00Z',
+    });
+    getVersionMock.mockResolvedValue({
+      version: '6.8.0',
+      build: 'production',
+      runtime: 'go',
+      isDocker: false,
+      isSourceBuild: false,
+      isDevelopment: false,
+    });
     licenseEntitlementsLoadErrorMock.mockReturnValue(null);
     startProTrialMock.mockResolvedValue(undefined);
     activateLicenseMock.mockResolvedValue({ success: true });
@@ -1785,5 +1826,83 @@ describe('ProLicensePanel', () => {
     expect(selfHostedCommercialRecoverySectionSource).not.toContain(
       'https://github.com/rcourtman/Pulse/blob/main/TERMS.md',
     );
+  });
+
+  it('offers one-click in-place Pro runtime switch and shows progress when a Pro license runs on community runtime', async () => {
+    mockEntitlements = {
+      capabilities: ['update_alerts', 'sso', 'ai_patrol'],
+      blocked_capabilities: [
+        {
+          feature: 'ai_autofix',
+          reason: 'paid_runtime_required',
+          action_url: 'https://pulserelay.pro/download.html',
+        },
+      ],
+      limits: [],
+      subscription_state: 'active',
+      upgrade_reasons: [],
+      tier: 'pro',
+      plan_version: 'v6',
+      licensed_email: 'ops@example.com',
+      runtime: {
+        build: 'community',
+        label: 'Pulse Community runtime',
+        download_url: 'https://pulserelay.pro/download.html',
+      },
+    };
+    checkProRuntimeSwitchMock.mockResolvedValueOnce({
+      available: true,
+      currentVersion: '6.8.0',
+      version: '6.8.0',
+      installInPlace: true,
+    });
+
+    renderPanel();
+
+    const switchButton = await screen.findByRole('button', { name: 'Switch to Pulse Pro' });
+    expect(checkProRuntimeSwitchMock).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(switchButton);
+    await waitFor(() => {
+      expect(applyProRuntimeSwitchMock).toHaveBeenCalledTimes(1);
+    });
+    expect(await screen.findByText('Extracting Pulse Pro update...')).toBeInTheDocument();
+    expect(screen.getByText('45%')).toBeInTheDocument();
+  });
+
+  it('surfaces inline error feedback and retry action when in-place Pro runtime switch fails to start', async () => {
+    mockEntitlements = {
+      capabilities: ['update_alerts', 'sso', 'ai_patrol'],
+      limits: [],
+      subscription_state: 'active',
+      upgrade_reasons: [],
+      tier: 'pro',
+      plan_version: 'v6',
+      licensed_email: 'ops@example.com',
+      runtime: {
+        build: 'community',
+        label: 'Pulse Community runtime',
+        download_url: 'https://pulserelay.pro/download.html',
+      },
+    };
+    checkProRuntimeSwitchMock.mockResolvedValueOnce({
+      available: true,
+      currentVersion: '6.8.0',
+      version: '6.8.0',
+      installInPlace: true,
+    });
+    applyProRuntimeSwitchMock.mockRejectedValueOnce(
+      new Error('Insufficient disk space on /opt/pulse for update backup'),
+    );
+
+    renderPanel();
+
+    const switchButton = await screen.findByRole('button', { name: 'Switch to Pulse Pro' });
+    fireEvent.click(switchButton);
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Insufficient disk space on /opt/pulse for update backup',
+    );
+    expect(screen.getByRole('button', { name: 'Retry switch to Pulse Pro' })).toBeInTheDocument();
   });
 });

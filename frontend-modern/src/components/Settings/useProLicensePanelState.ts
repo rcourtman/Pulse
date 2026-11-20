@@ -1,4 +1,4 @@
-import { createEffect, createMemo, createSignal, onMount } from 'solid-js';
+import { createEffect, createMemo, createSignal, onCleanup, onMount } from 'solid-js';
 import { useLocation, useNavigate } from '@solidjs/router';
 import { loadCommercialPosture } from '@/stores/licenseCommercial';
 import { loadRuntimeCapabilities } from '@/stores/license';
@@ -12,6 +12,7 @@ import {
   type AgentOperationsLoopStatus,
 } from '@/api/agentCapabilities';
 import { LicenseAPI } from '@/api/license';
+import { UpdatesAPI, type ProRuntimeSwitch, type UpdateStatus } from '@/api/updates';
 import {
   formatLicensePlanVersion,
   getSelfHostedActivationSuccessPresentation,
@@ -25,6 +26,7 @@ import {
   getSelfHostedCurrentPlanStatusPresentation,
   getLicenseSubscriptionStatusPresentation,
   getLicenseTierLabel,
+  hasPulseProRuntimeMismatch,
   isDisplayableLicenseFeature,
 } from '@/utils/licensePresentation';
 import {
@@ -93,6 +95,25 @@ export function useProLicensePanelState() {
   >(null);
   const [agentOperationsStatus, setAgentOperationsStatus] =
     createSignal<AgentOperationsLoopStatus | null>(null);
+  const [proRuntimeSwitch, setProRuntimeSwitch] = createSignal<ProRuntimeSwitch | null>(null);
+  const [proRuntimeSwitchLoading, setProRuntimeSwitchLoading] = createSignal(false);
+  const [proRuntimeSwitchLoadError, setProRuntimeSwitchLoadError] = createSignal<string | null>(
+    null,
+  );
+  const [switchingProRuntime, setSwitchingProRuntime] = createSignal(false);
+  const [proRuntimeSwitchStatus, setProRuntimeSwitchStatus] = createSignal<UpdateStatus | null>(
+    null,
+  );
+  const [proRuntimeSwitchError, setProRuntimeSwitchError] = createSignal<string | null>(null);
+  let proRuntimeStatusPollTimer: number | null = null;
+
+  const stopProRuntimeStatusPolling = () => {
+    if (proRuntimeStatusPollTimer !== null) {
+      window.clearInterval(proRuntimeStatusPollTimer);
+      proRuntimeStatusPollTimer = null;
+    }
+  };
+  onCleanup(stopProRuntimeStatusPolling);
 
   const entitlements = createMemo(() => licenseEntitlements());
   const subscriptionState = createMemo(() => entitlements()?.subscription_state);
@@ -120,6 +141,27 @@ export function useProLicensePanelState() {
     await loadPatrolOperatorStatus();
   };
 
+  const loadProRuntimeSwitch = async () => {
+    if (!hasPulseProRuntimeMismatch(entitlements())) {
+      setProRuntimeSwitch(null);
+      setProRuntimeSwitchLoadError(null);
+      return;
+    }
+    setProRuntimeSwitchLoading(true);
+    setProRuntimeSwitchLoadError(null);
+    try {
+      const result = await UpdatesAPI.checkProRuntimeSwitch();
+      setProRuntimeSwitch(result);
+    } catch (error) {
+      setProRuntimeSwitch(null);
+      setProRuntimeSwitchLoadError(
+        error instanceof Error ? error.message : 'Could not check Pulse Pro runtime availability',
+      );
+    } finally {
+      setProRuntimeSwitchLoading(false);
+    }
+  };
+
   const loadPanelData = async () => {
     setLoading(true);
     try {
@@ -128,6 +170,7 @@ export function useProLicensePanelState() {
       setLoading(false);
       setPanelDataSettled(true);
     }
+    await loadProRuntimeSwitch();
   };
 
   onMount(() => {
@@ -478,6 +521,12 @@ export function useProLicensePanelState() {
       const result = await LicenseAPI.clearLicense();
       setRecoveryFeedback({ type: 'success', message: result.message || 'License cleared' });
       setActivationSuccessSource(null);
+      stopProRuntimeStatusPolling();
+      setSwitchingProRuntime(false);
+      setProRuntimeSwitchStatus(null);
+      setProRuntimeSwitchError(null);
+      setProRuntimeSwitch(null);
+      setProRuntimeSwitchLoadError(null);
       await Promise.all([
         loadPanelData(),
         loadCommercialPosture(true),
@@ -492,6 +541,107 @@ export function useProLicensePanelState() {
     } finally {
       setClearing(false);
     }
+  };
+
+  const handleSwitchToProRuntime = async () => {
+    const currentSwitch = proRuntimeSwitch();
+    if (switchingProRuntime() || !currentSwitch?.available || !currentSwitch.installInPlace) {
+      return;
+    }
+    stopProRuntimeStatusPolling();
+    setSwitchingProRuntime(true);
+    setProRuntimeSwitchError(null);
+    setProRuntimeSwitchStatus({
+      status: 'starting',
+      progress: 5,
+      message: 'Starting switch to Pulse Pro...',
+      updatedAt: new Date().toISOString(),
+    });
+
+    try {
+      await UpdatesAPI.applyProRuntimeSwitch();
+    } catch (error) {
+      setSwitchingProRuntime(false);
+      setProRuntimeSwitchStatus(null);
+      setProRuntimeSwitchError(
+        error instanceof Error ? error.message : 'Could not start the switch to Pulse Pro',
+      );
+      return;
+    }
+
+    let polls = 0;
+    let sawRestartPhase = false;
+    let sawDisconnect = false;
+    const maxPolls = 80;
+
+    const pollOnce = async () => {
+      polls += 1;
+      if (polls > maxPolls) {
+        stopProRuntimeStatusPolling();
+        setSwitchingProRuntime(false);
+        setProRuntimeSwitchError(
+          'Pulse is still restarting or did not report completion in time. Refresh this page to check the active runtime.',
+        );
+        return;
+      }
+
+      if (sawRestartPhase) {
+        try {
+          await UpdatesAPI.getVersion();
+          if (sawDisconnect || polls >= 4) {
+            stopProRuntimeStatusPolling();
+            await Promise.all([
+              loadPanelData(),
+              loadCommercialPosture(true),
+              loadRuntimeCapabilities(true),
+            ]);
+            await loadPatrolOperatorStatusIfNeeded();
+            setSwitchingProRuntime(false);
+            return;
+          }
+        } catch {
+          sawDisconnect = true;
+          setProRuntimeSwitchStatus({
+            status: 'restarting',
+            progress: 95,
+            message: 'Pulse is restarting into Pulse Pro. Waiting for it to come back online...',
+            updatedAt: new Date().toISOString(),
+          });
+          return;
+        }
+      }
+
+      try {
+        const status = await UpdatesAPI.getUpdateStatus();
+        setProRuntimeSwitchStatus(status);
+        const normalized = status.status.trim().toLowerCase();
+        if (normalized === 'error') {
+          stopProRuntimeStatusPolling();
+          setSwitchingProRuntime(false);
+          setProRuntimeSwitchError(
+            status.error || status.message || 'Switching to Pulse Pro failed',
+          );
+          return;
+        }
+        if (normalized === 'restarting' || normalized === 'completed') {
+          sawRestartPhase = true;
+        }
+      } catch {
+        sawRestartPhase = true;
+        sawDisconnect = true;
+        setProRuntimeSwitchStatus({
+          status: 'restarting',
+          progress: 95,
+          message: 'Pulse is restarting into Pulse Pro. Waiting for it to come back online...',
+          updatedAt: new Date().toISOString(),
+        });
+      }
+    };
+
+    void pollOnce();
+    proRuntimeStatusPollTimer = window.setInterval(() => {
+      void pollOnce();
+    }, 1500);
   };
 
   return {
@@ -509,12 +659,19 @@ export function useProLicensePanelState() {
     grandfatheredPriceNotice,
     handleActivate,
     handleClear,
+    handleSwitchToProRuntime,
     hasLicenseDetails,
     licenseKey,
     loadPanelData,
+    loadProRuntimeSwitch,
     loading,
     looksLikeLegacyLicenseKey,
     planSelectionPrompt,
+    proRuntimeSwitch,
+    proRuntimeSwitchError,
+    proRuntimeSwitchLoadError,
+    proRuntimeSwitchLoading,
+    proRuntimeSwitchStatus,
     purchaseActivationNotice,
     purchaseActivationAction,
     recoveryFeedback,
@@ -522,5 +679,6 @@ export function useProLicensePanelState() {
     setLicenseKey,
     showRecoveryByDefault,
     statusPresentation,
+    switchingProRuntime,
   };
 }

@@ -1,0 +1,50 @@
+{
+  "version": 1,
+  "base_sha": "17970f5e0779f88216397b4ea29a42c3b9632ced",
+  "verified_at": "2026-11-20T23:18:04Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/api/updates.ts",
+    "frontend-modern/src/components/Settings/ProLicensePanel.tsx",
+    "frontend-modern/src/components/Settings/ProLicensePlanSection.tsx",
+    "frontend-modern/src/components/Settings/updatesSettingsModel.ts",
+    "frontend-modern/src/components/Settings/useProLicensePanelState.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/api/updates.ts": "9fdc272f33a30f73eb0ebd75e90f87d27bf0d8fbb861b2668d19c5a1720475cf",
+    "frontend-modern/src/components/Settings/ProLicensePanel.tsx": "806169b9ee8e7589201fdd543f31431a28e4b7dc63a85288979c9e7684153513",
+    "frontend-modern/src/components/Settings/ProLicensePlanSection.tsx": "922a2ce17c0de30431d74d9708a38e505268122c2aad78f47cb2daee3fa8c5e7",
+    "frontend-modern/src/components/Settings/updatesSettingsModel.ts": "7b415cef36be3025b68a089a753d529d65e9151400988fb14861958c0b93ff54",
+    "frontend-modern/src/components/Settings/useProLicensePanelState.ts": "a27360d91218ed518e40b687bffdf3329c6594c9451c0d53d7e0734a7a5d38d1"
+  },
+  "routes": [
+    "/settings/pulse-intelligence/billing/plan"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900,
+      "browser": "Chromium (Playwright)",
+      "theme": "light"
+    },
+    {
+      "width": 390,
+      "height": 844,
+      "browser": "Chromium (Playwright)",
+      "theme": "light"
+    }
+  ],
+  "states": [
+    "In-place switch ready on Community runtime with active Pro license (v6.8.0)",
+    "In-place switch in progress (45% blue progress bar and Extracting Pulse Pro update... status)",
+    "In-place switch 409 error alert with Retry switch to Pulse Pro button",
+    "Docker digest-pinned pull/up commands and sanitized password-free registry login prompt on desktop and 390px mobile with zero horizontal overflow",
+    "Unavailable refusal reason on 390px mobile with Check again retry and Open Pulse Pro downloads fallback"
+  ],
+  "interactions": [
+    "Clicked Switch to Pulse Pro and verified POST /api/updates/pro-runtime/apply and live /api/updates/status progress bar rendering",
+    "Verified 409 apply conflict renders inline role=alert error and switches button label to Retry switch to Pulse Pro",
+    "Verified Docker composePullCommand, composeUpCommand, and sanitized docker login prompt (no --password-stdin leak) wrap cleanly without overflow at 1440x900 and 390x844",
+    "Clicked Check again on unavailable refusal state and verified fresh GET /api/updates/pro-runtime request; visually inspected all 6 rendered PNG screenshots"
+  ]
+}

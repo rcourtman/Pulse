@@ -192,4 +192,37 @@ describe('UpdatesAPI', () => {
 
     await expect(UpdatesAPI.checkForUpdates()).resolves.toEqual(response);
   });
+
+  it('checks Pulse Pro runtime switch availability with optional channel', async () => {
+    const response = {
+      available: true,
+      currentVersion: '6.8.0',
+      version: '6.8.0',
+      installInPlace: true,
+    };
+    apiFetchJSONMock.mockResolvedValueOnce(response as any);
+
+    await expect(UpdatesAPI.checkProRuntimeSwitch()).resolves.toEqual(response);
+    expect(apiFetchJSONMock).toHaveBeenCalledWith('/api/updates/pro-runtime');
+
+    apiFetchJSONMock.mockResolvedValueOnce(response as any);
+    await expect(UpdatesAPI.checkProRuntimeSwitch('rc')).resolves.toEqual(response);
+    expect(apiFetchJSONMock).toHaveBeenCalledWith('/api/updates/pro-runtime?channel=rc');
+  });
+
+  it('posts Pulse Pro runtime switch apply requests with optional channel', async () => {
+    const response = { status: 'started', message: 'Pulse Pro runtime switch started' };
+    apiFetchJSONMock.mockResolvedValueOnce(response as any);
+
+    await expect(UpdatesAPI.applyProRuntimeSwitch()).resolves.toEqual(response);
+    expect(apiFetchJSONMock).toHaveBeenCalledWith('/api/updates/pro-runtime/apply', {
+      method: 'POST',
+    });
+
+    apiFetchJSONMock.mockResolvedValueOnce(response as any);
+    await expect(UpdatesAPI.applyProRuntimeSwitch('rc')).resolves.toEqual(response);
+    expect(apiFetchJSONMock).toHaveBeenCalledWith('/api/updates/pro-runtime/apply?channel=rc', {
+      method: 'POST',
+    });
+  });
 });

@@ -104,6 +104,16 @@ const ProLicensePanelContent: Component = () => {
                   planComparisonSummary={state.planComparisonSummary()}
                   planSelectionPrompt={state.planSelectionPrompt()}
                   planStatus={state.planStatus()}
+                  proRuntimeSwitchState={{
+                    info: state.proRuntimeSwitch(),
+                    loading: state.proRuntimeSwitchLoading(),
+                    loadError: state.proRuntimeSwitchLoadError(),
+                    switching: state.switchingProRuntime(),
+                    status: state.proRuntimeSwitchStatus(),
+                    error: state.proRuntimeSwitchError(),
+                    onRefresh: () => void state.loadProRuntimeSwitch(),
+                    onSwitch: () => void state.handleSwitchToProRuntime(),
+                  }}
                   purchaseActivationAction={state.purchaseActivationAction()}
                   purchaseActivationNotice={state.purchaseActivationNotice()}
                 />

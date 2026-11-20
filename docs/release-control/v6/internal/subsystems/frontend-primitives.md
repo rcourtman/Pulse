@@ -8157,6 +8157,9 @@ top-level settings shell, while
 `frontend-modern/src/utils/updatesPresentation.ts` own the
 deployment-specific install guide, copy-command block, and update-channel/install
 model data plus customer-facing update status/action copy.
+`updatesSettingsModel.ts` also exports `getBrokerRegistryLoginPrompt` so
+Plans & Billing's Docker Pro runtime switch card reuses the exact same
+password-free registry login sanitizer without duplicating command parsing.
 `frontend-modern/src/components/Settings/UpdateHistorySection.tsx` joins that
 split as the presentation owner for the update history table and the
 rollback confirmation dialog: the panel shell mounts it as a section and must

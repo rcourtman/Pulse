@@ -1,9 +1,12 @@
 import { Component, For, Show } from 'solid-js';
 import CheckIcon from 'lucide-solid/icons/check';
 import RefreshCw from 'lucide-solid/icons/refresh-cw';
+import type { ProRuntimeSwitch, UpdateStatus } from '@/api/updates';
 import { Button, ButtonLink } from '@/components/shared/Button';
 import { InlineNotice, type InlineNoticeTone } from '@/components/shared/InlineNotice';
 import { UpgradeButtonLink } from '@/components/shared/UpgradeLink';
+import { CopyCommandBlock } from '@/components/Settings/CopyCommandBlock';
+import { getBrokerRegistryLoginPrompt } from '@/components/Settings/updatesSettingsModel';
 import { licenseEntitlementsLoadError } from '@/stores/licenseEntitlements';
 import {
   getLicenseStatusLoadingState,
@@ -24,6 +27,17 @@ interface Notice {
 interface ActionNotice extends Notice {
   actionLabel: string;
   actionDestination: UpgradeDestination;
+}
+
+interface ProRuntimeSwitchState {
+  info: ProRuntimeSwitch | null;
+  loading: boolean;
+  loadError: string | null;
+  switching: boolean;
+  status: UpdateStatus | null;
+  error: string | null;
+  onRefresh: () => void;
+  onSwitch: () => void;
 }
 
 interface ProLicensePlanSectionProps {
@@ -94,6 +108,7 @@ interface ProLicensePlanSectionProps {
     label: string;
     destination: UpgradeDestination;
   } | null;
+  proRuntimeSwitchState?: ProRuntimeSwitchState;
 }
 
 const formatDate = (value?: string | null) => {
@@ -115,6 +130,41 @@ const statusStateClass = (state: 'active' | 'partial' | 'missing') => {
     case 'missing':
       return 'bg-red-100 text-red-700 dark:bg-red-900/25 dark:text-red-200';
   }
+};
+
+const formatProRuntimeVersion = (version?: string) => {
+  const trimmed = (version || '').trim();
+  if (!trimmed) return '';
+  return trimmed.startsWith('v') ? trimmed : `v${trimmed}`;
+};
+
+const getProRuntimeSwitchRefusalCopy = (info: ProRuntimeSwitch): string => {
+  const targetVersion = formatProRuntimeVersion(info.version);
+  switch (info.reason) {
+    case 'older_release':
+      return targetVersion
+        ? `The published Pulse Pro runtime (${targetVersion}) is older than this install (${formatProRuntimeVersion(info.currentVersion)}). Wait for the next Pulse Pro release so switching does not downgrade this server.`
+        : 'The published Pulse Pro runtime is older than this install. Wait for the next Pulse Pro release so switching does not downgrade this server.';
+    case 'prerelease_only':
+      return targetVersion
+        ? `Only preview build ${targetVersion} is published for Pulse Pro right now, and this install follows the stable channel.`
+        : 'Only a preview Pulse Pro build is published right now, and this install follows the stable channel.';
+    case 'source_build':
+      return 'This install was built from source and cannot be switched automatically. Install the private Pulse Pro release from downloads instead.';
+    case 'unsupported_deployment':
+      return 'Automatic runtime switching is only supported on systemd, Proxmox VE LXC, and Docker installs. Use Pulse Pro downloads to install the private runtime manually.';
+    case 'not_eligible':
+      return 'The license server did not grant Pulse Pro runtime downloads for this activation. Confirm your subscription is active or open Pulse Pro downloads.';
+    case 'unavailable':
+      return 'Could not reach the Pulse Pro download service right now. Try checking again in a moment or open Pulse Pro downloads.';
+    default:
+      return 'Install the private Pulse Pro runtime from downloads to unlock Pro-only features on this server.';
+  }
+};
+
+const clampProgress = (progress?: number): number => {
+  if (typeof progress !== 'number' || Number.isNaN(progress)) return 0;
+  return Math.max(0, Math.min(100, Math.round(progress)));
 };
 
 export const ProLicensePlanSection: Component<ProLicensePlanSectionProps> = (props) => {
@@ -255,15 +305,236 @@ export const ProLicensePlanSection: Component<ProLicensePlanSectionProps> = (pro
         </Show>
         <Show when={props.currentPlanSummary.privateRuntimeAction}>
           {(action) => (
-            <ButtonLink
-              href={action().actionUrl}
-              target="_blank"
-              variant="outline"
-              size="settingsActionXs"
-              class="mt-3 gap-1"
+            <Show
+              when={props.proRuntimeSwitchState}
+              fallback={
+                <ButtonLink
+                  href={action().actionUrl}
+                  target="_blank"
+                  variant="outline"
+                  size="settingsActionXs"
+                  class="mt-3 gap-1"
+                >
+                  {action().actionLabel}
+                </ButtonLink>
+              }
             >
-              {action().actionLabel}
-            </ButtonLink>
+              {(switchState) => (
+                <div
+                  class="mt-4 rounded-md border border-border bg-surface p-4"
+                  data-testid="pro-runtime-switch-card"
+                >
+                  <Show
+                    when={!switchState().loading}
+                    fallback={
+                      <div class="flex items-center gap-2 text-xs text-muted">
+                        <RefreshCw class="h-3.5 w-3.5 animate-spin shrink-0" />
+                        <span>Checking Pulse Pro runtime availability...</span>
+                      </div>
+                    }
+                  >
+                    <Show
+                      when={switchState().info?.available && switchState().info?.installInPlace}
+                    >
+                      <div class="space-y-3">
+                        <div class="flex flex-wrap items-center gap-2">
+                          <p class="text-sm font-semibold text-base-content">
+                            Switch this install to Pulse Pro
+                          </p>
+                          <Show when={formatProRuntimeVersion(switchState().info?.version)}>
+                            {(versionLabel) => (
+                              <span class="rounded-full border border-border bg-surface-alt px-2 py-0.5 text-[11px] font-medium text-base-content">
+                                {versionLabel()}
+                              </span>
+                            )}
+                          </Show>
+                        </div>
+                        <p class="text-xs text-muted">
+                          Downloads the signed Pulse Pro binary, creates a rollback backup, and
+                          restarts Pulse in place. Your monitoring data and configuration stay
+                          intact.
+                        </p>
+                        <Show when={switchState().status}>
+                          {(status) => (
+                            <div
+                              class="space-y-1.5 rounded-md border border-border bg-surface-alt p-3"
+                              role="status"
+                              aria-live="polite"
+                            >
+                              <div class="flex items-center justify-between gap-2 text-xs">
+                                <span class="font-medium text-base-content">
+                                  {status().message || 'Switching to Pulse Pro...'}
+                                </span>
+                                <span class="tabular-nums text-muted">
+                                  {clampProgress(status().progress)}%
+                                </span>
+                              </div>
+                              <div
+                                class="h-2 w-full overflow-hidden rounded-full bg-border"
+                                role="progressbar"
+                                aria-label="Pulse Pro runtime switch progress"
+                                aria-valuemin={0}
+                                aria-valuemax={100}
+                                aria-valuenow={clampProgress(status().progress)}
+                              >
+                                <div
+                                  class="h-full rounded-full bg-blue-600 transition-all duration-300 dark:bg-blue-500"
+                                  style={{ width: `${clampProgress(status().progress)}%` }}
+                                />
+                              </div>
+                            </div>
+                          )}
+                        </Show>
+                        <Show when={switchState().error}>
+                          {(errorMessage) => (
+                            <div
+                              role="alert"
+                              class="rounded-md border border-red-200 bg-red-50 p-3 text-xs text-red-800 dark:border-red-800 dark:bg-red-950/30 dark:text-red-200"
+                            >
+                              {errorMessage()}
+                            </div>
+                          )}
+                        </Show>
+                        <div class="flex flex-wrap items-center gap-2">
+                          <Button
+                            type="button"
+                            variant="primary"
+                            size="settingsActionXs"
+                            disabled={switchState().switching}
+                            onClick={() => switchState().onSwitch()}
+                          >
+                            {switchState().switching
+                              ? 'Switching to Pulse Pro...'
+                              : switchState().error
+                                ? 'Retry switch to Pulse Pro'
+                                : 'Switch to Pulse Pro'}
+                          </Button>
+                          <ButtonLink
+                            href={action().actionUrl}
+                            target="_blank"
+                            variant="outline"
+                            size="settingsActionXs"
+                            class="gap-1"
+                          >
+                            {action().actionLabel}
+                          </ButtonLink>
+                        </div>
+                      </div>
+                    </Show>
+
+                    <Show when={switchState().info?.available && switchState().info?.docker}>
+                      {(docker) => (
+                        <div class="space-y-3">
+                          <div class="flex flex-wrap items-center gap-2">
+                            <p class="text-sm font-semibold text-base-content">
+                              Switch this container to Pulse Pro
+                            </p>
+                            <Show when={formatProRuntimeVersion(docker().version)}>
+                              {(versionLabel) => (
+                                <span class="rounded-full border border-border bg-surface-alt px-2 py-0.5 text-[11px] font-medium text-base-content">
+                                  {versionLabel()}
+                                </span>
+                              )}
+                            </Show>
+                          </div>
+                          <p class="text-xs text-muted">
+                            Docker containers cannot replace their own binary in place. Run these
+                            digest-pinned commands on your Docker host to switch to the Pulse Pro
+                            image:
+                          </p>
+                          <div class="space-y-2">
+                            <p class="text-xs font-medium text-base-content">
+                              1. Pull the Pulse Pro image
+                            </p>
+                            <CopyCommandBlock
+                              command={docker().composePullCommand}
+                              codeClass="block rounded-md border border-border bg-page p-2.5 pr-14 font-mono text-xs text-base-content whitespace-pre-wrap break-all"
+                            />
+                          </div>
+                          <div class="space-y-2">
+                            <p class="text-xs font-medium text-base-content">
+                              2. Recreate the container on the Pulse Pro image
+                            </p>
+                            <CopyCommandBlock
+                              command={docker().composeUpCommand}
+                              codeClass="block rounded-md border border-border bg-page p-2.5 pr-14 font-mono text-xs text-base-content whitespace-pre-wrap break-all"
+                            />
+                          </div>
+                          <Show when={getBrokerRegistryLoginPrompt(docker())}>
+                            {(loginPrompt) => (
+                              <p class="text-xs text-muted">
+                                If the pull is denied, run{' '}
+                                <code class="rounded-sm bg-surface-alt px-1 py-0.5 font-mono text-[11px] text-base-content [overflow-wrap:anywhere]">
+                                  {loginPrompt()}
+                                </code>{' '}
+                                on the Docker host and enter your activation key at Docker’s hidden
+                                Password prompt, then retry the pull.
+                              </p>
+                            )}
+                          </Show>
+                          <div class="flex flex-wrap items-center gap-2">
+                            <ButtonLink
+                              href={action().actionUrl}
+                              target="_blank"
+                              variant="outline"
+                              size="settingsActionXs"
+                              class="gap-1"
+                            >
+                              {action().actionLabel}
+                            </ButtonLink>
+                          </div>
+                        </div>
+                      )}
+                    </Show>
+
+                    <Show
+                      when={
+                        !(
+                          switchState().info?.available &&
+                          (switchState().info?.installInPlace || switchState().info?.docker)
+                        )
+                      }
+                    >
+                      <div class="space-y-3">
+                        <p class="text-xs text-muted">
+                          {switchState().loadError
+                            ? `Could not check automatic Pulse Pro runtime switching: ${switchState().loadError}`
+                            : switchState().info
+                              ? getProRuntimeSwitchRefusalCopy(switchState().info!)
+                              : 'Install the private Pulse Pro runtime from downloads to unlock Pro-only features on this server.'}
+                        </p>
+                        <div class="flex flex-wrap items-center gap-2">
+                          <Show
+                            when={
+                              Boolean(switchState().loadError) ||
+                              switchState().info?.reason === 'unavailable'
+                            }
+                          >
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="settingsActionXs"
+                              onClick={() => switchState().onRefresh()}
+                            >
+                              Check again
+                            </Button>
+                          </Show>
+                          <ButtonLink
+                            href={action().actionUrl}
+                            target="_blank"
+                            variant="outline"
+                            size="settingsActionXs"
+                            class="gap-1"
+                          >
+                            {action().actionLabel}
+                          </ButtonLink>
+                        </div>
+                      </div>
+                    </Show>
+                  </Show>
+                </div>
+              )}
+            </Show>
           )}
         </Show>
         <Show when={getCurrentPlanPatrolControlAction()}>

@@ -31,6 +31,25 @@ export interface DockerUpdateCommands {
   composeUpCommand: string;
 }
 
+export type ProRuntimeSwitchReason =
+  | 'already_pro'
+  | 'not_activated'
+  | 'not_eligible'
+  | 'source_build'
+  | 'unsupported_deployment'
+  | 'older_release'
+  | 'prerelease_only'
+  | 'unavailable';
+
+export interface ProRuntimeSwitch {
+  available: boolean;
+  reason?: ProRuntimeSwitchReason | string;
+  currentVersion: string;
+  version?: string;
+  installInPlace: boolean;
+  docker?: DockerUpdateCommands;
+}
+
 export interface ReleaseNotesInfo {
   version: string;
   releaseNotes: string;
@@ -174,5 +193,33 @@ export class UpdatesAPI {
     }
     const url = `/api/updates/plan?${search.toString()}`;
     return apiFetchJSON(url);
+  }
+
+  static async checkProRuntimeSwitch(channel?: UpdateChannel): Promise<ProRuntimeSwitch> {
+    const search = new URLSearchParams();
+    const trimmedChannel = channel?.trim();
+    if (trimmedChannel) {
+      search.set('channel', trimmedChannel);
+    }
+    const query = search.toString();
+    const url = query ? `/api/updates/pro-runtime?${query}` : '/api/updates/pro-runtime';
+    return apiFetchJSON(url);
+  }
+
+  static async applyProRuntimeSwitch(
+    channel?: UpdateChannel,
+  ): Promise<{ status: string; message: string }> {
+    const search = new URLSearchParams();
+    const trimmedChannel = channel?.trim();
+    if (trimmedChannel) {
+      search.set('channel', trimmedChannel);
+    }
+    const query = search.toString();
+    const url = query
+      ? `/api/updates/pro-runtime/apply?${query}`
+      : '/api/updates/pro-runtime/apply';
+    return apiFetchJSON(url, {
+      method: 'POST',
+    });
   }
 }
