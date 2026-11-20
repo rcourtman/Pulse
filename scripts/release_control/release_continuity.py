@@ -791,7 +791,7 @@ def inventory_endpoint(value: str) -> str:
 
 
 def collect_inventory(args: argparse.Namespace) -> int:
-    """Publish complete pagination only; retry one exact peer CANCEL, not refusals."""
+    """Publish complete pagination only; repeat once on peer CANCEL or a release-list 502."""
     inventory = "release" if args.endpoint.endswith("/releases?per_page=100") else "tag reference"
     diagnostic: dict[str, Any] = {
         "schema_version": 1,
@@ -836,8 +836,7 @@ def collect_inventory(args: argparse.Namespace) -> int:
                 response.seek(0)
                 payload = response.read()
             # gh api can render a failed HTTP response as one printable line.
-            # Retain just its numeric status, never the response message. This
-            # is diagnostic evidence, not a condition for retry or admission.
+            # Retain just its numeric status, never the response message.
             stderr_line = result.stderr.strip()
             http_error = (
                 re.fullmatch(rb"gh: [ -~]+ \(HTTP ([45][0-9]{2})\)", stderr_line)
@@ -856,6 +855,7 @@ def collect_inventory(args: argparse.Namespace) -> int:
                 "result": "gh_failed",
             }
             diagnostic["attempts"].append(attempt)
+            retry_notice = None
             if result.returncode == 0 and stderr_line:
                 attempt["result"] = "unexpected_diagnostic"
             elif result.returncode == 0:
@@ -882,14 +882,19 @@ def collect_inventory(args: argparse.Namespace) -> int:
                 stderr_line,
             ):
                 attempt["result"] = "http2_peer_cancel"
+                retry_notice = "peer cancellation"
+            elif inventory == "release" and http_status == 502:
+                attempt["result"] = "http_bad_gateway"
+                retry_notice = "HTTP 502 reported by gh"
+
+            if retry_notice is not None and number == 1:
                 retain()
-                if number == 1:
-                    print(
-                        f"GitHub {inventory} inventory peer cancellation; repeating the identical read once.",
-                        file=sys.stderr,
-                    )
-                    time.sleep(2)
-                    continue
+                print(
+                    f"GitHub {inventory} inventory {retry_notice}; repeating the identical read once.",
+                    file=sys.stderr,
+                )
+                time.sleep(2)
+                continue
             return unavailable(attempt["result"], result.returncode, http_status)
     return 1
 

@@ -28,6 +28,7 @@ SPEC.loader.exec_module(collector)
 ENDPOINT = "repos/rcourtman/Pulse/releases?per_page=100"
 REFS_ENDPOINT = "repos/rcourtman/Pulse/git/matching-refs/tags/v?per_page=100"
 CANCEL = b"stream error: stream ID 1; CANCEL; received from peer\n"
+BAD_GATEWAY = b"gh: service error (HTTP 502)\n"
 COMPLETE = b'[[{"id":1}],[{"id":2}]]\n'
 
 
@@ -98,28 +99,72 @@ class InventoryCollectionTest(unittest.TestCase):
         self.assertEqual(len(calls), 2)
         self.assertEqual(len(sleeps), 1)
 
+    def test_release_list_bad_gateway_repeats_the_same_complete_read(self):
+        partial = b'[[{"id":999}],[{"message":"Bad Gateway"}]]'
+        result, receipt, output, calls, sleeps, console = self.collect([
+            (1, partial, BAD_GATEWAY), (0, COMPLETE, b""),
+        ])
+        self.assertEqual(result, 0)
+        self.assertEqual(output, COMPLETE, "never reuse pages from the failed read")
+        self.assertEqual(receipt["status"], "collected")
+        self.assertEqual(len(calls), 2)
+        self.assertEqual(calls[0], calls[1])
+        self.assertEqual([call.args for call in sleeps], [(2,)])
+        first, second = receipt["attempts"]
+        self.assertEqual(first["result"], "http_bad_gateway")
+        self.assertEqual(first["reported_http_status"], 502)
+        self.assertEqual(first["payload_sha256"], hashlib.sha256(partial).hexdigest())
+        self.assertEqual(first["stderr_sha256"], hashlib.sha256(BAD_GATEWAY).hexdigest())
+        self.assertEqual(second["result"], "collected")
+        self.assertIn("HTTP 502 reported by gh; repeating the identical read once", console)
+        self.assertNotIn("service error", console + json.dumps(receipt))
+
+    def test_bad_gateway_does_not_add_a_retry_beyond_the_existing_budget(self):
+        for first, second in [(BAD_GATEWAY, BAD_GATEWAY), (CANCEL, BAD_GATEWAY),
+                              (BAD_GATEWAY, CANCEL)]:
+            with self.subTest(first=first, second=second):
+                result, receipt, output, calls, sleeps, _ = self.collect([
+                    (1, b"[[", first), (1, b"{", second),
+                ])
+                self.assertEqual(result, 1)
+                self.assertIsNone(output)
+                self.assertEqual(receipt["status"], "unavailable")
+                self.assertEqual(len(calls), 2)
+                self.assertEqual(calls[0], calls[1])
+                self.assertEqual(len(sleeps), 1)
+                self.assertEqual([a["result"] for a in receipt["attempts"]], [
+                    "http_bad_gateway" if item == BAD_GATEWAY else "http2_peer_cancel"
+                    for item in (first, second)
+                ])
+
     def test_collected_inventory_still_rejects_a_newer_unadvertised_release(self):
         latest = {"tag_name": "v6.7.0"}
         newer = {"tag_name": "v6.8.0", "draft": False, "published_at": "2026-11-07T01:00:00Z"}
         payload = json.dumps([[latest], [newer]]).encode()
-        result, receipt, output, _, _, _ = self.collect([(1, b"[[", CANCEL), (0, payload, b"")])
+        result, receipt, output, _, _, _ = self.collect([(1, b"[[", BAD_GATEWAY), (0, payload, b"")])
         self.assertEqual(result, 0)
         self.assertEqual(receipt["status"], "collected", "collection is not trust admission")
         failures, _ = collector.frontier_violations(latest, [[]], json.loads(output), [])
         self.assertIn("newer_stable_release_not_advertised", [failure.code for failure in failures])
 
     def test_refusal_on_second_attempt_stops_and_remains_unavailable(self):
-        result, receipt, output, calls, _, _ = self.collect([
-            (1, b"[", CANCEL), (1, b"", b"HTTP 403: Forbidden\n"),
-        ])
-        self.assertEqual(result, 1)
-        self.assertIsNone(output)
-        self.assertEqual(receipt["attempts"][-1]["result"], "gh_failed")
-        self.assertEqual(len(calls), 2)
+        for first in (CANCEL, BAD_GATEWAY):
+            with self.subTest(first=first):
+                result, receipt, output, calls, _, _ = self.collect([
+                    (1, b"[", first), (1, b"", b"gh: Forbidden (HTTP 403)\n"),
+                ])
+                self.assertEqual(result, 1)
+                self.assertIsNone(output)
+                self.assertEqual(receipt["attempts"][-1]["result"], "gh_failed")
+                self.assertEqual(receipt["attempts"][-1]["reported_http_status"], 403)
+                self.assertEqual(len(calls), 2)
 
     def test_reports_only_a_fixed_inventory_name_and_cli_http_status_without_retrying(self):
         for endpoint, label in [(ENDPOINT, "release"), (REFS_ENDPOINT, "tag reference")]:
-            for status in [401, 403, 429, 502]:
+            statuses = [401, 403, 404, 429, 500, 503, 504]
+            if endpoint == REFS_ENDPOINT:
+                statuses.append(502)
+            for status in statuses:
                 with self.subTest(endpoint=endpoint, status=status):
                     error = f"gh: PRIVATE_FIXTURE (HTTP {status})\n".encode()
                     result, receipt, output, calls, sleeps, console = self.collect([
@@ -165,9 +210,13 @@ class InventoryCollectionTest(unittest.TestCase):
             (1, b"connection reset by peer\n"),
             (1, b"stream error: stream ID 1; INTERNAL_ERROR; received from peer\n"),
             (1, CANCEL + b"HTTP 403: Forbidden\n"),
+            (1, b"gh: Forbidden (HTTP 403)\n" + BAD_GATEWAY),
+            (1, BAD_GATEWAY + b"\x1b[0m"),
             (1, b"private provider diagnostic\n"),
             (-15, CANCEL),
+            (-15, BAD_GATEWAY),
             (2, CANCEL),
+            (2, BAD_GATEWAY),
         ]
         for code, error in cases:
             with self.subTest(code=code, error=error):
@@ -301,7 +350,7 @@ class InventoryCollectionTest(unittest.TestCase):
 
     def test_reports_collector_failure_separately_from_policy_and_activation(self):
         _, refs, _, _, _, _ = self.collect([(0, COMPLETE, b"")], endpoint=REFS_ENDPOINT)
-        _, releases, _, _, _, _ = self.collect([(1, b"[", b"gh: service error (HTTP 502)\n")])
+        _, releases, _, _, _, _ = self.collect([(1, b"[", BAD_GATEWAY)] * 2)
         report = self.record_workflow_evidence({
             "stable-refs": json.dumps(refs),
             "releases": json.dumps(releases),
