@@ -47,8 +47,11 @@ export const SSOReturnError: Component<{ message?: string; duringCheck?: boolean
   <Show when={props.message}>
     <div
       role="alert"
-      class="rounded-md bg-red-50 dark:bg-red-900/25 border border-red-200 dark:border-red-800 px-3 py-2 text-sm text-red-600 dark:text-red-300"
-      classList={{ 'mt-4 text-left': props.duringCheck }}
+      class="rounded-md bg-red-50 dark:bg-red-900/25 border border-red-200 dark:border-red-800 px-3 py-2 text-sm dark:text-red-300"
+      classList={{
+        'mt-4 text-left text-red-700': props.duringCheck,
+        'text-red-600': !props.duringCheck,
+      }}
     >
       <Show when={props.duringCheck}>
         <p class="mb-1 font-semibold">Last single sign-on attempt</p>
