@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"reflect"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -203,16 +204,24 @@ func TestTrueNASDiskHistoryAuthenticatedRoute(t *testing.T) {
 		Min       float64 `json:"min"`
 		Max       float64 `json:"max"`
 	}
-	readAll := func() map[string][]point {
+	readAll := func(source string, metricSources map[string]string) map[string][]point {
 		t.Helper()
 		rec := request(token, "org-a", "")
 		var all struct {
-			ResourceType string             `json:"resourceType"`
-			ResourceID   string             `json:"resourceId"`
-			Metrics      map[string][]point `json:"metrics"`
+			ResourceType  string             `json:"resourceType"`
+			ResourceID    string             `json:"resourceId"`
+			Metrics       map[string][]point `json:"metrics"`
+			Source        *string            `json:"source"`
+			MetricSources map[string]string  `json:"metricSources"`
 		}
 		if rec.Code != http.StatusOK || json.Unmarshal(rec.Body.Bytes(), &all) != nil || all.ResourceType != "disk" || all.ResourceID != "disk-serial" {
 			t.Fatalf("all-metric drawer contract lost: status %d body %s", rec.Code, rec.Body.String())
+		}
+		if (source == "" && all.Source != nil) ||
+			(source != "" && (all.Source == nil || *all.Source != source)) ||
+			!reflect.DeepEqual(all.MetricSources, metricSources) {
+			t.Fatalf("incorrect disk History source: want source %q, metricSources %v; got %s",
+				source, metricSources, rec.Body.String())
 		}
 		if maxPoints == "240" {
 			t.Logf("BOUND_DRAWER_HISTORY_RESPONSE %s", rec.Body.String())
@@ -231,7 +240,7 @@ func TestTrueNASDiskHistoryAuthenticatedRoute(t *testing.T) {
 			}
 		}
 	}
-	assertNative(readAll()["smart_temp"], 4)
+	assertNative(readAll("", map[string]string{"smart_temp": "native"})["smart_temp"], 4)
 
 	// The real drawer asks for all metrics. An unrelated I/O row, then a
 	// single shallow temperature row, must not bypass the native reader.
@@ -246,13 +255,14 @@ func TestTrueNASDiskHistoryAuthenticatedRoute(t *testing.T) {
 	// still require the exact independently supplied timestamps.
 	ioTime := time.Now().UTC().Truncate(time.Second).Add(-20 * time.Second)
 	store.WriteBatchSync([]metrics.WriteMetric{{ResourceType: "disk", ResourceID: "disk-serial", MetricType: "diskread", Tier: metrics.TierRaw, Value: 1024, Timestamp: ioTime}})
-	all := readAll()
+	mixedSources := map[string]string{"diskread": "store", "smart_temp": "native"}
+	all := readAll("", mixedSources)
 	assertNative(all["smart_temp"], 6)
 	if len(all["diskread"]) != 1 || all["diskread"][0].Value != 1024 || all["diskread"][0].Min != 1024 || all["diskread"][0].Max != 1024 || all["diskread"][0].Timestamp != ioTime.UnixMilli() {
 		t.Fatalf("native supplement changed independent stored I/O: %+v", all["diskread"])
 	}
 	store.WriteBatchSync([]metrics.WriteMetric{{ResourceType: "disk", ResourceID: "disk-serial", MetricType: "smart_temp", Tier: metrics.TierRaw, Value: 44, Timestamp: ioTime}})
-	assertNative(readAll()["smart_temp"], 8)
+	assertNative(readAll("", mixedSources)["smart_temp"], 8)
 	rec = request(token, "org-a", "smart_temp")
 	if rec.Code != http.StatusOK || json.Unmarshal(rec.Body.Bytes(), &got) != nil || len(got.Points) != 3 || reads.Load() != 10 {
 		t.Fatalf("single-metric sparse store hid native History: status %d points %+v reads %d", rec.Code, got.Points, reads.Load())
@@ -266,7 +276,7 @@ func TestTrueNASDiskHistoryAuthenticatedRoute(t *testing.T) {
 	// 15-second bucket centres and per-observation values/bounds, not a fake
 	// aggregate temperature. Retain the real fixture API response for rendering.
 	maxPoints = "240"
-	all = readAll()
+	all = readAll("", mixedSources)
 	if len(all["smart_temp"]) != 3 || reads.Load() != 12 {
 		t.Fatalf("browser query hid native history: %+v, reads %d", all, reads.Load())
 	}
@@ -284,10 +294,56 @@ func TestTrueNASDiskHistoryAuthenticatedRoute(t *testing.T) {
 	for _, offset := range []time.Duration{-55 * time.Minute, -30 * time.Minute, -time.Minute} {
 		store.WriteBatchSync([]metrics.WriteMetric{{ResourceType: "disk", ResourceID: "disk-serial", MetricType: "smart_temp", Tier: metrics.TierRaw, Value: 35, Timestamp: now.Add(offset)}})
 	}
-	all = readAll()
+	all = readAll("store", nil)
 	if len(all["smart_temp"]) != 4 || all["smart_temp"][0].Value != 35 || reads.Load() != 12 {
 		t.Fatalf("complete store needlessly invoked/replaced native history: %+v, reads %d", all["smart_temp"], reads.Load())
 	}
+
+	// The selected ring series can include an observation that is also in the
+	// store. Check both the temperature-only reply and the mixed reply after
+	// adding stored I/O: neither can claim the store was empty.
+	overlapStore, err := metrics.NewStore(metrics.DefaultConfig(t.TempDir()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = overlapStore.Close() })
+	ring := monitoring.NewMetricsHistory(20, time.Hour)
+	setUnexportedField(t, monitor, "metricsHistory", ring)
+	setUnexportedField(t, monitor, "metricsStore", overlapStore)
+	warmth := []point{
+		{Timestamp: ioTime.Add(-55 * time.Minute).UnixMilli(), Value: 31},
+		{Timestamp: ioTime.Add(-30 * time.Minute).UnixMilli(), Value: 33},
+		{Timestamp: ioTime.UnixMilli(), Value: 44},
+	}
+	for _, sample := range warmth {
+		ring.AddDiskMetric("disk-serial", "smart_temp", sample.Value, time.UnixMilli(sample.Timestamp))
+	}
+	overlapStore.WriteBatchSync([]metrics.WriteMetric{{ResourceType: "disk", ResourceID: "disk-serial", MetricType: "smart_temp", Tier: metrics.TierRaw, Value: warmth[2].Value, Timestamp: ioTime}})
+	stored, err := overlapStore.Query("disk", "disk-serial", "smart_temp", ioTime.Add(-time.Hour), time.Now(), 0)
+	if err != nil || len(stored) != 1 || stored[0].Timestamp.UnixMilli() != warmth[2].Timestamp || stored[0].Value != warmth[2].Value {
+		t.Fatalf("fixture must persist the same sample: %+v, %v", stored, err)
+	}
+	assertRingTemperature := func(all map[string][]point) {
+		t.Helper()
+		if len(all["smart_temp"]) != len(warmth) || reads.Load() != 12 {
+			t.Fatalf("ring coverage should win without native requests: %+v, reads %d", all, reads.Load())
+		}
+		for i, got := range all["smart_temp"] {
+			want := warmth[i]
+			if got.Timestamp != want.Timestamp || got.Value != want.Value || got.Min != want.Value || got.Max != want.Value {
+				t.Fatalf("selected temperature sample %d changed: got %+v, want %+v", i, got, want)
+			}
+		}
+	}
+	assertRingTemperature(readAll("", map[string]string{"smart_temp": "memory"}))
+	overlapStore.WriteBatchSync([]metrics.WriteMetric{{ResourceType: "disk", ResourceID: "disk-serial", MetricType: "diskread", Tier: metrics.TierRaw, Value: 1024, Timestamp: ioTime}})
+	all = readAll("", map[string]string{"diskread": "store", "smart_temp": "memory"})
+	assertRingTemperature(all)
+	if len(all["diskread"]) != 1 || all["diskread"][0].Timestamp != ioTime.UnixMilli() || all["diskread"][0].Value != 1024 {
+		t.Fatalf("selected ring Temperature changed the stored I/O sample: %+v", all["diskread"])
+	}
+
+	setUnexportedField(t, monitor, "metricsStore", store)
 	if err := store.Close(); err != nil {
 		t.Fatal(err)
 	}

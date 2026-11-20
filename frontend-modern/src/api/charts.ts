@@ -220,6 +220,8 @@ export interface SingleMetricHistoryResponse {
   source?: 'store' | 'memory' | 'live' | 'mock_synthetic';
 }
 
+export type DiskMetricHistorySource = 'store' | 'memory' | 'native';
+
 export interface AllMetricsHistoryResponse {
   resourceType: string;
   resourceId: string;
@@ -228,6 +230,9 @@ export interface AllMetricsHistoryResponse {
   end: number; // Unix timestamp in milliseconds
   metrics: Record<string, AggregatedMetricPoint[]>;
   source?: 'store' | 'memory' | 'live' | 'mock_synthetic';
+  // Disk replies with native or mixed history identify each populated series
+  // instead of describing the whole reply with one source.
+  metricSources?: Record<string, DiskMetricHistorySource>;
 }
 
 const isHistoryObject = (value: unknown): value is Record<string, unknown> =>
@@ -276,7 +281,12 @@ function parseMetricsHistoryResponse(
     throw new Error('Invalid metrics history response.');
   }
   if (params.metric) {
-    if (value.metric !== params.metric || 'metrics' in value || !isHistoryPointList(value.points)) {
+    if (
+      value.metric !== params.metric ||
+      'metrics' in value ||
+      value.metricSources !== undefined ||
+      !isHistoryPointList(value.points)
+    ) {
       throw new Error('Invalid metrics history response.');
     }
     return value as unknown as SingleMetricHistoryResponse;
@@ -288,6 +298,28 @@ function parseMetricsHistoryResponse(
     !Object.values(value.metrics).every(isHistoryPointList)
   ) {
     throw new Error('Invalid metrics history response.');
+  }
+  if (value.metricSources !== undefined) {
+    const sources = value.metricSources;
+    const metrics = value.metrics as Record<string, AggregatedMetricPoint[]>;
+    const populated = Object.keys(metrics).filter((metric) => metrics[metric].length > 0);
+    if (
+      resourceType !== 'disk' ||
+      value.source !== undefined ||
+      !isHistoryObject(sources) ||
+      populated.length === 0 ||
+      Object.keys(sources).length !== populated.length ||
+      !populated.every((metric) => {
+        const origin = sources[metric];
+        return (
+          origin === 'store' ||
+          origin === 'memory' ||
+          (metric === 'smart_temp' && origin === 'native')
+        );
+      })
+    ) {
+      throw new Error('Invalid metrics history response.');
+    }
   }
   return value as unknown as AllMetricsHistoryResponse;
 }

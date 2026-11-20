@@ -28,9 +28,9 @@ func TestDiskDrawerNativeTemperatureHistory(t *testing.T) {
 			monitor.supplementalProviders = map[unifiedresources.DataSource]MonitorSupplementalRecordsProvider{
 				unifiedresources.SourceTrueNAS: &stubDiskTemperatureHistoryProvider{history: map[string][]MetricPoint{"disk-serial": native}},
 			}
-			got := monitor.GetDiskMetricsForChart("disk-serial", "smart_temp", time.Hour)
-			if !reflect.DeepEqual(got, native) {
-				t.Fatalf("drawer lost native timestamps/Celsius samples: got %+v, want %+v", got, native)
+			got, origin := monitor.GetDiskMetricsForChartWithSource("disk-serial", "smart_temp", time.Hour)
+			if !reflect.DeepEqual(got, native) || origin != "native" {
+				t.Fatalf("drawer lost native origin or samples: got %s %+v, want native %+v", origin, got, native)
 			}
 			got[0].Value = 999
 			if next := monitor.GetDiskMetricsForChart("disk-serial", "smart_temp", time.Hour); !reflect.DeepEqual(next, native) {
@@ -74,8 +74,8 @@ func TestDiskDrawerNativeHistoryBoundaries(t *testing.T) {
 	for _, offset := range []time.Duration{-55 * time.Minute, -30 * time.Minute, -time.Minute} {
 		monitor.metricsHistory.AddDiskMetric("known-disk", "smart_temp", 35, now.Add(offset))
 	}
-	if got := monitor.GetDiskMetricsForChart("known-disk", "smart_temp", time.Hour); len(got) != 3 || got[0].Value != 35 || provider.calls != calls {
-		t.Fatalf("sufficient local coverage should not invoke native RPC: %+v, calls %d", got, provider.calls)
+	if got, origin := monitor.GetDiskMetricsForChartWithSource("known-disk", "smart_temp", time.Hour); origin != "memory" || len(got) != 3 || got[0].Value != 35 || provider.calls != calls {
+		t.Fatalf("sufficient local memory coverage should not invoke native RPC: %s %+v, calls %d", origin, got, provider.calls)
 	}
 	var nilMonitor *Monitor
 	if got := nilMonitor.GetDiskMetricsForChart("known-disk", "smart_temp", time.Hour); len(got) != 0 {

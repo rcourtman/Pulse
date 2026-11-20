@@ -7029,12 +7029,13 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 		}
 	}
 
-	fallbackAll := func() (map[string][]map[string]interface{}, string, bool) {
+	fallbackAll := func() (map[string][]map[string]interface{}, string, map[string]string) {
 		if !fallbackAllowed || metricType != "" {
-			return nil, "", false
+			return nil, "", nil
 		}
 
 		var metrics map[string][]monitoring.MetricPoint
+		var diskSources map[string]string
 		guestHistory := false
 		source := historySourceMemory
 		switch runtimeResourceType {
@@ -7070,11 +7071,16 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 				}
 			}
 		case "disk":
-			metrics = map[string][]monitoring.MetricPoint{
-				"disk":       monitor.GetDiskMetricsForChart(resourceID, "disk", duration),
-				"diskread":   monitor.GetDiskMetricsForChart(resourceID, "diskread", duration),
-				"diskwrite":  monitor.GetDiskMetricsForChart(resourceID, "diskwrite", duration),
-				"smart_temp": monitor.GetDiskMetricsForChart(resourceID, "smart_temp", duration),
+			metrics = make(map[string][]monitoring.MetricPoint, 4)
+			if !mock.IsMockEnabled() {
+				diskSources = make(map[string]string, 4)
+			}
+			for _, metric := range []string{"disk", "diskread", "diskwrite", "smart_temp"} {
+				points, origin := monitor.GetDiskMetricsForChartWithSource(resourceID, metric, duration)
+				metrics[metric] = points
+				if diskSources != nil && len(points) > 0 {
+					diskSources[metric] = origin
+				}
 			}
 		default:
 			if runtimeResourceType == "node" {
@@ -7090,7 +7096,7 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 					source = historySourceMock
 				}
 			} else {
-				return nil, "", false
+				return nil, "", nil
 			}
 		}
 
@@ -7112,9 +7118,48 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 			source = historySourceLive
 		}
 		if len(apiData) == 0 {
-			return nil, "", false
+			return nil, "", nil
 		}
-		return apiData, source, true
+		return apiData, source, diskSources
+	}
+
+	allHistoryResponse := func(data map[string][]map[string]interface{}, source string, diskSources map[string]string) map[string]interface{} {
+		response := map[string]interface{}{
+			"resourceType": responseResourceType,
+			"resourceId":   resourceID,
+			"range":        timeRange,
+			"start":        start.UnixMilli(),
+			"end":          end.UnixMilli(),
+			"metrics":      data,
+			"source":       source,
+		}
+		// Keep the existing hint for uniform stored history or genuine
+		// memory-only fallback. A ring series can also be chosen over sparse
+		// stored readings, including if Temperature is the only metric; the
+		// memory-only hint would wrongly say the store had nothing.
+		var common string
+		for metric, origin := range diskSources {
+			if len(data[metric]) == 0 {
+				delete(diskSources, metric)
+				continue
+			}
+			switch {
+			case common == "":
+				common = origin
+			case common != origin:
+				common = "mixed"
+			}
+		}
+		if common == "" {
+			return response
+		}
+		if common == historySourceStore || (common == historySourceMemory && source != historySourceStore) {
+			response["source"] = common
+			return response
+		}
+		delete(response, "source")
+		response["metricSources"] = diskSources
+		return response
 	}
 
 	// Mock storage targets with current capacity are fully answerable from the
@@ -7139,7 +7184,7 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 				r.ensureChartService().WriteHistoryJSON(w, req, response, duration)
 				return
 			}
-		} else if apiData, source, ok := fallbackAll(); ok {
+		} else if apiData, source, _ := fallbackAll(); len(apiData) > 0 {
 			response["metrics"] = apiData
 			response["source"] = source
 			w.Header().Set("Content-Type", "application/json")
@@ -7203,23 +7248,14 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 				return
 			}
 		} else {
-			if apiData, source, ok := fallbackAll(); ok {
+			if apiData, source, diskSources := fallbackAll(); len(apiData) > 0 {
 				log.Warn().
 					Str("resourceType", runtimeResourceType).
 					Str("resourceId", resourceID).
 					Str("source", source).
 					Msg("Metrics store unavailable; serving history from fallback source")
-				response := map[string]interface{}{
-					"resourceType": responseResourceType,
-					"resourceId":   resourceID,
-					"range":        timeRange,
-					"start":        start.UnixMilli(),
-					"end":          end.UnixMilli(),
-					"metrics":      apiData,
-					"source":       source,
-				}
 				w.Header().Set("Content-Type", "application/json")
-				r.ensureChartService().WriteHistoryJSON(w, req, response, duration)
+				r.ensureChartService().WriteHistoryJSON(w, req, allHistoryResponse(apiData, source, diskSources), duration)
 				return
 			}
 		}
@@ -7237,11 +7273,11 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 	// supplement only a better series, after successful store and access checks.
 	// Keep the issued window and ordinary aggregation contract, and never replace
 	// independent metrics or turn a failed store read into a successful fallback.
-	supplementDiskTemperature := func(current []metricstore.MetricPoint) []map[string]interface{} {
+	supplementDiskTemperature := func(current []metricstore.MetricPoint) ([]map[string]interface{}, string) {
 		if !fallbackAllowed || runtimeResourceType != "disk" || mock.IsMockEnabled() {
-			return nil
+			return nil, ""
 		}
-		candidate := monitor.GetDiskMetricsForChart(resourceID, "smart_temp", duration)
+		candidate, source := monitor.GetDiskMetricsForChartWithSource(resourceID, "smart_temp", duration)
 		withinWindow := make([]monitoring.MetricPoint, 0, len(candidate))
 		for _, point := range candidate {
 			if !point.Timestamp.Before(start) && !point.Timestamp.After(end) {
@@ -7250,7 +7286,7 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 		}
 		apiPoints := buildHistoryPoints(withinWindow, stepSecs)
 		if len(apiPoints) == 0 {
-			return nil
+			return nil, ""
 		}
 		var currentSpan int64
 		if len(current) > 1 {
@@ -7258,9 +7294,9 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 		}
 		candidateSpan := apiPoints[len(apiPoints)-1]["timestamp"].(int64) - apiPoints[0]["timestamp"].(int64)
 		if candidateSpan > currentSpan || (candidateSpan == currentSpan && len(apiPoints) > len(current)) {
-			return apiPoints
+			return apiPoints, source
 		}
-		return nil
+		return nil, ""
 	}
 
 	var response interface{}
@@ -7303,7 +7339,7 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 		}
 
 		if response == nil && len(points) > 0 && metricType == "smart_temp" {
-			if apiPoints := supplementDiskTemperature(points); len(apiPoints) > 0 {
+			if apiPoints, _ := supplementDiskTemperature(points); len(apiPoints) > 0 {
 				response = map[string]interface{}{
 					"resourceType": responseResourceType,
 					"resourceId":   resourceID,
@@ -7397,22 +7433,14 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 		}
 
 		if len(metricsMap) == 0 {
-			if apiData, fallbackSource, ok := fallbackAll(); ok {
+			if apiData, fallbackSource, diskSources := fallbackAll(); len(apiData) > 0 {
 				source = fallbackSource
 				log.Info().
 					Str("resourceType", runtimeResourceType).
 					Str("resourceId", resourceID).
 					Str("source", source).
 					Msg("Metrics store empty; serving history from fallback source")
-				response = map[string]interface{}{
-					"resourceType": responseResourceType,
-					"resourceId":   resourceID,
-					"range":        timeRange,
-					"start":        start.UnixMilli(),
-					"end":          end.UnixMilli(),
-					"metrics":      apiData,
-					"source":       source,
-				}
+				response = allHistoryResponse(apiData, source, diskSources)
 			}
 		}
 
@@ -7420,6 +7448,7 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 		if response == nil {
 			apiData := make(map[string][]map[string]interface{})
 			mixedHostHistory := false
+			var diskSources map[string]string
 			for metric, points := range metricsMap {
 				apiPoints := make([]map[string]interface{}, len(points))
 				for i, p := range points {
@@ -7434,9 +7463,13 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 			}
 
 			if runtimeResourceType == "disk" {
-				if points := supplementDiskTemperature(metricsMap["smart_temp"]); len(points) > 0 {
+				if points, temperatureSource := supplementDiskTemperature(metricsMap["smart_temp"]); len(points) > 0 {
 					apiData["smart_temp"] = points
-					source = historySourceMemory
+					diskSources = make(map[string]string, len(apiData))
+					for metric := range apiData {
+						diskSources[metric] = historySourceStore
+					}
+					diskSources["smart_temp"] = temperatureSource
 				}
 			}
 
@@ -7471,7 +7504,7 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 			// only the absent series from the deterministic chart fallback so one
 			// populated metric cannot suppress entire drawer groups.
 			if mock.IsMockEnabled() {
-				if fallbackData, fallbackSource, ok := fallbackAll(); ok {
+				if fallbackData, fallbackSource, _ := fallbackAll(); len(fallbackData) > 0 {
 					supplemented := false
 					for metric, points := range fallbackData {
 						if len(apiData[metric]) > 0 || len(points) == 0 {
@@ -7491,21 +7524,14 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 				}
 			}
 
-			response = map[string]interface{}{
-				"resourceType": responseResourceType,
-				"resourceId":   resourceID,
-				"range":        timeRange,
-				"start":        start.UnixMilli(),
-				"end":          end.UnixMilli(),
-				"metrics":      apiData,
-				"source":       source,
-			}
+			all := allHistoryResponse(apiData, source, diskSources)
 			if mixedHostHistory {
 				// The optional hint describes no single origin in this reply:
 				// stored CPU/capacity survives beside native or ring I/O. Calling
 				// all of it "memory" falsely says the history store has no data.
-				delete(response.(map[string]interface{}), "source")
+				delete(all, "source")
 			}
+			response = all
 		}
 	}
 
