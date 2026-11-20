@@ -64,6 +64,7 @@ export interface GuestDrawerViewState {
 export interface GuestDrawerHistoryTarget {
   resourceType: HistoryResourceType;
   resourceId: string;
+  pollAfterRead?: boolean;
 }
 
 export interface GuestDrawerHistoryChartConfig {

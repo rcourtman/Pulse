@@ -1,4 +1,4 @@
-import { createMemo, type Accessor } from 'solid-js';
+import { createMemo, createSignal, type Accessor } from 'solid-js';
 
 import {
   ChartsAPI,
@@ -7,7 +7,7 @@ import {
   type ResourceType,
   type SingleMetricHistoryResponse,
 } from '@/api/charts';
-import { createNonSuspendingQuery } from '@/hooks/createNonSuspendingQuery';
+import { createNonSuspendingQuery, STALLED_QUERY_READ_MS } from '@/hooks/createNonSuspendingQuery';
 
 import {
   GUEST_DRAWER_HISTORY_DEFAULT_RANGE,
@@ -22,6 +22,7 @@ export interface GuestDrawerHistoryQueryKey {
   resourceId: string;
   range: HistoryTimeRange;
   liveReadingsAvailable: boolean;
+  pollAfterRead: boolean;
 }
 
 const EMPTY_HISTORY_RESPONSE: AllMetricsHistoryResponse = {
@@ -59,6 +60,43 @@ const filterUnavailableLiveReading = (
     ? { ...response, metrics: {}, source: 'store' }
     : response;
 
+const readHistory = async (key: GuestDrawerHistoryQueryKey, signal: AbortSignal) =>
+  filterUnavailableLiveReading(
+    normalizeHistoryResponse(
+      await ChartsAPI.getMetricsHistory({
+        resourceType: key.resourceType,
+        resourceId: key.resourceId,
+        range: key.range,
+        maxPoints: GUEST_DRAWER_HISTORY_MAX_POINTS,
+        signal,
+      }),
+    ),
+    key.liveReadingsAvailable,
+  );
+
+const readHistoryBeforeDeadline = async (key: GuestDrawerHistoryQueryKey, owner: AbortSignal) => {
+  if (owner.aborted) throw owner.reason;
+  const controller = new AbortController();
+  const abort = () => controller.abort(owner.reason);
+  owner.addEventListener('abort', abort, { once: true });
+  const deadline = setTimeout(
+    () => controller.abort(new Error('The request timed out.')),
+    STALLED_QUERY_READ_MS,
+  );
+  // Settle the chart state even if a transport fails to honour the abort.
+  const interrupted = new Promise<never>((_, reject) => {
+    controller.signal.addEventListener('abort', () => reject(controller.signal.reason), {
+      once: true,
+    });
+  });
+  try {
+    return await Promise.race([interrupted, readHistory(key, controller.signal)]);
+  } finally {
+    clearTimeout(deadline);
+    owner.removeEventListener('abort', abort);
+  }
+};
+
 // Snapshot replacement often creates a new target object with unchanged
 // coordinates. A delivery transition also owns a new read, so an open drawer
 // does not wait for its next poll after the source stops or resumes reporting.
@@ -77,6 +115,7 @@ export const createGuestDrawerHistorySource = (
         resourceId: current.resourceId,
         range: range(),
         liveReadingsAvailable: liveReadingsAvailable(),
+        pollAfterRead: current.pollAfterRead === true,
       };
     },
     null,
@@ -89,7 +128,8 @@ export const createGuestDrawerHistorySource = (
           previous.resourceType === next.resourceType &&
           previous.resourceId === next.resourceId &&
           previous.range === next.range &&
-          previous.liveReadingsAvailable === next.liveReadingsAvailable,
+          previous.liveReadingsAvailable === next.liveReadingsAvailable &&
+          previous.pollAfterRead === next.pollAfterRead,
         ),
     },
   );
@@ -100,27 +140,27 @@ export const createGuestDrawerHistorySource = (
 export const createGuestDrawerHistoryQuery = (
   source: Accessor<GuestDrawerHistoryQueryKey | null>,
 ) => {
+  const [pollBlocker, setPollBlocker] = createSignal<AbortSignal | null>(null);
   const query = createNonSuspendingQuery<AllMetricsHistoryResponse, GuestDrawerHistoryQueryKey>({
     source,
-    fetcher: async (key, signal) =>
-      filterUnavailableLiveReading(
-        normalizeHistoryResponse(
-          await ChartsAPI.getMetricsHistory({
-            resourceType: key.resourceType,
-            resourceId: key.resourceId,
-            range: key.range,
-            maxPoints: GUEST_DRAWER_HISTORY_MAX_POINTS,
-            signal,
-          }),
-        ),
-        key.liveReadingsAvailable,
-      ),
+    fetcher: async (key, signal) => {
+      if (!key.pollAfterRead) return readHistory(key, signal);
+      setPollBlocker(signal);
+      try {
+        return await readHistoryBeforeDeadline(key, signal);
+      } finally {
+        // A range/host change can start a new read before this one unwinds.
+        setPollBlocker((active) => (active === signal ? null : active));
+      }
+    },
     initialValue: EMPTY_HISTORY_RESPONSE,
     cacheKey: (key) => `guest-drawer-history:${key.resourceType}:${key.resourceId}:${key.range}`,
     // Former-host or former-range observations are not evidence for this
     // target. Matching cached reads and same-source polling remain retained.
     retainPreviousValueOnSourceChange: false,
-    pollMs: GUEST_DRAWER_HISTORY_POLL_MS,
+    // For opt-in targets the bounded read owns settlement, not the poll.
+    // Resume the 30s cadence when it finishes, without a catch-up request.
+    pollMs: () => (pollBlocker() === null ? GUEST_DRAWER_HISTORY_POLL_MS : undefined),
   });
   return {
     ...query,

@@ -21,7 +21,10 @@ import {
 import { asTrimmedString } from '@/utils/stringUtils';
 import { getMemoryObservationPresentation } from '@/utils/memoryObservation';
 import { getWorkloadGuestDiskRead } from '@/utils/workloadGuestPresentation';
-import { getAgentFirstReportStatusIndicator } from '@/utils/agentResources';
+import {
+  getAgentFirstReportStatusIndicator,
+  isTrueNASSystemResource,
+} from '@/utils/agentResources';
 
 const finiteMetric = (value: number | undefined): number | undefined =>
   typeof value === 'number' && Number.isFinite(value) ? value : undefined;
@@ -137,16 +140,20 @@ export const getResourceMetricsHistoryTarget = (
 ): GuestDrawerHistoryTarget | null => {
   const metricsType = asTrimmedString(resource.metricsTarget?.resourceType);
   const metricsId = asTrimmedString(resource.metricsTarget?.resourceId);
+  // TrueNAS host history can still be returning useful data after one tick.
+  // Keep the host's read and poll independently of disk/VM history.
+  const readTiming = isTrueNASSystemResource(resource) ? { pollAfterRead: true } : undefined;
   if (metricsType && metricsId) {
     return {
       resourceType: metricsType as MetricsHistoryResourceType,
       resourceId: metricsId,
+      ...readTiming,
     };
   }
 
   if (resource.type === 'agent') {
     const resourceId = asTrimmedString(resource.id);
-    return resourceId ? { resourceType: 'agent', resourceId } : null;
+    return resourceId ? { resourceType: 'agent', resourceId, ...readTiming } : null;
   }
 
   return null;
