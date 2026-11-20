@@ -157,7 +157,8 @@ func TestVzdumpJobLogSchedulingPrunesAndSeparatesConnections(t *testing.T) {
 	client.requests = nil
 	m.synthesizeVzdumpJobGuestTasks(context.Background(), "other", client, jobs, upids)
 	require.Equal(t, upids[jobs[0].ID], client.requests[0], "another connection has its own request turns")
-	m.synthesizeVzdumpJobGuestTasks(context.Background(), "site", client, nil, nil)
+	m.state = models.NewState()
+	m.pollBackupTasks(context.Background(), "site", &historyPVEClient{})
 	require.Len(t, m.vzdumpJobTaskCache, maxVzdumpJobLogFetchesPerPoll, "removed jobs discard scheduling state, not another connection")
 	client.requests = nil
 	m.synthesizeVzdumpJobGuestTasks(context.Background(), "site", client, jobs, upids)
@@ -400,7 +401,8 @@ func TestVzdumpJobLogSchedulingQueueCursorOnlyTracksActualScopedReads(t *testing
 	m.synthesizeVzdumpJobGuestTasks(context.Background(), "other", client, jobs, upids)
 	require.Equal(t, upids[jobs[1].ID], client.requests[1], "a new connection starts live, regardless of its peer's cursor")
 	require.True(t, m.vzdumpJobLogHistoryFirst["site"])
-	m.synthesizeVzdumpJobGuestTasks(context.Background(), "site", client, nil, nil)
+	m.state = models.NewState()
+	m.pollBackupTasks(context.Background(), "site", &historyPVEClient{})
 	require.NotContains(t, m.vzdumpJobLogHistoryFirst, "site")
 	require.Contains(t, m.vzdumpJobLogHistoryFirst, "other")
 	for key := range m.vzdumpJobTaskCache {

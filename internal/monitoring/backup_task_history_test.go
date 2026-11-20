@@ -5,8 +5,12 @@ import (
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"os"
+	"path/filepath"
 	"sort"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -16,6 +20,7 @@ import (
 	recoverymanager "github.com/rcourtman/pulse-go-rewrite/internal/recovery/manager"
 	proxmoxmapper "github.com/rcourtman/pulse-go-rewrite/internal/recovery/mapper/proxmox"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/proxmox"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -102,6 +107,206 @@ func TestBackupHistoryTruncationDoesNotHideAnotherNodesFailure(t *testing.T) {
 	require.NoError(t, err)
 	require.False(t, collection.Complete)
 	require.Equal(t, "collection_failed", collection.Reason)
+}
+
+// Ordinary PVE HTTP reads -> poll publication -> live payload and execution
+// history. Inventory and log availability can recover on different polls.
+func TestBackupHistoryGuestLogsSurviveUnreadInventory(t *testing.T) {
+	const instance = "site"
+	job, prefix := vzdumpGuestResultFixture()
+	job.StartTime = time.Date(2026, 11, 20, 12, 0, 0, 0, time.UTC)
+	job.EndTime = job.StartTime.Add(10 * time.Minute)
+	full := append(append([]proxmox.TaskLogLine{}, prefix...),
+		proxmox.TaskLogLine{LineNumber: 6, Text: "INFO: Finished Backup of VM 103 (00:02:00)"},
+		proxmox.TaskLogLine{LineNumber: 7, Text: "TASK ERROR: one guest failed"})
+	short := append(append([]proxmox.TaskLogLine{}, prefix[:2]...),
+		proxmox.TaskLogLine{LineNumber: 3, Text: "TASK ERROR: one guest failed"})
+	var phase, reads atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Errorf("unexpected method %s", r.Method)
+		}
+		p := phase.Load()
+		var data any
+		switch r.URL.Path {
+		case "/api2/json/nodes":
+			status := "online"
+			if p == 5 {
+				status = "offline"
+			}
+			data = []proxmox.Node{{Node: "pve1", Status: status}, {Node: "pve2", Status: "online"}}
+		case "/api2/json/access/permissions":
+			data = map[string]any{r.URL.Query().Get("path"): map[string]int{"Sys.Audit": 1}}
+		case "/api2/json/nodes/pve1/tasks":
+			if p == 1 {
+				w.WriteHeader(http.StatusServiceUnavailable)
+				return
+			}
+			task := proxmox.Task{UPID: testJobUPID, Node: "pve1", Type: "vzdump", StartTime: job.StartTime.Unix()}
+			if p >= 2 {
+				task.EndTime, task.Status = job.EndTime.Unix(), "job errors"
+			}
+			data = []proxmox.Task{task}
+		case "/api2/json/nodes/pve2/tasks":
+			data = []proxmox.Task{{UPID: "sibling", Node: "pve2", Type: "vzdump", ID: "104",
+				StartTime: job.StartTime.Unix(), EndTime: job.StartTime.Add(time.Minute).Unix(), Status: "OK"}}
+		case "/api2/json/nodes/pve1/tasks/" + testJobUPID + "/log":
+			reads.Add(1)
+			switch p {
+			case 0:
+				data = prefix
+			case 3:
+				data = short
+			case 4:
+				data = full
+			default:
+				w.WriteHeader(http.StatusServiceUnavailable)
+				return
+			}
+		default:
+			t.Errorf("unexpected read %s", r.URL.Path)
+			http.NotFound(w, r)
+			return
+		}
+		if err := json.NewEncoder(w).Encode(map[string]any{"data": data}); err != nil {
+			t.Error(err)
+		}
+	}))
+	t.Cleanup(server.Close)
+	client, err := proxmox.NewClient(proxmox.ClientConfig{Host: server.URL, TokenName: "fixture@pam!readonly", TokenValue: "fixture"})
+	require.NoError(t, err)
+
+	ctx := context.Background()
+	dataDir := t.TempDir()
+	t.Setenv("PULSE_LEGACY_KEY_PATH", filepath.Join(dataDir, "absent-test-legacy.key"))
+	manager := recoverymanager.New(config.NewMultiTenantPersistence(dataDir))
+	m := &Monitor{state: models.NewState(), recoveryManager: manager}
+	store, err := manager.StoreForOrg("default")
+	require.NoError(t, err)
+	defer store.Close()
+	key := instance + "|" + testJobUPID
+	parent := instance + "-" + testJobUPID
+	peer := models.BackupTask{ID: "fixture-peer", Instance: "other-site", Node: "pve1", VMID: 102,
+		Type: "vzdump", Status: "OK", StartTime: job.StartTime, EndTime: job.EndTime, ObservedAt: job.EndTime}
+	m.state.UpdateBackupTasksForInstance(peer.Instance, []models.BackupTask{peer})
+
+	frames := map[string]any{}
+	var accepted, completed map[string]models.BackupTask
+	for p, label := range []string{"accepted", "inventory-unread", "listed-log-unread", "listed-log-short", "complete", "node-offline", "final-listed"} {
+		t.Run(label, func(t *testing.T) {
+			phase.Store(int32(p))
+			coverage, err := store.BackupHistoryCoverage(ctx, job.StartTime, time.Now().UTC())
+			require.NoError(t, err)
+			for _, source := range coverage.Sources {
+				if wait := time.Until(source.LastObservedAt.Add(time.Millisecond)); wait > 0 {
+					time.Sleep(wait)
+				}
+			}
+			m.pollBackupTasks(ctx, instance, client)
+			snapshot := m.PVEBackupsSnapshot()
+			frames[label] = map[string]any{"data": snapshot}
+			live := map[string]models.BackupTask{}
+			for _, task := range snapshot.BackupTasks {
+				live[task.ID] = task
+			}
+			assert.Equal(t, peer, live[peer.ID])
+			assert.Equal(t, "OK", live[instance+"-sibling"].Status)
+			firstID, failedID, lastID := parent+"-vm101", parent+"-vm102", parent+"-vm103"
+			first, failed, last := live[firstID], live[failedID], live[lastID]
+			assert.Equal(t, "OK", first.Status)
+			assert.Equal(t, "error", failed.Status)
+			assert.Equal(t, "storage unavailable", failed.Error)
+			assert.Equal(t, []string{"running", "running", "unknown", "unknown", "OK", "OK", "OK"}[p], last.Status)
+			assert.EqualValues(t, []int{1, 1, 2, 3, 4, 4, 4}[p], reads.Load())
+			assert.Equal(t, p >= 4, m.vzdumpJobTaskCache[key].final)
+			switch p {
+			case 0:
+				accepted = live
+			case 1:
+				assert.Equal(t, accepted[failedID], failed, "unread inventory carries without renewal")
+				assert.Equal(t, accepted[lastID], last)
+			case 2, 3:
+				assert.Equal(t, accepted[firstID], first, "retain the known finish, including observation time")
+				assert.Equal(t, accepted[failedID], failed, "retain failure without inventing a finish")
+				assert.Equal(t, accepted[lastID].ObservedAt, last.ObservedAt)
+				assert.True(t, last.EndTime.IsZero(), "the parent end does not measure the guest")
+				_, active := m.resolveBackupIntentContext("", instance, job.Node, 103, accepted[lastID].ObservedAt.Add(time.Second))
+				assert.False(t, active, "an ended parent withdraws running intent")
+			case 4:
+				completed = live
+				assert.True(t, job.StartTime.Add(3*time.Minute).Equal(last.EndTime))
+				assert.Equal(t, accepted[lastID].ID, last.ID)
+			case 5:
+				assert.Equal(t, completed[lastID], last, "offline does not reobserve a complete log")
+			}
+			points, _, err := store.ListPoints(ctx, recovery.ListPointsOptions{Kind: recovery.KindOther})
+			require.NoError(t, err)
+			byID := map[string]recovery.RecoveryPoint{}
+			for _, point := range points {
+				byID[point.ID] = point
+			}
+			assert.Equal(t, p >= 4, byID["pve-task:"+parent].Details["guestTaskDetailsComplete"])
+			assert.Equal(t, recovery.OutcomeFailed, byID["pve-task:"+failedID].Outcome)
+			assert.Equal(t, []recovery.Outcome{
+				recovery.OutcomeRunning, recovery.OutcomeRunning, recovery.OutcomeUnknown,
+				recovery.OutcomeUnknown, recovery.OutcomeSuccess, recovery.OutcomeSuccess, recovery.OutcomeSuccess,
+			}[p], byID["pve-task:"+lastID].Outcome)
+		})
+	}
+	if os.Getenv("PULSE_BACKUP_LOG_RECOVERY_FRAMES") == "1" {
+		b, err := json.Marshal(frames)
+		require.NoError(t, err)
+		t.Log("TASK_LOG_RECOVERY_FRAMES=" + string(b))
+	}
+}
+
+func TestBackupHistoryGuestLogFallbackRespectsWithdrawal(t *testing.T) {
+	for _, withdrawal := range []string{"empty-inventory", "access-denied", "removed-node", "empty-log-on-partial-list"} {
+		t.Run(withdrawal, func(t *testing.T) {
+			ctx := context.Background()
+			job, logLines := vzdumpGuestResultFixture()
+			task := proxmox.Task{UPID: testJobUPID, Node: job.Node, Type: job.Type, StartTime: job.StartTime.Unix()}
+			listed := proxmox.BackupTaskHistory{
+				Nodes: []proxmox.BackupTaskHistoryNode{{Node: job.Node, Complete: true}},
+				Tasks: []proxmox.Task{task},
+			}
+			client := &scheduledVzdumpClient{history: listed, read: func(string) ([]proxmox.TaskLogLine, error) { return logLines, nil }}
+			m := &Monitor{state: models.NewState()}
+			m.pollBackupTasks(ctx, job.Instance, client)
+			require.Len(t, m.state.GetBackupTasks(), 4)
+			unread := proxmox.BackupTaskHistory{Nodes: []proxmox.BackupTaskHistoryNode{{Node: job.Node, Reason: "collection_failed"}}}
+			client.history = unread
+			m.pollBackupTasks(ctx, job.Instance, client)
+			require.Len(t, m.state.GetBackupTasks(), 4, "unread is not withdrawal")
+
+			client.history = proxmox.BackupTaskHistory{}
+			wantRows := 0
+			switch withdrawal {
+			case "empty-inventory":
+				client.history.Nodes = listed.Nodes
+			case "access-denied":
+				client.history.Nodes = []proxmox.BackupTaskHistoryNode{{Node: job.Node, Reason: "access_denied"}}
+			case "empty-log-on-partial-list":
+				client.history = unread
+				client.history.Tasks = listed.Tasks
+				client.read = func(string) ([]proxmox.TaskLogLine, error) { return []proxmox.TaskLogLine{}, nil }
+				wantRows = 1
+			}
+			m.pollBackupTasks(ctx, job.Instance, client)
+			assert.Len(t, m.state.GetBackupTasks(), wantRows)
+			if wantRows == 0 {
+				assert.NotContains(t, m.vzdumpJobTaskCache, job.Instance+"|"+testJobUPID)
+			}
+
+			client.history = listed
+			client.read = func(string) ([]proxmox.TaskLogLine, error) { return nil, fmt.Errorf("fixture log unavailable") }
+			m.pollBackupTasks(ctx, job.Instance, client)
+			assert.Len(t, m.state.GetBackupTasks(), 1, "a later failed log cannot resurrect withdrawn children")
+			client.read = func(string) ([]proxmox.TaskLogLine, error) { return logLines, nil }
+			m.pollBackupTasks(ctx, job.Instance, client)
+			assert.Len(t, m.state.GetBackupTasks(), 4, "the next actual log recovers the children")
+		})
+	}
 }
 
 func vzdumpGuestResultFixture() (models.BackupTask, []proxmox.TaskLogLine) {

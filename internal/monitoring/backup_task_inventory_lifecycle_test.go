@@ -235,7 +235,7 @@ func TestBackupHistoryCarryForwardCannotAccumulateLiveWindows(t *testing.T) {
 				for i := range fresh {
 					fresh[i] = models.BackupTask{ID: fmt.Sprintf("fresh-%d-%d", poll, i), Instance: "site", Node: "unread", Type: "vzdump", VMID: 101, StartTime: old.Add(time.Duration(poll+1) * time.Minute), ObservedAt: time.Now().UTC()}
 				}
-				retained := m.retainUnreadBackupTasks("site", []proxmox.BackupTaskHistoryNode{{Node: "unread", Reason: "collection_failed"}}, fresh)
+				retained := m.retainUnreadBackupTasks("site", []proxmox.BackupTaskHistoryNode{{Node: "unread", Reason: "collection_failed"}}, fresh, nil)
 				require.Len(t, retained, previousCount, "partial windows cannot grow the live payload on each failed poll")
 				require.Equal(t, fresh, retained[:len(fresh)], "accepted page order and exact facts take priority")
 				m.state.UpdateBackupTasksForInstance("site", retained)
