@@ -8,6 +8,7 @@ import {
 import { buildMapExportSvg } from '../infrastructureMapExport';
 import {
   fitMapName,
+  nextMapHitIndex,
   wrapMapText,
   type MapDensity,
   type MapScene,
@@ -182,6 +183,131 @@ describe('fitMapName', () => {
     const cut = fit('paperless-ngx-archive');
     expect(cut.startsWith('paperless-')).toBe(true);
     expect(cut.endsWith('…')).toBe(true);
+  });
+});
+
+describe('nextMapHitIndex, the arrow keys', () => {
+  const tilesAt = (places: Array<[number, number]>): MapScene =>
+    ({
+      width: 400,
+      height: 400,
+      nodes: places.map(([x, y], index) => ({
+        kind: 'hit',
+        x,
+        y,
+        w: 40,
+        h: 40,
+        r: 6,
+        hit: { id: `t${index}`, name: `t${index}`, meta: '' },
+      })),
+    }) as unknown as MapScene;
+  // Two rows of three, and a row of one under the middle:
+  //   0 1 2
+  //   3 4 5
+  //     6
+  const scene = tilesAt([
+    [0, 0],
+    [44, 0],
+    [88, 0],
+    [0, 44],
+    [44, 44],
+    [88, 44],
+    [44, 88],
+  ]);
+
+  it('goes to the tile that lies the way the arrow points', () => {
+    expect(nextMapHitIndex(scene, 0, 'ArrowRight')).toBe(1);
+    expect(nextMapHitIndex(scene, 1, 'ArrowLeft')).toBe(0);
+    expect(nextMapHitIndex(scene, 1, 'ArrowDown')).toBe(4);
+    expect(nextMapHitIndex(scene, 4, 'ArrowUp')).toBe(1);
+    expect(nextMapHitIndex(scene, 4, 'ArrowDown')).toBe(6);
+    expect(nextMapHitIndex(scene, 6, 'ArrowUp')).toBe(4);
+  });
+
+  it('carries a row on into the next one, and back, when nothing lies to the side', () => {
+    expect(nextMapHitIndex(scene, 2, 'ArrowRight')).toBe(3);
+    expect(nextMapHitIndex(scene, 3, 'ArrowLeft')).toBe(2);
+    expect(nextMapHitIndex(scene, 5, 'ArrowRight')).toBe(6);
+    // The first and last tile are the ends.
+    expect(nextMapHitIndex(scene, 0, 'ArrowLeft')).toBeNull();
+    expect(nextMapHitIndex(scene, 6, 'ArrowRight')).toBeNull();
+  });
+
+  it('takes the nearest tile off to one side when none is in line, and stops at an edge', () => {
+    expect(nextMapHitIndex(scene, 3, 'ArrowDown')).toBe(6);
+    expect(nextMapHitIndex(scene, 5, 'ArrowDown')).toBe(6);
+    expect(nextMapHitIndex(scene, 6, 'ArrowDown')).toBeNull();
+    expect(nextMapHitIndex(scene, 1, 'ArrowUp')).toBeNull();
+  });
+
+  it('goes along the row to a tile in line, past a nearer one on another row', () => {
+    const apart = tilesAt([
+      [0, 0],
+      [44, 60],
+      [200, 10],
+    ]);
+    expect(nextMapHitIndex(apart, 0, 'ArrowRight')).toBe(2);
+    expect(nextMapHitIndex(apart, 2, 'ArrowLeft')).toBe(0);
+    // Down, a tile in line is preferred to a nearer one off to the side.
+    const stacked = tilesAt([
+      [0, 0],
+      [60, 44],
+      [10, 200],
+    ]);
+    expect(nextMapHitIndex(stacked, 0, 'ArrowDown')).toBe(2);
+  });
+
+  it('goes to the first and last tile on Home and End, and nowhere from a tile that is not there', () => {
+    expect(nextMapHitIndex(scene, 4, 'Home')).toBe(0);
+    expect(nextMapHitIndex(scene, 4, 'End')).toBe(6);
+    expect(nextMapHitIndex(scene, 0, 'Home')).toBeNull();
+    expect(nextMapHitIndex(scene, 6, 'End')).toBeNull();
+    expect(nextMapHitIndex(scene, 99, 'ArrowRight')).toBeNull();
+    expect(nextMapHitIndex(tilesAt([[0, 0]]), 0, 'End')).toBeNull();
+  });
+
+  it('reaches every tile of a drawn map with the arrows alone, each press going the way it says', () => {
+    const many = Array.from({ length: 40 }, (_, index) => guest(`svc-${index}`));
+    const diagram = buildServiceDiagram(buildInfrastructureMapModel(estate(many)), {
+      maxTilesPerGroup: 80,
+    });
+    const densities = ['marks', 'names'] as const;
+    const scenes = [
+      ...[320, 374].flatMap((width) =>
+        densities.map((density) => flowServiceDiagram(diagram, width, density).scene),
+      ),
+      ...[768, 1024, 1440].flatMap((width) =>
+        densities.map((density) => layoutServiceDiagram(diagram, { width, density })),
+      ),
+    ];
+    for (const drawn of scenes) {
+      const tiles = drawn.nodes.filter(
+        (node): node is Extract<SceneNode, { kind: 'hit' }> => node.kind === 'hit',
+      );
+      expect(tiles.length).toBeGreaterThan(40);
+      const seen = new Set([0]);
+      const queue = [0];
+      while (queue.length > 0) {
+        const from = queue.shift()!;
+        for (const key of ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'] as const) {
+          const to = nextMapHitIndex(drawn, from, key);
+          if (to === null) continue;
+          const a = tiles[from];
+          const b = tiles[to];
+          const where = `${drawn.width} ${key} ${a.hit.name} to ${b.hit.name}`;
+          if (key === 'ArrowDown') expect(b.y, where).toBeGreaterThanOrEqual(a.y + a.h);
+          if (key === 'ArrowUp') expect(b.y + b.h, where).toBeLessThanOrEqual(a.y);
+          if (key === 'ArrowRight') expect(b.x >= a.x + a.w || to === from + 1, where).toBe(true);
+          if (key === 'ArrowLeft') expect(b.x + b.w <= a.x || to === from - 1, where).toBe(true);
+          if (!seen.has(to)) {
+            seen.add(to);
+            queue.push(to);
+          }
+        }
+      }
+      const missed = tiles.filter((_, index) => !seen.has(index)).map((tile) => tile.hit.name);
+      expect(missed, `${drawn.width}`).toEqual([]);
+    }
   });
 });
 

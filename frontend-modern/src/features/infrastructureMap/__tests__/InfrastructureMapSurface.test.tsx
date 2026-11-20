@@ -400,6 +400,152 @@ describe('InfrastructureMapSurface connections', () => {
     expect(rings(container)).toHaveLength(0);
   });
 
+  describe('with a keyboard', () => {
+    const tiles = (container: HTMLElement) => [
+      ...container.querySelectorAll<SVGElement>('[data-map-hit]'),
+    ];
+    const stops = (container: HTMLElement) =>
+      tiles(container).filter((element) => element.getAttribute('tabindex') === '0');
+    // False when the page kept the key for itself.
+    const key = (element: Element, name: string, extra: KeyboardEventInit = {}) =>
+      fireEvent.keyDown(element, { key: name, ...extra });
+    const hint = () => screen.queryByText('Arrow keys move between tiles');
+
+    it('is one stop for the Tab key, the first tile, with every other tile out of its way', () => {
+      const { container } = draw();
+      const all = tiles(container);
+      expect(all.length).toBeGreaterThan(2);
+      expect(stops(container)).toEqual([all[0]]);
+      expect(all.slice(1).every((element) => element.getAttribute('tabindex') === '-1')).toBe(true);
+    });
+
+    it('moves the stop to the tile that takes focus, and keeps it and the focus when the map is drawn again', () => {
+      const { container } = draw();
+      (tile(container, 'qbittorrent') as SVGElement).focus();
+      expect(document.activeElement).toBe(tile(container, 'qbittorrent'));
+      expect(stops(container)).toEqual([tile(container, 'qbittorrent')]);
+
+      // The drawing is replaced whole: a new element for the same resource.
+      const before = tile(container, 'qbittorrent');
+      fireEvent.click(screen.getByRole('button', { name: 'Compact' }));
+      expect(tile(container, 'qbittorrent')).not.toBe(before);
+      expect(document.activeElement).toBe(tile(container, 'qbittorrent'));
+      expect(stops(container)).toEqual([tile(container, 'qbittorrent')]);
+      expect(tiles(container).filter((element) => element.hasAttribute('tabindex'))).toHaveLength(
+        tiles(container).length,
+      );
+    });
+
+    it('keeps the focus on the map, on the tile now in its place, when the focused thing is gone', () => {
+      const [resources, setResources] = createSignal<Resource[]>(behindVpn());
+      resourcesMock.read = resources;
+      const { container } = draw();
+      const all = tiles(container);
+      const focused = tile(container, 'sonarr') as SVGElement;
+      const at = all.indexOf(focused);
+      focused.focus();
+      expect(document.activeElement).toBe(focused);
+
+      setResources(behindVpn().filter((resource) => resource.name !== 'sonarr'));
+
+      const now = tiles(container);
+      expect(now.length).toBe(all.length - 1);
+      const inItsPlace = now[Math.min(at, now.length - 1)];
+      expect(document.activeElement).toBe(inItsPlace);
+      expect(stops(container)).toEqual([inItsPlace]);
+    });
+
+    it('takes no focus when the map is drawn again while the focus is elsewhere', () => {
+      const { container } = draw();
+      const button = screen.getByRole('button', { name: 'Compact' });
+      button.focus();
+      fireEvent.click(button);
+      expect(document.activeElement).toBe(button);
+      expect(stops(container)).toEqual([tiles(container)[0]]);
+    });
+
+    it('moves the focus to another tile on an arrow, Home or End, and keeps the key from the page', () => {
+      const { container } = draw();
+      const all = tiles(container);
+      all[0].focus();
+      expect(document.activeElement).toBe(all[0]);
+
+      expect(key(all[0], 'End')).toBe(false);
+      expect(document.activeElement).toBe(all[all.length - 1]);
+      expect(key(all[all.length - 1], 'Home')).toBe(false);
+      expect(document.activeElement).toBe(all[0]);
+
+      expect(key(all[0], 'ArrowRight')).toBe(false);
+      expect(document.activeElement).not.toBe(all[0]);
+      expect(all).toContain(document.activeElement);
+    });
+
+    it('leaves the page a key that moves nowhere, or is held with another', () => {
+      const { container } = draw();
+      const all = tiles(container);
+      all[0].focus();
+
+      expect(key(all[0], 'Home')).toBe(true);
+      expect(key(all[0], 'ArrowRight', { ctrlKey: true })).toBe(true);
+      expect(key(all[0], 'PageDown')).toBe(true);
+      expect(document.activeElement).toBe(all[0]);
+    });
+
+    it('says the arrow keys move between tiles, to a keyboard user, until one has been used', () => {
+      const { container } = draw();
+      const first = tile(container, 'qbittorrent');
+
+      // A pointer is told nothing about keys.
+      fireEvent.pointerOver(first);
+      expect(hint()).toBeNull();
+
+      fireEvent.keyDown(document.body, { key: 'Tab' });
+      fireEvent.focusIn(first);
+      expect(hint()).not.toBeNull();
+
+      // Home and End are not what the hint is about.
+      key(first, 'End');
+      const last = tiles(container)[tiles(container).length - 1];
+      fireEvent.focusIn(last);
+      expect(hint()).not.toBeNull();
+
+      key(last, 'ArrowLeft');
+      fireEvent.focusIn(first);
+      expect(hint()).toBeNull();
+    });
+
+    it('lets a tap do what it did, whatever key is pressed between the touch and its click', () => {
+      const { container } = draw();
+      const target = tile(container, 'qbittorrent');
+      press(target, 'touch');
+      fireEvent.keyDown(document.body, { key: 'Shift' });
+      const click = new MouseEvent('click', { bubbles: true, cancelable: true });
+      target.dispatchEvent(click);
+      // The first tap reads the tile; it does not open it.
+      expect(click.defaultPrevented).toBe(true);
+      expect(said().at(-1)).toContain('Tap again to open');
+    });
+
+    it('gives a map with nothing on it no instructions for moving between tiles', () => {
+      resourcesMock.value = [];
+      render(() => (
+        <MemoryRouter>
+          <Route path="/" component={InfrastructureMapSurface} />
+        </MemoryRouter>
+      ));
+      expect(screen.getByText('Nothing to draw yet')).toBeInTheDocument();
+      expect(screen.queryByText(/Arrow keys move between tiles\./)).toBeNull();
+    });
+
+    it('says nothing about keys to a tile that took focus from a press of the pointer', () => {
+      const { container } = draw();
+      fireEvent.keyDown(document.body, { key: 'Tab' });
+      press(tile(container, 'qbittorrent'), 'mouse');
+      fireEvent.focusIn(tile(container, 'qbittorrent'));
+      expect(hint()).toBeNull();
+    });
+  });
+
   it('says how a thing gets onto the map, and links the guide that explains it', () => {
     draw();
 

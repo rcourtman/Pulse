@@ -44,7 +44,13 @@ import {
   resolveDiagramTileLimit,
   resolveMapPalette,
 } from './infrastructureMapExport';
-import { resolveDefaultMapDensity, type MapDensity, type MapHit } from './infrastructureMapLayout';
+import {
+  isMapMoveKey,
+  nextMapHitIndex,
+  resolveDefaultMapDensity,
+  type MapDensity,
+  type MapHit,
+} from './infrastructureMapLayout';
 import {
   anonymizeInfrastructureMapModel,
   buildInfrastructureMapModel,
@@ -128,6 +134,11 @@ export function InfrastructureMapSurface() {
   const [hover, setHover] = createSignal<{ hit: MapHit; x: number; y: number } | null>(null);
   // The tile a tap on a touch screen is showing, by its id.
   const [armed, setArmed] = createSignal<string | null>(null);
+  // Whether the card on show was reached with the keyboard, and whether an
+  // arrow key has moved between tiles yet. Until one has, that card says
+  // the arrow keys do, because Tab no longer walks the tiles.
+  const [byKeys, setByKeys] = createSignal(false);
+  const [arrowsUsed, setArrowsUsed] = createSignal(false);
 
   // Counted once per browser session. Nothing on the map is sent.
   onMount(recordInfrastructureMapOpen);
@@ -261,6 +272,21 @@ export function InfrastructureMapSurface() {
   });
 
   const [svgElement, setSvgElement] = createSignal<SVGSVGElement>();
+  // The map is one stop for the Tab key, not one for every tile: with 190
+  // tiles that was 190 presses to get past it. The stop is the tile that
+  // last had focus, or the first one drawn, and the arrow keys move from
+  // there (`handleKey`). Kept by resource, so it survives a redraw.
+  let tabStopId: string | undefined;
+  const setTabStop = (svg: SVGSVGElement) => {
+    const kept = hits().findIndex((hit) => hit.id === tabStopId);
+    const stop = String(kept >= 0 ? kept : 0);
+    for (const element of svg.querySelectorAll(`[${MAP_HIT_ATTRIBUTE}]`)) {
+      element.setAttribute(
+        'tabindex',
+        element.getAttribute(MAP_HIT_ATTRIBUTE) === stop ? '0' : '-1',
+      );
+    }
+  };
   // The drawing is replaced whole on every refresh. Keep a keyboard user's
   // place by handing focus back to the same resource afterwards. Watch the
   // element as well as the markup: the drawing can be ready before Show
@@ -271,15 +297,22 @@ export function InfrastructureMapSurface() {
       const focused = svg.contains(document.activeElement)
         ? document.activeElement?.closest(`[${MAP_HIT_ATTRIBUTE}]`)
         : null;
-      const focusedId = focused
-        ? previousHits?.[Number(focused.getAttribute(MAP_HIT_ATTRIBUTE))]?.id
-        : undefined;
+      const focusedAt = focused ? Number(focused.getAttribute(MAP_HIT_ATTRIBUTE)) : -1;
+      const focusedId = focused ? previousHits?.[focusedAt]?.id : undefined;
       svg.innerHTML = markup;
-      if (focusedId) {
-        const index = hits().findIndex((hit) => hit.id === focusedId);
+      if (focused && hits().length > 0) {
+        // The same resource where it is still drawn. Where it has gone, the
+        // tile now in its place: replacing the drawing would otherwise drop
+        // the focus off the map, back to the top of the page.
+        const same = focusedId ? hits().findIndex((hit) => hit.id === focusedId) : -1;
+        const index = same >= 0 ? same : Math.min(Math.max(focusedAt, 0), hits().length - 1);
+        tabStopId = hits()[index].id;
+        setTabStop(svg);
         svg
           .querySelector<SVGElement>(`[${MAP_HIT_ATTRIBUTE}="${index}"]`)
           ?.focus({ preventScroll: true });
+      } else {
+        setTabStop(svg);
       }
       return hits();
     }),
@@ -325,12 +358,42 @@ export function InfrastructureMapSurface() {
     if (found) point(found);
     else setHover(null);
   };
+  const handleFocusIn = (event: FocusEvent) => {
+    const found = hitFromEvent(event);
+    const svg = svgElement();
+    if (found && svg) {
+      tabStopId = found.hit.id;
+      setTabStop(svg);
+    }
+    setByKeys(keyedLast);
+    showFor(event);
+  };
+  // An arrow key, Home or End moves the focus to another tile. A key that
+  // moves nowhere is left to the page, which scrolls with it.
+  const handleKey = (event: KeyboardEvent) => {
+    if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
+    if (!isMapMoveKey(event.key)) return;
+    const current = scene();
+    const found = hitFromEvent(event);
+    if (!current || !found) return;
+    const from = Number(found.element.getAttribute(MAP_HIT_ATTRIBUTE));
+    const to = nextMapHitIndex(current, from, event.key);
+    if (to === null) return;
+    event.preventDefault();
+    if (event.key.startsWith('Arrow')) setArrowsUsed(true);
+    svgElement()?.querySelector<SVGElement>(`[${MAP_HIT_ATTRIBUTE}="${to}"]`)?.focus();
+  };
 
   // A touch screen has no hover, and a tile is a link, so a tap would open
   // the tile before anyone could read what it is. There the first tap says
   // what the tile is and rings what it is connected to, as pointing does,
   // and a second tap on the same tile opens it.
   let pressedWith = '';
+  // Whether a key was the last thing pressed, so that a tile which takes
+  // focus next was reached with the keyboard. Kept apart from `pressedWith`:
+  // a key pressed between a finger's touch and its click must not change
+  // what that tap does.
+  let keyedLast = false;
   let armedAtPress: string | null = null;
   const disarm = () => {
     if (armed() === null) return;
@@ -342,8 +405,12 @@ export function InfrastructureMapSurface() {
     // press remembers the tile first, so a tap on it again can open it.
     const press = (event: PointerEvent) => {
       pressedWith = event.pointerType;
+      keyedLast = false;
       armedAtPress = armed();
       disarm();
+    };
+    const typed = () => {
+      keyedLast = true;
     };
     // A card is placed where its tile was. On a page that scrolls, the tile
     // moves: a card for the tile with keyboard focus goes with it, leaves
@@ -373,9 +440,11 @@ export function InfrastructureMapSurface() {
       }
     };
     document.addEventListener('pointerdown', press, true);
+    document.addEventListener('keydown', typed, true);
     window.addEventListener('scroll', scrolled, true);
     onCleanup(() => {
       document.removeEventListener('pointerdown', press, true);
+      document.removeEventListener('keydown', typed, true);
       window.removeEventListener('scroll', scrolled, true);
     });
   });
@@ -531,16 +600,27 @@ export function InfrastructureMapSurface() {
               viewBox={`0 0 ${current().scene.width} ${current().scene.height}`}
               role="group"
               aria-label="Infrastructure map"
-              onPointerOver={showFor}
+              aria-describedby="infrastructure-map-keys"
+              onPointerOver={(event) => {
+                if (!isTouch(event)) setByKeys(false);
+                showFor(event);
+              }}
               onPointerLeave={(event) => {
                 if (!isTouch(event)) setHover(null);
               }}
-              onFocusIn={showFor}
+              onKeyDown={handleKey}
+              onFocusIn={handleFocusIn}
               onFocusOut={() => {
                 if (armed() === null) setHover(null);
               }}
             />
           )}
+        </Show>
+        <Show when={fitted()}>
+          <p id="infrastructure-map-keys" class="sr-only">
+            Arrow keys move between tiles. Home and End go to the first and last. Tab leaves the
+            map.
+          </p>
         </Show>
       </div>
 
@@ -602,6 +682,9 @@ export function InfrastructureMapSurface() {
               {/* Every other tile opens the thing it shows. This one does not. */}
               <Show when={current().hit.checkAddress && canAddCheck()}>
                 <span class="text-muted">Click to add a check</span>
+              </Show>
+              <Show when={byKeys() && !arrowsUsed() && hits().length > 1}>
+                <span class="text-muted">Arrow keys move between tiles</span>
               </Show>
             </div>
           )}

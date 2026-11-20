@@ -118,6 +118,73 @@ export interface MapCursor {
 /** Estates up to this many guests and containers read best with every name drawn. */
 export const MAP_NAMES_ITEM_LIMIT = 220;
 
+/** The keys that move a keyboard user from one tile to another. */
+export type MapMoveKey = 'ArrowUp' | 'ArrowDown' | 'ArrowLeft' | 'ArrowRight' | 'Home' | 'End';
+const MAP_MOVE_KEYS: ReadonlySet<string> = new Set([
+  'ArrowUp',
+  'ArrowDown',
+  'ArrowLeft',
+  'ArrowRight',
+  'Home',
+  'End',
+]);
+export const isMapMoveKey = (key: string): key is MapMoveKey => MAP_MOVE_KEYS.has(key);
+
+/**
+ * The tile a key moves to from tile `from`, both counted among the scene's
+ * tiles in the order they are drawn, or null when the key moves nowhere.
+ *
+ * An arrow goes to the nearest tile in line that way on the drawing: along
+ * the row for left and right, up or down the column for the other two. Up
+ * and down, when no tile is in line (under the gap a short last row
+ * leaves), it is the nearest one off to the side. Left and right, when the
+ * row has no more, it carries on into the row after or before it, as a line
+ * of text does, so the end of a row is never a dead end. Home and End are
+ * the first and last tile drawn.
+ */
+export const nextMapHitIndex = (scene: MapScene, from: number, key: MapMoveKey): number | null => {
+  const tiles = scene.nodes.filter(
+    (node): node is Extract<SceneNode, { kind: 'hit' }> => node.kind === 'hit',
+  );
+  const at = tiles[from];
+  if (!at) return null;
+  const another = (index: number): number | null =>
+    index !== from && index >= 0 && index < tiles.length ? index : null;
+  if (key === 'Home') return another(0);
+  if (key === 'End') return another(tiles.length - 1);
+  const sideways = key === 'ArrowLeft' || key === 'ArrowRight';
+  const onward = key === 'ArrowRight' || key === 'ArrowDown';
+  // A tile as two spans: along the way the key travels, and across it.
+  const spans = (tile: { x: number; y: number; w: number; h: number }) =>
+    sideways
+      ? { near: tile.x, far: tile.x + tile.w, low: tile.y, high: tile.y + tile.h }
+      : { near: tile.y, far: tile.y + tile.h, low: tile.x, high: tile.x + tile.w };
+  const here = spans(at);
+  let best: number | null = null;
+  let bestInLine = false;
+  let bestCost = Infinity;
+  tiles.forEach((tile, index) => {
+    if (index === from) return;
+    const there = spans(tile);
+    // How far ahead it starts. A tile level with this one is not ahead.
+    const ahead = onward ? there.near - here.far : here.near - there.far;
+    if (ahead < 0) return;
+    const aside = Math.max(0, there.low - here.high, here.low - there.high);
+    const inLine = aside === 0;
+    // Sideways, a tile on another row is that row's, reached by going on.
+    if (sideways && !inLine) return;
+    const offCentre = Math.abs((there.low + there.high - here.low - here.high) / 2);
+    const cost = inLine ? ahead + offCentre / 2 : ahead + aside * 2;
+    if ((inLine && !bestInLine) || (inLine === bestInLine && cost < bestCost)) {
+      best = index;
+      bestInLine = inLine;
+      bestCost = cost;
+    }
+  });
+  if (best !== null) return best;
+  return sideways ? another(onward ? from + 1 : from - 1) : null;
+};
+
 export const resolveDefaultMapDensity = (model: InfrastructureMapModel): MapDensity => {
   let named = 0;
   for (const block of model.blocks) {

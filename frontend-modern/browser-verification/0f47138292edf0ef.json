@@ -1,0 +1,53 @@
+{
+  "version": 1,
+  "base_sha": "2994be71001b6bceb11c2cdbc82c131b117779d0",
+  "verified_at": "2026-11-20T02:51:00Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/infrastructureMap/InfrastructureMapSurface.tsx",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapLayout.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/infrastructureMap/InfrastructureMapSurface.tsx": "ea1f1ccb820cc78fe0d6497a13af5b2c33996017759e45f3abbccdca9f11d628",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapLayout.ts": "5edce0fbaaeee0771967e745589b6dd7c6b51350f349320d773b4351d89aaa4b"
+  },
+  "routes": [
+    "/map",
+    "/proxmox/overview"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 600,
+      "height": 700
+    },
+    {
+      "width": 390,
+      "height": 844
+    },
+    {
+      "width": 320,
+      "height": 568
+    }
+  ],
+  "states": [
+    "the final bytes as a production bundle embedded in a Pulse server on pulse-dev with mock data (196 tiles), in pages marked as a development build so that the held map is drawn, driven by Playwright in Chromium 151 and WebKit 26.0. The files the rig was built from were compared with the committed ones by hash. The rig was built two commits before this commit's parent, with the shell fix's files (the later of those two commits) laid over it exactly as they are on main, which was checked by comparing them; the other commit is a documentation check",
+    "Tab from the Save image button, 1440 and 600 wide, both engines: the focus went into the map, on the first tile, the one tile of 196 with a tab stop; the tile was ringed (rgb(59, 130, 246)) and its card was on it, saying 'Arrow keys move between tiles'. Tab again went past the map to the 'How the map works' link, and Shift+Tab came back to the same tile",
+    "160 arrow presses in a fixed pattern of all four directions, both widths, both engines: 116 moved at 1440 and 128 at 600, and after every move the tile reached was the single tab stop, ringed, wholly in the window, clear of the bottom navigation bar at 600 wide, and had its card on it. Left and right went to a tile further that way or to the next or previous tile drawn. The hint was gone from the card after the first arrow",
+    "Home and End, both widths, both engines: the first and last tile, the last one scrolled into the window at 600 wide with its card on it",
+    "the map drawn again under the focus: after seven seconds of live updates, and after Hide names, the same tile had the focus and there was one tab stop and no tile without a tabindex",
+    "Enter on a tile reached with an arrow opened that tile's own address, both widths, both engines",
+    "an axe scan of the page with a tile focused, both widths, both engines: the only rule reported was 'region', on the update banner's text and the brand wordmark in the app shell, none of it the map's",
+    "the phone layout from the pull request before, re-read on this build at 320, 360, 390, 430 and 767 wide in both engines: unchanged (scale 1, 40px tiles, nothing overlapping or off the side), and 768 and 1440 wide still fitted to one screen",
+    "the end-to-end spec against the same build, by the suite's own Playwright: 28 passed over two repeats of the desktop, Android and iPhone projects. Its keyboard journey now presses Tab in and out of the map, an arrow, Home and End, reads the hint, and opens a tile with Enter",
+    "not seen in a browser, held by unit tests only: the focus staying on the map when a live update removes the focused thing (the mock estate removes nothing), and a key pressed between a touch and its click",
+    "not checked: Firefox, real Safari and a real phone; a screen reader"
+  ],
+  "interactions": [
+    "pressed Tab into and out of the map, 160 arrow keys, Home, End and Enter; pressed Hide names with a tile focused",
+    "ran the end-to-end spec, whose keyboard journey does the same in short"
+  ]
+}
