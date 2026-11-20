@@ -452,6 +452,12 @@ type AlertConfig struct {
 	FlappingThreshold              int                            `json:"flappingThreshold"`            // Number of state changes to trigger flapping
 	FlappingCooldownMinutes        int                            `json:"flappingCooldownMinutes"`      // Cooldown period after flapping detected
 
+	// AlertHygieneDefaultsMigrated marks a config written since the one-time
+	// recovery of flapping detection and alert TTL cleanup defaults that
+	// pre-f7ac26b573 Thresholds-page saves silently zeroed on disk. Once true,
+	// explicit false/0 values are preserved verbatim.
+	AlertHygieneDefaultsMigrated bool `json:"alertHygieneDefaultsMigrated,omitempty"`
+
 	// TrueNASDiskTemperatureByType marks a config written since an unset
 	// TrueNASDiskDefaults.Temperature means each TrueNAS disk follows the
 	// disk temperature policy for its type. An older config carries the

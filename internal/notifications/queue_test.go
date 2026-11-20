@@ -45,37 +45,37 @@ func TestCalculateBackoff(t *testing.T) {
 		{
 			name:     "attempt 3",
 			attempt:  3,
-			expected: 8 * time.Second,
+			expected: 30 * time.Second,
 		},
 		{
 			name:     "attempt 4",
 			attempt:  4,
-			expected: 16 * time.Second,
+			expected: 2 * time.Minute,
 		},
 		{
 			name:     "attempt 5",
 			attempt:  5,
-			expected: 32 * time.Second,
+			expected: 5 * time.Minute,
 		},
 		{
-			name:     "attempt 6 (capped at 60s)",
+			name:     "attempt 6",
 			attempt:  6,
-			expected: 60 * time.Second,
+			expected: 10 * time.Minute,
 		},
 		{
-			name:     "attempt 7 (stays at cap)",
+			name:     "attempt 7 (capped at 15m)",
 			attempt:  7,
-			expected: 60 * time.Second,
+			expected: 15 * time.Minute,
 		},
 		{
 			name:     "attempt 10 (stays at cap)",
 			attempt:  10,
-			expected: 60 * time.Second,
+			expected: 15 * time.Minute,
 		},
 		{
 			name:     "very large attempts stay capped",
 			attempt:  60,
-			expected: 60 * time.Second,
+			expected: 15 * time.Minute,
 		},
 	}
 
@@ -86,6 +86,21 @@ func TestCalculateBackoff(t *testing.T) {
 				t.Errorf("calculateBackoff(%d) = %v, want %v", tc.attempt, result, tc.expected)
 			}
 		})
+	}
+}
+
+func TestCalculateBackoffForClass_RateLimitedFloor(t *testing.T) {
+	if got := calculateBackoffForClass(2, NotificationFailureRateLimited); got != 4*time.Second {
+		t.Fatalf("rate-limited attempt 2 = %v, want 4s", got)
+	}
+	if got := calculateBackoffForClass(3, NotificationFailureRateLimited); got != 60*time.Second {
+		t.Fatalf("rate-limited attempt 3 = %v, want 60s", got)
+	}
+	if got := calculateBackoffForClass(4, NotificationFailureRateLimited); got != 2*time.Minute {
+		t.Fatalf("rate-limited attempt 4 = %v, want 2m", got)
+	}
+	if got := calculateBackoffForClass(3, NotificationFailureConnectivity); got != 30*time.Second {
+		t.Fatalf("connectivity attempt 3 = %v, want 30s", got)
 	}
 }
 
@@ -215,19 +230,19 @@ func TestEnqueue_ValidatesAndNormalizesInput(t *testing.T) {
 }
 
 func TestCalculateBackoff_ExponentialGrowth(t *testing.T) {
-	// Verify backoff grows exponentially until cap
+	// Verify backoff grows strictly monotonically until cap
 	prev := calculateBackoff(0)
-	for attempt := 1; attempt <= 5; attempt++ {
+	for attempt := 1; attempt <= 6; attempt++ {
 		curr := calculateBackoff(attempt)
-		if curr != prev*2 {
-			t.Errorf("calculateBackoff(%d) = %v, expected %v (2x previous)", attempt, curr, prev*2)
+		if curr <= prev {
+			t.Errorf("calculateBackoff(%d) = %v, expected > %v", attempt, curr, prev)
 		}
 		prev = curr
 	}
 }
 
 func TestCalculateBackoff_NeverExceedsCap(t *testing.T) {
-	cap := 60 * time.Second
+	cap := 15 * time.Minute
 	// Test a range of practical attempt values (0-20 is realistic range)
 	for attempt := 0; attempt <= 20; attempt++ {
 		result := calculateBackoff(attempt)
@@ -239,8 +254,8 @@ func TestCalculateBackoff_NeverExceedsCap(t *testing.T) {
 
 func TestCalculateBackoff_LargeAttemptStillCapped(t *testing.T) {
 	for _, attempt := range []int{60, 1000} {
-		if got := calculateBackoff(attempt); got != 60*time.Second {
-			t.Errorf("calculateBackoff(%d) = %v, want %v", attempt, got, 60*time.Second)
+		if got := calculateBackoff(attempt); got != 15*time.Minute {
+			t.Errorf("calculateBackoff(%d) = %v, want %v", attempt, got, 15*time.Minute)
 		}
 	}
 }
