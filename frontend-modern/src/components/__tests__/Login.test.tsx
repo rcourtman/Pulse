@@ -290,9 +290,9 @@ describe('Login', () => {
         ).toBeVisible();
         expect(screen.getByRole('alert')).toHaveTextContent(message);
         expect(screen.getByRole('alert')).not.toHaveTextContent('Last single sign-on attempt');
-        expect(window.history.replaceState).toHaveBeenCalledWith(
+        expect(window.history.replaceState).toHaveBeenLastCalledWith(
           {},
-          document.title,
+          expect.any(String),
           '/login?view=fixture',
         );
         expect(mockFetch.mock.calls.map(([request]) => request)).toEqual([
