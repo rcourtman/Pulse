@@ -24,6 +24,8 @@ type InvitationReadResult =
 export const NoOrganizationAccess: Component<NoOrganizationAccessProps> = (props) => {
   let disposed = false;
   let invitationReadController: AbortController | undefined;
+  let invitationRegion: HTMLElement | undefined;
+  let restartCheckButton: HTMLButtonElement | undefined;
   const [invitationRead, { refetch }] = createResource<InvitationReadResult>(async () => {
     invitationReadController?.abort();
     const controller = new AbortController();
@@ -39,7 +41,18 @@ export const NoOrganizationAccess: Component<NoOrganizationAccessProps> = (props
       // that separate from an accepted empty list, including after a decline.
       return { kind: 'unavailable', invitations: [] };
     } finally {
-      if (invitationReadController === controller) invitationReadController = undefined;
+      if (invitationReadController === controller) {
+        invitationReadController = undefined;
+        // The result removes Restart. Keep keyboard position if the current
+        // read finishes while that button still owns focus.
+        if (
+          !controller.signal.aborted &&
+          restartCheckButton &&
+          restartCheckButton.ownerDocument.activeElement === restartCheckButton
+        ) {
+          invitationRegion?.focus({ preventScroll: true });
+        }
+      }
     }
   });
   onCleanup(() => {
@@ -52,7 +65,6 @@ export const NoOrganizationAccess: Component<NoOrganizationAccessProps> = (props
     organization: string;
   }>();
   const decisionsDisabled = () => responding() || unconfirmedDecision() !== undefined;
-  let invitationRegion: HTMLElement | undefined;
 
   const retryInvitations = () => {
     if (disposed || decisionsDisabled()) return;
@@ -142,6 +154,7 @@ export const NoOrganizationAccess: Component<NoOrganizationAccessProps> = (props
                   Checking invitations…
                 </p>
                 <Button
+                  ref={restartCheckButton}
                   variant="secondary"
                   size="sm"
                   class="mt-2 min-h-11 sm:min-h-0"

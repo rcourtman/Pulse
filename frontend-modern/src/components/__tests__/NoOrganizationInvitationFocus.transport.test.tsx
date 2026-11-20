@@ -124,6 +124,48 @@ describe('personal invitation read keyboard recovery', () => {
     expect(fetchMock).toHaveBeenCalledOnce();
   });
 
+  it.each(outcomes)('keeps focus when the pending control gives way to %s', async (outcome) => {
+    const read = deferred();
+    fetchMock.mockReturnValueOnce(read.promise);
+    const exits = mount();
+    const restart = screen.getByRole('button', { name: 'Restart invitation check' });
+    const region = screen.getByRole('region', { name: 'Organization invitations' });
+    restart.focus();
+    expect(restart).toHaveFocus();
+
+    read.resolve(response(outcome));
+    await waitForOutcome(outcome);
+    expect(restart).not.toBeInTheDocument();
+    expect(region).toHaveFocus();
+    expect(region).toHaveAttribute('aria-busy', 'false');
+    expect(fetchMock).toHaveBeenCalledOnce();
+    expect(exits.onReload).not.toHaveBeenCalled();
+    expect(exits.onSignOut).not.toHaveBeenCalled();
+  });
+
+  it('leaves a focused Restart alone when only the superseded read finishes', async () => {
+    const stale = deferred();
+    const current = deferred();
+    fetchMock.mockReturnValueOnce(stale.promise).mockReturnValueOnce(current.promise);
+    mount();
+    const restart = await screen.findByRole('button', { name: 'Restart invitation check' });
+    const region = screen.getByRole('region', { name: 'Organization invitations' });
+    restart.focus();
+    fireEvent.click(restart);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    restart.focus();
+
+    stale.resolve(json([]));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(restart).toHaveFocus();
+    expect(region).toHaveAttribute('aria-busy', 'true');
+
+    current.resolve(json(invitations));
+    await waitForOutcome('saved invitations');
+    expect(region).toHaveFocus();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
   it('restarts a stalled check with one current personal GET and ignores the old result', async () => {
     const oldRead = deferred();
     const restartedRead = deferred();

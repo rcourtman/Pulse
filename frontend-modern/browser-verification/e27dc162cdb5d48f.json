@@ -1,0 +1,34 @@
+{
+  "version": 1,
+  "base_sha": "fca866f0defe952188fee1e410df6f7d9d547fac",
+  "verified_at": "2026-11-20T14:41:33Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/NoOrganizationAccess.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/NoOrganizationAccess.tsx": "d8f11567a3dacb6ff9bd3b292877cad24375c837c2ba9c43addac838ef04249b"
+  },
+  "routes": [
+    "/settings/organization"
+  ],
+  "viewports": [
+    {
+      "width": 1366,
+      "height": 820
+    },
+    {
+      "width": 320,
+      "height": 700
+    }
+  ],
+  "states": [
+    "Production frontend assets at the ordinary Pulse bootstrap route, with offline proxy-session and invitation inbox fixtures. Playwright 1.56.1, desktop light Chromium 141 and mobile dark, touch-emulated WebKit 26.",
+    "Twelve matched before/after pairs inspected natively. When a held read completes with two same-name invitations, none, a read error, or a remaining invitation after a decline, the baseline drops focus to the body and loses the ring. The candidate keeps the focus ring around the named invitation region.",
+    "Both invitation IDs, role badges, row actions, empty instructions, Retry after an error, Check again and Sign out remain readable without sideways scrolling. Pending Restart and focused Sign out comparisons are unchanged."
+  ],
+  "interactions": [
+    "250 baseline and 260 candidate assertions. Hardware-style Tab before the held response, then Tab from the landing reaches the first exact invitation action, Retry or Check again according to the result. A user who already moved to Sign out keeps that focus.",
+    "Enter on desktop and touch on mobile still activate the existing Restart and Retry reads. One explicit fixture decline sends exactly one decision for the chosen row; its fresh sibling survives. Passive reads send no decision, add no requests and do not reload."
+  ]
+}
