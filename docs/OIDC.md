@@ -315,3 +315,18 @@ browser session as in [Quick Start](#-quick-start).
 
 Changing either source does not revoke existing sessions. Follow
 [Changing or removing access](#changing-or-removing-access) for that separate job.
+
+### `invalid_client` after saving an OIDC provider
+
+If the existing Pulse log shows `invalid_client` with **OIDC code exchange
+failed**, the identity provider rejected Pulse's client authentication. That
+does not prove Pulse lost the secret. Compare the saved **Client ID** with the
+app registration. In the identity provider, check whether the app's existing
+secret is still active. The masked field in Pulse does not show which secret is
+saved.
+
+Keep your working administrator session open. If Pulse could not confirm the
+save, [check the saved provider](#a-provider-change-could-not-be-confirmed)
+before writing anything. If the failure began after a save, keep the time,
+the setting you changed (or that nothing changed) and the locally redacted
+error. Do not repeat the save, rotate the secret or sign out to diagnose it.
