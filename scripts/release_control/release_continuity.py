@@ -791,7 +791,7 @@ def inventory_endpoint(value: str) -> str:
 
 
 def collect_inventory(args: argparse.Namespace) -> int:
-    """Publish complete pagination only; repeat once on peer CANCEL or a release-list 502."""
+    """Publish complete pagination only; repeat once on peer CANCEL or a release-list 502/504."""
     inventory = "release" if args.endpoint.endswith("/releases?per_page=100") else "tag reference"
     diagnostic: dict[str, Any] = {
         "schema_version": 1,
@@ -883,9 +883,9 @@ def collect_inventory(args: argparse.Namespace) -> int:
             ):
                 attempt["result"] = "http2_peer_cancel"
                 retry_notice = "peer cancellation"
-            elif inventory == "release" and http_status == 502:
-                attempt["result"] = "http_bad_gateway"
-                retry_notice = "HTTP 502 reported by gh"
+            elif inventory == "release" and http_status in (502, 504):
+                attempt["result"] = "http_bad_gateway" if http_status == 502 else "http_gateway_timeout"
+                retry_notice = f"HTTP {http_status} reported by gh"
 
             if retry_notice is not None and number == 1:
                 retain()

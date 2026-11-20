@@ -87,9 +87,9 @@ jobs:
         run: |
           set -euo pipefail
           evidence=release-continuity-evidence
-          # Failed inventory reads prove no orphaned release. Collect each
-          # complete inventory atomically. Repeat once on exact peer CANCEL or
-          # release-list HTTP 502, retaining both attempts. Access refusals stop.
+          # An unavailable inventory is not an orphaned-release verdict.
+          # Collect each full inventory atomically. Repeat once on exact peer
+          # CANCEL or release-list HTTP 502/504; retain both attempts. Refusals stop.
           python3 scripts/release_control/release_continuity.py collect \
             --endpoint "repos/${REPOSITORY}/git/matching-refs/tags/v?per_page=100" \
             --output "${evidence}/stable-refs.json" \
