@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi, beforeEach } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
-import { Login } from '@/components/Login';
+import { Login, SIGN_IN_CHECK_SLOW_DELAY_MS } from '@/components/Login';
 // Compile the real lazy destination before timed assertions; do not mock setup
 // or make module transformation part of the read-recovery deadline.
 import '@/components/SetupWizard';
@@ -710,6 +710,72 @@ describe('Login', () => {
       expect(mockFetch).toHaveBeenCalledTimes(1);
     });
 
+    it.each(['late setup response', 'late failure'] as const)(
+      'lets the user replace a slow first check and ignores its %s',
+      async (lateResult) => {
+        let resolveOld!: (response: Response) => void;
+        let rejectOld!: (reason: Error) => void;
+        let finish!: (response: Response) => void;
+        mockFetch
+          .mockReturnValueOnce(
+            new Promise<Response>((resolve, reject) => {
+              resolveOld = resolve;
+              rejectOld = reject;
+            }),
+          )
+          .mockReturnValueOnce(
+            new Promise<Response>((resolve) => {
+              finish = resolve;
+            }),
+          );
+        const onLogin = vi.fn();
+        vi.useFakeTimers();
+        try {
+          render(() => <Login onLogin={onLogin} />);
+          await vi.advanceTimersByTimeAsync(SIGN_IN_CHECK_SLOW_DELAY_MS - 1);
+          expect(screen.queryByRole('button', { name: 'Restart sign-in check' })).toBeNull();
+          expectNoGuessedAccess();
+          await vi.advanceTimersByTimeAsync(1);
+          const restart = screen.getByRole('button', { name: 'Restart sign-in check' });
+          const firstSignal = mockFetch.mock.calls[0][1].signal as AbortSignal;
+          expect(mockFetch).toHaveBeenCalledTimes(1);
+          expect(firstSignal.aborted).toBe(false);
+
+          restart.focus();
+          fireEvent.click(restart);
+          fireEvent.click(restart);
+          expect(mockFetch).toHaveBeenCalledTimes(2);
+          expect(firstSignal.aborted).toBe(true);
+          expect(mockFetch.mock.calls[1][1].signal.aborted).toBe(false);
+          expect(restart).toHaveFocus();
+          expect(restart).toHaveAttribute('aria-disabled', 'true');
+
+          if (lateResult === 'late setup response') {
+            resolveOld(discoveryResponse({ hasAuthentication: false }));
+          } else {
+            rejectOld(new Error('Discarded fixture read'));
+          }
+          await vi.advanceTimersByTimeAsync(0);
+          expect(screen.getByRole('status')).toHaveTextContent('Checking authentication again');
+          expect(screen.queryByText('Could not check sign-in options')).toBeNull();
+          expectNoGuessedAccess();
+
+          // The second read remains owned and can itself surface recovery.
+          await vi.advanceTimersByTimeAsync(SIGN_IN_CHECK_SLOW_DELAY_MS);
+          expect(restart).toHaveAttribute('aria-disabled', 'false');
+          expect(screen.getByRole('button', { name: 'Restart sign-in check' })).toBe(restart);
+          finish(discoveryResponse({ hasAuthentication: true }));
+          await vi.advanceTimersByTimeAsync(0);
+          expect(screen.getByPlaceholderText('Username')).toBeVisible();
+          expect(screen.getByRole('region', { name: 'Pulse access' })).toHaveFocus();
+          expect(mockFetch).toHaveBeenCalledTimes(2);
+          expect(onLogin).not.toHaveBeenCalled();
+        } finally {
+          vi.useRealTimers();
+        }
+      },
+    );
+
     it('retries one read, retains pending focus and restores SSO policy without local login', async () => {
       mockFetch.mockResolvedValueOnce(new Response('{}', { status: 503 }));
       let finish!: (response: Response) => void;
@@ -796,6 +862,30 @@ describe('Login', () => {
       finish(discoveryResponse({ hasAuthentication: true }));
       expect(await screen.findByPlaceholderText('Username')).toBeVisible();
       expect(independent).toHaveFocus();
+    });
+
+    it('keeps the troubleshooting link focused if recovery completes while the user is on Help', async () => {
+      mockFetch.mockResolvedValueOnce(new Response('{}', { status: 503 }));
+      let finish!: (response: Response) => void;
+      mockFetch.mockReturnValueOnce(
+        new Promise<Response>((resolve) => {
+          finish = resolve;
+        }),
+      );
+      render(() => <Login onLogin={vi.fn()} />);
+      const retry = await screen.findByRole('button', { name: 'Retry sign-in check' });
+      retry.focus();
+      fireEvent.click(retry);
+      const help = screen.getByRole('link', { name: 'Can’t sign in?' });
+      help.focus();
+
+      finish(discoveryResponse({ hasAuthentication: true }));
+      await waitFor(() => {
+        const currentHelp = screen.getByRole('link', { name: 'Can’t sign in?' });
+        expect(currentHelp).not.toBe(help);
+        expect(currentHelp).toHaveFocus();
+        expect(currentHelp).toHaveAttribute('href', '/docs/TROUBLESHOOTING');
+      });
     });
 
     it('ignores late discovery after disposal and aborts its transport', async () => {
