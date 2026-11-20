@@ -221,7 +221,7 @@ class ServerUpdateMenuTest(unittest.TestCase):
 
     def test_unobserved_version_refuses_both_automatic_entry_paths(self):
         data = [release("v6.6.0"), release("v6.7.0-rc.1", prerelease=True)]
-        for installed in (None, "", "dev", "v6.5.0-dev", "dev\nBuilt: v6.5.0"):
+        for installed in ("dev", "v6.5.0-dev", "dev\nBuilt: v6.5.0"):
             for channel, docker in (("stable", False), ("rc", True)):
                 with self.subTest(installed=installed, channel=channel, docker=docker):
                     r, mutations, _ = self.exercise(data, installed, channel, docker=docker)
@@ -230,21 +230,29 @@ class ServerUpdateMenuTest(unittest.TestCase):
                     self.assertIn("Existing installation is unchanged", r.stderr)
                     self.assertIn("--version", r.stderr)
 
-    def test_failed_version_probe_does_not_admit_its_stdout(self):
-        r, mutations, _ = self.exercise([release("v6.6.0")], version_exit=23)
-        self.assert_unchanged(r, mutations, refused=True)
-        self.assertIn("Cannot determine the installed Pulse version", r.stderr)
+    def test_unknown_edition_stops_before_discovery_or_a_pinned_public_update(self):
+        data = [release("v6.6.0")]
+        for installed, version_exit in ((None, 0), ("", 0), ("unrecognised", 0), ("v6.5.0", 23)):
+            for pinned in ("", "v6.6.0"):
+                with self.subTest(installed=installed, version_exit=version_exit, pinned=pinned):
+                    r, mutations, transport = self.exercise(
+                        data, installed, choice="1", pinned=pinned, version_exit=version_exit)
+                    self.assert_unchanged(r, mutations, refused=True)
+                    self.assertEqual(transport, [])
+                    self.assertIn("Cannot verify the installed Pulse edition", r.stderr)
+                    self.assertIn("Existing installation is unchanged", r.stderr)
 
     def test_version_reader_deadline_does_not_admit_partial_stdout(self):
         # The reader prints a valid version, but cannot exit before the
         # installer's five-second limit. Even on the old code the delay is
         # finite and shorter than this harness's command-level fail-stop.
-        r, mutations, _ = self.exercise([release("v6.6.0")], version_delay=8)
+        r, mutations, transport = self.exercise([release("v6.6.0")], version_delay=8)
         self.assert_unchanged(r, mutations, refused=True)
-        self.assertIn("Cannot determine the installed Pulse version", r.stderr)
+        self.assertEqual(transport, [])
+        self.assertIn("Cannot verify the installed Pulse edition", r.stderr)
 
-    def test_unknown_version_preserves_explicit_repair_routes(self):
-        r, mutations, transport = self.exercise([], installed=None, pinned="v6.6.0")
+    def test_verified_community_development_build_keeps_explicit_repair_routes(self):
+        r, mutations, transport = self.exercise([], installed="dev", pinned="v6.6.0")
         self.assert_download(r, mutations, "v6.6.0", "")
         self.assertEqual(transport, [])
         r, mutations, _ = self.exercise([release("v6.6.0")], "dev", choice="1")
