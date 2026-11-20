@@ -11,13 +11,20 @@ import (
 
 type targetedTrueNASHistoryFetcher struct {
 	controllableTrueNASHistoryFetcher
-	reads   atomic.Int32
-	entered chan struct{}
-	release chan struct{}
+	reads    atomic.Int32
+	entered  chan struct{}
+	release  chan struct{}
+	mode     truenas.TransportMode
+	deadline time.Time
+}
+
+func (f *targetedTrueNASHistoryFetcher) TransportStatus() truenas.TransportStatus {
+	return truenas.TransportStatus{Mode: f.mode}
 }
 
 func (f *targetedTrueNASHistoryFetcher) SystemMetricHistory(ctx context.Context, duration time.Duration) (*truenas.SystemMetricHistory, error) {
 	f.reads.Add(1)
+	f.deadline, _ = ctx.Deadline()
 	if f.entered != nil {
 		close(f.entered)
 		<-f.release
@@ -44,13 +51,33 @@ func TestTrueNASHostHistoryTargetAndLifetime(t *testing.T) {
 	poller := NewTrueNASPoller(nil, time.Minute, nil)
 	poller.providersByOrg["org-a"] = map[string]*truenas.Provider{"target": target, "other": other}
 	for _, test := range []struct{ org, kind, id string }{{"org-b", "agent", "target"}, {"org-a", "disk", "target"}, {"org-a", "agent", "missing"}, {"org-a", "agent", "same-name"}, {"org-a", "agent", ""}} {
-		if result := poller.GuestMetricHistoryForResource(nil, test.org, test.kind, test.id, time.Hour); len(result) != 0 || targetFetcher.reads.Load() != 0 || otherFetcher.reads.Load() != 0 {
+		if result := poller.GuestMetricHistoryForResource(context.Background(), nil, test.org, test.kind, test.id, time.Hour); len(result) != 0 || targetFetcher.reads.Load() != 0 || otherFetcher.reads.Load() != 0 {
 			t.Fatalf("nonmatching target reached native history: %+v", test)
 		}
 	}
-	result := poller.GuestMetricHistoryForResource(nil, "org-a", "agent", "target", time.Hour)
+	result := poller.GuestMetricHistoryForResource(context.Background(), nil, "org-a", "agent", "target", time.Hour)
 	if len(result["diskread"]) != 1 || result["diskread"][0].Value != 0 || targetFetcher.reads.Load() != 1 || otherFetcher.reads.Load() != 0 {
 		t.Fatalf("exact target/zero lost or other same-name host read: %+v", result)
+	}
+	for _, mode := range []truenas.TransportMode{truenas.TransportLegacyREST, truenas.TransportJSONRPC, truenas.TransportUnknown} {
+		t.Run(string(mode)+"-deadline", func(t *testing.T) {
+			targetFetcher.mode = mode
+			for _, cap := range []time.Duration{2 * time.Second, time.Minute} {
+				before := time.Now()
+				caller, cancel := context.WithTimeout(context.Background(), cap)
+				wantCaller, _ := caller.Deadline()
+				poller.GuestMetricHistoryForResource(caller, nil, "org-a", "agent", "target", time.Hour)
+				cancel()
+				deadline := targetFetcher.deadline
+				if mode == truenas.TransportLegacyREST && cap < defaultTrueNASHistoryReadTimeout {
+					if !deadline.Equal(wantCaller) {
+						t.Fatalf("confirmed REST read did not use the earlier caller deadline: %v != %v", deadline, wantCaller)
+					}
+				} else if deadline.Before(before.Add(defaultTrueNASHistoryReadTimeout)) || deadline.After(time.Now().Add(defaultTrueNASHistoryReadTimeout)) {
+					t.Fatalf("%s provider cap changed: %v since start", mode, deadline.Sub(before))
+				}
+			}
+		})
 	}
 	for _, action := range []string{"remove", "replace", "disable"} {
 		t.Run(action, func(t *testing.T) {
@@ -61,7 +88,9 @@ func TestTrueNASHostHistoryTargetAndLifetime(t *testing.T) {
 			poller.mu.Unlock()
 			truenas.SetFeatureEnabled(true)
 			done := make(chan map[string][]MetricPoint, 1)
-			go func() { done <- poller.GuestMetricHistoryForResource(nil, "org-a", "agent", "target", time.Hour) }()
+			go func() {
+				done <- poller.GuestMetricHistoryForResource(context.Background(), nil, "org-a", "agent", "target", time.Hour)
+			}()
 			<-f.entered
 			poller.mu.Lock()
 			switch action {
