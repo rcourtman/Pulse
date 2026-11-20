@@ -2215,6 +2215,21 @@ and slow-client eviction must use the same synchronized send/close ownership;
 recovering a send-on-closed panic is not a substitute for a race-free channel
 lifecycle.
 
+Public `GET /api/health` measures process liveness, not dashboard readiness.
+On a self-hosted server with multi-workspace mode disabled it may additionally
+return `"websocketStateStalled": true` while one build has held the hub's shared
+state slot for at least 30 seconds. Measure monotonic time from slot ownership,
+not since the last message or request. A queued waiter cannot reset its owner's
+age, and releasing the slot clears the observation before handing it off.
+Health reads must not start a state build, wait for the hub or report any
+workspace, client, payload, duration or count. Hosted and multi-workspace modes
+omit the field. Idle, building below the threshold and recovered states also omit
+it; absence is not readiness. Existing HTTP and JSON liveness verdicts and
+dependency flags do not change. Do not cache the transient response.
+`TestContract_HealthObservesWebSocketStateStallWithoutChangingLiveness` pins the
+wire shape during a controlled initial-state stall through the real hub, and
+`TestStateBuildStallFollowsCurrentSlotHolder` pins owner handoff and recovery.
+
 Invalidation coalescing is a throttle, not a restart-on-signal debounce. The
 first invalidation after a quiet period broadcasts after the 100 ms coalesce
 window; later invalidations for the same audience (all clients, or one tenant)

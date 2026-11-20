@@ -39,6 +39,7 @@ const (
 	websocketHubComponent     = "websocket_hub"
 	initialWelcomeDelay       = 500 * time.Millisecond
 	initialStateMessageDelay  = 100 * time.Millisecond
+	stateBuildStallThreshold  = 30 * time.Second
 	// clientReadDeadline is how long a client may stay silent before the server
 	// drops it. Liveness is proven by ANY inbound frame (data, JSON heartbeat,
 	// or protocol pong) — proxies and middleboxes (Cloudflare, AV products)
@@ -634,6 +635,8 @@ type Hub struct {
 	runDoneOnce        sync.Once
 	initialStateWG     sync.WaitGroup
 	stateBuildSlot     chan struct{}
+	stateBuildEpoch    time.Time    // Immutable monotonic origin for the slot's age.
+	stateBuildStarted  atomic.Int64 // Nanoseconds since the epoch plus one; zero is idle.
 	mu                 sync.RWMutex
 	getState           func(orgID string) interface{} // Function to get state for specific tenant
 	allowedOrigins     []string                       // Allowed origins for CORS
@@ -746,6 +749,7 @@ func NewHub(getState func(orgID string) interface{}) *Hub {
 		runStarted:               make(chan struct{}),
 		runDone:                  make(chan struct{}),
 		stateBuildSlot:           make(chan struct{}, 1),
+		stateBuildEpoch:          time.Now(),
 		getState:                 getState,
 		allowedOrigins:           []string{},             // Default to empty (will be set based on actual host)
 		coalesceWindow:           100 * time.Millisecond, // Coalesce rapid updates within 100ms
@@ -996,35 +1000,43 @@ func (h *Hub) sendRequestedState(client *Client) {
 }
 
 func (h *Hub) acquireStateBuildSlot(client *Client) bool {
-	if client == nil {
-		select {
-		case h.stateBuildSlot <- struct{}{}:
-			return true
-		case <-h.stopChan:
-			return false
-		}
+	var lifecycleDone <-chan struct{}
+	if client != nil {
+		lifecycleDone = client.lifecycleSignal()
 	}
-
-	lifecycleDone := client.lifecycleSignal()
 	select {
 	case h.stateBuildSlot <- struct{}{}:
-		h.mu.RLock()
-		_, registered := h.clients[client]
-		h.mu.RUnlock()
-		if registered && !client.closed.Load() && !h.isStopping() {
-			return true
-		}
-		h.releaseStateBuildSlot()
-		return false
+		h.stateBuildStarted.Store(int64(time.Since(h.stateBuildEpoch)) + 1)
 	case <-lifecycleDone:
 		return false
 	case <-h.stopChan:
 		return false
 	}
+
+	if client != nil {
+		h.mu.RLock()
+		_, registered := h.clients[client]
+		h.mu.RUnlock()
+		if !registered || client.closed.Load() || h.isStopping() {
+			h.releaseStateBuildSlot()
+			return false
+		}
+	}
+	return true
 }
 
 func (h *Hub) releaseStateBuildSlot() {
+	// Clear before handing off the slot so this owner cannot erase its successor.
+	h.stateBuildStarted.Store(0)
 	<-h.stateBuildSlot
+}
+
+// StateBuildStalled reports whether one state build has held the shared slot
+// for at least 30 seconds. It neither starts work nor waits for the hub.
+func (h *Hub) StateBuildStalled() bool {
+	elapsed := time.Since(h.stateBuildEpoch)
+	started := h.stateBuildStarted.Load()
+	return started != 0 && elapsed-time.Duration(started-1) >= stateBuildStallThreshold
 }
 
 func (h *Hub) tryRegisterClient(client *Client) bool {

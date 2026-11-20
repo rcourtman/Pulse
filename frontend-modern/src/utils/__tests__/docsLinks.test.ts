@@ -112,9 +112,24 @@ describe('docsLinks', () => {
     // resourceType list and the availability check types an API client may
     // send must not differ between the two.
     for (const guide of ['API.md', 'CONFIGURATION.md', 'METRICS_HISTORY.md']) {
-      expect(readFileSync(path.join(frontendRoot, 'public/docs', guide), 'utf8')).toBe(
-        readFileSync(path.join(repoRoot, 'docs', guide), 'utf8'),
-      );
+      const shipped = readFileSync(path.join(frontendRoot, 'public/docs', guide), 'utf8');
+      expect(shipped).toBe(readFileSync(path.join(repoRoot, 'docs', guide), 'utf8'));
+      if (guide === 'API.md') {
+        const health = shipped.split('### System Health\n')[1].split('\n### ')[0];
+        const article = document.createElement('article');
+        article.innerHTML = renderDocMarkdown(health, 'API');
+        const flag = [...article.querySelectorAll('code')].find(
+          (code) => code.textContent === 'websocketStateStalled: true',
+        );
+        expect(flag).toBeDefined();
+        const copy = flag?.closest('p')?.textContent?.replace(/\s+/g, ' ');
+        expect(copy).toMatch(/standalone servers.*shared WebSocket slot.*at least 30 seconds/);
+        expect(copy).toMatch(
+          /clears when the slot is released.*Hosted and multi-workspace modes omit/,
+        );
+        expect(copy).toMatch(/absent flag does not prove readiness/);
+        expect(copy).toMatch(/Preserve evidence; do not repeat state requests or auto-restart/);
+      }
     }
   });
 

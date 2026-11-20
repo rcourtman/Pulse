@@ -3116,6 +3116,9 @@ update, profile rollout, command reachability, or fleet-control authority.
     rather than long-lived service/environment arguments. Windows, macOS, and
     Linux commands must keep custom CA, insecure/plain-HTTP, and optional-auth
     behavior aligned so the Machines onboarding path does not diverge by OS.
+    A server `/api/health` response still establishes liveness only. Its optional
+    `websocketStateStalled` observation is about browser state builds: it must
+    not reject an agent preflight or stand in for enrollment or accepted reports.
 18. `frontend-modern/src/utils/infrastructureSettingsPresentation.ts` shared with `api-contracts`: the infrastructure settings presentation helper is both an agent lifecycle control surface and an API-backed direct-node/discovery settings boundary.
 1. `internal/agentidentity/identity.go` shared with `api-contracts`, `deployment-installability`: the executable package, release identity and compiler target authority is shared by agent activation, download API validation and release artifact selection.
 1. `internal/agentidentity/version-pattern.txt` shared with `api-contracts`, `deployment-installability`: the canonical release-version grammar is shared by runtime executable identity and release producer validation.

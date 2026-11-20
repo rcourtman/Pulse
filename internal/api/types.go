@@ -12,6 +12,7 @@ type HealthResponse struct {
 	ProxyInstallScriptAvailable bool            `json:"proxyInstallScriptAvailable,omitempty"`
 	DevModeSSH                  bool            `json:"devModeSSH,omitempty"` // DEV/TEST ONLY: SSH keys allowed in containers
 	Dependencies                map[string]bool `json:"dependencies"`
+	WebSocketStateStalled       bool            `json:"websocketStateStalled,omitempty"`
 }
 
 func EmptyHealthResponse() HealthResponse {

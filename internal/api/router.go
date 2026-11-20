@@ -5117,8 +5117,14 @@ func (r *Router) handleHealth(w http.ResponseWriter, req *http.Request) {
 		"scheduler": schedulerHealthy,
 		"websocket": r.wsHub != nil,
 	}
+	// This is a diagnostic, not a liveness failure. A shared hub may be
+	// working for another workspace, whose activity must not be public.
+	if r.wsHub != nil && !r.hostedMode && !IsMultiTenantEnabled() {
+		response.WebSocketStateStalled = r.wsHub.StateBuildStalled()
+	}
 
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", "no-store")
 	w.WriteHeader(statusCode)
 	if err := utils.WriteJSONResponse(w, response); err != nil {
 		log.Error().Err(err).Msg("Failed to write health response")

@@ -13,6 +13,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	gorillawebsocket "github.com/gorilla/websocket"
@@ -36,6 +37,40 @@ func TestNormalClientCloseIsNotAnError(t *testing.T) {
 	if !isUnexpectedClientClose(policyViolation) {
 		t.Fatal("policy violation was not classified as an unexpected close")
 	}
+}
+
+func TestStateBuildStallFollowsCurrentSlotHolder(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		hub := NewHub(nil)
+		defer hub.Stop()
+		if !hub.acquireStateBuildSlot(nil) {
+			t.Fatal("first build could not take the slot")
+		}
+		time.Sleep(30 * time.Second)
+		if !hub.StateBuildStalled() {
+			t.Fatal("overdue build was not observed")
+		}
+
+		acquired := make(chan bool, 1)
+		go func() { acquired <- hub.acquireStateBuildSlot(nil) }()
+		synctest.Wait()
+		if len(acquired) != 0 || !hub.StateBuildStalled() {
+			t.Fatal("waiting work entered the occupied slot or hid the first build")
+		}
+
+		hub.releaseStateBuildSlot()
+		if !<-acquired || hub.StateBuildStalled() {
+			t.Fatal("the next build could not start or inherited its predecessor's age")
+		}
+		time.Sleep(30 * time.Second)
+		if !hub.StateBuildStalled() {
+			t.Fatal("the next build was not tracked")
+		}
+		hub.releaseStateBuildSlot()
+		if hub.StateBuildStalled() {
+			t.Fatal("idle slot retained a stall")
+		}
+	})
 }
 
 func TestClientSafeSendAndCloseAreSynchronized(t *testing.T) {

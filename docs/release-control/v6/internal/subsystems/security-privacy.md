@@ -161,6 +161,14 @@ Three things the masking does not do, and the docs say so:
 `TestApplyDockerReportShapesTheFailureLogItself` hold the off switch and both
 ends of the masking.
 
+### Public WebSocket state-stall signal
+
+`/api/health` may show a fixed, optional stall flag on a standalone
+single-workspace server. Hosted mode and multi-workspace mode must omit it
+because the state slot is shared. The response is not cacheable and the flag
+contains no workspace, client, state, timing value or count. Reading health
+does not initiate state work or change authentication or access policy.
+
 ### Health-check output stays on the host (12 November 2026)
 
 The Docker module now reads the last health-check result of an unhealthy
