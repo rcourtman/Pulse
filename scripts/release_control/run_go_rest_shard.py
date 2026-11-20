@@ -33,10 +33,10 @@ def empty_package_coverage(stream, name: str, output: Path) -> int:
 
     The shared shard recorder deliberately rejects empty selections. Keep its
     contract unchanged (including on stable patches) and admit only this exact
-    package's complete, zero-test JSON stream here.
+    package's zero-test JSON stream with one start and one terminal event.
     """
     terminal = None
-    terminal_count = invalid = 0
+    start_count = terminal_count = invalid = 0
     for raw in stream:
         try:
             event = json.loads(raw)
@@ -45,6 +45,14 @@ def empty_package_coverage(stream, name: str, output: Path) -> int:
         if (not isinstance(event, dict) or event.get("Package") != name or
                 event.get("Test", "") != "" or terminal_count or
                 event.get("Action") not in ("start", "output", "pass", "skip")):
+            invalid += 1
+        elif event["Action"] == "start":
+            start_count += 1
+            if start_count != 1:
+                invalid += 1
+        elif start_count != 1:
+            # A retained tail is not the whole zero-root execution. In
+            # particular, a successful terminal event alone proves no start.
             invalid += 1
         if not isinstance(event, dict):
             print(raw, end="", flush=True)
@@ -57,10 +65,12 @@ def empty_package_coverage(stream, name: str, output: Path) -> int:
         if event.get("Action") in ("pass", "skip", "fail") and not event.get("Test"):
             terminal = event["Action"]
             terminal_count += 1
-    exit_code = 0 if terminal in ("pass", "skip") and terminal_count == 1 and invalid == 0 else 1
+    complete = start_count == terminal_count == 1 and invalid == 0
+    exit_code = 0 if complete and terminal in ("pass", "skip") else 1
     (output / "empty-coverage.json").write_text(json.dumps({
         "listed_roots": 0, "package_terminal_action": terminal,
-        "package_terminal_count": terminal_count, "invalid_event_count": invalid,
+        "package_start_count": start_count, "package_terminal_count": terminal_count,
+        "invalid_event_count": invalid,
         "coverage_exit": exit_code,
     }, indent=2) + "\n")
     if exit_code:
