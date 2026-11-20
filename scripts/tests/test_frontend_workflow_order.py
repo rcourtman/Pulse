@@ -11,6 +11,8 @@ import yaml
 
 ROOT = Path(__file__).resolve().parents[2]
 WORKFLOW = ROOT / ".github/workflows/build-and-test.yml"
+TRIAGE_VERDICT_STEP = "Require applicable triage proof when runtime is not applicable"
+RUNTIME_VERDICT_STEP = "Require complete frontend proof"
 
 
 class FrontendWorkflowOrderTest(unittest.TestCase):
@@ -20,8 +22,8 @@ class FrontendWorkflowOrderTest(unittest.TestCase):
         self.job = self.jobs["frontend-build"]
         self.steps = self.job["steps"]
 
-    def step(self, name):
-        matches = [step for step in self.steps if step.get("name") == name]
+    def step(self, name, *, job="frontend-build"):
+        matches = [step for step in self.jobs[job]["steps"] if step.get("name") == name]
         self.assertEqual(len(matches), 1, f"expected one {name} step")
         return matches[0]
 
@@ -190,22 +192,42 @@ class FrontendWorkflowOrderTest(unittest.TestCase):
                 self.assertNotIn("if", step)
 
     def verdict(self, **values):
-        step = self.jobs["frontend"]["steps"][0]
         env = dict(os.environ, CHANGE_RESULT="success", CODE_CHANGED="true",
-                   BUILD_RESULT="success", CHECKS_RESULT="success", UNIT_RESULT="success")
+                   BUILD_RESULT="success", CHECKS_RESULT="success", UNIT_RESULT="success",
+                   TRIAGE_REQUIRED="false", TRIAGE_RESULT="skipped")
         env.update(values)
-        return subprocess.run(["bash", "-e", "-u", "-o", "pipefail", "-c", step["run"]],
-                              env=env, text=True, capture_output=True, timeout=5)
+
+        def run(name):
+            step = self.step(name, job="frontend")
+            return subprocess.run(["bash", "-e", "-u", "-o", "pipefail", "-c", step["run"]],
+                                  env=env, text=True, capture_output=True, timeout=5)
+
+        # The first step has its own GitHub condition; a failure prevents the
+        # following step (default success()) from reporting a runtime verdict.
+        if env["CODE_CHANGED"] == "false":
+            triage = run(TRIAGE_VERDICT_STEP)
+            if triage.returncode:
+                return triage
+        return run(RUNTIME_VERDICT_STEP)
 
     def test_required_name_depends_on_classification_checks_and_unit_suite(self):
         verdict = self.jobs["frontend"]
         self.assertEqual(verdict["name"], "Frontend")
         self.assertEqual(sum(job.get("name") == "Frontend" for job in self.jobs.values()), 1)
-        self.assertEqual(verdict["needs"], ["changes", "frontend-build", "frontend-checks", "frontend-unit"])
+        self.assertEqual(verdict["needs"],
+                         ["changes", "frontend-build", "frontend-checks", "frontend-unit", "triage-helper"])
         self.assertEqual(verdict["if"], "always()")
         self.assertNotIn("continue-on-error", verdict)
-        self.assertEqual(len(verdict["steps"]), 1)
-        step = verdict["steps"][0]
+        self.assertEqual([item.get("name") for item in verdict["steps"]],
+                         [TRIAGE_VERDICT_STEP, RUNTIME_VERDICT_STEP])
+        triage = self.step(TRIAGE_VERDICT_STEP, job="frontend")
+        self.assertEqual(triage["if"], "always() && needs.changes.outputs.code == 'false'")
+        self.assertNotIn("continue-on-error", triage)
+        self.assertEqual(triage["env"], {
+            "TRIAGE_REQUIRED": "${{ needs.changes.outputs.triage_helper }}",
+            "TRIAGE_RESULT": "${{ needs.triage-helper.result }}",
+        })
+        step = self.step(RUNTIME_VERDICT_STEP, job="frontend")
         self.assertNotIn("if", step)
         self.assertNotIn("continue-on-error", step)
         self.assertEqual(step["env"], {
@@ -230,9 +252,18 @@ class FrontendWorkflowOrderTest(unittest.TestCase):
 
     def test_only_consistent_inapplicable_proof_can_skip_the_unit_inventory(self):
         values = dict(CODE_CHANGED="false", BUILD_RESULT="skipped", CHECKS_RESULT="skipped", UNIT_RESULT="skipped")
-        result = self.verdict(**values)
-        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-        self.assertIn("no frontend tests ran", result.stdout)
+        for required, state in (("false", "skipped"), ("true", "success")):
+            with self.subTest(required=required, triage=state):
+                result = self.verdict(**values, TRIAGE_REQUIRED=required, TRIAGE_RESULT=state)
+                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                self.assertIn("no frontend tests ran", result.stdout)
+        for required, state in (("true", "skipped"), ("true", "failure"), ("true", "cancelled"),
+                                ("true", ""), ("false", ""), ("", "skipped")):
+            with self.subTest(required=required, triage=state):
+                result = self.verdict(**values, TRIAGE_REQUIRED=required, TRIAGE_RESULT=state)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn("::error::Issue-triage proof", result.stdout)
+                self.assertNotIn("no frontend tests ran", result.stdout)
         for name in ("CHANGE_RESULT", "BUILD_RESULT", "CHECKS_RESULT", "UNIT_RESULT", "CODE_CHANGED"):
             states = ("failure", "cancelled", "", "unknown")
             if name in ("BUILD_RESULT", "CHECKS_RESULT", "UNIT_RESULT"):
