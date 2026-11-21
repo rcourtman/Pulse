@@ -903,8 +903,8 @@ jobs:
     # Expand the unchanged required checks even when compilation fails. A
     # skipped dependency must not turn a broken source into a green check.
     if: ${{ !cancelled() && needs.changes.result == 'success' }}
-    # Like the rest shards, expand even for documentation-only changes so the
-    # verdict job sees real shard results rather than skipped jobs.
+    # Keep one worker for an explicit no-runtime change so the verdict sees
+    # a checked admission result without waiting for four identical no-ops.
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     strategy:
@@ -915,6 +915,16 @@ jobs:
         # Full PRs to main use four API workers and a third rest worker.
         # Other full runs use five API workers. Component PRs use one.
         index: ${{ fromJSON(needs.changes.outputs.component_only == 'true' && '[0]' || '[0, 1, 2, 3, 4]') }}
+        mode: ${{ fromJSON(needs.changes.outputs.code == 'false' && '["verdict-only"]' || '["runtime"]') }}
+        exclude:
+          - mode: verdict-only
+            index: 1
+          - mode: verdict-only
+            index: 2
+          - mode: verdict-only
+            index: 3
+          - mode: verdict-only
+            index: 4
     env:
       API_SHARD_COUNT: 5
 
