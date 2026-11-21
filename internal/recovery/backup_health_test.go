@@ -137,3 +137,63 @@ func TestBackupHealthAmbiguousWorkloadIdentityIsIncomplete(t *testing.T) {
 		require.Contains(t, row.HistoryReason, "uniquely matched")
 	}
 }
+
+func TestBackupHealthAttributionGapsKeepScopedReasonsInPointOrder(t *testing.T) {
+	from := time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC)
+	to := from.AddDate(0, 0, 3)
+	coverage := model.BackupHistoryCoverage{}
+	for _, instance := range []string{"site-a", "site-b"} {
+		coverage.Sources = append(coverage.Sources, model.BackupHistorySource{Provider: ProviderProxmoxPVE, Instance: instance})
+		coverage.Intervals = append(coverage.Intervals, model.BackupHistoryInterval{Provider: ProviderProxmoxPVE, Instance: instance, Start: from, End: to})
+	}
+	workloads := []model.BackupHealthWorkload{
+		{ID: "a-first", Instance: "site-a", VMID: 100},
+		{ID: "a-second", Instance: "site-a", VMID: 100},
+		{ID: "a-other", Instance: "site-a", VMID: 101},
+		{ID: "b-first", Instance: "site-b", VMID: 100},
+	}
+	parent := backupHealthPoint("multi", "site-a", 0, OutcomeFailed, from.Add(time.Hour))
+	ambiguous := backupHealthPoint("ambiguous", "site-a", 100, OutcomeWarning, from.Add(25*time.Hour))
+	exact := backupHealthPoint("exact", "site-a", 100, OutcomeFailed, from.Add(49*time.Hour))
+	exact.SubjectResourceID = "a-first"
+	qualified := backupHealthPoint("qualified", "site-a", 0, OutcomeFailed, from.Add(50*time.Hour))
+	qualified.Details["guestTaskDetailsComplete"] = true
+	foreign := backupHealthPoint("foreign", "site-c", 0, OutcomeFailed, from.Add(51*time.Hour))
+	old := backupHealthPoint("old", "site-a", 100, OutcomeFailed, from.Add(-time.Hour))
+
+	for _, tc := range []struct {
+		name              string
+		first, second     RecoveryPoint
+		overlappingReason string
+	}{
+		{"ambiguous point last", parent, ambiguous, "Some backup task identities could not be uniquely matched to workloads."},
+		{"multi-guest point last", ambiguous, parent, "Some multi-guest backup jobs could not be fully attributed to workloads."},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			points := []RecoveryPoint{tc.first, tc.second, exact, qualified, foreign, old}
+			summary := BuildBackupHealth(workloads, points, coverage, from, to, time.UTC)
+			require.Equal(t, "partial", summary.HistoryState)
+			require.Equal(t, []model.BackupHealthDay{
+				{Date: "2026-10-01", HistoryState: "partial"},
+				{Date: "2026-10-02", HistoryState: "partial"},
+				{Date: "2026-10-03", HistoryState: "complete", Counts: model.BackupOutcomeCounts{Failed: 1}},
+			}, summary.Days)
+			require.Equal(t, model.BackupOutcomeCounts{Failed: 1}, summary.Counts)
+			require.Len(t, summary.Failures, 1)
+			require.Equal(t, "a-first", summary.Failures[0].WorkloadID)
+			require.Equal(t, 3, summary.MissingWorkloads)
+
+			rows := make(map[string]model.BackupHealthWorkloadResult)
+			for _, row := range summary.Workloads {
+				rows[row.ID] = row
+			}
+			for _, id := range []string{"a-first", "a-second"} {
+				require.Equal(t, "partial", rows[id].HistoryState)
+				require.Equal(t, tc.overlappingReason, rows[id].HistoryReason)
+			}
+			require.Equal(t, "partial", rows["a-other"].HistoryState)
+			require.Equal(t, "Some multi-guest backup jobs could not be fully attributed to workloads.", rows["a-other"].HistoryReason)
+			require.Equal(t, "complete", rows["b-first"].HistoryState, "a reused VMID on another connection keeps its evidence")
+		})
+	}
+}
