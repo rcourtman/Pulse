@@ -464,7 +464,7 @@ describe('NodeCredentialSlot', () => {
     });
   });
 
-  it('edits PBS datastore exclusions and saves normalized patterns', async () => {
+  it('explains PBS exclusions and preserves the patterns when Datastores is turned off', async () => {
     const settings = createSettings();
     const editingNode = {
       id: 'pbs-0',
@@ -496,14 +496,29 @@ describe('NodeCredentialSlot', () => {
 
     const input = screen.getByLabelText('Excluded datastores (optional)') as HTMLInputElement;
     expect(input.value).toBe('archive-*');
+    expect(input).toHaveAccessibleDescription(
+      /Matching stores and their snapshots are not monitored, even when mounted.*name\*, \*name, \*name\*\. Matches ignore case/,
+    );
 
     fireEvent.input(input, { target: { value: 'exthdd*, *removable*, exact-store' } });
-    fireEvent.submit(input.closest('form')!);
+    const datastores = screen.getByRole('checkbox', { name: /^Datastores / });
+    fireEvent.click(datastores);
+    expect(screen.queryByLabelText('Excluded datastores (optional)')).not.toBeInTheDocument();
+    expect(datastores).toHaveAccessibleDescription(
+      'Saving with Datastores off keeps your exclusion list.',
+    );
+    fireEvent.click(datastores);
+    expect(screen.getByLabelText('Excluded datastores (optional)')).toHaveValue(
+      'exthdd*, *removable*, exact-store',
+    );
+    fireEvent.click(datastores);
+    fireEvent.submit(datastores.closest('form')!);
 
     await vi.waitFor(() => {
       expect(settings.saveNode).toHaveBeenCalledTimes(1);
     });
     expect(vi.mocked(settings.saveNode).mock.calls[0][0]).toMatchObject({
+      monitorDatastores: false,
       excludeDatastores: ['exthdd*', '*removable*', 'exact-store'],
     });
   });
