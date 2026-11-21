@@ -24,8 +24,14 @@ if [[ "$*" == version ]]; then
 fi
 # Every package's closure is itself plus internal/shared, except pkg/auth.
 if [[ "$1" == list ]]; then
+  if [[ -n "${FAKE_GO_LIST_LOG:-}" ]]; then
+    printf '%s\n' "$*" >> "${FAKE_GO_LIST_LOG}"
+  fi
   [[ "${FAKE_GO_LIST_FAIL:-0}" == 0 ]] || exit 1
   if [[ "$2" == -m ]]; then
+    if [[ "${FAKE_GO_MULTI_ROOT:-0}" == 1 ]]; then
+      printf '%s/second-module\n' "$PWD"
+    fi
     echo "$PWD"
     exit 0
   fi
@@ -33,6 +39,14 @@ if [[ "$1" == list ]]; then
   package="${package#./}"
   package="${package%/}"
   printf '%s/%s\n\n' "$PWD" "${package}"
+  if [[ "${FAKE_GO_PARTIAL_GRAPH:-0}" == 1 && "${package}" == internal/hostmetrics ]]; then
+    # go list -e can exit zero with only the surviving directories. The
+    # strict call can also have written stdout, but signals the failure.
+    if [[ " $* " == *' -e '* ]]; then
+      exit 0
+    fi
+    exit 1
+  fi
   [[ "${package}" == pkg/auth ]] || echo "$PWD/internal/shared"
   exit 0
 fi
@@ -127,7 +141,8 @@ commit baseline
 change frontend/app.ts frontend
 change internal/shared/shared_test.go shared-test
 commit candidate
-run_paired
+list_log="${WORK_DIR}/go-list.log"
+FAKE_GO_LIST_LOG="${list_log}" run_paired
 grep -qFx 'selection=affected' "${metadata}"
 grep -qFx 'packages=' "${metadata}"
 grep -qFx "candidate.commit=$(git -C "${WORK_DIR}/candidate" rev-parse HEAD)" "${metadata}"
@@ -136,6 +151,10 @@ grep -qFx "baseline.tree=$(git -C "${WORK_DIR}/baseline" rev-parse 'HEAD^{tree}'
 [[ ! -s "${WORK_DIR}/candidate/bench-results.txt" ]]
 [[ ! -s "${WORK_DIR}/candidate/bench-baseline.txt" ]]
 [[ ! -s "${WORK_DIR}/go.log" ]]
+# A complete but unaffected graph still checks all nine closures. Do not
+# rediscover the same candidate module root for each lookup.
+[[ "$(grep -c '^list -m ' "${list_log}")" == 1 ]]
+[[ "$(grep -cv '^list -m ' "${list_log}")" == 9 ]]
 
 # A benchmark package's own test file selects that package alone.
 change internal/api/handler_test.go api-test
@@ -175,6 +194,18 @@ grep -qFx 'packages=./pkg/metrics/ ./internal/api/ ./internal/monitoring/ ./inte
 FAKE_GO_LIST_FAIL=1 run_paired
 grep -qFx 'selection=all (package graph unreadable)' "${metadata}"
 grep -qF 'packages=./pkg/metrics/ ./pkg/auth/' "${metadata}"
+
+# A late partial graph must discard any earlier narrowed selection, even if
+# stdout holds a directory and none of the visible dirs matches the diff.
+FAKE_GO_PARTIAL_GRAPH=1 PULSE_BENCH_SHARD=2 run_paired
+grep -qFx 'selection=all (package graph unreadable)' "${metadata}"
+grep -qFx 'packages=./pkg/metrics/ ./cmd/pulse-agent/ ./internal/hostmetrics/' "${metadata}"
+[[ "$(grep -c '^sample=' "${metadata}")" == 2 ]]
+
+# Several main modules cannot safely be compared against one directory root.
+FAKE_GO_MULTI_ROOT=1 PULSE_BENCH_SHARD=0 run_paired
+grep -qFx 'selection=all (package graph unreadable)' "${metadata}"
+grep -qFx 'packages=./pkg/auth/ ./internal/monitoring/ ./internal/dockeragent/' "${metadata}"
 
 # Uncommitted edits are measured but invisible to the committed trees.
 echo '// local edit' >> "${WORK_DIR}/baseline/internal/api/handler.go"
