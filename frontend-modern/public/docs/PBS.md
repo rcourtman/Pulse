@@ -402,23 +402,21 @@ backup or working protection from the strip alone.
 
 Check one affected guest without changing its setup:
 
-1. Open **Proxmox → Backups → Coverage** and expand that guest. Read its
-   protection explanation and the PBS **Source**, **Reported outcome**,
-   **History** and **Access** evidence. Source distinguishes backup inventories
-   from retained points. A successful inventory read is not a successful backup
-   job; the outcome can also include retained-point evidence. Access describes
-   permissions; if provider evidence is absent,
-   record that rather than interpreting it as healthy. These are backup
-   evidence states, not the PBS host's CPU/metrics History chart.
-2. Compare the listed backup with the existing record in PBS: server,
-   datastore, namespace (including root), guest type/ID and backup time.
-   Independent PVE installations can reuse an ID; confirm the owning
-   installation too. Under **Restore points**, choose the newest point whose
-   **Source** is **PBS**, and read its **Created** time and **State**. Tap the
-   point for its absolute **Created** time; if unavailable, keep the time
-   unknown. A relative age or Pulse's refresh time is not a matching backup
-   timestamp. A **guest snapshot** is not a PBS backup. Check the existing
-   backup task and verification result for that same point in PBS.
+1. In **Proxmox → Backups → Coverage**, expand the guest and open **More details**.
+   Read the protection explanation and **Provider evidence**: **Source**
+   (inventory or retained points), **Reported outcome** (not a backup-job result),
+   **History** and **Access** (permissions). With **Partial** or **Unavailable**
+   history, a missing point does not prove deletion and a retained point
+   may not have been read again. A collection limit can leave history
+   **Partial** without an access refusal. If provider evidence is missing,
+   record that. This is not the PBS host's metrics History chart.
+2. Find the newest point with **PBS** as its **Source**, not a guest snapshot.
+   If **Restore points** omits the point you expect, check **By date** and the
+   existing PBS inventory. Match the server, datastore, namespace (including
+   root), guest type/ID and owning PVE installation. IDs can repeat across
+   installations. Open the point for its **State** and absolute **Created**
+   time, not the relative age or refresh time. If the time is missing, keep it
+   unknown. Compare the existing task and verification for that point in PBS.
 3. If the records still disagree, report the Pulse version, one guest's
    protection explanation, PBS Source/Reported outcome/History/Access values and the matching
    point's Created time, State and PBS verification result. Use consistent

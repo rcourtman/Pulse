@@ -45,21 +45,22 @@ describe('PBS protection disagreement help', () => {
     );
     expect(steps).toHaveLength(3);
     expect(steps[0]).toContain('Proxmox → Backups → Coverage');
-    expect(steps[0]).toContain('Source, Reported outcome, History and Access');
-    expect(steps[0]).toContain('A successful inventory read is not a successful backup job');
-    expect(steps[0]).toContain('the outcome can also include retained-point evidence');
-    expect(steps[0]).toContain('provider evidence is absent');
+    expect(steps[0]).toContain('open More details');
+    expect(steps[0]).toContain('Source (inventory or retained points)');
+    expect(steps[0]).toContain('Reported outcome (not a backup-job result)');
+    expect(steps[0]).toContain('History and Access (permissions)');
+    expect(steps[0]).toContain('If provider evidence is missing, record that');
     expect(steps[0]).toContain('not the PBS host');
     expect(steps[1]).toContain(
-      'server, datastore, namespace (including root), guest type/ID and backup time',
+      'server, datastore, namespace (including root), guest type/ID and owning PVE installation',
     );
-    expect(steps[1]).toContain('confirm the owning installation');
-    expect(steps[1]).toContain('choose the newest point whose Source is PBS');
-    expect(steps[1]).toContain('Created time and State');
-    expect(steps[1]).toContain('Tap the point for its absolute Created time');
-    expect(steps[1]).toContain('if unavailable, keep the time unknown');
-    expect(steps[1]).toContain('refresh time is not a matching backup timestamp');
-    expect(steps[1]).toContain('guest snapshot is not a PBS backup');
+    expect(steps[1]).toContain('IDs can repeat across installations');
+    expect(steps[1]).toContain('newest point with PBS as its Source, not a guest snapshot');
+    expect(steps[1]).toContain(
+      'State and absolute Created time, not the relative age or refresh time',
+    );
+    expect(steps[1]).toContain('If the time is missing, keep it unknown');
+    expect(steps[1]).toContain('Compare the existing task and verification for that point in PBS');
     expect(steps[2]).toContain('protection explanation');
     expect(article().querySelector('pre')).toBeNull();
     // Runtime consumer tests own its rendered labels. Keep this check on the

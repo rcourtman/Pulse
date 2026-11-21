@@ -10,8 +10,8 @@ const shipped = (name: string) =>
 const render = createGuideFixture(shipped);
 const fragment = 'pbs-is-active-but-missing-from-monitoring';
 
-function section(): HTMLElement {
-  const heading = render('PBS').querySelector(`#${fragment}`);
+function section(headingId = fragment): HTMLElement {
+  const heading = render('PBS').querySelector(`#${headingId}`);
   expect(heading).not.toBeNull();
   const element = document.createElement('section');
   for (let next = heading!.nextElementSibling; next; next = next.nextElementSibling) {
@@ -75,5 +75,20 @@ describe('missing API-only PBS help', () => {
     for (const name of ['PBS', 'TROUBLESHOOTING']) {
       expect(shipped(name)).toBe(readFileSync(path.join(root, 'docs', `${name}.md`), 'utf8'));
     }
+  });
+
+  it('separates incomplete inventory from deleted backups and points readers to existing records', () => {
+    const guide = section('backups-are-visible-but-coverage-says-unprotected');
+    const [evidence, point] = guide.querySelectorAll<HTMLElement>('ol > li');
+    expect(prose(evidence)).toContain(
+      'With Partial or Unavailable history, a missing point does not prove deletion and a retained point may not have been read again.',
+    );
+    expect(prose(evidence)).toContain('Partial without an access refusal');
+    expect(prose(point)).toContain(
+      'If Restore points omits the point you expect, check By date and the existing PBS inventory.',
+    );
+    expect(prose(point)).toContain('guest type/ID and owning PVE installation');
+    expect(guide.querySelector('pre')).toBeNull();
+    expect(guide.querySelector('a[href="/docs/VM_DISK_MONITORING#backup-safety"]')).not.toBeNull();
   });
 });
