@@ -18,6 +18,7 @@ const entryGuideNames = [
   'TRUENAS',
   'PBS',
   'RECOVERY',
+  'OIDC',
 ];
 
 function renderGuide(name: string): HTMLElement {
@@ -98,6 +99,7 @@ describe('troubleshooting workflow entry', () => {
         'Cannot sign in:',
         [
           '/docs/TROUBLESHOOTING#i-forgot-my-password',
+          '/docs/OIDC#invalid_client-after-saving-an-oidc-provider',
           '/docs/TROUBLESHOOTING#cannot-login--401-unauthorized',
         ],
       ],
@@ -222,6 +224,25 @@ describe('troubleshooting workflow entry', () => {
       expect(match, href).not.toBeNull();
       expect(entryGuideNames, href).toContain(match![1] ?? 'TROUBLESHOOTING');
     }
+  });
+
+  it('points a saved OIDC edit at the existing client-rejection guide without dropping the other sign-in paths', () => {
+    const signIn = workflow(entry(), 'Cannot sign in:');
+    const article = renderGuide('TROUBLESHOOTING');
+    const branches = article.querySelector<HTMLUListElement>('#cannot-login--401-unauthorized + p + ul')!;
+    const sso = workflow(branches, 'SSO or proxy login:');
+    const href = '/docs/OIDC#invalid_client-after-saving-an-oidc-provider';
+    for (const section of [signIn, sso]) {
+      const link = section.querySelector(`a[data-doc-link][href="${href}"]`)!;
+      expect(link.querySelector('code')?.textContent).toBe('invalid_client');
+      expect(prose(link)).toContain('after saving');
+    }
+    expect(prose(signIn)).toContain('Keep your admin session open.');
+    expect(prose(signIn)).toContain('Do not delete configuration or repeat setup.');
+    expect(sso.querySelector('a[href="/docs/PROXY_AUTH"]')).not.toBeNull();
+    expect(prose(sso)).toContain('A local lockout reset does not repair');
+    expect(workflow(branches, 'Local login form:')).not.toBeNull();
+    expect(workflow(branches, 'API client:')).not.toBeNull();
   });
 
   // Each independent destination keeps Vitest's normal deadline. One case
