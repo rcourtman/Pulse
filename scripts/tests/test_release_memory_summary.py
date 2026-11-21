@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Check the release memory summary's CPU and disk-write rates."""
+"""Check the release memory summary's RSS, CPU and disk observations."""
 
 import importlib.util
 import io
@@ -21,14 +21,15 @@ SPEC.loader.exec_module(summary)
 HEADER = "elapsed_s\trss_kib\tgo_heap_kib\tgo_other_kib\tanon_other_kib\tfile_kib\tcpu_ticks\twrite_bytes\twchar_bytes\n"
 
 
-def samples(rss_kib, ticks_per_s, write_bytes_per_s, io=True):
-    rows = [HEADER]
+def samples(rss_kib, ticks_per_s, write_bytes_per_s, io=True, rss_hwm=None):
+    rows = [HEADER if rss_hwm is None else HEADER.rstrip("\n") + "\trss_hwm_kib\n"]
     for elapsed in range(0, 901, 15):
         write = str(write_bytes_per_s * elapsed) if io else ""
         wchar = str(2 * write_bytes_per_s * elapsed) if io else ""
-        rows.append(
-            f"{elapsed}\t{rss_kib}\t50000\t10000\t20000\t30000\t{ticks_per_s * elapsed}\t{write}\t{wchar}\n"
-        )
+        row = f"{elapsed}\t{rss_kib}\t50000\t10000\t20000\t30000\t{ticks_per_s * elapsed}\t{write}\t{wchar}"
+        if rss_hwm is not None:
+            row += f"\t{rss_hwm(elapsed)}"
+        rows.append(row + "\n")
     return "".join(rows)
 
 
@@ -124,6 +125,39 @@ class ReleaseMemorySummaryTests(unittest.TestCase):
         self.assertEqual(code, 0)
         self.assertIsNone(result["candidate_activity"]["write_mib_per_day"])
         self.assertIn("| Disk writes | MiB/day | n/a | n/a | n/a |", text)
+
+    def test_process_peak_separate_from_unchanged_sampled_rss_and_gate(self):
+        code, result, text = self.run_summary(
+            samples(131072, 25, 0, rss_hwm=lambda _: 163840),
+            samples(131072, 25, 0, rss_hwm=lambda t: 131072 if t == 0 else 262144),
+        )
+        self.assertEqual(code, 0)
+        self.assertEqual(result["rss_growth_kib"], 0)
+        self.assertFalse(result["regressed"])
+        self.assertEqual(result["baseline_rss_high_water_kib"], 163840)
+        self.assertEqual(result["candidate_rss_high_water_kib"], 262144)
+        self.assertIn("No steady-state RSS regression", text)
+        self.assertIn("| Process RSS high-water mark | 160.0 | 256.0 | +96.0 |", text)
+        self.assertIn("does not measure cgroup usage", text)
+
+    def test_legacy_samples_do_not_substitute_current_rss_for_high_water(self):
+        code, result, text = self.run_summary(
+            samples(131072, 25, 0), samples(131072, 25, 0, rss_hwm=lambda _: 163840)
+        )
+        self.assertEqual(code, 0)
+        self.assertIsNone(result["baseline_rss_high_water_kib"])
+        self.assertIn("| Process RSS high-water mark | n/a | 160.0 | n/a |", text)
+
+    def test_missing_or_invalid_last_high_water_keeps_comparison_unknown(self):
+        for invalid in ("", "0", "-1", "unavailable"):
+            with self.subTest(invalid=invalid):
+                code, result, text = self.run_summary(
+                    samples(131072, 25, 0, rss_hwm=lambda t: 163840 if t < 900 else invalid),
+                    samples(131072, 25, 0, rss_hwm=lambda _: 163840),
+                )
+                self.assertEqual(code, 0)
+                self.assertIsNone(result["baseline_rss_high_water_kib"])
+                self.assertIn("| Process RSS high-water mark | n/a | 160.0 | n/a |", text)
 
     def test_memory_regression_still_fails(self):
         code, result, _ = self.run_summary(samples(130000, 25, 0), samples(170000, 25, 0))
