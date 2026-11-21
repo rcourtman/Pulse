@@ -262,9 +262,9 @@ describe('securityScorePresentation', () => {
     ).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          key: 'password',
-          label: 'Password login',
-          description: 'Active',
+          key: 'authentication',
+          label: 'Authentication',
+          description: 'Configured or required',
           critical: true,
         }),
         expect.objectContaining({

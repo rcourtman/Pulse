@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "base_sha": "b9d2e509295343d77ad256c910a421381c934bbc",
+  "verified_at": "2026-11-21T07:56:35Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/utils/securityScorePresentation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/utils/securityScorePresentation.ts": "342b10b04fd0043e87337d9606350b79f057054d79f5e68c163d5075c637ebb3"
+  },
+  "routes": [
+    "/settings/security-overview",
+    "/settings/security/api",
+    "/settings/security-auth"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 320,
+      "height": 720
+    }
+  ],
+  "states": [
+    "Opened and compared 14 matched captures from the real compiled Settings page at desktop light and narrow touch dark, using synthetic security-status responses.",
+    "SSO-only and local-password views report “Authentication” and “Configured or required” without claiming that a local password login was verified. SSO, proxy, and API token cues remain separate, and the scores, sibling cards, and footer release link retain their values or positions.",
+    "The limited-viewer screen and the scrolled phone hardening screen are pixel-identical. No protected posture score or API Access shortcut appears for the limited viewer."
+  ],
+  "interactions": [
+    "303 assertions on Chromium 141.0.7390.37 / Playwright 1.56.1. Reach Open API Access with Tab and Enter on desktop and by tapping at the same scroll position on the phone. Both reach the unchanged API Access scope-reference link.",
+    "Open the separate Authentication panel from the desktop local fixture and verify the configured user and the existing Change password control. No settings writes, provider sign-ins or external requests."
+  ]
+}
