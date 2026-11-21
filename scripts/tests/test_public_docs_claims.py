@@ -144,6 +144,16 @@ class PublicDocsLinksTest(unittest.TestCase):
         self.assertEqual(errors, ["source.md: missing anchor #café-2 in source.md"])
         scan.assert_called_once_with(source)
 
+    def test_code_heading_keeps_literal_underscores_but_prose_emphasis_does_not(self) -> None:
+        self.document("guide.md", "### `invalid_client` after _saving_\n")
+        source = self.document(
+            "source.md", "[direct](guide.md#invalid_client-after-saving) "
+            "[wrong](guide.md#invalidclient-after-saving)\n",
+        )
+        self.assertEqual(public_docs.check_links([source]), [
+            "source.md: missing anchor #invalidclient-after-saving in guide.md",
+        ])
+
     def test_missing_files_still_fail_without_scanning_external_or_nonmarkdown_targets(self) -> None:
         self.document("image.svg", "<svg/>\n")
         source = self.document(

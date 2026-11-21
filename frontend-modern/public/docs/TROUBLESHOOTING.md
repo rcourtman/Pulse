@@ -17,10 +17,10 @@ establish safe recovery.
 - **Dashboard is stuck on “Connecting to Pulse” or stops updating:** distinguish
   [server liveness from dashboard delivery](#health-is-green-but-the-dashboard-is-stalled).
   Green health is not proof that current readings reached your browser.
-- **Cannot sign in:** use [local password recovery](TROUBLESHOOTING.md#i-forgot-my-password)
-  or [401 and login failures](TROUBLESHOOTING.md#cannot-login--401-unauthorized),
-  according to the existing authentication method. Do not delete configuration
-  or repeat first-time setup.
+- **Cannot sign in:** [local password](TROUBLESHOOTING.md#i-forgot-my-password),
+  [OIDC `invalid_client` after saving](OIDC.md#invalid_client-after-saving-an-oidc-provider)
+  or [other login errors](TROUBLESHOOTING.md#cannot-login--401-unauthorized).
+  Keep your admin session open. Do not delete configuration or repeat setup.
 - **Signed in, but saved infrastructure settings are unavailable:** use
   [saved-settings access recovery](#signed-in-but-saved-infrastructure-settings-are-unavailable).
   An unreadable connection is not evidence that it was removed; keep its saved
@@ -515,10 +515,10 @@ Identify which request failed before clearing cookies or changing credentials:
   expired session, not a wrong password. Open the same public Pulse URL in a
   fresh browser session and sign in through the configured method. Preserve any
   working administrator session; do not clear unrelated sites' cookies.
-- **SSO or proxy login:** use the identity-provider or Pulse administrator's
-  recovery path. Check the [proxy authentication guide](PROXY_AUTH.md) when the
-  proxy signs you in but Pulse rejects the request. A local lockout reset does
-  not repair an identity-provider account or missing trusted proxy headers.
+- **SSO or proxy login:** see [OIDC `invalid_client` after saving](OIDC.md#invalid_client-after-saving-an-oidc-provider).
+  For other SSO errors, ask your provider or Pulse admin. Proxy signed you in
+  but Pulse refused? See [proxy authentication](PROXY_AUTH.md). A local lockout
+  reset does not repair provider accounts or missing trusted proxy headers.
 - **Local login form:** an **Account locked** response gives the remaining wait.
   Lockout applies separately to username and client IP, normally for 15 minutes;
   clearing cookies does not reset it. A **Too many requests** response (429) is
