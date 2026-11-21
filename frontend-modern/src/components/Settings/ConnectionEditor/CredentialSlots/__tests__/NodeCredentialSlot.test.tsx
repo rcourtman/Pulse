@@ -497,7 +497,7 @@ describe('NodeCredentialSlot', () => {
     const input = screen.getByLabelText('Excluded datastores (optional)') as HTMLInputElement;
     expect(input.value).toBe('archive-*');
     expect(input).toHaveAccessibleDescription(
-      /Matching stores and their snapshots are not monitored, even when mounted.*name\*, \*name, \*name\*\. Matches ignore case/,
+      /Matching stores and their snapshots are not monitored, even when mounted.*name\*\s*, \*name\s*, \*name\*\s*\. Matches ignore case/,
     );
 
     fireEvent.input(input, { target: { value: 'exthdd*, *removable*, exact-store' } });
