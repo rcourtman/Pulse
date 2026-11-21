@@ -162,6 +162,22 @@ func adoptHistoricalProxmoxPBSGuestIdentity(
 	}
 }
 
+func needsHistoricalProxmoxPBSIdentity(points []recovery.RecoveryPoint) bool {
+	for i := range points {
+		p := &points[i]
+		if p.SubjectUnsettled {
+			continue
+		}
+		if strings.TrimSpace(string(p.Provider)) != string(recovery.ProviderProxmoxPBS) {
+			continue
+		}
+		if strings.TrimSpace(p.SubjectResourceID) == "" || isLikelyUnresolvedProxmoxPBSGuestRef(p.SubjectRef) {
+			return true
+		}
+	}
+	return false
+}
+
 func (s *Store) loadHistoricalProxmoxPBSGuestIdentities(ctx context.Context) (map[string]historicalSubjectIdentity, map[string]historicalSubjectIdentity, error) {
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT
@@ -184,8 +200,14 @@ func (s *Store) loadHistoricalProxmoxPBSGuestIdentities(ctx context.Context) (ma
 	}
 	defer rows.Close()
 
+	type looseCandidateState struct {
+		seen      bool
+		ambiguous bool
+		identity  historicalSubjectIdentity
+	}
+
 	identities := make(map[string]historicalSubjectIdentity)
-	looseCandidates := make(map[string][]historicalSubjectIdentity)
+	looseStates := make(map[string]looseCandidateState)
 	for rows.Next() {
 		var (
 			subjectRID    string
@@ -221,18 +243,6 @@ func (s *Store) loadHistoricalProxmoxPBSGuestIdentities(ctx context.Context) (ma
 		if key == "" {
 			continue
 		}
-		looseKey := recovery.ProxmoxPBSGuestLooseContinuityKey(
-			subjectLabel.String,
-			itemType.String,
-			entityID.String,
-		)
-
-		var subjectRef recovery.ExternalRef
-		_ = unmarshalJSON(subjectRefRaw, &subjectRef)
-		var refPtr *recovery.ExternalRef
-		if strings.TrimSpace(subjectRef.Type) != "" {
-			refPtr = &subjectRef
-		}
 
 		tsMs := updatedAtMs.Int64
 		if completedAtMs.Valid && completedAtMs.Int64 > tsMs {
@@ -246,41 +256,54 @@ func (s *Store) loadHistoricalProxmoxPBSGuestIdentities(ctx context.Context) (ma
 		if exists && current.tsMs > tsMs {
 			continue
 		}
-		identities[key] = historicalSubjectIdentity{
-			subjectResourceID: strings.TrimSpace(subjectRID),
-			subjectRef:        cloneExternalRef(refPtr),
+
+		var subjectRef recovery.ExternalRef
+		_ = unmarshalJSON(subjectRefRaw, &subjectRef)
+		var refPtr *recovery.ExternalRef
+		if strings.TrimSpace(subjectRef.Type) != "" {
+			refPtr = cloneExternalRef(&subjectRef)
+		}
+
+		rid := strings.TrimSpace(subjectRID)
+		entry := historicalSubjectIdentity{
+			subjectResourceID: rid,
+			subjectRef:        refPtr,
 			tsMs:              tsMs,
 		}
-		if looseKey != "" {
-			looseCandidates[looseKey] = append(looseCandidates[looseKey], historicalSubjectIdentity{
-				subjectResourceID: strings.TrimSpace(subjectRID),
-				subjectRef:        cloneExternalRef(refPtr),
-				tsMs:              tsMs,
-			})
+		identities[key] = entry
+
+		if rid == "" {
+			continue
 		}
+		looseKey := recovery.ProxmoxPBSGuestLooseContinuityKey(
+			subjectLabel.String,
+			itemType.String,
+			entityID.String,
+		)
+		if looseKey == "" {
+			continue
+		}
+		state := looseStates[looseKey]
+		if !state.seen {
+			state = looseCandidateState{seen: true, identity: entry}
+		} else if !state.ambiguous {
+			if state.identity.subjectResourceID != rid {
+				state.ambiguous = true
+				state.identity = historicalSubjectIdentity{}
+			} else if state.identity.tsMs < tsMs {
+				state.identity = entry
+			}
+		}
+		looseStates[looseKey] = state
 	}
 	if err := rows.Err(); err != nil {
 		return nil, nil, err
 	}
 
-	looseIdentities := make(map[string]historicalSubjectIdentity)
-	for key, candidates := range looseCandidates {
-		seen := make(map[string]historicalSubjectIdentity)
-		for _, candidate := range candidates {
-			rid := strings.TrimSpace(candidate.subjectResourceID)
-			if rid == "" {
-				continue
-			}
-			current, exists := seen[rid]
-			if !exists || current.tsMs < candidate.tsMs {
-				seen[rid] = candidate
-			}
-		}
-		if len(seen) != 1 {
-			continue
-		}
-		for _, candidate := range seen {
-			looseIdentities[key] = candidate
+	looseIdentities := make(map[string]historicalSubjectIdentity, len(looseStates))
+	for key, state := range looseStates {
+		if state.seen && !state.ambiguous {
+			looseIdentities[key] = state.identity
 		}
 	}
 
@@ -1225,9 +1248,16 @@ func (s *Store) UpsertPoints(ctx context.Context, points []recovery.RecoveryPoin
 
 	s.maybePrune(ctx)
 
-	proxmoxPBSIdentities, proxmoxPBSLooseIdentities, err := s.loadHistoricalProxmoxPBSGuestIdentities(ctx)
-	if err != nil {
-		return err
+	var (
+		proxmoxPBSIdentities      map[string]historicalSubjectIdentity
+		proxmoxPBSLooseIdentities map[string]historicalSubjectIdentity
+		err                       error
+	)
+	if needsHistoricalProxmoxPBSIdentity(points) {
+		proxmoxPBSIdentities, proxmoxPBSLooseIdentities, err = s.loadHistoricalProxmoxPBSGuestIdentities(ctx)
+		if err != nil {
+			return err
+		}
 	}
 
 	existingSubjectKeys, err := s.existingSubjectKeysByPointID(ctx, points)
@@ -1396,10 +1426,12 @@ func (s *Store) UpsertPoints(ctx context.Context, points []recovery.RecoveryPoin
 			return err
 		}
 
-		if key, identity := historicalSubjectIdentityFromPoint(p); key != "" {
-			current, exists := proxmoxPBSIdentities[key]
-			if !exists || current.tsMs <= identity.tsMs {
-				proxmoxPBSIdentities[key] = identity
+		if proxmoxPBSIdentities != nil {
+			if key, identity := historicalSubjectIdentityFromPoint(p); key != "" {
+				current, exists := proxmoxPBSIdentities[key]
+				if !exists || current.tsMs <= identity.tsMs {
+					proxmoxPBSIdentities[key] = identity
+				}
 			}
 		}
 	}

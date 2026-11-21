@@ -1118,3 +1118,150 @@ func TestStoreUnsettledUpdatesDoNotDeadlockAgainstPostureRefreshes(t *testing.T)
 		}
 	}
 }
+
+func TestStore_RefreshProtectionPosturesStreamsMultipleSubjectsAndClearsMissing(t *testing.T) {
+	t.Parallel()
+
+	store, err := Open(filepath.Join(t.TempDir(), "recovery.db"))
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	defer store.Close()
+
+	ctx := context.Background()
+	now := time.Now().UTC().Truncate(time.Millisecond)
+	tOld := now.Add(-24 * time.Hour)
+	tNew := now.Add(-1 * time.Hour)
+
+	if err := store.UpsertPoints(ctx, []recovery.RecoveryPoint{
+		{
+			ID: "pbs-a-old", Provider: recovery.ProviderProxmoxPBS, Kind: recovery.KindBackup, Mode: recovery.ModeRemote,
+			Outcome: recovery.OutcomeSuccess, StartedAt: &tOld, CompletedAt: &tOld, SubjectResourceID: "resource:alpha", ProviderScope: "pbs-1",
+		},
+		{
+			ID: "pbs-a-new", Provider: recovery.ProviderProxmoxPBS, Kind: recovery.KindBackup, Mode: recovery.ModeRemote,
+			Outcome: recovery.OutcomeSuccess, StartedAt: &tNew, CompletedAt: &tNew, SubjectResourceID: "resource:alpha", ProviderScope: "pbs-1",
+		},
+		{
+			ID: "pbs-b-new", Provider: recovery.ProviderProxmoxPBS, Kind: recovery.KindBackup, Mode: recovery.ModeRemote,
+			Outcome: recovery.OutcomeFailed, StartedAt: &tNew, CompletedAt: &tNew, SubjectResourceID: "resource:beta", ProviderScope: "pbs-1",
+		},
+	}); err != nil {
+		t.Fatalf("UpsertPoints() error = %v", err)
+	}
+
+	// Delete beta's points directly and refresh both keys plus an absent key.
+	if _, err := store.db.ExecContext(ctx, `DELETE FROM recovery_points WHERE subject_resource_id = 'resource:beta'`); err != nil {
+		t.Fatalf("DELETE beta points error = %v", err)
+	}
+	if err := store.RefreshProtectionPostures(ctx, []string{"res:resource:alpha", "res:resource:beta", "res:resource:missing"}); err != nil {
+		t.Fatalf("RefreshProtectionPostures() error = %v", err)
+	}
+
+	postures, total, err := store.ListProtectionPostures(ctx, recovery.ProtectionPostureQuery{Page: 1, Limit: 20})
+	if err != nil {
+		t.Fatalf("ListProtectionPostures() error = %v", err)
+	}
+	if total != 1 || len(postures) != 1 || postures[0].SubjectResourceID != "resource:alpha" {
+		t.Fatalf("ListProtectionPostures() = %+v (total=%d), want only resource:alpha", postures, total)
+	}
+
+	queried, queriedTotal, err := store.ListProtectionPostures(ctx, recovery.ProtectionPostureQuery{
+		SubjectResourceIDs: []string{"resource:alpha", "resource:beta"},
+	})
+	if err != nil {
+		t.Fatalf("ListProtectionPostures(subject filter) error = %v", err)
+	}
+	if queriedTotal != 2 || len(queried) != 2 {
+		t.Fatalf("subject-filtered postures = %d/%d, want 2/2", len(queried), queriedTotal)
+	}
+	if queried[0].SubjectResourceID != "resource:alpha" || queried[0].LastSuccessfulPointAt == nil || !queried[0].LastSuccessfulPointAt.Equal(tNew) {
+		t.Fatalf("alpha posture = %+v, want LastSuccessfulPointAt=%v", queried[0], tNew)
+	}
+	if queried[1].SubjectResourceID != "resource:beta" || queried[1].State != recovery.ProtectionStateUnknown {
+		t.Fatalf("beta posture = %+v, want unknown after point removal", queried[1])
+	}
+}
+
+func TestStore_ForEachProtectionPointGroupSkipsDetailsWhenProviderScopePresent(t *testing.T) {
+	t.Parallel()
+
+	store, err := Open(filepath.Join(t.TempDir(), "recovery.db"))
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	defer store.Close()
+
+	ctx := context.Background()
+	now := time.Now().UTC().Truncate(time.Millisecond)
+	tBackup := now.Add(-30 * time.Minute)
+
+	scopedPoint := recovery.RecoveryPoint{
+		ID:                "pbs:scoped",
+		Provider:          recovery.ProviderProxmoxPBS,
+		Kind:              recovery.KindBackup,
+		Mode:              recovery.ModeRemote,
+		Outcome:           recovery.OutcomeSuccess,
+		StartedAt:         &tBackup,
+		CompletedAt:       &tBackup,
+		SubjectResourceID: "resource:scoped",
+		ProviderScope:     "pbs-1",
+		RepositoryRef:     &recovery.ExternalRef{Type: "pbs-datastore", ID: "pbs-1:store1", Namespace: "pbs-1"},
+		Details:           map[string]any{"comment": "large-unused-payload", "files": []string{"a", "b", "c"}},
+	}
+	ev, err := recovery.NewRecoveryPointEvidence(scopedPoint, "pbs-inventory", now)
+	if err != nil {
+		t.Fatalf("NewRecoveryPointEvidence() error = %v", err)
+	}
+	scopedPoint.Evidence = ev
+
+	legacyPoint := recovery.RecoveryPoint{
+		ID:                "pve:legacy-empty-scope",
+		Provider:          recovery.ProviderProxmoxPVE,
+		Kind:              recovery.KindBackup,
+		Mode:              recovery.ModeLocal,
+		Outcome:           recovery.OutcomeSuccess,
+		StartedAt:         &tBackup,
+		CompletedAt:       &tBackup,
+		SubjectResourceID: "resource:legacy",
+		Details:           map[string]any{"instance": "pve-cluster-a"},
+	}
+
+	if err := store.UpsertPoints(ctx, []recovery.RecoveryPoint{scopedPoint, legacyPoint}); err != nil {
+		t.Fatalf("UpsertPoints() error = %v", err)
+	}
+	// Simulate a legacy row persisted before provider_scope was populated.
+	if _, err := store.db.ExecContext(ctx, `UPDATE recovery_points SET provider_scope = '' WHERE id = 'pve:legacy-empty-scope'`); err != nil {
+		t.Fatalf("UPDATE legacy provider_scope error = %v", err)
+	}
+
+	gotByKey := make(map[string][]recovery.RecoveryPoint)
+	if err := store.forEachProtectionPointGroup(ctx, []string{"res:resource:scoped", "res:resource:legacy"}, func(key string, points []recovery.RecoveryPoint) error {
+		gotByKey[key] = append([]recovery.RecoveryPoint(nil), points...)
+		return nil
+	}); err != nil {
+		t.Fatalf("forEachProtectionPointGroup() error = %v", err)
+	}
+
+	scopedGot := gotByKey["res:resource:scoped"]
+	if len(scopedGot) != 1 {
+		t.Fatalf("scoped points len = %d, want 1", len(scopedGot))
+	}
+	if scopedGot[0].Details != nil || scopedGot[0].RepositoryRef != nil {
+		t.Fatalf("expected Details and RepositoryRef to be skipped when provider_scope is set, got details=%v repoRef=%v", scopedGot[0].Details, scopedGot[0].RepositoryRef)
+	}
+	if scopedGot[0].Evidence == nil || scopedGot[0].Evidence.ID != ev.ID ||
+		scopedGot[0].Evidence.Source.Collector != "pbs-inventory" ||
+		scopedGot[0].Evidence.Source.Provider != string(recovery.ProviderProxmoxPBS) ||
+		!scopedGot[0].Evidence.IngestedAt.Equal(now) {
+		t.Fatalf("evidence projection mismatch: got %+v, want ID=%q collector=pbs-inventory ingestedAt=%v", scopedGot[0].Evidence, ev.ID, now)
+	}
+
+	legacyGot := gotByKey["res:resource:legacy"]
+	if len(legacyGot) != 1 {
+		t.Fatalf("legacy points len = %d, want 1", len(legacyGot))
+	}
+	if scope := recovery.ProviderScopeForPoint(legacyGot[0]); scope != "pve-cluster-a" {
+		t.Fatalf("legacy ProviderScopeForPoint() = %q, want pve-cluster-a", scope)
+	}
+}

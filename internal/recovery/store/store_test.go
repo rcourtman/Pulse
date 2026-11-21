@@ -1592,3 +1592,151 @@ func assertUndatedTrueNASRollupAndSeries(t *testing.T, db *Store, point recovery
 }
 
 func ptrInt64Store(value int64) *int64 { return &value }
+
+func TestNeedsHistoricalProxmoxPBSIdentity(t *testing.T) {
+	t.Parallel()
+
+	resolvedRef := &recovery.ExternalRef{
+		Type:      "proxmox-vm",
+		Namespace: "pve-a",
+		Name:      "web",
+		ID:        "pve-a:pve1:101",
+		Class:     "pve1",
+	}
+	unresolvedRef := &recovery.ExternalRef{
+		Type:      "proxmox-vm",
+		Namespace: "pbs-main",
+		Name:      "web",
+		ID:        "101",
+	}
+
+	cases := []struct {
+		name   string
+		points []recovery.RecoveryPoint
+		want   bool
+	}{
+		{
+			name: "pve only skips pbs historical scan",
+			points: []recovery.RecoveryPoint{{
+				ID:       "pve-1",
+				Provider: recovery.ProviderProxmoxPVE,
+			}},
+			want: false,
+		},
+		{
+			name: "already resolved pbs point skips scan",
+			points: []recovery.RecoveryPoint{{
+				ID:                "pbs-resolved",
+				Provider:          recovery.ProviderProxmoxPBS,
+				SubjectResourceID: "vm:proxmox:pve-a:101",
+				SubjectRef:        resolvedRef,
+			}},
+			want: false,
+		},
+		{
+			name: "unsettled pbs point skips scan",
+			points: []recovery.RecoveryPoint{{
+				ID:               "pbs-unsettled",
+				Provider:         recovery.ProviderProxmoxPBS,
+				SubjectUnsettled: true,
+				SubjectRef:       unresolvedRef,
+			}},
+			want: false,
+		},
+		{
+			name: "pbs point missing subject resource id needs scan",
+			points: []recovery.RecoveryPoint{{
+				ID:         "pbs-missing-rid",
+				Provider:   recovery.ProviderProxmoxPBS,
+				SubjectRef: resolvedRef,
+			}},
+			want: true,
+		},
+		{
+			name: "pbs point with unresolved ref needs scan",
+			points: []recovery.RecoveryPoint{{
+				ID:                "pbs-unresolved-ref",
+				Provider:          recovery.ProviderProxmoxPBS,
+				SubjectResourceID: "vm:proxmox:pve-a:101",
+				SubjectRef:        unresolvedRef,
+			}},
+			want: true,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := needsHistoricalProxmoxPBSIdentity(tc.points); got != tc.want {
+				t.Fatalf("needsHistoricalProxmoxPBSIdentity() = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestLoadHistoricalProxmoxPBSGuestIdentitiesAmbiguity(t *testing.T) {
+	t.Parallel()
+
+	store, err := Open(filepath.Join(t.TempDir(), "recovery.db"))
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+
+	t1 := time.Date(2026, 2, 1, 1, 0, 0, 0, time.UTC)
+	t2 := time.Date(2026, 2, 2, 1, 0, 0, 0, time.UTC)
+
+	ridA := unifiedresources.ProxmoxGuestCanonicalID(unifiedresources.ResourceTypeVM, "cluster-a", 101)
+	ridB := unifiedresources.ProxmoxGuestCanonicalID(unifiedresources.ResourceTypeVM, "cluster-b", 101)
+	ridUnique := unifiedresources.ProxmoxGuestCanonicalID(unifiedresources.ResourceTypeVM, "cluster-a", 202)
+
+	seed := []recovery.RecoveryPoint{
+		{
+			ID: "ambig-a", Provider: recovery.ProviderProxmoxPBS, Kind: recovery.KindBackup, Mode: recovery.ModeRemote, Outcome: recovery.OutcomeSuccess,
+			StartedAt: &t1, CompletedAt: &t1, SubjectResourceID: ridA,
+			SubjectRef: &recovery.ExternalRef{Type: "proxmox-vm", Namespace: "cluster-a", Name: "shared-app", ID: "cluster-a:pve1:101", Class: "pve1"},
+			Details:    map[string]any{"backupType": "vm", "comment": "shared-app", "namespace": "ns-a", "vmid": "101"},
+		},
+		{
+			ID: "ambig-b", Provider: recovery.ProviderProxmoxPBS, Kind: recovery.KindBackup, Mode: recovery.ModeRemote, Outcome: recovery.OutcomeSuccess,
+			StartedAt: &t2, CompletedAt: &t2, SubjectResourceID: ridB,
+			SubjectRef: &recovery.ExternalRef{Type: "proxmox-vm", Namespace: "cluster-b", Name: "shared-app", ID: "cluster-b:pve2:101", Class: "pve2"},
+			Details:    map[string]any{"backupType": "vm", "comment": "shared-app", "namespace": "ns-b", "vmid": "101"},
+		},
+		{
+			ID: "uniq-1", Provider: recovery.ProviderProxmoxPBS, Kind: recovery.KindBackup, Mode: recovery.ModeRemote, Outcome: recovery.OutcomeSuccess,
+			StartedAt: &t1, CompletedAt: &t1, SubjectResourceID: ridUnique,
+			SubjectRef: &recovery.ExternalRef{Type: "proxmox-vm", Namespace: "cluster-a", Name: "solo-app", ID: "cluster-a:pve1:202", Class: "pve1"},
+			Details:    map[string]any{"backupType": "vm", "comment": "solo-app", "namespace": "ns-a", "vmid": "202"},
+		},
+		{
+			ID: "uniq-2", Provider: recovery.ProviderProxmoxPBS, Kind: recovery.KindBackup, Mode: recovery.ModeRemote, Outcome: recovery.OutcomeSuccess,
+			StartedAt: &t2, CompletedAt: &t2, SubjectResourceID: ridUnique,
+			SubjectRef: &recovery.ExternalRef{Type: "proxmox-vm", Namespace: "cluster-a", Name: "solo-app", ID: "cluster-a:pve2:202", Class: "pve2"},
+			Details:    map[string]any{"backupType": "vm", "comment": "solo-app", "namespace": "ns-b", "vmid": "202"},
+		},
+	}
+	if err := store.UpsertPoints(context.Background(), seed); err != nil {
+		t.Fatalf("UpsertPoints(seed) error = %v", err)
+	}
+	if _, err := store.db.ExecContext(context.Background(), `UPDATE recovery_points SET updated_at_ms = completed_at_ms`); err != nil {
+		t.Fatalf("UPDATE updated_at_ms error = %v", err)
+	}
+
+	identities, looseIdentities, err := store.loadHistoricalProxmoxPBSGuestIdentities(context.Background())
+	if err != nil {
+		t.Fatalf("loadHistoricalProxmoxPBSGuestIdentities() error = %v", err)
+	}
+
+	if len(identities) != 4 {
+		t.Fatalf("len(identities) = %d, want 4 exact namespace keys", len(identities))
+	}
+	ambigLoose := recovery.ProxmoxPBSGuestLooseContinuityKey("shared-app", "vm", "101")
+	if _, exists := looseIdentities[ambigLoose]; exists {
+		t.Fatalf("ambiguous loose key %q should be excluded", ambigLoose)
+	}
+	uniqLoose := recovery.ProxmoxPBSGuestLooseContinuityKey("solo-app", "vm", "202")
+	got, exists := looseIdentities[uniqLoose]
+	if !exists || got.subjectResourceID != ridUnique || got.subjectRef == nil || got.subjectRef.Class != "pve2" {
+		t.Fatalf("unique loose identity = %+v (exists=%v), want newest rid %q with class pve2", got, exists, ridUnique)
+	}
+}

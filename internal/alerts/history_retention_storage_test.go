@@ -10,6 +10,8 @@ import (
 	"testing"
 	"time"
 	"unsafe"
+
+	"github.com/rcourtman/pulse-go-rewrite/internal/operationaltrust"
 )
 
 func retainedHistoryEntry(id string, at time.Time) HistoryEntry {
@@ -212,5 +214,102 @@ func TestHistoryCompactionConcurrentReadersAndWriters(t *testing.T) {
 	wg.Wait()
 	if len(hm.history) != 1 || hm.history[0].Alert.ID != "survivor" {
 		t.Fatal("concurrent compaction lost the surviving occurrence")
+	}
+}
+
+func TestHistoryLookupAvoidsCloningNonMatchingEntries(t *testing.T) {
+	hm := newTestHistoryManager(t)
+	now := time.Now()
+	const rows = 256
+	hm.history = make([]HistoryEntry, rows)
+	for i := 0; i < rows; i++ {
+		entry := retainedHistoryEntry(fmt.Sprintf("alert-%d", i), now.Add(-time.Duration(rows-i)*time.Second))
+		entry.Alert.Evidence = []operationaltrust.EvidenceEnvelope{
+			{ID: fmt.Sprintf("ev-%d-1", i), ObservedAt: now.Add(-2 * time.Minute)},
+			{ID: fmt.Sprintf("ev-%d-2", i), ObservedAt: now.Add(-1 * time.Minute)},
+		}
+		hm.history[i] = entry
+	}
+
+	probe := &Alert{ID: "missing", CanonicalState: "missing", Type: "cpu", ResourceID: "guest-1"}
+	latestAllocs := testing.AllocsPerRun(20, func() {
+		if got := hm.LatestAlertForAlert(probe); got != nil {
+			t.Fatalf("unexpected match: %v", got)
+		}
+	})
+	if latestAllocs > 2 {
+		t.Fatalf("LatestAlertForAlert miss allocated %.1f times across %d rows, want <= 2", latestAllocs, rows)
+	}
+
+	lastSeenAllocs := testing.AllocsPerRun(20, func() {
+		hm.UpdateAlertLastSeenForAlert(probe, now)
+	})
+	if lastSeenAllocs > 2 {
+		t.Fatalf("UpdateAlertLastSeenForAlert miss allocated %.1f times across %d rows, want <= 2", lastSeenAllocs, rows)
+	}
+
+	// Verify matching the oldest entry returns an independent clone without
+	// scanning-cloning the 255 newer rows.
+	oldestProbe := &Alert{ID: "alert-0", CanonicalState: "alert-0"}
+	got := hm.LatestAlertForAlert(oldestProbe)
+	if got == nil || got.ID != "alert-0" {
+		t.Fatalf("LatestAlertForAlert(alert-0) = %#v, want alert-0", got)
+	}
+	got.Metadata["sample"] = "mutated"
+	if hm.history[0].Alert.Metadata["sample"] != "unchanged" {
+		t.Fatal("LatestAlertForAlert returned aliased metadata")
+	}
+}
+
+func TestHistoryCleanupTrimsAgedResolvedEvidenceOnly(t *testing.T) {
+	hm := newTestHistoryManager(t)
+	now := time.Now()
+	agedResolvedAt := now.Add(-recentlyResolvedRetention - time.Minute)
+	recentResolvedAt := now.Add(-recentlyResolvedRetention / 2)
+
+	makeEv := func(prefix string, t0 time.Time) []operationaltrust.EvidenceEnvelope {
+		return []operationaltrust.EvidenceEnvelope{
+			{ID: prefix + "-old", ObservedAt: t0.Add(-2 * time.Minute)},
+			{ID: prefix + "-new", ObservedAt: t0},
+			{ID: prefix + "-mid", ObservedAt: t0.Add(-1 * time.Minute)},
+		}
+	}
+
+	agedResolved := retainedHistoryEntry("aged-resolved", agedResolvedAt)
+	agedResolved.Alert.OperationalRecord = &operationaltrust.OperationalRecord{
+		State:      operationaltrust.OperationalResolved,
+		ResolvedAt: &agedResolvedAt,
+	}
+	agedResolved.Alert.Evidence = makeEv("aged", agedResolvedAt)
+
+	recentResolved := retainedHistoryEntry("recent-resolved", recentResolvedAt)
+	recentResolved.Alert.OperationalRecord = &operationaltrust.OperationalRecord{
+		State:      operationaltrust.OperationalResolved,
+		ResolvedAt: &recentResolvedAt,
+	}
+	recentResolved.Alert.Evidence = makeEv("recent", recentResolvedAt)
+
+	openEntry := retainedHistoryEntry("still-open", agedResolvedAt)
+	openEntry.Alert.OperationalRecord = &operationaltrust.OperationalRecord{
+		State: operationaltrust.OperationalOpen,
+	}
+	openEntry.Alert.Evidence = makeEv("open", agedResolvedAt)
+
+	hm.history = []HistoryEntry{agedResolved, recentResolved, openEntry}
+	beforePtr := &hm.history[0]
+
+	hm.cleanOldEntries()
+
+	if &hm.history[0] != beforePtr {
+		t.Fatal("in-place evidence trim unexpectedly reallocated history slice")
+	}
+	if len(hm.history[0].Alert.Evidence) != 1 || hm.history[0].Alert.Evidence[0].ID != "aged-new" {
+		t.Fatalf("aged resolved evidence = %#v, want only aged-new", hm.history[0].Alert.Evidence)
+	}
+	if len(hm.history[1].Alert.Evidence) != 3 {
+		t.Fatalf("recently resolved evidence len = %d, want 3 preserved for recurrence merge", len(hm.history[1].Alert.Evidence))
+	}
+	if len(hm.history[2].Alert.Evidence) != 3 {
+		t.Fatalf("open alert evidence len = %d, want 3 preserved", len(hm.history[2].Alert.Evidence))
 	}
 }

@@ -46,10 +46,8 @@ type recoveryIngestCoalesceKey struct {
 	instance string
 }
 
-func (batch recoveryIngestBatch) coalesceKey() (recoveryIngestCoalesceKey, bool) {
-	// Guest-scoped batches can overlap without superseding one another. Keep
-	// their observations and removals in source order, just like partial reads.
-	if batch.reconcile == nil || batch.reconcile.snapshotGuests != nil {
+func (batch recoveryIngestBatch) scopeKey() (recoveryIngestCoalesceKey, bool) {
+	if batch.reconcile == nil {
 		return recoveryIngestCoalesceKey{}, false
 	}
 	return recoveryIngestCoalesceKey{
@@ -59,23 +57,42 @@ func (batch recoveryIngestBatch) coalesceKey() (recoveryIngestCoalesceKey, bool)
 	}, true
 }
 
+func (batch recoveryIngestBatch) coalesceKey() (recoveryIngestCoalesceKey, bool) {
+	// Guest-scoped batches can overlap without superseding one another. Keep
+	// their observations and removals in source order, just like partial reads.
+	if batch.reconcile == nil || batch.reconcile.snapshotGuests != nil {
+		return recoveryIngestCoalesceKey{}, false
+	}
+	return batch.scopeKey()
+}
+
 func (m *Monitor) coalescePendingRecoveryIngest(batch recoveryIngestBatch) bool {
 	key, ok := batch.coalesceKey()
 	if !ok {
 		return false
 	}
 	for i := len(m.recoveryIngestPending) - 1; i >= 0; i-- {
-		pendingKey, pendingOK := m.recoveryIngestPending[i].coalesceKey()
-		if !pendingOK {
-			// An incomplete poll/event is an ordered fact, not a replaceable
-			// full snapshot. Moving a later complete (possibly empty) inventory
-			// before it could reinsert old points after authoritative deletion.
-			return false
+		pending := m.recoveryIngestPending[i]
+		pendingKey, pendingOK := pending.coalesceKey()
+		if pendingOK {
+			if pendingKey == key {
+				m.recoveryIngestPending[i] = batch
+				return true
+			}
+			continue
 		}
-		if pendingKey == key {
-			m.recoveryIngestPending[i] = batch
-			return true
+		// A scoped non-coalescable batch (e.g. a PVE guest-snapshot read)
+		// touches only its own (provider, idPrefix, instance) scope; it never
+		// blocks coalescing an unrelated instance-wide enumeration queued
+		// ahead of it.
+		if scopeKey, hasScope := pending.scopeKey(); hasScope && scopeKey != key {
+			continue
 		}
+		// An incomplete poll/event or same-scope guest-scoped batch is an
+		// ordered fact, not a replaceable full snapshot. Moving a later
+		// complete (possibly empty) inventory before it could reinsert old
+		// points after authoritative deletion.
+		return false
 	}
 	return false
 }
@@ -151,7 +168,11 @@ func (m *Monitor) enqueueRecoveryIngest(batch recoveryIngestBatch) {
 
 func (m *Monitor) runRecoveryPointIngestLoop(batches []recoveryIngestBatch) {
 	for len(batches) > 0 {
-		for _, batch := range batches {
+		for i := range batches {
+			batch := batches[i]
+			// Release processed batch references immediately rather than pinning
+			// every full backup inventory until the entire drained slice finishes.
+			batches[i] = recoveryIngestBatch{}
 			// SQLite upserts are usually quick, but allow a bit of time for large batches.
 			ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 			m.ingestRecoveryPointsBestEffort(ctx, batch)

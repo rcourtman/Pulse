@@ -77,6 +77,37 @@ func historyIdentityKey(alert *Alert) string {
 	return alert.ID
 }
 
+// historyIdentityKeyReadOnly computes the same identity key as
+// historyIdentityKey without mutating alert or deep-cloning nested maps/slices.
+func historyIdentityKeyReadOnly(alert *Alert) string {
+	if alert == nil {
+		return ""
+	}
+	if alert.CanonicalState != "" {
+		return alert.CanonicalState
+	}
+	shallow := *alert
+	backfillCanonicalIdentity(&shallow)
+	if shallow.CanonicalState != "" {
+		return shallow.CanonicalState
+	}
+	return shallow.ID
+}
+
+func canTrimHistoryEntryEvidence(entry *HistoryEntry, resolvedCutoff time.Time) bool {
+	if entry == nil || len(entry.Alert.Evidence) <= 1 {
+		return false
+	}
+	rec := entry.Alert.OperationalRecord
+	if rec == nil || rec.State != operationaltrust.OperationalResolved {
+		return false
+	}
+	if rec.ResolvedAt != nil {
+		return !rec.ResolvedAt.After(resolvedCutoff)
+	}
+	return !entry.Timestamp.After(resolvedCutoff)
+}
+
 func resolveHistoryStoragePaths(dataDir string) (resolvedDataDir string, historyFile string, backupFile string, err error) {
 	resolvedDataDir, err = securityutil.NormalizeStorageDir(dataDir)
 	if err != nil {
@@ -168,8 +199,10 @@ func (hm *HistoryManager) addAlert(alert Alert, forceAppend bool) {
 	}
 
 	if !forceAppend {
+		entryKey := historyIdentityKey(&entry.Alert)
+		resolvedCutoff := entry.Timestamp.Add(-recentlyResolvedRetention)
 		for i := len(hm.history) - 1; i >= 0; i-- {
-			if historyIdentityKey(&hm.history[i].Alert) != historyIdentityKey(&entry.Alert) {
+			if historyIdentityKeyReadOnly(&hm.history[i].Alert) != entryKey {
 				continue
 			}
 			if sameHistoryIncident(hm.history[i], entry) {
@@ -177,6 +210,9 @@ func (hm *HistoryManager) addAlert(alert Alert, forceAppend bool) {
 				hm.mu.Unlock()
 				log.Debug().Str("alertID", alert.ID).Msg("updated existing alert history occurrence")
 				return
+			}
+			if canTrimHistoryEntryEvidence(&hm.history[i], resolvedCutoff) {
+				hm.history[i].Alert.Evidence = newestHistoryEvidence(hm.history[i].Alert.Evidence)
 			}
 			break
 		}
@@ -340,8 +376,7 @@ func (hm *HistoryManager) UpdateAlertLastSeenForAlert(alert *Alert, lastSeen tim
 
 	// Iterate from newest to oldest to find the most recent entry for this alert.
 	for i := len(hm.history) - 1; i >= 0; i-- {
-		entry := hm.history[i].Alert.Clone()
-		entryKey := historyIdentityKey(entry)
+		entryKey := historyIdentityKeyReadOnly(&hm.history[i].Alert)
 		if matchKey != "" && entryKey == matchKey {
 			hm.history[i].Alert.LastSeen = lastSeen
 			return
@@ -373,10 +408,10 @@ func (hm *HistoryManager) UpdateAlertOperationalContractForAlert(alert *Alert) {
 	defer hm.mu.Unlock()
 
 	for i := len(hm.history) - 1; i >= 0; i-- {
-		entry := hm.history[i].Alert.Clone()
-		entryKey := historyIdentityKey(entry)
+		entry := &hm.history[i].Alert
+		entryKey := historyIdentityKeyReadOnly(entry)
 		if (matchKey != "" && entryKey == matchKey) ||
-			(matchID != "" && hm.history[i].Alert.ID == matchID) {
+			(matchID != "" && entry.ID == matchID) {
 			// A resolved row is this occurrence's final state. A later
 			// occurrence of the same identity (different StartTime) gets its
 			// own row from AddAlert, so its record must not overwrite the
@@ -390,17 +425,17 @@ func (hm *HistoryManager) UpdateAlertOperationalContractForAlert(alert *Alert) {
 				!entry.StartTime.Equal(snapshot.StartTime) {
 				return
 			}
-			hm.history[i].Alert.OperationalRecord = snapshot.OperationalRecord
-			hm.history[i].Alert.LatestTransition = snapshot.LatestTransition
-			hm.history[i].Alert.Transitions = snapshot.Transitions
-			hm.history[i].Alert.Evidence = snapshot.Evidence
-			hm.history[i].Alert.Resolution = snapshot.Resolution
+			entry.OperationalRecord = snapshot.OperationalRecord
+			entry.LatestTransition = snapshot.LatestTransition
+			entry.Transitions = snapshot.Transitions
+			entry.Evidence = snapshot.Evidence
+			entry.Resolution = snapshot.Resolution
 			// The live alert is authoritative for acknowledgement; a row
 			// that keeps its fire-time ack state shows an acknowledged
 			// alert as unacknowledged for its whole active life.
-			hm.history[i].Alert.Acknowledged = snapshot.Acknowledged
-			hm.history[i].Alert.AckTime = snapshot.AckTime
-			hm.history[i].Alert.AckUser = snapshot.AckUser
+			entry.Acknowledged = snapshot.Acknowledged
+			entry.AckTime = snapshot.AckTime
+			entry.AckUser = snapshot.AckUser
 			return
 		}
 	}
@@ -413,18 +448,17 @@ func (hm *HistoryManager) LatestAlertForAlert(alert *Alert) *Alert {
 	if alert == nil {
 		return nil
 	}
-	matchKey := historyIdentityKey(alert)
+	matchKey := historyIdentityKeyReadOnly(alert)
 	matchID := alert.ID
 
 	hm.mu.RLock()
 	defer hm.mu.RUnlock()
 
 	for i := len(hm.history) - 1; i >= 0; i-- {
-		entry := hm.history[i].Alert.Clone()
-		entryKey := historyIdentityKey(entry)
+		entryKey := historyIdentityKeyReadOnly(&hm.history[i].Alert)
 		if (matchKey != "" && entryKey == matchKey) ||
 			(matchID != "" && hm.history[i].Alert.ID == matchID) {
-			return entry
+			return hm.history[i].Alert.Clone()
 		}
 	}
 	return nil
@@ -448,8 +482,7 @@ func (hm *HistoryManager) MigrateActiveAlert(oldTrackingKey string, updated Aler
 	defer hm.mu.Unlock()
 
 	for i := len(hm.history) - 1; i >= 0; i-- {
-		entry := hm.history[i].Alert.Clone()
-		if historyIdentityKey(entry) == oldTrackingKey || hm.history[i].Alert.ID == oldTrackingKey {
+		if historyIdentityKeyReadOnly(&hm.history[i].Alert) == oldTrackingKey || hm.history[i].Alert.ID == oldTrackingKey {
 			hm.history[i].Alert = *updatedAlert
 			return
 		}
@@ -789,19 +822,31 @@ func (hm *HistoryManager) cleanupRoutine() {
 	}
 }
 
-// cleanOldEntries removes entries older than MaxHistoryDays
+// cleanOldEntries removes entries older than MaxHistoryDays and trims excess
+// evidence envelopes from resolved entries past recentlyResolvedRetention.
 func (hm *HistoryManager) cleanOldEntries() {
 	hm.mu.Lock()
 	defer hm.mu.Unlock()
 
-	cutoff := time.Now().AddDate(0, 0, -MaxHistoryDays)
+	now := time.Now()
+	cutoff := now.AddDate(0, 0, -MaxHistoryDays)
+	resolvedCutoff := now.Add(-recentlyResolvedRetention)
 	removed := 0
-	for _, entry := range hm.history {
-		if !entry.Timestamp.After(cutoff) {
+	trimmed := 0
+	for i := range hm.history {
+		if !hm.history[i].Timestamp.After(cutoff) {
 			removed++
+			continue
+		}
+		if canTrimHistoryEntryEvidence(&hm.history[i], resolvedCutoff) {
+			hm.history[i].Alert.Evidence = newestHistoryEvidence(hm.history[i].Alert.Evidence)
+			trimmed++
 		}
 	}
 	if removed == 0 {
+		if trimmed > 0 {
+			log.Debug().Int("trimmed", trimmed).Msg("trimmed aged alert history evidence")
+		}
 		return
 	}
 
@@ -818,6 +863,7 @@ func (hm *HistoryManager) cleanOldEntries() {
 	hm.history = newHistory
 	log.Info().
 		Int("removed", removed).
+		Int("trimmed", trimmed).
 		Int("remaining", len(newHistory)).
 		Msg("cleaned old alert history entries")
 }

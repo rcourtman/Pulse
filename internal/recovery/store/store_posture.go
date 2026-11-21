@@ -542,6 +542,13 @@ func (s *Store) qualifyUnsettledPosture(posture recovery.ProtectionPosture) reco
 	return posture
 }
 
+type preparedProtectionPosture struct {
+	subjectResourceID string
+	state             string
+	postureJSON       string
+	evaluatedAtMs     int64
+}
+
 func (s *Store) RefreshProtectionPostures(ctx context.Context, subjectKeys []string) error {
 	if err := s.ensureInitialized(); err != nil {
 		return err
@@ -564,15 +571,51 @@ func (s *Store) RefreshProtectionPostures(ctx context.Context, subjectKeys []str
 			end = len(subjectKeys)
 		}
 		chunk := subjectKeys[start:end]
-		pointsByKey, err := s.loadProtectionPointsForKeys(ctx, chunk)
-		if err != nil {
+		now := time.Now().UTC()
+		preparedByKey := make(map[string]preparedProtectionPosture, len(chunk))
+		if err := s.forEachProtectionPointGroup(ctx, chunk, func(key string, points []recovery.RecoveryPoint) error {
+			subjectResourceID := ""
+			for _, point := range points {
+				// The bucket's subject key already recognises Proxmox legacy
+				// aliases. Publish that same canonical subject, not whichever
+				// historical representation the newest point happened to carry.
+				if value := recovery.CanonicalSubjectResourceID(point.Provider, point.SubjectResourceID, point.SubjectRef); value != "" {
+					subjectResourceID = value
+					break
+				}
+			}
+			if subjectResourceID == "" {
+				return nil
+			}
+			posture := s.qualifyUnsettledPosture(recovery.BuildProtectionPostureFromPointsAt(
+				subjectResourceID,
+				points,
+				observations,
+				recovery.DefaultProtectionPosturePolicy,
+				now,
+			))
+			if err := posture.Validate(); err != nil {
+				return err
+			}
+			postureJSON, err := json.Marshal(posture)
+			if err != nil {
+				return err
+			}
+			preparedByKey[key] = preparedProtectionPosture{
+				subjectResourceID: subjectResourceID,
+				state:             string(posture.State),
+				postureJSON:       string(postureJSON),
+				evaluatedAtMs:     posture.EvaluatedAt.UTC().UnixMilli(),
+			}
+			return nil
+		}); err != nil {
 			return err
 		}
-		if err := s.writeProtectionPostures(
+		if err := s.writePreparedProtectionPostures(
 			ctx,
 			chunk,
-			pointsByKey,
-			observations,
+			preparedByKey,
+			now.UnixMilli(),
 		); err != nil {
 			return err
 		}
@@ -580,21 +623,37 @@ func (s *Store) RefreshProtectionPostures(ctx context.Context, subjectKeys []str
 	return nil
 }
 
-func (s *Store) loadProtectionPointsForKeys(
+type postureEvidenceProjection struct {
+	ID         string                          `json:"id"`
+	Source     operationaltrust.EvidenceSource `json:"source"`
+	IngestedAt time.Time                       `json:"ingestedAt"`
+}
+
+func (s *Store) forEachProtectionPointGroup(
 	ctx context.Context,
 	subjectKeys []string,
-) (map[string][]recovery.RecoveryPoint, error) {
+	fn func(subjectKey string, points []recovery.RecoveryPoint) error,
+) error {
+	if len(subjectKeys) == 0 {
+		return nil
+	}
 	placeholders := strings.TrimSuffix(strings.Repeat("?,", len(subjectKeys)), ",")
 	args := make([]any, len(subjectKeys))
 	for i := range subjectKeys {
 		args[i] = subjectKeys[i]
 	}
+	// Posture derivation only reads repository_ref_json and details_json as a
+	// fallback in ProviderScopeForPoint when provider_scope is empty. Skip
+	// transferring and unmarshaling those JSON columns on rows that already
+	// store provider_scope, and decode only the evidence fields posture reads.
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT
 			subject_key, id, provider, kind, mode, outcome,
 			started_at_ms, completed_at_ms, verified,
 			subject_resource_id, repository_resource_id,
-			subject_ref_json, repository_ref_json, details_json,
+			subject_ref_json,
+			CASE WHEN provider_scope IS NULL OR TRIM(provider_scope) = '' THEN repository_ref_json ELSE NULL END,
+			CASE WHEN provider_scope IS NULL OR TRIM(provider_scope) = '' THEN details_json ELSE NULL END,
 			provider_scope, evidence_json
 		FROM recovery_points
 		WHERE subject_key IN (`+placeholders+`)
@@ -604,11 +663,15 @@ func (s *Store) loadProtectionPointsForKeys(
 		         id DESC
 	`, args...)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	defer rows.Close()
 
-	out := make(map[string][]recovery.RecoveryPoint, len(subjectKeys))
+	var (
+		hasCurrent bool
+		currentKey string
+		group      []recovery.RecoveryPoint
+	)
 	for rows.Next() {
 		var (
 			subjectKey             string
@@ -641,7 +704,7 @@ func (s *Store) loadProtectionPointsForKeys(
 			&providerScope,
 			&evidenceRaw,
 		); err != nil {
-			return nil, err
+			return err
 		}
 		point.Provider = recovery.Provider(provider)
 		point.Kind = recovery.Kind(kind)
@@ -654,17 +717,39 @@ func (s *Store) loadProtectionPointsForKeys(
 		point.RepositoryResourceID = strings.TrimSpace(repoRID.String)
 		point.ProviderScope = strings.TrimSpace(providerScope.String)
 		_ = unmarshalJSON(subjectRefRaw, &point.SubjectRef)
-		_ = unmarshalJSON(repoRefRaw, &point.RepositoryRef)
-		_ = unmarshalJSON(detailsRaw, &point.Details)
-		var evidence operationaltrust.EvidenceEnvelope
+		if point.ProviderScope == "" {
+			_ = unmarshalJSON(repoRefRaw, &point.RepositoryRef)
+			_ = unmarshalJSON(detailsRaw, &point.Details)
+		}
+		var evidence postureEvidenceProjection
 		_ = unmarshalJSON(evidenceRaw, &evidence)
 		if strings.TrimSpace(evidence.ID) != "" {
-			point.Evidence = &evidence
+			point.Evidence = &operationaltrust.EvidenceEnvelope{
+				ID:         evidence.ID,
+				Source:     evidence.Source,
+				IngestedAt: evidence.IngestedAt,
+			}
 		}
 		subjectKey = strings.TrimSpace(subjectKey)
-		out[subjectKey] = append(out[subjectKey], point)
+		if hasCurrent && subjectKey != currentKey {
+			if err := fn(currentKey, group); err != nil {
+				return err
+			}
+			group = nil
+		}
+		hasCurrent = true
+		currentKey = subjectKey
+		group = append(group, point)
 	}
-	return out, rows.Err()
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	if hasCurrent {
+		if err := fn(currentKey, group); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (s *Store) listLatestProtectionProviderObservations(
@@ -766,14 +851,12 @@ func (s *Store) listLatestProtectionProviderObservations(
 	return out, rows.Err()
 }
 
-func (s *Store) writeProtectionPostures(
+func (s *Store) writePreparedProtectionPostures(
 	ctx context.Context,
 	subjectKeys []string,
-	pointsByKey map[string][]recovery.RecoveryPoint,
-	observations []recovery.ProtectionProviderObservation,
+	preparedByKey map[string]preparedProtectionPosture,
+	nowMs int64,
 ) error {
-	now := time.Now().UTC()
-	nowMs := now.UnixMilli()
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
@@ -797,18 +880,8 @@ func (s *Store) writeProtectionPostures(
 	defer upsert.Close()
 
 	for _, key := range subjectKeys {
-		points := pointsByKey[key]
-		subjectResourceID := ""
-		for _, point := range points {
-			// The bucket's subject key already recognises Proxmox legacy
-			// aliases. Publish that same canonical subject, not whichever
-			// historical representation the newest point happened to carry.
-			if value := recovery.CanonicalSubjectResourceID(point.Provider, point.SubjectResourceID, point.SubjectRef); value != "" {
-				subjectResourceID = value
-				break
-			}
-		}
-		if subjectResourceID == "" {
+		prepared, ok := preparedByKey[key]
+		if !ok || prepared.subjectResourceID == "" {
 			if _, err := tx.ExecContext(
 				ctx,
 				`DELETE FROM protection_postures WHERE subject_key = ?`,
@@ -818,27 +891,13 @@ func (s *Store) writeProtectionPostures(
 			}
 			continue
 		}
-		posture := s.qualifyUnsettledPosture(recovery.BuildProtectionPostureFromPointsAt(
-			subjectResourceID,
-			points,
-			observations,
-			recovery.DefaultProtectionPosturePolicy,
-			now,
-		))
-		if err := posture.Validate(); err != nil {
-			return err
-		}
-		postureJSON, err := json.Marshal(posture)
-		if err != nil {
-			return err
-		}
 		if _, err := upsert.ExecContext(
 			ctx,
 			key,
-			subjectResourceID,
-			string(posture.State),
-			string(postureJSON),
-			posture.EvaluatedAt.UTC().UnixMilli(),
+			prepared.subjectResourceID,
+			prepared.state,
+			prepared.postureJSON,
+			prepared.evaluatedAtMs,
 			nowMs,
 		); err != nil {
 			return err
@@ -962,15 +1021,29 @@ func (s *Store) listRequestedProtectionPostures(
 	}
 
 	now := time.Now().UTC()
-	pointsByKey := make(map[string][]recovery.RecoveryPoint)
+	posturesByID := make(map[string]recovery.ProtectionPosture, len(subjectKeyByID))
 	var observations []recovery.ProtectionProviderObservation
 	if len(subjectKeys) > 0 {
-		pointsByKey, err = s.loadProtectionPointsForKeys(ctx, normalizeProtectionStrings(subjectKeys))
+		observations, err = s.listLatestProtectionProviderObservations(ctx)
 		if err != nil {
 			return nil, 0, err
 		}
-		observations, err = s.listLatestProtectionProviderObservations(ctx)
-		if err != nil {
+		idsBySubjectKey := make(map[string][]string, len(subjectKeyByID))
+		for subjectResourceID, subjectKey := range subjectKeyByID {
+			idsBySubjectKey[subjectKey] = append(idsBySubjectKey[subjectKey], subjectResourceID)
+		}
+		if err := s.forEachProtectionPointGroup(ctx, normalizeProtectionStrings(subjectKeys), func(subjectKey string, points []recovery.RecoveryPoint) error {
+			for _, subjectResourceID := range idsBySubjectKey[subjectKey] {
+				posturesByID[subjectResourceID] = s.qualifyUnsettledPosture(recovery.BuildProtectionPostureFromPointsAt(
+					subjectResourceID,
+					points,
+					observations,
+					recovery.DefaultProtectionPosturePolicy,
+					now,
+				))
+			}
+			return nil
+		}); err != nil {
 			return nil, 0, err
 		}
 	}
@@ -985,10 +1058,12 @@ func (s *Store) listRequestedProtectionPostures(
 				recovery.DefaultProtectionPosturePolicy,
 				now,
 			)
+		} else if existing, ok := posturesByID[subjectResourceID]; ok {
+			posture = existing
 		} else {
 			posture = s.qualifyUnsettledPosture(recovery.BuildProtectionPostureFromPointsAt(
 				subjectResourceID,
-				pointsByKey[subjectKey],
+				nil,
 				observations,
 				recovery.DefaultProtectionPosturePolicy,
 				now,

@@ -3835,12 +3835,15 @@ func (s *State) MergePVETagStyle(instance string, style PVETagStyle) {
 	s.LastUpdate = time.Now()
 }
 
-// syncBackupsLocked updates the aggregated backups structure.
+// syncBackupsLocked updates the aggregated backups structure to mirror the
+// primary backup fields without deep-cloning them a second time. Every State
+// backup mutator replaces its primary slice wholesale rather than mutating
+// elements in place, and snapshot/read helpers clone on read.
 func (s *State) syncBackupsLocked() {
 	s.Backups = Backups{
-		PVE: clonePVEBackups(s.PVEBackups),
-		PBS: clonePBSBackups(s.PBSBackups),
-		PMG: clonePMGBackups(s.PMGBackups),
+		PVE: s.PVEBackups,
+		PBS: s.PBSBackups,
+		PMG: s.PMGBackups,
 	}
 }
 
