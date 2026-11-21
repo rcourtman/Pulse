@@ -229,7 +229,9 @@ describe('troubleshooting workflow entry', () => {
   it('points a saved OIDC edit at the existing client-rejection guide without dropping the other sign-in paths', () => {
     const signIn = workflow(entry(), 'Cannot sign in:');
     const article = renderGuide('TROUBLESHOOTING');
-    const branches = article.querySelector<HTMLUListElement>('#cannot-login--401-unauthorized + p + ul')!;
+    const branches = article.querySelector<HTMLUListElement>(
+      '#cannot-login--401-unauthorized + p + ul',
+    )!;
     const sso = workflow(branches, 'SSO or proxy login:');
     const href = '/docs/OIDC#invalid_client-after-saving-an-oidc-provider';
     for (const section of [signIn, sso]) {
