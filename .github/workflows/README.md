@@ -227,6 +227,15 @@ throughout the measurement or recovery of a reported estate. The job reports mem
 writes without gating, and uploads `memory-regression-agents`. The scheduled
 issue reporter reads only the mock job.
 
+Its `compare-proxmox` job runs the same non-gating comparison on a third estate:
+a real, non-mock Pulse polling a synthetic 3-node Proxmox VE cluster (35 guests),
+2 Proxmox Backup Server instances (~5,250 snapshots), and one connected
+dashboard WebSocket (`scripts/memory/proxmox_load.py`). Neither mock mode nor
+the agent estate exercises PVE/PBS polling, `recovery.db` ingestion, protection
+posture refreshes, or PBS backup cloning. It fails if node registration fails,
+PVE/PBS polling does not occur, or the dashboard receives no initial state and
+update, and uploads `memory-regression-proxmox`.
+
 `dependency-advisory-watch.yml` strictly audits the product frontend on
 `main` every day. A newly disclosed advisory can affect an unchanged lockfile;
 it may only warn on an unrelated pull request, but it fails this watch.
