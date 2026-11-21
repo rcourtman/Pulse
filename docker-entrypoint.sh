@@ -65,7 +65,70 @@ chown_tree_if_owner_mismatch() {
     chown -R "$owner" "$root"
 }
 
+is_mountpoint_in_mountinfo() {
+    target="$1"
+    mountinfo_path="${2:-/proc/self/mountinfo}"
+    [ -n "$target" ] || return 1
+    [ -r "$mountinfo_path" ] || return 1
+
+    while [ "$target" != "/" ] && [ "${target%/}" != "$target" ]; do
+        target="${target%/}"
+    done
+
+    check="$target"
+    while [ -n "$check" ] && [ "$check" != "/" ]; do
+        while IFS=' ' read -r _ _ _ _ mount_point _; do
+            if [ "$mount_point" = "$check" ]; then
+                return 0
+            fi
+        done < "$mountinfo_path"
+        next="${check%/*}"
+        [ -n "$next" ] || next="/"
+        if [ "$next" = "$check" ]; then
+            break
+        fi
+        check="$next"
+    done
+
+    return 1
+}
+
+path_device_id() {
+    stat -c '%d' "$1" 2>/dev/null || stat -f '%d' "$1" 2>/dev/null || echo ""
+}
+
+warn_if_ephemeral_data_dir() {
+    target="${1:-/data}"
+    mountinfo_path="${2:-/proc/self/mountinfo}"
+
+    case "${PULSE_SUPPRESS_EPHEMERAL_DATA_WARNING:-}" in
+        1|true|TRUE|yes|YES)
+            return 0
+            ;;
+    esac
+
+    if [ ! -e "$target" ]; then
+        return 0
+    fi
+
+    if [ -r "$mountinfo_path" ]; then
+        if is_mountpoint_in_mountinfo "$target" "$mountinfo_path"; then
+            return 0
+        fi
+    else
+        target_dev=$(path_device_id "$target")
+        root_dev=$(path_device_id "/")
+        if [ -z "$target_dev" ] || [ -z "$root_dev" ] || [ "$target_dev" != "$root_dev" ]; then
+            return 0
+        fi
+    fi
+
+    echo "WARNING: $target is not mounted on a persistent volume. Pulse configuration, authentication, and history will be lost when this container is recreated. Mount a persistent volume (for example: -v pulse-data:/data) or set PULSE_SUPPRESS_EPHEMERAL_DATA_WARNING=true to silence this warning." >&2
+}
+
 # Only adjust permissions if running as root
+warn_if_ephemeral_data_dir "${PULSE_DATA_DIR:-/data}"
+
 if [ "$(id -u)" = "0" ]; then
     echo "Starting with UID: $PUID, GID: $PGID"
     

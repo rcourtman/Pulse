@@ -7631,7 +7631,12 @@ container boot.
 That same startup path must avoid recursive ownership mutation of image-owned
 runtime directories such as `/app` and `/opt/pulse`; those paths are build-time
 artifacts, and copy-up into per-container writable layers is a monitoring and
-host-health regression, not a valid runtime repair.
+host-health regression, not a valid runtime repair. It also checks at startup
+whether the active data directory (`PULSE_DATA_DIR`, defaulting to `/data`) is
+backed by a mounted volume (or an ancestor mount) and emits a non-fatal stderr
+warning naming the persistent volume flag (`-v pulse-data:/data`) when running
+ephemerally unless `PULSE_SUPPRESS_EPHEMERAL_DATA_WARNING` is enabled. Proof:
+`scripts/installtests/docker_entrypoint_test.go`.
 That same monitoring boundary now also owns Docker Swarm runtime truth at the
 collection seam. `internal/dockeragent/swarm.go` is the canonical manager-side
 filter for live Swarm services and tasks, so monitoring consumers do not ingest

@@ -6744,13 +6744,21 @@ the temporary transport file as a local installer. Temporary download files
 are removed on ordinary completion or failure. This is transfer/syntax
 admission, not a replacement for the canonical installer's artifact signature
 checks or proof of installed recovery.
-That same update-runtime boundary now also owns bounded rollback retention and
-disk-space fail-closed behavior for self-hosted app updates. `internal/updates/`
-must prune stale retained rollback snapshots, clear history references when an
-old snapshot ages out of retention, choose a backup root with enough free
-space, and reject extraction/backup work early with a concrete space error
-instead of drifting into partial update failure on small LXC or single-disk
-installs.
+That same update-runtime boundary now also owns bounded rollback retention,
+stale temp cleanup, download-stream retry, and disk-space fail-closed behavior
+for self-hosted app updates. `internal/updates/` must prune stale retained
+rollback snapshots and orphaned `pulse-update-*` temp directories before
+allocating staging space, select the managed temp root with the largest free
+headroom for ephemeral download/extraction work (while keeping persistent
+rollback backup selection anchored on the runtime data directory when it meets
+the required space), fall back to an alternate temp root for archive extraction
+when the download root fills up, reclaim the downloaded archive immediately
+after extraction, retry transient mid-stream download disconnects and truncated
+transfers with partial-file cleanup, clear history references when an old
+snapshot ages out of retention, and reject extraction/backup work early with a
+concrete space error instead of drifting into partial update failure on small
+LXC or single-disk installs. Proof: `internal/updates/manager_backup_runtime_test.go`
+and `internal/updates/manager_retry_test.go`.
 The root server installer shares that same fail-closed update-space boundary:
 `install.sh` must preflight staging and install-directory filesystem headroom
 before it stops the running Pulse service or downloads/applies a release

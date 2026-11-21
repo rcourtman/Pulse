@@ -93,13 +93,14 @@ type UpdateInfo struct {
 }
 
 var (
-	errGitHubRateLimited = errors.New("GitHub API rate limit exceeded")
-	stageDelayOnce       sync.Once
-	stageDelayValue      time.Duration
-	updateHTTPAttempts   = 3
-	updateHTTPBackoff    = 300 * time.Millisecond
-	updateHTTPMaxBackoff = 2 * time.Second
-	updateDiskUsage      = godisk.UsageWithContext
+	errGitHubRateLimited  = errors.New("GitHub API rate limit exceeded")
+	stageDelayOnce        sync.Once
+	stageDelayValue       time.Duration
+	updateHTTPAttempts    = 3
+	updateHTTPBackoff     = 300 * time.Millisecond
+	updateHTTPMaxBackoff  = 2 * time.Second
+	staleUpdateTempDirAge = time.Hour
+	updateDiskUsage       = godisk.UsageWithContext
 )
 
 const (
@@ -799,6 +800,11 @@ func (m *Manager) ApplyUpdate(ctx context.Context, req ApplyUpdateRequest) error
 		m.completeHistoryEntry(ctx, eventID, status, start, runErr)
 	}()
 
+	cleanupStaleUpdateTempDirs(time.Now())
+	if err := m.pruneRetainedUpdateBackups(ctx); err != nil {
+		log.Warn().Err(err).Msg("Failed to prune retained update backups before starting update")
+	}
+
 	tempDir, err := m.createUpdateTempDir(ctx, minUpdateTempFreeBytes)
 	if err != nil {
 		tempErr := fmt.Errorf("failed to create temp directory: %w", err)
@@ -868,21 +874,27 @@ func (m *Manager) ApplyUpdate(ctx context.Context, req ApplyUpdateRequest) error
 		runErr = extractErr
 		return runErr
 	}
-	if err := ensureUpdatePathHasFreeSpace(ctx, tempDir, extractBytes+updateExtractSafetyBytes, "extract update archive"); err != nil {
-		extractErr := fmt.Errorf("insufficient disk space for update extraction: %w", err)
-		m.updateStatus("error", 40, "Not enough disk space to extract update", extractErr)
-		runErr = extractErr
+	extractRequiredBytes := extractBytes + updateExtractSafetyBytes
+	extractDir, fallbackExtractRoot, err := m.prepareUpdateExtractionDir(ctx, tempDir, extractRequiredBytes)
+	if err != nil {
+		m.updateStatus("error", 40, "Not enough disk space to extract update", err)
+		runErr = err
 		return runErr
+	}
+	if fallbackExtractRoot != "" {
+		defer os.RemoveAll(fallbackExtractRoot)
 	}
 
 	// Extract tarball
-	extractDir := filepath.Join(tempDir, "extracted")
 	if err := m.extractTarball(tarballPath, extractDir); err != nil {
 		extractErr := fmt.Errorf("failed to extract update: %w", err)
 		m.updateStatus("error", 40, "Failed to extract update", extractErr)
 		runErr = extractErr
 		return runErr
 	}
+	// Reclaim archive space immediately after extraction so pre-update backup
+	// creation has maximum headroom on small single-disk and LXC installs.
+	_ = os.Remove(tarballPath)
 
 	m.updateStatus("verifying", 50, "Validating new binary...")
 
@@ -1563,56 +1575,154 @@ func (m *Manager) requestWithRetry(ctx context.Context, client *http.Client, met
 	return nil, fmt.Errorf("%s failed after retries", operation)
 }
 
-// downloadFile downloads a file from URL to dest
+func isRetryableDownloadError(ctx context.Context, err error) bool {
+	if err == nil {
+		return false
+	}
+	if ctx != nil && ctx.Err() != nil {
+		return false
+	}
+	if isRetryableUpdateRequestError(err) {
+		return true
+	}
+	// An http.Client per-attempt timeout wraps context.DeadlineExceeded while
+	// the caller's context is still active; retry those transient stalls.
+	return errors.Is(err, context.DeadlineExceeded)
+}
+
+// downloadFile downloads a file from URL to dest, retrying transient transport,
+// HTTP status, and mid-stream body transfer failures.
 func (m *Manager) downloadFile(ctx context.Context, rawURL, dest string) (int64, error) {
 	downloadURL, err := securityutil.NormalizeAbsoluteHTTPURL(rawURL)
 	if err != nil {
 		return 0, fmt.Errorf("download %q: %w", rawURL, err)
 	}
 
+	maxAttempts := updateHTTPAttempts
+	if maxAttempts < 1 {
+		maxAttempts = 1
+	}
+
 	client := &http.Client{Timeout: 5 * time.Minute}
-	resp, err := m.getWithRetry(ctx, client, downloadURL, nil, "download file")
-	if err != nil {
-		return 0, fmt.Errorf("download %q: %w", rawURL, err)
-	}
-	defer func() {
-		if closeErr := resp.Body.Close(); closeErr != nil {
-			log.Warn().Err(closeErr).Str("url", downloadURL.String()).Msg("Failed to close download response body")
+	targetURL := downloadURL.String()
+
+	for attempt := 1; attempt <= maxAttempts; attempt++ {
+		req, err := securityutil.NewValidatedRequestWithContext(ctx, http.MethodGet, downloadURL, nil)
+		if err != nil {
+			return 0, fmt.Errorf("download %q: %w", rawURL, err)
 		}
-	}()
 
-	if resp.StatusCode != http.StatusOK {
-		return 0, fmt.Errorf("download %q: status %d", rawURL, resp.StatusCode)
-	}
-	if updateHTTPAttempts < 1 {
-		updateHTTPAttempts = 1
-	}
-	if resp.ContentLength > maxUpdateDownloadBytes {
-		return 0, fmt.Errorf("download exceeds maximum size of %d bytes", maxUpdateDownloadBytes)
-	}
-
-	out, err := os.Create(dest)
-	if err != nil {
-		return 0, fmt.Errorf("create download destination %q: %w", dest, err)
-	}
-	defer func() {
-		if closeErr := out.Close(); closeErr != nil {
-			log.Warn().Err(closeErr).Str("path", dest).Msg("Failed to close downloaded file")
+		resp, err := client.Do(req)
+		if err != nil {
+			if isRetryableDownloadError(ctx, err) && attempt < maxAttempts {
+				delay := retryDelayForAttempt(attempt)
+				log.Warn().
+					Err(err).
+					Int("attempt", attempt).
+					Int("maxAttempts", maxAttempts).
+					Dur("retryIn", delay).
+					Str("url", targetURL).
+					Msg("Transient update download request error; retrying")
+				if sleepErr := sleepWithContext(ctx, delay); sleepErr != nil {
+					return 0, fmt.Errorf("download %q: %w", rawURL, sleepErr)
+				}
+				continue
+			}
+			return 0, fmt.Errorf("download %q: %w", rawURL, err)
 		}
-	}()
 
-	// Copy with progress updates
-	written, err := io.Copy(out, io.LimitReader(resp.Body, maxUpdateDownloadBytes+1))
-	if err != nil {
-		return 0, fmt.Errorf("copy download response to %q: %w", dest, err)
-	}
-	if written > maxUpdateDownloadBytes {
-		_ = out.Close()
-		_ = os.Remove(dest)
-		return 0, fmt.Errorf("download exceeds maximum size of %d bytes", maxUpdateDownloadBytes)
+		if isRetryableUpdateStatusCode(resp.StatusCode) && attempt < maxAttempts {
+			_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 4096))
+			_ = resp.Body.Close()
+			delay := retryDelayForAttempt(attempt)
+			log.Warn().
+				Int("statusCode", resp.StatusCode).
+				Int("attempt", attempt).
+				Int("maxAttempts", maxAttempts).
+				Dur("retryIn", delay).
+				Str("url", targetURL).
+				Msg("Transient update download HTTP status; retrying")
+			if sleepErr := sleepWithContext(ctx, delay); sleepErr != nil {
+				return 0, fmt.Errorf("download %q: %w", rawURL, sleepErr)
+			}
+			continue
+		}
+
+		if resp.StatusCode != http.StatusOK {
+			_ = resp.Body.Close()
+			return 0, fmt.Errorf("download %q: status %d", rawURL, resp.StatusCode)
+		}
+		if resp.ContentLength > maxUpdateDownloadBytes {
+			_ = resp.Body.Close()
+			return 0, fmt.Errorf("download exceeds maximum size of %d bytes", maxUpdateDownloadBytes)
+		}
+
+		out, err := os.Create(dest)
+		if err != nil {
+			_ = resp.Body.Close()
+			return 0, fmt.Errorf("create download destination %q: %w", dest, err)
+		}
+
+		written, copyErr := io.Copy(out, io.LimitReader(resp.Body, maxUpdateDownloadBytes+1))
+		closeErr := out.Close()
+		if bodyCloseErr := resp.Body.Close(); bodyCloseErr != nil {
+			log.Warn().Err(bodyCloseErr).Str("url", targetURL).Msg("Failed to close download response body")
+		}
+
+		if written > maxUpdateDownloadBytes {
+			_ = os.Remove(dest)
+			return 0, fmt.Errorf("download exceeds maximum size of %d bytes", maxUpdateDownloadBytes)
+		}
+
+		if copyErr != nil {
+			_ = os.Remove(dest)
+			if isRetryableDownloadError(ctx, copyErr) && attempt < maxAttempts {
+				delay := retryDelayForAttempt(attempt)
+				log.Warn().
+					Err(copyErr).
+					Int64("bytesWritten", written).
+					Int("attempt", attempt).
+					Int("maxAttempts", maxAttempts).
+					Dur("retryIn", delay).
+					Str("url", targetURL).
+					Msg("Transient update download stream error; retrying")
+				if sleepErr := sleepWithContext(ctx, delay); sleepErr != nil {
+					return 0, fmt.Errorf("copy download response to %q: %w", dest, sleepErr)
+				}
+				continue
+			}
+			return 0, fmt.Errorf("copy download response to %q: %w", dest, copyErr)
+		}
+
+		if resp.ContentLength > 0 && written != resp.ContentLength {
+			_ = os.Remove(dest)
+			truncErr := fmt.Errorf("%w: got %d of %d bytes", io.ErrUnexpectedEOF, written, resp.ContentLength)
+			if (ctx == nil || ctx.Err() == nil) && attempt < maxAttempts {
+				delay := retryDelayForAttempt(attempt)
+				log.Warn().
+					Err(truncErr).
+					Int("attempt", attempt).
+					Int("maxAttempts", maxAttempts).
+					Dur("retryIn", delay).
+					Str("url", targetURL).
+					Msg("Truncated update download stream; retrying")
+				if sleepErr := sleepWithContext(ctx, delay); sleepErr != nil {
+					return 0, fmt.Errorf("copy download response to %q: %w", dest, sleepErr)
+				}
+				continue
+			}
+			return 0, fmt.Errorf("copy download response to %q: %w", dest, truncErr)
+		}
+
+		if closeErr != nil {
+			_ = os.Remove(dest)
+			return 0, fmt.Errorf("close downloaded file %q: %w", dest, closeErr)
+		}
+
+		return written, nil
 	}
 
-	return written, nil
+	return 0, fmt.Errorf("download %q: failed after retries", rawURL)
 }
 
 // verifyChecksum downloads and verifies the SHA256 checksum of a file
@@ -2589,6 +2699,14 @@ func ensureUpdatePathHasFreeSpace(ctx context.Context, path string, requiredByte
 }
 
 func selectUpdateRootWithSpace(ctx context.Context, candidates []string, requiredBytes int64) (string, error) {
+	return selectUpdateRootWithSpaceStrategy(ctx, candidates, requiredBytes, false)
+}
+
+func selectLargestUpdateRootWithSpace(ctx context.Context, candidates []string, requiredBytes int64) (string, error) {
+	return selectUpdateRootWithSpaceStrategy(ctx, candidates, requiredBytes, true)
+}
+
+func selectUpdateRootWithSpaceStrategy(ctx context.Context, candidates []string, requiredBytes int64, preferMostFree bool) (string, error) {
 	type insufficientSpaceCandidate struct {
 		Path string
 		Free int64
@@ -2597,6 +2715,8 @@ func selectUpdateRootWithSpace(ctx context.Context, candidates []string, require
 
 	seen := make(map[string]struct{}, len(candidates))
 	failures := make([]insufficientSpaceCandidate, 0, len(candidates))
+	bestPath := ""
+	var bestFree int64 = -1
 
 	for _, candidate := range candidates {
 		cleaned := strings.TrimSpace(filepath.Clean(candidate))
@@ -2621,9 +2741,20 @@ func selectUpdateRootWithSpace(ctx context.Context, candidates []string, require
 			continue
 		}
 		if freeBytes >= requiredBytes {
-			return cleaned, nil
+			if !preferMostFree {
+				return cleaned, nil
+			}
+			if bestPath == "" || freeBytes > bestFree {
+				bestPath = cleaned
+				bestFree = freeBytes
+			}
+			continue
 		}
 		failures = append(failures, insufficientSpaceCandidate{Path: cleaned, Free: freeBytes})
+	}
+
+	if bestPath != "" {
+		return bestPath, nil
 	}
 
 	parts := make([]string, 0, len(failures))
@@ -2640,8 +2771,53 @@ func selectUpdateRootWithSpace(ctx context.Context, candidates []string, require
 	return "", fmt.Errorf("need %s free, candidates: %s", formatUpdateBytes(requiredBytes), strings.Join(parts, "; "))
 }
 
+func cleanupStaleUpdateTempDirs(now time.Time) {
+	cleanupStaleUpdateTempDirsInRoots(managedUpdateTempRoots(), now, staleUpdateTempDirAge)
+}
+
+func cleanupStaleUpdateTempDirsInRoots(roots []string, now time.Time, maxAge time.Duration) {
+	if maxAge <= 0 {
+		maxAge = time.Hour
+	}
+
+	seen := make(map[string]struct{}, len(roots))
+	for _, root := range roots {
+		cleaned := strings.TrimSpace(filepath.Clean(root))
+		if cleaned == "" {
+			continue
+		}
+		if _, exists := seen[cleaned]; exists {
+			continue
+		}
+		seen[cleaned] = struct{}{}
+
+		entries, err := os.ReadDir(cleaned)
+		if err != nil {
+			continue
+		}
+		for _, entry := range entries {
+			if !entry.IsDir() || !strings.HasPrefix(entry.Name(), "pulse-update-") {
+				continue
+			}
+			info, err := entry.Info()
+			if err != nil {
+				continue
+			}
+			if now.Sub(info.ModTime()) < maxAge {
+				continue
+			}
+			stalePath := filepath.Join(cleaned, entry.Name())
+			if err := os.RemoveAll(stalePath); err != nil {
+				log.Warn().Err(err).Str("path", stalePath).Msg("Failed to remove stale update temp directory")
+				continue
+			}
+			log.Info().Str("path", stalePath).Msg("Removed stale update temp directory")
+		}
+	}
+}
+
 func (m *Manager) createUpdateTempDir(ctx context.Context, requiredBytes int64) (string, error) {
-	tempRoot, err := selectUpdateRootWithSpace(ctx, managedUpdateTempRoots(), requiredBytes)
+	tempRoot, err := selectLargestUpdateRootWithSpace(ctx, managedUpdateTempRoots(), requiredBytes)
 	if err != nil {
 		return "", err
 	}
@@ -2650,6 +2826,23 @@ func (m *Manager) createUpdateTempDir(ctx context.Context, requiredBytes int64) 
 		return "", fmt.Errorf("create temp directory in %q: %w", tempRoot, err)
 	}
 	return tempDir, nil
+}
+
+func (m *Manager) prepareUpdateExtractionDir(ctx context.Context, tempDir string, requiredBytes int64) (string, string, error) {
+	err := ensureUpdatePathHasFreeSpace(ctx, tempDir, requiredBytes, "extract update archive")
+	if err == nil {
+		return filepath.Join(tempDir, "extracted"), "", nil
+	}
+	fallbackExtractRoot, fallbackErr := m.createUpdateTempDir(ctx, requiredBytes)
+	if fallbackErr != nil {
+		return "", "", fmt.Errorf("insufficient disk space for update extraction: %w", err)
+	}
+	log.Info().
+		Str("downloadTempDir", tempDir).
+		Str("extractTempDir", fallbackExtractRoot).
+		Int64("requiredBytes", requiredBytes).
+		Msg("Using alternate temp root with more free space for update extraction")
+	return filepath.Join(fallbackExtractRoot, "extracted"), fallbackExtractRoot, nil
 }
 
 func estimatePathCopyBytes(path string) (int64, error) {
