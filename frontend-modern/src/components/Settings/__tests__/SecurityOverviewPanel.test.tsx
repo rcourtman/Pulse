@@ -127,4 +127,32 @@ describe('SecurityOverviewPanel', () => {
     expect(screen.queryByText('Security posture needs an admin session')).not.toBeInTheDocument();
     expect(screen.getByText('Security Posture')).toBeInTheDocument();
   });
+
+  it('reports an SSO-only posture without claiming a local password login', () => {
+    render(() => (
+      <SecurityOverviewPanel
+        securityStatus={() => ({
+          detailLevel: 'privileged',
+          hasAuthentication: true,
+          requiresAuth: true,
+          ssoEnabled: true,
+          hasProxyAuth: false,
+          apiTokenConfigured: false,
+          exportProtected: true,
+          hasHTTPS: true,
+          hasAuditLogging: true,
+          publicAccess: false,
+          isPrivateNetwork: true,
+        })}
+        securityStatusLoading={() => false}
+      />
+    ));
+
+    expect(screen.getByText('Authentication', { exact: true })).toBeInTheDocument();
+    expect(screen.getByText('Configured or required')).toBeInTheDocument();
+    expect(screen.queryByText('Password login')).not.toBeInTheDocument();
+    expect(screen.getByText('Single sign-on')).toBeInTheDocument();
+    expect(screen.getByText('Provider configured')).toBeInTheDocument();
+    expect(screen.getByText('91%')).toBeInTheDocument();
+  });
 });

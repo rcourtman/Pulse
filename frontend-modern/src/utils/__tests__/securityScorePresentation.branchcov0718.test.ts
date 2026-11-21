@@ -227,7 +227,7 @@ describe('securityScorePresentation — branch coverage (batch 0718)', () => {
       });
       // Seven canonical items in declared order.
       expect(items.map((i) => i.key)).toEqual([
-        'password',
+        'authentication',
         'oidc',
         'proxy',
         'token',
@@ -236,8 +236,8 @@ describe('securityScorePresentation — branch coverage (batch 0718)', () => {
         'audit',
       ]);
       const byKey = Object.fromEntries(items.map((i) => [i.key, i]));
-      expect(byKey.password).toMatchObject({
-        label: 'Password login',
+      expect(byKey.authentication).toMatchObject({
+        label: 'Authentication',
         enabled: false,
         description: 'Not configured',
         critical: true,

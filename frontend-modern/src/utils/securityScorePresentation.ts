@@ -82,7 +82,7 @@ export interface SecurityPostureStatus {
 }
 
 export interface SecurityPostureItem {
-  key: 'password' | 'oidc' | 'proxy' | 'token' | 'export' | 'https' | 'audit';
+  key: 'authentication' | 'oidc' | 'proxy' | 'token' | 'export' | 'https' | 'audit';
   label: string;
   enabled: boolean;
   description: string;
@@ -354,10 +354,12 @@ export function getSecurityHardeningActions(
 export function getSecurityPostureItems(status: SecurityPostureStatus): SecurityPostureItem[] {
   return [
     {
-      key: 'password',
-      label: 'Password login',
+      // The status flag covers multiple auth methods and fail-closed policy,
+      // not the presence of a usable local password.
+      key: 'authentication',
+      label: 'Authentication',
       enabled: status.hasAuthentication,
-      description: status.hasAuthentication ? 'Active' : 'Not configured',
+      description: status.hasAuthentication ? 'Configured or required' : 'Not configured',
       critical: true,
     },
     {
