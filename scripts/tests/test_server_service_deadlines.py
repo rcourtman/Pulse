@@ -4,12 +4,14 @@
 Only a private ordinary-user manager and its child run. No host service,
 application binary, database, privilege change or native recovery is exercised.
 """
+from concurrent.futures import ThreadPoolExecutor
 import json
 import os
 from pathlib import Path
 import select
 import signal
 import subprocess
+import sys
 import tempfile
 import time
 import unittest
@@ -198,5 +200,37 @@ class ServiceDeadlines(unittest.TestCase):
                 self.assertEqual(result["calls"], [])
 
 
+def smoke_suite():
+    # Only the standalone smoke command overlaps these private fixtures. The
+    # Go installer tests still discover and run the original named controls
+    # separately, under Go's own parallel and per-control deadline budget.
+    waiting = (
+        ServiceDeadlines.test_stop_command_kills_term_ignoring_manager_and_child,
+        ServiceDeadlines.test_uncertain_initial_state_never_stops_or_restarts_service,
+        ServiceDeadlines.test_uncertain_post_stop_state_never_restarts_or_admits_replacement,
+        ServiceDeadlines.test_installer_initialization_is_outside_the_poll_budget,
+        ServiceDeadlines.test_startup_budget_includes_slow_manager_reads,
+        ServiceDeadlines.test_startup_kills_term_ignoring_manager_and_child,
+        ServiceDeadlines.test_active_response_after_budget_cannot_pass,
+    )
+    cases = {case.id().rsplit(".", 1)[-1]: case
+             for case in unittest.defaultTestLoader.loadTestsFromTestCase(ServiceDeadlines)}
+    isolated = [(control.__name__, cases.pop(control.__name__)) for control in waiting]
+
+    class IsolatedWaits(unittest.TestCase):
+        def runTest(self):
+            # Start the longest waits first, with at most three fixtures active.
+            # Each owns its directories, process groups, readiness and timer.
+            # Collect every result on the test thread with its original name.
+            with ThreadPoolExecutor(max_workers=3) as workers:
+                pending = [(name, workers.submit(case.debug)) for name, case in isolated]
+                for name, result in pending:
+                    with self.subTest(control=name):
+                        result.result()
+
+    # Other and newly added controls keep ordinary serial unittest execution.
+    return unittest.TestSuite([IsolatedWaits(), *cases.values()])
+
+
 if __name__ == "__main__":
-    unittest.main(verbosity=2)
+    unittest.main(verbosity=2, defaultTest="smoke_suite" if len(sys.argv) == 1 else None)
