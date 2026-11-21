@@ -15021,3 +15021,17 @@ Unrecognized errors keep their existing generic fallback strings.
 and `TestBranchcov0723pmPlatformConnection_ProbeError` in
 `internal/api/configapi/branchcov0723pm_test.go` verify every classified
 category and redaction boundary.
+
+### Ephemeral Docker data persistence check in update readiness (21 November 2026)
+
+`GET /api/updates/plan` (`internal/api/updates.go` and
+`internal/api/update_readiness.go`) appends an optional `warning` readiness
+check (`id: "container-data-persistence"`) when `updates.IsDockerDataDirEphemeral`
+detects that a Docker container's data directory is not backed by a mounted
+volume or bind mount. Persistent Docker mounts, suppressed installs
+(`PULSE_SUPPRESS_EPHEMERAL_DATA_WARNING=true`), and non-Docker deployments keep
+the existing four readiness checks unchanged.
+
+`TestBuildUpdateReadiness_WarnsOnEphemeralDockerDataDir` in
+`internal/api/update_readiness_test.go` and
+`internal/updates/ephemeral_data_test.go` verify this contract.

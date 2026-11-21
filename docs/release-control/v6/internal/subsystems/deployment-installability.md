@@ -9861,6 +9861,26 @@ gate's `internal/api` shards now list `Fuzz` and `Example` names as well as
 `Test`, as pull-request CI does, so those seed corpora and examples still run
 at release time. `TestCreateReleasePublishesPrivateProRuntime` pins the run id.
 
+### In-app Docker ephemeral data directory warning (21 November 2026)
+
+`internal/updates/ephemeral_data.go` mirrors the `/proc/self/mountinfo` check in
+`docker-entrypoint.sh` (`IsDockerDataDirEphemeral` / `DockerEphemeralDataWarning`),
+detecting when a Docker deployment stores its runtime data directory on the
+container's ephemeral root filesystem rather than on a mounted volume or bind
+mount while honoring `PULSE_SUPPRESS_EPHEMERAL_DATA_WARNING=true` and failing
+safe (no false positives) on non-Docker hosts or unreadable mountinfo. Both
+community (`CheckForUpdatesWithChannel`) and Pro (`checkForProUpdatesWithChannel`)
+update checks append the persistence warning to `UpdateInfo.Warning` when an
+update is available (surfaced in `UpdateBanner`), and `attachUpdateReadiness`
+attaches a `container-data-persistence` warning check to `UpdatePlan.Readiness`
+(surfaced in `UpdateInstallGuide`).
+
+`TestIsDockerDataDirEphemeral`, `TestFormatDockerEphemeralDataWarningAndCombine`
+in `internal/updates/ephemeral_data_test.go`, and
+`TestBuildUpdateReadiness_WarnsOnEphemeralDockerDataDir` in
+`internal/api/update_readiness_test.go` verify mountpoint matching, parent-mount
+coverage, suppression, fail-safe handling, and readiness payload output.
+
 ## Release-body updater ownership (30 September 2026)
 
 Each executable `/bin/update --version` example in a published body must carry

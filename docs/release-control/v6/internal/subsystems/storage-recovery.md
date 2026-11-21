@@ -10101,3 +10101,11 @@ surface uses it. The Proxmox node drawer displays the reported state.
 connection-test failures to closed, static operator guidance without echoing raw
 errors or secrets. No storage, backup, or recovery persistence or read path
 changes.
+
+### Ephemeral Docker data persistence update-readiness boundary (21 November 2026)
+
+`internal/updates/ephemeral_data.go` and `internal/api/update_readiness.go`
+read `/proc/self/mountinfo` read-only to warn Docker operators before container
+recreation when `/data` is not on a mounted volume and direct them to export a
+backup from `Settings -> System -> Recovery`. No storage, backup, or recovery
+persistence format or read/write path changes.

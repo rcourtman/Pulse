@@ -776,12 +776,22 @@ func (h *UpdateHandlers) attachUpdateReadiness(ctx context.Context, version stri
 	if h.now != nil {
 		now = h.now()
 	}
+	cfg := h.getConfig(ctx)
+	dataDir := ""
+	if cfg != nil {
+		dataDir = strings.TrimSpace(cfg.DataPath)
+		if dataDir == "" {
+			dataDir = strings.TrimSpace(cfg.ConfigPath)
+		}
+	}
 	plan.Readiness = buildUpdateReadiness(updateReadinessInputs{
-		cfg:           h.getConfig(ctx),
-		hosts:         h.getHostsSnapshot(ctx),
-		targetVersion: version,
-		plan:          plan,
-		now:           now,
+		cfg:                    cfg,
+		hosts:                  h.getHostsSnapshot(ctx),
+		targetVersion:          version,
+		plan:                   plan,
+		now:                    now,
+		dockerDataDirEphemeral: updates.IsDockerDataDirEphemeral(dataDir),
+		dataDir:                dataDir,
 	})
 	return plan.NormalizeCollections()
 }

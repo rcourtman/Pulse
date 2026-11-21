@@ -256,6 +256,23 @@ type Manager struct {
 	// the generation it captured at start is still current, and only if no
 	// operation was in flight then (see beginUpdateCheckStatus).
 	operationGeneration uint64
+
+	// ephemeralDataWarningFn overrides runtime Docker mountinfo probing in tests.
+	ephemeralDataWarningFn func() string
+}
+
+func (m *Manager) dockerEphemeralDataWarning() string {
+	if m != nil && m.ephemeralDataWarningFn != nil {
+		return m.ephemeralDataWarningFn()
+	}
+	dataDir := ""
+	if m != nil && m.config != nil {
+		dataDir = strings.TrimSpace(m.config.DataPath)
+		if dataDir == "" {
+			dataDir = strings.TrimSpace(m.config.ConfigPath)
+		}
+	}
+	return DockerEphemeralDataWarning(dataDir)
 }
 
 // ApplyUpdateRequest describes an update request initiated via the API/UI.
@@ -608,6 +625,7 @@ func (m *Manager) CheckForUpdatesWithOptions(ctx context.Context, options Update
 	info.Warning = updateWarning(info.Available, isMajorUpgrade, isPrerelease, currentVer.Major, latestVer.Major)
 	if info.Available {
 		info.Availability = UpdateAvailable
+		info.Warning = combineUpdateWarnings(info.Warning, m.dockerEphemeralDataWarning())
 	}
 	checkOutcome := availabilityOutcome(info.Available)
 	if latestVer.IsNewerThan(currentVer) && downloadURL == "" {

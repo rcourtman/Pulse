@@ -23,11 +23,13 @@ const (
 )
 
 type updateReadinessInputs struct {
-	cfg           *config.Config
-	hosts         []models.Host
-	targetVersion string
-	plan          updates.UpdatePlan
-	now           time.Time
+	cfg                    *config.Config
+	hosts                  []models.Host
+	targetVersion          string
+	plan                   updates.UpdatePlan
+	now                    time.Time
+	dockerDataDirEphemeral bool
+	dataDir                string
 }
 
 // updateReadinessConfigSnapshot reads the canonical runtime configuration.
@@ -54,6 +56,9 @@ func buildUpdateReadiness(in updateReadinessInputs) *updates.UpdateReadiness {
 		buildAgentContinuityReadinessCheck(agentHosts, in.targetVersion, now),
 		buildAgentMigrationSecurityReadinessCheck(agentHosts),
 		buildAgentTokenReadinessCheck(in.cfg, len(agentHosts), now),
+	}
+	if in.dockerDataDirEphemeral {
+		checks = append(checks, buildContainerPersistenceReadinessCheck(in.dataDir))
 	}
 
 	status := updateReadinessReady
@@ -127,6 +132,21 @@ func buildUpdatePathReadinessCheck(plan updates.UpdatePlan) updates.UpdateReadin
 		Title:   "Server update path",
 		Summary: "This deployment uses a manual update path.",
 		Details: []string{"Follow the generated update instructions and keep a backup available before restarting Pulse."},
+	}
+}
+
+func buildContainerPersistenceReadinessCheck(dataDir string) updates.UpdateReadinessCheck {
+	displayDir := updates.ResolveDockerDataDir(dataDir)
+	return updates.UpdateReadinessCheck{
+		ID:      "container-data-persistence",
+		Status:  updateReadinessCheckWarning,
+		Title:   "Container data persistence",
+		Summary: "Pulse data directory is not mounted on a persistent volume. Recreating this container will erase your configuration, authentication, and history.",
+		Details: []string{
+			fmt.Sprintf("Mount a persistent volume at %s (for example: -v pulse-data:%s) before recreating or updating the container.", displayDir, displayDir),
+			"Export a configuration backup from Settings -> System -> Recovery before migrating to a persistent volume.",
+			"Set PULSE_SUPPRESS_EPHEMERAL_DATA_WARNING=true if ephemeral container storage is intentional.",
+		},
 	}
 }
 
