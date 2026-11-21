@@ -4,7 +4,9 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
+	"strings"
 	"unicode/utf8"
 )
 
@@ -29,34 +31,82 @@ func readTaskLogResponse(resp *http.Response) ([]TaskLogLine, error) {
 	if failure, exists := envelope["errors"]; exists && !bytes.Equal(bytes.TrimSpace(failure), []byte("null")) {
 		return nil, errInvalidTaskLogResponse
 	}
-	data := bytes.TrimSpace(envelope["data"])
-	if len(data) == 0 || data[0] != '[' {
+	decoder := json.NewDecoder(bytes.NewReader(envelope["data"]))
+	start, err := decoder.Token()
+	if err != nil || start != json.Delim('[') {
 		return nil, errInvalidTaskLogResponse
 	}
-	var rows []json.RawMessage
-	if json.Unmarshal(data, &rows) != nil || len(rows) > taskLogLineLimit {
-		return nil, errInvalidTaskLogResponse
-	}
-	lines := make([]TaskLogLine, 0, len(rows))
-	for i, row := range rows {
-		fields, valid := inventoryResponseObject(row, "n", "t")
-		if !valid {
+	lines := make([]TaskLogLine, 0)
+	keys := make(map[string]struct{})
+	for decoder.More() {
+		if len(lines) == taskLogLineLimit {
 			return nil, errInvalidTaskLogResponse
 		}
-		for _, name := range []string{"n", "t"} {
-			value := bytes.TrimSpace(fields[name])
-			if len(value) == 0 || bytes.Equal(value, []byte("null")) {
-				return nil, errInvalidTaskLogResponse
-			}
-		}
-		var line TaskLogLine
-		if json.Unmarshal(row, &line) != nil || line.LineNumber != int64(i+1) {
+		line, valid := readTaskLogLine(decoder, keys)
+		if !valid || line.LineNumber != int64(len(lines)+1) {
 			return nil, errInvalidTaskLogResponse
 		}
 		lines = append(lines, line)
+	}
+	end, err := decoder.Token()
+	if err != nil || end != json.Delim(']') {
+		return nil, errInvalidTaskLogResponse
+	}
+	if _, err := decoder.Token(); err != io.EOF {
+		return nil, errInvalidTaskLogResponse
 	}
 	// An explicit empty log and a full capped prefix remain usable reads, but
 	// neither proves that all guests/results have been observed. The collector
 	// keeps its existing terminal-marker and attribution checks for finality.
 	return lines, nil
+}
+
+// Read the wire fields directly into the validated line. The JSON decoder
+// owns syntax and escaping; in particular keys are compared after unescaping.
+// Check all row keys for duplicates, even for ignored provider extensions.
+func readTaskLogLine(decoder *json.Decoder, keys map[string]struct{}) (TaskLogLine, bool) {
+	var line TaskLogLine
+	start, err := decoder.Token()
+	if err != nil || start != json.Delim('{') {
+		return line, false
+	}
+	clear(keys)
+	for decoder.More() {
+		key, err := decoder.Token()
+		name, ok := key.(string)
+		if err != nil || !ok {
+			return line, false
+		}
+		if _, duplicate := keys[name]; duplicate {
+			return line, false
+		}
+		keys[name] = struct{}{}
+		switch name {
+		case "n":
+			// Decode pointers so explicit null is distinct from zero/empty.
+			var number *int64
+			if decoder.Decode(&number) != nil || number == nil {
+				return line, false
+			}
+			line.LineNumber = *number
+		case "t":
+			var text *string
+			if decoder.Decode(&text) != nil || text == nil {
+				return line, false
+			}
+			line.Text = *text
+		default:
+			if strings.EqualFold(name, "n") || strings.EqualFold(name, "t") {
+				return line, false
+			}
+			var ignored json.RawMessage
+			if decoder.Decode(&ignored) != nil {
+				return line, false
+			}
+		}
+	}
+	end, err := decoder.Token()
+	_, hasText := keys["t"]
+	// Missing n leaves zero and fails the caller's one-based order check.
+	return line, err == nil && end == json.Delim('}') && hasText
 }
