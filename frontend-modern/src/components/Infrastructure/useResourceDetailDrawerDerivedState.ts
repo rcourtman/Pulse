@@ -6,7 +6,11 @@ import type { ResourceVMwareMeta } from '@/types/resource';
 import { formatAbsoluteTime, formatRelativeTime } from '@/utils/format';
 import { useRelativeTimeNow } from '@/utils/relativeTimeClock';
 import { getAgentStatusIndicator } from '@/utils/status';
-import { getAgentFirstReportStatusIndicator } from '@/utils/agentResources';
+import {
+  getAgentFirstReportStatusIndicator,
+  hasPulseAgentSourceEvidence,
+  isTrueNASSystemResource,
+} from '@/utils/agentResources';
 import { mapDockerContainerStatus } from '@/features/docker/dockerPageModel';
 import {
   dedupeResourceBadges,
@@ -135,16 +139,35 @@ export const useResourceDetailDrawerDerivedState = (
   });
   const systemIdentityBadges = createMemo(() => getInfrastructureSystemIdentityBadges(resource()));
   const hasUnifiedSources = createMemo(() => unifiedSourceBadges().length > 0);
-  const headerBadges = createMemo(() =>
-    dedupeResourceBadges([
-      typeBadge(),
-      ...(systemIdentityBadges().length > 0
+  const headerBadges = createMemo(() => {
+    const identityBadges =
+      systemIdentityBadges().length > 0
         ? systemIdentityBadges()
         : hasUnifiedSources()
           ? unifiedSourceBadges()
-          : [platformBadge(), sourceBadge()]),
-    ]),
-  );
+          : [platformBadge(), sourceBadge()];
+    const current = resource();
+    if (!isTrueNASSystemResource(current)) {
+      return dedupeResourceBadges([typeBadge(), ...identityBadges]);
+    }
+
+    // Native TrueNAS API systems share the agent resource type and may carry
+    // an Agent facet for API readings. Only source evidence means Pulse Agent.
+    const hasAgent = hasPulseAgentSourceEvidence(current);
+    const sourceLabel = hasAgent ? 'API+Agent' : 'API';
+    const sourceTitle = hasAgent ? 'TrueNAS API and Pulse Agent' : 'TrueNAS API';
+    const [identity, ...otherBadges] = identityBadges;
+    const badge = identity ?? getSourceBadge(hasAgent ? 'hybrid' : 'api');
+    // Keep the source and version together without another row of chips on phones.
+    return dedupeResourceBadges([
+      badge && {
+        ...badge,
+        label: identity ? `${identity.label} · ${sourceLabel}` : sourceLabel,
+        title: identity ? `${identity.title ?? identity.label} · ${sourceTitle}` : sourceTitle,
+      },
+      ...otherBadges,
+    ]);
+  });
   const policyBadges = createMemo(() => getResourcePolicyBadges(resource().policy));
   const policyRedactions = createMemo(() => getResourcePolicyRedactionLabels(resource().policy));
   const governanceSummary = createMemo(() =>
