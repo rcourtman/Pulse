@@ -5856,3 +5856,22 @@ input form stays compact, recovery is the primary action on the active report,
 and history and policy explanations use secondary disclosures. Provider
 acceptance remains distinct from recipient confirmation. No delivery or
 authority behavior changes.
+
+### Legacy alert hygiene recovery (20 November 2026)
+
+`AlertConfig` carries `alertHygieneDefaultsMigrated` (set `true` by
+`DefaultAlertConfig` and `SaveAlertConfig`). Because pre-`f7ac26b573`
+Thresholds-page saves omitted `flappingEnabled`, `maxAlertAgeDays`,
+`maxAcknowledgedAgeDays` and `autoAcknowledgeAfterHours` (none of which have UI
+controls) and persisted `false/0/0/0` to `alerts.json`, `LoadAlertConfig`
+performs a one-time recovery when `alertHygieneDefaultsMigrated` is absent or
+false: missing fields or an all-zeroed pre-`f7ac26b573` combination restore the
+factory defaults (`FlappingEnabled: true`, `MaxAlertAgeDays: 7`,
+`MaxAcknowledgedAgeDays: 1`), while any config with a customized TTL or an
+already-set `alertHygieneDefaultsMigrated: true` marker preserves explicit
+`false`/`0` values verbatim.
+
+`TestLoadAlertConfig_RecoversLegacyFlappingAndTTLDefaults` in
+`internal/config/persistence_test.go` verifies all four boundaries (missing
+fields, all-zeroed legacy saves, legacy customized TTLs, and explicitly saved
+disabled settings surviving reload).

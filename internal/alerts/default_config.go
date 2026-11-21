@@ -205,10 +205,11 @@ func DefaultAlertConfig() AlertConfig {
 		MaxAcknowledgedAgeDays:    1, // Auto-cleanup acknowledged alerts older than 1 day
 		AutoAcknowledgeAfterHours: 0, // Off: a firing alert stays unacknowledged until someone acknowledges it
 		// Flapping detection defaults
-		FlappingEnabled:         true, // Enable flapping detection
-		FlappingWindowSeconds:   300,  // 5 minute window
-		FlappingThreshold:       5,    // 5 state changes triggers flapping
-		FlappingCooldownMinutes: 15,   // 15 minute cooldown
+		FlappingEnabled:              true, // Enable flapping detection
+		FlappingWindowSeconds:        300,  // 5 minute window
+		FlappingThreshold:            5,    // 5 state changes triggers flapping
+		FlappingCooldownMinutes:      15,   // 15 minute cooldown
+		AlertHygieneDefaultsMigrated: true,
 	}
 }
 

@@ -97,7 +97,12 @@ func (dfs defaultFileSystem) MkdirAll(path string, perm os.FileMode) error {
 }
 
 type alertSchedulePresence struct {
-	Schedule *alertScheduleFieldPresence `json:"schedule"`
+	Schedule                     *alertScheduleFieldPresence `json:"schedule"`
+	FlappingEnabled              *bool                       `json:"flappingEnabled"`
+	MaxAlertAgeDays              *int                        `json:"maxAlertAgeDays"`
+	MaxAcknowledgedAgeDays       *int                        `json:"maxAcknowledgedAgeDays"`
+	AutoAcknowledgeAfterHours    *int                        `json:"autoAcknowledgeAfterHours"`
+	AlertHygieneDefaultsMigrated *bool                       `json:"alertHygieneDefaultsMigrated"`
 }
 
 type alertScheduleFieldPresence struct {
@@ -1055,6 +1060,7 @@ func (c *ConfigPersistence) SaveAlertConfig(config alerts.AlertConfig) error {
 	}
 
 	normalizeAlertDefaults(&config)
+	config.AlertHygieneDefaultsMigrated = true
 
 	data, err := json.Marshal(config)
 	if err != nil {
@@ -1151,6 +1157,30 @@ func (c *ConfigPersistence) LoadAlertConfig() (*alerts.AlertConfig, error) {
 			if sched.Grouping.ByGuest == nil {
 				config.Schedule.Grouping.ByGuest = defaultSchedule.Grouping.ByGuest
 			}
+		}
+
+		// Load-specific one-time recovery for flapping detection and alert TTL
+		// cleanup. Before f7ac26b573, every Thresholds-page save omitted these
+		// fields (the UI has no controls for them) and persisted false/0/0/0 to
+		// alerts.json. Recover factory noise-protection defaults once for
+		// configs written before AlertHygieneDefaultsMigrated existed; once the
+		// marker is true, explicit false/0 settings are preserved verbatim.
+		if presence.AlertHygieneDefaultsMigrated == nil || !*presence.AlertHygieneDefaultsMigrated {
+			defaults := alerts.DefaultAlertConfig()
+			allZeroedByLegacySave := !config.FlappingEnabled &&
+				config.MaxAlertAgeDays == 0 &&
+				config.MaxAcknowledgedAgeDays == 0 &&
+				config.AutoAcknowledgeAfterHours == 0
+			if presence.FlappingEnabled == nil || allZeroedByLegacySave {
+				config.FlappingEnabled = defaults.FlappingEnabled
+			}
+			if presence.MaxAlertAgeDays == nil || allZeroedByLegacySave {
+				config.MaxAlertAgeDays = defaults.MaxAlertAgeDays
+			}
+			if presence.MaxAcknowledgedAgeDays == nil || allZeroedByLegacySave {
+				config.MaxAcknowledgedAgeDays = defaults.MaxAcknowledgedAgeDays
+			}
+			config.AlertHygieneDefaultsMigrated = true
 		}
 	}
 

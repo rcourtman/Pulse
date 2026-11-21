@@ -2104,3 +2104,19 @@ Reports also reconstruct destination identity from retained queue jobs when a
 shutdown checkpoint commits work before a failed report write. A missing report
 projection cannot omit that destination or its actual queue outcome after reopen.
 The checkpoint evidence-failure regression covers this interrupted boundary.
+
+### Progressive queue retry and rate-limit backoff (20 November 2026)
+
+`NotificationQueue` keeps `defaultQueueMaxAttempts = 8` with fast initial
+retries (`1s`, `2s`, `4s` for attempts 0–2) so transient blips and delivery
+rehearsals recover within seconds, then stretches later retries across roughly
+33 minutes (`30s`, `2m`, `5m`, `10m`, capped at `15m` for attempt 7+) so brief
+ISP, DNS, SMTP, or webhook outages recover without dead-lettering alerts.
+`scheduleRetryWithClass` passes the classified `NotificationFailureClass` into
+`calculateBackoffForClass`, enforcing a 60-second minimum floor from attempt 3
+onward for `NotificationFailureRateLimited` responses so persistent HTTP 429s
+cool down cleanly.
+
+`TestCalculateBackoff`, `TestCalculateBackoffForClass_RateLimitedFloor`, and
+the full `internal/notifications` suite (including rehearsal, acknowledgement
+budget, and burst rate-limit tests) verify the schedule and class floor.

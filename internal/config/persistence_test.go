@@ -2605,3 +2605,92 @@ func TestLoadNodesConfig_PreservesExplicitlyDisabledPBSCollection(t *testing.T) 
 		t.Fatalf("expected explicit PBS collection flags to remain false: %+v", pbs)
 	}
 }
+
+func TestLoadAlertConfig_RecoversLegacyFlappingAndTTLDefaults(t *testing.T) {
+	t.Run("missing hygiene fields get factory defaults", func(t *testing.T) {
+		tempDir := t.TempDir()
+		cp := config.NewConfigPersistence(tempDir)
+		if err := cp.EnsureConfigDir(); err != nil {
+			t.Fatalf("EnsureConfigDir: %v", err)
+		}
+		if err := os.WriteFile(filepath.Join(tempDir, "alerts.json"), []byte(`{"enabled":true}`), 0600); err != nil {
+			t.Fatalf("write alerts.json: %v", err)
+		}
+
+		loaded, err := cp.LoadAlertConfig()
+		if err != nil {
+			t.Fatalf("LoadAlertConfig: %v", err)
+		}
+		if !loaded.FlappingEnabled || loaded.MaxAlertAgeDays != 7 || loaded.MaxAcknowledgedAgeDays != 1 || !loaded.AlertHygieneDefaultsMigrated {
+			t.Fatalf("got flapping=%v maxAge=%d maxAckAge=%d migrated=%v, want true/7/1/true",
+				loaded.FlappingEnabled, loaded.MaxAlertAgeDays, loaded.MaxAcknowledgedAgeDays, loaded.AlertHygieneDefaultsMigrated)
+		}
+	})
+
+	t.Run("pre-f7ac26b573 all-zeroed save recovers factory defaults once", func(t *testing.T) {
+		tempDir := t.TempDir()
+		cp := config.NewConfigPersistence(tempDir)
+		if err := cp.EnsureConfigDir(); err != nil {
+			t.Fatalf("EnsureConfigDir: %v", err)
+		}
+		raw := `{"enabled":true,"flappingEnabled":false,"maxAlertAgeDays":0,"maxAcknowledgedAgeDays":0,"autoAcknowledgeAfterHours":0}`
+		if err := os.WriteFile(filepath.Join(tempDir, "alerts.json"), []byte(raw), 0600); err != nil {
+			t.Fatalf("write alerts.json: %v", err)
+		}
+
+		loaded, err := cp.LoadAlertConfig()
+		if err != nil {
+			t.Fatalf("LoadAlertConfig: %v", err)
+		}
+		if !loaded.FlappingEnabled || loaded.MaxAlertAgeDays != 7 || loaded.MaxAcknowledgedAgeDays != 1 || !loaded.AlertHygieneDefaultsMigrated {
+			t.Fatalf("got flapping=%v maxAge=%d maxAckAge=%d migrated=%v, want true/7/1/true",
+				loaded.FlappingEnabled, loaded.MaxAlertAgeDays, loaded.MaxAcknowledgedAgeDays, loaded.AlertHygieneDefaultsMigrated)
+		}
+	})
+
+	t.Run("legacy customized TTL preserves explicit flapping false", func(t *testing.T) {
+		tempDir := t.TempDir()
+		cp := config.NewConfigPersistence(tempDir)
+		if err := cp.EnsureConfigDir(); err != nil {
+			t.Fatalf("EnsureConfigDir: %v", err)
+		}
+		raw := `{"enabled":true,"flappingEnabled":false,"maxAlertAgeDays":14,"maxAcknowledgedAgeDays":0,"autoAcknowledgeAfterHours":0}`
+		if err := os.WriteFile(filepath.Join(tempDir, "alerts.json"), []byte(raw), 0600); err != nil {
+			t.Fatalf("write alerts.json: %v", err)
+		}
+
+		loaded, err := cp.LoadAlertConfig()
+		if err != nil {
+			t.Fatalf("LoadAlertConfig: %v", err)
+		}
+		if loaded.FlappingEnabled || loaded.MaxAlertAgeDays != 14 || loaded.MaxAcknowledgedAgeDays != 0 || !loaded.AlertHygieneDefaultsMigrated {
+			t.Fatalf("got flapping=%v maxAge=%d maxAckAge=%d migrated=%v, want false/14/0/true",
+				loaded.FlappingEnabled, loaded.MaxAlertAgeDays, loaded.MaxAcknowledgedAgeDays, loaded.AlertHygieneDefaultsMigrated)
+		}
+	})
+
+	t.Run("explicitly saved disabled settings survive reload", func(t *testing.T) {
+		tempDir := t.TempDir()
+		cp := config.NewConfigPersistence(tempDir)
+		if err := cp.EnsureConfigDir(); err != nil {
+			t.Fatalf("EnsureConfigDir: %v", err)
+		}
+		cfg := alerts.DefaultAlertConfig()
+		cfg.FlappingEnabled = false
+		cfg.MaxAlertAgeDays = 0
+		cfg.MaxAcknowledgedAgeDays = 0
+		cfg.AutoAcknowledgeAfterHours = 0
+		if err := cp.SaveAlertConfig(cfg); err != nil {
+			t.Fatalf("SaveAlertConfig: %v", err)
+		}
+
+		loaded, err := cp.LoadAlertConfig()
+		if err != nil {
+			t.Fatalf("LoadAlertConfig: %v", err)
+		}
+		if loaded.FlappingEnabled || loaded.MaxAlertAgeDays != 0 || loaded.MaxAcknowledgedAgeDays != 0 || !loaded.AlertHygieneDefaultsMigrated {
+			t.Fatalf("got flapping=%v maxAge=%d maxAckAge=%d migrated=%v, want false/0/0/true",
+				loaded.FlappingEnabled, loaded.MaxAlertAgeDays, loaded.MaxAcknowledgedAgeDays, loaded.AlertHygieneDefaultsMigrated)
+		}
+	})
+}

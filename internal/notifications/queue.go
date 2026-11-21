@@ -27,9 +27,10 @@ var ErrNotificationDeliverySkipped = errors.New("notification delivery disabled"
 
 // defaultQueueMaxAttempts is the default number of delivery attempts
 // before a notification is moved to the dead-letter queue. With the
-// exponential backoff schedule (1s doubling, capped at 60s) eight attempts
-// span roughly three minutes, so a destination that is briefly down or
-// rebooting recovers deliveries instead of dead-lettering them.
+// progressive retry schedule (1s, 2s, 4s, 30s, 2m, 5m, 10m, 15m; 60s
+// floor from attempt 3 for rate-limited destinations) eight attempts
+// recover momentary blips within seconds while spanning ~33 minutes for
+// brief ISP, DNS, SMTP, or webhook outages without dead-lettering alerts.
 const defaultQueueMaxAttempts = 8
 
 const (
@@ -1307,11 +1308,15 @@ func (nq *NotificationQueue) scanNotification(rows interface{ Scan(...any) error
 // ScheduleRetry schedules a notification for retry with exponential backoff.
 // Cancelled and delivered rows are final, even for stale operator requests.
 func (nq *NotificationQueue) ScheduleRetry(id string, attempt int) error {
-	return nq.scheduleRetry(id, attempt, true)
+	return nq.scheduleRetryWithClass(id, attempt, NotificationFailureUnknown, true)
 }
 
 func (nq *NotificationQueue) scheduleRetry(id string, attempt int, notifyHealth bool) error {
-	backoff := calculateBackoff(attempt)
+	return nq.scheduleRetryWithClass(id, attempt, NotificationFailureUnknown, notifyHealth)
+}
+
+func (nq *NotificationQueue) scheduleRetryWithClass(id string, attempt int, failureClass NotificationFailureClass, notifyHealth bool) error {
+	backoff := calculateBackoffForClass(attempt, failureClass)
 	nextRetry := time.Now().Add(backoff)
 
 	nq.mu.Lock()
@@ -2197,7 +2202,7 @@ func (nq *NotificationQueue) processNotification(notif *QueuedNotification) {
 			}
 		} else {
 			// Schedule retry
-			if retryErr := nq.scheduleRetry(notif.ID, notif.Attempts, false); retryErr != nil {
+			if retryErr := nq.scheduleRetryWithClass(notif.ID, notif.Attempts, failureClass, false); retryErr != nil {
 				log.Error().
 					Err(retryErr).
 					Str("component", "notification_queue").
@@ -2437,19 +2442,36 @@ func (nq *NotificationQueue) Stop() error {
 	return nq.stopErr
 }
 
-// calculateBackoff calculates exponential backoff duration
+// calculateBackoff calculates the progressive retry delay for an attempt.
+// Early retries stay fast (1s, 2s, 4s) for transient blips and rehearsals,
+// while later retries stretch across ~33 minutes so brief outages recover
+// without flooding or dead-lettering alerts.
 func calculateBackoff(attempt int) time.Duration {
+	schedule := [...]time.Duration{
+		1 * time.Second,
+		2 * time.Second,
+		4 * time.Second,
+		30 * time.Second,
+		2 * time.Minute,
+		5 * time.Minute,
+		10 * time.Minute,
+		15 * time.Minute,
+	}
 	if attempt <= 0 {
-		return 1 * time.Second
+		return schedule[0]
 	}
-	if attempt >= 6 {
-		return 60 * time.Second
+	if attempt >= len(schedule) {
+		return schedule[len(schedule)-1]
 	}
+	return schedule[attempt]
+}
 
-	// 1s, 2s, 4s, 8s, 16s, 32s, 60s (capped)
-	backoff := time.Duration(1<<uint(attempt)) * time.Second
-	if backoff > 60*time.Second {
-		backoff = 60 * time.Second
+// calculateBackoffForClass enforces at least a 60-second breather from attempt
+// 3 onward for rate-limited destinations so persistent 429s cool down cleanly.
+func calculateBackoffForClass(attempt int, failureClass NotificationFailureClass) time.Duration {
+	backoff := calculateBackoff(attempt)
+	if failureClass == NotificationFailureRateLimited && attempt >= 3 && backoff < 60*time.Second {
+		return 60 * time.Second
 	}
 	return backoff
 }
