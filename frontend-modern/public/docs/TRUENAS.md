@@ -439,11 +439,11 @@ or correct pool/dataset capacity does not establish live disk activity: capacity
 measures space, not a read/write rate. A blank or dash is unavailable evidence,
 not proof that the disk is idle.
 
-Use TrueNAS's own **Reporting** view for missing activity. Compare the same
-appliance, disk and time window; a boot disk's rate and a data pool's rate are
-not interchangeable. Keep any boot-pool name already supplied in a report,
-but do not rename `freenas-boot` or `boot-pool`, recreate the connection or
-install an agent just to make the readings appear.
+Use TrueNAS **Reporting** to check [a blank host chart](#when-only-host-disk-io-history-is-blank)
+or missing individual disk activity. Compare the same appliance, disk and
+time window. Boot and data-pool rates are not interchangeable. Keep any
+reported boot-pool name. Do not rename `freenas-boot` or `boot-pool`,
+recreate the connection or install an agent just to make readings appear.
 
 **A populated chart is not proof of correct disk attribution.** Similar curves
 can be real during shared work, such as a scrub. If TrueNAS Reporting shows
@@ -627,3 +627,17 @@ Use the next completed [ordinary poll](TRUENAS.md#stale-truenas-data) to
 check that the inventory you still collect is fresh. A connection test does
 not check collection scope, and older **Protection** entries do not show
 whether Pulse still reads snapshots.
+
+## When only host Disk I/O History is blank
+
+Open the appliance from **TrueNAS → Overview**, select **History** and keep
+the affected range. On a phone, use the **Show** button that lists **Disk I/O**
+if the chart is folded.
+
+**Loading history** means the read has not finished. If the chart switches
+to **No stored history in this range**, Pulse has no points to show for that
+chart. CPU and Network I/O can have points in the same range. The blank chart
+does not tell you why points are missing. It is not a reading of zero activity.
+
+Use the same window in TrueNAS **Reporting**. If you already saw the message
+switch, there is no need to wait through the read again to report it.
