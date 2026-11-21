@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """Exercise documentation admission, its actual shell and owning workflow.
 
-No application verification is waived: an isolated edit keeps all Public docs
-suites, mirror/link checks, governance and secret scanning. Control changes,
-uncovered branches, mixed trees and unavailable evidence keep application CI.
+An isolated edit keeps all Public docs suites, mirror/link checks, governance
+and secret scanning. The two diagnostic recipes also keep a required verdict.
+Control changes, uncovered branches, mixed trees and unavailable evidence keep
+application CI.
 """
 
 import fnmatch
@@ -28,6 +29,10 @@ SCOPE = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(SCOPE)
 SUITE = "scripts/tests/test_oidc_session_docs.py"
 GUIDES = ("docs/OIDC.md", "frontend-modern/public/docs/OIDC.md")
+DIAGNOSTICS = (
+    "scripts/tests/test_troubleshooting_logs.py",
+    "scripts/tests/test_vm_disk_diagnostics.py",
+)
 
 
 def classifier_script(source):
@@ -157,7 +162,8 @@ class OwningChecksTest(unittest.TestCase):
         for event in ("pull_request", "push"):
             block = re.split(r"\n  [a-z_]+:\n", triggers.split(f"  {event}:\n", 1)[1], maxsplit=1)[0]
             patterns = re.findall(r'^      - "([^"]+)"$', block, re.MULTILINE)
-            for path in [*SCOPE.DOC_SUITES, *(p.encode() for p in ("README.md", *GUIDES))]:
+            for path in [*SCOPE.DOC_SUITES, *SCOPE.DIAGNOSTIC_RECIPES,
+                         *(p.encode() for p in ("README.md", *GUIDES))]:
                 self.assertTrue(any(fnmatch.fnmatchcase(os.fsdecode(path), p) for p in patterns), path)
         self.assertIn("  push:\n    branches:\n      - main\n", triggers)
         self.assertIn("        shard: [0, 1, 2, 3]\n", source)
@@ -182,6 +188,18 @@ class OwningChecksTest(unittest.TestCase):
         self.assertNotRegex(governance.split("\n  governance:\n", 1)[1], r"(?m)^    if:")
         self.assertIn("canonical_completion_guard.py", governance)
         self.assertIn("browser_verification_guard", governance)
+
+    def test_diagnostic_gate_is_an_unconditional_job_in_build_and_test(self):
+        source = BUILD.read_text()
+        changes = source.split("\n  changes:\n", 1)[1].split("\n  triage-helper:\n", 1)[0]
+        self.assertIn("    name: Detect changed areas\n", changes)
+        self.assertNotRegex(changes, r"(?m)^    (?:if|needs):|^\s*continue-on-error:")
+        classifier = changes.split("      - name: Classify changed files\n", 1)[1].split(
+            "\n      - name:", 1)[0]
+        self.assertNotRegex(classifier, r"(?m)^        if:")
+        self.assertNotRegex(source.split("\njobs:\n", 1)[0], r"(?m)^\s*paths(?:-ignore)?:")
+        self.assertEqual(SCOPE.DIAGNOSTIC_RECIPES, {path.encode() for path in DIAGNOSTICS})
+        self.assertTrue(SCOPE.DOC_SUITES.isdisjoint(SCOPE.DIAGNOSTIC_RECIPES))
 
 
 class GitClassifierTest(unittest.TestCase):
@@ -214,7 +232,7 @@ class GitClassifierTest(unittest.TestCase):
         self.git("commit", "-q", "-m", "Fixture tree change")
         return self.git("rev-parse", "HEAD")
 
-    def classify(self, base, head, branch="main", event="pull_request"):
+    def run_classifier(self, base, head, branch="main", event="pull_request"):
         values = {"github.event_name": event, "github.event.pull_request.base.sha": base,
                   "github.event.before": base, "github.sha": head}
         script = re.sub(r"\$\{\{\s*(.*?)\s*\}\}", lambda m: values[m[1]],
@@ -224,8 +242,86 @@ class GitClassifierTest(unittest.TestCase):
             result = subprocess.run(["bash", "-c", script], cwd=self.repo, capture_output=True,
                                     text=True, timeout=10, env=dict(os.environ, GITHUB_OUTPUT=str(output),
                                     GOVERNANCE_TARGET_BRANCH=branch))
+            fields = dict(line.split("=", 1) for line in output.read_text().splitlines()) if output.exists() else {}
+            return result, fields
+
+    def classify(self, base, head, branch="main", event="pull_request"):
+        result, fields = self.run_classifier(base, head, branch, event)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        return fields
+
+    def add_recipe_fixtures(self):
+        # Exercise the actual classifier command and runner using stdlib-only
+        # exit adapters. Separate source proof runs both real recipe suites.
+        for path in ("scripts/tests/run.sh", "scripts/run-script-tests.py"):
+            dest = self.repo / path
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy(ROOT / path, dest)
+        for recipe in DIAGNOSTICS:
+            self.write(recipe, "print('recipe observed')\n")
+        return self.commit()
+
+    def test_each_isolated_diagnostic_edit_requires_both_recipes(self):
+        start = self.add_recipe_fixtures()
+        for recipe in DIAGNOSTICS:
+            with self.subTest(recipe=recipe):
+                self.write(recipe, "print('updated recipe observed')\n")
+                changed = self.commit()
+                for event in ("pull_request", "push"):
+                    result, fields = self.run_classifier(start, changed, event=event)
+                    self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                    self.assertEqual(fields, dict.fromkeys(
+                        ("code", "frontend_deps", "go_compile", "triage_helper"), "false"))
+                    self.assertIn("Summary: 2/2 passed", result.stdout)
+                    self.assertEqual([line[4:] for line in result.stdout.splitlines()
+                                      if line.startswith("==> ")], list(DIAGNOSTICS))
+                start = changed
+        both = self.git("rev-parse", "HEAD~2")
+        for branch in ("release/v6.4", "pulse/v6-release"):
+            result, fields = self.run_classifier(both, changed, branch=branch)
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-            return dict(line.split("=", 1) for line in output.read_text().splitlines())
+            self.assertEqual(fields["code"], "true")
+            self.assertNotIn("recipe observed", result.stdout)
+        result, fields = self.run_classifier(both, changed)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(fields["code"], "false")
+        self.assertIn("Summary: 2/2 passed", result.stdout)
+
+    def test_failed_or_missing_recipe_cannot_return_a_passing_required_result(self):
+        start = self.add_recipe_fixtures()
+        for recipe in DIAGNOSTICS:
+            with self.subTest(recipe=recipe):
+                self.write(recipe, "raise SystemExit(7)\n")
+                failed = self.commit()
+                result, fields = self.run_classifier(start, failed)
+                self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+                self.assertIn(f"{recipe} (exit 7)", result.stdout)
+                self.assertIn("Summary: 1/2 passed", result.stdout)
+                self.assertNotIn("code", fields)
+
+                (self.repo / recipe).unlink()
+                missing = self.commit()
+                result, fields = self.run_classifier(failed, missing)
+                self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+                self.assertIn("Required diagnostic recipe is missing", result.stdout)
+                self.assertNotIn("code", fields)
+                self.write(recipe, "print('recipe observed')\n")
+                start = self.commit()
+
+    def test_diagnostics_mixed_tree_and_wrong_checkout_cannot_select_shortcut(self):
+        base = self.add_recipe_fixtures()
+        self.write(DIAGNOSTICS[0], "raise SystemExit(7)\n")
+        isolated = self.commit()
+        self.write("docs/guide.md", "# Also changed\n")
+        mixed = self.commit()
+        result, fields = self.run_classifier(base, mixed)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(fields["code"], "true")
+        self.assertNotIn("==> ", result.stdout)
+        result, fields = self.run_classifier(base, isolated)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("checkout does not match the admitted source", result.stdout)
+        self.assertNotIn("code", fields)
 
     def test_actual_classifier_accepts_isolated_add_edit_delete_and_guides(self):
         self.write(SUITE, "# source-consistency fixture\n")

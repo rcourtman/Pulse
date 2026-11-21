@@ -192,20 +192,41 @@ jobs:
           echo "triage_helper=$triage_helper" >> "$GITHUB_OUTPUT"
           # Note: -q must not be combined with -v here — BSD grep exits 1 for
           # that combination even when inverted matches exist.
-          # Known documentation safety suites already run in the complete
-          # Public docs workflow. Keep that check, triage policy and the secret
-          # scan, without fanning out unrelated application jobs. Only main has
-          # both push/PR docs coverage. Mixed, new-suite, missing-base and
-          # admission-control changes retain the ordinary runtime path.
-          if [[ "$GOVERNANCE_TARGET_BRANCH" == main ]] &&
-             docs_only=$(python3 scripts/ci_docs_only.py --base "$base" --head "${{ github.sha }}") &&
-             [[ "$docs_only" == true ]]; then
-            echo "Documentation-only tree diff; complete Public docs safety checks apply."
-            code=false
-          elif printf '%s\n' "$changed" | grep -vE '^docs/|\.md$' >/dev/null; then
+          if printf '%s\n' "$changed" | grep -vE '^docs/|\.md$' >/dev/null; then
             code=true
           else
             code=false
+          fi
+          # Known documentation safety suites already run in the complete
+          # Public docs workflow. Keep that check, triage policy and the secret
+          # scan. For the two diagnostic recipes, Public docs is not a landing
+          # gate. This required job must pass both before suppressing runtime.
+          # Keep mixed, new-suite, missing-base and admission-control changes
+          # on the ordinary path, and keep release branches unchanged.
+          if [[ "$GOVERNANCE_TARGET_BRANCH" == main ]] &&
+             docs_route=$(python3 scripts/ci_docs_only.py --route --base "$base" --head "${{ github.sha }}"); then
+            case "$docs_route" in
+              diagnostic-recipes)
+                if [[ "$(git rev-parse --verify HEAD)" != "${{ github.sha }}" ]]; then
+                  echo "::error::Diagnostic recipe checkout does not match the admitted source."
+                  exit 1
+                fi
+                recipes=(scripts/tests/test_troubleshooting_logs.py scripts/tests/test_vm_disk_diagnostics.py)
+                for recipe in "${recipes[@]}"; do
+                  if [[ ! -f "$recipe" || -L "$recipe" ]]; then
+                    echo "::error::Required diagnostic recipe is missing or not a regular file: $recipe"
+                    exit 1
+                  fi
+                done
+                scripts/tests/run.sh "${recipes[@]}"
+                echo "Both required diagnostic recipes passed on this checkout; application runtime is not applicable."
+                code=false
+                ;;
+              docs)
+                echo "Documentation-only tree diff; complete Public docs safety checks apply."
+                code=false
+                ;;
+            esac
           fi
           echo "code=$code" >> "$GITHUB_OUTPUT"
           # A full race-test compilation cost 386 seconds in a fresh offline
