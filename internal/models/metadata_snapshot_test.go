@@ -142,6 +142,41 @@ func TestPVEBackupCarryForwardReadsKeepOrderedPrimaryRows(t *testing.T) {
 	}
 }
 
+func TestPVEBackupTaskReadKeepsOrderedDetachedRowsForUnreadNodes(t *testing.T) {
+	s := metadataStateFixture()
+	at := time.Date(2026, 11, 21, 6, 0, 0, 0, time.UTC)
+	want := []BackupTask{
+		{ID: "child", Instance: "pve", Node: "node-b", VMID: 100, Status: "error", Error: "synthetic error", StartTime: at, ObservedAt: at},
+		{ID: "parent", Instance: "pve", Node: "node-a", Status: "running", StartTime: at.Add(-time.Minute), ObservedAt: at},
+	}
+	s.PVEBackups.BackupTasks = []BackupTask{
+		want[0],
+		{ID: "peer", Instance: "PVE", Node: "node-b", VMID: 100},
+		{ID: "healthy", Instance: "pve", Node: "node-c", VMID: 100},
+		{ID: "different-node", Instance: "pve", Node: "NODE-A", VMID: 100},
+		want[1],
+	}
+	s.Backups.PVE.BackupTasks = []BackupTask{{ID: "stale-aggregate", Instance: "pve", Node: "node-b"}}
+
+	unread := map[string]struct{}{"node-a": {}, "node-b": {}}
+	got := s.GetPVEBackupTasksForNodes("pve", unread)
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("got %+v, want ordered primary rows %+v", got, want)
+	}
+	got[0].ObservedAt, got[0].Error = time.Time{}, "reader-only"
+	if again := s.GetPVEBackupTasksForNodes("pve", unread); !reflect.DeepEqual(again, want) {
+		t.Fatalf("scoped reader mutated primary task rows: %+v", again)
+	}
+	for _, empty := range [][]BackupTask{
+		s.GetPVEBackupTasksForNodes("pve", nil),
+		s.GetPVEBackupTasksForNodes("missing", unread),
+	} {
+		if empty == nil || len(empty) != 0 {
+			t.Fatalf("unmatched scope should return an empty slice: %#v", empty)
+		}
+	}
+}
+
 func TestPBSBackupCarryForwardReadsKeepOrderedDetachedPrimaryRows(t *testing.T) {
 	s := metadataStateFixture()
 	got := s.GetPBSBackupsForInstance("pbs")

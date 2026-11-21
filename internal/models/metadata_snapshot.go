@@ -43,7 +43,7 @@ func (s *State) GetPVEGuestSnapshotsForInstance(instance string) []GuestSnapshot
 
 // The callers hold the state read lock across both passes. Count first to
 // avoid allocating for other connections or growing the result one row at a
-// time on large single-connection estates. Both row types have value fields.
+// time on large single-connection estates. These callers use value-only rows.
 func copyBackupRows[T any](rows []T, matches func(*T) bool) []T {
 	count := 0
 	for i := range rows {
@@ -72,6 +72,21 @@ func (s *State) GetBackupTasks() []BackupTask {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return append([]BackupTask{}, s.PVEBackups.BackupTasks...)
+}
+
+// GetPVEBackupTasksForNodes returns detached primary task rows for the given
+// connection and nodes, in stored order. A partial poll only needs evidence
+// from its unread nodes, not from healthy nodes or peer connections.
+func (s *State) GetPVEBackupTasksForNodes(instance string, nodes map[string]struct{}) []BackupTask {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return copyBackupRows(s.PVEBackups.BackupTasks, func(row *BackupTask) bool {
+		if row.Instance != instance {
+			return false
+		}
+		_, match := nodes[row.Node]
+		return match
+	})
 }
 
 func (s *State) GetPBSBackups() []PBSBackup {
