@@ -403,8 +403,8 @@ that command name.
 
 For `docker run` or an app UI, change the image in the existing saved deployment
 and recreate it with the same data mount, ports and settings; do not start a
-second Pulse against that data. Check the running image, Pulse's displayed
-server version and service health after recreation. For Pro,
+second Pulse against that data. Check the running image again, Pulse's
+displayed server version and service health after recreation. For Pro,
 [confirm the selected image and version](#check-the-running-pro-image).
 See [rollback and backup scope](AUTO_UPDATE.md#rollback) before reverting a
 version: an image change alone does not undo data migrations.
