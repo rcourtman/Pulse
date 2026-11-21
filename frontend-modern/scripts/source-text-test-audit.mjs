@@ -29,6 +29,8 @@ const BASELINE_PATH = path.join(ROOT, 'scripts', 'source-text-test-baseline.json
 const SKIP_DIRS = new Set([
   'node_modules',
   '.git',
+  '.claude',
+  'tmp',
   'dist',
   'vendor',
   'coverage',
