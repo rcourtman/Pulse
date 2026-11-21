@@ -551,6 +551,58 @@ describe('NotificationsAPI', () => {
     expect(result.deliveryPaused).toBe(true);
     expect(result.status).toBe('success');
   });
+
+  it('normalizes destination availability and enabled count from health responses', async () => {
+    const baseQueue = {
+      pending: 0,
+      sending: 0,
+      sent: 0,
+      failed: 0,
+      dlq: 0,
+      healthy: true,
+      status: 'healthy',
+      attention_required: 0,
+      reason_codes: [],
+      completed_retention_days: 7,
+      dead_letter_retention_days: 30,
+      counts_are_retention_bounded: true,
+      retry_attempts_affect_health: false,
+      terminal_failures_affect_health: true,
+      failure_classes_7d: {},
+      failure_classes_available: true,
+      failure_class_window_days: 7,
+    };
+
+    apiFetchJSONMock.mockResolvedValueOnce({
+      overall_healthy: true,
+      queue: baseQueue,
+      email: { enabled: false, configured: false },
+      webhooks: { total: 1, enabled: 0 },
+      apprise: { enabled: false, configured: false },
+    } as any);
+    const empty = await NotificationsAPI.getHealth();
+    expect(empty.destinations).toEqual({ available: true, enabledCount: 0 });
+
+    apiFetchJSONMock.mockResolvedValueOnce({
+      overall_healthy: true,
+      queue: baseQueue,
+      email: { enabled: true, configured: true },
+      webhooks: { total: 2, enabled: 1 },
+      apprise: { enabled: true, configured: true },
+    } as any);
+    const active = await NotificationsAPI.getHealth();
+    expect(active.destinations).toEqual({ available: true, enabledCount: 3 });
+
+    apiFetchJSONMock.mockResolvedValueOnce({
+      overall_healthy: true,
+      queue: baseQueue,
+      email: { status: 'unavailable' },
+      webhooks: { status: 'unavailable' },
+      apprise: { status: 'unavailable' },
+    } as any);
+    const unavailable = await NotificationsAPI.getHealth();
+    expect(unavailable.destinations).toEqual({ available: false, enabledCount: 0 });
+  });
 });
 
 describe('email minimum severity save/reload (#2069)', () => {

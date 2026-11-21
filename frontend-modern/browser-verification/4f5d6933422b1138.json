@@ -1,0 +1,54 @@
+{
+  "version": 1,
+  "base_sha": "86f320b57157e632ae66b162a9014ccf7c56b314",
+  "verified_at": "2026-11-21T12:00:35Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/api/notifications.ts",
+    "frontend-modern/src/features/alerts/AlertNoDestinationsCard.tsx",
+    "frontend-modern/src/features/alerts/OverviewTab.tsx",
+    "frontend-modern/src/features/alerts/useNotificationDeliveryHealth.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/api/notifications.ts": "616aeb93dae3c863db376a821a005708303aa1f267916757319e974f5f57b38d",
+    "frontend-modern/src/features/alerts/AlertNoDestinationsCard.tsx": "34e81cd0225e3884e652f9b617dd36e71b1cabde444f1343e72fc865fdae5f09",
+    "frontend-modern/src/features/alerts/OverviewTab.tsx": "ee5dc6aaeef04a005a2baf958f21658114678e8bd3922d467ad02920a47982f8",
+    "frontend-modern/src/features/alerts/useNotificationDeliveryHealth.ts": "7ac429ebf0ffcd2c576ecd2880dcee3d3c23d52cc1d6714ce9a93750473a5860"
+  },
+  "routes": [
+    "/alerts/overview",
+    "/alerts/notifications"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900,
+      "browser": "Chromium (Playwright)",
+      "theme": "light"
+    },
+    {
+      "width": 1440,
+      "height": 900,
+      "browser": "Chromium (Playwright)",
+      "theme": "dark"
+    },
+    {
+      "width": 390,
+      "height": 844,
+      "browser": "Chromium (Playwright)",
+      "theme": "light"
+    }
+  ],
+  "states": [
+    "Alerts Overview with active delivery and zero enabled notification destinations showing AlertNoDestinationsCard in desktop light, desktop dark, and mobile 390x844 viewports with zero horizontal overflow",
+    "Alerts Overview after dismissing AlertNoDestinationsCard and reloading page (stays dismissed via localStorage)",
+    "Alerts Overview when one webhook destination is enabled (card hidden)",
+    "Alerts Overview when notification delivery is paused (AlertDeliveryPausedCard shown without stacking AlertNoDestinationsCard)"
+  ],
+  "interactions": [
+    "Authenticated as admin, opened /alerts/overview, inspected pixels across 1440x900 light, 1440x900 dark, and 390x844 mobile viewports, and verified keyboard focus ring on Set up notifications",
+    "Clicked Set up notifications CTA and verified navigation to /alerts/notifications",
+    "Returned to /alerts/overview, clicked Dismiss, verified immediate hide and reload persistence, then cleared localStorage key and verified card reappears",
+    "Verified card stays hidden when an enabled destination exists or when AlertDeliveryPausedCard is active"
+  ]
+}

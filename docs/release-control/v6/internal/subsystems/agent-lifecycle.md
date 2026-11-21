@@ -12189,3 +12189,9 @@ changes.
 optional `container-data-persistence` warning check after existing agent
 readiness checks when Docker container storage is ephemeral. No agent token,
 continuity, migration-security, or lifecycle authority changes.
+
+### Notification health Apprise inventory boundary (21 November 2026)
+
+`GetNotificationHealth` in `internal/api/alerting/notifications.go` adds
+Apprise enabled/configured status alongside Email and Webhooks. No agent token,
+onboarding command, or lifecycle authority changes.

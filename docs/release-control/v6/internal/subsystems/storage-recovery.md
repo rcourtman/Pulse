@@ -10122,3 +10122,10 @@ read `/proc/self/mountinfo` read-only to warn Docker operators before container
 recreation when `/data` is not on a mounted volume and direct them to export a
 backup from `Settings -> System -> Recovery`. No storage, backup, or recovery
 persistence format or read/write path changes.
+
+### Notification health Apprise inventory boundary (21 November 2026)
+
+`GetNotificationHealth` in `internal/api/alerting/notifications.go` reports
+Apprise enabled/configured status (failing closed to `unavailable` when
+configuration is held unreadable). No storage, backup, or recovery persistence
+or read/write path changes.

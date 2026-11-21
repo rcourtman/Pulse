@@ -15035,3 +15035,16 @@ the existing four readiness checks unchanged.
 `TestBuildUpdateReadiness_WarnsOnEphemeralDockerDataDir` in
 `internal/api/update_readiness_test.go` and
 `internal/updates/ephemeral_data_test.go` verify this contract.
+
+### Notification health reports Apprise destination status (21 November 2026)
+
+`GET /api/notifications/health` (`internal/api/alerting/notifications.go`)
+includes `apprise` status alongside `email` and `webhooks` (`enabled`/`configured`
+when readable, or `status: "unavailable"` on configuration hold), and
+`NotificationsAPI.getHealth()` in `frontend-modern/src/api/notifications.ts`
+normalizes an optional `destinations` summary (`available`, `enabledCount`)
+without breaking responses that omit destination inventory.
+
+`internal/api/alerting/notifications_test.go`,
+`internal/api/alerting/notifications_health_test.go`, and
+`frontend-modern/src/api/__tests__/notifications.test.ts` verify this contract.
