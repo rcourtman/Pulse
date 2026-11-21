@@ -1,11 +1,10 @@
 #!/usr/bin/env python3
-"""Keep isolated documentation safety edits on the complete Public docs check.
+"""Classify documentation and isolated diagnostic recipe tree diffs.
 
-These exact suites already run in Public docs, along with mirror/link checks.
-They do not ship in Pulse. New suites and admission/workflow controls retain
-application CI until their coverage is reviewed. Mixed, empty and unavailable
-whole-tree diffs cannot select this exception. The workflow limits it to main,
-the only branch with both push and pull-request Public docs coverage.
+Public docs already runs these suites and mirror/link checks. The two diagnostic
+recipes have a distinct route: the caller must run both in a required check
+before marking application CI inapplicable. Only a nonempty diff exclusively
+of those two paths can take that route. The workflow limits both routes to main.
 """
 
 import argparse
@@ -15,6 +14,10 @@ import sys
 
 
 COMMIT = re.compile(r"[0-9a-f]{40}")
+DIAGNOSTIC_RECIPES = frozenset({
+    b"scripts/tests/test_troubleshooting_logs.py",
+    b"scripts/tests/test_vm_disk_diagnostics.py",
+})
 DOC_SUITES = frozenset({
     b"scripts/tests/test_admin_docs.py",
     b"scripts/tests/test_agent_auth_docs.py",
@@ -97,9 +100,9 @@ def docs_only_paths(paths):
     )
 
 
-def docs_only_diff(base, head):
+def changed_tree_paths(base, head):
     if not COMMIT.fullmatch(base) or not COMMIT.fullmatch(head):
-        return False
+        return []
     try:
         result = subprocess.run(
             ["git", "diff", "--no-ext-diff", "--no-renames", "--name-only", "-z",
@@ -108,18 +111,30 @@ def docs_only_diff(base, head):
         )
     except (OSError, subprocess.TimeoutExpired):
         print("Documentation diff unavailable; retaining application CI.", file=sys.stderr)
-        return False
+        return []
     if result.returncode != 0 or not result.stdout.endswith(b"\0"):
-        return False
-    return docs_only_paths(result.stdout[:-1].split(b"\0"))
+        return []
+    return result.stdout[:-1].split(b"\0")
+
+
+def docs_only_diff(base, head):
+    return docs_only_paths(changed_tree_paths(base, head))
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--base", required=True)
     parser.add_argument("--head", required=True)
+    parser.add_argument("--route", action="store_true", help="also classify isolated diagnostic recipe edits")
     args = parser.parse_args()
-    print("true" if docs_only_diff(args.base, args.head) else "false")
+    if not args.route:
+        print("true" if docs_only_diff(args.base, args.head) else "false")
+        return
+    paths = changed_tree_paths(args.base, args.head)
+    if paths and all(path in DIAGNOSTIC_RECIPES for path in paths):
+        print("diagnostic-recipes")
+    else:
+        print("docs" if docs_only_paths(paths) else "runtime")
 
 
 if __name__ == "__main__":
