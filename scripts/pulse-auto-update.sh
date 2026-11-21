@@ -18,25 +18,27 @@ INSTALL_SIGNATURE_IDENTITY="pulse-installer"
 INSTALL_SIGNATURE_NAMESPACE="pulse-install"
 PINNED_RELEASE_SSH_PUBLIC_KEY="ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIMZd/DaH+BldzOkq1A8KVTcFk73nAyrE8aJOyf7i00jm pulse-installer"
 
-# Logging function
-log() {
-    local level=$1
+log_stdout() {
+    local level=$1 timestamp=""
     shift
-    local logger_status=0 output_status=0 timestamp=""
-    # Conditional callers disable errexit throughout this function. Try both
-    # sinks, but never let successful stdout hide a failed journal write (or
-    # vice versa). The installer collector owns draining and the first error.
-    # A blocked journal socket must not hold the installer output collector or
-    # recovery path until systemd kills the whole update. Keep a TERM deadline
-    # and KILL backstop; timeout's observed failure still wins over stdout.
-    timeout -k 1 5 logger -t "$LOG_TAG" -p "user.$level" "$@" || logger_status=$?
     # Installer output can contain many lines. Format the same local timestamp
     # without a subshell and date process for each one. Older Bash versions
     # without the time conversion keep the existing date path and semantics.
     if ! printf -v timestamp '%(%Y-%m-%d %H:%M:%S)T' -1 2>/dev/null; then
         timestamp=$(date '+%Y-%m-%d %H:%M:%S') || :
     fi
-    echo "[$timestamp] [$level] $@" || output_status=$?
+    echo "[$timestamp] [$level] $@"
+}
+
+log() {
+    local level=$1
+    shift
+    local logger_status=0 output_status=0
+    # Conditional callers disable errexit here. Try both sinks, but never let
+    # one hide the other's failure. Bound the external journal writer with a
+    # TERM deadline and KILL backstop.
+    timeout -k 1 5 logger -t "$LOG_TAG" -p "user.$level" "$@" || logger_status=$?
+    log_stdout "$level" "$@" || output_status=$?
     if [[ "$logger_status" != 0 ]]; then
         return "$logger_status"
     fi
@@ -796,12 +798,17 @@ perform_update() {
            "PULSE_CONFIG_DIR=$CONFIG_DIR" \
            bash "$installer_tmp" "${installer_args[@]}" {update_lock_fd}<&- 2>&1 | (
            collector_status=0
+           journal_stalled=false
            line=""
            # Drain even after a failed log write: closing this pipe early can
            # interrupt an installer that is still replacing files. Retain the
            # first failure, not just the last successful write, and include a
            # final line without a newline in the completion evidence.
            while IFS= read -r line || [[ -n "$line" ]]; do
+               if [[ "$journal_stalled" == true ]]; then
+                   log_stdout info "installer: $line" || :
+                   continue
+               fi
                if log info "installer: $line"; then
                    :
                else
@@ -809,6 +816,16 @@ perform_update() {
                    if [[ "$collector_status" == 0 ]]; then
                        collector_status=$log_status
                    fi
+                   # timeout reports 124 on expiry, or 137 on the KILL path.
+                   # Do not spend that deadline again for every remaining
+                   # line. Keep stdout, the observed failure and the existing
+                   # recovery decision; only this installer's stream changes.
+                   case "$log_status" in
+                       124|137)
+                           journal_stalled=true
+                           log_stdout warn "Installer journal write stopped (exit $log_status); remaining installer output goes to stdout only" || :
+                           ;;
+                   esac
                fi
            done
            exit "$collector_status"
