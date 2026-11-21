@@ -147,11 +147,11 @@ describe('User Access selection through rendered controls and real transport', (
     ));
     await screen.findByTitle(ownAccount.username);
     const ownRow = rowFor(ownAccount);
-    expect(ownRow.getByText('You can’t remove your own access.')).toBeVisible();
+    expect(ownRow.getByText('You cannot remove your own user access.')).toBeVisible();
     expect(ownRow.queryByRole('button', { name: /^Remove / })).not.toBeInTheDocument();
     expect(rowFor(namesake).getByRole('button', { name: /^Remove / })).toBeEnabled();
     expect(
-      rowFor(namesake).queryByText('You can’t remove your own access.'),
+      rowFor(namesake).queryByText('You cannot remove your own user access.'),
     ).not.toBeInTheDocument();
 
     fireEvent.click(ownRow.getByRole('button', { name: /^Manage access for / }));
@@ -179,7 +179,7 @@ describe('User Access selection through rendered controls and real transport', (
     const confirmRemoval = within(dialog).getByRole('button', { name: 'Remove User Access' });
 
     setSignIn(user.username);
-    expect(await row.findByText('You can’t remove your own access.')).toBeVisible();
+    expect(await row.findByText('You cannot remove your own user access.')).toBeVisible();
     await waitFor(() => expect(dialog).not.toBeInTheDocument());
     fireEvent.click(confirmRemoval);
     expect(writes()).toHaveLength(0);

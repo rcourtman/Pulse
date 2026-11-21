@@ -186,11 +186,13 @@ export function sameRoleIDs(first: readonly string[], second: readonly string[])
   return JSON.stringify([...first].sort()) === JSON.stringify([...second].sort());
 }
 
+export const OWN_ACCESS_REMOVAL_MESSAGE = 'You cannot remove your own user access.';
+
 export function getUserAssignmentsDeleteErrorMessage(error?: unknown): string {
   if (error && typeof error === 'object') {
     const typedError = error as { code?: unknown; status?: unknown };
     if (typedError.status === 403 && typedError.code === 'self_deprovision_denied') {
-      return 'You cannot remove your own user access.';
+      return OWN_ACCESS_REMOVAL_MESSAGE;
     }
   }
   return 'Failed to remove user access';

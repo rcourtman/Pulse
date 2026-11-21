@@ -930,7 +930,7 @@ describe('RBAC paywall settings panels', () => {
     expect(screen.getByText('alice@example.com')).toBeInTheDocument();
     expect(screen.getByText('OIDC · okta')).toBeInTheDocument();
     expect(screen.getByTitle('sso:oidc:okta:opaque_subject')).toBeInTheDocument();
-    expect(screen.getByText('You can’t remove your own access.')).toBeVisible();
+    expect(screen.getByText('You cannot remove your own user access.')).toBeVisible();
     expect(screen.queryByRole('button', { name: 'Remove alice' })).not.toBeInTheDocument();
 
     fireEvent.click(
@@ -960,7 +960,7 @@ describe('RBAC paywall settings panels', () => {
       ),
     ).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Manage access for alice' })).toBeEnabled();
-    expect(screen.getByText('You can’t remove your own access.')).toBeVisible();
+    expect(screen.getByText('You cannot remove your own user access.')).toBeVisible();
     expect(notificationSuccessMock).not.toHaveBeenCalled();
     await waitFor(() => {
       expect(screen.queryByText('Alice Example')).not.toBeInTheDocument();

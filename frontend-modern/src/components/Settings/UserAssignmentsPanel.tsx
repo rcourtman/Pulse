@@ -16,7 +16,11 @@ import Pencil from 'lucide-solid/icons/pencil';
 import Trash2 from 'lucide-solid/icons/trash-2';
 import { SearchField } from '@/components/shared/SearchField';
 import { PulseDataGrid } from '@/components/shared/PulseDataGrid';
-import { getUserAssignmentsEmptyStateCopy, getUserIdentityLabel } from '@/utils/rbacPresentation';
+import {
+  getUserAssignmentsEmptyStateCopy,
+  getUserIdentityLabel,
+  OWN_ACCESS_REMOVAL_MESSAGE,
+} from '@/utils/rbacPresentation';
 import { InlineNotice } from '@/components/shared/InlineNotice';
 import TriangleAlert from 'lucide-solid/icons/triangle-alert';
 import { Dialog } from '@/components/shared/Dialog';
@@ -299,7 +303,7 @@ export const UserAssignmentsPanel: Component<UserAssignmentsPanelProps> = (props
                 render: (assignment) => {
                   const identity = getUserIdentityLabel(assignment);
                   return (
-                    <div class="flex flex-wrap items-center justify-end gap-1">
+                    <div class="flex flex-wrap items-center justify-end gap-1 whitespace-normal text-xs text-muted">
                       <Button
                         variant="ghost"
                         size="settingsAction"
@@ -314,9 +318,7 @@ export const UserAssignmentsPanel: Component<UserAssignmentsPanelProps> = (props
                         <span class="hidden sm:inline">Manage Access</span>
                       </Button>
                       {state.isOwnAccount(assignment) ? (
-                        <span class="whitespace-normal text-xs text-muted">
-                          You can’t remove your own access.
-                        </span>
+                        OWN_ACCESS_REMOVAL_MESSAGE
                       ) : (
                         <Button
                           variant="ghost"
