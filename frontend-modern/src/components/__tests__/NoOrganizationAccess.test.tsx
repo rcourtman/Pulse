@@ -76,6 +76,7 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup();
+  vi.useRealTimers();
   clearAuth();
   document.cookie = 'pulse_csrf=; Max-Age=0; Path=/';
   vi.unstubAllGlobals();
@@ -209,6 +210,14 @@ describe('no-organization invitation recovery', () => {
     expect(fetchMock).toHaveBeenCalledTimes(2);
     expectRequest(1, '/api/org-invitations/client%2Feast/accept', 'POST');
     expect(onReload).not.toHaveBeenCalled();
+    expect(screen.getByText(/Waiting for Pulse to confirm/)).toHaveTextContent(
+      'Waiting for Pulse to confirm your decision to accept the invitation to East estate (client/east).',
+    );
+    const checkAgain = screen.getByRole('button', { name: 'Check again' });
+    expect(checkAgain).toBeDisabled();
+    fireEvent.click(checkAgain);
+    expect(onReload).not.toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: 'Sign out' })).toBeEnabled();
     expect(screen.queryByRole('button', { name: 'Restart invitation check' })).toBeNull();
     for (const button of screen.getAllByRole('button', {
       name: /^(Accept|Decline) invitation to /,
@@ -221,6 +230,74 @@ describe('no-organization invitation recovery', () => {
 
     accept.resolve(jsonResponse({ kind: 'member' }));
     await waitFor(() => expect(onReload).toHaveBeenCalledOnce());
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it.each(['Accept', 'Decline'] as const)(
+    'allows a read-only check after a slow %s without acting on its late response',
+    async (action) => {
+      const response = deferred<Response>();
+      fetchMock
+        .mockResolvedValueOnce(jsonResponse(invitations))
+        .mockReturnValueOnce(response.promise);
+      const { onReload } = renderRecovery();
+      await screen.findByText('West estate');
+      vi.useFakeTimers();
+
+      const button = screen.getByRole('button', {
+        name: `${action} invitation to West estate (client/west)`,
+      });
+      const checkAgain = screen.getByRole('button', { name: 'Check again' });
+      button.focus();
+      fireEvent.click(button);
+
+      await vi.advanceTimersByTimeAsync(9_999);
+      expect(checkAgain).toBeDisabled();
+      expect(onReload).not.toHaveBeenCalled();
+      await vi.advanceTimersByTimeAsync(1);
+      expect(checkAgain).toBeEnabled();
+      expect(screen.getByText(/Waiting for Pulse to confirm/)).toHaveTextContent(
+        'check access without resending your decision.',
+      );
+      expect(button).toBeDisabled();
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+
+      fireEvent.click(checkAgain);
+      expect(onReload).toHaveBeenCalledOnce();
+      expect(screen.getByRole('alert')).toHaveTextContent(
+        'The list below is from before your decision.',
+      );
+      expect(button).toBeDisabled();
+
+      response.resolve(new Response(null, { status: 204 }));
+      await vi.advanceTimersByTimeAsync(0);
+      expect(onReload).toHaveBeenCalledOnce();
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+    },
+  );
+
+  it('does not interrupt explicit sign-out with a late acceptance reload', async () => {
+    const response = deferred<Response>();
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse(invitations))
+      .mockReturnValueOnce(response.promise);
+    const { onReload, onSignOut } = renderRecovery();
+    await screen.findByText('East estate');
+    vi.useFakeTimers();
+
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Accept invitation to East estate (client/east)' }),
+    );
+    const exit = screen.getByRole('button', { name: 'Sign out' });
+    exit.focus();
+    fireEvent.click(exit);
+    expect(onSignOut).toHaveBeenCalledOnce();
+    expect(exit).toHaveFocus();
+
+    response.resolve(jsonResponse({ kind: 'member' }));
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(onReload).not.toHaveBeenCalled();
+    expect(screen.queryByText(/Waiting for Pulse to confirm/)).toBeNull();
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
@@ -326,10 +403,15 @@ describe('no-organization invitation recovery', () => {
     fireEvent.click(row('West estate').getByRole('button', { name: /^Decline invitation to / }));
     expect(fetchMock).toHaveBeenCalledTimes(2);
     expectRequest(1, '/api/org-invitations/client%2Fwest', 'DELETE');
+    expect(screen.getByText(/Waiting for Pulse to confirm/)).toHaveTextContent(
+      'Waiting for Pulse to confirm your decision to decline the invitation to West estate (client/west).',
+    );
+    expect(screen.getByRole('button', { name: 'Check again' })).toBeDisabled();
     decline.resolve(new Response(null, { status: 204 }));
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
     expectRequest(2, '/api/org-invitations', 'GET');
     expect(onReload).not.toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: 'Check again' })).toBeEnabled();
     expect(screen.queryByRole('button', { name: /^Accept invitation to / })).toBeNull();
     expect(
       screen.queryByText('Ask a Pulse administrator to add you to an organization.'),
