@@ -2052,41 +2052,51 @@ for (const [name, field] of [
 
   test(`performance report measurement context stays optional: ${name}`, () => {
     const attachment = evidenceField();
-    assert.match(attachment, /For CPU, memory or disk-write reports/);
-    assert.match(attachment, /existing readings or safe, passive observations/);
-    assert.match(attachment, /Pulse process, its container or the whole host/);
-    for (const context of ["units", "measurement window", "uptime", "allocated CPUs", "memory limit", "fleet size", "polling interval", "open dashboards"]) {
+    assert.match(attachment, /For Pulse CPU, memory or disk writes/);
+    assert.match(attachment, /existing readings, screenshots or passive checks/);
+    assert.match(attachment, /Pulse process, container or host/);
+    for (const context of ["units", "measurement window", "uptime", "CPU or memory limits", "fleet size", "polling interval", "open dashboards"]) {
       assert.ok(attachment.includes(context), `${name} must distinguish ${context}`);
     }
-    assert.match(attachment, /where relevant and known/);
-    assert.match(attachment, /process-start CPU average is not a recent sampling window/);
-    assert.match(attachment, /database size is not a write rate/);
-    assert.match(attachment, /Existing screenshots are useful/);
-    assert.match(attachment, /write "unavailable" when safe collection is not possible/);
+    assert.match(attachment, /Add known CPU or memory limits, fleet size, polling interval and open dashboards/);
+    assert.match(attachment, /CPU averaged since start is not a recent sample/);
+    assert.match(attachment, /Database size is not a write rate/);
+    assert.match(attachment, /Write "unavailable" if you cannot measure safely/);
     assert.doesNotMatch(attachment, /required: true|render:/);
   });
 
   test(`performance report attachment safety: ${name}`, () => {
     const attachment = evidenceField();
-    assert.match(attachment, /Do not restart, create load or change polling or retention just to measure/);
-    assert.match(attachment, /Do not attach raw profiles, heap dumps, databases or full process command lines/);
-    assert.match(attachment, /summarise only relevant counters after local review/);
+    assert.match(attachment, /Do not restart, downgrade, add load or change limits, features, polling or retention to measure/);
+    assert.match(attachment, /Summarise reviewed counters, not raw profiles, heap dumps, databases or full process command lines/);
   });
 
   test(`baseline memory regressions need no continuing growth or restart: ${name}`, () => {
     const attachment = evidenceField();
-    assert.match(attachment, /higher steady baseline from growth during one uninterrupted run/);
-    assert.match(attachment, /worth reporting even if usage stays flat/);
-    assert.match(attachment, /already available versions, uptime, workload and enabled collectors\/features/);
-    assert.match(attachment, /not proof of recovery compared with a days-old run/);
-    assert.match(attachment, /Unknown context is valid/);
-    assert.match(attachment, /do not restart, downgrade or change features to create a comparison/);
+    assert.match(attachment, /higher steady memory baseline matters, not just growth during one run/);
+    assert.match(attachment, /Compare at similar uptimes, noting versions, workload and enabled collectors or features/);
+    assert.match(attachment, /Write "unavailable" if you cannot measure safely/);
+    assert.doesNotMatch(attachment, /required: true|render:/);
+  });
+
+  test(`a Pulse stop needs original evidence, not a finding inferred from a chart: ${name}`, () => {
+    const attachment = evidenceField();
+    const performance = attachment.match(
+      /<summary>Pulse CPU, memory or disk writes:[^<]*<\/summary>([\s\S]*?)<\/details>/,
+    )?.[1];
+    assert.ok(performance, "keep this guidance in the optional Pulse performance section");
+    assert.match(performance, /^\s*If Pulse stopped, say whether the service or the whole container stopped/);
+    assert.match(performance, /each stop's time and time zone, Pulse version and memory limit, if known/);
+    assert.match(performance, /high memory chart does not prove a kill/);
+    assert.match(performance, /already have a kernel line naming Pulse as killed.*share just that line after removing private details/);
+    assert.match(performance, /Otherwise leave the cause unknown/);
+    assert.match(performance, /Do not restart, downgrade, add load or change limits/);
     assert.doesNotMatch(attachment, /required: true|render:/);
   });
 
   test(`guest memory comparisons retain optional target and sample context: ${name}`, () => {
     const attachment = evidenceField();
-    assert.match(attachment, /For CPU, memory or disk-write reports about Pulse itself/);
+    assert.match(attachment, /For Pulse CPU, memory or disk writes/);
     const guest = attachment.split("For VM or LXC memory disagreements,")[1];
     assert.ok(guest, "guest readings must not inherit Pulse process-only guidance");
     assert.match(guest, /overview, History, alert, Patrol or another tool/);

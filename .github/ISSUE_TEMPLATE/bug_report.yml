@@ -190,10 +190,11 @@ body:
         <details>
         <summary>Pulse CPU, memory or disk writes: comparable measurements</summary>
 
-        For CPU, memory or disk-write reports about Pulse itself, use existing readings or safe, passive observations. Say whether the reading covers the Pulse process, its container or the whole host, and give its units, measurement window and uptime. Include allocated CPUs or memory limit, fleet size, polling interval and open dashboards where relevant and known. A process-start CPU average is not a recent sampling window; database size is not a write rate.
-        Existing screenshots are useful; write "unavailable" when safe collection is not possible. Do not restart, create load or change polling or retention just to measure. Do not attach raw profiles, heap dumps, databases or full process command lines; summarise only relevant counters after local review.
+        If Pulse stopped, say whether the service or the whole container stopped. Give each stop's time and time zone, Pulse version and memory limit, if known. A high memory chart does not prove a kill. If you already have a kernel line naming Pulse as killed for lack of memory, share just that line after removing private details. Otherwise leave the cause unknown.
 
-        For Pulse memory reports, distinguish a higher steady baseline from growth during one uninterrupted run. A higher baseline is worth reporting even if usage stays flat. Keep already available versions, uptime, workload and enabled collectors/features with each reading; a lower reading shortly after an upgrade is not proof of recovery compared with a days-old run. Unknown context is valid; do not restart, downgrade or change features to create a comparison.
+        For Pulse CPU, memory or disk writes, use existing readings, screenshots or passive checks. Give the scope (Pulse process, container or host), units, measurement window and uptime. Add known CPU or memory limits, fleet size, polling interval and open dashboards. CPU averaged since start is not a recent sample. Database size is not a write rate.
+
+        A higher steady memory baseline matters, not just growth during one run. Compare at similar uptimes, noting versions, workload and enabled collectors or features. Write "unavailable" if you cannot measure safely. Do not restart, downgrade, add load or change limits, features, polling or retention to measure. Summarise reviewed counters, not raw profiles, heap dumps, databases or full process command lines.
 
         </details>
 
