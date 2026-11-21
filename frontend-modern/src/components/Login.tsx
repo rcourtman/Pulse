@@ -485,14 +485,15 @@ const LoginForm: Component<{
     ssoProviders,
   } = props;
   const hasSSOProviders = ssoProviders.length > 0;
-  const compactReturn = () => showLocalLogin && !hasSSOProviders && Boolean(oidcError());
+  const providerReturn = () => hasSSOProviders && Boolean(oidcError());
+  const compactReturn = () => Boolean(oidcError()) && (showLocalLogin || hasSSOProviders);
 
   return (
     <div
       class="min-h-screen flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8"
       classList={{ 'max-sm:pt-6': compactReturn(), 'max-sm:py-6': hasSSOProviders }}
     >
-      <div class="max-w-md w-full space-y-8">
+      <div class="max-w-md w-full space-y-8" classList={{ 'max-sm:space-y-4': providerReturn() }}>
         {/* Demo Credentials Banner */}
         <Show when={demoModeEnabled}>
           <div class="bg-surface rounded-md p-4 shadow-xs border border-blue-200 dark:border-blue-800 animate-fade-in">
@@ -549,7 +550,10 @@ const LoginForm: Component<{
             </div>
           </div>
 
-          <h2 class="mt-6 text-center text-4xl font-extrabold text-blue-600 animate-fade-in delay-100 pb-1">
+          <h2
+            class="mt-6 text-center text-4xl font-extrabold text-blue-600 animate-fade-in delay-100 pb-1"
+            classList={{ 'max-sm:mt-3': providerReturn() }}
+          >
             Welcome to Pulse
           </h2>
 
@@ -561,11 +565,14 @@ const LoginForm: Component<{
         </div>
         <form
           class="mt-8 space-y-6 bg-surface rounded-md p-8 shadow-xs border border-border animate-slide-up"
+          classList={{ 'max-sm:mt-4 max-sm:p-4': providerReturn() }}
           onSubmit={handleSubmit}
         >
           {/* Return errors describe the attempt even when no providers are now listed. */}
           <Show when={hasSSOProviders || oidcError()}>
             <div class="space-y-3">
+              {/* Read why the last attempt failed before choosing where to try next. */}
+              <SSOReturnError message={oidcError()} />
               <For each={ssoProviders}>
                 {(provider) => (
                   <button
@@ -596,7 +603,6 @@ const LoginForm: Component<{
                   </button>
                 )}
               </For>
-              <SSOReturnError message={oidcError()} />
               <Show when={hasSSOProviders && oidcMessage()}>
                 <div class="rounded-md bg-green-50 dark:bg-green-900/25 border border-green-200 dark:border-green-700 px-3 py-2 text-sm text-green-600 dark:text-green-300">
                   {oidcMessage()}
