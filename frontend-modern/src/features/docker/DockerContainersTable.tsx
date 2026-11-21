@@ -27,6 +27,7 @@ import { ResourceNameWithWebInterfaceLink } from '@/components/shared/WebInterfa
 import { usePersistentSignal } from '@/hooks/usePersistentSignal';
 import { getSimpleStatusIndicator } from '@/utils/status';
 import { StackedMemoryBar } from '@/components/Workloads/StackedMemoryBar';
+import { MetricMiniSparkline } from '@/components/Workloads/MetricMiniSparkline';
 import type {
   WorkloadWebLinkRow,
   WorkloadWebLinksNoun,
@@ -53,6 +54,7 @@ import {
   PlatformTableToolbar,
   createPlatformTableFilterState,
   createPlatformTableSortState,
+  formatPlatformTablePercentValue,
   formatPlatformTableUptimeValue,
   getPlatformTableFiniteMetric,
   getPlatformTableCellClassForKind,
@@ -106,6 +108,11 @@ import {
 } from './dockerContainerTableModel';
 import type { Resource } from '@/types/resource';
 import { DockerContainerLifecycleControls } from './DockerContainerLifecycleControls';
+import {
+  DockerRowHistoryViewOptions,
+  createDockerRowLensState,
+  type DockerRowHistoryLens,
+} from './dockerRowHistoryLens';
 import { CONTAINER_CPU_CAPACITY_DESCRIPTION } from './dockerCpuPresentation';
 import { DockerImageReferenceText } from './DockerImageReferenceText';
 import {
@@ -121,6 +128,8 @@ type DockerContainersTableProps = DockerNativeTableProps & {
   // Host resources backing the group headers in grouped mode: they carry the
   // host's status and custom web-interface URL, which container rows do not.
   hosts?: Resource[];
+  // The page's row-hover History lens; its settings join this toolbar's View.
+  historyLens?: DockerRowHistoryLens;
 };
 
 type DockerContainerHostGroup = {
@@ -421,6 +430,8 @@ export const DockerContainersTable: Component<DockerContainersTableProps> = (pro
     },
   );
   const isGroupable = createMemo(() => hostOptions().length > 1);
+  // Hover previews need a pointer, so phones get no lens settings.
+  const showHistoryLensOptions = () => props.historyLens !== undefined && !breakpoint.isMobile();
   const groupingMode = createMemo<GroupedTableMode>(() =>
     isGroupable() ? groupingModePreference() : 'flat',
   );
@@ -577,6 +588,9 @@ export const DockerContainersTable: Component<DockerContainersTableProps> = (pro
     const memoryPercentOnly = () =>
       memoryTotal() > 0 ? undefined : getPlatformTableFiniteMetric(resource.memory?.current);
     const hasMemoryMetric = () => memoryTotal() > 0 || memoryPercentOnly() !== undefined;
+    const memoryPercent = () =>
+      memoryTotal() > 0 ? (memoryUsed() / memoryTotal()) * 100 : memoryPercentOnly();
+    const lens = createDockerRowLensState(props.historyLens, resource, ['cpu', 'memory']);
     const ports = () => dockerContainerPortsSummary(resource);
     const portsCompact = () => dockerContainerPortsCompactSummary(resource);
     const networks = () => networksSummary(resource);
@@ -640,15 +654,27 @@ export const DockerContainersTable: Component<DockerContainersTableProps> = (pro
         case 'cpu':
           return (
             <TableCell class={getPlatformTableCellClassForKind(column.kind)}>
-              <ResponsiveMetricCell
-                class="w-full"
-                value={cpuPercent() ?? 0}
-                type="cpu"
-                resourceId={metricsKey()}
-                isRunning={running() && cpuPercent() !== undefined}
-                showMobile={false}
-                thresholds={cpuThresholds()}
-              />
+              <Show
+                when={lens.visible() && running()}
+                fallback={
+                  <ResponsiveMetricCell
+                    class="w-full"
+                    value={cpuPercent() ?? 0}
+                    type="cpu"
+                    resourceId={metricsKey()}
+                    isRunning={running() && cpuPercent() !== undefined}
+                    showMobile={false}
+                    thresholds={cpuThresholds()}
+                  />
+                }
+              >
+                <MetricMiniSparkline
+                  series={lens.series('cpu')}
+                  valueLabel={formatPlatformTablePercentValue(cpuPercent())}
+                  title={`${dockerResourceName(resource)} CPU history`}
+                  {...lens.cursorProps()}
+                />
+              </Show>
             </TableCell>
           );
         case 'memory':
@@ -658,12 +684,24 @@ export const DockerContainersTable: Component<DockerContainersTableProps> = (pro
                 when={running() && hasMemoryMetric()}
                 fallback={<PlatformTableMetricFallback />}
               >
-                <StackedMemoryBar
-                  used={memoryUsed()}
-                  total={memoryTotal()}
-                  percentOnly={memoryPercentOnly()}
-                  thresholds={memoryThresholds()}
-                />
+                <Show
+                  when={lens.visible()}
+                  fallback={
+                    <StackedMemoryBar
+                      used={memoryUsed()}
+                      total={memoryTotal()}
+                      percentOnly={memoryPercentOnly()}
+                      thresholds={memoryThresholds()}
+                    />
+                  }
+                >
+                  <MetricMiniSparkline
+                    series={lens.series('memory')}
+                    valueLabel={formatPlatformTablePercentValue(memoryPercent())}
+                    title={`${dockerResourceName(resource)} memory history`}
+                    {...lens.cursorProps()}
+                  />
+                </Show>
               </Show>
             </TableCell>
           );
@@ -770,7 +808,9 @@ export const DockerContainersTable: Component<DockerContainersTableProps> = (pro
         <TableRow
           class={`${getPlatformResourceDetailRowClass(isExpanded())} text-[11px] sm:text-xs`}
           data-docker-container-row={resource.id}
+          data-history-lens-active={lens.visible() ? 'true' : undefined}
           onClick={() => drawer.toggle(resource)}
+          {...lens.handlers}
         >
           <For each={visibleColumns()}>{(column) => renderColumnCell(column)}</For>
         </TableRow>
@@ -880,16 +920,23 @@ export const DockerContainersTable: Component<DockerContainersTableProps> = (pro
             hasActiveFilters={hasActiveFilters()}
             onResetFilters={resetFilters}
             viewOptions={
-              isGroupable() ? (
-                <div>
-                  <div class="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted">
-                    Layout
-                  </div>
-                  <GroupedTableModeSegmentedControl
-                    value={groupingMode()}
-                    onChange={setGroupingModePreference}
-                  />
-                </div>
+              isGroupable() || showHistoryLensOptions() ? (
+                <>
+                  <Show when={isGroupable()}>
+                    <div>
+                      <div class="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted">
+                        Layout
+                      </div>
+                      <GroupedTableModeSegmentedControl
+                        value={groupingMode()}
+                        onChange={setGroupingModePreference}
+                      />
+                    </div>
+                  </Show>
+                  <Show when={showHistoryLensOptions() && props.historyLens}>
+                    {(lens) => <DockerRowHistoryViewOptions lens={lens()} />}
+                  </Show>
+                </>
               ) : undefined
             }
           />
