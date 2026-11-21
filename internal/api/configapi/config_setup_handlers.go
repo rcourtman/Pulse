@@ -2802,7 +2802,35 @@ type AgentInstallCommandRequest struct {
 	Type           string `json:"type"` // "pve", "pbs", or "host"
 	EnableCommands bool   `json:"enableCommands,omitempty"`
 	Insecure       bool   `json:"insecure,omitempty"`
-	Name           string `json:"name,omitempty"` // optional token name (host installs)
+	AgentURL       string `json:"agentUrl,omitempty"` // optional Agent->Pulse URL override
+	Name           string `json:"name,omitempty"`     // optional token name (host installs)
+}
+
+func normalizeAgentInstallBaseURLOverride(raw string) (string, error) {
+	trimmed := strings.TrimSpace(raw)
+	if trimmed == "" {
+		return "", nil
+	}
+	for i := 0; i < len(trimmed); i++ {
+		if trimmed[i] <= 0x20 || trimmed[i] == 0x7f {
+			return "", errors.New("Invalid agentUrl: must be an http:// or https:// URL without spaces or control characters")
+		}
+	}
+	parsed, err := url.Parse(trimmed)
+	if err != nil || parsed == nil {
+		return "", errors.New("Invalid agentUrl: must be a valid http:// or https:// URL")
+	}
+	scheme := strings.ToLower(parsed.Scheme)
+	if scheme != "http" && scheme != "https" {
+		return "", errors.New("Invalid agentUrl: scheme must be http or https")
+	}
+	if parsed.Hostname() == "" || parsed.User != nil || parsed.RawQuery != "" || parsed.Fragment != "" {
+		return "", errors.New("Invalid agentUrl: must include a host and omit credentials, query parameters, and fragments")
+	}
+	parsed.Scheme = scheme
+	parsed.Path = strings.TrimRight(parsed.Path, "/")
+	parsed.RawPath = strings.TrimRight(parsed.RawPath, "/")
+	return strings.TrimRight(parsed.String(), "/"), nil
 }
 
 // AgentInstallCommandResponse contains the generated install command
@@ -2840,7 +2868,14 @@ func (h *ConfigHandlers) handleAgentInstallCommand(w http.ResponseWriter, r *htt
 
 	cfg := h.getConfig(r.Context())
 	persistence := h.getPersistence(r.Context())
-	baseURL := h.resolveConfigAgentInstallBaseURL(r, cfg)
+	baseURL, err := normalizeAgentInstallBaseURLOverride(req.AgentURL)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if baseURL == "" {
+		baseURL = h.resolveConfigAgentInstallBaseURL(r, cfg)
+	}
 	if baseURL == "" {
 		writeConfigAgentInstallBaseURLUnavailable(w)
 		return

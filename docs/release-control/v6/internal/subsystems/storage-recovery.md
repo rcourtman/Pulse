@@ -10129,3 +10129,10 @@ persistence format or read/write path changes.
 Apprise enabled/configured status (failing closed to `unavailable` when
 configuration is held unreadable). No storage, backup, or recovery persistence
 or read/write path changes.
+
+### Agent install command optional `agentUrl` override boundary (21 November 2026)
+
+`handleAgentInstallCommand` in `internal/api/configapi/config_setup_handlers.go`
+validates an optional `agentUrl` override before minting a Proxmox/PBS agent
+install token or rendering the install command. No storage, backup, or recovery
+persistence format or read/write path changes.

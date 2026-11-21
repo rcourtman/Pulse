@@ -12195,3 +12195,22 @@ continuity, migration-security, or lifecycle authority changes.
 `GetNotificationHealth` in `internal/api/alerting/notifications.go` adds
 Apprise enabled/configured status alongside Email and Webhooks. No agent token,
 onboarding command, or lifecycle authority changes.
+
+### Pre-generation agent install controls parity (21 November 2026)
+
+`POST /api/agent-install-command` (`internal/api/configapi/config_setup_handlers.go`)
+accepts an optional validated `agentUrl` (`http://` or `https://` with non-empty
+hostname and no spaces, control characters, credentials, query strings, or
+fragments; invalid overrides fail closed with HTTP `400` without minting a
+token). `NodeModalSetupGuideSection.tsx` and `useNodeModalState.ts` expose
+pre-generation command authority (default `false`), optional `Connection URL
+(Agent -> Pulse)`, and TLS verification controls above the command box for both
+Proxmox VE and PBS `Host Telemetry Agent` flows, clearing any previously
+generated command when options change so minted token scopes always match the
+selected controls. `InfrastructureInstallerSection.tsx` renders the collapsible
+`Advanced connection and install options` panel before token generation as well.
+Verified by `TestHandleAgentInstallCommand_CustomAgentURLOverride`,
+`TestHandleAgentInstallCommand_RejectsInvalidAgentURLWithoutMintingToken`,
+`NodeModalSetupGuideSection.test.tsx`, `InfrastructureInstallerSection.test.tsx`,
+`useNodeModalState.agentInstall.test.ts`, `settingsArchitecture.test.ts`, and
+`frontend-modern/browser-verification/9734d949f31f8828.json`.

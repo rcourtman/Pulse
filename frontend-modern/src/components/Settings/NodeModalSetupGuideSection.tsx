@@ -6,6 +6,7 @@ import {
 import type { NodeModalState } from '@/components/Settings/useNodeModalState';
 import type { NodeModalNodeType, NodeModalSetupMode } from '@/utils/nodeModalPresentation';
 import { getUnifiedAgentCommandAccessOptionLabel } from '@/utils/unifiedAgentInventoryPresentation';
+import { getPulseBaseUrl } from '@/utils/url';
 
 interface NodeModalSetupGuideSectionProps {
   modalProps: NodeModalProps;
@@ -15,13 +16,15 @@ interface NodeModalSetupGuideSectionProps {
 const getNodeSetupStrategyPresentation = (
   nodeType: NodeModalNodeType,
   setupMode: NodeModalSetupMode,
+  enableCommands = false,
 ): { label: string; detail: string } => {
   const productLabel = nodeType === 'pbs' ? 'Proxmox Backup Server' : 'Proxmox VE';
 
   if (setupMode === 'agent') {
+    const credentialMode = enableCommands ? 'command-capable' : 'monitoring-only';
     return {
       label: 'Host telemetry agent',
-      detail: `Optional full host telemetry: creates a monitoring-only ${productLabel} credential, installs the current Pulse Agent root service, and registers the source automatically.`,
+      detail: `Optional full host telemetry: creates a ${credentialMode} ${productLabel} credential, installs the current Pulse Agent root service, and registers the source automatically.`,
     };
   }
 
@@ -57,7 +60,11 @@ export const NodeModalSetupGuideSection: Component<NodeModalSetupGuideSectionPro
   const setupCommandButtonClass = (className: string) =>
     `${className} disabled:cursor-not-allowed disabled:opacity-50`;
   const setupStrategy = () =>
-    getNodeSetupStrategyPresentation(modalProps.nodeType, state.formData().setupMode);
+    getNodeSetupStrategyPresentation(
+      modalProps.nodeType,
+      state.formData().setupMode,
+      state.agentInstallEnableCommands?.() ?? false,
+    );
   const setupStrategyPanel = () => (
     <div class="rounded-md border border-blue-200 bg-surface px-3 py-2 dark:border-blue-800">
       <div class="text-[10px] font-semibold uppercase tracking-wide text-blue-700 dark:text-blue-300">
@@ -95,6 +102,77 @@ export const NodeModalSetupGuideSection: Component<NodeModalSetupGuideSectionPro
       </button>
     </div>
   );
+
+  const renderAgentPreGenerationControls = (nodeType: 'pve' | 'pbs') => {
+    const urlInputId = `${nodeType}-agent-connection-url`;
+    const commandDescId = `${nodeType}-agent-command-access-description`;
+    const detectedBaseUrl = getPulseBaseUrl();
+    const enableCommandsChecked = () => Boolean(state.agentInstallEnableCommands?.());
+    const agentUrlValue = () => state.agentInstallUrl?.() ?? '';
+
+    return (
+      <div class="space-y-3 rounded-md border border-border bg-surface px-3 py-3">
+        <div class="text-[11px] font-semibold uppercase tracking-wide text-muted">
+          Install options (applied when generating the command)
+        </div>
+
+        <div class="space-y-1">
+          <label class="flex items-start gap-2 text-xs font-medium text-base-content cursor-pointer">
+            <input
+              type="checkbox"
+              checked={enableCommandsChecked()}
+              disabled={state.loadingAgentCommand()}
+              onChange={(event) =>
+                state.setAgentInstallEnableCommands?.(event.currentTarget.checked)
+              }
+              aria-describedby={commandDescId}
+              class="mt-0.5 rounded-sm text-blue-600 focus:ring-blue-500"
+            />
+            <span>{getUnifiedAgentCommandAccessOptionLabel()}</span>
+          </label>
+          <p id={commandDescId} class="ml-6 text-[11px] text-muted">
+            Leave off for monitoring-only telemetry. Turning this on mints a command-capable
+            credential and allows Pulse to run approved commands as root on this host (required for
+            guest Docker discovery and Patrol actions).
+          </p>
+        </div>
+
+        <div class="space-y-1">
+          <label for={urlInputId} class="block text-xs font-medium text-base-content">
+            Connection URL (Agent → Pulse)
+          </label>
+          <input
+            id={urlInputId}
+            type="text"
+            value={agentUrlValue()}
+            disabled={state.loadingAgentCommand()}
+            onInput={(event) => state.setAgentInstallUrl?.(event.currentTarget.value)}
+            placeholder={detectedBaseUrl}
+            class="w-full rounded-md border border-border bg-page px-2.5 py-1.5 text-xs text-base-content shadow-xs focus:border-blue-500 focus:outline-hidden focus:ring-1 focus:ring-blue-500 dark:focus:border-blue-400 dark:focus:ring-blue-800"
+          />
+          <p class="text-[11px] text-muted">
+            Optional override if this node reaches Pulse at a different address (for example{' '}
+            <code class="font-mono">http://192.0.2.50:7655</code>). Leave blank to use the
+            auto-detected URL.
+          </p>
+        </div>
+
+        <label class="flex items-start gap-2 text-xs text-base-content cursor-pointer">
+          <input
+            type="checkbox"
+            checked={state.agentInstallInsecure()}
+            disabled={state.loadingAgentCommand()}
+            onChange={(event) => state.setAgentInstallInsecure(event.currentTarget.checked)}
+            class="mt-0.5 rounded-sm text-blue-600 focus:ring-blue-500"
+          />
+          <span>
+            Skip TLS certificate verification when downloading the installer and connecting the
+            agent to Pulse
+          </span>
+        </label>
+      </div>
+    );
+  };
 
   return (
     <div class="space-y-4">
@@ -139,18 +217,43 @@ export const NodeModalSetupGuideSection: Component<NodeModalSetupGuideSectionPro
                       Adds host-local telemetry such as temperatures, SMART, ZFS, Ceph, and mdadm
                     </li>
                     <li>
-                      Uses a monitoring-only Pulse credential. This setup does not grant remote
-                      command authority
+                      <Show
+                        when={state.agentInstallEnableCommands?.()}
+                        fallback={
+                          <>
+                            Uses a monitoring-only Pulse credential. This setup does not grant
+                            remote command authority
+                          </>
+                        }
+                      >
+                        Mints a command-capable Pulse credential so Pulse can run approved commands
+                        on this host
+                      </Show>
                     </li>
                   </ul>
                   <div class="rounded-md border border-blue-200 bg-blue-50 px-3 py-2 dark:border-blue-800 dark:bg-blue-950/30">
                     <p class="text-xs text-blue-800 dark:text-blue-200">
-                      <strong>Docker inside Proxmox LXCs:</strong> this monitoring-only setup does
-                      not grant the command access guest Docker discovery needs. For that, install
-                      Pulse Agent on the node from Settings → Infrastructure with{' '}
-                      <span class="font-medium">{getUnifiedAgentCommandAccessOptionLabel()}</span>{' '}
-                      selected, only if you accept giving Pulse command access to the node. The
-                      Pulse server must also be opted in: turn on{' '}
+                      <strong>Docker inside Proxmox LXCs:</strong>{' '}
+                      <Show
+                        when={state.agentInstallEnableCommands?.()}
+                        fallback={
+                          <>
+                            monitoring-only setup does not grant the command access guest Docker
+                            discovery needs. Select{' '}
+                            <span class="font-medium">
+                              {getUnifiedAgentCommandAccessOptionLabel()}
+                            </span>{' '}
+                            below before generating the command, only if you accept giving Pulse
+                            command access to the node.
+                          </>
+                        }
+                      >
+                        with{' '}
+                        <span class="font-medium">{getUnifiedAgentCommandAccessOptionLabel()}</span>{' '}
+                        selected, the generated command grants the command access guest Docker
+                        discovery needs.
+                      </Show>{' '}
+                      The Pulse server must also be opted in: turn on{' '}
                       <span class="font-medium">Discover Docker in LXC guests</span> in Settings →
                       System → General (admin only), or set{' '}
                       <code class="break-all rounded-sm bg-blue-100 px-1 font-mono dark:bg-blue-900/25">
@@ -164,6 +267,7 @@ export const NodeModalSetupGuideSection: Component<NodeModalSetupGuideSectionPro
                       guests that already report through their own agent.
                     </p>
                   </div>
+                  {renderAgentPreGenerationControls('pve')}
                   <p class="text-blue-800 dark:text-blue-200 font-medium">
                     Run this command on your Proxmox VE node:
                   </p>
@@ -228,20 +332,6 @@ export const NodeModalSetupGuideSection: Component<NodeModalSetupGuideSectionPro
                   <Show when={state.agentCommandError()}>
                     <p class="text-xs text-red-500">{state.agentCommandError()}</p>
                   </Show>
-                  <label class="flex items-start gap-2 text-xs text-base-content">
-                    <input
-                      type="checkbox"
-                      checked={state.agentInstallInsecure()}
-                      onChange={(event) =>
-                        state.setAgentInstallInsecure(event.currentTarget.checked)
-                      }
-                      class="mt-0.5 rounded-sm text-blue-600 focus:ring-blue-500"
-                    />
-                    <span>
-                      Skip TLS certificate verification when downloading the installer and
-                      connecting the agent to Pulse
-                    </span>
-                  </label>
                   <p class="text-[11px] text-muted italic">
                     Run the command first, then paste the separately revealed token at its silent
                     prompt. The node appears in Pulse after the agent starts.
@@ -649,9 +739,20 @@ export const NodeModalSetupGuideSection: Component<NodeModalSetupGuideSectionPro
                     <li>
                       Host-local telemetry such as temperatures, SMART, services, and local disks
                     </li>
-                    <li>Monitoring-only Pulse credential with no remote command authority</li>
+                    <li>
+                      <Show
+                        when={state.agentInstallEnableCommands?.()}
+                        fallback={
+                          <>Monitoring-only Pulse credential with no remote command authority</>
+                        }
+                      >
+                        Command-capable Pulse credential so Pulse can run approved commands on this
+                        host
+                      </Show>
+                    </li>
                     <li>Automatic reconnection on network issues</li>
                   </ul>
+                  {renderAgentPreGenerationControls('pbs')}
                   <p class="text-blue-800 dark:text-blue-200 text-xs mt-3">
                     Run this command on your PBS node:
                   </p>
@@ -716,20 +817,6 @@ export const NodeModalSetupGuideSection: Component<NodeModalSetupGuideSectionPro
                   <Show when={state.agentCommandError()}>
                     <p class="text-xs text-red-500">{state.agentCommandError()}</p>
                   </Show>
-                  <label class="flex items-start gap-2 text-xs text-base-content">
-                    <input
-                      type="checkbox"
-                      checked={state.agentInstallInsecure()}
-                      onChange={(event) =>
-                        state.setAgentInstallInsecure(event.currentTarget.checked)
-                      }
-                      class="mt-0.5 rounded-sm text-blue-600 focus:ring-blue-500"
-                    />
-                    <span>
-                      Skip TLS certificate verification when downloading the installer and
-                      connecting the agent to Pulse
-                    </span>
-                  </label>
                   <p class="text-xs text-muted">
                     Run the command first, then paste the separately revealed token at its silent
                     prompt. The server appears in Pulse after the agent connects.

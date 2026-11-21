@@ -381,6 +381,7 @@ describe('NodesAPI', () => {
         enableProxmox: true,
         enableCommands: true,
         insecure: true,
+        agentUrl: 'https://pulse.lan:7655',
       });
 
       expect(apiFetchJSON).toHaveBeenCalledWith(
@@ -392,6 +393,7 @@ describe('NodesAPI', () => {
             enableProxmox: true,
             enableCommands: true,
             insecure: true,
+            agentUrl: 'https://pulse.lan:7655',
           }),
         }),
       );

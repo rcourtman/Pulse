@@ -45,10 +45,10 @@ const settingsRuntimeSources = import.meta.glob(['../*.tsx', '../ConnectionEdito
 
 describe('settings architecture guardrails', () => {
   it('keeps the Proxmox installer TLS override explicit and request-bound', () => {
-    expect(nodeModalSetupGuideSectionSource).toContain(
-      'Skip TLS certificate verification when downloading the installer and',
+    const normalizedSource = nodeModalSetupGuideSectionSource.replace(/\s+/g, ' ');
+    expect(normalizedSource).toContain(
+      'Skip TLS certificate verification when downloading the installer and connecting the agent to Pulse',
     );
-    expect(nodeModalSetupGuideSectionSource).toContain('connecting the agent to Pulse');
     expect(nodeModalSetupGuideSectionSource).toContain('state.agentInstallInsecure()');
     expect(nodeModalSetupGuideSectionSource).toContain('state.setAgentInstallInsecure');
     expect(nodeModalStateSource).toContain('insecure: agentInstallInsecure()');
@@ -198,12 +198,16 @@ describe('settings architecture guardrails', () => {
   });
 
   it('keeps the Proxmox agent install request command-free and its setup token off the clipboard', () => {
-    // An agent installed from the node editor must not get remote command
-    // execution, and the clipboard carries only the credential-free command;
-    // the one-time setup token is shown separately.
+    // An agent installed from the node editor defaults to monitoring-only
+    // (command authority is explicit opt-in before minting), and the clipboard
+    // carries only the credential-free command; the one-time setup token is
+    // shown separately.
     expect(nodeModalStateSource).toContain('copyToClipboard(data.command)');
     expect(nodeModalStateSource).toContain('showSetupToken(data)');
-    expect(nodeModalStateSource).toContain('enableCommands: false');
+    expect(nodeModalStateSource).toContain(
+      'const [agentInstallEnableCommands, setAgentInstallEnableCommandsRaw] = createSignal(false)',
+    );
+    expect(nodeModalStateSource).toContain('enableCommands: agentInstallEnableCommands()');
   });
 
   it('keeps Ollama credentials in the provider editor with write-only saved state', () => {

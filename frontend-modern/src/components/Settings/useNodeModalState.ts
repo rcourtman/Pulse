@@ -48,7 +48,29 @@ export const useNodeModalState = (props: NodeModalProps) => {
   const [agentInstallCommand, setAgentInstallCommand] = createSignal('');
   const [loadingAgentCommand, setLoadingAgentCommand] = createSignal(false);
   const [agentCommandError, setAgentCommandError] = createSignal<string | null>(null);
-  const [agentInstallInsecure, setAgentInstallInsecure] = createSignal(false);
+  const [agentInstallInsecure, setAgentInstallInsecureRaw] = createSignal(false);
+  const [agentInstallEnableCommands, setAgentInstallEnableCommandsRaw] = createSignal(false);
+  const [agentInstallUrl, setAgentInstallUrlRaw] = createSignal('');
+
+  const invalidateGeneratedAgentCommand = () => {
+    setAgentInstallCommand('');
+    setAgentCommandError(null);
+  };
+
+  const setAgentInstallInsecure = (value: boolean) => {
+    setAgentInstallInsecureRaw(value);
+    invalidateGeneratedAgentCommand();
+  };
+
+  const setAgentInstallEnableCommands = (value: boolean) => {
+    setAgentInstallEnableCommandsRaw(value);
+    invalidateGeneratedAgentCommand();
+  };
+
+  const setAgentInstallUrl = (value: string) => {
+    setAgentInstallUrlRaw(value);
+    invalidateGeneratedAgentCommand();
+  };
 
   const isAdvancedSetupMode = () => formData().setupMode === 'manual';
   const showTemperatureMonitoringSection = () =>
@@ -94,11 +116,13 @@ export const useNodeModalState = (props: NodeModalProps) => {
     try {
       setLoadingAgentCommand(true);
       setAgentCommandError(null);
+      const trimmedAgentUrl = agentInstallUrl().trim();
       const data = await NodesAPI.getAgentInstallCommand({
         type,
         enableProxmox: true,
-        enableCommands: false,
+        enableCommands: agentInstallEnableCommands(),
         insecure: agentInstallInsecure(),
+        ...(trimmedAgentUrl ? { agentUrl: trimmedAgentUrl } : {}),
       });
       if (!bootstrapActive(generation)) return;
       setAgentInstallCommand(data.command);
@@ -703,7 +727,9 @@ export const useNodeModalState = (props: NodeModalProps) => {
   return {
     agentCommandError,
     agentInstallCommand,
+    agentInstallEnableCommands,
     agentInstallInsecure,
+    agentInstallUrl,
     copyCommand,
     copyProxmoxAgentInstallCommand,
     copyQuickSetupCommand,
@@ -720,7 +746,9 @@ export const useNodeModalState = (props: NodeModalProps) => {
     quickSetupExpiryLabel,
     quickSetupCommandReady,
     quickSetupTokenHint,
+    setAgentInstallEnableCommands,
     setAgentInstallInsecure,
+    setAgentInstallUrl,
     showTemperatureMonitoringSection,
     temperatureMonitoringEnabledValue,
     testResult,
