@@ -291,6 +291,13 @@ export function useOrganizationSharingPanelState(props: OrganizationSharingPanel
     }
   };
 
+  const restartSharingRead = () => {
+    // Only replace the current reader's pending GETs, never a sharing change.
+    if (!loading() || !readController || !selectionIsCurrent() || saving()) return false;
+    void loadSharingData();
+    return true;
+  };
+
   const changeSharing = async (
     change: (options: OrganizationAccessRequestOptions) => Promise<unknown>,
     successMessage: string,
@@ -530,6 +537,7 @@ export function useOrganizationSharingPanelState(props: OrganizationSharingPanel
     resourceName,
     resourceType,
     resourceTypeError,
+    restartSharingRead,
     saving,
     selectedQuickPick,
     selectedResource,

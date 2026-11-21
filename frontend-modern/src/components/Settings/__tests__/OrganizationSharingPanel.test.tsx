@@ -299,6 +299,32 @@ describe('OrganizationSharingPanel', () => {
     });
   });
 
+  it('does not use an old restart control to begin a read for a different selection', async () => {
+    const oldRead = deferred<typeof baseOrg>();
+    orgGetMock.mockReturnValueOnce(oldRead.promise).mockResolvedValue(targetOrg);
+    renderPanel();
+    const restart = screen.getByRole('button', { name: 'Restart sharing check' });
+    expect(restart).toBeEnabled();
+
+    // Selection has changed but the switch event has not refreshed the panel.
+    getOrgIDMock.mockReturnValue(targetOrg.id);
+    fireEvent.click(restart);
+    expect(orgGetMock).toHaveBeenCalledTimes(1);
+    expect(orgGetMock.mock.calls[0][1].signal.aborted).toBe(false);
+
+    emit('org_switched');
+    expect(orgGetMock.mock.calls[0][1].signal.aborted).toBe(true);
+    expect(orgGetMock).toHaveBeenLastCalledWith(
+      targetOrg.id,
+      expect.objectContaining({ expectedOrgID: targetOrg.id, retry: false }),
+    );
+    oldRead.resolve(baseOrg);
+    const saved = await screen.findByRole('group', { name: 'Saved shares', busy: false });
+    expect(saved).toHaveTextContent('Sharing for Organization B (org-b)');
+    expect(saved).not.toHaveTextContent('Sharing for Organization A');
+    expect(orgGetMock).toHaveBeenCalledTimes(2);
+  });
+
   it('derives quick-pick options from unified resources', async () => {
     renderPanel();
 
