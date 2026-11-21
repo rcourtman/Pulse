@@ -21,6 +21,7 @@ import {
   API_TOKEN_DOCKER_MANAGE_PRESET_DESCRIPTION,
   API_TOKEN_DOCKER_REPORT_PRESET_LABEL,
   API_TOKEN_DOCKER_REPORT_PRESET_DESCRIPTION,
+  getAPITokenDockerPodmanUsageCountLabel,
 } from '@/utils/apiTokenPresentation';
 import { API_TOKEN_SCOPES_DOC_URL as SHIPPED_API_TOKEN_SCOPES_DOC_URL } from '@/utils/docsLinks';
 import { getPreferredInfrastructureDisplayName } from '@/utils/resourceIdentity';
@@ -49,6 +50,33 @@ export interface APITokenUsageEntry {
   count: number;
   items: { id: string; label: string }[];
 }
+
+/** The existing resource inventory is evidence of use, not a complete client list. */
+export const formatAPITokenUsagePreview = (
+  dockerUsage: APITokenUsageEntry | undefined,
+  agentUsage: APITokenUsageEntry | undefined,
+): string[] => {
+  const preview = ({ items }: APITokenUsageEntry) => {
+    const limit = 5;
+    const names = items
+      .slice(0, limit)
+      .map((item) => item.label)
+      .join(', ');
+    const extra = items.length - limit;
+    return extra > 0 ? `${names}, +${extra} more` : names;
+  };
+  const groups: string[] = [];
+  if (dockerUsage) {
+    groups.push(
+      `${getAPITokenDockerPodmanUsageCountLabel(dockerUsage.count)}: ${preview(dockerUsage)}`,
+    );
+  }
+  if (agentUsage) {
+    const label = agentUsage.count === 1 ? 'agent' : `${agentUsage.count} agents`;
+    groups.push(`${label}: ${preview(agentUsage)}`);
+  }
+  return groups;
+};
 
 type ScopeGroup = (typeof API_SCOPE_OPTIONS)[number]['group'];
 type ScopeOption = (typeof API_SCOPE_OPTIONS)[number];

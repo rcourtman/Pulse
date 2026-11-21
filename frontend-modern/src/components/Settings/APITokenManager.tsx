@@ -1,4 +1,14 @@
-import { Component, For, Show, createEffect, createSignal, lazy, on, onCleanup } from 'solid-js';
+import {
+  Component,
+  For,
+  Show,
+  createEffect,
+  createMemo,
+  createSignal,
+  lazy,
+  on,
+  onCleanup,
+} from 'solid-js';
 import { Card } from '@/components/shared/Card';
 import { Button } from '@/components/shared/Button';
 import { ExternalTextLink } from '@/components/shared/ExternalTextLink';
@@ -17,7 +27,7 @@ import {
 } from '@/utils/apiTokenPresentation';
 import { API_TOKEN_CREATE_ANCHOR } from '@/routing/resourceLinks';
 import { useAPITokenManagerState } from './useAPITokenManagerState';
-import { getAPITokenIdentityLabel } from './apiTokenManagerModel';
+import { formatAPITokenUsagePreview, getAPITokenIdentityLabel } from './apiTokenManagerModel';
 import type { APITokenRecord } from '@/types/api';
 import { useRelativeTimeNow } from '@/utils/relativeTimeClock';
 
@@ -102,6 +112,16 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
     wildcardCount,
     presetMatchesSelection,
   } = useAPITokenManagerState(props);
+
+  const revokeUsage = createMemo(() => {
+    const token = tokenToRevoke();
+    return token
+      ? formatAPITokenUsagePreview(
+          dockerTokenUsage().get(token.id),
+          agentTokenUsage().get(token.id),
+        )
+      : [];
+  });
 
   const clearDialogs = () => {
     clearEditErrors();
@@ -1016,6 +1036,7 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
         <APITokenManagerDialogs
           tokenToEdit={tokenToEdit}
           tokenToRevoke={tokenToRevoke}
+          revokeUsage={revokeUsage()}
           tokenToRename={tokenToRename}
           renameInput={renameInput}
           editScopes={editScopes}
