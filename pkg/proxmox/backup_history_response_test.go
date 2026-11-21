@@ -43,7 +43,14 @@ func TestBackupHistoryRejectsUnverifiedTaskInventory(t *testing.T) {
 		{"missing-upid", `{"data":[{"type":"vzdump","starttime":1700000000}]}`, false},
 		{"blank-upid", `{"data":[{"upid":" ","type":"vzdump","starttime":1700000000}]}`, false},
 		{"duplicate-upid-field", `{"data":[{"upid":"first",` + acceptedHistoryRow[1:] + `]}`, false},
+		{"escaped-duplicate-upid-field", `{"data":[{"\u0075pid":"first",` + acceptedHistoryRow[1:] + `]}`, false},
+		{"duplicate-metadata", `{"data":[{"future":{},"future":[],` + acceptedHistoryRow[1:] + `]}`, false},
 		{"case-status-field", `{"data":[{"Status":"running",` + acceptedHistoryRow[1:] + `]}`, false},
+		{"folded-status-field", `{"data":[{"\u017ftatus":"running",` + acceptedHistoryRow[1:] + `]}`, false},
+		{"null-user", `{"data":[{"user":null,` + acceptedHistoryRow[1:] + `]}`, false},
+		{"quoted-pid", `{"data":[{"pid":"22",` + acceptedHistoryRow[1:] + `]}`, false},
+		{"fractional-pid", `{"data":[{"pid":22.0,` + acceptedHistoryRow[1:] + `]}`, false},
+		{"overflowing-pstart", `{"data":[{"pstart":9223372036854775808,` + acceptedHistoryRow[1:] + `]}`, false},
 		{"missing-type", `{"data":[{"upid":"accepted","starttime":1700000000}]}`, false},
 		{"missing-start", `{"data":[{"upid":"accepted","type":"vzdump"}]}`, false},
 		{"null-start", `{"data":[{"upid":"accepted","type":"vzdump","starttime":null}]}`, false},
@@ -208,6 +215,24 @@ func TestBackupHistoryMalformedLaterPageDoesNotQualifyPrefix(t *testing.T) {
 			require.Zero(t, auditReads.Load())
 		})
 	}
+}
+
+func TestBackupHistoryPreservesTaskFields(t *testing.T) {
+	body := `{"data":[
+		{"\u0075pid":"completed","node":"member","pid":123,"pstart":9007199254740993,
+		 "starttime":1700000000,"endtime":1700000060,"type":"vzdump","id":"101",
+		 "user":"fixture@pve","status":"WARNINGS: 1","future":{"items":[null,{"v":"}\"]"}]},"Future":null},
+		{"upid":"live","type":"vzdump","starttime":1700000001,"status":"running"},
+		{"upid":"other","type":"qmigrate","id":"provider-specific","starttime":1700000002}
+	]}`
+	resp := &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(body))}
+	tasks, err := readBackupTaskInventory(resp, "member")
+	require.NoError(t, err)
+	require.Equal(t, []Task{
+		{UPID: "completed", Node: "member", PID: 123, PStart: 9007199254740993, StartTime: 1700000000, EndTime: 1700000060, Type: "vzdump", ID: "101", User: "fixture@pve", Status: "WARNINGS: 1"},
+		{UPID: "live", Node: "member", StartTime: 1700000001, Type: "vzdump", Status: "running"},
+		{UPID: "other", Node: "member", StartTime: 1700000002, Type: "qmigrate", ID: "provider-specific"},
+	}, tasks)
 }
 
 // Native running tasks have no end time and may omit status. A result label
