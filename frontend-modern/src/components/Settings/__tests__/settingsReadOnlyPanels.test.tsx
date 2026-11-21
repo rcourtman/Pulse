@@ -53,6 +53,7 @@ vi.mock('@/utils/apiClient', () => ({
   getOrgID: () => null,
   getApiToken: () => null,
   clearApiToken: vi.fn(),
+  beginCredentialChange: () => ({ isCurrent: () => true, release: () => false }),
   apiFetch: (...args: unknown[]) => apiFetchMock(...args),
   apiFetchJSON: (...args: unknown[]) => apiFetchJSONMock(...args),
 }));
