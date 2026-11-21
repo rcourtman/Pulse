@@ -1036,7 +1036,7 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
                         onInput={(e) => setForm('groupRoleMappings', e.currentTarget.value)}
                         placeholder="admins=admin, ops=operator"
                         textareaBaseClass={controlClass('min-h-[60px]')}
-                        help="Assigns roles after sign-in checks. Use group=roleId; commas or new lines. Names can have spaces."
+                        help="Assigns roles after sign-in checks. Enter group=roleId. Use commas or new lines. Names can have spaces."
                       />
                     </div>
                   </div>
