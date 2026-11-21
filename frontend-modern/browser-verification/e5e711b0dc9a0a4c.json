@@ -1,0 +1,62 @@
+{
+  "version": 1,
+  "base_sha": "6e65bfa1261f6fbced9308418e31813a71d8c1eb",
+  "verified_at": "2026-11-21T08:18:54Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/APITokenManager.tsx",
+    "frontend-modern/src/components/Settings/APITokenManagerDialogs.tsx",
+    "frontend-modern/src/components/Settings/apiTokenManagerModel.ts",
+    "frontend-modern/src/components/Settings/useAPITokenManagerState.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/APITokenManager.tsx": "2171c154ccfd4066160a159909eb302b7b7d7ad02deccd8c14b4d6e00bcb0b65",
+    "frontend-modern/src/components/Settings/APITokenManagerDialogs.tsx": "3e38edce734b290588e3bdf3699bf7882b617c037cbbe38ed8836075895343e6",
+    "frontend-modern/src/components/Settings/apiTokenManagerModel.ts": "8c4cbcd9c8b5c16bba4816a66036b666007111d49ca62b6cd9692e362e8f3991",
+    "frontend-modern/src/components/Settings/useAPITokenManagerState.ts": "f6b0817aad9e54bec5d8f4f63677e7f098e7207d87bd1f65261cd1b0a52ae577"
+  },
+  "routes": [
+    "/settings/security/api"
+  ],
+  "viewports": [
+    {
+      "width": 1680,
+      "height": 960,
+      "browser": "Chromium 141.0.7390.37",
+      "theme": "light"
+    },
+    {
+      "width": 320,
+      "height": 640,
+      "browser": "Chromium 141.0.7390.37",
+      "theme": "dark",
+      "input": "touch"
+    },
+    {
+      "width": 320,
+      "height": 568,
+      "browser": "Chromium 141.0.7390.37",
+      "theme": "dark",
+      "input": "touch"
+    },
+    {
+      "width": 320,
+      "height": 250,
+      "browser": "WebKit 26.0",
+      "theme": "dark",
+      "input": "touch and keyboard"
+    }
+  ],
+  "states": [
+    "Compiled Settings API Access table and phone cards supplied the same synthetic token and unified resource responses before and after.",
+    "Same-name tokens with distinct masked hints: matched agent and Podman observations, and an unmatched sibling with the original warning alone.",
+    "Bounded six-agent preview with long names on a narrow phone; read-only inventory stays unchanged.",
+    "Very short WebKit viewport preserves the target, permanent warning and both actions at rest. The added tail is reachable in the existing focusable details region."
+  ],
+  "interactions": [
+    "From the exact token action, keyboard and touch open the same confirmation and default to Cancel. Cancel writes nothing and returns to the original token action.",
+    "Positive past-use observations supplement the accessible warning. No attribution to the same-name sibling, no assertion of zero clients, and no additional token or resource reads.",
+    "Explicit confirmation sends one synthetic DELETE for the selected ID and leaves the sibling. No external calls or real credentials. The read-only row controls remain disabled.",
+    "Playwright 1.56.1 passed 692 assertions. Inspected all 18 full-viewport captures in nine matched pairs."
+  ]
+}

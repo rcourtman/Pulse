@@ -904,11 +904,24 @@ describe('APITokenManager', () => {
     expect(within(row).queryByText(/container runtime/i)).not.toBeInTheDocument();
     expect(within(row).getByText('Agent reporting')).toBeInTheDocument();
 
+    // No match for this ID is not evidence that the token has no clients.
+    const unmatched = getTokenTableRow('Unused token');
+    fireEvent.click(within(unmatched).getByRole('button', { name: /^Revoke / }));
+    const unmatchedDialog = await screen.findByRole('dialog', { name: /Unused token/ });
+    expect(unmatchedDialog).toHaveAccessibleDescription(
+      'Revocation is permanent. Agents, scripts, and integrations using it need a replacement token to authenticate.',
+    );
+    expect(unmatchedDialog).not.toHaveTextContent(/Docker Edge|Edge Agent|Previously seen/);
+    fireEvent.click(within(unmatchedDialog).getByRole('button', { name: 'Cancel' }));
+
     fireEvent.click(within(row).getByRole('button', { name: /^Revoke / }));
 
-    // Confirm modal opens — click "Revoke token" to actually trigger the delete.
-    const confirmBtn = await screen.findByRole('button', { name: 'Revoke token' });
-    fireEvent.click(confirmBtn);
+    const confirmation = await screen.findByRole('dialog', { name: /Runtime token/ });
+    expect(confirmation).toHaveAccessibleDescription(
+      /Revocation is permanent.*Previously seen using this token.*Docker \/ Podman runtime: Docker Edge.*agent: Edge Agent.*Other clients may also use it/,
+    );
+    expect(deleteTokenMock).not.toHaveBeenCalled();
+    fireEvent.click(within(confirmation).getByRole('button', { name: 'Revoke token' }));
 
     await waitFor(() => {
       expect(deleteTokenMock).toHaveBeenCalledWith(

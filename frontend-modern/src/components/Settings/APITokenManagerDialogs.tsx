@@ -8,6 +8,7 @@ import { getAPITokenHint, getAPITokenIdentityLabel } from './apiTokenManagerMode
 interface APITokenManagerDialogsProps {
   tokenToEdit: Accessor<APITokenRecord | null>;
   tokenToRevoke: Accessor<APITokenRecord | null>;
+  revokeUsage: string[];
   tokenToRename: Accessor<APITokenRecord | null>;
   renameInput: Accessor<string>;
   editScopes: Accessor<string[]>;
@@ -213,13 +214,14 @@ export const APITokenManagerDialogs: Component<APITokenManagerDialogsProps> = (p
     <Show keyed when={props.tokenToRevoke()}>
       {(token) => {
         const warningId = createUniqueId();
+        const usageId = createUniqueId();
         return (
           <Dialog
             isOpen={true}
             onClose={props.onCancelRevoke}
             panelClass="max-w-md"
             ariaLabel={`Revoke API token for ${getAPITokenIdentityLabel(token)}`}
-            ariaDescribedBy={warningId}
+            ariaDescribedBy={props.revokeUsage.length > 0 ? `${warningId} ${usageId}` : warningId}
           >
             <div
               role="region"
@@ -243,6 +245,21 @@ export const APITokenManagerDialogs: Component<APITokenManagerDialogsProps> = (p
                 Revocation is permanent. Agents, scripts, and integrations using it need a
                 replacement token to authenticate.
               </p>
+              <Show when={props.revokeUsage.length > 0}>
+                <div id={usageId} class="mt-2 space-y-1 text-xs text-muted wrap-anywhere">
+                  <p class="font-semibold text-base-content">Previously seen using this token</p>
+                  <ul class="list-disc pl-4">
+                    <For each={props.revokeUsage}>
+                      {(group) => (
+                        <li>
+                          <bdi>{group}</bdi>
+                        </li>
+                      )}
+                    </For>
+                  </ul>
+                  <p>Other clients may also use it.</p>
+                </div>
+              </Show>
             </div>
             <div class="flex shrink-0 flex-wrap justify-end gap-3 px-4 pt-2 pb-3 sm:px-6 sm:pt-4 sm:pb-6">
               <button

@@ -24,7 +24,6 @@ import { dismissTokenReveal, showTokenReveal, useTokenRevealState } from '@/stor
 import type { Resource } from '@/types/resource';
 import { formatRelativeTime } from '@/utils/format';
 import {
-  getAPITokenDockerPodmanUsageCountLabel,
   getAPITokenGenerateErrorMessage,
   getAPITokenRevealSettingsNote,
   getAPITokensLoadErrorMessage,
@@ -44,6 +43,7 @@ import {
   buildDockerTokenUsage,
   countWildcardTokens,
   dockerActionIdForResource,
+  formatAPITokenUsagePreview,
   getAPITokenScopePresets,
   getAPITokenDialogName,
   getAPITokenHint,
@@ -535,34 +535,11 @@ export const useAPITokenManagerState = (props: APITokenManagerProps) => {
 
     const affectedRuntimeIds = dockerUsage ? dockerUsage.items.map((item) => item.id) : [];
     const affectedAgentIds = agentUsage ? agentUsage.items.map((item) => item.id) : [];
-    let revokeMessage: string | undefined;
-    const messageChunks: string[] = [];
-
-    if (dockerUsage) {
-      const preview = dockerUsage.items
-        .slice(0, 5)
-        .map((item) => item.label)
-        .join(', ');
-      const extraCount = dockerUsage.items.length - 5;
-      const summary = extraCount > 0 ? `${preview}, +${extraCount} more` : preview;
-      const label = getAPITokenDockerPodmanUsageCountLabel(dockerUsage.count);
-      messageChunks.push(`${label}: ${summary}`);
-    }
-
-    if (agentUsage) {
-      const preview = agentUsage.items
-        .slice(0, 5)
-        .map((item) => item.label)
-        .join(', ');
-      const extraCount = agentUsage.items.length - 5;
-      const summary = extraCount > 0 ? `${preview}, +${extraCount} more` : preview;
-      const label = agentUsage.count === 1 ? 'agent' : `${agentUsage.count} agents`;
-      messageChunks.push(`${label}: ${summary}`);
-    }
-
-    if (messageChunks.length > 0) {
-      revokeMessage = `Token "${displayName}" was previously used by ${messageChunks.join(' • ')}. Update those agents with a new token.`;
-    }
+    const usage = formatAPITokenUsagePreview(dockerUsage, agentUsage);
+    const revokeMessage =
+      usage.length > 0
+        ? `Token "${displayName}" was previously used by ${usage.join(' • ')}. Update those agents with a new token.`
+        : undefined;
 
     try {
       await SecurityAPI.deleteToken(record.id, mutation.options);

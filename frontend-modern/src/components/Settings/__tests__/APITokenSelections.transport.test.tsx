@@ -328,20 +328,27 @@ describe.each<Layout>(['desktop row', 'compact card'])(
       await openPanel();
       const cancelled = originals[2];
       const selected = originals[1];
+      const permanentWarning =
+        'Revocation is permanent. Agents, scripts, and integrations using it need a replacement token to authenticate.';
       fireEvent.click(controlsFor(layout, cancelled).getByRole('button', { name: /^Revoke / }));
-      const cancelledDialog = await screen.findByRole('dialog', { name: /^Revoke API token / });
+      const cancelledDialog = await screen.findByRole('dialog', {
+        name: `Revoke API token for ${cancelled.name} (${hint(cancelled)})`,
+      });
       expect(cancelledDialog).toHaveAccessibleDescription(
-        'Revocation is permanent. Agents, scripts, and integrations using it need a replacement token to authenticate.',
+        `${permanentWarning} Previously seen using this token agent: agent ${cancelled.suffix} Other clients may also use it.`,
       );
       expect(writes()).toHaveLength(0);
       fireEvent.click(within(cancelledDialog).getByRole('button', { name: 'Cancel' }));
       expect(saved).toEqual(originals);
       fireEvent.click(controlsFor(layout, selected).getByRole('button', { name: /^Revoke / }));
-      const confirmation = within(
-        await screen.findByRole('dialog', { name: /^Revoke API token / }),
+      const confirmation = await screen.findByRole('dialog', {
+        name: `Revoke API token for ${selected.name} (${hint(selected)})`,
+      });
+      expect(confirmation).toHaveAccessibleDescription(
+        `${permanentWarning} Previously seen using this token Docker / Podman runtime: docker-host ${selected.suffix} agent: agent ${selected.suffix} Other clients may also use it.`,
       );
       expect(writes()).toHaveLength(0);
-      fireEvent.click(confirmation.getByRole('button', { name: 'Revoke token' }));
+      fireEvent.click(within(confirmation).getByRole('button', { name: 'Revoke token' }));
       await waitFor(() => expect(containerFor(layout, selected)).toBeUndefined());
       expect(writes()).toHaveLength(1);
       expect(writes()[0][0]).toBe(tokenPath(selected.id));
