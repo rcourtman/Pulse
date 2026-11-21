@@ -1209,6 +1209,9 @@ otherwise keep the mismatch explicit. Do not restart, downgrade or change
 retention, polling or enabled features to manufacture a comparison. A startup
 CPU improvement is not evidence that the resident-memory baseline fell.
 
+If the kernel stopped Pulse, [read the existing kill evidence](#after-a-memory-cgroup-kill)
+instead of taking a new sample.
+
 For a responsive **Linux systemd / Proxmox LXC** install, take this small,
 read-only sample at a normally occurring high point. Run it **inside the Pulse
 container** for LXC, not on the Proxmox host. Substitute the actual service name
@@ -1295,6 +1298,30 @@ Do not post a heap dump, profile, full `/proc` status or process command line:
 they can contain private details. Share only these counters and the relevant
 context after local review; existing screenshots remain useful if collection
 is unsafe.
+
+##### After a memory-cgroup kill
+
+A kernel message that names Pulse and records a memory-cgroup kill confirms
+that Pulse was stopped. A high peak or an `oom` count alone does not. On
+cgroup v2, an increase in `oom_kill` counts processes killed in the group or
+its children, but does not say whether one of them was Pulse.
+
+Keep `memory.current`, `memory.peak` and `memory.max` together for the same
+cgroup and note the peak's observation window. These are cgroup values, not
+Pulse RSS. `max` means no finite limit at that level; a parent can still set
+one. A lower reading after Pulse restarts does not explain the earlier peak
+or establish recovery.
+
+If the startup log for that run already says
+`aligned Go memory limit with cgroup memory limit`, `cgroupLimitBytes` is the
+limit Pulse detected and `goMemLimitBytes` is the Go runtime's soft target.
+That target does not cap process RSS or total container memory. A missing
+line does not prove there was no cap; an explicit `GOMEMLIMIT` takes
+precedence over automatic detection.
+
+Share only the time, running version, scope, counts or byte values, and the
+relevant kernel result with host names and paths removed. Do not restart
+Pulse, change its limit or collect a profile just to fill a gap.
 
 #### Excessive CPU, writes or database growth
 
