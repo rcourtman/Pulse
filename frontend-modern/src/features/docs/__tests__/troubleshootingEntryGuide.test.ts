@@ -235,7 +235,7 @@ describe('troubleshooting workflow entry', () => {
     const sso = workflow(branches, 'SSO or proxy login:');
     const href = '/docs/OIDC#invalid_client-after-saving-an-oidc-provider';
     for (const section of [signIn, sso]) {
-      const link = section.querySelector(`a[data-doc-link][href="${href}"]`)!;
+      const link = section.querySelector<HTMLAnchorElement>(`a[data-doc-link][href="${href}"]`)!;
       expect(link.querySelector('code')?.textContent).toBe('invalid_client');
       expect(prose(link)).toContain('after saving');
     }
