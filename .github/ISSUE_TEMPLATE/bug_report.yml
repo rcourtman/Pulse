@@ -166,13 +166,24 @@ body:
   - type: markdown
     attributes:
       value: |
-        Optional context: open only the section that matches your report. Use existing observations; missing details are valid.
+        Optional: use existing observations.
 
         <details>
         <summary>Notification delivery: Test versus ordinary alerts</summary>
 
         For notification reports, distinguish an already-observed **Test** result from ordinary alert delivery: single, grouped/digest or resolved. Give the destination type (such as email or Telegram), built-in or custom template, original time and redacted error or missing host/resource context where known. A successful Test does not establish ordinary delivery or correct identity.
         Use existing messages and queue details only; blank or "unknown" is valid. Do not send a Test, trigger an alert, retry/replay a queued message, clear the queue or change notification settings just to complete this report. Keep destination addresses, webhook URLs, chat IDs, tokens and full notification settings or payloads private.
+
+        </details>
+
+        <details>
+        <summary>Proxmox backups: what to report</summary>
+
+        Say where the readings disagree: **Backup jobs**, **By date**, **Coverage** or a backup-age alert. Use consistent aliases for the connection, guest and storage location, especially if guest IDs repeat. If you already have them, give the task result and time, the restore point's creation time and the backup age Pulse shows. Use the original time zone.
+
+        If a guest stayed unresponsive after the backup, say what you already saw about thaw, fresh successful writes on every filesystem covered by the backup, and whether the workload responded. An **OK** task does not prove the guest recovered.
+
+        Use existing evidence or write "unknown". Do not repeat a backup, verify or restore a point, run Diagnostics or send guest-agent probes for this report. Do not force writes or reset the guest. Keep full task IDs, private paths, inventories and unredacted errors private.
 
         </details>
 
