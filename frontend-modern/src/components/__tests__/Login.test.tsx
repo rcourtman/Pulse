@@ -176,12 +176,14 @@ describe('Login', () => {
                 {
                   id: 'workforce',
                   name: 'Workforce',
+                  displayName: 'Workforce',
                   type: 'oidc',
                   loginUrl: '/api/oidc/workforce/login',
                 },
                 {
                   id: 'operations',
                   name: 'Operations',
+                  displayName: 'Operations',
                   type: 'saml',
                   loginUrl: '/api/saml/operations/login',
                 },
