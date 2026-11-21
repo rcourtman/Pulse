@@ -136,3 +136,54 @@ it('uses saved issuer summaries to distinguish same-named provider switches', as
   expect(toggles[1]).toHaveAccessibleDescription('https://identity.example.test/recovery');
   expect(writes()).toHaveLength(0);
 });
+
+it.each([
+  {
+    inventoryMarker: undefined,
+    detailMarker: true,
+    description: 'Saved. Blank keeps it.',
+  },
+  {
+    inventoryMarker: true,
+    detailMarker: undefined, // The server omits a false marker.
+    description: 'No saved secret reported.',
+  },
+])(
+  'describes only the current OIDC detail marker ($detailMarker) and omits a blank secret on save',
+  async ({ inventoryMarker, detailMarker, description }) => {
+    const saved = provider('oidc', true);
+    const detailsURL = `${listURL}/${saved.id}`;
+    fetchMock.mockImplementation(async (url, options) => {
+      if (options?.method === 'PUT') return json({ id: saved.id });
+      return url === detailsURL
+        ? json({
+            ...saved,
+            oidcClientSecretSet: detailMarker,
+            oidc: { issuerUrl: saved.oidcIssuerUrl, clientId: 'pulse' },
+          })
+        : json({ providers: [{ ...saved, oidcClientSecretSet: inventoryMarker }] });
+    });
+    render(() => <SSOProvidersPanel currentUser="admin" />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit provider Corporate SSO' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Edit OIDC provider' });
+    const editor = within(dialog);
+    const secret = editor.getByLabelText('Client Secret');
+    expect(secret).toHaveAttribute('type', 'password');
+    expect(secret).toHaveValue('');
+    expect(secret).not.toHaveAttribute('placeholder');
+    expect(secret).toHaveAccessibleDescription(description);
+
+    fireEvent.input(editor.getByLabelText('Display Name (Button)'), {
+      target: { value: 'Continue with Corporate' },
+    });
+    fireEvent.submit(dialog.querySelector('form')!);
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    expect(writes()).toHaveLength(1);
+    const [url, options] = writes()[0];
+    expect(url).toBe(detailsURL);
+    const payload = JSON.parse(String(options?.body));
+    expect(payload).toMatchObject({ displayName: 'Continue with Corporate' });
+    expect(payload.oidc).not.toHaveProperty('clientSecret');
+    expect(payload).not.toHaveProperty('oidcClientSecretSet');
+  },
+);

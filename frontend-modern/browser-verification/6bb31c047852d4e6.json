@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "base_sha": "229985a0d6c23f886151d917d76520288c46f064",
+  "verified_at": "2026-11-21T06:45:47Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/SSOProvidersPanel.tsx",
+    "frontend-modern/src/components/Settings/useSSOProvidersState.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/SSOProvidersPanel.tsx": "960c2363e15d9cfabafc455cd39cd071538f0ce3c6136cc11ca21ea9b8890f3e",
+    "frontend-modern/src/components/Settings/useSSOProvidersState.ts": "5e9e263bb0497aff7d93e5330cab7a97a66101f9711fac80b92cf7e6146a9e9b"
+  },
+  "routes": [
+    "/settings/security-sso"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 320,
+      "height": 720
+    }
+  ],
+  "states": [
+    "Real SSO settings UI on Chromium 141.0.7390.37 and Playwright 1.56.1 with synthetic API responses: delayed matching detail, saved secret reported with inventory marker omitted, and no secret reported despite inventory marker.",
+    "Opened and compared 16 before/after images, including both focused fields after scrolling to them on the dark touch viewport. The empty field now has persistent, matching guidance above it; the registration and access context, redirect and scopes fields, and footer actions keep their positions in the paired states.",
+    "Add OIDC retains its PKCE hint, SAML editing retains its fields, and read-only operators retain the management restriction."
+  ],
+  "interactions": [
+    "274 main assertions and 68 scrolled phone assertions. Open each saved editor, verify the named password field and its description, type a synthetic draft without losing the hint, and check keyboard order, touch focus and the callback copy control.",
+    "Save a display-name-only edit with the password field untouched: the same provider receives one synthetic PUT omitting the blank client secret and the read-only marker. No provider sign-in or live request."
+  ]
+}
