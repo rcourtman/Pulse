@@ -2131,3 +2131,30 @@ hammering rate-limited endpoints.
 the full `internal/notifications` suite (including rehearsal, acknowledgement
 budget, and burst rate-limit tests) verify the schedule, class floor, and header
 propagation.
+
+### Authoritative classification of deterministic configuration and stdlib transport failures (21 November 2026)
+
+Deterministic local configuration and policy rejections — including webhook URL
+validation (`validateWebhookURLWithContext`), dial-time SSRF private/unspecified
+IP blocks and redirect-limit exhaustion (`createSecureWebhookClientWithURLDiagnostics`),
+URL template rendering (`renderWebhookURL`), Telegram `chat_id` validation
+(`extractTelegramChatID`), built-in Telegram tag/budget failures, request
+construction/normalization failures, disabled resolved webhooks, Apprise HTTP
+URL/payload setup errors, and local CLI lookup/permission errors (`exec.ErrNotFound`,
+`syscall.EACCES`) — now declare `NotificationFailureConfiguration` authoritatively
+via `FailfWithClass` / `ClassifyNotificationFailureError` rather than falling into
+`NotificationFailureUnknown`. Both `isRetryableWebhookError` and `NotificationQueue`
+dead-letter them on the first attempt instead of wasting transport and queue retry
+budgets, while DNS resolution failures remain `NotificationFailureConnectivity`
+(retryable) and unconfirmed SMTP DATA acceptance remains `NotificationFailureUnknown`.
+Standard library HTTP/TLS/HTTP2 transport prose (`http: server gave HTTP response
+to HTTPS client`, `http: server closed idle connection`, `http2: client connection
+lost`, `http2: server sent GOAWAY`, `use of closed network connection`, `malformed
+HTTP response`, and `unsupported protocol scheme`) also maps cleanly in
+`ClassifyNotificationFailure`.
+
+`TestDeterministicWebhookAndLocalConfigurationErrorsClassifyAsConfiguration` and
+`TestClassifyNotificationFailure_StdlibHTTPAndTransportErrors` in
+`internal/notifications/failure_class_test.go`, alongside the full
+`internal/notifications` suite, verify these classifications and immediate
+non-retryable stop behavior.

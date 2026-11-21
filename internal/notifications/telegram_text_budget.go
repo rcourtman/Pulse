@@ -2,7 +2,6 @@ package notifications
 
 import (
 	"encoding/json"
-	"fmt"
 	"html"
 	"strings"
 	"unicode/utf16"
@@ -103,7 +102,7 @@ func telegramVisibleUnits(body []byte) (int, error) {
 			return units, nil
 		}
 		if _, rest, found = strings.Cut(tag, ">"); !found {
-			return 0, fmt.Errorf("unterminated built-in Telegram tag")
+			return 0, FailfWithClass(NotificationFailureConfiguration, "unterminated built-in Telegram tag")
 		}
 	}
 }
@@ -168,7 +167,7 @@ func (n *NotificationManager) renderBuiltInTelegram(template string, data Webhoo
 			return nil, err
 		}
 		if fixed >= telegramTextLimit {
-			return nil, fmt.Errorf("built-in Telegram details exceed the text budget")
+			return nil, FailfWithClass(NotificationFailureConfiguration, "built-in Telegram details exceed the text budget")
 		}
 	}
 	data.Message = ellipsizeTelegramText(message, telegramTextLimit-fixed)

@@ -169,7 +169,7 @@ func (n *NotificationManager) prepareEnhancedWebhookExecution(webhook EnhancedWe
 
 	payload, err := n.renderWebhookPayloadJSON(canonical, data, webhookRenderModeSingle, func() ([]byte, error) {
 		if strings.TrimSpace(webhook.PayloadTemplate) == "" {
-			return nil, fmt.Errorf("enhanced webhook requires payload template or known service template")
+			return nil, FailfWithClass(NotificationFailureConfiguration, "enhanced webhook requires payload template or known service template")
 		}
 		return n.generatePayloadFromTemplateWithService(webhook.PayloadTemplate, data, webhook.Service)
 	})
@@ -201,7 +201,7 @@ func (n *NotificationManager) SendEnhancedWebhook(webhook EnhancedWebhookConfig,
 			Str("webhook", webhook.Name).
 			Str("url", RedactWebhookURLSecrets(webhook.URL)).
 			Msg("webhook request dropped due to rate limiting")
-		return fmt.Errorf("rate limit exceeded for webhook %s", webhook.Name)
+		return FailfWithClass(NotificationFailureRateLimited, "rate limit exceeded for webhook %s", webhook.Name)
 	}
 
 	eventID := webhookEventID(alert.ID, "alert")

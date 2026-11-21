@@ -6,9 +6,14 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"net/http"
 	"net/textproto"
+	"os/exec"
+	"syscall"
 	"testing"
 	"time"
+
+	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 )
 
 func TestClassFromHTTPStatus(t *testing.T) {
@@ -350,6 +355,200 @@ func TestProcessNotificationDeadLettersDeterministicFailureImmediately(t *testin
 			}
 			if stats[string(tc.wantStatus)] != 1 {
 				t.Errorf("persisted queue stats = %#v, want one row in %q", stats, tc.wantStatus)
+			}
+		})
+	}
+}
+
+func TestDeterministicWebhookAndLocalConfigurationErrorsClassifyAsConfiguration(t *testing.T) {
+	n := &NotificationManager{}
+
+	t.Run("validateWebhookURL policy blocks are non-retryable configuration", func(t *testing.T) {
+		for _, raw := range []string{
+			"",
+			"ftp://hooks.example.test/notify",
+			"https://user:pass@hooks.example.test/notify",
+			"https://",
+			"http://0.0.0.0/notify",
+			"http://127.0.0.1/notify",
+			"http://169.254.169.254/latest/meta-data",
+			"http://192.168.1.50/notify",
+		} {
+			err := n.ValidateWebhookURL(raw)
+			if err == nil {
+				t.Fatalf("ValidateWebhookURL(%q) = nil, want error", raw)
+			}
+			if got := ClassifyNotificationFailureError(err); got != NotificationFailureConfiguration {
+				t.Errorf("ValidateWebhookURL(%q) class = %q, want %q (err=%v)", raw, got, NotificationFailureConfiguration, err)
+			}
+			if isRetryableWebhookError(err) {
+				t.Errorf("ValidateWebhookURL(%q) should not be retryable (err=%v)", raw, err)
+			}
+		}
+	})
+
+	t.Run("validateWebhookURL DNS lookup error remains retryable connectivity", func(t *testing.T) {
+		dnsMgr := &NotificationManager{
+			resolveWebhookIPs: func(context.Context, string) ([]net.IP, error) {
+				return nil, &net.DNSError{Err: "server misbehaving", Name: "hooks.example.test", IsTemporary: true}
+			},
+		}
+		err := dnsMgr.ValidateWebhookURL("https://hooks.example.test/notify")
+		if err == nil {
+			t.Fatal("expected DNS lookup error")
+		}
+		if got := ClassifyNotificationFailureError(err); got != NotificationFailureConnectivity {
+			t.Errorf("DNS error class = %q, want %q (err=%v)", got, NotificationFailureConnectivity, err)
+		}
+		if !isRetryableWebhookError(err) {
+			t.Errorf("DNS error should remain retryable (err=%v)", err)
+		}
+	})
+
+	t.Run("dial-time SSRF private and unspecified IP blocks are non-retryable configuration", func(t *testing.T) {
+		client := n.createSecureWebhookClient(2 * time.Second)
+		for _, target := range []string{"http://192.168.1.50:8080/hook", "http://0.0.0.0:8080/hook"} {
+			req, err := http.NewRequest(http.MethodPost, target, nil)
+			if err != nil {
+				t.Fatalf("NewRequest(%q): %v", target, err)
+			}
+			_, err = client.Do(req)
+			if err == nil {
+				t.Fatalf("client.Do(%q) = nil, want blocked IP error", target)
+			}
+			if got := ClassifyNotificationFailureError(err); got != NotificationFailureConfiguration {
+				t.Errorf("client.Do(%q) class = %q, want %q (err=%v)", target, got, NotificationFailureConfiguration, err)
+			}
+			if isRetryableWebhookError(err) {
+				t.Errorf("client.Do(%q) should not be retryable (err=%v)", target, err)
+			}
+		}
+	})
+
+	t.Run("same-origin redirect limit exhaustion is non-retryable configuration", func(t *testing.T) {
+		server := newIPv4HTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			http.Redirect(w, r, "/loop", http.StatusFound)
+		}))
+		defer server.Close()
+
+		redirectMgr := &NotificationManager{}
+		if err := redirectMgr.UpdateAllowedPrivateCIDRs("127.0.0.1/32"); err != nil {
+			t.Fatal(err)
+		}
+		client := redirectMgr.createSecureWebhookClient(2 * time.Second)
+		_, err := client.Get(server.URL + "/loop")
+		if err == nil {
+			t.Fatal("expected redirect limit error")
+		}
+		if got := ClassifyNotificationFailureError(err); got != NotificationFailureConfiguration {
+			t.Errorf("redirect limit class = %q, want %q (err=%v)", got, NotificationFailureConfiguration, err)
+		}
+		if isRetryableWebhookError(err) {
+			t.Errorf("redirect limit error should not be retryable (err=%v)", err)
+		}
+	})
+
+	t.Run("renderWebhookURL and extractTelegramChatID errors are non-retryable configuration", func(t *testing.T) {
+		urlCases := []string{
+			"",
+			"{{.Bad",
+			"{{.DoesNotExist}}",
+			"{{if false}}https://hooks.example.test{{end}}",
+			"not-a-url/{{.Node}}",
+		}
+		for _, tmpl := range urlCases {
+			_, err := renderWebhookURL(tmpl, WebhookPayloadData{Node: "pve1"})
+			if err == nil {
+				t.Fatalf("renderWebhookURL(%q) = nil, want error", tmpl)
+			}
+			if got := ClassifyNotificationFailureError(err); got != NotificationFailureConfiguration {
+				t.Errorf("renderWebhookURL(%q) class = %q, want %q (err=%v)", tmpl, got, NotificationFailureConfiguration, err)
+			}
+		}
+
+		chatCases := []string{
+			"https://api.telegram.org/bot123/sendMessage",
+			"https://api.telegram.org/bot123/sendMessage?chat_id=",
+			"https://api.telegram.org/bot123/sendMessage?chat_id=@mychannel",
+			"https://api.telegram.org/bot123/sendMessage?chat_id=-abc",
+		}
+		for _, raw := range chatCases {
+			_, err := extractTelegramChatID(raw)
+			if err == nil {
+				t.Fatalf("extractTelegramChatID(%q) = nil, want error", raw)
+			}
+			if got := ClassifyNotificationFailureError(err); got != NotificationFailureConfiguration {
+				t.Errorf("extractTelegramChatID(%q) class = %q, want %q (err=%v)", raw, got, NotificationFailureConfiguration, err)
+			}
+		}
+	})
+
+	t.Run("disabled resolved webhook, telegram budget tag, and CLI exec errors classify as configuration", func(t *testing.T) {
+		err := n.sendResolvedWebhook(WebhookConfig{Enabled: false}, []*alerts.Alert{{ID: "a1"}}, time.Now())
+		if got := ClassifyNotificationFailureError(err); got != NotificationFailureConfiguration {
+			t.Errorf("disabled webhook class = %q, want %q (err=%v)", got, NotificationFailureConfiguration, err)
+		}
+
+		_, err = telegramVisibleUnits([]byte(`{"text":"<b unterminated"}`))
+		if got := ClassifyNotificationFailureError(err); got != NotificationFailureConfiguration {
+			t.Errorf("unterminated telegram tag class = %q, want %q (err=%v)", got, NotificationFailureConfiguration, err)
+		}
+
+		for _, execErr := range []error{
+			fmt.Errorf("execute apprise CLI: %w", exec.ErrNotFound),
+			fmt.Errorf("execute apprise CLI: %w", syscall.EACCES),
+		} {
+			if got := ClassifyNotificationFailureError(execErr); got != NotificationFailureConfiguration {
+				t.Errorf("exec error %v class = %q, want %q", execErr, got, NotificationFailureConfiguration)
+			}
+		}
+	})
+
+	t.Run("sendWebhookWithRetry stops immediately on SSRF private IP block", func(t *testing.T) {
+		retryMgr := &NotificationManager{
+			webhookRateLimits: make(map[string]*webhookRateLimit),
+		}
+		webhook := EnhancedWebhookConfig{
+			WebhookConfig: WebhookConfig{
+				Name:    "lan-webhook",
+				URL:     "http://192.168.1.50:8080/hook",
+				Enabled: true,
+			},
+			RetryEnabled: true,
+			RetryCount:   3,
+		}
+		err := retryMgr.sendWebhookWithRetry(webhook, []byte(`{"ok":true}`), "evt-1")
+		if err == nil {
+			t.Fatal("expected blocked private IP error")
+		}
+		if got := ClassifyNotificationFailureError(err); got != NotificationFailureConfiguration {
+			t.Errorf("class = %q, want %q (err=%v)", got, NotificationFailureConfiguration, err)
+		}
+		if !errors.Is(err, err) || len(retryMgr.webhookHistory) != 1 || retryMgr.webhookHistory[0].RetryAttempts != 0 {
+			t.Errorf("expected single attempt with 0 retries, history=%+v", retryMgr.webhookHistory)
+		}
+	})
+}
+
+func TestClassifyNotificationFailure_StdlibHTTPAndTransportErrors(t *testing.T) {
+	cases := []struct {
+		name string
+		msg  string
+		want NotificationFailureClass
+	}{
+		{"https to http endpoint", "Post \"https://192.168.1.50:8080/hook\": http: server gave HTTP response to HTTPS client", NotificationFailureTLS},
+		{"idle connection closed", "Post \"https://hooks.example.test\": http: server closed idle connection", NotificationFailureConnectivity},
+		{"http2 connection lost", "Post \"https://hooks.example.test\": http2: client connection lost", NotificationFailureConnectivity},
+		{"http2 goaway", "Post \"https://hooks.example.test\": http2: server sent GOAWAY and closed the session", NotificationFailureConnectivity},
+		{"closed network connection", "read tcp 10.0.0.2:54321->10.0.0.1:443: use of closed network connection", NotificationFailureConnectivity},
+		{"malformed http response", "Post \"http://192.168.1.50:8443/hook\": net/http: malformed HTTP response \"\\x15\\x03\\x01\"", NotificationFailureConnectivity},
+		{"unsupported scheme", "Post \"gopher://hooks.example.test\": unsupported protocol scheme \"gopher\"", NotificationFailureConfiguration},
+		{"legacy private IP block prose", "blocked private IP: 192.168.1.50", NotificationFailureConfiguration},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := ClassifyNotificationFailure(tc.msg); got != tc.want {
+				t.Errorf("ClassifyNotificationFailure(%q) = %q, want %q", tc.msg, got, tc.want)
 			}
 		})
 	}
