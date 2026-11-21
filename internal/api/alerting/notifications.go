@@ -1247,17 +1247,24 @@ func (h *NotificationHandlers) GetNotificationHealth(w http.ResponseWriter, r *h
 	// Unknown saved inventory is not a disabled/empty destination list.
 	emailStatus := map[string]interface{}{"status": "unavailable"}
 	webhookStatus := map[string]interface{}{"status": "unavailable"}
+	appriseStatus := map[string]interface{}{"status": "unavailable"}
 	if !configurationUnavailable {
 		emailCfg := manager.GetEmailConfig()
 		webhooks := manager.GetWebhooks()
+		appriseCfg := notifications.NormalizeAppriseConfig(manager.GetAppriseConfig())
 		emailStatus = map[string]interface{}{"enabled": emailCfg.Enabled, "configured": emailCfg.SMTPHost != ""}
 		webhookStatus = map[string]interface{}{"total": len(webhooks), "enabled": countEnabledWebhooks(webhooks)}
+		appriseStatus = map[string]interface{}{
+			"enabled":    appriseCfg.Enabled,
+			"configured": len(appriseCfg.Targets) > 0 || strings.TrimSpace(appriseCfg.ServerURL) != "",
+		}
 	}
 
 	health := map[string]interface{}{
 		"queue":    queueStats,
 		"email":    emailStatus,
 		"webhooks": webhookStatus,
+		"apprise":  appriseStatus,
 		"encryption": map[string]interface{}{
 			"enabled": monitor.GetConfigPersistence().IsEncryptionEnabled(),
 		},

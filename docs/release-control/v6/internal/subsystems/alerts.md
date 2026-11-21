@@ -5875,3 +5875,16 @@ already-set `alertHygieneDefaultsMigrated: true` marker preserves explicit
 `internal/config/persistence_test.go` verifies all four boundaries (missing
 fields, all-zeroed legacy saves, legacy customized TTLs, and explicitly saved
 disabled settings surviving reload).
+
+### Zero-destination setup guidance on Alerts Overview (21 November 2026)
+
+`OverviewTab` (`frontend-modern/src/features/alerts/OverviewTab.tsx`) reads
+`hasNoEnabledDestinations` from `useNotificationDeliveryHealth` and renders a
+dismissible `AlertNoDestinationsCard` (`AlertNoDestinationsCard.tsx`) with a
+direct link to `/alerts/notifications` when alert delivery is active, saved
+destination inventory is confirmed readable with zero enabled channels, alerts
+are enabled, and neither the delivery-health warning nor the delivery-paused
+card is active.
+
+`OverviewTab.emptystate.test.tsx` verifies showing, dismissing, persistence,
+enabled/unavailable suppression, and non-stacking with `AlertDeliveryPausedCard`.

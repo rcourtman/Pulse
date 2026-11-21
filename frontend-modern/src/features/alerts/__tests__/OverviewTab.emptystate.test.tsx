@@ -9,9 +9,18 @@ vi.mock('@solidjs/router', () => ({
 
 const getConfigMock = vi.hoisted(() => vi.fn());
 const activateMock = vi.hoisted(() => vi.fn());
+const getHealthMock = vi.hoisted(() => vi.fn());
 
 vi.mock('@/api/alerts', () => ({
   AlertsAPI: { getConfig: getConfigMock, activate: activateMock },
+}));
+
+vi.mock('@/api/notifications', () => ({
+  NotificationsAPI: {
+    getHealth: getHealthMock,
+    retryTerminalFailures: vi.fn(),
+    dismissTerminalFailures: vi.fn(),
+  },
 }));
 
 vi.mock('@/stores/notifications', () => ({
@@ -150,5 +159,102 @@ describe('OverviewTab delivery paused banner', () => {
     await Promise.resolve();
     expect(getConfigMock).toHaveBeenCalledTimes(2);
     expect(resume()).toBeEnabled();
+  });
+});
+
+describe('OverviewTab zero-destination setup card', () => {
+  const healthyQueue = {
+    pending: 0,
+    sending: 0,
+    sent: 0,
+    failed: 0,
+    deadLetter: 0,
+    healthy: true,
+    status: 'healthy' as const,
+    attentionRequired: 0,
+    reasonCodes: [],
+    completedRetentionDays: 7,
+    deadLetterRetentionDays: 30,
+    countsAreRetentionBounded: true,
+    retryAttemptsAffectHealth: false,
+    terminalFailuresAffectHealth: true,
+    failureClasses7d: {
+      authentication: 0,
+      rate_limited: 0,
+      connectivity: 0,
+      tls: 0,
+      configuration: 0,
+      rejected: 0,
+      server_error: 0,
+      unknown: 0,
+    },
+    failureClassesAvailable: true,
+    failureClassWindowDays: 7,
+  };
+
+  afterEach(() => {
+    cleanup();
+    localStorage.removeItem('pulseAlertsNoDestinationsDismissed');
+    getHealthMock.mockReset();
+    setOrgID(null);
+    eventBus.emit('org_switched');
+  });
+
+  it('shows a dismissible setup card when delivery is active and zero destinations are enabled', async () => {
+    getConfigMock.mockResolvedValue({ enabled: true, activationState: 'active' });
+    await useAlertsActivation().refreshConfig();
+    getHealthMock.mockResolvedValue({
+      overallHealthy: true,
+      queue: healthyQueue,
+      destinations: { available: true, enabledCount: 0 },
+    });
+
+    render(() => <OverviewTab {...defaultProps()} />);
+
+    expect(await screen.findByText('No notification destinations configured')).toBeInTheDocument();
+    expect(screen.getByText('Set up notifications')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }));
+    expect(screen.queryByText('No notification destinations configured')).not.toBeInTheDocument();
+    expect(localStorage.getItem('pulseAlertsNoDestinationsDismissed')).toBe('true');
+  });
+
+  it('stays hidden when at least one destination is enabled or inventory is unavailable', async () => {
+    getConfigMock.mockResolvedValue({ enabled: true, activationState: 'active' });
+    await useAlertsActivation().refreshConfig();
+
+    for (const destinations of [
+      { available: true, enabledCount: 1 },
+      { available: false, enabledCount: 0 },
+    ]) {
+      getHealthMock.mockResolvedValueOnce({
+        overallHealthy: true,
+        queue: healthyQueue,
+        destinations,
+      });
+
+      const { unmount } = render(() => <OverviewTab {...defaultProps()} />);
+      await Promise.resolve();
+      await Promise.resolve();
+      expect(screen.queryByText('No notification destinations configured')).not.toBeInTheDocument();
+      unmount();
+    }
+  });
+
+  it('does not stack with AlertDeliveryPausedCard when delivery is paused', async () => {
+    getConfigMock.mockResolvedValue({ enabled: true, activationState: 'pending_review' });
+    await useAlertsActivation().refreshConfig();
+    getHealthMock.mockResolvedValue({
+      overallHealthy: true,
+      queue: healthyQueue,
+      destinations: { available: true, enabledCount: 0 },
+    });
+
+    render(() => <OverviewTab {...defaultProps()} />);
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(screen.getByText(/Notification delivery is turned off\./)).toBeInTheDocument();
+    expect(screen.queryByText('No notification destinations configured')).not.toBeInTheDocument();
   });
 });

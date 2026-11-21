@@ -2158,3 +2158,17 @@ HTTP response`, and `unsupported protocol scheme`) also maps cleanly in
 `internal/notifications/failure_class_test.go`, alongside the full
 `internal/notifications` suite, verify these classifications and immediate
 non-retryable stop behavior.
+
+### Apprise destination status in notification health (21 November 2026)
+
+`GET /api/notifications/health` (`internal/api/alerting/notifications.go`) now
+reports `apprise` alongside `email` and `webhooks` (`{"enabled", "configured"}`
+when saved configuration is readable, or `{"status": "unavailable"}` when
+configuration is held unavailable), and `NotificationsAPI.getHealth()`
+normalizes an optional `destinations` summary (`{ available, enabledCount }`)
+only when all three channel statuses are present so unreadable inventory never
+masquerades as an empty setup.
+
+`internal/api/alerting/notifications_health_test.go`,
+`internal/api/alerting/notifications_test.go`, and
+`frontend-modern/src/api/__tests__/notifications.test.ts` verify this boundary.

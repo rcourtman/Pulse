@@ -11725,3 +11725,12 @@ have an unknown link state. A confirmed no-link report suppresses any
 retained speed. When the agent stops reporting, known port readings are
 labelled as last known. The drawer's Details disclosure retains the complete
 interface and address inventory, including virtual interfaces.
+
+### Alerts Overview zero-destination setup card (21 November 2026)
+
+`AlertNoDestinationsCard` in `frontend-modern/src/features/alerts/` uses the
+shared `Card` primitive (`tone="info"`) to inform operators on `OverviewTab`
+when zero notification channels are enabled and alert delivery is active, with
+a direct link to `/alerts/notifications` and a persistent dismiss action.
+`OverviewTab.emptystate.test.tsx` and Playwright desktop/mobile verification
+cover rendering, dismissal, and adjacent alert card states.

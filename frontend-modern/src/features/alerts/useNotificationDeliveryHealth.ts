@@ -75,6 +75,15 @@ export function useNotificationDeliveryHealth(options?: {
       (deliveryHealthUnavailable() || deliveryHealth()?.queue.status === 'degraded'),
   );
 
+  // Only true when the server explicitly returned a readable destination
+  // inventory with zero enabled channels. Unloaded or unavailable inventory
+  // stays false so storage errors never masquerade as an empty setup.
+  const hasNoEnabledDestinations = createMemo(() => {
+    if (!loadedOnce()) return false;
+    const destinations = deliveryHealth()?.destinations;
+    return destinations?.available === true && destinations.enabledCount === 0;
+  });
+
   // Action failure is independent of current queue health. A healthy read is
   // not evidence that a previously rejected action succeeded.
   const [queueActionFeedback, setQueueActionFeedback] = createSignal<string | null>(null);
@@ -171,6 +180,7 @@ export function useNotificationDeliveryHealth(options?: {
     deliveryHealthUnavailable,
     refreshingDeliveryHealth,
     deliveryNeedsAttention,
+    hasNoEnabledDestinations,
     loadDeliveryHealth,
     retryTerminalFailures,
     retryingTerminalFailures,

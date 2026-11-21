@@ -132,9 +132,15 @@ export interface NotificationQueueHealth {
   failureClassWindowDays: number;
 }
 
+export interface NotificationDestinationsHealth {
+  available: boolean;
+  enabledCount: number;
+}
+
 export interface NotificationHealth {
   overallHealthy: boolean;
   queue: NotificationQueueHealth;
+  destinations?: NotificationDestinationsHealth;
 }
 
 export interface NotificationTerminalFailureActionResult {
@@ -454,8 +460,38 @@ export class NotificationsAPI {
         attentionRequired === terminalFailureCount);
     const status = statusIsConsistent ? rawStatus : 'unavailable';
 
+    const hasDestinationInventory =
+      payload.email !== undefined &&
+      payload.webhooks !== undefined &&
+      payload.apprise !== undefined;
+    let destinations: NotificationDestinationsHealth | undefined;
+    if (hasDestinationInventory) {
+      const email = apiRecord(payload.email);
+      const webhooks = apiRecord(payload.webhooks);
+      const apprise = apiRecord(payload.apprise);
+      const anyUnavailable =
+        email.status === 'unavailable' ||
+        webhooks.status === 'unavailable' ||
+        apprise.status === 'unavailable';
+      const webhooksEnabled = nonNegativeCount(webhooks.enabled);
+      if (
+        !anyUnavailable &&
+        typeof email.enabled === 'boolean' &&
+        webhooksEnabled !== undefined &&
+        typeof apprise.enabled === 'boolean'
+      ) {
+        destinations = {
+          available: true,
+          enabledCount: (email.enabled ? 1 : 0) + webhooksEnabled + (apprise.enabled ? 1 : 0),
+        };
+      } else {
+        destinations = { available: false, enabledCount: 0 };
+      }
+    }
+
     return {
       overallHealthy: status === 'healthy' && strictBoolean(payload.overall_healthy),
+      ...(destinations ? { destinations } : {}),
       queue: {
         pending: pending ?? 0,
         sending: sending ?? 0,

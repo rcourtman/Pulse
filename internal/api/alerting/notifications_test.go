@@ -35,6 +35,7 @@ func TestNotificationHealthPendingStorageRemainsUnavailable(t *testing.T) {
 	manager.On("GetTelemetryStats", mock.Anything).Return(notifications.TelemetryStats{}, nil).Once()
 	manager.On("GetEmailConfig").Return(notifications.EmailConfig{}).Once()
 	manager.On("GetWebhooks").Return([]notifications.WebhookConfig{}).Once()
+	manager.On("GetAppriseConfig").Return(notifications.AppriseConfig{}).Once()
 	persistence.On("IsEncryptionEnabled").Return(true).Once()
 	w := httptest.NewRecorder()
 	NewNotificationHandlers(nil, monitor).GetNotificationHealth(w, httptest.NewRequest(http.MethodGet, "/api/notifications/health", nil))
@@ -618,6 +619,11 @@ func TestNotificationHandlers(t *testing.T) {
 		).Once()
 		mockManager.On("GetEmailConfig").Return(notifications.EmailConfig{}).Once()
 		mockManager.On("GetWebhooks").Return([]notifications.WebhookConfig{}).Once()
+		mockManager.On("GetAppriseConfig").Return(notifications.AppriseConfig{
+			Enabled: true,
+			Mode:    notifications.AppriseModeCLI,
+			Targets: []string{"ntfy://ntfy.sh/pulse-test"},
+		}).Once()
 		mockPersistence.On("IsEncryptionEnabled").Return(true).Once()
 
 		req := httptest.NewRequest("GET", "/api/notifications/health", nil)
@@ -630,6 +636,9 @@ func TestNotificationHandlers(t *testing.T) {
 		queue := resp["queue"].(map[string]interface{})
 		assert.Equal(t, float64(1), queue["pending"])
 		assert.Equal(t, true, queue["healthy"])
+		apprise := resp["apprise"].(map[string]interface{})
+		assert.Equal(t, true, apprise["enabled"])
+		assert.Equal(t, true, apprise["configured"])
 	})
 
 	t.Run("GetAppriseConfig", func(t *testing.T) {
@@ -867,6 +876,7 @@ func TestNotificationHandlers(t *testing.T) {
 				).Once()
 				mockManager.On("GetEmailConfig").Return(notifications.EmailConfig{}).Once()
 				mockManager.On("GetWebhooks").Return([]notifications.WebhookConfig{}).Once()
+				mockManager.On("GetAppriseConfig").Return(notifications.AppriseConfig{}).Once()
 				mockPersistence.On("IsEncryptionEnabled").Return(true).Once()
 			}},
 		}

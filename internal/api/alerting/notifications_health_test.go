@@ -35,6 +35,7 @@ func TestGetNotificationHealthReportsRetainedTerminalFailures(t *testing.T) {
 	}, nil).Once()
 	mockManager.On("GetEmailConfig").Return(notifications.EmailConfig{}).Once()
 	mockManager.On("GetWebhooks").Return([]notifications.WebhookConfig{}).Once()
+	mockManager.On("GetAppriseConfig").Return(notifications.AppriseConfig{}).Once()
 	mockPersistence.On("IsEncryptionEnabled").Return(true).Once()
 
 	rec := httptest.NewRecorder()
@@ -105,6 +106,7 @@ func TestGetNotificationHealthFailsClosedWhenQueueStatsAreUnavailable(t *testing
 	).Once()
 	mockManager.On("GetEmailConfig").Return(notifications.EmailConfig{}).Once()
 	mockManager.On("GetWebhooks").Return([]notifications.WebhookConfig{}).Once()
+	mockManager.On("GetAppriseConfig").Return(notifications.AppriseConfig{}).Once()
 	mockPersistence.On("IsEncryptionEnabled").Return(false).Once()
 
 	rec := httptest.NewRecorder()

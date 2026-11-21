@@ -7,12 +7,16 @@ import type { Alert } from '@/types/api';
 
 import { AlertDeliveryHealthCard } from './AlertDeliveryHealthCard';
 import { AlertDeliveryPausedCard } from './AlertDeliveryPausedCard';
+import { AlertNoDestinationsCard } from './AlertNoDestinationsCard';
 import { AlertOverviewActiveAlertsSection } from './AlertOverviewActiveAlertsSection';
 import type { Override } from './types';
 import { useAlertDeliveryPausedReason } from './useAlertDeliveryPausedReason';
 import { useAlertIncidentTimelineState } from './useAlertIncidentTimelineState';
 import { useAlertOverviewState } from './useAlertOverviewState';
 import { useNotificationDeliveryHealth } from './useNotificationDeliveryHealth';
+import { createLocalStorageBooleanSignal } from '@/utils/localStorage';
+
+const ALERTS_NO_DESTINATIONS_DISMISSED_KEY = 'pulseAlertsNoDestinationsDismissed';
 
 export function OverviewTab(props: {
   overrides: Override[];
@@ -43,6 +47,10 @@ export function OverviewTab(props: {
   // Delivery being off applies to every alert at once, so it is said once here
   // rather than on each card.
   const deliveryPaused = useAlertDeliveryPausedReason();
+  const [noDestinationsDismissed, setNoDestinationsDismissed] = createLocalStorageBooleanSignal(
+    ALERTS_NO_DESTINATIONS_DISMISSED_KEY,
+    false,
+  );
   onMount(() => {
     void deliveryHealthState.loadDeliveryHealth();
   });
@@ -115,6 +123,20 @@ export function OverviewTab(props: {
             onActivate={() => void deliveryPaused.activate()}
           />
         )}
+      </Show>
+      <Show
+        when={
+          deliveryHealthState.hasNoEnabledDestinations() &&
+          !deliveryHealthState.deliveryNeedsAttention() &&
+          deliveryPaused.pausedReason() === null &&
+          !props.alertsDisabled() &&
+          !noDestinationsDismissed()
+        }
+      >
+        <AlertNoDestinationsCard
+          setupHref="/alerts/notifications"
+          onDismiss={() => setNoDestinationsDismissed(true)}
+        />
       </Show>
       <AlertOverviewActiveAlertsSection
         state={overviewState}
