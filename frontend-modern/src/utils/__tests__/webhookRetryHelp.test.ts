@@ -42,13 +42,16 @@ describe('webhook retry help', () => {
     expect(retryText()).toContain(
       'up to three queue delivery attempts, including the initial attempt',
     );
-    expect(retryText()).toContain(
-      'not a promise to retry every failure or a guarantee of delivery',
+    expect(retryText()).toContain('Some failures stop sooner.');
+    expect(retryText()).toContain('There is no separate HTTP retry loop or guarantee of delivery.');
+  });
+
+  it('explains that a bounded provider cooldown changes the wait, not the budget', () => {
+    const retry = retryText();
+    expect(retry).toContain(
+      'For HTTP 429 or 503, a usable Retry-After can extend the usual wait up to 15 minutes.',
     );
-    expect(retryText()).toContain('queued webhook sender has no extra transport retry loop');
-    expect(retryText()).toContain(
-      "do not assume three extra HTTP retries or a provider's Retry-After wait on this path",
-    );
+    expect(retry).toContain('It cannot shorten the wait or add attempts.');
   });
 
   it('separates terminal request failures, temporary HTTP exceptions and TLS repair', () => {
