@@ -268,13 +268,18 @@ func backupJobWindowPoints(points []recovery.RecoveryPoint, start, now time.Time
 		if !started && !finished {
 			continue
 		}
-		// The mapper bounds the native blank-status observation without
-		// changing the stored outcome. Infer Running only on this copy, as
-		// of the request clock: the coverage cutoff may be an older poll.
-		if point.Outcome == recovery.OutcomeUnknown && point.CompletedAt == nil &&
-			point.Evidence != nil && point.Evidence.ValidUntil != nil && !now.After(*point.Evidence.ValidUntil) &&
-			point.Details["type"] == "vzdump" && point.Details["status"] == "" {
-			point.Outcome = recovery.OutcomeRunning
+		if point.CompletedAt == nil {
+			// The coverage cutoff can be an older poll. Qualify open tasks
+			// against the request clock before summarizing that history window.
+			switch {
+			case point.Outcome == recovery.OutcomeRunning && !recovery.BackupTaskRunningAt(point, now):
+				point.Outcome = recovery.OutcomeUnknown
+			case point.Outcome == recovery.OutcomeUnknown && point.Details["type"] == "vzdump" && point.Details["status"] == "" &&
+				point.Evidence != nil && point.Evidence.ValidUntil != nil && !now.After(*point.Evidence.ValidUntil):
+				// Only native blank-status observations with an explicit deadline
+				// support this inference. Leave the stored verdict untouched.
+				point.Outcome = recovery.OutcomeRunning
+			}
 		}
 		out = append(out, point)
 	}
