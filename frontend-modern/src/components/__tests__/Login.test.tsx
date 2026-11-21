@@ -153,6 +153,69 @@ describe('Login', () => {
     expect(onLogin).not.toHaveBeenCalled();
   });
 
+  describe('single sign-on return with listed providers', () => {
+    afterEach(() => window.history.pushState(null, '', '/'));
+
+    it.each([
+      ['oidc', 'audience_mismatch', 'Check the client ID against your provider application.', true],
+      ['saml', 'invalid_state', 'The sign-in attempt expired. Please try again.', false],
+    ])(
+      'shows the %s return reason before any retry choice (%s)',
+      async (protocol, code, reason, hideLocalLogin) => {
+        const params = new URLSearchParams({ [protocol]: 'error', [`${protocol}_error`]: code });
+        window.history.pushState(null, '', `/login?${params}`);
+        const onLogin = vi.fn();
+        render(() => (
+          <Login
+            onLogin={onLogin}
+            securityStatus={{
+              hasAuthentication: true,
+              requiresAuth: true,
+              hideLocalLogin,
+              ssoProviders: [
+                {
+                  id: 'workforce',
+                  name: 'Workforce',
+                  type: 'oidc',
+                  loginUrl: '/api/oidc/workforce/login',
+                },
+                {
+                  id: 'operations',
+                  name: 'Operations',
+                  type: 'saml',
+                  loginUrl: '/api/saml/operations/login',
+                },
+              ],
+            }}
+          />
+        ));
+
+        const alert = await screen.findByRole('alert');
+        expect(alert).toHaveTextContent(reason);
+        const providers = screen.getAllByRole('button', { name: /^Continue with / });
+        expect(providers.map((button) => button.textContent?.trim())).toEqual([
+          'Continue with Workforce',
+          'Continue with Operations',
+        ]);
+        for (const provider of providers) {
+          expect(
+            alert.compareDocumentPosition(provider) & Node.DOCUMENT_POSITION_FOLLOWING,
+          ).toBeTruthy();
+          expect(provider).toBeEnabled();
+        }
+        const localSubmit = screen.queryByRole('button', { name: 'Sign in to Pulse' });
+        if (hideLocalLogin) {
+          expect(localSubmit).not.toBeInTheDocument();
+        } else {
+          expect(localSubmit).toBeVisible();
+        }
+        expect(screen.getByRole('link', { name: 'Can’t sign in?' })).toBeVisible();
+        expect(mockFetch).not.toHaveBeenCalled();
+        expect(onLogin).not.toHaveBeenCalled();
+      },
+    );
+  });
+
   describe('single sign-on return without listed providers', () => {
     afterEach(() => window.history.pushState(null, '', '/'));
 

@@ -1,0 +1,35 @@
+{
+  "version": 1,
+  "base_sha": "845705d343d80cbb1738c3862e98a48353f52fd8",
+  "verified_at": "2026-11-21T04:50:22Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Login.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Login.tsx": "1bd857247467298f52f3f5f49cfc4812e5dcf46bcd4a389faf4a324d64f437dd"
+  },
+  "routes": [
+    "/login",
+    "/"
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 800
+    },
+    {
+      "width": 320,
+      "height": 620
+    }
+  ],
+  "states": [
+    "Real app with a delayed synthetic security-status read, an OIDC return with five providers and local sign-in hidden, and a SAML return with providers and local sign-in allowed. Playwright 1.56.1, Chromium 141 light and touch WebKit 26 dark.",
+    "Eight before/after pairs were opened and inspected. At 320 × 620 the OIDC reason is fully in view before the provider list, with the same four complete provider choices at entry. The SAML case keeps both choices and brings the first local field into view. Help and the existing lower form remain intact.",
+    "Ordinary entry and unlisted-provider returns have unchanged geometry. The original reason remains visible during bootstrap; there is no automatic sign-in or retry."
+  ],
+  "interactions": [
+    "169 parent and 177 candidate browser assertions with matched fixtures. Tab and Enter or tap use the same first listed provider destination, intercepted by an inert local response; no IdP traffic.",
+    "Keyboard order of the provider buttons, local form and Help is unchanged. The local form stays hidden when configured and Help keeps the same link. Only the existing return query keys are consumed."
+  ]
+}
