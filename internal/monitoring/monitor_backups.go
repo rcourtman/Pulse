@@ -2424,10 +2424,7 @@ func runningPBSTaskMatchesBackup(tasks []pbs.RunningDataTask, backup models.PBSB
 
 func (m *Monitor) buildPBSBackupCache(instanceName string) map[pbsBackupGroupKey]cachedPBSGroup {
 	cache := make(map[pbsBackupGroupKey]cachedPBSGroup)
-	for _, backup := range m.state.GetPBSBackups() {
-		if backup.Instance != instanceName {
-			continue
-		}
+	for _, backup := range m.state.GetPBSBackupsForInstance(instanceName) {
 		key := pbsBackupGroupKey{
 			datastore:  backup.Datastore,
 			namespace:  normalizePBSNamespacePath(backup.Namespace),
