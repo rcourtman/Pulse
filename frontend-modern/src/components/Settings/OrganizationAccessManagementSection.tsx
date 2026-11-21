@@ -21,7 +21,8 @@ export const OrganizationAccessManagementSection: Component<
 > = (props) => {
   const effectID = `member-effect-${createUniqueId()}`;
   const memberAction = createMemo(() => {
-    if (props.state.org()?.id === DEFAULT_ORG_SCOPE) {
+    const org = props.state.org();
+    if (org?.id === DEFAULT_ORG_SCOPE) {
       return {
         name: 'Add member',
         heading: 'Add Member',
@@ -30,18 +31,33 @@ export const OrganizationAccessManagementSection: Component<
           'Adding grants access immediately. Viewer is the organization role. The user’s instance roles determine permissions.',
       };
     }
+    const readerIsOwner = !!org?.ownerUserId && props.currentUser === org.ownerUserId;
+    const targetIsOwner = props.state.inviteDraftIsOwner();
+    const member = props.state.inviteDraftMember();
     if (props.state.inviteRole() === 'owner') {
       return {
         name: 'Review ownership transfer',
         heading: 'Transfer Ownership',
         submit: 'Review transfer',
-        effect:
-          props.currentUser === props.state.org()?.ownerUserId
-            ? 'Choose another existing member. You’ll review the transfer before it’s saved.'
-            : 'Only the current owner can transfer ownership.',
+        effect: !readerIsOwner
+          ? 'Only the current owner can transfer ownership.'
+          : targetIsOwner
+            ? 'This member is already the owner. Enter another existing member’s user ID.'
+            : 'Choose another existing member. You’ll review the transfer before it’s saved.',
+        blocked: !readerIsOwner || targetIsOwner || !member,
       };
     }
-    const member = props.state.inviteDraftMember();
+    if (targetIsOwner) {
+      return {
+        name: 'Current owner',
+        heading: 'Current Owner',
+        submit: 'Update role',
+        effect: readerIsOwner
+          ? 'To change your role, transfer ownership to another existing member.'
+          : 'Only the current owner can transfer ownership.',
+        blocked: true,
+      };
+    }
     if (member) {
       const savedRole = ORGANIZATION_MEMBER_ROLE_OPTIONS.find(
         (option) => option.value === member.role,
@@ -144,11 +160,7 @@ export const OrganizationAccessManagementSection: Component<
                   variant="primary"
                   size="settingsAction"
                   class="w-full sm:w-auto"
-                  disabled={
-                    !props.state.canChangeAccess() ||
-                    (props.state.inviteRole() === 'owner' &&
-                      currentOrg().ownerUserId !== props.currentUser)
-                  }
+                  disabled={!props.state.canChangeAccess() || memberAction().blocked}
                 >
                   {props.state.saving() ? 'Saving...' : memberAction().submit}
                 </Button>

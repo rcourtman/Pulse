@@ -131,6 +131,14 @@ function roleFor(userId: string) {
   // every select's accessible name across the whole rendered member grid.
   return screen.getByLabelText(`Role for ${userId}`, { selector: 'select' });
 }
+function memberRow(userId: string) {
+  return within(screen.getByText(userId, { exact: true }).closest('tr')!);
+}
+function expectSavedOwnerRole(userId: string) {
+  const row = memberRow(userId);
+  expect(row.getByText('owner', { exact: true })).toBeVisible();
+  expect(row.queryByRole('combobox')).toBeNull();
+}
 function chooseOwnership(origin: 'row' | 'form', userId: string) {
   if (origin === 'row') {
     fireEvent.change(roleFor(userId), { target: { value: 'owner' } });
@@ -149,8 +157,7 @@ function ownershipDialog() {
 }
 function expectSavedOwnership(selected: string) {
   expect(ownerID).toBe(selected);
-  expect(roleFor(selected)).toHaveValue('owner');
-  expect(roleFor(selected)).toBeDisabled();
+  expectSavedOwnerRole(selected);
   expect(roleFor(owner)).toHaveValue('admin');
   expect(members.filter((member) => ![owner, selected].includes(member.userId))).toEqual(
     originalMembers.filter((member) => ![owner, selected].includes(member.userId)),
@@ -196,20 +203,22 @@ function expectWrite(path: string, method: string, body?: unknown) {
 }
 async function expectSavedMembers() {
   await waitFor(() => {
-    for (const member of members) expect(roleFor(member.userId)).toHaveValue(member.role);
+    for (const member of members) {
+      if (member.userId === ownerID) expectSavedOwnerRole(ownerID);
+      else expect(roleFor(member.userId)).toHaveValue(member.role);
+    }
   });
-  expect(screen.getAllByRole('combobox', { name: /^Role for / })).toHaveLength(members.length);
+  expect(screen.getAllByRole('combobox', { name: /^Role for / })).toHaveLength(members.length - 1);
 }
 async function openPanel() {
   render(() => <OrganizationAccessPanel currentUser={owner} />);
   await expectSavedMembers();
   for (const member of members) {
-    const row = roleFor(member.userId).closest('tr');
-    expect(row).not.toBeNull();
-    expect(within(row!).getByText(member.userId, { exact: true })).toBeVisible();
+    const row = memberRow(member.userId);
+    expect(row.getByText(member.userId, { exact: true })).toBeVisible();
     if (member.userId !== owner)
       expect(
-        within(row!).getByRole('button', { name: `Remove ${member.userId} from organization` }),
+        row.getByRole('button', { name: `Remove ${member.userId} from organization` }),
       ).toBeEnabled();
   }
   for (const invitation of pending) expect(pendingGroup(invitation.userId)).toBeInTheDocument();
@@ -229,7 +238,7 @@ async function openOwnershipPanel() {
   expect(await screen.findByLabelText(`Role for ${people[1]}`, { selector: 'select' })).toHaveValue(
     'viewer',
   );
-  expect(roleFor(owner)).toHaveValue('owner');
+  expectSavedOwnerRole(owner);
   expect(orgReads()).toHaveLength(1);
   expect(writes()).toHaveLength(0);
 }
@@ -532,7 +541,7 @@ describe('ownership capability boundary through the rendered consent and real tr
       await settle();
       expect(screen.queryByRole('alert')).toBeNull();
       expect(screen.queryByRole('dialog')).toBeNull();
-      expect(roleFor(people[1])).toHaveValue('owner');
+      expectSavedOwnerRole(people[1]);
       expect(roleFor(owner)).toHaveValue('admin');
       expect(screen.getByRole('textbox', { name: 'Member user ID' })).toHaveValue(replacement);
       expect(screen.getByRole('combobox', { name: 'Member role' })).toHaveValue('editor');
@@ -882,8 +891,8 @@ describe('Incomplete organization invitations', () => {
       expect(screen.getByRole('combobox', { name: 'Member role' })).toBeDisabled();
       expect(within(inviteForm).getByRole('button', { name: 'Invite' })).toBeDisabled();
       for (const member of members) {
-        expect(roleFor(member.userId)).toBeDisabled();
         if (member.userId !== owner) {
+          expect(roleFor(member.userId)).toBeDisabled();
           expect(
             screen.getByRole('button', { name: `Remove ${member.userId} from organization` }),
           ).toBeDisabled();

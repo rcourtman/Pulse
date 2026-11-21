@@ -479,11 +479,9 @@ describe('OrganizationAccessPanel', () => {
       })),
     });
     render(() => <OrganizationAccessPanel currentUser="user-2" />);
-    const ownerRole = await screen.findByRole('combobox', {
-      name: 'Role for user-1',
-    });
-    expect(ownerRole).toHaveValue('owner');
-    expect(ownerRole).toBeDisabled();
+    const ownerRow = (await screen.findByText('user-1', { exact: true })).closest('tr')!;
+    expect(within(ownerRow).getByText('owner', { exact: true })).toBeVisible();
+    expect(within(ownerRow).queryByRole('combobox')).not.toBeInTheDocument();
     expect(screen.getByRole('combobox', { name: 'Role for user-2' })).not.toHaveTextContent(
       'Owner',
     );

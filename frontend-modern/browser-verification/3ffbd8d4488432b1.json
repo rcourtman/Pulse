@@ -1,0 +1,46 @@
+{
+  "version": 1,
+  "base_sha": "4ab19d46a7279aaa1c088d1cc6cd19ed832b5c1b",
+  "verified_at": "2026-11-21T02:46:30Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/OrganizationAccessManagementSection.tsx",
+    "frontend-modern/src/components/Settings/OrganizationAccessMembersSection.tsx",
+    "frontend-modern/src/components/Settings/useOrganizationAccessPanelState.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/OrganizationAccessManagementSection.tsx": "8661b399b30bd1d86919062e92aa0f35f6a0d746f51c859bbd11f7a5a6b89d36",
+    "frontend-modern/src/components/Settings/OrganizationAccessMembersSection.tsx": "4fae788632794131542557c70fddc3774abc848cedc5295b4d41bf2521361a89",
+    "frontend-modern/src/components/Settings/useOrganizationAccessPanelState.ts": "a79739cc2d75766041b9a997d409c7ca6491e6c42addcac46f13855c0b58771a"
+  },
+  "routes": [
+    "/settings/organization/access"
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 840,
+      "theme": "light",
+      "browser": "Chromium 141.0.7390.37"
+    },
+    {
+      "width": 320,
+      "height": 760,
+      "theme": "dark",
+      "browser": "WebKit 26.0"
+    }
+  ],
+  "states": [
+    "Named organization with a fixed saved Owner role alongside editable member roles",
+    "Direct edit of the current owner and ineligible self and unknown-member transfer drafts",
+    "Deliberate confirmation for another existing member and saved readback viewed as the former owner"
+  ],
+  "interactions": [
+    "Keep the target and role editable without offering a direct change to the current owner",
+    "Enter does not submit a blocked direct role edit; correct a transfer draft without re-entering the role",
+    "Cancel a row-initiated review with Escape on desktop or Cancel by touch with no write",
+    "Review and confirm from the form with keyboard or touch; assert one correctly scoped request then read saved roles",
+    "Keep other member actions and the invitation flow available after the transfer"
+  ],
+  "evidence_summary": "Playwright 1.56.1 on the existing Settings route and real client with synthetic responses. 152 candidate assertions, twelve matched desktop/narrow before and after pairs opened and inspected."
+}

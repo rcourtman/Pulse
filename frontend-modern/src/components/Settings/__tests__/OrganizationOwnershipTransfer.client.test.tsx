@@ -69,6 +69,13 @@ const dialog = () => screen.getByRole('dialog', { name: 'Transfer organization o
 const confirmTransfer = () =>
   fireEvent.click(within(dialog()).getByRole('button', { name: 'Transfer ownership' }));
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
+const ownerRow = (userId: string) =>
+  within(screen.getByText(userId, { exact: true }).closest('tr')!);
+const expectSavedOwner = (userId: string) => {
+  const row = ownerRow(userId);
+  expect(row.getByText('owner', { exact: true })).toBeVisible();
+  expect(row.queryByRole('combobox')).not.toBeInTheDocument();
+};
 
 beforeEach(() => {
   Object.values(mocks).forEach((mock) => mock.mockReset());
@@ -124,6 +131,60 @@ afterEach(() => {
 });
 
 describe('ownership transfer through the real organization client', () => {
+  it.each(['owner', 'admin'] as const)(
+    'shows the fixed owner role to an %s and rejects an ordinary edit from the member form',
+    async (reader) => {
+      const user = 'owner-a';
+      const nextOwner = 'member-b';
+      if (reader === 'admin') owner = nextOwner;
+      openPanel(user);
+      const input = await screen.findByRole('textbox', { name: 'Member user ID' });
+      expectSavedOwner(owner);
+      expect(ownerRow(owner).queryByRole('button', { name: /Remove/ })).not.toBeInTheDocument();
+
+      fireEvent.input(input, { target: { value: `  ${owner}  ` } });
+      const form = screen.getByRole('form', { name: 'Current owner' });
+      const submit = within(form).getByRole('button', { name: 'Update role' });
+      expect(submit).toBeDisabled();
+      expect(input).toBeEnabled();
+      expect(input).toHaveAccessibleDescription(
+        reader === 'owner'
+          ? 'To change your role, transfer ownership to another existing member.'
+          : 'Only the current owner can transfer ownership.',
+      );
+      fireEvent.submit(form);
+      await settle();
+      expect(writes()).toHaveLength(0);
+      expect(mocks.success).not.toHaveBeenCalled();
+
+      // Editing the draft leaves other members actionable.
+      fireEvent.input(input, { target: { value: reader === 'owner' ? nextOwner : user } });
+      expect(screen.getByRole('button', { name: 'Update role' })).toBeEnabled();
+    },
+  );
+
+  it('offers review only for another existing member and keeps the transfer draft editable', async () => {
+    openPanel();
+    const input = await screen.findByRole('textbox', { name: 'Member user ID' });
+    const role = screen.getByRole('combobox', { name: 'Member role' });
+    fireEvent.change(role, { target: { value: 'owner' } });
+    const review = screen.getByRole('button', { name: 'Review transfer' });
+    expect(review).toBeDisabled();
+    for (const userId of ['owner-a', 'not-a-member']) {
+      fireEvent.input(input, { target: { value: userId } });
+      expect(review).toBeDisabled();
+      expect(review).toHaveAccessibleDescription(/another existing member/);
+      expect(input).toHaveValue(userId);
+    }
+    expect(role).toHaveValue('owner');
+    expect(writes()).toHaveLength(0);
+    fireEvent.input(input, { target: { value: '  member-b  ' } });
+    expect(review).toBeEnabled();
+    fireEvent.click(review);
+    expect(dialog()).toHaveTextContent('member-b');
+    expect(writes()).toHaveLength(0);
+  });
+
   it.each(['row', 'form'] as const)(
     'requires deliberate review from the %s path, then sends one bound write and reads saved roles',
     async (origin) => {
@@ -149,10 +210,7 @@ describe('ownership transfer through the real organization client', () => {
         headers: { 'X-Pulse-Org-ID': 'estate/east', 'X-CSRF-Token': 'synthetic-csrf' },
       });
       expect(init.headers['X-API-Token']).toBeUndefined();
-      await waitFor(() => {
-        expect(screen.getByRole('combobox', { name: 'Role for member-b' })).toHaveValue('owner');
-        expect(screen.getByRole('combobox', { name: 'Role for member-b' })).toBeDisabled();
-      });
+      await waitFor(() => expectSavedOwner('member-b'));
       expect(screen.getByRole('combobox', { name: 'Role for owner-a' })).toHaveValue('admin');
       expect(
         within(screen.getByRole('combobox', { name: 'Member role' })).queryByRole('option', {
@@ -196,8 +254,7 @@ describe('ownership transfer through the real organization client', () => {
       expect(writes()).toHaveLength(1);
       expect(mocks.success).not.toHaveBeenCalled();
       fireEvent.click(screen.getByRole('button', { name: 'Reload access' }));
-      await screen.findByRole('combobox', { name: 'Role for member-b' });
-      expect(screen.getByRole('combobox', { name: 'Role for member-b' })).toHaveValue('owner');
+      await waitFor(() => expectSavedOwner('member-b'));
       expect(writes()).toHaveLength(1);
       if (origin === 'form') {
         expect(screen.getByRole('textbox', { name: 'Member user ID' })).toHaveValue('member-b');

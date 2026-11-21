@@ -193,7 +193,8 @@ async function expectWinningSnapshot(panel: Panel) {
       'editor',
     );
     expect(screen.getByRole('combobox', { name: `Role for ${user}` })).toHaveValue('admin');
-    expect(screen.getByRole('combobox', { name: `Role for ${nextOwner}` })).toHaveValue('owner');
+    expectOverviewMemberRole(nextOwner, 'owner');
+    expect(screen.queryByRole('combobox', { name: `Role for ${nextOwner}` })).toBeNull();
     expect(
       screen.getByRole('group', { name: 'Pending invitation for current-invite@example.test' }),
     ).toBeInTheDocument();

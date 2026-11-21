@@ -617,20 +617,27 @@ confirmed transfer uses the existing session/CSRF/expected-organization transpor
 with cancellation and no automatic retries. Only a member result naming the
 confirmed target with the Owner role is accepted as a confirmed write. A failed,
 unreadable, malformed or mismatched response requires the
-existing explicit saved-access read, never a repeated write. The accepted saved
-Owner remains visible in the disabled selector to non-owner administrators;
-Owner is not offered for other members or new invitations from those readers.
-An already-entered Owner invitation draft remains visible but disabled, labelled
+existing explicit saved-access read, never a repeated write.
+
+In a named organization, the current owner's row shows its saved role as a
+badge, not a role selector: the current owner can only change role through a
+transfer. The member form explains the same restriction when its trimmed user
+ID matches the accepted current owner, keeps the draft editable and cannot
+submit a direct role update. Review transfer is available only to the current
+owner for another accepted member. Ordinary member updates, invitations and
+the default organization's Viewer-only Add Member flow are unchanged.
+An already-entered Owner draft remains visible but disabled, labelled
 **Owner (current owner only)**, after a saved-access read establishes ownership
-was transferred. Submitting that stale draft is disabled, not silently changed
-to a lesser role or replayed.
+was transferred; it is not silently changed to a lesser role or replayed.
 
 `OrganizationAccessPanel.test.tsx` and the real-client
 `OrganizationOwnershipTransfer.client.test.tsx` cover both entry paths,
 confirmation, truthful saved-role readback, context withdrawal and uncertain
-committed writes. Comparable desktop/narrow browser fixtures exercise the actual
-panel, API and client. These establish frontend safeguards, not original-account,
-installed service or server-authorization acceptance.
+committed writes. The real-client suite also checks that a direct owner edit
+sends no request and that correcting a blocked draft restores review.
+Comparable desktop/narrow browser fixtures exercise the actual panel, API and
+client. These establish frontend safeguards, not original-account, installed
+service or server-authorization acceptance.
 
 ### Audit events and signature checks withdraw with the reader
 
