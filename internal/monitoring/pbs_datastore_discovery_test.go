@@ -122,7 +122,7 @@ func TestPBSDatastoreDiscoveryEmptyReconcilesOnlyAcceptedScope(t *testing.T) {
 					t.Error("empty reconciliation crossed scope or guessed a backup request")
 				}
 				f.m.mu.RLock()
-				cacheSize := len(f.m.pbsBackupCacheTime["pbs-main"])
+				cacheSize := len(f.m.pbsBackupCacheReads["pbs-main"])
 				f.m.mu.RUnlock()
 				if cacheSize != 0 {
 					t.Error("confirmed empty scope retained snapshot cache timestamps")

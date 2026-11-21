@@ -725,7 +725,7 @@ func (m *Monitor) pollPBSBackupsAsync(instanceName string, client *pbs.Client, i
 			if status, ok := pbs.HTTPStatus(discoveryErr); ok && (status == 401 || status == 403) {
 				denied = 1
 			}
-			observation, err := buildPBSProtectionProviderObservation(instanceName, 1, 0, 1, denied, time.Now().UTC())
+			observation, err := buildPBSProtectionProviderObservation(instanceName, 1, 0, 1, denied, false, time.Now().UTC())
 			if err != nil {
 				log.Warn().Err(err).Str("instance", instanceName).Msg("Failed to build PBS discovery failure observation")
 				return

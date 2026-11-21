@@ -15,6 +15,7 @@ func buildPBSProtectionProviderObservation(
 	datastoreFetches int,
 	datastoreErrors int,
 	datastoreTerminalFailures int,
+	historyLimited bool,
 	observedAt time.Time,
 ) (recovery.ProtectionProviderObservation, error) {
 	instanceName = strings.TrimSpace(instanceName)
@@ -35,7 +36,7 @@ func buildPBSProtectionProviderObservation(
 	var reason *operationaltrust.EvidenceReason
 
 	switch {
-	case datastoreErrors == 0:
+	case datastoreErrors == 0 && !historyLimited:
 		// A successful empty enumeration is complete evidence that the
 		// connection currently exposes no backup history.
 	case datastoreFetches > 0:

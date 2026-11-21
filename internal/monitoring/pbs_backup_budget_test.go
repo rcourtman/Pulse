@@ -147,8 +147,8 @@ func exercisePBSBudgetAcceptedListings(t *testing.T) {
 					frames := map[string]any{"observed": f.frame(t)}
 					f.m.mu.RLock()
 					cache := make(map[pbsBackupGroupKey]time.Time)
-					for key, at := range f.m.pbsBackupCacheTime["pbs-main"] {
-						cache[key] = at
+					for key, read := range f.m.pbsBackupCacheReads["pbs-main"] {
+						cache[key] = read.at
 					}
 					f.m.mu.RUnlock()
 					if cold {
@@ -157,7 +157,7 @@ func exercisePBSBudgetAcceptedListings(t *testing.T) {
 						// Orphan timestamps alone are not a reusable snapshot cache.
 						f.m.state.UpdatePBSBackups("pbs-main", nil)
 						f.m.mu.Lock()
-						delete(f.m.pbsBackupCacheTime, "pbs-main")
+						delete(f.m.pbsBackupCacheReads, "pbs-main")
 						f.m.mu.Unlock()
 						for key := range cache {
 							cache[key] = time.Time{}
