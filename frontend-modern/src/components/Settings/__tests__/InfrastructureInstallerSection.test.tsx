@@ -142,4 +142,63 @@ describe('InfrastructureInstallerSection', () => {
     expect(stateOverrides.setEnableFailureLogs).toHaveBeenCalledWith(true);
     view.unmount();
   });
+
+  // #1775: operators should be able to set Connection URL (Agent -> Pulse) and
+  // TLS verification before generating the token, not only after minting.
+  it('exposes advanced connection and TLS options before a token is generated', () => {
+    const prevUnlocked = stateOverrides.commandsUnlocked;
+    const prevRequiresToken = stateOverrides.requiresToken;
+    const setCustomAgentUrl = vi.fn();
+    const setInsecureMode = vi.fn();
+    stateOverrides.commandsUnlocked = () => false;
+    stateOverrides.requiresToken = () => true;
+    stateOverrides.agentUrl = () => 'https://pulse.example.local:7655';
+    stateOverrides.selectedAgentUrl = () => 'https://pulse.example.local:7655';
+    stateOverrides.customAgentUrl = () => '';
+    stateOverrides.setCustomAgentUrl = setCustomAgentUrl;
+    stateOverrides.customCaPath = () => '';
+    stateOverrides.setCustomCaPath = vi.fn();
+    stateOverrides.insecureMode = () => false;
+    stateOverrides.setInsecureMode = setInsecureMode;
+    stateOverrides.installProfile = () => 'auto';
+    stateOverrides.getSelectedInstallProfile = () => ({ description: 'Auto-detect' });
+    stateOverrides.handleInstallProfileChange = vi.fn();
+    try {
+      const view = render(() => <InfrastructureInstallerSection />);
+      const toggle = screen.getByRole('button', {
+        name: 'Show advanced connection and install options',
+      });
+      const generateButton = screen.getByRole('button', { name: 'Generate token' });
+      expect(
+        toggle.compareDocumentPosition(generateButton) & Node.DOCUMENT_POSITION_FOLLOWING,
+      ).toBeTruthy();
+
+      fireEvent.click(toggle);
+
+      const urlInput = screen.getByLabelText('Connection URL (Agent → Pulse)');
+      fireEvent.input(urlInput, { target: { value: 'https://10.0.0.5:7655' } });
+      expect(setCustomAgentUrl).toHaveBeenCalledWith('https://10.0.0.5:7655');
+
+      const tlsCheckbox = screen.getByRole('checkbox', {
+        name: /Skip TLS certificate verification/i,
+      });
+      fireEvent.click(tlsCheckbox);
+      expect(setInsecureMode).toHaveBeenCalledWith(true);
+      view.unmount();
+    } finally {
+      stateOverrides.commandsUnlocked = prevUnlocked;
+      stateOverrides.requiresToken = prevRequiresToken;
+      delete stateOverrides.agentUrl;
+      delete stateOverrides.selectedAgentUrl;
+      delete stateOverrides.customAgentUrl;
+      delete stateOverrides.setCustomAgentUrl;
+      delete stateOverrides.customCaPath;
+      delete stateOverrides.setCustomCaPath;
+      delete stateOverrides.insecureMode;
+      delete stateOverrides.setInsecureMode;
+      delete stateOverrides.installProfile;
+      delete stateOverrides.getSelectedInstallProfile;
+      delete stateOverrides.handleInstallProfileChange;
+    }
+  });
 });

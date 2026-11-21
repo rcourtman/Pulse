@@ -287,6 +287,7 @@ export class NodesAPI {
     enableProxmox: boolean;
     enableCommands?: boolean;
     insecure?: boolean;
+    agentUrl?: string;
   }): Promise<AgentInstallCommandResponse> {
     const response = await apiFetchJSON<RawAgentInstallCommandResponse>(
       '/api/agent-install-command',

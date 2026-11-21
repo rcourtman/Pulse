@@ -1,0 +1,49 @@
+{
+  "version": 1,
+  "base_sha": "43c7a01e8870fcc1c985b3a25b937b7328fb0825",
+  "verified_at": "2026-11-21T15:12:56Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/api/nodes.ts",
+    "frontend-modern/src/components/Settings/InfrastructureInstallerSection.tsx",
+    "frontend-modern/src/components/Settings/NodeModalSetupGuideSection.tsx",
+    "frontend-modern/src/components/Settings/useNodeModalState.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/api/nodes.ts": "8df8ac6ae393b30a181f7688cef1a95229edb463cb24f5b88633f2a65f8bb0b8",
+    "frontend-modern/src/components/Settings/InfrastructureInstallerSection.tsx": "26bba55ce0db76133611e6e5d3babda5b37f66144327023125f6c1f91a8f2ab8",
+    "frontend-modern/src/components/Settings/NodeModalSetupGuideSection.tsx": "a58d02008a1c9fcc9172f017394911308afe91b20ee8d0a01c470b8745889c10",
+    "frontend-modern/src/components/Settings/useNodeModalState.ts": "4e023b5218731ebdfd749fdbd569b2e5f46bda73fe5c0067e4f220539b33a1b3"
+  },
+  "routes": [
+    "/settings/infrastructure?add=agent",
+    "/settings/infrastructure?add=pve",
+    "/settings/infrastructure?add=pbs"
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "general Add Pulse Agent pre-token collapsed and expanded Advanced connection and install options (light desktop)",
+    "general Add Pulse Agent post-token command output reflecting pre-selected custom Agent->Pulse URL and TLS override",
+    "Proxmox VE Host Telemetry Agent default monitoring-only state (light desktop, dark desktop, and 390x844 mobile)",
+    "Proxmox VE Host Telemetry Agent opted-in command-capable state with custom Agent->Pulse URL and TLS verification override",
+    "Proxmox VE Host Telemetry Agent invalid custom Agent->Pulse URL inline error state",
+    "Proxmox Backup Server Host Telemetry Agent default monitoring-only pre-generation controls state"
+  ],
+  "interactions": [
+    "verified Show advanced connection and install options appears above Generate token on /settings/infrastructure?add=agent, expanded it before minting, entered https://pulse.lan:7655, checked Skip TLS certificate verification, generated token, dismissed TokenRevealDialog, and confirmed rendered command included custom URL and --insecure",
+    "switched /settings/infrastructure?add=pve to Host Telemetry Agent, verified Allow Pulse to run commands on this host (unchecked), Connection URL (Agent -> Pulse) (empty with auto-detected placeholder), and Skip TLS certificate verification (unchecked) appear above the command copy button",
+    "generated default PVE command and verified POST /api/agent-install-command sent enableCommands=false without agentUrl and omitted --enable-commands",
+    "toggled Allow Pulse to run commands on this host, entered https://10.0.0.5:7655, and checked Skip TLS certificate verification; verified previously generated command cleared immediately on option change, regenerated command, dismissed TokenRevealDialog, and verified POST payload and command included --enable-commands, --url 'https://10.0.0.5:7655', curl -kfsSL, and --insecure",
+    "entered invalid URL ftp://invalid-scheme and verified inline HTTP 400 error rendered cleanly without page errors",
+    "verified PBS Host Telemetry Agent pre-generation controls parity on /settings/infrastructure?add=pbs and inspected rendered pixels across desktop light, desktop dark, and mobile 390x844 with zero horizontal overflow"
+  ]
+}

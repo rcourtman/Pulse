@@ -15048,3 +15048,22 @@ without breaking responses that omit destination inventory.
 `internal/api/alerting/notifications_test.go`,
 `internal/api/alerting/notifications_health_test.go`, and
 `frontend-modern/src/api/__tests__/notifications.test.ts` verify this contract.
+
+### Agent install command optional `agentUrl` override (21 November 2026)
+
+`AgentInstallCommandRequest` (`POST /api/agent-install-command` in
+`internal/api/configapi/config_setup_handlers.go`) and
+`NodesAPI.getAgentInstallCommand` (`frontend-modern/src/api/nodes.ts`) accept an
+optional `agentUrl` override string alongside `enableCommands` (default `false`)
+and `insecure`. Non-empty `agentUrl` values are normalized and restricted to
+`http://` or `https://` URLs with a non-empty hostname and no credentials, query
+parameters, fragments, whitespace, or control characters; rejected values return
+HTTP `400` before minting a token. `NodeModalSetupGuideSection.tsx` and
+`useNodeModalState.ts` invalidate any previously generated Proxmox/PBS agent
+command whenever `enableCommands`, `insecure`, or `agentUrl` changes.
+
+`internal/api/configapi/config_handlers_cluster_additional_test.go`,
+`frontend-modern/src/api/__tests__/nodes.test.ts`,
+`frontend-modern/src/components/Settings/__tests__/NodeModalSetupGuideSection.test.tsx`,
+and `frontend-modern/src/components/Settings/__tests__/useNodeModalState.agentInstall.test.ts`
+verify this contract.

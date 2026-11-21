@@ -20,6 +20,8 @@ const renderSetupGuide = (
   const Harness = () => {
     const [setupMode, setSetupMode] = createSignal<NodeModalSetupMode>('auto');
     const [agentInstallInsecure, setAgentInstallInsecure] = createSignal(false);
+    const [agentInstallEnableCommands, setAgentInstallEnableCommands] = createSignal(false);
+    const [agentInstallUrl, setAgentInstallUrl] = createSignal('');
     const updateField = vi.fn((field: string, value: string | boolean | number) => {
       if (field === 'setupMode') {
         setSetupMode(value as NodeModalSetupMode);
@@ -29,7 +31,9 @@ const renderSetupGuide = (
     const state = {
       agentCommandError: () => null,
       agentInstallCommand: () => '',
+      agentInstallEnableCommands,
       agentInstallInsecure,
+      agentInstallUrl,
       copyCommand,
       copyProxmoxAgentInstallCommand: vi.fn(),
       copyQuickSetupCommand,
@@ -42,7 +46,9 @@ const renderSetupGuide = (
       quickSetupExpiryLabel: () => '',
       quickSetupCommandReady: () => Boolean(options.quickSetupCommandReady),
       quickSetupTokenHint: () => options.quickSetupTokenHint ?? '',
+      setAgentInstallEnableCommands,
       setAgentInstallInsecure,
+      setAgentInstallUrl,
       updateField,
     } as unknown as NodeModalState;
 
@@ -112,10 +118,37 @@ describe('NodeModalSetupGuideSection', () => {
     expect(
       screen.getAllByText(/does not grant remote\s+command authority/i).length,
     ).toBeGreaterThan(0);
+    const commandAccess = screen.getByRole('checkbox', {
+      name: /Allow Pulse to run commands on this host/i,
+    });
+    expect(commandAccess).not.toBeChecked();
+    const connectionUrl = screen.getByLabelText('Connection URL (Agent → Pulse)');
+    expect(connectionUrl).toHaveValue('');
     const tlsOverride = screen.getByRole('checkbox', {
       name: /Skip TLS certificate verification when downloading the installer/i,
     });
     expect(tlsOverride).not.toBeChecked();
+
+    // All three pre-generation controls appear before the command copy button.
+    const copyButton = screen.getByTitle('Copy command');
+    expect(
+      commandAccess.compareDocumentPosition(copyButton) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(
+      connectionUrl.compareDocumentPosition(copyButton) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(
+      tlsOverride.compareDocumentPosition(copyButton) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+
+    fireEvent.input(connectionUrl, { target: { value: 'https://pulse.lan:7655' } });
+    expect(connectionUrl).toHaveValue('https://pulse.lan:7655');
+
+    fireEvent.click(commandAccess);
+    expect(commandAccess).toBeChecked();
+    expect(screen.getByText(/command-capable Proxmox VE credential/i)).toBeInTheDocument();
+    expect(screen.getByText(/Mints a command-capable Pulse credential/i)).toBeInTheDocument();
+
     fireEvent.click(tlsOverride);
     expect(tlsOverride).toBeChecked();
     expect(screen.getByText('Discover Docker in LXC guests')).toBeInTheDocument();
@@ -126,6 +159,39 @@ describe('NodeModalSetupGuideSection', () => {
       screen.getByText('PULSE_PROXMOX_GUEST_DOCKER_INVENTORY_VMIDS=101,102'),
     ).toBeInTheDocument();
     expect(screen.getByText(/bounded/i)).toHaveTextContent(/pct exec/);
+  });
+
+  it('offers the same pre-generation controls on the PBS host telemetry agent flow', () => {
+    renderSetupGuide('pbs');
+
+    fireEvent.click(screen.getByRole('button', { name: /^Host Telemetry Agent$/i }));
+
+    const commandAccess = screen.getByRole('checkbox', {
+      name: /Allow Pulse to run commands on this host/i,
+    });
+    const connectionUrl = screen.getByLabelText('Connection URL (Agent → Pulse)');
+    const tlsOverride = screen.getByRole('checkbox', {
+      name: /Skip TLS certificate verification when downloading the installer/i,
+    });
+    const copyButton = screen.getByTitle('Copy to clipboard');
+
+    expect(commandAccess).not.toBeChecked();
+    expect(tlsOverride).not.toBeChecked();
+    expect(
+      commandAccess.compareDocumentPosition(copyButton) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(
+      connectionUrl.compareDocumentPosition(copyButton) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(
+      tlsOverride.compareDocumentPosition(copyButton) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+
+    fireEvent.click(commandAccess);
+    expect(commandAccess).toBeChecked();
+    expect(
+      screen.getByText(/command-capable Proxmox Backup Server credential/i),
+    ).toBeInTheDocument();
   });
 
   it('labels manual setup as the advanced token escape hatch', () => {

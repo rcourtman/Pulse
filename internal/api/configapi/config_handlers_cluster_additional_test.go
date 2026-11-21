@@ -661,3 +661,77 @@ func TestHandleAgentInstallCommand_NormalizesType(t *testing.T) {
 		t.Fatalf("expected normalized proxmox type in command, got: %s", resp.Command)
 	}
 }
+
+func TestHandleAgentInstallCommand_CustomAgentURLOverride(t *testing.T) {
+	cfg := &config.Config{DataPath: t.TempDir(), AuthUser: "admin", AuthPass: "hashed-password"}
+	handler := newTestConfigHandlers(t, cfg)
+
+	body := []byte(`{"type":"pve","enableCommands":false,"insecure":true,"agentUrl":" https://pulse.internal.lan:7655/pulse/ "}`)
+	req := httptest.NewRequest(http.MethodPost, "/api/agent-install-command", bytes.NewReader(body))
+	req.Host = "127.0.0.1:7655"
+	rec := httptest.NewRecorder()
+	handler.HandleAgentInstallCommand(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status OK, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var resp AgentInstallCommandResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	want := BuildProxmoxAgentInstallCommand(AgentInstallCommandOptions{
+		BaseURL:            "https://pulse.internal.lan:7655/pulse",
+		Token:              resp.Token,
+		InstallType:        "pve",
+		IncludeInstallType: true,
+		EnableCommands:     false,
+		Insecure:           true,
+	})
+	if resp.Command != want {
+		t.Fatalf("command mismatch:\ngot:  %s\nwant: %s", resp.Command, want)
+	}
+	if len(cfg.APITokens) != 1 {
+		t.Fatalf("expected 1 persisted token, got %d", len(cfg.APITokens))
+	}
+	if got := cfg.APITokens[0].Metadata[agentInstallCommandPolicyIntentKey]; got != "disabled" {
+		t.Fatalf("command_policy_intent = %q, want disabled", got)
+	}
+	for _, scope := range cfg.APITokens[0].Scopes {
+		if scope == config.ScopeAgentExec {
+			t.Fatalf("monitoring-only Proxmox token unexpectedly received %q scope", config.ScopeAgentExec)
+		}
+	}
+}
+
+func TestHandleAgentInstallCommand_RejectsInvalidAgentURLWithoutMintingToken(t *testing.T) {
+	cases := []string{
+		`{"type":"pve","agentUrl":"ftp://pulse.lan:7655"}`,
+		`{"type":"pve","agentUrl":"pulse.lan:7655"}`,
+		`{"type":"pve","agentUrl":"https://"}`,
+		`{"type":"pve","agentUrl":"https://:7655"}`,
+		`{"type":"pve","agentUrl":"https://user:pass@pulse.lan:7655"}`,
+		`{"type":"pve","agentUrl":"https://pulse.lan:7655?foo=bar"}`,
+		`{"type":"pve","agentUrl":"https://pulse.lan:7655#frag"}`,
+		`{"type":"pve","agentUrl":"https://pulse.lan:7655;id"}`,
+		`{"type":"pve","agentUrl":"https://pulse.lan:7655\nrm -rf /"}`,
+		`{"type":"pbs","agentUrl":"https://pulse.lan:7655 extra"}`,
+	}
+
+	for _, body := range cases {
+		cfg := &config.Config{DataPath: t.TempDir(), AuthUser: "admin", AuthPass: "hashed-password"}
+		handler := newTestConfigHandlers(t, cfg)
+
+		req := httptest.NewRequest(http.MethodPost, "/api/agent-install-command", strings.NewReader(body))
+		req.Host = "pulse.example.com:7655"
+		rec := httptest.NewRecorder()
+		handler.HandleAgentInstallCommand(rec, req)
+
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("body %s: status = %d, want 400 (%s)", body, rec.Code, rec.Body.String())
+		}
+		if len(cfg.APITokens) != 0 {
+			t.Fatalf("body %s: invalid agentUrl minted %d tokens", body, len(cfg.APITokens))
+		}
+	}
+}
