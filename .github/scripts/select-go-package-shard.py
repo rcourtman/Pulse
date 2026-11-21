@@ -5,7 +5,7 @@ Usage: go list ... | select-go-package-shard.py WEIGHTS COUNT INDEX
 
 The checked-out source supplies the package universe, never the weights file.
 Assign longest measured packages first to the lightest shard, breaking ties by
-package name and shard index. The two CI rest shards can account for work
+package name and shard index. Each CI rest layout can account for work
 already assigned outside this package list. Start selected packages longest
 first, so slow binaries do not wait behind the small-package tail.
 Unlike internal/api's test slices, separate package binaries have no shared
@@ -22,15 +22,15 @@ import sys
 
 
 PACKAGE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._~+/-]*\Z")
-REST_FIXED_SECONDS = "REST_SHARD_FIXED_SECONDS"
+REST_FIXED_COUNTS = {"REST_SHARD_FIXED_SECONDS": 2, "REST_SHARD_FIXED_SECONDS_3": 3}
 
 
 def read_weights(
     path: Path,
-) -> tuple[dict[str, Decimal], Decimal, tuple[Decimal, Decimal]]:
+) -> tuple[dict[str, Decimal], Decimal, dict[int, tuple[Decimal, ...]]]:
     weights: dict[str, Decimal] = {}
     default = Decimal("1")
-    fixed = (Decimal(0), Decimal(0))
+    fixed: dict[int, tuple[Decimal, ...]] = {}
     seen: set[str] = set()
     for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
         if not line.strip() or line.lstrip().startswith("#"):
@@ -40,16 +40,17 @@ def read_weights(
         if name in seen:
             raise ValueError(f"duplicate weight on line {number}: {name}")
         seen.add(name)
-        if name == REST_FIXED_SECONDS:
-            if len(values) != 2:
-                raise ValueError(f"invalid weights line {number}: expected two rest shard estimates")
+        if name in REST_FIXED_COUNTS:
+            count = REST_FIXED_COUNTS[name]
+            if len(values) != count:
+                raise ValueError(f"invalid weights line {number}: expected {count} rest shard estimates")
             try:
-                left, right = map(Decimal, values)
+                estimates = tuple(map(Decimal, values))
             except InvalidOperation:
                 raise ValueError(f"invalid rest shard estimates on line {number}") from None
-            if any(not v.is_finite() or not 0 <= v <= 86400 for v in (left, right)):
+            if any(not v.is_finite() or not 0 <= v <= 86400 for v in estimates):
                 raise ValueError(f"rest shard estimates must be finite and within [0, 86400] on line {number}")
-            fixed = left, right
+            fixed[count] = estimates
             continue
         if len(values) != 1:
             raise ValueError(f"invalid weights line {number}: expected name and seconds")
@@ -70,7 +71,7 @@ def read_weights(
 
 def assign(
     packages: list[str], weights: dict[str, Decimal], default: Decimal, count: int,
-    rest_fixed: tuple[Decimal, Decimal] = (Decimal(0), Decimal(0)),
+    rest_fixed: dict[int, tuple[Decimal, ...]] | None = None,
 ) -> dict[str, int]:
     if count < 1 or len(packages) < count:
         raise ValueError(f"{len(packages)} packages cannot fill {count} shards")
@@ -78,9 +79,10 @@ def assign(
         raise ValueError("duplicate package in source list")
     if any(not PACKAGE.fullmatch(name) for name in packages):
         raise ValueError("invalid package in source list")
-    # The one-shard release queue runs the whole packages itself. Do not apply
-    # a two-shard CI scheduling estimate to that (or any other) shape.
-    loads = list(rest_fixed) if count == 2 else [Decimal(0)] * count
+    # Slice boundaries and their costs depend on the layout. The one-shard
+    # release queue runs the whole packages and has no fixed slice work.
+    estimates = rest_fixed.get(count) if rest_fixed else None
+    loads = list(estimates) if estimates else [Decimal(0)] * count
     assignment: dict[str, int] = {}
     unfilled = set(range(count))
     ordered = sorted(packages, key=lambda name: (-weights.get(name, default), name))

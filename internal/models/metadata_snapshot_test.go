@@ -97,6 +97,121 @@ func TestMetadataSnapshotsParityAndOwnership(t *testing.T) {
 	assertMetadataSnapshotParity(t, s)
 }
 
+func TestPVEBackupCarryForwardReadsKeepOrderedPrimaryRows(t *testing.T) {
+	s := metadataStateFixture()
+	archives := s.PVEBackups.StorageBackups
+	snapshots := s.PVEBackups.GuestSnapshots
+	// A single connection still gets an independent bulk copy.
+	if got := s.GetPVEStorageBackupsForInstance("pve"); !reflect.DeepEqual(got, archives) {
+		t.Fatalf("single-connection archives: got %+v, want %+v", got, archives)
+	}
+	if got := s.GetPVEGuestSnapshotsForInstance("pve"); !reflect.DeepEqual(got, snapshots) {
+		t.Fatalf("single-connection snapshots: got %+v, want %+v", got, snapshots)
+	}
+
+	at := time.Date(2026, 11, 20, 7, 30, 0, 0, time.UTC)
+	wantArchives := []StorageBackup{
+		{ID: "last-local", Instance: "pve", Node: "node-b", StorageNode: "node-a", VMID: 100, Time: at, InProgress: true},
+		{ID: "older-shared", Instance: "pve", Node: "node-b", VMID: 100, Time: at.Add(-time.Hour), Verified: true},
+	}
+	wantSnapshots := []GuestSnapshot{
+		{ID: "last-snapshot", Instance: "pve", Node: "node-b", VMID: 100, Time: at, VMState: true},
+		{ID: "older-snapshot", Instance: "pve", Node: "node-b", VMID: 100, Time: at.Add(-time.Hour), SizeBytes: 2048},
+	}
+	s.PVEBackups.StorageBackups = []StorageBackup{wantArchives[0], {ID: "peer-archive", Instance: "PVE", Node: "node-b", VMID: 100}, wantArchives[1]}
+	s.PVEBackups.GuestSnapshots = []GuestSnapshot{wantSnapshots[0], {ID: "peer-snapshot", Instance: "PVE", Node: "node-b", VMID: 100}, wantSnapshots[1]}
+	s.Backups.PVE = PVEBackups{StorageBackups: archives, GuestSnapshots: snapshots}
+
+	check := func() ([]StorageBackup, []GuestSnapshot) {
+		t.Helper()
+		gotArchives := s.GetPVEStorageBackupsForInstance("pve")
+		gotSnapshots := s.GetPVEGuestSnapshotsForInstance("pve")
+		if !reflect.DeepEqual(gotArchives, wantArchives) || !reflect.DeepEqual(gotSnapshots, wantSnapshots) {
+			t.Fatalf("scoped reads changed order, provenance or content: archives=%+v, snapshots=%+v", gotArchives, gotSnapshots)
+		}
+		return gotArchives, gotSnapshots
+	}
+	gotArchives, gotSnapshots := check()
+	gotArchives[0].StorageNode, gotSnapshots[0].Description = "caller-only", "caller-only"
+	check()
+	if missing := s.GetPVEStorageBackupsForInstance("missing"); missing == nil || len(missing) != 0 {
+		t.Fatalf("missing archive connection should return an empty slice: %#v", missing)
+	}
+	if missing := s.GetPVEGuestSnapshotsForInstance("missing"); missing == nil || len(missing) != 0 {
+		t.Fatalf("missing snapshot connection should return an empty slice: %#v", missing)
+	}
+}
+
+func TestPVEBackupTaskReadKeepsOrderedDetachedRowsForUnreadNodes(t *testing.T) {
+	s := metadataStateFixture()
+	at := time.Date(2026, 11, 21, 6, 0, 0, 0, time.UTC)
+	want := []BackupTask{
+		{ID: "child", Instance: "pve", Node: "node-b", VMID: 100, Status: "error", Error: "synthetic error", StartTime: at, ObservedAt: at},
+		{ID: "parent", Instance: "pve", Node: "node-a", Status: "running", StartTime: at.Add(-time.Minute), ObservedAt: at},
+	}
+	s.PVEBackups.BackupTasks = []BackupTask{
+		want[0],
+		{ID: "peer", Instance: "PVE", Node: "node-b", VMID: 100},
+		{ID: "healthy", Instance: "pve", Node: "node-c", VMID: 100},
+		{ID: "different-node", Instance: "pve", Node: "NODE-A", VMID: 100},
+		want[1],
+	}
+	s.Backups.PVE.BackupTasks = []BackupTask{{ID: "stale-aggregate", Instance: "pve", Node: "node-b"}}
+
+	unread := map[string]struct{}{"node-a": {}, "node-b": {}}
+	got := s.GetPVEBackupTasksForNodes("pve", unread)
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("got %+v, want ordered primary rows %+v", got, want)
+	}
+	got[0].ObservedAt, got[0].Error = time.Time{}, "reader-only"
+	if again := s.GetPVEBackupTasksForNodes("pve", unread); !reflect.DeepEqual(again, want) {
+		t.Fatalf("scoped reader mutated primary task rows: %+v", again)
+	}
+	for _, empty := range [][]BackupTask{
+		s.GetPVEBackupTasksForNodes("pve", nil),
+		s.GetPVEBackupTasksForNodes("missing", unread),
+	} {
+		if empty == nil || len(empty) != 0 {
+			t.Fatalf("unmatched scope should return an empty slice: %#v", empty)
+		}
+	}
+}
+
+func TestPBSBackupCarryForwardReadsKeepOrderedDetachedPrimaryRows(t *testing.T) {
+	s := metadataStateFixture()
+	got := s.GetPBSBackupsForInstance("pbs")
+	if want := s.GetPBSBackups(); !reflect.DeepEqual(got, want) {
+		t.Fatalf("single-connection rows: got %+v, want %+v", got, want)
+	}
+	s.PBSBackups = append(s.PBSBackups,
+		PBSBackup{ID: "peer", Instance: "PBS", Namespace: "team", VMID: "100"},
+		PBSBackup{ID: "older", Instance: "pbs", Namespace: "team", VMID: "100", VerificationRaw: "ok", CarriedOver: true},
+		PBSBackup{ID: "empty-name", Instance: ""},
+	)
+	s.Backups.PBS = []PBSBackup{{ID: "stale-aggregate", Instance: "pbs"}}
+	before := s.GetPBSBackups()
+	for _, instance := range []string{"pbs", "PBS", "", "missing"} {
+		want := []PBSBackup{}
+		for _, row := range before {
+			if row.Instance == instance {
+				want = append(want, row)
+			}
+		}
+		got := s.GetPBSBackupsForInstance(instance)
+		if !reflect.DeepEqual(got, want) {
+			t.Fatalf("%q: got %+v, want ordered primary rows %+v", instance, got, want)
+		}
+	}
+
+	got = s.GetPBSBackupsForInstance("pbs")
+	got[0].Files[0] = "reader-only"
+	got[0].VerificationRaw.(map[string]interface{})["state"] = "reader-only"
+	got[1] = PBSBackup{}
+	if after := s.GetPBSBackups(); !reflect.DeepEqual(after, before) {
+		t.Fatal("scoped caller changed stored backup evidence")
+	}
+}
+
 func TestMetadataSnapshotsConcurrentTransactions(t *testing.T) {
 	s := metadataStateFixture()
 	var workers sync.WaitGroup

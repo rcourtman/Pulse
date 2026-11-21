@@ -183,6 +183,15 @@ The existing Reload access action is available even if a sibling read is
 still pending; it retires that attempt and reads only in the current session
 and selection.
 
+The accepted Organization Access summary describes invitation lists that were
+read successfully and found empty. An unavailable list is not empty; the
+other list can still show its saved rows or its own empty result. The
+manager-only result has the same visibility as Pending Invitations. After the
+last invitation is revoked or declined, the saved reread, not the mutation
+reply or the disappearance of a row, supplies the result. The compact
+summary uses the gap below the selected identity, leaving saved access
+controls in view. Reads, mutation gates and focus targets are unchanged.
+
 If a saved-access check has not returned a response or a warning yet,
 Organization Access shows the selected organization and offers Restart access
 check. This includes stalls during the explicit check after an unconfirmed
@@ -526,6 +535,26 @@ failures, fresh scoped data versus a failed selected read, native controls, no
 mutation or CSRF preparation, and explicit recovery. Desktop and narrow
 Settings browser proof uses safe response fixtures, not live client recovery.
 
+### Sharing readers can restart a stalled saved-state check
+
+While the selected organization's sharing read is pending, **Restart sharing
+check** names that organization outside the busy saved-results group. It
+cancels the previous read and starts the same five scoped GETs. Only the
+replacement can publish data or end loading. The pending view uses a compact
+loading indicator. It does not show an apparent Create Share form before the read
+establishes what the user can do. Restart is also available during the read-only
+check after an unconfirmed change. Neither Restart nor Reload replays a sharing
+write. Same-reader drafts and the existing complete-read requirement for writes
+are unchanged. A stale control cannot restart against a different selection.
+
+Explicit activation keeps focus in the named sharing region without removing
+the restart button from the Tab order while the read is pending. After a
+result, Tab reaches the existing controls. Initial checks and late responses
+do not take outside focus. The registered Sharing panel and keyboard transport
+tests verify scoped cancellation, late completion, unchanged write count and
+focus. Matched desktop and narrow Settings browser proof uses the production
+consumer and synthetic reads, not installed or original-account recovery.
+
 ### Invitation decisions identify the exact organization
 
 Your Invitations shows each organization's display name **and** ID beside its
@@ -588,20 +617,47 @@ confirmed transfer uses the existing session/CSRF/expected-organization transpor
 with cancellation and no automatic retries. Only a member result naming the
 confirmed target with the Owner role is accepted as a confirmed write. A failed,
 unreadable, malformed or mismatched response requires the
-existing explicit saved-access read, never a repeated write. The accepted saved
-Owner remains visible in the disabled selector to non-owner administrators;
-Owner is not offered for other members or new invitations from those readers.
-An already-entered Owner invitation draft remains visible but disabled, labelled
+existing explicit saved-access read, never a repeated write.
+
+In a named organization, the current owner's row shows its saved role as a
+badge, not a role selector: the current owner can only change role through a
+transfer. The member form explains the same restriction when its trimmed user
+ID matches the accepted current owner, keeps the draft editable and cannot
+submit a direct role update. Review transfer is available only to the current
+owner for another accepted member. Ordinary member updates, invitations and
+the default organization's Viewer-only Add Member flow are unchanged.
+An already-entered Owner draft remains visible but disabled, labelled
 **Owner (current owner only)**, after a saved-access read establishes ownership
-was transferred. Submitting that stale draft is disabled, not silently changed
-to a lesser role or replayed.
+was transferred; it is not silently changed to a lesser role or replayed.
 
 `OrganizationAccessPanel.test.tsx` and the real-client
 `OrganizationOwnershipTransfer.client.test.tsx` cover both entry paths,
 confirmation, truthful saved-role readback, context withdrawal and uncertain
-committed writes. Comparable desktop/narrow browser fixtures exercise the actual
-panel, API and client. These establish frontend safeguards, not original-account,
-installed service or server-authorization acceptance.
+committed writes. The real-client suite also checks that a direct owner edit
+sends no request and that correcting a blocked draft restores review.
+Comparable desktop/narrow browser fixtures exercise the actual panel, API and
+client. These establish frontend safeguards, not original-account, installed
+service or server-authorization acceptance.
+
+### Pending invitation roles are distinct from new invites and member roles
+
+In a named organization, an exact trimmed, case-sensitive user ID in the
+member draft matches a known pending invitation after saved owner and member
+checks. The form shows **Update Invitation**, the last read role and the
+pending acceptance status without changing the draft's selected role. It
+explains that a recipient who already accepted will instead have their member
+role changed immediately. The user ID, role selection and submit button all
+expose this distinction to assistive technology.
+
+Submitting still uses the existing session-bound, single-attempt member
+write and saved access reread. An invitation result means the invitation is
+saved and pending, not that access was granted or that a notice was sent.
+An existing member result keeps its distinct role-update message. The
+default organization's direct grant, ownership review, pending-row revoke
+actions and read-failure pauses are unchanged.
+`OrganizationAccessPanel.test.tsx` and
+`OrganizationAccessSelections.transport.test.tsx` exercise the saved/draft
+distinction and exact write/readback with unchanged sibling access.
 
 ### Audit events and signature checks withdraw with the reader
 

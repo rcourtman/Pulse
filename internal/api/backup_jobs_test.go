@@ -9,6 +9,7 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/recovery"
+	proxmoxrecoverymapper "github.com/rcourtman/pulse-go-rewrite/internal/recovery/mapper/proxmox"
 	"github.com/rcourtman/pulse-go-rewrite/internal/recovery/model"
 	"github.com/stretchr/testify/require"
 )
@@ -57,6 +58,45 @@ func TestBackupJobsPayloadReadsRetainedHistoryBeyondTheLiveWindow(t *testing.T) 
 	require.Equal(t, "web", payload.Last24h.Failures[0].WorkloadName)
 	require.Equal(t, "vm-100", payload.Last24h.Failures[0].WorkloadID)
 	require.Equal(t, "failed", payload.Last24h.Failures[0].Outcome)
+}
+
+func TestBackupJobsPayloadInfersRunningOnlyFromFreshNativeObservation(t *testing.T) {
+	now := time.Date(2026, 11, 21, 12, 0, 0, 0, time.UTC)
+	from := backupJobsHistoryStart(now, time.UTC)
+	for _, tt := range []struct {
+		name                       string
+		observed, ended, coveredTo time.Time
+		status                     string
+		want                       BackupJobsCounts
+	}{
+		{name: "fresh", observed: now.Add(-time.Minute), coveredTo: now, want: BackupJobsCounts{Success: 1, Failed: 1, Running: 1}},
+		{name: "at expiry", observed: now.Add(-recovery.BackupTaskRunningMaxAge), coveredTo: now, want: BackupJobsCounts{Success: 1, Failed: 1, Running: 1}},
+		{name: "past expiry after missed poll", observed: now.Add(-8 * time.Minute), coveredTo: now.Add(-7 * time.Minute), want: BackupJobsCounts{Success: 1, Failed: 1, Unknown: 1}},
+		{name: "no observation clock", coveredTo: now, want: BackupJobsCounts{Success: 1, Failed: 1, Unknown: 1}},
+		{name: "ended without verdict", observed: now.Add(-time.Minute), ended: now.Add(-2 * time.Minute), coveredTo: now, want: BackupJobsCounts{Success: 1, Failed: 1, Unknown: 1}},
+		{name: "terminal success", observed: now.Add(-time.Minute), ended: now.Add(-2 * time.Minute), coveredTo: now, status: "OK", want: BackupJobsCounts{Success: 2, Failed: 1}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			points, err := proxmoxrecoverymapper.FromPVEBackupTasksWithEvidence([]models.BackupTask{{
+				ID: "task-native", Instance: "lab", Node: "pve1", VMID: 100, Type: "vzdump",
+				StartTime: now.Add(-18 * time.Minute), EndTime: tt.ended, ObservedAt: tt.observed, Status: tt.status,
+			}}, nil, now)
+			require.NoError(t, err)
+			require.Len(t, points, 1)
+			points = append(points,
+				backupJobsFixturePoint("independent-ok", recovery.OutcomeSuccess, now.Add(-time.Hour), 101),
+				backupJobsFixturePoint("independent-error", recovery.OutcomeFailed, now.Add(-30*time.Minute), 101))
+			payload := buildBackupJobsPayload(backupJobsFixtureWorkloads, points, backupJobsFixtureCoverage(from, tt.coveredTo), true, from, now, time.UTC)
+			require.Equal(t, tt.coveredTo, payload.Last24h.End)
+			require.Equal(t, tt.want, payload.Last24h.Counts)
+			require.Equal(t, tt.want, payload.Days[len(payload.Days)-1].Counts)
+			require.Len(t, payload.Last24h.Failures, 1)
+			require.Equal(t, "db", payload.Last24h.Failures[0].WorkloadName)
+			if tt.status == "" {
+				require.Equal(t, recovery.OutcomeUnknown, points[0].Outcome, "the projection must not rewrite source points")
+			}
+		})
+	}
 }
 
 func TestBackupJobsPayloadMarksUnobservedDaysInsteadOfClean(t *testing.T) {

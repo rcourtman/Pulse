@@ -1,0 +1,50 @@
+{
+  "version": 1,
+  "base_sha": "53f0cb381d80367d982c4762f427ee0d64f1ea5b",
+  "verified_at": "2026-11-20T17:42:38Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/APITokenManagerDialogs.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/APITokenManagerDialogs.tsx": "93f37843cf88434917cef01f26027d709aba7db209dddd4ad279a32e94f22164"
+  },
+  "routes": [
+    "/settings/security/api"
+  ],
+  "viewports": [
+    {
+      "width": 1366,
+      "height": 820,
+      "browser": "Chromium 141.0.7390.37",
+      "theme": "light"
+    },
+    {
+      "width": 320,
+      "height": 700,
+      "browser": "WebKit 26.0",
+      "theme": "dark",
+      "input": "touch"
+    },
+    {
+      "width": 320,
+      "height": 250,
+      "browser": "WebKit 26.0",
+      "theme": "dark",
+      "input": "touch"
+    }
+  ],
+  "states": [
+    "Saved inventory with two long, similarly named synthetic tokens",
+    "Revocation confirmation with complete target, masked hint and permanent-revocation warning",
+    "Scope editor with unchanged and edited drafts, distinct Read, Write and Full access choices",
+    "Scope editor after one synthetic refusal with the draft, complete Write explanation, refusal and both actions visible"
+  ],
+  "interactions": [
+    "Keyboard and touch open the exact token target; cancellation preserves the inventory, with keyboard focus returned to the trigger",
+    "Revocation defaults to Cancel; Shift+Tab reaches the warning details and Tab returns to Cancel; the warning is the accessible description",
+    "An unchanged draft cannot save; choosing Settings read keeps Monitoring read and does not select Full access or Settings write",
+    "Each synthetic scope refusal makes one unchanged request for the selected record and keeps the editor open; no accepted mutation or live revocation",
+    "Opened seven matched baseline and exact-source capture pairs; Playwright 1.56.1 ran 181 final assertions"
+  ]
+}

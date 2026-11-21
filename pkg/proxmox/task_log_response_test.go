@@ -41,6 +41,8 @@ func TestTaskLogRejectsUnverifiedResponse(t *testing.T) {
 		{"null-number", `{"data":[{"n":null,"t":"text"}]}`, false},
 		{"string-number", `{"data":[{"n":"1","t":"text"}]}`, false},
 		{"fractional-number", `{"data":[{"n":1.5,"t":"text"}]}`, false},
+		{"exponent-number", `{"data":[{"n":1e0,"t":"text"}]}`, false},
+		{"overflowing-number", `{"data":[{"n":9223372036854775808,"t":"text"}]}`, false},
 		{"zero-number", `{"data":[{"n":0,"t":"text"}]}`, false},
 		{"negative-number", `{"data":[{"n":-1,"t":"text"}]}`, false},
 		{"missing-first-line", `{"data":[{"n":2,"t":"text"}]}`, false},
@@ -49,6 +51,7 @@ func TestTaskLogRejectsUnverifiedResponse(t *testing.T) {
 		{"non-string-text", `{"data":[{"n":1,"t":42}]}`, false},
 		{"duplicate-number", `{"data":[{"n":2,"n":1,"t":"text"}]}`, false},
 		{"duplicate-text", `{"data":[{"n":1,"t":"first","\u0074":"second"}]}`, false},
+		{"duplicate-extension-after-valid-prefix", `{"data":[` + row + `,{"n":2,"extra":[0],"t":"text","e\u0078tra":null}]}`, false},
 		{"case-number", `{"data":[{"n":1,"N":2,"t":"text"}]}`, false},
 		{"case-text", `{"data":[{"n":1,"t":"first","T":"second"}]}`, false},
 		{"repeated-line", `{"data":[` + row + `,` + row + `]}`, false},
@@ -90,6 +93,14 @@ func TestTaskLogAcceptsExplicitPrefixAndExtensions(t *testing.T) {
 		{"empty", `{"data":[]}`, []TaskLogLine{}},
 		{"empty-with-metadata", `{"data":[],"errors":null,"total":0}`, []TaskLogLine{}},
 		{"blank-and-unicode", `{"data":[{"n":1,"t":"","provider-metadata":true},{"n":2,"t":"INFO: café 日本語"}],"errors":null}`, []TaskLogLine{{1, ""}, {2, "INFO: café 日本語"}}},
+		{"escaped-keys-and-nested-extension", `{"data":[{"\u0074":"text\nline","extras":{"n":42,"T":[],"nested":[{},null]},"\u006e":1}]}`, []TaskLogLine{{1, "text\nline"}}},
+		{"extensions-are-row-local", `{"data":[
+			{"n":1,"t":"start","phase":"copy","worker":"backup","attempt":1,"duration":0,
+			 "progress":0,"tags":["local"],"detail":{"kind":"snapshot"},"resource":null},
+			{"n":2,"t":"progress"},
+			{"n":3,"t":"finish","pha\u0073e":"cleanup","detail":{"kind":"archive"}},
+			{"n":4,"t":""}
+		]}`, []TaskLogLine{{1, "start"}, {2, "progress"}, {3, "finish"}, {4, ""}}},
 		{"running-prefix", `{"data":[{"n":1,"t":"INFO: Starting Backup of VM 101 (qemu)"}]}`, []TaskLogLine{{1, "INFO: Starting Backup of VM 101 (qemu)"}}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

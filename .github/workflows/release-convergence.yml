@@ -134,27 +134,39 @@ jobs:
                 # deleted by retention or by hand, and GitHub only deletes a
                 # run once it has completed or is older than two weeks, far
                 # beyond every job timeout here. A definite 404 is therefore
-                # a terminal owner. Any other read failure is unknown and
-                # keeps waiting.
+                # a terminal owner. Wait on a live owner or a recognised
+                # transient read. Unclassified or refused failures stop.
                 owner_read_error="$(mktemp)"
-                if ! original_status="$(
+                owner_failure=""
+                owner_deleted=false
+                original_status="$(
                   gh api \
                     "repos/${{ github.repository }}/actions/runs/${activation_owner_run_id}" \
                     --jq '.status' 2>"${owner_read_error}"
-                )"; then
+                )" || {
+                  owner_read_exit=$?
                   original_status=""
-                  if grep -q 'HTTP 404' "${owner_read_error}"; then
-                    original_status="deleted"
-                  fi
-                fi
+                  owner_failure="$(python3 scripts/release_control/reconcile_release_convergence.py \
+                    --classify-gh-api-failure "${owner_read_exit}" <"${owner_read_error}")" \
+                    || owner_failure="unknown"
+                }
                 rm -f "${owner_read_error}"
-                if [ "${original_status}" != "completed" ] && [ "${original_status}" != "deleted" ]; then
+                case "${owner_failure}" in
+                  http-404) owner_deleted=true ;;
+                  ""|http-502|http-503|http-504|peer-cancel) ;;
+                  *)
+                    rm -f "${marker}"
+                    echo "::error::Original convergence owner ${activation_owner_run_id} could not be verified; owner read stopped (${owner_failure})."
+                    exit 1
+                    ;;
+                esac
+                if [ "${original_status}" != "completed" ] && [ "${owner_deleted}" != "true" ]; then
                   rm -f "${marker}"
                   echo "Original convergence owner ${activation_owner_run_id} is ${original_status:-unavailable}; successor adoption is not yet allowed."
                   sleep 2
                   continue
                 fi
-                if [ "${original_status}" = "deleted" ]; then
+                if [ "${owner_deleted}" = "true" ]; then
                   echo "[OK] Adopting committed ${TAG}; convergence owner ${activation_owner_run_id} was deleted from Actions history and is terminal."
                 else
                   echo "[OK] Adopting committed ${TAG} from completed convergence owner ${activation_owner_run_id}."

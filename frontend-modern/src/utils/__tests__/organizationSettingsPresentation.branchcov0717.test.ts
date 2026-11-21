@@ -4,7 +4,7 @@ import {
   getOrganizationAccessInvitationAcceptedMessage,
   getOrganizationAccessInvitationDeclinedMessage,
   getOrganizationAccessInvitationRevokedMessage,
-  getOrganizationAccessInvitationSentMessage,
+  getOrganizationAccessInvitationSavedMessage,
   getOrganizationAccessOwnerTransferMemberRequiredMessage,
   getOrganizationAccessPendingInvitationsEmptyState,
   getOrganizationAccessRoleUpdatedMessage,
@@ -67,13 +67,13 @@ describe('organizationSettingsPresentation branch coverage (supplemental)', () =
     });
   });
 
-  describe('getOrganizationAccessInvitationSentMessage', () => {
-    it('formats the invitation-sent copy for every non-owner role', () => {
+  describe('getOrganizationAccessInvitationSavedMessage', () => {
+    it('describes a saved pending invitation, not a delivery or grant, for every non-owner role', () => {
       // role is typed `Exclude<OrganizationRole, 'owner'>`; exercise each arm.
       const roles: Exclude<OrganizationRole, 'owner'>[] = ['admin', 'editor', 'viewer'];
       for (const role of roles) {
-        expect(getOrganizationAccessInvitationSentMessage('bob', role)).toBe(
-          `Sent bob an invitation for the ${role} role.`,
+        expect(getOrganizationAccessInvitationSavedMessage('bob', role)).toBe(
+          `Saved a pending ${role} invitation for bob.`,
         );
       }
     });

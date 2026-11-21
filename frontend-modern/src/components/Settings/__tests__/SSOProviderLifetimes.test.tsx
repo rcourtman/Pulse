@@ -325,7 +325,7 @@ describe('SSO provider read and editor ownership', () => {
     expect(result).toHaveTextContent(tokenEndpoint);
     expect(button).toHaveFocus();
     expect(button).not.toHaveAttribute('aria-disabled');
-    expect(button).toHaveAccessibleDescription('Test passed');
+    expect(button).toHaveAccessibleDescription('Issuer matched Sign-in not tested');
     expect(dialog.getByLabelText('Client Secret').compareDocumentPosition(result)).toBe(
       Node.DOCUMENT_POSITION_FOLLOWING,
     );
@@ -333,7 +333,9 @@ describe('SSO provider read and editor ownership', () => {
     const scroller = result.closest('fieldset')!.parentElement!;
     vi.spyOn(scroller, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, 100, 320, 500));
     vi.spyOn(result, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, 800, 320, 100));
-    const view = dialog.getByRole('button', { name: 'Test passed — view result' });
+    const view = dialog.getByRole('button', {
+      name: 'Issuer matched, Sign-in not tested — view result',
+    });
     expect(view).toHaveAttribute('aria-controls', result.id);
     fireEvent.click(view);
     expect(result).toHaveFocus();
@@ -348,6 +350,17 @@ describe('SSO provider read and editor ownership', () => {
     expect(writes()).toHaveLength(1);
   });
 
+  const currentCertificate = {
+    subject: 'CN=Current signing certificate',
+    notAfter: '2027-08-01T00:00:00Z',
+    isExpired: false,
+  };
+  const expiredCertificate = {
+    subject: 'CN=Retired signing certificate',
+    notAfter: '2026-08-01T00:00:00Z',
+    isExpired: true,
+  };
+
   it.each([
     {
       mode: 'manual URL only',
@@ -357,7 +370,7 @@ describe('SSO provider read and editor ownership', () => {
         message:
           'Only the SAML SSO URL format was checked. Certificates and sign-in have not been tested.',
       },
-      summary: 'URL format OK',
+      summary: ['URL format OK', 'Sign-in not tested'],
       title: 'Check the IdP SSO URL format only',
     },
     {
@@ -365,22 +378,39 @@ describe('SSO provider read and editor ownership', () => {
       saved: null,
       ssoUrl: 'not-a-url',
       result: { success: false, message: 'Invalid SSO URL format', error: 'invalid_url' },
-      summary: 'Test failed',
+      summary: ['Test failed'],
       title: 'Check the IdP SSO URL format only',
     },
     {
       mode: 'metadata URL alongside a manual URL',
       saved: { idpMetadataUrl: 'https://idp.example.test/metadata' },
-      result: { success: true, message: 'SAML metadata includes an IdP identity and an SSO URL.' },
-      summary: 'Test passed',
-      title: 'Test connection to IdP',
+      result: {
+        success: true,
+        message:
+          'SAML metadata includes an IdP identity and an SSO URL. Sign-in has not been tested.',
+        details: { certificates: [currentCertificate] },
+      },
+      summary: ['Metadata read', 'Sign-in not tested'],
+      title: 'Check SAML metadata',
     },
     {
       mode: 'saved metadata XML alongside a manual URL',
       saved: { idpMetadataXml: '<EntityDescriptor />', idpMetadataUrl: '  ' },
       result: { success: true, message: 'SAML metadata includes an IdP identity and an SSO URL.' },
-      summary: 'Test passed',
-      title: 'Test connection to IdP',
+      summary: ['Metadata read', 'Sign-in not tested'],
+      title: 'Check SAML metadata',
+    },
+    {
+      mode: 'metadata returning both an expired and a current certificate',
+      saved: { idpMetadataUrl: 'https://idp.example.test/metadata' },
+      result: {
+        success: true,
+        message:
+          'SAML metadata includes an IdP identity and an SSO URL. Sign-in has not been tested.',
+        details: { certificates: [expiredCertificate, currentCertificate] },
+      },
+      summary: ['Metadata read', 'Expired cert found', 'Sign-in not tested'],
+      title: 'Check SAML metadata',
     },
   ])('summarizes the observed SAML test for $mode', async (scenario) => {
     const { saved, result, summary, title } = scenario;
@@ -416,11 +446,23 @@ describe('SSO provider read and editor ownership', () => {
 
     const details = await dialog.findByRole(result.success ? 'status' : 'alert');
     expect(details).toHaveTextContent(result.message);
-    expect(testButton).toHaveAccessibleDescription(summary);
-    expect(dialog.getByRole('button', { name: `${summary} — view result` })).toHaveAttribute(
-      'aria-controls',
-      details.id,
-    );
+    expect(testButton).toHaveAccessibleDescription(summary.join(' '));
+    const summaryButton = dialog.getByRole('button', {
+      name: `${summary.join(', ')} — view result`,
+    });
+    expect(summaryButton).toHaveAttribute('aria-controls', details.id);
+    expect(summaryButton).toHaveTextContent(summary.join(' '));
+    if (result.details?.certificates.includes(expiredCertificate)) {
+      expect(details).toHaveTextContent(currentCertificate.subject);
+      expect(details).toHaveTextContent(expiredCertificate.subject);
+      expect(within(details).getAllByText('(Expired!)')).toHaveLength(1);
+      fireEvent.input(dialog.getByLabelText('IdP Metadata URL'), {
+        target: { value: 'https://other.example.test/metadata' },
+      });
+      expect(summaryButton).not.toBeInTheDocument();
+      expect(details).not.toBeInTheDocument();
+      expect(testButton).not.toHaveAttribute('aria-describedby');
+    }
     expect(dialog.getByLabelText('IdP Certificate (PEM)')).toBeEnabled();
     expect(writes()).toHaveLength(1);
     expect(JSON.parse(writes()[0][1].body)).toEqual({

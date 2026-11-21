@@ -1179,7 +1179,8 @@ Beta/RC revision ordering is numeric within the same stage, so `.10` upgrades
 Interactive update, removal and cancellation retain their displayed meanings.
 Explicit reinstall pins the known current server version rather than discovering
 and installing latest; an unknown current version requires a deliberate exact
-pin instead. Removal still requires the independent all-unit quiescence checks.
+pin and still has to satisfy the edition boundary below. Removal still
+requires the independent all-unit quiescence checks.
 
 `TestRootInstallExistingMenuRequiresExactAutomaticIntent` executes eighteen
 ordinary-user controls against actual sourced installer `main`, with confined
@@ -1188,6 +1189,33 @@ both automatic entry paths, channel intent, chart/draft/metadata refusal, automa
 rollback refusal, exact reinstall and deliberate removal/cancel. The same controls
 fail the prior menu; they do not establish native systemd, signed installation,
 published availability or customer recovery.
+
+### Manual server updates preserve the installed edition
+
+An existing installation must report a recognised Community version on the
+first line of a successful, bounded executable probe before the standalone
+installer selects a public update, including an explicit public version or a
+source build. The legacy executable is consulted only if the primary path is
+absent; a dangling link, non-executable file, failed probe or unrecognised
+reply does not establish Community. A recognised Community development
+build can use deliberate recovery without becoming eligible for automatic
+version ordering.
+
+For Pro or an unknown installed edition, a pin by itself is not sufficient.
+The operator must select a local signed Pro archive and an exact version,
+either explicitly or by its canonical filename. After signature and
+architecture admission and before service stop, the staged executable must
+report `Pulse Pro` and the exact selected release tag on its first line.
+Neither the filename nor a VERSION sidecar supplies edition evidence.
+Fresh-install handling and the existing replacement and recovery gates
+are unchanged.
+
+`scripts/tests/test_server_update_menu.py` covers refusal before public
+release discovery and deliberate Community development recovery.
+`scripts/tests/test_server_installer_stop.py` exercises primary/legacy
+precedence, real SSH signature verification with a fixture key, wrong
+edition and version refusal before stop, and a matching signed Pro archive.
+The service observations are fixture controls, not native systemd acceptance.
 
 ### Windows replacement and removal refuse uncertain service state
 

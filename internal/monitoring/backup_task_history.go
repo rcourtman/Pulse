@@ -108,10 +108,10 @@ func (m *Monitor) readBackupTaskHistory(ctx context.Context, instance string, cl
 // or acquire a new ObservedAt. A valid empty read, removed node or explicit
 // access denial withdraws its old live rows instead of resurrecting them.
 func (m *Monitor) retainUnreadBackupTasks(instance string, nodes []proxmox.BackupTaskHistoryNode, tasks []models.BackupTask, listedJobs map[string]string) []models.BackupTask {
-	unread := make(map[string]bool)
+	unread := make(map[string]struct{})
 	for _, node := range nodes {
 		if node.Reason == "collection_failed" || node.Reason == "node_offline" {
-			unread[node.Node] = true
+			unread[node.Node] = struct{}{}
 		}
 	}
 	if len(unread) == 0 {
@@ -124,11 +124,9 @@ func (m *Monitor) retainUnreadBackupTasks(instance string, nodes []proxmox.Backu
 		seen[task.ID] = true
 		counts[task.Node]++
 	}
-	previous := m.state.GetBackupTasks()
+	previous := m.state.GetPVEBackupTasksForNodes(instance, unread)
 	for _, task := range previous {
-		if task.Instance == instance && unread[task.Node] {
-			limits[task.Node]++
-		}
+		limits[task.Node]++
 	}
 	// Share the existing 200-provider-task live window. Synthesized guest
 	// children can make a previously accepted payload larger; preserve that
@@ -138,7 +136,7 @@ func (m *Monitor) retainUnreadBackupTasks(instance string, nodes []proxmox.Backu
 		limits[node] = max(200, limits[node], counts[node])
 	}
 	for _, task := range previous {
-		if task.Instance != instance || !unread[task.Node] || seen[task.ID] || counts[task.Node] >= limits[task.Node] {
+		if seen[task.ID] || counts[task.Node] >= limits[task.Node] {
 			continue
 		}
 		// A listed parent uses this poll's log result or its own log-cache
@@ -158,6 +156,85 @@ func (m *Monitor) retainUnreadBackupTasks(instance string, nodes []proxmox.Backu
 		counts[task.Node]++
 	}
 	return tasks
+}
+
+type pveArchiveWriter struct {
+	node   string
+	parent string
+	vmid   int
+	start  time.Time
+}
+
+// Use the accepted task inventory before applying the display cap. A writer
+// missing from an incomplete node read may still own an archive. While its
+// parent is still running, a log with no result for this guest says nothing
+// about that writer, even if the log can replace live guest details. Overlay
+// evidence for the exact task below. This cache affects only storage correlation.
+func (m *Monitor) recordPVEArchiveWriters(instance string, nodes []proxmox.BackupTaskHistoryNode, tasks, jobs []models.BackupTask) {
+	unreadNodes := make(map[string]bool)
+	for _, node := range nodes {
+		if !node.Complete && node.Reason != "access_denied" {
+			unreadNodes[node.Node] = true
+		}
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	writers := make(map[string]pveArchiveWriter)
+	previous := m.pveArchiveWriters[instance]
+	if len(previous) > 0 {
+		jobRunning := make(map[string]bool, len(jobs))
+		for _, job := range jobs {
+			jobRunning[job.ID] = job.EndTime.IsZero()
+		}
+		for id, writer := range previous {
+			if running, listed := jobRunning[writer.parent]; listed {
+				if !running {
+					continue
+				}
+			} else if !unreadNodes[writer.node] {
+				continue
+			}
+			writers[id] = writer
+		}
+	}
+	for _, task := range tasks {
+		if task.Instance != instance || task.Type != "vzdump" || task.VMID <= 0 {
+			continue
+		}
+		delete(writers, task.ID)
+		status := strings.ToLower(strings.TrimSpace(task.Status))
+		if task.EndTime.IsZero() && (status == "" || status == "running") {
+			writers[task.ID] = pveArchiveWriter{node: task.Node, parent: vzdumpParentTaskID(task), vmid: task.VMID, start: task.StartTime}
+		}
+	}
+	if len(writers) == 0 {
+		delete(m.pveArchiveWriters, instance)
+		return
+	}
+	if m.pveArchiveWriters == nil {
+		m.pveArchiveWriters = make(map[string]map[string]pveArchiveWriter)
+	}
+	m.pveArchiveWriters[instance] = writers
+}
+
+// An OK for another task, even if its time matches a single listed file,
+// gives no archive identity. Only compare writer scope and the file's origin:
+// an unrelated local disk's independently listed archive remains eligible.
+func (m *Monitor) pveArchiveWriterStarts(instance string) map[int]map[string]time.Time {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	starts := make(map[int]map[string]time.Time)
+	for _, writer := range m.pveArchiveWriters[instance] {
+		byNode := starts[writer.vmid]
+		if byNode == nil {
+			byNode = make(map[string]time.Time)
+			starts[writer.vmid] = byNode
+		}
+		if prior, ok := byNode[writer.node]; !ok || writer.start.Before(prior) {
+			byNode[writer.node] = writer.start
+		}
+	}
+	return starts
 }
 
 func (m *Monitor) persistBackupTaskHistory(ctx context.Context, points []recovery.RecoveryPoint, observation model.BackupHistoryCollection) {

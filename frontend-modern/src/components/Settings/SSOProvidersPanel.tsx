@@ -4,6 +4,7 @@ import {
   ParentComponent,
   Show,
   createEffect,
+  createMemo,
   createUniqueId,
   onCleanup,
 } from 'solid-js';
@@ -122,6 +123,8 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
   const testResultSummaryId = `${summaryIdPrefix}-test-summary`;
   const testResultId = `${summaryIdPrefix}-test-result`;
   const testResultTitleId = `${summaryIdPrefix}-test-result-title`;
+  const signInRestrictionsId = `${summaryIdPrefix}-sign-in-restrictions`;
+  const clientSecretHintId = `${summaryIdPrefix}-client-secret-hint`;
   // The server checks only URL format on the manual SAML path. Either
   // metadata source takes precedence, even when the draft also has an SSO URL.
   const isSamlUrlFormatCheck = () =>
@@ -129,10 +132,30 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
     !!form.samlIdpSsoUrl.trim() &&
     !form.samlIdpMetadataUrl.trim() &&
     !form.samlIdpMetadataXml.trim();
-  const testResultLabel = () => {
-    if (!testResult()?.success) return 'Test failed';
-    return isSamlUrlFormatCheck() ? 'URL format OK' : 'Test passed';
-  };
+  const testSummary = createMemo(() => {
+    const result = testResult();
+    if (!result) return null;
+    if (!result.success) return { lines: ['Test failed'], variant: 'dangerOutline' } as const;
+
+    const isManual = isSamlUrlFormatCheck();
+    const isSaml = form.type === 'saml';
+    const check = isManual ? 'URL format OK' : isSaml ? 'Metadata read' : 'Issuer matched';
+    // A successful metadata read can return both an expired and a current
+    // signing certificate. Flag the observed expiry without declaring sign-in broken.
+    const certificates = result.details?.certificates;
+    const hasExpiredCertificate =
+      isSaml &&
+      !isManual &&
+      Array.isArray(certificates) &&
+      certificates.some((certificate) => certificate?.isExpired === true);
+
+    return {
+      lines: hasExpiredCertificate
+        ? [check, 'Expired cert found', 'Sign-in not tested']
+        : [check, 'Sign-in not tested'],
+      variant: hasExpiredCertificate ? 'warning' : 'successOutline',
+    } as const;
+  });
   let inventoryRegion: HTMLDivElement | undefined;
   let editorScroll: HTMLDivElement | undefined;
   let testButton: HTMLButtonElement | undefined;
@@ -183,12 +206,16 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
       // The state owner rejects repeat/overlapping activation. Keep the button
       // focusable so waiting for the response doesn't reset keyboard position.
       aria-disabled={testing() || loadingPreview() || undefined}
-      aria-describedby={testResult() ? testResultSummaryId : undefined}
+      aria-describedby={testSummary() ? testResultSummaryId : undefined}
       variant="secondary"
       size="mdCompact"
       class={`whitespace-nowrap aria-disabled:cursor-not-allowed aria-disabled:opacity-50 ${button.class ?? ''}`}
       title={
-        isSamlUrlFormatCheck() ? 'Check the IdP SSO URL format only' : 'Test connection to IdP'
+        isSamlUrlFormatCheck()
+          ? 'Check the IdP SSO URL format only'
+          : form.type === 'saml'
+            ? 'Check SAML metadata'
+            : 'Check the OIDC discovery issuer'
       }
     >
       {testing() ? 'Testing...' : 'Test'}
@@ -475,20 +502,29 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
               <h3 class="text-lg font-semibold text-base-content">
                 {getSSOProviderModalTitle(Boolean(editingProvider()), form.type)}
               </h3>
-              <Show when={testResult()}>
-                <Button
-                  type="button"
-                  variant={testResult()?.success ? 'successOutline' : 'dangerOutline'}
-                  size="xs"
-                  class="-my-2 shrink-0 gap-1.5"
-                  aria-label={`${testResultLabel()} — view result`}
-                  aria-controls={testResultId}
-                  disabled={saving() || !!unconfirmedChange()}
-                  onClick={() => focusEditorContent(testResultPanel)}
-                >
-                  <span id={testResultSummaryId}>{testResultLabel()}</span>
-                  <ArrowDown class="h-3.5 w-3.5" aria-hidden="true" />
-                </Button>
+              <Show when={testSummary()}>
+                {(summary) => (
+                  <Button
+                    type="button"
+                    variant={summary().variant}
+                    size="xs"
+                    class="-my-2 min-w-0 max-w-[60%] shrink-0 gap-1.5 text-left"
+                    aria-label={`${summary().lines.join(', ')} — view result`}
+                    aria-controls={testResultId}
+                    disabled={saving() || !!unconfirmedChange()}
+                    onClick={() => focusEditorContent(testResultPanel)}
+                  >
+                    <span
+                      id={testResultSummaryId}
+                      class="min-w-0 leading-tight sm:flex sm:flex-wrap sm:gap-x-3"
+                    >
+                      <For each={summary().lines}>
+                        {(line) => <span class="block first:font-semibold">{line} </span>}
+                      </For>
+                    </span>
+                    <ArrowDown class="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                  </Button>
+                )}
               </Show>
             </div>
 
@@ -595,17 +631,27 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
                       />
                     </div>
                     <div class={formField}>
-                      <label for="sso-oidc-client-secret" class={labelClass()}>
-                        Client Secret
-                      </label>
+                      <div class="flex flex-wrap items-baseline gap-x-2">
+                        <label for="sso-oidc-client-secret" class={labelClass()}>
+                          Client Secret
+                        </label>
+                        <Show when={editingProvider()}>
+                          {(provider) => (
+                            <span id={clientSecretHintId} class={formHelpText}>
+                              {provider().oidcClientSecretSet
+                                ? 'Saved. Blank keeps it.'
+                                : 'No saved secret reported.'}
+                            </span>
+                          )}
+                        </Show>
+                      </div>
                       <input
                         id="sso-oidc-client-secret"
                         type="password"
                         value={form.oidcClientSecret}
                         onInput={(e) => setForm('oidcClientSecret', e.currentTarget.value)}
-                        placeholder={
-                          editingProvider() ? '•••••••• (leave blank to keep)' : 'Optional for PKCE'
-                        }
+                        aria-describedby={editingProvider() ? clientSecretHintId : undefined}
+                        placeholder={editingProvider() ? undefined : 'Optional for PKCE'}
                         class={controlClass()}
                       />
                     </div>
@@ -966,10 +1012,18 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
                         onInput={(e) => setForm('allowedGroups', e.currentTarget.value)}
                         placeholder="admin, sso-users"
                         textareaBaseClass={controlClass('min-h-[60px]')}
-                        help="Comma- or newline-separated. Group names may contain spaces. Empty allows all."
+                        help={
+                          <>
+                            <span id={signInRestrictionsId}>
+                              Each filled list needs a match. Blank skips only that check.
+                            </span>{' '}
+                            Use commas or new lines. Names can have spaces.
+                          </>
+                        }
                       />
                       <FormTextarea
                         label="Allowed Domains"
+                        aria-describedby={signInRestrictionsId}
                         rows={2}
                         value={form.allowedDomains}
                         onInput={(e) => setForm('allowedDomains', e.currentTarget.value)}
@@ -979,6 +1033,7 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
                       />
                       <FormTextarea
                         label="Allowed Emails"
+                        aria-describedby={signInRestrictionsId}
                         rows={2}
                         value={form.allowedEmails}
                         onInput={(e) => setForm('allowedEmails', e.currentTarget.value)}
@@ -992,7 +1047,7 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
                         onInput={(e) => setForm('groupRoleMappings', e.currentTarget.value)}
                         placeholder="admins=admin, ops=operator"
                         textareaBaseClass={controlClass('min-h-[60px]')}
-                        help="Format: group=roleId. Separate mappings with commas or new lines. Group names may contain spaces."
+                        help="Assigns roles after sign-in checks. Enter group=roleId. Use commas or new lines. Names can have spaces."
                       />
                     </div>
                   </div>

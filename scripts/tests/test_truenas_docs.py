@@ -265,6 +265,31 @@ class TrueNASDocsTest(unittest.TestCase):
                 self.assertIn(required, text)
         self.assertNotIn("```", text)
 
+    def test_blank_host_history_help_uses_the_rendered_chart_states(self):
+        text = DOC.read_text()
+        host = text.split("#### Host totals and individual disk activity", 1)[1]
+        host = " ".join(host.split("#### Memory usage and ARC cache", 1)[0].split())
+        self.assertIn("[a blank host chart](#when-only-host-disk-io-history-is-blank)", host)
+        self.assertIn("Compare the same appliance, disk and time window", host)
+        self.assertIn("Boot and data-pool rates are not interchangeable", host)
+        section = text.split("## When only host Disk I/O History is blank\n", 1)[1]
+        prose = " ".join(section.split("\n## ", 1)[0].split())
+        chart = (ROOT / "frontend-modern/src/components/Workloads/GuestDrawerHistory.tsx").read_text()
+        # Match the searchable wording to a pending read and to a settled
+        # chart without points, not to an assumed connection failure.
+        for condition in ("props.loading", "!hasStoredData() && !props.loading"):
+            with self.subTest(condition=condition):
+                markup = chart.split(f"<Show when={{{condition}}}>", 1)[1]
+                match = re.match(r"\s*<div[^>]*>\s*([^<]+)</div>", markup)
+                self.assertIsNotNone(match, "History chart state should have readable text")
+                label = match.group(1).strip()
+                self.assertIn(f"**{label}**", prose)
+        self.assertIn("CPU and Network I/O can have points in the same range", prose)
+        self.assertIn("does not tell you why points are missing", prose)
+        self.assertIn("not a reading of zero activity", prose)
+        self.assertIn("Use the same window in TrueNAS **Reporting**", prose)
+        self.assertIn("no need to wait through the read again", prose)
+
     def test_polling_guidance_preserves_evidence_before_a_manual_test(self):
         text = DOC.read_text().split("### Stale TrueNAS data", 1)[1].split("### Disabling", 1)[0]
         # Markdown wrapping and sentence capitalization do not change the

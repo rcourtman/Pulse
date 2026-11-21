@@ -115,7 +115,7 @@ class UpdateRecoveryDocsTest(unittest.TestCase):
     def test_install_update_link_keeps_helper_ownership_and_existing_paths(self):
         text = " ".join(section("INSTALL", "Manual Update", "####").split())
         for phrase in (
-            "helper is absent or its owner is unknown", "stop before executing it",
+            "If the helper is absent or its owner is unknown, do not run it.",
             "existing service and data/config paths", "default paths over a custom deployment",
             "private Pro runtime with a public build", "inside the existing Pulse LXC",
             "AUTO_UPDATE.md#a-helper-selects-a-helm-chart-release",

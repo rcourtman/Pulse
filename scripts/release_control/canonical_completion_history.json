@@ -110,6 +110,11 @@
       "incomplete_commit": "822eac9789e1d17c4139b0163c1014014dd76c1b",
       "completion_commit": "b07dfef40c5803cc4aeca787d3280c79af31d47e",
       "reason": "The tenant-scoped websocket delivery shipped its runtime change and tenant tests in the first commit; the following commit adds the agent-lifecycle and storage-recovery contract updates and moves the tenant tests into the named proof files. No source identity or required contract/proof gate is rewritten or waived."
+    },
+    {
+      "incomplete_commit": "e790d00979e67f3eb5391d7f2d20efa1c53ff339",
+      "completion_commit": "3b874776d92a797e01ffb80882ddb307b015621c",
+      "reason": "Evaluate the reviewed manual installer edition guard and its retained regression tests together with the follow-up deployment-installability contract. A version pin does not establish an installed edition. No contract or proof requirement is waived."
     }
   ]
 }

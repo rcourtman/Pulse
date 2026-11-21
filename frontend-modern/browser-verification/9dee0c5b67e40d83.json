@@ -1,0 +1,43 @@
+{
+  "version": 1,
+  "base_sha": "2370a6c992528f6cae7bfa73dad304c68d84808b",
+  "verified_at": "2026-11-20T23:54:38Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/OrganizationAccessPanel.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/OrganizationAccessPanel.tsx": "3f8d104eb136a8d5a2116b2444e95d73c46e84cdd1631490def5fbff54c7bb67"
+  },
+  "routes": [
+    "/settings/organization/access"
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 800,
+      "browser": "Chromium 141.0.7390.37",
+      "theme": "light",
+      "input": "keyboard"
+    },
+    {
+      "width": 320,
+      "height": 620,
+      "browser": "WebKit 26.0",
+      "theme": "dark",
+      "input": "touch"
+    }
+  ],
+  "states": [
+    "Both invitation lists populated; report neither as empty.",
+    "Final pending invitation revoked, read still held; no empty result until the read is accepted.",
+    "Confirmed last revoke and last decline; an unaffected invitation stays visible and usable until deliberately declined.",
+    "Each side unavailable in turn while the other is successfully read as empty; preserve Reload access and saved disabled controls.",
+    "A signed-in viewer sees only the result of their own inbox read, with no manager-list request or control."
+  ],
+  "interactions": [
+    "Use the actual Organization Access route with synthetic session and invitation transport. Revoke and decline with keyboard or touch; each uses one request and one saved refresh, with no repeated writes.",
+    "Use Reload access after each kind of read failure, without sending a mutation. Compare populated, confirmed-empty, incomplete and viewer screenshots with the same fixture and anchor.",
+    "Inspect all twelve before/after pairs. At 320px the reported empty result fills the existing gap without moving the saved Owner control or Invite. Playwright 1.56.1 completed 207 baseline and 231 candidate assertions."
+  ]
+}

@@ -143,8 +143,8 @@ func buildBackupJobsPayload(
 ) BackupJobsPayload {
 	to := backupJobsObservedThrough(workloads, coverage, now)
 	lastFrom := now.Add(-24 * time.Hour)
-	days := recovery.BuildBackupHealth(workloads, backupJobPointsSince(points, from), coverage, from, to, location)
-	last := recovery.BuildBackupHealth(workloads, backupJobPointsSince(points, lastFrom), coverage, lastFrom, to, location)
+	days := recovery.BuildBackupHealth(workloads, backupJobWindowPoints(points, from, now), coverage, from, to, location)
+	last := recovery.BuildBackupHealth(workloads, backupJobWindowPoints(points, lastFrom, now), coverage, lastFrom, to, location)
 
 	payload := BackupJobsPayload{
 		HistoryState: days.HistoryState,
@@ -257,17 +257,31 @@ func backupJobsObservedThrough(workloads []model.BackupHealthWorkload, coverage 
 	return through
 }
 
-// backupJobPointsSince keeps tasks that started or finished inside a window.
+// backupJobWindowPoints keeps tasks that started or finished inside a window.
 // BuildBackupHealth clamps an unresolved older task to the window start, so
 // one abandoned task would otherwise read "unknown" in every window.
-func backupJobPointsSince(points []recovery.RecoveryPoint, start time.Time) []recovery.RecoveryPoint {
+func backupJobWindowPoints(points []recovery.RecoveryPoint, start, now time.Time) []recovery.RecoveryPoint {
 	out := make([]recovery.RecoveryPoint, 0, len(points))
 	for _, point := range points {
 		started := point.StartedAt != nil && !point.StartedAt.Before(start)
 		finished := point.CompletedAt != nil && !point.CompletedAt.Before(start)
-		if started || finished {
-			out = append(out, point)
+		if !started && !finished {
+			continue
 		}
+		if point.CompletedAt == nil {
+			// The coverage cutoff can be an older poll. Qualify open tasks
+			// against the request clock before summarizing that history window.
+			switch {
+			case point.Outcome == recovery.OutcomeRunning && !recovery.BackupTaskRunningAt(point, now):
+				point.Outcome = recovery.OutcomeUnknown
+			case point.Outcome == recovery.OutcomeUnknown && point.Details["type"] == "vzdump" && point.Details["status"] == "" &&
+				point.Evidence != nil && point.Evidence.ValidUntil != nil && !now.After(*point.Evidence.ValidUntil):
+				// Only native blank-status observations with an explicit deadline
+				// support this inference. Leave the stored verdict untouched.
+				point.Outcome = recovery.OutcomeRunning
+			}
+		}
+		out = append(out, point)
 	}
 	return out
 }

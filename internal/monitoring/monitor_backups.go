@@ -288,40 +288,21 @@ func (m *Monitor) pollStorageBackupsWithNodes(ctx context.Context, instanceName 
 	deniedReads := map[pveLocalBackupStorage]struct{}{}
 	readState := m.backupReadStateForInstance(instanceName)
 
-	// Tasks and carry-forward storage rows must share one primary-state read,
-	// but neither needs a copy of guests or unrelated provider inventories.
-	previousBackups := m.state.GetPVEBackups()
+	// Capture this connection's archive evidence for an incomplete read.
+	previousBackups := m.state.GetPVEStorageBackupsForInstance(instanceName)
 	// Build guest lookup map to find actual node for each VMID
 	guestInfo := buildProxmoxGuestInfoIndex(readState)
 	guestNodeMap := make(map[int]string) // VMID -> actual node name
 	populateGuestNodeMapFromReadState(readState, instanceName, guestNodeMap)
 
 	// vzdump writes archives under their final name, so a backup that is
-	// still running is already listed by the storage content API as a
-	// growing partial file. Correlate content entries with the live vzdump
-	// tasks polled just before this pass (pollBackupTasks runs first in the
-	// cycle): a guest backup file created at or after a running task's start
-	// is that task's partial output, not a completed backup.
+	// still running can appear in storage inventory as a growing file. An
+	// unresolved writer that could own a file prevents it counting as a
+	// completed backup. Use accepted writer evidence, not the display window.
 	// Local archive paths belong to the disk on the task's executing node,
 	// not to the guest's current placement. Shared/remote repositories and
 	// tasks without a node retain the conservative instance/VMID fallback.
-	runningVzdumpStart := make(map[int]map[string]time.Time) // VMID -> task node -> earliest start
-	for _, task := range previousBackups.BackupTasks {
-		if task.Instance != instanceName || task.VMID <= 0 || !task.EndTime.IsZero() {
-			continue
-		}
-		status := strings.ToLower(strings.TrimSpace(task.Status))
-		if status != "" && status != "running" {
-			continue
-		}
-		if runningVzdumpStart[task.VMID] == nil {
-			runningVzdumpStart[task.VMID] = make(map[string]time.Time)
-		}
-		byNode := runningVzdumpStart[task.VMID]
-		if existing, ok := byNode[task.Node]; !ok || task.StartTime.Before(existing) {
-			byNode[task.Node] = task.StartTime
-		}
-	}
+	runningVzdumpStart := m.pveArchiveWriterStarts(instanceName)
 
 	// For each node, get storage and check content
 	for _, node := range nodes {
@@ -557,8 +538,8 @@ func (m *Monitor) pollStorageBackupsWithNodes(ctx context.Context, instanceName 
 					}
 				}
 
-				// Partial-output window: the file belongs to a vzdump task
-				// that is still running. PBS-type storages additionally list
+				// Partial-output window: an unresolved vzdump writer
+				// could own the file. PBS-type storages additionally list
 				// in-flight snapshots without a size (no manifest yet), which
 				// covers backups submitted by another cluster or host.
 				inProgress := false
@@ -689,7 +670,7 @@ func (m *Monitor) pollStorageBackupsWithNodes(ctx context.Context, instanceName 
 	// Carry-forward serves the live inventory, not a new provider observation.
 	// Only rows actually returned this poll may renew point-level evidence.
 	observedBackups := allBackups
-	allBackups, preservedStorages := preserveFailedStorageBackups(instanceName, previousBackups.StorageBackups, pveBackupReadFailures{
+	allBackups, preservedStorages := preserveFailedStorageBackups(instanceName, previousBackups, pveBackupReadFailures{
 		storages:      sharedPreserveNeeded,
 		nodes:         unreadNodes,
 		local:         failedLocalStorages,
@@ -1302,13 +1283,9 @@ func (m *Monitor) pollGuestSnapshots(ctx context.Context, instanceName string, c
 		containers = append(containers, ct)
 	}
 
-	previousSnapshots := make([]models.GuestSnapshot, 0)
+	var previousSnapshots []models.GuestSnapshot
 	if m.state != nil {
-		for _, snap := range m.state.GetPVEBackups().GuestSnapshots {
-			if snap.Instance == instanceName {
-				previousSnapshots = append(previousSnapshots, snap)
-			}
-		}
+		previousSnapshots = m.state.GetPVEGuestSnapshotsForInstance(instanceName)
 	}
 
 	guestKey := func(instance, node string, vmid int) string {
@@ -1816,7 +1793,8 @@ func (m *Monitor) resetAuthFailures(instanceName string, nodeType string) {
 func (m *Monitor) removeFailedPVENode(instanceName string) {
 	// Get instance config to get host URL
 	var hostURL string
-	m.mu.RLock()
+	m.mu.Lock()
+	delete(m.pveArchiveWriters, instanceName)
 	if m.config != nil {
 		for _, cfg := range m.config.PVEInstances {
 			if cfg.Name == instanceName {
@@ -1825,7 +1803,7 @@ func (m *Monitor) removeFailedPVENode(instanceName string) {
 			}
 		}
 	}
-	m.mu.RUnlock()
+	m.mu.Unlock()
 
 	// Create a failed node entry to show in UI with error status
 	failedNode := models.Node{
@@ -2446,10 +2424,7 @@ func runningPBSTaskMatchesBackup(tasks []pbs.RunningDataTask, backup models.PBSB
 
 func (m *Monitor) buildPBSBackupCache(instanceName string) map[pbsBackupGroupKey]cachedPBSGroup {
 	cache := make(map[pbsBackupGroupKey]cachedPBSGroup)
-	for _, backup := range m.state.GetPBSBackups() {
-		if backup.Instance != instanceName {
-			continue
-		}
+	for _, backup := range m.state.GetPBSBackupsForInstance(instanceName) {
 		key := pbsBackupGroupKey{
 			datastore:  backup.Datastore,
 			namespace:  normalizePBSNamespacePath(backup.Namespace),
@@ -2880,6 +2855,7 @@ func (m *Monitor) pollBackupTasks(ctx context.Context, instanceName string, clie
 	// An unread node can carry a visible parent, but not widen the history window.
 	published := m.retainUnreadBackupTasks(instanceName, history.Nodes, liveTasks, jobUPIDs)
 	m.pruneVzdumpJobTaskCache(instanceName, jobUPIDs, published[len(liveTasks):])
+	m.recordPVEArchiveWriters(instanceName, history.Nodes, backupTasks, jobTasks)
 	m.state.UpdateBackupTasksForInstance(instanceName, published)
 
 	// Retain execution history before qualifying collection coverage. Task rows
@@ -2929,54 +2905,40 @@ func (m *Monitor) synthesizeVzdumpJobGuestTasks(ctx context.Context, instanceNam
 	}
 
 	now := time.Now().UTC()
-	fetchJobs := m.selectVzdumpJobLogReads(instanceName, jobTasks, jobUPIDs)
-	order := make([]int, len(jobTasks))
-	for i := range order {
-		order[i] = i
-	}
-	// Execute selected reads in scheduling order as well: an early slow read
-	// can exhaust the shared context before the request-count cap is reached.
-	sort.SliceStable(order, func(i, j int) bool {
-		left := fetchJobs[instanceName+"|"+jobUPIDs[jobTasks[order[i]].ID]]
-		right := fetchJobs[instanceName+"|"+jobUPIDs[jobTasks[order[j]].ID]]
-		return left > 0 && (right == 0 || left < right)
-	})
+	selected := m.selectVzdumpJobLogReads(instanceName, jobTasks, jobUPIDs)
 	byJob := make([][]models.BackupTask, len(jobTasks))
-	fetches := 0
 
-	for _, index := range order {
+	readJob := func(index int, selected bool) {
 		jobTask := jobTasks[index]
 		upid := jobUPIDs[jobTask.ID]
-		key := instanceName + "|" + upid
 		m.mu.RLock()
-		entry, cached := m.vzdumpJobTaskCache[key]
+		entry, cached := m.vzdumpJobTaskCache[instanceName+"|"+upid]
 		m.mu.RUnlock()
 
 		if cached && entry.final {
 			byJob[index] = refreshObservedAt(entry.tasks, now)
-			continue
+			return
 		}
 
-		if fetchJobs[key] == 0 || fetches >= maxVzdumpJobLogFetchesPerPoll || ctx.Err() != nil {
+		if !selected || ctx.Err() != nil {
 			// Serve a stale non-final entry if we have one; the next cycle
 			// will catch up. The current parent can end a cached running
 			// guest, but cannot supply its missing verdict or a fresh log read.
 			if cached {
 				byJob[index] = cachedVzdumpGuestTasks(entry.tasks, jobTask)
 			}
-			continue
+			return
 		}
 		unlock, current := m.beginPVEBackupPublication(ctx, instanceName)
 		if !current {
 			if cached {
 				byJob[index] = cachedVzdumpGuestTasks(entry.tasks, jobTask)
 			}
-			continue
+			return
 		}
-		fetches++
-		delete(fetchJobs, key) // duplicate provider rows cannot spend the same turn twice
 		// A failed or incomplete read still spent the allowance. Keep attempt
 		// order separate from accepted observations so failure never freshens evidence.
+		key := instanceName + "|" + upid
 		m.mu.Lock()
 		if m.vzdumpJobTaskCache == nil {
 			m.vzdumpJobTaskCache = make(map[string]vzdumpJobTaskCacheEntry)
@@ -3000,7 +2962,7 @@ func (m *Monitor) synthesizeVzdumpJobGuestTasks(ctx context.Context, instanceNam
 			if cached {
 				byJob[index] = cachedVzdumpGuestTasks(entry.tasks, jobTask)
 			}
-			continue
+			return
 		}
 
 		// Every request starts at line one for the same job. A shorter
@@ -3014,7 +2976,7 @@ func (m *Monitor) synthesizeVzdumpJobGuestTasks(ctx context.Context, instanceNam
 				Int("previousLines", entry.lineCount).
 				Msg("shorter vzdump task log; keeping prior guest evidence")
 			byJob[index] = cachedVzdumpGuestTasks(entry.tasks, jobTask)
-			continue
+			return
 		}
 
 		unlock, current = m.beginPVEBackupPublication(ctx, instanceName)
@@ -3022,7 +2984,7 @@ func (m *Monitor) synthesizeVzdumpJobGuestTasks(ctx context.Context, instanceNam
 			if cached {
 				byJob[index] = cachedVzdumpGuestTasks(entry.tasks, jobTask)
 			}
-			continue
+			return
 		}
 		guestTasks := refreshObservedAt(parseVzdumpJobLog(jobTask, upid, logLines), now)
 		historyComplete := backupGuestLogComplete(jobTask, logLines, guestTasks)
@@ -3042,6 +3004,19 @@ func (m *Monitor) synthesizeVzdumpJobGuestTasks(ctx context.Context, instanceNam
 		unlock()
 	}
 
+	// Execute only the bounded selection in priority order. Unselected jobs
+	// can contribute cached evidence without being sorted or spending a turn.
+	scheduled := make(map[int]bool, len(selected))
+	for _, index := range selected {
+		scheduled[index] = true
+		readJob(index, true)
+	}
+	for index := range jobTasks {
+		if !scheduled[index] {
+			readJob(index, false)
+		}
+	}
+
 	var synthesized []models.BackupTask
 	for _, tasks := range byJob {
 		synthesized = append(synthesized, tasks...)
@@ -3056,67 +3031,72 @@ func (m *Monitor) synthesizeVzdumpJobGuestTasks(ctx context.Context, instanceNam
 // order. The queue not served by the last actual request gets the first turn,
 // so either queue can progress even when one read exhausts the shared context.
 // Only actual calls advance scheduling, not selection or cancellation.
-func (m *Monitor) selectVzdumpJobLogReads(instance string, jobs []models.BackupTask, upids map[string]string) map[string]int {
-	type pendingRead struct {
-		key     string
-		attempt time.Time
-		running bool
-	}
-	pending := make([]pendingRead, 0, len(jobs))
+func (m *Monitor) selectVzdumpJobLogReads(instance string, jobs []models.BackupTask, upids map[string]string) []int {
+	live := make([]vzdumpJobLogRead, 0, maxVzdumpJobLogFetchesPerPoll)
+	ended := make([]vzdumpJobLogRead, 0, maxVzdumpJobLogFetchesPerPoll)
 	seen := make(map[string]bool, len(jobs))
 	m.mu.RLock()
 	historyFirst := m.vzdumpJobLogHistoryFirst[instance]
-	for _, job := range jobs {
-		key := instance + "|" + upids[job.ID]
-		if seen[key] || m.vzdumpJobTaskCache[key].final {
+	for index, job := range jobs {
+		upid := upids[job.ID]
+		entry := m.vzdumpJobTaskCache[instance+"|"+upid]
+		if seen[upid] || entry.final {
 			continue
 		}
-		seen[key] = true
-		pending = append(pending, pendingRead{key: key, attempt: m.vzdumpJobTaskCache[key].lastAttempt, running: job.EndTime.IsZero()})
+		seen[upid] = true
+		read := vzdumpJobLogRead{index: index, attempt: entry.lastAttempt}
+		if job.EndTime.IsZero() {
+			live = offerVzdumpJobLogRead(live, read)
+		} else {
+			ended = offerVzdumpJobLogRead(ended, read)
+		}
 	}
 	m.mu.RUnlock()
-	sort.SliceStable(pending, func(i, j int) bool {
-		return pending[i].attempt.Before(pending[j].attempt)
-	})
-	// Positive ranks bind both admission and execution order; zero is unselected.
-	selected := make(map[string]int, min(len(pending), maxVzdumpJobLogFetchesPerPoll))
-	for _, read := range pending {
-		if read.running && len(selected) < maxVzdumpJobLogFetchesPerPoll-1 {
-			selected[read.key] = len(selected) + 1
-		}
+
+	liveCount := len(live)
+	if len(ended) > 0 {
+		liveCount = min(liveCount, maxVzdumpJobLogFetchesPerPoll-1)
 	}
-	for _, read := range pending {
-		if !read.running && len(selected) < maxVzdumpJobLogFetchesPerPoll {
-			selected[read.key] = len(selected) + 1
-		}
-	}
-	for _, read := range pending {
-		if len(selected) >= maxVzdumpJobLogFetchesPerPoll {
-			break
-		}
-		if selected[read.key] == 0 {
-			selected[read.key] = len(selected) + 1
-		}
-	}
+	ended = ended[:min(len(ended), maxVzdumpJobLogFetchesPerPoll-liveCount)]
+	selected := make([]int, 0, liveCount+len(ended))
 	// Admission reserves live capacity and an ended turn; execution must share
 	// the context too. Move only the oldest selected ended read ahead of live
 	// work when the last actual request was live. If either queue exhausts the
 	// context, the other starts next poll, rather than waiting behind an entire
 	// slow backlog. The shared time budget can still defer admitted live reads.
-	if historyFirst {
-		for _, read := range pending {
-			if rank := selected[read.key]; !read.running && rank > 0 {
-				for key, priority := range selected {
-					if priority < rank {
-						selected[key] = priority + 1
-					}
-				}
-				selected[read.key] = 1
-				break
-			}
-		}
+	if historyFirst && len(ended) != 0 {
+		selected = append(selected, ended[0].index)
+		ended = ended[1:]
+	}
+	for _, read := range live[:liveCount] {
+		selected = append(selected, read.index)
+	}
+	for _, read := range ended {
+		selected = append(selected, read.index)
 	}
 	return selected
+}
+
+type vzdumpJobLogRead struct {
+	index   int
+	attempt time.Time
+}
+
+// No poll can read more than the allowance from either queue. Keep only its
+// oldest candidates; insert after equal attempts to keep provider order.
+func offerVzdumpJobLogRead(queue []vzdumpJobLogRead, read vzdumpJobLogRead) []vzdumpJobLogRead {
+	if len(queue) == cap(queue) && !read.attempt.Before(queue[len(queue)-1].attempt) {
+		return queue
+	}
+	at := sort.Search(len(queue), func(i int) bool {
+		return read.attempt.Before(queue[i].attempt)
+	})
+	if len(queue) < cap(queue) {
+		queue = append(queue, vzdumpJobLogRead{})
+	}
+	copy(queue[at+1:], queue[at:])
+	queue[at] = read
+	return queue
 }
 
 // Retain the last successful log observation when a non-final log is unread or
@@ -3190,10 +3170,16 @@ func refreshObservedAt(tasks []models.BackupTask, now time.Time) []models.Backup
 }
 
 // vzdump job logs mark each guest's section with these lines.
+const (
+	vzdumpLogGuestStartPrefix  = "INFO: Starting Backup of VM "
+	vzdumpLogGuestFinishPrefix = "INFO: Finished Backup of VM "
+	vzdumpLogGuestFailPrefix   = "ERROR: Backup of VM "
+)
+
 var (
-	vzdumpLogGuestStartRe  = regexp.MustCompile(`^INFO: Starting Backup of VM (\d+)`)
-	vzdumpLogGuestFinishRe = regexp.MustCompile(`^INFO: Finished Backup of VM (\d+) \((\d+):(\d{2}):(\d{2})\)$`)
-	vzdumpLogGuestFailRe   = regexp.MustCompile(`^ERROR: Backup of VM (\d+) failed -\s*(.*)$`)
+	vzdumpLogGuestStartRe  = regexp.MustCompile("^" + vzdumpLogGuestStartPrefix + `(\d+)`)
+	vzdumpLogGuestFinishRe = regexp.MustCompile("^" + vzdumpLogGuestFinishPrefix + `(\d+) \((\d+):(\d{2}):(\d{2})\)$`)
+	vzdumpLogGuestFailRe   = regexp.MustCompile("^" + vzdumpLogGuestFailPrefix + `(\d+) failed -\s*(.*)$`)
 )
 
 // parseVzdumpJobLog turns a multi-guest vzdump job run into synthetic
@@ -3226,20 +3212,33 @@ func parseVzdumpJobLog(jobTask models.BackupTask, upid string, logLines []proxmo
 
 	for _, line := range logLines {
 		text := strings.TrimSpace(line.Text)
-		if match := vzdumpLogGuestStartRe.FindStringSubmatch(text); match != nil {
-			vmid, err := strconv.Atoi(match[1])
-			if err != nil || vmid <= 0 {
-				continue
-			}
-			sec := ensureSection(vmid)
+		// Long logs can contain thousands of progress lines. Only lines that
+		// could affect a guest verdict need the existing grammar checks.
+		var pattern *regexp.Regexp
+		switch {
+		case strings.HasPrefix(text, vzdumpLogGuestStartPrefix):
+			pattern = vzdumpLogGuestStartRe
+		case strings.HasPrefix(text, vzdumpLogGuestFinishPrefix):
+			pattern = vzdumpLogGuestFinishRe
+		case strings.HasPrefix(text, vzdumpLogGuestFailPrefix):
+			pattern = vzdumpLogGuestFailRe
+		default:
+			continue
+		}
+		match := pattern.FindStringSubmatch(text)
+		if match == nil {
+			continue
+		}
+		vmid, err := strconv.Atoi(match[1])
+		if err != nil || vmid <= 0 {
+			continue
+		}
+		sec := ensureSection(vmid)
+		switch pattern {
+		case vzdumpLogGuestStartRe:
 			sec.start = cursor
 			sec.status = "running"
-		} else if match := vzdumpLogGuestFinishRe.FindStringSubmatch(text); match != nil {
-			vmid, err := strconv.Atoi(match[1])
-			if err != nil || vmid <= 0 {
-				continue
-			}
-			sec := ensureSection(vmid)
+		case vzdumpLogGuestFinishRe:
 			if sec.status == "running" {
 				sec.status = "OK"
 			}
@@ -3249,12 +3248,7 @@ func parseVzdumpJobLog(jobTask models.BackupTask, upid string, logLines []proxmo
 			duration := time.Duration(hours)*time.Hour + time.Duration(minutes)*time.Minute + time.Duration(seconds)*time.Second
 			sec.end = sec.start.Add(duration)
 			cursor = sec.end
-		} else if match := vzdumpLogGuestFailRe.FindStringSubmatch(text); match != nil {
-			vmid, err := strconv.Atoi(match[1])
-			if err != nil || vmid <= 0 {
-				continue
-			}
-			sec := ensureSection(vmid)
+		case vzdumpLogGuestFailRe:
 			sec.status = "error"
 			sec.errMsg = strings.TrimSpace(match[2])
 			if sec.errMsg == "" {

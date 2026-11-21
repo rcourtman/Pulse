@@ -43,6 +43,46 @@ class BackendBuildCacheTest(unittest.TestCase):
         self.assertEqual(len(found), 1, (job, name))
         return found[0]
 
+    def test_explicit_no_runtime_keeps_one_api_worker_without_changing_runtime_coverage(self):
+        api = self.jobs["backend-api"]
+        matrix = api["strategy"]["matrix"]
+        self.assertEqual(api["if"], "${{ !cancelled() && needs.changes.result == 'success' }}")
+        self.assertEqual(set(matrix), {"index", "mode", "exclude"})
+        self.assertEqual(
+            matrix["index"],
+            "${{ fromJSON(needs.changes.outputs.component_only == 'true'"
+            " && '[0]' || '[0, 1, 2, 3, 4]') }}",
+        )
+        self.assertEqual(
+            matrix["mode"],
+            "${{ fromJSON(needs.changes.outputs.code == 'false'"
+            " && '[\"verdict-only\"]' || '[\"runtime\"]') }}",
+        )
+        # Expand the fixed axes above with GitHub's matrix exclusion rule.
+        # The required verdict still consumes the worker's actual result
+        # rather than accepting a skipped matrix.
+        for code, component_only, expected in (
+            ("false", "", [0]),
+            ("true", "", [0, 1, 2, 3, 4]),  # Index 4 also carries rest-2 on full main PRs.
+            ("true", "true", [0]),
+            ("", "", [0, 1, 2, 3, 4]),  # An absent classifier output must not narrow coverage.
+            ("unknown", "", [0, 1, 2, 3, 4]),  # Invalid output remains subject to admission.
+        ):
+            with self.subTest(code=code, component_only=component_only):
+                mode = "verdict-only" if code == "false" else "runtime"
+                indices = [0] if component_only == "true" else range(5)
+                rows = [{"index": index, "mode": mode} for index in indices]
+                selected = [
+                    row["index"] for row in rows
+                    if not any(all(row.get(key) == val for key, val in excluded.items())
+                               for excluded in matrix["exclude"])
+                ]
+                self.assertEqual(selected, expected)
+        self.assertEqual(self.jobs["backend"]["strategy"]["matrix"], {"shard": ["rest-0", "rest-1"]})
+        verdict = self.jobs["backend-api-verdict"]
+        self.assertEqual(verdict["name"], "Backend tests (api)")
+        self.assertEqual(verdict["needs"], ["changes", "backend-api"])
+
     def test_same_source_is_preferred_before_same_graph_build_objects(self):
         for job in ("test-compile", "backend", "backend-api"):
             with self.subTest(job=job):

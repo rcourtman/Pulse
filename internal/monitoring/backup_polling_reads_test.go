@@ -75,6 +75,10 @@ func backupPollingReadFixture(unrelated int) *Monitor {
 
 var backupPollingReadResult any
 
+func pollUnreadPVEStorage(m *Monitor) {
+	m.pollStorageBackupsWithNodes(context.Background(), "site", backupPollingUnreadClient{}, []proxmox.Node{{Node: "node"}}, map[string]string{"node": "offline"})
+}
+
 func backupPollingReadCases() []struct {
 	name string
 	call func(*Monitor)
@@ -84,11 +88,21 @@ func backupPollingReadCases() []struct {
 		call func(*Monitor)
 	}{
 		{"pbs-cache", func(m *Monitor) { backupPollingReadResult = m.buildPBSBackupCache("pbs") }},
-		{"storage-unread", func(m *Monitor) {
-			m.pollStorageBackupsWithNodes(context.Background(), "site", backupPollingUnreadClient{}, []proxmox.Node{{Node: "node"}}, map[string]string{"node": "offline"})
-		}},
+		{"storage-unread", pollUnreadPVEStorage},
 		{"snapshots-unread", func(m *Monitor) { m.pollGuestSnapshots(context.Background(), "site", backupPollingUnreadClient{}) }},
 	}
+}
+
+func pveBackupCarryForwardFixture(peerRows int) *Monitor {
+	m := backupPollingReadFixture(0)
+	pve := &m.state.PVEBackups
+	for i := range peerRows {
+		id := strconv.Itoa(i)
+		pve.BackupTasks = append(pve.BackupTasks, models.BackupTask{ID: "peer-task-" + id, Instance: "peer", Node: "node", VMID: 100})
+		pve.StorageBackups = append(pve.StorageBackups, models.StorageBackup{ID: "peer-file-" + id, Instance: "peer", StorageNode: "node", VMID: 100})
+		pve.GuestSnapshots = append(pve.GuestSnapshots, models.GuestSnapshot{ID: "peer-snapshot-" + id, Instance: "peer", Node: "node", VMID: 100})
+	}
+	return m
 }
 
 func TestBackupPollingUnreadReadsKeepPrimaryBackupEvidence(t *testing.T) {
@@ -229,6 +243,58 @@ func TestBackupPollingReadsDoNotCopyUnrelatedInventory(t *testing.T) {
 			}
 		})
 	}
+	t.Run("storage-unread-peer-backups", func(t *testing.T) {
+		small, large := pveBackupCarryForwardFixture(0), pveBackupCarryForwardFixture(2000)
+		// An all-offline enumeration does not rewrite the live inventory.
+		// Its cost must not grow with a different connection's backup rows.
+		costs := backupPollingCallCosts(t, small, large, pollUnreadPVEStorage)
+		t.Logf("allocation per storage read with 2000 peer rows per collection: %s", costs)
+		if costs.grewEveryCall(everyCallBytes, everyCallObjects) || costs.grewSomeCall(someCallBytes) {
+			t.Fatalf("storage poll copied a peer's backup inventory: %s", costs)
+		}
+	})
+	t.Run("task-carry-forward-unread-node", func(t *testing.T) {
+		for _, fixture := range []struct {
+			name, instance, node string
+		}{
+			{name: "peer-connection", instance: "peer", node: "node"},
+			{name: "healthy-local-node", instance: "site", node: "healthy"},
+		} {
+			t.Run(fixture.name, func(t *testing.T) {
+				small, large := backupPollingReadFixture(0), backupPollingReadFixture(0)
+				prior := large.state.PVEBackups.BackupTasks[0]
+				for i := range 2000 {
+					row := prior
+					row.ID, row.Instance, row.Node = strconv.Itoa(i), fixture.instance, fixture.node
+					large.state.PVEBackups.BackupTasks = append(large.state.PVEBackups.BackupTasks, row)
+				}
+				unread := []proxmox.BackupTaskHistoryNode{{Node: prior.Node, Reason: "collection_failed"}}
+				costs := backupPollingCallCosts(t, small, large, func(m *Monitor) {
+					backupPollingReadResult = m.retainUnreadBackupTasks("site", unread, nil, nil)
+				})
+				t.Logf("allocation per carry-forward with 2000 unrelated task rows: %s", costs)
+				if costs.grewEveryCall(everyCallBytes, everyCallObjects) || costs.grewSomeCall(someCallBytes) {
+					t.Fatalf("unread-node carry-forward copied unrelated task rows: %s", costs)
+				}
+			})
+		}
+	})
+	t.Run("pbs-cache-peer-backups", func(t *testing.T) {
+		small, large := backupPollingReadFixture(0), backupPollingReadFixture(0)
+		peer := large.state.PBSBackups[0]
+		peer.Instance = "peer"
+		for i := range 2000 {
+			peer.ID = strconv.Itoa(i)
+			large.state.PBSBackups = append(large.state.PBSBackups, peer)
+		}
+		costs := backupPollingCallCosts(t, small, large, func(m *Monitor) {
+			backupPollingReadResult = m.buildPBSBackupCache("pbs")
+		})
+		t.Logf("allocation per PBS cache build with 2000 peer rows: %s", costs)
+		if costs.grewEveryCall(everyCallBytes, everyCallObjects) || costs.grewSomeCall(someCallBytes) {
+			t.Fatalf("PBS poll copied a peer's backup inventory: %s", costs)
+		}
+	})
 	small, large := backupPollingReadFixture(0), backupPollingReadFixture(1000)
 	costs := backupPollingCallCosts(t, small, large,
 		func(m *Monitor) { backupPollingReadResult = m.state.GetSnapshot() })
@@ -360,6 +426,24 @@ func BenchmarkBackupPollingReadCost(b *testing.B) {
 		for _, size := range []int{0, 1000} {
 			b.Run(fmt.Sprintf("%s/unrelated-%d", c.name, size), func(b *testing.B) {
 				m := backupPollingReadFixture(size)
+				b.ReportAllocs()
+				b.ResetTimer()
+				for i := 0; i < b.N; i++ {
+					backupPollingCompleteRead(b, m, c.call)
+				}
+			})
+		}
+	}
+}
+
+func BenchmarkPVEBackupCarryForwardCost(b *testing.B) {
+	previous := log.Logger
+	log.Logger = zerolog.Nop()
+	b.Cleanup(func() { log.Logger = previous })
+	for _, c := range backupPollingReadCases()[1:] {
+		for _, peerRows := range []int{0, 2000} {
+			b.Run(fmt.Sprintf("%s/peer-rows-per-collection-%d", c.name, peerRows), func(b *testing.B) {
+				m := pveBackupCarryForwardFixture(peerRows)
 				b.ReportAllocs()
 				b.ResetTimer()
 				for i := 0; i < b.N; i++ {

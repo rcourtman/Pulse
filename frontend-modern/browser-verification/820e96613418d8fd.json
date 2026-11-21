@@ -1,0 +1,43 @@
+{
+  "version": 1,
+  "base_sha": "c736a4eb851f9f882bc014b99bc208f843d58929",
+  "verified_at": "2026-11-21T04:27:02Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/OrganizationAccessManagementSection.tsx",
+    "frontend-modern/src/components/Settings/useOrganizationAccessPanelState.ts",
+    "frontend-modern/src/utils/organizationSettingsPresentation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/OrganizationAccessManagementSection.tsx": "e313b20b443656230e2eb4c9d847f999a554bb7607b395187ba77d35ede6ee72",
+    "frontend-modern/src/components/Settings/useOrganizationAccessPanelState.ts": "4630ddbdeeb2a680fdc7dbf2eaf39df18bd37bcbadc68b3371b1c89de81a5220",
+    "frontend-modern/src/utils/organizationSettingsPresentation.ts": "2b1b29672ec7aad3eac0800d42a1243eadebbc1c5f55045757f32d6809c08ec0"
+  },
+  "routes": [
+    "/settings/organization/access"
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 840,
+      "theme": "light",
+      "browser": "Chromium 141.0.7390.37"
+    },
+    {
+      "width": 320,
+      "height": 800,
+      "theme": "dark",
+      "browser": "WebKit 26.0"
+    }
+  ],
+  "states": [
+    "Saved pending Viewer invitation and same-prefix sibling, with an Editor role in the matching pending draft",
+    "Saving rereads a single pending Editor row and acknowledges a saved invitation, without adding a member"
+  ],
+  "interactions": [
+    "Type a case mismatch, then the exact user ID with surrounding whitespace, and select the proposed role",
+    "Read the saved-role and acceptance guidance and verify it describes the user field, role and submit controls",
+    "Submit with Enter in Chromium or a tap in WebKit, verify one session-bound POST and check the freshly read pending row"
+  ],
+  "evidence_summary": "Playwright 1.56.1 on the consuming Settings route with synthetic HTTP. 84 candidate checks passed; all four matched desktop and narrow before/after pairs were inspected."
+}

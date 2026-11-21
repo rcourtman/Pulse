@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Execute the chart publication shell with a fake GitHub CLI; no network/writes."""
+"""Execute Helm Pages workflow steps with offline provider and clock fixtures."""
 from __future__ import annotations
 
 import hashlib
@@ -275,6 +275,98 @@ class HelmPagesRetryTests(unittest.TestCase):
 
 
 class PublicReceiptTests(unittest.TestCase):
+    # Keep the real workflow shell and separate executables on PATH. In a
+    # deadline case the workflow makes hundreds of synthetic clock/probe calls;
+    # use shell builtins in those stand-ins rather than starting Python for each.
+    tools = r"""#!/bin/sh
+set -eu
+read -r now < clock
+tool=${0##*/}
+# Preserve every argument (including empty ones) without a JSON encoder per call.
+printf '%s\000' "$now" "$tool" "$#" "$@" >> calls.nul
+
+unexpected() {
+    printf 'Unexpected %s arguments in the Pages fixture\n' "$tool" >> fixture-error
+    exit 97
+}
+
+case "$tool" in
+    date)
+        [ "$#" -eq 1 ] && [ "$1" = '+%s' ] || unexpected
+        printf '%s\n' "$now"
+        ;;
+    sleep)
+        [ "$#" -eq 1 ] || unexpected
+        case "$1" in 1|2|3|4|5) ;; *) unexpected ;; esac
+        printf '%s\n' "$(( now + $1 ))" > clock
+        ;;
+    curl)
+        limit=$FETCH_SECONDS
+        output=
+        url=
+        while [ "$#" -gt 0 ]; do
+            url=$1
+            case "$1" in
+                --max-time) [ "$#" -ge 2 ] || unexpected; limit=$2; shift ;;
+                -o) [ "$#" -ge 2 ] || unexpected; output=$2; shift ;;
+            esac
+            shift
+        done
+        [ "$url" = 'https://rcourtman.github.io/Pulse/index.yaml' ] &&
+            [ -n "$output" ] || unexpected
+        case "$limit" in ''|*[!0-9]*) unexpected ;; esac
+        if [ "$FETCH_SECONDS" -gt "$limit" ]; then
+            printf '%s\n' "$(( now + limit ))" > clock
+            exit 28
+        fi
+        printf '%s\n' "$(( now + FETCH_SECONDS ))" > clock
+        [ "$MODE" != index_unavailable ] || exit 22
+        if [ "$now" -ge "$READY_AFTER" ]; then
+            printf 'version: 6.4.3\n' > "$output"
+        else
+            printf 'version: 6.4.2\n' > "$output"
+        fi
+        ;;
+    helm)
+        case "${1-} ${2-}" in
+            'repo remove'|'repo add'|'repo update') ;;
+            'pull pulse-public/pulse')
+                [ "$#" -eq 6 ] && [ "$3" = '--version' ] &&
+                    [ "$4" = 6.4.3 ] && [ "$5" = '--destination' ] || unexpected
+                case "$MODE" in
+                    unavailable) exit 1 ;;
+                    missing) ;;
+                    match) printf 'qualified' > "$6/pulse-6.4.3.tgz" ;;
+                    *) printf 'wrong' > "$6/pulse-6.4.3.tgz" ;;
+                esac
+                ;;
+            'show chart')
+                [ "$#" -eq 3 ] || unexpected
+                [ -f "$3" ]
+                ;;
+            *) unexpected ;;
+        esac
+        ;;
+    *) unexpected ;;
+esac
+"""
+
+    def read_calls(self, root):
+        # An unexpected invocation must not be mistaken for a successful
+        # negative case just because the workflow also exits nonzero.
+        error = root / 'fixture-error'
+        self.assertFalse(error.exists(), error.read_text() if error.exists() else '')
+        records = (root / 'calls.nul').read_bytes().decode().split('\0')
+        self.assertEqual(records.pop(), '')
+        fields = iter(records)
+        calls = []
+        for at in fields:
+            command = next(fields)
+            argc = int(next(fields))
+            calls.append({'command': command, 'at': int(at),
+                          'args': [next(fields) for _ in range(argc)]})
+        return calls
+
     def receipt(self, mode, *, ready_after=0, fetch_seconds=0, workflow=None):
         workflow = workflow or (ROOT / '.github/workflows/helm-pages.yml').read_text()
         step = workflow.split('      - name: Verify public Pages chart\n', 1)[1]
@@ -283,63 +375,20 @@ class PublicReceiptTests(unittest.TestCase):
             root = Path(temp)
             (root / 'dist').mkdir()
             (root / 'dist/pulse-6.4.3.tgz').write_bytes(b'qualified')
-            (root / 'clock').write_text('0')
-            # Execute the actual workflow shell. Only the external programs
-            # and clock are fixtures: late Pages readiness needs no real wait,
-            # network, workflow dispatch or replacement publication.
-            common = '''import json, os, pathlib, sys
-clock = pathlib.Path('clock')
-now = int(clock.read_text())
-args = sys.argv[1:]
-with open('calls.jsonl', 'a') as log:
-    log.write(json.dumps({'command': pathlib.Path(sys.argv[0]).name,
-                          'args': args, 'at': now}) + '\\n')
-'''
-            programs = {
-                'curl': common + '''
-assert args[-1] == 'https://rcourtman.github.io/Pulse/index.yaml', args
-cost = int(os.environ['FETCH_SECONDS'])
-limit = int(args[args.index('--max-time')+1]) if '--max-time' in args else cost
-clock.write_text(str(now + min(cost, limit)))
-if cost > limit: sys.exit(28)
-if os.environ['MODE'] == 'index_unavailable': sys.exit(22)
-version = '6.4.3' if now >= int(os.environ['READY_AFTER']) else '6.4.2'
-pathlib.Path(args[args.index('-o')+1]).write_text('version: ' + version + '\\n')
-''',
-                'helm': common + '''
-if args[0] == 'pull':
-    assert args[1:4] == ['pulse-public/pulse', '--version', '6.4.3'], args
-    mode = os.environ['MODE']
-    if mode == 'unavailable': sys.exit(1)
-    if mode != 'missing':
-        dest = pathlib.Path(args[args.index('--destination')+1])
-        (dest / 'pulse-6.4.3.tgz').write_bytes(b'qualified' if mode == 'match' else b'wrong')
-elif args[:2] == ['show', 'chart']:
-    if not pathlib.Path(args[2]).is_file(): sys.exit(1)
-''',
-                'date': common + '''
-assert args == ['+%s'], args
-print(now)
-''',
-                'sleep': common + '''
-delay = int(args[0])
-assert 0 < delay <= 5, args
-clock.write_text(str(now + delay))
-''',
-            }
-            for name, body in programs.items():
-                path = root / name
-                path.write_text('#!/usr/bin/env python3\n' + body)
-                path.chmod(0o755)
+            (root / 'clock').write_text('0\n')
+            tools = root / 'public-pages-tool'
+            tools.write_text(self.tools)
+            tools.chmod(0o700)
+            for name in ('curl', 'helm', 'date', 'sleep'):
+                (root / name).symlink_to(tools.name)
             result = subprocess.run(['bash', '-c', script], cwd=root,
                                     env={'PATH': f"{root}:{os.environ['PATH']}",
                                          'VERSION': '6.4.3', 'MODE': mode,
                                          'READY_AFTER': str(ready_after),
                                          'FETCH_SECONDS': str(fetch_seconds)},
                                     capture_output=True, text=True, timeout=120)
-            calls = [json.loads(line) for line in (root / 'calls.jsonl').read_text().splitlines()]
             return result, {'elapsed_seconds': int((root / 'clock').read_text()),
-                            'calls': calls}
+                            'calls': self.read_calls(root)}
 
     def test_matching_public_package_passes(self):
         result, _ = self.receipt('match')

@@ -1,4 +1,4 @@
-import { Component, Show, createEffect, createUniqueId, onCleanup } from 'solid-js';
+import { Component, Show, createEffect, createMemo, createUniqueId, onCleanup } from 'solid-js';
 import { Button } from '@/components/shared/Button';
 import { Dialog } from '@/components/shared/Dialog';
 import { Card } from '@/components/shared/Card';
@@ -41,6 +41,19 @@ export const OrganizationAccessPanel: Component<OrganizationAccessPanelProps> = 
         : null)
     );
   };
+  const emptyInvitationResult = createMemo(() => {
+    const issue = state.invitationReadIssue();
+    if (issue === 'both') return;
+    const pendingEmpty =
+      state.canManageCurrentOrg() && issue !== 'pending' && state.pendingInvitations().length === 0;
+    const personalEmpty = issue !== 'personal' && state.myInvitations().length === 0;
+    if (pendingEmpty && personalEmpty) return 'No pending invitations. None for you.';
+    if (pendingEmpty) return state.pendingInvitationsEmptyState();
+    if (personalEmpty) return state.yourInvitationsEmptyState();
+  });
+  const hasInvitationRows = () =>
+    state.myInvitations().length > 0 ||
+    (state.canManageCurrentOrg() && state.pendingInvitations().length > 0);
   const warningTitleID = createUniqueId();
   const checkingID = createUniqueId();
   let panel: HTMLDivElement | undefined;
@@ -222,7 +235,7 @@ export const OrganizationAccessPanel: Component<OrganizationAccessPanelProps> = 
           >
             <Show when={!state.loadError() && state.org()}>
               {(currentOrg) => (
-                <>
+                <div>
                   <p
                     ref={summary}
                     tabIndex={-1}
@@ -233,14 +246,31 @@ export const OrganizationAccessPanel: Component<OrganizationAccessPanelProps> = 
                       {currentOrg().displayName || currentOrg().id}
                     </span>{' '}
                     ({currentOrg().id})
+                    {/* A 16px line uses the existing 20px gap before the next section. */}
+                    <Show when={emptyInvitationResult()}>
+                      {(message) => <span class="block text-xs leading-4">{message()}</span>}
+                    </Show>
                   </p>
-                  <OrganizationAccessInvitationsSection state={state} />
-                  <OrganizationAccessManagementSection
-                    state={state}
-                    currentUser={props.currentUser}
-                  />
-                  <OrganizationAccessMembersSection state={state} currentUser={props.currentUser} />
-                </>
+                  <div
+                    class="space-y-5"
+                    classList={{
+                      'mt-1': !!emptyInvitationResult(),
+                      'mt-5': !emptyInvitationResult(),
+                    }}
+                  >
+                    <Show when={hasInvitationRows()}>
+                      <OrganizationAccessInvitationsSection state={state} />
+                    </Show>
+                    <OrganizationAccessManagementSection
+                      state={state}
+                      currentUser={props.currentUser}
+                    />
+                    <OrganizationAccessMembersSection
+                      state={state}
+                      currentUser={props.currentUser}
+                    />
+                  </div>
+                </div>
               )}
             </Show>
           </Show>

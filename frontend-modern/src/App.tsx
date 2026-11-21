@@ -71,6 +71,7 @@ import {
 import type { Resource } from '@/types/resource';
 import type { SecurityStatusSettingsCapabilities } from '@/types/config';
 import { AppBootstrapStatus } from '@/components/AppBootstrapStatus';
+import { readSSOReturnError } from '@/components/SSOReturnError';
 import { featureReleaseRoute } from '@/components/FeatureRelease';
 
 function isPublicRoutePath(pathname: string): boolean {
@@ -488,7 +489,14 @@ function App() {
     return (
       <Show
         when={!runtime.isLoading() && (!runtime.bootstrapFailed() || isPublicRoute())}
-        fallback={<AppBootstrapStatus failed={runtime.bootstrapFailed()} />}
+        fallback={
+          <AppBootstrapStatus
+            failed={runtime.bootstrapFailed()}
+            ssoReturnError={
+              isPublicRoute() ? undefined : readSSOReturnError(new URLSearchParams(location.search))
+            }
+          />
+        }
       >
         <Show
           when={isPublicRoute()}

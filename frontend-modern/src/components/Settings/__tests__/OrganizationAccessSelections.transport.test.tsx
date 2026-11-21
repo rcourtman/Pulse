@@ -131,6 +131,14 @@ function roleFor(userId: string) {
   // every select's accessible name across the whole rendered member grid.
   return screen.getByLabelText(`Role for ${userId}`, { selector: 'select' });
 }
+function memberRow(userId: string) {
+  return within(screen.getByText(userId, { exact: true }).closest('tr')!);
+}
+function expectSavedOwnerRole(userId: string) {
+  const row = memberRow(userId);
+  expect(row.getByText('owner', { exact: true })).toBeVisible();
+  expect(row.queryByRole('combobox')).toBeNull();
+}
 function chooseOwnership(origin: 'row' | 'form', userId: string) {
   if (origin === 'row') {
     fireEvent.change(roleFor(userId), { target: { value: 'owner' } });
@@ -149,8 +157,7 @@ function ownershipDialog() {
 }
 function expectSavedOwnership(selected: string) {
   expect(ownerID).toBe(selected);
-  expect(roleFor(selected)).toHaveValue('owner');
-  expect(roleFor(selected)).toBeDisabled();
+  expectSavedOwnerRole(selected);
   expect(roleFor(owner)).toHaveValue('admin');
   expect(members.filter((member) => ![owner, selected].includes(member.userId))).toEqual(
     originalMembers.filter((member) => ![owner, selected].includes(member.userId)),
@@ -196,20 +203,22 @@ function expectWrite(path: string, method: string, body?: unknown) {
 }
 async function expectSavedMembers() {
   await waitFor(() => {
-    for (const member of members) expect(roleFor(member.userId)).toHaveValue(member.role);
+    for (const member of members) {
+      if (member.userId === ownerID) expectSavedOwnerRole(ownerID);
+      else expect(roleFor(member.userId)).toHaveValue(member.role);
+    }
   });
-  expect(screen.getAllByRole('combobox', { name: /^Role for / })).toHaveLength(members.length);
+  expect(screen.getAllByRole('combobox', { name: /^Role for / })).toHaveLength(members.length - 1);
 }
 async function openPanel() {
   render(() => <OrganizationAccessPanel currentUser={owner} />);
   await expectSavedMembers();
   for (const member of members) {
-    const row = roleFor(member.userId).closest('tr');
-    expect(row).not.toBeNull();
-    expect(within(row!).getByText(member.userId, { exact: true })).toBeVisible();
+    const row = memberRow(member.userId);
+    expect(row.getByText(member.userId, { exact: true })).toBeVisible();
     if (member.userId !== owner)
       expect(
-        within(row!).getByRole('button', { name: `Remove ${member.userId} from organization` }),
+        row.getByRole('button', { name: `Remove ${member.userId} from organization` }),
       ).toBeEnabled();
   }
   for (const invitation of pending) expect(pendingGroup(invitation.userId)).toBeInTheDocument();
@@ -229,7 +238,7 @@ async function openOwnershipPanel() {
   expect(await screen.findByLabelText(`Role for ${people[1]}`, { selector: 'select' })).toHaveValue(
     'viewer',
   );
-  expect(roleFor(owner)).toHaveValue('owner');
+  expectSavedOwnerRole(owner);
   expect(orgReads()).toHaveLength(1);
   expect(writes()).toHaveLength(0);
 }
@@ -329,13 +338,16 @@ beforeEach(async () => {
                 : savedMember,
           });
         }
+        const existing = pending.find((candidate) => candidate.userId === body.userId);
         const invitation: OrganizationInvitation = {
           userId: body.userId,
           role: body.role,
-          invitedAt: '2026-11-07T00:00:00Z',
+          invitedAt: existing?.invitedAt ?? '2026-11-07T00:00:00Z',
           invitedBy: owner,
         };
-        pending = [...pending, invitation];
+        pending = existing
+          ? pending.map((candidate) => (candidate === existing ? invitation : candidate))
+          : [...pending, invitation];
         return reply({ kind: 'invitation', invitation });
       }
       const member = members.find(
@@ -532,7 +544,7 @@ describe('ownership capability boundary through the rendered consent and real tr
       await settle();
       expect(screen.queryByRole('alert')).toBeNull();
       expect(screen.queryByRole('dialog')).toBeNull();
-      expect(roleFor(people[1])).toHaveValue('owner');
+      expectSavedOwnerRole(people[1]);
       expect(roleFor(owner)).toHaveValue('admin');
       expect(screen.getByRole('textbox', { name: 'Member user ID' })).toHaveValue(replacement);
       expect(screen.getByRole('combobox', { name: 'Member role' })).toHaveValue('editor');
@@ -882,8 +894,8 @@ describe('Incomplete organization invitations', () => {
       expect(screen.getByRole('combobox', { name: 'Member role' })).toBeDisabled();
       expect(within(inviteForm).getByRole('button', { name: 'Invite' })).toBeDisabled();
       for (const member of members) {
-        expect(roleFor(member.userId)).toBeDisabled();
         if (member.userId !== owner) {
+          expect(roleFor(member.userId)).toBeDisabled();
           expect(
             screen.getByRole('button', { name: `Remove ${member.userId} from organization` }),
           ).toBeDisabled();
@@ -982,10 +994,46 @@ describe('Organization invitation form submission', () => {
       expect(pending.filter((invitation) => invitation.userId !== userId)).toEqual(originalPending);
       expect(within(pendingGroup(userId)).getByText(role)).toBeInTheDocument();
       expect(notices.success).toHaveBeenCalledExactlyOnceWith(
-        `Sent ${userId} an invitation for the ${role} role.`,
+        `Saved a pending ${role} invitation for ${userId}.`,
       );
     },
   );
+
+  it('saves one pending role for the exact ID and rereads the existing invitation', async () => {
+    await openPanel();
+    const saved = originalPending[1];
+    const input = screen.getByRole('textbox', { name: 'Member user ID' });
+    fireEvent.input(input, { target: { value: saved.userId.toUpperCase() } });
+    expect(screen.getByRole('form', { name: 'Invite member' })).toContainElement(input);
+
+    fireEvent.input(input, { target: { value: `  ${saved.userId}  ` } });
+    const form = screen.getByRole('form', { name: 'Update pending invitation' });
+    const submit = within(form).getByRole('button', { name: 'Save role' });
+    expect(submit).toHaveAccessibleDescription(
+      /Last read: Viewer, pending acceptance\. If already accepted, the role changes immediately\./,
+    );
+    fireEvent.change(within(form).getByRole('combobox', { name: 'Member role' }), {
+      target: { value: 'editor' },
+    });
+    expect(within(pendingGroup(saved.userId)).getByText('viewer')).toBeVisible();
+    expect(writes()).toHaveLength(0);
+
+    fireEvent.submit(form);
+    await expectSavedReread();
+    expectWrite(`${orgPath}/members`, 'POST', { userId: saved.userId, role: 'editor' });
+    expect(notices.success).toHaveBeenCalledExactlyOnceWith(
+      `Saved a pending editor invitation for ${saved.userId}.`,
+    );
+    expect(pending).toEqual(
+      originalPending.map((invitation) =>
+        invitation.userId === saved.userId ? { ...invitation, role: 'editor' } : invitation,
+      ),
+    );
+    expect(within(pendingGroup(saved.userId)).getByText('editor')).toBeVisible();
+    expect(members).toEqual(originalMembers);
+    expect(personal).toEqual(originalPersonal);
+    expect(screen.getByRole('form', { name: 'Invite member' })).toBeInTheDocument();
+  });
 
   it('names an immediate role edit for an exact saved member, without changing the write', async () => {
     // Preserve exact matching (including case) and the current saved role;

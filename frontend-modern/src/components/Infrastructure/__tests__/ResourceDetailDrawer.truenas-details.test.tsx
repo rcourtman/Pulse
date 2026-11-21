@@ -73,6 +73,53 @@ const worthChecking = (queryByTestId: (id: string) => HTMLElement | null) => {
 // tables (no second "Show TrueNAS" toggle), their problems are lifted to
 // "Worth checking", and a pool's or disk's health stays in view as a card.
 describe('ResourceDetailDrawer TrueNAS details', () => {
+  it.each([
+    {
+      sources: ['truenas'],
+      sourceType: 'api',
+      labels: ['TrueNAS 25.10.8 · API'],
+      agent: { agentId: 'truenas-system-api', platform: 'truenas' },
+    },
+    {
+      sources: ['truenas', 'agent'],
+      sourceType: 'hybrid',
+      labels: ['TrueNAS 25.10.8 · API+Agent'],
+      // No agent sample is needed to show that an agent source is known.
+      agent: undefined,
+    },
+  ] as const)('distinguishes the TrueNAS drawer sources $sources', (mode) => {
+    const resource = baseResource({
+      type: 'agent',
+      sources: [...mode.sources],
+      sourceType: mode.sourceType,
+      truenas: { hostname: 'nas', version: '25.10.8' },
+      agent: mode.agent,
+    });
+    const { getByTestId } = render(() => (
+      <ResourceDetailDrawer resource={resource} presentation="table-row" />
+    ));
+    expect(
+      Array.from(getByTestId('resource-header-badges').children, (badge) => badge.textContent),
+    ).toEqual(mode.labels);
+  });
+
+  it('keeps the normal identity and Agent badge for an agent-only system', () => {
+    const resource = baseResource({
+      type: 'agent',
+      platformType: 'agent',
+      platformData: undefined,
+      sources: ['agent'],
+      sourceType: 'agent',
+      agent: { platform: 'linux', osName: 'Debian', osVersion: '13' },
+    });
+    const { getByTestId } = render(() => (
+      <ResourceDetailDrawer resource={resource} presentation="table-row" />
+    ));
+    expect(
+      Array.from(getByTestId('resource-header-badges').children, (badge) => badge.textContent),
+    ).toEqual(['Agent', 'Debian 13']);
+  });
+
   it("lifts a TrueNAS system's storage problems and keeps the rest under Details", () => {
     const resource = baseResource({
       id: 'truenas-system-1',

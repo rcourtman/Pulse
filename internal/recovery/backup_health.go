@@ -1,7 +1,6 @@
 package recovery
 
 import (
-	"fmt"
 	"sort"
 	"strings"
 	"time"
@@ -20,21 +19,35 @@ func BuildBackupHealth(workloads []model.BackupHealthWorkload, points []Recovery
 	if location == nil {
 		location = time.UTC
 	}
-	result := model.BackupHealthSummary{Start: from, End: to, Timezone: location.String(), HistoryState: "complete", Workloads: []model.BackupHealthWorkloadResult{}, Days: []model.BackupHealthDay{}, Failures: []model.BackupHealthFailure{}}
+	result := model.BackupHealthSummary{
+		Start:        from,
+		End:          to,
+		Timezone:     location.String(),
+		HistoryState: "complete",
+		Workloads:    make([]model.BackupHealthWorkloadResult, 0, len(workloads)),
+		Days:         []model.BackupHealthDay{},
+		Failures:     []model.BackupHealthFailure{},
+	}
 	byID := map[string]int{}
-	byNative := map[string][]int{}
-	instances := map[string]bool{}
+	byNative := map[backupHealthNativeKey]backupHealthNativeMatch{}
+	instances := indexBackupHealthCoverage(workloads, coverage, from, to)
 	for _, workload := range workloads {
 		index := len(result.Workloads)
-		state, reason := backupHistoryState(coverage, workload.Instance, from, to)
+		instance := instances[workload.Instance]
+		state, reason := instance.state, instance.reason
 		if workload.Instance == "" || workload.VMID <= 0 {
 			state, reason = "unsupported", "Backup task outcomes are not available for this workload's provider."
 		}
 		result.Workloads = append(result.Workloads, model.BackupHealthWorkloadResult{BackupHealthWorkload: workload, HistoryState: state, HistoryReason: reason})
 		byID[workload.ID] = index
-		key := fmt.Sprintf("%s\x00%d", workload.Instance, workload.VMID)
-		byNative[key] = append(byNative[key], index)
-		instances[workload.Instance] = true
+		key := backupHealthNativeKey{instance: workload.Instance, vmid: workload.VMID}
+		match, exists := byNative[key]
+		if exists {
+			match.ambiguous = true
+		} else {
+			match.index = index
+		}
+		byNative[key] = match
 	}
 	dayIndexes := map[string]int{}
 	local := from.In(location)
@@ -50,8 +63,8 @@ func BuildBackupHealth(workloads []model.BackupHealthWorkload, points []Recovery
 		}
 		state := "not_observed"
 		allComplete, observed := len(workloads) > 0, false
-		for instance := range instances {
-			s, _ := backupHistoryState(coverage, instance, start, end)
+		for _, instance := range instances {
+			s, _ := backupHistoryState(instance.coverage, start, end)
 			if s != "not_observed" {
 				observed = true
 			}
@@ -70,7 +83,7 @@ func BuildBackupHealth(workloads []model.BackupHealthWorkload, points []Recovery
 		day = next
 	}
 	seen := map[string]bool{}
-	for _, point := range points {
+	for pointIndex, point := range points {
 		if point.Kind != KindOther || point.Provider != ProviderProxmoxPVE || !strings.HasPrefix(point.ID, "pve-task:") || seen[point.ID] {
 			continue
 		}
@@ -79,7 +92,8 @@ func BuildBackupHealth(workloads []model.BackupHealthWorkload, points []Recovery
 			continue
 		}
 		instance := recoveryDetailString(point, "instance")
-		if !instances[instance] {
+		instanceCoverage := instances[instance]
+		if instanceCoverage == nil {
 			continue
 		}
 		// A multi-guest job lacking a complete task log makes client-level
@@ -94,12 +108,7 @@ func BuildBackupHealth(workloads []model.BackupHealthWorkload, points []Recovery
 				if dayIndex, ok := dayIndexes[at.In(location).Format("2006-01-02")]; ok {
 					result.Days[dayIndex].HistoryState = "partial"
 				}
-				for i := range result.Workloads {
-					if result.Workloads[i].Instance == instance {
-						result.Workloads[i].HistoryState = "partial"
-						result.Workloads[i].HistoryReason = "Some multi-guest backup jobs could not be fully attributed to workloads."
-					}
-				}
+				instanceCoverage.lastUnattributedTask = pointIndex + 1
 			}
 			continue
 		}
@@ -108,13 +117,12 @@ func BuildBackupHealth(workloads []model.BackupHealthWorkload, points []Recovery
 			continue
 		}
 		if !matched {
-			candidates := byNative[fmt.Sprintf("%s\x00%d", instance, recoveryDetailInt(point, "vmid"))]
-			if len(candidates) != 1 {
-				if len(candidates) > 1 && (point.CompletedAt == nil || !point.CompletedAt.Before(from)) {
-					for _, candidate := range candidates {
-						result.Workloads[candidate].HistoryState = "partial"
-						result.Workloads[candidate].HistoryReason = "Some backup task identities could not be uniquely matched to workloads."
-					}
+			key := backupHealthNativeKey{instance: instance, vmid: recoveryDetailInt(point, "vmid")}
+			match, found := byNative[key]
+			if !found || match.ambiguous {
+				if match.ambiguous && (point.CompletedAt == nil || !point.CompletedAt.Before(from)) {
+					match.lastAmbiguousTask = pointIndex + 1
+					byNative[key] = match
 					at := to.Add(-time.Nanosecond)
 					if point.CompletedAt != nil && point.CompletedAt.Before(to) {
 						at = *point.CompletedAt
@@ -125,7 +133,7 @@ func BuildBackupHealth(workloads []model.BackupHealthWorkload, points []Recovery
 				}
 				continue
 			}
-			index = candidates[0]
+			index = match.index
 		}
 		row := &result.Workloads[index]
 		if point.Outcome == OutcomeSuccess && point.CompletedAt != nil && point.CompletedAt.Before(to) {
@@ -146,7 +154,7 @@ func BuildBackupHealth(workloads []model.BackupHealthWorkload, points []Recovery
 			// An unresolved task from an old poll is not evidence that it is
 			// still running at the report cutoff.
 			outcome = OutcomeUnknown
-			if backupTaskRunningAt(point, to) {
+			if BackupTaskRunningAt(point, to) {
 				outcome = OutcomeRunning
 			}
 			if at.Before(from) {
@@ -169,7 +177,20 @@ func BuildBackupHealth(workloads []model.BackupHealthWorkload, points []Recovery
 			result.Failures = append(result.Failures, model.BackupHealthFailure{WorkloadID: row.ID, WorkloadName: row.Name, Instance: row.Instance, TaskID: point.ID, Detail: detail, At: at, Outcome: outcome})
 		}
 	}
-	for _, row := range result.Workloads {
+	for i := range result.Workloads {
+		row := &result.Workloads[i]
+		// Apply attribution gaps once per row. The last qualifying point in
+		// input order still supplies the reason; zero means no such point.
+		unattributed := instances[row.Instance].lastUnattributedTask
+		ambiguous := byNative[backupHealthNativeKey{instance: row.Instance, vmid: row.VMID}].lastAmbiguousTask
+		switch {
+		case ambiguous > unattributed:
+			row.HistoryState = "partial"
+			row.HistoryReason = "Some backup task identities could not be uniquely matched to workloads."
+		case unattributed > 0:
+			row.HistoryState = "partial"
+			row.HistoryReason = "Some multi-guest backup jobs could not be fully attributed to workloads."
+		}
 		if row.Counts.Total() == 0 {
 			result.MissingWorkloads++
 		}
@@ -217,8 +238,11 @@ func recoveryDetailInt(point RecoveryPoint, key string) int {
 	return 0
 }
 
-func backupTaskRunningAt(point RecoveryPoint, cutoff time.Time) bool {
-	if point.Outcome != OutcomeRunning || point.Evidence == nil {
+// BackupTaskRunningAt reports whether an open task's recorded running outcome
+// is supported at cutoff. Historical reports use the period end; a live summary
+// must also check its read clock, which can be later than collection coverage.
+func BackupTaskRunningAt(point RecoveryPoint, cutoff time.Time) bool {
+	if point.CompletedAt != nil || point.Outcome != OutcomeRunning || point.Evidence == nil {
 		return false
 	}
 	if validUntil := point.Evidence.ValidUntil; validUntil != nil {
@@ -229,16 +253,64 @@ func backupTaskRunningAt(point RecoveryPoint, cutoff time.Time) bool {
 	return !point.Evidence.IngestedAt.Before(cutoff.Add(-BackupTaskRunningMaxAge))
 }
 
-func backupHistoryState(coverage model.BackupHistoryCoverage, instance string, from, to time.Time) (string, string) {
-	found := false
-	for _, source := range coverage.Sources {
-		if source.Provider != ProviderProxmoxPVE || source.Instance != instance {
-			continue
+type backupHealthInstanceCoverage struct {
+	coverage             model.BackupHistoryCoverage
+	state                string
+	reason               string
+	lastUnattributedTask int
+}
+
+type backupHealthNativeKey struct {
+	instance string
+	vmid     int
+}
+
+type backupHealthNativeMatch struct {
+	index             int
+	ambiguous         bool
+	lastAmbiguousTask int
+}
+
+// A report can scope a few workloads out of an entire fleet. Partition just
+// the in-scope PVE coverage once and evaluate the full period once per
+// connection, not once per guest. Keep the input order within each connection
+// so the first incomplete source and its interval sequence still win.
+func indexBackupHealthCoverage(workloads []model.BackupHealthWorkload, coverage model.BackupHistoryCoverage, from, to time.Time) map[string]*backupHealthInstanceCoverage {
+	if len(workloads) == 0 {
+		return nil
+	}
+	instances := make(map[string]*backupHealthInstanceCoverage)
+	for _, workload := range workloads {
+		if instances[workload.Instance] == nil {
+			instances[workload.Instance] = &backupHealthInstanceCoverage{}
 		}
-		found = true
+	}
+	for _, source := range coverage.Sources {
+		if instance := instances[source.Instance]; instance != nil && source.Provider == ProviderProxmoxPVE {
+			instance.coverage.Sources = append(instance.coverage.Sources, source)
+		}
+	}
+	for _, interval := range coverage.Intervals {
+		if instance := instances[interval.Instance]; instance != nil && interval.Provider == ProviderProxmoxPVE {
+			instance.coverage.Intervals = append(instance.coverage.Intervals, interval)
+		}
+	}
+	for _, instance := range instances {
+		instance.state, instance.reason = backupHistoryState(instance.coverage, from, to)
+	}
+	return instances
+}
+
+// coverage contains only PVE rows for a single connection. Each node still
+// has to cover the requested window with its own intervals.
+func backupHistoryState(coverage model.BackupHistoryCoverage, from, to time.Time) (string, string) {
+	if len(coverage.Sources) == 0 {
+		return "not_observed", "No durable backup task collection has been recorded for this source."
+	}
+	for _, source := range coverage.Sources {
 		cursor := from
 		for _, interval := range coverage.Intervals {
-			if interval.Provider != source.Provider || interval.Instance != source.Instance || interval.Node != source.Node || interval.End.Before(cursor) {
+			if interval.Node != source.Node || interval.End.Before(cursor) {
 				continue
 			}
 			if interval.Start.After(cursor) {
@@ -255,9 +327,6 @@ func backupHistoryState(coverage model.BackupHistoryCoverage, instance string, f
 			}
 			return "partial", reason
 		}
-	}
-	if !found {
-		return "not_observed", "No durable backup task collection has been recorded for this source."
 	}
 	return "complete", "Available task history was collected throughout this period. Provider retention remains external to Pulse."
 }

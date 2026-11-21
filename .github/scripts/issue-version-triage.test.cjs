@@ -31,34 +31,36 @@ for (const [name, summary, evidence] of [
   test(`specialist intake guidance stays optional and beside its input: ${name}`, () => {
     const form = fs.readFileSync(path.resolve(__dirname, "../ISSUE_TEMPLATE", name), "utf8");
     const blocks = form.split(/(?=^  - type: )/m).slice(1);
-    const disclosures = [];
-    for (const block of blocks) {
+    const expectedByField = new Map([
+      ["upgrade_context", ["Failed upgrade: which attempt, stop and recovery?"]],
+      [summary, ["Several hosts or clusters: preserve which names and IDs repeat"]],
+      [evidence, [
+        "Notification delivery: Test versus ordinary alerts",
+        "Proxmox backups: what to report",
+        "Pulse CPU, memory or disk writes: comparable measurements",
+        "Saved access or plans: failed read versus unconfirmed change",
+        "Single sign-on: setup check versus a new sign-in",
+        "VM or LXC memory: guest versus hypervisor readings",
+      ]],
+    ]);
+    const actualByField = new Map();
+    for (const [index, block] of blocks.entries()) {
       if (!block.includes("<details")) continue;
       assert.ok(block.startsWith("  - type: markdown\n"), "details must not be input descriptions");
       assert.doesNotMatch(block, /<details\s+[^>]*\bopen\b/);
       const groups = [...block.matchAll(/<details>\s*<summary>([^<]+)<\/summary>([\s\S]*?)<\/details>/g)];
       assert.equal(groups.length, (block.match(/<details/g) || []).length, "each disclosure must close");
+      const nextField = blocks[index + 1]?.match(/^    id: (\S+)$/m)?.[1];
+      assert.ok(expectedByField.has(nextField), "guidance must immediately precede its input");
+      assert.ok(!actualByField.has(nextField), `duplicate guidance for ${nextField}`);
       for (const [, title, content] of groups) {
         assert.ok(title.trim(), "keyboard focus needs a meaningful summary");
         assert.ok(content.trim(), "a disclosure must retain its guidance");
-        disclosures.push(title);
       }
+      actualByField.set(nextField, groups.map(([, title]) => title).sort());
     }
-    assert.deepEqual(disclosures.sort(), [
-      "Failed upgrade: which attempt, stop and recovery?",
-      "Several hosts or clusters: preserve which names and IDs repeat",
-      "Notification delivery: Test versus ordinary alerts",
-      "Pulse CPU, memory or disk writes: comparable measurements",
-      "Saved access or plans: failed read versus unconfirmed change",
-      "VM or LXC memory: guest versus hypervisor readings",
-    ].sort());
-    for (const [id, titles] of [
-      ["upgrade_context", ["Failed upgrade:"]],
-      [summary, ["Several hosts or clusters:"]],
-      [evidence, ["Notification delivery:", "Pulse CPU, memory or disk writes:", "Saved access or plans:", "VM or LXC memory:"]],
-    ]) {
-      const guidance = fieldGuidance(form, id);
-      for (const title of titles) assert.ok(guidance.includes(`<summary>${title}`), `${id}: ${title}`);
+    for (const [id, titles] of expectedByField) {
+      assert.deepEqual(actualByField.get(id), titles.toSorted(), `guidance before ${id}`);
     }
     // Collection and public-disclosure warnings are never hidden in a disclosure.
     const introduction = blocks[0];
@@ -68,6 +70,21 @@ for (const [name, summary, evidence] of [
     const attachment = blocks.find(block => block.includes(`    id: ${evidence}\n`));
     assert.match(attachment, /Review files and screenshots locally/);
     assert.doesNotMatch(attachment, /<details|For notification reports|For CPU, memory or disk-write reports/);
+  });
+
+  test(`sign-in evidence distinguishes the failed step without requiring another attempt: ${name}`, () => {
+    const form = fs.readFileSync(path.resolve(__dirname, "../ISSUE_TEMPLATE", name), "utf8");
+    const guidance = fieldGuidance(form, evidence);
+    const sso = guidance.match(/<summary>Single sign-on:[^<]*<\/summary>([\s\S]*?)<\/details>/)?.[1];
+    assert.ok(sso, "missing sign-in guidance beside the evidence field");
+    assert.match(sso, /saving the provider.*Test.*signing in at the provider.*returning to Pulse.*expected access after sign-in/);
+    assert.match(sso, /passing \*\*Test\*\* or a session that was already open does not show that a new sign-in works/);
+    assert.match(sso, /role mapping.*saved without changing anything/);
+    assert.match(sso, /client secret field blank or entered a value, but never include the value/);
+    assert.match(sso, /redacted error if known.*cookies, tokens, full return URLs and SAML responses private/);
+    assert.match(sso, /Keep any working administrator session open/);
+    assert.match(sso, /write "unknown"/);
+    assert.match(sso, /Do not sign out, save again, run \*\*Test\*\* or repeat the sign-in/);
   });
 }
 

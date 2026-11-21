@@ -1349,9 +1349,11 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertIn("EXPECTED_CONVERGENCE_RUN_ID: ${{ github.run_id }}", await_commit)
         self.assertIn('original_status}" != "completed"', await_commit)
         # A deleted owner is terminal: GitHub only deletes completed runs or
-        # runs older than two weeks. Other read failures keep waiting.
-        self.assertIn("grep -q 'HTTP 404'", await_commit)
-        self.assertIn('original_status="deleted"', await_commit)
+        # runs older than two weeks. Never infer deletion from raw text.
+        self.assertIn("python3 scripts/release_control/reconcile_release_convergence.py", await_commit)
+        self.assertIn("--classify-gh-api-failure", await_commit)
+        self.assertIn("http-404) owner_deleted=true", await_commit)
+        self.assertIn("owner read stopped", await_commit)
         self.assertIn("successor adoption is not yet allowed", await_commit)
         self.assertIn("activation_marker_sha256", await_commit)
 
@@ -1402,6 +1404,58 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         )
         self.assertLess(marker_upload, final_owner_check)
         self.assertLess(final_owner_check, publish_patch)
+
+    def test_convergence_successor_requires_definite_terminal_owner_evidence(self) -> None:
+        source = yaml.load(read(".github/workflows/release-convergence.yml"), Loader=UniqueKeyLoader)
+        steps = source["jobs"]["await_activation_commit"]["steps"]
+        shell = next(step["run"] for step in steps if step.get("id") == "marker")
+        start = shell.index('  if [ "${activation_owner_run_id}" != "${EXPECTED_CONVERGENCE_RUN_ID}" ]; then')
+        end = shell.index("  activation_marker_sha256=", start)
+        owner_check = shell[start:end].replace("${{ github.repository }}", "rcourtman/Pulse")
+        harness = r'''
+set -euo pipefail
+activation_owner_run_id=101
+EXPECTED_CONVERGENCE_RUN_ID=102
+TAG=v1.2.3
+marker="$(mktemp)"
+gh() {
+    [[ "$*" == "api repos/rcourtman/Pulse/actions/runs/101 --jq .status" ]] || return 64
+    printf '%s\n' "$FAKE_STATUS"
+    printf '%s' "$FAKE_ERROR" >&2
+    return "$FAKE_EXIT"
+}
+sleep() { return 0; }
+for attempt in 1; do
+''' + owner_check + '''
+    echo "fixture admitted"
+done
+'''
+        for exit_code, status, diagnostic, admitted, expected_exit in (
+            (0, "completed", "", True, 0),
+            (0, "in_progress", "", False, 0),
+            (0, "deleted", "", False, 0),
+            (1, "", "gh: Not Found (HTTP 404)\n", True, 0),
+            (1, "", "gh: HTTP 404\n", True, 0),
+            (1, "completed", "gh: Gateway Timeout (HTTP 504)\n", False, 0),
+            (1, "", "gh: HTTP 502\n", False, 0),
+            (1, "", "stream error: stream ID 1; CANCEL; received from peer\n", False, 0),
+            (1, "", "gh: Forbidden (HTTP 403)\n", False, 1),
+            (1, "", "gh: Refused; not HTTP 404 (HTTP 403)\n", False, 1),
+            (1, "", "gh: Refused (HTTP 403)\ngh: Not Found (HTTP 404)\n", False, 1),
+            (2, "", "gh: Not Found (HTTP 404)\n", False, 1),
+        ):
+            with self.subTest(exit_code=exit_code, status=status, diagnostic=diagnostic):
+                with tempfile.TemporaryDirectory() as tmp:
+                    result = subprocess.run(
+                        ["bash", "-c", harness], cwd=REPO_ROOT, text=True,
+                        capture_output=True, timeout=10, env=os.environ | {
+                            "TMPDIR": tmp, "FAKE_STATUS": status,
+                            "FAKE_ERROR": diagnostic, "FAKE_EXIT": str(exit_code),
+                        },
+                    )
+                    self.assertEqual(expected_exit, result.returncode, result.stdout + result.stderr)
+                    self.assertEqual(admitted, "fixture admitted" in result.stdout, result.stdout)
+                    self.assertEqual(1 if admitted else 0, len(list(Path(tmp).iterdir())))
 
     def test_fresh_fixed_code_convergence_can_adopt_completed_original_owner(self) -> None:
         convergence = read(".github/workflows/release-convergence.yml")
@@ -2207,8 +2261,7 @@ sleep() {
         self.assertIn("community-scripts installation", lxc_updates)
         self.assertIn("helper whose owner is unknown", systemd_updates)
         self.assertIn("default installation paths", systemd_updates)
-        self.assertIn("helper is absent or its owner is unknown", manual_update)
-        self.assertIn("stop before executing it", manual_update)
+        self.assertIn("If the helper is absent or its owner is unknown, do not run it.", manual_update)
         self.assertIn("existing service and data/config paths", manual_update)
         self.assertIn("private Pro runtime with a public build", manual_update)
         self.assertIn("unknown helper may ignore `--version`", chart_help)
@@ -2424,6 +2477,34 @@ sleep() {
                 ):
                     self.assertIn(distinction, context)
                 self.assertTrue(fields["pulse_version"]["validations"]["required"])
+
+    def test_proxmox_backup_intake_distinguishes_artifact_and_guest_recovery(self) -> None:
+        heading = "Proxmox backups: what to report"
+        contexts = []
+        for name, evidence_id in (("bug_report.yml", "logs"), ("v6_rc_feedback.yml", "evidence")):
+            with self.subTest(form=name):
+                form = yaml.load(read(f".github/ISSUE_TEMPLATE/{name}"), Loader=UniqueKeyLoader)
+                context = expandable_intake_context(form, evidence_id, heading)
+                for distinction in (
+                    "**Backup jobs**, **By date**, **Coverage** or a backup-age alert",
+                    "consistent aliases for the connection, guest and storage location",
+                    "task result and time, the restore point's creation time and the backup age",
+                    "thaw, fresh successful writes on every filesystem covered by the backup",
+                    "whether the workload responded",
+                    "An **OK** task does not prove the guest recovered",
+                    'Use existing evidence or write "unknown"',
+                    "Do not repeat a backup, verify or restore a point",
+                    "run Diagnostics or send guest-agent probes",
+                    "Do not force writes or reset the guest",
+                    "Keep full task IDs, private paths, inventories and unredacted errors private",
+                ):
+                    self.assertIn(distinction, context)
+                evidence = next(field for field in form["body"] if field.get("id") == evidence_id)
+                self.assertEqual(evidence["type"], "textarea")
+                self.assertFalse(evidence.get("validations", {}).get("required", False))
+                contexts.append(context)
+        self.assertEqual(len(contexts), 2)
+        self.assertEqual(contexts[0], contexts[1])
 
     def test_saved_access_intake_distinguishes_reads_from_uncertain_changes(self) -> None:
         contexts = []

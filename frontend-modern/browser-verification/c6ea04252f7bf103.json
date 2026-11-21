@@ -1,0 +1,45 @@
+{
+  "version": 1,
+  "base_sha": "0b0b88efbc47375a5021a916835ffecf084bbfe8",
+  "verified_at": "2026-11-21T01:25:53Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/OrganizationSharingLoadingState.tsx",
+    "frontend-modern/src/components/Settings/OrganizationSharingPanel.tsx",
+    "frontend-modern/src/components/Settings/useOrganizationSharingPanelState.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/OrganizationSharingLoadingState.tsx": "5cbe9ecbfe42c1d7cbe9fde834c6638923c6fa6f7d0662c32456dc96511618d9",
+    "frontend-modern/src/components/Settings/OrganizationSharingPanel.tsx": "30af6764b4886dbf25371657984949e680ac808ae634b40379febc39a9d63094",
+    "frontend-modern/src/components/Settings/useOrganizationSharingPanelState.ts": "3721f6b438c42bfb3b34b0e2357fa71caa23d4bbc275d622f88238f236137876"
+  },
+  "routes": [
+    "/settings/organization/sharing"
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 820,
+      "theme": "light",
+      "browser": "Chromium 141.0.7390.37"
+    },
+    {
+      "width": 320,
+      "height": 680,
+      "theme": "dark",
+      "browser": "WebKit 26.0"
+    }
+  ],
+  "states": [
+    "Initial selected-organization read and explicit Reload held at the outgoing list, with a plain progress indicator",
+    "Outgoing list unavailable, with the selected identity, Reload and the verified incoming row still visible",
+    "Recovered complete snapshot with the existing creation form and row decisions"
+  ],
+  "interactions": [
+    "Reach Restart sharing check by Tab outside the busy results and activate with Enter or touch",
+    "Retire the previous scoped GETs and ignore their late result before and after the replacement completes",
+    "Keep the focused region and scroll position during restart; return to Target Organization by Tab after recovery",
+    "Reload and restart without submitting a write; preserve a disabled incoming decision on partial read and restore it only after a complete read"
+  ],
+  "evidence_summary": "Playwright 1.56.1 against the real Settings route and client with synthetic responses. Nine viewport- and scroll-matched before/after pairs inspected."
+}

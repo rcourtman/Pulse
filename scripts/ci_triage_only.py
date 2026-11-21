@@ -1,14 +1,15 @@
 #!/usr/bin/env python3
 """Select the dedicated issue-triage check for an isolated triage tree change.
 
-These inputs run only in the issue-event workflow, not the Pulse application.
-Their locked parser and silent-mutation tests still run on the proposed source,
-as do the independent secret scan and governance. Mixed, empty or unavailable
-diffs retain the ordinary application checks. Changes to this selector or its
-workflow/tests cannot opt themselves out of those checks.
+These inputs are not part of the Pulse application. Their locked parser and
+silent-mutation tests still run on the proposed source. The two intake forms
+also need the independent governance policy suite, so admit them only on main.
+Mixed, empty or unavailable diffs retain the ordinary application checks.
+Changes to this selector or its workflow/tests cannot opt themselves out.
 """
 
 import argparse
+import os
 import re
 import subprocess
 import sys
@@ -23,13 +24,18 @@ TRIAGE_INPUTS = frozenset({
     b".github/scripts/package-lock.json",
     b"docs/ISSUE_TRIAGE.md",
 })
+MAIN_INTAKE_FORMS = frozenset({
+    b".github/ISSUE_TEMPLATE/bug_report.yml",
+    b".github/ISSUE_TEMPLATE/v6_rc_feedback.yml",
+})
 
 
-def triage_only_paths(paths):
-    return bool(paths) and all(path in TRIAGE_INPUTS for path in paths)
+def triage_only_paths(paths, *, target_branch=""):
+    allowed = TRIAGE_INPUTS | MAIN_INTAKE_FORMS if target_branch == "main" else TRIAGE_INPUTS
+    return bool(paths) and all(path in allowed for path in paths)
 
 
-def triage_only_diff(base, head):
+def triage_only_diff(base, head, *, target_branch=""):
     if not COMMIT.fullmatch(base) or not COMMIT.fullmatch(head):
         return False
     try:
@@ -46,7 +52,7 @@ def triage_only_diff(base, head):
         return False
     if result.returncode != 0 or not result.stdout.endswith(b"\0"):
         return False
-    return triage_only_paths(result.stdout[:-1].split(b"\0"))
+    return triage_only_paths(result.stdout[:-1].split(b"\0"), target_branch=target_branch)
 
 
 def main():
@@ -54,7 +60,11 @@ def main():
     parser.add_argument("--base", required=True)
     parser.add_argument("--head", required=True)
     args = parser.parse_args()
-    print("true" if triage_only_diff(args.base, args.head) else "false")
+    # Stable patches can copy the workflow without updating this helper.
+    # Use the existing workflow environment; keep the original CLI intact.
+    target_branch = os.environ.get("GOVERNANCE_TARGET_BRANCH", "")
+    result = triage_only_diff(args.base, args.head, target_branch=target_branch)
+    print("true" if result else "false")
 
 
 if __name__ == "__main__":

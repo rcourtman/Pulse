@@ -1,6 +1,6 @@
 import { createSignal } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@solidjs/testing-library';
 import { OrganizationSharingPanel } from '../OrganizationSharingPanel';
 import { clearAuth, getApiToken, getOrgID, setApiToken, setOrgID } from '@/utils/apiClient';
 import { eventBus } from '@/stores/events';
@@ -46,15 +46,16 @@ const incomingShare: IncomingOrganizationShare = {
   sourceOrgName: peer.displayName,
 };
 const json = (value: unknown, status = 200) => new Response(JSON.stringify(value), { status });
-const deferred = () => {
-  let resolve!: () => void;
-  const promise = new Promise<void>((yes) => {
+const deferred = <T = void,>() => {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((yes) => {
     resolve = yes;
   });
   return { promise, resolve };
 };
 const fetchMock = vi.fn<typeof fetch>();
-let readGate: ReturnType<typeof deferred> | undefined;
+let readGate: ReturnType<typeof deferred<void>> | undefined;
+let outgoingGate: Promise<Response> | undefined;
 let failRead: boolean;
 let enabled: boolean;
 let outgoing: OrganizationShare[];
@@ -66,8 +67,10 @@ const reads = () =>
       (init?.method ?? 'GET') === 'GET' && (url === '/api/orgs' || String(url).startsWith(base())),
   );
 const reader = () => screen.getByRole('region', { name: 'Organization sharing' });
+const results = () => screen.getByRole('group', { name: 'Saved shares' });
 const warning = () => screen.getByRole('alert', { name: 'Organization sharing unavailable' });
 const reload = () => screen.getByRole('button', { name: 'Reload sharing' });
+const restart = () => screen.getByRole('button', { name: 'Restart sharing check' });
 const settle = () => new Promise<void>((resolve) => setTimeout(resolve, 15));
 const policy = (kind: 'ordinary' | 'read-only' | 'hidden') =>
   syncSessionPresentationPolicy({
@@ -117,6 +120,7 @@ beforeEach(async () => {
   document.cookie = `pulse_csrf=${csrf}; Path=/`;
   policy('ordinary');
   readGate = undefined;
+  outgoingGate = undefined;
   failRead = false;
   enabled = true;
   outgoing = [share];
@@ -135,6 +139,7 @@ beforeEach(async () => {
       else incoming = [{ ...incomingShare, status: 'accepted' }];
       return json({ error: 'Synthetic response unavailable after saved change' }, 503);
     }
+    if (url === `${base()}/shares` && outgoingGate) return outgoingGate;
     if (readGate) await readGate.promise;
     if (url === '/api/orgs') return json([org, peer]);
     for (const organization of [org, peer]) {
@@ -174,7 +179,8 @@ describe('manual sharing rereads retain keyboard context through real transport'
       if (activation === 'focused button') button.focus();
       fireEvent.click(button);
       expect(stable).toHaveFocus();
-      expect(stable).toHaveAttribute('aria-busy', 'true');
+      expect(results()).toHaveAttribute('aria-busy', 'true');
+      expect(results()).not.toContainElement(restart());
       expect(stable).toHaveAttribute('tabindex', '-1');
       expect(button).not.toBeInTheDocument();
       expect(
@@ -186,14 +192,64 @@ describe('manual sharing rereads retain keyboard context through real transport'
       await saved();
       expect(reader()).toBe(stable);
       expect(stable).toHaveFocus();
-      expect(stable).toHaveAttribute('aria-busy', 'false');
+      expect(results()).toHaveAttribute('aria-busy', 'false');
       expect(reads()).toHaveLength(10);
       expect(writes()).toHaveLength(0);
       expectBoundReads();
     },
   );
 
-  it('retains the same busy reader through a failed manual read', async () => {
+  it('replaces the whole pending scoped read and ignores a late outgoing result', async () => {
+    const firstOutgoing = deferred<Response>();
+    outgoingGate = firstOutgoing.promise;
+    open();
+    const stable = reader();
+    const action = restart();
+    expect(action).toHaveAccessibleDescription(
+      `Checking saved shares for ${orgID}. Restarting does not repeat a sharing change.`,
+    );
+    expect(action).toBeEnabled();
+    expect(results()).toHaveAttribute('aria-busy', 'true');
+    expect(results()).not.toContainElement(action);
+    expect(document.body).toHaveFocus();
+
+    await waitFor(() => expect(reads()).toHaveLength(5));
+    outgoingGate = undefined;
+    readGate = deferred();
+    fireEvent.click(action);
+    expect(stable).toHaveFocus();
+    await waitFor(() => expect(reads()).toHaveLength(10));
+    expect(
+      reads()
+        .slice(0, 5)
+        .every(([, init]) => init?.signal?.aborted),
+    ).toBe(true);
+    expect(
+      reads()
+        .slice(5)
+        .every(([, init]) => init?.signal?.aborted === false),
+    ).toBe(true);
+
+    firstOutgoing.resolve(json([{ ...share, resourceName: 'Retired result' }]));
+    await settle();
+    expect(results()).toHaveAttribute('aria-busy', 'true');
+    expect(screen.queryByText('Retired result')).not.toBeInTheDocument();
+    expect(within(results()).queryByRole('heading', { name: 'Outgoing Shares' })).toBeNull();
+
+    const outside = screen.getByRole('button', { name: 'Outside sharing' });
+    outside.focus();
+    readGate.resolve();
+    await saved();
+    expect(outside).toHaveFocus();
+    expect(screen.queryByRole('button', { name: 'Restart sharing check' })).toBeNull();
+    expect(screen.getByRole('heading', { name: 'Incoming Shares' })).toBeVisible();
+    expect(screen.queryByText('Retired result')).not.toBeInTheDocument();
+    expect(results()).toHaveAttribute('aria-busy', 'false');
+    expect(writes()).toHaveLength(0);
+    expectBoundReads();
+  });
+
+  it('retains the same reader through a failed manual read', async () => {
     await unavailable();
     const stable = reader();
     readGate = deferred();
@@ -205,7 +261,7 @@ describe('manual sharing rereads retain keyboard context through real transport'
     await settle();
     expect(reader()).toBe(stable);
     expect(stable).toHaveFocus();
-    expect(stable).toHaveAttribute('aria-busy', 'false');
+    expect(results()).toHaveAttribute('aria-busy', 'false');
     expect(reload()).toBeEnabled();
     expect(writes()).toHaveLength(0);
     expectBoundReads();
@@ -252,11 +308,19 @@ describe('manual sharing rereads retain keyboard context through real transport'
       );
       expect(init?.method).toBe(operation === 'remove outgoing' ? 'DELETE' : 'POST');
       expect(new Headers(init?.headers).get('X-CSRF-Token')).toBe(csrf);
-      readGate = deferred();
+      const firstRecovery = deferred();
+      readGate = firstRecovery;
       reload().focus();
       fireEvent.click(reload());
       expect(reader()).toHaveFocus();
-      expect(reader()).toHaveAttribute('aria-busy', 'true');
+      expect(results()).toHaveAttribute('aria-busy', 'true');
+      await waitFor(() => expect(reads()).toHaveLength(10));
+      readGate = deferred();
+      fireEvent.click(restart());
+      await waitFor(() => expect(reads()).toHaveLength(15));
+      firstRecovery.resolve();
+      await settle();
+      expect(results()).toHaveAttribute('aria-busy', 'true');
       readGate.resolve();
       await saved();
       expect(reader()).toHaveFocus();
@@ -268,7 +332,7 @@ describe('manual sharing rereads retain keyboard context through real transport'
         expect(
           screen.getByRole('button', { name: /^Remove share of vm:opaque::vm\/202/ }),
         ).toBeEnabled();
-      expect(reads()).toHaveLength(10);
+      expect(reads()).toHaveLength(15);
       expect(writes()).toHaveLength(1);
       expectBoundReads();
     },

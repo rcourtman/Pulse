@@ -102,6 +102,7 @@ func (m *Monitor) beginPVEBackupPublication(ctx context.Context, instance string
 // Keep accepted live state until an ordinary new read replaces it, but never
 // let a reused name/UPID borrow another connection's immutable guest results.
 func (m *Monitor) discardPVEBackupTaskCacheLocked(instance string) {
+	delete(m.pveArchiveWriters, instance)
 	delete(m.vzdumpJobLogHistoryFirst, instance)
 	for key := range m.vzdumpJobTaskCache {
 		if strings.HasPrefix(key, instance+"|") {

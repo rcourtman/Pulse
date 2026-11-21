@@ -1,0 +1,35 @@
+{
+  "version": 1,
+  "base_sha": "a696d13c7e844599cb618063a6a2c6c9f15eff13",
+  "verified_at": "2026-11-20T21:43:32Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/SSOReturnError.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/SSOReturnError.tsx": "d18b023c59153793864863a6cf9cf5bb3e22ca245b9516379cdadf3f9a69aa4f"
+  },
+  "routes": [
+    "/",
+    "/login"
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 800
+    },
+    {
+      "width": 320,
+      "height": 620
+    }
+  ],
+  "states": [
+    "Production-mode Pulse with controlled status reads and simulated OIDC and SAML returns. Playwright 1.56.1, desktop Chromium 141/light and touch-emulated WebKit 26 at 320 px/dark.",
+    "Ten matched before/after pairs inspected: session and sign-in option checks pending or failed, and the option check retry in flight, on desktop and narrow screens.",
+    "The last attempt reason and current check remain distinct. The new light alert measured 5.91:1 glyph-to-fill contrast (4.41:1 in the first pass) and the dark sample remained 7.53:1. Existing retry, guidance and Help are visible in the relevant states."
+  ],
+  "interactions": [
+    "209 final assertions passed. Tab/Enter and taps use the existing read-only retry controls; the pending Login retry remains disabled and desktop keyboard focus stays on it.",
+    "Verified discovery restores only the existing permitted form or listed SSO option and consumes only the original callback parameters. Unknown detail is generic; no sign-in POST, setup or external IdP request."
+  ]
+}

@@ -1,0 +1,41 @@
+{
+  "version": 1,
+  "base_sha": "9be8e06726f2ec09fb40e5d0efd07b6c998be08f",
+  "verified_at": "2026-11-20T21:15:14Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/App.tsx",
+    "frontend-modern/src/components/AppBootstrapStatus.tsx",
+    "frontend-modern/src/components/Login.tsx",
+    "frontend-modern/src/components/SSOReturnError.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/App.tsx": "efd23df5b7da12c1e2e334415de4e9f10717c23a76aca256ffea47cf4d20eee7",
+    "frontend-modern/src/components/AppBootstrapStatus.tsx": "9c328ac12caa6e75e1a7fddd7cbfe811c0c4ad0b8adf81d3db8d18a80e0925b3",
+    "frontend-modern/src/components/Login.tsx": "a623e315ccdfc1ef01fae5291f281eb771278603dc175afc30892ba43e7769e1",
+    "frontend-modern/src/components/SSOReturnError.tsx": "3d4053ded5380413aa9e22035295158d13ca7fbf0debf9e8cadadd172458b406"
+  },
+  "routes": [
+    "/",
+    "/login"
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 800
+    },
+    {
+      "width": 320,
+      "height": 620
+    }
+  ],
+  "states": [
+    "Production-mode Pulse frontend with simulated SSO returns and controlled read-only HTTP responses. Chromium 141 desktop light and touch-emulated WebKit 26 narrow dark, Playwright 1.56.1.",
+    "Ten matched and inspected before/after pairs: pending and failed session bootstrap, pending and failed sign-in option discovery, and discovery retry in progress at both widths.",
+    "The same fixed OIDC group and SAML expiration messages remain readable alongside the distinct live check status. Retry and existing sign-in Help remain visible; no new horizontal overflow. Unknown callback detail is generic and a success hint does not become an alert."
+  ],
+  "interactions": [
+    "188 baseline and 209 candidate assertions. Keyboard and touch use the existing Retry connection and Retry sign-in check. The focused discovery retry remains disabled in flight; after recovery, focus and real options return as before.",
+    "On verified discovery, the listed SSO button or permitted local form returns and the recognized callback query fields are consumed, leaving unrelated fields. No setup, sign-in POST, or request to an external identity provider."
+  ]
+}

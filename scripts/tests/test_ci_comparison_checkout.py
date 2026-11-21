@@ -41,6 +41,9 @@ class ComparisonCheckoutTest(unittest.TestCase):
         for number in range(8):
             self.write("docs/readme.md", f"history {number}\n")
             self.commit()
+        # Form cases compare after the unrelated history. Using self.base
+        # would also include docs/readme.md and exercise the mixed path.
+        self.after_history = self.git(self.seed, "rev-parse", "HEAD")
         workflow = yaml.safe_load(WORKFLOW.read_text())
         self.job = workflow["jobs"]["changes"]
         self.prepare = next(step for step in self.job["steps"]
@@ -83,7 +86,7 @@ class ComparisonCheckoutTest(unittest.TestCase):
         self.assertEqual(self.git(self.repo, "status", "--porcelain"), "")
         return result
 
-    def classify(self, base, event="push"):
+    def classify(self, base, event="push", branch="main"):
         script = self.classifier
         for name, value in {"github.event_name": event,
                             "github.event.pull_request.base.sha": base,
@@ -94,7 +97,7 @@ class ComparisonCheckoutTest(unittest.TestCase):
         output.write_text("")
         result = subprocess.run(["bash", "-c", script], cwd=self.repo,
                                 env={**os.environ, "GITHUB_OUTPUT": str(output),
-                                     "GOVERNANCE_TARGET_BRANCH": "main"},
+                                     "GOVERNANCE_TARGET_BRANCH": branch},
                                 capture_output=True, text=True, timeout=15)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         return dict(line.split("=", 1) for line in output.read_text().splitlines())
@@ -149,6 +152,88 @@ class ComparisonCheckoutTest(unittest.TestCase):
                  "user.email=fixture@example.invalid", "commit", "-qm", "receipt")
         self.head = self.git(self.repo, "rev-parse", "HEAD")
         self.assertEqual(self.classify(receipt_base), NO_CHECKS)
+
+    def test_two_intake_forms_and_their_locked_tests_use_triage_on_main(self):
+        self.write(".github/ISSUE_TEMPLATE/bug_report.yml", "name: Bug report\n")
+        self.write(".github/ISSUE_TEMPLATE/v6_rc_feedback.yml", "name: Preview feedback\n")
+        self.write(".github/scripts/issue-version-triage.test.cjs", "// changed form test\n")
+        self.commit()
+        self.checkout()
+        self.run_prepare(self.after_history)
+        for event in ("pull_request", "push"):
+            with self.subTest(event=event):
+                self.assertEqual(self.classify(self.after_history, event),
+                                 {**NO_CHECKS, "triage_helper": "true"})
+                for branch in ("", "pulse/v6-release", "release/v6.8.1"):
+                    self.assertEqual(self.classify(self.after_history, event, branch)["code"], "true")
+        self.run_prepare(self.base)
+        self.assertEqual(self.classify(self.base, "pull_request")["code"], "true")
+
+    def test_intake_scope_does_not_include_mixed_product_changes(self):
+        self.write(".github/ISSUE_TEMPLATE/bug_report.yml", "name: Bug report\n")
+        self.write("internal/fixture.go", "package fixture\n")
+        self.commit()
+        self.checkout()
+        self.run_prepare(self.after_history)
+        flags = self.classify(self.after_history, "pull_request")
+        self.assertEqual(flags["code"], "true")
+        self.assertEqual(flags["triage_helper"], "true")
+
+    def test_a_rename_into_intake_cannot_hide_a_product_deletion(self):
+        self.write("internal/fixture.go", "package fixture\n")
+        self.write(".github/ISSUE_TEMPLATE/bug_report.yml", "name: Bug report\n")
+        base = self.commit()
+        (self.seed / "internal/fixture.go").rename(
+            self.seed / ".github/ISSUE_TEMPLATE/v6_rc_feedback.yml")
+        self.commit()
+        self.checkout()
+        self.run_prepare(base)
+        flags = self.classify(base, "pull_request")
+        self.assertEqual(flags["code"], "true")
+        self.assertEqual(flags["triage_helper"], "true")
+
+    def test_non_intake_forms_are_not_in_the_allowlist(self):
+        self.write(".github/ISSUE_TEMPLATE/bug_report.yml", "name: Bug report\n")
+        self.write(".github/ISSUE_TEMPLATE/config.yml", "blank_issues_enabled: false\n")
+        self.commit()
+        self.checkout()
+        self.run_prepare(self.after_history)
+        flags = self.classify(self.after_history, "pull_request")
+        self.assertEqual(flags["code"], "true")
+        self.assertEqual(flags["triage_helper"], "true")
+
+    def test_form_checks_are_independent_and_triage_failure_blocks_required_frontend(self):
+        governance = yaml.load((ROOT / ".github/workflows/canonical-governance.yml").read_text(),
+                               Loader=yaml.BaseLoader)
+        for event in ("pull_request", "push"):
+            self.assertIn("main", governance["on"][event]["branches"])
+            self.assertNotIn("paths-ignore", governance["on"][event])
+            self.assertNotIn("paths", governance["on"][event])
+        form_policy = next(step for step in governance["jobs"]["governance"]["steps"]
+                           if step.get("run") == "python3 scripts/release_control/release_promotion_policy_test.py")
+        self.assertNotIn("if", form_policy)
+        self.assertNotIn("continue-on-error", form_policy)
+
+        frontend = yaml.safe_load(WORKFLOW.read_text())["jobs"]["frontend"]
+        self.assertEqual(frontend["name"], "Frontend")
+        self.assertIn("triage-helper", frontend["needs"])
+        gate = frontend["steps"][0]
+        self.assertEqual(gate["if"], "always() && needs.changes.outputs.code == 'false'")
+        self.assertEqual(gate["env"], {
+            "TRIAGE_REQUIRED": "${{ needs.changes.outputs.triage_helper }}",
+            "TRIAGE_RESULT": "${{ needs.triage-helper.result }}",
+        })
+        for required, result, expected in (
+            ("true", "success", 0), ("false", "skipped", 0), ("true", "failure", 1),
+            ("true", "cancelled", 1), ("true", "skipped", 1), ("true", "", 1),
+            ("", "skipped", 1), ("false", "failure", 1),
+        ):
+            with self.subTest(required=required, result=result):
+                verdict = subprocess.run(["bash", "-c", gate["run"]],
+                                         env={**os.environ, "TRIAGE_REQUIRED": required,
+                                              "TRIAGE_RESULT": result},
+                                         capture_output=True, text=True, timeout=5)
+                self.assertEqual(verdict.returncode, expected, verdict.stdout + verdict.stderr)
 
     def test_absent_or_invalid_base_cannot_become_a_fetch_option_or_skip_tests(self):
         self.checkout()

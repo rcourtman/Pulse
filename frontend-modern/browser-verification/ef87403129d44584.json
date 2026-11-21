@@ -1,0 +1,43 @@
+{
+  "version": 1,
+  "base_sha": "ed6bc5ddf65d9e9fca0c0baec56983d1209efd09",
+  "verified_at": "2026-11-20T19:39:38Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/SSOProvidersPanel.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/SSOProvidersPanel.tsx": "424dffc37d3237e5018c13f6d1ffaae897389fea2a1af624201b98581b88fd17"
+  },
+  "routes": [
+    "/settings/security-sso"
+  ],
+  "viewports": [
+    {
+      "width": 1366,
+      "height": 820,
+      "browser": "Chromium 141.0.7390.37",
+      "theme": "light",
+      "input": "keyboard"
+    },
+    {
+      "width": 320,
+      "height": 700,
+      "browser": "WebKit 26.0",
+      "theme": "dark",
+      "input": "touch"
+    }
+  ],
+  "states": [
+    "SAML rollover: one reported expired and one current certificate, first at Test, then at the top of setup, then at focused result details",
+    "SAML metadata with only a current certificate, and manual SSO URL format without metadata",
+    "OIDC exact-issuer discovery, and a failed SAML metadata check",
+    "Pending test and retained unsaved draft, with the same safe fixtures before and after"
+  ],
+  "interactions": [
+    "Run the setup check on the real editor route with keyboard and touch; assert one unchanged fixture request and no provider save or network request outside the fixture",
+    "Verify Test describes the visible summary and stays focused on desktop; jump explicitly to the detailed result, dismiss to Test, cancel without a save",
+    "Check the setup URL, Test, Preview when offered, Cancel and Save stay visible or reachable in the matched states; the IdP-initiated SSO checkbox stays visible and hit-testable at the rollover details jump",
+    "Playwright 1.56.1 passed 279 final interaction assertions; all twelve matched baseline and candidate capture pairs inspected natively"
+  ]
+}
