@@ -129,7 +129,9 @@ describe('Proxmox TLS troubleshooting guide', () => {
 
   it('explains member access failures without treating them as downtime or asking for wider scope', () => {
     const { article } = testScopeSection();
-    const details = article.querySelector('#cluster-members-and-conflicting-saved-trust + p');
+    const details = article.querySelector<HTMLParagraphElement>(
+      '#cluster-members-and-conflicting-saved-trust + p',
+    );
     expect(details).not.toBeNull();
     expect(prose(details!)).toContain("open the failed member's details with touch or keyboard");
     expect(prose(details!)).toContain(
