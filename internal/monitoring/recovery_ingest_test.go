@@ -792,3 +792,174 @@ func TestRecoveryIngestForgetsUnsettledGuestsOfARemovedConnection(t *testing.T) 
 		t.Fatalf("connection removed: state = %s, want unprotected", got)
 	}
 }
+
+func TestRecoveryIngestSkipsUnchangedCompleteInventoryAndAppliesDeltas(t *testing.T) {
+	m, manager := recoveryIngestTestMonitor(t)
+	store, err := manager.StoreForOrg("default")
+	if err != nil {
+		t.Fatalf("StoreForOrg(default): %v", err)
+	}
+	ctx := context.Background()
+
+	scope := &recoveryReconcileScope{
+		provider: string(recovery.ProviderProxmoxPBS),
+		idPrefix: "pbs-backup:",
+		instance: "pbs-main",
+	}
+	baseBackup := time.Now().UTC().Add(-2 * time.Hour).Truncate(time.Second)
+	t1 := time.Now().UTC().Add(-2 * time.Minute).Truncate(time.Millisecond)
+	t2 := t1.Add(time.Minute)
+	t3 := t2.Add(time.Minute)
+	t4 := t3.Add(time.Minute)
+	t5 := t4.Add(time.Minute)
+
+	boolPtr := func(v bool) *bool { return &v }
+	makePoint := func(id string, verified bool, outcome recovery.Outcome, ingestedAt time.Time) recovery.RecoveryPoint {
+		t.Helper()
+		p := recovery.RecoveryPoint{
+			ID:                   id,
+			Provider:             recovery.ProviderProxmoxPBS,
+			ProviderScope:        "pbs-main",
+			Kind:                 recovery.KindBackup,
+			Mode:                 recovery.ModeRemote,
+			Outcome:              outcome,
+			StartedAt:            &baseBackup,
+			CompletedAt:          &baseBackup,
+			Verified:             boolPtr(verified),
+			SubjectResourceID:    "proxmox:vm:pve:100",
+			RepositoryResourceID: "pbs:datastore:pbs-main:store",
+			RepositoryRef:        &recovery.ExternalRef{Type: "pbs-datastore", ID: "pbs-main:store", Namespace: "pbs-main"},
+			Details:              map[string]any{"vmid": "100"},
+		}
+		ev, err := recovery.NewRecoveryPointEvidence(p, "pbs-backup-inventory", ingestedAt)
+		if err != nil {
+			t.Fatalf("NewRecoveryPointEvidence: %v", err)
+		}
+		p.Evidence = ev
+		return p
+	}
+	makeObs := func(completeness recovery.ProtectionHistoryCompleteness, perms operationaltrust.EvidencePermissions, at time.Time) recovery.ProtectionProviderObservation {
+		t.Helper()
+		obs, err := recovery.NewProtectionProviderObservation(
+			recovery.ProviderProxmoxPBS, "pbs-backup-inventory", "pbs-main",
+			recovery.OutcomeSuccess, completeness, perms, true, at, at, nil,
+		)
+		if err != nil {
+			t.Fatalf("NewProtectionProviderObservation: %v", err)
+		}
+		return obs
+	}
+	pointIngestedAt := func(id string) time.Time {
+		t.Helper()
+		pts, _, err := store.ListPoints(ctx, recovery.ListPointsOptions{Provider: recovery.ProviderProxmoxPBS, Limit: 20})
+		if err != nil {
+			t.Fatalf("ListPoints: %v", err)
+		}
+		for _, p := range pts {
+			if p.ID == id && p.Evidence != nil {
+				return p.Evidence.IngestedAt
+			}
+		}
+		return time.Time{}
+	}
+
+	// Poll 1: initial complete healthy inventory persists both points.
+	m.ingestRecoveryPointsBestEffort(ctx, recoveryIngestBatch{
+		observations: []recovery.ProtectionProviderObservation{
+			makeObs(recovery.ProtectionHistoryComplete, operationaltrust.EvidencePermissionsSufficient, t1),
+		},
+		points: []recovery.RecoveryPoint{
+			makePoint("pbs-backup:pbs-main:store:vm:100:1", true, recovery.OutcomeSuccess, t1),
+			makePoint("pbs-backup:pbs-main:store:vm:100:2", false, recovery.OutcomeSuccess, t1),
+		},
+		reconcile: scope,
+	})
+	if got := pointIngestedAt("pbs-backup:pbs-main:store:vm:100:1"); !got.Equal(t1) {
+		t.Fatalf("poll 1 point 1 ingestedAt = %v, want %v", got, t1)
+	}
+
+	// Poll 2: semantically identical complete poll at t2 must NOT rewrite unchanged rows.
+	m.ingestRecoveryPointsBestEffort(ctx, recoveryIngestBatch{
+		observations: []recovery.ProtectionProviderObservation{
+			makeObs(recovery.ProtectionHistoryComplete, operationaltrust.EvidencePermissionsSufficient, t2),
+		},
+		points: []recovery.RecoveryPoint{
+			makePoint("pbs-backup:pbs-main:store:vm:100:1", true, recovery.OutcomeSuccess, t2),
+			makePoint("pbs-backup:pbs-main:store:vm:100:2", false, recovery.OutcomeSuccess, t2),
+		},
+		reconcile: scope,
+	})
+	if got := pointIngestedAt("pbs-backup:pbs-main:store:vm:100:1"); !got.Equal(t1) {
+		t.Fatalf("unchanged poll 2 rewrote point 1: ingestedAt = %v, want preserved %v", got, t1)
+	}
+	if got := pointIngestedAt("pbs-backup:pbs-main:store:vm:100:2"); !got.Equal(t1) {
+		t.Fatalf("unchanged poll 2 rewrote point 2: ingestedAt = %v, want preserved %v", got, t1)
+	}
+
+	// Poll 3: only point 2 changes verification false -> true; point 1 stays untouched while point 2 updates.
+	m.ingestRecoveryPointsBestEffort(ctx, recoveryIngestBatch{
+		observations: []recovery.ProtectionProviderObservation{
+			makeObs(recovery.ProtectionHistoryComplete, operationaltrust.EvidencePermissionsSufficient, t3),
+		},
+		points: []recovery.RecoveryPoint{
+			makePoint("pbs-backup:pbs-main:store:vm:100:1", true, recovery.OutcomeSuccess, t3),
+			makePoint("pbs-backup:pbs-main:store:vm:100:2", true, recovery.OutcomeSuccess, t3),
+		},
+		reconcile: scope,
+	})
+	if got := pointIngestedAt("pbs-backup:pbs-main:store:vm:100:1"); !got.Equal(t1) {
+		t.Fatalf("delta poll 3 needlessly rewrote unchanged point 1: ingestedAt = %v, want %v", got, t1)
+	}
+	if got := pointIngestedAt("pbs-backup:pbs-main:store:vm:100:2"); !got.Equal(t3) {
+		t.Fatalf("delta poll 3 did not update changed point 2: ingestedAt = %v, want %v", got, t3)
+	}
+
+	// Poll 4: point 2 is pruned on PBS -> reconcile deletes it while keeping point 1.
+	m.ingestRecoveryPointsBestEffort(ctx, recoveryIngestBatch{
+		observations: []recovery.ProtectionProviderObservation{
+			makeObs(recovery.ProtectionHistoryComplete, operationaltrust.EvidencePermissionsSufficient, t4),
+		},
+		points: []recovery.RecoveryPoint{
+			makePoint("pbs-backup:pbs-main:store:vm:100:1", true, recovery.OutcomeSuccess, t4),
+		},
+		reconcile: scope,
+	})
+	if got := pointIngestedAt("pbs-backup:pbs-main:store:vm:100:2"); !got.IsZero() {
+		t.Fatalf("removed point 2 still present after poll 4 (ingestedAt=%v)", got)
+	}
+
+	// Poll 5: partial observation bypasses steady-state skip so re-read point 1 renews its IngestedAt for pointConfirmedByObservation.
+	m.ingestRecoveryPointsBestEffort(ctx, recoveryIngestBatch{
+		observations: []recovery.ProtectionProviderObservation{
+			makeObs(recovery.ProtectionHistoryPartial, operationaltrust.EvidencePermissionsPartial, t5),
+		},
+		points: []recovery.RecoveryPoint{
+			makePoint("pbs-backup:pbs-main:store:vm:100:1", true, recovery.OutcomeSuccess, t5),
+		},
+	})
+	if got := pointIngestedAt("pbs-backup:pbs-main:store:vm:100:1"); !got.Equal(t5) {
+		t.Fatalf("partial poll 5 did not renew re-read point 1 evidence: ingestedAt = %v, want %v", got, t5)
+	}
+
+	// Poll 6 & 7: OutcomeRunning points always renew IngestedAt even across identical complete polls.
+	t6 := t5.Add(time.Minute)
+	t7 := t6.Add(time.Minute)
+	for _, at := range []time.Time{t6, t7} {
+		m.ingestRecoveryPointsBestEffort(ctx, recoveryIngestBatch{
+			observations: []recovery.ProtectionProviderObservation{
+				makeObs(recovery.ProtectionHistoryComplete, operationaltrust.EvidencePermissionsSufficient, at),
+			},
+			points: []recovery.RecoveryPoint{
+				makePoint("pbs-backup:pbs-main:store:vm:100:1", true, recovery.OutcomeSuccess, at),
+				makePoint("pbs-backup:pbs-main:store:vm:100:running", false, recovery.OutcomeRunning, at),
+			},
+			reconcile: scope,
+		})
+	}
+	if got := pointIngestedAt("pbs-backup:pbs-main:store:vm:100:1"); !got.Equal(t6) {
+		t.Fatalf("completed point 1 should not be rewritten on poll 7: ingestedAt = %v, want %v", got, t6)
+	}
+	if got := pointIngestedAt("pbs-backup:pbs-main:store:vm:100:running"); !got.Equal(t7) {
+		t.Fatalf("running point must renew IngestedAt on every poll: ingestedAt = %v, want %v", got, t7)
+	}
+}
