@@ -41,6 +41,9 @@ const (
 	notificationAuditDestinationColumn            = "destination_id"
 	notificationQueueDirName                      = "notifications"
 	notificationQueueFileName                     = "notification_queue.db"
+	autoReplayDLQWindow                           = 24 * time.Hour
+	autoReplayDLQBatchLimit                       = 25
+	autoReplayDLQCooldown                         = 5 * time.Minute
 )
 
 // NotificationQueueStatus represents the status of a queued notification
@@ -203,11 +206,12 @@ type NotificationQueue struct {
 	quietHoursPolicy        func() func(*alerts.Alert, time.Time) *time.Time
 	now                     func() time.Time // Queue scheduling clock; nil uses wall time.
 	occurrenceLifecycle     func(string, time.Time) alerts.NotificationOccurrenceLifecycle
-	deliveryHealthChanged   func()              // Reconcile the monitoring-owned delivery alert after health-changing transitions
-	workerSem               chan struct{}       // Semaphore for limiting concurrent workers
-	processingNotifications map[string]struct{} // Owned row attempts; guarded by mu.
-	rehearsalErrors         map[string]struct{} // Evidence failures fence this producer until restart; guarded by mu.
-	rehearsalOwner          string              // This queue incarnation owns new rehearsal admissions.
+	deliveryHealthChanged   func()               // Reconcile the monitoring-owned delivery alert after health-changing transitions
+	workerSem               chan struct{}        // Semaphore for limiting concurrent workers
+	processingNotifications map[string]struct{}  // Owned row attempts; guarded by mu.
+	rehearsalErrors         map[string]struct{}  // Evidence failures fence this producer until restart; guarded by mu.
+	rehearsalOwner          string               // This queue incarnation owns new rehearsal admissions.
+	lastAutoReplay          map[string]time.Time // Per-destination recovery replay cooldown; guarded by mu.
 }
 
 // notificationDeliveryGate orders delivery and cancellation for a single
@@ -1449,6 +1453,202 @@ func (nq *NotificationQueue) DismissTerminalFailures() (int, error) {
 	return nq.resolveTerminalFailures(false)
 }
 
+// replayRecoverableDeadLettersForDestination re-queues a bounded batch of
+// recent, retryable dead-letter deliveries for the exact same destination and
+// config snapshot after a live delivery to that destination succeeds.
+//
+// Invariants:
+//   - Scoped to the exact same base notification channel (alert + resolved)
+//     and identical snapshotted config JSON, so edited/sibling destinations
+//     never cross-replay.
+//   - Only replays rows whose latest audit failure class is retryable
+//     (connectivity, server_error, rate_limited, tls, unknown); deterministic
+//     failures (authentication, configuration, rejected) remain in DLQ.
+//   - Bounded to autoReplayDLQWindow (24h), autoReplayDLQBatchLimit (25), and
+//     autoReplayDLQCooldown (5m per destination once a batch replays) to
+//     prevent ancient alert storms and cascading batch drain.
+//   - At most one automatic recovery replay per row (enforced via immutable
+//     audit count <= max_attempts) with a single delivery attempt on replay,
+//     preventing infinite loops on flapping destinations while leaving manual
+//     RetryTerminalFailures unconstrained.
+func (nq *NotificationQueue) replayRecoverableDeadLettersForDestination(notif *QueuedNotification) (int, error) {
+	if nq == nil || nq.db == nil || notif == nil {
+		return 0, nil
+	}
+	baseType, _ := normalizeQueueType(notif.Type)
+	rawConfig := string(notif.Config)
+	trimmedConfig := strings.TrimSpace(rawConfig)
+	if baseType == "" || trimmedConfig == "" || trimmedConfig == "{}" || trimmedConfig == "null" {
+		return 0, nil
+	}
+
+	nq.mu.Lock()
+	replayed, err := nq.replayRecoverableDeadLettersForDestinationNoLock(notif.ID, baseType, rawConfig)
+	nq.mu.Unlock()
+	if err != nil {
+		return 0, err
+	}
+	if replayed > 0 {
+		select {
+		case nq.notifyChan <- struct{}{}:
+		default:
+		}
+		log.Info().
+			Str("component", "notification_queue").
+			Str("action", "auto_replay_dlq_on_recovery").
+			Str("triggerId", notif.ID).
+			Str("type", baseType).
+			Int("replayed", replayed).
+			Msg("Auto-replayed recoverable dead-letter notifications after destination recovery")
+	}
+	return replayed, nil
+}
+
+func (nq *NotificationQueue) replayRecoverableDeadLettersForDestinationNoLock(triggerID, baseType, rawConfig string) (int, error) {
+	now := time.Now()
+	if nq.now != nil {
+		now = nq.now()
+	}
+	destinationKey := baseType + "\x00" + rawConfig
+	if nq.lastAutoReplay != nil {
+		if lastAt, ok := nq.lastAutoReplay[destinationKey]; ok && now.Sub(lastAt) < autoReplayDLQCooldown {
+			return 0, nil
+		}
+	}
+
+	cutoff := now.Add(-autoReplayDLQWindow).Unix()
+	resolvedType := baseType + "_resolved"
+
+	rows, err := nq.db.Query(`
+		SELECT
+			q.id,
+			q.max_attempts,
+			q.operational_links,
+			COALESCE((
+				SELECT a.failure_class
+				FROM notification_audit a
+				WHERE a.notification_id = q.id
+				ORDER BY a.timestamp DESC, a.id DESC
+				LIMIT 1
+			), '') AS latest_failure_class,
+			COALESCE((
+				SELECT a.error_message
+				FROM notification_audit a
+				WHERE a.notification_id = q.id
+				ORDER BY a.timestamp DESC, a.id DESC
+				LIMIT 1
+			), '') AS latest_error
+		FROM notification_queue q
+		WHERE q.status IN ('failed', 'dlq')
+		  AND q.id != ?
+		  AND q.type IN (?, ?)
+		  AND q.config = ?
+		  AND COALESCE(q.completed_at, q.created_at) >= ?
+		  AND NOT EXISTS (
+			SELECT 1 FROM notification_audit a
+			WHERE a.notification_id = q.id AND a.success = 1
+		  )
+		  AND (SELECT COUNT(*) FROM notification_audit a WHERE a.notification_id = q.id) > 0
+		  AND (SELECT COUNT(*) FROM notification_audit a WHERE a.notification_id = q.id) <= CASE WHEN q.max_attempts > 0 THEN q.max_attempts ELSE 1 END
+		ORDER BY COALESCE(q.completed_at, q.created_at), q.id
+		LIMIT ?
+	`, triggerID, baseType, resolvedType, rawConfig, cutoff, autoReplayDLQBatchLimit)
+	if err != nil {
+		return 0, fmt.Errorf("query recoverable dead-letter notifications: %w", err)
+	}
+
+	type candidate struct {
+		id          string
+		maxAttempts int
+		links       []operationaltrust.NotificationLink
+	}
+	candidates := make([]candidate, 0)
+	for rows.Next() {
+		var (
+			id                 string
+			maxAttempts        int
+			rawLinks           string
+			latestFailureClass string
+			latestError        string
+		)
+		if err := rows.Scan(&id, &maxAttempts, &rawLinks, &latestFailureClass, &latestError); err != nil {
+			_ = rows.Close()
+			return 0, fmt.Errorf("scan recoverable dead-letter notification: %w", err)
+		}
+		fc := NotificationFailureClass(strings.TrimSpace(latestFailureClass))
+		if fc == "" {
+			fc = ClassifyNotificationFailure(latestError)
+		}
+		if !fc.Retryable() {
+			continue
+		}
+		var links []operationaltrust.NotificationLink
+		if err := json.Unmarshal([]byte(rawLinks), &links); err != nil {
+			_ = rows.Close()
+			return 0, fmt.Errorf("decode recoverable dead-letter notification links: %w", err)
+		}
+		candidates = append(candidates, candidate{id: id, maxAttempts: maxAttempts, links: links})
+	}
+	if err := rows.Close(); err != nil {
+		return 0, fmt.Errorf("close recoverable dead-letter notification rows: %w", err)
+	}
+	if err := rows.Err(); err != nil {
+		return 0, fmt.Errorf("iterate recoverable dead-letter notifications: %w", err)
+	}
+	if len(candidates) == 0 {
+		return 0, nil
+	}
+
+	tx, err := nq.db.Begin()
+	if err != nil {
+		return 0, fmt.Errorf("begin auto-replay dead-letter recovery: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	replayed := 0
+	for _, item := range candidates {
+		linksJSON, err := json.Marshal(transitionNotificationLinks(item.links, operationaltrust.NotificationRetrying, now))
+		if err != nil {
+			return 0, fmt.Errorf("encode auto-replay notification links: %w", err)
+		}
+		replayAttempts := item.maxAttempts - 1
+		if replayAttempts < 0 {
+			replayAttempts = 0
+		}
+		result, err := tx.Exec(`
+			UPDATE notification_queue
+			SET status = 'pending', attempts = ?, last_attempt = NULL,
+			    last_error = NULL, next_retry_at = NULL, completed_at = NULL,
+			    operational_links = ?
+			WHERE id = ? AND status IN ('failed', 'dlq')
+		`, replayAttempts, string(linksJSON), item.id)
+		if err != nil {
+			return 0, fmt.Errorf("requeue recoverable dead-letter notification %s: %w", item.id, err)
+		}
+		if count, err := result.RowsAffected(); err == nil {
+			replayed += int(count)
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		return 0, fmt.Errorf("commit auto-replay dead-letter recovery: %w", err)
+	}
+	if replayed > 0 {
+		if nq.lastAutoReplay == nil {
+			nq.lastAutoReplay = make(map[string]time.Time)
+		}
+		if len(nq.lastAutoReplay) >= 256 {
+			for k, ts := range nq.lastAutoReplay {
+				if now.Sub(ts) >= autoReplayDLQCooldown {
+					delete(nq.lastAutoReplay, k)
+				}
+			}
+		}
+		nq.lastAutoReplay[destinationKey] = now
+	}
+	return replayed, nil
+}
+
 func (nq *NotificationQueue) resolveTerminalFailures(retry bool) (int, error) {
 	if nq == nil || nq.db == nil {
 		return 0, fmt.Errorf("notification queue not initialized")
@@ -2291,6 +2491,21 @@ func (nq *NotificationQueue) processNotification(notif *QueuedNotification) {
 		notif.ProviderAcceptedAt = &at
 		if err := nq.deferSettlement(notif, false); err != nil {
 			log.Error().Err(err).Msg("Failed to retain acknowledged notification settlement")
+		}
+	}
+
+	if success && notif.ProviderAcceptedAt == nil && !nq.stopping() {
+		replayed, replayErr := nq.replayRecoverableDeadLettersForDestination(notif)
+		if replayErr != nil {
+			log.Error().
+				Err(replayErr).
+				Str("component", "notification_queue").
+				Str("action", "auto_replay_dlq_on_recovery").
+				Str("id", notif.ID).
+				Str("type", notif.Type).
+				Msg("Failed to auto-replay recoverable dead-letter notifications")
+		} else if replayed > 0 {
+			healthChanged = true
 		}
 	}
 }

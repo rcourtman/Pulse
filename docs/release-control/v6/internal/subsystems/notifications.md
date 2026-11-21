@@ -2172,3 +2172,24 @@ masquerades as an empty setup.
 `internal/api/alerting/notifications_health_test.go`,
 `internal/api/alerting/notifications_test.go`, and
 `frontend-modern/src/api/__tests__/notifications.test.ts` verify this boundary.
+
+### Automatic destination-recovery DLQ replay (21 November 2026)
+
+When a live queued delivery succeeds in `NotificationQueue.processNotification`
+(`internal/notifications/queue.go`), `replayRecoverableDeadLettersForDestination`
+automatically re-queues up to 25 recent (within 24 hours) `failed`/`dlq`
+notifications matching the exact same channel family (alert and `_resolved`) and
+snapshotted destination config JSON, restricted strictly to retryable failure
+classes (`connectivity`, `server_error`, `rate_limited`, `tls`, `unknown`),
+with a 5-minute per-destination cooldown once a batch replays (preventing
+cascading batch storms) and at most one automatic replay per row (enforced via
+immutable `notification_audit` attempt count `<= max_attempts`, with one clean
+delivery attempt on replay). Deterministic failures (`authentication`,
+`configuration`, `rejected`), edited or sibling destinations, stale (>24h)
+dead-letters, and manual `SendTest*` probes remain untouched, while manual
+`RetryTerminalFailures` continues to work unconstrained.
+
+`internal/notifications/dlq_recovery_replay_test.go` verifies recovery replay,
+non-retryable exclusion, destination/config isolation, 24h freshness cutoff,
+single-replay anti-loop behavior on flapping destinations, and batch capping +
+cooldown drain.
