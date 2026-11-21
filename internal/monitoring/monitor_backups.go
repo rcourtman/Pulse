@@ -1918,6 +1918,12 @@ func pbsReadDenied(err error) bool {
 }
 
 func (m *Monitor) pollPBSBackups(ctx context.Context, instanceName string, client *pbs.Client, datastores []models.PBSDatastore, namespaceErrors map[string]error) {
+	m.pollPBSBackupsWithLiveLimit(ctx, instanceName, client, datastores, namespaceErrors, pbsBackupLiveStateLimit)
+}
+
+// Take the live limit once for admission and retention. Poll-to-recovery tests
+// can cross this boundary without persisting thousands of unrelated points.
+func (m *Monitor) pollPBSBackupsWithLiveLimit(ctx context.Context, instanceName string, client *pbs.Client, datastores []models.PBSDatastore, namespaceErrors map[string]error, liveStateLimit int) {
 	log.Debug().Str("instance", instanceName).Msg("polling PBS backups")
 
 	// Cache existing PBS backups so we can avoid redundant API calls when no changes occurred.
@@ -2027,7 +2033,7 @@ func (m *Monitor) pollPBSBackups(ctx context.Context, instanceName string, clien
 				if group.BackupCount == 0 {
 					continue
 				}
-				if projectedBackups >= pbsBackupLiveStateLimit {
+				if projectedBackups >= liveStateLimit {
 					// Listed nonempty groups can still hold backups. Preserve
 					// the location of the skipped read without calling it a
 					// provider failure or an authorization rejection.
@@ -2080,7 +2086,7 @@ func (m *Monitor) pollPBSBackups(ctx context.Context, instanceName string, clien
 					lastBackupTime.Equal(cached.latest) {
 
 					var clipped bool
-					allBackups, clipped = appendPBSBackupsWithinLimit(allBackups, cached.snapshots)
+					allBackups, clipped = appendPBSBackupsWithinLimit(allBackups, cached.snapshots, liveStateLimit)
 					historyLimited = historyLimited || clipped || cacheRead.snapshotCount > len(cached.snapshots)
 					observedGroups[key] = struct{}{}
 					groupsReused++
@@ -2102,9 +2108,9 @@ func (m *Monitor) pollPBSBackups(ctx context.Context, instanceName string, clien
 			}
 
 			groupsRequested += len(requests)
-			fetched := m.fetchPBSBackupSnapshots(ctx, client, instanceName, requests)
+			fetched := m.fetchPBSBackupSnapshots(ctx, client, instanceName, requests, liveStateLimit)
 			var clipped bool
-			allBackups, clipped = appendPBSBackupsWithinLimit(allBackups, fetched.backups)
+			allBackups, clipped = appendPBSBackupsWithinLimit(allBackups, fetched.backups, liveStateLimit)
 			historyLimited = historyLimited || clipped || fetched.historyLimited
 			datastoreNamespaceErrors += fetched.errors
 			datastoreTerminalNamespaceErrors += fetched.terminalErrors
@@ -2184,7 +2190,7 @@ func (m *Monitor) pollPBSBackups(ctx context.Context, instanceName string, clien
 	sortPBSBackupsByLatest(carriedBackups)
 	// Carried rows already have a provider-read gap. They cannot establish
 	// completeness even when they all fit.
-	allBackups, _ = appendPBSBackupsWithinLimit(allBackups, carriedBackups)
+	allBackups, _ = appendPBSBackupsWithinLimit(allBackups, carriedBackups, liveStateLimit)
 
 	log.Info().
 		Str("instance", instanceName).
@@ -2194,7 +2200,7 @@ func (m *Monitor) pollPBSBackups(ctx context.Context, instanceName string, clien
 	if historyLimited {
 		log.Warn().
 			Str("instance", instanceName).
-			Int("instance_limit", pbsBackupLiveStateLimit).
+			Int("instance_limit", liveStateLimit).
 			Int("group_limit", pbsBackupSnapshotsPerGroupLimit).
 			Msg("PBS backup history incomplete at Pulse retention limits")
 	}
@@ -2539,7 +2545,7 @@ type pbsBackupSnapshotFetchResult struct {
 	historyLimited bool
 }
 
-func (m *Monitor) fetchPBSBackupSnapshots(ctx context.Context, client *pbs.Client, instanceName string, requests []pbsBackupFetchRequest) pbsBackupSnapshotFetchResult {
+func (m *Monitor) fetchPBSBackupSnapshots(ctx context.Context, client *pbs.Client, instanceName string, requests []pbsBackupFetchRequest, liveStateLimit int) pbsBackupSnapshotFetchResult {
 	if len(requests) == 0 {
 		return pbsBackupSnapshotFetchResult{}
 	}
@@ -2628,7 +2634,7 @@ func (m *Monitor) fetchPBSBackupSnapshots(ctx context.Context, client *pbs.Clien
 	combined := pbsBackupSnapshotFetchResult{refreshed: make(map[pbsBackupGroupKey]pbsBackupCacheRead)}
 	for result := range results {
 		var clipped bool
-		combined.backups, clipped = appendPBSBackupsWithinLimit(combined.backups, result.backups)
+		combined.backups, clipped = appendPBSBackupsWithinLimit(combined.backups, result.backups, liveStateLimit)
 		combined.historyLimited = combined.historyLimited || clipped || result.historyLimited
 		combined.errors += result.errors
 		combined.terminalErrors += result.terminalErrors
@@ -2757,11 +2763,11 @@ func retainedPBSSnapshotCount(backupCount int) int {
 	return backupCount
 }
 
-func appendPBSBackupsWithinLimit(backups []models.PBSBackup, additions []models.PBSBackup) ([]models.PBSBackup, bool) {
+func appendPBSBackupsWithinLimit(backups []models.PBSBackup, additions []models.PBSBackup, liveStateLimit int) ([]models.PBSBackup, bool) {
 	if len(additions) == 0 {
 		return backups, false
 	}
-	remaining := max(0, pbsBackupLiveStateLimit-len(backups))
+	remaining := max(0, liveStateLimit-len(backups))
 	if len(additions) > remaining {
 		return append(backups, additions[:remaining]...), true
 	}

@@ -280,7 +280,7 @@ func TestFetchPBSBackupSnapshotsUsesBoundedWorkerPool(t *testing.T) {
 	}
 
 	m := &Monitor{}
-	result := m.fetchPBSBackupSnapshots(context.Background(), client, "pbs1", requests)
+	result := m.fetchPBSBackupSnapshots(context.Background(), client, "pbs1", requests, pbsBackupLiveStateLimit)
 	if result.errors != 0 || result.terminalErrors != 0 {
 		t.Fatalf("successful snapshot fetch lost quality: %+v", result)
 	}

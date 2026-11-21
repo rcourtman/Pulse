@@ -8,7 +8,6 @@ import (
 	"path"
 	"reflect"
 	"slices"
-	"strconv"
 	"sync/atomic"
 	"testing"
 
@@ -27,14 +26,15 @@ type pbsHistoryLimitInventory map[string][]pbsHistoryLimitGroup
 
 type pbsHistoryLimitFixture struct {
 	*pbsPosturePollFixture
+	liveLimit    int
 	inventory    atomic.Pointer[pbsHistoryLimitInventory]
 	edgeReads    atomic.Int32
 	allEdgeReads atomic.Int32
 }
 
-func newPBSHistoryLimitFixture(t *testing.T) *pbsHistoryLimitFixture {
+func newPBSHistoryLimitFixture(t *testing.T, liveLimit int) *pbsHistoryLimitFixture {
 	t.Helper()
-	f := &pbsHistoryLimitFixture{pbsPosturePollFixture: newPBSPosturePollFixture(t, 2)}
+	f := &pbsHistoryLimitFixture{pbsPosturePollFixture: newPBSPosturePollFixture(t, 2), liveLimit: liveLimit}
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		inv := f.inventory.Load()
 		store := path.Base(path.Dir(r.URL.Path))
@@ -92,16 +92,14 @@ func pbsHistoryLimitTimes(at int64, count int) []int64 {
 func (f *pbsHistoryLimitFixture) collect(t *testing.T, inv pbsHistoryLimitInventory) {
 	t.Helper()
 	f.inventory.Store(&inv)
-	f.m.pollPBSBackups(context.Background(), "pbs-main", f.client, []models.PBSDatastore{{Name: "archive"}, {Name: "edge"}}, nil)
+	f.m.pollPBSBackupsWithLiveLimit(context.Background(), "pbs-main", f.client, []models.PBSDatastore{{Name: "archive"}, {Name: "edge"}}, nil, f.liveLimit)
 	f.wait(t)
 }
 
 func (f *pbsHistoryLimitFixture) primary(filler int) []pbsHistoryLimitGroup {
 	groups := []pbsHistoryLimitGroup{{kind: "vm", id: "101", times: []int64{f.backupAt}}}
-	for i := 0; filler > 0; i++ {
-		count := min(filler, pbsBackupSnapshotsPerGroupLimit)
-		groups = append(groups, pbsHistoryLimitGroup{kind: "host", id: "fixture-host-" + strconv.Itoa(i), times: pbsHistoryLimitTimes(f.backupAt-3600, count)})
-		filler -= count
+	if filler > 0 {
+		groups = append(groups, pbsHistoryLimitGroup{kind: "host", id: "fixture-host", times: pbsHistoryLimitTimes(f.backupAt-3600, filler)})
 	}
 	return groups
 }
@@ -118,13 +116,17 @@ func (f *pbsHistoryLimitFixture) guestPoints(t *testing.T) []recovery.RecoveryPo
 }
 
 func TestPBSBackupHistoryInstanceLimitRetainsEvidence(t *testing.T) {
+	// The normal 5,000-row collection limit is covered separately by
+	// TestPollPBSBackupsBoundsLargeTopologyAcrossPolls. Here the persisted
+	// evidence matters, and the transitions only need a handful of rows.
+	const liveLimit = 6
 	for _, cached := range []bool{false, true} {
 		name := "fetched"
 		if cached {
 			name = "cached"
 		}
 		t.Run(name, func(t *testing.T) {
-			f := newPBSHistoryLimitFixture(t)
+			f := newPBSHistoryLimitFixture(t, liveLimit)
 			at, omittedAt := f.backupAt, f.backupAt-60
 			seedAt := at - 10
 			if cached {
@@ -144,7 +146,7 @@ func TestPBSBackupHistoryInstanceLimitRetainsEvidence(t *testing.T) {
 				t.Fatal("no accepted historical witness")
 			}
 
-			primary := f.primary(pbsBackupLiveStateLimit - 2)
+			primary := f.primary(liveLimit - 2)
 			f.collect(t, pbsHistoryLimitInventory{"archive": primary, "edge": edge(at, omittedAt)})
 			wantReads := int32(2)
 			if cached {
@@ -155,8 +157,8 @@ func TestPBSBackupHistoryInstanceLimitRetainsEvidence(t *testing.T) {
 			}
 			assertPBSHistoryLimitPosture(t, f, recovery.ProtectionHistoryPartial)
 			raw := f.m.state.GetPBSBackupsForInstance("pbs-main")
-			if len(raw) != pbsBackupLiveStateLimit {
-				t.Fatalf("raw snapshots=%d want=%d", len(raw), pbsBackupLiveStateLimit)
+			if len(raw) != liveLimit {
+				t.Fatalf("raw snapshots=%d want=%d", len(raw), liveLimit)
 			}
 			found := false
 			for _, row := range raw {
@@ -178,7 +180,7 @@ func TestPBSBackupHistoryInstanceLimitRetainsEvidence(t *testing.T) {
 				t.Fatal("overflow removed or renewed a verified historical point outside live retention")
 			}
 
-			// The provider now lists exactly 5,000 rows. The edge group
+			// The provider now lists exactly as many rows as can fit. The edge group
 			// shrank to the size of its clipped cache without changing
 			// its newest snapshot; only another read can confirm absence.
 			before := f.edgeReads.Load()
@@ -196,26 +198,28 @@ func TestPBSBackupHistoryInstanceLimitRetainsEvidence(t *testing.T) {
 			// Exhaust the budget before this namespace's nonempty group.
 			// Its prior point remains, but it cannot be freshly confirmed.
 			before = f.edgeReads.Load()
-			f.collect(t, pbsHistoryLimitInventory{"archive": f.primary(pbsBackupLiveStateLimit - 1), "edge": edge(at)})
+			f.collect(t, pbsHistoryLimitInventory{"archive": f.primary(liveLimit - 1), "edge": edge(at)})
 			assertPBSHistoryLimitPosture(t, f, recovery.ProtectionHistoryPartial, recovery.ProtectionUnreadScope{
 				Kind: recovery.ProtectionUnreadScopeNamespace, Storage: "edge",
 			})
 			if f.edgeReads.Load() != before || !reflect.DeepEqual(f.guestPoints(t), points) {
 				t.Fatal("skipped group started extra reads, renewed evidence or reconciled absence")
 			}
-			t.Logf("%s: 5,001 listed / 5,000 retained stayed partial; exact fit refetched; skipped group kept historical evidence", name)
+			t.Logf("%s: %d listed / %d retained stayed partial; exact fit refetched; skipped group kept historical evidence", name, liveLimit+1, liveLimit)
 		})
 	}
 }
 
 func TestPBSBackupHistoryLimitPreservesQueuedBudget(t *testing.T) {
-	f := newPBSHistoryLimitFixture(t)
-	warm := pbsHistoryLimitGroup{kind: "vm", id: "100", times: pbsHistoryLimitTimes(f.backupAt, 99)}
+	const liveLimit = 6
+	f := newPBSHistoryLimitFixture(t, liveLimit)
+	warm := pbsHistoryLimitGroup{kind: "vm", id: "100", times: pbsHistoryLimitTimes(f.backupAt, 3)}
 	f.collect(t, pbsHistoryLimitInventory{"archive": f.primary(0), "edge": {warm}})
 	queued := pbsHistoryLimitGroup{kind: "host", id: "queued", times: []int64{f.backupAt + 60}}
 	tail := pbsHistoryLimitGroup{kind: "host", id: "tail", times: []int64{f.backupAt - 60}}
 	f.collect(t, pbsHistoryLimitInventory{
-		"archive": f.primary(pbsBackupLiveStateLimit - 101),
+		// One guest, one filler, one queued fetch and three cached rows fit.
+		"archive": f.primary(1),
 		"edge":    {queued, warm, tail},
 	})
 	if f.allEdgeReads.Load() != 2 || f.edgeReads.Load() != 1 {
@@ -226,7 +230,7 @@ func TestPBSBackupHistoryLimitPreservesQueuedBudget(t *testing.T) {
 	for _, row := range raw {
 		foundQueued = foundQueued || row.VMID == "queued"
 	}
-	if len(raw) != pbsBackupLiveStateLimit || !foundQueued {
+	if len(raw) != liveLimit || !foundQueued {
 		t.Fatal("poll failed to retain the admitted queued group")
 	}
 	assertPBSHistoryLimitPosture(t, f, recovery.ProtectionHistoryPartial, recovery.ProtectionUnreadScope{
@@ -235,7 +239,7 @@ func TestPBSBackupHistoryLimitPreservesQueuedBudget(t *testing.T) {
 }
 
 func TestPBSBackupHistoryGroupLimitCountChangeRequiresRead(t *testing.T) {
-	f := newPBSHistoryLimitFixture(t)
+	f := newPBSHistoryLimitFixture(t, pbsBackupLiveStateLimit)
 	times := pbsHistoryLimitTimes(f.backupAt, pbsBackupSnapshotsPerGroupLimit+1)
 	collect := func(times []int64) {
 		f.collect(t, pbsHistoryLimitInventory{
