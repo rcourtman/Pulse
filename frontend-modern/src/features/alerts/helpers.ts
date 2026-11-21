@@ -113,6 +113,9 @@ export const createDefaultEmailConfig = (): UIEmailConfig => ({
   tagFilter: [],
   tagFilterMode: 'all',
   minimumSeverity: 'all',
+  subjectPrefix: '',
+  brandName: '',
+  footerNote: '',
 });
 
 export const readStringValue = (value: unknown, fallback = ''): string =>
@@ -152,6 +155,9 @@ export const normalizeEmailConfigFromAPI = (
     tagFilter: readStringArrayValue(value?.tagFilter),
     tagFilterMode: value?.tagFilterMode === 'any' ? 'any' : 'all',
     minimumSeverity: normalizeNotificationMinimumSeverity(value?.minimumSeverity),
+    subjectPrefix: readStringValue(value?.subjectPrefix, defaults.subjectPrefix),
+    brandName: readStringValue(value?.brandName, defaults.brandName),
+    footerNote: readStringValue(value?.footerNote, defaults.footerNote),
   };
 };
 

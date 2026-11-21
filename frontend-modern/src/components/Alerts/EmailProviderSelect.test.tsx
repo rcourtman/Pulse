@@ -786,4 +786,50 @@ describe('EmailProviderSelect', () => {
     );
     expect(usernameInput).toBeTruthy();
   });
+
+  it('keeps email branding fields collapsed by default and edits subject prefix, brand name, and footer note under advanced options', () => {
+    const [config, setConfig] = createSignal(
+      makeConfig({
+        subjectPrefix: '',
+        brandName: '',
+        footerNote: '',
+      }),
+    );
+
+    render(() => (
+      <EmailProviderSelect
+        config={config()}
+        onChange={(next) => {
+          setConfig(next);
+          onChangeMock(next);
+        }}
+        onTest={onTestMock}
+      />
+    ));
+
+    expect(screen.queryByRole('textbox', { name: 'Subject prefix' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('textbox', { name: 'Brand name' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('textbox', { name: 'Footer note' })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Show advanced options' }));
+
+    const subjectInput = screen.getByRole('textbox', { name: 'Subject prefix' });
+    const brandInput = screen.getByRole('textbox', { name: 'Brand name' });
+    const footerInput = screen.getByRole('textbox', { name: 'Footer note' });
+
+    fireEvent.input(subjectInput, { target: { value: '[Acme Ops]' } });
+    fireEvent.input(brandInput, { target: { value: 'Acme Infrastructure' } });
+    fireEvent.input(footerInput, { target: { value: 'Escalation desk' } });
+
+    expect(config().subjectPrefix).toBe('[Acme Ops]');
+    expect(config().brandName).toBe('Acme Infrastructure');
+    expect(config().footerNote).toBe('Escalation desk');
+    expect(onChangeMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        subjectPrefix: '[Acme Ops]',
+        brandName: 'Acme Infrastructure',
+        footerNote: 'Escalation desk',
+      }),
+    );
+  });
 });

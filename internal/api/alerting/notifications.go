@@ -284,6 +284,9 @@ func (h *NotificationHandlers) UpdateEmailConfig(w http.ResponseWriter, r *http.
 		TagFilter       *[]string `json:"tagFilter"`
 		TagMode         *string   `json:"tagFilterMode"`
 		MinimumSeverity *string   `json:"minimumSeverity"`
+		SubjectPrefix   *string   `json:"subjectPrefix"`
+		BrandName       *string   `json:"brandName"`
+		FooterNote      *string   `json:"footerNote"`
 	}
 	if err := json.Unmarshal(body, &presenceCheck); err != nil {
 		// Non-fatal, just means we can't do presence check
@@ -325,6 +328,19 @@ func (h *NotificationHandlers) UpdateEmailConfig(w http.ResponseWriter, r *http.
 	if presenceCheck.MinimumSeverity == nil {
 		config.MinimumSeverity = existingConfig.MinimumSeverity
 	}
+	if presenceCheck.SubjectPrefix == nil {
+		config.SubjectPrefix = existingConfig.SubjectPrefix
+	}
+	if presenceCheck.BrandName == nil {
+		config.BrandName = existingConfig.BrandName
+	}
+	if presenceCheck.FooterNote == nil {
+		config.FooterNote = existingConfig.FooterNote
+	}
+	branding := config.Branding()
+	config.SubjectPrefix = branding.SubjectPrefix
+	config.BrandName = branding.BrandName
+	config.FooterNote = branding.FooterNote
 
 	log.Info().
 		Bool("enabled", config.Enabled).

@@ -11750,3 +11750,16 @@ retaining the existing 90% coverage and determinate-share honesty guards
 `AvailabilityFleetView.test.tsx` cover window switching, coverage formatting,
 and range callbacks alongside desktop (`1440x900` light/dark) and narrow
 (`390x844`) browser proof.
+
+
+### Email branding & subject fields under Destinations advanced options
+
+`EmailProviderSelect` (`frontend-modern/src/components/Alerts/EmailProviderSelect.tsx`)
+reuses the shared `formField`, `labelClass`, `controlClass`, and `formHelpText`
+primitives inside the existing `Advanced options` disclosure to render optional
+`Subject prefix`, `Brand name`, and `Footer note` inputs with canonical
+presentation constants (`frontend-modern/src/utils/alertEmailPresentation.ts`),
+defaulting collapsed so primary SMTP setup stays uncluttered on desktop and
+mobile viewports. Verified in `EmailProviderSelect.test.tsx`,
+`EmailProviderSelect.supported-settings.test.tsx`, and live desktop/mobile
+browser inspection on `/alerts/notifications`.

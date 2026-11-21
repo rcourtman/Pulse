@@ -12214,3 +12214,12 @@ Verified by `TestHandleAgentInstallCommand_CustomAgentURLOverride`,
 `NodeModalSetupGuideSection.test.tsx`, `InfrastructureInstallerSection.test.tsx`,
 `useNodeModalState.agentInstall.test.ts`, `settingsArchitecture.test.ts`, and
 `frontend-modern/browser-verification/9734d949f31f8828.json`.
+
+
+### Email notification branding compatibility
+
+`PUT /api/notifications/email` (`internal/api/alerting/notifications.go`) adds
+optional structured email branding fields (`subjectPrefix`, `brandName`,
+`footerNote`) normalized via `EmailConfig.Branding()` with omitted-field
+preservation. Agent-lifecycle routes, credentials, and alerting hooks under
+`internal/api/` are unchanged (`internal/api/alerting/email_branding_test.go`).

@@ -59,6 +59,9 @@ export interface EmailConfig {
   tagFilter?: string[];
   tagFilterMode?: 'all' | 'any';
   minimumSeverity?: NotificationMinimumSeverity;
+  subjectPrefix?: string;
+  brandName?: string;
+  footerNote?: string;
 }
 
 export interface Webhook {
@@ -630,6 +633,15 @@ export class NotificationsAPI {
       backendConfig.minimumSeverity === 'critical' || backendConfig.minimumSeverity === 'warning'
         ? backendConfig.minimumSeverity
         : 'all';
+    if (typeof backendConfig.subjectPrefix === 'string') {
+      config.subjectPrefix = backendConfig.subjectPrefix;
+    }
+    if (typeof backendConfig.brandName === 'string') {
+      config.brandName = backendConfig.brandName;
+    }
+    if (typeof backendConfig.footerNote === 'string') {
+      config.footerNote = backendConfig.footerNote;
+    }
     return config;
   }
 
@@ -666,6 +678,15 @@ export class NotificationsAPI {
         config.minimumSeverity === 'critical' || config.minimumSeverity === 'warning'
           ? config.minimumSeverity
           : 'all';
+    }
+    if (config.subjectPrefix !== undefined) {
+      backendConfig.subjectPrefix = config.subjectPrefix;
+    }
+    if (config.brandName !== undefined) {
+      backendConfig.brandName = config.brandName;
+    }
+    if (config.footerNote !== undefined) {
+      backendConfig.footerNote = config.footerNote;
     }
 
     return apiFetchJSON(`${this.baseUrl}/email`, {

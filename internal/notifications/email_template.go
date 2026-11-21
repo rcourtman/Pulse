@@ -66,13 +66,90 @@ func patrolFindingCategory(alert *alerts.Alert) string {
 	return titleCase(strings.TrimSpace(category))
 }
 
-// EmailTemplate generates a professional HTML email template for alerts.
-// With a public URL, each alert links to its page in Pulse.
-func EmailTemplate(alertList []*alerts.Alert, isSingle bool, publicURL string) (subject, htmlBody, textBody string) {
-	if isSingle && len(alertList) == 1 {
-		return singleAlertTemplate(alertList[0], publicURL)
+const (
+	// DefaultEmailSubjectPrefix is used when EmailConfig.SubjectPrefix is empty.
+	DefaultEmailSubjectPrefix = "[Pulse Alert]"
+	// DefaultEmailBrandName is used in alert email headers and footers when EmailConfig.BrandName is empty.
+	DefaultEmailBrandName = "Pulse Monitoring"
+
+	MaxEmailSubjectPrefixRunes = 64
+	MaxEmailBrandNameRunes     = 80
+	MaxEmailFooterNoteRunes    = 240
+)
+
+// EmailBranding carries optional structured, plain-text branding overrides for
+// compiled-in alert emails. All fields are strictly sanitized and escaped before
+// rendering; raw HTML or arbitrary template files are intentionally not supported.
+type EmailBranding struct {
+	SubjectPrefix string
+	BrandName     string
+	FooterNote    string
+}
+
+func sanitizeEmailBrandingField(value string, maxRunes int) string {
+	cleaned := strings.Join(strings.Fields(strings.Map(func(r rune) rune {
+		if unicode.IsControl(r) || unicode.IsSpace(r) {
+			return ' '
+		}
+		return r
+	}, value)), " ")
+	if maxRunes <= 0 || cleaned == "" {
+		return cleaned
 	}
-	return groupedAlertTemplate(alertList, publicURL)
+	runes := []rune(cleaned)
+	if len(runes) <= maxRunes {
+		return cleaned
+	}
+	return strings.TrimSpace(string(runes[:maxRunes]))
+}
+
+// NormalizeEmailBranding removes control characters and line breaks, collapses
+// whitespace, and bounds each branding field to its supported length.
+func NormalizeEmailBranding(branding EmailBranding) EmailBranding {
+	return EmailBranding{
+		SubjectPrefix: sanitizeEmailBrandingField(branding.SubjectPrefix, MaxEmailSubjectPrefixRunes),
+		BrandName:     sanitizeEmailBrandingField(branding.BrandName, MaxEmailBrandNameRunes),
+		FooterNote:    sanitizeEmailBrandingField(branding.FooterNote, MaxEmailFooterNoteRunes),
+	}
+}
+
+// Branding returns the normalized email branding settings configured on c.
+func (c EmailConfig) Branding() EmailBranding {
+	return NormalizeEmailBranding(EmailBranding{
+		SubjectPrefix: c.SubjectPrefix,
+		BrandName:     c.BrandName,
+		FooterNote:    c.FooterNote,
+	})
+}
+
+func (b EmailBranding) effectiveSubjectPrefix() string {
+	if b.SubjectPrefix != "" {
+		return b.SubjectPrefix
+	}
+	return DefaultEmailSubjectPrefix
+}
+
+func (b EmailBranding) effectiveBrandName() string {
+	if b.BrandName != "" {
+		return b.BrandName
+	}
+	return DefaultEmailBrandName
+}
+
+// EmailTemplate generates a professional HTML email template for alerts using
+// default Pulse branding. With a public URL, each alert links to its page in Pulse.
+func EmailTemplate(alertList []*alerts.Alert, isSingle bool, publicURL string) (subject, htmlBody, textBody string) {
+	return EmailTemplateWithBranding(alertList, isSingle, publicURL, EmailBranding{})
+}
+
+// EmailTemplateWithBranding generates a professional HTML and plain-text alert
+// email applying optional normalized structured branding overrides.
+func EmailTemplateWithBranding(alertList []*alerts.Alert, isSingle bool, publicURL string, branding EmailBranding) (subject, htmlBody, textBody string) {
+	normalized := NormalizeEmailBranding(branding)
+	if isSingle && len(alertList) == 1 {
+		return singleAlertTemplateWithBranding(alertList[0], publicURL, normalized)
+	}
+	return groupedAlertTemplateWithBranding(alertList, publicURL, normalized)
 }
 
 // emailFooterLinks is the closing line of an alert email: a link into Pulse
@@ -87,7 +164,17 @@ func emailFooterLinks(link, label string) (footerHTML, footerText string) {
 }
 
 func singleAlertTemplate(alert *alerts.Alert, publicURL string) (subject, htmlBody, textBody string) {
+	return singleAlertTemplateWithBranding(alert, publicURL, EmailBranding{})
+}
+
+func singleAlertTemplateWithBranding(alert *alerts.Alert, publicURL string, branding EmailBranding) (subject, htmlBody, textBody string) {
 	footerHTML, footerText := emailFooterLinks(alertLinkURL(publicURL, alert), "View this alert in Pulse")
+	if branding.FooterNote != "" {
+		footerHTML += fmt.Sprintf("\n            <p>%s</p>", html.EscapeString(branding.FooterNote))
+		footerText += "\n" + branding.FooterNote
+	}
+	brandName := branding.effectiveBrandName()
+	escapedBrandName := html.EscapeString(brandName)
 	level := alerts.NormalizeAlertLevel(alert.Level)
 	levelColor := "#3b82f6"
 	levelBg := "#eff6ff"
@@ -102,8 +189,8 @@ func singleAlertTemplate(alert *alerts.Alert, publicURL string) (subject, htmlBo
 
 	alertType := alertTypeDisplay(alert.Type)
 
-	subject = fmt.Sprintf("[Pulse Alert] %s: %s on %s",
-		titleCase(string(level)), boundEmailSubjectLabel(emailSubjectLabel(alertType)), emailSubjectIdentities([]*alerts.Alert{alert}))
+	subject = fmt.Sprintf("%s %s: %s on %s",
+		branding.effectiveSubjectPrefix(), titleCase(string(level)), boundEmailSubjectLabel(emailSubjectLabel(alertType)), emailSubjectIdentities([]*alerts.Alert{alert}))
 
 	escapedLevel := html.EscapeString(string(level))
 	escapedResourceName := html.EscapeString(alert.ResourceName)
@@ -174,7 +261,7 @@ func singleAlertTemplate(alert *alerts.Alert, publicURL string) (subject, htmlBo
                 <path d="M10 50 L30 50 L35 30 L40 70 L45 10 L50 90 L55 30 L60 70 L65 50 L90 50" 
                       stroke="#4ade80" stroke-width="3" fill="none"/>
             </svg>
-            <h1>Pulse Monitoring Alert</h1>
+            <h1>%s Alert</h1>
         </div>
         <div class="content">
             <div class="alert-box">
@@ -212,13 +299,14 @@ func singleAlertTemplate(alert *alerts.Alert, publicURL string) (subject, htmlBo
             </div>
         </div>
         <div class="footer">
-            <p>This is an automated notification from Pulse Monitoring</p>
+            <p>This is an automated notification from %s</p>
             %s
         </div>
     </div>
 </body>
 </html>`,
 		levelBg, levelColor, levelColor,
+		escapedBrandName,
 		escapedLevel,
 		escapedResourceName,
 		escapedMessage,
@@ -229,11 +317,12 @@ func singleAlertTemplate(alert *alerts.Alert, publicURL string) (subject, htmlBo
 		escapedInstance,
 		escapedStarted,
 		escapedDuration,
+		escapedBrandName,
 		footerHTML,
 	)
 
 	if isPatrolFindingAlert(alert) {
-		textBody = fmt.Sprintf(`PULSE MONITORING ALERT
+		textBody = fmt.Sprintf(`%s ALERT
 
 %s ALERT: %s
 
@@ -247,8 +336,9 @@ Details:
 - Started: %s
 - Duration: %s
 
-This is an automated notification from Pulse Monitoring.
+This is an automated notification from %s.
 %s`,
+			strings.ToUpper(brandName),
 			strings.ToUpper(string(level)),
 			alert.ResourceName,
 			alert.ResourceName,
@@ -259,12 +349,13 @@ This is an automated notification from Pulse Monitoring.
 			alert.Instance,
 			formatAlertStartTime(alert.StartTime),
 			formatDuration(time.Since(alert.StartTime)),
+			brandName,
 			footerText,
 		)
 		return subject, htmlBody, textBody
 	}
 
-	textBody = fmt.Sprintf(`PULSE MONITORING ALERT
+	textBody = fmt.Sprintf(`%s ALERT
 
 %s ALERT: %s
 
@@ -279,8 +370,9 @@ Details:
 - Started: %s
 - Duration: %s
 
-This is an automated notification from Pulse Monitoring.
+This is an automated notification from %s.
 %s`,
+		strings.ToUpper(brandName),
 		strings.ToUpper(string(level)),
 		alert.ResourceName,
 		alert.ResourceName,
@@ -293,6 +385,7 @@ This is an automated notification from Pulse Monitoring.
 		alert.Instance,
 		formatAlertStartTime(alert.StartTime),
 		formatDuration(time.Since(alert.StartTime)),
+		brandName,
 		footerText,
 	)
 
@@ -300,7 +393,17 @@ This is an automated notification from Pulse Monitoring.
 }
 
 func groupedAlertTemplate(alertList []*alerts.Alert, publicURL string) (subject, htmlBody, textBody string) {
+	return groupedAlertTemplateWithBranding(alertList, publicURL, EmailBranding{})
+}
+
+func groupedAlertTemplateWithBranding(alertList []*alerts.Alert, publicURL string, branding EmailBranding) (subject, htmlBody, textBody string) {
 	footerHTML, footerText := emailFooterLinks(alertsPageURL(publicURL, alertList, false), "Open these alerts in Pulse")
+	if branding.FooterNote != "" {
+		footerHTML += fmt.Sprintf("\n            <p>%s</p>", html.EscapeString(branding.FooterNote))
+		footerText += "\n" + branding.FooterNote
+	}
+	brandName := branding.effectiveBrandName()
+	escapedBrandName := html.EscapeString(brandName)
 	critical := 0
 	warning := 0
 	info := 0
@@ -332,7 +435,7 @@ func groupedAlertTemplate(alertList []*alerts.Alert, publicURL string) (subject,
 	if info > 0 {
 		severityParts = append(severityParts, fmt.Sprintf("%d Info", info))
 	}
-	subject = fmt.Sprintf("[Pulse Alert] %s alert%s", strings.Join(severityParts, ", "), pluralize(len(alertList)))
+	subject = fmt.Sprintf("%s %s alert%s", branding.effectiveSubjectPrefix(), strings.Join(severityParts, ", "), pluralize(len(alertList)))
 	if identities := emailSubjectIdentities(alertList); identities != "" {
 		subject += ": " + identities
 	}
@@ -447,13 +550,13 @@ func groupedAlertTemplate(alertList []*alerts.Alert, publicURL string) (subject,
                 <path d="M10 50 L30 50 L35 30 L40 70 L45 10 L50 90 L55 30 L60 70 L65 50 L90 50" 
                       stroke="#4ade80" stroke-width="3" fill="none"/>
             </svg>
-            <h1>Pulse Monitoring Alert Summary</h1>
+            <h1>%s Alert Summary</h1>
         </div>
         <div class="content">
             <div class="summary">
                 <h2 style="margin: 0 0 15px 0; font-size: 18px;">%d New Alert%s</h2>
                 <div class="summary-grid">`,
-		len(alertList), pluralize(len(alertList)))
+		escapedBrandName, len(alertList), pluralize(len(alertList)))
 
 	if critical > 0 {
 		htmlBody += fmt.Sprintf(`
@@ -497,16 +600,16 @@ func groupedAlertTemplate(alertList []*alerts.Alert, publicURL string) (subject,
             </table>
         </div>
         <div class="footer">
-            <p>This is an automated notification from Pulse Monitoring</p>
+            <p>This is an automated notification from %s</p>
             %s
         </div>
     </div>
 </body>
-</html>`, valueHeading, alertRows.String(), footerHTML)
+</html>`, valueHeading, alertRows.String(), escapedBrandName, footerHTML)
 
 	// Plain text version
 	var textBuilder strings.Builder
-	textBuilder.WriteString("PULSE MONITORING ALERT SUMMARY\n\n")
+	textBuilder.WriteString(strings.ToUpper(brandName) + " ALERT SUMMARY\n\n")
 	textBuilder.WriteString(fmt.Sprintf("%d New Alert%s\n", len(alertList), pluralize(len(alertList))))
 	if critical > 0 {
 		textBuilder.WriteString(fmt.Sprintf("Critical: %d\n", critical))
@@ -535,7 +638,7 @@ func groupedAlertTemplate(alertList []*alerts.Alert, publicURL string) (subject,
 	}
 
 	textBuilder.WriteString("\n─────────────────────────────────────────────────────────────\n")
-	textBuilder.WriteString("This is an automated notification from Pulse Monitoring.\n")
+	textBuilder.WriteString("This is an automated notification from " + brandName + ".\n")
 	textBuilder.WriteString(footerText)
 
 	textBody = textBuilder.String()
