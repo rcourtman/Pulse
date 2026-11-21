@@ -322,11 +322,11 @@ export const useSSOProvidersState = (props: SSOProvidersPanelProps) => {
       if (!data || data.id !== provider.id || data.type !== provider.type)
         throw new Error('Mismatched provider details');
       setForm(mapProviderDetailsToForm(data));
-      // Registration instructions belong to this detail read, not an older
-      // inventory or a guess from the browser origin. Omitted endpoints must
-      // also replace old values when the server can no longer derive them.
+      // Registration and saved-secret hints belong to this detail read.
+      // Omission must clear any older inventory evidence.
       setEditingProvider({
         ...provider,
+        oidcClientSecretSet: data.oidcClientSecretSet === true,
         oidcCallbackUrl: data.oidcCallbackUrl,
         samlMetadataUrl: data.samlMetadataUrl,
         samlAcsUrl: data.samlAcsUrl,

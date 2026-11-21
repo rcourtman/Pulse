@@ -124,6 +124,7 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
   const testResultId = `${summaryIdPrefix}-test-result`;
   const testResultTitleId = `${summaryIdPrefix}-test-result-title`;
   const signInRestrictionsId = `${summaryIdPrefix}-sign-in-restrictions`;
+  const clientSecretHintId = `${summaryIdPrefix}-client-secret-hint`;
   // The server checks only URL format on the manual SAML path. Either
   // metadata source takes precedence, even when the draft also has an SSO URL.
   const isSamlUrlFormatCheck = () =>
@@ -630,17 +631,27 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
                       />
                     </div>
                     <div class={formField}>
-                      <label for="sso-oidc-client-secret" class={labelClass()}>
-                        Client Secret
-                      </label>
+                      <div class="flex flex-wrap items-baseline gap-x-2">
+                        <label for="sso-oidc-client-secret" class={labelClass()}>
+                          Client Secret
+                        </label>
+                        <Show when={editingProvider()}>
+                          {(provider) => (
+                            <span id={clientSecretHintId} class={formHelpText}>
+                              {provider().oidcClientSecretSet
+                                ? 'Saved. Blank keeps it.'
+                                : 'No saved secret reported.'}
+                            </span>
+                          )}
+                        </Show>
+                      </div>
                       <input
                         id="sso-oidc-client-secret"
                         type="password"
                         value={form.oidcClientSecret}
                         onInput={(e) => setForm('oidcClientSecret', e.currentTarget.value)}
-                        placeholder={
-                          editingProvider() ? '•••••••• (leave blank to keep)' : 'Optional for PKCE'
-                        }
+                        aria-describedby={editingProvider() ? clientSecretHintId : undefined}
+                        placeholder={editingProvider() ? undefined : 'Optional for PKCE'}
                         class={controlClass()}
                       />
                     </div>
