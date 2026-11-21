@@ -79,7 +79,9 @@ func TestPBSOrdinaryPollCancellationDoesNotRenewUnpublishedCache(t *testing.T) {
 			f.assertProtected(t, "pbs-main")
 			key := pbsBackupGroupKey{datastore: "archive", backupType: "vm", backupID: "100"}
 			expired := time.Now().Add(-2 * pbsBackupCacheTTL)
-			f.m.setPBSBackupCacheTime("pbs-main", key, expired)
+			read := f.m.pbsBackupCacheReadFor("pbs-main", key)
+			read.at = expired
+			f.m.setPBSBackupCacheRead("pbs-main", key, read)
 			phase.Store(1)
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()

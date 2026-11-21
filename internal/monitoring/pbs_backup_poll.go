@@ -80,7 +80,7 @@ func (m *Monitor) replacePBSClient(instance string, client *pbs.Client) {
 	m.cancelPBSBackupPollLocked(instance)
 	// A same-name server must independently read its own snapshots, never
 	// borrow the former client's still-fresh count/time cache.
-	delete(m.pbsBackupCacheTime, instance)
+	delete(m.pbsBackupCacheReads, instance)
 	if m.pbsClients == nil {
 		m.pbsClients = make(map[string]*pbs.Client)
 	}

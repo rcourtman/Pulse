@@ -1366,32 +1366,32 @@ type Monitor struct {
 	deliveryHealthProjectionMu sync.Mutex // serializes delivery-health reads and alert projection
 	lastDeliveryHealthCheck    time.Time  // throttles the notification-delivery system alert evaluation; guarded by mu
 	configPersist              *config.ConfigPersistence
-	discoveryService           *discovery.Service                         // Background discovery service
-	activePollCount            int32                                      // Number of active polling operations
-	authFailures               map[string]int                             // Track consecutive auth failures per node
-	lastAuthAttempt            map[string]time.Time                       // Track last auth attempt time
-	lastClusterCheck           map[string]time.Time                       // Track last cluster check for standalone nodes
-	lastPhysicalDiskPoll       map[string]time.Time                       // Track last physical disk poll time per instance
-	pveBackupPolls             map[string]*pveBackupPoll                  // Owned runtime/client-scoped backup scans; guarded by mu
-	pveReplicationPolls        map[string]*pveReplicationPoll             // Owned runtime/client-scoped replication reads; guarded by mu
-	lastPVEBackupPoll          map[string]time.Time                       // Track last PVE backup poll per instance
-	vzdumpJobTaskCache         map[string]vzdumpJobTaskCacheEntry         // Cache synthesized per-guest tasks for multi-guest vzdump job runs, keyed by instance|UPID
-	vzdumpJobLogHistoryFirst   map[string]bool                            // Last actual log read was running; next poll offers ended history the first turn. Guarded by mu.
-	pveArchiveWriters          map[string]map[string]pveArchiveWriter     // Accepted archive writers by connection and task ID, independent of live task display; guarded by mu.
-	lastPBSBackupPoll          map[string]time.Time                       // Track last PBS backup poll per instance
-	pveBackupInventoryReady    map[string]map[string]bool                 // Track PVE guest inventory readiness for backup orphan detection
-	pveBackupTemplateSubjects  map[string]map[string]struct{}             // Track template VMIDs excluded from runtime workloads but valid for backups
-	backupPermissionWarnings   map[string]string                          // Track backup permission issues per instance (instance -> warning message)
-	backupAlertEvalMu          sync.Mutex                                 // Coalesce global rollup reads and order failure/recovery publication.
-	persistence                *config.ConfigPersistence                  // Add persistence for saving updated configs
-	instanceTokens             APITokenInventory                          // Instance inventory holding agent tokens bound to this tenant org; see APITokenInventories
-	pbsBackupPollers           map[string]*pbsBackupPoll                  // Runtime/client-owned PBS backup scans; guarded by mu
-	pbsBackupCacheTime         map[string]map[pbsBackupGroupKey]time.Time // Track when each PBS backup group was last fetched
-	runtimePollingMu           sync.RWMutex                               // Guards runtimePollingOverride; polling goroutines read it every cycle
-	runtimePollingOverride     runtimePollingOverrides                    // Runtime polling-cadence overrides pushed by the settings API (#1619)
-	runtimeCtx                 context.Context                            // Context used while monitor is running
-	wsHub                      *websocket.Hub                             // Hub used for broadcasting state
-	diagMu                     sync.RWMutex                               // Protects diagnostic snapshot maps
+	discoveryService           *discovery.Service                     // Background discovery service
+	activePollCount            int32                                  // Number of active polling operations
+	authFailures               map[string]int                         // Track consecutive auth failures per node
+	lastAuthAttempt            map[string]time.Time                   // Track last auth attempt time
+	lastClusterCheck           map[string]time.Time                   // Track last cluster check for standalone nodes
+	lastPhysicalDiskPoll       map[string]time.Time                   // Track last physical disk poll time per instance
+	pveBackupPolls             map[string]*pveBackupPoll              // Owned runtime/client-scoped backup scans; guarded by mu
+	pveReplicationPolls        map[string]*pveReplicationPoll         // Owned runtime/client-scoped replication reads; guarded by mu
+	lastPVEBackupPoll          map[string]time.Time                   // Track last PVE backup poll per instance
+	vzdumpJobTaskCache         map[string]vzdumpJobTaskCacheEntry     // Cache synthesized per-guest tasks for multi-guest vzdump job runs, keyed by instance|UPID
+	vzdumpJobLogHistoryFirst   map[string]bool                        // Last actual log read was running; next poll offers ended history the first turn. Guarded by mu.
+	pveArchiveWriters          map[string]map[string]pveArchiveWriter // Accepted archive writers by connection and task ID, independent of live task display; guarded by mu.
+	lastPBSBackupPoll          map[string]time.Time                   // Track last PBS backup poll per instance
+	pveBackupInventoryReady    map[string]map[string]bool             // Track PVE guest inventory readiness for backup orphan detection
+	pveBackupTemplateSubjects  map[string]map[string]struct{}         // Track template VMIDs excluded from runtime workloads but valid for backups
+	backupPermissionWarnings   map[string]string                      // Track backup permission issues per instance (instance -> warning message)
+	backupAlertEvalMu          sync.Mutex                             // Coalesce global rollup reads and order failure/recovery publication.
+	persistence                *config.ConfigPersistence              // Add persistence for saving updated configs
+	instanceTokens             APITokenInventory                      // Instance inventory holding agent tokens bound to this tenant org; see APITokenInventories
+	pbsBackupPollers           map[string]*pbsBackupPoll              // Runtime/client-owned PBS backup scans; guarded by mu
+	pbsBackupCacheReads        map[string]map[pbsBackupGroupKey]pbsBackupCacheRead
+	runtimePollingMu           sync.RWMutex            // Guards runtimePollingOverride; polling goroutines read it every cycle
+	runtimePollingOverride     runtimePollingOverrides // Runtime polling-cadence overrides pushed by the settings API (#1619)
+	runtimeCtx                 context.Context         // Context used while monitor is running
+	wsHub                      *websocket.Hub          // Hub used for broadcasting state
+	diagMu                     sync.RWMutex            // Protects diagnostic snapshot maps
 	nodeSnapshots              map[string]NodeMemorySnapshot
 	guestSnapshots             map[string]GuestMemorySnapshot
 	rrdCacheMu                 sync.RWMutex // Protects short-lived guest memory caches.
@@ -2087,7 +2087,7 @@ func New(cfg *config.Config) (*Monitor, error) {
 		backupPermissionWarnings:   make(map[string]string),
 		persistence:                config.NewConfigPersistence(cfg.DataPath),
 		pbsBackupPollers:           make(map[string]*pbsBackupPoll),
-		pbsBackupCacheTime:         make(map[string]map[pbsBackupGroupKey]time.Time),
+		pbsBackupCacheReads:        make(map[string]map[pbsBackupGroupKey]pbsBackupCacheRead),
 		nodeSnapshots:              make(map[string]NodeMemorySnapshot),
 		guestSnapshots:             make(map[string]GuestMemorySnapshot),
 		nodeRRDMemCache:            make(map[string]rrdMemCacheEntry),

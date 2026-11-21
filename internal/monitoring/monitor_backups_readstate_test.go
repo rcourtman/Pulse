@@ -280,7 +280,7 @@ func TestFetchPBSBackupSnapshotsUsesBoundedWorkerPool(t *testing.T) {
 	}
 
 	m := &Monitor{}
-	result := m.fetchPBSBackupSnapshots(context.Background(), client, "pbs1", requests)
+	result := m.fetchPBSBackupSnapshots(context.Background(), client, "pbs1", requests, pbsBackupLiveStateLimit)
 	if result.errors != 0 || result.terminalErrors != 0 {
 		t.Fatalf("successful snapshot fetch lost quality: %+v", result)
 	}
@@ -585,10 +585,10 @@ func TestPollPBSBackupsPrunesCacheTimesForDeletedGroups(t *testing.T) {
 
 	m := &Monitor{
 		state: models.NewState(),
-		pbsBackupCacheTime: map[string]map[pbsBackupGroupKey]time.Time{
+		pbsBackupCacheReads: map[string]map[pbsBackupGroupKey]pbsBackupCacheRead{
 			"pbs1": {
-				keepKey:  time.Now(),
-				staleKey: time.Now(),
+				keepKey:  {at: time.Now(), snapshotCount: 1},
+				staleKey: {at: time.Now(), snapshotCount: 1},
 			},
 		},
 	}
@@ -618,7 +618,7 @@ func TestPollPBSBackupsPrunesCacheTimesForDeletedGroups(t *testing.T) {
 	}, nil)
 
 	m.mu.RLock()
-	perGroup := m.pbsBackupCacheTime["pbs1"]
+	perGroup := m.pbsBackupCacheReads["pbs1"]
 	_, kept := perGroup[keepKey]
 	_, stale := perGroup[staleKey]
 	m.mu.RUnlock()

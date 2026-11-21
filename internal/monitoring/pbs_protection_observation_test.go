@@ -39,6 +39,7 @@ func TestBuildPBSProtectionProviderObservationMapsEvidenceQuality(t *testing.T) 
 		fetches          int
 		errors           int
 		terminalFailures int
+		historyLimited   bool
 		wantJob          recovery.Outcome
 		wantHistory      recovery.ProtectionHistoryCompleteness
 		wantPermissions  operationaltrust.EvidencePermissions
@@ -63,11 +64,22 @@ func TestBuildPBSProtectionProviderObservationMapsEvidenceQuality(t *testing.T) 
 			wantReason:      "pbs_partial_enumeration",
 		},
 		{
+			name:            "local history limit",
+			datastores:      2,
+			fetches:         2,
+			historyLimited:  true,
+			wantJob:         recovery.OutcomeWarning,
+			wantHistory:     recovery.ProtectionHistoryPartial,
+			wantPermissions: operationaltrust.EvidencePermissionsUnknown,
+			wantReason:      "pbs_partial_enumeration",
+		},
+		{
 			name:             "partial provider access",
 			datastores:       2,
 			fetches:          1,
 			errors:           1,
 			terminalFailures: 1,
+			historyLimited:   true,
 			wantJob:          recovery.OutcomeWarning,
 			wantHistory:      recovery.ProtectionHistoryPartial,
 			wantPermissions:  operationaltrust.EvidencePermissionsPartial,
@@ -104,6 +116,7 @@ func TestBuildPBSProtectionProviderObservationMapsEvidenceQuality(t *testing.T) 
 				test.fetches,
 				test.errors,
 				test.terminalFailures,
+				test.historyLimited,
 				now,
 			)
 			if err != nil {
@@ -208,11 +221,11 @@ func TestPBSOrdinaryPollNewestRemovalInvalidatesCappedCache(t *testing.T) {
 						"point_count": len(points), "snapshot_reads": snapshotReads.Load(),
 					}
 				}
-				assertLatest := func(at int64, state recovery.ProtectionState) {
+				assertLatest := func(at int64, state recovery.ProtectionState, durableCount int, history recovery.ProtectionHistoryCompleteness) {
 					t.Helper()
 					raw, points, postures := f.m.state.GetSnapshot().PBSBackups, f.points(t, "pbs-main"), f.postures(t)
-					if len(raw) != pbsBackupSnapshotsPerGroupLimit || len(points) != pbsBackupSnapshotsPerGroupLimit || len(postures) != 1 {
-						t.Fatalf("raw/persisted/postures=%d/%d/%d, want %d/%d/1", len(raw), len(points), len(postures), pbsBackupSnapshotsPerGroupLimit, pbsBackupSnapshotsPerGroupLimit)
+					if len(raw) != pbsBackupSnapshotsPerGroupLimit || len(points) != durableCount || len(postures) != 1 {
+						t.Fatalf("raw/persisted/postures=%d/%d/%d, want %d/%d/1", len(raw), len(points), len(postures), pbsBackupSnapshotsPerGroupLimit, durableCount)
 					}
 					for _, row := range raw {
 						if row.BackupTime.Unix() > at {
@@ -225,19 +238,23 @@ func TestPBSOrdinaryPollNewestRemovalInvalidatesCappedCache(t *testing.T) {
 						}
 					}
 					p := postures[0]
+					if len(p.ProviderStates) != 1 || p.ProviderStates[0].HistoryCompleteness != history {
+						t.Errorf("history quality = %+v, want %s", p.ProviderStates, history)
+					}
 					if p.State != state || p.LastSuccessfulPointAt == nil || p.LastSuccessfulPointAt.Unix() != at {
 						t.Errorf("posture=%s latest=%v, want %s at %s", p.State, p.LastSuccessfulPointAt, state, time.Unix(at, 0))
 					}
 				}
 				key := pbsBackupGroupKey{datastore: "archive", backupType: kind, backupID: "100"}
 				poll(0)
-				assertLatest(f.backupAt, recovery.ProtectionStateProtected)
+				assertLatest(f.backupAt, recovery.ProtectionStateProtected, pbsBackupSnapshotsPerGroupLimit, recovery.ProtectionHistoryPartial)
 				capture("observed")
 				readAt := f.m.pbsBackupCacheTimeFor("pbs-main", key)
 				poll(0)
 				if snapshotReads.Load() != 1 || !f.m.pbsBackupCacheTimeFor("pbs-main", key).Equal(readAt) {
 					t.Error("unchanged healthy group reread or renewed its snapshot cache")
 				}
+				assertLatest(f.backupAt, recovery.ProtectionStateProtected, pbsBackupSnapshotsPerGroupLimit, recovery.ProtectionHistoryPartial)
 				if failure != 0 {
 					for range 2 {
 						before := snapshotReads.Load()
@@ -260,17 +277,19 @@ func TestPBSOrdinaryPollNewestRemovalInvalidatesCappedCache(t *testing.T) {
 				if snapshotReads.Load() != before+1 {
 					t.Errorf("pruned newest did not refresh snapshots: %d -> %d", before, snapshotReads.Load())
 				}
-				assertLatest(oldAt, recovery.ProtectionStateAttention)
+				assertLatest(oldAt, recovery.ProtectionStateAttention, pbsBackupSnapshotsPerGroupLimit, recovery.ProtectionHistoryComplete)
 				capture("removed")
 				readAt = f.m.pbsBackupCacheTimeFor("pbs-main", key)
 				before = snapshotReads.Load()
 				poll(1)
-				assertLatest(oldAt, recovery.ProtectionStateAttention)
+				assertLatest(oldAt, recovery.ProtectionStateAttention, pbsBackupSnapshotsPerGroupLimit, recovery.ProtectionHistoryComplete)
 				if snapshotReads.Load() != before || !f.m.pbsBackupCacheTimeFor("pbs-main", key).Equal(readAt) {
 					t.Error("unchanged pruned inventory did not resume cheap TTL reuse")
 				}
 				poll(3)
-				assertLatest(restoredAt, recovery.ProtectionStateProtected)
+				// The per-group cap left a previously accepted oldest archive
+				// out of the new displayed set, not out of the provider.
+				assertLatest(restoredAt, recovery.ProtectionStateProtected, pbsBackupSnapshotsPerGroupLimit+1, recovery.ProtectionHistoryPartial)
 				capture("recovered")
 				poll(4)
 				if len(f.m.state.GetSnapshot().PBSBackups) != 0 || len(f.points(t, "pbs-main")) != 0 || !f.m.pbsBackupCacheTimeFor("pbs-main", key).IsZero() {
@@ -650,7 +669,7 @@ func TestPBSFailedRefreshDoesNotRenewCarriedPointEvidence(t *testing.T) {
 						phase.Store(mode)
 						if expire {
 							f.m.mu.Lock()
-							delete(f.m.pbsBackupCacheTime, instance)
+							delete(f.m.pbsBackupCacheReads, instance)
 							f.m.mu.Unlock()
 						}
 						f.m.pollPBSBackups(context.Background(), instance, f.client, ds, nil)
