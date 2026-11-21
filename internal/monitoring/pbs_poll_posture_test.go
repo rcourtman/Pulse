@@ -31,6 +31,10 @@ type pbsPosturePollFixture struct {
 	ids      []string
 }
 
+func (m *Monitor) pbsBackupCacheTimeFor(instance string, key pbsBackupGroupKey) time.Time {
+	return m.pbsBackupCacheReadFor(instance, key).at
+}
+
 func newPBSPosturePollFixture(t *testing.T, count int, backupTypes ...string) *pbsPosturePollFixture {
 	t.Helper()
 	m, manager := recoveryIngestTestMonitor(t)
@@ -130,7 +134,7 @@ func (f *pbsPosturePollFixture) poll(t *testing.T, instance string, mode int32, 
 	// Deliberately expire snapshot reuse: group-count/time are unchanged when
 	// only snapshot access or verification changes between ordinary polls.
 	f.m.mu.Lock()
-	clear(f.m.pbsBackupCacheTime)
+	clear(f.m.pbsBackupCacheReads)
 	f.m.mu.Unlock()
 	f.m.pollPBSBackups(context.Background(), instance, f.client, datastores, nil)
 	f.wait(t)
@@ -356,7 +360,7 @@ func TestPBSCarriedRowsStopTeachingGuestSources(t *testing.T) {
 	}
 	poll := func() map[string]string {
 		m.mu.Lock()
-		clear(m.pbsBackupCacheTime)
+		clear(m.pbsBackupCacheReads)
 		m.mu.Unlock()
 		m.pollPBSBackups(context.Background(), "pbs-main", client, []models.PBSDatastore{{Name: "main"}}, nil)
 		f.wait(t)
@@ -424,7 +428,7 @@ func TestPBSSecondInstallationWithdrawsUnsettledAttribution(t *testing.T) {
 	}
 	read := func() (badge bool, subject, table string) {
 		m.mu.Lock()
-		clear(m.pbsBackupCacheTime)
+		clear(m.pbsBackupCacheReads)
 		m.mu.Unlock()
 		m.pollPBSBackups(context.Background(), "pbs-main", client, []models.PBSDatastore{{Name: "main"}}, nil)
 		f.wait(t)
