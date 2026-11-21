@@ -491,7 +491,7 @@ describe('ProLicensePanel', () => {
     expect(screen.getByText('Available plans')).toBeInTheDocument();
     expect(screen.queryByText('Relay plan')).not.toBeInTheDocument();
     expect(screen.getByRole('region', { name: 'Pulse Pro plan' })).toBeInTheDocument();
-    expect(screen.getAllByRole('link', { name: 'View plans' }).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole('link', { name: 'Upgrade to Pulse Pro' }).length).toBeGreaterThan(0);
   });
 
   it('opens compare-plan checkout from the explicit self-hosted billing handoff', async () => {
@@ -536,8 +536,8 @@ describe('ProLicensePanel', () => {
       'Roles and permissions (RBAC)',
       'Audit logging',
       'For larger estates',
-      'Reporting and agent profiles',
-      'External probes from another site',
+      'Scheduled reports and exports',
+      'Agent profiles for multi-host configuration',
       'Commercial support, typically within two business days',
       'Patrol',
       'Patrol modes: Ask first, Safe auto-fix, or Autopilot',

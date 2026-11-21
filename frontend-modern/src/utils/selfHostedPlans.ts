@@ -35,8 +35,8 @@ const PRO_COMPARISON_GROUPS: readonly SelfHostedPlanComparisonGroup[] = [
   {
     title: 'For larger estates',
     items: [
-      'Reporting and agent profiles',
-      'External probes from another site',
+      'Scheduled reports and exports',
+      'Agent profiles for multi-host configuration',
       'Commercial support, typically within two business days',
     ],
   },

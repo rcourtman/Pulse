@@ -8991,6 +8991,11 @@ instead of drifting independently. The owned split is now explicit: the
 navigation label comes from `navLabel`, while the route header and billing
 shell reuse `shellTitle` plus `shellDescription`, so the settings IA and page
 shell stay aligned on `Plans & Billing` without reintroducing local label drift.
+`system-billing` lives in the `System` settings nav group (beside `General`,
+`Network`, `Updates`, and `Recovery`) rather than under `Pulse Intelligence`,
+so every self-hosted operator discovers Plans & Billing in ordinary system
+administration even when they do not configure AI. Proof:
+`frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts`.
 That same settings-shell framing boundary also covers adjacent top-level
 settings references to the self-hosted commercial surface. When
 `InfrastructureWorkspace.tsx` or other settings-shell surfaces point operators

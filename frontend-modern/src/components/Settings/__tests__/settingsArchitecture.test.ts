@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { sanitizeDiagnosticsData } from '../diagnosticsModel';
 import type { DiagnosticsData } from '../diagnosticsModel';
 import { getBrokerRegistryLoginPrompt } from '../updatesSettingsModel';
+import { SETTINGS_NAV_GROUPS } from '../settingsNavCatalog';
 import settingsSource from '../Settings.tsx?raw';
 import { EN_MESSAGES } from '@/i18n/messages';
 import aiSettingsSource from '../AISettings.tsx?raw';
@@ -491,5 +492,14 @@ describe('User Access reader projection', () => {
       composeUpCommand: 'docker compose up -d',
     });
     expect(prompt).toBe("docker login registry.pulserelay.pro --username 'lic_123'");
+  });
+
+  it('places Plans & Billing in the System settings group instead of Pulse Intelligence', () => {
+    const systemGroup = SETTINGS_NAV_GROUPS.find((group) => group.id === 'system');
+    const intelligenceGroup = SETTINGS_NAV_GROUPS.find(
+      (group) => group.id === 'pulse-intelligence',
+    );
+    expect(systemGroup?.items.some((item) => item.id === 'system-billing')).toBe(true);
+    expect(intelligenceGroup?.items.some((item) => item.id === 'system-billing')).toBe(false);
   });
 });

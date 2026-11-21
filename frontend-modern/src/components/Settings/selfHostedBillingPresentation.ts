@@ -94,7 +94,7 @@ export const SELF_HOSTED_PRO_BILLING_PRESENTATION: SelfHostedProBillingPresentat
   planSectionTitle: 'Current plan',
   planSectionDescription: 'Current tier and enabled capabilities.',
   planComparisonSectionTitle: 'Available plans',
-  planComparisonActionLabel: 'View plans',
+  planComparisonActionLabel: 'Upgrade to Pulse Pro',
   usageSectionTitle: 'Usage',
   hiddenShellTitle: 'Demo mode',
   hiddenShellDescription: 'Commercial settings are hidden for this session.',

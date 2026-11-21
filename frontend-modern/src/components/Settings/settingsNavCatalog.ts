@@ -79,14 +79,6 @@ export const SETTINGS_NAV_GROUPS: SettingsNavGroup[] = [
         requiredCapability: 'pulseIntelligenceRead',
       },
       {
-        id: 'system-billing',
-        label: SELF_HOSTED_PRO_BILLING_PRESENTATION.navLabel,
-        icon: PulseLogoIcon,
-        // Listed for free installs too: it is the one place to see the plan
-        // and buy. Demo and white-label runtimes still hide it.
-        hideWhenCommercialHidden: true,
-      },
-      {
         id: 'system-ai-agents',
         label: 'External agents',
         keywords: [
@@ -204,6 +196,15 @@ export const SETTINGS_NAV_GROUPS: SettingsNavGroup[] = [
         iconProps: { strokeWidth: 2 },
         saveBehavior: 'system',
         requiredCapability: 'systemSettingsRead',
+      },
+      {
+        id: 'system-billing',
+        label: SELF_HOSTED_PRO_BILLING_PRESENTATION.navLabel,
+        icon: PulseLogoIcon,
+        // Placed under System alongside Updates and Recovery so every admin
+        // finds it even if they never use Pulse Intelligence. Listed for free
+        // installs too; demo and white-label runtimes still hide it.
+        hideWhenCommercialHidden: true,
       },
     ],
   },
