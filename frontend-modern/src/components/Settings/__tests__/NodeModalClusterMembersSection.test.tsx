@@ -77,18 +77,46 @@ describe('Cluster member connection diagnostics', () => {
     vi.restoreAllMocks();
   });
 
-  it('gives a refused online member a named native disclosure with its actual reason', () => {
+  it('names a failed TLS check and retains the actual trust conflict', () => {
     const { container, fetch, onSave } = renderMembers();
     const summary = container.querySelector('summary')!;
     expect(summary.tagName).toBe('SUMMARY');
     expect(summary.parentElement?.tagName).toBe('DETAILS');
-    expect(summary).toHaveTextContent('Unreachable — details for member');
+    expect(summary).toHaveTextContent('TLS check failed — details for member');
     expect(summary).not.toHaveAttribute('title');
     expect(screen.getByText(trustReason).tagName).toBe('P');
     expect(screen.getByText('Discovered: member.example.invalid:8006 (192.0.2.2)')).toBeVisible();
     // Native keyboard/touch activation and collapsed accessibility are checked
     // in real browsers, not emulated by jsdom.
     expect(summary.parentElement).not.toHaveAttribute('open');
+    expect(fetch).not.toHaveBeenCalled();
+    expect(onSave).not.toHaveBeenCalled();
+  });
+
+  it('keeps an ambiguous access failure distinct from a refused connection and a slow read', () => {
+    const { container, fetch, onSave } = renderMembers([
+      member({ pulseError: 'Authentication failed - check API token or credentials' }),
+      member({
+        nodeName: 'refused',
+        pulseError:
+          'Proxmox API endpoint unavailable during cluster discovery (connection refused)',
+      }),
+      member({
+        nodeName: 'slow',
+        pulseError:
+          'Request timed out - storage API slow (check for unreachable PBS/NFS/Ceph backends)',
+      }),
+    ]);
+
+    const [access, refused, slow] = container.querySelectorAll('summary');
+    expect(access).toHaveTextContent('API access failed — details for member');
+    expect(access.parentElement).toHaveTextContent(
+      'Check saved credentials and read access for intended nodes only.',
+    );
+    expect(refused).toHaveTextContent('Unreachable — details for refused');
+    expect(refused.parentElement).toHaveTextContent('connection refused');
+    expect(slow).toHaveTextContent('API check timed out — details for slow');
+    expect(slow.parentElement).toHaveTextContent('storage API slow');
     expect(fetch).not.toHaveBeenCalled();
     expect(onSave).not.toHaveBeenCalled();
   });
@@ -105,14 +133,17 @@ describe('Cluster member connection diagnostics', () => {
   it.each([undefined, ''])('keeps a usable generic explanation when the error is %s', (error) => {
     const { container } = renderMembers([member({ pulseError: error })]);
     expect(container.querySelector('summary')).toHaveTextContent(
-      'Unreachable — details for member',
+      'API check failed — details for member',
     );
-    expect(screen.getByText('Pulse could not connect to this node')).toBeInTheDocument();
+    expect(screen.getByText('No reason reported for this API check.')).toBeInTheDocument();
   });
 
   it('renders error markup literally rather than making it executable', () => {
     const error = '<img src="untrusted" onerror="alert(1)">';
     const { container } = renderMembers([member({ pulseError: error })]);
+    expect(container.querySelector('summary')).toHaveTextContent(
+      'API check failed — details for member',
+    );
     expect(screen.getByText(error)).toBeInTheDocument();
     expect(container.querySelector('img')).not.toBeInTheDocument();
   });

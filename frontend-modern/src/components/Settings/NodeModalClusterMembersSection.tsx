@@ -19,6 +19,32 @@ const discoveredAddress = (endpoint: ClusterEndpoint): string => {
   return host || endpoint.ip || '';
 };
 
+const memberCheckFailure = (error?: string): { label: string; detail: string } => {
+  const detail = error?.trim() || 'No reason reported for this API check.';
+  const reason = detail
+    .toLowerCase()
+    .replace(/^proxmox api endpoint unavailable during cluster discovery \((.+)\)$/, '$1');
+
+  // The existing polling message groups HTTP 401 and 403. It cannot tell us
+  // whether Proxmox rejected the identity or denied a read to an accepted one.
+  if (reason === 'authentication failed - check api token or credentials') {
+    return {
+      label: 'API access failed',
+      detail: 'Check saved credentials and read access for intended nodes only.',
+    };
+  }
+  if (/^tls (?:trust conflict|fingerprint changed|certificate)\b/.test(reason)) {
+    return { label: 'TLS check failed', detail };
+  }
+  if (/^(?:connection|request) timed out\b/.test(reason)) {
+    return { label: 'API check timed out', detail };
+  }
+  if (/^(?:connection refused|network unreachable|hostname did not resolve)\b/.test(reason)) {
+    return { label: 'Unreachable', detail };
+  }
+  return { label: 'API check failed', detail };
+};
+
 // Per-member presentation and connection settings for an existing PVE
 // cluster. Display names are keyed by Pulse's immutable node identity while
 // connection overrides remain keyed by the provider's native node name.
@@ -63,16 +89,22 @@ export const NodeModalClusterMembersSection: Component<NodeModalClusterMembersSe
                   <div class="truncate text-xs text-muted" title={discoveredAddress(endpoint)}>
                     Discovered: {discoveredAddress(endpoint)}
                   </div>
-                  <Show when={endpoint.pulseReachable === false}>
-                    <details class="mt-2 rounded-md bg-amber-100 text-xs text-amber-800 dark:bg-amber-950/25 dark:text-amber-300">
-                      <summary class="min-h-11 cursor-pointer rounded-md px-3 py-3 font-medium focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-600 dark:focus-visible:outline-amber-300">
-                        Unreachable — details
-                        <span class="sr-only"> for {endpoint.nodeName}</span>
-                      </summary>
-                      <p class="break-words whitespace-pre-wrap px-3 pb-3 pt-1">
-                        {endpoint.pulseError || 'Pulse could not connect to this node'}
-                      </p>
-                    </details>
+                  <Show
+                    when={
+                      endpoint.pulseReachable === false && memberCheckFailure(endpoint.pulseError)
+                    }
+                  >
+                    {(failure) => (
+                      <details class="mt-2 rounded-md bg-amber-100 text-xs text-amber-800 dark:bg-amber-950/25 dark:text-amber-300">
+                        <summary class="min-h-11 cursor-pointer rounded-md px-3 py-3 font-medium focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-600 dark:focus-visible:outline-amber-300">
+                          {failure().label} — details
+                          <span class="sr-only"> for {endpoint.nodeName}</span>
+                        </summary>
+                        <p class="break-words whitespace-pre-wrap px-3 pb-3 pt-1">
+                          {failure().detail}
+                        </p>
+                      </details>
+                    )}
                   </Show>
                 </div>
                 <div class="grid gap-2">
