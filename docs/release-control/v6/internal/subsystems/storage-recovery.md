@@ -10136,3 +10136,13 @@ or read/write path changes.
 validates an optional `agentUrl` override before minting a Proxmox/PBS agent
 install token or rendering the install command. No storage, backup, or recovery
 persistence format or read/write path changes.
+
+
+### Email notification branding compatibility
+
+`PUT /api/notifications/email` (`internal/api/alerting/notifications.go`) adds
+optional structured email branding fields (`subjectPrefix`, `brandName`,
+`footerNote`) normalized via `EmailConfig.Branding()` with omitted-field
+preservation. Storage-recovery endpoints, backup/snapshot evaluation, and
+persistence contracts under `internal/api/` are unchanged
+(`internal/api/alerting/email_branding_test.go`).

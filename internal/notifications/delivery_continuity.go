@@ -1329,6 +1329,9 @@ func notificationDeliveryConfigurationFingerprint(job notificationDeliveryJob) s
 		c.TagFilter = nil
 		c.TagMode = ""
 		c.MinimumSeverity = ""
+		c.SubjectPrefix = ""
+		c.BrandName = ""
+		c.FooterNote = ""
 		value = c
 	case "apprise":
 		if job.AppriseConfig == nil {

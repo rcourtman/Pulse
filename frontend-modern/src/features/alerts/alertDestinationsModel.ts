@@ -51,6 +51,15 @@ export function buildEmailConfigPayload(config: UIEmailConfig): EmailConfig {
     payload.tagFilterMode = config.tagFilterMode === 'any' ? 'any' : 'all';
   }
   payload.minimumSeverity = normalizeNotificationMinimumSeverity(config.minimumSeverity);
+  if (config.subjectPrefix !== undefined) {
+    payload.subjectPrefix = config.subjectPrefix.trim();
+  }
+  if (config.brandName !== undefined) {
+    payload.brandName = config.brandName.trim();
+  }
+  if (config.footerNote !== undefined) {
+    payload.footerNote = config.footerNote.trim();
+  }
   return payload;
 }
 

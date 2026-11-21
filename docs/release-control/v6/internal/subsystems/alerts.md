@@ -5888,3 +5888,23 @@ card is active.
 
 `OverviewTab.emptystate.test.tsx` verifies showing, dismissing, persistence,
 enabled/unavailable suppression, and non-stacking with `AlertDeliveryPausedCard`.
+
+
+### Email branding & subject customization in Destinations
+
+`EmailProviderSelect` (`frontend-modern/src/components/Alerts/EmailProviderSelect.tsx`)
+exposes optional `Subject prefix`, `Brand name`, and `Footer note` controls
+inside the collapsed-by-default `Advanced options` disclosure using canonical
+constants from `frontend-modern/src/utils/alertEmailPresentation.ts`. Blank
+values preserve Pulse defaults (`[Pulse Alert]`, `Pulse Monitoring`, no extra
+footer note). `createDefaultEmailConfig`, `normalizeEmailConfigFromAPI`, and
+`buildEmailConfigPayload` round-trip and trim all three fields while preserving
+the `EmailProviderSelect.supported-settings.test.tsx` guarantee that every
+offered form control is backed by persisted backend configuration. Unsaved
+drafts are forwarded by `Send test email` so operators can verify branding
+before saving.
+
+`EmailProviderSelect.test.tsx` and `EmailProviderSelect.supported-settings.test.tsx`
+cover collapsed defaults, expanding advanced options, editing, payload
+round-tripping, and supported-settings invariants alongside desktop (`1280x900`
+light/dark) and mobile (`390x844`) browser verification on `/alerts/notifications`.

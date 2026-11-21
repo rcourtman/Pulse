@@ -15083,3 +15083,18 @@ retaining the existing 90% coverage and determinate-share honesty guards
 `AvailabilityFleetView.test.tsx` cover window switching, coverage formatting,
 and range callbacks alongside desktop (`1440x900` light/dark) and narrow
 (`390x844`) browser proof.
+
+
+### Email configuration API branding fields
+
+`GET /api/notifications/email`, `PUT /api/notifications/email`, and
+`POST /api/notifications/test` (email config preview) support optional
+`subjectPrefix`, `brandName`, and `footerNote` string fields on `EmailConfig`
+(`internal/notifications/notifications.go`, `internal/api/alerting/notifications.go`,
+and `frontend-modern/src/api/notifications.ts`). `UpdateEmailConfig` preserves
+existing values when a client omits these keys and clears them when explicit
+empty strings are submitted, normalizing control characters, whitespace, and
+rune-length bounds (`64`/`80`/`240`) before saving. Existing clients that do not
+send these keys remain fully compatible. `internal/api/alerting/email_branding_test.go`
+and `frontend-modern/src/api/__tests__/notifications.test.ts` verify API
+serialization and presence handling.

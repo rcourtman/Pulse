@@ -728,6 +728,9 @@ type EmailConfig struct {
 	TagFilter       []string `json:"tagFilter,omitempty"`
 	TagMode         string   `json:"tagFilterMode,omitempty"`   // "all" (default) or "any"
 	MinimumSeverity string   `json:"minimumSeverity,omitempty"` // "all" (default), "warning", or "critical"
+	SubjectPrefix   string   `json:"subjectPrefix,omitempty"`   // Optional custom subject prefix (replaces "[Pulse Alert]")
+	BrandName       string   `json:"brandName,omitempty"`       // Optional custom header/footer brand name (replaces "Pulse Monitoring")
+	FooterNote      string   `json:"footerNote,omitempty"`      // Optional plain-text note appended to email footers
 }
 
 // WebhookConfig holds webhook settings
@@ -788,6 +791,10 @@ func normalizeEmailConfig(cfg EmailConfig) EmailConfig {
 	normalized.From = strings.TrimSpace(normalized.From)
 	normalized.TagFilter = normalizeNotificationTagFilter(normalized.TagFilter)
 	normalized.MinimumSeverity = normalizeNotificationMinimumSeverity(normalized.MinimumSeverity)
+	branding := normalized.Branding()
+	normalized.SubjectPrefix = branding.SubjectPrefix
+	normalized.BrandName = branding.BrandName
+	normalized.FooterNote = branding.FooterNote
 	if len(normalized.TagFilter) == 0 {
 		normalized.TagMode = ""
 	} else {
@@ -2727,7 +2734,7 @@ func (n *NotificationManager) sendGroupedEmail(config EmailConfig, alertList []*
 	// by using the From address as the recipient
 
 	// Generate email using template
-	subject, htmlBody, textBody := EmailTemplate(alertList, false, n.publicURL)
+	subject, htmlBody, textBody := EmailTemplateWithBranding(alertList, false, n.publicURL, config.Branding())
 
 	// Send using HTML-aware method
 	return n.sendThreadedHTMLEmailWithError(subject, htmlBody, textBody, alertListThreadID(alertList), config)
@@ -2738,11 +2745,20 @@ func (n *NotificationManager) sendResolvedEmail(config EmailConfig, alertList []
 		return fmt.Errorf("no alerts to send")
 	}
 
+	branding := config.Branding()
 	subject, htmlBody, textBody := buildResolvedNotificationContent(alertList, resolvedAt, n.publicURL)
 	if subject == "" && textBody == "" {
 		return fmt.Errorf("failed to build resolved email content")
 	}
-	subject = resolvedEmailSubject(alertList)
+	if branding.FooterNote != "" {
+		if !strings.HasSuffix(textBody, "\n") {
+			textBody += "\n"
+		}
+		textBody += branding.FooterNote + "\n"
+		htmlBody = "<pre style=\"font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, \\\"Liberation Mono\\\", \\\"Courier New\\\", monospace\">" +
+			html.EscapeString(textBody) + "</pre>"
+	}
+	subject = resolvedEmailSubjectWithBranding(alertList, branding)
 
 	return n.sendThreadedHTMLEmailWithError(subject, htmlBody, textBody, alertListThreadID(alertList), config)
 }
@@ -3126,7 +3142,7 @@ func (n *NotificationManager) sendResolvedApprise(config AppriseConfig, alertLis
 
 // sendEmail sends an email notification
 func (n *NotificationManager) sendSingleEmailWithError(alert *alerts.Alert, config EmailConfig) error {
-	subject, htmlBody, textBody := EmailTemplate([]*alerts.Alert{alert}, true, n.publicURL)
+	subject, htmlBody, textBody := EmailTemplateWithBranding([]*alerts.Alert{alert}, true, n.publicURL, config.Branding())
 	return n.sendThreadedHTMLEmailWithError(subject, htmlBody, textBody, alertListThreadID([]*alerts.Alert{alert}), config)
 }
 
