@@ -31,6 +31,7 @@ CURRENT_PRODUCT_DOCS = (
 MARKDOWN_LINK = re.compile(r"!?\[[^\]]*\]\(([^)]+)\)")
 HTML_ASSET = re.compile(r"(?:src|href)=[\"']([^\"']+)[\"']")
 HEADING = re.compile(r"^#{1,6}\s+(.+?)\s*#*\s*$", re.MULTILINE)
+CODE_SPAN = re.compile(r"(?<!`)(`+)(?!`)(.*?)(?<!`)\1(?!`)")
 FENCE_OPEN = re.compile(r"^ {0,3}(`{3,}|~{3,})(.*)$")
 
 MISLEADING_PUBLIC_CLAIMS = {
@@ -63,8 +64,18 @@ def split_target(raw_target: str) -> tuple[str, str]:
 
 
 def heading_slug(value: str) -> str:
-    value = re.sub(r"<[^>]+>", "", value)
-    value = re.sub(r"[`*_~]", "", value).lower()
+    def prose(text: str) -> str:
+        return re.sub(r"[`*_~]", "", re.sub(r"<[^>]+>", "", text))
+
+    # Underscores in code names are visible text, not emphasis markers.
+    # GitHub and the shipped Help keep them in the rendered heading ID.
+    parts: list[str] = []
+    offset = 0
+    for span in CODE_SPAN.finditer(value):
+        parts.extend((prose(value[offset:span.start()]), span.group(2)))
+        offset = span.end()
+    parts.append(prose(value[offset:]))
+    value = "".join(parts).lower()
     value = re.sub(r"[^\w\s-]", "", value, flags=re.UNICODE)
     return re.sub(r"\s", "-", value).strip("-")
 
