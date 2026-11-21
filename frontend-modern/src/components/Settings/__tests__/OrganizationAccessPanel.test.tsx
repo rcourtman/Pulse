@@ -172,6 +172,30 @@ afterEach(() => {
 });
 
 describe('OrganizationAccessPanel', () => {
+  it('distinguishes a pending invitation from the proposed role in the draft', async () => {
+    const userId = 'new-user';
+    listPendingInvitationsMock.mockResolvedValue([
+      { userId, role: 'editor', invitedAt: '2026-11-03T00:00:00Z' },
+    ]);
+    renderPanel();
+
+    const input = await screen.findByRole('textbox', { name: 'Member user ID' });
+    input.focus();
+    fireEvent.input(input, { target: { value: `  ${userId}  ` } });
+    const form = screen.getByRole('form', { name: 'Update pending invitation' });
+    const role = within(form).getByRole('combobox', { name: 'Member role' });
+    expect(input).toHaveFocus();
+    expect(role).toHaveValue('viewer');
+    expect(role).toHaveAccessibleDescription(
+      'Last read: Editor, pending acceptance. If already accepted, the role changes immediately.',
+    );
+    expect(within(form).getByRole('button', { name: 'Save role' })).toBeEnabled();
+    const pending = within(screen.getByRole('group', { name: `Pending invitation for ${userId}` }));
+    expect(pending.getByText('editor', { exact: true })).toBeVisible();
+    expect(pending.getByRole('button', { name: `Revoke invitation for ${userId}` })).toBeEnabled();
+    expect(inviteMemberMock).not.toHaveBeenCalled();
+  });
+
   it.each(['org-a', 'default'])(
     'uses native required-field recovery before submitting an empty %s member draft',
     async (orgID) => {

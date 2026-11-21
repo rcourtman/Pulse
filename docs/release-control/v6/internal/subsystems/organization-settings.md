@@ -639,6 +639,26 @@ Comparable desktop/narrow browser fixtures exercise the actual panel, API and
 client. These establish frontend safeguards, not original-account, installed
 service or server-authorization acceptance.
 
+### Pending invitation roles are distinct from new invites and member roles
+
+In a named organization, an exact trimmed, case-sensitive user ID in the
+member draft matches a known pending invitation after saved owner and member
+checks. The form shows **Update Invitation**, the last read role and the
+pending acceptance status without changing the draft's selected role. It
+explains that a recipient who already accepted will instead have their member
+role changed immediately. The user ID, role selection and submit button all
+expose this distinction to assistive technology.
+
+Submitting still uses the existing session-bound, single-attempt member
+write and saved access reread. An invitation result means the invitation is
+saved and pending, not that access was granted or that a notice was sent.
+An existing member result keeps its distinct role-update message. The
+default organization's direct grant, ownership review, pending-row revoke
+actions and read-failure pauses are unchanged.
+`OrganizationAccessPanel.test.tsx` and
+`OrganizationAccessSelections.transport.test.tsx` exercise the saved/draft
+distinction and exact write/readback with unchanged sibling access.
+
 ### Audit events and signature checks withdraw with the reader
 
 The existing Settings Audit Log passes its current principal, explicit audit

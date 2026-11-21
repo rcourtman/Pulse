@@ -58,15 +58,26 @@ export const OrganizationAccessManagementSection: Component<
         blocked: true,
       };
     }
+    const invitation = props.state.inviteDraftInvitation();
+    const savedRole = ORGANIZATION_MEMBER_ROLE_OPTIONS.find(
+      (option) => option.value === (member ?? invitation)?.role,
+    );
     if (member) {
-      const savedRole = ORGANIZATION_MEMBER_ROLE_OPTIONS.find(
-        (option) => option.value === member.role,
-      );
       return {
         name: 'Update member role',
         heading: 'Update Member Role',
         submit: 'Update role',
         effect: `${savedRole ? `Last read: ${savedRole.label}. ` : ''}Role changes take effect immediately, without an invitation.`,
+      };
+    }
+    if (invitation) {
+      // This is the last saved read, not a guarantee that the recipient has
+      // not accepted in another session while this draft was open.
+      return {
+        name: 'Update pending invitation',
+        heading: 'Update Invitation',
+        submit: 'Save role',
+        effect: `Last read: ${savedRole ? `${savedRole.label}, ` : ''}pending acceptance. If already accepted, the role changes immediately.`,
       };
     }
     return {
@@ -120,6 +131,7 @@ export const OrganizationAccessManagementSection: Component<
                   data-org-access-action="invite-role"
                   data-org-access-target="draft"
                   aria-label="Member role"
+                  aria-describedby={effectID}
                   labelClass="text-xs"
                   fieldBaseClass="min-w-0 space-y-1"
                   value={props.state.inviteRole()}
