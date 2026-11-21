@@ -1,0 +1,34 @@
+{
+  "version": 1,
+  "base_sha": "07df1cf59bede1db4c3d7337f30e0c94b0aed897",
+  "verified_at": "2026-11-21T00:32:09Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/SSOProvidersPanel.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/SSOProvidersPanel.tsx": "92fbc299b64e9a1833084fd1d27ead0d4be358954b1a974bdfc0eee9cca52789"
+  },
+  "routes": [
+    "/settings/security-sso"
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 800
+    },
+    {
+      "width": 320,
+      "height": 620
+    }
+  ],
+  "states": [
+    "Matched before and after captures of the actual Settings page via offline Vite preview, using Playwright 1.56.1 with light Chromium desktop and dark WebKit phone.",
+    "Saved OIDC with blank groups and configured domain and email, and saved SAML with all three filters configured. Six inspected comparisons include both phone reading positions, with the role instructions in full.",
+    "The rule describes only the filter skipped by a blank list. Group claim and scopes, SAML certificate and attributes, saved filters and both footer actions remain available."
+  ],
+  "interactions": [
+    "253 candidate checks. Open the saved editor and disclose restrictions with keyboard or touch. The expected field follows the disclosure in keyboard order. All three field descriptions explain the matching rule.",
+    "Copy the URL from the opened provider details on desktop, cancel an unsaved change and reopen to the saved mapping. A read-only account sees the inventory with edit controls disabled. No writes to a provider or live IdP interaction."
+  ]
+}
