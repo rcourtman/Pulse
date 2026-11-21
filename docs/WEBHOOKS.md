@@ -118,10 +118,10 @@ and holds still apply.
 **Retries and retained failures.**
 
 Normal queued firing and recovery webhooks have a budget of **up to three
-queue delivery attempts, including the initial attempt**. This is a ceiling,
-not a promise to retry every failure or a guarantee of delivery. The normal
-queued webhook sender has no extra transport retry loop; do not assume three
-extra HTTP retries or a provider's `Retry-After` wait on this path.
+queue delivery attempts, including the initial attempt**. Some failures stop
+sooner. There is no separate HTTP retry loop or guarantee of delivery. For
+HTTP 429 or 503, a usable `Retry-After` can extend the usual wait up to
+15 minutes. It cannot shorten the wait or add attempts.
 
 | Observed failure | Automatic queue behaviour |
 | --- | --- |
