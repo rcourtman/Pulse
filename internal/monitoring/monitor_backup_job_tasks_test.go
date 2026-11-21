@@ -2,6 +2,7 @@ package monitoring
 
 import (
 	"context"
+	"reflect"
 	"testing"
 	"time"
 
@@ -149,6 +150,35 @@ func TestParseVzdumpJobLogNoGuestMarkers(t *testing.T) {
 	}
 	if tasks := parseVzdumpJobLog(jobTask, testJobUPID, testLogLines("INFO: nothing to do")); tasks != nil {
 		t.Errorf("expected no synthetic tasks, got %+v", tasks)
+	}
+}
+
+func TestParseVzdumpJobLogProgressAndMalformedMarkersDoNotCreateVerdicts(t *testing.T) {
+	start := time.Date(2026, 7, 25, 2, 0, 0, 0, time.UTC)
+	end := start.Add(2 * time.Minute)
+	job := models.BackupTask{Instance: "pve-cluster", Node: "pve1", Type: "vzdump", StartTime: start, EndTime: end}
+	got := parseVzdumpJobLog(job, testJobUPID, testLogLines(
+		"INFO: 1% (120.0 MiB of 10.0 GiB) in 3s",
+		"INFO: progress note: Finished Backup of VM 99 (0:00:00)",
+		"INFO: Starting Backup of VM abc (lxc)",
+		"\u2003INFO: Starting Backup of VM 103 (qemu)\t",
+		"INFO: 100% (10.0 GiB of 10.0 GiB) in 75s",
+		" INFO: Finished Backup of VM 103 (0:01:15)\t",
+		"ERROR: Backup of VM 888 missing failure separator",
+		"ERROR: Backup of VM 111 failed -\t",
+		"INFO: Starting Backup of VM 109 (lxc)",
+		"INFO: Finished Backup of VM 109 (0:0:09)",
+		"TASK ERROR: job errors",
+	))
+	next := start.Add(75 * time.Second)
+	idPrefix := job.Instance + "-" + testJobUPID + "-vm"
+	want := []models.BackupTask{
+		{ID: idPrefix + "103", Instance: job.Instance, Node: job.Node, Type: job.Type, VMID: 103, Status: "OK", StartTime: start, EndTime: next},
+		{ID: idPrefix + "111", Instance: job.Instance, Node: job.Node, Type: job.Type, VMID: 111, Status: "error", StartTime: next, EndTime: end, EndTimeFromParent: true, Error: "backup failed"},
+		{ID: idPrefix + "109", Instance: job.Instance, Node: job.Node, Type: job.Type, VMID: 109, Status: "unknown", StartTime: next, EndTime: end, EndTimeFromParent: true, Error: "backup job ended without an observed guest result"},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("guest verdicts and times = %+v, want %+v", got, want)
 	}
 }
 
