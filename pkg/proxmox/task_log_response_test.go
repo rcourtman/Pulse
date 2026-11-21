@@ -94,6 +94,13 @@ func TestTaskLogAcceptsExplicitPrefixAndExtensions(t *testing.T) {
 		{"empty-with-metadata", `{"data":[],"errors":null,"total":0}`, []TaskLogLine{}},
 		{"blank-and-unicode", `{"data":[{"n":1,"t":"","provider-metadata":true},{"n":2,"t":"INFO: café 日本語"}],"errors":null}`, []TaskLogLine{{1, ""}, {2, "INFO: café 日本語"}}},
 		{"escaped-keys-and-nested-extension", `{"data":[{"\u0074":"text\nline","extras":{"n":42,"T":[],"nested":[{},null]},"\u006e":1}]}`, []TaskLogLine{{1, "text\nline"}}},
+		{"extensions-are-row-local", `{"data":[
+			{"n":1,"t":"start","phase":"copy","worker":"backup","attempt":1,"duration":0,
+			 "progress":0,"tags":["local"],"detail":{"kind":"snapshot"},"resource":null},
+			{"n":2,"t":"progress"},
+			{"n":3,"t":"finish","pha\u0073e":"cleanup","detail":{"kind":"archive"}},
+			{"n":4,"t":""}
+		]}`, []TaskLogLine{{1, "start"}, {2, "progress"}, {3, "finish"}, {4, ""}}},
 		{"running-prefix", `{"data":[{"n":1,"t":"INFO: Starting Backup of VM 101 (qemu)"}]}`, []TaskLogLine{{1, "INFO: Starting Backup of VM 101 (qemu)"}}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

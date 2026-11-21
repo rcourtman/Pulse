@@ -37,12 +37,11 @@ func readTaskLogResponse(resp *http.Response) ([]TaskLogLine, error) {
 		return nil, errInvalidTaskLogResponse
 	}
 	lines := make([]TaskLogLine, 0)
-	keys := make(map[string]struct{})
 	for decoder.More() {
 		if len(lines) == taskLogLineLimit {
 			return nil, errInvalidTaskLogResponse
 		}
-		line, valid := readTaskLogLine(decoder, keys)
+		line, valid := readTaskLogLine(decoder)
 		if !valid || line.LineNumber != int64(len(lines)+1) {
 			return nil, errInvalidTaskLogResponse
 		}
@@ -64,13 +63,15 @@ func readTaskLogResponse(resp *http.Response) ([]TaskLogLine, error) {
 // Read the wire fields directly into the validated line. The JSON decoder
 // owns syntax and escaping; in particular keys are compared after unescaping.
 // Check all row keys for duplicates, even for ignored provider extensions.
-func readTaskLogLine(decoder *json.Decoder, keys map[string]struct{}) (TaskLogLine, bool) {
+func readTaskLogLine(decoder *json.Decoder) (TaskLogLine, bool) {
 	var line TaskLogLine
 	start, err := decoder.Token()
 	if err != nil || start != json.Delim('{') {
 		return line, false
 	}
-	clear(keys)
+	// Keep the set row-local: clearing a reused map would retain the
+	// allocation of an earlier row with more provider fields.
+	keys := make(map[string]struct{})
 	for decoder.More() {
 		key, err := decoder.Token()
 		name, ok := key.(string)
