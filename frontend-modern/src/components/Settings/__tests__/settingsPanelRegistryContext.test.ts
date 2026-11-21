@@ -265,14 +265,26 @@ describe('buildSettingsPanelRegistryContext', () => {
     expect(context.getUserAssignmentsPanelProps()).toEqual({
       currentUser: undefined,
       canManage: false,
+      signedInUsername: undefined,
+    });
+    setStatus({
+      authUsername: 'configured-admin',
+      settingsCapabilities: { users: true },
+    } as SecurityStatus);
+    expect(context.getUserAssignmentsPanelProps()).toEqual({
+      currentUser: 'configured-admin',
+      canManage: true,
+      signedInUsername: undefined,
     });
     setStatus({
       currentUsername: 'reader-one',
+      authUsername: 'configured-admin',
       settingsCapabilities: { users: true },
     } as SecurityStatus);
     expect(context.getUserAssignmentsPanelProps()).toEqual({
       currentUser: 'reader-one',
       canManage: true,
+      signedInUsername: 'reader-one',
     });
     setStatus({
       currentUsername: 'reader-two',
@@ -281,6 +293,7 @@ describe('buildSettingsPanelRegistryContext', () => {
     expect(context.getUserAssignmentsPanelProps()).toEqual({
       currentUser: 'reader-two',
       canManage: false,
+      signedInUsername: 'reader-two',
     });
   });
   it('binds Audit Log to live principal, explicit capability and normalised credential scopes', () => {

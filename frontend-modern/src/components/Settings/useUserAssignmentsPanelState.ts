@@ -17,6 +17,7 @@ import { useRBACFeatureGateState } from './useRBACFeatureGateState';
 export interface UserAssignmentsPanelProps {
   currentUser?: string;
   canManage?: boolean;
+  signedInUsername?: string;
 }
 
 export function useUserAssignmentsPanelState(props: UserAssignmentsPanelProps = {}) {
@@ -70,6 +71,13 @@ export function useUserAssignmentsPanelState(props: UserAssignmentsPanelProps = 
     !deletingUser();
   const isCurrentUser = (user: UserRoleAssignment) =>
     assignments().some((current) => unwrap(current) === unwrap(user));
+  // A reader fallback is not an observed sign-in. Match only the authoritative
+  // principal and leave all other spellings and aliases to the server.
+  const isOwnAccount = (user: UserRoleAssignment | null) =>
+    !!user && user.username === props.signedInUsername;
+  createEffect(() => {
+    if (isOwnAccount(userPendingDeletion())) setUserPendingDeletion(null);
+  });
   const requestOptions = (controller: AbortController) => ({
     signal: controller.signal,
     expectedOrgID: context.org,
@@ -241,7 +249,7 @@ export function useUserAssignmentsPanelState(props: UserAssignmentsPanelProps = 
     await loadUserPermissions();
   };
   const openDeleteUser = (assignment: UserRoleAssignment) => {
-    if (!canEdit() || !isCurrentUser(assignment)) return;
+    if (!canEdit() || !isCurrentUser(assignment) || isOwnAccount(assignment)) return;
     clearEditor();
     setSuccessNotice(null);
     setUserPendingDeletion(assignment);
@@ -317,7 +325,7 @@ export function useUserAssignmentsPanelState(props: UserAssignmentsPanelProps = 
   };
   const handleDeleteUser = async () => {
     const user = userPendingDeletion();
-    if (user) await mutateUser(user, 'delete');
+    if (user && !isOwnAccount(user)) await mutateUser(user, 'delete');
   };
   const handleSaveAssignments = async () => {
     const user = editingUser();
@@ -349,6 +357,7 @@ export function useUserAssignmentsPanelState(props: UserAssignmentsPanelProps = 
     formRoleIds,
     handleSaveAssignments,
     handleDeleteUser,
+    isOwnAccount,
     loading,
     loadData,
     loadError,

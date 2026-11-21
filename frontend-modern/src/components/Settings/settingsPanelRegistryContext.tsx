@@ -169,6 +169,7 @@ export function buildSettingsPanelRegistryContext(
     getUserAssignmentsPanelProps: () => ({
       currentUser: currentUser(),
       canManage: settingsCapabilities()?.users === true,
+      signedInUsername: params.securityStatus()?.currentUsername,
     }),
   };
 }

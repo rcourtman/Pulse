@@ -328,17 +328,27 @@ This presents only the existing admin inventory fields; it adds no read or
 write authority, metadata source or outbound disclosure.
 
 Long identity values wrap instead of truncating or widening the phone table.
-Every assigned role and both touch-sized actions remain visible with the user,
-not behind a tooltip, horizontal scroll or role count. The editor retains its
-saved-permissions qualifier, selected roles, Close, Cancel and Save; removal
-retains session-revocation effects and the identity-provider re-creation warning.
+Every assigned role and available touch-sized action remains visible with the
+user, not behind a tooltip, horizontal scroll or role count. If the saved user
+ID exactly matches the authenticated `currentUsername` in security status, the
+row explains that the signed-in account cannot be removed instead of offering
+Remove. Role editing remains available. Names, email, configured authentication
+usernames and other reader fallbacks do not identify this row. If that exact
+identity is learned while its removal confirmation is open, the UI withdraws
+the confirmation without a write or inventory reload. The server's
+self-removal rejection remains authoritative, including when no exact match is
+known. The editor retains its saved-permissions qualifier, selected roles,
+Close, Cancel and Save; removal retains session-revocation effects and the
+identity-provider re-creation warning.
 The state model still admits exact accepted row objects and sends only the
 selected username with its existing reader/org fence and no automatic retry.
 
 `RBACPaywallPanels.test.tsx` exercises two namesakes through the real panel's
 selection, permission read, destructive confirmation, exact-key removal and
 uncertain role update. `rbacPresentation.test.ts` covers exact identifier labels
-and local/email fallback. Browser proof pairs the native Settings shell and
+and local/email fallback. `UserAccessSelections.transport.test.tsx` verifies the
+signed-in account distinction without guessing from a fallback and without
+changing its saved-permissions read. Browser proof pairs the native Settings shell and
 User Access with the same HTTP fixtures on desktop and phone light/dark,
 including exact encoded PUT/DELETE targets and capability withdrawal.
 

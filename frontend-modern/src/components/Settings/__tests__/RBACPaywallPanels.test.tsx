@@ -921,14 +921,17 @@ describe('RBAC paywall settings panels', () => {
       providerId: 'okta',
       roleIds: ['admin'],
     };
-    getUsersMock.mockResolvedValueOnce([user]).mockResolvedValueOnce([]);
+    const signedIn = { username: 'alice', roleIds: ['admin'] };
+    getUsersMock.mockResolvedValueOnce([signedIn, user]).mockResolvedValueOnce([signedIn]);
 
-    render(() => <UserAssignmentsPanel />);
+    render(() => <UserAssignmentsPanel currentUser="alice" signedInUsername="alice" canManage />);
 
     expect(await screen.findByText('Alice Example')).toBeInTheDocument();
     expect(screen.getByText('alice@example.com')).toBeInTheDocument();
     expect(screen.getByText('OIDC · okta')).toBeInTheDocument();
     expect(screen.getByTitle('sso:oidc:okta:opaque_subject')).toBeInTheDocument();
+    expect(screen.getByText('You cannot remove your own user access.')).toBeVisible();
+    expect(screen.queryByRole('button', { name: 'Remove alice' })).not.toBeInTheDocument();
 
     fireEvent.click(
       screen.getByRole('button', {
@@ -956,6 +959,8 @@ describe('RBAC paywall settings panels', () => {
         'User access removed for Alice Example (sso:oidc:okta:opaque_subject)',
       ),
     ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Manage access for alice' })).toBeEnabled();
+    expect(screen.getByText('You cannot remove your own user access.')).toBeVisible();
     expect(notificationSuccessMock).not.toHaveBeenCalled();
     await waitFor(() => {
       expect(screen.queryByText('Alice Example')).not.toBeInTheDocument();

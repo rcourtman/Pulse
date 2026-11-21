@@ -16,7 +16,11 @@ import Pencil from 'lucide-solid/icons/pencil';
 import Trash2 from 'lucide-solid/icons/trash-2';
 import { SearchField } from '@/components/shared/SearchField';
 import { PulseDataGrid } from '@/components/shared/PulseDataGrid';
-import { getUserAssignmentsEmptyStateCopy, getUserIdentityLabel } from '@/utils/rbacPresentation';
+import {
+  getUserAssignmentsEmptyStateCopy,
+  getUserIdentityLabel,
+  USER_ACCESS_REMOVAL_COPY,
+} from '@/utils/rbacPresentation';
 import { InlineNotice } from '@/components/shared/InlineNotice';
 import TriangleAlert from 'lucide-solid/icons/triangle-alert';
 import { Dialog } from '@/components/shared/Dialog';
@@ -296,35 +300,42 @@ export const UserAssignmentsPanel: Component<UserAssignmentsPanelProps> = (props
                 key: 'actions',
                 label: 'Actions',
                 align: 'right',
-                render: (assignment) => (
-                  <div class="flex flex-wrap justify-end gap-1">
-                    <Button
-                      variant="ghost"
-                      size="settingsAction"
-                      class="min-h-11 min-w-11 gap-2 px-2 sm:min-h-9 sm:min-w-0"
-                      aria-label={`Manage access for ${getUserIdentityLabel(assignment)}`}
-                      title="Manage access"
-                      disabled={!state.canEdit()}
-                      data-user-access={assignment.username}
-                      onClick={() => void state.openManageAccess(assignment)}
-                    >
-                      <Pencil class="w-4 h-4" />
-                      <span class="hidden sm:inline">Manage Access</span>
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="settingsAction"
-                      class="min-h-11 min-w-11 gap-2 px-2 text-red-600 hover:text-red-700 sm:min-h-9 sm:min-w-0"
-                      aria-label={`Remove ${getUserIdentityLabel(assignment)}`}
-                      title="Remove user access"
-                      disabled={!state.canEdit()}
-                      onClick={() => state.openDeleteUser(assignment)}
-                    >
-                      <Trash2 class="w-4 h-4" />
-                      <span class="hidden sm:inline">Remove</span>
-                    </Button>
-                  </div>
-                ),
+                render: (assignment) => {
+                  const identity = getUserIdentityLabel(assignment);
+                  return (
+                    <div class="flex flex-wrap items-center justify-end gap-1 whitespace-normal text-xs text-muted">
+                      <Button
+                        variant="ghost"
+                        size="settingsAction"
+                        class="min-h-11 min-w-11 gap-2 px-2 sm:min-h-9 sm:min-w-0"
+                        aria-label={`Manage access for ${identity}`}
+                        title="Manage access"
+                        disabled={!state.canEdit()}
+                        data-user-access={assignment.username}
+                        onClick={() => void state.openManageAccess(assignment)}
+                      >
+                        <Pencil class="w-4 h-4" />
+                        <span class="hidden sm:inline">Manage Access</span>
+                      </Button>
+                      {state.isOwnAccount(assignment) ? (
+                        USER_ACCESS_REMOVAL_COPY.self
+                      ) : (
+                        <Button
+                          variant="ghost"
+                          size="settingsAction"
+                          class="min-h-11 min-w-11 gap-2 px-2 text-red-600 hover:text-red-700 sm:min-h-9 sm:min-w-0"
+                          aria-label={`Remove ${identity}`}
+                          title="Remove user access"
+                          disabled={!state.canEdit()}
+                          onClick={() => state.openDeleteUser(assignment)}
+                        >
+                          <Trash2 class="w-4 h-4" />
+                          <span class="hidden sm:inline">Remove</span>
+                        </Button>
+                      )}
+                    </div>
+                  );
+                },
               },
             ]}
             keyExtractor={(assignment) => assignment.username}
@@ -368,16 +379,13 @@ export const UserAssignmentsPanel: Component<UserAssignmentsPanelProps> = (props
             <div class="space-y-5 p-6">
               <div>
                 <h3 class="text-lg font-semibold text-base-content">Remove user access?</h3>
-                <p class="mt-2 text-sm text-muted">
-                  This removes all role assignments and revokes active Pulse sessions for:
-                </p>
+                <p class="mt-2 text-sm text-muted">{USER_ACCESS_REMOVAL_COPY.effect}</p>
                 <div class="mt-2">
                   <UserAccessIdentity user={user()} />
                 </div>
               </div>
               <div class="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/25 dark:text-amber-100">
-                This does not disable the account at the identity provider. A later authorized SSO
-                login will create the user record again.
+                {USER_ACCESS_REMOVAL_COPY.identityProvider}
               </div>
               <Show when={state.actionError()}>
                 {(message) => (

@@ -1,0 +1,47 @@
+{
+  "version": 1,
+  "base_sha": "62331b1e3aabfb1e0403b71195af7c599c42a848",
+  "verified_at": "2026-11-21T09:43:25Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/UserAssignmentsPanel.tsx",
+    "frontend-modern/src/components/Settings/settingsPanelRegistryContext.tsx",
+    "frontend-modern/src/components/Settings/useUserAssignmentsPanelState.ts",
+    "frontend-modern/src/utils/rbacPresentation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/UserAssignmentsPanel.tsx": "62feed42167740b299184542192a29dd1aa3178b29af8a2f1565409511c6db2b",
+    "frontend-modern/src/components/Settings/settingsPanelRegistryContext.tsx": "4fcc911d6d01ec0af3152cbdfe0374b80bd52983e0c6563c75315e50d8b15735",
+    "frontend-modern/src/components/Settings/useUserAssignmentsPanelState.ts": "8d29a1896bb4152315f8238beb561f05ea32296f07353a2e9e6a758a17873615",
+    "frontend-modern/src/utils/rbacPresentation.ts": "596e03ecba28afe461733e7293f43a48af4116d95343e2bb046db60811967bf3"
+  },
+  "routes": [
+    "/settings/security-users"
+  ],
+  "viewports": [
+    {
+      "width": 1536,
+      "height": 864,
+      "browser": "Chromium 141.0.7390.37",
+      "theme": "light",
+      "input": "keyboard"
+    },
+    {
+      "width": 320,
+      "height": 640,
+      "browser": "WebKit 26.0",
+      "theme": "dark",
+      "input": "touch"
+    }
+  ],
+  "states": [
+    "Paired the exact compiled Settings User Access route with preserved base captures and identical synthetic status, user and role responses.",
+    "Two accounts with the same display name, email and provider have distinct saved IDs. Only the exact authenticated account explains why Remove is unavailable. The reason wraps inside its Actions cell on the phone without obscuring roles or identity.",
+    "With only the configured username available, the UI makes no self claim and the narrow inventory is pixel identical. The narrow namesake confirmation is also pixel identical."
+  ],
+  "interactions": [
+    "Keyboard and touch open Manage Access for the exact signed-in ID and read its saved permissions. Rendering and cancelling do not write.",
+    "The exact other account confirmation retains its saved ID, removal effects, IdP warning, and Cancel default. Explicit confirmation sends only that account’s synthetic DELETE and the ordinary reload retains the signed-in row. The final run sent no self-removal request.",
+    "Playwright 1.56.1: 169 final and comparison assertions, normal preview and browser shutdown, and native pixel review of five matched pairs."
+  ]
+}
