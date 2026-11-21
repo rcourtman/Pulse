@@ -403,10 +403,11 @@ that command name.
 
 For `docker run` or an app UI, change the image in the existing saved deployment
 and recreate it with the same data mount, ports and settings; do not start a
-second Pulse against that data. Check the running image again, Pulse's displayed
-server version and service health after recreation. See
-[rollback and backup scope](AUTO_UPDATE.md#rollback) before reverting a version:
-an image change alone does not undo data migrations.
+second Pulse against that data. Check the running image, Pulse's displayed
+server version and service health after recreation. For Pro,
+[confirm the selected image and version](#check-the-running-pro-image).
+See [rollback and backup scope](AUTO_UPDATE.md#rollback) before reverting a
+version: an image change alone does not undo data migrations.
 
 ---
 
@@ -870,3 +871,55 @@ Pulse can start, stop, and restart Docker / Podman containers directly from the 
   ```bash
   docker exec -it pulse /bin/sh
   ```
+
+## Check the running Pro image
+
+A successful pull or a matching version does not tell you which build is
+running. On the same Docker host and in the same context as your existing Pulse
+deployment, use its regular server container, not a stopped or temporary one.
+Replace `pulse` with its actual container name and set `expected` to the complete
+`repository@sha256:…` reference you selected in Private Downloads for that
+update. This is an image reference, not an activation key. The check does not
+pull, recreate or restart anything.
+
+```bash
+(
+  container='pulse'
+  expected='paste-the-selected-image-reference-here'
+  unconfirmed() { printf 'Running image unconfirmed: %s\n' "$1" >&2; exit 1; }
+
+  [[ "$expected" =~ ^[^[:space:]@]+@sha256:[0-9a-f]{64}$ ]] ||
+    unconfirmed 'use the complete repository@sha256 reference'
+  snapshot() {
+    docker container inspect --format \
+      '{{.Id}} {{.Image}} {{.State.Status}} {{.State.StartedAt}}' -- "$container"
+  }
+  before=$(snapshot) || unconfirmed 'cannot inspect the container'
+  read -r id image status started <<< "$before"
+  [[ "$status" == running && "$id" =~ ^[0-9a-f]{64}$ &&
+     "$image" =~ ^sha256:[0-9a-f]{64}$ ]] || unconfirmed 'need a running container'
+  timestamp='^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\.[0-9]{1,9})?(Z|[+-][0-9]{2}:[0-9]{2})$'
+  [[ "$started" =~ $timestamp &&
+     "$started" != 0001-* ]] || unconfirmed 'Docker did not report a start time'
+  refs=$(docker image inspect --format '{{range .RepoDigests}}{{println .}}{{end}}' \
+    -- "$image") || unconfirmed 'cannot read registry references for the running image'
+  grep -Fqx -- "$expected" <<< "$refs" || unconfirmed 'the selected reference is not recorded'
+  version=$(docker container exec -- "$id" /app/pulse --version) ||
+    unconfirmed 'cannot read the running version'
+  [[ -n "$version" ]] || unconfirmed 'the container did not report a version'
+  after=$(snapshot) || unconfirmed 'cannot recheck the container'
+  [[ "$before" == "$after" ]] || unconfirmed 'the container changed or restarted during the check'
+  printf 'Selected private image matches the running container.\n%s\n' "$version"
+)
+```
+
+A local image ID is not a registry digest. The check matches the entire
+repository reference and compares the container's start time before and after
+reading its version. Docker can keep the same container ID across a restart.
+
+Look for the image match **and** `Pulse Pro` with the version you chose.
+Then check service health and that monitoring has resumed. A match does not
+prove the licence activated. If the result is unconfirmed, leave the working
+installation alone. Do not pull again, recreate or change the licence just to
+check. If a restart was already under way, wait for the service to settle
+before checking again.
