@@ -80,9 +80,11 @@ changed_paths() {
 # into its own package's test binary; any other file reaches every package
 # that imports its directory, including through embeds and testdata below it.
 package_affected() {
-  local package="$1" changed="$2" closure="${work_dir}/closure" root
-  root="$(cd "${CURRENT_DIR}" && go list -m -f '{{.Dir}}')" || return 2
-  (cd "${CURRENT_DIR}" && go list -e -deps -test \
+  local package="$1" changed="$2" root="$3" closure="${work_dir}/closure"
+  # Do not ask Go to continue on errors here. A deleted dependency has no
+  # directory in the partial graph, so its changed files can otherwise
+  # disappear from the intersection and be reported as no work.
+  (cd "${CURRENT_DIR}" && go list -deps -test \
     -f '{{with .Module}}{{if .Main}}{{$.Dir}}{{end}}{{end}}' "${package}") > "${closure}" ||
     return 2
   [[ -s "${closure}" ]] || return 2
@@ -115,7 +117,7 @@ package_affected() {
 SELECTED=("${PACKAGES[@]}")
 selection="all (no baseline)"
 select_packages() {
-  local changed="${work_dir}/changed-paths" package status picked=()
+  local changed="${work_dir}/changed-paths" package root status picked=()
   if ! changed_paths > "${changed}"; then
     selection="all (trees are not both clean Git checkouts)"
     return
@@ -124,9 +126,15 @@ select_packages() {
     selection="all (module files changed)"
     return
   fi
+  # The root is the same for every dependency lookup in this checkout.
+  if ! root="$(cd "${CURRENT_DIR}" && go list -m -f '{{.Dir}}')" ||
+      [[ "${root}" != /* || "${root}" == *$'\n'* ]]; then
+    selection="all (package graph unreadable)"
+    return
+  fi
   for package in "${PACKAGES[@]}"; do
     status=0
-    package_affected "${package}" "${changed}" || status=$?
+    package_affected "${package}" "${changed}" "${root}" || status=$?
     case "${status}" in
       0) picked+=("${package}") ;;
       1) ;;
