@@ -2478,6 +2478,34 @@ sleep() {
                     self.assertIn(distinction, context)
                 self.assertTrue(fields["pulse_version"]["validations"]["required"])
 
+    def test_proxmox_backup_intake_distinguishes_artifact_and_guest_recovery(self) -> None:
+        heading = "Proxmox backups: what to report"
+        contexts = []
+        for name, evidence_id in (("bug_report.yml", "logs"), ("v6_rc_feedback.yml", "evidence")):
+            with self.subTest(form=name):
+                form = yaml.load(read(f".github/ISSUE_TEMPLATE/{name}"), Loader=UniqueKeyLoader)
+                context = expandable_intake_context(form, evidence_id, heading)
+                for distinction in (
+                    "**Backup jobs**, **By date**, **Coverage** or a backup-age alert",
+                    "consistent aliases for the connection, guest and storage location",
+                    "task result and time, the restore point's creation time and the backup age",
+                    "thaw, fresh successful writes on every filesystem covered by the backup",
+                    "whether the workload responded",
+                    "An **OK** task does not prove the guest recovered",
+                    'Use existing evidence or write "unknown"',
+                    "Do not repeat a backup, verify or restore a point",
+                    "run Diagnostics or send guest-agent probes",
+                    "Do not force writes or reset the guest",
+                    "Keep full task IDs, private paths, inventories and unredacted errors private",
+                ):
+                    self.assertIn(distinction, context)
+                evidence = next(field for field in form["body"] if field.get("id") == evidence_id)
+                self.assertEqual(evidence["type"], "textarea")
+                self.assertFalse(evidence.get("validations", {}).get("required", False))
+                contexts.append(context)
+        self.assertEqual(len(contexts), 2)
+        self.assertEqual(contexts[0], contexts[1])
+
     def test_saved_access_intake_distinguishes_reads_from_uncertain_changes(self) -> None:
         contexts = []
         for name, summary_id, evidence_id in (
