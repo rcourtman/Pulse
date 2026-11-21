@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@solidjs/testing-library';
+import { createSignal } from 'solid-js';
 import type { Permission, Role, UserRoleAssignment } from '@/types/rbac';
 import { clearAuth, getOrgID, setApiToken, setOrgID } from '@/utils/apiClient';
 import { UserAssignmentsPanel } from '../UserAssignmentsPanel';
@@ -134,6 +135,58 @@ afterEach(() => {
 });
 
 describe('User Access selection through rendered controls and real transport', () => {
+  it('explains why only the signed-in account cannot be removed and leaves its role editor available', async () => {
+    const [ownAccount, namesake] = savedUsers;
+    namesake.email = ownAccount.email;
+    render(() => (
+      <UserAssignmentsPanel
+        currentUser={ownAccount.username}
+        signedInUsername={ownAccount.username}
+        canManage
+      />
+    ));
+    await screen.findByTitle(ownAccount.username);
+    const ownRow = rowFor(ownAccount);
+    expect(ownRow.getByText('You can’t remove your own access.')).toBeVisible();
+    expect(ownRow.queryByRole('button', { name: /^Remove / })).not.toBeInTheDocument();
+    expect(rowFor(namesake).getByRole('button', { name: /^Remove / })).toBeEnabled();
+    expect(
+      rowFor(namesake).queryByText('You can’t remove your own access.'),
+    ).not.toBeInTheDocument();
+
+    fireEvent.click(ownRow.getByRole('button', { name: /^Manage access for / }));
+    const editor = await screen.findByRole('dialog', {
+      name: `Manage access: Alex Example (${ownAccount.username})`,
+    });
+    await within(editor).findByRole('list', { name: 'Returned rules' });
+    expect(reads(`${userPath(ownAccount.username)}/permissions`)).toHaveLength(1);
+    expect(writes()).toHaveLength(0);
+    expectBoundRequests();
+  });
+
+  it('does not infer self from the reader fallback and withdraws an open removal once self is known', async () => {
+    const user = savedUsers[0];
+    const [signIn, setSignIn] = createSignal<string>();
+    render(() => (
+      <UserAssignmentsPanel currentUser={user.username} signedInUsername={signIn()} canManage />
+    ));
+    await screen.findByTitle(user.username);
+    const row = rowFor(user);
+    fireEvent.click(row.getByRole('button', { name: /^Remove / }));
+    const dialog = await screen.findByRole('dialog', {
+      name: `Remove user access: Alex Example (${user.username})`,
+    });
+    const confirmRemoval = within(dialog).getByRole('button', { name: 'Remove User Access' });
+
+    setSignIn(user.username);
+    expect(await row.findByText('You can’t remove your own access.')).toBeVisible();
+    await waitFor(() => expect(dialog).not.toBeInTheDocument());
+    fireEvent.click(confirmRemoval);
+    expect(writes()).toHaveLength(0);
+    expect(reads('/api/admin/users')).toHaveLength(1);
+    expect(reads('/api/admin/roles')).toHaveLength(1);
+  });
+
   it('keeps both namesakes distinct and an unlisted saved key visible without making it toggleable', async () => {
     catalogue = [
       structuredClone(roles[0]),

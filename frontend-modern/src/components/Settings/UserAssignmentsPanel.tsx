@@ -296,35 +296,44 @@ export const UserAssignmentsPanel: Component<UserAssignmentsPanelProps> = (props
                 key: 'actions',
                 label: 'Actions',
                 align: 'right',
-                render: (assignment) => (
-                  <div class="flex flex-wrap justify-end gap-1">
-                    <Button
-                      variant="ghost"
-                      size="settingsAction"
-                      class="min-h-11 min-w-11 gap-2 px-2 sm:min-h-9 sm:min-w-0"
-                      aria-label={`Manage access for ${getUserIdentityLabel(assignment)}`}
-                      title="Manage access"
-                      disabled={!state.canEdit()}
-                      data-user-access={assignment.username}
-                      onClick={() => void state.openManageAccess(assignment)}
-                    >
-                      <Pencil class="w-4 h-4" />
-                      <span class="hidden sm:inline">Manage Access</span>
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="settingsAction"
-                      class="min-h-11 min-w-11 gap-2 px-2 text-red-600 hover:text-red-700 sm:min-h-9 sm:min-w-0"
-                      aria-label={`Remove ${getUserIdentityLabel(assignment)}`}
-                      title="Remove user access"
-                      disabled={!state.canEdit()}
-                      onClick={() => state.openDeleteUser(assignment)}
-                    >
-                      <Trash2 class="w-4 h-4" />
-                      <span class="hidden sm:inline">Remove</span>
-                    </Button>
-                  </div>
-                ),
+                render: (assignment) => {
+                  const identity = getUserIdentityLabel(assignment);
+                  return (
+                    <div class="flex flex-wrap items-center justify-end gap-1">
+                      <Button
+                        variant="ghost"
+                        size="settingsAction"
+                        class="min-h-11 min-w-11 gap-2 px-2 sm:min-h-9 sm:min-w-0"
+                        aria-label={`Manage access for ${identity}`}
+                        title="Manage access"
+                        disabled={!state.canEdit()}
+                        data-user-access={assignment.username}
+                        onClick={() => void state.openManageAccess(assignment)}
+                      >
+                        <Pencil class="w-4 h-4" />
+                        <span class="hidden sm:inline">Manage Access</span>
+                      </Button>
+                      {state.isOwnAccount(assignment) ? (
+                        <span class="whitespace-normal text-xs text-muted">
+                          You can’t remove your own access.
+                        </span>
+                      ) : (
+                        <Button
+                          variant="ghost"
+                          size="settingsAction"
+                          class="min-h-11 min-w-11 gap-2 px-2 text-red-600 hover:text-red-700 sm:min-h-9 sm:min-w-0"
+                          aria-label={`Remove ${identity}`}
+                          title="Remove user access"
+                          disabled={!state.canEdit()}
+                          onClick={() => state.openDeleteUser(assignment)}
+                        >
+                          <Trash2 class="w-4 h-4" />
+                          <span class="hidden sm:inline">Remove</span>
+                        </Button>
+                      )}
+                    </div>
+                  );
+                },
               },
             ]}
             keyExtractor={(assignment) => assignment.username}
