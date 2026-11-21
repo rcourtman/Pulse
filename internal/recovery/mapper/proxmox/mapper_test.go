@@ -237,7 +237,7 @@ func TestFromPVEBackupTasksWithEvidenceUsesGuestObservationForRunning(t *testing
 	started := ingested.Add(-time.Hour)
 	task := models.BackupTask{
 		ID: "job-vm103", Instance: "site", Node: "pve1", VMID: 103,
-		Status: "running", StartTime: started,
+		Type: "vzdump", StartTime: started,
 	}
 	for _, tt := range []struct {
 		name      string
@@ -246,26 +246,34 @@ func TestFromPVEBackupTasksWithEvidenceUsesGuestObservationForRunning(t *testing
 		completed time.Time
 		observed  time.Time
 		expires   time.Time
+		outcome   recovery.Outcome
 	}{
-		{name: "carried", observed: ingested.Add(-6 * time.Minute), expires: ingested.Add(-time.Minute)},
-		{name: "fresh reread", observed: ingested, expires: ingested.Add(5 * time.Minute)},
-		{name: "future provider start", started: ingested.Add(10 * time.Minute), observed: ingested, expires: ingested.Add(10 * time.Minute)},
-		{name: "legacy without observation"},
-		{name: "terminal failure", status: "error", completed: ingested.Add(-time.Minute), observed: ingested.Add(-6 * time.Minute)},
+		{name: "carried", status: "running", observed: ingested.Add(-6 * time.Minute), expires: ingested.Add(-time.Minute), outcome: recovery.OutcomeRunning},
+		{name: "fresh reread", status: "running", observed: ingested, expires: ingested.Add(5 * time.Minute), outcome: recovery.OutcomeRunning},
+		{name: "future provider start", status: "running", started: ingested.Add(10 * time.Minute), observed: ingested, expires: ingested.Add(10 * time.Minute), outcome: recovery.OutcomeRunning},
+		{name: "legacy without observation", status: "running", outcome: recovery.OutcomeRunning},
+		{name: "terminal failure", status: "error", completed: ingested.Add(-time.Minute), observed: ingested.Add(-6 * time.Minute), outcome: recovery.OutcomeFailed},
+		{name: "omitted status", observed: ingested, expires: ingested.Add(5 * time.Minute), outcome: recovery.OutcomeUnknown},
+		{name: "carried omitted status", observed: ingested.Add(-6 * time.Minute), expires: ingested.Add(-time.Minute), outcome: recovery.OutcomeUnknown},
+		{name: "omitted status with future provider start", started: ingested.Add(10 * time.Minute), observed: ingested, outcome: recovery.OutcomeUnknown},
+		{name: "omitted status without observation", outcome: recovery.OutcomeUnknown},
+		{name: "ended without verdict", completed: ingested.Add(-time.Minute), observed: ingested, outcome: recovery.OutcomeUnknown},
+		{name: "explicit unknown status", status: "unknown", observed: ingested, outcome: recovery.OutcomeUnknown},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			row := task
 			row.ObservedAt = tt.observed
 			row.EndTime = tt.completed
-			if tt.status != "" {
-				row.Status = tt.status
-			}
+			row.Status = tt.status
 			if !tt.started.IsZero() {
 				row.StartTime = tt.started
 			}
 			points, err := FromPVEBackupTasksWithEvidence([]models.BackupTask{row}, nil, ingested)
 			if err != nil || len(points) != 1 || points[0].Evidence == nil {
 				t.Fatalf("expected an evidenced point: %v, %v", points, err)
+			}
+			if points[0].Outcome != tt.outcome {
+				t.Fatalf("outcome = %s, want %s", points[0].Outcome, tt.outcome)
 			}
 			evidence := points[0].Evidence
 			if err := evidence.Validate(); err != nil {

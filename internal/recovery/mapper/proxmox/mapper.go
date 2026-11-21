@@ -443,18 +443,32 @@ func FromPVEBackupTasksWithEvidence(
 	// ingestion and from the provider's start/end timestamps.
 	runningObservations := make(map[string]time.Time)
 	for _, task := range tasks {
-		if task.VMID > 0 && task.EndTime.IsZero() && !task.ObservedAt.IsZero() && outcomeFromTaskStatus(task.Status) == recovery.OutcomeRunning {
+		if task.VMID <= 0 || !task.EndTime.IsZero() || task.ObservedAt.IsZero() {
+			continue
+		}
+		// PVE may omit status on an open vzdump. Retain the observation's
+		// deadline, not an inferred verdict that unclocked readers could reuse.
+		omitted := task.Type == "vzdump" && strings.TrimSpace(task.Status) == "" && task.StartTime.Unix() > 0
+		if omitted || outcomeFromTaskStatus(task.Status) == recovery.OutcomeRunning {
 			runningObservations["pve-task:"+strings.TrimSpace(task.ID)] = task.ObservedAt
 		}
 	}
 	for i := range points {
 		point := &points[i]
-		if point.Outcome != recovery.OutcomeRunning || point.CompletedAt != nil || point.Evidence == nil {
+		if point.CompletedAt != nil || point.Evidence == nil {
+			continue
+		}
+		explicit := point.Outcome == recovery.OutcomeRunning
+		omitted := point.Outcome == recovery.OutcomeUnknown && point.Details["type"] == "vzdump" && point.Details["status"] == ""
+		if !explicit && !omitted {
 			continue
 		}
 		if observedAt, ok := runningObservations[point.ID]; ok {
 			expires := observedAt.Add(recovery.BackupTaskRunningMaxAge).UTC()
 			if expires.Before(point.Evidence.ObservedAt) {
+				if !explicit {
+					continue // Don't extend inferred running to a future provider start.
+				}
 				// A provider start ahead of Pulse's clock cannot extend
 				// validity. The rollup only considers start < cutoff.
 				expires = point.Evidence.ObservedAt
