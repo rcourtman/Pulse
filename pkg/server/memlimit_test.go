@@ -212,3 +212,203 @@ func TestReadCgroupV1MemoryLimit(t *testing.T) {
 		t.Fatal("expected missing file to mean no limit")
 	}
 }
+
+func TestParseProcMeminfoTotal(t *testing.T) {
+	cases := []struct {
+		name    string
+		content string
+		want    int64
+		ok      bool
+	}{
+		{
+			name:    "typical lxcfs 2 GiB",
+			content: "MemTotal:        2097152 kB\nMemFree:         1500000 kB\n",
+			want:    2147483648,
+			ok:      true,
+		},
+		{
+			name:    "small 256 MiB container",
+			content: "MemTotal: 262144 KiB\n",
+			want:    268435456,
+			ok:      true,
+		},
+		{
+			name:    "megabytes unit",
+			content: "MemTotal: 512 MB\n",
+			want:    536870912,
+			ok:      true,
+		},
+		{
+			name:    "gigabytes unit",
+			content: "MemTotal: 4 GiB\n",
+			want:    4294967296,
+			ok:      true,
+		},
+		{
+			name:    "bytes unit",
+			content: "MemTotal: 536870912 B\n",
+			want:    536870912,
+			ok:      true,
+		},
+		{
+			name:    "missing MemTotal",
+			content: "MemFree: 1024 kB\n",
+			want:    0,
+			ok:      false,
+		},
+		{
+			name:    "missing unit",
+			content: "MemTotal: 2097152\n",
+			want:    0,
+			ok:      false,
+		},
+		{
+			name:    "unknown unit",
+			content: "MemTotal: 2097152 TB\n",
+			want:    0,
+			ok:      false,
+		},
+		{
+			name:    "zero value",
+			content: "MemTotal: 0 kB\n",
+			want:    0,
+			ok:      false,
+		},
+		{
+			name:    "negative value",
+			content: "MemTotal: -1024 kB\n",
+			want:    0,
+			ok:      false,
+		},
+		{
+			name:    "non-numeric",
+			content: "MemTotal: nope kB\n",
+			want:    0,
+			ok:      false,
+		},
+		{
+			name:    "overflow",
+			content: "MemTotal: 9223372036854775807 kB\n",
+			want:    0,
+			ok:      false,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, ok := parseProcMeminfoTotal(tc.content)
+			if ok != tc.ok || got != tc.want {
+				t.Fatalf("parseProcMeminfoTotal(%q) = (%d, %v), want (%d, %v)", tc.content, got, ok, tc.want, tc.ok)
+			}
+		})
+	}
+}
+
+func TestSelectRuntimeMemoryLimit(t *testing.T) {
+	const (
+		mib512 = 512 << 20
+		gib2   = 2 << 30
+		gib16  = 16 << 30
+	)
+	cases := []struct {
+		name         string
+		cgroupLimit  int64
+		hasCgroup    bool
+		meminfoTotal int64
+		hasMeminfo   bool
+		wantLimit    int64
+		wantSource   string
+		wantOK       bool
+	}{
+		{
+			name:         "Proxmox LXC cgroup v2 max with lxcfs MemTotal",
+			hasCgroup:    false,
+			meminfoTotal: gib2,
+			hasMeminfo:   true,
+			wantLimit:    gib2,
+			wantSource:   "proc_meminfo",
+			wantOK:       true,
+		},
+		{
+			name:         "tighter cgroup limit wins over host MemTotal",
+			cgroupLimit:  mib512,
+			hasCgroup:    true,
+			meminfoTotal: gib16,
+			hasMeminfo:   true,
+			wantLimit:    mib512,
+			wantSource:   "cgroup",
+			wantOK:       true,
+		},
+		{
+			name:         "tighter MemTotal wins over larger cgroup limit",
+			cgroupLimit:  gib16,
+			hasCgroup:    true,
+			meminfoTotal: gib2,
+			hasMeminfo:   true,
+			wantLimit:    gib2,
+			wantSource:   "proc_meminfo",
+			wantOK:       true,
+		},
+		{
+			name:         "equal limits prefer cgroup",
+			cgroupLimit:  gib2,
+			hasCgroup:    true,
+			meminfoTotal: gib2,
+			hasMeminfo:   true,
+			wantLimit:    gib2,
+			wantSource:   "cgroup",
+			wantOK:       true,
+		},
+		{
+			name:        "cgroup only",
+			cgroupLimit: mib512,
+			hasCgroup:   true,
+			wantLimit:   mib512,
+			wantSource:  "cgroup",
+			wantOK:      true,
+		},
+		{
+			name:   "neither available",
+			wantOK: false,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			limit, source, ok := selectRuntimeMemoryLimit(tc.cgroupLimit, tc.hasCgroup, tc.meminfoTotal, tc.hasMeminfo)
+			if ok != tc.wantOK || limit != tc.wantLimit || source != tc.wantSource {
+				t.Fatalf("selectRuntimeMemoryLimit(...) = (%d, %q, %v), want (%d, %q, %v)",
+					limit, source, ok, tc.wantLimit, tc.wantSource, tc.wantOK)
+			}
+		})
+	}
+}
+
+func TestReadRuntimeMemoryLimitProxmoxLXCCgroupV2(t *testing.T) {
+	// Proxmox VE LXC on cgroup v2 applies memory.max on /lxc/<vmid>, outside
+	// the container's /lxc/<vmid>/ns namespace root, so every memory.max visible
+	// inside the container reads "max" while lxcfs reports the cap in /proc/meminfo.
+	root := t.TempDir()
+	v2Root := filepath.Join(root, "cgroup")
+	v1Root := filepath.Join(root, "cgroup-v1-missing")
+	procCgroup := filepath.Join(root, "proc-self-cgroup")
+	procMeminfo := filepath.Join(root, "proc-meminfo")
+
+	writeCgroupFixture(t, procCgroup, "0::/system.slice/pulse.service\n")
+	writeCgroupFixture(t, filepath.Join(v2Root, "system.slice/pulse.service/memory.max"), "max\n")
+	writeCgroupFixture(t, filepath.Join(v2Root, "system.slice/memory.max"), "max\n")
+	writeCgroupFixture(t, filepath.Join(v2Root, "memory.max"), "max\n")
+	writeCgroupFixture(t, procMeminfo, "MemTotal:        2097152 kB\nMemFree:         1400000 kB\n")
+
+	limit, source, ok := readRuntimeMemoryLimitFrom(v2Root, v1Root, filepath.Join(v1Root, "memory.limit_in_bytes"), procCgroup, procMeminfo)
+	if !ok || limit != 2147483648 || source != "proc_meminfo" {
+		t.Fatalf("readRuntimeMemoryLimitFrom(...) = (%d, %q, %v), want (2147483648, %q, true)", limit, source, ok, "proc_meminfo")
+	}
+
+	// When a tighter systemd MemoryMax is also set inside the container, it must win.
+	writeCgroupFixture(t, filepath.Join(v2Root, "system.slice/pulse.service/memory.max"), "536870912\n")
+	limit, source, ok = readRuntimeMemoryLimitFrom(v2Root, v1Root, filepath.Join(v1Root, "memory.limit_in_bytes"), procCgroup, procMeminfo)
+	if !ok || limit != 536870912 || source != "cgroup" {
+		t.Fatalf("readRuntimeMemoryLimitFrom(...) with tighter service limit = (%d, %q, %v), want (536870912, %q, true)", limit, source, ok, "cgroup")
+	}
+}

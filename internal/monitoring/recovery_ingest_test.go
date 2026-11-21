@@ -388,6 +388,46 @@ func TestRecoveryIngestKeepsOverlappingSnapshotReadScopesInOrder(t *testing.T) {
 	}
 }
 
+func TestRecoveryIngestDisjointSnapshotBatchDoesNotBlockPBSCoalescing(t *testing.T) {
+	m := &Monitor{recoveryIngestRunning: true}
+	pbsScope := recoveryReconcileScope{
+		provider: string(recovery.ProviderProxmoxPBS),
+		idPrefix: "pbs-backup:",
+		instance: "pbs-main",
+	}
+	snapshotScope := recoveryReconcileScope{
+		provider: string(recovery.ProviderProxmoxPVE),
+		idPrefix: "pve-snapshot:",
+		instance: "pve-1",
+		snapshotGuests: map[recoverystore.PVESnapshotGuest]struct{}{
+			{Node: "pve1", Kind: "qemu", VMID: 101}: {},
+		},
+	}
+
+	m.enqueueRecoveryIngest(recoveryIngestBatch{
+		points:    []recovery.RecoveryPoint{{ID: "pbs-backup:old"}},
+		reconcile: &pbsScope,
+	})
+	m.enqueueRecoveryIngest(recoveryIngestBatch{
+		points:    []recovery.RecoveryPoint{{ID: "pve-snapshot:1"}},
+		reconcile: &snapshotScope,
+	})
+	m.enqueueRecoveryIngest(recoveryIngestBatch{
+		points:    []recovery.RecoveryPoint{{ID: "pbs-backup:newest"}},
+		reconcile: &pbsScope,
+	})
+
+	if got := len(m.recoveryIngestPending); got != 2 {
+		t.Fatalf("pending batches = %d, want 2 (coalesced PBS batch + disjoint PVE snapshot batch)", got)
+	}
+	if got := m.recoveryIngestPending[0].points[0].ID; got != "pbs-backup:newest" {
+		t.Fatalf("pending PBS batch point = %q, want pbs-backup:newest", got)
+	}
+	if got := m.recoveryIngestPending[1].points[0].ID; got != "pve-snapshot:1" {
+		t.Fatalf("pending snapshot batch point = %q, want pve-snapshot:1", got)
+	}
+}
+
 // Snapshot inventory in memory can be empty after an ordinary monitor
 // replacement while its durable recovery points still exist. Exercise the
 // actual poll, ingest queue and public store reader, not database internals.

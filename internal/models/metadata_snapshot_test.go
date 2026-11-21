@@ -252,3 +252,32 @@ func TestMetadataSnapshotsConcurrentTransactions(t *testing.T) {
 	workers.Wait()
 	assertMetadataSnapshotParity(t, s)
 }
+
+func TestSyncBackupsDoesNotDeepCloneUnchangedPBSInventory(t *testing.T) {
+	s := NewState()
+	const pbsCount = 500
+	pbsBackups := make([]PBSBackup, pbsCount)
+	for i := range pbsBackups {
+		pbsBackups[i] = PBSBackup{
+			ID:       fmt.Sprintf("pbs-%d", i),
+			Instance: "pbs-main",
+			VMID:     fmt.Sprint(100 + i%35),
+			Files:    []string{"index.json.blob", "drive-scsi0.img.fidx"},
+		}
+	}
+	s.UpdatePBSBackups("pbs-main", pbsBackups)
+
+	if len(s.Backups.PBS) != pbsCount || &s.Backups.PBS[0] != &s.PBSBackups[0] {
+		t.Fatal("State.Backups.PBS retained a duplicate copy instead of mirroring State.PBSBackups")
+	}
+
+	snaps := []GuestSnapshot{{ID: "snap-1", Instance: "pve1", VMID: 100, Name: "pre-upgrade"}}
+	allocs := testing.AllocsPerRun(20, func() {
+		s.UpdateGuestSnapshotsForInstance("pve1", snaps)
+	})
+	// Deep-cloning 500 PBS backups on every snapshot update allocated >500 times
+	// (one slice per backup's Files plus the PBSBackup slice itself).
+	if allocs > 50 {
+		t.Fatalf("UpdateGuestSnapshotsForInstance allocated %.1f times with %d PBS backups present, want <= 50", allocs, pbsCount)
+	}
+}

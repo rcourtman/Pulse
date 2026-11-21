@@ -12,25 +12,33 @@ import (
 )
 
 const (
-	cgroupV2Root = "/sys/fs/cgroup"
+	cgroupV2Root    = "/sys/fs/cgroup"
+	procMeminfoPath = "/proc/meminfo"
 	// cgroupV1NoLimit is the value cgroup v1 reports when no memory limit is
 	// set (PAGE_SIZE-rounded max int64).
 	cgroupV1NoLimit = int64(9223372036854771712)
-	// memoryLimitHeadroomPercent is how much of the cgroup limit the Go
-	// runtime may use. The remainder absorbs non-heap memory the GC cannot
+	// memoryLimitHeadroomPercent is how much of the detected memory limit the
+	// Go runtime may use. The remainder absorbs non-heap memory the GC cannot
 	// control: goroutine stacks, mmap'd files, and CGO allocations.
 	memoryLimitHeadroomPercent = 90
-	// minimumUsableMemoryLimit guards against nonsense cgroup values; below
+	// minimumUsableMemoryLimit guards against nonsense limit values; below
 	// this a soft limit would just make the GC thrash.
 	minimumUsableMemoryLimit = int64(64 << 20)
 )
 
-// applyRuntimeMemoryLimit aligns the Go GC with the enclosing cgroup memory
-// limit so a capped service (systemd MemoryMax, docker --memory, Kubernetes
-// limits) tightens garbage collection as it approaches the cap instead of
-// growing until the kernel OOM-kills it. Without this the GC paces itself
-// purely off GOGC and is blind to the limit. Best effort: any failure leaves
-// the runtime untouched.
+// applyRuntimeMemoryLimit aligns the Go GC with the enclosing container or
+// host memory limit so a capped service (Proxmox LXC, systemd MemoryMax,
+// docker --memory, Kubernetes limits, small VMs) tightens garbage collection
+// as it approaches the cap instead of growing until the kernel OOM-kills it.
+// Without this the GC paces itself purely off GOGC and is blind to the limit.
+//
+// In Proxmox VE LXC containers on cgroup v2, memory.max is enforced on the
+// parent /lxc/<vmid> cgroup above the container's /lxc/<vmid>/ns namespace
+// root, so every visible memory.max inside the container reads "max" while
+// lxcfs virtualizes /proc/meminfo MemTotal to the container limit (#1803).
+// Taking the tightest bound across cgroup limits and /proc/meminfo MemTotal
+// covers both cgroup-capped services and namespaced LXC containers.
+// Best effort: any failure leaves the runtime untouched.
 func applyRuntimeMemoryLimit() {
 	if v := strings.TrimSpace(os.Getenv("GOMEMLIMIT")); v != "" {
 		// The runtime already honors the explicit operator setting.
@@ -38,36 +46,128 @@ func applyRuntimeMemoryLimit() {
 		return
 	}
 
-	limit, ok := readCgroupMemoryLimit()
+	limit, source, ok := readRuntimeMemoryLimit()
 	if !ok {
-		log.Debug().Msg("no cgroup memory limit detected; leaving GC defaults")
+		log.Debug().Msg("no cgroup or /proc/meminfo memory limit detected; leaving GC defaults")
 		return
 	}
 
 	soft := limit / 100 * memoryLimitHeadroomPercent
 	if soft < minimumUsableMemoryLimit {
-		log.Warn().Int64("cgroupLimitBytes", limit).Msg("cgroup memory limit too small for a GC soft limit; leaving GC defaults")
+		ev := log.Warn().
+			Int64("memoryLimitBytes", limit).
+			Str("limitSource", source)
+		if source == "cgroup" {
+			ev = ev.Int64("cgroupLimitBytes", limit)
+		}
+		ev.Msg("detected memory limit too small for a GC soft limit; leaving GC defaults")
 		return
 	}
 
 	debug.SetMemoryLimit(soft)
-	log.Info().
-		Int64("cgroupLimitBytes", limit).
-		Int64("goMemLimitBytes", soft).
-		Msg("aligned Go memory limit with cgroup memory limit")
+	ev := log.Info().
+		Int64("memoryLimitBytes", limit).
+		Str("limitSource", source).
+		Int64("goMemLimitBytes", soft)
+	if source == "cgroup" {
+		ev.Int64("cgroupLimitBytes", limit).Msg("aligned Go memory limit with cgroup memory limit")
+		return
+	}
+	ev.Msg("aligned Go memory limit with /proc/meminfo MemTotal")
 }
 
-func readCgroupMemoryLimit() (int64, bool) {
-	const procSelfCgroup = "/proc/self/cgroup"
-	if limit, ok := readCgroupV2MemoryLimit(cgroupV2Root, procSelfCgroup); ok {
+func readRuntimeMemoryLimit() (int64, string, bool) {
+	return readRuntimeMemoryLimitFrom(
+		cgroupV2Root,
+		"/sys/fs/cgroup/memory",
+		"/sys/fs/cgroup/memory/memory.limit_in_bytes",
+		"/proc/self/cgroup",
+		procMeminfoPath,
+	)
+}
+
+func readRuntimeMemoryLimitFrom(v2Root, v1Root, v1FallbackFile, procSelfCgroup, meminfoPath string) (int64, string, bool) {
+	cgroupLimit, hasCgroup := readCgroupMemoryLimitFrom(v2Root, v1Root, v1FallbackFile, procSelfCgroup)
+	meminfoTotal, hasMeminfo := readProcMeminfoTotal(meminfoPath)
+	return selectRuntimeMemoryLimit(cgroupLimit, hasCgroup, meminfoTotal, hasMeminfo)
+}
+
+func selectRuntimeMemoryLimit(cgroupLimit int64, hasCgroup bool, meminfoTotal int64, hasMeminfo bool) (int64, string, bool) {
+	if hasCgroup && cgroupLimit <= 0 {
+		hasCgroup = false
+	}
+	if hasMeminfo && meminfoTotal <= 0 {
+		hasMeminfo = false
+	}
+	switch {
+	case hasCgroup && hasMeminfo:
+		if meminfoTotal < cgroupLimit {
+			return meminfoTotal, "proc_meminfo", true
+		}
+		return cgroupLimit, "cgroup", true
+	case hasCgroup:
+		return cgroupLimit, "cgroup", true
+	case hasMeminfo:
+		return meminfoTotal, "proc_meminfo", true
+	default:
+		return 0, "", false
+	}
+}
+
+func readCgroupMemoryLimitFrom(v2Root, v1Root, v1FallbackFile, procSelfCgroup string) (int64, bool) {
+	if limit, ok := readCgroupV2MemoryLimit(v2Root, procSelfCgroup); ok {
 		return limit, true
 	}
-	if limit, ok := readCgroupV1HierarchyMemoryLimit("/sys/fs/cgroup/memory", procSelfCgroup); ok {
+	if limit, ok := readCgroupV1HierarchyMemoryLimit(v1Root, procSelfCgroup); ok {
 		return limit, true
 	}
 	// Preserve the original best-effort fallback for unusual v1 mounts that
 	// expose the controller limit but not a readable /proc/self/cgroup.
-	return readCgroupV1MemoryLimit("/sys/fs/cgroup/memory/memory.limit_in_bytes")
+	return readCgroupV1MemoryLimit(v1FallbackFile)
+}
+
+func readProcMeminfoTotal(path string) (int64, bool) {
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return 0, false
+	}
+	return parseProcMeminfoTotal(string(raw))
+}
+
+// parseProcMeminfoTotal extracts MemTotal in bytes from Linux/lxcfs
+// /proc/meminfo content (e.g. "MemTotal:        2097152 kB").
+func parseProcMeminfoTotal(content string) (int64, bool) {
+	for _, line := range strings.Split(content, "\n") {
+		if !strings.HasPrefix(line, "MemTotal:") {
+			continue
+		}
+		fields := strings.Fields(strings.TrimPrefix(line, "MemTotal:"))
+		if len(fields) < 2 {
+			return 0, false
+		}
+		v, err := strconv.ParseInt(fields[0], 10, 64)
+		if err != nil || v <= 0 {
+			return 0, false
+		}
+		var mult int64
+		switch strings.ToLower(fields[1]) {
+		case "b":
+			mult = 1
+		case "kb", "kib":
+			mult = 1 << 10
+		case "mb", "mib":
+			mult = 1 << 20
+		case "gb", "gib":
+			mult = 1 << 30
+		default:
+			return 0, false
+		}
+		if v > math.MaxInt64/mult {
+			return 0, false
+		}
+		return v * mult, true
+	}
+	return 0, false
 }
 
 // readCgroupV2MemoryLimit resolves the process's own cgroup from
