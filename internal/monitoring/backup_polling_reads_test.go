@@ -253,6 +253,32 @@ func TestBackupPollingReadsDoNotCopyUnrelatedInventory(t *testing.T) {
 			t.Fatalf("storage poll copied a peer's backup inventory: %s", costs)
 		}
 	})
+	t.Run("task-carry-forward-unread-node", func(t *testing.T) {
+		for _, fixture := range []struct {
+			name, instance, node string
+		}{
+			{name: "peer-connection", instance: "peer", node: "node"},
+			{name: "healthy-local-node", instance: "site", node: "healthy"},
+		} {
+			t.Run(fixture.name, func(t *testing.T) {
+				small, large := backupPollingReadFixture(0), backupPollingReadFixture(0)
+				prior := large.state.PVEBackups.BackupTasks[0]
+				for i := range 2000 {
+					row := prior
+					row.ID, row.Instance, row.Node = strconv.Itoa(i), fixture.instance, fixture.node
+					large.state.PVEBackups.BackupTasks = append(large.state.PVEBackups.BackupTasks, row)
+				}
+				unread := []proxmox.BackupTaskHistoryNode{{Node: prior.Node, Reason: "collection_failed"}}
+				costs := backupPollingCallCosts(t, small, large, func(m *Monitor) {
+					backupPollingReadResult = m.retainUnreadBackupTasks("site", unread, nil, nil)
+				})
+				t.Logf("allocation per carry-forward with 2000 unrelated task rows: %s", costs)
+				if costs.grewEveryCall(everyCallBytes, everyCallObjects) || costs.grewSomeCall(someCallBytes) {
+					t.Fatalf("unread-node carry-forward copied unrelated task rows: %s", costs)
+				}
+			})
+		}
+	})
 	t.Run("pbs-cache-peer-backups", func(t *testing.T) {
 		small, large := backupPollingReadFixture(0), backupPollingReadFixture(0)
 		peer := large.state.PBSBackups[0]

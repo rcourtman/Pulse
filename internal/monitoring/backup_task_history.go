@@ -108,10 +108,10 @@ func (m *Monitor) readBackupTaskHistory(ctx context.Context, instance string, cl
 // or acquire a new ObservedAt. A valid empty read, removed node or explicit
 // access denial withdraws its old live rows instead of resurrecting them.
 func (m *Monitor) retainUnreadBackupTasks(instance string, nodes []proxmox.BackupTaskHistoryNode, tasks []models.BackupTask, listedJobs map[string]string) []models.BackupTask {
-	unread := make(map[string]bool)
+	unread := make(map[string]struct{})
 	for _, node := range nodes {
 		if node.Reason == "collection_failed" || node.Reason == "node_offline" {
-			unread[node.Node] = true
+			unread[node.Node] = struct{}{}
 		}
 	}
 	if len(unread) == 0 {
@@ -124,11 +124,9 @@ func (m *Monitor) retainUnreadBackupTasks(instance string, nodes []proxmox.Backu
 		seen[task.ID] = true
 		counts[task.Node]++
 	}
-	previous := m.state.GetBackupTasks()
+	previous := m.state.GetPVEBackupTasksForNodes(instance, unread)
 	for _, task := range previous {
-		if task.Instance == instance && unread[task.Node] {
-			limits[task.Node]++
-		}
+		limits[task.Node]++
 	}
 	// Share the existing 200-provider-task live window. Synthesized guest
 	// children can make a previously accepted payload larger; preserve that
@@ -138,7 +136,7 @@ func (m *Monitor) retainUnreadBackupTasks(instance string, nodes []proxmox.Backu
 		limits[node] = max(200, limits[node], counts[node])
 	}
 	for _, task := range previous {
-		if task.Instance != instance || !unread[task.Node] || seen[task.ID] || counts[task.Node] >= limits[task.Node] {
+		if seen[task.ID] || counts[task.Node] >= limits[task.Node] {
 			continue
 		}
 		// A listed parent uses this poll's log result or its own log-cache
