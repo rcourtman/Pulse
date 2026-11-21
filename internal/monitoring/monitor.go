@@ -1455,6 +1455,8 @@ type Monitor struct {
 	recoveryIngestPending     []recoveryIngestBatch
 	recoveryIngestSteadyMu    sync.Mutex
 	recoveryIngestSteady      map[recoveryIngestSteadyKey]*recoveryIngestSteadyState
+	storagePollMu             sync.Mutex
+	storagePollInFlight       map[string]bool
 	mockMetricsCancel         context.CancelFunc
 	mockMetricsWg             sync.WaitGroup
 	mockHostAgentsMu          sync.Mutex

@@ -187,3 +187,46 @@ func TestPBSRollupsFollowAGuestFoldedIntoAnother(t *testing.T) {
 		t.Fatalf("datastore consumers = %d %+v, want 8", datastore.ConsumerCount, datastore.TopConsumers)
 	}
 }
+
+func TestPBSGuestBackupsAggregatesRepeatedSnapshotsWithExactCounts(t *testing.T) {
+	now := time.Now().UTC()
+	state := models.NewState()
+	state.UpdateNodesForInstance("pve1", []models.Node{{ID: "pve1-node1", Name: "node1", Instance: "pve1", Status: "online"}})
+	state.UpdateVMsForInstance("pve1", []models.VM{{ID: "pve1-node1-100", Name: "web", VMID: 100, Node: "node1", Instance: "pve1", Status: "running"}})
+	state.UpdatePBSInstances([]models.PBSInstance{{
+		ID: "pbs-main", Name: "pbs-main", Status: "online",
+		Datastores: []models.PBSDatastore{{Name: "archive"}},
+	}})
+
+	const snapshots = 50
+	backups := make([]models.PBSBackup, 0, snapshots)
+	for i := 0; i < snapshots; i++ {
+		backups = append(backups, models.PBSBackup{
+			ID:         fmt.Sprintf("pbs-main:archive:vm-100-%d", i),
+			Instance:   "pbs-main",
+			Datastore:  "archive",
+			BackupType: "vm",
+			VMID:       "100",
+			BackupTime: now.Add(-time.Duration(i) * time.Hour),
+			Verified:   true,
+			Files:      []string{"index.json.blob", "drive-scsi0.img.fidx"},
+		})
+	}
+	state.UpdatePBSBackups("pbs-main", backups)
+
+	snap := state.GetSnapshot()
+	aggregated := pbsGuestBackupsOf(snap)
+	if len(aggregated) != 1 || aggregated[0].count != snapshots {
+		t.Fatalf("pbsGuestBackupsOf() = %+v, want 1 aggregated entry with count=%d", aggregated, snapshots)
+	}
+
+	registry := NewRegistry(nil)
+	registry.IngestSnapshot(snap)
+	server, datastore := pbsFacets(t, registry.List())
+	if server.ProtectedWorkloadCount != 1 {
+		t.Fatalf("ProtectedWorkloadCount = %d, want 1", server.ProtectedWorkloadCount)
+	}
+	if datastore.ConsumerCount != 1 || len(datastore.TopConsumers) != 1 || datastore.TopConsumers[0].DiskCount != snapshots {
+		t.Fatalf("datastore consumers = %+v, want 1 consumer with DiskCount=%d", datastore, snapshots)
+	}
+}

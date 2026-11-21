@@ -437,6 +437,14 @@ func NewClientWithContext(ctx context.Context, cfg ClientConfig) (*Client, error
 	return client, nil
 }
 
+// CloseIdleConnections releases idle HTTP connections held by this client's
+// transport. Callers that construct short-lived clients should defer it.
+func (c *Client) CloseIdleConnections() {
+	if c != nil && c.httpClient != nil {
+		c.httpClient.CloseIdleConnections()
+	}
+}
+
 // Initial authentication belongs only to the constructing caller. It has no
 // retained session or other readers whose login must outlive that caller.
 func (c *Client) authenticate(ctx context.Context) error {
