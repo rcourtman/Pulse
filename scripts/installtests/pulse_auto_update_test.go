@@ -268,6 +268,7 @@ func TestAutoUpdateLogSinkFailures(t *testing.T) {
 		"test_real_log_timestamp_avoids_date_startup_and_preserves_legacy_fallback",
 		"test_real_log_retains_each_sink_failure_in_conditional_calls",
 		"test_real_logger_deadline_preserves_stdout_exit_and_owned_cleanup",
+		"test_stalled_installer_journal_does_not_repeat_timeout_before_recovery",
 	}
 	for _, state := range []string{"active", "inactive"} {
 		for _, failure := range []string{"success", "first_failure", "consecutive_failures", "final_failure", "timeout_failure", "kill_failure"} {

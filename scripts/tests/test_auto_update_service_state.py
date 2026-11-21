@@ -191,6 +191,9 @@ case "$5" in
         fi
         count=$((count + 1))
         printf '%s\n' "$count" > "$FIXTURE/collector-count"
+        if [ "${COLLECTOR_STALL_FROM:-0}" -gt 0 ] && [ "$count" -ge "$COLLECTOR_STALL_FROM" ]; then
+            exec sleep 30
+        fi
         while IFS=' ' read -r line status; do
             if [ "$line" = "$count" ]; then exit "$status"; fi
         done < "$FIXTURE/collector-failures"
@@ -333,7 +336,7 @@ def capture_fixture_command(argv, env, timeout=15):
 class UpdaterFixture(unittest.TestCase):
     def run_fixture(self, *, mode="normal", state="active", load="loaded", success=False, flow="update",
                     installer_exit=None, collector_exit=0, installer_output=None, collector_failures=None,
-                    real_log=False, runtime_exit=0, installer_state=None, download_fault="",
+                    collector_stall_from=0, real_log=False, runtime_exit=0, installer_state=None, download_fault="",
                     observation_fault="", observation_phase="initial", clock_probe=False):
         with tempfile.TemporaryDirectory(prefix="pulse-updater-state-") as directory:
             f = Path(directory)
@@ -378,7 +381,7 @@ class UpdaterFixture(unittest.TestCase):
                        PULSE_SERVICE_NAME="pulse-custom@department", LOAD_STATE=load,
                        INSTALLER_STATE=installer_state if installer_state is not None else ("active" if mode in ("stop-noop", "stop-error", "stop-hang", "after-error", "readback-error", "readback-empty") else "inactive"),
                        INSTALLER_EXIT=str(installer_exit) if installer_exit is not None else ("0" if success else "23"),
-                       COLLECTOR_EXIT=str(collector_exit),
+                       COLLECTOR_EXIT=str(collector_exit), COLLECTOR_STALL_FROM=str(collector_stall_from),
                        REAL_LOG="true" if real_log else "false", RUNTIME_EXIT=str(runtime_exit),
                        CLOCK_PROBE="true" if clock_probe else "false",
                        DOWNLOAD_FAULT=download_fault,
@@ -741,13 +744,18 @@ child.wait()
         r = self.run_fixture(state=state, success=True, real_log=True,
                              installer_output="\n".join(lines), collector_failures=failures)
         self.assertTrue(r["installer_finished"])
-        self.assertEqual(r["collected"], len(lines))
+        stopped_journal = failure_mode in ("timeout_failure", "kill_failure")
+        self.assertEqual(r["collected"], 1 if stopped_journal else len(lines))
+        self.assertEqual(r["output"].count("[info] installer: "), len(lines))
         self.assertTrue("installer: final installer evidence" in r["output"])
         installer_calls = [args for args in r["logger_calls"] if args[4].startswith("installer: ")]
-        self.assertEqual(len(installer_calls), len(lines))
+        self.assertEqual([args[4] for args in installer_calls],
+                         [f"installer: {line}" for line in (lines[:1] if stopped_journal else lines)])
         self.assertTrue(all(args[:4] == ["-t", "pulse-custom@department-auto-update", "-p", "user.info"]
                             for args in installer_calls))
         first_failure = next(iter(failures.values()), 0)
+        self.assertEqual(r["output"].count("remaining installer output goes to stdout only"),
+                         1 if stopped_journal else 0)
         expected = (f"Installer pipeline failed (installer exit: 0; log collector exit: {first_failure})"
                     if failures else "Installer completed; verifying update (installer exit: 0; log collector exit: 0)")
         self.assertTrue(expected in r["output"], "real logger exit was not retained by the collector")
@@ -758,6 +766,31 @@ child.wait()
         self.assertEqual(r["version"], "v6.5.0\n" if failures else "v6.6.0\n")
         self.assertEqual(r["started"], state == "active")
         self.assertEqual(r["backups"], [])
+
+    def test_stalled_installer_journal_does_not_repeat_timeout_before_recovery(self):
+        # The second and every later journal write would hang, not just return
+        # a simulated status. Use the real timeout with an owned logger and
+        # retain an unterminated line after the stall.
+        lines = ["before stall", "stalled write", "final installer evidence"]
+        r = self.run_fixture(state="active", success=True, real_log=True, installer_state="active",
+                             installer_output="\n".join(lines), collector_stall_from=2)
+        installer_calls = [args[4] for args in r["logger_calls"] if args[4].startswith("installer: ")]
+        self.assertEqual(installer_calls, [f"installer: {line}" for line in lines[:2]],
+                         f"installer journal attempts took {r['elapsed']:.2f}s through recovery")
+        self.assertTrue(r["installer_finished"], r)
+        for line in lines:
+            self.assertIn(f"[info] installer: {line}\n", r["output"], r)
+        self.assertIn("Installer journal write stopped (exit 124)", r["output"], r)
+        observed = "Installer pipeline failed (installer exit: 0; log collector exit: 124)"
+        self.assertIn(observed, r["output"], r)
+        self.assertLess(r["output"].index(observed), r["output"].index("Previous installation restored"), r)
+        self.assertEqual(r["exit"], 1, r)
+        self.assertTrue(r["stopped"] and r["started"], r)
+        self.assertEqual(r["state"], "active", r)
+        self.assertEqual(r["binary"], b"#!/bin/sh\necho 'Pulse v6.5.0'\n", r)
+        self.assertEqual(r["version"], "v6.5.0\n", r)
+        self.assertEqual(r["runtime_probes"], ["v6.5.0"], r)
+        self.assertEqual(r["temporary_files"], [], r)
 
     def test_real_logger_active_success(self):
         self.assert_real_logger_pipeline("active", "success")
