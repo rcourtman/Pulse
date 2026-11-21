@@ -1316,7 +1316,11 @@ func (nq *NotificationQueue) scheduleRetry(id string, attempt int, notifyHealth 
 }
 
 func (nq *NotificationQueue) scheduleRetryWithClass(id string, attempt int, failureClass NotificationFailureClass, notifyHealth bool) error {
-	backoff := calculateBackoffForClass(attempt, failureClass)
+	return nq.scheduleRetryWithHint(id, attempt, failureClass, 0, notifyHealth)
+}
+
+func (nq *NotificationQueue) scheduleRetryWithHint(id string, attempt int, failureClass NotificationFailureClass, retryAfter time.Duration, notifyHealth bool) error {
+	backoff := calculateBackoffForRetry(attempt, failureClass, retryAfter)
 	nextRetry := time.Now().Add(backoff)
 
 	nq.mu.Lock()
@@ -2201,8 +2205,9 @@ func (nq *NotificationQueue) processNotification(notif *QueuedNotification) {
 					Msg("notification moved to DLQ")
 			}
 		} else {
-			// Schedule retry
-			if retryErr := nq.scheduleRetryWithClass(notif.ID, notif.Attempts, failureClass, false); retryErr != nil {
+			// Schedule retry, honoring any bounded server Retry-After hint.
+			retryAfter, _ := RetryAfterFromError(err)
+			if retryErr := nq.scheduleRetryWithHint(notif.ID, notif.Attempts, failureClass, retryAfter, false); retryErr != nil {
 				log.Error().
 					Err(retryErr).
 					Str("component", "notification_queue").
@@ -2472,6 +2477,22 @@ func calculateBackoffForClass(attempt int, failureClass NotificationFailureClass
 	backoff := calculateBackoff(attempt)
 	if failureClass == NotificationFailureRateLimited && attempt >= 3 && backoff < 60*time.Second {
 		return 60 * time.Second
+	}
+	return backoff
+}
+
+// calculateBackoffForRetry respects a bounded server-provided Retry-After hint
+// when it exceeds the queue's own attempt/class backoff.
+func calculateBackoffForRetry(attempt int, failureClass NotificationFailureClass, retryAfter time.Duration) time.Duration {
+	backoff := calculateBackoffForClass(attempt, failureClass)
+	if retryAfter <= 0 {
+		return backoff
+	}
+	if retryAfter > maxNotificationRetryAfter {
+		retryAfter = maxNotificationRetryAfter
+	}
+	if retryAfter > backoff {
+		return retryAfter
 	}
 	return backoff
 }

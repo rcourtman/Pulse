@@ -2172,3 +2172,55 @@ func TestNotificationQueuePersistsGroupedOperationalLinksAcrossDeliveryStates(t 
 		}
 	}
 }
+
+func TestCalculateBackoffForRetryHonorsServerHintAndBounds(t *testing.T) {
+	if got := calculateBackoffForRetry(1, NotificationFailureRateLimited, 45*time.Second); got != 45*time.Second {
+		t.Fatalf("attempt 1 with 45s Retry-After = %v, want 45s", got)
+	}
+	if got := calculateBackoffForRetry(3, NotificationFailureRateLimited, 10*time.Second); got != 60*time.Second {
+		t.Fatalf("attempt 3 rate-limited with short 10s hint = %v, want 60s class floor", got)
+	}
+	if got := calculateBackoffForRetry(1, NotificationFailureRateLimited, 2*time.Hour); got != maxNotificationRetryAfter {
+		t.Fatalf("attempt 1 with 2h hint = %v, want %v cap", got, maxNotificationRetryAfter)
+	}
+}
+
+func TestNotificationQueueHonorsRetryAfterHintOnRateLimitedFailure(t *testing.T) {
+	nq, err := NewNotificationQueue(t.TempDir())
+	if err != nil {
+		t.Fatalf("NewNotificationQueue: %v", err)
+	}
+	defer func() { _ = nq.Stop() }()
+
+	notif := &QueuedNotification{
+		ID:          "retry-after-429-1",
+		Type:        "webhook",
+		Status:      QueueStatusPending,
+		Attempts:    0,
+		MaxAttempts: 5,
+		Config:      []byte(`{}`),
+		CreatedAt:   time.Now(),
+	}
+	if err := nq.Enqueue(notif); err != nil {
+		t.Fatalf("Enqueue: %v", err)
+	}
+
+	before := time.Now()
+	nq.SetProcessor(func(*QueuedNotification) error {
+		return FailfWithClassAndRetryAfter(NotificationFailureRateLimited, 75*time.Second, "webhook returned HTTP 429: Too Many Requests")
+	})
+	nq.processNotification(notif)
+
+	var status string
+	var nextRetryUnix int64
+	if err := nq.db.QueryRow(`SELECT status, next_retry_at FROM notification_queue WHERE id = ?`, notif.ID).Scan(&status, &nextRetryUnix); err != nil {
+		t.Fatalf("query scheduled retry: %v", err)
+	}
+	if status != string(QueueStatusPending) {
+		t.Fatalf("status = %q, want %q", status, QueueStatusPending)
+	}
+	delay := time.Unix(nextRetryUnix, 0).Sub(before)
+	if delay < 70*time.Second || delay > 85*time.Second {
+		t.Fatalf("scheduled retry delay = %v, want ~75s from Retry-After hint", delay)
+	}
+}

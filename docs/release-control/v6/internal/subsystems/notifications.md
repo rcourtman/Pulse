@@ -2115,8 +2115,19 @@ ISP, DNS, SMTP, or webhook outages recover without dead-lettering alerts.
 `scheduleRetryWithClass` passes the classified `NotificationFailureClass` into
 `calculateBackoffForClass`, enforcing a 60-second minimum floor from attempt 3
 onward for `NotificationFailureRateLimited` responses so persistent HTTP 429s
-cool down cleanly.
+cool down cleanly. On HTTP 429 and 503 responses, `readWebhookResponse` also
+parses bounded `Retry-After` (seconds or HTTP-date) and `X-RateLimit-Reset-After`
+(for HTTP 429) headers without reading or logging response bodies, attaches the
+clamped delay (capped at 15 minutes) onto `NotificationFailureError`, and
+`NotificationQueue.processNotification` forwards `RetryAfterFromError(err)` into
+`scheduleRetryWithHint` / `calculateBackoffForRetry` so queued webhooks, chat
+providers, and Apprise HTTP targets respect destination cooldowns instead of
+hammering rate-limited endpoints.
 
-`TestCalculateBackoff`, `TestCalculateBackoffForClass_RateLimitedFloor`, and
+`TestCalculateBackoff`, `TestCalculateBackoffForClass_RateLimitedFloor`,
+`TestCalculateBackoffForRetryHonorsServerHintAndBounds`,
+`TestNotificationQueueHonorsRetryAfterHintOnRateLimitedFailure`,
+`TestReadWebhookResponsePropagatesRetryAfterAndDiscordResetHeader`, and
 the full `internal/notifications` suite (including rehearsal, acknowledgement
-budget, and burst rate-limit tests) verify the schedule and class floor.
+budget, and burst rate-limit tests) verify the schedule, class floor, and header
+propagation.
