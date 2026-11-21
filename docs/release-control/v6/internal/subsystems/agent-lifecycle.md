@@ -12175,3 +12175,10 @@ or an administratively down port. Software interfaces leave it unset. A speed
 the driver still reports on a port with no link is dropped as stale. No agent
 token, installation, command or lifecycle authority changes. `collector_test.go`
 covers carrier up, down and unreadable, and the stale speed.
+
+### Node connection-test diagnostics boundary (20 November 2026)
+
+`sanitizeErrorMessage` in `internal/api/configapi/config_handlers.go` maps node
+connection-test failures to closed, static operator guidance without echoing raw
+errors or secrets. No agent token, onboarding command, or lifecycle authority
+changes.

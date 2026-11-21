@@ -1,6 +1,7 @@
 package configapi
 
 import (
+	"context"
 	"errors"
 	"strings"
 	"testing"
@@ -356,16 +357,64 @@ func TestSanitizeErrorMessage(t *testing.T) {
 		expected  string
 	}{
 		{
-			name:      "create_client operation",
-			err:       errors.New("connection refused"),
+			name:      "create_client operation classifies connection refused",
+			err:       errors.New("dial tcp 10.0.0.5:8006: connection refused"),
+			operation: "create_client",
+			expected:  "Connection refused. Verify the host address and port (Proxmox VE uses 8006, PBS uses 8007) and confirm the service is running.",
+		},
+		{
+			name:      "create_client operation falls back on unknown error",
+			err:       errors.New("unexpected internal state"),
 			operation: "create_client",
 			expected:  "Failed to initialize connection",
 		},
 		{
-			name:      "connection operation",
-			err:       errors.New("network unreachable"),
+			name:      "connection operation classifies network unreachable",
+			err:       errors.New("dial tcp 10.0.0.5:8006: connect: network is unreachable"),
+			operation: "connection",
+			expected:  "Host is unreachable from Pulse. Check the IP address, VLAN, routing, or container network settings.",
+		},
+		{
+			name:      "connection operation falls back on unknown error",
+			err:       errors.New("unexpected internal error"),
 			operation: "connection",
 			expected:  "Connection failed. Please check your credentials and network settings",
+		},
+		{
+			name:      "connection operation classifies 401 authentication failure without leaking secret",
+			err:       errors.New("authentication failed (status 401): bad token secret=supersecret123"),
+			operation: "connection",
+			expected:  "Authentication failed (HTTP 401). Verify the username with realm (for example root@pam) or API token ID and secret.",
+		},
+		{
+			name:      "connection operation classifies 403 permission denied",
+			err:       errors.New("API error (status 403): Permission check failed (/nodes, Sys.Audit)"),
+			operation: "connection",
+			expected:  "Permission denied (HTTP 403). Verify the user or API token has the PVEAuditor role on '/' and check whether Privilege Separation is blocking access.",
+		},
+		{
+			name:      "connection operation classifies TLS error without leaking cert details",
+			err:       errors.New("x509: certificate signed by unknown authority (CN=internal.corp.lan)"),
+			operation: "connection",
+			expected:  "TLS certificate verification failed. Turn off 'Verify SSL certificate' for self-signed Proxmox certificates or configure an SSL fingerprint.",
+		},
+		{
+			name:      "connection operation classifies HTTP protocol mismatch",
+			err:       errors.New("Get https://pve.lan:8006/api2/json: http: server gave HTTP response to HTTPS client"),
+			operation: "connection",
+			expected:  "Protocol mismatch. Proxmox endpoints require https:// (for example https://host:8006 for PVE or :8007 for PBS).",
+		},
+		{
+			name:      "connection operation classifies timeout",
+			err:       context.DeadlineExceeded,
+			operation: "connection",
+			expected:  "Connection timed out. Verify Pulse can reach the host over the network or firewall on the configured port.",
+		},
+		{
+			name:      "connection operation classifies DNS failure without leaking hostname",
+			err:       errors.New("dial tcp: lookup secret-pve.internal: no such host"),
+			operation: "connection",
+			expected:  "Hostname could not be resolved. Verify the hostname or enter the server's IP address.",
 		},
 		{
 			name:      "validation operation",
@@ -390,12 +439,6 @@ func TestSanitizeErrorMessage(t *testing.T) {
 			err:       nil,
 			operation: "create_client",
 			expected:  "Failed to initialize connection",
-		},
-		{
-			name:      "detailed error hidden from response",
-			err:       errors.New("x509: certificate signed by unknown authority"),
-			operation: "connection",
-			expected:  "Connection failed. Please check your credentials and network settings",
 		},
 		{
 			name:      "sensitive error hidden from response",

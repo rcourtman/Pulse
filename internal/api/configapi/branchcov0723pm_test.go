@@ -117,7 +117,7 @@ func TestBranchcov0723pmPlatformConnection_ProbeError(t *testing.T) {
 	if status, _ := got["status"].(string); status != "error" {
 		t.Fatalf("status = %q, want error", status)
 	}
-	const wantMsg = "Connection failed. Please check your credentials and network settings"
+	const wantMsg = "Authentication failed (HTTP 401). Verify the username with realm (for example root@pam) or API token ID and secret."
 	if msg, _ := got["message"].(string); msg != wantMsg {
 		t.Errorf("message = %q, want sanitized %q (connection context)", msg, wantMsg)
 	}

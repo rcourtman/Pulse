@@ -3,6 +3,7 @@ package configapi
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
@@ -674,22 +675,81 @@ func (h *ConfigHandlers) findInstanceNameByHost(ctx context.Context, nodeType, h
 	return ""
 }
 
-// sanitizeErrorMessage returns a safe error message for external responses
-// It logs the detailed error internally while returning a generic message
+// sanitizeErrorMessage returns a safe error message for external responses.
+// It logs the detailed error internally and never echoes raw error text,
+// credentials, or internal addresses back to the client. For node connection
+// operations ("create_client" and "connection"), it maps recognized failure
+// classes to closed, actionable operator diagnostics.
 func sanitizeErrorMessage(err error, operation string) string {
 	// Log the detailed error internally
 	log.Error().Err(err).Str("operation", operation).Msg("Operation failed")
 
-	// Return generic messages based on operation type
 	switch operation {
 	case "create_client":
+		if guidance := classifyConnectionTestError(err); guidance != "" {
+			return guidance
+		}
 		return "Failed to initialize connection"
 	case "connection":
+		if guidance := classifyConnectionTestError(err); guidance != "" {
+			return guidance
+		}
 		return "Connection failed. Please check your credentials and network settings"
 	case "validation":
 		return "Invalid configuration"
 	default:
 		return "Operation failed"
+	}
+}
+
+// classifyConnectionTestError maps a connection or authentication error to a
+// fixed, content-free diagnostic message so operators know what to fix without
+// exposing raw error text, credentials, or internal host details.
+func classifyConnectionTestError(err error) string {
+	if err == nil {
+		return ""
+	}
+	if errors.Is(err, context.DeadlineExceeded) {
+		return "Connection timed out. Verify Pulse can reach the host over the network or firewall on the configured port."
+	}
+	var dnsErr *net.DNSError
+	if errors.As(err, &dnsErr) {
+		return "Hostname could not be resolved. Verify the hostname or enter the server's IP address."
+	}
+	var netErr net.Error
+	if errors.As(err, &netErr) && netErr.Timeout() {
+		return "Connection timed out. Verify Pulse can reach the host over the network or firewall on the configured port."
+	}
+
+	msg := strings.ToLower(err.Error())
+	containsAny := func(needles ...string) bool {
+		for _, needle := range needles {
+			if strings.Contains(msg, needle) {
+				return true
+			}
+		}
+		return false
+	}
+
+	switch {
+	case containsAny("status 403", "http 403", "403 forbidden", "permission check failed", "permission denied", "forbidden"):
+		return "Permission denied (HTTP 403). Verify the user or API token has the PVEAuditor role on '/' and check whether Privilege Separation is blocking access."
+	case containsAny("status 401", "http 401", "401 unauthorized", "unauthorized", "authentication failed", "invalid credentials", "invalid ticket", "login failed"):
+		return "Authentication failed (HTTP 401). Verify the username with realm (for example root@pam) or API token ID and secret."
+	case containsAny("server gave http response to https client", "malformed http response", "first record does not look like a tls handshake"):
+		return "Protocol mismatch. Proxmox endpoints require https:// (for example https://host:8006 for PVE or :8007 for PBS)."
+	case containsAny("x509", "certificate", "tls:", "unknown authority", "fingerprint mismatch", "handshake failure", "bad certificate"):
+		return "TLS certificate verification failed. Turn off 'Verify SSL certificate' for self-signed Proxmox certificates or configure an SSL fingerprint."
+	case containsAny("connection refused"):
+		return "Connection refused. Verify the host address and port (Proxmox VE uses 8006, PBS uses 8007) and confirm the service is running."
+	case containsAny("deadline exceeded", "timed out", "i/o timeout"):
+		return "Connection timed out. Verify Pulse can reach the host over the network or firewall on the configured port."
+	case containsAny("no such host"):
+		return "Hostname could not be resolved. Verify the hostname or enter the server's IP address."
+	case containsAny("no route to host", "network is unreachable", "host is unreachable", "network unreachable"):
+		return "Host is unreachable from Pulse. Check the IP address, VLAN, routing, or container network settings."
+	default:
+		return ""
 	}
 }
 
