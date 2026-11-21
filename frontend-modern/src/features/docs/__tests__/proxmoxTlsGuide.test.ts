@@ -126,4 +126,17 @@ describe('Proxmox TLS troubleshooting guide', () => {
     expect(prose(article)).toContain('Keep certificate verification enabled.');
     expect(prose(article)).toContain("do not copy the primary's fingerprint to all members");
   });
+
+  it('explains member access failures without treating them as downtime or asking for wider scope', () => {
+    const { article } = testScopeSection();
+    const details = article.querySelector<HTMLParagraphElement>(
+      '#cluster-members-and-conflicting-saved-trust + p',
+    );
+    expect(details).not.toBeNull();
+    expect(prose(details!)).toContain("open the failed member's details with touch or keyboard");
+    expect(prose(details!)).toContain(
+      'API access failed can mean rejected credentials or denied read access. It does not mean the member is down.',
+    );
+    expect(prose(details!)).toContain('Check access only for members you intend to monitor.');
+  });
 });

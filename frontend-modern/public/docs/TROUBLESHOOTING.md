@@ -409,10 +409,11 @@ new certificate.
 
 Cluster members can have different certificates. A reachable primary or one
 healthy member does not prove trust or polling recovery for every peer; do not
-copy the primary's fingerprint to all members. In **Cluster members**, retain
-the affected node and existing failure reason. If **Unreachable — details**
-is available, open it with touch or keyboard rather than relying on a hover.
-A display-name edit does not reconcile certificate trust.
+copy the primary's fingerprint to all members. In **Cluster members**, open the
+failed member's **details** with touch or keyboard to read its last API check
+result. **API access failed** can mean rejected credentials or denied read
+access. It does not mean the member is down. Check access only for members you
+intend to monitor. A display-name edit does not reconcile certificate trust.
 
 #### Test Connection succeeds but cluster polling fails
 

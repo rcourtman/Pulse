@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "base_sha": "d591eb84824fc33af162ef6a05f61466f912cdd1",
+  "verified_at": "2026-11-21T20:15:16Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/NodeModalClusterMembersSection.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/NodeModalClusterMembersSection.tsx": "02cc523c36104c955a868995f7ee5c9faf900ac3db4a8d891a276178171d1e77"
+  },
+  "routes": [
+    "/settings/infrastructure",
+    "/docs/TROUBLESHOOTING#cluster-members-and-conflicting-saved-trust"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 320,
+      "height": 800
+    }
+  ],
+  "states": [
+    "Light desktop and dark phone: existing cluster editor with mixed background API access, TLS trust, transport, slow-read and unknown outcomes beside healthy and unchecked members.",
+    "Access result collapsed and expanded, each other failure expanded, and the deployed Help fragment at the same scroll anchor."
+  ],
+  "interactions": [
+    "Read synthetic node and cluster endpoint payloads through the existing Infrastructure Manage editor. The current access message cannot distinguish 401 from 403.",
+    "Used keyboard Space and phone touch to open and close each native details control. Preserved readable member identity, address and existing TLS controls with no writes.",
+    "Opened in-app Help at the existing fragment and checked the served Markdown bytes and visible guidance without navigation or trust changes.",
+    "Inspected all 14 before/after pairs in Chromium 141.0.7390.37 with Playwright 1.56.1. No measured editor control lost visibility."
+  ]
+}
