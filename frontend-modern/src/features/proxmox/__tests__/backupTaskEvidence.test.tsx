@@ -135,7 +135,12 @@ describe('latest backup task evidence through the inventory consumer', () => {
   });
 
   it.each([
-    { status: 'running', endTime: undefined, duration: 'Not reported' },
+    {
+      status: 'running',
+      endTime: undefined,
+      observedAt: '2026-10-04T11:59:00Z',
+      duration: 'Not reported',
+    },
     { status: 'OK', endTime: '2026-10-04T10:59:00Z', duration: 'Unknown' },
     { status: 'OK', endTime: '2026-10-04T12:00:01Z', duration: 'Unknown' },
     { status: 'running', endTime: '2026-10-04T11:05:00Z', duration: 'Unknown' },
@@ -152,7 +157,7 @@ describe('latest backup task evidence through the inventory consumer', () => {
     mount();
     const section = taskSection(await open());
     expect(value(section, 'Status')).toHaveTextContent(
-      extra.status === 'running' ? 'Running' : 'OK',
+      extra.status === 'running' ? (extra.endTime ? 'Unknown · last: running' : 'Running') : 'OK',
     );
     expect(value(section, 'Duration')).toHaveTextContent(extra.duration);
     const timingNotice = within(section).queryByText(
@@ -238,22 +243,75 @@ describe('latest backup task evidence through the inventory consumer', () => {
   });
 
   it.each([
-    ['running', 'In flight', 'Running'],
-    ['unknown', 'State unclear', 'unknown'],
-    ['interrupted', 'Other', 'interrupted'],
-  ])('labels the compact job result for %s without guessing', async (status, visible, reported) => {
-    tasks = [identityTask({ status, endTime: undefined })];
+    ['running', '2026-10-04T11:59:00Z', 'In flight', 'Running'],
+    ['running', '2026-10-04T11:52:00Z', 'State unclear', 'Unknown'],
+    ['unknown', undefined, 'State unclear', 'unknown'],
+    ['interrupted', undefined, 'Other', 'interrupted'],
+  ])(
+    'labels the compact job result for %s observed at %s',
+    async (status, observedAt, visible, label) => {
+      tasks = [identityTask({ status, endTime: undefined, observedAt })];
+      mount();
+      await open();
+      const summary = screen
+        .getByRole('button', { name: /Collapse details for same-name .* east$/ })
+        .closest('tr')!;
+      expectPhoneJob(summary, visible);
+      expect(summary.lastElementChild).toHaveTextContent(`Latest task: ${label}`);
+      const west = screen
+        .getByRole('button', { name: /Expand details for same-name .* west$/ })
+        .closest('tr')!;
+      expectPhoneJob(west, '—');
+    },
+  );
+
+  it.each([330, 1200])('updates execution and result of the same task at %ipx', async (width) => {
+    api.width = width;
+    const native = identityTask({
+      status: '',
+      endTime: '0001-01-01T00:00:00Z',
+      observedAt: '2026-10-04T11:55:15Z',
+    });
+    tasks = [native, identityTask({ id: 'west-task', instance: 'west' })];
     mount();
-    await open();
-    const summary = screen
-      .getByRole('button', { name: /Collapse details for same-name .* east$/ })
-      .closest('tr')!;
-    expectPhoneJob(summary, visible);
-    expect(summary.lastElementChild).toHaveTextContent(`Latest task: ${reported}`);
+    const panel = await open();
+    const toggle = screen.getByRole('button', {
+      name: 'Collapse details for same-name (VM 100) · PVE connection: east',
+    });
+    toggle.focus();
+    const east = toggle.closest('tr')!;
     const west = screen
       .getByRole('button', { name: /Expand details for same-name .* west$/ })
       .closest('tr')!;
-    expectPhoneJob(west, '—');
+    const expectState = (state: string, compact: string, detail = state) => {
+      expect(value(taskSection(panel), 'Status').textContent).toBe(detail);
+      expect(value(taskSection(panel), 'Task ID')).toHaveTextContent('task-100');
+      expect(value(taskSection(panel), 'Task connection')).toHaveTextContent('east');
+      expect(value(taskSection(panel), 'Task node')).toHaveTextContent('pve-1');
+      expect(west.lastElementChild).toHaveTextContent('OK');
+      if (width === 330) expectPhoneJob(east, compact);
+      else expect(east.lastElementChild).toHaveTextContent(state);
+      expect(panel).toHaveTextContent('Restore points');
+      expect(screen.getByRole('button', { name: '2 status unknown' })).toBeInTheDocument();
+      expect(screen.getByTestId('proxmox-coverage-detail')).toBe(panel);
+      expect(document.activeElement).toBe(toggle);
+    };
+    expectState('Running', 'In flight', 'Running · no verdict');
+
+    // The same accepted row comes back on the next HTTP request. Fetching it
+    // again must not refresh the provider's observation.
+    await vi.advanceTimersByTimeAsync(30_000);
+    await waitFor(() => expectState('Unknown', 'State unclear'));
+
+    tasks = [{ ...native, endTime: '2026-10-04T11:05:00Z' }, tasks[1]];
+    await vi.advanceTimersByTimeAsync(30_000);
+    await waitFor(() => expect(value(taskSection(panel), 'Duration')).toHaveTextContent('5m 0s'));
+    expectState('Unknown', 'State unclear');
+
+    tasks = [{ ...tasks[0], status: 'OK' }, tasks[1]];
+    await vi.advanceTimersByTimeAsync(30_000);
+    await waitFor(() => expectState('OK', 'OK'));
+    expect(api.fetch).toHaveBeenCalledTimes(8);
   });
 });
 
@@ -409,6 +467,7 @@ describe('bounded uncertain-task inspection', () => {
         startTime: index === 199 ? '2026-10-04T11:00:00Z' : 'invalid',
         status:
           index === 198 ? 'failed' : index === 199 ? 'running' : index === 197 ? 'warning' : 'OK',
+        ...(index === 199 ? { endTime: undefined, observedAt: '2026-10-04T11:59:00Z' } : {}),
         error: index === 198 ? failure : undefined,
       }),
     );

@@ -1,0 +1,45 @@
+{
+  "version": 1,
+  "base_sha": "2f708a941b9e5b59265d956660eb90f9d77929a3",
+  "verified_at": "2026-11-21T05:33:04Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx",
+    "frontend-modern/src/features/proxmox/proxmoxBackupRecoveryModel.ts",
+    "frontend-modern/src/types/api.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx": "2a537edb2145141012bfb6f908130b61ca4d881566db26cf650929b182a340a1",
+    "frontend-modern/src/features/proxmox/proxmoxBackupRecoveryModel.ts": "b3a57c9450b07e9de7a88953171e9a0be761c81319ea32f6ad8226c3733a5bc9",
+    "frontend-modern/src/types/api.ts": "b64abbf84958d66a31240173f7f754e93a22a7a4612655f6c1875873451824a5"
+  },
+  "routes": [
+    "/proxmox/backups/coverage",
+    "/proxmox/backups/date"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900,
+      "theme": "light",
+      "browser": "Chromium 141.0.7390.37"
+    },
+    {
+      "width": 320,
+      "height": 800,
+      "theme": "light",
+      "browser": "Chromium 141.0.7390.37"
+    }
+  ],
+  "states": [
+    "Same-connection open native task with a fresh observation, zero end and no reported verdict; already-on-disk archive and another connection with the same VMID",
+    "Same accepted task returned after expiry; separately, expired provider status explicitly reported as running",
+    "Same task ended without a verdict, then explicitly reports OK; named sibling failure, placement, protection and previous restore evidence retained"
+  ],
+  "interactions": [
+    "Open the guest and its older restore point, then show More details, using desktop keyboard and phone taps",
+    "Advance the ordinary inventory poll through stale, ended and complete frames with the same panel and keyboard focus",
+    "Open the independent failure and switch to By date without changing task or protection data"
+  ],
+  "evidence_summary": "Playwright 1.56.1; 388 combined assertions. Inspected twelve matched desktop and 320 px before/after pairs, including compact status captions that do not displace surrounding controls."
+}

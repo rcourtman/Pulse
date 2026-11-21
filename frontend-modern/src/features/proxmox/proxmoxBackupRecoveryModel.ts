@@ -143,6 +143,10 @@ type WorkloadCandidate = WorkloadReference;
 type WorkloadRowDraft = Omit<WorkloadCoverageRow, 'posture' | 'postureRank' | 'isOrphaned'>;
 
 const DAY_MS = 24 * 60 * 60 * 1000;
+// Same validity window as recovery.BackupTaskRunningMaxAge. A retained PVE
+// row can be returned on later reads without renewing its observation.
+const BACKUP_TASK_RUNNING_MAX_AGE_MS = 5 * 60_000;
+const GO_ZERO_TIME = '0001-01-01T00:00:00Z';
 export const CURRENT_RECOVERY_MS = 7 * DAY_MS;
 export const STALE_RECOVERY_MS = 30 * DAY_MS;
 
@@ -562,11 +566,42 @@ export function selectWorkloadRecoveryArtifacts(
   };
 }
 
-function taskLabel(task: BackupTask): string {
+function isReportedRunning(task: BackupTask, status: string): boolean {
+  return status === 'running' || (task.type === 'vzdump' && status === 'active');
+}
+
+function taskLabel(
+  task: BackupTask,
+  workload: WorkloadReference,
+  startedMs: number | undefined,
+  nowMs: number,
+): string {
   const normalized = normalizeKey(task.status);
   if (normalized === 'ok' || normalized === 'success' || normalized === 'completed') return 'OK';
   if (normalized === 'failed' || normalized === 'error') return 'Failed';
-  if (normalized === 'running') return 'Running';
+  if (task.type === 'vzdump' && (!normalized || isReportedRunning(task, normalized))) {
+    const instance = normalizeKey(task.instance);
+    const observedMs =
+      typeof task.observedAt === 'string' ? parseBackupTimestampMs(task.observedAt) : undefined;
+    // A native open task may have no verdict. Require current evidence for
+    // this guest on this connection; duration, result and restore evidence
+    // remain separate. An unreadable end is not evidence of an open task.
+    if (
+      instance &&
+      instance === normalizeKey(workload.instance) &&
+      (!task.endTime || task.endTime === GO_ZERO_TIME) &&
+      !task.error?.trim() &&
+      startedMs !== undefined &&
+      observedMs !== undefined &&
+      observedMs >= startedMs &&
+      observedMs <= nowMs &&
+      nowMs - observedMs <= BACKUP_TASK_RUNNING_MAX_AGE_MS
+    ) {
+      return 'Running';
+    }
+    return 'Unknown';
+  }
+  if (isReportedRunning(task, normalized)) return 'Running';
   return task.status || 'Unknown';
 }
 
@@ -581,7 +616,7 @@ function taskDuration(
   // the same positive/past-instant rule as task ordering, and never use a
   // contradictory end time to make a running task look completed.
   if (
-    normalizeKey(task.status) === 'running' ||
+    isReportedRunning(task, normalizeKey(task.status)) ||
     start === undefined ||
     end === undefined ||
     getRecoveryAgeBand(start, nowMs) === 'unknown' ||
@@ -808,13 +843,14 @@ export function buildProxmoxBackupRecoveryModel(
     if (!workload) continue;
     const row = ensureRow(workload, true);
     const parsedStart = parseBackupTimestampMs(task.startTime);
+    const startedMs =
+      getRecoveryAgeBand(parsedStart, input.nowMs) === 'unknown' ? undefined : parsedStart;
     const candidateTask: CoverageTask = {
       id: task.id,
       status: task.status,
-      label: taskLabel(task),
+      label: taskLabel(task, workload, startedMs, input.nowMs),
       startedAt: task.startTime,
-      startedMs:
-        getRecoveryAgeBand(parsedStart, input.nowMs) === 'unknown' ? undefined : parsedStart,
+      startedMs,
       ...taskDuration(task, input.nowMs),
       error: task.error,
       instance: task.instance?.trim() || undefined,
