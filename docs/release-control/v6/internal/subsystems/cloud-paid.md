@@ -1480,7 +1480,11 @@ hands-on Patrol modes, issue investigation, and verified fixes`.
     When free-plan copy mentions Patrol, it must describe watch-only/background
     health checks; investigation, approval-backed fixes, autonomous action,
     and outcome verification are Pro value. Metric history is free on every
-    plan and is never presented as Pro value.
+    plan and is never presented as Pro value. The self-hosted Pro comparison
+    card (`selfHostedPlans.ts` and `selfHostedBillingPresentation.ts`) uses the
+    direct `Upgrade to Pulse Pro` action label and leads larger-estate value
+    with scheduled reports and exports, multi-host agent profiles, and
+    commercial support rather than zero-adoption external probe copy.
     Legacy packaging nouns such as
     `incident memory`, `scheduled remediations`, and `execution audit trail`
     must likewise stay out of current v6 commercial copy unless Pulse ships a

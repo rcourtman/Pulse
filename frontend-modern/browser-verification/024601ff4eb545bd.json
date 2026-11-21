@@ -1,0 +1,44 @@
+{
+  "version": 1,
+  "base_sha": "510c2ace41c3537b0a24a2e9816f85693f4d205a",
+  "verified_at": "2026-11-21T09:46:19Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/selfHostedBillingPresentation.ts",
+    "frontend-modern/src/components/Settings/settingsNavCatalog.ts",
+    "frontend-modern/src/utils/selfHostedPlans.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/selfHostedBillingPresentation.ts": "9a1c46928a5eca5ab820887ce9d4050643c41022b6c39d84f4a054ca4c639b6f",
+    "frontend-modern/src/components/Settings/settingsNavCatalog.ts": "5c709dfe67601ab76cf160c5fe5634aaf912d274118727a766eb8051bdfda254",
+    "frontend-modern/src/utils/selfHostedPlans.ts": "756f05e4164d4ac6699078b5efd9ab04e98659c1d933dbe6ee1ab948bd5789f2"
+  },
+  "routes": [
+    "/settings/system-general",
+    "/settings/pulse-intelligence/billing/plan"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900,
+      "browser": "Chromium (Playwright)",
+      "theme": "light"
+    },
+    {
+      "width": 390,
+      "height": 844,
+      "browser": "Chromium (Playwright)",
+      "theme": "light"
+    }
+  ],
+  "states": [
+    "Settings sidebar on free Community install showing Plans & Billing under SYSTEM (after Recovery) and absent from PULSE INTELLIGENCE",
+    "Plans & Billing page showing updated For larger estates bullets (Scheduled reports and exports, Agent profiles for multi-host configuration) and Upgrade to Pulse Pro CTA",
+    "Mobile 390x844 Plans & Billing comparison card with zero horizontal overflow"
+  ],
+  "interactions": [
+    "Loaded /settings/system-general on desktop (1440x900), verified Plans & Billing sits under SYSTEM after Recovery, clicked it to open Plans & Billing",
+    "Verified Upgrade to Pulse Pro link targets /auth/license-purchase-start?feature=self_hosted_plan and removed External probes from another site copy",
+    "Verified 390x844 mobile viewport renders Pro comparison card and CTA with zero horizontal overflow against fresh origin/main build"
+  ]
+}

@@ -84,7 +84,7 @@ describe('licensePresentation', () => {
       planSectionTitle: 'Current plan',
       planSectionDescription: 'Current tier and enabled capabilities.',
       planComparisonSectionTitle: 'Available plans',
-      planComparisonActionLabel: 'View plans',
+      planComparisonActionLabel: 'Upgrade to Pulse Pro',
       usageSectionTitle: 'Usage',
       hiddenShellTitle: 'Demo mode',
       hiddenShellDescription: 'Commercial settings are hidden for this session.',
@@ -914,8 +914,8 @@ describe('licensePresentation', () => {
             {
               title: 'For larger estates',
               items: [
-                'Reporting and agent profiles',
-                'External probes from another site',
+                'Scheduled reports and exports',
+                'Agent profiles for multi-host configuration',
                 'Commercial support, typically within two business days',
               ],
             },
