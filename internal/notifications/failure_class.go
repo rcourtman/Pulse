@@ -11,6 +11,7 @@ import (
 	"net/textproto"
 	"strings"
 	"syscall"
+	"time"
 )
 
 // Delivery failure classification is authoritative where the sender knows the
@@ -25,10 +26,12 @@ import (
 // sender states what happened, and the text is only consulted when nobody did.
 
 // NotificationFailureError carries the delivery failure class its sender
-// already knew, so the class never has to be inferred from the message.
+// already knew, so the class never has to be inferred from the message, plus
+// any bounded server-provided retry delay (such as HTTP 429/503 Retry-After).
 type NotificationFailureError struct {
-	Class NotificationFailureClass
-	Err   error
+	Class      NotificationFailureClass
+	Err        error
+	RetryAfter time.Duration
 }
 
 func (e *NotificationFailureError) Error() string {
@@ -57,11 +60,49 @@ func FailWithClass(class NotificationFailureClass, err error) error {
 	return &NotificationFailureError{Class: class, Err: err}
 }
 
+// FailWithClassAndRetryAfter labels err with an authoritative delivery failure
+// class and an optional positive retry delay supplied by the destination.
+func FailWithClassAndRetryAfter(class NotificationFailureClass, retryAfter time.Duration, err error) error {
+	if err == nil {
+		return nil
+	}
+	if retryAfter < 0 {
+		retryAfter = 0
+	}
+	return &NotificationFailureError{Class: class, Err: err, RetryAfter: retryAfter}
+}
+
 // FailfWithClass builds a labelled failure from a format string. The format
 // arguments may include destination response text; that text is preserved for
 // the operator-facing audit row but can no longer influence the class.
 func FailfWithClass(class NotificationFailureClass, format string, args ...any) error {
 	return &NotificationFailureError{Class: class, Err: fmt.Errorf(format, args...)}
+}
+
+// FailfWithClassAndRetryAfter builds a labelled failure carrying an optional
+// positive retry delay supplied by the destination.
+func FailfWithClassAndRetryAfter(class NotificationFailureClass, retryAfter time.Duration, format string, args ...any) error {
+	if retryAfter < 0 {
+		retryAfter = 0
+	}
+	return &NotificationFailureError{Class: class, Err: fmt.Errorf(format, args...), RetryAfter: retryAfter}
+}
+
+// RetryAfterFromError extracts the largest positive server-provided retry
+// delay carried by any NotificationFailureError in err's unwrap chain.
+func RetryAfterFromError(err error) (time.Duration, bool) {
+	var best time.Duration
+	for current := err; current != nil; {
+		var failureErr *NotificationFailureError
+		if !errors.As(current, &failureErr) {
+			break
+		}
+		if failureErr.RetryAfter > best {
+			best = failureErr.RetryAfter
+		}
+		current = failureErr.Unwrap()
+	}
+	return best, best > 0
 }
 
 // Local decoding/rendering errors can include private configuration or alert
