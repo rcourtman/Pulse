@@ -9,6 +9,7 @@ import (
 	"io"
 	"net"
 	"net/textproto"
+	"os/exec"
 	"strings"
 	"syscall"
 	"time"
@@ -256,6 +257,12 @@ func ClassifyNotificationFailureError(err error) NotificationFailureClass {
 	var netErr net.Error
 	if errors.As(err, &netErr) && netErr.Timeout() {
 		return NotificationFailureConnectivity
+	}
+
+	// Local executable lookup or permission errors (for example Apprise CLI)
+	// cannot succeed on retry until the host configuration is fixed.
+	if errors.Is(err, exec.ErrNotFound) || errors.Is(err, syscall.EACCES) {
+		return NotificationFailureConfiguration
 	}
 
 	return ClassifyNotificationFailure(err.Error())

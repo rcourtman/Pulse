@@ -124,16 +124,16 @@ func (n *NotificationManager) createSecureWebhookClientWithURLDiagnostics(timeou
 			// Extract hostname and port
 			host, port, err := net.SplitHostPort(addr)
 			if err != nil {
-				return nil, fmt.Errorf("parse webhook address %q: %w", addr, err)
+				return nil, FailfWithClass(NotificationFailureConfiguration, "parse webhook address %q: %w", addr, err)
 			}
 
 			// Validate IP if it's already an IP
 			if ip := net.ParseIP(host); ip != nil {
 				if ip.IsUnspecified() {
-					return nil, fmt.Errorf("blocked unspecified IP: %s", ip)
+					return nil, FailfWithClass(NotificationFailureConfiguration, "blocked unspecified IP: %s", ip)
 				}
 				if isPrivateIP(ip) && !n.isIPInAllowlist(ip) {
-					return nil, fmt.Errorf("blocked private IP: %s", ip)
+					return nil, FailfWithClass(NotificationFailureConfiguration, "blocked private IP: %s", ip)
 				}
 				return pkgsecurityutil.DialPinnedIPs(ctx, network, port, []net.IP{ip}, 10*time.Second)
 			}
@@ -153,7 +153,7 @@ func (n *NotificationManager) createSecureWebhookClientWithURLDiagnostics(timeou
 			}
 
 			if len(permittedIPs) == 0 {
-				return nil, fmt.Errorf("hostname %s resolves to blocked private IPs", host)
+				return nil, FailfWithClass(NotificationFailureConfiguration, "hostname %s resolves to blocked private IPs", host)
 			}
 
 			// Log if we filtered some IPs
@@ -190,7 +190,7 @@ func (n *NotificationManager) createSecureWebhookClientWithURLDiagnostics(timeou
 			// exhausted: a foreign Location must not enter diagnostics or become
 			// an unknown/retryable error instead of a local configuration failure.
 			if len(via) >= WebhookMaxRedirects {
-				return fmt.Errorf("stopped after %d redirects", WebhookMaxRedirects)
+				return FailfWithClass(NotificationFailureConfiguration, "stopped after %d redirects", WebhookMaxRedirects)
 			}
 			// Re-validate strictly on an admitted redirect, including DNS/IP
 			// changes. Foreign origins are rejected before resolution or logging.
@@ -2986,13 +2986,13 @@ func (n *NotificationManager) validatedWebhookBaseURL(rawURL string) (*url.URL, 
 
 func (n *NotificationManager) sendAppriseViaHTTP(cfg AppriseConfig, title, body, notifyType string) error {
 	if cfg.ServerURL == "" {
-		return fmt.Errorf("apprise server URL is not configured")
+		return FailfWithClass(NotificationFailureConfiguration, "apprise server URL is not configured")
 	}
 
 	serverURL := cfg.ServerURL
 	lowerURL := strings.ToLower(serverURL)
 	if !strings.HasPrefix(lowerURL, "http://") && !strings.HasPrefix(lowerURL, "https://") {
-		return fmt.Errorf("apprise server URL must start with http or https")
+		return FailfWithClass(NotificationFailureConfiguration, "apprise server URL must start with http or https")
 	}
 
 	validatedBaseURL, err := securityutil.NormalizeHTTPBaseURL(serverURL, "")
@@ -3033,7 +3033,7 @@ func (n *NotificationManager) sendAppriseViaHTTP(cfg AppriseConfig, title, body,
 
 	payloadBytes, err := json.Marshal(payload)
 	if err != nil {
-		return fmt.Errorf("failed to marshal Apprise payload: %w", err)
+		return FailfWithClass(NotificationFailureConfiguration, "failed to marshal Apprise payload: %w", err)
 	}
 
 	req, err := securityutil.NewValidatedRequestWithContext(ctx, http.MethodPost, targetURL, bytes.NewReader(payloadBytes))
@@ -3552,7 +3552,7 @@ func (n *NotificationManager) sendResolvedWebhook(webhook WebhookConfig, alertLi
 	}
 
 	if !webhook.Enabled {
-		return fmt.Errorf("webhook is disabled")
+		return FailfWithClass(NotificationFailureConfiguration, "webhook is disabled")
 	}
 
 	if resolvedAt.IsZero() {
@@ -3660,7 +3660,7 @@ func (n *NotificationManager) sendResolvedWebhookNtfy(webhook WebhookConfig, ale
 	}
 
 	if !n.checkWebhookRateLimit(webhook.URL) {
-		return fmt.Errorf("rate limit exceeded for webhook %s", webhook.Name)
+		return FailfWithClass(NotificationFailureRateLimited, "rate limit exceeded for webhook %s", webhook.Name)
 	}
 
 	// Build plain-text body and title. A single alert that moved rather than
@@ -3699,7 +3699,7 @@ func (n *NotificationManager) sendResolvedWebhookNtfy(webhook WebhookConfig, ale
 	payload := []byte(body.String())
 	req, err := http.NewRequest(method, webhook.URL, bytes.NewReader(payload))
 	if err != nil {
-		return fmt.Errorf("failed to create ntfy request: %w", err)
+		return FailfWithClass(NotificationFailureConfiguration, "failed to create ntfy request: %w", err)
 	}
 
 	req.Header.Set("Content-Type", "text/plain")
@@ -3860,12 +3860,12 @@ func (n *NotificationManager) executeWebhookRequest(webhook WebhookConfig, paylo
 
 	targetURL, err := securityutil.NormalizeAbsoluteHTTPURL(normalizeWebhookRequestURL(webhook))
 	if err != nil {
-		return nil, fmt.Errorf("failed to normalize webhook request URL: %w", err)
+		return nil, FailfWithClass(NotificationFailureConfiguration, "failed to normalize webhook request URL: %w", err)
 	}
 
 	req, err := securityutil.NewValidatedRequestWithContext(context.Background(), method, targetURL, bytes.NewBuffer(payload))
 	if err != nil {
-		return nil, fmt.Errorf("failed to create webhook request: %w", err)
+		return nil, FailfWithClass(NotificationFailureConfiguration, "failed to create webhook request: %w", err)
 	}
 
 	req.Header.Set("Content-Type", "application/json")
@@ -3937,7 +3937,7 @@ func (n *NotificationManager) sendWebhookRequest(webhook WebhookConfig, jsonData
 			Str("webhook", webhook.Name).
 			Str("url", RedactWebhookURLSecrets(webhook.URL)).
 			Msg("Webhook request dropped due to rate limiting")
-		return fmt.Errorf("rate limit exceeded for webhook %s", webhook.Name)
+		return FailfWithClass(NotificationFailureRateLimited, "rate limit exceeded for webhook %s", webhook.Name)
 	}
 
 	result, err := n.executeWebhookRequest(webhook, jsonData, webhookRequestOptions{
@@ -4196,7 +4196,7 @@ func (n *NotificationManager) generatePayloadFromTemplateWithService(templateStr
 func renderWebhookURL(urlTemplate string, data WebhookPayloadData) (string, error) {
 	trimmed := strings.TrimSpace(urlTemplate)
 	if trimmed == "" {
-		return "", fmt.Errorf("webhook URL cannot be empty")
+		return "", FailfWithClass(NotificationFailureConfiguration, "webhook URL cannot be empty")
 	}
 
 	if !strings.Contains(trimmed, "{{") {
@@ -4205,26 +4205,26 @@ func renderWebhookURL(urlTemplate string, data WebhookPayloadData) (string, erro
 
 	tmpl, err := template.New("webhook_url").Funcs(templateFuncMap()).Parse(trimmed)
 	if err != nil {
-		return "", fmt.Errorf("invalid webhook URL template: %w", err)
+		return "", FailfWithClass(NotificationFailureConfiguration, "invalid webhook URL template: %w", err)
 	}
 
 	var buf bytes.Buffer
 	if err := tmpl.Execute(&buf, data); err != nil {
-		return "", fmt.Errorf("webhook URL template execution failed: %w", err)
+		return "", FailfWithClass(NotificationFailureConfiguration, "webhook URL template execution failed: %w", err)
 	}
 
 	rendered := strings.TrimSpace(buf.String())
 	if rendered == "" {
-		return "", fmt.Errorf("webhook URL template produced empty URL")
+		return "", FailfWithClass(NotificationFailureConfiguration, "webhook URL template produced empty URL")
 	}
 
 	parsed, err := url.Parse(rendered)
 	if err != nil {
-		return "", fmt.Errorf("webhook URL template produced invalid URL: %w", err)
+		return "", FailfWithClass(NotificationFailureConfiguration, "webhook URL template produced invalid URL: %w", err)
 	}
 
 	if parsed.Scheme == "" || parsed.Host == "" {
-		return "", fmt.Errorf("webhook URL template produced invalid URL: missing scheme or host")
+		return "", FailfWithClass(NotificationFailureConfiguration, "webhook URL template produced invalid URL: missing scheme or host")
 	}
 
 	return parsed.String(), nil
@@ -4248,27 +4248,27 @@ func formatWebhookDuration(d time.Duration) string {
 // extractTelegramChatID extracts and validates the chat_id from a Telegram webhook URL
 func extractTelegramChatID(webhookURL string) (string, error) {
 	if !strings.Contains(webhookURL, "chat_id=") {
-		return "", fmt.Errorf("telegram webhook URL missing chat_id parameter")
+		return "", FailfWithClass(NotificationFailureConfiguration, "telegram webhook URL missing chat_id parameter")
 	}
 
 	u, err := url.Parse(webhookURL)
 	if err != nil {
-		return "", fmt.Errorf("invalid URL format: %w", err)
+		return "", FailfWithClass(NotificationFailureConfiguration, "invalid URL format: %w", err)
 	}
 
 	chatID := u.Query().Get("chat_id")
 	if chatID == "" {
-		return "", fmt.Errorf("chat_id parameter is empty")
+		return "", FailfWithClass(NotificationFailureConfiguration, "chat_id parameter is empty")
 	}
 
 	// Validate that chat_id is numeric (Telegram chat IDs are always numeric)
 	// Handle negative IDs (group chats) and positive IDs (private chats)
 	if strings.HasPrefix(chatID, "-") {
 		if !isNumeric(chatID[1:]) {
-			return "", fmt.Errorf("chat_id must be numeric, got: %s", chatID)
+			return "", FailfWithClass(NotificationFailureConfiguration, "chat_id must be numeric, got: %s", chatID)
 		}
 	} else if !isNumeric(chatID) {
-		return "", fmt.Errorf("chat_id must be numeric, got: %s", chatID)
+		return "", FailfWithClass(NotificationFailureConfiguration, "chat_id must be numeric, got: %s", chatID)
 	}
 
 	return chatID, nil
@@ -4297,29 +4297,29 @@ func (n *NotificationManager) validateWebhookURL(webhookURL string, diagnosticUR
 
 func (n *NotificationManager) validateWebhookURLWithContext(ctx context.Context, webhookURL string, diagnosticURL func(string) string) error {
 	if webhookURL == "" {
-		return fmt.Errorf("webhook URL cannot be empty")
+		return FailfWithClass(NotificationFailureConfiguration, "webhook URL cannot be empty")
 	}
 
 	u, err := url.Parse(webhookURL)
 	if err != nil {
-		return fmt.Errorf("invalid URL format: %w", err)
+		return FailfWithClass(NotificationFailureConfiguration, "invalid URL format: %w", err)
 	}
 	if u.User != nil {
-		return fmt.Errorf("webhook URL userinfo is not allowed")
+		return FailfWithClass(NotificationFailureConfiguration, "webhook URL userinfo is not allowed")
 	}
 
 	// Must be HTTP or HTTPS
 	if u.Scheme != "http" && u.Scheme != "https" {
-		return fmt.Errorf("webhook URL must use http or https protocol")
+		return FailfWithClass(NotificationFailureConfiguration, "webhook URL must use http or https protocol")
 	}
 
 	// Get hostname for validation
 	host := u.Hostname()
 	if host == "" {
-		return fmt.Errorf("webhook URL missing hostname")
+		return FailfWithClass(NotificationFailureConfiguration, "webhook URL missing hostname")
 	}
 	if ip := net.ParseIP(host); ip != nil && ip.IsUnspecified() {
-		return fmt.Errorf("webhook URLs pointing to unspecified addresses are not allowed")
+		return FailfWithClass(NotificationFailureConfiguration, "webhook URLs pointing to unspecified addresses are not allowed")
 	}
 
 	// Block localhost and loopback addresses (SSRF protection) unless allowlisted
@@ -4327,7 +4327,7 @@ func (n *NotificationManager) validateWebhookURLWithContext(ctx context.Context,
 		// Check if localhost is in the allowlist
 		localhostIP := net.ParseIP("127.0.0.1")
 		if !n.isIPInAllowlist(localhostIP) {
-			return fmt.Errorf("webhook URLs pointing to localhost are not allowed for security reasons")
+			return FailfWithClass(NotificationFailureConfiguration, "webhook URLs pointing to localhost are not allowed for security reasons")
 		}
 		log.Debug().
 			Str("host", host).
@@ -4337,7 +4337,7 @@ func (n *NotificationManager) validateWebhookURLWithContext(ctx context.Context,
 
 	// Block link-local addresses
 	if strings.HasPrefix(host, "169.254.") || strings.HasPrefix(host, "fe80:") {
-		return fmt.Errorf("webhook URLs pointing to link-local addresses are not allowed")
+		return FailfWithClass(NotificationFailureConfiguration, "webhook URLs pointing to link-local addresses are not allowed")
 	}
 
 	// Resolve hostname to IPs and check for private ranges (DNS rebinding protection)
@@ -4357,7 +4357,7 @@ func (n *NotificationManager) validateWebhookURLWithContext(ctx context.Context,
 					Str("url", diagnosticURL(webhookURL)).
 					Msg("webhook URL resolves to private IP in allowlist")
 			} else {
-				return fmt.Errorf("webhook URL resolves to private IP %s - private networks are not allowed for security (configure allowlist in System Settings)", ip.String())
+				return FailfWithClass(NotificationFailureConfiguration, "webhook URL resolves to private IP %s - private networks are not allowed for security (configure allowlist in System Settings)", ip.String())
 			}
 		}
 	}
@@ -4370,7 +4370,7 @@ func (n *NotificationManager) validateWebhookURLWithContext(ctx context.Context,
 	}
 	for _, metadataHost := range metadataHosts {
 		if host == metadataHost {
-			return fmt.Errorf("webhook URLs pointing to cloud metadata services are not allowed")
+			return FailfWithClass(NotificationFailureConfiguration, "webhook URLs pointing to cloud metadata services are not allowed")
 		}
 	}
 

@@ -125,12 +125,16 @@ func ClassifyNotificationFailure(errorMessage string) NotificationFailureClass {
 		return NotificationFailureServerError
 	case containsAny(
 		"x509", "certificate", "tls", "ssl", "starttls",
+		"server gave http response to https client",
 	):
 		return NotificationFailureTLS
 	case containsAny(
 		"timeout", "timed out", "deadline exceeded", "connection refused",
 		"connection reset", "network unreachable", "no such host", "dial tcp",
 		"broken pipe", "unexpected eof",
+		"http: server closed idle connection", "http2: client connection lost",
+		"http2: server sent goaway", "use of closed network connection",
+		"malformed http response",
 	):
 		return NotificationFailureConnectivity
 	case containsAny(
@@ -138,6 +142,9 @@ func ClassifyNotificationFailure(errorMessage string) NotificationFailureClass {
 		"invalid webhook", "invalid configuration",
 		"must start with http", "validation failed", "executable file not found",
 		"no supported", "requires payload template",
+		"unsupported protocol scheme", "blocked private ip",
+		"blocked unspecified ip", "resolves to blocked private ips",
+		"private networks are not allowed",
 	):
 		return NotificationFailureConfiguration
 	case containsAny(
