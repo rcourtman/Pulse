@@ -102,10 +102,16 @@ describe('Coverage only calls an open vzdump running on fresh task evidence', ()
 
   it('does not infer running on a guest whose older inventory has no connection', () => {
     const incomplete = [identityGuest('east-100', '', 'pve-1')];
-    expect(eastTask(coverage({}, BACKUP_IDENTITY_NOW, incomplete))).toMatchObject({
-      id: 'task-100',
-      label: 'Unknown',
-    });
+    const row = coverage({}, BACKUP_IDENTITY_NOW, incomplete).coverageRows.find(
+      (candidate) => candidate.workload.resourceId === 'east-100',
+    );
+    // Both connections supplied a task at the same start with only a native
+    // node match. Keep candidates rather than making either the latest.
+    expect(row?.latestTask).toBeUndefined();
+    expect(row?.taskCandidates).toMatchObject([
+      { id: 'task-100', label: 'Unknown', instance: 'east' },
+      { id: 'west-task', label: 'OK', instance: 'west' },
+    ]);
   });
 
   it('withdraws stale and contradictory active words without hiding the raw verdict', () => {

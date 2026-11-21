@@ -467,6 +467,7 @@ describe('bounded uncertain-task inspection', () => {
         startTime: index === 199 ? '2026-10-04T11:00:00Z' : 'invalid',
         status:
           index === 198 ? 'failed' : index === 199 ? 'running' : index === 197 ? 'warning' : 'OK',
+        ...(index === 199 ? { endTime: undefined, observedAt: '2026-10-04T11:59:00Z' } : {}),
         error: index === 198 ? failure : undefined,
       }),
     );
