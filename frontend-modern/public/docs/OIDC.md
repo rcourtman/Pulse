@@ -232,7 +232,7 @@ separate-session login and permission checks in Quick Start.
 | :--- | :--- |
 | **`invalid_id_token`** | Compare the configured issuer with the IdP issuer locally; use the existing redacted error, not a token dump or newly enabled Debug logs. |
 | **`unexpected signature algorithm "HS256"`** | Your IdP is signing with HS256. Configure it to use **RS256**. |
-| **Redirect Loop** | Check `X-Forwarded-Proto` header (must be `https`) and cookie settings. |
+| **Redirect Loop** | [Check the callback address](#check-the-callback-address) before changing proxy or cookie settings. |
 | **Self-Signed Certs** | The SSO provider form in Settings has no CA Bundle field. Set `oidc.caBundle` on the provider through the SSO provider API (`/api/security/sso/providers`) to a host path readable by Pulse (e.g. `/etc/ssl/certs/oidc-ca.pem` mounted into the container). For a provider configured with the legacy `OIDC_ENABLED` environment variables, set `OIDC_CA_BUNDLE` instead (see [Configuration](CONFIGURATION.md)). |
 
 ### Safe diagnosis
@@ -330,3 +330,26 @@ save, [check the saved provider](#a-provider-change-could-not-be-confirmed)
 before writing anything. If the failure began after a save, keep the time,
 the setting you changed (or that nothing changed) and the locally redacted
 error. Do not repeat the save, rotate the secret or sign out to diagnose it.
+
+### Check the callback address
+
+Keep your working administrator session open. On your usual HTTPS Pulse
+address, open **Settings → Security → Single Sign-On** and compare the saved
+provider's **Callback / Redirect URL** with the redirect URL registered in
+the identity provider. Match the whole address, including the scheme, host,
+port if shown and provider-specific path. If only the registration is wrong,
+correct it in the identity provider. There is no need to save the Pulse
+provider again.
+
+If Pulse shows the wrong address, open the existing provider without saving
+and check **Redirect URL**. A saved override takes precedence over **Public
+URL** in **Settings → System → Network**. If there is no override, check
+**Public URL** and the [trusted proxy setup](REVERSE_PROXY.md#before-configuring-the-proxy).
+Adding `X-Forwarded-Proto: https` alone does not make Pulse trust the proxy.
+Do not expose the backend or disable TLS or origin checks. After correcting
+the address, register the exact callback shown on the card before trying a
+fresh sign-in in a separate browser session.
+
+If the addresses already match, use the existing
+[sign-in error to find the failing step](#safe-diagnosis). A redirect loop
+alone does not tell you which setting is wrong.

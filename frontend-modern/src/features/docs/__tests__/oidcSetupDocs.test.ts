@@ -107,6 +107,27 @@ describe('OIDC setup without losing access', () => {
     );
   });
 
+  it('routes OIDC and proxy readers to the same callback check before changing settings', () => {
+    const guide = article('OIDC');
+    const fragment = 'check-the-callback-address';
+    const heading = guide.querySelector(`h3[id="${fragment}"]`)!;
+    const oidcEntry = guide.querySelector(`tr a[href="#${fragment}"]`)!;
+    const proxyEntry = article('REVERSE_PROXY').querySelector(`a[href="/docs/OIDC#${fragment}"]`)!;
+    expect(oidcEntry.closest('tr')).toHaveTextContent('Redirect Loop');
+    expect(proxyEntry.closest('li')).toHaveTextContent('OIDC redirects fail');
+
+    const compare = heading.nextElementSibling!;
+    const correct = compare.nextElementSibling!;
+    expect(text(compare)).toContain('Keep your working administrator session open');
+    expect(text(compare)).toContain('correct it in the identity provider');
+    expect(text(compare)).toContain('There is no need to save the Pulse provider again');
+    expect(text(correct)).toContain('A saved override takes precedence over Public URL');
+    expect(
+      correct.querySelector('a[href="/docs/REVERSE_PROXY#before-configuring-the-proxy"]'),
+    ).toHaveTextContent('trusted proxy setup');
+    expect(correct.nextElementSibling!.querySelector('a[href="#safe-diagnosis"]')).not.toBeNull();
+  });
+
   it('links all setup decisions to real focused documentation headings', () => {
     const guide = article('OIDC');
     for (const [name, fragment] of [
