@@ -1,0 +1,34 @@
+{
+  "version": 1,
+  "base_sha": "8c952282ec1f26515fe500a7b846ea0fb76b95e1",
+  "verified_at": "2026-11-21T07:16:53Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Login.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Login.tsx": "950a0efc8b7892076fc45dbd221d60cb64d96b92ef2a55a565b65d436028dcc6"
+  },
+  "routes": [
+    "/login"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 320,
+      "height": 720
+    }
+  ],
+  "states": [
+    "Paired production-mode sign-in pages on Chromium 141.0.7390.37 and Playwright 1.56.1 with synthetic responses. Desktop light: empty, restored values, pending, rejected. Phone dark: empty, filled after a mixed SSO return (initial and after the same scroll), and hidden local form.",
+    "Reviewed all 16 captures. Username and Password remain legible above the values, which stay masked for Password. Form, controls, return notice and Help keep their positions; the SSO-only captures are pixel-identical."
+  ],
+  "interactions": [
+    "466 assertions: native labels and old placeholder selectors address the same fields. Tab order, input focus and full field tap targets stay intact; tapping each new visible label focuses its input.",
+    "Control the pending and rejected POST from the existing form: one submission with the same synthetic values, no second request on Enter while pending, same focus and visible refusal. The SSO-only control follows its synthetic provider destination without submitting local credentials.",
+    "No external service, signed identity provider, native password manager, or real credential was exercised."
+  ]
+}

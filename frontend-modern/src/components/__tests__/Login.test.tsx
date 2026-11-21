@@ -81,8 +81,11 @@ describe('Login', () => {
     ));
 
     // Username and password fields should be visible
-    expect(await screen.findByPlaceholderText('Username')).toBeInTheDocument();
-    expect(screen.getByPlaceholderText('Password')).toBeInTheDocument();
+    expect(await screen.findByLabelText('Username')).toBeInTheDocument();
+    expect(screen.getByLabelText('Password')).toBeInTheDocument();
+    // Older browser clients still find these inputs by placeholder.
+    expect(screen.getByPlaceholderText('Username')).toBe(screen.getByLabelText('Username'));
+    expect(screen.getByPlaceholderText('Password')).toBe(screen.getByLabelText('Password'));
     expect(screen.getByRole('button', { name: /sign in to pulse/i })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Can’t sign in?' })).toHaveAttribute(
       'href',
@@ -119,8 +122,8 @@ describe('Login', () => {
     ).toBeInTheDocument();
 
     // Username and password fields should NOT be visible
-    expect(screen.queryByPlaceholderText('Username')).toBeNull();
-    expect(screen.queryByPlaceholderText('Password')).toBeNull();
+    expect(screen.queryByLabelText('Username')).toBeNull();
+    expect(screen.queryByLabelText('Password')).toBeNull();
     expect(screen.getByRole('link', { name: 'Can’t sign in?' })).toHaveAttribute(
       'href',
       '/docs/TROUBLESHOOTING',
@@ -142,7 +145,7 @@ describe('Login', () => {
       await screen.findByRole('heading', { name: 'No sign-in options on this page' }),
     ).toBeVisible();
     expect(screen.getByText(/Ask your Pulse administrator how to sign in/)).toBeVisible();
-    expect(screen.queryByPlaceholderText('Username')).toBeNull();
+    expect(screen.queryByLabelText('Username')).toBeNull();
     expect(screen.queryByRole('button')).toBeNull();
     expect(screen.getByRole('link', { name: 'Can’t sign in?' })).toHaveAttribute(
       'href',
@@ -400,8 +403,8 @@ describe('Login', () => {
     ));
 
     // Local login form should still be visible due to show_local=true
-    expect(await screen.findByPlaceholderText('Username')).toBeInTheDocument();
-    expect(screen.getByPlaceholderText('Password')).toBeInTheDocument();
+    expect(await screen.findByLabelText('Username')).toBeInTheDocument();
+    expect(screen.getByLabelText('Password')).toBeInTheDocument();
     // Restore location
     (window as any).location = originalLocation;
   });
@@ -419,7 +422,7 @@ describe('Login', () => {
     ));
 
     // Wait for component to render
-    expect(await screen.findByPlaceholderText('Username')).toBeInTheDocument();
+    expect(await screen.findByLabelText('Username')).toBeInTheDocument();
 
     // The fetch should not have been called for /api/security/status
     // because we passed securityStatus directly
@@ -447,7 +450,7 @@ describe('Login', () => {
     if (hidden) {
       expect(screen.getByRole('status')).toBeEmptyDOMElement();
       expect(screen.getByText(/The local sign-in form is hidden/)).toBeVisible();
-      expect(screen.queryByPlaceholderText('Username')).toBeNull();
+      expect(screen.queryByLabelText('Username')).toBeNull();
     }
     expect(mockFetch).not.toHaveBeenCalledWith('/api/login', expect.anything());
     expect(mockOnLogin).not.toHaveBeenCalled();
@@ -542,7 +545,7 @@ describe('Login', () => {
     expect(screen.getByText(/The local sign-in form is hidden/)).toBeVisible();
     expect(screen.getAllByText('demo')).toHaveLength(2);
     expect(screen.queryByText('Synthetic provider detail')).toBeNull();
-    expect(screen.queryByPlaceholderText('Username')).toBeNull();
+    expect(screen.queryByLabelText('Username')).toBeNull();
     expect(help).toHaveFocus();
     expect(mockFetch.mock.calls.filter(([url]) => url === '/api/login')).toHaveLength(1);
     expect(onLogin).not.toHaveBeenCalled();
@@ -606,10 +609,29 @@ describe('Login', () => {
       <Login onLogin={mockOnLogin} hasAuth={true} securityStatus={securityStatus as any} />
     ));
 
-    const usernameInput = (await screen.findByPlaceholderText('Username')) as HTMLInputElement;
+    const usernameInput = (await screen.findByLabelText('Username')) as HTMLInputElement;
+    const passwordInput = screen.getByLabelText('Password') as HTMLInputElement;
     expect(usernameInput.value).toBe('johannes');
     expect(screen.getByLabelText('Remember me')).toBeChecked();
-    expect((screen.getByPlaceholderText('Password') as HTMLInputElement).value).toBe('');
+    expect(passwordInput.value).toBe('');
+  });
+
+  it('does not hide the field labels when the browser restores filled inputs', async () => {
+    render(() => (
+      <Login onLogin={vi.fn()} securityStatus={{ hasAuthentication: true, requiresAuth: true }} />
+    ));
+    const username = await screen.findByLabelText<HTMLInputElement>('Username');
+    const password = screen.getByLabelText<HTMLInputElement>('Password');
+    // Restore without input events, like a password manager.
+    username.value = 'fixture-operator';
+    password.value = 'synthetic-input';
+
+    // JSDOM does not load Tailwind; the browser comparison checks actual geometry.
+    for (const input of [username, password]) {
+      expect(input.labels).toHaveLength(1);
+      expect(input.labels![0]).not.toHaveClass('sr-only');
+    }
+    expect(password).toHaveAttribute('type', 'password');
   });
 
   it('stores the username after a successful remembered login', async () => {
@@ -630,10 +652,10 @@ describe('Login', () => {
       <Login onLogin={mockOnLogin} hasAuth={true} securityStatus={securityStatus as any} />
     ));
 
-    fireEvent.input(await screen.findByPlaceholderText('Username'), {
+    fireEvent.input(await screen.findByLabelText('Username'), {
       target: { value: 'johannes' },
     });
-    fireEvent.input(screen.getByPlaceholderText('Password'), { target: { value: 'secret' } });
+    fireEvent.input(screen.getByLabelText('Password'), { target: { value: 'secret' } });
     fireEvent.click(screen.getByLabelText('Remember me'));
     fireEvent.click(screen.getByRole('button', { name: /sign in to pulse/i }));
 
@@ -663,10 +685,10 @@ describe('Login', () => {
       <Login onLogin={mockOnLogin} hasAuth={true} securityStatus={securityStatus as any} />
     ));
 
-    fireEvent.input(await screen.findByPlaceholderText('Username'), {
+    fireEvent.input(await screen.findByLabelText('Username'), {
       target: { value: 'johannes' },
     });
-    fireEvent.input(screen.getByPlaceholderText('Password'), { target: { value: 'secret' } });
+    fireEvent.input(screen.getByLabelText('Password'), { target: { value: 'secret' } });
     (screen.getByLabelText('Remember me') as HTMLInputElement).checked = true;
     fireEvent.click(screen.getByRole('button', { name: /sign in to pulse/i }));
 
@@ -701,10 +723,10 @@ describe('Login', () => {
 
     const rememberCheckbox = await screen.findByLabelText('Remember me');
     fireEvent.click(rememberCheckbox);
-    fireEvent.input(screen.getByPlaceholderText('Username'), {
+    fireEvent.input(screen.getByLabelText('Username'), {
       target: { value: 'new-user' },
     });
-    fireEvent.input(screen.getByPlaceholderText('Password'), { target: { value: 'secret' } });
+    fireEvent.input(screen.getByLabelText('Password'), { target: { value: 'secret' } });
     fireEvent.click(screen.getByRole('button', { name: /sign in to pulse/i }));
 
     await waitFor(() => expect(mockOnLogin).toHaveBeenCalledOnce());
@@ -776,7 +798,7 @@ describe('Login', () => {
       });
     const expectNoGuessedAccess = () => {
       expect(screen.queryByRole('main', { name: 'Pulse Setup Wizard' })).not.toBeInTheDocument();
-      expect(screen.queryByPlaceholderText('Username')).not.toBeInTheDocument();
+      expect(screen.queryByLabelText('Username')).not.toBeInTheDocument();
       expect(screen.queryByRole('button', { name: /sign in to pulse/i })).not.toBeInTheDocument();
     };
 
@@ -854,7 +876,7 @@ describe('Login', () => {
     it('reads again when bootstrap supplied no explicit authentication observation', async () => {
       mockFetch.mockResolvedValueOnce(discoveryResponse({ hasAuthentication: true }));
       render(() => <Login onLogin={vi.fn()} securityStatus={{} as any} />);
-      expect(await screen.findByPlaceholderText('Username')).toBeVisible();
+      expect(await screen.findByLabelText('Username')).toBeVisible();
       expect(mockFetch).toHaveBeenCalledTimes(1);
     });
 
@@ -914,7 +936,7 @@ describe('Login', () => {
           expect(screen.getByRole('button', { name: 'Restart sign-in check' })).toBe(restart);
           finish(discoveryResponse({ hasAuthentication: true }));
           await vi.advanceTimersByTimeAsync(0);
-          expect(screen.getByPlaceholderText('Username')).toBeVisible();
+          expect(screen.getByLabelText('Username')).toBeVisible();
           expect(screen.getByRole('region', { name: 'Pulse access' })).toHaveFocus();
           expect(mockFetch).toHaveBeenCalledTimes(2);
           expect(onLogin).not.toHaveBeenCalled();
@@ -960,7 +982,7 @@ describe('Login', () => {
         }),
       );
       expect(await screen.findByRole('button', { name: 'Continue with Lab SSO' })).toBeVisible();
-      expect(screen.queryByPlaceholderText('Username')).not.toBeInTheDocument();
+      expect(screen.queryByLabelText('Username')).not.toBeInTheDocument();
       expect(screen.queryByRole('button', { name: 'Retry sign-in check' })).not.toBeInTheDocument();
       await waitFor(() =>
         expect(screen.getByRole('region', { name: 'Pulse access' })).toHaveFocus(),
@@ -1008,7 +1030,7 @@ describe('Login', () => {
       const independent = screen.getByRole('button', { name: 'Independent control' });
       independent.focus();
       finish(discoveryResponse({ hasAuthentication: true }));
-      expect(await screen.findByPlaceholderText('Username')).toBeVisible();
+      expect(await screen.findByLabelText('Username')).toBeVisible();
       expect(independent).toHaveFocus();
     });
 
@@ -1062,7 +1084,7 @@ describe('Login', () => {
       render(() => <Login onLogin={vi.fn()} hasAuth={false} />);
       fireEvent.click(await screen.findByRole('button', { name: 'Retry sign-in check' }));
       expect(await screen.findByRole('main', { name: 'Pulse Setup Wizard' })).toBeVisible();
-      expect(screen.queryByPlaceholderText('Username')).not.toBeInTheDocument();
+      expect(screen.queryByLabelText('Username')).not.toBeInTheDocument();
       expect(mockFetch).toHaveBeenCalledTimes(2);
     });
   });
