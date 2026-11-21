@@ -154,7 +154,7 @@ func BuildBackupHealth(workloads []model.BackupHealthWorkload, points []Recovery
 			// An unresolved task from an old poll is not evidence that it is
 			// still running at the report cutoff.
 			outcome = OutcomeUnknown
-			if backupTaskRunningAt(point, to) {
+			if BackupTaskRunningAt(point, to) {
 				outcome = OutcomeRunning
 			}
 			if at.Before(from) {
@@ -238,8 +238,11 @@ func recoveryDetailInt(point RecoveryPoint, key string) int {
 	return 0
 }
 
-func backupTaskRunningAt(point RecoveryPoint, cutoff time.Time) bool {
-	if point.Outcome != OutcomeRunning || point.Evidence == nil {
+// BackupTaskRunningAt reports whether an open task's recorded running outcome
+// is supported at cutoff. Historical reports use the period end; a live summary
+// must also check its read clock, which can be later than collection coverage.
+func BackupTaskRunningAt(point RecoveryPoint, cutoff time.Time) bool {
+	if point.CompletedAt != nil || point.Outcome != OutcomeRunning || point.Evidence == nil {
 		return false
 	}
 	if validUntil := point.Evidence.ValidUntil; validUntil != nil {
