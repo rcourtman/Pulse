@@ -288,8 +288,8 @@ func (m *Monitor) pollStorageBackupsWithNodes(ctx context.Context, instanceName 
 	deniedReads := map[pveLocalBackupStorage]struct{}{}
 	readState := m.backupReadStateForInstance(instanceName)
 
-	// Carry-forward needs the primary storage rows, not the fleet inventory.
-	previousBackups := m.state.GetPVEBackups()
+	// Capture this connection's archive evidence for an incomplete read.
+	previousBackups := m.state.GetPVEStorageBackupsForInstance(instanceName)
 	// Build guest lookup map to find actual node for each VMID
 	guestInfo := buildProxmoxGuestInfoIndex(readState)
 	guestNodeMap := make(map[int]string) // VMID -> actual node name
@@ -670,7 +670,7 @@ func (m *Monitor) pollStorageBackupsWithNodes(ctx context.Context, instanceName 
 	// Carry-forward serves the live inventory, not a new provider observation.
 	// Only rows actually returned this poll may renew point-level evidence.
 	observedBackups := allBackups
-	allBackups, preservedStorages := preserveFailedStorageBackups(instanceName, previousBackups.StorageBackups, pveBackupReadFailures{
+	allBackups, preservedStorages := preserveFailedStorageBackups(instanceName, previousBackups, pveBackupReadFailures{
 		storages:      sharedPreserveNeeded,
 		nodes:         unreadNodes,
 		local:         failedLocalStorages,
@@ -1283,13 +1283,9 @@ func (m *Monitor) pollGuestSnapshots(ctx context.Context, instanceName string, c
 		containers = append(containers, ct)
 	}
 
-	previousSnapshots := make([]models.GuestSnapshot, 0)
+	var previousSnapshots []models.GuestSnapshot
 	if m.state != nil {
-		for _, snap := range m.state.GetPVEBackups().GuestSnapshots {
-			if snap.Instance == instanceName {
-				previousSnapshots = append(previousSnapshots, snap)
-			}
-		}
+		previousSnapshots = m.state.GetPVEGuestSnapshotsForInstance(instanceName)
 	}
 
 	guestKey := func(instance, node string, vmid int) string {

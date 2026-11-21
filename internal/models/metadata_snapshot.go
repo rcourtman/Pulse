@@ -20,6 +20,51 @@ func (s *State) GetPVEBackups() PVEBackups {
 	return clonePVEBackups(s.PVEBackups)
 }
 
+// GetPVEStorageBackupsForInstance returns detached primary storage rows in
+// their existing order. The poller needs only this connection's archive
+// evidence, not tasks, snapshots or other connections' archives.
+func (s *State) GetPVEStorageBackupsForInstance(instance string) []StorageBackup {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return copyBackupRows(s.PVEBackups.StorageBackups, func(row *StorageBackup) bool {
+		return row.Instance == instance
+	})
+}
+
+// GetPVEGuestSnapshotsForInstance returns detached primary snapshot rows in
+// their existing order, without copying backup tasks or storage archives.
+func (s *State) GetPVEGuestSnapshotsForInstance(instance string) []GuestSnapshot {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return copyBackupRows(s.PVEBackups.GuestSnapshots, func(row *GuestSnapshot) bool {
+		return row.Instance == instance
+	})
+}
+
+// The callers hold the state read lock across both passes. Count first to
+// avoid allocating for other connections or growing the result one row at a
+// time on large single-connection estates. Both row types have value fields.
+func copyBackupRows[T any](rows []T, matches func(*T) bool) []T {
+	count := 0
+	for i := range rows {
+		if matches(&rows[i]) {
+			count++
+		}
+	}
+	result := make([]T, 0, count)
+	if count == len(rows) {
+		return append(result, rows...)
+	}
+	if count > 0 {
+		for i := range rows {
+			if matches(&rows[i]) {
+				result = append(result, rows[i])
+			}
+		}
+	}
+	return result
+}
+
 // GetBackupTasks returns the primary PVE tasks in their existing order, without
 // copying backup artifacts or the resource inventory. BackupTask has only value
 // fields; the returned slice is detached, including when it is empty.
