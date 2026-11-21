@@ -7218,10 +7218,16 @@ points also outlive that live cache: an incomplete, cancelled or unobserved gues
 inventory must not reconcile missing durable points, including after a monitor
 replacement. Only snapshots returned by an accepted listing may renew point-level
 evidence; carried-forward rows remain live continuity, not fresh observations.
-Instance-wide deletion waits for a nonempty target inventory whose listings all
-succeeded, without cancellation or carried-forward rows. An accepted complete
-empty snapshot listing still clears that instance's snapshot scope, preserving
-other instances and backup/task classes. `TestPVESnapshotIncompletePollRetainsRecoveryHistory`,
+Removal waits for a nonempty target inventory whose listings all succeeded,
+without cancellation or carried-forward rows. Even then, a successful pass over
+the loaded guests only establishes absence for the exact connection, node, native
+guest kind and VMID of each accepted listing. An explicitly empty listing can
+still clear that guest's stored points. A guest missing from a freshly loaded
+inventory supplies no listing or deletion evidence, and past points are not
+restored to the live inventory or renewed. Other instances and point classes
+are unchanged. `TestPVESnapshotColdSubsetDoesNotReconcileUnqueriedGuest` covers
+the actual HTTP, poll and store flow after a cold monitor replacement.
+`TestPVESnapshotIncompletePollRetainsRecoveryHistory`,
 `TestPVESnapshotUnobservedInventoryPreservesRecoveryHistory` and
 `TestPVESnapshotCancelledAfterListingsCannotReconcile` in
 `internal/monitoring/recovery_ingest_test.go` exercise the actual poll, queue and

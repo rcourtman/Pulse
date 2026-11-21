@@ -20,6 +20,10 @@ type recoveryReconcileScope struct {
 	provider string
 	idPrefix string
 	instance string
+
+	// A snapshot poll only has removal authority for its exact read targets.
+	// Nil leaves the existing instance-wide scope for full backup inventories.
+	snapshotGuests map[recoverystore.PVESnapshotGuest]struct{}
 }
 
 // recoveryIngestBatch is one poll cycle's worth of recovery points, plus an
@@ -43,7 +47,9 @@ type recoveryIngestCoalesceKey struct {
 }
 
 func (batch recoveryIngestBatch) coalesceKey() (recoveryIngestCoalesceKey, bool) {
-	if batch.reconcile == nil {
+	// Guest-scoped batches can overlap without superseding one another. Keep
+	// their observations and removals in source order, just like partial reads.
+	if batch.reconcile == nil || batch.reconcile.snapshotGuests != nil {
 		return recoveryIngestCoalesceKey{}, false
 	}
 	return recoveryIngestCoalesceKey{
@@ -113,8 +119,8 @@ func (m *Monitor) enqueueRecoveryIngest(batch recoveryIngestBatch) {
 
 	m.recoveryIngestMu.Lock()
 	if m.recoveryIngestRunning {
-		// A reconcile batch is a complete current enumeration for one source
-		// scope, so only its newest pending value is authoritative. Distinct
+		// An instance-wide reconcile batch is a complete enumeration, so only
+		// its newest pending value is authoritative. Distinct
 		// scopes and non-reconciling event batches remain FIFO; this preserves
 		// their facts without retaining every superseded full poll result.
 		if m.coalescePendingRecoveryIngest(batch) {
@@ -225,7 +231,13 @@ func (m *Monitor) ingestRecoveryPointsBestEffort(ctx context.Context, batch reco
 	for _, p := range batch.points {
 		keepIDs = append(keepIDs, p.ID)
 	}
-	if _, err := store.ReconcileInstancePoints(ctx, batch.reconcile.provider, batch.reconcile.idPrefix, batch.reconcile.instance, keepIDs); err != nil {
+	scope := batch.reconcile
+	if scope.snapshotGuests != nil {
+		_, err = store.ReconcilePVESnapshotPoints(ctx, scope.instance, scope.snapshotGuests, keepIDs)
+	} else {
+		_, err = store.ReconcileInstancePoints(ctx, scope.provider, scope.idPrefix, scope.instance, keepIDs)
+	}
+	if err != nil {
 		log.Warn().
 			Err(err).
 			Str("org_id", orgID).

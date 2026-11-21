@@ -358,6 +358,36 @@ func TestRecoveryIngestCompletePollCannotOvertakePartialBatch(t *testing.T) {
 	}
 }
 
+func TestRecoveryIngestKeepsOverlappingSnapshotReadScopesInOrder(t *testing.T) {
+	m := &Monitor{recoveryIngestRunning: true}
+	guestA := recoverystore.PVESnapshotGuest{Node: "node-a", Kind: "qemu", VMID: 101}
+	guestB := recoverystore.PVESnapshotGuest{Node: "node-b", Kind: "qemu", VMID: 202}
+	enqueue := func(guests ...recoverystore.PVESnapshotGuest) {
+		targets := make(map[recoverystore.PVESnapshotGuest]struct{}, len(guests))
+		for _, guest := range guests {
+			targets[guest] = struct{}{}
+		}
+		m.enqueueRecoveryIngest(recoveryIngestBatch{reconcile: &recoveryReconcileScope{
+			provider: string(recovery.ProviderProxmoxPVE), idPrefix: "pve-snapshot:", instance: "site",
+			snapshotGuests: targets,
+		}})
+	}
+	enqueue(guestA, guestB)
+	enqueue(guestB)
+	enqueue(guestA)
+	want := []map[recoverystore.PVESnapshotGuest]struct{}{
+		{guestA: {}, guestB: {}}, {guestB: {}}, {guestA: {}},
+	}
+	if len(m.recoveryIngestPending) != len(want) {
+		t.Fatalf("expected three pending overlapping read scopes, got %d", len(m.recoveryIngestPending))
+	}
+	for i, batch := range m.recoveryIngestPending {
+		if !reflect.DeepEqual(want[i], batch.reconcile.snapshotGuests) {
+			t.Fatalf("read scope %d was reordered or replaced: %v", i, batch.reconcile.snapshotGuests)
+		}
+	}
+}
+
 // Snapshot inventory in memory can be empty after an ordinary monitor
 // replacement while its durable recovery points still exist. Exercise the
 // actual poll, ingest queue and public store reader, not database internals.

@@ -17,6 +17,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring/errors"
 	"github.com/rcourtman/pulse-go-rewrite/internal/recovery"
 	proxmoxrecoverymapper "github.com/rcourtman/pulse-go-rewrite/internal/recovery/mapper/proxmox"
+	recoverystore "github.com/rcourtman/pulse-go-rewrite/internal/recovery/store"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/pbs"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/proxmox"
@@ -1602,16 +1603,20 @@ func (m *Monitor) pollGuestSnapshots(ctx context.Context, instanceName string, c
 			Msg("Failed to attach PVE snapshot recovery evidence; preserving existing points")
 	} else if len(targets) > 0 && len(polledGuestKeys) == len(targets) &&
 		carriedForward == 0 && snapshotCtx.Err() == nil {
-		// Only an accepted complete listing can establish instance-wide
-		// absence. In particular, after a monitor replacement the live cache
-		// can be empty while durable snapshots still exist for a failed guest.
-		// No observed guest inventory is not a successful empty enumeration.
+		// Success for every loaded guest establishes absence for those guests
+		// only. After monitor replacement even the live carry-forward can be
+		// empty while another guest's durable snapshots still exist.
+		readGuests := make(map[recoverystore.PVESnapshotGuest]struct{}, len(targets))
+		for _, target := range targets {
+			readGuests[recoverystore.PVESnapshotGuest{Node: target.node, Kind: target.guestType, VMID: target.vmid}] = struct{}{}
+		}
 		m.ingestAndReconcileRecoveryPointsAsync(
 			points,
 			recoveryReconcileScope{
-				provider: string(recovery.ProviderProxmoxPVE),
-				idPrefix: "pve-snapshot:",
-				instance: instanceName,
+				provider:       string(recovery.ProviderProxmoxPVE),
+				idPrefix:       "pve-snapshot:",
+				instance:       instanceName,
+				snapshotGuests: readGuests,
 			},
 		)
 	} else {

@@ -300,6 +300,70 @@ func TestStore_ReconcileInstancePoints(t *testing.T) {
 	}
 }
 
+func TestStore_ReconcilePVESnapshotPointsRequiresExactReadTarget(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	store, err := Open(filepath.Join(t.TempDir(), "recovery.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+	now := time.Now().UTC()
+	point := func(name, instance, node, kind string, vmid int) recovery.RecoveryPoint {
+		return recovery.RecoveryPoint{
+			ID: "pve-snapshot:" + name, Provider: recovery.ProviderProxmoxPVE,
+			Kind: recovery.KindSnapshot, Mode: recovery.ModeSnapshot, Outcome: recovery.OutcomeSuccess,
+			StartedAt: &now, CompletedAt: &now,
+			Details: map[string]any{"instance": instance, "node": node, "type": kind, "vmid": vmid},
+		}
+	}
+	stale := point("absent", "east", "node-a", "qemu", 101)
+	fresh := point("still-listed", "east", "node-a", "qemu", 101)
+	otherProvider := point("different-provider", "east", "node-a", "qemu", 101)
+	otherProvider.Provider = recovery.ProviderTrueNAS
+	archive := point("archive", "east", "node-a", "qemu", 101)
+	archive.ID, archive.Kind, archive.Mode = "pve-backup:archive", recovery.KindBackup, recovery.ModeLocal
+	keep := []recovery.RecoveryPoint{
+		fresh,
+		point("opposite-kind", "east", "node-a", "lxc", 101),
+		point("different-vmid", "east", "node-a", "qemu", 102),
+		point("different-node", "east", "node-b", "qemu", 101),
+		point("different-connection", "west", "node-a", "qemu", 101),
+		point("legacy-kind", "east", "node-a", "", 101),
+		point("legacy-node", "east", "", "qemu", 101),
+		otherProvider,
+		archive,
+	}
+	if err := store.UpsertPoints(ctx, append([]recovery.RecoveryPoint{stale}, keep...)); err != nil {
+		t.Fatal(err)
+	}
+	check := func(targets map[PVESnapshotGuest]struct{}, listed []string, want int64) {
+		t.Helper()
+		deleted, err := store.ReconcilePVESnapshotPoints(ctx, "east", targets, listed)
+		if err != nil || deleted != want {
+			t.Fatalf("reconcile deleted %d, want %d: %v", deleted, want, err)
+		}
+	}
+	check(nil, nil, 0)
+	targets := map[PVESnapshotGuest]struct{}{{Node: "node-a", Kind: "qemu", VMID: 101}: {}}
+	check(targets, []string{fresh.ID}, 1)
+	got, _, err := store.ListPoints(ctx, recovery.ListPointsOptions{})
+	if err != nil || len(got) != len(keep) {
+		t.Fatalf("retained points: got %d, want %d: %v", len(got), len(keep), err)
+	}
+	retained := make(map[string]bool, len(got))
+	for _, p := range got {
+		retained[p.ID] = true
+	}
+	for _, p := range keep {
+		if !retained[p.ID] {
+			t.Errorf("reconciled untouched point %s", p.ID)
+		}
+	}
+	check(targets, nil, 1) // Explicit empty inventory removes the last exact point.
+	check(targets, nil, 0)
+}
+
 func TestStore_ListPoints_IgnoresMalformedJSONFields(t *testing.T) {
 	t.Parallel()
 

@@ -481,6 +481,28 @@ func (s *Store) PurgeStalePVEPBSBackups(ctx context.Context) error {
 // prune and kept re-raising age alerts (#1580). Callers must only pass
 // enumerations that fully succeeded (or carried forward unpolled entries).
 func (s *Store) ReconcileInstancePoints(ctx context.Context, provider, idPrefix, instance string, keepIDs []string) (int64, error) {
+	return s.reconcileInstancePoints(ctx, provider, idPrefix, instance, keepIDs, nil)
+}
+
+// PVESnapshotGuest is the exact node, native kind and VMID used to list
+// snapshots for one guest on a PVE connection.
+type PVESnapshotGuest struct {
+	Node string
+	Kind string
+	VMID int
+}
+
+// ReconcilePVESnapshotPoints removes absent points only for guests whose
+// snapshot inventories were accepted. A guest missing from the monitor's
+// current inventory did not supply an empty listing.
+func (s *Store) ReconcilePVESnapshotPoints(ctx context.Context, instance string, readGuests map[PVESnapshotGuest]struct{}, keepIDs []string) (int64, error) {
+	if len(readGuests) == 0 {
+		return 0, nil
+	}
+	return s.reconcileInstancePoints(ctx, string(recovery.ProviderProxmoxPVE), "pve-snapshot:", instance, keepIDs, readGuests)
+}
+
+func (s *Store) reconcileInstancePoints(ctx context.Context, provider, idPrefix, instance string, keepIDs []string, snapshotGuests map[PVESnapshotGuest]struct{}) (int64, error) {
 	if err := s.ensureInitialized(); err != nil {
 		return 0, err
 	}
@@ -504,7 +526,7 @@ func (s *Store) ReconcileInstancePoints(ctx context.Context, provider, idPrefix,
 	// PVE points carry the connection in details_json.instance; PBS points in
 	// repository_ref_json.namespace. The id prefix keeps the classes apart, so
 	// matching either field never crosses providers.
-	rows, err := s.db.QueryContext(ctx, `
+	query := `
 		SELECT id, subject_key FROM recovery_points
 		WHERE provider = ?
 		  AND id LIKE ? || '%'
@@ -512,7 +534,29 @@ func (s *Store) ReconcileInstancePoints(ctx context.Context, provider, idPrefix,
 			json_extract(details_json, '$.instance') = ?
 			OR json_extract(repository_ref_json, '$.namespace') = ?
 		  )
-	`, provider, idPrefix, instance, instance)
+	`
+	args := []any{provider, idPrefix, instance, instance}
+	if snapshotGuests != nil {
+		// Use the observed identity fields, not names, the guest's current
+		// placement or a split of the opaque persisted ID. Legacy rows with
+		// unknown origin cannot be claimed by a successful guest listing.
+		query = `
+			SELECT id, subject_key, json_extract(details_json, '$.node'),
+			       json_extract(details_json, '$.type'), json_extract(details_json, '$.vmid')
+			FROM recovery_points
+			WHERE provider = ?
+			  AND id LIKE ? || '%'
+			  AND kind = 'snapshot'
+			  AND json_extract(details_json, '$.instance') = ?
+			  AND json_type(details_json, '$.node') = 'text'
+			  AND json_extract(details_json, '$.node') <> ''
+			  AND json_extract(details_json, '$.type') IN ('qemu', 'lxc')
+			  AND json_type(details_json, '$.vmid') = 'integer'
+			  AND json_extract(details_json, '$.vmid') > 0
+		`
+		args = args[:3]
+	}
+	rows, err := s.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return 0, err
 	}
@@ -523,7 +567,15 @@ func (s *Store) ReconcileInstancePoints(ctx context.Context, provider, idPrefix,
 	for rows.Next() {
 		var id string
 		var subjectKey sql.NullString
-		if err := rows.Scan(&id, &subjectKey); err != nil {
+		if snapshotGuests != nil {
+			var guest PVESnapshotGuest
+			if err := rows.Scan(&id, &subjectKey, &guest.Node, &guest.Kind, &guest.VMID); err != nil {
+				return 0, err
+			}
+			if _, read := snapshotGuests[guest]; !read {
+				continue
+			}
+		} else if err := rows.Scan(&id, &subjectKey); err != nil {
 			return 0, err
 		}
 		if _, ok := keep[id]; !ok {

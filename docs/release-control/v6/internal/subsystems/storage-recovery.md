@@ -1955,6 +1955,19 @@ rescued by a reused node name or a singleton fallback. With no connection scope,
 an exact native node/alias must identify one candidate; wholly unscoped singleton
 observations retain their existing compatibility behaviour.
 
+Snapshot removal has a different boundary from display attribution. A complete
+successful snapshot pass authorizes removal of absent PVE snapshot points only
+for its accepted connection, native node, QEMU/LXC kind and VMID tuples.
+An absent guest, an opposite-kind occupant or a point with unknown inventory
+origin cannot supply that authority. An explicit empty listing still removes
+points for its exact guest. This neither re-ingests unqueried points nor counts a
+retained guest snapshot as a backup. The other inventory classes retain their
+existing instance-wide reconciliation rules. Overlapping snapshot batches
+remain ordered rather than superseding one another.
+`TestStore_ReconcilePVESnapshotPointsRequiresExactReadTarget` and
+`TestRecoveryIngestKeepsOverlappingSnapshotReadScopesInOrder` verify these
+boundaries.
+
 PBS instance and datastore identify a repository, not a PVE workload. A PBS row
 takes its workload from the server's `guestInstance`, the attribution described at
 the top of this contract. No namespace, label or lone VMID can pool it onto a guest
