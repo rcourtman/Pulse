@@ -401,13 +401,12 @@ no need to bring the whole Compose project down. Use your actual service and
 container names if they differ; legacy `docker-compose` users can substitute
 that command name.
 
-For `docker run` or an app UI, change the image in the existing saved deployment
-and recreate it with the same data mount, ports and settings; do not start a
-second Pulse against that data. Check the running image again, Pulse's
-displayed server version and service health after recreation. For Pro,
-[confirm the selected image and version](#check-the-running-pro-image).
-See [rollback and backup scope](AUTO_UPDATE.md#rollback) before reverting a
-version: an image change alone does not undo data migrations.
+For `docker run` or an app UI, change the image in the saved deployment.
+Recreate with the same data mount, ports and settings. Do not start a second
+Pulse on that data. Check the running image again, Pulse's displayed version
+and service health. For Pro, [confirm its exact image](#check-the-running-pro-image).
+See [rollback and backup scope](AUTO_UPDATE.md#rollback) before reverting:
+an image change alone does not undo data migrations.
 
 ---
 
@@ -879,8 +878,8 @@ running. On the same Docker host and in the same context as your existing Pulse
 deployment, use its regular server container, not a stopped or temporary one.
 Replace `pulse` with its actual container name and set `expected` to the complete
 `repository@sha256:…` reference you selected in Private Downloads for that
-update. This is an image reference, not an activation key. The check does not
-pull, recreate or restart anything.
+update. This is an image reference, not an activation key. Run the check in
+Bash. It does not pull, recreate or restart anything.
 
 ```bash
 (
