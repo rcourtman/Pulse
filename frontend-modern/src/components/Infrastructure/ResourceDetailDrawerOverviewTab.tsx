@@ -1,4 +1,4 @@
-import { For, Show, createMemo } from 'solid-js';
+import { For, Show, Suspense, createMemo, lazy } from 'solid-js';
 import type { Component } from 'solid-js';
 import ExternalLinkIcon from 'lucide-solid/icons/external-link';
 import type {
@@ -14,7 +14,12 @@ import { useAlertsActivation } from '@/stores/alertsActivation';
 import { getAlertsForUnifiedResource, getOwnAlertsForUnifiedResource } from '@/utils/alerts';
 import { GuestDrawerHistory } from '@/components/Workloads/GuestDrawerHistory';
 import { InlineNotice } from '@/components/shared/InlineNotice';
-import { getAgentFirstReportStatusIndicator } from '@/utils/agentResources';
+import {
+  getAgentFirstReportStatusIndicator,
+  getExplicitAgentIdFromResource,
+  isPulseAgentPlatformResource,
+  isTrueNASSystemResource,
+} from '@/utils/agentResources';
 import {
   getAlertStatedRowLabels,
   getDrawerChartAlerts,
@@ -65,7 +70,6 @@ import {
 import { formatConfidenceLabel } from '@/utils/confidencePresentation';
 import { formatIdentifierLabel } from '@/utils/textPresentation';
 import { shouldShowResourcePlatformId } from '@/utils/resourceIdentity';
-import { isPulseAgentPlatformResource } from '@/utils/agentResources';
 import { formatInteger } from './resourceDetailMappers';
 import { buildPbsJobHealthEvidenceModel } from './resourceDetailDrawerServiceModel';
 import { buildResourceDrawerOverviewInventory } from './resourceDetailDrawerOverviewModel';
@@ -73,6 +77,14 @@ import { AvailabilityProbeStatusCards } from './AvailabilityProbeStatusCard';
 import { ResourceDetailDrawerSupportDisclosure as SupportDisclosure } from './ResourceDetailDrawerSupportDisclosure';
 import type { UseResourceDetailDrawerStateResult } from './useResourceDetailDrawerState';
 import type { ResourceDetailDrawerPresentation } from './resourceDetailDrawerPresentation';
+
+// Keep the physical-disk SMART drawer out of the initial drawer bundle until
+// an agent-backed machine or host with physical disk telemetry is opened.
+const LazyResourcePhysicalDisks = lazy(() =>
+  import('@/components/Workloads/GuestPhysicalDisks').then(({ GuestPhysicalDisks }) => ({
+    default: GuestPhysicalDisks,
+  })),
+);
 
 interface ResourceDetailDrawerOverviewTabProps {
   resource: Resource;
@@ -390,6 +402,14 @@ export const ResourceDetailDrawerOverviewTab: Component<ResourceDetailDrawerOver
     getResourceDrawerFacts(resource(), drawer.identityIpValues()[0], relatedResources());
   const hasPlatformDetails = () =>
     drawer.hasServiceDetails() || drawer.hasHostDetails() || drawer.hasInvestigationContext();
+  const showAgentPhysicalDisks = () =>
+    Boolean(drawer.agentInfo()) &&
+    resource().type !== 'physical_disk' &&
+    resource().type !== 'storage' &&
+    !isTrueNASSystemResource(resource()) &&
+    (Boolean(drawer.agentInfo()?.sensors?.smart?.length) ||
+      Boolean(drawer.agentMeta()?.raid?.length) ||
+      Boolean(resource().agent?.unraid?.disks?.length));
   const availabilityChecks = () => [
     ...(resource().availability ? [resource().availability!] : []),
     ...(resource().availabilityChecks ?? []),
@@ -442,6 +462,18 @@ export const ResourceDetailDrawerOverviewTab: Component<ResourceDetailDrawerOver
       </Show>
       <Show when={contentCards().length > 0}>
         <TechnicalDetailsSection dataTestId="resource-drawer-cards" sections={contentCards()} />
+      </Show>
+      <Show when={showAgentPhysicalDisks()}>
+        <Suspense fallback={null}>
+          <LazyResourcePhysicalDisks
+            parentId={resource().id}
+            ownerResource={resource()}
+            reportingAgentId={getExplicitAgentIdFromResource(resource())}
+            historyEnabled={drawer.activeTab() === 'overview'}
+            subjectNoun={isPulseAgentPlatformResource(resource()) ? 'machine' : 'host'}
+            testIdPrefix="resource-physical-disk"
+          />
+        </Suspense>
       </Show>
       <Show when={availabilityChecks().length > 0 && !availabilityHealthy()}>
         <div class="flex flex-wrap gap-3 *:min-w-[240px] *:flex-1">

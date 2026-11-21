@@ -1898,3 +1898,17 @@ describe('ResourceDetailDrawer header status dot', () => {
     expect(screen.queryByRole('img', { name: 'Unhealthy' })).toBeNull();
   });
 });
+
+describe('ResourceDetailDrawer Overview physical disks consumer', () => {
+  it('lazy-loads canonical physical disks for SMART-capable agent machines and excludes TrueNAS systems', () => {
+    expect(resourceDetailDrawerOverviewSource).toContain(
+      "import('@/components/Workloads/GuestPhysicalDisks')",
+    );
+    expect(resourceDetailDrawerOverviewSource).toContain('ownerResource={resource()}');
+    expect(resourceDetailDrawerOverviewSource).not.toContain('physicalDiskAlertOwner');
+    expect(resourceDetailDrawerOverviewSource).toContain(
+      'getExplicitAgentIdFromResource(resource())',
+    );
+    expect(resourceDetailDrawerOverviewSource).toContain('!isTrueNASSystemResource(resource())');
+  });
+});

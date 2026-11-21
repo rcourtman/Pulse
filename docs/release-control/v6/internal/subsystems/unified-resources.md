@@ -10612,3 +10612,21 @@ retaining the existing 90% coverage and determinate-share honesty guards
 `AvailabilityFleetView.test.tsx` cover window switching, coverage formatting,
 and range callbacks alongside desktop (`1440x900` light/dark) and narrow
 (`390x844`) browser proof.
+
+### Standalone Machine physical disks and SMART view (21 November 2026)
+
+`ResourceDetailDrawerOverviewTab.tsx` surfaces direct `type=physical_disk`
+children on Overview for agent-backed Machines and hosts that carry
+`sensors.smart`, `raid`, or `unraid.disks` telemetry (excluding
+`physical_disk`, `storage`, and TrueNAS systems that own their own Disks tab).
+It lazy-loads the shared `GuestPhysicalDisks` consumer with
+`parentId={resource.id}`, `reportingAgentId={getExplicitAgentIdFromResource(resource)}`,
+and `ownerResource={resource}` (deriving `getAgentMachineAlertOverrideKeys` lazily inside `GuestPhysicalDisks` so `physicalDiskAlertOwner` stays out of the initial drawer bundle), keeping
+`DiskDrawerOverview` out of the initial bundle and issuing zero
+`physical_disk` queries for diskless or agentless resources. Read-failure
+withholding, explicit retry, focus restoration, SMART health/attribute
+expansion, and last-known standby/offline presentation follow the same
+canonical contract as linked guests (`subjectNoun` renders machine/host copy).
+`ResourceDetailDrawer.physical-disks.test.tsx` and
+`ResourceDetailDrawer.history.test.tsx` cover this consumer boundary alongside
+desktop (`1280x900` light/dark) and narrow (`390x844`) browser proof.
