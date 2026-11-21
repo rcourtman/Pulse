@@ -40,9 +40,18 @@ type pbsDatastoreIndexKey struct {
 
 type pbsBackupWorkloadIndex map[models.PBSGuestRef][]*Resource
 
-// pbsGuestBackup is what the rollups need from a settled PBS snapshot. Keeping only
-// this spares each registry a copy of every snapshot's file list.
+// pbsGuestBackup is what the rollups need from settled PBS snapshots for one
+// (instance, datastore, guest) tuple. Aggregating by tuple with a snapshot
+// count spares each registry both file lists and per-snapshot duplicates while
+// preserving exact TopConsumers disk/backup counts.
 type pbsGuestBackup struct {
+	instance  string
+	datastore string
+	guest     models.PBSGuestRef
+	count     int
+}
+
+type pbsGuestBackupKey struct {
 	instance  string
 	datastore string
 	guest     models.PBSGuestRef
@@ -50,11 +59,31 @@ type pbsGuestBackup struct {
 
 func pbsGuestBackupsOf(snapshot models.StateSnapshot) []pbsGuestBackup {
 	guests := snapshot.PBSBackupGuests()
-	backups := make([]pbsGuestBackup, 0, len(guests))
+	if len(guests) == 0 {
+		return nil
+	}
+	indexByKey := make(map[pbsGuestBackupKey]int, 32)
+	backups := make([]pbsGuestBackup, 0, 32)
 	for i, guest := range guests {
-		if guest != (models.PBSGuestRef{}) {
-			backups = append(backups, pbsGuestBackup{instance: snapshot.PBSBackups[i].Instance, datastore: snapshot.PBSBackups[i].Datastore, guest: guest})
+		if guest == (models.PBSGuestRef{}) {
+			continue
 		}
+		key := pbsGuestBackupKey{
+			instance:  snapshot.PBSBackups[i].Instance,
+			datastore: snapshot.PBSBackups[i].Datastore,
+			guest:     guest,
+		}
+		if idx, exists := indexByKey[key]; exists {
+			backups[idx].count++
+			continue
+		}
+		indexByKey[key] = len(backups)
+		backups = append(backups, pbsGuestBackup{
+			instance:  key.instance,
+			datastore: key.datastore,
+			guest:     key.guest,
+			count:     1,
+		})
 	}
 	return backups
 }
@@ -152,7 +181,11 @@ func (rr *ResourceRegistry) addPBSStorageConsumersLocked(consumersByStorage map[
 		if workload == nil {
 			continue
 		}
-		addStorageConsumerSummary(consumersByStorage, datastore.ID, workload, 1)
+		count := backup.count
+		if count <= 0 {
+			count = 1
+		}
+		addStorageConsumerSummary(consumersByStorage, datastore.ID, workload, count)
 	}
 }
 

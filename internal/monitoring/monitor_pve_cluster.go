@@ -782,6 +782,7 @@ func defaultDetectMonitorPVECluster(clientConfig proxmox.ClientConfig, existingE
 		log.Warn().Err(err).Msg("Failed to create client for runtime cluster detection")
 		return false, "", nil
 	}
+	defer tempClient.CloseIdleConnections()
 
 	var (
 		clusterStatus []proxmox.ClusterStatus

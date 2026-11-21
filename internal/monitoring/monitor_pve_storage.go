@@ -266,7 +266,26 @@ func (m *Monitor) pollStorageAsync(
 		return
 	}
 
+	m.storagePollMu.Lock()
+	if m.storagePollInFlight == nil {
+		m.storagePollInFlight = make(map[string]bool)
+	}
+	if m.storagePollInFlight[instanceName] {
+		m.storagePollMu.Unlock()
+		log.Debug().
+			Str("instance", instanceName).
+			Msg("Skipping PVE storage poll because a previous storage poll is still in flight")
+		return
+	}
+	m.storagePollInFlight[instanceName] = true
+	m.storagePollMu.Unlock()
+
 	go func(inst string, pveClient PVEClientInterface, nodeList []proxmox.Node) {
+		defer func() {
+			m.storagePollMu.Lock()
+			delete(m.storagePollInFlight, inst)
+			m.storagePollMu.Unlock()
+		}()
 		defer recoverFromPanic(fmt.Sprintf("pollStorageWithNodes-%s", inst))
 
 		// Use a generous timeout for storage polling - it's not blocking the main task
@@ -281,5 +300,4 @@ func (m *Monitor) pollStorageAsync(
 
 		m.pollStorageWithNodes(storageCtx, inst, pveClient, nodeList)
 	}(instanceName, client, nodes)
-
 }
