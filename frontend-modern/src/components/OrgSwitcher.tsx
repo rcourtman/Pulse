@@ -61,7 +61,7 @@ export function OrgSwitcher(props: OrgSwitcherProps) {
             when={props.orgs.length > 1}
             fallback={
               <span
-                class="inline-flex h-7 items-center rounded-md border border-border bg-surface px-2 text-xs font-medium text-base-content"
+                class="inline-flex min-h-7 min-w-0 max-w-44 items-center rounded-md border border-border bg-surface px-2 py-1 text-xs font-medium text-base-content [overflow-wrap:anywhere] lg:max-w-56 xl:max-w-96"
                 title={selectedOrgName()}
               >
                 {selectedOrgName()}

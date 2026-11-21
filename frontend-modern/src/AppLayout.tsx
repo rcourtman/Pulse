@@ -785,7 +785,7 @@ export function AppLayout(props: AppLayoutProps) {
           class={`header-controls flex max-w-full flex-wrap items-center gap-1 sm:flex-nowrap sm:gap-2 ${kioskMode() ? '' : 'justify-end sm:col-start-3 sm:col-end-4 sm:w-auto sm:justify-end sm:justify-self-end'}`}
         >
           <Show when={props.hasAuth() && !props.needsAuth()}>
-            <div class="flex items-center gap-1 sm:gap-2">
+            <div class="flex min-w-0 items-center gap-1 sm:gap-2">
               <Show when={props.showOrgSwitcher()}>
                 <OrgSwitcher
                   orgs={props.organizations()}
@@ -799,7 +799,7 @@ export function AppLayout(props: AppLayoutProps) {
               <button
                 type="button"
                 onClick={toggleKioskMode}
-                class={`group relative flex h-9 w-9 items-center justify-center rounded-full text-xs transition focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 sm:h-10 sm:w-10 ${
+                class={`group relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs transition focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 sm:h-10 sm:w-10 ${
                   kioskMode()
                     ? 'bg-blue-100 text-blue-700 hover:bg-blue-200 dark:bg-blue-900/25 dark:text-blue-300 dark:hover:bg-blue-800'
                     : 'bg-surface-hover text-base-content hover:bg-border'
@@ -817,14 +817,16 @@ export function AppLayout(props: AppLayoutProps) {
                 </Show>
               </button>
               <Show when={props.proxyAuthInfo()?.username}>
-                <span class="text-xs px-2 py-1 text-muted">{props.proxyAuthInfo()?.username}</span>
+                <span class="min-w-0 px-2 py-1 text-xs text-muted [overflow-wrap:anywhere]">
+                  {props.proxyAuthInfo()?.username}
+                </span>
               </Show>
               <button
                 type="button"
                 onClick={props.handleLogout}
                 disabled={props.isLoggingOut?.()}
                 aria-busy={props.isLoggingOut?.() || undefined}
-                class="group relative flex h-9 w-9 items-center justify-center rounded-full bg-surface-hover text-xs text-base-content transition hover:bg-border focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 disabled:cursor-wait disabled:opacity-60 sm:h-10 sm:w-10"
+                class="group relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-surface-hover text-xs text-base-content transition hover:bg-border focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 disabled:cursor-wait disabled:opacity-60 sm:h-10 sm:w-10"
                 title={props.isLoggingOut?.() ? 'Signing out…' : 'Logout'}
                 aria-label={props.isLoggingOut?.() ? 'Signing out…' : 'Logout'}
               >
