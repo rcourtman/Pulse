@@ -335,4 +335,54 @@ describe('AvailabilityFleetView', () => {
     expect(screen.getByText('History unavailable')).toBeInTheDocument();
     expect(screen.getByText('Reachable')).toBeInTheDocument();
   });
+
+  it('displays selected multi-day history window labels and emits range changes', () => {
+    const onRangeChange = vi.fn();
+    render(() => (
+      <AvailabilityFleetView
+        resources={[resource(1)]}
+        historyByTarget={
+          new Map([
+            [
+              'target-1',
+              {
+                targetId: 'target-1',
+                summary: {
+                  reachableSeconds: 5 * 86_400,
+                  unreachableSeconds: 0,
+                  indeterminateSeconds: 0,
+                  unknownSeconds: 25 * 86_400,
+                  coveragePercent: 16.7,
+                  availabilityPercent: 100,
+                },
+                buckets: [
+                  {
+                    start: '2026-10-22T00:00:00Z',
+                    end: '2026-11-21T00:00:00Z',
+                    reachableSeconds: 5 * 86_400,
+                    unreachableSeconds: 0,
+                    indeterminateSeconds: 0,
+                    unknownSeconds: 25 * 86_400,
+                  },
+                ],
+              },
+            ],
+          ])
+        }
+        historyLoading={false}
+        historyRange="30d"
+        onHistoryRangeChange={onRangeChange}
+      />
+    ));
+
+    expect(screen.getByText('30-day evidence · reachable latency only')).toBeInTheDocument();
+    expect(screen.getByTestId('availability-state-strip')).toHaveAttribute(
+      'aria-label',
+      '30-day state history: 1 unknown',
+    );
+    expect(screen.getByText('Insufficient coverage · 5d observed')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: '1y' }));
+    expect(onRangeChange).toHaveBeenCalledWith('365d');
+  });
 });

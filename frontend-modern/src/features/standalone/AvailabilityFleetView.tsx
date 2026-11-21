@@ -13,12 +13,64 @@ import { createStore, reconcile } from 'solid-js/store';
 import RefreshCwIcon from 'lucide-solid/icons/refresh-cw';
 import { ResourceDetailDrawer } from '@/components/Infrastructure/ResourceDetailDrawer';
 import { Button } from '@/components/shared/Button';
+import { FilterSegmentedControl } from '@/components/shared/FilterToolbar';
 import { MetadataBadge } from '@/components/shared/MetadataBadge';
 import { StatusDot } from '@/components/shared/StatusDot';
 import type {
   AvailabilityHistoryBucket,
+  AvailabilityHistoryRange,
   AvailabilityHistoryTarget,
 } from '@/api/availabilityHistory';
+
+export interface AvailabilityHistoryRangeMeta {
+  value: AvailabilityHistoryRange;
+  label: string;
+  columnLabel: string;
+  windowPhrase: string;
+  evidenceLabel: string;
+  headerTitle: string;
+}
+
+export const AVAILABILITY_HISTORY_RANGE_OPTIONS: readonly AvailabilityHistoryRangeMeta[] = [
+  {
+    value: '24h',
+    label: '24h',
+    columnLabel: 'Uptime 24h',
+    windowPhrase: '24h',
+    evidenceLabel: '24-hour',
+    headerTitle: 'Share of the last 24 hours the check was reachable',
+  },
+  {
+    value: '7d',
+    label: '7d',
+    columnLabel: 'Uptime 7d',
+    windowPhrase: '7 days',
+    evidenceLabel: '7-day',
+    headerTitle: 'Share of the last 7 days the check was reachable',
+  },
+  {
+    value: '30d',
+    label: '30d',
+    columnLabel: 'Uptime 30d',
+    windowPhrase: '30 days',
+    evidenceLabel: '30-day',
+    headerTitle: 'Share of the last 30 days the check was reachable',
+  },
+  {
+    value: '365d',
+    label: '1y',
+    columnLabel: 'Uptime 1y',
+    windowPhrase: '365 days',
+    evidenceLabel: '1-year',
+    headerTitle: 'Share of the last 365 days the check was reachable',
+  },
+];
+
+export const getAvailabilityHistoryRangeMeta = (
+  range: AvailabilityHistoryRange = '24h',
+): AvailabilityHistoryRangeMeta =>
+  AVAILABILITY_HISTORY_RANGE_OPTIONS.find((option) => option.value === range) ??
+  AVAILABILITY_HISTORY_RANGE_OPTIONS[0];
 import type { Resource, ResourceAvailabilityMeta } from '@/types/resource';
 import { formatRelativeTime } from '@/utils/format';
 import {
@@ -127,11 +179,27 @@ const getUptimeVerdict = (summary: AvailabilityHistoryTarget['summary']): Uptime
   return { kind: 'ok', percent: summary.availabilityPercent };
 };
 
-// Compact 24h uptime for the checks table, on the same coverage rule as the
+const formatObservedDuration = (
+  observedMinutes: number,
+  range: AvailabilityHistoryRange,
+): string => {
+  if (range === '24h' || observedMinutes < 120) {
+    return `${observedMinutes.toLocaleString()}m`;
+  }
+  const hours = Math.round(observedMinutes / 60);
+  if (hours < 48) {
+    return `${hours.toLocaleString()}h`;
+  }
+  return `${Math.round(hours / 24).toLocaleString()}d`;
+};
+
+// Compact window uptime for the checks table, on the same coverage rule as the
 // fleet view: below 90 percent observed there is no honest percentage yet.
 export const getAvailabilityUptimeCell = (
   history: AvailabilityHistoryTarget | undefined,
+  range: AvailabilityHistoryRange = '24h',
 ): { label: string; title: string; tone: 'default' | 'warning' | 'danger' | 'muted' } => {
+  const meta = getAvailabilityHistoryRangeMeta(range);
   if (!history?.summary) {
     return { label: '—', title: 'History unavailable', tone: 'muted' };
   }
@@ -139,30 +207,33 @@ export const getAvailabilityUptimeCell = (
   if (verdict.kind === 'thin') {
     return {
       label: '—',
-      title: `Not enough history yet: ${verdict.observedMinutes.toLocaleString()}m observed in the last 24h`,
+      title: `Not enough history yet: ${formatObservedDuration(verdict.observedMinutes, range)} observed in the last ${meta.windowPhrase}`,
       tone: 'muted',
     };
   }
   if (verdict.kind === 'inconclusive') {
     return {
       label: '—',
-      title: 'Most results in the last 24h were inconclusive, so there is no uptime figure',
+      title: `Most results in the last ${meta.windowPhrase} were inconclusive, so there is no uptime figure`,
       tone: 'muted',
     };
   }
   const percent = verdict.percent;
   return {
     label: formatPercent(percent),
-    title: `Available ${formatPercent(percent)} of the last 24h (${formatPercent(history.summary.coveragePercent)} observed)`,
+    title: `Available ${formatPercent(percent)} of the last ${meta.windowPhrase} (${formatPercent(history.summary.coveragePercent)} observed)`,
     tone: percent < 95 ? 'danger' : percent < 99 ? 'warning' : 'default',
   };
 };
 
-const availabilityText = (history: AvailabilityHistoryTarget | undefined): string => {
+const availabilityText = (
+  history: AvailabilityHistoryTarget | undefined,
+  range: AvailabilityHistoryRange = '24h',
+): string => {
   if (!history?.summary) return 'History unavailable';
   const verdict = getUptimeVerdict(history.summary);
   if (verdict.kind === 'thin') {
-    return `Insufficient coverage · ${verdict.observedMinutes.toLocaleString()}m observed`;
+    return `Insufficient coverage · ${formatObservedDuration(verdict.observedMinutes, range)} observed`;
   }
   if (verdict.kind === 'inconclusive') return 'Mostly inconclusive results';
   return `${formatPercent(verdict.percent)} available · ${formatPercent(history.summary.coveragePercent)} observed`;
@@ -201,9 +272,10 @@ const latencyPaths = (
   return paths;
 };
 
-const AvailabilityStateStrip: Component<{ buckets: readonly AvailabilityHistoryBucket[] }> = (
-  props,
-) => {
+const AvailabilityStateStrip: Component<{
+  buckets: readonly AvailabilityHistoryBucket[];
+  evidenceLabel: string;
+}> = (props) => {
   const states = createMemo(() => props.buckets.map(historyState));
   const description = createMemo(() => {
     const counts = new Map<AvailabilityFleetHistoryState, number>();
@@ -217,7 +289,7 @@ const AvailabilityStateStrip: Component<{ buckets: readonly AvailabilityHistoryB
     <div
       class="flex h-3 w-full overflow-hidden rounded-xs bg-slate-200 dark:bg-slate-700"
       role="img"
-      aria-label={`24-hour state history: ${description() || 'no observations'}`}
+      aria-label={`${props.evidenceLabel} state history: ${description() || 'no observations'}`}
       data-testid="availability-state-strip"
     >
       <For each={states()}>
@@ -273,11 +345,15 @@ export const AvailabilityFleetView: Component<{
   historyByTarget: ReadonlyMap<string, AvailabilityHistoryTarget>;
   historyLoading: boolean;
   historyError?: string;
+  historyRange?: AvailabilityHistoryRange;
+  onHistoryRangeChange?: (range: AvailabilityHistoryRange) => void;
   probeAgentOptions?: readonly ProbeAgentOption[];
   onRetryHistory?: () => void;
   getFocusFallback?: () => HTMLElement | undefined;
 }> = (props) => {
   const now = useRelativeTimeNow();
+  const range = () => props.historyRange ?? '24h';
+  const rangeMeta = () => getAvailabilityHistoryRangeMeta(range());
   // Live snapshots replace resource objects. Reconciled by id, each tile (and
   // an open drawer) keeps its identity and updates in place instead of
   // remounting, and losing the drawer's tab, on every poll.
@@ -322,19 +398,36 @@ export const AvailabilityFleetView: Component<{
               </span>
             )}
           </For>
-          <span class="text-[10px]">24-hour evidence · reachable latency only</span>
+          <span class="text-[10px]">
+            {rangeMeta().evidenceLabel} evidence · reachable latency only
+          </span>
         </div>
-        <Show when={props.historyError}>
-          <div class="flex items-center gap-2 text-rose-700 dark:text-rose-300">
-            <span>History unavailable. Current health is unchanged.</span>
-            <Show when={props.onRetryHistory}>
-              <Button type="button" size="xs" variant="secondary" onClick={props.onRetryHistory}>
-                <RefreshCwIcon class="h-3 w-3" />
-                Retry
-              </Button>
-            </Show>
-          </div>
-        </Show>
+        <div class="flex flex-wrap items-center gap-2">
+          <Show when={props.onHistoryRangeChange}>
+            {(onChange) => (
+              <FilterSegmentedControl
+                aria-label="History window"
+                value={range()}
+                onChange={(value) => onChange()(value as AvailabilityHistoryRange)}
+                options={AVAILABILITY_HISTORY_RANGE_OPTIONS.map((option) => ({
+                  value: option.value,
+                  label: option.label,
+                }))}
+              />
+            )}
+          </Show>
+          <Show when={props.historyError}>
+            <div class="flex items-center gap-2 text-rose-700 dark:text-rose-300">
+              <span>History unavailable. Current health is unchanged.</span>
+              <Show when={props.onRetryHistory}>
+                <Button type="button" size="xs" variant="secondary" onClick={props.onRetryHistory}>
+                  <RefreshCwIcon class="h-3 w-3" />
+                  Retry
+                </Button>
+              </Show>
+            </div>
+          </Show>
+        </div>
       </div>
 
       {/* The open check's drawer is a full-width grid item right after its
@@ -447,11 +540,14 @@ export const AvailabilityFleetView: Component<{
                         />
                       }
                     >
-                      <AvailabilityStateStrip buckets={buckets()} />
+                      <AvailabilityStateStrip
+                        buckets={buckets()}
+                        evidenceLabel={rangeMeta().evidenceLabel}
+                      />
                     </Show>
                     <AvailabilityLatencyLine buckets={buckets()} />
                     <div class="flex items-center justify-between gap-2 text-[10px] text-muted">
-                      <span>{availabilityText(history())}</span>
+                      <span>{availabilityText(history(), range())}</span>
                       <Show when={history()?.revisionBoundaries?.length}>
                         <span title="The check configuration changed during this window">
                           {history()?.revisionBoundaries?.length} revision
