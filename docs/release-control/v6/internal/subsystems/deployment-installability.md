@@ -4328,6 +4328,11 @@ Tokens and hostnames never establish CPU or installed-executable identity.
    `prerelease_only` with the pinned version and is offered neither the
    in-place switch nor the Docker command block, so a stable install is never
    moved onto a preview Pro build; rc-channel installs are still offered it.
+   `frontend-modern/src/api/updates.ts` exposes `checkProRuntimeSwitch` and
+   `applyProRuntimeSwitch` against those endpoints, and
+   `frontend-modern/src/components/Settings/updatesSettingsModel.ts` exports
+   `getBrokerRegistryLoginPrompt` so Docker switch guidance reuses the same
+   password-free registry login sanitizer as Pro container updates.
    A Docker deployment of the compiled Pro binary is part of that same
    boundary: the container cannot self-replace its binary and a Pro compose
    file pins the previous image digest, so `internal/updates/pro_update.go`

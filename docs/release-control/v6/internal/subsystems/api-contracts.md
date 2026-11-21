@@ -3046,7 +3046,11 @@ payload shape change when the portal presents compact client rows.
     API state so settings UI can render `ready`, `attention`, and `blocked`
     update checks without rebuilding upgrade state locally. The frontend may
     disable blocked installs, but the backend apply route remains authoritative
-    and must reject a recomputed `blocked` readiness verdict.
+    and must reject a recomputed `blocked` readiness verdict. It also owns the
+    typed `checkProRuntimeSwitch` (`GET /api/updates/pro-runtime`) and
+    `applyProRuntimeSwitch` (`POST /api/updates/pro-runtime/apply`) client
+    contracts so Plans & Billing consumes backend-owned Pro runtime switch
+    eligibility, refusal reasons, and digest-pinned Docker commands directly.
 14. `frontend-modern/src/api/workflowPrompts.ts` shared with `ai-runtime`: the workflow prompt activity client is both the AI runtime workflow-prompt telemetry surface and a canonical API payload contract boundary.
 15. `frontend-modern/src/components/Settings/AgentIntegrationsPanel.tsx` shared with `ai-runtime`, `frontend-primitives`: the External agents settings panel is the optional settings-shell projection of Pulse MCP onboarding, the AI runtime connected-agent onboarding surface, and a presentation consumer of the shared agent capabilities frontend client.
     The panel may own settings placement, copy composition, local fallback

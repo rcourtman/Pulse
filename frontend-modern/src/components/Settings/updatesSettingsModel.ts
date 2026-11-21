@@ -75,7 +75,10 @@ const promptLogin = /^docker login ('?)([a-z0-9.:-]+)\1 (?:-u|--username) '([a-z
 const registryHost =
   /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)*(?::[0-9]{1,5})?$/i;
 
-function brokerPasswordPrompt({ image, loginCommand }: DockerUpdateCommands): string | null {
+export function getBrokerRegistryLoginPrompt({
+  image,
+  loginCommand,
+}: DockerUpdateCommands): string | null {
   if (typeof loginCommand !== 'string' || typeof image !== 'string') return null;
   const legacy = legacyLogin.exec(loginCommand);
   const current = legacy ? null : promptLogin.exec(loginCommand);
@@ -93,6 +96,10 @@ function brokerPasswordPrompt({ image, loginCommand }: DockerUpdateCommands): st
     return null;
   }
   return `docker login ${registry} --username '${username}'`;
+}
+
+function brokerPasswordPrompt(dockerUpdate: DockerUpdateCommands): string | null {
+  return getBrokerRegistryLoginPrompt(dockerUpdate);
 }
 
 function buildProDockerUpdateSteps(dockerUpdate: DockerUpdateCommands): UpdateInstallStep[] {

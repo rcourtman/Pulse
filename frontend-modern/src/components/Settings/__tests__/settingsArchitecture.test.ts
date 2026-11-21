@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { sanitizeDiagnosticsData } from '../diagnosticsModel';
 import type { DiagnosticsData } from '../diagnosticsModel';
+import { getBrokerRegistryLoginPrompt } from '../updatesSettingsModel';
 import settingsSource from '../Settings.tsx?raw';
 import { EN_MESSAGES } from '@/i18n/messages';
 import aiSettingsSource from '../AISettings.tsx?raw';
@@ -477,5 +478,18 @@ describe('User Access reader projection', () => {
     expect(context).toMatch(
       /getUserAssignmentsPanelProps: \(\) => \(\{\s*currentUser: currentUser\(\),\s*canManage: settingsCapabilities\(\)\?\.users === true/s,
     );
+  });
+
+  it('sanitizes broker Docker registry login prompts without leaking activation keys', () => {
+    const prompt = getBrokerRegistryLoginPrompt({
+      version: '6.8.0',
+      image: 'registry.pulserelay.pro/pulse/pulse-pro',
+      imageDigest: 'sha256:' + 'ab'.repeat(32),
+      loginCommand:
+        "printf '%s' '<activation-key>' | docker login registry.pulserelay.pro -u 'lic_123' --password-stdin",
+      composePullCommand: 'docker compose pull',
+      composeUpCommand: 'docker compose up -d',
+    });
+    expect(prompt).toBe("docker login registry.pulserelay.pro --username 'lic_123'");
   });
 });

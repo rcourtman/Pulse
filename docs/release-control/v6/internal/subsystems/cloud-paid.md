@@ -1305,6 +1305,17 @@ responsive shell appear to ignore an operator.
     actions are cloud-paid behaviors, but their button chrome must compose the
     frontend-primitives `Button` family instead of carrying Pro-license-local
     primary, secondary, or warning action class strings.
+    When an active or grace-period self-hosted Pro/Business license runs on a
+    community runtime (`hasPulseProRuntimeMismatch`), `useProLicensePanelState.ts`
+    and `ProLicensePlanSection.tsx` query `GET /api/updates/pro-runtime` via
+    `UpdatesAPI.checkProRuntimeSwitch` and surface the backend-owned switch
+    path inline: a one-click `Switch to Pulse Pro` action backed by
+    `POST /api/updates/pro-runtime/apply` and `/api/updates/status` progress
+    polling when `installInPlace` is true, digest-pinned Docker switch commands
+    (with sanitized password-prompt login guidance) when `docker` is returned,
+    or tailored copy per backend refusal reason alongside the Pulse Pro
+    downloads fallback link. Proof:
+    `frontend-modern/src/components/Settings/__tests__/ProLicensePlanSectionRuntimeSwitch.test.tsx`.
     The self-hosted Pro plan and activation-success surfaces must keep Patrol
     actions tied to current operator work: set Patrol control when no work is
     active, open Patrol for current work, or review a pending governed
