@@ -42,7 +42,11 @@ export const OrganizationAccessMembersSection: Component<OrganizationAccessMembe
               const isOwner = () => member.userId === currentOrg().ownerUserId;
               return (
                 <Show
-                  when={props.state.canManageCurrentOrg() && currentOrg().id !== DEFAULT_ORG_SCOPE}
+                  when={
+                    props.state.canManageCurrentOrg() &&
+                    currentOrg().id !== DEFAULT_ORG_SCOPE &&
+                    !isOwner()
+                  }
                   fallback={<OrganizationRoleBadge role={role} />}
                 >
                   <FormSelect
@@ -58,10 +62,7 @@ export const OrganizationAccessMembersSection: Component<OrganizationAccessMembe
                       event.currentTarget.value = role;
                       void props.state.updateRole(member, nextRole);
                     }}
-                    disabled={
-                      !props.state.canChangeAccess() ||
-                      (isOwner() && props.currentUser !== currentOrg().ownerUserId)
-                    }
+                    disabled={!props.state.canChangeAccess()}
                     selectBaseClass="min-h-11 w-full rounded-md border border-border bg-surface px-2 py-1 text-xs text-base-content shadow-xs focus:border-blue-500 focus:outline-hidden focus:ring-2 focus:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-60 sm:min-h-0 sm:w-auto"
                   >
                     <For
