@@ -245,6 +245,16 @@ export function AppLayout(props: AppLayoutProps) {
   );
   const browserBrandName = createMemo(() => customBrandName() || 'Pulse');
 
+  // With one workspace there is no useful picker to give up space. On phones,
+  // let its full name share the height of the account controls and user name.
+  const compactWorkspaceHeader = () =>
+    props.hasAuth() &&
+    !props.needsAuth() &&
+    props.showOrgSwitcher() &&
+    props.organizations().length === 1 &&
+    !props.organizationListIssue() &&
+    Boolean(props.proxyAuthInfo()?.username);
+
   const [headerVisible, setHeaderVisible] = createSignal(true);
   const [primaryRouteMemoryVersion, setPrimaryRouteMemoryVersion] = createSignal(0);
   let headerEl: HTMLDivElement | undefined;
@@ -783,11 +793,18 @@ export function AppLayout(props: AppLayoutProps) {
         </Show>
         <div
           class={`header-controls flex max-w-full flex-wrap items-center gap-1 sm:flex-nowrap sm:gap-2 ${kioskMode() ? '' : 'justify-end sm:col-start-3 sm:col-end-4 sm:w-auto sm:justify-end sm:justify-self-end'}`}
+          classList={{
+            'max-sm:grid max-sm:grid-cols-[minmax(0,1fr)_auto_auto_auto]': compactWorkspaceHeader(),
+          }}
         >
           <Show when={props.hasAuth() && !props.needsAuth()}>
-            <div class="flex min-w-0 items-center gap-1 sm:gap-2">
+            <div
+              class="flex min-w-0 items-center gap-1 sm:gap-2"
+              classList={{ 'max-sm:contents': compactWorkspaceHeader() }}
+            >
               <Show when={props.showOrgSwitcher()}>
                 <OrgSwitcher
+                  class={compactWorkspaceHeader() ? 'max-sm:col-start-1 max-sm:row-span-2' : ''}
                   orgs={props.organizations()}
                   selectedOrgId={props.activeOrgID()}
                   loading={props.orgsLoading()}
@@ -804,6 +821,7 @@ export function AppLayout(props: AppLayoutProps) {
                     ? 'bg-blue-100 text-blue-700 hover:bg-blue-200 dark:bg-blue-900/25 dark:text-blue-300 dark:hover:bg-blue-800'
                     : 'bg-surface-hover text-base-content hover:bg-border'
                 }`}
+                classList={{ 'max-sm:col-start-2 max-sm:row-start-1': compactWorkspaceHeader() }}
                 title={
                   kioskMode()
                     ? 'Exit kiosk mode (show navigation)'
@@ -817,7 +835,13 @@ export function AppLayout(props: AppLayoutProps) {
                 </Show>
               </button>
               <Show when={props.proxyAuthInfo()?.username}>
-                <span class="min-w-0 px-2 py-1 text-xs text-muted [overflow-wrap:anywhere]">
+                <span
+                  class="min-w-0 px-2 py-1 text-xs text-muted [overflow-wrap:anywhere]"
+                  classList={{
+                    'max-sm:col-span-3 max-sm:col-start-2 max-sm:row-start-2 max-sm:px-0 max-sm:py-0 max-sm:text-right':
+                      compactWorkspaceHeader(),
+                  }}
+                >
                   {props.proxyAuthInfo()?.username}
                 </span>
               </Show>
@@ -827,6 +851,7 @@ export function AppLayout(props: AppLayoutProps) {
                 disabled={props.isLoggingOut?.()}
                 aria-busy={props.isLoggingOut?.() || undefined}
                 class="group relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-surface-hover text-xs text-base-content transition hover:bg-border focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 disabled:cursor-wait disabled:opacity-60 sm:h-10 sm:w-10"
+                classList={{ 'max-sm:col-start-3 max-sm:row-start-1': compactWorkspaceHeader() }}
                 title={props.isLoggingOut?.() ? 'Signing out…' : 'Logout'}
                 aria-label={props.isLoggingOut?.() ? 'Signing out…' : 'Logout'}
               >
@@ -854,7 +879,10 @@ export function AppLayout(props: AppLayoutProps) {
               </button>
             </div>
           </Show>
-          <ConnectionStatusBadge connectionStatus={props.connectionStatus} class="shrink-0" />
+          <ConnectionStatusBadge
+            connectionStatus={props.connectionStatus}
+            class={`shrink-0 ${compactWorkspaceHeader() ? 'max-sm:col-start-4 max-sm:row-start-1' : ''}`}
+          />
         </div>
       </div>
 
