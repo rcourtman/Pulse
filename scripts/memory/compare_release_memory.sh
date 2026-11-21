@@ -27,6 +27,11 @@
 #           the per-report registry refresh and broadcast cost (#2199). The
 #           driver fails the run when reports were not accepted or the dashboard
 #           did not receive an initial state and a subsequent state update.
+#   proxmox a real, non-mock Pulse with authentication configured, fed by
+#           proxmox_load.py: a synthetic 3-node Proxmox VE cluster (35 guests),
+#           2 Proxmox Backup Server instances (~5,250 snapshots total), and one
+#           connected dashboard (#1803). Exercises PVE/PBS polling, recovery.db
+#           ingestion, posture refreshes, and backup state cloning.
 
 set -euo pipefail
 
@@ -56,8 +61,16 @@ case "${ESTATE}" in
       'PULSE_AUTH_PASS=$2a$12$J/Vu6FlBUJDTK.VAkysjB.AnvFOcijDbETyumhCB.nJVes5gvpiI6'
     )
     ;;
+  proxmox)
+    ESTATE_ENV=(
+      BIND_ADDRESS=127.0.0.1 PULSE_AUTH_USER=footprint
+      'PULSE_AUTH_PASS=$2a$12$J/Vu6FlBUJDTK.VAkysjB.AnvFOcijDbETyumhCB.nJVes5gvpiI6'
+      "POLLING_INTERVAL=${PULSE_PROXMOX_POLL_INTERVAL:-5s}"
+      "BACKUP_POLLING_INTERVAL=${PULSE_PROXMOX_BACKUP_POLL_INTERVAL:-30s}"
+    )
+    ;;
   *)
-    echo "Unknown PULSE_FOOTPRINT_ESTATE '${ESTATE}'; use mock or agents" >&2
+    echo "Unknown PULSE_FOOTPRINT_ESTATE '${ESTATE}'; use mock, agents, or proxmox" >&2
     exit 2
     ;;
 esac
@@ -122,12 +135,19 @@ run_tree() {
     "${OUT_DIR}/pulse-${label}" > "${log}" 2>&1 &
   local pid=$!
   local driver=""
+  local driver_log=""
   if [[ "${ESTATE}" == agents ]]; then
     # The sampling loop ends the driver with SIGTERM. A driver deadline equal
     # to the sampling window can expire as that signal arrives, and Python then
     # exits by the signal (143) instead of handling it, failing the run.
+    driver_log="${OUT_DIR}/agents-${label}.log"
     python3 "${SCRIPT_DIR}/agent_load.py" --port "${port}" --duration "$((DURATION + 120))" \
-      --stats "${OUT_DIR}/agents-${label}.json" > "${OUT_DIR}/agents-${label}.log" 2>&1 &
+      --stats "${OUT_DIR}/agents-${label}.json" > "${driver_log}" 2>&1 &
+    driver=$!
+  elif [[ "${ESTATE}" == proxmox ]]; then
+    driver_log="${OUT_DIR}/proxmox-${label}.log"
+    python3 "${SCRIPT_DIR}/proxmox_load.py" --port "${port}" --duration "$((DURATION + 120))" \
+      --stats "${OUT_DIR}/proxmox-${label}.json" > "${driver_log}" 2>&1 &
     driver=$!
   fi
   printf 'elapsed_s\trss_kib\tgo_heap_kib\tgo_other_kib\tanon_other_kib\tfile_kib\tcpu_ticks\twrite_bytes\twchar_bytes\n' > "${samples}"
@@ -159,7 +179,7 @@ run_tree() {
     return 1
   fi
   if (( driver_status != 0 )); then
-    echo "${label} agent load failed (exit ${driver_status}); see ${OUT_DIR}/agents-${label}.log" >&2
+    echo "${label} ${ESTATE} load failed (exit ${driver_status}); see ${driver_log}" >&2
     return 1
   fi
 }

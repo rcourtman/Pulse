@@ -42,6 +42,7 @@ ACTIVITY_LABELS = {
 ESTATES = {
     "mock": "the fixed small mock estate (2 nodes, 24 guests, a Docker host with 10 containers)",
     "agents": "a real Pulse fed by synthetic Unified Agents and one connected dashboard",
+    "proxmox": "a real Pulse polling a synthetic 3-node Proxmox VE cluster (35 guests), 2 PBS servers, and one connected dashboard",
 }
 SECONDS_PER_DAY = 86400
 MIB = 1024 * 1024
@@ -105,6 +106,42 @@ def read_agent_stats(out: Path, label: str) -> dict | None:
         return json.loads((out / f"agents-{label}.json").read_text())
     except (OSError, ValueError):
         return None
+
+
+def read_proxmox_stats(out: Path, label: str) -> dict | None:
+    try:
+        return json.loads((out / f"proxmox-{label}.json").read_text())
+    except (OSError, ValueError):
+        return None
+
+
+def proxmox_lines(baseline: dict | None, candidate: dict | None) -> list[str]:
+    shape = candidate or baseline
+    if shape is None:
+        return ["", "No Proxmox load statistics were written."]
+    lines = [
+        "",
+        "### Proxmox traffic",
+        "",
+        f"{shape['pve_nodes']} PVE nodes ({shape['guests']} guests) and {shape['pbs_instances']} PBS instances "
+        f"({shape['total_pbs_snapshots']} total PBS snapshots across {shape['snapshots_per_group']} snapshots/group).",
+        "",
+        "| | Baseline | Candidate |",
+        "|---|---:|---:|",
+    ]
+    rows = (
+        ("PVE API requests", lambda d: d["pve_requests"]),
+        ("PBS API requests", lambda d: d["pbs_requests"]),
+        ("Dashboard connections", lambda d: d["dashboard"]["connects"]),
+        ("Dashboard application messages", lambda d: d["dashboard"]["messages"]),
+        ("Dashboard state messages", lambda d: d["dashboard"].get("state_messages", "n/a")),
+        ("Dashboard state updates", lambda d: d["dashboard"].get("state_updates", "n/a")),
+        ("Dashboard MiB received", lambda d: f"{d['dashboard']['bytes'] / MIB:.1f}"),
+    )
+    for label, value in rows:
+        cells = [str(value(d)) if d else "n/a" for d in (baseline, candidate)]
+        lines.append(f"| {label} | {cells[0]} | {cells[1]} |")
+    return lines
 
 
 def agent_lines(baseline: dict | None, candidate: dict | None) -> list[str]:
@@ -208,8 +245,12 @@ def main(argv: list[str]) -> int:
         lines.append(f"| {label} | {unit} | {format_rate(base)} | {format_rate(cand)} | {format_change(base, cand)} |")
     baseline_agents = read_agent_stats(out, "baseline")
     candidate_agents = read_agent_stats(out, "candidate")
+    baseline_proxmox = read_proxmox_stats(out, "baseline")
+    candidate_proxmox = read_proxmox_stats(out, "candidate")
     if estate == "agents":
         lines += agent_lines(baseline_agents, candidate_agents)
+    elif estate == "proxmox":
+        lines += proxmox_lines(baseline_proxmox, candidate_proxmox)
     growth_file = out / "heap-growth.txt"
     if growth_file.exists() and growth_file.stat().st_size:
         top = growth_file.read_text().splitlines()[:30]
@@ -231,6 +272,8 @@ def main(argv: list[str]) -> int:
         "estate": estate,
         "baseline_agents": baseline_agents,
         "candidate_agents": candidate_agents,
+        "baseline_proxmox": baseline_proxmox,
+        "candidate_proxmox": candidate_proxmox,
         "gated": gated,
         "exceeded": exceeded,
         "rss_growth_kib": growth,
