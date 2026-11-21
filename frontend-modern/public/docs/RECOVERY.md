@@ -214,6 +214,9 @@ one corrected backup label does not establish recovery in those other views.
 An unresponsive guest or uncertain thaw needs the separate
 [backup safety procedure](VM_DISK_MONITORING.md#backup-safety), not a filter change.
 
+If a notification names a guest you cannot find, check [backup-age alert
+scope](#backup-age-alerts-for-unlisted-guests) before changing thresholds.
+
 ### Outcomes and verification
 
 Recorded outcomes are `success`, `warning`, `failed`, `running` or `unknown`.
@@ -352,6 +355,21 @@ If a guest is unresponsive or freeze/thaw is uncertain, stop this display
 comparison and follow [Backup safety](VM_DISK_MONITORING.md#backup-safety).
 Neither an OK task nor a corrected badge confirms independent thaw, fresh
 successful writes to every covered filesystem and workload liveness.
+
+### Backup-age alerts for unlisted guests
+
+A notification can refer to a backup that still exists after a guest was
+deleted. First compare the existing provider record with the [guest's owning
+connection](#backup-location-and-guest-placement). A missing node label or a
+VMID shared with another connection does not prove the guest was deleted.
+
+In **Alerts → Thresholds → Proxmox → Recovery**, **Orphaned backups** controls
+alerts for retained backups with no matching guest. **Ignore VMIDs** is not
+limited to orphaned backups: it suppresses backup-age alerts for matching IDs
+across Proxmox connections using those settings, including live guests.
+A trailing `*` matches a whole prefix. Leave the ignore list unchanged if you
+mean to silence only one guest and another connection uses the same ID.
+Neither setting changes or deletes backups.
 
 ### Local PVE backups are newer than Coverage
 
