@@ -84,6 +84,35 @@ func (s *State) GetPBSBackups() []PBSBackup {
 	return backups
 }
 
+// GetPBSBackupsForInstance returns ordered, detached primary rows for one
+// connection. Select by exact instance before copying the file lists and
+// verification metadata so cache preparation does no copy work for peers.
+func (s *State) GetPBSBackupsForInstance(instance string) []PBSBackup {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	rows := s.PBSBackups
+	count := 0
+	for i := range rows {
+		if rows[i].Instance == instance {
+			count++
+		}
+	}
+	if count == 0 {
+		return []PBSBackup{}
+	}
+	if count == len(rows) {
+		return clonePBSBackups(rows)
+	}
+	result := make([]PBSBackup, 0, count)
+	for i := range rows {
+		if rows[i].Instance == instance {
+			result = append(result, clonePBSBackup(rows[i]))
+		}
+	}
+	return result
+}
+
 // GetPMGBackupsForInstance returns the same ordered primary backup rows as
 // filtering GetSnapshot().PMGBackups by exact Instance. PMGBackup contains only
 // value fields, so the returned slice is detached without copying unrelated

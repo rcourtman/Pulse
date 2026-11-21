@@ -253,6 +253,22 @@ func TestBackupPollingReadsDoNotCopyUnrelatedInventory(t *testing.T) {
 			t.Fatalf("storage poll copied a peer's backup inventory: %s", costs)
 		}
 	})
+	t.Run("pbs-cache-peer-backups", func(t *testing.T) {
+		small, large := backupPollingReadFixture(0), backupPollingReadFixture(0)
+		peer := large.state.PBSBackups[0]
+		peer.Instance = "peer"
+		for i := range 2000 {
+			peer.ID = strconv.Itoa(i)
+			large.state.PBSBackups = append(large.state.PBSBackups, peer)
+		}
+		costs := backupPollingCallCosts(t, small, large, func(m *Monitor) {
+			backupPollingReadResult = m.buildPBSBackupCache("pbs")
+		})
+		t.Logf("allocation per PBS cache build with 2000 peer rows: %s", costs)
+		if costs.grewEveryCall(everyCallBytes, everyCallObjects) || costs.grewSomeCall(someCallBytes) {
+			t.Fatalf("PBS poll copied a peer's backup inventory: %s", costs)
+		}
+	})
 	small, large := backupPollingReadFixture(0), backupPollingReadFixture(1000)
 	costs := backupPollingCallCosts(t, small, large,
 		func(m *Monitor) { backupPollingReadResult = m.state.GetSnapshot() })

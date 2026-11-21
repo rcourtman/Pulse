@@ -142,6 +142,41 @@ func TestPVEBackupCarryForwardReadsKeepOrderedPrimaryRows(t *testing.T) {
 	}
 }
 
+func TestPBSBackupCarryForwardReadsKeepOrderedDetachedPrimaryRows(t *testing.T) {
+	s := metadataStateFixture()
+	got := s.GetPBSBackupsForInstance("pbs")
+	if want := s.GetPBSBackups(); !reflect.DeepEqual(got, want) {
+		t.Fatalf("single-connection rows: got %+v, want %+v", got, want)
+	}
+	s.PBSBackups = append(s.PBSBackups,
+		PBSBackup{ID: "peer", Instance: "PBS", Namespace: "team", VMID: "100"},
+		PBSBackup{ID: "older", Instance: "pbs", Namespace: "team", VMID: "100", VerificationRaw: "ok", CarriedOver: true},
+		PBSBackup{ID: "empty-name", Instance: ""},
+	)
+	s.Backups.PBS = []PBSBackup{{ID: "stale-aggregate", Instance: "pbs"}}
+	before := s.GetPBSBackups()
+	for _, instance := range []string{"pbs", "PBS", "", "missing"} {
+		want := []PBSBackup{}
+		for _, row := range before {
+			if row.Instance == instance {
+				want = append(want, row)
+			}
+		}
+		got := s.GetPBSBackupsForInstance(instance)
+		if !reflect.DeepEqual(got, want) {
+			t.Fatalf("%q: got %+v, want ordered primary rows %+v", instance, got, want)
+		}
+	}
+
+	got = s.GetPBSBackupsForInstance("pbs")
+	got[0].Files[0] = "reader-only"
+	got[0].VerificationRaw.(map[string]interface{})["state"] = "reader-only"
+	got[1] = PBSBackup{}
+	if after := s.GetPBSBackups(); !reflect.DeepEqual(after, before) {
+		t.Fatal("scoped caller changed stored backup evidence")
+	}
+}
+
 func TestMetadataSnapshotsConcurrentTransactions(t *testing.T) {
 	s := metadataStateFixture()
 	var workers sync.WaitGroup
