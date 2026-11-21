@@ -3,9 +3,10 @@
 #
 # Usage: bash scripts/check-bench-regression.sh <benchstat-output-file>
 # Exits 0 if no regressions >10% with p<0.05, exits 1 otherwise. More time,
-# bytes/op and allocs/op are worse; less byte throughput is worse. Comparisons
-# with missing pairs or fewer than 10 samples on either side are rejected:
-# absent evidence must not become a successful regression verdict.
+# bytes/op and allocs/op are worse; less byte throughput is worse. A significant
+# increase from zero in a cost metric is also a regression: the percent change
+# is undefined. Comparisons with missing pairs or fewer than 10 samples on
+# either side are rejected.
 #
 # Expected input: benchstat comparison output containing lines like:
 #   BenchmarkName-N  1.23µ ± 1%  1.45µ ± 2%  +17.89% (p=0.001 n=10)
@@ -31,33 +32,71 @@ TMPFILE=$(mktemp)
 LOW_SAMPLE_FILE=$(mktemp)
 trap 'rm -f "$TMPFILE" "$LOW_SAMPLE_FILE"' EXIT
 
-# Refuse empty, one-sided, malformed and under-sampled comparisons before
-# judging deltas. Benchstat can successfully print a table with only one
-# input's rows, and an empty file used to say "no regressions". Ignore table
-# headers, file configuration, footnotes and geomeans, not measured rows.
-# Benchstat prints a significant change that rounds to nothing as an unsigned
-# 0.00%. No other unsigned change passes, because only signed ones are judged
-# below. The leading space stops the zero matching the end of 10.00%.
-awk -v minimum="$MIN_SAMPLES" '
+# Parse the evidence and judge the same delta field, not a sign elsewhere in
+# the row (for example in a benchmark label). Incomplete evidence takes
+# precedence over the regression verdict below.
+LC_ALL=C awk -v minimum="$MIN_SAMPLES" -v threshold="$THRESHOLD" -v p_max="$P_MAX" \
+  -v insufficient="$LOW_SAMPLE_FILE" -v findings="$TMPFILE" '
+BEGIN {
+  number = "[0-9]+(\\.[0-9]+)?"
+  scale = "(m|µ|n|p|f|a|z|y|[kKMGTPEZY]i?)?"
+  interval = "(" number "%|\\?|∞)([[:space:]]+(⁰|¹|²|³|⁴|⁵|⁶|⁷|⁸|⁹)+)?"
+}
+# When benchstat prints ? for the delta, require two real measurement columns
+# with a zero base and a positive candidate. A ? in an interval is allowed:
+# benchstat cannot express a relative interval around some near-zero medians.
+function zero_to_positive(prefix, columns, candidate) {
+  if (split(prefix, columns, /[[:space:]]+±[[:space:]]+/) != 3 ||
+      columns[1] !~ ("^[^[:space:]]+[[:space:]]+0(\\.0+)?" scale "$") ||
+      columns[2] !~ ("^" interval "[[:space:]]+" number scale "$") ||
+      columns[3] !~ ("^" interval "$")) {
+    return 0
+  }
+  candidate = columns[2]
+  sub(/^.*[[:space:]]/, "", candidate)
+  return candidate + 0 > 0
+}
 {
   row = $0
   sub(/^[[:space:]]+/, "", row)
+  # Go SetBytes reports throughput (normally tidied to B/s), where a
+  # decrease is worse. Other metrics and headerless input are costs.
+  if (row ~ /^(│|\|).*vs base/) {
+    header = row
+    gsub(/│/, "|", header)
+    if (split(header, columns, /\|/) >= 3) {
+      metric = columns[2]
+      gsub(/^[[:space:]]+|[[:space:]]+$/, "", metric)
+      higher_is_better = (metric ~ /^([kKMGTPE]i?)?B\/s$/)
+    }
+    next
+  }
   if (row !~ /^[^[:space:]]+[[:space:]]+[0-9]/ ||
       row ~ /^[^[:space:]]+:[[:space:]]/ || row ~ /^geomean[[:space:]]/) {
     next
   }
   rows++
   intervals = row
+  # Only a change rounded to zero can be unsigned. Match the entire delta
+  # token so its suffix cannot impersonate a zero.
   if (gsub(/±/, "", intervals) != 2 ||
-      !match(row, /(~|[[:space:]]0(\.0+)?%|[-+][0-9]+(\.[0-9]+)?%)[[:space:]]+\(p=[0-9]+\.[0-9]+ (n=[0-9]+|n1=[0-9]+ n2=[0-9]+)\)/)) {
-    print "Unpaired or malformed benchmark: " row
+      !match(row, /[[:space:]]+(~|0(\.0+)?%|[-+][0-9]+(\.[0-9]+)?%|\?)[[:space:]]+\(p=[0-9]+\.[0-9]+ (n=[0-9]+|n1=[0-9]+ n2=[0-9]+)\)/)) {
+    print "Unpaired or malformed benchmark: " row > insufficient
     next
   }
+  prefix = substr(row, 1, RSTART-1)
   comparison = substr(row, RSTART, RLENGTH)
+  delta = comparison
+  sub(/^[[:space:]]+/, "", delta)
+  sub(/[[:space:]].*$/, "", delta)
+  if (delta == "?" && !zero_to_positive(prefix)) {
+    print "Cannot determine direction of undefined benchmark delta: " row > insufficient
+    next
+  }
   match(comparison, /p=[0-9]+\.[0-9]+/)
   pvalue = substr(comparison, RSTART+2, RLENGTH-2) + 0
   if (pvalue > 1) {
-    print "Invalid p-value: " row
+    print "Invalid p-value: " row > insufficient
     next
   }
   if (match(comparison, /n=[0-9]+/)) {
@@ -70,14 +109,29 @@ awk -v minimum="$MIN_SAMPLES" '
     other_samples = substr(comparison, RSTART+3, RLENGTH-3) + 0
   }
   if (samples < minimum || other_samples < minimum) {
-    print "Under-sampled benchmark: " row
+    print "Under-sampled benchmark: " row > insufficient
+    next
+  }
+  if (pvalue >= p_max) {
+    next
+  }
+  label = metric == "" ? "" : "[" metric "] "
+  if (delta == "?") {
+    if (!higher_is_better) {
+      print label row " (zero baseline; percent change undefined)" > findings
+    }
+  } else if (delta ~ /^[-+]/) {
+    pct = delta + 0
+    if ((higher_is_better ? -pct : pct) > threshold) {
+      print label row > findings
+    }
   }
 }
 END {
   if (rows == 0) {
-    print "No paired benchmark comparisons found."
+    print "No paired benchmark comparisons found." > insufficient
   }
-}' "$COMPARISON_FILE" > "$LOW_SAMPLE_FILE"
+}' "$COMPARISON_FILE"
 
 low_sample_count=$(wc -l < "$LOW_SAMPLE_FILE" | tr -d ' ')
 if [ "$low_sample_count" -ne 0 ]; then
@@ -88,43 +142,15 @@ if [ "$low_sample_count" -ne 0 ]; then
   exit 1
 fi
 
-# Benchstat prints a separate table for each metric. Go SetBytes benchmarks
-# report byte throughput (normally tidied to B/s), where a decrease is worse.
-# Other metrics, including headerless legacy comparisons, retain the existing
-# lower-is-better rule. Include the unit in each finding so scaled values such
-# as 63Mi cannot be mistaken for throughput when they actually mean bytes/op.
-awk -v threshold="$THRESHOLD" -v p_max="$P_MAX" '
-/vs base/ {
-  header = $0
-  gsub(/│/, "|", header)
-  if (split(header, columns, /\|/) >= 3) {
-    metric = columns[2]
-    gsub(/^[[:space:]]+|[[:space:]]+$/, "", metric)
-    higher_is_better = (metric ~ /^([kKMGTPE]i?)?B\/s$/)
-  }
-}
-/[-+][0-9].*%.*\(p=/ {
-  match($0, /[-+][0-9]+\.?[0-9]*%/)
-  pct = substr($0, RSTART, RLENGTH-1) + 0
-
-  match($0, /p=[0-9]+\.[0-9]+/)
-  pval = substr($0, RSTART+2, RLENGTH-2) + 0
-
-  regression = higher_is_better ? -pct : pct
-  if (regression > threshold && pval < p_max) {
-    print (metric == "" ? "" : "[" metric "] ") $0
-  }
-}' "$COMPARISON_FILE" > "$TMPFILE"
-
 count=$(wc -l < "$TMPFILE" | tr -d ' ')
 
 if [ "$count" -eq 0 ]; then
-  echo "No significant benchmark regressions detected (threshold: >${THRESHOLD}%, p<${P_MAX})."
+  echo "No significant benchmark regressions detected (threshold: >${THRESHOLD}% or cost increase from zero, p<${P_MAX})."
   exit 0
 else
   echo "BENCHMARK REGRESSION DETECTED"
   echo "============================="
-  echo "Threshold: >${THRESHOLD}% with p<${P_MAX}"
+  echo "Threshold: >${THRESHOLD}% or cost increase from zero, with p<${P_MAX}"
   echo ""
   echo "$count regressed benchmark(s):"
   sed 's/^/  /' "$TMPFILE"

@@ -183,6 +183,58 @@ class BenchmarkWorkflowContractTest(unittest.TestCase):
         self.assertEqual(process.returncode, 1, process.stdout + process.stderr)
         self.assertIn("BENCHMARK REGRESSION DETECTED", process.stdout)
 
+    def test_undefined_percentage_with_complete_measurements_respects_metric_direction(self) -> None:
+        metadata = "selection=affected\npackages=./internal/api/\n"
+        samples = "BenchmarkExample-4 1 100 ns/op\n"
+        # Benchstat's B/op row from Pulse CI: both medians and ten samples
+        # exist, but the relative change from zero cannot be calculated.
+        for unit, pvalue, expected in [("B/op", "0.033", 1), ("B/s", "0.033", 0), ("B/op", "0.050", 0)]:
+            with self.subTest(unit=unit, pvalue=pvalue):
+                row = f"Example-4  0.000 ± 0%  8.000 ± ?  ? (p={pvalue} n=10)"
+                table = f"          │ {unit} │ {unit} vs base │\n{row}\n"
+                process, comparison = self.run_compare(metadata, results=samples, table=table)
+                self.assertEqual(process.returncode, expected, process.stdout + process.stderr)
+                self.assertEqual(comparison, table)
+                self.assertNotIn("BENCHMARK EVIDENCE INSUFFICIENT", process.stdout)
+                if expected:
+                    self.assertIn("BENCHMARK REGRESSION DETECTED", process.stdout)
+                    self.assertIn(f"[{unit}] {row} (zero baseline; percent change undefined)", process.stdout)
+                else:
+                    self.assertIn("No significant benchmark regressions", process.stdout)
+
+    def test_undefined_percentage_still_needs_two_valid_sampled_medians(self) -> None:
+        metadata = "selection=affected\npackages=./internal/api/\n"
+        samples = "BenchmarkExample-4 1 100 ns/op\n"
+        for row, diagnostic in [
+            ("0.000 ± 0%  8.000 ± ?  ? (p=0.033 n1=10 n2=9)", "Under-sampled benchmark"),
+            ("0.000 ± 0%  8.000 ± ?  ? (p=1.033 n=10)", "Invalid p-value"),
+            ("1.000 ± 0%  8.000 ± ?  ? (p=0.033 n=10)", "Cannot determine direction"),
+            ("0.000 ± 0%  0.000 ± ?  ? (p=0.033 n=10)", "Cannot determine direction"),
+            ("0.000 ± 0%        ± ?  ? (p=0.033 n=10)", "Cannot determine direction"),
+            ("0.000 ± 0%             ? (p=0.033 n=10)", "Unpaired or malformed"),
+        ]:
+            with self.subTest(row=row):
+                table = f"Example-4  {row}\n"
+                process, _ = self.run_compare(metadata, results=samples, table=table)
+                self.assertEqual(process.returncode, 1, process.stdout + process.stderr)
+                self.assertIn("BENCHMARK EVIDENCE INSUFFICIENT", process.stdout)
+                self.assertIn(diagnostic, process.stdout)
+                self.assertNotIn("No significant benchmark regressions", process.stdout)
+
+    def test_delta_is_not_read_from_the_benchmark_label(self) -> None:
+        metadata = "selection=affected\npackages=./internal/api/\n"
+        samples = "BenchmarkExample-4 1 100 ns/op\n"
+        for label, new, delta, expected in [
+            ("Example/+50%-4", 100, "~", 0),
+            ("Example/+50%-4", 105, "+5.00%", 0),
+            ("Example/-50%-4", 111, "+11.00%", 1),
+        ]:
+            with self.subTest(label=label, delta=delta):
+                table = f"{label}  100.0n ± 0%  {new}.0n ± 1%  {delta} (p=0.001 n=10)\n"
+                process, _ = self.run_compare(metadata, results=samples, table=table)
+                self.assertEqual(process.returncode, expected, process.stdout + process.stderr)
+                self.assertNotIn("BENCHMARK EVIDENCE INSUFFICIENT", process.stdout)
+
 
 if __name__ == "__main__":
     unittest.main()
