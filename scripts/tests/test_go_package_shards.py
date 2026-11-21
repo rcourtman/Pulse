@@ -101,6 +101,39 @@ class PackageShardsTest(unittest.TestCase):
         self.assertNotEqual(self.cli(packages, weights, index=1).stdout,
                             self.cli(packages, fixed, index=1).stdout)
 
+    def test_three_worker_estimates_rebalance_without_changing_other_layouts(self):
+        names = [f"example/{letter}" for letter in "abcdef"]
+        a, b, c, d, e, f = names
+        costs = dict(zip(names, (100, 90, 80, 30, 20, 10)))
+        packages = "\n".join(reversed(names)) + "\n"
+        weights = "".join(f"{name} {seconds}\n" for name, seconds in costs.items())
+        weights += "REST_SHARD_FIXED_SECONDS 0 100\n"
+        with_third = weights + "REST_SHARD_FIXED_SECONDS_3 0 0 100\n"
+
+        def plan(text, count):
+            choices = []
+            for index in range(count):
+                result = self.cli(packages, text, count=count, index=index)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                choices.append(result.stdout.splitlines())
+            self.assertCountEqual([name for group in choices for name in group], names)
+            self.assertTrue(all(choices))
+            return choices
+
+        def tail(groups):
+            return max(sum(costs[name] for name in group) + fixed
+                       for group, fixed in zip(groups, (0, 0, 100)))
+
+        # An empty-queue partition puts 110 seconds of ordinary work on the
+        # third worker, despite its 100 seconds of work already assigned.
+        self.assertEqual(tail(plan(weights, 3)), 210)
+        balanced = plan(with_third, 3)
+        self.assertEqual(balanced, [[a, d], [b, c], [e, f]])
+        self.assertEqual(tail(balanced), 170)
+        for count in (1, 2, 4):
+            with self.subTest(count=count):
+                self.assertEqual(plan(with_third, count), plan(weights, count))
+
     def test_rest_estimate_does_not_empty_a_shard_or_change_one_shard_release_order(self):
         packages = "example/a\nexample/z\n"
         weights = "DEFAULT_WEIGHT 1\nexample/z 10\n"
@@ -120,6 +153,12 @@ class PackageShardsTest(unittest.TestCase):
             "REST_SHARD_FIXED_SECONDS 0 NaN", "REST_SHARD_FIXED_SECONDS Infinity 0",
             "REST_SHARD_FIXED_SECONDS 0 86401",
             "REST_SHARD_FIXED_SECONDS 0 300\nREST_SHARD_FIXED_SECONDS 0 1",
+            "REST_SHARD_FIXED_SECONDS_3 0 5",
+            "REST_SHARD_FIXED_SECONDS_3 0 5 4 3",
+            "REST_SHARD_FIXED_SECONDS_3 0 5 -1",
+            "REST_SHARD_FIXED_SECONDS_3 0 5 NaN",
+            "REST_SHARD_FIXED_SECONDS_3 0 5 86401",
+            "REST_SHARD_FIXED_SECONDS_3 0 5 4\nREST_SHARD_FIXED_SECONDS_3 0 1 2",
         ):
             with self.subTest(row=row):
                 result = self.cli("example/a\nexample/b\n", row + "\n")
@@ -149,10 +188,11 @@ class PackageShardsTest(unittest.TestCase):
         self.assertEqual(result.stdout, "")
 
     def test_committed_weights_are_valid_and_positive(self):
-        weights, default, _ = selector.read_weights(ROOT / ".github/scripts/go-package-test-seconds.txt")
+        weights, default, fixed = selector.read_weights(ROOT / ".github/scripts/go-package-test-seconds.txt")
         self.assertGreater(default, 0)
         self.assertGreater(len(weights), 0)
         self.assertTrue(all(value > 0 for value in weights.values()))
+        self.assertEqual({count: len(estimates) for count, estimates in fixed.items()}, {2: 2, 3: 3})
 
     def test_sliced_ci_packages_keep_whole_package_hints_for_the_shared_queue(self):
         # CI's ordinary-package samples exclude these sliced packages, but

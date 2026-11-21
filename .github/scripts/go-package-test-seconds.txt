@@ -11,6 +11,11 @@ DEFAULT_WEIGHT 4.916
 # offsets (rest-1 minus rest-0) were 290s and 275s in 44450687537 and 44520279000.
 # Rounded to 300 task-seconds. This is scheduling, not a hosted time claim.
 REST_SHARD_FIXED_SECONDS 0 300
+# Full PRs to main use a separate three-way slice layout. Relative to rest-0,
+# the medians of the combined monitoring/installer task-time differences were
+# +63s and +165s in runs 44853848110, 44871218711, 44876287607 and 44878602177.
+# Rounded to the nearest 5 task-seconds; not estimates of actual PR time.
+REST_SHARD_FIXED_SECONDS_3 0 65 165
 github.com/rcourtman/pulse-go-rewrite/cmd/pulse-agent 203.709
 github.com/rcourtman/pulse-go-rewrite/internal/agentidentity 32.225
 github.com/rcourtman/pulse-go-rewrite/internal/agentupdate 77.294
