@@ -5,6 +5,7 @@ import { FormSelect } from '@/components/shared/FormSelect';
 import { Button } from '@/components/shared/Button';
 
 interface OrgSwitcherProps {
+  class?: string;
   orgs: Organization[];
   selectedOrgId: string;
   loading?: boolean;
@@ -51,7 +52,7 @@ export function OrgSwitcher(props: OrgSwitcherProps) {
       role="group"
       aria-label="Organization selection"
       tabIndex={-1}
-      class="flex min-w-0 items-center gap-2 focus:outline-2 focus:-outline-offset-2 focus:outline-blue-500"
+      class={`flex min-w-0 items-center gap-2 focus:outline-2 focus:-outline-offset-2 focus:outline-blue-500 ${props.class ?? ''}`}
     >
       <span class="hidden lg:inline text-xs text-muted">Org</span>
       <Show
@@ -61,7 +62,7 @@ export function OrgSwitcher(props: OrgSwitcherProps) {
             when={props.orgs.length > 1}
             fallback={
               <span
-                class="inline-flex h-7 items-center rounded-md border border-border bg-surface px-2 text-xs font-medium text-base-content"
+                class="inline-flex min-h-7 min-w-0 max-w-44 items-center rounded-md border border-border bg-surface px-2 py-1 text-xs font-medium text-base-content [overflow-wrap:anywhere] lg:max-w-56 xl:max-w-96"
                 title={selectedOrgName()}
               >
                 {selectedOrgName()}

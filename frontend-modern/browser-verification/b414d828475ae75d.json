@@ -1,0 +1,49 @@
+{
+  "version": 1,
+  "base_sha": "44e92667454853f4d4b36773eb44e4fe985ae367",
+  "verified_at": "2026-11-21T11:35:50Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/AppLayout.tsx",
+    "frontend-modern/src/components/OrgSwitcher.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/AppLayout.tsx": "efcf77e652b7c0e95ac30f5e53a5c49308f13bd359de499ab62e2e404aa48af8",
+    "frontend-modern/src/components/OrgSwitcher.tsx": "eb9a0225e919a239245e5cd7f14967d6eace45b7351b210df1e0a707fd740ddb"
+  },
+  "routes": [
+    "/standalone/machines"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 768,
+      "height": 960
+    },
+    {
+      "width": 360,
+      "height": 800
+    },
+    {
+      "width": 320,
+      "height": 760
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Actual compiled Pulse shell and Machines route, before 63387c026eb13f300ae77f579b63e6824dfb6c8f, after 44e92667454853f4d4b36773eb44e4fe985ae367, with synthetic local directory, session and live-stream replies. Fixture data, viewport, theme, clock and initial scroll are matched. Playwright 1.56.1, Chromium 141.0.7390.37 and WebKit 26.0. All 18 screenshots in nine pairs inspected.",
+    "An unbroken single workspace name begins off-screen on phones and overlaps kiosk beside the SSO name at 320px. After, the entire workspace name wraps, kiosk and sign-out keep their hit targets, and the SSO name and live connection indicator remain visible. At 320px the Machines actions start 10px earlier than before instead of being pushed down.",
+    "The desktop and tablet still show both Machines actions, navigation, version and release link. At 390px the visible Sync reconnecting warning stays beside the existing header controls and the page actions and release link stay above the bottom navigation.",
+    "The short name with no account caption, native multi-workspace selector, and verified empty directory pairs are pixel-identical. A short name with an SSO caption still shows both identities and all header controls on a 320px phone."
+  ],
+  "interactions": [
+    "Tab from kiosk focuses sign-out; browser hit tests keep both buttons usable. The release link stays reachable after scrolling.",
+    "The native workspace selector changes the exact selected ID and reconnects the offline fixture socket once. Retry organization list sends one GET, keeps the selected ID, and sends no write."
+  ]
+}
