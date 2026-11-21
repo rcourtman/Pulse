@@ -1,0 +1,42 @@
+{
+  "version": 1,
+  "base_sha": "a1f8d1e3137e77e7f682cf7fb2625b70bf583f10",
+  "verified_at": "2026-11-21T12:01:50Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/NoOrganizationAccess.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/NoOrganizationAccess.tsx": "d8d2a69e8f94ac5716de1e973a772281f6098429ac73b75a13fc7dc7643990dc"
+  },
+  "routes": [
+    "/standalone/machines (signed-in invitation screen at bootstrap)"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900,
+      "theme": "light",
+      "browser": "Chromium 141.0.7390.37"
+    },
+    {
+      "width": 320,
+      "height": 800,
+      "theme": "dark",
+      "browser": "WebKit 26.0"
+    }
+  ],
+  "states": [
+    "Two current same-named invitations with different exact IDs and roles.",
+    "Desktop acceptance awaiting acknowledgement with its target visible and Check again temporarily disabled.",
+    "Narrow decline awaiting acknowledgement, then still pending after ten seconds with read-only recovery available.",
+    "Unconfirmed acknowledgement distinct from signed-in access; original rows remain visible and non-actionable."
+  ],
+  "interactions": [
+    "Activate Accept with Enter, verify one exact session-bound decision, and verify the disabled reload cannot issue a fresh read. Tab still reaches Sign out.",
+    "Release the acknowledgement; existing bootstrap runs once and opens the Machines page as the fixture member.",
+    "Tap Decline on WebKit, advance the clock past the slow threshold, and use Check again. Fresh inbox read, no repeated decision.",
+    "Recheck after an unconfirmed acceptance and verify the original write is not replayed."
+  ],
+  "evidence_summary": "Playwright 1.56.1 on paired exact-source app bootstraps with synthetic HTTP. Six matched pairs were inspected in the native image tool."
+}
