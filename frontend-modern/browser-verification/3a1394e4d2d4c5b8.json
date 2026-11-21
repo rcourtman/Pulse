@@ -1,0 +1,35 @@
+{
+  "version": 1,
+  "base_sha": "437cc54a6aef9f1828ea651b8f5892762f7bf315",
+  "verified_at": "2026-11-21T02:19:14Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Infrastructure/useResourceDetailDrawerDerivedState.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Infrastructure/useResourceDetailDrawerDerivedState.ts": "92d1d34874ebd3002b685804936de9c4cfdab9486ee119fc0e47ff4e3f9058ac"
+  },
+  "routes": [
+    "/truenas/overview",
+    "/standalone/machines"
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 840
+    },
+    {
+      "width": 320,
+      "height": 760
+    }
+  ],
+  "states": [
+    "Playwright 1.56.1, desktop light Chromium 141 and narrow dark touch WebKit 26. Six inspected before/after pairs of the expanded resource drawer, using the same synthetic REST fields, clock, viewport and Overview state.",
+    "API-only TrueNAS with an Agent facet shows the version and API; a TrueNAS system with agent-source evidence shows the version and API+Agent. The ordinary agent retains Agent and Debian 13.",
+    "Source text remains entirely visible. The combined badge stays beside the name on the 320 px fixture; Overview and the history range control do not move. Ordinary agent captures are byte-identical."
+  ],
+  "interactions": [
+    "125 candidate assertions and 12 paired control-position assertions through the actual TrueNAS and Machines routes. Open and collapse with desktop keyboard or narrow touch.",
+    "TrueNAS Details still shows appliance information, and changing the visible history range to seven days still reads the same canonical resource. No appliance was used and no write was sent."
+  ]
+}
