@@ -71,11 +71,13 @@ describe('completed backup count guidance', () => {
     expect(copy).toContain('Older versions may use different labels');
   });
 
-  it('points an expired Running reading to the existing guest evidence', () => {
-    expect(text()).toContain('Without a fresh update, Running can become Unknown');
+  it('separates fresh running activity, guest results and stale readings', () => {
     const fragment = '#backup-task-results-and-backup-age';
     const link = section().querySelector(`a[href="${fragment}"]`);
-    expect(link?.textContent).toBe("guest's task record");
+    expect(link?.textContent).toBe('no guest result');
+    const jobCopy = link?.closest('li')?.textContent?.replace(/\s+/g, ' ');
+    expect(jobCopy).toContain('Running can mean a fresh read with no guest result.');
+    expect(jobCopy).toContain('Stale reads count as Unknown.');
     expect(guide('RECOVERY').querySelector(fragment)?.textContent).toBe(
       'Backup task results and backup age',
     );

@@ -64,8 +64,9 @@ answer different questions:
   failures. List filters don't change it. Failed jobs usually leave no point,
   and retention prunes old ones, so daily totals can differ. Hover or focus a
   bar for outcomes and failed guests. Click to show that day's restore points
-  and again to clear. Without a fresh update, **Running** can become
-  **Unknown**. Check the [guest's task record](#backup-task-results-and-backup-age).
+  and again to clear. **Running** can mean a fresh read with
+  [no guest result](#backup-task-results-and-backup-age).
+  Stale reads count as **Unknown**.
 - Guest **snapshots** can contribute to completed-point totals. They are not
   independent backups and do not fill Coverage's **Last backup**. If a
   completed backup's date is unavailable or in the future, the latest backup
