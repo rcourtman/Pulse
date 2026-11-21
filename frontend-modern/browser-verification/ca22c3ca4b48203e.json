@@ -1,0 +1,42 @@
+{
+  "version": 1,
+  "base_sha": "4c7c639830d6a6c453132c4d4f398d0f77f84825",
+  "verified_at": "2026-11-21T19:45:43Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/NodeModalMonitoringSection.tsx",
+    "frontend-modern/src/utils/nodeModalPresentation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/NodeModalMonitoringSection.tsx": "0e9823cb1a2dd5aac879661ee17a481a2c989c5b04437aad58a2cb30c8235726",
+    "frontend-modern/src/utils/nodeModalPresentation.ts": "81df8e3c5a679fef42d6927308bbe591c693cbdc07381c5fba2d4f0609b4be87"
+  },
+  "routes": [
+    "/settings/infrastructure"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900,
+      "browser": "Chromium 141.0.7390.37 / Playwright 1.56.1",
+      "theme": "light"
+    },
+    {
+      "width": 320,
+      "height": 800,
+      "browser": "Chromium 141.0.7390.37 / Playwright 1.56.1, touch emulation",
+      "theme": "dark"
+    }
+  ],
+  "states": [
+    "Saved PBS scope shows the configured exclusion and explains that mounted matches and their snapshots are not monitored.",
+    "The Datastores toggle, pattern guidance, four individual job controls and action buttons fit together at Save on the narrow editor after changing authentication method.",
+    "With Datastores off, the input is hidden and a visible note explains that saving keeps the list. All four job controls and the original actions remain visible.",
+    "Six matched before/after screenshot pairs were inspected in the existing Infrastructure editor."
+  ],
+  "interactions": [
+    "Open Manage with keyboard or touch, edit exclusions, switch the authentication method and switch back without sending any writes.",
+    "Save and reopen the same node using offline fixtures. Verify exact, prefix, suffix and contains patterns are read back and persist when saved with Datastores off.",
+    "Re-enable Datastores in the reopened form, confirm the list reappears, and cancel without saving."
+  ]
+}
