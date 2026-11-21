@@ -5,6 +5,7 @@ import {
   createEffect,
   createMemo,
   createResource,
+  createSignal,
   onCleanup,
   onMount,
   type Component,
@@ -39,7 +40,7 @@ import {
   getPlatformResourceDetailRowClass,
 } from '@/features/platformPage/PlatformResourceDetailTableRow';
 import type { Resource, ResourceAvailabilityMeta } from '@/types/resource';
-import { AvailabilityHistoryAPI } from '@/api/availabilityHistory';
+import { AvailabilityHistoryAPI, type AvailabilityHistoryRange } from '@/api/availabilityHistory';
 import {
   getAvailabilityProbeEndpointLabel,
   getAvailabilityProbePresentation,
@@ -50,7 +51,12 @@ import {
   getStandaloneResourceStatusIndicator,
   sortStandaloneResourcesByAttention,
 } from './standalonePageModel';
-import { AvailabilityFleetView, getAvailabilityUptimeCell } from './AvailabilityFleetView';
+import {
+  AVAILABILITY_HISTORY_RANGE_OPTIONS,
+  AvailabilityFleetView,
+  getAvailabilityHistoryRangeMeta,
+  getAvailabilityUptimeCell,
+} from './AvailabilityFleetView';
 
 export type AvailabilityChecksView = 'table' | 'fleet';
 
@@ -171,19 +177,24 @@ export const AvailabilityChecksTable: Component<{
     if (index <= 0) return sorted;
     return [sorted[index], ...sorted.slice(0, index), ...sorted.slice(index + 1)];
   });
+  const [historyRange, setHistoryRange] = createSignal<AvailabilityHistoryRange>('24h');
+  const historyRangeMeta = createMemo(() => getAvailabilityHistoryRangeMeta(historyRange()));
   const historyTargetIDs = createMemo(() =>
     props.resources
       .map((resource) => availabilityFor(resource)?.targetId)
       .filter((targetID): targetID is string => Boolean(targetID)),
   );
-  // The table's Uptime 24h column and the fleet view read the same history.
+  // The table's Uptime column and the fleet view read the same history window.
   const historySource = createMemo(() =>
-    historyTargetIDs().length > 0 ? historyTargetIDs().join('\u0000') : undefined,
+    historyTargetIDs().length > 0
+      ? `${historyRange()}\u0000${historyTargetIDs().join('\u0000')}`
+      : undefined,
   );
   const [history, historyActions] = createResource(historySource, async () => {
+    const range = historyRange();
     try {
       return {
-        response: await AvailabilityHistoryAPI.batch(historyTargetIDs(), '24h'),
+        response: await AvailabilityHistoryAPI.batch(historyTargetIDs(), range),
         error: undefined,
       };
     } catch (error) {
@@ -308,6 +319,8 @@ export const AvailabilityChecksTable: Component<{
                 historyByTarget={historyByTarget()}
                 historyLoading={history.loading}
                 historyError={history()?.error}
+                historyRange={historyRange()}
+                onHistoryRangeChange={setHistoryRange}
                 probeAgentOptions={props.probeAgentOptions}
                 onRetryHistory={() => void historyActions.refetch()}
                 getFocusFallback={getFleetFocusFallback}
@@ -318,6 +331,15 @@ export const AvailabilityChecksTable: Component<{
               title="Availability checks"
               actions={
                 <div class="flex flex-wrap items-center justify-end gap-2">
+                  <FilterSegmentedControl
+                    aria-label="History window"
+                    value={historyRange()}
+                    onChange={(value) => setHistoryRange(value as AvailabilityHistoryRange)}
+                    options={AVAILABILITY_HISTORY_RANGE_OPTIONS.map((option) => ({
+                      value: option.value,
+                      label: option.label,
+                    }))}
+                  />
                   <A href={buildAvailabilityTargetAddPath('service')} class={settingsLinkClass}>
                     <PlusIcon class="h-3.5 w-3.5" />
                     Add service/device check
@@ -349,9 +371,9 @@ export const AvailabilityChecksTable: Component<{
                   </TableHead>
                   <TableHead
                     class={`${getPlatformTableHeadClassForKind('numeric-value')} hidden lg:table-cell lg:w-[9%]`}
-                    title="Share of the last 24 hours the check was reachable"
+                    title={historyRangeMeta().headerTitle}
                   >
-                    Uptime 24h
+                    {historyRangeMeta().columnLabel}
                   </TableHead>
                   <TableHead
                     class={`${getPlatformTableHeadClassForKind('numeric-value')} platform-table-mobile-w-15 md:w-[10%]`}
@@ -476,6 +498,7 @@ export const AvailabilityChecksTable: Component<{
                             {(() => {
                               const uptime = getAvailabilityUptimeCell(
                                 historyByTarget().get(availability()?.targetId ?? ''),
+                                historyRange(),
                               );
                               return (
                                 <span

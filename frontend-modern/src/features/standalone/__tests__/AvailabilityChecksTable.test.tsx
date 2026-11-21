@@ -406,4 +406,86 @@ describe('AvailabilityChecksTable', () => {
     );
     expect(container.querySelector('[data-availability-uptime]')).toHaveTextContent('—');
   });
+
+  it('switches between 24h, 7d, 30d, and 1y history windows and updates batch query, column header, and coverage labels', async () => {
+    const batchMock = vi.mocked(AvailabilityHistoryAPI.batch);
+    batchMock.mockImplementation(async (_ids, range) => {
+      if (range === '30d') {
+        return {
+          start: '2026-10-22T00:00:00Z',
+          end: '2026-11-21T00:00:00Z',
+          targets: [
+            {
+              targetId: 'mock-availability-mqtt-meter',
+              summary: {
+                reachableSeconds: 4 * 86_400,
+                unreachableSeconds: 0,
+                indeterminateSeconds: 0,
+                unknownSeconds: 26 * 86_400,
+                coveragePercent: 13.3,
+                availabilityPercent: 100,
+              },
+            },
+          ],
+        };
+      }
+      if (range === '365d') {
+        return {
+          start: '2025-11-21T00:00:00Z',
+          end: '2026-11-21T00:00:00Z',
+          targets: [
+            {
+              targetId: 'mock-availability-mqtt-meter',
+              summary: {
+                reachableSeconds: 364 * 86_400,
+                unreachableSeconds: 86_400,
+                indeterminateSeconds: 0,
+                unknownSeconds: 0,
+                coveragePercent: 100,
+                availabilityPercent: 99.73,
+              },
+            },
+          ],
+        };
+      }
+      return {
+        start: '2026-11-20T00:00:00Z',
+        end: '2026-11-21T00:00:00Z',
+        targets: [
+          {
+            targetId: 'mock-availability-mqtt-meter',
+            summary: {
+              reachableSeconds: 86_400,
+              unreachableSeconds: 0,
+              indeterminateSeconds: 0,
+              unknownSeconds: 0,
+              coveragePercent: 100,
+              availabilityPercent: 100,
+            },
+          },
+        ],
+      };
+    });
+
+    const { container } = renderTable([availabilityResource()]);
+    expect(await screen.findByText('100%')).toBeInTheDocument();
+    expect(screen.getByRole('columnheader', { name: 'Uptime 24h' })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: '30d' }));
+    await vi.waitFor(() => {
+      expect(batchMock).toHaveBeenCalledWith(['mock-availability-mqtt-meter'], '30d');
+      expect(screen.getByRole('columnheader', { name: 'Uptime 30d' })).toBeInTheDocument();
+      expect(container.querySelector('[data-availability-uptime]')).toHaveAttribute(
+        'title',
+        'Not enough history yet: 4d observed in the last 30 days',
+      );
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: '1y' }));
+    await vi.waitFor(() => {
+      expect(batchMock).toHaveBeenCalledWith(['mock-availability-mqtt-meter'], '365d');
+      expect(screen.getByRole('columnheader', { name: 'Uptime 1y' })).toBeInTheDocument();
+      expect(screen.getByText('99.73%')).toBeInTheDocument();
+    });
+  });
 });

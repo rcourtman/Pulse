@@ -11734,3 +11734,19 @@ when zero notification channels are enabled and alert delivery is active, with
 a direct link to `/alerts/notifications` and a persistent dismiss action.
 `OverviewTab.emptystate.test.tsx` and Playwright desktop/mobile verification
 cover rendering, dismissal, and adjacent alert card states.
+
+### Availability checks and fleet multi-window history (21 November 2026)
+
+`AvailabilityChecksTable.tsx` and `AvailabilityFleetView.tsx` expose a
+`History window` selector (`24h`, `7d`, `30d`, `1y` mapping to backend ranges
+`24h`, `7d`, `30d`, `365d`) on top of the existing `POST /api/availability-history`
+batch endpoint (`frontend-modern/src/api/availabilityHistory.ts`, exporting
+`AvailabilityHistoryRange`). The selected window defaults to `24h`, persists
+when switching between Table and Fleet views, and preserves the active range on
+Retry. Table uptime header/tooltips, fleet legend wording, state-strip aria
+labels, and thin-coverage observed durations follow the selected window while
+retaining the existing 90% coverage and determinate-share honesty guards
+(`getAvailabilityUptimeCell`). `AvailabilityChecksTable.test.tsx` and
+`AvailabilityFleetView.test.tsx` cover window switching, coverage formatting,
+and range callbacks alongside desktop (`1440x900` light/dark) and narrow
+(`390x844`) browser proof.

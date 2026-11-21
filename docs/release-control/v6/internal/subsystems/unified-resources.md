@@ -10596,3 +10596,19 @@ report. Agent data still wins for any name both sources carry.
 `convertInterfaces` in `internal/unifiedresources/adapters.go` carries a host
 interface's `LinkUp`, and `clone.go` deep-copies it. The dead `Status` field
 stays unset. The frontend reads it as `linkUp` on agent and node interfaces.
+
+### Availability checks and fleet multi-window history (21 November 2026)
+
+`AvailabilityChecksTable.tsx` and `AvailabilityFleetView.tsx` expose a
+`History window` selector (`24h`, `7d`, `30d`, `1y` mapping to backend ranges
+`24h`, `7d`, `30d`, `365d`) on top of the existing `POST /api/availability-history`
+batch endpoint (`frontend-modern/src/api/availabilityHistory.ts`, exporting
+`AvailabilityHistoryRange`). The selected window defaults to `24h`, persists
+when switching between Table and Fleet views, and preserves the active range on
+Retry. Table uptime header/tooltips, fleet legend wording, state-strip aria
+labels, and thin-coverage observed durations follow the selected window while
+retaining the existing 90% coverage and determinate-share honesty guards
+(`getAvailabilityUptimeCell`). `AvailabilityChecksTable.test.tsx` and
+`AvailabilityFleetView.test.tsx` cover window switching, coverage formatting,
+and range callbacks alongside desktop (`1440x900` light/dark) and narrow
+(`390x844`) browser proof.

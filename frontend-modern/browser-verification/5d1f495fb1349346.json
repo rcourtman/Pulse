@@ -1,0 +1,43 @@
+{
+  "version": 1,
+  "base_sha": "84b1e347a87066f6dcd51e79670696b4643f7384",
+  "verified_at": "2026-11-21T21:14:50Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/api/availabilityHistory.ts",
+    "frontend-modern/src/features/standalone/AvailabilityChecksTable.tsx",
+    "frontend-modern/src/features/standalone/AvailabilityFleetView.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/api/availabilityHistory.ts": "555c937fbebdbabc485ccb70b342a8abebab7544aebd9e504cf37abc3555824e",
+    "frontend-modern/src/features/standalone/AvailabilityChecksTable.tsx": "94b9652632a5b40d52fe4c114b570b761ee343ec234d0a3b778e0422693edf93",
+    "frontend-modern/src/features/standalone/AvailabilityFleetView.tsx": "197ccacb9bee69717e2865d0d9dc079e69dfa62d923fd5f940d6499354d7cb8c"
+  },
+  "routes": [
+    "/standalone/availability",
+    "/standalone/availability?view=fleet"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Availability checks Table view default 24h and switched 30d / 1y windows with dynamic Uptime column header and human-readable thin-coverage days tooltip (desktop 1440x900 light)",
+    "Availability checks Fleet view inheriting persisted 1y window from Table view and switching to 7d directly from Fleet legend bar (desktop 1440x900 light)",
+    "Availability checks Fleet view simulated HTTP 500 on 30d history fetch with Retry recovering 30d data intact (desktop 1440x900 dark)",
+    "Availability checks Fleet view 30d history selector wrapping cleanly with zero horizontal overflow (mobile 390x844 light)"
+  ],
+  "interactions": [
+    "opened /standalone/availability at 1440x900 light, verified History window segmented control (24h/7d/30d/1y) beside Add service/device check and Uptime 24h column values",
+    "clicked 30d and confirmed POST /api/availability-history sent range=30d, header updated to Uptime 30d, Reverse Proxy HTTPS updated to 98.4%, and thin-coverage New Backup NAS tooltip read 'Not enough history yet: 4d observed in the last 30 days'",
+    "clicked 1y and confirmed range=365d, header updated to Uptime 1y, switched View -> Fleet, confirmed 1y persisted (1-year evidence legend and 1-year state history aria-label), then clicked 7d in Fleet bar and confirmed 7-day evidence + 4d observed coverage",
+    "simulated HTTP 500 on first 30d request in dark mode on /standalone/availability?view=fleet, clicked Retry, and verified second POST re-requested range=30d and rendered 98.4% available",
+    "verified 390x844 mobile wrapping and zero horizontal overflow on /standalone/availability?view=fleet with zero page errors"
+  ]
+}

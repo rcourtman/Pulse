@@ -3,6 +3,8 @@ import { apiFetchJSON } from '@/utils/apiClient';
 const AVAILABILITY_HISTORY_PATH = '/api/availability-history';
 const MAX_TARGETS_PER_REQUEST = 200;
 
+export type AvailabilityHistoryRange = '24h' | '7d' | '30d' | '365d';
+
 export interface AvailabilityLatencySummary {
   average: number;
   min: number;
