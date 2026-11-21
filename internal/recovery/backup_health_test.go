@@ -52,6 +52,46 @@ func TestBackupHealthMissingHistoryAndZeroRecordedAttemptsAreDistinct(t *testing
 	require.Equal(t, "not_observed", summary.Days[0].HistoryState, "an unmatched client scope is not an observed zero-failure day")
 }
 
+func TestBackupHealthCoverageKeepsConnectionNodeAndProviderSeparate(t *testing.T) {
+	from := time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC)
+	day2, day3, to := from.AddDate(0, 0, 1), from.AddDate(0, 0, 2), from.AddDate(0, 0, 3)
+	coverage := model.BackupHistoryCoverage{
+		Sources: []model.BackupHistorySource{
+			{Provider: ProviderProxmoxPVE, Instance: "a", Node: "node-1"},
+			{Provider: ProviderProxmoxPVE, Instance: "a", Node: "node-2", Reason: "collection_failed"},
+			{Provider: ProviderProxmoxPVE, Instance: "b", Node: "node-2"},
+			{Provider: ProviderProxmoxPBS, Instance: "a", Node: "node-2"},
+		},
+		Intervals: []model.BackupHistoryInterval{
+			{Provider: ProviderProxmoxPVE, Instance: "a", Node: "node-1", Start: from, End: to},
+			{Provider: ProviderProxmoxPVE, Instance: "a", Node: "node-2", Start: from, End: day2},
+			{Provider: ProviderProxmoxPVE, Instance: "a", Node: "node-2", Start: day3, End: to},
+			{Provider: ProviderProxmoxPVE, Instance: "b", Node: "node-2", Start: from, End: day2},
+			{Provider: ProviderProxmoxPVE, Instance: "b", Node: "node-2", Start: day2, End: to},
+			{Provider: ProviderProxmoxPBS, Instance: "a", Node: "node-2", Start: from, End: to},
+		},
+	}
+	workloads := []model.BackupHealthWorkload{
+		{ID: "a-100", Instance: "a", Node: "node-1", VMID: 100},
+		{ID: "a-101", Instance: "a", Node: "node-2", VMID: 101},
+		{ID: "b-100", Instance: "b", Node: "node-2", VMID: 100},
+	}
+	summary := BuildBackupHealth(workloads, nil, coverage, from, to, time.UTC)
+	require.Equal(t, "partial", summary.HistoryState)
+	require.Zero(t, summary.Counts.Total())
+	require.Len(t, summary.Workloads, 3)
+	for _, row := range summary.Workloads[:2] {
+		require.Equal(t, "partial", row.HistoryState)
+		require.Equal(t, "Pulse did not continuously observe this source throughout the reporting period. Latest collection: collection failed.", row.HistoryReason)
+	}
+	require.Equal(t, "complete", summary.Workloads[2].HistoryState, "touching intervals cover connection b")
+	require.Equal(t, []model.BackupHealthDay{
+		{Date: "2026-10-01", HistoryState: "complete"},
+		{Date: "2026-10-02", HistoryState: "partial"},
+		{Date: "2026-10-03", HistoryState: "complete"},
+	}, summary.Days, "other nodes, connections and providers cannot fill the gap")
+}
+
 func TestBackupHealthUnattributedJobsCannotProduceCompleteClientReport(t *testing.T) {
 	from := time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC)
 	to := from.AddDate(0, 0, 1)
