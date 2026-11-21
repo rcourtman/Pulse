@@ -124,11 +124,8 @@ export const NodeModalMonitoringSection: Component<NodeModalMonitoringSectionPro
         </div>
       </section>
 
-      {/* For PVE the Collection scope section below carries both the
-          coverage description and the per-collector toggles, so the
-          standalone Monitoring coverage paragraph would be redundant. PBS
-          and PMG keep the standalone paragraph because they have no toggles. */}
-      <Show when={modalProps.nodeType !== 'pve'}>
+      {/* PVE and PBS describe coverage next to their collector controls below. */}
+      <Show when={modalProps.nodeType === 'pmg'}>
         <div>
           <SectionHeader
             title="Monitoring coverage"
@@ -343,57 +340,14 @@ export const NodeModalMonitoringSection: Component<NodeModalMonitoringSectionPro
       </Show>
 
       <Show when={modalProps.nodeType === 'pbs'}>
-        <div class="space-y-3">
+        <section aria-label="Collection scope" class="space-y-2 sm:space-y-3">
           <SectionHeader
             title="Collection scope"
             size="sm"
             class="mb-1"
             titleClass="text-base-content"
           />
-          <p class="text-xs text-muted">
-            Control which Proxmox Backup Server surfaces Pulse ingests. Disable collectors you don't
-            need.
-          </p>
-
-          <label class="flex items-start gap-2 text-sm text-base-content">
-            <input
-              type="checkbox"
-              checked={state.formData().monitorDatastores}
-              onChange={(event) =>
-                state.updateField('monitorDatastores', event.currentTarget.checked)
-              }
-              class={formCheckbox + ' mt-0.5'}
-            />
-            <div>
-              <div>Datastores</div>
-              <p class="text-xs text-muted mt-1">
-                Datastore capacity, usage, and deduplication status.
-              </p>
-            </div>
-          </label>
-
-          <Show when={state.formData().monitorDatastores}>
-            <div class={formField}>
-              <label for="pbs-excluded-datastores" class={labelClass()}>
-                Excluded datastores (optional)
-              </label>
-              <input
-                id="pbs-excluded-datastores"
-                type="text"
-                value={state.formData().excludeDatastores}
-                onInput={(event) =>
-                  state.updateField('excludeDatastores', event.currentTarget.value)
-                }
-                placeholder="exthdd1500gb, removable-*"
-                class={controlClass('font-mono')}
-              />
-              <p class={formHelpText}>
-                Comma-separated names or patterns. Use <code>name*</code>, <code>*name</code>, or{' '}
-                <code>*name*</code>. Pulse will not query matching removable or unmounted
-                datastores.
-              </p>
-            </div>
-          </Show>
+          <p class="text-sm text-muted">{getNodeMonitoringCoverageCopy('pbs')}</p>
 
           <label class="flex items-start gap-2 text-sm text-base-content">
             <input
@@ -406,7 +360,7 @@ export const NodeModalMonitoringSection: Component<NodeModalMonitoringSectionPro
             />
             <div>
               <div>Sync jobs</div>
-              <p class="text-xs text-muted mt-1">Remote sync schedules and their last-run state.</p>
+              <p class="mt-0.5 text-xs text-muted">Remote sync schedules and run status.</p>
             </div>
           </label>
 
@@ -421,7 +375,7 @@ export const NodeModalMonitoringSection: Component<NodeModalMonitoringSectionPro
             />
             <div>
               <div>Verify jobs</div>
-              <p class="text-xs text-muted mt-1">Backup verification schedules and outcomes.</p>
+              <p class="mt-0.5 text-xs text-muted">Verification schedules and results.</p>
             </div>
           </label>
 
@@ -436,9 +390,7 @@ export const NodeModalMonitoringSection: Component<NodeModalMonitoringSectionPro
             />
             <div>
               <div>Prune jobs</div>
-              <p class="text-xs text-muted mt-1">
-                Retention policy runs and the snapshots they remove.
-              </p>
+              <p class="mt-0.5 text-xs text-muted">Retention runs and removed snapshots.</p>
             </div>
           </label>
 
@@ -453,12 +405,65 @@ export const NodeModalMonitoringSection: Component<NodeModalMonitoringSectionPro
             />
             <div>
               <div>Garbage collection</div>
-              <p class="text-xs text-muted mt-1">
-                GC runs that reclaim orphaned chunks from the datastore.
-              </p>
+              <p class="mt-0.5 text-xs text-muted">Runs that reclaim orphaned chunks.</p>
             </div>
           </label>
-        </div>
+
+          <div class="space-y-2 border-t border-border pt-2 sm:space-y-3 sm:pt-3">
+            <label class="flex items-start gap-2 text-sm text-base-content">
+              <input
+                type="checkbox"
+                checked={state.formData().monitorDatastores}
+                onChange={(event) =>
+                  state.updateField('monitorDatastores', event.currentTarget.checked)
+                }
+                aria-describedby={
+                  state.formData().monitorDatastores
+                    ? undefined
+                    : `${descriptionId}-pbs-exclusions-off`
+                }
+                class={formCheckbox + ' mt-0.5'}
+              />
+              <div>
+                <div>Datastores</div>
+                <p class="text-xs text-muted mt-1">
+                  Capacity, usage, deduplication, and backup snapshots.
+                </p>
+              </div>
+            </label>
+
+            <Show
+              when={state.formData().monitorDatastores}
+              fallback={
+                <p id={`${descriptionId}-pbs-exclusions-off`} class={formHelpText}>
+                  Saving with Datastores off keeps your exclusion list.
+                </p>
+              }
+            >
+              <div class={formField}>
+                <label for={`${descriptionId}-pbs-exclusions`} class={labelClass()}>
+                  Excluded datastores (optional)
+                </label>
+                <input
+                  id={`${descriptionId}-pbs-exclusions`}
+                  type="text"
+                  value={state.formData().excludeDatastores}
+                  onInput={(event) =>
+                    state.updateField('excludeDatastores', event.currentTarget.value)
+                  }
+                  aria-describedby={`${descriptionId}-pbs-exclusions-help`}
+                  placeholder="exthdd1500gb, removable-*"
+                  class={controlClass('font-mono')}
+                />
+                <p id={`${descriptionId}-pbs-exclusions-help`} class={formHelpText}>
+                  Matching stores and their snapshots are not monitored, even when mounted. Separate
+                  names or patterns with commas: <code>name*</code>, <code>*name</code>,{' '}
+                  <code>*name*</code>. Matches ignore case.
+                </p>
+              </div>
+            </Show>
+          </div>
+        </section>
       </Show>
 
       <Show when={modalProps.nodeType === 'pmg'}>

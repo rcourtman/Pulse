@@ -169,6 +169,9 @@ export function getNodeMonitoringCoverageCopy(nodeType: NodeModalNodeType): stri
   if (nodeType === 'pmg') {
     return 'Pulse captures mail flow analytics, rejection causes, and quarantine visibility without additional scripts.';
   }
+  if (nodeType === 'pbs') {
+    return 'Choose what Pulse reads from this backup server: datastore usage, backup snapshots, and PBS job status.';
+  }
   return 'Pulse automatically tracks all supported resources for this node — virtual machines, containers, storage usage, backups, and PBS job activity — so you always get full visibility without extra configuration.';
 }
 

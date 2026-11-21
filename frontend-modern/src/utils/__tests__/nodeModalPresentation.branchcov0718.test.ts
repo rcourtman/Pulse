@@ -62,14 +62,11 @@ describe('getNodeTokenIdPlaceholder branch coverage', () => {
 // ===========================================================================
 
 describe('getNodeMonitoringCoverageCopy branch coverage', () => {
-  it('returns the generic non-pmg coverage copy for pbs (false arm of the pmg predicate)', () => {
-    // The sibling test covers this return via 'pve'; pinning the pbs input
-    // too locks down the third node type that routes here. The exact string
-    // is asserted verbatim so the em-dash + 'PBS job activity' phrasing is
-    // protected against silent copy drift.
-    expect(getNodeMonitoringCoverageCopy('pbs')).toBe(
-      'Pulse automatically tracks all supported resources for this node — virtual machines, containers, storage usage, backups, and PBS job activity — so you always get full visibility without extra configuration.',
-    );
+  it('describes configurable PBS coverage without promising guest metrics or full visibility', () => {
+    const coverage = getNodeMonitoringCoverageCopy('pbs');
+    expect(coverage).toContain('Choose what Pulse reads from this backup server');
+    expect(coverage).toContain('datastore usage, backup snapshots, and PBS job status');
+    expect(coverage).not.toMatch(/full visibility|virtual machines/i);
   });
 });
 
