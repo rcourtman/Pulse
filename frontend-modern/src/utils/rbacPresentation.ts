@@ -186,13 +186,18 @@ export function sameRoleIDs(first: readonly string[], second: readonly string[])
   return JSON.stringify([...first].sort()) === JSON.stringify([...second].sort());
 }
 
-export const OWN_ACCESS_REMOVAL_MESSAGE = 'You cannot remove your own user access.';
+export const USER_ACCESS_REMOVAL_COPY = {
+  self: 'You cannot remove your own user access.',
+  effect: 'This removes all role assignments and revokes active Pulse sessions for:',
+  identityProvider:
+    'This does not disable the account at the identity provider. A later authorized SSO login will create the user record again.',
+} as const;
 
 export function getUserAssignmentsDeleteErrorMessage(error?: unknown): string {
   if (error && typeof error === 'object') {
     const typedError = error as { code?: unknown; status?: unknown };
     if (typedError.status === 403 && typedError.code === 'self_deprovision_denied') {
-      return OWN_ACCESS_REMOVAL_MESSAGE;
+      return USER_ACCESS_REMOVAL_COPY.self;
     }
   }
   return 'Failed to remove user access';

@@ -19,7 +19,7 @@ import { PulseDataGrid } from '@/components/shared/PulseDataGrid';
 import {
   getUserAssignmentsEmptyStateCopy,
   getUserIdentityLabel,
-  OWN_ACCESS_REMOVAL_MESSAGE,
+  USER_ACCESS_REMOVAL_COPY,
 } from '@/utils/rbacPresentation';
 import { InlineNotice } from '@/components/shared/InlineNotice';
 import TriangleAlert from 'lucide-solid/icons/triangle-alert';
@@ -318,7 +318,7 @@ export const UserAssignmentsPanel: Component<UserAssignmentsPanelProps> = (props
                         <span class="hidden sm:inline">Manage Access</span>
                       </Button>
                       {state.isOwnAccount(assignment) ? (
-                        OWN_ACCESS_REMOVAL_MESSAGE
+                        USER_ACCESS_REMOVAL_COPY.self
                       ) : (
                         <Button
                           variant="ghost"
@@ -379,16 +379,13 @@ export const UserAssignmentsPanel: Component<UserAssignmentsPanelProps> = (props
             <div class="space-y-5 p-6">
               <div>
                 <h3 class="text-lg font-semibold text-base-content">Remove user access?</h3>
-                <p class="mt-2 text-sm text-muted">
-                  This removes all role assignments and revokes active Pulse sessions for:
-                </p>
+                <p class="mt-2 text-sm text-muted">{USER_ACCESS_REMOVAL_COPY.effect}</p>
                 <div class="mt-2">
                   <UserAccessIdentity user={user()} />
                 </div>
               </div>
               <div class="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/25 dark:text-amber-100">
-                This does not disable the account at the identity provider. A later authorized SSO
-                login will create the user record again.
+                {USER_ACCESS_REMOVAL_COPY.identityProvider}
               </div>
               <Show when={state.actionError()}>
                 {(message) => (
