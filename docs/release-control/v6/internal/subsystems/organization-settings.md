@@ -535,6 +535,26 @@ failures, fresh scoped data versus a failed selected read, native controls, no
 mutation or CSRF preparation, and explicit recovery. Desktop and narrow
 Settings browser proof uses safe response fixtures, not live client recovery.
 
+### Sharing readers can restart a stalled saved-state check
+
+While the selected organization's sharing read is pending, **Restart sharing
+check** names that organization outside the busy saved-results group. It
+cancels the previous read and starts the same five scoped GETs. Only the
+replacement can publish data or end loading. The pending view uses a compact
+loading indicator. It does not show an apparent Create Share form before the read
+establishes what the user can do. Restart is also available during the read-only
+check after an unconfirmed change. Neither Restart nor Reload replays a sharing
+write. Same-reader drafts and the existing complete-read requirement for writes
+are unchanged. A stale control cannot restart against a different selection.
+
+Explicit activation keeps focus in the named sharing region without removing
+the restart button from the Tab order while the read is pending. After a
+result, Tab reaches the existing controls. Initial checks and late responses
+do not take outside focus. The registered Sharing panel and keyboard transport
+tests verify scoped cancellation, late completion, unchanged write count and
+focus. Matched desktop and narrow Settings browser proof uses the production
+consumer and synthetic reads, not installed or original-account recovery.
+
 ### Invitation decisions identify the exact organization
 
 Your Invitations shows each organization's display name **and** ID beside its

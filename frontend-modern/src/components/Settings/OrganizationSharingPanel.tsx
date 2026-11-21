@@ -29,6 +29,7 @@ export const OrganizationSharingPanel: Component<OrganizationSharingPanelProps> 
   const showOrganizationSurface = () =>
     isMultiTenantEnabled() && !presentationPolicyHidesOrganizationSurfaces();
   const warningTitleID = createUniqueId();
+  const checkingID = createUniqueId();
   let panel: HTMLDivElement | undefined;
   let warning: HTMLDivElement | undefined;
   let summary: HTMLParagraphElement | undefined;
@@ -116,7 +117,6 @@ export const OrganizationSharingPanel: Component<OrganizationSharingPanelProps> 
         ref={panel}
         role="region"
         aria-label="Organization sharing"
-        aria-busy={state.loading()}
         tabIndex={-1}
         class="space-y-6 rounded-lg focus:outline-2 focus:-outline-offset-2 focus:outline-blue-500 dark:focus:outline-blue-400"
         onFocusIn={(event) => {
@@ -152,84 +152,110 @@ export const OrganizationSharingPanel: Component<OrganizationSharingPanelProps> 
             ) : undefined
           }
           noPadding
-          bodyClass="divide-y divide-border"
         >
-          <Show when={!state.loading()} fallback={<OrganizationSharingLoadingState />}>
-            <Show when={state.loadError()}>
-              <div class="p-4 sm:p-6">
-                <Card tone="warning" padding="md">
-                  <div
-                    ref={warning}
-                    role="alert"
-                    aria-labelledby={warningTitleID}
-                    tabIndex={-1}
-                    class="space-y-3 text-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-                  >
-                    <p id={warningTitleID} class="font-semibold">
-                      {ORGANIZATION_SHARING_UNAVAILABLE_TITLE}
-                    </p>
-                    <p>{state.loadError()}</p>
-                    <p>{getOrganizationSharingReloadMessage(state.selectedOrgID())}</p>
-                    <Button
-                      onClick={reloadSharing}
-                      disabled={state.loading() || state.saving()}
-                      class="w-full sm:w-auto"
-                    >
-                      {ORGANIZATION_SHARING_RELOAD_LABEL}
-                    </Button>
-                  </div>
-                </Card>
-              </div>
-            </Show>
-            <Show when={!state.loadError() && state.org()}>
-              {(currentOrg) => (
-                <>
-                  <div class="p-4 sm:px-6 space-y-2 text-sm text-muted break-words">
-                    <p
-                      ref={summary}
-                      tabIndex={-1}
-                      class="focus:outline-hidden focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-                    >
-                      Sharing for{' '}
-                      <span class="font-medium text-base-content" data-sharing-organization>
-                        {currentOrg().displayName || currentOrg().id}
-                      </span>{' '}
-                      ({currentOrg().id})
-                    </p>
-                    <Show when={state.readOnly()}>
-                      <p>{ORGANIZATION_SHARING_READ_ONLY_MESSAGE}</p>
-                    </Show>
-                    <Show when={state.sharingChangesPaused()}>
-                      <p role="status">
-                        {getOrganizationSharingPartialReadMessage(
-                          state.canManageCurrentOrg(),
-                          state.unavailableLists()?.outgoing,
-                        )}
-                      </p>
-                    </Show>
-                  </div>
-                  <Show
-                    when={state.canManageCurrentOrg()}
-                    fallback={
-                      <Show when={!state.readOnly()}>
-                        <div class="p-4 sm:p-6">
-                          <div class="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-900/25 dark:text-amber-300">
-                            {ORGANIZATION_SHARING_MANAGER_REQUIRED_MESSAGE}
-                          </div>
-                        </div>
-                      </Show>
-                    }
-                  >
-                    <Show when={!state.unavailableLists()?.outgoing}>
-                      <OrganizationSharingCreateSection state={state} />
-                    </Show>
-                  </Show>
-                  <OrganizationOutgoingSharesSection state={state} />
-                  <OrganizationIncomingSharesSection state={state} />
-                </>
-              )}
-            </Show>
+          <Show when={state.loading()}>
+            <div class="px-4 pt-4 sm:px-6 sm:pt-6">
+              <p id={checkingID} class="text-sm text-muted">
+                Checking saved shares for{' '}
+                <bdi class="font-medium text-base-content [overflow-wrap:anywhere]">
+                  {`${state.selectedOrgID()}.`}
+                </bdi>{' '}
+                Restarting does not repeat a sharing change.
+              </p>
+              <Button
+                aria-describedby={checkingID}
+                onClick={() => {
+                  if (state.restartSharingRead()) panel?.focus({ preventScroll: true });
+                }}
+                class="mt-2 min-h-11 w-full sm:min-h-0 sm:w-auto"
+              >
+                Restart sharing check
+              </Button>
+            </div>
           </Show>
+          <div
+            role="group"
+            aria-label="Saved shares"
+            aria-busy={state.loading()}
+            class="divide-y divide-border"
+          >
+            <Show when={!state.loading()} fallback={<OrganizationSharingLoadingState />}>
+              <Show when={state.loadError()}>
+                <div class="p-4 sm:p-6">
+                  <Card tone="warning" padding="md">
+                    <div
+                      ref={warning}
+                      role="alert"
+                      aria-labelledby={warningTitleID}
+                      tabIndex={-1}
+                      class="space-y-3 text-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                    >
+                      <p id={warningTitleID} class="font-semibold">
+                        {ORGANIZATION_SHARING_UNAVAILABLE_TITLE}
+                      </p>
+                      <p>{state.loadError()}</p>
+                      <p>{getOrganizationSharingReloadMessage(state.selectedOrgID())}</p>
+                      <Button
+                        onClick={reloadSharing}
+                        disabled={state.loading() || state.saving()}
+                        class="w-full sm:w-auto"
+                      >
+                        {ORGANIZATION_SHARING_RELOAD_LABEL}
+                      </Button>
+                    </div>
+                  </Card>
+                </div>
+              </Show>
+              <Show when={!state.loadError() && state.org()}>
+                {(currentOrg) => (
+                  <>
+                    <div class="p-4 sm:px-6 space-y-2 text-sm text-muted break-words">
+                      <p
+                        ref={summary}
+                        tabIndex={-1}
+                        class="focus:outline-hidden focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                      >
+                        Sharing for{' '}
+                        <span class="font-medium text-base-content" data-sharing-organization>
+                          {currentOrg().displayName || currentOrg().id}
+                        </span>{' '}
+                        ({currentOrg().id})
+                      </p>
+                      <Show when={state.readOnly()}>
+                        <p>{ORGANIZATION_SHARING_READ_ONLY_MESSAGE}</p>
+                      </Show>
+                      <Show when={state.sharingChangesPaused()}>
+                        <p role="status">
+                          {getOrganizationSharingPartialReadMessage(
+                            state.canManageCurrentOrg(),
+                            state.unavailableLists()?.outgoing,
+                          )}
+                        </p>
+                      </Show>
+                    </div>
+                    <Show
+                      when={state.canManageCurrentOrg()}
+                      fallback={
+                        <Show when={!state.readOnly()}>
+                          <div class="p-4 sm:p-6">
+                            <div class="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-900/25 dark:text-amber-300">
+                              {ORGANIZATION_SHARING_MANAGER_REQUIRED_MESSAGE}
+                            </div>
+                          </div>
+                        </Show>
+                      }
+                    >
+                      <Show when={!state.unavailableLists()?.outgoing}>
+                        <OrganizationSharingCreateSection state={state} />
+                      </Show>
+                    </Show>
+                    <OrganizationOutgoingSharesSection state={state} />
+                    <OrganizationIncomingSharesSection state={state} />
+                  </>
+                )}
+              </Show>
+            </Show>
+          </div>
         </SettingsPanel>
       </div>
     </Show>
