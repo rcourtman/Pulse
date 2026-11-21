@@ -525,6 +525,9 @@ describe('normalizeEmailConfigFromAPI', () => {
       tagFilter: [],
       tagFilterMode: 'all',
       minimumSeverity: 'all',
+      subjectPrefix: '',
+      brandName: '',
+      footerNote: '',
     });
   });
 
@@ -560,6 +563,9 @@ describe('normalizeEmailConfigFromAPI', () => {
       tagFilter: [],
       tagFilterMode: 'all',
       minimumSeverity: 'all',
+      subjectPrefix: '',
+      brandName: '',
+      footerNote: '',
     });
   });
 });
