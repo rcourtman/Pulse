@@ -1,0 +1,41 @@
+{
+  "version": 1,
+  "base_sha": "880074e4a188eac9edc55c7c1afcac6ef9494f03",
+  "verified_at": "2026-11-21T21:34:34Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx",
+    "frontend-modern/src/components/Workloads/GuestPhysicalDisks.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx": "d7517a8c83f5fb3caf3f3a57ac9c3cb38043e8f88f8e7ef48853e0ead50fe273",
+    "frontend-modern/src/components/Workloads/GuestPhysicalDisks.tsx": "36b7caa41ed4fa6edb9c536521bf0a920c7fb699086b5db75df1dfa315b1a370"
+  },
+  "routes": [
+    "/standalone/machines"
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "standalone Machine Overview drawer with Physical Disks & SMART (3) collapsed inventory showing healthy NVMe, elevated-risk SATA HDD, and standby last-known SATA HDD (desktop 1280x900 light)",
+    "standalone Machine Overview expanded SATA disk row with lifted Worth Checking SMART warnings, SMART Health, and expanded SMART Attributes details (desktop 1280x900 light)",
+    "standalone Machine Overview read-error fallback notice with Retry physical disk read recovery and expanded NVMe SMART attributes (desktop 1280x900 dark)",
+    "standalone Machine Overview expanded NVMe SMART card layout with zero horizontal overflow (mobile 390x844 light)",
+    "diskless standalone VPS Machine Overview verifying no Physical Disks & SMART card renders and zero physical_disk requests fire"
+  ],
+  "interactions": [
+    "clicked debian-san-01 on /standalone/machines, confirmed Physical Disks & SMART (3) appeared directly on Overview without opening collapsed Details -> Platform details -> Machine, and verified standby disk rendered last-known temperature marker",
+    "focused /dev/sda summary row and toggled via keyboard Enter, confirmed lazy-loaded DiskDrawerOverview rendered Worth Checking (Reallocated Sectors 2, CRC Errors 1), expanded inner Details disclosure to verify SMART Attributes, and checked zero horizontal overflow",
+    "switched to diskless edge-vps-01 and confirmed resource-physical-disks was absent and zero /api/resources?type=physical_disk requests fired",
+    "simulated HTTP 500 on first physical_disk read in dark mode, confirmed Physical disk details are unavailable warning notice and Retry physical disk read button, clicked Retry to recover 3 disks, and expanded /dev/nvme0n1 SMART attributes",
+    "verified responsive wrapping and zero horizontal overflow on 390x844 mobile viewport across collapsed and expanded disk rows with zero page errors"
+  ]
+}

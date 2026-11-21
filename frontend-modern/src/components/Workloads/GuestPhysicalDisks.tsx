@@ -10,7 +10,10 @@ import {
   type Component,
 } from 'solid-js';
 import type { HistoryTimeRange } from '@/api/charts';
-import { getPhysicalDiskAlerts } from '@/components/Storage/physicalDiskAlertOwner';
+import {
+  getAgentMachineAlertOverrideKeys,
+  getPhysicalDiskAlerts,
+} from '@/components/Storage/physicalDiskAlertOwner';
 import { InfoCardFrame } from '@/components/shared/InfoCardFrame';
 import { InlineNotice } from '@/components/shared/InlineNotice';
 import { useWebSocket } from '@/contexts/appRuntime';
@@ -48,6 +51,7 @@ const GuestPhysicalDiskRow: Component<{
   alertResourceIds: string[];
   reportingAgentId?: string;
   historyEnabled: boolean;
+  testId?: string;
 }> = (props) => {
   const [expanded, setExpanded] = createSignal(false);
   const [historyRange, setHistoryRange] = createSignal<HistoryTimeRange>(
@@ -78,7 +82,7 @@ const GuestPhysicalDiskRow: Component<{
     <details
       class="rounded-sm border border-border p-2"
       onToggle={(event) => setExpanded(event.currentTarget.open)}
-      data-testid="guest-physical-disk"
+      data-testid={props.testId ?? 'guest-physical-disk'}
     >
       <summary class="flex cursor-pointer flex-wrap items-center gap-x-2 gap-y-1 text-xs">
         <span class="font-semibold text-base-content">{label()}</span>
@@ -138,6 +142,11 @@ export const GuestPhysicalDisks: Component<{
    * applies, then the guest's canonical ID and override keys.
    */
   alertResourceIds?: string[];
+  /**
+   * Optional owning machine/host resource whose override keys should be derived
+   * lazily inside this chunk when explicit alertResourceIds are not passed.
+   */
+  ownerResource?: Resource;
   /** The guest's own agent, which reports these disks' SMART temperatures. */
   reportingAgentId?: string;
   /**
@@ -145,14 +154,19 @@ export const GuestPhysicalDisks: Component<{
    * charts and the list's live refresh pause until it is shown again.
    */
   historyEnabled?: boolean;
+  /** Noun used in empty-state status copy (defaults to "guest"). */
+  subjectNoun?: 'guest' | 'machine' | 'host';
+  /** Base data-testid prefix for rows and container (defaults to "guest-physical-disk"). */
+  testIdPrefix?: string;
 }> = (props) => {
-  // The Proxmox Overview snapshot deliberately excludes physical disks. Query
-  // only the open guest's direct children rather than hydrating every disk in
-  // a large estate (or mistaking the VMID-based table key for the resource ID).
+  // Query only the open resource's direct physical_disk children rather than
+  // hydrating every disk in a large estate.
   const parentId = props.parentId.trim();
+  const testIdPrefix = props.testIdPrefix?.trim() || 'guest-physical-disk';
+  const subjectNoun = () => props.subjectNoun ?? 'guest';
   const source = useUnifiedResources({
     query: `type=physical_disk&parent=${encodeURIComponent(parentId)}`,
-    cacheKey: `guest-physical-disks:${parentId}`,
+    cacheKey: `${testIdPrefix}s:${parentId}`,
     retainReadError: true,
     enabled: () => parentId.length > 0,
     realtimeEnabled: () => parentId.length > 0 && props.historyEnabled !== false,
@@ -191,7 +205,7 @@ export const GuestPhysicalDisks: Component<{
 
   return (
     <Show when={hasShownInspection()}>
-      <InfoCardFrame ref={card} data-testid="guest-physical-disks">
+      <InfoCardFrame ref={card} data-testid={`${testIdPrefix}s`}>
         <h3
           ref={heading}
           tabIndex={-1}
@@ -206,17 +220,23 @@ export const GuestPhysicalDisks: Component<{
             <div ref={retainInspectionFocus} class="space-y-2">
               <Show when={disks().length === 0}>
                 <p class="text-xs text-muted" role="status">
-                  No physical disk records were returned for this guest. This does not mean the
-                  guest has no disks.
+                  No physical disk records were returned for this {subjectNoun()}. This does not
+                  mean the {subjectNoun()} has no disks.
                 </p>
               </Show>
               <For each={disks()}>
                 {(disk) => (
                   <GuestPhysicalDiskRow
                     disk={disk}
-                    alertResourceIds={props.alertResourceIds ?? []}
+                    alertResourceIds={
+                      props.alertResourceIds ??
+                      (props.ownerResource
+                        ? getAgentMachineAlertOverrideKeys(props.ownerResource)
+                        : [])
+                    }
                     reportingAgentId={props.reportingAgentId}
                     historyEnabled={props.historyEnabled !== false}
+                    testId={testIdPrefix}
                   />
                 )}
               </For>
