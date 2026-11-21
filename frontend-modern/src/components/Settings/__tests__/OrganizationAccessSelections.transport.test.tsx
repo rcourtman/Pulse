@@ -338,13 +338,16 @@ beforeEach(async () => {
                 : savedMember,
           });
         }
+        const existing = pending.find((candidate) => candidate.userId === body.userId);
         const invitation: OrganizationInvitation = {
           userId: body.userId,
           role: body.role,
-          invitedAt: '2026-11-07T00:00:00Z',
+          invitedAt: existing?.invitedAt ?? '2026-11-07T00:00:00Z',
           invitedBy: owner,
         };
-        pending = [...pending, invitation];
+        pending = existing
+          ? pending.map((candidate) => (candidate === existing ? invitation : candidate))
+          : [...pending, invitation];
         return reply({ kind: 'invitation', invitation });
       }
       const member = members.find(
@@ -991,10 +994,46 @@ describe('Organization invitation form submission', () => {
       expect(pending.filter((invitation) => invitation.userId !== userId)).toEqual(originalPending);
       expect(within(pendingGroup(userId)).getByText(role)).toBeInTheDocument();
       expect(notices.success).toHaveBeenCalledExactlyOnceWith(
-        `Sent ${userId} an invitation for the ${role} role.`,
+        `Saved a pending ${role} invitation for ${userId}.`,
       );
     },
   );
+
+  it('saves one pending role for the exact ID and rereads the existing invitation', async () => {
+    await openPanel();
+    const saved = originalPending[1];
+    const input = screen.getByRole('textbox', { name: 'Member user ID' });
+    fireEvent.input(input, { target: { value: saved.userId.toUpperCase() } });
+    expect(screen.getByRole('form', { name: 'Invite member' })).toContainElement(input);
+
+    fireEvent.input(input, { target: { value: `  ${saved.userId}  ` } });
+    const form = screen.getByRole('form', { name: 'Update pending invitation' });
+    const submit = within(form).getByRole('button', { name: 'Save role' });
+    expect(submit).toHaveAccessibleDescription(
+      /Last read: Viewer, pending acceptance\. If already accepted, the role changes immediately\./,
+    );
+    fireEvent.change(within(form).getByRole('combobox', { name: 'Member role' }), {
+      target: { value: 'editor' },
+    });
+    expect(within(pendingGroup(saved.userId)).getByText('viewer')).toBeVisible();
+    expect(writes()).toHaveLength(0);
+
+    fireEvent.submit(form);
+    await expectSavedReread();
+    expectWrite(`${orgPath}/members`, 'POST', { userId: saved.userId, role: 'editor' });
+    expect(notices.success).toHaveBeenCalledExactlyOnceWith(
+      `Saved a pending editor invitation for ${saved.userId}.`,
+    );
+    expect(pending).toEqual(
+      originalPending.map((invitation) =>
+        invitation.userId === saved.userId ? { ...invitation, role: 'editor' } : invitation,
+      ),
+    );
+    expect(within(pendingGroup(saved.userId)).getByText('editor')).toBeVisible();
+    expect(members).toEqual(originalMembers);
+    expect(personal).toEqual(originalPersonal);
+    expect(screen.getByRole('form', { name: 'Invite member' })).toBeInTheDocument();
+  });
 
   it('names an immediate role edit for an exact saved member, without changing the write', async () => {
     // Preserve exact matching (including case) and the current saved role;

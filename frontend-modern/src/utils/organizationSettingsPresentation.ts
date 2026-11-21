@@ -192,11 +192,11 @@ export function getOrganizationAccessMemberAddedMessage(
   return `Added ${userId} as ${role}.`;
 }
 
-export function getOrganizationAccessInvitationSentMessage(
+export function getOrganizationAccessInvitationSavedMessage(
   userId: string,
   role: Exclude<OrganizationRole, 'owner'>,
 ): string {
-  return `Sent ${userId} an invitation for the ${role} role.`;
+  return `Saved a pending ${role} invitation for ${userId}.`;
 }
 
 export function getOrganizationAccessInvitationAcceptedMessage(userId: string): string {

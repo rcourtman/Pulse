@@ -25,7 +25,7 @@ import {
   getOrganizationAccessInvitationAcceptedMessage,
   getOrganizationAccessInvitationDeclinedMessage,
   getOrganizationAccessInvitationRevokedMessage,
-  getOrganizationAccessInvitationSentMessage,
+  getOrganizationAccessInvitationSavedMessage,
   getOrganizationAccessMemberAddedMessage,
   getOrganizationAccessMemberRemovedMessage,
   getOrganizationAccessOwnerTransferMemberRequiredMessage,
@@ -80,6 +80,12 @@ export function useOrganizationAccessPanelState(props: OrganizationAccessPanelPr
   const inviteDraftMember = createMemo(() => {
     const userId = inviteDraftUserID();
     return userId ? members().find((member) => member.userId === userId) : undefined;
+  });
+  const inviteDraftInvitation = createMemo(() => {
+    const userId = inviteDraftUserID();
+    return userId
+      ? pendingInvitations().find((invitation) => invitation.userId === userId)
+      : undefined;
   });
   const inviteDraftIsOwner = () => {
     const currentOrg = org();
@@ -400,7 +406,7 @@ export function useOrganizationAccessPanelState(props: OrganizationAccessPanelPr
       (options) => OrgsAPI.inviteMember(currentOrg.id, { userId, role }, options),
       (result) =>
         result.kind === 'invitation'
-          ? getOrganizationAccessInvitationSentMessage(userId, result.invitation.role)
+          ? getOrganizationAccessInvitationSavedMessage(userId, result.invitation.role)
           : currentOrg.id === DEFAULT_ORG_SCOPE
             ? getOrganizationAccessMemberAddedMessage(userId, result.member.role)
             : getOrganizationAccessRoleUpdatedMessage(userId, result.member.role),
@@ -496,6 +502,7 @@ export function useOrganizationAccessPanelState(props: OrganizationAccessPanelPr
     canManageCurrentOrg,
     canChangeAccess,
     declineInvitation,
+    inviteDraftInvitation,
     inviteDraftIsOwner,
     inviteDraftMember,
     inviteMember,
