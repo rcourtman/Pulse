@@ -97,6 +97,51 @@ func TestMetadataSnapshotsParityAndOwnership(t *testing.T) {
 	assertMetadataSnapshotParity(t, s)
 }
 
+func TestPVEBackupCarryForwardReadsKeepOrderedPrimaryRows(t *testing.T) {
+	s := metadataStateFixture()
+	archives := s.PVEBackups.StorageBackups
+	snapshots := s.PVEBackups.GuestSnapshots
+	// A single connection still gets an independent bulk copy.
+	if got := s.GetPVEStorageBackupsForInstance("pve"); !reflect.DeepEqual(got, archives) {
+		t.Fatalf("single-connection archives: got %+v, want %+v", got, archives)
+	}
+	if got := s.GetPVEGuestSnapshotsForInstance("pve"); !reflect.DeepEqual(got, snapshots) {
+		t.Fatalf("single-connection snapshots: got %+v, want %+v", got, snapshots)
+	}
+
+	at := time.Date(2026, 11, 20, 7, 30, 0, 0, time.UTC)
+	wantArchives := []StorageBackup{
+		{ID: "last-local", Instance: "pve", Node: "node-b", StorageNode: "node-a", VMID: 100, Time: at, InProgress: true},
+		{ID: "older-shared", Instance: "pve", Node: "node-b", VMID: 100, Time: at.Add(-time.Hour), Verified: true},
+	}
+	wantSnapshots := []GuestSnapshot{
+		{ID: "last-snapshot", Instance: "pve", Node: "node-b", VMID: 100, Time: at, VMState: true},
+		{ID: "older-snapshot", Instance: "pve", Node: "node-b", VMID: 100, Time: at.Add(-time.Hour), SizeBytes: 2048},
+	}
+	s.PVEBackups.StorageBackups = []StorageBackup{wantArchives[0], {ID: "peer-archive", Instance: "PVE", Node: "node-b", VMID: 100}, wantArchives[1]}
+	s.PVEBackups.GuestSnapshots = []GuestSnapshot{wantSnapshots[0], {ID: "peer-snapshot", Instance: "PVE", Node: "node-b", VMID: 100}, wantSnapshots[1]}
+	s.Backups.PVE = PVEBackups{StorageBackups: archives, GuestSnapshots: snapshots}
+
+	check := func() ([]StorageBackup, []GuestSnapshot) {
+		t.Helper()
+		gotArchives := s.GetPVEStorageBackupsForInstance("pve")
+		gotSnapshots := s.GetPVEGuestSnapshotsForInstance("pve")
+		if !reflect.DeepEqual(gotArchives, wantArchives) || !reflect.DeepEqual(gotSnapshots, wantSnapshots) {
+			t.Fatalf("scoped reads changed order, provenance or content: archives=%+v, snapshots=%+v", gotArchives, gotSnapshots)
+		}
+		return gotArchives, gotSnapshots
+	}
+	gotArchives, gotSnapshots := check()
+	gotArchives[0].StorageNode, gotSnapshots[0].Description = "caller-only", "caller-only"
+	check()
+	if missing := s.GetPVEStorageBackupsForInstance("missing"); missing == nil || len(missing) != 0 {
+		t.Fatalf("missing archive connection should return an empty slice: %#v", missing)
+	}
+	if missing := s.GetPVEGuestSnapshotsForInstance("missing"); missing == nil || len(missing) != 0 {
+		t.Fatalf("missing snapshot connection should return an empty slice: %#v", missing)
+	}
+}
+
 func TestMetadataSnapshotsConcurrentTransactions(t *testing.T) {
 	s := metadataStateFixture()
 	var workers sync.WaitGroup
