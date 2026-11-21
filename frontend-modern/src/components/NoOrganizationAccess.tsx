@@ -1,4 +1,12 @@
-import { For, Show, createResource, createSignal, onCleanup, type Component } from 'solid-js';
+import {
+  For,
+  Show,
+  batch,
+  createResource,
+  createSignal,
+  onCleanup,
+  type Component,
+} from 'solid-js';
 import { OrgsAPI, type UserOrganizationInvitation } from '@/api/orgs';
 import { Button } from '@/components/shared/Button';
 import { OrganizationRoleBadge } from '@/components/shared/OrganizationBadges';
@@ -16,6 +24,13 @@ type InvitationReadResult =
   | { kind: 'loaded'; invitations: UserOrganizationInvitation[] }
   | { kind: 'unavailable'; invitations: [] };
 
+interface InvitationDecision {
+  action: 'accept' | 'decline';
+  organization: string;
+}
+
+const SLOW_INVITATION_DECISION_MS = 10_000;
+
 /**
  * Shown to a signed-in user who can use no organization yet, typically someone
  * invited to an organization who has not accepted. Accepting an invitation
@@ -26,6 +41,7 @@ export const NoOrganizationAccess: Component<NoOrganizationAccessProps> = (props
   let invitationReadController: AbortController | undefined;
   let invitationRegion: HTMLElement | undefined;
   let restartCheckButton: HTMLButtonElement | undefined;
+  let slowDecisionTimer: number | undefined;
   const [invitationRead, { refetch }] = createResource<InvitationReadResult>(async () => {
     invitationReadController?.abort();
     const controller = new AbortController();
@@ -58,13 +74,13 @@ export const NoOrganizationAccess: Component<NoOrganizationAccessProps> = (props
   onCleanup(() => {
     disposed = true;
     invitationReadController?.abort();
+    window.clearTimeout(slowDecisionTimer);
   });
-  const [responding, setResponding] = createSignal(false);
-  const [unconfirmedDecision, setUnconfirmedDecision] = createSignal<{
-    action: 'accept' | 'decline';
-    organization: string;
-  }>();
-  const decisionsDisabled = () => responding() || unconfirmedDecision() !== undefined;
+  const [pendingDecision, setPendingDecision] = createSignal<InvitationDecision>();
+  const [decisionSlow, setDecisionSlow] = createSignal(false);
+  const [unconfirmedDecision, setUnconfirmedDecision] = createSignal<InvitationDecision>();
+  const decisionsDisabled = () => !!(pendingDecision() || unconfirmedDecision());
+  const checkAgainDisabled = () => !!pendingDecision() && !decisionSlow();
 
   const retryInvitations = () => {
     if (disposed || decisionsDisabled()) return;
@@ -76,38 +92,70 @@ export const NoOrganizationAccess: Component<NoOrganizationAccessProps> = (props
 
   const reload = () => (props.onReload ? props.onReload() : window.location.reload());
 
-  const respond = async (invitation: UserOrganizationInvitation, action: 'accept' | 'decline') => {
+  const finishDecision = (decision: InvitationDecision, unconfirmed = false) => {
+    window.clearTimeout(slowDecisionTimer);
+    batch(() => {
+      if (unconfirmed) setUnconfirmedDecision(decision);
+      setPendingDecision(undefined);
+      setDecisionSlow(false);
+    });
+  };
+
+  const leaveWhileWaiting = () => {
+    const decision = pendingDecision();
+    // Stop acting on this response if the user leaves. That does not cancel
+    // or undo a server write; the current access has to be read again.
+    if (decision) finishDecision(decision, true);
+  };
+
+  const checkAgain = () => {
+    if (disposed || checkAgainDisabled()) return;
+    leaveWhileWaiting();
+    reload();
+  };
+
+  const respond = async (
+    invitation: UserOrganizationInvitation,
+    action: InvitationDecision['action'],
+  ) => {
     if (disposed || invitationRead.loading || decisionsDisabled()) return;
     // A disabled row button can drop keyboard focus. Move it only when it is
     // still inside this region, never from a recovery or sign-out control.
     if (invitationRegion?.contains(document.activeElement)) {
       invitationRegion.focus({ preventScroll: true });
     }
-    setResponding(true);
+    const decision = {
+      action,
+      organization: getOrganizationInvitationPresentation(
+        invitation.orgId,
+        invitation.orgDisplayName,
+      ).organization,
+    };
+    const isCurrent = () => !disposed && pendingDecision() === decision;
+    setPendingDecision(decision);
+    // Avoid replacing a healthy in-flight decision with a reload, but keep
+    // an escape for an unresponsive server. The timer itself does not retry.
+    slowDecisionTimer = window.setTimeout(() => {
+      if (isCurrent()) setDecisionSlow(true);
+    }, SLOW_INVITATION_DECISION_MS);
     try {
       if (action === 'accept') {
         await OrgsAPI.acceptMyInvitation(invitation.orgId);
-        if (!disposed) reload();
+        if (isCurrent()) reload();
         return;
       }
       await OrgsAPI.declineMyInvitation(invitation.orgId);
       // The decision is complete. Its readback can be replaced independently.
-      if (!disposed) void refetch();
+      if (isCurrent()) void refetch();
     } catch (error) {
-      if (disposed) return;
+      if (!isCurrent()) return;
       logger.warn('Failed to answer organization invitation', error);
       // The reply can fail after Pulse saved the decision. An inbox read
       // alone cannot tell whether an acceptance granted access; Check again
       // re-enters the existing bootstrap path instead of resending the write.
-      setUnconfirmedDecision({
-        action,
-        organization: getOrganizationInvitationPresentation(
-          invitation.orgId,
-          invitation.orgDisplayName,
-        ).organization,
-      });
+      finishDecision(decision, true);
     } finally {
-      setResponding(false);
+      if (isCurrent()) finishDecision(decision);
     }
   };
 
@@ -120,10 +168,32 @@ export const NoOrganizationAccess: Component<NoOrganizationAccessProps> = (props
         <h1 id="no-organization-access-title" class="text-lg font-semibold tracking-tight">
           {unconfirmedDecision() ? 'Check organization access' : 'No organization access yet'}
         </h1>
-        <p class="mt-2 text-sm leading-6 text-muted">
-          {unconfirmedDecision()
-            ? 'You are signed in. Your organization access may have changed.'
-            : 'You are signed in, but you are not a member of an organization on this Pulse server.'}
+        <p
+          class="mt-2 text-sm leading-6 text-muted [overflow-wrap:anywhere]"
+          aria-live="polite"
+          aria-atomic="true"
+        >
+          <Show
+            when={pendingDecision()}
+            keyed
+            fallback={
+              unconfirmedDecision()
+                ? 'You are signed in. Your organization access may have changed.'
+                : 'You are signed in, but you are not a member of an organization on this Pulse server.'
+            }
+          >
+            {(decision) => (
+              <>
+                You are signed in. Waiting for Pulse to confirm your decision to {decision.action}{' '}
+                the invitation to <bdi>{decision.organization}</bdi>.
+                <Show when={decisionSlow()}>
+                  {' '}
+                  Keep waiting or choose <strong>Check again</strong> to check access without
+                  resending your decision.
+                </Show>
+              </>
+            )}
+          </Show>
         </p>
 
         <section
@@ -250,11 +320,19 @@ export const NoOrganizationAccess: Component<NoOrganizationAccessProps> = (props
           <Button
             variant={unconfirmedDecision() ? 'primary' : 'secondary'}
             size="md"
-            onClick={reload}
+            disabled={checkAgainDisabled()}
+            onClick={checkAgain}
           >
             Check again
           </Button>
-          <Button variant="ghost" size="md" onClick={() => void props.onSignOut()}>
+          <Button
+            variant="ghost"
+            size="md"
+            onClick={() => {
+              leaveWhileWaiting();
+              void props.onSignOut();
+            }}
+          >
             Sign out
           </Button>
         </div>
