@@ -7,6 +7,9 @@ writes summary.md and result.json, and exits 1 when the candidate's resident
 memory exceeds the baseline by more than both the percentage tolerance and the
 absolute slack. Requiring both keeps small installs' noise from failing it.
 
+It also reports Linux's process RSS high-water mark through the last sample,
+when available. The high-water mark is not cgroup usage and does not gate.
+
 Over the same final third it also reports CPU (percent of one core) and disk
 writes extrapolated to a day (#2199, #1966). Those rates are reported, not
 gated, until measured budgets exist for them.
@@ -64,6 +67,15 @@ def final_third(rows: list[dict[str, str]]) -> list[dict[str, str]]:
 def steady_state(rows: list[dict[str, str]]) -> dict[str, float]:
     tail = final_third(rows)
     return {column: statistics.median(float(row[column]) for row in tail) for column in COLUMNS}
+
+
+def rss_high_water_kib(rows: list[dict[str, str]]) -> int | None:
+    """Process VmHWM at the last sample, not the maximum sampled VmRSS."""
+    try:
+        peak = int(rows[-1].get("rss_hwm_kib") or "")
+    except ValueError:
+        return None
+    return peak if peak > 0 else None
 
 
 def counter_rate(tail: list[dict[str, str]], column: str) -> float | None:
@@ -202,6 +214,8 @@ def main(argv: list[str]) -> int:
     candidate_rows = read_rows(out / "samples-candidate.tsv")
     baseline = steady_state(baseline_rows)
     candidate = steady_state(candidate_rows)
+    baseline_high_water = rss_high_water_kib(baseline_rows)
+    candidate_high_water = rss_high_water_kib(candidate_rows)
     baseline_activity = activity(baseline_rows, clk_tck)
     candidate_activity = activity(candidate_rows, clk_tck)
 
@@ -223,14 +237,29 @@ def main(argv: list[str]) -> int:
         lines.append(f"| {LABELS[column]} | {base:.1f} | {cand:.1f} | {cand - base:+.1f} |")
     if exceeded:
         verdict = (
-            f"**Regression:** resident memory grew {growth / 1024:+.1f} MiB ({growth_pct:+.1f}%), "
+            f"**Steady-state RSS regression:** resident memory grew "
+            f"{growth / 1024:+.1f} MiB ({growth_pct:+.1f}%), "
             f"past both {tolerance:g}% and {slack_kib / 1024:g} MiB."
         )
         if not gated:
             verdict += " Reported only: this estate does not gate."
     else:
-        verdict = f"No regression: resident memory changed {growth / 1024:+.1f} MiB ({growth_pct:+.1f}%)."
+        verdict = f"No steady-state RSS regression: resident memory changed {growth / 1024:+.1f} MiB ({growth_pct:+.1f}%)."
     lines += ["", verdict]
+    baseline_peak_mib = baseline_high_water / 1024 if baseline_high_water is not None else None
+    candidate_peak_mib = candidate_high_water / 1024 if candidate_high_water is not None else None
+    lines += [
+        "",
+        "### Peak process memory",
+        "",
+        "Linux `VmHWM` through the last sample can include peaks between samples. "
+        "It does not measure cgroup usage or affect the steady-state verdict.",
+        "",
+        "| | Baseline MiB | Candidate MiB | Change |",
+        "|---|---:|---:|---:|",
+        f"| Process RSS high-water mark | {format_rate(baseline_peak_mib)} | "
+        f"{format_rate(candidate_peak_mib)} | {format_change(baseline_peak_mib, candidate_peak_mib)} |",
+    ]
     lines += [
         "",
         "### CPU and disk writes",
@@ -266,6 +295,8 @@ def main(argv: list[str]) -> int:
     (out / "result.json").write_text(json.dumps({
         "baseline": baseline,
         "candidate": candidate,
+        "baseline_rss_high_water_kib": baseline_high_water,
+        "candidate_rss_high_water_kib": candidate_high_water,
         "baseline_activity": baseline_activity,
         "candidate_activity": candidate_activity,
         "clk_tck": clk_tck,

@@ -11,6 +11,8 @@
 # memory (where the modernc SQLite driver allocates) and file pages. At the end
 # each run's heap profile is saved, and summarize_release_memory.py writes the
 # comparison and exits 1 when the candidate grew past the tolerance.
+# Each sample also retains Linux's process RSS high-water mark (VmHWM), which
+# can include peaks between samples. This is not cgroup memory usage.
 #
 # Each sample also records the process's CPU ticks (/proc/<pid>/stat) and its
 # storage and write-syscall byte counters (/proc/<pid>/io), so the summary can
@@ -119,6 +121,14 @@ io_bytes() {
   awk '/^write_bytes:/ { w = $2 } /^wchar:/ { c = $2 } END { printf "%s\t%s", w, c }' "$1"
 }
 
+read_memory_status() {
+  awk '
+    /^VmRSS:/ { rss = $2 }
+    /^VmHWM:/ { hwm = $2 }
+    END { if (rss != "") printf "%s\t%s\n", rss, hwm }
+  ' "$1"
+}
+
 run_tree() {
   local label=$1 port=$2
   local data="${OUT_DIR}/data-${label}" log="${OUT_DIR}/run-${label}.log"
@@ -150,18 +160,17 @@ run_tree() {
       --stats "${OUT_DIR}/proxmox-${label}.json" > "${driver_log}" 2>&1 &
     driver=$!
   fi
-  printf 'elapsed_s\trss_kib\tgo_heap_kib\tgo_other_kib\tanon_other_kib\tfile_kib\tcpu_ticks\twrite_bytes\twchar_bytes\n' > "${samples}"
-  local start now
+  printf 'elapsed_s\trss_kib\tgo_heap_kib\tgo_other_kib\tanon_other_kib\tfile_kib\tcpu_ticks\twrite_bytes\twchar_bytes\trss_hwm_kib\n' > "${samples}"
+  local start now rss rss_hwm
   start=$(date +%s)
   while kill -0 "${pid}" 2>/dev/null; do
     now=$(( $(date +%s) - start ))
     (( now >= DURATION )) && break
-    local rss
-    rss=$(awk '/^VmRSS:/ {print $2}' "/proc/${pid}/status" 2>/dev/null || true)
+    IFS=$'\t' read -r rss rss_hwm < <(read_memory_status "/proc/${pid}/status" 2>/dev/null) || true
     if [[ -n "${rss}" ]]; then
-      printf '%s\t%s\t%s\t%s\t%s\n' "${now}" "${rss}" "$(classify_smaps "/proc/${pid}/smaps")" \
+      printf '%s\t%s\t%s\t%s\t%s\t%s\n' "${now}" "${rss}" "$(classify_smaps "/proc/${pid}/smaps")" \
         "$(cpu_ticks "/proc/${pid}/stat" 2>/dev/null || true)" \
-        "$(io_bytes "/proc/${pid}/io" 2>/dev/null || printf '\t')" >> "${samples}"
+        "$(io_bytes "/proc/${pid}/io" 2>/dev/null || printf '\t')" "${rss_hwm}" >> "${samples}"
     fi
     sleep "${INTERVAL}"
   done
