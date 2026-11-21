@@ -1069,6 +1069,61 @@ const writes = () => [
 const expectNoWrites = () => writes().forEach((write) => expect(write).not.toHaveBeenCalled());
 
 describe('Organization Access read admission', () => {
+  const noPendingInvitations = 'No pending invitations for this organization.';
+  const noPersonalInvitations = 'No invitations are waiting for you.';
+  const noInvitations = 'No pending invitations. None for you.';
+  const emptyResults = [noPendingInvitations, noPersonalInvitations, noInvitations];
+
+  it.each([
+    { failedList: 'neither', expected: noInvitations },
+    { failedList: 'pending', expected: noPersonalInvitations },
+    { failedList: 'personal', expected: noPendingInvitations },
+    { failedList: 'both', expected: undefined },
+  ])(
+    'reports only the verified empty result when $failedList failed',
+    async ({ failedList, expected }) => {
+      const unavailable = () =>
+        Object.assign(new Error('Temporarily unavailable'), { status: 503 });
+      if (failedList === 'pending' || failedList === 'both') {
+        listPendingInvitationsMock.mockRejectedValueOnce(unavailable());
+      }
+      if (failedList === 'personal' || failedList === 'both') {
+        listMyInvitationsMock.mockRejectedValueOnce(unavailable());
+      }
+      renderPanel();
+
+      const summary = within(await screen.findByText(/Access for/));
+      for (const result of emptyResults) {
+        if (result === expected) expect(summary.getByText(result)).toBeVisible();
+        else expect(summary.queryByText(result)).not.toBeInTheDocument();
+      }
+      if (failedList !== 'neither') {
+        expect(
+          screen.getByRole('alert', { name: 'Organization invitations incomplete' }),
+        ).toBeVisible();
+        expect(screen.getByRole('button', { name: /^Invite$/ })).toBeDisabled();
+      }
+      expectNoWrites();
+    },
+  );
+
+  it.each(['viewer', 'read-only owner'])(
+    'does not describe the manager-only list as empty for a %s',
+    async (reader) => {
+      setReadOnly(reader === 'read-only owner');
+      render(() => (
+        <OrganizationAccessPanel currentUser={reader === 'viewer' ? 'user-2' : 'user-1'} />
+      ));
+
+      const summary = within(await screen.findByText(/Access for/));
+      expect(summary.getByText(noPersonalInvitations)).toBeVisible();
+      expect(summary.queryByText(noPendingInvitations)).not.toBeInTheDocument();
+      expect(summary.queryByText(noInvitations)).not.toBeInTheDocument();
+      if (reader === 'viewer') expect(listPendingInvitationsMock).not.toHaveBeenCalled();
+      expectNoWrites();
+    },
+  );
+
   it('allows a read-only reload when invitations fail before a sibling read settles', async () => {
     const oldMembers = deferred<typeof baseMembers>();
     listMembersMock.mockReturnValueOnce(oldMembers.promise);
@@ -1081,6 +1136,7 @@ describe('Organization Access read admission', () => {
     });
     expect(warning).toHaveTextContent('Pending Invitations');
     expect(screen.queryByText('user-2')).not.toBeInTheDocument();
+    for (const result of emptyResults) expect(screen.queryByText(result)).not.toBeInTheDocument();
     const oldSignal = listMembersMock.mock.calls[0][1].signal;
     expect(oldSignal.aborted).toBe(false);
     const reload = within(warning).getByRole('button', { name: 'Reload access' });
@@ -1093,6 +1149,7 @@ describe('Organization Access read admission', () => {
     expect(await screen.findByText('fresh-member')).toBeInTheDocument();
     oldMembers.resolve(baseMembers);
     await waitFor(() => expect(screen.getByText(/Access for/)).toHaveFocus());
+    expect(screen.getByText(noInvitations)).toBeVisible();
     expect(screen.queryByText('user-2')).not.toBeInTheDocument();
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
     expect(orgGetMock).toHaveBeenCalledTimes(2);
@@ -1104,6 +1161,7 @@ describe('Organization Access read admission', () => {
     renderPanel();
     await screen.findByRole('alert');
     expect(screen.queryByText('No organization members found.')).not.toBeInTheDocument();
+    for (const result of emptyResults) expect(screen.queryByText(result)).not.toBeInTheDocument();
     orgGetMock.mockResolvedValue(baseOrg);
     listMembersMock.mockResolvedValue([]);
     fireEvent.click(screen.getByRole('button', { name: 'Reload access' }));
