@@ -47,14 +47,17 @@ class BackendBuildCacheTest(unittest.TestCase):
         api = self.jobs["backend-api"]
         matrix = api["strategy"]["matrix"]
         self.assertEqual(api["if"], "${{ !cancelled() && needs.changes.result == 'success' }}")
-        self.assertEqual(matrix["index"],
-                         "${{ fromJSON(needs.changes.outputs.component_only == 'true'"
-                         " && '[0]' || '[0, 1, 2, 3, 4]') }}")
-        mode_axis = matrix.get("mode")
-        if mode_axis is not None:
-            self.assertEqual(mode_axis,
-                             "${{ fromJSON(needs.changes.outputs.code == 'false'"
-                             " && '[\"verdict-only\"]' || '[\"runtime\"]') }}")
+        self.assertEqual(set(matrix), {"index", "mode", "exclude"})
+        self.assertEqual(
+            matrix["index"],
+            "${{ fromJSON(needs.changes.outputs.component_only == 'true'"
+            " && '[0]' || '[0, 1, 2, 3, 4]') }}",
+        )
+        self.assertEqual(
+            matrix["mode"],
+            "${{ fromJSON(needs.changes.outputs.code == 'false'"
+            " && '[\"verdict-only\"]' || '[\"runtime\"]') }}",
+        )
         # Expand the fixed axes above with GitHub's matrix exclusion rule.
         # The required verdict still consumes the worker's actual result
         # rather than accepting a skipped matrix.
@@ -63,18 +66,16 @@ class BackendBuildCacheTest(unittest.TestCase):
             ("true", "", [0, 1, 2, 3, 4]),  # Index 4 also carries rest-2 on full main PRs.
             ("true", "true", [0]),
             ("", "", [0, 1, 2, 3, 4]),  # An absent classifier output must not narrow coverage.
+            ("unknown", "", [0, 1, 2, 3, 4]),  # Invalid output remains subject to admission.
         ):
             with self.subTest(code=code, component_only=component_only):
                 mode = "verdict-only" if code == "false" else "runtime"
                 indices = [0] if component_only == "true" else range(5)
-                rows = [{"index": index} for index in indices]
-                if mode_axis is not None:
-                    for row in rows:
-                        row["mode"] = mode
+                rows = [{"index": index, "mode": mode} for index in indices]
                 selected = [
                     row["index"] for row in rows
                     if not any(all(row.get(key) == val for key, val in excluded.items())
-                               for excluded in matrix.get("exclude", []))
+                               for excluded in matrix["exclude"])
                 ]
                 self.assertEqual(selected, expected)
         self.assertEqual(self.jobs["backend"]["strategy"]["matrix"], {"shard": ["rest-0", "rest-1"]})

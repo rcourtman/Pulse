@@ -917,10 +917,14 @@ jobs:
         index: ${{ fromJSON(needs.changes.outputs.component_only == 'true' && '[0]' || '[0, 1, 2, 3, 4]') }}
         mode: ${{ fromJSON(needs.changes.outputs.code == 'false' && '["verdict-only"]' || '["runtime"]') }}
         exclude:
-          - {mode: verdict-only, index: 1}
-          - {mode: verdict-only, index: 2}
-          - {mode: verdict-only, index: 3}
-          - {mode: verdict-only, index: 4}
+          - mode: verdict-only
+            index: 1
+          - mode: verdict-only
+            index: 2
+          - mode: verdict-only
+            index: 3
+          - mode: verdict-only
+            index: 4
     env:
       API_SHARD_COUNT: 5
 
