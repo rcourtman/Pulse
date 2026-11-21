@@ -123,6 +123,7 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
   const testResultSummaryId = `${summaryIdPrefix}-test-summary`;
   const testResultId = `${summaryIdPrefix}-test-result`;
   const testResultTitleId = `${summaryIdPrefix}-test-result-title`;
+  const signInRestrictionsId = `${summaryIdPrefix}-sign-in-restrictions`;
   // The server checks only URL format on the manual SAML path. Either
   // metadata source takes precedence, even when the draft also has an SSO URL.
   const isSamlUrlFormatCheck = () =>
@@ -1000,10 +1001,18 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
                         onInput={(e) => setForm('allowedGroups', e.currentTarget.value)}
                         placeholder="admin, sso-users"
                         textareaBaseClass={controlClass('min-h-[60px]')}
-                        help="Comma- or newline-separated. Group names may contain spaces. Empty allows all."
+                        help={
+                          <>
+                            <span id={signInRestrictionsId}>
+                              Each filled list needs a match. Blank skips only that check.
+                            </span>{' '}
+                            Use commas or new lines. Names can have spaces.
+                          </>
+                        }
                       />
                       <FormTextarea
                         label="Allowed Domains"
+                        aria-describedby={signInRestrictionsId}
                         rows={2}
                         value={form.allowedDomains}
                         onInput={(e) => setForm('allowedDomains', e.currentTarget.value)}
@@ -1013,6 +1022,7 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
                       />
                       <FormTextarea
                         label="Allowed Emails"
+                        aria-describedby={signInRestrictionsId}
                         rows={2}
                         value={form.allowedEmails}
                         onInput={(e) => setForm('allowedEmails', e.currentTarget.value)}
@@ -1026,7 +1036,7 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
                         onInput={(e) => setForm('groupRoleMappings', e.currentTarget.value)}
                         placeholder="admins=admin, ops=operator"
                         textareaBaseClass={controlClass('min-h-[60px]')}
-                        help="Format: group=roleId. Separate mappings with commas or new lines. Group names may contain spaces."
+                        help="Assigns roles after sign-in checks. Enter group=roleId. Use commas or new lines. Names can have spaces."
                       />
                     </div>
                   </div>

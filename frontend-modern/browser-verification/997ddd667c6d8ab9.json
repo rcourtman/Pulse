@@ -1,0 +1,34 @@
+{
+  "version": 1,
+  "base_sha": "8ad0a821ec35425a9dbcadaf61ac224d37edab53",
+  "verified_at": "2026-11-20T22:37:44Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/SSOProvidersPanel.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/SSOProvidersPanel.tsx": "40f0d4996c590fd4f72117dbc887b0971659d7ebe66d5e3fbcf7209517a064a8"
+  },
+  "routes": [
+    "/settings/security-sso"
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 800
+    },
+    {
+      "width": 320,
+      "height": 620
+    }
+  ],
+  "states": [
+    "Production-mode Settings at the existing Single Sign-On route with synthetic provider inventory and details; Playwright 1.56.1, desktop Chromium 141/light and touch-emulated WebKit 26/dark.",
+    "Six inspected before/after pairs for saved OIDC (blank groups, populated domain and email) and SAML (all lists populated), including the restrictions and phone role-mapping reading positions.",
+    "A blank list skips just its check and mappings describe role assignment separately. Phone field and footer geometry remain unchanged at matched reading positions. Desktop scopes and certificate labels, group claim, access disclosure and all controls remain visible in the same frames."
+  ],
+  "interactions": [
+    "182 assertions in the final browser run. Open and expand by keyboard or touch; the first tab target is unchanged. All three lists have an accessible description of the matching rule without changing saved values or accepted entry syntax.",
+    "The existing saved callback/metadata copy control, Save and Cancel remain available; cancel a draft and reopen the original saved values. A read-only principal has no editor; no provider or session mutation or real IdP request."
+  ]
+}
