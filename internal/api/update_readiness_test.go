@@ -111,6 +111,52 @@ func TestBuildUpdateReadiness_BlocksWhenAgentsHaveNoReportingToken(t *testing.T)
 	}
 }
 
+func TestBuildUpdateReadiness_WarnsOnEphemeralDockerDataDir(t *testing.T) {
+	now := time.Date(2026, 11, 21, 11, 0, 0, 0, time.UTC)
+
+	readiness := buildUpdateReadiness(updateReadinessInputs{
+		cfg:           &config.Config{DataPath: "/data"},
+		targetVersion: "v6.10.0",
+		plan: updates.UpdatePlan{
+			CanAutoUpdate:   false,
+			RollbackSupport: true,
+		},
+		now:                    now,
+		dockerDataDirEphemeral: true,
+		dataDir:                "/data",
+	})
+
+	if readiness.Status != updateReadinessAttention {
+		t.Fatalf("readiness status = %q, want %q: %#v", readiness.Status, updateReadinessAttention, readiness)
+	}
+	if len(readiness.Checks) != 5 {
+		t.Fatalf("len(checks) = %d, want 5: %#v", len(readiness.Checks), readiness.Checks)
+	}
+	check := readiness.Checks[4]
+	if check.ID != "container-data-persistence" || check.Status != updateReadinessCheckWarning {
+		t.Fatalf("unexpected persistence check: %#v", check)
+	}
+	wantDetail := "Mount a persistent volume at /data (for example: -v pulse-data:/data) before recreating or updating the container."
+	if !containsExactString(check.Details, wantDetail) {
+		t.Fatalf("persistence check details missing %q: %#v", wantDetail, check.Details)
+	}
+
+	persistent := buildUpdateReadiness(updateReadinessInputs{
+		cfg:           &config.Config{DataPath: "/data"},
+		targetVersion: "v6.10.0",
+		plan: updates.UpdatePlan{
+			CanAutoUpdate:   false,
+			RollbackSupport: true,
+		},
+		now:                    now,
+		dockerDataDirEphemeral: false,
+		dataDir:                "/data",
+	})
+	if len(persistent.Checks) != 4 {
+		t.Fatalf("len(checks) when persistent = %d, want 4", len(persistent.Checks))
+	}
+}
+
 func containsExactString(values []string, want string) bool {
 	for _, value := range values {
 		if value == want {

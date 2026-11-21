@@ -410,6 +410,7 @@ func (m *Manager) checkProUpdates(ctx context.Context, channel string, currentIn
 	info.Warning = updateWarning(info.Available, isMajorUpgrade, isPrerelease, currentVer.Major, latestVer.Major)
 	if info.Available {
 		info.Availability = UpdateAvailable
+		info.Warning = combineUpdateWarnings(info.Warning, m.dockerEphemeralDataWarning())
 	}
 
 	// A successful broker read says what this installation can receive, not

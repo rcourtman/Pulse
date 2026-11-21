@@ -12182,3 +12182,10 @@ covers carrier up, down and unreadable, and the stale speed.
 connection-test failures to closed, static operator guidance without echoing raw
 errors or secrets. No agent token, onboarding command, or lifecycle authority
 changes.
+
+### Ephemeral Docker data persistence update-readiness boundary (21 November 2026)
+
+`buildUpdateReadiness` in `internal/api/update_readiness.go` appends the
+optional `container-data-persistence` warning check after existing agent
+readiness checks when Docker container storage is ephemeral. No agent token,
+continuity, migration-security, or lifecycle authority changes.
