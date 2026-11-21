@@ -304,11 +304,23 @@ const assessmentTimeRow = (label: string, value: string | null | undefined) => {
   });
 };
 
+function coverageTaskStatusDetail(task: CoverageTask): string {
+  const reported = task.status.trim();
+  const word = reported.toLowerCase();
+  if (task.label === 'Running' && !reported) return 'Running · no verdict';
+  if (task.label === 'Unknown' && (word === 'running' || word === 'active')) {
+    return `Unknown · last: ${reported}`;
+  }
+  if (task.label === 'Running' && word === 'active') return `Running · reported ${reported}`;
+  return task.label;
+}
+
 const buildCoverageTaskSection = (task: CoverageTask, label: string): DetailSection => ({
   label,
   rows: compactDetailRows([
-    makeDetailRow('Status', task.label, {
+    makeDetailRow('Status', coverageTaskStatusDetail(task), {
       tone: statusDetailTone(taskWordVariant(task.label)),
+      wrap: true,
     }),
     makeDetailRow(
       'Started',

@@ -789,6 +789,8 @@ export interface BackupTask {
   status: string;
   startTime: string;
   endTime?: string;
+  /** Pulse's last accepted observation of this task, not the inventory read time. */
+  observedAt?: string;
   size?: number;
   error?: string;
 }
