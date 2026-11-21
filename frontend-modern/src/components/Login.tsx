@@ -446,6 +446,12 @@ export const Login: Component<LoginProps> = (props) => {
   );
 };
 
+const loginFieldLabelClass = 'absolute left-10 top-1 z-10 text-xs font-medium text-base-content';
+// Keep the existing placeholders for browser clients that use them as selectors.
+// The associated labels are the only visible captions, even once values are filled.
+const loginFieldInputClass =
+  'appearance-none relative block w-full rounded-md border border-border pb-1 pl-10 pr-3 pt-5 placeholder:opacity-0 focus:outline-hidden focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all sm:text-sm';
+
 // Extract login form to separate component for cleaner code
 const LoginForm: Component<{
   username: () => string;
@@ -632,10 +638,13 @@ const LoginForm: Component<{
           <Show when={showLocalLogin}>
             <div class="space-y-4">
               <div class="relative">
-                <label for="username" class="sr-only">
+                <label for="username" class={loginFieldLabelClass}>
                   Username
                 </label>
-                <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <div
+                  aria-hidden="true"
+                  class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none"
+                >
                   <svg class="h-5 w-5 " fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path
                       stroke-linecap="round"
@@ -651,17 +660,20 @@ const LoginForm: Component<{
                   type="text"
                   autocomplete="username"
                   required
-                  class="appearance-none relative block w-full pl-10 pr-3 py-3 border border-border placeholder-gray-500 rounded-md focus:outline-hidden focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all sm:text-sm"
+                  class={loginFieldInputClass}
                   placeholder="Username"
                   value={username()}
                   onInput={(e) => setUsername(e.currentTarget.value)}
                 />
               </div>
               <div class="relative">
-                <label for="password" class="sr-only">
+                <label for="password" class={loginFieldLabelClass}>
                   Password
                 </label>
-                <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <div
+                  aria-hidden="true"
+                  class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none"
+                >
                   <svg class="h-5 w-5 " fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path
                       stroke-linecap="round"
@@ -677,7 +689,7 @@ const LoginForm: Component<{
                   type="password"
                   autocomplete="current-password"
                   required
-                  class="appearance-none relative block w-full pl-10 pr-3 py-3 border border-border placeholder-gray-500 rounded-md focus:outline-hidden focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all sm:text-sm"
+                  class={loginFieldInputClass}
                   placeholder="Password"
                   value={password()}
                   onInput={(e) => setPassword(e.currentTarget.value)}
