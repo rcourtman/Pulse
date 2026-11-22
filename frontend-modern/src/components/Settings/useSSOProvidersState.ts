@@ -555,6 +555,7 @@ export const useSSOProvidersState = (props: SSOProvidersPanelProps) => {
     testController = controller;
     const version = editorVersion;
     const context = contextVersion;
+    const type = form.type;
     const payload = JSON.stringify(buildProviderTestPayload(form));
     const isCurrent = () =>
       canEdit() &&
@@ -574,9 +575,35 @@ export const useSSOProvidersState = (props: SSOProvidersPanelProps) => {
         body: payload,
       });
       if (!isCurrent()) return;
+      if (response.status === 400 && type === 'oidc') {
+        const finding: unknown = await response.json();
+        if (!isCurrent()) return;
+        // Accept only the draft test's structured finding. Response prose
+        // and details are not safe diagnostic copy.
+        if (
+          finding !== null &&
+          typeof finding === 'object' &&
+          'success' in finding &&
+          finding.success === false &&
+          'error' in finding &&
+          finding.error === 'issuer_mismatch'
+        ) {
+          setTestResult({
+            success: false,
+            issuerMismatch: true,
+            message:
+              'The Issuer URL does not match the OIDC discovery document. Confirm the intended issuer in your provider settings, including the host, path and any trailing slash. Nothing was saved. Client credentials and sign-in were not tested.',
+          });
+          return;
+        }
+      }
       if (!response.ok) throw new Error('Connection test refused');
       const result = (await response.json()) as SSOProviderTestResult;
-      if (isCurrent()) setTestResult(result);
+      if (!isCurrent()) return;
+      if (result?.success !== true || typeof result.message !== 'string') {
+        throw new Error('No successful connection test result');
+      }
+      setTestResult({ success: true, message: result.message, details: result.details });
     } catch {
       if (!isCurrent()) return;
       logger.error('[SSOProvidersPanel] Test connection failed.');

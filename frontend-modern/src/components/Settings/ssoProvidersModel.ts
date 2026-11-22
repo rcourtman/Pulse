@@ -30,7 +30,7 @@ export interface SSOProvidersResponse {
 export interface SSOProviderTestResult {
   success: boolean;
   message: string;
-  error?: string;
+  issuerMismatch?: true;
   details?: {
     type: string;
     entityId?: string;

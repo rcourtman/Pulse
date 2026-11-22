@@ -135,7 +135,12 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
   const testSummary = createMemo(() => {
     const result = testResult();
     if (!result) return null;
-    if (!result.success) return { lines: ['Test failed'], variant: 'dangerOutline' } as const;
+    if (!result.success) {
+      return {
+        lines: [result.issuerMismatch ? 'Issuer mismatch' : 'Test failed'],
+        variant: 'dangerOutline',
+      } as const;
+    }
 
     const isManual = isSamlUrlFormatCheck();
     const isSaml = form.type === 'saml';
@@ -879,9 +884,6 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
                       <p id={testResultTitleId} class={testResultPresentation()!.titleClass}>
                         {testResult()?.message}
                       </p>
-                      <Show when={testResult()?.error}>
-                        <p class={testResultPresentation()!.errorClass}>{testResult()?.error}</p>
-                      </Show>
                       <Show when={testResult()?.success && testResult()?.details}>
                         <dl class="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1 text-xs">
                           <Show when={testResult()?.details?.entityId}>
