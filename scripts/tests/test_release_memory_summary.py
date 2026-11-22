@@ -91,6 +91,24 @@ class ReleaseMemorySummaryTests(unittest.TestCase):
         self.assertIn("| Dashboard state messages | n/a | n/a |", lines)
         self.assertIn("| Dashboard state updates | n/a | n/a |", lines)
 
+    def test_proxmox_reports_served_pbs_groups_without_inventing_legacy_coverage(self):
+        legacy = {
+            "pve_nodes": 3, "guests": 35, "pbs_instances": 2, "total_pbs_snapshots": 5200,
+            "snapshots_per_group": 50, "pve_requests": 914, "pbs_requests": 210,
+            "dashboard": {"connects": 1, "messages": 60, "bytes": 1024},
+        }
+        candidate = dict(legacy, pve_guests_observed=35, pbs_snapshot_group_coverage={
+            "pbs1": {"store-fast": {"served_groups": 35, "expected_groups": 35},
+                     "store-archive": {"served_groups": 17, "expected_groups": 17}},
+            "pbs2": {"store-fast": {"served_groups": 35, "expected_groups": 35},
+                     "store-archive": {"served_groups": 5, "expected_groups": 17}},
+        })
+        lines = "\n".join(summary.proxmox_lines(legacy, candidate))
+        self.assertIn("| PVE guests observed in dashboard state | n/a | 35 |", lines)
+        self.assertIn("| PBS API requests | 210 | 210 |", lines)
+        self.assertIn("| PBS snapshot groups served/configured | n/a | 92/104 |", lines)
+        self.assertIn("not snapshots Pulse retained or displayed", lines)
+
     def test_mock_estate_is_the_default(self):
         _, result, text = self.run_summary(samples(130000, 25, 0), samples(130000, 25, 0))
         self.assertEqual(result["estate"], "mock")

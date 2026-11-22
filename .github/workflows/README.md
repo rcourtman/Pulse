@@ -232,12 +232,15 @@ a real, non-mock Pulse polling a synthetic 3-node Proxmox VE cluster (35 guests)
 2 Proxmox Backup Server instances (5,200 fixture snapshots), and one connected
 dashboard WebSocket (`scripts/memory/proxmox_load.py`). Neither mock mode nor
 the agent estate exercises PVE/PBS polling, `recovery.db` ingestion, protection
-posture refreshes, or PBS backup cloning. It fails if node registration fails,
-PVE/PBS polling does not occur, or the dashboard does not receive an initial
-state and update with all expected PVE guests visible in its reconstructed
-state. The per-build `proxmox-*.json` retained in `memory-regression-proxmox`
-reports configured `guests` separately from `pve_guests_observed`. A passing
-comparison is synthetic polling evidence, not an installed LXC memory test.
+posture refreshes, or PBS backup cloning. It requires node registration,
+PVE/PBS polling, and dashboard state updates with all expected PVE guests. It
+also requires a completed, nonempty snapshot response for each configured PBS
+backup group on each datastore; registration, status requests and repeat reads
+of one group cannot stand in for snapshot traffic. The per-build
+`proxmox-*.json` in `memory-regression-proxmox` records observed PVE guests and
+PBS group coverage by instance and datastore. Served groups do not prove Pulse
+retained or displayed those snapshots. A passing comparison is synthetic
+polling evidence, not an installed LXC memory test.
 
 `dependency-advisory-watch.yml` strictly audits the product frontend on
 `main` every day. A newly disclosed advisory can affect an unchanged lockfile;

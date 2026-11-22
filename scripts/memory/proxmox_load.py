@@ -16,8 +16,8 @@ and authentication configured:
 
 It runs until --duration elapses or SIGTERM arrives, then writes a JSON stats
 file. It exits 1 when registration failed, PVE or PBS polling did not occur,
-or the dashboard did not receive state updates and the full synthetic PVE
-guest inventory.
+the fixture did not serve snapshots for every configured PBS group, or the
+dashboard did not receive state updates and the full synthetic PVE inventory.
 """
 
 from __future__ import annotations
@@ -98,6 +98,24 @@ class DashboardStats:
 
     def missing_guests(self) -> set[tuple[str, str]]:
         return self.expected_guests.difference(self.resource_identities.values())
+
+
+@dataclass
+class SnapshotCoverage:
+    expected_groups: int
+    served_groups: set[tuple[str, str]] = field(default_factory=set)
+
+    def counts(self) -> dict[str, int]:
+        return {"expected_groups": self.expected_groups, "served_groups": len(self.served_groups)}
+
+
+def missing_snapshot_coverage(coverage: dict[str, dict[str, dict[str, int]]]) -> list[str]:
+    return [
+        f"{instance}/{store} {row['served_groups']}/{row['expected_groups']}"
+        for instance, stores in sorted(coverage.items())
+        for store, row in sorted(stores.items())
+        if row["served_groups"] < row["expected_groups"]
+    ]
 
 
 def make_pve_handler(
@@ -387,6 +405,7 @@ def make_pbs_handler(
 
     groups_by_store: dict[str, list[dict]] = {}
     snaps_by_key: dict[tuple[str, str, str], list[dict]] = {}
+    coverage: dict[str, SnapshotCoverage] = {}
     total_snapshots = 0
     for ds_idx, ds in enumerate(datastores):
         groups = []
@@ -424,6 +443,7 @@ def make_pbs_handler(
             snaps_by_key[(ds, kind, gid_str)] = snaps
             total_snapshots += len(snaps)
         groups_by_store[ds] = groups
+        coverage[ds] = SnapshotCoverage(len(groups) if snapshots_per_group > 0 else 0)
 
     class PBSHandler(http.server.BaseHTTPRequestHandler):
         protocol_version = "HTTP/1.1"
@@ -495,12 +515,19 @@ def make_pbs_handler(
                     if ep == "snapshots":
                         btype = qs.get("backup-type", [""])[0]
                         bid = qs.get("backup-id", [""])[0]
-                        return self.send_json(snaps_by_key.get((ds, btype, bid), []))
+                        snapshots = snaps_by_key.get((ds, btype, bid), [])
+                        self.send_json(snapshots)
+                        if snapshots:
+                            # Count only a completed, nonempty response. Retries
+                            # for the same group do not cover another group.
+                            with lock:
+                                coverage[ds].served_groups.add((btype, bid))
+                        return
                     if ep == "rrd":
                         return self.send_json([])
             return self.send_json([])
 
-    return PBSHandler, total_snapshots
+    return PBSHandler, total_snapshots, coverage
 
 
 def ws_read_exact(sock: socket.socket, count: int) -> bytes:
@@ -672,12 +699,14 @@ def main(argv: list[str]) -> int:
     pve_srv = ThreadedHTTPServer(("127.0.0.1", 0), pve_handler)
 
     pbs_servers: list[tuple[str, ThreadedHTTPServer]] = []
+    snapshot_coverage: dict[str, dict[str, SnapshotCoverage]] = {}
     total_pbs_snapshots = 0
     for idx in range(args.pbs_instances):
         name = f"pbs{idx + 1}"
-        handler, snap_count = make_pbs_handler(name, guest_refs, args.snapshots_per_group, counters, lock)
+        handler, snap_count, coverage = make_pbs_handler(name, guest_refs, args.snapshots_per_group, counters, lock)
         pbs_servers.append((name, ThreadedHTTPServer(("127.0.0.1", 0), handler)))
         total_pbs_snapshots += snap_count
+        snapshot_coverage[name] = coverage
 
     servers = [pve_srv] + [srv for _, srv in pbs_servers]
     for srv in servers:
@@ -754,6 +783,10 @@ def main(argv: list[str]) -> int:
 
     with lock:
         req_counts = dict(counters)
+        snapshot_counts = {
+            name: {store: row.counts() for store, row in stores.items()}
+            for name, stores in snapshot_coverage.items()
+        }
     pbs_requests = sum(v for k, v in req_counts.items() if k != "pve_requests")
     pve_requests = req_counts.get("pve_requests", 0)
     with dash_stats.lock:
@@ -771,6 +804,7 @@ def main(argv: list[str]) -> int:
         "requests": req_counts,
         "pve_requests": pve_requests,
         "pbs_requests": pbs_requests,
+        "pbs_snapshot_group_coverage": snapshot_counts,
         "dashboard": {
             "connects": dash_stats.ws_connects,
             "messages": dash_stats.ws_messages,
@@ -791,6 +825,10 @@ def main(argv: list[str]) -> int:
         return 1
     if pve_requests == 0 or (args.pbs_instances > 0 and pbs_requests == 0):
         print(f"proxmox load did not exercise polling: pve={pve_requests}, pbs={pbs_requests}", file=sys.stderr)
+        return 1
+    gaps = missing_snapshot_coverage(snapshot_counts)
+    if gaps:
+        print(f"proxmox load did not serve every PBS snapshot group: {', '.join(gaps)}", file=sys.stderr)
         return 1
     if dash_stats.ws_connects == 0 or dash_stats.ws_initial_states == 0 or dash_stats.ws_state_updates == 0:
         print(
