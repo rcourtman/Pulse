@@ -875,9 +875,11 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertNotIn("READINESS_RESULT", step["env"])
         good = dict.fromkeys(results, "success") | {"DRAFT_ONLY": "false", "VERSION": "6.6.0"}
 
+        def run(env: dict[str, str]) -> subprocess.CompletedProcess[str]:
+            return subprocess.run(["bash", "-c", script], env=os.environ | env, text=True, capture_output=True)
+
         def passes(env: dict[str, str]) -> bool:
-            result = subprocess.run(["bash", "-c", script], env=os.environ | env, text=True, capture_output=True)
-            return result.returncode == 0
+            return run(env).returncode == 0
 
         self.assertTrue(passes(good))
         self.assertTrue(passes(good | {"INTEGRATION_RESULT": "skipped"}))
@@ -887,6 +889,34 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
                     continue
                 with self.subTest(result=name, state=state):
                     self.assertFalse(passes(good | {name: state}))
+
+        # A downstream writer that correctly abstained is not the failing job.
+        # RC.3 had a valid draft but private staging failed and all writers skipped.
+        writers_skipped = dict.fromkeys(
+            ("TAG_RESULT", "DOCKER_RESULT", "HELM_RESULT", "CONVERGENCE_DISPATCH_RESULT"), "skipped",
+        )
+        for upstream, expected in (
+            ({"PRIVATE_PRO_STAGE_RESULT": "failure"}, "private Pro staging"),
+            ({
+                "BUILD_CANDIDATE_RESULT": "failure", "CONTAINER_QUALIFICATION_RESULT": "skipped",
+                "CREATE_RESULT": "skipped", "VALIDATE_RESULT": "skipped", "INSTALL_RESULT": "skipped",
+            }, "release candidate build"),
+            ({"INSTALL_RESULT": "failure"}, "staged install.sh smoke"),
+        ):
+            with self.subTest(upstream=expected):
+                result = run(good | {"VERSION": "6.9.0-rc.3"} | writers_skipped | upstream)
+                self.assertEqual(1, result.returncode)
+                self.assertIn(f"::error::{expected} ended as failure; expected success.", result.stdout)
+                self.assertNotIn("ended as skipped", result.stdout)
+
+        result = run(good | {"TAG_RESULT": "failure", "DOCKER_RESULT": "skipped", "HELM_RESULT": "skipped"})
+        self.assertEqual(1, result.returncode)
+        self.assertIn("::error::qualified tag publication ended as failure;", result.stdout)
+
+        self.assertTrue(passes(good | writers_skipped | {
+            "DRAFT_ONLY": "true", "PRIVATE_PRO_STAGE_RESULT": "skipped", "INSTALL_RESULT": "skipped",
+        }))
+        self.assertTrue(passes(good | {"VERSION": "7.0.0", "PRIVATE_PRO_STAGE_RESULT": "skipped"}))
 
     def test_parent_release_requires_exact_customer_delivery(self) -> None:
         workflow = yaml.safe_load(read(".github/workflows/create-release.yml"))
