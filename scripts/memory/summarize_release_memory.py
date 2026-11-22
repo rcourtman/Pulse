@@ -13,6 +13,9 @@ from failing it.
 The watch passes its two worker wait statuses. A failed worker makes the
 comparison incomplete even if its sample timestamps cover the window.
 
+The verdict uses resident memory independently of the optional mapping
+breakdown. Class medians are not estimated from a partially observed window.
+
 It also reports Linux's process RSS high-water mark through the last sample,
 when available. The high-water mark is not cgroup usage and does not gate.
 
@@ -62,6 +65,14 @@ CHILD_WAIT_LABELS = {
 }
 
 
+def sample_kib(value: str | None) -> int | None:
+    try:
+        kib = int(value or "")
+    except ValueError:
+        return None
+    return kib if kib >= 0 else None
+
+
 def read_steady_window(path: Path, start: int, end: int, max_gap: int) -> tuple[list[dict[str, str]], dict]:
     """Require observations across the fixed window, not just anywhere in the run."""
     try:
@@ -78,6 +89,10 @@ def read_steady_window(path: Path, start: int, end: int, max_gap: int) -> tuple[
         raise ValueError("RSS sample timestamps must increase within the planned duration")
 
     points = [(when, row) for when, row in zip(elapsed, rows) if when >= start]
+    if any(None in row or None in row.values() for _, row in points):
+        raise ValueError("misaligned RSS sample fields in the planned final third")
+    if any(sample_kib(row["rss_kib"]) is None for _, row in points):
+        raise ValueError("invalid resident memory sample in the planned final third")
     if len(points) < 3:
         raise ValueError(f"only {len(points)} RSS samples in the planned final third (need at least 3)")
     times = [when for when, _ in points]
@@ -88,8 +103,13 @@ def read_steady_window(path: Path, start: int, end: int, max_gap: int) -> tuple[
     return [row for _, row in points], {"first_s": times[0], "last_s": times[-1], "count": len(times)}
 
 
-def steady_state(rows: list[dict[str, str]]) -> dict[str, float]:
-    return {column: statistics.median(float(row[column]) for row in rows) for column in COLUMNS}
+def steady_state(rows: list[dict[str, str]]) -> dict[str, float | None]:
+    readings = {}
+    for column in COLUMNS:
+        values = [sample_kib(row.get(column)) for row in rows]
+        observed = [value for value in values if value is not None]
+        readings[column] = statistics.median(observed) if len(observed) == len(rows) else None
+    return readings
 
 
 def rss_high_water_kib(rows: list[dict[str, str]]) -> int | None:
@@ -318,6 +338,7 @@ def main(argv: list[str]) -> int:
     baseline_activity = activity(baseline_rows, clk_tck)
     candidate_activity = activity(candidate_rows, clk_tck)
 
+    # The selected window requires valid VmRSS independently of smaps.
     growth = candidate["rss_kib"] - baseline["rss_kib"]
     growth_pct = 100 * growth / baseline["rss_kib"] if baseline["rss_kib"] else 0.0
     exceeded = growth > slack_kib and growth_pct > tolerance
@@ -333,8 +354,15 @@ def main(argv: list[str]) -> int:
         "|---|---:|---:|---:|",
     ]
     for column in COLUMNS:
-        base, cand = baseline[column] / 1024, candidate[column] / 1024
-        lines.append(f"| {LABELS[column]} | {base:.1f} | {cand:.1f} | {cand - base:+.1f} |")
+        base_kib, cand_kib = baseline[column], candidate[column]
+        base = None if base_kib is None else base_kib / 1024
+        cand = None if cand_kib is None else cand_kib / 1024
+        lines.append(
+            f"| {LABELS[column]} | {format_rate(base)} | {format_rate(cand)} | {format_change(base, cand)} |"
+        )
+    if any(baseline[column] is None or candidate[column] is None for column in COLUMNS[1:]):
+        lines += ["", "Mapping breakdown is unavailable for at least one sample in that run's window. "
+                  "The verdict uses the separately measured resident memory."]
     if exceeded:
         verdict = (
             f"**Steady-state RSS regression:** resident memory grew "

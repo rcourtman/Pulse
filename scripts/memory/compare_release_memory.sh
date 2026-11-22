@@ -11,6 +11,7 @@
 # memory (where the modernc SQLite driver allocates) and file pages. At the end
 # each run's heap profile is saved, and summarize_release_memory.py writes the
 # comparison and exits 1 when the candidate grew past the tolerance.
+# The mapping breakdown is optional; VmRSS is read separately for the verdict.
 # Each sample also retains Linux's process RSS high-water mark (VmHWM), which
 # can include peaks between samples. This is not cgroup memory usage.
 #
@@ -109,8 +110,14 @@ classify_smaps() {
       else cls = "special"
       next
     }
-    /^Rss:/ { kib[cls] += $2 }
-    END { printf "%d\t%d\t%d\t%d", kib["go_heap"], kib["go_other"], kib["anon_other"], kib["file"] }
+    /^Rss:/ && cls != "" && $2 ~ /^[0-9]+$/ && $3 == "kB" {
+      kib[cls] += $2
+      observed = 1
+    }
+    END {
+      if (!observed) exit 1
+      printf "%d\t%d\t%d\t%d", kib["go_heap"], kib["go_other"], kib["anon_other"], kib["file"]
+    }
   ' "$1"
 }
 
@@ -152,7 +159,7 @@ run_tree() {
   local pid=$!
   local driver=""
   local driver_log=""
-  local start now rss rss_hwm
+  local start now rss rss_hwm mappings
   start=$(date +%s)
   if [[ "${ESTATE}" == agents ]]; then
     # The sampling loop ends the driver with SIGTERM. A driver deadline equal
@@ -175,7 +182,12 @@ run_tree() {
     (( now >= DURATION )) && break
     IFS=$'\t' read -r rss rss_hwm < <(read_memory_status "/proc/${pid}/status" 2>/dev/null) || true
     if [[ -n "${rss}" ]]; then
-      printf '%s\t%s\t%s\t%s\t%s\t%s\n' "${now}" "${rss}" "$(classify_smaps "/proc/${pid}/smaps")" \
+      if ! mappings="$(classify_smaps "/proc/${pid}/smaps" 2>/dev/null)"; then
+        # Keep all four fields empty. A failed read can still emit partial
+        # output, and a short row would move CPU, I/O and high-water fields.
+        mappings=$'\t\t\t'
+      fi
+      printf '%s\t%s\t%s\t%s\t%s\t%s\n' "${now}" "${rss}" "${mappings}" \
         "$(cpu_ticks "/proc/${pid}/stat" 2>/dev/null || true)" \
         "$(io_bytes "/proc/${pid}/io" 2>/dev/null || printf '\t')" "${rss_hwm}" >> "${samples}"
     fi

@@ -209,6 +209,42 @@ class ReleaseMemorySummaryTests(unittest.TestCase):
         self.assertEqual(result["status"], "incomplete")
         self.assertIn("timestamps must increase", result["sampling"]["candidate"]["error"])
 
+    def test_missing_mapping_sample_does_not_disable_the_rss_gate(self):
+        baseline = samples(130000, 25, 0).replace("\t50000\t", "\t0\t")
+        candidate = samples(170000, 25, 0, rss_hwm=lambda _: 180000).replace(
+            "600\t170000\t50000\t10000\t20000\t30000", "600\t170000\t\t\t\t", 1
+        )
+        code, result, text = self.run_summary(baseline, candidate)
+        self.assertEqual(code, 1)
+        self.assertEqual(result["status"], "measured")
+        self.assertTrue(result["regressed"])
+        self.assertEqual(result["rss_growth_kib"], 40000)
+        self.assertEqual(result["candidate_rss_high_water_kib"], 180000)
+        self.assertEqual(result["candidate_activity"]["cpu_pct"], 25.0)
+        self.assertEqual(result["baseline"]["go_heap_kib"], 0)
+        for key in ("go_heap_kib", "go_other_kib", "anon_other_kib", "file_kib"):
+            self.assertIsNone(result["candidate"][key])
+        self.assertIn("| Go heap | 0.0 | n/a | n/a |", text)
+        self.assertIn("Mapping breakdown is unavailable", text)
+
+    def test_shifted_sample_cannot_establish_a_comparison(self):
+        full = samples(130000, 25, 0, rss_hwm=lambda _: 160000)
+        shifted = full.replace("600\t130000\t50000\t10000\t20000\t30000", "600\t130000\t", 1)
+        code, result, _ = self.run_summary(full, shifted)
+        self.assertEqual(code, 1)
+        self.assertEqual(result["status"], "incomplete")
+        self.assertIn("misaligned", result["sampling"]["candidate"]["error"])
+        self.assertNotIn("regressed", result)
+
+    def test_invalid_resident_memory_cannot_establish_a_comparison(self):
+        full = samples(130000, 25, 0)
+        invalid = full.replace("600\t130000\t", "600\tunknown\t", 1)
+        code, result, _ = self.run_summary(full, invalid)
+        self.assertEqual(code, 1)
+        self.assertEqual(result["status"], "incomplete")
+        self.assertIn("invalid resident memory sample", result["sampling"]["candidate"]["error"])
+        self.assertNotIn("regressed", result)
+
     def test_reports_cpu_and_write_rates_over_the_final_third(self):
         # 25 ticks/s at 100 Hz is a quarter of a core; 1 MiB per 64 s is 1350 MiB/day.
         code, result, text = self.run_summary(
@@ -330,11 +366,13 @@ class ReleaseMemoryLauncherTests(unittest.TestCase):
             self.assertNotIn("regressed", observation)
             self.assertNotIn("No steady-state RSS regression", summary_text)
 
-    def test_full_sample_window_still_requires_an_observed_normal_stop(self):
+    def test_full_window_requires_normal_stop_but_not_optional_mapping_data(self):
         for mode, expected, failure_field in (
             ("exit-during-profile", 1, "pulse_wait_status_before_stop"),
             ("unexpected-stop-status", 1, "pulse_wait_status_after_stop_request"),
             ("normal-term", 0, None),
+            ("unreadable-smaps", 0, None),
+            ("empty-smaps", 0, None),
         ):
             with self.subTest(mode=mode), tempfile.TemporaryDirectory() as tmp:
                 root = Path(tmp)
@@ -342,6 +380,17 @@ class ReleaseMemoryLauncherTests(unittest.TestCase):
                 for directory in (baseline, candidate):
                     directory.mkdir()
                 (candidate / "mode").write_text(mode)
+                smaps = root / "fixture-smaps"
+                smaps.write_text(
+                    "1000-2000 rw-p 00000000 00:00 0                 [anon: Go: heap]\n"
+                    "Rss:                  50000 kB\n"
+                    "2000-3000 rw-p 00000000 00:00 0                 [anon: Go: runtime]\n"
+                    "Rss:                  10000 kB\n"
+                    "3000-4000 rw-p 00000000 00:00 0\n"
+                    "Rss:                  20000 kB\n"
+                    "4000-5000 r-xp 00000000 00:00 1                 /fixture/file\n"
+                    "Rss:                  30000 kB\n"
+                )
                 fixture = root / "pulse-fixture"
                 fixture.write_text(
                     '''#!/usr/bin/env python3
@@ -380,8 +429,16 @@ date() {
 awk() {
   case "${2-}" in
     /proc/*/status) printf '131072\t163840\n' ;;
-    /proc/*/smaps) printf '50000\t10000\t20000\t30000' ;;
-    /proc/*/io) printf '\t' ;;
+    /proc/*/smaps)
+      if [[ "$label" == candidate ]]; then
+        case "$PULSE_TEST_MODE" in
+          unreadable-smaps) printf '123\t456'; return 2 ;;
+          empty-smaps) command awk "$1" /dev/null; return $? ;;
+        esac
+      fi
+      command awk "$1" "$PULSE_TEST_SMAPS"
+      ;;
+    /proc/*/io) printf '1024\t2048' ;;
     *) command awk "$@" ;;
   esac
 }
@@ -412,14 +469,15 @@ exec bash "$@"
                     ["bash", "-c", shims, "memory-fixture", str(ROOT / "scripts/memory/compare_release_memory.sh"),
                      str(baseline), str(candidate), str(output)],
                     env={**os.environ, "PULSE_TEST_BINARY": str(fixture),
+                         "PULSE_TEST_SMAPS": str(smaps),
                          "PULSE_TEST_OUT": str(output), "PULSE_TEST_MODE": mode, "PULSE_FOOTPRINT_ESTATE": "mock",
                          "PULSE_MEMORY_GATE": "0", "PULSE_MEMORY_DURATION": "8", "PULSE_MEMORY_INTERVAL": "1"},
                     text=True, capture_output=True, timeout=25,
                 )
+                self.assertEqual(result.returncode, expected, result.stdout + result.stderr)
                 observation = json.loads((output / "result.json").read_text())
                 for side in ("baseline", "candidate"):
                     self.assertEqual(observation["sampling"][side], {"first_s": 5, "last_s": 7, "count": 3})
-                self.assertEqual(result.returncode, expected, result.stdout + result.stderr)
                 if failure_field is not None:
                     self.assertEqual(observation["status"], "incomplete")
                     self.assertEqual(observation["failed_runs"], {
@@ -430,6 +488,15 @@ exec bash "$@"
                 else:
                     self.assertEqual(observation["status"], "measured")
                     self.assertNotIn("failed_runs", observation)
+                    if mode.endswith("-smaps"):
+                        self.assertEqual(observation["candidate"]["rss_kib"], 131072)
+                        self.assertIsNone(observation["candidate"]["go_heap_kib"])
+                        self.assertEqual(observation["baseline"]["go_heap_kib"], 50000)
+                        self.assertEqual(observation["candidate_rss_high_water_kib"], 163840)
+                        self.assertEqual(observation["candidate_activity"]["write_mib_per_day"], 0.0)
+                        row = (output / "samples-candidate.tsv").read_text().splitlines()[-1].split("\t")
+                        self.assertEqual(row[2:6], [""] * 4)
+                        self.assertEqual(row[7:], ["1024", "2048", "163840"])
                 for side in ("baseline", "candidate"):
                     args = (output / f"profile-{side}").read_text().splitlines()
                     self.assertIn("--max-time", args)
