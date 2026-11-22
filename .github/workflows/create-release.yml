@@ -1686,7 +1686,7 @@ jobs:
     # cover dispatch and the output write around it.
     timeout-minutes: 190
     outputs:
-      r2_prefix: ${{ steps.publish.outputs.r2_prefix }}
+      r2_prefix: ${{ steps.stage_plan.outputs.r2_prefix }}
     steps:
       - name: Checkout private-runtime staging control
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -1700,8 +1700,10 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: python3 scripts/release_control/previous_private_stage.py
 
-      - name: Dispatch and verify private Pro runtime staging
-        id: publish
+      # A retry can prove non-dispatch when this read-only preparation fails
+      # and GitHub records the separate POST step as skipped.
+      - name: Prepare private Pro runtime staging
+        id: stage_plan
         env:
           GH_TOKEN: ${{ secrets.WORKFLOW_PAT }}
           VERSION: ${{ needs.prepare.outputs.version }}
@@ -1716,6 +1718,128 @@ jobs:
             exit 1
           fi
 
+          allow_ga_publish=false
+          if [[ "${IS_PRERELEASE}" != "true" ]]; then
+            allow_ga_publish=true
+          fi
+
+          # The R2 prefix must be identical across rerun attempts of this run:
+          # a rerun after a promotion-only failure has to reuse the packet the
+          # earlier attempt already uploaded instead of tripping the enterprise
+          # R2 overwrite guard. Run creation date and run id are stable across
+          # attempts; wall-clock date is not.
+          run_created_date="$(
+            gh run view "${GITHUB_RUN_ID}" \
+              --repo "${GITHUB_REPOSITORY}" \
+              --json createdAt \
+              --jq '.createdAt' | cut -c1-10 | tr -d '-'
+          )"
+          if [[ ! "${run_created_date}" =~ ^[0-9]{8}$ ]]; then
+            echo "::error::Could not derive the release run creation date for the R2 prefix."
+            exit 1
+          fi
+          r2_prefix="${TAG}-pro-${run_created_date}-${GITHUB_RUN_ID}"
+          python3 scripts/write_github_output.py r2_prefix "${r2_prefix}"
+
+          if [[ -n "${PRIOR_CHILD_ID}" ]]; then
+            [[ "${PRIOR_CHILD_ID}" =~ ^[1-9][0-9]{0,18}$ ]] || exit 1
+            # A wait timeout does not terminate the child. A second build
+            # competes in the same private workflow queue.
+            # Accept a new dispatch only after a definite failure of that child.
+            if ! child_state="$(gh api "repos/rcourtman/pulse-enterprise/actions/runs/${PRIOR_CHILD_ID}" | jq -er \
+              --arg id "${PRIOR_CHILD_ID}" '
+                select((.id | tostring) == $id and .path == ".github/workflows/build-pro-release.yml"
+                  and .head_branch == "main" and .event == "workflow_dispatch")
+                | [.status, (.conclusion // "-")] | @tsv')"; then
+              echo "::error::The exact prior private staging child could not be verified; not dispatching."
+              exit 1
+            fi
+            case "${child_state}" in
+              $'completed\tsuccess'|$'queued\t-'|$'in_progress\t-'|$'pending\t-'|$'requested\t-'|$'waiting\t-')
+                python3 scripts/write_github_output.py existing_child_id "${PRIOR_CHILD_ID}"
+                exit 0
+                ;;
+              $'completed\tfailure'|$'completed\ttimed_out'|$'completed\tstartup_failure')
+                echo "The exact previous staging child failed; dispatching a replacement for the same source and prefix."
+                ;;
+              *)
+                echo "::error::The exact prior private staging child did not establish a retryable outcome; not dispatching."
+                exit 1
+                ;;
+            esac
+          fi
+
+          dispatch_payload="$(
+            jq -cn \
+              --arg pulse_ref "${TAG}" \
+              --arg pulse_checkout_ref "${GITHUB_SHA}" \
+              --arg public_release_run_id "${GITHUB_RUN_ID}" \
+              --arg version "${VERSION}" \
+              --arg r2_prefix "${r2_prefix}" \
+              --arg allow_stable_ga_publish "${allow_ga_publish}" \
+              '{
+                ref: "main",
+                return_run_details: true,
+                inputs: {
+                  pulse_ref: $pulse_ref,
+                  pulse_checkout_ref: $pulse_checkout_ref,
+                  public_release_run_id: $public_release_run_id,
+                  version: $version,
+                  upload_actions_artifact: "false",
+                  upload_to_r2: "true",
+                  publish_docker_image: "true",
+                  docker_image: "license.pulserelay.pro/pulse-pro",
+                  r2_prefix: $r2_prefix,
+                  reuse_existing_packet: "true",
+                  allow_stable_ga_publish: $allow_stable_ga_publish,
+                  allow_pre_activation_staging: "true"
+                }
+              }'
+          )"
+          python3 scripts/write_github_output.py dispatch_payload "${dispatch_payload}"
+          echo "Prepared private Pro build for ${TAG} with R2 prefix ${r2_prefix}."
+
+      - name: Dispatch private Pro runtime staging
+        id: stage_dispatch
+        if: ${{ success() && steps.stage_plan.outputs.dispatch_payload != '' }}
+        env:
+          GH_TOKEN: ${{ secrets.WORKFLOW_PAT }}
+          DISPATCH_PAYLOAD: ${{ steps.stage_plan.outputs.dispatch_payload }}
+        run: |
+          set -euo pipefail
+          build_dispatch="$(
+            gh api \
+              --method POST \
+              -H "Accept: application/vnd.github+json" \
+              -H "X-GitHub-Api-Version: 2026-03-10" \
+              repos/rcourtman/pulse-enterprise/actions/workflows/build-pro-release.yml/dispatches \
+              --input - <<<"${DISPATCH_PAYLOAD}"
+          )"
+          build_run_id="$(jq -r '.workflow_run_id // empty' <<<"${build_dispatch}")"
+          if [[ ! "${build_run_id}" =~ ^[1-9][0-9]{0,18}$ ]] ||
+             ! jq -es 'length == 1 and (.[0].workflow_run_id | type == "number")' <<<"${build_dispatch}" >/dev/null; then
+            echo "::error::Dispatch for private Pro build did not return an exact workflow run ID."
+            exit 1
+          fi
+          # This acknowledgement belongs to the POST, not the watcher.
+          # Retain the child even if writing the step output subsequently fails.
+          echo "Acknowledged private Pro build dispatch run ${build_run_id} in rcourtman/pulse-enterprise."
+          python3 scripts/write_github_output.py child_id "${build_run_id}"
+
+      - name: Verify private Pro runtime staging
+        id: stage_verify
+        env:
+          GH_TOKEN: ${{ secrets.WORKFLOW_PAT }}
+          EXISTING_CHILD_ID: ${{ steps.stage_plan.outputs.existing_child_id }}
+          DISPATCHED_CHILD_ID: ${{ steps.stage_dispatch.outputs.child_id }}
+        run: |
+          set -euo pipefail
+          if [[ -n "${EXISTING_CHILD_ID}" && -n "${DISPATCHED_CHILD_ID}" ]]; then
+            echo "::error::Private Pro staging returned two child identities."
+            exit 1
+          fi
+          build_run_id="${DISPATCHED_CHILD_ID:-${EXISTING_CHILD_ID}}"
+
           wait_for_workflow() {
             local repo="$1"
             local run_id="$2"
@@ -1723,7 +1847,7 @@ jobs:
             local timeout_seconds="$4"
             local deadline=$((SECONDS + timeout_seconds))
 
-            if [[ ! "${run_id}" =~ ^[0-9]+$ ]]; then
+            if [[ ! "${run_id}" =~ ^[1-9][0-9]{0,18}$ ]]; then
               echo "::error::Dispatch for ${label} did not return an exact workflow run ID."
               return 1
             fi
@@ -1772,93 +1896,6 @@ jobs:
             return 1
           }
 
-          allow_ga_publish=false
-          if [[ "${IS_PRERELEASE}" != "true" ]]; then
-            allow_ga_publish=true
-          fi
-
-          # The R2 prefix must be identical across rerun attempts of this run:
-          # a rerun after a promotion-only failure has to reuse the packet the
-          # earlier attempt already uploaded instead of tripping the enterprise
-          # R2 overwrite guard. Run creation date and run id are stable across
-          # attempts; wall-clock date is not.
-          run_created_date="$(
-            gh run view "${GITHUB_RUN_ID}" \
-              --repo "${GITHUB_REPOSITORY}" \
-              --json createdAt \
-              --jq '.createdAt' | cut -c1-10 | tr -d '-'
-          )"
-          if [[ ! "${run_created_date}" =~ ^[0-9]{8}$ ]]; then
-            echo "::error::Could not derive the release run creation date for the R2 prefix."
-            exit 1
-          fi
-          r2_prefix="${TAG}-pro-${run_created_date}-${GITHUB_RUN_ID}"
-          python3 scripts/write_github_output.py r2_prefix "${r2_prefix}"
-
-          if [[ -n "${PRIOR_CHILD_ID}" ]]; then
-            [[ "${PRIOR_CHILD_ID}" =~ ^[1-9][0-9]*$ ]] || exit 1
-            # A wait timeout does not terminate the child. Its private workflow
-            # is serialized: posting a second build only waits behind the first.
-            # Accept a new dispatch only after a definite failure of that child.
-            if ! child_state="$(gh api "repos/rcourtman/pulse-enterprise/actions/runs/${PRIOR_CHILD_ID}" | jq -er \
-              --arg id "${PRIOR_CHILD_ID}" '
-                select((.id | tostring) == $id and .path == ".github/workflows/build-pro-release.yml"
-                  and .head_branch == "main" and .event == "workflow_dispatch")
-                | [.status, (.conclusion // "-")] | @tsv')"; then
-              echo "::error::The exact prior private staging child could not be verified; not dispatching."
-              exit 1
-            fi
-            case "${child_state}" in
-              $'completed\tsuccess'|$'queued\t-'|$'in_progress\t-'|$'pending\t-'|$'requested\t-'|$'waiting\t-')
-                build_run_id="${PRIOR_CHILD_ID}"
-                wait_for_workflow rcourtman/pulse-enterprise "${build_run_id}" "private Pro build" 10800
-                exit 0
-                ;;
-              $'completed\tfailure'|$'completed\ttimed_out'|$'completed\tstartup_failure')
-                echo "The exact previous staging child failed; dispatching a replacement for the same source and prefix."
-                ;;
-              *)
-                echo "::error::The exact prior private staging child did not establish a retryable outcome; not dispatching."
-                exit 1
-                ;;
-            esac
-          fi
-
-          echo "Dispatching private Pro build for ${TAG} with R2 prefix ${r2_prefix}."
-          build_dispatch="$(
-            jq -n \
-              --arg pulse_ref "${TAG}" \
-              --arg pulse_checkout_ref "${GITHUB_SHA}" \
-              --arg public_release_run_id "${GITHUB_RUN_ID}" \
-              --arg version "${VERSION}" \
-              --arg r2_prefix "${r2_prefix}" \
-              --arg allow_stable_ga_publish "${allow_ga_publish}" \
-              '{
-                ref: "main",
-                return_run_details: true,
-                inputs: {
-                  pulse_ref: $pulse_ref,
-                  pulse_checkout_ref: $pulse_checkout_ref,
-                  public_release_run_id: $public_release_run_id,
-                  version: $version,
-                  upload_actions_artifact: "false",
-                  upload_to_r2: "true",
-                  publish_docker_image: "true",
-                  docker_image: "license.pulserelay.pro/pulse-pro",
-                  r2_prefix: $r2_prefix,
-                  reuse_existing_packet: "true",
-                  allow_stable_ga_publish: $allow_stable_ga_publish,
-                  allow_pre_activation_staging: "true"
-                }
-              }' | \
-              gh api \
-                --method POST \
-                -H "Accept: application/vnd.github+json" \
-                -H "X-GitHub-Api-Version: 2026-03-10" \
-                repos/rcourtman/pulse-enterprise/actions/workflows/build-pro-release.yml/dispatches \
-                --input -
-          )"
-          build_run_id="$(jq -r '.workflow_run_id // empty' <<<"${build_dispatch}")"
           # Healthy builds took 80 to 114 minutes from v6.7.0-beta.2 to
           # v6.8.0-beta.1, about a third of it queued behind other private CI.
           # A two-hour limit failed releases whose Pro build later succeeded.

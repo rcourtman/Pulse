@@ -11,15 +11,16 @@ import sys
 
 
 JOB_NAME = "stage_private_pro_runtime"
-DISPATCH_STEP = "Dispatch and verify private Pro runtime staging"
+DISPATCH_STEP = "Dispatch private Pro runtime staging"
 RUN_ID = r"[1-9][0-9]{0,18}"
+FINISHED_DISPATCH = {"success", "failure", "cancelled", "timed_out", "startup_failure"}
 # GitHub's raw job log prefixes stdout lines with a UTC timestamp. Match
-# only the fixed acknowledgement emitted by the waiter, not script echoes,
-# links, status messages or child logs. The parent job lives in a gated,
-# immutable source workflow; only its own completed job log is read here.
+# only the fixed acknowledgement from the POST step, not a later watcher,
+# script echoes, links, or child logs. Every attempt runs the same immutable
+# workflow source; only an exact, completed parent job's log is read here.
 ACK = re.compile(
     rf"^\d{{4}}-\d{{2}}-\d{{2}}T\d{{2}}:\d{{2}}:\d{{2}}(?:\.\d+)?Z "
-    rf"Watching exact private Pro build run ({RUN_ID}) in rcourtman/pulse-enterprise\.\r?$",
+    rf"Acknowledged private Pro build dispatch run ({RUN_ID}) in rcourtman/pulse-enterprise\.\r?$",
     re.MULTILINE,
 )
 
@@ -64,22 +65,29 @@ def previous_child(repository: str, run_id: str, attempt: str, source: str) -> s
             and job["run_attempt"] == earlier
             and job["head_sha"] == source
             and job["status"] == "completed"
+            and isinstance(job["conclusion"], str)
+            and job["conclusion"]
         ):
             raise EvidenceError(f"attempt {earlier} staging job identity or result did not match")
-        if job["conclusion"] == "skipped":
-            continue
         dispatch = [step for step in job["steps"] if step["name"] == DISPATCH_STEP]
-        if len(dispatch) != 1 or dispatch[0]["status"] != "completed" or not dispatch[0]["conclusion"]:
-            raise EvidenceError(f"attempt {earlier} has no definite staging step result")
-        if dispatch[0]["conclusion"] == "skipped":
+        if job["conclusion"] == "skipped" and not dispatch:
             continue
+        if len(dispatch) != 1 or dispatch[0]["status"] != "completed":
+            raise EvidenceError(f"attempt {earlier} has no definite dispatch step result")
+        conclusion = dispatch[0]["conclusion"]
+        if conclusion == "skipped":
+            # This attempt could not POST. An older attempt may still own a
+            # child, even if this one did not reach the watcher or its log.
+            continue
+        if job["conclusion"] == "skipped" or conclusion not in FINISHED_DISPATCH:
+            raise EvidenceError(f"attempt {earlier} has no definite dispatch step result")
 
         children = ACK.findall(read_api(f"{root}/jobs/{job_id}/logs"))
         if len(children) != 1:
             raise EvidenceError(f"attempt {earlier} has no unique child acknowledgement; dispatch may have been accepted")
         return children[0]
 
-    # Original execution or every earlier staging step definitely skipped.
+    # Original execution or every earlier dispatch step definitely skipped.
     return ""
 
 
