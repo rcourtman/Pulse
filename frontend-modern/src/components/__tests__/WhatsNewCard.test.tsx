@@ -107,7 +107,9 @@ describe('WhatsNewCard', () => {
 
     expect(screen.queryByTestId('whats-new-notice')).not.toBeInTheDocument();
     expect(screen.getByRole('dialog')).toBeInTheDocument();
-    expect(screen.getByText("What's new in Pulse v6.1.0-rc.1")).toBeInTheDocument();
+    expect(
+      screen.getByRole('heading', { name: "What's new in Pulse v6.1.0-rc.1" }),
+    ).toBeInTheDocument();
     expect(
       screen.getByText(`Released ${new Date('2026-07-13T12:00:00Z').toLocaleDateString()}`),
     ).toBeInTheDocument();
@@ -382,5 +384,60 @@ describe('WhatsNewCard', () => {
     expect(screen.queryByTestId('whats-new-modal')).not.toBeInTheDocument();
     expect(getReleaseNotesMock).not.toHaveBeenCalled();
     expect(localStorage.getItem(STORAGE_KEYS.WHATS_NEW_LAST_SEEN)).toBe('6.0.5');
+  });
+
+  it('opens on demand after the version was already seen and suppresses auto notice when disabled', async () => {
+    localStorage.setItem(STORAGE_KEYS.WHATS_NEW_LAST_SEEN, '6.9.0');
+    versionInfoMock.mockReturnValue({
+      version: '6.9.0',
+      isDevelopment: false,
+      isSourceBuild: false,
+    });
+    getReleaseNotesMock.mockResolvedValue({
+      version: '6.9.0',
+      releaseNotes: '## Highlights\n- Longer history on every plan.',
+      releaseDate: '2026-11-22T12:00:00Z',
+      isPrerelease: false,
+    });
+
+    const { WhatsNewCard, openWhatsNewDialog } = await import('../WhatsNewCard');
+    render(() => <WhatsNewCard allowAutoNotice={false} />);
+
+    expect(screen.queryByTestId('whats-new-notice')).not.toBeInTheDocument();
+    expect(getReleaseNotesMock).not.toHaveBeenCalled();
+
+    expect(openWhatsNewDialog()).toBe(true);
+    expect(await screen.findByText('Longer history on every plan.')).toBeVisible();
+    expect(getReleaseNotesMock).toHaveBeenCalledTimes(1);
+
+    // Reopening in the same session reuses the cached notes without refetching.
+    fireEvent.click(screen.getByRole('button', { name: 'Got it' }));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(openWhatsNewDialog()).toBe(true);
+    expect(screen.getByText('Longer history on every plan.')).toBeVisible();
+    expect(getReleaseNotesMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows retryable error and empty states when opened on demand', async () => {
+    localStorage.setItem(STORAGE_KEYS.WHATS_NEW_LAST_SEEN, '6.9.0');
+    versionInfoMock.mockReturnValue({
+      version: '6.9.0',
+      isDevelopment: false,
+      isSourceBuild: false,
+    });
+    getReleaseNotesMock
+      .mockRejectedValueOnce(new Error('offline'))
+      .mockRejectedValueOnce({ status: 404 });
+
+    const { WhatsNewCard, openWhatsNewDialog } = await import('../WhatsNewCard');
+    render(() => <WhatsNewCard />);
+
+    openWhatsNewDialog();
+    expect(
+      await screen.findByText("Couldn't load release notes for v6.9.0 right now."),
+    ).toBeVisible();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+    expect(await screen.findByText('No release notes are published for v6.9.0 yet.')).toBeVisible();
   });
 });

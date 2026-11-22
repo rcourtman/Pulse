@@ -3904,7 +3904,9 @@ Tokens and hostnames never establish CPU or installed-executable identity.
    `Breaking changes`, `Deprecated`, or `Removed`) as a changelog once per
    later installed release. Automatic release communication is limited to a
    compact non-blocking update notice; the detailed changelog may open only
-   after explicit operator action. Preparing that notice records the version
+   after explicit operator action (from the post-update notice, clicking the
+   running release version in the footer, or the What's new action in Settings
+   -> Updates). Preparing that notice records the version
    immediately so a reload cannot turn it into a recurring prompt.
    `frontend-modern/src/utils/localStorage.ts` owns that browser-session notice
    reservation boundary so the release notice and the GitHub gratitude prompt

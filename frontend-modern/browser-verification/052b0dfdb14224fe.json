@@ -1,0 +1,40 @@
+{
+  "version": 1,
+  "base_sha": "97f800b9090f24b2998239ea3b32b3b18c296428",
+  "verified_at": "2026-11-22T23:21:55Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/App.tsx",
+    "frontend-modern/src/AppLayout.tsx",
+    "frontend-modern/src/components/Settings/UpdatesSettingsPanel.tsx",
+    "frontend-modern/src/components/WhatsNewCard.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/App.tsx": "cd432ad7e5948b3e5335c78dbf8e3e28074a26b67f357ee52b6cde82b2844b78",
+    "frontend-modern/src/AppLayout.tsx": "a137e4b0803725e9119102776385e8ea8666675edfa89c2c0aab4470ca3dd96f",
+    "frontend-modern/src/components/Settings/UpdatesSettingsPanel.tsx": "85ce818d36265f23b0bc855a6627f5b176299e356a993496011a40ea41153fe0",
+    "frontend-modern/src/components/WhatsNewCard.tsx": "7cf19f5999a68ea00b6bfe4bb0bf32ce28c4037b1a6d1583f0b55f167bf63ad8"
+  },
+  "routes": [
+    "/proxmox/overview",
+    "/settings/system-updates"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Production vite build of this tree served locally; /api/version rewritten to published 6.9.0-rc.3 and /api/updates/release-notes fulfilled with docs/releases/RELEASE_NOTES_v6.9.0-rc.3.md",
+    "After reload with pulseWhatsNewLastSeen matching 6.9.0-rc.3, post-update toast stays hidden; footer version button on /proxmox/overview and What's new button beside Current release notes on /settings/system-updates both open the dialog on demand",
+    "Mobile dark (390x844): What's new dialog header keeps v6.9.0-rc.3 unbroken on a single line (versionLineCount=1) with zero horizontal overflow"
+  ],
+  "interactions": [
+    "Dismissed dialog via Escape, reloaded to confirm quiet baseline, clicked footer 6.9.0-rc.3 version button to reopen dialog and pressed Escape to verify focus returned to footer button, navigated to /settings/system-updates, verified Current release notes link and clicked What's new button to reopen dialog and pressed Escape to verify focus returned to Settings button"
+  ]
+}
