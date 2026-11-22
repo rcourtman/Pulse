@@ -56,13 +56,13 @@ test('observe the actual sequencer selection once, returning its unchanged array
   let calls = 0;
   let returned;
   class Sequencer {
-    async shard(files) { calls++; returned = files.slice(1, 2); return returned; }
+    async shard(files) { calls++; returned = files.slice(1, 3); return returned; }
     sort(files) { return files; }
   }
   const { reporter, ctx, spec, module, read } = fixture(t, {
     shard: { index: 2, count: 4 }, sequence: { sequencer: Sequencer },
   });
-  const discovered = ['outside-a', 'selected', 'outside-b', 'outside-c'].map(spec);
+  const discovered = ['outside-a', 'selected-b', 'selected-a', 'outside-b'].map(spec);
   reporter.onTestRunStart(discovered);
   assert.equal(read().inventory_observed, true);
   assert.equal(read().selection_observed, false);
@@ -70,15 +70,19 @@ test('observe the actual sequencer selection once, returning its unchanged array
   const sequencer = new ctx.config.sequence.sequencer(ctx);
   assert.ok(sequencer instanceof Sequencer);
   assert.equal(await sequencer.shard(discovered), returned);
+  assert.deepEqual(returned.map(spec => spec.taskId), ['selected-b', 'selected-a']);
   assert.equal(calls, 1, 'never independently predict or re-run sharding');
   assert.equal(sequencer.sort(discovered), discovered);
   assert.equal(read().discovered_module_count, 4);
-  assert.deepEqual(read().modules.map(m => m.id), ['selected']);
-  assert.deepEqual(read().unobserved_modules, ['selected']);
+  assert.deepEqual(read().modules.map(m => m.id), ['selected-a', 'selected-b']);
+  assert.deepEqual(read().unobserved_modules, ['selected-a', 'selected-b']);
   assert.deepEqual(read().shard, { index: 2, count: 4 });
-  reporter.onTestRunEnd([module('selected')], [], 'passed');
+  reporter.onTestModuleEnd(module('selected-b'));
+  assert.deepEqual(read().modules.map(m => m.id), ['selected-a', 'selected-b']);
+  assert.deepEqual(read().unobserved_modules, ['selected-a']);
+  reporter.onTestRunEnd([module('selected-b'), module('selected-a')], [], 'passed');
   assert.equal(read().collection_complete, true);
-  assert.equal(read().modules.length, 1);
+  assert.equal(read().modules.length, 2);
 });
 
 test('completed failure and success survive while another selected module is unobserved', t => {
@@ -96,6 +100,7 @@ test('completed failure and success survive while another selected module is uno
   assert.equal(receipt.modules[1].tests.skipped, 1);
   assert.equal(receipt.modules[2].tests, null);
   const bytes = fs.readFileSync(outputFile, 'utf8');
+  assert.equal(bytes, `${JSON.stringify(receipt)}\n`, 'write a compact JSON snapshot of the same observations');
   assert.ok(!bytes.includes('SYNTHETIC_PRIVATE'));
   assert.ok(!bytes.includes('message'));
 });
