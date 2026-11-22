@@ -1873,7 +1873,7 @@ exit "$status"
 
 
 class UpdateServiceDeadlines(unittest.TestCase):
-    def exercise(self, budget="2", mode="active", *, read_only=False, late_timer=False, model_clock=False):
+    def exercise(self, budget="2", mode="active", *, read_only=False, probe_elapsed=None, model_clock=False):
         with tempfile.TemporaryDirectory(prefix="pulse-updater-deadline-") as directory:
             f = Path(directory)
             (f / "tools").mkdir()
@@ -1908,12 +1908,19 @@ if mode == "error":
             (f / "tools/systemctl").write_text(
                 "#!/bin/sh\nexec " + shlex.quote(sys.executable) + " -I -S "
                 + shlex.quote(str(f / "manager.py")) + ' "$@"\n')
-            (f / "tools/timeout").write_text(
-                '#!/bin/sh\nprintf "%s\\n" "$*" >> "$FIXTURE/timeouts"\n'
-                # Only the explicit late-success control models a timer that
-                # returns a complete observation past its requested deadline.
-                'if [ "$LATE_TIMER" = true ]; then sleep 1.35; shift 3; exec "$@"; fi\n'
-                'exec "$REAL_TIMEOUT" "$@"\n')
+            # Only the completed-reply model substitutes the timer. A failed
+            # manager call cannot publish its completion marker.
+            (f / "tools/timeout").write_text(r'''#!/bin/sh
+printf '%s\n' "$*" >> "$FIXTURE/timeouts"
+if [ -n "$PROBE_ELAPSED" ]; then
+    shift 3
+    "$@" > "$FIXTURE/manager-reply" || exit "$?"
+    cat "$FIXTURE/manager-reply" || exit "$?"
+    : > "$FIXTURE/manager-complete"
+    exit "$?"
+fi
+exec "$REAL_TIMEOUT" "$@"
+''')
             for tool in (f / "tools").iterdir():
                 tool.chmod(0o700)
             originals = {f / "saved-settings": b"private fixture settings\n",
@@ -1923,18 +1930,33 @@ if mode == "error":
                 path.chmod(0o600)
             env = {k: v for k, v in os.environ.items() if not k.startswith("PULSE_")}
             env.update(UPDATER=str(UPDATER), FIXTURE=str(f), BUDGET=budget,
-                       DEADLINE_MODE=mode, LATE_TIMER="true" if late_timer else "false",
+                       DEADLINE_MODE=mode, PROBE_ELAPSED="" if probe_elapsed is None else str(probe_elapsed),
                        REAL_TIMEOUT=shutil.which("timeout"),
                        PATH=str(f / "tools") + os.pathsep + env["PATH"])
             function = "read_update_service_state" if read_only else "wait_for_service_active"
+            # Classify the same complete reply before, at and after expiry.
+            # The manager runs in a command substitution. Once it returns,
+            # advance SECONDS in the waiting shell, never in that subshell.
+            # Real GNU timeout and child cleanup have independent controls.
+            observation_clock = r'''
+set -T
+trap '
+    if [[ "$BASH_SUBSHELL" == 0 && -f "$FIXTURE/manager-complete" ]]; then
+        trap - DEBUG
+        SECONDS=$PROBE_ELAPSED
+        printf "%s\n" "$SECONDS" > "$FIXTURE/observed-probe-seconds"
+    fi
+' DEBUG
+''' if probe_elapsed is not None else ""
             script = ('set -euo pipefail\nsource "$UPDATER"\n'
                       'log() { printf "[%s] %s\\n" "$1" "${*:2}" >&2; }\n'
                       # Logical budget/state classification controls use a
                       # deterministic clock: real SECONDS can expire during
-                      # an otherwise complete probe. Separate real-time
-                      # controls retain late-read and child-kill deadlines.
+                      # an otherwise complete probe.
                       + ('unset SECONDS; SECONDS=0\n'
-                         'sleep() { SECONDS=$((SECONDS + $1)); }\n' if model_clock else '') +
+                         'sleep() { SECONDS=$((SECONDS + $1)); }\n'
+                         if model_clock or probe_elapsed is not None else '')
+                      + observation_clock +
                       'status=0\n' + function + ' pulse-deadline@fixture "$BUDGET" || status=$?\n'
                       'printf "STATUS=%s\\n" "$status"\nexit "$status"\n')
             start = time.monotonic()
@@ -1972,6 +1994,10 @@ if mode == "error":
             for args in result["calls"]:
                 self.assertEqual(args, ["show", "pulse-deadline@fixture", "--no-pager",
                                         "--property=LoadState", "--property=ActiveState"])
+            if probe_elapsed is not None:
+                self.assertTrue((f / "observed-probe-seconds").is_file(), result)
+                result["probe_elapsed"] = int((f / "observed-probe-seconds").read_text())
+                result["manager_reply"] = (f / "manager-reply").read_text()
             return result
 
     def test_slow_reads_count_toward_one_polling_budget(self):
@@ -1980,15 +2006,23 @@ if mode == "error":
         self.assertLess(result["elapsed"], 3.6, result)
         self.assertLessEqual(len(result["calls"]), 2, result)
 
+    def assert_complete_reply_classification(self, mode, timely_status):
+        for probe_elapsed, status in ((0, timely_status), (1, 2), (2, 2)):
+            with self.subTest(mode=mode, probe_elapsed=probe_elapsed):
+                result = self.exercise("1", mode=mode, probe_elapsed=probe_elapsed)
+                self.assertEqual(result["manager_reply"], f"LoadState=loaded\nActiveState={mode}\n", result)
+                self.assertEqual(result["probe_elapsed"], probe_elapsed, result)
+                self.assertEqual(result["stderr"], "", result)
+                self.assertEqual(result["code"], status, result)
+                self.assertEqual(result["stdout"], f"STATUS={status}\n", result)
+                self.assertEqual(len(result["calls"]), 1, result)
+                self.assertEqual([args[:3] for args in result["timeouts"]], [["-k", "1", "1"]], result)
+
     def test_complete_active_response_after_deadline_is_uncertain(self):
-        result = self.exercise("1", late_timer=True)
-        self.assertEqual(result["code"], 2, result)
-        self.assertLess(result["elapsed"], 2.8, result)
+        self.assert_complete_reply_classification("active", 0)
 
     def test_complete_inactive_response_after_deadline_is_uncertain(self):
-        result = self.exercise("1", mode="inactive", late_timer=True)
-        self.assertEqual(result["code"], 2, result)
-        self.assertLess(result["elapsed"], 2.8, result)
+        self.assert_complete_reply_classification("inactive", 1)
 
     def test_last_manager_probe_uses_only_remaining_budget(self):
         result = self.exercise(mode="remaining", model_clock=True)
@@ -2014,8 +2048,8 @@ if mode == "error":
 
     def test_settled_inactive_timeout_is_not_manager_uncertainty(self):
         # This oracle needs both reads to finish inside their granted budget.
-        # An actual late reply is uncertainty, even when its state is inactive;
-        # the real-clock control above must continue to reject that reply.
+        # A late reply is uncertainty, even when its state is inactive;
+        # the separate completed-reply cases above exercise that boundary.
         result = self.exercise(mode="inactive", model_clock=True)
         self.assertEqual(result["code"], 1, result)
         self.assertEqual(len(result["calls"]), 2, result)
