@@ -1554,6 +1554,13 @@ runtime poll rather than a probe-shaped synthetic success. The API contract
 control retains a runtime inventory error despite a subsequent successful
 system-information probe; no synthetic success establishes installed acceptance.
 
+The TrueNAS connection editor reports a successful draft test only as a system
+information read: it does not verify selected pools, datasets, replication or
+metrics, or save the draft. A reply without explicit success is unconfirmed.
+Feedback belongs to the current draft and reader; editing or leaving the form
+clears it. An access denial still withdraws the reader's saved configuration
+even if the tested draft has since changed.
+
 ### Podman interval CPU evidence — issue #2447
 
 Every one-shot container stats response retains a cumulative CPU baseline.

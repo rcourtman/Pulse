@@ -1423,6 +1423,74 @@ describe('InfrastructureWorkspace', () => {
     },
   );
 
+  it('shows only what the TrueNAS draft probe verified beside the unchanged actions', async () => {
+    savedCredentialSlotMounts.useRealSlots = true;
+    const saved = {
+      id: 'source-1',
+      name: 'Saved source',
+      host: 'source.example.invalid',
+      username: 'monitor',
+      apiKey: '********',
+      useHttps: true,
+      insecureSkipVerify: false,
+      enabled: true,
+      monitorPools: true,
+      monitorDatasets: false,
+      monitorReplication: true,
+    };
+    vi.spyOn(TrueNASAPI, 'listConnections').mockResolvedValue([saved]);
+    const test = vi
+      .spyOn(TrueNASAPI, 'testSavedConnection')
+      .mockResolvedValueOnce({ success: true })
+      .mockResolvedValueOnce({ success: false })
+      .mockRejectedValueOnce({
+        status: 400,
+        details: { error: 'x509: certificate signed by unknown authority' },
+      });
+    const update = vi.spyOn(TrueNASAPI, 'updateConnection');
+    connectionState.connections = [
+      connectionFixture({ id: 'truenas:source-1', type: 'truenas', name: saved.name }),
+    ];
+    render(() => {
+      const trueNASSettings = useTrueNASSettingsPanelState();
+      return <InfrastructureWorkspace {...baseProps()} trueNASSettings={trueNASSettings} />;
+    });
+    fireEvent.click(await screen.findByRole('button', { name: 'Manage' }));
+    const dialog = within(screen.getByRole('dialog'));
+    const testButton = await dialog.findByRole('button', { name: 'Test connection' });
+    const result = dialog.getByRole('status');
+    expect(result).toBeEmptyDOMElement();
+    fireEvent.click(testButton);
+    await waitFor(() => expect(result).toHaveTextContent('System information read'));
+    expect(result).toHaveTextContent('Pools, datasets, replication, and metrics were not checked.');
+    expect(result).toHaveTextContent('No settings were saved.');
+    expect(dialog.getByRole('button', { name: 'Update connection' })).toBeEnabled();
+    expect(test).toHaveBeenCalledWith(
+      saved.id,
+      expect.objectContaining({
+        apiKey: '********',
+        useHttps: true,
+        insecureSkipVerify: false,
+        monitorPools: true,
+        monitorDatasets: false,
+      }),
+      expect.objectContaining({ retry: false }),
+    );
+
+    fireEvent.click(testButton);
+    await waitFor(() => expect(result).toHaveTextContent('Connection test not confirmed'));
+    expect(result).not.toHaveTextContent('System information read');
+    fireEvent.click(testButton);
+    await waitFor(() => expect(result).toHaveTextContent('Connection test failed'));
+    expect(result).toHaveTextContent('x509: certificate signed by unknown authority');
+    fireEvent.input(dialog.getByRole('textbox', { name: 'Name' }), {
+      target: { value: 'New draft' },
+    });
+    expect(result).toBeEmptyDOMElement();
+    expect(test).toHaveBeenCalledTimes(3);
+    expect(update).not.toHaveBeenCalled();
+  });
+
   describe.each([
     ['truenas', 'TrueNAS', 'trueNASSettings'],
     ['vmware', 'VMware', 'vmwareSettings'],

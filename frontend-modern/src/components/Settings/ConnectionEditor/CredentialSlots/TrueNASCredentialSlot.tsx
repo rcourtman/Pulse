@@ -1,4 +1,4 @@
-import { Component, Show, createEffect, onMount } from 'solid-js';
+import { Component, Show, createEffect, createMemo, onMount } from 'solid-js';
 import { Button } from '@/components/shared/Button';
 import { CalloutCard } from '@/components/shared/CalloutCard';
 import {
@@ -71,6 +71,31 @@ export const TrueNASCredentialSlot: Component<TrueNASCredentialSlotProps> = (pro
   };
 
   const isEditing = () => Boolean(props.editingConnection);
+  const connectionTestFeedback = createMemo(() => {
+    const result = props.state.connectionTestResult();
+    if (!result) return null;
+    switch (result.kind) {
+      case 'passed':
+        return {
+          title: 'System information read',
+          description:
+            'Pools, datasets, replication, and metrics were not checked. No settings were saved.',
+          tone: 'success' as const,
+        };
+      case 'unconfirmed':
+        return {
+          title: 'Connection test not confirmed',
+          description: 'Pulse did not get a confirmed result. No settings were saved.',
+          tone: 'warning' as const,
+        };
+      case 'failed':
+        return {
+          title: 'Connection test failed',
+          description: result.detail,
+          tone: 'danger' as const,
+        };
+    }
+  });
 
   return (
     <div class="space-y-6">
@@ -357,12 +382,67 @@ export const TrueNASCredentialSlot: Component<TrueNASCredentialSlotProps> = (pro
           )}
         </Show>
 
-        <div class="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-          <Show when={isEditing() && props.onToggleEnabled}>
+        <div>
+          <div role="status" aria-atomic="true">
+            <Show when={connectionTestFeedback()}>
+              {(feedback) => (
+                <CalloutCard
+                  tone={feedback().tone}
+                  scale="compact"
+                  padding="sm"
+                  class="mb-2 wrap-anywhere"
+                  title={feedback().title}
+                  description={feedback().description}
+                />
+              )}
+            </Show>
+          </div>
+
+          <div class="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+            <Show when={isEditing() && props.onToggleEnabled}>
+              <Button
+                variant="outline"
+                size="settingsAction"
+                onClick={() => props.onToggleEnabled?.()}
+                disabled={
+                  props.state.saving() ||
+                  props.state.testing() ||
+                  props.togglePending ||
+                  props.deletePending
+                }
+              >
+                {props.togglePending
+                  ? props.connectionEnabled
+                    ? 'Pausing…'
+                    : 'Resuming…'
+                  : props.connectionEnabled
+                    ? 'Pause connection'
+                    : 'Resume connection'}
+              </Button>
+            </Show>
+            <Show when={isEditing() && props.onDelete}>
+              <Button
+                variant={props.deleteConfirming ? 'danger' : 'dangerOutline'}
+                size="settingsAction"
+                onClick={() => props.onDelete?.()}
+                disabled={
+                  props.state.saving() ||
+                  props.state.testing() ||
+                  props.togglePending ||
+                  props.deletePending
+                }
+              >
+                {props.deletePending
+                  ? 'Deleting…'
+                  : props.deleteConfirming
+                    ? 'Click again to confirm'
+                    : 'Delete connection'}
+              </Button>
+            </Show>
             <Button
               variant="outline"
               size="settingsAction"
-              onClick={() => props.onToggleEnabled?.()}
+              onClick={handleCancel}
               disabled={
                 props.state.saving() ||
                 props.state.testing() ||
@@ -370,20 +450,12 @@ export const TrueNASCredentialSlot: Component<TrueNASCredentialSlotProps> = (pro
                 props.deletePending
               }
             >
-              {props.togglePending
-                ? props.connectionEnabled
-                  ? 'Pausing…'
-                  : 'Resuming…'
-                : props.connectionEnabled
-                  ? 'Pause connection'
-                  : 'Resume connection'}
+              Cancel
             </Button>
-          </Show>
-          <Show when={isEditing() && props.onDelete}>
             <Button
-              variant={props.deleteConfirming ? 'danger' : 'dangerOutline'}
+              variant="outline"
               size="settingsAction"
-              onClick={() => props.onDelete?.()}
+              onClick={() => void props.state.testCurrentForm()}
               disabled={
                 props.state.saving() ||
                 props.state.testing() ||
@@ -391,68 +463,38 @@ export const TrueNASCredentialSlot: Component<TrueNASCredentialSlotProps> = (pro
                 props.deletePending
               }
             >
-              {props.deletePending
-                ? 'Deleting…'
-                : props.deleteConfirming
-                  ? 'Click again to confirm'
-                  : 'Delete connection'}
+              {props.state.testing() ? 'Testing…' : 'Test connection'}
             </Button>
-          </Show>
-          <Button
-            variant="outline"
-            size="settingsAction"
-            onClick={handleCancel}
-            disabled={
-              props.state.saving() ||
-              props.state.testing() ||
-              props.togglePending ||
-              props.deletePending
-            }
-          >
-            Cancel
-          </Button>
-          <Button
-            variant="outline"
-            size="settingsAction"
-            onClick={() => void props.state.testCurrentForm()}
-            disabled={
-              props.state.saving() ||
-              props.state.testing() ||
-              props.togglePending ||
-              props.deletePending
-            }
-          >
-            {props.state.testing() ? 'Testing…' : 'Test connection'}
-          </Button>
-          <Button
-            variant="outline"
-            size="settingsAction"
-            onClick={() => void props.state.previewCurrentForm()}
-            disabled={props.state.saving() || props.state.testing() || props.state.previewing()}
-            title="Show the resources Pulse would ingest from this connection without saving or starting polling."
-          >
-            {props.state.previewing() ? 'Previewing…' : 'Preview impact'}
-          </Button>
-          <Button
-            variant="primary"
-            size="settingsAction"
-            onClick={() => void props.state.saveCurrentForm()}
-            disabled={
-              props.state.saving() ||
-              props.state.testing() ||
-              props.state.previewing() ||
-              props.togglePending ||
-              props.deletePending
-            }
-          >
-            {props.state.saving()
-              ? isEditing()
-                ? 'Saving…'
-                : 'Adding…'
-              : isEditing()
-                ? 'Update connection'
-                : 'Add connection'}
-          </Button>
+            <Button
+              variant="outline"
+              size="settingsAction"
+              onClick={() => void props.state.previewCurrentForm()}
+              disabled={props.state.saving() || props.state.testing() || props.state.previewing()}
+              title="Show the resources Pulse would ingest from this connection without saving or starting polling."
+            >
+              {props.state.previewing() ? 'Previewing…' : 'Preview impact'}
+            </Button>
+            <Button
+              variant="primary"
+              size="settingsAction"
+              onClick={() => void props.state.saveCurrentForm()}
+              disabled={
+                props.state.saving() ||
+                props.state.testing() ||
+                props.state.previewing() ||
+                props.togglePending ||
+                props.deletePending
+              }
+            >
+              {props.state.saving()
+                ? isEditing()
+                  ? 'Saving…'
+                  : 'Adding…'
+                : isEditing()
+                  ? 'Update connection'
+                  : 'Add connection'}
+            </Button>
+          </div>
         </div>
       </Show>
     </div>

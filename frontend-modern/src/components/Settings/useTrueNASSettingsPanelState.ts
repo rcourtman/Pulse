@@ -19,6 +19,9 @@ import {
 
 type TrueNASAuthMode = 'apiKey' | 'userpass';
 
+type TrueNASConnectionTestResult =
+  { kind: 'passed' } | { kind: 'unconfirmed' } | { kind: 'failed'; detail: string };
+
 export interface TrueNASConnectionFormState {
   name: string;
   host: string;
@@ -209,6 +212,8 @@ export function useTrueNASSettingsPanelState({
   const [form, setForm] = createSignal<TrueNASConnectionFormState>(createEmptyFormState());
   const [saving, setSaving] = createSignal(false);
   const [testing, setTesting] = createSignal(false);
+  const [connectionTestResult, setConnectionTestResult] =
+    createSignal<TrueNASConnectionTestResult | null>(null);
   const [deleting, setDeleting] = createSignal(false);
   const [previewing, setPreviewing] = createSignal(false);
   const [monitoredSystemPreview, setMonitoredSystemPreview] =
@@ -267,6 +272,7 @@ export function useTrueNASSettingsPanelState({
     setDialogOpen(false);
     setEditingConnectionId(null);
     setForm(createEmptyFormState());
+    setConnectionTestResult(null);
     clearPreview();
   };
   const resetDeleteDialogState = () => {
@@ -420,6 +426,7 @@ export function useTrueNASSettingsPanelState({
       return;
     dialogVersion += 1;
     batch(() => {
+      setConnectionTestResult(null);
       clearPreview();
       setForm((current) => ({ ...current, ...patch }));
     });
@@ -438,32 +445,31 @@ export function useTrueNASSettingsPanelState({
     const accepted = reader();
     const version = dialogVersion;
     const isCurrent = () => isCurrentReader(accepted) && version === dialogVersion;
-    setTesting(true);
+    batch(() => {
+      setTesting(true);
+      setConnectionTestResult(null);
+    });
     try {
       const payload = buildConnectionInput(form());
-      if (editingConnectionId()) {
-        await TrueNASAPI.testSavedConnection(
-          editingConnectionId()!,
-          payload,
-          requestOptions(accepted),
-        );
-      } else {
-        await TrueNASAPI.testConnection(payload, requestOptions(accepted));
-      }
+      const id = editingConnectionId();
+      const reply = id
+        ? await TrueNASAPI.testSavedConnection(id, payload, requestOptions(accepted))
+        : await TrueNASAPI.testConnection(payload, requestOptions(accepted));
       if (!isCurrent()) return false;
-      notificationStore.success('TrueNAS connection successful');
-      return true;
+      setConnectionTestResult(reply.success ? { kind: 'passed' } : { kind: 'unconfirmed' });
+      return reply.success;
     } catch (error) {
       // Access belongs to the reader, not the tested draft. A Name/credential
       // edit may obsolete a result, but must not hide this reader's denial.
       if (!isCurrentReader(accepted)) return false;
       if (withdrawOnDenial(error)) notificationStore.error(loadingError()!);
-      else if (isCurrent())
-        handleActionError(
-          error,
-          'TrueNAS connection failed',
-          '[TrueNAS Settings] Connection test failed',
-        );
+      else if (isCurrent()) {
+        setConnectionTestResult({
+          kind: 'failed',
+          detail: getTrueNASErrorMessage(error, 'Pulse could not complete this test.'),
+        });
+        logger.error('[TrueNAS Settings] Connection test failed', error);
+      }
       return false;
     } finally {
       if (isCurrentReader(accepted)) setTesting(false);
@@ -602,6 +608,7 @@ export function useTrueNASSettingsPanelState({
     closeDeleteDialog,
     closeDialog,
     connections,
+    connectionTestResult,
     deleteDialogOpen,
     deletePendingConnection,
     deleting,
