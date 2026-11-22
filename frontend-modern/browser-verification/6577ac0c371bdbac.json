@@ -1,0 +1,42 @@
+{
+  "version": 1,
+  "base_sha": "40228414ac5d30f0350b1160007318a3e1b59b0e",
+  "verified_at": "2026-11-22T07:47:03Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/NodeModalSetupGuideSection.tsx",
+    "frontend-modern/src/components/Settings/nodeModalModel.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/NodeModalSetupGuideSection.tsx": "18d77f58cdb3a5eb19e38f137772173f0980c8ea383dc665c8a13b748c7e5e1a",
+    "frontend-modern/src/components/Settings/nodeModalModel.ts": "e0623c6a64df1ec47688616aea3da3697fa7c5cc6ca87196e92bebb0a92dfff2"
+  },
+  "routes": [
+    "/settings/infrastructure",
+    "/docs/TROUBLESHOOTING#check-permissions-proxmox"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 360,
+      "height": 800
+    },
+    {
+      "width": 320,
+      "height": 800
+    }
+  ],
+  "states": [
+    "Production-mode Pulse previews of assigned 4b021e230ab7c480b15aa304fae16f06d70c6b7f and final runtime 40228414ac5d30f0350b1160007318a3e1b59b0e, with the same synthetic Add/Manage fixtures, desktop light and narrow dark viewports, Chromium 141.0.7390.37 and Playwright 1.56.1.",
+    "Manual Proxmox VE setup shows the scoped path, Help, explicit new whole-cluster example, separation on, the paired monitoring ACLs, private token-value reminder and optional datastore-specific guidance. The narrow view retains the first-view token command and ACL heading. Existing fields and verification controls remain available.",
+    "Eleven corresponding before/after pairs and both new guide views were inspected natively. No live Proxmox, credential, role, or backup read change."
+  ],
+  "interactions": [
+    "Select Manual Token Setup from the real Add and saved Manage dialogs; compare the summary, command blocks, optional storage guidance and token fields. Use keyboard on desktop and touch on phone.",
+    "Copy the token and ACL commands and compare their actual clipboard text against the visible commands. Before offers a blanket datastore-admin command; after offers no such command and describes the write-capable role as optional and datastore-specific.",
+    "Open same-origin Permissions Help in a new tab, focus the correct section without opener or referrer, return to the unchanged draft, then cancel. Test and Add/Save remain available; no API write or external request."
+  ]
+}
