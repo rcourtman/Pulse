@@ -1,0 +1,44 @@
+{
+  "version": 1,
+  "base_sha": "1da83633e8ce18eed8984d1268e5c5f5a9755102",
+  "verified_at": "2026-11-22T03:17:04Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/SSOProvidersPanel.tsx",
+    "frontend-modern/src/components/Settings/ssoProvidersModel.ts",
+    "frontend-modern/src/components/Settings/useSSOProvidersState.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/SSOProvidersPanel.tsx": "35cbc3a8852972dbcc5f5c8b0b6a351b04c66754d13558792f4fc06b3ba173b5",
+    "frontend-modern/src/components/Settings/ssoProvidersModel.ts": "9098b605b4214c47c57486b3eda4f107d3d97b2e7302322d8719bbca9ba865cf",
+    "frontend-modern/src/components/Settings/useSSOProvidersState.ts": "92d6b97fcc28944da6d17ed2fda921e0df395f29c892068cbe5280af01c3cb64"
+  },
+  "routes": [
+    "/settings/security-sso — real Pulse Settings editor with synthetic local draft-test responses"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 360,
+      "height": 800
+    },
+    {
+      "width": 320,
+      "height": 800
+    }
+  ],
+  "states": [
+    "Chromium 141.0.7390.37 / Playwright 1.56.1. Desktop light keyboard, 360px and 320px dark touch with the same synthetic saved provider, theme and input state before and after.",
+    "Baseline e1f7327c2ab39de495e5eb4bc6986c296820932b, runtime 1da83633e8ce18eed8984d1268e5c5f5a9755102; four matched states per viewport (12 pairs) opened for native pixel inspection.",
+    "Known OIDC HTTP 400: result summary and explicitly opened detail. The callback, Issuer URL, Client ID, saved-secret cue and Test/Save/Cancel remain available at completion; detail retains Client ID, saved-secret cue, redirect/scopes, restrictions and the fixed footer.",
+    "Unknown HTTP 400 and an unexpected HTTP 200 failure: fixed generic recovery only. No raw response text, code, details or credentials from failures."
+  ],
+  "interactions": [
+    "Edit a synthetic OIDC issuer, activate the existing Test by keyboard or touch, and verify draft values and focus are retained. Follow the result action and dismiss to return to Test.",
+    "Correct the draft and retest successfully; the existing issuer-match/sign-in limits and successful details remain. The test carries only the existing draft fields; no provider write, live IdP request or sign-in.",
+    "Compare the verified captures at rest and when viewing details. The 320px badge wraps within its 44px touch target; no previously visible measured field/action is lost."
+  ]
+}

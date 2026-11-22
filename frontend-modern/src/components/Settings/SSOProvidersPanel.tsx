@@ -135,7 +135,12 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
   const testSummary = createMemo(() => {
     const result = testResult();
     if (!result) return null;
-    if (!result.success) return { lines: ['Test failed'], variant: 'dangerOutline' } as const;
+    if (!result.success) {
+      return {
+        lines: [result.issuerMismatch ? 'Issuer mismatch' : 'Test failed'],
+        variant: 'dangerOutline',
+      } as const;
+    }
 
     const isManual = isSamlUrlFormatCheck();
     const isSaml = form.type === 'saml';
@@ -508,7 +513,9 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
                     type="button"
                     variant={summary().variant}
                     size="xs"
-                    class="-my-2 min-w-0 max-w-[60%] shrink-0 gap-1.5 text-left"
+                    class={`-my-2 min-w-0 max-w-[60%] shrink-0 gap-1.5 text-left ${
+                      testResult()?.issuerMismatch ? 'max-[360px]:max-w-25' : ''
+                    }`}
                     aria-label={`${summary().lines.join(', ')} — view result`}
                     aria-controls={testResultId}
                     disabled={saving() || !!unconfirmedChange()}
@@ -864,7 +871,9 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
                 <div
                   id={testResultId}
                   ref={testResultPanel}
-                  class={`${testResultPresentation()!.panelClass} focus:outline-hidden focus:ring-2 focus:ring-blue-500`}
+                  class={`${testResultPresentation()!.panelClass} focus:outline-hidden focus:ring-2 focus:ring-blue-500 ${
+                    testResult()?.issuerMismatch ? 'max-sm:p-2' : ''
+                  }`}
                   role={testResult()?.success ? 'status' : 'alert'}
                   tabindex={-1}
                   aria-labelledby={testResultTitleId}
@@ -879,9 +888,6 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
                       <p id={testResultTitleId} class={testResultPresentation()!.titleClass}>
                         {testResult()?.message}
                       </p>
-                      <Show when={testResult()?.error}>
-                        <p class={testResultPresentation()!.errorClass}>{testResult()?.error}</p>
-                      </Show>
                       <Show when={testResult()?.success && testResult()?.details}>
                         <dl class="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1 text-xs">
                           <Show when={testResult()?.details?.entityId}>
