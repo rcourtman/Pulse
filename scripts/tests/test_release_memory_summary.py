@@ -40,7 +40,8 @@ def select_samples(raw, keep):
 
 
 class ReleaseMemorySummaryTests(unittest.TestCase):
-    def run_summary(self, baseline, candidate, estate=None, agents=None, env=None, duration=900, interval=15):
+    def run_summary(self, baseline, candidate, estate=None, agents=None, env=None, duration=900, interval=15,
+                    wait_statuses=(), child_wait_statuses=None):
         with tempfile.TemporaryDirectory() as tmp:
             out = Path(tmp)
             (out / "samples-baseline.tsv").write_text(baseline)
@@ -50,11 +51,13 @@ class ReleaseMemorySummaryTests(unittest.TestCase):
                 (out / "estate").write_text(estate + "\n")
             for label, stats in (agents or {}).items():
                 (out / f"agents-{label}.json").write_text(json.dumps(stats))
+            for label, status in (child_wait_statuses or {}).items():
+                (out / f"run-{label}-wait.json").write_text(json.dumps(status))
             saved = {key: os.environ.get(key) for key in (env or {})}
             os.environ.update(env or {})
             try:
                 with redirect_stdout(io.StringIO()):
-                    code = summary.main(["summarize", str(out), str(duration), str(interval)])
+                    code = summary.main(["summarize", str(out), str(duration), str(interval), *map(str, wait_statuses)])
             finally:
                 for key, value in saved.items():
                     if value is None:
@@ -152,7 +155,7 @@ class ReleaseMemorySummaryTests(unittest.TestCase):
     def test_uses_one_planned_window_and_allows_one_missed_nominal_sample(self):
         baseline = samples(131072, 25, 0)
         candidate = select_samples(baseline, lambda t: t not in (600, 750, 900))
-        code, result, text = self.run_summary(baseline, candidate)
+        code, result, text = self.run_summary(baseline, candidate, wait_statuses=(0, 0))
         self.assertEqual(code, 0)
         self.assertEqual(result["status"], "measured")
         self.assertEqual(result["sampling"], {
@@ -162,6 +165,33 @@ class ReleaseMemorySummaryTests(unittest.TestCase):
         })
         self.assertEqual(result["candidate_activity"]["cpu_pct"], 25.0)
         self.assertIn("planned 600–900 s window", text)
+        self.assertNotIn("failed_runs", result)
+
+    def test_complete_sample_windows_do_not_clear_a_failed_load_driver(self):
+        full = samples(131072, 25, 0)
+        code, result, text = self.run_summary(
+            full, full, estate="proxmox", wait_statuses=(0, 1), env={"PULSE_MEMORY_GATE": "0"},
+            child_wait_statuses={"candidate": {"pulse_wait_status_before_stop": None, "driver_wait_status": 42}},
+        )
+        self.assertEqual(code, 1)
+        self.assertEqual(result["status"], "incomplete")
+        self.assertEqual(result["sampling"]["candidate"], {"first_s": 600, "last_s": 900, "count": 21})
+        self.assertEqual(result["failed_runs"], {"candidate": {"worker_wait_status": 1, "driver_wait_status": 42}})
+        self.assertNotIn("regressed", result)
+        self.assertIn("Candidate run did not complete successfully (worker wait status 1; load driver wait status 42)", text)
+        self.assertNotIn("No steady-state RSS regression", text)
+
+    def test_worker_failure_without_child_observation_remains_incomplete(self):
+        full = samples(131072, 25, 0)
+        code, result, text = self.run_summary(
+            full, full, wait_statuses=(143, 1),
+            child_wait_statuses={"candidate": {"pulse_wait_status_before_stop": True, "driver_wait_status": 256}},
+        )
+        self.assertEqual(code, 1)
+        self.assertEqual(result["failed_runs"], {
+            "baseline": {"worker_wait_status": 143}, "candidate": {"worker_wait_status": 1},
+        })
+        self.assertIn("worker wait status 143; no child wait status observed", text)
 
     def test_short_run_uses_its_declared_duration(self):
         short = samples(131072, 25, 0, end=38, interval=2)
@@ -248,10 +278,10 @@ class ReleaseMemorySummaryTests(unittest.TestCase):
 
 
 class ReleaseMemoryLauncherTests(unittest.TestCase):
-    def test_both_builds_request_their_own_loopback_metrics_listener(self):
+    def test_launch_parity_and_incomplete_report_after_early_pulse_exit(self):
         # Exercise the actual Bash launch, not a copy of its env arguments.
-        # The fixture records its environment and then exits, so this is
-        # neither a memory sample nor a real server/bind test.
+        # The fixture records its environment and deliberately exits, so this
+        # exercises launcher reporting, not a real server, bind or RSS verdict.
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             baseline, candidate, output = [root / name for name in ("stable", "main", "out")]
@@ -263,6 +293,7 @@ class ReleaseMemoryLauncherTests(unittest.TestCase):
                 '#!/bin/bash\nset -eu\n'
                 'printf "%s:%s\\n" "${PULSE_METRICS_BIND_ADDRESS-unset}" '
                 '"${PULSE_METRICS_PORT-unset}" > "$PULSE_DATA_DIR/metrics-bind"\n'
+                'case "$PULSE_DATA_DIR" in */data-candidate) exit 42 ;; *) exit 0 ;; esac\n'
             )
             fixture.chmod(0o700)
             for name, body in (
@@ -283,9 +314,21 @@ class ReleaseMemoryLauncherTests(unittest.TestCase):
             self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
             for label in ("baseline", "candidate"):
                 with self.subTest(label=label):
-                    self.assertIn(f"{label} exited before the measurement ended", result.stderr)
                     self.assertEqual((output / f"data-{label}" / "metrics-bind").read_text(),
                                      "127.0.0.1:0\n")
+            observation = json.loads((output / "result.json").read_text())
+            self.assertEqual(observation["status"], "incomplete")
+            self.assertEqual(observation["failed_runs"], {
+                "baseline": {"worker_wait_status": 1, "pulse_wait_status_before_stop": 0},
+                "candidate": {"worker_wait_status": 1, "pulse_wait_status_before_stop": 42},
+            })
+            summary_text = (output / "summary.md").read_text()
+            for label, status in (("Baseline", 0), ("Candidate", 42)):
+                self.assertIn(f"{label.lower()} exited before the watch stopped it (wait status {status})", result.stderr)
+                self.assertIn(f"{label} run did not complete successfully", summary_text)
+                self.assertIn(f"Pulse wait status before the watch's stop {status}", summary_text)
+            self.assertNotIn("regressed", observation)
+            self.assertNotIn("No steady-state RSS regression", summary_text)
 
 
 if __name__ == "__main__":
