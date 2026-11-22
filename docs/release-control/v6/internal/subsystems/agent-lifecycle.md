@@ -3847,6 +3847,10 @@ tools must preserve settings-scope auth, typed manifest schemas, and redacted
 source reads. The manifest does not turn discovered hosts into command-agent
 authority, install-token scope, fleet-command grants, or permission to bypass
 human approval for multi-source imports.
+The cluster membership refresh can save before monitoring fails to apply the
+configuration. Its non-success reply directs the caller to read the saved row;
+it is neither a rollback nor a reason to replay provisioning or mint another
+enrolment token.
 Native provider resource types exposed through shared `internal/api/` resource
 handlers are the same kind of read-only context for lifecycle surfaces. A
 TrueNAS `network-share` resource may appear in resource pickers, connection
