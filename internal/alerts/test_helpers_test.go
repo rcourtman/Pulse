@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts/reducer"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
 func testNewCanonicalAlert(resourceID, specID, kind, alertType string) (string, *Alert) {
@@ -242,4 +243,30 @@ func testSeedCoreConfirmations(m *Manager, resourceID, specID string, count int,
 			ObservedAt: base.Add(time.Duration(i) * time.Minute),
 		}, reducer.DiscreteRule{Confirmations: confirmationsRequired})
 	}
+}
+
+// checkMetric is a test-only convenience adapter that routes legacy test
+// calls through the single canonical metric evaluation path
+// (evaluateCanonicalMetricAlert). Production code no longer maintains a
+// separate legacy checkMetric implementation.
+func (m *Manager) checkMetric(resourceID, resourceName, node, instance, resourceType, metricType string, value float64, threshold *HysteresisThreshold, opts *metricOptions) {
+	unifiedType, ok := unifiedMetricResourceType(strings.ToLower(strings.TrimSpace(resourceType)))
+	if !ok {
+		switch strings.ToLower(strings.TrimSpace(resourceType)) {
+		case "guest", "container", "lxc", "qemu":
+			unifiedType = unifiedresources.ResourceTypeVM
+		case "host":
+			unifiedType = unifiedresources.ResourceTypeAgent
+		default:
+			unifiedType = unifiedresources.ResourceTypeVM
+		}
+	}
+	spec, err := buildCanonicalMetricSpec(resourceID, resourceName, unifiedType, metricType, threshold)
+	if err != nil {
+		if threshold == nil || threshold.Trigger <= 0 {
+			m.releaseCanonicalMetricAlert(spec, resourceName, node, instance, resourceType, value, nil)
+		}
+		return
+	}
+	m.evaluateCanonicalMetricAlert(spec, resourceName, node, instance, resourceType, value, threshold, opts)
 }

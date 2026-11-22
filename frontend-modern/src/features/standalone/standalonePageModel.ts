@@ -5,9 +5,29 @@ import {
   isPulseAgentPlatformResource,
 } from '@/utils/agentResources';
 import { getSimpleStatusIndicator } from '@/utils/status';
+import { buildStandalonePath } from '@/routing/resourceLinks';
+
+export type StandaloneTabId = 'machines' | 'vms' | 'availability';
+
+export type StandaloneVMStatusFilter = 'all' | 'running' | 'attention' | 'stopped';
+
+export const normalizeStandaloneVMStatusFilter = (
+  value: string | string[] | undefined,
+): StandaloneVMStatusFilter => {
+  const raw = (Array.isArray(value) ? value[0] : value)?.trim().toLowerCase();
+  if (raw === 'running' || raw === 'attention' || raw === 'stopped') return raw;
+  return 'all';
+};
+
+export interface StandaloneTabSpec {
+  id: StandaloneTabId;
+  label: string;
+  path: string;
+}
 
 export interface StandalonePageModel {
   machines: Resource[];
+  vms: Resource[];
   availabilityChecks: Resource[];
   resources: Resource[];
 }
@@ -22,11 +42,73 @@ export interface StandalonePostureSummary {
   warning: number;
 }
 
+const PROVIDER_OWNED_VM_SOURCES = new Set([
+  'proxmox-pve',
+  'vmware-vsphere',
+  'truenas',
+  'kubernetes',
+]);
+
 export const isStandaloneMachineResource = (resource: Resource): boolean =>
   isPulseAgentPlatformResource(resource);
 
+export const isStandaloneVirtualMachineResource = (resource: Resource): boolean => {
+  if (resource.type !== 'vm') return false;
+  if (PROVIDER_OWNED_VM_SOURCES.has(resource.platformType)) return false;
+  const sources = resource.sources ?? [];
+  if (sources.some((source) => PROVIDER_OWNED_VM_SOURCES.has(source))) return false;
+  return true;
+};
+
 export const isAgentlessAvailabilityResource = (resource: Resource): boolean =>
   resource.type === 'network-endpoint' || resource.platformType === 'availability';
+
+export const getStandaloneTabSpecs = (
+  hasVms: boolean,
+  activeTab: StandaloneTabId,
+): readonly StandaloneTabSpec[] => {
+  const tabs: StandaloneTabSpec[] = [
+    { id: 'machines', label: 'Machines', path: buildStandalonePath('machines') },
+  ];
+  if (hasVms || activeTab === 'vms') {
+    tabs.push({ id: 'vms', label: 'VMs', path: buildStandalonePath('vms') });
+  }
+  tabs.push({
+    id: 'availability',
+    label: 'Availability checks',
+    path: buildStandalonePath('availability'),
+  });
+  return tabs;
+};
+
+export const buildStandaloneMachineVmCounts = (
+  machines: readonly Resource[],
+  vms: readonly Resource[],
+): Map<string, number> => {
+  const counts = new Map<string, number>();
+  if (machines.length === 0 || vms.length === 0) return counts;
+  const machineIdSet = new Set(machines.map((machine) => machine.id));
+  const machineIdByName = new Map<string, string>();
+  for (const machine of machines) {
+    for (const candidate of [machine.name, machine.displayName, machine.agent?.hostname]) {
+      const normalized = candidate?.trim().toLowerCase();
+      if (normalized && !machineIdByName.has(normalized)) {
+        machineIdByName.set(normalized, machine.id);
+      }
+    }
+  }
+  for (const vm of vms) {
+    const parentId = vm.parentId?.trim();
+    let ownerId = parentId && machineIdSet.has(parentId) ? parentId : undefined;
+    if (!ownerId) {
+      const parentName = vm.parentName?.trim().toLowerCase();
+      if (parentName) ownerId = machineIdByName.get(parentName);
+    }
+    if (!ownerId) continue;
+    counts.set(ownerId, (counts.get(ownerId) ?? 0) + 1);
+  }
+  return counts;
+};
 
 const AGENT_REPORT_STALE_AFTER_MS = 5 * 60 * 1000;
 
@@ -134,9 +216,11 @@ export function sortStandaloneResourcesByAttention(
 
 export function buildStandalonePageModel(resources: readonly Resource[]): StandalonePageModel {
   const machines = resources.filter(isStandaloneMachineResource);
+  const vms = resources.filter(isStandaloneVirtualMachineResource);
   const availabilityChecks = resources.filter(isAgentlessAvailabilityResource);
   return {
     machines,
+    vms,
     availabilityChecks,
     resources: machines,
   };

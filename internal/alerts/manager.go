@@ -77,28 +77,11 @@ type Manager struct {
 	// gates, re-fire retention, and ack restoration for alerts that flow
 	// through evaluateCanonicalLifecycleAlert and the poll-driven recovery
 	// paths (docs/ALERT_ENGINE_EVOLUTION.md, Phase 2). Access under m.mu.
-	core                         *reducer.State
-	unifiedIncidentConfirmations map[string]int                     // Track consecutive provider-incident observations before activation
-	unifiedIncidentFirstSeen     map[string]time.Time               // Preserve the first confirmed observation as lifecycle start
-	unifiedIncidentRecoveries    map[string]int                     // Track consecutive healthy observations before provider-incident recovery
-	hostDiskTempPendingContexts  map[string]hostDiskTempContext     // Only live pending temperature runs; config saves need link/type identity
-	hostNativeSensorPendingCtx   map[string]hostNativeSensorContext // Only live pending native sensor runs; config saves need the host's link identity
-	hostSMARTRiskAbsences        map[string]int                     // Consecutive non-empty reports omitting a SMART risk resource
-	hostDiskTempAbsences         map[string]int                     // Track consecutive SMART reports missing a disk that holds temperature alert state
-	dockerRestartTracking        map[string]*dockerRestartRecord    // Track restart counts and times for restart loop detection
-	dockerUpdateFirstSeen        map[string]time.Time               // Track when image updates were first detected for alert delay
-	// Stable identity tracking prevents update-delay resets when host IDs churn.
-	dockerUpdateFirstSeenByIdentity map[string]time.Time
-	dockerUpdateIdentityOwner       map[string]string    // last reporting runtime, for scoped policy changes
-	dockerUpdateLastObserved        map[string]time.Time // Resource and stable identity keys; activity, not pending age.
-	// PMG quarantine growth tracking
-	pmgQuarantineHistory map[string][]pmgQuarantineSnapshot // Track quarantine snapshots for growth detection
-	// SMART counter snapshots let alert evaluation distinguish historical
-	// counters from new disk errors. They are keyed by the canonical disk
-	// resource ID and intentionally retain only the latest observation.
-	smartCounterSnapshots map[string]smartCounterSnapshot
-	// PMG anomaly detection tracking
-	pmgAnomalyTrackers map[string]*pmgAnomalyTracker // Track mail metrics for anomaly detection per PMG instance
+	core *reducer.State
+	unifiedIncidentTracker
+	hostTracker
+	dockerTracker
+	pmgTracker
 	// Persistent acknowledgement state so quick alert rebuilds keep user acknowledgements
 	ackState map[string]ackRecord
 	// Canonical acknowledgement state is keyed by resource_id + spec_id so later
@@ -109,16 +92,6 @@ type Manager struct {
 	flappingActive  map[string]bool        // Track which alerts are currently in flapping state
 	// Cleanup control
 	cleanupStop chan struct{} // Signal to stop cleanup goroutine
-	// Host agent deduplication: the Proxmox node each reporting host agent is
-	// linked to and the usage metrics the agent evaluates for it. The node
-	// releases only those metrics and keeps evaluating the rest itself.
-	hostAgentNodeLinks map[string]hostAgentNodeLink // Host agent ID -> node link
-	// Membership only: coverage stays in hostAgentNodeLinks. Both maps change
-	// under m.mu, so node checks need not scan agents linked to other nodes.
-	hostAgentsByNode map[string]map[string]struct{} // Node ID -> host agent IDs
-	// Ordering survives link removal so an older in-flight report cannot restore it.
-	hostAgentReportSeq   map[string]uint64
-	hostAgentLinkApplied map[string]uint64
 	// Node display name caches. Proxmox nodes can share the same raw node name
 	// across multiple configured instances, so keep instance-scoped entries in
 	// addition to the legacy raw-name cache used by instance-less resources.
@@ -172,6 +145,91 @@ type Manager struct {
 	activeSaveRunning bool
 	activeSavePending bool
 	activeSaveContext string
+}
+
+// unifiedIncidentTracker holds batch-reconciliation confirmation and recovery
+// state for provider-native unified resource incidents. Access under m.mu.
+type unifiedIncidentTracker struct {
+	unifiedIncidentConfirmations map[string]int       // Track consecutive provider-incident observations before activation
+	unifiedIncidentFirstSeen     map[string]time.Time // Preserve the first confirmed observation as lifecycle start
+	unifiedIncidentRecoveries    map[string]int       // Track consecutive healthy observations before provider-incident recovery
+}
+
+func newUnifiedIncidentTracker() unifiedIncidentTracker {
+	return unifiedIncidentTracker{
+		unifiedIncidentConfirmations: make(map[string]int),
+		unifiedIncidentFirstSeen:     make(map[string]time.Time),
+		unifiedIncidentRecoveries:    make(map[string]int),
+	}
+}
+
+// hostTracker holds host-agent disk/sensor/SMART tracking and Proxmox node
+// deduplication link state. Access under m.mu.
+type hostTracker struct {
+	hostDiskTempPendingContexts map[string]hostDiskTempContext     // Only live pending temperature runs; config saves need link/type identity
+	hostNativeSensorPendingCtx  map[string]hostNativeSensorContext // Only live pending native sensor runs; config saves need the host's link identity
+	hostSMARTRiskAbsences       map[string]int                     // Consecutive non-empty reports omitting a SMART risk resource
+	hostDiskTempAbsences        map[string]int                     // Track consecutive SMART reports missing a disk that holds temperature alert state
+	// SMART counter snapshots let alert evaluation distinguish historical
+	// counters from new disk errors. They are keyed by the canonical disk
+	// resource ID and intentionally retain only the latest observation.
+	smartCounterSnapshots map[string]smartCounterSnapshot
+	// Host agent deduplication: the Proxmox node each reporting host agent is
+	// linked to and the usage metrics the agent evaluates for it. The node
+	// releases only those metrics and keeps evaluating the rest itself.
+	hostAgentNodeLinks map[string]hostAgentNodeLink // Host agent ID -> node link
+	// Membership only: coverage stays in hostAgentNodeLinks. Both maps change
+	// under m.mu, so node checks need not scan agents linked to other nodes.
+	hostAgentsByNode map[string]map[string]struct{} // Node ID -> host agent IDs
+	// Ordering survives link removal so an older in-flight report cannot restore it.
+	hostAgentReportSeq   map[string]uint64
+	hostAgentLinkApplied map[string]uint64
+}
+
+func newHostTracker() hostTracker {
+	return hostTracker{
+		hostDiskTempAbsences:  make(map[string]int),
+		smartCounterSnapshots: make(map[string]smartCounterSnapshot),
+		hostAgentNodeLinks:    make(map[string]hostAgentNodeLink),
+		hostAgentsByNode:      make(map[string]map[string]struct{}),
+		hostAgentReportSeq:    make(map[string]uint64),
+		hostAgentLinkApplied:  make(map[string]uint64),
+	}
+}
+
+// dockerTracker holds Docker container restart-loop and image-update delay
+// tracking state. Access under m.mu.
+type dockerTracker struct {
+	dockerRestartTracking map[string]*dockerRestartRecord // Track restart counts and times for restart loop detection
+	dockerUpdateFirstSeen map[string]time.Time            // Track when image updates were first detected for alert delay
+	// Stable identity tracking prevents update-delay resets when host IDs churn.
+	dockerUpdateFirstSeenByIdentity map[string]time.Time
+	dockerUpdateIdentityOwner       map[string]string    // last reporting runtime, for scoped policy changes
+	dockerUpdateLastObserved        map[string]time.Time // Resource and stable identity keys; activity, not pending age.
+}
+
+func newDockerTracker() dockerTracker {
+	return dockerTracker{
+		dockerRestartTracking:           make(map[string]*dockerRestartRecord),
+		dockerUpdateFirstSeen:           make(map[string]time.Time),
+		dockerUpdateFirstSeenByIdentity: make(map[string]time.Time),
+		dockerUpdateIdentityOwner:       make(map[string]string),
+		dockerUpdateLastObserved:        make(map[string]time.Time),
+	}
+}
+
+// pmgTracker holds Proxmox Mail Gateway quarantine growth and mail-metric
+// anomaly tracking state. Access under m.mu.
+type pmgTracker struct {
+	pmgQuarantineHistory map[string][]pmgQuarantineSnapshot // Track quarantine snapshots for growth detection
+	pmgAnomalyTrackers   map[string]*pmgAnomalyTracker      // Track mail metrics for anomaly detection per PMG instance
+}
+
+func newPMGTracker() pmgTracker {
+	return pmgTracker{
+		pmgQuarantineHistory: make(map[string][]pmgQuarantineSnapshot),
+		pmgAnomalyTrackers:   make(map[string]*pmgAnomalyTracker),
+	}
 }
 
 type ackRecord struct {
@@ -233,48 +291,36 @@ func NewManagerWithDataDir(dataDir string, options ...ManagerOption) *Manager {
 
 	alertsDir := filepath.Join(dataDir, "alerts")
 	m := &Manager{
-		alertsDir:                       alertsDir,
-		activeAlerts:                    make(map[string]*Alert),
-		activeAlertAlias:                make(map[string]string),
-		activeRecoveryState:             make(map[string]*Alert),
-		historyManager:                  NewHistoryManager(alertsDir),
-		callbacks:                       newCallbackBus(),
-		escalationStop:                  make(chan struct{}),
-		alertRateLimit:                  make(map[string][]time.Time),
-		recentAlerts:                    make(map[string]*Alert),
-		suppressedUntil:                 make(map[string]time.Time),
-		recentlyResolved:                make(map[string]*ResolvedAlert),
-		resolvedAlias:                   make(map[string]string),
-		intentPending:                   make(map[string]IntentPendingState),
-		intentRuntimeTicks:              make(map[string]time.Duration),
-		intentPolicies:                  NewAlertIntentPolicyDocument(),
-		core:                            reducer.NewState(),
-		unifiedIncidentConfirmations:    make(map[string]int),
-		unifiedIncidentFirstSeen:        make(map[string]time.Time),
-		unifiedIncidentRecoveries:       make(map[string]int),
-		hostDiskTempAbsences:            make(map[string]int),
-		dockerRestartTracking:           make(map[string]*dockerRestartRecord),
-		dockerUpdateFirstSeen:           make(map[string]time.Time),
-		dockerUpdateFirstSeenByIdentity: make(map[string]time.Time),
-		dockerUpdateIdentityOwner:       make(map[string]string),
-		dockerUpdateLastObserved:        make(map[string]time.Time),
-		pmgQuarantineHistory:            make(map[string][]pmgQuarantineSnapshot),
-		smartCounterSnapshots:           make(map[string]smartCounterSnapshot),
-		pmgAnomalyTrackers:              make(map[string]*pmgAnomalyTracker),
-		ackState:                        make(map[string]ackRecord),
-		ackStateByCanonical:             make(map[string]ackRecord),
-		flappingHistory:                 make(map[string][]time.Time),
-		flappingActive:                  make(map[string]bool),
-		cleanupStop:                     make(chan struct{}),
-		hostAgentNodeLinks:              make(map[string]hostAgentNodeLink),
-		hostAgentsByNode:                make(map[string]map[string]struct{}),
-		hostAgentReportSeq:              make(map[string]uint64),
-		hostAgentLinkApplied:            make(map[string]uint64),
-		nodeDisplayNames:                make(map[string]string),
-		instanceNodeDisplayNames:        make(map[string]string),
-		now:                             time.Now,
-		config:                          DefaultAlertConfig(),
-		skipPersistedRestore:            opts.skipPersistedAlertRestore,
+		alertsDir:                alertsDir,
+		activeAlerts:             make(map[string]*Alert),
+		activeAlertAlias:         make(map[string]string),
+		activeRecoveryState:      make(map[string]*Alert),
+		historyManager:           NewHistoryManager(alertsDir),
+		callbacks:                newCallbackBus(),
+		escalationStop:           make(chan struct{}),
+		alertRateLimit:           make(map[string][]time.Time),
+		recentAlerts:             make(map[string]*Alert),
+		suppressedUntil:          make(map[string]time.Time),
+		recentlyResolved:         make(map[string]*ResolvedAlert),
+		resolvedAlias:            make(map[string]string),
+		intentPending:            make(map[string]IntentPendingState),
+		intentRuntimeTicks:       make(map[string]time.Duration),
+		intentPolicies:           NewAlertIntentPolicyDocument(),
+		core:                     reducer.NewState(),
+		unifiedIncidentTracker:   newUnifiedIncidentTracker(),
+		hostTracker:              newHostTracker(),
+		dockerTracker:            newDockerTracker(),
+		pmgTracker:               newPMGTracker(),
+		ackState:                 make(map[string]ackRecord),
+		ackStateByCanonical:      make(map[string]ackRecord),
+		flappingHistory:          make(map[string][]time.Time),
+		flappingActive:           make(map[string]bool),
+		cleanupStop:              make(chan struct{}),
+		nodeDisplayNames:         make(map[string]string),
+		instanceNodeDisplayNames: make(map[string]string),
+		now:                      time.Now,
+		config:                   DefaultAlertConfig(),
+		skipPersistedRestore:     opts.skipPersistedAlertRestore,
 	}
 	intentClockEpoch := time.Now()
 	m.intentClock = func() time.Duration {

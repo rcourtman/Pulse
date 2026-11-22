@@ -84,3 +84,57 @@ func TestLibvirtResourceStatusMapping(t *testing.T) {
 		}
 	}
 }
+
+func TestLibvirtMemoryPrefersBalloonUsableAndZerosShutoff(t *testing.T) {
+	now := time.Now().UTC()
+	host := models.Host{
+		ID:       "host-tower",
+		Hostname: "Tower",
+		Status:   "online",
+		LastSeen: now,
+		Libvirt: &models.HostLibvirtInventory{Domains: []models.HostLibvirtDomain{
+			{
+				ID:                   "domain-running",
+				Name:                 "pulse-dev",
+				State:                "running",
+				VCPUs:                8,
+				MemoryCurrentBytes:   20 << 30,
+				MemoryMaximumBytes:   20 << 30,
+				MemoryAvailableBytes: 20 << 30,
+				MemoryUsableBytes:    15 << 30,
+				MemoryUnusedBytes:    18 << 30,
+			},
+			{
+				ID:                 "domain-shutoff",
+				Name:               "win11",
+				State:              "shutoff",
+				VCPUs:              4,
+				MemoryCurrentBytes: 16 << 30,
+				MemoryMaximumBytes: 16 << 30,
+			},
+		}},
+	}
+
+	registry := NewRegistry(nil)
+	registry.IngestSnapshot(models.StateSnapshot{Hosts: []models.Host{host}})
+	byName := make(map[string]Resource)
+	for _, vm := range registry.ListByType(ResourceTypeVM) {
+		byName[vm.Name] = vm
+	}
+
+	running := byName["pulse-dev"]
+	if running.Metrics == nil || running.Metrics.Memory == nil {
+		t.Fatalf("running VM missing memory metric: %+v", running)
+	}
+	if running.Metrics.Memory.Percent != 25 || *running.Metrics.Memory.Used != 5<<30 || *running.Metrics.Memory.Total != 20<<30 {
+		t.Fatalf("running VM memory = %+v, want 5 GiB / 20 GiB (25%%)", running.Metrics.Memory)
+	}
+
+	shutoff := byName["win11"]
+	if shutoff.Metrics == nil || shutoff.Metrics.Memory == nil {
+		t.Fatalf("shutoff VM missing memory metric: %+v", shutoff)
+	}
+	if shutoff.Metrics.Memory.Percent != 0 || *shutoff.Metrics.Memory.Used != 0 || *shutoff.Metrics.Memory.Total != 16<<30 {
+		t.Fatalf("shutoff VM memory = %+v, want 0 / 16 GiB (0%%)", shutoff.Metrics.Memory)
+	}
+}

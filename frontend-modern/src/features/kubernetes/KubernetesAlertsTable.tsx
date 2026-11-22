@@ -1,30 +1,17 @@
-import { Show, type Component, type JSX } from 'solid-js';
+import type { Component, JSX } from 'solid-js';
 import {
-  InlineDetailPanel,
   compactDetailRows,
   compactDetailSections,
   makeDetailRow,
   type DetailSection,
 } from '@/components/shared/DetailSectionTable';
-import { AlertSeverityBadge, AlertSeverityDot } from '@/components/shared/AlertSeverityBadge';
-import { InlineDetailTableRow } from '@/components/shared/InlineDetailTableRow';
-import { TableCell, TableHead, TableRow } from '@/components/shared/Table';
+import { TableCell, TableHead } from '@/components/shared/Table';
 import {
-  PlatformWindowedRows,
-  PlatformTableEmptyState,
-  PlatformTableToolbar,
-  createPlatformTableFilterState,
   getPlatformTableCellClassForKind,
   getPlatformTableHeadClassForKind,
-  PlatformTableShell,
   withPlatformStatusCounts,
 } from '@/features/platformPage/sharedPlatformPage';
-import {
-  PlatformResourceDetailToggleButton,
-  createPlatformResourceDetailState,
-  getPlatformResourceDetailRowClass,
-} from '@/features/platformPage/PlatformResourceDetailTableRow';
-import { RecordOwnerLink } from '@/features/platformPage/RecordOwnerLink';
+import { PlatformAlertsTable } from '@/features/platformPage/PlatformAlertsTable';
 import { getPlatformAlertSeverityFilterOptions } from '@/features/platformPage/platformAlertSeverityFilterOptions';
 import {
   formatPlatformAlertCode,
@@ -32,12 +19,9 @@ import {
   formatPlatformAlertResourceType,
   formatPlatformAlertStartedAt,
 } from '@/utils/alertDetailPresentation';
-import { useRelativeTimeNow } from '@/utils/relativeTimeClock';
-import { getAlertFilteredEmptyState } from '@/utils/alertOverviewPresentation';
 import {
   formatAlertSeverityLabel,
   getAlertSeverityDetailTone,
-  getAlertSeverityIndicator,
 } from '@/utils/alertSeverityPresentation';
 import {
   filterKubernetesIncidents,
@@ -48,22 +32,18 @@ import {
 const KUBERNETES_INCIDENT_STATUS_OPTIONS =
   getPlatformAlertSeverityFilterOptions<KubernetesIncidentSeverityFilter>();
 
-type AlertDetailSection = DetailSection;
-
-const detailRow = makeDetailRow;
-
-const buildAlertDetailSections = (incident: KubernetesIncidentRow): AlertDetailSection[] => {
+const buildAlertDetailSections = (incident: KubernetesIncidentRow): DetailSection[] => {
   const k = incident.resource.kubernetes;
   const owner = k?.ownerKind && k?.ownerName ? `${k.ownerKind}/${k.ownerName}` : undefined;
   return compactDetailSections([
     {
       label: 'Alert',
       rows: compactDetailRows([
-        detailRow('Severity', formatAlertSeverityLabel(incident.severity), {
+        makeDetailRow('Severity', formatAlertSeverityLabel(incident.severity), {
           tone: getAlertSeverityDetailTone(incident.severityBucket),
         }),
-        detailRow('Signal', incident.label),
-        detailRow('Code', formatPlatformAlertCode(incident.code, 'kubernetes'), {
+        makeDetailRow('Signal', incident.label),
+        makeDetailRow('Code', formatPlatformAlertCode(incident.code, 'kubernetes'), {
           title: incident.code,
         }),
       ]),
@@ -71,55 +51,28 @@ const buildAlertDetailSections = (incident: KubernetesIncidentRow): AlertDetailS
     {
       label: 'Affected resource',
       rows: compactDetailRows([
-        detailRow('Name', incident.resourceName),
-        detailRow('Type', formatPlatformAlertResourceType(incident.resourceType, 'kubernetes')),
-        detailRow('Cluster', k?.clusterName || k?.clusterId),
-        detailRow('Namespace', k?.namespace),
-        detailRow('Node', k?.nodeName),
-        detailRow('Owner', owner),
-        detailRow('Resource ID', incident.resourceId),
+        makeDetailRow('Name', incident.resourceName),
+        makeDetailRow('Type', formatPlatformAlertResourceType(incident.resourceType, 'kubernetes')),
+        makeDetailRow('Cluster', k?.clusterName || k?.clusterId),
+        makeDetailRow('Namespace', k?.namespace),
+        makeDetailRow('Node', k?.nodeName),
+        makeDetailRow('Owner', owner),
+        makeDetailRow('Resource ID', incident.resourceId),
       ]),
     },
     {
       label: 'Source',
       rows: compactDetailRows([
-        detailRow('Started', formatPlatformAlertDetailDateTime(incident.startedAt)),
-        detailRow('Provider', incident.source),
+        makeDetailRow('Started', formatPlatformAlertDetailDateTime(incident.startedAt)),
+        makeDetailRow('Provider', incident.source),
       ]),
     },
     {
       label: 'Action',
-      rows: compactDetailRows([detailRow('Recommended', incident.action)]),
+      rows: compactDetailRows([makeDetailRow('Recommended', incident.action)]),
     },
   ]);
 };
-
-const AlertDetail: Component<{ incident: KubernetesIncidentRow; onClose: () => void }> = (
-  props,
-) => (
-  <InlineDetailPanel
-    testId="kubernetes-alert-detail"
-    detailFor={props.incident.id}
-    title={
-      props.incident.resourceName || formatPlatformAlertCode(props.incident.code, 'kubernetes')
-    }
-    status={getAlertSeverityIndicator(props.incident.severity, props.incident.severityBucket)}
-    summary={props.incident.summary || props.incident.label}
-    actions={
-      <RecordOwnerLink
-        subject={{
-          id: props.incident.resourceId,
-          name: props.incident.resourceName,
-          type: props.incident.resourceType,
-          resource: props.incident.resource,
-        }}
-      />
-    }
-    sections={buildAlertDetailSections(props.incident)}
-    detailAttributes={{ 'data-kubernetes-alert-detail-for': props.incident.id }}
-    onClose={props.onClose}
-  />
-);
 
 export const KubernetesAlertsTable: Component<{
   incidents: KubernetesIncidentRow[];
@@ -127,216 +80,90 @@ export const KubernetesAlertsTable: Component<{
   emptyTitle: string;
   emptyDescription: string;
   showToolbar?: boolean;
-}> = (props) => {
-  const now = useRelativeTimeNow();
-  const tableState = createPlatformTableFilterState({
-    resources: () => props.incidents,
-    initialStatus: 'all' as KubernetesIncidentSeverityFilter,
-    filter: filterKubernetesIncidents,
-  });
-  const drawer = createPlatformResourceDetailState({ idPrefix: 'kubernetes-alert-drawer' });
-  const filteredEmptyState = () => getAlertFilteredEmptyState('Kubernetes alerts', 'severity');
-
-  return (
-    <Show
-      when={props.incidents.length > 0}
-      fallback={
-        <PlatformTableEmptyState
-          icon={props.emptyIcon}
-          title={props.emptyTitle}
-          description={props.emptyDescription}
-        />
-      }
-    >
-      <div class="space-y-3">
-        <Show when={props.showToolbar !== false}>
-          <PlatformTableToolbar
-            search={tableState.search}
-            onSearchChange={tableState.setSearch}
-            searchPlaceholder="Search Kubernetes alerts"
-            searchSuggestions={tableState.searchSuggestions}
-            status={tableState.status()}
-            onStatusChange={tableState.setStatus}
-            statusOptions={withPlatformStatusCounts(
-              KUBERNETES_INCIDENT_STATUS_OPTIONS,
-              tableState.countForStatus,
-            )}
-            visible={tableState.visible()}
-            total={tableState.total()}
-            rowNoun="alerts"
-          />
-        </Show>
-
-        <Show
-          when={tableState.filtered().length > 0}
-          fallback={
-            <PlatformTableEmptyState
-              icon={props.emptyIcon}
-              title={filteredEmptyState().title}
-              description={filteredEmptyState().description}
-            />
-          }
+}> = (props) => (
+  <PlatformAlertsTable
+    platform="kubernetes"
+    attrPrefix="kubernetes"
+    incidents={props.incidents}
+    emptyIcon={props.emptyIcon}
+    emptyTitle={props.emptyTitle}
+    emptyDescription={props.emptyDescription}
+    showToolbar={props.showToolbar}
+    searchPlaceholder="Search Kubernetes alerts"
+    rowNoun="alerts"
+    filteredEmptyNoun="Kubernetes alerts"
+    shellTitle="Active Alerts"
+    initialStatus={'all' as KubernetesIncidentSeverityFilter}
+    filter={filterKubernetesIncidents}
+    statusOptions={(countForStatus) =>
+      withPlatformStatusCounts(KUBERNETES_INCIDENT_STATUS_OPTIONS, countForStatus)
+    }
+    resourceTitleMeta={(incident) => {
+      const k = incident.resource.kubernetes;
+      return k?.ownerKind && k?.ownerName ? `${k.ownerKind}/${k.ownerName}` : '';
+    }}
+    colspan={6}
+    buildDetailSections={buildAlertDetailSections}
+    trailingHeaders={
+      <>
+        <TableHead
+          class={`${getPlatformTableHeadClassForKind('text')} platform-table-mobile-w-15 md:w-[14%]`}
         >
-          <PlatformTableShell
-            title="Active Alerts"
-            tableClass="min-w-full table-fixed text-xs md:min-w-[960px]"
-            header={
-              <>
-                <TableHead
-                  class={`${getPlatformTableHeadClassForKind('name')} platform-table-mobile-w-30 md:w-[22%]`}
-                >
-                  Resource
-                </TableHead>
-                <TableHead
-                  class={`${getPlatformTableHeadClassForKind('badge')} platform-table-phone-hidden md:w-[10%]`}
-                >
-                  Severity
-                </TableHead>
-                <TableHead
-                  class={`${getPlatformTableHeadClassForKind('text')} platform-table-mobile-w-25 md:w-[34%]`}
-                >
-                  Alert
-                </TableHead>
-                <TableHead
-                  class={`${getPlatformTableHeadClassForKind('text')} platform-table-mobile-w-15 md:w-[14%]`}
-                >
-                  Scope
-                </TableHead>
-                <TableHead
-                  class={`${getPlatformTableHeadClassForKind('numeric-value')} platform-table-mobile-w-15 md:w-[10%]`}
-                >
-                  Started
-                </TableHead>
-                <TableHead
-                  class={`${getPlatformTableHeadClassForKind('text')} hidden xl:table-cell md:w-[10%]`}
-                >
-                  Action
-                </TableHead>
-              </>
-            }
-            body={
-              <>
-                <PlatformWindowedRows items={tableState.filtered} estimatedRowHeight={32}>
-                  {(incident) => {
-                    const k = () => incident.resource.kubernetes;
-                    const detailRowId = () => drawer.detailRowId(incident);
-                    const isExpanded = () => drawer.isExpanded(incident);
-                    const scopeText = () => {
-                      const cluster = k()?.clusterName || k()?.clusterId;
-                      const namespace = k()?.namespace;
-                      if (cluster && namespace) return `${cluster}/${namespace}`;
-                      return cluster || namespace || '-';
-                    };
-                    return (
-                      <>
-                        <TableRow
-                          class={`${getPlatformResourceDetailRowClass(isExpanded())} text-[11px] sm:text-xs`}
-                          data-kubernetes-alert-row={incident.id}
-                          onClick={() => drawer.toggle(incident)}
-                        >
-                          <TableCell class={getPlatformTableCellClassForKind('name')}>
-                            <div class="flex min-w-0 items-center gap-2">
-                              <PlatformResourceDetailToggleButton
-                                expanded={isExpanded()}
-                                resourceLabel={incident.resourceName}
-                                controlsId={detailRowId()}
-                                onToggle={() => drawer.toggle(incident)}
-                              />
-                              <AlertSeverityDot
-                                size="sm"
-                                severity={incident.severity}
-                                bucket={incident.severityBucket}
-                              />
-                              <div class="min-w-0">
-                                <div
-                                  class="truncate font-medium text-base-content"
-                                  title={[
-                                    incident.resourceName,
-                                    formatPlatformAlertResourceType(
-                                      incident.resourceType,
-                                      'kubernetes',
-                                    ),
-                                    k()?.ownerKind && k()?.ownerName
-                                      ? `${k()?.ownerKind}/${k()?.ownerName}`
-                                      : '',
-                                  ]
-                                    .filter(Boolean)
-                                    .join(' · ')}
-                                >
-                                  {incident.resourceName}
-                                </div>
-                              </div>
-                            </div>
-                          </TableCell>
-                          <TableCell
-                            class={`${getPlatformTableCellClassForKind('badge')} platform-table-phone-hidden`}
-                          >
-                            <AlertSeverityBadge
-                              severity={incident.severity}
-                              bucket={incident.severityBucket}
-                            />
-                          </TableCell>
-                          <TableCell class={getPlatformTableCellClassForKind('text')}>
-                            <span
-                              class="block truncate text-base-content"
-                              title={[incident.summary, incident.label].filter(Boolean).join(' · ')}
-                            >
-                              {incident.summary}
-                            </span>
-                          </TableCell>
-                          <TableCell class={getPlatformTableCellClassForKind('text')}>
-                            <span
-                              class="block truncate text-base-content"
-                              title={[
-                                scopeText(),
-                                k()?.nodeName ||
-                                  formatPlatformAlertCode(incident.code, 'kubernetes'),
-                              ]
-                                .filter(Boolean)
-                                .join(' · ')}
-                            >
-                              {scopeText()}
-                            </span>
-                          </TableCell>
-                          <TableCell
-                            class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
-                          >
-                            <span title={formatPlatformAlertDetailDateTime(incident.startedAt)}>
-                              {formatPlatformAlertStartedAt(incident.startedAt, now())}
-                            </span>
-                          </TableCell>
-                          <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content xl:table-cell`}
-                          >
-                            <span class="block truncate" title={incident.action}>
-                              {incident.action}
-                            </span>
-                          </TableCell>
-                        </TableRow>
-                        <Show when={isExpanded()}>
-                          <InlineDetailTableRow
-                            cellId={detailRowId()}
-                            colspan={6}
-                            data-inline-detail-for={incident.id}
-                            data-kubernetes-alert-detail-row={incident.id}
-                          >
-                            <AlertDetail
-                              incident={incident}
-                              onClose={() => drawer.close(incident)}
-                            />
-                          </InlineDetailTableRow>
-                        </Show>
-                      </>
-                    );
-                  }}
-                </PlatformWindowedRows>
-              </>
-            }
-          />
-        </Show>
-      </div>
-    </Show>
-  );
-};
+          Scope
+        </TableHead>
+        <TableHead
+          class={`${getPlatformTableHeadClassForKind('numeric-value')} platform-table-mobile-w-15 md:w-[10%]`}
+        >
+          Started
+        </TableHead>
+        <TableHead
+          class={`${getPlatformTableHeadClassForKind('text')} hidden xl:table-cell md:w-[10%]`}
+        >
+          Action
+        </TableHead>
+      </>
+    }
+    renderTrailingCells={(incident, now) => {
+      const k = () => incident.resource.kubernetes;
+      const scopeText = () => {
+        const cluster = k()?.clusterName || k()?.clusterId;
+        const namespace = k()?.namespace;
+        if (cluster && namespace) return `${cluster}/${namespace}`;
+        return cluster || namespace || '-';
+      };
+      return (
+        <>
+          <TableCell class={getPlatformTableCellClassForKind('text')}>
+            <span
+              class="block truncate text-base-content"
+              title={[
+                scopeText(),
+                k()?.nodeName || formatPlatformAlertCode(incident.code, 'kubernetes'),
+              ]
+                .filter(Boolean)
+                .join(' · ')}
+            >
+              {scopeText()}
+            </span>
+          </TableCell>
+          <TableCell
+            class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
+          >
+            <span title={formatPlatformAlertDetailDateTime(incident.startedAt)}>
+              {formatPlatformAlertStartedAt(incident.startedAt, now())}
+            </span>
+          </TableCell>
+          <TableCell
+            class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content xl:table-cell`}
+          >
+            <span class="block truncate" title={incident.action}>
+              {incident.action}
+            </span>
+          </TableCell>
+        </>
+      );
+    }}
+  />
+);
 
 export default KubernetesAlertsTable;

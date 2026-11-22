@@ -41,9 +41,7 @@ func resourceFromHostLibvirtDomain(host models.Host, domain models.HostLibvirtDo
 			Source:  SourceAgent,
 		}
 	}
-	if domain.MemoryMaximumBytes > 0 {
-		used := max(int64(0), min(domain.MemoryCurrentBytes, domain.MemoryMaximumBytes))
-		total := domain.MemoryMaximumBytes
+	if used, total, ok := domain.MemoryUsage(); ok {
 		metrics.Memory = &MetricValue{
 			Used:    &used,
 			Total:   &total,

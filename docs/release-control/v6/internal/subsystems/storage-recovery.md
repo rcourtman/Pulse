@@ -10165,3 +10165,10 @@ optional structured email branding fields (`subjectPrefix`, `brandName`,
 preservation. Storage-recovery endpoints, backup/snapshot evaluation, and
 persistence contracts under `internal/api/` are unchanged
 (`internal/api/alerting/email_branding_test.go`).
+
+### Standalone host-scoped VMs route helper boundary (22 November 2026)
+
+`frontend-modern/src/routing/resourceLinks.ts` adds `STANDALONE_QUERY_PARAMS.host`
+and `buildStandaloneHostVmsPath` for host-scoped `/standalone/vms?host=<id>`
+links from Machines. No storage, backup, or recovery persistence format or
+read/write path changes. Verified by `resourceLinks.test.ts`.

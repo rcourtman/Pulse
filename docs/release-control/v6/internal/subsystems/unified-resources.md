@@ -10630,3 +10630,30 @@ canonical contract as linked guests (`subjectNoun` renders machine/host copy).
 `ResourceDetailDrawer.physical-disks.test.tsx` and
 `ResourceDetailDrawer.history.test.tsx` cover this consumer boundary alongside
 desktop (`1280x900` light/dark) and narrow (`390x844`) browser proof.
+
+
+### Standalone Machines VMs tab and host-agent VM routing (22 November 2026)
+
+`StandalonePageSurface.tsx` queries
+`source=agent,availability&excludeSource=proxmox,kubernetes,truenas,vmware&type=agent,vm,network-endpoint`
+and projects standalone agent-reported `vm` resources (Unraid/Linux `libvirt`
+and `xcp-ng`) into `standalonePageModel.vms` while continuing to exclude
+provider-owned VMs (`proxmox-pve`, `vmware-vsphere`, `truenas`, `kubernetes`).
+When standalone VMs exist (or `/standalone/vms` is opened directly), Machines
+exposes an evidence-gated `VMs` tab whose `StandaloneVirtualMachinesTable.tsx`
+and `standaloneVmTableModel.ts` lazy-load behind `<Suspense>` (keeping the eager
+`Standalone` chunk within its bundle budget, with `normalizeStandaloneVMStatusFilter`
+hosted in `standalonePageModel.ts`), and `AgentsMachinesTable.tsx` displays a
+single-line desktop/tablet `N VM(s)` pill beside hosts that own VMs linking to
+`/standalone/vms?host=<id>`. `resourcePagePath.ts` routes standalone `vm` resources to `/standalone/vms?q=<name>`,
+`frontend-modern/src/routing/resourceLinks.ts` retains both
+`STANDALONE_QUERY_PARAMS.host`/`buildStandaloneHostVmsPath` and
+`PROXMOX_BACKUPS_INSPECTION_STATE`, and `ResourceDetailSummary.tsx` renders
+hypervisor, parent host, vCPU, and RAM facts in the VM drawer.
+`internal/unifiedresources/libvirt.go` projects memory metrics via
+`models.HostLibvirtDomain.MemoryUsage()`. Verified by
+`TestLibvirtMemoryPrefersBalloonUsableAndZerosShutoff`,
+`standalonePageModel.test.ts`, `standaloneVmTableModel.test.ts`,
+`StandaloneVirtualMachinesTable.test.tsx`, `StandalonePageSurface.test.tsx`,
+`AgentsMachinesTable.test.tsx`, `resourcePagePath.test.ts`, and
+`frontend-modern/browser-verification/9b345049621d9e89.json`.

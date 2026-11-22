@@ -49,6 +49,9 @@ Domain: 'web vm'
   vcpu.current=4
   balloon.current=4194304
   balloon.maximum=8388608
+  balloon.available=4096000
+  balloon.usable=3072000
+  balloon.unused=3584000
   net.0.rx.bytes=100
   net.1.rx.bytes=50
   net.0.tx.bytes=80
@@ -79,6 +82,9 @@ Domain: 'web vm'
 		web.State != "running" ||
 		web.VCPUs != 4 ||
 		web.CPUTimeNanoseconds != 3_000_000_000 ||
+		web.MemoryAvailableBytes != 4096000*1024 ||
+		web.MemoryUsableBytes != 3072000*1024 ||
+		web.MemoryUnusedBytes != 3584000*1024 ||
 		web.NetworkRXBytes != 150 ||
 		web.NetworkTXBytes != 80 ||
 		web.DiskReadBytes != 5120 ||

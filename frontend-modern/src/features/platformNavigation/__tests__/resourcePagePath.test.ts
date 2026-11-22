@@ -82,6 +82,18 @@ describe('buildResourcePagePath', () => {
         }),
       }),
     ).toBe('/standalone/machines?q=Apollo-114');
+    expect(
+      buildResourcePagePath({
+        id: 'agent:tower:libvirt:domain-1',
+        resource: resource({
+          id: 'agent:tower:libvirt:domain-1',
+          type: 'vm',
+          name: 'pulse-dev',
+          platformScopes: ['agent'],
+          technology: 'libvirt',
+        }),
+      }),
+    ).toBe('/standalone/vms?q=pulse-dev');
   });
 
   it('keeps a Proxmox node that also runs the Pulse agent on the Proxmox page', () => {

@@ -352,7 +352,7 @@ func (m *Manager) evaluateCanonicalMetricAlert(spec alertspecs.ResourceAlertSpec
 
 			m.saveActiveAlertsAsync("canonical metric create")
 
-			if alertForAICallback := m.getAlertForAICallback(); alertForAICallback != nil {
+			if callbacks := m.getAlertForAICallbacks(); len(callbacks) > 0 {
 				alertCopy := cloneAlertForOutput(alert)
 				m.dispatchCallback(true, func() {
 					defer func() {
@@ -360,7 +360,9 @@ func (m *Manager) evaluateCanonicalMetricAlert(spec alertspecs.ResourceAlertSpec
 							log.Error().Interface("panic", r).Str("alertID", alertCopy.ID).Msg("panic in AI alert callback")
 						}
 					}()
-					alertForAICallback(alertCopy)
+					for _, callback := range callbacks {
+						callback(alertCopy)
+					}
 				})
 			}
 
@@ -368,7 +370,7 @@ func (m *Manager) evaluateCanonicalMetricAlert(spec alertspecs.ResourceAlertSpec
 				return true
 			}
 
-			if m.getAlertCallback() != nil {
+			if len(m.getAlertCallbacks()) > 0 || len(m.getAlertFiringCallbacks()) > 0 {
 				now := time.Now()
 				alert.LastNotified = &now
 				if !m.dispatchAlert(alert, true) {
@@ -434,7 +436,7 @@ func (m *Manager) evaluateCanonicalMetricAlert(spec alertspecs.ResourceAlertSpec
 			shouldRenotify = m.allowNotificationByRateLimit(trackingKey, existingAlert, "critical-escalation")
 		}
 
-		if shouldRenotify && m.getAlertCallback() != nil {
+		if shouldRenotify && (len(m.getAlertCallbacks()) > 0 || len(m.getAlertFiringCallbacks()) > 0) {
 			now := time.Now()
 			existingAlert.LastNotified = &now
 			if !m.dispatchAlert(existingAlert, true) {

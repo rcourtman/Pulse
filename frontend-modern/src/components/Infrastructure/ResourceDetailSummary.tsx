@@ -701,9 +701,31 @@ export const getResourceDrawerFacts = (
       : `${formatBytes(total)} ${label}`;
   };
   const cpus = resource.agent?.cpuCount ?? 0;
+  const standaloneVm =
+    resource.type === 'vm' &&
+    !resource.proxmox &&
+    !resource.vmware &&
+    !resource.truenas &&
+    resource.virtualMachine
+      ? resource.virtualMachine
+      : undefined;
+  const standaloneVmHypervisor = (() => {
+    const raw = (standaloneVm?.hypervisor ?? resource.technology ?? '').trim().toLowerCase();
+    if (raw === 'libvirt') return 'Libvirt';
+    if (raw === 'xcp-ng') return 'XCP-ng';
+    return raw ? raw.charAt(0).toUpperCase() + raw.slice(1) : '';
+  })();
+  const standaloneVmVcpus = standaloneVm?.vcpus ?? 0;
+  const standaloneVmHost = standaloneVm ? (resource.parentName ?? '').trim() : '';
   return [
     ...getKubernetesPodFacts(resource),
-    cpus > 0 ? `${cpus} logical CPUs` : '',
+    standaloneVmHypervisor,
+    standaloneVmHost ? `Host ${standaloneVmHost}` : '',
+    standaloneVmVcpus > 0
+      ? `${standaloneVmVcpus} ${standaloneVmVcpus === 1 ? 'vCPU' : 'vCPUs'}`
+      : cpus > 0
+        ? `${cpus} logical CPUs`
+        : '',
     size(resource.memory, 'RAM'),
     size(resource.disk, 'disk'),
     primaryIp ?? '',

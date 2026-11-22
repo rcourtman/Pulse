@@ -48,7 +48,7 @@ class NotificationRuntimeControls(unittest.TestCase):
         return RUNTIME.Journey(Path('/unused-binary'), Path('/unused-data'), io.BytesIO(), None)
 
     def test_current_ordinary_event_not_resolution_or_invented_firing(self):
-        source = (ROOT / 'internal/notifications/notifications.go').read_text()
+        source = (ROOT / 'internal/notifications/webhook_delivery.go').read_text()
         prepare = source.split('func (n *NotificationManager) prepareWebhookData(', 1)[1]
         self.assertRegex(prepare, r'Event:\s+"alert",')
         self.assertEqual(RUNTIME.ORDINARY_EVENT, 'alert')

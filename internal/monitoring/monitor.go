@@ -2151,7 +2151,6 @@ func New(cfg *config.Config) (*Monitor, error) {
 	m.hydrateRemovedHostAgents(time.Now().UTC())
 	m.alertManager.SetBackupIntentContextResolver(m.resolveBackupIntentContext)
 	m.alertManager.SetMetricWindowProvider(m.metricWindowPoints)
-	m.alertManager.EnableShadowFeed()
 	// Finish startup configuration mutations before publishing the monitor to
 	// API handlers. Start runs asynchronously for tenants, so consolidation
 	// there can race with auto-registration on this same configuration pointer.

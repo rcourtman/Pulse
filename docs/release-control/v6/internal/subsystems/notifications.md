@@ -2197,15 +2197,17 @@ cooldown drain.
 
 ### Structured email subject prefix, brand name, and footer note
 
-`EmailConfig` (`internal/notifications/notifications.go`) carries three optional
-structured plain-text fields — `SubjectPrefix` (max 64 runes), `BrandName` (max
-80 runes), and `FooterNote` (max 240 runes) — normalized by
-`NormalizeEmailBranding` to strip control characters and line breaks, collapse
-whitespace, and enforce length bounds before persistence or rendering. All email
-send paths (`sendSingleEmailWithError`, `sendGroupedEmail`, `sendResolvedEmail`,
-and test-email delivery) apply these overrides inside the compiled-in template
-(`EmailTemplateWithBranding`, `resolvedEmailSubjectWithBranding`) with HTML
-escaping; raw HTML and custom template files remain intentionally unsupported.
+`EmailConfig` (`internal/notifications/notification_config.go`) carries three
+optional structured plain-text fields — `SubjectPrefix` (max 64 runes),
+`BrandName` (max 80 runes), and `FooterNote` (max 240 runes) — normalized by
+`NormalizeEmailBranding` inside `normalizeEmailConfig` to strip control
+characters and line breaks, collapse whitespace, and enforce length bounds
+before persistence or rendering. All email send paths in
+`internal/notifications/email_delivery.go` (`sendSingleEmailWithError`,
+`sendGroupedEmail`, `sendResolvedEmail`, and test-email delivery) apply these
+overrides inside the compiled-in template (`EmailTemplateWithBranding`,
+`resolvedEmailSubjectWithBranding`) with HTML escaping; raw HTML and custom
+template files remain intentionally unsupported.
 When omitted or empty, rendered subjects and bodies remain byte-compatible with
 existing defaults (`[Pulse Alert]`, `Pulse Monitoring`, no extra footer note).
 `UpdateEmailConfig` preserves omitted branding fields via `presenceCheck` and

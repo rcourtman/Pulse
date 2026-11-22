@@ -167,8 +167,6 @@ func (m *Manager) CheckGuest(guest any, instanceName string) {
 			} else if snapshot.OnBoot != nil && !*snapshot.OnBoot {
 				// Guest is explicitly not configured to autostart (onboot=0).
 				// Being stopped is the expected state — suppress the alert.
-				m.mu.Lock()
-				m.mu.Unlock()
 				m.clearAlert(canonicalPoweredStateStateID(guestID))
 				m.clearGuestPoweredOffAlert(guestID, name)
 			} else {
@@ -360,12 +358,7 @@ func (m *Manager) CheckGuest(guest any, instanceName string) {
 			}
 			resourceType, ok := unifiedMetricResourceType(snapshot.resourceType())
 			if !ok {
-				m.checkMetric(perDiskResourceID, name, node, instanceName, snapshot.resourceType(), "disk", disk.Usage, effectiveDiskThreshold, &metricOptions{
-					Metadata:    metadata,
-					Message:     message,
-					MonitorOnly: monitorOnly,
-				})
-				continue
+				resourceType = unifiedresources.ResourceTypeVM
 			}
 			spec, err := buildCanonicalMetricSpec(perDiskResourceID, name, resourceType, "disk", effectiveDiskThreshold)
 			if err != nil {

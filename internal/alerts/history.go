@@ -430,6 +430,15 @@ func (hm *HistoryManager) UpdateAlertOperationalContractForAlert(alert *Alert) {
 			entry.Transitions = snapshot.Transitions
 			entry.Evidence = snapshot.Evidence
 			entry.Resolution = snapshot.Resolution
+			if snapshotResolved {
+				entry.Value = snapshot.Value
+				if snapshot.Message != "" {
+					entry.Message = snapshot.Message
+				}
+				if snapshot.LastSeen.After(entry.LastSeen) {
+					entry.LastSeen = snapshot.LastSeen
+				}
+			}
 			// The live alert is authoritative for acknowledgement; a row
 			// that keeps its fire-time ack state shows an acknowledged
 			// alert as unacknowledged for its whole active life.
