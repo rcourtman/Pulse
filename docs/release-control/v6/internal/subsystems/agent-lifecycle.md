@@ -5181,7 +5181,12 @@ unauthenticated bootstrap behavior.
     delete-error, and probe guidance notices in the connection editor may
     compose frontend-primitives' `CalloutCard`; agent-lifecycle owns the
     selected-source lifecycle semantics and form handoff, not colored local
-    notice shells. The add flow
+    notice shells. Auto-detection candidates, errors and no-match actions
+    belong to the last submitted address. A change to the trimmed address
+    retires them until another probe; whitespace-only edits do not. A retired
+    request cannot populate a later attempt, even for the same address.
+    `ConnectionEditor.test.tsx` covers the candidate handoff and these result
+    lifetimes. The add flow
     must not reintroduce the full per-type workspace (Proxmox discovery
     card, configured nodes table, node-modal stack; TrueNAS/VMware
     connection list with headers and row actions) into the credential
