@@ -32,6 +32,37 @@ type NodeModalTestResult = {
 
 const PROXMOX_SETUP_HOST_REQUIRED_MESSAGE = 'Proxmox setup host is required';
 
+const savedEditorAuthentication = (
+  node: Partial<NodeConfig>,
+): Pick<NodeModalFormData, 'authType' | 'user' | 'tokenName'> => {
+  const tokenName = node.tokenName ?? '';
+  const usesTokenUsername = node.type !== 'pve' && !node.hasPassword && tokenName.includes('!');
+  return {
+    // PMG's editor offers password entry even for a saved API token. Compare
+    // against the displayed username, not the stored token row's user field.
+    authType: node.type === 'pmg' || node.hasPassword ? 'password' : 'token',
+    user: usesTokenUsername ? tokenName.split('!', 1)[0] : (node.user ?? ''),
+    tokenName,
+  };
+};
+
+const matchesSavedAuthentication = (draft: NodeModalFormData, saved: NodeConfig) => {
+  const authentication = savedEditorAuthentication(saved);
+  return (
+    draft.authType === authentication.authType &&
+    (draft.authType === 'password'
+      ? draft.user === authentication.user
+      : draft.tokenName === authentication.tokenName)
+  );
+};
+
+const incompleteDraftTestMessage = (draft: NodeModalFormData) => {
+  if (draft.authType === 'password') {
+    return draft.user ? 'Test needs a password.' : 'Test needs a username and password.';
+  }
+  return draft.tokenName ? 'Test needs a token value.' : 'Test needs a token ID and value.';
+};
+
 export const useNodeModalState = (props: NodeModalProps) => {
   const [testResult, setTestResult] = createSignal<NodeModalTestResult | null>(null);
   const [isTesting, setIsTesting] = createSignal(false);
@@ -378,16 +409,6 @@ export const useNodeModalState = (props: NodeModalProps) => {
       return;
     }
 
-    let username = ('user' in node ? node.user : '') || '';
-    const tokenName = node.tokenName || '';
-
-    const usesToken =
-      node.type !== 'pve' && tokenName && tokenName.includes('!') && !node.hasPassword;
-    if (usesToken) {
-      const parts = tokenName.split('!');
-      username = parts[0];
-    }
-
     const pveConfig =
       node.type === 'pve'
         ? (node as NodeConfig & {
@@ -424,11 +445,9 @@ export const useNodeModalState = (props: NodeModalProps) => {
       name: node.name || '',
       host: node.host || '',
       guestURL: ('guestURL' in node ? node.guestURL : '') || '',
-      authType: node.type === 'pmg' ? 'password' : node.hasPassword ? 'password' : 'token',
+      ...savedEditorAuthentication(node),
       setupMode: node.source === 'agent' ? 'agent' : 'auto',
-      user: username,
       password: '',
-      tokenName,
       tokenValue: '',
       fingerprint: ('fingerprint' in node ? node.fingerprint : '') || '',
       verifySSL: node.verifySSL ?? true,
@@ -638,13 +657,28 @@ export const useNodeModalState = (props: NodeModalProps) => {
   };
 
   const testSavedEndpoint = async (endpoint?: ClusterEndpoint) => {
-    if (isTesting() || !props.isOpen) return;
+    const saved = props.editingNode;
+    if (isTesting() || !props.isOpen || !saved?.id || (endpoint && !endpoint.tlsEndpoint)) return;
     const data = formData();
+    // The saved probe takes TLS edits only. A blank secret is permission to
+    // reuse saved credentials only for the matching identity, not for a draft.
     if (
-      data.host !== props.editingNode?.host ||
-      (endpoint &&
-        (data.clusterEndpointOverrides[endpoint.nodeName] ?? '') !== (endpoint.ipOverride ?? '')) ||
+      !matchesSavedAuthentication(data, saved) ||
       (endpoint && (data.password || data.tokenValue))
+    ) {
+      setTestResult({
+        endpoint: endpoint?.tlsEndpoint,
+        status: 'warning',
+        message: endpoint
+          ? 'Member tests use saved credentials. Restore the saved authentication to test this member now.'
+          : incompleteDraftTestMessage(data),
+      });
+      return;
+    }
+    if (
+      data.host !== saved.host ||
+      (endpoint &&
+        (data.clusterEndpointOverrides[endpoint.nodeName] ?? '') !== (endpoint.ipOverride ?? ''))
     ) {
       setTestResult({
         endpoint: endpoint?.tlsEndpoint,
@@ -654,10 +688,9 @@ export const useNodeModalState = (props: NodeModalProps) => {
       });
       return;
     }
-    if (endpoint && !endpoint.tlsEndpoint) return;
     const generation = beginConnectionTest();
     try {
-      const result = await NodesAPI.testExistingNode(props.editingNode!.id, {
+      const result = await NodesAPI.testExistingNode(saved.id, {
         verifySSL: data.verifySSL,
         ...(!endpoint || endpoint.usesPrimaryTLS
           ? { fingerprint: data.fingerprint }

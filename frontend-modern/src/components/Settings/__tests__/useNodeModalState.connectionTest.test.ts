@@ -34,6 +34,7 @@ describe('Proxmox connection tests', () => {
   const mountEditor = (
     nodeType: NodeModalProps['nodeType'],
     clusterEndpoints?: ClusterEndpoint[],
+    savedFields?: Partial<NodeConfig>,
   ) =>
     createRoot((cleanup) => {
       dispose = cleanup;
@@ -44,7 +45,9 @@ describe('Proxmox connection tests', () => {
         type: nodeType,
         name: 'saved',
         host: 'https://node.example.test:8006',
-        tokenName: 'root@pam!pulse',
+        tokenName: nodeType === 'pmg' ? undefined : 'fixture@pve!pulse',
+        hasToken: nodeType !== 'pmg',
+        hasPassword: nodeType === 'pmg',
         fingerprint: 'saved-pin',
         verifySSL: true,
         user: 'fixture@pve',
@@ -64,6 +67,7 @@ describe('Proxmox connection tests', () => {
         monitorQuarantine: true,
         monitorDomainStats: false,
         clusterEndpoints,
+        ...savedFields,
       } as NodeConfig);
       const state = useNodeModalState({
         get isOpen() {
@@ -84,6 +88,14 @@ describe('Proxmox connection tests', () => {
 
   const mount = (nodeType: NodeModalProps['nodeType'], clusterEndpoints?: ClusterEndpoint[]) =>
     mountEditor(nodeType, clusterEndpoints).state;
+
+  const mountTokenOnlyPmg = (storedUser = '') =>
+    mountEditor('pmg', undefined, {
+      user: storedUser,
+      hasPassword: false,
+      hasToken: true,
+      tokenName: 'fixture@pmg!saved',
+    }).state;
 
   it.each(['pve', 'pbs', 'pmg'] as const)(
     'tests edited TLS settings for %s without replacing credentials',
@@ -117,6 +129,73 @@ describe('Proxmox connection tests', () => {
     });
   });
 
+  it.each([
+    { change: 'untouched', storedUser: '', pin: 'saved-pin' },
+    { change: 'pin only', storedUser: '', pin: 'edited-pin' },
+    { change: 'untouched with separate saved user', storedUser: 'legacy@pmg', pin: 'saved-pin' },
+    { change: 'pin only with separate saved user', storedUser: 'legacy@pmg', pin: 'edited-pin' },
+  ])('tests saved token-only PMG authentication: $change', async ({ storedUser, pin }) => {
+    const state = mountTokenOnlyPmg(storedUser);
+    expect(state.formData()).toMatchObject({
+      authType: 'password',
+      user: 'fixture@pmg',
+      password: '',
+    });
+    if (pin !== 'saved-pin') state.updateField('fingerprint', pin);
+
+    await state.handleTestConnection();
+
+    expect(NodesAPI.testExistingNode).toHaveBeenCalledExactlyOnceWith('pmg-saved', {
+      verifySSL: true,
+      fingerprint: pin,
+    });
+    expect(NodesAPI.testConnection).not.toHaveBeenCalled();
+    expect(state.testResult()?.status).toBe('success');
+  });
+
+  it.each([
+    { user: 'legacy@pmg', password: '', message: 'Test needs a password.' },
+    { user: '', password: '', message: 'Test needs a username and password.' },
+    { user: '', password: 'draft-password', message: 'Username and password are required' },
+  ])(
+    'does not test the saved PMG token for an incomplete password draft ($message)',
+    async ({ user, password, message }) => {
+      const state = mountTokenOnlyPmg('legacy@pmg');
+      state.updateField('user', user);
+      if (password) state.updateField('password', password);
+
+      await state.handleTestConnection();
+
+      expect(NodesAPI.testExistingNode).not.toHaveBeenCalled();
+      expect(NodesAPI.testConnection).not.toHaveBeenCalled();
+      expect(state.testResult()?.message).toBe(message);
+      expect(state.formData()).toMatchObject({ user, password });
+    },
+  );
+
+  it.each(['fixture@pmg', 'changed@pmg'])(
+    'tests an explicit PMG password draft as %s rather than the saved token',
+    async (user) => {
+      const state = mountTokenOnlyPmg();
+      state.updateField('user', user);
+      state.updateField('password', 'draft-password');
+      state.updateField('fingerprint', 'edited-pin');
+
+      await state.handleTestConnection();
+
+      expect(NodesAPI.testExistingNode).not.toHaveBeenCalled();
+      expect(NodesAPI.testConnection).toHaveBeenCalledExactlyOnceWith({
+        type: 'pmg',
+        host: 'https://node.example.test:8006',
+        name: 'saved',
+        user,
+        password: 'draft-password',
+        verifySSL: true,
+        fingerprint: 'edited-pin',
+      });
+    },
+  );
+
   it('uses the supplied credentials when they are replaced', async () => {
     const state = mount('pve');
     state.updateField('authType', 'token');
@@ -134,6 +213,73 @@ describe('Proxmox connection tests', () => {
         fingerprint: '',
       }),
     );
+  });
+
+  it.each([
+    {
+      platform: 'pve',
+      field: 'tokenName',
+      value: 'fixture@pve!scoped',
+      message: 'Test needs a token value.',
+    },
+    { platform: 'pbs', field: 'tokenName', value: '', message: 'Test needs a token ID and value.' },
+    {
+      platform: 'pbs',
+      field: 'authType',
+      value: 'password',
+      message: 'Test needs a password.',
+    },
+    {
+      platform: 'pmg',
+      field: 'user',
+      value: 'scoped@pmg',
+      message: 'Test needs a password.',
+    },
+    { platform: 'pmg', field: 'user', value: '', message: 'Test needs a username and password.' },
+  ] as const)(
+    'does not test saved credentials for an incomplete $platform $field change',
+    async (fixture) => {
+      const state = mount(fixture.platform);
+      const saved = state.formData()[fixture.field];
+      state.updateField(fixture.field, fixture.value);
+
+      await state.handleTestConnection();
+
+      expect(NodesAPI.testExistingNode).not.toHaveBeenCalled();
+      expect(NodesAPI.testConnection).not.toHaveBeenCalled();
+      expect(state.testResult()).toEqual({
+        endpoint: undefined,
+        status: 'warning',
+        message: fixture.message,
+      });
+      expect(state.formData()[fixture.field]).toBe(fixture.value);
+      expect(state.isTesting()).toBe(false);
+
+      state.updateField(fixture.field, saved);
+      expect(state.testResult()).toBeNull();
+      await state.handleTestConnection();
+      expect(NodesAPI.testExistingNode).toHaveBeenCalledOnce();
+    },
+  );
+
+  it('tests the new password and username after switching from a saved token', async () => {
+    const state = mount('pbs');
+    state.updateField('authType', 'password');
+    state.updateField('user', 'changed@pbs');
+    state.updateField('password', 'fixture-password');
+
+    await state.handleTestConnection();
+
+    expect(NodesAPI.testExistingNode).not.toHaveBeenCalled();
+    expect(NodesAPI.testConnection).toHaveBeenCalledExactlyOnceWith({
+      type: 'pbs',
+      host: 'https://node.example.test:8006',
+      name: 'saved',
+      user: 'changed@pbs',
+      password: 'fixture-password',
+      verifySSL: true,
+      fingerprint: 'saved-pin',
+    });
   });
 
   it('discards a draft success after editing the endpoint and tests the new draft on request', async () => {
@@ -235,6 +381,22 @@ describe('Proxmox connection tests', () => {
     state.updateField('host', 'https://changed-primary.test:8006');
     await state.handleTestConnection();
     expect(NodesAPI.testExistingNode).not.toHaveBeenCalled();
+  });
+
+  it('does not test a member with stored credentials when the draft changes its Token ID', async () => {
+    const state = mount('pve', [peer]);
+    state.updateField('tokenName', 'fixture@pve!different');
+
+    await state.handleTestClusterEndpoint(peer);
+
+    expect(NodesAPI.testExistingNode).not.toHaveBeenCalled();
+    expect(NodesAPI.testConnection).not.toHaveBeenCalled();
+    expect(state.testResult()).toMatchObject({
+      endpoint: peer.tlsEndpoint,
+      status: 'warning',
+      message:
+        'Member tests use saved credentials. Restore the saved authentication to test this member now.',
+    });
   });
 
   it('does not display an old in-flight success after trust changes', async () => {

@@ -715,7 +715,13 @@ The connection editor exposes each member's actual runtime TLS endpoint.
 Its pin/CA controls submit only deliberately edited scopes, distinguish unknown
 first-use trust, and leave primary and other-member policy independent. Tests
 read the nodes API without enrolling agents or mutating background health.
-Address/credential changes must be saved before a stored-credential probe.
+The editor uses the stored-credential probe only for the saved address and
+matching authentication fields, even when trust settings are edited. For a
+saved token-only PMG connection, the unchanged username shown by the editor
+comes from the Token ID, not the stored user field. An edited identity needs
+its matching secret for the primary Test action; an incomplete password or
+token draft is not tested with saved credentials. Member probes use saved
+credentials and do not report on edited authentication.
 The configured-node readback test and desktop/narrow consumer proof cover the
 saved policy and preservation of disabled collection, not installed recovery.
 
