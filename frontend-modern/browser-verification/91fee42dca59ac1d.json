@@ -1,0 +1,37 @@
+{
+  "version": 1,
+  "base_sha": "09cbbc0d50fa4897023a3d633ee6d38553f07568",
+  "verified_at": "2026-11-22T23:01:13Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx",
+    "frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx": "4b26d7c4cec3044cc6b11ee6ec280967c2e4e7266c85c21284358592515acf75",
+    "frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx": "01c684759e4224e39ab50b14db33b72671eb8d3854953db4072d682d7ebc1a03"
+  },
+  "routes": [
+    "/proxmox/backups/coverage",
+    "/docs/PBS#what-the-backup-server-count-means"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Matched production-mode Chromium 141.0.7390.37 / Playwright 1.56.1, light desktop and dark touch phone, with 148 assertions and 16 inspected captures. Same synthetic resource, PBS inventory and protection-posture responses.",
+    "The direct PBS reader with incomplete history still has both its zero and nonzero listed counts, now qualified as a History gap. The independently healthy reader with the same datastore name has no gap. Transport failure stays Unavailable and the recovery poll removes the caveat without converting a listed count into a datastore total.",
+    "The new guide row explains the distinction and where to find the count on a narrow screen. Connection status, capacity, jobs, named unread sources, protection and the existing Coverage and By date controls remain visible."
+  ],
+  "interactions": [
+    "Open the same datastore with Enter on desktop and a tap on its row on phone. Check the selected reader, exact capacity, backup entry count and the retained Show server action.",
+    "Advance ordinary reads while the detail is open; compare the recovered state and then a failed PBS inventory read. Close the same datastore and open the Help fragment."
+  ]
+}
