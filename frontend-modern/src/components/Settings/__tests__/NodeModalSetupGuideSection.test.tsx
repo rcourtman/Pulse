@@ -199,13 +199,14 @@ describe('NodeModalSetupGuideSection', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /^Manual Token Setup$/i }));
     expect(screen.getByText('Manual API token')).toBeInTheDocument();
-    const guidance = screen.getByText(/matching user and token permissions/i);
+    const guidance = screen.getByText(/Match user and token permissions/i);
+    expect(guidance).toHaveTextContent('Keep privilege separation on');
     expect(guidance).toHaveTextContent(/intended resources only/i);
-    const example = screen.getByText('Example: new token for whole-cluster monitoring');
+    const example = screen.getByText('New whole-cluster token example');
     expect(
       guidance.compareDocumentPosition(example) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
-    expect(screen.getByText(/Skip them if you already have a token/i)).toBeInTheDocument();
+    expect(screen.getByText(/Skip for existing or scoped tokens/i)).toBeInTheDocument();
     const help = screen.getByRole('link', { name: /Proxmox permissions help/i });
     expect(help).toHaveAttribute('href', '/docs/TROUBLESHOOTING#check-permissions-proxmox');
     expect(help).toHaveAttribute('target', '_blank');

@@ -42,7 +42,7 @@ const getNodeSetupStrategyPresentation = (
     label: 'Manual API token',
     detail:
       nodeType === 'pve'
-        ? 'Use a Proxmox VE token you manage. No agent is installed.'
+        ? 'Keep privilege separation on. Match user and token permissions on intended resources only.'
         : 'Advanced escape hatch: use this only when you already created the API token yourself and want to paste the token details into Pulse.',
   };
 };
@@ -76,7 +76,21 @@ export const NodeModalSetupGuideSection: Component<NodeModalSetupGuideSectionPro
         Source strategy
       </div>
       <div class="mt-1 text-sm font-semibold text-base-content">{setupStrategy().label}</div>
-      <p class="mt-1 text-xs leading-5 text-muted">{setupStrategy().detail}</p>
+      <p class="mt-1 text-xs leading-5 text-muted">
+        {setupStrategy().detail}
+        <Show when={modalProps.nodeType === 'pve' && state.isAdvancedSetupMode()}>
+          {' '}
+          <a
+            href={`${TROUBLESHOOTING_DOC_URL}#check-permissions-proxmox`}
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label="Proxmox permissions help (opens in a new tab)"
+            class="font-medium text-blue-700 underline underline-offset-2 dark:text-blue-300"
+          >
+            Permissions help
+          </a>
+        </Show>
+      </p>
     </div>
   );
   const setupModeControls = () => (
@@ -530,27 +544,12 @@ export const NodeModalSetupGuideSection: Component<NodeModalSetupGuideSectionPro
 
               <Show when={state.formData().setupMode === 'manual'}>
                 <div class="space-y-3">
-                  <p class="text-blue-800 dark:text-blue-200">
-                    Already have a token or need to limit what Pulse can monitor? Use a
-                    privilege-separated token with matching user and token permissions on the
-                    intended resources only.{' '}
-                    <a
-                      href={`${TROUBLESHOOTING_DOC_URL}#check-permissions-proxmox`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      class="font-medium underline underline-offset-2"
-                    >
-                      Proxmox permissions help (opens in a new tab)
-                    </a>
-                  </p>
-
                   <div>
                     <p class="text-sm font-medium text-base-content">
-                      Example: new token for whole-cluster monitoring
+                      New whole-cluster token example
                     </p>
                     <p class="text-muted">
-                      Run these steps in order on Proxmox VE. Skip them if you already have a token
-                      or only want Pulse to read part of the cluster.
+                      Run in order on Proxmox VE. Skip for existing or scoped tokens.
                     </p>
                   </div>
 
