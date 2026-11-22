@@ -232,17 +232,23 @@ export const ProxmoxBackupsTable: Component<{
   // while a Proxmox collector could not enumerate all of its history. Use an
   // explicit provider observation, not the workload's overall verdict (which
   // can still be protected) or a legacy point with unknown history.
-  const providerInventoryIncomplete = createMemo(() =>
-    protectionPostures
-      .postures()
-      .some((posture) =>
-        posture.providerStates.some(
-          ({ provider, historyCompleteness }) =>
-            (provider === 'proxmox-pve' || provider === 'proxmox-pbs') &&
-            (historyCompleteness === 'partial' || historyCompleteness === 'unavailable'),
-        ),
-      ),
-  );
+  const providerHistoryGaps = createMemo(() => {
+    let incomplete = false;
+    const pbsReaders = new Set<string>();
+    for (const posture of protectionPostures.postures()) {
+      for (const { provider, source, scope, historyCompleteness } of posture.providerStates) {
+        if (provider !== 'proxmox-pve' && provider !== 'proxmox-pbs') continue;
+        if (historyCompleteness !== 'partial' && historyCompleteness !== 'unavailable') continue;
+        incomplete = true;
+        // The observation is for the exact configured reader. Unread scope
+        // names can be omitted or capped, so they are not a datastore allowlist.
+        if (provider === 'proxmox-pbs' && source === 'pbs-backup-enumeration')
+          pbsReaders.add(scope);
+      }
+    }
+    return { incomplete, pbsReaders };
+  });
+  const providerInventoryIncomplete = () => providerHistoryGaps().incomplete;
   const restorePointInventoryIncomplete = () =>
     inventoryTransportIncomplete() || providerInventoryIncomplete();
   // One unreadable storage limits every guest's coverage on its connection;
@@ -1009,6 +1015,7 @@ export const ProxmoxBackupsTable: Component<{
           <ProxmoxBackupServersTable
             servers={props.servers ?? []}
             backups={pbsArtifacts()}
+            incompleteHistoryReaders={providerHistoryGaps().pbsReaders}
             datastoreAlerts={props.datastoreAlerts}
             backupInventoryState={
               pbsBackups.error()
