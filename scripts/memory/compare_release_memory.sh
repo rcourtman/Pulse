@@ -181,30 +181,42 @@ run_tree() {
     fi
     sleep "${INTERVAL}"
   done
-  local driver_status=null pulse_status=null
+  local driver_status=null
   if [[ -n "${driver}" ]]; then
     kill -TERM "${driver}" 2>/dev/null || true
     driver_status=0
     wait "${driver}" || driver_status=$?
   fi
   if kill -0 "${pid}" 2>/dev/null; then
-    curl -fsS -o "${OUT_DIR}/heap-${label}.pb.gz" "http://127.0.0.1:${port}/debug/pprof/heap" || true
-    kill "${pid}" 2>/dev/null || true
-    wait "${pid}" 2>/dev/null || true
-  else
-    pulse_status=0
-    wait "${pid}" || pulse_status=$?
+    local heap="${OUT_DIR}/heap-${label}.pb.gz"
+    # Profiles are optional. An unresponsive endpoint must not prevent
+    # checking the process outcome or expose a partial profile as evidence.
+    if curl -fsS --max-time 5 -o "${heap}.partial" "http://127.0.0.1:${port}/debug/pprof/heap"; then
+      mv "${heap}.partial" "${heap}" || true
+    fi
+  fi
+  local stop_request_status=0 pulse_status=0 before_stop=null after_stop_request=null
+  # Pulse can exit between the liveness check and the end of the profile read.
+  # Require the stop request itself to succeed, then inspect the actual wait.
+  kill -TERM "${pid}" 2>/dev/null || stop_request_status=$?
+  wait "${pid}" 2>/dev/null || pulse_status=$?
+  if (( stop_request_status != 0 )); then
+    before_stop="${pulse_status}"
     echo "${label} exited before the watch stopped it (wait status ${pulse_status}); see ${log}" >&2
+  elif (( pulse_status != 0 && pulse_status != 143 )); then
+    after_stop_request="${pulse_status}"
+    echo "${label} returned unexpected wait status ${pulse_status} after the watch requested TERM; see ${log}" >&2
   fi
 
   # This is the only stdout from each measurement worker. The parent binds
   # this observation to the corresponding worker's wait status.
-  printf '{"pulse_wait_status_before_stop":%s,"driver_wait_status":%s}\n' "${pulse_status}" "${driver_status}"
+  printf '{"pulse_wait_status_before_stop":%s,"pulse_wait_status_after_stop_request":%s,"driver_wait_status":%s}\n' \
+    "${before_stop}" "${after_stop_request}" "${driver_status}"
   if [[ "${driver_status}" != null && "${driver_status}" != 0 ]]; then
     echo "${label} ${ESTATE} load failed (exit ${driver_status}); see ${driver_log}" >&2
     return 1
   fi
-  [[ "${pulse_status}" == null ]]
+  [[ "${before_stop}" == null && "${after_stop_request}" == null ]]
 }
 
 build_tree baseline "${BASELINE_DIR}"

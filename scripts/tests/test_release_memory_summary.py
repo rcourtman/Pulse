@@ -330,6 +330,113 @@ class ReleaseMemoryLauncherTests(unittest.TestCase):
             self.assertNotIn("regressed", observation)
             self.assertNotIn("No steady-state RSS regression", summary_text)
 
+    def test_full_sample_window_still_requires_an_observed_normal_stop(self):
+        for mode, expected, failure_field in (
+            ("exit-during-profile", 1, "pulse_wait_status_before_stop"),
+            ("unexpected-stop-status", 1, "pulse_wait_status_after_stop_request"),
+            ("normal-term", 0, None),
+        ):
+            with self.subTest(mode=mode), tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                baseline, candidate, output = [root / name for name in ("stable", "main", "out")]
+                for directory in (baseline, candidate):
+                    directory.mkdir()
+                (candidate / "mode").write_text(mode)
+                fixture = root / "pulse-fixture"
+                fixture.write_text(
+                    '''#!/usr/bin/env python3
+import os
+from pathlib import Path
+import signal
+
+data = Path(os.environ["PULSE_DATA_DIR"])
+mode = (data.parent.parent / "main" / "mode").read_text() if data.name == "data-candidate" else "graceful"
+signal.alarm(15)  # Do not leave a fixture process behind if the test fails.
+signal.signal(signal.SIGUSR1, lambda *_: os._exit(42))
+if mode != "normal-term":
+    signal.signal(signal.SIGTERM, lambda *_: os._exit(42 if mode == "unexpected-stop-status" else 0))
+(data / "ready").touch()
+while True:
+    signal.pause()
+'''
+                )
+                fixture.chmod(0o700)
+                # Control the clock and counters so both sides have a complete
+                # window, but exercise the real launch, signals, wait and summary.
+                shims = r'''go() {
+  [[ "$1" == build && "$2" == -o ]] && cp "$PULSE_TEST_BINARY" "$3"
+}
+date() {
+  local tick=100 i
+  for ((i=0; i<100; i++)); do
+    [[ -f "$data/ready" ]] && break
+    command sleep 0.02
+  done
+  [[ -f "$data/ready" ]] || return 1
+  [[ ! -f "$data/clock" ]] || read -r tick < "$data/clock"
+  printf '%s\n' "$((tick + 1))" > "$data/clock"
+  printf '%s\n' "$tick"
+}
+awk() {
+  case "${2-}" in
+    /proc/*/status) printf '131072\t163840\n' ;;
+    /proc/*/smaps) printf '50000\t10000\t20000\t30000' ;;
+    /proc/*/io) printf '\t' ;;
+    *) command awk "$@" ;;
+  esac
+}
+curl() {
+  printf '%s\n' "$@" > "$PULSE_TEST_OUT/profile-$label"
+  local i
+  while (( $# > 1 )); do
+    if [[ "$1" == -o ]]; then
+      printf 'partial' > "$2"
+      break
+    fi
+    shift
+  done
+  if [[ "$label" == candidate && "$PULSE_TEST_MODE" == exit-during-profile ]]; then
+    kill -USR1 "$pid"
+    for ((i=0; i<100; i++)); do
+      kill -0 "$pid" 2>/dev/null || break
+      command sleep 0.02
+    done
+  fi
+  return 28
+}
+sleep() { :; }
+export -f go date awk curl sleep
+exec bash "$@"
+'''
+                result = subprocess.run(
+                    ["bash", "-c", shims, "memory-fixture", str(ROOT / "scripts/memory/compare_release_memory.sh"),
+                     str(baseline), str(candidate), str(output)],
+                    env={**os.environ, "PULSE_TEST_BINARY": str(fixture),
+                         "PULSE_TEST_OUT": str(output), "PULSE_TEST_MODE": mode, "PULSE_FOOTPRINT_ESTATE": "mock",
+                         "PULSE_MEMORY_GATE": "0", "PULSE_MEMORY_DURATION": "8", "PULSE_MEMORY_INTERVAL": "1"},
+                    text=True, capture_output=True, timeout=25,
+                )
+                observation = json.loads((output / "result.json").read_text())
+                for side in ("baseline", "candidate"):
+                    self.assertEqual(observation["sampling"][side], {"first_s": 5, "last_s": 7, "count": 3})
+                self.assertEqual(result.returncode, expected, result.stdout + result.stderr)
+                if failure_field is not None:
+                    self.assertEqual(observation["status"], "incomplete")
+                    self.assertEqual(observation["failed_runs"], {
+                        "candidate": {"worker_wait_status": 1, failure_field: 42},
+                    })
+                    self.assertNotIn("regressed", observation)
+                    self.assertIn("wait status 42", result.stderr)
+                else:
+                    self.assertEqual(observation["status"], "measured")
+                    self.assertNotIn("failed_runs", observation)
+                for side in ("baseline", "candidate"):
+                    args = (output / f"profile-{side}").read_text().splitlines()
+                    self.assertIn("--max-time", args)
+                    self.assertEqual(args[args.index("--max-time") + 1], "5")
+                    self.assertEqual((output / f"heap-{side}.pb.gz.partial").read_text(), "partial")
+                    self.assertFalse((output / f"heap-{side}.pb.gz").exists())
+
 
 if __name__ == "__main__":
     unittest.main()
