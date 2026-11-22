@@ -23,6 +23,7 @@ import { createNonSuspendingQuery } from '@/hooks/createNonSuspendingQuery';
 import {
   buildProxmoxBackupsPath,
   PROXMOX_BACKUPS_DEFAULT_VIEW,
+  PROXMOX_BACKUPS_INSPECTION_STATE,
   PROXMOX_BACKUPS_PATH,
   PROXMOX_BACKUPS_QUERY_PARAMS,
   type ProxmoxBackupsView,
@@ -204,7 +205,24 @@ export const ProxmoxBackupsTable: Component<{
     void Promise.all([backups.refetch(), pbsBackups.refetch(), protectionPostures.refetch()]);
   };
   const { isMobile } = useBreakpoint();
-  const location = useLocation();
+  const location = useLocation<typeof PROXMOX_BACKUPS_INSPECTION_STATE>();
+  let inspectionArrivalHandled = false;
+  createEffect(() => {
+    if (inspectionArrivalHandled || location.state?.focusBackupInspection !== true) return;
+    // The dialog first restores focus to its trigger; the tab switch then
+    // hides that trigger. Wait for that render before resuming inspection.
+    const frame = requestAnimationFrame(() => {
+      inspectionArrivalHandled = true;
+      const active = document.activeElement;
+      if (
+        inspection?.isConnected &&
+        (active === document.body || active?.closest('[aria-hidden="true"]'))
+      ) {
+        inspection.focus({ preventScroll: true });
+      }
+    });
+    onCleanup(() => cancelAnimationFrame(frame));
+  });
   const protectionPostures = useProtectionPostures(() =>
     (props.workloads ?? []).map((workload) => workload.id),
   );
