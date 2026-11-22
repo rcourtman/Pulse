@@ -248,6 +248,14 @@ evidence:
 - **Unknown**: identity, permissions or collection completeness cannot support
   a stronger claim.
 
+**Coverage counts do not mean Pulse sent an alert.** Workloads you deliberately
+leave out of backup jobs still appear. A VM with no readable recovery evidence
+can show **Unknown**, and one with only snapshots can show **Unprotected**.
+[Ignore VMIDs](RECOVERY.md#backup-age-alerts-for-unlisted-guests) won't change
+Coverage or its counts. It can silence backup-age alerts for a different
+workload with the same VMID on another connection, so don't use it to clear a
+Coverage count.
+
 A retained artifact can remain visible while posture is unknown. A running
 backup is not a new completed recovery point; inspect any earlier completed
 point separately rather than treating current activity as protection.

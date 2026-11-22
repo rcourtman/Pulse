@@ -75,6 +75,25 @@ describe('Recovery backup scope guidance', () => {
     expect(whole).toContain('restore only services and timers that were active before the pause');
   });
 
+  it('distinguishes Coverage counts from alert suppression and links to the VMID warning', () => {
+    const article = recoveryArticle();
+    const alertScope = '#backup-age-alerts-for-unlisted-guests';
+    const ignoreLink = article.querySelector(
+      `a[data-doc-link][href="/docs/RECOVERY${alertScope}"]`,
+    );
+    const explanation = ignoreLink?.closest('p');
+    expect(ignoreLink?.textContent).toBe('Ignore VMIDs');
+    expect(explanation?.textContent?.replace(/\s+/g, ' ')).toContain(
+      "won't change Coverage or its counts",
+    );
+    expect(explanation?.querySelector('strong')?.textContent).toBe(
+      'Coverage counts do not mean Pulse sent an alert.',
+    );
+    expect(article.querySelector(alertScope)?.textContent).toBe(
+      'Backup-age alerts for unlisted guests',
+    );
+  });
+
   it('renders navigable links to the existing exact-scope and recovery procedures', () => {
     const article = recoveryArticle();
     for (const [name, anchor] of [
