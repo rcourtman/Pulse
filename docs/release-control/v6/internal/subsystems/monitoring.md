@@ -10284,3 +10284,17 @@ actual inventory/posture frames on desktop and narrow layouts.
 `models.HostNetworkInterface`, and `monitor.go` keeps it when rebuilding host
 interfaces from the unified read-state view. It is copied, never inferred: a
 Proxmox-listed interface without agent data keeps it unset.
+
+### Libvirt guest memory usage and shutoff accounting (22 November 2026)
+
+`models.HostLibvirtDomain.MemoryUsage()` prefers guest-side virtio-balloon
+consumption (`MemoryAvailableBytes - MemoryUsableBytes`, or
+`MemoryAvailableBytes - MemoryUnusedBytes` when `usable` is absent) over raw
+host allocation (`MemoryCurrentBytes / MemoryMaximumBytes`), preventing fixed-
+memory KVM guests from reporting 100% RAM usage when `balloon.current` equals
+`balloon.maximum`. `shutoff` domains report zero used bytes against their
+configured maximum and skip writing live memory history samples in
+`writeLibvirtDomainMetrics`. `normalizeAgentLibvirtInventory` copies and clamps
+the optional balloon fields onto `models.HostLibvirtDomain`. Verified by
+`TestNormalizeAgentLibvirtInventoryDerivesCPUAndIORates` and
+`TestLibvirtMemoryPrefersBalloonUsableAndZerosShutoff`.

@@ -87,17 +87,20 @@ type LibvirtInventory struct {
 // LibvirtDomain contains only stable virDomainStats fields. All byte counters
 // are cumulative; the server derives rates between accepted reports.
 type LibvirtDomain struct {
-	ID                 string `json:"id"`
-	Name               string `json:"name"`
-	State              string `json:"state"`
-	VCPUs              int    `json:"vcpus,omitempty"`
-	CPUTimeNanoseconds uint64 `json:"cpuTimeNanoseconds,omitempty"`
-	MemoryCurrentBytes int64  `json:"memoryCurrentBytes,omitempty"`
-	MemoryMaximumBytes int64  `json:"memoryMaximumBytes,omitempty"`
-	NetworkRXBytes     uint64 `json:"networkRxBytes,omitempty"`
-	NetworkTXBytes     uint64 `json:"networkTxBytes,omitempty"`
-	DiskReadBytes      uint64 `json:"diskReadBytes,omitempty"`
-	DiskWriteBytes     uint64 `json:"diskWriteBytes,omitempty"`
+	ID                   string `json:"id"`
+	Name                 string `json:"name"`
+	State                string `json:"state"`
+	VCPUs                int    `json:"vcpus,omitempty"`
+	CPUTimeNanoseconds   uint64 `json:"cpuTimeNanoseconds,omitempty"`
+	MemoryCurrentBytes   int64  `json:"memoryCurrentBytes,omitempty"`
+	MemoryMaximumBytes   int64  `json:"memoryMaximumBytes,omitempty"`
+	MemoryAvailableBytes int64  `json:"memoryAvailableBytes,omitempty"`
+	MemoryUsableBytes    int64  `json:"memoryUsableBytes,omitempty"`
+	MemoryUnusedBytes    int64  `json:"memoryUnusedBytes,omitempty"`
+	NetworkRXBytes       uint64 `json:"networkRxBytes,omitempty"`
+	NetworkTXBytes       uint64 `json:"networkTxBytes,omitempty"`
+	DiskReadBytes        uint64 `json:"diskReadBytes,omitempty"`
+	DiskWriteBytes       uint64 `json:"diskWriteBytes,omitempty"`
 }
 
 // XCPNGInventory is the bounded, read-only pool inventory collected through

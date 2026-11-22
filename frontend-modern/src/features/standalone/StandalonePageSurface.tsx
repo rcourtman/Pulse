@@ -1,7 +1,17 @@
-import { Show, createEffect, createMemo, createSignal, type Component, type JSX } from 'solid-js';
+import {
+  Show,
+  Suspense,
+  createEffect,
+  createMemo,
+  createSignal,
+  lazy,
+  type Component,
+  type JSX,
+} from 'solid-js';
 import { useLocation, useNavigate, useSearchParams } from '@solidjs/router';
 import ActivityIcon from 'lucide-solid/icons/activity';
 import CircleAlertIcon from 'lucide-solid/icons/circle-alert';
+import MonitorIcon from 'lucide-solid/icons/monitor';
 import ServerIcon from 'lucide-solid/icons/server';
 import SettingsIcon from 'lucide-solid/icons/settings';
 import { Button, ButtonLink } from '@/components/shared/Button';
@@ -28,6 +38,7 @@ import { useUnifiedResources } from '@/hooks/useUnifiedResources';
 import {
   STANDALONE_PATH,
   STANDALONE_QUERY_PARAMS,
+  buildStandaloneHostVmsPath,
   buildStandalonePath,
 } from '@/routing/resourceLinks';
 import { updateStore } from '@/stores/updates';
@@ -43,25 +54,42 @@ import { AgentsMachinesTable } from './AgentsMachinesTable';
 import { collectHostIdentityConflictHosts } from './hostIdentityConflict';
 import { HostIdentityConflictNotice } from './HostIdentityConflictNotice';
 import {
+  buildStandaloneMachineVmCounts,
   buildStandalonePageModel,
   buildStandalonePostureSummary,
+  getStandaloneTabSpecs,
   type StandalonePostureSummary,
+  type StandaloneTabId,
 } from './standalonePageModel';
+import type { StandaloneVMStatusFilter } from './standaloneVmTableModel';
 
-// Machines owns standalone Pulse Agent hosts plus standalone availability
-// targets. Provider-owned agents are excluded at the API boundary so this
-// surface does not hydrate the rest of the infrastructure estate and discard
-// it again in buildStandalonePageModel. Docker remains additive here because
-// a standalone Pulse Agent host can also contribute a Docker facet.
+// Keep the standalone VMs table and its model out of the initial Machines
+// bundle until the VMs tab is opened.
+const LazyStandaloneVirtualMachinesTable = lazy(() =>
+  import('./StandaloneVirtualMachinesTable').then(({ StandaloneVirtualMachinesTable }) => ({
+    default: StandaloneVirtualMachinesTable,
+  })),
+);
+
+const normalizeStandaloneVMStatusParam = (
+  value: string | string[] | undefined,
+): StandaloneVMStatusFilter => {
+  const raw = (Array.isArray(value) ? value[0] : value)?.trim().toLowerCase();
+  if (raw === 'running' || raw === 'attention' || raw === 'stopped') return raw;
+  return 'all';
+};
+
+// Machines owns standalone Pulse Agent hosts, standalone hypervisor VMs
+// reported by those agents (libvirt/KVM, XCP-ng), and standalone availability
+// targets. Provider-owned agents and VMs are excluded at the API boundary so
+// this surface does not hydrate the rest of the infrastructure estate and
+// discard it again in buildStandalonePageModel. Docker remains additive here
+// because a standalone Pulse Agent host can also contribute a Docker facet.
 const STANDALONE_RESOURCE_QUERY =
-  'source=agent,availability&excludeSource=proxmox,kubernetes,truenas,vmware&type=agent,network-endpoint';
-const STANDALONE_TAB_SPECS = [
-  { id: 'machines', label: 'Machines', path: buildStandalonePath('machines') },
-  { id: 'availability', label: 'Availability checks', path: buildStandalonePath('availability') },
-] as const;
-type StandaloneTabId = (typeof STANDALONE_TAB_SPECS)[number]['id'];
+  'source=agent,availability&excludeSource=proxmox,kubernetes,truenas,vmware&type=agent,vm,network-endpoint';
 
 const machineIcon = () => <ServerIcon class="h-6 w-6 text-slate-400" />;
+const vmIcon = () => <MonitorIcon class="h-6 w-6 text-slate-400" />;
 const availabilityIcon = () => <ActivityIcon class="h-6 w-6 text-slate-400" />;
 
 const StandalonePostureCard: Component<{
@@ -135,10 +163,12 @@ const StandalonePostureCard: Component<{
   );
 };
 
-const resolveStandaloneTab = (pathname: string): StandaloneTabId =>
-  pathname.replace(/\/+$/, '') === buildStandalonePath('availability')
-    ? 'availability'
-    : 'machines';
+const resolveStandaloneTab = (pathname: string): StandaloneTabId => {
+  const normalized = pathname.replace(/\/+$/, '');
+  if (normalized === buildStandalonePath('availability')) return 'availability';
+  if (normalized === buildStandalonePath('vms')) return 'vms';
+  return 'machines';
+};
 
 export function StandalonePageSurface() {
   const now = useRelativeTimeNow();
@@ -155,6 +185,10 @@ export function StandalonePageSurface() {
 
   const model = createMemo(() => buildStandalonePageModel(resources()));
   const activeTab = createMemo(() => resolveStandaloneTab(location.pathname));
+  const tabs = createMemo(() => getStandaloneTabSpecs(model().vms.length > 0, activeTab()));
+  const vmCountByMachineId = createMemo(() =>
+    buildStandaloneMachineVmCounts(model().machines, model().vms),
+  );
   const machineSearchFilter = createMemo(() => {
     const value = searchParams[STANDALONE_QUERY_PARAMS.query];
     return typeof value === 'string' ? value : '';
@@ -171,11 +205,37 @@ export function StandalonePageSurface() {
       { replace: true },
     );
   };
+  const vmStatusFilter = createMemo(() =>
+    normalizeStandaloneVMStatusParam(searchParams[STANDALONE_QUERY_PARAMS.status]),
+  );
+  const setVmStatusFilter = (status: StandaloneVMStatusFilter) => {
+    setSearchParams(
+      { [STANDALONE_QUERY_PARAMS.status]: status === 'all' ? null : status },
+      { replace: true },
+    );
+  };
+  const vmHostFilter = createMemo(() => {
+    const value = searchParams[STANDALONE_QUERY_PARAMS.host];
+    return (Array.isArray(value) ? value[0] : value)?.trim() || undefined;
+  });
+  const clearVmHostFilter = () => {
+    setSearchParams({ [STANDALONE_QUERY_PARAMS.host]: null }, { replace: true });
+  };
   const resetMachineFilters = () => {
     setSearchParams(
       {
         [STANDALONE_QUERY_PARAMS.query]: null,
         [STANDALONE_QUERY_PARAMS.status]: null,
+      },
+      { replace: true },
+    );
+  };
+  const resetVmFilters = () => {
+    setSearchParams(
+      {
+        [STANDALONE_QUERY_PARAMS.query]: null,
+        [STANDALONE_QUERY_PARAMS.status]: null,
+        [STANDALONE_QUERY_PARAMS.host]: null,
       },
       { replace: true },
     );
@@ -201,6 +261,7 @@ export function StandalonePageSurface() {
       loading() &&
       !initialLoadComplete() &&
       model().machines.length === 0 &&
+      model().vms.length === 0 &&
       model().availabilityChecks.length === 0,
   );
   const showOverviewEmpty = createMemo(
@@ -208,6 +269,7 @@ export function StandalonePageSurface() {
       initialLoadComplete() &&
       !error() &&
       model().machines.length === 0 &&
+      model().vms.length === 0 &&
       model().availabilityChecks.length === 0,
   );
   const agentUpdateTargetVersion = createMemo(
@@ -241,11 +303,7 @@ export function StandalonePageSurface() {
 
   return (
     <div data-testid="standalone-page" class="pulse-wide-data-surface space-y-3">
-      <PlatformSectionTabs
-        tabs={STANDALONE_TAB_SPECS}
-        active={activeTab()}
-        ariaLabel="Machines sections"
-      />
+      <PlatformSectionTabs tabs={tabs()} active={activeTab()} ariaLabel="Machines sections" />
 
       <Show
         when={!showLoading()}
@@ -304,6 +362,32 @@ export function StandalonePageSurface() {
             </div>
           </Show>
 
+          <Show when={activeTab() === 'vms'}>
+            <Suspense
+              fallback={
+                <PlatformTableLoadingState
+                  title="Loading virtual machines"
+                  description="Pulse is loading standalone virtual machines."
+                />
+              }
+            >
+              <LazyStandaloneVirtualMachinesTable
+                vms={model().vms}
+                machines={model().machines}
+                selectedHostId={vmHostFilter}
+                onClearHostScope={clearVmHostFilter}
+                externalSearch={machineSearchFilter}
+                onExternalSearchChange={setMachineSearchFilter}
+                externalStatus={vmStatusFilter}
+                onExternalStatusChange={setVmStatusFilter}
+                onResetFilters={resetVmFilters}
+                emptyIcon={vmIcon()}
+                emptyTitle="No virtual machines"
+                emptyDescription="Virtual machines reported by standalone Pulse Agents (Unraid, Linux libvirt/KVM, and XCP-ng) appear here automatically."
+              />
+            </Suspense>
+          </Show>
+
           <Show when={activeTab() === 'machines'}>
             <Show
               when={!showOverviewEmpty()}
@@ -351,7 +435,7 @@ export function StandalonePageSurface() {
                 <Show
                   when={model().machines.length > 0}
                   fallback={
-                    <Show when={model().availabilityChecks.length > 0}>
+                    <Show when={model().availabilityChecks.length > 0 || model().vms.length > 0}>
                       <PlatformTableEmptyState
                         icon={machineIcon()}
                         title="No Pulse Agent machines"
@@ -389,6 +473,8 @@ export function StandalonePageSurface() {
                     emptyTitle="No machines"
                     emptyDescription="Install Pulse Agent on Linux, macOS, Windows, or Unraid systems for full CPU, memory, disk, and network telemetry."
                     targetAgentVersion={agentUpdateTargetVersion()}
+                    vmCountByMachineId={vmCountByMachineId}
+                    onOpenHostVms={(machine) => navigate(buildStandaloneHostVmsPath(machine.id))}
                     externalSearch={machineSearchFilter}
                     onExternalSearchChange={setMachineSearchFilter}
                     externalStatus={machineStatusFilter}

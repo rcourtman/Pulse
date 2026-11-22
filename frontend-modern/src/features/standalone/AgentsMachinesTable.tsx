@@ -1271,6 +1271,8 @@ export const AgentsMachinesTable: Component<{
   emptyTitle: string;
   emptyDescription: string;
   targetAgentVersion?: string | null;
+  vmCountByMachineId?: () => ReadonlyMap<string, number>;
+  onOpenHostVms?: (machine: Resource) => void;
   externalSearch?: () => string;
   onExternalSearchChange?: (value: string) => void;
   externalStatus?: () => PlatformResourceStatusFilter;
@@ -1755,13 +1757,40 @@ export const AgentsMachinesTable: Component<{
                                 title={indicator().label}
                                 ariaLabel={indicator().label}
                               />
-                              <div class="min-w-0">
-                                <ResourceNameWithWebInterfaceLink
-                                  name={name()}
-                                  url={savedWebInterfaceUrl()}
-                                  class="min-w-0"
-                                  nameClass="truncate font-semibold text-base-content"
-                                />
+                              <div class="min-w-0 flex-1">
+                                <div class="flex min-w-0 items-center gap-1.5">
+                                  <ResourceNameWithWebInterfaceLink
+                                    name={name()}
+                                    url={savedWebInterfaceUrl()}
+                                    class="min-w-0"
+                                    nameClass="truncate font-semibold text-base-content"
+                                  />
+                                  <Show
+                                    when={(props.vmCountByMachineId?.().get(machine.id) ?? 0) > 0}
+                                  >
+                                    {(() => {
+                                      const count = () =>
+                                        props.vmCountByMachineId?.().get(machine.id) ?? 0;
+                                      const label = () =>
+                                        `${count()} ${count() === 1 ? 'VM' : 'VMs'}`;
+                                      return (
+                                        <button
+                                          type="button"
+                                          data-machine-vms-link={machine.id}
+                                          class="-my-0.5 hidden shrink-0 items-center rounded border border-border bg-base-200/70 px-1.5 py-0.5 text-[10px] font-medium leading-none tabular-nums text-muted transition-colors hover:border-primary/40 hover:bg-primary/10 hover:text-primary focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-primary/40 sm:inline-flex"
+                                          title={`View ${label()} on ${name()}`}
+                                          aria-label={`View ${label()} on ${name()}`}
+                                          onClick={(event) => {
+                                            event.stopPropagation();
+                                            props.onOpenHostVms?.(machine);
+                                          }}
+                                        >
+                                          {label()}
+                                        </button>
+                                      );
+                                    })()}
+                                  </Show>
+                                </div>
                                 <Show when={awaitingReport()}>
                                   {(waiting) => (
                                     <span class="block whitespace-normal text-[10px] leading-snug text-muted">

@@ -1,9 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { Resource } from '@/types/resource';
 import {
+  buildStandaloneMachineVmCounts,
   buildStandalonePageModel,
   buildStandalonePostureSummary,
   getStandaloneResourceStatusIndicator,
+  getStandaloneTabSpecs,
   sortStandaloneResourcesByAttention,
 } from '../standalonePageModel';
 
@@ -292,5 +294,45 @@ describe('standalonePageModel', () => {
     expect(summary.attention).toBe(2);
     expect(summary.warning).toBe(2);
     expect(summary.normal).toBe(0);
+  });
+
+  it('admits standalone agent VMs, excludes provider-owned VMs, counts VMs per host, and gates the VMs tab', () => {
+    const tower = resource({ id: 'agent:tower', name: 'Tower', type: 'agent', sources: ['agent'] });
+    const mac = resource({ id: 'agent:mac', name: 'Mac', type: 'agent', sources: ['agent'] });
+    const libvirtVm = resource({
+      id: 'agent:tower:libvirt:domain-1',
+      name: 'pulse-dev',
+      type: 'vm',
+      parentId: 'agent:tower',
+      platformType: 'agent',
+      sources: ['agent'],
+      technology: 'libvirt',
+    });
+    const pveVm = resource({
+      id: 'pve-vm-100',
+      name: 'proxmox-guest',
+      type: 'vm',
+      platformType: 'proxmox-pve',
+      sources: ['proxmox-pve', 'agent'],
+    });
+    const model = buildStandalonePageModel([tower, mac, libvirtVm, pveVm]);
+    expect(model.vms.map((vm) => vm.id)).toEqual(['agent:tower:libvirt:domain-1']);
+    const counts = buildStandaloneMachineVmCounts(model.machines, model.vms);
+    expect(counts.get('agent:tower')).toBe(1);
+    expect(counts.get('agent:mac')).toBeUndefined();
+    expect(getStandaloneTabSpecs(false, 'machines').map((tab) => tab.id)).toEqual([
+      'machines',
+      'availability',
+    ]);
+    expect(getStandaloneTabSpecs(true, 'machines').map((tab) => tab.id)).toEqual([
+      'machines',
+      'vms',
+      'availability',
+    ]);
+    expect(getStandaloneTabSpecs(false, 'vms').map((tab) => tab.id)).toEqual([
+      'machines',
+      'vms',
+      'availability',
+    ]);
   });
 });

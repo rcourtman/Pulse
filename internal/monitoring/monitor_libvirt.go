@@ -77,17 +77,20 @@ func (m *Monitor) normalizeAgentLibvirtInventory(
 		seen[dedupeKey] = struct{}{}
 
 		domain := models.HostLibvirtDomain{
-			ID:                 agentLibvirtDomainID(name),
-			Name:               name,
-			State:              normalizeAgentLibvirtState(incoming.State),
-			VCPUs:              max(0, min(incoming.VCPUs, 4096)),
-			CPUTimeNanoseconds: incoming.CPUTimeNanoseconds,
-			MemoryCurrentBytes: max(int64(0), incoming.MemoryCurrentBytes),
-			MemoryMaximumBytes: max(int64(0), incoming.MemoryMaximumBytes),
-			NetworkRXBytes:     incoming.NetworkRXBytes,
-			NetworkTXBytes:     incoming.NetworkTXBytes,
-			DiskReadBytes:      incoming.DiskReadBytes,
-			DiskWriteBytes:     incoming.DiskWriteBytes,
+			ID:                   agentLibvirtDomainID(name),
+			Name:                 name,
+			State:                normalizeAgentLibvirtState(incoming.State),
+			VCPUs:                max(0, min(incoming.VCPUs, 4096)),
+			CPUTimeNanoseconds:   incoming.CPUTimeNanoseconds,
+			MemoryCurrentBytes:   max(int64(0), incoming.MemoryCurrentBytes),
+			MemoryMaximumBytes:   max(int64(0), incoming.MemoryMaximumBytes),
+			MemoryAvailableBytes: max(int64(0), incoming.MemoryAvailableBytes),
+			MemoryUsableBytes:    max(int64(0), incoming.MemoryUsableBytes),
+			MemoryUnusedBytes:    max(int64(0), incoming.MemoryUnusedBytes),
+			NetworkRXBytes:       incoming.NetworkRXBytes,
+			NetworkTXBytes:       incoming.NetworkTXBytes,
+			DiskReadBytes:        incoming.DiskReadBytes,
+			DiskWriteBytes:       incoming.DiskWriteBytes,
 		}
 		if domain.MemoryMaximumBytes > 0 && domain.MemoryCurrentBytes > domain.MemoryMaximumBytes {
 			domain.MemoryCurrentBytes = domain.MemoryMaximumBytes
@@ -205,16 +208,18 @@ func (m *Monitor) writeLibvirtDomainMetrics(host models.Host, observedAt time.Ti
 				m.metricsStore.Write("vm", metricID, "cpu", domain.CPUUsagePercent, observedAt)
 			}
 		}
-		if domain.MemoryMaximumBytes > 0 {
-			memoryPercent := math.Max(0, math.Min(
-				100,
-				(float64(domain.MemoryCurrentBytes)/float64(domain.MemoryMaximumBytes))*100,
-			))
-			if m.metricsHistory != nil {
-				m.metricsHistory.AddGuestMetric(metricID, "memory", memoryPercent, observedAt)
-			}
-			if m.metricsStore != nil {
-				m.metricsStore.Write("vm", metricID, "memory", memoryPercent, observedAt)
+		if !strings.EqualFold(strings.TrimSpace(domain.State), "shutoff") {
+			if used, total, ok := domain.MemoryUsage(); ok {
+				memoryPercent := math.Max(0, math.Min(
+					100,
+					(float64(used)/float64(total))*100,
+				))
+				if m.metricsHistory != nil {
+					m.metricsHistory.AddGuestMetric(metricID, "memory", memoryPercent, observedAt)
+				}
+				if m.metricsStore != nil {
+					m.metricsStore.Write("vm", metricID, "memory", memoryPercent, observedAt)
+				}
 			}
 		}
 		if !domain.IORatesValid {

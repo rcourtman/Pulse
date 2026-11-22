@@ -12255,3 +12255,14 @@ optional structured email branding fields (`subjectPrefix`, `brandName`,
 `footerNote`) normalized via `EmailConfig.Branding()` with omitted-field
 preservation. Agent-lifecycle routes, credentials, and alerting hooks under
 `internal/api/` are unchanged (`internal/api/alerting/email_branding_test.go`).
+
+### Agent libvirt virtio-balloon guest memory counters (22 November 2026)
+
+`internal/hostagent/libvirt.go` parses optional `balloon.available`,
+`balloon.usable`, and `balloon.unused` KiB fields from `virsh --readonly domstats`
+onto `agentshost.LibvirtDomain` (`MemoryAvailableBytes`, `MemoryUsableBytes`,
+`MemoryUnusedBytes`) alongside `MemoryCurrentBytes` and `MemoryMaximumBytes`.
+Older agents that omit these optional fields remain wire-compatible and fall
+back to `balloon.current`/`balloon.maximum`. Collection remains strictly
+read-only with no VM lifecycle or configuration authority. Verified by
+`TestCollectLibvirtInventoryUsesReadOnlyBoundedBulkStats`.

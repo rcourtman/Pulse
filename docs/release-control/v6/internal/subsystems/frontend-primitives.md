@@ -11763,3 +11763,19 @@ defaulting collapsed so primary SMTP setup stays uncluttered on desktop and
 mobile viewports. Verified in `EmailProviderSelect.test.tsx`,
 `EmailProviderSelect.supported-settings.test.tsx`, and live desktop/mobile
 browser inspection on `/alerts/notifications`.
+
+### Standalone Machines VMs table and host VM cues (22 November 2026)
+
+`StandaloneVirtualMachinesTable.tsx` uses the canonical platform table
+primitives (`PlatformTableToolbar`, `PlatformTableShell`,
+`PlatformHostScopedTableTitle`, `PlatformSortableTableHead` with canonical
+column kinds, `PlatformWindowedRows`, and `PlatformResourceDetailTableRow`) to
+display standalone hypervisor VMs (`VM`, `Host`, `State`, `CPU`, `Memory`,
+`Disk I/O`, `Net I/O`) at the standard 33px single-line desktop rhythm with
+responsive mobile column visibility and zero horizontal overflow.
+`AgentsMachinesTable.tsx` renders an inline `hidden sm:inline-flex` VM count
+pill beside hosts with standalone VMs that preserves single-line 33px desktop
+rows and avoids truncating host names on 390px phones. Verified by
+`StandaloneVirtualMachinesTable.test.tsx`, `AgentsMachinesTable.test.tsx`,
+`lint:canonical-platforms`, `lint:table-rows`, and
+`frontend-modern/browser-verification/2e3a9e02ff6f4da8.json`.

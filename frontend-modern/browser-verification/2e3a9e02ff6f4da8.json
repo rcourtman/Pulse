@@ -1,0 +1,60 @@
+{
+  "version": 1,
+  "base_sha": "449b5f85270831207c7c5029caa7cb48c1068f24",
+  "verified_at": "2026-11-22T16:02:52Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Infrastructure/ResourceDetailSummary.tsx",
+    "frontend-modern/src/features/platformNavigation/resourcePagePath.ts",
+    "frontend-modern/src/features/standalone/AgentsMachinesTable.tsx",
+    "frontend-modern/src/features/standalone/StandalonePageSurface.tsx",
+    "frontend-modern/src/features/standalone/StandaloneVirtualMachinesTable.tsx",
+    "frontend-modern/src/features/standalone/standalonePageModel.ts",
+    "frontend-modern/src/features/standalone/standaloneVmTableModel.ts",
+    "frontend-modern/src/routing/resourceLinks.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Infrastructure/ResourceDetailSummary.tsx": "7e3437ce97cdc656aacb6d38839fe0e3174dc0ab30ce6d225dd089778365c89f",
+    "frontend-modern/src/features/platformNavigation/resourcePagePath.ts": "3ce0caeee905ff6ddd678424884652a63d8ef3fb65917f4b9dcd6fbfdcef087f",
+    "frontend-modern/src/features/standalone/AgentsMachinesTable.tsx": "a7a039c116c44f41fc3d5eca99d5ac6bdac3ed7179f050b3ac1874bb1193e6b4",
+    "frontend-modern/src/features/standalone/StandalonePageSurface.tsx": "dcccfd05dfad186c82895d04b24d7d2690f3a8bbb2b9102765975056494efb95",
+    "frontend-modern/src/features/standalone/StandaloneVirtualMachinesTable.tsx": "9ad0068aeb66a110c23ecca417bb9710e8d8d07d366901aa17c754db456104a5",
+    "frontend-modern/src/features/standalone/standalonePageModel.ts": "98a03489d06c2673c26a8cc9aa0133b109385550b6c733fcea0bfcdb3b5e68be",
+    "frontend-modern/src/features/standalone/standaloneVmTableModel.ts": "f9c56296d000c96df971e35f2926f7f6e9eddcc4adb9e1af6d388bd26e5ec718",
+    "frontend-modern/src/routing/resourceLinks.ts": "a3554451dadf1df45a4bfad03d017cf4a7aada6b32c73cc914216668e6ba9462"
+  },
+  "routes": [
+    "/standalone/machines",
+    "/standalone/vms",
+    "/standalone/vms?host=agent%3Atower",
+    "/standalone/vms?q=pulse-dev"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 1024,
+      "height": 800
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Machines tab with zero standalone VMs hiding the VMs tab and host VM count pills",
+    "Direct /standalone/vms route showing the empty state when no standalone VMs are reported",
+    "Machines tab with Unraid/Linux libvirt VMs revealing the VMs tab and single-line 32.5px desktop host rows with 2 VMs / 1 VM pills (hidden below sm on 390x844 phones so host names stay readable)",
+    "Host-scoped VMs tab (Virtual Machines on Tower) lazily loading StandaloneVirtualMachinesTable and showing running pulse-dev and shutoff win11-workstation at 33.0px desktop row height, plus all-hosts view including paused lab-router",
+    "Expanded VM ResourceDetailDrawer displaying Libvirt hypervisor, Host Tower, 8 vCPUs, 5.00 GB of 20.0 GB RAM facts, and CPU/Network/Disk I/O history charts",
+    "Filtered-empty VMs state with Reset filters button, and responsive 1024x800 and 390x844 mobile layouts with zero horizontal overflow"
+  ],
+  "interactions": [
+    "verified VMs tab hidden with zero VMs and empty state rendered on direct /standalone/vms navigation",
+    "clicked Tower 2 VMs pill on /standalone/machines, verified lazy-loaded navigation to /standalone/vms?host=agent%3Atower without expanding Tower's machine drawer",
+    "clicked Show all hosts to clear host scope, exercised Running/Attention/Stopped/All status filters, sorted by CPU column header, searched pulse-dev and verified reload persistence, triggered empty search state and clicked Reset filters",
+    "focused pulse-dev row toggle button and pressed Enter to open ResourceDetailDrawer, verified Libvirt/8 vCPUs/host facts and charts, closed drawer cleanly, and verified desktop, 1024px, and 390px viewports with zero page errors"
+  ]
+}

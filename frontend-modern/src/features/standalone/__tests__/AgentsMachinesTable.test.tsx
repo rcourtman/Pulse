@@ -1870,4 +1870,32 @@ describe('AgentsMachinesTable', () => {
       vi.useRealTimers();
     }
   });
+
+  it('shows a single-line VM count pill only for hosts with VMs and opens host VMs without expanding the row', async () => {
+    const tower = resource({ id: 'agent:tower', name: 'Tower' });
+    const mac = resource({ id: 'agent:mac', name: 'Mac-Mini' });
+    const onOpenHostVms = vi.fn();
+
+    render(() => (
+      <AgentsMachinesTable
+        resources={[tower, mac]}
+        vmCountByMachineId={() => new Map([['agent:tower', 2]])}
+        onOpenHostVms={onOpenHostVms}
+        emptyIcon={emptyIcon}
+        emptyTitle="No machines"
+        emptyDescription="Install Pulse Agent."
+      />
+    ));
+
+    const pill = screen.getByRole('button', { name: 'View 2 VMs on Tower' });
+    expect(pill).toHaveTextContent('2 VMs');
+    expect(
+      screen.queryByRole('button', { name: /View .* VMs? on Mac-Mini/i }),
+    ).not.toBeInTheDocument();
+
+    await fireEvent.click(pill);
+    expect(onOpenHostVms).toHaveBeenCalledTimes(1);
+    expect(onOpenHostVms).toHaveBeenCalledWith(tower);
+    expect(screen.queryByTestId('resource-detail-drawer')).not.toBeInTheDocument();
+  });
 });
