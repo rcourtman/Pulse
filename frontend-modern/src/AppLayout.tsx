@@ -55,6 +55,7 @@ import {
   buildStandalonePath,
   buildTrueNASPath,
   buildVmwarePath,
+  isStandaloneVmsRoute,
 } from '@/routing/resourceLinks';
 import { getKioskModePreference, setKioskMode } from '@/utils/url';
 import { updateStore } from '@/stores/updates';
@@ -96,7 +97,12 @@ function resolveStandaloneSubTabTitle(pathname: string): string {
   return 'Machines';
 }
 
+const isHeldStandaloneVmsRoute = (route: string) =>
+  isStandaloneVmsRoute(route) && !isFeatureAvailable('standaloneVms');
+
 function routeBelongsToPrimaryTab(route: string, tabId: PrimaryPlatformNavId): boolean {
+  // A guessed address must not become the remembered Machines entry point.
+  if (tabId === 'standalone' && isHeldStandaloneVmsRoute(route)) return false;
   const prefix = PRIMARY_ROUTE_PREFIX_BY_ID[tabId];
   const pathname = route.split(/[?#]/, 1)[0]?.replace(/\/+$/, '') || '/';
   return pathname === prefix || pathname.startsWith(`${prefix}/`);
@@ -244,6 +250,8 @@ export function AppLayout(props: AppLayoutProps) {
     runtimeBranding().enabled ? runtimeBranding().displayName.trim() : '',
   );
   const browserBrandName = createMemo(() => customBrandName() || 'Pulse');
+  const getNavigationActiveTab = () =>
+    isHeldStandaloneVmsRoute(location.pathname) ? null : getActiveTabForPath(location.pathname);
 
   // With one workspace there is no useful picker to give up space. On phones,
   // let its full name share the height of the account controls and user name.
@@ -307,7 +315,7 @@ export function AppLayout(props: AppLayoutProps) {
     settings: 'Settings',
   };
   createEffect(() => {
-    const active = getActiveTabForPath(location.pathname);
+    const active = getNavigationActiveTab();
     if (!active) {
       // The map is reached from the window edge, not from a tab.
       const onMap =
@@ -355,7 +363,7 @@ export function AppLayout(props: AppLayoutProps) {
   });
 
   createEffect(() => {
-    const activeTab = getActiveTabForPath(location.pathname);
+    const activeTab = getNavigationActiveTab();
     if (!isPrimaryPlatformNavId(activeTab)) return;
     const route = currentPrimaryRoute(location.pathname, location.search, location.hash);
     if (!routeBelongsToPrimaryTab(route, activeTab)) return;
@@ -449,7 +457,6 @@ export function AppLayout(props: AppLayoutProps) {
     clearHeaderHideTimeout();
   });
 
-  const getNavigationActiveTab = () => getActiveTabForPath(location.pathname);
   const getActiveTabDesktop = getNavigationActiveTab;
   const getActiveTabMobile = getNavigationActiveTab;
   const actionApprovalBadge = createMemo(() =>

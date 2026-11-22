@@ -64,6 +64,7 @@ vi.mock('@/hooks/useUnifiedResources', () => ({
 vi.mock('@/stores/updates', () => ({
   updateStore: {
     versionInfo: mocks.versionInfo,
+    lastError: () => null,
   },
 }));
 
@@ -188,6 +189,7 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
+  vi.unstubAllEnvs();
 });
 
 describe('StandalonePageSurface', () => {
@@ -636,6 +638,52 @@ describe('StandalonePageSurface', () => {
     expect(mocks.setSearchParams).toHaveBeenCalledWith(
       { q: null, status: null, host: null },
       { replace: true },
+    );
+  });
+
+  it('keeps Machines and Availability checks usable with VM inventory in a release build', () => {
+    vi.stubEnv('DEV', false);
+    mocks.versionInfo.mockReturnValue({ channel: 'stable' });
+    mocks.useUnifiedResources.mockReturnValue({
+      resources: () => [
+        resource({ id: 'tower', type: 'agent', platformType: 'agent', sources: ['agent'] }),
+        resource({ type: 'vm', platformType: 'agent', sources: ['agent'], parentId: 'tower' }),
+      ],
+      loading: () => false,
+      error: () => null,
+      refetch: vi.fn(),
+    });
+
+    render(() => <StandalonePageSurface />);
+
+    expect(screen.getByTestId('standalone-section-tabs')).toHaveAttribute(
+      'data-tabs',
+      'machines,availability',
+    );
+    expect(screen.getByTestId('agents-machines-table')).toHaveAttribute('data-resource-count', '1');
+    expect(screen.queryByTestId('standalone-vms-table-mock')).not.toBeInTheDocument();
+    const machineProps = mocks.AgentsMachinesTable.mock.calls.at(-1)?.[0];
+    expect(machineProps?.vmCountByMachineId?.().has('tower')).toBe(false);
+    expect(machineProps?.onOpenHostVms).toBeUndefined();
+  });
+
+  it('does not treat a held VM as a reason to hide ordinary first-run actions', () => {
+    vi.stubEnv('DEV', false);
+    mocks.versionInfo.mockReturnValue({ channel: 'rc' });
+    mocks.useUnifiedResources.mockReturnValue({
+      resources: () => [resource({ type: 'vm', platformType: 'agent', sources: ['agent'] })],
+      loading: () => false,
+      error: () => null,
+      refetch: vi.fn(),
+    });
+
+    render(() => <StandalonePageSurface />);
+
+    expect(screen.getByText('No Pulse Agent machines')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Add agent' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'View checks' })).toHaveAttribute(
+      'href',
+      '/standalone/availability',
     );
   });
 });

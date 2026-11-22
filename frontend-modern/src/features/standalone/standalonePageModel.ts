@@ -5,7 +5,7 @@ import {
   isPulseAgentPlatformResource,
 } from '@/utils/agentResources';
 import { getSimpleStatusIndicator } from '@/utils/status';
-import { buildStandalonePath } from '@/routing/resourceLinks';
+import { buildStandalonePath, STANDALONE_VMS_PATH } from '@/routing/resourceLinks';
 
 export type StandaloneTabId = 'machines' | 'vms' | 'availability';
 
@@ -71,7 +71,7 @@ export const getStandaloneTabSpecs = (
     { id: 'machines', label: 'Machines', path: buildStandalonePath('machines') },
   ];
   if (hasVms || activeTab === 'vms') {
-    tabs.push({ id: 'vms', label: 'VMs', path: buildStandalonePath('vms') });
+    tabs.push({ id: 'vms', label: 'VMs', path: STANDALONE_VMS_PATH });
   }
   tabs.push({
     id: 'availability',

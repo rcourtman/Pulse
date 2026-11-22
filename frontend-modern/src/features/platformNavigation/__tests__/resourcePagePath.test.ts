@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { Resource } from '@/types/resource';
 import { buildResourcePagePath, buildResourceThresholdsPath } from '../resourcePagePath';
@@ -7,6 +7,8 @@ const resource = (overrides: Partial<Resource>): Resource =>
   ({ id: 'res-1', name: 'res-1', status: 'online', ...overrides }) as Resource;
 
 describe('buildResourcePagePath', () => {
+  afterEach(() => vi.unstubAllEnvs());
+
   // Patrol's "Open resource" sent every subject to Machines, which lists only
   // standalone agent hosts; 19 of 20 decisions on a mock estate dead-ended.
   it('opens a registry resource on the page of the platform that reports it', () => {
@@ -82,18 +84,26 @@ describe('buildResourcePagePath', () => {
         }),
       }),
     ).toBe('/standalone/machines?q=Apollo-114');
+  });
+
+  it('offers a standalone VM backlink only where the VM view is shown', () => {
+    const vm = resource({
+      id: 'agent:tower:libvirt:domain-1',
+      type: 'vm',
+      name: 'pulse-dev',
+      platformScopes: ['agent'],
+      technology: 'libvirt',
+    });
+    expect(buildResourcePagePath({ id: vm.id, resource: vm })).toBe('/standalone/vms?q=pulse-dev');
+
+    vi.stubEnv('DEV', false);
+    expect(buildResourcePagePath({ id: vm.id, resource: vm })).toBeNull();
     expect(
       buildResourcePagePath({
-        id: 'agent:tower:libvirt:domain-1',
-        resource: resource({
-          id: 'agent:tower:libvirt:domain-1',
-          type: 'vm',
-          name: 'pulse-dev',
-          platformScopes: ['agent'],
-          technology: 'libvirt',
-        }),
+        id: 'pve-vm-3',
+        resource: resource({ id: 'pve-vm-3', type: 'vm', platformScopes: ['proxmox-pve'] }),
       }),
-    ).toBe('/standalone/vms?q=pulse-dev');
+    ).toBe('/proxmox/overview?resource=pve-vm-3');
   });
 
   it('keeps a Proxmox node that also runs the Pulse agent on the Proxmox page', () => {

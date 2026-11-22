@@ -13,9 +13,11 @@ import {
   DOCKER_QUERY_PARAMS,
   KUBERNETES_QUERY_PARAMS,
   STANDALONE_QUERY_PARAMS,
+  STANDALONE_VMS_PATH,
   TRUENAS_QUERY_PARAMS,
   type AlertThresholdsTab,
 } from '@/routing/resourceLinks';
+import { isFeatureAvailable } from '@/utils/featureReleases';
 import { getPreferredInfrastructureDisplayName } from '@/utils/resourceIdentity';
 import {
   collectResourcePlatformEvidence,
@@ -222,8 +224,7 @@ export function buildResourceThresholdsPath(subject: ResourcePageSubject): strin
  * page can: `?resource=` on workload and Proxmox storage tables (resolved
  * through the registry), a name filter on Docker containers, Kubernetes,
  * TrueNAS storage, apps, VMs and shares, and Machines, and the owning tab
- * elsewhere. Returns null when nothing names a
- * platform.
+ * elsewhere. Returns null when no available page shows the resource.
  */
 export function buildResourcePagePath(subject: ResourcePageSubject): string | null {
   const resource = subject.resource ?? null;
@@ -299,7 +300,9 @@ export function buildResourcePagePath(subject: ResourcePageSubject): string | nu
       );
     case 'standalone':
       if (isGuest)
-        return withQuery(buildStandalonePath('vms'), STANDALONE_QUERY_PARAMS.query, name);
+        return isFeatureAvailable('standaloneVms')
+          ? withQuery(STANDALONE_VMS_PATH, STANDALONE_QUERY_PARAMS.query, name)
+          : null;
       return withQuery(buildStandalonePath(), STANDALONE_QUERY_PARAMS.query, name);
     default:
       return null;

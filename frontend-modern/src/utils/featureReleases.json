@@ -3,5 +3,10 @@
     "name": "Map",
     "stage": "build",
     "guides": ["MAP.md"]
+  },
+  "standaloneVms": {
+    "name": "Machines VMs",
+    "stage": "build",
+    "guides": []
   }
 }

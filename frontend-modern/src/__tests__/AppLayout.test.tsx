@@ -139,6 +139,7 @@ const renderLayout = (
       <Route path="/settings/infrastructure" component={LayoutRoute} />
       <Route path="/proxmox/overview" component={LayoutRoute} />
       <Route path="/docker/overview" component={LayoutRoute} />
+      <Route path="/standalone/*" component={LayoutRoute} />
       <Route path="/alerts" component={LayoutRoute} />
       <Route path="/actions" component={LayoutRoute} />
       <Route path="/patrol" component={LayoutRoute} />
@@ -164,6 +165,7 @@ describe('AppLayout navigation icons', () => {
     aiAvailabilityStore.setEnabled(false);
     clearRuntimeBranding();
     cleanup();
+    vi.unstubAllEnvs();
   });
 
   const getInfrastructureLink = (name: string) => {
@@ -177,6 +179,19 @@ describe('AppLayout navigation icons', () => {
     makeResource({ id: 'pve-1', type: 'agent', platformType: 'proxmox-pve' }),
     makeResource({ id: 'docker-1', type: 'docker-host', platformType: 'docker' }),
   ];
+
+  it('does not remember the address of the held VMs view as a Machines entry', () => {
+    vi.stubEnv('DEV', false);
+    renderLayout(
+      [makeResource({ id: 'agent-1', type: 'agent', platformType: 'agent' })],
+      '/standalone/vms/?host=agent-1',
+    );
+
+    const machines = getInfrastructureLink('Machines');
+    expect(machines).toHaveAttribute('href', '/standalone/machines');
+    expect(machines).not.toHaveAttribute('aria-current', 'page');
+    expect(document.title).toBe('Pulse');
+  });
 
   it('renders fresh utility icons for both desktop and mobile navigation trees', () => {
     const { container } = renderLayout();
