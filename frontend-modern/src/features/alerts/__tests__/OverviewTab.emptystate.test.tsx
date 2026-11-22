@@ -191,6 +191,12 @@ describe('OverviewTab zero-destination setup card', () => {
     failureClassesAvailable: true,
     failureClassWindowDays: 7,
   };
+  const noEnabledDestinations = {
+    overallHealthy: true,
+    queue: healthyQueue,
+    destinations: { available: true, enabledCount: 0 },
+  };
+  const card = () => screen.queryByTestId('alerts-no-destinations-card');
 
   afterEach(() => {
     cleanup();
@@ -203,20 +209,69 @@ describe('OverviewTab zero-destination setup card', () => {
   it('shows a dismissible setup card when delivery is active and zero destinations are enabled', async () => {
     getConfigMock.mockResolvedValue({ enabled: true, activationState: 'active' });
     await useAlertsActivation().refreshConfig();
-    getHealthMock.mockResolvedValue({
-      overallHealthy: true,
-      queue: healthyQueue,
-      destinations: { available: true, enabledCount: 0 },
-    });
+    getHealthMock.mockResolvedValue(noEnabledDestinations);
 
-    render(() => <OverviewTab {...defaultProps()} />);
+    const { unmount } = render(() => <OverviewTab {...defaultProps()} />);
 
-    expect(await screen.findByText('No notification destinations configured')).toBeInTheDocument();
-    expect(screen.getByText('Set up notifications')).toBeInTheDocument();
+    expect(await screen.findByText('No notification destinations enabled')).toBeInTheDocument();
+    expect(screen.getByText(/add or enable email/i)).toBeInTheDocument();
+    expect(screen.getByText('Manage destinations')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }));
-    expect(screen.queryByText('No notification destinations configured')).not.toBeInTheDocument();
+    expect(card()).toBeNull();
     expect(localStorage.getItem('pulseAlertsNoDestinationsDismissed')).toBe('true');
+    unmount();
+    render(() => <OverviewTab {...defaultProps()} />);
+    await Promise.resolve();
+    expect(card()).toBeNull();
+  });
+
+  it('waits for confirmed activation even when the empty destination read finishes first', async () => {
+    let finishConfig!: (config: { enabled: true; activationState: 'active' }) => void;
+    getConfigMock.mockReturnValueOnce(
+      new Promise((resolve) => {
+        finishConfig = resolve;
+      }),
+    );
+    const readingConfig = useAlertsActivation().refreshConfig();
+    getHealthMock.mockResolvedValue(noEnabledDestinations);
+    render(() => <OverviewTab {...defaultProps()} />);
+    await getHealthMock.mock.results[0].value;
+
+    expect(card()).toBeNull();
+    expect(screen.getByText('No active alerts')).toBeInTheDocument();
+    expect(screen.queryByText(/Notification delivery is turned off/)).toBeNull();
+
+    finishConfig({ enabled: true, activationState: 'active' });
+    await readingConfig;
+    expect(card()).toBeInTheDocument();
+  });
+
+  it.each(['unavailable', 'not reported'] as const)(
+    'does not infer active delivery when activation is %s',
+    async (state) => {
+      if (state === 'unavailable') getConfigMock.mockRejectedValueOnce(new Error('unavailable'));
+      else getConfigMock.mockResolvedValueOnce({ enabled: true });
+      await useAlertsActivation().refreshConfig();
+      getHealthMock.mockResolvedValue(noEnabledDestinations);
+      render(() => <OverviewTab {...defaultProps()} />);
+      await getHealthMock.mock.results[0].value;
+      expect(card()).toBeNull();
+      expect(screen.getByText('No active alerts')).toBeInTheDocument();
+    },
+  );
+
+  it('keeps the delivery health warning ahead of setup guidance', async () => {
+    getConfigMock.mockResolvedValue({ enabled: true, activationState: 'active' });
+    await useAlertsActivation().refreshConfig();
+    getHealthMock.mockResolvedValue({
+      ...noEnabledDestinations,
+      overallHealthy: false,
+      queue: { ...healthyQueue, healthy: false, status: 'unavailable' },
+    });
+    render(() => <OverviewTab {...defaultProps()} />);
+    expect(await screen.findByRole('alert')).toBeInTheDocument();
+    expect(card()).toBeNull();
   });
 
   it('stays hidden when at least one destination is enabled or inventory is unavailable', async () => {
@@ -236,7 +291,7 @@ describe('OverviewTab zero-destination setup card', () => {
       const { unmount } = render(() => <OverviewTab {...defaultProps()} />);
       await Promise.resolve();
       await Promise.resolve();
-      expect(screen.queryByText('No notification destinations configured')).not.toBeInTheDocument();
+      expect(card()).toBeNull();
       unmount();
     }
   });
@@ -244,17 +299,13 @@ describe('OverviewTab zero-destination setup card', () => {
   it('does not stack with AlertDeliveryPausedCard when delivery is paused', async () => {
     getConfigMock.mockResolvedValue({ enabled: true, activationState: 'pending_review' });
     await useAlertsActivation().refreshConfig();
-    getHealthMock.mockResolvedValue({
-      overallHealthy: true,
-      queue: healthyQueue,
-      destinations: { available: true, enabledCount: 0 },
-    });
+    getHealthMock.mockResolvedValue(noEnabledDestinations);
 
     render(() => <OverviewTab {...defaultProps()} />);
     await Promise.resolve();
     await Promise.resolve();
 
     expect(screen.getByText(/Notification delivery is turned off\./)).toBeInTheDocument();
-    expect(screen.queryByText('No notification destinations configured')).not.toBeInTheDocument();
+    expect(card()).toBeNull();
   });
 });
