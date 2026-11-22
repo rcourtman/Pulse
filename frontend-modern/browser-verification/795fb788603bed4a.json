@@ -1,0 +1,37 @@
+{
+  "version": 1,
+  "base_sha": "8cb261988dbd87f655f2614353b2dec4c8a9e810",
+  "verified_at": "2026-11-22T10:08:04Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx": "8c12222059e04e7903b8568a0ee17d4905c9e8c5dd55a9734cd82bcefac423fb"
+  },
+  "routes": [
+    "/proxmox/backups/coverage",
+    "/proxmox/backups/date?day=2026-11-20"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 320,
+      "height": 800
+    }
+  ],
+  "states": [
+    "Matched production previews with Playwright 1.56.1 and Chromium 141.0.7390.37, desktop light and narrow touch dark; 16 paired captures inspected natively.",
+    "Both inventory endpoints reply 200 with no files; PVE names a storage-list gap. Coverage and By date show points read rather than claiming no backups; the existing node warning and unknown rows remain.",
+    "Partial provider history with a readable backup on a healthy sibling, empty day, and day plus a search miss. Distinct HTTP 503 control preserves its existing source warning and healthy PBS evidence.",
+    "An ordinary poll clears the gap and restores the read point in the same dated view. No given protection verdict, date filter, footer cue, or available point was displaced."
+  ],
+  "interactions": [
+    "Use keyboard and touch from Coverage to By date and expand/collapse the independently readable archive; verify its repository in the expanded evidence.",
+    "Choose a day in the live Backup jobs chart, type and clear a nonmatching search, then deselect the day. Selection, count, filter controls and complete readable row remain reachable.",
+    "Switch the synthetic producer on ordinary polling and verify the qualifier clears without navigation. Read-only local API requests; no live storage, permissions, assets or release changed."
+  ]
+}

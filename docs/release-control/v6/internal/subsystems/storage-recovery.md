@@ -1747,6 +1747,25 @@ thaw. Registered recovery-model and consuming-table tests cover mixed,
 incomplete-only, unknown-date and completion-transition controls without any
 new backup execution, QGA requests, schema or persisted state.
 
+### Proxmox restore-point totals distinguish provider reads from Pulse API reads
+
+A successful PVE or PBS inventory response can contain retained or empty rows
+while a provider could not read its backup history. A parsed `partial` or
+`unavailable` PVE/PBS provider history in the page's existing workload
+assessments qualifies the page total and the By date counter as points read,
+even if both Pulse inventory requests succeeded. By date qualifies empty
+inventory and filtered misses accordingly. A day-only miss names what is listed
+for that day, not why a backup might be absent; another active filter still
+gets the search and filter guidance. A complete provider observation on the
+next refresh can clear the qualification without changing the selected view.
+
+This is a display limit, not a new assessment: no provider is inferred from
+legacy or missing observations, and a known gap does not remove visible points,
+change a workload's protection status or change collection, cadence, retention
+or access. `ProxmoxBackupsTable.test.tsx` exercises an empty but unread inventory,
+an ordinary recovery poll, a readable sibling point and date/search misses
+through the existing inventory parsers and posture client.
+
 ### Failed posture refreshes withdraw retained assessments (24 October 2026)
 
 Protection posture remains visible while a refresh is pending, but a settled
