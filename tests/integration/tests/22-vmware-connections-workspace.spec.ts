@@ -229,12 +229,18 @@ test.describe("VMware connections in the consolidated workspace", () => {
     await dialog.getByRole("textbox", { name: "Password" }).fill("super-secret");
     await dialog.getByRole("button", { name: "Test connection" }).click();
 
-    const feedback = page.getByTestId("vmware-connection-test-feedback");
+    const feedback = dialog
+      .getByRole("status")
+      .filter({ hasText: "Unsupported vCenter version" });
     await expect(feedback).toBeVisible();
-    await expect(feedback).toContainText("Unsupported vCenter version");
     await expect(feedback).toContainText(
       "VMware vCenter 6.7 is below the supported VI JSON release floor",
     );
+    await expect(feedback).toContainText("Pulse supports vCenter 8.0U1 and newer.");
+    await expect(feedback).toContainText("No settings were saved.");
+
+    await dialog.getByRole("textbox", { name: "Host" }).fill("supported.lab.local");
+    await expect(feedback).toHaveCount(0);
     expect(createCalls).toBe(0);
   });
 });
