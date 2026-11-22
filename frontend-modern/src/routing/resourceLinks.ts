@@ -39,6 +39,9 @@ export const PROXMOX_PATH = '/proxmox';
 export const PROXMOX_DEFAULT_TAB = 'overview';
 export const PROXMOX_BACKUPS_PATH = `${PROXMOX_PATH}/backups`;
 export const PROXMOX_BACKUPS_DEFAULT_VIEW = 'coverage';
+// A link from a disappearing disclosure needs a focus target on arrival.
+// This is navigation state, not a saved view or a query filter.
+export const PROXMOX_BACKUPS_INSPECTION_STATE = { focusBackupInspection: true } as const;
 export type ProxmoxBackupsView = 'date' | 'coverage';
 export const PROXMOX_BACKUPS_QUERY_PARAMS = {
   query: 'q',

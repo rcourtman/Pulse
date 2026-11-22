@@ -5,6 +5,7 @@ import {
   createMemo,
   createSignal,
   onCleanup,
+  onMount,
   type Component,
   type JSX,
 } from 'solid-js';
@@ -23,6 +24,7 @@ import { createNonSuspendingQuery } from '@/hooks/createNonSuspendingQuery';
 import {
   buildProxmoxBackupsPath,
   PROXMOX_BACKUPS_DEFAULT_VIEW,
+  PROXMOX_BACKUPS_INSPECTION_STATE,
   PROXMOX_BACKUPS_PATH,
   PROXMOX_BACKUPS_QUERY_PARAMS,
   type ProxmoxBackupsView,
@@ -204,7 +206,17 @@ export const ProxmoxBackupsTable: Component<{
     void Promise.all([backups.refetch(), pbsBackups.refetch(), protectionPostures.refetch()]);
   };
   const { isMobile } = useBreakpoint();
-  const location = useLocation();
+  const location = useLocation<typeof PROXMOX_BACKUPS_INSPECTION_STATE>();
+  onMount(() => {
+    if (location.state?.focusBackupInspection !== true) return;
+    // A status dialog's trigger is no longer visible after opening Backups.
+    // Resume inspection here, without scrolling or taking existing focus.
+    queueMicrotask(() => {
+      if (inspection?.isConnected && document.activeElement === document.body) {
+        inspection.focus({ preventScroll: true });
+      }
+    });
+  });
   const protectionPostures = useProtectionPostures(() =>
     (props.workloads ?? []).map((workload) => workload.id),
   );

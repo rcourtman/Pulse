@@ -24,7 +24,11 @@ import {
   getBackupInfo,
   type BackupInfo,
 } from '@/utils/format';
-import { ALERT_BACKUP_THRESHOLDS_PATH, buildProxmoxBackupsPath } from '@/routing/resourceLinks';
+import {
+  ALERT_BACKUP_THRESHOLDS_PATH,
+  buildProxmoxBackupsPath,
+  PROXMOX_BACKUPS_INSPECTION_STATE,
+} from '@/routing/resourceLinks';
 import { useRelativeTimeNow } from '@/utils/relativeTimeClock';
 import type { AvailabilityProbePresentation } from '@/utils/availabilityProbePresentation';
 import {
@@ -481,6 +485,7 @@ function BackupStatusCell(props: {
             Backups owns that evidence; don't infer the cause or fetch it here. */}
         <a
           href={buildProxmoxBackupsPath()}
+          state={JSON.stringify(PROXMOX_BACKUPS_INSPECTION_STATE)}
           class={`${EXTERNAL_TEXT_LINK_BASE_CLASS} ${EXTERNAL_TEXT_LINK_VARIANT_CLASSES.compactAction} -mx-1 underline`}
           ref={(link) => {
             onCleanup(() => {

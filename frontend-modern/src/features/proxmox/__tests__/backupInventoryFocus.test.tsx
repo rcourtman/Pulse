@@ -4,6 +4,7 @@ import { Route, Router } from '@solidjs/router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { resetCreateNonSuspendingQueryCacheForTest } from '@/hooks/createNonSuspendingQuery';
 import { protectionPolicy } from '@/utils/__fixtures__/protectionPosture';
+import { PROXMOX_BACKUPS_INSPECTION_STATE } from '@/routing/resourceLinks';
 import { setKioskMode } from '@/utils/url';
 import { ProxmoxBackupsTable } from '../ProxmoxBackupsTable';
 import {
@@ -77,6 +78,28 @@ afterEach(() => {
 });
 
 describe('retiring backup evidence retains a usable keyboard position', () => {
+  it('receives focus when a backup status link has left its trigger behind', async () => {
+    window.history.replaceState(PROXMOX_BACKUPS_INSPECTION_STATE, '', '/proxmox/backups/coverage');
+    mount();
+    await waitFor(() =>
+      expect(screen.getByRole('region', { name: 'Backup inspection' })).toHaveFocus(),
+    );
+  });
+
+  it('leaves an already focused control alone when the inspection mounts', async () => {
+    window.history.replaceState(PROXMOX_BACKUPS_INSPECTION_STATE, '', '/proxmox/backups/coverage');
+    const outside = document.createElement('button');
+    document.body.append(outside);
+    try {
+      outside.focus();
+      mount();
+      await screen.findByText('east-100');
+      expect(outside).toHaveFocus();
+    } finally {
+      outside.remove();
+    }
+  });
+
   it.each(['pbs', 'pve'])(
     'hands a withdrawn %s disclosure to inventory retry, without leaving its old point',
     async (source) => {
