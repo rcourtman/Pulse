@@ -1238,9 +1238,26 @@ func (r *Router) testOIDCConnection(ctx context.Context, cfg *OIDCTestConfig) SS
 		SupportedScopes:  discovery.ScopesSupported,
 	}
 
+	// An issuer match is useful even when discovery is incomplete. Keep the
+	// observed details and name missing fields without claiming a sign-in check.
+	if strings.TrimSpace(details.TokenEndpoint) == "" {
+		details.TokenEndpoint = ""
+	}
+	if strings.TrimSpace(details.JWKSURI) == "" {
+		details.JWKSURI = ""
+	}
+	message := "OIDC discovery succeeded with an exact issuer match."
+	switch {
+	case details.TokenEndpoint == "" && details.JWKSURI == "":
+		message = "Token and signing-key URLs missing."
+	case details.TokenEndpoint == "":
+		message = "No token endpoint in discovery."
+	case details.JWKSURI == "":
+		message = "No signing-key URL in discovery."
+	}
 	return SSOTestResponse{
 		Success: true,
-		Message: "OIDC discovery succeeded with an exact issuer match. Client credentials and sign-in have not been tested.",
+		Message: message + " Client credentials and sign-in have not been tested.",
 		Details: details,
 	}
 }

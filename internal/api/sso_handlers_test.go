@@ -254,6 +254,73 @@ func TestHandleTestSSOProvider_OIDCSuccess(t *testing.T) {
 	}
 }
 
+func TestHandleTestSSOProvider_OIDCDiscoveryMissingURLs(t *testing.T) {
+	const tokenURL = "https://idp.example.test/token"
+	const keysURL = "https://idp.example.test/keys"
+	const userinfoURL = "https://idp.example.test/userinfo"
+	for _, tc := range []struct {
+		name, token, keys, wantToken, wantKeys, message string
+	}{
+		{"missing token", "", keysURL, "", keysURL, "No token endpoint in discovery."},
+		{"missing keys", tokenURL, "", tokenURL, "", "No signing-key URL in discovery."},
+		{"missing both", "", "", "", "", "Token and signing-key URLs missing."},
+		{"blank token", " \t", keysURL, "", keysURL, "No token endpoint in discovery."},
+		{"blank keys", tokenURL, "\n ", tokenURL, "", "No signing-key URL in discovery."},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			discoveryServer := newIPv4HTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path != "/.well-known/openid-configuration" {
+					http.NotFound(w, r)
+					return
+				}
+				discovery := map[string]any{
+					"issuer":            "http://" + r.Host,
+					"userinfo_endpoint": userinfoURL,
+					"scopes_supported":  []string{"openid", "email"},
+				}
+				if tc.token != "" {
+					discovery["token_endpoint"] = tc.token
+				}
+				if tc.keys != "" {
+					discovery["jwks_uri"] = tc.keys
+				}
+				w.Header().Set("Content-Type", "application/json")
+				json.NewEncoder(w).Encode(discovery)
+			}))
+			defer discoveryServer.Close()
+
+			body, err := json.Marshal(SSOTestRequest{
+				Type: "oidc",
+				OIDC: &OIDCTestConfig{IssuerURL: discoveryServer.URL},
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			req := httptest.NewRequest(http.MethodPost, "/api/security/sso/providers/test", bytes.NewReader(body))
+			setTestIP(req)
+			rec := httptest.NewRecorder()
+			(&Router{}).handleTestSSOProvider(rec, req)
+			if rec.Code != http.StatusOK {
+				t.Fatalf("issuer matched: want HTTP 200, got %d: %s", rec.Code, rec.Body.String())
+			}
+			var result SSOTestResponse
+			if err := json.Unmarshal(rec.Body.Bytes(), &result); err != nil {
+				t.Fatal(err)
+			}
+			wantMessage := tc.message + " Client credentials and sign-in have not been tested."
+			if !result.Success || result.Message != wantMessage {
+				t.Fatalf("want successful issuer match with %q, got %+v", wantMessage, result)
+			}
+			d := result.Details
+			if d == nil || d.Type != "oidc" || d.EntityID != discoveryServer.URL ||
+				d.TokenEndpoint != tc.wantToken || d.JWKSURI != tc.wantKeys ||
+				d.UserinfoEndpoint != userinfoURL || strings.Join(d.SupportedScopes, ",") != "openid,email" {
+				t.Fatalf("missing fields must not erase known discovery details: %+v", d)
+			}
+		})
+	}
+}
+
 func TestHandleTestSSOProvider_OIDCRedirectRejected(t *testing.T) {
 	target := newIPv4HTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/.well-known/openid-configuration" {
