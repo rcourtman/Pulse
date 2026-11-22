@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { createRoot } from 'solid-js';
+import { createRoot, createSignal } from 'solid-js';
 import { NodesAPI } from '@/api/nodes';
 import type { ClusterEndpoint, NodeConfig } from '@/types/nodes';
-import { useNodeModalState, type NodeModalState } from '../useNodeModalState';
+import { useNodeModalState } from '../useNodeModalState';
 import type { NodeModalProps } from '../nodeModalModel';
 
 vi.mock('@/api/nodes', () => ({
@@ -10,7 +10,17 @@ vi.mock('@/api/nodes', () => ({
 }));
 vi.mock('@/utils/clipboard', () => ({ copyToClipboard: vi.fn() }));
 
-describe('connection tests with retained credentials', () => {
+const deferred = <T>() => {
+  let resolve!: (value: T) => void;
+  let reject!: (error: Error) => void;
+  const promise = new Promise<T>((done, fail) => {
+    resolve = done;
+    reject = fail;
+  });
+  return { promise, resolve, reject };
+};
+
+describe('Proxmox connection tests', () => {
   let dispose: (() => void) | undefined;
 
   beforeEach(() => {
@@ -21,45 +31,59 @@ describe('connection tests with retained credentials', () => {
 
   afterEach(() => dispose?.());
 
-  const mount = (nodeType: NodeModalProps['nodeType'], clusterEndpoints?: ClusterEndpoint[]) => {
-    let state!: NodeModalState;
-    dispose = createRoot((cleanup) => {
-      state = useNodeModalState({
-        isOpen: true,
+  const mountEditor = (
+    nodeType: NodeModalProps['nodeType'],
+    clusterEndpoints?: ClusterEndpoint[],
+  ) =>
+    createRoot((cleanup) => {
+      dispose = cleanup;
+      const [isOpen, setOpen] = createSignal(true);
+      const [resetKey, setResetKey] = createSignal<number>();
+      const [node, setNode] = createSignal<NodeConfig>({
+        id: `${nodeType}-saved`,
+        type: nodeType,
+        name: 'saved',
+        host: 'https://node.example.test:8006',
+        tokenName: 'root@pam!pulse',
+        fingerprint: 'saved-pin',
+        verifySSL: true,
+        user: 'fixture@pve',
+        monitorVMs: true,
+        monitorContainers: true,
+        monitorStorage: true,
+        monitorBackups: true,
+        monitorPhysicalDisks: false,
+        monitorDatastores: true,
+        monitorSyncJobs: true,
+        monitorVerifyJobs: true,
+        monitorPruneJobs: true,
+        monitorGarbageJobs: true,
+        excludeDatastores: [],
+        monitorMailStats: true,
+        monitorQueues: true,
+        monitorQuarantine: true,
+        monitorDomainStats: false,
+        clusterEndpoints,
+      } as NodeConfig);
+      const state = useNodeModalState({
+        get isOpen() {
+          return isOpen();
+        },
+        get resetKey() {
+          return resetKey();
+        },
         nodeType,
-        editingNode: {
-          id: `${nodeType}-saved`,
-          type: nodeType,
-          name: 'saved',
-          host: 'https://node.example.test:8006',
-          tokenName: 'root@pam!pulse',
-          fingerprint: 'saved-pin',
-          verifySSL: true,
-          user: 'fixture@pve',
-          monitorVMs: true,
-          monitorContainers: true,
-          monitorStorage: true,
-          monitorBackups: true,
-          monitorPhysicalDisks: false,
-          monitorDatastores: true,
-          monitorSyncJobs: true,
-          monitorVerifyJobs: true,
-          monitorPruneJobs: true,
-          monitorGarbageJobs: true,
-          excludeDatastores: [],
-          monitorMailStats: true,
-          monitorQueues: true,
-          monitorQuarantine: true,
-          monitorDomainStats: false,
-          clusterEndpoints,
-        } as NodeConfig,
+        get editingNode() {
+          return node();
+        },
         onClose: vi.fn(),
         onSave: vi.fn(),
       });
-      return cleanup;
+      return { state, setNode, setOpen, setResetKey };
     });
-    return state;
-  };
+
+  const mount = (nodeType: NodeModalProps['nodeType'], clusterEndpoints?: ClusterEndpoint[]) =>
+    mountEditor(nodeType, clusterEndpoints).state;
 
   it.each(['pve', 'pbs', 'pmg'] as const)(
     'tests edited TLS settings for %s without replacing credentials',
@@ -111,6 +135,67 @@ describe('connection tests with retained credentials', () => {
       }),
     );
   });
+
+  it('discards a draft success after editing the endpoint and tests the new draft on request', async () => {
+    const state = mount('pve');
+    state.updateField('tokenValue', 'draft-token');
+    const oldDraft = deferred<Awaited<ReturnType<typeof NodesAPI.testConnection>>>();
+    vi.mocked(NodesAPI.testConnection).mockReturnValueOnce(oldDraft.promise);
+
+    const pending = state.handleTestConnection();
+    state.updateField('host', 'https://second.example.test:8006');
+    state.updateField('fingerprint', 'second-pin');
+    expect(state.isTesting()).toBe(true);
+    await state.handleTestConnection();
+    expect(NodesAPI.testConnection).toHaveBeenCalledTimes(1);
+    oldDraft.resolve({ status: 'success', message: 'Old host accepted', isCluster: true });
+    await pending;
+
+    expect(state.testResult()).toBeNull();
+    expect(state.isTesting()).toBe(false);
+
+    vi.mocked(NodesAPI.testConnection).mockResolvedValueOnce({
+      status: 'success',
+      message: 'New host answered',
+      warnings: ['Inventory scope limited'],
+    });
+    await state.handleTestConnection();
+    expect(NodesAPI.testConnection).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        host: 'https://second.example.test:8006',
+        fingerprint: 'second-pin',
+        verifySSL: true,
+      }),
+    );
+    expect(state.testResult()).toMatchObject({
+      status: 'warning',
+      message: 'New host answered',
+      warnings: ['Inventory scope limited'],
+    });
+  });
+
+  it('discards a draft failure even when the operator restores the previous pin', async () => {
+    const state = mount('pbs');
+    state.updateField('tokenValue', 'draft-token');
+    const oldDraft = deferred<Awaited<ReturnType<typeof NodesAPI.testConnection>>>();
+    vi.mocked(NodesAPI.testConnection).mockReturnValueOnce(oldDraft.promise);
+
+    const pending = state.handleTestConnection();
+    state.updateField('fingerprint', 'different-pin');
+    state.updateField('fingerprint', 'saved-pin');
+    oldDraft.reject(new Error('API request failed: 400 Old failure'));
+    await pending;
+
+    expect(state.testResult()).toBeNull();
+    expect(state.isTesting()).toBe(false);
+
+    vi.mocked(NodesAPI.testConnection).mockRejectedValueOnce(
+      new Error('API request failed: 400 Current failure'),
+    );
+    await state.handleTestConnection();
+    expect(state.testResult()).toMatchObject({ status: 'error', message: 'Current failure' });
+  });
+
   const peer = {
     nodeName: 'peer',
     tlsEndpoint: 'https://peer.test:8006',
@@ -166,6 +251,54 @@ describe('connection tests with retained credentials', () => {
     await pending;
     expect(state.testResult()).toBeNull();
   });
+
+  it('keeps a valid member result through a health refresh but clears it when saved trust changes', async () => {
+    const { state, setNode } = mountEditor('pve', [peer]);
+    await state.handleTestClusterEndpoint(peer);
+    const result = state.testResult();
+    expect(result?.status).toBe('success');
+
+    setNode((node) => ({
+      ...node,
+      clusterEndpoints: [{ ...peer, online: false, pulseReachable: false, displayName: 'Lab' }],
+    }));
+    expect(state.testResult()).toBe(result);
+
+    setNode((node) => ({
+      ...node,
+      clusterEndpoints: [{ ...peer, fingerprint: 'changed-saved-pin' }],
+    }));
+    expect(state.testResult()).toBeNull();
+  });
+
+  it.each(['reset', 'close and reopen', 'different saved node'] as const)(
+    'ignores a saved test response after %s',
+    async (change) => {
+      const { state, setNode, setResetKey, setOpen } = mountEditor('pve');
+      const oldTest = deferred<Awaited<ReturnType<typeof NodesAPI.testExistingNode>>>();
+      vi.mocked(NodesAPI.testExistingNode).mockReturnValueOnce(oldTest.promise);
+
+      const pending = state.handleTestConnection();
+      switch (change) {
+        case 'reset':
+          setResetKey(1);
+          break;
+        case 'close and reopen':
+          setOpen(false);
+          setOpen(true);
+          break;
+        case 'different saved node':
+          setNode((node) => ({ ...node, id: 'pve-different' }));
+          break;
+      }
+      oldTest.resolve({ status: 'success', message: 'Old saved connection answered' });
+      await pending;
+
+      expect(state.testResult()).toBeNull();
+      expect(state.isTesting()).toBe(false);
+    },
+  );
+
   it('tests untouched member trust without implicitly clearing its saved policy', async () => {
     const state = mount('pve', [peer]);
     await state.handleTestClusterEndpoint(peer);

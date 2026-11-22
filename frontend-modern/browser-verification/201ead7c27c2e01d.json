@@ -1,0 +1,38 @@
+{
+  "version": 1,
+  "base_sha": "4ef6bf18a1e3740fbe42f80caa08dc15b0a310e3",
+  "verified_at": "2026-11-22T06:02:42Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/useNodeModalState.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/useNodeModalState.ts": "2e7ed2e0b75d8b28cb066618228da1be835dc5543354956e65796a2bf7ce6261"
+  },
+  "routes": [
+    "/settings/infrastructure"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 360,
+      "height": 800
+    },
+    {
+      "width": 320,
+      "height": 800
+    }
+  ],
+  "states": [
+    "Production-mode Pulse previews, assigned baseline bffc0b00bbfa4b455ce142573697ba5bf8f9d97e and candidate runtime 4ef6bf18a1e3740fbe42f80caa08dc15b0a310e3. Chromium 141.0.7390.37 / Playwright 1.56.1. Same offline fixtures, light desktop and dark narrow viewports.",
+    "A delayed success from before the URL edit and a delayed denial from before the TLS fingerprint edit both appear on the baseline; neither is presented for the edited form in the candidate.",
+    "A deliberate retest of the current draft still shows its successful reply beside the same controls. Footer actions, collection warning, SMART and temperature controls stay in the same flow. Inspected all 18 captures."
+  ],
+  "interactions": [
+    "Open the existing Proxmox Manage editor. Enter a synthetic token. Start Test with keyboard or touch, edit the endpoint URL or fingerprint before releasing the local HTTP response, then inspect the form after it settles.",
+    "The test button is disabled during that request and usable afterwards. Retest sends exactly the current URL and pin with verification on and shows its own reply. Request bodies match across builds. Cancel closes without saving; no external requests or writes."
+  ]
+}
