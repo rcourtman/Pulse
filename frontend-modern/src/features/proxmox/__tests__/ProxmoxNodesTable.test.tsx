@@ -44,12 +44,34 @@ vi.mock('@/components/Workloads/StackedMemoryBar', () => ({
 }));
 
 vi.mock('@/components/Workloads/StackedDiskBar', () => ({
-  StackedDiskBar: () => <div data-testid="stacked-disk-bar" />,
+  StackedDiskBar: (props: {
+    aggregateDisk?: { usage?: number; used?: number; total?: number };
+    formatAggregatePercent?: (value: number) => string;
+  }) => (
+    <div
+      data-testid="stacked-disk-bar"
+      data-usage={props.aggregateDisk?.usage}
+      data-used={props.aggregateDisk?.used}
+      data-total={props.aggregateDisk?.total}
+    >
+      {props.aggregateDisk?.usage !== undefined && props.aggregateDisk.usage >= 0
+        ? props.formatAggregatePercent?.(props.aggregateDisk.usage)
+        : null}
+    </div>
+  ),
 }));
 
 vi.mock('@/components/Workloads/MetricMiniSparkline', () => ({
-  MetricMiniSparkline: (props: { title?: string; valueContent?: JSX.Element }) => (
-    <div data-testid="metric-mini-sparkline" data-title={props.title}>
+  MetricMiniSparkline: (props: {
+    title?: string;
+    valueContent?: JSX.Element;
+    valueLabel?: string;
+  }) => (
+    <div
+      data-testid="metric-mini-sparkline"
+      data-title={props.title}
+      data-value-label={props.valueLabel}
+    >
       {props.valueContent}
     </div>
   ),
@@ -137,6 +159,82 @@ afterEach(() => {
 });
 
 describe('ProxmoxNodesTable', () => {
+  it.each([
+    [0, 0, '0%', '0.0%'],
+    [49, 49, '0.49%', '0.49%'],
+    [88, 88, '0.88%', '0.88%'],
+    [100, 100, '1%', '1%'],
+    [113, 1.13, '1.13%', '1.13%'],
+    [10_000, 100, '100%', '100.0%'],
+  ])('uses %i measured disk bytes in bars and History', (used, current, bar, history) => {
+    const [mode, setMode] = createSignal<'bars' | 'sparklines'>('bars');
+    const { container } = render(() => (
+      <ProxmoxNodesTable
+        nodes={[
+          makeNodeResource({ disk: { total: 10_000, used, current }, cpu: { current: 12.5 } }),
+        ]}
+        guests={[]}
+        metricDisplayMode={mode}
+        metricHoverMode={() => 'details'}
+        emptyIcon={<span />}
+        emptyTitle="No Proxmox VE nodes"
+        emptyDescription="No nodes"
+      />
+    ));
+    const diskBar = screen.getByTestId('stacked-disk-bar');
+    expect(diskBar).toHaveTextContent(bar);
+    expect(diskBar).toHaveAttribute('data-used', String(used));
+    expect(diskBar).toHaveAttribute('data-total', '10000');
+
+    setMode('sparklines');
+    expect(container.querySelector('[data-title="pve-node-1 disk history"]')).toHaveAttribute(
+      'data-value-label',
+      history,
+    );
+    expect(container.querySelector('[data-title="pve-node-1 CPU history"]')).toHaveAttribute(
+      'data-value-label',
+      '12.5%',
+    );
+  });
+
+  it('orders measured disk use ahead of unknown and keeps percentage-only readings', async () => {
+    const { container } = render(() => (
+      <ProxmoxNodesTable
+        nodes={[
+          makeNodeResource({ disk: { total: 10_000, used: 88, current: 88 } }),
+          makeNodeResource({
+            id: 'agent:pve-node-2',
+            name: 'pve-node-2',
+            disk: { current: 1.13 },
+          }),
+          makeNodeResource({
+            id: 'agent:pve-node-3',
+            name: 'pve-node-3',
+            disk: { total: 10_000, current: -1 },
+          }),
+        ]}
+        guests={[]}
+        metricDisplayMode={() => 'sparklines'}
+        emptyIcon={<span />}
+        emptyTitle="No Proxmox VE nodes"
+        emptyDescription="No nodes"
+      />
+    ));
+    await fireEvent.click(screen.getByRole('button', { name: 'Disk' }));
+    const rows = Array.from(container.querySelectorAll('[data-proxmox-host-row]'));
+    expect(rows.map((row) => row.getAttribute('data-proxmox-host-row'))).toEqual([
+      'agent:pve-node-2',
+      'agent:pve-node-1',
+      'agent:pve-node-3',
+    ]);
+    const diskLabel = (name: string) =>
+      container
+        .querySelector(`[data-title="${name} disk history"]`)
+        ?.getAttribute('data-value-label');
+    expect(diskLabel('pve-node-2')).toBe('1.13%');
+    expect(diskLabel('pve-node-3')).toBeNull();
+  });
+
   it('uses the shared workload search to narrow the host preview and count', () => {
     render(() => (
       <ProxmoxNodesTable

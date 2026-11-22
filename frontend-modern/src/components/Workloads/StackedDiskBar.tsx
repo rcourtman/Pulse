@@ -1,7 +1,6 @@
 import { Show, For } from 'solid-js';
 import { AnimatedNumber } from '@/components/shared/AnimatedNumber';
 import { TooltipPortal } from '@/components/shared/TooltipPortal';
-import { formatPercent } from '@/utils/format';
 import { type StackedDiskBarProps } from './stackedDiskBarModel';
 import { useStackedDiskBarState } from './useStackedDiskBarState';
 
@@ -110,7 +109,7 @@ export function StackedDiskBar(props: StackedDiskBarProps) {
                       <Show when={!presentation().unavailable} fallback="N/A">
                         <AnimatedNumber
                           value={presentation().displayPercentValue}
-                          format={formatPercent}
+                          format={presentation().displayPercentFormat}
                         />
                       </Show>
                     </span>
