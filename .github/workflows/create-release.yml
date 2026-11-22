@@ -2385,17 +2385,10 @@ jobs:
           }
 
           require_result "publication trust preflight" "$PUBLICATION_TRUST_RESULT" success
-          require_result "release smoke" "$SMOKE_RESULT" success
-          require_result "Windows install command smoke" "$WINDOWS_INSTALL_COMMAND_RESULT" success
-          require_result "release staging" "$CREATE_RESULT" success
-          require_result "release asset validation" "$VALIDATE_RESULT" success
 
           if [ "${DRAFT_ONLY:-false}" != "true" ]; then
-            require_result "exact-version Docker staging" "$DOCKER_RESULT" success
-            require_result "staged install.sh smoke" "$INSTALL_RESULT" success
-            require_result "Helm staging" "$HELM_RESULT" success
-            # The candidate predicate the public writers carry, restated as
-            # an explicit verdict now that no echo-only join summarizes it.
+            # Report upstream failures before the dependent jobs that skipped.
+            # These are the same qualification checks the public writers carry.
             require_result "release candidate build" "$BUILD_CANDIDATE_RESULT" success
             require_result "exact-candidate container qualification" "$CONTAINER_QUALIFICATION_RESULT" success
             require_result "frontend bundle" "$FRONTEND_BUNDLE_RESULT" success
@@ -2404,7 +2397,21 @@ jobs:
             if [ "$INTEGRATION_RESULT" != "skipped" ]; then
               require_result "integration tests" "$INTEGRATION_RESULT" success
             fi
+            if [[ "$VERSION" == 6.* ]]; then
+              require_result "private Pro staging" "$PRIVATE_PRO_STAGE_RESULT" success
+            fi
+          fi
+
+          require_result "release smoke" "$SMOKE_RESULT" success
+          require_result "Windows install command smoke" "$WINDOWS_INSTALL_COMMAND_RESULT" success
+          require_result "release staging" "$CREATE_RESULT" success
+          require_result "release asset validation" "$VALIDATE_RESULT" success
+
+          if [ "${DRAFT_ONLY:-false}" != "true" ]; then
+            require_result "staged install.sh smoke" "$INSTALL_RESULT" success
             require_result "qualified tag publication" "$TAG_RESULT" success
+            require_result "exact-version Docker staging" "$DOCKER_RESULT" success
+            require_result "Helm staging" "$HELM_RESULT" success
             require_result "durable customer convergence dispatch" "$CONVERGENCE_DISPATCH_RESULT" success
             if [[ "$VERSION" =~ -rc\.[1-9][0-9]*$ ]]; then
               if [[ ! "$SECURE_RUNTIME_QUALIFICATION_RUN_ID" =~ ^[0-9]+$ ]] || \
@@ -2414,10 +2421,6 @@ jobs:
               fi
               echo "[OK] Secure-runtime qualification run: ${SECURE_RUNTIME_QUALIFICATION_RUN_URL}"
             fi
-            if [[ "$VERSION" == 6.* ]]; then
-              require_result "private Pro staging" "$PRIVATE_PRO_STAGE_RESULT" success
-            fi
-
             ./scripts/verify-github-release-integrity.sh \
               "$TAG" "${GITHUB_REPOSITORY}" "$RELEASE_ID" "$EXPECTED_COMMIT"
 
