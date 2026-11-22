@@ -2755,6 +2755,11 @@ Likewise, retrying or dismissing retained notification failures changes only
 delivery-queue state and its warning. It does not alter storage health,
 protection posture, recovery-point evidence, or restore readiness.
 
+A saved PVE membership refresh whose monitor reload fails is not a new
+backup-coverage observation. The saved connection remains readable, but
+coverage and recovery still depend on ordinary collection from the applied
+runtime, not the configuration response.
+
 ## Extension Points
 
 Diagnostic source-build identity is not a recovery checkpoint or a schema

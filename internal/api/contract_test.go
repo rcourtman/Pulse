@@ -688,6 +688,69 @@ func TestContract_DefaultDetectPVEClusterRetainsUnreachableMembers(t *testing.T)
 	}
 }
 
+// A failed monitor reload must not tell API clients that the refresh was
+// applied, or obscure that the same connection has already been persisted.
+func TestContract_PVEClusterRefreshReportsSavedButUnapplied(t *testing.T) {
+	const apiToken = "cluster-refresh-contract.12345678"
+	cfg := newTestConfigWithTokens(t, newTokenRecord(t, apiToken, []string{config.ScopeSettingsRead, config.ScopeSettingsWrite}, nil))
+	configure := func(client proxmox.ClientConfig, _ string, existing []config.ClusterEndpoint) (bool, string, []config.ClusterEndpoint) {
+		if client.Host != "https://pve.example.test:8006" || !client.VerifySSL || client.Fingerprint != "fixture-primary-pin" {
+			t.Error("refresh did not use the saved connection and its trust policy")
+		}
+		return true, "renamed-cluster", slices.Clone(existing)
+	}
+	t.Cleanup(configapi.ConfigureAutoRegisterNetworkDependencies(configure, nil))
+	cfg.PVEInstances = []config.PVEInstance{{
+		Name: "existing-connection", Host: "https://pve.example.test:8006", TokenName: "fixture@pve!monitor", TokenValue: "synthetic-only",
+		VerifySSL: true, VerifySSLExplicit: true, Fingerprint: "fixture-primary-pin", IsCluster: true, ClusterName: "old-cluster",
+		ClusterEndpoints: []config.ClusterEndpoint{
+			{NodeName: "alpha", NativeNodeID: 1, Host: "https://alpha.example.test:8006", Fingerprint: "fixture-alpha-pin"},
+			{NodeName: "beta", NativeNodeID: 2, Host: "https://beta.example.test:8006", IPOverride: "192.0.2.22", Fingerprint: "fixture-beta-pin"},
+		},
+	}}
+	config.EnsurePVEClusterNodeIdentities(cfg.PVEInstances)
+	original := cfg.PVEInstances[0].DeepCopy()
+	persistence := config.NewConfigPersistence(cfg.DataPath)
+
+	var reloads int
+	router := newTestRouter(t, cfg, nil, nil, nil, func() error {
+		reloads++
+		// Establish ordering inside the callback: the durable rename is
+		// already readable before application is attempted.
+		saved, err := persistence.LoadNodesConfig()
+		if err != nil || saved == nil || len(saved.PVEInstances) != 1 {
+			t.Fatalf("load saved refresh during reload: %v", err)
+		}
+		got := saved.PVEInstances[0]
+		if got.ClusterName != "renamed-cluster" || got.Name != original.Name || got.Host != original.Host ||
+			got.VerifySSL != original.VerifySSL || got.Fingerprint != original.Fingerprint ||
+			!reflect.DeepEqual(got.ClusterEndpoints, original.ClusterEndpoints) ||
+			!reflect.DeepEqual(got.ClusterNodeIdentities, original.ClusterNodeIdentities) {
+			t.Fatal("persisted refresh did not keep the existing membership, owner and trust")
+		}
+		return errors.New("protected fixture detail: previous monitor still owns its work")
+	}, "test")
+	request := func(method, path string) *httptest.ResponseRecorder {
+		req := httptest.NewRequest(method, path, nil)
+		req.Header.Set("X-API-Token", apiToken)
+		rec := httptest.NewRecorder()
+		router.Handler().ServeHTTP(rec, req)
+		return rec
+	}
+	refreshed := request(http.MethodPost, "/api/config/nodes/pve-0/refresh-cluster")
+	if refreshed.Code != http.StatusInternalServerError ||
+		strings.TrimSpace(refreshed.Body.String()) != "Cluster configuration saved, but monitoring could not apply it. Read the saved connection before retrying." ||
+		reloads != 1 {
+		t.Fatalf("saved but unapplied refresh: got %d %q after %d reloads", refreshed.Code, refreshed.Body.String(), reloads)
+	}
+	readback := request(http.MethodGet, "/api/config/nodes")
+	var nodes []NodeResponse
+	if err := json.Unmarshal(readback.Body.Bytes(), &nodes); readback.Code != http.StatusOK || err != nil ||
+		len(nodes) != 1 || nodes[0].ClusterName != "renamed-cluster" || len(nodes[0].ClusterEndpoints) != 2 || reloads != 1 {
+		t.Fatalf("readback requires no second mutation: status %d, reloads %d, decode %v", readback.Code, reloads, err)
+	}
+}
+
 func TestContract_OperationalTrustAttentionActionOfferJSONIsAdditiveAndTyped(t *testing.T) {
 	payload, err := json.Marshal(ai.AttentionActionOffer{
 		ActionID:              "action-1",

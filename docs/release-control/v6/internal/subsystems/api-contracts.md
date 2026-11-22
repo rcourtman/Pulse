@@ -13032,10 +13032,19 @@ The browser config payload remains additive and compatible: no endpoint field
 is removed or renamed. Monitoring owns the later repeated-authoritative-
 absence retirement rule; config handlers must not reinterpret a partial
 membership or telemetry read as deletion.
+
+`POST /api/config/nodes/{id}/refresh-cluster` saves the discovered configuration
+before requesting a monitor reload. If the reload reports failure after the
+save, the API returns HTTP 500 with a saved-but-not-applied message, not the
+success payload. The saved row remains available through
+`GET /api/config/nodes` without another write, and the inventory change event
+still describes the saved change, not a successful poll. A cancelled client
+may receive no response; it does not roll back a completed save.
 `internal/api/configapi/config_handlers_cluster_additional_test.go` and
 `internal/config/pve_instances_test.go` prove unreachable-member persistence,
 evidence preservation, duplicate consolidation, and same-name-cluster
-isolation.
+isolation. `TestContract_PVEClusterRefreshReportsSavedButUnapplied` covers the
+scoped refresh response and saved readback after a failed reload.
 
 ### Canonical pool-health resource transport
 

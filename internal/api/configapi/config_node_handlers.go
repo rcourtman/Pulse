@@ -2092,15 +2092,15 @@ func (h *ConfigHandlers) handleRefreshClusterNodes(w http.ResponseWriter, r *htt
 		Int("new_endpoints", newEndpointCount).
 		Msg("Refreshed cluster membership")
 
-	// Reload monitor with new configuration
+	// A saved change and a completed runtime reload are different outcomes.
+	var reloadErr error
 	if h.reloadFunc != nil {
-		if err := h.reloadFunc(); err != nil {
-			log.Error().Err(err).Msg("Failed to reload monitor after cluster refresh")
-			// Don't fail the request, config was saved successfully
+		if reloadErr = h.reloadFunc(); reloadErr != nil {
+			log.Error().Err(reloadErr).Msg("Failed to reload monitor after cluster refresh")
 		}
 	}
 
-	// Broadcast update to refresh frontend
+	// The saved inventory changed even when monitoring could not reload it.
 	if h.wsHub != nil {
 		h.wsHub.BroadcastMessageToTenant(apicontext.OrgID(r.Context()), websocket.Message{
 			Type: "nodes_updated",
@@ -2110,6 +2110,11 @@ func (h *ConfigHandlers) handleRefreshClusterNodes(w http.ResponseWriter, r *htt
 			},
 			Timestamp: time.Now().Format(time.RFC3339),
 		})
+	}
+
+	if reloadErr != nil {
+		http.Error(w, "Cluster configuration saved, but monitoring could not apply it. Read the saved connection before retrying.", http.StatusInternalServerError)
+		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
