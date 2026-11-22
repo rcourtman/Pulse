@@ -1307,11 +1307,20 @@ that Pulse was stopped. A high peak or an `oom` count alone does not. On
 cgroup v2, an increase in `oom_kill` counts processes killed in the group or
 its children, but does not say whether one of them was Pulse.
 
+Once Pulse is running again, open a resource that had stored readings before
+the stop. In its [History chart](METRICS_HISTORY.md#read-a-history-panel), select
+a short range that includes the restart. On its usual collection schedule,
+look for a stored point dated after Pulse came back. If you can't see a new
+point, collection for that resource is not yet verified. The dashboard opening
+or showing its last value does not establish that collection resumed. Use normal
+polling for this check. Do not restart again or run a test load.
+
 Keep `memory.current`, `memory.peak` and `memory.max` together for the same
 cgroup and note the peak's observation window. These are cgroup values, not
 Pulse RSS. `max` means no finite limit at that level; a parent can still set
-one. A lower reading after Pulse restarts does not explain the earlier peak
-or establish recovery.
+one. After a cgroup is recreated, its counters describe the new group, not
+the one that stopped. A lower reading after Pulse restarts does not explain
+the earlier peak or establish recovery.
 
 If the startup log for that run already says
 `aligned Go memory limit with cgroup memory limit`, `cgroupLimitBytes` is the

@@ -316,6 +316,12 @@ port); `*` is not a login or proxy repair. Follow the
 [CORS checks](TROUBLESHOOTING.md#cors-errors) before broadening browser access.
 
 ### High memory usage?
+If Pulse stopped and you suspect it ran out of memory, start with
+[the checks after a memory-cgroup kill](TROUBLESHOOTING.md#after-a-memory-cgroup-kill).
+Use the evidence you already have. Once Pulse is running again, check that a
+resource you already monitor is receiving new readings before taking any more
+memory samples.
+
 For a monitored VM, first check [guest memory, cache and available memory](TROUBLESHOOTING.md#guest-memory-is-high-but-available-memory-is-plentiful).
 A high hypervisor footprint and one application's RSS measure different things;
 compare existing readings from the same guest and time, not the Proxmox node.
