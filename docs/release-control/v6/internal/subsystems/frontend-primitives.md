@@ -11769,8 +11769,10 @@ browser inspection on `/alerts/notifications`.
 `StandaloneVirtualMachinesTable.tsx` uses the canonical platform table
 primitives (`PlatformTableToolbar`, `PlatformTableShell`,
 `PlatformHostScopedTableTitle`, `PlatformSortableTableHead` with canonical
-column kinds, `PlatformWindowedRows`, and `PlatformResourceDetailTableRow`) to
-display standalone hypervisor VMs (`VM`, `Host`, `State`, `CPU`, `Memory`,
+column kinds, `PlatformWindowedRows`, and `PlatformResourceDetailTableRow`) and
+lazy-loads behind `<Suspense>` with `PlatformTableLoadingState` from
+`StandalonePageSurface.tsx` so the default Machines tab stays within its bundle
+budget while displaying standalone hypervisor VMs (`VM`, `Host`, `State`, `CPU`, `Memory`,
 `Disk I/O`, `Net I/O`) at the standard 33px single-line desktop rhythm with
 responsive mobile column visibility and zero horizontal overflow.
 `AgentsMachinesTable.tsx` renders an inline `hidden sm:inline-flex` VM count

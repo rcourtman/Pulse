@@ -5,8 +5,12 @@ import {
 } from '@/features/platformPage/sharedPlatformPage';
 import { hasImpairedResourceSource } from '@/utils/resourceSourceHealth';
 import { asTrimmedString } from '@/utils/stringUtils';
+import {
+  normalizeStandaloneVMStatusFilter,
+  type StandaloneVMStatusFilter,
+} from './standalonePageModel';
 
-export type StandaloneVMStatusFilter = 'all' | 'running' | 'attention' | 'stopped';
+export { normalizeStandaloneVMStatusFilter, type StandaloneVMStatusFilter };
 export type StandaloneVMStatusBucket = Exclude<StandaloneVMStatusFilter, 'all'>;
 
 export const STANDALONE_VM_SORT_KEYS = [
@@ -20,14 +24,6 @@ export const STANDALONE_VM_SORT_KEYS = [
 ] as const;
 
 export type StandaloneVMSortKey = (typeof STANDALONE_VM_SORT_KEYS)[number];
-
-export const normalizeStandaloneVMStatusFilter = (
-  value: string | string[] | undefined,
-): StandaloneVMStatusFilter => {
-  const raw = (Array.isArray(value) ? value[0] : value)?.trim().toLowerCase();
-  if (raw === 'running' || raw === 'attention' || raw === 'stopped') return raw;
-  return 'all';
-};
 
 export const getStandaloneVMRuntimeState = (resource: Resource): string =>
   (

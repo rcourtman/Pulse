@@ -1,0 +1,40 @@
+{
+  "version": 1,
+  "base_sha": "0b7a1956d6e908156a2f36dc9d54b5fca944ca1c",
+  "verified_at": "2026-11-22T17:57:59Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/standalone/StandalonePageSurface.tsx",
+    "frontend-modern/src/features/standalone/standalonePageModel.ts",
+    "frontend-modern/src/features/standalone/standaloneVmTableModel.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/standalone/StandalonePageSurface.tsx": "7e0153b99562e31924f9498b29de890045bead1cd1da7236681810ada7b83a9e",
+    "frontend-modern/src/features/standalone/standalonePageModel.ts": "194501af4d969c480ac13483359e8d105635df2ef683d4b750779758745933c9",
+    "frontend-modern/src/features/standalone/standaloneVmTableModel.ts": "ea57894fb95a1dc5433af8a76bc759bc1ccc0804d718ccbe1d33c2857c9e8cb3"
+  },
+  "routes": [
+    "/standalone/machines",
+    "/standalone/vms",
+    "/standalone/vms?host=agent%3Atest-host&status=running&q=pulse-dev"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Standalone Machines tab loading cleanly at 1440x900 and 390x844 with zero console errors and zero horizontal overflow",
+    "Lazy-loaded StandaloneVirtualMachinesTable resolving behind Suspense (PlatformTableLoadingState title/description fallback) on /standalone/vms with HTTP 200 assets and clean No virtual machines empty state at 1440x900 and 390x844",
+    "Host, status, and search query parameters (?host=agent%3Atest-host&status=running&q=pulse-dev) preserved across reload on both desktop and mobile viewports with zero console errors and zero failed requests"
+  ],
+  "interactions": [
+    "verified /standalone/machines, /standalone/vms, and /standalone/vms?host=agent%3Atest-host&status=running&q=pulse-dev including page reload persistence at both 1440x900 and 390x844",
+    "inspected desktop (1440x900) and mobile (390x844) screenshots pixel-by-pixel for alignment, readable tabs, and zero horizontal overflow"
+  ]
+}

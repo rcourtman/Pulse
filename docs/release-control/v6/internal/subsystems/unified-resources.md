@@ -10640,8 +10640,10 @@ and projects standalone agent-reported `vm` resources (Unraid/Linux `libvirt`
 and `xcp-ng`) into `standalonePageModel.vms` while continuing to exclude
 provider-owned VMs (`proxmox-pve`, `vmware-vsphere`, `truenas`, `kubernetes`).
 When standalone VMs exist (or `/standalone/vms` is opened directly), Machines
-exposes an evidence-gated `VMs` tab rendered by
-`StandaloneVirtualMachinesTable.tsx`, and `AgentsMachinesTable.tsx` displays a
+exposes an evidence-gated `VMs` tab whose `StandaloneVirtualMachinesTable.tsx`
+and `standaloneVmTableModel.ts` lazy-load behind `<Suspense>` (keeping the eager
+`Standalone` chunk within its bundle budget, with `normalizeStandaloneVMStatusFilter`
+hosted in `standalonePageModel.ts`), and `AgentsMachinesTable.tsx` displays a
 single-line desktop/tablet `N VM(s)` pill beside hosts that own VMs linking to
 `/standalone/vms?host=<id>`. `resourcePagePath.ts` routes standalone `vm` resources to `/standalone/vms?q=<name>`,
 `frontend-modern/src/routing/resourceLinks.ts` retains both

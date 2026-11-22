@@ -9,6 +9,16 @@ import { buildStandalonePath } from '@/routing/resourceLinks';
 
 export type StandaloneTabId = 'machines' | 'vms' | 'availability';
 
+export type StandaloneVMStatusFilter = 'all' | 'running' | 'attention' | 'stopped';
+
+export const normalizeStandaloneVMStatusFilter = (
+  value: string | string[] | undefined,
+): StandaloneVMStatusFilter => {
+  const raw = (Array.isArray(value) ? value[0] : value)?.trim().toLowerCase();
+  if (raw === 'running' || raw === 'attention' || raw === 'stopped') return raw;
+  return 'all';
+};
+
 export interface StandaloneTabSpec {
   id: StandaloneTabId;
   label: string;

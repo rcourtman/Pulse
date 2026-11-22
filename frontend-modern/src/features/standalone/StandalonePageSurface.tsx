@@ -1,4 +1,13 @@
-import { Show, createEffect, createMemo, createSignal, type Component, type JSX } from 'solid-js';
+import {
+  Show,
+  Suspense,
+  createEffect,
+  createMemo,
+  createSignal,
+  lazy,
+  type Component,
+  type JSX,
+} from 'solid-js';
 import { useLocation, useNavigate, useSearchParams } from '@solidjs/router';
 import ActivityIcon from 'lucide-solid/icons/activity';
 import CircleAlertIcon from 'lucide-solid/icons/circle-alert';
@@ -42,7 +51,6 @@ import {
   type AvailabilityChecksView,
 } from './AvailabilityChecksTable';
 import { AgentsMachinesTable } from './AgentsMachinesTable';
-import { StandaloneVirtualMachinesTable } from './StandaloneVirtualMachinesTable';
 import { collectHostIdentityConflictHosts } from './hostIdentityConflict';
 import { HostIdentityConflictNotice } from './HostIdentityConflictNotice';
 import {
@@ -50,13 +58,11 @@ import {
   buildStandalonePageModel,
   buildStandalonePostureSummary,
   getStandaloneTabSpecs,
+  normalizeStandaloneVMStatusFilter,
   type StandalonePostureSummary,
   type StandaloneTabId,
-} from './standalonePageModel';
-import {
-  normalizeStandaloneVMStatusFilter,
   type StandaloneVMStatusFilter,
-} from './standaloneVmTableModel';
+} from './standalonePageModel';
 
 // Machines owns standalone Pulse Agent hosts, standalone hypervisor VMs
 // reported by those agents (libvirt/KVM, XCP-ng), and standalone availability
@@ -66,6 +72,12 @@ import {
 // because a standalone Pulse Agent host can also contribute a Docker facet.
 const STANDALONE_RESOURCE_QUERY =
   'source=agent,availability&excludeSource=proxmox,kubernetes,truenas,vmware&type=agent,vm,network-endpoint';
+
+const StandaloneVirtualMachinesTable = lazy(() =>
+  import('./StandaloneVirtualMachinesTable').then((module) => ({
+    default: module.StandaloneVirtualMachinesTable,
+  })),
+);
 
 const machineIcon = () => <ServerIcon class="h-6 w-6 text-slate-400" />;
 const vmIcon = () => <MonitorIcon class="h-6 w-6 text-slate-400" />;
@@ -342,20 +354,29 @@ export function StandalonePageSurface() {
           </Show>
 
           <Show when={activeTab() === 'vms'}>
-            <StandaloneVirtualMachinesTable
-              vms={model().vms}
-              machines={model().machines}
-              selectedHostId={vmHostFilter}
-              onClearHostScope={clearVmHostFilter}
-              externalSearch={machineSearchFilter}
-              onExternalSearchChange={setMachineSearchFilter}
-              externalStatus={vmStatusFilter}
-              onExternalStatusChange={setVmStatusFilter}
-              onResetFilters={resetVmFilters}
-              emptyIcon={vmIcon()}
-              emptyTitle="No virtual machines"
-              emptyDescription="Virtual machines reported by standalone Pulse Agents (Unraid, Linux libvirt/KVM, and XCP-ng) appear here automatically."
-            />
+            <Suspense
+              fallback={
+                <PlatformTableLoadingState
+                  title="Loading virtual machines"
+                  description="Pulse is loading standalone virtual machines."
+                />
+              }
+            >
+              <StandaloneVirtualMachinesTable
+                vms={model().vms}
+                machines={model().machines}
+                selectedHostId={vmHostFilter}
+                onClearHostScope={clearVmHostFilter}
+                externalSearch={machineSearchFilter}
+                onExternalSearchChange={setMachineSearchFilter}
+                externalStatus={vmStatusFilter}
+                onExternalStatusChange={setVmStatusFilter}
+                onResetFilters={resetVmFilters}
+                emptyIcon={vmIcon()}
+                emptyTitle="No virtual machines"
+                emptyDescription="Virtual machines reported by standalone Pulse Agents (Unraid, Linux libvirt/KVM, and XCP-ng) appear here automatically."
+              />
+            </Suspense>
           </Show>
 
           <Show when={activeTab() === 'machines'}>

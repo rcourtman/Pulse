@@ -580,7 +580,7 @@ describe('StandalonePageSurface', () => {
     );
   });
 
-  it('reveals the evidence-gated VMs tab and wires host VM navigation when standalone VMs exist', () => {
+  it('reveals the evidence-gated VMs tab and wires host VM navigation when standalone VMs exist', async () => {
     const tower = resource({
       id: 'agent:tower',
       name: 'Tower',
@@ -623,7 +623,7 @@ describe('StandalonePageSurface', () => {
     render(() => <StandalonePageSurface />);
 
     expect(screen.getByTestId('standalone-section-tabs')).toHaveAttribute('data-active', 'vms');
-    const vmTable = screen.getByTestId('standalone-vms-table-mock');
+    const vmTable = await screen.findByTestId('standalone-vms-table-mock');
     expect(vmTable).toHaveAttribute('data-vm-count', '1');
     expect(vmTable).toHaveAttribute('data-host-scope', 'agent:tower');
 
