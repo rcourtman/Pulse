@@ -25,11 +25,11 @@ export function AlertNoDestinationsCard(props: AlertNoDestinationsCardProps) {
           <BellIcon class="mt-0.5 h-4 w-4 shrink-0 text-blue-700 dark:text-blue-300" />
           <div class="min-w-0">
             <h3 class="text-sm font-semibold text-blue-900 dark:text-blue-100">
-              No notification destinations configured
+              No notification destinations enabled
             </h3>
             <p class="mt-1 text-sm leading-6 text-blue-800 dark:text-blue-200">
-              Pulse is monitoring alerts here, but nobody is notified outside the dashboard yet. Add
-              Email, Discord, Telegram, Slack, ntfy, or Apprise to receive alerts.
+              To receive these alerts outside the dashboard, add or enable Email, Discord, Telegram,
+              Slack, ntfy, or Apprise.
             </p>
           </div>
         </div>
@@ -38,7 +38,7 @@ export function AlertNoDestinationsCard(props: AlertNoDestinationsCardProps) {
             href={props.setupHref}
             class="inline-flex shrink-0 items-center justify-center rounded-md bg-blue-600 px-3 py-1.5 text-sm font-medium text-white transition hover:bg-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:bg-blue-500 dark:hover:bg-blue-600 dark:focus-visible:ring-offset-surface"
           >
-            Set up notifications
+            Manage destinations
           </A>
           <button
             type="button"

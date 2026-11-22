@@ -1,0 +1,40 @@
+{
+  "version": 1,
+  "base_sha": "5e2c257c14f47de2a7703cd299bdf7d1c8199140",
+  "verified_at": "2026-11-22T03:45:09Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/alerts/AlertNoDestinationsCard.tsx",
+    "frontend-modern/src/features/alerts/OverviewTab.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/alerts/AlertNoDestinationsCard.tsx": "84cc2ab8e6a9d58f5adc8bcc565b46b04f99db246cf06ecd37b271f33e7f2c53",
+    "frontend-modern/src/features/alerts/OverviewTab.tsx": "36e5e8c5636f9d3d9f20c440a08944d5413ce7067363911c830b9c17c8bd7e72"
+  },
+  "routes": [
+    "/alerts/overview",
+    "/alerts/notifications"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 360,
+      "height": 800
+    }
+  ],
+  "states": [
+    "Chromium 141.0.7390.37 / Playwright 1.56.1; 1440×900 light and 360×800 dark, same synthetic health/config/inventory, account, clock and viewport on both sides; 12 before/after pairs reviewed with native image display.",
+    "Baseline 91462506b72abb4e4af808f52c0e0fb154aaf7e7; verified runtime 5e2c257c14f47de2a7703cd299bdf7d1c8199140. Real Alerts routes, API adapters, active-alert store and styles in an offline preview.",
+    "Readable zero-enabled inventory arrives before config or with no reported activation: no setup card and no false paused banner. The active alert, severity, and acknowledge/snooze controls remain visible.",
+    "Active delivery with no destinations or one disabled saved webhook: the card says no destinations are enabled, and offers adding or enabling a destination. Focus ring, both actions, alert and footer stay visible where previously visible.",
+    "Notifications with the saved disabled destination and Overview with confirmed pause were unchanged. Enabled or unreadable inventory does not show setup; unavailable queue still shows Review and Refresh."
+  ],
+  "interactions": [
+    "Hold the activation response after valid zero-enabled health, then return explicit active delivery and observe the same open Overview.",
+    "Activate Manage destinations by keyboard on desktop and by touch on phone; the existing Notifications route shows 0 of 1 webhooks enabled and the same disabled record.",
+    "Dismiss setup with keyboard or touch and reload to verify persistence. No settings writes, test notification, queue action or off-origin request."
+  ]
+}
