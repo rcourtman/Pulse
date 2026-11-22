@@ -40,7 +40,13 @@ export const NodeModalStatusFooter: Component<NodeModalStatusFooterProps> = (pro
           });
           return null;
         })()}
-        <div class={state.testResultPresentation().panelClass}>
+        <div
+          class={state.testResultPresentation().panelClass}
+          role="status"
+          aria-label="Connection test result"
+          aria-live="polite"
+          aria-atomic="true"
+        >
           <div class="flex items-start gap-2">
             <Show when={state.testResultPresentation().icon === 'success'}>
               <svg
