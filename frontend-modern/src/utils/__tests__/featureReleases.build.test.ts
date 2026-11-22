@@ -1,8 +1,7 @@
 import { createMemo, createRoot, createSignal } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-// A feature at build, in a production bundle, read from the version reply.
-// The map is at this stage, so the list is used as it stands.
+// The real Build-stage registry in a production bundle, read from the version reply.
 const [version, setVersion] = createSignal<Record<string, unknown> | null>(null);
 const [lastError, setLastError] = createSignal<string | null>(null);
 
@@ -92,5 +91,22 @@ describe('a feature at build, in a production bundle', () => {
       expect(availability()).toBe('on');
       dispose();
     });
+  });
+
+  it('keeps the standalone VM view off in stable, beta, RC and source installs', () => {
+    expect(getFeatureStage('standaloneVms')).toBe('build');
+    expect(isFeatureAvailable('standaloneVms')).toBe(false);
+    for (const reply of [
+      { version: '6.9.0', channel: 'stable' },
+      { version: '6.9.0-beta.4', channel: 'rc' },
+      { version: '6.9.0-rc.4', channel: 'rc' },
+      { version: '6.9.0-dev', isDevelopment: true, isSourceBuild: true },
+    ]) {
+      setVersion(reply);
+      expect(getFeatureAvailability('standaloneVms')).toBe('off');
+    }
+
+    setVersion({ featureReleaseTestBuild: true });
+    expect(getFeatureAvailability('standaloneVms')).toBe('on');
   });
 });

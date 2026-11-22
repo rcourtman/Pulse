@@ -16,6 +16,10 @@ export const WORKLOADS_QUERY_PARAMS = {
 
 export const STANDALONE_PATH = '/standalone';
 export const STANDALONE_DEFAULT_TAB = 'machines';
+export const STANDALONE_VMS_PATH = `${STANDALONE_PATH}/vms`;
+export const isStandaloneVmsRoute = (route: string): boolean =>
+  route.split(/[?#]/, 1)[0]?.replace(/\/+/g, '/').replace(/\/$/, '').toLowerCase() ===
+  STANDALONE_VMS_PATH;
 export const STANDALONE_QUERY_PARAMS = {
   query: 'q',
   status: 'status',
@@ -27,10 +31,10 @@ export const STANDALONE_QUERY_PARAMS = {
 
 export const buildStandaloneHostVmsPath = (hostId: string): string => {
   const normalized = hostId.trim();
-  if (!normalized) return buildStandalonePath('vms');
+  if (!normalized) return STANDALONE_VMS_PATH;
   const params = new URLSearchParams();
   params.set(STANDALONE_QUERY_PARAMS.host, normalized);
-  return `${buildStandalonePath('vms')}?${params.toString()}`;
+  return `${STANDALONE_VMS_PATH}?${params.toString()}`;
 };
 
 /**

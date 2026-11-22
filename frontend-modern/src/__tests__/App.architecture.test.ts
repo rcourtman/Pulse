@@ -387,6 +387,7 @@ describe('App architecture', () => {
       '<Route path={TRUENAS_PATH} component={TrueNASPage} />',
       '<Route path={VMWARE_PATH} component={VmwarePage} />',
       '<Route path={STANDALONE_PATH} component={StandalonePage} />',
+      '<Route path={STANDALONE_VMS_PATH} component={StandaloneVmsRoute} />',
       '<Route path={`${STANDALONE_PATH}/*`} component={StandalonePage} />',
       '<Route path={`${ROOT_PATROL_PATH}/*`} component={AIIntelligencePage} />',
       '<Route path={INFRASTRUCTURE_MAP_PATH} component={InfrastructureMapRoute} />',

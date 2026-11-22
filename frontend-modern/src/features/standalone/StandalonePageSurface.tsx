@@ -14,6 +14,7 @@ import CircleAlertIcon from 'lucide-solid/icons/circle-alert';
 import MonitorIcon from 'lucide-solid/icons/monitor';
 import ServerIcon from 'lucide-solid/icons/server';
 import SettingsIcon from 'lucide-solid/icons/settings';
+import { FeaturePreviewTag } from '@/components/FeatureRelease';
 import { Button, ButtonLink } from '@/components/shared/Button';
 import { MetadataBadge, type MetadataBadgeTone } from '@/components/shared/MetadataBadge';
 import {
@@ -40,8 +41,10 @@ import {
   STANDALONE_QUERY_PARAMS,
   buildStandaloneHostVmsPath,
   buildStandalonePath,
+  isStandaloneVmsRoute,
 } from '@/routing/resourceLinks';
 import { updateStore } from '@/stores/updates';
+import { isFeatureAvailable } from '@/utils/featureReleases';
 import { formatRelativeTime } from '@/utils/format';
 import { useRelativeTimeNow } from '@/utils/relativeTimeClock';
 import { buildProbeAgentOptions } from '@/utils/availabilityProbeAgents';
@@ -154,10 +157,10 @@ const StandalonePostureCard: Component<{
   );
 };
 
-const resolveStandaloneTab = (pathname: string): StandaloneTabId => {
+const resolveStandaloneTab = (pathname: string, vmsAvailable: boolean): StandaloneTabId => {
   const normalized = pathname.replace(/\/+$/, '');
   if (normalized === buildStandalonePath('availability')) return 'availability';
-  if (normalized === buildStandalonePath('vms')) return 'vms';
+  if (vmsAvailable && isStandaloneVmsRoute(normalized)) return 'vms';
   return 'machines';
 };
 
@@ -175,10 +178,14 @@ export function StandalonePageSurface() {
   const [initialLoadComplete, setInitialLoadComplete] = createSignal(false);
 
   const model = createMemo(() => buildStandalonePageModel(resources()));
-  const activeTab = createMemo(() => resolveStandaloneTab(location.pathname));
-  const tabs = createMemo(() => getStandaloneTabSpecs(model().vms.length > 0, activeTab()));
+  const vmsAvailable = () => isFeatureAvailable('standaloneVms');
+  // An inventory can contain these guests before the view ships. They must
+  // not change the Machines empty/loading states or supply host badges.
+  const visibleVms = createMemo(() => (vmsAvailable() ? model().vms : []));
+  const activeTab = createMemo(() => resolveStandaloneTab(location.pathname, vmsAvailable()));
+  const tabs = createMemo(() => getStandaloneTabSpecs(visibleVms().length > 0, activeTab()));
   const vmCountByMachineId = createMemo(() =>
-    buildStandaloneMachineVmCounts(model().machines, model().vms),
+    buildStandaloneMachineVmCounts(model().machines, visibleVms()),
   );
   const machineSearchFilter = createMemo(() => {
     const value = searchParams[STANDALONE_QUERY_PARAMS.query];
@@ -252,7 +259,7 @@ export function StandalonePageSurface() {
       loading() &&
       !initialLoadComplete() &&
       model().machines.length === 0 &&
-      model().vms.length === 0 &&
+      visibleVms().length === 0 &&
       model().availabilityChecks.length === 0,
   );
   const showOverviewEmpty = createMemo(
@@ -260,7 +267,7 @@ export function StandalonePageSurface() {
       initialLoadComplete() &&
       !error() &&
       model().machines.length === 0 &&
-      model().vms.length === 0 &&
+      visibleVms().length === 0 &&
       model().availabilityChecks.length === 0,
   );
   const agentUpdateTargetVersion = createMemo(
@@ -354,6 +361,7 @@ export function StandalonePageSurface() {
           </Show>
 
           <Show when={activeTab() === 'vms'}>
+            <FeaturePreviewTag feature="standaloneVms" />
             <Suspense
               fallback={
                 <PlatformTableLoadingState
@@ -363,7 +371,7 @@ export function StandalonePageSurface() {
               }
             >
               <StandaloneVirtualMachinesTable
-                vms={model().vms}
+                vms={visibleVms()}
                 machines={model().machines}
                 selectedHostId={vmHostFilter}
                 onClearHostScope={clearVmHostFilter}
@@ -426,7 +434,7 @@ export function StandalonePageSurface() {
                 <Show
                   when={model().machines.length > 0}
                   fallback={
-                    <Show when={model().availabilityChecks.length > 0 || model().vms.length > 0}>
+                    <Show when={model().availabilityChecks.length > 0 || visibleVms().length > 0}>
                       <PlatformTableEmptyState
                         icon={machineIcon()}
                         title="No Pulse Agent machines"
@@ -465,7 +473,11 @@ export function StandalonePageSurface() {
                     emptyDescription="Install Pulse Agent on Linux, macOS, Windows, or Unraid systems for full CPU, memory, disk, and network telemetry."
                     targetAgentVersion={agentUpdateTargetVersion()}
                     vmCountByMachineId={vmCountByMachineId}
-                    onOpenHostVms={(machine) => navigate(buildStandaloneHostVmsPath(machine.id))}
+                    onOpenHostVms={
+                      vmsAvailable()
+                        ? (machine) => navigate(buildStandaloneHostVmsPath(machine.id))
+                        : undefined
+                    }
                     externalSearch={machineSearchFilter}
                     onExternalSearchChange={setMachineSearchFilter}
                     externalStatus={machineStatusFilter}

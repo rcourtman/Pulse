@@ -76,11 +76,18 @@ export const ActionReviewDialog: Component<{
   const resourceHref = createMemo(() => {
     const record = audit();
     if (!record || !props.showResourceLink) return null;
+    const resolved = registryResource();
+    // A bare VM might belong to another platform or to a view this build
+    // does not have. Don't focus or offer a provisional Proxmox link while
+    // its lookup can still change or remove the destination.
+    if (resolved === undefined && record.resource?.type?.trim().toLowerCase() === 'vm') {
+      return null;
+    }
     return buildResourcePagePath({
       id: record.request.resourceId,
       name: record.resource?.name,
       type: record.resource?.type,
-      resource: registryResource(),
+      resource: resolved,
     });
   });
   const readOnly = createMemo(

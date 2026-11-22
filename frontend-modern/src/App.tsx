@@ -43,6 +43,7 @@ import {
   PATROL_PATH,
   PROXMOX_PATH,
   STANDALONE_PATH,
+  STANDALONE_VMS_PATH,
   TRUENAS_PATH,
   VMWARE_PATH,
   buildDockerPath,
@@ -118,6 +119,7 @@ const InfrastructureMapRoute = featureReleaseRoute(
   InfrastructureMapPage,
   NotFoundPage,
 );
+const StandaloneVmsRoute = featureReleaseRoute('standaloneVms', StandalonePage, NotFoundPage);
 const DocsPage = lazy(() => import('./pages/Docs'));
 const PricingHandoffPage = lazy(() => import('./pages/PricingHandoff'));
 const SetupCompletionPreviewPage = lazy(() =>
@@ -639,6 +641,7 @@ function App() {
       <Route path={VMWARE_PATH} component={VmwarePage} />
       <Route path={`${VMWARE_PATH}/*`} component={VmwarePage} />
       <Route path={STANDALONE_PATH} component={StandalonePage} />
+      <Route path={STANDALONE_VMS_PATH} component={StandaloneVmsRoute} />
       <Route path={`${STANDALONE_PATH}/*`} component={StandalonePage} />
 
       {/* Not in every build yet: utils/featureReleases says which builds show it. */}
