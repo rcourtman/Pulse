@@ -687,3 +687,110 @@ func TestPVEEndpointTrustEditorPreservesDisabledCollectors(t *testing.T) {
 		t.Fatal("trust edit enabled an excluded collector")
 	}
 }
+
+// TestPVEEndpointReachabilityAfterAddressEdit exercises the saved node API,
+// including reopening the persisted connection before polling the new target.
+func TestPVEEndpointReachabilityAfterAddressEdit(t *testing.T) {
+	checked := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
+	lastSeen := checked.Add(-time.Minute)
+	for _, tc := range []struct {
+		name          string
+		initial       string
+		request       string
+		wantOverride  string
+		wantTarget    string
+		wasReachable  bool
+		wantUnchecked bool
+	}{
+		{"moved_reachable_member", "old-cedar.lab.test", `{"clusterEndpointOverrides":[{"nodeName":"cedar","ipOverride":"cedar-gateway.lab.test:8443"}]}`, "cedar-gateway.lab.test:8443", "https://cedar-gateway.lab.test:8443", true, true},
+		{"moved_failed_member", "old-cedar.lab.test", `{"clusterEndpointOverrides":[{"nodeName":"cedar","ipOverride":"cedar-gateway.lab.test:8443"}]}`, "cedar-gateway.lab.test:8443", "https://cedar-gateway.lab.test:8443", false, true},
+		{"changed_port", "cedar.lab.test", `{"clusterEndpointOverrides":[{"nodeName":"cedar","ipOverride":"cedar.lab.test:8443"}]}`, "cedar.lab.test:8443", "https://cedar.lab.test:8443", true, true},
+		{"cleared_override_moves_target", "old-cedar.lab.test", `{"clusterEndpointOverrides":[{"nodeName":"cedar","ipOverride":""}]}`, "", "https://cedar.lab.test:8006", false, true},
+		{"explicit_noop", "old-cedar.lab.test", `{"clusterEndpointOverrides":[{"nodeName":"cedar","ipOverride":"old-cedar.lab.test"}]}`, "old-cedar.lab.test", "https://old-cedar.lab.test:8006", true, false},
+		{"same_effective_authority", "old-cedar.lab.test", `{"clusterEndpointOverrides":[{"nodeName":"cedar","ipOverride":" https://OLD-CEDAR.lab.test:8006/ "}]}`, "OLD-CEDAR.lab.test:8006", "https://OLD-CEDAR.lab.test:8006", false, false},
+		{"cleared_override_keeps_target", "cedar.lab.test", `{"clusterEndpointOverrides":[{"nodeName":"cedar","ipOverride":""}]}`, "", "https://cedar.lab.test:8006", true, false},
+		{"unrelated_rename", "old-cedar.lab.test", `{"name":"Renamed connection"}`, "old-cedar.lab.test", "https://old-cedar.lab.test:8006", true, false},
+		{"verification_changes_discovered_target", "", `{"verifySSL":false}`, "", "https://192.0.2.11:8006", true, true},
+		{"combined_edit_keeps_effective_target", "", `{"verifySSL":false,"clusterEndpointOverrides":[{"nodeName":"cedar","ipOverride":"cedar.lab.test"}]}`, "cedar.lab.test", "https://cedar.lab.test:8006", true, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			failed := false
+			cfg := &config.Config{
+				DataPath: t.TempDir(),
+				PVEInstances: []config.PVEInstance{{
+					Name: "Lab Proxmox", Host: "https://maple.lab.test:8006", TokenName: "fixture@pve!monitor",
+					TokenValue: "synthetic-settings-fixture", VerifySSL: true, VerifySSLExplicit: true,
+					IsCluster: true, ClusterName: "Lab cluster",
+					ClusterEndpoints: []config.ClusterEndpoint{
+						{NodeName: "cedar", Host: "https://cedar.lab.test:8006", IP: "192.0.2.11", IPOverride: tc.initial, Online: true, LastSeen: lastSeen,
+							PulseReachable: &tc.wasReachable, LastPulseCheck: &checked},
+						{NodeName: "maple", Host: "https://maple.lab.test:8006", IP: "192.0.2.12", IPOverride: "maple.lab.test", Online: true, LastSeen: lastSeen,
+							PulseReachable: &failed, LastPulseCheck: &checked, PulseError: "Request timed out - fixture sibling API"},
+					},
+				}},
+			}
+			if !tc.wasReachable {
+				cfg.PVEInstances[0].ClusterEndpoints[0].PulseError = "Connection refused - fixture old address"
+			}
+			config.EnsurePVEClusterNodeIdentities(cfg.PVEInstances)
+			persistence := config.NewConfigPersistence(cfg.DataPath)
+			h := &ConfigHandlers{defaultConfig: cfg, defaultPersistence: persistence, runtime: defaultRuntimeDependencies()}
+			get := func() (NodeResponse, json.RawMessage) {
+				t.Helper()
+				res := httptest.NewRecorder()
+				h.HandleGetNodes(res, httptest.NewRequest(http.MethodGet, "/api/config/nodes", nil))
+				var nodes []NodeResponse
+				if res.Code != http.StatusOK || json.Unmarshal(res.Body.Bytes(), &nodes) != nil || len(nodes) != 1 || len(nodes[0].ClusterEndpoints) != 2 {
+					t.Fatalf("GET node response: %d %s", res.Code, res.Body.String())
+				}
+				return nodes[0], json.RawMessage(bytes.TrimSpace(res.Body.Bytes()))
+			}
+			initial, _ := get()
+
+			res := httptest.NewRecorder()
+			h.HandleUpdateNode(res, httptest.NewRequest(http.MethodPut, "/api/config/nodes/pve-0", strings.NewReader(tc.request)))
+			if res.Code != http.StatusOK {
+				t.Fatalf("save: %d %s", res.Code, res.Body.String())
+			}
+			post, _ := get()
+
+			saved, err := config.NewConfigPersistence(cfg.DataPath).LoadNodesConfig()
+			if err != nil {
+				t.Fatal(err)
+			}
+			reopened := &config.Config{PVEInstances: saved.PVEInstances}
+			h.SetConfig(reopened)
+			readback, savedWire := get()
+
+			if !reflect.DeepEqual(post.ClusterEndpoints, readback.ClusterEndpoints) {
+				t.Fatal("the reopened endpoint response differs from the in-memory save")
+			}
+			got := readback.ClusterEndpoints[0]
+			want := initial.ClusterEndpoints[0]
+			want.IPOverride, want.TLSEndpoint = tc.wantOverride, tc.wantTarget
+			if tc.wantUnchecked {
+				want.PulseReachable, want.LastPulseCheck, want.PulseError = nil, nil, ""
+			}
+			if !reflect.DeepEqual(got, want) {
+				t.Errorf("member after save: %s, reachable=%v, last check=%v, reason=%q; want %s, unchecked=%t",
+					got.TLSEndpoint, got.PulseReachable != nil && *got.PulseReachable, got.LastPulseCheck, got.PulseError, want.TLSEndpoint, tc.wantUnchecked)
+			}
+			if tc.wantUnchecked {
+				var nodes []struct {
+					ClusterEndpoints []map[string]json.RawMessage `json:"clusterEndpoints"`
+				}
+				if err := json.Unmarshal(savedWire, &nodes); err != nil {
+					t.Fatal(err)
+				}
+				for _, field := range []string{"pulseReachable", "lastPulseCheck", "pulseError"} {
+					if _, ok := nodes[0].ClusterEndpoints[0][field]; ok {
+						t.Errorf("unchecked address carried %s on the wire", field)
+					}
+				}
+			}
+			if !reflect.DeepEqual(readback.ClusterEndpoints[1], initial.ClusterEndpoints[1]) {
+				t.Fatal("save changed the unchanged sibling's address, identity or observation")
+			}
+		})
+	}
+}
