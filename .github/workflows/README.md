@@ -194,7 +194,9 @@ source with a placeholder frontend, runs both for 15 minutes at once against the
 same small mock estate (2 nodes, 24 guests, a Docker host, telemetry off, no
 licence server), and splits steady-state resident memory into the Go heap, memory
 outside Go (where the SQLite driver allocates) and file pages
-(`scripts/memory/compare_release_memory.sh`). It fails when `main` uses more than
+(`scripts/memory/compare_release_memory.sh`). Each instance binds its own
+kernel-assigned loopback metrics port instead of racing for the default port.
+The watch does not scrape these endpoints. It fails when `main` uses more than
 15% and 16 MiB more resident memory than the release. Both builds use the same
 planned final third. An unavailable sample file, fewer than three RSS samples
 in that window, or a gap of more than two sampling intervals leaves the

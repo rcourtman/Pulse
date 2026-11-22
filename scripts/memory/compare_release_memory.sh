@@ -143,6 +143,7 @@ run_tree() {
   # the legacy key lookup at a path that does not exist instead.
   env -i HOME="${HOME}" PATH="${PATH}" "${ESTATE_ENV[@]}" \
     PULSE_DATA_DIR="${data}" PORT="${port}" FRONTEND_PORT="${port}" \
+    PULSE_METRICS_BIND_ADDRESS=127.0.0.1 PULSE_METRICS_PORT=0 \
     PULSE_LEGACY_KEY_PATH="${data}/no-legacy-key" \
     PULSE_DEV=true ALLOW_ADMIN_BYPASS=1 PULSE_DEV_DISABLE_BACKGROUND_AI=true \
     PULSE_TELEMETRY=false PULSE_LICENSE_SERVER_URL=http://127.0.0.1:9 \
@@ -202,8 +203,8 @@ run_tree() {
 build_tree baseline "${BASELINE_DIR}"
 build_tree candidate "${CANDIDATE_DIR}"
 
-# Run both at once so they share host conditions. Only one can bind the fixed
-# Prometheus port; the other logs a bind error, which costs no measurable memory.
+# Run both at once so they share host conditions. The kernel assigns each
+# instance its own loopback metrics port, so neither loses that listener.
 run_tree baseline 7801 & baseline_pid=$!
 run_tree candidate 7802 & candidate_pid=$!
 status=0
