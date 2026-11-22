@@ -41,7 +41,6 @@ import urllib.parse
 import urllib.request
 from collections import Counter
 from dataclasses import dataclass, field
-from datetime import datetime
 
 STOP = threading.Event()
 DASHBOARD_SOCKETS: set[socket.socket] = set()
@@ -50,18 +49,6 @@ DASHBOARD_LOCK = threading.Lock()
 # scheduling and delivery slack without accepting the startup roster for RSS
 # measured after collection has stopped.
 GUEST_FRESHNESS_SECONDS = 60
-
-
-def guest_seen_at(value: object) -> float | None:
-    if not isinstance(value, str):
-        return None
-    if value.endswith("Z"):
-        value = value[:-1] + "+00:00"
-    try:
-        when = datetime.fromisoformat(value)
-        return when.timestamp() if when.tzinfo is not None else None
-    except (ValueError, OverflowError, OSError):
-        return None
 
 
 class ThreadedHTTPServer(socketserver.ThreadingMixIn, http.server.HTTPServer):
@@ -80,7 +67,7 @@ class DashboardStats:
     ws_state_updates: int = 0
     ws_state_bytes: int = 0
     ws_errors: list[str] = field(default_factory=list)
-    resources: dict[str, tuple[str | None, str | None, float | None]] = field(default_factory=dict)
+    resources: dict[str, tuple[str | None, str | None, int | None]] = field(default_factory=dict)
 
     def update_guests(self, data: dict) -> None:
         # Existing resource upserts are merge patches. A metrics-only update
@@ -108,25 +95,29 @@ class DashboardStats:
             if not isinstance(row, dict) or not isinstance(row.get("id"), str) or not row["id"]:
                 continue
             resource_id = row["id"]
-            old_technology, old_name, last_seen = self.resources.get(resource_id, (None, None, None))
+            old_technology, old_name, last_seen_ms = self.resources.get(resource_id, (None, None, None))
             technology = row.get("technology", old_technology)
             name = row.get("name", old_name)
             if "lastSeen" in row or (technology, name) != (old_technology, old_name):
-                last_seen = guest_seen_at(row.get("lastSeen"))
+                # /ws carries ResourceFrontend, not the registry Resource:
+                # lastSeen is an integer Unix millisecond, with zero unknown.
+                value = row.get("lastSeen")
+                last_seen_ms = value if type(value) is int and value > 0 else None
             self.resources[resource_id] = (
                 technology if isinstance(technology, str) else None,
                 name if isinstance(name, str) else None,
-                last_seen,
+                last_seen_ms,
             )
 
     def missing_guests(self) -> set[tuple[str, str]]:
         return self.expected_guests.difference((tech, name) for tech, name, _ in self.resources.values())
 
     def missing_recent_guests(self, started: float, finished: float) -> set[tuple[str, str]]:
-        earliest = max(started, finished - GUEST_FRESHNESS_SECONDS)
+        latest_ms = finished * 1000
+        earliest_ms = max(started, finished - GUEST_FRESHNESS_SECONDS) * 1000
         return self.expected_guests.difference(
-            (tech, name) for tech, name, seen in self.resources.values()
-            if seen is not None and earliest <= seen <= finished
+            (tech, name) for tech, name, seen_ms in self.resources.values()
+            if seen_ms is not None and earliest_ms <= seen_ms <= latest_ms
         )
 
 

@@ -2,7 +2,6 @@
 """Exercise PVE guest and PBS snapshot coverage in the memory watch."""
 
 from collections import Counter
-from datetime import datetime, timezone
 import json
 from pathlib import Path
 import sys
@@ -13,6 +12,9 @@ from urllib.request import urlopen
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "memory"))
 import proxmox_load as load
+
+
+END = 1_795_305_900  # Synthetic end of RSS sampling, Unix seconds.
 
 
 class ProxmoxMemoryLoadTests(unittest.TestCase):
@@ -138,51 +140,48 @@ class ProxmoxMemoryLoadTests(unittest.TestCase):
         self.assertEqual(self.stats.missing_guests(), {("lxc", "ct-101")})
 
     def test_a_retained_roster_or_unrelated_update_does_not_prove_late_collection(self):
-        old = "2026-11-21T00:00:30Z"
-        end = datetime(2026, 11, 21, 0, 5, tzinfo=timezone.utc).timestamp()
+        old = (END - 270) * 1000
         self.frame("initialState", resources=[
             {"id": "a", "technology": "qemu", "name": "vm-100", "lastSeen": old},
             {"id": "b", "technology": "lxc", "name": "ct-101", "lastSeen": old},
         ])
         self.frame("rawData", resourceDelta={"upserts": [
-            {"id": "a", "lastSeen": "2026-11-21T00:04:00.999999999Z"},
-            {"id": "b", "updatedAt": "2026-11-21T00:04:55Z"},
+            {"id": "a", "lastSeen": (END - 60) * 1000},
+            {"id": "b", "updatedAt": (END - 5) * 1000},
         ]})
         self.assertFalse(self.stats.missing_guests())
-        self.assertEqual(self.stats.missing_recent_guests(end - 300, end), {("lxc", "ct-101")})
+        self.assertEqual(self.stats.missing_recent_guests(END - 300, END), {("lxc", "ct-101")})
         self.frame("rawData", resourceDelta={"upserts": [
-            {"id": "b", "lastSeen": "2026-11-21T01:04:58+01:00"},
+            {"id": "b", "lastSeen": (END - 2) * 1000 + 321},
         ]})
-        self.assertFalse(self.stats.missing_recent_guests(end - 300, end))
+        self.assertFalse(self.stats.missing_recent_guests(END - 300, END))
 
     def test_missing_or_invalid_times_and_previous_run_do_not_prove_a_poll(self):
-        end = datetime(2026, 11, 21, 0, 5, tzinfo=timezone.utc).timestamp()
-        for timestamp in ("2026-11-21T00:04:00Z", "2026-11-21T00:05:01Z",
-                          "2026-11-21T00:04:59", "not a date", None):
+        for timestamp in ((END - 31) * 1000, END * 1000 + 1, END - 1,
+                          "2026-11-21T00:04:59Z", str(END * 1000), END * 1000.0, 0, True, None):
             with self.subTest(timestamp=timestamp):
                 self.frame("initialState", resources=[
                     {"id": "a", "technology": "qemu", "name": "vm-100", "lastSeen": timestamp},
                     {"id": "b", "technology": "lxc", "name": "ct-101"},
                 ])
                 self.assertFalse(self.stats.missing_guests())
-                self.assertEqual(self.stats.missing_recent_guests(end - 30, end), self.expected)
+                self.assertEqual(self.stats.missing_recent_guests(END - 30, END), self.expected)
 
     def test_recent_sighting_stays_bound_to_the_guest_and_current_inventory(self):
-        end = datetime(2026, 11, 21, 0, 5, tzinfo=timezone.utc).timestamp()
         self.frame("initialState", resources=[
-            {"id": "a", "technology": "qemu", "name": "vm-100", "lastSeen": "2026-11-21T00:04:51Z"},
-            {"id": "b", "technology": "lxc", "name": "ct-101", "lastSeen": "2026-11-21T00:04:52Z"},
+            {"id": "a", "technology": "qemu", "name": "vm-100", "lastSeen": (END - 9) * 1000},
+            {"id": "b", "technology": "lxc", "name": "ct-101", "lastSeen": (END - 8) * 1000},
         ])
         self.frame("rawData", resourceDelta={"upserts": [{"id": "a", "cpu": {"current": 0.3}}]})
-        self.assertFalse(self.stats.missing_recent_guests(end - 300, end))
+        self.assertFalse(self.stats.missing_recent_guests(END - 300, END))
         self.frame("rawData", resourceDelta={"upserts": [
             {"id": "c", "technology": "qemu", "name": "vm-100"},
         ], "removed": ["a"]})
-        self.assertEqual(self.stats.missing_recent_guests(end - 300, end), {("qemu", "vm-100")})
+        self.assertEqual(self.stats.missing_recent_guests(END - 300, END), {("qemu", "vm-100")})
         self.frame("rawData", resourceDelta={"upserts": [
             {"id": "b", "technology": "qemu", "name": "vm-100"},
         ]})
-        self.assertEqual(self.stats.missing_recent_guests(end - 300, end), self.expected)
+        self.assertEqual(self.stats.missing_recent_guests(END - 300, END), self.expected)
 
 
 if __name__ == "__main__":
