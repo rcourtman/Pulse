@@ -253,6 +253,77 @@ func TestMetricsFromProxmoxGuestsNormalizesCPUOnceIndependentOfCoreCount(t *test
 	}
 }
 
+func TestProxmoxCapacityMetricsKeepPercentagePoints(t *testing.T) {
+	const total int64 = 10_000
+	observation := models.MemoryObservation{
+		State: "current", Source: "guest-agent-meminfo", ObservedAt: time.Unix(1780000000, 0).UTC(),
+	}
+	for _, sample := range []struct {
+		name string
+		used int64
+		pct  float64
+	}{
+		{"idle", 0, 0},
+		{"below-one", 49, 0.49},
+		{"one", 100, 1},
+		{"above-one", 101, 1.01},
+		{"full", total, 100},
+	} {
+		t.Run(sample.name, func(t *testing.T) {
+			used := sample.used
+			memory := models.Memory{Total: total, Used: used, Free: total - used, Usage: sample.pct, Observation: observation}
+			disk := models.Disk{Total: total, Used: used, Free: total - used, Usage: sample.pct}
+			node := metricsFromProxmoxNode(models.Node{CPU: 0.125, Memory: memory, Disk: disk})
+			vm := metricsFromVM(models.VM{CPU: 1, Memory: memory, Disk: disk})
+			lxc := metricsFromContainer(models.Container{CPU: 0.125, Memory: memory, Disk: disk})
+			pveStorage := metricsFromStorage(models.Storage{Used: used, Total: total, Usage: sample.pct})
+			pbs := metricsFromPBSInstance(models.PBSInstance{CPU: 0.125, MemoryUsed: used, MemoryTotal: total, Memory: sample.pct})
+			pbsDatastore := metricsFromPBSDatastore(models.PBSDatastore{Used: used, Total: total, Usage: sample.pct})
+			for _, metric := range []struct {
+				name   string
+				value  *MetricValue
+				source DataSource
+			}{
+				{"node memory", node.Memory, SourceProxmox},
+				{"node disk", node.Disk, SourceProxmox},
+				{"QEMU memory", vm.Memory, SourceProxmox},
+				{"QEMU disk", vm.Disk, SourceProxmox},
+				{"LXC memory", lxc.Memory, SourceProxmox},
+				{"LXC disk", lxc.Disk, SourceProxmox},
+				{"PVE storage disk", pveStorage.Disk, SourceProxmox},
+				{"PBS memory", pbs.Memory, SourcePBS},
+				{"PBS datastore disk", pbsDatastore.Disk, SourcePBS},
+			} {
+				value := metric.value
+				if value == nil || value.Unit != "bytes" || value.Source != metric.source ||
+					value.Used == nil || *value.Used != used || value.Total == nil || *value.Total != total ||
+					value.Percent != sample.pct {
+					t.Errorf("%s = %+v, want %d/%d bytes and %.2f percentage points from %s",
+						metric.name, value, used, total, sample.pct, metric.source)
+				}
+			}
+			if vm.Memory == nil || vm.Memory.Observation != observation || lxc.Memory == nil || lxc.Memory.Observation != observation {
+				t.Errorf("guest memory observation changed: QEMU %+v, LXC %+v", vm.Memory, lxc.Memory)
+			}
+			if node.CPU.Percent != 12.5 || vm.CPU.Percent != 100 || lxc.CPU.Percent != 12.5 || pbs.CPU.Percent != 12.5 {
+				t.Error("CPU ratios no longer convert to percentage points")
+			}
+		})
+	}
+}
+
+func TestProxmoxStorageCapacityStillFallsBackToReportedBytes(t *testing.T) {
+	// Legacy snapshots can have a byte pair without a populated usage field.
+	// Its derived sub-1% reading must not go through the CPU normalization.
+	pve := metricsFromStorage(models.Storage{Used: 49, Total: 10_000})
+	pbs := metricsFromPBSDatastore(models.PBSDatastore{Used: 49, Total: 10_000})
+	for i, metric := range []*MetricValue{pve.Disk, pbs.Disk} {
+		if metric == nil || math.Abs(metric.Percent-0.49) > 1e-9 {
+			t.Errorf("capacity %d = %+v, want 0.49%% from bytes", i, metric)
+		}
+	}
+}
+
 func TestMetricsFromKubernetesClusterAggregatesLinkedHostReportedPercents(t *testing.T) {
 	cluster := models.KubernetesCluster{ID: "cluster-1", Name: "cluster-1"}
 	hosts := []*models.Host{

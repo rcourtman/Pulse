@@ -13,16 +13,14 @@ import (
 
 func metricsFromProxmoxNode(node models.Node) *ResourceMetrics {
 	metrics := &ResourceMetrics{}
-	cpuPercent := percentFromUsage(node.CPU)
+	cpuPercent := percentFromCPUUsage(node.CPU)
 	metrics.CPU = &MetricValue{Value: cpuPercent, Percent: cpuPercent, Unit: "percent", Source: SourceProxmox}
 
 	if node.Memory.Total > 0 && node.Memory.HasKnownUsage() {
-		percent := percentFromUsage(node.Memory.Usage)
-		metrics.Memory = &MetricValue{Used: &node.Memory.Used, Total: &node.Memory.Total, Percent: percent, Unit: "bytes", Source: SourceProxmox}
+		metrics.Memory = &MetricValue{Used: &node.Memory.Used, Total: &node.Memory.Total, Percent: node.Memory.Usage, Unit: "bytes", Source: SourceProxmox}
 	}
 	if hasObservedDiskUsage(node.Disk) {
-		percent := percentFromUsage(node.Disk.Usage)
-		metrics.Disk = &MetricValue{Used: &node.Disk.Used, Total: &node.Disk.Total, Percent: percent, Unit: "bytes", Source: SourceProxmox}
+		metrics.Disk = &MetricValue{Used: &node.Disk.Used, Total: &node.Disk.Total, Percent: node.Disk.Usage, Unit: "bytes", Source: SourceProxmox}
 	}
 	return metrics
 }
@@ -122,14 +120,13 @@ func buildHostMetricPayload(
 
 func metricsFromPBSInstance(instance models.PBSInstance) *ResourceMetrics {
 	metrics := &ResourceMetrics{}
-	cpuPercent := percentFromUsage(instance.CPU)
+	cpuPercent := percentFromCPUUsage(instance.CPU)
 	metrics.CPU = &MetricValue{Value: cpuPercent, Percent: cpuPercent, Unit: "percent", Source: SourcePBS}
 	if instance.MemoryTotal > 0 {
-		percent := percentFromUsage(instance.Memory)
 		metrics.Memory = &MetricValue{
 			Used:    &instance.MemoryUsed,
 			Total:   &instance.MemoryTotal,
-			Percent: percent,
+			Percent: instance.Memory,
 			Unit:    "bytes",
 			Source:  SourcePBS,
 		}
@@ -145,7 +142,7 @@ func metricsFromPBSDatastore(datastore models.PBSDatastore) *ResourceMetrics {
 
 	used := datastore.Used
 	total := datastore.Total
-	percent := percentFromUsage(datastore.Usage)
+	percent := datastore.Usage
 	if percent == 0 && total > 0 {
 		percent = clampMetricValue((float64(used)/float64(total))*100, 0, 100)
 	}
@@ -206,12 +203,10 @@ func buildVMMetricPayload(
 	cpuPercent := ProxmoxGuestCPUPercent(cpu)
 	metrics.CPU = &MetricValue{Value: cpuPercent, Percent: cpuPercent, Unit: "percent", Source: source}
 	if memory.Total > 0 && memory.HasKnownUsage() {
-		percent := percentFromUsage(memory.Usage)
-		metrics.Memory = &MetricValue{Used: &memory.Used, Total: &memory.Total, Percent: percent, Unit: "bytes", Source: source, Observation: memory.Observation}
+		metrics.Memory = &MetricValue{Used: &memory.Used, Total: &memory.Total, Percent: memory.Usage, Unit: "bytes", Source: source, Observation: memory.Observation}
 	}
 	if hasObservedDiskUsage(disk) {
-		percent := percentFromUsage(disk.Usage)
-		metrics.Disk = &MetricValue{Used: &disk.Used, Total: &disk.Total, Percent: percent, Unit: "bytes", Source: source}
+		metrics.Disk = &MetricValue{Used: &disk.Used, Total: &disk.Total, Percent: disk.Usage, Unit: "bytes", Source: source}
 	}
 	setNetworkAndDiskIOMetricsVM(metrics, netIn, netOut, diskRead, diskWrite, rateValidity, source)
 	return metrics
@@ -225,7 +220,7 @@ func metricsFromStorage(storage models.Storage) *ResourceMetrics {
 
 	used := storage.Used
 	total := storage.Total
-	percent := percentFromUsage(storage.Usage)
+	percent := storage.Usage
 	if percent == 0 && total > 0 {
 		percent = clampMetricValue((float64(used)/float64(total))*100, 0, 100)
 	}
@@ -797,7 +792,9 @@ func clampMetricValue(value, min, max float64) float64 {
 	return value
 }
 
-func percentFromUsage(value float64) float64 {
+// Proxmox and PBS CPU inputs can be ratios. Their capacity usage inputs
+// already carry percentage points, including 0..1, and must not use this.
+func percentFromCPUUsage(value float64) float64 {
 	if value <= 1.0 {
 		return value * 100
 	}
@@ -810,7 +807,7 @@ func percentFromUsage(value float64) float64 {
 // normalized fixtures and read-state adapters. Guest CPU is not divided by
 // the configured core count: Proxmox already reports capacity utilization.
 func ProxmoxGuestCPUPercent(value float64) float64 {
-	return percentFromUsage(value)
+	return percentFromCPUUsage(value)
 }
 
 func percentFromReportedPercent(value float64) float64 {
