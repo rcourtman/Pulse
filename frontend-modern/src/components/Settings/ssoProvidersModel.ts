@@ -215,7 +215,8 @@ export const mapProviderDetailsToForm = (full: SSOProviderDetailsResponse): Prov
   samlSignRequests: full.saml?.signRequests || false,
   samlAllowIdpInitiated: full.saml?.allowIdpInitiated || false,
   samlUsernameAttr: full.saml?.usernameAttr || '',
-  samlEmailAttr: full.saml?.emailAttr || 'email',
+  // Only new drafts default to 'email'. Saved details omit an unset attribute.
+  samlEmailAttr: full.saml?.emailAttr ?? '',
   groupsClaim: full.saml?.groupsAttr || full.groupsClaim || '',
   allowedGroups: listToString(full.allowedGroups),
   allowedDomains: listToString(full.allowedDomains),
