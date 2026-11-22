@@ -543,7 +543,7 @@ export const NodeModalSetupGuideSection: Component<NodeModalSetupGuideSectionPro
               </Show>
 
               <Show when={state.formData().setupMode === 'manual'}>
-                <div class="space-y-3">
+                <div class="space-y-2">
                   <div>
                     <p class="text-sm font-medium text-base-content">
                       New whole-cluster token example
@@ -553,7 +553,7 @@ export const NodeModalSetupGuideSection: Component<NodeModalSetupGuideSectionPro
                     </p>
                   </div>
 
-                  <div class="space-y-3">
+                  <div class="space-y-2">
                     <div>
                       <p class="text-sm font-medium text-base-content mb-1">
                         1. Create monitoring user:
@@ -629,7 +629,7 @@ export const NodeModalSetupGuideSection: Component<NodeModalSetupGuideSectionPro
 
                     <div>
                       <p class="text-sm font-medium text-base-content mb-1">
-                        3. Grant monitoring roles to both the user and the token:
+                        3. Apply user and token ACLs:
                       </p>
                       <div class="relative bg-surface rounded-md p-2 pr-8 font-mono text-xs mb-1">
                         <button
