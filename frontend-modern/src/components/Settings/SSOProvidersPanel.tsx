@@ -513,7 +513,9 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
                     type="button"
                     variant={summary().variant}
                     size="xs"
-                    class="-my-2 min-w-0 max-w-[60%] shrink-0 gap-1.5 text-left"
+                    class={`-my-2 min-w-0 max-w-[60%] shrink-0 gap-1.5 text-left ${
+                      testResult()?.issuerMismatch ? 'max-[360px]:max-w-25' : ''
+                    }`}
                     aria-label={`${summary().lines.join(', ')} — view result`}
                     aria-controls={testResultId}
                     disabled={saving() || !!unconfirmedChange()}
