@@ -1,0 +1,37 @@
+{
+  "version": 1,
+  "base_sha": "741ea1448a725a634d98e4ce6714ef5c2290e7f4",
+  "verified_at": "2026-11-22T15:58:21Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/SSOProvidersPanel.tsx",
+    "frontend-modern/src/components/Settings/ssoProvidersModel.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/SSOProvidersPanel.tsx": "ca1e4b641e8e46daa79d3fac04f370f7a18a62d6c4aa20d7bd58f51b1ebbc1a3",
+    "frontend-modern/src/components/Settings/ssoProvidersModel.ts": "bc9ea66b6afe3bcb26eb8a801c49ea49fafc1f62640bcbcc2e8fd4f6081dd381"
+  },
+  "routes": [
+    "/settings/security-sso"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 360,
+      "height": 800
+    }
+  ],
+  "states": [
+    "Actual production Settings route in Chromium 141.0.7390.37 / Playwright 1.56.1; desktop light and narrow dark touch with matched synthetic provider details. Sixteen paired images inspected.",
+    "A saved omitted or empty SAML Email Attribute shows Not set; an explicit mail and the new-provider email default remain values. Clearing an explicit value reopens as Not set.",
+    "Email, neighbouring fields, surrounding editor and fixed Save or Create and Cancel stay in place. SP metadata copy remains available on edit."
+  ],
+  "interactions": [
+    "Rename without touching Email Attribute on both viewports, reach Save by keyboard and touch, and verify blank saved mappings are absent from the PUT JSON while explicit mail remains.",
+    "Clear, reopen, set and reopen the saved mapping, then Cancel without resubmitting. Create a fixture draft and observe the unchanged email in its POST.",
+    "Offline HTTP fixture; exact browser form payloads, no live provider or sign-in."
+  ]
+}
