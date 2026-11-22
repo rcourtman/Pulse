@@ -8132,12 +8132,19 @@ saved-connection preview/test/update payloads must preserve stored enablement
 unless the caller explicitly changes it, so setup surfaces do not accidentally
 preview an unchanged active connection as inactive just because JSON omitted a
 bool field.
-The VMware credential editor must also distinguish required-floor failure from
-optional enrichment degradation. When the canonical connection-test response
-is successful but `degraded`, the editor must keep the exact upstream
-diagnostic visible in a limited-data warning and identify the negotiated VI
-JSON release when available; it must not show the test as fully green or route
-the warning through the hard-failure presentation.
+The VMware credential editor reports the outcome of testing this draft beside
+the actions, without a duplicate toast. On narrow screens, the result, scope
+choices and individual test and save actions remain readable together.
+Only a confirmed success can show
+passed API checks. A successful but `degraded` reply keeps the upstream
+diagnostic visible in a limited-data warning and identifies the negotiated VI
+JSON release when available. A reply without success confirmation is distinct
+from a categorized connection failure and from passing checks.
+The test signs in and checks basic inventory and APIs independently of the
+collection checkboxes, does not confirm full monitoring coverage, and does not
+save the draft. Changes to the draft or its reader clear or invalidate the
+result. `VMwareDestinationFeedback.transport.test.tsx` verifies those
+distinctions through the editor and canonical HTTP consumer.
 That same validation contract must stay coherent across the public
 `/api/auto-register` route and the direct canonical handler path used by the
 same runtime surface, so Unified Agent/setup entry points do not inherit divergent

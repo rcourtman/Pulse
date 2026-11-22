@@ -348,7 +348,8 @@ describe('VMware reader lifetime', () => {
             success: true,
           } as never);
           expect(await result.testCurrentForm()).toBe(true);
-          expect(notificationStore.success).toHaveBeenCalledWith('VMware connection successful');
+          expect(result.connectionTestFeedback()?.tone).toBe('success');
+          expect(notificationStore.success).not.toHaveBeenCalled();
         });
 
   for (const action of ['Test', 'Preview'] as const)
