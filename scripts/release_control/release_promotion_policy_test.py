@@ -1707,7 +1707,17 @@ mode = os.environ["CASE"]
 args = sys.argv[1:]
 token = os.environ["GH_TOKEN"]
 ack = "2026-11-22T00:39:41.3416113Z Watching exact private Pro build run 300 in rcourtman/pulse-enterprise."
-if args == ["api", "repos/rcourtman/Pulse/actions/runs/200/attempts/1/jobs?per_page=100"]:
+if args == ["api", "repos/rcourtman/Pulse/actions/runs/200/attempts/2/jobs?per_page=100"]:
+    assert token == "public-reader"
+    assert mode in ("earlier-acknowledgement", "earlier-unknown")
+    # The second attempt could not read the first. Its publish step never ran,
+    # but that does not say whether a child was dispatched in attempt 1.
+    step = {"name": "Dispatch and verify private Pro runtime staging", "status": "completed",
+            "conclusion": "skipped"}
+    job = {"name": "stage_private_pro_runtime", "id": 101, "run_id": 200, "run_attempt": 2,
+           "head_sha": "a" * 40, "status": "completed", "conclusion": "failure", "steps": [step]}
+    print(json.dumps({"total_count": 1, "jobs": [job]}))
+elif args == ["api", "repos/rcourtman/Pulse/actions/runs/200/attempts/1/jobs?per_page=100"]:
     assert token == "public-reader"
     step = {"name": "Dispatch and verify private Pro runtime staging", "status": "completed",
             "conclusion": "skipped" if mode == "never-dispatched" else "failure"}
@@ -1717,6 +1727,8 @@ if args == ["api", "repos/rcourtman/Pulse/actions/runs/200/attempts/1/jobs?per_p
     print(json.dumps({"total_count": 2 if mode == "partial-jobs" else 1, "jobs": [job]}))
 elif args == ["api", "repos/rcourtman/Pulse/actions/jobs/100/logs"]:
     assert token == "public-reader"
+    if mode == "earlier-unknown":
+        sys.exit(1)
     if mode == "lost-acknowledgement":
         print('2026-11-22T00:39:41.3416113Z echo "Watching exact private Pro build run 300 in rcourtman/pulse-enterprise."')
     elif mode == "duplicate-acknowledgement":
@@ -1756,6 +1768,7 @@ else:
             "foreign-job": (False, 0), "partial-jobs": (False, 0),
             "lost-acknowledgement": (False, 0), "duplicate-acknowledgement": (False, 0),
             "foreign-child": (False, 0), "unavailable-child": (False, 0),
+            "earlier-acknowledgement": (True, 0), "earlier-unknown": (False, 0),
         }
         for mode, (success, posts) in cases.items():
             with self.subTest(mode=mode), tempfile.TemporaryDirectory() as temp:
@@ -1764,10 +1777,11 @@ else:
                 gh.write_text(fake_gh, encoding="utf-8")
                 gh.chmod(0o755)
                 result_path, posts_path = fixture / "output", fixture / "post.jsonl"
+                attempt = "1" if mode == "original" else "3" if mode.startswith("earlier-") else "2"
                 env = {**os.environ, "CASE": mode, "FIX": temp,
                        "PATH": f"{temp}{os.pathsep}{os.environ['PATH']}", "GITHUB_OUTPUT": str(result_path),
                        "GITHUB_REPOSITORY": "rcourtman/Pulse", "GITHUB_RUN_ID": "200",
-                       "GITHUB_RUN_ATTEMPT": "1" if mode == "original" else "2", "GITHUB_SHA": "a" * 40,
+                       "GITHUB_RUN_ATTEMPT": attempt, "GITHUB_SHA": "a" * 40,
                        "TAG": "v6.9.0-rc.99", "VERSION": "6.9.0-rc.99", "IS_PRERELEASE": "true"}
 
                 def execute(step, **extra):
