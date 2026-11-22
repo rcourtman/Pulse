@@ -25,6 +25,7 @@ from release_promotion_policy_support import (
     staged_governance_input_errors,
 )
 from repo_file_io import REPO_ROOT, git_env, read_repo_text, strip_local_git_env
+from stable_patch import CONTROLS as STABLE_PATCH_CONTROLS
 
 USE_STAGED_GOVERNANCE = os.environ.get("PULSE_READ_STAGED_GOVERNANCE") == "1"
 
@@ -1689,6 +1690,133 @@ done
                 self.assertIn("did not return an exact workflow run ID", job)
                 self.assertNotIn("gh run list", job)
                 self.assertNotIn("started_at", job)
+
+    def test_private_pro_staging_retry_follows_the_exact_prior_child(self) -> None:
+        """Exercise both real job steps: reads use the public token, not the staging token."""
+        workflow = yaml.safe_load(read(".github/workflows/create-release.yml"))
+        steps = workflow["jobs"]["stage_private_pro_runtime"]["steps"]
+        prior, staging = (next(step for step in steps if step.get("id") == step_id)
+                          for step_id in ("prior_stage", "publish"))
+        interpreter, helper_path = prior["run"].split()
+        self.assertEqual(interpreter, "python3")
+        self.assertTrue(any(PurePosixPath(helper_path).is_relative_to(control)
+                            for control in STABLE_PATCH_CONTROLS),
+                        "The staging retry helper must be included in the stable patch control overlay")
+        self.assertEqual(prior["env"]["GH_TOKEN"], "${{ github.token }}")
+        self.assertEqual(staging["env"]["PRIOR_CHILD_ID"], "${{ steps.prior_stage.outputs.child_id }}")
+        self.assertEqual(prior["if"], "${{ github.run_attempt != '1' }}")
+        fake_gh = r'''#!/usr/bin/env python3
+import json, os, sys
+from pathlib import Path
+
+mode = os.environ["CASE"]
+args = sys.argv[1:]
+token = os.environ["GH_TOKEN"]
+ack = "2026-11-22T00:39:41.3416113Z Watching exact private Pro build run 300 in rcourtman/pulse-enterprise."
+if args == ["api", "repos/rcourtman/Pulse/actions/runs/200/attempts/2/jobs?per_page=100"]:
+    assert token == "public-reader"
+    assert mode in ("earlier-acknowledgement", "earlier-unknown")
+    # The second attempt could not read the first. Its publish step never ran,
+    # but that does not say whether a child was dispatched in attempt 1.
+    step = {"name": "Dispatch and verify private Pro runtime staging", "status": "completed",
+            "conclusion": "skipped"}
+    job = {"name": "stage_private_pro_runtime", "id": 101, "run_id": 200, "run_attempt": 2,
+           "head_sha": "a" * 40, "status": "completed", "conclusion": "failure", "steps": [step]}
+    print(json.dumps({"total_count": 1, "jobs": [job]}))
+elif args == ["api", "repos/rcourtman/Pulse/actions/runs/200/attempts/1/jobs?per_page=100"]:
+    assert token == "public-reader"
+    step = {"name": "Dispatch and verify private Pro runtime staging", "status": "completed",
+            "conclusion": "skipped" if mode == "never-dispatched" else "failure"}
+    job = {"name": "stage_private_pro_runtime", "id": 100, "run_id": 200, "run_attempt": 1,
+           "head_sha": ("b" if mode == "foreign-job" else "a") * 40, "status": "completed",
+           "conclusion": "failure", "steps": [step]}
+    print(json.dumps({"total_count": 2 if mode == "partial-jobs" else 1, "jobs": [job]}))
+elif args == ["api", "repos/rcourtman/Pulse/actions/jobs/100/logs"]:
+    assert token == "public-reader"
+    if mode == "earlier-unknown":
+        sys.exit(1)
+    if mode == "lost-acknowledgement":
+        print('2026-11-22T00:39:41.3416113Z echo "Watching exact private Pro build run 300 in rcourtman/pulse-enterprise."')
+    elif mode == "duplicate-acknowledgement":
+        print(ack, ack.replace("run 300", "run 301"), sep="\n")
+    else:
+        print(ack)
+elif args == ["api", "repos/rcourtman/pulse-enterprise/actions/runs/300"]:
+    assert token == "private-stager"
+    if mode == "unavailable-child":
+        sys.exit(1)
+    status, conclusion = {"succeeded": ("completed", "success"), "failed": ("completed", "failure"),
+                          "cancelled": ("completed", "cancelled")}.get(mode, ("queued", None))
+    print(json.dumps({"id": 300, "path": ".github/workflows/" +
+                      ("unrelated.yml" if mode == "foreign-child" else "build-pro-release.yml"),
+                      "event": "workflow_dispatch", "head_branch": "main", "status": status,
+                      "conclusion": conclusion}))
+elif args[:2] == ["run", "view"]:
+    assert token == "private-stager"
+    if args[2] == "200" and "createdAt" in args:
+        print("2026-11-22T00:38:22Z")
+    else:
+        assert args[2] == ("301" if mode in ("original", "never-dispatched", "failed") else "300")
+        result = "failure" if mode == "queued-then-failed" else "success"
+        print(f"completed\t{result}\thttps://example.invalid/runs/{args[2]}")
+elif args[:4] == ["api", "--method", "POST", "-H"]:
+    assert token == "private-stager"
+    assert "repos/rcourtman/pulse-enterprise/actions/workflows/build-pro-release.yml/dispatches" in args
+    with (Path(os.environ["FIX"]) / "post.jsonl").open("a") as out:
+        out.write(json.dumps(json.load(sys.stdin)) + "\n")
+    print('{"workflow_run_id": 301}')
+else:
+    sys.exit(f"unexpected gh invocation: {args!r}")
+'''
+        cases = {
+            "original": (True, 1), "never-dispatched": (True, 1), "failed": (True, 1),
+            "queued": (True, 0), "queued-then-failed": (False, 0), "succeeded": (True, 0), "cancelled": (False, 0),
+            "foreign-job": (False, 0), "partial-jobs": (False, 0),
+            "lost-acknowledgement": (False, 0), "duplicate-acknowledgement": (False, 0),
+            "foreign-child": (False, 0), "unavailable-child": (False, 0),
+            "earlier-acknowledgement": (True, 0), "earlier-unknown": (False, 0),
+        }
+        for mode, (success, posts) in cases.items():
+            with self.subTest(mode=mode), tempfile.TemporaryDirectory() as temp:
+                fixture = Path(temp)
+                gh = fixture / "gh"
+                gh.write_text(fake_gh, encoding="utf-8")
+                gh.chmod(0o755)
+                result_path, posts_path = fixture / "output", fixture / "post.jsonl"
+                attempt = "1" if mode == "original" else "3" if mode.startswith("earlier-") else "2"
+                env = {**os.environ, "CASE": mode, "FIX": temp,
+                       "PATH": f"{temp}{os.pathsep}{os.environ['PATH']}", "GITHUB_OUTPUT": str(result_path),
+                       "GITHUB_REPOSITORY": "rcourtman/Pulse", "GITHUB_RUN_ID": "200",
+                       "GITHUB_RUN_ATTEMPT": attempt, "GITHUB_SHA": "a" * 40,
+                       "TAG": "v6.9.0-rc.99", "VERSION": "6.9.0-rc.99", "IS_PRERELEASE": "true"}
+
+                def execute(step, **extra):
+                    return subprocess.run(["bash", "-e", "-o", "pipefail", "-c", step["run"]],
+                                          cwd=REPO_ROOT, env={**env, **extra}, text=True,
+                                          capture_output=True, timeout=15)
+
+                child = ""
+                result = None
+                if mode != "original":
+                    result = execute(prior, GH_TOKEN="public-reader")
+                    if result.returncode == 0:
+                        child = result_path.read_text().strip().split("=", 1)[1]
+                if result is None or result.returncode == 0:
+                    result = execute(staging, GH_TOKEN="private-stager", PRIOR_CHILD_ID=child)
+                self.assertEqual(result.returncode == 0, success, result.stdout + result.stderr)
+                received = posts_path.read_text().splitlines() if posts_path.exists() else []
+                self.assertEqual(len(received), posts, result.stdout + result.stderr)
+                expected_prefix = "v6.9.0-rc.99-pro-20261122-200"
+                if success:
+                    self.assertIn(expected_prefix, result_path.read_text())
+                    self.assertIn("[OK] private Pro build completed", result.stdout)
+                if received:
+                    request = json.loads(received[0])
+                    self.assertEqual(request["ref"], "main")
+                    self.assertTrue(request["return_run_details"])
+                    self.assertEqual(request["inputs"]["public_release_run_id"], "200")
+                    self.assertEqual(request["inputs"]["pulse_checkout_ref"], "a" * 40)
+                    self.assertEqual(request["inputs"]["r2_prefix"], expected_prefix)
 
     def test_private_pro_promotion_redispatches_only_a_moved_main_source_refusal(self) -> None:
         """Run the real dispatch loop against doubles: only a pre-credential refusal caused by a
