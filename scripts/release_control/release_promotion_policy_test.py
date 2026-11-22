@@ -25,6 +25,7 @@ from release_promotion_policy_support import (
     staged_governance_input_errors,
 )
 from repo_file_io import REPO_ROOT, git_env, read_repo_text, strip_local_git_env
+from stable_patch import CONTROLS as STABLE_PATCH_CONTROLS
 
 USE_STAGED_GOVERNANCE = os.environ.get("PULSE_READ_STAGED_GOVERNANCE") == "1"
 
@@ -1696,6 +1697,11 @@ done
         steps = workflow["jobs"]["stage_private_pro_runtime"]["steps"]
         prior, staging = (next(step for step in steps if step.get("id") == step_id)
                           for step_id in ("prior_stage", "publish"))
+        interpreter, helper_path = prior["run"].split()
+        self.assertEqual(interpreter, "python3")
+        self.assertTrue(any(PurePosixPath(helper_path).is_relative_to(control)
+                            for control in STABLE_PATCH_CONTROLS),
+                        "The staging retry helper must be included in the stable patch control overlay")
         self.assertEqual(prior["env"]["GH_TOKEN"], "${{ github.token }}")
         self.assertEqual(staging["env"]["PRIOR_CHILD_ID"], "${{ steps.prior_stage.outputs.child_id }}")
         self.assertEqual(prior["if"], "${{ github.run_attempt != '1' }}")

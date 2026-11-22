@@ -256,6 +256,7 @@ scripts/release_control/*
 !scripts/release_control/mobile_relay_auth_approvals_proof.py
 !scripts/release_control/mobile_release_gate.py
 !scripts/release_control/mobile_release_gate_test.py
+!scripts/release_control/previous_private_stage.py
 !scripts/release_control/proof_entrypoints_test.py
 !scripts/release_control/readiness_assertion_guard.py
 !scripts/release_control/readiness_assertion_guard_test.py

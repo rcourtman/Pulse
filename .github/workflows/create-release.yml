@@ -1698,7 +1698,7 @@ jobs:
         if: ${{ github.run_attempt != '1' }}
         env:
           GH_TOKEN: ${{ github.token }}
-        run: python3 .github/scripts/previous-private-stage.py
+        run: python3 scripts/release_control/previous_private_stage.py
 
       - name: Dispatch and verify private Pro runtime staging
         id: publish
