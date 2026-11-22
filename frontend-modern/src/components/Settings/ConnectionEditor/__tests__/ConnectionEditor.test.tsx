@@ -30,7 +30,7 @@ function deferredProbe() {
 
 describe('ConnectionEditor', () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    mockedProbe.mockReset();
   });
 
   it.each([
@@ -172,7 +172,7 @@ describe('ConnectionEditor', () => {
       fireEvent.input(input, { target: { value: 'first.example.test' } });
       fireEvent.click(screen.getByRole('button', { name: 'Probe API endpoint' }));
       const previousResult = await (outcome === 'no-match'
-        ? screen.findByRole('button', { name: 'install Pulse Agent instead', exact: true })
+        ? screen.findByRole('button', { name: /^install Pulse Agent instead$/ })
         : screen.findByRole('alert'));
       expect(previousResult).toBeVisible();
 
