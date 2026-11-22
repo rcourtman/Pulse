@@ -396,7 +396,7 @@ func TestSanitizeErrorMessage(t *testing.T) {
 			name:      "connection operation classifies TLS error without leaking cert details",
 			err:       errors.New("x509: certificate signed by unknown authority (CN=internal.corp.lan)"),
 			operation: "connection",
-			expected:  "TLS certificate verification failed. Keep verification enabled. Check the hostname, expiry and trusted chain. Verify a certificate independently before setting a pin.",
+			expected:  "TLS certificate verification failed. Keep verification enabled. Check the hostname and trust chain. Verify pins independently.",
 		},
 		{
 			name:      "connection operation classifies HTTP protocol mismatch",

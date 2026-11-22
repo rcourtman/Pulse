@@ -88,7 +88,7 @@ export const NodeModalStatusFooter: Component<NodeModalStatusFooterProps> = (pro
               <p>{state.testResult()?.message}</p>
               <Show when={state.testResult()?.isCluster}>
                 <p class="mt-1 text-xs opacity-80">
-                  Cluster detected. This does not confirm access to every member. Nothing was saved.
+                  Cluster detected. Peer access unconfirmed. Not saved.
                 </p>
               </Show>
               <Show when={state.testResult()?.warnings && state.testResult()!.warnings!.length > 0}>

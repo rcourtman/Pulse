@@ -180,10 +180,10 @@ func TestHandleTestConnectionReportsNodesListedByPVE(t *testing.T) {
 		t.Fatalf("decode test result (HTTP %d): %v", rec.Code, err)
 	}
 	if rec.Code != http.StatusOK || result.Status != "success" || result.NodeCount != 2 ||
-		!strings.Contains(result.Message, "Nodes reported: 2. Background collection was not tested.") {
+		!strings.Contains(result.Message, "Nodes reported: 2. Polling not tested.") {
 		t.Fatalf("expected an inventory observation, got HTTP %d: %+v", rec.Code, result)
 	}
-	if len(cfg.PVEInstances) != 0 {
+	if len(handler.getConfig(req.Context()).PVEInstances) != 0 {
 		t.Fatal("testing the connection should not save it")
 	}
 }

@@ -975,7 +975,7 @@ func (h *ConfigHandlers) handleTestConnection(w http.ResponseWriter, r *http.Req
 
 		response := map[string]interface{}{
 			"status":    "success",
-			"message":   fmt.Sprintf("Connected to this PVE endpoint. Nodes reported: %d. Background collection was not tested.", len(nodes)),
+			"message":   fmt.Sprintf("Nodes reported: %d. Polling not tested.", len(nodes)),
 			"isCluster": isCluster,
 			"nodeCount": len(nodes),
 		}

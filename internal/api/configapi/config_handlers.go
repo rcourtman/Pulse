@@ -739,7 +739,7 @@ func classifyConnectionTestError(err error) string {
 	case containsAny("server gave http response to https client", "malformed http response", "first record does not look like a tls handshake"):
 		return "Protocol mismatch. Proxmox endpoints require https:// (for example https://host:8006 for PVE or :8007 for PBS)."
 	case containsAny("x509", "certificate", "tls:", "unknown authority", "fingerprint mismatch", "handshake failure", "bad certificate"):
-		return "TLS certificate verification failed. Keep verification enabled. Check the hostname, expiry and trusted chain. Verify a certificate independently before setting a pin."
+		return "TLS certificate verification failed. Keep verification enabled. Check the hostname and trust chain. Verify pins independently."
 	case containsAny("connection refused"):
 		return "Connection refused. Verify the host address and port (Proxmox VE uses 8006, PBS uses 8007) and confirm the service is running."
 	case containsAny("deadline exceeded", "timed out", "i/o timeout"):

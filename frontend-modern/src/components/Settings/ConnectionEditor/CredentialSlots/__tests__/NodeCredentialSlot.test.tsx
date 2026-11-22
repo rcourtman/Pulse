@@ -251,8 +251,7 @@ describe('NodeCredentialSlot', () => {
     const settings = createSettings();
     const testConnection = vi.spyOn(NodesAPI, 'testConnection').mockResolvedValue({
       status: 'success',
-      message:
-        'Connected to this PVE endpoint. Nodes reported: 2. Background collection was not tested.',
+      message: 'Nodes reported: 2. Polling not tested.',
       isCluster: true,
       nodeCount: 2,
       clusterNodeCount: 2,
@@ -277,9 +276,9 @@ describe('NodeCredentialSlot', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Test connection' }));
 
     expect(await screen.findByText(/Nodes reported: 2/)).toBeVisible();
-    expect(
-      screen.getByText(/Cluster detected.*does not confirm access to every member/),
-    ).toHaveTextContent('Nothing was saved.');
+    expect(screen.getByText(/Cluster detected.*Peer access unconfirmed/)).toHaveTextContent(
+      'Not saved.',
+    );
     expect(screen.getByRole('checkbox', { name: 'Verify SSL certificate' })).toBeChecked();
     expect(screen.getByRole('button', { name: 'Add node' })).toBeEnabled();
     expect(testConnection).toHaveBeenCalledOnce();
