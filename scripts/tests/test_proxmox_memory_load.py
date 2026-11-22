@@ -14,6 +14,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "memory"))
 import proxmox_load as load
 
 
+END = 1_795_305_900  # Synthetic end of RSS sampling, Unix seconds.
+
+
 class ProxmoxMemoryLoadTests(unittest.TestCase):
     def test_cluster_inventory_matches_estate_and_node_lists(self):
         counters = Counter()
@@ -135,6 +138,50 @@ class ProxmoxMemoryLoadTests(unittest.TestCase):
         self.assertEqual(self.stats.missing_guests(), self.expected)
         self.frame("initialState", resources=rows[:1])
         self.assertEqual(self.stats.missing_guests(), {("lxc", "ct-101")})
+
+    def test_a_retained_roster_or_unrelated_update_does_not_prove_late_collection(self):
+        old = (END - 270) * 1000
+        self.frame("initialState", resources=[
+            {"id": "a", "technology": "qemu", "name": "vm-100", "lastSeen": old},
+            {"id": "b", "technology": "lxc", "name": "ct-101", "lastSeen": old},
+        ])
+        self.frame("rawData", resourceDelta={"upserts": [
+            {"id": "a", "lastSeen": (END - 60) * 1000},
+            {"id": "b", "updatedAt": (END - 5) * 1000},
+        ]})
+        self.assertFalse(self.stats.missing_guests())
+        self.assertEqual(self.stats.missing_recent_guests(END - 300, END), {("lxc", "ct-101")})
+        self.frame("rawData", resourceDelta={"upserts": [
+            {"id": "b", "lastSeen": (END - 2) * 1000 + 321},
+        ]})
+        self.assertFalse(self.stats.missing_recent_guests(END - 300, END))
+
+    def test_missing_or_invalid_times_and_previous_run_do_not_prove_a_poll(self):
+        for timestamp in ((END - 31) * 1000, END * 1000 + 1, END - 1,
+                          "2026-11-21T00:04:59Z", str(END * 1000), END * 1000.0, 0, True, None):
+            with self.subTest(timestamp=timestamp):
+                self.frame("initialState", resources=[
+                    {"id": "a", "technology": "qemu", "name": "vm-100", "lastSeen": timestamp},
+                    {"id": "b", "technology": "lxc", "name": "ct-101"},
+                ])
+                self.assertFalse(self.stats.missing_guests())
+                self.assertEqual(self.stats.missing_recent_guests(END - 30, END), self.expected)
+
+    def test_recent_sighting_stays_bound_to_the_guest_and_current_inventory(self):
+        self.frame("initialState", resources=[
+            {"id": "a", "technology": "qemu", "name": "vm-100", "lastSeen": (END - 9) * 1000},
+            {"id": "b", "technology": "lxc", "name": "ct-101", "lastSeen": (END - 8) * 1000},
+        ])
+        self.frame("rawData", resourceDelta={"upserts": [{"id": "a", "cpu": {"current": 0.3}}]})
+        self.assertFalse(self.stats.missing_recent_guests(END - 300, END))
+        self.frame("rawData", resourceDelta={"upserts": [
+            {"id": "c", "technology": "qemu", "name": "vm-100"},
+        ], "removed": ["a"]})
+        self.assertEqual(self.stats.missing_recent_guests(END - 300, END), {("qemu", "vm-100")})
+        self.frame("rawData", resourceDelta={"upserts": [
+            {"id": "b", "technology": "qemu", "name": "vm-100"},
+        ]})
+        self.assertEqual(self.stats.missing_recent_guests(END - 300, END), self.expected)
 
 
 if __name__ == "__main__":

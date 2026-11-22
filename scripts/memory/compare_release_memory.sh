@@ -146,6 +146,8 @@ run_tree() {
   local pid=$!
   local driver=""
   local driver_log=""
+  local start now rss rss_hwm
+  start=$(date +%s)
   if [[ "${ESTATE}" == agents ]]; then
     # The sampling loop ends the driver with SIGTERM. A driver deadline equal
     # to the sampling window can expire as that signal arrives, and Python then
@@ -157,12 +159,11 @@ run_tree() {
   elif [[ "${ESTATE}" == proxmox ]]; then
     driver_log="${OUT_DIR}/proxmox-${label}.log"
     python3 "${SCRIPT_DIR}/proxmox_load.py" --port "${port}" --duration "$((DURATION + 120))" \
+      --sample-until "$((start + DURATION))" \
       --stats "${OUT_DIR}/proxmox-${label}.json" > "${driver_log}" 2>&1 &
     driver=$!
   fi
   printf 'elapsed_s\trss_kib\tgo_heap_kib\tgo_other_kib\tanon_other_kib\tfile_kib\tcpu_ticks\twrite_bytes\twchar_bytes\trss_hwm_kib\n' > "${samples}"
-  local start now rss rss_hwm
-  start=$(date +%s)
   while kill -0 "${pid}" 2>/dev/null; do
     now=$(( $(date +%s) - start ))
     (( now >= DURATION )) && break

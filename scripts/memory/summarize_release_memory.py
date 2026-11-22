@@ -157,6 +157,9 @@ def proxmox_lines(baseline: dict | None, candidate: dict | None) -> list[str]:
     rows = (
         ("PVE API requests", lambda d: d["pve_requests"]),
         ("PVE guests observed in dashboard state", lambda d: d.get("pve_guests_observed", "n/a")),
+        ("PVE guests with recent poll sightings at measurement end",
+         lambda d: (f"{d['pve_guests_recent']}/{d['guests']} (last {d['pve_guest_freshness_window_s']} s)"
+                    if "pve_guests_recent" in d else "n/a")),
         ("PBS API requests", lambda d: d["pbs_requests"]),
         ("PBS snapshot groups served/configured", pbs_snapshot_coverage),
         ("Dashboard connections", lambda d: d["dashboard"]["connects"]),
