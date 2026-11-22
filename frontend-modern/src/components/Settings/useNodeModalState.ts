@@ -1,4 +1,4 @@
-import { createEffect, createMemo, createSignal, onCleanup } from 'solid-js';
+import { createEffect, createMemo, createSignal, on, onCleanup } from 'solid-js';
 import type { ClusterEndpoint, NodeConfig } from '@/types/nodes';
 
 import { notificationStore } from '@/stores/notifications';
@@ -36,6 +36,47 @@ export const useNodeModalState = (props: NodeModalProps) => {
   const [testResult, setTestResult] = createSignal<NodeModalTestResult | null>(null);
   const [isTesting, setIsTesting] = createSignal(false);
   let probeGeneration = 0;
+  const invalidateConnectionTest = () => {
+    probeGeneration++;
+    setTestResult(null);
+  };
+
+  // The editor can stay mounted as the saved connection is refreshed. Compare
+  // its connection settings, not snapshot identity or live member health.
+  const probeSourceSignature = createMemo(() => {
+    const editingNode = props.editingNode;
+    const node = editingNode ?? props.prefillNode;
+    const peers = node && 'clusterEndpoints' in node ? node.clusterEndpoints : undefined;
+    return JSON.stringify([
+      props.isOpen,
+      props.resetKey,
+      props.nodeType,
+      editingNode?.id,
+      Boolean(node),
+      node?.id,
+      node?.host,
+      node?.user,
+      node?.tokenName,
+      node?.hasPassword,
+      node?.hasToken,
+      node?.verifySSL,
+      node && 'fingerprint' in node ? node.fingerprint : undefined,
+      peers
+        ?.map((peer) =>
+          JSON.stringify([
+            peer.nodeName,
+            peer.tlsEndpoint,
+            peer.ipOverride,
+            peer.usesPrimaryTLS,
+            peer.tlsFirstUse,
+            peer.fingerprint,
+          ]),
+        )
+        .sort() ?? [],
+    ]);
+  });
+  createEffect(on(probeSourceSignature, invalidateConnectionTest, { defer: true }));
+
   const [formData, setFormData] = createSignal<NodeModalFormData>(
     getNodeModalDefaultFormData(props.nodeType),
   );
@@ -101,6 +142,7 @@ export const useNodeModalState = (props: NodeModalProps) => {
   const bootstrapActive = (generation: number) =>
     generation === bootstrapGeneration && props.isOpen !== false;
   onCleanup(() => {
+    probeGeneration++;
     bootstrapGeneration++;
     clearQuickSetupState();
   });
@@ -291,7 +333,6 @@ export const useNodeModalState = (props: NodeModalProps) => {
       previousResetKey = key;
       setFormData(() => getNodeModalDefaultFormData(props.nodeType));
       clearQuickSetupState();
-      setTestResult(null);
       previousFormSourceSignature = null;
       previousFormSourceIdentity = null;
       formEditedByUser = false;
@@ -302,7 +343,6 @@ export const useNodeModalState = (props: NodeModalProps) => {
       previousNodeType = nodeType;
       setFormData(() => getNodeModalDefaultFormData(props.nodeType));
       clearQuickSetupState();
-      setTestResult(null);
       previousFormSourceSignature = null;
       previousFormSourceIdentity = null;
       formEditedByUser = false;
@@ -313,7 +353,6 @@ export const useNodeModalState = (props: NodeModalProps) => {
     if (isOpen && !editingNode && !prefillNode) {
       setFormData(() => getNodeModalDefaultFormData(props.nodeType));
       clearQuickSetupState();
-      setTestResult(null);
       previousFormSourceSignature = null;
       previousFormSourceIdentity = null;
       formEditedByUser = false;
@@ -536,8 +575,7 @@ export const useNodeModalState = (props: NodeModalProps) => {
 
   const updateField = (field: string, value: string | boolean | number) => {
     formEditedByUser = true;
-    probeGeneration++;
-    setTestResult(null);
+    invalidateConnectionTest();
     if (field === 'host' && typeof value === 'string') {
       setFormData((prev) => {
         const next = { ...prev, host: value };
@@ -567,8 +605,7 @@ export const useNodeModalState = (props: NodeModalProps) => {
 
   const updateClusterEndpointOverride = (nodeName: string, value: string) => {
     formEditedByUser = true;
-    probeGeneration++;
-    setTestResult(null);
+    invalidateConnectionTest();
     setFormData((prev) => ({
       ...prev,
       clusterEndpointOverrides: { ...prev.clusterEndpointOverrides, [nodeName]: value },
@@ -585,8 +622,7 @@ export const useNodeModalState = (props: NodeModalProps) => {
 
   const updateClusterEndpointFingerprint = (endpoint: string, value: string) => {
     formEditedByUser = true;
-    probeGeneration++;
-    setTestResult(null);
+    invalidateConnectionTest();
     setFormData((prev) => ({
       ...prev,
       clusterEndpointFingerprints: { ...prev.clusterEndpointFingerprints, [endpoint]: value },
@@ -594,7 +630,15 @@ export const useNodeModalState = (props: NodeModalProps) => {
     }));
   };
 
+  const beginConnectionTest = () => {
+    const generation = ++probeGeneration;
+    setIsTesting(true);
+    setTestResult(null);
+    return generation;
+  };
+
   const testSavedEndpoint = async (endpoint?: ClusterEndpoint) => {
+    if (isTesting() || !props.isOpen) return;
     const data = formData();
     if (
       data.host !== props.editingNode?.host ||
@@ -611,9 +655,7 @@ export const useNodeModalState = (props: NodeModalProps) => {
       return;
     }
     if (endpoint && !endpoint.tlsEndpoint) return;
-    const generation = ++probeGeneration;
-    setIsTesting(true);
-    setTestResult(null);
+    const generation = beginConnectionTest();
     try {
       const result = await NodesAPI.testExistingNode(props.editingNode!.id, {
         verifySSL: data.verifySSL,
@@ -650,6 +692,7 @@ export const useNodeModalState = (props: NodeModalProps) => {
   const handleTestClusterEndpoint = (endpoint: ClusterEndpoint) => testSavedEndpoint(endpoint);
 
   const handleTestConnection = async () => {
+    if (isTesting() || !props.isOpen) return;
     const data = formData();
     const normalizedName = data.name.trim() || deriveNameFromHost(data.host);
 
@@ -698,11 +741,10 @@ export const useNodeModalState = (props: NodeModalProps) => {
       testData.tokenValue = data.tokenValue;
     }
 
-    setIsTesting(true);
-    setTestResult(null);
-
+    const generation = beginConnectionTest();
     try {
       const result = await NodesAPI.testConnection(testData as NodeConfig);
+      if (generation !== probeGeneration) return;
       setTestResult({
         status: result.warnings && result.warnings.length > 0 ? 'warning' : 'success',
         message: result.message || 'Connection successful',
@@ -710,6 +752,7 @@ export const useNodeModalState = (props: NodeModalProps) => {
         warnings: result.warnings,
       });
     } catch (error) {
+      if (generation !== probeGeneration) return;
       logger.error('Test connection error:', error);
       let errorMessage = 'Connection failed';
       if (error instanceof Error) {
