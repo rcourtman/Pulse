@@ -114,7 +114,7 @@ describe('SSO provider read and editor ownership', () => {
     expect(notices.error).not.toHaveBeenCalled();
   });
 
-  it('accepts only the latest requested provider details, even if aborted fetch completes', async () => {
+  it.each([200, 503])('ignores an aborted provider-detail read that returns %i', async (status) => {
     const old = deferred();
     const base = fetchMock.getMockImplementation()!;
     fetchMock.mockImplementation((url: string, options?: RequestInit) =>
@@ -127,9 +127,10 @@ describe('SSO provider read and editor ownership', () => {
     );
     const dialog = await edit(1);
     expect(dialog.getByLabelText('Provider Name')).toHaveValue('second provider');
-    old.resolve(json(details()));
+    old.resolve(json(details(), status));
     await settle();
     expect(dialog.getByLabelText('Provider Name')).toHaveValue('second provider');
+    expect(screen.queryByText(/Could not open settings/)).toBeNull();
     const request = fetchMock.mock.calls.find(([url]) => url.endsWith('/first'))!;
     expect(request[1].signal.aborted).toBe(true);
     expect(writes()).toHaveLength(0);
@@ -158,10 +159,46 @@ describe('SSO provider read and editor ownership', () => {
     );
     render(() => <SSOProvidersPanel />);
     fireEvent.click((await screen.findAllByRole('button', { name: /^Edit provider / }))[0]);
-    await waitFor(() =>
-      expect(notices.error).toHaveBeenCalledWith('Unable to load SSO provider details.'),
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Could not open settings. Try Edit again.',
     );
+    expect(notices.error).not.toHaveBeenCalled();
     expect(screen.queryByRole('dialog')).toBeNull();
+  });
+
+  it('keeps a refused detail read with that provider until an explicit edit succeeds', async () => {
+    const base = fetchMock.getMockImplementation()!;
+    fetchMock.mockImplementation((url: string, options?: RequestInit) =>
+      url.endsWith('/first')
+        ? Promise.resolve(json({ error: 'FIXTURE_DETAIL' }, 503))
+        : base(url, options),
+    );
+    render(() => <SSOProvidersPanel />);
+
+    const failedEdit = await screen.findByRole('button', { name: 'Edit provider first provider' });
+    const otherEdit = screen.getByRole('button', { name: 'Edit provider second provider' });
+    failedEdit.focus();
+    fireEvent.click(failedEdit);
+    const notice = await screen.findByRole('alert');
+    expect(notice).toHaveTextContent('Could not open settings. Try Edit again.');
+    expect(failedEdit).toHaveFocus();
+    expect(failedEdit).toHaveAccessibleDescription(/Could not open settings/);
+    expect(otherEdit).not.toHaveAccessibleDescription(/Could not open settings/);
+    expect(otherEdit).toBeEnabled();
+    expect(document.body).not.toHaveTextContent('FIXTURE_DETAIL');
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(notices.error).not.toHaveBeenCalled();
+    expect(fetchMock.mock.calls.filter(([url]) => url.endsWith('/first'))).toHaveLength(1);
+
+    fetchMock.mockImplementation(base);
+    fireEvent.click(failedEdit);
+    const dialog = within(await screen.findByRole('dialog', { name: 'Edit OIDC provider' }));
+    expect(dialog.getByLabelText('Provider Name')).toHaveValue('first provider');
+    expect(dialog.getByLabelText('Client ID')).toHaveValue('pulse');
+    expect(screen.queryByText(/Could not open settings/)).toBeNull();
+    expect(fetchMock.mock.calls.filter(([url]) => url.endsWith('/first'))).toHaveLength(2);
+    expect(listCalls()).toHaveLength(1);
+    expect(writes()).toHaveLength(0);
   });
 
   it.each(['user', 'organisation', 'permission'] as const)(

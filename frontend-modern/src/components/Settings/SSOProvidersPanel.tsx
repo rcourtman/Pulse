@@ -32,6 +32,7 @@ import {
   getSSOCertificatePresentation,
   getSSOEndpointUnavailableHint,
   getSSOProviderCardClass,
+  getSSOProviderDetailsLoadErrorMessage,
   getSSOProviderEmptyStateDescription,
   getSSOProviderEmptyStateTitle,
   getSSOProvidersLoadingState,
@@ -84,6 +85,7 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
     unconfirmedChange,
     loadProviders,
     loadingDetails,
+    failedProviderDetails,
     canEdit,
     mutating,
     saving,
@@ -121,6 +123,7 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
   const summaryIdPrefix = createUniqueId();
   const summaryId = (id: string) => `${summaryIdPrefix}-${encodeURIComponent(id)}`;
   const inventoryTitleId = `${summaryIdPrefix}-inventory-title`;
+  const providerDetailErrorId = `${createUniqueId()}-provider-detail-error`;
   const testResultSummaryId = `${summaryIdPrefix}-test-summary`;
   const testResultId = `${summaryIdPrefix}-test-result`;
   const testResultTitleId = `${summaryIdPrefix}-test-result-title`;
@@ -408,7 +411,11 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
                         onClick={() => openEditModal(provider)}
                         disabled={!canEdit()}
                         label={`Edit provider ${provider.name}`}
-                        aria-describedby={summaryId(provider.id)}
+                        aria-describedby={
+                          failedProviderDetails() === provider
+                            ? `${summaryId(provider.id)} ${providerDetailErrorId}`
+                            : summaryId(provider.id)
+                        }
                         tone="accent"
                         size="md"
                         class="min-h-11 min-w-11 sm:min-h-0 sm:min-w-0"
@@ -429,6 +436,16 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
                       </ActionIconButton>
                     </div>
                   </div>
+
+                  <Show when={failedProviderDetails() === provider}>
+                    <p
+                      id={providerDetailErrorId}
+                      role="alert"
+                      class="mt-2 text-xs text-red-700 dark:text-red-300"
+                    >
+                      {getSSOProviderDetailsLoadErrorMessage()}
+                    </p>
+                  </Show>
 
                   {/* OIDC callback info */}
                   <Show when={provider.type === 'oidc'}>

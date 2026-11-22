@@ -54,7 +54,7 @@ export function getSSOProvidersLoadErrorMessage(): string {
 }
 
 export function getSSOProviderDetailsLoadErrorMessage(): string {
-  return 'Unable to load SSO provider details.';
+  return 'Could not open settings. Try Edit again.';
 }
 
 export function getSSOProviderSaveSuccessMessage(isEdit: boolean): string {
