@@ -1,0 +1,38 @@
+{
+  "version": 1,
+  "base_sha": "e2f1d5fed98d2948f34f4ee4b9222b02fa478c2d",
+  "verified_at": "2026-11-22T01:56:42Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/ConnectionEditor/CredentialSlots/VMwareCredentialSlot.tsx",
+    "frontend-modern/src/components/Settings/useVMwareSettingsPanelState.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/ConnectionEditor/CredentialSlots/VMwareCredentialSlot.tsx": "6388823ed9fbbd1c08ca9d0284967a7a7fa35ca442a23a8a5664078b7f716181",
+    "frontend-modern/src/components/Settings/useVMwareSettingsPanelState.ts": "b1fa70ff62e21be35867671e06c6788186ad935aacd463be59a61e239efb44d8"
+  },
+  "routes": [
+    "/settings/infrastructure \u2014 real InfrastructureWorkspace managed-source table, picker, and Add/Manage dialogs in a local fixture"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 320,
+      "height": 800
+    }
+  ],
+  "states": [
+    "Chromium 141.0.7390.37 / Playwright 1.56.1. Desktop light keyboard and narrow dark touch, matched inputs and fixed clock.",
+    "Base cf84f8b0b26c4fb09a7b0de0c72683c7a69031be and runtime e2f1d5fed98d2948f34f4ee4b9222b02fa478c2d; 12 matched pairs opened for native pixel inspection.",
+    "Saved draft success, limited optional event access, incomplete HTTP 200, required inventory permission failure, edit during a delayed test, and a successful unsaved Add test.",
+    "Visible per-surface scope, exact limited/failure diagnostics, negotiated version and direct action controls. No previously unobscured measured controls were lost. No full-App startup or live vCenter acceptance."
+  ],
+  "interactions": [
+    "Manage a saved vCenter and open Add through the existing source picker. Exercise the real HTTP response adapter and editor state using synthetic canonical probe replies.",
+    "Confirm the fixed result is inline, desktop focus stays on Test, and all measured phone actions are at least 44 px high. Editing Hosts during a pending test discards the stale result and preserves the edit.",
+    "Verify matching requests, saved password placeholder, verification enabled, and unchanged collection choices. No save, pause, removal or external requests."
+  ]
+}
