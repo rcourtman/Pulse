@@ -1,0 +1,38 @@
+{
+  "version": 1,
+  "base_sha": "6da54e579c9720313de9057c77805a458dd84f50",
+  "verified_at": "2026-11-22T12:39:18Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/NodeModalStatusFooter.tsx",
+    "frontend-modern/src/components/Settings/useNodeModalState.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/NodeModalStatusFooter.tsx": "772a813edfa2b4873895877452f47dd07abe456f0f33035783cfae297014496f",
+    "frontend-modern/src/components/Settings/useNodeModalState.ts": "b25a6258f9ac00d5dcc42f4a812e7500a8d144e6fd19662c892dc8f41cd03fda"
+  },
+  "routes": [
+    "/settings/infrastructure"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 320,
+      "height": 800
+    }
+  ],
+  "states": [
+    "Matched production Settings previews with synthetic nodes; Playwright 1.56.1 and Chromium 141.0.7390.37. Light desktop and dark touch. Inspected 16 matched main/final pairs and six returned-candidate captures.",
+    "Saved token-only PMG, projected username and blank password: unchanged and pin-only tests keep the prior main result with the saved route; the returned candidate blocked both.",
+    "Changed PMG usernames (saved token and saved password), changed PVE Token ID and switched PBS authentication ask for the missing secret with no saved test. A password draft missing its username also sends no request.",
+    "PVE peer tests with edited authentication stay local to that peer without changing its retained access warning. Unchanged authentication can still test an edited TLS pin with the endpoint-qualified result."
+  ],
+  "interactions": [
+    "Open the real Infrastructure Manage dialog, exercise edits and Test with keyboard or touch, and verify the saved route receives TLS fields only, including the intended pin.",
+    "Complete and retest a draft, including a password for the same displayed PMG username. Verify the draft route receives the selected identity and only its matching secret; no save or trust change.",
+    "Restore the PVE identity and test the intended member. Inspect the result, monitoring controls, TLS cues and footer actions at both widths relative to main."
+  ]
+}
