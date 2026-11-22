@@ -1558,10 +1558,15 @@ The TrueNAS connection editor reports a successful draft test only as a system
 information read: it does not verify selected pools, datasets, replication or
 metrics, or save the draft. A reply without explicit success is unconfirmed.
 Feedback belongs to the current draft and reader; editing or leaving the form
-clears it. An access denial still withdraws the reader's saved configuration
-even if the tested draft has since changed.
-Keep the test result next to the editor actions without replacing scope
-or saved-transport details, or moving the connection actions behind a disclosure.
+clears it. On the editor's Test or Save request only, HTTP 403 with the
+structured `destination_not_allowed` code means Pulse refused the address, not
+that it lost access to Settings. Keep the draft and show the refusal and the
+fact that nothing was saved. Do not retry automatically or change destination
+policy. Other 401/403 responses still withdraw the reader's configuration even
+if the tested draft has since changed. The transport tests exercise both Add
+and Manage, verify one request per action, and check that an obsolete refusal
+does not apply to a changed address. Keep feedback next to the existing editor
+actions without replacing scope or saved-transport details, or hiding actions.
 
 ### Podman interval CPU evidence — issue #2447
 

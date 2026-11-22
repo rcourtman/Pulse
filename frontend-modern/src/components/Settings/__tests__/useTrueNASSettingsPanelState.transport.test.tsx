@@ -13,7 +13,12 @@ vi.mock('@/stores/notifications', () => ({
 vi.mock('@/utils/logger', () => ({ logger: { error: vi.fn(), warn: vi.fn(), debug: vi.fn() } }));
 
 const fetchMock = vi.fn<typeof fetch>();
+let expectedActions: [string, string][];
 const pendingBodies = new Set<() => void>();
+const destinationRefusal = {
+  code: 'destination_not_allowed',
+  error: 'Synthetic upstream explanation that should not be displayed',
+};
 const connection = (name = 'Original private source') => ({
   id: 'same-source-id',
   name,
@@ -64,6 +69,7 @@ const ready = async (state: ReturnType<typeof useTrueNASSettingsPanelState>) => 
 describe('TrueNAS settings through the real API transport', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    expectedActions = [];
     fetchMock.mockReset().mockImplementation(async () => json([connection('Replacement source')]));
     fetchMock.mockResolvedValueOnce(json([connection()]));
     vi.stubGlobal('fetch', fetchMock);
@@ -78,13 +84,117 @@ describe('TrueNAS settings through the real API transport', () => {
   afterEach(() => {
     cleanup();
     for (const discard of pendingBodies) discard();
-    for (const [url, options] of fetchMock.mock.calls) {
-      expect(url).toBe('/api/truenas/connections');
-      expect(options?.method || 'GET').toBe('GET');
-    }
+    const actions = fetchMock.mock.calls.flatMap(([url, options]) => {
+      const method = options?.method ?? 'GET';
+      return url === '/api/truenas/connections' && method === 'GET' ? [] : [[method, String(url)]];
+    });
     clearAuth();
     setOrgID(null);
     vi.unstubAllGlobals();
+    expect(actions).toEqual(expectedActions);
+  });
+
+  it.each([
+    ['new', 'test', 'POST', '/api/truenas/connections/test'],
+    ['saved', 'test', 'POST', '/api/truenas/connections/same-source-id/test'],
+    ['new', 'save', 'POST', '/api/truenas/connections'],
+    ['saved', 'save', 'PUT', '/api/truenas/connections/same-source-id'],
+  ] as const)(
+    'preserves the %s draft after a %s destination refusal without replaying',
+    async (mode, action, method, endpoint) => {
+      const { result } = renderHook(() => useTrueNASSettingsPanelState());
+      await ready(result);
+      if (mode === 'saved') result.openEditDialog(result.connections()[0]);
+      else result.openCreateDialog();
+      result.updateForm({
+        name: 'Retained draft',
+        host: 'nas.example.invalid',
+        username: 'monitor',
+        ...(mode === 'new' ? { apiKey: 'fixture-unsaved-key' } : {}),
+        monitorDatasets: false,
+      });
+      const draft = result.form();
+      expectedActions = [[method, endpoint]];
+      fetchMock.mockResolvedValueOnce(
+        json(destinationRefusal, 403, { 'X-CSRF-Token': 'fixture-no-replay' }),
+      );
+
+      if (action === 'test') expect(await result.testCurrentForm()).toBe(false);
+      else await result.saveCurrentForm();
+
+      expect(result.connectionFeedback()).toEqual({ kind: 'destination-refused' });
+      expect(result.dialogOpen()).toBe(true);
+      expect(result.form()).toEqual(draft);
+      expect(result.connections().map((item) => item.name)).toEqual(['Original private source']);
+      expect(result.loadingError()).toBeNull();
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+      const options = fetchMock.mock.calls[1][1];
+      expect(new Headers(options?.headers).get('X-Pulse-Org-ID')).toBe('north');
+      expect(JSON.parse(String(options?.body))).toMatchObject({
+        apiKey: mode === 'saved' ? '********' : 'fixture-unsaved-key',
+        useHttps: true,
+        insecureSkipVerify: false,
+        monitorDatasets: false,
+      });
+      result.updateForm({ host: 'corrected.example.invalid' });
+      expect(result.connectionFeedback()).toBeNull();
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+    },
+  );
+
+  it.each([
+    [401, destinationRefusal],
+    [403, { code: 'permission_denied', error: 'destination_not_allowed' }],
+  ] as const)('still withdraws reader access on Test HTTP %s', async (status, body) => {
+    const { result } = renderHook(() => useTrueNASSettingsPanelState());
+    await ready(result);
+    result.openEditDialog(result.connections()[0]);
+    result.updateForm({ apiKey: 'fixture-unsaved-key' });
+    expectedActions = [['POST', '/api/truenas/connections/same-source-id/test']];
+    fetchMock.mockResolvedValueOnce(json(body, status));
+
+    expect(await result.testCurrentForm()).toBe(false);
+    expect(result.dialogOpen()).toBe(false);
+    expect(result.form().apiKey).toBe('');
+    expect(result.connections()).toEqual([]);
+    expect(result.connectionFeedback()).toBeNull();
+    expect(result.loadingError()).toContain('access could not be verified');
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not make the Test and Save exception on a preview request', async () => {
+    const { result } = renderHook(() => useTrueNASSettingsPanelState());
+    await ready(result);
+    result.openEditDialog(result.connections()[0]);
+    expectedActions = [['POST', '/api/truenas/connections/same-source-id/preview']];
+    fetchMock.mockResolvedValueOnce(json(destinationRefusal, 403));
+
+    expect(await result.previewCurrentForm()).toBeNull();
+    expect(result.dialogOpen()).toBe(false);
+    expect(result.connectionFeedback()).toBeNull();
+    expect(result.loadingError()).toContain('access could not be verified');
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not show a delayed destination refusal after changing the tested address', async () => {
+    const { result } = renderHook(() => useTrueNASSettingsPanelState());
+    await ready(result);
+    result.openEditDialog(result.connections()[0]);
+    const old = delayedBody(403);
+    fetchMock.mockResolvedValueOnce(old.response);
+    expectedActions = [['POST', '/api/truenas/connections/same-source-id/test']];
+    const testing = result.testCurrentForm();
+    await waitFor(() => expect(old.response.body?.locked).toBe(true));
+    result.updateForm({ host: 'corrected.example.invalid' });
+    old.release(destinationRefusal);
+
+    expect(await testing).toBe(false);
+    expect(result.connectionFeedback()).toBeNull();
+    expect(result.loadingError()).toBeNull();
+    expect(result.dialogOpen()).toBe(true);
+    expect(result.form().host).toBe('corrected.example.invalid');
+    expect(result.testing()).toBe(false);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
   it.each(['organisation', 'user round trip', 'capability', 'disposal'] as const)(
@@ -152,6 +262,7 @@ describe('TrueNAS settings through the real API transport', () => {
   it.each([
     [400, { error: 'invalid_org' }, {}],
     [403, { error: 'private-denial-detail' }, { 'X-CSRF-Token': 'synthetic-replacement' }],
+    [403, destinationRefusal, {}],
     [429, { error: 'rate_limited' }, { 'Retry-After': '1' }],
   ] as const)(
     'does not replay a settings read or drop its organisation after HTTP %i',

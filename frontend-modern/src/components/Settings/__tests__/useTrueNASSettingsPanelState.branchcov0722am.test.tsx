@@ -79,7 +79,7 @@ describe('useTrueNASSettingsPanelState — error-message + dialog branch coverag
     const ok = await result.testCurrentForm();
 
     expect(ok).toBe(false);
-    expect(result.connectionTestResult()).toEqual({
+    expect(result.connectionFeedback()).toEqual({
       kind: 'failed',
       detail: 'x509: certificate signed by unknown authority',
     });
@@ -107,7 +107,7 @@ describe('useTrueNASSettingsPanelState — error-message + dialog branch coverag
     result.updateForm({ host: 'tower.local', apiKey: 'secret', username: 'pulse-monitor' });
     await result.testCurrentForm();
 
-    expect(result.connectionTestResult()).toEqual({
+    expect(result.connectionFeedback()).toEqual({
       kind: 'failed',
       detail: 'actionable cause from details',
     });
@@ -124,7 +124,7 @@ describe('useTrueNASSettingsPanelState — error-message + dialog branch coverag
     result.updateForm({ host: 'tower.local', apiKey: 'secret', username: 'pulse-monitor' });
     await result.testCurrentForm();
 
-    expect(result.connectionTestResult()).toEqual({ kind: 'failed', detail: 'connection refused' });
+    expect(result.connectionFeedback()).toEqual({ kind: 'failed', detail: 'connection refused' });
   });
 
   it('extracts and trims a plain-object message through testSavedConnection failure', async () => {
@@ -175,7 +175,7 @@ describe('useTrueNASSettingsPanelState — error-message + dialog branch coverag
       const ok = await result.testCurrentForm();
 
       expect(ok).toBe(false);
-      expect(result.connectionTestResult()).toEqual({
+      expect(result.connectionFeedback()).toEqual({
         kind: 'failed',
         detail: 'Pulse could not complete this test.',
       });
@@ -254,7 +254,7 @@ describe('useTrueNASSettingsPanelState — error-message + dialog branch coverag
     resolveTest({ success: true });
     await testPromise;
     expect(result.testing()).toBe(false);
-    expect(result.connectionTestResult()).toEqual({ kind: 'passed' });
+    expect(result.connectionFeedback()).toEqual({ kind: 'passed' });
   });
 
   it('keeps the dialog open when closeDialog is invoked while a save is in flight', async () => {

@@ -1446,6 +1446,11 @@ describe('InfrastructureWorkspace', () => {
       .mockRejectedValueOnce({
         status: 400,
         details: { error: 'x509: certificate signed by unknown authority' },
+      })
+      .mockRejectedValueOnce({
+        status: 403,
+        code: 'destination_not_allowed',
+        message: 'Synthetic server detail',
       });
     const update = vi.spyOn(TrueNASAPI, 'updateConnection');
     connectionState.connections = [
@@ -1496,7 +1501,13 @@ describe('InfrastructureWorkspace', () => {
       target: { value: 'New draft' },
     });
     expect(result).toBeEmptyDOMElement();
-    expect(test).toHaveBeenCalledTimes(3);
+    fireEvent.click(testButton);
+    await waitFor(() => expect(result).toHaveTextContent('TrueNAS address not allowed'));
+    expect(result).toHaveTextContent('Nothing was saved.');
+    expect(result).not.toHaveTextContent('Synthetic server detail');
+    expect(dialog.getByRole('textbox', { name: 'Name' })).toHaveValue('New draft');
+    expect(dialog.getByRole('button', { name: 'Update connection' })).toBeEnabled();
+    expect(test).toHaveBeenCalledTimes(4);
     expect(update).not.toHaveBeenCalled();
   });
 
