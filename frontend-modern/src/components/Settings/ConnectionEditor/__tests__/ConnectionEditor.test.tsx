@@ -3,6 +3,7 @@ import { fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
 import { createSignal } from 'solid-js';
 import { ConnectionsAPI, type ConnectionType, type ProbeResponse } from '@/api/connections';
 import { ConnectionEditor } from '../ConnectionEditor';
+import { createConnectionEditorState } from '../useConnectionEditor';
 
 const connectionsApiMock = vi.hoisted(() => ({
   list: vi.fn(),
@@ -17,9 +18,19 @@ vi.mock('@/api/connections', () => ({
 
 const mockedProbe = vi.mocked(ConnectionsAPI.probe);
 
+function deferredProbe() {
+  let resolve!: (response: ProbeResponse) => void;
+  let reject!: (error: Error) => void;
+  const promise = new Promise<ProbeResponse>((accept, decline) => {
+    resolve = accept;
+    reject = decline;
+  });
+  return { promise, resolve, reject };
+}
+
 describe('ConnectionEditor', () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    mockedProbe.mockReset();
   });
 
   it.each([
@@ -89,6 +100,127 @@ describe('ConnectionEditor', () => {
     expect(lastCall.candidate?.host).toBe('https://pve.lab:8006');
     expect(lastCall.mode).toBe('add');
   });
+
+  it('retains detection for whitespace only and hands off only a freshly probed endpoint after an edit', async () => {
+    const firstHost = 'https://first.example.test:8006';
+    const nextHost = 'https://second.example.test:8007';
+    const nextCandidate = { type: 'pbs', host: nextHost, port: 8007 } as const;
+    mockedProbe
+      .mockResolvedValueOnce({
+        candidates: [{ type: 'pve', host: firstHost, port: 8006 }],
+        probedMs: 418,
+      })
+      .mockResolvedValueOnce({ candidates: [nextCandidate], probedMs: 215 });
+
+    const chooseCandidate = vi.fn();
+    render(() => (
+      <ConnectionEditor
+        onSelectCandidate={chooseCandidate}
+        renderCredentialSlot={() => <div />}
+        onClose={() => {}}
+      />
+    ));
+    const input = screen.getByLabelText('API endpoint');
+    const probe = screen.getByRole('button', { name: 'Probe API endpoint' });
+    const edit = (value: string) => fireEvent.input(input, { target: { value } });
+
+    edit(firstHost);
+    fireEvent.click(probe);
+    expect(await screen.findByText(firstHost)).toBeVisible();
+    edit(`  ${firstHost}  `);
+    expect(screen.getByText(firstHost)).toBeVisible();
+    expect(screen.getByText('Probed in 418 ms')).toBeVisible();
+
+    edit(nextHost);
+    expect(screen.queryByText(firstHost)).not.toBeInTheDocument();
+    expect(screen.queryByText('Probed in 418 ms')).not.toBeInTheDocument();
+    expect(screen.getByRole('status')).toHaveTextContent('Address changed. Probe this endpoint');
+    expect(probe).toBeEnabled();
+    expect(chooseCandidate).not.toHaveBeenCalled();
+
+    edit('');
+    expect(probe).toBeDisabled();
+    expect(screen.getByRole('status')).toBeEmptyDOMElement();
+    edit(firstHost);
+    expect(screen.queryByText(firstHost)).not.toBeInTheDocument();
+    expect(mockedProbe.mock.calls).toEqual([[firstHost]]);
+
+    edit(` ${nextHost} `);
+    fireEvent.click(probe);
+    fireEvent.click((await screen.findByText(nextHost)).closest('button')!);
+    expect(chooseCandidate).toHaveBeenCalledExactlyOnceWith(nextCandidate);
+    expect(mockedProbe.mock.calls).toEqual([[firstHost], [nextHost]]);
+    expect(screen.getByRole('status')).toBeEmptyDOMElement();
+  });
+
+  it.each(['no-match', 'error'] as const)(
+    'retains the source picker but retires a previous %s on address edit',
+    async (outcome) => {
+      if (outcome === 'no-match')
+        mockedProbe.mockResolvedValueOnce({ candidates: [], probedMs: 22 });
+      else mockedProbe.mockRejectedValueOnce(new Error('Previous probe rejected the address'));
+
+      const onBackToCatalog = vi.fn();
+      render(() => (
+        <ConnectionEditor
+          onBackToCatalog={onBackToCatalog}
+          renderCredentialSlot={() => <div />}
+          onClose={() => {}}
+        />
+      ));
+      const input = screen.getByLabelText('API endpoint');
+      fireEvent.input(input, { target: { value: 'first.example.test' } });
+      fireEvent.click(screen.getByRole('button', { name: 'Probe API endpoint' }));
+      const previousResult = await (outcome === 'no-match'
+        ? screen.findByRole('button', { name: /^install Pulse Agent instead$/ })
+        : screen.findByRole('alert'));
+      expect(previousResult).toBeVisible();
+
+      fireEvent.input(input, { target: { value: 'second.example.test' } });
+      expect(previousResult).not.toBeInTheDocument();
+      const back = screen.getByRole('button', { name: /Back to source types/i });
+      expect(back).toBeVisible();
+      fireEvent.click(back);
+      expect(onBackToCatalog).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it.each(['edit', 'reset'] as const)(
+    'ignores a late response after %s even if a new probe uses the same address',
+    async (retirement) => {
+      const retired = deferredProbe();
+      const current = deferredProbe();
+      mockedProbe.mockReturnValueOnce(retired.promise).mockReturnValueOnce(current.promise);
+      const state = createConnectionEditorState();
+      const address = 'https://first.example.test:8006';
+      state.setAddress(address);
+      const oldRun = state.runProbe();
+      expect(state.phase()).toBe('probing');
+      const duplicateRun = state.runProbe();
+      expect(mockedProbe.mock.calls).toEqual([[address]]);
+      expect(await duplicateRun).toBeUndefined();
+
+      if (retirement === 'edit') state.setAddress('second.example.test');
+      else state.reset();
+      state.setAddress(address);
+      const newRun = state.runProbe();
+      if (retirement === 'edit') {
+        retired.resolve({ candidates: [{ type: 'pve', host: address, port: 8006 }], probedMs: 99 });
+      } else {
+        retired.reject(new Error('Retired endpoint check failed'));
+      }
+      expect(await oldRun).toBeUndefined();
+      expect(state.phase()).toBe('probing');
+      expect(state.candidates()).toEqual([]);
+      expect(state.errorMessage()).toBe('');
+
+      current.resolve({ candidates: [], probedMs: 20 });
+      expect(await newRun).toBe('no-match');
+      expect(state.phase()).toBe('no-match');
+      expect(state.probedMs()).toBe(20);
+      expect(mockedProbe.mock.calls).toEqual([[address], [address]]);
+    },
+  );
 
   it('renders the detect landing and can return to the source picker', () => {
     const onBackToCatalog = vi.fn();
