@@ -25,6 +25,7 @@ from release_promotion_policy_support import (
     staged_governance_input_errors,
 )
 from repo_file_io import REPO_ROOT, git_env, read_repo_text, strip_local_git_env
+from stable_patch import CONTROLS as STABLE_PATCH_CONTROLS
 
 USE_STAGED_GOVERNANCE = os.environ.get("PULSE_READ_STAGED_GOVERNANCE") == "1"
 
@@ -1690,6 +1691,274 @@ done
                 self.assertNotIn("gh run list", job)
                 self.assertNotIn("started_at", job)
 
+    def test_private_pro_staging_retry_follows_the_exact_prior_child(self) -> None:
+        """Drive the workflow steps and use their completed jobs/logs on later attempts."""
+        workflow = yaml.safe_load(read(".github/workflows/create-release.yml"))
+        job = workflow["jobs"]["stage_private_pro_runtime"]
+        steps = {step["id"]: step for step in job["steps"] if "id" in step}
+        prior, plan, dispatch, verify = (steps[key] for key in
+                                         ("prior_stage", "stage_plan", "stage_dispatch", "stage_verify"))
+        interpreter, helper_path = prior["run"].split()
+        self.assertEqual(interpreter, "python3")
+        self.assertTrue(any(PurePosixPath(helper_path).is_relative_to(control)
+                            for control in STABLE_PATCH_CONTROLS),
+                        "The staging retry helper must be included in the stable patch control overlay")
+        self.assertEqual(prior["env"]["GH_TOKEN"], "${{ github.token }}")
+        self.assertEqual(prior["if"], "${{ github.run_attempt != '1' }}")
+        self.assertEqual(plan["env"]["PRIOR_CHILD_ID"], "${{ steps.prior_stage.outputs.child_id }}")
+        self.assertEqual(dispatch["env"]["DISPATCH_PAYLOAD"], "${{ steps.stage_plan.outputs.dispatch_payload }}")
+        self.assertEqual(dispatch["if"], "${{ success() && steps.stage_plan.outputs.dispatch_payload != '' }}")
+        self.assertEqual(verify["env"]["EXISTING_CHILD_ID"], "${{ steps.stage_plan.outputs.existing_child_id }}")
+        self.assertEqual(verify["env"]["DISPATCHED_CHILD_ID"], "${{ steps.stage_dispatch.outputs.child_id }}")
+        self.assertEqual(job["outputs"]["r2_prefix"], "${{ steps.stage_plan.outputs.r2_prefix }}")
+        self.assertNotIn("if", plan)
+        self.assertNotIn("if", verify)
+
+        fake_gh = r'''#!/usr/bin/env python3
+import json, os, re, sys
+from pathlib import Path
+
+fix = Path(os.environ["FIX"])
+settings = json.loads(os.environ["SETTINGS"])
+attempt = int(os.environ["GITHUB_RUN_ATTEMPT"])
+args = sys.argv[1:]
+token = os.environ["GH_TOKEN"]
+
+def record(kind, value):
+    with (fix / "calls").open("a") as out:
+        print(json.dumps([attempt, kind, value]), file=out)
+
+if len(args) == 2 and args[0] == "api":
+    endpoint = args[1]
+    if match := re.fullmatch(r"repos/rcourtman/Pulse/actions/runs/200/attempts/(\d+)/jobs\?per_page=100", endpoint):
+        assert token == "public-reader"
+        record("jobs", int(match[1]))
+        print((fix / f"jobs-{match[1]}.json").read_text())
+    elif match := re.fullmatch(r"repos/rcourtman/Pulse/actions/jobs/(\d+)/logs", endpoint):
+        assert token == "public-reader"
+        record("logs", int(match[1]))
+        print((fix / f"log-{match[1]}.txt").read_text())
+    elif match := re.fullmatch(r"repos/rcourtman/pulse-enterprise/actions/runs/(\d+)", endpoint):
+        assert token == "private-stager"
+        child = int(match[1])
+        record("child", child)
+        mode = settings.get("prior_child", "queued")
+        if mode == "unavailable":
+            sys.exit(1)
+        status, conclusion = (("completed", mode) if mode in
+                              ("failure", "success", "cancelled") else ("queued", None))
+        print(json.dumps({"id": child,
+                          "path": ".github/workflows/" +
+                                  ("unrelated.yml" if mode == "foreign" else "build-pro-release.yml"),
+                          "event": "workflow_dispatch", "head_branch": "main", "status": status,
+                          "conclusion": conclusion}))
+    else:
+        sys.exit(f"unexpected gh endpoint: {endpoint!r}")
+elif args == ["run", "view", "200", "--repo", "rcourtman/Pulse", "--json", "createdAt", "--jq", ".createdAt"]:
+    assert token == "private-stager"
+    record("created", 200)
+    if settings.get("missing_date"):
+        sys.exit(1)
+    print("2026-11-22T00:38:22Z")
+elif len(args) == 9 and args[:2] == ["run", "view"] and args[3:8] == [
+    "--repo", "rcourtman/pulse-enterprise", "--json", "status,conclusion,url", "--jq"
+]:
+    assert token == "private-stager"
+    child = int(args[2])
+    record("watch", child)
+    mode = settings.get("watch", "success")
+    status, conclusion = ("queued", "") if mode == "queued" else ("completed", mode)
+    print(f"{status}\t{conclusion}\thttps://example.invalid/runs/{child}")
+elif args == ["api", "--method", "POST", "-H", "Accept: application/vnd.github+json",
+              "-H", "X-GitHub-Api-Version: 2026-03-10",
+              "repos/rcourtman/pulse-enterprise/actions/workflows/build-pro-release.yml/dispatches", "--input", "-"]:
+    assert token == "private-stager"
+    record("post", json.load(sys.stdin))
+    if settings.get("lost_response"):
+        sys.exit(1)
+    print(json.dumps({} if settings.get("missing_id") else
+                     {"workflow_run_id": settings.get("dispatch_id", 300)}))
+else:
+    sys.exit(f"unexpected gh invocation: {args!r}")
+'''
+        prefix = "v6.9.0-rc.99-pro-20261122-200"
+        expected_payload = {"ref": "main", "return_run_details": True, "inputs": {
+            "pulse_ref": "v6.9.0-rc.99",
+            "pulse_checkout_ref": "a" * 40,
+            "public_release_run_id": "200",
+            "version": "6.9.0-rc.99",
+            "upload_actions_artifact": "false",
+            "upload_to_r2": "true",
+            "publish_docker_image": "true",
+            "docker_image": "license.pulserelay.pro/pulse-pro",
+            "r2_prefix": prefix,
+            "reuse_existing_packet": "true",
+            "allow_stable_ga_publish": "false",
+            "allow_pre_activation_staging": "true",
+        }}
+
+        def exercise(configs, *, damage=None):
+            with tempfile.TemporaryDirectory() as temp:
+                fixture = Path(temp)
+                gh = fixture / "gh"
+                gh.write_text(fake_gh, encoding="utf-8")
+                gh.chmod(0o755)
+                results = []
+                for attempt, settings in enumerate(configs, 1):
+                    env = {**os.environ, "SETTINGS": json.dumps(settings), "FIX": temp,
+                           "PATH": f"{temp}{os.pathsep}{os.environ['PATH']}",
+                           "GITHUB_REPOSITORY": "rcourtman/Pulse", "GITHUB_RUN_ID": "200",
+                           "GITHUB_RUN_ATTEMPT": str(attempt), "GITHUB_SHA": "a" * 40,
+                           "TAG": "v6.9.0-rc.99", "VERSION": "6.9.0-rc.99", "IS_PRERELEASE": "true"}
+                    steps_result, logs = {}, []
+                    job_failed = False
+
+                    def execute(step, run=True, *, GH_TOKEN="private-stager", **extra):
+                        nonlocal job_failed
+                        output = {}
+                        conclusion = "skipped"
+                        if run and not job_failed:
+                            path = fixture / step["id"]
+                            path.write_text("")
+                            script = step["run"]
+                            if step is verify:
+                                # Advance the real waiter's clock across the bounded timeout.
+                                script = 'sleep() { SECONDS=$((SECONDS + 10800)); }\n' + script
+                            result = subprocess.run(
+                                ["bash", "-e", "-o", "pipefail", "-c", script], cwd=REPO_ROOT,
+                                env={**env, **extra, "GH_TOKEN": GH_TOKEN,
+                                     "GITHUB_OUTPUT": str(fixture if step is dispatch and
+                                                         settings.get("lost_output") else path)},
+                                text=True, capture_output=True, timeout=15,
+                            )
+                            job_failed = result.returncode != 0
+                            conclusion = "failure" if job_failed else "success"
+                            logs.extend(result.stdout.splitlines())
+                            logs.extend(result.stderr.splitlines())
+                            lines = iter(path.read_text().splitlines())
+                            for line in lines:
+                                if "<<" in line:
+                                    key, delimiter = line.split("<<", 1)
+                                    value = []
+                                    for next_line in lines:
+                                        if next_line == delimiter:
+                                            break
+                                        value.append(next_line)
+                                    output[key] = "\n".join(value)
+                                else:
+                                    key, value = line.split("=", 1)
+                                    output[key] = value
+                        steps_result[step["id"]] = {"name": step["name"], "status": "completed",
+                                                    "conclusion": conclusion}
+                        return output
+
+                    known = execute(prior, run=attempt > 1, GH_TOKEN="public-reader")
+                    planned = execute(plan, PRIOR_CHILD_ID=known.get("child_id", ""))
+                    payload = planned.get("dispatch_payload", "")
+                    dispatched = execute(dispatch, run=bool(payload), DISPATCH_PAYLOAD=payload)
+                    execute(verify, EXISTING_CHILD_ID=planned.get("existing_child_id", ""),
+                            DISPATCHED_CHILD_ID=dispatched.get("child_id", ""))
+                    job_id = 100 + attempt
+                    row = {"name": "stage_private_pro_runtime", "id": job_id, "run_id": 200,
+                           "run_attempt": attempt, "head_sha": "a" * 40, "status": "completed",
+                           "conclusion": "failure" if job_failed else "success",
+                           "steps": list(steps_result.values())}
+                    total_count, job_results = 1, [row]
+                    retained = list(logs)
+                    if attempt == 1:
+                        if damage == "foreign-source":
+                            row["head_sha"] = "b" * 40
+                        elif damage == "partial-jobs":
+                            total_count = 2
+                        elif damage == "missing-step":
+                            row["steps"] = [step for step in row["steps"] if step["name"] != dispatch["name"]]
+                        elif damage == "unavailable-log":
+                            retained = None
+                        elif damage == "conflicting-ack":
+                            retained.append("Acknowledged private Pro build dispatch run 399 in rcourtman/pulse-enterprise.")
+                        elif damage == "only-watcher-or-shell-echo":
+                            retained = [
+                                'echo "Acknowledged private Pro build dispatch run 300 in rcourtman/pulse-enterprise."',
+                                "\x1b[36;1mAcknowledged private Pro build dispatch run 300 in rcourtman/pulse-enterprise.\x1b[0m",
+                                "Watching exact private Pro build run 300 in rcourtman/pulse-enterprise.",
+                            ]
+                    if retained is not None:
+                        (fixture / f"log-{job_id}.txt").write_text(
+                            "".join(f"2026-11-22T00:39:41.3416113Z {line}\n" for line in retained))
+                    (fixture / f"jobs-{attempt}.json").write_text(
+                        json.dumps({"total_count": total_count, "jobs": job_results}))
+                    results.append((not job_failed, known.get("child_id"), planned.get("r2_prefix"),
+                                    steps_result["stage_dispatch"]["conclusion"], "\n".join(logs)))
+                calls = [json.loads(line) for line in (fixture / "calls").read_text().splitlines()]
+                return results, calls
+
+        def assert_attempts(results, expected):
+            self.assertEqual([row[:4] for row in results], expected, "\n\n".join(row[4] for row in results))
+
+        def assert_posts(calls, attempts):
+            self.assertEqual([(attempt, value) for attempt, kind, value in calls if kind == "post"],
+                             [(attempt, expected_payload) for attempt in attempts])
+
+        # The original child is still queued when the wait expires. Retry 2
+        # knows its ID but cannot query it. Retry 3 must still find that same
+        # child, not interpret missing watcher output as a new POST admission.
+        results, calls = exercise([{"watch": "queued"}, {"prior_child": "unavailable"}, {}])
+        assert_attempts(results, [(False, None, prefix, "success"), (False, "300", prefix, "skipped"),
+                                  (True, "300", prefix, "skipped")])
+        assert_posts(calls, [1])
+        self.assertIn("Timed out waiting for private Pro build after 10800s.", results[0][4])
+        self.assertIn("exact prior private staging child could not be verified", results[1][4])
+        self.assertEqual([(i, n) for i, k, n in calls if k == "watch"], [(1, 300), (3, 300)])
+        self.assertEqual([(i, n) for i, k, n in calls if k == "child"], [(2, 300), (3, 300)])
+        self.assertEqual([(i, n) for i, k, n in calls if k == "jobs"], [(2, 1), (3, 2), (3, 1)])
+        self.assertEqual([(i, n) for i, k, n in calls if k == "logs"], [(2, 101), (3, 101)])
+
+        results, calls = exercise([{"missing_date": True}, {}])
+        assert_attempts(results, [(False, None, None, "skipped"), (True, "", prefix, "success")])
+        assert_posts(calls, [2])
+        self.assertFalse(any(k == "logs" for _, k, _ in calls))
+
+        results, calls = exercise([{"watch": "queued"}, {"missing_date": True}, {}])
+        assert_attempts(results, [(False, None, prefix, "success"), (False, "300", None, "skipped"),
+                                  (True, "300", prefix, "skipped")])
+        assert_posts(calls, [1])
+        self.assertEqual([(i, n) for i, k, n in calls if k == "watch"], [(1, 300), (3, 300)])
+
+        results, calls = exercise([{"watch": "failure"}, {"prior_child": "failure", "dispatch_id": 301}])
+        assert_attempts(results, [(False, None, prefix, "success"), (True, "300", prefix, "success")])
+        assert_posts(calls, [1, 2])
+        self.assertEqual([(i, n) for i, k, n in calls if k == "watch"], [(1, 300), (2, 301)])
+
+        results, calls = exercise([{"lost_output": True}, {"prior_child": "success"}])
+        assert_attempts(results, [(False, None, prefix, "failure"), (True, "300", prefix, "skipped")])
+        assert_posts(calls, [1])
+        self.assertEqual([(i, n) for i, k, n in calls if k == "watch"], [(2, 300)])
+
+        for mode in ("lost_response", "missing_id"):
+            with self.subTest(mode=mode):
+                results, calls = exercise([{mode: True}, {}, {}])
+                assert_attempts(results, [(False, None, prefix, "failure"), (False, None, None, "skipped"),
+                                          (False, None, None, "skipped")])
+                assert_posts(calls, [1])
+                self.assertFalse(any(k in {"child", "watch"} for _, k, _ in calls))
+                for result in results[1:]:
+                    self.assertIn("dispatch may have been accepted", result[4])
+
+        for damage in ("foreign-source", "partial-jobs", "missing-step", "unavailable-log",
+                       "conflicting-ack", "only-watcher-or-shell-echo"):
+            with self.subTest(damage=damage):
+                results, calls = exercise([{"watch": "queued"}, {}], damage=damage)
+                assert_attempts(results, [(False, None, prefix, "success"), (False, None, None, "skipped")])
+                assert_posts(calls, [1])
+                self.assertIn("Private staging retry stopped", results[1][4])
+
+        for mode in ("foreign", "cancelled"):
+            with self.subTest(mode=mode):
+                results, calls = exercise([{"watch": "queued"}, {"prior_child": mode}])
+                assert_attempts(results, [(False, None, prefix, "success"), (False, "300", prefix, "skipped")])
+                assert_posts(calls, [1])
+                self.assertEqual([(i, n) for i, k, n in calls if k == "watch"], [(1, 300)])
+
     def test_private_pro_promotion_redispatches_only_a_moved_main_source_refusal(self) -> None:
         """Run the real dispatch loop against doubles: only a pre-credential refusal caused by a
         pulse-pro main that moved after dispatch is re-dispatched, and only the terminal failure
@@ -1889,7 +2158,7 @@ sleep() {
             "printf 'completed\\tsuccess\\thttps://example.invalid/runs/100\\n'\n"
         )
         watchers = (
-            (".github/workflows/create-release.yml", "stage_private_pro_runtime", "publish"),
+            (".github/workflows/create-release.yml", "stage_private_pro_runtime", "stage_verify"),
             (".github/workflows/promote-private-pro-runtime.yml", "promote", None),
         )
         for path, job_name, step_id in watchers:
