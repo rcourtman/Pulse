@@ -414,6 +414,37 @@ class GitClassifierTest(unittest.TestCase):
         quoted = self.commit()
         self.assertEqual(self.classify(renamed, quoted)["code"], "true")
 
+    def test_moves_to_docs_keep_the_removed_path_in_the_runtime_checks(self):
+        self.git("config", "diff.renames", "true")
+        for old, new, go_compile, frontend_deps in (
+            ("internal/api/fixture.go", "docs/backend.md", "true", "false"),
+            ("frontend-modern/package-lock.json", "docs/dependencies.md", "false", "true"),
+        ):
+            self.write(old, "unchanged fixture bytes for " + old + "\n")
+            before = self.commit()
+            destination = self.repo / new
+            destination.parent.mkdir(exist_ok=True)
+            (self.repo / old).rename(destination)
+            after = self.commit()
+            for branch, event in (("main", "pull_request"), ("main", "push"),
+                                  ("release/v6.4", "pull_request")):
+                with self.subTest(old=old, branch=branch, event=event):
+                    self.assertEqual(self.classify(before, after, branch, event), {
+                        "code": "true", "go_compile": go_compile,
+                        "frontend_deps": frontend_deps, "triage_helper": "false",
+                    })
+
+    def test_moves_between_guides_keep_documentation_only_checks(self):
+        self.git("config", "diff.renames", "true")
+        self.write("docs/before.md", "# Guide fixture\n")
+        before = self.commit()
+        (self.repo / "docs/before.md").rename(self.repo / "docs/after.md")
+        after = self.commit()
+        self.assertEqual(self.classify(before, after), {
+            "code": "false", "go_compile": "false", "frontend_deps": "false",
+            "triage_helper": "false",
+        })
+
     def test_triage_guidance_still_selects_its_policy_check(self):
         self.write(SUITE, "# fixture\n")
         self.write("docs/ISSUE_TRIAGE.md", "# guidance fixture\n")
