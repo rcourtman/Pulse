@@ -1,0 +1,38 @@
+{
+  "version": 1,
+  "base_sha": "527a1eac196989615844e90a9e3bbddd6ec8ba19",
+  "verified_at": "2026-11-22T05:36:00Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/NodeModalStatusFooter.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/NodeModalStatusFooter.tsx": "0f471b0e750453a6f9a0135a105150a5df0832e5cb18fa6fbdcbe44b992a0394"
+  },
+  "routes": [
+    "/settings/infrastructure"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 360,
+      "height": 800
+    },
+    {
+      "width": 320,
+      "height": 800
+    }
+  ],
+  "states": [
+    "Chromium 141.0.7390.37 / Playwright 1.56.1. Compared the production-built Manage editor on light desktop and dark touch phone against f028a36007b5108e183d3b800368e3af4fef809e with matching fixtures and interaction state.",
+    "Entered PVE cluster test with two nodes listed but incomplete member access, entered PVE TLS failure with verification enabled, and saved PBS datastore denial. The consumer received the exact status, content type and bodies from both revisions of the Go handlers exercised against isolated TLS fixtures.",
+    "Opened 11 matched before/after pixel pairs, including the cluster result immediately after completion at 360 and 320 pixels. Test stays visible then; Test, Save and Cancel stay reachable at the established end of the form. Existing safety, SMART, temperature and PBS scope cues remain where compared."
+  ],
+  "interactions": [
+    "Use keyboard Test on desktop and touch on the phones; confirm the requested draft or saved-credential test, unaltered verification and pin fields, the result, and Cancel with no connection write.",
+    "The cluster result keeps the count and detection cue but does not report peer access, successful polling or a save. TLS directs the reader to keep verification enabled; denied access refers to intended resources and the token\u2019s own grants."
+  ]
+}
