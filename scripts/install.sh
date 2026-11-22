@@ -61,8 +61,14 @@ main() {
 
 # --- Cleanup trap ---
 TMP_FILES=()
+PFSENSE_BOOT_STAGE_DIR=""
+PFSENSE_BOOT_PUBLISHED_PATHS=()
 # shellcheck disable=SC2317  # Invoked by trap, not directly
 cleanup() {
+    # Also recover on a shell error that did not go through fail().
+    if [[ -n "${PFSENSE_BOOT_PUBLISHED_PATHS[0]:-}" && "${RUNTIME_TOKEN_PREPARED:-false}" != "true" ]]; then
+        restore_pfsense_agent_boot_scripts
+    fi
     if [[ "${SAFE_PROFILE_TRANSACTION_ACTIVE:-false}" == "true" &&
           "${SAFE_PROFILE_TRANSACTION_COMMITTED:-false}" != "true" &&
           -n "${SAFE_PROFILE_TRANSACTION_DIR:-}" ]] &&
@@ -75,6 +81,10 @@ cleanup() {
     for f in ${TMP_FILES[@]+"${TMP_FILES[@]}"}; do
         rm -f "$f" 2>/dev/null || true
     done
+    if [[ -n "${PFSENSE_BOOT_STAGE_DIR:-}" && "${PFSENSE_BOOT_RESTORE_FAILED:-false}" != "true" ]]; then
+        rm -f "$PFSENSE_BOOT_STAGE_DIR/previous/$AGENT_NAME" "$PFSENSE_BOOT_STAGE_DIR/previous/pulse_agent.sh" 2>/dev/null || true
+        rmdir "$PFSENSE_BOOT_STAGE_DIR/previous" "$PFSENSE_BOOT_STAGE_DIR" 2>/dev/null || true
+    fi
 }
 trap cleanup EXIT
 
@@ -335,6 +345,11 @@ final_response_header_value() {
 }
 fail() {
     local code="${2:-1}"
+    # Restore a boot definition that would still use the old saved token
+    # before reporting failure or waiting for interactive acknowledgement.
+    if [[ -n "${PFSENSE_BOOT_PUBLISHED_PATHS[0]:-}" && "${RUNTIME_TOKEN_PREPARED:-false}" != "true" ]]; then
+        restore_pfsense_agent_boot_scripts
+    fi
     if [[ "$OUTPUT_FORMAT" == "json" ]]; then
         printf '{"phase":"error","code":"install_failed","message":"%s","exitCode":%d}\n' \
             "$(echo "$1" | sed 's/\\/\\\\/g; s/"/\\"/g; s/	/\\t/g' | tr -d '\n\r')" "$code"
@@ -3388,7 +3403,7 @@ render_freebsd_rc_agent_script() {
     local exec_args="$3"
     local service_env_lines="$SHELL_EXPORT_LINES"
 
-    cat > "$script_path" <<EOF
+    cat > "$script_path" <<EOF || return 1
 #!/bin/sh
 
 # PROVIDE: pulse_agent
@@ -3564,7 +3579,92 @@ load_rc_config \$name
 run_rc_command "\$1"
 EOF
 
-    chmod +x "$script_path"
+    chmod "${4:-+x}" "$script_path"
+}
+
+check_pfsense_agent_boot_paths() {
+    local path
+    for path in "$@"; do
+        [[ ! -L "$path" && ( ! -e "$path" || -f "$path" ) ]] || return 1
+    done
+}
+
+stage_pfsense_agent_boot_scripts() {
+    local rc_script="$1" wrapper="$2"
+    local staged_rc staged_wrapper path
+    # Rendering needs the future path, not a write to the live credential.
+    # The existing token-file installer still owns its creation and mode.
+    local RUNTIME_TOKEN_FILE="${STATE_DIR}/token" EXEC_ARGS
+    local -a EXEC_ARG_ITEMS
+
+    check_pfsense_agent_boot_paths "$rc_script" "$wrapper" || return 1
+    PFSENSE_BOOT_STAGE_DIR=$(mktemp -d "${rc_script%/*}/.pulse-agent.XXXXXX") || return 1
+    staged_rc="$PFSENSE_BOOT_STAGE_DIR/${rc_script##*/}"
+    staged_wrapper="$PFSENSE_BOOT_STAGE_DIR/${wrapper##*/}"
+    TMP_FILES+=("$staged_rc" "$staged_wrapper")
+
+    build_exec_args
+    render_freebsd_rc_agent_script "$staged_rc" "${INSTALL_DIR}/${BINARY_NAME}" "$EXEC_ARGS" 0755 || return 1
+    cat > "$staged_wrapper" <<'BOOTEOF' || return 1
+#!/bin/sh
+# pfSense boot wrapper for pulse-agent
+# pfSense requires .sh extension for scripts to run at boot
+/usr/local/etc/rc.d/pulse-agent start
+BOOTEOF
+    chmod 0755 "$staged_wrapper" || return 1
+    check_pfsense_agent_boot_paths "$rc_script" "$wrapper" || return 1
+    # Keep the old files and their modes on the same filesystem. A legacy
+    # rc.d script may have an inline token; never expose it outside staging.
+    mkdir -m 0700 "$PFSENSE_BOOT_STAGE_DIR/previous" || return 1
+    for path in "$rc_script" "$wrapper"; do
+        if [[ -f "$path" ]]; then
+            ln "$path" "$PFSENSE_BOOT_STAGE_DIR/previous/${path##*/}" || return 1
+        fi
+    done
+}
+
+publish_pfsense_agent_boot_scripts() {
+    local rc_script="$1" wrapper="$2"
+    local path previous
+    check_pfsense_agent_boot_paths "$rc_script" "$wrapper" || return 1
+    for path in "$wrapper" "$rc_script"; do
+        # Do not publish against a destination that changed since preparation.
+        previous="$PFSENSE_BOOT_STAGE_DIR/previous/${path##*/}"
+        if [[ -e "$path" ]]; then
+            [[ "$path" -ef "$previous" ]] || return 1
+        else
+            [[ ! -e "$previous" ]] || return 1
+        fi
+    done
+    # Move into the containing directory by basename, never into an entry that
+    # might itself resolve to a directory. Publish the fixed-path wrapper first
+    # so a failed wrapper rename cannot replace the old service definition.
+    RUNTIME_TOKEN_PREPARED=false
+    for path in "$wrapper" "$rc_script"; do
+        mv -f "$PFSENSE_BOOT_STAGE_DIR/${path##*/}" "${path%/*}/" || return 1
+        PFSENSE_BOOT_PUBLISHED_PATHS+=("$path")
+    done
+}
+
+restore_pfsense_agent_boot_scripts() {
+    local i path previous
+    # Restore the command definition before its wrapper, and only undo writes
+    # made by this attempt. No service start or binary/token rollback here.
+    for ((i=${#PFSENSE_BOOT_PUBLISHED_PATHS[@]} - 1; i >= 0; i--)); do
+        path="${PFSENSE_BOOT_PUBLISHED_PATHS[i]}"
+        previous="$PFSENSE_BOOT_STAGE_DIR/previous/${path##*/}"
+        if ! check_pfsense_agent_boot_paths "$path"; then
+            PFSENSE_BOOT_RESTORE_FAILED=true
+        elif [[ -e "$previous" ]]; then
+            mv -f "$previous" "${path%/*}/" || PFSENSE_BOOT_RESTORE_FAILED=true
+        else
+            rm -f "$path" || PFSENSE_BOOT_RESTORE_FAILED=true
+        fi
+    done
+    PFSENSE_BOOT_PUBLISHED_PATHS=()
+    if [[ "${PFSENSE_BOOT_RESTORE_FAILED:-false}" == "true" ]]; then
+        log_error "Could not restore all previous pfSense startup files. Do not start the agent until its startup definitions are reconciled; recovery files remain in $PFSENSE_BOOT_STAGE_DIR/previous." >&2 || true
+    fi
 }
 
 # report_proxmox_registration_outcome surfaces the agent's Proxmox
@@ -5167,8 +5267,10 @@ ensure_runtime_token_file() {
 
     RUNTIME_TOKEN_FILE=""
     RUNTIME_TOKEN_CHANGED="false"
+    RUNTIME_TOKEN_PREPARED=false
     if [[ -z "$PULSE_TOKEN" ]]; then
         rm -f "$token_file" 2>/dev/null || true
+        RUNTIME_TOKEN_PREPARED=true
         log_info "No API token provided; installer will configure token-optional agent runtime."
         return 0
     fi
@@ -5197,6 +5299,7 @@ ensure_runtime_token_file() {
         umask "$old_umask"
         fail "Failed to install runtime token file: $token_file" "$EXIT_GENERAL"
     fi
+    RUNTIME_TOKEN_PREPARED=true
     umask "$old_umask"
     RUNTIME_TOKEN_FILE="$token_file"
     # A changed bootstrap token is explicit re-enrollment intent. Preserve the
@@ -6446,6 +6549,17 @@ if [[ -n "$PULSE_URL" ]]; then
     PULSE_URL="${PULSE_URL%/}"
 fi
 
+# pfSense uses a .sh boot entry alongside the usual rc.d service. Check both
+# before update recovery, which can read the previously installed rc.d script.
+PFSENSE_BOOT_WRAPPER=""
+if [[ "$UNINSTALL" != "true" && "$PREFLIGHT_ONLY" != "true" ]] &&
+   { [[ -f /usr/local/sbin/pfSsh.php ]] || { [[ -f /etc/platform ]] && grep -qi pfsense /etc/platform 2>/dev/null; }; } &&
+   [[ "$(uname -s)" == "FreeBSD" ]]; then
+    PFSENSE_BOOT_WRAPPER="/usr/local/etc/rc.d/pulse_agent.sh"
+    check_pfsense_agent_boot_paths "/usr/local/etc/rc.d/${AGENT_NAME}" "$PFSENSE_BOOT_WRAPPER" ||
+        fail "The pfSense Pulse startup files in /usr/local/etc/rc.d must be regular files, not links. The existing agent has not been stopped or replaced." "$EXIT_GENERAL"
+fi
+
 # --- Installed Lifecycle State Recovery ---
 # An explicit state directory is authoritative. Without one, inspect the active
 # process/service first so a custom installation wins over stale default-path
@@ -7645,6 +7759,15 @@ if [[ "$SAFE_PROFILE_ACTION" != "apply" ]]; then
     fi
 fi
 
+# Finish preparing both pfSense startup files while the old service and its
+# saved token are still in place. Plain FreeBSD and TrueNAS keep their paths.
+if [[ -n "${PFSENSE_BOOT_WRAPPER:-}" && "$TRUENAS" != "true" ]]; then
+    AGENT_LOG_FILE="${STATE_DIR}/logs/${AGENT_NAME}.log"
+    log_info "Detected pfSense — preparing rc.d service and boot wrapper..."
+    stage_pfsense_agent_boot_scripts "/usr/local/etc/rc.d/${AGENT_NAME}" "$PFSENSE_BOOT_WRAPPER" ||
+        fail "Could not prepare the pfSense rc.d service and boot wrapper with mode 0755. Check that /usr/local/etc/rc.d is writable and that existing Pulse startup files are regular files, not links. The existing agent has not been stopped or replaced; saved state is retained." "$EXIT_GENERAL"
+fi
+
 # --- Upgrade Detection ---
 # Check if pulse-agent is already installed and handle upgrade gracefully
 EXISTING_VERSION=""
@@ -7695,6 +7818,13 @@ if [[ "$UPDATE_ONLY" == "true" && "$UPGRADE_MODE" != "true" ]]; then
     fail "No existing Pulse Agent installation found to update. Use the install command instead." "$EXIT_MISSING_ARGS"
 fi
 
+# Keep the prior rc.d definition through the upgrade stop. If either final
+# rename fails, report it separately and leave the executable and token alone.
+if [[ -n "${PFSENSE_BOOT_STAGE_DIR:-}" ]]; then
+    publish_pfsense_agent_boot_scripts "/usr/local/etc/rc.d/${AGENT_NAME}" "$PFSENSE_BOOT_WRAPPER" ||
+        fail "Could not publish the prepared pfSense startup files. The existing binary and saved credentials were not replaced, but the agent may have been stopped; check service status and /usr/local/etc/rc.d before retrying." "$EXIT_GENERAL"
+fi
+
 # Install Binary
 log_info "Installing binary to ${INSTALL_DIR}/${BINARY_NAME}..."
 mkdir -p "$INSTALL_DIR"
@@ -7703,6 +7833,9 @@ if [[ "$SAFE_PROFILE_ACTION" == "apply" ]]; then
         fail "Verified safe-profile collector staging artifact is unavailable" "$EXIT_GENERAL"
     mv "$SAFE_PROFILE_STAGED_COLLECTOR" "${INSTALL_DIR}/${BINARY_NAME}"
     COLLECTOR_LIFECYCLE_BINARY_PATH="${INSTALL_DIR}/${BINARY_NAME}"
+elif [[ -n "${PFSENSE_BOOT_STAGE_DIR:-}" ]]; then
+    mv "$STAGED_AGENT_BIN" "${INSTALL_DIR}/${BINARY_NAME}" ||
+        fail "Could not install the prepared pfSense executable. The saved credentials were not replaced, but the agent may have been stopped; check the installation filesystem and service status before retrying." "$EXIT_GENERAL"
 else
     mv "$STAGED_AGENT_BIN" "${INSTALL_DIR}/${BINARY_NAME}"
 fi
@@ -8297,30 +8430,16 @@ if [[ "$OS" == "freebsd" ]] || [[ -f /etc/rc.subr ]]; then
     # system log that never receives them (and that pfSense does not even ship).
     AGENT_LOG_FILE="${STATE_DIR}/logs/${AGENT_NAME}.log"
 
-    # Build command line args
+    # pfSense prepared its token-file reference before the upgrade stop.
     ensure_runtime_token_file "$STATE_DIR"
     clear_proxmox_state_if_needed
-    build_exec_args
-
-    render_freebsd_rc_agent_script "$RCSCRIPT" "${INSTALL_DIR}/${BINARY_NAME}" "${EXEC_ARGS}"
-
-    # Enable the service in rc.conf
-    ensure_freebsd_agent_enabled
-
-    # pfSense does not use the standard FreeBSD rc.d boot system.
-    # Scripts in /usr/local/etc/rc.d/ must end in .sh to run at boot.
-    # Create a .sh wrapper that invokes the rc.d script on boot.
-    if [ -f /usr/local/sbin/pfSsh.php ] || ([ -f /etc/platform ] && grep -qi pfsense /etc/platform 2>/dev/null); then
-        BOOT_WRAPPER="/usr/local/etc/rc.d/pulse_agent.sh"
-        log_info "Detected pfSense — creating boot wrapper at $BOOT_WRAPPER..."
-        cat > "$BOOT_WRAPPER" <<'BOOTEOF'
-#!/bin/sh
-# pfSense boot wrapper for pulse-agent
-# pfSense requires .sh extension for scripts to run at boot
-/usr/local/etc/rc.d/pulse-agent start
-BOOTEOF
-        chmod +x "$BOOT_WRAPPER"
+    if [[ -z "${PFSENSE_BOOT_STAGE_DIR:-}" ]]; then
+        build_exec_args
+        render_freebsd_rc_agent_script "$RCSCRIPT" "${INSTALL_DIR}/${BINARY_NAME}" "${EXEC_ARGS}"
     fi
+
+    # Enable the service in rc.conf only after its startup files are ready.
+    ensure_freebsd_agent_enabled
 
     # Stop existing agent if running
     restart_sysv_agent_service "$RCSCRIPT"
