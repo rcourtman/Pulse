@@ -239,6 +239,12 @@ const rowErrorBannerClass = (row: InfrastructureSystemRow): string =>
 const formatCount = (count: number, noun: string): string =>
   `${count} ${noun}${count === 1 ? '' : 's'}`;
 
+const rowCoverageText = (row: InfrastructureSystemRow): string => {
+  const coverage = row.coverageLabels.join(', ');
+  if (!row.apiScopeOff) return coverage;
+  return coverage ? `All API scope options off · ${coverage}` : 'All API scope options off';
+};
+
 const rowHasApiCoverage = (row: InfrastructureSystemRow): boolean =>
   row.source === 'api' ||
   row.source === 'both' ||
@@ -1087,19 +1093,21 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
 
                                       <TableCell class="px-3 py-1 align-middle">
                                         <Show
-                                          when={row.coverageLabels.length > 0}
+                                          when={rowCoverageText(row)}
                                           fallback={
                                             <span class="text-xs text-muted" aria-hidden="true">
                                               —
                                             </span>
                                           }
                                         >
-                                          <div
-                                            class="whitespace-normal text-[12px] leading-4 text-muted"
-                                            title={row.coverageLabels.join(', ')}
-                                          >
-                                            {row.coverageLabels.join(', ')}
-                                          </div>
+                                          {(text) => (
+                                            <div
+                                              class="whitespace-normal text-[12px] leading-4 text-muted"
+                                              title={text()}
+                                            >
+                                              {text()}
+                                            </div>
+                                          )}
                                         </Show>
                                         <Show when={rowNeedsAgentCoverage(row)}>
                                           <div class="mt-0.5 text-[11px] font-medium text-amber-700 dark:text-amber-300">
@@ -1602,10 +1610,12 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                                   </span>
                                 </header>
 
-                                <Show when={row.coverageLabels.length > 0}>
-                                  <div class="mt-1 text-[12px] leading-4 text-muted">
-                                    {row.coverageLabels.join(', ')}
-                                  </div>
+                                <Show when={rowCoverageText(row)}>
+                                  {(text) => (
+                                    <div class="mt-1 text-[12px] leading-4 text-muted">
+                                      {text()}
+                                    </div>
+                                  )}
                                 </Show>
                                 <Show when={rowNeedsAgentCoverage(row)}>
                                   <div class="mt-0.5 text-[11px] font-medium text-amber-700 dark:text-amber-300">

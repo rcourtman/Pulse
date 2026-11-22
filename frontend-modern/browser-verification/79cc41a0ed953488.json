@@ -1,0 +1,38 @@
+{
+  "version": 1,
+  "base_sha": "60b9fbf9110f71dbb03930dba588a47bb60f50a9",
+  "verified_at": "2026-11-22T14:20:25Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/InfrastructureSourceManager.tsx",
+    "frontend-modern/src/components/Settings/connectionsTableModel.ts",
+    "frontend-modern/src/components/Settings/useConnectionsLedger.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/InfrastructureSourceManager.tsx": "a71a8906e63fd7563526c24bfbca271889ecfab06657bacb942b180f89607bb6",
+    "frontend-modern/src/components/Settings/connectionsTableModel.ts": "bb2e2442d2ed003c610a497ba95509e34431dc48cf0c12b4458c69e40992af03",
+    "frontend-modern/src/components/Settings/useConnectionsLedger.ts": "86348a7f4ba85cd47f3dabd8b16c6b49f6a497e2942af7874f95e4211dd8f5ef"
+  },
+  "routes": [
+    "/settings/infrastructure"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 320,
+      "height": 800
+    }
+  ],
+  "states": [
+    "Exact production previews: before a9ec7c6bc047be652ef27bce876e95e54dd958d2; after 60b9fbf9110f71dbb03930dba588a47bb60f50a9. Chromium 141.0.7390.37, Playwright 1.56.1. Same fixture, 1440 × 900 light desktop and 320 × 800 dark phone.",
+    "Mixed PBS estate with saved scope explicitly all off on an API + Agent row and an API-only row, and a separate enabled Sync jobs row. Before, both all-off rows incorrectly list every supported field; after, both report all API scope options off. Attached host telemetry, connection health, activity and Manage remain available.",
+    "On a fresh ledger read Datastores returns to the first row without removing Host telemetry or changing either sibling. Inspected all eight matched captures (phone scrolled to the same row)."
+  ],
+  "interactions": [
+    "Open Settings → Infrastructure, read all three sources and open Manage for the paired source with keyboard or touch. Check the five existing displayed options are off and the exclusion-list guidance and Save changes remain. Close without saving.",
+    "Advance the ledger poll with the fixture Datastores selection enabled. Observe only that row refresh; 174 assertions passed. No test submissions, source writes or external requests."
+  ]
+}
