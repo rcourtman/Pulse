@@ -154,7 +154,7 @@ export function WhatsNewCard() {
         <Dialog
           isOpen={dialogVisible()}
           onClose={dismissChangelog}
-          panelClass="max-w-4xl"
+          panelClass={content()?.visuals.length ? 'max-w-3xl' : 'max-w-2xl'}
           ariaLabelledBy="whats-new-title"
           returnFocus={() => document.getElementById('main')}
         >
@@ -203,7 +203,7 @@ export function WhatsNewCard() {
               </div>
             </div>
 
-            <div class="max-h-[60vh] overflow-y-auto overscroll-contain px-4 py-5 sm:px-6">
+            <div class="max-h-[70vh] overflow-y-auto overscroll-contain px-4 py-5 sm:px-6">
               <Show when={content()}>
                 {(releaseContent) => <WhatsNewContent content={releaseContent()} />}
               </Show>

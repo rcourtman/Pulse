@@ -3908,15 +3908,18 @@ Tokens and hostnames never establish CPU or installed-executable identity.
    immediately so a reload cannot turn it into a recurring prompt.
    `frontend-modern/src/utils/localStorage.ts` owns that browser-session notice
    reservation boundary so the release notice and the GitHub gratitude prompt
-   cannot create a one-two sequence. The post-update
-   dialog reads as a conventional changelog headed by the version and release
-   date: authored Known issues and historical Breaking changes first, optional
-   `See the difference` images next, then every grouped change section as
-   plain headed lists and routine Before-you-upgrade instructions last as
-   Upgrade notes, with no disclosure hiding any of them. The curated
-   Highlights summary belongs to the pre-update preview and is not repeated
-   above the changelog. Release authors must put critical risks and required
-   safety actions in Known issues so those warnings lead the dialog.
+   cannot create a one-two sequence. The post-update dialog is designed to be
+   scanned quickly, headed by the version and release date: authored Breaking
+   changes always lead at the top, followed by curated Highlights and optional
+   `See the difference` images so users immediately see what changed. Compact
+   Known issues, short change lists, and brief Before-you-upgrade instructions
+   render directly inline, while long Known issues lists, large multi-section
+   change lists, and multi-item Upgrade notes collapse into compact expandable
+   rows with item counts (plus an Expand all control for change groups) so
+   large releases never become a wall of text. Release authors must put
+   critical risks and required safety actions in Breaking changes or Known
+   issues, and keep customer release notes concise and user-focused rather than
+   mirroring an exhaustive PR inventory.
    Screenshot URLs must be exact-version public release PNG sidecars, never
    arbitrary remote images or raw PR attachment URLs. Before/now comparisons
    load through the authenticated exact-version release-asset endpoint, which
@@ -6325,9 +6328,11 @@ build upload or public mobile-store rollout is part of this server release.
 The same release boundary provides one canonical in-app release-note
 experience. Update checks preview curated Highlights, while the authenticated
 running-version endpoint supplies the same published body to the post-update
-modal. That modal is a plain changelog: important operator information,
-optional release screenshot comparisons, every grouped change section and
-upgrade notes, without repeating Highlights. Historical
+modal. That modal leads with Breaking changes (when present), curated
+Highlights, and optional release screenshot comparisons, keeps short Known
+issues, compact change lists, and brief Upgrade notes inline, and collapses
+long Known issues, large multi-section change lists, and multi-item Upgrade
+notes into scannable expandable rows with item counts. Historical
 Added/Improved/Fixed categories remain readable. PR visual evidence can be
 selected autonomously and copied into versioned release assets, with fresh
 captures available for missing or stale views. Source/development builds and

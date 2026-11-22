@@ -1,0 +1,37 @@
+{
+  "version": 1,
+  "base_sha": "a0facc31a875bd1d75b92b02609dfe9c8a9ddab6",
+  "verified_at": "2026-11-22T23:05:36Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/WhatsNewCard.tsx",
+    "frontend-modern/src/components/WhatsNewContent.tsx",
+    "frontend-modern/src/components/whatsNewModel.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/WhatsNewCard.tsx": "f139f4bf4835c5ef7cdae55f64379363b1c92e39fa2c3bc10bb936e42a01c511",
+    "frontend-modern/src/components/WhatsNewContent.tsx": "f65a257ec9b4700446012626c8b604daa5758f199a5abe7339782db91bd2cefc",
+    "frontend-modern/src/components/whatsNewModel.ts": "26a767f43d887e345339b0a126d5fe4bca16188b18a49051a58720f5b29aa8b5"
+  },
+  "routes": [
+    "/proxmox/overview"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Production vite build of this tree served locally; /api/version rewritten to published 6.9.0-rc.3 and /api/updates/release-notes fulfilled with docs/releases/RELEASE_NOTES_v6.9.0-rc.3.md (125 bullets), last-seen version 6.8.0",
+    "Large release desktop dark/light (1440x900) and mobile dark (390x844): Highlights visible immediately above the fold, Known issues (12), 10 All changes (110) rows, and Upgrade notes (3) start collapsed (798px scrollHeight vs 9191px expanded in 630px desktop viewport, zero horizontal overflow)",
+    "Compact release (v6.10.0) desktop dark (1440x900) and mobile dark (390x844): Breaking changes, 2 Highlights, Before/Now screenshots (side-by-side desktop, stacked mobile), 1 Known issue, 2 change groups (3 items), and 1 Upgrade note all render directly inline with zero expand buttons"
+  ],
+  "interactions": [
+    "Clicked See what's new on the post-update notice, expanded and collapsed Known issues (12), expanded Proxmox, PBS and backups individually, toggled Expand all and Collapse all, expanded Upgrade notes (3), dismissed via Escape and verified reload persistence, and dismissed via Got it in light theme"
+  ]
+}
