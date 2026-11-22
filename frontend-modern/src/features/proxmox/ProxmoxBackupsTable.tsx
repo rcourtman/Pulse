@@ -5,7 +5,6 @@ import {
   createMemo,
   createSignal,
   onCleanup,
-  onMount,
   type Component,
   type JSX,
 } from 'solid-js';
@@ -207,15 +206,22 @@ export const ProxmoxBackupsTable: Component<{
   };
   const { isMobile } = useBreakpoint();
   const location = useLocation<typeof PROXMOX_BACKUPS_INSPECTION_STATE>();
-  onMount(() => {
-    if (location.state?.focusBackupInspection !== true) return;
-    // A status dialog's trigger is no longer visible after opening Backups.
-    // Resume inspection here, without scrolling or taking existing focus.
-    queueMicrotask(() => {
-      if (inspection?.isConnected && document.activeElement === document.body) {
+  let inspectionArrivalHandled = false;
+  createEffect(() => {
+    if (inspectionArrivalHandled || location.state?.focusBackupInspection !== true) return;
+    // The dialog first restores focus to its trigger; the tab switch then
+    // hides that trigger. Wait for that render before resuming inspection.
+    const frame = requestAnimationFrame(() => {
+      inspectionArrivalHandled = true;
+      const active = document.activeElement;
+      if (
+        inspection?.isConnected &&
+        (active === document.body || active?.closest('[aria-hidden="true"]'))
+      ) {
         inspection.focus({ preventScroll: true });
       }
     });
+    onCleanup(() => cancelAnimationFrame(frame));
   });
   const protectionPostures = useProtectionPostures(() =>
     (props.workloads ?? []).map((workload) => workload.id),

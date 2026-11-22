@@ -94,6 +94,7 @@ describe('retiring backup evidence retains a usable keyboard position', () => {
       outside.focus();
       mount();
       await screen.findByText('east-100');
+      await new Promise((resolve) => requestAnimationFrame(resolve));
       expect(outside).toHaveFocus();
     } finally {
       outside.remove();
