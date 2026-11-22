@@ -2,18 +2,22 @@ package notifications
 
 import (
 	"bytes"
+	"context"
 	"encoding/base64"
+	"flag"
 	"fmt"
 	"io"
 	"mime"
 	"mime/multipart"
 	"mime/quotedprintable"
 	"net/mail"
-
-	"github.com/stretchr/testify/require"
+	"os"
+	"os/exec"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/require"
 )
 
 // Independently encode first and insert CRLF only between 76-character lines.
@@ -89,7 +93,30 @@ func (w *attachmentCountingWriter) Write(p []byte) (int, error) {
 	return len(p), nil
 }
 
+var emailAttachmentAllocationProbe = flag.Bool("test.emailAttachmentAllocationProbe", false, "measure attachment encoding in a dedicated test process")
+
 func TestEmailAttachmentEncodingHasBoundedWriteOverhead(t *testing.T) {
+	// AllocsPerRun reads process-wide counters, even when GOMAXPROCS is one.
+	// Run just this measurement in the same binary so unrelated notification
+	// workers cannot affect the budget, and race CI still measures race code.
+	if !*emailAttachmentAllocationProbe {
+		executable, err := os.Executable()
+		if err != nil {
+			t.Fatal(err)
+		}
+		ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
+		defer cancel()
+		cmd := exec.CommandContext(ctx, executable,
+			"-test.run=^TestEmailAttachmentEncodingHasBoundedWriteOverhead$",
+			"-test.count=1", "-test.v", "-test.timeout=25s", "-test.emailAttachmentAllocationProbe=true")
+		output, err := cmd.CombinedOutput()
+		if err != nil || !bytes.Contains(output, []byte("attachment_bytes=")) {
+			t.Fatalf("isolated attachment budget check did not pass: %v\n%s", err, output)
+		}
+		t.Logf("isolated attachment budget check:\n%s", output)
+		return
+	}
+
 	data := make([]byte, 1<<20)
 	var sink attachmentCountingWriter
 	var encodeErr error
