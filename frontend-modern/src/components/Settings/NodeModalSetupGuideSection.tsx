@@ -1,9 +1,12 @@
 import { Component, Show } from 'solid-js';
 import {
   PVE_MANUAL_PERMISSION_COMMAND,
+  PVE_MANUAL_TOKEN_COMMAND,
+  PVE_MANUAL_TOKEN_ID,
   type NodeModalProps,
 } from '@/components/Settings/nodeModalModel';
 import type { NodeModalState } from '@/components/Settings/useNodeModalState';
+import { TROUBLESHOOTING_DOC_URL } from '@/utils/docsLinks';
 import type { NodeModalNodeType, NodeModalSetupMode } from '@/utils/nodeModalPresentation';
 import { getUnifiedAgentCommandAccessOptionLabel } from '@/utils/unifiedAgentInventoryPresentation';
 import { getPulseBaseUrl } from '@/utils/url';
@@ -38,7 +41,9 @@ const getNodeSetupStrategyPresentation = (
   return {
     label: 'Manual API token',
     detail:
-      'Advanced escape hatch: use this only when you already created the API token yourself and want to paste the token details into Pulse.',
+      nodeType === 'pve'
+        ? 'Use a Proxmox VE token you manage. No agent is installed.'
+        : 'Advanced escape hatch: use this only when you already created the API token yourself and want to paste the token details into Pulse.',
   };
 };
 
@@ -525,17 +530,36 @@ export const NodeModalSetupGuideSection: Component<NodeModalSetupGuideSectionPro
 
               <Show when={state.formData().setupMode === 'manual'}>
                 <div class="space-y-3">
-                  <p class="text-blue-800 dark:text-blue-200 mb-2">
-                    Advanced manual token setup. Run these commands one by one on your Proxmox VE
-                    server, then paste the token into the fields below:
+                  <p class="text-blue-800 dark:text-blue-200">
+                    Already have a token or need to limit what Pulse can monitor? Use a
+                    privilege-separated token with matching user and token permissions on the
+                    intended resources only.{' '}
+                    <a
+                      href={`${TROUBLESHOOTING_DOC_URL}#check-permissions-proxmox`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      class="font-medium underline underline-offset-2"
+                    >
+                      Proxmox permissions help (opens in a new tab)
+                    </a>
                   </p>
+
+                  <div>
+                    <p class="text-sm font-medium text-base-content">
+                      Example: new token for whole-cluster monitoring
+                    </p>
+                    <p class="text-muted">
+                      Run these steps in order on Proxmox VE. Skip them if you already have a token
+                      or only want Pulse to read part of the cluster.
+                    </p>
+                  </div>
 
                   <div class="space-y-3">
                     <div>
                       <p class="text-sm font-medium text-base-content mb-1">
                         1. Create monitoring user:
                       </p>
-                      <div class="relative bg-surface rounded-md p-2 font-mono text-xs">
+                      <div class="relative bg-surface rounded-md p-2 pr-8 font-mono text-xs">
                         <button
                           type="button"
                           onClick={async () => {
@@ -547,6 +571,7 @@ export const NodeModalSetupGuideSection: Component<NodeModalSetupGuideSectionPro
                           class={setupCommandButtonClass(
                             'absolute top-1 right-1 p-1 text-slate-500 hover:text-base-content transition-colors',
                           )}
+                          aria-label="Copy monitoring user command"
                           title={setupCommandButtonTitle()}
                         >
                           <svg
@@ -561,7 +586,7 @@ export const NodeModalSetupGuideSection: Component<NodeModalSetupGuideSectionPro
                             <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"></path>
                           </svg>
                         </button>
-                        <code class="text-base-content">
+                        <code class="text-base-content wrap-anywhere">
                           pveum user add pulse-monitor@pve --comment "Pulse monitoring service"
                         </code>
                       </div>
@@ -569,20 +594,17 @@ export const NodeModalSetupGuideSection: Component<NodeModalSetupGuideSectionPro
 
                     <div>
                       <p class="text-sm font-medium text-base-content mb-1">
-                        2. Generate API token (save the output!):
+                        2. Generate a privilege-separated token:
                       </p>
-                      <div class="relative bg-surface rounded-md p-2 font-mono text-xs">
+                      <div class="relative bg-surface rounded-md p-2 pr-8 font-mono text-xs">
                         <button
                           type="button"
-                          onClick={async () => {
-                            const command =
-                              'pveum user token add pulse-monitor@pve pulse-token --privsep 0';
-                            await state.copyCommand(command);
-                          }}
+                          onClick={() => state.copyCommand(PVE_MANUAL_TOKEN_COMMAND)}
                           disabled={setupHandoffDisabled()}
                           class={setupCommandButtonClass(
                             'absolute top-1 right-1 p-1 text-slate-500 hover:text-base-content transition-colors',
                           )}
+                          aria-label="Copy token creation command"
                           title={setupCommandButtonTitle()}
                         >
                           <svg
@@ -597,20 +619,20 @@ export const NodeModalSetupGuideSection: Component<NodeModalSetupGuideSectionPro
                             <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"></path>
                           </svg>
                         </button>
-                        <code class="text-base-content">
-                          pveum user token add pulse-monitor@pve pulse-token --privsep 0
+                        <code class="text-base-content wrap-anywhere">
+                          {PVE_MANUAL_TOKEN_COMMAND}
                         </code>
                       </div>
                       <p class="text-amber-600 dark:text-amber-400 text-xs mt-1">
-                        Important: Copy the token value immediately - it won't be shown again!
+                        Save the token value privately. Proxmox only shows it once.
                       </p>
                     </div>
 
                     <div>
                       <p class="text-sm font-medium text-base-content mb-1">
-                        3. Set up monitoring permissions:
+                        3. Grant monitoring roles to both the user and the token:
                       </p>
-                      <div class="relative bg-surface rounded-md p-2 font-mono text-xs mb-1">
+                      <div class="relative bg-surface rounded-md p-2 pr-8 font-mono text-xs mb-1">
                         <button
                           type="button"
                           onClick={async () => {
@@ -620,6 +642,7 @@ export const NodeModalSetupGuideSection: Component<NodeModalSetupGuideSectionPro
                           class={setupCommandButtonClass(
                             'absolute top-1 right-1 p-1 hover:text-muted transition-colors',
                           )}
+                          aria-label="Copy monitoring ACL commands"
                           title={setupCommandButtonTitle()}
                         >
                           <svg
@@ -634,44 +657,21 @@ export const NodeModalSetupGuideSection: Component<NodeModalSetupGuideSectionPro
                             <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"></path>
                           </svg>
                         </button>
-                        <code class="text-base-content whitespace-pre-line">
+                        <code class="text-base-content whitespace-pre-wrap wrap-anywhere">
                           {PVE_MANUAL_PERMISSION_COMMAND}
                         </code>
                       </div>
-                      <div class="relative bg-surface rounded-md p-2 font-mono text-xs">
-                        <button
-                          type="button"
-                          onClick={async () => {
-                            const command =
-                              'pveum aclmod /storage -user pulse-monitor@pve -role PVEDatastoreAdmin';
-                            await state.copyCommand(command);
-                          }}
-                          disabled={setupHandoffDisabled()}
-                          class={setupCommandButtonClass(
-                            'absolute top-1 right-1 p-1 hover:text-muted transition-colors',
-                          )}
-                          title={setupCommandButtonTitle()}
-                        >
-                          <svg
-                            width="14"
-                            height="14"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            stroke-width="2"
-                          >
-                            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-                            <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"></path>
-                          </svg>
-                        </button>
-                        <code class="text-base-content">
-                          pveum aclmod /storage -user pulse-monitor@pve -role PVEDatastoreAdmin
-                        </code>
-                      </div>
                       <p class="text-muted text-xs mt-1">
-                        Note: PVEAuditor gives read-only API access. PulseMonitor adds Sys.Audit
-                        plus VM.GuestAgent.Audit/FileRead (PVE 9+) or VM.Monitor (PVE 8) for disk
-                        and guest metrics. PVEDatastoreAdmin on /storage adds backup visibility.
+                        PVEAuditor provides inventory reads. PulseMonitor adds Sys.Audit and
+                        available guest-agent read privileges on PVE 9+, or legacy VM.Monitor on PVE
+                        8, for disk and guest metrics.
+                      </p>
+                      <p class="text-base-content text-xs mt-2">
+                        <strong>Optional backup listings:</strong> Check access on the intended
+                        datastore first. <code>PVEDatastoreAdmin</code> also allows writes. If your
+                        administrator accepts that role for backup visibility, limit both the user
+                        and token grants to the specific <code>{'/storage/<datastore>'}</code>, not
+                        all storage. A timeout does not mean access was denied.
                       </p>
                     </div>
 
@@ -681,7 +681,7 @@ export const NodeModalSetupGuideSection: Component<NodeModalSetupGuideSectionPro
                       </p>
                       <ul class="text-xs text-green-800 dark:text-green-200 ml-4 list-disc">
                         <li>
-                          <strong>Token ID:</strong> pulse-monitor@pve!pulse-token
+                          <strong>Token ID:</strong> {PVE_MANUAL_TOKEN_ID}
                         </li>
                         <li>
                           <strong>Token Value:</strong> [The value from step 2]

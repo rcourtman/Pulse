@@ -134,8 +134,14 @@ export const deriveNameFromHost = (host: string): string => {
   return value;
 };
 
-export const PVE_MANUAL_PERMISSION_COMMAND = `# Apply monitoring permissions - use built-in PVEAuditor role
-pveum aclmod / -user pulse-monitor@pve -role PVEAuditor
+const PVE_MANUAL_USER = 'pulse-monitor@pve';
+const PVE_MANUAL_TOKEN_NAME = 'pulse-token';
+export const PVE_MANUAL_TOKEN_ID = `${PVE_MANUAL_USER}!${PVE_MANUAL_TOKEN_NAME}`;
+export const PVE_MANUAL_TOKEN_COMMAND = `pveum user token add ${PVE_MANUAL_USER} ${PVE_MANUAL_TOKEN_NAME} --privsep 1`;
+
+export const PVE_MANUAL_PERMISSION_COMMAND = `# Whole-cluster monitoring permissions for the new example token
+pveum aclmod / -user ${PVE_MANUAL_USER} -role PVEAuditor
+pveum aclmod / -token '${PVE_MANUAL_TOKEN_ID}' -role PVEAuditor
 
 # Gather additional privileges for VM metrics
 EXTRA_PRIVS=()
@@ -180,5 +186,6 @@ fi
 if [ \${#EXTRA_PRIVS[@]} -gt 0 ]; then
   PRIV_STRING="$(IFS=,; echo "\${EXTRA_PRIVS[*]}")"
   pveum role modify PulseMonitor -privs "$PRIV_STRING" 2>/dev/null || pveum role add PulseMonitor -privs "$PRIV_STRING" 2>/dev/null
-  pveum aclmod / -user pulse-monitor@pve -role PulseMonitor
+  pveum aclmod / -user ${PVE_MANUAL_USER} -role PulseMonitor
+  pveum aclmod / -token '${PVE_MANUAL_TOKEN_ID}' -role PulseMonitor
 fi`;

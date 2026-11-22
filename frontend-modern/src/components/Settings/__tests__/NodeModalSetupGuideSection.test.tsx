@@ -194,13 +194,49 @@ describe('NodeModalSetupGuideSection', () => {
     ).toBeInTheDocument();
   });
 
-  it('labels manual setup as the advanced token escape hatch', () => {
+  it('shows the scoped-token path before the PVE whole-cluster example', () => {
     renderSetupGuide('pve');
 
     fireEvent.click(screen.getByRole('button', { name: /^Manual Token Setup$/i }));
     expect(screen.getByText('Manual API token')).toBeInTheDocument();
-    expect(screen.getByText(/Advanced manual token setup/i)).toBeInTheDocument();
-    expect(screen.getByText(/Advanced escape hatch: use this only when/i)).toBeInTheDocument();
+    const guidance = screen.getByText(/matching user and token permissions/i);
+    expect(guidance).toHaveTextContent(/intended resources only/i);
+    const example = screen.getByText('Example: new token for whole-cluster monitoring');
+    expect(
+      guidance.compareDocumentPosition(example) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(screen.getByText(/Skip them if you already have a token/i)).toBeInTheDocument();
+    const help = screen.getByRole('link', { name: /Proxmox permissions help/i });
+    expect(help).toHaveAttribute('href', '/docs/TROUBLESHOOTING#check-permissions-proxmox');
+    expect(help).toHaveAttribute('target', '_blank');
+    expect(help).toHaveAttribute('rel', 'noopener noreferrer');
+  });
+
+  it('copies a separated PVE token recipe with paired monitoring ACLs but no store-wide admin grant', () => {
+    const { copyCommand } = renderSetupGuide('pve');
+    fireEvent.click(screen.getByRole('button', { name: /^Manual Token Setup$/i }));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Copy token creation command' }));
+    expect(copyCommand).toHaveBeenLastCalledWith(
+      'pveum user token add pulse-monitor@pve pulse-token --privsep 1',
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Copy monitoring ACL commands' }));
+    const aclCommands: string = copyCommand.mock.lastCall?.[0];
+    for (const role of ['PVEAuditor', 'PulseMonitor']) {
+      expect(aclCommands).toContain(`pveum aclmod / -user pulse-monitor@pve -role ${role}\n`);
+      expect(aclCommands).toContain(
+        `pveum aclmod / -token 'pulse-monitor@pve!pulse-token' -role ${role}\n`,
+      );
+    }
+    expect(aclCommands).not.toContain('PVEDatastoreAdmin');
+    expect(screen.getAllByTitle('Copy command')).toHaveLength(3);
+    const backups = screen.getByText('Optional backup listings:').parentElement;
+    expect(backups).toHaveTextContent('PVEDatastoreAdmin also allows writes');
+    expect(backups).toHaveTextContent(
+      /limit both the user and token grants to the specific \/storage\/<datastore>/,
+    );
+    expect(backups).toHaveTextContent('A timeout does not mean access was denied');
   });
 
   it('surfaces non-destructive repair guidance for existing Proxmox API sources', () => {
@@ -237,11 +273,11 @@ describe('NodeModalSetupGuideSection', () => {
   });
 
   it.each([
-    ['pve' as const, /pveum user add pulse-monitor@pve/i],
-    ['pbs' as const, /proxmox-backup-manager user create pulse-monitor@pbs/i],
+    ['pve' as const, /pveum user add pulse-monitor@pve/i, 3],
+    ['pbs' as const, /proxmox-backup-manager user create pulse-monitor@pbs/i, 4],
   ])(
     'blocks %s manual token command copies until an import plan is approved',
-    (nodeType, command) => {
+    (nodeType, command, controls) => {
       const reason = 'Approve the import plan before generating setup commands.';
       const { copyCommand } = renderSetupGuide(nodeType, {
         setupHandoffDisabled: true,
@@ -252,7 +288,7 @@ describe('NodeModalSetupGuideSection', () => {
 
       expect(screen.getByText(command)).toBeInTheDocument();
       const disabledCopyButtons = screen.getAllByTitle(reason);
-      expect(disabledCopyButtons.length).toBeGreaterThanOrEqual(4);
+      expect(disabledCopyButtons.length).toBe(controls);
       for (const button of disabledCopyButtons) {
         expect(button).toBeDisabled();
       }
