@@ -270,6 +270,12 @@ mv() {
 					(exit != 14 || !strings.Contains(string(output), `"exitCode":14`)) {
 					t.Fatalf("destination execution refusal did not retain preflight exit 14: %d\n%s", exit, output)
 				}
+				if !relocated && fault == "destination-not-executable" &&
+					(!strings.Contains(string(output), "This check uses the agent installation directory.") ||
+						strings.Contains(string(output), "temporary download directory") ||
+						strings.Contains(string(output), installDir)) {
+					t.Fatalf("destination refusal did not identify only the directory type:\n%s", output)
+				}
 				operations, err := os.ReadFile(trace)
 				if err != nil {
 					t.Fatal(err)
