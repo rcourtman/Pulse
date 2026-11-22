@@ -200,11 +200,14 @@ The watch does not scrape these endpoints. It fails when `main` uses more than
 15% and 16 MiB more resident memory than the release. Both builds use the same
 planned final third. An unavailable sample file, fewer than three RSS samples
 in that window, or a gap of more than two sampling intervals leaves the
-measurement incomplete, not a pass or a memory regression. If a Pulse
-process exits before the watch stops it or a load driver fails, the watch
-still writes the incomplete summary and `result.json` with the affected side,
-available sample coverage and observed wait statuses. These statuses do not
-identify the cause of a stop or establish a cgroup OOM kill.
+measurement incomplete, not a pass or a memory regression. Even a complete
+sample window does not count if a Pulse process exits before the watch can
+request its stop, returns a wait status other than 0 or 143 after that request,
+or its load driver fails. The incomplete summary and `result.json` retain the
+affected side, sample coverage and observed wait statuses. These statuses do
+not identify the cause of a stop or establish a cgroup OOM kill. The optional
+heap profile request is limited to five seconds; partial downloads are not
+uploaded as profiles.
 Over the same steady-state window it also reports CPU as a percentage of one
 core and extrapolates disk writes and write calls to MiB per day, from
 `/proc/<pid>/stat` and `/proc/<pid>/io`. Those rates are reported, not gated, until measured budgets

@@ -57,6 +57,7 @@ SECONDS_PER_DAY = 86400
 MIB = 1024 * 1024
 CHILD_WAIT_LABELS = {
     "pulse_wait_status_before_stop": "Pulse wait status before the watch's stop",
+    "pulse_wait_status_after_stop_request": "Pulse wait status after the watch's TERM request",
     "driver_wait_status": "load driver wait status",
 }
 
