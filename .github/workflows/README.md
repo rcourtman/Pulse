@@ -208,6 +208,10 @@ affected side, sample coverage and observed wait statuses. These statuses do
 not identify the cause of a stop or establish a cgroup OOM kill. The optional
 heap profile request is limited to five seconds; partial downloads are not
 uploaded as profiles.
+If Linux cannot supply the mapping breakdown for every sample in a run's
+comparison window, the affected columns are unavailable rather than zero.
+A complete, valid `VmRSS` window still supplies the verdict; misaligned sample
+rows cannot supply one.
 Over the same steady-state window it also reports CPU as a percentage of one
 core and extrapolates disk writes and write calls to MiB per day, from
 `/proc/<pid>/stat` and `/proc/<pid>/io`. Those rates are reported, not gated, until measured budgets
