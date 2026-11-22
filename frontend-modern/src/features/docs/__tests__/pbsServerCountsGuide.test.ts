@@ -96,17 +96,23 @@ describe('PBS server count guidance', () => {
     expect(text()).toContain('Shared hostnames, display labels or guest IDs');
   });
 
-  it('distinguishes inventory failure, loading, absent datastore and a hidden column from zero', () => {
+  it('distinguishes a history gap, inventory failure, loading and an absent datastore from zero', () => {
     const meanings = [...section().querySelectorAll('tbody tr')].map((row) =>
       row.textContent!.replace(/\s+/g, ' ').trim(),
     );
-    expect(meanings).toHaveLength(4);
-    expect(meanings[1]).toContain('Loading The PBS inventory has not loaded yet');
-    expect(meanings[2]).toContain('Unavailable The PBS inventory read failed');
-    expect(meanings[2]).toContain(
+    expect(meanings).toHaveLength(5);
+    expect(meanings[0]).toContain('0 listed');
+    expect(meanings[1]).toContain('History gap Pulse has evidence');
+    expect(meanings[1]).toContain('not a datastore total');
+    expect(meanings[2]).toContain('Loading The PBS inventory has not loaded yet');
+    expect(meanings[3]).toContain('Unavailable The PBS inventory read failed');
+    expect(meanings[3]).toContain(
       'reachability and datastore capacity can still be shown independently',
     );
-    expect(meanings[3]).toContain('— This server row has no reported datastore to count');
+    expect(meanings[4]).toContain('— This server row has no reported datastore to count');
+    expect(text()).toContain(
+      'Open the datastore row to see Backup entries and any known history gap',
+    );
     expect(text()).toContain('A hidden column is not missing inventory');
   });
 
