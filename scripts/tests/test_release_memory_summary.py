@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
-"""Check the release memory summary's RSS, CPU and disk observations."""
+"""Check launch parity and the release memory summary's observations."""
 
 import importlib.util
 import io
 import json
 import os
+import subprocess
 from contextlib import redirect_stdout
 from pathlib import Path
 import tempfile
@@ -244,6 +245,47 @@ class ReleaseMemorySummaryTests(unittest.TestCase):
         code, result, _ = self.run_summary(samples(130000, 25, 0), samples(170000, 25, 0))
         self.assertEqual(code, 1)
         self.assertTrue(result["regressed"])
+
+
+class ReleaseMemoryLauncherTests(unittest.TestCase):
+    def test_both_builds_request_their_own_loopback_metrics_listener(self):
+        # Exercise the actual Bash launch, not a copy of its env arguments.
+        # The fixture records its environment and then exits, so this is
+        # neither a memory sample nor a real server/bind test.
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            baseline, candidate, output = [root / name for name in ("stable", "main", "out")]
+            tool_bin = root / "bin"
+            for directory in (baseline, candidate, tool_bin):
+                directory.mkdir()
+            fixture = root / "pulse-fixture"
+            fixture.write_text(
+                '#!/bin/bash\nset -eu\n'
+                'printf "%s:%s\\n" "${PULSE_METRICS_BIND_ADDRESS-unset}" '
+                '"${PULSE_METRICS_PORT-unset}" > "$PULSE_DATA_DIR/metrics-bind"\n'
+            )
+            fixture.chmod(0o700)
+            for name, body in (
+                ("go", 'set -eu\n[[ "$1" == build && "$2" == -o ]]\ncp "$PULSE_TEST_BINARY" "$3"\n'),
+                ("curl", "exit 1\n"),
+            ):
+                fake = tool_bin / name
+                fake.write_text("#!/bin/bash\n" + body)
+                fake.chmod(0o700)
+            result = subprocess.run(
+                ["bash", str(ROOT / "scripts/memory/compare_release_memory.sh"),
+                 str(baseline), str(candidate), str(output)],
+                env={**os.environ, "PATH": f"{tool_bin}:{os.environ['PATH']}",
+                     "PULSE_TEST_BINARY": str(fixture), "PULSE_FOOTPRINT_ESTATE": "mock",
+                     "PULSE_MEMORY_DURATION": "8", "PULSE_MEMORY_INTERVAL": "1"},
+                text=True, capture_output=True, timeout=30,
+            )
+            self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+            for label in ("baseline", "candidate"):
+                with self.subTest(label=label):
+                    self.assertIn(f"{label} exited before the measurement ended", result.stderr)
+                    self.assertEqual((output / f"data-{label}" / "metrics-bind").read_text(),
+                                     "127.0.0.1:0\n")
 
 
 if __name__ == "__main__":
