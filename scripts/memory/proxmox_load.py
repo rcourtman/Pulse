@@ -17,7 +17,8 @@ and authentication configured:
 It runs until --duration elapses or SIGTERM arrives, then writes a JSON stats
 file. It exits 1 when registration failed, PVE or PBS polling did not occur,
 the fixture did not serve snapshots for every configured PBS group, or the
-dashboard did not receive state updates and the full synthetic PVE inventory.
+dashboard lacked the full synthetic PVE inventory with recent poll sightings
+at the end of sampling.
 """
 
 from __future__ import annotations
@@ -40,10 +41,27 @@ import urllib.parse
 import urllib.request
 from collections import Counter
 from dataclasses import dataclass, field
+from datetime import datetime
 
 STOP = threading.Event()
 DASHBOARD_SOCKETS: set[socket.socket] = set()
 DASHBOARD_LOCK = threading.Lock()
+# The default PVE poll interval is 10 seconds. Allow several cycles of
+# scheduling and delivery slack without accepting the startup roster for RSS
+# measured after collection has stopped.
+GUEST_FRESHNESS_SECONDS = 60
+
+
+def guest_seen_at(value: object) -> float | None:
+    if not isinstance(value, str):
+        return None
+    if value.endswith("Z"):
+        value = value[:-1] + "+00:00"
+    try:
+        when = datetime.fromisoformat(value)
+        return when.timestamp() if when.tzinfo is not None else None
+    except (ValueError, OverflowError, OSError):
+        return None
 
 
 class ThreadedHTTPServer(socketserver.ThreadingMixIn, http.server.HTTPServer):
@@ -62,13 +80,15 @@ class DashboardStats:
     ws_state_updates: int = 0
     ws_state_bytes: int = 0
     ws_errors: list[str] = field(default_factory=list)
-    resource_identities: dict[str, tuple[str | None, str | None]] = field(default_factory=dict)
+    resources: dict[str, tuple[str | None, str | None, float | None]] = field(default_factory=dict)
 
     def update_guests(self, data: dict) -> None:
-        # Keep just the identity fields. Existing resource upserts are merge
-        # patches, so a metrics-only update must not erase a guest's identity.
+        # Existing resource upserts are merge patches. A metrics-only update
+        # neither erases identity nor proves a new guest poll. In this
+        # PVE-only guest estate lastSeen is the collector's sighting, not
+        # updatedAt, the frame time, or a new registration.
         if "resources" in data:
-            self.resource_identities.clear()
+            self.resources.clear()
             rows = data["resources"]
         else:
             delta = data.get("resourceDelta")
@@ -76,28 +96,38 @@ class DashboardStats:
                 return
             removed = delta.get("removed", [])
             if not isinstance(removed, list) or not all(isinstance(key, str) for key in removed):
-                self.resource_identities.clear()
+                self.resources.clear()
                 return
             for resource_id in removed:
-                self.resource_identities.pop(resource_id, None)
+                self.resources.pop(resource_id, None)
             rows = delta.get("upserts", [])
         if not isinstance(rows, list):
-            self.resource_identities.clear()
+            self.resources.clear()
             return
         for row in rows:
             if not isinstance(row, dict) or not isinstance(row.get("id"), str) or not row["id"]:
                 continue
             resource_id = row["id"]
-            technology, name = self.resource_identities.get(resource_id, (None, None))
-            technology = row.get("technology", technology)
-            name = row.get("name", name)
-            self.resource_identities[resource_id] = (
+            old_technology, old_name, last_seen = self.resources.get(resource_id, (None, None, None))
+            technology = row.get("technology", old_technology)
+            name = row.get("name", old_name)
+            if "lastSeen" in row or (technology, name) != (old_technology, old_name):
+                last_seen = guest_seen_at(row.get("lastSeen"))
+            self.resources[resource_id] = (
                 technology if isinstance(technology, str) else None,
                 name if isinstance(name, str) else None,
+                last_seen,
             )
 
     def missing_guests(self) -> set[tuple[str, str]]:
-        return self.expected_guests.difference(self.resource_identities.values())
+        return self.expected_guests.difference((tech, name) for tech, name, _ in self.resources.values())
+
+    def missing_recent_guests(self, started: float, finished: float) -> set[tuple[str, str]]:
+        earliest = max(started, finished - GUEST_FRESHNESS_SECONDS)
+        return self.expected_guests.difference(
+            (tech, name) for tech, name, seen in self.resources.values()
+            if seen is not None and earliest <= seen <= finished
+        )
 
 
 @dataclass
@@ -568,7 +598,7 @@ def record_ws_message(opcode: int, payload: bytes, stats: DashboardStats, has_in
     if message.get("type") == "stateTooLarge":
         # Pulse invalidates the delta baseline when it withholds a state.
         with stats.lock:
-            stats.resource_identities.clear()
+            stats.resources.clear()
         return False
     data = message.get("data")
     if not isinstance(data, dict) or not data:
@@ -577,7 +607,7 @@ def record_ws_message(opcode: int, payload: bytes, stats: DashboardStats, has_in
         if message.get("type") == "initialState":
             stats.ws_initial_states += 1
             has_initial_state = True
-            stats.resource_identities.clear()
+            stats.resources.clear()
         elif message.get("type") == "rawData" and has_initial_state:
             stats.ws_state_updates += 1
         else:
@@ -610,7 +640,7 @@ def run_dashboard(host: str, port: int, deadline: float, stats: DashboardStats) 
                     raise ConnectionError(response.split(b"\r\n", 1)[0].decode(errors="replace"))
                 with stats.lock:
                     stats.ws_connects += 1
-                    stats.resource_identities.clear()
+                    stats.resources.clear()
                 has_initial_state = False
                 message_opcode = None
                 fragments = bytearray()
@@ -686,6 +716,7 @@ def main(argv: list[str]) -> int:
     parser.add_argument("--pbs-instances", type=int, default=2)
     parser.add_argument("--snapshots-per-group", type=int, default=50)
     parser.add_argument("--duration", type=float, required=True, help="seconds to drive load")
+    parser.add_argument("--sample-until", type=int, required=True, help="planned end of RSS sampling (Unix seconds)")
     parser.add_argument("--stats", required=True, help="path of the JSON stats file to write")
     args = parser.parse_args(argv)
 
@@ -767,6 +798,7 @@ def main(argv: list[str]) -> int:
 
     while not STOP.is_set() and time.time() < deadline:
         STOP.wait(1)
+    finished = time.time()
     STOP.set()
 
     with DASHBOARD_LOCK:
@@ -791,6 +823,7 @@ def main(argv: list[str]) -> int:
     pve_requests = req_counts.get("pve_requests", 0)
     with dash_stats.lock:
         missing_pve_guests = dash_stats.missing_guests()
+        missing_recent_guests = dash_stats.missing_recent_guests(started, finished)
 
     result = {
         "pve_nodes": args.nodes,
@@ -799,7 +832,10 @@ def main(argv: list[str]) -> int:
         "pbs_instances": args.pbs_instances,
         "snapshots_per_group": args.snapshots_per_group,
         "total_pbs_snapshots": total_pbs_snapshots,
-        "elapsed_s": round(time.time() - started, 1),
+        "elapsed_s": round(finished - started, 1),
+        "sampling_end_reached": finished >= args.sample_until,
+        "pve_guests_recent": len(guest_refs) - len(missing_recent_guests),
+        "pve_guest_freshness_window_s": GUEST_FRESHNESS_SECONDS,
         "registrations": reg_results,
         "requests": req_counts,
         "pve_requests": pve_requests,
@@ -820,6 +856,9 @@ def main(argv: list[str]) -> int:
         json.dump(result, handle, indent=2)
         handle.write("\n")
 
+    if not result["sampling_end_reached"]:
+        print("proxmox load ended before the planned end of RSS sampling", file=sys.stderr)
+        return 1
     if reg_failed:
         print(f"proxmox load registration failed: {reg_results}", file=sys.stderr)
         return 1
@@ -841,6 +880,15 @@ def main(argv: list[str]) -> int:
         print(
             f"proxmox load dashboard saw {result['pve_guests_observed']}/{len(guest_refs)} expected PVE guests; "
             f"missing: {', '.join(f'{kind}/{name}' for kind, name in sorted(missing_pve_guests))}",
+            file=sys.stderr,
+        )
+        return 1
+    if missing_recent_guests:
+        print(
+            f"proxmox load dashboard had recent poll sightings for "
+            f"{result['pve_guests_recent']}/{len(guest_refs)} PVE guests within the last "
+            f"{GUEST_FRESHNESS_SECONDS}s: missing recent sightings for "
+            f"{', '.join(f'{kind}/{name}' for kind, name in sorted(missing_recent_guests))}",
             file=sys.stderr,
         )
         return 1

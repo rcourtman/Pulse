@@ -233,7 +233,10 @@ a real, non-mock Pulse polling a synthetic 3-node Proxmox VE cluster (35 guests)
 dashboard WebSocket (`scripts/memory/proxmox_load.py`). Neither mock mode nor
 the agent estate exercises PVE/PBS polling, `recovery.db` ingestion, protection
 posture refreshes, or PBS backup cloning. It requires node registration,
-PVE/PBS polling, and dashboard state updates with all expected PVE guests. It
+PVE/PBS polling, and dashboard state updates with all expected PVE guests. Each
+guest must have a poll sighting within 60 seconds of the end of RSS sampling;
+a roster retained since startup or an unrelated dashboard update is not enough.
+This checks collection near the end, not uninterrupted polling. It
 also requires a completed, nonempty snapshot response for each configured PBS
 backup group on each datastore; registration, status requests and repeat reads
 of one group cannot stand in for snapshot traffic. The per-build

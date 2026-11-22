@@ -2,6 +2,7 @@
 """Exercise PVE guest and PBS snapshot coverage in the memory watch."""
 
 from collections import Counter
+from datetime import datetime, timezone
 import json
 from pathlib import Path
 import sys
@@ -135,6 +136,53 @@ class ProxmoxMemoryLoadTests(unittest.TestCase):
         self.assertEqual(self.stats.missing_guests(), self.expected)
         self.frame("initialState", resources=rows[:1])
         self.assertEqual(self.stats.missing_guests(), {("lxc", "ct-101")})
+
+    def test_a_retained_roster_or_unrelated_update_does_not_prove_late_collection(self):
+        old = "2026-11-21T00:00:30Z"
+        end = datetime(2026, 11, 21, 0, 5, tzinfo=timezone.utc).timestamp()
+        self.frame("initialState", resources=[
+            {"id": "a", "technology": "qemu", "name": "vm-100", "lastSeen": old},
+            {"id": "b", "technology": "lxc", "name": "ct-101", "lastSeen": old},
+        ])
+        self.frame("rawData", resourceDelta={"upserts": [
+            {"id": "a", "lastSeen": "2026-11-21T00:04:00.999999999Z"},
+            {"id": "b", "updatedAt": "2026-11-21T00:04:55Z"},
+        ]})
+        self.assertFalse(self.stats.missing_guests())
+        self.assertEqual(self.stats.missing_recent_guests(end - 300, end), {("lxc", "ct-101")})
+        self.frame("rawData", resourceDelta={"upserts": [
+            {"id": "b", "lastSeen": "2026-11-21T01:04:58+01:00"},
+        ]})
+        self.assertFalse(self.stats.missing_recent_guests(end - 300, end))
+
+    def test_missing_or_invalid_times_and_previous_run_do_not_prove_a_poll(self):
+        end = datetime(2026, 11, 21, 0, 5, tzinfo=timezone.utc).timestamp()
+        for timestamp in ("2026-11-21T00:04:00Z", "2026-11-21T00:05:01Z",
+                          "2026-11-21T00:04:59", "not a date", None):
+            with self.subTest(timestamp=timestamp):
+                self.frame("initialState", resources=[
+                    {"id": "a", "technology": "qemu", "name": "vm-100", "lastSeen": timestamp},
+                    {"id": "b", "technology": "lxc", "name": "ct-101"},
+                ])
+                self.assertFalse(self.stats.missing_guests())
+                self.assertEqual(self.stats.missing_recent_guests(end - 30, end), self.expected)
+
+    def test_recent_sighting_stays_bound_to_the_guest_and_current_inventory(self):
+        end = datetime(2026, 11, 21, 0, 5, tzinfo=timezone.utc).timestamp()
+        self.frame("initialState", resources=[
+            {"id": "a", "technology": "qemu", "name": "vm-100", "lastSeen": "2026-11-21T00:04:51Z"},
+            {"id": "b", "technology": "lxc", "name": "ct-101", "lastSeen": "2026-11-21T00:04:52Z"},
+        ])
+        self.frame("rawData", resourceDelta={"upserts": [{"id": "a", "cpu": {"current": 0.3}}]})
+        self.assertFalse(self.stats.missing_recent_guests(end - 300, end))
+        self.frame("rawData", resourceDelta={"upserts": [
+            {"id": "c", "technology": "qemu", "name": "vm-100"},
+        ], "removed": ["a"]})
+        self.assertEqual(self.stats.missing_recent_guests(end - 300, end), {("qemu", "vm-100")})
+        self.frame("rawData", resourceDelta={"upserts": [
+            {"id": "b", "technology": "qemu", "name": "vm-100"},
+        ]})
+        self.assertEqual(self.stats.missing_recent_guests(end - 300, end), self.expected)
 
 
 if __name__ == "__main__":
