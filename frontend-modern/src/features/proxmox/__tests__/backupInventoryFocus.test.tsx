@@ -81,6 +81,7 @@ describe('retiring backup evidence retains a usable keyboard position', () => {
   it('receives focus when a backup status link has left its trigger behind', async () => {
     window.history.replaceState(PROXMOX_BACKUPS_INSPECTION_STATE, '', '/proxmox/backups/coverage');
     mount();
+    await vi.advanceTimersByTimeAsync(32);
     await waitFor(() =>
       expect(screen.getByRole('region', { name: 'Backup inspection' })).toHaveFocus(),
     );
@@ -94,7 +95,7 @@ describe('retiring backup evidence retains a usable keyboard position', () => {
       outside.focus();
       mount();
       await screen.findByText('east-100');
-      await new Promise((resolve) => requestAnimationFrame(resolve));
+      await vi.advanceTimersByTimeAsync(32);
       expect(outside).toHaveFocus();
     } finally {
       outside.remove();
