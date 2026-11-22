@@ -92,7 +92,11 @@ export default class CIUnitReceipts {
       }
       selected.set(spec.taskId, entry);
     }
-    this.modules = selected;
+    // Map updates to existing IDs preserve this order. Sort once at selection,
+    // not on every completed module, and leave Vitest's sequence untouched.
+    const ordered = [...selected.values()].sort((a, b) =>
+      a.module.localeCompare(b.module) || a.id.localeCompare(b.id));
+    this.modules = new Map(ordered.map(entry => [entry.id, entry]));
     this.receipt.selection_observed = true;
     this.write();
   }
@@ -132,8 +136,7 @@ export default class CIUnitReceipts {
   }
 
   write() {
-    const modules = [...this.modules.values()].sort((a, b) =>
-      a.module.localeCompare(b.module) || a.id.localeCompare(b.id));
+    const modules = [...this.modules.values()];
     const unobserved = modules.filter(module => !terminalStates.has(module.state))
       .map(module => module.id);
     const receipt = {
@@ -150,7 +153,9 @@ export default class CIUnitReceipts {
     const temporary = `${this.outputFile}.${process.pid}.tmp`;
     let owned = false;
     try {
-      fs.writeFileSync(temporary, `${JSON.stringify(receipt, null, 2)}\n`,
+      // Every callback still leaves a complete, atomic snapshot. Avoid writing
+      // pretty-print whitespace for the whole inventory after each result.
+      fs.writeFileSync(temporary, `${JSON.stringify(receipt)}\n`,
         { flag: 'wx', mode: 0o600 });
       owned = true;
       fs.renameSync(temporary, this.outputFile);
