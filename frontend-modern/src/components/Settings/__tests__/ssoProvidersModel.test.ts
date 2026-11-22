@@ -172,6 +172,40 @@ describe('ssoProvidersModel', () => {
     expect(form.groupRoleMappings).toBe('admins=admin');
   });
 
+  it.each([
+    { saved: {}, expected: undefined },
+    { saved: { emailAttr: '' }, expected: undefined },
+    { saved: { emailAttr: 'mail' }, expected: 'mail' },
+  ])(
+    'does not change the saved SAML email attribute $saved when renaming a provider',
+    ({ saved, expected }) => {
+      const form = mapProviderDetailsToForm({
+        id: 'corp-saml',
+        name: 'Corporate SAML',
+        type: 'saml',
+        enabled: true,
+        saml: { idpMetadataUrl: 'https://idp.example.com/metadata', ...saved },
+      });
+
+      expect(form.samlEmailAttr).toBe(expected ?? '');
+      const payload = JSON.parse(
+        JSON.stringify(buildProviderPayload({ ...form, name: 'New name' })),
+      );
+      expect(payload.name).toBe('New name');
+      expect(payload.saml.emailAttr).toBe(expected);
+    },
+  );
+
+  it('preserves the new SAML default and allows setting and clearing an attribute', () => {
+    const draft = { ...createEmptyProviderForm(), type: 'saml' as const };
+    const payloadWithAttribute = (samlEmailAttr: string) =>
+      JSON.parse(JSON.stringify(buildProviderPayload({ ...draft, samlEmailAttr }))).saml;
+
+    expect(payloadWithAttribute(draft.samlEmailAttr).emailAttr).toBe('email');
+    expect(payloadWithAttribute(' mail ').emailAttr).toBe('mail');
+    expect(payloadWithAttribute('')).not.toHaveProperty('emailAttr');
+  });
+
   it('keeps SAML provider and SAML protocol groups attributes aligned', () => {
     const form = {
       ...createEmptyProviderForm(),

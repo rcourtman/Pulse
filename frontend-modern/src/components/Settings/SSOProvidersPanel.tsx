@@ -833,7 +833,7 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
                         type="text"
                         value={form.samlEmailAttr}
                         onInput={(e) => setForm('samlEmailAttr', e.currentTarget.value)}
-                        placeholder="email"
+                        placeholder="Not set"
                         class={controlClass()}
                       />
                     </div>
