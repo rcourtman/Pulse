@@ -1,0 +1,43 @@
+{
+  "version": 1,
+  "base_sha": "00613eb68b712b0a58ab5addffd85dc07275f74e",
+  "verified_at": "2026-11-22T17:13:55Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/routing/resourceLinks.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/routing/resourceLinks.ts": "a3554451dadf1df45a4bfad03d017cf4a7aada6b32c73cc914216668e6ba9462"
+  },
+  "routes": [
+    "/proxmox/overview",
+    "/proxmox/backups",
+    "/proxmox/backups/coverage",
+    "/proxmox/backups/date",
+    "/standalone/machines",
+    "/standalone/vms",
+    "/standalone/vms?host=agent%3Atest-host",
+    "/standalone/vms?q=pulse-dev"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Proxmox overview guest backup status dialog and guest-row Backups link handoff to /proxmox/backups/coverage",
+    "Proxmox backups coverage and by-date tabs with expanded datastore row and disclosure at 1440x900 and 390x844 with zero horizontal overflow",
+    "Standalone Machines and direct /standalone/vms empty state at 1440x900 and 390x844 with zero console errors and zero horizontal overflow",
+    "Host-scoped /standalone/vms?host=agent%3Atest-host and search-scoped /standalone/vms?q=pulse-dev routes preserved across reload"
+  ],
+  "interactions": [
+    "clicked guest backup status cell on /proxmox/overview to open backup status details dialog and followed expanded guest Backups link to /proxmox/backups/coverage",
+    "toggled What the counts mean disclosure, expanded offsite-vault datastore row, and switched to By date tab on /proxmox/backups",
+    "navigated /standalone/machines, /standalone/vms, /standalone/vms?host=agent%3Atest-host, and /standalone/vms?q=pulse-dev including page reload persistence, and inspected desktop (1440x900) and mobile (390x844) screenshots pixel-by-pixel"
+  ]
+}
