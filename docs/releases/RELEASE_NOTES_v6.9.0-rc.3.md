@@ -2,170 +2,168 @@
 
 This release candidate follows `v6.9.0-rc.2` on the way to stable `v6.9.0`. Stable `v6.8.0` remains the rollback target.
 
-Pulse v6.9.0 opens longer chart history to every plan, groups Compose projects in Docker, and lets you rehearse alert delivery. Proxmox and PBS keep backup results visible through incomplete polls, and agent setup and updates explain where they got stuck.
+Pulse v6.9.0 makes longer metric history available to everyone, adds a home for Docker Compose apps and standalone VMs, and gives you a way to test alert routes. Proxmox and PBS show more of what they know when a backup poll is incomplete, and setup and update errors give clearer next steps.
 
 ## Highlights
 
-- History charts show up to 90 days of retained metrics on every plan, including Community.
-- Docker → Applications groups Compose services by runtime and project and shows their checks and recent failures.
-- Alerts → Notifications sends rehearsal alerts and recoveries through saved email, webhook and Apprise routes.
+- History charts now show up to 90 days of retained metrics on every plan, including Community.
+- Docker → Applications now groups Compose services by runtime and project and shows linked checks and recent failures.
+- Alerts → Notifications now sends rehearsal alerts and recoveries through saved email, webhook and Apprise routes.
 
 ## What's improved
 
-- **Patrol Inbox puts the conclusion beside the finding.** Open the proposed fix from the same item. The review names the target and shows what ran and where to find the result.
-- **Workspace switching keeps your place.** Retry a failed list in place and use IDs to tell same-named workspaces apart. Alerts loads the selected workspace's policy and keeps confirmations with the workspace that sent them.
-- **Organization Settings keeps saved details visible.** Restart stalled checks in Overview, Access, Billing & Usage and Sharing. Confirmed details stay visible, dependent controls pause when their data is missing, and long names wrap in Overview.
-- **Organization Access shows when invitations are empty.** A confirmed empty list is distinct from a pending or failed check. Member fields identify missing IDs, support Enter and explain which edits take effect immediately.
-- **Invitation replies can be checked without sending them again.** Invitees can restart a stalled check. After an uncertain reply, Check again reads saved access and returns keyboard focus to the result.
-- **Sharing identifies both parties and the resource.** Incoming and outgoing shares show access and confirmed decisions, even if a refresh fails. Create Share supports Enter and points to the field that needs correction.
-- **Roles and User Access keep drafts through stalled reads.** Restart role, roster and permission checks in place. Rules show Allow or Deny with conditions, and saves or refusals return focus to the relevant control.
-- **Role editing catches duplicates and skips unchanged saves.** New Role rejects an existing ID. Permission edits keep focus, and removing a permission moves it to a remaining control.
-- **Audit Log keeps details and controls in reach.** The Event cell includes who acted and when on narrow screens. Filters stay usable while results load, verification applies to the displayed page, and stalled loads can be restarted.
-- **Audit Webhooks can confirm an uncertain change.** Check saved destinations without resending the change, or restart a stalled read. After removal, focus returns to a nearby endpoint.
-- **API Access keeps the affected token readable.** Long names wrap in scope and revocation dialogs, and errors stay with the open dialog. Restart a stalled list and keep your place after revoking.
-- **Help clarifies HTTPS and agent URL checks.** The systemd example uses the configured port and explains which settings take precedence. Plain HTTP needs a local or private address, even with `--insecure`.
+- **Machines lists standalone VMs.** The VMs tab appears when agents report Unraid, libvirt/KVM or XCP-ng guests. Host VM counts open a filtered list, and libvirt guests use balloon memory readings when available.
+- **Patrol Inbox shows the conclusion and proposed fix together.** Open the review from the finding to see the affected resource, what approval did, what ran and where to find the result.
+- **Availability checks show uptime over longer windows.** Choose 24 hours, 7 days, 30 days or 1 year in Table or Fleet. The choice stays in place when switching views or retrying, and sparse history shows how much time was observed.
+- **Backups writes less to disk.** Healthy polls skip rewriting unchanged restore points. Large PBS inventories use less memory to count backups per guest, and slow Proxmox storage polls no longer pile up.
+- **Pulse respects the memory ceiling in more Proxmox LXCs.** It uses the container's reported memory when the cgroup limit is hidden. Backup processing and alert history also use less temporary memory.
+- **Configuration restores protect other saves.** Settings writes wait for the restore to finish, keeping a failed restore from undoing another successful save.
+- **CLI backups preserve the previous file until the new copy is complete.** Passphrase prompts stay out of redirected archives, and incomplete output reports failure.
 
 ## Alerts and notifications
 
-- **Rehearsal reports explain each destination's result.** See what was accepted, failed, suppressed, waiting or unknown for seven days, even after restart. Confirm receipt in the receiving service.
-- **More alerts respect maintenance windows.** Matching one-time and recurring windows cover Proxmox and PBS connection warnings and PBS datastore-offline alerts.
-- **Reminders no longer inflate flapping counts.** Reminders, escalations and retries belong to the original firing. A problem in one alert listener can't change or drop another listener's alert.
-- **Finished container jobs can stay quiet.** With an agent that reports restart policy, jobs that exit successfully in under an hour and won't restart skip offline alerts. Set Warn or Crit on a container to include it, or Off to mute it.
-- **Mute every container on one Docker runtime.** Alerts → Thresholds → Docker → Container Runtimes covers current and future containers. Monitoring, runtime-offline alerts, Swarm services and endpoint checks have separate controls.
-- **Mail Gateway queue alerts wait for confirmed recovery.** Partial counts and unclear ages no longer clear alerts or downgrade critical ones. Alerts shows gateway-wide and node-specific Message Age warnings together.
-- **Built-in Telegram handles long groups and special characters.** Pulse escapes alert text, splits or shortens long messages and waits when rate-limited. Recoveries link to Alert History when a Pulse URL is configured.
-- **ntfy recoveries include authentication and event headers.** Receivers can authenticate and identify recoveries the same way they handle firing notifications.
-- **Delivery uses less temporary memory.** Email attachments, tag routing and built-in webhooks allocate less, and Apprise output is drained as it arrives.
-- **Help shows how to check delivery.** The alerting guide covers routes, reminders, incidents and an external watchdog. The API guide shows how to test a saved webhook or draft destination.
+- **Rehearsal reports show what happened at each destination.** Results distinguish delivery, failure, suppression, waiting and uncertainty. Reports survive restarts for seven days. Confirm receipt in the destination itself.
+- **Maintenance windows cover more alerts.** Matching one-time and recurring windows cover Proxmox and PBS connection warnings and PBS datastore-offline alerts. A node window applies only when Pulse can match the connection to that node.
+- **Repeat notices no longer look like flapping.** Reminders, escalations and retries count as one firing. Older settings with missing defaults regain flapping protection and stale-alert cleanup, while explicit choices are preserved.
+- **Alert History keeps the final value and message.** Resolved entries retain the latest reading and time. Metric alerts reach every registered listener, even if a listener fails or changes its copy.
+- **Finished container jobs can stay quiet.** With restart-policy data from the agent, jobs that finish successfully in under an hour and won't restart skip offline alerts. Choose Off, Warn or Crit for individual containers.
+- **One switch mutes container alerts on a Docker runtime.** Alerts → Thresholds → Docker → Container Runtimes covers existing and future containers. Runtime-offline alerts, Swarm services and endpoint checks have their own controls.
+- **Mail Gateway alerts wait for confirmed recovery.** Missing queue counts or ages leave alerts open and preserve critical severity. Gateway-wide and node-specific Message Age warnings can appear together.
+- **Telegram handles special characters and long groups.** Built-in messages escape names, split or shorten long batches and wait when rate-limited. Recovery messages link to Alert History when a Pulse URL is configured.
+- **ntfy recoveries carry authentication and event headers.** Subscribers can authenticate and identify recovery messages the same way they handle firing alerts.
+- **Delivery retries cover longer outages.** The queue retries temporary failures for about 33 minutes, respects webhook cooldown requests up to 15 minutes, and reports permanent setup errors without repeated attempts.
+- **Recovered destinations can receive recent missed messages.** A successful live send can retry up to 25 eligible failures from the past 24 hours for the same saved destination.
+- **Notifications adds email branding and destination guidance.** Set a subject prefix, brand name and footer under Email → Advanced options. Alerts Overview prompts for setup when delivery is active and Pulse confirms zero enabled destinations.
 
 ## Disks and storage
 
-- **Proxmox adds longer SMART polling intervals.** Disk-health settings offer 3, 6, 12 and 24 hours and preserve custom values. The drive standby warning stays by the selector.
-- **Machines names critical Unraid array problems.** The collapsed row shows the severity and reason on the affected host, including when an assigned disk is missing.
-- **Storage alerts open the affected resource.** PBS capacity alerts open the datastore, and Proxmox filesystem alerts open the VM or LXC. Patrol gets the full mount path and where to inspect it.
-- **AI can follow the largest folder on a filesystem.** Patrol and Assistant can drill down several levels on the same mount, report unreadable paths and suggest a directory read if a wildcard needs approval.
-- **TrueNAS CORE shows each disk's own read and write history.** Disk History keeps paired samples together and identifies appliance readings, readings held in Pulse memory, or a mix. Charts stay reachable in narrow drawers.
-- **TrueNAS CORE host Disk I/O fetches only the missing disk graphs.** Stored CPU, memory, temperature and network readings can load independently. Use TrueNAS Reporting if the host total is blank because a reporting disk is missing a sample.
+- **Machine details include Physical Disks & SMART.** Open Overview on an agent-backed machine that reports disks. Expand a drive to see its health, warnings, history and SMART attributes.
+- **Unraid array problems appear on the Machines row.** See the severity and reason without expanding the host, including when an assigned disk is missing.
+- **Storage alerts open the affected resource.** PBS capacity alerts go to the datastore, and Proxmox filesystem alerts go to the VM or LXC. Patrol gets the full mount path to inspect.
+- **Disk investigations can follow the largest folder.** Patrol and Assistant can drill down several levels on the same filesystem, identify unreadable paths and suggest a directory read when a wildcard needs approval.
+- **Proxmox Nodes shows actual disk use below 1%.** The Disk column, sorting and History use the measured percentage, so 0.88% appears as 0.88% instead of 88%.
+- **Proxmox disk health offers longer SMART intervals.** Choose 3, 6, 12 or 24 hours or keep a saved custom interval. The drive standby warning stays beside the selector.
+- **TrueNAS CORE shows each disk's own I/O history.** Read and write samples stay paired, and Disk History identifies appliance readings, readings held in Pulse memory, or a mix.
+- **TrueNAS host History handles slow reads.** CORE fetches only the missing disk graphs and lets other charts load independently. Reads can take up to 150 seconds and cancel when you leave or change the range.
 
 ## Proxmox, PBS and backups
 
-- **Proxmox drawers show node hardware and linked readings.** See CPU, thread count, RAM, fans and ports with speed, link state and last-known labels. Current custom readings appear again, including zeros and collection errors.
-- **Node History adds temperature to hover charts.** Hover over a node to see CPU, memory, disk and temperature. Temperature sparklines in Trends keep their threshold colors.
-- **Backup health shows incomplete coverage.** See pending and unevaluated targets, running or failed jobs and unmatched backups. Backup Jobs offers a retry when history fails to load and keeps the counts it has.
-- **Proxmox backup polls preserve observed guest results.** Overlapping pages still contribute new tasks. Shorter logs, later timeouts and task-list interruptions preserve observed successes and failures where evidence is still current.
-- **Backup Jobs expires stale Running results.** After five minutes without fresh evidence, the guest becomes Unknown. Coverage shows each guest's result and leaves duration blank if Pulse only knows when the parent job ended.
-- **Protection dates exclude incomplete archives.** An archive still being written can't make a guest look protected. Unread shared storage keeps last-known backups and PBS links even if a same-named local store was scanned.
-- **PBS keeps last-known failures and restore points.** Unread job lists preserve sync, verify and prune failures across restarts. Incomplete backup group lists keep earlier restore points until a complete read.
-- **Backup Servers and Replication show uncertainty.** Backup Servers separates warning, unknown and unreachable states and leaves unconfirmed capacity unknown. Replication adds an Unknown filter for unconfirmed sync outcomes.
-- **VM snapshots show whether memory was saved.** Pulse uses the flag reported by Proxmox and marks the result unconfirmed if the flag is missing or invalid.
-- **VM memory prefers a current reading from its linked Pulse Agent.** It works even when Proxmox VM status is unavailable and skips the guest memory file read. See the source and time under Overview → Details → Memory reading.
-- **Patrol and action reviews can start stopped VMs and LXCs.** An admin approves Start through a confirmed systemd node agent with commands enabled. The action runner is still required for stop or restart.
-- **Patrol checks how a guest stopped.** Manual and alert-triggered checks read Proxmox tasks for deliberate stops and failed restarts. If history is unreadable, check why the guest stopped before approving Start.
+- **Node details show hardware and linked agent readings.** See CPU, threads, RAM, fans and network ports with link speed, link state and last-known labels. Custom readings show zeros and collection errors.
+- **Node History includes temperature on hover.** CPU, memory, disk and temperature appear together. Temperature sparklines keep their threshold colors.
+- **VM memory prefers a current linked Pulse Agent reading.** It works when Proxmox status is unavailable and skips the guest memory file read. See the source and time in Overview → Details → Memory reading.
+- **VM snapshots show whether memory was saved.** Missing or invalid flags stay unconfirmed. Recovery keeps historical snapshots for guests that weren't queried during the latest poll.
+- **Backup Jobs and Coverage show each guest's outcome.** Running becomes Unknown after five minutes without fresh evidence. A parent job's end time leaves guest duration blank, and failed reads offer Retry.
+- **Backup Health shows what Pulse could evaluate.** See pending and unevaluated workloads, failed or running jobs and unmatched backups. Unknown shields open the guest's Coverage, and Restore points flags partial totals and empty results.
+- **Proxmox keeps observed task results through incomplete polls.** Overlapping pages still contribute new tasks. Shorter logs, later timeouts and unread nodes preserve the last usable results for the affected connection.
+- **Protection dates come from completed archives.** A backup still being written can't move the protection date forward. Unread shared storage keeps last-known points and PBS links even when a same-named local store was read.
+- **PBS retains last-known failures and restore points.** Unread job lists preserve sync, verify and prune failures through restarts. Capped or incomplete history keeps earlier points until a complete inventory can confirm removals.
+- **Backup Servers and Replication show uncertainty.** PBS warnings, unknown states and unreachable servers are distinct, and unread capacity stays unknown. Replication has an Unknown filter and keeps missing failure counts blank.
+- **Proxmox connection tests explain what was checked.** Feedback stays with the tested draft and credential, including saved PMG tokens. It distinguishes credentials, read permissions, TLS and network errors and labels cluster members the endpoint listed.
+- **Approved Start works through a confirmed Proxmox node agent.** Patrol checks how the VM or LXC stopped before proposing Start. The agent needs commands enabled, and Stop and Restart still require the action runner.
 
 ## TrueNAS, vSphere and Docker
 
-- **TrueNAS honors the pool, dataset and replication switches.** All three can stay off. Disabling datasets also skips snapshots, while system, disk and native alert readings continue.
-- **TrueNAS snapshots take less work to poll.** SCALE 25.04 and 25.10 fallback queries ask only for the properties Pulse uses, and large snapshot inventories use less temporary memory to build restore points.
-- **TrueNAS separates reclaimable ZFS cache from free memory.** Open the Memory bar in TrueNAS → Overview for the ARC breakdown. Linked Pulse Agent readings account for ARC when used for Proxmox VM memory.
-- **Slow TrueNAS host History reads can finish.** Refreshes let requests run for up to 150 seconds. Changing range or leaving cancels abandoned CORE REST work without interrupting SCALE polling.
-- **Agent profiles list TrueNAS hosts with an installed agent.** NAS systems connected through their native API remain available for monitoring and History.
-- **vSphere honors VM, host and datastore collection choices.** Skipped inventories can't fail a poll. Empty views explain how to enable collection, and rejected vCenter addresses leave the draft open for correction.
-- **Reviewed Compose updates use your registered source.** An admin-approved local update edits the Compose file and replaces one service. Git mode publishes a review branch for your normal deployment process.
-- **Service deployments shows what rolled out.** Pulse compares the running image to the reviewed image and shows fresh linked HTTP check results separately.
-- **Compose admins can opt in to live logs.** Docker → Applications follows the latest 30 lines from a selected container after live logs are enabled on its agent. Use it only where administrators may read application logs.
-- **Docker and Podman can show failure logs.** Opt in under Install on a host or with `--enable-failure-logs` for up to 30 lines and 4 KB per failure. Leave it off for sensitive logs since masking can miss secrets and AI can send logs to your provider.
-- **Docker health checks explain failures.** Container details, State tooltips, alerts and Patrol show causes such as DNS, HTTP, TLS, timeout or a missing command. Raw probe output stays on the host.
+- **TrueNAS honors its collection switches.** Turn off pools, datasets or replication independently. Turning off datasets skips snapshots, and turning off all three still allows system, disk and native alert readings.
+- **TrueNAS snapshots take less work to poll.** SCALE 25.04 and 25.10 fallback queries request only the fields Pulse uses, and large snapshot inventories use less temporary memory.
+- **TrueNAS shows where its readings come from.** The drawer distinguishes the native API from a real Pulse Agent. Agent profiles list only hosts with an installed agent.
+- **TrueNAS Memory separates reclaimable ZFS cache from free RAM.** Open the bar in Overview for the breakdown. Linked agent readings also account for ARC when used for Proxmox VM memory.
+- **TrueNAS and vSphere tests stay with the draft.** Results say which details were read or left unconfirmed. Refused destinations keep the editor open for correction.
+- **vSphere honors VM, host and datastore collection choices.** Skipped inventory calls can't fail the poll. Related resources keep readable names, and empty views explain how to enable collection.
+- **Reviewed Compose updates use a registered source.** An approved local update edits the Compose file and replaces one service. Git mode publishes a branch for review and deployment through your usual process.
+- **Service deployments shows what actually rolled out.** Pulse compares the running image with the reviewed image and shows a fresh linked HTTP check separately.
+- **Compose admins can opt in to live logs.** Enable live logs on the agent to follow the latest 30 lines from a selected container in Docker → Applications.
+- **Docker and Podman can show recent failure logs.** Opt in under Install on a host or with `--enable-failure-logs` for up to 30 lines and 4 KB. Leave it off for sensitive logs. Masking can miss secrets and AI can send logs to your provider.
+- **Docker health checks explain failures.** Container details, State tooltips, alerts and Patrol show causes such as DNS, HTTP, TLS, a timeout or a missing command. Raw probe output stays on the host.
 - **Container updates protect the original.** Failed pulls or unchanged images leave it in place. After an interrupted stop or rename, Pulse checks whether it was restored. A replacement for a stopped container stays stopped.
 
 ## Install, updates and agents
 
-- **Agent startup protects saved identity.** Unreadable credentials or IDs stop startup with recovery guidance. Restore unavailable storage before restarting. Read-only installs can set an ID with `--agent-id` or `PULSE_AGENT_ID`.
-- **Enrollment confirms that identity and credentials were saved.** An incomplete enrollment reply stops the attempt because the setup token may already have been used.
-- **Agent installers prepare replacements before stopping services.** Windows stages the executable. Unix checks the collector at its destination and readies the optional helper. A preparation failure leaves the existing service available.
-- **Unix installers distinguish launch failures from URL refusals.** Preflight checks reachability and download availability, then the downloaded agent checks the address. TrueNAS SCALE can run that check from its install filesystem.
-- **TrueNAS CORE agents start at boot again.** The standalone installer enables the service and reports failed stops or starts, or when it can't confirm the service is running.
-- **APT reports pending updates without an action runner.** Linux agents check locally and mark incomplete results. Installing packages still requires the runner.
-- **Settings → Updates explains delivery delays.** See when a release is being prepared for your installation or when Pulse can't confirm the latest version. Channel changes refresh the result and pending releases are checked sooner.
-- **Automatic server updates require a confirmed newer Community version.** The updater rechecks what is installed after getting its lock, skips stale offers and protects an installed Pro binary.
-- **Manual server updates protect the installed edition.** Public updates require a confirmed Community install. For Pro, use the matching private image or Linux archive. Run `/bin/update` only if the Pulse installer provided it.
-- **Updater results say what happened.** Help, cancellation and removal stop reporting success. Unattended updates limit downloads and journal waits, and Proxmox registration times out with advice to check the node list before trying again.
-- **Install Help covers scripted first setup.** Create the admin, enroll a host and activate alerts through the API. Supplied setup API tokens need at least 32 characters, and installer usage lists the host option.
-- **The MCP installer handles help and custom paths.** Help prints usage without installing, unknown options stop early, and custom install directories are prepared before downloading.
+- **Install options are available before generating credentials.** The general installer and Proxmox VE and PBS Host Telemetry Agent forms let you set the connection URL, TLS options and whether commands are allowed.
+- **Agents protect saved identity and credentials.** Unreadable state stops startup with recovery guidance. Restore unavailable storage first. Read-only installations can set a persistent ID with `--agent-id` or `PULSE_AGENT_ID`.
+- **Enrollment confirms the saved identity before reporting success.** An incomplete reply ends the attempt because the setup token may already have been used.
+- **Installers prepare agent replacements before stopping services.** Windows stages the executable. Unix checks the collector on its destination filesystem and prepares the optional helper, including on TrueNAS SCALE.
+- **Unix setup explains URL and launch failures separately.** A successful download check can still be followed by a refused agent URL or an executable that can't run. Errors identify the filesystem checked.
+- **NAS and firewall agents keep working boot settings.** TrueNAS CORE enables startup at boot and reports unconfirmed service state. On pfSense, a failed install preserves the previous startup settings and credentials when recovery succeeds.
+- **APT reports pending packages without an action runner.** The Linux collector checks locally and marks incomplete results. Installing packages still requires the runner.
+- **Updates explains when a release is still on its way.** Settings distinguishes pending delivery from an unconfirmed status, checks pending releases sooner and refreshes the result when you change channels.
+- **Server updates protect the installed edition.** Automatic updates recheck the running version and require a confirmed newer Community release. Public manual updates also require a confirmed Community installation.
+- **Updates recover better from low disk space and broken downloads.** Pulse clears stale staging files, chooses a staging location with more room, and retries incomplete transfers.
+- **Docker warns when Pulse data can disappear on recreation.** Look in startup logs and Settings → Updates for a warning when the active data directory has no persistent mount.
+- **Installer commands report what finished.** Help, cancellation and removal avoid false success. Downloads and journal waits have limits, and a registration timeout tells you to check the Proxmox node list before retrying.
 
 ## Pulse Pro, AI and hosted
 
-- **Patrol follows up on firing alerts.** In Ask first and Autopilot, a run that records no finding can still open one from a firing alert. Manual checks use fresh readings, address the alert first and avoid calling an alerting resource healthy.
-- **Findings follow the resource and the problem.** Separate issues on one guest get separate findings. Patrol corrects guessed IDs when one resource matches and shows IDs in triage to distinguish same-named resources.
-- **Removed resources stop leaving findings open.** Patrol confirms absence, investigates same-named replacements separately and avoids failed runs for cleared alerts on removed resources.
-- **Written advice can become a reviewable fix.** If an investigation ends with advice alone, Pulse asks once for a supported proposal or a conclusion. The final turn can still propose a fix.
-- **Patrol stays connected when monitoring reloads.** Adding connections or changing polling settings keeps alert investigations working. Weekly summaries include confirmed fixes completed between scans.
-- **Patrol can explain why a workload stopped without an alert.** It can flag stopped services and use exit codes or out-of-memory status to explain what happened and whether someone needs to intervene.
-- **AI reads default to the resource under investigation.** Patrol can read inside a running Proxmox guest through a confirmed node agent. Power-action refusals explain when commands are off, the agent is old or unconfirmed, or a runner is needed.
-- **AI backup reads summarize space before listing files.** Ask about a guest by name or VMID, Proxmox storage or a PBS datastore. See counts, sizes and dates with incomplete totals marked.
-- **MSP plans stay visible if some prices are missing.** Account marks unavailable plans or billing periods and offers Reload. Larger self-hosted fleets see a dismissible MSP option under Settings → Infrastructure.
-- **Account preserves client details after an uncertain change.** Refresh to confirm the saved result without resending it. Sign-in code requests for the same email share a visible one-minute wait and explain uncertain delivery.
-- **Hosted clients land in their own workspace.** The empty default workspace stays hidden. New and resumed workspaces recheck billing, with a retry if it's missing, and delayed checkout or edits can't restore withdrawn access.
-- **Hosted recovery waits for old processes to stop writing.** Workspace changes require complete requests, and pending invitations are kept out of hosted lifecycle replies.
+- **Plans & Billing is under Settings → System.** The Pro comparison now calls out scheduled reports, exports and agent profiles. Eligible Community installs can switch to Pro in place or copy pinned Docker Compose commands.
+- **Pro Docker updates check the running image.** Settings shows the private registry's hidden password prompt and both Compose commands. Check the running image after recreation to confirm the update.
+- **Patrol follows up on firing alerts.** Ask first and Autopilot can open a finding if a completed scan records none. Manual checks use fresh readings and examine the active alert first.
+- **Findings stay with the right problem and resource.** Separate problems on one guest get separate findings. Patrol corrects a guessed ID when one resource matches, shows IDs in triage and closes findings after confirming removal.
+- **Written advice can become a reviewable fix.** Patrol asks once for a supported proposal or conclusion when it receives advice alone. An investigation can still propose a fix on its final turn.
+- **Patrol stays connected after monitoring reloads.** Changes to connections or polling settings preserve alert-driven investigations. Weekly summaries count fixes confirmed between scans.
+- **Stopped workloads can get findings without an alert.** Patrol uses exit codes, out-of-memory status and available actions to explain what happened and whether someone needs to intervene.
+- **AI reads start with the resource under investigation.** Patrol can read inside a running Proxmox guest through a confirmed node agent. Refused actions explain whether commands, an updated agent or an action runner are needed.
+- **AI backup queries summarize space before listing files.** Ask by guest name or VMID, Proxmox storage or PBS datastore. Results include counts, sizes and dates and flag incomplete totals.
+- **MSP offers stay usable when prices are missing.** Account marks the affected plans or billing periods and offers Reload. Larger self-hosted fleets see a dismissible MSP option in Infrastructure.
+- **Account can confirm an uncertain client change.** Refresh to read the saved result without sending it again. Sign-in codes for the same email share a visible one-minute wait, with feedback when delivery is uncertain.
+- **Hosted clients land in their own workspace.** New and resumed workspaces recheck billing and offer retry. Delayed checkouts or edits can't restore withdrawn access, and recovery waits for old processes to stop writing.
 
 ## Monitoring and service health
 
-- **Docker suggests availability checks for published web ports.** Review responding HTTP or HTTPS addresses before adding checks. Pulse checks them again before saving and clears offers on workspace changes.
-- **Docker shows when a running service stops responding.** State tooltips name failing checks. A check follows a recreated container on the same host when its name and checked port still match.
-- **Related Compose failures appear together in Alerts.** Container failures and linked service-check failures can share an incident. Each check keeps its own notification settings.
-- **Home Assistant Supervisor avoids false Docker update alerts.** Pulse clears alerts caused solely by the `latest` image alias and leaves Supervisor updates to Home Assistant.
-- **Availability checks catch TCP ports that immediately close.** A port that closes or resets before sending data fails. Silent connections can take up to a quarter-second longer. Exact UDP matching checks the entire reply.
-- **Availability checks identify what they monitor.** Label routers, switches, access points, machines or services. Alerts opens the matching check, and Fleet moves focus to an available control if a check disappears.
-- **Help explains how to check DNS answers.** Use an HTTP health endpoint that asks the resolver for a known answer. The guide covers what each protocol can verify and where probes can run.
-- **History APIs and MCP read retained data on every plan.** Metrics and availability APIs support up to 365 days per request, subject to retention. Ending a paid plan no longer deletes saved history or generated reports.
-- **Resource APIs include more network details.** Updated agents can report Linux IPv4 default gateways, DNS servers and Docker network mode. Proxmox guests can include bridge, VLAN and firewall settings.
-- **Health shows stalled dashboard updates on standalone Pulse.** A saved `/api/health` response can show `websocketStateStalled` after 30 seconds while liveness stays healthy. If reporting a stall, share the flag and time.
-- **Local helper calls stop waiting on cancellation.** Setup and execution share a deadline, temporary failures back off, and shutdown lets connections drain. Work the helper already received can still finish.
-- **Large fleets do less repeated work.** Startup does less database work, and chart filters, snapshot discovery, disk and sensor alert cleanup and Proxmox backup polls process less data.
+- **Docker suggests checks for published web ports.** Review responding HTTP or HTTPS addresses before adding them. Pulse verifies the selected endpoint again on save and clears suggestions when workspace access changes.
+- **Docker shows when a running container stops responding.** State tooltips name the failing checks. A check follows a recreated container on the same runtime when its name and checked port still match.
+- **Related Compose failures can appear in one incident.** Alerts groups container failures with linked service-check failures while each check keeps its own notification settings.
+- **Home Assistant Supervisor avoids false update alerts.** Pulse clears alerts caused solely by the `latest` image alias and leaves Supervisor updates to Home Assistant.
+- **TCP and UDP checks verify more than a response prefix or open port.** TCP fails if the port immediately closes or resets. Exact UDP matching checks the whole reply, and Help shows how to verify DNS answers through an HTTP endpoint.
+- **Availability checks identify the equipment they monitor.** Label routers, switches, access points, machines or services. Alerts opens the affected check, and Fleet keeps keyboard focus usable when a check disappears.
+- **History APIs and MCP can read retained data on every plan.** Metrics and availability requests support up to 365 days, subject to retention. Ending a paid plan preserves saved history and generated reports.
+- **Resource APIs report more network details.** Updated agents can supply Linux IPv4 gateways, DNS servers and Docker network mode. Proxmox guests can include bridge, VLAN and firewall settings.
+- **Standalone Pulse health can flag stalled dashboard updates.** An existing `/api/health` response can show `websocketStateStalled` after 30 seconds while liveness stays healthy.
+- **Local helper waits end when the caller cancels.** Setup and execution share a time limit, temporary failures back off, and shutdown lets connections drain. Work the helper already received can still finish.
+- **Large fleets do less repeated work.** Startup does less database work. Workload charts, snapshot discovery and disk and sensor alert cleanup process less unrelated data.
 
 ## Security
 
-- **Host commands require execute access.** Assistant host reads, Kubernetes logs, Docker update scans and agent checks during action previews require execution permission and the appropriate token scope.
-- **Action reviews enforce your role.** Inbox fixes require plan, approve and execute permissions. Assistant planning requires plan permission, and starting another investigation of an existing finding requires plan and execute permissions.
-- **Automatic command approval checks arguments.** Options that change systems, expose process environments or read extra files require approval. Automatic log reads stay inside `/var/log`, and Pulse filters environment overrides.
+- **Host commands require execute access.** Assistant file and log reads, Kubernetes logs, Docker update scans and agent checks during previews require action execution permission and the appropriate API token scope.
+- **Action reviews enforce your role.** Inbox fixes require plan, approve and execute permissions. Assistant planning requires plan permission. Starting another investigation of an existing finding requires plan and execute permissions.
+- **Automatic command approval checks arguments.** Options that change systems, expose process environments or read extra files require approval. Automatic log reads stay within `/var/log`, and Pulse filters environment overrides.
 - **Recovery tokens must be active and saved.** Pulse records creation and one-time use before granting access. An expired or ended recovery leaves the token unused.
-- **API token changes check current access.** Writes recheck the caller's scopes and workspace. Incomplete inventories preserve live tokens, restored older files can reload, and failed saves keep recovery copies.
-- **Old replies can't disrupt a replacement sign-in.** Requests from earlier sessions can't sign the current user out or switch their workspace. Sharing, ownership and role changes recheck access before applying.
-- **Client addresses follow the configured proxy chain.** List every trusted hop in `PULSE_TRUSTED_PROXY_CIDRS` or have the final proxy replace the forwarded address. Same-host proxies using a loopback Host need `X-Forwarded-For`.
-- **Local setup and recovery check request origin.** Forwarded and cross-origin requests can't use direct local access. Security Overview shows the observed address, and shared hosted networks trust only configured ingress.
-- **Workspace connections enforce destination limits.** Appliance connections and SMTP reject local-only and cloud metadata addresses. Pulse Cloud also blocks private addresses. Self-hosted LAN connections remain supported.
-- **Connection checks protect credentials and private details.** Appliance redirects stay on the configured host, certificate discovery checks registration access before connecting, and errors omit private redirect destinations.
-- **SSO protects pending sign-ins.** OIDC and SAML limit login input. OIDC checks custom CA files and keeps pending logins after incomplete callbacks. Concurrent SAML setup preserves pending sign-ins.
-- **Paid Docker update instructions keep keys out of shell commands.** Settings → Updates uses Docker's hidden password prompt and shows both pinned Compose commands.
+- **API token changes check current access.** Writes recheck the caller's permissions and workspace. Incomplete files preserve live tokens, restored older files can reload, and failed saves keep recovery copies.
+- **Old replies stay with their original sign-in.** Requests made before a credential change can't sign out the current user or switch their workspace. Sharing, ownership and role changes recheck access before applying.
+- **Client addresses follow the configured proxy chain.** List each trusted hop in `PULSE_TRUSTED_PROXY_CIDRS` or have the final proxy replace the forwarded address. Same-host proxies using a loopback Host need `X-Forwarded-For`.
+- **Local setup and recovery check request origin.** Only direct local requests can use local access. Security Overview shows the observed address and describes configured authentication across the instance.
+- **Workspace connections enforce destination limits.** Appliance connections, checks and SMTP block local-only and cloud metadata addresses. Pulse Cloud also blocks private addresses. Self-hosted LAN connections remain supported.
+- **Connection checks protect credentials.** TrueNAS and vSphere redirects stay on the configured host. Agent registration checks access before certificate discovery, and errors omit private redirect addresses and enrollment response bodies.
+- **SSO protects pending logins.** OIDC and SAML limit login input. OIDC checks custom CA files and preserves pending logins after incomplete callbacks. Concurrent SAML setup preserves pending logins.
+- **Saved access files stay recoverable.** Writes preserve unread password, session, CSRF and recovery records. Unsupported file types return errors without blocking startup. Private agent settings also check file type, size, permissions and conflicts.
 
 ## Other improvements
 
-- **SSO setup reports what each check verified.** Manual SAML checks label URL format results, and observed expired certificates are flagged. Test results and deletion errors stay in view, with keyboard recovery for provider checks and metadata preview.
-- **SSO explains how sign-in rules combine.** Each nonempty domain, email and group list must match. Group Role Mappings assigns roles separately. Help shows how to verify OIDC or SAML in another session while keeping an independent admin login.
-- **Sign-in keeps the previous SSO error visible.** Errors survive session checks and empty provider lists. Retry a stalled check, see why the local form is hidden, and read full provider names on their buttons.
-- **OIDC Help explains rejected client authentication.** If code exchange reports `invalid_client` after a save, check the saved Client ID and the provider's existing secret while keeping your working admin session open.
-- **Saved access files stay recoverable.** Writes preserve unread password, session, CSRF and recovery records. Unsupported file types in sign-in or organization data return errors without holding up startup or Settings.
-- **Configuration restores protect concurrent saves.** Other settings writes wait until the restore finishes so a failed restore can't erase a successful save.
-- **CLI exports preserve your existing backup.** Pulse replaces the destination only after writing a complete private copy. Prompts stay out of redirected archives, and incomplete output reports failure.
-- **CLI action results match the request.** Missing fleet inventories return an error. Capabilities, history and confirmations must match the requested resource or action. Check action audit before retrying an unconfirmed request.
-- **Keyboard controls stay reachable.** Focus stays clear of sticky bars, Change password scrolls in short windows, and monitoring toggles show focus. Help stays dismissed if closed before opening, and Billing Admin keeps IDs and row focus.
-- **Private agent settings are checked before use.** Observer files are checked for type, size and permissions. Conflicting settings are refused before they can affect saved credentials.
-- **Optional usage statistics show more aggregate counts.** The preview includes agents with commands or failure logs enabled and how Patrol investigations end after upgrade. Host identities and log text stay out of these counts.
-- **HTTP and telemetry dependencies received fixes.** Go fixes a race in HTTP handling, and OpenTelemetry enforces its attribute length limit.
+- **Workspace switching keeps the selected workspace visible.** Retry failed lists in place and use IDs to distinguish repeated names. Alerts loads the selected workspace's policy and keeps confirmations with the workspace that sent them.
+- **Organization Settings keeps confirmed details visible.** Restart stalled Overview, Access, Billing & Usage and Sharing checks. Ownership controls explain available changes, and long workspace names stay readable.
+- **Organization Access and invitations show what's pending.** A confirmed empty list is distinct from loading or failure. Member forms explain immediate changes. After an uncertain invitation reply, Check again reads saved access without resending it.
+- **Sharing identifies both parties and the resource.** Saved shares keep confirmed identities, access levels and outcomes through failed refreshes. Create Share supports Enter and points to the field that needs correction.
+- **Roles and User Access preserve drafts and keyboard focus.** Retry stalled reads, see Allow or Deny and all conditions, and skip unchanged saves. New Role catches duplicate IDs, and User Access explains why you can't remove your own account.
+- **Audit Log and webhooks keep recovery controls in reach.** Filters stay usable while results load and verification applies to the displayed page. Restart a stalled read or confirm an uncertain webhook change without resending it.
+- **API Access shows observed token use before revocation.** See matching agents and Docker or Podman runtimes. All-off scopes are labeled, errors stay inside their dialogs, and token lists can retry a stalled load.
+- **Infrastructure keeps tests and scope with their settings.** API detection clears results when the address changes. Saved collection scope can show all options off alongside agent coverage, and PBS exclusions stay visible near Save.
+- **SSO editors explain exactly what a test checked.** OIDC flags issuer mismatch and shows saved secret status. SAML identifies failed checks, labels manual URL checks and preserves an unset email attribute. Help covers callbacks and safe sign-in checks.
+- **Sign-in keeps the last SSO error visible.** Retry stalled checks, follow failed OIDC sign-in to recovery, and see why local sign-in is hidden. Field labels stay visible and provider names remain readable.
+- **Setup Help covers scripted installs and MCP options.** The first-run guide covers creating an admin and enrolling a host. Supplied setup tokens need 32 characters. The MCP installer shows help without installing and prepares custom destinations.
+- **CLI and usage reports are clearer.** CLI fleet reads flag missing inventories and action replies must match the request. Check action audit before retrying an unconfirmed action. Optional usage stats show aggregate agent settings and Patrol outcomes.
 
 ## Known issues
 
-- **Guest freezes and Windows restarts remain unresolved.** If you stopped monitoring after a guest froze, do not restart it solely to test this beta or release.
-- **Stop Pulse server monitoring before freeze-enabled backups.** Keep it stopped until independent checks confirm thaw, fresh writes on every backed-up filesystem and a running workload, even if the backup reports OK.
-- **A guest can freeze without a detectable VM lock.** Cloning a running VM or importing disks can cause this, and reads already in progress when a backup lock appears can interfere with thaw. Avoid manual guest-agent probes during freeze or thaw.
+- **Guest freezes and Windows restarts remain unresolved.** If you stopped monitoring after a guest froze, do not restart it solely to test this release or a beta.
+- **Stop Pulse server monitoring before freeze-enabled backups.** Keep it stopped until independent checks confirm thaw, fresh writes on every backed-up filesystem and a running workload. Verify those conditions even if the backup reports OK.
+- **Guests can freeze without a detectable VM lock.** Cloning a running VM or importing disks can do this. Reads already in progress when a lock appears can interfere with thaw. Avoid manual guest-agent probes during freeze or thaw.
 - **Resume only services and timers that were active before the pause.** Avoid hooks that ignore failed stops or restart Pulse after a failed or unanswered thaw check. Monitoring and alerts are unavailable while Pulse is stopped.
-- **Kubernetes pauses require storage and controller checks.** Confirm persistent Pulse server storage and prevent controllers from replacing stopped pods. Verify server polling has stopped before the backup.
-- **Some Windows guests may still lack Proxmox disk readings.** Use the working Machines disk view. Avoid removing or reinstalling agents, restarting guests or forcing guest-agent checks just to restore readings.
-- **Elevated Pulse server memory remains under investigation.** Keep your working setup and compare existing readings at similar uptimes and workloads. Skip restarts and heap dumps solely for this report.
-- **Keep affected monitoring paused after a host lockup.** Leave agents or Patrol off if you disabled them. Preserve existing evidence privately and avoid changing GPU load or hardware to reproduce the lockup.
+- **Kubernetes pauses require storage and controller checks.** Confirm persistent Pulse server storage, prevent controllers from replacing stopped pods and verify server polling has stopped before the backup.
+- **Some Windows guests may still lack Proxmox disk readings.** Use the working Machines disk view or check in Windows. Keep existing agents and avoid guest restarts or forced guest-agent probes solely to recover the reading.
+- **Elevated server memory and out-of-memory stops remain under investigation.** Keep your working setup and compare existing readings at similar uptimes and workloads. Skip restarts and heap dumps solely for this report.
+- **Keep affected monitoring paused after a host lockup.** Leave agents or Patrol off if you disabled them. Preserve existing evidence privately and avoid changing GPU load or hardware to recreate the lockup.
 - **Check the running agent version after an update.** Automatic updates can leave the privilege helper on an older version. Use installer maintenance if you need a helper fix and keep the existing enrollment.
-- **Older ARMv6 agents may need a manual update.** If the updater asks for ARMv7, use the installer with the correct architecture and keep the saved agent ID and connection state.
+- **Older ARMv6 agents may need a manual update.** If the updater requests ARMv7, use the installer with the correct architecture and preserve the saved agent ID and connection state.
 - **Earlier gaps in alert history can't be recreated.** Keep existing logs and delivery records after a storage failure, including after the history store is working again.
-- **An online TrueNAS CORE pool can lack capacity readings.** If Usage / Size shows a dash, check the same pool in TrueNAS Storage. Keep its existing API key and permissions, and use the pool's figures since dataset figures can reflect quotas.
+- **An online TrueNAS CORE pool can still lack capacity readings.** If Usage / Size shows a dash, check that pool in TrueNAS Storage. Keep the existing API key and permissions, and use the pool's figures since datasets can have quotas.
 
 ## Before you upgrade
 
