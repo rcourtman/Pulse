@@ -21,9 +21,9 @@ SPEC.loader.exec_module(summary)
 HEADER = "elapsed_s\trss_kib\tgo_heap_kib\tgo_other_kib\tanon_other_kib\tfile_kib\tcpu_ticks\twrite_bytes\twchar_bytes\n"
 
 
-def samples(rss_kib, ticks_per_s, write_bytes_per_s, io=True, rss_hwm=None):
+def samples(rss_kib, ticks_per_s, write_bytes_per_s, io=True, rss_hwm=None, end=900, interval=15):
     rows = [HEADER if rss_hwm is None else HEADER.rstrip("\n") + "\trss_hwm_kib\n"]
-    for elapsed in range(0, 901, 15):
+    for elapsed in range(0, end + 1, interval):
         write = str(write_bytes_per_s * elapsed) if io else ""
         wchar = str(2 * write_bytes_per_s * elapsed) if io else ""
         row = f"{elapsed}\t{rss_kib}\t50000\t10000\t20000\t30000\t{ticks_per_s * elapsed}\t{write}\t{wchar}"
@@ -33,8 +33,13 @@ def samples(rss_kib, ticks_per_s, write_bytes_per_s, io=True, rss_hwm=None):
     return "".join(rows)
 
 
+def select_samples(raw, keep):
+    header, *rows = raw.splitlines(keepends=True)
+    return header + "".join(row for row in rows if keep(int(row.split("\t", 1)[0])))
+
+
 class ReleaseMemorySummaryTests(unittest.TestCase):
-    def run_summary(self, baseline, candidate, estate=None, agents=None, env=None):
+    def run_summary(self, baseline, candidate, estate=None, agents=None, env=None, duration=900, interval=15):
         with tempfile.TemporaryDirectory() as tmp:
             out = Path(tmp)
             (out / "samples-baseline.tsv").write_text(baseline)
@@ -48,7 +53,7 @@ class ReleaseMemorySummaryTests(unittest.TestCase):
             os.environ.update(env or {})
             try:
                 with redirect_stdout(io.StringIO()):
-                    code = summary.main(["summarize", str(out)])
+                    code = summary.main(["summarize", str(out), str(duration), str(interval)])
             finally:
                 for key, value in saved.items():
                     if value is None:
@@ -116,6 +121,62 @@ class ReleaseMemorySummaryTests(unittest.TestCase):
         self.assertEqual(result["estate"], "mock")
         self.assertIn("(mock estate)", text)
         self.assertNotIn("Agent traffic", text)
+
+    def test_refuses_rss_verdict_without_a_covered_window_on_both_builds(self):
+        full = samples(131072, 25, 0)
+        cases = (
+            ("candidate", lambda t: t <= 30, "only 0 RSS samples"),
+            ("candidate", lambda t: t >= 870, "no RSS sample across 600–870 s"),
+            ("candidate", lambda t: not 660 <= t <= 750, "no RSS sample across 645–765 s"),
+            ("baseline", lambda t: t <= 855, "no RSS sample across 855–900 s"),
+        )
+        for label, keep, diagnostic in cases:
+            with self.subTest(label=label, diagnostic=diagnostic):
+                partial = select_samples(full, keep)
+                code, result, text = self.run_summary(
+                    partial if label == "baseline" else full,
+                    partial if label == "candidate" else full,
+                    env={"PULSE_MEMORY_GATE": "0"},
+                )
+                self.assertEqual(code, 1)
+                self.assertEqual(result["status"], "incomplete")
+                self.assertEqual(result["sampling"]["window_start_s"], 600)
+                self.assertIn(diagnostic, result["sampling"][label]["error"])
+                self.assertNotIn("regressed", result)
+                self.assertNotIn("rss_growth_kib", result)
+                self.assertIn("**Incomplete measurement:**", text)
+                self.assertIn(f"{label.capitalize()}: {diagnostic}", text)
+                self.assertNotIn("No steady-state RSS regression", text)
+
+    def test_uses_one_planned_window_and_allows_one_missed_nominal_sample(self):
+        baseline = samples(131072, 25, 0)
+        candidate = select_samples(baseline, lambda t: t not in (600, 750, 900))
+        code, result, text = self.run_summary(baseline, candidate)
+        self.assertEqual(code, 0)
+        self.assertEqual(result["status"], "measured")
+        self.assertEqual(result["sampling"], {
+            "duration_s": 900, "interval_s": 15, "window_start_s": 600, "max_gap_s": 30,
+            "baseline": {"first_s": 600, "last_s": 900, "count": 21},
+            "candidate": {"first_s": 615, "last_s": 885, "count": 18},
+        })
+        self.assertEqual(result["candidate_activity"]["cpu_pct"], 25.0)
+        self.assertIn("planned 600–900 s window", text)
+
+    def test_short_run_uses_its_declared_duration(self):
+        short = samples(131072, 25, 0, end=38, interval=2)
+        code, result, _ = self.run_summary(short, short, duration=40, interval=2)
+        self.assertEqual(code, 0)
+        self.assertEqual(result["sampling"]["window_start_s"], 26)
+        self.assertEqual(result["sampling"]["candidate"], {"first_s": 26, "last_s": 38, "count": 7})
+
+    def test_duplicate_timestamp_cannot_fill_a_sampling_gap(self):
+        baseline = samples(131072, 25, 0)
+        head, duplicate, rest = baseline.partition("\n675\t")
+        edited = head + duplicate.replace("675", "660") + rest
+        code, result, _ = self.run_summary(baseline, edited)
+        self.assertEqual(code, 1)
+        self.assertEqual(result["status"], "incomplete")
+        self.assertIn("timestamps must increase", result["sampling"]["candidate"]["error"])
 
     def test_reports_cpu_and_write_rates_over_the_final_third(self):
         # 25 ticks/s at 100 Hz is a quarter of a core; 1 MiB per 64 s is 1350 MiB/day.
