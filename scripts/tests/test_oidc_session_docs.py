@@ -118,10 +118,22 @@ def assert_discovery_test_scope(case, handlers):
         case.assertIn("Success: false", branch)
         case.assertIn(error, branch)
         case.assertLess(oidc.index(condition), oidc.index("details := &SSOTestDetails{"))
-    success = oidc.rsplit("return SSOTestResponse{", 1)[1]
+    before_success, success = oidc.rsplit("\n\treturn SSOTestResponse{", 1)
     case.assertIn("Success: true", success)
-    case.assertIn("exact issuer match", success)
-    case.assertIn("Client credentials and sign-in have not been tested.", success)
+    # The verdict may have a selected prefix, but every successful result
+    # must include the sign-in limitation in the returned message itself.
+    message = re.search(
+        r'(?m)^\t\tMessage:\s+(?:(?P<prefix>\w+)\s+\+\s+)?"(?P<literal>[^"\n]*)",$', success
+    )
+    case.assertIsNotNone(message, "missing successful discovery message")
+    literal = message["literal"]
+    case.assertIn("Client credentials and sign-in have not been tested.", literal)
+    if prefix := message["prefix"]:
+        after_issuer_checks = before_success.split("details := &SSOTestDetails{", 1)[1]
+        complete = re.search(rf'(?m)^\t{re.escape(prefix)} := "([^"\n]*)"$', after_issuer_checks)
+        case.assertIsNotNone(complete, "missing default for the returned discovery message prefix")
+        literal = complete[1]
+    case.assertIn("exact issuer match", literal)
 
 
 def assert_role_assignment_audit_scope(case, guide, callback):
@@ -399,6 +411,7 @@ class OIDCSessionDocsTest(unittest.TestCase):
             ('if discovery.Issuer != cfg.IssuerURL {', 'if false {'),
             ('"missing_discovery_issuer"', '"ignored_missing_issuer"'),
             ('"issuer_mismatch"', '"ignored_issuer_mismatch"'),
+            ("with an exact issuer match.", "successfully."),
             ("Client credentials and sign-in have not been tested.", "Sign-in is ready."),
         )
         for before, after in mutations:
