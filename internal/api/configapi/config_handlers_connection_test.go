@@ -148,6 +148,46 @@ func TestHandleTestConnection(t *testing.T) {
 	}
 }
 
+func TestHandleTestConnectionReportsNodesListedByPVE(t *testing.T) {
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/api2/json/nodes":
+			_, _ = io.WriteString(w, `{"data":[{"node":"primary","status":"online"},{"node":"peer","status":"offline"}]}`)
+		case "/api2/json/cluster/status":
+			_, _ = io.WriteString(w, `{"data":[]}`)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	cfg := &config.Config{DataPath: t.TempDir()}
+	t.Setenv("PULSE_DATA_DIR", cfg.DataPath)
+	handler := newTestConfigHandlers(t, cfg)
+	body := fmt.Sprintf(`{"type":"pve","host":%q,"tokenName":"fixture@pve!pulse","tokenValue":"fixture-token","verifySSL":true,"fingerprint":"%x"}`,
+		server.URL, sha256.Sum256(server.Certificate().Raw))
+	req := httptest.NewRequest(http.MethodPost, "/api/config/nodes/test-connection", strings.NewReader(body))
+	rec := httptest.NewRecorder()
+	handler.HandleTestConnection(rec, req)
+
+	var result struct {
+		Status    string `json:"status"`
+		Message   string `json:"message"`
+		NodeCount int    `json:"nodeCount"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &result); err != nil {
+		t.Fatalf("decode test result (HTTP %d): %v", rec.Code, err)
+	}
+	if rec.Code != http.StatusOK || result.Status != "success" || result.NodeCount != 2 ||
+		!strings.Contains(result.Message, "Nodes reported: 2. Polling not tested.") {
+		t.Fatalf("expected an inventory observation, got HTTP %d: %+v", rec.Code, result)
+	}
+	if len(handler.getConfig(req.Context()).PVEInstances) != 0 {
+		t.Fatal("testing the connection should not save it")
+	}
+}
+
 func TestHandleTestNodePBSIsADirectProbeWithoutChangingRuntimeHealth(t *testing.T) {
 	var authorization string
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
