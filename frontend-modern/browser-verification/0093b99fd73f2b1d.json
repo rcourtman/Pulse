@@ -1,0 +1,54 @@
+{
+  "version": 1,
+  "base_sha": "69a941d6df0d8fbfa44c56b1b5ac0e969522622c",
+  "verified_at": "2026-11-22T20:30:01.341968Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/App.tsx",
+    "frontend-modern/src/AppLayout.tsx",
+    "frontend-modern/src/features/actions/ActionReviewDialog.tsx",
+    "frontend-modern/src/features/platformNavigation/resourcePagePath.ts",
+    "frontend-modern/src/features/platformNavigation/useResolvedResource.ts",
+    "frontend-modern/src/features/standalone/StandalonePageSurface.tsx",
+    "frontend-modern/src/features/standalone/standalonePageModel.ts",
+    "frontend-modern/src/routing/resourceLinks.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/App.tsx": "66b19bffd808254812c08bf8631fe7a83fe2c4f96a6c48d90c83290dfeb53db8",
+    "frontend-modern/src/AppLayout.tsx": "e446392c4eefb522990ece7e3bc0b554e7481646cc6ce64dabc060cf965f4b7d",
+    "frontend-modern/src/features/actions/ActionReviewDialog.tsx": "c869f164194330a48d33c0372aa13954406e5b2d5ae64c7ee731e86f588d8e2a",
+    "frontend-modern/src/features/platformNavigation/resourcePagePath.ts": "fb3d7651418a669e43066775d3dac5150f9f71ae8293a87735e9e5fca77e8eaf",
+    "frontend-modern/src/features/platformNavigation/useResolvedResource.ts": "647c50787e7784ce4b85b214bde5c439be08488a8e3a5ac997527580ef3852b0",
+    "frontend-modern/src/features/standalone/StandalonePageSurface.tsx": "95b5726bdf6f7b922b5b796a29a59f9d828a4ee3b2b6742af1364c71a8cbde92",
+    "frontend-modern/src/features/standalone/standalonePageModel.ts": "d53bfd128f11ba08cdfa220a981be086407252ec160536effb04b62f40ddae15",
+    "frontend-modern/src/routing/resourceLinks.ts": "fe3c0bd43e760915e07ec410696bde9f0b2a3813c215df40e914803afb2f52f9"
+  },
+  "routes": [
+    "/standalone/machines",
+    "/standalone/availability",
+    "/standalone/vms?host=agent%3Acedar",
+    "/standalone/vms/",
+    "/actions?action=fixture-action"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 360,
+      "height": 800
+    }
+  ],
+  "states": [
+    "Matched fixture across the assigned base and exact production bundles, and a development build of the containing source; Chromium 141.0.7390.37, Playwright 1.56.1. 324 checks passed and all 22 retained images were inspected (1440×900 light desktop and 360×800 dark phone).",
+    "Stable, beta, RC and source-install responses to the production bundle omit the VM tab, host badges and VM backlinks. Populated and empty bookmarks get the ordinary unknown page, with no VM table request. Existing Machines, first-run actions and Availability checks remain usable.",
+    "The read-only Action review waits for an ambiguous VM lookup. The published-build fixture never shows a provisional link while the lookup is pending, or a link to the held page after it settles. The Close control keeps focus, and the review details remain visible.",
+    "Actual development build retains the tab, host scope, resource search and Back behavior. The production test marker can still resolve late to an admitted view, while a delayed normal version reply never exposes it."
+  ],
+  "interactions": [
+    "Keyboard/touch navigation between Machines and Availability checks with live fixture rows; return to Machines from a denied bookmark without remembering it.",
+    "Use the existing desktop host count and phone tab, open a bookmark, and follow a resolved VM backlink from Actions and go Back in the development build.",
+    "Open a read-only Action review with a delayed registry response. In the release-off case retain Close focus, then Tab and Escape. No action, mutation or external request."
+  ]
+}
