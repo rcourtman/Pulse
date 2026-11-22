@@ -132,7 +132,7 @@ const buildConnectionTestFeedback = (
     `${count} optional VMware read${count === 1 ? '' : 's'} could not be completed.`;
   return {
     tone: 'warning',
-    title: 'VMware connection has limited data access',
+    title: 'Limited vCenter data access',
     message: diagnostic,
     guidance: checked,
   };

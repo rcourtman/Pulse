@@ -8124,7 +8124,9 @@ unless the caller explicitly changes it, so setup surfaces do not accidentally
 preview an unchanged active connection as inactive just because JSON omitted a
 bool field.
 The VMware credential editor reports the outcome of testing this draft beside
-the actions, without a duplicate toast. Only a confirmed success can show
+the actions, without a duplicate toast. On narrow screens, the result, scope
+choices and individual test and save actions remain readable together.
+Only a confirmed success can show
 passed API checks. A successful but `degraded` reply keeps the upstream
 diagnostic visible in a limited-data warning and identifies the negotiated VI
 JSON release when available. A reply without success confirmation is distinct

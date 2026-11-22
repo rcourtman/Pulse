@@ -2,6 +2,7 @@ import { Component, Show, createEffect, onMount } from 'solid-js';
 import ShieldAlert from 'lucide-solid/icons/shield-alert';
 import { Button } from '@/components/shared/Button';
 import { CalloutCard } from '@/components/shared/CalloutCard';
+import { InlineNotice } from '@/components/shared/InlineNotice';
 import {
   formCheckbox,
   formControl,
@@ -263,29 +264,26 @@ export const VMwareCredentialSlot: Component<VMwareCredentialSlotProps> = (props
         </Show>
 
         <div ref={testArea}>
-          <div role="status" aria-atomic="true" data-testid="vmware-draft-test-result">
+          <div role="status" aria-atomic="true">
             <Show when={props.state.connectionTestFeedback()}>
               {(feedback) => (
-                <CalloutCard
-                  class="mb-2 break-words"
-                  tone={feedback().tone}
-                  scale="compact"
-                  padding="sm"
-                  title={feedback().title}
-                  description={
-                    <>
-                      {feedback().message} {feedback().guidance} No settings were saved.
-                    </>
-                  }
-                />
+                <InlineNotice class="mb-2 wrap-anywhere" tone={feedback().tone}>
+                  <p class="font-semibold">{feedback().title}</p>
+                  <div class="space-y-1 text-xs">
+                    <p>{feedback().message}</p>
+                    <Show when={feedback().guidance}>{(guidance) => <p>{guidance()}</p>}</Show>
+                    <p>No settings were saved.</p>
+                  </div>
+                </InlineNotice>
               )}
             </Show>
           </div>
-          <div class="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+          <div class="grid grid-cols-2 gap-2 sm:flex sm:justify-end">
             <Show when={isEditing() && props.onToggleEnabled}>
               <Button
                 variant="outline"
                 size="settingsAction"
+                class="max-sm:order-6 max-sm:px-2 max-sm:text-xs"
                 onClick={() => props.onToggleEnabled?.()}
                 disabled={
                   props.state.saving() ||
@@ -307,6 +305,7 @@ export const VMwareCredentialSlot: Component<VMwareCredentialSlotProps> = (props
               <Button
                 variant={props.deleteConfirming ? 'danger' : 'dangerOutline'}
                 size="settingsAction"
+                class="max-sm:order-5 max-sm:px-2 max-sm:text-xs"
                 onClick={() => props.onDelete?.()}
                 disabled={
                   props.state.saving() ||
@@ -325,6 +324,7 @@ export const VMwareCredentialSlot: Component<VMwareCredentialSlotProps> = (props
             <Button
               variant="outline"
               size="settingsAction"
+              class="max-sm:order-4 max-sm:col-span-2"
               onClick={handleCancel}
               disabled={
                 props.state.saving() ||
@@ -340,7 +340,7 @@ export const VMwareCredentialSlot: Component<VMwareCredentialSlotProps> = (props
               size="settingsAction"
               onClick={() => void props.state.testCurrentForm()}
               aria-disabled={props.state.testing()}
-              class="aria-disabled:cursor-not-allowed aria-disabled:opacity-50"
+              class="aria-disabled:cursor-not-allowed aria-disabled:opacity-50 max-sm:order-2 max-sm:px-2"
               disabled={props.state.saving() || props.togglePending || props.deletePending}
             >
               {props.state.testing() ? 'Testing…' : 'Test connection'}
@@ -348,6 +348,7 @@ export const VMwareCredentialSlot: Component<VMwareCredentialSlotProps> = (props
             <Button
               variant="outline"
               size="settingsAction"
+              class="max-sm:order-3 max-sm:px-2"
               onClick={() => void props.state.previewCurrentForm()}
               disabled={props.state.saving() || props.state.testing() || props.state.previewing()}
               title="Show the resources Pulse would ingest from this connection without saving or starting polling."
@@ -357,6 +358,7 @@ export const VMwareCredentialSlot: Component<VMwareCredentialSlotProps> = (props
             <Button
               variant="primary"
               size="settingsAction"
+              class="max-sm:order-1 max-sm:col-span-2"
               onClick={() => void props.state.saveCurrentForm()}
               disabled={
                 props.state.saving() ||

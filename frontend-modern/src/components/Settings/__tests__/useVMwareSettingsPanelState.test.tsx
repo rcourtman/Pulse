@@ -308,7 +308,7 @@ describe('useVMwareSettingsPanelState', () => {
     expect(result.connectionFailure()).toBeNull();
     expect(result.connectionTestFeedback()).toEqual({
       tone: 'warning',
-      title: 'VMware connection has limited data access',
+      title: 'Limited vCenter data access',
       message: 'VMware HostSystem recent events request failed with HTTP 500',
       guidance: 'Pulse signed in and read basic inventory (VI JSON 8.0.2.0).',
     });
