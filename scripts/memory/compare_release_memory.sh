@@ -181,9 +181,10 @@ run_tree() {
     fi
     sleep "${INTERVAL}"
   done
-  local driver_status=0
+  local driver_status=null pulse_status=null
   if [[ -n "${driver}" ]]; then
     kill -TERM "${driver}" 2>/dev/null || true
+    driver_status=0
     wait "${driver}" || driver_status=$?
   fi
   if kill -0 "${pid}" 2>/dev/null; then
@@ -191,13 +192,19 @@ run_tree() {
     kill "${pid}" 2>/dev/null || true
     wait "${pid}" 2>/dev/null || true
   else
-    echo "${label} exited before the measurement ended; see ${log}" >&2
-    return 1
+    pulse_status=0
+    wait "${pid}" || pulse_status=$?
+    echo "${label} exited before the watch stopped it (wait status ${pulse_status}); see ${log}" >&2
   fi
-  if (( driver_status != 0 )); then
+
+  # This is the only stdout from each measurement worker. The parent binds
+  # this observation to the corresponding worker's wait status.
+  printf '{"pulse_wait_status_before_stop":%s,"driver_wait_status":%s}\n' "${pulse_status}" "${driver_status}"
+  if [[ "${driver_status}" != null && "${driver_status}" != 0 ]]; then
     echo "${label} ${ESTATE} load failed (exit ${driver_status}); see ${driver_log}" >&2
     return 1
   fi
+  [[ "${pulse_status}" == null ]]
 }
 
 build_tree baseline "${BASELINE_DIR}"
@@ -205,17 +212,18 @@ build_tree candidate "${CANDIDATE_DIR}"
 
 # Run both at once so they share host conditions. The kernel assigns each
 # instance its own loopback metrics port, so neither loses that listener.
-run_tree baseline 7801 & baseline_pid=$!
-run_tree candidate 7802 & candidate_pid=$!
-status=0
-wait "${baseline_pid}" || status=1
-wait "${candidate_pid}" || status=1
-(( status == 0 )) || exit 1
+run_tree baseline 7801 > "${OUT_DIR}/run-baseline-wait.json" & baseline_pid=$!
+run_tree candidate 7802 > "${OUT_DIR}/run-candidate-wait.json" & candidate_pid=$!
+baseline_status=0 candidate_status=0
+wait "${baseline_pid}" || baseline_status=$?
+wait "${candidate_pid}" || candidate_status=$?
 
-if [[ -s "${OUT_DIR}/heap-baseline.pb.gz" && -s "${OUT_DIR}/heap-candidate.pb.gz" ]]; then
+if (( baseline_status == 0 && candidate_status == 0 )) &&
+   [[ -s "${OUT_DIR}/heap-baseline.pb.gz" && -s "${OUT_DIR}/heap-candidate.pb.gz" ]]; then
   (cd "${CANDIDATE_DIR}" && go tool pprof -sample_index=inuse_space -top -nodecount=25 \
     -base "${OUT_DIR}/heap-baseline.pb.gz" "${OUT_DIR}/heap-candidate.pb.gz") \
     > "${OUT_DIR}/heap-growth.txt" 2>/dev/null || true
 fi
 
-python3 "${SCRIPT_DIR}/summarize_release_memory.py" "${OUT_DIR}" "${DURATION}" "${INTERVAL}"
+python3 "${SCRIPT_DIR}/summarize_release_memory.py" "${OUT_DIR}" "${DURATION}" "${INTERVAL}" \
+  "${baseline_status}" "${candidate_status}"

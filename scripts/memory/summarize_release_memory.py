@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Compare steady-state memory from compare_release_memory.sh samples (#1803).
 
-Usage: summarize_release_memory.py OUTPUT_DIR DURATION_SECONDS INTERVAL_SECONDS
+Usage: summarize_release_memory.py OUTPUT_DIR DURATION_SECONDS INTERVAL_SECONDS [BASELINE_WAIT_STATUS CANDIDATE_WAIT_STATUS]
 
 Reads both sample files from the output directory and uses the final third of
 the planned duration for both builds. Writes an incomplete observation instead
@@ -9,6 +9,9 @@ of a memory verdict if either sample file does not cover that window. Otherwise
 exits 1 when the candidate's resident memory exceeds both the percentage
 tolerance and the absolute slack. Requiring both keeps small installs' noise
 from failing it.
+
+The watch passes its two worker wait statuses. A failed worker makes the
+comparison incomplete even if its sample timestamps cover the window.
 
 It also reports Linux's process RSS high-water mark through the last sample,
 when available. The high-water mark is not cgroup usage and does not gate.
@@ -52,6 +55,10 @@ ESTATES = {
 }
 SECONDS_PER_DAY = 86400
 MIB = 1024 * 1024
+CHILD_WAIT_LABELS = {
+    "pulse_wait_status_before_stop": "Pulse wait status before the watch's stop",
+    "driver_wait_status": "load driver wait status",
+}
 
 
 def read_steady_window(path: Path, start: int, end: int, max_gap: int) -> tuple[list[dict[str, str]], dict]:
@@ -238,11 +245,28 @@ def write_observation(out: Path, summary: str, result: dict) -> None:
     print(summary)
 
 
+def read_child_wait_statuses(out: Path, label: str) -> dict[str, int]:
+    try:
+        data = json.loads((out / f"run-{label}-wait.json").read_text())
+    except (OSError, ValueError):
+        return {}
+    if not isinstance(data, dict):
+        return {}
+    observed = {}
+    for key in CHILD_WAIT_LABELS:
+        status = data.get(key)
+        if type(status) is int and 0 <= status <= 255:
+            observed[key] = status
+    return observed
+
+
 def main(argv: list[str]) -> int:
     try:
-        out_dir, duration_arg, interval_arg = argv[1:]
+        out_dir, duration_arg, interval_arg, *wait_args = argv[1:]
         duration, interval = int(duration_arg), int(interval_arg)
-        if min(duration, interval) <= 0:
+        wait_statuses = [int(arg) for arg in wait_args]
+        if (min(duration, interval) <= 0 or len(wait_statuses) not in (0, 2)
+                or any(not 0 <= status <= 255 for status in wait_statuses)):
             raise ValueError
     except ValueError:
         print(__doc__, file=sys.stderr)
@@ -264,12 +288,26 @@ def main(argv: list[str]) -> int:
         except ValueError as exc:
             sampling[label] = {"error": str(exc)}
             incomplete.append(f"- {label.capitalize()}: {exc}.")
+    failed_runs = {}
+    for label, status in zip(("baseline", "candidate"), wait_statuses):
+        if status == 0:
+            continue
+        observed = read_child_wait_statuses(out, label)
+        failed_runs[label] = {"worker_wait_status": status, **observed}
+        details = ", ".join(f"{CHILD_WAIT_LABELS[key]} {value}" for key, value in observed.items())
+        incomplete.append(
+            f"- {label.capitalize()} run did not complete successfully "
+            f"(worker wait status {status}; {details or 'no child wait status observed'})."
+        )
     heading = f"## Pulse memory: candidate against baseline ({estate} estate)"
     if incomplete:
+        result = {"status": "incomplete", "estate": estate, "sampling": sampling}
+        if failed_runs:
+            result["failed_runs"] = failed_runs
         write_observation(out, "\n".join([
             heading, "", f"**Incomplete measurement:** no comparison for the planned {start}–{duration} s window.",
             "", *incomplete, "",
-        ]), {"status": "incomplete", "estate": estate, "sampling": sampling})
+        ]), result)
         return 1
     baseline_rows, candidate_rows = windows["baseline"], windows["candidate"]
     baseline = steady_state(baseline_rows)
