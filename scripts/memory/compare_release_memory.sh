@@ -172,6 +172,7 @@ run_tree() {
   elif [[ "${ESTATE}" == proxmox ]]; then
     driver_log="${OUT_DIR}/proxmox-${label}.log"
     python3 "${SCRIPT_DIR}/proxmox_load.py" --port "${port}" --duration "$((DURATION + 120))" \
+      --steady-since "$((start + DURATION * 2 / 3))" \
       --sample-until "$((start + DURATION))" \
       --stats "${OUT_DIR}/proxmox-${label}.json" > "${driver_log}" 2>&1 &
     driver=$!

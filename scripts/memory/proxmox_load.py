@@ -18,7 +18,8 @@ It runs until --duration elapses or SIGTERM arrives, then writes a JSON stats
 file. It exits 1 when registration failed, PVE or PBS polling did not occur,
 the fixture did not serve snapshots for every configured PBS group, or the
 dashboard lacked the full synthetic PVE inventory with recent poll sightings
-at the end of sampling.
+at the end of sampling. It also reports gaps between observed guest poll
+sightings during the same final third used for the RSS comparison.
 """
 
 from __future__ import annotations
@@ -57,8 +58,49 @@ class ThreadedHTTPServer(socketserver.ThreadingMixIn, http.server.HTTPServer):
 
 
 @dataclass
+class GuestPollWindow:
+    start_s: int
+    end_s: int
+    latest_ms: dict[tuple[str, str], int] = field(default_factory=dict)
+    longest_gap_ms: dict[tuple[str, str], int] = field(default_factory=dict)
+
+    def observe(self, guest: tuple[str, str], seen_ms: int, observed_ms: int) -> None:
+        start_ms, end_ms = self.start_s * 1000, self.end_s * 1000
+        # Neither a retained sighting before the window nor a fresh frame
+        # arriving after it can establish collection during the RSS window.
+        if not start_ms <= seen_ms <= observed_ms <= end_ms:
+            return
+        latest = self.latest_ms.get(guest)
+        if latest is not None and seen_ms <= latest:
+            return
+        gap = seen_ms - (start_ms if latest is None else latest)
+        self.longest_gap_ms[guest] = max(self.longest_gap_ms.get(guest, 0), gap)
+        self.latest_ms[guest] = seen_ms
+
+    def report(self, expected: set[tuple[str, str]], finished: float) -> dict | None:
+        if finished < self.end_s or not expected:
+            return None
+        start_ms, end_ms = self.start_s * 1000, self.end_s * 1000
+        gaps = {
+            f"{kind}/{name}": max(
+                self.longest_gap_ms.get((kind, name), 0),
+                end_ms - self.latest_ms.get((kind, name), start_ms),
+            )
+            for kind, name in sorted(expected)
+        }
+        return {
+            "window_s": self.end_s - self.start_s,
+            "limit_s": GUEST_FRESHNESS_SECONDS,
+            "guests_with_sightings": len(self.latest_ms),
+            "longest_gap_ms": max(gaps.values()),
+            "guests_over_limit": [guest for guest, gap in gaps.items() if gap > GUEST_FRESHNESS_SECONDS * 1000],
+        }
+
+
+@dataclass
 class DashboardStats:
     expected_guests: set[tuple[str, str]] = field(default_factory=set)
+    poll_window: GuestPollWindow | None = None
     lock: threading.Lock = field(default_factory=threading.Lock)
     ws_connects: int = 0
     ws_messages: int = 0
@@ -91,6 +133,8 @@ class DashboardStats:
         if not isinstance(rows, list):
             self.resources.clear()
             return
+        poll_window = self.poll_window
+        observed_ms = time.time_ns() // 1_000_000 if poll_window is not None else 0
         for row in rows:
             if not isinstance(row, dict) or not isinstance(row.get("id"), str) or not row["id"]:
                 continue
@@ -103,11 +147,13 @@ class DashboardStats:
                 # lastSeen is an integer Unix millisecond, with zero unknown.
                 value = row.get("lastSeen")
                 last_seen_ms = value if type(value) is int and value > 0 else None
-            self.resources[resource_id] = (
-                technology if isinstance(technology, str) else None,
-                name if isinstance(name, str) else None,
-                last_seen_ms,
-            )
+            technology = technology if isinstance(technology, str) else None
+            name = name if isinstance(name, str) else None
+            self.resources[resource_id] = (technology, name, last_seen_ms)
+            if (poll_window is not None and "lastSeen" in row
+                    and last_seen_ms is not None and technology is not None and name is not None
+                    and (technology, name) in self.expected_guests):
+                poll_window.observe((technology, name), last_seen_ms, observed_ms)
 
     def missing_guests(self) -> set[tuple[str, str]]:
         return self.expected_guests.difference((tech, name) for tech, name, _ in self.resources.values())
@@ -707,9 +753,12 @@ def main(argv: list[str]) -> int:
     parser.add_argument("--pbs-instances", type=int, default=2)
     parser.add_argument("--snapshots-per-group", type=int, default=50)
     parser.add_argument("--duration", type=float, required=True, help="seconds to drive load")
+    parser.add_argument("--steady-since", type=int, required=True, help="start of steady RSS sampling (Unix seconds)")
     parser.add_argument("--sample-until", type=int, required=True, help="planned end of RSS sampling (Unix seconds)")
     parser.add_argument("--stats", required=True, help="path of the JSON stats file to write")
     args = parser.parse_args(argv)
+    if not 0 <= args.steady_since < args.sample_until:
+        parser.error("--steady-since must precede --sample-until")
 
     signal.signal(signal.SIGTERM, lambda *_: STOP.set())
     signal.signal(signal.SIGINT, lambda *_: STOP.set())
@@ -776,10 +825,11 @@ def main(argv: list[str]) -> int:
         if not (200 <= status < 300):
             reg_failed = True
 
-    dash_stats = DashboardStats(expected_guests={
-        ("qemu" if kind == "vm" else "lxc", guest_name)
-        for _, kind, _, guest_name in guest_refs
-    })
+    poll_window = GuestPollWindow(args.steady_since, args.sample_until)
+    dash_stats = DashboardStats(
+        expected_guests={("qemu" if kind == "vm" else "lxc", guest_name) for _, kind, _, guest_name in guest_refs},
+        poll_window=poll_window,
+    )
     started = time.time()
     deadline = started + args.duration
     dash_thread = threading.Thread(
@@ -815,6 +865,7 @@ def main(argv: list[str]) -> int:
     with dash_stats.lock:
         missing_pve_guests = dash_stats.missing_guests()
         missing_recent_guests = dash_stats.missing_recent_guests(started, finished)
+        poll_coverage = poll_window.report(dash_stats.expected_guests, finished)
 
     result = {
         "pve_nodes": args.nodes,
@@ -827,6 +878,7 @@ def main(argv: list[str]) -> int:
         "sampling_end_reached": finished >= args.sample_until,
         "pve_guests_recent": len(guest_refs) - len(missing_recent_guests),
         "pve_guest_freshness_window_s": GUEST_FRESHNESS_SECONDS,
+        "pve_steady_poll_sightings": poll_coverage,
         "registrations": reg_results,
         "requests": req_counts,
         "pve_requests": pve_requests,
