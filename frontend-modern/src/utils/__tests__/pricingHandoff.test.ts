@@ -60,6 +60,7 @@ describe('pricingHandoff', () => {
     expect(getUpgradeFallbackDestination('advanced_reporting')).toBe(
       SELF_HOSTED_PRO_BILLING_PLAN_HREF,
     );
+    expect(getUpgradeFallbackDestination('white_label')).toBe(SELF_HOSTED_PRO_BILLING_PLAN_HREF);
   });
 
   it('keeps all displayable paid self-hosted catalog features on the owned Plans surface', () => {

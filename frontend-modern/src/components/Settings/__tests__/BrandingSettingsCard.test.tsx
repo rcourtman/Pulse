@@ -1,5 +1,5 @@
 import { fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
-import { createSignal } from 'solid-js';
+import { createSignal, type JSX } from 'solid-js';
 import { describe, expect, it, vi } from 'vitest';
 import {
   BRAND_LOGO_MAX_BYTES,
@@ -8,8 +8,21 @@ import {
   brandingLogoPreview,
 } from '../BrandingSettingsCard';
 
+vi.mock('@solidjs/router', () => ({
+  A: (props: { href: string; class?: string; children: JSX.Element }) => (
+    <a href={props.href} class={props.class}>
+      {props.children}
+    </a>
+  ),
+}));
+
+const testState = vi.hoisted(() => ({
+  whiteLabelEnabled: true,
+  commercialHidden: false,
+}));
+
 vi.mock('@/stores/license', () => ({
-  hasFeature: () => true,
+  hasFeature: () => testState.whiteLabelEnabled,
 }));
 
 vi.mock('@/stores/licenseCommercial', () => ({
@@ -17,7 +30,7 @@ vi.mock('@/stores/licenseCommercial', () => ({
 }));
 
 vi.mock('@/stores/sessionPresentationPolicy', () => ({
-  presentationPolicyHidesUpgradePrompts: () => false,
+  presentationPolicyHidesCommercialSurfaces: () => testState.commercialHidden,
 }));
 
 function renderCard() {
@@ -113,5 +126,44 @@ describe('BrandingSettingsCard', () => {
 
     expect(await screen.findByRole('alert')).toHaveTextContent('36 KB or smaller');
     expect(state.logoBase64()).toBe('');
+  });
+
+  it('shows the View plans link on locked Community installs unless commercial surfaces are hidden', () => {
+    testState.whiteLabelEnabled = false;
+    testState.commercialHidden = false;
+    const { unmount } = render(() => (
+      <BrandingSettingsCard
+        displayName={() => ''}
+        setDisplayName={() => ''}
+        logoBase64={() => ''}
+        setLogoBase64={() => ''}
+        logoFormat={() => ''}
+        setLogoFormat={() => ''}
+        setHasUnsavedChanges={() => false}
+      />
+    ));
+    expect(screen.getByRole('link', { name: 'View plans' })).toHaveAttribute(
+      'href',
+      '/settings/billing',
+    );
+    unmount();
+
+    testState.commercialHidden = true;
+    const hidden = render(() => (
+      <BrandingSettingsCard
+        displayName={() => ''}
+        setDisplayName={() => ''}
+        logoBase64={() => ''}
+        setLogoBase64={() => ''}
+        logoFormat={() => ''}
+        setLogoFormat={() => ''}
+        setHasUnsavedChanges={() => false}
+      />
+    ));
+    expect(screen.queryByRole('link', { name: 'View plans' })).toBeNull();
+    hidden.unmount();
+
+    testState.whiteLabelEnabled = true;
+    testState.commercialHidden = false;
   });
 });

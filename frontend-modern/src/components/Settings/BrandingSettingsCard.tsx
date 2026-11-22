@@ -7,7 +7,7 @@ import { FeatureGateSection } from '@/components/shared/FeatureGateSection';
 import { formControl, formHelpText, formLabel } from '@/components/shared/Form';
 import { hasFeature } from '@/stores/license';
 import { getUpgradeActionDestination } from '@/stores/licenseCommercial';
-import { presentationPolicyHidesUpgradePrompts } from '@/stores/sessionPresentationPolicy';
+import { presentationPolicyHidesCommercialSurfaces } from '@/stores/sessionPresentationPolicy';
 import type { ReportBrandSettings } from '@/types/config';
 
 export const BRAND_LOGO_MAX_BYTES = 36 * 1024;
@@ -102,7 +102,7 @@ export const BrandingSettingsCard: Component<BrandingSettingsCardProps> = (props
           title="Application branding"
           body="Use a custom logo and name across the Pulse header and generated reports."
           upgradeDestination={getUpgradeActionDestination('white_label')}
-          showUpgradePrompts={!presentationPolicyHidesUpgradePrompts()}
+          showUpgradePrompts={!presentationPolicyHidesCommercialSurfaces()}
           icon={<ImageIcon class="h-5 w-5" />}
         />
       }

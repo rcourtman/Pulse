@@ -13,10 +13,7 @@ import { PATROL_PATH } from '@/routing/resourceLinks';
 import { aiAvailabilityStore } from '@/stores/aiAvailability';
 import { hasFeature } from '@/stores/license';
 import { getUpgradeActionDestination } from '@/stores/licenseCommercial';
-import {
-  presentationPolicyHidesCommercialSurfaces,
-  presentationPolicyHidesUpgradePrompts,
-} from '@/stores/sessionPresentationPolicy';
+import { presentationPolicyHidesCommercialSurfaces } from '@/stores/sessionPresentationPolicy';
 import { MetadataBadge } from '@/components/shared/MetadataBadge';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { Subtabs } from '@/components/shared/Subtabs';
@@ -84,7 +81,7 @@ export function Actions() {
       patrolWatchOnly: patrolWatchOnly(),
       patrolModesUnlocked: hasFeature(PATROL_AUTONOMY_FEATURE_KEY),
       commercialSurfacesHidden: presentationPolicyHidesCommercialSurfaces(),
-      upgradePromptsHidden: presentationPolicyHidesUpgradePrompts(),
+      upgradePromptsHidden: presentationPolicyHidesCommercialSurfaces(),
       upgradeDestination: getUpgradeActionDestination('ai_autofix'),
     }),
   );
