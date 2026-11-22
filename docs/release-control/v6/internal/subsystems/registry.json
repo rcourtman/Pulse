@@ -5894,6 +5894,7 @@
         "frontend-modern/src/components/Workloads/NodeDrawerOverview.tsx",
         "frontend-modern/src/content/help/updates.ts",
         "frontend-modern/src/features/docker/dockerHostDrawerModel.ts",
+        "frontend-modern/src/features/platformPage/PlatformAlertsTable.tsx",
         "frontend-modern/src/features/platformPage/platformEstateOverviewModel.ts",
         "frontend-modern/src/features/platformPage/PlatformOutdatedAgentNotice.tsx",
         "frontend-modern/src/features/platformPage/PlatformOutdatedSensorSetupNotice.tsx",
@@ -6506,6 +6507,7 @@
             "match_files": [
               "frontend-modern/scripts/shared-template-audit.mjs",
               "frontend-modern/scripts/shared-template-registry.json",
+              "frontend-modern/src/features/platformPage/PlatformAlertsTable.tsx",
               "frontend-modern/src/features/platformPage/platformEstateOverviewModel.ts",
               "frontend-modern/src/features/platformPage/PlatformOutdatedAgentNotice.tsx",
               "frontend-modern/src/features/platformPage/PlatformOutdatedSensorSetupNotice.tsx",

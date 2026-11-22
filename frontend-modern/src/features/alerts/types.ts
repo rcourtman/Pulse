@@ -183,7 +183,6 @@ export interface CooldownConfig {
 export interface GroupingConfig {
   enabled: boolean;
   window: number;
-  maxGroupSize?: number;
   byNode?: boolean;
   byGuest?: boolean;
 }

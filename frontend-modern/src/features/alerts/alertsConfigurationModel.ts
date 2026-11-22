@@ -962,25 +962,6 @@ export function buildAlertsConfigurationPayload({
           byGuest: snapshot.scheduleGrouping.byGuest,
         },
       },
-      aggregation: {
-        enabled: true,
-        timeWindow: 10,
-        countThreshold: 3,
-        similarityWindow: 5.0,
-      },
-      flapping: {
-        enabled: true,
-        threshold: 5,
-        window: 10,
-        suppressionTime: 30,
-        minStability: 0.8,
-      },
-      ioNormalization: {
-        enabled: true,
-        vmDiskMax: 500.0,
-        containerDiskMax: 300.0,
-        networkMax: 1000.0,
-      },
     },
   };
 }

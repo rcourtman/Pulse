@@ -7,60 +7,11 @@ import type {
 } from '@/types/alerts';
 import type { Resource } from '@/types/resource';
 import type { AlertIntentSignal } from '@/api/alertIntentPolicies';
+import type { Override, OverrideType } from '../types';
 
-export type OverrideType =
-  | 'guest'
-  | 'guestDisk'
-  | 'agent'
-  | 'agentDisk'
-  | 'agentSensor'
-  | 'storage'
-  | 'pbs'
-  | 'pmg'
-  | 'kubernetesCluster'
-  | 'kubernetesNode'
-  | 'kubernetesNamespace'
-  | 'kubernetesDeployment'
-  | 'kubernetesPod'
-  | 'truenasSystem'
-  | 'truenasPool'
-  | 'truenasDataset'
-  | 'truenasDisk'
-  | 'vmwareHost'
-  | 'vmwareVm'
-  | 'vmwareDatastore'
-  | 'vmwareNetwork'
-  | 'dockerHost'
-  | 'dockerContainer';
+export type { Override, OverrideType };
 
 export type OfflineState = 'off' | 'warning' | 'critical';
-
-export interface Override {
-  id: string;
-  name: string;
-  type: OverrideType;
-  resourceType?: string;
-  vmid?: number;
-  node?: string;
-  instance?: string;
-  disabled?: boolean;
-  disableConnectivity?: boolean; // For nodes only - disable offline alerts
-  poweredOffSeverity?: 'warning' | 'critical';
-  note?: string;
-  backup?: BackupAlertConfig;
-  snapshot?: SnapshotAlertConfig;
-  thresholds: {
-    cpu?: number;
-    memory?: number;
-    disk?: number;
-    diskRead?: number;
-    diskWrite?: number;
-    networkIn?: number;
-    networkOut?: number;
-    usage?: number; // For storage devices
-    temperature?: number; // For nodes only - CPU temperature in °C
-  };
-}
 
 export interface SimpleThresholds {
   cpu?: number;

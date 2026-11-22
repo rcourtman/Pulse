@@ -1,0 +1,57 @@
+{
+  "version": 1,
+  "base_sha": "4fb69c742be7b1154da2bcef817db9df74a38fe2",
+  "verified_at": "2026-11-22T12:38:38Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/alerts/alertsConfigurationModel.ts",
+    "frontend-modern/src/features/alerts/thresholds/types.ts",
+    "frontend-modern/src/features/alerts/types.ts",
+    "frontend-modern/src/features/docker/DockerAlertsTable.tsx",
+    "frontend-modern/src/features/kubernetes/KubernetesAlertsTable.tsx",
+    "frontend-modern/src/features/platformPage/PlatformAlertsTable.tsx",
+    "frontend-modern/src/features/truenas/TrueNASAlertsTable.tsx",
+    "frontend-modern/src/features/vmware/VsphereAlertsTable.tsx",
+    "frontend-modern/src/types/alerts.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/alerts/alertsConfigurationModel.ts": "c9bd2108bd5e48742173ac9ca8a854e3e459df025290c35a0879e47c9b8c32e2",
+    "frontend-modern/src/features/alerts/thresholds/types.ts": "6d9c09c307d6fdbc28591193b31830f4605029923634f99111936478888b47fb",
+    "frontend-modern/src/features/alerts/types.ts": "1fdbec92cff321612833b2eb9bd6041aa15cfaebe4449d85c86c33e1245170f5",
+    "frontend-modern/src/features/docker/DockerAlertsTable.tsx": "5613d4990f1803ba834b5042c1ad70027dd1a959a6ab6492433efcc5ddec3e3c",
+    "frontend-modern/src/features/kubernetes/KubernetesAlertsTable.tsx": "b30b822747e63508720e9da1e8bd0add1e75befd0ccfe93e354d54aa8bd09fc7",
+    "frontend-modern/src/features/platformPage/PlatformAlertsTable.tsx": "fbaab6541f610527e367e7b4063eed2909ff45b7655876ee7588ed4c1a440bd3",
+    "frontend-modern/src/features/truenas/TrueNASAlertsTable.tsx": "2361f7e4823af399ace6826c76695ef2e43879b17c0b334082a4bc09de15e484",
+    "frontend-modern/src/features/vmware/VsphereAlertsTable.tsx": "77425d395b197941f1f0928a48b9d51d6b6feb62b2a415480f002aa4dd17744f",
+    "frontend-modern/src/types/alerts.ts": "242cc782a1b3fe2146ee2f73637c91c8caf7397547fa4b74198e3f9db5ab9b83"
+  },
+  "routes": [
+    "/alerts/schedule",
+    "/alerts/thresholds",
+    "/docker",
+    "/kubernetes",
+    "/truenas",
+    "/vmware"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "alerts schedule default, dirty/edited, saved, and reloaded persisted state",
+    "alerts thresholds desktop and mobile (390x844) layout with zero horizontal overflow",
+    "PlatformAlertsTable collapsed and expanded inline detail drawer states on TrueNAS and vSphere (singleVcenter)",
+    "PlatformAlertsTable severity badge column visible at 1440x900 and hidden via platform-table-phone-hidden at 390x844",
+    "Docker and Kubernetes pages loaded with zero console or page errors"
+  ],
+  "interactions": [
+    "toggled Recovery notifications on /alerts/schedule, clicked Save Changes, verified HTTP 200 and PUT /api/alerts/config payload omits dead aggregation, ioNormalization, and nested flapping fields, and verified persistence across reload",
+    "expanded and collapsed TrueNAS and vSphere PlatformAlertsTable rows at desktop (1440x900) and mobile (390x844) viewports and inspected screenshots pixel-by-pixel for alignment, drawer cards, and zero overflow"
+  ]
+}

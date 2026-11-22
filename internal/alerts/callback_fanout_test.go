@@ -211,3 +211,27 @@ func TestAlertSubscriberStopDrainsPastFault(t *testing.T) {
 		t.Fatal("closed producer admitted a late fan-out")
 	}
 }
+
+func TestCanonicalMetricAlertNotifiesSubscribersWithoutLegacyCallback(t *testing.T) {
+	m := fanoutTestManager(t)
+	cfg := m.GetConfig()
+	cfg.TimeThresholds = map[string]int{"guest": 0, "all": 0}
+	cfg.MetricEvaluationWindows = map[string]map[string]int{"all": {"cpu": 0}}
+	m.UpdateConfig(cfg)
+
+	firingCh := make(chan *Alert, 2)
+	aiCh := make(chan *Alert, 2)
+	m.SubscribeAlertFiringCallback(func(alert *Alert) { firingCh <- alert })
+	m.SubscribeAlertForAICallback(func(alert *Alert) { aiCh <- alert })
+
+	threshold := &HysteresisThreshold{Trigger: 80, Clear: 75}
+	m.checkMetric("sub-vm-1", "sub-vm-1", "node1", "pve1", "vm", "cpu", 92, threshold, nil)
+	m.Stop()
+
+	if len(firingCh) != 1 {
+		t.Fatalf("firing subscriber deliveries = %d, want 1", len(firingCh))
+	}
+	if len(aiCh) != 1 {
+		t.Fatalf("AI subscriber deliveries = %d, want 1", len(aiCh))
+	}
+}

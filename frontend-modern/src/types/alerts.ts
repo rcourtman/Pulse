@@ -183,41 +183,14 @@ export interface AlertConfig {
   };
   metricTimeThresholds?: Record<string, Record<string, number>>;
   metricEvaluationWindows?: Record<string, Record<string, number>>;
-  aggregation?: {
-    enabled: boolean;
-    timeWindow: number;
-    countThreshold: number;
-    similarityWindow: number;
-  };
-  flapping?: {
-    enabled: boolean;
-    threshold: number;
-    window: number;
-    suppressionTime: number;
-    minStability: number;
-  };
-  ioNormalization?: {
-    enabled: boolean;
-    vmDiskMax: number;
-    containerDiskMax: number;
-    networkMax: number;
-  };
-  notifications?: {
-    email?: {
-      server: string;
-      port: number;
-      username: string;
-      password: string;
-      from: string;
-      tls: boolean;
-    };
-    webhooks?: Array<{
-      id: string;
-      name: string;
-      url: string;
-      enabled: boolean;
-    }>;
-  };
+  maxAlertAgeDays?: number;
+  maxAcknowledgedAgeDays?: number;
+  autoAcknowledgeAfterHours?: number;
+  flappingEnabled?: boolean;
+  flappingWindowSeconds?: number;
+  flappingThreshold?: number;
+  flappingCooldownMinutes?: number;
+  alertHygieneDefaultsMigrated?: boolean;
   schedule?: {
     quietHours?: {
       enabled: boolean;

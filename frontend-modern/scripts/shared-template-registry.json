@@ -207,16 +207,13 @@
           "path": "src/components/Workloads/WorkloadPanel.tsx"
         },
         {
-          "path": "src/features/docker/DockerAlertsTable.tsx"
-        },
-        {
           "path": "src/features/docker/DockerHostsTable.tsx"
         },
         {
           "path": "src/features/docker/DockerNetworksTable.tsx"
         },
         {
-          "path": "src/features/kubernetes/KubernetesAlertsTable.tsx"
+          "path": "src/features/platformPage/PlatformAlertsTable.tsx"
         },
         {
           "path": "src/features/platformPage/PlatformResourceDetailTableRow.tsx"
@@ -231,9 +228,6 @@
           "path": "src/features/proxmox/ProxmoxNodesTable.tsx"
         },
         {
-          "path": "src/features/truenas/TrueNASAlertsTable.tsx"
-        },
-        {
           "path": "src/features/truenas/TrueNASProtectionTable.tsx"
         },
         {
@@ -241,9 +235,6 @@
         },
         {
           "path": "src/features/vmware/VsphereActivityTable.tsx"
-        },
-        {
-          "path": "src/features/vmware/VsphereAlertsTable.tsx"
         }
       ],
       "forbiddenPatterns": [
@@ -2157,19 +2148,14 @@
       },
       "requiredConsumers": [
         {
-          "path": "src/features/docker/DockerAlertsTable.tsx"
-        },
-        {
-          "path": "src/features/kubernetes/KubernetesAlertsTable.tsx"
-        },
-        {
-          "path": "src/features/truenas/TrueNASAlertsTable.tsx"
-        },
-        {
-          "path": "src/features/vmware/VsphereAlertsTable.tsx"
+          "path": "src/features/platformPage/PlatformAlertsTable.tsx"
         }
       ],
       "forbiddenPatterns": [
+        {
+          "path": "src/features/platformPage/PlatformAlertsTable.tsx",
+          "patterns": ["severityVariant", "severityTextClass"]
+        },
         {
           "path": "src/features/docker/DockerAlertsTable.tsx",
           "patterns": ["severityVariant", "severityTextClass"]

@@ -236,13 +236,6 @@ func (b *callbackBus) setFlappingDetectedCallback(cb func(alert *Alert, tracking
 	b.onFlappingDetected = cb
 }
 
-func (b *callbackBus) alertCallback() func(alert *Alert) {
-	b.mu.RLock()
-	cb := b.onAlert
-	b.mu.RUnlock()
-	return cb
-}
-
 func (b *callbackBus) alertCallbacks() []func(alert *Alert) {
 	b.mu.RLock()
 	defer b.mu.RUnlock()
@@ -257,13 +250,6 @@ func (b *callbackBus) alertCallbacks() []func(alert *Alert) {
 		}
 	}
 	return callbacks
-}
-
-func (b *callbackBus) alertForAICallback() func(alert *Alert) {
-	b.mu.RLock()
-	cb := b.onAlertForAI
-	b.mu.RUnlock()
-	return cb
 }
 
 func (b *callbackBus) alertForAICallbacks() []func(alert *Alert) {
@@ -433,20 +419,12 @@ func (m *Manager) SetFlappingDetectedCallback(cb func(alert *Alert, trackingKey 
 	m.callbacks.setFlappingDetectedCallback(cb)
 }
 
-func (m *Manager) getAlertCallback() func(alert *Alert) {
-	return m.callbacks.alertCallback()
-}
-
 func (m *Manager) getAlertCallbacks() []func(alert *Alert) {
 	return m.callbacks.alertCallbacks()
 }
 
 func (m *Manager) getAlertFiringCallbacks() []func(alert *Alert) {
 	return m.callbacks.alertFiringCallbacks()
-}
-
-func (m *Manager) getAlertForAICallback() func(alert *Alert) {
-	return m.callbacks.alertForAICallback()
 }
 
 func (m *Manager) getAlertForAICallbacks() []func(alert *Alert) {
