@@ -1,6 +1,14 @@
 import { fireEvent, render, screen } from '@solidjs/testing-library';
 import { createSignal } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+vi.mock('@solidjs/router', () => ({
+  A: (props: { href: string; class?: string; children?: unknown }) => (
+    <a href={props.href} class={props.class}>
+      {props.children as any}
+    </a>
+  ),
+}));
 import { DEFAULT_LOCALE, getActiveLocale, setActiveLocale } from '@/i18n';
 import { STORAGE_KEYS } from '@/utils/localStorage';
 import { GeneralSettingsPanel, type GeneralSettingsPanelProps } from '../GeneralSettingsPanel';

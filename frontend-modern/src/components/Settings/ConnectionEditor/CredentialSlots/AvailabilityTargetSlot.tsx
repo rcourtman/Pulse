@@ -52,7 +52,7 @@ import {
 } from '@/utils/availabilityProbeAgents';
 import { hasFeature, loadRuntimeCapabilities, runtimeCapabilitiesLoaded } from '@/stores/license';
 import { getUpgradeActionDestination } from '@/stores/licenseCommercial';
-import { presentationPolicyHidesUpgradePrompts } from '@/stores/sessionPresentationPolicy';
+import { presentationPolicyHidesCommercialSurfaces } from '@/stores/sessionPresentationPolicy';
 import type { Resource } from '@/types/resource';
 
 interface AvailabilityForm {
@@ -750,7 +750,7 @@ export const AvailabilityTargetSlot: Component<AvailabilityTargetSlotProps> = (p
                 title={getExternalProbeGateTitle()}
                 body={getExternalProbeGateBody()}
                 upgradeDestination={getUpgradeActionDestination(EXTERNAL_PROBE_FEATURE)}
-                showUpgradePrompts={!presentationPolicyHidesUpgradePrompts()}
+                showUpgradePrompts={!presentationPolicyHidesCommercialSurfaces()}
               />
             </div>
           </Show>

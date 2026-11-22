@@ -1,0 +1,53 @@
+{
+  "version": 1,
+  "base_sha": "a1a3fa51886380bb1076989f76e35ebc9f479ba9",
+  "verified_at": "2026-11-22T20:35:00Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/BrandingSettingsCard.tsx",
+    "frontend-modern/src/components/Settings/ConnectionEditor/CredentialSlots/AvailabilityTargetSlot.tsx",
+    "frontend-modern/src/features/patrol/PatrolIntelligenceWorkspace.tsx",
+    "frontend-modern/src/pages/Actions.tsx",
+    "frontend-modern/src/utils/pricingHandoff.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/BrandingSettingsCard.tsx": "05a3193e5354739229f05053ab680cd46e842e67485f36403c330254df3fd88e",
+    "frontend-modern/src/components/Settings/ConnectionEditor/CredentialSlots/AvailabilityTargetSlot.tsx": "cb8182cc04a979a046615ff99a8c4dfa31853eda54a7f44c746b99273904df3a",
+    "frontend-modern/src/features/patrol/PatrolIntelligenceWorkspace.tsx": "2f62da9430b84f096399f49e5d592af2a315c32cc2c53a01fd3a63af8109e2a0",
+    "frontend-modern/src/pages/Actions.tsx": "9df4b3f72b339a0aad41ab4742447a73ee77b4609961eac0c0b520d5e420c226",
+    "frontend-modern/src/utils/pricingHandoff.ts": "28f9244195601a9cb5e1f63e98e7be29307d5dab640405060cb559ea1c60943c"
+  },
+  "routes": [
+    "/settings/system-general",
+    "/settings/monitoring/availability?add=target",
+    "/actions",
+    "/patrol",
+    "/settings/pulse-intelligence/billing/plan"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Free Community non-demo session (hideCommercial=false, hideUpgrade=true): Application branding card renders View plans link routing in-app to /settings/pulse-intelligence/billing/plan",
+    "Free Community non-demo session: Add availability check modal External Probes card renders View plans link routing in-app to /settings/pulse-intelligence/billing/plan",
+    "Free Community non-demo session: Actions Watch-only empty state renders Learn about Pulse Pro button routing to /settings/pulse-intelligence/billing/plan?intent=self_hosted_plan",
+    "Free Community non-demo session: Patrol Activity -> Finding options and history -> expanded finding renders Learn about Pulse Pro button routing to /settings/pulse-intelligence/billing/plan?intent=self_hosted_plan",
+    "Commercial-hidden policy (hideCommercial=true via mocked /api/security/status): View plans and Learn about Pulse Pro links are suppressed on Branding and Actions surfaces",
+    "Zero horizontal overflow across desktop (1440x900) and mobile (390x844) screenshots inspected visually"
+  ],
+  "interactions": [
+    "Logged into local built Pulse binary (127.0.0.1:17655, non-demo mock mode) as admin",
+    "Clicked Application branding View plans link and verified navigation to /settings/pulse-intelligence/billing/plan",
+    "Opened Add availability check modal via ?add=target, scrolled to External Probes, verified View plans href and navigation to /settings/pulse-intelligence/billing/plan on desktop and mobile",
+    "Navigated to /actions Watch-only empty state, verified Learn about Pulse Pro link on desktop and mobile and clicked through to /settings/pulse-intelligence/billing/plan?intent=self_hosted_plan",
+    "Navigated to /patrol -> Activity tab -> Finding options and history -> clicked Review on critical finding, verified Learn about Pulse Pro button on desktop and mobile and clicked through to /settings/pulse-intelligence/billing/plan?intent=self_hosted_plan",
+    "Intercepted /api/security/status with hideCommercial=true and verified 0 upgrade links rendered on /settings/system-general and /actions"
+  ]
+}

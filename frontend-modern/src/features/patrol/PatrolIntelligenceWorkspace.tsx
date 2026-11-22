@@ -49,10 +49,7 @@ import {
   type PatrolIntelligenceState,
 } from './usePatrolIntelligenceState';
 import { getUpgradeActionDestination } from '@/stores/licenseCommercial';
-import {
-  presentationPolicyHidesCommercialSurfaces,
-  presentationPolicyHidesUpgradePrompts,
-} from '@/stores/sessionPresentationPolicy';
+import { presentationPolicyHidesCommercialSurfaces } from '@/stores/sessionPresentationPolicy';
 
 // Only an install that cannot run Patrol needs the setup panel and the AI
 // settings, provider and cost code it brings, so it loads on demand and stays
@@ -335,7 +332,7 @@ export function PatrolIntelligenceWorkspace(props: {
                 getPatrolProInvestigationHandoff({
                   autoFixLocked: state.autoFixLocked(),
                   commercialSurfacesHidden: presentationPolicyHidesCommercialSurfaces(),
-                  upgradePromptsHidden: presentationPolicyHidesUpgradePrompts(),
+                  upgradePromptsHidden: presentationPolicyHidesCommercialSurfaces(),
                   upgradeDestination: getUpgradeActionDestination('ai_autofix'),
                   severity: finding.severity,
                   status: finding.status,

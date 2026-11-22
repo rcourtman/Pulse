@@ -68,6 +68,7 @@ const IN_PRODUCT_PRICING_DESTINATIONS: Record<string, string> = {
   advanced_reporting: SELF_HOSTED_PRO_BILLING_PLAN_HREF,
   agent_profiles: SELF_HOSTED_PRO_BILLING_PLAN_HREF,
   external_probe: SELF_HOSTED_PRO_BILLING_PLAN_HREF,
+  white_label: SELF_HOSTED_PRO_BILLING_PLAN_HREF,
 };
 
 const RETIRED_TRIAL_PRICING_FEATURES = new Set(['trial_expired']);

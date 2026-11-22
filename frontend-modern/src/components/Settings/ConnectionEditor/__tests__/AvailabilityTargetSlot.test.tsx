@@ -43,7 +43,7 @@ vi.mock('@/stores/licenseCommercial', () => ({
 }));
 
 vi.mock('@/stores/sessionPresentationPolicy', () => ({
-  presentationPolicyHidesUpgradePrompts: () => false,
+  presentationPolicyHidesCommercialSurfaces: () => false,
 }));
 
 const agentHostResource = (agentId: string, displayName: string) => ({
