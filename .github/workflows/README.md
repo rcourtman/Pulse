@@ -229,12 +229,15 @@ issue reporter reads only the mock job.
 
 Its `compare-proxmox` job runs the same non-gating comparison on a third estate:
 a real, non-mock Pulse polling a synthetic 3-node Proxmox VE cluster (35 guests),
-2 Proxmox Backup Server instances (~5,250 snapshots), and one connected
+2 Proxmox Backup Server instances (5,200 fixture snapshots), and one connected
 dashboard WebSocket (`scripts/memory/proxmox_load.py`). Neither mock mode nor
 the agent estate exercises PVE/PBS polling, `recovery.db` ingestion, protection
 posture refreshes, or PBS backup cloning. It fails if node registration fails,
-PVE/PBS polling does not occur, or the dashboard receives no initial state and
-update, and uploads `memory-regression-proxmox`.
+PVE/PBS polling does not occur, or the dashboard does not receive an initial
+state and update with all expected PVE guests visible in its reconstructed
+state. The per-build `proxmox-*.json` retained in `memory-regression-proxmox`
+reports configured `guests` separately from `pve_guests_observed`. A passing
+comparison is synthetic polling evidence, not an installed LXC memory test.
 
 `dependency-advisory-watch.yml` strictly audits the product frontend on
 `main` every day. A newly disclosed advisory can affect an unchanged lockfile;

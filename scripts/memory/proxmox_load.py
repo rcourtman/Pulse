@@ -10,13 +10,14 @@ and authentication configured:
 - serves 1 synthetic Proxmox VE cluster (3 nodes, 20 VMs, 15 LXCs, storage,
   guest snapshots, tasks, physical disks) over local HTTP;
 - serves 2 synthetic Proxmox Backup Server instances (2 datastores each,
-  50 snapshots per backup group by default -> 5,250 PBS snapshots total);
+  50 snapshots per backup group by default -> 5,200 PBS snapshots total);
 - registers the PVE cluster and PBS instances via /api/config/nodes;
 - keeps one WebSocket dashboard subscriber connected to /ws.
 
 It runs until --duration elapses or SIGTERM arrives, then writes a JSON stats
-file. It exits 1 when registration failed, PVE or PBS polling did not occur, or
-the dashboard never received an initial state followed by a state update.
+file. It exits 1 when registration failed, PVE or PBS polling did not occur,
+or the dashboard did not receive state updates and the full synthetic PVE
+guest inventory.
 """
 
 from __future__ import annotations
@@ -52,6 +53,7 @@ class ThreadedHTTPServer(socketserver.ThreadingMixIn, http.server.HTTPServer):
 
 @dataclass
 class DashboardStats:
+    expected_guests: set[tuple[str, str]] = field(default_factory=set)
     lock: threading.Lock = field(default_factory=threading.Lock)
     ws_connects: int = 0
     ws_messages: int = 0
@@ -60,6 +62,42 @@ class DashboardStats:
     ws_state_updates: int = 0
     ws_state_bytes: int = 0
     ws_errors: list[str] = field(default_factory=list)
+    resource_identities: dict[str, tuple[str | None, str | None]] = field(default_factory=dict)
+
+    def update_guests(self, data: dict) -> None:
+        # Keep just the identity fields. Existing resource upserts are merge
+        # patches, so a metrics-only update must not erase a guest's identity.
+        if "resources" in data:
+            self.resource_identities.clear()
+            rows = data["resources"]
+        else:
+            delta = data.get("resourceDelta")
+            if not isinstance(delta, dict):
+                return
+            removed = delta.get("removed", [])
+            if not isinstance(removed, list) or not all(isinstance(key, str) for key in removed):
+                self.resource_identities.clear()
+                return
+            for resource_id in removed:
+                self.resource_identities.pop(resource_id, None)
+            rows = delta.get("upserts", [])
+        if not isinstance(rows, list):
+            self.resource_identities.clear()
+            return
+        for row in rows:
+            if not isinstance(row, dict) or not isinstance(row.get("id"), str) or not row["id"]:
+                continue
+            resource_id = row["id"]
+            technology, name = self.resource_identities.get(resource_id, (None, None))
+            technology = row.get("technology", technology)
+            name = row.get("name", name)
+            self.resource_identities[resource_id] = (
+                technology if isinstance(technology, str) else None,
+                name if isinstance(name, str) else None,
+            )
+
+    def missing_guests(self) -> set[tuple[str, str]]:
+        return self.expected_guests.difference(self.resource_identities.values())
 
 
 def make_pve_handler(
@@ -111,6 +149,20 @@ def make_pve_handler(
         for guest in lxcs:
             all_guest_refs.append((node, "ct", guest["vmid"], guest["name"]))
 
+    def guest_payload(guest: dict, kind: str, wave: float, now: int) -> dict:
+        is_vm = kind == "qemu"
+        io_scale = 4 if is_vm else 1
+        return {
+            **guest,
+            "cpu": wave * (0.5 if is_vm else 0.3),
+            "mem": int(guest["maxmem"] * ((0.4 if is_vm else 0.3) + 0.1 * wave)),
+            "disk": int(guest["maxdisk"] * (0.35 if is_vm else 0.25)),
+            "diskread": now * 1024 * io_scale,
+            "diskwrite": now * 512 * io_scale,
+            "netin": now * 2048 * io_scale,
+            "netout": now * 1024 * io_scale,
+        }
+
     class PVEHandler(http.server.BaseHTTPRequestHandler):
         protocol_version = "HTTP/1.1"
 
@@ -161,6 +213,21 @@ def make_pve_handler(
                 return self.send_json(data)
             if path == "/cluster/options":
                 return self.send_json({})
+            if path == "/cluster/resources" and urllib.parse.parse_qs(parsed.query).get("type") == ["vm"]:
+                # Pulse treats a successful empty response as authoritative,
+                # not as a request to fall back to the per-node guest lists.
+                return self.send_json([
+                    {
+                        **guest_payload(guest, kind, wave, now),
+                        "type": kind,
+                        "id": f"{kind}/{guest['vmid']}",
+                        "node": node,
+                        "maxcpu": guest["cpus"],
+                    }
+                    for node, (vms, lxcs) in guests_by_node.items()
+                    for kind, guests in (("qemu", vms), ("lxc", lxcs))
+                    for guest in guests
+                ])
             if path == "/nodes":
                 return self.send_json([
                     {
@@ -201,33 +268,10 @@ def make_pve_handler(
                         "pveversion": "pve-manager/8.3.1",
                         "kversion": "Linux 6.8.12-pve",
                     })
-                if sub == "qemu" and len(parts) == 3:
+                if sub in ("qemu", "lxc") and len(parts) == 3:
                     return self.send_json([
-                        {
-                            **g,
-                            "cpu": wave * 0.5,
-                            "mem": int(g["maxmem"] * (0.4 + 0.1 * wave)),
-                            "disk": int(g["maxdisk"] * 0.35),
-                            "diskread": now * 4096,
-                            "diskwrite": now * 2048,
-                            "netin": now * 8192,
-                            "netout": now * 4096,
-                        }
-                        for g in vms
-                    ])
-                if sub == "lxc" and len(parts) == 3:
-                    return self.send_json([
-                        {
-                            **g,
-                            "cpu": wave * 0.3,
-                            "mem": int(g["maxmem"] * (0.3 + 0.1 * wave)),
-                            "disk": int(g["maxdisk"] * 0.25),
-                            "diskread": now * 1024,
-                            "diskwrite": now * 512,
-                            "netin": now * 2048,
-                            "netout": now * 1024,
-                        }
-                        for g in lxcs
+                        guest_payload(guest, sub, wave, now)
+                        for guest in (vms if sub == "qemu" else lxcs)
                     ])
                 if sub == "storage" and len(parts) == 3:
                     return self.send_json([
@@ -492,16 +536,26 @@ def record_ws_message(opcode: int, payload: bytes, stats: DashboardStats, has_in
         message = json.loads(payload)
     except (ValueError, UnicodeError):
         return has_initial_state
-    if not isinstance(message, dict) or not isinstance(message.get("data"), dict) or not message["data"]:
+    if not isinstance(message, dict):
+        return has_initial_state
+    if message.get("type") == "stateTooLarge":
+        # Pulse invalidates the delta baseline when it withholds a state.
+        with stats.lock:
+            stats.resource_identities.clear()
+        return False
+    data = message.get("data")
+    if not isinstance(data, dict) or not data:
         return has_initial_state
     with stats.lock:
         if message.get("type") == "initialState":
             stats.ws_initial_states += 1
             has_initial_state = True
+            stats.resource_identities.clear()
         elif message.get("type") == "rawData" and has_initial_state:
             stats.ws_state_updates += 1
         else:
             return has_initial_state
+        stats.update_guests(data)
         stats.ws_state_bytes += len(payload)
     return has_initial_state
 
@@ -529,6 +583,7 @@ def run_dashboard(host: str, port: int, deadline: float, stats: DashboardStats) 
                     raise ConnectionError(response.split(b"\r\n", 1)[0].decode(errors="replace"))
                 with stats.lock:
                     stats.ws_connects += 1
+                    stats.resource_identities.clear()
                 has_initial_state = False
                 message_opcode = None
                 fragments = bytearray()
@@ -670,7 +725,10 @@ def main(argv: list[str]) -> int:
         if not (200 <= status < 300):
             reg_failed = True
 
-    dash_stats = DashboardStats()
+    dash_stats = DashboardStats(expected_guests={
+        ("qemu" if kind == "vm" else "lxc", guest_name)
+        for _, kind, _, guest_name in guest_refs
+    })
     started = time.time()
     deadline = started + args.duration
     dash_thread = threading.Thread(
@@ -698,10 +756,13 @@ def main(argv: list[str]) -> int:
         req_counts = dict(counters)
     pbs_requests = sum(v for k, v in req_counts.items() if k != "pve_requests")
     pve_requests = req_counts.get("pve_requests", 0)
+    with dash_stats.lock:
+        missing_pve_guests = dash_stats.missing_guests()
 
     result = {
         "pve_nodes": args.nodes,
         "guests": len(guest_refs),
+        "pve_guests_observed": len(guest_refs) - len(missing_pve_guests),
         "pbs_instances": args.pbs_instances,
         "snapshots_per_group": args.snapshots_per_group,
         "total_pbs_snapshots": total_pbs_snapshots,
@@ -735,6 +796,13 @@ def main(argv: list[str]) -> int:
         print(
             f"proxmox load did not exercise the dashboard state path: {dash_stats.ws_connects} connections, "
             f"{dash_stats.ws_initial_states} initial states, {dash_stats.ws_state_updates} state updates",
+            file=sys.stderr,
+        )
+        return 1
+    if missing_pve_guests:
+        print(
+            f"proxmox load dashboard saw {result['pve_guests_observed']}/{len(guest_refs)} expected PVE guests; "
+            f"missing: {', '.join(f'{kind}/{name}' for kind, name in sorted(missing_pve_guests))}",
             file=sys.stderr,
         )
         return 1
