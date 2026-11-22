@@ -42,6 +42,7 @@ import {
   getSSOProviderTypeLabel,
 } from '@/utils/ssoProviderPresentation';
 import { ALERT_EMAIL_REPLY_TO_PLACEHOLDER } from '@/utils/alertEmailPresentation';
+import { getProviderTestSource } from '@/components/Settings/ssoProvidersModel';
 import { useSSOProvidersState } from '@/components/Settings/useSSOProvidersState';
 
 // Endpoint labels and values have separate lines so neither a long URL nor
@@ -125,17 +126,17 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
   const testResultTitleId = `${summaryIdPrefix}-test-result-title`;
   const signInRestrictionsId = `${summaryIdPrefix}-sign-in-restrictions`;
   const clientSecretHintId = `${summaryIdPrefix}-client-secret-hint`;
-  // The server checks only URL format on the manual SAML path. Either
-  // metadata source takes precedence, even when the draft also has an SSO URL.
-  const isSamlUrlFormatCheck = () =>
-    form.type === 'saml' &&
-    !!form.samlIdpSsoUrl.trim() &&
-    !form.samlIdpMetadataUrl.trim() &&
-    !form.samlIdpMetadataXml.trim();
+  const isSamlUrlFormatCheck = () => getProviderTestSource(form) === 'saml-manual-url';
+  const hasSamlFinding = () => form.type === 'saml' && !!testResult()?.failureLabel;
   const testSummary = createMemo(() => {
     const result = testResult();
     if (!result) return null;
-    if (!result.success) return { lines: ['Test failed'], variant: 'dangerOutline' } as const;
+    if (!result.success) {
+      return {
+        lines: [result.failureLabel ?? 'Test failed'],
+        variant: 'dangerOutline',
+      } as const;
+    }
 
     const isManual = isSamlUrlFormatCheck();
     const isSaml = form.type === 'saml';
@@ -508,7 +509,13 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
                     type="button"
                     variant={summary().variant}
                     size="xs"
-                    class="-my-2 min-w-0 max-w-[60%] shrink-0 gap-1.5 text-left"
+                    class={`-my-2 min-w-0 max-w-[60%] shrink-0 gap-1.5 text-left ${
+                      hasSamlFinding()
+                        ? 'max-[360px]:max-w-24'
+                        : testResult()?.failureLabel
+                          ? 'max-[360px]:max-w-25'
+                          : ''
+                    }`}
                     aria-label={`${summary().lines.join(', ')} — view result`}
                     aria-controls={testResultId}
                     disabled={saving() || !!unconfirmedChange()}
@@ -826,7 +833,7 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
                         type="text"
                         value={form.samlEmailAttr}
                         onInput={(e) => setForm('samlEmailAttr', e.currentTarget.value)}
-                        placeholder="email"
+                        placeholder="Not set"
                         class={controlClass()}
                       />
                     </div>
@@ -864,24 +871,30 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
                 <div
                   id={testResultId}
                   ref={testResultPanel}
-                  class={`${testResultPresentation()!.panelClass} focus:outline-hidden focus:ring-2 focus:ring-blue-500`}
+                  class={`${testResultPresentation()!.panelClass} focus:outline-hidden focus:ring-2 focus:ring-blue-500 ${
+                    hasSamlFinding()
+                      ? 'max-sm:px-2 max-sm:py-1 sm:py-2.5'
+                      : testResult()?.failureLabel
+                        ? 'max-sm:p-2'
+                        : ''
+                  }`}
                   role={testResult()?.success ? 'status' : 'alert'}
                   tabindex={-1}
                   aria-labelledby={testResultTitleId}
                 >
-                  <div class="flex items-start gap-3">
+                  <div class={`flex items-start gap-3 ${hasSamlFinding() ? 'max-sm:gap-1.5' : ''}`}>
                     {testResult()?.success ? (
                       <CheckCircle class={testResultPresentation()!.iconClass} />
                     ) : (
                       <XCircle class={testResultPresentation()!.iconClass} />
                     )}
                     <div class="flex-1 min-w-0">
-                      <p id={testResultTitleId} class={testResultPresentation()!.titleClass}>
+                      <p
+                        id={testResultTitleId}
+                        class={`${testResultPresentation()!.titleClass} ${hasSamlFinding() ? 'max-sm:text-xs max-sm:leading-3.5' : ''}`}
+                      >
                         {testResult()?.message}
                       </p>
-                      <Show when={testResult()?.error}>
-                        <p class={testResultPresentation()!.errorClass}>{testResult()?.error}</p>
-                      </Show>
                       <Show when={testResult()?.success && testResult()?.details}>
                         <dl class="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1 text-xs">
                           <Show when={testResult()?.details?.entityId}>

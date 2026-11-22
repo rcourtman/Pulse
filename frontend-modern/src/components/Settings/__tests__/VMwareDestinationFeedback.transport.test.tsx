@@ -49,6 +49,21 @@ const ready = async (state: ReturnType<typeof useVMwareSettingsPanelState>) => {
   state.openEditDialog(state.connections()[0]);
   state.updateForm({ name: 'Retained draft' });
 };
+const draftFeedback = (
+  state: ReturnType<typeof useVMwareSettingsPanelState>,
+  action: 'test' | 'preview' | 'save',
+) => (action === 'test' ? state.connectionTestFeedback() : state.connectionFailure());
+const renderSavedEditor = (state: ReturnType<typeof useVMwareSettingsPanelState>) =>
+  render(() => (
+    <Dialog isOpen={state.dialogOpen()} onClose={state.closeDialog} ariaLabel="Edit VMware vCenter">
+      <VMwareCredentialSlot
+        state={state}
+        editingConnection={state.connections()[0]}
+        onCancel={() => {}}
+        onSaved={() => {}}
+      />
+    </Dialog>
+  ));
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -99,13 +114,13 @@ describe('VMware destination refusal through real transport', () => {
       expect(result.form()).toEqual(draft);
       expect(result.loadingError()).toBeNull();
       expect(notificationStore.error).not.toHaveBeenCalled();
-      expect(result.connectionFailure()).toMatchObject({
+      expect(draftFeedback(result, action)).toMatchObject({
         code: 'destination_not_allowed',
         message: destinationFailure.message,
         title: 'Check the vCenter destination',
         tone: 'warning',
       });
-      expect(result.connectionFailure()?.guidance).toContain('Pulse instance administrator');
+      expect(draftFeedback(result, action)?.guidance).toContain('Pulse instance administrator');
       expect(fetchMock).toHaveBeenCalledTimes(2);
       const [url, options] = fetchMock.mock.calls[1];
       expect(url).toBe(
@@ -120,7 +135,7 @@ describe('VMware destination refusal through real transport', () => {
         monitorHosts: false,
       });
       result.updateForm({ host: 'https://corrected.example.test' });
-      expect(result.connectionFailure()).toBeNull();
+      expect(draftFeedback(result, action)).toBeNull();
       expect(fetchMock).toHaveBeenCalledTimes(2);
     },
   );
@@ -133,11 +148,10 @@ describe('VMware destination refusal through real transport', () => {
       fetchMock.mockResolvedValueOnce(json(dialFailure, 400));
       if (action === 'test') await result.testCurrentForm();
       else await result.previewCurrentForm();
-      expect(result.connectionFailure()?.message).toBe(dialFailure.details.error);
-      expect(result.connectionFailure()?.guidance).toContain('Pulse instance administrator');
-      expect(result.connectionFailure()?.guidance).not.toMatch(
-        /password|credentials|Skip TLS|grant/i,
-      );
+      const feedback = draftFeedback(result, action);
+      expect(feedback?.message).toBe(dialFailure.details.error);
+      expect(feedback?.guidance).toContain('Pulse instance administrator');
+      expect(feedback?.guidance).not.toMatch(/password|credentials|Skip TLS|grant/i);
       expect(result.form().hasStoredPassword).toBe(true);
       expect(result.dialogOpen()).toBe(true);
     },
@@ -161,10 +175,9 @@ describe('VMware destination refusal through real transport', () => {
       else if (action === 'preview') await result.previewCurrentForm();
       else await result.saveCurrentForm();
       expect(result.dialogOpen()).toBe(true);
-      expect(result.connectionFailure()?.guidance).toContain('Pulse instance administrator');
-      expect(result.connectionFailure()?.guidance).not.toMatch(
-        /password|credentials|Skip TLS|grant/i,
-      );
+      const feedback = draftFeedback(result, action);
+      expect(feedback?.guidance).toContain('Pulse instance administrator');
+      expect(feedback?.guidance).not.toMatch(/password|credentials|Skip TLS|grant/i);
       expect(result.form().hasStoredPassword).toBe(true);
       expect(notificationStore.error).not.toHaveBeenCalled();
       expect(fetchMock).toHaveBeenCalledTimes(2);
@@ -186,7 +199,7 @@ describe('VMware destination refusal through real transport', () => {
     expect(result.form().password).toBe('');
     expect(result.connections()).toEqual([]);
     expect(result.loadingError()).toContain('access could not be verified');
-    expect(result.connectionFailure()).toBeNull();
+    expect(result.connectionTestFeedback()).toBeNull();
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
@@ -202,7 +215,7 @@ describe('VMware destination refusal through real transport', () => {
     await result.testCurrentForm();
     expect(getOrgID()).toBeNull();
     expect(localStorage.getItem('just_logged_out')).toBe('true');
-    expect(result.connectionFailure()).toBeNull();
+    expect(result.connectionTestFeedback()).toBeNull();
     expect(fetchMock).toHaveBeenCalledTimes(2);
     setAllowed(false);
     expect(result.dialogOpen()).toBe(false);
@@ -246,7 +259,7 @@ describe('VMware destination refusal through real transport', () => {
       await pending;
       expect(result.form().name).toBe('Newer draft');
       expect(result.dialogOpen()).toBe(true);
-      expect(result.connectionFailure()).toBeNull();
+      expect(draftFeedback(result, action)).toBeNull();
       expect(result.monitoredSystemPreviewError()).toBeNull();
       expect(result.loadingError()).toBeNull();
       expect(fetchMock).toHaveBeenCalledTimes(2);
@@ -295,33 +308,18 @@ describe('VMware destination refusal through real transport', () => {
       await pending;
       expect(result.form().password).toBe('');
       expect(result.dialogOpen()).toBe(false);
-      expect(result.connectionFailure()).toBeNull();
+      expect(result.connectionTestFeedback()).toBeNull();
     },
   );
 
   it('renders actionable policy feedback in the real credential slot and clears it on cancel/reopen', async () => {
     const { result } = renderHook(() => useVMwareSettingsPanelState());
     await ready(result);
-    render(() => (
-      <Dialog
-        isOpen={result.dialogOpen()}
-        onClose={result.closeDialog}
-        ariaLabel="Edit VMware vCenter"
-      >
-        <VMwareCredentialSlot
-          state={result}
-          editingConnection={result.connections()[0]}
-          onCancel={() => {}}
-          onSaved={() => {}}
-        />
-      </Dialog>
-    ));
+    renderSavedEditor(result);
     fetchMock.mockResolvedValueOnce(json(dialFailure, 400));
     fireEvent.click(screen.getByRole('button', { name: 'Test connection' }));
     await waitFor(() =>
-      expect(screen.getByTestId('vmware-connection-test-feedback')).toHaveTextContent(
-        'Pulse instance administrator',
-      ),
+      expect(screen.getByRole('status')).toHaveTextContent('Pulse instance administrator'),
     );
     expect(screen.getByLabelText('Host')).toHaveValue(saved.host);
     expect(screen.getByLabelText('Skip TLS verification')).not.toBeChecked();
@@ -331,6 +329,76 @@ describe('VMware destination refusal through real transport', () => {
     );
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
     result.openEditDialog(result.connections()[0]);
-    expect(result.connectionFailure()).toBeNull();
+    expect(result.connectionTestFeedback()).toBeNull();
+  });
+
+  it.each([
+    ['missing confirmation', {}],
+    ['unsuccessful with a degraded flag', { success: false, degraded: true }],
+    ['non-boolean confirmation', { success: 'true' }],
+  ])('shows an unconfirmed result, not success, on HTTP 200 with %s', async (_, response) => {
+    const { result } = renderHook(() => useVMwareSettingsPanelState());
+    await ready(result);
+    renderSavedEditor(result);
+    const status = screen.getByRole('status');
+    expect(status).toBeEmptyDOMElement();
+    fetchMock.mockResolvedValueOnce(json(response));
+    fireEvent.click(screen.getByRole('button', { name: 'Test connection' }));
+    await waitFor(() => expect(status).toHaveTextContent('Connection test not confirmed'));
+    expect(status).toHaveTextContent('No settings were saved.');
+    expect(status).not.toHaveTextContent(/passed|limited data access/);
+    expect(notificationStore.success).not.toHaveBeenCalled();
+    expect(notificationStore.warning).not.toHaveBeenCalled();
+    expect(notificationStore.error).not.toHaveBeenCalled();
+    expect(fetchMock.mock.calls.map(([url, init]) => [url, init?.method ?? 'GET'])).toEqual([
+      ['/api/vmware/connections', 'GET'],
+      ['/api/vmware/connections/saved-vcenter/test', 'POST'],
+    ]);
+    fireEvent.click(screen.getByLabelText(/^Hosts/));
+    expect(screen.getByLabelText(/^Hosts/)).toBeChecked();
+    expect(status).toBeEmptyDOMElement();
+  });
+
+  it('keeps a confirmed result local to the scope that was tested', async () => {
+    const { result } = renderHook(() => useVMwareSettingsPanelState());
+    await ready(result);
+    renderSavedEditor(result);
+    const test = screen.getByRole('button', { name: 'Test connection' });
+    const hostScope = screen.getByLabelText(/^Hosts/);
+    const status = screen.getByRole('status');
+    const response = { success: true, viRelease: '8.0.3.0' };
+    let release!: (response: Response) => void;
+    fetchMock.mockImplementationOnce(
+      () =>
+        new Promise<Response>((resolve) => {
+          release = resolve;
+        }),
+    );
+    fireEvent.click(test);
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    expect(test).toHaveAttribute('aria-disabled', 'true');
+    fireEvent.click(test);
+    fireEvent.click(hostScope);
+    release(json(response));
+    await waitFor(() => expect(result.testing()).toBe(false));
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(status).toBeEmptyDOMElement();
+    expect(hostScope).toBeChecked();
+    fetchMock.mockResolvedValueOnce(json(response));
+    fireEvent.click(test);
+    await waitFor(() => expect(status).toHaveTextContent('vCenter API checks passed'));
+    expect(status).toHaveTextContent('VI JSON 8.0.3.0');
+    expect(status).toHaveTextContent('No settings were saved.');
+    expect(
+      screen.getByText('Collection choices apply to monitoring, not the connection test.'),
+    ).toBeVisible();
+    expect(notificationStore.success).not.toHaveBeenCalled();
+    expect(JSON.parse(String(fetchMock.mock.calls[2][1]?.body))).toMatchObject({
+      monitorHosts: true,
+      monitorVms: true,
+      monitorDatastores: true,
+      password: '********',
+      insecureSkipVerify: false,
+    });
   });
 });

@@ -1,4 +1,4 @@
-import { createMemo, createSignal, For, Show } from 'solid-js';
+import { createMemo, createSignal, For, onCleanup, Show } from 'solid-js';
 
 import { Dialog } from '@/components/shared/Dialog';
 import { getShippedDocUrl } from '@/utils/docsLinks';
@@ -24,7 +24,11 @@ import {
   getBackupInfo,
   type BackupInfo,
 } from '@/utils/format';
-import { ALERT_BACKUP_THRESHOLDS_PATH } from '@/routing/resourceLinks';
+import {
+  ALERT_BACKUP_THRESHOLDS_PATH,
+  buildProxmoxBackupsPath,
+  PROXMOX_BACKUPS_INSPECTION_STATE,
+} from '@/routing/resourceLinks';
 import { useRelativeTimeNow } from '@/utils/relativeTimeClock';
 import type { AvailabilityProbePresentation } from '@/utils/availabilityProbePresentation';
 import {
@@ -338,6 +342,7 @@ function BackupStatusCell(props: {
   const tip = useTooltip();
   const [detailsOpen, setDetailsOpen] = createSignal(false);
   let trigger: HTMLButtonElement | undefined;
+  let closeButton: HTMLButtonElement | undefined;
 
   const alertsActivation = useAlertsActivation();
   const info = createMemo(() =>
@@ -475,6 +480,39 @@ function BackupStatusCell(props: {
           </div>
         )}
       </Show>
+      <Show when={evidenceProps.dialog && !hasCompletedBackup()}>
+        {/* The shield has a completion time, not an inventory read result.
+            Backups owns that evidence; don't infer the cause or fetch it here. */}
+        <a
+          href={buildProxmoxBackupsPath()}
+          state={JSON.stringify(PROXMOX_BACKUPS_INSPECTION_STATE)}
+          class={`${EXTERNAL_TEXT_LINK_BASE_CLASS} ${EXTERNAL_TEXT_LINK_VARIANT_CLASSES.compactAction} -mx-1 underline`}
+          ref={(link) => {
+            onCleanup(() => {
+              // A new completed time can retire the focused link while the
+              // dialog is still open. Keep the keyboard inside its owner.
+              if (detailsOpen() && document.activeElement === link && closeButton?.isConnected) {
+                closeButton.focus({ preventScroll: true });
+              }
+            });
+          }}
+          onClick={(event) => {
+            // Overview can stay mounted when switching Proxmox tabs.
+            // Leave the dialog alone for modified clicks opening another tab.
+            if (
+              event.button === 0 &&
+              !event.altKey &&
+              !event.ctrlKey &&
+              !event.metaKey &&
+              !event.shiftKey
+            ) {
+              setDetailsOpen(false);
+            }
+          }}
+        >
+          Check Proxmox backup coverage
+        </a>
+      </Show>
     </div>
   );
   const focusClass =
@@ -535,6 +573,7 @@ function BackupStatusCell(props: {
           <div class="flex items-center justify-between gap-3 border-b border-border px-4 py-2">
             <h2 class="text-sm font-semibold text-base-content">Backup status</h2>
             <button
+              ref={closeButton}
               type="button"
               aria-label="Close backup details"
               class="min-h-11 rounded-sm px-3 text-xs text-muted hover:bg-surface-hover focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500"

@@ -33,6 +33,9 @@ const savedConfig = {
   tagFilter: ['production'],
   tagFilterMode: 'any',
   minimumSeverity: 'warning',
+  subjectPrefix: '',
+  brandName: '',
+  footerNote: '',
 };
 
 function writtenEmailConfig() {

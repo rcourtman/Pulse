@@ -10643,9 +10643,11 @@ When standalone VMs exist (or `/standalone/vms` is opened directly), Machines
 exposes an evidence-gated `VMs` tab rendered by
 `StandaloneVirtualMachinesTable.tsx`, and `AgentsMachinesTable.tsx` displays a
 single-line desktop/tablet `N VM(s)` pill beside hosts that own VMs linking to
-`/standalone/vms?host=<id>`. `resourcePagePath.ts` routes standalone `vm`
-resources to `/standalone/vms?q=<name>`, and `ResourceDetailSummary.tsx`
-renders hypervisor, parent host, vCPU, and RAM facts in the VM drawer.
+`/standalone/vms?host=<id>`. `resourcePagePath.ts` routes standalone `vm` resources to `/standalone/vms?q=<name>`,
+`frontend-modern/src/routing/resourceLinks.ts` retains both
+`STANDALONE_QUERY_PARAMS.host`/`buildStandaloneHostVmsPath` and
+`PROXMOX_BACKUPS_INSPECTION_STATE`, and `ResourceDetailSummary.tsx` renders
+hypervisor, parent host, vCPU, and RAM facts in the VM drawer.
 `internal/unifiedresources/libvirt.go` projects memory metrics via
 `models.HostLibvirtDomain.MemoryUsage()`. Verified by
 `TestLibvirtMemoryPrefersBalloonUsableAndZerosShutoff`,

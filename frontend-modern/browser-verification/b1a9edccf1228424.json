@@ -1,0 +1,45 @@
+{
+  "version": 1,
+  "base_sha": "eee61de0cad16577a7c23ab39a4cc0dee53658ef",
+  "verified_at": "2026-11-21T22:47:21Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/api/notifications.ts",
+    "frontend-modern/src/components/Alerts/EmailProviderSelect.tsx",
+    "frontend-modern/src/features/alerts/alertDestinationsModel.ts",
+    "frontend-modern/src/features/alerts/helpers.ts",
+    "frontend-modern/src/utils/alertEmailPresentation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/api/notifications.ts": "b37d713d8c46d3246c7a8d8bc83415de2884b0d2a364bfadcb287c3b54d25a05",
+    "frontend-modern/src/components/Alerts/EmailProviderSelect.tsx": "d3fdbb16860721ceaa7f48c8af565b14364afa83a15eaaf683fbbc247aab0fa0",
+    "frontend-modern/src/features/alerts/alertDestinationsModel.ts": "8d97f30c72f7ac5a96ef8c2bf5f26b3e61bee2693f79eb3f3175a457b2698a87",
+    "frontend-modern/src/features/alerts/helpers.ts": "10fc0123b3665bc290c801ea4ac6ab1a228fa61787a3bdcf800214fcea78b611",
+    "frontend-modern/src/utils/alertEmailPresentation.ts": "1dcfab0a7132c21ca13b59ee8327b61370c6b7bc6d62c6a66f06dc9e2b4a8ba7"
+  },
+  "routes": [
+    "/alerts/notifications"
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Email destination panel with Advanced options collapsed by default hiding Subject prefix, Brand name, and Footer note (desktop 1280x900 light)",
+    "Email destination panel with Advanced options expanded displaying Email branding & subject inputs and Send test email confirmation toast (desktop 1280x900 light)",
+    "Email destination panel with Advanced options expanded and persisted branding values after save and page reload (desktop 1280x900 dark)",
+    "Email destination panel with Advanced options expanded stacking branding inputs in a single column with zero horizontal overflow (mobile 390x844 light)"
+  ],
+  "interactions": [
+    "opened /alerts/notifications and confirmed Subject prefix, Brand name, and Footer note are absent while Advanced options is collapsed",
+    "clicked Show advanced options, entered [Acme Ops], Acme Infrastructure, and Escalation desk: https://wiki.acme.invalid/alerts, clicked Send test email, and verified POST /api/notifications/test carried all three draft fields",
+    "clicked Save, verified PUT /api/notifications/email persisted all three fields, reloaded /alerts/notifications, re-expanded Show advanced options, confirmed all three values persisted, and toggled Hide advanced options to re-collapse",
+    "verified dark mode contrast/alignment at 1280x900 and responsive single-column layout with zero horizontal overflow and zero page errors at 390x844"
+  ]
+}

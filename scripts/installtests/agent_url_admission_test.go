@@ -62,7 +62,7 @@ PULSE_URL=%q
 %s
 auto_enable_insecure_for_plain_http_url
 printf 'INSECURE=%%s\n' "$INSECURE"
-validate_staged_agent_url %q
+validate_staged_agent_url %q download
 printf 'ADMITTED\n'
 `, tc.url, functions.String(), binary)
 			runCtx, stop := context.WithTimeout(context.Background(), 15*time.Second)

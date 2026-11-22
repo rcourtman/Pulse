@@ -1,3 +1,5 @@
+import type { SSOProviderTestSource } from '@/components/Settings/ssoProvidersModel';
+
 export type SSOProviderType = 'oidc' | 'saml';
 
 export interface SSOProviderFeatureGateCopy {
@@ -110,6 +112,67 @@ export function getSSOConnectionTestFailureMessage(message: string): string {
 
 export function getSSOConnectionTestErrorMessage(): string {
   return 'Unable to run the connection test.';
+}
+
+export function getSSODraftTestFinding(source: SSOProviderTestSource, body: unknown) {
+  // Classify only structured findings for the source that was checked.
+  // Provider text, URLs, XML and error details do not belong in this result.
+  if (
+    body === null ||
+    typeof body !== 'object' ||
+    !('success' in body) ||
+    body.success !== false ||
+    !('error' in body)
+  ) {
+    return null;
+  }
+  const finding = (failureLabel: string, message: string) => ({
+    failureLabel,
+    message: `${message} Nothing saved. Sign-in not tested.`,
+  });
+  const code = body.error;
+  switch (source) {
+    case 'oidc-issuer':
+      return code === 'issuer_mismatch'
+        ? finding('Issuer mismatch', 'Check the exact Issuer URL in your IdP settings.')
+        : null;
+    case 'saml-metadata-url':
+      switch (code) {
+        case 'invalid_url':
+          return finding('Invalid metadata URL', 'Enter a full HTTP or HTTPS IdP Metadata URL.');
+        case 'fetch_failed':
+          return finding(
+            'Metadata not read',
+            'Check that Pulse can read SAML XML from the IdP Metadata URL.',
+          );
+        case 'metadata_incomplete':
+          return finding(
+            'Metadata incomplete',
+            'Use IdP metadata with an entity ID and SSO URL, not SP metadata.',
+          );
+        default:
+          return null;
+      }
+    case 'saml-metadata-xml':
+      switch (code) {
+        case 'parse_failed':
+          return finding(
+            'Invalid metadata XML',
+            'Saved metadata XML is unreadable. Test an IdP Metadata URL instead.',
+          );
+        case 'metadata_incomplete':
+          return finding(
+            'Metadata incomplete',
+            'Saved XML needs an IdP identity and SSO URL. Test an IdP Metadata URL instead.',
+          );
+        default:
+          return null;
+      }
+    case 'saml-manual-url':
+      return code === 'invalid_url'
+        ? finding('Invalid SSO URL', 'Enter a full HTTP or HTTPS IdP SSO URL.')
+        : null;
+  }
 }
 
 export function getSSOMetadataUrlRequiredMessage(): string {

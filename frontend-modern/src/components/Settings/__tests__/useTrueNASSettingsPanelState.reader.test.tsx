@@ -326,6 +326,7 @@ describe('TrueNAS reader lifetime', () => {
     test.resolve({ success: true } as never);
     expect(await b).toBe(false);
     expect(result.testing()).toBe(false);
+    expect(result.connectionFeedback()).toBeNull();
     expect(notificationStore.success).not.toHaveBeenCalled();
   });
 
@@ -367,6 +368,7 @@ describe('TrueNAS reader lifetime', () => {
           expect(result.form().username).toBe('');
           expect(result.monitoredSystemPreview()).toBeNull();
           expect(result.monitoredSystemPreviewError()).toBeNull();
+          expect(result.connectionFeedback()).toBeNull();
           expect(result.loadingError()).toContain('access could not be verified');
           expect(result.testing() || result.previewing()).toBe(false);
           expect(notificationStore.success).not.toHaveBeenCalled();
@@ -387,7 +389,7 @@ describe('TrueNAS reader lifetime', () => {
             success: true,
           } as never);
           expect(await result.testCurrentForm()).toBe(true);
-          expect(notificationStore.success).toHaveBeenCalledWith('TrueNAS connection successful');
+          expect(result.connectionFeedback()).toEqual({ kind: 'passed' });
         });
 
   for (const action of ['Test', 'Preview'] as const)
@@ -439,6 +441,7 @@ describe('TrueNAS reader lifetime', () => {
       expect(result.form().apiKey).toBe('synthetic-draft');
       expect(result.loadingError()).toBeNull();
       expect(result.monitoredSystemPreviewError()).toBeNull();
+      expect(result.connectionFeedback()).toBeNull();
       expect(result.testing() || result.previewing()).toBe(false);
       expect(notificationStore.error).not.toHaveBeenCalled();
       expect(logger.error).not.toHaveBeenCalled();

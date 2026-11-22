@@ -111,6 +111,11 @@ func emailSubjectIdentities(alertList []*alerts.Alert) string {
 // This is email-only. Other destinations keep their own resolution titles and
 // all destinations keep the existing occurrence-qualified recovery admission.
 func resolvedEmailSubject(alertList []*alerts.Alert) string {
+	return resolvedEmailSubjectWithBranding(alertList, EmailBranding{})
+}
+
+func resolvedEmailSubjectWithBranding(alertList []*alerts.Alert, branding EmailBranding) string {
+	normalized := NormalizeEmailBranding(branding)
 	var primary *alerts.Alert
 	count := 0
 	for _, alert := range alertList {
@@ -124,11 +129,21 @@ func resolvedEmailSubject(alertList []*alerts.Alert) string {
 	if count == 0 {
 		return ""
 	}
-	prefix := "Pulse alert resolved"
-	if count > 1 {
-		prefix = fmt.Sprintf("Pulse alerts resolved (%d)", count)
-	} else if primary.Resolution.Outcome() != "" {
-		prefix = "Pulse alert moved"
+	var prefix string
+	if normalized.SubjectPrefix != "" {
+		prefix = normalized.SubjectPrefix + " Alert resolved"
+		if count > 1 {
+			prefix = fmt.Sprintf("%s Alerts resolved (%d)", normalized.SubjectPrefix, count)
+		} else if primary.Resolution.Outcome() != "" {
+			prefix = normalized.SubjectPrefix + " Alert moved"
+		}
+	} else {
+		prefix = "Pulse alert resolved"
+		if count > 1 {
+			prefix = fmt.Sprintf("Pulse alerts resolved (%d)", count)
+		} else if primary.Resolution.Outcome() != "" {
+			prefix = "Pulse alert moved"
+		}
 	}
 	return prefix + ": " + emailSubjectIdentities(alertList)
 }

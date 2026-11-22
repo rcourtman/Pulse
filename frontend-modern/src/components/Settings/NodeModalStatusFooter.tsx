@@ -40,7 +40,13 @@ export const NodeModalStatusFooter: Component<NodeModalStatusFooterProps> = (pro
           });
           return null;
         })()}
-        <div class={state.testResultPresentation().panelClass}>
+        <div
+          class={state.testResultPresentation().panelClass}
+          role="status"
+          aria-label="Connection test result"
+          aria-live="polite"
+          aria-atomic="true"
+        >
           <div class="flex items-start gap-2">
             <Show when={state.testResultPresentation().icon === 'success'}>
               <svg
@@ -88,7 +94,7 @@ export const NodeModalStatusFooter: Component<NodeModalStatusFooterProps> = (pro
               <p>{state.testResult()?.message}</p>
               <Show when={state.testResult()?.isCluster}>
                 <p class="mt-1 text-xs opacity-80">
-                  ✨ Cluster detected! All cluster nodes will be automatically added.
+                  Cluster detected. Peer access unconfirmed. Not saved.
                 </p>
               </Show>
               <Show when={state.testResult()?.warnings && state.testResult()!.warnings!.length > 0}>

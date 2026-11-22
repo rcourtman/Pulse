@@ -280,7 +280,24 @@ describe('useTrueNASSettingsPanelState', () => {
       }),
     );
     expect(TrueNASAPI.testConnection).not.toHaveBeenCalled();
-    expect(notificationStore.success).toHaveBeenCalledWith('TrueNAS connection successful');
+    expect(result.connectionFeedback()).toEqual({ kind: 'passed' });
+    expect(notificationStore.success).not.toHaveBeenCalled();
+  });
+
+  it('does not treat an unconfirmed reply as a successful test and clears it on close', async () => {
+    vi.mocked(TrueNASAPI.listConnections).mockResolvedValueOnce([]);
+    vi.mocked(TrueNASAPI.testConnection).mockResolvedValueOnce({ success: false });
+    const { result } = renderHook(() => useTrueNASSettingsPanelState());
+    await waitFor(() => expect(result.loading()).toBe(false));
+    result.openCreateDialog();
+    result.updateForm({ host: 'tower.local', apiKey: 'secret', username: 'monitor' });
+
+    expect(await result.testCurrentForm()).toBe(false);
+    expect(result.connectionFeedback()).toEqual({ kind: 'unconfirmed' });
+    expect(notificationStore.success).not.toHaveBeenCalled();
+    result.closeDialog();
+    result.openCreateDialog();
+    expect(result.connectionFeedback()).toBeNull();
   });
 
   it('saves a connection without requiring a monitored-system preview', async () => {
@@ -326,9 +343,10 @@ describe('useTrueNASSettingsPanelState', () => {
 
     expect(await result.testCurrentForm()).toBe(false);
     expect(TrueNASAPI.testConnection).not.toHaveBeenCalled();
-    expect(notificationStore.error).toHaveBeenCalledWith(
-      'TrueNAS API key owner username is required for supported authentication',
-    );
+    expect(result.connectionFeedback()).toEqual({
+      kind: 'failed',
+      detail: 'TrueNAS API key owner username is required for supported authentication',
+    });
   });
 
   it('previews monitored-system impact through the canonical TrueNAS preview path', async () => {

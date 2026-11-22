@@ -29,6 +29,19 @@ export const ALERT_EMAIL_RATE_LIMIT_LABEL = 'Rate limit';
 export const ALERT_EMAIL_RATE_LIMIT_SUFFIX = '/min';
 export const ALERT_EMAIL_RETRY_POLICY_HELP =
   'Email retries are managed by Pulse, not by this form.';
+export const ALERT_EMAIL_BRANDING_HEADING = 'Email branding & subject';
+export const ALERT_EMAIL_BRANDING_HELP =
+  'Customize how alert emails appear in your inbox. Leave blank to use the default Pulse wording.';
+export const ALERT_EMAIL_SUBJECT_PREFIX_LABEL = 'Subject prefix';
+export const ALERT_EMAIL_SUBJECT_PREFIX_PLACEHOLDER = '[Pulse Alert]';
+export const ALERT_EMAIL_SUBJECT_PREFIX_MAX_LENGTH = 64;
+export const ALERT_EMAIL_BRAND_NAME_LABEL = 'Brand name';
+export const ALERT_EMAIL_BRAND_NAME_PLACEHOLDER = 'Pulse Monitoring';
+export const ALERT_EMAIL_BRAND_NAME_MAX_LENGTH = 80;
+export const ALERT_EMAIL_FOOTER_NOTE_LABEL = 'Footer note';
+export const ALERT_EMAIL_FOOTER_NOTE_PLACEHOLDER =
+  'Optional plain-text note shown in the email footer';
+export const ALERT_EMAIL_FOOTER_NOTE_MAX_LENGTH = 240;
 export const ALERT_EMAIL_TEST_LABEL = 'Send test email';
 export const ALERT_EMAIL_TESTING_LABEL = 'Sending test email…';
 

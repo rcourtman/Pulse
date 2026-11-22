@@ -1,4 +1,4 @@
-import { createEffect, createMemo, createSignal, onCleanup } from 'solid-js';
+import { createEffect, createMemo, createSignal, on, onCleanup } from 'solid-js';
 import type { ClusterEndpoint, NodeConfig } from '@/types/nodes';
 
 import { notificationStore } from '@/stores/notifications';
@@ -32,10 +32,82 @@ type NodeModalTestResult = {
 
 const PROXMOX_SETUP_HOST_REQUIRED_MESSAGE = 'Proxmox setup host is required';
 
+const savedEditorAuthentication = (
+  node: Partial<NodeConfig>,
+): Pick<NodeModalFormData, 'authType' | 'user' | 'tokenName'> => {
+  const tokenName = node.tokenName ?? '';
+  const usesTokenUsername = node.type !== 'pve' && !node.hasPassword && tokenName.includes('!');
+  return {
+    // PMG's editor offers password entry even for a saved API token. Compare
+    // against the displayed username, not the stored token row's user field.
+    authType: node.type === 'pmg' || node.hasPassword ? 'password' : 'token',
+    user: usesTokenUsername ? tokenName.split('!', 1)[0] : (node.user ?? ''),
+    tokenName,
+  };
+};
+
+const matchesSavedAuthentication = (draft: NodeModalFormData, saved: NodeConfig) => {
+  const authentication = savedEditorAuthentication(saved);
+  return (
+    draft.authType === authentication.authType &&
+    (draft.authType === 'password'
+      ? draft.user === authentication.user
+      : draft.tokenName === authentication.tokenName)
+  );
+};
+
+const incompleteDraftTestMessage = (draft: NodeModalFormData) => {
+  if (draft.authType === 'password') {
+    return draft.user ? 'Test needs a password.' : 'Test needs a username and password.';
+  }
+  return draft.tokenName ? 'Test needs a token value.' : 'Test needs a token ID and value.';
+};
+
 export const useNodeModalState = (props: NodeModalProps) => {
   const [testResult, setTestResult] = createSignal<NodeModalTestResult | null>(null);
   const [isTesting, setIsTesting] = createSignal(false);
   let probeGeneration = 0;
+  const invalidateConnectionTest = () => {
+    probeGeneration++;
+    setTestResult(null);
+  };
+
+  // The editor can stay mounted as the saved connection is refreshed. Compare
+  // its connection settings, not snapshot identity or live member health.
+  const probeSourceSignature = createMemo(() => {
+    const editingNode = props.editingNode;
+    const node = editingNode ?? props.prefillNode;
+    const peers = node && 'clusterEndpoints' in node ? node.clusterEndpoints : undefined;
+    return JSON.stringify([
+      props.isOpen,
+      props.resetKey,
+      props.nodeType,
+      editingNode?.id,
+      Boolean(node),
+      node?.id,
+      node?.host,
+      node?.user,
+      node?.tokenName,
+      node?.hasPassword,
+      node?.hasToken,
+      node?.verifySSL,
+      node && 'fingerprint' in node ? node.fingerprint : undefined,
+      peers
+        ?.map((peer) =>
+          JSON.stringify([
+            peer.nodeName,
+            peer.tlsEndpoint,
+            peer.ipOverride,
+            peer.usesPrimaryTLS,
+            peer.tlsFirstUse,
+            peer.fingerprint,
+          ]),
+        )
+        .sort() ?? [],
+    ]);
+  });
+  createEffect(on(probeSourceSignature, invalidateConnectionTest, { defer: true }));
+
   const [formData, setFormData] = createSignal<NodeModalFormData>(
     getNodeModalDefaultFormData(props.nodeType),
   );
@@ -101,6 +173,7 @@ export const useNodeModalState = (props: NodeModalProps) => {
   const bootstrapActive = (generation: number) =>
     generation === bootstrapGeneration && props.isOpen !== false;
   onCleanup(() => {
+    probeGeneration++;
     bootstrapGeneration++;
     clearQuickSetupState();
   });
@@ -291,7 +364,6 @@ export const useNodeModalState = (props: NodeModalProps) => {
       previousResetKey = key;
       setFormData(() => getNodeModalDefaultFormData(props.nodeType));
       clearQuickSetupState();
-      setTestResult(null);
       previousFormSourceSignature = null;
       previousFormSourceIdentity = null;
       formEditedByUser = false;
@@ -302,7 +374,6 @@ export const useNodeModalState = (props: NodeModalProps) => {
       previousNodeType = nodeType;
       setFormData(() => getNodeModalDefaultFormData(props.nodeType));
       clearQuickSetupState();
-      setTestResult(null);
       previousFormSourceSignature = null;
       previousFormSourceIdentity = null;
       formEditedByUser = false;
@@ -313,7 +384,6 @@ export const useNodeModalState = (props: NodeModalProps) => {
     if (isOpen && !editingNode && !prefillNode) {
       setFormData(() => getNodeModalDefaultFormData(props.nodeType));
       clearQuickSetupState();
-      setTestResult(null);
       previousFormSourceSignature = null;
       previousFormSourceIdentity = null;
       formEditedByUser = false;
@@ -337,16 +407,6 @@ export const useNodeModalState = (props: NodeModalProps) => {
       formEditedByUser = false;
     } else if (formEditedByUser) {
       return;
-    }
-
-    let username = ('user' in node ? node.user : '') || '';
-    const tokenName = node.tokenName || '';
-
-    const usesToken =
-      node.type !== 'pve' && tokenName && tokenName.includes('!') && !node.hasPassword;
-    if (usesToken) {
-      const parts = tokenName.split('!');
-      username = parts[0];
     }
 
     const pveConfig =
@@ -385,11 +445,9 @@ export const useNodeModalState = (props: NodeModalProps) => {
       name: node.name || '',
       host: node.host || '',
       guestURL: ('guestURL' in node ? node.guestURL : '') || '',
-      authType: node.type === 'pmg' ? 'password' : node.hasPassword ? 'password' : 'token',
+      ...savedEditorAuthentication(node),
       setupMode: node.source === 'agent' ? 'agent' : 'auto',
-      user: username,
       password: '',
-      tokenName,
       tokenValue: '',
       fingerprint: ('fingerprint' in node ? node.fingerprint : '') || '',
       verifySSL: node.verifySSL ?? true,
@@ -536,8 +594,7 @@ export const useNodeModalState = (props: NodeModalProps) => {
 
   const updateField = (field: string, value: string | boolean | number) => {
     formEditedByUser = true;
-    probeGeneration++;
-    setTestResult(null);
+    invalidateConnectionTest();
     if (field === 'host' && typeof value === 'string') {
       setFormData((prev) => {
         const next = { ...prev, host: value };
@@ -567,8 +624,7 @@ export const useNodeModalState = (props: NodeModalProps) => {
 
   const updateClusterEndpointOverride = (nodeName: string, value: string) => {
     formEditedByUser = true;
-    probeGeneration++;
-    setTestResult(null);
+    invalidateConnectionTest();
     setFormData((prev) => ({
       ...prev,
       clusterEndpointOverrides: { ...prev.clusterEndpointOverrides, [nodeName]: value },
@@ -585,8 +641,7 @@ export const useNodeModalState = (props: NodeModalProps) => {
 
   const updateClusterEndpointFingerprint = (endpoint: string, value: string) => {
     formEditedByUser = true;
-    probeGeneration++;
-    setTestResult(null);
+    invalidateConnectionTest();
     setFormData((prev) => ({
       ...prev,
       clusterEndpointFingerprints: { ...prev.clusterEndpointFingerprints, [endpoint]: value },
@@ -594,13 +649,36 @@ export const useNodeModalState = (props: NodeModalProps) => {
     }));
   };
 
+  const beginConnectionTest = () => {
+    const generation = ++probeGeneration;
+    setIsTesting(true);
+    setTestResult(null);
+    return generation;
+  };
+
   const testSavedEndpoint = async (endpoint?: ClusterEndpoint) => {
+    const saved = props.editingNode;
+    if (isTesting() || !props.isOpen || !saved?.id || (endpoint && !endpoint.tlsEndpoint)) return;
     const data = formData();
+    // The saved probe takes TLS edits only. A blank secret is permission to
+    // reuse saved credentials only for the matching identity, not for a draft.
     if (
-      data.host !== props.editingNode?.host ||
-      (endpoint &&
-        (data.clusterEndpointOverrides[endpoint.nodeName] ?? '') !== (endpoint.ipOverride ?? '')) ||
+      !matchesSavedAuthentication(data, saved) ||
       (endpoint && (data.password || data.tokenValue))
+    ) {
+      setTestResult({
+        endpoint: endpoint?.tlsEndpoint,
+        status: 'warning',
+        message: endpoint
+          ? 'Member tests use saved credentials. Restore the saved authentication to test this member now.'
+          : incompleteDraftTestMessage(data),
+      });
+      return;
+    }
+    if (
+      data.host !== saved.host ||
+      (endpoint &&
+        (data.clusterEndpointOverrides[endpoint.nodeName] ?? '') !== (endpoint.ipOverride ?? ''))
     ) {
       setTestResult({
         endpoint: endpoint?.tlsEndpoint,
@@ -610,12 +688,9 @@ export const useNodeModalState = (props: NodeModalProps) => {
       });
       return;
     }
-    if (endpoint && !endpoint.tlsEndpoint) return;
-    const generation = ++probeGeneration;
-    setIsTesting(true);
-    setTestResult(null);
+    const generation = beginConnectionTest();
     try {
-      const result = await NodesAPI.testExistingNode(props.editingNode!.id, {
+      const result = await NodesAPI.testExistingNode(saved.id, {
         verifySSL: data.verifySSL,
         ...(!endpoint || endpoint.usesPrimaryTLS
           ? { fingerprint: data.fingerprint }
@@ -650,6 +725,7 @@ export const useNodeModalState = (props: NodeModalProps) => {
   const handleTestClusterEndpoint = (endpoint: ClusterEndpoint) => testSavedEndpoint(endpoint);
 
   const handleTestConnection = async () => {
+    if (isTesting() || !props.isOpen) return;
     const data = formData();
     const normalizedName = data.name.trim() || deriveNameFromHost(data.host);
 
@@ -698,11 +774,10 @@ export const useNodeModalState = (props: NodeModalProps) => {
       testData.tokenValue = data.tokenValue;
     }
 
-    setIsTesting(true);
-    setTestResult(null);
-
+    const generation = beginConnectionTest();
     try {
       const result = await NodesAPI.testConnection(testData as NodeConfig);
+      if (generation !== probeGeneration) return;
       setTestResult({
         status: result.warnings && result.warnings.length > 0 ? 'warning' : 'success',
         message: result.message || 'Connection successful',
@@ -710,6 +785,7 @@ export const useNodeModalState = (props: NodeModalProps) => {
         warnings: result.warnings,
       });
     } catch (error) {
+      if (generation !== probeGeneration) return;
       logger.error('Test connection error:', error);
       let errorMessage = 'Connection failed';
       if (error instanceof Error) {

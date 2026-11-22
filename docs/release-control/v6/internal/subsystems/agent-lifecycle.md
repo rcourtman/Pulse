@@ -715,7 +715,13 @@ The connection editor exposes each member's actual runtime TLS endpoint.
 Its pin/CA controls submit only deliberately edited scopes, distinguish unknown
 first-use trust, and leave primary and other-member policy independent. Tests
 read the nodes API without enrolling agents or mutating background health.
-Address/credential changes must be saved before a stored-credential probe.
+The editor uses the stored-credential probe only for the saved address and
+matching authentication fields, even when trust settings are edited. For a
+saved token-only PMG connection, the unchanged username shown by the editor
+comes from the Token ID, not the stored user field. An edited identity needs
+its matching secret for the primary Test action; an incomplete password or
+token draft is not tested with saved credentials. Member probes use saved
+credentials and do not report on edited authentication.
 The configured-node readback test and desktop/narrow consumer proof cover the
 saved policy and preservation of disabled collection, not installed recovery.
 
@@ -1553,6 +1559,20 @@ unchanged. The connections continuity test seeds its success from a real local
 runtime poll rather than a probe-shaped synthetic success. The API contract
 control retains a runtime inventory error despite a subsequent successful
 system-information probe; no synthetic success establishes installed acceptance.
+
+The TrueNAS connection editor reports a successful draft test only as a system
+information read: it does not verify selected pools, datasets, replication or
+metrics, or save the draft. A reply without explicit success is unconfirmed.
+Feedback belongs to the current draft and reader; editing or leaving the form
+clears it. On the editor's Test or Save request only, HTTP 403 with the
+structured `destination_not_allowed` code means Pulse refused the address, not
+that it lost access to Settings. Keep the draft and show the refusal and the
+fact that nothing was saved. Do not retry automatically or change destination
+policy. Normal sign-in recovery and settings-access withdrawal still apply to
+other 401/403 responses, even if the draft has changed. The transport tests exercise both Add
+and Manage, verify one request per action, and check that an obsolete refusal
+does not apply to a changed address. Keep feedback next to the existing editor
+actions without replacing scope or saved-transport details, or hiding actions.
 
 ### Podman interval CPU evidence — issue #2447
 
@@ -5161,7 +5181,12 @@ unauthenticated bootstrap behavior.
     delete-error, and probe guidance notices in the connection editor may
     compose frontend-primitives' `CalloutCard`; agent-lifecycle owns the
     selected-source lifecycle semantics and form handoff, not colored local
-    notice shells. The add flow
+    notice shells. Auto-detection candidates, errors and no-match actions
+    belong to the last submitted address. A change to the trimmed address
+    retires them until another probe; whitespace-only edits do not. A retired
+    request cannot populate a later attempt, even for the same address.
+    `ConnectionEditor.test.tsx` covers the candidate handoff and these result
+    lifetimes. The add flow
     must not reintroduce the full per-type workspace (Proxmox discovery
     card, configured nodes table, node-modal stack; TrueNAS/VMware
     connection list with headers and row actions) into the credential
@@ -8123,12 +8148,19 @@ saved-connection preview/test/update payloads must preserve stored enablement
 unless the caller explicitly changes it, so setup surfaces do not accidentally
 preview an unchanged active connection as inactive just because JSON omitted a
 bool field.
-The VMware credential editor must also distinguish required-floor failure from
-optional enrichment degradation. When the canonical connection-test response
-is successful but `degraded`, the editor must keep the exact upstream
-diagnostic visible in a limited-data warning and identify the negotiated VI
-JSON release when available; it must not show the test as fully green or route
-the warning through the hard-failure presentation.
+The VMware credential editor reports the outcome of testing this draft beside
+the actions, without a duplicate toast. On narrow screens, the result, scope
+choices and individual test and save actions remain readable together.
+Only a confirmed success can show
+passed API checks. A successful but `degraded` reply keeps the upstream
+diagnostic visible in a limited-data warning and identifies the negotiated VI
+JSON release when available. A reply without success confirmation is distinct
+from a categorized connection failure and from passing checks.
+The test signs in and checks basic inventory and APIs independently of the
+collection checkboxes, does not confirm full monitoring coverage, and does not
+save the draft. Changes to the draft or its reader clear or invalidate the
+result. `VMwareDestinationFeedback.transport.test.tsx` verifies those
+distinctions through the editor and canonical HTTP consumer.
 That same validation contract must stay coherent across the public
 `/api/auto-register` route and the direct canonical handler path used by the
 same runtime surface, so Unified Agent/setup entry points do not inherit divergent
@@ -12215,6 +12247,14 @@ Verified by `TestHandleAgentInstallCommand_CustomAgentURLOverride`,
 `useNodeModalState.agentInstall.test.ts`, `settingsArchitecture.test.ts`, and
 `frontend-modern/browser-verification/9734d949f31f8828.json`.
 
+
+### Email notification branding compatibility
+
+`PUT /api/notifications/email` (`internal/api/alerting/notifications.go`) adds
+optional structured email branding fields (`subjectPrefix`, `brandName`,
+`footerNote`) normalized via `EmailConfig.Branding()` with omitted-field
+preservation. Agent-lifecycle routes, credentials, and alerting hooks under
+`internal/api/` are unchanged (`internal/api/alerting/email_branding_test.go`).
 
 ### Agent libvirt virtio-balloon guest memory counters (22 November 2026)
 

@@ -361,6 +361,9 @@ type EmailConfig struct {
 	TagFilter       []string `json:"tagFilter,omitempty"`
 	TagMode         string   `json:"tagFilterMode,omitempty"`   // "all" (default) or "any"
 	MinimumSeverity string   `json:"minimumSeverity,omitempty"` // "all" (default), "warning", or "critical"
+	SubjectPrefix   string   `json:"subjectPrefix,omitempty"`   // Optional custom subject prefix (replaces "[Pulse Alert]")
+	BrandName       string   `json:"brandName,omitempty"`       // Optional custom header/footer brand name (replaces "Pulse Monitoring")
+	FooterNote      string   `json:"footerNote,omitempty"`      // Optional plain-text note appended to email footers
 }
 
 // WebhookConfig holds webhook settings
@@ -421,6 +424,10 @@ func normalizeEmailConfig(cfg EmailConfig) EmailConfig {
 	normalized.From = strings.TrimSpace(normalized.From)
 	normalized.TagFilter = normalizeNotificationTagFilter(normalized.TagFilter)
 	normalized.MinimumSeverity = normalizeNotificationMinimumSeverity(normalized.MinimumSeverity)
+	branding := normalized.Branding()
+	normalized.SubjectPrefix = branding.SubjectPrefix
+	normalized.BrandName = branding.BrandName
+	normalized.FooterNote = branding.FooterNote
 	if len(normalized.TagFilter) == 0 {
 		normalized.TagMode = ""
 	} else {

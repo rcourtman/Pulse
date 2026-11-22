@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { InfrastructurePlatformSettingsProps } from '@/components/Settings/proxmoxSettingsModel';
 import type { NodeConfigWithStatus } from '@/types/nodes';
 import { MonitoredSystemLedgerAPI } from '@/api/monitoredSystemLedger';
+import { NodesAPI } from '@/api/nodes';
 import { NodeCredentialSlot } from '../NodeCredentialSlot';
 
 const importApprovalRequiredMessage =
@@ -244,6 +245,108 @@ describe('NodeCredentialSlot', () => {
     fireEvent.input(name, { target: { value: 'Rack A' } });
     fireEvent.input(endpoint, { target: { value: 'https://pve2.local:8006' } });
     expect(name).toHaveValue('Rack A');
+  });
+
+  it('shows reported cluster membership without claiming wider access or a save', async () => {
+    const settings = createSettings();
+    const testConnection = vi.spyOn(NodesAPI, 'testConnection').mockResolvedValue({
+      status: 'success',
+      message: 'Nodes reported: 2. Polling not tested.',
+      isCluster: true,
+      nodeCount: 2,
+      clusterNodeCount: 2,
+    });
+    render(() => (
+      <NodeCredentialSlot
+        nodeType="pve"
+        settings={settings}
+        prefillNode={{ type: 'pve', host: 'https://cluster.example.test:8006' }}
+        onCancel={vi.fn()}
+        onSaved={vi.fn()}
+      />
+    ));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Manual Token Setup' }));
+    fireEvent.input(screen.getByLabelText(/^Token ID/), {
+      target: { value: 'fixture@pve!pulse' },
+    });
+    fireEvent.input(screen.getByLabelText(/^Token Value/), {
+      target: { value: 'fixture-token' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Test connection' }));
+
+    expect(await screen.findByText(/Nodes reported: 2/)).toBeVisible();
+    expect(screen.getByText(/Cluster detected.*Peer access unconfirmed/)).toHaveTextContent(
+      'Not saved.',
+    );
+    expect(screen.getByRole('checkbox', { name: 'Verify SSL certificate' })).toBeChecked();
+    expect(screen.getByRole('button', { name: 'Add node' })).toBeEnabled();
+    expect(testConnection).toHaveBeenCalledOnce();
+    expect(settings.saveNode).not.toHaveBeenCalled();
+  });
+
+  it('keeps the edited Token ID while asking for its value instead of testing the saved ID', async () => {
+    const settings = createSettings();
+    const savedProbe = vi
+      .spyOn(NodesAPI, 'testExistingNode')
+      .mockResolvedValue({ status: 'success' });
+    const draftProbe = vi.spyOn(NodesAPI, 'testConnection').mockResolvedValue({
+      status: 'success',
+      message: 'Draft endpoint answered',
+    });
+    const node = {
+      id: 'pve-saved',
+      type: 'pve',
+      name: 'Fixture PVE',
+      host: 'https://pve.example.test:8006',
+      tokenName: 'fixture@pve!saved',
+      hasToken: true,
+      verifySSL: true,
+      status: 'connected',
+    } as NodeConfigWithStatus;
+    render(() => (
+      <NodeCredentialSlot
+        nodeType="pve"
+        settings={settings}
+        editingNode={node}
+        onCancel={vi.fn()}
+        onSaved={vi.fn()}
+      />
+    ));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Manual Token Setup' }));
+    const tokenId = screen.getByLabelText(/^Token ID/);
+    fireEvent.input(tokenId, { target: { value: 'fixture@pve!narrow' } });
+    const test = screen.getByRole('button', { name: 'Test connection' });
+    fireEvent.click(test);
+
+    const result = screen.getByRole('status', { name: 'Connection test result' });
+    expect(result).toBeVisible();
+    expect(result).toHaveTextContent('Test needs a token value.');
+    expect(tokenId).toHaveValue('fixture@pve!narrow');
+    expect(savedProbe).not.toHaveBeenCalled();
+    expect(draftProbe).not.toHaveBeenCalled();
+
+    fireEvent.input(screen.getByLabelText(/^Token Value/), {
+      target: { value: 'fixture-only-secret' },
+    });
+    expect(result).not.toBeInTheDocument();
+    fireEvent.click(test);
+
+    await waitFor(() =>
+      expect(screen.getByRole('status', { name: 'Connection test result' })).toHaveTextContent(
+        'Draft endpoint answered',
+      ),
+    );
+    expect(draftProbe).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({
+        tokenName: 'fixture@pve!narrow',
+        tokenValue: 'fixture-only-secret',
+        verifySSL: true,
+      }),
+    );
+    expect(savedProbe).not.toHaveBeenCalled();
+    expect(settings.saveNode).not.toHaveBeenCalled();
   });
 
   it('requires candidate import plan approval before guided setup handoff or manual save', () => {

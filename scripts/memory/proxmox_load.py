@@ -10,13 +10,15 @@ and authentication configured:
 - serves 1 synthetic Proxmox VE cluster (3 nodes, 20 VMs, 15 LXCs, storage,
   guest snapshots, tasks, physical disks) over local HTTP;
 - serves 2 synthetic Proxmox Backup Server instances (2 datastores each,
-  50 snapshots per backup group by default -> 5,250 PBS snapshots total);
+  50 snapshots per backup group by default -> 5,200 PBS snapshots total);
 - registers the PVE cluster and PBS instances via /api/config/nodes;
 - keeps one WebSocket dashboard subscriber connected to /ws.
 
 It runs until --duration elapses or SIGTERM arrives, then writes a JSON stats
-file. It exits 1 when registration failed, PVE or PBS polling did not occur, or
-the dashboard never received an initial state followed by a state update.
+file. It exits 1 when registration failed, PVE or PBS polling did not occur,
+the fixture did not serve snapshots for every configured PBS group, or the
+dashboard lacked the full synthetic PVE inventory with recent poll sightings
+at the end of sampling.
 """
 
 from __future__ import annotations
@@ -43,6 +45,10 @@ from dataclasses import dataclass, field
 STOP = threading.Event()
 DASHBOARD_SOCKETS: set[socket.socket] = set()
 DASHBOARD_LOCK = threading.Lock()
+# The default PVE poll interval is 10 seconds. Allow several cycles of
+# scheduling and delivery slack without accepting the startup roster for RSS
+# measured after collection has stopped.
+GUEST_FRESHNESS_SECONDS = 60
 
 
 class ThreadedHTTPServer(socketserver.ThreadingMixIn, http.server.HTTPServer):
@@ -52,6 +58,7 @@ class ThreadedHTTPServer(socketserver.ThreadingMixIn, http.server.HTTPServer):
 
 @dataclass
 class DashboardStats:
+    expected_guests: set[tuple[str, str]] = field(default_factory=set)
     lock: threading.Lock = field(default_factory=threading.Lock)
     ws_connects: int = 0
     ws_messages: int = 0
@@ -60,6 +67,76 @@ class DashboardStats:
     ws_state_updates: int = 0
     ws_state_bytes: int = 0
     ws_errors: list[str] = field(default_factory=list)
+    resources: dict[str, tuple[str | None, str | None, int | None]] = field(default_factory=dict)
+
+    def update_guests(self, data: dict) -> None:
+        # Existing resource upserts are merge patches. A metrics-only update
+        # neither erases identity nor proves a new guest poll. In this
+        # PVE-only guest estate lastSeen is the collector's sighting, not
+        # updatedAt, the frame time, or a new registration.
+        if "resources" in data:
+            self.resources.clear()
+            rows = data["resources"]
+        else:
+            delta = data.get("resourceDelta")
+            if not isinstance(delta, dict):
+                return
+            removed = delta.get("removed", [])
+            if not isinstance(removed, list) or not all(isinstance(key, str) for key in removed):
+                self.resources.clear()
+                return
+            for resource_id in removed:
+                self.resources.pop(resource_id, None)
+            rows = delta.get("upserts", [])
+        if not isinstance(rows, list):
+            self.resources.clear()
+            return
+        for row in rows:
+            if not isinstance(row, dict) or not isinstance(row.get("id"), str) or not row["id"]:
+                continue
+            resource_id = row["id"]
+            old_technology, old_name, last_seen_ms = self.resources.get(resource_id, (None, None, None))
+            technology = row.get("technology", old_technology)
+            name = row.get("name", old_name)
+            if "lastSeen" in row or (technology, name) != (old_technology, old_name):
+                # /ws carries ResourceFrontend, not the registry Resource:
+                # lastSeen is an integer Unix millisecond, with zero unknown.
+                value = row.get("lastSeen")
+                last_seen_ms = value if type(value) is int and value > 0 else None
+            self.resources[resource_id] = (
+                technology if isinstance(technology, str) else None,
+                name if isinstance(name, str) else None,
+                last_seen_ms,
+            )
+
+    def missing_guests(self) -> set[tuple[str, str]]:
+        return self.expected_guests.difference((tech, name) for tech, name, _ in self.resources.values())
+
+    def missing_recent_guests(self, started: float, finished: float) -> set[tuple[str, str]]:
+        latest_ms = finished * 1000
+        earliest_ms = max(started, finished - GUEST_FRESHNESS_SECONDS) * 1000
+        return self.expected_guests.difference(
+            (tech, name) for tech, name, seen_ms in self.resources.values()
+            if seen_ms is not None and earliest_ms <= seen_ms <= latest_ms
+        )
+
+
+@dataclass
+class SnapshotCoverage:
+    expected_groups: int
+    served_groups: set[tuple[str, str]] = field(default_factory=set)
+
+    def counts(self) -> dict[str, int]:
+        return {"expected_groups": self.expected_groups, "served_groups": len(self.served_groups)}
+
+
+def missing_snapshot_coverage(coverage: dict[str, dict[str, dict[str, int]]]) -> list[str]:
+    return [
+        f"{instance}/{store} {row['served_groups']}/{row['expected_groups']}"
+        for instance, stores in sorted(coverage.items())
+        for store, row in sorted(stores.items())
+        if row["served_groups"] < row["expected_groups"]
+    ]
 
 
 def make_pve_handler(
@@ -111,6 +188,20 @@ def make_pve_handler(
         for guest in lxcs:
             all_guest_refs.append((node, "ct", guest["vmid"], guest["name"]))
 
+    def guest_payload(guest: dict, kind: str, wave: float, now: int) -> dict:
+        is_vm = kind == "qemu"
+        io_scale = 4 if is_vm else 1
+        return {
+            **guest,
+            "cpu": wave * (0.5 if is_vm else 0.3),
+            "mem": int(guest["maxmem"] * ((0.4 if is_vm else 0.3) + 0.1 * wave)),
+            "disk": int(guest["maxdisk"] * (0.35 if is_vm else 0.25)),
+            "diskread": now * 1024 * io_scale,
+            "diskwrite": now * 512 * io_scale,
+            "netin": now * 2048 * io_scale,
+            "netout": now * 1024 * io_scale,
+        }
+
     class PVEHandler(http.server.BaseHTTPRequestHandler):
         protocol_version = "HTTP/1.1"
 
@@ -161,6 +252,21 @@ def make_pve_handler(
                 return self.send_json(data)
             if path == "/cluster/options":
                 return self.send_json({})
+            if path == "/cluster/resources" and urllib.parse.parse_qs(parsed.query).get("type") == ["vm"]:
+                # Pulse treats a successful empty response as authoritative,
+                # not as a request to fall back to the per-node guest lists.
+                return self.send_json([
+                    {
+                        **guest_payload(guest, kind, wave, now),
+                        "type": kind,
+                        "id": f"{kind}/{guest['vmid']}",
+                        "node": node,
+                        "maxcpu": guest["cpus"],
+                    }
+                    for node, (vms, lxcs) in guests_by_node.items()
+                    for kind, guests in (("qemu", vms), ("lxc", lxcs))
+                    for guest in guests
+                ])
             if path == "/nodes":
                 return self.send_json([
                     {
@@ -201,33 +307,10 @@ def make_pve_handler(
                         "pveversion": "pve-manager/8.3.1",
                         "kversion": "Linux 6.8.12-pve",
                     })
-                if sub == "qemu" and len(parts) == 3:
+                if sub in ("qemu", "lxc") and len(parts) == 3:
                     return self.send_json([
-                        {
-                            **g,
-                            "cpu": wave * 0.5,
-                            "mem": int(g["maxmem"] * (0.4 + 0.1 * wave)),
-                            "disk": int(g["maxdisk"] * 0.35),
-                            "diskread": now * 4096,
-                            "diskwrite": now * 2048,
-                            "netin": now * 8192,
-                            "netout": now * 4096,
-                        }
-                        for g in vms
-                    ])
-                if sub == "lxc" and len(parts) == 3:
-                    return self.send_json([
-                        {
-                            **g,
-                            "cpu": wave * 0.3,
-                            "mem": int(g["maxmem"] * (0.3 + 0.1 * wave)),
-                            "disk": int(g["maxdisk"] * 0.25),
-                            "diskread": now * 1024,
-                            "diskwrite": now * 512,
-                            "netin": now * 2048,
-                            "netout": now * 1024,
-                        }
-                        for g in lxcs
+                        guest_payload(guest, sub, wave, now)
+                        for guest in (vms if sub == "qemu" else lxcs)
                     ])
                 if sub == "storage" and len(parts) == 3:
                     return self.send_json([
@@ -343,6 +426,7 @@ def make_pbs_handler(
 
     groups_by_store: dict[str, list[dict]] = {}
     snaps_by_key: dict[tuple[str, str, str], list[dict]] = {}
+    coverage: dict[str, SnapshotCoverage] = {}
     total_snapshots = 0
     for ds_idx, ds in enumerate(datastores):
         groups = []
@@ -380,6 +464,7 @@ def make_pbs_handler(
             snaps_by_key[(ds, kind, gid_str)] = snaps
             total_snapshots += len(snaps)
         groups_by_store[ds] = groups
+        coverage[ds] = SnapshotCoverage(len(groups) if snapshots_per_group > 0 else 0)
 
     class PBSHandler(http.server.BaseHTTPRequestHandler):
         protocol_version = "HTTP/1.1"
@@ -451,12 +536,19 @@ def make_pbs_handler(
                     if ep == "snapshots":
                         btype = qs.get("backup-type", [""])[0]
                         bid = qs.get("backup-id", [""])[0]
-                        return self.send_json(snaps_by_key.get((ds, btype, bid), []))
+                        snapshots = snaps_by_key.get((ds, btype, bid), [])
+                        self.send_json(snapshots)
+                        if snapshots:
+                            # Count only a completed, nonempty response. Retries
+                            # for the same group do not cover another group.
+                            with lock:
+                                coverage[ds].served_groups.add((btype, bid))
+                        return
                     if ep == "rrd":
                         return self.send_json([])
             return self.send_json([])
 
-    return PBSHandler, total_snapshots
+    return PBSHandler, total_snapshots, coverage
 
 
 def ws_read_exact(sock: socket.socket, count: int) -> bytes:
@@ -492,16 +584,26 @@ def record_ws_message(opcode: int, payload: bytes, stats: DashboardStats, has_in
         message = json.loads(payload)
     except (ValueError, UnicodeError):
         return has_initial_state
-    if not isinstance(message, dict) or not isinstance(message.get("data"), dict) or not message["data"]:
+    if not isinstance(message, dict):
+        return has_initial_state
+    if message.get("type") == "stateTooLarge":
+        # Pulse invalidates the delta baseline when it withholds a state.
+        with stats.lock:
+            stats.resources.clear()
+        return False
+    data = message.get("data")
+    if not isinstance(data, dict) or not data:
         return has_initial_state
     with stats.lock:
         if message.get("type") == "initialState":
             stats.ws_initial_states += 1
             has_initial_state = True
+            stats.resources.clear()
         elif message.get("type") == "rawData" and has_initial_state:
             stats.ws_state_updates += 1
         else:
             return has_initial_state
+        stats.update_guests(data)
         stats.ws_state_bytes += len(payload)
     return has_initial_state
 
@@ -529,6 +631,7 @@ def run_dashboard(host: str, port: int, deadline: float, stats: DashboardStats) 
                     raise ConnectionError(response.split(b"\r\n", 1)[0].decode(errors="replace"))
                 with stats.lock:
                     stats.ws_connects += 1
+                    stats.resources.clear()
                 has_initial_state = False
                 message_opcode = None
                 fragments = bytearray()
@@ -604,6 +707,7 @@ def main(argv: list[str]) -> int:
     parser.add_argument("--pbs-instances", type=int, default=2)
     parser.add_argument("--snapshots-per-group", type=int, default=50)
     parser.add_argument("--duration", type=float, required=True, help="seconds to drive load")
+    parser.add_argument("--sample-until", type=int, required=True, help="planned end of RSS sampling (Unix seconds)")
     parser.add_argument("--stats", required=True, help="path of the JSON stats file to write")
     args = parser.parse_args(argv)
 
@@ -617,12 +721,14 @@ def main(argv: list[str]) -> int:
     pve_srv = ThreadedHTTPServer(("127.0.0.1", 0), pve_handler)
 
     pbs_servers: list[tuple[str, ThreadedHTTPServer]] = []
+    snapshot_coverage: dict[str, dict[str, SnapshotCoverage]] = {}
     total_pbs_snapshots = 0
     for idx in range(args.pbs_instances):
         name = f"pbs{idx + 1}"
-        handler, snap_count = make_pbs_handler(name, guest_refs, args.snapshots_per_group, counters, lock)
+        handler, snap_count, coverage = make_pbs_handler(name, guest_refs, args.snapshots_per_group, counters, lock)
         pbs_servers.append((name, ThreadedHTTPServer(("127.0.0.1", 0), handler)))
         total_pbs_snapshots += snap_count
+        snapshot_coverage[name] = coverage
 
     servers = [pve_srv] + [srv for _, srv in pbs_servers]
     for srv in servers:
@@ -670,7 +776,10 @@ def main(argv: list[str]) -> int:
         if not (200 <= status < 300):
             reg_failed = True
 
-    dash_stats = DashboardStats()
+    dash_stats = DashboardStats(expected_guests={
+        ("qemu" if kind == "vm" else "lxc", guest_name)
+        for _, kind, _, guest_name in guest_refs
+    })
     started = time.time()
     deadline = started + args.duration
     dash_thread = threading.Thread(
@@ -680,6 +789,7 @@ def main(argv: list[str]) -> int:
 
     while not STOP.is_set() and time.time() < deadline:
         STOP.wait(1)
+    finished = time.time()
     STOP.set()
 
     with DASHBOARD_LOCK:
@@ -696,20 +806,32 @@ def main(argv: list[str]) -> int:
 
     with lock:
         req_counts = dict(counters)
+        snapshot_counts = {
+            name: {store: row.counts() for store, row in stores.items()}
+            for name, stores in snapshot_coverage.items()
+        }
     pbs_requests = sum(v for k, v in req_counts.items() if k != "pve_requests")
     pve_requests = req_counts.get("pve_requests", 0)
+    with dash_stats.lock:
+        missing_pve_guests = dash_stats.missing_guests()
+        missing_recent_guests = dash_stats.missing_recent_guests(started, finished)
 
     result = {
         "pve_nodes": args.nodes,
         "guests": len(guest_refs),
+        "pve_guests_observed": len(guest_refs) - len(missing_pve_guests),
         "pbs_instances": args.pbs_instances,
         "snapshots_per_group": args.snapshots_per_group,
         "total_pbs_snapshots": total_pbs_snapshots,
-        "elapsed_s": round(time.time() - started, 1),
+        "elapsed_s": round(finished - started, 1),
+        "sampling_end_reached": finished >= args.sample_until,
+        "pve_guests_recent": len(guest_refs) - len(missing_recent_guests),
+        "pve_guest_freshness_window_s": GUEST_FRESHNESS_SECONDS,
         "registrations": reg_results,
         "requests": req_counts,
         "pve_requests": pve_requests,
         "pbs_requests": pbs_requests,
+        "pbs_snapshot_group_coverage": snapshot_counts,
         "dashboard": {
             "connects": dash_stats.ws_connects,
             "messages": dash_stats.ws_messages,
@@ -725,16 +847,39 @@ def main(argv: list[str]) -> int:
         json.dump(result, handle, indent=2)
         handle.write("\n")
 
+    if not result["sampling_end_reached"]:
+        print("proxmox load ended before the planned end of RSS sampling", file=sys.stderr)
+        return 1
     if reg_failed:
         print(f"proxmox load registration failed: {reg_results}", file=sys.stderr)
         return 1
     if pve_requests == 0 or (args.pbs_instances > 0 and pbs_requests == 0):
         print(f"proxmox load did not exercise polling: pve={pve_requests}, pbs={pbs_requests}", file=sys.stderr)
         return 1
+    gaps = missing_snapshot_coverage(snapshot_counts)
+    if gaps:
+        print(f"proxmox load did not serve every PBS snapshot group: {', '.join(gaps)}", file=sys.stderr)
+        return 1
     if dash_stats.ws_connects == 0 or dash_stats.ws_initial_states == 0 or dash_stats.ws_state_updates == 0:
         print(
             f"proxmox load did not exercise the dashboard state path: {dash_stats.ws_connects} connections, "
             f"{dash_stats.ws_initial_states} initial states, {dash_stats.ws_state_updates} state updates",
+            file=sys.stderr,
+        )
+        return 1
+    if missing_pve_guests:
+        print(
+            f"proxmox load dashboard saw {result['pve_guests_observed']}/{len(guest_refs)} expected PVE guests; "
+            f"missing: {', '.join(f'{kind}/{name}' for kind, name in sorted(missing_pve_guests))}",
+            file=sys.stderr,
+        )
+        return 1
+    if missing_recent_guests:
+        print(
+            f"proxmox load dashboard had recent poll sightings for "
+            f"{result['pve_guests_recent']}/{len(guest_refs)} PVE guests within the last "
+            f"{GUEST_FRESHNESS_SECONDS}s: missing recent sightings for "
+            f"{', '.join(f'{kind}/{name}' for kind, name in sorted(missing_recent_guests))}",
             file=sys.stderr,
         )
         return 1

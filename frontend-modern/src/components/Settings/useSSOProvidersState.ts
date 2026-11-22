@@ -8,6 +8,7 @@ import {
   getSSOCopySuccessMessage,
   getSSOCopyErrorMessage,
   getSSOConnectionTestErrorMessage,
+  getSSODraftTestFinding,
   getSSOMetadataFetchErrorMessage,
   getSSOMetadataUrlRequiredMessage,
   getSSOProviderDeleteErrorMessage,
@@ -32,6 +33,7 @@ import {
   buildProviderTestPayload,
   canTestProviderForm,
   createEmptyProviderForm,
+  getProviderTestSource,
   mapProviderDetailsToForm,
 } from '@/components/Settings/ssoProvidersModel';
 
@@ -550,7 +552,8 @@ export const useSSOProvidersState = (props: SSOProvidersPanelProps) => {
   );
 
   const testConnection = async () => {
-    if (!canEdit() || !showModal() || !canTest() || testing() || loadingPreview()) return;
+    const source = getProviderTestSource(form);
+    if (!canEdit() || !showModal() || !source || testing() || loadingPreview()) return;
     const controller = new AbortController();
     testController = controller;
     const version = editorVersion;
@@ -574,9 +577,21 @@ export const useSSOProvidersState = (props: SSOProvidersPanelProps) => {
         body: payload,
       });
       if (!isCurrent()) return;
+      if (response.status === 400) {
+        const finding = getSSODraftTestFinding(source, await response.json());
+        if (!isCurrent()) return;
+        if (finding) {
+          setTestResult({ success: false, ...finding });
+          return;
+        }
+      }
       if (!response.ok) throw new Error('Connection test refused');
       const result = (await response.json()) as SSOProviderTestResult;
-      if (isCurrent()) setTestResult(result);
+      if (!isCurrent()) return;
+      if (result?.success !== true || typeof result.message !== 'string') {
+        throw new Error('No successful connection test result');
+      }
+      setTestResult({ success: true, message: result.message, details: result.details });
     } catch {
       if (!isCurrent()) return;
       logger.error('[SSOProvidersPanel] Test connection failed.');

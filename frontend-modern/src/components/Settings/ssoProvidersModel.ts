@@ -30,7 +30,7 @@ export interface SSOProvidersResponse {
 export interface SSOProviderTestResult {
   success: boolean;
   message: string;
-  error?: string;
+  failureLabel?: string;
   details?: {
     type: string;
     entityId?: string;
@@ -215,7 +215,8 @@ export const mapProviderDetailsToForm = (full: SSOProviderDetailsResponse): Prov
   samlSignRequests: full.saml?.signRequests || false,
   samlAllowIdpInitiated: full.saml?.allowIdpInitiated || false,
   samlUsernameAttr: full.saml?.usernameAttr || '',
-  samlEmailAttr: full.saml?.emailAttr || 'email',
+  // Only new drafts default to 'email'. Saved details omit an unset attribute.
+  samlEmailAttr: full.saml?.emailAttr ?? '',
   groupsClaim: full.saml?.groupsAttr || full.groupsClaim || '',
   allowedGroups: listToString(full.allowedGroups),
   allowedDomains: listToString(full.allowedDomains),
@@ -289,14 +290,21 @@ export const buildProviderTestPayload = (form: ProviderForm): Record<string, unk
   return payload;
 };
 
-export const canTestProviderForm = (form: ProviderForm): boolean => {
+export type SSOProviderTestSource =
+  'oidc-issuer' | 'saml-metadata-url' | 'saml-metadata-xml' | 'saml-manual-url';
+
+export const getProviderTestSource = (form: ProviderForm): SSOProviderTestSource | null => {
   if (form.type === 'oidc') {
-    return Boolean(form.oidcIssuerUrl.trim());
+    return form.oidcIssuerUrl.trim() ? 'oidc-issuer' : null;
   }
-  return Boolean(
-    form.samlIdpMetadataUrl.trim() || form.samlIdpMetadataXml.trim() || form.samlIdpSsoUrl.trim(),
-  );
+  // Match the server's order: a metadata source takes precedence over manual fields.
+  if (form.samlIdpMetadataUrl.trim()) return 'saml-metadata-url';
+  if (form.samlIdpMetadataXml.trim()) return 'saml-metadata-xml';
+  return form.samlIdpSsoUrl.trim() ? 'saml-manual-url' : null;
 };
+
+export const canTestProviderForm = (form: ProviderForm): boolean =>
+  getProviderTestSource(form) !== null;
 
 export const buildMetadataPreviewPayload = (form: ProviderForm) => ({
   type: 'saml' as const,

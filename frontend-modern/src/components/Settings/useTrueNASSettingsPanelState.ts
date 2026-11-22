@@ -19,6 +19,12 @@ import {
 
 type TrueNASAuthMode = 'apiKey' | 'userpass';
 
+type TrueNASConnectionFeedback =
+  | { kind: 'passed' }
+  | { kind: 'unconfirmed' }
+  | { kind: 'failed'; detail: string }
+  | { kind: 'destination-refused' };
+
 export interface TrueNASConnectionFormState {
   name: string;
   host: string;
@@ -136,6 +142,9 @@ const getErrorMessage = (error: unknown, fallback: string): string => {
 const getTrueNASErrorMessage = (error: unknown, fallback: string): string =>
   apiErrorDetailField(error, 'error') ?? getErrorMessage(error, fallback);
 
+const isDestinationRefusal = (error: unknown) =>
+  apiErrorStatus(error) === 403 && apiErrorCode(error) === 'destination_not_allowed';
+
 const monitoredSystemImpactPreviewUnavailableStateFromError = (error: unknown) => {
   return buildMonitoredSystemImpactPreviewUnavailableState({
     code: apiErrorCode(error),
@@ -209,6 +218,8 @@ export function useTrueNASSettingsPanelState({
   const [form, setForm] = createSignal<TrueNASConnectionFormState>(createEmptyFormState());
   const [saving, setSaving] = createSignal(false);
   const [testing, setTesting] = createSignal(false);
+  const [connectionFeedback, setConnectionFeedback] =
+    createSignal<TrueNASConnectionFeedback | null>(null);
   const [deleting, setDeleting] = createSignal(false);
   const [previewing, setPreviewing] = createSignal(false);
   const [monitoredSystemPreview, setMonitoredSystemPreview] =
@@ -267,6 +278,7 @@ export function useTrueNASSettingsPanelState({
     setDialogOpen(false);
     setEditingConnectionId(null);
     setForm(createEmptyFormState());
+    setConnectionFeedback(null);
     clearPreview();
   };
   const resetDeleteDialogState = () => {
@@ -420,6 +432,7 @@ export function useTrueNASSettingsPanelState({
       return;
     dialogVersion += 1;
     batch(() => {
+      setConnectionFeedback(null);
       clearPreview();
       setForm((current) => ({ ...current, ...patch }));
     });
@@ -438,32 +451,35 @@ export function useTrueNASSettingsPanelState({
     const accepted = reader();
     const version = dialogVersion;
     const isCurrent = () => isCurrentReader(accepted) && version === dialogVersion;
-    setTesting(true);
+    batch(() => {
+      setTesting(true);
+      setConnectionFeedback(null);
+    });
     try {
       const payload = buildConnectionInput(form());
-      if (editingConnectionId()) {
-        await TrueNASAPI.testSavedConnection(
-          editingConnectionId()!,
-          payload,
-          requestOptions(accepted),
-        );
-      } else {
-        await TrueNASAPI.testConnection(payload, requestOptions(accepted));
-      }
+      const id = editingConnectionId();
+      const reply = id
+        ? await TrueNASAPI.testSavedConnection(id, payload, requestOptions(accepted))
+        : await TrueNASAPI.testConnection(payload, requestOptions(accepted));
       if (!isCurrent()) return false;
-      notificationStore.success('TrueNAS connection successful');
-      return true;
+      setConnectionFeedback(reply.success ? { kind: 'passed' } : { kind: 'unconfirmed' });
+      return reply.success;
     } catch (error) {
-      // Access belongs to the reader, not the tested draft. A Name/credential
-      // edit may obsolete a result, but must not hide this reader's denial.
       if (!isCurrentReader(accepted)) return false;
+      // A refused address belongs to this draft. An actual access denial
+      // belongs to the reader and still withdraws it after a draft edit.
+      if (isDestinationRefusal(error)) {
+        if (isCurrent()) setConnectionFeedback({ kind: 'destination-refused' });
+        return false;
+      }
       if (withdrawOnDenial(error)) notificationStore.error(loadingError()!);
-      else if (isCurrent())
-        handleActionError(
-          error,
-          'TrueNAS connection failed',
-          '[TrueNAS Settings] Connection test failed',
-        );
+      else if (isCurrent()) {
+        setConnectionFeedback({
+          kind: 'failed',
+          detail: getTrueNASErrorMessage(error, 'Pulse could not complete this test.'),
+        });
+        logger.error('[TrueNAS Settings] Connection test failed', error);
+      }
       return false;
     } finally {
       if (isCurrentReader(accepted)) setTesting(false);
@@ -541,7 +557,11 @@ export function useTrueNASSettingsPanelState({
   const saveCurrentForm = async () => {
     if (!canAct() || !dialogOpen()) return;
     const accepted = reader();
-    setSaving(true);
+    const version = dialogVersion;
+    batch(() => {
+      setSaving(true);
+      if (connectionFeedback()?.kind === 'destination-refused') setConnectionFeedback(null);
+    });
     try {
       const payload = buildConnectionInput(form());
       if (editingConnectionId()) {
@@ -563,6 +583,10 @@ export function useTrueNASSettingsPanelState({
     } catch (error) {
       if (!isCurrentReader(accepted)) return;
       setMonitoredSystemPreviewUnavailableState(null);
+      if (isDestinationRefusal(error)) {
+        if (version === dialogVersion) setConnectionFeedback({ kind: 'destination-refused' });
+        return;
+      }
       handleActionError(
         error,
         'Failed to save TrueNAS connection',
@@ -602,6 +626,7 @@ export function useTrueNASSettingsPanelState({
     closeDeleteDialog,
     closeDialog,
     connections,
+    connectionFeedback,
     deleteDialogOpen,
     deletePendingConnection,
     deleting,

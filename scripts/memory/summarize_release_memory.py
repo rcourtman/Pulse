@@ -1,11 +1,20 @@
 #!/usr/bin/env python3
 """Compare steady-state memory from compare_release_memory.sh samples (#1803).
 
-Reads samples-baseline.tsv and samples-candidate.tsv from the output
-directory, takes the median of each column over the final third of each run,
-writes summary.md and result.json, and exits 1 when the candidate's resident
-memory exceeds the baseline by more than both the percentage tolerance and the
-absolute slack. Requiring both keeps small installs' noise from failing it.
+Usage: summarize_release_memory.py OUTPUT_DIR DURATION_SECONDS INTERVAL_SECONDS [BASELINE_WAIT_STATUS CANDIDATE_WAIT_STATUS]
+
+Reads both sample files from the output directory and uses the final third of
+the planned duration for both builds. Writes an incomplete observation instead
+of a memory verdict if either sample file does not cover that window. Otherwise
+exits 1 when the candidate's resident memory exceeds both the percentage
+tolerance and the absolute slack. Requiring both keeps small installs' noise
+from failing it.
+
+The watch passes its two worker wait statuses. A failed worker makes the
+comparison incomplete even if its sample timestamps cover the window.
+
+The verdict uses resident memory independently of the optional mapping
+breakdown. Class medians are not estimated from a partially observed window.
 
 It also reports Linux's process RSS high-water mark through the last sample,
 when available. The high-water mark is not cgroup usage and does not gate.
@@ -49,24 +58,58 @@ ESTATES = {
 }
 SECONDS_PER_DAY = 86400
 MIB = 1024 * 1024
+CHILD_WAIT_LABELS = {
+    "pulse_wait_status_before_stop": "Pulse wait status before the watch's stop",
+    "pulse_wait_status_after_stop_request": "Pulse wait status after the watch's TERM request",
+    "driver_wait_status": "load driver wait status",
+}
 
 
-def read_rows(path: Path) -> list[dict[str, str]]:
-    with path.open(newline="") as handle:
-        rows = [row for row in csv.DictReader(handle, delimiter="\t") if row.get("rss_kib")]
-    if len(rows) < 3:
-        raise SystemExit(f"{path.name}: only {len(rows)} samples; the run ended early")
-    return rows
+def sample_kib(value: str | None) -> int | None:
+    try:
+        kib = int(value or "")
+    except ValueError:
+        return None
+    return kib if kib >= 0 else None
 
 
-def final_third(rows: list[dict[str, str]]) -> list[dict[str, str]]:
-    last = int(rows[-1]["elapsed_s"])
-    return [row for row in rows if int(row["elapsed_s"]) >= last * 2 // 3] or rows[-3:]
+def read_steady_window(path: Path, start: int, end: int, max_gap: int) -> tuple[list[dict[str, str]], dict]:
+    """Require observations across the fixed window, not just anywhere in the run."""
+    try:
+        with path.open(newline="") as handle:
+            rows = [row for row in csv.DictReader(handle, delimiter="\t") if row.get("rss_kib")]
+    except OSError as exc:
+        raise ValueError("RSS sample file unavailable") from exc
+    try:
+        elapsed = [int(row["elapsed_s"]) for row in rows]
+    except (KeyError, TypeError, ValueError) as exc:
+        raise ValueError("invalid RSS sample timestamps") from exc
+    if elapsed and (elapsed[0] < 0 or elapsed[-1] > end
+                    or any(b <= a for a, b in zip(elapsed, elapsed[1:]))):
+        raise ValueError("RSS sample timestamps must increase within the planned duration")
+
+    points = [(when, row) for when, row in zip(elapsed, rows) if when >= start]
+    if any(None in row or None in row.values() for _, row in points):
+        raise ValueError("misaligned RSS sample fields in the planned final third")
+    if any(sample_kib(row["rss_kib"]) is None for _, row in points):
+        raise ValueError("invalid resident memory sample in the planned final third")
+    if len(points) < 3:
+        raise ValueError(f"only {len(points)} RSS samples in the planned final third (need at least 3)")
+    times = [when for when, _ in points]
+    boundaries = [start, *times, end]
+    left, right = max(zip(boundaries, boundaries[1:]), key=lambda pair: pair[1] - pair[0])
+    if right - left > max_gap:
+        raise ValueError(f"no RSS sample across {left}–{right} s (maximum gap {max_gap} s)")
+    return [row for _, row in points], {"first_s": times[0], "last_s": times[-1], "count": len(times)}
 
 
-def steady_state(rows: list[dict[str, str]]) -> dict[str, float]:
-    tail = final_third(rows)
-    return {column: statistics.median(float(row[column]) for row in tail) for column in COLUMNS}
+def steady_state(rows: list[dict[str, str]]) -> dict[str, float | None]:
+    readings = {}
+    for column in COLUMNS:
+        values = [sample_kib(row.get(column)) for row in rows]
+        observed = [value for value in values if value is not None]
+        readings[column] = statistics.median(observed) if len(observed) == len(rows) else None
+    return readings
 
 
 def rss_high_water_kib(rows: list[dict[str, str]]) -> int | None:
@@ -88,10 +131,9 @@ def counter_rate(tail: list[dict[str, str]], column: str) -> float | None:
 
 
 def activity(rows: list[dict[str, str]], clk_tck: float) -> dict[str, float | None]:
-    tail = final_third(rows)
-    ticks = counter_rate(tail, "cpu_ticks")
-    writes = counter_rate(tail, "write_bytes")
-    wchar = counter_rate(tail, "wchar_bytes")
+    ticks = counter_rate(rows, "cpu_ticks")
+    writes = counter_rate(rows, "write_bytes")
+    wchar = counter_rate(rows, "wchar_bytes")
     return {
         "cpu_pct": None if ticks is None else 100 * ticks / clk_tck,
         "write_mib_per_day": None if writes is None else writes * SECONDS_PER_DAY / MIB,
@@ -127,6 +169,16 @@ def read_proxmox_stats(out: Path, label: str) -> dict | None:
         return None
 
 
+def pbs_snapshot_coverage(stats: dict) -> str:
+    coverage = stats.get("pbs_snapshot_group_coverage")
+    if coverage is None:
+        return "n/a"
+    stores = [store for instance in coverage.values() for store in instance.values()]
+    served = sum(store["served_groups"] for store in stores)
+    expected = sum(store["expected_groups"] for store in stores)
+    return f"{served}/{expected}"
+
+
 def proxmox_lines(baseline: dict | None, candidate: dict | None) -> list[str]:
     shape = candidate or baseline
     if shape is None:
@@ -138,12 +190,20 @@ def proxmox_lines(baseline: dict | None, candidate: dict | None) -> list[str]:
         f"{shape['pve_nodes']} PVE nodes ({shape['guests']} guests) and {shape['pbs_instances']} PBS instances "
         f"({shape['total_pbs_snapshots']} total PBS snapshots across {shape['snapshots_per_group']} snapshots/group).",
         "",
+        "PBS coverage counts distinct groups for which the fixture finished serving snapshots, "
+        "not snapshots Pulse retained or displayed.",
+        "",
         "| | Baseline | Candidate |",
         "|---|---:|---:|",
     ]
     rows = (
         ("PVE API requests", lambda d: d["pve_requests"]),
+        ("PVE guests observed in dashboard state", lambda d: d.get("pve_guests_observed", "n/a")),
+        ("PVE guests with recent poll sightings at measurement end",
+         lambda d: (f"{d['pve_guests_recent']}/{d['guests']} (last {d['pve_guest_freshness_window_s']} s)"
+                    if "pve_guests_recent" in d else "n/a")),
         ("PBS API requests", lambda d: d["pbs_requests"]),
+        ("PBS snapshot groups served/configured", pbs_snapshot_coverage),
         ("Dashboard connections", lambda d: d["dashboard"]["connects"]),
         ("Dashboard application messages", lambda d: d["dashboard"]["messages"]),
         ("Dashboard state messages", lambda d: d["dashboard"].get("state_messages", "n/a")),
@@ -200,18 +260,77 @@ def format_change(base: float | None, cand: float | None) -> str:
     return f"{0.0 if abs(change) < 0.05 else change:+.1f}"
 
 
+def write_observation(out: Path, summary: str, result: dict) -> None:
+    (out / "summary.md").write_text(summary, encoding="utf-8")
+    (out / "result.json").write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
+    print(summary)
+
+
+def read_child_wait_statuses(out: Path, label: str) -> dict[str, int]:
+    try:
+        data = json.loads((out / f"run-{label}-wait.json").read_text())
+    except (OSError, ValueError):
+        return {}
+    if not isinstance(data, dict):
+        return {}
+    observed = {}
+    for key in CHILD_WAIT_LABELS:
+        status = data.get(key)
+        if type(status) is int and 0 <= status <= 255:
+            observed[key] = status
+    return observed
+
+
 def main(argv: list[str]) -> int:
-    if len(argv) != 2:
+    try:
+        out_dir, duration_arg, interval_arg, *wait_args = argv[1:]
+        duration, interval = int(duration_arg), int(interval_arg)
+        wait_statuses = [int(arg) for arg in wait_args]
+        if (min(duration, interval) <= 0 or len(wait_statuses) not in (0, 2)
+                or any(not 0 <= status <= 255 for status in wait_statuses)):
+            raise ValueError
+    except ValueError:
         print(__doc__, file=sys.stderr)
         return 2
-    out = Path(argv[1])
+    out = Path(out_dir)
     tolerance = float(os.environ.get("PULSE_MEMORY_TOLERANCE_PCT", "15"))
     slack_kib = float(os.environ.get("PULSE_MEMORY_SLACK_MIB", "16")) * 1024
     gated = os.environ.get("PULSE_MEMORY_GATE", "1") != "0"
     estate = read_estate(out)
     clk_tck = read_clk_tck(out)
-    baseline_rows = read_rows(out / "samples-baseline.tsv")
-    candidate_rows = read_rows(out / "samples-candidate.tsv")
+    start = duration * 2 // 3
+    max_gap = 2 * interval
+    sampling = {"duration_s": duration, "interval_s": interval, "window_start_s": start, "max_gap_s": max_gap}
+    windows = {}
+    incomplete = []
+    for label in ("baseline", "candidate"):
+        try:
+            windows[label], sampling[label] = read_steady_window(out / f"samples-{label}.tsv", start, duration, max_gap)
+        except ValueError as exc:
+            sampling[label] = {"error": str(exc)}
+            incomplete.append(f"- {label.capitalize()}: {exc}.")
+    failed_runs = {}
+    for label, status in zip(("baseline", "candidate"), wait_statuses):
+        if status == 0:
+            continue
+        observed = read_child_wait_statuses(out, label)
+        failed_runs[label] = {"worker_wait_status": status, **observed}
+        details = ", ".join(f"{CHILD_WAIT_LABELS[key]} {value}" for key, value in observed.items())
+        incomplete.append(
+            f"- {label.capitalize()} run did not complete successfully "
+            f"(worker wait status {status}; {details or 'no child wait status observed'})."
+        )
+    heading = f"## Pulse memory: candidate against baseline ({estate} estate)"
+    if incomplete:
+        result = {"status": "incomplete", "estate": estate, "sampling": sampling}
+        if failed_runs:
+            result["failed_runs"] = failed_runs
+        write_observation(out, "\n".join([
+            heading, "", f"**Incomplete measurement:** no comparison for the planned {start}–{duration} s window.",
+            "", *incomplete, "",
+        ]), result)
+        return 1
+    baseline_rows, candidate_rows = windows["baseline"], windows["candidate"]
     baseline = steady_state(baseline_rows)
     candidate = steady_state(candidate_rows)
     baseline_high_water = rss_high_water_kib(baseline_rows)
@@ -219,22 +338,31 @@ def main(argv: list[str]) -> int:
     baseline_activity = activity(baseline_rows, clk_tck)
     candidate_activity = activity(candidate_rows, clk_tck)
 
+    # The selected window requires valid VmRSS independently of smaps.
     growth = candidate["rss_kib"] - baseline["rss_kib"]
     growth_pct = 100 * growth / baseline["rss_kib"] if baseline["rss_kib"] else 0.0
     exceeded = growth > slack_kib and growth_pct > tolerance
     regressed = exceeded and gated
 
     lines = [
-        f"## Pulse memory: candidate against baseline ({estate} estate)",
+        heading,
         "",
-        f"Steady state is the median over the final third of each run, on {ESTATES.get(estate, estate)}.",
+        f"Steady state is the median over the planned {start}–{duration} s window, on {ESTATES.get(estate, estate)}.",
+        f"RSS samples in that window: {len(baseline_rows)} baseline, {len(candidate_rows)} candidate.",
         "",
         "| | Baseline MiB | Candidate MiB | Change |",
         "|---|---:|---:|---:|",
     ]
     for column in COLUMNS:
-        base, cand = baseline[column] / 1024, candidate[column] / 1024
-        lines.append(f"| {LABELS[column]} | {base:.1f} | {cand:.1f} | {cand - base:+.1f} |")
+        base_kib, cand_kib = baseline[column], candidate[column]
+        base = None if base_kib is None else base_kib / 1024
+        cand = None if cand_kib is None else cand_kib / 1024
+        lines.append(
+            f"| {LABELS[column]} | {format_rate(base)} | {format_rate(cand)} | {format_change(base, cand)} |"
+        )
+    if any(baseline[column] is None or candidate[column] is None for column in COLUMNS[1:]):
+        lines += ["", "Mapping breakdown is unavailable for at least one sample in that run's window. "
+                  "The verdict uses the separately measured resident memory."]
     if exceeded:
         verdict = (
             f"**Steady-state RSS regression:** resident memory grew "
@@ -290,9 +418,9 @@ def main(argv: list[str]) -> int:
             "Mock mode keeps its own fixtures in the heap, so check the growth list for `internal/mock` before",
             "attributing a change to production code.",
         ]
-    summary = "\n".join(lines) + "\n"
-    (out / "summary.md").write_text(summary)
-    (out / "result.json").write_text(json.dumps({
+    write_observation(out, "\n".join(lines) + "\n", {
+        "status": "measured",
+        "sampling": sampling,
         "baseline": baseline,
         "candidate": candidate,
         "baseline_rss_high_water_kib": baseline_high_water,
@@ -312,8 +440,7 @@ def main(argv: list[str]) -> int:
         "tolerance_pct": tolerance,
         "slack_kib": slack_kib,
         "regressed": regressed,
-    }, indent=2) + "\n")
-    print(summary)
+    })
     return 1 if regressed else 0
 
 

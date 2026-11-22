@@ -2,6 +2,8 @@ package notifications
 
 import (
 	"fmt"
+	"html"
+	"strings"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
@@ -26,7 +28,7 @@ func (n *NotificationManager) sendGroupedEmail(config EmailConfig, alertList []*
 	// by using the From address as the recipient
 
 	// Generate email using template
-	subject, htmlBody, textBody := EmailTemplate(alertList, false, n.publicURL)
+	subject, htmlBody, textBody := EmailTemplateWithBranding(alertList, false, n.publicURL, config.Branding())
 
 	// Send using HTML-aware method
 	return n.sendThreadedHTMLEmailWithError(subject, htmlBody, textBody, alertListThreadID(alertList), config)
@@ -37,18 +39,27 @@ func (n *NotificationManager) sendResolvedEmail(config EmailConfig, alertList []
 		return fmt.Errorf("no alerts to send")
 	}
 
+	branding := config.Branding()
 	subject, htmlBody, textBody := buildResolvedNotificationContent(alertList, resolvedAt, n.publicURL)
 	if subject == "" && textBody == "" {
 		return fmt.Errorf("failed to build resolved email content")
 	}
-	subject = resolvedEmailSubject(alertList)
+	if branding.FooterNote != "" {
+		if !strings.HasSuffix(textBody, "\n") {
+			textBody += "\n"
+		}
+		textBody += branding.FooterNote + "\n"
+		htmlBody = "<pre style=\"font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, \\\"Liberation Mono\\\", \\\"Courier New\\\", monospace\">" +
+			html.EscapeString(textBody) + "</pre>"
+	}
+	subject = resolvedEmailSubjectWithBranding(alertList, branding)
 
 	return n.sendThreadedHTMLEmailWithError(subject, htmlBody, textBody, alertListThreadID(alertList), config)
 }
 
 // sendEmail sends an email notification
 func (n *NotificationManager) sendSingleEmailWithError(alert *alerts.Alert, config EmailConfig) error {
-	subject, htmlBody, textBody := EmailTemplate([]*alerts.Alert{alert}, true, n.publicURL)
+	subject, htmlBody, textBody := EmailTemplateWithBranding([]*alerts.Alert{alert}, true, n.publicURL, config.Branding())
 	return n.sendThreadedHTMLEmailWithError(subject, htmlBody, textBody, alertListThreadID([]*alerts.Alert{alert}), config)
 }
 

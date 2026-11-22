@@ -2193,3 +2193,29 @@ dead-letters, and manual `SendTest*` probes remain untouched, while manual
 non-retryable exclusion, destination/config isolation, 24h freshness cutoff,
 single-replay anti-loop behavior on flapping destinations, and batch capping +
 cooldown drain.
+
+
+### Structured email subject prefix, brand name, and footer note
+
+`EmailConfig` (`internal/notifications/notification_config.go`) carries three
+optional structured plain-text fields — `SubjectPrefix` (max 64 runes),
+`BrandName` (max 80 runes), and `FooterNote` (max 240 runes) — normalized by
+`NormalizeEmailBranding` inside `normalizeEmailConfig` to strip control
+characters and line breaks, collapse whitespace, and enforce length bounds
+before persistence or rendering. All email send paths in
+`internal/notifications/email_delivery.go` (`sendSingleEmailWithError`,
+`sendGroupedEmail`, `sendResolvedEmail`, and test-email delivery) apply these
+overrides inside the compiled-in template (`EmailTemplateWithBranding`,
+`resolvedEmailSubjectWithBranding`) with HTML escaping; raw HTML and custom
+template files remain intentionally unsupported.
+When omitted or empty, rendered subjects and bodies remain byte-compatible with
+existing defaults (`[Pulse Alert]`, `Pulse Monitoring`, no extra footer note).
+`UpdateEmailConfig` preserves omitted branding fields via `presenceCheck` and
+clears them when explicit empty strings are submitted. Email branding edits do
+not alter `notificationDeliveryConfigurationFingerprint`, preserving destination
+continuity across edits.
+
+`internal/notifications/email_branding_test.go` and
+`internal/api/alerting/email_branding_test.go` verify default compatibility,
+custom single/grouped/resolved rendering, CRLF and HTML-escaping sanitization,
+rune bounds, destination continuity stability, and API presence/clear semantics.

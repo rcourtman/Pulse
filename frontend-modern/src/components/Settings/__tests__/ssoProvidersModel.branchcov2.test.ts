@@ -199,7 +199,7 @@ describe('mapProviderDetailsToForm', () => {
     expect(form.enabled).toBe(false);
   });
 
-  it('defaults the saml emailAttr to "email" when saml is present without emailAttr', () => {
+  it('does not populate emailAttr when the saved SAML details omit it', () => {
     const form = mapProviderDetailsToForm({
       id: 'p',
       name: 'P',
@@ -207,19 +207,19 @@ describe('mapProviderDetailsToForm', () => {
       enabled: true,
       saml: { signRequests: false },
     });
-    expect(form.samlEmailAttr).toBe('email');
+    expect(form.samlEmailAttr).toBe('');
     expect(form.samlSignRequests).toBe(false);
     expect(form.samlAllowIdpInitiated).toBe(false);
   });
 
-  it('defaults the saml emailAttr to "email" when saml is entirely absent (oidc provider)', () => {
+  it('keeps the SAML fields blank when editing an OIDC provider', () => {
     const form = mapProviderDetailsToForm({
       id: 'p',
       name: 'P',
       type: 'oidc',
       enabled: true,
     });
-    expect(form.samlEmailAttr).toBe('email');
+    expect(form.samlEmailAttr).toBe('');
     expect(form.samlSpEntityId).toBe('');
   });
 

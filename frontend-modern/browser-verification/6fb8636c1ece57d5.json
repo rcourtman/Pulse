@@ -1,0 +1,40 @@
+{
+  "version": 1,
+  "base_sha": "98d5ab2ac1d36ccb95fc80c00551dd88c867f125",
+  "verified_at": "2026-11-22T13:56:00Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/ConnectionEditor/AddressProbeStep.tsx",
+    "frontend-modern/src/components/Settings/ConnectionEditor/useConnectionEditor.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/ConnectionEditor/AddressProbeStep.tsx": "fce24f139cb478676c17a49a0402da564689b18182fbb97af110374b875e73f1",
+    "frontend-modern/src/components/Settings/ConnectionEditor/useConnectionEditor.ts": "eef3ac8884b35cad31c5ae1d6436a080d194c6cc52636b8514f1feb0ed43362f"
+  },
+  "routes": [
+    "/settings/infrastructure",
+    "/settings/infrastructure?add=detect",
+    "/settings/infrastructure?add=pbs"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 320,
+      "height": 800
+    }
+  ],
+  "states": [
+    "Exact production Settings builds with the same local synthetic probe responses. Playwright 1.56.1, Chromium 141.0.7390.37. Inspected 20 before/after captures: light desktop and dark touch.",
+    "After a meaningful edit, old candidate, no-match and error states are replaced by guidance for the current address. Blank input has no stale result and keeps Probe disabled.",
+    "A whitespace-only edit keeps the current candidate and timing. Returning to an older address after a meaningful edit does not resurrect a candidate.",
+    "A fresh PBS detection opens the intended host in the existing import plan and endpoint field. The matched fresh handoff images are byte-identical at each width."
+  ],
+  "interactions": [
+    "Open Add infrastructure and Detect API platform. Submit by keyboard on desktop and touch on the phone. Main could select a previous PVE candidate after editing; the candidate build cannot.",
+    "Probe a new address and select the new result. Read back the intended address and preserve the existing candidate plan, Preview impact, manual source and general agent entry points.",
+    "Compare request bodies for trimmed addresses only; verify there is no automatic re-probe, credential operation or configuration write."
+  ]
+}

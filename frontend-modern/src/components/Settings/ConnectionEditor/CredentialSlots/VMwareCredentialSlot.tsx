@@ -2,6 +2,7 @@ import { Component, Show, createEffect, onMount } from 'solid-js';
 import ShieldAlert from 'lucide-solid/icons/shield-alert';
 import { Button } from '@/components/shared/Button';
 import { CalloutCard } from '@/components/shared/CalloutCard';
+import { InlineNotice } from '@/components/shared/InlineNotice';
 import {
   formCheckbox,
   formControl,
@@ -30,6 +31,7 @@ export interface VMwareCredentialSlotProps {
 
 export const VMwareCredentialSlot: Component<VMwareCredentialSlotProps> = (props) => {
   let primed = false;
+  let testArea: HTMLDivElement | undefined;
 
   onMount(() => {
     if (!props.state.dialogOpen()) {
@@ -46,6 +48,12 @@ export const VMwareCredentialSlot: Component<VMwareCredentialSlotProps> = (props
     const open = props.state.dialogOpen();
     if (primed && !open && !props.state.saving()) {
       props.onSaved();
+    }
+  });
+
+  createEffect(() => {
+    if (props.state.connectionTestFeedback()) {
+      testArea?.scrollIntoView?.({ block: 'nearest' });
     }
   });
 
@@ -83,23 +91,6 @@ export const VMwareCredentialSlot: Component<VMwareCredentialSlotProps> = (props
                   <Show when={failure().guidance}>
                     <p class="mt-2">{failure().guidance}</p>
                   </Show>
-                </>
-              }
-              icon={<ShieldAlert class="h-5 w-5" />}
-            />
-          )}
-        </Show>
-
-        <Show when={props.state.connectionTestWarning()}>
-          {(warning) => (
-            <CalloutCard
-              data-testid="vmware-connection-test-warning"
-              tone="warning"
-              title={warning().title}
-              description={
-                <>
-                  <p>{warning().message}</p>
-                  <p class="mt-2">{warning().guidance}</p>
                 </>
               }
               icon={<ShieldAlert class="h-5 w-5" />}
@@ -197,7 +188,7 @@ export const VMwareCredentialSlot: Component<VMwareCredentialSlotProps> = (props
           <div>
             <div class="text-sm font-semibold text-base-content">Collection scope</div>
             <p class="mt-0.5 text-xs text-muted">
-              Pulse only collects the surfaces you keep enabled. Disable anything you don't need.
+              Collection choices apply to monitoring, not the connection test.
             </p>
           </div>
           <div class="grid gap-2 sm:grid-cols-3">
@@ -272,12 +263,69 @@ export const VMwareCredentialSlot: Component<VMwareCredentialSlotProps> = (props
           )}
         </Show>
 
-        <div class="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-          <Show when={isEditing() && props.onToggleEnabled}>
+        <div ref={testArea}>
+          <div role="status" aria-atomic="true">
+            <Show when={props.state.connectionTestFeedback()}>
+              {(feedback) => (
+                <InlineNotice class="mb-2 wrap-anywhere" tone={feedback().tone}>
+                  <p class="font-semibold">{feedback().title}</p>
+                  <div class="space-y-1 text-xs">
+                    <p>{feedback().message}</p>
+                    <Show when={feedback().guidance}>{(guidance) => <p>{guidance()}</p>}</Show>
+                    <p>No settings were saved.</p>
+                  </div>
+                </InlineNotice>
+              )}
+            </Show>
+          </div>
+          <div class="grid grid-cols-2 gap-2 sm:flex sm:justify-end">
+            <Show when={isEditing() && props.onToggleEnabled}>
+              <Button
+                variant="outline"
+                size="settingsAction"
+                class="max-sm:order-6 max-sm:px-2 max-sm:text-xs"
+                onClick={() => props.onToggleEnabled?.()}
+                disabled={
+                  props.state.saving() ||
+                  props.state.testing() ||
+                  props.togglePending ||
+                  props.deletePending
+                }
+              >
+                {props.togglePending
+                  ? props.connectionEnabled
+                    ? 'Pausing…'
+                    : 'Resuming…'
+                  : props.connectionEnabled
+                    ? 'Pause connection'
+                    : 'Resume connection'}
+              </Button>
+            </Show>
+            <Show when={isEditing() && props.onDelete}>
+              <Button
+                variant={props.deleteConfirming ? 'danger' : 'dangerOutline'}
+                size="settingsAction"
+                class="max-sm:order-5 max-sm:px-2 max-sm:text-xs"
+                onClick={() => props.onDelete?.()}
+                disabled={
+                  props.state.saving() ||
+                  props.state.testing() ||
+                  props.togglePending ||
+                  props.deletePending
+                }
+              >
+                {props.deletePending
+                  ? 'Deleting…'
+                  : props.deleteConfirming
+                    ? 'Click again to confirm'
+                    : 'Delete connection'}
+              </Button>
+            </Show>
             <Button
               variant="outline"
               size="settingsAction"
-              onClick={() => props.onToggleEnabled?.()}
+              class="max-sm:order-4 max-sm:col-span-2"
+              onClick={handleCancel}
               disabled={
                 props.state.saving() ||
                 props.state.testing() ||
@@ -285,89 +333,50 @@ export const VMwareCredentialSlot: Component<VMwareCredentialSlotProps> = (props
                 props.deletePending
               }
             >
-              {props.togglePending
-                ? props.connectionEnabled
-                  ? 'Pausing…'
-                  : 'Resuming…'
-                : props.connectionEnabled
-                  ? 'Pause connection'
-                  : 'Resume connection'}
+              Cancel
             </Button>
-          </Show>
-          <Show when={isEditing() && props.onDelete}>
             <Button
-              variant={props.deleteConfirming ? 'danger' : 'dangerOutline'}
+              variant="outline"
               size="settingsAction"
-              onClick={() => props.onDelete?.()}
+              onClick={() => void props.state.testCurrentForm()}
+              aria-disabled={props.state.testing()}
+              class="aria-disabled:cursor-not-allowed aria-disabled:opacity-50 max-sm:order-2 max-sm:px-2"
+              disabled={props.state.saving() || props.togglePending || props.deletePending}
+            >
+              {props.state.testing() ? 'Testing…' : 'Test connection'}
+            </Button>
+            <Button
+              variant="outline"
+              size="settingsAction"
+              class="max-sm:order-3 max-sm:px-2"
+              onClick={() => void props.state.previewCurrentForm()}
+              disabled={props.state.saving() || props.state.testing() || props.state.previewing()}
+              title="Show the resources Pulse would ingest from this connection without saving or starting polling."
+            >
+              {props.state.previewing() ? 'Previewing…' : 'Preview impact'}
+            </Button>
+            <Button
+              variant="primary"
+              size="settingsAction"
+              class="max-sm:order-1 max-sm:col-span-2"
+              onClick={() => void props.state.saveCurrentForm()}
               disabled={
                 props.state.saving() ||
                 props.state.testing() ||
+                props.state.previewing() ||
                 props.togglePending ||
                 props.deletePending
               }
             >
-              {props.deletePending
-                ? 'Deleting…'
-                : props.deleteConfirming
-                  ? 'Click again to confirm'
-                  : 'Delete connection'}
+              {props.state.saving()
+                ? isEditing()
+                  ? 'Saving…'
+                  : 'Adding…'
+                : isEditing()
+                  ? 'Update connection'
+                  : 'Add connection'}
             </Button>
-          </Show>
-          <Button
-            variant="outline"
-            size="settingsAction"
-            onClick={handleCancel}
-            disabled={
-              props.state.saving() ||
-              props.state.testing() ||
-              props.togglePending ||
-              props.deletePending
-            }
-          >
-            Cancel
-          </Button>
-          <Button
-            variant="outline"
-            size="settingsAction"
-            onClick={() => void props.state.testCurrentForm()}
-            disabled={
-              props.state.saving() ||
-              props.state.testing() ||
-              props.togglePending ||
-              props.deletePending
-            }
-          >
-            {props.state.testing() ? 'Testing…' : 'Test connection'}
-          </Button>
-          <Button
-            variant="outline"
-            size="settingsAction"
-            onClick={() => void props.state.previewCurrentForm()}
-            disabled={props.state.saving() || props.state.testing() || props.state.previewing()}
-            title="Show the resources Pulse would ingest from this connection without saving or starting polling."
-          >
-            {props.state.previewing() ? 'Previewing…' : 'Preview impact'}
-          </Button>
-          <Button
-            variant="primary"
-            size="settingsAction"
-            onClick={() => void props.state.saveCurrentForm()}
-            disabled={
-              props.state.saving() ||
-              props.state.testing() ||
-              props.state.previewing() ||
-              props.togglePending ||
-              props.deletePending
-            }
-          >
-            {props.state.saving()
-              ? isEditing()
-                ? 'Saving…'
-                : 'Adding…'
-              : isEditing()
-                ? 'Update connection'
-                : 'Add connection'}
-          </Button>
+          </div>
         </div>
       </Show>
     </div>

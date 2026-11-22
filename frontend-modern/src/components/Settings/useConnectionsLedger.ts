@@ -107,15 +107,14 @@ const CONNECTION_STATE_SEVERITY: Record<ConnectionState, number> = {
 const coverageLabelsFor = (connections: readonly Connection[]): string[] => {
   const seen = new Set<string>();
   for (const connection of connections) {
-    const activeScopeKeys = Object.keys(connection.scope ?? {}).filter(
-      (key) => connection.scope?.[key],
-    );
+    const scope = Object.entries(connection.scope ?? {});
+    // Surfaces lists what the source supports, not what the user enabled.
     const coverage =
-      activeScopeKeys.length > 0
-        ? activeScopeKeys.map(surfaceLabel)
-        : connection.surfaces.map(surfaceLabel);
-    for (const label of coverage) {
-      seen.add(label);
+      scope.length > 0
+        ? scope.filter(([, enabled]) => enabled).map(([key]) => key)
+        : connection.surfaces;
+    for (const key of coverage) {
+      seen.add(surfaceLabel(key));
     }
   }
   return [...seen];
@@ -390,6 +389,11 @@ const buildRow = (
   const coverageLabels = isCluster
     ? coverageLabelsFor(componentConnections).filter((label) => label !== hostTelemetryLabel)
     : coverageLabelsFor(componentConnections);
+  const savedScope = Object.values(primaryConnection.scope ?? {});
+  const apiScopeOff =
+    PLATFORM_API_TYPES.has(primaryConnection.type) &&
+    savedScope.length > 0 &&
+    savedScope.every((enabled) => enabled === false);
   const source: InfrastructureSourceKind = sourceFor(componentConnections);
   const subtitle = isCluster
     ? `Cluster · ${members.length} ${members.length === 1 ? 'node' : 'nodes'}`
@@ -437,6 +441,7 @@ const buildRow = (
     source,
     host,
     coverageLabels,
+    apiScopeOff,
     statusLabel,
     statusClassName: presentation.badgeClass,
     agentUpdateCount: agentUpdateCountFor(componentConnections),

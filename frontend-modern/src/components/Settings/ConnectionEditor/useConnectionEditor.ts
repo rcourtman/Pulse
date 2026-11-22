@@ -1,4 +1,4 @@
-import { createSignal } from 'solid-js';
+import { batch, createSignal } from 'solid-js';
 import {
   ConnectionsAPI,
   type ConnectionType,
@@ -19,18 +19,21 @@ function describeProbeError(error: unknown): string {
   return PROBE_ERROR_FALLBACK;
 }
 
-export type ProbePhase = 'idle' | 'probing' | 'detected' | 'no-match' | 'error';
-export type CompletedProbePhase = Extract<ProbePhase, 'detected' | 'no-match' | 'error'>;
+export type CompletedProbePhase = 'detected' | 'no-match' | 'error';
+type ProbeState =
+  | { phase: 'idle' | 'probing' | 'address-changed' }
+  | { phase: 'detected' | 'no-match'; response: ProbeResponse }
+  | { phase: 'error'; message: string };
 
 export interface ConnectionEditorState {
   address: () => string;
   setAddress: (value: string) => void;
-  phase: () => ProbePhase;
+  phase: () => ProbeState['phase'];
   candidates: () => ProbeCandidate[];
   probedMs: () => number;
   errorMessage: () => string;
   reset: () => void;
-  runProbe: () => Promise<CompletedProbePhase>;
+  runProbe: () => Promise<CompletedProbePhase | undefined>;
 }
 
 // CONNECTION_TYPE_LABELS drives both the detected-candidate header copy and
@@ -57,56 +60,66 @@ function isSubmittableAddress(address: string): boolean {
 }
 
 export function createConnectionEditorState(): ConnectionEditorState {
-  const [address, setAddress] = createSignal('');
-  const [phase, setPhase] = createSignal<ProbePhase>('idle');
-  const [candidates, setCandidates] = createSignal<ProbeCandidate[]>([]);
-  const [probedMs, setProbedMs] = createSignal(0);
-  const [errorMessage, setErrorMessage] = createSignal('');
-
-  const reset = () => {
-    setAddress('');
-    setPhase('idle');
-    setCandidates([]);
-    setProbedMs(0);
-    setErrorMessage('');
+  const [address, setAddressValue] = createSignal('');
+  const [probe, setProbe] = createSignal<ProbeState>({ phase: 'idle' });
+  const probeResponse = () => {
+    const result = probe();
+    return 'response' in result ? result.response : undefined;
   };
 
-  const runProbe = async () => {
+  const setAddress = (value: string) => {
+    const phase = probe().phase;
+    batch(() => {
+      if (phase !== 'idle' && phase !== 'address-changed' && address().trim() !== value.trim()) {
+        setProbe({ phase: 'address-changed' });
+      }
+      setAddressValue(value);
+    });
+  };
+
+  const reset = () =>
+    batch(() => {
+      setAddressValue('');
+      setProbe({ phase: 'idle' });
+    });
+
+  const runProbe = async (): Promise<CompletedProbePhase | undefined> => {
+    if (probe().phase === 'probing') return;
     const value = address().trim();
     if (!isSubmittableAddress(value)) {
-      setErrorMessage('Enter an API endpoint to probe.');
-      setPhase('error');
+      setProbe({ phase: 'error', message: 'Enter an API endpoint to probe.' });
       return 'error';
     }
 
-    setPhase('probing');
-    setErrorMessage('');
-    setCandidates([]);
-    setProbedMs(0);
+    // A new attempt owns its response even when the address returns to the same string.
+    const pending = { phase: 'probing' } as const;
+    setProbe(pending);
 
     let response: ProbeResponse;
     try {
       response = await ConnectionsAPI.probe(value);
     } catch (error: unknown) {
-      setErrorMessage(describeProbeError(error));
-      setPhase('error');
+      if (probe() !== pending) return;
+      setProbe({ phase: 'error', message: describeProbeError(error) });
       return 'error';
     }
 
-    setProbedMs(response.probedMs);
-    setCandidates(response.candidates);
-    const nextPhase: CompletedProbePhase = response.candidates.length > 0 ? 'detected' : 'no-match';
-    setPhase(nextPhase);
+    if (probe() !== pending) return;
+    const nextPhase = response.candidates.length > 0 ? 'detected' : 'no-match';
+    setProbe({ phase: nextPhase, response });
     return nextPhase;
   };
 
   return {
     address,
     setAddress,
-    phase,
-    candidates,
-    probedMs,
-    errorMessage,
+    phase: () => probe().phase,
+    candidates: () => probeResponse()?.candidates ?? [],
+    probedMs: () => probeResponse()?.probedMs ?? 0,
+    errorMessage: () => {
+      const result = probe();
+      return result.phase === 'error' ? result.message : '';
+    },
     reset,
     runProbe,
   };

@@ -22,9 +22,9 @@ vi.mock('@/utils/logger', () => ({
   },
 }));
 
-const jsonResponse = (body: unknown) =>
+const jsonResponse = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), {
-    status: 200,
+    status,
     headers: { 'Content-Type': 'application/json' },
   });
 
@@ -504,12 +504,19 @@ describe('SSOProvidersPanel modal feedback and recovery', () => {
     const read = fetchMock.getMockImplementation()!;
     fetchMock.mockImplementation((url: string, options?: RequestInit) =>
       url.endsWith('/test')
-        ? Promise.resolve(jsonResponse({ success: false, message: 'Synthetic IdP unavailable' }))
+        ? Promise.resolve(
+            jsonResponse(
+              { success: false, error: 'fetch_failed', message: 'Synthetic IdP unavailable' },
+              400,
+            ),
+          )
         : read(url, options),
     );
     const dialog = await editProvider();
     fireEvent.click(dialog.getByRole('button', { name: 'Test' }));
-    expect(await dialog.findByRole('alert')).toHaveTextContent('Synthetic IdP unavailable');
+    const result = await dialog.findByRole('alert');
+    expect(result).toHaveTextContent('Unable to run the connection test.');
+    expect(result).not.toHaveTextContent('Synthetic IdP unavailable');
     expect(notificationErrorMock).not.toHaveBeenCalled();
     fireEvent.click(dialog.getByRole('button', { name: 'Cancel' }));
     fireEvent.click(screen.getByRole('button', { name: /^Edit provider / }));

@@ -11,6 +11,7 @@
 # memory (where the modernc SQLite driver allocates) and file pages. At the end
 # each run's heap profile is saved, and summarize_release_memory.py writes the
 # comparison and exits 1 when the candidate grew past the tolerance.
+# The mapping breakdown is optional; VmRSS is read separately for the verdict.
 # Each sample also retains Linux's process RSS high-water mark (VmHWM), which
 # can include peaks between samples. This is not cgroup memory usage.
 #
@@ -44,6 +45,11 @@ DURATION="${PULSE_MEMORY_DURATION:-900}"
 INTERVAL="${PULSE_MEMORY_INTERVAL:-15}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ESTATE="${PULSE_FOOTPRINT_ESTATE:-mock}"
+
+if [[ ! "${DURATION}" =~ ^[1-9][0-9]*$ || ! "${INTERVAL}" =~ ^[1-9][0-9]*$ ]]; then
+  echo "Memory sampling duration and interval must be positive whole seconds" >&2
+  exit 2
+fi
 
 case "${ESTATE}" in
   mock)
@@ -104,8 +110,14 @@ classify_smaps() {
       else cls = "special"
       next
     }
-    /^Rss:/ { kib[cls] += $2 }
-    END { printf "%d\t%d\t%d\t%d", kib["go_heap"], kib["go_other"], kib["anon_other"], kib["file"] }
+    /^Rss:/ && cls != "" && $2 ~ /^[0-9]+$/ && $3 == "kB" {
+      kib[cls] += $2
+      observed = 1
+    }
+    END {
+      if (!observed) exit 1
+      printf "%d\t%d\t%d\t%d", kib["go_heap"], kib["go_other"], kib["anon_other"], kib["file"]
+    }
   ' "$1"
 }
 
@@ -138,6 +150,7 @@ run_tree() {
   # the legacy key lookup at a path that does not exist instead.
   env -i HOME="${HOME}" PATH="${PATH}" "${ESTATE_ENV[@]}" \
     PULSE_DATA_DIR="${data}" PORT="${port}" FRONTEND_PORT="${port}" \
+    PULSE_METRICS_BIND_ADDRESS=127.0.0.1 PULSE_METRICS_PORT=0 \
     PULSE_LEGACY_KEY_PATH="${data}/no-legacy-key" \
     PULSE_DEV=true ALLOW_ADMIN_BYPASS=1 PULSE_DEV_DISABLE_BACKGROUND_AI=true \
     PULSE_TELEMETRY=false PULSE_LICENSE_SERVER_URL=http://127.0.0.1:9 \
@@ -146,6 +159,8 @@ run_tree() {
   local pid=$!
   local driver=""
   local driver_log=""
+  local start now rss rss_hwm mappings
+  start=$(date +%s)
   if [[ "${ESTATE}" == agents ]]; then
     # The sampling loop ends the driver with SIGTERM. A driver deadline equal
     # to the sampling window can expire as that signal arrives, and Python then
@@ -157,58 +172,82 @@ run_tree() {
   elif [[ "${ESTATE}" == proxmox ]]; then
     driver_log="${OUT_DIR}/proxmox-${label}.log"
     python3 "${SCRIPT_DIR}/proxmox_load.py" --port "${port}" --duration "$((DURATION + 120))" \
+      --sample-until "$((start + DURATION))" \
       --stats "${OUT_DIR}/proxmox-${label}.json" > "${driver_log}" 2>&1 &
     driver=$!
   fi
   printf 'elapsed_s\trss_kib\tgo_heap_kib\tgo_other_kib\tanon_other_kib\tfile_kib\tcpu_ticks\twrite_bytes\twchar_bytes\trss_hwm_kib\n' > "${samples}"
-  local start now rss rss_hwm
-  start=$(date +%s)
   while kill -0 "${pid}" 2>/dev/null; do
     now=$(( $(date +%s) - start ))
     (( now >= DURATION )) && break
     IFS=$'\t' read -r rss rss_hwm < <(read_memory_status "/proc/${pid}/status" 2>/dev/null) || true
     if [[ -n "${rss}" ]]; then
-      printf '%s\t%s\t%s\t%s\t%s\t%s\n' "${now}" "${rss}" "$(classify_smaps "/proc/${pid}/smaps")" \
+      if ! mappings="$(classify_smaps "/proc/${pid}/smaps" 2>/dev/null)"; then
+        # Keep all four fields empty. A failed read can still emit partial
+        # output, and a short row would move CPU, I/O and high-water fields.
+        mappings=$'\t\t\t'
+      fi
+      printf '%s\t%s\t%s\t%s\t%s\t%s\n' "${now}" "${rss}" "${mappings}" \
         "$(cpu_ticks "/proc/${pid}/stat" 2>/dev/null || true)" \
         "$(io_bytes "/proc/${pid}/io" 2>/dev/null || printf '\t')" "${rss_hwm}" >> "${samples}"
     fi
     sleep "${INTERVAL}"
   done
-  local driver_status=0
+  local driver_status=null
   if [[ -n "${driver}" ]]; then
     kill -TERM "${driver}" 2>/dev/null || true
+    driver_status=0
     wait "${driver}" || driver_status=$?
   fi
   if kill -0 "${pid}" 2>/dev/null; then
-    curl -fsS -o "${OUT_DIR}/heap-${label}.pb.gz" "http://127.0.0.1:${port}/debug/pprof/heap" || true
-    kill "${pid}" 2>/dev/null || true
-    wait "${pid}" 2>/dev/null || true
-  else
-    echo "${label} exited before the measurement ended; see ${log}" >&2
-    return 1
+    local heap="${OUT_DIR}/heap-${label}.pb.gz"
+    # Profiles are optional. An unresponsive endpoint must not prevent
+    # checking the process outcome or expose a partial profile as evidence.
+    if curl -fsS --max-time 5 -o "${heap}.partial" "http://127.0.0.1:${port}/debug/pprof/heap"; then
+      mv "${heap}.partial" "${heap}" || true
+    fi
   fi
-  if (( driver_status != 0 )); then
+  local stop_request_status=0 pulse_status=0 before_stop=null after_stop_request=null
+  # Pulse can exit between the liveness check and the end of the profile read.
+  # Require the stop request itself to succeed, then inspect the actual wait.
+  kill -TERM "${pid}" 2>/dev/null || stop_request_status=$?
+  wait "${pid}" 2>/dev/null || pulse_status=$?
+  if (( stop_request_status != 0 )); then
+    before_stop="${pulse_status}"
+    echo "${label} exited before the watch stopped it (wait status ${pulse_status}); see ${log}" >&2
+  elif (( pulse_status != 0 && pulse_status != 143 )); then
+    after_stop_request="${pulse_status}"
+    echo "${label} returned unexpected wait status ${pulse_status} after the watch requested TERM; see ${log}" >&2
+  fi
+
+  # This is the only stdout from each measurement worker. The parent binds
+  # this observation to the corresponding worker's wait status.
+  printf '{"pulse_wait_status_before_stop":%s,"pulse_wait_status_after_stop_request":%s,"driver_wait_status":%s}\n' \
+    "${before_stop}" "${after_stop_request}" "${driver_status}"
+  if [[ "${driver_status}" != null && "${driver_status}" != 0 ]]; then
     echo "${label} ${ESTATE} load failed (exit ${driver_status}); see ${driver_log}" >&2
     return 1
   fi
+  [[ "${before_stop}" == null && "${after_stop_request}" == null ]]
 }
 
 build_tree baseline "${BASELINE_DIR}"
 build_tree candidate "${CANDIDATE_DIR}"
 
-# Run both at once so they share host conditions. Only one can bind the fixed
-# Prometheus port; the other logs a bind error, which costs no measurable memory.
-run_tree baseline 7801 & baseline_pid=$!
-run_tree candidate 7802 & candidate_pid=$!
-status=0
-wait "${baseline_pid}" || status=1
-wait "${candidate_pid}" || status=1
-(( status == 0 )) || exit 1
+# Run both at once so they share host conditions. The kernel assigns each
+# instance its own loopback metrics port, so neither loses that listener.
+run_tree baseline 7801 > "${OUT_DIR}/run-baseline-wait.json" & baseline_pid=$!
+run_tree candidate 7802 > "${OUT_DIR}/run-candidate-wait.json" & candidate_pid=$!
+baseline_status=0 candidate_status=0
+wait "${baseline_pid}" || baseline_status=$?
+wait "${candidate_pid}" || candidate_status=$?
 
-if [[ -s "${OUT_DIR}/heap-baseline.pb.gz" && -s "${OUT_DIR}/heap-candidate.pb.gz" ]]; then
+if (( baseline_status == 0 && candidate_status == 0 )) &&
+   [[ -s "${OUT_DIR}/heap-baseline.pb.gz" && -s "${OUT_DIR}/heap-candidate.pb.gz" ]]; then
   (cd "${CANDIDATE_DIR}" && go tool pprof -sample_index=inuse_space -top -nodecount=25 \
     -base "${OUT_DIR}/heap-baseline.pb.gz" "${OUT_DIR}/heap-candidate.pb.gz") \
     > "${OUT_DIR}/heap-growth.txt" 2>/dev/null || true
 fi
 
-python3 "${SCRIPT_DIR}/summarize_release_memory.py" "${OUT_DIR}"
+python3 "${SCRIPT_DIR}/summarize_release_memory.py" "${OUT_DIR}" "${DURATION}" "${INTERVAL}" \
+  "${baseline_status}" "${candidate_status}"

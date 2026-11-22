@@ -1,6 +1,14 @@
 import { Show, For, createUniqueId } from 'solid-js';
 import type { UIEmailConfig } from '@/features/alerts/types';
 import {
+  ALERT_EMAIL_BRAND_NAME_LABEL,
+  ALERT_EMAIL_BRAND_NAME_MAX_LENGTH,
+  ALERT_EMAIL_BRAND_NAME_PLACEHOLDER,
+  ALERT_EMAIL_BRANDING_HEADING,
+  ALERT_EMAIL_BRANDING_HELP,
+  ALERT_EMAIL_FOOTER_NOTE_LABEL,
+  ALERT_EMAIL_FOOTER_NOTE_MAX_LENGTH,
+  ALERT_EMAIL_FOOTER_NOTE_PLACEHOLDER,
   ALERT_EMAIL_FROM_ADDRESS_LABEL,
   ALERT_EMAIL_FROM_ADDRESS_PLACEHOLDER,
   ALERT_EMAIL_MANUAL_CONFIGURATION_LABEL,
@@ -20,6 +28,9 @@ import {
   ALERT_EMAIL_SMTP_PORT_PLACEHOLDER,
   ALERT_EMAIL_SMTP_SERVER_LABEL,
   ALERT_EMAIL_SMTP_SERVER_PLACEHOLDER,
+  ALERT_EMAIL_SUBJECT_PREFIX_LABEL,
+  ALERT_EMAIL_SUBJECT_PREFIX_MAX_LENGTH,
+  ALERT_EMAIL_SUBJECT_PREFIX_PLACEHOLDER,
   ALERT_EMAIL_USERNAME_LABEL,
   getAlertEmailAdvancedToggleLabel,
   getAlertEmailProviderOptionLabel,
@@ -57,6 +68,9 @@ export function EmailProviderSelect(props: EmailProviderSelectProps) {
     rateLimit: `${fieldIdPrefix}-rate-limit`,
     tagMode: `${fieldIdPrefix}-tag-mode`,
     minimumSeverity: `${fieldIdPrefix}-minimum-severity`,
+    subjectPrefix: `${fieldIdPrefix}-subject-prefix`,
+    brandName: `${fieldIdPrefix}-brand-name`,
+    footerNote: `${fieldIdPrefix}-footer-note`,
   };
   const instructionBoxClass =
     'mt-2 rounded-sm border border-blue-200 bg-blue-50 px-3 py-2 text-xs leading-relaxed text-blue-900 dark:border-blue-700 dark:bg-blue-900/25 dark:text-blue-200';
@@ -318,6 +332,63 @@ export function EmailProviderSelect(props: EmailProviderSelectProps) {
             </div>
 
             <p class={formHelpText}>{ALERT_EMAIL_RETRY_POLICY_HELP}</p>
+
+            <div class="space-y-3 border-t border-border pt-3">
+              <div>
+                <div class={labelClass()}>{ALERT_EMAIL_BRANDING_HEADING}</div>
+                <p class={formHelpText + ' mt-1'}>{ALERT_EMAIL_BRANDING_HELP}</p>
+              </div>
+              <div class="grid w-full gap-3 sm:grid-cols-2">
+                <div class={formField}>
+                  <label for={fieldIds.subjectPrefix} class={labelClass()}>
+                    {ALERT_EMAIL_SUBJECT_PREFIX_LABEL}
+                  </label>
+                  <input
+                    id={fieldIds.subjectPrefix}
+                    type="text"
+                    maxLength={ALERT_EMAIL_SUBJECT_PREFIX_MAX_LENGTH}
+                    value={props.config.subjectPrefix ?? ''}
+                    onInput={(e) =>
+                      props.onChange({ ...props.config, subjectPrefix: e.currentTarget.value })
+                    }
+                    placeholder={ALERT_EMAIL_SUBJECT_PREFIX_PLACEHOLDER}
+                    class={controlClass('px-2 py-1.5')}
+                  />
+                </div>
+                <div class={formField}>
+                  <label for={fieldIds.brandName} class={labelClass()}>
+                    {ALERT_EMAIL_BRAND_NAME_LABEL}
+                  </label>
+                  <input
+                    id={fieldIds.brandName}
+                    type="text"
+                    maxLength={ALERT_EMAIL_BRAND_NAME_MAX_LENGTH}
+                    value={props.config.brandName ?? ''}
+                    onInput={(e) =>
+                      props.onChange({ ...props.config, brandName: e.currentTarget.value })
+                    }
+                    placeholder={ALERT_EMAIL_BRAND_NAME_PLACEHOLDER}
+                    class={controlClass('px-2 py-1.5')}
+                  />
+                </div>
+                <div class={`${formField} sm:col-span-2`}>
+                  <label for={fieldIds.footerNote} class={labelClass()}>
+                    {ALERT_EMAIL_FOOTER_NOTE_LABEL}
+                  </label>
+                  <input
+                    id={fieldIds.footerNote}
+                    type="text"
+                    maxLength={ALERT_EMAIL_FOOTER_NOTE_MAX_LENGTH}
+                    value={props.config.footerNote ?? ''}
+                    onInput={(e) =>
+                      props.onChange({ ...props.config, footerNote: e.currentTarget.value })
+                    }
+                    placeholder={ALERT_EMAIL_FOOTER_NOTE_PLACEHOLDER}
+                    class={controlClass('px-2 py-1.5')}
+                  />
+                </div>
+              </div>
+            </div>
           </div>
         </Show>
       </div>

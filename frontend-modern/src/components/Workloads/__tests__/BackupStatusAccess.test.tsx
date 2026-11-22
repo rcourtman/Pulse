@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createSignal } from 'solid-js';
-import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
+import { cleanup, fireEvent, render, screen, within } from '@solidjs/testing-library';
 import { BackupIndicator, BackupStatusCell } from '../GuestRowCells';
 import { getGuestDrawerBackupPresentation } from '../guestDrawerModel';
 
@@ -38,6 +38,9 @@ describe('backup evidence access', () => {
       fireEvent.click(trigger);
       const dialog = screen.getByRole('dialog', { name: 'Backup status details' });
       expect(dialog).toHaveTextContent('Last completed backup');
+      expect(
+        within(dialog).queryByRole('link', { name: 'Check Proxmox backup coverage' }),
+      ).toBeNull();
       const completion = dialog.querySelector('time')!;
       const drawer = getGuestDrawerBackupPresentation(completed, undefined, now);
       expect(completion).toHaveAttribute('datetime', drawer.completedAt);
@@ -50,6 +53,27 @@ describe('backup evidence access', () => {
       fireEvent.keyDown(document, { key: 'Escape' });
       expect(screen.queryByRole('dialog')).toBeNull();
       expect(trigger).toHaveFocus();
+    },
+  );
+
+  it.each(['badge', 'indicator'] as const)(
+    'links from an unknown %s to the existing Proxmox Coverage view',
+    (variant) => {
+      render(() =>
+        variant === 'badge' ? (
+          <BackupStatusCell lastBackup={0} />
+        ) : (
+          <BackupIndicator lastBackup={0} isTemplate={false} />
+        ),
+      );
+      expect(screen.queryByRole('link', { name: 'Check Proxmox backup coverage' })).toBeNull();
+      fireEvent.click(screen.getByRole('button', { name: /no completed backup reported/i }));
+      const dialog = screen.getByRole('dialog');
+      expect(dialog).toHaveTextContent('Missing data does not mean no backups exist');
+      const link = within(dialog).getByRole('link', { name: 'Check Proxmox backup coverage' });
+      expect(link).toHaveAttribute('href', '/proxmox/backups/coverage');
+      expect(link).not.toHaveAttribute('target');
+      expect(dialog.querySelector('time')).toBeNull();
     },
   );
 
@@ -79,6 +103,28 @@ describe('backup evidence access', () => {
     setValue(completed);
     expect(dialog).toHaveTextContent('2 hours ago');
     expect(dialog).not.toHaveTextContent('unavailable');
+  });
+
+  it('keeps focus in the dialog when a live completion retires the coverage link', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(now);
+    const [value, setValue] = createSignal(0);
+    render(() => <BackupStatusCell lastBackup={value()} />);
+    const badge = screen.getByRole('button', { name: /^Backup status:/ });
+    fireEvent.click(badge);
+    await Promise.resolve();
+    const dialog = screen.getByRole('dialog');
+    const link = within(dialog).getByRole('link', { name: 'Check Proxmox backup coverage' });
+    link.focus();
+    expect(link).toHaveFocus();
+    setValue(completed);
+    expect(link).not.toBeInTheDocument();
+    expect(screen.getByRole('dialog')).toBe(dialog);
+    expect(within(dialog).getByRole('button', { name: 'Close backup details' })).toHaveFocus();
+    expect(dialog).toHaveTextContent('Last completed backup');
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(badge).toHaveFocus();
   });
 
   it('uses separate disclosures for adjacent guests and omits template indicators', () => {

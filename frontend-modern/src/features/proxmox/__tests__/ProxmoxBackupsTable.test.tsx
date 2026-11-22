@@ -1329,6 +1329,139 @@ const serverTable = () => document.querySelector('[data-proxmox-backups-table="s
 const sourceCalls = (source: 'pve' | 'pbs') =>
   apiFetchMock.mock.calls.filter(([url]) => url === `/api/backups/${source}`);
 
+describe('By date qualifies restore-point totals with provider collection evidence', () => {
+  const posture = protectionPosture(workloadResource.id);
+
+  it('does not call accepted empty inventories empty of backups when PVE could not read the storage list', async () => {
+    const completeProvider = {
+      ...posture.providerStates[0],
+      provider: 'proxmox-pve',
+      source: 'pve-backup-enumeration',
+      scope: 'pve-a',
+    };
+    const unreadPosture = {
+      ...posture,
+      state: 'unknown',
+      coverage: 'unknown',
+      freshness: 'unknown',
+      verification: 'unknown',
+      reason: 'history-unreadable',
+      explanation: 'Pulse could not read the storage list.',
+      providerStates: [
+        {
+          ...completeProvider,
+          jobState: 'failed',
+          historyCompleteness: 'unavailable',
+          permissions: 'unknown',
+          unreadScopes: [{ kind: 'node', node: 'pve-a' }],
+        },
+      ],
+    };
+    apiFetchMock.mockImplementation((url: string) =>
+      Promise.resolve(jsonResponse(url.endsWith('/pve') ? emptyPVE : emptyPBS)),
+    );
+    apiFetchJSONMock.mockResolvedValue({ data: [unreadPosture], policy: protectionPolicy });
+
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
+    try {
+      mountBackupReadState();
+      expect(await screen.findByText('0 completed restore points read')).toBeVisible();
+      expect(screen.getByText(/Pulse cannot read the storage list on node pve-a/)).toBeVisible();
+      expect(screen.queryByRole('button', { name: /Retry .* inventory/ })).toBeNull();
+      await fireEvent.click(screen.getByRole('link', { name: 'By date' }));
+      expect(await screen.findByText('Backup list incomplete')).toBeVisible();
+      expect(screen.getByText(/Check the backup list in Proxmox/)).toBeVisible();
+      expect(screen.getByText('0 restore points read', { exact: true })).toBeVisible();
+      expect(screen.queryByText('No backups yet')).toBeNull();
+      expect(sourceCalls('pve')).toHaveLength(1);
+      expect(sourceCalls('pbs')).toHaveLength(1);
+
+      apiFetchJSONMock.mockResolvedValue({
+        data: [
+          {
+            ...unreadPosture,
+            state: 'unprotected',
+            coverage: 'none',
+            reason: 'no-backup',
+            explanation: 'No completed backup was found in the read inventory.',
+            providerStates: [completeProvider],
+          },
+        ],
+        policy: protectionPolicy,
+      });
+      await vi.advanceTimersByTimeAsync(30_000);
+      expect(await screen.findByText('No backups yet')).toBeVisible();
+      expect(screen.queryByText('0 restore points read', { exact: true })).toBeNull();
+      expect(screen.queryByText(/Pulse cannot read the storage list/)).toBeNull();
+      expect(screen.getByRole('link', { name: 'By date' })).toHaveAttribute('aria-current', 'page');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('keeps the readable point and qualifies day and search misses with unnamed partial PBS history', async () => {
+    apiFetchMock.mockImplementation((url: string) =>
+      Promise.resolve(jsonResponse(url.endsWith('/pve') ? readPvePayload : emptyPBS)),
+    );
+    apiFetchJSONMock.mockResolvedValue({
+      data: [
+        {
+          ...posture,
+          providerStates: [{ ...posture.providerStates[0], historyCompleteness: 'partial' }],
+        },
+      ],
+      policy: protectionPolicy,
+    });
+    window.history.replaceState({}, '', '/proxmox/backups/date');
+    mountBackupReadState();
+    expect(await screen.findByText('1 completed restore point read')).toBeVisible();
+    expect(recoverableRows()).toHaveLength(1);
+    expect(recoverableRows()[0]).toHaveTextContent('pbs-docker');
+
+    const search = screen.getByPlaceholderText(
+      'Search backups by workload, node, source, or status',
+    );
+    fireEvent.input(search, { target: { value: 'no-matching-guest' } });
+    expect(await screen.findByText('No recoverable artifacts match current filters')).toBeVisible();
+    expect(screen.getByText('Change search or filters. The list is incomplete.')).toBeVisible();
+
+    // Start an inspection at the saved day URL with the same accepted evidence.
+    cleanup();
+    window.history.replaceState({}, '', '/proxmox/backups/date?day=2026-01-01');
+    mountBackupReadState();
+    expect(await screen.findByText('No restore points listed for Jan 1, 2026')).toBeVisible();
+    expect(screen.getByText(/Check the backup list in Proxmox/)).toBeVisible();
+    expect(screen.queryByText(/A failed backup usually leaves none/)).toBeNull();
+    expect(screen.getByText('0 of 1 restore point read', { exact: true })).toBeVisible();
+  });
+
+  it('qualifies a selected empty day while an inventory request failed, until that source recovers', async () => {
+    let pveFailed = true;
+    apiFetchMock.mockImplementation((url: string) =>
+      Promise.resolve(
+        url.endsWith('/pbs')
+          ? jsonResponse(pbsPayload)
+          : pveFailed
+            ? new Response('', { status: 503 })
+            : jsonResponse(emptyPVE),
+      ),
+    );
+    apiFetchJSONMock.mockResolvedValue({ data: [posture], policy: protectionPolicy });
+    window.history.replaceState({}, '', '/proxmox/backups/date?day=2026-01-01');
+    mountBackupReadState();
+    expect(await screen.findByText('No restore points listed for Jan 1, 2026')).toBeVisible();
+    expect(screen.getByText('Some backup sources are still loading or unavailable.')).toBeVisible();
+    expect(screen.queryByText(/A failed backup usually leaves none/)).toBeNull();
+
+    pveFailed = false;
+    await fireEvent.click(screen.getByRole('button', { name: 'Retry PVE inventory' }));
+    expect(await screen.findByText('No restore points from Jan 1, 2026')).toBeVisible();
+    expect(screen.getByText(/A failed backup usually leaves none/)).toBeVisible();
+    expect(sourceCalls('pve')).toHaveLength(2);
+    expect(sourceCalls('pbs')).toHaveLength(1);
+  });
+});
+
 describe('backup read recovery keeps keyboard position', () => {
   beforeEach(() => window.history.replaceState({}, '', '/proxmox/backups/coverage?q=backup#proof'));
   afterEach(() => {

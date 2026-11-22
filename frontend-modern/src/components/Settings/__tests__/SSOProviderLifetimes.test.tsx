@@ -350,6 +350,112 @@ describe('SSO provider read and editor ownership', () => {
     expect(writes()).toHaveLength(1);
   });
 
+  const issuerMismatch = {
+    success: false,
+    error: 'issuer_mismatch',
+    message: 'UNTRUSTED_RESULT_TEXT',
+    details: { entityId: 'UNTRUSTED_RESULT_DETAILS' },
+  };
+  const genericTestFailure = 'Unable to run the connection test.';
+
+  it('reports the draft issuer mismatch without echoing the response or saving', async () => {
+    const base = fetchMock.getMockImplementation()!;
+    fetchMock.mockImplementation((url: string, options?: RequestInit) =>
+      url.endsWith('/test') ? json(issuerMismatch, 400) : base(url, options),
+    );
+    render(() => <SSOProvidersPanel />);
+    const dialog = await edit();
+    const field = dialog.getByLabelText('Issuer URL');
+    const client = dialog.getByLabelText('Client ID');
+    const button = dialog.getByRole('button', { name: 'Test' });
+    const issuerUrl = 'https://first.example.test/realm/';
+    fireEvent.input(field, { target: { value: issuerUrl } });
+    fireEvent.input(dialog.getByLabelText('Client Secret'), {
+      target: { value: 'fixture-secret' },
+    });
+    button.focus();
+    fireEvent.click(button);
+
+    const result = await dialog.findByRole('alert');
+    expect(result).toHaveTextContent('Check the exact Issuer URL in your IdP settings.');
+    expect(result).toHaveTextContent('Nothing saved. Sign-in not tested.');
+    expect(result).not.toHaveTextContent(/issuer_mismatch|UNTRUSTED_RESULT|fixture-secret/);
+    expect(field).toHaveValue(issuerUrl);
+    expect(client).toHaveValue('pulse');
+    expect(button).toHaveFocus();
+    expect(button).toHaveAccessibleDescription('Issuer mismatch');
+    expect(dialog.getByRole('button', { name: 'Save Changes' })).toBeEnabled();
+    const view = dialog.getByRole('button', { name: 'Issuer mismatch — view result' });
+    expect(view).toHaveAttribute('aria-controls', result.id);
+    fireEvent.click(view);
+    expect(result).toHaveFocus();
+
+    fireEvent.input(field, { target: { value: 'https://first.example.test/realm' } });
+    expect(result).not.toBeInTheDocument();
+    expect(view).not.toBeInTheDocument();
+    expect(button).not.toHaveAttribute('aria-describedby');
+    expect(writes()).toHaveLength(1);
+    expect(JSON.parse(writes()[0][1].body)).toEqual({
+      type: 'oidc',
+      oidc: { issuerUrl, clientId: 'pulse' },
+    });
+  });
+
+  it.each([
+    ['unknown finding', 400, { ...issuerMismatch, error: 'other_finding' }],
+    ['ordinary API error', 400, { code: 'issuer_mismatch', error: 'UNTRUSTED_RESULT_TEXT' }],
+    ['contradictory success', 400, { ...issuerMismatch, success: true }],
+    ['non-boolean success', 400, { ...issuerMismatch, success: 'false' }],
+    ['null body', 400, null],
+    ['malformed body', 400, '<p>UNTRUSTED_RESULT_TEXT</p>'],
+    ['denial', 403, issuerMismatch],
+    ['rate limit', 429, issuerMismatch],
+    ['server error', 500, issuerMismatch],
+    ['2xx failure envelope', 200, issuerMismatch],
+  ])('keeps a %s generic and does not retry it', async (_label, status, body) => {
+    const base = fetchMock.getMockImplementation()!;
+    fetchMock.mockImplementation((url: string, options?: RequestInit) =>
+      url.endsWith('/test')
+        ? typeof body === 'string'
+          ? new Response(body, { status })
+          : json(body, status)
+        : base(url, options),
+    );
+    render(() => <SSOProvidersPanel />);
+    const dialog = await edit();
+    fireEvent.click(dialog.getByRole('button', { name: 'Test' }));
+    expect(await dialog.findByRole('alert')).toHaveTextContent(genericTestFailure);
+    expect(dialog.getByRole('button', { name: 'Test failed — view result' })).toBeInTheDocument();
+    expect(document.body).not.toHaveTextContent(/UNTRUSTED_RESULT|issuer_mismatch/);
+    expect(writes()).toHaveLength(1);
+  });
+
+  it('never applies a mismatch decoded after the draft has changed', async () => {
+    const pending = deferred();
+    const response = json(issuerMismatch, 400);
+    const decode = vi
+      .spyOn(response, 'json')
+      .mockImplementation(async () => (await pending.promise).json());
+    const base = fetchMock.getMockImplementation()!;
+    fetchMock.mockImplementation((url: string, options?: RequestInit) =>
+      url.endsWith('/test') ? response : base(url, options),
+    );
+    render(() => <SSOProvidersPanel />);
+    const dialog = await edit();
+    const button = dialog.getByRole('button', { name: 'Test' });
+    fireEvent.click(button);
+    await waitFor(() => expect(decode).toHaveBeenCalledOnce());
+    fireEvent.input(dialog.getByLabelText('Issuer URL'), {
+      target: { value: 'https://changed.example.test' },
+    });
+    pending.resolve(json(issuerMismatch, 400));
+    await settle();
+    expect(writes()[0][1].signal.aborted).toBe(true);
+    expect(dialog.queryByRole('alert')).toBeNull();
+    expect(button).not.toHaveAttribute('aria-describedby');
+    expect(button).toBeEnabled();
+  });
+
   const currentCertificate = {
     subject: 'CN=Current signing certificate',
     notAfter: '2027-08-01T00:00:00Z',
@@ -360,6 +466,12 @@ describe('SSO provider read and editor ownership', () => {
     notAfter: '2026-08-01T00:00:00Z',
     isExpired: true,
   };
+  const samlFailure = (error: string) => ({
+    success: false,
+    error,
+    message: 'UNTRUSTED_RESULT_TEXT',
+    details: { entityId: 'UNTRUSTED_RESULT_DETAILS', certificates: [] },
+  });
 
   it.each([
     {
@@ -377,9 +489,50 @@ describe('SSO provider read and editor ownership', () => {
       mode: 'manual URL rejected',
       saved: null,
       ssoUrl: 'not-a-url',
-      result: { success: false, message: 'Invalid SSO URL format', error: 'invalid_url' },
-      summary: ['Test failed'],
+      result: samlFailure('invalid_url'),
+      summary: ['Invalid SSO URL'],
+      guidance: 'Enter a full HTTP or HTTPS IdP SSO URL.',
       title: 'Check the IdP SSO URL format only',
+    },
+    {
+      mode: 'metadata URL rejected while manual and inline details are also set',
+      saved: { idpMetadataUrl: 'not-a-url', idpMetadataXml: '<EntityDescriptor />' },
+      result: samlFailure('invalid_url'),
+      summary: ['Invalid metadata URL'],
+      guidance: 'Enter a full HTTP or HTTPS IdP Metadata URL.',
+      title: 'Check SAML metadata',
+    },
+    {
+      mode: 'metadata URL could not be read',
+      saved: { idpMetadataUrl: 'https://idp.example.test/metadata' },
+      result: samlFailure('fetch_failed'),
+      summary: ['Metadata not read'],
+      guidance: 'Check that Pulse can read SAML XML from the IdP Metadata URL.',
+      title: 'Check SAML metadata',
+    },
+    {
+      mode: 'read metadata URL without a usable IdP',
+      saved: { idpMetadataUrl: 'https://pulse.example.test/sp-metadata' },
+      result: samlFailure('metadata_incomplete'),
+      summary: ['Metadata incomplete'],
+      guidance: 'Use IdP metadata with an entity ID and SSO URL, not SP metadata.',
+      title: 'Check SAML metadata',
+    },
+    {
+      mode: 'saved metadata XML cannot be parsed',
+      saved: { idpMetadataUrl: '  ', idpMetadataXml: 'synthetic malformed metadata' },
+      result: samlFailure('parse_failed'),
+      summary: ['Invalid metadata XML'],
+      guidance: 'Saved metadata XML is unreadable. Test an IdP Metadata URL instead.',
+      title: 'Check SAML metadata',
+    },
+    {
+      mode: 'saved metadata XML without a usable IdP',
+      saved: { idpMetadataUrl: '  ', idpMetadataXml: '<EntityDescriptor />' },
+      result: samlFailure('metadata_incomplete'),
+      summary: ['Metadata incomplete'],
+      guidance: 'Saved XML needs an IdP identity and SSO URL. Test an IdP Metadata URL instead.',
+      title: 'Check SAML metadata',
     },
     {
       mode: 'metadata URL alongside a manual URL',
@@ -413,7 +566,7 @@ describe('SSO provider read and editor ownership', () => {
       title: 'Check SAML metadata',
     },
   ])('summarizes the observed SAML test for $mode', async (scenario) => {
-    const { saved, result, summary, title } = scenario;
+    const { saved, result, summary, title, guidance } = scenario;
     const samlProvider = {
       id: 'fixture',
       name: 'Fixture',
@@ -423,7 +576,7 @@ describe('SSO provider read and editor ownership', () => {
     };
     const base = fetchMock.getMockImplementation()!;
     fetchMock.mockImplementation((url: string, options?: RequestInit) => {
-      if (url.endsWith('/test')) return json(result);
+      if (url.endsWith('/test')) return json(result, result.success ? 200 : 400);
       if (url.endsWith('/fixture')) return json({ ...samlProvider, saml: saved });
       if (saved && url === '/api/security/sso/providers')
         return json({ providers: [samlProvider] });
@@ -445,14 +598,17 @@ describe('SSO provider read and editor ownership', () => {
     fireEvent.click(testButton);
 
     const details = await dialog.findByRole(result.success ? 'status' : 'alert');
-    expect(details).toHaveTextContent(result.message);
+    expect(details).toHaveTextContent(
+      result.success ? result.message : `${guidance} Nothing saved. Sign-in not tested.`,
+    );
+    expect(details).not.toHaveTextContent(/UNTRUSTED_RESULT/);
     expect(testButton).toHaveAccessibleDescription(summary.join(' '));
     const summaryButton = dialog.getByRole('button', {
       name: `${summary.join(', ')} — view result`,
     });
     expect(summaryButton).toHaveAttribute('aria-controls', details.id);
     expect(summaryButton).toHaveTextContent(summary.join(' '));
-    if (result.details?.certificates.includes(expiredCertificate)) {
+    if (result.details?.certificates.some((certificate) => certificate === expiredCertificate)) {
       expect(details).toHaveTextContent(currentCertificate.subject);
       expect(details).toHaveTextContent(expiredCertificate.subject);
       expect(within(details).getAllByText('(Expired!)')).toHaveLength(1);
@@ -475,6 +631,33 @@ describe('SSO provider read and editor ownership', () => {
     });
   });
 
+  it.each([
+    [400, samlFailure('parse_failed')], // No inline XML in this request.
+    [400, samlFailure('unrecognised')],
+    [400, issuerMismatch],
+    [400, { ...samlFailure('metadata_incomplete'), success: true }],
+    [403, samlFailure('metadata_incomplete')],
+    [429, samlFailure('metadata_incomplete')],
+    [200, samlFailure('metadata_incomplete')],
+  ])('keeps mismatched SAML findings generic (HTTP %s): %j', async (status, body) => {
+    const base = fetchMock.getMockImplementation()!;
+    fetchMock.mockImplementation((url: string, options?: RequestInit) =>
+      url.endsWith('/test') ? json(body, status) : base(url, options),
+    );
+    render(() => <SSOProvidersPanel />);
+    await screen.findByText('first provider');
+    fireEvent.click(screen.getByRole('button', { name: 'Add SAML' }));
+    const dialog = within(await screen.findByRole('dialog', { name: 'Add SAML provider' }));
+    fireEvent.input(dialog.getByLabelText('IdP Metadata URL'), {
+      target: { value: 'https://idp.example.test/metadata' },
+    });
+    fireEvent.click(dialog.getByRole('button', { name: 'Test' }));
+    expect(await dialog.findByRole('alert')).toHaveTextContent(genericTestFailure);
+    expect(dialog.getByRole('button', { name: 'Test failed — view result' })).toBeInTheDocument();
+    expect(document.body).not.toHaveTextContent(/UNTRUSTED_RESULT/);
+    expect(writes()).toHaveLength(1);
+  });
+
   it('shows the SAML failure without reclaiming focus from draft fields', async () => {
     const pending = deferred();
     const base = fetchMock.getMockImplementation()!;
@@ -493,14 +676,14 @@ describe('SSO provider read and editor ownership', () => {
     await waitFor(() => expect(writes()).toHaveLength(1));
 
     metadata.focus();
-    pending.resolve(json({ success: false, message: 'Metadata could not be read' }));
+    pending.resolve(json(samlFailure('metadata_incomplete'), 400));
     const result = await dialog.findByRole('alert');
-    expect(result).toHaveTextContent('Metadata could not be read');
+    expect(result).toHaveTextContent('Use IdP metadata with an entity ID and SSO URL');
     expect(metadata).toHaveFocus();
     expect(dialog.getByLabelText('IdP SSO URL').compareDocumentPosition(result)).toBe(
       Node.DOCUMENT_POSITION_FOLLOWING,
     );
-    const view = dialog.getByRole('button', { name: 'Test failed — view result' });
+    const view = dialog.getByRole('button', { name: 'Metadata incomplete — view result' });
     expect(view).toHaveAttribute('aria-controls', result.id);
     const preview = dialog.getByRole('button', { name: 'Preview' });
     expect(preview).toBeEnabled();

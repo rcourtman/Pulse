@@ -1032,6 +1032,8 @@ export interface InfrastructureSystemRow {
   source: InfrastructureSourceKind;
   host?: string;
   coverageLabels: string[];
+  /** The saved platform API scope has every option off, independent of health. */
+  apiScopeOff?: boolean;
   statusLabel: string;
   statusClassName: string;
   agentUpdateCount: number;

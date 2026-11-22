@@ -194,17 +194,34 @@ source with a placeholder frontend, runs both for 15 minutes at once against the
 same small mock estate (2 nodes, 24 guests, a Docker host, telemetry off, no
 licence server), and splits steady-state resident memory into the Go heap, memory
 outside Go (where the SQLite driver allocates) and file pages
-(`scripts/memory/compare_release_memory.sh`). It fails when `main` uses more than
-15% and 16 MiB more resident memory than the release. Over the same steady-state
-window it also reports CPU as a percentage of one core, and disk writes and
-write calls extrapolated to MiB per day, from `/proc/<pid>/stat` and
-`/proc/<pid>/io`. Those rates are reported, not gated, until measured budgets
+(`scripts/memory/compare_release_memory.sh`). Each instance binds its own
+kernel-assigned loopback metrics port instead of racing for the default port.
+The watch does not scrape these endpoints. It fails when `main` uses more than
+15% and 16 MiB more resident memory than the release. Both builds use the same
+planned final third. An unavailable sample file, fewer than three RSS samples
+in that window, or a gap of more than two sampling intervals leaves the
+measurement incomplete, not a pass or a memory regression. Even a complete
+sample window does not count if a Pulse process exits before the watch can
+request its stop, returns a wait status other than 0 or 143 after that request,
+or its load driver fails. The incomplete summary and `result.json` retain the
+affected side, sample coverage and observed wait statuses. These statuses do
+not identify the cause of a stop or establish a cgroup OOM kill. The optional
+heap profile request is limited to five seconds; partial downloads are not
+uploaded as profiles.
+If Linux cannot supply the mapping breakdown for every sample in a run's
+comparison window, the affected columns are unavailable rather than zero.
+A complete, valid `VmRSS` window still supplies the verdict; misaligned sample
+rows cannot supply one.
+Over the same steady-state window it also reports CPU as a percentage of one
+core and extrapolates disk writes and write calls to MiB per day, from
+`/proc/<pid>/stat` and `/proc/<pid>/io`. Those rates are reported, not gated, until measured budgets
 exist for them. The step summary has the tables, and the `memory-regression` artifact holds the samples, both heap profiles
 and `heap-growth.txt`, which lists what grew by function. Mock fixtures live in
 the heap, so a growth list led by `internal/mock` is not production memory. A
-failed scheduled run opens an issue titled "Pulse memory grew against the last
-stable release", or comments on the open one, and the next passing scheduled run
-closes it. SQLite page caches only fill on large databases, which this short run
+failed scheduled mock comparison opens its own marked CI watch issue or records
+a transition on the untouched watch issue. A passing scheduled comparison can
+record recovery of the check; it does not close the issue or resolve a user's
+report. SQLite page caches only fill on large databases, which this short run
 never builds; `pkg/db/pagecache_test.go` guards those on every pull request.
 It gates nothing.
 
@@ -229,12 +246,21 @@ issue reporter reads only the mock job.
 
 Its `compare-proxmox` job runs the same non-gating comparison on a third estate:
 a real, non-mock Pulse polling a synthetic 3-node Proxmox VE cluster (35 guests),
-2 Proxmox Backup Server instances (~5,250 snapshots), and one connected
+2 Proxmox Backup Server instances (5,200 fixture snapshots), and one connected
 dashboard WebSocket (`scripts/memory/proxmox_load.py`). Neither mock mode nor
 the agent estate exercises PVE/PBS polling, `recovery.db` ingestion, protection
-posture refreshes, or PBS backup cloning. It fails if node registration fails,
-PVE/PBS polling does not occur, or the dashboard receives no initial state and
-update, and uploads `memory-regression-proxmox`.
+posture refreshes, or PBS backup cloning. It requires node registration,
+PVE/PBS polling, and dashboard state updates with all expected PVE guests. Each
+guest must have a poll sighting within 60 seconds of the end of RSS sampling;
+a roster retained since startup or an unrelated dashboard update is not enough.
+This checks collection near the end, not uninterrupted polling. It
+also requires a completed, nonempty snapshot response for each configured PBS
+backup group on each datastore; registration, status requests and repeat reads
+of one group cannot stand in for snapshot traffic. The per-build
+`proxmox-*.json` in `memory-regression-proxmox` records observed PVE guests and
+PBS group coverage by instance and datastore. Served groups do not prove Pulse
+retained or displayed those snapshots. A passing comparison is synthetic
+polling evidence, not an installed LXC memory test.
 
 `dependency-advisory-watch.yml` strictly audits the product frontend on
 `main` every day. A newly disclosed advisory can affect an unchanged lockfile;

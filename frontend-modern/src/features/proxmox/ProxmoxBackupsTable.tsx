@@ -23,6 +23,7 @@ import { createNonSuspendingQuery } from '@/hooks/createNonSuspendingQuery';
 import {
   buildProxmoxBackupsPath,
   PROXMOX_BACKUPS_DEFAULT_VIEW,
+  PROXMOX_BACKUPS_INSPECTION_STATE,
   PROXMOX_BACKUPS_PATH,
   PROXMOX_BACKUPS_QUERY_PARAMS,
   type ProxmoxBackupsView,
@@ -114,6 +115,8 @@ const EMPTY_PVE_BACKUPS: PVEBackupsPayload = {
 const EMPTY_PBS_BACKUPS: PBSBackupsPayload = { backups: [] };
 const BACKUP_READ_NOTICE_CLASS =
   'rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-100';
+const PROVIDER_HISTORY_GAP_DESCRIPTION =
+  'Check the backup list in Proxmox. Some backups may not appear here.';
 
 async function fetchPVEBackups(signal: AbortSignal): Promise<PVEBackupsPayload> {
   const response = await apiFetch('/api/backups/pve', { signal });
@@ -191,7 +194,7 @@ export const ProxmoxBackupsTable: Component<{
     { label: 'PVE', query: backups },
     { label: 'PBS', query: pbsBackups },
   ];
-  const inventoryIncomplete = () =>
+  const inventoryTransportIncomplete = () =>
     inventorySources.some(({ query }) => !query.resolvedOnce() || Boolean(query.error()));
   const hasReadableInventory = () =>
     inventorySources.some(({ query }) => query.resolvedOnce() && !query.error());
@@ -204,10 +207,44 @@ export const ProxmoxBackupsTable: Component<{
     void Promise.all([backups.refetch(), pbsBackups.refetch(), protectionPostures.refetch()]);
   };
   const { isMobile } = useBreakpoint();
-  const location = useLocation();
+  const location = useLocation<typeof PROXMOX_BACKUPS_INSPECTION_STATE>();
+  let inspectionArrivalHandled = false;
+  createEffect(() => {
+    if (inspectionArrivalHandled || location.state?.focusBackupInspection !== true) return;
+    // The dialog first restores focus to its trigger; the tab switch then
+    // hides that trigger. Wait for that render before resuming inspection.
+    const frame = requestAnimationFrame(() => {
+      inspectionArrivalHandled = true;
+      const active = document.activeElement;
+      if (
+        inspection?.isConnected &&
+        (active === document.body || active?.closest('[aria-hidden="true"]'))
+      ) {
+        inspection.focus({ preventScroll: true });
+      }
+    });
+    onCleanup(() => cancelAnimationFrame(frame));
+  });
   const protectionPostures = useProtectionPostures(() =>
     (props.workloads ?? []).map((workload) => workload.id),
   );
+  // A successful Pulse inventory response can contain retained or empty rows
+  // while a Proxmox collector could not enumerate all of its history. Use an
+  // explicit provider observation, not the workload's overall verdict (which
+  // can still be protected) or a legacy point with unknown history.
+  const providerInventoryIncomplete = createMemo(() =>
+    protectionPostures
+      .postures()
+      .some((posture) =>
+        posture.providerStates.some(
+          ({ provider, historyCompleteness }) =>
+            (provider === 'proxmox-pve' || provider === 'proxmox-pbs') &&
+            (historyCompleteness === 'partial' || historyCompleteness === 'unavailable'),
+        ),
+      ),
+  );
+  const restorePointInventoryIncomplete = () =>
+    inventoryTransportIncomplete() || providerInventoryIncomplete();
   // One unreadable storage limits every guest's coverage on its connection;
   // say which one once, where the operator can act on it.
   const unreadBackupSourcesNotice = createMemo(() =>
@@ -775,6 +812,17 @@ export const ProxmoxBackupsTable: Component<{
     !locationFilter() &&
     !typeFilter() &&
     recoverableFilter() === 'all';
+  const filteredEmptyDescription = () => {
+    if (!onlyDayFiltered()) {
+      return restorePointInventoryIncomplete()
+        ? 'Change search or filters. The list is incomplete.'
+        : undefined;
+    }
+    if (providerInventoryIncomplete()) return PROVIDER_HISTORY_GAP_DESCRIPTION;
+    if (inventoryTransportIncomplete())
+      return 'Some backup sources are still loading or unavailable.';
+    return 'A failed backup usually leaves none, and retention prunes older ones.';
+  };
   const hasActiveBackupsFilters = (): boolean =>
     Boolean(
       search().trim() ||
@@ -912,7 +960,7 @@ export const ProxmoxBackupsTable: Component<{
                     {recoveryModel().coverageSummary.recoverableArtifacts === 1
                       ? 'point'
                       : 'points'}
-                    {inventoryIncomplete() ? ' read' : ''}
+                    {restorePointInventoryIncomplete() ? ' read' : ''}
                     <Show when={recoveryModel().coverageSummary.runningArtifacts > 0}>
                       {' · '}
                       {recoveryModel().coverageSummary.runningArtifacts} running
@@ -1029,7 +1077,7 @@ export const ProxmoxBackupsTable: Component<{
                   view() === 'date'
                     ? restorePointCountNoun(
                         recoveryModel().coverageSummary.recoverableArtifacts,
-                        inventoryIncomplete(),
+                        restorePointInventoryIncomplete(),
                       )
                     : 'targets'
                 }
@@ -1049,21 +1097,23 @@ export const ProxmoxBackupsTable: Component<{
               emptyIcon={props.emptyIcon}
               filteredEmptyTitle={
                 onlyDayFiltered()
-                  ? `No restore points from ${getRecoveryFilterDateLabel(selectedDateKey()!)}`
+                  ? `No restore points ${restorePointInventoryIncomplete() ? 'listed for' : 'from'} ${getRecoveryFilterDateLabel(selectedDateKey()!)}`
                   : undefined
               }
-              filteredEmptyDescription={
-                onlyDayFiltered()
-                  ? 'A failed backup usually leaves none, and retention prunes older ones.'
-                  : undefined
-              }
+              filteredEmptyDescription={filteredEmptyDescription()}
               emptyTitle={
-                inventoryIncomplete() ? 'Backup inventory is incomplete' : 'No backups yet'
+                inventoryTransportIncomplete()
+                  ? 'Backup inventory is incomplete'
+                  : providerInventoryIncomplete()
+                    ? 'Backup list incomplete'
+                    : 'No backups yet'
               }
               emptyDescription={
-                inventoryIncomplete()
+                inventoryTransportIncomplete()
                   ? 'Some backup sources are still loading or unavailable. Missing restore points do not mean no backups exist.'
-                  : 'PBS backups, PVE backup files, and guest snapshots will appear here when available.'
+                  : providerInventoryIncomplete()
+                    ? PROVIDER_HISTORY_GAP_DESCRIPTION
+                    : 'PBS backups, PVE backup files, and guest snapshots will appear here when available.'
               }
               sortKey={recoverableSortKey}
               sortDirection={recoverableSortDirection}
@@ -1107,7 +1157,7 @@ export const ProxmoxBackupsTable: Component<{
               showWorkloadConnection={showWorkloadConnection()}
               evidenceLocationLabel={evidenceLocationLabel()}
               historyReadIncomplete={
-                inventoryIncomplete() ||
+                inventoryTransportIncomplete() ||
                 !protectionPostures.resolvedOnce() ||
                 Boolean(protectionPostures.response.error)
               }
@@ -1151,7 +1201,7 @@ export const ProxmoxBackupsTable: Component<{
                       showWorkloadConnection={showWorkloadConnection()}
                       evidenceLocationLabel={evidenceLocationLabel()}
                       historyReadIncomplete={
-                        inventoryIncomplete() ||
+                        inventoryTransportIncomplete() ||
                         !protectionPostures.resolvedOnce() ||
                         Boolean(protectionPostures.response.error)
                       }

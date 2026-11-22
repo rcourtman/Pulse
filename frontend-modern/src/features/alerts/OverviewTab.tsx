@@ -3,6 +3,7 @@ import { createSignal, onCleanup, createEffect, onMount, Show } from 'solid-js';
 import { useLocation } from '@solidjs/router';
 
 import type { AlertAcknowledgementRequests } from '@/stores/alertAcknowledgementRequests';
+import { useAlertsActivation } from '@/stores/alertsActivation';
 import type { Alert } from '@/types/api';
 
 import { AlertDeliveryHealthCard } from './AlertDeliveryHealthCard';
@@ -47,6 +48,13 @@ export function OverviewTab(props: {
   // Delivery being off applies to every alert at once, so it is said once here
   // rather than on each card.
   const deliveryPaused = useAlertDeliveryPausedReason();
+  const alertsActivation = useAlertsActivation();
+  // No pause banner can also mean the config has not confirmed activation.
+  // The setup hint needs a positive read, not the store's legacy default.
+  const deliveryConfirmedActive = () => {
+    const config = alertsActivation.config();
+    return config?.enabled === true && config.activationState === 'active';
+  };
   const [noDestinationsDismissed, setNoDestinationsDismissed] = createLocalStorageBooleanSignal(
     ALERTS_NO_DESTINATIONS_DISMISSED_KEY,
     false,
@@ -126,9 +134,9 @@ export function OverviewTab(props: {
       </Show>
       <Show
         when={
+          deliveryConfirmedActive() &&
           deliveryHealthState.hasNoEnabledDestinations() &&
           !deliveryHealthState.deliveryNeedsAttention() &&
-          deliveryPaused.pausedReason() === null &&
           !props.alertsDisabled() &&
           !noDestinationsDismissed()
         }

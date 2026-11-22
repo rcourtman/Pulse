@@ -1,0 +1,42 @@
+{
+  "version": 1,
+  "base_sha": "b4ad18fc69a06ef26e7d76c4e08a761c0f00398d",
+  "verified_at": "2026-11-22T13:28:16Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/SSOProvidersPanel.tsx",
+    "frontend-modern/src/components/Settings/ssoProvidersModel.ts",
+    "frontend-modern/src/components/Settings/useSSOProvidersState.ts",
+    "frontend-modern/src/utils/ssoProviderPresentation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/SSOProvidersPanel.tsx": "06b5d9212edd58996b5d9d2ae8be1e70678ba4b4f9ac1e42019d5762ce37aef9",
+    "frontend-modern/src/components/Settings/ssoProvidersModel.ts": "14a6e38a0260297f9bf3bafd3eeb26478d6d37996a2673eb93a44987f0693a1c",
+    "frontend-modern/src/components/Settings/useSSOProvidersState.ts": "9b35fa395c608995d50483819f827dd4c2f563f54e578eb387fac17adc017b7d",
+    "frontend-modern/src/utils/ssoProviderPresentation.ts": "c9b47ae903052473c6a5fe633dfbec53f8d0c95e435a20e342e447b80dc78cfe"
+  },
+  "routes": [
+    "/settings/security-sso — actual production Pulse Settings editor with synthetic local diagnostic responses"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 320,
+      "height": 800
+    }
+  ],
+  "states": [
+    "Chromium 141.0.7390.37 / Playwright 1.56.1; 1,338 assertions and 14 matched before/after camera states opened for native pixel inspection (desktop light and narrow dark touch).",
+    "Matched diagnostic results for unreadable metadata URL, incomplete fetched metadata with a manual choice also present, invalid metadata URL, unreadable and incomplete saved XML, and invalid manual SSO URL.",
+    "At Test, the copyable SP Metadata URL, draft metadata and Test/Preview stay in view. Opening the result retains certificate and access restrictions, the desktop helper text and the pinned footer. The compact narrow labels wrap without hiding fields.",
+    "Unknown and non-diagnostic HTTP failures stay generic. The OIDC issuer mismatch and the existing successful SAML format-only state keep their semantics."
+  ],
+  "interactions": [
+    "Use the existing Test by keyboard and touch; verify matching draft request bytes, distinct result copy, no actual provider write and no provider response details shown.",
+    "Open the summary’s result, check focus and the fixed actions, and dismiss to return to Test. Correct the metadata draft and explicitly retest: only the URL changes and sign-in is still not tested.",
+    "Exact production builds from 0b0c37b515b3c2e8e3519b8e02423a0644a0c01f and b4ad18fc69a06ef26e7d76c4e08a761c0f00398d. No real IdP or installed sign-in claim."
+  ]
+}
