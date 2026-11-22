@@ -1459,12 +1459,21 @@ describe('InfrastructureWorkspace', () => {
     const dialog = within(screen.getByRole('dialog'));
     const testButton = await dialog.findByRole('button', { name: 'Test connection' });
     const result = dialog.getByRole('status');
+    expect(result).toHaveAttribute('aria-atomic', 'true');
     expect(result).toBeEmptyDOMElement();
     fireEvent.click(testButton);
     await waitFor(() => expect(result).toHaveTextContent('System information read'));
     expect(result).toHaveTextContent('Pools, datasets, replication, and metrics were not checked.');
     expect(result).toHaveTextContent('No settings were saved.');
-    expect(dialog.getByRole('button', { name: 'Update connection' })).toBeEnabled();
+    for (const name of [
+      'Update connection',
+      'Preview impact',
+      'Cancel',
+      'Delete connection',
+      'Pause connection',
+    ]) {
+      expect(dialog.getByRole('button', { name })).toBeEnabled();
+    }
     expect(test).toHaveBeenCalledWith(
       saved.id,
       expect.objectContaining({

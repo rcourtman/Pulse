@@ -80,25 +80,25 @@ export const TrueNASCredentialSlot: Component<TrueNASCredentialSlotProps> = (pro
           title: 'System information read',
           description:
             'Pools, datasets, replication, and metrics were not checked. No settings were saved.',
-          tone: 'success' as const,
+          accent: 'border-emerald-500',
         };
       case 'unconfirmed':
         return {
           title: 'Connection test not confirmed',
           description: 'Pulse did not get a confirmed result. No settings were saved.',
-          tone: 'warning' as const,
+          accent: 'border-amber-500',
         };
       case 'failed':
         return {
           title: 'Connection test failed',
           description: result.detail,
-          tone: 'danger' as const,
+          accent: 'border-red-500',
         };
     }
   });
 
   return (
-    <div class="space-y-6">
+    <div class="space-y-4">
       <Show when={props.state.featureDisabled()}>
         <CalloutCard
           tone="warning"
@@ -382,23 +382,24 @@ export const TrueNASCredentialSlot: Component<TrueNASCredentialSlotProps> = (pro
           )}
         </Show>
 
-        <div>
-          <div role="status" aria-atomic="true">
+        <div
+          class="flex flex-col xl:flex-row xl:items-end xl:justify-between"
+          classList={{ 'gap-2': Boolean(connectionTestFeedback()) }}
+        >
+          <div role="status" aria-atomic="true" class="min-w-0 xl:flex-1">
             <Show when={connectionTestFeedback()}>
               {(feedback) => (
-                <CalloutCard
-                  tone={feedback().tone}
-                  scale="compact"
-                  padding="sm"
-                  class="mb-2 wrap-anywhere"
-                  title={feedback().title}
-                  description={feedback().description}
-                />
+                <div
+                  class={`wrap-anywhere border-l-2 py-0.5 pl-2 text-xs leading-snug ${feedback().accent}`}
+                >
+                  <p class="font-semibold text-base-content">{feedback().title}</p>
+                  <p class="text-muted">{feedback().description}</p>
+                </div>
               )}
             </Show>
           </div>
 
-          <div class="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+          <div class="flex flex-col-reverse gap-2 sm:flex-row sm:flex-wrap sm:justify-end">
             <Show when={isEditing() && props.onToggleEnabled}>
               <Button
                 variant="outline"
@@ -452,28 +453,32 @@ export const TrueNASCredentialSlot: Component<TrueNASCredentialSlotProps> = (pro
             >
               Cancel
             </Button>
-            <Button
-              variant="outline"
-              size="settingsAction"
-              onClick={() => void props.state.testCurrentForm()}
-              disabled={
-                props.state.saving() ||
-                props.state.testing() ||
-                props.togglePending ||
-                props.deletePending
-              }
-            >
-              {props.state.testing() ? 'Testing…' : 'Test connection'}
-            </Button>
-            <Button
-              variant="outline"
-              size="settingsAction"
-              onClick={() => void props.state.previewCurrentForm()}
-              disabled={props.state.saving() || props.state.testing() || props.state.previewing()}
-              title="Show the resources Pulse would ingest from this connection without saving or starting polling."
-            >
-              {props.state.previewing() ? 'Previewing…' : 'Preview impact'}
-            </Button>
+            <div class="grid grid-cols-2 gap-2 sm:flex">
+              <Button
+                variant="outline"
+                size="settingsAction"
+                class="order-2 whitespace-normal sm:order-none"
+                onClick={() => void props.state.testCurrentForm()}
+                disabled={
+                  props.state.saving() ||
+                  props.state.testing() ||
+                  props.togglePending ||
+                  props.deletePending
+                }
+              >
+                {props.state.testing() ? 'Testing…' : 'Test connection'}
+              </Button>
+              <Button
+                variant="outline"
+                size="settingsAction"
+                class="whitespace-normal"
+                onClick={() => void props.state.previewCurrentForm()}
+                disabled={props.state.saving() || props.state.testing() || props.state.previewing()}
+                title="Show the resources Pulse would ingest from this connection without saving or starting polling."
+              >
+                {props.state.previewing() ? 'Previewing…' : 'Preview impact'}
+              </Button>
+            </div>
             <Button
               variant="primary"
               size="settingsAction"

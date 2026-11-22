@@ -1560,6 +1560,8 @@ metrics, or save the draft. A reply without explicit success is unconfirmed.
 Feedback belongs to the current draft and reader; editing or leaving the form
 clears it. An access denial still withdraws the reader's saved configuration
 even if the tested draft has since changed.
+Keep the test result next to the editor actions without replacing scope
+or saved-transport details, or moving the connection actions behind a disclosure.
 
 ### Podman interval CPU evidence — issue #2447
 
