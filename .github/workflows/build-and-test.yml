@@ -179,7 +179,9 @@ jobs:
             echo "triage_helper=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          changed=$(git diff --name-only "$base" "${{ github.sha }}")
+          # A move removes one path and adds another. Use both for runtime
+          # and dependency decisions, just as the specialized classifiers do.
+          changed=$(git diff --no-ext-diff --no-renames --name-only "$base" "${{ github.sha }}" --)
           printf 'Changed files:\n%s\n' "$changed"
           # The issue-event job tests before minting its App token, but that
           # happens after publication. Test its parser and silent-mutation
