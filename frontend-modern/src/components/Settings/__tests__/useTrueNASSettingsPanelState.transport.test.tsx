@@ -142,16 +142,31 @@ describe('TrueNAS settings through the real API transport', () => {
     },
   );
 
-  it.each([
-    [401, destinationRefusal],
-    [403, { code: 'permission_denied', error: 'destination_not_allowed' }],
-  ] as const)('still withdraws reader access on Test HTTP %s', async (status, body) => {
+  it('does not replace the shared sign-in recovery on Test HTTP 401', async () => {
+    const { result } = renderHook(() => useTrueNASSettingsPanelState());
+    await ready(result);
+    result.openEditDialog(result.connections()[0]);
+    expectedActions = [['POST', '/api/truenas/connections/same-source-id/test']];
+    fetchMock.mockResolvedValueOnce(json(destinationRefusal, 401));
+
+    expect(await result.testCurrentForm()).toBe(false);
+    // The real API client clears auth and starts navigation before the hook
+    // reads the error. JSDOM does not unmount the route on navigation.
+    expect(getOrgID()).toBeNull();
+    expect(localStorage.getItem('just_logged_out')).toBe('true');
+    expect(result.connectionFeedback()).toBeNull();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('still withdraws on a permission denial mentioning the code only as text', async () => {
     const { result } = renderHook(() => useTrueNASSettingsPanelState());
     await ready(result);
     result.openEditDialog(result.connections()[0]);
     result.updateForm({ apiKey: 'fixture-unsaved-key' });
     expectedActions = [['POST', '/api/truenas/connections/same-source-id/test']];
-    fetchMock.mockResolvedValueOnce(json(body, status));
+    fetchMock.mockResolvedValueOnce(
+      json({ code: 'permission_denied', error: 'destination_not_allowed' }, 403),
+    );
 
     expect(await result.testCurrentForm()).toBe(false);
     expect(result.dialogOpen()).toBe(false);

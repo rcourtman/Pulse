@@ -1562,8 +1562,8 @@ clears it. On the editor's Test or Save request only, HTTP 403 with the
 structured `destination_not_allowed` code means Pulse refused the address, not
 that it lost access to Settings. Keep the draft and show the refusal and the
 fact that nothing was saved. Do not retry automatically or change destination
-policy. Other 401/403 responses still withdraw the reader's configuration even
-if the tested draft has since changed. The transport tests exercise both Add
+policy. Normal sign-in recovery and settings-access withdrawal still apply to
+other 401/403 responses, even if the draft has changed. The transport tests exercise both Add
 and Manage, verify one request per action, and check that an obsolete refusal
 does not apply to a changed address. Keep feedback next to the existing editor
 actions without replacing scope or saved-transport details, or hiding actions.
