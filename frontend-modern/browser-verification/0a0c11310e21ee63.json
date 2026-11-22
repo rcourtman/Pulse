@@ -1,0 +1,34 @@
+{
+  "version": 1,
+  "base_sha": "68dcd659f3d18e6b58248f9a804639c5a57689e9",
+  "verified_at": "2026-11-22T22:12:03Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/proxmox/ProxmoxNodesTable.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/proxmox/ProxmoxNodesTable.tsx": "c35ccbc81cfcdec8733665e4f91a59323c1d9847e1454cb1ac82d6b4804e1276"
+  },
+  "routes": [
+    "/proxmox/overview"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Matched exact production-mode frontend previews on the admitted parent and the changed source. Same synthetic canonical registry and infrastructure History wires. Chromium 141.0.7390.37 and Playwright 1.56.1; light desktop and dark touch phone; 350 assertions and all 12 matched captures inspected.",
+    "The current labels beside the curves show 0.62% CPU and 0.88% byte-derived memory, not 62% and 88%. Tiny positives, measured zero, exactly 1%, ordinary values and unavailable memory stay distinguishable.",
+    "The Bars controls, used/capacity figures, per-filesystem bars and phone fullest-disk summary remain. Disk current labels, time-series paths and sampled point values are unchanged."
+  ],
+  "interactions": [
+    "Use keyboard on desktop or tap Filters then View on phone, switch Bars to Trends and back, and sort the Nodes table by Memory. The real app renders text and accessible labels with no clipping.",
+    "Hover a supported node in Bars on desktop to preview the same current labels; scrub the Memory curve in Trends and read the unchanged historical point and synchronized cursors."
+  ]
+}
