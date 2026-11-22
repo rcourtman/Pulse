@@ -32,13 +32,13 @@ func TestAgentURLAdmissionRefusesUnsupportedOrUnexecutableValidator(t *testing.T
 		t.Skip("Unix installer")
 	}
 	for _, tc := range []struct {
-		name, url, body, wantHint string
-		mode                      os.FileMode
+		name, url, body, location, wantHint string
+		mode                                os.FileMode
 	}{
-		{"unsupported", "https://pulse.example.invalid", "#!/bin/sh\nprintf 'untrusted-output-canary\\n' >&2\nexit 1\n", "matches this Pulse server version and supports URL validation", 0700},
-		{"older-http-ambiguous", "http://203.0.113.10", "#!/bin/sh\nprintf 'invalid pulse URL: untrusted-output-canary\\n' >&2\nexit 1\n", "does not tell us whether the address is allowed", 0700},
-		{"cannot-execute", "http://192.168.1.20:7655", "#!/bin/sh\nexit 0\n", "staging filesystem allows execution", 0600},
-		{"missing-loader", "https://pulse.example.invalid", "#!/nonexistent-pulse-test-interpreter\nexit 0\n", "staging filesystem allows execution", 0700},
+		{"unsupported", "https://pulse.example.invalid", "#!/bin/sh\nprintf 'untrusted-output-canary\\n' >&2\nexit 1\n", "download", "matches this Pulse server version and supports URL validation", 0700},
+		{"older-http-ambiguous", "http://203.0.113.10", "#!/bin/sh\nprintf 'invalid pulse URL: untrusted-output-canary\\n' >&2\nexit 1\n", "install", "does not tell us whether the address is allowed", 0700},
+		{"cannot-execute-download", "http://192.168.1.20:7655", "#!/bin/sh\nexit 0\n", "download", "temporary download directory (TMPDIR, default /tmp), not the installer script directory", 0600},
+		{"missing-loader-install", "https://pulse.example.invalid", "#!/nonexistent-pulse-test-interpreter\nexit 0\n", "install", "This check uses the agent installation directory.", 0700},
 	} {
 		for _, format := range []string{"text", "json"} {
 			t.Run(tc.name+"/"+format, func(t *testing.T) {
@@ -57,8 +57,8 @@ EXIT_PREFLIGHT_FAILED=14
 				for _, name := range []string{"log_error", "redact_token", "pulse_url_uses_plain_http", "fail", "json_event", "validate_staged_agent_url"} {
 					script += extractInstallShellFunction(t, name) + "\n"
 				}
-				script += "validate_staged_agent_url \"$3\"\nprintf 'UNEXPECTED-ADMITTED\\n'\n"
-				output, err := exec.Command("bash", "-c", script, "url-admission", format, tc.url, path).CombinedOutput()
+				script += "validate_staged_agent_url \"$3\" \"$4\"\nprintf 'UNEXPECTED-ADMITTED\\n'\n"
+				output, err := exec.Command("bash", "-c", script, "url-admission", format, tc.url, path, tc.location).CombinedOutput()
 				text := strings.TrimSpace(string(output))
 				var failure *exec.ExitError
 				if !errors.As(err, &failure) || failure.ExitCode() != 14 || strings.Contains(text, "UNEXPECTED-ADMITTED") {
@@ -84,6 +84,12 @@ EXIT_PREFLIGHT_FAILED=14
 				}
 				if strings.Contains(message, "rejected the Pulse URL") || strings.Contains(message, "Plain HTTP") {
 					t.Fatalf("unsupported or unexecutable validator wrongly diagnosed as a URL refusal: %s", message)
+				}
+				if hasDownload := strings.Contains(message, "temporary download directory"); hasDownload != (tc.name == "cannot-execute-download") {
+					t.Fatalf("incorrect download-directory hint: %s", message)
+				}
+				if hasInstall := strings.Contains(message, "agent installation directory"); hasInstall != (tc.name == "missing-loader-install") {
+					t.Fatalf("incorrect installation-directory hint: %s", message)
 				}
 			})
 		}

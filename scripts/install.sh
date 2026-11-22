@@ -6856,6 +6856,7 @@ fi
 # not --self-test (older agents return before their URL policy is checked).
 validate_staged_agent_url() {
     local staged_binary="$1"
+    local location="$2"
     local status
     if "$staged_binary" --validate-url --url "$PULSE_URL" --allow-plaintext-http=false >/dev/null 2>&1; then
         json_event "preflight" "agent_url_validated" "Downloaded agent accepted the Pulse URL"
@@ -6866,7 +6867,13 @@ validate_staged_agent_url() {
 
     local unchanged="The installed service and saved credentials have not been changed."
     if [[ "$status" -eq 126 || "$status" -eq 127 ]]; then
-        fail "Could not run the downloaded agent to check the Pulse URL. Check that the staging filesystem allows execution and that the binary matches this host. $unchanged" "$EXIT_PREFLIGHT_FAILED"
+        local hint
+        if [[ "$location" == "download" ]]; then
+            hint="This check uses the temporary download directory (TMPDIR, default /tmp), not the installer script directory."
+        else
+            hint="This check uses the agent installation directory."
+        fi
+        fail "Could not run the downloaded agent to check the Pulse URL. $hint Check that this filesystem allows execution and that the binary matches this host. $unchanged" "$EXIT_PREFLIGHT_FAILED"
     fi
     # 65 is reserved for rejection by the collector's --validate-url policy.
     # Never classify from child output or expose it in either output format.
@@ -7577,7 +7584,11 @@ chmod 0755 "$TMP_BIN"
 STAGED_AGENT_BIN=""
 VERSION_PROBE_BINARY="$TMP_BIN"
 prepare_truenas_scale_url_validator
-validate_staged_agent_url "$VERSION_PROBE_BINARY"
+if [[ "$VERSION_PROBE_BINARY" == "$TMP_BIN" ]]; then
+    validate_staged_agent_url "$VERSION_PROBE_BINARY" download
+else
+    validate_staged_agent_url "$VERSION_PROBE_BINARY" install
+fi
 if [[ "$SAFE_PROFILE_ACTION" == "apply" ]]; then
     # The irreversible server-side reduction must run only through the staged
     # binary whose checksum/signature have just been verified. The installed
@@ -7630,7 +7641,7 @@ if [[ "$SAFE_PROFILE_ACTION" != "apply" ]]; then
     # does not rule out noexec or ACL denial). TrueNAS deliberately separates
     # persistent storage from its platform-selected executable runtime path.
     if [[ "${TRUENAS:-false}" != "true" ]]; then
-        validate_staged_agent_url "$STAGED_AGENT_BIN"
+        validate_staged_agent_url "$STAGED_AGENT_BIN" install
     fi
 fi
 
