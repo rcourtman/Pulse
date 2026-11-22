@@ -272,6 +272,18 @@ func applyLibvirtDomainStat(domain *agentshost.LibvirtDomain, key, value string)
 		if parsed, ok := parseLibvirtUint(value); ok {
 			domain.MemoryMaximumBytes = libvirtKiBToBytes(parsed)
 		}
+	case "balloon.available":
+		if parsed, ok := parseLibvirtUint(value); ok {
+			domain.MemoryAvailableBytes = libvirtKiBToBytes(parsed)
+		}
+	case "balloon.usable":
+		if parsed, ok := parseLibvirtUint(value); ok {
+			domain.MemoryUsableBytes = libvirtKiBToBytes(parsed)
+		}
+	case "balloon.unused":
+		if parsed, ok := parseLibvirtUint(value); ok {
+			domain.MemoryUnusedBytes = libvirtKiBToBytes(parsed)
+		}
 	default:
 		parsed, ok := parseLibvirtUint(value)
 		if !ok {

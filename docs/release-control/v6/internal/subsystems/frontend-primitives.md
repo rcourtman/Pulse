@@ -11750,3 +11750,20 @@ retaining the existing 90% coverage and determinate-share honesty guards
 `AvailabilityFleetView.test.tsx` cover window switching, coverage formatting,
 and range callbacks alongside desktop (`1440x900` light/dark) and narrow
 (`390x844`) browser proof.
+
+
+### Standalone Machines VMs table and host VM cues (22 November 2026)
+
+`StandaloneVirtualMachinesTable.tsx` uses the canonical platform table
+primitives (`PlatformTableToolbar`, `PlatformTableShell`,
+`PlatformHostScopedTableTitle`, `PlatformSortableTableHead` with canonical
+column kinds, `PlatformWindowedRows`, and `PlatformResourceDetailTableRow`) to
+display standalone hypervisor VMs (`VM`, `Host`, `State`, `CPU`, `Memory`,
+`Disk I/O`, `Net I/O`) at the standard 33px single-line desktop rhythm with
+responsive mobile column visibility and zero horizontal overflow.
+`AgentsMachinesTable.tsx` renders an inline `hidden sm:inline-flex` VM count
+pill beside hosts with standalone VMs that preserves single-line 33px desktop
+rows and avoids truncating host names on 390px phones. Verified by
+`StandaloneVirtualMachinesTable.test.tsx`, `AgentsMachinesTable.test.tsx`,
+`lint:canonical-platforms`, `lint:table-rows`, and
+`frontend-modern/browser-verification/9b345049621d9e89.json`.

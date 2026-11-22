@@ -47,6 +47,7 @@ import {
   STANDALONE_PATH,
   STANDALONE_QUERY_PARAMS,
   buildAvailabilityCheckPath,
+  buildStandaloneHostVmsPath,
   TRUENAS_PATH,
   VMWARE_PATH,
   buildPatrolControlPath,
@@ -193,9 +194,12 @@ describe('resource link routing contract', () => {
     expect(STANDALONE_QUERY_PARAMS).toEqual({
       query: 'q',
       status: 'status',
+      host: 'host',
       view: 'view',
       check: 'check',
     });
+    expect(buildStandaloneHostVmsPath('host:tower')).toBe('/standalone/vms?host=host%3Atower');
+    expect(buildStandaloneHostVmsPath('  ')).toBe('/standalone/vms');
     // One check's detail, on the table that holds it.
     expect(buildAvailabilityCheckPath('availability:router 1')).toBe(
       '/standalone/availability?view=table&check=availability%3Arouter+1',

@@ -19,10 +19,19 @@ export const STANDALONE_DEFAULT_TAB = 'machines';
 export const STANDALONE_QUERY_PARAMS = {
   query: 'q',
   status: 'status',
+  host: 'host',
   view: 'view',
   /** The availability check whose detail a link opens. */
   check: 'check',
 } as const;
+
+export const buildStandaloneHostVmsPath = (hostId: string): string => {
+  const normalized = hostId.trim();
+  if (!normalized) return buildStandalonePath('vms');
+  const params = new URLSearchParams();
+  params.set(STANDALONE_QUERY_PARAMS.host, normalized);
+  return `${buildStandalonePath('vms')}?${params.toString()}`;
+};
 
 /**
  * The Availability checks page with one check's detail open. The table is

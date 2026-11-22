@@ -14,12 +14,33 @@ const mocks = vi.hoisted(() => ({
   AgentsMachinesTable: vi.fn(
     (props: {
       resources: Resource[];
+      vmCountByMachineId?: () => ReadonlyMap<string, number>;
+      onOpenHostVms?: (machine: Resource) => void;
       externalSearch?: () => string;
       onExternalSearchChange?: (value: string) => void;
       externalStatus?: () => string;
       onExternalStatusChange?: (value: string) => void;
       onResetFilters?: () => void;
     }) => <div data-testid="agents-machines-table" data-resource-count={props.resources.length} />,
+  ),
+  StandaloneVirtualMachinesTable: vi.fn(
+    (props: {
+      vms: Resource[];
+      machines: Resource[];
+      selectedHostId?: () => string | undefined;
+      onClearHostScope?: () => void;
+      externalSearch?: () => string;
+      onExternalSearchChange?: (value: string) => void;
+      externalStatus?: () => string;
+      onExternalStatusChange?: (value: string) => void;
+      onResetFilters?: () => void;
+    }) => (
+      <div
+        data-testid="standalone-vms-table-mock"
+        data-vm-count={props.vms.length}
+        data-host-scope={props.selectedHostId?.() ?? ''}
+      />
+    ),
   ),
   AvailabilityChecksTable: vi.fn(
     (props: {
@@ -65,6 +86,10 @@ vi.mock('@solidjs/router', async () => {
 
 vi.mock('../AgentsMachinesTable', () => ({
   AgentsMachinesTable: mocks.AgentsMachinesTable,
+}));
+
+vi.mock('../StandaloneVirtualMachinesTable', () => ({
+  StandaloneVirtualMachinesTable: mocks.StandaloneVirtualMachinesTable,
 }));
 
 vi.mock('../AvailabilityChecksTable', () => ({
@@ -244,7 +269,7 @@ describe('StandalonePageSurface', () => {
     expect(mocks.useUnifiedResources).toHaveBeenCalledWith(
       expect.objectContaining({
         query:
-          'source=agent,availability&excludeSource=proxmox,kubernetes,truenas,vmware&type=agent,network-endpoint',
+          'source=agent,availability&excludeSource=proxmox,kubernetes,truenas,vmware&type=agent,vm,network-endpoint',
       }),
     );
     expect(screen.getByTestId('standalone-section-tabs')).toHaveAttribute(
@@ -552,6 +577,65 @@ describe('StandalonePageSurface', () => {
     expect(screen.getByRole('link', { name: 'View checks' })).toHaveAttribute(
       'href',
       '/standalone/availability',
+    );
+  });
+
+  it('reveals the evidence-gated VMs tab and wires host VM navigation when standalone VMs exist', () => {
+    const tower = resource({
+      id: 'agent:tower',
+      name: 'Tower',
+      type: 'agent',
+      platformType: 'agent',
+      sources: ['agent'],
+    });
+    const pulseDev = resource({
+      id: 'agent:tower:libvirt:domain-1',
+      name: 'pulse-dev',
+      type: 'vm',
+      parentId: 'agent:tower',
+      parentName: 'Tower',
+      platformType: 'agent',
+      sources: ['agent'],
+      technology: 'libvirt',
+      virtualMachine: { runtimeState: 'running', hypervisor: 'libvirt', vcpus: 8 },
+    });
+    mocks.useUnifiedResources.mockReturnValue({
+      resources: () => [tower, pulseDev],
+      loading: () => false,
+      error: () => null,
+      refetch: vi.fn(),
+    });
+
+    render(() => <StandalonePageSurface />);
+
+    expect(screen.getByTestId('standalone-section-tabs')).toHaveAttribute(
+      'data-tabs',
+      'machines,vms,availability',
+    );
+    const machineProps = mocks.AgentsMachinesTable.mock.calls.at(-1)?.[0];
+    expect(machineProps?.vmCountByMachineId?.().get('agent:tower')).toBe(1);
+    machineProps?.onOpenHostVms?.(tower);
+    expect(mocks.navigate).toHaveBeenCalledWith('/standalone/vms?host=agent%3Atower');
+
+    cleanup();
+    mocks.pathname = '/standalone/vms';
+    mocks.searchParams = { host: 'agent:tower', q: 'pulse', status: 'running' };
+    render(() => <StandalonePageSurface />);
+
+    expect(screen.getByTestId('standalone-section-tabs')).toHaveAttribute('data-active', 'vms');
+    const vmTable = screen.getByTestId('standalone-vms-table-mock');
+    expect(vmTable).toHaveAttribute('data-vm-count', '1');
+    expect(vmTable).toHaveAttribute('data-host-scope', 'agent:tower');
+
+    const vmProps = mocks.StandaloneVirtualMachinesTable.mock.calls.at(-1)?.[0];
+    expect(vmProps?.externalSearch?.()).toBe('pulse');
+    expect(vmProps?.externalStatus?.()).toBe('running');
+    vmProps?.onClearHostScope?.();
+    expect(mocks.setSearchParams).toHaveBeenCalledWith({ host: null }, { replace: true });
+    vmProps?.onResetFilters?.();
+    expect(mocks.setSearchParams).toHaveBeenCalledWith(
+      { q: null, status: null, host: null },
+      { replace: true },
     );
   });
 });

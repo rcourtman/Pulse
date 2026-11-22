@@ -10136,3 +10136,11 @@ or read/write path changes.
 validates an optional `agentUrl` override before minting a Proxmox/PBS agent
 install token or rendering the install command. No storage, backup, or recovery
 persistence format or read/write path changes.
+
+
+### Standalone host-scoped VMs route helper boundary (22 November 2026)
+
+`frontend-modern/src/routing/resourceLinks.ts` adds `STANDALONE_QUERY_PARAMS.host`
+and `buildStandaloneHostVmsPath` for host-scoped `/standalone/vms?host=<id>`
+links from Machines. No storage, backup, or recovery persistence format or
+read/write path changes. Verified by `resourceLinks.test.ts`.

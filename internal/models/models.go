@@ -674,24 +674,58 @@ func (i HostLibvirtInventory) NormalizeCollections() HostLibvirtInventory {
 // HostLibvirtDomain carries both cumulative source counters and the
 // server-derived point-in-time rates used by the unified VM resource.
 type HostLibvirtDomain struct {
-	ID                 string  `json:"id"`
-	Name               string  `json:"name"`
-	State              string  `json:"state"`
-	VCPUs              int     `json:"vcpus,omitempty"`
-	CPUTimeNanoseconds uint64  `json:"cpuTimeNanoseconds,omitempty"`
-	CPUUsagePercent    float64 `json:"cpuUsagePercent,omitempty"`
-	CPUUsageValid      bool    `json:"-"`
-	MemoryCurrentBytes int64   `json:"memoryCurrentBytes,omitempty"`
-	MemoryMaximumBytes int64   `json:"memoryMaximumBytes,omitempty"`
-	NetworkRXBytes     uint64  `json:"networkRxBytes,omitempty"`
-	NetworkTXBytes     uint64  `json:"networkTxBytes,omitempty"`
-	DiskReadBytes      uint64  `json:"diskReadBytes,omitempty"`
-	DiskWriteBytes     uint64  `json:"diskWriteBytes,omitempty"`
-	NetworkInRate      float64 `json:"networkInRate,omitempty"`
-	NetworkOutRate     float64 `json:"networkOutRate,omitempty"`
-	DiskReadRate       float64 `json:"diskReadRate,omitempty"`
-	DiskWriteRate      float64 `json:"diskWriteRate,omitempty"`
-	IORatesValid       bool    `json:"-"`
+	ID                   string  `json:"id"`
+	Name                 string  `json:"name"`
+	State                string  `json:"state"`
+	VCPUs                int     `json:"vcpus,omitempty"`
+	CPUTimeNanoseconds   uint64  `json:"cpuTimeNanoseconds,omitempty"`
+	CPUUsagePercent      float64 `json:"cpuUsagePercent,omitempty"`
+	CPUUsageValid        bool    `json:"-"`
+	MemoryCurrentBytes   int64   `json:"memoryCurrentBytes,omitempty"`
+	MemoryMaximumBytes   int64   `json:"memoryMaximumBytes,omitempty"`
+	MemoryAvailableBytes int64   `json:"memoryAvailableBytes,omitempty"`
+	MemoryUsableBytes    int64   `json:"memoryUsableBytes,omitempty"`
+	MemoryUnusedBytes    int64   `json:"memoryUnusedBytes,omitempty"`
+	NetworkRXBytes       uint64  `json:"networkRxBytes,omitempty"`
+	NetworkTXBytes       uint64  `json:"networkTxBytes,omitempty"`
+	DiskReadBytes        uint64  `json:"diskReadBytes,omitempty"`
+	DiskWriteBytes       uint64  `json:"diskWriteBytes,omitempty"`
+	NetworkInRate        float64 `json:"networkInRate,omitempty"`
+	NetworkOutRate       float64 `json:"networkOutRate,omitempty"`
+	DiskReadRate         float64 `json:"diskReadRate,omitempty"`
+	DiskWriteRate        float64 `json:"diskWriteRate,omitempty"`
+	IORatesValid         bool    `json:"-"`
+}
+
+// MemoryUsage returns the best available (used, total) byte pair for the domain.
+// When libvirt reports guest-side virtio-balloon statistics (balloon.available
+// paired with balloon.usable or balloon.unused), actual guest memory usage is
+// preferred over host allocation (balloon.current), which otherwise reads 100%
+// whenever balloon.current equals balloon.maximum. Shutoff domains report zero
+// used bytes against their configured maximum.
+func (d HostLibvirtDomain) MemoryUsage() (used int64, total int64, ok bool) {
+	if strings.EqualFold(strings.TrimSpace(d.State), "shutoff") {
+		total = d.MemoryMaximumBytes
+		if total <= 0 {
+			total = d.MemoryCurrentBytes
+		}
+		if total <= 0 {
+			return 0, 0, false
+		}
+		return 0, total, true
+	}
+	if d.MemoryAvailableBytes > 0 {
+		if d.MemoryUsableBytes > 0 && d.MemoryUsableBytes <= d.MemoryAvailableBytes {
+			return d.MemoryAvailableBytes - d.MemoryUsableBytes, d.MemoryAvailableBytes, true
+		}
+		if d.MemoryUnusedBytes > 0 && d.MemoryUnusedBytes <= d.MemoryAvailableBytes {
+			return d.MemoryAvailableBytes - d.MemoryUnusedBytes, d.MemoryAvailableBytes, true
+		}
+	}
+	if d.MemoryMaximumBytes > 0 {
+		return max(int64(0), min(d.MemoryCurrentBytes, d.MemoryMaximumBytes)), d.MemoryMaximumBytes, true
+	}
+	return 0, 0, false
 }
 
 // HostXCPNGInventory is the normalized server-side view of the XCP-ng pool

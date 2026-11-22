@@ -298,6 +298,8 @@ export function buildResourcePagePath(subject: ResourcePageSubject): string | nu
         name,
       );
     case 'standalone':
+      if (isGuest)
+        return withQuery(buildStandalonePath('vms'), STANDALONE_QUERY_PARAMS.query, name);
       return withQuery(buildStandalonePath(), STANDALONE_QUERY_PARAMS.query, name);
     default:
       return null;

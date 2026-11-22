@@ -12214,3 +12214,15 @@ Verified by `TestHandleAgentInstallCommand_CustomAgentURLOverride`,
 `NodeModalSetupGuideSection.test.tsx`, `InfrastructureInstallerSection.test.tsx`,
 `useNodeModalState.agentInstall.test.ts`, `settingsArchitecture.test.ts`, and
 `frontend-modern/browser-verification/9734d949f31f8828.json`.
+
+
+### Agent libvirt virtio-balloon guest memory counters (22 November 2026)
+
+`internal/hostagent/libvirt.go` parses optional `balloon.available`,
+`balloon.usable`, and `balloon.unused` KiB fields from `virsh --readonly domstats`
+onto `agentshost.LibvirtDomain` (`MemoryAvailableBytes`, `MemoryUsableBytes`,
+`MemoryUnusedBytes`) alongside `MemoryCurrentBytes` and `MemoryMaximumBytes`.
+Older agents that omit these optional fields remain wire-compatible and fall
+back to `balloon.current`/`balloon.maximum`. Collection remains strictly
+read-only with no VM lifecycle or configuration authority. Verified by
+`TestCollectLibvirtInventoryUsesReadOnlyBoundedBulkStats`.
