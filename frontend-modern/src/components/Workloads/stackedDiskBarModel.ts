@@ -16,6 +16,8 @@ import type { MetricDisplayThresholds } from '@/utils/metricThresholds';
 export interface StackedDiskBarProps {
   disks?: Disk[];
   aggregateDisk?: Disk;
+  /** Format the aggregate reading only, not the individual filesystem bars or max. */
+  formatAggregatePercent?: (percent: number) => string;
   mode?: 'stacked' | 'aggregate' | 'mini' | 'vertical-bars';
   summaryStrategy?: 'total' | 'max';
   showDiskCount?: boolean;
@@ -75,6 +77,7 @@ export interface StackedDiskBarPresentation {
   containerClass: string;
   diskCountLabel: string;
   diskCountTitle: string;
+  displayPercentFormat: (percent: number) => string;
   displayLabel: string;
   displayPercentValue: number;
   displaySublabel: string;
@@ -199,6 +202,7 @@ function buildTooltipContent(
   disks: Disk[],
   options: {
     aggregateDisk: Disk | undefined;
+    formatAggregatePercent?: (percent: number) => string;
     aggregateMode: boolean;
     current: boolean;
     unavailable: boolean;
@@ -255,7 +259,10 @@ function buildTooltipContent(
             ? getMetricColorRgba(percentValue, 'disk', options.thresholds)
             : UNKNOWN_DISK_COLOR,
         label: 'Total',
-        percent: options.unavailable || percentValue === null ? '—' : formatPercent(percentValue),
+        percent:
+          options.unavailable || percentValue === null
+            ? '—'
+            : (options.formatAggregatePercent ?? formatPercent)(percentValue),
         total: hasTotal ? formatBytes(aggregate.total!) : '—',
         used: options.unavailable || !hasUsed ? '?' : formatBytes(aggregate.used!),
       },
@@ -355,7 +362,11 @@ export function buildStackedDiskBarPresentation(
   const maxLabelFull = maxInfo
     ? `${valuePrefix ? 'Last known highest' : 'Highest'} usage: ${maxInfo.label} ${formatPercent(maxInfo.percent)}`
     : '';
-  const displayLabel = unavailable ? 'N/A' : formatPercent(displayPercentValue);
+  const displayPercentFormat =
+    !summarizeDisks && !useMaxSummary && hasAggregateUsage
+      ? (props.formatAggregatePercent ?? formatPercent)
+      : formatPercent;
+  const displayLabel = unavailable ? 'N/A' : displayPercentFormat(displayPercentValue);
   const displaySublabel =
     unavailable ||
     (useMaxSummary && maxInfo) ||
@@ -446,6 +457,7 @@ export function buildStackedDiskBarPresentation(
   const verticalBarsLabelTitle = verticalBarsMode && maxInfo ? maxLabelFull : '';
   const tooltipContent = buildTooltipContent(allDisks, {
     aggregateDisk: props.aggregateDisk,
+    formatAggregatePercent: props.formatAggregatePercent,
     aggregateMode,
     current,
     unavailable,
@@ -471,6 +483,7 @@ export function buildStackedDiskBarPresentation(
         : 'metric-text w-full h-4 flex items-center justify-center',
     diskCountLabel,
     diskCountTitle,
+    displayPercentFormat,
     displayLabel,
     displayPercentValue,
     displaySublabel,

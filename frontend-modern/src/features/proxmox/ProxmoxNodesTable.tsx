@@ -32,7 +32,7 @@ import { TableCell, TableRow } from '@/components/shared/Table';
 import { getSimpleStatusIndicator } from '@/utils/status';
 import { getNodeExternalUrl } from '@/utils/nodes';
 import { asTrimmedString } from '@/utils/stringUtils';
-import { normalizeDiskArray } from '@/utils/format';
+import { formatPercent, normalizeDiskArray } from '@/utils/format';
 import { buildMetricKeyForUnifiedResource } from '@/utils/metricsKeys';
 import { useWorkloadTableMetricHistory } from '@/components/Workloads/useWorkloadTableMetricHistory';
 import { getWorkloadTableLayoutMode } from '@/components/Workloads/guestRowModel';
@@ -69,7 +69,7 @@ import {
 } from '@/components/Workloads/workloadMetricHistoryModel';
 import { formatTemperature, getTemperatureTextClass } from '@/utils/temperature';
 import type { Disk, Node as LegacyNode } from '@/types/api';
-import type { Resource } from '@/types/resource';
+import { getDiskPercent, type Resource } from '@/types/resource';
 import { hasCurrentProxmoxUpdateEvidence } from '@/utils/proxmoxUpdateEvidence';
 import { nodeFromResource } from '@/utils/resourceStateAdapters';
 import {
@@ -111,6 +111,17 @@ const formatNodeUptime = (
     warn: seconds < 3_600,
   };
 };
+
+// Disk usage is already in percentage points. Under 2%, retain hundredths so
+// 0.88% is not shown as the same reading as 1%, or a small reading as empty.
+const formatLowNodeDiskPercent = (value: number): string | undefined => {
+  if (value <= 0 || value >= 2) return undefined;
+  return value < 0.01 ? '<0.01%' : `${Number(value.toFixed(2))}%`;
+};
+const formatNodeDiskBarPercent = (value: number): string =>
+  formatLowNodeDiskPercent(value) ?? formatPercent(value);
+const formatNodeDiskHistoryPercent = (value: number): string =>
+  formatLowNodeDiskPercent(value) ?? formatPlatformTablePercentValue(value);
 
 type GuestCounts = { vms: number; containers: number };
 
@@ -195,7 +206,7 @@ const getHostSortValue = (
       return typeof node.memory?.current === 'number' ? node.memory.current : null;
     }
     case 'disk':
-      return node.disk?.current ?? null;
+      return getDiskPercent(node) ?? null;
     case 'temp':
       return typeof node.temperature === 'number' && node.temperature > 0 ? node.temperature : null;
     case 'uptime':
@@ -536,14 +547,17 @@ export const ProxmoxNodesTable: Component<{
                   !memoryTotal() && getPlatformTableFiniteMetric(node.memory?.current) !== undefined
                     ? getPlatformTableFiniteMetric(node.memory?.current)
                     : undefined;
-                const diskPercent = () => getPlatformTableFiniteMetric(node.disk?.current) ?? 0;
+                const diskPercent = createMemo(() => getDiskPercent(node));
+                const diskHistoryLabel = () => {
+                  const value = diskPercent();
+                  return value === undefined ? undefined : formatNodeDiskHistoryPercent(value);
+                };
                 const aggregateDisk = (): Disk | undefined => {
                   if (!node.disk) return undefined;
-                  const total = getPlatformTableFiniteMetric(node.disk.total) ?? 0;
-                  const used = getPlatformTableFiniteMetric(node.disk.used) ?? 0;
-                  const free = getPlatformTableFiniteMetric(node.disk.free) ?? 0;
-                  const usage = getPlatformTableFiniteMetric(node.disk.current) ?? 0;
-                  return { total, used, free, usage } as Disk;
+                  const { total, used, free } = node.disk;
+                  // Match the canonical disk reader: measured bytes beat the
+                  // redundant percentage; unavailable is never an empty disk.
+                  return { total, used, free, usage: diskPercent() ?? -1 };
                 };
                 const legacyNode = () => projectResourceToLegacyNode(node);
                 const externalUrl = () => {
@@ -797,16 +811,15 @@ export const ProxmoxNodesTable: Component<{
                                   summaryStrategy="max"
                                   disks={normalizeDiskArray(node.agent?.disks)}
                                   aggregateDisk={aggregateDisk()}
+                                  formatAggregatePercent={formatNodeDiskBarPercent}
                                   thresholds={diskThresholds()}
                                 />
                               }
                             >
                               <MetricMiniSparkline
                                 series={diskSeries()}
-                                valueLabel={formatPlatformTablePercentValue(diskPercent(), {
-                                  normalizeRatio: true,
-                                  clamp: true,
-                                })}
+                                valueLabel={diskHistoryLabel()}
+                                formatValue={formatNodeDiskHistoryPercent}
                                 title={`${name()} disk history`}
                                 {...historyCursorProps()}
                               />

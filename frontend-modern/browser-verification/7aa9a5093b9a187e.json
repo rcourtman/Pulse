@@ -1,0 +1,39 @@
+{
+  "version": 1,
+  "base_sha": "54648323456c73ce9aaff3bfd8df5ebb547c2a8d",
+  "verified_at": "2026-11-22T18:45:57.155Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Workloads/StackedDiskBar.tsx",
+    "frontend-modern/src/components/Workloads/stackedDiskBarModel.ts",
+    "frontend-modern/src/features/proxmox/ProxmoxNodesTable.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Workloads/StackedDiskBar.tsx": "9791294691b43d6a5c741132f7ff93f2d88d49d1ce9be2e94a826f796a3755f5",
+    "frontend-modern/src/components/Workloads/stackedDiskBarModel.ts": "7a2ae4970538ef6bbdcd1cc38b01220e7a4c70681a42a3ca0175ac01d2c91111",
+    "frontend-modern/src/features/proxmox/ProxmoxNodesTable.tsx": "14ed7d3a8996b9855e6238b5ea07af32d91fed4bc0e0e30d5f07c387708ba298"
+  },
+  "routes": [
+    "/proxmox/overview"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 360,
+      "height": 800
+    }
+  ],
+  "states": [
+    "Matched production frontend builds on the parent and the repaired source, with identical Proxmox registry output and node history samples from an offline fixture. Chromium 141.0.7390.37 with Playwright 1.56.1, light desktop and dark touch phone. 206 assertions passed; all 16 captures inspected.",
+    "Nodes shows 0.49%, 0.88%, 1%, and 1.13% as distinct measurements. Used and total bytes remain visible on desktop. The real zero, full disk and unavailable states are still distinct.",
+    "A two-filesystem node still shows both individual bars and its 94% fullest reading on desktop, and the existing 94% compact summary on phone. CPU, history curves and table widths were unchanged.",
+    "The live tooltip retains the used/capacity pair. The stored point tooltip adds a percent unit without changing the sample or its time; the current reading beside History uses the same units as the live bar."
+  ],
+  "interactions": [
+    "Use keyboard or touch to sort Disk from its actual aggregate, toggle sort and restore the original order. Unavailable sorts after measured values.",
+    "Expand the narrow node preview, open View (inside Filters on phone), switch from Bars to Trends and back, and read and hover actual chart data. No external or mutating request."
+  ]
+}

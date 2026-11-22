@@ -140,6 +140,29 @@ describe('StackedDiskBar', () => {
       render(() => <StackedDiskBar aggregateDisk={agg} />);
       expect(screen.getByText('75%')).toBeInTheDocument();
     });
+
+    it('uses a supplied aggregate label without changing the fill or per-disk labels', async () => {
+      const aggregate = { total: 10_000, used: 88, usage: 0.88 };
+      const formatAggregatePercent = (percent: number) => `${percent.toFixed(2)}%`;
+      const { container } = render(() => (
+        <>
+          <StackedDiskBar
+            aggregateDisk={aggregate}
+            formatAggregatePercent={formatAggregatePercent}
+          />
+          <StackedDiskBar
+            aggregateDisk={aggregate}
+            disks={[makeDisk()]}
+            formatAggregatePercent={formatAggregatePercent}
+          />
+        </>
+      ));
+      expect(screen.getByText('0.88%')).toHaveAttribute('aria-label', '0.88%');
+      expect(getSingleBarFill(container)).toHaveAttribute('width', '0.88');
+      expect(screen.getByText('50%')).toBeInTheDocument();
+      await fireEvent.mouseEnter(getBarTrigger(container));
+      expect(document.querySelector('[data-tooltip-portal]')).toHaveTextContent('0.88%');
+    });
   });
 
   it.each([Infinity, -Infinity, Number.NaN, -100, 0, undefined])(
