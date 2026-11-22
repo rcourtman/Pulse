@@ -1,0 +1,41 @@
+{
+  "version": 1,
+  "base_sha": "80feb3555b86dc8c8eafc1e3bfb02d05d4a02c30",
+  "verified_at": "2026-11-22T04:59:49Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Workloads/GuestRowCells.tsx",
+    "frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx",
+    "frontend-modern/src/routing/resourceLinks.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Workloads/GuestRowCells.tsx": "7234de8be65924c3faf618ca47eae34a35411fcde2cb4069f1467b45e1895f16",
+    "frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx": "6e4e0f436cdfd1745c9f4f8902fc6d9ffa5463e908afed1cdfedd952ce3127fc",
+    "frontend-modern/src/routing/resourceLinks.ts": "fba8cc942aef0e44209c5fae950e8fc22e15d8c046ca0ed0f3e2607e726a4bae"
+  },
+  "routes": [
+    "/proxmox/overview",
+    "/proxmox/backups/coverage"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 360,
+      "height": 800
+    }
+  ],
+  "states": [
+    "Actual production-mode Pulse browser builds: baseline 3f8183f6c2f182365c9aa1104076d26f2b16b950, candidate runtime aa32acc76cc97f5fc4962a62a7b0f5a82d486b0c. Chromium 141.0.7390.37 / Playwright 1.56.1; matching light desktop and dark phone captures from fixed synthetic REST and WebSocket fixtures.",
+    "Unknown completion retains the absence caveat and guest-read state, with a direct Check Proxmox backup coverage link. Running stays distinct, with safety guidance and Close still visible at both widths. Known completion preserves its UTC instant, age and threshold link.",
+    "Coverage retains the named unread node, backup health, the readable peer's completed restore point, filters and both backup views. The transition adds a desktop focus outline around Backup inspection without moving the evidence.",
+    "A live resource snapshot with a valid completion updates the open disclosure, returns focus to Close, and leaves the separate guest-read observation intact. All twenty matched captures were opened for native pixel review."
+  ],
+  "interactions": [
+    "Activate the badge with Enter and the compact shield with touch; open and dismiss details. Escape returns desktop focus to the initiating shield.",
+    "Follow Coverage with Tab/Enter and touch. No full document reload or backup read before navigation; Backup inspection receives focus on arrival, and the next Tab remains inside it.",
+    "Use Back and accept a live completion while the disclosure is open. The retired link leaves a usable keyboard position. No writes, provider activity or off-origin requests."
+  ]
+}
