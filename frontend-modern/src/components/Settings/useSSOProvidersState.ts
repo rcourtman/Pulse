@@ -592,7 +592,7 @@ export const useSSOProvidersState = (props: SSOProvidersPanelProps) => {
             success: false,
             issuerMismatch: true,
             message:
-              'The Issuer URL does not match the OIDC discovery document. Confirm the intended issuer in your provider settings, including the host, path and any trailing slash. Nothing was saved. Client credentials and sign-in were not tested.',
+              'Check the exact Issuer URL in your IdP settings. Nothing saved. Sign-in not tested.',
           });
           return;
         }

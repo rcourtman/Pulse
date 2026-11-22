@@ -871,7 +871,9 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
                 <div
                   id={testResultId}
                   ref={testResultPanel}
-                  class={`${testResultPresentation()!.panelClass} focus:outline-hidden focus:ring-2 focus:ring-blue-500`}
+                  class={`${testResultPresentation()!.panelClass} focus:outline-hidden focus:ring-2 focus:ring-blue-500 ${
+                    testResult()?.issuerMismatch ? 'max-sm:p-2' : ''
+                  }`}
                   role={testResult()?.success ? 'status' : 'alert'}
                   tabindex={-1}
                   aria-labelledby={testResultTitleId}

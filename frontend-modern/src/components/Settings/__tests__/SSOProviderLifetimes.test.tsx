@@ -377,11 +377,8 @@ describe('SSO provider read and editor ownership', () => {
     fireEvent.click(button);
 
     const result = await dialog.findByRole('alert');
-    expect(result).toHaveTextContent('The Issuer URL does not match the OIDC discovery document.');
-    expect(result).toHaveTextContent(/intended issuer in your provider settings.*trailing slash/);
-    expect(result).toHaveTextContent(
-      'Nothing was saved. Client credentials and sign-in were not tested.',
-    );
+    expect(result).toHaveTextContent('Check the exact Issuer URL in your IdP settings.');
+    expect(result).toHaveTextContent('Nothing saved. Sign-in not tested.');
     expect(result).not.toHaveTextContent(/issuer_mismatch|UNTRUSTED_RESULT|fixture-secret/);
     expect(field).toHaveValue(issuerUrl);
     expect(client).toHaveValue('pulse');
