@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { expect, test as base } from "@playwright/test";
+import { expect, test as base, type Locator } from "@playwright/test";
 
 import {
   createAuthenticatedStorageState,
@@ -101,6 +101,23 @@ async function expectNoRowContains(
       return rows.some((row) => row.includes(text));
     })
     .toBe(false);
+}
+
+async function expectWindowedBackupRows(
+  table: Locator,
+  rowKind: "coverage" | "recoverable",
+): Promise<void> {
+  // The shared renderer reserves the space for unmounted rows with spacers.
+  // Check that reserve as well as the mounted row budget in the demo estate.
+  await expect(
+    table.locator("tr[data-platform-window-spacer]").first(),
+  ).toBeAttached();
+  await expect(
+    table.locator(`[data-proxmox-backup-row="${rowKind}"]`).first(),
+  ).toBeVisible();
+  expect(
+    await table.locator("[data-proxmox-backup-row]").count(),
+  ).toBeLessThanOrEqual(140);
 }
 
 test.describe.serial("Demo scenario curation", () => {
@@ -222,18 +239,7 @@ test.describe.serial("Demo scenario curation", () => {
     const coverageTable = page.locator(
       '[data-proxmox-backups-table="coverage"]',
     );
-    await expect(coverageTable).toHaveAttribute(
-      "data-proxmox-backups-windowed",
-      "true",
-    );
-    await expect
-      .poll(() => coverageTable.locator('[data-proxmox-backup-row="coverage"]').count())
-      .toBeGreaterThan(0);
-    expect(
-      await coverageTable
-        .locator('[data-proxmox-backup-row="coverage"]')
-        .count(),
-    ).toBeLessThanOrEqual(140);
+    await expectWindowedBackupRows(coverageTable, "coverage");
     const backupSearch = page.getByPlaceholder(
       "Search backups by workload, node, source, or status",
     );
@@ -244,15 +250,6 @@ test.describe.serial("Demo scenario curation", () => {
     const recoverableTable = page.locator(
       '[data-proxmox-backups-table="recoverable"]',
     );
-    await expect(recoverableTable).toHaveAttribute(
-      "data-proxmox-backups-windowed",
-      "true",
-    );
-    await expect
-      .poll(() => recoverableTable.locator('[data-proxmox-backup-row]').count())
-      .toBeGreaterThan(0);
-    expect(
-      await recoverableTable.locator("[data-proxmox-backup-row]").count(),
-    ).toBeLessThanOrEqual(140);
+    await expectWindowedBackupRows(recoverableTable, "recoverable");
   });
 });
