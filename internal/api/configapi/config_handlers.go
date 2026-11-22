@@ -733,13 +733,13 @@ func classifyConnectionTestError(err error) string {
 
 	switch {
 	case containsAny("status 403", "http 403", "403 forbidden", "permission check failed", "permission denied", "forbidden"):
-		return "Permission denied (HTTP 403). Verify the user or API token has the PVEAuditor role on '/' and check whether Privilege Separation is blocking access."
+		return "Permission denied (HTTP 403). Check read access for the intended resources. If the token uses Privilege Separation, check its own read grants."
 	case containsAny("status 401", "http 401", "401 unauthorized", "unauthorized", "authentication failed", "invalid credentials", "invalid ticket", "login failed"):
 		return "Authentication failed (HTTP 401). Verify the username with realm (for example root@pam) or API token ID and secret."
 	case containsAny("server gave http response to https client", "malformed http response", "first record does not look like a tls handshake"):
 		return "Protocol mismatch. Proxmox endpoints require https:// (for example https://host:8006 for PVE or :8007 for PBS)."
 	case containsAny("x509", "certificate", "tls:", "unknown authority", "fingerprint mismatch", "handshake failure", "bad certificate"):
-		return "TLS certificate verification failed. Turn off 'Verify SSL certificate' for self-signed Proxmox certificates or configure an SSL fingerprint."
+		return "TLS certificate verification failed. Keep verification enabled. Check the hostname, expiry and trusted chain. Verify a certificate independently before setting a pin."
 	case containsAny("connection refused"):
 		return "Connection refused. Verify the host address and port (Proxmox VE uses 8006, PBS uses 8007) and confirm the service is running."
 	case containsAny("deadline exceeded", "timed out", "i/o timeout"):

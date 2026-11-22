@@ -390,13 +390,13 @@ func TestSanitizeErrorMessage(t *testing.T) {
 			name:      "connection operation classifies 403 permission denied",
 			err:       errors.New("API error (status 403): Permission check failed (/nodes, Sys.Audit)"),
 			operation: "connection",
-			expected:  "Permission denied (HTTP 403). Verify the user or API token has the PVEAuditor role on '/' and check whether Privilege Separation is blocking access.",
+			expected:  "Permission denied (HTTP 403). Check read access for the intended resources. If the token uses Privilege Separation, check its own read grants.",
 		},
 		{
 			name:      "connection operation classifies TLS error without leaking cert details",
 			err:       errors.New("x509: certificate signed by unknown authority (CN=internal.corp.lan)"),
 			operation: "connection",
-			expected:  "TLS certificate verification failed. Turn off 'Verify SSL certificate' for self-signed Proxmox certificates or configure an SSL fingerprint.",
+			expected:  "TLS certificate verification failed. Keep verification enabled. Check the hostname, expiry and trusted chain. Verify a certificate independently before setting a pin.",
 		},
 		{
 			name:      "connection operation classifies HTTP protocol mismatch",

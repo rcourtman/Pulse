@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { InfrastructurePlatformSettingsProps } from '@/components/Settings/proxmoxSettingsModel';
 import type { NodeConfigWithStatus } from '@/types/nodes';
 import { MonitoredSystemLedgerAPI } from '@/api/monitoredSystemLedger';
+import { NodesAPI } from '@/api/nodes';
 import { NodeCredentialSlot } from '../NodeCredentialSlot';
 
 const importApprovalRequiredMessage =
@@ -244,6 +245,45 @@ describe('NodeCredentialSlot', () => {
     fireEvent.input(name, { target: { value: 'Rack A' } });
     fireEvent.input(endpoint, { target: { value: 'https://pve2.local:8006' } });
     expect(name).toHaveValue('Rack A');
+  });
+
+  it('shows reported cluster membership without claiming wider access or a save', async () => {
+    const settings = createSettings();
+    const testConnection = vi.spyOn(NodesAPI, 'testConnection').mockResolvedValue({
+      status: 'success',
+      message:
+        'Connected to this PVE endpoint. Nodes reported: 2. Background collection was not tested.',
+      isCluster: true,
+      nodeCount: 2,
+      clusterNodeCount: 2,
+    });
+    render(() => (
+      <NodeCredentialSlot
+        nodeType="pve"
+        settings={settings}
+        prefillNode={{ type: 'pve', host: 'https://cluster.example.test:8006' }}
+        onCancel={vi.fn()}
+        onSaved={vi.fn()}
+      />
+    ));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Manual Token Setup' }));
+    fireEvent.input(screen.getByLabelText(/^Token ID/), {
+      target: { value: 'fixture@pve!pulse' },
+    });
+    fireEvent.input(screen.getByLabelText(/^Token Value/), {
+      target: { value: 'fixture-token' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Test connection' }));
+
+    expect(await screen.findByText(/Nodes reported: 2/)).toBeVisible();
+    expect(
+      screen.getByText(/Cluster detected.*does not confirm access to every member/),
+    ).toHaveTextContent('Nothing was saved.');
+    expect(screen.getByRole('checkbox', { name: 'Verify SSL certificate' })).toBeChecked();
+    expect(screen.getByRole('button', { name: 'Add node' })).toBeEnabled();
+    expect(testConnection).toHaveBeenCalledOnce();
+    expect(settings.saveNode).not.toHaveBeenCalled();
   });
 
   it('requires candidate import plan approval before guided setup handoff or manual save', () => {
