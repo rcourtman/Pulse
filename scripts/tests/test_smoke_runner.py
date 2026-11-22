@@ -190,10 +190,15 @@ class SmokeRunnerTest(unittest.TestCase):
         held = self.python_fixture('test_third.py')
         ready = self.root / 'ready'
         child_ready = self.root / 'child-ready'
+        # The observers (including cleanup) treat existence as readiness.
+        # Publish each marker only after closing its complete payload.
         child_source = ("import os, signal, time\nfrom pathlib import Path\n"
                         "signal.signal(signal.SIGTERM, signal.SIG_IGN)\n"
                         "signal.signal(signal.SIGINT, signal.SIG_IGN)\n"
-                        f"Path({str(child_ready)!r}).write_text(str(os.getpid()))\n"
+                        f"ready = Path({str(child_ready)!r})\n"
+                        "pending = ready.with_suffix('.tmp')\n"
+                        "pending.write_text(str(os.getpid()))\n"
+                        "pending.replace(ready)\n"
                         "time.sleep(30)\n")
         held.write_text(
             "from pathlib import Path\nimport json, os, signal, subprocess, sys, time\n" +
@@ -203,7 +208,10 @@ class SmokeRunnerTest(unittest.TestCase):
              "signal.signal(signal.SIGINT, lambda *_: sys.exit(0))\n" if exit_zero else '') +
             (f"child = subprocess.Popen([sys.executable, '-c', {child_source!r}])\n"
              f"while not Path({str(child_ready)!r}).exists(): time.sleep(.01)\n" if descendant else '') +
-            f"Path({str(ready)!r}).write_text(json.dumps({{'pid': os.getpid(), 'pgid': os.getpgrp()}}))\n"
+            f"ready = Path({str(ready)!r})\n"
+            "pending = ready.with_suffix('.tmp')\n"
+            "pending.write_text(json.dumps({'pid': os.getpid(), 'pgid': os.getpgrp()}))\n"
+            "pending.replace(ready)\n"
             "time.sleep(30)\n")
         self.python_fixture('test_fourth.py')
         process = subprocess.Popen(['bash', str(self.runner), 'test_first.py', 'test_second.py',
