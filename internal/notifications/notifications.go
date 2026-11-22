@@ -2,6 +2,8 @@ package notifications
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -1490,4 +1492,9 @@ func (n *NotificationManager) Stop() {
 
 		log.Info().Msg("NotificationManager stopped")
 	})
+}
+
+func hashDeliveryDestination(kind, identity string) string {
+	digest := sha256.Sum256([]byte(kind + "\x00" + identity))
+	return kind + ":" + hex.EncodeToString(digest[:16])
 }

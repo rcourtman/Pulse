@@ -370,11 +370,6 @@ func notificationDeliveryDestinationKey(job notificationDeliveryJob) string {
 	return hashDeliveryDestination(job.Type, identity)
 }
 
-func hashDeliveryDestination(kind, identity string) string {
-	digest := sha256.Sum256([]byte(kind + "\x00" + identity))
-	return kind + ":" + hex.EncodeToString(digest[:16])
-}
-
 func legacyWebhookDestination(hook WebhookConfig) (string, string) {
 	identity := strings.Join([]string{strings.TrimSpace(hook.ID), strings.TrimSpace(hook.URL)}, "\x1f")
 	return hashDeliveryDestination("webhook", identity), identity
