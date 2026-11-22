@@ -1693,6 +1693,13 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Read the prior staging child on a retry
+        id: prior_stage
+        if: ${{ github.run_attempt != '1' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 .github/scripts/previous-private-stage.py
+
       - name: Dispatch and verify private Pro runtime staging
         id: publish
         env:
@@ -1700,6 +1707,7 @@ jobs:
           VERSION: ${{ needs.prepare.outputs.version }}
           TAG: ${{ needs.prepare.outputs.tag }}
           IS_PRERELEASE: ${{ needs.prepare.outputs.is_prerelease }}
+          PRIOR_CHILD_ID: ${{ steps.prior_stage.outputs.child_id }}
         run: |
           set -euo pipefail
 
@@ -1786,6 +1794,36 @@ jobs:
           fi
           r2_prefix="${TAG}-pro-${run_created_date}-${GITHUB_RUN_ID}"
           python3 scripts/write_github_output.py r2_prefix "${r2_prefix}"
+
+          if [[ -n "${PRIOR_CHILD_ID}" ]]; then
+            [[ "${PRIOR_CHILD_ID}" =~ ^[1-9][0-9]*$ ]] || exit 1
+            # A wait timeout does not terminate the child. Its private workflow
+            # is serialized: posting a second build only waits behind the first.
+            # Accept a new dispatch only after a definite failure of that child.
+            if ! child_state="$(gh api "repos/rcourtman/pulse-enterprise/actions/runs/${PRIOR_CHILD_ID}" | jq -er \
+              --arg id "${PRIOR_CHILD_ID}" '
+                select((.id | tostring) == $id and .path == ".github/workflows/build-pro-release.yml"
+                  and .head_branch == "main" and .event == "workflow_dispatch")
+                | [.status, (.conclusion // "-")] | @tsv')"; then
+              echo "::error::The exact prior private staging child could not be verified; not dispatching."
+              exit 1
+            fi
+            case "${child_state}" in
+              $'completed\tsuccess'|$'queued\t-'|$'in_progress\t-'|$'pending\t-'|$'requested\t-'|$'waiting\t-')
+                build_run_id="${PRIOR_CHILD_ID}"
+                wait_for_workflow rcourtman/pulse-enterprise "${build_run_id}" "private Pro build" 10800
+                exit 0
+                ;;
+              $'completed\tfailure'|$'completed\ttimed_out'|$'completed\tstartup_failure')
+                echo "The exact previous staging child failed; dispatching a replacement for the same source and prefix."
+                ;;
+              *)
+                echo "::error::The exact prior private staging child did not establish a retryable outcome; not dispatching."
+                exit 1
+                ;;
+            esac
+          fi
+
           echo "Dispatching private Pro build for ${TAG} with R2 prefix ${r2_prefix}."
           build_dispatch="$(
             jq -n \
