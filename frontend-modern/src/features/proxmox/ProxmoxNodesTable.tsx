@@ -112,16 +112,16 @@ const formatNodeUptime = (
   };
 };
 
-// Disk usage is already in percentage points. Under 2%, retain hundredths so
-// 0.88% is not shown as the same reading as 1%, or a small reading as empty.
-const formatLowNodeDiskPercent = (value: number): string | undefined => {
+// Node readings are already in percentage points. Under 2%, retain hundredths
+// so 0.88% is not shown as 1%, or a small reading as empty.
+const formatLowNodePercent = (value: number): string | undefined => {
   if (value <= 0 || value >= 2) return undefined;
   return value < 0.01 ? '<0.01%' : `${Number(value.toFixed(2))}%`;
 };
 const formatNodeDiskBarPercent = (value: number): string =>
-  formatLowNodeDiskPercent(value) ?? formatPercent(value);
-const formatNodeDiskHistoryPercent = (value: number): string =>
-  formatLowNodeDiskPercent(value) ?? formatPlatformTablePercentValue(value);
+  formatLowNodePercent(value) ?? formatPercent(value);
+const formatNodeHistoryPercent = (value: number): string =>
+  formatLowNodePercent(value) ?? formatPlatformTablePercentValue(value, { clamp: true });
 
 type GuestCounts = { vms: number; containers: number };
 
@@ -550,7 +550,7 @@ export const ProxmoxNodesTable: Component<{
                 const diskPercent = createMemo(() => getDiskPercent(node));
                 const diskHistoryLabel = () => {
                   const value = diskPercent();
-                  return value === undefined ? undefined : formatNodeDiskHistoryPercent(value);
+                  return value === undefined ? undefined : formatNodeHistoryPercent(value);
                 };
                 const aggregateDisk = (): Disk | undefined => {
                   if (!node.disk) return undefined;
@@ -737,10 +737,7 @@ export const ProxmoxNodesTable: Component<{
                             >
                               <MetricMiniSparkline
                                 series={cpuSeries()}
-                                valueLabel={formatPlatformTablePercentValue(cpuPercent(), {
-                                  normalizeRatio: true,
-                                  clamp: true,
-                                })}
+                                valueLabel={formatNodeHistoryPercent(cpuPercent())}
                                 title={`${name()} CPU history`}
                                 {...historyCursorProps()}
                               />
@@ -776,10 +773,7 @@ export const ProxmoxNodesTable: Component<{
                                 valueLabel={
                                   drawerNode()?.memory?.usageUnavailable
                                     ? 'N/A'
-                                    : formatPlatformTablePercentValue(memoryPercent(), {
-                                        normalizeRatio: true,
-                                        clamp: true,
-                                      })
+                                    : formatNodeHistoryPercent(memoryPercent())
                                 }
                                 title={`${name()} memory history`}
                                 {...historyCursorProps()}
@@ -819,7 +813,7 @@ export const ProxmoxNodesTable: Component<{
                               <MetricMiniSparkline
                                 series={diskSeries()}
                                 valueLabel={diskHistoryLabel()}
-                                formatValue={formatNodeDiskHistoryPercent}
+                                formatValue={formatNodeHistoryPercent}
                                 title={`${name()} disk history`}
                                 {...historyCursorProps()}
                               />

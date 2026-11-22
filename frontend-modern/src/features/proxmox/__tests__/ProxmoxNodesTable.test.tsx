@@ -235,6 +235,38 @@ describe('ProxmoxNodesTable', () => {
     expect(diskLabel('pve-node-3')).toBeNull();
   });
 
+  it.each([
+    [0, { total: 10_000, used: 0, current: 0 }, '0.0%', '0.0%'],
+    [0.004, { current: 0.004 }, '<0.01%', '<0.01%'],
+    [0.62, { total: 10_000, used: 88, current: 88 }, '0.62%', '0.88%'],
+    [1, { total: 10_000, used: 100, current: 100 }, '1%', '1%'],
+    [1.13, { current: 1.24 }, '1.13%', '1.24%'],
+    [46.25, { total: 10_000, used: 4_080, current: 40.8 }, '46.3%', '40.8%'],
+  ])(
+    'shows %s CPU and memory in Trends without rescaling',
+    (cpu, memory, cpuLabel, memoryLabel) => {
+      const { container } = render(() => (
+        <ProxmoxNodesTable
+          nodes={[makeNodeResource({ cpu: { current: cpu }, memory })]}
+          guests={[]}
+          metricDisplayMode={() => 'sparklines'}
+          emptyIcon={<span />}
+          emptyTitle="No Proxmox VE nodes"
+          emptyDescription="No nodes"
+        />
+      ));
+
+      expect(container.querySelector('[data-title="pve-node-1 CPU history"]')).toHaveAttribute(
+        'data-value-label',
+        cpuLabel,
+      );
+      expect(container.querySelector('[data-title="pve-node-1 memory history"]')).toHaveAttribute(
+        'data-value-label',
+        memoryLabel,
+      );
+    },
+  );
+
   it('uses the shared workload search to narrow the host preview and count', () => {
     render(() => (
       <ProxmoxNodesTable
