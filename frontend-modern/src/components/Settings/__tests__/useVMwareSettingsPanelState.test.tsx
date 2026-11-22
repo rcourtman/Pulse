@@ -255,7 +255,12 @@ describe('useVMwareSettingsPanelState', () => {
       context(),
     );
     expect(VMwareAPI.testConnection).not.toHaveBeenCalled();
-    expect(notificationStore.success).toHaveBeenCalledWith('VMware connection successful');
+    expect(result.connectionTestFeedback()).toEqual({
+      tone: 'success',
+      title: 'vCenter API checks passed',
+      message: 'Pulse signed in and read basic inventory.',
+    });
+    expect(notificationStore.success).not.toHaveBeenCalled();
   });
 
   it('reports optional VMware test failures as a degraded success with diagnostics', async () => {
@@ -298,16 +303,14 @@ describe('useVMwareSettingsPanelState', () => {
     const succeeded = await result.testCurrentForm();
 
     expect(succeeded).toBe(true);
-    expect(notificationStore.warning).toHaveBeenCalledWith(
-      'VMware HostSystem recent events request failed with HTTP 500',
-    );
+    expect(notificationStore.warning).not.toHaveBeenCalled();
     expect(notificationStore.success).not.toHaveBeenCalled();
     expect(result.connectionFailure()).toBeNull();
-    expect(result.connectionTestWarning()).toEqual({
+    expect(result.connectionTestFeedback()).toEqual({
+      tone: 'warning',
       title: 'VMware connection has limited data access',
       message: 'VMware HostSystem recent events request failed with HTTP 500',
-      guidance:
-        'Core inventory, authentication, and API compatibility checks succeeded using VI JSON 8.0.2.0. Pulse will keep monitoring and report affected optional data as degraded.',
+      guidance: 'Pulse signed in and read basic inventory (VI JSON 8.0.2.0).',
     });
   });
 
@@ -366,10 +369,8 @@ describe('useVMwareSettingsPanelState', () => {
     const succeeded = await result.testCurrentForm();
 
     expect(succeeded).toBe(false);
-    expect(notificationStore.error).toHaveBeenCalledWith(
-      'VMware vCenter 6.7 is below the supported VI JSON release floor',
-    );
-    expect(result.connectionFailure()).toEqual({
+    expect(notificationStore.error).not.toHaveBeenCalled();
+    expect(result.connectionTestFeedback()).toEqual({
       category: 'unsupported_version',
       code: 'vmware_connection_failed',
       guidance:
@@ -447,9 +448,8 @@ describe('useVMwareSettingsPanelState', () => {
       const succeeded = await result.testCurrentForm();
 
       expect(succeeded).toBe(false);
-      if (category === 'invalid_config') expect(notificationStore.error).not.toHaveBeenCalled();
-      else expect(notificationStore.error).toHaveBeenCalledWith(error);
-      expect(result.connectionFailure()).toEqual({
+      expect(notificationStore.error).not.toHaveBeenCalled();
+      expect(result.connectionTestFeedback()).toEqual({
         category,
         code: 'vmware_connection_failed',
         guidance: expected.guidance,

@@ -36,11 +36,9 @@ export interface VMwareConnectionFormState {
   hasStoredPassword: boolean;
 }
 
-export interface VMwareConnectionTestWarning {
-  title: string;
-  message: string;
-  guidance: string;
-}
+type VMwareConnectionTestFeedback = Omit<VMwareConnectionFailurePresentation, 'tone'> & {
+  tone: VMwareConnectionFailurePresentation['tone'] | 'success';
+};
 
 const REDACTED_SECRET = '********';
 
@@ -108,22 +106,35 @@ const isDestinationConfigurationError = (error: unknown) =>
   apiErrorCode(error) === 'vmware_invalid_config' ||
   apiErrorDetailField(error, 'category') === 'invalid_config';
 
-const buildConnectionTestWarning = (
+const buildConnectionTestFeedback = (
   result: VMwareConnectionTestResult,
-): VMwareConnectionTestWarning | null => {
-  if (!result.degraded) return null;
+): VMwareConnectionTestFeedback => {
+  if (!result.success) {
+    return {
+      tone: 'warning',
+      title: 'Connection test not confirmed',
+      message: 'Pulse did not receive a success result from the test.',
+    };
+  }
+  const release = result.viRelease?.trim();
+  const version = release ? ` (VI JSON ${release})` : '';
+  const checked = `Pulse signed in and read basic inventory${version}.`;
+  if (!result.degraded) {
+    return {
+      tone: 'success',
+      title: 'vCenter API checks passed',
+      message: checked,
+    };
+  }
+  const count = result.issueCount || result.issues.length || 1;
   const diagnostic =
     result.issues.find((issue) => issue.message?.trim())?.message?.trim() ||
-    `${result.issueCount || result.issues.length || 1} optional VMware read${
-      (result.issueCount || result.issues.length || 1) === 1 ? '' : 's'
-    } could not be completed.`;
-  const release = result.viRelease?.trim();
+    `${count} optional VMware read${count === 1 ? '' : 's'} could not be completed.`;
   return {
+    tone: 'warning',
     title: 'VMware connection has limited data access',
     message: diagnostic,
-    guidance: `Core inventory, authentication, and API compatibility checks succeeded${
-      release ? ` using VI JSON ${release}` : ''
-    }. Pulse will keep monitoring and report affected optional data as degraded.`,
+    guidance: checked,
   };
 };
 
@@ -180,8 +191,8 @@ export function useVMwareSettingsPanelState({
   const [previewing, setPreviewing] = createSignal(false);
   const [connectionFailure, setConnectionFailure] =
     createSignal<VMwareConnectionFailurePresentation | null>(null);
-  const [connectionTestWarning, setConnectionTestWarning] =
-    createSignal<VMwareConnectionTestWarning | null>(null);
+  const [connectionTestFeedback, setConnectionTestFeedback] =
+    createSignal<VMwareConnectionTestFeedback | null>(null);
   const [monitoredSystemPreview, setMonitoredSystemPreview] =
     createSignal<MonitoredSystemLedgerPreviewResponse | null>(null);
   const [monitoredSystemPreviewUnavailableState, setMonitoredSystemPreviewUnavailableState] =
@@ -238,7 +249,7 @@ export function useVMwareSettingsPanelState({
     setEditingConnectionId(null);
     setForm(createEmptyFormState());
     setConnectionFailure(null);
-    setConnectionTestWarning(null);
+    setConnectionTestFeedback(null);
     clearPreview();
   };
   const resetDeleteDialogState = () => {
@@ -391,7 +402,7 @@ export function useVMwareSettingsPanelState({
     dialogVersion += 1;
     batch(() => {
       setConnectionFailure(null);
-      setConnectionTestWarning(null);
+      setConnectionTestFeedback(null);
       clearPreview();
       setForm((current) => ({ ...current, ...patch }));
     });
@@ -419,7 +430,7 @@ export function useVMwareSettingsPanelState({
     batch(() => {
       setTesting(true);
       setConnectionFailure(null);
-      setConnectionTestWarning(null);
+      setConnectionTestFeedback(null);
     });
     try {
       const payload = buildConnectionInput(form());
@@ -431,11 +442,8 @@ export function useVMwareSettingsPanelState({
           )
         : await VMwareAPI.testConnection(payload, requestOptions(accepted));
       if (!isCurrent()) return false;
-      const warning = buildConnectionTestWarning(result);
-      setConnectionTestWarning(warning);
-      if (warning) notificationStore.warning(warning.message);
-      else notificationStore.success('VMware connection successful');
-      return true;
+      setConnectionTestFeedback(buildConnectionTestFeedback(result));
+      return result.success;
     } catch (error) {
       if (!isCurrentReader(accepted)) return false;
       // A changed draft obsoletes its test result, but not this reader's denial.
@@ -446,10 +454,8 @@ export function useVMwareSettingsPanelState({
         message: getVMwareErrorMessage(error, 'VMware connection failed'),
         fallback: 'VMware connection failed',
       });
-      setConnectionFailure(failure);
-      // Destination feedback is already beside this correctable draft. A
-      // duplicate toast can cover its actions, especially on a phone.
-      if (!isDestinationConfigurationError(error)) notificationStore.error(failure.message);
+      // Keep the result with the tested draft, not in a toast behind the dialog.
+      setConnectionTestFeedback(failure);
       logger.error('[VMware Settings] Connection test failed', error);
       return false;
     } finally {
@@ -468,10 +474,14 @@ export function useVMwareSettingsPanelState({
         requestOptions(accepted),
       );
       if (!isCurrentReader(accepted)) return;
-      const warning = buildConnectionTestWarning(result);
-      if (warning) {
+      const feedback = buildConnectionTestFeedback(result);
+      if (!result.success) {
         notificationStore.warning(
-          `VMware connection for ${connection.name || connection.host} has limited data access: ${warning.message}`,
+          `VMware connection test not confirmed for ${connection.name || connection.host}`,
+        );
+      } else if (feedback.tone === 'warning') {
+        notificationStore.warning(
+          `VMware connection for ${connection.name || connection.host} has limited data access: ${feedback.message}`,
         );
       } else {
         notificationStore.success(
@@ -620,7 +630,7 @@ export function useVMwareSettingsPanelState({
     featureDisabledMessage,
     form,
     connectionFailure,
-    connectionTestWarning,
+    connectionTestFeedback,
     loadConnections,
     loading,
     loadingError,
