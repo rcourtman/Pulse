@@ -7,6 +7,7 @@ import { SecurityAPI } from '@/api/security';
 import { syncSessionPresentationPolicy } from '@/stores/sessionPresentationPolicy';
 import type { SecurityStatus } from '@/types/config';
 import type { ActionAuditRecord, ActionDetailResponse } from '@/types/actionAudit';
+import type { Resource } from '@/types/resource';
 import { ActionReviewDialog } from '../ActionReviewDialog';
 
 vi.mock('@/api/resourceActions', () => ({
@@ -37,6 +38,7 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   vi.useRealTimers();
+  vi.unstubAllEnvs();
   syncSessionPresentationPolicy(null);
   vi.clearAllMocks();
 });
@@ -390,11 +392,50 @@ describe('ActionReviewDialog trust gates', () => {
         />
       </Router>
     ));
-    await waitFor(() => expect(getResource).toHaveBeenCalled());
-    expect(screen.getByRole('link', { name: 'Open resource' })).toHaveAttribute(
-      'href',
-      '/proxmox/overview?resource=pve%3Avm%3A101',
+    await waitFor(() =>
+      expect(screen.getByRole('link', { name: 'Open resource' })).toHaveAttribute(
+        'href',
+        '/proxmox/overview?resource=pve%3Avm%3A101',
+      ),
     );
+  });
+
+  it('keeps review focus inside while a VM resolves to a view that is not shown', async () => {
+    vi.stubEnv('DEV', false);
+    const id = 'agent:lab:libvirt:web';
+    const audit = makeAudit('resolved', '2099-01-01T00:00:00Z');
+    audit.request.resourceId = id;
+    audit.resource = { id, name: 'Web guest', type: 'vm' };
+    let finish: (resource: Resource) => void = () => undefined;
+    const lookup = new Promise<Resource>((resolve) => {
+      finish = resolve;
+    });
+    getResource.mockReturnValueOnce(lookup);
+    render(() => (
+      <Router>
+        <Route
+          path="*"
+          component={() => (
+            <ActionReviewDialog detail={detail(audit)} onClose={vi.fn()} showResourceLink />
+          )}
+        />
+      </Router>
+    ));
+
+    const close = await screen.findByRole('button', { name: 'Close action review' });
+    await waitFor(() => expect(close).toHaveFocus());
+    expect(screen.queryByRole('link', { name: 'Open resource' })).not.toBeInTheDocument();
+
+    finish({
+      id,
+      type: 'vm',
+      name: 'Web guest',
+      platformType: 'agent',
+      platformScopes: ['agent'],
+    } as Resource);
+    await lookup;
+    expect(screen.queryByRole('link', { name: 'Open resource' })).not.toBeInTheDocument();
+    expect(close).toHaveFocus();
   });
 
   // Patrol and the Docker container controls open the review over the

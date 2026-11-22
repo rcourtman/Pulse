@@ -13,7 +13,7 @@ afterEach(() => {
 });
 
 describe('useResolvedResource', () => {
-  it('returns the registry resource for the current id and null when it cannot resolve', async () => {
+  it('distinguishes a pending lookup from a missing resource or id', async () => {
     const vm = { id: 'vm-1', name: 'web', type: 'vm' } as Resource;
     getResource.mockImplementation((id: string) =>
       id === 'vm-1' ? Promise.resolve(vm) : Promise.reject(new Error('not found')),
@@ -21,14 +21,16 @@ describe('useResolvedResource', () => {
     await createRoot(async (dispose) => {
       const [id, setId] = createSignal<string | undefined>(' vm-1 ');
       const resolved = useResolvedResource(id);
-      expect(resolved()).toBeNull();
+      expect(resolved()).toBeUndefined();
       await flush();
       expect(resolved()).toBe(vm);
       expect(getResource).toHaveBeenCalledWith('vm-1', expect.anything());
 
       setId('missing');
-      expect(resolved()).toBeNull();
+      expect(resolved()).toBeUndefined();
       await flush();
+      expect(resolved()).toBeNull();
+      setId(undefined);
       expect(resolved()).toBeNull();
       dispose();
     });
@@ -53,7 +55,7 @@ describe('useResolvedResource', () => {
       setId('second');
       finishFirst({ id: 'first', name: 'old', type: 'vm' } as Resource);
       await flush();
-      expect(resolved()).toBeNull();
+      expect(resolved()).toBeUndefined();
       dispose();
     });
   });

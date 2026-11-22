@@ -4,14 +4,14 @@ import type { Resource } from '@/types/resource';
 
 /**
  * The registry resource a record names, for `buildResourcePagePath` and its
- * siblings. One abortable lookup runs per id; until it answers, and when the
- * registry cannot resolve the id, the accessor returns null so callers fall
- * back to the record's own name and type. An answer for an earlier id is
- * never returned for the current one.
+ * siblings. One abortable lookup runs per id. Undefined means the current
+ * lookup is pending; null means there is no id or no answer. Callers that
+ * need to avoid a provisional link can distinguish those states. An answer
+ * for an earlier id is never returned for the current one.
  */
 export function useResolvedResource(
   id: Accessor<string | null | undefined>,
-): Accessor<Resource | null> {
+): Accessor<Resource | null | undefined> {
   const [resolved, setResolved] = createSignal<{ id: string; resource: Resource | null } | null>(
     null,
   );
@@ -29,7 +29,9 @@ export function useResolvedResource(
     onCleanup(() => controller.abort());
   });
   return () => {
+    const current = id()?.trim();
+    if (!current) return null;
     const value = resolved();
-    return value && value.id === id()?.trim() ? value.resource : null;
+    return value?.id === current ? value.resource : undefined;
   };
 }
