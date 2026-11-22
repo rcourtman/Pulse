@@ -46,7 +46,7 @@ const describeTransport = (transport: NonNullable<TrueNASConnection['transport']
 
 export const TrueNASCredentialSlot: Component<TrueNASCredentialSlotProps> = (props) => {
   let primed = false;
-  let testActionArea: HTMLDivElement | undefined;
+  let connectionActionArea: HTMLDivElement | undefined;
 
   onMount(() => {
     if (!props.state.dialogOpen()) {
@@ -71,18 +71,26 @@ export const TrueNASCredentialSlot: Component<TrueNASCredentialSlotProps> = (pro
     props.onCancel();
   };
 
-  const handleTest = async () => {
-    await props.state.testCurrentForm();
-    if (props.state.connectionTestResult() && testActionArea?.isConnected) {
+  const revealConnectionFeedback = () => {
+    if (connectionActionArea?.isConnected) {
       // Reflow can put the result or the actions below a scrolled dialog edge.
       // Keep them in view without taking focus from the editor.
-      testActionArea.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
+      connectionActionArea.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
     }
+  };
+  const handleTest = async () => {
+    await props.state.testCurrentForm();
+    if (props.state.connectionFeedback()) revealConnectionFeedback();
+  };
+  const handleSave = async () => {
+    await props.state.saveCurrentForm();
+    if (props.state.connectionFeedback()?.kind === 'destination-refused')
+      revealConnectionFeedback();
   };
 
   const isEditing = () => Boolean(props.editingConnection);
-  const connectionTestFeedback = createMemo(() => {
-    const result = props.state.connectionTestResult();
+  const connectionFeedback = createMemo(() => {
+    const result = props.state.connectionFeedback();
     if (!result) return null;
     switch (result.kind) {
       case 'passed':
@@ -102,6 +110,12 @@ export const TrueNASCredentialSlot: Component<TrueNASCredentialSlotProps> = (pro
         return {
           title: 'Connection test failed',
           description: result.detail,
+          accent: 'border-red-500',
+        };
+      case 'destination-refused':
+        return {
+          title: 'TrueNAS address not allowed',
+          description: 'Use an address allowed for this workspace. Nothing was saved.',
           accent: 'border-red-500',
         };
     }
@@ -393,12 +407,12 @@ export const TrueNASCredentialSlot: Component<TrueNASCredentialSlotProps> = (pro
         </Show>
 
         <div
-          ref={testActionArea}
+          ref={connectionActionArea}
           class="flex flex-col xl:flex-row xl:items-end xl:justify-between"
-          classList={{ 'gap-2': Boolean(connectionTestFeedback()) }}
+          classList={{ 'gap-2': Boolean(connectionFeedback()) }}
         >
           <div role="status" aria-atomic="true" class="min-w-0 xl:flex-1">
-            <Show when={connectionTestFeedback()}>
+            <Show when={connectionFeedback()}>
               {(feedback) => (
                 <div
                   class={`wrap-anywhere border-l-2 py-0.5 pl-2 text-xs leading-snug ${feedback().accent}`}
@@ -493,7 +507,7 @@ export const TrueNASCredentialSlot: Component<TrueNASCredentialSlotProps> = (pro
             <Button
               variant="primary"
               size="settingsAction"
-              onClick={() => void props.state.saveCurrentForm()}
+              onClick={() => void handleSave()}
               disabled={
                 props.state.saving() ||
                 props.state.testing() ||

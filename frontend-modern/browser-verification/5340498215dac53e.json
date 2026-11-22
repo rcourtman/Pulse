@@ -1,0 +1,37 @@
+{
+  "version": 1,
+  "base_sha": "b73ba93418fed08a1ed1b6005d28abeaa9dc7fa1",
+  "verified_at": "2026-11-22T10:36:24Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/ConnectionEditor/CredentialSlots/TrueNASCredentialSlot.tsx",
+    "frontend-modern/src/components/Settings/useTrueNASSettingsPanelState.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/ConnectionEditor/CredentialSlots/TrueNASCredentialSlot.tsx": "a210df69a1726925ae0d8b175616ca4fbcbe49996a7bd832c5a55836b4ac7ceb",
+    "frontend-modern/src/components/Settings/useTrueNASSettingsPanelState.ts": "fe5fc3c2c66322e4a78326248865ab174db6a96b2821097937175d482f6260e0"
+  },
+  "routes": [
+    "/settings/infrastructure",
+    "/settings/infrastructure?add=truenas"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 320,
+      "height": 800
+    }
+  ],
+  "states": [
+    "Inspected 12 matched before and after pairs on light desktop and a dark touch phone in Chromium 141.0.7390.37 with Playwright 1.56.1. Both exact builds received the same synthetic replies.",
+    "On Add and Manage, a refused Test or Save preserves the draft and reports that nothing was saved, alongside the existing actions and collection scope. The saved transport remains visible at Manage actions.",
+    "A distinct settings permission denial still withdraws the configuration. A delayed refusal for a previous address does not replace the current draft or its focused input."
+  ],
+  "interactions": [
+    "Activated Test and Save in the actual editor with keyboard and touch. The two exact trees issued identical first request bytes, with TLS verification, collection scope and saved-key handling unchanged, and no automatic replay.",
+    "Changed the address while Test was pending. The delayed refusal left no stale result. An explicit Test of the corrected fixture reported only the system information read; it did not save."
+  ]
+}

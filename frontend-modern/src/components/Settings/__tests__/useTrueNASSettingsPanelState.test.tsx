@@ -280,7 +280,7 @@ describe('useTrueNASSettingsPanelState', () => {
       }),
     );
     expect(TrueNASAPI.testConnection).not.toHaveBeenCalled();
-    expect(result.connectionTestResult()).toEqual({ kind: 'passed' });
+    expect(result.connectionFeedback()).toEqual({ kind: 'passed' });
     expect(notificationStore.success).not.toHaveBeenCalled();
   });
 
@@ -293,11 +293,11 @@ describe('useTrueNASSettingsPanelState', () => {
     result.updateForm({ host: 'tower.local', apiKey: 'secret', username: 'monitor' });
 
     expect(await result.testCurrentForm()).toBe(false);
-    expect(result.connectionTestResult()).toEqual({ kind: 'unconfirmed' });
+    expect(result.connectionFeedback()).toEqual({ kind: 'unconfirmed' });
     expect(notificationStore.success).not.toHaveBeenCalled();
     result.closeDialog();
     result.openCreateDialog();
-    expect(result.connectionTestResult()).toBeNull();
+    expect(result.connectionFeedback()).toBeNull();
   });
 
   it('saves a connection without requiring a monitored-system preview', async () => {
@@ -343,7 +343,7 @@ describe('useTrueNASSettingsPanelState', () => {
 
     expect(await result.testCurrentForm()).toBe(false);
     expect(TrueNASAPI.testConnection).not.toHaveBeenCalled();
-    expect(result.connectionTestResult()).toEqual({
+    expect(result.connectionFeedback()).toEqual({
       kind: 'failed',
       detail: 'TrueNAS API key owner username is required for supported authentication',
     });
