@@ -16,6 +16,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/api/apicontext"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/mock"
+	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 	"github.com/rcourtman/pulse-go-rewrite/internal/securityutil"
 	"github.com/rcourtman/pulse-go-rewrite/internal/websocket"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/pbs"
@@ -1399,6 +1400,35 @@ func applyClusterEndpointOverrides(endpoints []config.ClusterEndpoint, overrides
 	return result, nil
 }
 
+// clearMovedClusterEndpointChecks keeps Pulse's last observation tied to the
+// configured target, not just the member name. Saving an address is not a check.
+// An editor update keeps the same rows and order; discovery owns that inventory.
+func clearMovedClusterEndpointChecks(previous config.PVEInstance, updated *config.PVEInstance) {
+	for i := range updated.ClusterEndpoints {
+		old := previous.ClusterEndpoints[i]
+		next := &updated.ClusterEndpoints[i]
+		if old.IPOverride == next.IPOverride && previous.VerifySSL == updated.VerifySSL {
+			continue
+		}
+		// Compare configured dial targets, before discovery-policy filtering.
+		// There is no DNS lookup: aliases are separate destinations, while case
+		// and equivalent port spelling do not invalidate an observation.
+		oldURL := monitoring.PVEClusterEndpointURL(old, previous.VerifySSL, config.DiscoveryConfig{})
+		newURL := monitoring.PVEClusterEndpointURL(*next, updated.VerifySSL, config.DiscoveryConfig{})
+		if oldURL == newURL {
+			continue
+		}
+		oldKey, oldValid := proxmox.ClusterEndpointIdentity(oldURL)
+		newKey, newValid := proxmox.ClusterEndpointIdentity(newURL)
+		if oldValid && newValid && oldKey == newKey {
+			continue
+		}
+		next.PulseReachable = nil
+		next.LastPulseCheck = nil
+		next.PulseError = ""
+	}
+}
+
 func applyClusterNodeDisplayNameOverrides(instance config.PVEInstance, overrides []ClusterNodeDisplayNameOverrideRequest) (config.PVEInstance, error) {
 	instance.ClusterEndpoints = append([]config.ClusterEndpoint(nil), instance.ClusterEndpoints...)
 	instance.ClusterNodeIdentities = append([]config.PVEClusterNodeIdentity(nil), instance.ClusterNodeIdentities...)
@@ -1568,6 +1598,7 @@ func (h *ConfigHandlers) handleUpdateNode(w http.ResponseWriter, r *http.Request
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
+		clearMovedClusterEndpointChecks(current, &updated)
 		pendingPVE = make([]config.PVEInstance, len(h.getConfig(r.Context()).PVEInstances))
 		for i, instance := range h.getConfig(r.Context()).PVEInstances {
 			pendingPVE[i] = instance.DeepCopy()

@@ -11265,11 +11265,17 @@ are touched, an empty `ipOverride` clears the stored override, naming an
 unknown cluster member is a `400` rather than a silent no-op, and accepted
 values are normalized to a scheme-less IP or hostname with optional port
 (pasted URLs are reduced to their `host[:port]`). The override writes
-`ClusterEndpoints[n].IPOverride` exclusively; discovered `Host` and `IP`
-remain re-discovery-owned and must not become client-writable through this
-payload. `GET /api/config/nodes` continues to expose the stored value as the
-optional `ipOverride` endpoint field consumed by the shared normalization in
-`frontend-modern/src/api/nodes.ts`.
+`ClusterEndpoints[n].IPOverride` as its only address field; discovered `Host`
+and `IP` remain re-discovery-owned. A save that moves a member's effective dial
+target, including clearing an override or selecting a different discovered
+address through Verify SSL, discards that member's last Pulse reachability
+result, time and error before persistence. A spelling-only edit, an unchanged
+sibling, and Proxmox's own online/last-seen state retain their evidence.
+`GET /api/config/nodes` exposes the saved `ipOverride` next to its effective
+target and omits the discarded observation until checked again.
+`TestPVEEndpointReachabilityAfterAddressEdit` in
+`internal/api/configapi/config_handlers_connection_test.go` covers the
+saved and reopened wire response.
 `ClusterEndpoints[n].IPOverride` has a second canonical writer: when a
 canonical `/api/auto-register` PVE registration in
 `internal/api/configapi/config_setup_handlers.go` matches a non-primary cluster member
