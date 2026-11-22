@@ -45,6 +45,11 @@ INTERVAL="${PULSE_MEMORY_INTERVAL:-15}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ESTATE="${PULSE_FOOTPRINT_ESTATE:-mock}"
 
+if [[ ! "${DURATION}" =~ ^[1-9][0-9]*$ || ! "${INTERVAL}" =~ ^[1-9][0-9]*$ ]]; then
+  echo "Memory sampling duration and interval must be positive whole seconds" >&2
+  exit 2
+fi
+
 case "${ESTATE}" in
   mock)
     ESTATE_ENV=(
@@ -212,4 +217,4 @@ if [[ -s "${OUT_DIR}/heap-baseline.pb.gz" && -s "${OUT_DIR}/heap-candidate.pb.gz
     > "${OUT_DIR}/heap-growth.txt" 2>/dev/null || true
 fi
 
-python3 "${SCRIPT_DIR}/summarize_release_memory.py" "${OUT_DIR}"
+python3 "${SCRIPT_DIR}/summarize_release_memory.py" "${OUT_DIR}" "${DURATION}" "${INTERVAL}"
