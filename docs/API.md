@@ -849,6 +849,19 @@ Actively rediscovers a saved PVE connection's cluster membership. It does not
 select authorised nodes, grant missing permissions or repair an unrelated
 standalone installation. Keep intentional token restrictions intact.
 
+Use the saved PVE connection `id` from [List Nodes](#list-nodes), not the
+cluster or member name. The refresh changes Pulse, not Proxmox. If you renamed
+the cluster, back up your Pulse data and check that the saved credential can
+still see the same members before refreshing.
+
+**If the refresh times out or you cancel it**, don't send it again just to
+get a reply. Pulse can save the new name and membership before it replies.
+Use [List Nodes](#list-nodes) to check `clusterName` for the same `id`.
+Keep the response private. If the new name appears, check that all expected
+members still update during their normal polls. The name alone doesn't show
+that polling resumed. If the old name remains or you can't read the row,
+leave the connection in place. Don't delete and re-add it to force the rename.
+
 ### Export Configuration
 `POST /api/config/export` (instance admin for the default organization, tenant
 manager for a selected tenant, or an API token bound to the selected
