@@ -21,9 +21,8 @@ import {
   type InfrastructureSystemMemberRow,
   type InfrastructureSystemRow,
 } from '../connectionsTableModel';
-import type { Connection } from '@/api/connections';
 import { eventBus } from '@/stores/events';
-import { ConnectionsAPI } from '@/api/connections';
+import { ConnectionsAPI, type Connection, type ConnectionSystem } from '@/api/connections';
 import { resetCreateNonSuspendingQueryCacheForTest } from '@/hooks/createNonSuspendingQuery';
 import { useConnectionsLedger } from '../useConnectionsLedger';
 
@@ -149,6 +148,85 @@ describe('InfrastructureSourceManager setup summary', () => {
     ));
     return { ledger, onOpenConnection };
   };
+
+  it.each([1440, 320])(
+    'shows saved API scope independently of agent coverage at %ipx',
+    async (width) => {
+      Object.defineProperty(window, 'innerWidth', { configurable: true, value: width });
+      const archive = connectionFixture({
+        id: 'pbs:archive-a',
+        type: 'pbs',
+        name: 'Archive A',
+        address: 'https://archive-a.example.test:8007',
+        source: 'manual',
+        surfaces: ['backups', 'datastores', 'syncJobs', 'verifyJobs', 'pruneJobs', 'garbageJobs'],
+        scope: {
+          backups: false,
+          datastores: false,
+          syncJobs: false,
+          verifyJobs: false,
+          pruneJobs: false,
+          garbageJobs: false,
+        },
+        capabilities: { supportsPause: true, supportsScope: true, supportsTest: true },
+      });
+      const sibling = {
+        ...archive,
+        id: 'pbs:archive-b',
+        name: 'Archive B',
+        address: 'https://archive-b.example.test:8007',
+        scope: { ...archive.scope, datastores: true },
+      };
+      const agent = connectionFixture();
+      const systems: ConnectionSystem[] = [
+        {
+          id: archive.id,
+          type: 'pbs',
+          components: [
+            { connectionId: archive.id, type: 'pbs', role: 'primary' },
+            { connectionId: agent.id, type: 'agent', role: 'attachment' },
+          ],
+        },
+        {
+          id: sibling.id,
+          type: 'pbs',
+          components: [{ connectionId: sibling.id, type: 'pbs', role: 'primary' }],
+        },
+      ];
+      const list = vi.spyOn(ConnectionsAPI, 'list').mockResolvedValueOnce({
+        connections: [archive, sibling, agent],
+        systems,
+      });
+      const { ledger, onOpenConnection } = renderReadState();
+      const source = (name: string) => {
+        const container = screen
+          .getByRole('link', { name })
+          .closest<HTMLElement>(width === 1440 ? 'tr' : 'article');
+        if (!container) throw new Error('Missing source row');
+        return within(container);
+      };
+
+      await waitFor(() =>
+        expect(
+          source('Archive A').getByText('All API scope options off · Host telemetry'),
+        ).toBeVisible(),
+      );
+      expect(source('Archive A').queryByText(/Sync jobs|Datastores/)).toBeNull();
+      expect(source('Archive A').getByText('Active')).toBeVisible();
+      expect(source('Archive B').getByText('Datastores')).toBeVisible();
+      fireEvent.click(source('Archive A').getByRole('button', { name: 'Manage' }));
+      expect(onOpenConnection.mock.calls[0][0].connection).toBe(archive);
+
+      const restored = { ...archive, scope: { ...archive.scope, backups: true } };
+      list.mockResolvedValueOnce({ connections: [restored, sibling, agent], systems });
+      ledger.reload();
+      await waitFor(() =>
+        expect(source('Archive A').getByText('Backups, Host telemetry')).toBeVisible(),
+      );
+      expect(source('Archive A').queryByText(/API scope options off/)).toBeNull();
+      expect(source('Archive B').getByText('Datastores')).toBeVisible();
+    },
+  );
 
   it('distinguishes an unread list from empty and keeps a failed read visible during retry', async () => {
     let failFirst!: (error: unknown) => void;

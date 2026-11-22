@@ -235,23 +235,27 @@ describe('connectionToRow (standalone buildRow arms)', () => {
       }),
     );
     expect(row.coverageLabels).toEqual(['VMs']);
+    expect(row.apiScopeOff).toBe(false);
   });
 
-  it('falls back to surfaces when no scope key is active', () => {
+  it('does not count supported surfaces when all scope options are off', () => {
     const row = connectionToRow(
       connectionFixture({
         surfaces: ['vms', 'containers'],
         scope: { vms: false, containers: false },
       }),
     );
-    expect(row.coverageLabels).toEqual(['VMs', 'Containers']);
+    expect(row.coverageLabels).toEqual([]);
+    expect(row.apiScopeOff).toBe(true);
+    expect(row.statusLabel).toBe('Active');
   });
 
-  it('falls back to surfaces when scope is null', () => {
+  it.each([{}, null, undefined])('falls back to surfaces without saved scope (%j)', (scope) => {
     const row = connectionToRow(
-      connectionFixture({ surfaces: ['host'], scope: null as unknown as Connection['scope'] }),
+      connectionFixture({ surfaces: ['vms'], scope: scope as Connection['scope'] }),
     );
-    expect(row.coverageLabels).toEqual(['Host telemetry']);
+    expect(row.coverageLabels).toEqual(['VMs']);
+    expect(row.apiScopeOff).toBe(false);
   });
 
   // --- status presentation fallback ---
