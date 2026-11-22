@@ -11,10 +11,7 @@ import shlex
 import shutil
 import subprocess
 import tempfile
-import textwrap
 import unittest
-
-import yaml
 
 import yaml
 
@@ -24,7 +21,8 @@ from test_public_docs_workflow import job_body, step_body, workflow_fixture_envi
 
 ROOT = Path(__file__).resolve().parents[2]
 WORKFLOW = ROOT / ".github/workflows/build-and-test.yml"
-VERDICT_STEP = "Require every script smoke shard"
+SMOKE_STEP = "Require every script smoke shard"
+BACKEND_STEP = "Require same-run real-embed backend proof"
 REQUIRED_NAME = "Script smoke tests & backend build"
 
 
@@ -42,17 +40,22 @@ def smoke_command(source: str, shard: int) -> str:
     return commands[0].replace("${{ matrix.shard }}", str(shard))
 
 
-def verdict_command(source: str) -> str:
-    body = step_body(job_body(source, "scripts-and-build"), VERDICT_STEP)
-    marker = "        run: |\n"
-    if body.count(marker) != 1:
-        raise AssertionError("expected one literal smoke verdict command")
-    return textwrap.dedent(body.split(marker, 1)[1]).strip()
-
-
 class SmokeWorkflowTest(unittest.TestCase):
     def setUp(self):
         self.source = WORKFLOW.read_text(encoding="utf-8")
+        self.jobs = yaml.safe_load(self.source)["jobs"]
+
+    def run_verdict(self, step_name: str, **results: str):
+        step = next(step for step in self.jobs["scripts-and-build"]["steps"]
+                    if step["name"] == step_name)
+        env = dict(os.environ)
+        for name in ("SMOKE_RESULT", "BACKEND_RESULT"):
+            env.pop(name, None)
+        env.update(results)
+        return subprocess.run(
+            ["bash", "-e", "-u", "-o", "pipefail", "-c", step["run"]],
+            env=env, text=True, capture_output=True, timeout=5,
+        )
 
     def test_two_isolated_complete_shards_keep_source_setup_and_deadlines(self):
         smoke = job_body(self.source, "script-smoke")
@@ -75,7 +78,7 @@ class SmokeWorkflowTest(unittest.TestCase):
                              ["scripts/tests/run.sh", "--smoke-shard", str(shard)])
 
     def test_returned_suite_observations_are_bound_and_retained_after_failure(self):
-        smoke = yaml.safe_load(self.source)['jobs']['script-smoke']
+        smoke = self.jobs['script-smoke']
         execute = next(step for step in smoke['steps'] if step['name'] == 'Script smoke tests')
         upload = next(step for step in smoke['steps']
                       if step['name'] == 'Retain script smoke observations')
@@ -96,50 +99,50 @@ class SmokeWorkflowTest(unittest.TestCase):
         self.assertEqual(self.source.count(f"    name: {REQUIRED_NAME}\n"), 1)
         self.assertIn("          SMOKE_RESULT: ${{ needs.script-smoke.result }}\n", build)
         self.assertIn("          BACKEND_RESULT: ${{ needs.frontend-checks.result }}\n", build)
-        states = ("success", "failure", "cancelled", "skipped", "", "unknown")
-        for smoke_state in states:
-            for backend_state in states:
-                with self.subTest(smoke=smoke_state, backend=backend_state):
-                    result = subprocess.run(
-                        ["bash", "-e", "-u", "-o", "pipefail", "-c", verdict_command(self.source)],
-                        env=dict(os.environ, SMOKE_RESULT=smoke_state, BACKEND_RESULT=backend_state),
-                        text=True, capture_output=True, timeout=5,
-                    )
-                    self.assertEqual(result.returncode == 0,
-                                     smoke_state == backend_state == "success",
+        states = ("success", "failure", "cancelled", "skipped", "", "unknown", None)
+        for step, variable, error in (
+            (SMOKE_STEP, "SMOKE_RESULT", "Script smoke shards did not all pass"),
+            (BACKEND_STEP, "BACKEND_RESULT", "This run's real-embed backend proof did not pass"),
+        ):
+            for state in states:
+                with self.subTest(step=step, result=state):
+                    result = self.run_verdict(step, **({variable: state} if state is not None else {}))
+                    self.assertEqual(result.returncode, 0 if state == "success" else 1,
                                      result.stdout + result.stderr)
-                    if result.returncode == 0:
-                        self.assertIn("this run's real-embed backend proof passed", result.stdout)
+                    if state != "success":
+                        self.assertIn(f"::error::{error} (result: {state or 'unavailable'})",
+                                      result.stdout)
 
-    def test_missing_result_cannot_admit_the_required_check(self):
-        for missing in ("SMOKE_RESULT", "BACKEND_RESULT"):
-            with self.subTest(missing=missing):
-                env = dict(os.environ, SMOKE_RESULT="success", BACKEND_RESULT="success")
-                env.pop(missing)
-                result = subprocess.run(
-                    ["bash", "-e", "-u", "-o", "pipefail", "-c", verdict_command(self.source)],
-                    env=env, text=True, capture_output=True, timeout=5,
-                )
-                self.assertNotEqual(result.returncode, 0)
+    def test_successful_smoke_with_skipped_embed_names_only_the_missing_proof(self):
+        # An over-budget frontend build can skip real-embed validation even
+        # when both smoke shards pass. The failed step must not name smoke.
+        results = {"SMOKE_RESULT": "success", "BACKEND_RESULT": "skipped"}
+        outcomes = {step: self.run_verdict(step, **results) for step in (SMOKE_STEP, BACKEND_STEP)}
+        self.assertEqual([step for step, result in outcomes.items() if result.returncode],
+                         [BACKEND_STEP])
+        self.assertIn("Every script smoke shard passed.", outcomes[SMOKE_STEP].stdout)
+        self.assertIn("Frontend backend and runtime", outcomes[BACKEND_STEP].stdout)
 
     def test_verdict_reuses_required_same_run_real_embed_build_without_another_compiler(self):
-        jobs = yaml.safe_load(self.source)["jobs"]
+        jobs = self.jobs
         verdict = jobs["scripts-and-build"]
         self.assertEqual(verdict["runs-on"], "ubuntu-24.04")
         self.assertEqual(verdict["timeout-minutes"], 5)
         self.assertEqual(verdict["needs"], ["changes", "script-smoke", "frontend-checks"])
         self.assertEqual(verdict["if"], "always() && needs.changes.outputs.code == 'true'")
         self.assertNotIn("continue-on-error", verdict)
-        self.assertEqual(len(verdict["steps"]), 1)
-        step = verdict["steps"][0]
-        self.assertEqual(step["env"], {
-            "SMOKE_RESULT": "${{ needs.script-smoke.result }}",
-            "BACKEND_RESULT": "${{ needs.frontend-checks.result }}",
-        })
-        self.assertNotIn("if", step)
-        self.assertNotIn("continue-on-error", step)
-        self.assertNotIn("uses", step)
-        self.assertNotRegex(step["run"], r"\b(?:go|npm|git)\b")
+        self.assertEqual([step["name"] for step in verdict["steps"]], [SMOKE_STEP, BACKEND_STEP])
+        smoke_step, backend_step = verdict["steps"]
+        self.assertEqual(smoke_step["env"], {"SMOKE_RESULT": "${{ needs.script-smoke.result }}"})
+        self.assertEqual(backend_step["env"], {"BACKEND_RESULT": "${{ needs.frontend-checks.result }}"})
+        self.assertNotIn("if", smoke_step)
+        # Override implicit success(): an active run reports both independent
+        # failures, but it does not carry on after workflow cancellation.
+        self.assertEqual(backend_step["if"], "${{ !cancelled() }}")
+        for step in (smoke_step, backend_step):
+            self.assertNotIn("continue-on-error", step)
+            self.assertNotIn("uses", step)
+            self.assertNotRegex(step["run"], r"\b(?:go|npm|git)\b")
 
         # The reused producer is in this same workflow/DAG, not a cached status
         # or an unrelated successful job. Check its actual production-asset
@@ -222,11 +225,7 @@ class SmokeWorkflowTest(unittest.TestCase):
             self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
             self.assertEqual(calls, names)
             self.assertIn(f"Summary: {len(names)-1}/{len(names)} passed", result.stdout)
-            gate = subprocess.run(
-                ["bash", "-e", "-o", "pipefail", "-c", verdict_command(self.source)],
-                env=dict(os.environ, SMOKE_RESULT="failure", BACKEND_RESULT="success"), text=True,
-                capture_output=True, timeout=5,
-            )
+            gate = self.run_verdict(SMOKE_STEP, SMOKE_RESULT="failure")
             self.assertNotEqual(gate.returncode, 0)
 
 

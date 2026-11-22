@@ -1228,17 +1228,24 @@ jobs:
       - name: Require every script smoke shard
         env:
           SMOKE_RESULT: ${{ needs.script-smoke.result }}
+        run: |
+          if [ "${SMOKE_RESULT:-}" != success ]; then
+            echo "::error::Script smoke shards did not all pass (result: ${SMOKE_RESULT:-unavailable}). Inspect the Script smoke tests jobs."
+            exit 1
+          fi
+          echo "Every script smoke shard passed."
+
+      # A smoke failure must not hide a separate missing backend proof.
+      - name: Require same-run real-embed backend proof
+        if: ${{ !cancelled() }}
+        env:
           BACKEND_RESULT: ${{ needs.frontend-checks.result }}
         run: |
-          if [ "$SMOKE_RESULT" != success ]; then
-            echo "::error::Script smoke shards did not all pass (result: ${SMOKE_RESULT})"
+          if [ "${BACKEND_RESULT:-}" != success ]; then
+            echo "::error::This run's real-embed backend proof did not pass (result: ${BACKEND_RESULT:-unavailable}). Inspect Frontend backend and runtime and its build/audit prerequisite."
             exit 1
           fi
-          if [ "$BACKEND_RESULT" != success ]; then
-            echo "::error::This run's real-embed backend proof did not pass (result: ${BACKEND_RESULT})"
-            exit 1
-          fi
-          echo "Every script smoke shard and this run's real-embed backend proof passed."
+          echo "This run's real-embed backend proof passed."
 
   chart-latency-slo:
     name: Workload chart SLO evidence
