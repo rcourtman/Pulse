@@ -8,6 +8,7 @@ import {
   getSSOCopySuccessMessage,
   getSSOCopyErrorMessage,
   getSSOConnectionTestErrorMessage,
+  getSSODraftTestFinding,
   getSSOMetadataFetchErrorMessage,
   getSSOMetadataUrlRequiredMessage,
   getSSOProviderDeleteErrorMessage,
@@ -32,6 +33,7 @@ import {
   buildProviderTestPayload,
   canTestProviderForm,
   createEmptyProviderForm,
+  getProviderTestSource,
   mapProviderDetailsToForm,
 } from '@/components/Settings/ssoProvidersModel';
 
@@ -550,12 +552,12 @@ export const useSSOProvidersState = (props: SSOProvidersPanelProps) => {
   );
 
   const testConnection = async () => {
-    if (!canEdit() || !showModal() || !canTest() || testing() || loadingPreview()) return;
+    const source = getProviderTestSource(form);
+    if (!canEdit() || !showModal() || !source || testing() || loadingPreview()) return;
     const controller = new AbortController();
     testController = controller;
     const version = editorVersion;
     const context = contextVersion;
-    const type = form.type;
     const payload = JSON.stringify(buildProviderTestPayload(form));
     const isCurrent = () =>
       canEdit() &&
@@ -575,25 +577,11 @@ export const useSSOProvidersState = (props: SSOProvidersPanelProps) => {
         body: payload,
       });
       if (!isCurrent()) return;
-      if (response.status === 400 && type === 'oidc') {
-        const finding: unknown = await response.json();
+      if (response.status === 400) {
+        const finding = getSSODraftTestFinding(source, await response.json());
         if (!isCurrent()) return;
-        // Accept only the draft test's structured finding. Response prose
-        // and details are not safe diagnostic copy.
-        if (
-          finding !== null &&
-          typeof finding === 'object' &&
-          'success' in finding &&
-          finding.success === false &&
-          'error' in finding &&
-          finding.error === 'issuer_mismatch'
-        ) {
-          setTestResult({
-            success: false,
-            issuerMismatch: true,
-            message:
-              'Check the exact Issuer URL in your IdP settings. Nothing saved. Sign-in not tested.',
-          });
+        if (finding) {
+          setTestResult({ success: false, ...finding });
           return;
         }
       }

@@ -30,7 +30,7 @@ export interface SSOProvidersResponse {
 export interface SSOProviderTestResult {
   success: boolean;
   message: string;
-  issuerMismatch?: true;
+  failureLabel?: string;
   details?: {
     type: string;
     entityId?: string;
@@ -289,14 +289,21 @@ export const buildProviderTestPayload = (form: ProviderForm): Record<string, unk
   return payload;
 };
 
-export const canTestProviderForm = (form: ProviderForm): boolean => {
+export type SSOProviderTestSource =
+  'oidc-issuer' | 'saml-metadata-url' | 'saml-metadata-xml' | 'saml-manual-url';
+
+export const getProviderTestSource = (form: ProviderForm): SSOProviderTestSource | null => {
   if (form.type === 'oidc') {
-    return Boolean(form.oidcIssuerUrl.trim());
+    return form.oidcIssuerUrl.trim() ? 'oidc-issuer' : null;
   }
-  return Boolean(
-    form.samlIdpMetadataUrl.trim() || form.samlIdpMetadataXml.trim() || form.samlIdpSsoUrl.trim(),
-  );
+  // Match the server's order: a metadata source takes precedence over manual fields.
+  if (form.samlIdpMetadataUrl.trim()) return 'saml-metadata-url';
+  if (form.samlIdpMetadataXml.trim()) return 'saml-metadata-xml';
+  return form.samlIdpSsoUrl.trim() ? 'saml-manual-url' : null;
 };
+
+export const canTestProviderForm = (form: ProviderForm): boolean =>
+  getProviderTestSource(form) !== null;
 
 export const buildMetadataPreviewPayload = (form: ProviderForm) => ({
   type: 'saml' as const,
