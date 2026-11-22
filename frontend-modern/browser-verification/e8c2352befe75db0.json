@@ -1,0 +1,39 @@
+{
+  "version": 1,
+  "base_sha": "e3dd6d4156411de94cd89d81447eb0d21571a0da",
+  "verified_at": "2026-11-22T01:11:19Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/ConnectionEditor/CredentialSlots/TrueNASCredentialSlot.tsx",
+    "frontend-modern/src/components/Settings/useTrueNASSettingsPanelState.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/ConnectionEditor/CredentialSlots/TrueNASCredentialSlot.tsx": "e11b72f8b6a0c70d55e9624597eae7c245df401743a2ec18b7e58702da6d937c",
+    "frontend-modern/src/components/Settings/useTrueNASSettingsPanelState.ts": "bcca57fd530fcba7d7d60c8ff7c51a2bc8c9bcef98e3aced6350f8d3f6493802"
+  },
+  "routes": [
+    "/settings/infrastructure"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 320,
+      "height": 800
+    }
+  ],
+  "states": [
+    "Ten matched before/after screenshot pairs inspected: light desktop and dark phone using Playwright 1.56.1 Chromium 141.0.7390.37 and identical offline fixtures through the real Infrastructure route.",
+    "Saved test success shows only the system information read; checked scope, transport, Pause and Delete remain visible with all editor actions.",
+    "An incomplete success body does not confirm the test. A TLS failure stays beside the controls with its original detail, without a notification covering the actions.",
+    "A reply for the prior draft after editing Datasets does not render a stale result.",
+    "Add test success preserves scope, TLS options, the masked input and all add actions; it does not save."
+  ],
+  "interactions": [
+    "Opened Manage and Add using a desktop keyboard and phone touch, submitted the existing read-only Test connection action, and compared the result alongside the existing controls.",
+    "Held a saved probe pending, changed Datasets, and let the earlier response finish. The changed scope stayed checked and no old result appeared.",
+    "Checked both probe payloads and the current live region. The saved key stayed masked and HTTPS with certificate verification was preserved; no connection settings were written."
+  ]
+}
