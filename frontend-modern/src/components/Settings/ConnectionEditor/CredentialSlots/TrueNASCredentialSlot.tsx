@@ -46,6 +46,7 @@ const describeTransport = (transport: NonNullable<TrueNASConnection['transport']
 
 export const TrueNASCredentialSlot: Component<TrueNASCredentialSlotProps> = (props) => {
   let primed = false;
+  let testActionArea: HTMLDivElement | undefined;
 
   onMount(() => {
     if (!props.state.dialogOpen()) {
@@ -68,6 +69,15 @@ export const TrueNASCredentialSlot: Component<TrueNASCredentialSlotProps> = (pro
   const handleCancel = () => {
     props.state.closeDialog();
     props.onCancel();
+  };
+
+  const handleTest = async () => {
+    await props.state.testCurrentForm();
+    if (props.state.connectionTestResult() && testActionArea?.isConnected) {
+      // Reflow can put the result or the actions below a scrolled dialog edge.
+      // Keep them in view without taking focus from the editor.
+      testActionArea.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
+    }
   };
 
   const isEditing = () => Boolean(props.editingConnection);
@@ -98,7 +108,7 @@ export const TrueNASCredentialSlot: Component<TrueNASCredentialSlotProps> = (pro
   });
 
   return (
-    <div class="space-y-4">
+    <div class="space-y-3">
       <Show when={props.state.featureDisabled()}>
         <CalloutCard
           tone="warning"
@@ -383,6 +393,7 @@ export const TrueNASCredentialSlot: Component<TrueNASCredentialSlotProps> = (pro
         </Show>
 
         <div
+          ref={testActionArea}
           class="flex flex-col xl:flex-row xl:items-end xl:justify-between"
           classList={{ 'gap-2': Boolean(connectionTestFeedback()) }}
         >
@@ -458,7 +469,7 @@ export const TrueNASCredentialSlot: Component<TrueNASCredentialSlotProps> = (pro
                 variant="outline"
                 size="settingsAction"
                 class="order-2 whitespace-normal sm:order-none"
-                onClick={() => void props.state.testCurrentForm()}
+                onClick={() => void handleTest()}
                 disabled={
                   props.state.saving() ||
                   props.state.testing() ||
