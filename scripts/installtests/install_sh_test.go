@@ -3165,6 +3165,369 @@ func TestInstallSHFreeBSDAgentLogsUseRotatingWriter(t *testing.T) {
 	}
 }
 
+// Run the shipped recovery, upgrade, binary publication and rc.d caller
+// statements, not just the boot-file renderer. Service/process operations are
+// private fixture observations; file contents, modes, and moves are real.
+func TestAgentInstallerPreparesPfSenseBootBeforeStop(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Unix rc.d file modes and installer")
+	}
+	const freeBSD = "# 5b. FreeBSD rc.d (OPNsense, pfSense, vanilla FreeBSD)"
+	const renderer = "render_freebsd_rc_agent_script() {"
+	// The renderer's heredoc contains shell function bodies, so extract the
+	// whole renderer section rather than stopping at its first closing brace.
+	renderers := extractInstallShellSection(t, renderer, "# report_proxmox_registration_outcome ")
+	caller := extractInstallShellSection(t, "# --- URL Normalization ---", "# --- CA Certificate Validation ---") +
+		extractInstallShellSection(t, "# Prepare the ordinary collector replacement before any upgrade stop/kill.", "# --- Service Installation ---") +
+		extractInstallShellSection(t, freeBSD, "# 5. Linux (Systemd)")
+	// Relocate only the fixed probes and boot destinations in the caller. The
+	// wrapper's literal production destination must still be rendered.
+	caller = strings.NewReplacer(
+		`/usr/local/etc/rc.d/${AGENT_NAME}`, `$FIXTURE/rc.d/${AGENT_NAME}`,
+		`/usr/local/etc/rc.d/pulse_agent.sh`, `$FIXTURE/rc.d/pulse_agent.sh`,
+		`/usr/local/sbin/pfSsh.php`, `"$FIXTURE/pfSsh.php"`,
+		`/etc/rc.subr`, `"$FIXTURE/rc.subr"`,
+		`/etc/platform`, `"$FIXTURE/platform"`,
+	).Replace(caller)
+	var functions strings.Builder
+	for _, name := range []string{
+		"cleanup", "fail", "stage_agent_binary_for_install", "ensure_runtime_token_file",
+		"build_exec_arg_items", "join_exec_arg_items", "build_exec_args",
+	} {
+		functions.WriteString(extractInstallShellFunction(t, name) + "\n")
+	}
+
+	const token = "aabbccdd" // synthetic replacement; never a real credential
+	const oldToken = "00112233"
+	const oldURL = "https://previous.example.invalid"
+	const newURL = "https://pulse.example.invalid"
+	const oldStart = "version=v6.8-fixture url=" + oldURL + " interval=90s credential=previous"
+	const newStart = "version=v6.9-fixture url=" + newURL + " interval=30s credential=replacement"
+	const setup = `set -euo pipefail
+umask "$MASK"
+OS=freebsd AGENT_NAME=pulse-agent BINARY_NAME=pulse-agent
+TRUENAS=false SAFE_PROFILE_ACTION=none PRIVILEGED_HELPER_ENABLED=false
+UNINSTALL=false PREFLIGHT_ONLY=false
+INSTALL_DIR="$FIXTURE/bin" STATE_DIR="$FIXTURE/state" STATE_DIR_SOURCE=default
+PULSE_URL=` + newURL + ` PULSE_TOKEN=` + token + `
+NEW_VERSION=v6.9-fixture INTERVAL=30s ENABLE_HOST=true
+SHELL_EXPORT_LINES='export SSL_CERT_FILE="/conf/fixture-ca.pem"'
+EXIT_GENERAL=1 EXIT_MISSING_ARGS=16
+NON_INTERACTIVE=true OUTPUT_FORMAT=text
+TMP_BIN="$FIXTURE/download"
+TMP_FILES=("$TMP_BIN")
+PFSENSE_BOOT_STAGE_DIR=""
+PFSENSE_BOOT_PUBLISHED_PATHS=()
+for setting in ACTION_TOKEN ENABLE_DOCKER DOCKER_EXPLICIT ENABLE_KUBERNETES KUBECONFIG_PATH ENABLE_PROXMOX PROXMOX_TYPE INSECURE SERVER_FINGERPRINT OBSERVERS_FILE ENABLE_COMMANDS HEALTH_ADDR_SET ENROLL KUBE_INCLUDE_ALL_PODS KUBE_INCLUDE_ALL_DEPLOYMENTS AGENT_ID HOSTNAME_OVERRIDE REPORT_IP; do
+    printf -v "$setting" '%s' ''
+done
+
+log_info() { :; }
+log_error() { printf '%s\n' "$1" >&2; }
+record() { printf '%s\n' "$1" >> "$FIXTURE/trace"; }
+uname() { [[ "$1" == "-s" ]] && printf 'FreeBSD\n'; }
+sleep() { :; }
+systemctl() { [[ "$1" == is-enabled ]] || exit 90; return 1; }
+recover_connection_state_from_existing_agent() { record recover; }
+find_connection_state_file() { :; }
+update_connection_state_incomplete() { return 1; }
+recover_agent_id_from_state_file() { printf 'prior-id\n'; }
+resolve_command_authority_profile() { :; }
+clear_proxmox_state_if_needed() { :; }
+validate_staged_agent_url() { [[ -x "$1" && "$2" == install ]]; }
+stop_existing_agent_service() {
+    record stop
+    [[ "$(<"$FIXTURE/service")" == running ]] || exit 91
+    printf 'stopped\n' > "$FIXTURE/service"
+}
+pkill() {
+    [[ "$1" == -f && "$2" == "^${INSTALL_DIR}/${BINARY_NAME}([[:space:]]|$)" ]] || exit 92
+    record kill
+}
+ensure_freebsd_agent_enabled() { record enable; }
+restart_sysv_agent_service() {
+    [[ "$1" == "$FIXTURE/rc.d/pulse-agent" && -x "$1" ]] || exit 93
+    record start
+    printf 'running\n' > "$FIXTURE/service"
+}
+complete_installation_flow() { record complete; }
+chmod() {
+    local kind=""
+    if [[ "$1" == 0755 && "$2" == "$FIXTURE/rc.d/".pulse-agent.* ]]; then
+        if grep -Fq '# pfSense boot wrapper for pulse-agent' "$2"; then
+            [[ "$FAULT" != wrapper-mode ]] || { record wrapper-mode-refused; return 1; }
+            kind=wrapper
+        else
+            kind=rc
+        fi
+    fi
+    command chmod "$@" || return 1
+    [[ -z "$kind" ]] || record "stage-$kind"
+}
+mv() {
+    local last="${@: -1}"
+    if [[ "$last" == "$FIXTURE/rc.d/" && "$2" == "$PFSENSE_BOOT_STAGE_DIR/"* ]]; then
+        case "${2##*/}:$FAULT" in
+            pulse_agent.sh:wrapper-publish) record wrapper-publish-refused; return 1 ;;
+            pulse-agent:rc-publish) record rc-publish-refused; return 1 ;;
+        esac
+    fi
+    if [[ "$last" == "$INSTALL_DIR/$BINARY_NAME" && "$FAULT" == binary-publish ]]; then
+        record binary-publish-refused
+        return 1
+    fi
+    if [[ "$last" == "$STATE_DIR/token" && "$FAULT" == token-publish ]]; then
+        record token-publish-refused
+        return 1
+    fi
+    command mv "$@" || return 1
+    if [[ "$last" == "$INSTALL_DIR/$BINARY_NAME" ]]; then record binary; fi
+}
+`
+	script := setup + functions.String() + renderers + "\ntrap cleanup EXIT\nmain_fixture() {\n" + caller + "\n}\nmain_fixture\n"
+	const priorTrace = "recover\nstage-rc\nstage-wrapper\nstop\nkill\n"
+	const completeTrace = "binary\nenable\nstart\ncomplete\n"
+	const unsafe = "must be regular files, not links"
+	for _, tc := range []struct {
+		name, mask, marker, bad, fault, trace, errorText string
+		prior                                            bool
+		nextStart                                        string
+	}{
+		{name: "fresh-022", mask: "022", marker: "pfSsh.php", trace: "stage-rc\nstage-wrapper\n" + completeTrace},
+		{name: "fresh-077", mask: "077", marker: "pfSsh.php", trace: "stage-rc\nstage-wrapper\n" + completeTrace},
+		{name: "repair-0700-022", mask: "022", marker: "platform", prior: true, trace: priorTrace + completeTrace},
+		{name: "repair-0700-077", mask: "077", marker: "platform", prior: true, trace: priorTrace + completeTrace, nextStart: newStart},
+		{name: "plain-freebsd", mask: "077", trace: completeTrace},
+		{name: "running-service-link", mask: "077", marker: "pfSsh.php", prior: true, bad: "pulse-agent", errorText: unsafe},
+		{name: "running-wrapper-link", mask: "077", marker: "pfSsh.php", prior: true, bad: "pulse_agent.sh", errorText: unsafe},
+		{name: "running-nonregular", mask: "077", marker: "platform", prior: true, bad: "directory", errorText: unsafe},
+		{name: "running-wrapper-preparation-refused", mask: "077", marker: "platform", prior: true, fault: "wrapper-mode", trace: "recover\nstage-rc\nwrapper-mode-refused\n", errorText: "The existing agent has not been stopped or replaced"},
+		{name: "running-wrapper-publication-refused", mask: "077", marker: "platform", prior: true, fault: "wrapper-publish", trace: priorTrace + "wrapper-publish-refused\n", errorText: "the agent may have been stopped", nextStart: oldStart},
+		{name: "running-rc-publication-refused", mask: "077", marker: "platform", prior: true, fault: "rc-publish", trace: priorTrace + "rc-publish-refused\n", errorText: "the agent may have been stopped", nextStart: oldStart},
+		{name: "running-binary-publication-refused", mask: "077", marker: "platform", prior: true, fault: "binary-publish", trace: priorTrace + "binary-publish-refused\n", errorText: "the agent may have been stopped", nextStart: oldStart},
+		{name: "running-token-publication-refused", mask: "077", marker: "platform", prior: true, fault: "token-publish", trace: priorTrace + "binary\ntoken-publish-refused\n", errorText: "Failed to install runtime token file", nextStart: strings.Replace(oldStart, "v6.8", "v6.9", 1)},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			root := t.TempDir()
+			rcDir := filepath.Join(root, "rc.d")
+			binary := filepath.Join(root, "bin", "pulse-agent")
+			savedToken := filepath.Join(root, "state", "token")
+			trace := filepath.Join(root, "trace")
+			foreign := filepath.Join(root, "unrelated")
+			rc := filepath.Join(rcDir, "pulse-agent")
+			wrapper := filepath.Join(rcDir, "pulse_agent.sh")
+			service := filepath.Join(root, "service")
+			write := func(path, body string, mode os.FileMode) {
+				t.Helper()
+				writeTestFile(t, path, []byte(body), mode)
+			}
+			read := func(path string) string {
+				t.Helper()
+				b, err := os.ReadFile(path)
+				if err != nil {
+					t.Fatal(err)
+				}
+				return string(b)
+			}
+			mode := func(path string, want os.FileMode) {
+				t.Helper()
+				info, err := os.Lstat(path)
+				if err != nil || info.Mode() != want {
+					t.Fatalf("%s: want mode %s, got %v (%v)", filepath.Base(path), want, info, err)
+				}
+			}
+			for _, path := range []string{rcDir, filepath.Dir(binary), filepath.Dir(savedToken), foreign} {
+				if err := os.Mkdir(path, 0700); err != nil {
+					t.Fatal(err)
+				}
+			}
+			write(trace, "", 0600)
+			write(filepath.Join(foreign, "sentinel"), "unrelated contents\n", 0600)
+			const observingAgent = `
+if [ "${1:-}" = --version ]; then
+    printf '%s\n' "$version"
+    exit 0
+fi
+while [ "$#" -gt 0 ]; do
+    case "$1" in
+        --url) url=$2; shift ;;
+        --interval) interval=$2; shift ;;
+        --token-file) token_file=$2; shift ;;
+    esac
+    shift
+done
+case "$(cat "$token_file")" in
+    ` + oldToken + `) credential=previous ;;
+    ` + token + `) credential=replacement ;;
+    *) credential=unexpected ;;
+esac
+printf 'version=%s url=%s interval=%s credential=%s\n' "$version" "$url" "$interval" "$credential"
+`
+			const oldBinary = "#!/bin/sh\nversion=v6.8-fixture\n" + observingAgent
+			const newBinary = "#!/bin/sh\nversion=v6.9-fixture\n" + observingAgent
+			const oldWrapper = "#!/bin/sh\n# previous boot wrapper\n/usr/local/etc/rc.d/pulse-agent start\n"
+			priorBoot := map[string]string{wrapper: oldWrapper}
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			if tc.marker != "" {
+				write(filepath.Join(root, tc.marker), "pfSense\n", 0600)
+			}
+			if tc.prior {
+				write(binary, oldBinary, 0755)
+				write(savedToken, oldToken, 0600)
+				write(service, "running\n", 0600)
+				priorRC := filepath.Join(root, "prior-rc")
+				render := exec.CommandContext(ctx, "bash", "-c", renderers+`
+SHELL_EXPORT_LINES=''
+render_freebsd_rc_agent_script "$2" "$1" "--url `+oldURL+` --interval 90s --token-file $3" 0700
+`, "previous", binary, priorRC, savedToken)
+				if out, err := render.CombinedOutput(); err != nil {
+					t.Fatalf("render prior rc.d fixture: %v\n%s", err, out)
+				}
+				priorBoot[rc] = read(priorRC)
+				for _, path := range []string{rc, wrapper} {
+					var err error
+					switch {
+					case filepath.Base(path) == tc.bad:
+						err = os.Symlink(foreign, path)
+					case tc.bad == "directory" && path == rc:
+						err = os.Mkdir(path, 0700)
+					default:
+						write(path, priorBoot[path], 0700)
+					}
+					if err != nil {
+						t.Fatal(err)
+					}
+				}
+			}
+			write(filepath.Join(root, "download"), newBinary, 0755)
+			cmd := exec.CommandContext(ctx, "bash", "-c", script)
+			update := "false"
+			if tc.prior {
+				update = "true"
+			}
+			cmd.Env = []string{"PATH=" + os.Getenv("PATH"), "LC_ALL=C", "FIXTURE=" + root,
+				"UPDATE_ONLY=" + update, "MASK=" + tc.mask, "FAULT=" + tc.fault}
+			out, err := cmd.CombinedOutput()
+			if tc.nextStart != "" {
+				// Follow the actual installed wrapper and rc.d command in a
+				// disposable directory. Only fixed system paths are relocated;
+				// the daemon substitute forwards argv to the installed fixture
+				// executable, which reports the token generation, not its bytes.
+				rcSubr := filepath.Join(root, "observed-rc.subr")
+				write(rcSubr, `load_rc_config() { :; }
+checkyesno() { [ "$1" = pulse_agent_enable ]; }
+run_rc_command() { [ "$1" = start ] && "$start_cmd"; }
+fixture_daemon() {
+    [ "$1" = -r ] && [ "$2" = -P ] && [ "$4" = -p ] && [ "$6" = -f ] || return 1
+    shift 6
+    exec "$@"
+}
+`, 0600)
+				rcCopy := filepath.Join(root, "observed-rc")
+				wrapperCopy := filepath.Join(root, "observed-wrapper.sh")
+				copyBoot := func(src, dst, body string) {
+					t.Helper()
+					info, err := os.Stat(src)
+					if err != nil {
+						t.Fatal(err)
+					}
+					write(dst, body, info.Mode().Perm())
+				}
+				copyBoot(rc, rcCopy, strings.NewReplacer("/etc/rc.subr", rcSubr, "/var/run/", root+"/", "/usr/sbin/daemon", "fixture_daemon").Replace(read(rc)))
+				copyBoot(wrapper, wrapperCopy, strings.ReplaceAll(read(wrapper), "/usr/local/etc/rc.d/pulse-agent", rcCopy))
+				start := exec.CommandContext(ctx, wrapperCopy)
+				start.Env = cmd.Env
+				output, startErr := start.CombinedOutput()
+				t.Logf("modelled next start: %s", strings.TrimSpace(string(output)))
+				if startErr != nil || !strings.HasSuffix(strings.TrimSpace(string(output)), tc.nextStart) {
+					t.Fatalf("next start did not use %s: %v", tc.nextStart, startErr)
+				}
+			}
+			if got := read(trace); got != tc.trace {
+				t.Fatalf("effects = %q, want %q (binary replaced=%t); exit=%v\n%s",
+					got, tc.trace, strings.Contains(got, "binary\n"), err, out)
+			}
+			if tc.errorText != "" {
+				var exit *exec.ExitError
+				if !errors.As(err, &exit) || exit.ExitCode() != 1 || !strings.Contains(string(out), tc.errorText) {
+					t.Fatalf("expected a bounded installer failure: %v\n%s", err, out)
+				}
+				wantService := "running\n"
+				wantBinary := oldBinary
+				switch tc.fault {
+				case "wrapper-publish", "rc-publish", "binary-publish", "token-publish":
+					wantService = "stopped\n"
+				}
+				if tc.fault == "token-publish" {
+					wantBinary = newBinary
+				}
+				if read(service) != wantService || read(binary) != wantBinary || read(savedToken) != oldToken {
+					t.Fatal("failed boot preparation or publication lost installed state")
+				}
+				for _, path := range []string{rc, wrapper} {
+					switch {
+					case filepath.Base(path) == tc.bad:
+						if target, err := os.Readlink(path); err != nil || target != foreign {
+							t.Fatalf("link changed rather than being refused: %q, %v", target, err)
+						}
+					case tc.bad == "directory" && path == rc:
+						mode(path, os.ModeDir|0700)
+					default:
+						mode(path, 0700)
+						if read(path) != priorBoot[path] {
+							t.Fatal("previous startup definition changed")
+						}
+					}
+				}
+			} else {
+				if err != nil {
+					t.Fatalf("install: %v\n%s", err, out)
+				}
+				if read(service) != "running\n" || read(binary) != newBinary || read(savedToken) != token {
+					t.Fatal("did not start the verified replacement with its saved credential")
+				}
+				wantMode := os.FileMode(0755)
+				if tc.marker == "" {
+					wantMode = 0700
+					if _, err := os.Lstat(wrapper); !errors.Is(err, os.ErrNotExist) {
+						t.Fatalf("ordinary FreeBSD gained a pfSense wrapper: %v", err)
+					}
+				} else {
+					mode(wrapper, wantMode)
+					if contents := read(wrapper); !strings.Contains(contents, "/usr/local/etc/rc.d/pulse-agent start\n") || strings.Contains(contents, token) {
+						t.Fatal("pfSense wrapper changed its target or exposed the credential")
+					}
+					if out, err := exec.CommandContext(ctx, "sh", "-n", wrapper).CombinedOutput(); err != nil {
+						t.Fatalf("pfSense wrapper did not parse: %v\n%s", err, out)
+					}
+				}
+				mode(rc, wantMode)
+				if contents := read(rc); !strings.Contains(contents, "--token-file "+savedToken) ||
+					!strings.Contains(contents, "--log-file "+filepath.Join(root, "state", "logs", "pulse-agent.log")) ||
+					strings.Contains(contents, token) || (tc.prior && !strings.Contains(contents, "--agent-id prior-id")) {
+					t.Fatal("rc.d script lost its private token-file reference, log file or saved identity")
+				}
+				if out, err := exec.CommandContext(ctx, "sh", "-n", rc).CombinedOutput(); err != nil {
+					t.Fatalf("rc.d script did not parse: %v\n%s", err, out)
+				}
+			}
+			mode(filepath.Dir(savedToken), os.ModeDir|0700)
+			mode(savedToken, 0600)
+			if entries, err := os.ReadDir(foreign); err != nil || len(entries) != 1 || read(filepath.Join(foreign, "sentinel")) != "unrelated contents\n" {
+				t.Fatalf("refused destination did not leave link target alone: %v", err)
+			}
+			for _, pattern := range []string{filepath.Join(rcDir, ".pulse-agent.*"), filepath.Join(filepath.Dir(binary), ".pulse-agent.install.*")} {
+				if leftovers, err := filepath.Glob(pattern); err != nil || len(leftovers) != 0 {
+					t.Fatalf("staged files were not cleaned up (%s): %v, %v", pattern, leftovers, err)
+				}
+			}
+			t.Logf("effects=%q; running=%t; binary_replaced=%t; token_mode=0600; cleanup=complete", tc.trace,
+				read(service) == "running\n", read(binary) == newBinary)
+		})
+	}
+}
+
 // TestInstallSHFreeBSDBuildArgsPassesLogFile verifies the FreeBSD rc.d service
 // args actually carry --log-file once AGENT_LOG_FILE is set.
 func TestInstallSHFreeBSDBuildArgsPassesLogFile(t *testing.T) {
