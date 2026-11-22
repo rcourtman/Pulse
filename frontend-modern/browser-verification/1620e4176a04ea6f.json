@@ -1,0 +1,44 @@
+{
+  "version": 1,
+  "base_sha": "7878790fa2ea55337044cb4397626802e1f504aa",
+  "verified_at": "2026-11-22T19:16:53Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/SSOProvidersPanel.tsx",
+    "frontend-modern/src/components/Settings/useSSOProvidersState.ts",
+    "frontend-modern/src/utils/ssoProviderPresentation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/SSOProvidersPanel.tsx": "8315975991e57c88522edde51387cc2028c2ac674ebb9e2d38a9e2daa0ab0b94",
+    "frontend-modern/src/components/Settings/useSSOProvidersState.ts": "aef5f7ffc19e88d95b3548c8d0ebc0330f2ad3b868f369c00d60ecb7b5da4018",
+    "frontend-modern/src/utils/ssoProviderPresentation.ts": "8f4a9854a662b7c9fa9e2bd1af2ca0da535ac6cedc7957b1217f997bfe6932a9"
+  },
+  "routes": [
+    "/settings/security-sso"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900,
+      "theme": "light"
+    },
+    {
+      "width": 360,
+      "height": 800,
+      "theme": "dark"
+    }
+  ],
+  "states": [
+    "Existing SAML and OIDC cards",
+    "Failed SAML details read with actionable card feedback",
+    "SAML editor opened with the returned fields after retry",
+    "Unaffected OIDC editor",
+    "Read-only provider inventory"
+  ],
+  "interactions": [
+    "Keyboard Edit and touch Edit on the existing card; keep focus and other provider controls",
+    "Leave the failed read visible without writing or automatically retrying",
+    "Retry the same Edit after the fixture recovers; cancel and open the other provider",
+    "Check the provider details action remains disabled for a read-only account"
+  ]
+}

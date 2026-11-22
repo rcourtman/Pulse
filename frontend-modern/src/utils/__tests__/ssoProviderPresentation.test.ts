@@ -77,7 +77,9 @@ describe('ssoProviderPresentation', () => {
 
   it('formats provider operational messages canonically', () => {
     expect(getSSOProvidersLoadErrorMessage()).toBe('Unable to load SSO providers.');
-    expect(getSSOProviderDetailsLoadErrorMessage()).toBe('Unable to load SSO provider details.');
+    expect(getSSOProviderDetailsLoadErrorMessage()).toBe(
+      'Could not open settings. Try Edit again.',
+    );
     expect(getSSOProviderSaveSuccessMessage(true)).toBe('SSO provider has been updated.');
     expect(getSSOProviderSaveSuccessMessage(false)).toBe('SSO provider has been created.');
     expect(getSSOProviderSaveErrorMessage('boom')).toBe('Unable to save the SSO provider: boom');

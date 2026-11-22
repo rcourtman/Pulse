@@ -13,7 +13,6 @@ import {
   getSSOMetadataUrlRequiredMessage,
   getSSOProviderDeleteErrorMessage,
   getSSOProviderDeleteSuccessMessage,
-  getSSOProviderDetailsLoadErrorMessage,
   getSSOProviderSaveErrorMessage,
   getSSOProviderSaveSuccessMessage,
   getSSOProviderToggleErrorMessage,
@@ -80,6 +79,7 @@ export const useSSOProvidersState = (props: SSOProvidersPanelProps) => {
   const [unconfirmedChange, setUnconfirmedChange] = createSignal<string | null>(null);
   const [providersLoaded, setProvidersLoaded] = createSignal(false);
   const [loadingDetails, setLoadingDetails] = createSignal(false);
+  const [failedProviderDetails, setFailedProviderDetails] = createSignal<SSOProvider | null>(null);
   const [mutating, setMutating] = createSignal(false);
   const managementAllowed = createMemo(() => props.canManage !== false);
   const authenticatedUser = createMemo(() => props.currentUser);
@@ -139,6 +139,7 @@ export const useSSOProvidersState = (props: SSOProvidersPanelProps) => {
     clearPreviewAndTest();
     batch(() => {
       setLoadingDetails(false);
+      setFailedProviderDetails(null);
       setShowModalValue(false);
       setEditingProvider(null);
       setEditorFeedback(null);
@@ -245,6 +246,7 @@ export const useSSOProvidersState = (props: SSOProvidersPanelProps) => {
       setLoading(true);
       setLoadError(false);
       setProvidersLoaded(false);
+      setFailedProviderDetails(null);
       setProviders([]);
     });
     void readProviderInventory(read, version);
@@ -337,7 +339,7 @@ export const useSSOProvidersState = (props: SSOProvidersPanelProps) => {
     } catch {
       if (!isCurrent()) return;
       logger.error('[SSOProvidersPanel] Failed to load provider details.');
-      notificationStore.error(getSSOProviderDetailsLoadErrorMessage());
+      setFailedProviderDetails(provider);
     } finally {
       if (detailController === controller) {
         detailController = undefined;
@@ -671,6 +673,7 @@ export const useSSOProvidersState = (props: SSOProvidersPanelProps) => {
     unconfirmedChange,
     loadProviders,
     loadingDetails,
+    failedProviderDetails,
     canEdit,
     mutating,
     saving,

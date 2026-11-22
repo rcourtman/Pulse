@@ -107,7 +107,9 @@ describe('ssoProviderPresentation branch coverage (supplemental)', () => {
   describe('getSSOProvidersLoadErrorMessage / DetailsLoadErrorMessage', () => {
     it('returns the canonical load-error strings', () => {
       expect(getSSOProvidersLoadErrorMessage()).toBe('Unable to load SSO providers.');
-      expect(getSSOProviderDetailsLoadErrorMessage()).toBe('Unable to load SSO provider details.');
+      expect(getSSOProviderDetailsLoadErrorMessage()).toBe(
+        'Could not open settings. Try Edit again.',
+      );
     });
   });
 
