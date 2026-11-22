@@ -5,6 +5,7 @@ import agentsMachinesTableSource from '@/features/standalone/AgentsMachinesTable
 import agentMachineTableModelSource from '@/features/standalone/agentMachineTableModel.ts?raw';
 import standalonePageSurfaceSource from '@/features/standalone/StandalonePageSurface.tsx?raw';
 import dockerAlertsTableSource from '@/features/docker/DockerAlertsTable.tsx?raw';
+import platformAlertsTableSource from '@/features/platformPage/PlatformAlertsTable.tsx?raw';
 import dockerConfigsTableSource from '@/features/docker/DockerConfigsTable.tsx?raw';
 import dockerHostsTableSource from '@/features/docker/DockerHostsTable.tsx?raw';
 import dockerImagesTableSource from '@/features/docker/DockerImagesTable.tsx?raw';
@@ -16,7 +17,6 @@ import dockerStorageUsageTableSource from '@/features/docker/DockerStorageUsageT
 import dockerSwarmNodesTableSource from '@/features/docker/DockerSwarmNodesTable.tsx?raw';
 import dockerTasksTableSource from '@/features/docker/DockerTasksTable.tsx?raw';
 import dockerVolumesTableSource from '@/features/docker/DockerVolumesTable.tsx?raw';
-import kubernetesAlertsTableSource from '@/features/kubernetes/KubernetesAlertsTable.tsx?raw';
 import kubernetesAutoscalingTableSource from '@/features/kubernetes/KubernetesAutoscalingTable.tsx?raw';
 import kubernetesClustersTableSource from '@/features/kubernetes/KubernetesClustersTable.tsx?raw';
 import kubernetesConfigTableSource from '@/features/kubernetes/KubernetesConfigTable.tsx?raw';
@@ -36,7 +36,6 @@ import proxmoxRecoverableTableSource from '@/features/proxmox/ProxmoxRecoverable
 import proxmoxMailGatewayDrawerSource from '@/features/proxmox/ProxmoxMailGatewayDrawer.tsx?raw';
 import proxmoxPageSurfaceSource from '@/features/proxmox/ProxmoxPageSurface.tsx?raw';
 import proxmoxReplicationTableSource from '@/features/proxmox/ProxmoxReplicationTable.tsx?raw';
-import truenasAlertsTableSource from '@/features/truenas/TrueNASAlertsTable.tsx?raw';
 import truenasAppsTableSource from '@/features/truenas/TrueNASAppsTable.tsx?raw';
 import truenasNetworkSharesTableSource from '@/features/truenas/TrueNASNetworkSharesTable.tsx?raw';
 import truenasPageSurfaceSource from '@/features/truenas/TrueNASPageSurface.tsx?raw';
@@ -46,7 +45,6 @@ import truenasSystemsTableSource from '@/features/truenas/TrueNASSystemsTable.ts
 import truenasVirtualMachinesTableSource from '@/features/truenas/TrueNASVirtualMachinesTable.tsx?raw';
 import vmwarePageSurfaceSource from '@/features/vmware/VmwarePageSurface.tsx?raw';
 import vsphereActivityTableSource from '@/features/vmware/VsphereActivityTable.tsx?raw';
-import vsphereAlertsTableSource from '@/features/vmware/VsphereAlertsTable.tsx?raw';
 import vsphereHostsTableSource from '@/features/vmware/VsphereHostsTable.tsx?raw';
 import vsphereNetworksTableSource from '@/features/vmware/VsphereNetworksTable.tsx?raw';
 import storageSurfaceSource from '@/components/Storage/Storage.tsx?raw';
@@ -319,17 +317,11 @@ describe('platform overview layout guardrails', () => {
     expect(indexCssSource).toContain(':is(th, td).platform-table-phone-hidden');
     expect(indexCssSource).toContain(':is(th, td).platform-table-phone-only');
 
-    for (const source of [
-      dockerAlertsTableSource,
-      kubernetesAlertsTableSource,
-      truenasAlertsTableSource,
-      vsphereAlertsTableSource,
-    ]) {
-      expect(source).toMatch(/TableHead[\s\S]{0,160}?platform-table-phone-hidden/);
-      expect(source).toMatch(
-        /TableCell[\s\S]{0,160}?getPlatformTableCellClassForKind\('badge'\)[\s\S]{0,80}?platform-table-phone-hidden/,
-      );
-    }
+    expect(platformAlertsTableSource).toMatch(/TableHead[\s\S]{0,160}?platform-table-phone-hidden/);
+    expect(platformAlertsTableSource).toMatch(
+      /TableCell[\s\S]{0,160}?getPlatformTableCellClassForKind\('badge'\)[\s\S]{0,80}?platform-table-phone-hidden/,
+    );
+    expect(dockerAlertsTableSource).toContain('<PlatformAlertsTable');
 
     expect(dockerVolumesTableSource).toMatch(
       /sortKey="scope"[\s\S]{0,120}?platform-table-phone-hidden/,

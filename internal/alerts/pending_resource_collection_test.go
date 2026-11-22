@@ -20,15 +20,17 @@ import (
 // Nothing here needs an event store or a running manager worker.
 func pendingCollectionFixture(hosts int, mode string) *Manager {
 	m := &Manager{
-		core:                        reducer.NewState(),
-		shadow:                      &shadowFeed{state: reducer.NewState()},
-		activeAlerts:                make(map[string]*Alert),
-		intentPending:               make(map[string]IntentPendingState),
-		hostDiskTempPendingContexts: make(map[string]hostDiskTempContext),
-		hostDiskTempAbsences:        make(map[string]int),
-		hostNativeSensorPendingCtx:  make(map[string]hostNativeSensorContext),
-		config:                      AlertConfig{Overrides: make(map[string]ThresholdConfig)},
-		stopping:                    true, // no persistence worker in this in-memory fixture
+		core:          reducer.NewState(),
+		shadow:        &shadowFeed{state: reducer.NewState()},
+		activeAlerts:  make(map[string]*Alert),
+		intentPending: make(map[string]IntentPendingState),
+		hostTracker: hostTracker{
+			hostDiskTempPendingContexts: make(map[string]hostDiskTempContext),
+			hostDiskTempAbsences:        make(map[string]int),
+			hostNativeSensorPendingCtx:  make(map[string]hostNativeSensorContext),
+		},
+		config:   AlertConfig{Overrides: make(map[string]ThresholdConfig)},
+		stopping: true, // no persistence worker in this in-memory fixture
 	}
 	at := time.Date(2026, 11, 12, 12, 0, 0, 0, time.UTC)
 	for h := 0; h < hosts; h++ {
