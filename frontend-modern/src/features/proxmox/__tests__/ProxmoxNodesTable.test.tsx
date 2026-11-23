@@ -323,12 +323,12 @@ describe('ProxmoxNodesTable', () => {
   );
 
   it.each([
-    [{ total: 10_000, used: 62 }, '0.62%'],
+    [{ total: 10_000, used: 62, current: 0.62 }, '0.62%'],
     [{ total: 10_000, used: 88, current: 88 }, '0.88%'],
     [{ current: 1.13 }, '1.13%'],
     [{ current: 0.004 }, '<0.01%'],
     [{ total: 10_000, used: 0, current: 0 }, '0%'],
-    [{ total: 10_000, used: 1_640 }, '16%'],
+    [{ total: 10_000, used: 1_640, current: 16.4 }, '16%'],
     [undefined, '—'],
   ])('labels memory Bars for reading %j as %s', (memory, label) => {
     const { container } = render(() => (
