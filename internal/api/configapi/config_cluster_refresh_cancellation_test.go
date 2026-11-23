@@ -215,7 +215,7 @@ func TestClusterRefreshOrdersSameConfigSavesAndApplies(t *testing.T) {
 
 				firstRead, applyFirst := make(chan struct{}), make(chan struct{})
 				var reloads atomic.Int32
-				h := &ConfigHandlers{defaultConfig: cfg, defaultPersistence: persistence, reloadFunc: func() error {
+				h := &ConfigHandlers{defaultConfig: cfg, defaultPersistence: persistence, runtime: defaultRuntimeDependencies(), reloadFunc: func() error {
 					// Model the reload boundary: read the saved config, then
 					// publish it after the previous monitor finishes stopping.
 					first := reloads.Add(1) == 1
