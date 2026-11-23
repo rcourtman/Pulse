@@ -1,0 +1,40 @@
+{
+  "version": 1,
+  "base_sha": "5ff8da7bf5661d6b73fcaa8935f58966eda53924",
+  "verified_at": "2026-11-23T21:46:36Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/TokenRevealDialog.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/TokenRevealDialog.tsx": "a7a33cb522f3c324054e939422caea2f41af5f9dbc0e497f9de4def0411a001d"
+  },
+  "routes": [
+    "/settings/security/api (existing scoped token generation, reveal and recovery)"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900,
+      "theme": "light",
+      "browser": "Chromium 141.0.7390.37"
+    },
+    {
+      "width": 320,
+      "height": 620,
+      "theme": "dark",
+      "browser": "WebKit 26.0 touch emulation"
+    }
+  ],
+  "states": [
+    "Ready shows the same token, role context, hint, saved guidance and dismissal controls.",
+    "A denied clipboard and fallback now leave an inline alert and Select token text beside the visible value; the old toast expired and partially covered Dismiss at 320 px.",
+    "A successful deliberate retry restores Copied! without the failure notice. Existing Show remains available in Settings after dismissal."
+  ],
+  "interactions": [
+    "The existing Generate form posts only the chosen Agent scopes once. Neither selection nor copy retry issues another token.",
+    "Tab and Enter select the exact visible value; desktop Control+C dispatches the native copy event. A tap selects the same exact text in narrow WebKit.",
+    "Escape and Dismiss remove the active reveal and selection. Select does not call the clipboard helper."
+  ],
+  "evidence_summary": "Four Playwright 1.56.1 journeys against locked production builds; eight matched capture pairs and two action-only captures reviewed as images. The submitted runtime retained all tested frontend bytes and rebuilt to identical output (203 files). The API and automatic clipboard outcomes were synthetic; the phone OS copy menu and pasteboard were not tested."
+}
