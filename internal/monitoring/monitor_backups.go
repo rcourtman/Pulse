@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"fmt"
 	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -2307,7 +2308,7 @@ func (m *Monitor) pollPBSBackupsWithLiveLimit(ctx context.Context, instanceName 
 	// Failed reads may retain raw artifacts for continuity, but cannot renew
 	// their point evidence or use them to infer another backup's guest identity.
 	// Successful, unchanged group listings retain the existing bounded TTL reuse.
-	observedBackups := make([]models.PBSBackup, 0, len(allBackups))
+	hasCarriedBackups := false
 	for i, backup := range allBackups {
 		key := pbsBackupGroupKey{
 			datastore: backup.Datastore, namespace: normalizePBSNamespacePath(backup.Namespace),
@@ -2315,9 +2316,7 @@ func (m *Monitor) pollPBSBackupsWithLiveLimit(ctx context.Context, instanceName 
 		}
 		_, observed := observedGroups[key]
 		allBackups[i].CarriedOver = !observed
-		if observed {
-			observedBackups = append(observedBackups, allBackups[i])
-		}
+		hasCarriedBackups = hasCarriedBackups || !observed
 	}
 
 	// Publication is the commit boundary: no cancellation return may split a
@@ -2327,6 +2326,16 @@ func (m *Monitor) pollPBSBackupsWithLiveLimit(ctx context.Context, instanceName 
 	m.prunePBSBackupCacheTimes(instanceName, retainedGroups)
 	for key, read := range refreshedGroups {
 		m.setPBSBackupCacheRead(instanceName, key, read)
+	}
+
+	// Live state has detached copies of all rows, including any carried ones.
+	// Reuse this poll's slice for Recovery, keeping only accepted observations
+	// in their original order. A wholly observed poll needs no filtering pass.
+	observedBackups := allBackups
+	if hasCarriedBackups {
+		observedBackups = slices.DeleteFunc(allBackups, func(backup models.PBSBackup) bool {
+			return backup.CarriedOver
+		})
 	}
 
 	// Best-effort ingestion into recovery store (for rollups / unified backups UX).
