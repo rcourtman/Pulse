@@ -295,6 +295,18 @@ compare them at similar points during busy polls. A lower memory peak with
 more swap use is not enough to widen the rollout. Keep swap samples separate
 from memory peaks. Do not change swap or add load just to compare.
 
+**Check for pressure even if nothing was killed.** If you already have
+`memory.events` for the container, compare how much `high` and `max` increased
+in each window, not the totals since startup. `high` counts throttling and
+direct reclaim after crossing the `memory.high` threshold. `max` counts
+attempts to exceed `memory.max`, even when reclaim avoids a kill.
+
+Use the same limits for both windows and the same cgroup instance for the
+start and end of each window. If either counter starts rising, or rises
+more in the new window, keep the rollout staged even if `oom_kill` did
+not increase. These counters cover the whole group, not just Pulse. If
+the readings aren't comparable, pressure is unknown.
+
 If the cgroup was recreated, its peak and `oom_kill` counter start over.
 Keep those observations separate and check the existing Proxmox kernel and
 Pulse service logs for a kill or restart. Do not reset counters to make
