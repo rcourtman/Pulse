@@ -14,13 +14,13 @@
 
 Pulse is a self-hosted monitoring and alerting dashboard for Proxmox, Docker,
 Kubernetes, TrueNAS, vSphere, and Linux/Windows/macOS hosts. One lightweight
-server tracks health, backups, availability checks, and metric history — and
+server tracks health, backups, availability checks, and metric history, and
 alerts you when something needs attention.
 
-![Pulse Proxmox overview](docs/images/pulse-workspace.png)
+![Pulse Proxmox overview](docs/images/pulse-workspace.webp)
 
 <p align="center">
-  Try the <a href="https://demo.pulserelay.pro">live demo</a> (Proxmox, <a href="https://demo.pulserelay.pro/docker/overview">Docker</a>, Kubernetes, Alerts) — no sign-up required.
+  Try the <a href="https://demo.pulserelay.pro">live demo</a> (Proxmox, <a href="https://demo.pulserelay.pro/docker/overview">Docker</a>, Kubernetes, Alerts). No sign-up required.
 </p>
 
 ## Inside Pulse
@@ -28,32 +28,32 @@ alerts you when something needs attention.
 <table>
   <tr>
     <td width="50%" valign="top">
-      <a href="docs/images/pulse-docker.png"><img src="docs/images/pulse-docker.png" alt="Docker hosts and containers" /></a><br />
-      <strong>Docker &amp; Podman</strong> — hosts, containers, Compose stacks, Swarm health, and image updates without mounting the Docker socket on Pulse.
+      <a href="docs/images/pulse-docker.webp"><img src="docs/images/pulse-docker.webp" alt="Docker hosts and containers" /></a><br />
+      <strong>Docker &amp; Podman:</strong> hosts, containers, Compose stacks, Swarm health, and image updates without mounting the Docker socket on Pulse.
     </td>
     <td width="50%" valign="top">
-      <a href="docs/images/pulse-kubernetes.png"><img src="docs/images/pulse-kubernetes.png" alt="Kubernetes clusters and workloads" /></a><br />
-      <strong>Kubernetes</strong> — multi-cluster health, degraded nodes, pods, deployments, storage, and events in one view.
-    </td>
-  </tr>
-  <tr>
-    <td width="50%" valign="top">
-      <a href="docs/images/pulse-alerts.png"><img src="docs/images/pulse-alerts.png" alt="Active alerts and notifications" /></a><br />
-      <strong><a href="docs/ALERTING.md">Alerts</a> &amp; <a href="docs/AVAILABILITY.md">Availability</a></strong> — thresholds plus Ping/TCP/UDP/HTTP(S) &amp; TLS checks via email, Discord, Slack, Telegram, ntfy, Gotify, Pushover, PagerDuty, or webhooks.
-    </td>
-    <td width="50%" valign="top">
-      <a href="docs/images/pulse-backups.png"><img src="docs/images/pulse-backups.png" alt="Proxmox backup coverage and PBS datastores" /></a><br />
-      <strong>Backup coverage &amp; PBS</strong> — spot unprotected guests, stale backups, and failed sync jobs across PVE and Proxmox Backup Server.
+      <a href="docs/images/pulse-kubernetes.webp"><img src="docs/images/pulse-kubernetes.webp" alt="Kubernetes clusters and workloads" /></a><br />
+      <strong>Kubernetes:</strong> multi-cluster health, degraded nodes, pods, deployments, storage, and events in one view.
     </td>
   </tr>
   <tr>
     <td width="50%" valign="top">
-      <a href="docs/images/pulse-history.png"><img src="docs/images/pulse-history.png" alt="Metric history and filesystem diagnostics" /></a><br />
-      <strong>Built-in metric history</strong> — CPU, memory, disk, network I/O, and filesystem charts for every host, guest, and container without external databases.
+      <a href="docs/images/pulse-alerts.webp"><img src="docs/images/pulse-alerts.webp" alt="Active alerts and notifications" /></a><br />
+      <strong><a href="docs/ALERTING.md">Alerts</a> &amp; <a href="docs/AVAILABILITY.md">Availability</a>:</strong> thresholds plus Ping/TCP/UDP/HTTP(S) &amp; TLS checks via email, Discord, Slack, Telegram, ntfy, Gotify, Pushover, PagerDuty, or webhooks.
     </td>
     <td width="50%" valign="top">
-      <a href="docs/images/pulse-patrol.png"><img src="docs/images/pulse-patrol.png" alt="Pulse Patrol attention inbox" /></a><br />
-      <strong>Optional AI &amp; MCP</strong> — <a href="docs/AI.md">Pulse Patrol</a> runs scheduled checks with your own AI provider or local model; <a href="cmd/pulse-mcp/README.md#quick-start"><code>pulse-mcp</code></a> lets Claude Code, Codex, or OpenCode <a href="docs/WHAT_HAPPENED_OVERNIGHT.md">ask what changed overnight</a>.
+      <a href="docs/images/pulse-backups.webp"><img src="docs/images/pulse-backups.webp" alt="Proxmox backup coverage and PBS datastores" /></a><br />
+      <strong>Backup coverage &amp; PBS:</strong> spot unprotected guests, stale backups, and failed sync jobs across PVE and Proxmox Backup Server.
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top">
+      <a href="docs/images/pulse-history.webp"><img src="docs/images/pulse-history.webp" alt="Metric history and filesystem diagnostics" /></a><br />
+      <strong>Built-in metric history:</strong> CPU, memory, disk, network I/O, and filesystem charts for every host, guest, and container without external databases.
+    </td>
+    <td width="50%" valign="top">
+      <a href="docs/images/pulse-patrol.webp"><img src="docs/images/pulse-patrol.webp" alt="Pulse Patrol attention inbox" /></a><br />
+      <strong>Optional AI &amp; MCP:</strong> <a href="docs/AI.md">Pulse Patrol</a> runs scheduled checks with your own AI provider or local model; <a href="cmd/pulse-mcp/README.md#quick-start"><code>pulse-mcp</code></a> lets Claude Code, Codex, or OpenCode <a href="docs/WHAT_HAPPENED_OVERNIGHT.md">ask what changed overnight</a>.
     </td>
   </tr>
 </table>
@@ -108,7 +108,7 @@ volumes:
 
 ### Proxmox LXC or Linux
 
-Signed installer — downloads, verifies against the pinned `pulse-installer` key, then runs:
+Signed installer: downloads, verifies against the pinned `pulse-installer` key, then runs:
 
 ```bash
 export PULSE_VERSION=v6.8.0
@@ -130,19 +130,19 @@ Open `http://<your-ip>:7655`, paste the one-time token from `docker exec pulse /
 
 ### Do you need an agent?
 
-**Often not.** Proxmox VE, PBS and PMG connect over their API with a read-only token, so no Pulse host agent is required. Install the unified agent (including v5-to-v6 agent upgrades) from **Settings → Infrastructure → Install on a host** for Docker/Podman, Kubernetes, standalone machines, or SMART/temperature sensors — command execution stays off by default ([agent security model](docs/AGENT_SECURITY.md)).
+**Often not.** Proxmox VE, PBS and PMG connect over their API with a read-only token, so no Pulse host agent is required. Install the unified agent (including v5-to-v6 agent upgrades) from **Settings → Infrastructure → Install on a host** for Docker/Podman, Kubernetes, standalone machines, or SMART/temperature sensors. Command execution stays off by default ([agent security model](docs/AGENT_SECURITY.md)).
 
 > [!NOTE]
-> Proxmox VM disk/memory queries use QEMU Guest Agent, which shares the channel used by freeze-enabled backups — read the [backup safety precaution](docs/VM_DISK_MONITORING.md#backup-safety) before changing guest-agent settings during backups.
+> Proxmox VM disk/memory queries use QEMU Guest Agent, which shares the channel used by freeze-enabled backups. Read the [backup safety precaution](docs/VM_DISK_MONITORING.md#backup-safety) before changing guest-agent settings during backups.
 
 ## Editions
 
 - **Community (free, MIT):** full self-hosted monitoring (not gated by system or resource count), core SSO, update alerts, and Patrol with your own AI provider or local model.
 - **Pro:** Community plus Patrol investigation/fixes, centralized agent profiles, RBAC, audit logging, and reporting ([capability reference](docs/PULSE_PRO.md) · [plans](https://pulserelay.pro)).
-- **MSP:** isolated per-client workspaces under one Pulse Account — 60-day free trial for two clients at [Pulse for MSPs](https://pulserelay.pro/msp).
+- **MSP:** isolated per-client workspaces under one Pulse Account, with a 60-day free trial for two clients at [Pulse for MSPs](https://pulserelay.pro/msp).
 
 > [!IMPORTANT]
-> GitHub releases and `rcourtman/pulse` are Community builds; Pro and legacy customers download from the [Pulse download portal](https://pulserelay.pro/download.html). Relay is no longer sold — existing subscribers keep Pro features at their current price, and paired phones keep working until **31 March 2027** ([details](docs/PULSE_PRO.md)).
+> GitHub releases and `rcourtman/pulse` are Community builds; Pro and legacy customers download from the [Pulse download portal](https://pulserelay.pro/download.html). Relay is no longer sold: existing subscribers keep Pro features at their current price, and paired phones keep working until **31 March 2027** ([details](docs/PULSE_PRO.md)).
 
 ## Documentation
 
@@ -157,4 +157,4 @@ Open `http://<your-ip>:7655`, paste the one-time token from `docker exec pulse /
 
 Go 1.26 + SolidJS/TypeScript (`npm ci && npm --prefix frontend-modern ci && npm run dev`, proxies `:5173` → `:7655`). See [CONTRIBUTING.md](CONTRIBUTING.md) before opening changes (Pulse works issue-first).
 
-Everything in this repository is [MIT licensed](LICENSE) — no dual licensing or source-available code. Pulse Pro is a separate commercial product at [pulserelay.pro](https://pulserelay.pro) ([Terms of Service](TERMS.md)).
+Everything in this repository is [MIT licensed](LICENSE), with no dual licensing and no source-available code. Pulse Pro is a separate commercial product at [pulserelay.pro](https://pulserelay.pro) ([Terms of Service](TERMS.md)).
