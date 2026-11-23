@@ -272,8 +272,11 @@ without making the memory comparison fail or assuming that cached snapshots
 should be requested again. An unfinished window has no gap
 observation. Status responses do not establish backup reads or Pulse accepting
 the response; served snapshot groups do not prove Pulse retained or displayed
-them. A passing comparison is synthetic evidence, not an installed LXC memory
-test.
+them. The summary reports the RSS change alongside any observed PVE sighting
+gaps, silent PBS datastores or missing coverage for either build. In those
+cases a smaller RSS reading does not establish lower memory use under
+equivalent polling. This does not change the watch's thresholds or make this
+estate gating. The observations are synthetic, not an installed LXC memory test.
 
 `dependency-advisory-watch.yml` strictly audits the product frontend on
 `main` every day. A newly disclosed advisory can affect an unchanged lockfile;

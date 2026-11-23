@@ -160,13 +160,18 @@ class ReleaseMemorySummaryTests(unittest.TestCase):
             **baseline["pve_steady_poll_sightings"],
             "guests_over_limit": ["lxc/ct-101"], "longest_gap_ms": 150000,
         })
-        full = samples(131072, 25, 0)
         code, result, text = self.run_summary(
-            full, full, estate="proxmox", proxmox={"baseline": baseline, "candidate": candidate},
+            samples(131072, 25, 0), samples(98304, 25, 0), estate="proxmox",
+            proxmox={"baseline": baseline, "candidate": candidate},
             env={"PULSE_MEMORY_GATE": "0"}, wait_statuses=(0, 0),
         )
         self.assertEqual(code, 0)
         self.assertEqual(result["status"], "measured")
+        self.assertEqual(result["rss_growth_kib"], -32768)
+        self.assertIn("resident memory changed -32.0 MiB (-25.0%)", text)
+        self.assertIn("Candidate: PVE guest sightings were missing or exceeded the 60 s gap limit.", text)
+        self.assertIn("This RSS change does not establish memory use under equivalent polling.", text)
+        self.assertNotIn("No steady-state RSS regression", text)
         self.assertIn("| PVE guests with recent poll sightings at measurement end | 35/35 (last 60 s) |"
                       " 35/35 (last 60 s) |", text)
         self.assertIn("| PVE guest poll sightings during steady RSS sampling |"
@@ -181,6 +186,10 @@ class ReleaseMemorySummaryTests(unittest.TestCase):
             "pve_nodes": 3, "guests": 35, "pbs_instances": 2, "total_pbs_snapshots": 5200,
             "snapshots_per_group": 50, "pve_requests": 914, "pbs_requests": 210,
             "dashboard": {"connects": 1, "messages": 60, "bytes": 1024},
+            "pve_steady_poll_sightings": {
+                "guests_with_sightings": 35, "guests_over_limit": [], "limit_s": 60,
+                "longest_gap_ms": 10000, "window_s": 300,
+            },
             "pbs_snapshot_group_coverage": {
                 name: {"store-fast": {"served_groups": 35, "expected_groups": 35},
                        "store-archive": {"served_groups": 17, "expected_groups": 17}}
@@ -204,11 +213,47 @@ class ReleaseMemorySummaryTests(unittest.TestCase):
         )
         self.assertEqual(code, 0)
         self.assertEqual(result["status"], "measured")
+        self.assertIn("Candidate: 1 of 4 PBS datastores had no status response in the RSS window.", text)
+        self.assertNotIn("- Baseline:", text)
+        self.assertNotIn("No steady-state RSS regression", text)
         self.assertIn("| PBS snapshot groups served/configured | 104/104 | 104/104 |", text)
         self.assertIn("| PBS datastore status responses during steady RSS sampling |"
                       " 4/4 with a response; longest gap 31 s in 300 s |"
                       " 3/4 with a response; longest gap 300 s in 300 s |", text)
         self.assertIn("not proof of backup reads or of Pulse accepting the response", text)
+
+        _, _, intact = self.run_summary(
+            full, full, estate="proxmox", proxmox={"baseline": baseline, "candidate": baseline},
+            env={"PULSE_MEMORY_GATE": "0"}, wait_statuses=(0, 0),
+        )
+        self.assertNotIn("Polling evidence limits the comparison", intact)
+        self.assertIn("Steady-state process RSS observation", intact)
+        self.assertNotIn("No steady-state RSS regression", intact)
+
+        older_window = dict(baseline, pbs_steady_datastore_status={
+            **candidate["pbs_steady_datastore_status"], "window_s": 299,
+        })
+        _, _, mismatched = self.run_summary(
+            full, full, estate="proxmox", proxmox={"baseline": older_window, "candidate": baseline},
+            env={"PULSE_MEMORY_GATE": "0"}, wait_statuses=(0, 0),
+        )
+        self.assertIn("Baseline: PBS datastore status evidence is unavailable for the RSS window.", mismatched)
+        self.assertNotIn("- Candidate:", mismatched)
+        self.assertNotIn("PBS datastores had no status response in the RSS window.", mismatched)
+
+    def test_proxmox_unavailable_traffic_does_not_erase_adverse_rss(self):
+        code, result, text = self.run_summary(
+            samples(131072, 25, 0), samples(174080, 25, 0), estate="proxmox",
+            env={"PULSE_MEMORY_GATE": "0"}, wait_statuses=(0, 0),
+        )
+        self.assertEqual(code, 0)
+        self.assertEqual(result["status"], "measured")
+        self.assertTrue(result["exceeded"])
+        self.assertFalse(result["regressed"])
+        self.assertIn("resident memory changed +42.0 MiB (+32.8%), past both 15% and 16 MiB", text)
+        self.assertIn("Baseline: PVE/PBS polling evidence is unavailable.", text)
+        self.assertIn("Candidate: PVE/PBS polling evidence is unavailable.", text)
+        self.assertIn("Reported only: this estate does not gate.", text)
 
     def test_mock_estate_is_the_default(self):
         _, result, text = self.run_summary(samples(130000, 25, 0), samples(130000, 25, 0))
