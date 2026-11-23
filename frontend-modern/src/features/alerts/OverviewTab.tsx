@@ -29,6 +29,8 @@ export function OverviewTab(props: {
   showAcknowledged: () => boolean;
   setShowAcknowledged: (value: boolean) => void;
   alertsDisabled: () => boolean;
+  hasMonitoredResources?: () => boolean;
+  canAddInfrastructure?: boolean;
 }) {
   const location = useLocation();
   let hashScrollRafId: number | undefined;
@@ -154,6 +156,8 @@ export function OverviewTab(props: {
         showAcknowledged={props.showAcknowledged()}
         setShowAcknowledged={props.setShowAcknowledged}
         deliveryPausedGlobally={deliveryPaused.pausedReason() !== null}
+        hasMonitoredResources={props.hasMonitoredResources ? props.hasMonitoredResources() : true}
+        canAddInfrastructure={props.canAddInfrastructure ?? false}
       />
     </div>
   );

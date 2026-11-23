@@ -300,12 +300,13 @@ const AGENT_CATALOG_ITEMS: Record<
   },
   docker: {
     routeStep: 'docker',
-    label: 'Docker',
-    bestFor: 'Docker hosts where containers should be discovered from the machine running them.',
+    label: 'Docker / Podman',
+    bestFor:
+      'Docker and Podman hosts where containers should be discovered from the machine running them.',
     coverage:
-      'Docker inventory plus host CPU, memory, disk, network, services, and SMART telemetry',
-    catalogDescription: 'Containers plus host telemetry',
-    searchAliases: ['containers', 'container host', 'compose'],
+      'Docker and Podman inventory plus host CPU, memory, disk, network, services, and SMART telemetry',
+    catalogDescription: 'Containers, Compose projects, and host telemetry',
+    searchAliases: ['docker', 'podman', 'containers', 'container host', 'compose'],
     sourceStrategy: 'agent',
     autoDetect: false,
   },

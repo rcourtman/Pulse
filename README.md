@@ -107,11 +107,14 @@ Also available: [Docker Compose](docs/INSTALL.md#docker-compose),
 
 ### First run
 
-Open `http://<your-ip>:7655` and paste the one-time setup token. Get it with
-`docker exec pulse /app/pulse bootstrap-token` on Docker, or
-`sudo pulse bootstrap-token` on Linux (the LXC installer prints the exact
-command). Create your admin account, then add your first system with
+Open `http://<your-ip>:7655` within 10 minutes of first boot to create your
+admin account directly, then add your first system with
 **Add infrastructure** under **Settings → Infrastructure**.
+
+If the 10-minute first-boot window expires (or you set
+`PULSE_REQUIRE_BOOTSTRAP_TOKEN=true`), restart Pulse for a fresh window or
+unlock with `docker exec pulse /app/pulse bootstrap-token` (Docker) or
+`sudo pulse bootstrap-token` (Linux).
 
 For a Docker host, choose **Docker / Podman** and run its generated installer
 on the machine running the containers. Leave command access off for monitoring.

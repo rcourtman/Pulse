@@ -845,6 +845,7 @@ func Run(ctx context.Context, version string) (runErr error) {
 				Int("port", cfg.FrontendPort).
 				Str("protocol", "HTTPS").
 				Msg("Server listening")
+			logFirstRunStartupNotice(cfg, router, "https")
 			err = srv.ServeTLS(mainListener, cfg.TLSCertFile, cfg.TLSKeyFile)
 		} else {
 			if cfg.HTTPSEnabled {
@@ -855,6 +856,7 @@ func Run(ctx context.Context, version string) (runErr error) {
 				Int("port", cfg.FrontendPort).
 				Str("protocol", "HTTP").
 				Msg("Server listening")
+			logFirstRunStartupNotice(cfg, router, "http")
 			err = srv.Serve(mainListener)
 		}
 		if err != nil && err != http.ErrServerClosed {
@@ -1332,4 +1334,56 @@ func ensureOrgOwnerMembership(org *models.Organization, userID string, now time.
 		AddedBy: userID,
 	})
 	return true
+}
+
+func isRunningInDockerContainer() bool {
+	if _, err := os.Stat("/.dockerenv"); err == nil {
+		return true
+	}
+	return false
+}
+
+func formatFirstRunStartupNotice(protocol, bindAddr string, port int, publicURL string, isDocker bool) (setupURL string, command string) {
+	setupURL = strings.TrimSpace(publicURL)
+	if setupURL == "" {
+		host := strings.TrimSpace(bindAddr)
+		if host == "" || host == "0.0.0.0" || host == "::" {
+			host = "localhost"
+		}
+		if strings.Contains(host, ":") && !strings.HasPrefix(host, "[") {
+			host = "[" + host + "]"
+		}
+		setupURL = fmt.Sprintf("%s://%s:%d", protocol, host, port)
+	}
+	if isDocker {
+		command = "docker exec <pulse-container> /app/pulse bootstrap-token (or /app/pulse bootstrap-token from the container console)"
+	} else {
+		command = "sudo pulse bootstrap-token"
+	}
+	return setupURL, command
+}
+
+func firstRunStartupNoticeMessage(setupWindowOpen bool) string {
+	if setupWindowOpen {
+		return "First-time setup ready: open the setup URL within 10 minutes to create your admin account (if the window expires, restart Pulse or run the token command)"
+	}
+	return "First-time setup ready: open the setup URL and run the token command to unlock Pulse"
+}
+
+func logFirstRunStartupNotice(cfg *config.Config, router *api.Router, protocol string) {
+	if cfg == nil || router == nil || !router.HasPendingBootstrapToken() {
+		return
+	}
+	setupURL, command := formatFirstRunStartupNotice(
+		protocol,
+		cfg.BindAddress,
+		cfg.FrontendPort,
+		cfg.PublicURL,
+		isRunningInDockerContainer(),
+	)
+	log.Warn().
+		Str("setup_url", setupURL).
+		Str("token_command", command).
+		Bool("setup_window_open", router.IsBootstrapSetupWindowOpen()).
+		Msg(firstRunStartupNoticeMessage(router.IsBootstrapSetupWindowOpen()))
 }

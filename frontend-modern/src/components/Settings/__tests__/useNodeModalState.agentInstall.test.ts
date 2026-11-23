@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createRoot } from 'solid-js';
 import { NodesAPI } from '@/api/nodes';
+import { showTokenReveal } from '@/stores/tokenReveal';
 import { copyToClipboard } from '@/utils/clipboard';
 import { useNodeModalState, type NodeModalState } from '../useNodeModalState';
 
@@ -56,10 +57,16 @@ describe('useNodeModalState host telemetry agent pre-generation controls', () =>
       insecure: false,
     });
     expect(state.agentInstallCommand()).toBe('curl -fsSL https://pulse.example/install.sh | bash');
+    expect(state.agentInstallToken()).toBe('agent-secret-token');
+    expect(showTokenReveal).not.toHaveBeenCalled();
 
-    // Changing any pre-generation option clears the stale previously minted command.
+    await state.copyAgentInstallToken();
+    expect(copyToClipboard).toHaveBeenLastCalledWith('agent-secret-token');
+
+    // Changing any pre-generation option clears the stale previously minted command and token.
     state.setAgentInstallEnableCommands(true);
     expect(state.agentInstallCommand()).toBe('');
+    expect(state.agentInstallToken()).toBe('');
 
     await state.copyProxmoxAgentInstallCommand('pve', 'Copied');
     expect(state.agentInstallCommand()).not.toBe('');

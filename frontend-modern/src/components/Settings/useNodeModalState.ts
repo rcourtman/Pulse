@@ -6,7 +6,6 @@ import { NodesAPI } from '@/api/nodes';
 import type { ProxmoxSetupCommandResponse } from '@/api/nodes';
 import { copyToClipboard } from '@/utils/clipboard';
 import { logger } from '@/utils/logger';
-import { showTokenReveal } from '@/stores/tokenReveal';
 import {
   buildNodeModalMonitoringPayload,
   getNodeModalDefaultFormData,
@@ -118,6 +117,7 @@ export const useNodeModalState = (props: NodeModalProps) => {
   const [quickSetupTokenHint, setQuickSetupTokenHint] = createSignal('');
   const [quickSetupExpiry, setQuickSetupExpiry] = createSignal<number | null>(null);
   const [agentInstallCommand, setAgentInstallCommand] = createSignal('');
+  const [agentInstallToken, setAgentInstallToken] = createSignal('');
   const [loadingAgentCommand, setLoadingAgentCommand] = createSignal(false);
   const [agentCommandError, setAgentCommandError] = createSignal<string | null>(null);
   const [agentInstallInsecure, setAgentInstallInsecureRaw] = createSignal(false);
@@ -126,6 +126,7 @@ export const useNodeModalState = (props: NodeModalProps) => {
 
   const invalidateGeneratedAgentCommand = () => {
     setAgentInstallCommand('');
+    setAgentInstallToken('');
     setAgentCommandError(null);
   };
 
@@ -150,6 +151,7 @@ export const useNodeModalState = (props: NodeModalProps) => {
   const temperatureMonitoringEnabledValue = () => props.temperatureMonitoringEnabled ?? true;
   const isEditingExistingNode = () => Boolean(props.editingNode?.id);
   const quickSetupCommandReady = () => quickSetupBootstrap() !== null;
+  const quickSetupToken = () => quickSetupBootstrap()?.response.setupToken ?? '';
 
   const quickSetupExpiryLabel = () => {
     const expiry = quickSetupExpiry();
@@ -167,6 +169,9 @@ export const useNodeModalState = (props: NodeModalProps) => {
     setQuickSetupBootstrap(null);
     setQuickSetupTokenHint('');
     setQuickSetupExpiry(null);
+    setAgentInstallCommand('');
+    setAgentInstallToken('');
+    setAgentCommandError(null);
   };
 
   let bootstrapGeneration = 0;
@@ -199,13 +204,7 @@ export const useNodeModalState = (props: NodeModalProps) => {
       });
       if (!bootstrapActive(generation)) return;
       setAgentInstallCommand(data.command);
-      if (data.token) {
-        showTokenReveal({
-          token: data.token,
-          source: type,
-          note: 'Run the copied install command first. Then copy this token and paste it only at the silent “Pulse agent token” prompt. It is not part of the command.',
-        });
-      }
+      setAgentInstallToken(data.token ?? '');
       const copied = await copyToClipboard(data.command);
       if (copied) {
         notificationStore.success(successMessage);
@@ -276,7 +275,6 @@ export const useNodeModalState = (props: NodeModalProps) => {
       });
       const data = await loadQuickSetupBootstrap(type, backupPerms);
       if (!data || !bootstrapActive(generation)) return;
-      showSetupToken(data);
       if (await copyToClipboard(data.command)) {
         notificationStore.success(successMessage);
         return;
@@ -292,12 +290,26 @@ export const useNodeModalState = (props: NodeModalProps) => {
     }
   };
 
-  const showSetupToken = (bootstrap: ProxmoxSetupCommandResponse) => {
-    showTokenReveal({
-      token: bootstrap.setupToken,
-      source: bootstrap.type,
-      note: `Run the copied setup command (or downloaded script) first. Then copy this token and paste it only at the silent “Pulse setup token” prompt. It expires at ${new Date(bootstrap.expires * 1000).toLocaleTimeString()}. Never paste it into a shell command.`,
-    });
+  const copyQuickSetupToken = async (): Promise<boolean> => {
+    const token = quickSetupToken();
+    if (!token) return false;
+    if (await copyToClipboard(token)) {
+      notificationStore.success('Setup token copied! Paste it at the silent prompt.');
+      return true;
+    }
+    notificationStore.error('Failed to copy setup token');
+    return false;
+  };
+
+  const copyAgentInstallToken = async (): Promise<boolean> => {
+    const token = agentInstallToken();
+    if (!token) return false;
+    if (await copyToClipboard(token)) {
+      notificationStore.success('Agent token copied! Paste it at the silent prompt.');
+      return true;
+    }
+    notificationStore.error('Failed to copy agent token');
+    return false;
   };
 
   const setupScriptRunHint = (fileName: string) => `bash ${fileName}`;
@@ -309,7 +321,6 @@ export const useNodeModalState = (props: NodeModalProps) => {
       if (!bootstrap || !bootstrapActive(generation)) return;
       const data = await NodesAPI.downloadProxmoxSetupScript(bootstrap);
       if (!bootstrapActive(generation)) return;
-      showSetupToken(bootstrap);
 
       const blob = new Blob([data.content], {
         type: data.contentType,
@@ -805,10 +816,13 @@ export const useNodeModalState = (props: NodeModalProps) => {
     agentInstallCommand,
     agentInstallEnableCommands,
     agentInstallInsecure,
+    agentInstallToken,
     agentInstallUrl,
+    copyAgentInstallToken,
     copyCommand,
     copyProxmoxAgentInstallCommand,
     copyQuickSetupCommand,
+    copyQuickSetupToken,
     downloadProxmoxSetupScript,
     formData,
     handleSubmit,
@@ -821,6 +835,7 @@ export const useNodeModalState = (props: NodeModalProps) => {
     quickSetupExpiry,
     quickSetupExpiryLabel,
     quickSetupCommandReady,
+    quickSetupToken,
     quickSetupTokenHint,
     setAgentInstallEnableCommands,
     setAgentInstallInsecure,

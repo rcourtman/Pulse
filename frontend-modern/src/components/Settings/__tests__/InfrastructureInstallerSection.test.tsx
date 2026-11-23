@@ -201,4 +201,46 @@ describe('InfrastructureInstallerSection', () => {
       delete stateOverrides.handleInstallProfileChange;
     }
   });
+
+  it('keeps setup handoff compact without exposing the admin token inline and collapses Proxmox LXC Docker notes', () => {
+    const prevHandoff = stateOverrides.setupHandoff;
+    const prevTokenSource = stateOverrides.latestTokenSource;
+    const prevCommandSections = stateOverrides.commandSections;
+    stateOverrides.setupHandoff = () => ({
+      username: 'admin',
+      apiToken: 'admin-super-secret-token-value',
+    });
+    stateOverrides.latestTokenSource = () => 'setup_handoff';
+    stateOverrides.commandSections = () => [
+      {
+        platform: 'linux',
+        title: 'Linux',
+        description: 'Run on Linux',
+        snippets: [
+          { label: 'Install', command: 'curl -fsSL https://pulse.local/install.sh | bash' },
+        ],
+      },
+    ];
+    try {
+      const view = render(() => <InfrastructureInstallerSection focus="docker" />);
+      expect(screen.getByText(/Admin account ready \(admin\)/)).toBeInTheDocument();
+      // Admin API token must not appear inline above the scoped agent install token.
+      expect(screen.queryByText('admin-super-secret-token-value')).not.toBeInTheDocument();
+      expect(screen.queryByText(/transitional command-capable profile/i)).not.toBeInTheDocument();
+
+      const lxcSummary = screen.getByText('Docker inside Proxmox LXCs');
+      const lxcDetails = lxcSummary.closest('details');
+      expect(lxcDetails).not.toBeNull();
+      expect(lxcDetails?.open).toBe(false);
+
+      const copyButton = screen.getByRole('button', { name: 'Copy Install command' });
+      expect(copyButton).not.toHaveClass('absolute');
+      expect(copyButton).toHaveClass('shrink-0');
+      view.unmount();
+    } finally {
+      stateOverrides.setupHandoff = prevHandoff;
+      stateOverrides.latestTokenSource = prevTokenSource;
+      stateOverrides.commandSections = prevCommandSections;
+    }
+  });
 });

@@ -194,12 +194,12 @@ export const SetupCompletionPanel: Component<CompleteStepProps> = (props) => {
   ]);
 
   return (
-    <div class="max-w-2xl mx-auto bg-surface border border-border overflow-hidden relative rounded-md p-6 sm:p-8 text-center text-base-content">
+    <div class="max-w-2xl mx-auto bg-surface border border-border overflow-hidden relative rounded-md p-5 sm:p-6 text-center text-base-content">
       <div class="relative z-10">
-        <div class="mb-8">
-          <div class="inline-flex items-center justify-center w-16 h-16 rounded-full bg-emerald-100 dark:bg-emerald-900/25 text-emerald-600 dark:text-emerald-400 mb-6 border border-emerald-200 dark:border-emerald-800">
+        <div class="mb-4">
+          <div class="inline-flex items-center justify-center w-11 h-11 rounded-full bg-emerald-100 dark:bg-emerald-900/25 text-emerald-600 dark:text-emerald-400 mb-3 border border-emerald-200 dark:border-emerald-800">
             <svg
-              class="w-8 h-8"
+              class="w-6 h-6"
               fill="none"
               viewBox="0 0 24 24"
               stroke="currentColor"
@@ -208,10 +208,10 @@ export const SetupCompletionPanel: Component<CompleteStepProps> = (props) => {
               <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
             </svg>
           </div>
-          <h1 class="text-2xl sm:text-3xl font-bold tracking-tight text-base-content mb-2">
+          <h1 class="text-xl sm:text-2xl font-bold tracking-tight text-base-content mb-1">
             {completionViewModel().heroTitle}
           </h1>
-          <p class="text-slate-500 dark:text-emerald-300 font-light text-sm sm:text-base">
+          <p class="text-slate-500 dark:text-emerald-300 font-light text-xs sm:text-sm">
             {completionViewModel().heroDescription}
           </p>
         </div>
@@ -252,10 +252,11 @@ export const SetupCompletionPanel: Component<CompleteStepProps> = (props) => {
           </div>
         </Show>
 
-        <div class="bg-surface rounded-md border border-border mb-6 overflow-hidden">
+        <div class="bg-surface rounded-md border border-border mb-4 overflow-hidden">
           <button
+            type="button"
             onClick={() => setShowCredentials(!showCredentials())}
-            class="w-full p-4 sm:p-6 flex items-center justify-between gap-4 text-left hover:bg-surface-hover transition-colors group"
+            class="w-full px-4 py-3 flex items-center justify-between gap-4 text-left hover:bg-surface-hover transition-colors group"
           >
             <div class="flex items-start gap-3">
               <div class="w-8 h-8 rounded-md bg-amber-50 dark:bg-amber-900/25 flex items-center justify-center border border-amber-100 dark:border-amber-800 shrink-0">
@@ -303,68 +304,70 @@ export const SetupCompletionPanel: Component<CompleteStepProps> = (props) => {
           </button>
 
           <Show when={showCredentials()}>
-            <div class="px-4 pb-4 pt-0 sm:px-6 sm:pb-6 space-y-3 border-t border-border-subtle">
-              <div class="bg-surface-hover dark:bg-black border rounded-md p-3 mt-4">
-                <div class="text-[11px] font-medium text-muted mb-1 uppercase tracking-wider">
-                  {t('setup.completion.credentials.usernameLabel')}
+            <div class="px-4 pb-3.5 pt-3 space-y-2.5 border-t border-border-subtle text-left">
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                <div class="bg-surface-hover dark:bg-black border border-border rounded-md px-3 py-2">
+                  <div class="text-[11px] font-medium text-muted mb-0.5 uppercase tracking-wider">
+                    {t('setup.completion.credentials.usernameLabel')}
+                  </div>
+                  <div class="text-base-content font-mono text-sm">{props.state.username}</div>
                 </div>
-                <div class="text-base-content font-mono text-sm">{props.state.username}</div>
+
+                <div class="bg-surface-hover dark:bg-black border border-border rounded-md px-3 py-2">
+                  <div class="text-[11px] font-medium text-muted mb-0.5 uppercase tracking-wider">
+                    {t('setup.completion.credentials.passwordLabel')}
+                  </div>
+                  <div class="flex items-center justify-between gap-2">
+                    <code class="text-base-content font-mono text-sm break-all">
+                      {props.state.password}
+                    </code>
+                    <ActionIconButton
+                      label={t('setup.completion.action.copyPassword')}
+                      tone="outline"
+                      size="lg"
+                      onClick={() => handleCopy('password', props.state.password)}
+                      class="shrink-0 min-h-10 min-w-10 sm:min-h-9 sm:min-w-9"
+                    >
+                      {copied() === 'password' ? (
+                        <svg
+                          class="w-4 h-4 text-emerald-500"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          stroke="currentColor"
+                        >
+                          <path
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="2"
+                            d="M5 13l4 4L19 7"
+                          />
+                        </svg>
+                      ) : (
+                        <svg
+                          class="w-4 h-4 text-muted"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          stroke="currentColor"
+                        >
+                          <path
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="2"
+                            d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
+                          />
+                        </svg>
+                      )}
+                    </ActionIconButton>
+                  </div>
+                </div>
               </div>
 
-              <div class="bg-surface-hover dark:bg-black border rounded-md p-3">
-                <div class="text-[11px] font-medium text-muted mb-1 uppercase tracking-wider">
-                  {t('setup.completion.credentials.passwordLabel')}
-                </div>
-                <div class="flex items-center justify-between">
-                  <code class="text-base-content font-mono text-sm break-all">
-                    {props.state.password}
-                  </code>
-                  <ActionIconButton
-                    label={t('setup.completion.action.copyPassword')}
-                    tone="outline"
-                    size="lg"
-                    onClick={() => handleCopy('password', props.state.password)}
-                    class="ml-3 min-h-10 min-w-10 sm:min-h-9 sm:min-w-9"
-                  >
-                    {copied() === 'password' ? (
-                      <svg
-                        class="w-4 h-4 text-emerald-500"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke="currentColor"
-                      >
-                        <path
-                          stroke-linecap="round"
-                          stroke-linejoin="round"
-                          stroke-width="2"
-                          d="M5 13l4 4L19 7"
-                        />
-                      </svg>
-                    ) : (
-                      <svg
-                        class="w-4 h-4 text-muted"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke="currentColor"
-                      >
-                        <path
-                          stroke-linecap="round"
-                          stroke-linejoin="round"
-                          stroke-width="2"
-                          d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
-                        />
-                      </svg>
-                    )}
-                  </ActionIconButton>
-                </div>
-              </div>
-
-              <div class="bg-surface-hover dark:bg-black border border-border rounded-md p-3">
-                <div class="text-[11px] font-medium text-muted mb-1 uppercase tracking-wider">
+              <div class="bg-surface-hover dark:bg-black border border-border rounded-md px-3 py-2">
+                <div class="text-[11px] font-medium text-muted mb-0.5 uppercase tracking-wider">
                   {t('setup.completion.credentials.apiTokenLabel')}
                 </div>
-                <div class="flex items-center justify-between">
-                  <code class="text-base-content font-mono text-xs break-all pr-4">
+                <div class="flex items-center justify-between gap-2">
+                  <code class="text-base-content font-mono text-xs break-all">
                     {props.state.apiToken}
                   </code>
                   <ActionIconButton
@@ -372,7 +375,7 @@ export const SetupCompletionPanel: Component<CompleteStepProps> = (props) => {
                     tone="outline"
                     size="lg"
                     onClick={() => handleCopy('admin-token', props.state.apiToken)}
-                    class="ml-2 min-h-10 min-w-10 sm:min-h-9 sm:min-w-9"
+                    class="shrink-0 min-h-10 min-w-10 sm:min-h-9 sm:min-w-9"
                   >
                     {copied() === 'admin-token' ? (
                       <svg
@@ -442,7 +445,7 @@ export const SetupCompletionPanel: Component<CompleteStepProps> = (props) => {
 
         <div
           aria-label={t('setup.completion.nextStep.ariaLabel')}
-          class="bg-surface rounded-md border border-border p-5 sm:p-6 text-left mb-6"
+          class="bg-surface rounded-md border border-border p-4 text-left"
         >
           <div class="flex items-start justify-between gap-4">
             <div>
@@ -467,22 +470,23 @@ export const SetupCompletionPanel: Component<CompleteStepProps> = (props) => {
               {t('setup.completion.nextStep.badge')}
             </div>
           </div>
-          <div class="mt-4 rounded-md border border-border bg-surface-alt p-4">
+          <div class="mt-3 rounded-md border border-border bg-surface-alt p-3.5">
             <div class="text-[11px] font-medium uppercase tracking-wider text-muted">
               {t('setup.completion.nextStep.label')}
             </div>
-            <div class="mt-2 text-sm text-base-content">
+            <div class="mt-1 text-sm text-base-content">
               {completionViewModel().nextStepSummary}
             </div>
-            <div class="mt-2 text-xs text-muted">{completionViewModel().nextStepDetail}</div>
-            <div class="mt-4 flex flex-col gap-3 sm:flex-row">
+            <div class="mt-1 text-xs text-muted">{completionViewModel().nextStepDetail}</div>
+            <div class="mt-3 flex flex-col gap-2.5 sm:flex-row">
               <button
+                type="button"
                 onClick={() =>
                   completionViewModel().primaryAction === 'infrastructure'
                     ? handleOpenInfrastructure()
                     : handleOpenAddInfrastructure()
                 }
-                class="inline-flex items-center justify-center gap-2 rounded-md bg-blue-600 px-4 py-3 text-sm font-semibold text-white transition-colors hover:bg-blue-700"
+                class="inline-flex items-center justify-center gap-2 rounded-md bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-blue-700"
               >
                 {completionViewModel().primaryAction === 'infrastructure'
                   ? t('setup.completion.action.openInfrastructure')
@@ -490,16 +494,18 @@ export const SetupCompletionPanel: Component<CompleteStepProps> = (props) => {
               </button>
               <Show when={completionViewModel().showAddInfrastructureAction}>
                 <button
+                  type="button"
                   onClick={handleOpenAddInfrastructure}
-                  class="inline-flex items-center justify-center gap-2 rounded-md border border-border px-4 py-3 text-sm font-medium text-base-content transition-colors hover:bg-surface-hover"
+                  class="inline-flex items-center justify-center gap-2 rounded-md border border-border px-4 py-2.5 text-sm font-medium text-base-content transition-colors hover:bg-surface-hover"
                 >
                   {t('setup.completion.action.addInfrastructure')}
                 </button>
               </Show>
               <Show when={completionViewModel().showAgentInstallAction}>
                 <button
+                  type="button"
                   onClick={handleOpenAgentInstall}
-                  class="inline-flex items-center justify-center gap-2 rounded-md border border-border px-4 py-3 text-sm font-medium text-base-content transition-colors hover:bg-surface-hover"
+                  class="inline-flex items-center justify-center gap-2 rounded-md border border-border px-4 py-2.5 text-sm font-medium text-base-content transition-colors hover:bg-surface-hover"
                 >
                   {t('setup.completion.action.installAgent')}
                 </button>

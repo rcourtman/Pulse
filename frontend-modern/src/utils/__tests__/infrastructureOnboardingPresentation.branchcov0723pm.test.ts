@@ -21,7 +21,7 @@ const RECOGNISED_STEP_EXPECTATIONS = [
   { step: 'truenas', id: 'truenas', connectionType: 'truenas', label: 'TrueNAS SCALE' },
   { step: 'vmware', id: 'vmware', connectionType: 'vmware', label: 'VMware vCenter' },
   { step: 'unraid', id: 'unraid', connectionType: 'agent', label: 'Unraid' },
-  { step: 'docker', id: 'docker', connectionType: 'agent', label: 'Docker' },
+  { step: 'docker', id: 'docker', connectionType: 'agent', label: 'Docker / Podman' },
   { step: 'kubernetes', id: 'kubernetes', connectionType: 'agent', label: 'Kubernetes' },
   {
     step: 'linux-host',

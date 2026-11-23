@@ -12,11 +12,16 @@ const renderSetupGuide = (
     setupHandoffDisabled?: boolean;
     setupHandoffDisabledReason?: string;
     quickSetupCommandReady?: boolean;
+    quickSetupToken?: string;
     quickSetupTokenHint?: string;
+    agentInstallCommand?: string;
+    agentInstallToken?: string;
   } = {},
 ) => {
   const copyCommand = vi.fn();
   const copyQuickSetupCommand = vi.fn();
+  const copyQuickSetupToken = vi.fn();
+  const copyAgentInstallToken = vi.fn();
   const Harness = () => {
     const [setupMode, setSetupMode] = createSignal<NodeModalSetupMode>('auto');
     const [agentInstallInsecure, setAgentInstallInsecure] = createSignal(false);
@@ -30,13 +35,16 @@ const renderSetupGuide = (
 
     const state = {
       agentCommandError: () => null,
-      agentInstallCommand: () => '',
+      agentInstallCommand: () => options.agentInstallCommand ?? '',
       agentInstallEnableCommands,
       agentInstallInsecure,
+      agentInstallToken: () => options.agentInstallToken ?? '',
       agentInstallUrl,
+      copyAgentInstallToken,
       copyCommand,
       copyProxmoxAgentInstallCommand: vi.fn(),
       copyQuickSetupCommand,
+      copyQuickSetupToken,
       downloadProxmoxSetupScript: vi.fn(),
       formData: () => ({ setupMode: setupMode(), host: '' }),
       isAdvancedSetupMode: () => setupMode() === 'manual',
@@ -45,6 +53,7 @@ const renderSetupGuide = (
       quickSetupExpiry: () => null,
       quickSetupExpiryLabel: () => '',
       quickSetupCommandReady: () => Boolean(options.quickSetupCommandReady),
+      quickSetupToken: () => options.quickSetupToken ?? '',
       quickSetupTokenHint: () => options.quickSetupTokenHint ?? '',
       setAgentInstallEnableCommands,
       setAgentInstallInsecure,
@@ -70,7 +79,7 @@ const renderSetupGuide = (
   };
 
   render(() => <Harness />);
-  return { copyCommand, copyQuickSetupCommand };
+  return { copyCommand, copyQuickSetupCommand, copyQuickSetupToken, copyAgentInstallToken };
 };
 
 describe('NodeModalSetupGuideSection', () => {
@@ -103,6 +112,28 @@ describe('NodeModalSetupGuideSection', () => {
     expect(screen.getByText(/one-time setup token is shown separately/i)).toBeInTheDocument();
     expect(screen.queryByText(/curl -fsSL/i)).not.toBeInTheDocument();
     expect(screen.getByText('set…123')).toBeInTheDocument();
+  });
+
+  it('shows Step 2 inline setup token with reveal toggle and copy button instead of an auto-popping dialog', async () => {
+    const { copyQuickSetupToken } = renderSetupGuide('pve', {
+      quickSetupCommandReady: true,
+      quickSetupToken: 'inline-setup-token-999',
+      quickSetupTokenHint: 'inl…999',
+    });
+
+    expect(screen.getByText(/Step 2: When prompted for/i)).toBeInTheDocument();
+    expect(screen.queryByText('inline-setup-token-999')).not.toBeInTheDocument();
+    expect(screen.getByText('inl…999')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Reveal' }));
+    expect(screen.getByText('inline-setup-token-999')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Hide' }));
+    expect(screen.queryByText('inline-setup-token-999')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Copy token' }));
+    expect(copyQuickSetupToken).toHaveBeenCalledTimes(1);
+    expect(await screen.findByRole('button', { name: 'Copied' })).toBeInTheDocument();
   });
 
   it('keeps the root agent path explicit as optional full host telemetry', () => {

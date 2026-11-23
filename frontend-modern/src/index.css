@@ -141,7 +141,7 @@
 }
 
 @utility animate-slide-up {
-  animation: slide-up 0.8s cubic-bezier(0.16, 1, 0.3, 1) 0.2s both;
+  animation: slide-up 0.18s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
 @utility animate-enter {
@@ -1638,7 +1638,7 @@
   @keyframes slide-up {
     from {
       opacity: 0;
-      transform: translateY(20px);
+      transform: translateY(8px);
     }
 
     to {

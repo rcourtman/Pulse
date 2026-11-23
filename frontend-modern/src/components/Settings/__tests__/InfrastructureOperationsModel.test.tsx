@@ -305,7 +305,7 @@ describe('infrastructure operations model', () => {
     expect(infrastructureInstallerSectionSource).toContain('Generate token');
     expect(infrastructureInstallerSectionSource).toContain('Show token only');
     expect(infrastructureInstallerSectionSource).toContain(
-      'This is the Pulse Agent handoff from first-run setup inside Add infrastructure.',
+      'Use the scoped install token below (not your admin API token)',
     );
     expect(infrastructureInstallerSectionSource).toContain(
       'Pulse Agent is a low-overhead background service.',

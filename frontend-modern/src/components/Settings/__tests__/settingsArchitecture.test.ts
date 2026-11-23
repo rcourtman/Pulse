@@ -201,9 +201,9 @@ describe('settings architecture guardrails', () => {
     // An agent installed from the node editor defaults to monitoring-only
     // (command authority is explicit opt-in before minting), and the clipboard
     // carries only the credential-free command; the one-time setup token is
-    // shown separately.
+    // held separately for the inline reveal/copy step.
     expect(nodeModalStateSource).toContain('copyToClipboard(data.command)');
-    expect(nodeModalStateSource).toContain('showSetupToken(data)');
+    expect(nodeModalStateSource).toContain("setAgentInstallToken(data.token ?? '')");
     expect(nodeModalStateSource).toContain(
       'const [agentInstallEnableCommands, setAgentInstallEnableCommandsRaw] = createSignal(false)',
     );

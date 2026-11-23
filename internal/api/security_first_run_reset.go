@@ -109,6 +109,7 @@ func (r *Router) handleResetFirstRunSecurity(w http.ResponseWriter, req *http.Re
 	r.clearSession(w, req)
 	r.bootstrapTokenHash = internalauth.HashAPIToken(token)
 	r.bootstrapTokenPath = path
+	r.openBootstrapSetupWindow()
 
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(firstRunResetResponse{

@@ -179,4 +179,10 @@ describe('Docs section navigation', () => {
       expect(screen.queryByRole('heading', { name: 'Existing section' })).not.toBeInTheDocument();
     },
   );
+
+  it('provides a Back to Pulse link so docs never strand the user', async () => {
+    renderGuide();
+    await screen.findByRole('heading', { name: 'Existing section' });
+    expect(screen.getByRole('link', { name: /Back to Pulse/i })).toHaveAttribute('href', '/');
+  });
 });

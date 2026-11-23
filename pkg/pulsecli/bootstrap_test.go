@@ -44,6 +44,9 @@ func TestShowBootstrapTokenPrintsToken(t *testing.T) {
 	if !strings.Contains(output, "test-token") {
 		t.Fatalf("output = %q", output)
 	}
+	if strings.Contains(output, `"level":"debug"`) || strings.Contains(output, "looking for encryption key") {
+		t.Fatalf("expected clean CLI output without debug log lines, got: %q", output)
+	}
 }
 
 func captureOutput(t *testing.T, fn func()) string {

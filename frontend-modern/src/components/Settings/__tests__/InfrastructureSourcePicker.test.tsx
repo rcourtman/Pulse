@@ -16,10 +16,12 @@ describe('InfrastructureSourcePicker', () => {
     expect(screen.getByText('Choose how Pulse should connect')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Monitor network endpoint/i })).toBeNull();
     expect(screen.getByText('Or pick a specific source')).toBeInTheDocument();
+    // Docker / Podman must be visible immediately without expanding the disclosure.
+    expect(screen.getByText('Docker / Podman')).toBeInTheDocument();
     // VMware lives behind 'Show more sources' since it is a less common
     // homelab choice; expand the long tail to verify the Preview badge still
     // renders for it.
-    fireEvent.click(screen.getByRole('button', { name: /Show \d+ more sources?/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Show 4 more sources/i }));
     expect(screen.getByText('Preview')).toBeInTheDocument();
     expect(screen.queryByText('Available now')).toBeNull();
     expect(screen.getByText('Unraid')).toBeInTheDocument();
