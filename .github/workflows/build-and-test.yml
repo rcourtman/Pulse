@@ -74,11 +74,11 @@ jobs:
   changes:
     name: Detect changed areas
     runs-on: ubuntu-24.04
-    # Only protected main pushes can run the locked Help validation here.
-    timeout-minutes: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && github.ref_protected && 12 || 5 }}
+    timeout-minutes: 5
     outputs:
-      # Only completed Help proof, not selection alone, can skip runtime.
-      code: ${{ steps.help-proof.outputs.completed == 'true' && 'false' || steps.filter.outputs.code }}
+      # Selection routes execution, not the required Frontend verdict.
+      help_only: ${{ steps.help-scope.outputs.selected == 'true' && 'true' || 'false' }}
+      code: ${{ steps.help-scope.outputs.selected == 'true' && 'false' || steps.filter.outputs.code }}
       component_only: ${{ steps.component.outputs.only }}
       # Both matrices use one allocation. An unavailable output keeps the
       # complete two-rest/five-API layout in both consumers.
@@ -295,23 +295,36 @@ jobs:
           set -euo pipefail
           if selected=$(python3 scripts/ci_docs_only.py --help-push --base "$BASE_SHA" --head "$TESTED_SHA") &&
              [[ "$selected" == true && "$(git rev-parse --verify HEAD)" == "$TESTED_SHA" ]]; then
-            echo "Main push modifies only mirrored Help guides and their tests; running the required focused checks."
+            echo "Main push modifies only mirrored Help guides and their tests; Frontend requires the focused proof."
             echo "selected=true" >> "$GITHUB_OUTPUT"
           fi
 
+  help-proof:
+    name: Mirrored Help proof
+    needs: changes
+    if: needs.changes.outputs.help_only == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    outputs:
+      completed: ${{ steps.help-proof.outputs.completed }}
+    steps:
+      - name: Checkout the selected Help source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
       - name: Set up Node.js for main-push Help checks
-        if: steps.help-scope.outputs.selected == 'true'
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: '24'
           cache: npm
           cache-dependency-path: frontend-modern/package-lock.json
 
-      # Public docs and the ordinary required verdicts still run; a failure
-      # here fails changed-area admission itself, before any successful skip.
+      # Public docs and secret scanning still run. The required Frontend job
+      # checks both this job's result and the exact-checkout completion marker.
       - name: Check Help test source and rendered guides
         id: help-proof
-        if: steps.help-scope.outputs.selected == 'true'
         working-directory: frontend-modern
         timeout-minutes: 9
         env:
@@ -727,7 +740,7 @@ jobs:
   # failed audit/build/runtime check must never produce a green Frontend.
   frontend:
     name: Frontend
-    needs: [changes, frontend-build, frontend-checks, frontend-unit, triage-helper]
+    needs: [changes, frontend-build, frontend-checks, frontend-unit, triage-helper, help-proof]
     if: always()
     runs-on: ubuntu-24.04
     timeout-minutes: 5
@@ -744,6 +757,22 @@ jobs:
               echo "::error::Issue-triage proof is incomplete or failed. Inspect changed-area classification and the dedicated triage check."
               exit 1 ;;
           esac
+      - name: Require selected Help proof
+        env:
+          CHANGE_RESULT: ${{ needs.changes.result }}
+          CODE_CHANGED: ${{ needs.changes.outputs.code }}
+          HELP_ONLY: ${{ needs.changes.outputs.help_only }}
+          HELP_RESULT: ${{ needs.help-proof.result }}
+          HELP_COMPLETED: ${{ needs.help-proof.outputs.completed }}
+        run: |
+          case "$HELP_ONLY:$HELP_RESULT:$HELP_COMPLETED:$CHANGE_RESULT:$CODE_CHANGED" in
+            false:skipped::*) ;;
+            true:success:true:success:false)
+              echo "The exact checkout passed the required mirrored Help checks." ;;
+            *)
+              echo "::error::Frontend proof is incomplete or failed. Inspect the mirrored Help selection and proof."
+              exit 1 ;;
+          esac
       - name: Require complete frontend proof
         env:
           CHANGE_RESULT: ${{ needs.changes.result }}
@@ -756,7 +785,7 @@ jobs:
             success:true:success:success:success)
               echo "Frontend build, complete audit, runtime and the unit suite passed." ;;
             success:false:skipped:skipped:skipped)
-              echo "Application runtime checks are not applicable; no frontend tests ran in these jobs. See Detect changed areas for any focused checks." ;;
+              echo "Application runtime checks are not applicable to this classified change; no frontend tests ran in the runtime jobs." ;;
             *)
               echo "::error::Frontend proof is incomplete or failed. Inspect changed-area classification, build/audit/runtime and unit suite."
               exit 1 ;;

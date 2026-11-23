@@ -330,7 +330,17 @@ class GitClassifierTest(unittest.TestCase):
         self.commit()
         self.assertEqual(self.help_scope(base, head), "")  # tested checkout does not match
 
-    def test_only_exact_completed_help_command_emits_the_skip_marker(self):
+    def test_protected_merge_compares_the_first_parent_not_the_topic(self):
+        base = self.add_help_fixture()
+        self.update_help_fixture()
+        topic = self.commit()
+        merge = self.git("commit-tree", f"{topic}^{{tree}}", "-p", base, "-p", topic,
+                         "-m", "Merge the verified Help change")
+        self.git("reset", "--hard", merge)
+        self.assertEqual(self.help_scope(base, merge), "selected=true\n")
+        self.assertEqual(self.help_scope(topic, merge), "")
+
+    def test_only_exact_completed_help_command_emits_the_proof_marker(self):
         head = self.add_help_fixture()
         fake = self.repo / "bin/npm"
         self.write("bin/npm", '#!/bin/sh\n'
