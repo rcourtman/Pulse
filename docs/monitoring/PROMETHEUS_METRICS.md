@@ -37,14 +37,37 @@ In Docker and Kubernetes you must expose `9091` explicitly if you want to scrape
 | `pulse_monitor_poll_total` | Counter | Success/error counts per instance (`result` label). |
 | `pulse_monitor_poll_errors_total` | Counter | Poll failures by `error_type`. |
 | `pulse_monitor_poll_last_success_timestamp` | Gauge | Unix timestamp of last success. |
-| `pulse_monitor_poll_staleness_seconds` | Gauge | Seconds since last success (`-1` if never succeeded). |
+| `pulse_monitor_poll_staleness_seconds` | Gauge | Age since success at last result. |
 | `pulse_monitor_poll_queue_depth` | Gauge | Global queue depth. |
 | `pulse_monitor_poll_inflight` | Gauge | In-flight polls by `instance_type`. |
 | `pulse_monitor_node_poll_duration_seconds` | Histogram | Per-node poll latency. |
 | `pulse_monitor_node_poll_total` | Counter | Success/error counts per node (`result` label). |
 | `pulse_monitor_node_poll_errors_total` | Counter | Node poll failures by `error_type`. |
 | `pulse_monitor_node_poll_last_success_timestamp` | Gauge | Unix timestamp of last node success. |
-| `pulse_monitor_node_poll_staleness_seconds` | Gauge | Seconds since last node success (`-1` if never succeeded). |
+| `pulse_monitor_node_poll_staleness_seconds` | Gauge | Age since success at last result. |
+
+### Check whether polling is still running
+
+Use your existing scrape. A successful scrape means Pulse served metrics, not
+that polling succeeded. The staleness gauges above update when a poll result
+is recorded. A recorded failure before the first success sets the gauge to
+`-1`. If polls stop finishing after a success, the gauge can stay at zero.
+Instead, subtract the last successful poll time from the query time:
+
+- **Per connection:** `time() - pulse_monitor_poll_last_success_timestamp`
+- **Per node:** `time() - pulse_monitor_node_poll_last_success_timestamp`
+
+Look at the connections and nodes you still expect Pulse to poll. Allow for
+their configured cadence, including adaptive polling, and normal poll duration.
+An age that keeps rising means no new success has been recorded. An absent
+series is not an age of zero: Pulse may not have completed a successful poll
+since it started, or Prometheus may not have a current scrape. Check the
+expected series and scrape gaps separately.
+
+When comparing runs before and after an update, check the same connections and
+nodes in both windows. A new poll timestamp does not prove every guest or
+backup datastore refreshed. Check the actual readings for those resources,
+and treat a gap as unverified rather than a memory saving.
 
 ## 🧠 Scheduler Health
 
@@ -105,5 +128,5 @@ Example rollout alerts:
 
 ## 🚨 Alerting Examples
 - **High Error Rate**: `rate(pulse_http_request_errors_total[5m]) > 0.05`
-- **Stale Node**: `pulse_monitor_node_poll_staleness_seconds > 300`
+- **Overdue node poll with a recorded success**: `time() - pulse_monitor_node_poll_last_success_timestamp > 300`. Five minutes is an example, not a default for every cadence. The check does not alert on a missing series. Use the [poll and scrape checks](#check-whether-polling-is-still-running) above.
 - **Breaker Open**: `pulse_scheduler_breaker_state == 2`

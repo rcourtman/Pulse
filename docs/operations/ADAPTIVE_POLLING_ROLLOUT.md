@@ -49,9 +49,12 @@ data still refreshes. A snapshot's `updatedAt` is its collection time, not a
 successful provider poll. There is no fleet-independent queue-depth success
 threshold, and an open breaker is a backoff state, not proof of a new regression.
 
-If using an already configured Prometheus scrape, compare the queue and error
-metrics too. Missing metrics or a failed read are unavailable evidence, not zero
-errors. Do not prolong a failure merely to finish the 15-minute observation.
+If using an already configured Prometheus scrape, compare queue and error
+metrics and the [age of the last recorded success](../monitoring/PROMETHEUS_METRICS.md#check-whether-polling-is-still-running)
+for the same expected connections and nodes. A quiet error counter or a flat
+staleness gauge can also mean no poll finished. Missing metrics or a failed
+read are unavailable evidence, not zero errors. Do not prolong a failure
+merely to finish the 15-minute observation.
 
 ## ↩️ Rollback
 
