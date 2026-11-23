@@ -299,48 +299,6 @@ jobs:
             echo "selected=true" >> "$GITHUB_OUTPUT"
           fi
 
-  help-proof:
-    name: Mirrored Help proof
-    needs: changes
-    if: needs.changes.outputs.help_only == 'true'
-    runs-on: ubuntu-24.04
-    timeout-minutes: 12
-    outputs:
-      completed: ${{ steps.help-proof.outputs.completed }}
-    steps:
-      - name: Checkout the selected Help source
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          ref: ${{ github.sha }}
-          persist-credentials: false
-
-      - name: Set up Node.js for main-push Help checks
-        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version: '24'
-          cache: npm
-          cache-dependency-path: frontend-modern/package-lock.json
-
-      # Public docs and secret scanning still run. The required Frontend job
-      # checks both this job's result and the exact-checkout completion marker.
-      - name: Check Help test source and rendered guides
-        id: help-proof
-        working-directory: frontend-modern
-        timeout-minutes: 9
-        env:
-          EXPECTED_SOURCE_SHA: ${{ github.sha }}
-        run: |
-          set -euo pipefail
-          test "$(git rev-parse --verify HEAD)" = "$EXPECTED_SOURCE_SHA"
-          npm ci --no-audit
-          npm run format:check
-          npm run lint
-          npm run lint:headers
-          npm run lint:cpd
-          npm run type-check
-          npm run test -- src/features/docs/__tests__ src/utils/__tests__/docsLinks.test.ts
-          echo "completed=true" >> "$GITHUB_OUTPUT"
-
   triage-helper:
     name: Issue metadata and silent triage policy
     needs: changes
@@ -735,6 +693,48 @@ jobs:
           path: ${{ runner.temp }}/frontend-unit-${{ github.run_attempt }}.json
           if-no-files-found: warn
           retention-days: 7
+
+  help-proof:
+    name: Mirrored Help proof
+    needs: changes
+    if: needs.changes.outputs.help_only == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    outputs:
+      completed: ${{ steps.help-proof.outputs.completed }}
+    steps:
+      - name: Checkout the selected Help source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Set up Node.js for main-push Help checks
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: frontend-modern/package-lock.json
+
+      # Public docs and secret scanning still run. The required Frontend job
+      # checks both this job's result and the exact-checkout completion marker.
+      - name: Check Help test source and rendered guides
+        id: help-proof
+        working-directory: frontend-modern
+        timeout-minutes: 9
+        env:
+          EXPECTED_SOURCE_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse --verify HEAD)" = "$EXPECTED_SOURCE_SHA"
+          npm ci --no-audit
+          npm run format:check
+          npm run lint
+          npm run lint:headers
+          npm run lint:cpd
+          npm run type-check
+          npm run test -- src/features/docs/__tests__ src/utils/__tests__/docsLinks.test.ts
+          echo "completed=true" >> "$GITHUB_OUTPUT"
 
   # Preserve the required check name; a failed/cancelled/skipped unit suite or a
   # failed audit/build/runtime check must never produce a green Frontend.
