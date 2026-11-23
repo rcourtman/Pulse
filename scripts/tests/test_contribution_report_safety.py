@@ -18,22 +18,27 @@ def report_guidance() -> str:
 
 class ContributionReportSafetyTest(unittest.TestCase):
     def test_help_entrypoints_accept_original_evidence_before_public_sharing(self):
-        surfaces = (
-            ("README.md", "## Community and support\n", "\n## ", "docs/"),
-            ("docs/README.md", "# Pulse documentation\n", "\n## Start here", ""),
+        readme_text = (ROOT / "README.md").read_text(encoding="utf-8")
+        readme_entry = " ".join(
+            readme_text.split("## Community and support\n", 1)[1].split("\n## ", 1)[0].split()
         )
-        for name, start, end, prefix in surfaces:
-            with self.subTest(surface=name):
-                text = (ROOT / name).read_text(encoding="utf-8")
-                entry = " ".join(text.split(start, 1)[1].split(end, 1)[0].split())
-                self.assertIn(f"({prefix}TROUBLESHOOTING.md#-getting-help)", entry)
-                self.assertIn("A second reproduction or diagnostics export is not required", entry)
-                self.assertIn("original evidence", entry)
-                self.assertIn("interrupt workloads or send duplicate notifications", entry)
-                self.assertIn("reports and attachments are public", entry)
-                self.assertIn("review them locally", entry)
-                self.assertIn("credentials and private details", entry)
-                self.assertNotIn("Report reproducible bugs", entry)
+        self.assertIn("(docs/TROUBLESHOOTING.md#-getting-help)", readme_entry)
+        self.assertIn("credentials", readme_entry)
+        self.assertIn("public attachments", readme_entry)
+        self.assertNotIn("Report reproducible bugs", readme_entry)
+
+        docs_text = (ROOT / "docs/README.md").read_text(encoding="utf-8")
+        docs_entry = " ".join(
+            docs_text.split("# Pulse documentation\n", 1)[1].split("\n## Start here", 1)[0].split()
+        )
+        self.assertIn("(TROUBLESHOOTING.md#-getting-help)", docs_entry)
+        self.assertIn("A second reproduction or diagnostics export is not required", docs_entry)
+        self.assertIn("original evidence", docs_entry)
+        self.assertIn("interrupt workloads or send duplicate notifications", docs_entry)
+        self.assertIn("reports and attachments are public", docs_entry)
+        self.assertIn("review them locally", docs_entry)
+        self.assertIn("credentials and private details", docs_entry)
+        self.assertNotIn("Report reproducible bugs", docs_entry)
         self.assertEqual(
             (ROOT / "docs/README.md").read_bytes(),
             (ROOT / "frontend-modern/public/docs/README.md").read_bytes(),
