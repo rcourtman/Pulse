@@ -17,6 +17,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	unified "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/aicontracts"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/audit"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/auth"
 )
 
@@ -1414,6 +1415,199 @@ func TestApprovalPlanInfoRejectsMalformedApprovalRequirement(t *testing.T) {
 		_, err := approvalPlanInfoToRequest(&aicontracts.ActionPlanInfo{ApprovalPolicy: string(unified.ApprovalMultiFactor), ApprovalRequirement: json.RawMessage(raw)})
 		if err == nil {
 			t.Fatalf("accepted malformed approval requirement %s", raw)
+		}
+	}
+}
+
+func TestActionExecutionRequiresAutoFixLicense(t *testing.T) {
+	userActor := unified.ActionActor{SubjectID: "admin", Kind: unified.ActionActorUser, CredentialID: "session:1", OrgID: "default"}
+	tokenActor := unified.ActionActor{SubjectID: "admin", Kind: unified.ActionActorAPIToken, CredentialID: "api-token:tok-1", OrgID: "default"}
+
+	manualRecord := unified.ActionAuditRecord{
+		Request: unified.ActionRequest{Actor: userActor},
+	}
+	if actionExecutionRequiresAutoFixLicense(userActor, manualRecord) {
+		t.Fatal("manual browser-session action without broker origin must stay free on Community")
+	}
+
+	tokenPlannedRecord := unified.ActionAuditRecord{
+		Request: unified.ActionRequest{Actor: tokenActor},
+	}
+	if !actionExecutionRequiresAutoFixLicense(userActor, tokenPlannedRecord) {
+		t.Fatal("action planned by an external API token must require Pro even when approved/executed from UI")
+	}
+	if !actionExecutionRequiresAutoFixLicense(tokenActor, manualRecord) {
+		t.Fatal("action executed via an external API token must require Pro")
+	}
+
+	patrolRecord := unified.ActionAuditRecord{
+		Request: unified.ActionRequest{Actor: userActor},
+		Origin:  &unified.ActionOrigin{Surface: "patrol"},
+	}
+	if !actionExecutionRequiresAutoFixLicense(userActor, patrolRecord) {
+		t.Fatal("Patrol-originated action must require Pro")
+	}
+}
+
+func newActionSeedHandlers(t *testing.T, resourceID string) *ResourceHandlers {
+	t.Helper()
+	now := time.Date(2026, 11, 23, 9, 0, 0, 0, time.UTC)
+	h := newActionTestResourceHandlers(t, &config.Config{DataPath: t.TempDir()})
+	h.SetStateProvider(resourceUnifiedSeedProvider{
+		snapshot: models.StateSnapshot{LastUpdate: now},
+		resources: []unified.Resource{
+			{
+				ID:        resourceID,
+				Type:      unified.ResourceTypeVM,
+				Name:      "web-test",
+				Status:    unified.StatusWarning,
+				LastSeen:  now,
+				UpdatedAt: now,
+				Sources:   []unified.DataSource{unified.SourceProxmox},
+				Capabilities: []unified.ResourceCapability{
+					{
+						Name:                 "restart",
+						Type:                 unified.CapabilityTypeCommon,
+						Description:          "Restart the VM",
+						MinimumApprovalLevel: unified.ApprovalAdmin,
+						InternalHandler:      "proxmox.vm.restart",
+					},
+				},
+			},
+		},
+	})
+	h.SetActionExecutor(&stubActionExecutor{result: &unified.ExecutionResult{Success: true, Output: "restart dispatched"}})
+	return h
+}
+
+func TestHandleExecuteAction_GatesExternalTokenExecutionOnAutoFixLicense(t *testing.T) {
+	t.Setenv("PULSE_DATA_DIR", t.TempDir())
+	h := newActionSeedHandlers(t, "vm:license-gate-1")
+	licensed := false
+	h.SetActionExecutionLicenseChecker(func(context.Context) error {
+		if !licensed {
+			return errors.New("Pulse Pro license required for governed fix execution")
+		}
+		return nil
+	})
+
+	tokenActor := unified.ActionActor{
+		SubjectID:    "admin",
+		Kind:         unified.ActionActorAPIToken,
+		CredentialID: "api-token:tok-pro-gate",
+		OrgID:        "default",
+	}
+	plan, err := h.ActionLifecycle().Plan(context.Background(), "default", unified.ActionRequest{
+		RequestID:      "req-license-gate-1",
+		ResourceID:     "vm:license-gate-1",
+		CapabilityName: "restart",
+		Reason:         "external agent proposed restart",
+	}, tokenActor)
+	if err != nil {
+		t.Fatalf("Plan: %v", err)
+	}
+	userActor := unified.ActionActor{SubjectID: "admin", Kind: unified.ActionActorUser, CredentialID: "session:1", OrgID: "default"}
+	if _, err := h.ActionLifecycle().Decide(context.Background(), "default", plan.ActionID, unified.ActionDecision{
+		Actor:   userActor,
+		Outcome: unified.OutcomeApproved,
+		Reason:  "operator approved",
+		Evidence: unified.ApprovalEvidence{
+			Version:  1,
+			Method:   unified.MethodSession,
+			Actor:    userActor,
+			OrgID:    "default",
+			ActionID: plan.ActionID,
+			PlanHash: plan.PlanHash,
+			Outcome:  unified.OutcomeApproved,
+			IssuedAt: time.Now().UTC(),
+		},
+	}); err != nil {
+		t.Fatalf("Decide: %v", err)
+	}
+
+	unlicensedRec := httptest.NewRecorder()
+	unlicensedReq := httptest.NewRequest(http.MethodPost, "/api/actions/"+plan.ActionID+"/execute", bytes.NewBufferString(`{"reason":"run"}`))
+	unlicensedReq.SetPathValue("id", plan.ActionID)
+	h.HandleExecuteAction(unlicensedRec, actionHandlerTestRequest(unlicensedReq, ""))
+	if unlicensedRec.Code != http.StatusPaymentRequired {
+		t.Fatalf("expected 402 Payment Required for unlicensed external-agent action execution, got %d: %s", unlicensedRec.Code, unlicensedRec.Body.String())
+	}
+	if !strings.Contains(unlicensedRec.Body.String(), "ai_autofix") {
+		t.Fatalf("expected ai_autofix feature key in 402 response, got %s", unlicensedRec.Body.String())
+	}
+
+	licensed = true
+	licensedRec := httptest.NewRecorder()
+	licensedReq := httptest.NewRequest(http.MethodPost, "/api/actions/"+plan.ActionID+"/execute", bytes.NewBufferString(`{"reason":"run"}`))
+	licensedReq.SetPathValue("id", plan.ActionID)
+	h.HandleExecuteAction(licensedRec, actionHandlerTestRequest(licensedReq, ""))
+	if licensedRec.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK once licensed, got %d: %s", licensedRec.Code, licensedRec.Body.String())
+	}
+}
+
+type recordingAuditLogger struct {
+	events []audit.Event
+}
+
+func (l *recordingAuditLogger) Record(event audit.Event) error {
+	l.events = append(l.events, event)
+	return nil
+}
+func (l *recordingAuditLogger) Query(audit.QueryFilter) ([]audit.Event, error) { return l.events, nil }
+func (l *recordingAuditLogger) Count(audit.QueryFilter) (int, error)           { return len(l.events), nil }
+func (l *recordingAuditLogger) GetWebhookURLs() []string                       { return nil }
+func (l *recordingAuditLogger) UpdateWebhookURLs([]string) error               { return nil }
+func (l *recordingAuditLogger) Close() error                                   { return nil }
+
+func TestHandleActionLifecycle_MirrorsSignedAuditEvents(t *testing.T) {
+	origLogger := audit.GetLogger()
+	origManager := GetTenantAuditManager()
+	recorder := &recordingAuditLogger{}
+	SetTenantAuditManager(nil)
+	audit.SetLogger(recorder)
+	defer func() {
+		audit.SetLogger(origLogger)
+		SetTenantAuditManager(origManager)
+	}()
+
+	t.Setenv("PULSE_DATA_DIR", t.TempDir())
+	h := newActionSeedHandlers(t, "vm:audit-mirror-1")
+
+	planRec := httptest.NewRecorder()
+	planReq := httptest.NewRequest(http.MethodPost, "/api/actions/plan", bytes.NewBufferString(`{"requestId":"req-audit-1","resourceId":"vm:audit-mirror-1","capabilityName":"restart","reason":"test audit"}`))
+	h.HandlePlanAction(planRec, actionHandlerTestRequest(planReq, ""))
+	if planRec.Code != http.StatusOK {
+		t.Fatalf("plan status = %d, body=%s", planRec.Code, planRec.Body.String())
+	}
+	var plan unified.ActionPlan
+	if err := json.Unmarshal(planRec.Body.Bytes(), &plan); err != nil {
+		t.Fatalf("decode plan: %v", err)
+	}
+
+	decideRec := httptest.NewRecorder()
+	decideReq := httptest.NewRequest(http.MethodPost, "/api/actions/"+plan.ActionID+"/decision", bytes.NewBufferString(`{"outcome":"approved","reason":"ok"}`))
+	decideReq.SetPathValue("id", plan.ActionID)
+	h.HandleDecideAction(decideRec, actionHandlerTestRequest(decideReq, ""))
+	if decideRec.Code != http.StatusOK {
+		t.Fatalf("decide status = %d, body=%s", decideRec.Code, decideRec.Body.String())
+	}
+
+	execRec := httptest.NewRecorder()
+	execReq := httptest.NewRequest(http.MethodPost, "/api/actions/"+plan.ActionID+"/execute", bytes.NewBufferString(`{"reason":"run"}`))
+	execReq.SetPathValue("id", plan.ActionID)
+	h.HandleExecuteAction(execRec, actionHandlerTestRequest(execReq, ""))
+	if execRec.Code != http.StatusOK {
+		t.Fatalf("execute status = %d, body=%s", execRec.Code, execRec.Body.String())
+	}
+
+	wantTypes := []string{"action_planned", "action_decision", "action_executed"}
+	if len(recorder.events) != len(wantTypes) {
+		t.Fatalf("expected %d mirrored audit events, got %d: %+v", len(wantTypes), len(recorder.events), recorder.events)
+	}
+	for i, want := range wantTypes {
+		if recorder.events[i].EventType != want || !recorder.events[i].Success {
+			t.Fatalf("event[%d] = %+v, want event=%s success=true", i, recorder.events[i], want)
 		}
 	}
 }

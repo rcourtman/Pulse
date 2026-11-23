@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"strconv"
@@ -16,6 +17,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/api/resourceapi"
 	"github.com/rcourtman/pulse-go-rewrite/internal/mock"
 	unified "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
 	"github.com/rs/zerolog/log"
 )
 
@@ -197,6 +199,7 @@ func (h *ResourceHandlers) HandlePlanAction(w http.ResponseWriter, r *http.Reque
 		writeActionPlanError(w, err)
 		return
 	}
+	LogAuditEventForTenant(orgID, "action_planned", actor.SubjectID, GetClientIP(r), r.URL.Path, true, fmt.Sprintf("Planned action %s (%s on %s)", plan.ActionID, req.CapabilityName, req.ResourceID))
 
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(plan); err != nil {
@@ -538,6 +541,7 @@ func (h *ResourceHandlers) HandleDecideAction(w http.ResponseWriter, r *http.Req
 		})
 		return
 	}
+	LogAuditEventForTenant(orgID, "action_decision", actor.SubjectID, GetClientIP(r), r.URL.Path, true, fmt.Sprintf("Action %s %s (%s on %s)", updated.ID, decision.Outcome, updated.Request.CapabilityName, updated.Request.ResourceID))
 
 	responseApproval := unified.ActionApprovalRecord{}
 	if len(updated.Approvals) > 0 {
@@ -717,22 +721,26 @@ func (h *ResourceHandlers) HandleExecuteAction(w http.ResponseWriter, r *http.Re
 		writeJSONError(w, http.StatusForbidden, agentcapabilities.AgentErrCodeActionActorUnavailable, "Authenticated action actor is unavailable")
 		return
 	}
-	if execution.PlanHash != "" {
-		record, found, err := h.ActionLifecycle().Get(orgID, actionID)
-		if err != nil {
-			writeActionLifecycleReadError(w, err, func() {
-				writeJSONError(w, http.StatusInternalServerError, "action_audit_query_failed", "Failed to query action audit")
-			})
+	record, found, err := h.ActionLifecycle().Get(orgID, actionID)
+	if err != nil {
+		writeActionLifecycleReadError(w, err, func() {
+			writeJSONError(w, http.StatusInternalServerError, "action_audit_query_failed", "Failed to query action audit")
+		})
+		return
+	}
+	if !found {
+		writeJSONErrorWithDetails(w, http.StatusNotFound, agentcapabilities.AgentErrCodeActionNotFound, "Action not found", map[string]string{"actionId": actionID})
+		return
+	}
+	if actionExecutionRequiresAutoFixLicense(actor, record) && h.actionExecutionLicense != nil {
+		if err := h.actionExecutionLicense(r.Context()); err != nil {
+			WriteLicenseRequired(w, licensing.FeatureAIAutoFix, err.Error())
 			return
 		}
-		if !found {
-			writeJSONErrorWithDetails(w, http.StatusNotFound, agentcapabilities.AgentErrCodeActionNotFound, "Action not found", map[string]string{"actionId": actionID})
-			return
-		}
-		if execution.PlanHash != record.Plan.PlanHash {
-			writeJSONError(w, http.StatusConflict, agentcapabilities.AgentErrCodeActionPlanIdentityMismatch, "The approved action plan changed; reload it before execution")
-			return
-		}
+	}
+	if execution.PlanHash != "" && execution.PlanHash != record.Plan.PlanHash {
+		writeJSONError(w, http.StatusConflict, agentcapabilities.AgentErrCodeActionPlanIdentityMismatch, "The approved action plan changed; reload it before execution")
+		return
 	}
 	// Detach dispatch from the client connection: reverse proxies and browsers
 	// drop long requests well before slow operations (e.g. docker image pulls)
@@ -746,6 +754,7 @@ func (h *ResourceHandlers) HandleExecuteAction(w http.ResponseWriter, r *http.Re
 		})
 		return
 	}
+	LogAuditEventForTenant(orgID, "action_executed", actor.SubjectID, GetClientIP(r), r.URL.Path, completed.State == unified.ActionStateCompleted, fmt.Sprintf("Executed action %s (%s on %s): %s", completed.ID, completed.Request.CapabilityName, completed.Request.ResourceID, completed.State))
 
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(actionExecutionResponse{
@@ -820,6 +829,7 @@ func (h *ResourceHandlers) HandleForceFailAction(w http.ResponseWriter, r *http.
 		})
 		return
 	}
+	LogAuditEventForTenant(orgID, "action_force_failed", actor.SubjectID, GetClientIP(r), r.URL.Path, true, fmt.Sprintf("Force-failed action %s (%s on %s)", failed.ID, failed.Request.CapabilityName, failed.Request.ResourceID))
 
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(actionExecutionResponse{
@@ -830,6 +840,24 @@ func (h *ResourceHandlers) HandleForceFailAction(w http.ResponseWriter, r *http.
 	}); err != nil {
 		writeJSONError(w, http.StatusInternalServerError, "action_force_fail_encode_failed", "Failed to encode action force-fail")
 	}
+}
+
+// actionExecutionRequiresAutoFixLicense reports whether executing this action
+// is an external-agent or AI-brokered governed fix that requires Pro
+// (FeatureAIAutoFix). Direct human UI actions (e.g. manual Docker container
+// lifecycle controls planned and executed by a browser session with no broker
+// origin) stay free on Community.
+func actionExecutionRequiresAutoFixLicense(actor unified.ActionActor, record unified.ActionAuditRecord) bool {
+	if actor.Kind == unified.ActionActorAPIToken {
+		return true
+	}
+	if record.Request.Actor.Kind == unified.ActionActorAPIToken {
+		return true
+	}
+	if record.Origin != nil && strings.TrimSpace(record.Origin.Surface) != "" {
+		return true
+	}
+	return false
 }
 
 func mockActionAuditsByState(limit int, states ...unified.ActionState) []unified.ActionAuditRecord {

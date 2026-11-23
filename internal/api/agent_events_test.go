@@ -739,3 +739,45 @@ func TestAgentEventBroadcaster_PublishActionCompletedAbsentVerificationOmitsFiel
 		t.Fatal("timed out waiting for action.completed event")
 	}
 }
+
+func TestAgentEventBroadcaster_PublishActionCompletedRecordScopesToOrg(t *testing.T) {
+	b := NewAgentEventBroadcaster()
+	events, unsub := b.Subscribe()
+	defer unsub()
+
+	b.PublishActionCompletedRecord(unifiedresources.ActionAuditRecord{
+		ID:        "action-org-scoped-1",
+		State:     unifiedresources.ActionStateCompleted,
+		UpdatedAt: time.Now().UTC(),
+		Request: unifiedresources.ActionRequest{
+			ResourceID:     "docker:alpha-web",
+			CapabilityName: "restart",
+			RequestedBy:    "alice",
+			Actor: unifiedresources.ActionActor{
+				SubjectID:    "alice",
+				Kind:         unifiedresources.ActionActorAPIToken,
+				CredentialID: "api-token:tok-1",
+				OrgID:        "org-alpha",
+			},
+		},
+	})
+
+	select {
+	case event := <-events:
+		payload, ok := event.Payload.(AgentEventActionCompletedPayload)
+		if !ok || payload.ActionID != "action-org-scoped-1" {
+			t.Fatalf("expected action-org-scoped-1, got %+v", event)
+		}
+		if !event.visibleToOrg("org-alpha") {
+			t.Fatal("org-alpha subscriber must receive its own action.completed event")
+		}
+		if event.visibleToOrg("org-beta") {
+			t.Fatal("org-beta subscriber must not receive org-alpha action.completed event")
+		}
+		if event.visibleToOrg("default") {
+			t.Fatal("default org subscriber must not receive org-alpha action.completed event")
+		}
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for action.completed event")
+	}
+}

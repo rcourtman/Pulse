@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -395,6 +396,39 @@ func (b *AgentEventBroadcaster) PublishActionCompleted(payload AgentEventActionC
 	})
 }
 
+// PublishActionCompletedForOrg publishes a tenant-scoped action.completed event
+// so subscribers in other organizations never receive another tenant's action
+// outcomes.
+func (b *AgentEventBroadcaster) PublishActionCompletedForOrg(orgID string, payload AgentEventActionCompletedPayload) {
+	b.Publish(AgentEvent{
+		Kind:    AgentEventActionCompleted,
+		Payload: payload,
+		orgID:   normalizeAgentEventOrgID(orgID),
+	})
+}
+
+func actionCompletedOrgID(record unifiedresources.ActionAuditRecord) string {
+	if orgID := strings.TrimSpace(record.Request.Actor.OrgID); orgID != "" {
+		return orgID
+	}
+	for _, approvalRecord := range record.Approvals {
+		if orgID := strings.TrimSpace(approvalRecord.ActorBinding.OrgID); orgID != "" {
+			return orgID
+		}
+		if approvalRecord.Evidence != nil {
+			if orgID := strings.TrimSpace(approvalRecord.Evidence.OrgID); orgID != "" {
+				return orgID
+			}
+		}
+		if approvalRecord.PolicyLease != nil {
+			if orgID := strings.TrimSpace(approvalRecord.PolicyLease.OrgID); orgID != "" {
+				return orgID
+			}
+		}
+	}
+	return ""
+}
+
 // PublishActionCompletedRecord converts a terminal action audit record into
 // the agent-stable action.completed payload. Both the Assistant executor and
 // API-owned execution endpoint route through this helper so agents hear the
@@ -425,6 +459,10 @@ func (b *AgentEventBroadcaster) PublishActionCompletedRecord(record unifiedresou
 	payload.ErrorMessage = legacy.ErrorMessage
 	if v := projectAgentResourceVerification(unifiedresources.CanonicalActionVerification(record)); v != nil {
 		payload.Verification = v
+	}
+	if orgID := actionCompletedOrgID(record); orgID != "" {
+		b.PublishActionCompletedForOrg(orgID, payload)
+		return
 	}
 	b.PublishActionCompleted(payload)
 }

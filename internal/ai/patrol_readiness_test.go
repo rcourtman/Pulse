@@ -73,8 +73,8 @@ func TestEvaluatePatrolConfigReadiness_AssignsStableCause(t *testing.T) {
 			},
 		},
 		{
-			name:      "ollama suggested patrol model is ready",
-			wantCause: PatrolFailureCauseNone,
+			name:      "ollama suggested patrol model warns until qualified",
+			wantCause: PatrolFailureCauseModelToolSupportUnverified,
 			wantReady: true,
 			configure: func(cfg *config.AIConfig) {
 				cfg.Enabled = true

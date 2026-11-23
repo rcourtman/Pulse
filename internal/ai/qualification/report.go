@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"html"
+	"net"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -14,6 +15,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/aicontracts"
 )
 
@@ -35,17 +37,24 @@ type PhaseTiming struct {
 }
 
 type Environment struct {
-	GitSHA         string            `json:"git_sha"`
-	GitDirty       bool              `json:"git_dirty"`
-	PulseVersion   string            `json:"pulse_version"`
-	PulseBaseURL   string            `json:"pulse_base_url"`
-	DockerTarget   string            `json:"docker_target"`
-	Model          string            `json:"model"`
-	Provider       string            `json:"provider"`
-	InferenceRoute string            `json:"inference_route"`
-	ChallengeNonce string            `json:"community_challenge_nonce,omitempty"`
-	CapturedAt     time.Time         `json:"captured_at"`
-	Versions       map[string]string `json:"versions,omitempty"`
+	GitSHA                  string            `json:"git_sha"`
+	GitDirty                bool              `json:"git_dirty"`
+	PulseVersion            string            `json:"pulse_version"`
+	PulseBaseURL            string            `json:"pulse_base_url"`
+	DockerTarget            string            `json:"docker_target"`
+	Model                   string            `json:"model"`
+	Provider                string            `json:"provider"`
+	InferenceRoute          string            `json:"inference_route"`
+	InferenceEngine         string            `json:"inference_engine,omitempty"`
+	ModelFingerprint        string            `json:"model_fingerprint,omitempty"`
+	ModelQuantization       string            `json:"model_quantization,omitempty"`
+	ConfiguredContextWindow int               `json:"configured_context_window,omitempty"`
+	HardwareClass           string            `json:"hardware_class,omitempty"`
+	ColdStartLatencyMs      int64             `json:"cold_start_latency_ms,omitempty"`
+	WarmLatencyMs           int64             `json:"warm_latency_ms,omitempty"`
+	ChallengeNonce          string            `json:"community_challenge_nonce,omitempty"`
+	CapturedAt              time.Time         `json:"captured_at"`
+	Versions                map[string]string `json:"versions,omitempty"`
 }
 
 func inferenceRouteForProvider(provider string) string {
@@ -59,16 +68,58 @@ func inferenceRouteForProvider(provider string) string {
 	}
 }
 
+// isLocalQualificationEndpoint reports syntactically whether baseURL targets an
+// operator-hosted local/private model server (loopback, RFC1918, link-local,
+// single-label hostname, or local DNS suffixes) without performing DNS lookups.
+func isLocalQualificationEndpoint(baseURL string) bool {
+	parsed, err := url.Parse(strings.TrimSpace(baseURL))
+	if err != nil {
+		return false
+	}
+	host := strings.ToLower(strings.TrimSuffix(parsed.Hostname(), "."))
+	if host == "" {
+		return false
+	}
+	if ip := net.ParseIP(host); ip != nil {
+		return ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() || ip.IsUnspecified()
+	}
+	if host == "localhost" || !strings.Contains(host, ".") {
+		return true
+	}
+	for _, suffix := range []string{".local", ".localdomain", ".lan", ".internal", ".home", ".home.arpa", ".localhost"} {
+		if strings.HasSuffix(host, suffix) {
+			return true
+		}
+	}
+	return false
+}
+
 func inferenceRouteForProviderEndpoint(provider, baseURL string) string {
 	provider = strings.ToLower(strings.TrimSpace(provider))
-	if provider != "zai" {
-		return inferenceRouteForProvider(provider)
-	}
-	parsed, err := url.Parse(strings.TrimSpace(baseURL))
-	if err == nil && strings.Contains(strings.ToLower(parsed.Path), "/coding/paas/") {
-		return "coding_plan_allowance"
+	switch provider {
+	case "zai":
+		parsed, err := url.Parse(strings.TrimSpace(baseURL))
+		if err == nil && strings.Contains(strings.ToLower(parsed.Path), "/coding/paas/") {
+			return "coding_plan_allowance"
+		}
+	case "openai":
+		if config.IsCustomOpenAICompatibleEndpoint(baseURL) && isLocalQualificationEndpoint(baseURL) {
+			return "local_model_server"
+		}
 	}
 	return inferenceRouteForProvider(provider)
+}
+
+func inferenceEngineForProviderEndpoint(provider, baseURL string) string {
+	switch strings.ToLower(strings.TrimSpace(provider)) {
+	case "ollama":
+		return "ollama"
+	case "openai":
+		if config.IsCustomOpenAICompatibleEndpoint(baseURL) && isLocalQualificationEndpoint(baseURL) {
+			return "openai_compatible_local"
+		}
+	}
+	return ""
 }
 
 type RunReport struct {

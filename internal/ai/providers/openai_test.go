@@ -1563,3 +1563,123 @@ func TestOpenAIClient_TestConnection(t *testing.T) {
 	err := client.TestConnection(context.Background())
 	require.NoError(t, err)
 }
+
+func TestIsLocalOpenAIEndpoint(t *testing.T) {
+	assert.True(t, isLocalOpenAIEndpoint("http://127.0.0.1:8000/v1"))
+	assert.True(t, isLocalOpenAIEndpoint("http://localhost:8080/v1"))
+	assert.True(t, isLocalOpenAIEndpoint("http://192.168.1.42:8000/v1"))
+	assert.True(t, isLocalOpenAIEndpoint("http://vllm.lan:8000/v1"))
+	assert.True(t, isLocalOpenAIEndpoint("http://llama-box:8080/v1"))
+	assert.False(t, isLocalOpenAIEndpoint("https://api.openai.com/v1"))
+	assert.False(t, isLocalOpenAIEndpoint("https://openrouter.ai/api/v1"))
+	assert.False(t, isLocalOpenAIEndpoint(""))
+}
+
+func TestOpenAIClient_ListModelsLocalEndpointSkipsModelsDev(t *testing.T) {
+	modelsDevHits := 0
+	modelsDevServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		modelsDevHits++
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer modelsDevServer.Close()
+
+	// Point global cache at our local spy and force it stale so any IsNotable
+	// lookup would hit modelsDevServer.
+	cache := GetNotableCache()
+	cache.mu.Lock()
+	origURL := cache.apiURL
+	origFetched := cache.lastFetched
+	cache.apiURL = modelsDevServer.URL
+	cache.lastFetched = time.Time{}
+	cache.mu.Unlock()
+	defer func() {
+		cache.mu.Lock()
+		cache.apiURL = origURL
+		cache.lastFetched = origFetched
+		cache.mu.Unlock()
+	}()
+
+	localServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "/v1/models", r.URL.Path)
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"data": []map[string]any{
+				{"id": "qwen3.5-27b-instruct", "object": "model", "owned_by": "vllm"},
+			},
+		})
+	}))
+	defer localServer.Close()
+
+	client := NewOpenAIClient("", "qwen3.5-27b-instruct", localServer.URL+"/v1", 0)
+	models, err := client.ListModels(context.Background())
+	require.NoError(t, err)
+	require.Len(t, models, 1)
+	assert.Equal(t, "qwen3.5-27b-instruct", models[0].ID)
+	assert.True(t, models[0].Notable)
+	assert.Zero(t, modelsDevHits, "local OpenAI-compatible ListModels must never contact models.dev")
+}
+
+func TestOpenAIClient_InspectModel_ReadsVLLMMaxModelLen(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "/v1/models", r.URL.Path)
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"data": []map[string]any{
+				{
+					"id":            "Qwen/Qwen3.5-27B-Instruct",
+					"object":        "model",
+					"owned_by":      "vllm",
+					"max_model_len": 32768,
+				},
+			},
+		})
+	}))
+	defer server.Close()
+
+	client := NewOpenAIClient("", "Qwen/Qwen3.5-27B-Instruct", server.URL+"/v1", 0)
+	diag, err := client.InspectModel(context.Background(), "openai:Qwen/Qwen3.5-27B-Instruct")
+	require.NoError(t, err)
+	require.NotNil(t, diag)
+	assert.Equal(t, 32768, diag.ContextWindow)
+	assert.Equal(t, "vllm", diag.Family)
+	assert.True(t, strings.HasPrefix(diag.Fingerprint, "sha256:"))
+}
+
+func TestOpenAIClient_InspectModel_FallsBackToLlamaCppProps(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/v1/models":
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"data": []map[string]any{
+					{"id": "qwen3-14b.gguf", "object": "model", "owned_by": "llamacpp"},
+				},
+			})
+		case "/props":
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"model_alias": "qwen3-14b.gguf",
+				"default_generation_settings": map[string]any{
+					"n_ctx": 16384,
+				},
+			})
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer server.Close()
+
+	client := NewOpenAIClient("", "qwen3-14b.gguf", server.URL+"/v1", 0)
+	diag, err := client.InspectModel(context.Background(), "qwen3-14b.gguf")
+	require.NoError(t, err)
+	require.NotNil(t, diag)
+	assert.Equal(t, 16384, diag.ContextWindow)
+	assert.Equal(t, "llamacpp", diag.Family)
+	assert.True(t, strings.HasPrefix(diag.Fingerprint, "sha256:"))
+}
+
+func TestOpenAIClient_InspectModel_SkipsOfficialCloudEndpoint(t *testing.T) {
+	client := NewOpenAIClient("sk-test", "gpt-4o-mini", "https://api.openai.com/v1", 0)
+	diag, err := client.InspectModel(context.Background(), "gpt-4o-mini")
+	require.NoError(t, err)
+	assert.Nil(t, diag)
+}

@@ -85,10 +85,11 @@ func patrolSuggestedGuidance(provider, prefix string, exclude ...string) PatrolM
 }
 
 // StaticPatrolModelGuidance returns the maintained guidance table. Cloud
-// entries are price-driven starting points and say so; only the Ollama
-// blessing and the Flash-Lite caution carry evidence.
+// entries are price-driven starting points and say so; local entries note
+// preflight status honestly and are not marked Recommended until they pass
+// live multi-fault Patrol qualification.
 func StaticPatrolModelGuidance() []PatrolModelGuidanceRule {
-	ollamaReason := "Passed Pulse's Patrol tool-call check and runs on your own hardware, so there is no per-token bill."
+	ollamaReason := "Passed Pulse's basic tool-call preflight and runs on your own hardware, so there is no per-token bill, but small 8B models scored 1/6 on live multi-fault Patrol tests. Run Check Patrol model and consider a larger local model before relying on it."
 	var ollamaEquivalents []string
 	if def, ok := config.LookupAIProviderDefinition(config.AIProviderOllama); ok {
 		if note := strings.TrimSpace(def.SuggestedModelNote); note != "" {
@@ -101,9 +102,9 @@ func StaticPatrolModelGuidance() []PatrolModelGuidanceRule {
 			Provider:    config.AIProviderOllama,
 			ModelPrefix: config.OllamaSuggestedPatrolModel,
 			ModelExact:  true,
-			Level:       PatrolModelGuidanceRecommended,
+			Level:       PatrolModelGuidanceSuggested,
 			Reason:      ollamaReason,
-			Evidence:    "patrol-preflight",
+			Evidence:    "patrol-preflight-only",
 		},
 	}
 	for _, equivalent := range ollamaEquivalents {
@@ -111,9 +112,9 @@ func StaticPatrolModelGuidance() []PatrolModelGuidanceRule {
 			Provider:    config.AIProviderOllama,
 			ModelPrefix: equivalent,
 			ModelExact:  true,
-			Level:       PatrolModelGuidanceRecommended,
+			Level:       PatrolModelGuidanceSuggested,
 			Reason:      ollamaReason,
-			Evidence:    "patrol-preflight",
+			Evidence:    "patrol-preflight-only",
 		})
 	}
 	rules = append(rules,

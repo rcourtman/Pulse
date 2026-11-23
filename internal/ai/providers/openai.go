@@ -3,9 +3,11 @@ package providers
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"sort"
@@ -69,6 +71,33 @@ var openAICompatibleOutboundHTTPOptions = securityutil.RestrictedOutboundHTTPOpt
 	AllowedSchemes:  []string{"http", "https"},
 	AllowPrivateIPs: true,
 	AllowLoopback:   true,
+}
+
+// isLocalOpenAIEndpoint reports whether raw points at a local/private host an
+// operator runs themselves (loopback, RFC1918, link-local, single-label, or
+// local DNS suffixes). This syntactic check never resolves DNS or opens a
+// connection, keeping local model listing free of external models.dev requests.
+func isLocalOpenAIEndpoint(raw string) bool {
+	parsed, err := url.Parse(strings.TrimSpace(raw))
+	if err != nil {
+		return false
+	}
+	host := strings.ToLower(strings.TrimSuffix(parsed.Hostname(), "."))
+	if host == "" {
+		return false
+	}
+	if ip := net.ParseIP(host); ip != nil {
+		return ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() || ip.IsUnspecified()
+	}
+	if host == "localhost" || !strings.Contains(host, ".") {
+		return true
+	}
+	for _, suffix := range []string{".local", ".localdomain", ".lan", ".internal", ".home", ".home.arpa", ".localhost"} {
+		if strings.HasSuffix(host, suffix) {
+			return true
+		}
+	}
+	return false
 }
 
 // NewOpenAIClient creates a new OpenAI API client
@@ -1498,12 +1527,16 @@ func (c *OpenAIClient) ListModels(ctx context.Context) ([]ModelInfo, error) {
 			if description == "" && strings.TrimSpace(m.OwnedBy) != "" {
 				description = strings.TrimSpace(m.OwnedBy)
 			}
+			notable := true
+			if !isLocalOpenAIEndpoint(c.baseURL) {
+				notable = cache.IsNotable(c.Name(), m.ID, m.Created)
+			}
 			models = append(models, ModelInfo{
 				ID:          m.ID,
 				Name:        modelName,
 				Description: description,
 				CreatedAt:   m.Created,
-				Notable:     cache.IsNotable(c.Name(), m.ID, m.Created),
+				Notable:     notable,
 			})
 			continue
 		}
@@ -1517,12 +1550,16 @@ func (c *OpenAIClient) ListModels(ctx context.Context) ([]ModelInfo, error) {
 			if description == "" && strings.TrimSpace(m.OwnedBy) != "" {
 				description = strings.TrimSpace(m.OwnedBy)
 			}
+			notable := true
+			if !isLocalOpenAIEndpoint(c.baseURL) {
+				notable = cache.IsNotable(c.Name(), m.ID, m.Created)
+			}
 			models = append(models, ModelInfo{
 				ID:          m.ID,
 				Name:        modelName,
 				Description: description,
 				CreatedAt:   m.Created,
-				Notable:     cache.IsNotable(c.Name(), m.ID, m.Created),
+				Notable:     notable,
 			})
 			continue
 		}
@@ -1546,6 +1583,118 @@ func (c *OpenAIClient) ListModels(ctx context.Context) ([]ModelInfo, error) {
 	}
 
 	return models, nil
+}
+
+// InspectModel reads best-effort runtime metadata from custom OpenAI-compatible
+// local servers (such as vLLM's max_model_len on /v1/models and llama.cpp's
+// /props default_generation_settings.n_ctx) so Patrol readiness and
+// qualification observe the actual configured context window instead of
+// falling back to DefaultContextWindow (128k). Official cloud OpenAI and
+// OpenRouter endpoints return (nil, nil) to avoid unnecessary round-trips.
+func (c *OpenAIClient) InspectModel(ctx context.Context, model string) (*ModelDiagnostics, error) {
+	if c == nil || c.usesOfficialOpenAIEndpoint() || c.isOpenRouter() {
+		return nil, nil
+	}
+	targetModel := strings.TrimSpace(model)
+	if idx := strings.Index(targetModel, ":"); idx >= 0 && strings.EqualFold(strings.TrimSpace(targetModel[:idx]), c.Name()) {
+		targetModel = strings.TrimSpace(targetModel[idx+1:])
+	}
+	if targetModel == "" {
+		targetModel = strings.TrimSpace(c.model)
+	}
+	if targetModel == "" {
+		return nil, fmt.Errorf("no model specified")
+	}
+
+	var contextWindow int
+	var family string
+
+	// 1. Inspect /v1/models for vLLM (max_model_len) or LM Studio (context_length).
+	if req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.modelsEndpoint(), nil); err == nil {
+		c.applyAuthorization(req)
+		c.applyProviderHeaders(req)
+		if resp, err := c.client.Do(req); err == nil {
+			body, readErr := io.ReadAll(io.LimitReader(resp.Body, 2<<20))
+			_ = resp.Body.Close()
+			if readErr == nil && resp.StatusCode == http.StatusOK {
+				var modelsResp struct {
+					Data []struct {
+						ID            string `json:"id"`
+						OwnedBy       string `json:"owned_by"`
+						MaxModelLen   int    `json:"max_model_len"`
+						ContextLength int    `json:"context_length"`
+					} `json:"data"`
+				}
+				if json.Unmarshal(body, &modelsResp) == nil {
+					for _, m := range modelsResp.Data {
+						if strings.EqualFold(strings.TrimSpace(m.ID), targetModel) {
+							family = strings.TrimSpace(m.OwnedBy)
+							if m.MaxModelLen > 0 {
+								contextWindow = m.MaxModelLen
+							} else if m.ContextLength > 0 {
+								contextWindow = m.ContextLength
+							}
+							break
+						}
+					}
+				}
+			}
+		}
+	}
+
+	// 2. Fallback to llama.cpp /props when /v1/models did not expose context length.
+	if contextWindow == 0 {
+		if propsURL := c.llamaCppPropsEndpoint(); propsURL != "" {
+			if req, err := http.NewRequestWithContext(ctx, http.MethodGet, propsURL, nil); err == nil {
+				c.applyAuthorization(req)
+				c.applyProviderHeaders(req)
+				if resp, err := c.client.Do(req); err == nil {
+					body, readErr := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+					_ = resp.Body.Close()
+					if readErr == nil && resp.StatusCode == http.StatusOK {
+						var propsResp struct {
+							ModelAlias                string `json:"model_alias"`
+							DefaultGenerationSettings struct {
+								NCtx int `json:"n_ctx"`
+							} `json:"default_generation_settings"`
+						}
+						if json.Unmarshal(body, &propsResp) == nil {
+							if propsResp.DefaultGenerationSettings.NCtx > 0 {
+								contextWindow = propsResp.DefaultGenerationSettings.NCtx
+							}
+							if family == "" && strings.TrimSpace(propsResp.ModelAlias) != "" {
+								family = "llama.cpp"
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+
+	if contextWindow == 0 && family == "" {
+		return nil, nil
+	}
+	fingerprintPayload, _ := json.Marshal(struct {
+		BaseURL       string `json:"base_url"`
+		Model         string `json:"model"`
+		Family        string `json:"family,omitempty"`
+		ContextWindow int    `json:"context_window,omitempty"`
+	}{strings.TrimSpace(c.baseURL), targetModel, family, contextWindow})
+	sum := sha256.Sum256(fingerprintPayload)
+	return &ModelDiagnostics{
+		Fingerprint:   fmt.Sprintf("sha256:%x", sum[:]),
+		Family:        family,
+		ContextWindow: contextWindow,
+	}, nil
+}
+
+func (c *OpenAIClient) llamaCppPropsEndpoint() string {
+	parsed, err := url.Parse(strings.TrimSpace(c.baseURL))
+	if err != nil || parsed.Scheme == "" || parsed.Host == "" {
+		return ""
+	}
+	return fmt.Sprintf("%s://%s/props", parsed.Scheme, parsed.Host)
 }
 
 func notableProviderForOpenRouterModel(modelID string) string {

@@ -18,16 +18,16 @@ func findGuidance(t *testing.T, provider, model string) []PatrolModelGuidanceRul
 	return matched
 }
 
-func TestStaticPatrolModelGuidance_OllamaBlessingIsRecommendedWithHardwareNote(t *testing.T) {
+func TestStaticPatrolModelGuidance_OllamaBlessingIsSuggestedWithHardwareNote(t *testing.T) {
 	rules := findGuidance(t, config.AIProviderOllama, config.OllamaSuggestedPatrolModel)
-	if len(rules) != 1 || rules[0].Level != PatrolModelGuidanceRecommended {
-		t.Fatalf("expected one recommended rule for the Ollama blessing, got %+v", rules)
+	if len(rules) != 1 || rules[0].Level != PatrolModelGuidanceSuggested {
+		t.Fatalf("expected one suggested rule for the Ollama starter model, got %+v", rules)
 	}
-	if !strings.Contains(rules[0].Reason, "8 GB") || !strings.Contains(rules[0].Reason, "no per-token bill") {
-		t.Fatalf("reason should carry the hardware note and the no-bill point: %q", rules[0].Reason)
+	if !strings.Contains(rules[0].Reason, "8 GB") || !strings.Contains(rules[0].Reason, "no per-token bill") || !strings.Contains(rules[0].Reason, "1/6") {
+		t.Fatalf("reason should carry the hardware note, no-bill point, and 1/6 multi-fault caveat: %q", rules[0].Reason)
 	}
 	if len(findGuidance(t, config.AIProviderOllama, "qwen3:4b")) != 0 {
-		t.Fatal("smaller qwen3 tags failed preflight and must not inherit the blessing")
+		t.Fatal("smaller qwen3 tags failed preflight and must not inherit the guidance")
 	}
 }
 

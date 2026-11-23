@@ -51,12 +51,27 @@ var modelContextWindows = map[string]int{
 
 	// Meta (via various providers)
 	"llama-3.3": 128_000,
+	"llama-3.2": 131_072,
 	"llama-3.1": 128_000,
 
-	// Qwen
+	// Qwen (cloud and local open-weight)
 	"qwen-max":   131_072,
 	"qwen-plus":  131_072,
 	"qwen-turbo": 1_000_000,
+	"qwen3.5":    32_768,
+	"qwen3":      32_768,
+	"qwen2.5":    32_768,
+
+	// Open-weight local families (conservative defaults when server inspection is unavailable)
+	"glm-5":         131_072,
+	"glm-4":         131_072,
+	"deepseek-v3":   65_536,
+	"deepseek-r1":   65_536,
+	"gemma-3":       131_072,
+	"gemma3":        131_072,
+	"mistral-small": 32_768,
+	"phi-4":         16_384,
+	"phi4":          16_384,
 }
 
 // ContextWindowTokens returns the context window size in tokens for the given model.

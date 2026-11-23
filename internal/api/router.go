@@ -719,6 +719,16 @@ func (r *Router) setupRoutes() {
 		})
 	}
 	if r.resourceHandlers != nil {
+		r.resourceHandlers.SetActionExecutionLicenseChecker(func(ctx context.Context) error {
+			if r.licenseHandlers == nil {
+				return errors.New("license service unavailable")
+			}
+			service := r.licenseHandlers.Service(ctx)
+			if service == nil {
+				return errors.New("license service unavailable")
+			}
+			return service.RequireFeature(ai.FeatureAIAutoFix)
+		})
 		r.resourceHandlers.SetActionEmergencyStopChecker(func(orgID string) (bool, error) {
 			orgCtx := context.WithValue(context.Background(), OrgIDContextKey, approval.NormalizeOrgID(orgID))
 			svc := r.aiSettingsHandler.GetAIService(orgCtx)
@@ -3260,6 +3270,10 @@ func (r *Router) publishActionCompletedAgentEvent(broadcaster *AgentEventBroadca
 	payload, ok := projectAgentActionCompletedPayload(record)
 	if !ok {
 		broadcaster.PublishActionCompletedRecord(record)
+		return
+	}
+	if orgID := actionCompletedOrgID(record); orgID != "" {
+		broadcaster.PublishActionCompletedForOrg(orgID, payload)
 		return
 	}
 	broadcaster.PublishActionCompleted(payload)

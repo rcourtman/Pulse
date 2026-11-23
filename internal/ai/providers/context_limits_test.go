@@ -62,3 +62,22 @@ func TestContextWindowTokens_Unknown(t *testing.T) {
 		t.Fatalf("ContextWindowTokens(unknown model) = %d, want %d", got, want)
 	}
 }
+
+func TestContextWindowTokens_OpenWeightLocalModels(t *testing.T) {
+	testCases := []struct {
+		model string
+		want  int
+	}{
+		{model: "ollama:qwen3:8b", want: 32_768},
+		{model: "openai:qwen3.5-27b-instruct", want: 32_768},
+		{model: "openai:glm-4-9b-chat", want: 131_072},
+		{model: "openai:deepseek-r1-distill-qwen-32b", want: 65_536},
+		{model: "ollama:llama-3.2:latest", want: 131_072},
+		{model: "ollama:phi-4:14b", want: 16_384},
+	}
+	for _, tc := range testCases {
+		if got := ContextWindowTokens(tc.model); got != tc.want {
+			t.Fatalf("ContextWindowTokens(%q) = %d, want %d", tc.model, got, tc.want)
+		}
+	}
+}

@@ -169,13 +169,20 @@ func (r *QualificationRunner) Run(ctx context.Context) (report RunReport, termin
 		if provider == "" {
 			provider, _ = splitModel(model)
 		}
+		endpointURL := settings.ZaiBaseURL
+		if provider == "openai" {
+			endpointURL = settings.OpenAIBaseURL
+		}
 		report.Environment = Environment{
 			GitSHA: r.config.GitSHA, GitDirty: r.config.GitDirty,
 			PulseVersion: version.Version,
 			PulseBaseURL: r.config.Client.config.BaseURL,
 			DockerTarget: r.config.Lab.targetLabel(),
-			Model:        model, Provider: provider, InferenceRoute: inferenceRouteForProviderEndpoint(provider, settings.ZaiBaseURL), ChallengeNonce: r.config.ChallengeNonce,
-			CapturedAt: time.Now().UTC(),
+			Model:        model, Provider: provider,
+			InferenceRoute:  inferenceRouteForProviderEndpoint(provider, endpointURL),
+			InferenceEngine: inferenceEngineForProviderEndpoint(provider, endpointURL),
+			ChallengeNonce:  r.config.ChallengeNonce,
+			CapturedAt:      time.Now().UTC(),
 		}
 		return nil
 	}); err != nil {

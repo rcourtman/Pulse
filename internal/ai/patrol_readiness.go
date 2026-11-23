@@ -114,9 +114,9 @@ func PatrolToolReadinessForModel(provider, model string) (string, PatrolFailureC
 		return PatrolReadinessWarning, PatrolFailureCauseModelToolSupportUnverified, fmt.Sprintf("%s routes vary by model and endpoint. Patrol will fail closed if the routed model rejects tools or tool_choice.", config.AIProviderDisplayName(provider))
 	case provider == config.AIProviderOllama:
 		if patrolOllamaModelIsSuggested(normalizedModel) {
-			return PatrolReadinessReady, PatrolFailureCauseNone, fmt.Sprintf("%s passes Patrol's tool check on Ollama.", config.OllamaSuggestedPatrolModel)
+			return PatrolReadinessWarning, PatrolFailureCauseModelToolSupportUnverified, fmt.Sprintf("%s passed basic tool-call preflight on Ollama, but small 8B models are not qualified for full multi-fault Patrol runs. Run Check Patrol model and consider a larger local model before relying on it.", config.OllamaSuggestedPatrolModel)
 		}
-		return PatrolReadinessWarning, PatrolFailureCauseModelToolSupportUnverified, fmt.Sprintf("Ollama connectivity alone does not prove tool support, and %s has not passed Patrol's tool check. %s is the verified Patrol model: run ollama pull %s and select it as the Patrol model.", patrolOllamaModelName(normalizedModel), config.OllamaSuggestedPatrolModel, config.OllamaSuggestedPatrolModel)
+		return PatrolReadinessWarning, PatrolFailureCauseModelToolSupportUnverified, fmt.Sprintf("Ollama connectivity alone does not prove tool support, and %s has not passed Patrol's live qualification. Run Check Patrol model before relying on it.", patrolOllamaModelName(normalizedModel))
 	default:
 		return PatrolReadinessReady, PatrolFailureCauseNone, "The selected provider path supports Patrol's tool-backed analysis contract."
 	}

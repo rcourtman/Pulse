@@ -114,11 +114,14 @@ func TestHandleGetPatrolModelGuidance_ReturnsRulesWithoutVerifiedMarker(t *testi
 	}
 	sawOllama := false
 	for _, rule := range resp.Rules {
-		if rule.Provider == config.AIProviderOllama && rule.Level == ai.PatrolModelGuidanceRecommended {
+		if rule.Provider == config.AIProviderOllama && rule.Level == ai.PatrolModelGuidanceSuggested {
 			sawOllama = true
+		}
+		if rule.Provider == config.AIProviderOllama && rule.Level == ai.PatrolModelGuidanceRecommended {
+			t.Fatalf("unqualified Ollama starter model must not be marked recommended: %+v", rule)
 		}
 	}
 	if !sawOllama {
-		t.Fatal("expected the Ollama blessing in the guidance rules")
+		t.Fatal("expected the Ollama suggested guidance rule")
 	}
 }

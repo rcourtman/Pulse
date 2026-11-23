@@ -34,6 +34,7 @@ type ResourceHandlers struct {
 	actionExecutionAuthorizer actionlifecycle.ExecutionAuthorizer
 	actionLiveCheckAuthorizer actionlifecycle.LiveCheckAuthorizer
 	actionRefreshPlanner      actionlifecycle.RefreshPlanner
+	actionExecutionLicense    func(ctx context.Context) error
 	operatorStateChanged      func(orgID, resourceID string)
 }
 
@@ -117,6 +118,10 @@ func (h *ResourceHandlers) SetActionAuthorizers(decision actionlifecycle.Decisio
 
 func (h *ResourceHandlers) SetActionRefreshPlanner(planner actionlifecycle.RefreshPlanner) {
 	h.actionRefreshPlanner = planner
+}
+
+func (h *ResourceHandlers) SetActionExecutionLicenseChecker(checker func(ctx context.Context) error) {
+	h.actionExecutionLicense = checker
 }
 
 func (h *ResourceHandlers) SetActionCompletedPublisher(publisher func(unified.ActionAuditRecord)) {
