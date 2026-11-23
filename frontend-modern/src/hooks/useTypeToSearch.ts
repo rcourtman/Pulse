@@ -76,10 +76,19 @@ export interface TypeToSearchOptions {
 }
 
 type RegistryEntry = TypeToSearchOptions & { id: number };
+type TypeToSearchKeyGuard = (event: KeyboardEvent) => boolean;
 
 let nextEntryId = 1;
 const registry: RegistryEntry[] = [];
+const keyGuards = new Set<TypeToSearchKeyGuard>();
 let listenerAttached = false;
+
+export const registerTypeToSearchKeyGuard = (guard: TypeToSearchKeyGuard): (() => void) => {
+  keyGuards.add(guard);
+  return () => {
+    keyGuards.delete(guard);
+  };
+};
 
 const focusInput = (
   entry: RegistryEntry,
@@ -212,6 +221,10 @@ const handleTypeToSearchKeyDown = (event: KeyboardEvent) => {
     return;
 
   if (!isPrintableSearchKey(event)) return;
+
+  for (const guard of keyGuards) {
+    if (guard(event)) return;
+  }
 
   const match = getActiveEntry(() => true, { allowPrepared: true });
   if (!match) return;

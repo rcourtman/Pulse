@@ -77,7 +77,7 @@ export function KeyboardShortcutsModal(props: KeyboardShortcutsModalProps) {
         <button
           type="button"
           onClick={props.onClose}
-          class="text-slate-400 hover:text-muted"
+          class="rounded-sm p-1 text-slate-400 transition-colors hover:text-base-content focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500"
           aria-label="Close shortcuts"
         >
           <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -103,9 +103,9 @@ export function KeyboardShortcutsModal(props: KeyboardShortcutsModalProps) {
                   {(item) => (
                     <div class="flex items-center justify-between text-sm text-base-content">
                       <span>{item.description}</span>
-                      <span class="rounded-sm bg-surface-alt px-2 py-1 text-xs font-medium text-base-content">
+                      <kbd class="rounded-sm border border-border bg-page px-2 py-1 font-sans text-xs font-medium text-base-content shadow-2xs">
                         {item.keys}
-                      </span>
+                      </kbd>
                     </div>
                   )}
                 </For>
@@ -116,8 +116,15 @@ export function KeyboardShortcutsModal(props: KeyboardShortcutsModalProps) {
       </div>
 
       <div class="border-t border-border px-5 py-3 text-xs text-muted">
-        Press <span class="font-medium">?</span> again or <span class="font-medium">Esc</span> to
-        close.
+        Press{' '}
+        <kbd class="rounded-sm border border-border bg-page px-1.5 py-0.5 font-sans text-[11px] font-medium text-base-content">
+          ?
+        </kbd>{' '}
+        again or{' '}
+        <kbd class="rounded-sm border border-border bg-page px-1.5 py-0.5 font-sans text-[11px] font-medium text-base-content">
+          Esc
+        </kbd>{' '}
+        to close.
       </div>
     </Dialog>
   );

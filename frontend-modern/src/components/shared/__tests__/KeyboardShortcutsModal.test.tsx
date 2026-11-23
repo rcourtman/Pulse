@@ -30,6 +30,9 @@ describe('KeyboardShortcutsModal', () => {
 
     expect(screen.getByText('Go to Patrol')).toBeInTheDocument();
     expect(screen.getByText('Go to Alerts')).toBeInTheDocument();
+    const keycap = screen.getByText('g then a');
+    expect(keycap.tagName).toBe('KBD');
+    expect(keycap).toHaveClass('border', 'border-border', 'bg-page');
   });
 
   it('drops the Patrol shortcut while AI is off (#905)', () => {
