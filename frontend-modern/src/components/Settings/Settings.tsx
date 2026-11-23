@@ -39,6 +39,14 @@ interface SettingsProps {
   setThemePreference: (pref: 'light' | 'dark' | 'system') => void;
 }
 
+export function resetSettingsScrollPosition(): void {
+  const scrollShell = document.querySelector<HTMLElement>('.app-scroll-shell');
+  if (scrollShell) {
+    scrollShell.scrollTop = 0;
+  }
+  window.scrollTo({ top: 0, behavior: 'auto' });
+}
+
 const SettingsPanelLoadingFallback = () => (
   <div class="px-1 py-1 text-xs text-muted" role="status">
     {getSettingsLoadingState().text}
@@ -176,7 +184,7 @@ const SettingsWorkspace: Component<SettingsProps> = (props) => {
   });
   createEffect(() => {
     activeTab();
-    queueMicrotask(() => window.scrollTo({ top: 0, behavior: 'auto' }));
+    queueMicrotask(resetSettingsScrollPosition);
   });
 
   onMount(() => {

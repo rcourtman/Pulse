@@ -120,6 +120,7 @@ describe('settingsNavigationModel', () => {
     expect(resolveCanonicalSettingsPath('/settings/system/billing/usage')).toBe(
       '/settings/pulse-intelligence/billing/usage',
     );
+    expect(resolveCanonicalSettingsPath('/settings/api')).toBe('/settings/security/api');
     expect(resolveCanonicalSettingsPath('/settings/system-pro')).toBeNull();
     expect(resolveCanonicalSettingsPath('/not-settings')).toBeNull();
   });
@@ -162,6 +163,8 @@ describe('settingsNavigationModel', () => {
     expect(isRouteableSettingsPath('/settings/system/billing/plan')).toBe(true);
     expect(isRouteableSettingsPath('/settings/system/billing/usage')).toBe(true);
     expect(isRouteableSettingsPath('/settings/security/api')).toBe(true);
+    expect(isRouteableSettingsPath('/settings/api')).toBe(true);
+    expect(deriveTabFromPath('/settings/api')).toBe('api');
     expect(isRouteableSettingsPath('/settings/unknown')).toBe(false);
   });
 

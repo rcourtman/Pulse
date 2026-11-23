@@ -477,7 +477,7 @@ export const EN_MESSAGES = {
     'Inspect the live Pulse log stream and download the captured buffer for support work.',
   'settings.header.supportLogs.title': 'System Logs',
   'settings.header.supportReporting.description':
-    'Export inventory data and generate performance reports from the canonical settings shell.',
+    'Export inventory data and generate performance reports.',
   'settings.header.supportReporting.title': 'Data & Reports',
   'settings.nav.group.infrastructure': 'Infrastructure',
   'settings.nav.group.monitoring': 'Monitoring',

@@ -167,10 +167,11 @@ export function stripInternalAnalyticsDiagnosticsFields(raw: DiagnosticsData): D
 }
 
 export function formatUptime(seconds: number): string {
-  if (seconds < 60) return `${seconds}s`;
-  if (seconds < 3600) return `${Math.floor(seconds / 60)}m ${seconds % 60}s`;
-  const hours = Math.floor(seconds / 3600);
-  const minutes = Math.floor((seconds % 3600) / 60);
+  const wholeSeconds = Math.max(0, Math.floor(Number.isFinite(seconds) ? seconds : 0));
+  if (wholeSeconds < 60) return `${wholeSeconds}s`;
+  if (wholeSeconds < 3600) return `${Math.floor(wholeSeconds / 60)}m ${wholeSeconds % 60}s`;
+  const hours = Math.floor(wholeSeconds / 3600);
+  const minutes = Math.floor((wholeSeconds % 3600) / 60);
   if (hours < 24) return `${hours}h ${minutes}m`;
   const days = Math.floor(hours / 24);
   return `${days}d ${hours % 24}h`;

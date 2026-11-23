@@ -179,8 +179,7 @@ describe('getSettingsHeaderMeta', () => {
     it('localizes support-reporting to the English baseline', () => {
       expect(en['support-reporting']).toEqual({
         title: 'Data & Reports',
-        description:
-          'Export inventory data and generate performance reports from the canonical settings shell.',
+        description: 'Export inventory data and generate performance reports.',
       });
     });
 
@@ -447,8 +446,7 @@ describe('getSettingsHeaderMeta', () => {
     it('localizes support-reporting', () => {
       expect(de['support-reporting']).toEqual({
         title: 'Daten & Berichte',
-        description:
-          'Exportieren Sie Inventardaten und erstellen Sie Leistungsberichte aus der kanonischen Einstellungsoberflaeche.',
+        description: 'Exportieren Sie Inventardaten und erstellen Sie Leistungsberichte.',
       });
     });
 
@@ -642,8 +640,7 @@ describe('getSettingsHeaderMeta', () => {
     it('localizes support-reporting', () => {
       expect(es['support-reporting']).toEqual({
         title: 'Datos e informes',
-        description:
-          'Exporta datos de inventario y genera informes de rendimiento desde la consola canónica de ajustes.',
+        description: 'Exporta datos de inventario y genera informes de rendimiento.',
       });
     });
 

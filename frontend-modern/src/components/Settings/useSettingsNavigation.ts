@@ -157,7 +157,7 @@ export function useSettingsNavigation({ navigate, location }: UseSettingsNavigat
 
         const canonicalPath = resolveCanonicalSettingsPath(path);
         if (canonicalPath && canonicalPath !== path) {
-          navigate(canonicalPath, {
+          navigate(`${canonicalPath}${search}${hash}`, {
             replace: true,
             scroll: false,
           });

@@ -89,7 +89,7 @@ export const DiagnosticsPanel: Component<DiagnosticsPanelProps> = (props) => {
             <p id={exportSafetyId}>{DIAGNOSTICS_PANEL_COPY.exportSafety}</p>
             <a
               href={`${TROUBLESHOOTING_DOC_URL}#collect-diagnostics-safely`}
-              class="inline-flex min-h-11 items-center text-link hover:underline"
+              class="inline-flex min-h-11 items-center text-blue-600 dark:text-blue-400 hover:underline"
             >
               Safe diagnostics and sharing
             </a>
