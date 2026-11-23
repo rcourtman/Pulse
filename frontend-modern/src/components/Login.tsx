@@ -431,6 +431,7 @@ export const Login: Component<LoginProps> = (props) => {
             }
           >
             <SetupWizard
+              setupWindowOpen={authStatus()?.setupWindowOpen === true}
               onComplete={(nextPath) => {
                 const target = nextPath || window.location.pathname;
                 window.location.assign(target);

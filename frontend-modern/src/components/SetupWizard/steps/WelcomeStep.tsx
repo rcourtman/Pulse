@@ -14,6 +14,7 @@ interface WelcomeStepProps {
   setBootstrapToken: (token: string) => void;
   isUnlocked: boolean;
   setIsUnlocked: (unlocked: boolean) => void;
+  windowExpired?: boolean;
 }
 
 export const WelcomeStep: Component<WelcomeStepProps> = (props) => {
@@ -159,6 +160,15 @@ export const WelcomeStep: Component<WelcomeStepProps> = (props) => {
 
       <Show when={!props.isUnlocked}>
         <div class="p-5 sm:p-6 max-w-2xl mx-auto bg-surface border border-border rounded-md text-left">
+          <Show when={props.windowExpired}>
+            <div
+              role="alert"
+              class="mb-3.5 rounded-md border border-amber-300 bg-amber-50 px-3.5 py-2.5 text-xs sm:text-sm text-amber-900 dark:border-amber-700/70 dark:bg-amber-950/40 dark:text-amber-200"
+            >
+              The 10-minute first-boot setup window expired. Restart Pulse for a fresh setup window,
+              or enter the unlock token below.
+            </div>
+          </Show>
           <h3 class="text-base sm:text-lg font-semibold text-base-content mb-1 tracking-tight">
             {t('setup.welcome.unlockTitle')}
           </h3>

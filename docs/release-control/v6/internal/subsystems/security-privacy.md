@@ -4206,6 +4206,17 @@ first-run unlock screen, must name the supported command and never the token
 file, because the file holds ciphertext. The unlock screen lists the host,
 `docker exec`, in-container console (`/app/pulse bootstrap-token`) and
 `pct exec` forms without revealing the server's deployment details.
+On a fresh unconfigured boot (and after dev first-run reset), Pulse opens a
+10-minute first-boot setup window during which `POST /api/security/quick-setup`
+allows direct admin account creation without entering the bootstrap token, and
+`GET /api/security/status` advertises `setupWindowOpen: true` only while the
+window is active and no authentication exists. The window closes immediately
+when authentication is saved or after 10 minutes, falling back to restart or
+the encrypted `pulse bootstrap-token` flow; operators can disable the window
+entirely with `PULSE_REQUIRE_BOOTSTRAP_TOKEN=true`. Explicit invalid
+`X-Setup-Token` headers remain rejected even while the window is open, and
+`/api/security/apply-restart` continues to require authentication or a valid
+bootstrap token.
 Managed first-session proof may reset that boundary only through the dev-only
 `/api/security/dev/reset-first-run` route under authenticated
 `settings:write`; harnesses may not scrape `.env`, delete persisted token

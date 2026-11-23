@@ -1148,5 +1148,20 @@ describe('Login', () => {
       expect(screen.queryByLabelText('Username')).not.toBeInTheDocument();
       expect(mockFetch).toHaveBeenCalledTimes(2);
     });
+
+    it('opens the direct admin-account setup step when setupWindowOpen is true', async () => {
+      render(() => (
+        <Login
+          onLogin={vi.fn()}
+          securityStatus={{ hasAuthentication: false, requiresAuth: false, setupWindowOpen: true }}
+        />
+      ));
+      expect(await screen.findByRole('main', { name: 'Pulse Setup Wizard' })).toBeVisible();
+      expect(await screen.findByRole('heading', { name: 'Welcome to Pulse' })).toBeVisible();
+      expect(
+        await screen.findByRole('heading', { name: 'Create your admin account' }),
+      ).toBeVisible();
+      expect(screen.queryByPlaceholderText('Paste your bootstrap token')).not.toBeInTheDocument();
+    });
   });
 });

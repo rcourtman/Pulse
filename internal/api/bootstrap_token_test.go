@@ -9,6 +9,7 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/bootstrap"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
@@ -608,6 +609,50 @@ func TestClearBootstrapToken(t *testing.T) {
 		}
 		if r.bootstrapTokenPath != "" {
 			t.Errorf("expected empty bootstrapTokenPath, got %q", r.bootstrapTokenPath)
+		}
+	})
+}
+
+func TestBootstrapSetupWindowLifecycle(t *testing.T) {
+	now := time.Date(2026, 11, 23, 12, 0, 0, 0, time.UTC)
+	prevClock := bootstrapSetupWindowNow
+	bootstrapSetupWindowNow = func() time.Time { return now }
+	t.Cleanup(func() { bootstrapSetupWindowNow = prevClock })
+
+	t.Run("opens for 10 minutes by default and closes on expiry or clear", func(t *testing.T) {
+		t.Setenv(envRequireBootstrapToken, "")
+		tmpDir := t.TempDir()
+		r := &Router{config: &config.Config{DataPath: tmpDir}}
+		r.initializeBootstrapToken()
+		t.Cleanup(r.clearBootstrapToken)
+
+		if !r.IsBootstrapSetupWindowOpen() {
+			t.Fatalf("expected setup window to be open immediately after initializeBootstrapToken")
+		}
+
+		now = now.Add(defaultBootstrapSetupWindow - time.Second)
+		if !r.IsBootstrapSetupWindowOpen() {
+			t.Fatalf("expected setup window to remain open before 10-minute deadline")
+		}
+
+		now = now.Add(time.Second)
+		if r.IsBootstrapSetupWindowOpen() {
+			t.Fatalf("expected setup window to close at 10-minute deadline")
+		}
+	})
+
+	t.Run("stays closed when PULSE_REQUIRE_BOOTSTRAP_TOKEN is enabled", func(t *testing.T) {
+		t.Setenv(envRequireBootstrapToken, "true")
+		tmpDir := t.TempDir()
+		r := &Router{config: &config.Config{DataPath: tmpDir}}
+		r.initializeBootstrapToken()
+		t.Cleanup(r.clearBootstrapToken)
+
+		if !r.HasPendingBootstrapToken() {
+			t.Fatalf("expected bootstrap token to still be prepared")
+		}
+		if r.IsBootstrapSetupWindowOpen() {
+			t.Fatalf("expected setup window to remain closed when %s=true", envRequireBootstrapToken)
 		}
 	})
 }

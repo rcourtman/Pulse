@@ -147,6 +147,7 @@ export interface SecurityStatus {
   detailLevel?: 'public' | 'authenticated' | 'privileged';
   hasAuthentication: boolean;
   requiresAuth: boolean;
+  setupWindowOpen?: boolean;
   ssoEnabled?: boolean;
   hideLocalLogin?: boolean; // Login discovery metadata
   ssoProviders?: SSOProviderInfo[];

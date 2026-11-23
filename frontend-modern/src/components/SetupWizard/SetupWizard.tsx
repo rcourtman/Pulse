@@ -17,6 +17,7 @@ interface SetupWizardProps {
   onComplete: (nextPath?: string) => void;
   bootstrapToken?: string;
   isUnlocked?: boolean;
+  setupWindowOpen?: boolean;
 }
 
 export const SetupWizard: Component<SetupWizardProps> = (props) => {
@@ -25,14 +26,23 @@ export const SetupWizard: Component<SetupWizardProps> = (props) => {
     password: '',
     apiToken: '',
   };
-  const [currentStep, setCurrentStep] = createSignal<WizardStep>('welcome');
+  const [directSetupActive, setDirectSetupActive] = createSignal(Boolean(props.setupWindowOpen));
+  const [setupWindowExpired, setSetupWindowExpired] = createSignal(false);
+  const [currentStep, setCurrentStep] = createSignal<WizardStep>(
+    props.setupWindowOpen ? 'security' : 'welcome',
+  );
   const [wizardState, setWizardState] = createSignal<WizardState>(defaultWizardState);
   const [bootstrapToken, setBootstrapToken] = createSignal(props.bootstrapToken || '');
   const [isUnlocked, setIsUnlocked] = createSignal(props.isUnlocked || false);
 
-  const steps: WizardStep[] = ['welcome', 'security', 'completion'];
+  const steps = createMemo<WizardStep[]>(() =>
+    directSetupActive() ? ['security', 'completion'] : ['welcome', 'security', 'completion'],
+  );
 
-  const currentStepIndex = () => steps.indexOf(currentStep());
+  const currentStepIndex = () => {
+    const idx = steps().indexOf(currentStep());
+    return idx >= 0 ? idx : 0;
+  };
 
   createEffect(() => {
     currentStep();
@@ -42,17 +52,26 @@ export const SetupWizard: Component<SetupWizardProps> = (props) => {
   });
 
   const nextStep = () => {
+    const activeSteps = steps();
     const idx = currentStepIndex();
-    if (idx < steps.length - 1) {
-      setCurrentStep(steps[idx + 1]);
+    if (idx < activeSteps.length - 1) {
+      setCurrentStep(activeSteps[idx + 1]);
     }
   };
 
   const prevStep = () => {
+    const activeSteps = steps();
     const idx = currentStepIndex();
     if (idx > 0) {
-      setCurrentStep(steps[idx - 1]);
+      setCurrentStep(activeSteps[idx - 1]);
     }
+  };
+
+  const handleRequireUnlock = () => {
+    setDirectSetupActive(false);
+    setSetupWindowExpired(true);
+    setIsUnlocked(false);
+    setCurrentStep('welcome');
   };
 
   const updateState = (updates: Partial<WizardState>) => {
@@ -67,11 +86,11 @@ export const SetupWizard: Component<SetupWizardProps> = (props) => {
     setCurrentStep('completion');
   };
 
-  const stepLabels = createMemo(() => [
-    t('setup.step.unlockServer'),
-    t('setup.step.security'),
-    t('setup.step.firstSource'),
-  ]);
+  const stepLabels = createMemo(() =>
+    directSetupActive()
+      ? [t('setup.step.security'), t('setup.step.firstSource')]
+      : [t('setup.step.unlockServer'), t('setup.step.security'), t('setup.step.firstSource')],
+  );
 
   return (
     <div class="min-h-screen flex flex-col" role="main" aria-label={t('setup.wizard.ariaLabel')}>
@@ -96,6 +115,7 @@ export const SetupWizard: Component<SetupWizardProps> = (props) => {
               setBootstrapToken={setBootstrapToken}
               isUnlocked={isUnlocked()}
               setIsUnlocked={setIsUnlocked}
+              windowExpired={setupWindowExpired()}
             />
           </Show>
 
@@ -104,6 +124,9 @@ export const SetupWizard: Component<SetupWizardProps> = (props) => {
               state={wizardState()}
               updateState={updateState}
               bootstrapToken={bootstrapToken()}
+              showBack={!directSetupActive()}
+              showWelcomeHeader={directSetupActive()}
+              onRequireUnlock={handleRequireUnlock}
               onComplete={finishSecurityStep}
               onBack={prevStep}
             />

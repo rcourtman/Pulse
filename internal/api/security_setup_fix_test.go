@@ -99,6 +99,7 @@ func TestQuickSecuritySetupRejectsUnauthenticatedForce(t *testing.T) {
 
 func TestQuickSecuritySetupRequiresBootstrapToken(t *testing.T) {
 	t.Setenv("PULSE_TRUSTED_PROXY_CIDRS", "")
+	t.Setenv(envRequireBootstrapToken, "true")
 	resetTrustedProxyConfig()
 
 	dataDir := t.TempDir()
@@ -114,6 +115,10 @@ func TestQuickSecuritySetupRequiresBootstrapToken(t *testing.T) {
 	}
 	router.initializeBootstrapToken()
 	InitPersistentAuthStores(dataDir)
+
+	if router.IsBootstrapSetupWindowOpen() {
+		t.Fatalf("expected setup window to remain closed when %s=true", envRequireBootstrapToken)
+	}
 
 	tokenPath := filepath.Join(cfg.DataPath, bootstrapTokenFilename)
 	bootstrapToken, _, _, err := bootstrap.Load(cfg.DataPath)
@@ -195,6 +200,156 @@ func TestQuickSecuritySetupRequiresBootstrapToken(t *testing.T) {
 	}
 	if !strings.Contains(authEnvText, "PULSE_AUTH_PASS='$2") {
 		t.Fatalf("persisted authentication configuration missing password hash:\n%s", authEnvText)
+	}
+}
+
+func TestQuickSecuritySetupFirstBootWindowAllowsDirectAccountCreation(t *testing.T) {
+	t.Setenv("PULSE_TRUSTED_PROXY_CIDRS", "")
+	t.Setenv(envRequireBootstrapToken, "")
+	resetTrustedProxyConfig()
+
+	dataDir := t.TempDir()
+	cfg := &config.Config{
+		DataPath:   dataDir,
+		ConfigPath: dataDir,
+	}
+
+	router := newTestRouter(t, cfg, nil, nil, nil, nil, "1.0.0")
+	InitPersistentAuthStores(dataDir)
+
+	if !router.IsBootstrapSetupWindowOpen() {
+		t.Fatalf("expected first-boot setup window to be open by default")
+	}
+
+	statusReq := httptest.NewRequest(http.MethodGet, "/api/security/status", nil)
+	statusRec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(statusRec, statusReq)
+	if statusRec.Code != http.StatusOK {
+		t.Fatalf("status endpoint returned %d: %s", statusRec.Code, statusRec.Body.String())
+	}
+	var publicStatus map[string]any
+	if err := json.Unmarshal(statusRec.Body.Bytes(), &publicStatus); err != nil {
+		t.Fatalf("decode status: %v", err)
+	}
+	if got, _ := publicStatus["setupWindowOpen"].(bool); !got {
+		t.Fatalf("expected setupWindowOpen=true during first-boot window, got %v", publicStatus["setupWindowOpen"])
+	}
+
+	payload := `{"username":"firstboot","password":"StrongPass!1","apiToken":"` + strings.Repeat("bb", 32) + `"}`
+
+	// Supplying an explicitly wrong bootstrap token is still rejected even during the open window.
+	authLimiter.Reset("198.51.100.81")
+	badTokenReq := httptest.NewRequest(http.MethodPost, "/api/security/quick-setup", strings.NewReader(payload))
+	badTokenReq.RemoteAddr = "198.51.100.81:54321"
+	badTokenReq.Header.Set(bootstrapTokenHeader, "wrong-token")
+	badTokenRec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(badTokenRec, badTokenReq)
+	if badTokenRec.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 for explicit invalid token during open window, got %d (%s)", badTokenRec.Code, badTokenRec.Body.String())
+	}
+
+	// Without a token, setup succeeds during the 10-minute window and closes it immediately.
+	authLimiter.Reset("198.51.100.82")
+	openReq := httptest.NewRequest(http.MethodPost, "/api/security/quick-setup", strings.NewReader(payload))
+	openReq.RemoteAddr = "198.51.100.82:54321"
+	openRec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(openRec, openReq)
+	if openRec.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK during open setup window, got %d (%s)", openRec.Code, openRec.Body.String())
+	}
+	if router.IsBootstrapSetupWindowOpen() {
+		t.Fatalf("expected setup window to close immediately after setup completes")
+	}
+	if router.bootstrapTokenHash != "" {
+		t.Fatalf("expected bootstrap token hash to be cleared after direct setup")
+	}
+
+	// Status no longer advertises setupWindowOpen once authentication is configured.
+	afterStatusReq := httptest.NewRequest(http.MethodGet, "/api/security/status", nil)
+	afterStatusRec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(afterStatusRec, afterStatusReq)
+	var afterStatus map[string]any
+	if err := json.Unmarshal(afterStatusRec.Body.Bytes(), &afterStatus); err != nil {
+		t.Fatalf("decode post-setup status: %v", err)
+	}
+	if _, exists := afterStatus["setupWindowOpen"]; exists {
+		t.Fatalf("expected setupWindowOpen to be omitted once auth is configured, got %v", afterStatus["setupWindowOpen"])
+	}
+
+	// Subsequent unauthenticated quick-setup attempts are rejected.
+	authLimiter.Reset("198.51.100.83")
+	secondReq := httptest.NewRequest(http.MethodPost, "/api/security/quick-setup", strings.NewReader(payload))
+	secondReq.RemoteAddr = "198.51.100.83:54321"
+	secondRec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(secondRec, secondReq)
+	if secondRec.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 for unauthenticated quick-setup after completion, got %d (%s)", secondRec.Code, secondRec.Body.String())
+	}
+}
+
+func TestQuickSecuritySetupWindowExpiresAndFallsBackToBootstrapToken(t *testing.T) {
+	t.Setenv("PULSE_TRUSTED_PROXY_CIDRS", "")
+	t.Setenv(envRequireBootstrapToken, "")
+	resetTrustedProxyConfig()
+
+	now := time.Date(2026, 11, 23, 10, 0, 0, 0, time.UTC)
+	prevClock := bootstrapSetupWindowNow
+	bootstrapSetupWindowNow = func() time.Time { return now }
+	t.Cleanup(func() { bootstrapSetupWindowNow = prevClock })
+
+	dataDir := t.TempDir()
+	cfg := &config.Config{
+		DataPath:   dataDir,
+		ConfigPath: dataDir,
+	}
+
+	router := newTestRouter(t, cfg, nil, nil, nil, nil, "1.0.0")
+	InitPersistentAuthStores(dataDir)
+	bootstrapToken, _, _, err := bootstrap.Load(cfg.DataPath)
+	if err != nil {
+		t.Fatalf("load bootstrap token: %v", err)
+	}
+
+	// Advance past the 10-minute window.
+	now = now.Add(defaultBootstrapSetupWindow + time.Second)
+	if router.IsBootstrapSetupWindowOpen() {
+		t.Fatalf("expected setup window to be closed after %v", defaultBootstrapSetupWindow)
+	}
+
+	statusReq := httptest.NewRequest(http.MethodGet, "/api/security/status", nil)
+	statusRec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(statusRec, statusReq)
+	var publicStatus map[string]any
+	if err := json.Unmarshal(statusRec.Body.Bytes(), &publicStatus); err != nil {
+		t.Fatalf("decode status: %v", err)
+	}
+	if _, exists := publicStatus["setupWindowOpen"]; exists {
+		t.Fatalf("expected setupWindowOpen to be omitted after window expiration, got %v", publicStatus["setupWindowOpen"])
+	}
+
+	payload := `{"username":"expired","password":"StrongPass!1","apiToken":"` + strings.Repeat("cc", 32) + `"}`
+
+	authLimiter.Reset("198.51.100.84")
+	expiredRemoteReq := httptest.NewRequest(http.MethodPost, "/api/security/quick-setup", strings.NewReader(payload))
+	expiredRemoteReq.RemoteAddr = "198.51.100.84:54321"
+	expiredRemoteRec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(expiredRemoteRec, expiredRemoteReq)
+	if expiredRemoteRec.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 after window expiry without token, got %d (%s)", expiredRemoteRec.Code, expiredRemoteRec.Body.String())
+	}
+	if !strings.Contains(expiredRemoteRec.Body.String(), "setup window has expired") {
+		t.Fatalf("expected expired-window guidance in error body, got %q", expiredRemoteRec.Body.String())
+	}
+
+	// Valid bootstrap token still unlocks setup after the 10-minute window expires.
+	authLimiter.Reset("198.51.100.84")
+	tokenReq := httptest.NewRequest(http.MethodPost, "/api/security/quick-setup", strings.NewReader(payload))
+	tokenReq.RemoteAddr = "198.51.100.84:54321"
+	tokenReq.Header.Set(bootstrapTokenHeader, bootstrapToken)
+	tokenRec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(tokenRec, tokenReq)
+	if tokenRec.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK with valid bootstrap token after window expiry, got %d (%s)", tokenRec.Code, tokenRec.Body.String())
 	}
 }
 

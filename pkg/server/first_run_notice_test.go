@@ -32,4 +32,15 @@ func TestFormatFirstRunStartupNotice(t *testing.T) {
 			t.Fatalf("setupURL = %q, want %q", setupURL, "http://127.0.0.1:17655")
 		}
 	})
+
+	t.Run("startup notice message reflects open setup window vs strict token mode", func(t *testing.T) {
+		openMsg := firstRunStartupNoticeMessage(true)
+		if !strings.Contains(openMsg, "within 10 minutes") {
+			t.Fatalf("open-window message = %q, want 10-minute guidance", openMsg)
+		}
+		strictMsg := firstRunStartupNoticeMessage(false)
+		if !strings.Contains(strictMsg, "run the token command to unlock Pulse") {
+			t.Fatalf("strict message = %q, want token unlock guidance", strictMsg)
+		}
+	})
 }

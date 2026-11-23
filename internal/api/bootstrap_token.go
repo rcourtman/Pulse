@@ -6,9 +6,12 @@ import (
 	"errors"
 	"net/http"
 	"os"
+	"runtime"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
+	"weak"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/bootstrap"
 	internalauth "github.com/rcourtman/pulse-go-rewrite/pkg/auth"
@@ -16,9 +19,84 @@ import (
 )
 
 const (
-	bootstrapTokenFilename = bootstrap.TokenFilename
-	bootstrapTokenHeader   = "X-Setup-Token"
+	bootstrapTokenFilename      = bootstrap.TokenFilename
+	bootstrapTokenHeader        = "X-Setup-Token"
+	defaultBootstrapSetupWindow = 10 * time.Minute
+	envRequireBootstrapToken    = "PULSE_REQUIRE_BOOTSTRAP_TOKEN"
 )
+
+var (
+	bootstrapWindowMu       sync.RWMutex
+	bootstrapWindowExpiry   = map[weak.Pointer[Router]]time.Time{}
+	bootstrapWindowCleanups = map[weak.Pointer[Router]]runtime.Cleanup{}
+	bootstrapSetupWindowNow = time.Now
+)
+
+func requireBootstrapTokenEnabled() bool {
+	switch strings.ToLower(strings.TrimSpace(os.Getenv(envRequireBootstrapToken))) {
+	case "1", "true", "yes", "on":
+		return true
+	default:
+		return false
+	}
+}
+
+func (r *Router) openBootstrapSetupWindow() bool {
+	if r == nil {
+		return false
+	}
+	if requireBootstrapTokenEnabled() {
+		r.closeBootstrapSetupWindow()
+		return false
+	}
+	key := weak.Make(r)
+	expiresAt := bootstrapSetupWindowNow().Add(defaultBootstrapSetupWindow)
+	bootstrapWindowMu.Lock()
+	bootstrapWindowExpiry[key] = expiresAt
+	if _, registered := bootstrapWindowCleanups[key]; !registered {
+		bootstrapWindowCleanups[key] = runtime.AddCleanup(r, func(k weak.Pointer[Router]) {
+			bootstrapWindowMu.Lock()
+			delete(bootstrapWindowExpiry, k)
+			delete(bootstrapWindowCleanups, k)
+			bootstrapWindowMu.Unlock()
+		}, key)
+	}
+	bootstrapWindowMu.Unlock()
+	return true
+}
+
+func (r *Router) closeBootstrapSetupWindow() {
+	if r == nil {
+		return
+	}
+	key := weak.Make(r)
+	bootstrapWindowMu.Lock()
+	delete(bootstrapWindowExpiry, key)
+	if cleanup, ok := bootstrapWindowCleanups[key]; ok {
+		cleanup.Stop()
+		delete(bootstrapWindowCleanups, key)
+	}
+	bootstrapWindowMu.Unlock()
+}
+
+// IsBootstrapSetupWindowOpen reports whether first-time setup can currently
+// proceed directly to admin account creation without an unlock token. The
+// window opens for 10 minutes on a fresh boot unless PULSE_REQUIRE_BOOTSTRAP_TOKEN
+// is enabled, and closes immediately once authentication is configured or the
+// window expires.
+func (r *Router) IsBootstrapSetupWindowOpen() bool {
+	if r == nil || r.bootstrapTokenHash == "" || requireBootstrapTokenEnabled() {
+		return false
+	}
+	key := weak.Make(r)
+	bootstrapWindowMu.RLock()
+	expiresAt, ok := bootstrapWindowExpiry[key]
+	bootstrapWindowMu.RUnlock()
+	if !ok || expiresAt.IsZero() {
+		return false
+	}
+	return bootstrapSetupWindowNow().Before(expiresAt)
+}
 
 func generateBootstrapToken() (string, error) {
 	buf := make([]byte, 24)
@@ -58,8 +136,14 @@ func (r *Router) initializeBootstrapToken() {
 
 	r.bootstrapTokenHash = internalauth.HashAPIToken(token)
 	r.bootstrapTokenPath = path
+	windowOpen := r.openBootstrapSetupWindow()
 
-	if created {
+	if windowOpen {
+		logger.Info().
+			Str("token_path", path).
+			Dur("setup_window", defaultBootstrapSetupWindow).
+			Msg("First-boot setup window open for 10 minutes; open Pulse in your browser to create your admin account (if the window expires, restart Pulse or run `pulse bootstrap-token`)")
+	} else if created {
 		logger.Warn().
 			Str("token_path", path).
 			Msg("Bootstrap setup token created; the file is encrypted, so reveal the token with `pulse bootstrap-token` (Docker: `docker exec <container> /app/pulse bootstrap-token`, or `/app/pulse bootstrap-token` from the container console)")
@@ -108,6 +192,7 @@ func (r *Router) clearBootstrapToken() {
 
 	r.bootstrapTokenHash = ""
 	r.bootstrapTokenPath = ""
+	r.closeBootstrapSetupWindow()
 }
 
 func (r *Router) handleValidateBootstrapToken(w http.ResponseWriter, req *http.Request) {
