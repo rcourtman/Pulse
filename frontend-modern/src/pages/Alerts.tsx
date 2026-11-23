@@ -444,6 +444,8 @@ export function Alerts(props: { securityStatus?: SecurityStatus | null }) {
                   showAcknowledged={showAcknowledged}
                   setShowAcknowledged={setShowAcknowledged}
                   alertsDisabled={() => !alertsActivation.detectionEnabled()}
+                  hasMonitoredResources={() => allResources().length > 0}
+                  canAddInfrastructure={!readOnlySession()}
                 />
               </Show>
             </Show>

@@ -10,6 +10,7 @@ import {
 } from '@/components/shared/Form';
 import { FormSelect } from '@/components/shared/FormSelect';
 import { TlsVerificationWarningBanner } from '@/components/shared/TlsVerificationWarningBanner';
+import { humanizeConnectionError } from '@/utils/connectionErrorPresentation';
 import { MonitoredSystemImpactPreview } from '../../MonitoredSystemImpactPreview';
 import type { TrueNASConnection } from '@/api/truenas';
 import type { TrueNASSettingsPanelState } from '../../useTrueNASSettingsPanelState';
@@ -106,12 +107,15 @@ export const TrueNASCredentialSlot: Component<TrueNASCredentialSlotProps> = (pro
           description: 'Pulse did not get a confirmed result. No settings were saved.',
           accent: 'border-amber-500',
         };
-      case 'failed':
+      case 'failed': {
+        const humanized = humanizeConnectionError(result.detail);
         return {
           title: 'Connection test failed',
           description: result.detail,
+          hint: humanized?.hint && humanized.hint !== result.detail ? humanized.hint : undefined,
           accent: 'border-red-500',
         };
+      }
       case 'destination-refused':
         return {
           title: 'TrueNAS address not allowed',
@@ -138,7 +142,12 @@ export const TrueNASCredentialSlot: Component<TrueNASCredentialSlotProps> = (pro
       <Show when={!props.state.featureDisabled()}>
         <div class="grid gap-4 sm:grid-cols-2">
           <label class={formField}>
-            <span class={formLabel}>Name</span>
+            <span class={formLabel}>
+              Name
+              <span class="ml-0.5 text-red-500" aria-hidden="true">
+                *
+              </span>
+            </span>
             <input
               class={formControl}
               value={props.state.form().name}
@@ -147,7 +156,12 @@ export const TrueNASCredentialSlot: Component<TrueNASCredentialSlotProps> = (pro
             />
           </label>
           <label class={formField}>
-            <span class={formLabel}>Host</span>
+            <span class={formLabel}>
+              Host
+              <span class="ml-0.5 text-red-500" aria-hidden="true">
+                *
+              </span>
+            </span>
             <input
               class={formControl}
               value={props.state.form().host}
@@ -199,7 +213,12 @@ export const TrueNASCredentialSlot: Component<TrueNASCredentialSlotProps> = (pro
         <Show when={props.state.form().authMode === 'apiKey'}>
           <div class="grid gap-4 sm:grid-cols-2">
             <label class={formField}>
-              <span class={formLabel}>API key owner username</span>
+              <span class={formLabel}>
+                API key owner username
+                <span class="ml-0.5 text-red-500" aria-hidden="true">
+                  *
+                </span>
+              </span>
               <input
                 class={formControl}
                 value={props.state.form().username}
@@ -207,12 +226,18 @@ export const TrueNASCredentialSlot: Component<TrueNASCredentialSlotProps> = (pro
                 placeholder="pulse-monitor"
               />
               <span class={formHelpText}>
-                Use the TrueNAS user that owns this key. Required by the supported login flow on
-                current and future releases.
+                The TrueNAS username that owns this API key (for example, truenas_admin or root).
               </span>
             </label>
             <label class={formField}>
-              <span class={formLabel}>API key</span>
+              <span class={formLabel}>
+                API key
+                <Show when={!props.state.form().hasStoredApiKey}>
+                  <span class="ml-0.5 text-red-500" aria-hidden="true">
+                    *
+                  </span>
+                </Show>
+              </span>
               <input
                 class={formControl}
                 type="password"
@@ -232,7 +257,12 @@ export const TrueNASCredentialSlot: Component<TrueNASCredentialSlotProps> = (pro
         <Show when={props.state.form().authMode === 'userpass'}>
           <div class="grid gap-4 sm:grid-cols-2">
             <label class={formField}>
-              <span class={formLabel}>Username</span>
+              <span class={formLabel}>
+                Username
+                <span class="ml-0.5 text-red-500" aria-hidden="true">
+                  *
+                </span>
+              </span>
               <input
                 class={formControl}
                 value={props.state.form().username}
@@ -241,7 +271,14 @@ export const TrueNASCredentialSlot: Component<TrueNASCredentialSlotProps> = (pro
               />
             </label>
             <label class={formField}>
-              <span class={formLabel}>Password</span>
+              <span class={formLabel}>
+                Password
+                <Show when={!props.state.form().hasStoredPassword}>
+                  <span class="ml-0.5 text-red-500" aria-hidden="true">
+                    *
+                  </span>
+                </Show>
+              </span>
               <input
                 class={formControl}
                 type="password"
@@ -419,6 +456,9 @@ export const TrueNASCredentialSlot: Component<TrueNASCredentialSlotProps> = (pro
                 >
                   <p class="font-semibold text-base-content">{feedback().title}</p>
                   <p class="text-muted">{feedback().description}</p>
+                  <Show when={feedback().hint}>
+                    {(hint) => <p class="mt-0.5 text-base-content/90">{hint()}</p>}
+                  </Show>
                 </div>
               )}
             </Show>
