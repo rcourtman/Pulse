@@ -87,8 +87,9 @@ Multi-tenant layout:
 ## 🔐 Authentication (`.env`)
 
 For a new install, leave `PULSE_AUTH_USER` and `PULSE_AUTH_PASS` unset and
-complete the bootstrap-token setup in your browser. See
-[First login](INSTALL.md#step-1-get-the-token). Do not deploy a shared example password.
+complete [first-time setup](INSTALL.md#quick-setup-first-10-minutes) in your
+browser (set `PULSE_REQUIRE_BOOTSTRAP_TOKEN=true` to require the unlock token
+immediately). Do not deploy a shared example password.
 
 The Pulse-generated `.env` controls local authentication and is not exposed
 to the UI. Preserve its owner-only permissions. A bcrypt hash is sensitive too:

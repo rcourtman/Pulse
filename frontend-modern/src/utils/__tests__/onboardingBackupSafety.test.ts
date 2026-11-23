@@ -23,7 +23,7 @@ const entries = [
   {
     name: 'INSTALL',
     source: 'docs/INSTALL.md',
-    start: '### Step 2: Create Admin Account',
+    start: '### Quick Setup (First 10 Minutes)',
     end: '\n> **Note**: If you configure authentication',
   },
 ];

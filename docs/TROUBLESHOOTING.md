@@ -231,12 +231,14 @@ existing sessions and API tokens need separate review if credentials leaked.
    change. Remove the temporary password record after verification,
    and retain or dispose of the backup under your normal credential policy.
 
-#### A fresh install's bootstrap token was missed
+#### A fresh install's setup window expired or bootstrap token was missed
 
-If no local password has ever been set, there is nothing to reset. Follow
-[first login](INSTALL.md#step-1-get-the-token) to read the existing bootstrap
-token for that instance, using its actual data directory. Enter it only in the
-Pulse setup screen, not in command arguments, URLs or issue reports.
+If no local password has ever been set, there is nothing to reset. Restart
+Pulse for a fresh 10-minute setup window, or follow
+[Bootstrap Token Fallback](INSTALL.md#bootstrap-token-fallback-after-10-minutes-or-strict-mode)
+to read the existing bootstrap token for that instance, using its actual data
+directory. Enter it only in the Pulse setup screen, not in command arguments,
+URLs or issue reports.
 
 ### Port change didn't take effect
 
