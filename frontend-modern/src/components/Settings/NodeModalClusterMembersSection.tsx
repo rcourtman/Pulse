@@ -19,6 +19,19 @@ const discoveredAddress = (endpoint: ClusterEndpoint): string => {
   return host || endpoint.ip || '';
 };
 
+const memberCheckContext = (endpoint: ClusterEndpoint): string => {
+  // Failed checks already have a visible summary. Don't spend another row on it.
+  if (endpoint.pulseReachable === false) return '';
+  if (endpoint.pulseReachable == null) {
+    return endpoint.awaitingAddressReadback
+      ? 'No previous Pulse API check recorded'
+      : 'No Pulse API check recorded';
+  }
+  return endpoint.awaitingAddressReadback
+    ? 'Previous Pulse API check: reachable'
+    : 'Last Pulse API check: reachable';
+};
+
 const memberCheckFailure = (error?: string): { label: string; detail: string } => {
   const detail = error?.trim() || 'No reason reported for this API check.';
   const reason = detail
@@ -53,6 +66,20 @@ export const NodeModalClusterMembersSection: Component<NodeModalClusterMembersSe
 ) => {
   const { modalProps, state } = props;
   const trustDescriptionId = createUniqueId();
+  const addressDescriptionId = createUniqueId();
+  const addressValue = (endpoint: ClusterEndpoint) =>
+    state.formData().clusterEndpointOverrides[endpoint.nodeName] ?? endpoint.ipOverride ?? '';
+  const hasAddressDraft = (endpoint: ClusterEndpoint) =>
+    addressValue(endpoint).trim() !== (endpoint.ipOverride ?? '');
+  const addressNotice = (endpoint: ClusterEndpoint) => {
+    if (endpoint.awaitingAddressReadback) {
+      return 'Address change saved. Reload to confirm the endpoint before testing or changing TLS.';
+    }
+    if (hasAddressDraft(endpoint)) {
+      return 'Draft only. API checks shown are for the saved address.';
+    }
+    return '';
+  };
 
   const endpoints = createMemo<ClusterEndpoint[]>(() => {
     const node = modalProps.editingNode;
@@ -89,6 +116,9 @@ export const NodeModalClusterMembersSection: Component<NodeModalClusterMembersSe
                   <div class="truncate text-xs text-muted" title={discoveredAddress(endpoint)}>
                     Discovered: {discoveredAddress(endpoint)}
                   </div>
+                  <Show when={memberCheckContext(endpoint)}>
+                    {(context) => <p class="mt-2 text-xs text-muted">{context()}</p>}
+                  </Show>
                   <Show
                     when={
                       endpoint.pulseReachable === false && memberCheckFailure(endpoint.pulseError)
@@ -97,6 +127,7 @@ export const NodeModalClusterMembersSection: Component<NodeModalClusterMembersSe
                     {(failure) => (
                       <details class="mt-2 rounded-md bg-amber-100 text-xs text-amber-800 dark:bg-amber-950/25 dark:text-amber-300">
                         <summary class="min-h-11 cursor-pointer rounded-md px-3 py-3 font-medium focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-600 dark:focus-visible:outline-amber-300">
+                          {endpoint.awaitingAddressReadback ? 'Previous check: ' : ''}
                           {failure().label} — details
                           <span class="sr-only"> for {endpoint.nodeName}</span>
                         </summary>
@@ -136,7 +167,7 @@ export const NodeModalClusterMembersSection: Component<NodeModalClusterMembersSe
                     Connection address override
                     <input
                       type="text"
-                      value={state.formData().clusterEndpointOverrides[endpoint.nodeName] ?? ''}
+                      value={addressValue(endpoint)}
                       onInput={(event) =>
                         state.updateClusterEndpointOverride(
                           endpoint.nodeName,
@@ -145,13 +176,26 @@ export const NodeModalClusterMembersSection: Component<NodeModalClusterMembersSe
                       }
                       placeholder={endpoint.ip || 'IP or hostname'}
                       aria-label={`Connection address for ${endpoint.nodeName}`}
+                      aria-describedby={
+                        addressNotice(endpoint) ? `${addressDescriptionId}-${index()}` : undefined
+                      }
                       class={controlClass()}
                     />
+                    <Show when={addressNotice(endpoint)}>
+                      {(notice) => (
+                        <p id={`${addressDescriptionId}-${index()}`} class="text-xs text-muted">
+                          {notice()}
+                        </p>
+                      )}
+                    </Show>
                   </label>
                   <Show when={endpoint.tlsEndpoint}>
                     <div class="grid min-w-0 gap-2">
                       <p class="break-all text-xs text-muted">
-                        TLS endpoint: {endpoint.tlsEndpoint}
+                        {endpoint.awaitingAddressReadback
+                          ? 'Previous TLS endpoint: '
+                          : 'TLS endpoint: '}
+                        {endpoint.tlsEndpoint}
                       </p>
                       <Show
                         when={!endpoint.usesPrimaryTLS}
@@ -179,7 +223,10 @@ export const NodeModalClusterMembersSection: Component<NodeModalClusterMembersSe
                             }
                             aria-label={`Certificate fingerprint for ${endpoint.nodeName}`}
                             aria-describedby={`${trustDescriptionId}-${index()}`}
-                            disabled={!endpoint.tlsEndpoint?.startsWith('https://')}
+                            disabled={
+                              endpoint.awaitingAddressReadback ||
+                              !endpoint.tlsEndpoint?.startsWith('https://')
+                            }
                             class={controlClass('font-mono')}
                           />
                         </label>
@@ -209,7 +256,8 @@ export const NodeModalClusterMembersSection: Component<NodeModalClusterMembersSe
                       >
                         <button
                           type="button"
-                          class="min-h-11 justify-self-start rounded-md border border-border px-3 py-2 text-xs text-base-content hover:bg-surface-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
+                          class="min-h-11 justify-self-start rounded-md border border-border px-3 py-2 text-xs text-base-content hover:bg-surface-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 disabled:cursor-not-allowed disabled:opacity-50"
+                          disabled={endpoint.awaitingAddressReadback}
                           onClick={() =>
                             state.updateClusterEndpointFingerprint(endpoint.tlsEndpoint!, '')
                           }
@@ -219,13 +267,18 @@ export const NodeModalClusterMembersSection: Component<NodeModalClusterMembersSe
                       </Show>
                       <button
                         type="button"
-                        class="min-h-11 justify-self-start rounded-md border border-border px-3 py-2 text-xs text-base-content hover:bg-surface-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
-                        disabled={state.isTesting()}
+                        class="min-h-11 justify-self-start rounded-md border border-border px-3 py-2 text-xs text-base-content hover:bg-surface-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 disabled:cursor-not-allowed disabled:opacity-50"
+                        disabled={endpoint.awaitingAddressReadback || state.isTesting()}
                         onClick={() => void state.handleTestClusterEndpoint(endpoint)}
                       >
                         Test TLS for {endpoint.nodeName}
                       </button>
-                      <Show when={state.testResult()?.endpoint === endpoint.tlsEndpoint}>
+                      <Show
+                        when={
+                          !endpoint.awaitingAddressReadback &&
+                          state.testResult()?.endpoint === endpoint.tlsEndpoint
+                        }
+                      >
                         <div
                           ref={(element) =>
                             queueMicrotask(() => {

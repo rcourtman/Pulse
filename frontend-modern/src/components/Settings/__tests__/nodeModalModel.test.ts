@@ -107,6 +107,7 @@ describe('applyClusterEndpointOverridesLocally', () => {
       { nodeName: 'pve1', ipOverride: '10.0.0.11' },
     ]);
     expect(result?.[0].ipOverride).toBe('10.0.0.11');
+    expect(result?.[0].awaitingAddressReadback).toBe(true);
     expect(result?.[1]).toBe(endpoints[1]);
   });
 
@@ -116,6 +117,7 @@ describe('applyClusterEndpointOverridesLocally', () => {
       [{ nodeName: 'pve2', ipOverride: '' }],
     );
     expect(result?.[0].ipOverride).toBeUndefined();
+    expect(result?.[0].awaitingAddressReadback).toBe(true);
   });
 
   it('passes endpoints through when there is nothing to apply', () => {
@@ -126,6 +128,17 @@ describe('applyClusterEndpointOverridesLocally', () => {
 });
 
 describe('endpoint-scoped TLS decisions', () => {
+  it('does not submit trust for a member whose new address has not been read back', () => {
+    const target = 'https://previous.example.invalid:8006';
+    expect(
+      buildClusterEndpointTrustOverridesPayload(
+        [{ ...endpoint('peer'), tlsEndpoint: target, awaitingAddressReadback: true }],
+        { [target]: 'previous-pin' },
+        { [target]: true },
+      ),
+    ).toBeUndefined();
+  });
+
   it('does not copy the primary pin to peers or submit untouched trust', () => {
     const endpoints = [
       {
