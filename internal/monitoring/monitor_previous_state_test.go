@@ -49,13 +49,15 @@ func TestPreviousGuestContextKeepsScopedCarryInViewOrder(t *testing.T) {
 	require.Equal(t, len(got.containers), cap(got.containers), "do not reserve peer container rows")
 	require.Len(t, got.vmsByID, len(got.vms))
 	require.Len(t, got.containersByID, len(got.containers))
-	for _, row := range got.vms {
-		require.Equal(t, row, got.vmsByID[row.ID])
+	for i := range got.vms {
+		row := &got.vms[i]
+		require.Same(t, row, got.vmsByID[row.ID], "index must reuse the ordered VM row")
 		require.Equal(t, "Fixture Linux", row.OSName)
 		require.Equal(t, []string{"192.0.2.20"}, row.IPAddresses)
 	}
-	for _, row := range got.containers {
-		require.Equal(t, row, got.containersByID[row.ID])
+	for i := range got.containers {
+		row := &got.containers[i]
+		require.Same(t, row, got.containersByID[row.ID], "index must reuse the ordered container row")
 		require.True(t, row.HasDocker)
 		require.True(t, now.Equal(row.DockerCheckedAt))
 	}

@@ -145,17 +145,17 @@ func TestVMFilesystemAliasUsagePollingAndHistory(t *testing.T) {
 				phase.Store(int32(step))
 				// The cycle starts before collection, as in pollVMsAndContainersEfficient.
 				cycleStart := time.Now()
-				previous := m.previousGuestContextForInstance("aliases").vmsByID[id]
+				previous := m.previousGuestContextForInstance("aliases").vmsByID
 				var vm models.VM
 				if collector == "node" {
-					vms, _ := m.pollNodeVMsWithClusterResourceBuilder(context.Background(), "aliases", "node", []proxmox.VM{{VMID: 105, Name: res.Name, Status: res.Status, MaxMem: res.MaxMem, Mem: res.Mem, MaxDisk: res.MaxDisk, CPU: res.CPU}}, client, map[string]models.VM{id: previous}, nil)
+					vms, _ := m.pollNodeVMsWithClusterResourceBuilder(context.Background(), "aliases", "node", []proxmox.VM{{VMID: 105, Name: res.Name, Status: res.Status, MaxMem: res.MaxMem, Mem: res.Mem, MaxDisk: res.MaxDisk, CPU: res.CPU}}, client, previous, nil)
 					if len(vms) != 1 {
 						t.Fatal("node collector lost guest")
 					}
 					vm = vms[0]
 				} else {
 					var ok bool
-					vm, _, _, _, _, ok = m.buildVMFromClusterResource(context.Background(), "aliases", res, client, id, nil, &previous)
+					vm, _, _, _, _, ok = m.buildVMFromClusterResource(context.Background(), "aliases", res, client, id, nil, previous[id])
 					if !ok {
 						t.Fatal("cluster builder lost guest")
 					}

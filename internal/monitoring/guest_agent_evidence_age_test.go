@@ -221,9 +221,9 @@ func testGuestAgentRetainedIdentityCannotRenewAdmission(t *testing.T) {
 				}
 				var vms []models.VM
 				if collector == "cluster" {
-					vms = m.collectClusterVMResources(ctx, "evidence", clusterGuestInventory{rows: []proxmox.ClusterResource{res}}, client, map[string]models.VM{id: prev}, nil)
+					vms = m.collectClusterVMResources(ctx, "evidence", clusterGuestInventory{rows: []proxmox.ClusterResource{res}}, client, map[string]*models.VM{id: &prev}, nil)
 				} else {
-					vms, _ = m.pollNodeVMsWithClusterResourceBuilder(ctx, "evidence", "node", []proxmox.VM{{VMID: 105, Name: "windows", Status: "running", MaxMem: 8000, Mem: 2000, MaxDisk: 1000, CPU: .2}}, client, map[string]models.VM{id: prev}, nil)
+					vms, _ = m.pollNodeVMsWithClusterResourceBuilder(ctx, "evidence", "node", []proxmox.VM{{VMID: 105, Name: "windows", Status: "running", MaxMem: 8000, Mem: 2000, MaxDisk: 1000, CPU: .2}}, client, map[string]*models.VM{id: &prev}, nil)
 				}
 				if len(vms) != 1 {
 					t.Fatal("guest disappeared")

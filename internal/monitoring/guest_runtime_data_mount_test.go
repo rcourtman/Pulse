@@ -102,17 +102,17 @@ func (f *runtimeDataMountFixture) poll(t *testing.T, collector string) models.VM
 	m := f.monitor
 	id := makeGuestID("runtime-data", "node", 105)
 	res := proxmox.ClusterResource{Type: "qemu", Node: "node", Name: "podman-vm", VMID: 105, Status: "running", MaxMem: 1000, Mem: 400, MaxDisk: uint64(10000 * runtimeMountMiB), CPU: .2}
-	previous := m.previousGuestContextForInstance("runtime-data").vmsByID[id]
+	previous := m.previousGuestContextForInstance("runtime-data").vmsByID
 	var vm models.VM
 	if collector == "node" {
-		vms, _ := m.pollNodeVMsWithClusterResourceBuilder(context.Background(), "runtime-data", "node", []proxmox.VM{{VMID: 105, Name: res.Name, Status: res.Status, MaxMem: res.MaxMem, Mem: res.Mem, MaxDisk: res.MaxDisk, CPU: res.CPU}}, f.client, map[string]models.VM{id: previous}, nil)
+		vms, _ := m.pollNodeVMsWithClusterResourceBuilder(context.Background(), "runtime-data", "node", []proxmox.VM{{VMID: 105, Name: res.Name, Status: res.Status, MaxMem: res.MaxMem, Mem: res.Mem, MaxDisk: res.MaxDisk, CPU: res.CPU}}, f.client, previous, nil)
 		if len(vms) != 1 {
 			t.Fatal("node collector lost guest")
 		}
 		vm = vms[0]
 	} else {
 		var ok bool
-		vm, _, _, _, _, ok = m.buildVMFromClusterResource(context.Background(), "runtime-data", res, f.client, id, nil, &previous)
+		vm, _, _, _, _, ok = m.buildVMFromClusterResource(context.Background(), "runtime-data", res, f.client, id, nil, previous[id])
 		if !ok {
 			t.Fatal("cluster builder lost guest")
 		}

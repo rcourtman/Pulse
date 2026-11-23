@@ -189,7 +189,7 @@ func testGuestMemorySampleCapacityPolling(t *testing.T) {
 				m := &Monitor{config: &config.Config{}, alertManager: am, rateTracker: NewRateTracker(), metricsHistory: NewMetricsHistory(32, time.Hour), guestMetadataLimiter: make(map[string]time.Time), vmAgentMemCache: make(map[string]agentMemCacheEntry)}
 				registry := unifiedresources.NewRegistry(nil)
 				id := makeGuestID("capacity", "node", 105)
-				previous := map[string]models.VM{}
+				previous := map[string]*models.VM{}
 				build := func() models.VM {
 					t.Helper()
 					// The cycle starts before collection, as in pollVMsAndContainersEfficient.
@@ -214,7 +214,8 @@ func testGuestMemorySampleCapacityPolling(t *testing.T) {
 					if !vm.Memory.HasKnownUsage() && view.MemoryEvidence(time.Now()).Available {
 						t.Error("unavailable memory became a canonical measurement")
 					}
-					previous[id] = previousVMFromView(view)
+					projected := previousVMFromView(view)
+					previous[id] = &projected
 					return vm
 				}
 				assertHealthy := func(vm models.VM, total uint64) {

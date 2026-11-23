@@ -139,17 +139,17 @@ func testGuestWindowsMeminfoPolling(t *testing.T) {
 					// whenever the state update and resource-store refresh in
 					// between take over a second.
 					cycleStart := time.Now()
-					previous := m.previousGuestContextForInstance("windows").vmsByID[id]
+					previous := m.previousGuestContextForInstance("windows").vmsByID
 					var vm models.VM
 					if path == "node" {
-						vms, _ := m.pollNodeVMsWithClusterResourceBuilder(context.Background(), "windows", "node", []proxmox.VM{{VMID: 105, Name: res.Name, Status: res.Status, MaxMem: res.MaxMem, MaxDisk: res.MaxDisk, CPU: res.CPU}}, client, map[string]models.VM{id: previous}, nil)
+						vms, _ := m.pollNodeVMsWithClusterResourceBuilder(context.Background(), "windows", "node", []proxmox.VM{{VMID: 105, Name: res.Name, Status: res.Status, MaxMem: res.MaxMem, MaxDisk: res.MaxDisk, CPU: res.CPU}}, client, previous, nil)
 						if len(vms) != 1 {
 							t.Fatal("node collector lost the guest")
 						}
 						vm = vms[0]
 					} else {
 						var ok bool
-						vm, _, _, _, _, ok = m.buildVMFromClusterResource(context.Background(), "windows", res, client, id, nil, &previous)
+						vm, _, _, _, _, ok = m.buildVMFromClusterResource(context.Background(), "windows", res, client, id, nil, previous[id])
 						if !ok {
 							t.Fatal("cluster builder lost the guest")
 						}

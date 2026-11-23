@@ -13,7 +13,7 @@ func (m *Monitor) pollNodeVMsWithClusterResourceBuilder(
 	node string,
 	vms []proxmox.VM,
 	client PVEClientInterface,
-	prevVMByID map[string]models.VM,
+	prevVMByID map[string]*models.VM,
 	vmIDToHostAgent map[string]models.Host,
 ) ([]models.VM, map[string]struct{}) {
 	templateSubjects := make(map[string]struct{})
