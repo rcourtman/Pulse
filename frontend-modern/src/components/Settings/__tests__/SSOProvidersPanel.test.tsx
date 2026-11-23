@@ -332,7 +332,7 @@ describe('SSOProvidersPanel IdP endpoint URLs', () => {
     expect(screen.queryByRole('button', { name: 'Copy ACS URL' })).toBeNull();
   });
 
-  it('tells a new OIDC provider where the callback URL appears after saving', async () => {
+  it('tells the administrator where to find the callback without showing a draft URL', async () => {
     setupFetch([]);
     render(() => <SSOProvidersPanel />);
 
@@ -340,11 +340,11 @@ describe('SSOProvidersPanel IdP endpoint URLs', () => {
     await waitFor(() => expect(addButton).toBeEnabled());
     fireEvent.click(addButton);
 
+    const draft = within(screen.getByRole('dialog', { name: 'Add OIDC provider' }));
     expect(
-      screen.getByText(
-        'The Callback / Redirect URL is generated when the provider is saved. Save this provider, then copy it from the provider card.',
-      ),
-    ).toBeTruthy();
+      draft.getByText(/copy its Callback \/ Redirect URL from the saved provider card/),
+    ).toBeVisible();
+    expect(draft.queryByRole('button', { name: 'Copy callback / redirect URL' })).toBeNull();
   });
 });
 
