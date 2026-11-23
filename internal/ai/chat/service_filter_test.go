@@ -7,6 +7,7 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentcapabilities"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/providers"
+	"github.com/rcourtman/pulse-go-rewrite/internal/ai/tools"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 )
 
@@ -306,6 +307,53 @@ func TestFilterToolsForPatrol_AllEnabled(t *testing.T) {
 	}
 	if hasToolName(filtered, "pulse_alerts") {
 		t.Fatalf("expected pulse_alerts to remain Assistant-only when every Patrol subsystem is enabled")
+	}
+}
+
+func TestFilterToolsForPatrolWithPresence_DropsAbsentIntegrations(t *testing.T) {
+	svc := &Service{
+		cfg: &config.AIConfig{
+			PatrolAnalyzeDocker:  true,
+			PatrolAnalyzeStorage: true,
+		},
+	}
+	allTools := []providers.Tool{
+		{Name: "pulse_query"},
+		{Name: "patrol_get_findings"},
+		{Name: "pulse_docker"},
+		{Name: "pulse_storage"},
+		{Name: "pulse_kubernetes"},
+		{Name: "pulse_pmg"},
+	}
+
+	dockerOnly := svc.filterToolsForPatrolWithPresence(allTools, tools.IntegrationPresence{
+		Populated: true,
+		Docker:    true,
+	})
+	if !hasToolName(dockerOnly, "pulse_docker") {
+		t.Fatalf("expected pulse_docker to stay included on a Docker estate")
+	}
+	if hasToolName(dockerOnly, "pulse_kubernetes") {
+		t.Fatalf("expected pulse_kubernetes to be omitted when no Kubernetes clusters exist")
+	}
+	if hasToolName(dockerOnly, "pulse_pmg") {
+		t.Fatalf("expected pulse_pmg to be omitted when no PMG instances exist")
+	}
+
+	pveOnly := filterToolsForPopulatedIntegrations(allTools, tools.IntegrationPresence{
+		Populated: true,
+		Storage:   true,
+	})
+	if hasToolName(pveOnly, "pulse_docker") || hasToolName(pveOnly, "pulse_kubernetes") || hasToolName(pveOnly, "pulse_pmg") {
+		t.Fatalf("expected unused Docker, Kubernetes, and PMG tools to be omitted on a Proxmox-only estate")
+	}
+	if !hasToolName(pveOnly, "pulse_query") || !hasToolName(pveOnly, "pulse_storage") {
+		t.Fatalf("expected core query and storage tools to remain available")
+	}
+
+	unpopulated := filterToolsForPopulatedIntegrations(allTools, tools.IntegrationPresence{})
+	if len(unpopulated) != len(allTools) {
+		t.Fatalf("expected unpopulated estate to fail open with all tools, got %d of %d", len(unpopulated), len(allTools))
 	}
 }
 

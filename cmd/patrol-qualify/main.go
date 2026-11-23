@@ -52,6 +52,9 @@ func main() {
 	faults := flag.String("faults", "", "optional comma-separated fault labels to run from the fault set, such as D1,D4")
 	agentProfile := flag.String("agent-profile", "", "agent profile a response run is declared as: commands-on or commands-off")
 	hostFilesystem := flag.String("host-filesystem", "", "comma-separated dedicated mount paths handed to the lab for host filesystem faults")
+	hardwareClass := flag.String("hardware-class", "", "optional hardware and VRAM class recorded in local-model provenance")
+	coldStartLatencyMs := flag.Int64("cold-start-latency-ms", 0, "optional measured cold-start latency in milliseconds")
+	warmLatencyMs := flag.Int64("warm-latency-ms", 0, "optional measured warm latency in milliseconds")
 	flag.Parse()
 
 	catalog, err := qualification.LoadCatalog(*catalogDir)
@@ -103,6 +106,9 @@ func main() {
 			ExpectedPulseVersion: *expectedPulseVersion,
 			ChallengeNonce:       *communityChallenge,
 			AgentProfile:         strings.TrimSpace(*agentProfile),
+			HardwareClass:        strings.TrimSpace(*hardwareClass),
+			ColdStartLatencyMs:   *coldStartLatencyMs,
+			WarmLatencyMs:        *warmLatencyMs,
 		})
 		if err != nil {
 			fatal(err)
@@ -179,6 +185,9 @@ func main() {
 			AuthorizeRemediation: *authorizeRemediation,
 			ExpectedPulseVersion: *expectedPulseVersion,
 			AgentProfile:         profile,
+			HardwareClass:        strings.TrimSpace(*hardwareClass),
+			ColdStartLatencyMs:   *coldStartLatencyMs,
+			WarmLatencyMs:        *warmLatencyMs,
 		})
 		if err := printScorecard(*artifactRoot, *faultSet, *artifactRoot, catalog); err != nil {
 			fmt.Fprintln(os.Stderr, "patrol-qualify:", err)
@@ -292,6 +301,9 @@ type liveQualificationConfig struct {
 	ExpectedPulseVersion string
 	ChallengeNonce       string
 	AgentProfile         string
+	HardwareClass        string
+	ColdStartLatencyMs   int64
+	WarmLatencyMs        int64
 }
 
 func runLiveQualification(ctx context.Context, config liveQualificationConfig) (failed bool, terminalErr error) {
@@ -337,6 +349,9 @@ func runLiveQualification(ctx context.Context, config liveQualificationConfig) (
 				ExpectedPulseVersion: config.ExpectedPulseVersion,
 				ChallengeNonce:       config.ChallengeNonce,
 				AgentProfile:         config.AgentProfile,
+				HardwareClass:        config.HardwareClass,
+				ColdStartLatencyMs:   config.ColdStartLatencyMs,
+				WarmLatencyMs:        config.WarmLatencyMs,
 			})
 			if err != nil {
 				return failed, err

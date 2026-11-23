@@ -34,6 +34,12 @@ type RunnerConfig struct {
 	// or commands-off. The run refuses to continue when Pulse reports the
 	// other one. Empty records what Pulse reports without asserting it.
 	AgentProfile string
+	// HardwareClass optionally records the host/GPU class for local model runs.
+	HardwareClass string
+	// ColdStartLatencyMs and WarmLatencyMs optionally supply measured cold and
+	// warm timings when the caller benchmarks them outside Patrol readiness.
+	ColdStartLatencyMs int64
+	WarmLatencyMs      int64
 }
 
 type QualificationRunner struct {
@@ -166,24 +172,36 @@ func (r *QualificationRunner) Run(ctx context.Context) (report RunReport, termin
 		}
 		model := settings.EffectivePatrolModel()
 		provider := strings.ToLower(strings.TrimSpace(status.Readiness.Provider))
+		_, rawModel := splitModel(model)
 		if provider == "" {
-			provider, _ = splitModel(model)
+			provider, rawModel = splitModel(model)
+		}
+		if rawModel == "" {
+			rawModel = strings.TrimSpace(status.Readiness.Model)
 		}
 		endpointURL := settings.ZaiBaseURL
-		if provider == "openai" {
+		switch provider {
+		case "openai":
 			endpointURL = settings.OpenAIBaseURL
+		case "ollama":
+			endpointURL = settings.OllamaBaseURL
 		}
-		report.Environment = Environment{
+		env := Environment{
 			GitSHA: r.config.GitSHA, GitDirty: r.config.GitDirty,
 			PulseVersion: version.Version,
 			PulseBaseURL: r.config.Client.config.BaseURL,
 			DockerTarget: r.config.Lab.targetLabel(),
 			Model:        model, Provider: provider,
-			InferenceRoute:  inferenceRouteForProviderEndpoint(provider, endpointURL),
-			InferenceEngine: inferenceEngineForProviderEndpoint(provider, endpointURL),
-			ChallengeNonce:  r.config.ChallengeNonce,
-			CapturedAt:      time.Now().UTC(),
+			InferenceRoute:     inferenceRouteForProviderEndpoint(provider, endpointURL),
+			InferenceEngine:    inferenceEngineForProviderEndpoint(provider, endpointURL),
+			HardwareClass:      strings.TrimSpace(r.config.HardwareClass),
+			ColdStartLatencyMs: r.config.ColdStartLatencyMs,
+			WarmLatencyMs:      r.config.WarmLatencyMs,
+			ChallengeNonce:     r.config.ChallengeNonce,
+			CapturedAt:         time.Now().UTC(),
 		}
+		populateLocalProvenance(ctx, &env, settings, rawModel)
+		report.Environment = env
 		return nil
 	}); err != nil {
 		report.Errors = append(report.Errors, err.Error())

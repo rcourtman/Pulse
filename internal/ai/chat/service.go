@@ -3873,12 +3873,26 @@ func (s *Service) toolsForExecutor(executor *tools.PulseToolExecutor, autonomous
 	// but never by prompt keyword inference. The selected Patrol model
 	// owns tool choice within the profile-projected manifest.
 	if profile == tools.ProfilePatrolDetection {
-		filtered := s.filterToolsForPatrol(providerTools)
+		presence := executor.IntegrationPresence()
+		filtered := s.filterToolsForPatrolWithPresence(providerTools, presence)
 		log.Debug().
 			Int("total_tools", len(providerTools)).
 			Int("tool_manifest_count", len(filtered)).
 			Bool("patrol_scope_filter", true).
+			Bool("estate_populated", presence.Populated).
 			Msg("[toolsForExecutor] Built Patrol detection manifest from profile projection and subsystem scope")
+		return filtered
+	}
+
+	if profile == tools.ProfilePatrolInvestigation {
+		presence := executor.IntegrationPresence()
+		filtered := filterToolsForPopulatedIntegrations(providerTools, presence)
+		log.Debug().
+			Int("total_tools", len(providerTools)).
+			Int("tool_manifest_count", len(filtered)).
+			Bool("patrol_investigation_integration_scope", true).
+			Bool("estate_populated", presence.Populated).
+			Msg("[toolsForExecutor] Built Patrol investigation manifest scoped to active estate integrations")
 		return filtered
 	}
 
@@ -4175,6 +4189,10 @@ func assistantPromptContainsAny(normalized string, needles []string) bool {
 // filterToolsForPatrol applies explicit Patrol subsystem scope settings. It
 // must not inspect prompt text or infer which tool the model should use.
 func (s *Service) filterToolsForPatrol(providerTools []providers.Tool) []providers.Tool {
+	return s.filterToolsForPatrolWithPresence(providerTools, tools.IntegrationPresence{})
+}
+
+func (s *Service) filterToolsForPatrolWithPresence(providerTools []providers.Tool, presence tools.IntegrationPresence) []providers.Tool {
 	s.mu.RLock()
 	cfg := s.cfg
 	s.mu.RUnlock()
@@ -4182,9 +4200,15 @@ func (s *Service) filterToolsForPatrol(providerTools []providers.Tool) []provide
 	// Determine which subsystems are enabled for patrol.
 	includeDocker := cfg != nil && cfg.PatrolAnalyzeDocker
 	includeStorage := cfg != nil && cfg.PatrolAnalyzeStorage
-	// K8s and PMG don't have dedicated top-level patrol flags.
+	// K8s and PMG don't have dedicated top-level patrol flags, so when the
+	// estate is populated, expose them only if matching resources exist.
 	includeK8s := true
 	includePMG := true
+	if presence.Populated {
+		includeDocker = includeDocker && presence.Docker
+		includeK8s = presence.Kubernetes
+		includePMG = presence.PMG
+	}
 
 	filtered := make([]providers.Tool, 0, len(providerTools))
 	for _, tool := range providerTools {
@@ -4216,6 +4240,32 @@ func (s *Service) filterToolsForPatrol(providerTools []providers.Tool) []provide
 		filtered = append(filtered, tool)
 	}
 
+	return filtered
+}
+
+func filterToolsForPopulatedIntegrations(providerTools []providers.Tool, presence tools.IntegrationPresence) []providers.Tool {
+	if !presence.Populated {
+		return append([]providers.Tool{}, providerTools...)
+	}
+
+	filtered := make([]providers.Tool, 0, len(providerTools))
+	for _, tool := range providerTools {
+		switch tool.Name {
+		case agentcapabilities.PulseDockerToolName:
+			if !presence.Docker {
+				continue
+			}
+		case agentcapabilities.PulseKubernetesToolName:
+			if !presence.Kubernetes {
+				continue
+			}
+		case agentcapabilities.PulsePMGToolName:
+			if !presence.PMG {
+				continue
+			}
+		}
+		filtered = append(filtered, tool)
+	}
 	return filtered
 }
 

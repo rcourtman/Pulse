@@ -1,7 +1,10 @@
 package qualification
 
 import (
+	"context"
 	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -251,6 +254,92 @@ func TestWriteReportIncludesReplayAndChecksumsWithPrivateMode(t *testing.T) {
 		}
 		if info.Mode().Perm() != 0o600 {
 			t.Fatalf("%s mode = %o", name, info.Mode().Perm())
+		}
+	}
+}
+
+func TestPopulateLocalProvenanceFromReadinessAndInspectFallback(t *testing.T) {
+	// 1. Readiness snapshot supplies fingerprint, quantization, context, latencies, and vLLM engine refinement.
+	envFromReadiness := Environment{
+		Model:           "openai:qwen3-14b",
+		Provider:        "openai",
+		InferenceRoute:  "local_model_server",
+		InferenceEngine: "openai_compatible_local",
+		HardwareClass:   "RTX 3070 8GB",
+	}
+	populateLocalProvenance(context.Background(), &envFromReadiness, AISettings{
+		OpenAIBaseURL: "http://127.0.0.1:8000/v1",
+		PatrolModelReadiness: &PatrolModelReadinessSnapshot{
+			Provider: "openai",
+			Model:    "qwen3-14b",
+			Success:  true,
+			Metadata: &PatrolModelReadinessMetadata{
+				Fingerprint:       "sha256:vllm-1234",
+				Family:            "vllm",
+				QuantizationLevel: "AWQ-4bit",
+				ContextWindow:     32768,
+			},
+			Dimensions: PatrolModelReadinessDimensions{
+				Latency: PatrolModelReadinessDimension{
+					FirstResponseMs: 14200,
+					WarmP50Ms:       1850,
+				},
+			},
+		},
+	}, "qwen3-14b")
+	if envFromReadiness.InferenceEngine != "vllm" ||
+		envFromReadiness.ModelFingerprint != "sha256:vllm-1234" ||
+		envFromReadiness.ModelQuantization != "AWQ-4bit" ||
+		envFromReadiness.ConfiguredContextWindow != 32768 ||
+		envFromReadiness.ColdStartLatencyMs != 14200 ||
+		envFromReadiness.WarmLatencyMs != 1850 {
+		t.Fatalf("unexpected readiness provenance: %+v", envFromReadiness)
+	}
+
+	// 2. Fallback to direct llama.cpp /props inspection when readiness is absent.
+	llamaServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/v1/models":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"data":[{"id":"qwen3-8b-q4"}]}`))
+		case "/props":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"model_alias":"qwen3-8b-q4","default_generation_settings":{"n_ctx":16384}}`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer llamaServer.Close()
+
+	envLlama := Environment{
+		Model:           "openai:qwen3-8b-q4",
+		Provider:        "openai",
+		InferenceRoute:  "local_model_server",
+		InferenceEngine: "openai_compatible_local",
+		HardwareClass:   "Apple M4 16GB unified",
+	}
+	populateLocalProvenance(context.Background(), &envLlama, AISettings{
+		OpenAIBaseURL: llamaServer.URL + "/v1",
+	}, "qwen3-8b-q4")
+	if envLlama.InferenceEngine != "llama.cpp" || envLlama.ConfiguredContextWindow != 16384 || envLlama.ModelFingerprint == "" {
+		t.Fatalf("unexpected llama.cpp fallback provenance: %+v", envLlama)
+	}
+
+	// 3. Markdown rendering includes local provenance lines cleanly.
+	md := renderMarkdown(RunReport{
+		Manifest:    validTestManifest(),
+		Environment: envFromReadiness,
+		Passed:      true,
+	})
+	for _, want := range []string{
+		"- Inference engine: `vllm`",
+		"- Hardware: `RTX 3070 8GB`",
+		"- Model provenance: quantization `AWQ-4bit`, context `32768`",
+		"- Model fingerprint: `sha256:vllm-1234`",
+		"- Local latency: cold 14200ms, warm 1850ms",
+	} {
+		if !strings.Contains(md, want) {
+			t.Fatalf("rendered markdown missing %q:\n%s", want, md)
 		}
 	}
 }

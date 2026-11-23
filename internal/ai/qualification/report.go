@@ -1,6 +1,7 @@
 package qualification
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -15,6 +16,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/ai/providers"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/aicontracts"
 )
@@ -120,6 +122,104 @@ func inferenceEngineForProviderEndpoint(provider, baseURL string) string {
 		}
 	}
 	return ""
+}
+
+func refineInferenceEngine(current, family string) string {
+	normalized := strings.ToLower(strings.TrimSpace(family))
+	if current == "openai_compatible_local" {
+		switch {
+		case strings.Contains(normalized, "llama.cpp") || strings.Contains(normalized, "llamacpp"):
+			return "llama.cpp"
+		case strings.Contains(normalized, "vllm"):
+			return "vllm"
+		case strings.Contains(normalized, "lmstudio") || strings.Contains(normalized, "lm-studio"):
+			return "lmstudio"
+		}
+	}
+	return current
+}
+
+func populateLocalProvenance(ctx context.Context, env *Environment, settings AISettings, rawModel string) {
+	if env == nil {
+		return
+	}
+	provider := strings.ToLower(strings.TrimSpace(env.Provider))
+	trimmedRawModel := strings.TrimSpace(rawModel)
+	if trimmedRawModel == "" {
+		_, trimmedRawModel = splitModel(env.Model)
+	}
+
+	if readiness := settings.PatrolModelReadiness; readiness != nil {
+		readinessProvider := strings.ToLower(strings.TrimSpace(readiness.Provider))
+		readinessModel := strings.TrimSpace(readiness.Model)
+		if (readinessProvider == "" || readinessProvider == provider) &&
+			(readinessModel == "" || strings.EqualFold(readinessModel, trimmedRawModel) || strings.EqualFold(readinessModel, env.Model)) {
+			if meta := readiness.Metadata; meta != nil {
+				if env.ModelFingerprint == "" {
+					env.ModelFingerprint = strings.TrimSpace(meta.Fingerprint)
+				}
+				if env.ModelQuantization == "" {
+					env.ModelQuantization = strings.TrimSpace(meta.QuantizationLevel)
+				}
+				if env.ConfiguredContextWindow == 0 && meta.ContextWindow > 0 {
+					env.ConfiguredContextWindow = meta.ContextWindow
+				}
+				env.InferenceEngine = refineInferenceEngine(env.InferenceEngine, meta.Family)
+			}
+			if env.ColdStartLatencyMs == 0 && readiness.Dimensions.Latency.FirstResponseMs > 0 {
+				env.ColdStartLatencyMs = readiness.Dimensions.Latency.FirstResponseMs
+			}
+			if env.WarmLatencyMs == 0 && readiness.Dimensions.Latency.WarmP50Ms > 0 {
+				env.WarmLatencyMs = readiness.Dimensions.Latency.WarmP50Ms
+			}
+		}
+	}
+
+	if env.InferenceRoute != "local_model_server" || trimmedRawModel == "" {
+		return
+	}
+	needsInspect := env.ModelFingerprint == "" || env.ModelQuantization == "" || env.ConfiguredContextWindow == 0 || env.InferenceEngine == "openai_compatible_local"
+	if !needsInspect {
+		return
+	}
+
+	inspectCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+
+	var diagnostics *providers.ModelDiagnostics
+	switch provider {
+	case "ollama":
+		endpoint := strings.TrimSpace(settings.OllamaBaseURL)
+		if endpoint == "" {
+			endpoint = config.DefaultOllamaBaseURL
+		}
+		if client, err := providers.NewOllamaClient(trimmedRawModel, endpoint, "", "", 5*time.Second); err == nil && client != nil {
+			if d, err := client.InspectModel(inspectCtx, trimmedRawModel); err == nil {
+				diagnostics = d
+			}
+		}
+	case "openai":
+		endpoint := strings.TrimSpace(settings.OpenAIBaseURL)
+		if config.IsCustomOpenAICompatibleEndpoint(endpoint) && isLocalQualificationEndpoint(endpoint) {
+			client := providers.NewOpenAIClient("", trimmedRawModel, endpoint, 5*time.Second)
+			if d, err := client.InspectModel(inspectCtx, trimmedRawModel); err == nil {
+				diagnostics = d
+			}
+		}
+	}
+	if diagnostics == nil {
+		return
+	}
+	if env.ModelFingerprint == "" {
+		env.ModelFingerprint = strings.TrimSpace(diagnostics.Fingerprint)
+	}
+	if env.ModelQuantization == "" {
+		env.ModelQuantization = strings.TrimSpace(diagnostics.QuantizationLevel)
+	}
+	if env.ConfiguredContextWindow == 0 && diagnostics.ContextWindow > 0 {
+		env.ConfiguredContextWindow = diagnostics.ContextWindow
+	}
+	env.InferenceEngine = refineInferenceEngine(env.InferenceEngine, diagnostics.Family)
 }
 
 type RunReport struct {
@@ -723,6 +823,35 @@ func renderMarkdown(report RunReport) string {
 	fmt.Fprintf(&b, "- Scenario: `%s` v%d\n", report.Manifest.ID, report.Manifest.Version)
 	fmt.Fprintf(&b, "- Track: `%s`\n", report.Manifest.Track)
 	fmt.Fprintf(&b, "- Model: `%s`\n", report.Environment.Model)
+	if report.Environment.InferenceEngine != "" {
+		fmt.Fprintf(&b, "- Inference engine: `%s`\n", report.Environment.InferenceEngine)
+	}
+	if report.Environment.HardwareClass != "" {
+		fmt.Fprintf(&b, "- Hardware: `%s`\n", report.Environment.HardwareClass)
+	}
+	if report.Environment.ModelQuantization != "" || report.Environment.ConfiguredContextWindow > 0 {
+		parts := make([]string, 0, 2)
+		if report.Environment.ModelQuantization != "" {
+			parts = append(parts, "quantization `"+report.Environment.ModelQuantization+"`")
+		}
+		if report.Environment.ConfiguredContextWindow > 0 {
+			parts = append(parts, fmt.Sprintf("context `%d`", report.Environment.ConfiguredContextWindow))
+		}
+		fmt.Fprintf(&b, "- Model provenance: %s\n", strings.Join(parts, ", "))
+	}
+	if report.Environment.ModelFingerprint != "" {
+		fmt.Fprintf(&b, "- Model fingerprint: `%s`\n", report.Environment.ModelFingerprint)
+	}
+	if report.Environment.ColdStartLatencyMs > 0 || report.Environment.WarmLatencyMs > 0 {
+		parts := make([]string, 0, 2)
+		if report.Environment.ColdStartLatencyMs > 0 {
+			parts = append(parts, fmt.Sprintf("cold %dms", report.Environment.ColdStartLatencyMs))
+		}
+		if report.Environment.WarmLatencyMs > 0 {
+			parts = append(parts, fmt.Sprintf("warm %dms", report.Environment.WarmLatencyMs))
+		}
+		fmt.Fprintf(&b, "- Local latency: %s\n", strings.Join(parts, ", "))
+	}
 	fmt.Fprintf(&b, "- Pulse runtime: `%s`\n", report.Environment.PulseVersion)
 	fmt.Fprintf(&b, "- Harness revision: `%s` (dirty=%t)\n", report.Environment.GitSHA, report.Environment.GitDirty)
 	fmt.Fprintf(&b, "- Run: `%s`\n\n", report.RunID)

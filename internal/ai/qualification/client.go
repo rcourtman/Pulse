@@ -54,16 +54,49 @@ func NewPulseClient(config ClientConfig) (*PulseClient, error) {
 }
 
 type AISettings struct {
-	Enabled                   bool                     `json:"enabled"`
-	Model                     string                   `json:"model"`
-	PatrolModel               string                   `json:"patrol_model"`
-	PatrolEnabled             bool                     `json:"patrol_enabled"`
-	CodexSubscriptionEnabled  bool                     `json:"codex_subscription_enabled"`
-	ClaudeSubscriptionEnabled bool                     `json:"claude_subscription_enabled"`
-	OpenAIBaseURL             string                   `json:"openai_base_url"`
-	RequestTimeoutSeconds     int                      `json:"request_timeout_seconds"`
-	ZaiBaseURL                string                   `json:"zai_base_url"`
-	PatrolPreflight           *PatrolPreflightSnapshot `json:"patrol_preflight,omitempty"`
+	Enabled                   bool                          `json:"enabled"`
+	Model                     string                        `json:"model"`
+	PatrolModel               string                        `json:"patrol_model"`
+	PatrolEnabled             bool                          `json:"patrol_enabled"`
+	CodexSubscriptionEnabled  bool                          `json:"codex_subscription_enabled"`
+	ClaudeSubscriptionEnabled bool                          `json:"claude_subscription_enabled"`
+	OllamaBaseURL             string                        `json:"ollama_base_url,omitempty"`
+	OpenAIBaseURL             string                        `json:"openai_base_url"`
+	RequestTimeoutSeconds     int                           `json:"request_timeout_seconds"`
+	ZaiBaseURL                string                        `json:"zai_base_url"`
+	PatrolPreflight           *PatrolPreflightSnapshot      `json:"patrol_preflight,omitempty"`
+	PatrolModelReadiness      *PatrolModelReadinessSnapshot `json:"patrol_model_readiness,omitempty"`
+}
+
+type PatrolModelReadinessMetadata struct {
+	Fingerprint       string   `json:"fingerprint,omitempty"`
+	Family            string   `json:"family,omitempty"`
+	ParameterSize     string   `json:"parameter_size,omitempty"`
+	QuantizationLevel string   `json:"quantization_level,omitempty"`
+	ContextWindow     int      `json:"context_window,omitempty"`
+	Capabilities      []string `json:"capabilities,omitempty"`
+}
+
+type PatrolModelReadinessDimension struct {
+	Status          string `json:"status"`
+	DurationMs      int64  `json:"duration_ms,omitempty"`
+	FirstResponseMs int64  `json:"first_response_ms,omitempty"`
+	WarmP50Ms       int64  `json:"warm_p50_ms,omitempty"`
+}
+
+type PatrolModelReadinessDimensions struct {
+	Connectivity   PatrolModelReadinessDimension `json:"connectivity"`
+	ToolProtocol   PatrolModelReadinessDimension `json:"tool_protocol"`
+	ContextQuality PatrolModelReadinessDimension `json:"context_quality"`
+	Latency        PatrolModelReadinessDimension `json:"latency"`
+}
+
+type PatrolModelReadinessSnapshot struct {
+	Provider   string                         `json:"provider,omitempty"`
+	Model      string                         `json:"model,omitempty"`
+	Success    bool                           `json:"success"`
+	Metadata   *PatrolModelReadinessMetadata  `json:"metadata,omitempty"`
+	Dimensions PatrolModelReadinessDimensions `json:"dimensions"`
 }
 
 type PatrolPreflightSnapshot struct {

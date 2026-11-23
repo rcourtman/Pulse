@@ -879,6 +879,39 @@ func (e *PulseToolExecutor) hasCanonicalReadState() bool {
 	return e.getCanonicalReadState() != nil
 }
 
+// IntegrationPresence reports which optional integration domains currently have
+// monitored resources in the executor read state. Populated is false when no
+// read state is wired or no monitored resources have been ingested yet so
+// callers fail open before the first poll completes.
+type IntegrationPresence struct {
+	Populated  bool
+	Docker     bool
+	Kubernetes bool
+	PMG        bool
+	Storage    bool
+}
+
+// IntegrationPresence inspects the current read state to determine which
+// optional integration domains are active in this estate.
+func (e *PulseToolExecutor) IntegrationPresence() IntegrationPresence {
+	rs := e.getReadState()
+	if rs == nil {
+		return IntegrationPresence{}
+	}
+	hasDocker := len(rs.DockerHosts()) > 0 || len(rs.DockerContainers()) > 0
+	hasK8s := len(rs.K8sClusters()) > 0 || len(rs.K8sNodes()) > 0 || len(rs.Pods()) > 0 || len(rs.K8sDeployments()) > 0
+	hasPMG := len(rs.PMGInstances()) > 0
+	hasStorage := len(rs.StoragePools()) > 0 || len(rs.PhysicalDisks()) > 0 || len(rs.PBSInstances()) > 0
+	hasOther := len(rs.VMs()) > 0 || len(rs.Containers()) > 0 || len(rs.Nodes()) > 0 || len(rs.Hosts()) > 0 || len(rs.Workloads()) > 0 || len(rs.Infrastructure()) > 0
+	return IntegrationPresence{
+		Populated:  hasDocker || hasK8s || hasPMG || hasStorage || hasOther,
+		Docker:     hasDocker,
+		Kubernetes: hasK8s,
+		PMG:        hasPMG,
+		Storage:    hasStorage,
+	}
+}
+
 // SetContext sets the current execution context
 func (e *PulseToolExecutor) SetContext(targetType, targetID string) {
 	e.targetType = targetType
