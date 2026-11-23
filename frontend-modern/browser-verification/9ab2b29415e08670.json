@@ -1,0 +1,41 @@
+{
+  "version": 1,
+  "base_sha": "ec9bf5aa8c2e2c8e67dddda399ea8427950bf6f2",
+  "verified_at": "2026-11-23T23:34:44Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/shared/FormSelect.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/shared/FormSelect.tsx": "fb3c96669fac384ee6b775eec6b70f6aa02dbd6c50655c6b5eb708e3d526c4a7"
+  },
+  "routes": [
+    "/settings/support/logs",
+    "/alerts/schedule",
+    "/alerts/thresholds",
+    "/docs"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "desktop dark and light themes on /settings/support/logs showing Server Log Level FormSelect with crisp ChevronDown icon, 36px right padding, and no duplicate background arrow",
+    "desktop dark and light themes on /alerts/schedule with Quiet Hours enabled showing TIMEZONE FormSelect chevron alignment and no text overlap on long option values",
+    "desktop dark theme on /alerts/thresholds with CPU averaging expanded showing compact FormSelect controls with crisp 14px chevrons and no duplicate arrow",
+    "mobile 390x844 dark theme on /settings/support/logs and /alerts/schedule with 44px touch targets, centered chevrons, and zero horizontal overflow",
+    "desktop and mobile /docs index showing updated Patrol and external-agent overview and Shared AI runtime safety model links with zero console or page errors"
+  ],
+  "interactions": [
+    "focused and changed Server Log Level select on /settings/support/logs between debug and info and confirmed chevron stays aligned",
+    "enabled Quiet Hours toggle on /alerts/schedule, changed TIMEZONE to America/Los_Angeles, and verified selected value and chevron clearance",
+    "expanded CPU averaging disclosure on /alerts/thresholds to inspect all compact FormSelect controls",
+    "navigated /docs Pulse Intelligence links to AI.md and ASSISTANT_SAFETY.md and verified rendered targets"
+  ]
+}

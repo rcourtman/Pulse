@@ -8,8 +8,8 @@ describe('FormSelect', () => {
     cleanup();
   });
 
-  it('owns the label relationship for native selects', () => {
-    render(() => (
+  it('owns the label relationship and renders an accessible dropdown chevron', () => {
+    const { container } = render(() => (
       <FormSelect label="Delivery mode" value="cli" data-testid="delivery-mode">
         <option value="cli">Local CLI</option>
         <option value="http">Remote API</option>
@@ -20,8 +20,58 @@ describe('FormSelect', () => {
     expect(select).toBe(screen.getByTestId('delivery-mode'));
     expect(select).toHaveValue('cli');
     expect(select).toHaveClass('min-h-11', 'sm:min-h-9');
-    // appearance-none drops the native arrow, so the shared class draws one.
-    expect(select).toHaveClass('appearance-none', 'form-select-arrow');
+    // Keeps shared classes for existing callers while drawing the SVG chevron.
+    expect(select).toHaveClass('appearance-none', 'form-select-arrow', 'bg-none!', 'pr-9!');
+
+    const chevron = container.querySelector('svg');
+    expect(chevron).not.toBeNull();
+    expect(chevron).toHaveAttribute('aria-hidden', 'true');
+    expect(chevron).toHaveClass('pointer-events-none', 'text-muted');
+    expect(chevron).not.toHaveClass('opacity-50');
+  });
+
+  it('renders a visible chevron and reserved right padding for custom selectBaseClass callers', () => {
+    const { container } = render(() => (
+      <FormSelect
+        id="system-log-level"
+        label="Server Log Level:"
+        value="info"
+        disabled
+        fieldBaseClass="flex"
+        fieldClass="items-center space-x-3"
+        selectBaseClass="form-select min-h-11 sm:min-h-9 text-sm py-2.5 px-3 rounded-md border-border bg-surface text-muted"
+      >
+        <option value="info">Info</option>
+      </FormSelect>
+    ));
+
+    const select = screen.getByLabelText('Server Log Level:');
+    expect(select).toHaveClass('form-select', 'appearance-none', 'bg-none!', 'pr-9!');
+
+    const chevron = container.querySelector('svg');
+    expect(chevron).not.toBeNull();
+    expect(chevron).toHaveAttribute('aria-hidden', 'true');
+    expect(chevron).toHaveClass('pointer-events-none', 'opacity-50');
+  });
+
+  it('omits the chevron wrapper for hidden overlay or multi-select controls', () => {
+    const { container } = render(() => (
+      <>
+        <FormSelect
+          label="Organization"
+          value="org-1"
+          selectBaseClass="z-10 col-start-1 row-start-1 opacity-0"
+        >
+          <option value="org-1">Default</option>
+        </FormSelect>
+        <FormSelect label="Regions" multiple value={['us']}>
+          <option value="us">US</option>
+          <option value="eu">EU</option>
+        </FormSelect>
+      </>
+    ));
+
+    expect(container.querySelector('svg')).toBeNull();
   });
 
   it('preserves explicit ids and compact styling hooks', () => {
@@ -42,10 +92,11 @@ describe('FormSelect', () => {
     const select = screen.getByLabelText('Log level');
     expect(select).toHaveAttribute('id', 'log-level');
     expect(select).toHaveClass('w-auto');
+    expect(select.parentElement).toHaveClass('inline-grid');
   });
 
   it('provides a canonical compact drawer density', () => {
-    render(() => (
+    const { container } = render(() => (
       <FormSelect label="Monitoring" value="normal" density="compact">
         <option value="normal">Normal monitoring</option>
       </FormSelect>
@@ -57,7 +108,9 @@ describe('FormSelect', () => {
       'px-2',
       'py-1.5',
       'text-xs',
+      'pr-8!',
     );
+    expect(container.querySelector('svg')).toHaveClass('h-3.5', 'w-3.5');
   });
 
   it('connects helper text without dropping an existing description', () => {
