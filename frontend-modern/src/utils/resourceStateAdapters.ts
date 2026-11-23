@@ -659,6 +659,8 @@ export const canonicalizeRealtimeResource = (
       (platformRecord?.availabilityChecks as Resource['availabilityChecks']),
     physicalDisk:
       resource.physicalDisk ?? (platformRecord?.physicalDisk as Resource['physicalDisk']),
+    virtualMachine:
+      resource.virtualMachine ?? (platformRecord?.virtualMachine as Resource['virtualMachine']),
   };
 };
 
@@ -927,6 +929,10 @@ export const mergeCanonicalResource = (incoming: Resource, existing?: Resource):
       incoming.physicalDisk as JsonRecord | undefined,
       existingCanonical.physicalDisk as JsonRecord | undefined,
     ) as Resource['physicalDisk'],
+    virtualMachine: mergeRecord(
+      incoming.virtualMachine as JsonRecord | undefined,
+      existingCanonical.virtualMachine as JsonRecord | undefined,
+    ) as Resource['virtualMachine'],
     identity: mergeRecord(
       incoming.identity as JsonRecord | undefined,
       existingCanonical.identity as JsonRecord | undefined,

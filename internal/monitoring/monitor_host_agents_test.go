@@ -354,6 +354,33 @@ func TestMonitoringBroadcastCarriesEveryAvailabilityProjection(t *testing.T) {
 	}
 }
 
+func TestMonitoringBroadcastCarriesVirtualMachineFacet(t *testing.T) {
+	input := monitorResourceToConvertInput(unifiedresources.Resource{
+		ID:         "vm-standalone-1",
+		Type:       unifiedresources.ResourceTypeVM,
+		Technology: "libvirt",
+		Name:       "kvm-app-prod-01",
+		Status:     unifiedresources.StatusWarning,
+		Sources:    []unifiedresources.DataSource{unifiedresources.SourceAgent},
+		VirtualMachine: &unifiedresources.VirtualMachineData{
+			RuntimeState: "crashed",
+			Hypervisor:   "libvirt",
+			VCPUs:        4,
+		},
+	})
+
+	payload := string(input.VirtualMachine)
+	if !strings.Contains(payload, `"runtimeState":"crashed"`) ||
+		!strings.Contains(payload, `"hypervisor":"libvirt"`) ||
+		!strings.Contains(payload, `"vcpus":4`) {
+		t.Fatalf("VirtualMachine = %s, want runtimeState/hypervisor/vcpus", payload)
+	}
+	frontend := models.ConvertResourceToFrontend(input)
+	if string(frontend.VirtualMachine) != payload {
+		t.Fatalf("frontend virtualMachine = %s, want %s", frontend.VirtualMachine, payload)
+	}
+}
+
 func TestBroadcastSlimmingKeepsHostAgentSupersededIdentityResolvable(t *testing.T) {
 	// A re-enrolled host carries retired canonical spellings. Broadcast
 	// slimming stops duplicating them into the alias list, but they must stay

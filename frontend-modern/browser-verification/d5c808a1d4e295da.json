@@ -1,0 +1,51 @@
+{
+  "version": 1,
+  "base_sha": "8eefca03e7c28dd54459eab10b96aba06a63af51",
+  "verified_at": "2026-11-23T22:50:15Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/standalone/StandaloneVirtualMachinesTable.tsx",
+    "frontend-modern/src/hooks/useUnifiedResources.ts",
+    "frontend-modern/src/utils/resourceStateAdapters.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/standalone/StandaloneVirtualMachinesTable.tsx": "9583ec222f33cec3e27d887f48b9804093d65f939a1e22624935f629caf95920",
+    "frontend-modern/src/hooks/useUnifiedResources.ts": "5e7fcbe7b82a8a75ab4c149d5d3ff27a9cbdf287c13b5160aedfcaf997674124",
+    "frontend-modern/src/utils/resourceStateAdapters.ts": "0c2abd9a27bc47cb376d7bd165f5e6b3c430f5aef51d4bca4ae303e1572edf25"
+  },
+  "routes": [
+    "/standalone/machines",
+    "/standalone/vms",
+    "/standalone/vms?host=agent-acdfdee2953587fb",
+    "/standalone/vms?status=attention"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "dark desktop 1440x900",
+    "light desktop 1440x900 hydrated via WebSocket",
+    "dark mobile 390x844 table and expanded drawer",
+    "host-scoped VMs view via /standalone/machines host VM count badges",
+    "running, paused, crashed, shutoff, and halted VM posture states",
+    "libvirt and XCP-ng VM detail drawers (Overview and Manage tabs)",
+    "search empty state with Reset filters recovery",
+    "URL filter persistence across reload (?status=attention)"
+  ],
+  "interactions": [
+    "clicked host VM count badge on /standalone/machines to scope /standalone/vms by host and cleared with Show all hosts",
+    "exercised All, Running, Attention, and Stopped filter pills verifying exact counts (9, 5, 2, 2)",
+    "toggled View preferences inventory totals Hide and Show",
+    "searched by hypervisor, VM name, and no-match query then clicked Reset filters",
+    "sorted ascending and descending on VM, Host, State, CPU, Memory, Disk I/O, and Net I/O headers",
+    "expanded and collapsed Libvirt, XCP-ng, and crashed VM detail drawers and switched Overview and Manage tabs",
+    "verified zero console errors, zero failed requests, zero horizontal overflow, no duplicate Crashed state text, and full WebSocket virtualMachine state preservation"
+  ]
+}

@@ -997,6 +997,7 @@ const toResource = (v2: APIResource): Resource => {
       availability: v2.availability,
       availabilityChecks: v2.availabilityChecks,
       physicalDisk: v2.physicalDisk,
+      virtualMachine: v2.virtualMachine,
       ceph: v2.ceph,
       metrics: v2.metrics,
       discoveryTarget: v2.discoveryTarget,
