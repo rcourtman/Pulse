@@ -22,8 +22,6 @@ them locally and keep credentials and private details out.
 - [Production deployment and security](PRODUCTION_SECURITY.md) —
   least-privilege Proxmox setup, root-agent boundaries, discovery, supply-chain
   verification, plan limits, scale evidence, and a rollout checklist.
-- [Upgrade from Pulse v5](UPGRADE_v6.md) — migration prerequisites, rollback,
-  agent continuity, and post-upgrade checks.
 - [Releases and update channels](RELEASE_PROCESS.md): choosing Stable or Preview,
   beta and RC expectations, and how releases are tested and promoted.
 - [Configure Pulse](CONFIGURATION.md) — authentication, notifications,
@@ -123,6 +121,8 @@ are linked from the sections above.
 
 ## Previous versions and migrations
 
+- [Upgrade from Pulse v5](UPGRADE_v6.md): migration prerequisites, rollback,
+  agent continuity, and post-upgrade checks.
 - [Upgrade from v4 to v5](UPGRADE_v5.md)
 - [Retired unified-navigation migration](MIGRATION_UNIFIED_NAV.md) — historical
   context only; current Pulse uses platform-shaped navigation.

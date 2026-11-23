@@ -790,9 +790,9 @@ interface; a raw network or configuration dump is not needed.
   `GET /api/agents/diagnostics`, to inspect liveness, version drift, profile
   deployment drift, expected telemetry gaps, and identity-split evidence. It
   does not change agent configuration or enqueue a repair.
-- A current Pulse server does not prove fleet convergence. Eligible v6 agents
-  update asynchronously; v5, PVE, disabled, and failed updates require manual
-  handling.
+- A current Pulse server does not prove fleet convergence. Eligible agents
+  update asynchronously. PVE, legacy, disabled, and failed updates require
+  manual handling.
 
 #### Removed Pulse server but `pulse-agent` still logs connection failures
 

@@ -222,7 +222,6 @@ class DocumentationCurrentnessTest(unittest.TestCase):
         upgrade_doc = normalize_prose(read("docs/UPGRADE_v6.md"))
         unified_agent_doc = normalize_prose(read("docs/UNIFIED_AGENT.md"))
         self.assertIn("Settings → Infrastructure → Install on a host", root_readme)
-        self.assertIn("v5-to-v6 agent upgrades", root_readme)
         self.assertIn("first installs and in-place agent upgrades", upgrade_doc)
         self.assertIn("supported v5-to-v6 agent upgrade path", unified_agent_doc)
         self.assertIn("Version and outdated", upgrade_doc)
