@@ -120,7 +120,7 @@ func testGuestStatusMemoryAvailabilityPolling(t *testing.T) {
 					res := proxmox.ClusterResource{Type: "qemu", Node: "node", Name: "guest", VMID: 105, Status: "running", MaxMem: 20 * gib, Mem: 20 * gib, CPU: .1}
 					var vms []models.VM
 					if collector == "cluster-resources" {
-						vms = m.collectClusterVMResources(context.Background(), "status-zero", []indexedClusterResource{{resource: res, guestID: id}}, client, previous, nil)
+						vms = m.collectClusterVMResources(context.Background(), "status-zero", clusterGuestInventory{rows: []proxmox.ClusterResource{res}}, client, previous, nil)
 					} else {
 						vms, _ = m.pollNodeVMsWithClusterResourceBuilder(context.Background(), "status-zero", "node", []proxmox.VM{{VMID: 105, Name: "guest", Status: "running", MaxMem: res.MaxMem, Mem: res.Mem, CPU: .1}}, client, previous, nil)
 					}

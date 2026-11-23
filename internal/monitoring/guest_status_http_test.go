@@ -173,7 +173,7 @@ func guestStatusHTTPMonitoringJourney(t *testing.T, clientKind, collector, rejec
 		res := proxmox.ClusterResource{Type: "qemu", Node: "node", VMID: 105, Name: "status-integrity-guest", Status: "running", CPU: .2 + float64(step)/10, MaxMem: 8 * gib, Mem: 4 * gib, MaxDisk: gib}
 		var vms []models.VM
 		if collector == "cluster" {
-			vms = m.collectClusterVMResources(ctx, "status-integrity", []indexedClusterResource{{resource: res, guestID: id}}, client, previous, nil)
+			vms = m.collectClusterVMResources(ctx, "status-integrity", clusterGuestInventory{rows: []proxmox.ClusterResource{res}}, client, previous, nil)
 		} else {
 			vms, _ = m.pollNodeVMsWithClusterResourceBuilder(ctx, "status-integrity", "node", []proxmox.VM{{VMID: 105, Name: res.Name, Status: res.Status, CPU: res.CPU, MaxMem: res.MaxMem, Mem: res.Mem, MaxDisk: res.MaxDisk}}, client, previous, nil)
 		}

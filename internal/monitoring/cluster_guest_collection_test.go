@@ -3,6 +3,7 @@ package monitoring
 import (
 	"context"
 	"slices"
+	"strconv"
 	"testing"
 
 	"github.com/rcourtman/pulse-go-rewrite/pkg/proxmox"
@@ -16,7 +17,7 @@ func TestClusterGuestCollectionPreservesInventoryOrder(t *testing.T) {
 	client := &stubPVEClient{}
 
 	resource := func(kind, node string, id, template int) proxmox.ClusterResource {
-		return proxmox.ClusterResource{Type: kind, Node: node, VMID: id, Template: template, Status: "stopped"}
+		return proxmox.ClusterResource{Type: kind, Node: node, VMID: id, Name: "guest-" + strconv.Itoa(id), Template: template, Status: "stopped"}
 	}
 	for _, tc := range []struct {
 		name      string
@@ -53,16 +54,26 @@ func TestClusterGuestCollectionPreservesInventoryOrder(t *testing.T) {
 		{name: "authoritative empty inventory"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+			original := slices.Clone(tc.resources)
 			vms, lxcs := mon.collectGuestsFromClusterResources(context.Background(), "site", tc.resources, client, nil, nil, nil, nil)
+			if !slices.Equal(tc.resources, original) {
+				t.Fatal("collection changed the source inventory")
+			}
 			if vms == nil || lxcs == nil {
 				t.Fatal("empty inventory collections must be non-nil")
 			}
 			vmIDs := make([]string, 0, len(vms))
 			for _, vm := range vms {
+				if vm.Name != "guest-"+strconv.Itoa(vm.VMID) {
+					t.Fatalf("VM %s got another source row's name: %q", vm.ID, vm.Name)
+				}
 				vmIDs = append(vmIDs, vm.ID)
 			}
 			lxcIDs := make([]string, 0, len(lxcs))
 			for _, lxc := range lxcs {
+				if lxc.Name != "guest-"+strconv.Itoa(lxc.VMID) {
+					t.Fatalf("container %s got another source row's name: %q", lxc.ID, lxc.Name)
+				}
 				lxcIDs = append(lxcIDs, lxc.ID)
 			}
 			if !slices.Equal(vmIDs, tc.wantVMs) || !slices.Equal(lxcIDs, tc.wantLXCs) {
