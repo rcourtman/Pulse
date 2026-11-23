@@ -826,7 +826,7 @@ describe('AppLayout map entry', () => {
     ));
 
     const trigger = screen.getByTestId('command-palette-trigger');
-    expect(trigger).toHaveAccessibleName('Search commands');
+    expect(trigger).toHaveAccessibleName('Search');
     expect(trigger.querySelector('kbd')).toHaveAttribute('aria-hidden', 'true');
     fireEvent.click(trigger);
     expect(onOpenCommandPalette).toHaveBeenCalledOnce();
