@@ -298,14 +298,25 @@ class AdminDocsTest(unittest.TestCase):
 
     def test_rbac_guidance_preserves_private_and_uncertain_change_boundaries(self):
         guide = (DOCS / "RBAC.md").read_text()
-        readable = " ".join(guide.replace("**", "").split())
+        before_api = guide.split("### Before Using the API", 1)[1].split("\n### ", 1)[0]
+        readable = " ".join(before_api.replace("**", "").split())
         for boundary in ("in the same Bash session", "not an installed Pulse command",
-                         "owner-only file", "redacted", "five-second", "twenty-second",
-                         "not as a top-to-bottom script", "administrator recovery path",
-                         "empty role list, removes access", "does not follow redirects or retry",
-                         "timeout can follow an applied change", "read before writing again",
-                         "HTTP success", "upstream IdP account"):
+                         "owner-only file", "redacted", "five-second", "twenty-second"):
             self.assertIn(boundary, readable)
+        caution = next(p for p in before_api.split("\n\n") if p.startswith("**Run one operation"))
+        readable = " ".join(caution.replace("**", "").split())
+        for boundary in (
+            "Run one operation at a time.", "Keep admin recovery access.",
+            "Role deletion can remove grants or lift deny rules.",
+            "Check assignments in Users first.",
+            "Removing a user or clearing their role list clears assignments.",
+            "won't follow redirects or retry",
+            "A timeout or partial reply can follow a saved change.",
+            "Check saved roles and intended access before another write.",
+            "HTTP success neither proves access nor disables IdP accounts.",
+        ):
+            with self.subTest(boundary=boundary):
+                self.assertIn(boundary, readable)
 
     def test_role_replacement_guidance_preserves_the_current_policy(self):
         guide = (DOCS / "RBAC.md").read_text()
