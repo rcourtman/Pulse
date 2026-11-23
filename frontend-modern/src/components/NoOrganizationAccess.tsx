@@ -9,6 +9,7 @@ import {
 } from 'solid-js';
 import { OrgsAPI, type UserOrganizationInvitation } from '@/api/orgs';
 import { Button } from '@/components/shared/Button';
+import { Dialog } from '@/components/shared/Dialog';
 import { OrganizationRoleBadge } from '@/components/shared/OrganizationBadges';
 import { logger } from '@/utils/logger';
 import { getOrganizationInvitationPresentation } from '@/utils/organizationSettingsPresentation';
@@ -41,6 +42,7 @@ export const NoOrganizationAccess: Component<NoOrganizationAccessProps> = (props
   let invitationReadController: AbortController | undefined;
   let invitationRegion: HTMLElement | undefined;
   let restartCheckButton: HTMLButtonElement | undefined;
+  let declineReturnFocus: HTMLElement | undefined;
   let slowDecisionTimer: number | undefined;
   const [invitationRead, { refetch }] = createResource<InvitationReadResult>(async () => {
     invitationReadController?.abort();
@@ -79,7 +81,10 @@ export const NoOrganizationAccess: Component<NoOrganizationAccessProps> = (props
   const [pendingDecision, setPendingDecision] = createSignal<InvitationDecision>();
   const [decisionSlow, setDecisionSlow] = createSignal(false);
   const [unconfirmedDecision, setUnconfirmedDecision] = createSignal<InvitationDecision>();
+  const [declineTarget, setDeclineTarget] = createSignal<UserOrganizationInvitation>();
   const decisionsDisabled = () => !!(pendingDecision() || unconfirmedDecision());
+  const canStartDecision = () =>
+    !disposed && !invitationRead.loading && !decisionsDisabled() && !declineTarget();
   const checkAgainDisabled = () => !!pendingDecision() && !decisionSlow();
 
   const retryInvitations = () => {
@@ -118,7 +123,7 @@ export const NoOrganizationAccess: Component<NoOrganizationAccessProps> = (props
     invitation: UserOrganizationInvitation,
     action: InvitationDecision['action'],
   ) => {
-    if (disposed || invitationRead.loading || decisionsDisabled()) return;
+    if (!canStartDecision()) return;
     // A disabled row button can drop keyboard focus. Move it only when it is
     // still inside this region, never from a recovery or sign-out control.
     if (invitationRegion?.contains(document.activeElement)) {
@@ -157,6 +162,23 @@ export const NoOrganizationAccess: Component<NoOrganizationAccessProps> = (props
     } finally {
       if (isCurrent()) finishDecision(decision);
     }
+  };
+
+  const reviewDecline = (invitation: UserOrganizationInvitation, trigger: HTMLButtonElement) => {
+    if (!canStartDecision()) return;
+    declineReturnFocus = trigger;
+    setDeclineTarget(invitation);
+  };
+  const keepInvitation = () => setDeclineTarget(undefined);
+
+  const confirmDecline = () => {
+    const invitation = declineTarget();
+    if (!invitation) return;
+    // The originating button is disabled while the write is pending and may
+    // disappear on readback. Return to the existing invitation region instead.
+    declineReturnFocus = invitationRegion;
+    setDeclineTarget(undefined);
+    void respond(invitation, 'decline');
   };
 
   return (
@@ -299,8 +321,9 @@ export const NoOrganizationAccess: Component<NoOrganizationAccessProps> = (props
                                 variant="secondary"
                                 size="sm"
                                 aria-label={presentation().declineLabel}
+                                aria-haspopup="dialog"
                                 disabled={decisionsDisabled()}
-                                onClick={() => void respond(invitation, 'decline')}
+                                onClick={(event) => reviewDecline(invitation, event.currentTarget)}
                               >
                                 Decline
                               </Button>
@@ -337,6 +360,48 @@ export const NoOrganizationAccess: Component<NoOrganizationAccessProps> = (props
           </Button>
         </div>
       </div>
+      <Dialog
+        isOpen={Boolean(declineTarget())}
+        ariaLabelledBy="invitation-decline-title"
+        ariaDescribedBy="invitation-decline-description"
+        panelClass="max-w-md"
+        onClose={keepInvitation}
+        returnFocus={() => declineReturnFocus}
+      >
+        <Show when={declineTarget()} keyed>
+          {(invitation) => (
+            <div class="overflow-y-auto p-5 sm:p-6">
+              <h2 id="invitation-decline-title" class="text-lg font-semibold">
+                Decline this invitation?
+              </h2>
+              <p
+                id="invitation-decline-description"
+                class="mt-2 text-sm leading-6 text-muted [overflow-wrap:anywhere]"
+              >
+                Declining removes your invitation to{' '}
+                <bdi class="font-medium text-base-content">
+                  {
+                    getOrganizationInvitationPresentation(
+                      invitation.orgId,
+                      invitation.orgDisplayName,
+                    ).organization
+                  }
+                </bdi>
+                . If you change your mind, ask an administrator for a new invitation.
+              </p>
+              <div class="mt-2">
+                <OrganizationRoleBadge role={normalizeRole(invitation.role)} />
+              </div>
+              <div class="mt-5 flex flex-wrap justify-end gap-2">
+                <Button onClick={keepInvitation}>Keep invitation</Button>
+                <Button variant="danger" onClick={confirmDecline}>
+                  Decline invitation
+                </Button>
+              </div>
+            </div>
+          )}
+        </Show>
+      </Dialog>
     </main>
   );
 };

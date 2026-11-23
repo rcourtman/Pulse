@@ -39,6 +39,13 @@ const deferred = <T,>() => {
   return { promise, resolve, reject };
 };
 const row = (name: string) => within(screen.getByText(name).closest('li')!);
+const declineReview = () => screen.getByRole('dialog', { name: 'Decline this invitation?' });
+const confirmDecline = () =>
+  fireEvent.click(within(declineReview()).getByRole('button', { name: 'Decline invitation' }));
+const declineFrom = (name: string) => {
+  fireEvent.click(row(name).getByRole('button', { name: /^Decline invitation to / }));
+  confirmDecline();
+};
 const renderRecovery = () => {
   const onReload = vi.fn();
   const onSignOut = vi.fn();
@@ -83,6 +90,49 @@ afterEach(() => {
 });
 
 describe('no-organization invitation recovery', () => {
+  it.each(['Keep invitation', 'Escape'] as const)(
+    'leaves the invitation untouched and restores its trigger on %s',
+    async (dismissal) => {
+      const sameNames = invitations.map((invitation) => ({
+        ...invitation,
+        orgDisplayName: 'Operations',
+      }));
+      fetchMock.mockResolvedValueOnce(jsonResponse(sameNames));
+      const { onReload, onSignOut } = renderRecovery();
+      const peer = await screen.findByRole('button', {
+        name: 'Accept invitation to Operations (client/east)',
+      });
+      const trigger = screen.getByRole('button', {
+        name: 'Decline invitation to Operations (client/west)',
+      });
+      trigger.focus();
+      fireEvent.click(trigger);
+
+      const review = declineReview();
+      expect(review).toHaveAccessibleDescription(
+        'Declining removes your invitation to Operations (client/west). If you change your mind, ask an administrator for a new invitation.',
+      );
+      expect(within(review).getByText('editor')).toBeVisible();
+      expect(screen.queryByText(/Waiting for Pulse to confirm/)).toBeNull();
+      const keep = within(review).getByRole('button', { name: 'Keep invitation' });
+      await waitFor(() => expect(keep).toHaveFocus());
+
+      // Even a dispatched background event cannot replace this decision.
+      fireEvent.click(peer);
+      expect(fetchMock).toHaveBeenCalledOnce();
+      if (dismissal === 'Escape') fireEvent.keyDown(keep, { key: 'Escape' });
+      else fireEvent.click(keep);
+
+      expect(review).not.toBeInTheDocument();
+      expect(trigger).toHaveFocus();
+      expect(peer).toBeEnabled();
+      expect(trigger).toBeEnabled();
+      expect(fetchMock).toHaveBeenCalledOnce();
+      expect(onReload).not.toHaveBeenCalled();
+      expect(onSignOut).not.toHaveBeenCalled();
+    },
+  );
+
   it('distinguishes same-named invitations and sends only the chosen exact ID', async () => {
     const sameNames = invitations.map((invitation) => ({
       ...invitation,
@@ -118,6 +168,8 @@ describe('no-organization invitation recovery', () => {
     fireEvent.click(
       screen.getByRole('button', { name: 'Decline invitation to Operations (client/west)' }),
     );
+    expect(fetchMock).toHaveBeenCalledOnce();
+    confirmDecline();
     await waitFor(() => expect(screen.getAllByRole('group')).toHaveLength(1));
     expectRequest(1, '/api/org-invitations/client%2Fwest', 'DELETE');
     expectRequest(2, '/api/org-invitations', 'GET');
@@ -250,6 +302,7 @@ describe('no-organization invitation recovery', () => {
       const checkAgain = screen.getByRole('button', { name: 'Check again' });
       button.focus();
       fireEvent.click(button);
+      if (action === 'Decline') confirmDecline();
 
       await vi.advanceTimersByTimeAsync(9_999);
       expect(checkAgain).toBeDisabled();
@@ -328,6 +381,7 @@ describe('no-organization invitation recovery', () => {
 
       decision.focus();
       fireEvent.click(decision);
+      if (!accept) confirmDecline();
       expect(await screen.findByRole('alert')).toHaveTextContent(
         `Pulse could not confirm your decision to ${action.toLowerCase()} the invitation to Operations (${target.orgId}).`,
       );
@@ -400,9 +454,10 @@ describe('no-organization invitation recovery', () => {
     const { onReload } = renderRecovery();
     await screen.findByText('West estate');
 
-    fireEvent.click(row('West estate').getByRole('button', { name: /^Decline invitation to / }));
+    declineFrom('West estate');
     expect(fetchMock).toHaveBeenCalledTimes(2);
     expectRequest(1, '/api/org-invitations/client%2Fwest', 'DELETE');
+    expect(screen.getByRole('region', { name: 'Organization invitations' })).toHaveFocus();
     expect(screen.getByText(/Waiting for Pulse to confirm/)).toHaveTextContent(
       'Waiting for Pulse to confirm your decision to decline the invitation to West estate (client/west).',
     );
@@ -438,7 +493,7 @@ describe('no-organization invitation recovery', () => {
     const exits = renderRecovery();
     await screen.findByText('West estate');
 
-    fireEvent.click(row('West estate').getByRole('button', { name: /^Decline invitation to / }));
+    declineFrom('West estate');
     fireEvent.click(await screen.findByRole('button', { name: 'Restart invitation check' }));
     expectRequest(1, '/api/org-invitations/client%2Fwest', 'DELETE');
     expectRequest(2, '/api/org-invitations', 'GET');
@@ -588,7 +643,7 @@ describe('no-organization invitation recovery', () => {
     const { onReload } = renderRecovery();
     await screen.findByText('West estate');
 
-    fireEvent.click(row('West estate').getByRole('button', { name: /^Decline invitation to / }));
+    declineFrom('West estate');
     expect(await screen.findByRole('alert')).toHaveTextContent('Could not check your invitations.');
     expect(screen.getByRole('main')).toHaveAccessibleName('No organization access yet');
     expect(
