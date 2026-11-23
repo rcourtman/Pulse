@@ -1,0 +1,41 @@
+{
+  "version": 1,
+  "base_sha": "f78d4a1594606fcd2179727785844989a7e47c13",
+  "verified_at": "2026-11-23T20:40:05.844Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/AppBootstrapStatus.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/AppBootstrapStatus.tsx": "b95ff5b2c6a438da84050785d593eee5eab92532976726555bf23af7e7bd37db"
+  },
+  "routes": [
+    "/standalone/machines",
+    "/standalone/machines?saml=error&saml_error=invalid_state",
+    "/docs/TROUBLESHOOTING",
+    "/docs/TROUBLESHOOTING#health-is-green-but-the-dashboard-is-stalled"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 320,
+      "height": 800
+    }
+  ],
+  "states": [
+    "First session read pending",
+    "Slow session read with Retry",
+    "Failed session read with saved sign-in details",
+    "Failed session read with the last SAML return reason",
+    "Shipped Troubleshooting Guide rendered while status API still fails"
+  ],
+  "interactions": [
+    "Tab from Retry to the guide link and activate with Enter on desktop",
+    "Tap the guide link at 320px",
+    "Read the connection symptom then use browser Back and Retry",
+    "No write, private page admission, new tab, forwarded return parameters or cleared saved sign-in details"
+  ]
+}

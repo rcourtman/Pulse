@@ -7,6 +7,7 @@ import {
   probeNoOrganizationAccess,
   signOutWithoutOrganization,
 } from '@/stores/organizationAccessBootstrap';
+import { TROUBLESHOOTING_DOC_URL } from '@/utils/docsLinks';
 
 export const APP_BOOTSTRAP_SLOW_DELAY_MS = 10_000;
 
@@ -93,6 +94,18 @@ export const AppBootstrapStatus: Component<AppBootstrapStatusProps> = (props) =>
               <Button variant="primary" size="md" onClick={retry}>
                 Retry connection
               </Button>
+              <Show when={props.failed}>
+                <div class="mt-2">
+                  {/* Use a document navigation so Back and Retry do not depend on the failed app shell's router. */}
+                  <a
+                    href={TROUBLESHOOTING_DOC_URL}
+                    target="_self"
+                    class="inline-flex min-h-11 items-center rounded-sm px-2 text-sm font-medium text-blue-700 underline underline-offset-2 focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 dark:text-blue-300"
+                  >
+                    Open troubleshooting guide
+                  </a>
+                </div>
+              </Show>
             </div>
           </Show>
         </div>
