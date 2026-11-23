@@ -80,10 +80,14 @@ diagnostics. A missing scrape is not evidence of zero errors.
 | :--- | :--- | :--- |
 | `pulse_monitor_poll_total` | Counter | Total poll attempts. |
 | `pulse_monitor_poll_duration_seconds` | Histogram | Poll latency. |
-| `pulse_monitor_poll_staleness_seconds` | Gauge | Age since last success. |
+| `pulse_monitor_poll_staleness_seconds` | Gauge | Age since success at last result. |
 | `pulse_monitor_poll_queue_depth` | Gauge | Queue size. |
 | `pulse_monitor_poll_errors_total` | Counter | Error counts by category. |
 | `pulse_scheduler_queue_due_soon` | Gauge | Tasks due in the next 12 seconds. |
+
+If a scrape still works but polling stops producing results, use the
+[last-success timestamp](PROMETHEUS_METRICS.md#check-whether-polling-is-still-running)
+to check age. A staleness gauge that stays at zero does not rule out a stall.
 
 ## ⚡ Circuit Breaker
 
