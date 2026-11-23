@@ -1,6 +1,7 @@
-import { For, Show } from 'solid-js';
+import { For, Show, type Component } from 'solid-js';
 import { getPlatformIcon } from '@/features/platformPage/platformIcon';
 import { FilterBar, type FilterDef } from '@/components/shared/FilterBar';
+import { LoadingSpinner } from '@/components/shared/LoadingSpinner';
 import { Subtabs, type SubtabOption } from '@/components/shared/Subtabs';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
 import { BulkEditDialog } from './BulkEditDialog';
@@ -27,13 +28,13 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
   const state = useThresholdsTableState(props);
   const { isMobile } = useBreakpoint();
   const platformTabs: SubtabOption[] = thresholdPlatformDefinitions.map((definition) => {
-    const Icon = definition.icon;
+    const Icon = definition.icon as Component<{ class?: string; title?: string }>;
     return {
       value: definition.value,
       label: (
         <span class="inline-flex items-center gap-2">
           <span aria-hidden="true">
-            <Icon class="h-4 w-4" />
+            <Icon class="h-4 w-4" title="" />
           </span>
           <span>{definition.label}</span>
         </span>
@@ -57,9 +58,11 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
     },
   ];
   const customOverrideItems = () => state.summaryItems().filter((item) => item.overrides > 0);
+  const showResourcesLoadingSkeleton = () =>
+    Boolean(props.resourcesLoading?.()) && props.allResources.length === 0;
 
   return (
-    <div class="space-y-4">
+    <div class="space-y-3">
       <Subtabs
         value={state.activeTab()}
         onChange={(value) => state.handleTabClick(value as ThresholdsActiveTab)}
@@ -89,15 +92,15 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
       />
 
       <Show when={!state.helpBannerDismissed()}>
-        <div class="rounded-md border border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-900/25 p-3 relative group">
+        <div class="relative rounded-md border border-blue-200 bg-blue-50 px-3 py-2 dark:border-blue-800 dark:bg-blue-900/25">
           <button
             type="button"
             onClick={state.dismissHelpBanner}
-            class="absolute right-1 top-1 inline-flex min-h-11 min-w-11 items-center justify-center rounded-md p-1 text-blue-500 transition-colors hover:bg-blue-100 hover:text-blue-700 dark:text-blue-400 dark:hover:bg-blue-900/25 dark:hover:text-blue-200 sm:right-2 sm:top-2 sm:min-h-0 sm:min-w-0 sm:opacity-0 sm:group-hover:opacity-100"
+            class="absolute right-1 top-1 inline-flex min-h-11 min-w-11 items-center justify-center rounded-md p-1 text-blue-600 transition-colors hover:bg-blue-100 hover:text-blue-800 dark:text-blue-300 dark:hover:bg-blue-900/40 dark:hover:text-blue-100 sm:right-2 sm:top-1.5 sm:min-h-0 sm:min-w-0"
             title={state.getAlertThresholdsHelpDismissLabel()}
             aria-label={state.getAlertThresholdsHelpDismissLabel()}
           >
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path
                 stroke-linecap="round"
                 stroke-linejoin="round"
@@ -106,12 +109,13 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
               />
             </svg>
           </button>
-          <div class="flex items-start gap-2 pr-6">
+          <div class="flex items-start gap-2 pr-8">
             <svg
-              class="w-5 h-5 text-blue-600 dark:text-blue-400 shrink-0 mt-0.5"
+              class="mt-0.5 h-4 w-4 shrink-0 text-blue-600 dark:text-blue-400"
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"
+              aria-hidden="true"
             >
               <path
                 stroke-linecap="round"
@@ -120,13 +124,17 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
                 d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
               />
             </svg>
-            <div class="text-sm text-blue-900 dark:text-blue-100">
+            <div class="space-y-0.5 text-xs leading-5 text-blue-900 dark:text-blue-100">
               <p class="font-medium">{state.getAlertThresholdsHelpBanner().title}</p>
-              <p class="mt-1">{state.getAlertThresholdsHelpBanner().toggleGuidance}</p>
-              <p>{state.getAlertThresholdsHelpBanner().inheritanceGuidance}</p>
-              <p>{state.getAlertThresholdsHelpBanner().bulkGuidance}</p>
-              <p class="text-blue-600 dark:text-blue-400">
-                {state.getAlertThresholdsHelpBanner().collapseHint}
+              <p>
+                {state.getAlertThresholdsHelpBanner().toggleGuidance}{' '}
+                {state.getAlertThresholdsHelpBanner().inheritanceGuidance}
+              </p>
+              <p>
+                {state.getAlertThresholdsHelpBanner().bulkGuidance}{' '}
+                <span class="text-blue-700 dark:text-blue-300">
+                  {state.getAlertThresholdsHelpBanner().collapseHint}
+                </span>
               </p>
             </div>
           </div>
@@ -169,7 +177,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
       </Show>
 
       <Show when={state.summaryItems().length > 0}>
-        <div class="flex justify-end gap-2">
+        <div class="flex items-center justify-end gap-2">
           <button
             type="button"
             onClick={state.expandAll}
@@ -177,7 +185,9 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
           >
             Expand all
           </button>
-          <span class="text-muted">|</span>
+          <span class="select-none text-xs text-muted" aria-hidden="true">
+            |
+          </span>
           <button
             type="button"
             onClick={state.collapseAll}
@@ -188,7 +198,26 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
         </div>
       </Show>
 
-      <div class="space-y-6">
+      <Show when={showResourcesLoadingSkeleton()}>
+        <div
+          role="status"
+          aria-live="polite"
+          data-testid="thresholds-resources-loading"
+          class="space-y-3 rounded-lg border border-border bg-surface p-4"
+        >
+          <div class="flex items-center gap-2 text-sm font-medium text-base-content">
+            <LoadingSpinner size="sm" />
+            <span>Loading monitored resources...</span>
+          </div>
+          <div class="space-y-2" aria-hidden="true">
+            <div class="h-10 w-full animate-pulse rounded-md bg-surface-alt" />
+            <div class="h-10 w-full animate-pulse rounded-md bg-surface-alt" />
+            <div class="h-10 w-3/4 animate-pulse rounded-md bg-surface-alt" />
+          </div>
+        </div>
+      </Show>
+
+      <div class="space-y-5">
         <Show when={state.activeTab() === 'proxmox'}>
           <ThresholdsTableProxmoxTab state={state} tableProps={props} />
         </Show>

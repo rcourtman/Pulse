@@ -56,7 +56,7 @@ describe('AlertDeadManDestinationSection', () => {
     const input = screen.getByLabelText('Healthchecks-compatible success ping URL');
     expect(input).toHaveAttribute('type', 'password');
     expect(input).toHaveValue('');
-    expect(input).toHaveAttribute('placeholder', 'Configured — enter a new URL to replace');
+    expect(input).toHaveAttribute('placeholder', 'Configured. Enter a new URL to replace');
 
     await waitFor(() => expect(screen.getByText('Heartbeat healthy')).toBeInTheDocument());
     expect(screen.getByText('5 min (unexpected stop)')).toBeInTheDocument();

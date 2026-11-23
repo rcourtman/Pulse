@@ -181,9 +181,13 @@ export function Actions() {
             size="sm"
             aria-label="Refresh actions"
             onClick={() => void loadActions()}
-            isLoading={loading()}
+            disabled={loading()}
+            aria-busy={loading()}
           >
-            <RefreshCwIcon class="mr-2 h-4 w-4" />
+            <RefreshCwIcon
+              class={`mr-2 h-4 w-4 ${loading() ? 'motion-safe:animate-spin' : ''}`}
+              aria-hidden="true"
+            />
             Refresh
           </Button>
         }
@@ -307,22 +311,24 @@ export function Actions() {
                     >
                       <div class="flex items-center gap-3">
                         <div class="min-w-0 flex-1">
-                          <div class="flex flex-wrap items-center gap-2">
-                            <MetadataBadge
-                              tone={state().tone}
-                              size="xs"
-                              shape="rounded"
-                              appearance="outline"
-                            >
-                              {state().label}
-                            </MetadataBadge>
-                            <Show when={originLabel()}>
-                              {(label) => (
-                                <MetadataBadge tone="info" size="xs" shape="rounded">
-                                  {label()}
-                                </MetadataBadge>
-                              )}
-                            </Show>
+                          <div class="flex flex-col gap-1 sm:flex-row sm:flex-wrap sm:items-center sm:gap-2">
+                            <div class="flex flex-wrap items-center gap-1.5">
+                              <MetadataBadge
+                                tone={state().tone}
+                                size="xs"
+                                shape="rounded"
+                                appearance="outline"
+                              >
+                                {state().label}
+                              </MetadataBadge>
+                              <Show when={originLabel()}>
+                                {(label) => (
+                                  <MetadataBadge tone="info" size="xs" shape="rounded">
+                                    {label()}
+                                  </MetadataBadge>
+                                )}
+                              </Show>
+                            </div>
                             <span class="truncate text-sm font-semibold text-base-content">
                               {title()}
                             </span>

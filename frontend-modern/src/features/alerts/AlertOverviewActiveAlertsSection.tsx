@@ -1,10 +1,14 @@
 import { For, Show } from 'solid-js';
 
+import { FilterBar, filterChipStatusDot, type FilterDef } from '@/components/shared/FilterBar';
 import { SectionHeader } from '@/components/shared/SectionHeader';
 import { PlatformWindowedList } from '@/features/platformPage/PlatformWindowedList';
+import { useBreakpoint } from '@/hooks/useBreakpoint';
 import { t } from '@/i18n';
 import type { Alert } from '@/types/api';
 import {
+  getAlertHistoryEmptyState,
+  getAlertHistorySearchPlaceholder,
   getAlertOverviewAcknowledgedToggleLabel,
   getAlertOverviewActiveSectionTitle,
   getAlertOverviewBulkAcknowledgeLabel,
@@ -20,7 +24,11 @@ import { AlertOverviewStatsCards } from './AlertOverviewStatsCards';
 import { useAlertGroupExpansion } from './useAlertGroupExpansion';
 import { AlertIncidentSynthesisSummary } from './AlertIncidentSynthesisSummary';
 import type { AlertIncidentTimelineState } from './useAlertIncidentTimelineState';
-import type { AlertGroup, AlertOverviewState } from './useAlertOverviewState';
+import type {
+  AlertGroup,
+  AlertOverviewSeverityFilter,
+  AlertOverviewState,
+} from './useAlertOverviewState';
 
 function pmgMessageAgeScope(alert: Alert): 'gateway' | 'node' | undefined {
   if (alert.type !== 'message-age' || alert.metadata?.resourceType !== 'pmg' || !alert.resourceId) {
@@ -62,6 +70,49 @@ interface AlertOverviewActiveAlertsSectionProps {
 
 export function AlertOverviewActiveAlertsSection(props: AlertOverviewActiveAlertsSectionProps) {
   const { isGroupExpanded, toggleGroup } = useAlertGroupExpansion();
+  const { isMobile } = useBreakpoint();
+  const buildFilters = (): FilterDef[] => [
+    {
+      id: 'active-alert-severity',
+      label: 'Severity',
+      group: 'status',
+      inline: true,
+      value: props.state.severityFilter,
+      setValue: (value: string) =>
+        props.state.setSeverityFilter(value as AlertOverviewSeverityFilter),
+      defaultValue: 'all',
+      options: () => {
+        const infoCount = props.state.countForSeverity('info');
+        return [
+          { value: 'all', label: 'All', count: props.state.countForSeverity('all') },
+          {
+            value: 'critical',
+            label: 'Critical',
+            leading: filterChipStatusDot('bg-red-500'),
+            tone: 'danger' as const,
+            count: props.state.countForSeverity('critical'),
+          },
+          {
+            value: 'warning',
+            label: 'Warning',
+            leading: filterChipStatusDot('bg-amber-500'),
+            tone: 'warning' as const,
+            count: props.state.countForSeverity('warning'),
+          },
+          ...(infoCount > 0 || props.state.severityFilter() === 'info'
+            ? [
+                {
+                  value: 'info',
+                  label: 'Info',
+                  leading: filterChipStatusDot('bg-blue-500'),
+                  count: infoCount,
+                },
+              ]
+            : []),
+        ];
+      },
+    },
+  ];
   return (
     <div>
       <div class="mb-3 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
@@ -121,6 +172,22 @@ export function AlertOverviewActiveAlertsSection(props: AlertOverviewActiveAlert
           </div>
         }
       >
+        <div class="mb-2">
+          <FilterBar
+            role="group"
+            ariaLabel="Active alert filters"
+            isMobile={isMobile}
+            search={{
+              value: props.state.searchTerm,
+              setValue: props.state.setSearchTerm,
+              placeholder: getAlertHistorySearchPlaceholder(),
+              clearOnEscape: true,
+            }}
+            filters={buildFilters()}
+            onClearAll={props.state.clearFilters}
+            showClearAll={() => props.state.activeFilterCount() > 0}
+          />
+        </div>
         <Show
           when={props.state.alertStats().acknowledged > 0 || props.state.alertStats().active > 0}
         >
@@ -153,7 +220,20 @@ export function AlertOverviewActiveAlertsSection(props: AlertOverviewActiveAlert
         <div class="space-y-2">
           <Show when={props.state.filteredAlerts().length === 0}>
             <div class="text-center py-8 text-muted">
-              {getAlertListEmptyState(props.showAcknowledged)}
+              <Show
+                when={props.state.activeFilterCount() > 0}
+                fallback={getAlertListEmptyState(props.showAcknowledged)}
+              >
+                <p class="text-sm">{getAlertHistoryEmptyState().title}</p>
+                <p class="mt-1 text-xs">{getAlertHistoryEmptyState().description}</p>
+                <button
+                  type="button"
+                  onClick={props.state.clearFilters}
+                  class="mt-2 rounded-md border border-border px-3 py-1.5 text-xs font-medium text-base-content hover:bg-surface-hover"
+                >
+                  Clear filters
+                </button>
+              </Show>
             </div>
           </Show>
           <PlatformWindowedList

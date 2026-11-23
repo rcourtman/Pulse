@@ -1,0 +1,91 @@
+{
+  "version": 1,
+  "base_sha": "f3ab36fd2181085ec4ea78384704880f7084ff06",
+  "verified_at": "2026-11-23T20:51:06Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Alerts/ThresholdsTable.tsx",
+    "frontend-modern/src/features/actions/aptActionPresentation.ts",
+    "frontend-modern/src/features/alerts/AlertAppriseDestinationsSection.tsx",
+    "frontend-modern/src/features/alerts/AlertDeadManDestinationSection.tsx",
+    "frontend-modern/src/features/alerts/AlertHistoryFrequencyCard.tsx",
+    "frontend-modern/src/features/alerts/AlertIntentPolicyPanel.tsx",
+    "frontend-modern/src/features/alerts/AlertOverviewActiveAlertsSection.tsx",
+    "frontend-modern/src/features/alerts/AlertOverviewAlertCard.tsx",
+    "frontend-modern/src/features/alerts/AlertQuietHoursSection.tsx",
+    "frontend-modern/src/features/alerts/AlertsConfigurationSurface.tsx",
+    "frontend-modern/src/features/alerts/deliveryDiagnosisPresentation.ts",
+    "frontend-modern/src/features/alerts/tabs/ScheduleTab.tsx",
+    "frontend-modern/src/features/alerts/tabs/ThresholdsTab.tsx",
+    "frontend-modern/src/features/alerts/thresholds/types.ts",
+    "frontend-modern/src/features/alerts/useAlertOverviewState.ts",
+    "frontend-modern/src/features/alerts/useAlertsConfigurationState.ts",
+    "frontend-modern/src/features/patrol/PatrolAttentionWorkbench.tsx",
+    "frontend-modern/src/features/patrol/PatrolIntelligenceSurface.tsx",
+    "frontend-modern/src/features/patrol/PatrolWeeklyDigestCard.tsx",
+    "frontend-modern/src/pages/Actions.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Alerts/ThresholdsTable.tsx": "83c3f121ede35b6e77b94fd47fef4000ba2cc588114175779c028dfded89f5f6",
+    "frontend-modern/src/features/actions/aptActionPresentation.ts": "953a6899fef5f338bb10d084ba0305190111ec28553be3a3e20179d14cb2c5a4",
+    "frontend-modern/src/features/alerts/AlertAppriseDestinationsSection.tsx": "2485d987b44f355b8ba8e458dc51f3005003318993dd25fb74727bfa827e27eb",
+    "frontend-modern/src/features/alerts/AlertDeadManDestinationSection.tsx": "4028fec1a56ad8c687af9bc548db990906a1eb4c3dc5383e1fb04204befd3362",
+    "frontend-modern/src/features/alerts/AlertHistoryFrequencyCard.tsx": "df4cbb3a6b75b190106bccf20356682283bfe4eb13e8ad7d676359a241ecb824",
+    "frontend-modern/src/features/alerts/AlertIntentPolicyPanel.tsx": "19dde6b3e15ac8223c5ed2fd1669567f3a31a02a81c617124d7895057236d511",
+    "frontend-modern/src/features/alerts/AlertOverviewActiveAlertsSection.tsx": "c9ae1231d4d481ed72a64976109466f64a710315901a97cce1946b45e7dc7f41",
+    "frontend-modern/src/features/alerts/AlertOverviewAlertCard.tsx": "be8eb18ba8b0ed2eafabfed3006eeb547aaf9e4eae1eb2e0a9ca029edd77a36c",
+    "frontend-modern/src/features/alerts/AlertQuietHoursSection.tsx": "e3821c3f34ea639b6787265bcdfdc6ac5cdae7d7f292b7f10643de024664c0bd",
+    "frontend-modern/src/features/alerts/AlertsConfigurationSurface.tsx": "347f76498db9086137aa4dfb1ce14d7f4ee815b9ab1f197449657b8e6987d9be",
+    "frontend-modern/src/features/alerts/deliveryDiagnosisPresentation.ts": "eedc706773bfeda7daa6740542aaf4b29b91233685b435921886351912aff533",
+    "frontend-modern/src/features/alerts/tabs/ScheduleTab.tsx": "e49e26f1bae26cc99637ab106fdd328e194163824d222ce63b3b74fc63ff7c81",
+    "frontend-modern/src/features/alerts/tabs/ThresholdsTab.tsx": "ffb64471ef5f8c723744a0583a64942b02ab7b3a99b394598cad01725666112f",
+    "frontend-modern/src/features/alerts/thresholds/types.ts": "de76a57155b3210fba8bb7f19a487480391d03ad99888878cba92c0d9a05e18f",
+    "frontend-modern/src/features/alerts/useAlertOverviewState.ts": "cf7af05784c1d61b44ff500f8b95666941b305c2bd9abd5b535a6ced57516dc7",
+    "frontend-modern/src/features/alerts/useAlertsConfigurationState.ts": "f9c0fb742848f928dd28b1bcad2c879adf6317a7b9ffef8f96ab8c4ce576b805",
+    "frontend-modern/src/features/patrol/PatrolAttentionWorkbench.tsx": "99474fc268beb08c94e2afd205fb4e8a993fb8c2e46c66710b607ae8f8e21eb6",
+    "frontend-modern/src/features/patrol/PatrolIntelligenceSurface.tsx": "b4d1cdaa4742e49e004c210630f419336bd05102990f5ebaf3253a28c69751f1",
+    "frontend-modern/src/features/patrol/PatrolWeeklyDigestCard.tsx": "8f20b478b85473a8df13901e0c1b83772f98c5e8632c10edde77f87b193c178e",
+    "frontend-modern/src/pages/Actions.tsx": "70af56330ec0c78e3a975c0e1dc2254789f2ef1a49e1eea29b3df1fd819c6f3e"
+  },
+  "routes": [
+    "/alerts/overview",
+    "/alerts/thresholds/proxmox",
+    "/alerts/schedule",
+    "/alerts/notifications",
+    "/alerts/history",
+    "/patrol",
+    "/patrol/activity",
+    "/actions"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "desktop dark and light themes on Alerts Overview with active search and severity filter chips",
+    "desktop dark Thresholds scrolled below the fold with floating unsaved changes bar visible",
+    "desktop dark Thresholds clean platform tab names and always-visible help banner dismiss button",
+    "desktop dark Delivery Schedule with Quiet hours enabled, full-width timezone select, and uniform suppress category grid",
+    "desktop dark Notifications with disabled Apprise Send test hidden and clean External watchdog copy",
+    "desktop dark Patrol Inbox in Watch only mode showing accurate 68 issues to review count and pagination beyond 50",
+    "desktop dark Patrol Activity This week digest matching effective locked Watch only mode",
+    "mobile 390x844 Alert History frequency chart auto-scrolled to latest edge with left fade and scroll hint",
+    "mobile 390x844 Thresholds centered Expand all and Collapse all separator",
+    "mobile 390x844 dark and light Actions cards with stacked badges and action titles plus single refresh icon"
+  ],
+  "interactions": [
+    "Filtered active alerts on /alerts/overview with Critical, Warning, All chips and search query",
+    "Expanded PBS Servers on /alerts/thresholds/proxmox, edited threshold input, verified viewport-pinned Save Changes and Discard bar, and discarded changes",
+    "Toggled Quiet hours on /alerts/schedule, verified Europe/London timezone width (430px) and uniform suppress category cards, and discarded changes",
+    "Verified /alerts/notifications disabled Apprise controls and External watchdog copy",
+    "Expanded Patrol Inbox on /patrol and clicked Load more to paginate from 50 to 68 items",
+    "Switched to Patrol Activity tab and verified Watch only digest copy",
+    "Verified mobile /alerts/history horizontal auto-scroll to right edge (scrollLeft 490 of 810), /alerts/thresholds separator alignment (deltaY 0px), and /actions mobile card layout"
+  ]
+}

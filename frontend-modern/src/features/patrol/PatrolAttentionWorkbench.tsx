@@ -30,6 +30,7 @@ import type {
 } from '@/api/patrolAttention';
 import {
   acknowledgePatrolAttention,
+  getPatrolAttention,
   planPatrolAttentionAction,
   suppressPatrolAttention,
   unacknowledgePatrolAttention,
@@ -85,6 +86,7 @@ import {
 
 const PRIMARY_EVIDENCE_LIMIT = 3;
 const PRIMARY_DECISION_LIMIT = 5;
+const ATTENTION_PAGE_LIMIT = 50;
 type PatrolAttentionView = 'inbox' | 'handled';
 
 const normalizeComparableCopy = (value?: string | null) =>
@@ -205,6 +207,12 @@ export function PatrolAttentionWorkbench(
   const [attentionView, setAttentionView] = createSignal<PatrolAttentionView>('inbox');
   const [reviewOrder, setReviewOrder] = createSignal<string[]>([]);
   const [showAllDecisions, setShowAllDecisions] = createSignal(false);
+  const [extraItems, setExtraItems] = createSignal<AttentionItem[]>([]);
+  const [loadedPage, setLoadedPage] = createSignal(1);
+  const [loadingMore, setLoadingMore] = createSignal(false);
+  const [loadMoreError, setLoadMoreError] = createSignal('');
+  const [knownServerTotal, setKnownServerTotal] = createSignal<number | null>(null);
+  let loadMoreGeneration = 0;
   const itemButtons = new Map<string, HTMLButtonElement>();
   let detailPanel: HTMLDivElement | undefined;
   let actionTrigger: HTMLButtonElement | undefined;
@@ -218,14 +226,43 @@ export function PatrolAttentionWorkbench(
   const handledCount = createMemo(
     () => (summary()?.acknowledgedCount ?? 0) + (summary()?.suppressedCount ?? 0),
   );
+
+  // Reset additional loaded pages whenever the base store list reloads or view switches.
+  createEffect(() => {
+    patrolAttentionStore.items();
+    attentionView();
+    loadMoreGeneration++;
+    setExtraItems([]);
+    setLoadedPage(1);
+    setLoadingMore(false);
+    setLoadMoreError('');
+    setKnownServerTotal(null);
+  });
+
+  const combinedItems = createMemo<AttentionItem[]>(() => {
+    const base = patrolAttentionStore.items();
+    const baseList = Array.isArray(base) ? base : [];
+    const appended = extraItems();
+    if (appended.length === 0) return baseList;
+    const seen = new Set(baseList.map((entry) => entry.id));
+    const merged = [...baseList];
+    for (const entry of appended) {
+      if (!seen.has(entry.id)) {
+        seen.add(entry.id);
+        merged.push(entry);
+      }
+    }
+    return merged;
+  });
+
   const attention = createMemo(() => {
-    const items = patrolAttentionStore.items();
+    const items = combinedItems();
     const visibleItems =
       attentionView() === 'handled'
         ? items.filter((item) => item.state === 'acknowledged' || item.state === 'suppressed')
         : items;
     return partitionPatrolAttention(
-      Array.isArray(visibleItems) ? visibleItems : [],
+      visibleItems,
       attentionView() === 'handled' ? 'monitor' : (props.autonomyLevel ?? 'monitor'),
       attentionView() === 'handled' ? true : (props.autonomyLocked ?? false),
     );
@@ -261,16 +298,98 @@ export function PatrolAttentionWorkbench(
     const index = selectedDecisionIndex();
     return index >= 0 ? orderedDecisions()[index + 1] : undefined;
   });
+  const isPassiveWatchOnly = createMemo(
+    () => attentionView() === 'inbox' && effectiveAutonomyLevel() === 'monitor',
+  );
+  const serverInboxTotal = createMemo(() => {
+    const loaded = combinedItems().length;
+    const summaryActive = summary()?.activeCount ?? 0;
+    const metaTotal = knownServerTotal() ?? 0;
+    return Math.max(loaded, summaryActive, metaTotal);
+  });
+  const serverAllTotal = createMemo(() => {
+    const loaded = combinedItems().length;
+    const metaTotal = knownServerTotal();
+    if (metaTotal !== null) return Math.max(loaded, metaTotal);
+    return Math.max(loaded, (summary()?.activeCount ?? 0) + handledCount());
+  });
+  const hasMorePages = createMemo(() => {
+    if (combinedItems().length === 0) return false;
+    if (attentionView() === 'handled') {
+      return (
+        attention().needsUser.length < handledCount() && combinedItems().length < serverAllTotal()
+      );
+    }
+    return combinedItems().length < serverInboxTotal();
+  });
+  const remainingServerCount = createMemo(() => {
+    if (attentionView() === 'handled') {
+      return Math.max(0, handledCount() - attention().needsUser.length);
+    }
+    return Math.max(0, serverInboxTotal() - combinedItems().length);
+  });
+  const headlineCount = createMemo(() => {
+    const loaded = attention().needsUser.length;
+    if (attentionView() === 'handled') {
+      return Math.max(loaded, handledCount());
+    }
+    // Under Watch only and Ask first, every active item belongs in the user's queue,
+    // so the headline reflects the true server total rather than stopping at the 50-item page cap.
+    if (effectiveAutonomyLevel() === 'monitor' || effectiveAutonomyLevel() === 'approval') {
+      return Math.max(loaded, serverInboxTotal());
+    }
+    return loaded;
+  });
+  const queueNounSingular = createMemo(() => (isPassiveWatchOnly() ? 'issue' : 'decision'));
+  const queueNounPlural = createMemo(() => (isPassiveWatchOnly() ? 'issues' : 'decisions'));
   const briefingHeadline = createMemo(() => {
     if (patrolAttentionStore.loading() && !summary()) return 'Building your current briefing';
-    const count = attention().needsUser.length;
+    const count = headlineCount();
     if (attentionView() === 'handled') {
       if (count === 0) return 'No reviewed or suppressed issues';
       return `${count} reviewed or suppressed ${count === 1 ? 'issue' : 'issues'}`;
     }
-    if (count === 0) return 'No decisions are waiting';
+    if (count === 0) {
+      return isPassiveWatchOnly() ? 'No issues to review' : 'No decisions are waiting';
+    }
+    if (isPassiveWatchOnly()) {
+      return `${count} ${count === 1 ? 'issue' : 'issues'} to review`;
+    }
     return `${count} ${count === 1 ? 'decision needs' : 'decisions need'} you`;
   });
+
+  const loadMoreItems = async () => {
+    if (loadingMore() || !hasMorePages()) return;
+    const generation = loadMoreGeneration;
+    const nextPage = loadedPage() + 1;
+    const activeFilter = attentionView() === 'handled' ? 'all' : 'active';
+    setLoadingMore(true);
+    setLoadMoreError('');
+    try {
+      const response = await getPatrolAttention(activeFilter, nextPage, ATTENTION_PAGE_LIMIT);
+      if (generation !== loadMoreGeneration) return;
+      const incoming = Array.isArray(response.data) ? response.data : [];
+      if (incoming.length > 0) {
+        setExtraItems((prev) => [...prev, ...incoming]);
+        setLoadedPage(response.meta?.page ?? nextPage);
+        setShowAllDecisions(true);
+      }
+      if (typeof response.meta?.total === 'number') {
+        setKnownServerTotal(response.meta.total);
+      } else if (incoming.length < ATTENTION_PAGE_LIMIT) {
+        setKnownServerTotal(combinedItems().length);
+      }
+    } catch (cause) {
+      if (generation !== loadMoreGeneration) return;
+      setLoadMoreError(
+        cause instanceof Error ? cause.message : 'More attention items could not be loaded.',
+      );
+    } finally {
+      if (generation === loadMoreGeneration) {
+        setLoadingMore(false);
+      }
+    }
+  };
 
   const loadCurrentFilter = () => patrolAttentionStore.load(patrolAttentionStore.filter());
   const scrollDetailIntoView = () => {
@@ -394,8 +513,8 @@ export function PatrolAttentionWorkbench(
               ? `${successLabel}. ${remaining.length} ${remaining.length === 1 ? 'handled issue remains' : 'handled issues remain'}.`
               : `${successLabel}. No other handled issues remain.`
             : remaining.length > 0
-              ? `${successLabel}. ${remaining.length} ${remaining.length === 1 ? 'decision remains' : 'decisions remain'}.`
-              : `${successLabel}. Your decision inbox is clear.`,
+              ? `${successLabel}. ${remaining.length} ${remaining.length === 1 ? `${queueNounSingular()} remains` : `${queueNounPlural()} remain`}.`
+              : `${successLabel}. ${isPassiveWatchOnly() ? 'Your review queue is clear.' : 'Your decision inbox is clear.'}`,
         );
         if (next) {
           selectItem(next.item.id, true);
@@ -452,6 +571,13 @@ export function PatrolAttentionWorkbench(
             <h2 class="text-xl font-semibold tracking-tight text-base-content sm:text-2xl">
               {briefingHeadline()}
             </h2>
+            <Show when={hasMorePages() && attention().needsUser.length > 0}>
+              <p class="mt-1 text-xs text-muted" data-testid="patrol-attention-pagination-summary">
+                Showing {visibleDecisions().length} of {headlineCount()}{' '}
+                {attentionView() === 'handled' ? 'handled issues' : queueNounPlural()} (
+                {attention().needsUser.length} loaded)
+              </p>
+            </Show>
             <Show when={attention().needsUser.length === 0}>
               <p class="mt-1 text-sm leading-5 text-muted">
                 {attentionView() === 'handled'
@@ -563,18 +689,49 @@ export function PatrolAttentionWorkbench(
             view={attentionView()}
             findings={props.findings}
           />
-          <Show when={attention().needsUser.length > PRIMARY_DECISION_LIMIT}>
-            <div class="border-t border-border px-4 py-3 text-center sm:px-5">
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={() => setShowAllDecisions((current) => !current)}
+          <Show when={attention().needsUser.length > PRIMARY_DECISION_LIMIT || hasMorePages()}>
+            <div class="flex flex-wrap items-center justify-center gap-2 border-t border-border px-4 py-3 text-center sm:px-5">
+              <Show when={attention().needsUser.length > PRIMARY_DECISION_LIMIT}>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => setShowAllDecisions((current) => !current)}
+                >
+                  {showAllDecisions()
+                    ? `Show fewer ${queueNounPlural()}`
+                    : hasMorePages()
+                      ? `Show ${attention().needsUser.length} of ${headlineCount()} ${queueNounPlural()}`
+                      : `Show all ${attention().needsUser.length} ${queueNounPlural()}`}
+                </Button>
+              </Show>
+              <Show
+                when={
+                  hasMorePages() &&
+                  (showAllDecisions() || attention().needsUser.length <= PRIMARY_DECISION_LIMIT)
+                }
               >
-                {showAllDecisions()
-                  ? 'Show fewer decisions'
-                  : `Show all ${attention().needsUser.length} decisions`}
-              </Button>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  disabled={loadingMore()}
+                  onClick={() => void loadMoreItems()}
+                >
+                  {loadingMore()
+                    ? 'Loading more...'
+                    : `Load more (${remainingServerCount()} remaining)`}
+                </Button>
+              </Show>
             </div>
+          </Show>
+          <Show when={loadMoreError()}>
+            {(message) => (
+              <p
+                role="alert"
+                class="border-t border-border px-4 py-2 text-center text-xs text-red-600 dark:text-red-400"
+              >
+                {message()}
+              </p>
+            )}
           </Show>
         </div>
         <Show when={selectedItemId()}>
@@ -597,7 +754,13 @@ export function PatrolAttentionWorkbench(
                 selectedDecisionIndex() >= 0 ? selectedDecisionIndex() + 1 : undefined
               }
               queueCount={() => orderedDecisions().length}
-              queueLabel={attentionView() === 'handled' ? 'Handled issue' : 'Decision'}
+              queueLabel={
+                attentionView() === 'handled'
+                  ? 'Handled issue'
+                  : isPassiveWatchOnly()
+                    ? 'Issue'
+                    : 'Decision'
+              }
               canPrevious={() => Boolean(previousDecision())}
               canNext={() => Boolean(nextDecision())}
               onPrevious={() => {
@@ -924,7 +1087,7 @@ function AttentionDetail(props: {
   lifecycleError: string;
   queuePosition: Accessor<number | undefined>;
   queueCount: Accessor<number>;
-  queueLabel: 'Decision' | 'Handled issue';
+  queueLabel: 'Decision' | 'Issue' | 'Handled issue';
   canPrevious: Accessor<boolean>;
   canNext: Accessor<boolean>;
   onPrevious: () => void;

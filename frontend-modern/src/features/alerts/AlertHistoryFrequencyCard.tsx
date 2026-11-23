@@ -1,4 +1,4 @@
-import { createMemo, For, Show } from 'solid-js';
+import { createEffect, createMemo, createSignal, For, onCleanup, onMount, Show } from 'solid-js';
 
 import { Card } from '@/components/shared/Card';
 import { SectionHeader } from '@/components/shared/SectionHeader';
@@ -54,6 +54,63 @@ export function AlertHistoryFrequencyCard(props: AlertHistoryFrequencyCardProps)
     const totals: AlertSeverityCounts = { critical: 0, warning: 0, info: 0 };
     for (const alert of props.state.alertData()) totals[alertSeverityCountKey(alert.severity)]++;
     return totals;
+  });
+
+  let scrollContainerRef: HTMLDivElement | undefined;
+  const [canScrollLeft, setCanScrollLeft] = createSignal(false);
+  const [canScrollRight, setCanScrollRight] = createSignal(false);
+  const [isHorizontallyScrollable, setIsHorizontallyScrollable] = createSignal(false);
+
+  const updateScrollCueState = () => {
+    const el = scrollContainerRef;
+    if (!el) return;
+    const maxScroll = Math.max(0, el.scrollWidth - el.clientWidth);
+    setIsHorizontallyScrollable(maxScroll > 2);
+    setCanScrollLeft(el.scrollLeft > 2);
+    setCanScrollRight(maxScroll - el.scrollLeft > 2);
+  };
+
+  const scrollToLatestEdge = () => {
+    const el = scrollContainerRef;
+    if (!el) return;
+    if (el.scrollWidth > el.clientWidth) {
+      el.scrollLeft = el.scrollWidth;
+    }
+    updateScrollCueState();
+  };
+
+  let scrollSyncRafId: number | undefined;
+  const scheduleScrollToLatestEdge = () => {
+    scrollToLatestEdge();
+    if (typeof requestAnimationFrame !== 'function') return;
+    if (scrollSyncRafId !== undefined) cancelAnimationFrame(scrollSyncRafId);
+    scrollSyncRafId = requestAnimationFrame(() => {
+      scrollSyncRafId = undefined;
+      scrollToLatestEdge();
+    });
+  };
+
+  onMount(() => {
+    scheduleScrollToLatestEdge();
+    const handleResize = () => updateScrollCueState();
+    window.addEventListener('resize', handleResize);
+    onCleanup(() => {
+      window.removeEventListener('resize', handleResize);
+      if (scrollSyncRafId !== undefined) {
+        cancelAnimationFrame(scrollSyncRafId);
+        scrollSyncRafId = undefined;
+      }
+    });
+  });
+
+  createEffect(() => {
+    // Whenever the plotted buckets change (range switch or initial load),
+    // anchor the horizontal scroll surface on the right edge ("Now") so
+    // narrow viewports show the most recent activity first.
+    const trends = props.state.alertTrends();
+    trends.buckets.length;
+    trends.bucketTimes[trends.bucketTimes.length - 1];
+    scheduleScrollToLatestEdge();
   });
 
   return (
@@ -123,137 +180,173 @@ export function AlertHistoryFrequencyCard(props: AlertHistoryFrequencyCardProps)
       {(() => {
         const trends = props.state.alertTrends();
         return (
-          <div
-            data-alert-frequency-scroll
-            class="overflow-x-auto pb-1"
-            role="group"
-            aria-label="Filter alert history by time period"
-          >
-            {/*
+          <>
+            <div class="relative">
+              <Show when={canScrollLeft()}>
+                <div
+                  aria-hidden="true"
+                  data-alert-frequency-fade="left"
+                  class="pointer-events-none absolute inset-y-0 left-0 z-10 w-6 bg-gradient-to-r from-surface to-transparent"
+                />
+              </Show>
+              <Show when={canScrollRight()}>
+                <div
+                  aria-hidden="true"
+                  data-alert-frequency-fade="right"
+                  class="pointer-events-none absolute inset-y-0 right-0 z-10 w-6 bg-gradient-to-l from-surface to-transparent"
+                />
+              </Show>
+              <div
+                ref={scrollContainerRef}
+                data-alert-frequency-scroll
+                onScroll={updateScrollCueState}
+                class="overflow-x-auto pb-1"
+                role="group"
+                aria-label="Filter alert history by time period"
+              >
+                {/*
               Keep each period at least 24 CSS pixels wide. On compact cards the
               chart and its axis scroll as one surface instead of compressing
               dozens of pointer targets below the WCAG 2.2 minimum target size.
             */}
-            <div class="w-max min-w-full">
-              <div class="rounded-sm bg-surface-alt p-1">
-                <div class="flex h-12 items-end gap-1">
-                  {trends.buckets.map((value, index) => {
-                    const pixelHeight =
-                      value > 0
-                        ? Math.max(
-                            BAR_MIN_PX,
-                            Math.round(Math.sqrt(value / trends.max) * BAR_MAX_PX),
-                          )
-                        : 0;
-                    const counts = trends.severityBuckets?.[index];
-                    const breakdown = formatSeverityBreakdown(counts);
-                    const isSelected = () => props.state.selectedBarIndex() === index;
-                    const bucketStart = trends.bucketTimes[index];
-                    const bucketEnd = bucketStart + trends.bucketSize * MS_PER_HOUR;
-                    const bucketRangeLabel = props.state.formatBucketRange(bucketStart, bucketEnd);
-                    const bucketDurationText =
-                      trends.bucketSize % 24 === 0
-                        ? `${trends.bucketSize / 24} day${trends.bucketSize / 24 === 1 ? '' : 's'}`
-                        : `${trends.bucketSize} hour${trends.bucketSize === 1 ? '' : 's'}`;
-                    const countLabel = getAlertBucketCountLabel(value);
-                    const tooltipContent = [
-                      breakdown ? `${countLabel}: ${breakdown}` : countLabel,
-                      `${bucketDurationText} period`,
-                      bucketRangeLabel,
-                    ].join('\n');
+                <div class="w-max min-w-full">
+                  <div class="rounded-sm bg-surface-alt p-1">
+                    <div class="flex h-12 items-end gap-1">
+                      {trends.buckets.map((value, index) => {
+                        const pixelHeight =
+                          value > 0
+                            ? Math.max(
+                                BAR_MIN_PX,
+                                Math.round(Math.sqrt(value / trends.max) * BAR_MAX_PX),
+                              )
+                            : 0;
+                        const counts = trends.severityBuckets?.[index];
+                        const breakdown = formatSeverityBreakdown(counts);
+                        const isSelected = () => props.state.selectedBarIndex() === index;
+                        const bucketStart = trends.bucketTimes[index];
+                        const bucketEnd = bucketStart + trends.bucketSize * MS_PER_HOUR;
+                        const bucketRangeLabel = props.state.formatBucketRange(
+                          bucketStart,
+                          bucketEnd,
+                        );
+                        const bucketDurationText =
+                          trends.bucketSize % 24 === 0
+                            ? `${trends.bucketSize / 24} day${trends.bucketSize / 24 === 1 ? '' : 's'}`
+                            : `${trends.bucketSize} hour${trends.bucketSize === 1 ? '' : 's'}`;
+                        const countLabel = getAlertBucketCountLabel(value);
+                        const tooltipContent = [
+                          breakdown ? `${countLabel}: ${breakdown}` : countLabel,
+                          `${bucketDurationText} period`,
+                          bucketRangeLabel,
+                        ].join('\n');
 
-                    return (
-                      <button
-                        type="button"
-                        data-alert-frequency-bucket={index}
-                        class="relative flex h-12 min-w-6 flex-1 cursor-pointer items-end rounded-xs focus:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-inset"
-                        aria-pressed={isSelected()}
-                        aria-label={`${breakdown ? `${countLabel} (${breakdown})` : countLabel} between ${bucketRangeLabel}`}
-                        onClick={() =>
-                          props.state.setSelectedBarIndex(
-                            index === props.state.selectedBarIndex() ? null : index,
-                          )
-                        }
-                      >
-                        <span class="absolute bottom-0 h-1 w-full rounded-full bg-slate-300 opacity-30"></span>
-                        <span
-                          data-alert-frequency-bar
-                          class="relative flex w-full flex-col-reverse overflow-hidden rounded-xs"
-                          classList={{ 'ring-2 ring-blue-500/60': isSelected() }}
-                          style={{ height: `${pixelHeight}px` }}
-                          title={bucketRangeLabel}
-                          onMouseEnter={(event) => {
-                            if (value <= 0) {
-                              hideTooltip();
-                              return;
+                        return (
+                          <button
+                            type="button"
+                            data-alert-frequency-bucket={index}
+                            class="relative flex h-12 min-w-6 flex-1 cursor-pointer items-end rounded-xs focus:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-inset"
+                            aria-pressed={isSelected()}
+                            aria-label={`${breakdown ? `${countLabel} (${breakdown})` : countLabel} between ${bucketRangeLabel}`}
+                            onClick={() =>
+                              props.state.setSelectedBarIndex(
+                                index === props.state.selectedBarIndex() ? null : index,
+                              )
                             }
-                            const rect = event.currentTarget.getBoundingClientRect();
-                            showTooltip(tooltipContent, rect.left + rect.width / 2, rect.top, {
-                              align: 'center',
-                              direction: 'up',
-                            });
-                          }}
-                          onMouseLeave={() => hideTooltip()}
-                        >
-                          <For
-                            each={SEVERITY_ORDER.filter(
-                              (severity) => (counts?.[severity] ?? 0) > 0,
-                            )}
                           >
-                            {(severity) => (
-                              <span
-                                data-alert-frequency-segment={severity}
-                                class={`w-full shrink-0 ${getAlertSeverityFillClass(severity)}`}
-                                style={{ height: `${((counts?.[severity] ?? 0) / value) * 100}%` }}
-                              />
-                            )}
-                          </For>
-                        </span>
-                      </button>
-                    );
-                  })}
+                            <span class="absolute bottom-0 h-1 w-full rounded-full bg-slate-300 opacity-30"></span>
+                            <span
+                              data-alert-frequency-bar
+                              class="relative flex w-full flex-col-reverse overflow-hidden rounded-xs"
+                              classList={{ 'ring-2 ring-blue-500/60': isSelected() }}
+                              style={{ height: `${pixelHeight}px` }}
+                              title={bucketRangeLabel}
+                              onMouseEnter={(event) => {
+                                if (value <= 0) {
+                                  hideTooltip();
+                                  return;
+                                }
+                                const rect = event.currentTarget.getBoundingClientRect();
+                                showTooltip(tooltipContent, rect.left + rect.width / 2, rect.top, {
+                                  align: 'center',
+                                  direction: 'up',
+                                });
+                              }}
+                              onMouseLeave={() => hideTooltip()}
+                            >
+                              <For
+                                each={SEVERITY_ORDER.filter(
+                                  (severity) => (counts?.[severity] ?? 0) > 0,
+                                )}
+                              >
+                                {(severity) => (
+                                  <span
+                                    data-alert-frequency-segment={severity}
+                                    class={`w-full shrink-0 ${getAlertSeverityFillClass(severity)}`}
+                                    style={{
+                                      height: `${((counts?.[severity] ?? 0) / value) * 100}%`,
+                                    }}
+                                  />
+                                )}
+                              </For>
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  <Show when={props.state.axisTicks().length > 0}>
+                    <div class="relative mt-3 h-10">
+                      <div class="absolute inset-x-0 top-0 h-px bg-surface-hover"></div>
+                      <For each={props.state.axisTicks()}>
+                        {(tick, index) => {
+                          const lastIndex = props.state.axisTicks().length - 1;
+                          const mobileMidpoint = Math.floor(lastIndex / 2);
+                          const visibleOnMobile =
+                            index() === 0 || index() === mobileMidpoint || index() === lastIndex;
+
+                          return (
+                            <div
+                              data-testid="alert-frequency-axis-tick"
+                              class="pointer-events-none absolute top-0 h-full flex-col items-center sm:flex"
+                              classList={{
+                                hidden: !visibleOnMobile,
+                                flex: visibleOnMobile,
+                              }}
+                              style={{ left: `${tick.position * 100}%` }}
+                            >
+                              <div class="h-3 w-px bg-slate-300"></div>
+                              <div
+                                data-testid="alert-frequency-axis-label"
+                                class="mt-1 whitespace-nowrap text-[10px] text-muted transform"
+                                classList={{
+                                  '-translate-x-1/2': tick.align === 'center',
+                                  '-translate-x-full': tick.align === 'end',
+                                }}
+                              >
+                                {tick.label}
+                              </div>
+                            </div>
+                          );
+                        }}
+                      </For>
+                    </div>
+                  </Show>
                 </div>
               </div>
-
-              <Show when={props.state.axisTicks().length > 0}>
-                <div class="relative mt-3 h-10">
-                  <div class="absolute inset-x-0 top-0 h-px bg-surface-hover"></div>
-                  <For each={props.state.axisTicks()}>
-                    {(tick, index) => {
-                      const lastIndex = props.state.axisTicks().length - 1;
-                      const mobileMidpoint = Math.floor(lastIndex / 2);
-                      const visibleOnMobile =
-                        index() === 0 || index() === mobileMidpoint || index() === lastIndex;
-
-                      return (
-                        <div
-                          data-testid="alert-frequency-axis-tick"
-                          class="pointer-events-none absolute top-0 h-full flex-col items-center sm:flex"
-                          classList={{
-                            hidden: !visibleOnMobile,
-                            flex: visibleOnMobile,
-                          }}
-                          style={{ left: `${tick.position * 100}%` }}
-                        >
-                          <div class="h-3 w-px bg-slate-300"></div>
-                          <div
-                            data-testid="alert-frequency-axis-label"
-                            class="mt-1 whitespace-nowrap text-[10px] text-muted transform"
-                            classList={{
-                              '-translate-x-1/2': tick.align === 'center',
-                              '-translate-x-full': tick.align === 'end',
-                            }}
-                          >
-                            {tick.label}
-                          </div>
-                        </div>
-                      );
-                    }}
-                  </For>
-                </div>
-              </Show>
             </div>
-          </div>
+            <Show when={isHorizontallyScrollable()}>
+              <p
+                data-alert-frequency-scroll-hint
+                class="mt-1 flex items-center justify-between text-[11px] text-muted"
+              >
+                <span>
+                  {canScrollLeft() ? '← Scroll left for earlier periods' : 'Earliest period'}
+                </span>
+                <span>{canScrollRight() ? 'Scroll right for latest →' : 'Showing latest'}</span>
+              </p>
+            </Show>
+          </>
         );
       })()}
     </Card>

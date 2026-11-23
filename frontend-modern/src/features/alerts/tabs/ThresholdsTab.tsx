@@ -128,44 +128,51 @@ export function ThresholdsTab(props: ThresholdsTabProps) {
   };
 
   return (
-    <div class="space-y-4">
-      <AlertIntentPolicyPanel
-        resources={props.allResources}
-        selectionTarget={intentSelectionTarget()}
-      />
-      {/*
-        CPU averaging is tuning, not the page's answer. It stays one line that
-        states the effective setting, so the default limits below lead and the
-        ten per-platform selects open only for someone changing them.
-      */}
-      <Show when={props.metricEvaluationWindows && props.setMetricEvaluationWindows}>
-        <details class="group rounded-md border border-border bg-surface" data-cpu-averaging>
-          <summary class="flex min-h-11 cursor-pointer list-none items-center gap-2 px-4 py-2.5 text-sm focus-visible:outline-solid focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-blue-500 [&::-webkit-details-marker]:hidden">
-            <ChevronRight
-              class="h-4 w-4 shrink-0 text-muted transition-transform group-open:rotate-90"
-              aria-hidden="true"
-            />
-            <span class="shrink-0 font-semibold text-base-content">CPU averaging</span>
-            <span class="min-w-0 text-muted sm:truncate" data-cpu-averaging-summary>
-              {cpuWindowSummary()}
-            </span>
-          </summary>
-          <div class="space-y-3 border-t border-border px-4 py-3">
-            <p class="text-sm text-muted">
-              Pulse averages CPU over time before applying trigger and recovery thresholds. This
-              filters harmless bursts without delaying a sustained incident or splitting its
-              timeline.
-            </p>
-            <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-              <For each={evaluationProfiles}>{(profile) => evaluationProfileControl(profile)}</For>
+    <div class="space-y-3">
+      <div class="space-y-2">
+        <AlertIntentPolicyPanel
+          resources={props.allResources}
+          selectionTarget={intentSelectionTarget()}
+        />
+        {/*
+          CPU averaging is tuning, not the page's answer. It stays one line that
+          states the effective setting, so the default limits below lead and the
+          ten per-platform selects open only for someone changing them.
+        */}
+        <Show when={props.metricEvaluationWindows && props.setMetricEvaluationWindows}>
+          <details class="group rounded-md border border-border bg-surface" data-cpu-averaging>
+            <summary class="flex min-h-10 cursor-pointer list-none items-center gap-2 px-3.5 py-2 text-sm focus-visible:outline-solid focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-blue-500 [&::-webkit-details-marker]:hidden">
+              <ChevronRight
+                class="h-4 w-4 shrink-0 text-muted transition-transform group-open:rotate-90"
+                aria-hidden="true"
+              />
+              <span class="shrink-0 font-semibold text-base-content">CPU averaging</span>
+              <span
+                class="min-w-0 text-xs text-muted sm:truncate sm:text-sm"
+                data-cpu-averaging-summary
+              >
+                {cpuWindowSummary()}
+              </span>
+            </summary>
+            <div class="space-y-3 border-t border-border px-4 py-3">
+              <p class="text-sm text-muted">
+                Pulse averages CPU over time before applying trigger and recovery thresholds. This
+                filters harmless bursts without delaying a sustained incident or splitting its
+                timeline.
+              </p>
+              <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                <For each={evaluationProfiles}>
+                  {(profile) => evaluationProfileControl(profile)}
+                </For>
+              </div>
+              <p class="text-xs text-muted">
+                A rolling rule waits for enough recent, gap-free samples. If history is incomplete,
+                Pulse holds the existing incident state instead of firing or resolving on weak data.
+              </p>
             </div>
-            <p class="text-xs text-muted">
-              A rolling rule waits for enough recent, gap-free samples. If history is incomplete,
-              Pulse holds the existing incident state instead of firing or resolving on weak data.
-            </p>
-          </div>
-        </details>
-      </Show>
+          </details>
+        </Show>
+      </div>
       <ThresholdsTable
         onConfigureResourceIntent={configureResourceIntent}
         overrides={props.overrides}
@@ -179,6 +186,7 @@ export function ThresholdsTab(props: ThresholdsTabProps) {
         containerRuntimes={props.containerRuntimes}
         dockerHosts={props.dockerHosts}
         allResources={props.allResources}
+        resourcesLoading={props.resourcesLoading}
         pbsInstances={props.pbsInstances}
         pmgInstances={props.pmgInstances}
         pmgThresholds={props.pmgThresholds}

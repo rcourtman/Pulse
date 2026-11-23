@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from '@solidjs/testing-library';
+import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { AlertAppriseDestinationsSection } from './AlertAppriseDestinationsSection';
 import type { UIAppriseConfig } from './types';
@@ -97,5 +97,16 @@ describe('AlertAppriseDestinationsSection', () => {
     renderSection(makeConfig({ mode: 'http', skipTlsVerify: false }));
 
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  it('hides the Send test button while Apprise is disabled and collapsed, matching Email', () => {
+    renderSection(makeConfig({ enabled: false }));
+
+    expect(screen.queryByRole('button', { name: /send test/i })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /show settings/i }));
+    const testButton = screen.getByRole('button', { name: /send test/i });
+    expect(testButton).toBeInTheDocument();
+    expect(testButton).toBeDisabled();
   });
 });
