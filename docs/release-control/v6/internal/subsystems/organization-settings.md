@@ -593,6 +593,16 @@ real state, API and HTTP client with synthetic invitations, including keyboard
 acceptance/decline, long identities and dark theme. This does not establish
 original-account recovery or installed service acceptance.
 
+On the bootstrap screen for a signed-in user without a usable organization,
+the first Decline action opens a confirmation naming the exact organization
+and invited role. It does not send a decision. Keeping the invitation or
+dismissing the dialog returns focus to the originating action. Confirming
+sends the same single decline and returns focus to the invitation region,
+since the button can disappear after a fresh read. Accept is unchanged.
+Pending and unconfirmed writes still use their existing readback and never
+retry the decision automatically. `NoOrganizationAccess.test.tsx` covers
+cancel, exact targeting and the existing pending and recovery paths.
+
 ### Sharing requests require an explicitly chosen recipient
 
 A fresh Organization Sharing draft starts at **Select organization**. Neither

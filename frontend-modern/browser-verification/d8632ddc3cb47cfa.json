@@ -1,0 +1,41 @@
+{
+  "version": 1,
+  "base_sha": "ea824d152171a8e2b26bf187b68d671aa2ec50fb",
+  "verified_at": "2026-11-23T19:51:02Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/NoOrganizationAccess.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/NoOrganizationAccess.tsx": "5eb2bc6f57c90415c0291938b54f079fb62ca1a84b4cb7ed20ad1e42a7fa7246"
+  },
+  "routes": [
+    "/standalone/machines (signed-in invitation screen at bootstrap)"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900,
+      "theme": "light",
+      "browser": "Chromium 141.0.7390.37"
+    },
+    {
+      "width": 320,
+      "height": 800,
+      "theme": "dark",
+      "browser": "WebKit 26.0, touch"
+    }
+  ],
+  "states": [
+    "Two invitations with the same display name, different exact IDs and different roles.",
+    "First Decline activates the review only. The exact ID, invited role, consequence and both choices fit on desktop and phone.",
+    "A confirmed decline keeps waiting and readback distinct. A fresh list keeps the other invitation and its actions.",
+    "An unconfirmed response preserves the existing stale-list warning, Check again and Sign out."
+  ],
+  "interactions": [
+    "Desktop Enter opens the review with Keep invitation focused. Tab is contained. Escape or Enter on Keep restores the exact row action and sends nothing.",
+    "Phone tap opens the review. Keep returns to the exact row and sends nothing. Confirm sends one decision for the chosen ID.",
+    "After an unconfirmed decline, Check again runs read-only bootstrap and inbox calls without resending the decision. Accept still sends its existing single request with no dialog."
+  ],
+  "evidence_summary": "Twelve actual production App journeys across base and candidate with identical synthetic HTTP fixtures, Playwright 1.56.1. Ten comparable state pairs inspected natively. No installed service or external identity provider tested."
+}
