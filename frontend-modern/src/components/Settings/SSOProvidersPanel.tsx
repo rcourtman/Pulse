@@ -52,24 +52,34 @@ const SSOEndpoint: Component<{
   caption: string;
   value: string | undefined;
   copyLabel: string;
+  copyHint?: string;
   onCopyValue: (value: string) => Promise<void>;
-}> = (props) => (
-  <div class="min-w-0 space-y-1">
-    <dt class="text-muted">{props.caption}</dt>
-    <dd class="min-w-0">
-      <CopyValueButton
-        value={props.value}
-        onCopyValue={props.onCopyValue}
-        label={props.copyLabel}
-        variant="accent"
-        size="sm"
-        class="min-h-11 w-full max-w-full justify-between gap-2 py-2 text-left text-xs sm:min-h-0 sm:w-auto [&>svg]:shrink-0"
-      >
-        <span class="min-w-0 [overflow-wrap:anywhere]">{props.value}</span>
-      </CopyValueButton>
-    </dd>
-  </div>
-);
+}> = (props) => {
+  const hintId = createUniqueId();
+  return (
+    <div class="min-w-0 space-y-1">
+      <dt class="text-muted">{props.caption}</dt>
+      <dd class="min-w-0">
+        <CopyValueButton
+          value={props.value}
+          onCopyValue={props.onCopyValue}
+          label={props.copyLabel}
+          aria-describedby={props.copyHint ? hintId : undefined}
+          variant="accent"
+          size="sm"
+          class="min-h-11 w-full max-w-full justify-between gap-2 py-2 text-left text-xs sm:min-h-0 sm:w-auto [&>svg]:shrink-0"
+        >
+          <span class="min-w-0 [overflow-wrap:anywhere]">{props.value}</span>
+        </CopyValueButton>
+        <Show when={props.copyHint}>
+          <p id={hintId} class="mt-1 text-muted">
+            {props.copyHint}
+          </p>
+        </Show>
+      </dd>
+    </div>
+  );
+};
 
 interface SSOProvidersPanelProps {
   onConfigUpdated?: () => void;
@@ -464,6 +474,7 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
                             value={provider.oidcCallbackUrl}
                             onCopyValue={(value) => copyToClipboard(value, 'Callback URL')}
                             copyLabel="Copy callback / redirect URL"
+                            copyHint="Register this URL as a redirect URI in your identity provider before testing sign-in."
                           />
                         </dl>
                       </Show>
@@ -590,35 +601,44 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
               <Show when={form.type === 'oidc'}>
                 <div class="space-y-4">
                   <div class="bg-surface-alt border border-border rounded-md p-3">
-                    <p class="text-xs text-base-content">
-                      <strong>Setup:</strong> Register this Callback / Redirect URL with your
-                      Identity Provider for Pulse sign-in.
-                    </p>
                     <Show
-                      when={editingProvider()?.oidcCallbackUrl}
+                      when={editingProvider()}
                       fallback={
-                        <p class="mt-2 text-xs text-muted">
-                          {editingProvider()
-                            ? getSSOEndpointUnavailableHint('Callback / Redirect URL')
-                            : 'The Callback / Redirect URL is generated when the provider is saved. Save this provider, then copy it from the provider card.'}
+                        <p class="text-xs text-base-content">
+                          <strong>Setup:</strong> Create the provider in Pulse. Then copy its
+                          Callback / Redirect URL from the saved provider card and register it with
+                          your identity provider.
                         </p>
                       }
                     >
-                      <div class="mt-2 flex flex-col gap-1 sm:flex-row sm:items-center sm:gap-2">
-                        <span class="text-xs text-muted">Callback / Redirect URL:</span>
-                        <CopyValueButton
-                          value={editingProvider()?.oidcCallbackUrl}
-                          onCopyValue={(value) => copyToClipboard(value, 'Callback URL')}
-                          label="Copy callback / redirect URL"
-                          variant="accent"
-                          size="sm"
-                          class="min-w-0 max-w-full justify-between gap-2 py-2 text-left text-xs [&>svg]:shrink-0"
-                        >
-                          <span class="min-w-0 [overflow-wrap:anywhere]">
-                            {editingProvider()?.oidcCallbackUrl}
-                          </span>
-                        </CopyValueButton>
-                      </div>
+                      <p class="text-xs text-base-content">
+                        <strong>Setup:</strong> Register this Callback / Redirect URL with your
+                        Identity Provider for Pulse sign-in.
+                      </p>
+                      <Show
+                        when={editingProvider()?.oidcCallbackUrl}
+                        fallback={
+                          <p class="mt-2 text-xs text-muted">
+                            {getSSOEndpointUnavailableHint('Callback / Redirect URL')}
+                          </p>
+                        }
+                      >
+                        {(url) => (
+                          <div class="mt-2 flex flex-col gap-1 sm:flex-row sm:items-center sm:gap-2">
+                            <span class="text-xs text-muted">Callback / Redirect URL:</span>
+                            <CopyValueButton
+                              value={url()}
+                              onCopyValue={(value) => copyToClipboard(value, 'Callback URL')}
+                              label="Copy callback / redirect URL"
+                              variant="accent"
+                              size="sm"
+                              class="min-w-0 max-w-full justify-between gap-2 py-2 text-left text-xs [&>svg]:shrink-0"
+                            >
+                              <span class="min-w-0 [overflow-wrap:anywhere]">{url()}</span>
+                            </CopyValueButton>
+                          </div>
+                        )}
+                      </Show>
                     </Show>
                   </div>
 
