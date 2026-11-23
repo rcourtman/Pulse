@@ -164,6 +164,12 @@ updates:
       - dependency-name: "vite"
         update-types:
           - "version-update:semver-major"
+      # The locked router and Solid compiler tooling require Solid 1.x.
+      # Migrate them with the Solid runtime rather than queuing a standalone
+      # major that cannot install. Keep minor, patch and security updates.
+      - dependency-name: "solid-js"
+        update-types:
+          - "version-update:semver-major"
 
   - package-ecosystem: "docker"
     directories:
