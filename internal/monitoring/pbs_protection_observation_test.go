@@ -727,6 +727,15 @@ func TestPBSFailedRefreshDoesNotRenewCarriedPointEvidence(t *testing.T) {
 						for _, row := range f.m.state.GetSnapshot().PBSBackups {
 							if row.Instance == "pbs-main" {
 								raw++
+								prior, ok := original["pbs-backup:"+row.ID]
+								if !ok {
+									t.Errorf("partial poll published an unexpected row %q", row.ID)
+									continue
+								}
+								failed := failedPoint(prior)
+								if row.CarriedOver != failed || (failed && failure == http.StatusForbidden) {
+									t.Errorf("row %q has incorrect continuity after %d: carried=%t failed-scope=%t", row.ID, failure, row.CarriedOver, failed)
+								}
 							}
 						}
 						if raw != wantRaw {
@@ -744,6 +753,11 @@ func TestPBSFailedRefreshDoesNotRenewCarriedPointEvidence(t *testing.T) {
 						}
 					}
 					poll("pbs-main", 2, true)
+					for _, row := range f.m.state.GetSnapshot().PBSBackups {
+						if row.Instance == "pbs-main" && row.CarriedOver {
+							t.Errorf("recovered row %q is still marked as carried", row.ID)
+						}
+					}
 					recovered := index("pbs-main")
 					for id, point := range recovered {
 						if point.Verified == nil || *point.Verified || point.Evidence == nil || !point.Evidence.IngestedAt.After(original[id].Evidence.IngestedAt) {
