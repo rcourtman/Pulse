@@ -9,6 +9,65 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/storagehealth"
 )
 
+func TestProxmoxPollInventoryReturnsDetachedEvidence(t *testing.T) {
+	type guestView interface {
+		ProxmoxPollInventory() ([]models.Disk, []models.GuestNetworkInterface)
+	}
+	for _, tc := range []struct {
+		name string
+		view func(*Resource) guestView
+	}{
+		{"qemu", func(r *Resource) guestView { return NewVMView(r) }},
+		{"lxc", func(r *Resource) guestView { return NewContainerView(r) }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			for _, absent := range []*Resource{
+				nil,
+				{Agent: &AgentData{Disks: []DiskInfo{{Device: "not-proxmox"}}}},
+				{Proxmox: &ProxmoxData{Disks: []DiskInfo{}, NetworkInterfaces: []NetworkInterface{}}},
+			} {
+				disks, interfaces := tc.view(absent).ProxmoxPollInventory()
+				if disks != nil || interfaces != nil {
+					t.Fatalf("missing Proxmox inventory must remain nil: %v, %v", disks, interfaces)
+				}
+			}
+
+			r := &Resource{Proxmox: &ProxmoxData{
+				Disks: []DiskInfo{
+					{Device: "vda1", Mountpoint: "/", Filesystem: "ext4", Total: 128, Used: 32, Free: 96, Usage: 25},
+					{Device: "vdb", Mountpoint: "/data", Filesystem: "xfs", Total: 256, Used: 128, Free: 128, Usage: 50},
+				},
+				NetworkInterfaces: []NetworkInterface{
+					{Name: "eth0", MAC: "02:00:00:00:00:01", Addresses: []string{"192.0.2.42", "2001:db8::42"},
+						RXBytes: 123, TXBytes: 456, Bridge: "vmbr0", VLAN: 42, Firewall: true},
+					{Name: "eth1", Addresses: []string{}, RXBytes: 1 << 63, Bridge: "vmbr1"},
+				},
+			}}
+			wantDisks := []models.Disk{
+				{Device: "vda1", Mountpoint: "/", Type: "ext4", Total: 128, Used: 32, Free: 96, Usage: 25},
+				{Device: "vdb", Mountpoint: "/data", Type: "xfs", Total: 256, Used: 128, Free: 128, Usage: 50},
+			}
+			wantInterfaces := []models.GuestNetworkInterface{
+				{Name: "eth0", MAC: "02:00:00:00:00:01", Addresses: []string{"192.0.2.42", "2001:db8::42"},
+					RXBytes: 123, TXBytes: 456, Bridge: "vmbr0", VLAN: 42, Firewall: true},
+				{Name: "eth1", Bridge: "vmbr1"},
+			}
+			view := tc.view(r)
+			disks, interfaces := view.ProxmoxPollInventory()
+			if !reflect.DeepEqual(disks, wantDisks) || !reflect.DeepEqual(interfaces, wantInterfaces) {
+				t.Fatalf("poll inventory changed: disks %v, interfaces %v", disks, interfaces)
+			}
+			disks[0].Used = 0
+			interfaces[0].Bridge = ""
+			interfaces[0].Addresses[0] = "198.51.100.1"
+			disks, interfaces = view.ProxmoxPollInventory()
+			if !reflect.DeepEqual(disks, wantDisks) || !reflect.DeepEqual(interfaces, wantInterfaces) {
+				t.Fatal("poller mutated the previous view's evidence")
+			}
+		})
+	}
+}
+
 func TestGuestDiskObservationViewUsesOnlyItsOwnSource(t *testing.T) {
 	origin := models.GuestDiskObservation{Source: "guest-agent", ObservedAt: time.Now().Add(-time.Minute)}
 	vm := models.VM{VMID: 105, Type: "qemu", Status: "running", LastSeen: time.Now(), DiskObservation: origin}
