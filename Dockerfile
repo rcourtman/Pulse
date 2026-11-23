@@ -63,11 +63,11 @@ COPY VERSION ./
 # Copy the synced embed artifact from the frontend builder stage.
 COPY --from=frontend-builder /app/internal/api/frontend-modern/dist ./internal/api/frontend-modern/dist
 
-# Build the main pulse binary for all target architectures
-RUN --mount=type=cache,id=pulse-go-mod,target=/go/pkg/mod \
-    --mount=type=cache,id=pulse-go-build,target=/root/.cache/go-build \
-    --mount=type=secret,id=pulse_license_public_key,required=false \
-    --mount=type=secret,id=pulse_update_signing_key,required=false \
+# Both server targets use the same embedded inputs and linker/signing rules.
+COPY <<'PULSE_BUILD_SERVER' /usr/local/bin/pulse-build-server
+#!/bin/sh
+set -e
+
     VERSION="${VERSION:-v$(cat VERSION | tr -d '\n')}" && \
     BUILD_TIME=$(date -u +"%Y-%m-%dT%H:%M:%SZ") && \
     GIT_COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown") && \
@@ -90,21 +90,44 @@ RUN --mount=type=cache,id=pulse-go-mod,target=/go/pkg/mod \
     if [ -n "${PULSE_UPDATE_SIGNING_PUBLIC_KEY:-}" ] && [ -z "${UPDATE_PUBLIC_KEYS}" ]; then echo "Error: PULSE_UPDATE_SIGNING_PUBLIC_KEY was provided but no update signing key was mounted." >&2; exit 1; fi && \
     if [ -n "${PULSE_UPDATE_SIGNING_PUBLIC_KEY:-}" ] && [ "${UPDATE_PUBLIC_KEYS}" != "${PULSE_UPDATE_SIGNING_PUBLIC_KEY}" ]; then echo "Error: mounted update signing key does not match PULSE_UPDATE_SIGNING_PUBLIC_KEY." >&2; echo "Expected public key: ${PULSE_UPDATE_SIGNING_PUBLIC_KEY}" >&2; echo "Actual public key:   ${UPDATE_PUBLIC_KEYS}" >&2; exit 1; fi && \
     SERVER_LDFLAGS="$(./scripts/release_ldflags.sh server --version "${VERSION}" --build-time "${BUILD_TIME}" --git-commit "${GIT_COMMIT}" $(if [ -n "${LICENSE_PUBLIC_KEY}" ]; then printf '%s %s' --license-public-key "${LICENSE_PUBLIC_KEY}"; fi) $(if [ -n "${UPDATE_PUBLIC_KEYS}" ]; then printf '%s %s' --update-public-keys "${UPDATE_PUBLIC_KEYS}"; fi))" && \
-    CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
-      -tags "${GO_BUILD_TAGS}" \
-      -ldflags="${SERVER_LDFLAGS}" \
-      -buildvcs=false \
-      -trimpath \
-      -o pulse-linux-amd64 ./cmd/pulse && \
-    CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build \
-      -tags "${GO_BUILD_TAGS}" \
-      -ldflags="${SERVER_LDFLAGS}" \
-      -buildvcs=false \
-      -trimpath \
-      -o pulse-linux-arm64 ./cmd/pulse
+    for arch in "$@"; do
+      case "$arch" in
+        amd64|arm64) ;;
+        *) echo "Unsupported Pulse server build architecture: $arch" >&2; exit 1 ;;
+      esac
+      CGO_ENABLED=0 GOOS=linux GOARCH="$arch" go build \
+        -tags "${GO_BUILD_TAGS}" \
+        -ldflags="${SERVER_LDFLAGS}" \
+        -buildvcs=false \
+        -trimpath \
+        -o "pulse-linux-$arch" ./cmd/pulse || exit $?
+    done
+PULSE_BUILD_SERVER
+
+# The full runtime carries both server downloads, even in a single-platform
+# image. Keep the paired build for the regular source-built server paths.
+FROM backend-builder AS backend-server-pair
+RUN --mount=type=cache,id=pulse-go-mod,target=/go/pkg/mod \
+    --mount=type=cache,id=pulse-go-build,target=/root/.cache/go-build \
+    --mount=type=secret,id=pulse_license_public_key,required=false \
+    --mount=type=secret,id=pulse_update_signing_key,required=false \
+    sh /usr/local/bin/pulse-build-server amd64 arm64
+
+# The disposable E2E image never contains the cross-architecture downloads.
+FROM backend-builder AS backend-e2e-server
+ARG TARGETARCH
+RUN --mount=type=cache,id=pulse-go-mod,target=/go/pkg/mod \
+    --mount=type=cache,id=pulse-go-build,target=/root/.cache/go-build \
+    --mount=type=secret,id=pulse_license_public_key,required=false \
+    --mount=type=secret,id=pulse_update_signing_key,required=false \
+    sh /usr/local/bin/pulse-build-server "${TARGETARCH:-amd64}"
 
 
 FROM backend-builder AS release-assets-builder
+
+# Bind the installer/agent assembly to the same version and completed
+# paired-server build as before. This dependency is not on the E2E path.
+COPY --from=backend-server-pair /app/VERSION ./VERSION
 
 # Build unified agent binaries for all platforms (for download endpoint)
 RUN --mount=type=cache,id=pulse-go-mod,target=/go/pkg/mod \
@@ -322,8 +345,8 @@ ARG TARGETARCH
 
 # Assign metadata while copying: a later chown/chmod layer carries the large
 # binary again even though its contents have not changed.
-COPY --from=backend-builder --chown=pulse:pulse --chmod=0755 /app/pulse-linux-${TARGETARCH:-amd64} ./pulse
-COPY --from=backend-builder --chown=pulse:pulse /app/VERSION .
+COPY --from=backend-server-pair --chown=pulse:pulse --chmod=0755 /app/pulse-linux-${TARGETARCH:-amd64} ./pulse
+COPY --from=backend-server-pair --chown=pulse:pulse /app/VERSION .
 
 # Exact-candidate runtime base. release_payload is a named BuildKit context
 # produced from the verified linux-amd64 and linux-arm64 release archives.
@@ -341,9 +364,13 @@ FROM pulse-runtime-base AS hosted_runtime
 
 # Core browser integration tests exercise the running Pulse application and
 # mock remote update downloads. They do not serve production installer or agent
-# artifacts, so keep their image on the canonical runtime base instead of
-# rebuilding the release packet once per Playwright shard.
-FROM pulse-runtime-base AS e2e_runtime
+# artifacts, so use the same runtime foundation with just the target server.
+FROM pulse-runtime-foundation AS e2e_runtime
+
+ARG TARGETARCH
+
+COPY --from=backend-e2e-server --chown=pulse:pulse --chmod=0755 /app/pulse-linux-${TARGETARCH:-amd64} ./pulse
+COPY --from=backend-e2e-server --chown=pulse:pulse /app/VERSION .
 
 # Final stage (Pulse server runtime)
 FROM pulse-runtime-base AS runtime
@@ -363,8 +390,8 @@ COPY --chown=pulse:pulse --from=release-assets-builder /app/rendered-installers/
 # Copy all binaries for download endpoint
 
 # Main pulse server binary (for validation) - copy both architectures
-COPY --chown=pulse:pulse --from=backend-builder /app/pulse-linux-amd64 /opt/pulse/bin/pulse-linux-amd64
-COPY --chown=pulse:pulse --from=backend-builder /app/pulse-linux-arm64 /opt/pulse/bin/pulse-linux-arm64
+COPY --chown=pulse:pulse --from=backend-server-pair /app/pulse-linux-amd64 /opt/pulse/bin/pulse-linux-amd64
+COPY --chown=pulse:pulse --from=backend-server-pair /app/pulse-linux-arm64 /opt/pulse/bin/pulse-linux-arm64
 RUN if [ "$TARGETARCH" = "arm64" ]; then \
         ln -s pulse-linux-arm64 /opt/pulse/bin/pulse; \
     else \
