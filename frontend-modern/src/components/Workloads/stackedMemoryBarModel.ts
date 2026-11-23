@@ -17,6 +17,8 @@ export interface StackedMemoryBarProps {
   /** Already classified by the owning surface; never infer freshness from capacity. */
   reading?: Pick<MemoryObservationPresentation, 'state' | 'message'> | null;
   percentOnly?: number;
+  /** Formats the selected utilization in percentage points, without changing the reading. */
+  formatUtilizationPercent?: (value: number) => string;
   /** Reclaimable buff/cache (available - truly free); used + cache + free ≈ total. */
   cache?: number;
   cacheInclusiveLabel?: string;
@@ -56,8 +58,10 @@ export interface StackedMemoryBarPresentation {
   displayLabel: string;
   displayPercentValue: number;
   displaySublabel: string;
+  compactLabel: boolean;
   segments: StackedMemorySegment[];
   showSublabel: boolean;
+  stackSublabel: boolean;
   showSwapBar: boolean;
   swapBarPercent: number;
   swapBarColor: string;
@@ -305,17 +309,28 @@ export function buildStackedMemoryBarPresentation(
   const current = isMemoryCurrent(props);
   const anomaly = current ? props.anomaly : undefined;
   const utilizationPercent = getUtilizationPercent(props);
-  const displayLabel = formatPercent(utilizationPercent);
+  const roundedLabel = formatPercent(utilizationPercent);
+  const displayLabel = props.formatUtilizationPercent?.(utilizationPercent) ?? roundedLabel;
   const displaySublabel =
     !unavailable && props.total > 0 ? `${formatBytes(props.used)}/${formatBytes(props.total)}` : '';
   const anomalyRatio = formatAnomalyRatio(anomaly) ?? '';
   // The anomaly marker shares the label's line whenever it renders.
   const anomalyMarker = anomaly?.description && anomalyRatio ? ` ${anomalyRatio}` : '';
-  const showSublabel =
-    displaySublabel.length > 0 &&
+  const fitsWith = (label: string) =>
     containerWidth >=
-      estimateTextWidth(`${displayLabel}${anomalyMarker}`, { detail: ` (${displaySublabel})` }) +
-        LABEL_PADDING_PX;
+    estimateTextWidth(`${label}${anomalyMarker}`, { detail: ` (${displaySublabel})` }) +
+      LABEL_PADDING_PX;
+  const hasBytes = displaySublabel.length > 0;
+  const fitsInline = hasBytes && fitsWith(displayLabel);
+  const customLabel = displayLabel !== roundedLabel;
+  // Where the old label had room for the byte pair, keep it visible on a
+  // second line rather than dropping it to fit the more precise percentage.
+  const stackSublabel = hasBytes && !fitsInline && customLabel && fitsWith(roundedLabel);
+  const showSublabel = fitsInline || stackSublabel;
+  const compactLabel =
+    customLabel &&
+    !showSublabel &&
+    containerWidth < estimateTextWidth(`${displayLabel}${anomalyMarker}`) + LABEL_PADDING_PX;
 
   return {
     anomalyClass: anomaly
@@ -326,8 +341,10 @@ export function buildStackedMemoryBarPresentation(
     displayLabel,
     displayPercentValue: utilizationPercent,
     displaySublabel,
+    compactLabel,
     segments: getSegments(props, utilizationPercent),
     showSublabel,
+    stackSublabel,
     showSwapBar: !unavailable && (props.swapTotal || 0) > 0 && (props.swapUsed || 0) > 0,
     swapBarPercent:
       !unavailable && props.swapTotal && props.swapTotal > 0

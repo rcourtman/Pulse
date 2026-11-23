@@ -37,12 +37,6 @@ vi.mock('@/components/shared/responsive', () => ({
   ResponsiveMetricCell: () => <div data-testid="responsive-metric-cell" />,
 }));
 
-vi.mock('@/components/Workloads/StackedMemoryBar', () => ({
-  StackedMemoryBar: (props: { cacheInclusiveLabel?: string }) => (
-    <div data-testid="stacked-memory-bar" data-cache-inclusive-label={props.cacheInclusiveLabel} />
-  ),
-}));
-
 vi.mock('@/components/Workloads/StackedDiskBar', () => ({
   StackedDiskBar: (props: {
     aggregateDisk?: { usage?: number; used?: number; total?: number };
@@ -148,6 +142,14 @@ const makeNodeResources = (count: number): Resource[] =>
 
 beforeEach(() => {
   vi.clearAllMocks();
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    },
+  );
   nodeMetricSeriesMock.mockImplementation(() => []);
   getMetricThresholdsMock.mockReturnValue({ warning: 80, critical: 85 });
   activeAlertsMock.value = {};
@@ -158,6 +160,7 @@ afterEach(() => {
   // test's sort choice cannot leak into the next render.
   window.localStorage.clear();
   cleanup();
+  vi.unstubAllGlobals();
 });
 
 describe('ProxmoxNodesTable', () => {
@@ -318,6 +321,38 @@ describe('ProxmoxNodesTable', () => {
       );
     },
   );
+
+  it.each([
+    [{ total: 10_000, used: 62, current: 0.62 }, '0.62%'],
+    [{ total: 10_000, used: 88, current: 88 }, '0.88%'],
+    [{ current: 1.13 }, '1.13%'],
+    [{ current: 0.004 }, '<0.01%'],
+    [{ total: 10_000, used: 0, current: 0 }, '0%'],
+    [{ total: 10_000, used: 1_640, current: 16.4 }, '16%'],
+    [undefined, '—'],
+  ])('labels memory Bars for reading %j as %s', (memory, label) => {
+    const { container } = render(() => (
+      <ProxmoxNodesTable
+        nodes={[makeNodeResource({ memory })]}
+        guests={[]}
+        metricDisplayMode={() => 'bars'}
+        emptyIcon={<span />}
+        emptyTitle="No Proxmox VE nodes"
+        emptyDescription="No nodes"
+      />
+    ));
+    const index = screen.getByRole('button', { name: 'Memory' }).closest('th')!.cellIndex;
+    const cell =
+      container.querySelector<HTMLTableRowElement>('[data-proxmox-host-row]')!.cells[index];
+    const value = cell.querySelector('[data-animated-number]');
+    if (memory) {
+      expect(value).toHaveTextContent(label);
+      expect(value).toHaveAttribute('aria-label', label);
+    } else {
+      expect(cell.textContent?.trim()).toBe('—');
+      expect(value).toBeNull();
+    }
+  });
 
   it('uses the shared workload search to narrow the host preview and count', () => {
     render(() => (
@@ -705,8 +740,8 @@ describe('ProxmoxNodesTable', () => {
     );
   });
 
-  it('keeps the Proxmox cache-inclusive memory comparison label on node rows', () => {
-    render(() => (
+  it('keeps the Proxmox cache-inclusive memory comparison label on node rows', async () => {
+    const { container } = render(() => (
       <ProxmoxNodesTable
         nodes={[
           makeNodeResource({
@@ -715,21 +750,20 @@ describe('ProxmoxNodesTable', () => {
               used: 3_200,
               free: 3_800,
               current: 40,
-              cache: 1_000,
-            } as Resource['memory'],
+            },
+            proxmox: { nodeName: 'pve-node-1', memoryCache: 1_000 },
           }),
         ]}
         guests={[]}
+        metricHoverMode={() => 'details'}
         emptyIcon={<span />}
         emptyTitle="No Proxmox VE nodes"
         emptyDescription="No nodes"
       />
     ));
 
-    expect(screen.getByTestId('stacked-memory-bar')).toHaveAttribute(
-      'data-cache-inclusive-label',
-      'Shown in Proxmox',
-    );
+    await fireEvent.mouseEnter(container.querySelector<HTMLElement>('.metric-text')!);
+    expect(screen.getByText('Shown in Proxmox').nextElementSibling).toHaveTextContent('53%');
   });
 
   it('restores the v5 row signals: alert accent, pending updates badge, full uptime, offline dimming', () => {

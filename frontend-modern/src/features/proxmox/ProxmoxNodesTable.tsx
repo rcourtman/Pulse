@@ -119,7 +119,7 @@ const formatLowNodePercent = (value: number): string | undefined => {
   if (value <= 0 || value >= 2) return undefined;
   return value < 0.01 ? '<0.01%' : `${Number(value.toFixed(2))}%`;
 };
-const formatNodeDiskBarPercent = (value: number): string =>
+const formatNodeBarPercent = (value: number): string =>
   formatLowNodePercent(value) ?? formatPercent(value);
 const formatNodeHistoryPercent = (value: number): string =>
   formatLowNodePercent(value) ?? formatPlatformTablePercentValue(value, { clamp: true });
@@ -761,6 +761,7 @@ export const ProxmoxNodesTable: Component<{
                                   total={memoryTotal()}
                                   unavailable={drawerNode()?.memory?.usageUnavailable === true}
                                   percentOnly={memoryPercentOnly()}
+                                  formatUtilizationPercent={formatNodeBarPercent}
                                   cache={drawerNode()?.memory?.cache || 0}
                                   cacheInclusiveLabel="Shown in Proxmox"
                                   swapUsed={drawerNode()?.memory?.swapUsed || 0}
@@ -806,7 +807,7 @@ export const ProxmoxNodesTable: Component<{
                                   summaryStrategy="max"
                                   disks={normalizeDiskArray(node.agent?.disks)}
                                   aggregateDisk={aggregateDisk()}
-                                  formatAggregatePercent={formatNodeDiskBarPercent}
+                                  formatAggregatePercent={formatNodeBarPercent}
                                   thresholds={diskThresholds()}
                                 />
                               }

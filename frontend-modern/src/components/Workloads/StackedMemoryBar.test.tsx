@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, cleanup, fireEvent, within } from '@solidjs/testing-library';
 import { createSignal } from 'solid-js';
 import type { MemoryObservationPresentation } from '@/utils/memoryObservation';
+import { estimateTextWidth } from '@/utils/format';
 import { StackedMemoryBar } from './StackedMemoryBar';
 
 let resizeCallback: ResizeObserverCallback | undefined;
@@ -340,6 +341,33 @@ describe('StackedMemoryBar', () => {
       {} as ResizeObserver,
     );
     expect(await screen.findByText(/4\.00 GB/)).toBeInTheDocument();
+  });
+
+  it('keeps the byte pair at widths where only the old rounded label fits beside it', () => {
+    const { container } = render(() => (
+      <StackedMemoryBar
+        used={8_800_000_000}
+        total={1_000_000_000_000}
+        formatUtilizationPercent={(value) => `${value.toFixed(2)}%`}
+      />
+    ));
+    const resize = (width: number) =>
+      resizeCallback?.([{ contentRect: { width } } as ResizeObserverEntry], {} as ResizeObserver);
+    const pair = '(8.20 GB/931 GB)';
+    const percentage = screen.getByText('0.88%', { exact: true });
+    const roundedFits = estimateTextWidth('1%', { detail: ` ${pair}` }) + 8;
+
+    resize(roundedFits);
+    expect(screen.getByText(pair)).toHaveClass('block');
+    expect(percentage).toHaveAttribute('aria-label', '0.88%');
+    expect(getSegments(container)[0]).toHaveAttribute('width', '0.88');
+
+    resize(200);
+    expect(screen.getByText(pair, { exact: false })).not.toHaveClass('block');
+
+    resize(46);
+    expect(percentage).toBeVisible();
+    expect(screen.queryByText(pair, { exact: false })).not.toBeInTheDocument();
   });
 
   // ---- Anomaly indicator ----
