@@ -1,4 +1,4 @@
-import { Component, createEffect, For, on, onCleanup, Show } from 'solid-js';
+import { Component, createEffect, createUniqueId, For, on, onCleanup, Show } from 'solid-js';
 import { ActionIconButton, Button } from '@/components/shared/Button';
 import SettingsPanel from '@/components/shared/SettingsPanel';
 import { RBACFeatureGateSection } from './RBACFeatureGateSection';
@@ -43,6 +43,7 @@ const RolePermissions: Component<{ role: Role }> = (props) => (
 
 export const RolesPanel: Component<RolesPanelProps> = (props) => {
   const state = useRolesPanelState(props);
+  const deleteImpactId = createUniqueId();
   let inventoryRoot: HTMLDivElement | undefined;
   let inventoryNotice: HTMLDivElement | undefined;
   let focusTimer: number | undefined;
@@ -315,6 +316,7 @@ export const RolesPanel: Component<RolesPanelProps> = (props) => {
             closeOnBackdrop={false}
             panelClass="max-w-lg"
             ariaLabel={`Delete role: ${getRoleIdentityLabel(role)}`}
+            ariaDescribedBy={deleteImpactId}
           >
             <div class="space-y-5 p-6">
               <div>
@@ -324,6 +326,10 @@ export const RolesPanel: Component<RolesPanelProps> = (props) => {
                 </p>
                 <p class="mt-2 text-xs text-muted [overflow-wrap:anywhere]">
                   Role ID: <bdi class="font-mono whitespace-pre-wrap">{role.id}</bdi>
+                </p>
+                <p id={deleteImpactId} class="mt-2 text-sm text-muted">
+                  Deleting an in-use role can take away access or lift restrictions set by deny
+                  rules. Review role assignments in Users first.
                 </p>
               </div>
               <Show when={state.actionError()}>

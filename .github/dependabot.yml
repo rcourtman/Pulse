@@ -153,6 +153,17 @@ updates:
       - dependency-name: "@vitest/coverage-v8"
         update-types:
           - "version-update:semver-major"
+      # jsdom majors can change parser behavior and the supported Node line.
+      # Migrate with the docs/portal tests and their checked-in graphs.
+      - dependency-name: "jsdom"
+        update-types:
+          - "version-update:semver-major"
+      # Vite majors need a composed plugin/lockfile change and proof of the
+      # shipped bundle, embed and size budgets, not an isolated version bump.
+      # Normal minor/patch proposals and security updates remain eligible.
+      - dependency-name: "vite"
+        update-types:
+          - "version-update:semver-major"
 
   - package-ecosystem: "docker"
     directories:
