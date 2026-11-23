@@ -378,6 +378,44 @@ func (s *State) GetLastUpdate() time.Time {
 	return s.LastUpdate
 }
 
+// StateInventoryCounts contains the raw row counts used by broadcast diagnostics.
+// These are counts from one state read, not deduplicated fleet totals.
+type StateInventoryCounts struct {
+	Nodes, VMs, Containers, Hosts, PBSInstances, PBSBackups, PhysicalDisks int
+}
+
+// InventoryCounts reads the diagnostic counts without copying the inventory.
+func (s *State) InventoryCounts() StateInventoryCounts {
+	if s == nil {
+		return StateInventoryCounts{}
+	}
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return StateInventoryCounts{
+		Nodes:         len(s.Nodes),
+		VMs:           len(s.VMs),
+		Containers:    len(s.Containers),
+		Hosts:         len(s.Hosts),
+		PBSInstances:  len(s.PBSInstances),
+		PBSBackups:    len(s.PBSBackups),
+		PhysicalDisks: len(s.PhysicalDisks),
+	}
+}
+
+// InventoryCounts reads the same counters from a detached snapshot, including
+// the backup list used by the existing broadcast diagnostic.
+func (s *StateSnapshot) InventoryCounts() StateInventoryCounts {
+	return StateInventoryCounts{
+		Nodes:         len(s.Nodes),
+		VMs:           len(s.VMs),
+		Containers:    len(s.Containers),
+		Hosts:         len(s.Hosts),
+		PBSInstances:  len(s.PBSInstances),
+		PBSBackups:    len(s.Backups.PBS),
+		PhysicalDisks: len(s.PhysicalDisks),
+	}
+}
+
 // ResourceLocation describes where a resource lives in the infrastructure hierarchy.
 // This is the authoritative source of truth for routing commands to resources.
 type ResourceLocation struct {
