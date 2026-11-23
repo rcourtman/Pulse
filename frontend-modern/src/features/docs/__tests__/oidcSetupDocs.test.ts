@@ -107,6 +107,31 @@ describe('OIDC setup without losing access', () => {
     );
   });
 
+  it('distinguishes a returned login, the options check, and a role problem', () => {
+    const guide = article('OIDC');
+    const heading = guide.querySelector('#safe-diagnosis')!;
+    const diagnosis = heading.nextElementSibling!;
+    const privacy = diagnosis.nextElementSibling!;
+    expect(text(diagnosis)).toContain(
+      'Back at Pulse sign-in after SSO? Your session is unconfirmed.',
+    );
+    expect(text(diagnosis.querySelector('strong')!)).toBe('Retry sign-in check');
+    expect(text(diagnosis)).toContain('if shown, only reads the sign-in options');
+    expect(text(diagnosis)).toContain('Keep your working admin session open and do not resave');
+    expect(text(diagnosis)).toContain(
+      'If Pulse opens without the expected controls, check the role',
+    );
+    expect(text(diagnosis)).toContain('existing login error');
+    expect(text(privacy)).toContain('claim names locally');
+    expect(text(privacy)).toContain('Do not paste a full IdP response');
+    expect(text(privacy)).toContain('full callback query strings');
+    expect(text(privacy)).toContain('Never disable TLS verification or access restrictions');
+    expect(privacy.nextElementSibling).toHaveAttribute(
+      'id',
+      'a-provider-change-could-not-be-confirmed',
+    );
+  });
+
   it('routes OIDC and proxy readers to the same callback check before changing settings', () => {
     const guide = article('OIDC');
     const fragment = 'check-the-callback-address';
