@@ -240,10 +240,11 @@ func (m cgroupMemoryMount) readLimit(memberPath string) (int64, bool) {
 		// Match whole path components before interpreting any ".." from
 		// the cgroup namespace. Only the suffix below this mount is local.
 		suffix, ok := strings.CutPrefix(memberPath, strings.TrimSuffix(m.root, "/")+"/")
-		if !ok || !filepath.IsLocal(suffix) || path.Clean(suffix) != suffix {
+		if ok && filepath.IsLocal(suffix) && path.Clean(suffix) == suffix {
+			rel = suffix
+		} else if !isInheritedCgroupAncestor(m.root, memberPath) {
 			return 0, false
 		}
-		rel = suffix
 	}
 
 	limitFile, unlimited := "memory.max", int64(math.MaxInt64)
@@ -266,6 +267,36 @@ func (m cgroupMemoryMount) readLimit(memberPath string) (int64, bool) {
 		return 0, false
 	}
 	return lowest, true
+}
+
+// An inherited mount can show a root of "/.." (cgroup_namespaces(7)).
+// A root made only of parent components encloses the member if it goes up
+// farther than the member path does. The missing intermediate directory
+// names prevent mapping the member to disk, so only the mount root applies.
+func isInheritedCgroupAncestor(root, member string) bool {
+	rootUp, rootRest := splitCgroupNamespaceParents(root)
+	memberUp, memberRest := splitCgroupNamespaceParents(member)
+	if rootRest != "" || rootUp <= memberUp {
+		return false
+	}
+	// Do not infer ancestry from a malformed member suffix. "/" is valid
+	// on its own, but not as a trailing separator after parent components.
+	switch memberRest {
+	case "":
+		return memberUp > 0
+	case "/":
+		return memberUp == 0
+	default:
+		return path.Clean(memberRest) == memberRest
+	}
+}
+
+func splitCgroupNamespaceParents(p string) (up int, rest string) {
+	for p == "/.." || strings.HasPrefix(p, "/../") {
+		up++
+		p = p[len("/.."):]
+	}
+	return up, p
 }
 
 // Preserve the kernel's path verbatim: ".." can be part of the namespace

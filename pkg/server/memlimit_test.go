@@ -476,14 +476,40 @@ func TestReadRuntimeMemoryLimitMountedCgroups(t *testing.T) {
 			wantBytes:  512 * mib, wantSource: "cgroup",
 		},
 		{
+			name:       "inherited v2 mount preserves its visible parent cap",
+			membership: "0::/\n",
+			mountinfo:  "31 21 0:28 /.. $ROOT/sys/fs/cgroup ro - cgroup2 cgroup rw\n",
+			files:      map[string]string{"sys/fs/cgroup/memory.max": "536870912\n"},
+			wantBytes:  512 * mib, wantSource: "cgroup",
+		},
+		{
+			name:       "higher inherited root applies without guessing a member directory",
+			membership: "0::/../peer/pulse.service\n",
+			mountinfo:  "31 21 0:28 /../.. $ROOT/ancestor ro - cgroup2 cgroup rw\n",
+			files: map[string]string{
+				"ancestor/memory.max":                    "536870912\n",
+				"ancestor/peer/pulse.service/memory.max": "134217728\n", // not under the unnamed child
+			},
+			wantBytes: 512 * mib, wantSource: "cgroup",
+		},
+		{
+			name:       "inherited combined v1 memory mount preserves its parent cap",
+			membership: "7:cpu,memory:/system.slice/pulse.service\n",
+			mountinfo:  "31 21 0:30 /.. $ROOT/combined ro - cgroup cgroup rw,cpu,memory\n",
+			files:      map[string]string{"combined/memory.limit_in_bytes": "536870912\n"},
+			wantBytes:  512 * mib, wantSource: "cgroup",
+		},
+		{
 			name:       "a namespace-relative ancestor is used only through its matching mount",
 			membership: "0::/../../pulse.service\n",
 			mountinfo: "31 21 0:28 / $ROOT/namespace ro - cgroup2 cgroup rw\n" +
-				"32 21 0:28 /../.. $ROOT/ancestor ro - cgroup2 cgroup rw\n",
+				"32 21 0:28 /../.. $ROOT/ancestor ro - cgroup2 cgroup rw\n" +
+				"33 21 0:28 /.. $ROOT/closer ro - cgroup2 cgroup rw\n",
 			files: map[string]string{
 				"namespace/memory.max":              "134217728\n",
 				"ancestor/pulse.service/memory.max": "max\n",
 				"ancestor/memory.max":               "536870912\n",
+				"closer/memory.max":                 "134217728\n",
 				"pulse.service/memory.max":          "134217728\n",
 			},
 			wantBytes: 512 * mib, wantSource: "cgroup",
@@ -500,16 +526,26 @@ func TestReadRuntimeMemoryLimitMountedCgroups(t *testing.T) {
 			wantBytes: 2 * gib, wantSource: "proc_meminfo",
 		},
 		{
-			name:       "a sibling or out-of-namespace mount cannot stand in for membership",
+			name:       "sibling mounts and guessed descendants do not supply a cap",
 			membership: "0::/system.slice/pulse.service\n",
 			mountinfo: "31 21 0:28 /system $ROOT/sibling ro - cgroup2 cgroup rw\n" +
-				"32 21 0:28 /.. $ROOT/outside ro - cgroup2 cgroup rw\n",
+				"32 21 0:28 /.. $ROOT/outside ro - cgroup2 cgroup rw\n" +
+				"33 21 0:28 /../sibling $ROOT/outside-sibling ro - cgroup2 cgroup rw\n",
 			files: map[string]string{
 				"sibling/memory.max":                                  "134217728\n",
+				"outside/memory.max":                                  "max\n",
 				"outside/system.slice/pulse.service/memory.max":       "134217728\n",
+				"outside-sibling/memory.max":                          "134217728\n",
 				"sys/fs/cgroup/system.slice/pulse.service/memory.max": "134217728\n",
 			},
 			wantBytes: 2 * gib, wantSource: "proc_meminfo",
+		},
+		{
+			name:       "a non-leading parent component does not establish ancestry",
+			membership: "0::/system.slice/../pulse.service\n",
+			mountinfo:  "31 21 0:28 /.. $ROOT/ancestor ro - cgroup2 cgroup rw\n",
+			files:      map[string]string{"ancestor/memory.max": "134217728\n"},
+			wantBytes:  2 * gib, wantSource: "proc_meminfo",
 		},
 		{
 			name: "when membership is unavailable only the whole v1 controller can supply a fallback",
