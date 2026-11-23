@@ -1,0 +1,41 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "9aee74a0fc774307505ad81947a725921038fc44",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/SSOProvidersPanel.tsx",
+    "frontend-modern/src/components/Settings/ssoProvidersModel.ts",
+    "frontend-modern/src/components/Settings/useSSOProvidersState.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/SSOProvidersPanel.tsx": "9b0bbc8473e2b8a4fc6f52b155d6f05b50addfc78511b51040a19372745b3a00",
+    "frontend-modern/src/components/Settings/ssoProvidersModel.ts": "bd35c3ade627b81a787644736969491e8f36264be4735368c43fee3e8d4c32a9",
+    "frontend-modern/src/components/Settings/useSSOProvidersState.ts": "a4adb2af009f3a805c692578128358d5fccd8f8108e75d265b1d71cfc859b7e4"
+  },
+  "routes": [
+    "/settings/security-sso"
+  ],
+  "states": [
+    "OIDC and SAML saved group rules open with both the exact directory group and the simple spaced group",
+    "After a label-only save, both settings read back with their roles and restrictions unchanged",
+    "An incomplete mapping displays local field feedback without sending a save",
+    "A deliberate empty mapping saves and reopens without clearing the group restriction"
+  ],
+  "interactions": [
+    "Use keyboard on desktop and touch on phone to open, save, reopen and cancel the same selected provider",
+    "Compare both settings on the exact base and candidate production builds with identical offline fixtures",
+    "Check the exact dispatched group arrays, mapping objects, and other fields without returning or replacing a saved secret",
+    "Inspect 12 matched browser capture pairs; the final fixture group strings, the mapping role IDs, and Save/Cancel remain readable"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "verified_at": "2026-11-23T09:47:27Z"
+}

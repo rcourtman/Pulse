@@ -3,9 +3,70 @@ import {
   buildProviderPayload,
   createEmptyProviderForm,
   mapProviderDetailsToForm,
+  ProviderGroupRuleError,
 } from '../ssoProvidersModel';
 
 describe('ssoProvidersModel', () => {
+  it.each(['oidc', 'saml'] as const)('round-trips exact saved %s directory rules', (type) => {
+    const directoryGroup = 'CN=Night Operators,OU=Operations,DC=example,DC=test';
+    const otherNames = ['Read Only Team', ' Ops, East ', 'Lab "Watch"\\QA', 'Line\r\nBreak'];
+    const allowedGroups = [directoryGroup, ...otherNames];
+    const groupRoleMappings = Object.fromEntries(
+      allowedGroups.map((group, index) => [group, index === 0 ? 'operator' : 'viewer']),
+    );
+    const form = mapProviderDetailsToForm({
+      id: 'corp',
+      name: 'Corporate SSO',
+      enabled: true,
+      type,
+      allowedGroups,
+      groupRoleMappings,
+    });
+
+    // A label-only edit must not replace structured rules with different names.
+    const payload = buildProviderPayload({ ...form, displayName: 'New login label' });
+    expect(payload.allowedGroups).toEqual(allowedGroups);
+    expect(payload.groupRoleMappings).toEqual(groupRoleMappings);
+    expect(form.allowedGroups).toContain(JSON.stringify(directoryGroup));
+    expect(form.allowedGroups).toContain('Read Only Team');
+    expect(form.allowedGroups).not.toMatch(/[\r\n]/);
+
+    const edited = buildProviderPayload({
+      ...form,
+      groupRoleMappings: ['Read Only Team=viewer', '"Ops, East" = operator'].join('\r\n'),
+    });
+    expect(edited.allowedGroups).toEqual(allowedGroups);
+    expect(edited.groupRoleMappings).toEqual({
+      'Read Only Team': 'viewer',
+      'Ops, East': 'operator',
+    });
+    expect(buildProviderPayload({ ...form, allowedGroups: '' })).toMatchObject({
+      allowedGroups: [],
+      groupRoleMappings,
+    });
+    expect(buildProviderPayload({ ...form, groupRoleMappings: '   ' })).toMatchObject({
+      allowedGroups,
+      groupRoleMappings: {},
+    });
+  });
+
+  it.each([
+    ['allowedGroups', 'CN=Night Operators,OU=Operations'],
+    ['allowedGroups', '"Ops, East'],
+    ['allowedGroups', '"Ops\\q"'],
+    ['allowedGroups', '"Ops, East" West'],
+    ['allowedGroups', ' , , '],
+    ['groupRoleMappings', 'Read Only Team=viewer, Ops'],
+    ['groupRoleMappings', 'Read Only Team=viewer, "Ops, East"='],
+    ['groupRoleMappings', 'CN=Night Operators,OU=Operations=viewer'],
+    ['groupRoleMappings', 'Ops=viewer, "Ops"=operator'],
+    ['groupRoleMappings', ' , , '],
+  ] as const)('rejects incomplete or ambiguous %s input: %s', (field, value) => {
+    expect(() => buildProviderPayload({ ...createEmptyProviderForm(), [field]: value })).toThrow(
+      ProviderGroupRuleError,
+    );
+  });
+
   it.each(['oidc', 'saml'] as const)(
     'preserves exact %s group restrictions on no-op and mapping-only saves',
     (type) => {

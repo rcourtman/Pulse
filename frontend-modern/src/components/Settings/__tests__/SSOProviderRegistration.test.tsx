@@ -90,14 +90,14 @@ describe('SSO sign-in restrictions and role mapping guidance', () => {
     expect(allowedDomains).toHaveValue('example.test');
     expect(allowedEmails).toHaveValue('operator@example.test');
     expect(allowedGroups).toHaveAccessibleDescription(
-      `${rule} Use commas or new lines. Names can have spaces.`,
+      `${rule} Use commas or new lines. Spaces are fine. Double-quote names with commas or =.`,
     );
     expect(allowedDomains).toHaveAccessibleDescription(`${rule} Email domains (without @)`);
     expect(allowedEmails).toHaveAccessibleDescription(rule);
     expect(
       dialog.getByRole('textbox', { name: 'Group Role Mappings' }),
     ).toHaveAccessibleDescription(
-      'Assigns roles after sign-in checks. Enter group=roleId. Use commas or new lines. Names can have spaces.',
+      'Roles apply after sign-in checks. Use group=roleId, e.g. "Ops, East"=viewer. Commas or new lines.',
     );
     expect(dialog.queryByText(/Empty allows all/)).toBeNull();
     readOnlyRequests();

@@ -34,6 +34,7 @@ import {
   createEmptyProviderForm,
   getProviderTestSource,
   mapProviderDetailsToForm,
+  ProviderGroupRuleError,
 } from '@/components/Settings/ssoProvidersModel';
 
 interface SSOProvidersPanelProps {
@@ -62,6 +63,7 @@ export const useSSOProvidersState = (props: SSOProvidersPanelProps) => {
   const [editorFeedback, setEditorFeedback] = createSignal<{
     tone: 'success' | 'error';
     message: string;
+    field?: ProviderGroupRuleError['field'];
   } | null>(null);
   const [showModal, setShowModalValue] = createSignal(false);
   const [editingProvider, setEditingProvider] = createSignal<SSOProvider | null>(null);
@@ -384,12 +386,20 @@ export const useSSOProvidersState = (props: SSOProvidersPanelProps) => {
 
   const handleSave = async (event?: Event) => {
     event?.preventDefault();
-    if (!showModal() || testing() || loadingPreview()) return;
+    if (!showModal() || testing() || loadingPreview() || !canEdit()) return;
+    let payload: ReturnType<typeof buildProviderPayload>;
+    try {
+      payload = buildProviderPayload(form);
+    } catch (error) {
+      if (!(error instanceof ProviderGroupRuleError)) throw error;
+      setAdvancedOpen(true);
+      setEditorFeedback({ tone: 'error', message: error.message, field: error.field });
+      return;
+    }
     const mutation = beginMutation();
     if (!mutation) return;
     const isEdit = Boolean(editingProvider());
     const providerId = editingProvider()?.id;
-    const payload = buildProviderPayload(form);
     setEditorFeedback(null);
     setSaving(true);
     try {

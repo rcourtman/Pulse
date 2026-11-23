@@ -135,6 +135,7 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
   const summaryId = (id: string) => `${summaryIdPrefix}-${encodeURIComponent(id)}`;
   const inventoryTitleId = `${summaryIdPrefix}-inventory-title`;
   const providerDetailErrorId = `${createUniqueId()}-provider-detail-error`;
+  const editorFeedbackId = `${createUniqueId()}-editor-feedback`;
   const testResultSummaryId = `${summaryIdPrefix}-test-summary`;
   const testResultId = `${summaryIdPrefix}-test-result`;
   const testResultTitleId = `${summaryIdPrefix}-test-result-title`;
@@ -1069,7 +1070,7 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
                 </Button>
 
                 <Show when={advancedOpen()}>
-                  <div class="mt-4 space-y-4 p-4 bg-surface-alt rounded-md">
+                  <div class="mt-3 space-y-2.5 rounded-md bg-surface-alt p-3">
                     <Show when={form.type === 'oidc'}>
                       <div class={formField}>
                         <label for="sso-oidc-groups-claim" class={labelClass()}>
@@ -1090,20 +1091,25 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
                         </p>
                       </div>
                     </Show>
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div class="grid grid-cols-1 gap-2.5 md:grid-cols-2">
                       <FormTextarea
                         label="Allowed Groups"
-                        rows={2}
+                        aria-invalid={editorFeedback()?.field === 'allowedGroups' || undefined}
+                        aria-describedby={
+                          editorFeedback()?.field === 'allowedGroups' ? editorFeedbackId : undefined
+                        }
+                        rows={3}
                         value={form.allowedGroups}
                         onInput={(e) => setForm('allowedGroups', e.currentTarget.value)}
                         placeholder="admin, sso-users"
-                        textareaBaseClass={controlClass('min-h-[60px]')}
+                        textareaBaseClass={controlClass('break-all py-1.5!')}
                         help={
                           <>
                             <span id={signInRestrictionsId}>
                               Each filled list needs a match. Blank skips only that check.
                             </span>{' '}
-                            Use commas or new lines. Names can have spaces.
+                            Use commas or new lines. Spaces are fine. Double-quote names with commas
+                            or =.
                           </>
                         }
                       />
@@ -1128,12 +1134,18 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
                       />
                       <FormTextarea
                         label="Group Role Mappings"
-                        rows={2}
+                        aria-invalid={editorFeedback()?.field === 'groupRoleMappings' || undefined}
+                        aria-describedby={
+                          editorFeedback()?.field === 'groupRoleMappings'
+                            ? editorFeedbackId
+                            : undefined
+                        }
+                        rows={3}
                         value={form.groupRoleMappings}
                         onInput={(e) => setForm('groupRoleMappings', e.currentTarget.value)}
                         placeholder="admins=admin, ops=operator"
-                        textareaBaseClass={controlClass('min-h-[60px]')}
-                        help="Assigns roles after sign-in checks. Enter group=roleId. Use commas or new lines. Names can have spaces."
+                        textareaBaseClass={controlClass('break-all py-1.5!')}
+                        help='Roles apply after sign-in checks. Use group=roleId, e.g. "Ops, East"=viewer. Commas or new lines.'
                       />
                     </div>
                   </div>
@@ -1156,6 +1168,7 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
               <Show when={editorFeedback()} keyed>
                 {(feedback) => (
                   <p
+                    id={editorFeedbackId}
                     role={feedback.tone === 'error' ? 'alert' : 'status'}
                     tabindex="0"
                     class={`max-h-48 overflow-y-auto text-sm [overflow-wrap:anywhere] ${
