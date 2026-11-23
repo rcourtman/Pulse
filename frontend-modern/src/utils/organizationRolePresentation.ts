@@ -1,5 +1,4 @@
 import type { OrganizationRole } from '@/api/orgs';
-import { normalizeRole } from '@/utils/orgUtils';
 
 export type ShareAccessRole = 'viewer' | 'editor' | 'admin';
 
@@ -22,8 +21,7 @@ export const ORGANIZATION_SHARE_ROLE_OPTIONS: Array<{
   { value: 'admin', label: 'Admin or Owner' },
 ];
 
-export function normalizeOrganizationShareRole(role: OrganizationRole): ShareAccessRole {
-  const normalized = normalizeRole(role);
-  if (normalized === 'admin' || normalized === 'editor') return normalized;
-  return 'viewer';
+export function getOrganizationShareRoleOption(role: unknown) {
+  // A missing or unsupported saved threshold is not evidence of a Viewer share.
+  return ORGANIZATION_SHARE_ROLE_OPTIONS.find((option) => option.value === role);
 }

@@ -8,7 +8,7 @@ import {
 } from '@/utils/organizationSettingsPresentation';
 import Trash2 from 'lucide-solid/icons/trash-2';
 import {
-  renderShareAccess,
+  renderShareAudience,
   renderShareRequested,
   renderShareResource,
   renderShareStatus,
@@ -48,9 +48,9 @@ export const OrganizationOutgoingSharesSection: Component<
           },
           {
             key: 'accessRole',
-            label: 'Access',
+            label: 'Target audience',
             hiddenOnMobile: true,
-            render: renderShareAccess,
+            render: renderShareAudience,
           },
           {
             key: 'status',

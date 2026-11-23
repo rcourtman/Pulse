@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  normalizeOrganizationShareRole,
+  getOrganizationShareRoleOption,
   ORGANIZATION_MEMBER_ROLE_OPTIONS,
   ORGANIZATION_SHARE_ROLE_OPTIONS,
 } from '@/utils/organizationRolePresentation';
@@ -20,10 +20,11 @@ describe('organizationRolePresentation', () => {
     ]);
   });
 
-  it('normalizes organization share roles onto the supported subset', () => {
-    expect(normalizeOrganizationShareRole('admin')).toBe('admin');
-    expect(normalizeOrganizationShareRole('editor')).toBe('editor');
-    expect(normalizeOrganizationShareRole('viewer')).toBe('viewer');
-    expect(normalizeOrganizationShareRole('owner')).toBe('viewer');
+  it('uses the same audience choices for saved shares without guessing at an unrecognized role', () => {
+    for (const option of ORGANIZATION_SHARE_ROLE_OPTIONS) {
+      expect(getOrganizationShareRoleOption(option.value)).toBe(option);
+    }
+    expect(getOrganizationShareRoleOption('owner')).toBeUndefined();
+    expect(getOrganizationShareRoleOption(undefined)).toBeUndefined();
   });
 });

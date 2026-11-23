@@ -7,7 +7,7 @@ import {
   getOrganizationShareActionLabel,
 } from '@/utils/organizationSettingsPresentation';
 import {
-  renderShareAccess,
+  renderShareAudience,
   renderShareRequested,
   renderShareResource,
   renderShareStatus,
@@ -47,9 +47,9 @@ export const OrganizationIncomingSharesSection: Component<
           },
           {
             key: 'accessRole',
-            label: 'Access',
+            label: 'Target audience',
             hiddenOnMobile: true,
-            render: renderShareAccess,
+            render: renderShareAudience,
           },
           {
             key: 'status',

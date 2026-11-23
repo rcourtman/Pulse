@@ -123,21 +123,29 @@ IdP, installed or published recovery.
 
 Incoming and outgoing sharing rows retain the saved organization's full key
 beside its display name (or once for an unnamed, unlisted or ID-named party).
-Resource names and type/keys, each saved role, pending/active state, acceptance
-context and text-labelled actions remain individually available. Names and
+Resource names and type/keys, each saved audience, pending/active state,
+acceptance context and text-labelled actions remain individually available. Names and
 opaque keys are isolated literal text. This does not infer a grant from a label.
+
+The saved Target audience uses the same minimum target membership labels as
+Create Share: All members (Viewer), Editor or higher, and Admin or Owner. The
+audience is not a new membership role or confirmation of access: the separate
+Pending approval/Active state and acceptance details still apply. An unreported
+or unrecognized threshold is unknown, not All members. This is presentation
+only; the stored `accessRole`, authority, and write/readback are unchanged.
 
 The existing shared grid retains its stable-key row state, accepted-row proxies,
 callbacks and native table/row/cell structure. Only sharing uses this scoped
-layout; no shared primitive changes.
+layout; no shared primitive changes. Narrow rows label the target audience
+beside the saved peer identity even when the dedicated column is not shown.
 
 Below the existing 34rem table-container threshold the two identity cells
 share a line, followed by separate status/action areas and full-width acceptance
 context. Managers keep 44px touch controls. Readers without sharing actions
 keep a compact metadata rhythm instead of an empty action line. Status and
 Actions retain accessible header labels. Empty inventories keep their existing
-meaning, wide tables retain Requested and Access, and no record is aggregated,
-truncated or moved behind hover or disclosure. Whole-page review includes the
+meaning, wide tables retain Requested and Target audience, and no record is
+aggregated, truncated or moved behind hover or disclosure. Whole-page review includes the
 natural first view and incoming names/roles at the same outgoing anchor, not
 just each table in isolation.
 

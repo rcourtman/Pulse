@@ -199,6 +199,57 @@ describe('OrganizationSharingPanel', () => {
     expect(createShareMock).not.toHaveBeenCalled();
   });
 
+  it('shows the saved target audience in both tables and their narrow peer cells', async () => {
+    const cases = [
+      { role: 'viewer', audience: 'All members (Viewer)' },
+      { role: 'editor', audience: 'Editor or higher' },
+      { role: 'admin', audience: 'Admin or Owner' },
+      // Simulate an unrecognized value in a saved response, not a new valid role.
+      { role: 'owner', audience: 'Unknown' },
+    ];
+    const rows = (direction: string) =>
+      cases.map(({ role }, index) => ({
+        id: `${direction}-${index}`,
+        resourceType: 'vm',
+        resourceId: `${direction}/${index}`,
+        accessRole: role,
+        status: index % 2 === 0 ? 'pending' : 'accepted',
+        createdAt: '2026-11-20T10:00:00Z',
+        createdBy: 'user-1',
+      }));
+    listSharesMock.mockResolvedValue(
+      rows('outgoing').map((share) => ({ ...share, targetOrgId: targetOrg.id })),
+    );
+    listIncomingSharesMock.mockResolvedValue(
+      rows('incoming').map((share) => ({
+        ...share,
+        targetOrgId: baseOrg.id,
+        sourceOrgId: targetOrg.id,
+        sourceOrgName: targetOrg.displayName,
+      })),
+    );
+
+    renderPanel();
+    await screen.findByRole('heading', { name: 'Incoming Shares' });
+    expect(screen.getAllByRole('columnheader', { name: 'Target audience' })).toHaveLength(2);
+    for (const direction of ['outgoing', 'incoming']) {
+      cases.forEach(({ audience }, index) => {
+        const row = screen
+          .getByText(`vm:${direction}/${index}`, { selector: 'bdi' })
+          .closest('tr')!;
+        expect(within(row).getAllByText(audience, { exact: true })).toHaveLength(2);
+        const compact = within(row.querySelector<HTMLElement>('[data-share-access]')!);
+        expect(compact.getByText('Target audience:', { exact: true })).toBeInTheDocument();
+        expect(compact.getByText(audience, { exact: true })).toBeInTheDocument();
+        expect(
+          within(row).getByText(index % 2 === 0 ? 'Pending approval' : 'Active', { exact: true }),
+        ).toBeInTheDocument();
+      });
+    }
+    expect(acceptIncomingShareMock).not.toHaveBeenCalled();
+    expect(createShareMock).not.toHaveBeenCalled();
+  });
+
   it('names the native creation form and keeps manual-entry toggles non-submitting', async () => {
     renderPanel();
     const form = await screen.findByRole('form', { name: 'Create Share' });
@@ -547,7 +598,7 @@ describe('OrganizationSharingPanel', () => {
       expect(key).toBeVisible();
       expect(key.tagName).toBe('BDI');
       expect(key.closest('td')).toHaveTextContent('Organization B');
-      expect(key.closest('td')).toHaveTextContent('viewer');
+      expect(key.closest('td')).toHaveTextContent('All members (Viewer)');
     }
 
     const incomingAction = (action: 'Accept' | 'Decline') =>
