@@ -1,0 +1,49 @@
+{
+  "version": 1,
+  "base_sha": "11f4d6ef5ef7f593f6c38a44a4b17e385a67d90b",
+  "verified_at": "2026-11-22T23:52:14Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/InfrastructureInstallerSection.tsx",
+    "frontend-modern/src/components/Settings/InfrastructureSourcePicker.tsx",
+    "frontend-modern/src/components/Settings/NodeModalSetupGuideSection.tsx",
+    "frontend-modern/src/components/Settings/useNodeModalState.ts",
+    "frontend-modern/src/components/shared/Button.tsx",
+    "frontend-modern/src/index.css",
+    "frontend-modern/src/utils/infrastructureOnboardingPresentation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/InfrastructureInstallerSection.tsx": "b72329fa21610a7bd61321472670a72224b37b605c80834facd2b08ba78489ae",
+    "frontend-modern/src/components/Settings/InfrastructureSourcePicker.tsx": "ce23a4a1ae28c2a19fdedc0edbe087dfa8a530b88ceb4d96b985c1f53424830a",
+    "frontend-modern/src/components/Settings/NodeModalSetupGuideSection.tsx": "cf3a45e5c4285101216aca067bb6c2bfc270e1e0bea5a9ef9e0e0c8b2715af11",
+    "frontend-modern/src/components/Settings/useNodeModalState.ts": "fd50ac2a09547ca4fbb6c0023121910c93aab35c45162e8a531e4e0bba76ff9b",
+    "frontend-modern/src/components/shared/Button.tsx": "8f65c827c3dfd500c2af83390a94c6a52aa6de6df0a88e5f2d786c9ae6bac2df",
+    "frontend-modern/src/index.css": "7e5de2fa42842de33d28f39bd3425c71b4efead8a6e2f3ecde8accfa031e0e5f",
+    "frontend-modern/src/utils/infrastructureOnboardingPresentation.ts": "7851a7d6ac7cfd385eea3807883da83621a0b61f4620bbe4dfee22c6dd96222a"
+  },
+  "routes": [
+    "/settings/infrastructure?add=pick",
+    "/settings/infrastructure?add=docker",
+    "/settings/infrastructure?add=pve"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Infrastructure source picker at 1440x900 and 390x844: Docker / Podman promoted into the visible 2x2 popular grid beside Proxmox VE, TrueNAS SCALE, and Unraid; opaque modal card surface with no background text bleed-through",
+    "Add Docker / Podman modal at 1440x900 and 390x844: compact setup handoff without Admin API Token banner, collapsed Docker inside Proxmox LXCs details disclosure, non-overlapping inline copy buttons beside shell commands, and wrapped env vars on mobile without horizontal clipping",
+    "Add Proxmox VE modal at 1440x900: Connect via API and Host Telemetry Agent tabs render inline Step 1 (Copy command) and Step 2 (masked token with Reveal/Hide and Copy token inline Copied confirmation) without auto-opening TokenRevealDialog"
+  ],
+  "interactions": [
+    "Opened /settings/infrastructure?add=pick on desktop and mobile, toggled Show 4 more sources, and searched for podman",
+    "Opened Add Docker / Podman, generated install token, verified inline Copy buttons do not overlap command text, expanded and collapsed Docker inside Proxmox LXCs disclosure on desktop and mobile",
+    "Opened Add Proxmox VE, entered host, clicked Copy command on Connect via API and Host Telemetry Agent, confirmed TokenRevealDialog did not auto-open, toggled Reveal/Hide, clicked Copy token and observed inline Copied confirmation"
+  ]
+}

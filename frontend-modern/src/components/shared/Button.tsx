@@ -39,6 +39,7 @@ export interface CommandCopyButtonProps extends Omit<
   'children' | 'isLoading' | 'size' | 'variant'
 > {
   label?: string;
+  layout?: 'overlay' | 'inline';
 }
 
 export interface CopyValueButtonProps extends Omit<
@@ -140,8 +141,11 @@ export function DrawerHeaderIconButton(props: DrawerHeaderActionButtonProps) {
 }
 
 export function CommandCopyButton(props: CommandCopyButtonProps) {
-  const merged = mergeProps({ label: 'Copy command', type: 'button' as const }, props);
-  const [local, rest] = splitProps(merged, ['label', 'class', 'title', 'aria-label']);
+  const merged = mergeProps(
+    { label: 'Copy command', layout: 'overlay' as const, type: 'button' as const },
+    props,
+  );
+  const [local, rest] = splitProps(merged, ['label', 'layout', 'class', 'title', 'aria-label']);
 
   return (
     <Button
@@ -149,7 +153,9 @@ export function CommandCopyButton(props: CommandCopyButtonProps) {
       variant="ghost"
       size="icon"
       class={[
-        'absolute right-2 top-2 min-h-10 min-w-10 bg-surface-hover text-muted hover:text-base-content sm:min-h-9 sm:min-w-9',
+        local.layout === 'inline'
+          ? 'shrink-0 min-h-10 min-w-10 bg-surface-hover text-muted hover:text-base-content sm:min-h-9 sm:min-w-9'
+          : 'absolute right-2 top-2 min-h-10 min-w-10 bg-surface-hover text-muted hover:text-base-content sm:min-h-9 sm:min-w-9',
         local.class,
       ]
         .filter(Boolean)

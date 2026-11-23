@@ -47,6 +47,7 @@ const PRIMARY_PATH_PICKER_ITEM_IDS: ReadonlySet<InfrastructureSourcePickerItemId
 // types already represented by a primary path.
 const POPULAR_PICKER_ITEM_IDS: ReadonlySet<InfrastructureSourcePickerItemId> = new Set([
   'pve',
+  'docker',
   'truenas',
   'unraid',
 ]);
@@ -139,8 +140,8 @@ export const InfrastructureSourcePicker: Component<InfrastructureSourcePickerPro
               <div class="min-w-0 flex-1 space-y-1">
                 <div class="text-sm font-semibold text-base-content">Install Pulse Agent</div>
                 <p class="text-xs leading-5 text-muted">
-                  Run an installer on a host (Linux, macOS, Windows, Unraid). Pulse classifies the
-                  host profile from its OS and starts collecting telemetry.
+                  Run an installer on a host (Linux, macOS, Windows, Docker, Unraid). Pulse
+                  classifies the host profile from its OS and starts collecting telemetry.
                 </p>
               </div>
             </button>
@@ -176,7 +177,13 @@ export const InfrastructureSourcePicker: Component<InfrastructureSourcePickerPro
             </div>
           }
         >
-          <div class="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-3">
+          <div
+            class={
+              visibleItems().length === 4
+                ? 'grid grid-cols-1 gap-2 sm:grid-cols-2'
+                : 'grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-3'
+            }
+          >
             <For each={visibleItems()}>
               {(item) => {
                 const Icon = CARD_ICON[item.id];

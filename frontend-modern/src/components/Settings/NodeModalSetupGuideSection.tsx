@@ -1,4 +1,4 @@
-import { Component, Show } from 'solid-js';
+import { Component, Show, createEffect, createSignal, onCleanup } from 'solid-js';
 import {
   PVE_MANUAL_PERMISSION_COMMAND,
   type NodeModalProps,
@@ -59,6 +59,110 @@ export const NodeModalSetupGuideSection: Component<NodeModalSetupGuideSectionPro
     setupHandoffDisabled() ? setupHandoffDisabledReason() : 'Copy command';
   const setupCommandButtonClass = (className: string) =>
     `${className} disabled:cursor-not-allowed disabled:opacity-50`;
+  const [quickSetupTokenRevealed, setQuickSetupTokenRevealed] = createSignal(false);
+  const [agentTokenRevealed, setAgentTokenRevealed] = createSignal(false);
+  const [quickSetupTokenCopied, setQuickSetupTokenCopied] = createSignal(false);
+  const [agentTokenCopied, setAgentTokenCopied] = createSignal(false);
+  let quickSetupCopyTimer: number | undefined;
+  let agentCopyTimer: number | undefined;
+
+  onCleanup(() => {
+    if (quickSetupCopyTimer !== undefined) window.clearTimeout(quickSetupCopyTimer);
+    if (agentCopyTimer !== undefined) window.clearTimeout(agentCopyTimer);
+  });
+
+  createEffect(() => {
+    state.quickSetupToken?.();
+    setQuickSetupTokenRevealed(false);
+    setQuickSetupTokenCopied(false);
+  });
+
+  createEffect(() => {
+    state.agentInstallToken?.();
+    setAgentTokenRevealed(false);
+    setAgentTokenCopied(false);
+  });
+
+  const handleInlineTokenCopy = async (
+    copyFn: (() => Promise<boolean> | boolean | void) | undefined,
+    setCopied: (next: boolean) => void,
+    kind: 'quick' | 'agent',
+  ) => {
+    const result = await copyFn?.();
+    if (result === false) return;
+    setCopied(true);
+    if (kind === 'quick') {
+      if (quickSetupCopyTimer !== undefined) window.clearTimeout(quickSetupCopyTimer);
+      quickSetupCopyTimer = window.setTimeout(() => setCopied(false), 2000);
+    } else {
+      if (agentCopyTimer !== undefined) window.clearTimeout(agentCopyTimer);
+      agentCopyTimer = window.setTimeout(() => setCopied(false), 2000);
+    }
+  };
+
+  const renderInlineTokenStep = (options: {
+    token: () => string;
+    tokenHint?: () => string;
+    expiryLabel?: () => string;
+    promptName: string;
+    revealed: () => boolean;
+    setRevealed: (next: boolean) => void;
+    copied: () => boolean;
+    onCopy: () => void | Promise<void>;
+  }) => (
+    <Show when={options.token().length > 0}>
+      <div class="rounded-md border border-blue-200 bg-blue-50/70 p-3 dark:border-blue-800 dark:bg-blue-950/30">
+        <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <div class="min-w-0 space-y-1">
+            <p class="text-xs font-semibold text-blue-900 dark:text-blue-100">
+              Step 2: When prompted for &ldquo;{options.promptName}&rdquo;, copy and paste this
+              token
+            </p>
+            <div class="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-blue-800 dark:text-blue-200">
+              <code class="rounded bg-surface px-2 py-0.5 font-mono text-base-content break-all">
+                {options.revealed() ? options.token() : '••••••••••••••••••••••••'}
+              </code>
+              <Show when={options.tokenHint && options.tokenHint().length > 0}>
+                <span>
+                  <span class="font-semibold">Setup token hint:</span>{' '}
+                  <code class="font-mono break-all text-blue-900 dark:text-blue-100">
+                    {options.tokenHint?.()}
+                  </code>
+                </span>
+              </Show>
+              <Show when={options.expiryLabel && options.expiryLabel().length > 0}>
+                <span>Expires at {options.expiryLabel?.()}</span>
+              </Show>
+            </div>
+            <p class="text-[11px] text-muted">
+              Run the command first, then copy this token so you do not overwrite your clipboard
+              early. Never paste it into a shell command.
+            </p>
+          </div>
+          <div class="flex shrink-0 items-center gap-2">
+            <button
+              type="button"
+              onClick={() => options.setRevealed(!options.revealed())}
+              class="rounded-md border border-border bg-surface px-2.5 py-1.5 text-xs font-medium text-base-content hover:bg-surface-hover transition-colors"
+            >
+              {options.revealed() ? 'Hide' : 'Reveal'}
+            </button>
+            <button
+              type="button"
+              onClick={() => void options.onCopy()}
+              class={`rounded-md px-3 py-1.5 text-xs font-medium text-white transition-colors ${
+                options.copied()
+                  ? 'bg-emerald-600 hover:bg-emerald-700'
+                  : 'bg-blue-600 hover:bg-blue-700'
+              }`}
+            >
+              {options.copied() ? 'Copied' : 'Copy token'}
+            </button>
+          </div>
+        </div>
+      </div>
+    </Show>
+  );
   const setupStrategy = () =>
     getNodeSetupStrategyPresentation(
       modalProps.nodeType,
@@ -269,20 +373,34 @@ export const NodeModalSetupGuideSection: Component<NodeModalSetupGuideSectionPro
                   </div>
                   {renderAgentPreGenerationControls('pve')}
                   <p class="text-blue-800 dark:text-blue-200 font-medium">
-                    Run this command on your Proxmox VE node:
+                    Step 1: Copy and run this command on your Proxmox VE node:
                   </p>
-                  <div class="relative bg-page rounded-md p-3 font-mono text-xs overflow-x-auto">
+                  <div class="flex items-start gap-2 rounded-md border border-border bg-page p-3 font-mono text-xs">
+                    <div class="min-w-0 flex-1 overflow-x-auto">
+                      <Show
+                        when={state.agentInstallCommand().length > 0}
+                        fallback={
+                          <code class="text-muted">
+                            Click the copy button to generate the install command
+                          </code>
+                        }
+                      >
+                        <code class="block text-base-content whitespace-pre-wrap wrap-break-word">
+                          {state.agentInstallCommand()}
+                        </code>
+                      </Show>
+                    </div>
                     <button
                       type="button"
                       disabled={state.loadingAgentCommand() || setupHandoffDisabled()}
                       onClick={async () => {
                         await state.copyProxmoxAgentInstallCommand(
                           'pve',
-                          'Command copied! Run it on your Proxmox node.',
+                          'Command copied! Run it on your Proxmox node, then copy the token below when prompted.',
                         );
                       }}
                       class={setupCommandButtonClass(
-                        'absolute top-2 right-2 p-1.5 hover:text-slate-200 bg-surface-hover rounded-md transition-colors',
+                        'shrink-0 p-1.5 hover:text-slate-200 bg-surface-hover rounded-md transition-colors',
                       )}
                       title={setupCommandButtonTitle()}
                     >
@@ -316,25 +434,26 @@ export const NodeModalSetupGuideSection: Component<NodeModalSetupGuideSectionPro
                         </svg>
                       </Show>
                     </button>
-                    <Show
-                      when={state.agentInstallCommand().length > 0}
-                      fallback={
-                        <code class="text-muted">
-                          Click the copy button to generate the install command
-                        </code>
-                      }
-                    >
-                      <code class="block text-base-content whitespace-pre-wrap wrap-break-word">
-                        {state.agentInstallCommand()}
-                      </code>
-                    </Show>
                   </div>
+                  {renderInlineTokenStep({
+                    token: () => state.agentInstallToken?.() ?? '',
+                    promptName: 'Pulse agent token',
+                    revealed: agentTokenRevealed,
+                    setRevealed: setAgentTokenRevealed,
+                    copied: agentTokenCopied,
+                    onCopy: () =>
+                      handleInlineTokenCopy(
+                        state.copyAgentInstallToken,
+                        setAgentTokenCopied,
+                        'agent',
+                      ),
+                  })}
                   <Show when={state.agentCommandError()}>
                     <p class="text-xs text-red-500">{state.agentCommandError()}</p>
                   </Show>
                   <p class="text-[11px] text-muted italic">
-                    Run the command first, then paste the separately revealed token at its silent
-                    prompt. The node appears in Pulse after the agent starts.
+                    Run the command first, then paste the separate token at its silent prompt. The
+                    node appears in Pulse after the agent starts.
                   </p>
                 </div>
               </Show>
@@ -366,22 +485,61 @@ export const NodeModalSetupGuideSection: Component<NodeModalSetupGuideSectionPro
                       </p>
                     </div>
                   </Show>
-                  <p class="text-blue-800 dark:text-blue-200">
-                    Just copy and run this one command on your Proxmox VE server:
+                  <p class="text-blue-800 dark:text-blue-200 font-medium">
+                    Step 1: Copy and run this setup command on your Proxmox VE server:
                   </p>
 
                   <div class="space-y-3">
-                    <div class="relative bg-page rounded-md p-3 font-mono text-xs overflow-x-auto">
+                    <div class="flex items-start gap-2 rounded-md border border-border bg-page p-3 font-mono text-xs">
+                      <div class="min-w-0 flex-1">
+                        <Show
+                          when={state.quickSetupCommandReady()}
+                          fallback={
+                            <code class="text-muted">
+                              {state.formData().host
+                                ? 'Click the copy button to generate the setup command'
+                                : 'Please enter the Endpoint URL above first'}
+                            </code>
+                          }
+                        >
+                          <div class="font-sans text-left">
+                            <p class="font-medium text-base-content">
+                              Credential-free command ready
+                            </p>
+                            <p class="mt-1 text-xs leading-5 text-muted">
+                              Use Copy command to place the runnable command on your clipboard. The
+                              one-time setup token is shown separately below. Run the command first,
+                              then copy the token when prompted.
+                            </p>
+                          </div>
+                        </Show>
+                        <Show
+                          when={
+                            state.quickSetupTokenHint().length > 0 &&
+                            !(state.quickSetupToken?.().length > 0)
+                          }
+                        >
+                          <div class="mt-2 text-xs text-blue-800 dark:text-blue-200">
+                            <span class="font-semibold">Setup token hint:</span>
+                            <code class="ml-1 font-mono break-all text-blue-900 dark:text-blue-100">
+                              {state.quickSetupTokenHint()}
+                            </code>
+                            <Show when={state.quickSetupExpiry()}>
+                              <span class="ml-2">Expires at {state.quickSetupExpiryLabel()}</span>
+                            </Show>
+                          </div>
+                        </Show>
+                      </div>
                       <button
                         type="button"
                         onClick={async () => {
                           await state.copyQuickSetupCommand(
                             'pve',
                             true,
-                            'Command copied to clipboard! Run it on the server. Paste the separate token only at the silent prompt.',
+                            'Command copied to clipboard! Run it on the server, then copy the token below when prompted.',
                           );
                         }}
-                        class="absolute top-2 right-2 p-1.5 text-slate-400 hover:text-slate-200 bg-surface-hover rounded-md transition-colors"
+                        class="shrink-0 p-1.5 text-slate-400 hover:text-slate-200 bg-surface-hover rounded-md transition-colors disabled:cursor-not-allowed disabled:opacity-50"
                         disabled={setupHandoffDisabled()}
                         title={
                           setupHandoffDisabled() ? setupHandoffDisabledReason() : 'Copy command'
@@ -399,37 +557,23 @@ export const NodeModalSetupGuideSection: Component<NodeModalSetupGuideSectionPro
                           <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"></path>
                         </svg>
                       </button>
-                      <Show
-                        when={state.quickSetupCommandReady()}
-                        fallback={
-                          <code class="text-muted">
-                            {state.formData().host
-                              ? 'Click the copy button to generate the setup command'
-                              : 'Please enter the Endpoint URL above first'}
-                          </code>
-                        }
-                      >
-                        <div class="pr-10 font-sans text-left">
-                          <p class="font-medium text-base-content">Credential-free command ready</p>
-                          <p class="mt-1 text-xs leading-5 text-muted">
-                            Use Copy command to place the runnable command on your clipboard. The
-                            one-time setup token is shown separately. Run the command first, then
-                            paste the token only at its silent prompt, never into a shell command.
-                          </p>
-                        </div>
-                      </Show>
-                      <Show when={state.quickSetupTokenHint().length > 0}>
-                        <div class="mt-2 text-xs text-blue-800 dark:text-blue-200">
-                          <span class="font-semibold">Setup token hint:</span>
-                          <code class="ml-1 font-mono break-all text-blue-900 dark:text-blue-100">
-                            {state.quickSetupTokenHint()}
-                          </code>
-                          <Show when={state.quickSetupExpiry()}>
-                            <span class="ml-2">Expires at {state.quickSetupExpiryLabel()}</span>
-                          </Show>
-                        </div>
-                      </Show>
                     </div>
+                    {renderInlineTokenStep({
+                      token: () => state.quickSetupToken?.() ?? '',
+                      tokenHint: () => state.quickSetupTokenHint(),
+                      expiryLabel: () =>
+                        state.quickSetupExpiry() ? state.quickSetupExpiryLabel() : '',
+                      promptName: 'Pulse setup token',
+                      revealed: quickSetupTokenRevealed,
+                      setRevealed: setQuickSetupTokenRevealed,
+                      copied: quickSetupTokenCopied,
+                      onCopy: () =>
+                        handleInlineTokenCopy(
+                          state.copyQuickSetupToken,
+                          setQuickSetupTokenCopied,
+                          'quick',
+                        ),
+                    })}
 
                     <div class="bg-amber-50 dark:bg-amber-900/25 border border-amber-200 dark:border-amber-800 rounded-md p-3">
                       <div class="flex items-start space-x-2">
@@ -753,16 +897,23 @@ export const NodeModalSetupGuideSection: Component<NodeModalSetupGuideSectionPro
                     <li>Automatic reconnection on network issues</li>
                   </ul>
                   {renderAgentPreGenerationControls('pbs')}
-                  <p class="text-blue-800 dark:text-blue-200 text-xs mt-3">
-                    Run this command on your PBS node:
+                  <p class="text-blue-800 dark:text-blue-200 text-xs mt-3 font-medium">
+                    Step 1: Copy and run this command on your PBS node:
                   </p>
-                  <div class="relative bg-page rounded-md p-3 font-mono text-xs overflow-x-auto">
+                  <div class="flex items-start gap-2 rounded-md border border-border bg-page p-3 font-mono text-xs">
+                    <code class="min-w-0 flex-1 block text-base-content whitespace-pre-wrap break-all">
+                      {state.agentInstallCommand() ||
+                        'Click the copy button to generate and copy the install command'}
+                    </code>
                     <button
                       type="button"
                       onClick={() =>
-                        state.copyProxmoxAgentInstallCommand('pbs', 'Command copied to clipboard')
+                        state.copyProxmoxAgentInstallCommand(
+                          'pbs',
+                          'Command copied to clipboard! Run it on the server, then copy the token below when prompted.',
+                        )
                       }
-                      class="absolute top-2 right-2 p-1.5 text-slate-400 hover:text-white rounded-sm bg-surface hover:bg-slate-700 transition-colors"
+                      class="shrink-0 p-1.5 text-slate-400 hover:text-white rounded-sm bg-surface hover:bg-slate-700 transition-colors disabled:cursor-not-allowed disabled:opacity-50"
                       title={
                         setupHandoffDisabled() ? setupHandoffDisabledReason() : 'Copy to clipboard'
                       }
@@ -809,17 +960,26 @@ export const NodeModalSetupGuideSection: Component<NodeModalSetupGuideSectionPro
                         </svg>
                       </Show>
                     </button>
-                    <code class="block text-base-content whitespace-pre-wrap break-all pr-10">
-                      {state.agentInstallCommand() ||
-                        'Click the copy button to generate and copy the install command'}
-                    </code>
                   </div>
+                  {renderInlineTokenStep({
+                    token: () => state.agentInstallToken?.() ?? '',
+                    promptName: 'Pulse agent token',
+                    revealed: agentTokenRevealed,
+                    setRevealed: setAgentTokenRevealed,
+                    copied: agentTokenCopied,
+                    onCopy: () =>
+                      handleInlineTokenCopy(
+                        state.copyAgentInstallToken,
+                        setAgentTokenCopied,
+                        'agent',
+                      ),
+                  })}
                   <Show when={state.agentCommandError()}>
                     <p class="text-xs text-red-500">{state.agentCommandError()}</p>
                   </Show>
                   <p class="text-xs text-muted">
-                    Run the command first, then paste the separately revealed token at its silent
-                    prompt. The server appears in Pulse after the agent connects.
+                    Run the command first, then paste the separate token at its silent prompt. The
+                    server appears in Pulse after the agent connects.
                   </p>
                 </div>
               </Show>
@@ -834,12 +994,51 @@ export const NodeModalSetupGuideSection: Component<NodeModalSetupGuideSectionPro
                       operations.
                     </p>
                   </div>
-                  <p class="text-blue-800 dark:text-blue-200">
-                    Just copy and run this one command on your Proxmox Backup Server:
+                  <p class="text-blue-800 dark:text-blue-200 font-medium">
+                    Step 1: Copy and run this setup command on your Proxmox Backup Server:
                   </p>
 
                   <div class="space-y-3">
-                    <div class="relative bg-page rounded-md p-3 font-mono text-xs overflow-x-auto">
+                    <div class="flex items-start gap-2 rounded-md border border-border bg-page p-3 font-mono text-xs">
+                      <div class="min-w-0 flex-1">
+                        <Show
+                          when={state.quickSetupCommandReady()}
+                          fallback={
+                            <code class="text-muted">
+                              {state.formData().host
+                                ? 'Click the copy button to generate the setup command'
+                                : 'Please enter the Endpoint URL above first'}
+                            </code>
+                          }
+                        >
+                          <div class="font-sans text-left">
+                            <p class="font-medium text-base-content">
+                              Credential-free command ready
+                            </p>
+                            <p class="mt-1 text-xs leading-5 text-muted">
+                              Use Copy command to place the runnable command on your clipboard. The
+                              one-time setup token is shown separately below. Run the command first,
+                              then copy the token when prompted.
+                            </p>
+                          </div>
+                        </Show>
+                        <Show
+                          when={
+                            state.quickSetupTokenHint().length > 0 &&
+                            !(state.quickSetupToken?.().length > 0)
+                          }
+                        >
+                          <div class="mt-2 text-xs text-blue-800 dark:text-blue-200">
+                            <span class="font-semibold">Setup token hint:</span>
+                            <code class="ml-1 font-mono break-all text-blue-900 dark:text-blue-100">
+                              {state.quickSetupTokenHint()}
+                            </code>
+                            <Show when={state.quickSetupExpiry()}>
+                              <span class="ml-2">Expires at {state.quickSetupExpiryLabel()}</span>
+                            </Show>
+                          </div>
+                        </Show>
+                      </div>
                       <Show when={state.formData().host && state.formData().host.trim() !== ''}>
                         <button
                           type="button"
@@ -847,10 +1046,10 @@ export const NodeModalSetupGuideSection: Component<NodeModalSetupGuideSectionPro
                             await state.copyQuickSetupCommand(
                               'pbs',
                               false,
-                              'Command copied to clipboard! Run it on the server. Paste the separate token only at the silent prompt.',
+                              'Command copied to clipboard! Run it on the server, then copy the token below when prompted.',
                             );
                           }}
-                          class="absolute top-2 right-2 p-1.5 text-slate-400 hover:text-slate-200 bg-surface-hover rounded-md transition-colors"
+                          class="shrink-0 p-1.5 text-slate-400 hover:text-slate-200 bg-surface-hover rounded-md transition-colors disabled:cursor-not-allowed disabled:opacity-50"
                           disabled={setupHandoffDisabled()}
                           title={
                             setupHandoffDisabled() ? setupHandoffDisabledReason() : 'Copy command'
@@ -869,37 +1068,23 @@ export const NodeModalSetupGuideSection: Component<NodeModalSetupGuideSectionPro
                           </svg>
                         </button>
                       </Show>
-                      <Show
-                        when={state.quickSetupCommandReady()}
-                        fallback={
-                          <code class="text-muted">
-                            {state.formData().host
-                              ? 'Click the copy button to generate the setup command'
-                              : 'Please enter the Endpoint URL above first'}
-                          </code>
-                        }
-                      >
-                        <div class="pr-10 font-sans text-left">
-                          <p class="font-medium text-base-content">Credential-free command ready</p>
-                          <p class="mt-1 text-xs leading-5 text-muted">
-                            Use Copy command to place the runnable command on your clipboard. The
-                            one-time setup token is shown separately. Run the command first, then
-                            paste the token only at its silent prompt, never into a shell command.
-                          </p>
-                        </div>
-                      </Show>
-                      <Show when={state.quickSetupTokenHint().length > 0}>
-                        <div class="mt-2 text-xs text-blue-800 dark:text-blue-200">
-                          <span class="font-semibold">Setup token hint:</span>
-                          <code class="ml-1 font-mono break-all text-blue-900 dark:text-blue-100">
-                            {state.quickSetupTokenHint()}
-                          </code>
-                          <Show when={state.quickSetupExpiry()}>
-                            <span class="ml-2">Expires at {state.quickSetupExpiryLabel()}</span>
-                          </Show>
-                        </div>
-                      </Show>
                     </div>
+                    {renderInlineTokenStep({
+                      token: () => state.quickSetupToken?.() ?? '',
+                      tokenHint: () => state.quickSetupTokenHint(),
+                      expiryLabel: () =>
+                        state.quickSetupExpiry() ? state.quickSetupExpiryLabel() : '',
+                      promptName: 'Pulse setup token',
+                      revealed: quickSetupTokenRevealed,
+                      setRevealed: setQuickSetupTokenRevealed,
+                      copied: quickSetupTokenCopied,
+                      onCopy: () =>
+                        handleInlineTokenCopy(
+                          state.copyQuickSetupToken,
+                          setQuickSetupTokenCopied,
+                          'quick',
+                        ),
+                    })}
 
                     <div class="bg-amber-50 dark:bg-amber-900/25 border border-amber-200 dark:border-amber-800 rounded-md p-3">
                       <div class="flex items-start space-x-2">

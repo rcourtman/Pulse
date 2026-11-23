@@ -145,6 +145,18 @@ describe('Button', () => {
     expect(onClick).toHaveBeenCalledTimes(1);
   });
 
+  it('supports inline non-overlapping command-copy icon buttons', () => {
+    const onClick = vi.fn();
+
+    render(() => (
+      <CommandCopyButton layout="inline" onClick={onClick} label="Copy inline command" />
+    ));
+
+    const button = screen.getByRole('button', { name: 'Copy inline command' });
+    expect(button).toHaveClass('shrink-0');
+    expect(button).not.toHaveClass('absolute');
+  });
+
   it('renders copy-value icon and chip buttons through the shared primitive', () => {
     const onCopy = vi.fn();
     const onParentClick = vi.fn();
