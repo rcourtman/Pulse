@@ -2040,6 +2040,10 @@ func (h *ConfigHandlers) handleDeleteNode(w http.ResponseWriter, r *http.Request
 // This handles the case where nodes are added to a Proxmox cluster after initial configuration
 
 func (h *ConfigHandlers) handleRefreshClusterNodes(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	if ctx.Err() != nil {
+		return
+	}
 	// Prevent modifications in mock mode
 	if mock.IsMockEnabled() {
 		http.Error(w, "Cannot refresh cluster in mock mode", http.StatusForbidden)
@@ -2056,7 +2060,19 @@ func (h *ConfigHandlers) handleRefreshClusterNodes(w http.ResponseWriter, r *htt
 		return
 	}
 
-	nodeType, index, err := resolveNodeID(h.getConfig(r.Context()), nodeID)
+	cfg, persistence, _ := h.getContextState(ctx)
+	if cfg == nil || persistence == nil {
+		http.Error(w, "Failed to save configuration", http.StatusInternalServerError)
+		return
+	}
+	config.Mu.RLock()
+	nodeType, index, err := resolveNodeID(cfg, nodeID)
+	var original config.PVEInstance
+	found := err == nil && nodeType == "pve" && index >= 0 && index < len(cfg.PVEInstances)
+	if found {
+		original = cfg.PVEInstances[index].DeepCopy()
+	}
+	config.Mu.RUnlock()
 	if err != nil {
 		if errors.Is(err, errNodeIDNotFound) {
 			http.Error(w, "Node not found", http.StatusNotFound)
@@ -2072,21 +2088,23 @@ func (h *ConfigHandlers) handleRefreshClusterNodes(w http.ResponseWriter, r *htt
 		return
 	}
 
-	if index >= len(h.getConfig(r.Context()).PVEInstances) {
+	if !found {
 		http.Error(w, "Node not found", http.StatusNotFound)
 		return
 	}
 
-	pve := &h.getConfig(r.Context()).PVEInstances[index]
-	if refuseTenantOutboundDestination(w, r, pve.Host) {
+	if refuseTenantOutboundDestination(w, r, original.Host) {
 		return
 	}
 
 	// Create client config for cluster detection
-	clientConfig := config.CreateProxmoxConfig(pve)
+	clientConfig := config.CreateProxmoxConfig(&original)
 
 	// Force cluster re-detection (ignore existing endpoints)
-	isCluster, clusterName, clusterEndpoints := detectPVECluster(clientConfig, pve.Name, pve.ClusterEndpoints)
+	isCluster, clusterName, clusterEndpoints := detectPVEClusterContext(ctx, clientConfig, original.Name, original.ClusterEndpoints)
+	if ctx.Err() != nil {
+		return
+	}
 
 	if !isCluster {
 		http.Error(w, "Node is not part of a cluster", http.StatusBadRequest)
@@ -2098,6 +2116,27 @@ func (h *ConfigHandlers) handleRefreshClusterNodes(w http.ResponseWriter, r *htt
 		return
 	}
 
+	// Discovery is read-only. Stage normalization on copies so neither a
+	// cancelled request nor a failed save changes the live inventory.
+	if h.getConfig(ctx) != cfg {
+		http.Error(w, "Failed to save configuration", http.StatusInternalServerError)
+		return
+	}
+	config.Mu.RLock()
+	if index >= len(cfg.PVEInstances) || cfg.PVEInstances[index].Name != original.Name ||
+		config.CreateProxmoxConfig(&cfg.PVEInstances[index]) != clientConfig {
+		config.Mu.RUnlock()
+		http.Error(w, "Failed to save configuration", http.StatusInternalServerError)
+		return
+	}
+	pending := make([]config.PVEInstance, len(cfg.PVEInstances))
+	for i := range cfg.PVEInstances {
+		pending[i] = cfg.PVEInstances[i].DeepCopy()
+	}
+	pbs, pmg := cfg.PBSInstances, cfg.PMGInstances
+	config.Mu.RUnlock()
+
+	pve := &pending[index]
 	oldEndpointCount := len(pve.ClusterEndpoints)
 	newEndpointCount := len(clusterEndpoints)
 
@@ -2108,13 +2147,23 @@ func (h *ConfigHandlers) handleRefreshClusterNodes(w http.ResponseWriter, r *htt
 	}
 	pve.ClusterEndpoints = mergeDiscoveredClusterEndpointConfiguration(pve.ClusterEndpoints, clusterEndpoints)
 
-	// Save configuration
-	h.normalizePVEConfigState(r.Context())
-	if err := h.getPersistence(r.Context()).SaveNodesConfig(h.getConfig(r.Context()).PVEInstances, h.getConfig(r.Context()).PBSInstances, h.getConfig(r.Context()).PMGInstances); err != nil {
+	if normalized, changed := config.ConsolidatePVEInstances(pending); changed {
+		pending = normalized
+	}
+	config.EnsurePVEClusterNodeIdentities(pending)
+	// This is the last cancellation check before admitting the save. Once
+	// admitted, finish persistence and apply even if the caller disconnects.
+	if ctx.Err() != nil {
+		return
+	}
+	if err := persistence.SaveNodesConfig(pending, pbs, pmg); err != nil {
 		log.Error().Err(err).Msg("Failed to save nodes configuration after cluster refresh")
 		http.Error(w, "Failed to save configuration", http.StatusInternalServerError)
 		return
 	}
+	config.Mu.Lock()
+	cfg.PVEInstances = pending
+	config.Mu.Unlock()
 
 	log.Info().
 		Str("instance", pve.Name).

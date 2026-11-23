@@ -339,9 +339,9 @@ func TestNodeMutationEventsStayWithRequestOrganization(t *testing.T) {
 				{Name: "node-a", Host: "https://192.0.2.10:8006", TokenValue: "synthetic"},
 			}})
 			h.wsHub = hub
-			original := detectPVECluster
-			t.Cleanup(func() { detectPVECluster = original })
-			detectPVECluster = func(proxmox.ClientConfig, string, []config.ClusterEndpoint) (bool, string, []config.ClusterEndpoint) {
+			original := detectPVEClusterContext
+			t.Cleanup(func() { detectPVEClusterContext = original })
+			detectPVEClusterContext = func(context.Context, proxmox.ClientConfig, string, []config.ClusterEndpoint) (bool, string, []config.ClusterEndpoint) {
 				return true, "cluster-a", []config.ClusterEndpoint{{NodeName: "node-a", Host: "https://192.0.2.10:8006"}}
 			}
 			ctx := context.WithValue(context.Background(), apicontext.OrgIDContextKey, orgID)

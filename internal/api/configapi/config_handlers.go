@@ -1205,7 +1205,7 @@ func nodeValidationFailureReason(err error) string {
 // This helps filter out qdevice VMs and other non-Proxmox participants.
 // Returns (isValid, fingerprint, failureReason) - fingerprint is captured for
 // TOFU (Trust On First Use); failureReason is empty when the node validates.
-func validateNodeAPI(clusterNode proxmox.ClusterStatus, baseConfig proxmox.ClientConfig) (bool, string, string) {
+func validateNodeAPI(ctx context.Context, clusterNode proxmox.ClusterStatus, baseConfig proxmox.ClientConfig) (bool, string, string) {
 	// Determine the host to test - prefer IP if available, otherwise use node name
 	testHost := clusterNode.IP
 	if testHost == "" {
@@ -1238,7 +1238,7 @@ func validateNodeAPI(clusterNode proxmox.ClusterStatus, baseConfig proxmox.Clien
 	// Capture the fingerprint for TOFU (Trust On First Use)
 	var capturedFingerprint string
 	if testHost != "" {
-		fp, err := fetchTLSFingerprint(testConfig.Host)
+		fp, err := tlsutil.FetchFingerprintContext(ctx, testConfig.Host)
 		if err != nil {
 			log.Debug().
 				Str("node", clusterNode.Name).
@@ -1254,7 +1254,7 @@ func validateNodeAPI(clusterNode proxmox.ClusterStatus, baseConfig proxmox.Clien
 	}
 
 	// Try to create a client and make a simple API call
-	testClient, err := proxmox.NewClient(testConfig)
+	testClient, err := proxmox.NewClientWithContext(ctx, testConfig)
 	if err != nil {
 		// Many clusters use unique certificates per node. If the primary node
 		// was configured with fingerprint pinning, connecting to peers with the
@@ -1267,7 +1267,7 @@ func validateNodeAPI(clusterNode proxmox.ClusterStatus, baseConfig proxmox.Clien
 				Msg("Retrying cluster node validation without fingerprint pinning")
 			testConfig.Fingerprint = ""
 			testConfig.VerifySSL = false
-			testClient, err = proxmox.NewClient(testConfig)
+			testClient, err = proxmox.NewClientWithContext(ctx, testConfig)
 		}
 		if err != nil {
 			log.Debug().
@@ -1277,13 +1277,14 @@ func validateNodeAPI(clusterNode proxmox.ClusterStatus, baseConfig proxmox.Clien
 			return false, "", nodeValidationFailureReason(err)
 		}
 	}
+	defer testClient.CloseIdleConnections()
 
 	// Test with a simple API call that all Proxmox nodes should support
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	readCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
 	defer cancel()
 
 	// Try to get the node version - this is a very lightweight API call
-	_, err = testClient.GetNodes(ctx)
+	_, err = testClient.GetNodes(readCtx)
 	if err != nil {
 		errMsg := err.Error()
 		// If we reached the API but were denied (common when per-node permissions
@@ -1307,7 +1308,7 @@ func validateNodeAPI(clusterNode proxmox.ClusterStatus, baseConfig proxmox.Clien
 			if capturedFingerprint == "" {
 				retryConfig.VerifySSL = false
 			}
-			if retryNodeValidation(retryConfig) {
+			if retryNodeValidation(ctx, retryConfig) {
 				log.Debug().
 					Str("node", clusterNode.Name).
 					Msg("Cluster node validated with its own certificate after pinned-fingerprint mismatch")
@@ -1331,14 +1332,15 @@ func validateNodeAPI(clusterNode proxmox.ClusterStatus, baseConfig proxmox.Clien
 
 // retryNodeValidation re-runs the lightweight validation call with an adjusted
 // TLS configuration. Auth denials still count as success (see validateNodeAPI).
-func retryNodeValidation(cfg proxmox.ClientConfig) bool {
-	retryClient, err := proxmox.NewClient(cfg)
+func retryNodeValidation(ctx context.Context, cfg proxmox.ClientConfig) bool {
+	retryClient, err := proxmox.NewClientWithContext(ctx, cfg)
 	if err != nil {
 		return false
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer retryClient.CloseIdleConnections()
+	readCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
 	defer cancel()
-	if _, err := retryClient.GetNodes(ctx); err != nil {
+	if _, err := retryClient.GetNodes(readCtx); err != nil {
 		return isNodeValidationAuthError(err.Error())
 	}
 	return true
@@ -1489,45 +1491,55 @@ func findPreferredIP(interfaces []proxmox.NodeNetworkInterface, referenceIP net.
 }
 
 var (
-	detectPVECluster       = defaultDetectPVECluster
-	validatePVEClusterNode = validateNodeAPI
-	fetchTLSFingerprint    = tlsutil.FetchFingerprint
+	detectPVEClusterContext = defaultDetectPVECluster
+	validatePVEClusterNode  = validateNodeAPI
+	fetchTLSFingerprint     = tlsutil.FetchFingerprint
 )
 
 func ConfigureAutoRegisterNetworkDependencies(
 	detect func(proxmox.ClientConfig, string, []config.ClusterEndpoint) (bool, string, []config.ClusterEndpoint),
 	fingerprint func(string) (string, error),
 ) func() {
-	previousDetect := detectPVECluster
+	previousDetect := detectPVEClusterContext
 	previousFingerprint := fetchTLSFingerprint
 	if detect != nil {
-		detectPVECluster = detect
+		detectPVEClusterContext = func(_ context.Context, clientConfig proxmox.ClientConfig, nodeName string, endpoints []config.ClusterEndpoint) (bool, string, []config.ClusterEndpoint) {
+			return detect(clientConfig, nodeName, endpoints)
+		}
 	}
 	if fingerprint != nil {
 		fetchTLSFingerprint = fingerprint
 	}
 	return func() {
-		detectPVECluster = previousDetect
+		detectPVEClusterContext = previousDetect
 		fetchTLSFingerprint = previousFingerprint
 	}
 }
 
 // detectPVECluster checks if a PVE node is part of a cluster and returns cluster information
 // If existingEndpoints is provided, GuestURL values will be preserved for matching nodes
-func defaultDetectPVECluster(clientConfig proxmox.ClientConfig, nodeName string, existingEndpoints []config.ClusterEndpoint) (isCluster bool, clusterName string, clusterEndpoints []config.ClusterEndpoint) {
-	return detectPVEClusterWithValidator(clientConfig, nodeName, existingEndpoints, validatePVEClusterNode)
+func detectPVECluster(clientConfig proxmox.ClientConfig, nodeName string, existingEndpoints []config.ClusterEndpoint) (bool, string, []config.ClusterEndpoint) {
+	return detectPVEClusterContext(context.Background(), clientConfig, nodeName, existingEndpoints)
+}
+
+func defaultDetectPVECluster(ctx context.Context, clientConfig proxmox.ClientConfig, nodeName string, existingEndpoints []config.ClusterEndpoint) (bool, string, []config.ClusterEndpoint) {
+	return detectPVEClusterWithValidator(ctx, clientConfig, nodeName, existingEndpoints, validatePVEClusterNode)
 }
 
 func DetectPVEClusterWithValidator(clientConfig proxmox.ClientConfig, nodeName string, existingEndpoints []config.ClusterEndpoint, validator func(proxmox.ClusterStatus, proxmox.ClientConfig) (bool, string, string)) (isCluster bool, clusterName string, clusterEndpoints []config.ClusterEndpoint) {
-	return detectPVEClusterWithValidator(clientConfig, nodeName, existingEndpoints, validator)
+	return detectPVEClusterWithValidator(context.Background(), clientConfig, nodeName, existingEndpoints,
+		func(_ context.Context, node proxmox.ClusterStatus, cfg proxmox.ClientConfig) (bool, string, string) {
+			return validator(node, cfg)
+		})
 }
 
-func detectPVEClusterWithValidator(clientConfig proxmox.ClientConfig, nodeName string, existingEndpoints []config.ClusterEndpoint, validator func(proxmox.ClusterStatus, proxmox.ClientConfig) (bool, string, string)) (isCluster bool, clusterName string, clusterEndpoints []config.ClusterEndpoint) {
-	tempClient, err := proxmox.NewClient(clientConfig)
+func detectPVEClusterWithValidator(ctx context.Context, clientConfig proxmox.ClientConfig, nodeName string, existingEndpoints []config.ClusterEndpoint, validator func(context.Context, proxmox.ClusterStatus, proxmox.ClientConfig) (bool, string, string)) (isCluster bool, clusterName string, clusterEndpoints []config.ClusterEndpoint) {
+	tempClient, err := proxmox.NewClientWithContext(ctx, clientConfig)
 	if err != nil {
 		log.Warn().Err(err).Msg("Failed to create client for cluster detection")
 		return false, "", nil
 	}
+	defer tempClient.CloseIdleConnections()
 
 	// Try to get cluster status with retries to handle API permission propagation delays
 	// This addresses issue #437 where cluster detection fails on first attempt
@@ -1537,16 +1549,25 @@ func detectPVEClusterWithValidator(clientConfig proxmox.ClientConfig, nodeName s
 	for attempt := 0; attempt < 3; attempt++ {
 		if attempt > 0 {
 			// Wait a bit for permissions to propagate
-			time.Sleep(time.Duration(attempt) * time.Second)
+			timer := time.NewTimer(time.Duration(attempt) * time.Second)
+			select {
+			case <-ctx.Done():
+				timer.Stop()
+				return false, "", nil
+			case <-timer.C:
+			}
 			log.Debug().Int("attempt", attempt+1).Msg("Retrying cluster detection")
 		}
 
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
+		readCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 
 		// Get full cluster status to find the actual cluster name
 		// Note: This can cause certificate lookup errors on standalone nodes, but it's only done once during configuration
-		clusterStatus, lastErr = tempClient.GetClusterStatus(ctx)
+		clusterStatus, lastErr = tempClient.GetClusterStatus(readCtx)
+		cancel()
+		if ctx.Err() != nil {
+			return false, "", nil
+		}
 		if lastErr == nil {
 			// Success!
 			break
@@ -1606,7 +1627,10 @@ func detectPVEClusterWithValidator(clientConfig proxmox.ClientConfig, nodeName s
 			// Reachability enriches a member endpoint but never defines cluster
 			// membership. Powered-off nodes remain canonical members even
 			// though their individual API cannot answer during discovery.
-			isValid, nodeFingerprint, failureReason := validator(clusterNode, clientConfig)
+			isValid, nodeFingerprint, failureReason := validator(ctx, clusterNode, clientConfig)
+			if ctx.Err() != nil {
+				return false, "", nil
+			}
 			existingEndpoint, hadExistingEndpoint := findExistingClusterEndpoint(clusterNode.Name, existingEndpoints)
 			if !isValid {
 				log.Info().
@@ -1668,9 +1692,12 @@ func detectPVEClusterWithValidator(clientConfig proxmox.ClientConfig, nodeName s
 				clusterIP := net.ParseIP(clusterNode.IP)
 				if clusterIP != nil && !ipsOnSameNetwork(clusterIP, connectionIP) {
 					// Cluster IP is on a different network, try to find one on the same network
-					ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-					nodeInterfaces, err := tempClient.GetNodeNetworkInterfaces(ctx, clusterNode.Name)
+					readCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+					nodeInterfaces, err := tempClient.GetNodeNetworkInterfaces(readCtx, clusterNode.Name)
 					cancel()
+					if ctx.Err() != nil {
+						return false, "", nil
+					}
 
 					if err == nil {
 						preferredIP := findPreferredIP(nodeInterfaces, connectionIP)
