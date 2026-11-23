@@ -103,10 +103,19 @@ func (m *Monitor) collectGuestsFromClusterResources(
 	prevVMByID map[string]models.VM,
 	vmIDToHostAgent map[string]models.Host,
 ) ([]models.VM, []models.Container) {
-	allVMs := make([]models.VM, 0, len(resources))
-	allContainers := make([]models.Container, 0, len(resources))
-	vmResources := make([]indexedClusterResource, 0, len(resources))
-	containerResources := make([]indexedClusterResource, 0, len(resources))
+	// Size each partition to its own guest kind, not the whole inventory.
+	// The entries hold full cluster resource records.
+	vmCount, containerCount := 0, 0
+	for i := range resources {
+		switch resources[i].Type {
+		case "qemu":
+			vmCount++
+		case "lxc":
+			containerCount++
+		}
+	}
+	vmResources := make([]indexedClusterResource, 0, vmCount)
+	containerResources := make([]indexedClusterResource, 0, containerCount)
 
 	for _, res := range resources {
 		// Generate canonical guest ID: instance:node:vmid
@@ -123,13 +132,11 @@ func (m *Monitor) collectGuestsFromClusterResources(
 		switch res.Type {
 		case "qemu":
 			vmResources = append(vmResources, indexedClusterResource{
-				order:    len(vmResources),
 				resource: res,
 				guestID:  guestID,
 			})
 		case "lxc":
 			containerResources = append(containerResources, indexedClusterResource{
-				order:    len(containerResources),
 				resource: res,
 				guestID:  guestID,
 			})
@@ -139,6 +146,7 @@ func (m *Monitor) collectGuestsFromClusterResources(
 	// Let VM and LXC detail compete fairly for the shared enrichment slots.
 	// Running one type to completion first can consume the entire bounded budget
 	// on a large mixed cluster and permanently starve the other type.
+	allVMs, allContainers := []models.VM{}, []models.Container{}
 	var collectionWG sync.WaitGroup
 	if len(containerResources) > 0 {
 		collectionWG.Add(1)
@@ -159,16 +167,10 @@ func (m *Monitor) collectGuestsFromClusterResources(
 	return allVMs, allContainers
 }
 
+// The entry's index in its partition is its position in inventory order.
 type indexedClusterResource struct {
-	order    int
 	resource proxmox.ClusterResource
 	guestID  string
-}
-
-type clusterVMResourceResult struct {
-	order int
-	vm    models.VM
-	ok    bool
 }
 
 func rotatingResourceOffset(total int) int {
@@ -259,7 +261,8 @@ func (m *Monitor) collectClusterContainerResources(
 	offset := rotatingResourceOffset(len(resources))
 
 	for i := range resources {
-		entry := resources[(offset+i)%len(resources)]
+		index := (offset + i) % len(resources)
+		entry := &resources[index]
 		var container models.Container
 		var ok bool
 		ran := m.runGuestAgentVMWork(ctx, func(workCtx context.Context) {
@@ -276,18 +279,12 @@ func (m *Monitor) collectClusterContainerResources(
 			container = preserveContainerOptionalEnrichment(container, &previous)
 		}
 		if ok {
-			orderedContainers[entry.order] = container
-			orderedOK[entry.order] = true
+			orderedContainers[index] = container
+			orderedOK[index] = true
 		}
 	}
 
-	containers := make([]models.Container, 0, len(resources))
-	for i, ok := range orderedOK {
-		if ok {
-			containers = append(containers, orderedContainers[i])
-		}
-	}
-	return containers
+	return compactClusterGuestRows(orderedContainers, orderedOK)
 }
 
 func (m *Monitor) collectClusterVMResources(
@@ -298,79 +295,73 @@ func (m *Monitor) collectClusterVMResources(
 	prevVMByID map[string]models.VM,
 	vmIDToHostAgent map[string]models.Host,
 ) []models.VM {
-	resultCh := make(chan clusterVMResourceResult, len(resources))
-	jobCh := make(chan indexedClusterResource, len(resources))
-	var wg sync.WaitGroup
-
 	workerCount := m.efficientQEMUWorkerCount(len(resources))
-	for i := 0; i < workerCount; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			for entry := range jobCh {
-				var result clusterVMResourceResult
-				ran := m.runGuestAgentVMWork(ctx, func(workCtx context.Context) {
-					var prevVM *models.VM
-					if prev, ok := prevVMByID[entry.guestID]; ok {
-						prevVM = &prev
-					}
-					vm, ok := m.handleClusterVMResource(workCtx, instanceName, entry.resource, entry.guestID, client, prevVM, vmIDToHostAgent)
-					result = clusterVMResourceResult{
-						order: entry.order,
-						vm:    vm,
-						ok:    ok,
-					}
-				})
-				if !ran {
+	if workerCount == 0 {
+		return []models.VM{}
+	}
+	// Queue only indexes, bounded by the worker count. Each index is sent
+	// exactly once; its worker owns that output slot until the wait completes.
+	jobCh := make(chan int, workerCount)
+	orderedVMs := make([]models.VM, len(resources))
+	orderedOK := make([]bool, len(resources))
+	var wg sync.WaitGroup
+	for range workerCount {
+		wg.Go(func() {
+			for index := range jobCh {
+				entry := &resources[index]
+				var previous *models.VM
+				if prev, ok := prevVMByID[entry.guestID]; ok {
+					previous = &prev
+				}
+				var vm models.VM
+				var ok bool
+				build := func(workCtx context.Context) {
+					vm, ok = m.handleClusterVMResource(workCtx, instanceName, entry.resource, entry.guestID, client, previous, vmIDToHostAgent)
+				}
+				if !m.runGuestAgentVMWork(ctx, build) {
 					// Do not turn an exhausted detail budget into missing inventory.
 					// Re-run only the builder with the canceled context so it emits the
 					// current cluster/resources row without remote enrichment.
-					var prevVM *models.VM
-					if prev, ok := prevVMByID[entry.guestID]; ok {
-						prevVM = &prev
-					}
-					vm, ok := m.handleClusterVMResource(ctx, instanceName, entry.resource, entry.guestID, client, prevVM, vmIDToHostAgent)
-					result = clusterVMResourceResult{order: entry.order, vm: vm, ok: ok}
+					build(ctx)
 				}
-				if ctx.Err() != nil && result.ok {
-					previous, exists := prevVMByID[entry.guestID]
-					if exists {
-						result.vm = preserveVMOptionalEnrichment(result.vm, &previous)
-					}
+				if !ok {
+					continue
 				}
-				resultCh <- result
+				if ctx.Err() != nil {
+					vm = preserveVMOptionalEnrichment(vm, previous)
+				}
+				orderedVMs[index] = vm
+				orderedOK[index] = true
 			}
-		}()
+		})
 	}
 
 	offset := rotatingResourceOffset(len(resources))
+	// Drain the entire inventory even after the enrichment deadline, so the
+	// canceled-context builders still get to publish every accepted base row.
 	for i := range resources {
-		jobCh <- resources[(offset+i)%len(resources)]
+		jobCh <- (offset + i) % len(resources)
 	}
 	close(jobCh)
+	wg.Wait()
+	return compactClusterGuestRows(orderedVMs, orderedOK)
+}
 
-	go func() {
-		wg.Wait()
-		close(resultCh)
-	}()
-
-	orderedVMs := make([]models.VM, len(resources))
-	orderedOK := make([]bool, len(resources))
-	for result := range resultCh {
-		if result.order < 0 || result.order >= len(resources) || !result.ok {
+// Drop rejected rows (such as templates) without a second inventory-sized
+// allocation. Clear any moved rows still referenced by the unused tail.
+func compactClusterGuestRows[T any](rows []T, accepted []bool) []T {
+	next := 0
+	for i, ok := range accepted {
+		if !ok {
 			continue
 		}
-		orderedVMs[result.order] = result.vm
-		orderedOK[result.order] = true
-	}
-
-	vms := make([]models.VM, 0, len(resources))
-	for i, ok := range orderedOK {
-		if ok {
-			vms = append(vms, orderedVMs[i])
+		if i != next {
+			rows[next] = rows[i]
 		}
+		next++
 	}
-	return vms
+	clear(rows[next:])
+	return rows[:next]
 }
 
 func (m *Monitor) handleClusterVMResource(

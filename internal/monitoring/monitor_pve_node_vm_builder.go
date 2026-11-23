@@ -29,7 +29,6 @@ func (m *Monitor) pollNodeVMsWithClusterResourceBuilder(
 
 		guestID := makeGuestID(instanceName, node, vm.VMID)
 		resources = append(resources, indexedClusterResource{
-			order: len(resources),
 			resource: proxmox.ClusterResource{
 				ID:         guestID,
 				Type:       "qemu",
