@@ -19,6 +19,7 @@ interface WelcomeStepProps {
 export const WelcomeStep: Component<WelcomeStepProps> = (props) => {
   const [isValidating, setIsValidating] = createSignal(false);
   const [copiedCommand, setCopiedCommand] = createSignal<string | null>(null);
+  const [validationError, setValidationError] = createSignal<string | null>(null);
   let copiedTimer: ReturnType<typeof setTimeout> | undefined;
   let unlockInFlight = false;
 
@@ -95,14 +96,19 @@ export const WelcomeStep: Component<WelcomeStepProps> = (props) => {
 
     const trimmedToken = props.bootstrapToken.trim();
     if (!trimmedToken) {
-      showError(t('setup.welcome.error.missingBootstrapToken'));
+      const message = t('setup.welcome.error.missingBootstrapToken');
+      setValidationError(message);
+      showError(message);
       return;
     }
     if (looksLikeBootstrapTokenSnapshot(trimmedToken)) {
-      showError(snapshotPasteHelp());
+      const message = snapshotPasteHelp();
+      setValidationError(message);
+      showError(message);
       return;
     }
 
+    setValidationError(null);
     unlockInFlight = true;
     setIsValidating(true);
     try {
@@ -123,7 +129,9 @@ export const WelcomeStep: Component<WelcomeStepProps> = (props) => {
       props.setIsUnlocked(true);
       props.onNext();
     } catch (_error) {
-      showError(t('setup.welcome.error.invalidBootstrapToken'));
+      const message = t('setup.welcome.error.invalidBootstrapToken');
+      setValidationError(message);
+      showError(message);
     } finally {
       unlockInFlight = false;
       setIsValidating(false);
@@ -132,64 +140,53 @@ export const WelcomeStep: Component<WelcomeStepProps> = (props) => {
 
   return (
     <div class="text-center relative">
-      <div class="mb-8 relative z-10">
-        <PulseBrandMark class="w-20 h-20 mb-6 mx-auto" />
-        <h1 class="text-3xl sm:text-4xl font-bold tracking-tight text-base-content mb-3">
+      <div class="mb-4 relative z-10">
+        <PulseBrandMark class="w-12 h-12 mb-3 mx-auto" />
+        <h1 class="text-2xl sm:text-3xl font-bold tracking-tight text-base-content mb-1.5">
           {t('setup.welcome.hero.title')}
         </h1>
-        <p class="text-base text-muted max-w-xl mx-auto">
+        <p class="text-sm sm:text-base text-muted max-w-xl mx-auto">
           {t('setup.welcome.hero.stepsIntro')}{' '}
           <span class="text-base-content font-medium">{t('setup.welcome.hero.step.unlock')}</span>,{' '}
           <span class="text-base-content font-medium">{t('setup.welcome.hero.step.admin')}</span>,{' '}
           {t('setup.welcome.hero.stepsThen')}{' '}
           <span class="text-base-content font-medium">{t('setup.welcome.hero.step.source')}</span>.
         </p>
-        <p class="text-sm text-muted max-w-xl mx-auto mt-2">
+        <p class="text-xs sm:text-sm text-muted max-w-xl mx-auto mt-1">
           <span>{t('setup.welcome.hero.coverage')}</span>
         </p>
       </div>
 
-      <div class="mb-6 max-w-2xl mx-auto rounded-md border border-border bg-surface px-4 py-3 text-left">
-        <div class="flex items-start gap-3">
-          <ShieldCheck class="mt-0.5 h-4 w-4 shrink-0 text-blue-500" strokeWidth={2} />
-          <div class="min-w-0">
-            <p class="text-sm font-medium text-base-content">
-              {t('setup.welcome.telemetryNotice.title')}
-            </p>
-            <p class="mt-1 text-xs leading-5 text-muted">
-              {t('setup.welcome.telemetryNotice.description')}{' '}
-              <ExternalTextLink href={PRIVACY_DOC_URL} variant="muted">
-                {t('setup.welcome.telemetryNotice.detailsLink')}
-              </ExternalTextLink>
-            </p>
-          </div>
-        </div>
-      </div>
-
       <Show when={!props.isUnlocked}>
-        <div class="p-6 sm:p-8 max-w-2xl mx-auto bg-surface border border-border rounded-md text-left">
-          <h3 class="text-lg font-semibold text-base-content mb-2 tracking-tight">
+        <div class="p-5 sm:p-6 max-w-2xl mx-auto bg-surface border border-border rounded-md text-left">
+          <h3 class="text-base sm:text-lg font-semibold text-base-content mb-1 tracking-tight">
             {t('setup.welcome.unlockTitle')}
           </h3>
-          <p class="text-sm text-muted mb-5">{t('setup.welcome.deploymentHint.choose')}</p>
+          <p class="text-xs sm:text-sm text-muted mb-3.5">
+            {t('setup.welcome.deploymentHint.choose')}
+          </p>
 
-          <div class="mb-5 space-y-2">
+          <div class="mb-4 grid grid-cols-1 sm:grid-cols-2 gap-2">
             <For each={bootstrapCommands()}>
               {(item) => (
-                <div class="bg-page rounded-md border border-border-subtle px-3 py-2.5">
-                  <div class="mb-1.5 text-[11px] font-semibold text-muted">{item.label}</div>
-                  <div class="flex items-center justify-between gap-3 font-mono text-sm text-emerald-700 dark:text-emerald-400">
-                    <div class="flex min-w-0 items-center space-x-3 overflow-x-auto scrollbar-hide">
-                      <Terminal class="h-4 w-4 shrink-0" />
+                <div class="bg-page rounded-md border border-border-subtle px-3 py-2">
+                  <div class="mb-1 text-[11px] font-semibold text-muted">{item.label}</div>
+                  <div class="flex items-center justify-between gap-2 font-mono text-xs text-emerald-700 dark:text-emerald-400">
+                    <div class="flex min-w-0 items-center space-x-2 overflow-x-auto scrollbar-hide">
+                      <Terminal class="h-3.5 w-3.5 shrink-0" />
                       <code class="whitespace-nowrap select-all">{item.command}</code>
                     </div>
                     <button
+                      type="button"
                       onClick={() => void copyCommand(item.id, item.command)}
-                      class="shrink-0 rounded-md bg-surface p-2 text-muted transition-colors hover:bg-surface-hover hover:text-base-content focus:outline-hidden focus:ring-0"
+                      class="shrink-0 rounded-md bg-surface p-1.5 text-muted transition-colors hover:bg-surface-hover hover:text-base-content focus:outline-hidden focus:ring-0"
                       title={`${t('setup.welcome.copyCommandTitle')}: ${item.label}`}
                     >
-                      <Show when={copiedCommand() === item.id} fallback={<Copy class="h-4 w-4" />}>
-                        <Check class="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                      <Show
+                        when={copiedCommand() === item.id}
+                        fallback={<Copy class="h-3.5 w-3.5" />}
+                      >
+                        <Check class="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
                       </Show>
                     </button>
                   </div>
@@ -198,37 +195,55 @@ export const WelcomeStep: Component<WelcomeStepProps> = (props) => {
             </For>
           </div>
 
-          <div class="mb-5 text-left">
+          <div class="mb-3.5 text-left">
             <div class="text-[11px] font-semibold uppercase tracking-wide text-muted">
               {t('setup.welcome.tokenHelp.title')}
             </div>
-            <p class="mt-1 text-sm text-muted">{t('setup.welcome.tokenHelp.generic')}</p>
+            <p class="mt-0.5 text-xs text-muted">{t('setup.welcome.tokenHelp.generic')}</p>
           </div>
 
-          <div class="space-y-3">
+          <div class="space-y-2.5">
             <input
               type="text"
+              aria-invalid={validationError() ? 'true' : undefined}
               value={props.bootstrapToken}
               onInput={(e) => {
+                setValidationError(null);
                 props.setBootstrapToken(e.currentTarget.value);
               }}
               onKeyDown={(e) => e.key === 'Enter' && void handleUnlock()}
-              class="w-full px-5 py-3.5 bg-surface border border-border rounded-md text-base-content placeholder-slate-400 focus:outline-hidden focus:ring-0 focus:border-blue-500 transition-colors font-mono"
+              class={`w-full px-4 py-2.5 bg-surface border rounded-md text-base-content placeholder-slate-400 focus:outline-hidden focus:ring-0 transition-colors font-mono text-sm ${
+                validationError()
+                  ? 'border-red-500 focus:border-red-500'
+                  : 'border-border focus:border-blue-500'
+              }`}
               placeholder={t('setup.welcome.placeholder.bootstrapToken')}
-              autofocus
             />
 
-            <p class="text-xs text-muted">{t('setup.welcome.tokenHelp.afterVerify')}</p>
-            <Show when={looksLikeBootstrapTokenSnapshot(props.bootstrapToken)}>
+            <Show when={validationError()}>
+              <p
+                role="alert"
+                class="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700 dark:border-red-800 dark:bg-red-950/40 dark:text-red-200"
+              >
+                {validationError()}
+              </p>
+            </Show>
+
+            <Show
+              when={!validationError() && looksLikeBootstrapTokenSnapshot(props.bootstrapToken)}
+            >
               <p class="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100">
                 {snapshotPasteHelp()}
               </p>
             </Show>
 
+            <p class="text-xs text-muted">{t('setup.welcome.tokenHelp.afterVerify')}</p>
+
             <button
+              type="button"
               onClick={handleUnlock}
               disabled={isValidating() || !props.bootstrapToken.trim()}
-              class="w-full py-3.5 px-6 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:bg-surface-alt disabled:text-muted disabled:cursor-not-allowed text-white font-medium rounded-md transition-colors flex justify-center items-center gap-2 duration-200"
+              class="w-full py-2.5 px-6 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:bg-surface-alt disabled:text-muted disabled:cursor-not-allowed text-white font-medium rounded-md transition-colors flex justify-center items-center gap-2 duration-200"
             >
               {isValidating() ? (
                 <>
@@ -266,13 +281,31 @@ export const WelcomeStep: Component<WelcomeStepProps> = (props) => {
       <Show when={props.isUnlocked}>
         <div>
           <button
+            type="button"
             onClick={props.onNext}
-            class="py-4 px-10 bg-blue-600 hover:bg-blue-700 text-white text-lg font-medium rounded-md transition-colors duration-200"
+            class="py-3.5 px-10 bg-blue-600 hover:bg-blue-700 text-white text-base font-medium rounded-md transition-colors duration-200"
           >
             {t('setup.welcome.action.continueSecurity')} <span>→</span>
           </button>
         </div>
       </Show>
+
+      <div class="mt-4 max-w-2xl mx-auto rounded-md border border-border bg-surface/80 px-4 py-2.5 text-left">
+        <div class="flex items-start gap-2.5">
+          <ShieldCheck class="mt-0.5 h-4 w-4 shrink-0 text-blue-500" strokeWidth={2} />
+          <div class="min-w-0">
+            <p class="text-xs font-medium text-base-content">
+              {t('setup.welcome.telemetryNotice.title')}
+            </p>
+            <p class="mt-0.5 text-xs leading-4 text-muted">
+              {t('setup.welcome.telemetryNotice.description')}{' '}
+              <ExternalTextLink href={PRIVACY_DOC_URL} variant="muted">
+                {t('setup.welcome.telemetryNotice.detailsLink')}
+              </ExternalTextLink>
+            </p>
+          </div>
+        </div>
+      </div>
     </div>
   );
 };

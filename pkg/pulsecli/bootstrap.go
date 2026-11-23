@@ -6,10 +6,19 @@ import (
 
 	bootstrapstore "github.com/rcourtman/pulse-go-rewrite/internal/bootstrap"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"
 )
 
 func ShowBootstrapToken(deps *BootstrapDeps) {
+	// Keep CLI stdout/stderr free of internal crypto debug logs so operators
+	// get a clean, copyable token box.
+	prevLevel := zerolog.GlobalLevel()
+	if prevLevel < zerolog.WarnLevel {
+		zerolog.SetGlobalLevel(zerolog.WarnLevel)
+		defer zerolog.SetGlobalLevel(prevLevel)
+	}
+
 	dataPath := config.ResolveRuntimeDataDir("")
 
 	token, tokenPath, _, err := bootstrapstore.Load(dataPath)

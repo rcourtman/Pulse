@@ -77,4 +77,21 @@ describe('SetupWizard', () => {
       screen.getByText('Step indicator 0:Server entsperren > Sicherheit > Erste Quelle'),
     ).toBeInTheDocument();
   });
+
+  it('scrolls back to the top when advancing between setup steps', () => {
+    const scrollToSpy = vi.spyOn(window, 'scrollTo').mockImplementation(() => {});
+    try {
+      render(() => <SetupWizard onComplete={vi.fn()} />);
+      scrollToSpy.mockClear();
+
+      fireEvent.click(screen.getByRole('button', { name: 'Welcome next' }));
+      expect(scrollToSpy).toHaveBeenCalledWith({ top: 0, behavior: 'auto' });
+
+      scrollToSpy.mockClear();
+      fireEvent.click(screen.getByRole('button', { name: 'Security complete' }));
+      expect(scrollToSpy).toHaveBeenCalledWith({ top: 0, behavior: 'auto' });
+    } finally {
+      scrollToSpy.mockRestore();
+    }
+  });
 });

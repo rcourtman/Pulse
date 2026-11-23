@@ -70,6 +70,12 @@ func (r *Router) initializeBootstrapToken() {
 	}
 }
 
+// HasPendingBootstrapToken reports whether first-time setup is still waiting
+// for an operator to unlock the server with the generated bootstrap token.
+func (r *Router) HasPendingBootstrapToken() bool {
+	return r != nil && r.bootstrapTokenHash != ""
+}
+
 func (r *Router) bootstrapTokenValid(token string) bool {
 	if r == nil || r.bootstrapTokenHash == "" {
 		return false
