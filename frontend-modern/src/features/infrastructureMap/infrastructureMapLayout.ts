@@ -26,6 +26,11 @@ export type MapDensity = 'names' | 'marks';
 /** Everything the map has an outline glyph for: each platform, the Internet and a gateway. */
 export type MapGlyphKey = MapPlatform | 'internet' | 'gateway' | 'switch' | 'access-point';
 
+export type MapInspectTarget =
+  | { kind: 'group'; groupKey: string; initialFilter?: 'all' | 'attention' | 'off' }
+  | { kind: 'network'; networkId: string }
+  | { kind: 'all-networks' };
+
 export interface MapHit {
   id: string;
   name: string;
@@ -43,6 +48,8 @@ export interface MapHit {
   navigable: boolean;
   /** Set on a thing nothing monitors: its tile opens a new check for this address. */
   checkAddress?: string;
+  /** Set on overflow or summary tiles that open the interactive inspector drawer. */
+  inspectTarget?: MapInspectTarget;
 }
 
 export type SceneNode =
@@ -90,6 +97,17 @@ export type SceneNode =
       dashed?: boolean;
       arrow?: boolean;
     }
+  | {
+      /** Clickable header or network pill target that opens the inspector drawer. */
+      kind: 'inspect';
+      x: number;
+      y: number;
+      w: number;
+      h: number;
+      r: number;
+      label: string;
+      target: MapInspectTarget;
+    }
   | { kind: 'hit'; x: number; y: number; w: number; h: number; r: number; hit: MapHit };
 
 export interface MapScene {
@@ -119,6 +137,7 @@ export interface MapLayoutOptions {
 export interface MapCursor {
   nodes: SceneNode[];
   hits: SceneNode[];
+  inspects?: SceneNode[];
 }
 
 /** Estates up to this many guests and containers read best with every name drawn. */

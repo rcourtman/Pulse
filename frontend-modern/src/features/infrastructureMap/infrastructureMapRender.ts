@@ -164,6 +164,12 @@ const MONOGRAM_TILE = '#475569';
 const MONOGRAM_EDGE = '#64748b';
 const MONOGRAM_LETTERS = '#f8fafc';
 
+const monogramFontSize = (size: number, letters: string): number => {
+  if (letters.length >= 4) return size * 0.34;
+  if (letters.length === 3) return size * 0.39;
+  return size * 0.45;
+};
+
 // A known app is its logo on its brand colour. Anything else is its initials
 // on a slate tile, so the logos are the only colour that is not the product's.
 const appToSvg = (node: Extract<SceneNode, { kind: 'app' }>, palette: MapPalette): string => {
@@ -173,7 +179,7 @@ const appToSvg = (node: Extract<SceneNode, { kind: 'app' }>, palette: MapPalette
   const inset = node.size * 0.21;
   const mark = logo
     ? `<path transform="translate(${n(node.x + inset)} ${n(node.y + inset)}) scale(${n((node.size - inset * 2) / 24)})" d="${logo.d}" fill="${readsDarkOn(logo.hex) ? '#0f172a' : '#ffffff'}"/>`
-    : `<text x="${n(node.x + node.size / 2)}" y="${n(node.y + node.size * 0.64)}" font-size="${n(node.size * 0.38)}" font-weight="600" text-anchor="middle" fill="${MONOGRAM_LETTERS}">${escapeXml(node.letters)}</text>`;
+    : `<text x="${n(node.x + node.size / 2)}" y="${n(node.y + node.size * 0.65)}" font-size="${n(monogramFontSize(node.size, node.letters))}" font-weight="700" text-anchor="middle" fill="${MONOGRAM_LETTERS}">${escapeXml(node.letters)}</text>`;
   return node.dim ? `<g opacity="0.45">${square}${mark}</g>` : square + mark;
 };
 
@@ -231,12 +237,15 @@ const nodeToSvg = (node: SceneNode, palette: MapPalette): string => {
           : `fill="none" stroke="${palette.muted}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"`;
       return `<path transform="translate(${n(node.x)} ${n(node.y)}) scale(${n(node.size / 24)})" d="${glyph.d}" ${paint}/>`;
     }
+    case 'inspect':
     case 'hit':
       return '';
   }
 };
 
 export const MAP_HIT_ATTRIBUTE = 'data-map-hit';
+/** Clickable group header or network pill target that opens the map inspector drawer. */
+export const MAP_INSPECT_ATTRIBUTE = 'data-map-inspect';
 /** The layer the page fills with rings while a tile is pointed at or focused. */
 export const MAP_RINGS_ATTRIBUTE = 'data-map-rings';
 
@@ -249,12 +258,15 @@ export const MAP_RINGS_ATTRIBUTE = 'data-map-rings';
 // the tile's edge, and neighbours are little more than a pixel apart.
 const HIT_CLASS =
   'cursor-pointer fill-transparent stroke-2 [vector-effect:non-scaling-stroke] outline-none transition-colors hover:fill-slate-400/15 focus-visible:fill-slate-400/15 focus-visible:stroke-blue-500 group-focus-visible:fill-slate-400/15 group-focus-visible:stroke-blue-500';
+const INSPECT_CLASS =
+  'cursor-pointer fill-transparent outline-none transition-colors hover:fill-slate-400/12';
 const LINK_CLASS = 'group outline-none';
 
 /**
  * The inside of the on-page map: the drawn marks, then one target per
  * resource on top. A target the page can open is a link to that resource's
- * own page; the rest still answer hover and focus with their details.
+ * own page; overflow tiles, group headers and network pills open the
+ * inspector drawer; the rest still answer hover and focus with their details.
  */
 export function renderMapSceneBody(
   scene: MapScene,
@@ -262,8 +274,15 @@ export function renderMapSceneBody(
   hrefFor: (hitIndex: number) => string | null,
 ): string {
   let hitIndex = 0;
+  let inspectIndex = 0;
   return scene.nodes
     .map((node) => {
+      if (node.kind === 'inspect') {
+        const index = inspectIndex;
+        inspectIndex += 1;
+        const label = escapeXml(node.label);
+        return `<rect x="${n(node.x)}" y="${n(node.y)}" width="${n(node.w)}" height="${n(node.h)}" rx="${n(node.r)}" class="${INSPECT_CLASS}" ${MAP_INSPECT_ATTRIBUTE}="${index}" role="button" aria-label="${label}"><title>${label}</title></rect>`;
+      }
       if (node.kind !== 'hit') return nodeToSvg(node, palette);
       const index = hitIndex;
       hitIndex += 1;
@@ -272,9 +291,11 @@ export function renderMapSceneBody(
       const adds = Boolean(node.hit.checkAddress) && href !== null;
       const label = escapeXml(`${node.hit.name}, ${node.hit.meta}${adds ? ', add a check' : ''}`);
       const rect = `x="${n(node.x)}" y="${n(node.y)}" width="${n(node.w)}" height="${n(node.h)}" rx="${n(node.r)}" class="${HIT_CLASS}"`;
-      return href
-        ? `<a href="${escapeXml(href)}" class="${LINK_CLASS}" ${MAP_HIT_ATTRIBUTE}="${index}" aria-label="${label}"><rect ${rect}/></a>`
-        : `<rect ${rect} ${MAP_HIT_ATTRIBUTE}="${index}" tabindex="0" role="img" aria-label="${label}"/>`;
+      if (href) {
+        return `<a href="${escapeXml(href)}" class="${LINK_CLASS}" ${MAP_HIT_ATTRIBUTE}="${index}" aria-label="${label}"><rect ${rect}/></a>`;
+      }
+      const role = node.hit.inspectTarget ? 'button' : 'img';
+      return `<rect ${rect} ${MAP_HIT_ATTRIBUTE}="${index}" tabindex="0" role="${role}" aria-label="${label}"/>`;
     })
     .concat(`<g ${MAP_RINGS_ATTRIBUTE}="" pointer-events="none"></g>`)
     .join('');
