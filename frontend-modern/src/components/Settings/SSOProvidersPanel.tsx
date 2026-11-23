@@ -547,7 +547,11 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
           ariaLabel={`${editingProvider() ? 'Edit' : 'Add'} ${getSSOProviderTypeLabel(form.type)} provider`}
         >
           <form class="flex max-h-[calc(100dvh-2rem-2px)] min-h-0 flex-col" onSubmit={handleSave}>
-            <div class="flex shrink-0 items-center justify-between gap-2 border-b border-border bg-surface px-4 py-4 sm:px-6">
+            <div
+              class={`flex shrink-0 items-center justify-between gap-2 border-b border-border bg-surface px-4 py-4 sm:px-6 ${
+                signingCertificateUnread() ? 'max-sm:py-2.5' : ''
+              }`}
+            >
               <h3 class="text-lg font-semibold text-base-content">
                 {getSSOProviderModalTitle(Boolean(editingProvider()), form.type)}
               </h3>
@@ -558,11 +562,13 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
                     variant={summary().variant}
                     size="xs"
                     class={`-my-2 min-w-0 max-w-[60%] shrink-0 gap-1.5 text-left ${
-                      hasSamlFinding()
-                        ? 'max-[360px]:max-w-24'
-                        : testResult()?.failureLabel
-                          ? 'max-[360px]:max-w-25'
-                          : ''
+                      signingCertificateUnread()
+                        ? 'max-sm:-my-1 max-sm:gap-1 max-sm:px-1 max-sm:py-0'
+                        : hasSamlFinding()
+                          ? 'max-[360px]:max-w-24'
+                          : testResult()?.failureLabel
+                            ? 'max-[360px]:max-w-25'
+                            : ''
                     }`}
                     aria-label={`${summary().lines.join(', ')} — view result`}
                     aria-controls={testResultId}
