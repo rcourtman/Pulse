@@ -268,7 +268,8 @@ and measure their own workload.
   new kernel memory kills, unexpected Pulse restarts and gaps in fresh readings
   for the same guests and backup datastores. An open dashboard does not prove
   that polling continued. A lifetime peak from before the window does not
-  measure it. Treat missing evidence as unverified. If Pulse stops, use the
+  measure it. [Check which readings establish a peak](#compare-lxc-memory-peaks).
+  Treat missing evidence as unverified. If Pulse stops, use the
   [memory-stop checks](TROUBLESHOOTING.md#after-a-memory-cgroup-kill) instead.
   Do not change the limit, restart again or induce a kill just to collect proof.
 - [ ] Record the Pulse version, enabled integrations, privileges, exposed
@@ -277,6 +278,24 @@ and measure their own workload.
 Pulse is intended to be the operational monitoring layer for the platforms it
 supports. It is not a SIEM, a general log-ingestion platform, or a substitute
 for an organization's incident escalation and change-control process.
+
+### Compare LXC memory peaks
+
+On cgroup v2, compare `memory.peak` at the start and end of each window
+if you already have those readings from the same container cgroup. If it
+rose, the new peak occurred in that window. If it stayed at an earlier
+high-water mark, you only have an upper bound, not the peak for that window.
+Periodic `memory.current` samples can show a change in steady usage, but
+they can miss short spikes.
+
+If the cgroup was recreated, its peak and `oom_kill` counter start over.
+Keep those observations separate and check the existing Proxmox kernel and
+Pulse service logs for a kill or restart. Do not reset counters to make
+the comparison.
+
+Use windows that include your ordinary busy polls and dashboard use. A quiet
+spell does not show that an intermittent stop has gone away. Keep the rollout
+staged if you cannot verify the peaks or that collection stayed fresh.
 
 ## Independent review
 

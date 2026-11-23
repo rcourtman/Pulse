@@ -117,8 +117,26 @@ class ProductionRolloutDocsTest(unittest.TestCase):
             with self.subTest(requirement=requirement):
                 self.assertIn(requirement, item)
         self.assertIn("TROUBLESHOOTING.md#after-a-memory-cgroup-kill", item)
+        self.assertIn("](#compare-lxc-memory-peaks)", item)
         target = (ROOT / "frontend-modern/public/docs/TROUBLESHOOTING.md").read_text(encoding="utf-8")
         self.assertIn("\n##### After a memory-cgroup kill\n", target)
+
+    def test_lxc_headroom_does_not_treat_lifetime_or_sampled_values_as_window_peaks(self):
+        text = section("### Compare LXC memory peaks")
+        for evidence in (
+            "`memory.peak` at the start and end of each window",
+            "from the same container cgroup",
+            "the new peak occurred in that window",
+            "an upper bound, not the peak for that window",
+            "`memory.current` samples",
+            "can miss short spikes",
+            "its peak and `oom_kill` counter start over",
+            "Do not reset counters",
+            "ordinary busy polls",
+            "Keep the rollout staged if you cannot verify the peaks or that collection stayed fresh",
+        ):
+            with self.subTest(evidence=evidence):
+                self.assertIn(evidence, text)
 
     def test_scale_and_privilege_limits_remain_explicit(self):
         text = " ".join(DOC.read_text().split())
