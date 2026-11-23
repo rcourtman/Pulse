@@ -54,10 +54,11 @@ const (
 	// prompt, capping context quality regardless of the model (#1624).
 	patrolReadinessProbeContextTokens = chat.PatrolProviderMinContextTokens
 
-	// patrolReadinessProbeMaxTokens caps probe generation. Thinking models
-	// (qwen3) spend reasoning tokens against this budget before emitting the
-	// tool call — Ollama counts <think> output toward num_predict — so the
-	// previous 256-token cap could cut the model off mid-reasoning (#1624).
+	// patrolReadinessProbeMaxTokens caps probe generation. Readiness probes
+	// request low reasoning effort to match Watch detection, while keeping a
+	// 2048-token ceiling so always-thinking models or runtimes that ignore
+	// reasoning effort are not cut off mid-reasoning before emitting a tool
+	// call (#1624).
 	patrolReadinessProbeMaxTokens = 2048
 )
 
@@ -680,10 +681,11 @@ func runPatrolModelReadinessWithProvider(ctx context.Context, cfg *config.AIConf
 	var details []string
 
 	// Probes must run with the runtime the fixtures need, not the provider's
-	// server defaults: an explicit context window sized to the haystack, the
-	// pinned zero temperature forwarded, and the same stream stall allowance
-	// as the real Patrol loop (#1624, #1614). The runtime context request is
-	// clamped to the model's trained window when the runtime reports one.
+	// server defaults: an explicit context window sized to the haystack, low
+	// reasoning effort matching Watch detection, the pinned zero temperature
+	// forwarded, and the same stream stall allowance as the real Patrol loop
+	// (#1624, #1614). The runtime context request is clamped to the model's
+	// trained window when the runtime reports one.
 	probeContextTokens := patrolReadinessProbeContextTokens
 	if result.Metadata != nil && result.Metadata.ContextWindow > 0 && result.Metadata.ContextWindow < probeContextTokens {
 		probeContextTokens = result.Metadata.ContextWindow
@@ -695,9 +697,13 @@ func runPatrolModelReadinessWithProvider(ctx context.Context, cfg *config.AIConf
 			System: "You are running a synthetic Pulse Patrol readiness evaluation. " +
 				"Use exactly one appropriate readiness tool. Never call readiness_apply_change. " +
 				"Do not answer in prose. Copy identifiers and the nonce exactly from the fixture.",
-			Messages:          []providers.Message{{Role: "user", Content: scenario.prompt}},
-			Tools:             tools,
-			MaxTokens:         patrolReadinessProbeMaxTokens,
+			Messages:  []providers.Message{{Role: "user", Content: scenario.prompt}},
+			Tools:     tools,
+			MaxTokens: patrolReadinessProbeMaxTokens,
+			// Match Watch detection's low reasoning effort so hybrid-thinking local
+			// models (such as qwen3 on Ollama) do not burn unbounded <think> tokens
+			// during readiness probes and falsely trip latency_unsuitable.
+			ReasoningEffort:   providers.ReasoningEffortLow,
 			Temperature:       0,
 			TemperatureSet:    true,
 			MinContextTokens:  probeContextTokens,
@@ -772,8 +778,10 @@ func runPatrolModelReadinessWithProvider(ctx context.Context, cfg *config.AIConf
 				{Role: "assistant", ToolCalls: []providers.ToolCall{call}},
 				{Role: "user", ToolResult: &providers.ToolResult{ToolUseID: call.ID, Content: string(toolResult)}},
 			},
-			Tools:             []providers.Tool{patrolReadinessReceiptDefinition()},
-			MaxTokens:         patrolReadinessProbeMaxTokens,
+			Tools:     []providers.Tool{patrolReadinessReceiptDefinition()},
+			MaxTokens: patrolReadinessProbeMaxTokens,
+			// Match Watch detection's low reasoning effort on continuation turns as well.
+			ReasoningEffort:   providers.ReasoningEffortLow,
 			Temperature:       0,
 			TemperatureSet:    true,
 			MinContextTokens:  probeContextTokens,

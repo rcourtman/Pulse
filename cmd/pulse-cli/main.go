@@ -36,7 +36,7 @@ func printVersion(w io.Writer) {
 func main() {
 	cmd := pulsecli.NewClientRootCommand(pulsecli.CommandSpec{
 		Use:             "pulse",
-		Short:           "Pulse CLI — connect external agents and inspect your Pulse fleet",
+		Short:           "Pulse CLI: connect external agents and inspect your Pulse fleet",
 		Version:         Version,
 		VersionTemplate: "Pulse CLI {{.Version}}\n",
 		VersionPrinter:  printVersion,

@@ -612,7 +612,7 @@ func (h *ResourceHandlers) HandleDecideAction(w http.ResponseWriter, r *http.Req
 		return
 	}
 	if decision.PlanHash != "" && decision.PlanHash != record.Plan.PlanHash {
-		writeJSONError(w, http.StatusConflict, agentcapabilities.AgentErrCodeActionPlanIdentityMismatch, "The reviewed action plan changed; reload it before deciding")
+		writeJSONError(w, http.StatusConflict, agentcapabilities.AgentErrCodeActionPlanIdentityMismatch, "The reviewed action plan changed. Reload it before deciding")
 		return
 	}
 	canonicalDecision := unified.ActionDecision{
@@ -750,7 +750,7 @@ func writeActionReadinessError(w http.ResponseWriter, err error) bool {
 	case errors.As(err, &availability):
 		writeActionExecutionUnavailable(w, availability)
 	case errors.Is(err, unified.ErrActionPlanDrift):
-		writeJSONError(w, http.StatusConflict, agentcapabilities.AgentErrCodeActionPlanDrift, "Action plan no longer matches the current resource contract; refresh the plan before continuing")
+		writeJSONError(w, http.StatusConflict, agentcapabilities.AgentErrCodeActionPlanDrift, "Action plan no longer matches the current resource contract. Refresh the plan before continuing")
 	case errors.Is(err, unified.ErrActionEmergencyStop):
 		writeJSONError(w, http.StatusConflict, agentcapabilities.AgentErrCodeActionEmergencyStop, "Action dispatch is stopped by the operator")
 	case errors.Is(err, unified.ErrResourceRemediationLocked):
@@ -834,7 +834,7 @@ func (h *ResourceHandlers) HandleExecuteAction(w http.ResponseWriter, r *http.Re
 		}
 	}
 	if execution.PlanHash != "" && execution.PlanHash != record.Plan.PlanHash {
-		writeJSONError(w, http.StatusConflict, agentcapabilities.AgentErrCodeActionPlanIdentityMismatch, "The approved action plan changed; reload it before execution")
+		writeJSONError(w, http.StatusConflict, agentcapabilities.AgentErrCodeActionPlanIdentityMismatch, "The approved action plan changed. Reload it before execution")
 		return
 	}
 	// Detach dispatch from the client connection: reverse proxies and browsers

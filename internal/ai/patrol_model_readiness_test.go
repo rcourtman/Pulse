@@ -26,6 +26,7 @@ type scriptedReadinessProvider struct {
 	waitForCancellation bool
 	contextWindow       int
 	calls               int
+	capturedRequests    []providers.ChatRequest
 }
 
 func (p *scriptedReadinessProvider) Chat(context.Context, providers.ChatRequest) (*providers.ChatResponse, error) {
@@ -67,6 +68,7 @@ func readinessArgumentsFromPrompt(prompt string) map[string]interface{} {
 
 func (p *scriptedReadinessProvider) ChatStream(ctx context.Context, req providers.ChatRequest, callback providers.StreamCallback) error {
 	p.calls++
+	p.capturedRequests = append(p.capturedRequests, req)
 	if p.waitForCancellation {
 		<-ctx.Done()
 		return ctx.Err()
@@ -153,6 +155,36 @@ func TestRunPatrolModelReadinessWithProvider_VerifiesMonitorAndApproval(t *testi
 	}
 	if result.providerCalls != 4 || result.inputTokens != 400 || result.outputTokens != 40 {
 		t.Fatalf("unexpected usage accounting: calls=%d input=%d output=%d", result.providerCalls, result.inputTokens, result.outputTokens)
+	}
+}
+
+func TestRunPatrolModelReadinessWithProvider_SetsLowReasoningEffortOnInitialAndContinuationProbes(t *testing.T) {
+	provider := &scriptedReadinessProvider{contextWindow: 32768}
+	result := runPatrolModelReadinessWithProvider(
+		context.Background(), readinessTestConfig(), config.AIProviderOllama, "test-model", "ollama:test-model", provider,
+	)
+	if !result.Success || !result.Dimensions.ToolProtocol.ContinuationObserved {
+		t.Fatalf("expected successful readiness run with continuation, got %+v", result)
+	}
+	if len(provider.capturedRequests) != 4 {
+		t.Fatalf("captured requests = %d, want 4 (3 initial scenario probes + 1 continuation)", len(provider.capturedRequests))
+	}
+
+	initialCalls := 0
+	continuationCalls := 0
+	for i, req := range provider.capturedRequests {
+		if req.ReasoningEffort != providers.ReasoningEffortLow {
+			t.Fatalf("request %d ReasoningEffort = %q, want %q", i, req.ReasoningEffort, providers.ReasoningEffortLow)
+		}
+		last := req.Messages[len(req.Messages)-1]
+		if last.ToolResult != nil {
+			continuationCalls++
+		} else {
+			initialCalls++
+		}
+	}
+	if initialCalls != 3 || continuationCalls != 1 {
+		t.Fatalf("probe request breakdown = %d initial / %d continuation, want 3 / 1", initialCalls, continuationCalls)
 	}
 }
 
