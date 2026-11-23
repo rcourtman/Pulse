@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "675d33f7e5ee825b9b571c8734fc02acc4abcbc5",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/SystemLogsPanel.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/SystemLogsPanel.tsx": "9f9289cf4cb391f8717379f7959a1e6214c206ed308e0e97e55bba7797e89eaf"
+  },
+  "routes": [
+    "/settings/support/logs"
+  ],
+  "states": [
+    "Open the live System Logs panel with both original and address-minimized synthetic handler streams",
+    "Saved configuration and Test, sender fallback, and SMTP rejection at matched reading positions",
+    "Paused, resumed with a long uninterrupted identifier and original whitespace, and cleared"
+  ],
+  "interactions": [
+    "Inspect the production panel in Chromium with desktop light and touch phone dark settings",
+    "Inspect paired pixels and verify recipient fields and the SMTP verdict fit at zero horizontal scroll",
+    "Select the rejection text and match it to the original raw line",
+    "Pause, resume and clear by keyboard or touch; download the unchanged support bundle after clearing"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "verified_at": "2026-11-23T08:06:08Z"
+}
