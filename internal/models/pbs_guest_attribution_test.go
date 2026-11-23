@@ -2,6 +2,7 @@ package models
 
 import (
 	"encoding/json"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -135,6 +136,51 @@ func TestAttributePBSBackups(t *testing.T) {
 				t.Errorf("attributed to %q, want %q", got, tc.want)
 			}
 		})
+	}
+}
+
+func TestAttributePBSBackupsUncontestedPreservesRowOrderAndKind(t *testing.T) {
+	guests := []PBSGuestCandidate{
+		{BackupType: "vm", VMID: 100, Instance: "home", Node: "old-node"},
+		{BackupType: "vm", VMID: 100, Instance: "home", Node: "new-node"},
+		{BackupType: "ct", VMID: 100, Instance: "peer"},
+		{BackupType: "ct", VMID: 200, Instance: "peer"},
+	}
+	backups := []PBSBackup{
+		{VMID: "100", BackupType: "host"},
+		{VMID: " 100 ", BackupType: " CT ", CarriedOver: true},
+		{VMID: "100", BackupType: "vm", BackupTime: pbsAttributionTime, InProgress: true},
+		{VMID: "200", BackupType: "vm"},
+		{VMID: "invalid", BackupType: "ct"},
+		{VMID: "200", BackupType: "ct"},
+	}
+	// An exclusive view cannot displace a sole connection, even when a VM
+	// has two observations or a container on another connection shares its ID.
+	confirmers := map[PBSSnapshotRef]string{
+		{BackupType: "vm", VMID: 100, Time: pbsAttributionTime.Unix()}: "peer",
+	}
+	if got, want := AttributePBSBackups(backups, guests, confirmers), []string{"", "peer", "home", "", "", "peer"}; !slices.Equal(got, want) {
+		t.Fatalf("attributed = %q, want %q in snapshot order", got, want)
+	}
+}
+
+func TestAttributePBSBackupsUncontestedHistoryAllocation(t *testing.T) {
+	guests := []PBSGuestCandidate{{BackupType: "vm", VMID: 100, Instance: "home"}}
+	backups := make([]PBSBackup, 1024)
+	for i := range backups {
+		backups[i] = PBSBackup{VMID: "100", BackupType: "vm"}
+	}
+	var attributed []string
+	allocs := testing.AllocsPerRun(10, func() {
+		attributed = AttributePBSBackups(backups, guests, nil)
+	})
+	// Budget for the result and the small guest index, not an additional
+	// history-sized learner buffer or per-row allocation.
+	if allocs > 2 {
+		t.Fatalf("uncontested history attribution allocated %.0f times, want at most 2", allocs)
+	}
+	if len(attributed) != len(backups) || attributed[len(backups)-1] != "home" {
+		t.Fatal("uncontested history lost the last row's attribution")
 	}
 }
 
