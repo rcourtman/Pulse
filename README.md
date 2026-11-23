@@ -46,15 +46,15 @@ Thresholds plus Ping, TCP, UDP, HTTP(S), and TLS expiry checks via email, Discor
 
 | Platform | What Pulse monitors |
 |---|---|
-| Proxmox VE, PBS &amp; PMG | Nodes, VMs, LXCs, storage, backups, replication, Ceph, mail gateways |
-| Docker &amp; Podman | Hosts, containers, Compose projects, Swarm services, image updates |
+| Proxmox VE, PBS & PMG | Nodes, VMs, LXCs, storage, backups, replication, Ceph, mail gateways |
+| Docker & Podman | Hosts, containers, Compose projects, Swarm services, image updates |
 | Kubernetes | Clusters, nodes, workloads, pods, services, storage, events |
-| TrueNAS SCALE &amp; CORE | Pools, datasets, disks, snapshots, replication, apps, VMs |
-| Linux, Windows &amp; macOS | Host health, filesystems, networking, temperatures, RAID, availability |
+| TrueNAS SCALE & CORE | Pools, datasets, disks, snapshots, replication, apps, VMs |
+| Linux, Windows & macOS | Host health, filesystems, networking, temperatures, RAID, availability |
 | VMware vSphere *(early access)* | Hosts, clusters, VMs, datastores, networks, snapshots |
 
 <details>
-<summary><strong>More full-screen views: Docker &amp; Podman, Kubernetes, and Pulse Patrol</strong></summary>
+<summary><strong>More full-screen views: Docker and Podman, Kubernetes, and Pulse Patrol</strong></summary>
 
 ### Docker & Podman
 Hosts, containers, Compose stacks, Swarm health, and image updates without mounting the Docker socket on Pulse.
@@ -67,7 +67,7 @@ Multi-cluster health, degraded nodes, pods, deployments, storage, and events in 
 ![Kubernetes clusters and workloads](docs/images/pulse-kubernetes.webp)
 
 ### Optional AI & MCP
-[Pulse Patrol](docs/AI.md) runs scheduled checks with your own AI provider or local model; [`pulse-mcp`](cmd/pulse-mcp/README.md#quick-start) lets Claude Code, Codex, or OpenCode [ask what changed overnight](docs/WHAT_HAPPENED_OVERNIGHT.md).
+[Pulse Patrol](docs/AI.md) runs scheduled checks with your own AI provider or local model. [`pulse-mcp`](cmd/pulse-mcp/README.md#quick-start) lets Claude Code, Codex, or OpenCode [ask what changed overnight](docs/WHAT_HAPPENED_OVERNIGHT.md).
 
 ![Pulse Patrol attention inbox](docs/images/pulse-patrol.webp)
 
@@ -146,7 +146,7 @@ Open `http://<your-ip>:7655`, paste the one-time token from `docker exec pulse /
 - **MSP:** isolated per-client workspaces under one Pulse Account, with a 60-day free trial for two clients at [Pulse for MSPs](https://pulserelay.pro/msp).
 
 > [!IMPORTANT]
-> GitHub releases and `rcourtman/pulse` are Community builds; Pro and legacy customers download from the [Pulse download portal](https://pulserelay.pro/download.html). Relay is no longer sold: existing subscribers keep Pro features at their current price, and paired phones keep working until **31 March 2027** ([details](docs/PULSE_PRO.md)).
+> GitHub releases and `rcourtman/pulse` are Community builds. Pro and legacy customers download from the [Pulse download portal](https://pulserelay.pro/download.html). Relay is no longer sold: existing subscribers keep Pro features at their current price, and paired phones keep working until **31 March 2027** ([details](docs/PULSE_PRO.md)).
 
 ## Documentation
 
