@@ -182,8 +182,14 @@ class NotificationTroubleshootingDocsTest(unittest.TestCase):
                          "one static `Content-Type` header to `application/json`", "conflicting duplicate",
                          "leaving the bot URL, `chat_id`, template and grouping settings unchanged",
                          "next normally occurring alert", "do not induce an alert or retry",
+                         "The webhook log can say `grouped` for one alert",
                          "#recover-retained-delivery-failures", "custom template", "private"):
             self.assertIn(boundary, telegram)
+        stable, legacy = telegram.split("**On releases without that fix:**", 1)
+        self.assertIn("**From stable v6.6.0:**", stable)
+        self.assertIn("Keep your settings unchanged", stable)
+        self.assertNotIn("**Custom headers**", stable)
+        self.assertIn("**Custom headers**", legacy)
         self.assertNotRegex(telegram, r"https://api\.telegram\.org|curl|--token|Debug")
         guide = (ROOT / "docs/WEBHOOKS.md").read_text()
         self.assertIn("TROUBLESHOOTING.md#telegram-test-works-but-real-alerts-say-message-text-is-empty", guide)

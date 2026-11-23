@@ -13,7 +13,7 @@ or rejected requests, follow the [notification troubleshooting guide](TROUBLESHO
 before retrying retained failures. In particular, a destination edit does not
 replace the settings saved in an old queued delivery; a retry can still use its
 original URL and credentials. For built-in Telegram's "message text is empty"
-error despite a successful Test, see the [static-header check](TROUBLESHOOTING.md#telegram-test-works-but-real-alerts-say-message-text-is-empty).
+error despite a successful Test, see the [Telegram delivery checks](TROUBLESHOOTING.md#telegram-test-works-but-real-alerts-say-message-text-is-empty).
 
 ## 📝 Service URLs
 
