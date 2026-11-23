@@ -7,6 +7,7 @@ recipes run separately in the source-proof VM, never against customer services.
 
 from __future__ import annotations
 
+import ast
 import fnmatch
 import os
 from pathlib import Path
@@ -49,6 +50,50 @@ def documentation_suites() -> list[str]:
     return sorted(path.name for path in (ROOT / "scripts/tests").iterdir()
                   if path.is_file() and (fnmatch.fnmatch(path.name, "test_*docs*.py")
                                          or path.name in LEGACY_SUITES))
+
+
+def workflow_paths(source: str, event: str) -> list[str]:
+    triggers = source.split("\non:\n", 1)[1].split("\npermissions:", 1)[0]
+    block = triggers.split(f"  {event}:\n", 1)[1]
+    block = re.split(r"\n  [a-z_]+:\n", block, maxsplit=1)[0]
+    return re.findall(r'^      - "([^"]+)"$', block, re.MULTILINE)
+
+
+def matches_path(path: str, pattern: str) -> bool:
+    # The workflow uses only recursive directory prefixes and segment-local
+    # globs. A single '*' must not match across directories.
+    if pattern.endswith("/**"):
+        return path.startswith(pattern[:-2])
+    parts, selectors = path.split("/"), pattern.split("/")
+    return len(parts) == len(selectors) and all(
+        fnmatch.fnmatchcase(part, selector) for part, selector in zip(parts, selectors)
+    )
+
+
+def local_fixture_imports(suites: list[str]) -> set[str]:
+    # Direct in-tree Python fixture imports (including imports of fixtures).
+    # Dynamic runner/control inputs are asserted separately below.
+    pending = [ROOT / "scripts/tests" / name for name in suites if name.endswith(".py")]
+    seen = set(pending)
+    helpers = set()
+    while pending:
+        file = pending.pop()
+        for node in ast.walk(ast.parse(file.read_bytes(), filename=str(file))):
+            if isinstance(node, ast.Import):
+                modules = [alias.name for alias in node.names]
+            elif isinstance(node, ast.ImportFrom) and node.module:
+                modules = [node.module]
+            else:
+                continue
+            for module in modules:
+                relative = Path(*module.split(".")).with_suffix(".py")
+                for directory in ("scripts/tests", "scripts"):
+                    helper = ROOT / directory / relative
+                    if helper.is_file() and helper not in seen:
+                        seen.add(helper)
+                        pending.append(helper)
+                        helpers.add(helper.relative_to(ROOT).as_posix())
+    return helpers
 
 
 def job_body(source: str, name: str) -> str:
@@ -111,24 +156,44 @@ class PublicDocsWorkflowTest(unittest.TestCase):
     def setUp(self):
         self.source = WORKFLOW.read_text(encoding="utf-8")
 
-    def test_both_events_cover_all_suite_and_helper_changes(self):
-        triggers = self.source.split("\non:\n", 1)[1].split("\npermissions:", 1)[0]
+    def test_both_events_cover_docs_inventory_and_control_changes(self):
         required = {
             "*.md", "docs/**", "frontend-modern/public/docs/**",
             ".github/ISSUE_TEMPLATE/**", ".github/PULL_REQUEST_TEMPLATE.md",
             "scripts/check_public_docs.py", "scripts/check_docs_mirror.py",
-            "scripts/readme_entrypoints_test.py", "scripts/tests/**",
+            "scripts/readme_entrypoints_test.py", "scripts/tests/test_*docs*.py",
+            "scripts/tests/run.sh", "scripts/run-script-tests.py", "scripts/ci_docs_only.py",
             "scripts/select-smoke-test-shard.py", ".github/scripts/docs-test-seconds.txt",
             "scripts/test-vm-disk.sh", ".github/workflows/public-docs.yml",
         }
+        self.assertEqual(workflow_paths(self.source, "pull_request"),
+                         workflow_paths(self.source, "push"))
+        suites = documentation_suites()
+        covered = {f"scripts/tests/{name}" for name in suites} | local_fixture_imports(suites)
+        covered.update({
+            "scripts/tests/agent_installer_test_support.py",
+            "scripts/tests/test_new_infrastructure_docs.py",
+        })
         for event in ("pull_request", "push"):
             with self.subTest(event=event):
-                block = triggers.split(f"  {event}:\n", 1)[1]
-                block = re.split(r"\n  [a-z_]+:\n", block, maxsplit=1)[0]
-                paths = re.findall(r'^      - "([^"]+)"$', block, re.MULTILINE)
+                paths = workflow_paths(self.source, event)
                 self.assertTrue(required.issubset(paths), required.difference(paths))
                 self.assertEqual(len(paths), len(set(paths)))
-        self.assertIn("  push:\n    branches:\n      - main\n", triggers)
+                missing = {path for path in covered
+                           if not any(matches_path(path, pattern) for pattern in paths)}
+                self.assertFalse(missing, f"Docs suites or fixture imports without a trigger: {missing}")
+        self.assertIn("  push:\n    branches:\n      - main\n", self.source)
+
+    def test_unrelated_policy_and_smoke_suites_do_not_queue_docs_jobs(self):
+        unrelated = (
+            ".github/dependabot.yml", "scripts/tests/test_dependabot_config.py",
+            "scripts/tests/test_smoke_runner.py", "scripts/tests/test_benchmark_workflow_contract.py",
+        )
+        for event in ("pull_request", "push"):
+            for path in unrelated:
+                with self.subTest(event=event, path=path):
+                    self.assertFalse(any(matches_path(path, pattern)
+                                         for pattern in workflow_paths(self.source, event)))
 
     def test_shards_discover_current_suites_without_dependency_setup(self):
         self.assertTrue(set(REQUIRED_SUITES).issubset(documentation_suites()))
