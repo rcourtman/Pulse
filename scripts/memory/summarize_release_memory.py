@@ -179,6 +179,17 @@ def pbs_snapshot_coverage(stats: dict) -> str:
     return f"{served}/{expected}"
 
 
+def pve_steady_poll_sightings(stats: dict) -> str:
+    coverage = stats.get("pve_steady_poll_sightings")
+    if coverage is None:
+        return "n/a"
+    return (
+        f"{coverage['guests_with_sightings']}/{stats['guests']} sighted; "
+        f"{len(coverage['guests_over_limit'])} with a gap over {coverage['limit_s']} s; "
+        f"longest {coverage['longest_gap_ms'] / 1000:g} s in {coverage['window_s']} s"
+    )
+
+
 def proxmox_lines(baseline: dict | None, candidate: dict | None) -> list[str]:
     shape = candidate or baseline
     if shape is None:
@@ -192,6 +203,8 @@ def proxmox_lines(baseline: dict | None, candidate: dict | None) -> list[str]:
         "",
         "PBS coverage counts distinct groups for which the fixture finished serving snapshots, "
         "not snapshots Pulse retained or displayed.",
+        "PVE sighting gaps describe what the dashboard observed during steady RSS sampling. "
+        "They are reported only; a gap does not identify where observation stopped.",
         "",
         "| | Baseline | Candidate |",
         "|---|---:|---:|",
@@ -202,6 +215,7 @@ def proxmox_lines(baseline: dict | None, candidate: dict | None) -> list[str]:
         ("PVE guests with recent poll sightings at measurement end",
          lambda d: (f"{d['pve_guests_recent']}/{d['guests']} (last {d['pve_guest_freshness_window_s']} s)"
                     if "pve_guests_recent" in d else "n/a")),
+        ("PVE guest poll sightings during steady RSS sampling", pve_steady_poll_sightings),
         ("PBS API requests", lambda d: d["pbs_requests"]),
         ("PBS snapshot groups served/configured", pbs_snapshot_coverage),
         ("Dashboard connections", lambda d: d["dashboard"]["connects"]),

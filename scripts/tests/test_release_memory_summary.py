@@ -41,7 +41,7 @@ def select_samples(raw, keep):
 
 class ReleaseMemorySummaryTests(unittest.TestCase):
     def run_summary(self, baseline, candidate, estate=None, agents=None, env=None, duration=900, interval=15,
-                    wait_statuses=(), child_wait_statuses=None):
+                    wait_statuses=(), child_wait_statuses=None, proxmox=None):
         with tempfile.TemporaryDirectory() as tmp:
             out = Path(tmp)
             (out / "samples-baseline.tsv").write_text(baseline)
@@ -51,6 +51,8 @@ class ReleaseMemorySummaryTests(unittest.TestCase):
                 (out / "estate").write_text(estate + "\n")
             for label, stats in (agents or {}).items():
                 (out / f"agents-{label}.json").write_text(json.dumps(stats))
+            for label, stats in (proxmox or {}).items():
+                (out / f"proxmox-{label}.json").write_text(json.dumps(stats))
             for label, status in (child_wait_statuses or {}).items():
                 (out / f"run-{label}-wait.json").write_text(json.dumps(status))
             saved = {key: os.environ.get(key) for key in (env or {})}
@@ -116,9 +118,39 @@ class ReleaseMemorySummaryTests(unittest.TestCase):
         lines = "\n".join(summary.proxmox_lines(legacy, candidate))
         self.assertIn("| PVE guests observed in dashboard state | n/a | 35 |", lines)
         self.assertIn("| PVE guests with recent poll sightings at measurement end | n/a | 34/35 (last 60 s) |", lines)
+        self.assertIn("| PVE guest poll sightings during steady RSS sampling | n/a | n/a |", lines)
         self.assertIn("| PBS API requests | 210 | 210 |", lines)
         self.assertIn("| PBS snapshot groups served/configured | n/a | 92/104 |", lines)
         self.assertIn("not snapshots Pulse retained or displayed", lines)
+
+    def test_steady_proxmox_sighting_gap_is_reported_separately_from_the_rss_result(self):
+        baseline = {
+            "pve_nodes": 3, "guests": 35, "pbs_instances": 2, "total_pbs_snapshots": 5200,
+            "snapshots_per_group": 50, "pve_requests": 914, "pbs_requests": 210,
+            "pve_guests_recent": 35, "pve_guest_freshness_window_s": 60,
+            "dashboard": {"connects": 1, "messages": 60, "bytes": 1024},
+            "pve_steady_poll_sightings": {
+                "guests_with_sightings": 35, "guests_over_limit": [], "limit_s": 60,
+                "longest_gap_ms": 10000, "window_s": 300,
+            },
+        }
+        candidate = dict(baseline, pve_steady_poll_sightings={
+            **baseline["pve_steady_poll_sightings"],
+            "guests_over_limit": ["lxc/ct-101"], "longest_gap_ms": 150000,
+        })
+        full = samples(131072, 25, 0)
+        code, result, text = self.run_summary(
+            full, full, estate="proxmox", proxmox={"baseline": baseline, "candidate": candidate},
+            env={"PULSE_MEMORY_GATE": "0"}, wait_statuses=(0, 0),
+        )
+        self.assertEqual(code, 0)
+        self.assertEqual(result["status"], "measured")
+        self.assertIn("| PVE guests with recent poll sightings at measurement end | 35/35 (last 60 s) |"
+                      " 35/35 (last 60 s) |", text)
+        self.assertIn("| PVE guest poll sightings during steady RSS sampling |"
+                      " 35/35 sighted; 0 with a gap over 60 s; longest 10 s in 300 s |"
+                      " 35/35 sighted; 1 with a gap over 60 s; longest 150 s in 300 s |", text)
+        self.assertIn("a gap does not identify where observation stopped", text)
 
     def test_mock_estate_is_the_default(self):
         _, result, text = self.run_summary(samples(130000, 25, 0), samples(130000, 25, 0))
@@ -461,8 +493,17 @@ curl() {
   fi
   return 28
 }
+python3() {
+  if [[ "$1" == */proxmox_load.py ]]; then
+    # The poll decoder is tested separately. Here capture the actual
+    # launcher's requested observation window under the controlled clock.
+    printf '%s\n' "$@" > "$PULSE_TEST_OUT/proxmox-args-$label"
+    return 0
+  fi
+  command python3 "$@"
+}
 sleep() { :; }
-export -f go date awk curl sleep
+export -f go date awk curl python3 sleep
 exec bash "$@"
 '''
                 result = subprocess.run(
@@ -470,7 +511,8 @@ exec bash "$@"
                      str(baseline), str(candidate), str(output)],
                     env={**os.environ, "PULSE_TEST_BINARY": str(fixture),
                          "PULSE_TEST_SMAPS": str(smaps),
-                         "PULSE_TEST_OUT": str(output), "PULSE_TEST_MODE": mode, "PULSE_FOOTPRINT_ESTATE": "mock",
+                         "PULSE_TEST_OUT": str(output), "PULSE_TEST_MODE": mode,
+                         "PULSE_FOOTPRINT_ESTATE": "proxmox" if mode == "normal-term" else "mock",
                          "PULSE_MEMORY_GATE": "0", "PULSE_MEMORY_DURATION": "8", "PULSE_MEMORY_INTERVAL": "1"},
                     text=True, capture_output=True, timeout=25,
                 )
@@ -498,6 +540,10 @@ exec bash "$@"
                         self.assertEqual(row[2:6], [""] * 4)
                         self.assertEqual(row[7:], ["1024", "2048", "163840"])
                 for side in ("baseline", "candidate"):
+                    if mode == "normal-term":
+                        args = (output / f"proxmox-args-{side}").read_text().splitlines()
+                        self.assertEqual(args[args.index("--steady-since") + 1], "105")
+                        self.assertEqual(args[args.index("--sample-until") + 1], "108")
                     args = (output / f"profile-{side}").read_text().splitlines()
                     self.assertIn("--max-time", args)
                     self.assertEqual(args[args.index("--max-time") + 1], "5")
