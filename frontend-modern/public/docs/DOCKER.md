@@ -60,7 +60,7 @@ not container recreation or guest-agent probes. Monitoring and alerts are
 unavailable while Pulse is stopped; an OK backup alone does not prove recovery.
 
 Leave authentication overrides unset for a new install and complete
-[bootstrap-token setup](INSTALL.md#step-1-get-the-token) in your browser. Do not add a
+[first-time setup](INSTALL.md#quick-setup-first-10-minutes) in your browser. Do not add a
 shared example password to the Compose file. If automation must skip setup,
 use a private deployment-managed credential source; the
 [private Docker authentication file](CONFIGURATION.md#private-docker-authentication-file)

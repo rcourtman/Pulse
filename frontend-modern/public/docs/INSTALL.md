@@ -125,7 +125,7 @@ docker run -d \
   rcourtman/pulse:v6.8.0
 ```
 
-For a new container, continue with [bootstrap-token setup](#step-1-get-the-token)
+For a new container, continue with [first-time setup](#quick-setup-first-10-minutes)
 in your browser; do not add an example password to the command.
 
 ### Docker Compose
@@ -154,7 +154,7 @@ to the private Pulse Pro image shown on
 second deployment path.
 
 Leave authentication overrides unset for a new install and complete
-[bootstrap-token setup](#step-1-get-the-token) in your browser. Do not deploy a
+[first-time setup](#quick-setup-first-10-minutes) in your browser. Do not deploy a
 shared example password. If automation must skip setup, use a private
 deployment-managed credential source. The
 [authentication guide](CONFIGURATION.md#private-docker-authentication-file)
@@ -323,9 +323,30 @@ page; an existing installation's login belongs to
 
 ## 🔐 First-Time Setup
 
-Pulse is secure by default. On first launch, you must retrieve a **Bootstrap Token** to create your admin account.
+Pulse is secure by default. On a fresh install, Pulse opens a **10-minute first-boot setup window** so you can create your admin account directly in the browser without terminal access. Once setup finishes — or after 10 minutes — the window closes automatically.
 
-### Step 1: Get the Token
+### Quick Setup (First 10 Minutes)
+1. Open `http://<your-ip>:7655` within 10 minutes of starting Pulse.
+2. Complete **Create your admin account**:
+   - Set your **Admin Username** and **Password** (or let Pulse generate a 20-character password).
+   - Pulse generates an **API token** for agents and automations.
+   - Copy the credentials before leaving the screen.
+3. Click **Add infrastructure** (or open **Settings → Infrastructure → Add infrastructure**) and add your first system. For Proxmox, start with API-only monitoring when inventory, node status, VM/container status, and storage metrics are enough; install the unified agent only on hosts where you need inside-guest Docker/Podman visibility, host SMART/temperature data, local ZFS/Ceph/mdadm detail, or other local host telemetry. See [Agent Security](AGENT_SECURITY.md).
+
+**API-only does not mean guest-agent-free.** VM filesystem and memory requests
+through QEMU Guest Agent can share the channel used by freeze-enabled backups.
+Read-only permissions do not prove backup safety. Do not add permissions,
+enable or restart an agent, or send manual guest-agent probes during a backup,
+freeze or thaw. Use the existing
+[backup safety precaution](VM_DISK_MONITORING.md#backup-safety). Stopping Pulse
+also stops its monitoring and alerts. An OK backup task does not prove
+successful thaw.
+
+> **Note**: If you configure authentication via environment variables (`PULSE_AUTH_USER`/`PULSE_AUTH_PASS`), the bootstrap token is automatically removed and this step is skipped.
+
+### Bootstrap Token Fallback (After 10 Minutes or Strict Mode)
+
+If the 10-minute first-boot window expires before you open Pulse, either **restart Pulse** for a fresh 10-minute window or retrieve the one-time **Bootstrap Token** from the host. Operators deploying on public networks can also set `PULSE_REQUIRE_BOOTSTRAP_TOKEN=true` to disable the 10-minute window and require this token immediately.
 
 | Platform | Command |
 |----------|---------|
@@ -338,32 +359,6 @@ Pulse is secure by default. On first launch, you must retrieve a **Bootstrap Tok
 The Proxmox path must be absolute. `pct exec` runs with `PATH=/sbin:/bin:/usr/sbin:/usr/bin`, which does not include `/usr/local/bin`, so a bare `pulse` fails with `No such file or directory`.
 
 > **Important**: Paste the token string printed by the command above. Do not paste the raw `.bootstrap_token` file contents directly. In v6 that file may contain an encrypted JSON snapshot rather than the usable setup token.
-
-### Step 2: Create Admin Account
-1. Open `http://<your-ip>:7655`
-2. Paste the **Bootstrap Token**.
-3. Complete the **Quick Security Setup** wizard.
-   - Set your **Admin Username** and **Password** (or let Pulse generate one).
-   - Pulse generates an **API token** for agents and automations.
-   - Copy the credentials before leaving the page.
-4. Open **Settings → Infrastructure → Install on a host** and install the
-   unified agent only on hosts where you need agent-provided telemetry. For
-   Proxmox, start with API-only monitoring when inventory, node status,
-   VM/container status, and storage metrics are enough; use agents for
-   inside-guest Docker/Podman visibility, host SMART/temperature data, local
-   ZFS/Ceph/mdadm detail, or other telemetry that requires local host access.
-   See [Agent Security](AGENT_SECURITY.md).
-
-**API-only does not mean guest-agent-free.** VM filesystem and memory requests
-through QEMU Guest Agent can share the channel used by freeze-enabled backups.
-Read-only permissions do not prove backup safety. Do not add permissions,
-enable or restart an agent, or send manual guest-agent probes during a backup,
-freeze or thaw. Use the existing
-[backup safety precaution](VM_DISK_MONITORING.md#backup-safety). Stopping Pulse
-also stops its monitoring and alerts. An OK backup task does not prove
-successful thaw.
-
-> **Note**: If you configure authentication via environment variables (`PULSE_AUTH_USER`/`PULSE_AUTH_PASS`), the bootstrap token is automatically removed and this step is skipped.
 
 ### Scripted setup (no browser)
 

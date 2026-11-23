@@ -121,10 +121,14 @@ Also available: [Kubernetes with Helm](docs/KUBERNETES.md) and the
 
 ### First run
 
-Open `http://<your-ip>:7655` and paste the one-time setup token from
-`docker exec pulse /app/pulse bootstrap-token` (Docker) or
-`sudo pulse bootstrap-token` (Linux). Create your admin account, then add your
-first system under **Settings → Infrastructure → Add infrastructure**.
+Open `http://<your-ip>:7655` within 10 minutes of first boot to create your
+admin account directly, then add your first system under
+**Settings → Infrastructure → Add infrastructure**.
+
+If the 10-minute first-boot window expires (or you set
+`PULSE_REQUIRE_BOOTSTRAP_TOKEN=true`), restart Pulse for a fresh window or
+unlock with `docker exec pulse /app/pulse bootstrap-token` (Docker) /
+`sudo pulse bootstrap-token` (Linux).
 
 ### Do you need an agent?
 
