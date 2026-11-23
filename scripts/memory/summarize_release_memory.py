@@ -192,16 +192,41 @@ def pve_steady_poll_sightings(stats: dict) -> str:
     )
 
 
+def pbs_datastore_rows(coverage: dict) -> list[dict]:
+    return [store for instance in coverage["datastores"].values() for store in instance.values()]
+
+
 def pbs_steady_datastore_status(stats: dict) -> str:
     coverage = stats.get("pbs_steady_datastore_status")
     if coverage is None:
         return "n/a"
-    stores = [store for instance in coverage["datastores"].values() for store in instance.values()]
+    stores = pbs_datastore_rows(coverage)
     if not stores:
         return "n/a"
     seen = sum(store["responses"] > 0 for store in stores)
     longest = max(store["longest_gap_ms"] for store in stores) / 1000
     return f"{seen}/{len(stores)} with a response; longest gap {longest:g} s in {coverage['window_s']} s"
+
+
+def proxmox_polling_limits(label: str, stats: dict | None, window_s: int) -> list[str]:
+    if not stats:
+        return [f"- {label}: PVE/PBS polling evidence is unavailable."]
+
+    notes = []
+    pve = stats.get("pve_steady_poll_sightings")
+    if pve is None or pve["window_s"] != window_s:
+        notes.append(f"- {label}: PVE guest sightings are unavailable for the RSS window.")
+    elif pve["guests_with_sightings"] != stats["guests"] or pve["guests_over_limit"]:
+        notes.append(f"- {label}: PVE guest sightings were missing or exceeded the {pve['limit_s']} s gap limit.")
+
+    if stats["pbs_instances"] > 0:
+        pbs = stats.get("pbs_steady_datastore_status")
+        stores = pbs_datastore_rows(pbs) if pbs is not None and pbs["window_s"] == window_s else []
+        if not stores:
+            notes.append(f"- {label}: PBS datastore status evidence is unavailable for the RSS window.")
+        elif silent := sum(store["responses"] == 0 for store in stores):
+            notes.append(f"- {label}: {silent} of {len(stores)} PBS datastores had no status response in the RSS window.")
+    return notes
 
 
 def proxmox_lines(baseline: dict | None, candidate: dict | None) -> list[str]:
@@ -407,7 +432,18 @@ def main(argv: list[str]) -> int:
     if any(baseline[column] is None or candidate[column] is None for column in COLUMNS[1:]):
         lines += ["", "Mapping breakdown is unavailable for at least one sample in that run's window. "
                   "The verdict uses the separately measured resident memory."]
-    if exceeded:
+    baseline_proxmox = read_proxmox_stats(out, "baseline")
+    candidate_proxmox = read_proxmox_stats(out, "candidate")
+    if estate == "proxmox":
+        threshold = "past" if exceeded else "not past"
+        verdict = (
+            f"**Steady-state process RSS observation:** resident memory changed "
+            f"{growth / 1024:+.1f} MiB ({growth_pct:+.1f}%), "
+            f"{threshold} both {tolerance:g}% and {slack_kib / 1024:g} MiB of growth."
+        )
+        if not gated:
+            verdict += " Reported only: this estate does not gate."
+    elif exceeded:
         verdict = (
             f"**Steady-state RSS regression:** resident memory grew "
             f"{growth / 1024:+.1f} MiB ({growth_pct:+.1f}%), "
@@ -418,6 +454,13 @@ def main(argv: list[str]) -> int:
     else:
         verdict = f"No steady-state RSS regression: resident memory changed {growth / 1024:+.1f} MiB ({growth_pct:+.1f}%)."
     lines += ["", verdict]
+    if estate == "proxmox":
+        limits = (proxmox_polling_limits("Baseline", baseline_proxmox, duration - start)
+                  + proxmox_polling_limits("Candidate", candidate_proxmox, duration - start))
+        if limits:
+            lines += ["", "**Polling evidence limits the comparison.** "
+                      "This RSS change does not establish memory use under equivalent polling.", "", *limits]
+
     baseline_peak_mib = baseline_high_water / 1024 if baseline_high_water is not None else None
     candidate_peak_mib = candidate_high_water / 1024 if candidate_high_water is not None else None
     lines += [
@@ -446,8 +489,6 @@ def main(argv: list[str]) -> int:
         lines.append(f"| {label} | {unit} | {format_rate(base)} | {format_rate(cand)} | {format_change(base, cand)} |")
     baseline_agents = read_agent_stats(out, "baseline")
     candidate_agents = read_agent_stats(out, "candidate")
-    baseline_proxmox = read_proxmox_stats(out, "baseline")
-    candidate_proxmox = read_proxmox_stats(out, "candidate")
     if estate == "agents":
         lines += agent_lines(baseline_agents, candidate_agents)
     elif estate == "proxmox":
