@@ -236,4 +236,39 @@ describe('SecurityStep', () => {
       'Your admin account was created, but usage statistics could not be turned off. You can turn them off in Settings → System → General.',
     );
   });
+
+  it('submits without X-Setup-Token during the open setup window and falls back to unlock on expiry', async () => {
+    const onComplete = vi.fn();
+    const onRequireUnlock = vi.fn();
+
+    render(() => (
+      <SecurityStep
+        state={baseState}
+        updateState={vi.fn()}
+        bootstrapToken=""
+        showBack={false}
+        showWelcomeHeader
+        onRequireUnlock={onRequireUnlock}
+        onComplete={onComplete}
+        onBack={vi.fn()}
+      />
+    ));
+
+    expect(screen.getByRole('heading', { name: 'Welcome to Pulse' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Back/i })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /Create Account & Continue/i }));
+    await waitFor(() => expect(onComplete).toHaveBeenCalledOnce());
+
+    const [, requestInit] = apiFetchJSONMock.mock.calls[0] as [string, RequestInit];
+    expect(requestInit.headers).toBeUndefined();
+    const body = JSON.parse(String(requestInit.body)) as { setupToken?: string };
+    expect(body.setupToken).toBeUndefined();
+
+    apiFetchJSONMock.mockRejectedValueOnce(
+      new Error('API request failed: 403 setup window has expired'),
+    );
+    fireEvent.click(screen.getByRole('button', { name: /Create Account & Continue/i }));
+    await waitFor(() => expect(onRequireUnlock).toHaveBeenCalledOnce());
+  });
 });

@@ -43,6 +43,7 @@ type publicSecurityStatusResponse struct {
 	DetailLevel        string                           `json:"detailLevel"`
 	HasAuthentication  bool                             `json:"hasAuthentication"`
 	RequiresAuth       bool                             `json:"requiresAuth"`
+	SetupWindowOpen    bool                             `json:"setupWindowOpen,omitempty"`
 	SSOEnabled         bool                             `json:"ssoEnabled"`
 	HideLocalLogin     bool                             `json:"hideLocalLogin"`
 	SSOProviders       []securityStatusSSOProvider      `json:"ssoProviders,omitempty"`
@@ -361,6 +362,7 @@ func (r *Router) registerAuthSecurityInstallRoutes() {
 			DetailLevel:        securityStatusDetailPublic,
 			HasAuthentication:  hasAuthentication,
 			RequiresAuth:       requiresAuth,
+			SetupWindowOpen:    !hasAuthentication && r.IsBootstrapSetupWindowOpen(),
 			SSOEnabled:         hasEnabledSSO,
 			HideLocalLogin:     r.config.HideLocalLogin,
 			SSOProviders:       ssoProviders,

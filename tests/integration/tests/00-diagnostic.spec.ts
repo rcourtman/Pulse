@@ -243,13 +243,23 @@ test.describe("Release readiness diagnostic", () => {
           page.getByRole("main", { name: "Pulse Setup Wizard" }),
           `Rendered UI readiness failed: security status requires first-run setup, but the setup wizard was not visible; body=${compact(securityBody)}`,
         ).toBeVisible();
-        await expect(
-          page.getByPlaceholder("Paste your bootstrap token"),
-          `Rendered UI readiness failed: the setup wizard did not render its bootstrap-token control; body=${compact(securityBody)}`,
-        ).toBeVisible();
-        renderedSurfaceControl = page.getByPlaceholder(
-          "Paste your bootstrap token",
-        );
+        if (securityPayload.setupWindowOpen === true) {
+          renderedSurfaceControl = page.getByRole("button", {
+            name: /Create Account & Continue/i,
+          });
+          await expect(
+            renderedSurfaceControl,
+            `Rendered UI readiness failed: setupWindowOpen=true but the direct account setup button was not visible; body=${compact(securityBody)}`,
+          ).toBeVisible();
+        } else {
+          await expect(
+            page.getByPlaceholder("Paste your bootstrap token"),
+            `Rendered UI readiness failed: the setup wizard did not render its bootstrap-token control; body=${compact(securityBody)}`,
+          ).toBeVisible();
+          renderedSurfaceControl = page.getByPlaceholder(
+            "Paste your bootstrap token",
+          );
+        }
       } else if (securityPayload.hideLocalLogin !== true) {
         renderedSurface = "local login";
         await expect(

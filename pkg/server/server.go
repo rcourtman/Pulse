@@ -1363,6 +1363,13 @@ func formatFirstRunStartupNotice(protocol, bindAddr string, port int, publicURL 
 	return setupURL, command
 }
 
+func firstRunStartupNoticeMessage(setupWindowOpen bool) string {
+	if setupWindowOpen {
+		return "First-time setup ready: open the setup URL within 10 minutes to create your admin account (if the window expires, restart Pulse or run the token command)"
+	}
+	return "First-time setup ready: open the setup URL and run the token command to unlock Pulse"
+}
+
 func logFirstRunStartupNotice(cfg *config.Config, router *api.Router, protocol string) {
 	if cfg == nil || router == nil || !router.HasPendingBootstrapToken() {
 		return
@@ -1377,5 +1384,6 @@ func logFirstRunStartupNotice(cfg *config.Config, router *api.Router, protocol s
 	log.Warn().
 		Str("setup_url", setupURL).
 		Str("token_command", command).
-		Msg("First-time setup ready: open the setup URL and run the token command to unlock Pulse")
+		Bool("setup_window_open", router.IsBootstrapSetupWindowOpen()).
+		Msg(firstRunStartupNoticeMessage(router.IsBootstrapSetupWindowOpen()))
 }

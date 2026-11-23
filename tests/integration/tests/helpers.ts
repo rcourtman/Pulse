@@ -386,8 +386,6 @@ async function completeSetupWizard(
     }
   };
 
-  await enterBootstrapToken();
-
   const detectWizardStep = async (): Promise<
     "security" | "completion" | "pending"
   > => {
@@ -412,9 +410,14 @@ async function completeSetupWizard(
     return "pending";
   };
 
-  // Prefer the explicit verify action in tests. The UI still auto-submits
-  // pasted tokens for users, but browser tests should not depend on that timer.
+  // When the 10-minute first-boot setup window is open, the wizard lands
+  // directly on the security step without an unlock prompt; only enter the
+  // bootstrap token when the unlock step is shown.
   let wizardStep = await detectWizardStep();
+  if (wizardStep === "pending") {
+    await enterBootstrapToken();
+    wizardStep = await detectWizardStep();
+  }
   if (wizardStep === "pending" && (await clickContinueIfReady())) {
     await expect
       .poll(detectWizardStep, { timeout: 30_000 })

@@ -280,4 +280,21 @@ describe('WelcomeStep', () => {
     fireEvent.input(input, { target: { value: 'another-token' } });
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
+
+  it('shows an expiry notice when routed back after the 10-minute setup window closes', () => {
+    render(() => (
+      <WelcomeStep
+        onNext={vi.fn()}
+        bootstrapToken=""
+        setBootstrapToken={vi.fn()}
+        isUnlocked={false}
+        setIsUnlocked={vi.fn()}
+        windowExpired
+      />
+    ));
+
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'The 10-minute first-boot setup window expired. Restart Pulse for a fresh setup window, or enter the unlock token below.',
+    );
+  });
 });

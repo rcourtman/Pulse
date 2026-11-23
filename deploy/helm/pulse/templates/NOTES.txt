@@ -1,10 +1,11 @@
 1. Pulse web UI URL: http://{{ include "pulse.fullname" . }}:{{ .Values.service.port }}
    (Adjust if using Ingress, LoadBalancer, or port-forward:
    kubectl port-forward svc/{{ include "pulse.fullname" . }} 7655:{{ .Values.service.port }} -n {{ .Release.Namespace }})
-2. On first boot, retrieve your one-time setup token to unlock the setup wizard:
+2. Open Pulse in your browser within 10 minutes of first boot to create your admin
+   account directly, then connect your first system under Settings → Infrastructure.
+3. If the 10-minute first-boot window expires (or PULSE_REQUIRE_BOOTSTRAP_TOKEN=true
+   is set), restart the pod for a fresh window or retrieve the fallback unlock token:
    kubectl exec -n {{ .Release.Namespace }} deploy/{{ include "pulse.fullname" . }} -- /app/pulse bootstrap-token
-3. Open Pulse in your browser, paste the bootstrap token to create your admin account,
-   then connect your first system under Settings → Infrastructure.
 4. To monitor this Kubernetes cluster with the optional agent, generate an install token
    under Settings → Infrastructure → Add infrastructure → Kubernetes, then enable
    `agent.enabled` with your server URL and token.

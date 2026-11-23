@@ -1,0 +1,45 @@
+{
+  "version": 1,
+  "base_sha": "6d53a35db887f59d08ca76a44eba3bc1dd966261",
+  "verified_at": "2026-11-23T10:06:07Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Login.tsx",
+    "frontend-modern/src/components/SetupWizard/SetupWizard.tsx",
+    "frontend-modern/src/components/SetupWizard/steps/SecurityStep.tsx",
+    "frontend-modern/src/components/SetupWizard/steps/WelcomeStep.tsx",
+    "frontend-modern/src/types/config.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Login.tsx": "89b3423ec9fbf5920c35845cf4e9086c3651444f1b0531f7240011a8b7072815",
+    "frontend-modern/src/components/SetupWizard/SetupWizard.tsx": "fca1e5d41b15cb3c0be4c0b05e8fef26c3c547d382a60ece3681b2f261751f7e",
+    "frontend-modern/src/components/SetupWizard/steps/SecurityStep.tsx": "41df1fb348b4c51be89692a9cd47364093a04482001b118a7a642f5780d7c1c7",
+    "frontend-modern/src/components/SetupWizard/steps/WelcomeStep.tsx": "172d5d11dbd11b0ca6f9c88336d4baceba51395b7f05413a8d681eb2f42e5a02",
+    "frontend-modern/src/types/config.ts": "9ca7125712c71e69c10beefdb0483193a6526bc304f3a8b70d13f236bec169ff"
+  },
+  "routes": [
+    "/",
+    "/settings/infrastructure?add=pick"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Default fresh boot at 1440x900 and 390x844 (setupWindowOpen=true): SetupWizard opens directly on 2-step flow (Security -> First source) with Welcome to Pulse hero, 10-minute setup notice, no bootstrap token prompt, no Back button, and Create Account & Continue above the 900px desktop fold (y=815..859) with zero horizontal overflow on mobile",
+    "Custom password validation at 1440x900: submitting empty custom password renders inline role=alert error",
+    "Direct account creation completes without bootstrap token, lands on Step 2 (Connect your first system), and Add infrastructure opens /settings/infrastructure?add=pick signed in",
+    "Strict mode (PULSE_REQUIRE_BOOTSTRAP_TOKEN=true) at 1440x900: SetupWizard renders 3-step flow (Unlock server -> Security -> First source) with Paste your bootstrap token input and Verify bootstrap token button"
+  ],
+  "interactions": [
+    "Loaded fresh PULSE_DATA_DIR at / on 1440x900 and 390x844, verified direct 2-step Security view and absence of Back button and bootstrap token input",
+    "Toggled Custom password, submitted empty password to verify inline alert, switched back to Auto-generate, clicked Create Account & Continue, verified completion screen, and clicked Add infrastructure",
+    "Restarted server with PULSE_REQUIRE_BOOTSTRAP_TOKEN=true and fresh PULSE_DATA_DIR, visited / at 1440x900, and verified 3-step Unlock server screen"
+  ]
+}

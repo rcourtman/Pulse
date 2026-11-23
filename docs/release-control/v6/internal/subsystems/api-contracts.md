@@ -10519,6 +10519,13 @@ through the supported `pulse bootstrap-token` command, but `.bootstrap_token`
 may not remain a raw plaintext secret file on disk. Canonical runtime
 persistence must encrypt that token at rest and rewrite any legacy plaintext
 bootstrap-token file immediately into the encrypted canonical format on load.
+During the 10-minute first-boot setup window (unless `PULSE_REQUIRE_BOOTSTRAP_TOKEN=true`
+is set), `GET /api/security/status` exposes `setupWindowOpen: true` (omitted
+once auth exists, after expiry, or in strict mode) and `POST /api/security/quick-setup`
+permits initial admin creation without `X-Setup-Token`, closing the window and
+deleting `.bootstrap_token` immediately on completion. After expiry or under
+`PULSE_REQUIRE_BOOTSTRAP_TOKEN=true`, `POST /api/security/quick-setup` falls
+back to requiring a valid `X-Setup-Token` (or a fresh restart).
 That same first-session contract also owns the dev/test reset response used by
 managed-backend proof: `/api/security/dev/reset-first-run` may exist only for
 development verification, must require authenticated `settings:write`, must
