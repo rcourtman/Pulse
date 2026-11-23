@@ -6,12 +6,14 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 	"github.com/rcourtman/pulse-go-rewrite/internal/notifications"
 	"github.com/rcourtman/pulse-go-rewrite/internal/operationaltrust"
+	"github.com/stretchr/testify/require"
 )
 
 func newNotificationQueueHandlers(t *testing.T) (*NotificationQueueHandlers, *notifications.NotificationQueue) {
@@ -74,7 +76,10 @@ func TestNotificationQueueHandlers_GetDLQAndStats(t *testing.T) {
 		t.Fatalf("GetDLQ status = %d, want 200", rec.Code)
 	}
 
-	var dlq []notifications.QueuedNotification
+	var dlq []struct {
+		ID    string                              `json:"id"`
+		Links []operationaltrust.NotificationLink `json:"links"`
+	}
 	if err := json.Unmarshal(rec.Body.Bytes(), &dlq); err != nil {
 		t.Fatalf("decode DLQ: %v", err)
 	}
@@ -95,25 +100,117 @@ func TestNotificationQueueHandlers_GetDLQAndStats(t *testing.T) {
 	}
 }
 
+func TestNotificationQueueHandlers_GetDLQSummaryPreservesStoredRecord(t *testing.T) {
+	handler, queue := newNotificationQueueHandlers(t)
+	// An unattempted row without a completion time must not displace the
+	// completed row when the list is limited to one.
+	enqueueDLQNotification(t, queue, "older-row")
+	item := notifications.QueuedNotification{
+		ID:          "delivery-fixture",
+		Type:        "webhook",
+		Method:      "fixture-method",
+		Status:      notifications.QueueStatusDLQ,
+		Attempts:    2,
+		MaxAttempts: 5,
+		CreatedAt:   time.Now().UTC().Truncate(time.Second).Add(-time.Minute),
+		Config:      json.RawMessage(`{ "fixtureOption": { "value": "stored-fixture" } }`),
+		Alerts: []*alerts.Alert{{
+			ID:         "alert-fixture",
+			Type:       "memory",
+			Level:      alerts.AlertLevelWarning,
+			ResourceID: "resource-fixture",
+			Message:    "stored alert detail",
+			Metadata:   map[string]interface{}{"detail": "stored fixture metadata"},
+		}},
+	}
+	require.NoError(t, queue.Enqueue(&item))
+	const failure = "HTTP 503: stored fixture diagnostic"
+	require.NoError(t, queue.MoveToDLQ(item.ID, failure))
+
+	rec := httptest.NewRecorder()
+	handler.GetDLQ(rec, httptest.NewRequest(http.MethodGet, "/api/notifications/dlq?limit=1", nil))
+	require.Equal(t, http.StatusOK, rec.Code)
+
+	stored, err := queue.GetDLQ(1)
+	require.NoError(t, err)
+	require.Len(t, stored, 1)
+	saved := stored[0]
+	require.Equal(t, item.ID, saved.ID)
+	require.True(t, bytes.Equal(item.Config, saved.Config), "provider snapshot changed on read")
+	require.NotNil(t, saved.LastError)
+	require.Equal(t, failure, *saved.LastError)
+	require.NotNil(t, saved.LastAttempt)
+	require.NotNil(t, saved.CompletedAt)
+	require.Len(t, saved.Alerts, 1)
+	require.Equal(t, item.Alerts[0].Message, saved.Alerts[0].Message)
+	require.Equal(t, item.Alerts[0].Metadata, saved.Alerts[0].Metadata)
+
+	// Assert the entire wire shape, so an accidentally serialized storage
+	// field (including any full alert payload) fails the response contract.
+	want, err := json.Marshal([]map[string]interface{}{{
+		"id":     item.ID,
+		"type":   "webhook",
+		"method": "fixture-method",
+		"status": "dlq",
+		"alerts": []map[string]string{{
+			"id": "alert-fixture", "type": "memory", "level": "warning", "resourceId": "resource-fixture",
+		}},
+		"attempts":     2,
+		"maxAttempts":  5,
+		"createdAt":    saved.CreatedAt,
+		"lastAttempt":  saved.LastAttempt,
+		"completedAt":  saved.CompletedAt,
+		"failureClass": "server_error",
+	}})
+	require.NoError(t, err)
+	require.JSONEq(t, string(want), rec.Body.String())
+	require.True(t, saved.CreatedAt.Equal(item.CreatedAt))
+}
+
+func TestNotificationQueueHandlers_GetDLQEmpty(t *testing.T) {
+	handler, _ := newNotificationQueueHandlers(t)
+	rec := httptest.NewRecorder()
+	handler.GetDLQ(rec, httptest.NewRequest(http.MethodGet, "/api/notifications/dlq", nil))
+	require.Equal(t, http.StatusOK, rec.Code)
+	require.JSONEq(t, "null", rec.Body.String())
+}
+
 func TestNotificationQueueHandlers_RetryAndDelete(t *testing.T) {
 	handler, queue := newNotificationQueueHandlers(t)
+	queue.SetProcessor(nil) // Inspect the operator transitions without sending.
 	enqueueDLQNotification(t, queue, "notif-2")
 
-	retryBody := []byte(`{"id":"notif-2"}`)
-	req := httptest.NewRequest(http.MethodPost, "/api/notifications/dlq/retry", bytes.NewReader(retryBody))
 	rec := httptest.NewRecorder()
-	handler.RetryDLQItem(rec, req)
-	if rec.Code != http.StatusOK {
-		t.Fatalf("RetryDLQItem status = %d, want 200: %s", rec.Code, rec.Body.String())
+	handler.GetDLQ(rec, httptest.NewRequest(http.MethodGet, "/api/notifications/dlq", nil))
+	require.Equal(t, http.StatusOK, rec.Code)
+	var entries []struct {
+		ID string `json:"id"`
 	}
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &entries))
+	require.Len(t, entries, 1)
+	require.Equal(t, "notif-2", entries[0].ID)
+	body, err := json.Marshal(entries[0])
+	require.NoError(t, err)
 
-	deleteBody := []byte(`{"id":"notif-2"}`)
-	req = httptest.NewRequest(http.MethodPost, "/api/notifications/dlq/delete", bytes.NewReader(deleteBody))
+	req := httptest.NewRequest(http.MethodPost, "/api/notifications/dlq/retry", bytes.NewReader(body))
+	rec = httptest.NewRecorder()
+	handler.RetryDLQItem(rec, req)
+	require.Equal(t, http.StatusOK, rec.Code)
+	require.JSONEq(t, `{"success":true,"message":"Notification scheduled for retry","id":"notif-2"}`, rec.Body.String())
+	stats, err := queue.GetQueueStats()
+	require.NoError(t, err)
+	require.Equal(t, 1, stats["pending"])
+	require.Zero(t, stats["dlq"])
+
+	req = httptest.NewRequest(http.MethodPost, "/api/notifications/dlq/delete", bytes.NewReader(body))
 	rec = httptest.NewRecorder()
 	handler.DeleteDLQItem(rec, req)
-	if rec.Code != http.StatusOK {
-		t.Fatalf("DeleteDLQItem status = %d, want 200: %s", rec.Code, rec.Body.String())
-	}
+	require.Equal(t, http.StatusOK, rec.Code)
+	require.JSONEq(t, `{"success":true,"message":"Notification deleted from DLQ","id":"notif-2"}`, rec.Body.String())
+	stats, err = queue.GetQueueStats()
+	require.NoError(t, err)
+	require.Zero(t, stats["pending"])
+	require.Equal(t, 1, stats["cancelled"])
 }
 
 func TestNotificationQueueHandlers_BulkTerminalFailureRecovery(t *testing.T) {

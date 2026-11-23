@@ -5,11 +5,14 @@ import (
 	"net/http"
 	"strconv"
 	"sync"
+	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 	"github.com/rcourtman/pulse-go-rewrite/internal/api/apihttp"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 	"github.com/rcourtman/pulse-go-rewrite/internal/notifications"
+	"github.com/rcourtman/pulse-go-rewrite/internal/operationaltrust"
 	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
 	"github.com/rs/zerolog/log"
 )
@@ -45,7 +48,67 @@ func (h *NotificationQueueHandlers) getQueue() *notifications.NotificationQueue 
 	return monitor.GetNotificationManager().GetQueue()
 }
 
-// GetDLQ returns notifications in the dead letter queue
+// deadLetterEntry is the operator view, not the record used for delivery.
+type deadLetterEntry struct {
+	ID            string                                 `json:"id"`
+	Type          string                                 `json:"type"`
+	Method        string                                 `json:"method,omitempty"`
+	DestinationID string                                 `json:"destinationId,omitempty"`
+	Status        notifications.NotificationQueueStatus  `json:"status"`
+	Alerts        []deadLetterAlertRef                   `json:"alerts"`
+	Links         []operationaltrust.NotificationLink    `json:"links,omitempty"`
+	Attempts      int                                    `json:"attempts"`
+	MaxAttempts   int                                    `json:"maxAttempts"`
+	FailureClass  notifications.NotificationFailureClass `json:"failureClass,omitempty"`
+	LastAttempt   *time.Time                             `json:"lastAttempt,omitempty"`
+	CreatedAt     time.Time                              `json:"createdAt"`
+	NextRetryAt   *time.Time                             `json:"nextRetryAt,omitempty"`
+	CompletedAt   *time.Time                             `json:"completedAt,omitempty"`
+	PayloadBytes  *int                                   `json:"payloadBytes,omitempty"`
+}
+
+type deadLetterAlertRef struct {
+	ID         string            `json:"id"`
+	Type       string            `json:"type"`
+	Level      alerts.AlertLevel `json:"level"`
+	ResourceID string            `json:"resourceId"`
+}
+
+func newDeadLetterEntry(item *notifications.QueuedNotification) deadLetterEntry {
+	entry := deadLetterEntry{
+		ID:            item.ID,
+		Type:          item.Type,
+		Method:        item.Method,
+		DestinationID: item.DestinationID,
+		Status:        item.Status,
+		Links:         item.Links,
+		Attempts:      item.Attempts,
+		MaxAttempts:   item.MaxAttempts,
+		LastAttempt:   item.LastAttempt,
+		CreatedAt:     item.CreatedAt,
+		NextRetryAt:   item.NextRetryAt,
+		CompletedAt:   item.CompletedAt,
+		PayloadBytes:  item.PayloadBytes,
+	}
+	if item.Alerts != nil {
+		entry.Alerts = make([]deadLetterAlertRef, 0, len(item.Alerts))
+		for _, alert := range item.Alerts {
+			if alert != nil {
+				entry.Alerts = append(entry.Alerts, deadLetterAlertRef{
+					ID: alert.ID, Type: alert.Type, Level: alert.Level, ResourceID: alert.ResourceID,
+				})
+			}
+		}
+	}
+	// Provider diagnostics may contain free-form response text. Keep only a
+	// closed class here; per-attempt evidence belongs to the delivery log.
+	if item.LastError != nil && *item.LastError != "" {
+		entry.FailureClass = notifications.ClassifyNotificationFailure(*item.LastError)
+	}
+	return entry
+}
+
+// GetDLQ returns diagnostic summaries of dead-letter notifications.
 func (h *NotificationQueueHandlers) GetDLQ(w http.ResponseWriter, r *http.Request) {
 	if !apihttp.EnsureScope(w, r, config.ScopeMonitoringRead) {
 		return
@@ -71,7 +134,14 @@ func (h *NotificationQueueHandlers) GetDLQ(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	if err := utils.WriteJSONResponse(w, dlq); err != nil {
+	var entries []deadLetterEntry // Preserve the existing null when there are no rows.
+	if dlq != nil {
+		entries = make([]deadLetterEntry, len(dlq))
+		for i, item := range dlq {
+			entries[i] = newDeadLetterEntry(item)
+		}
+	}
+	if err := utils.WriteJSONResponse(w, entries); err != nil {
 		log.Error().Err(err).Msg("Failed to write DLQ response")
 	}
 }
