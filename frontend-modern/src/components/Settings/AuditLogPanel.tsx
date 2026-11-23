@@ -407,7 +407,7 @@ export default function AuditLogPanel(props: AuditLogPanelProps) {
       <Show when={!loading() && isPersistent() && filteredEvents().length > 0}>
         <div class="sm:mt-4">
           <PulseDataGrid
-            class="max-sm:[&_th]:px-2 max-sm:[&_td]:px-2 max-sm:[&_td]:py-1.5"
+            class="[&_th]:px-2 [&_td]:px-2 max-sm:[&_td]:py-1.5"
             data={filteredEvents()}
             columns={[
               {
