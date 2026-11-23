@@ -9,6 +9,7 @@ import { useStackedMemoryBarState } from './useStackedMemoryBarState';
 export function StackedMemoryBar(props: StackedMemoryBarProps) {
   const state = useStackedMemoryBarState(props);
   const presentation = state.presentation;
+  const barHeight = () => (presentation().stackSublabel ? 'h-6' : 'h-4');
   const [detailsOpen, setDetailsOpen] = createSignal(false);
   let detailsTrigger: HTMLButtonElement | undefined;
   const swapBarWidth = () => String(Math.max(0, Math.min(presentation().swapBarPercent, 100)));
@@ -18,7 +19,7 @@ export function StackedMemoryBar(props: StackedMemoryBarProps) {
   return (
     <div
       ref={state.setContainerRef}
-      class={`metric-text relative w-full flex items-center justify-center ${props.detailsLabel ? 'h-11 sm:h-6' : 'h-4'}`}
+      class={`metric-text relative w-full flex items-center justify-center ${props.detailsLabel ? 'h-11 sm:h-6' : barHeight()}`}
       onMouseEnter={state.handleMouseEnter}
       onMouseLeave={state.handleMouseLeave}
       onClick={(event) => {
@@ -26,7 +27,7 @@ export function StackedMemoryBar(props: StackedMemoryBarProps) {
         if (props.detailsLabel) event.stopPropagation();
       }}
     >
-      <div class="relative w-full h-4 overflow-hidden bg-surface-hover rounded-sm">
+      <div class={`relative w-full overflow-hidden bg-surface-hover rounded-sm ${barHeight()}`}>
         <svg
           aria-hidden="true"
           class="absolute inset-0 h-full w-full"
@@ -75,16 +76,25 @@ export function StackedMemoryBar(props: StackedMemoryBarProps) {
         </svg>
 
         <span class="absolute inset-0 flex items-center justify-center text-[10px] font-semibold text-base-content leading-none pointer-events-none min-w-0 overflow-hidden">
-          <span class="max-w-full min-w-0 whitespace-nowrap overflow-hidden text-ellipsis rounded-xs px-1 text-center shadow-xs">
+          <span
+            class="max-w-full min-w-0 whitespace-nowrap overflow-hidden text-ellipsis rounded-xs px-1 text-center shadow-xs"
+            classList={{
+              'px-0!': presentation().compactLabel,
+              'tracking-tight': presentation().compactLabel,
+            }}
+          >
             <span>
               <Show
                 when={!presentation().unavailable}
                 fallback={<span class="text-muted">N/A</span>}
               >
-                <AnimatedNumber value={presentation().displayPercentValue} format={formatPercent} />
+                <AnimatedNumber
+                  value={presentation().displayPercentValue}
+                  format={props.formatUtilizationPercent ?? formatPercent}
+                />
               </Show>
             </span>
-            <Show when={presentation().showSublabel}>
+            <Show when={presentation().showSublabel && !presentation().stackSublabel}>
               <span class="metric-sublabel font-normal"> ({presentation().displaySublabel})</span>
             </Show>
             <Show when={presentation().anomalyDescription && presentation().anomalyRatio}>
@@ -93,6 +103,11 @@ export function StackedMemoryBar(props: StackedMemoryBarProps) {
                 title={presentation().anomalyDescription}
               >
                 {presentation().anomalyRatio}
+              </span>
+            </Show>
+            <Show when={presentation().stackSublabel}>
+              <span class="metric-sublabel block font-normal">
+                ({presentation().displaySublabel})
               </span>
             </Show>
           </span>
