@@ -171,6 +171,7 @@ describe('Login', () => {
       'does not claim a signed-in session when Login displays after %s',
       async (returnQuery, hideLocalLogin, message) => {
         window.history.pushState(null, '', `/login?${returnQuery}&view=fixture`);
+        vi.mocked(window.history.replaceState).mockClear();
         const onLogin = vi.fn();
         render(() => (
           <Login
@@ -206,7 +207,11 @@ describe('Login', () => {
           expect(screen.getByRole('button', { name: 'Sign in to Pulse' })).toBeVisible();
         }
         expect(screen.getByRole('link', { name: 'Can’t sign in?' })).toBeVisible();
-        expect(window.location.search).toBe('?view=fixture');
+        expect(window.history.replaceState).toHaveBeenCalledExactlyOnceWith(
+          {},
+          expect.any(String),
+          '/login?view=fixture',
+        );
         expect(mockFetch).not.toHaveBeenCalled();
         expect(onLogin).not.toHaveBeenCalled();
       },
