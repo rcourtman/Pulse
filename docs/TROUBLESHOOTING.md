@@ -82,6 +82,10 @@ establish safe recovery.
   [unassigned slots, missing members and parity counts](TROUBLESHOOTING.md#unraid-reports-missing-disks-in-empty-slots).
   Unraid parity is not Linux MD RAID; do not rebuild or change disk assignments
   just to make Pulse's count agree.
+- **Pulse stopped and may have run out of memory:** start with the
+  [checks after a suspected memory stop](#after-a-memory-cgroup-kill).
+  A high memory chart is not proof of a kill. If the dashboard opens again,
+  check for new History points before assuming that collection resumed.
 - **Pulse itself uses more memory, CPU or disk writes:** use
   [memory baseline and growth checks](TROUBLESHOOTING.md#memory-use-keeps-growing)
   or [CPU and write-rate checks](TROUBLESHOOTING.md#excessive-cpu-writes-or-database-growth).

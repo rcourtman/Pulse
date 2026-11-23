@@ -84,6 +84,17 @@ describe('installation startup guidance', () => {
     expect(prose(rendered)).toContain('not environment values or log content');
   });
 
+  it('offers the existing memory-stop checks before a live service read', () => {
+    const rendered = section();
+    const fragment = 'after-a-memory-cgroup-kill';
+    const route = `/docs/TROUBLESHOOTING#${fragment}`;
+    const link = rendered.querySelector(`a[data-doc-link][href="${route}"]`);
+    expect(link).not.toBeNull();
+    expect(link!.compareDocumentPosition(rendered.querySelector('pre')!) &
+      Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(article('TROUBLESHOOTING').querySelector(`h5#${fragment}`)).not.toBeNull();
+  });
+
   it('does not confuse active, unavailable and ready or prescribe a second disruptive attempt', () => {
     const copy = prose(section());
     for (const distinction of [
