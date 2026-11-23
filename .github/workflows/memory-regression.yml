@@ -29,6 +29,11 @@ concurrency:
 jobs:
   resolve-stable:
     name: Pin the stable comparison source
+    # A manual run is still the main-vs-stable watch. Do not send other refs
+    # or forks to jobs that build and run the checked-out source.
+    if: >-
+      github.repository == 'rcourtman/Pulse' && github.ref == 'refs/heads/main' &&
+      (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     outputs:
@@ -42,7 +47,13 @@ jobs:
         run: |
           set -euo pipefail
           release="$(gh api "repos/${GITHUB_REPOSITORY}/releases/latest")"
-          tag="$(jq -er 'select(.draft == false and .prerelease == false) | .tag_name | strings' <<<"$release")"
+          tag="$(jq -er '
+            select(.draft == false and .prerelease == false and .immutable == true)
+            | .tag_name | strings
+          ' <<<"$release")" || {
+            echo "The latest release is not a published immutable stable release." >&2
+            exit 1
+          }
           [[ "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "No stable release tag found." >&2; exit 1; }
 
           ref="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/$tag")"
@@ -270,7 +281,9 @@ jobs:
   report-scheduled-result:
     name: Report scheduled result
     needs: [resolve-stable, compare]
-    if: ${{ always() && github.event_name == 'schedule' }}
+    if: >-
+      ${{ always() && github.repository == 'rcourtman/Pulse' &&
+      github.ref == 'refs/heads/main' && github.event_name == 'schedule' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
