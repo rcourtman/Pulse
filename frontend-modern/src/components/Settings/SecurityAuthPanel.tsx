@@ -207,7 +207,14 @@ export const SecurityAuthPanel: Component<SecurityAuthPanelProps> = (props) => {
           <div class="p-4 sm:p-6">
             <Toggle
               label="Hide local login form"
-              description="Hide the username/password form on the login page. Users will only see SSO options unless ?show_local=true is used."
+              description={
+                <span>
+                  Hides the form, not password sign-in. Verify SSO sign-in in a separate session.
+                  Keep a working local admin login. Add{' '}
+                  <code class="whitespace-nowrap">?show_local=true</code> to the sign-in URL to show
+                  the form. This does not reset credentials.
+                </span>
+              }
               checked={props.hideLocalLogin()}
               onChange={(e: ToggleChangeEvent) =>
                 props.handleHideLocalLoginChange(e.currentTarget.checked)
@@ -218,8 +225,6 @@ export const SecurityAuthPanel: Component<SecurityAuthPanelProps> = (props) => {
                 props.savingHideLocalLogin() ||
                 credentialChangePending()
               }
-              locked={props.hideLocalLoginLocked()}
-              lockedMessage="This setting is managed by the PULSE_AUTH_HIDE_LOCAL_LOGIN environment variable"
             />
           </div>
 
