@@ -1,0 +1,49 @@
+{
+  "version": 1,
+  "base_sha": "e90013cc5c4368a59fbf7daacc8244f3ce93cfac",
+  "verified_at": "2026-11-23T22:42:18Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/infrastructureMap/InfrastructureMapDrawer.tsx",
+    "frontend-modern/src/features/infrastructureMap/InfrastructureMapSurface.tsx",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapRender.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/infrastructureMap/InfrastructureMapDrawer.tsx": "fc4ff6551a7e3374a13626866d60a9bc62fbb22d28ab7c532d8253d57cb54d80",
+    "frontend-modern/src/features/infrastructureMap/InfrastructureMapSurface.tsx": "3a7527d23919e5b3cb95842a99067b360b3cf6e629199c8dfb4c1fba3fa5193b",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapRender.ts": "aeb66ddf3514ccb63247236000512199ef032379ffa42dea36f1fd47be9d780c"
+  },
+  "routes": [
+    "/map",
+    "/docs/MAP"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 1024,
+      "height": 768
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Chromium and WebKit desktop 1440x900 dark and light themes with zero clipped SVG elements and readable bold monograms",
+    "Chromium and WebKit tablet 1024x768 and mobile 390x844 dark and light themes with zero horizontal overflow",
+    "Empty first-run estate, small homelab (10 resources, Names default), medium estate (80 resources), and large estate (1,377 resources)",
+    "Loading state (Drawing the map...) and API 500 error state (Could not load the map with Try again button)",
+    "Signed-in non-admin viewer RBAC hiding admin-only unmonitored router check link and Add a system CTA",
+    "Production build gating on dist/ confirming /map renders NotFound, header Map button absent, Command Palette hides Map, and /docs/MAP hidden",
+    "Zero axe-core WCAG violations across dark theme, light theme, and open slide-over inspector drawer"
+  ],
+  "interactions": [
+    "Drag-to-pan while zoomed to 150%, reset with Fit, then click group header in WebKit and Chromium to open and close inspector drawer",
+    "Keyboard Tab into map, Arrow key navigation, Escape to dismiss tile tooltip (WCAG 1.4.13), Enter on +N overflow tile to open drawer, and Escape returning focus to the +N SVG tile",
+    "Search across 1,377 resources into +N overflow, toggle N need attention filter, and clear filters",
+    "Save image PNG export verified in both Chromium (628 KB PNG) and WebKit (387 KB PNG)"
+  ]
+}

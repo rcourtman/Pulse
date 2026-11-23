@@ -23,11 +23,15 @@ import { InfrastructureMapSurface } from '../InfrastructureMapSurface';
 
 const resourcesMock = vi.hoisted(() => ({
   value: [] as Resource[],
+  error: undefined as unknown,
+  refetch: vi.fn(),
 }));
 vi.mock('@/hooks/useResources', () => ({
   useResources: () => ({
     resources: () => resourcesMock.value,
     loading: () => false,
+    error: () => resourcesMock.error,
+    refetch: resourcesMock.refetch,
   }),
 }));
 vi.mock('@/contexts/appRuntime', () => ({ useDarkMode: () => () => false }));
@@ -249,6 +253,8 @@ describe('InfrastructureMapSurface scale interactions', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     resourcesMock.value = largeEstate();
+    resourcesMock.error = undefined;
+    resourcesMock.refetch.mockReset();
   });
   afterEach(() => {
     cleanup();
@@ -388,5 +394,45 @@ describe('InfrastructureMapSurface scale interactions', () => {
       y: 238,
       direction: 'down',
     });
+
+    // Escape dismisses open hover/focus tooltip (WCAG 1.4.13).
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(tooltipState.read().when).toBe(false);
+  });
+
+  it('shows an error state with retry when resources fail to load', () => {
+    resourcesMock.value = [];
+    resourcesMock.error = new Error('HTTP 500');
+    render(() => <InfrastructureMapSurface />);
+
+    expect(screen.getByText('Could not load the map')).toBeInTheDocument();
+    expect(screen.queryByText('Nothing to draw yet')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+    expect(resourcesMock.refetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps accessible zoom label aligned with visible percentage and returns focus after drawer Escape', () => {
+    const rafSpy = vi.spyOn(window, 'requestAnimationFrame').mockImplementation((cb) => {
+      cb(0);
+      return 1;
+    });
+    try {
+      const { container } = render(() => <InfrastructureMapSurface />);
+      const resetBtn = screen.getByTestId('infrastructure-map-zoom-reset');
+      expect(resetBtn).toHaveAttribute('aria-label', 'Zoom 100%, reset to default');
+
+      const overflowTile = container.querySelector<SVGElement>('[data-map-hit][aria-label^="+"]');
+      expect(overflowTile).not.toBeNull();
+      overflowTile!.focus();
+      fireEvent.keyDown(overflowTile!, { key: 'Enter' });
+      expect(screen.getByTestId('infrastructure-map-drawer')).toBeInTheDocument();
+
+      fireEvent.keyDown(document, { key: 'Escape' });
+      expect(screen.queryByTestId('infrastructure-map-drawer')).not.toBeInTheDocument();
+      expect(document.activeElement).toBe(overflowTile);
+    } finally {
+      rafSpy.mockRestore();
+    }
   });
 });
