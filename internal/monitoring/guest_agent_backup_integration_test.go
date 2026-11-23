@@ -185,7 +185,7 @@ func testGuestAgentBackupMonitoringLifecycleWithUnverifiedConfig(t *testing.T, u
 	manager := alerts.NewManagerWithDataDir(t.TempDir())
 	defer manager.Stop()
 	m.alertManager = manager
-	nodeVMs, _ := m.pollNodeVMsWithClusterResourceBuilder(context.Background(), "fixture", "node", []proxmox.VM{{VMID: 105, Name: "guest", Status: "running", Lock: "backup", MaxMem: 8 * mib, Mem: 8 * mib, MaxDisk: 1000 * mib}}, client, map[string]models.VM{makeGuestID("fixture", "node", 105): locked}, nil)
+	nodeVMs, _ := m.pollNodeVMsWithClusterResourceBuilder(context.Background(), "fixture", "node", []proxmox.VM{{VMID: 105, Name: "guest", Status: "running", Lock: "backup", MaxMem: 8 * mib, Mem: 8 * mib, MaxDisk: 1000 * mib}}, client, map[string]*models.VM{makeGuestID("fixture", "node", 105): &locked}, nil)
 	if len(nodeVMs) != 1 || nodeVMs[0].GuestAgentStatus != "deferred" || calls.Load() != before {
 		t.Fatalf("node fallback lost lock or sent guest commands: %#v calls=%d", nodeVMs, calls.Load())
 	}

@@ -111,7 +111,7 @@ func TestGuestMeminfoIntegrityPollingContract(t *testing.T) {
 					registry := unifiedresources.NewRegistry(nil)
 					m := &Monitor{config: &config.Config{}, state: models.NewState(), alertManager: am, rateTracker: NewRateTracker(), metricsHistory: NewMetricsHistory(32, time.Hour), guestMetadataLimiter: make(map[string]time.Time)}
 					id := makeGuestID("meminfo-integrity", "node", 105)
-					previous := map[string]models.VM{}
+					previous := map[string]*models.VM{}
 					build := func() models.VM {
 						t.Helper()
 						// Bound this synthetic poll independently of the executor. No
@@ -144,7 +144,8 @@ func TestGuestMeminfoIntegrityPollingContract(t *testing.T) {
 						if !vms[0].Memory.HasKnownUsage() && view.MemoryEvidence(time.Now()).Available {
 							t.Error("unavailable memory became a canonical measurement")
 						}
-						previous[id] = previousVMFromView(view)
+						projected := previousVMFromView(view)
+						previous[id] = &projected
 						return vms[0]
 					}
 					assertMemoryAlerts := func(want int) {

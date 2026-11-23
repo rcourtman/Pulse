@@ -80,7 +80,7 @@ func testGuestAgentConfigFlagCannotRenewAdmission(t *testing.T) {
 			registry := unifiedresources.NewRegistry(nil)
 			build := func() models.VM {
 				t.Helper()
-				vms := m.collectClusterVMResources(context.Background(), "flag", clusterGuestInventory{rows: []proxmox.ClusterResource{res}}, client, map[string]models.VM{id: prev}, nil)
+				vms := m.collectClusterVMResources(context.Background(), "flag", clusterGuestInventory{rows: []proxmox.ClusterResource{res}}, client, map[string]*models.VM{id: &prev}, nil)
 				if len(vms) != 1 {
 					t.Fatal("guest disappeared")
 				}

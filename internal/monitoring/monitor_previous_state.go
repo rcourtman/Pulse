@@ -9,10 +9,13 @@ import (
 )
 
 type previousGuestContext struct {
+	// The ordered slices own each poll-local row. The read-only indexes
+	// point into those rows so lookups and outage carry don't store a
+	// separate copy of every guest.
 	vms                []models.VM
-	vmsByID            map[string]models.VM
+	vmsByID            map[string]*models.VM
 	containers         []models.Container
-	containersByID     map[string]models.Container
+	containersByID     map[string]*models.Container
 	containerOCIByVMID map[int]bool
 	hostAgentsByVMID   map[string]models.Host
 }
@@ -28,7 +31,7 @@ func (m *Monitor) previousGuestContextForInstance(instanceName string) previousG
 
 	// The views span every connection, but only this connection's rows
 	// belong in the carry-over. Count the matching views before allocating
-	// large guest structs so the slices and indexes do not grow mid-poll.
+	// the slices so their backing arrays stay fixed while building the indexes.
 	vmCount, containerCount := 0, 0
 	for _, vm := range vmViews {
 		if vm != nil && vm.Instance() == instanceName {
@@ -42,9 +45,9 @@ func (m *Monitor) previousGuestContextForInstance(instanceName string) previousG
 	}
 	ctx := previousGuestContext{
 		vms:                make([]models.VM, 0, vmCount),
-		vmsByID:            make(map[string]models.VM, vmCount),
+		vmsByID:            make(map[string]*models.VM, vmCount),
 		containers:         make([]models.Container, 0, containerCount),
-		containersByID:     make(map[string]models.Container, containerCount),
+		containersByID:     make(map[string]*models.Container, containerCount),
 		containerOCIByVMID: make(map[int]bool),
 		hostAgentsByVMID:   make(map[string]models.Host),
 	}
@@ -56,10 +59,10 @@ func (m *Monitor) previousGuestContextForInstance(instanceName string) previousG
 		if vm == nil || vm.Instance() != instanceName {
 			continue
 		}
-		modelVM := previousVMFromView(vm)
-		ctx.vms = append(ctx.vms, modelVM)
-		if guestID := modelVM.ID; guestID != "" {
-			ctx.vmsByID[guestID] = modelVM
+		ctx.vms = append(ctx.vms, previousVMFromView(vm))
+		row := &ctx.vms[len(ctx.vms)-1]
+		if guestID := row.ID; guestID != "" {
+			ctx.vmsByID[guestID] = row
 			agent := models.Host{LinkedVMID: guestID, Status: "online"}
 			memory, hasMemory := vm.LinkedAgentMemory()
 			agent.Memory = memory
@@ -75,10 +78,10 @@ func (m *Monitor) previousGuestContextForInstance(instanceName string) previousG
 		if ct == nil || ct.Instance() != instanceName {
 			continue
 		}
-		container := previousContainerFromView(ct)
-		ctx.containers = append(ctx.containers, container)
-		if guestID := container.ID; guestID != "" {
-			ctx.containersByID[guestID] = container
+		ctx.containers = append(ctx.containers, previousContainerFromView(ct))
+		row := &ctx.containers[len(ctx.containers)-1]
+		if guestID := row.ID; guestID != "" {
+			ctx.containersByID[guestID] = row
 			agent := models.Host{LinkedContainerID: guestID, Status: "online"}
 			memory, hasMemory := ct.LinkedAgentMemory()
 			agent.Memory = memory
@@ -88,8 +91,8 @@ func (m *Monitor) previousGuestContextForInstance(instanceName string) previousG
 				ctx.hostAgentsByVMID[guestID] = agent
 			}
 		}
-		if container.VMID > 0 && (strings.EqualFold(strings.TrimSpace(container.Type), "oci") || container.IsOCI) {
-			ctx.containerOCIByVMID[container.VMID] = true
+		if row.VMID > 0 && (strings.EqualFold(strings.TrimSpace(row.Type), "oci") || row.IsOCI) {
+			ctx.containerOCIByVMID[row.VMID] = true
 		}
 	}
 

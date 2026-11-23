@@ -164,7 +164,7 @@ func guestStatusHTTPMonitoringJourney(t *testing.T, clientKind, collector, rejec
 	registry := unifiedresources.NewRegistry(nil)
 	m.resourceStore = unifiedresources.NewMonitorAdapter(registry)
 	id := makeGuestID("status-integrity", "node", 105)
-	previous := map[string]models.VM{}
+	previous := map[string]*models.VM{}
 	var frames []guestStatusHTTPFrame
 	for step, name := range []string{"accepted-pressure", "unread-status", "repeated-unread", "recovered"} {
 		phase.Store(int32(step))
@@ -233,7 +233,8 @@ func guestStatusHTTPMonitoringJourney(t *testing.T, clientKind, collector, rejec
 			t.Fatal(err)
 		}
 		frames = append(frames, guestStatusHTTPFrame{Phase: name, VM: vm, Resources: wire, MemoryHistory: m.metricsHistory.GetGuestMetrics(id, "memory", time.Hour)})
-		previous[id] = previousVMFromView(views[0])
+		projected := previousVMFromView(views[0])
+		previous[id] = &projected
 	}
 	if commands.Load() != 0 {
 		t.Error("status rejection queued a guest operation")

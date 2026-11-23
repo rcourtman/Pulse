@@ -162,11 +162,11 @@ func windowsBootstrapPoll(t *testing.T, m *Monitor, client PVEClientInterface, c
 	t.Helper()
 	id := makeGuestID(instance, node, vmid)
 	cycleStart := time.Now()
-	previous := m.previousGuestContextForInstance(instance).vmsByID[id]
+	previous := m.previousGuestContextForInstance(instance).vmsByID
 	res := proxmox.ClusterResource{Type: "qemu", Node: node, Name: "guest", VMID: vmid, Status: "running", MaxMem: 8 * bootstrapMiB, MaxDisk: 2000 * bootstrapMiB, CPU: float64(poll) / 10}
 	var vm models.VM
 	if collector == "node" {
-		vms, _ := m.pollNodeVMsWithClusterResourceBuilder(context.Background(), instance, node, []proxmox.VM{{VMID: vmid, Name: res.Name, Status: res.Status, MaxMem: res.MaxMem, MaxDisk: res.MaxDisk, CPU: res.CPU}}, client, map[string]models.VM{id: previous}, nil)
+		vms, _ := m.pollNodeVMsWithClusterResourceBuilder(context.Background(), instance, node, []proxmox.VM{{VMID: vmid, Name: res.Name, Status: res.Status, MaxMem: res.MaxMem, MaxDisk: res.MaxDisk, CPU: res.CPU}}, client, previous, nil)
 		if len(vms) != 1 {
 			t.Errorf("node bootstrap lost guest: %d records", len(vms))
 			return models.VM{}
@@ -174,7 +174,7 @@ func windowsBootstrapPoll(t *testing.T, m *Monitor, client PVEClientInterface, c
 		vm = vms[0]
 	} else {
 		var ok bool
-		vm, _, _, _, _, ok = m.buildVMFromClusterResource(context.Background(), instance, res, client, id, nil, &previous)
+		vm, _, _, _, _, ok = m.buildVMFromClusterResource(context.Background(), instance, res, client, id, nil, previous[id])
 		if !ok {
 			t.Error("cluster bootstrap lost guest")
 			return models.VM{}

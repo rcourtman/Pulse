@@ -232,9 +232,9 @@ func TestGuestMetadataBudgetEndsAfterNetworkRecovery(t *testing.T) {
 						}
 						id := makeGuestID("budget", "node", 105)
 						if collector == "node" {
-							prior := make(map[string]models.VM)
+							prior := make(map[string]*models.VM)
 							if previous != nil {
-								prior[id] = *previous
+								prior[id] = previous
 							}
 							vms, _ := m.pollNodeVMsWithClusterResourceBuilder(context.Background(), "budget", "node", []proxmox.VM{{VMID: 105, Name: "budget-guest", Status: "running", MaxMem: 8 * bootstrapMiB, MaxDisk: 2000 * bootstrapMiB, CPU: cpu}}, client, prior, nil)
 							if len(vms) != 1 {

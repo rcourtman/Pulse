@@ -126,7 +126,7 @@ func replicationSafetyMonitoringJourney(t *testing.T, clientKind, collector stri
 	registry := unifiedresources.NewRegistry(nil)
 	m.resourceStore = unifiedresources.NewMonitorAdapter(registry)
 	id := makeGuestID(instance, "node", 105)
-	previous := map[string]models.VM{}
+	previous := map[string]*models.VM{}
 	var frames []replicationSafetyFrame
 	var originalMemory agentMemCacheEntry
 	var originalMetadata guestMetadataCacheEntry
@@ -219,7 +219,8 @@ func replicationSafetyMonitoringJourney(t *testing.T, clientKind, collector stri
 			t.Fatal("served projection changed guest safety", err)
 		}
 		frames = append(frames, replicationSafetyFrame{Phase: name, Resources: wire, Alerts: front.ActiveAlerts, GuestCommands: commands.Load(), DiskHistoryPoints: len(m.metricsHistory.GetGuestMetrics(id, "disk", time.Hour)), ActiveAlerts: len(am.GetActiveAlerts())})
-		previous[id] = previousVMFromView(views[0])
+		projected := previousVMFromView(views[0])
+		previous[id] = &projected
 	}
 	if got := len(m.metricsHistory.GetGuestMetrics(id, "disk", time.Hour)); got != 2 {
 		t.Errorf("current History does not isolate unknown interval: %d", got)

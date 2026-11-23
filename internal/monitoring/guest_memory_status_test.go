@@ -112,7 +112,7 @@ func testGuestStatusMemoryAvailabilityPolling(t *testing.T) {
 				m := &Monitor{config: &config.Config{}, alertManager: am, rateTracker: NewRateTracker(), metricsHistory: NewMetricsHistory(32, time.Hour), guestMetadataLimiter: make(map[string]time.Time)}
 				registry := unifiedresources.NewRegistry(nil)
 				id := makeGuestID("status-zero", "node", 105)
-				previous := map[string]models.VM{}
+				previous := map[string]*models.VM{}
 				build := func() models.VM {
 					t.Helper()
 					// The cycle starts before collection, as in pollVMsAndContainersEfficient.
@@ -143,7 +143,8 @@ func testGuestStatusMemoryAvailabilityPolling(t *testing.T) {
 					} else if evidence.Available || evidence.PressureKnown {
 						t.Errorf("missing measurement became pressure: %+v", evidence)
 					}
-					previous[id] = previousVMFromView(view)
+					projected := previousVMFromView(view)
+					previous[id] = &projected
 					return vm
 				}
 				assertCurrent := func(vm models.VM, want float64, source string) {
