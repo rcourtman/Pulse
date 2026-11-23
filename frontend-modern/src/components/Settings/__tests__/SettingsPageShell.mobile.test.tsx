@@ -1,5 +1,5 @@
 import { createSignal } from 'solid-js';
-import { cleanup, render, screen, waitFor } from '@solidjs/testing-library';
+import { cleanup, fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { SettingsPageShell } from '../SettingsPageShell';
 import type { SettingsNavGroup, SettingsTab } from '../settingsNavigationModel';
@@ -56,7 +56,7 @@ describe('SettingsPageShell mobile navigation', () => {
     expect(shell).toHaveClass('space-y-0', 'lg:space-y-6');
     expect(navigation?.tagName).toBe('NAV');
     expect(navigation).not.toHaveAttribute('aria-expanded');
-    expect(navigation).toHaveClass('max-h-[calc(100dvh-8rem)]');
+    expect(navigation).not.toHaveClass('max-h-[calc(100dvh-8rem)]');
     expect(screen.getByRole('button', { name: 'Collapse settings navigation' })).toHaveAttribute(
       'aria-controls',
       'settings-sidebar-menu',
@@ -237,6 +237,45 @@ describe('SettingsPageShell mobile navigation', () => {
     );
 
     await screen.getByRole('button', { name: 'Close settings navigation' }).click();
+    await waitFor(() => expect(mobileMenuOpen()).toBe(false));
+  });
+
+  it('keeps the unsaved changes banner sticky, hides nav icons from screen readers, and closes mobile nav on Escape', async () => {
+    const [activeTab] = createSignal<SettingsTab>('system-general');
+    const [mobileMenuOpen, setMobileMenuOpen] = createSignal(true);
+    const [sidebarCollapsed, setSidebarCollapsed] = createSignal(false);
+    const [searchQuery, setSearchQuery] = createSignal('');
+
+    render(() => (
+      <SettingsPageShell
+        headerMeta={() => ({ title: 'General', description: 'Manage general settings.' })}
+        hasUnsavedChanges={() => true}
+        activeTabSaveBehavior={() => 'system'}
+        saveSettings={() => undefined}
+        discardChanges={() => undefined}
+        isMobileMenuOpen={mobileMenuOpen}
+        setIsMobileMenuOpen={setMobileMenuOpen}
+        sidebarCollapsed={sidebarCollapsed}
+        setSidebarCollapsed={setSidebarCollapsed}
+        searchQuery={searchQuery}
+        setSearchQuery={setSearchQuery}
+        filteredTabGroups={() => [{ id: 'infrastructure', label: 'Settings', items: tabs }]}
+        flatTabs={() => tabs}
+        activeTab={activeTab}
+        setActiveTab={() => undefined}
+        isPro={() => false}
+      >
+        <div>Panel content</div>
+      </SettingsPageShell>
+    ));
+
+    const banner = screen.getByRole('status');
+    expect(banner).toHaveClass('sticky', 'top-0', 'z-20');
+
+    const nav = document.querySelector('[data-settings-navigation]')!;
+    expect(nav.querySelector('[aria-hidden="true"]')).toBeTruthy();
+
+    fireEvent.keyDown(nav, { key: 'Escape' });
     await waitFor(() => expect(mobileMenuOpen()).toBe(false));
   });
 });

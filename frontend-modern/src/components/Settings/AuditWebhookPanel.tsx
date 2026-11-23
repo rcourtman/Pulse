@@ -10,7 +10,7 @@ import { Dialog } from '@/components/shared/Dialog';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { FeatureGateSection } from '@/components/shared/FeatureGateSection';
 import { InlineNotice } from '@/components/shared/InlineNotice';
-import SettingsPanel from '@/components/shared/SettingsPanel';
+import { LoadingSpinner } from '@/components/shared/LoadingSpinner';
 import { formControl } from '@/components/shared/Form';
 import {
   AUDIT_WEBHOOK_CHECK_SAVED_LABEL,
@@ -147,10 +147,18 @@ export const AuditWebhookPanel: Component<AuditWebhookPanelProps> = (props) => {
   const readErrorCopy = () => getAuditWebhookReadErrorCopy(hasLoadedConfiguration());
 
   const featureGate = () => (
-    <SettingsPanel title="Audit Webhooks">
-      <Show when={!loading()} fallback={<div class="text-sm text-muted">Loading...</div>}>
+    <Card padding="md" class="border border-border space-y-3">
+      <Show
+        when={!loading()}
+        fallback={
+          <div role="status" class="flex items-center gap-2 text-sm text-muted">
+            <LoadingSpinner size="sm" tone="muted" />
+            <span>Loading...</span>
+          </div>
+        }
+      >
         <AuditWebhookNotificationsSignpost />
-        <Card tone="info" padding="md" class="mt-3">
+        <Card tone="info" padding="md">
           <FeatureGateSection
             title={featureGateCopy().title}
             body={featureGateCopy().body}
@@ -161,7 +169,7 @@ export const AuditWebhookPanel: Component<AuditWebhookPanelProps> = (props) => {
           />
         </Card>
       </Show>
-    </SettingsPanel>
+    </Card>
   );
 
   return (
@@ -169,173 +177,181 @@ export const AuditWebhookPanel: Component<AuditWebhookPanelProps> = (props) => {
       <Show
         when={canRead()}
         fallback={
-          <SettingsPanel title="Audit Webhooks">
+          <Card padding="md" class="border border-border">
             <p role="status" class="text-sm text-muted">
               Audit webhook access is unavailable for this account.
             </p>
-          </SettingsPanel>
+          </Card>
         }
       >
         <div class="space-y-6">
-          <SettingsPanel
+          <Card
             ref={configurationPanelRef}
-            title="Audit Webhooks"
+            padding="none"
+            border={false}
             role="region"
             aria-label="Audit webhook configuration"
             tabIndex={-1}
-            class="focus:outline-2 focus:-outline-offset-2 focus:outline-blue-500 dark:focus:outline-blue-400"
-            noPadding
-            bodyClass="divide-y divide-border"
+            class="overflow-hidden border border-border focus:outline-2 focus:-outline-offset-2 focus:outline-blue-500 dark:focus:outline-blue-400"
           >
-            <div
-              class="p-3 sm:space-y-6 sm:p-6"
-              classList={{ 'space-y-2': unconfirmedChange(), 'space-y-4': !unconfirmedChange() }}
-            >
-              <Show when={!canManage()}>
-                <div class={AUDIT_WEBHOOK_READONLY_NOTICE_CLASS}>
-                  Audit webhook configuration is read-only for this account.
-                </div>
-              </Show>
-
-              <p class="text-sm text-muted leading-relaxed">
-                Pulse can send a signed event payload whenever security-relevant activity occurs
-                (logins, settings changes, RBAC updates, and similar audit events).
-              </p>
-              <AuditWebhookNotificationsSignpost />
-
-              <Show when={successNotice()}>
-                <p role="status" class="text-sm text-green-700 dark:text-green-300">
-                  {successNotice()}
-                </p>
-              </Show>
-              <Show when={actionError() && !pendingRemoval()}>
-                <p role="alert" class="text-sm text-red-700 dark:text-red-300">
-                  {actionError()}
-                </p>
-              </Show>
-              <Show when={unconfirmedChange() && !pendingRemoval()}>
-                <p role="alert" class="text-sm text-amber-800 dark:text-amber-200">
-                  <strong>{AUDIT_WEBHOOK_UNCONFIRMED_MESSAGE}</strong>{' '}
-                  {loadError() ? 'Check failed. Last read shown.' : 'Showing the last read.'}
-                </p>
-              </Show>
-              <Show when={loadError() && !unconfirmedChange()}>
-                <Card tone="warning" padding="md">
-                  <div role="alert" class="space-y-2 text-sm">
-                    <p class="font-medium">{readErrorCopy().title}</p>
-                    <p>{readErrorCopy().body}</p>
-                    <Button onClick={retryConfigurationRead} disabled={loading() || saving()}>
-                      {readErrorCopy().retryLabel}
-                    </Button>
+            <div class="divide-y divide-border">
+              <div
+                class="p-3 sm:space-y-6 sm:p-6"
+                classList={{ 'space-y-2': unconfirmedChange(), 'space-y-4': !unconfirmedChange() }}
+              >
+                <Show when={!canManage()}>
+                  <div class={AUDIT_WEBHOOK_READONLY_NOTICE_CLASS}>
+                    Audit webhook configuration is read-only for this account.
                   </div>
-                </Card>
-              </Show>
-              <Show when={loading() && !unconfirmedChange()}>
-                <div class="flex flex-wrap items-center gap-x-3 gap-y-2">
-                  <p class="text-sm text-muted" role="status">
-                    {getAuditWebhookLoadingState().text}
-                  </p>
-                  <ReadRecoveryButton />
-                </div>
-              </Show>
-              <Show when={hasLoadedConfiguration()}>
-                <div
-                  ref={endpointListRef}
-                  role="group"
-                  aria-label="Saved audit webhook destinations"
-                  aria-busy={loading()}
-                  class="space-y-2 sm:space-y-3"
-                >
-                  <For each={webhookUrls()}>
-                    {(url) => (
-                      <div class={AUDIT_WEBHOOK_ENDPOINT_CARD_CLASS}>
-                        <div class="flex min-w-0 flex-1 items-center gap-3">
-                          <div class={AUDIT_WEBHOOK_ENDPOINT_ICON_CLASS}>
-                            <ExternalLink size={16} />
-                          </div>
-                          <span
-                            class="min-w-0 text-sm font-medium text-base-content whitespace-normal [overflow-wrap:anywhere]"
-                            title={url}
-                          >
-                            {url}
-                          </span>
-                        </div>
-                        <button
-                          type="button"
-                          aria-label={`Remove webhook endpoint ${url}`}
-                          onClick={(event) => {
-                            removalTrigger = event.currentTarget;
-                            removalIndex = webhookUrls().indexOf(url);
-                            openRemoveWebhook(url);
-                          }}
-                          disabled={!canEdit() || saving()}
-                          class="min-h-11 min-w-11 shrink-0 p-2 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/25 rounded-md transition-colors sm:min-h-0 sm:min-w-0"
-                          title="Remove webhook endpoint"
-                        >
-                          <Trash2 size={16} />
-                        </button>
-                      </div>
-                    )}
-                  </For>
+                </Show>
 
-                  <Show when={!loading() && !loadError() && webhookUrls().length === 0}>
-                    <EmptyState
-                      variant="panel"
-                      icon={<Globe class="h-5 w-5" />}
-                      title={emptyStateCopy().title}
-                    />
+                <p class="text-sm text-muted leading-relaxed">
+                  Pulse can send a signed event payload whenever security-relevant activity occurs
+                  (logins, settings changes, RBAC updates, and similar audit events).
+                </p>
+                <AuditWebhookNotificationsSignpost />
+
+                <Show when={successNotice()}>
+                  <p role="status" class="text-sm text-green-700 dark:text-green-300">
+                    {successNotice()}
+                  </p>
+                </Show>
+                <Show when={actionError() && !pendingRemoval()}>
+                  <p role="alert" class="text-sm text-red-700 dark:text-red-300">
+                    {actionError()}
+                  </p>
+                </Show>
+                <Show when={unconfirmedChange() && !pendingRemoval()}>
+                  <p role="alert" class="text-sm text-amber-800 dark:text-amber-200">
+                    <strong>{AUDIT_WEBHOOK_UNCONFIRMED_MESSAGE}</strong>{' '}
+                    {loadError() ? 'Check failed. Last read shown.' : 'Showing the last read.'}
+                  </p>
+                </Show>
+                <Show when={loadError() && !unconfirmedChange()}>
+                  <Card tone="warning" padding="md">
+                    <div role="alert" class="space-y-2 text-sm">
+                      <p class="font-medium">{readErrorCopy().title}</p>
+                      <p>{readErrorCopy().body}</p>
+                      <Button onClick={retryConfigurationRead} disabled={loading() || saving()}>
+                        {readErrorCopy().retryLabel}
+                      </Button>
+                    </div>
+                  </Card>
+                </Show>
+                <Show when={loading() && !unconfirmedChange()}>
+                  <div class="flex flex-wrap items-center gap-x-3 gap-y-2">
+                    <p class="text-sm text-muted" role="status">
+                      {getAuditWebhookLoadingState().text}
+                    </p>
+                    <ReadRecoveryButton />
+                  </div>
+                </Show>
+                <Show when={hasLoadedConfiguration()}>
+                  <div
+                    ref={endpointListRef}
+                    role="group"
+                    aria-label="Saved audit webhook destinations"
+                    aria-busy={loading()}
+                    class="space-y-2 sm:space-y-3"
+                  >
+                    <For each={webhookUrls()}>
+                      {(url) => (
+                        <div class={AUDIT_WEBHOOK_ENDPOINT_CARD_CLASS}>
+                          <div class="flex min-w-0 flex-1 items-center gap-3">
+                            <div class={AUDIT_WEBHOOK_ENDPOINT_ICON_CLASS}>
+                              <ExternalLink size={16} />
+                            </div>
+                            <span
+                              class="min-w-0 text-sm font-medium text-base-content whitespace-normal [overflow-wrap:anywhere]"
+                              title={url}
+                            >
+                              {url}
+                            </span>
+                          </div>
+                          <button
+                            type="button"
+                            aria-label={`Remove webhook endpoint ${url}`}
+                            onClick={(event) => {
+                              removalTrigger = event.currentTarget;
+                              removalIndex = webhookUrls().indexOf(url);
+                              openRemoveWebhook(url);
+                            }}
+                            disabled={!canEdit() || saving()}
+                            class="min-h-11 min-w-11 shrink-0 p-2 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/25 rounded-md transition-colors sm:min-h-0 sm:min-w-0"
+                            title="Remove webhook endpoint"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </div>
+                      )}
+                    </For>
+
+                    <Show when={!loading() && !loadError() && webhookUrls().length === 0}>
+                      <EmptyState
+                        variant="panel"
+                        icon={<Globe class="h-5 w-5" />}
+                        title={emptyStateCopy().title}
+                      />
+                    </Show>
+                  </div>
+                </Show>
+                <div
+                  class="border-t border-border pt-4 sm:flex sm:flex-row sm:gap-3"
+                  classList={{
+                    'grid grid-cols-2 gap-2': unconfirmedChange(),
+                    'flex flex-col gap-3': !unconfirmedChange(),
+                  }}
+                >
+                  <input
+                    ref={newUrlInputRef}
+                    type="text"
+                    aria-label="Audit webhook URL"
+                    placeholder="https://your-api.com/webhook"
+                    class={`${formControl} col-span-2 w-full min-w-0 flex-1`}
+                    value={newUrl()}
+                    onInput={(e) => setNewUrl(e.currentTarget.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleAddWebhook()}
+                    disabled={!canManage()}
+                  />
+                  <button
+                    type="button"
+                    onClick={handleAddWebhook}
+                    disabled={!canEdit() || saving() || !newUrl().trim()}
+                    class="flex items-center justify-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50 sm:shrink-0"
+                  >
+                    <Plus size={18} />
+                    Add Endpoint
+                  </button>
+                  <Show when={unconfirmedChange() && !pendingRemoval()}>
+                    <ReadRecoveryButton savedCheck />
                   </Show>
                 </div>
-              </Show>
-              <div
-                class="border-t border-border pt-4 sm:flex sm:flex-row sm:gap-3"
-                classList={{
-                  'grid grid-cols-2 gap-2': unconfirmedChange(),
-                  'flex flex-col gap-3': !unconfirmedChange(),
-                }}
-              >
-                <input
-                  ref={newUrlInputRef}
-                  type="text"
-                  aria-label="Audit webhook URL"
-                  placeholder="https://your-api.com/webhook"
-                  class={`${formControl} col-span-2 w-full min-w-0 flex-1`}
-                  value={newUrl()}
-                  onInput={(e) => setNewUrl(e.currentTarget.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && handleAddWebhook()}
-                  disabled={!canManage()}
-                />
-                <button
-                  onClick={handleAddWebhook}
-                  disabled={!canEdit() || saving() || !newUrl().trim()}
-                  class="flex items-center justify-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50 sm:shrink-0"
-                >
-                  <Plus size={18} />
-                  Add Endpoint
-                </button>
-                <Show when={unconfirmedChange() && !pendingRemoval()}>
-                  <ReadRecoveryButton savedCheck />
-                </Show>
               </div>
             </div>
-          </SettingsPanel>
+          </Card>
           <Card tone="warning" class="border border-amber-200 dark:border-amber-800">
             <div class="p-5 flex gap-4">
               <div class="p-3 bg-amber-100 dark:bg-amber-900/25 rounded-md h-fit text-amber-600 dark:text-amber-300">
                 <Shield size={22} />
               </div>
-              <div>
-                <h3 class="text-base font-semibold text-amber-900 dark:text-amber-100 mb-1.5">
+              <div class="space-y-1.5">
+                <h3 class="text-base font-semibold text-amber-900 dark:text-amber-100">
                   {AUDIT_WEBHOOK_SECURITY_NOTE_TITLE}
                 </h3>
                 <p class="text-sm text-amber-800 dark:text-amber-200 leading-relaxed">
                   {AUDIT_WEBHOOK_SECURITY_NOTE_BODY}
                 </p>
+                <p class="text-xs text-amber-800 dark:text-amber-200 leading-relaxed">
+                  Events carry the instance audit signature field when persistent audit logging is
+                  active. Per-endpoint HMAC secrets are not configured on this page, so restrict
+                  receivers with HTTPS, network allowlists, or an ingest token in your receiver
+                  proxy.
+                </p>
               </div>
             </div>
           </Card>
 
-          {/* Remove confirmation modal — webhook removal stops audit
+          {/* Remove confirmation modal: webhook removal stops audit
           deliveries to that endpoint, so guard the action behind
           an explicit confirm. */}
           <Show when={pendingRemoval()} keyed>

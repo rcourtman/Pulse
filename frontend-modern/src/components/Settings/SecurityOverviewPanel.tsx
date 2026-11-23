@@ -1,7 +1,7 @@
 import { Component, Show, Accessor, For, createMemo } from 'solid-js';
+import { Button } from '@/components/shared/Button';
 import { CalloutCard } from '@/components/shared/CalloutCard';
 import { ExternalTextLink } from '@/components/shared/ExternalTextLink';
-import SettingsPanel from '@/components/shared/SettingsPanel';
 import {
   SettingsLoadingSkeleton,
   SettingsSkeletonBlock,
@@ -41,6 +41,7 @@ interface SecurityStatusInfo {
 interface SecurityOverviewPanelProps {
   securityStatus: Accessor<SecurityStatusInfo | null>;
   securityStatusLoading: Accessor<boolean>;
+  onRetry?: () => void;
 }
 
 export const SecurityOverviewPanel: Component<SecurityOverviewPanelProps> = (props) => {
@@ -108,7 +109,7 @@ export const SecurityOverviewPanel: Component<SecurityOverviewPanelProps> = (pro
   };
 
   return (
-    <SettingsPanel title="Security Overview" bodyClass="space-y-6">
+    <div class="space-y-6">
       <Show when={props.securityStatusLoading()}>
         <SettingsLoadingSkeleton label="Loading security overview" gap="sm">
           <div class="rounded-md border border-border overflow-hidden">
@@ -139,6 +140,28 @@ export const SecurityOverviewPanel: Component<SecurityOverviewPanelProps> = (pro
             </div>
           </div>
         </SettingsLoadingSkeleton>
+      </Show>
+
+      <Show when={!props.securityStatusLoading() && !props.securityStatus()}>
+        <CalloutCard
+          tone="warning"
+          title="Unable to load security status"
+          description="Pulse could not retrieve the current security posture. Try reloading the status."
+          icon={<AlertTriangle class="h-5 w-5" />}
+          class="space-y-3"
+        >
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              if (props.onRetry) props.onRetry();
+              else window.location.reload();
+            }}
+          >
+            Retry
+          </Button>
+        </CalloutCard>
       </Show>
 
       <Show
@@ -279,28 +302,6 @@ export const SecurityOverviewPanel: Component<SecurityOverviewPanelProps> = (pro
           </div>
         </div>
       </Show>
-
-      <Show when={!props.securityStatusLoading() && props.securityStatus()}>
-        <div class="rounded-md border border-border p-4 sm:p-6 space-y-4">
-          <div class="flex items-start gap-3">
-            <div class="p-2 rounded-md border border-border bg-surface-alt">
-              <Info class="w-5 h-5" strokeWidth={2} />
-            </div>
-            <div class="min-w-0 flex-1">
-              <h3 class="text-sm font-semibold text-base-content">Security best practices</h3>
-              <p class="text-sm text-muted">
-                Recommended hardening actions for production deployments.
-              </p>
-            </div>
-          </div>
-          <ul class="space-y-1.5 list-disc list-inside text-sm text-muted">
-            <li>Enable HTTPS via a reverse proxy for encrypted connections</li>
-            <li>Use strong, unique passwords and rotate credentials regularly</li>
-            <li>Consider SSO/OIDC for centralized team authentication</li>
-            <li>Review API token scopes and remove unused tokens</li>
-          </ul>
-        </div>
-      </Show>
-    </SettingsPanel>
+    </div>
   );
 };

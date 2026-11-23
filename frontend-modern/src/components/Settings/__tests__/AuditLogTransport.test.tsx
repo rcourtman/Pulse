@@ -414,7 +414,9 @@ describe('Audit Log rendered controls through the real HTTP client', () => {
     expect(
       screen.queryByRole('status', { name: 'Verification filter results' }),
     ).not.toBeInTheDocument();
-    expect(window.location.search).toBe('?event=login');
+    await waitFor(() => {
+      expect(window.location.search).toBe('?event=login');
+    });
     // No delayed user-filter request should appear after the router change.
     await new Promise((resolve) => setTimeout(resolve, 350));
     expect(auditRequests()).toHaveLength(3);
@@ -636,6 +638,9 @@ describe('Audit Log rendered controls through the real HTTP client', () => {
     async ({ trigger, title, description }) => {
       mount();
       await loaded();
+      if (trigger === 'Help: Auto-verify limit') {
+        fireEvent.click(screen.getByText('Signature verification settings'));
+      }
       const action = screen.getByRole('button', { name: trigger });
       expect(action).toHaveAttribute('type', 'button');
       expect(action).toHaveAttribute('aria-expanded', 'false');

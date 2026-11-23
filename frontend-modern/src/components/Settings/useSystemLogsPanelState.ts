@@ -39,6 +39,7 @@ export function useSystemLogsPanelState(props: SystemLogsPanelProps = {}) {
   let writeRequest: AbortController | undefined;
   let disposed = false;
   let renderFrame: number | null = null;
+  let autoScrollPinned = true;
   // A bounded ring also caps pending work when a background tab stops frames.
   let pendingLogs: string[] = [];
   let pendingCount = 0;
@@ -112,6 +113,13 @@ export function useSystemLogsPanelState(props: SystemLogsPanelProps = {}) {
 
   const setLogContainer = (element: HTMLDivElement | undefined) => {
     logContainer = element;
+    autoScrollPinned = true;
+  };
+  const handleLogScroll = () => {
+    if (!logContainer) return;
+    const distanceFromBottom =
+      logContainer.scrollHeight - logContainer.scrollTop - logContainer.clientHeight;
+    autoScrollPinned = distanceFromBottom <= 32;
   };
   const flushPendingLogs = () => {
     if (!canUseControls() || pendingCount === 0) return;
@@ -124,7 +132,7 @@ export function useSystemLogsPanelState(props: SystemLogsPanelProps = {}) {
       ...prev.slice(Math.max(0, prev.length + incoming.length - MAX_LOGS)),
       ...incoming,
     ]);
-    if (logContainer) logContainer.scrollTop = logContainer.scrollHeight;
+    if (logContainer && autoScrollPinned) logContainer.scrollTop = logContainer.scrollHeight;
   };
 
   const connectStream = (acceptedReader: ReturnType<typeof reader>) => {
@@ -158,12 +166,10 @@ export function useSystemLogsPanelState(props: SystemLogsPanelProps = {}) {
     };
     source.onerror = () => {
       if (!isCurrent()) return;
-      // EventSource does not expose the HTTP error or its cause. Withdraw
-      // private buffered lines even on transient EOF; keep native reconnects.
-      clearLogs();
       if (source.readyState === EventSource.CLOSED) {
         disconnect(SYSTEM_LOGS_PANEL_COPY.connectionError);
       } else {
+        resetPending();
         batch(() => {
           setConnectionState('reconnecting');
           setNotice(SYSTEM_LOGS_PANEL_COPY.reconnecting);
@@ -233,7 +239,9 @@ export function useSystemLogsPanelState(props: SystemLogsPanelProps = {}) {
       setLevel(newLevel);
       setNotice(`Log level set to ${newLevel}`);
     } catch {
-      if (isCurrent()) disconnect(SYSTEM_LOGS_PANEL_COPY.levelError);
+      if (isCurrent()) {
+        setError(SYSTEM_LOGS_PANEL_COPY.levelError);
+      }
     } finally {
       if (writeRequest === request) {
         writeRequest = undefined;
@@ -277,6 +285,7 @@ export function useSystemLogsPanelState(props: SystemLogsPanelProps = {}) {
     error: () => (isCurrentReader() ? error() : ''),
     handleDownload,
     handleLevelChange,
+    handleLogScroll,
     isLoading,
     isPaused,
     level,

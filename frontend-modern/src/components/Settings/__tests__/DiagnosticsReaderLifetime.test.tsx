@@ -95,7 +95,7 @@ describe('Diagnostics reader lifetime', () => {
     expect(screen.queryByRole('button', { name: 'Run Diagnostics' })).not.toBeInTheDocument();
     setAllowed(true);
     await waitFor(() =>
-      expect(screen.getAllByRole('button', { name: 'Run Diagnostics' })).toHaveLength(2),
+      expect(screen.getAllByRole('button', { name: 'Run Diagnostics' })).toHaveLength(1),
     );
     expect(api.read).toHaveBeenCalledOnce();
     run();
@@ -131,7 +131,7 @@ describe('Diagnostics reader lifetime', () => {
     setVisible(true);
     resolve(data);
     await waitFor(() =>
-      expect(screen.getAllByRole('button', { name: 'Run Diagnostics' })).toHaveLength(2),
+      expect(screen.getAllByRole('button', { name: 'Run Diagnostics' })).toHaveLength(1),
     );
     expect(screen.queryByText('private-reader-a')).not.toBeInTheDocument();
     expect(screen.queryByRole('status')).not.toBeInTheDocument();

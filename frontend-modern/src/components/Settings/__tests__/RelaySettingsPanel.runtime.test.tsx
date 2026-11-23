@@ -563,4 +563,33 @@ describe('RelaySettingsPanel runtime', () => {
     ).toBeInTheDocument();
     expect(showErrorMock).toHaveBeenCalledWith('Failed to generate pairing QR code');
   });
+
+  it('shows a retryable error instead of Not enabled when loading relay config fails', async () => {
+    getRelayConfigMock.mockRejectedValueOnce(new Error('network down'));
+
+    render(() => <RelaySettingsPanel canManage />);
+
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent('Unable to load Pulse Mobile configuration.');
+    expect(screen.queryByText('Not enabled')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    await waitFor(() => {
+      expect(screen.getByDisplayValue('wss://relay.example.test/ws/instance')).toBeInTheDocument();
+    });
+  });
+
+  it('reactively transitions to relay controls once runtime capabilities finish loading', async () => {
+    let enabled = false;
+    hasFeatureMock.mockImplementation(() => enabled);
+    loadLicenseStatusMock.mockImplementation(async () => {
+      enabled = true;
+    });
+
+    render(() => <RelaySettingsPanel canManage />);
+
+    await waitFor(() => {
+      expect(screen.getByDisplayValue('wss://relay.example.test/ws/instance')).toBeInTheDocument();
+    });
+  });
 });

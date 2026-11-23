@@ -8,6 +8,8 @@ import {
   getApiToken,
   getOrgID,
 } from '@/utils/apiClient';
+import { Button } from '@/components/shared/Button';
+import { Dialog } from '@/components/shared/Dialog';
 import { InlineNotice } from '@/components/shared/InlineNotice';
 import { LoadingSpinner } from '@/components/shared/LoadingSpinner';
 import { SectionHeader } from '@/components/shared/SectionHeader';
@@ -41,6 +43,7 @@ export const QuickSecuritySetup: Component<QuickSecuritySetupProps> = (props) =>
   const [customUsername, setCustomUsername] = createSignal(props.defaultUsername ?? 'admin');
   const [customPassword, setCustomPassword] = createSignal('');
   const [confirmPassword, setConfirmPassword] = createSignal('');
+  const [confirmRotationOpen, setConfirmRotationOpen] = createSignal(false);
   let copiedTimer: ReturnType<typeof setTimeout> | undefined;
   const owner = props.owner;
   const org = getOrgID() || 'default';
@@ -62,6 +65,7 @@ export const QuickSecuritySetup: Component<QuickSecuritySetupProps> = (props) =>
     attempted = null;
     credentialAtAdmission = null;
     setCredentials(null);
+    setConfirmRotationOpen(false);
     setCustomPassword('');
     setConfirmPassword('');
     props.onPendingChange(false);
@@ -103,19 +107,35 @@ export const QuickSecuritySetup: Component<QuickSecuritySetupProps> = (props) =>
     }
   };
 
-  const setupSecurity = async () => {
-    if (!isCurrent() || controlsDisabled() || credentials()) return;
+  const validateCustomPassword = () => {
     setError('');
     if (useCustomPassword()) {
       if (customPassword().length < 12) {
         setError('Password must be at least 12 characters');
-        return;
+        return false;
       }
       if (customPassword() !== confirmPassword()) {
         setError('Passwords do not match');
-        return;
+        return false;
       }
     }
+    return true;
+  };
+
+  const handlePrimaryAction = () => {
+    if (!isCurrent() || controlsDisabled() || credentials()) return;
+    if (!validateCustomPassword()) return;
+    if (isRotation) {
+      setConfirmRotationOpen(true);
+      return;
+    }
+    void setupSecurity();
+  };
+
+  const setupSecurity = async () => {
+    if (!isCurrent() || controlsDisabled() || credentials()) return;
+    setConfirmRotationOpen(false);
+    if (!validateCustomPassword()) return;
 
     const request = new AbortController();
     controller = request;
@@ -259,7 +279,13 @@ Important:
                   {isRotation ? 'Replace the stored admin password' : 'Enable basic authentication'}
                 </li>
                 <li class="flex items-center">
-                  <span class="text-emerald-400 mr-2">✓</span>
+                  <span
+                    class={
+                      isRotation ? 'text-amber-500 mr-2 font-semibold' : 'text-emerald-400 mr-2'
+                    }
+                  >
+                    {isRotation ? '!' : '✓'}
+                  </span>
                   {isRotation
                     ? 'Replace all API tokens (full access)'
                     : 'Replace any API tokens (full access)'}
@@ -357,12 +383,13 @@ Important:
                 <p class="font-semibold">Important:</p>
                 <p>
                   {useCustomPassword()
-                    ? 'Your password will be hashed before storage'
-                    : 'Credentials will be shown only once. Save them immediately!'}
+                    ? 'Your password will be hashed before storage, and the generated API token is shown only once.'
+                    : 'Credentials will be shown only once. Save them immediately.'}
                 </p>
                 <Show when={isRotation}>
-                  <p class="mt-1">
-                    Active immediately. Update agents and automation with the new token.
+                  <p class="mt-1 font-medium">
+                    Active immediately. All existing API tokens stop working, so update connected
+                    agents and automation with the new token.
                   </p>
                 </Show>
               </div>
@@ -377,7 +404,7 @@ Important:
             </Show>
             <button
               type="button"
-              onClick={setupSecurity}
+              onClick={handlePrimaryAction}
               disabled={controlsDisabled()}
               classList={{ 'w-full': !error(), 'shrink-0': !!error() }}
               class="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
@@ -423,7 +450,7 @@ Important:
           </div>
 
           <InlineNotice tone={outcome() === 'unconfirmed' ? 'warning' : 'success'} role="status">
-            <p class="font-semibold">Save these credentials now - they won't be shown again!</p>
+            <p class="font-semibold">Save these credentials now. They will not be shown again.</p>
           </InlineNotice>
 
           <div class="space-y-3">
@@ -519,11 +546,55 @@ Important:
               class="px-4 py-2 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700 transition-colors"
             >
               {outcome() === 'unconfirmed'
-                ? "Close - I've Saved These Credentials"
-                : "Done - I've Saved My Credentials"}
+                ? "Close, I've saved these credentials"
+                : "Done, I've saved my credentials"}
             </button>
           </div>
         </div>
+      </Show>
+
+      <Show when={confirmRotationOpen()}>
+        <Dialog
+          isOpen={true}
+          onClose={() => setConfirmRotationOpen(false)}
+          panelClass="max-w-md"
+          ariaLabel="Confirm credential rotation"
+        >
+          <div class="w-full space-y-4 p-6">
+            <h3 class="text-lg font-semibold text-base-content">
+              Rotate credentials and replace all API tokens?
+            </h3>
+            <InlineNotice tone="danger" role="alert">
+              Rotating credentials immediately invalidates every existing API token. Connected host
+              agents, Docker agents, and automation scripts will stop authenticating until updated
+              with a new token.
+            </InlineNotice>
+            <p class="text-sm text-muted">
+              Your local admin password will also be replaced immediately and active sessions will
+              need the new credentials.
+            </p>
+            <div class="flex justify-end gap-3 pt-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="md"
+                onClick={() => setConfirmRotationOpen(false)}
+                disabled={controlsDisabled()}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                variant="danger"
+                size="md"
+                onClick={() => void setupSecurity()}
+                disabled={controlsDisabled()}
+              >
+                Confirm rotation
+              </Button>
+            </div>
+          </div>
+        </Dialog>
       </Show>
     </div>
   );

@@ -348,7 +348,7 @@ export const EN_MESSAGES = {
     'Discover Docker containers running inside Proxmox LXC guests without installing an agent in every guest.',
   'settings.general.guestDocker.toggle.title': 'Discover Docker in LXC guests',
   'settings.general.guestDocker.toggle.description':
-    'When enabled, Pulse runs bounded pct exec checks through connected Proxmox node agents to find Docker inside LXC guests and list their containers. Guests that already report through their own agent are skipped, and Pulse collects only the container list and usage stats — no inspect, environment, mount, command, or process details.',
+    'When enabled, Pulse runs bounded pct exec checks through connected Proxmox node agents to find Docker inside LXC guests and list their containers. Guests that already report through their own agent are skipped, and Pulse collects only the container list and usage stats, with no inspect, environment, mount, command, or process details.',
   'settings.general.guestDocker.requirements':
     'Requires a Pulse agent on the Proxmox node with command execution enabled. Admin only.',
   'settings.general.language.ariaLabel': 'App language',
@@ -374,7 +374,7 @@ export const EN_MESSAGES = {
     'Control how frequently Pulse polls Proxmox VE nodes.',
   'settings.general.monitoringCadence.section.title': 'Monitoring cadence',
   'settings.general.telemetry.description':
-    'Help improve Pulse by sharing a daily usage summary. Preview payload shows exactly what would be sent: a rotating pseudonymous install ID, normalized release identity, runtime platform, coarse deployment and lifecycle buckets, aggregate resource and outcome counts, coarse feature flags, content-free Patrol, Assistant, and capability-API usage counters, and four session-deduplicated workload-history adoption counts. It never includes hostnames, credentials, infrastructure identifiers, URLs, paths, locale, raw browser events, an event-level clickstream, prompts, chat messages, command text, action output, token values, names, email addresses, or IP addresses. It is never sold, shared with anyone else, or used for advertising, and it is not linked to a Pulse account or license. Telemetry rows are retained for up to 90 days, and request IP addresses are used only transiently for rate limiting and are not stored in telemetry rows.',
+    'Help improve Pulse by sharing a daily usage summary. Preview payload shows what is sent: a rotating pseudonymous install ID, normalized release identity, runtime platform, coarse deployment and lifecycle buckets, aggregate resource and outcome counts, coarse feature flags, content-free Patrol and capability-API usage counters, and four session-deduplicated workload-history adoption counts. It never includes hostnames, credentials, infrastructure identifiers, URLs, paths, locale, raw browser events, an event-level clickstream, prompts, chat messages, command text, action output, token values, names, email addresses, or IP addresses. Telemetry is never sold, shared, used for advertising, or linked to a Pulse account or license. Rows are retained for up to 90 days, and request IP addresses are used only transiently for rate limiting and are not stored in telemetry rows.',
   'settings.general.temperature.description': 'Display temperatures in Celsius or Fahrenheit.',
   'settings.general.temperature.title': 'Temperature unit',
   'settings.general.telemetry.copyJson': 'Copy JSON',
@@ -413,7 +413,7 @@ export const EN_MESSAGES = {
     'Review your organization plan, applicable usage policies, and subscription status for paid access.',
   'settings.header.organizationBilling.title': 'Billing & Usage',
   'settings.header.organizationBillingAdmin.description':
-    'Review and manage tenant billing state across all organizations (hosted mode only).',
+    'Review and manage tenant billing state across all organizations.',
   'settings.header.organizationBillingAdmin.title': 'Billing Admin',
   'settings.header.organizationOverview.description':
     'Review organization metadata, membership footprint, and ownership.',
@@ -477,7 +477,7 @@ export const EN_MESSAGES = {
     'Inspect the live Pulse log stream and download the captured buffer for support work.',
   'settings.header.supportLogs.title': 'System Logs',
   'settings.header.supportReporting.description':
-    'Export inventory data and generate performance reports from the canonical settings shell.',
+    'Export inventory data and generate performance reports.',
   'settings.header.supportReporting.title': 'Data & Reports',
   'settings.nav.group.infrastructure': 'Infrastructure',
   'settings.nav.group.monitoring': 'Monitoring',

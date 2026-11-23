@@ -1,5 +1,5 @@
 import { Component, For, createMemo, createUniqueId, Show } from 'solid-js';
-import { useNavigate } from '@solidjs/router';
+import { A, useNavigate } from '@solidjs/router';
 import { AISettingsDialogs } from '@/components/Settings/AISettingsDialogs';
 import {
   AIModelOverrideField,
@@ -7,10 +7,11 @@ import {
 } from '@/components/Settings/AIModelSelectionSection';
 import { AIProviderRuntimeControlsSection } from '@/components/Settings/AIRuntimeControlsSection';
 import { AISettingsStatusAndActions } from '@/components/Settings/AISettingsStatusAndActions';
+import { settingsTabPath } from '@/components/Settings/settingsNavigationModel';
 import { useAISettingsState } from '@/components/Settings/useAISettingsState';
+import { Card } from '@/components/shared/Card';
 import { FormSelect } from '@/components/shared/FormSelect';
 import { LoadingSpinner } from '@/components/shared/LoadingSpinner';
-import SettingsPanel from '@/components/shared/SettingsPanel';
 import { Toggle } from '@/components/shared/Toggle';
 import { UpgradeLink } from '@/components/shared/UpgradeLink';
 import { PATROL_PATH } from '@/routing/resourceLinks';
@@ -19,6 +20,7 @@ import {
   getPatrolAlertAnalysisAvailabilityPresentation,
   getPatrolAutonomyAvailabilityPresentation,
 } from '@/features/patrol/patrolAutonomyAvailability';
+import { PATROL_AUTONOMY_POLICY_PRESENTATION } from '@/features/patrol/patrolControlPresentation';
 import { getRuntimeCapabilityBlock, hasFeature, runtimeCapabilities } from '@/stores/license';
 import { getUpgradeActionDestination } from '@/stores/licenseCommercial';
 import { presentationPolicyHidesCommercialSurfaces } from '@/stores/sessionPresentationPolicy';
@@ -27,7 +29,6 @@ import {
   getPatrolIntervalCostHint,
 } from '@/utils/aiPatrolCostPresentation';
 import {
-  AI_SETTINGS_PANEL_TITLE,
   getAISettingsLoadingState,
   getAISettingsLoadErrorMessage,
   getAISettingsRetryLabel,
@@ -43,7 +44,6 @@ const AI_SETTINGS_PAGE_META: Record<
     savedLabel: string;
     saveLabel: string;
     savingLabel: string;
-    title: string;
   }
 > = {
   provider: {
@@ -52,7 +52,6 @@ const AI_SETTINGS_PAGE_META: Record<
     savedLabel: 'Provider & Models settings saved',
     saveLabel: 'Save provider settings',
     savingLabel: 'Saving provider settings...',
-    title: AI_SETTINGS_PANEL_TITLE,
   },
   patrol: {
     resetLabel: 'Reset Patrol settings',
@@ -60,9 +59,17 @@ const AI_SETTINGS_PAGE_META: Record<
     savedLabel: 'Patrol settings saved',
     saveLabel: 'Save Patrol settings',
     savingLabel: 'Saving Patrol settings...',
-    title: 'Patrol',
   },
 };
+
+const PRESET_PATROL_INTERVALS = [
+  { value: 0, label: 'Manual only' },
+  { value: 60, label: 'Every hour' },
+  { value: 180, label: 'Every 3 hours' },
+  { value: 360, label: 'Every 6 hours' },
+  { value: 720, label: 'Every 12 hours' },
+  { value: 1440, label: 'Daily' },
+];
 
 const formatPatrolInterval = (minutes: number): string => {
   if (minutes <= 0) return 'Manual only';
@@ -98,6 +105,13 @@ const PatrolSettingsContent: Component<{ state: ReturnType<typeof useAISettingsS
     }),
   );
   const isPlanLockedPatrol = createMemo(() => patrolModeAvailability().kind === 'plan_locked');
+  const activePatrolModeLabel = createMemo(() => {
+    if (isPlanLockedPatrol()) {
+      return PATROL_AUTONOMY_POLICY_PRESENTATION.monitor.label;
+    }
+    const level = props.state.patrolAutonomyLevel();
+    return level ? PATROL_AUTONOMY_POLICY_PRESENTATION[level]?.label : null;
+  });
   // Under "Critical only" a warning still gets one Patrol look once it has
   // stayed active, in the modes that investigate. The delay and the hourly
   // limit are the server's (internal/ai/unified/bridge.go). Installs that can
@@ -119,21 +133,59 @@ const PatrolSettingsContent: Component<{ state: ReturnType<typeof useAISettingsS
     }),
   );
   const alertAnalysisLockId = createUniqueId();
-  const intervalOptions = [
-    { value: 0, label: 'Manual only' },
-    { value: 60, label: 'Every hour' },
-    { value: 180, label: 'Every 3 hours' },
-    { value: 360, label: 'Every 6 hours' },
-    { value: 720, label: 'Every 12 hours' },
-    { value: 1440, label: 'Daily' },
-  ];
+  const intervalOptions = createMemo(() => {
+    const current = props.state.form.patrolIntervalMinutes;
+    if (PRESET_PATROL_INTERVALS.some((option) => option.value === current)) {
+      return PRESET_PATROL_INTERVALS;
+    }
+    return [
+      ...PRESET_PATROL_INTERVALS,
+      { value: current, label: `${formatPatrolInterval(current)} (custom)` },
+    ].sort((a, b) => a.value - b.value);
+  });
 
   return (
     <div class="space-y-6 p-4 sm:p-6">
+      <Show when={!props.state.form.enabled}>
+        <div
+          role="status"
+          data-testid="patrol-disabled-banner"
+          class="flex flex-col gap-3 rounded-md border border-amber-200 bg-amber-50 p-4 dark:border-amber-800 dark:bg-amber-900/25 sm:flex-row sm:items-center sm:justify-between"
+        >
+          <div class="space-y-0.5">
+            <p class="text-sm font-semibold text-amber-900 dark:text-amber-100">
+              Pulse Intelligence is disabled
+            </p>
+            <p class="text-xs text-amber-800 dark:text-amber-200">
+              Patrol will not run on a schedule or react to alerts until Pulse Intelligence is
+              enabled on Provider &amp; Models.
+            </p>
+          </div>
+          <A
+            href={settingsTabPath('system-ai')}
+            class="inline-flex shrink-0 min-h-10 sm:min-h-9 items-center justify-center rounded-md border border-amber-300 bg-surface px-3 py-2 text-sm font-medium text-amber-900 hover:bg-amber-100 dark:border-amber-700 dark:text-amber-100 dark:hover:bg-amber-900/40"
+          >
+            Open Provider &amp; Models
+          </A>
+        </div>
+      </Show>
+
       <div class="rounded-md border border-border bg-surface-alt p-4">
         <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h3 class="text-sm font-semibold text-base-content">Patrol mode</h3>
+            <div class="flex flex-wrap items-center gap-2">
+              <h3 class="text-sm font-semibold text-base-content">Patrol mode</h3>
+              <Show when={activePatrolModeLabel()}>
+                {(label) => (
+                  <span
+                    data-testid="patrol-active-mode-badge"
+                    class="rounded-full border border-border bg-surface px-2 py-0.5 text-xs font-medium text-base-content"
+                  >
+                    {label()}
+                  </span>
+                )}
+              </Show>
+            </div>
             <p class="mt-1 text-xs text-muted">
               <Show
                 when={isPlanLockedPatrol()}
@@ -146,7 +198,7 @@ const PatrolSettingsContent: Component<{ state: ReturnType<typeof useAISettingsS
           </div>
           <button
             type="button"
-            class="inline-flex min-h-10 items-center justify-center rounded-md border border-blue-300 px-3 py-2 text-sm font-medium text-blue-700 hover:bg-blue-50 dark:border-blue-700 dark:text-blue-300 dark:hover:bg-blue-900/25 sm:min-h-9"
+            class="inline-flex shrink-0 min-h-10 items-center justify-center rounded-md border border-blue-300 px-3 py-2 text-sm font-medium text-blue-700 hover:bg-blue-50 dark:border-blue-700 dark:text-blue-300 dark:hover:bg-blue-900/25 sm:min-h-9"
             onClick={() => navigate(PATROL_PATH)}
           >
             Open Patrol
@@ -154,7 +206,7 @@ const PatrolSettingsContent: Component<{ state: ReturnType<typeof useAISettingsS
         </div>
       </div>
 
-      <div class="grid gap-4 lg:grid-cols-2">
+      <div class="space-y-2 max-w-xl">
         <FormSelect
           id="ai-patrol-schedule"
           label="Schedule"
@@ -167,7 +219,7 @@ const PatrolSettingsContent: Component<{ state: ReturnType<typeof useAISettingsS
           labelClass="text-xs font-medium text-muted"
           selectBaseClass="w-full min-h-10 rounded-md border border-border bg-surface px-3 py-2 text-sm"
         >
-          <For each={intervalOptions}>
+          <For each={intervalOptions()}>
             {(option) => {
               const hint = () =>
                 getPatrolIntervalCostHint(props.state.patrolCostPreview(), option.value);
@@ -181,31 +233,25 @@ const PatrolSettingsContent: Component<{ state: ReturnType<typeof useAISettingsS
           </For>
         </FormSelect>
 
-        <div class="rounded-md border border-border bg-surface-alt p-3">
-          <p class="text-xs font-medium text-base-content">Current schedule</p>
-          <p class="mt-1 text-sm text-muted">
-            {formatPatrolInterval(props.state.form.patrolIntervalMinutes)}
-          </p>
-          <Show when={getPatrolCostPresentation(props.state.patrolCostPreview())}>
-            {(cost) => (
-              <p class="mt-1 text-xs text-muted" data-testid="patrol-schedule-cost">
-                {cost().headline} with {props.state.effectivePatrolModel()}.
-                <Show when={props.state.patrolCostPreview()?.billed_per_token}>
-                  {' '}
-                  Estimate. The Patrol model section below shows the assumptions.
-                </Show>
-              </p>
-            )}
-          </Show>
-          <Show when={props.state.patrolIntervalAutoAdjust()}>
-            {(adjust) => (
-              <p class="mt-1 text-xs text-amber-700 dark:text-amber-300">
-                Changed from {formatPatrolInterval(adjust().from).toLowerCase()} to keep the
-                per-token bill down. Pick another option above to override it.
-              </p>
-            )}
-          </Show>
-        </div>
+        <Show when={getPatrolCostPresentation(props.state.patrolCostPreview())}>
+          {(cost) => (
+            <p class="text-xs text-muted" data-testid="patrol-schedule-cost">
+              {cost().headline} with {props.state.effectivePatrolModel()}.
+              <Show when={props.state.patrolCostPreview()?.billed_per_token}>
+                {' '}
+                Estimate. The Patrol model section below shows the assumptions.
+              </Show>
+            </p>
+          )}
+        </Show>
+        <Show when={props.state.patrolIntervalAutoAdjust()}>
+          {(adjust) => (
+            <p class="text-xs text-amber-700 dark:text-amber-300">
+              Changed from {formatPatrolInterval(adjust().from).toLowerCase()} to keep the per-token
+              bill down. Pick another option above to override it.
+            </p>
+          )}
+        </Show>
       </div>
 
       <div class="space-y-3">
@@ -377,6 +423,9 @@ export const AISettings: Component<{ page?: AISettingsPage }> = (props) => {
   const page = () => props.page ?? 'provider';
   const pageMeta = () => AI_SETTINGS_PAGE_META[page()];
   const state = useAISettingsState({
+    get page() {
+      return page();
+    },
     get saveErrorFallback() {
       return pageMeta().saveErrorFallback;
     },
@@ -389,34 +438,49 @@ export const AISettings: Component<{ page?: AISettingsPage }> = (props) => {
   return (
     <>
       <div class="space-y-6">
-        <SettingsPanel
-          title={pageMeta().title}
-          action={
-            isProviderPage() ? (
-              <Toggle
-                checked={state.form.enabled}
-                onChange={async (event) => {
-                  const newValue = event.currentTarget.checked;
-                  await state.handleEnableRequest(newValue);
-                }}
-                disabled={state.loading() || state.saving() || state.loadError()}
-                containerClass="items-center gap-2"
-                ariaLabel="Enable Pulse Intelligence"
-                label={
-                  <span class="text-xs font-medium text-muted">
-                    {state.form.enabled ? 'Enabled' : 'Disabled'}
-                  </span>
-                }
-              />
-            ) : undefined
-          }
-          noPadding
-        >
+        <Card padding="none" class="overflow-hidden border border-border" border={false}>
+          <Show when={isProviderPage()}>
+            <div class="flex flex-wrap items-center justify-between gap-3 border-b border-border bg-surface-alt px-4 py-3 sm:px-6">
+              <div class="min-w-0">
+                <p class="text-sm font-medium text-base-content">Pulse Intelligence</p>
+                <p class="text-xs text-muted">
+                  {state.form.enabled
+                    ? 'Active for Patrol and AI summaries.'
+                    : 'Turn on to connect a provider and run Patrol.'}
+                </p>
+              </div>
+              <div class="flex shrink-0 items-center gap-2.5">
+                <span class="text-xs font-medium text-muted">
+                  {state.form.enabled ? 'Enabled' : 'Disabled'}
+                </span>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={state.form.enabled}
+                  aria-label="Enable Pulse Intelligence"
+                  disabled={state.loading() || state.saving() || state.loadError()}
+                  onClick={async () => {
+                    await state.handleEnableRequest(!state.form.enabled);
+                  }}
+                  class={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent transition-colors focus:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 ${
+                    state.form.enabled ? 'bg-blue-600' : 'bg-slate-300 dark:bg-slate-600'
+                  }`}
+                >
+                  <span
+                    class={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-xs transition-transform ${
+                      state.form.enabled ? 'translate-x-5' : 'translate-x-0'
+                    }`}
+                  />
+                </button>
+              </div>
+            </div>
+          </Show>
+
           <form class="divide-y divide-border" autocomplete="off" onSubmit={state.handleSave}>
             <Show when={state.loading()}>
               <div class="flex items-center gap-3 text-sm text-muted p-4 sm:p-6">
                 <LoadingSpinner size="md" tone="current" />
-                {getAISettingsLoadingState().text}
+                {getAISettingsLoadingState(page()).text}
               </div>
             </Show>
 
@@ -440,7 +504,7 @@ export const AISettings: Component<{ page?: AISettingsPage }> = (props) => {
                       d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z"
                     />
                   </svg>
-                  <span>{getAISettingsLoadErrorMessage()}</span>
+                  <span>{getAISettingsLoadErrorMessage(page())}</span>
                 </div>
                 <button
                   type="button"
@@ -464,21 +528,29 @@ export const AISettings: Component<{ page?: AISettingsPage }> = (props) => {
               />
             </Show>
           </form>
-        </SettingsPanel>
+        </Card>
       </div>
 
-      <AISettingsDialogs
-        showSetupModal={state.showSetupModal}
-        setupProvider={state.setupProvider}
-        setSetupProvider={state.setSetupProvider}
-        setupApiKey={state.setupApiKey}
-        setSetupApiKey={state.setSetupApiKey}
-        setupOllamaUrl={state.setupOllamaUrl}
-        setSetupOllamaUrl={state.setSetupOllamaUrl}
-        setupSaving={state.setupSaving}
-        handleCloseSetupModal={state.handleCloseSetupModal}
-        handleSetupSubmit={state.handleSetupSubmit}
-      />
+      <Show when={isProviderPage()}>
+        <AISettingsDialogs
+          showSetupModal={state.showSetupModal}
+          setupProvider={state.setupProvider}
+          setSetupProvider={state.setSetupProvider}
+          setupApiKey={state.setupApiKey}
+          setSetupApiKey={state.setSetupApiKey}
+          setupOpenAIBaseUrl={state.setupOpenAIBaseUrl}
+          setSetupOpenAIBaseUrl={state.setSetupOpenAIBaseUrl}
+          setupOllamaUrl={state.setupOllamaUrl}
+          setSetupOllamaUrl={state.setSetupOllamaUrl}
+          setupSaving={state.setupSaving}
+          handleCloseSetupModal={state.handleCloseSetupModal}
+          handleSetupSubmit={state.handleSetupSubmit}
+          pendingRemoveProvider={state.pendingRemoveProvider}
+          removeSaving={state.saving}
+          handleCancelRemoveProvider={state.cancelRemoveProvider}
+          handleConfirmRemoveProvider={state.confirmRemoveProvider}
+        />
+      </Show>
     </>
   );
 };

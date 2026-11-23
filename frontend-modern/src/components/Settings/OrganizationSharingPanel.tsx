@@ -1,6 +1,7 @@
 import { Component, Show, createEffect, createUniqueId, onCleanup } from 'solid-js';
 import { Button } from '@/components/shared/Button';
 import { Card } from '@/components/shared/Card';
+import { Dialog } from '@/components/shared/Dialog';
 import SettingsPanel from '@/components/shared/SettingsPanel';
 import { isMultiTenantEnabled } from '@/stores/license';
 import { presentationPolicyHidesOrganizationSurfaces } from '@/stores/sessionPresentationPolicy';
@@ -154,8 +155,8 @@ export const OrganizationSharingPanel: Component<OrganizationSharingPanelProps> 
           noPadding
         >
           <Show when={state.loading()}>
-            <div class="px-4 pt-4 sm:px-6 sm:pt-6">
-              <p id={checkingID} class="text-sm text-muted">
+            <div class="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b border-border/60 bg-surface-alt/50 px-4 py-2.5 sm:px-6">
+              <p id={checkingID} class="min-w-0 max-w-full text-xs text-muted">
                 Checking saved shares for{' '}
                 <bdi class="font-medium text-base-content [overflow-wrap:anywhere]">
                   {`${state.selectedOrgID()}.`}
@@ -163,11 +164,13 @@ export const OrganizationSharingPanel: Component<OrganizationSharingPanelProps> 
                 Restarting does not repeat a sharing change.
               </p>
               <Button
+                variant="ghost"
+                size="xs"
                 aria-describedby={checkingID}
                 onClick={() => {
                   if (state.restartSharingRead()) panel?.focus({ preventScroll: true });
                 }}
-                class="mt-2 min-h-11 w-full sm:min-h-0 sm:w-auto"
+                class="w-full sm:w-auto"
               >
                 Restart sharing check
               </Button>
@@ -232,6 +235,16 @@ export const OrganizationSharingPanel: Component<OrganizationSharingPanelProps> 
                           )}
                         </p>
                       </Show>
+                      <Show when={state.mutationError()}>
+                        {(message) => (
+                          <div
+                            role="alert"
+                            class="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800 dark:border-red-900/40 dark:bg-red-950/40 dark:text-red-200"
+                          >
+                            {message()}
+                          </div>
+                        )}
+                      </Show>
                     </div>
                     <Show
                       when={state.canManageCurrentOrg()}
@@ -257,6 +270,32 @@ export const OrganizationSharingPanel: Component<OrganizationSharingPanelProps> 
             </Show>
           </div>
         </SettingsPanel>
+        <Show keyed when={state.shareConfirmation()}>
+          {(confirmation) => (
+            <Dialog
+              isOpen={true}
+              ariaLabel={confirmation.title}
+              onClose={() => state.cancelShareConfirmation(confirmation)}
+              panelClass="max-w-lg"
+            >
+              <Card padding="lg" class="min-h-0 overflow-y-auto space-y-4">
+                <h3 class="text-lg font-semibold text-base-content">{confirmation.title}</h3>
+                <p class="text-sm text-base-content break-words">{confirmation.message}</p>
+                <div class="flex flex-col gap-2 sm:flex-row sm:justify-end">
+                  <Button onClick={() => state.cancelShareConfirmation(confirmation)}>
+                    Cancel
+                  </Button>
+                  <Button
+                    variant="danger"
+                    onClick={() => void state.confirmShareAction(confirmation)}
+                  >
+                    {confirmation.confirmLabel}
+                  </Button>
+                </div>
+              </Card>
+            </Dialog>
+          )}
+        </Show>
       </div>
     </Show>
   );

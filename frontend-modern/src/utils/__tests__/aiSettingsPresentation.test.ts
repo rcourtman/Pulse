@@ -60,8 +60,8 @@ describe('aiSettingsPresentation', () => {
   });
 
   it('returns canonical provider test result text classes', () => {
-    expect(getAIProviderTestResultTextClass(true)).toBe('text-green-600');
-    expect(getAIProviderTestResultTextClass(false)).toBe('text-red-600');
+    expect(getAIProviderTestResultTextClass(true)).toBe('text-green-600 dark:text-green-400');
+    expect(getAIProviderTestResultTextClass(false)).toBe('text-red-600 dark:text-red-400');
   });
 
   it('returns canonical OAuth callback error messages', () => {
@@ -85,8 +85,14 @@ describe('aiSettingsPresentation', () => {
     expect(getAISettingsLoadingState()).toEqual({
       text: 'Loading Provider & Models settings...',
     });
+    expect(getAISettingsLoadingState('patrol')).toEqual({
+      text: 'Loading Patrol settings...',
+    });
     expect(getAISettingsLoadErrorMessage()).toBe(
       'Unable to load Provider & Models settings. Your configuration could not be retrieved.',
+    );
+    expect(getAISettingsLoadErrorMessage('patrol')).toBe(
+      'Unable to load Patrol settings. Your configuration could not be retrieved.',
     );
     expect(getAISettingsRetryLabel()).toBe('Retry');
     expect(getAIModelsLoadErrorMessage()).toBe('Unable to load models.');

@@ -1,12 +1,13 @@
 import { Component, createEffect, createUniqueId, For, on, onCleanup, Show } from 'solid-js';
 import { ActionIconButton, Button } from '@/components/shared/Button';
-import SettingsPanel from '@/components/shared/SettingsPanel';
+import { Card } from '@/components/shared/Card';
 import { RBACFeatureGateSection } from './RBACFeatureGateSection';
 import { RolesEditorDialog } from './RolesEditorDialog';
 import { useRolesPanelState, type RolesPanelProps } from './useRolesPanelState';
 import { Dialog } from '@/components/shared/Dialog';
 import { LoadingSpinner } from '@/components/shared/LoadingSpinner';
 import { getRoleIdentityLabel, getRolesEmptyState } from '@/utils/rbacPresentation';
+import Copy from 'lucide-solid/icons/copy';
 import Plus from 'lucide-solid/icons/plus';
 import Pencil from 'lucide-solid/icons/pencil';
 import Trash2 from 'lucide-solid/icons/trash-2';
@@ -112,9 +113,18 @@ export const RolesPanel: Component<RolesPanelProps> = (props) => {
       tabIndex={-1}
       class="space-y-6 rounded-lg focus:outline-2 focus:outline-offset-2 focus:outline-blue-500 dark:focus:outline-blue-400"
     >
-      <SettingsPanel
-        title="Roles"
-        action={
+      <Card padding="none" border={false} class="overflow-hidden border border-border">
+        <div class="flex flex-wrap items-center justify-between gap-3 border-b border-border bg-surface-alt px-3 py-3 sm:px-6 sm:py-4">
+          <div class="flex min-w-0 flex-wrap items-center gap-2">
+            <p class="text-xs text-muted sm:text-sm">
+              Manage built-in and custom role permission sets.
+            </p>
+            <Show when={state.featureGate.paywallVisible()}>
+              <span class="inline-flex items-center rounded-full border border-border bg-surface px-2.5 py-0.5 text-[11px] font-medium text-muted">
+                Requires Pulse Pro
+              </span>
+            </Show>
+          </div>
           <Button
             variant="primary"
             size="settingsAction"
@@ -125,170 +135,183 @@ export const RolesPanel: Component<RolesPanelProps> = (props) => {
             <Plus class="w-4 h-4" />
             New Role
           </Button>
-        }
-        noPadding
-        bodyClass="divide-y divide-border"
-      >
-        <Show when={state.successNotice()}>
-          {(message) => (
-            <InlineNotice
-              tone="success"
-              role="status"
-              aria-live="polite"
-              class="[overflow-wrap:anywhere]"
-            >
-              {message()}
+        </div>
+        <div class="divide-y divide-border">
+          <Show when={state.successNotice()}>
+            {(message) => (
+              <InlineNotice
+                tone="success"
+                role="status"
+                aria-live="polite"
+                class="[overflow-wrap:anywhere]"
+              >
+                {message()}
+              </InlineNotice>
+            )}
+          </Show>
+
+          <Show when={state.featureGate.paywallVisible()}>
+            <RBACFeatureGateSection
+              copy={state.featureGate.featureGateCopy()}
+              paywallLocation="settings_roles_panel"
+              showUpgradePrompts={state.featureGate.showUpgradePrompts()}
+            />
+          </Show>
+
+          <Show when={state.accessAllowed() && state.unconfirmedChange()}>
+            {(message) => (
+              <InlineNotice
+                ref={inventoryNotice}
+                tabindex={-1}
+                tone="warning"
+                layout="banner"
+                role="alert"
+                aria-live="polite"
+                class="break-words"
+                icon={<TriangleAlert />}
+                actionLabel={state.loading() ? undefined : 'Check saved roles'}
+                actionOnClick={checkSavedRoles}
+              >
+                {message()}
+              </InlineNotice>
+            )}
+          </Show>
+
+          <Show when={state.loading()}>
+            <div class="flex flex-wrap items-center justify-center gap-x-4 gap-y-2 px-3 py-8">
+              <p role="status" class="flex items-center gap-2 text-sm text-muted">
+                <LoadingSpinner size="md" tone="info" />
+                Loading roles…
+              </p>
+              <Show when={state.accessAllowed()}>
+                <RestartRoleCheck />
+              </Show>
+            </div>
+          </Show>
+
+          <Show
+            when={!state.loading() && state.featureGate.rbacEnabled() && !state.accessAllowed()}
+          >
+            <InlineNotice tone="warning" role="status">
+              Roles are unavailable for this session.
             </InlineNotice>
-          )}
-        </Show>
+          </Show>
 
-        <Show when={state.featureGate.paywallVisible()}>
-          <RBACFeatureGateSection
-            copy={state.featureGate.featureGateCopy()}
-            paywallLocation="settings_roles_panel"
-            showUpgradePrompts={state.featureGate.showUpgradePrompts()}
-          />
-        </Show>
+          <Show when={!state.loading() && state.accessAllowed() && state.loadError()}>
+            {(message) => (
+              <InlineNotice
+                role="alert"
+                aria-live="polite"
+                tone="danger"
+                layout="banner"
+                icon={<TriangleAlert />}
+                actionLabel={state.unconfirmedChange() ? undefined : 'Retry'}
+                actionOnClick={checkSavedRoles}
+              >
+                {message()}
+              </InlineNotice>
+            )}
+          </Show>
 
-        <Show when={state.accessAllowed() && state.unconfirmedChange()}>
-          {(message) => (
-            <InlineNotice
-              ref={inventoryNotice}
-              tabindex={-1}
-              tone="warning"
-              layout="banner"
-              role="alert"
-              aria-live="polite"
-              class="break-words"
-              icon={<TriangleAlert />}
-              actionLabel={state.loading() ? undefined : 'Check saved roles'}
-              actionOnClick={checkSavedRoles}
-            >
-              {message()}
-            </InlineNotice>
-          )}
-        </Show>
-
-        <Show when={state.loading()}>
-          <div class="flex flex-wrap items-center justify-center gap-x-4 gap-y-2 px-3 py-8">
-            <p role="status" class="flex items-center gap-2 text-sm text-muted">
-              <LoadingSpinner size="md" tone="info" />
-              Loading roles…
+          <Show
+            when={
+              !state.loading() &&
+              state.accessAllowed() &&
+              !state.loadError() &&
+              !state.unconfirmedChange()
+            }
+          >
+            <p class="px-3 py-3 text-xs text-muted sm:px-6">
+              Saved rules are not an access verdict. All conditions must match request attributes. A
+              missing attribute skips the rule, including a deny rule.
             </p>
-            <Show when={state.accessAllowed()}>
-              <RestartRoleCheck />
-            </Show>
-          </div>
-        </Show>
-
-        <Show when={!state.loading() && state.featureGate.rbacEnabled() && !state.accessAllowed()}>
-          <InlineNotice tone="warning" role="status">
-            Roles are unavailable for this session.
-          </InlineNotice>
-        </Show>
-
-        <Show when={!state.loading() && state.accessAllowed() && state.loadError()}>
-          {(message) => (
-            <InlineNotice
-              role="alert"
-              aria-live="polite"
-              tone="danger"
-              layout="banner"
-              icon={<TriangleAlert />}
-              actionLabel={state.unconfirmedChange() ? undefined : 'Retry'}
-              actionOnClick={checkSavedRoles}
-            >
-              {message()}
-            </InlineNotice>
-          )}
-        </Show>
-
-        <Show
-          when={
-            !state.loading() &&
-            state.accessAllowed() &&
-            !state.loadError() &&
-            !state.unconfirmedChange()
-          }
-        >
-          <p class="px-3 py-3 text-xs text-muted sm:px-6">
-            Saved rules are not an access verdict. All conditions must match request attributes. A
-            missing attribute skips the rule, including a deny rule.
-          </p>
-          <PulseDataGrid
-            data={state.roles()}
-            columns={[
-              {
-                key: 'role',
-                label: 'Role',
-                render: (role) => (
-                  <div class="flex min-w-0 flex-col whitespace-normal [overflow-wrap:anywhere]">
-                    <span class="font-medium text-base-content flex items-center gap-1">
-                      <bdi class="min-w-0">{role.name}</bdi>
-                      <Show when={role.isBuiltIn}>
-                        <BadgeCheck class="w-4 h-4 shrink-0 text-blue-500" />
-                      </Show>
-                    </span>
-                    <span class="text-[10px] leading-4 text-muted">
-                      Role ID: <bdi class="font-mono whitespace-pre-wrap">{role.id}</bdi>
-                    </span>
-                    <span class="text-xs text-muted">{role.description}</span>
-                    <div class="mt-3 space-y-1 sm:hidden">
-                      <p class="text-[11px] font-medium text-muted">Permissions</p>
-                      <RolePermissions role={role} />
+            <PulseDataGrid
+              data={state.roles()}
+              columns={[
+                {
+                  key: 'role',
+                  label: 'Role',
+                  render: (role) => (
+                    <div class="flex min-w-0 flex-col whitespace-normal [overflow-wrap:anywhere]">
+                      <span class="font-medium text-base-content flex items-center gap-1">
+                        <bdi class="min-w-0">{role.name}</bdi>
+                        <Show when={role.isBuiltIn}>
+                          <BadgeCheck class="w-4 h-4 shrink-0 text-blue-500" />
+                        </Show>
+                      </span>
+                      <span class="text-[10px] leading-4 text-muted">
+                        Role ID: <bdi class="font-mono whitespace-pre-wrap">{role.id}</bdi>
+                      </span>
+                      <span class="text-xs text-muted">{role.description}</span>
+                      <div class="mt-3 space-y-1 sm:hidden">
+                        <p class="text-[11px] font-medium text-muted">Permissions</p>
+                        <RolePermissions role={role} />
+                      </div>
                     </div>
-                  </div>
-                ),
-              },
-              {
-                key: 'permissions',
-                label: 'Permissions',
-                hiddenOnMobile: true,
-                render: (role) => <RolePermissions role={role} />,
-              },
-              {
-                key: 'actions',
-                label: 'Actions',
-                align: 'right',
-                render: (role) => (
-                  <div class="inline-flex items-center gap-1">
-                    <Show when={!role.isBuiltIn}>
-                      <ActionIconButton
-                        label={`Edit role ${getRoleIdentityLabel(role)}`}
-                        tone="accent"
-                        size="sm"
-                        class="-my-2 min-h-11 min-w-11 sm:my-0 sm:min-h-0 sm:min-w-0"
-                        disabled={!state.canEdit()}
-                        onClick={() => state.openEditRole(role)}
-                      >
-                        <Pencil class="w-4 h-4" />
-                      </ActionIconButton>
-                      <ActionIconButton
-                        label={`Delete role ${getRoleIdentityLabel(role)}`}
-                        tone="danger"
-                        size="sm"
-                        class="-my-2 min-h-11 min-w-11 sm:my-0 sm:min-h-0 sm:min-w-0"
-                        disabled={!state.canEdit()}
-                        onClick={() => state.openDeleteRole(role)}
-                      >
-                        <Trash2 class="w-4 h-4" />
-                      </ActionIconButton>
-                    </Show>
-                    <Show when={role.isBuiltIn}>
-                      <span class="text-xs text-slate-400 italic">Read-only</span>
-                    </Show>
-                  </div>
-                ),
-              },
-            ]}
-            keyExtractor={(role) => role.id}
-            emptyState={getRolesEmptyState()}
-            class="[&_table]:table-fixed sm:[&_table]:table-auto [&_th:last-child]:w-28 sm:[&_th:last-child]:w-auto"
-            desktopMinWidth="620px"
-            frame="flush"
-          />
-        </Show>
-      </SettingsPanel>
+                  ),
+                },
+                {
+                  key: 'permissions',
+                  label: 'Permissions',
+                  hiddenOnMobile: true,
+                  render: (role) => <RolePermissions role={role} />,
+                },
+                {
+                  key: 'actions',
+                  label: 'Actions',
+                  align: 'right',
+                  render: (role) => (
+                    <div class="inline-flex items-center gap-1">
+                      <Show when={!role.isBuiltIn}>
+                        <ActionIconButton
+                          label={`Edit role ${getRoleIdentityLabel(role)}`}
+                          tone="accent"
+                          size="sm"
+                          class="-my-2 min-h-11 min-w-11 sm:my-0 sm:min-h-0 sm:min-w-0"
+                          disabled={!state.canEdit()}
+                          onClick={() => state.openEditRole(role)}
+                        >
+                          <Pencil class="w-4 h-4" />
+                        </ActionIconButton>
+                        <ActionIconButton
+                          label={`Delete role ${getRoleIdentityLabel(role)}`}
+                          tone="danger"
+                          size="sm"
+                          class="-my-2 min-h-11 min-w-11 sm:my-0 sm:min-h-0 sm:min-w-0"
+                          disabled={!state.canEdit()}
+                          onClick={() => state.openDeleteRole(role)}
+                        >
+                          <Trash2 class="w-4 h-4" />
+                        </ActionIconButton>
+                      </Show>
+                      <Show when={role.isBuiltIn}>
+                        <span class="text-xs text-slate-400 italic">Read-only</span>
+                        <Show when={props.canManage !== false}>
+                          <ActionIconButton
+                            label={`Duplicate role ${getRoleIdentityLabel(role)}`}
+                            tone="accent"
+                            size="sm"
+                            class="-my-2 min-h-11 min-w-11 sm:my-0 sm:min-h-0 sm:min-w-0"
+                            disabled={!state.canEdit()}
+                            onClick={() => state.openDuplicateRole(role)}
+                          >
+                            <Copy class="w-4 h-4" />
+                          </ActionIconButton>
+                        </Show>
+                      </Show>
+                    </div>
+                  ),
+                },
+              ]}
+              keyExtractor={(role) => role.id}
+              emptyState={getRolesEmptyState()}
+              class="[&_table]:table-fixed sm:[&_table]:table-auto [&_th:last-child]:w-28 sm:[&_th:last-child]:w-auto"
+              desktopMinWidth="620px"
+              frame="flush"
+            />
+          </Show>
+        </div>
+      </Card>
 
       <RolesEditorDialog
         actionError={state.actionError()}

@@ -311,13 +311,12 @@ describe('OrganizationAccessPanel', () => {
   );
 
   it.each(['user-2', 'user-3'])(
-    'names member removal for %s and keeps the existing confirmation',
+    'names member removal for %s and confirms through an accessible dialog',
     async (target) => {
       listMembersMock.mockResolvedValue([
         ...baseMembers,
         { userId: 'user-3', role: 'viewer', addedAt: '2026-11-01T12:00:00Z' },
       ]);
-      vi.mocked(confirm).mockReturnValue(false);
       renderPanel();
 
       for (const userId of ['user-2', 'user-3']) {
@@ -338,9 +337,11 @@ describe('OrganizationAccessPanel', () => {
         }),
       );
 
-      expect(confirm).toHaveBeenCalledOnce();
-      expect(vi.mocked(confirm).mock.calls[0][0]).toContain(target);
-      expect(vi.mocked(confirm).mock.calls[0][0]).toContain('Organization A');
+      const dialog = screen.getByRole('dialog', { name: 'Remove organization member' });
+      expect(dialog).toHaveTextContent(target);
+      expect(dialog).toHaveTextContent('Organization A');
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
       expectNoWrites();
     },
   );
@@ -535,6 +536,8 @@ describe('OrganizationAccessPanel', () => {
             name: 'Remove user-2 from organization',
           }),
         );
+        const dialog = screen.getByRole('dialog', { name: 'Remove organization member' });
+        fireEvent.click(within(dialog).getByRole('button', { name: 'Remove member' }));
         await waitFor(() =>
           expect(removeMemberMock).toHaveBeenCalledWith(
             'org-a',
@@ -662,6 +665,10 @@ describe('Organization Access keyboard recovery', () => {
         });
         control.focus();
         fireEvent.click(control);
+        if (operation === 'remove') {
+          const dialog = screen.getByRole('dialog', { name: 'Remove organization member' });
+          fireEvent.click(within(dialog).getByRole('button', { name: 'Remove member' }));
+        }
       }
       request.reject(new Error('response lost after applying change'));
       await waitFor(() => expect(warning()).toHaveFocus());
@@ -868,6 +875,8 @@ describe('Organization Access keyboard recovery', () => {
       });
       trigger.focus();
       fireEvent.click(trigger);
+      const dialog = screen.getByRole('dialog', { name: 'Remove organization member' });
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Remove member' }));
       await waitFor(() =>
         expect(
           screen.getByRole('button', {
@@ -876,7 +885,6 @@ describe('Organization Access keyboard recovery', () => {
         ).toHaveFocus(),
       );
       expect(removeMemberMock).toHaveBeenCalledTimes(1);
-      expect(confirm).toHaveBeenCalledOnce();
     },
   );
 
@@ -1404,7 +1412,11 @@ describe('Organization Access change safety', () => {
       const action = {
         invite: () => state.inviteMember(),
         role: () => state.updateRole(member, 'editor'),
-        remove: () => state.removeMember(member),
+        remove: () => {
+          state.removeMember(member);
+          const removal = state.memberRemoval();
+          return removal ? state.confirmMemberRemoval(removal) : Promise.resolve();
+        },
         revoke: () => state.revokeInvitation('invited-user'),
         accept: () => state.acceptInvitation('inviting-org'),
         decline: () => state.declineInvitation('inviting-org'),
@@ -1444,8 +1456,11 @@ describe('Organization Access change safety', () => {
     {
       name: 'remove',
       mock: removeMemberMock,
-      run: (state: ReturnType<typeof useOrganizationAccessPanelState>) =>
-        state.removeMember(state.members()[1]),
+      run: (state: ReturnType<typeof useOrganizationAccessPanelState>) => {
+        state.removeMember(state.members()[1]);
+        const removal = state.memberRemoval();
+        return removal ? state.confirmMemberRemoval(removal) : Promise.resolve();
+      },
     },
     {
       name: 'revoke',
@@ -1716,11 +1731,11 @@ describe('Organization Access change safety', () => {
   it('rechecks a remove confirmation against the selection that supplied it', async () => {
     const { state } = renderState();
     await ready(state);
-    vi.mocked(confirm).mockImplementationOnce(() => {
-      getOrgIDMock.mockReturnValue('org-b');
-      return true;
-    });
-    await state.removeMember(state.members()[1]);
+    state.removeMember(state.members()[1]);
+    const removal = state.memberRemoval()!;
+    expect(removal).not.toBeNull();
+    getOrgIDMock.mockReturnValue('org-b');
+    await state.confirmMemberRemoval(removal);
     expect(removeMemberMock).not.toHaveBeenCalled();
   });
 

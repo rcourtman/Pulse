@@ -194,19 +194,19 @@ describe('getAvailabilityTargetAddressLabel', () => {
     ).toBe('10.0.0.1');
   });
 
-  it('returns the address verbatim for https (final fallback arm; no https special-case)', () => {
+  it('appends path for https targets just like http targets', () => {
     expect(
       getAvailabilityTargetAddressLabel(
         target({ protocol: 'https', address: 'https://api.local', path: '/health' }),
       ),
-    ).toBe('https://api.local');
+    ).toBe('https://api.local/health');
   });
 });
 
 // ---- getAvailabilityTargetMethodLabel --------------------------------------
 // Branches: every switch arm. The sibling test covers 'icmp' and tcp-with-port;
 // here we cover the tcp-without-port arm (both via undefined and 0), 'http',
-// and the default arm (https plus an arbitrary protocol string via cast).
+// 'https', and the default arm (an arbitrary protocol string via cast).
 
 describe('getAvailabilityTargetMethodLabel', () => {
   it("returns 'TCP port' for a tcp target without a port (port falsy arm)", () => {
@@ -223,8 +223,8 @@ describe('getAvailabilityTargetMethodLabel', () => {
     expect(getAvailabilityTargetMethodLabel(target({ protocol: 'http' }))).toBe('HTTP check');
   });
 
-  it('uppercases an unrecognised but valid protocol via the default arm (https)', () => {
-    expect(getAvailabilityTargetMethodLabel(target({ protocol: 'https' }))).toBe('HTTPS');
+  it("returns 'HTTPS check' for an https target", () => {
+    expect(getAvailabilityTargetMethodLabel(target({ protocol: 'https' }))).toBe('HTTPS check');
   });
 
   it('uppercases an arbitrary protocol string via the default arm (cast)', () => {

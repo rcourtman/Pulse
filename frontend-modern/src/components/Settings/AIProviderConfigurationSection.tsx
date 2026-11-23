@@ -50,17 +50,18 @@ export const AIProviderConfigurationSection: Component<AIProviderConfigurationSe
   };
 
   const isConfigured = (provider: AIProvider) => isAIProviderConfigured(provider, props.settings());
+  const hasAnyConfiguredProvider = () => AI_PROVIDERS.some((provider) => isConfigured(provider));
 
   const providerIssueProviders = () =>
     AI_PROVIDERS.filter((provider) => props.providerHealth[provider].status === 'error');
 
   return (
-    <div class="p-5 rounded-md border border-border bg-surface-alt">
+    <div class="p-4 sm:p-5 rounded-md border border-border bg-surface-alt">
       <div class="mb-3 space-y-1.5">
-        <div class="flex items-center justify-between gap-2">
-          <h4 class="font-medium text-base-content flex items-center gap-2">
+        <div class="flex flex-wrap items-center justify-between gap-2">
+          <h4 class="font-medium text-base-content flex items-center gap-2 min-w-0">
             <svg
-              class="w-5 h-5 text-blue-600 dark:text-blue-400"
+              class="w-5 h-5 text-blue-600 dark:text-blue-400 shrink-0"
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"
@@ -77,8 +78,13 @@ export const AIProviderConfigurationSection: Component<AIProviderConfigurationSe
           <button
             type="button"
             onClick={() => void props.runProviderPreflight()}
-            disabled={props.preflightRunning() || props.saving()}
-            class="inline-flex min-h-10 sm:min-h-9 items-center rounded-md px-3 py-2 text-sm bg-blue-100 dark:bg-blue-900/25 text-blue-700 dark:text-blue-300 hover:bg-blue-200 dark:hover:bg-blue-800 disabled:opacity-50"
+            disabled={props.preflightRunning() || props.saving() || !hasAnyConfiguredProvider()}
+            title={
+              hasAnyConfiguredProvider()
+                ? 'Check connectivity for all configured providers'
+                : 'Configure and save at least one provider before running preflight'
+            }
+            class="inline-flex shrink-0 whitespace-nowrap min-h-10 sm:min-h-9 items-center rounded-md px-3 py-2 text-sm bg-blue-100 dark:bg-blue-900/25 text-blue-700 dark:text-blue-300 hover:bg-blue-200 dark:hover:bg-blue-800 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {props.preflightRunning() ? 'Checking...' : 'Run Preflight'}
           </button>
@@ -87,6 +93,11 @@ export const AIProviderConfigurationSection: Component<AIProviderConfigurationSe
           Configure API keys, subscription logins, or local/custom endpoints. Models returned by
           every configured provider will appear in the model selectors.
         </p>
+        <Show when={!hasAnyConfiguredProvider()}>
+          <p class="text-xs text-muted">
+            Save at least one provider below to load models and run preflight checks.
+          </p>
+        </Show>
         <Show when={props.preflightLastCheckedAt()}>
           <p class="text-[11px] text-muted">
             Last checked: {new Date(props.preflightLastCheckedAt()!).toLocaleTimeString()}

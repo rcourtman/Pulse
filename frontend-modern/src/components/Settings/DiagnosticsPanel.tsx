@@ -1,5 +1,6 @@
 import { Component, Show, createUniqueId } from 'solid-js';
-import OperationsPanel from '@/components/Settings/OperationsPanel';
+import { Card } from '@/components/shared/Card';
+import { ExternalTextLink } from '@/components/shared/ExternalTextLink';
 import RefreshCw from 'lucide-solid/icons/refresh-cw';
 import Download from 'lucide-solid/icons/download';
 import { DiagnosticsResultsPanel } from '@/components/Settings/DiagnosticsResultsPanel';
@@ -28,75 +29,92 @@ export const DiagnosticsPanel: Component<DiagnosticsPanelProps> = (props) => {
     <Show
       when={props.canRead !== false}
       fallback={
-        <OperationsPanel title={DIAGNOSTICS_PANEL_COPY.title}>
+        <Card
+          data-settings-panel
+          padding="none"
+          border={false}
+          class="overflow-hidden border border-border"
+        >
           <p class="p-4 text-sm text-muted">{DIAGNOSTICS_PANEL_COPY.accessUnavailable}</p>
-        </OperationsPanel>
+        </Card>
       }
     >
       <div class="space-y-6">
-        <OperationsPanel
-          title={DIAGNOSTICS_PANEL_COPY.title}
-          action={
-            <div class="flex items-center justify-between sm:justify-end gap-3 flex-wrap">
+        <Card
+          data-settings-panel
+          padding="none"
+          border={false}
+          class="overflow-hidden border border-border divide-y divide-border"
+        >
+          <div class="px-4 sm:px-6 py-3 sm:py-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between bg-surface-alt">
+            <div class="min-w-0 space-y-1">
+              <p class="text-sm text-base-content font-medium">{DIAGNOSTICS_PANEL_COPY.summary}</p>
               <Show when={diagnosticsData()}>
-                <div class="text-left sm:text-right text-xs text-muted">
-                  <div>
-                    {DIAGNOSTICS_PANEL_COPY.versionLabel} {diagnosticsData()?.version}
-                  </div>
-                  <div>
+                <div class="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted">
+                  <span>
+                    {DIAGNOSTICS_PANEL_COPY.versionLabel}: {diagnosticsData()?.version}
+                  </span>
+                  <span>
                     {DIAGNOSTICS_PANEL_COPY.uptimeLabel}:{' '}
                     {formatUptime(diagnosticsData()?.uptime || 0)}
-                  </div>
+                  </span>
                 </div>
               </Show>
-              <button
-                type="button"
-                onClick={runDiagnostics}
-                disabled={loading()}
-                aria-label={
-                  loading()
-                    ? DIAGNOSTICS_PANEL_COPY.runningActionLabel
-                    : DIAGNOSTICS_PANEL_COPY.runActionLabel
-                }
-                aria-describedby={runSafetyId}
-                class="flex min-h-11 sm:min-h-9 min-w-11 sm:min-w-10 items-center gap-2 px-3 sm:px-4 py-2.5 rounded-md font-medium text-sm transition-colors whitespace-nowrap bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-50 disabled:bg-surface disabled:text-muted"
-              >
-                <RefreshCw class={`w-4 h-4 ${loading() ? 'animate-spin' : ''}`} />
-                <span class="sm:hidden">
-                  {loading()
-                    ? DIAGNOSTICS_PANEL_COPY.runningActionLabel
-                    : DIAGNOSTICS_PANEL_COPY.runShortLabel}
-                </span>
-                <span class="hidden sm:inline">
-                  {loading()
-                    ? DIAGNOSTICS_PANEL_COPY.runningActionLabel
-                    : DIAGNOSTICS_PANEL_COPY.runActionLabel}
-                </span>
-              </button>
             </div>
-          }
-        >
-          <div class="px-4 sm:px-6 py-3 sm:py-4 space-y-2 text-sm text-muted">
+            <Show when={diagnosticsData() || loading()}>
+              <div class="flex items-center justify-end gap-2 flex-wrap shrink-0">
+                <button
+                  type="button"
+                  onClick={runDiagnostics}
+                  disabled={loading()}
+                  aria-label={
+                    loading()
+                      ? DIAGNOSTICS_PANEL_COPY.runningActionLabel
+                      : DIAGNOSTICS_PANEL_COPY.runActionLabel
+                  }
+                  aria-describedby={runSafetyId}
+                  class="flex min-h-11 sm:min-h-9 min-w-11 sm:min-w-10 items-center gap-2 px-3 sm:px-4 py-2.5 rounded-md font-medium text-sm transition-colors whitespace-nowrap bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-50 disabled:bg-surface disabled:text-muted"
+                >
+                  <RefreshCw class={`w-4 h-4 ${loading() ? 'animate-spin' : ''}`} />
+                  <span class="sm:hidden">
+                    {loading()
+                      ? DIAGNOSTICS_PANEL_COPY.runningActionLabel
+                      : DIAGNOSTICS_PANEL_COPY.runShortLabel}
+                  </span>
+                  <span class="hidden sm:inline">
+                    {loading()
+                      ? DIAGNOSTICS_PANEL_COPY.runningActionLabel
+                      : DIAGNOSTICS_PANEL_COPY.runActionLabel}
+                  </span>
+                </button>
+              </div>
+            </Show>
+          </div>
+          <div class="px-4 sm:px-6 py-3 sm:py-4 space-y-2 text-xs text-muted">
             <Show when={error()}>
-              <p role="alert" class="text-red-700 dark:text-red-300">
+              <p role="alert" class="text-sm text-red-700 dark:text-red-300">
                 {error()}
               </p>
             </Show>
             <Show when={notice()}>
-              <p role="status">{notice()}</p>
+              <p role="status" class="text-sm text-base-content">
+                {notice()}
+              </p>
             </Show>
             <p id={runSafetyId}>{DIAGNOSTICS_PANEL_COPY.runSafety}</p>
             <p id={exportSafetyId}>{DIAGNOSTICS_PANEL_COPY.exportSafety}</p>
-            <a
-              href={`${TROUBLESHOOTING_DOC_URL}#collect-diagnostics-safely`}
-              class="inline-flex min-h-11 items-center text-link hover:underline"
-            >
-              Safe diagnostics and sharing
-            </a>
+            <div class="pt-1">
+              <ExternalTextLink
+                href={`${TROUBLESHOOTING_DOC_URL}#collect-diagnostics-safely`}
+                class="inline-flex min-h-11 sm:min-h-0 items-center text-xs font-medium text-blue-600 underline underline-offset-2 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
+              >
+                Safe diagnostics and sharing
+              </ExternalTextLink>
+            </div>
           </div>
-          <div class="px-4 sm:px-6 py-3 sm:py-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-            <p class="text-xs text-muted">{DIAGNOSTICS_PANEL_COPY.summary}</p>
-            <Show when={diagnosticsData()}>
+          <Show when={diagnosticsData()}>
+            <div class="px-4 sm:px-6 py-3 sm:py-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+              <p class="text-xs text-muted">Export displayed diagnostics snapshot:</p>
               <div class="flex items-center gap-2 flex-wrap">
                 <button
                   type="button"
@@ -119,9 +137,9 @@ export const DiagnosticsPanel: Component<DiagnosticsPanelProps> = (props) => {
                   {DIAGNOSTICS_PANEL_COPY.exportGithubLabel}
                 </button>
               </div>
-            </Show>
-          </div>
-        </OperationsPanel>
+            </div>
+          </Show>
+        </Card>
         <DiagnosticsResultsPanel
           diagnosticsData={diagnosticsData()}
           loading={loading()}

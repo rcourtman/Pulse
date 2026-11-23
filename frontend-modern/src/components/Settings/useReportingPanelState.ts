@@ -126,6 +126,10 @@ export const useReportingPanelState = (isCurrentReader: () => boolean = () => tr
   const [runningScheduleID, setRunningScheduleID] = createSignal('');
   const [deletingScheduleID, setDeletingScheduleID] = createSignal('');
   const [updatingSchedule, setUpdatingSchedule] = createSignal(false);
+  const [pendingDeleteSchedule, setPendingDeleteSchedule] = createSignal<ReportSchedule | null>(
+    null,
+  );
+  const [pendingRetrySchedule, setPendingRetrySchedule] = createSignal<ReportSchedule | null>(null);
   const reportingFeatureId = () => reportingCatalog()?.id ?? '';
   const showUpgradePrompts = () => !presentationPolicyHidesUpgradePrompts();
 
@@ -512,17 +516,8 @@ export const useReportingPanelState = (isCurrentReader: () => boolean = () => tr
     }
   };
 
-  const runReportScheduleNow = async (schedule: ReportSchedule) => {
+  const executeRunReportScheduleNow = async (schedule: ReportSchedule) => {
     if (!canEditSchedules() || !isCurrentSchedule(schedule) || runningScheduleID()) return;
-    clearFeedback();
-    if (
-      schedule.last_run_status === 'unconfirmed' &&
-      !window.confirm(
-        'The previous email may have been accepted. Check the recipient first. Retry anyway, with a risk of a duplicate?',
-      )
-    )
-      return;
-    if (!canEditSchedules() || !isCurrentSchedule(schedule)) return;
     const retry = reportScheduleNeedsRetry(schedule);
     setRunningScheduleID(schedule.id);
     try {
@@ -567,11 +562,43 @@ export const useReportingPanelState = (isCurrentReader: () => boolean = () => tr
     }
   };
 
-  const deleteReportSchedule = async (schedule: ReportSchedule) => {
+  const runReportScheduleNow = async (schedule: ReportSchedule) => {
+    if (!canEditSchedules() || !isCurrentSchedule(schedule) || runningScheduleID()) return;
+    clearFeedback();
+    if (schedule.last_run_status === 'unconfirmed') {
+      setPendingRetrySchedule(schedule);
+      return;
+    }
+    await executeRunReportScheduleNow(schedule);
+  };
+
+  const cancelRetryReportSchedule = () => {
+    setPendingRetrySchedule(null);
+  };
+
+  const confirmRetryReportSchedule = async () => {
+    const schedule = pendingRetrySchedule();
+    setPendingRetrySchedule(null);
+    if (!schedule) return;
+    await executeRunReportScheduleNow(schedule);
+  };
+
+  const deleteReportSchedule = (schedule: ReportSchedule) => {
     if (!canEditSchedules() || !isCurrentSchedule(schedule) || deletingScheduleID()) return;
     clearFeedback();
-    if (!window.confirm(`Delete ${schedule.name}?`)) return;
-    if (!canEditSchedules() || !isCurrentSchedule(schedule)) return;
+    setPendingDeleteSchedule(schedule);
+  };
+
+  const cancelDeleteReportSchedule = () => {
+    setPendingDeleteSchedule(null);
+  };
+
+  const confirmDeleteReportSchedule = async () => {
+    const schedule = pendingDeleteSchedule();
+    setPendingDeleteSchedule(null);
+    if (!schedule || !canEditSchedules() || !isCurrentSchedule(schedule) || deletingScheduleID()) {
+      return;
+    }
     setDeletingScheduleID(schedule.id);
     try {
       const response = await fetchForReader(
@@ -598,9 +625,15 @@ export const useReportingPanelState = (isCurrentReader: () => boolean = () => tr
     successNotice,
     clearFeedback,
     canEditSchedules,
+    cancelDeleteReportSchedule,
+    cancelRetryReportSchedule,
     closeScheduleForm,
+    confirmDeleteReportSchedule,
+    confirmRetryReportSchedule,
     deleteReportSchedule,
     deletingScheduleID,
+    pendingDeleteSchedule,
+    pendingRetrySchedule,
     exportingInventory,
     format,
     handleExportVMInventory,

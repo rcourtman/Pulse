@@ -44,6 +44,23 @@ export const InfrastructureDiscoverySettingsDialog: Component<
           <div class="min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-6">
             <DiscoverySettingsForm {...props} />
           </div>
+
+          <div class="flex items-center justify-between gap-3 border-t border-border bg-surface-alt px-4 py-3 sm:px-6">
+            <span class="text-xs text-muted" role="status" aria-live="polite">
+              {props.savingDiscoverySettings()
+                ? 'Saving discovery settings...'
+                : 'Changes save automatically.'}
+            </span>
+            <Button
+              type="button"
+              variant="primary"
+              size="mdCompact"
+              onClick={props.onClose}
+              disabled={props.savingDiscoverySettings()}
+            >
+              Done
+            </Button>
+          </div>
         </div>
       </Dialog>
     </Show>

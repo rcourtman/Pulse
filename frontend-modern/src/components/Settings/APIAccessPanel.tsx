@@ -1,5 +1,5 @@
 import { Component } from 'solid-js';
-import SettingsPanel from '@/components/shared/SettingsPanel';
+import { Card } from '@/components/shared/Card';
 import { ButtonLink } from '@/components/shared/Button';
 import { API_TOKEN_ACCESS_PANEL_DESCRIPTION } from '@/utils/apiTokenPresentation';
 import { API_TOKEN_SCOPES_DOC_URL } from '@/utils/docsLinks';
@@ -16,8 +16,8 @@ interface APIAccessPanelProps {
 export const APIAccessPanel: Component<APIAccessPanelProps> = (props) => {
   return (
     <div class="space-y-3 sm:space-y-6">
-      <SettingsPanel title="API Access" noPadding>
-        <div class="space-y-2.5 p-2.5 sm:space-y-3 sm:p-6">
+      <Card padding="none" class="border border-border">
+        <div class="flex flex-col gap-3 p-3 sm:flex-row sm:items-center sm:justify-between sm:p-5">
           <p class="text-xs leading-relaxed text-muted sm:text-sm">
             {API_TOKEN_ACCESS_PANEL_DESCRIPTION}
           </p>
@@ -26,12 +26,12 @@ export const APIAccessPanel: Component<APIAccessPanelProps> = (props) => {
             target="_blank"
             variant="info"
             size="settingsAction"
-            class="w-fit gap-2 font-semibold"
+            class="w-fit shrink-0 gap-2 font-semibold whitespace-nowrap"
           >
             View scope reference
           </ButtonLink>
         </div>
-      </SettingsPanel>
+      </Card>
 
       <div data-testid="api-access-token-section">
         <APITokenManager

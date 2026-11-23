@@ -64,7 +64,9 @@ const SettingsWorkspace: Component<SettingsProps> = (props) => {
     searchQuery,
     setSearchQuery,
   } = useSettingsShellState({ activeTab });
-  const organizationMonitoredSystemUsage = createMemo(() => 0);
+  const organizationMonitoredSystemUsage = createMemo(
+    () => getRuntimeLimit('max_nodes')?.current ?? state.resources?.length ?? 0,
+  );
   const organizationGuestUsage = createMemo(() => getRuntimeLimit('max_guests')?.current ?? 0);
   const discoverySettings = useDiscoverySettingsState();
 
@@ -176,7 +178,13 @@ const SettingsWorkspace: Component<SettingsProps> = (props) => {
   });
   createEffect(() => {
     activeTab();
-    queueMicrotask(() => window.scrollTo({ top: 0, behavior: 'auto' }));
+    queueMicrotask(() => {
+      document.querySelector<HTMLElement>('.app-scroll-shell')?.scrollTo({
+        top: 0,
+        behavior: 'auto',
+      });
+      window.scrollTo({ top: 0, behavior: 'auto' });
+    });
   });
 
   onMount(() => {
@@ -190,7 +198,7 @@ const SettingsWorkspace: Component<SettingsProps> = (props) => {
         hasUnsavedChanges={systemSettings.hasUnsavedChanges}
         activeTabSaveBehavior={activeTabSaveBehavior}
         saveSettings={systemSettings.saveSettings}
-        discardChanges={() => window.location.reload()}
+        discardChanges={systemSettings.discardChanges}
         isMobileMenuOpen={isMobileMenuOpen}
         setIsMobileMenuOpen={setIsMobileMenuOpen}
         sidebarCollapsed={sidebarCollapsed}

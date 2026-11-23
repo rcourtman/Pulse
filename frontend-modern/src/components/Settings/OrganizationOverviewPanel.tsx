@@ -121,8 +121,8 @@ export const OrganizationOverviewPanel: Component<OrganizationOverviewPanelProps
       >
         <SettingsPanel title="Organization Overview" noPadding>
           <Show when={state.loading()}>
-            <div class="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 px-4 pt-4 sm:px-6 sm:pt-6">
-              <p id={checkingID} class="min-w-0 max-w-full text-sm text-muted">
+            <div class="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b border-border/60 bg-surface-alt/50 px-4 py-2.5 sm:px-6">
+              <p id={checkingID} class="min-w-0 max-w-full text-xs text-muted">
                 Checking saved details for{' '}
                 <bdi class="font-medium text-base-content [overflow-wrap:anywhere]">
                   {`${state.selectedOrgID()}.`}
@@ -130,12 +130,14 @@ export const OrganizationOverviewPanel: Component<OrganizationOverviewPanelProps
                 Restarting does not repeat a name change.
               </p>
               <Button
+                variant="ghost"
+                size="xs"
                 aria-describedby={checkingID}
                 onClick={(event) => {
                   // Pointer activation in Safari may not focus the control itself.
                   if (state.restartOrganizationRead()) event.currentTarget.focus();
                 }}
-                class="min-h-11 w-full sm:min-h-0 sm:w-auto"
+                class="w-full sm:w-auto"
               >
                 Restart details check
               </Button>

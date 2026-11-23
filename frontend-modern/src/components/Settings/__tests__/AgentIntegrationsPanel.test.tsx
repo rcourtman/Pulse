@@ -194,11 +194,10 @@ describe('AgentIntegrationsPanel', () => {
   it('leads immediately with un-collapsed 3-step pulse CLI onboarding, client switcher, and zero-token manual config', async () => {
     renderPanel();
 
-    expect(
-      (await screen.findByRole('heading', { name: 'External agents' })).closest(
-        `#${EXTERNAL_AGENT_SETUP_ANCHOR}`,
-      ),
-    ).not.toBeNull();
+    await waitFor(() => {
+      expect(document.getElementById(EXTERNAL_AGENT_SETUP_ANCHOR)).not.toBeNull();
+    });
+    expect(screen.queryByRole('heading', { name: 'External agents' })).not.toBeInTheDocument();
 
     // No outer toggle hiding the 3-step setup, and no curl | bash or irm | iex snippets.
     expect(screen.queryByRole('button', { name: 'Show connector setup' })).not.toBeInTheDocument();
@@ -208,7 +207,7 @@ describe('AgentIntegrationsPanel', () => {
     expect(document.body.textContent).not.toContain('<your-api-token>');
     expect(document.body.textContent).not.toContain('Patrol external agent');
 
-    // Step 1: Install pulse CLI (Homebrew default + verified installers).
+    // Step 1: Install pulse CLI (Homebrew default + verified installers without vX.Y.Z placeholder).
     expect(screen.getByText('Step 1')).toBeInTheDocument();
     expect(screen.getByText('brew install rcourtman/tap/pulse')).toBeInTheDocument();
 
@@ -217,11 +216,13 @@ describe('AgentIntegrationsPanel', () => {
     expect(unixButton).toHaveAttribute('aria-pressed', 'true');
     expect(document.body.textContent).toContain('gh release verify-asset');
     expect(document.body.textContent).toContain('install-cli.sh');
+    expect(document.body.textContent).not.toContain('vX.Y.Z');
 
     const windowsButton = screen.getByRole('button', { name: 'Windows (verified)' });
     fireEvent.click(windowsButton);
     expect(windowsButton).toHaveAttribute('aria-pressed', 'true');
     expect(document.body.textContent).toContain('install-cli.ps1');
+    expect(document.body.textContent).not.toContain('vX.Y.Z');
 
     // Step 2: Sign in read-only with keychain storage & read-only preset link.
     expect(screen.getByText('Step 2')).toBeInTheDocument();
@@ -274,9 +275,11 @@ describe('AgentIntegrationsPanel', () => {
     manualConfig!.open = true;
     fireEvent(manualConfig!, new Event('toggle'));
 
+    await waitFor(() => {
+      expect(document.body.textContent).toContain('[mcp_servers.pulse-test]');
+    });
     expect(document.body.textContent).toContain('"command": "pulse"');
     expect(document.body.textContent).toContain('"mcp"');
-    expect(document.body.textContent).toContain('[mcp_servers.pulse-test]');
     expect(document.body.textContent).toContain('command = "pulse"');
     expect(document.body.textContent).toContain('args = ["mcp"]');
     expect(document.body.textContent).not.toContain('PULSE_API_TOKEN');
@@ -324,18 +327,38 @@ describe('AgentIntegrationsPanel', () => {
     expect(screen.getByText('Failure codes')).toBeInTheDocument();
     expect(screen.getByText('(1 from the live manifest)')).toBeInTheDocument();
     expect(screen.getAllByText('resource_not_found').length).toBeGreaterThanOrEqual(2);
+    expect(document.body.textContent).toContain('claude_desktop_config.json');
+    expect(document.body.textContent).not.toContain('cmd/pulse-cli');
+  });
+
+  it('scopes manifest load errors and Retry inside Developer details without breaking Steps 1-3', async () => {
+    mocks.fetchAgentCapabilitiesManifest.mockRejectedValueOnce(new Error('Manifest offline'));
+    renderPanel();
+
+    expect(await screen.findByText('Step 1')).toBeInTheDocument();
+    expect(screen.queryByText(/Manifest offline/)).not.toBeInTheDocument();
+
+    const advancedDetails = (await screen.findByText('Developer details')).closest('details');
+    expect(advancedDetails).not.toBeNull();
+    advancedDetails!.open = true;
+    fireEvent(advancedDetails!, new Event('toggle'));
+
+    expect(await screen.findByText(/Manifest offline/)).toBeInTheDocument();
+    const retryButton = screen.getByRole('button', { name: 'Retry' });
+    mocks.fetchAgentCapabilitiesManifest.mockResolvedValueOnce(manifest);
+    fireEvent.click(retryButton);
+
+    expect(await screen.findByText('Live manifest details')).toBeInTheDocument();
   });
 
   it('scrolls direct setup links to External agents instead of the API token top', async () => {
     window.history.pushState({}, '', `/#${EXTERNAL_AGENT_SETUP_ANCHOR}`);
     renderPanel();
 
-    const heading = await screen.findByRole('heading', { name: 'External agents' });
-    const panel = heading.closest(`#${EXTERNAL_AGENT_SETUP_ANCHOR}`);
-
     await waitFor(() => {
       expect(scrollIntoViewMock).toHaveBeenCalledWith({ behavior: 'smooth', block: 'start' });
     });
+    const panel = document.getElementById(EXTERNAL_AGENT_SETUP_ANCHOR);
     expect(panel?.className).toContain('ring-2');
     expect(screen.getByText('Step 1')).toBeInTheDocument();
   });
@@ -344,12 +367,10 @@ describe('AgentIntegrationsPanel', () => {
     window.history.pushState({}, '', `/#${PULSE_MCP_SETUP_ANCHOR}`);
     renderPanel();
 
-    const heading = await screen.findByRole('heading', { name: 'External agents' });
-    expect(heading.closest(`#${EXTERNAL_AGENT_SETUP_ANCHOR}`)).not.toBeNull();
-
     await waitFor(() => {
       expect(window.location.hash).toBe(`#${EXTERNAL_AGENT_SETUP_ANCHOR}`);
     });
+    expect(document.getElementById(EXTERNAL_AGENT_SETUP_ANCHOR)).not.toBeNull();
     expect(scrollIntoViewMock).toHaveBeenCalledWith({ behavior: 'smooth', block: 'start' });
     expect(screen.getByText('Step 1')).toBeInTheDocument();
   });

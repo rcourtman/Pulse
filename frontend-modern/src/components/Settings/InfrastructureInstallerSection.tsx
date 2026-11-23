@@ -1,5 +1,6 @@
 import type { Component } from 'solid-js';
 import { For, Show, createEffect, createMemo, createSignal } from 'solid-js';
+import { A } from '@solidjs/router';
 import { Button, ButtonLink, CommandCopyButton } from '@/components/shared/Button';
 import { FormSelect } from '@/components/shared/FormSelect';
 import SettingsPanel from '@/components/shared/SettingsPanel';
@@ -55,7 +56,7 @@ const INSTALLER_FOCUS_PRESENTATION: Record<
   agent: {
     title: 'Install on a host',
     description:
-      'Install the agent for host-local, Docker, or Kubernetes telemetry. API-backed platforms such as Proxmox start under Platform connections.',
+      'Install the agent for host-local, Docker, or Kubernetes telemetry. API-backed platforms such as Proxmox connect directly via Add infrastructure.',
     recommendationTitle: 'Recommended install model',
     recommendationDetail:
       'Pulse Agent is a low-overhead background service. It collects node-local telemetry such as CPU, memory, disks, network I/O, temperatures, SMART disk health, services, Docker, and Kubernetes. For Proxmox, start with a dedicated read-only or narrowly scoped API token. No root agent is required for normal platform inventory and metrics. Add the agent only to nodes that need host-local augmentation. Use Availability checks for ping-only or agentless device monitoring.',
@@ -166,6 +167,7 @@ export const InfrastructureInstallerSection: Component<InfrastructureInstallerSe
   const state = useInfrastructureOperationsContext();
   const now = useRelativeTimeNow();
   const [showAdvancedOptions, setShowAdvancedOptions] = createSignal(false);
+  const [selectedPlatform, setSelectedPlatform] = createSignal<AgentPlatform>('linux');
   const focus = createMemo<InfrastructureInstallerFocus>(() => props.focus ?? 'agent');
   const presentation = createMemo(() => INSTALLER_FOCUS_PRESENTATION[focus()]);
   const commandSections = createMemo(() =>
@@ -173,6 +175,20 @@ export const InfrastructureInstallerSection: Component<InfrastructureInstallerSe
       .commandSections()
       .filter((section) => presentation().platforms.includes(section.platform)),
   );
+  const activeCommandSection = createMemo(() => {
+    const sections = commandSections();
+    return sections.find((section) => section.platform === selectedPlatform()) ?? sections[0];
+  });
+
+  createEffect(() => {
+    const sections = commandSections();
+    if (
+      sections.length > 0 &&
+      !sections.some((section) => section.platform === selectedPlatform())
+    ) {
+      setSelectedPlatform(sections[0].platform);
+    }
+  });
 
   createEffect(() => {
     state.handleInstallProfileChange(presentation().preferredProfile);
@@ -211,7 +227,7 @@ export const InfrastructureInstallerSection: Component<InfrastructureInstallerSe
                         }
                       >
                         {' '}
-                        Your first scoped install token is prepared below — copy the install command
+                        Your first scoped install token is prepared below. Copy the install command
                         to connect your first host.
                       </Show>
                     }
@@ -259,18 +275,18 @@ export const InfrastructureInstallerSection: Component<InfrastructureInstallerSe
               storage detail.
             </p>
             <div class="mt-2 flex flex-wrap gap-x-4 gap-y-2 text-xs font-medium">
-              <a
+              <A
                 href={buildInfrastructureOnboardingPath('pve')}
                 class="text-blue-700 underline decoration-blue-300 underline-offset-2 hover:text-blue-900 dark:text-blue-200 dark:hover:text-white"
               >
                 Connect Proxmox VE through the API
-              </a>
-              <a
+              </A>
+              <A
                 href={buildInfrastructureOnboardingPath('pbs')}
                 class="text-blue-700 underline decoration-blue-300 underline-offset-2 hover:text-blue-900 dark:text-blue-200 dark:hover:text-white"
               >
                 Connect PBS through the API
-              </a>
+              </A>
               <a
                 href="/docs/PRODUCTION_SECURITY"
                 class="text-blue-700 underline decoration-blue-300 underline-offset-2 hover:text-blue-900 dark:text-blue-200 dark:hover:text-white"
@@ -345,8 +361,8 @@ export const InfrastructureInstallerSection: Component<InfrastructureInstallerSe
                 <span class="mr-2 mt-0.5 text-emerald-500">✓</span>
                 <span>
                   Revoke the token any time from{' '}
-                  <span class="font-medium">Settings → Infrastructure → Tokens</span>. The agent
-                  stops reporting immediately.
+                  <span class="font-medium">Settings → Security → API Access</span>. The agent stops
+                  reporting immediately.
                 </span>
               </li>
             </ul>
@@ -377,7 +393,7 @@ export const InfrastructureInstallerSection: Component<InfrastructureInstallerSe
             <p id="install-token-replacement-description" class="ml-6 mt-2 text-xs text-muted">
               Changing this choice prepares a new token and command. It does not reconfigure an
               installed agent. Rerun the installer on the intended host with the new token. Earlier
-              tokens remain valid. Revoke them from Settings → Infrastructure → Tokens only when no
+              tokens remain valid. Revoke them from Settings → Security → API Access only when no
               agent still uses them.
             </p>
           </div>
@@ -469,8 +485,8 @@ export const InfrastructureInstallerSection: Component<InfrastructureInstallerSe
 
                 <Show when={state.insecureMode()}>
                   <div class="rounded-md border border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-800 dark:border-amber-700 dark:bg-amber-900/25 dark:text-amber-200">
-                    <span class="font-medium">TLS verification disabled</span> — skip cert checks
-                    for self-signed setups. Not recommended for production.
+                    <span class="font-medium">TLS verification disabled:</span> skip cert checks for
+                    self-signed setups. Not recommended for production.
                   </div>
                 </Show>
 
@@ -488,7 +504,7 @@ export const InfrastructureInstallerSection: Component<InfrastructureInstallerSe
                 </label>
 
                 <div class="rounded-md border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm text-emerald-900 dark:border-emerald-700 dark:bg-emerald-900/25 dark:text-emerald-100">
-                  <span class="font-medium">Config signing (optional)</span> — Require signed remote
+                  <span class="font-medium">Config signing (optional):</span> Require signed remote
                   config payloads with{' '}
                   <code class="wrap-anywhere">PULSE_AGENT_CONFIG_SIGNATURE_REQUIRED=true</code>.
                   Provide keys via <code class="wrap-anywhere">PULSE_AGENT_CONFIG_SIGNING_KEY</code>{' '}
@@ -532,6 +548,7 @@ export const InfrastructureInstallerSection: Component<InfrastructureInstallerSe
           <div class="flex gap-2">
             <input
               type="text"
+              aria-label="Install token name (optional)"
               value={state.tokenName()}
               onInput={(event) => state.setTokenName(event.currentTarget.value)}
               onKeyDown={(event) => {
@@ -686,20 +703,49 @@ export const InfrastructureInstallerSection: Component<InfrastructureInstallerSe
               />
             </div>
 
-            <div class="space-y-4">
-              <For each={commandSections()}>
+            <div class="space-y-3">
+              <Show when={commandSections().length > 1}>
+                <div
+                  role="tablist"
+                  aria-label="Target operating system"
+                  class="flex flex-wrap gap-1.5 border-b border-border pb-2"
+                >
+                  <For each={commandSections()}>
+                    {(section) => {
+                      const isActive = () => activeCommandSection()?.platform === section.platform;
+                      return (
+                        <button
+                          type="button"
+                          role="tab"
+                          aria-selected={isActive()}
+                          onClick={() => setSelectedPlatform(section.platform)}
+                          class={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+                            isActive()
+                              ? 'bg-blue-600 text-white'
+                              : 'border border-border bg-surface text-muted hover:text-base-content'
+                          }`}
+                        >
+                          {getCommandSectionTitle(section, focus())}
+                        </button>
+                      );
+                    }}
+                  </For>
+                </div>
+              </Show>
+
+              <Show when={activeCommandSection()}>
                 {(section) => (
                   <div class="space-y-3 rounded-md border border-border p-4">
                     <div class="space-y-1">
                       <h5 class="text-sm font-semibold text-base-content">
-                        {getCommandSectionTitle(section, focus())}
+                        {getCommandSectionTitle(section(), focus())}
                       </h5>
                       <p class="text-xs text-muted">
-                        {getCommandSectionDescription(section, focus())}
+                        {getCommandSectionDescription(section(), focus())}
                       </p>
                     </div>
                     <div class="space-y-3">
-                      <For each={section.snippets}>
+                      <For each={section().snippets}>
                         {(snippet) => {
                           const copyCommand = () => snippet.command;
 
@@ -740,7 +786,7 @@ export const InfrastructureInstallerSection: Component<InfrastructureInstallerSe
                     </div>
                   </div>
                 )}
-              </For>
+              </Show>
             </div>
 
             <div class="space-y-3 rounded-md border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900 dark:border-blue-800 dark:bg-blue-900/25 dark:text-blue-100">
@@ -763,6 +809,7 @@ export const InfrastructureInstallerSection: Component<InfrastructureInstallerSe
               <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
                 <input
                   type="text"
+                  aria-label="Hostname or agent ID"
                   value={state.lookupValue()}
                   onInput={(event) => {
                     state.setLookupValue(event.currentTarget.value);
@@ -815,7 +862,7 @@ export const InfrastructureInstallerSection: Component<InfrastructureInstallerSe
                         <div class="space-y-1">
                           <div class="text-sm font-semibold">
                             {isConnected()
-                              ? 'First host connected'
+                              ? 'Host connected'
                               : agent().displayName || agent().hostname}
                           </div>
                           <p
@@ -917,23 +964,23 @@ export const InfrastructureInstallerSection: Component<InfrastructureInstallerSe
                   </p>
                   <ul class="mt-2 list-inside list-disc space-y-1 text-xs text-muted">
                     <li>
-                      <code class="rounded-sm bg-surface-hover px-1">--enable-docker</code> — Force
+                      <code class="rounded-sm bg-surface-hover px-1">--enable-docker</code>: Force
                       enable Docker/Podman monitoring
                     </li>
                     <li>
-                      <code class="rounded-sm bg-surface-hover px-1">--enable-kubernetes</code> —
+                      <code class="rounded-sm bg-surface-hover px-1">--enable-kubernetes</code>:
                       Force enable Kubernetes monitoring
                     </li>
                     <li>
-                      <code class="rounded-sm bg-surface-hover px-1">--enable-proxmox</code> — Force
+                      <code class="rounded-sm bg-surface-hover px-1">--enable-proxmox</code>: Force
                       enable Proxmox integration (creates API token)
                     </li>
                     <li>
-                      <code class="rounded-sm bg-surface-hover px-1">--proxmox-type pve|pbs</code> —
+                      <code class="rounded-sm bg-surface-hover px-1">--proxmox-type pve|pbs</code>:
                       Set Proxmox node mode explicitly
                     </li>
                     <li>
-                      <code class="rounded-sm bg-surface-hover px-1">--disable-docker</code> — Skip
+                      <code class="rounded-sm bg-surface-hover px-1">--disable-docker</code>: Skip
                       Docker even if detected
                     </li>
                   </ul>
@@ -954,8 +1001,8 @@ export const InfrastructureInstallerSection: Component<InfrastructureInstallerSe
             </p>
             <div class="space-y-1">
               <span class="text-xs font-medium text-muted">Linux / macOS / FreeBSD</span>
-              <div class="flex items-start gap-2 rounded-md border border-border bg-slate-950 p-2">
-                <pre class="min-w-0 flex-1 overflow-x-auto px-1 py-1.5 font-mono text-xs text-red-400">
+              <div class="flex items-start gap-2 rounded-md border border-border bg-page p-2">
+                <pre class="min-w-0 flex-1 overflow-x-auto px-1 py-1.5 font-mono text-xs text-base-content">
                   <code>{state.getUninstallCommand()}</code>
                 </pre>
                 <CommandCopyButton
@@ -997,8 +1044,8 @@ export const InfrastructureInstallerSection: Component<InfrastructureInstallerSe
               <span class="text-xs font-medium text-muted">
                 Windows (PowerShell as Administrator)
               </span>
-              <div class="flex items-start gap-2 rounded-md border border-border bg-slate-950 p-2">
-                <pre class="min-w-0 flex-1 overflow-x-auto px-1 py-1.5 font-mono text-xs text-red-400">
+              <div class="flex items-start gap-2 rounded-md border border-border bg-page p-2">
+                <pre class="min-w-0 flex-1 overflow-x-auto px-1 py-1.5 font-mono text-xs text-base-content">
                   <code>{state.getWindowsUninstallCommand()}</code>
                 </pre>
                 <CommandCopyButton

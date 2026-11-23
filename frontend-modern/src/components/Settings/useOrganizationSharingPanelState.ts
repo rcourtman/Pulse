@@ -7,6 +7,7 @@ import {
   type OrganizationAccessRequestOptions,
   type OrganizationShare,
 } from '@/api/orgs';
+import { apiErrorStatus } from '@/api/responseUtils';
 import { useResources } from '@/hooks/useResources';
 import { eventBus } from '@/stores/events';
 import { isMultiTenantEnabled } from '@/stores/license';
@@ -56,10 +57,32 @@ export type ResourceOption = {
   name: string;
 };
 
+export type ShareConfirmation =
+  | {
+      kind: 'remove-outgoing';
+      organization: Organization;
+      share: OrganizationShare;
+      title: string;
+      message: string;
+      confirmLabel: string;
+      generation: number;
+    }
+  | {
+      kind: 'decline-incoming';
+      organization: Organization;
+      share: IncomingOrganizationShare;
+      title: string;
+      message: string;
+      confirmLabel: string;
+      generation: number;
+    };
+
 export function useOrganizationSharingPanelState(props: OrganizationSharingPanelProps) {
   const [loading, setLoading] = createSignal(true);
   const [loadError, setLoadError] = createSignal<string | null>(null);
+  const [mutationError, setMutationError] = createSignal<string | null>(null);
   const [saving, setSaving] = createSignal(false);
+  const [shareConfirmation, setShareConfirmation] = createSignal<ShareConfirmation | null>(null);
   const [org, setOrg] = createSignal<Organization | null>(null);
   const [orgs, setOrgs] = createSignal<Organization[]>([]);
   const [outgoingShares, setOutgoingShares] = createSignal<OrganizationShare[]>([]);
@@ -107,7 +130,11 @@ export function useOrganizationSharingPanelState(props: OrganizationSharingPanel
   );
   const sharingChangesPaused = () => unavailableLists() !== undefined;
   const canChangeSharing = () =>
-    hasCurrentSharing() && canManageCurrentOrg() && !sharingChangesPaused() && !saving();
+    hasCurrentSharing() &&
+    canManageCurrentOrg() &&
+    !sharingChangesPaused() &&
+    !saving() &&
+    !shareConfirmation();
   const { resources } = useResources();
 
   const targetOrgOptions = createMemo(() =>
@@ -171,6 +198,7 @@ export function useOrganizationSharingPanelState(props: OrganizationSharingPanel
     setOutgoingShares([]);
     setIncomingShares([]);
     setUnavailableLists(undefined);
+    setMutationError(null);
   };
   const clearDraft = () => {
     targetOrgNeedsReselection = false;
@@ -187,6 +215,7 @@ export function useOrganizationSharingPanelState(props: OrganizationSharingPanel
   };
   const invalidateRequests = () => {
     generation += 1;
+    setShareConfirmation(null);
     readController?.abort();
     readController = undefined;
     mutationController?.abort();
@@ -308,6 +337,7 @@ export function useOrganizationSharingPanelState(props: OrganizationSharingPanel
     const isCurrent = () => request === generation && selectionIsCurrent();
     const controller = new AbortController();
     mutationController = controller;
+    setMutationError(null);
     setSaving(true);
     try {
       await change({ expectedOrgID: selectedOrgID(), signal: controller.signal, retry: false });
@@ -319,7 +349,13 @@ export function useOrganizationSharingPanelState(props: OrganizationSharingPanel
     } catch (error) {
       if (!isCurrent()) return;
       logger.error('Failed to change organization sharing', error);
-      notificationStore.error(errorMessage(error instanceof Error ? error.message : undefined));
+      const status = apiErrorStatus(error);
+      const resolvedError = errorMessage(error instanceof Error ? error.message : undefined);
+      notificationStore.error(resolvedError);
+      if (status === 400 || status === 422) {
+        setMutationError(resolvedError);
+        return;
+      }
       // A failed response cannot tell us whether a change was applied. Read
       // before allowing another change; never replay a write automatically.
       batch(() => {
@@ -450,16 +486,18 @@ export function useOrganizationSharingPanelState(props: OrganizationSharingPanel
   const isCurrentIncoming = (share: IncomingOrganizationShare) =>
     incomingShares().includes(unwrap(share));
 
-  const deleteShare = async (share: OrganizationShare) => {
+  const deleteShare = (share: OrganizationShare) => {
     const currentOrg = org();
     if (!currentOrg || !canChangeSharing() || !isCurrentOutgoing(share)) return;
-    if (!confirm(getOrganizationOutgoingShareRemoveConfirmMessage(share))) return;
-    if (org() !== currentOrg || !isCurrentOutgoing(share) || !canChangeSharing()) return;
-    await changeSharing(
-      (options) => OrgsAPI.deleteShare(currentOrg.id, share.id, options),
-      getOrganizationShareDeleteSuccessMessage(),
-      getOrganizationShareDeleteErrorMessage,
-    );
+    setShareConfirmation({
+      kind: 'remove-outgoing',
+      organization: currentOrg,
+      share: unwrap(share),
+      title: 'Remove outgoing share?',
+      message: getOrganizationOutgoingShareRemoveConfirmMessage(share),
+      confirmLabel: 'Remove share',
+      generation,
+    });
   };
 
   const acceptIncomingShare = async (share: IncomingOrganizationShare) => {
@@ -479,7 +517,7 @@ export function useOrganizationSharingPanelState(props: OrganizationSharingPanel
     );
   };
 
-  const declineIncomingShare = async (share: IncomingOrganizationShare) => {
+  const declineIncomingShare = (share: IncomingOrganizationShare) => {
     const currentOrg = org();
     if (
       !currentOrg ||
@@ -489,12 +527,51 @@ export function useOrganizationSharingPanelState(props: OrganizationSharingPanel
     )
       return;
     const shareLabel = getOrganizationShareResourceLabel(share);
-    if (!confirm(getOrganizationIncomingShareDeclineConfirmMessage(shareLabel, share.status)))
+    const isPending = share.status === 'pending';
+    setShareConfirmation({
+      kind: 'decline-incoming',
+      organization: currentOrg,
+      share: unwrap(share),
+      title: isPending ? 'Decline incoming share?' : 'Remove incoming share?',
+      message: getOrganizationIncomingShareDeclineConfirmMessage(shareLabel, share.status),
+      confirmLabel: isPending ? 'Decline share' : 'Remove share',
+      generation,
+    });
+  };
+
+  const cancelShareConfirmation = (confirmation: ShareConfirmation) => {
+    if (shareConfirmation() === confirmation) setShareConfirmation(null);
+  };
+
+  const confirmShareAction = async (confirmation: ShareConfirmation) => {
+    if (shareConfirmation() !== confirmation) return;
+    setShareConfirmation(null);
+    if (
+      confirmation.generation !== generation ||
+      !canChangeSharing() ||
+      org() !== confirmation.organization
+    )
       return;
-    if (org() !== currentOrg || !isCurrentIncoming(share) || !canChangeSharing()) return;
+    if (confirmation.kind === 'remove-outgoing') {
+      if (!isCurrentOutgoing(confirmation.share)) return;
+      await changeSharing(
+        (options) =>
+          OrgsAPI.deleteShare(confirmation.organization.id, confirmation.share.id, options),
+        getOrganizationShareDeleteSuccessMessage(),
+        getOrganizationShareDeleteErrorMessage,
+      );
+      return;
+    }
+    if (
+      !isCurrentIncoming(confirmation.share) ||
+      confirmation.share.targetOrgId !== confirmation.organization.id
+    )
+      return;
+    const shareLabel = getOrganizationShareResourceLabel(confirmation.share);
     await changeSharing(
-      (options) => OrgsAPI.declineIncomingShare(currentOrg.id, share.id, options),
-      getOrganizationIncomingShareDeclineSuccessMessage(shareLabel, share.status),
+      (options) =>
+        OrgsAPI.declineIncomingShare(confirmation.organization.id, confirmation.share.id, options),
+      getOrganizationIncomingShareDeclineSuccessMessage(shareLabel, confirmation.share.status),
       getOrganizationIncomingShareDeclineErrorMessage,
     );
   };
@@ -517,8 +594,10 @@ export function useOrganizationSharingPanelState(props: OrganizationSharingPanel
     accessRole,
     acceptIncomingShare,
     applyResourceQuickPick,
+    cancelShareConfirmation,
     canCreateShare,
     canManageCurrentOrg,
+    confirmShareAction,
     createShare,
     declineIncomingShare,
     deleteShare,
@@ -526,6 +605,7 @@ export function useOrganizationSharingPanelState(props: OrganizationSharingPanel
     loading,
     loadError,
     loadSharingData,
+    mutationError,
     org,
     readOnly: presentationPolicyIsReadOnly,
     selectedOrgID,
@@ -541,6 +621,7 @@ export function useOrganizationSharingPanelState(props: OrganizationSharingPanel
     saving,
     selectedQuickPick,
     selectedResource,
+    shareConfirmation,
     quickPickUnavailable: () => !!selectedQuickPick() && !selectedResource(),
     setAccessRole,
     targetOrgError,

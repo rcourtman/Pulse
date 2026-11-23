@@ -13,7 +13,7 @@ interface UseBackupTransferFlowParams {
 }
 
 const CHANGED_WORKSPACE =
-  'Organisation changed. Close this dialog and reopen it in the intended workspace.';
+  'Organization changed. Close this dialog and reopen it in the intended workspace.';
 
 // Allow room for the exported JSON envelope/formatting without reading an
 // unbounded local file. The wire limit matches handleImportConfig's reader;
@@ -156,7 +156,12 @@ export function useBackupTransferFlow({ securityStatus }: UseBackupTransferFlowP
       setExportPassphrase('');
       setExportPassphraseConfirmation('');
     } catch (error) {
-      if (active) fail(error instanceof Error ? error.message : 'Failed to export configuration');
+      if (!active) return;
+      if (currentOrgID() !== orgID) {
+        fail(CHANGED_WORKSPACE);
+        return;
+      }
+      fail(error instanceof Error ? error.message : 'Failed to export configuration');
     } finally {
       if (active) setIsTransferring(false);
     }
@@ -249,6 +254,10 @@ export function useBackupTransferFlow({ securityStatus }: UseBackupTransferFlowP
       }, 2000);
     } catch (error) {
       if (!active) return;
+      if (currentOrgID() !== orgID) {
+        fail(CHANGED_WORKSPACE);
+        return;
+      }
       const errorText = error instanceof Error ? error.message : 'Failed to import configuration';
       fail(
         submitted

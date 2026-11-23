@@ -131,6 +131,11 @@ const healthReads = () => requests.filter(({ url }) => url === '/api/health');
 const row = (id = selectedID) => screen.getByText(id, { exact: true }).closest('tr')!;
 const action = (name: 'Suspend Org' | 'Activate Org', id = selectedID) =>
   screen.getByRole('button', { name: `${name} for Same organization name (${id})` });
+const triggerSuspend = (id = selectedID) => {
+  fireEvent.click(action('Suspend Org', id));
+  const dialog = screen.getByRole('dialog', { name: 'Suspend organization' });
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Suspend organization' }));
+};
 const loaded = async () => {
   await waitFor(() => expect(action('Suspend Org')).toBeEnabled());
   expect(action('Suspend Org', firstID)).toBeEnabled();
@@ -306,7 +311,7 @@ describe('Billing Admin rendered controls through real HTTP', () => {
       const save = deferred<Response>();
       healthReply = () => health.promise;
       writeReply = () => save.promise;
-      fireEvent.click(action('Suspend Org'));
+      triggerSuspend();
       await waitFor(() => expect(healthReads()).toHaveLength(1));
       expect(writes()).toHaveLength(0);
       expect(action('Suspend Org')).toBeDisabled();
@@ -370,7 +375,7 @@ describe('Billing Admin rendered controls through real HTTP', () => {
     primeCSRF();
     render(() => <BillingAdminPanel />);
     await loaded();
-    fireEvent.click(action('Suspend Org'));
+    triggerSuspend();
     await waitFor(() => expect(action('Activate Org')).toBeEnabled());
     expect(writes()).toHaveLength(1);
     expectWire(writes()[0], 'PUT', billingURL(selectedID));
@@ -401,7 +406,7 @@ describe('Billing Admin rendered controls through real HTTP', () => {
       };
       render(() => <BillingAdminPanel />);
       await loaded();
-      fireEvent.click(action('Suspend Org'));
+      triggerSuspend();
       await waitFor(() =>
         expect(within(row()).getByRole('alert')).toHaveTextContent(
           BILLING_ADMIN_UNCONFIRMED_CHANGE,
@@ -457,7 +462,7 @@ describe('Billing Admin rendered controls through real HTTP', () => {
       healthReply = () => health.promise;
       const view = render(() => <BillingAdminPanel />);
       await loaded();
-      fireEvent.click(action('Suspend Org'));
+      triggerSuspend();
       await waitFor(() => expect(healthReads()).toHaveLength(1));
       expect(writes()).toHaveLength(0);
       if (kind === 'refresh') fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
@@ -508,7 +513,7 @@ describe('Billing Admin rendered controls through real HTTP', () => {
       if (kind !== 'dispose') {
         await loaded();
         // A new explicit action still works, using a fresh admitted snapshot.
-        fireEvent.click(action('Suspend Org'));
+        triggerSuspend();
         await waitFor(() => expect(action('Activate Org')).toBeEnabled());
         expect(writes()).toHaveLength(1);
         expectWire(writes()[0], 'PUT', billingURL(selectedID));
@@ -524,7 +529,7 @@ describe('Billing Admin rendered controls through real HTTP', () => {
       writeReply = () => old.response;
       render(() => <BillingAdminPanel />);
       await loaded();
-      fireEvent.click(action('Suspend Org'));
+      triggerSuspend();
       await waitFor(() => expect(old.response.bodyUsed).toBe(true));
       // A synthetic Response ignores abort. This exercises the hook's post-body
       // generation guard, not browser transport cancellation or server rollback.
@@ -544,7 +549,7 @@ describe('Billing Admin rendered controls through real HTTP', () => {
       expect(writes()).toHaveLength(1);
       expect(reads(selectedID)).toHaveLength(3);
       writeReply = acceptWrite;
-      fireEvent.click(action('Suspend Org'));
+      triggerSuspend();
       await waitFor(() => expect(action('Activate Org')).toBeEnabled());
       expect(JSON.parse(String(writes()[1].init.body))).toEqual({
         ...billing('suspended'),

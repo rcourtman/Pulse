@@ -1,5 +1,13 @@
 import { useRelativeTimeNow } from '@/utils/relativeTimeClock';
-import { Show, createEffect, createMemo, createSignal, onMount, type Component } from 'solid-js';
+import {
+  For,
+  Show,
+  createEffect,
+  createMemo,
+  createSignal,
+  onMount,
+  type Component,
+} from 'solid-js';
 import type { Resource } from '@/types/resource';
 import { isAgentlessAvailabilityResource } from '@/features/standalone/standalonePageModel';
 import { useLocation, useNavigate } from '@solidjs/router';
@@ -11,12 +19,16 @@ import RotateCw from 'lucide-solid/icons/rotate-cw';
 import Activity from 'lucide-solid/icons/activity';
 import X from 'lucide-solid/icons/x';
 import { Button } from '@/components/shared/Button';
+import { Card } from '@/components/shared/Card';
 import { EmptyState } from '@/components/shared/EmptyState';
-import SettingsPanel from '@/components/shared/SettingsPanel';
 import { Dialog } from '@/components/shared/Dialog';
+import { FormSelect } from '@/components/shared/FormSelect';
 import { MetadataBadge } from '@/components/shared/MetadataBadge';
+import { SearchField } from '@/components/shared/SearchField';
 import { PlatformWindowedList } from '@/features/platformPage/PlatformWindowedList';
 import { useResources } from '@/hooks/useResources';
+import { notificationStore } from '@/stores/notifications';
+import { presentationPolicyIsReadOnly } from '@/stores/sessionPresentationPolicy';
 import { buildProbeAgentOptions } from '@/utils/availabilityProbeAgents';
 import {
   AvailabilityTargetsAPI,
@@ -30,6 +42,7 @@ import {
   getAvailabilityTargetAddKind,
   getAvailabilityTargetAddPrefill,
   getAvailabilityTargetAddressLabel,
+  getAvailabilityTargetHealth,
   getAvailabilityTargetKindLabel,
   getAvailabilityTargetMethodLabel,
   getAvailabilityTargetProbeSourceLabel,
@@ -50,6 +63,13 @@ type AvailabilityDialogState =
   | { mode: 'edit'; target: AvailabilityTarget }
   | null;
 
+type PendingAvailabilityAction = {
+  id: string;
+  kind: 'test' | 'toggle' | 'delete';
+} | null;
+
+type AvailabilityStatusFilter = 'all' | 'attention' | 'paused';
+
 const sortTargets = (targets: readonly AvailabilityTarget[]): AvailabilityTarget[] =>
   [...targets].sort((left, right) => left.name.localeCompare(right.name));
 
@@ -58,6 +78,7 @@ export const AvailabilitySettingsPanel: Component = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const { resources } = useResources();
+  const readOnly = createMemo(() => presentationPolicyIsReadOnly());
   const probeAgentOptions = createMemo(() => buildProbeAgentOptions(resources()));
   // The Machines availability tab reads these same resources, so the counts and
   // colours here come from the same status logic when they are loaded.
@@ -73,12 +94,48 @@ export const AvailabilitySettingsPanel: Component = () => {
   const resourceForTarget = (target: AvailabilityTarget) =>
     availabilityResourceByTargetId().get(target.id);
   const [targets, setTargets] = createSignal<AvailabilityTarget[]>([]);
-  const [loading, setLoading] = createSignal(false);
+  const [loading, setLoading] = createSignal(true);
   const [error, setError] = createSignal<string | null>(null);
   const [dialog, setDialog] = createSignal<AvailabilityDialogState>(null);
-  const [pendingActionId, setPendingActionId] = createSignal<string | null>(null);
+  const [pendingAction, setPendingAction] = createSignal<PendingAvailabilityAction>(null);
   const [deleteConfirmingId, setDeleteConfirmingId] = createSignal<string | null>(null);
+  const [dialogActionError, setDialogActionError] = createSignal<string | null>(null);
+  const [searchQuery, setSearchQuery] = createSignal('');
+  const [statusFilter, setStatusFilter] = createSignal<AvailabilityStatusFilter>('all');
+  const [kindFilter, setKindFilter] = createSignal<string>('all');
+
   const sortedTargets = createMemo(() => sortTargets(targets()));
+  const availableKindLabels = createMemo(() => {
+    const labels = new Set<string>();
+    for (const target of targets()) {
+      labels.add(getAvailabilityTargetKindLabel(target));
+    }
+    return Array.from(labels).sort((left, right) => left.localeCompare(right));
+  });
+  const filteredTargets = createMemo(() => {
+    const query = searchQuery().trim().toLowerCase();
+    const status = statusFilter();
+    const kind = kindFilter();
+    return sortedTargets().filter((target) => {
+      if (status === 'paused' && target.enabled) return false;
+      if (status === 'attention') {
+        const health = getAvailabilityTargetHealth(target, resourceForTarget(target), now());
+        if (health !== 'attention' && health !== 'offline') return false;
+      }
+      if (kind !== 'all' && getAvailabilityTargetKindLabel(target) !== kind) return false;
+      if (!query) return true;
+      const haystack = [
+        target.name,
+        target.address,
+        getAvailabilityTargetKindLabel(target),
+        getAvailabilityTargetMethodLabel(target),
+        getAvailabilityTargetAddressLabel(target),
+      ]
+        .join(' ')
+        .toLowerCase();
+      return haystack.includes(query);
+    });
+  });
 
   const loadTargets = async () => {
     setLoading(true);
@@ -93,7 +150,9 @@ export const AvailabilitySettingsPanel: Component = () => {
   };
 
   const openAddDialog = (targetKind: AvailabilityTargetKind = 'service') => {
+    if (readOnly()) return;
     setDeleteConfirmingId(null);
+    setDialogActionError(null);
     navigate(buildAvailabilityTargetAddPath(targetKind), { scroll: false });
   };
 
@@ -101,6 +160,7 @@ export const AvailabilitySettingsPanel: Component = () => {
     const current = dialog();
     setDialog(null);
     setDeleteConfirmingId(null);
+    setDialogActionError(null);
     // The map sent the owner here to add one thing. Saved or not, that is
     // where they were, and where what they added is drawn.
     if (
@@ -125,8 +185,10 @@ export const AvailabilitySettingsPanel: Component = () => {
   };
 
   const toggleTarget = async (target: AvailabilityTarget) => {
-    setPendingActionId(target.id);
+    if (readOnly()) return;
+    setPendingAction({ id: target.id, kind: 'toggle' });
     setError(null);
+    setDialogActionError(null);
     try {
       await AvailabilityTargetsAPI.update(target.id, { enabled: !target.enabled });
       await loadTargets();
@@ -136,45 +198,72 @@ export const AvailabilitySettingsPanel: Component = () => {
         if (updated) setDialog({ mode: 'edit', target: updated });
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to update availability check.');
+      const message = err instanceof Error ? err.message : 'Failed to update availability check.';
+      if (dialog()?.mode === 'edit') {
+        setDialogActionError(message);
+      } else {
+        setError(message);
+      }
     } finally {
-      setPendingActionId(null);
+      setPendingAction(null);
     }
   };
 
   const testTarget = async (target: AvailabilityTarget) => {
-    setPendingActionId(target.id);
+    if (readOnly()) return;
+    setPendingAction({ id: target.id, kind: 'test' });
     setError(null);
     try {
-      await AvailabilityTargetsAPI.testSaved(target.id);
+      const result = await AvailabilityTargetsAPI.testSaved(target.id);
+      if (result.outcome === 'indeterminate') {
+        notificationStore.info(
+          `${target.name}: open or filtered (${result.latencyMillis} ms)`,
+          4000,
+        );
+      } else if (result.success) {
+        notificationStore.success(`${target.name}: reachable in ${result.latencyMillis} ms`, 3500);
+      } else {
+        notificationStore.error(
+          `${target.name}: ${result.error || 'Availability test failed.'}`,
+          5000,
+        );
+      }
       await loadTargets();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Availability test failed.');
     } finally {
-      setPendingActionId(null);
+      setPendingAction(null);
     }
   };
 
   const requestRemoveTarget = async (target: AvailabilityTarget) => {
+    if (readOnly()) return;
     if (deleteConfirmingId() !== target.id) {
       setDeleteConfirmingId(target.id);
+      setDialogActionError(null);
       return;
     }
 
-    setPendingActionId(target.id);
+    setPendingAction({ id: target.id, kind: 'delete' });
     setError(null);
+    setDialogActionError(null);
     try {
       await AvailabilityTargetsAPI.remove(target.id);
       await loadTargets();
       closeDialog(true);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to remove availability check.');
+      const message = err instanceof Error ? err.message : 'Failed to remove availability check.';
+      setDialogActionError(message);
     } finally {
-      setPendingActionId(null);
+      setPendingAction(null);
     }
   };
 
   createEffect(() => {
+    if (readOnly()) {
+      setDialog(null);
+      return;
+    }
     if (shouldOpenAvailabilityTargetAddDialog(location.pathname, location.search)) {
       setDialog({
         mode: 'add',
@@ -215,12 +304,14 @@ export const AvailabilitySettingsPanel: Component = () => {
     ) {
       return 'Pulse cannot see network gear by itself. A check gives it a live status and draws it on the map as the device it is.';
     }
-    return 'Use ICMP ping, TCP port, or HTTP checks for devices and services that cannot run Pulse Agent.';
+    return 'Use ICMP ping, TCP port, UDP, or HTTP/HTTPS checks for devices and services that cannot run Pulse Agent.';
   });
+
+  const isEmptyState = () => !loading() && !error() && targets().length === 0;
 
   return (
     <div class="space-y-6">
-      <SettingsPanel title="Availability checks" noPadding>
+      <Card padding="none" class="overflow-hidden border border-border" border={false}>
         <div class="border-b border-border bg-surface px-4 py-3">
           <div class="flex flex-wrap items-center justify-between gap-3">
             <div class="min-w-0">
@@ -228,7 +319,8 @@ export const AvailabilitySettingsPanel: Component = () => {
                 {getAvailabilityTargetsSummary(targets(), resourceForTarget, now())}
               </div>
               <p class="mt-1 text-xs leading-5 text-muted">
-                Monitor endpoint-only devices and services with ICMP, TCP, and HTTP probes.
+                Monitor endpoint-only devices and services with ICMP, TCP, UDP, and HTTP/HTTPS
+                probes.
               </p>
             </div>
             <div class="flex flex-wrap items-center gap-2">
@@ -243,45 +335,127 @@ export const AvailabilitySettingsPanel: Component = () => {
                 <RotateCw class={`h-4 w-4 ${loading() ? 'animate-spin' : ''}`} />
                 Refresh
               </Button>
-              <Button
-                type="button"
-                variant="primary"
-                size="mdCompact"
-                class="min-h-11 gap-2 sm:min-h-9"
-                onClick={() => openAddDialog('service')}
-              >
-                <Plus class="h-4 w-4" />
-                Add service/device check
-              </Button>
+              <Show when={!readOnly() && !isEmptyState()}>
+                <Button
+                  type="button"
+                  variant="primary"
+                  size="mdCompact"
+                  class="min-h-11 gap-2 sm:min-h-9"
+                  onClick={() => openAddDialog('service')}
+                >
+                  <Plus class="h-4 w-4" />
+                  Add service/device check
+                </Button>
+              </Show>
             </div>
           </div>
         </div>
 
-        <div class="divide-y divide-border">
-          <Show when={loading() && targets().length === 0}>
-            <div class="p-4 text-sm text-muted">Loading availability checks...</div>
-          </Show>
+        <Show when={targets().length >= 4}>
+          <div class="flex flex-col gap-2 border-b border-border bg-surface-alt/40 px-4 py-2.5 sm:flex-row sm:items-center sm:justify-between">
+            <div class="w-full sm:max-w-xs">
+              <SearchField
+                value={searchQuery()}
+                onChange={setSearchQuery}
+                title="Search availability checks"
+                placeholder="Search checks by name or address..."
+              />
+            </div>
+            <div class="flex flex-wrap items-center gap-1.5">
+              <button
+                type="button"
+                aria-pressed={statusFilter() === 'all'}
+                onClick={() => setStatusFilter('all')}
+                class={`rounded-full px-2.5 py-1 text-xs font-medium transition-colors ${
+                  statusFilter() === 'all'
+                    ? 'bg-blue-600 text-white'
+                    : 'border border-border bg-surface text-muted hover:text-base-content'
+                }`}
+              >
+                All
+              </button>
+              <button
+                type="button"
+                aria-pressed={statusFilter() === 'attention'}
+                onClick={() =>
+                  setStatusFilter((current) => (current === 'attention' ? 'all' : 'attention'))
+                }
+                class={`rounded-full px-2.5 py-1 text-xs font-medium transition-colors ${
+                  statusFilter() === 'attention'
+                    ? 'bg-amber-600 text-white'
+                    : 'border border-border bg-surface text-muted hover:text-base-content'
+                }`}
+              >
+                Needs attention
+              </button>
+              <button
+                type="button"
+                aria-pressed={statusFilter() === 'paused'}
+                onClick={() =>
+                  setStatusFilter((current) => (current === 'paused' ? 'all' : 'paused'))
+                }
+                class={`rounded-full px-2.5 py-1 text-xs font-medium transition-colors ${
+                  statusFilter() === 'paused'
+                    ? 'bg-slate-600 text-white'
+                    : 'border border-border bg-surface text-muted hover:text-base-content'
+                }`}
+              >
+                Paused
+              </button>
+              <Show when={availableKindLabels().length > 1}>
+                <FormSelect
+                  label="Filter by target kind"
+                  labelClass="sr-only"
+                  fieldBaseClass="contents"
+                  value={kindFilter()}
+                  onChange={(event) => setKindFilter(event.currentTarget.value)}
+                  selectBaseClass="rounded-md border border-border bg-surface px-2 py-1 text-xs text-base-content"
+                >
+                  <option value="all">All kinds</option>
+                  <For each={availableKindLabels()}>
+                    {(kind) => <option value={kind}>{kind}</option>}
+                  </For>
+                </FormSelect>
+              </Show>
+            </div>
+          </div>
+        </Show>
 
+        <div class="divide-y divide-border">
           <Show when={error()}>
             {(message) => (
               <div
                 role="alert"
-                class="border-b border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800 dark:border-rose-900/25 dark:bg-rose-950/25 dark:text-rose-200"
+                class="flex flex-col gap-2 border-b border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800 dark:border-rose-900/25 dark:bg-rose-950/25 dark:text-rose-200 sm:flex-row sm:items-center sm:justify-between"
               >
-                {message()}
+                <span>{message()}</span>
+                <Show when={targets().length === 0}>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="xs"
+                    class="self-start sm:self-center"
+                    onClick={() => void loadTargets()}
+                  >
+                    Retry
+                  </Button>
+                </Show>
               </div>
             )}
           </Show>
 
-          <Show
-            when={sortedTargets().length > 0}
-            fallback={
-              <EmptyState
-                variant="panel"
-                icon={<Activity class="h-5 w-5" />}
-                title="No availability checks yet"
-                description="Add a ping, TCP port, MQTT broker, ESPHome device, HTTP health check, or another endpoint that only needs reachability monitoring."
-                actions={
+          <Show when={loading() && targets().length === 0}>
+            <div class="p-4 text-sm text-muted">Loading availability checks...</div>
+          </Show>
+
+          <Show when={isEmptyState()}>
+            <EmptyState
+              variant="panel"
+              icon={<Activity class="h-5 w-5" />}
+              title="No availability checks yet"
+              description="Add a ping, TCP port, MQTT broker, ESPHome device, HTTP health check, or another endpoint that only needs reachability monitoring."
+              actions={
+                !readOnly() ? (
                   <Button
                     type="button"
                     variant="primary"
@@ -292,18 +466,40 @@ export const AvailabilitySettingsPanel: Component = () => {
                     <Plus class="h-4 w-4" />
                     Add service/device check
                   </Button>
-                }
-              />
-            }
-          >
+                ) : undefined
+              }
+            />
+          </Show>
+
+          <Show when={targets().length > 0 && filteredTargets().length === 0}>
+            <div class="space-y-2 px-4 py-8 text-center text-sm text-muted">
+              <p>No availability checks match your current filter.</p>
+              <Button
+                type="button"
+                variant="outline"
+                size="xs"
+                onClick={() => {
+                  setSearchQuery('');
+                  setStatusFilter('all');
+                  setKindFilter('all');
+                }}
+              >
+                Clear filters
+              </Button>
+            </div>
+          </Show>
+
+          <Show when={filteredTargets().length > 0}>
             <PlatformWindowedList
-              items={sortedTargets}
+              items={filteredTargets}
               estimatedItemHeight={92}
               enableThreshold={24}
               windowSize={32}
             >
               {(target) => {
-                const pending = () => pendingActionId() === target.id;
+                const isPending = () => pendingAction()?.id === target.id;
+                const isTesting = () => isPending() && pendingAction()?.kind === 'test';
+                const isToggling = () => isPending() && pendingAction()?.kind === 'toggle';
                 return (
                   <div class="grid gap-3 px-4 py-4 md:grid-cols-[minmax(0,1fr)_auto] md:items-center">
                     <div class="min-w-0 space-y-2">
@@ -348,52 +544,67 @@ export const AvailabilitySettingsPanel: Component = () => {
                         <span class="break-all">{getAvailabilityTargetAddressLabel(target)}</span>
                       </div>
                     </div>
-                    <div class="flex flex-wrap items-center gap-2 md:justify-end">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="xs"
-                        class="min-h-11 sm:min-h-8"
-                        onClick={() => void testTarget(target)}
-                        disabled={pending()}
-                      >
-                        {pending() ? 'Testing...' : 'Test'}
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="xs"
-                        class="min-h-11 sm:min-h-8"
-                        onClick={() => void toggleTarget(target)}
-                        disabled={pending()}
-                      >
-                        {target.enabled ? 'Pause' : 'Resume'}
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="xs"
-                        class="min-h-11 sm:min-h-8"
-                        onClick={() => {
-                          setDeleteConfirmingId(null);
-                          setDialog({ mode: 'edit', target });
-                        }}
-                      >
-                        Manage
-                      </Button>
-                    </div>
+                    <Show when={!readOnly()}>
+                      <div class="flex flex-wrap items-center gap-2 md:justify-end">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="xs"
+                          class="min-h-11 sm:min-h-8"
+                          onClick={() => void testTarget(target)}
+                          disabled={isPending()}
+                        >
+                          {isTesting() ? 'Testing...' : 'Test'}
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="xs"
+                          class="min-h-11 sm:min-h-8"
+                          onClick={() => void toggleTarget(target)}
+                          disabled={isPending()}
+                        >
+                          {isToggling()
+                            ? target.enabled
+                              ? 'Pausing...'
+                              : 'Resuming...'
+                            : target.enabled
+                              ? 'Pause'
+                              : 'Resume'}
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="xs"
+                          class="min-h-11 sm:min-h-8"
+                          onClick={() => {
+                            setDeleteConfirmingId(null);
+                            setDialogActionError(null);
+                            setDialog({ mode: 'edit', target });
+                          }}
+                        >
+                          Manage
+                        </Button>
+                      </div>
+                    </Show>
                   </div>
                 );
               }}
             </PlatformWindowedList>
           </Show>
         </div>
-      </SettingsPanel>
+      </Card>
 
       <Show when={dialog()}>
         {(dialogAccessor) => {
-          const current = dialogAccessor();
-          const editingTarget = current.mode === 'edit' ? current.target : null;
+          const editingTarget = () => {
+            const current = dialogAccessor();
+            return current.mode === 'edit' ? current.target : null;
+          };
+          const addState = () => {
+            const current = dialogAccessor();
+            return current.mode === 'add' ? current : null;
+          };
           return (
             <Dialog
               isOpen={true}
@@ -402,7 +613,7 @@ export const AvailabilitySettingsPanel: Component = () => {
               panelClass="max-w-4xl"
             >
               <div class="flex h-full min-h-0 flex-col">
-                <div class="flex items-start justify-between gap-4 border-b border-border bg-surface-alt px-4 py-4 sm:px-6">
+                <div class="flex shrink-0 items-start justify-between gap-4 border-b border-border bg-surface-alt px-4 py-4 sm:px-6">
                   <div class="space-y-1">
                     <h2 class="text-base font-semibold text-base-content">{dialogTitle()}</h2>
                     <p class="text-sm text-muted">{dialogDescription()}</p>
@@ -417,29 +628,48 @@ export const AvailabilitySettingsPanel: Component = () => {
                     <X class="h-4 w-4" />
                   </Button>
                 </div>
-                <div class="min-h-0 flex-1 overflow-y-auto p-4">
+                <div class="min-h-0 flex-1 overflow-hidden">
                   <AvailabilityTargetSlot
-                    editingTargetId={editingTarget?.id}
-                    initialTargetKind={
-                      current.mode === 'add' ? current.initialTargetKind : undefined
-                    }
-                    initialName={current.mode === 'add' ? current.prefill.name : undefined}
-                    initialAddress={current.mode === 'add' ? current.prefill.address : undefined}
+                    editingTargetId={editingTarget()?.id}
+                    initialTarget={editingTarget()}
+                    initialTargetKind={addState()?.initialTargetKind}
+                    initialName={addState()?.prefill.name}
+                    initialAddress={addState()?.prefill.address}
                     onCancel={() => closeDialog(true)}
                     onSaved={handleSaved}
                     onToggleEnabled={
-                      editingTarget ? () => void toggleTarget(editingTarget) : undefined
+                      editingTarget()
+                        ? () => {
+                            const target = editingTarget();
+                            if (target) void toggleTarget(target);
+                          }
+                        : undefined
                     }
-                    togglePending={editingTarget ? pendingActionId() === editingTarget.id : false}
-                    connectionEnabled={editingTarget?.enabled}
+                    togglePending={
+                      editingTarget()
+                        ? pendingAction()?.id === editingTarget()!.id &&
+                          pendingAction()?.kind === 'toggle'
+                        : false
+                    }
+                    connectionEnabled={editingTarget()?.enabled}
                     onDelete={
-                      editingTarget ? () => void requestRemoveTarget(editingTarget) : undefined
+                      editingTarget()
+                        ? () => {
+                            const target = editingTarget();
+                            if (target) void requestRemoveTarget(target);
+                          }
+                        : undefined
                     }
-                    deletePending={editingTarget ? pendingActionId() === editingTarget.id : false}
+                    deletePending={
+                      editingTarget()
+                        ? pendingAction()?.id === editingTarget()!.id &&
+                          pendingAction()?.kind === 'delete'
+                        : false
+                    }
                     deleteConfirming={
-                      editingTarget ? deleteConfirmingId() === editingTarget.id : false
+                      editingTarget() ? deleteConfirmingId() === editingTarget()!.id : false
                     }
-                    deleteError={null}
+                    deleteError={dialogActionError()}
                   />
                 </div>
               </div>

@@ -75,8 +75,8 @@ export interface SettingsNavItem {
   // terms its label/description can't carry, e.g. "mcp" or "claude" for the
   // External agents connector setup.
   keywords?: string[];
-  icon: Component<{ class?: string; strokeWidth?: number }>;
-  iconProps?: { strokeWidth?: number };
+  icon: Component<{ class?: string; strokeWidth?: number; decorative?: boolean }>;
+  iconProps?: { strokeWidth?: number; decorative?: boolean };
   hideFromSidebar?: boolean;
   saveBehavior?: 'system';
   disabled?: boolean;

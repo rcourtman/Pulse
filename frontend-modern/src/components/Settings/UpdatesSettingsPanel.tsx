@@ -1,7 +1,8 @@
 import { Component, Show, For, Accessor, Setter, createUniqueId } from 'solid-js';
-import SettingsPanel from '@/components/shared/SettingsPanel';
+import { Card } from '@/components/shared/Card';
 import { HelpIcon } from '@/components/shared/HelpIcon';
 import { LoadingSpinner } from '@/components/shared/LoadingSpinner';
+import { TogglePrimitive } from '@/components/shared/Toggle';
 import {
   SelectionCardGroup,
   type SelectionCardOption,
@@ -112,7 +113,12 @@ export const UpdatesSettingsPanel: Component<UpdatesSettingsPanelProps> = (props
     }));
 
   return (
-    <SettingsPanel title={UPDATES_PANEL_COPY.title} noPadding bodyClass="divide-y divide-border">
+    <Card
+      data-settings-panel
+      padding="none"
+      border={false}
+      class="overflow-hidden border border-border divide-y divide-border"
+    >
       <div class="p-4 sm:p-6">
         <div class="space-y-4">
           {/* Version Status Section */}
@@ -122,9 +128,9 @@ export const UpdatesSettingsPanel: Component<UpdatesSettingsPanelProps> = (props
               class={`grid gap-px ${props.updateInfo()?.available ? 'sm:grid-cols-3' : 'sm:grid-cols-2'}`}
             >
               {/* Current Version */}
-              <div class="bg-surface-alt p-4">
-                <div class="flex items-start gap-3">
-                  <div class="p-2 bg-blue-100 dark:bg-blue-900/25 rounded-md">
+              <div class="min-w-0 bg-surface-alt p-4">
+                <div class="flex min-w-0 items-start gap-3">
+                  <div class="shrink-0 p-2 bg-blue-100 dark:bg-blue-900/25 rounded-md">
                     <Package class="w-5 h-5 text-blue-600 dark:text-blue-400" />
                   </div>
                   <div class="flex-1 min-w-0">
@@ -132,7 +138,7 @@ export const UpdatesSettingsPanel: Component<UpdatesSettingsPanelProps> = (props
                       {UPDATES_PANEL_COPY.currentVersionLabel}
                     </p>
                     <p
-                      class="mt-1 text-lg font-bold text-base-content truncate"
+                      class="mt-1 break-all text-base font-bold text-base-content sm:truncate sm:text-lg"
                       title={props.versionInfo()?.version}
                     >
                       {props.versionInfo()?.version || 'Loading...'}
@@ -389,21 +395,17 @@ export const UpdatesSettingsPanel: Component<UpdatesSettingsPanelProps> = (props
                   <p class="text-xs text-muted">{UPDATES_PANEL_COPY.autoUpdateDescription}</p>
                 </div>
               </div>
-              <label class="relative inline-flex items-center cursor-pointer">
-                <input
-                  type="checkbox"
-                  data-testid="updates-auto-check-toggle"
+              <div data-testid="updates-auto-check-toggle" class="shrink-0">
+                <TogglePrimitive
                   checked={props.autoUpdateEnabled()}
                   onChange={(e) => {
                     props.setAutoUpdateEnabled(e.currentTarget.checked);
                     props.setHasUnsavedChanges(true);
                   }}
                   disabled={autoUpdateLocked()}
-                  aria-labelledby={autoUpdateTitleId}
-                  class="sr-only peer"
+                  ariaLabelledBy={autoUpdateTitleId}
                 />
-                <div class="w-11 h-6 bg-surface-alt peer-focus:outline-hidden rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600 peer-disabled:opacity-50"></div>
-              </label>
+              </div>
             </div>
 
             <Show when={isPreviewChannel()}>
@@ -424,6 +426,6 @@ export const UpdatesSettingsPanel: Component<UpdatesSettingsPanelProps> = (props
       <div class="p-4 sm:p-6">
         <UpdateHistorySection />
       </div>
-    </SettingsPanel>
+    </Card>
   );
 };

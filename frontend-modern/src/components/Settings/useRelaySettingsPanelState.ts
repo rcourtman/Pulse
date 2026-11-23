@@ -1,8 +1,8 @@
 import { createMemo, createSignal, onCleanup, onMount } from 'solid-js';
-import { hasFeature } from '@/stores/license';
+import { hasFeature, loadRuntimeCapabilities } from '@/stores/license';
 import { getUpgradeActionDestination } from '@/stores/licenseCommercial';
 import { presentationPolicyHidesUpgradePrompts } from '@/stores/sessionPresentationPolicy';
-import { loadRuntimeCapabilities } from '@/stores/license';
+import { eventBus } from '@/stores/events';
 import { showError, showSuccess } from '@/utils/toast';
 import { RelayAPI, type RelayConfig, type RelayStatus } from '@/api/relay';
 import {
@@ -26,6 +26,7 @@ export function useRelaySettingsPanelState(props: RelaySettingsPanelProps) {
   const [config, setConfig] = createSignal<RelayConfig | null>(null);
   const [status, setStatus] = createSignal<RelayStatus | null>(null);
   const [loading, setLoading] = createSignal(true);
+  const [loadError, setLoadError] = createSignal<string | null>(null);
   const [saving, setSaving] = createSignal(false);
   const [serverUrl, setServerUrl] = createSignal('');
   const [showPairing, setShowPairing] = createSignal(false);
@@ -99,7 +100,8 @@ export function useRelaySettingsPanelState(props: RelaySettingsPanelProps) {
     return 'Failed to generate pairing QR code';
   };
 
-  const loadConfig = async () => {
+  const loadConfig = async (): Promise<boolean> => {
+    setLoadError(null);
     try {
       const nextConfig = await RelayAPI.getConfig();
       setConfig(nextConfig);
@@ -108,8 +110,13 @@ export function useRelaySettingsPanelState(props: RelaySettingsPanelProps) {
         await deletePairingTokenIfUnused(pairingTokenId());
         resetPairingState();
       }
+      return true;
     } catch (error) {
+      setConfig(null);
+      setStatus(null);
+      setLoadError('Unable to load Pulse Mobile configuration.');
       logger.error('[RelaySettings] Failed to load config', error);
+      return false;
     }
   };
 
@@ -135,21 +142,38 @@ export function useRelaySettingsPanelState(props: RelaySettingsPanelProps) {
     statusInterval = setInterval(() => void loadStatus(), 5000);
   };
 
-  onMount(async () => {
+  const initializePanel = async () => {
+    setLoading(true);
+    setLoadError(null);
+    stopStatusPolling();
     await loadRuntimeCapabilities();
     if (!relayEnabled()) {
       setLoading(false);
       return;
     }
 
-    await loadConfig();
-    if (config()?.enabled) {
+    const ok = await loadConfig();
+    if (ok && config()?.enabled) {
       startStatusPolling();
     }
     setLoading(false);
+  };
+
+  onMount(() => {
+    void initializePanel();
+  });
+
+  const unsubscribeOrg = eventBus.on('org_switched', () => {
+    stopStatusPolling();
+    void deletePairingTokenIfUnused(pairingTokenId());
+    resetPairingState();
+    setConfig(null);
+    setStatus(null);
+    void initializePanel();
   });
 
   onCleanup(() => {
+    unsubscribeOrg();
     stopStatusPolling();
     void deletePairingTokenIfUnused(pairingTokenId());
   });
@@ -182,6 +206,16 @@ export function useRelaySettingsPanelState(props: RelaySettingsPanelProps) {
     if (!canManage()) return;
     const url = serverUrl().trim();
     if (!url) return;
+    try {
+      const parsed = new URL(url);
+      if (parsed.protocol !== 'wss:' && parsed.protocol !== 'ws:') {
+        showError('Relay server URL must start with wss:// or ws://');
+        return;
+      }
+    } catch {
+      showError('Please enter a valid Relay server URL');
+      return;
+    }
     setSaving(true);
     try {
       await RelayAPI.updateConfig({ server_url: url });
@@ -266,11 +300,13 @@ export function useRelaySettingsPanelState(props: RelaySettingsPanelProps) {
     handlePairNewDevice,
     handleSaveServerUrl,
     handleToggleEnabled,
+    loadError,
     loading,
     pairingLoading,
     pairingPayload,
     pairingQRCode,
     relayEnabled,
+    retryLoad: initializePanel,
     saving,
     serverUrl,
     setServerUrl,

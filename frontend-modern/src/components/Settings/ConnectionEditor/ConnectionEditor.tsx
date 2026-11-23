@@ -187,7 +187,7 @@ export const ConnectionEditor: Component<ConnectionEditorProps> = (props) => {
           </div>
         </Show>
 
-        <div class="flex-1 overflow-y-auto p-4">
+        <div class="p-4">
           {props.renderCredentialSlot({
             mode: props.mode ?? 'add',
             type: activeType()!,

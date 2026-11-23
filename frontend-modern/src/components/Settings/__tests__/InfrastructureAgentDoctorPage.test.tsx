@@ -1,8 +1,12 @@
-import { createSignal } from 'solid-js';
+import { createSignal, type JSX } from 'solid-js';
 import { fireEvent, render, screen, waitFor, within } from '@solidjs/testing-library';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { InfrastructureAgentDoctorPage } from '../InfrastructureAgentDoctorPage';
 import type { InfrastructureAgentDoctorTarget } from '../infrastructureAgentUpdateCommandsModel';
+
+vi.mock('@solidjs/router', () => ({
+  A: (props: JSX.AnchorHTMLAttributes<HTMLAnchorElement>) => <a {...props} />,
+}));
 
 const issueCredential = vi.hoisted(() => vi.fn());
 
@@ -187,10 +191,10 @@ describe('InfrastructureAgentDoctorPage action-runner enrollment', () => {
     render(() => <InfrastructureAgentDoctorPage targets={[targetFixture()]} />);
 
     const facts = within(screen.getByTestId('agent-doctor-facts'));
-    expect(facts.getByText('Safe collector')).toBeInTheDocument();
+    expect(facts.getByText('Least-privilege service')).toBeInTheDocument();
     expect(facts.getByText('Confirmed')).toBeInTheDocument();
     fireEvent.click(
-      screen.getByRole('button', { name: 'Issue one-time action-runner credential' }),
+      screen.getByRole('button', { name: 'Issue one-time remote action credential' }),
     );
 
     await waitFor(() => expect(screen.getByText('one-time-runner-secret')).toBeInTheDocument());
@@ -235,7 +239,7 @@ describe('InfrastructureAgentDoctorPage action-runner enrollment', () => {
     ));
 
     expect(
-      screen.queryByRole('button', { name: 'Issue one-time action-runner credential' }),
+      screen.queryByRole('button', { name: 'Issue one-time remote action credential' }),
     ).not.toBeInTheDocument();
     expect(screen.getByText('Safe collector profile is not confirmed.')).toBeInTheDocument();
     expect(
@@ -277,7 +281,7 @@ describe('InfrastructureAgentDoctorPage action-runner enrollment', () => {
     ));
 
     expect(
-      screen.getByRole('button', { name: 'Rotate action-runner credential' }),
+      screen.getByRole('button', { name: 'Rotate remote action credential' }),
     ).toBeInTheDocument();
   });
 

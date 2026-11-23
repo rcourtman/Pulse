@@ -388,7 +388,7 @@ describe('APITokenManager', () => {
     await screen.findAllByText('Full token');
     expect(screen.queryAllByText('Unknown')).toHaveLength(0);
     expect(screen.queryByRole('button', { name: 'Retry token inventory' })).not.toBeInTheDocument();
-    expect(screen.getByText(/1 full access token – consider/)).toBeInTheDocument();
+    expect(screen.getByText(/1 full access token: consider/)).toBeInTheDocument();
     expect(screen.getByText('Credentials visible to this account')).toBeInTheDocument();
     expect(screen.getByLabelText('Token name')).toHaveValue('Unsent draft');
     expect(screen.getByRole('button', { name: 'Kiosk / Monitoring' })).toHaveAttribute(
@@ -409,14 +409,7 @@ describe('APITokenManager', () => {
     render(() => <APITokenManager canManage={false} />);
     fireEvent.click(await screen.findByRole('button', { name: 'Retry token inventory' }));
     await screen.findAllByText('Runtime token');
-    for (const name of [
-      'New token',
-      'Generate new',
-      'Generate',
-      /^Rename /,
-      /^Edit scopes for /,
-      /^Revoke /,
-    ]) {
+    for (const name of ['New token', 'Generate', /^Rename /, /^Edit scopes for /, /^Revoke /]) {
       for (const button of screen.getAllByRole('button', { name })) {
         expect(button).toBeDisabled();
       }

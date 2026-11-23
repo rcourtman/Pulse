@@ -74,7 +74,7 @@ describe('BackupTransferDialogs', () => {
     const text = screen.getByRole('dialog', { name: 'Import configuration' }).textContent;
     expect(text).toContain('Back up the destination first');
     expect(text).toContain('not the whole installation');
-    expect(text).toContain('inventory, enrolment state, profiles and assignments are not');
+    expect(text).toContain('inventory, enrollment state, profiles and assignments are not');
     expect(text).toContain('Import cannot change the Pulse URL stored on remote agents');
     expect(text).toContain('Preserve each agent');
     expect(text).toContain('verify fresh admission');
@@ -489,7 +489,7 @@ describe('BackupTransferDialogs', () => {
       expect(getOrgID()).toBe('tenant-other');
       expect(within(dialog).getByText('tenant-fixture')).toBeInTheDocument();
       expect(within(dialog).getByRole('alert')).toHaveTextContent(
-        'Organisation changed. Close this dialog and reopen it in the intended workspace.',
+        'Organization changed. Close this dialog and reopen it in the intended workspace.',
       );
       expect(within(dialog).getByLabelText('Backup passphrase')).toHaveValue(
         'synthetic-passphrase',

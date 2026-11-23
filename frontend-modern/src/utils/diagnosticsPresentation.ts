@@ -5,7 +5,7 @@ export const DIAGNOSTICS_PANEL_COPY = {
   runSafety:
     'Diagnostics can make live API and guest-agent requests. Do not run it during a backup, freeze/thaw or an unresponsive-host incident. Keep the existing evidence instead. A successful check does not prove ongoing collection has recovered.',
   exportSafety:
-    'Downloads use the displayed result without running diagnostics again. Nothing is uploaded. Keep the full file private. Review even a sanitised file for credentials, secret URLs and private host or personal information before sharing.',
+    'Downloads use the displayed result without running diagnostics again. Nothing is uploaded. Keep the full file private. Review even a sanitized file for credentials, secret URLs and private host or personal information before sharing.',
   runActionLabel: 'Run Diagnostics',
   runShortLabel: 'Run',
   runningActionLabel: 'Running...',
@@ -17,8 +17,8 @@ export const DIAGNOSTICS_PANEL_COPY = {
   exportError: 'Diagnostics could not be downloaded. Nothing was uploaded. Try downloading again.',
   exportFullLabel: 'Full (private)',
   exportGithubLabel: 'GitHub (review first)',
-  exportFullSuccess: 'Full diagnostics downloaded — keep this file private',
-  exportGithubSuccess: 'Sanitised diagnostics downloaded — review before sharing',
+  exportFullSuccess: 'Full diagnostics downloaded. Keep this file private.',
+  exportGithubSuccess: 'Sanitized diagnostics downloaded. Review before sharing.',
   versionLabel: 'Version',
   uptimeLabel: 'Uptime',
   recommendedVersionLabel: 'Recommended version',

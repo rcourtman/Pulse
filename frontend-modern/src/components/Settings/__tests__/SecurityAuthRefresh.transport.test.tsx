@@ -213,6 +213,7 @@ describe('Authentication status and credential draft refresh', () => {
     const username = screen.getByLabelText('Username', { exact: true });
     const toggle = screen.getByRole('button', { name: 'Hide local login form' });
     fireEvent.click(toggle);
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm hide form' }));
     await waitFor(() => expect(reads).toBe(2));
     expect(screen.getByRole('status')).toHaveTextContent('Refreshing authentication status…');
     expectDraft();

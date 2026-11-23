@@ -92,4 +92,13 @@ describe('Toggle', () => {
     expect(labelledBy).toContain('schedule-section-label');
     expect(labelledBy).toHaveLength(2);
   });
+
+  it('uses a high-contrast white knob on active toggles for dark and light modes', () => {
+    render(() => <Toggle checked={true} ariaLabel="Active toggle" />);
+
+    const button = screen.getByRole('button', { name: 'Active toggle' });
+    const knob = button.querySelector('span');
+    expect(knob).toHaveClass('bg-white');
+    expect(knob?.className).not.toContain('bg-surface');
+  });
 });

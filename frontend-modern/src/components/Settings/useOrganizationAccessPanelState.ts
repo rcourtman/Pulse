@@ -51,6 +51,13 @@ interface OwnershipTransfer {
   inviteDraft?: string;
 }
 
+interface MemberRemoval {
+  organization: Organization;
+  member: OrganizationMember;
+  generation: number;
+  message: string;
+}
+
 interface OrganizationAccessPanelProps {
   currentUser?: string;
 }
@@ -65,6 +72,7 @@ const canManageMembers = (org: Organization | null, currentUser?: string): boole
 export function useOrganizationAccessPanelState(props: OrganizationAccessPanelProps) {
   const [loading, setLoading] = createSignal(true);
   const [loadError, setLoadError] = createSignal<string | null>(null);
+  const [mutationError, setMutationError] = createSignal<string | null>(null);
   const [invitationReadIssue, setInvitationReadIssue] = createSignal<
     InvitationList | 'both' | null
   >(null);
@@ -76,6 +84,7 @@ export function useOrganizationAccessPanelState(props: OrganizationAccessPanelPr
   const [inviteUserID, setInviteUserID] = createSignal('');
   const [inviteRole, setInviteRole] = createSignal<OrganizationRole>('viewer');
   const [ownershipTransfer, setOwnershipTransfer] = createSignal<OwnershipTransfer | null>(null);
+  const [memberRemoval, setMemberRemoval] = createSignal<MemberRemoval | null>(null);
   const inviteDraftUserID = () => inviteUserID().trim();
   const inviteDraftMember = createMemo(() => {
     const userId = inviteDraftUserID();
@@ -124,7 +133,8 @@ export function useOrganizationAccessPanelState(props: OrganizationAccessPanelPr
     !presentationPolicyIsReadOnly() &&
     !invitationReadIssue() &&
     !saving() &&
-    !ownershipTransfer();
+    !ownershipTransfer() &&
+    !memberRemoval();
 
   // PulseDataGrid wraps the accepted row in a Solid store proxy. Compare its
   // underlying object, not the proxy, without admitting an older read's row.
@@ -136,11 +146,13 @@ export function useOrganizationAccessPanelState(props: OrganizationAccessPanelPr
     setPendingInvitations([]);
     setMyInvitations([]);
     setInvitationReadIssue(null);
+    setMutationError(null);
   };
 
   const invalidateRequests = () => {
     generation += 1;
     setOwnershipTransfer(null);
+    setMemberRemoval(null);
     readController?.abort();
     readController = undefined;
     mutationController?.abort();
@@ -251,6 +263,7 @@ export function useOrganizationAccessPanelState(props: OrganizationAccessPanelPr
     const request = generation;
     const controller = new AbortController();
     mutationController = controller;
+    setMutationError(null);
     setSaving(true);
     const isCurrent = () => request === generation && selectionIsCurrent();
     try {
@@ -270,7 +283,13 @@ export function useOrganizationAccessPanelState(props: OrganizationAccessPanelPr
     } catch (error) {
       if (!isCurrent()) return;
       logger.error('Failed to change organization access', error);
-      notificationStore.error(errorMessage(error instanceof Error ? error.message : undefined));
+      const status = apiErrorStatus(error);
+      const resolvedError = errorMessage(error instanceof Error ? error.message : undefined);
+      notificationStore.error(resolvedError);
+      if (status === 400 || status === 422) {
+        setMutationError(resolvedError);
+        return;
+      }
       // A failed response does not establish whether the server applied the
       // change. Require a read, never automatically repeat a write.
       batch(() => {
@@ -455,24 +474,39 @@ export function useOrganizationAccessPanelState(props: OrganizationAccessPanelPr
     );
   };
 
-  const removeMember = async (member: OrganizationMember) => {
+  const removeMember = (member: OrganizationMember) => {
     if (!canChangeAccess() || !canManageCurrentOrg() || !isCurrentMember(member)) return;
     const currentOrg = org()!;
     if (member.userId === currentOrg.ownerUserId) return;
+    setMemberRemoval({
+      organization: currentOrg,
+      member: unwrap(member),
+      generation,
+      message: getOrganizationMemberRemoveConfirmMessage(
+        member.userId,
+        currentOrg.displayName || currentOrg.id,
+      ),
+    });
+  };
+
+  const cancelMemberRemoval = (removal: MemberRemoval) => {
+    if (memberRemoval() === removal) setMemberRemoval(null);
+  };
+
+  const confirmMemberRemoval = async (removal: MemberRemoval) => {
+    if (memberRemoval() !== removal) return;
+    setMemberRemoval(null);
     if (
-      !confirm(
-        getOrganizationMemberRemoveConfirmMessage(
-          member.userId,
-          currentOrg.displayName || currentOrg.id,
-        ),
-      )
+      removal.generation !== generation ||
+      !canChangeAccess() ||
+      !canManageCurrentOrg() ||
+      org() !== removal.organization ||
+      !isCurrentMember(removal.member)
     )
       return;
-    // A confirmation can outlive the snapshot that supplied its member.
-    if (org() !== currentOrg || !isCurrentMember(member) || !canManageCurrentOrg()) return;
     await changeAccess(
-      (options) => OrgsAPI.removeMember(currentOrg.id, member.userId, options),
-      () => getOrganizationAccessMemberRemovedMessage(member.userId),
+      (options) => OrgsAPI.removeMember(removal.organization.id, removal.member.userId, options),
+      () => getOrganizationAccessMemberRemovedMessage(removal.member.userId),
       getOrganizationRemoveMemberErrorMessage,
     );
   };
@@ -496,8 +530,12 @@ export function useOrganizationAccessPanelState(props: OrganizationAccessPanelPr
 
   return {
     acceptInvitation,
+    cancelMemberRemoval,
     cancelOwnershipTransfer,
+    confirmMemberRemoval,
     confirmOwnershipTransfer,
+    memberRemoval,
+    mutationError,
     ownershipTransfer,
     canManageCurrentOrg,
     canChangeAccess,

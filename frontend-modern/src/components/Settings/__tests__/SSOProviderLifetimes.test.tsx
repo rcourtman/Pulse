@@ -371,7 +371,7 @@ describe('SSO provider read and editor ownership', () => {
     vi.spyOn(scroller, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, 100, 320, 500));
     vi.spyOn(result, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, 800, 320, 100));
     const view = dialog.getByRole('button', {
-      name: 'Issuer matched, Sign-in not tested — view result',
+      name: 'Issuer matched, Sign-in not tested: view result',
     });
     expect(view).toHaveAttribute('aria-controls', result.id);
     fireEvent.click(view);
@@ -422,7 +422,7 @@ describe('SSO provider read and editor ownership', () => {
     expect(button).toHaveFocus();
     expect(button).toHaveAccessibleDescription('Issuer mismatch');
     expect(dialog.getByRole('button', { name: 'Save Changes' })).toBeEnabled();
-    const view = dialog.getByRole('button', { name: 'Issuer mismatch — view result' });
+    const view = dialog.getByRole('button', { name: 'Issuer mismatch: view result' });
     expect(view).toHaveAttribute('aria-controls', result.id);
     fireEvent.click(view);
     expect(result).toHaveFocus();
@@ -462,7 +462,7 @@ describe('SSO provider read and editor ownership', () => {
     const dialog = await edit();
     fireEvent.click(dialog.getByRole('button', { name: 'Test' }));
     expect(await dialog.findByRole('alert')).toHaveTextContent(genericTestFailure);
-    expect(dialog.getByRole('button', { name: 'Test failed — view result' })).toBeInTheDocument();
+    expect(dialog.getByRole('button', { name: 'Test failed: view result' })).toBeInTheDocument();
     expect(document.body).not.toHaveTextContent(/UNTRUSTED_RESULT|issuer_mismatch/);
     expect(writes()).toHaveLength(1);
   });
@@ -671,7 +671,7 @@ describe('SSO provider read and editor ownership', () => {
     expect(details).not.toHaveTextContent(/UNTRUSTED_RESULT/);
     expect(testButton).toHaveAccessibleDescription(summary.join(' '));
     const summaryButton = dialog.getByRole('button', {
-      name: `${summary.join(', ')} — view result`,
+      name: `${summary.join(', ')}: view result`,
     });
     expect(summaryButton).toHaveAttribute('aria-controls', details.id);
     expect(summaryButton).toHaveTextContent(summary.join(' '));
@@ -725,7 +725,7 @@ describe('SSO provider read and editor ownership', () => {
     });
     fireEvent.click(dialog.getByRole('button', { name: 'Test' }));
     expect(await dialog.findByRole('alert')).toHaveTextContent(genericTestFailure);
-    expect(dialog.getByRole('button', { name: 'Test failed — view result' })).toBeInTheDocument();
+    expect(dialog.getByRole('button', { name: 'Test failed: view result' })).toBeInTheDocument();
     expect(document.body).not.toHaveTextContent(/UNTRUSTED_RESULT/);
     expect(writes()).toHaveLength(1);
   });
@@ -755,7 +755,7 @@ describe('SSO provider read and editor ownership', () => {
     expect(dialog.getByLabelText('IdP SSO URL').compareDocumentPosition(result)).toBe(
       Node.DOCUMENT_POSITION_FOLLOWING,
     );
-    const view = dialog.getByRole('button', { name: 'Metadata incomplete — view result' });
+    const view = dialog.getByRole('button', { name: 'Metadata incomplete: view result' });
     expect(view).toHaveAttribute('aria-controls', result.id);
     const preview = dialog.getByRole('button', { name: 'Preview' });
     expect(preview).toBeEnabled();

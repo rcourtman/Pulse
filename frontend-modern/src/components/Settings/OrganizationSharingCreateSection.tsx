@@ -16,7 +16,10 @@ import {
   ORGANIZATION_SHARING_QUICK_PICK_GUIDANCE,
   ORGANIZATION_SHARING_QUICK_PICK_UNAVAILABLE_MESSAGE,
 } from '@/utils/organizationSettingsPresentation';
-import type { useOrganizationSharingPanelState } from './useOrganizationSharingPanelState';
+import type {
+  ResourceOption,
+  useOrganizationSharingPanelState,
+} from './useOrganizationSharingPanelState';
 
 interface OrganizationSharingCreateSectionProps {
   state: ReturnType<typeof useOrganizationSharingPanelState>;
@@ -29,6 +32,41 @@ const invalidControlClass = `${controlClass} border-red-400 dark:border-red-500`
 const quickPickControlClass = `${controlClass} border-blue-300 dark:border-blue-700`;
 const validatedControlClass = (error: string) =>
   error ? invalidControlClass : defaultControlClass;
+
+const resourceGroupLabel = (type: string): string => {
+  if (type === 'vm') return 'Virtual Machines';
+  if (
+    type === 'system-container' ||
+    type === 'app-container' ||
+    type === 'oci-container' ||
+    type === 'pod' ||
+    type === 'jail'
+  ) {
+    return 'Containers & Pods';
+  }
+  if (
+    type === 'agent' ||
+    type === 'docker-host' ||
+    type === 'k8s-node' ||
+    type === 'docker-swarm-node'
+  ) {
+    return 'Hosts & Nodes';
+  }
+  if (type.startsWith('k8s-')) return 'Kubernetes';
+  if (type.startsWith('docker-')) return 'Docker';
+  if (
+    type === 'storage' ||
+    type === 'datastore' ||
+    type === 'pool' ||
+    type === 'dataset' ||
+    type === 'physical_disk' ||
+    type === 'network-share' ||
+    type === 'ceph'
+  ) {
+    return 'Storage';
+  }
+  return 'Other Resources';
+};
 
 const OrganizationSharingCreateSection: Component<OrganizationSharingCreateSectionProps> = (
   props,
@@ -45,6 +83,16 @@ const OrganizationSharingCreateSection: Component<OrganizationSharingCreateSecti
     props.state.targetOrgOptions().find((target) => target.id === props.state.targetOrgId()),
   );
   const selectedResource = () => props.state.selectedResource();
+  const groupedResourceOptions = createMemo(() => {
+    const groups = new Map<string, ResourceOption[]>();
+    for (const resource of props.state.unifiedResourceOptions()) {
+      const label = resourceGroupLabel(resource.type);
+      const list = groups.get(label) ?? [];
+      list.push(resource);
+      groups.set(label, list);
+    }
+    return Array.from(groups.entries()).sort(([a], [b]) => a.localeCompare(b));
+  });
 
   return (
     <form
@@ -158,11 +206,17 @@ const OrganizationSharingCreateSection: Component<OrganizationSharingCreateSecti
               selectBaseClass={quickPickControlClass}
             >
               <option value="">Select resource</option>
-              <For each={props.state.unifiedResourceOptions()}>
-                {(resource) => (
-                  <option value={`${resource.type}::${resource.id}`}>
-                    {getOrganizationShareResourceOptionLabel(resource)}
-                  </option>
+              <For each={groupedResourceOptions()}>
+                {([groupLabel, items]) => (
+                  <optgroup label={groupLabel}>
+                    <For each={items}>
+                      {(resource) => (
+                        <option value={`${resource.type}::${resource.id}`}>
+                          {getOrganizationShareResourceOptionLabel(resource)}
+                        </option>
+                      )}
+                    </For>
+                  </optgroup>
                 )}
               </For>
             </FormSelect>
@@ -198,24 +252,23 @@ const OrganizationSharingCreateSection: Component<OrganizationSharingCreateSecti
         >
           <div class="grid gap-3 lg:grid-cols-3">
             <div class="space-y-1">
-              <label
-                for={resourceTypeID}
-                class="text-xs font-medium uppercase tracking-wide text-muted"
-              >
-                Resource Type
-              </label>
-              <input
+              <FormSelect
                 id={resourceTypeID}
+                label="Resource Type"
+                labelClass="text-xs font-medium uppercase tracking-wide text-muted"
                 aria-invalid={props.state.resourceTypeError() ? true : undefined}
                 aria-describedby={
                   props.state.resourceTypeError() ? `${resourceTypeID}-error` : undefined
                 }
-                type="text"
                 value={props.state.resourceType()}
-                onInput={(event) => props.state.updateResourceType(event.currentTarget.value)}
-                placeholder={CANONICAL_RESOURCE_TYPES.join(' | ')}
-                class={validatedControlClass(props.state.resourceTypeError())}
-              />
+                onChange={(event) => props.state.updateResourceType(event.currentTarget.value)}
+                selectBaseClass={validatedControlClass(props.state.resourceTypeError())}
+              >
+                <option value="">Select resource type</option>
+                <For each={CANONICAL_RESOURCE_TYPES}>
+                  {(type) => <option value={type}>{type}</option>}
+                </For>
+              </FormSelect>
               <Show when={props.state.resourceTypeError() !== ''}>
                 <p id={`${resourceTypeID}-error`} class="text-xs text-red-600 dark:text-red-400">
                   {props.state.resourceTypeError()}

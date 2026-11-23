@@ -118,6 +118,10 @@ const submit = (initial = false) => {
     name: initial ? 'Enable Security Now' : 'Rotate credentials',
   });
   fireEvent.click(buttons[buttons.length - 1]);
+  if (!initial) {
+    const confirm = screen.queryByRole('button', { name: 'Confirm rotation' });
+    if (confirm) fireEvent.click(confirm);
+  }
 };
 const generated = () =>
   JSON.parse(writes()[0][1].body) as {
@@ -210,7 +214,13 @@ describe('native Settings credential setup and rotation through real API transpo
         .getAllByRole('button', { name: initial ? 'Enable Security Now' : 'Rotate credentials' })
         .at(-1)!;
       fireEvent.click(button);
-      fireEvent.click(button);
+      if (!initial) {
+        const confirm = screen.getByRole('button', { name: 'Confirm rotation' });
+        fireEvent.click(confirm);
+        fireEvent.click(confirm);
+      } else {
+        fireEvent.click(button);
+      }
       expect(writes()).toHaveLength(1);
       expect(generated()).toMatchObject({
         force: !initial,
@@ -325,6 +335,7 @@ describe('native Settings credential setup and rotation through real API transpo
       };
       const staleSubmit = screen.getAllByRole('button', { name: 'Rotate credentials' }).at(-1)!;
       fireEvent.click(staleSubmit);
+      fireEvent.click(screen.getByRole('button', { name: 'Confirm rotation' }));
       await reveal();
       expect(screen.getByText('Credential change unconfirmed')).toBeVisible();
       expect(screen.getByText(/The password or token may have changed/)).toBeVisible();
@@ -531,7 +542,7 @@ describe('native Settings credential setup and rotation through real API transpo
     const copy = deferred<void>();
     clipboard.mockReturnValue(copy.promise);
     const downloadButton = screen.getByRole('button', { name: 'Download credentials' });
-    const done = screen.getByRole('button', { name: "Done - I've Saved My Credentials" });
+    const done = screen.getByRole('button', { name: "Done, I've saved my credentials" });
     fireEvent.click(screen.getAllByRole('button', { name: 'Copy' })[1]);
     eventBus.emit('org_switched', 'fixture-estate');
     setApiToken('synthetic-later-token');

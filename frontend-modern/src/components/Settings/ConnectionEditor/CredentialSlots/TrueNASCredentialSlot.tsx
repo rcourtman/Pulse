@@ -47,6 +47,7 @@ const describeTransport = (transport: NonNullable<TrueNASConnection['transport']
 
 export const TrueNASCredentialSlot: Component<TrueNASCredentialSlotProps> = (props) => {
   let primed = false;
+  let cancelled = false;
   let connectionActionArea: HTMLDivElement | undefined;
 
   onMount(() => {
@@ -62,12 +63,21 @@ export const TrueNASCredentialSlot: Component<TrueNASCredentialSlotProps> = (pro
 
   createEffect(() => {
     const open = props.state.dialogOpen();
-    if (primed && !open && !props.state.saving()) {
+    if (primed && !cancelled && !open && !props.state.saving()) {
       props.onSaved();
     }
   });
 
+  createEffect(() => {
+    if (props.editingConnection && typeof props.connectionEnabled === 'boolean') {
+      if (props.state.form().enabled !== props.connectionEnabled) {
+        props.state.updateForm({ enabled: props.connectionEnabled });
+      }
+    }
+  });
+
   const handleCancel = () => {
+    cancelled = true;
     props.state.closeDialog();
     props.onCancel();
   };
@@ -339,17 +349,19 @@ export const TrueNASCredentialSlot: Component<TrueNASCredentialSlotProps> = (pro
               />
               <span class="text-sm text-base-content">Skip TLS verification</span>
             </label>
-            <label class="flex items-center gap-3">
-              <input
-                type="checkbox"
-                class={formCheckbox}
-                checked={props.state.form().enabled}
-                onChange={(event) =>
-                  props.state.updateForm({ enabled: event.currentTarget.checked })
-                }
-              />
-              <span class="text-sm text-base-content">Enable polling immediately</span>
-            </label>
+            <Show when={!(isEditing() && props.onToggleEnabled)}>
+              <label class="flex items-center gap-3">
+                <input
+                  type="checkbox"
+                  class={formCheckbox}
+                  checked={props.state.form().enabled}
+                  onChange={(event) =>
+                    props.state.updateForm({ enabled: event.currentTarget.checked })
+                  }
+                />
+                <span class="text-sm text-base-content">Enable polling immediately</span>
+              </label>
+            </Show>
           </div>
         </div>
 

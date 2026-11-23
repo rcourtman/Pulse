@@ -1,8 +1,9 @@
-import type { Component } from 'solid-js';
+import { Show, type Component } from 'solid-js';
 
 interface PulseLogoIconProps {
   class?: string;
   title?: string;
+  decorative?: boolean;
 }
 
 /**
@@ -13,12 +14,15 @@ interface PulseLogoIconProps {
 export const PulseLogoIcon: Component<PulseLogoIconProps> = (props) => (
   <svg
     class={props.class}
-    role="img"
+    role={props.decorative ? undefined : 'img'}
+    aria-hidden={props.decorative ? 'true' : undefined}
     viewBox="0 0 256 256"
     xmlns="http://www.w3.org/2000/svg"
-    aria-label={props.title ?? 'Pulse'}
+    aria-label={props.decorative ? undefined : (props.title ?? 'Pulse')}
   >
-    <title>{props.title ?? 'Pulse'}</title>
+    <Show when={!props.decorative}>
+      <title>{props.title ?? 'Pulse'}</title>
+    </Show>
     <defs>
       <mask id="pulse-logo-mask">
         {/* Start with everything visible */}

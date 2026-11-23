@@ -660,9 +660,14 @@ export const useAPITokenManagerState = (props: APITokenManagerProps) => {
     const link = newMonitoringKioskLink();
     if (!canManage() || !link) return;
     const version = contextVersion();
-    await navigator.clipboard.writeText(link);
-    if (version !== contextVersion() || !canManage()) return;
-    notificationStore.success('Link copied to clipboard');
+    try {
+      await navigator.clipboard.writeText(link);
+      if (version !== contextVersion() || !canManage()) return;
+      notificationStore.success('Link copied to clipboard');
+    } catch {
+      if (version !== contextVersion() || !canManage()) return;
+      notificationStore.error('Failed to copy link to clipboard');
+    }
   };
 
   return {

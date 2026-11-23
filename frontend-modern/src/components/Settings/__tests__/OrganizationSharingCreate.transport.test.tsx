@@ -201,7 +201,7 @@ function fillForm(entry: Entry, role: Role = 'viewer') {
     fireEvent.click(screen.getByRole('button', { name: 'Enter manually' }));
     expect(resourceInput()).toHaveValue('');
     expect(resourceInput()).not.toHaveAttribute('aria-describedby');
-    fireEvent.input(screen.getByLabelText('Resource Type'), { target: { value: ' VM ' } });
+    fireEvent.change(screen.getByLabelText('Resource Type'), { target: { value: 'vm' } });
     fireEvent.input(screen.getByLabelText('Resource ID'), {
       target: { value: ` ${manualResourceID} ` },
     });
@@ -343,9 +343,15 @@ describe('rendered Create Share controls through the real transport', () => {
       ...peers.map((peer) => `${peer.displayName} (${peer.id})`),
     ]);
     const choices = Array.from((resourceInput() as HTMLSelectElement).options);
+    const expectedGroupedResources = [
+      ...resourceRows().filter((resource) => resource.type === 'agent'),
+      ...resourceRows().filter((resource) => resource.type === 'vm'),
+    ];
     expect(choices.map((option) => option.textContent)).toEqual([
       'Select resource',
-      ...resourceRows().map((resource) => `Namesake workload (${resource.type}:${resource.id})`),
+      ...expectedGroupedResources.map(
+        (resource) => `Namesake workload (${resource.type}:${resource.id})`,
+      ),
     ]);
     for (const options of [destinations, choices]) {
       expect(new Set(options.map((option) => option.textContent)).size).toBe(options.length);

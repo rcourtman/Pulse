@@ -59,8 +59,7 @@ export const SETTINGS_HEADER_META: SettingsHeaderMetaMap = {
   },
   'support-reporting': {
     title: 'Data & Reports',
-    description:
-      'Export inventory data and generate performance reports from the canonical settings shell.',
+    description: 'Export inventory data and generate performance reports.',
   },
   'support-logs': {
     title: 'System Logs',
@@ -86,8 +85,7 @@ export const SETTINGS_HEADER_META: SettingsHeaderMetaMap = {
   },
   'organization-billing-admin': {
     title: 'Billing Admin',
-    description:
-      'Review and manage tenant billing state across all organizations (hosted mode only).',
+    description: 'Review and manage tenant billing state across all organizations.',
   },
   api: {
     title: 'API Access',

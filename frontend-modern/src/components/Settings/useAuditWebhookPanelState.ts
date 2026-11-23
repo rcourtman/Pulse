@@ -192,10 +192,27 @@ export const useAuditWebhookPanelState = (props: AuditWebhookPanelProps) => {
     } catch (error) {
       if (!isCurrent()) return false;
       const status = (error as { status?: number } | null)?.status;
+      const code = (error as { code?: unknown } | null)?.code;
       // The handler validates the whole list before saving. A known admission
       // or validation refusal is different from losing the save's result.
       if (status === 400 || status === 401 || status === 403 || status === 429) {
-        setActionError(getAuditWebhookSaveErrorMessage());
+        if (
+          status === 400 &&
+          typeof code === 'string' &&
+          [
+            'invalid_url',
+            'invalid_webhook_url',
+            'ssrf_blocked',
+            'private_network_blocked',
+            'webhook_blocked',
+          ].includes(code)
+        ) {
+          setActionError(
+            `${getAuditWebhookSaveErrorMessage()}: the destination URL is invalid or blocked by network policy.`,
+          );
+        } else {
+          setActionError(getAuditWebhookSaveErrorMessage());
+        }
       } else {
         // Add and Remove both replace the whole list. Do not offer another
         // write based on the old list until the current reader checks it.
@@ -218,10 +235,15 @@ export const useAuditWebhookPanelState = (props: AuditWebhookPanelProps) => {
     const url = draft.trim();
     if (!url) return;
     setSuccessNotice(null);
+    let parsed: URL;
     try {
-      new URL(url);
+      parsed = new URL(url);
     } catch {
       setActionError(getAuditWebhookInvalidUrlMessage());
+      return;
+    }
+    if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
+      setActionError('Please enter a valid http:// or https:// URL');
       return;
     }
     if (webhookUrls().includes(url)) {

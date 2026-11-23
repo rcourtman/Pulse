@@ -162,6 +162,8 @@ async function openAndSubmit(panel: Panel) {
     render(() => <OrganizationSharingPanel currentUser={user} />);
     await screen.findByText('Old VM');
     fireEvent.click(shareRemoveButton());
+    const dialog = screen.getByRole('dialog', { name: 'Remove outgoing share?' });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Remove share' }));
   }
   await waitFor(() => expect(writes()).toHaveLength(1));
   const [path, options] = writes()[0];
@@ -187,7 +189,7 @@ async function expectWinningSnapshot(panel: Panel) {
     expectOverviewMemberRole(user, 'admin');
     expectOverviewMemberRole(memberID, 'editor');
     expectOverviewMemberRole(nextOwner, 'owner');
-    expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
   } else if (panel === 'access') {
     expect(await screen.findByRole('combobox', { name: `Role for ${memberID}` })).toHaveValue(
       'editor',
@@ -223,7 +225,12 @@ async function deliberatelyChangeCurrent(panel: Panel) {
     fireEvent.change(screen.getByRole('combobox', { name: `Role for ${memberID}` }), {
       target: { value: 'admin' },
     });
-  } else fireEvent.click(shareRemoveButton());
+  } else {
+    fireEvent.click(shareRemoveButton());
+    const dialog = screen.getByRole('dialog', { name: 'Remove outgoing share?' });
+    expect(dialog).toHaveTextContent('Remove share for vm:vm::202?');
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Remove share' }));
+  }
   await waitFor(() => expect(notices.success).toHaveBeenCalledTimes(1));
   expect(writes()).toHaveLength(2);
   if (panel === 'overview')
@@ -237,7 +244,6 @@ async function deliberatelyChangeCurrent(panel: Panel) {
   else {
     await screen.findByText('Unchanged sibling');
     expect(screen.queryByText('Current saved VM')).not.toBeInTheDocument();
-    expect(vi.mocked(window.confirm)).toHaveBeenLastCalledWith('Remove share for vm:vm::202?');
   }
   expect(freshChange).toBe(true);
   expectBoundRequests();

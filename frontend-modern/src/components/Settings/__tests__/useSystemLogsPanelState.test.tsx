@@ -106,7 +106,7 @@ afterEach(() => {
 });
 
 describe('live system log rendering', () => {
-  it('withdraws private lines on transient loss and requires explicit recovery after terminal loss', async () => {
+  it('preserves buffered lines on transient reconnect and withdraws on terminal loss', async () => {
     const { state, stream, view } = await mount();
     expect(state.connectionState()).toBe('connecting');
     stream.onopen?.();
@@ -118,7 +118,7 @@ describe('live system log rendering', () => {
     stream.onerror?.();
     expect(state.connectionState()).toBe('reconnecting');
     expect(state.isPaused()).toBe(true);
-    expect(state.logs()).toEqual([]);
+    expect(state.logs()).toEqual(['accepted before disconnect', 'pending before disconnect']);
     expect(frames.size).toBe(0);
     expect(state.canUseControls()).toBe(false);
     expect(stream.close).not.toHaveBeenCalled();
@@ -126,7 +126,7 @@ describe('live system log rendering', () => {
     expect(state.connectionState()).toBe('streaming');
     stream.send('not collected while paused');
     flushFrame();
-    expect(state.logs()).toEqual([]);
+    expect(state.logs()).toEqual(['accepted before disconnect', 'pending before disconnect']);
     stream.readyState = 2;
     stream.onerror?.();
     expect(state.connectionState()).toBe('disconnected');
@@ -268,12 +268,14 @@ describe('live system log rendering', () => {
       retry: false,
     });
     expect(state.notice()).toBe('Log level set to warn');
+    stream.send('existing buffered log');
+    flushFrame();
     mocks.api.mockRejectedValueOnce(new Error('fixture unavailable'));
     await state.handleLevelChange('error');
     expect(state.level()).toBe('warn');
     expect(state.error()).toMatch(/change could not be confirmed/);
-    expect(state.logs()).toEqual([]);
-    expect(state.canUseControls()).toBe(false);
+    expect(state.logs()).toEqual(['existing buffered log']);
+    expect(state.canUseControls()).toBe(true);
     expect(mocks.success).not.toHaveBeenCalled();
     expect(mocks.error).not.toHaveBeenCalled();
   });

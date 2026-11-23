@@ -1,4 +1,5 @@
 import { Component, For, Show, createMemo, createSignal } from 'solid-js';
+import { A } from '@solidjs/router';
 import { Archive, Cpu, Database, Download, Mail, Search, Server, ServerCog } from 'lucide-solid';
 import type {
   InfrastructureSourcePickerItemId,
@@ -104,7 +105,7 @@ export const InfrastructureSourcePicker: Component<InfrastructureSourcePickerPro
       <Show when={!normalizedQuery()}>
         <section class="space-y-2">
           <h3 class="text-sm font-semibold text-base-content">Choose how Pulse should connect</h3>
-          <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+          <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <Show when={props.onDetectApiPlatform}>
               <button
                 type="button"
@@ -171,9 +172,22 @@ export const InfrastructureSourcePicker: Component<InfrastructureSourcePickerPro
         <Show
           when={visibleItems().length > 0}
           fallback={
-            <div class="rounded-md border border-dashed border-border bg-surface-alt p-4 text-sm text-muted">
-              No matching source yet. Try a device, host type, service, platform, or endpoint
-              address.
+            <div class="space-y-2 rounded-md border border-dashed border-border bg-surface-alt p-4 text-sm text-muted">
+              <p>
+                No matching platform or host type found. Try a platform name like Proxmox, Docker,
+                TrueNAS, VMware, or Linux.
+              </p>
+              <p class="text-xs">
+                Looking to monitor a network device, router, ping, TCP port, or HTTP service without
+                installing an agent?{' '}
+                <A
+                  href="/settings/monitoring/availability"
+                  class="font-medium text-blue-700 underline underline-offset-2 hover:text-blue-900 dark:text-blue-300 dark:hover:text-blue-100"
+                >
+                  Open Availability checks
+                </A>
+                .
+              </p>
             </div>
           }
         >

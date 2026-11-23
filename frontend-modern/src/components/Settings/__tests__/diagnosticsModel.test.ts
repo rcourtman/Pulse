@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   buildDiagnosticsExportFilename,
+  formatUptime,
   sanitizeDiagnosticsData,
   stripInternalAnalyticsDiagnosticsFields,
   type DiagnosticsData,
@@ -212,5 +213,11 @@ describe('diagnosticsModel', () => {
     // Non-sensitive probe fields survive the copy.
     expect(sanitized.pbs[0].probe?.errorKind).toBe('network');
     expect(sanitized.pbs[0].probe?.connected).toBe(false);
+  });
+
+  it('formats floating-point Go uptimes cleanly without fractional nanosecond tails', () => {
+    expect(formatUptime(454.71988866700002)).toBe('7m 34s');
+    expect(formatUptime(59.99)).toBe('59s');
+    expect(formatUptime(-5)).toBe('0s');
   });
 });

@@ -231,6 +231,8 @@ describe('native role-editor submission through its existing guarded action', ()
     expect(writes()).toHaveLength(0);
     expect(editor.queryByRole('alert')).toBeNull();
     fireEvent.input(editor.getByLabelText('Role Name'), { target: { value: 'Missing ID' } });
+    expect(editor.getByLabelText('Role ID')).toHaveValue('missing-id');
+    fireEvent.input(editor.getByLabelText('Role ID'), { target: { value: '' } });
     submit(dialog);
     expect(editor.getByRole('alert')).toHaveTextContent('ID and Name are required');
     expect(writes()).toHaveLength(0);

@@ -66,10 +66,13 @@ export const useAgentProfilesPanelState = () => {
   const [profiles, setProfiles] = createSignal<AgentProfile[]>([]);
   const [assignments, setAssignments] = createSignal<AgentProfileAssignment[]>([]);
   const [loading, setLoading] = createSignal(true);
+  const [loadError, setLoadError] = createSignal<string | null>(null);
 
   const [showModal, setShowModal] = createSignal(false);
   const [showSuggestModal, setShowSuggestModal] = createSignal(false);
   const [editingProfile, setEditingProfile] = createSignal<AgentProfile | null>(null);
+  const [deletingProfile, setDeletingProfile] = createSignal<AgentProfile | null>(null);
+  const [deleting, setDeleting] = createSignal(false);
   const [saving, setSaving] = createSignal(false);
 
   const [formName, setFormName] = createSignal('');
@@ -182,6 +185,7 @@ export const useAgentProfilesPanelState = () => {
 
   const loadData = async () => {
     setLoading(true);
+    setLoadError(null);
     try {
       const [profilesData, assignmentsData] = await Promise.all([
         AgentProfilesAPI.listProfiles(),
@@ -191,7 +195,10 @@ export const useAgentProfilesPanelState = () => {
       setAssignments(assignmentsData);
     } catch (err) {
       logger.error('Failed to load agent profiles', err);
-      notificationStore.error(err instanceof Error ? err.message : 'Failed to load agent profiles');
+      const message =
+        err instanceof Error && err.message ? err.message : 'Failed to load agent profiles';
+      setLoadError(message);
+      notificationStore.error(message);
     } finally {
       setLoading(false);
     }
@@ -236,24 +243,27 @@ export const useAgentProfilesPanelState = () => {
     setShowModal(true);
   };
 
-  const handleDelete = async (profile: AgentProfile) => {
-    const assignedCount = getAssignmentCount(profile.id);
-    const confirmMessage =
-      assignedCount > 0
-        ? `Delete "${profile.name}"? ${assignedCount} agent(s) will be unassigned.`
-        : `Delete "${profile.name}"?`;
+  const handleDelete = (profile: AgentProfile) => {
+    setDeletingProfile(profile);
+  };
 
-    if (!confirm(confirmMessage)) return;
+  const confirmDeleteProfile = async () => {
+    const profile = deletingProfile();
+    if (!profile) return;
 
+    setDeleting(true);
     try {
       await AgentProfilesAPI.deleteProfile(profile.id);
       notificationStore.success(`Profile "${profile.name}" deleted`);
+      setDeletingProfile(null);
       await loadData();
     } catch (err) {
       logger.error('Failed to delete profile', err);
       notificationStore.error(
         err instanceof Error && err.message ? err.message : 'Failed to delete profile',
       );
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -344,9 +354,15 @@ export const useAgentProfilesPanelState = () => {
     handleSuggest,
     handleSuggestionAccepted,
     hasAgentProfiles,
+    loadData,
+    loadError,
     loading,
     profiles,
     saving,
+    deletingProfile,
+    setDeletingProfile,
+    deleting,
+    confirmDeleteProfile,
     setFormDescription,
     setFormName,
     setShowModal,

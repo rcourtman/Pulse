@@ -1,36 +1,98 @@
-import { Component, For, Show, createUniqueId } from 'solid-js';
-import OperationsPanel from '@/components/Settings/OperationsPanel';
+import {
+  Component,
+  For,
+  Show,
+  createMemo,
+  createSignal,
+  createUniqueId,
+  onCleanup,
+} from 'solid-js';
+import { Card } from '@/components/shared/Card';
 import {
   getSystemLogBufferSummary,
+  getSystemLogLevelBadgeClass,
   getSystemLogLineClass,
   getSystemLogStreamPresentation,
+  parseSystemLogLine,
   SYSTEM_LOG_LEVEL_OPTIONS,
   SYSTEM_LOGS_PANEL_COPY,
+  type SystemLogLevel,
 } from '@/utils/systemLogsPresentation';
+import { copyToClipboard } from '@/utils/clipboard';
+import Check from 'lucide-solid/icons/check';
+import Copy from 'lucide-solid/icons/copy';
 import Download from 'lucide-solid/icons/download';
 import Pause from 'lucide-solid/icons/pause';
 import Play from 'lucide-solid/icons/play';
+import Search from 'lucide-solid/icons/search';
 import Trash2 from 'lucide-solid/icons/trash-2';
 import Terminal from 'lucide-solid/icons/terminal';
 import { FormSelect } from '@/components/shared/FormSelect';
 import { Button } from '@/components/shared/Button';
 import { useSystemLogsPanelState, type SystemLogsPanelProps } from './useSystemLogsPanelState';
 
+type LogLevelFilter = 'all' | SystemLogLevel;
+
+const LOG_LEVEL_FILTERS: readonly { value: LogLevelFilter; label: string }[] = [
+  { value: 'all', label: 'All' },
+  { value: 'error', label: 'Error' },
+  { value: 'warn', label: 'Warn' },
+  { value: 'info', label: 'Info' },
+  { value: 'debug', label: 'Debug' },
+];
+
 export const SystemLogsPanel: Component<SystemLogsPanelProps> = (props) => {
   const state = useSystemLogsPanelState(props);
   const levelHelpId = createUniqueId();
   const displayHelpId = createUniqueId();
   const bundleHelpId = createUniqueId();
+  const [searchQuery, setSearchQuery] = createSignal('');
+  const [levelFilter, setLevelFilter] = createSignal<LogLevelFilter>('all');
+  const [copiedLogs, setCopiedLogs] = createSignal(false);
+  let copyTimer: ReturnType<typeof setTimeout> | undefined;
+  onCleanup(() => {
+    if (copyTimer) clearTimeout(copyTimer);
+  });
 
   const streamPresentation = () =>
     getSystemLogStreamPresentation(state.isPaused(), state.connectionState());
 
+  const parsedLogs = createMemo(() => state.logs().map(parseSystemLogLine));
+  const filteredLogs = createMemo(() => {
+    const query = searchQuery().trim().toLowerCase();
+    const activeLevel = levelFilter();
+    return parsedLogs().filter((entry) => {
+      if (activeLevel !== 'all' && entry.level !== activeLevel) return false;
+      if (query && !entry.raw.toLowerCase().includes(query)) return false;
+      return true;
+    });
+  });
+
+  const hasActiveFilter = () => searchQuery().trim().length > 0 || levelFilter() !== 'all';
+
+  const handleCopyVisibleLogs = async () => {
+    const text = filteredLogs()
+      .map((entry) => entry.raw)
+      .join('\n');
+    if (!text) return;
+    const copied = await copyToClipboard(text);
+    if (!copied) return;
+    setCopiedLogs(true);
+    if (copyTimer) clearTimeout(copyTimer);
+    copyTimer = setTimeout(() => setCopiedLogs(false), 2000);
+  };
+
   return (
     <div class="space-y-6">
-      <OperationsPanel title={SYSTEM_LOGS_PANEL_COPY.title}>
+      <Card
+        data-settings-panel
+        padding="none"
+        border={false}
+        class="overflow-hidden border border-border divide-y divide-border"
+      >
         {/* Controls */}
-        <div class="p-4 sm:p-6 space-y-3">
-          <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+        <div class="p-3 sm:p-5 space-y-3 bg-surface-alt/50">
+          <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
             <FormSelect
               id={`system-log-level-${levelHelpId}`}
               label={SYSTEM_LOGS_PANEL_COPY.levelLabel}
@@ -41,14 +103,14 @@ export const SystemLogsPanel: Component<SystemLogsPanelProps> = (props) => {
               fieldBaseClass="flex"
               fieldClass="items-center space-x-3"
               labelClass="text-sm font-medium text-base-content whitespace-nowrap"
-              selectBaseClass="form-select min-h-11 sm:min-h-9 text-sm py-2.5 px-3 rounded-md border-border bg-surface text-muted focus:ring-primary-500 focus:border-primary-500"
+              selectBaseClass="form-select min-h-11 sm:min-h-9 text-sm py-2 px-3 rounded-md border border-border bg-surface text-base-content focus:ring-primary-500 focus:border-primary-500 disabled:opacity-50"
             >
               <For each={SYSTEM_LOG_LEVEL_OPTIONS}>
                 {(option) => <option value={option.value}>{option.label}</option>}
               </For>
             </FormSelect>
 
-            <div class="flex items-center space-x-2">
+            <div class="flex flex-wrap items-center gap-2">
               <button
                 type="button"
                 onClick={state.togglePaused}
@@ -76,7 +138,22 @@ export const SystemLogsPanel: Component<SystemLogsPanelProps> = (props) => {
               >
                 <Trash2 size={18} aria-hidden="true" />
               </button>
-              <div class="h-6 w-px bg-surface-hover mx-2"></div>
+              <Button
+                type="button"
+                variant="secondary"
+                size="settingsActionXs"
+                class="gap-1.5"
+                disabled={filteredLogs().length === 0}
+                onClick={() => void handleCopyVisibleLogs()}
+              >
+                {copiedLogs() ? (
+                  <Check size={14} aria-hidden="true" />
+                ) : (
+                  <Copy size={14} aria-hidden="true" />
+                )}
+                <span>{copiedLogs() ? 'Copied' : 'Copy logs'}</span>
+              </Button>
+              <div class="hidden h-6 w-px bg-border sm:block"></div>
               <Button
                 type="button"
                 disabled={!state.canUseControls()}
@@ -91,67 +168,141 @@ export const SystemLogsPanel: Component<SystemLogsPanelProps> = (props) => {
               </Button>
             </div>
           </div>
-          <div class="space-y-2 text-sm text-muted">
+
+          {/* Search and client-side level filter bar */}
+          <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <div class="relative flex-1 min-w-0 sm:max-w-sm">
+              <Search
+                size={15}
+                class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted"
+                aria-hidden="true"
+              />
+              <input
+                type="search"
+                aria-label="Filter log output"
+                value={searchQuery()}
+                onInput={(e) => setSearchQuery(e.currentTarget.value)}
+                placeholder="Filter logs by text..."
+                class="w-full min-h-10 sm:min-h-9 rounded-md border border-border bg-surface pl-9 pr-3 py-1.5 text-sm text-base-content placeholder:text-muted focus:outline-hidden focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+            <div
+              class="flex flex-wrap items-center gap-1"
+              role="group"
+              aria-label="Filter by log level"
+            >
+              <For each={LOG_LEVEL_FILTERS}>
+                {(chip) => (
+                  <button
+                    type="button"
+                    aria-pressed={levelFilter() === chip.value}
+                    onClick={() => setLevelFilter(chip.value)}
+                    class={`min-h-9 sm:min-h-8 rounded-md border px-2.5 py-1 text-xs font-medium transition-colors ${
+                      levelFilter() === chip.value
+                        ? 'border-blue-500 bg-blue-50 text-blue-700 dark:border-blue-400 dark:bg-blue-900/30 dark:text-blue-200'
+                        : 'border-border bg-surface text-muted hover:bg-surface-hover hover:text-base-content'
+                    }`}
+                  >
+                    {chip.label}
+                  </button>
+                )}
+              </For>
+            </div>
+          </div>
+
+          <div class="grid gap-1.5 rounded-md border border-border-subtle bg-surface px-3 py-2 text-[11px] leading-snug text-muted">
             <p id={levelHelpId}>{SYSTEM_LOGS_PANEL_COPY.levelHelp}</p>
             <p id={displayHelpId}>{SYSTEM_LOGS_PANEL_COPY.displayHelp}</p>
             <p id={bundleHelpId}>{SYSTEM_LOGS_PANEL_COPY.bundleHelp}</p>
           </div>
         </div>
 
-        <div class="px-4 sm:px-6 space-y-3">
-          <Show when={state.error()}>
-            <p role="alert" class="text-sm text-red-600 dark:text-red-400">
-              {state.error()}
-            </p>
-          </Show>
-          <Show when={state.notice()}>
-            <p role="status" class="text-sm text-muted">
-              {state.notice()}
-            </p>
-          </Show>
-          <Show when={state.canReconnect()}>
-            <Button type="button" size="settingsAction" onClick={() => void state.reconnect()}>
-              Reconnect logs
-            </Button>
-          </Show>
-        </div>
+        <Show when={state.error() || state.notice() || state.canReconnect()}>
+          <div class="px-4 sm:px-6 py-3 space-y-2">
+            <Show when={state.error()}>
+              <p role="alert" class="text-sm text-red-600 dark:text-red-400">
+                {state.error()}
+              </p>
+            </Show>
+            <Show when={state.notice()}>
+              <p role="status" class="text-sm text-muted">
+                {state.notice()}
+              </p>
+            </Show>
+            <Show when={state.canReconnect()}>
+              <Button type="button" size="settingsAction" onClick={() => void state.reconnect()}>
+                Reconnect logs
+              </Button>
+            </Show>
+          </div>
+        </Show>
 
         {/* Terminal View */}
-        <div class="p-4 sm:p-6">
+        <div class="p-3 sm:p-5">
           <div
             ref={state.setLogContainer}
-            class="bg-slate-950 text-slate-300 font-mono text-xs p-4 rounded-md h-[500px] overflow-y-auto whitespace-pre-wrap wrap-anywhere leading-relaxed border border-border-subtle scrollbar-thin scrollbar-thumb-slate-700 scrollbar-track-transparent"
+            onScroll={() => state.handleLogScroll?.()}
+            class="bg-slate-950 text-slate-300 font-mono text-xs p-3 sm:p-4 rounded-md h-[420px] sm:h-[500px] overflow-y-auto whitespace-pre-wrap wrap-anywhere leading-relaxed border border-border scrollbar-thin scrollbar-thumb-slate-700 scrollbar-track-transparent"
           >
-            <For each={state.logs()}>
-              {(log) => (
-                <div class="border-b border-border-subtle last:border-0 pb-0.5 mb-0.5 hover:bg-surface-hover px-1 -mx-1 rounded-sm">
-                  <span class={getSystemLogLineClass(log)}>{log}</span>
+            <For each={filteredLogs()}>
+              {(entry) => (
+                <div class="border-b border-slate-800/60 last:border-0 pb-1 mb-1 hover:bg-slate-900 px-1.5 -mx-1 rounded-sm">
+                  <Show
+                    when={entry.isStructured}
+                    fallback={<span class={getSystemLogLineClass(entry.raw)}>{entry.raw}</span>}
+                  >
+                    <div class="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+                      <Show when={entry.timestamp}>
+                        <span class="shrink-0 text-slate-500 tabular-nums">{entry.timestamp}</span>
+                      </Show>
+                      <Show when={entry.level !== 'unknown'}>
+                        <span
+                          class={`shrink-0 rounded-sm border px-1 py-0 text-[10px] font-semibold uppercase ${getSystemLogLevelBadgeClass(entry.level)}`}
+                        >
+                          {entry.level}
+                        </span>
+                      </Show>
+                      <span class={getSystemLogLineClass(entry.raw)}>{entry.message}</span>
+                      <Show when={entry.fields}>
+                        <span class="text-slate-400">{entry.fields}</span>
+                      </Show>
+                    </div>
+                  </Show>
                 </div>
               )}
             </For>
 
-            {state.logs().length === 0 && !state.isLoading() && (
-              <div class="h-full flex flex-col items-center justify-center ">
-                <Terminal size={48} class="mb-4 opacity-50" />
+            <Show when={filteredLogs().length === 0 && !state.isLoading()}>
+              <div class="h-full flex flex-col items-center justify-center text-slate-400">
+                <Terminal size={40} class="mb-3 opacity-50" aria-hidden="true" />
                 <p>
-                  {state.canUseControls()
-                    ? SYSTEM_LOGS_PANEL_COPY.emptyState
-                    : SYSTEM_LOGS_PANEL_COPY.unavailableState}
+                  {hasActiveFilter() && state.logs().length > 0
+                    ? 'No buffered log lines match the current filter.'
+                    : state.canUseControls()
+                      ? SYSTEM_LOGS_PANEL_COPY.emptyState
+                      : SYSTEM_LOGS_PANEL_COPY.unavailableState}
                 </p>
               </div>
-            )}
+            </Show>
           </div>
 
-          <div class="text-xs text-muted flex flex-wrap gap-2 justify-between px-1 pt-4">
-            <span>{getSystemLogBufferSummary(state.logs().length, state.maxLogs)}</span>
+          <div class="text-xs text-muted flex flex-wrap gap-2 justify-between px-1 pt-3">
+            <span>
+              {hasActiveFilter()
+                ? `Showing ${filteredLogs().length} of ${state.logs().length} buffered lines (max ${state.maxLogs})`
+                : getSystemLogBufferSummary(state.logs().length, state.maxLogs)}
+            </span>
             <span role="status" class="flex items-center gap-2">
-              <div class={`w-2 h-2 rounded-full ${streamPresentation().indicatorClass}`}></div>
+              <span
+                aria-hidden="true"
+                class={`inline-block w-2 h-2 rounded-full ${streamPresentation().indicatorClass}`}
+              />
               {streamPresentation().label}
             </span>
           </div>
-          <p class="text-xs text-muted px-1 pt-2">{SYSTEM_LOGS_PANEL_COPY.bufferHelp}</p>
+          <p class="text-[11px] text-muted px-1 pt-1.5">{SYSTEM_LOGS_PANEL_COPY.bufferHelp}</p>
         </div>
-      </OperationsPanel>
+      </Card>
     </div>
   );
 };

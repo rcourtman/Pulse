@@ -123,7 +123,7 @@ export const OrganizationAccessManagementSection: Component<
                     disabled={!!props.state.invitationReadIssue()}
                     onInput={(event) => props.state.setInviteUserID(event.currentTarget.value)}
                     placeholder="username"
-                    class="w-full rounded-md border px-3 py-2 text-sm shadow-xs focus:border-blue-500 focus:outline-hidden focus:ring-2 focus:ring-blue-500"
+                    class="w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-base-content shadow-xs focus:border-blue-500 focus:outline-hidden focus:ring-2 focus:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-60"
                   />
                 </label>
                 <FormSelect
@@ -177,6 +177,26 @@ export const OrganizationAccessManagementSection: Component<
                   {props.state.saving() ? 'Saving...' : memberAction().submit}
                 </Button>
               </div>
+              <Show when={!isDefaultOrg(currentOrg())}>
+                <dl class="grid gap-2 border-t border-border/60 pt-3 text-xs text-muted sm:grid-cols-2 lg:grid-cols-4">
+                  <div>
+                    <dt class="font-medium text-base-content">Viewer</dt>
+                    <dd>Read-only access to organization resources.</dd>
+                  </div>
+                  <div>
+                    <dt class="font-medium text-base-content">Editor</dt>
+                    <dd>Can update monitored infrastructure and alerts.</dd>
+                  </div>
+                  <div>
+                    <dt class="font-medium text-base-content">Admin</dt>
+                    <dd>Manages members, invitations, and resource sharing.</dd>
+                  </div>
+                  <div>
+                    <dt class="font-medium text-base-content">Owner</dt>
+                    <dd>Full control including ownership transfer.</dd>
+                  </div>
+                </dl>
+              </Show>
             </form>
           </Show>
 

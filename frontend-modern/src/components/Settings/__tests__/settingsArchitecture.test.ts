@@ -168,7 +168,7 @@ describe('settings architecture guardrails', () => {
       'coarse deployment and lifecycle buckets',
     );
     expect(EN_MESSAGES['settings.general.telemetry.description']).toContain(
-      'aggregate resource and outcome counts, coarse feature flags, content-free Patrol, Assistant, and capability-API usage counters, and four session-deduplicated workload-history adoption counts',
+      'aggregate resource and outcome counts, coarse feature flags, content-free Patrol and capability-API usage counters, and four session-deduplicated workload-history adoption counts',
     );
     expect(EN_MESSAGES['settings.general.telemetry.description']).not.toContain(
       'Pulse Intelligence loop adoption',
@@ -200,7 +200,7 @@ describe('settings architecture guardrails', () => {
       'class="flex flex-col items-start gap-2 p-2 sm:flex-row sm:items-center sm:justify-between sm:gap-4 sm:p-6"',
     );
     expect(generalSettingsPanelSource).toContain(
-      'class="max-w-full shrink-0 [&_button]:px-1.5 sm:w-auto sm:[&_button]:px-3"',
+      'class="max-w-full shrink-0 [&_button]:px-1.5 sm:w-auto sm:[&_button]:px-3 border border-border bg-surface-alt dark:border-slate-700"',
     );
   });
 

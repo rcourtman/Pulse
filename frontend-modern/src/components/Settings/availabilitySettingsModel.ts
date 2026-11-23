@@ -112,6 +112,8 @@ export function getAvailabilityTargetMethodLabel(target: AvailabilityTarget): st
       return target.port ? `UDP ${target.port}` : 'UDP port';
     case 'http':
       return 'HTTP check';
+    case 'https':
+      return 'HTTPS check';
     default:
       return String(target.protocol).toUpperCase();
   }
@@ -124,7 +126,7 @@ export function getAvailabilityTargetKindLabel(target: AvailabilityTarget): stri
 }
 
 export function getAvailabilityTargetAddressLabel(target: AvailabilityTarget): string {
-  if (target.protocol === 'http') {
+  if (target.protocol === 'http' || target.protocol === 'https') {
     const path = target.path?.trim();
     if (path && !target.address.endsWith(path)) {
       const normalizedAddress = target.address.replace(/\/+$/, '');

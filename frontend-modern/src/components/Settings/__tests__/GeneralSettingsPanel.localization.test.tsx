@@ -170,4 +170,40 @@ describe('GeneralSettingsPanel localization', () => {
       '"install_id":"abc"',
     );
   });
+
+  it('separates personal preferences from read-only instance defaults for non-admin viewers', () => {
+    const handleTelemetryEnabledChange = vi.fn();
+    const handleDisableDockerUpdateActionsChange = vi.fn();
+    const handleGuestDockerInventoryChange = vi.fn();
+
+    renderGeneralSettingsPanel({
+      canManageSystemSettings: () => false,
+      handleTelemetryEnabledChange,
+      handleDisableDockerUpdateActionsChange,
+      handleGuestDockerInventoryChange,
+    });
+
+    expect(screen.getByText('Personal preferences')).toBeInTheDocument();
+    expect(screen.getByText('Instance defaults')).toBeInTheDocument();
+    expect(screen.getByText('Read-only')).toBeInTheDocument();
+    expect(screen.queryByText('Application branding')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Preview payload' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Reset ID' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Outbound usage telemetry' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Full-width mode' })).toBeEnabled();
+  });
+
+  it('confirms telemetry install ID reset in a dialog instead of window.confirm', () => {
+    const handleResetTelemetryInstallID = vi.fn().mockResolvedValue(undefined);
+    renderGeneralSettingsPanel({ handleResetTelemetryInstallID });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Reset ID' }));
+    const dialog = screen.getByRole('dialog', { name: 'Reset telemetry install ID' });
+    expect(dialog).toBeInTheDocument();
+    expect(handleResetTelemetryInstallID).not.toHaveBeenCalled();
+
+    const confirmButtons = screen.getAllByRole('button', { name: 'Reset ID' });
+    fireEvent.click(confirmButtons[confirmButtons.length - 1]);
+    expect(handleResetTelemetryInstallID).toHaveBeenCalledOnce();
+  });
 });

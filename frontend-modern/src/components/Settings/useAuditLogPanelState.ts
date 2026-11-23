@@ -63,9 +63,12 @@ type VerifyAllOptions = {
 const ALLOWED_VERIFICATION_FILTERS = new Set(['all', 'needs', 'verified', 'failed']);
 const ALLOWED_SUCCESS_FILTERS = new Set(['all', 'success', 'failed']);
 const ALLOWED_EVENT_FILTERS = new Set(['', 'login', 'logout', 'config_change', 'startup']);
+const ALLOWED_DATE_RANGES = new Set(['all', '24h', '7d', '30d']);
 const USER_FILTER_DEBOUNCE_MS = 300;
 const DEFAULT_AUDIT_PAGE_SIZE = 100;
 const ALLOWED_AUDIT_PAGE_SIZES = new Set([25, 50, 100, 200]);
+
+export type AuditDateRangeFilter = 'all' | '24h' | '7d' | '30d';
 
 const parseEventFilter = (raw: string | null | undefined): string =>
   ALLOWED_EVENT_FILTERS.has(raw ?? '') ? (raw ?? '') : '';
@@ -73,8 +76,18 @@ const parseSuccessFilter = (raw: string | null | undefined): string =>
   ALLOWED_SUCCESS_FILTERS.has(raw ?? '') ? (raw ?? 'all') : 'all';
 const parseVerificationFilter = (raw: string | null | undefined): string =>
   ALLOWED_VERIFICATION_FILTERS.has(raw ?? '') ? (raw ?? 'all') : 'all';
+const parseDateRangeFilter = (raw: string | null | undefined): AuditDateRangeFilter =>
+  ALLOWED_DATE_RANGES.has(raw ?? '') ? ((raw ?? 'all') as AuditDateRangeFilter) : 'all';
 const normalizeAuditPageSize = (value: number): number =>
   ALLOWED_AUDIT_PAGE_SIZES.has(value) ? value : DEFAULT_AUDIT_PAGE_SIZE;
+
+const escapeCsvCell = (value: string): string => {
+  const safe = /^[=+\-@]/.test(value) ? `'${value}` : value;
+  if (/[",\r\n]/.test(safe)) {
+    return `"${safe.replace(/"/g, '""')}"`;
+  }
+  return safe;
+};
 
 export interface AuditLogPanelProps {
   currentUser?: string;
@@ -130,6 +143,11 @@ export const useAuditLogPanelState = (props: AuditLogPanelProps = {}) => {
       if (parseVerificationFilter(value) === 'all') params.delete('verification');
       else params.set('verification', value);
     });
+  };
+  const [searchQuery, setSearchQuery] = createSignal('');
+  const [dateRangeFilter, setDateRangeFilterRaw] = createSignal<AuditDateRangeFilter>('all');
+  const setDateRangeFilter = (value: string): void => {
+    setDateRangeFilterRaw(parseDateRangeFilter(value));
   };
   const [storedPageSize, setStoredPageSize] = createLocalStorageNumberSignal(
     STORAGE_KEYS.AUDIT_PAGE_SIZE,
@@ -627,8 +645,13 @@ export const useAuditLogPanelState = (props: AuditLogPanelProps = {}) => {
     Number(Boolean(eventFilter())) +
     Number(Boolean(userFilter())) +
     Number(successFilter() !== 'all');
-  const hasLogFilters = () => activeLogFilterCount() > 0;
-  const activeFilterCount = () => activeLogFilterCount() + Number(verificationFilter() !== 'all');
+  const hasLogFilters = () =>
+    activeLogFilterCount() > 0 || Boolean(searchQuery().trim()) || dateRangeFilter() !== 'all';
+  const activeFilterCount = () =>
+    activeLogFilterCount() +
+    Number(verificationFilter() !== 'all') +
+    Number(Boolean(searchQuery().trim())) +
+    Number(dateRangeFilter() !== 'all');
 
   const activeFilterChips = createMemo<AuditFilterChip[]>(() => {
     const chips: AuditFilterChip[] = [];
@@ -645,18 +668,87 @@ export const useAuditLogPanelState = (props: AuditLogPanelProps = {}) => {
 
   const filteredEvents = createMemo(() => {
     const filter = verificationFilter();
-    if (filter === 'all') return events();
+    const query = searchQuery().trim().toLowerCase();
+    const range = dateRangeFilter();
+    const cutoffMs =
+      range === '24h'
+        ? Date.now() - 24 * 60 * 60 * 1000
+        : range === '7d'
+          ? Date.now() - 7 * 24 * 60 * 60 * 1000
+          : range === '30d'
+            ? Date.now() - 30 * 24 * 60 * 60 * 1000
+            : null;
+
     return events().filter((event) => {
-      if (!event.signature) return false;
-      const state = verification()[event.id];
-      if (!state) {
-        return filter === 'needs';
+      if (filter !== 'all') {
+        if (!event.signature) return false;
+        const state = verification()[event.id];
+        if (!state) {
+          if (filter !== 'needs') return false;
+        } else if (filter === 'verified') {
+          if (state.status !== 'verified') return false;
+        } else if (filter === 'failed') {
+          if (state.status !== 'failed' && state.status !== 'error') return false;
+        } else {
+          return false;
+        }
       }
-      if (filter === 'verified') return state.status === 'verified';
-      if (filter === 'failed') return state.status === 'failed' || state.status === 'error';
-      return false;
+      if (cutoffMs !== null) {
+        const ts = Date.parse(event.timestamp);
+        if (Number.isFinite(ts) && ts < cutoffMs) return false;
+      }
+      if (query) {
+        const haystack = [event.ip, event.user, event.event, event.path, event.details, event.id]
+          .filter(Boolean)
+          .join(' ')
+          .toLowerCase();
+        if (!haystack.includes(query)) return false;
+      }
+      return true;
     });
   });
+
+  const downloadExport = (content: string, mimeType: string, extension: 'csv' | 'json') => {
+    const blob = new Blob([content], { type: mimeType });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `pulse-audit-log-${new Date().toISOString().slice(0, 10)}.${extension}`;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const exportCsv = () => {
+    const rows = filteredEvents();
+    if (rows.length === 0) return;
+    const header = ['timestamp', 'event', 'outcome', 'user', 'ip', 'path', 'details', 'id'];
+    const lines = [
+      header.join(','),
+      ...rows.map((event) =>
+        [
+          event.timestamp,
+          event.event,
+          event.success ? 'success' : 'failed',
+          event.user ?? '',
+          event.ip ?? '',
+          event.path ?? '',
+          event.details ?? '',
+          event.id,
+        ]
+          .map(escapeCsvCell)
+          .join(','),
+      ),
+    ];
+    downloadExport(lines.join('\n'), 'text/csv;charset=utf-8', 'csv');
+    showSuccess(`Exported ${rows.length} audit events to CSV`);
+  };
+
+  const exportJson = () => {
+    const rows = filteredEvents();
+    if (rows.length === 0) return;
+    downloadExport(JSON.stringify(rows, null, 2), 'application/json;charset=utf-8', 'json');
+    showSuccess(`Exported ${rows.length} audit events to JSON`);
+  };
 
   const resetPaging = () => {
     setPageOffset(0);
@@ -670,6 +762,8 @@ export const useAuditLogPanelState = (props: AuditLogPanelProps = {}) => {
 
   const clearFilters = () => {
     const hadFilters = activeFilterCount() > 0;
+    setSearchQuery('');
+    setDateRangeFilterRaw('all');
     updateSearchParam((params) => {
       params.delete('event');
       params.delete('user');
@@ -840,9 +934,12 @@ export const useAuditLogPanelState = (props: AuditLogPanelProps = {}) => {
     cancelVerification,
     clearFilterChip,
     clearFilters,
+    dateRangeFilter,
     error,
     eventFilter,
     events,
+    exportCsv,
+    exportJson,
     filteredEvents,
     goToFirstPage,
     goToLastPage,
@@ -863,11 +960,14 @@ export const useAuditLogPanelState = (props: AuditLogPanelProps = {}) => {
     resumeCount,
     resumeVerification,
     resetPreferences,
+    searchQuery,
     setAutoVerifyEnabled,
     setAutoVerifyLimit,
+    setDateRangeFilter,
     setEventFilter,
     setPageInput,
     setPageSize,
+    setSearchQuery,
     setSuccessFilter,
     setUserFilter,
     setVerificationFilter,

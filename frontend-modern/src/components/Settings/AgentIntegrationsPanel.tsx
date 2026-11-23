@@ -22,9 +22,10 @@ import {
   normalizeAgentMCPAdapter,
 } from '@/api/agentCapabilities';
 import { ButtonLink } from '@/components/shared/Button';
+import { Card } from '@/components/shared/Card';
 import { ExternalTextLink } from '@/components/shared/ExternalTextLink';
 import { SelectablePillButton } from '@/components/shared/SelectablePillButton';
-import SettingsPanel from '@/components/shared/SettingsPanel';
+import { updateStore } from '@/stores/updates';
 import {
   API_TOKEN_CREATE_ANCHOR,
   API_TOKEN_PRESET_QUERY_PARAM,
@@ -60,7 +61,15 @@ interface AgentClientOption {
   configPathHint: string;
 }
 
-const INSTALL_METHOD_OPTIONS: InstallMethodOption[] = [
+const RELEASE_TAG_RE = /^v?\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/;
+
+const resolveReleaseTag = (version?: string | null): string | null => {
+  const trimmed = version?.trim();
+  if (!trimmed || !RELEASE_TAG_RE.test(trimmed)) return null;
+  return trimmed.startsWith('v') ? trimmed : `v${trimmed}`;
+};
+
+const buildInstallMethodOptions = (releaseTag: string | null): InstallMethodOption[] => [
   {
     id: 'homebrew',
     label: 'Homebrew',
@@ -70,22 +79,40 @@ const INSTALL_METHOD_OPTIONS: InstallMethodOption[] = [
   {
     id: 'unix',
     label: 'macOS / Linux (verified)',
-    command: [
-      'gh release download vX.Y.Z --repo rcourtman/Pulse --pattern install-cli.sh',
-      'gh release verify-asset vX.Y.Z install-cli.sh --repo rcourtman/Pulse',
-      'PULSE_CLI_VERSION=vX.Y.Z bash ./install-cli.sh',
-    ].join('\n'),
-    note: 'Downloads and verifies the release asset before running. Replace vX.Y.Z with a published Pulse release tag.',
+    command: releaseTag
+      ? [
+          `gh release download ${releaseTag} --repo rcourtman/Pulse --pattern install-cli.sh`,
+          `gh release verify-asset ${releaseTag} install-cli.sh --repo rcourtman/Pulse`,
+          `PULSE_CLI_VERSION=${releaseTag} bash ./install-cli.sh`,
+        ].join('\n')
+      : [
+          'PULSE_CLI_VERSION=$(gh release view --repo rcourtman/Pulse --json tagName -q .tagName)',
+          'gh release download "$PULSE_CLI_VERSION" --repo rcourtman/Pulse --pattern install-cli.sh',
+          'gh release verify-asset "$PULSE_CLI_VERSION" install-cli.sh --repo rcourtman/Pulse',
+          'PULSE_CLI_VERSION="$PULSE_CLI_VERSION" bash ./install-cli.sh',
+        ].join('\n'),
+    note: releaseTag
+      ? `Downloads and verifies release ${releaseTag} before running.`
+      : 'Resolves the latest published Pulse release tag and verifies the asset before running.',
   },
   {
     id: 'windows',
     label: 'Windows (verified)',
-    command: [
-      'gh release download vX.Y.Z --repo rcourtman/Pulse --pattern install-cli.ps1',
-      'gh release verify-asset vX.Y.Z install-cli.ps1 --repo rcourtman/Pulse',
-      '.\\install-cli.ps1 -Version vX.Y.Z',
-    ].join('\n'),
-    note: 'Downloads and verifies the release asset before running. Replace vX.Y.Z with a published Pulse release tag.',
+    command: releaseTag
+      ? [
+          `gh release download ${releaseTag} --repo rcourtman/Pulse --pattern install-cli.ps1`,
+          `gh release verify-asset ${releaseTag} install-cli.ps1 --repo rcourtman/Pulse`,
+          `.\\install-cli.ps1 -Version ${releaseTag}`,
+        ].join('\n')
+      : [
+          '$PulseCliVersion = gh release view --repo rcourtman/Pulse --json tagName -q .tagName',
+          'gh release download $PulseCliVersion --repo rcourtman/Pulse --pattern install-cli.ps1',
+          'gh release verify-asset $PulseCliVersion install-cli.ps1 --repo rcourtman/Pulse',
+          '.\\install-cli.ps1 -Version $PulseCliVersion',
+        ].join('\n'),
+    note: releaseTag
+      ? `Downloads and verifies release ${releaseTag} before running.`
+      : 'Resolves the latest published Pulse release tag and verifies the asset before running.',
   },
 ];
 
@@ -156,7 +183,19 @@ const CODE_BLOCK_CLASS =
   'min-w-0 flex-1 whitespace-pre overflow-x-auto py-1.5 font-mono text-xs text-base-content';
 
 export const AgentIntegrationsPanel: Component = () => {
-  const [manifest] = createResource(fetchAgentCapabilitiesManifest);
+  const [manifestState, { refetch: refetchManifest }] = createResource(async () => {
+    try {
+      const data = await fetchAgentCapabilitiesManifest();
+      return { data, error: null as string | null };
+    } catch (err) {
+      return {
+        data: null,
+        error: err instanceof Error && err.message ? err.message : String(err),
+      };
+    }
+  });
+  const manifest = () => manifestState()?.data ?? undefined;
+  const manifestError = () => manifestState()?.error ?? null;
   const [copied, setCopied] = createSignal<string | null>(null);
   const [routeHash, setRouteHash] = createSignal('');
   const [panelHighlight, setPanelHighlight] = createSignal(false);
@@ -169,10 +208,13 @@ export const AgentIntegrationsPanel: Component = () => {
   let highlightTimer: number | undefined;
   let routeFocusTimer: number | undefined;
 
+  const installMethodOptions = createMemo(() =>
+    buildInstallMethodOptions(resolveReleaseTag(updateStore.versionInfo()?.version)),
+  );
   const activeInstallMethod = createMemo(
     () =>
-      INSTALL_METHOD_OPTIONS.find((option) => option.id === installMethod()) ??
-      INSTALL_METHOD_OPTIONS[0],
+      installMethodOptions().find((option) => option.id === installMethod()) ??
+      installMethodOptions()[0],
   );
   const activeAgentClient = createMemo(
     () =>
@@ -318,11 +360,12 @@ export const AgentIntegrationsPanel: Component = () => {
   });
 
   return (
-    <SettingsPanel
+    <Card
       id={EXTERNAL_AGENT_SETUP_ANCHOR}
-      title="External agents"
-      noPadding
-      class={`scroll-mt-20 transition-shadow ${
+      data-settings-panel
+      padding="none"
+      border={false}
+      class={`overflow-hidden border border-border scroll-mt-20 transition-shadow ${
         panelHighlight() ? 'ring-2 ring-blue-500 shadow-xs' : ''
       }`}
     >
@@ -339,7 +382,7 @@ export const AgentIntegrationsPanel: Component = () => {
         <div id="external-agent-setup-details" class="space-y-4">
           <ol class="divide-y divide-border rounded-md border border-border text-sm">
             <li class="space-y-3 p-4">
-              <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <div class="flex flex-col gap-2.5">
                 <div class="space-y-0.5">
                   <p class="text-[11px] font-semibold uppercase tracking-wide text-muted">Step 1</p>
                   <h3 class="font-semibold text-base-content">
@@ -350,7 +393,7 @@ export const AgentIntegrationsPanel: Component = () => {
                   </p>
                 </div>
                 <div class="flex flex-wrap gap-1.5" role="group" aria-label="CLI install method">
-                  <For each={INSTALL_METHOD_OPTIONS}>
+                  <For each={installMethodOptions()}>
                     {(option) => (
                       <SelectablePillButton
                         size="md"
@@ -398,7 +441,6 @@ export const AgentIntegrationsPanel: Component = () => {
                 </div>
                 <ButtonLink
                   href={PULSE_MCP_TOKEN_SETUP_PATH}
-                  hardNavigation
                   variant="secondary"
                   size="settingsAction"
                   class="w-fit shrink-0 gap-2 font-semibold"
@@ -431,7 +473,7 @@ export const AgentIntegrationsPanel: Component = () => {
             </li>
 
             <li class="space-y-3 p-4">
-              <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <div class="flex flex-col gap-2.5">
                 <div class="space-y-0.5">
                   <p class="text-[11px] font-semibold uppercase tracking-wide text-muted">Step 3</p>
                   <h3 class="font-semibold text-base-content">Connect your agent and verify</h3>
@@ -506,7 +548,6 @@ export const AgentIntegrationsPanel: Component = () => {
               <div class="flex shrink-0 flex-wrap gap-2">
                 <ButtonLink
                   href={PROPOSE_TOKEN_SETUP_PATH}
-                  hardNavigation
                   variant="secondary"
                   size="settingsAction"
                   class="w-fit gap-2 font-semibold"
@@ -546,8 +587,9 @@ export const AgentIntegrationsPanel: Component = () => {
                 <div class="space-y-2">
                   <div class="flex items-center justify-between gap-2">
                     <h4 class="text-xs font-semibold uppercase tracking-wide text-muted">
-                      Claude Code &amp; Claude Desktop{' '}
-                      <code class="font-mono normal-case">~/.claude.json</code>
+                      Claude Code (<code class="font-mono normal-case">~/.claude.json</code>) &amp;
+                      Claude Desktop (
+                      <code class="font-mono normal-case">claude_desktop_config.json</code>)
                     </h4>
                     <Show when={copied() === claudeManualConfig()}>
                       <span class="text-xs text-emerald-600 dark:text-emerald-400">
@@ -608,7 +650,9 @@ export const AgentIntegrationsPanel: Component = () => {
             </Show>
           </details>
 
-          <Show when={hasClientBuilderDetails()}>
+          <Show
+            when={manifestState.loading || Boolean(manifestError()) || hasClientBuilderDetails()}
+          >
             <details
               class="rounded-md border border-border p-3"
               onToggle={(event) => setAdvancedClientDetailsOpen(event.currentTarget.open)}
@@ -622,6 +666,31 @@ export const AgentIntegrationsPanel: Component = () => {
                     Only open this when you are building or debugging a client against this Pulse
                     instance. Normal setup only needs the three CLI steps above.
                   </p>
+                  <Show when={manifestState.loading}>
+                    <p class="text-xs text-muted" role="status">
+                      Loading capabilities...
+                    </p>
+                  </Show>
+                  <Show when={manifestError()}>
+                    {(errorMessage) => (
+                      <div
+                        role="alert"
+                        class="flex flex-wrap items-center justify-between gap-2 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700 dark:border-red-800 dark:bg-red-900/25 dark:text-red-300"
+                      >
+                        <span>
+                          Could not load <code class="font-mono">/api/agent/capabilities</code>:{' '}
+                          {errorMessage()}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => void refetchManifest()}
+                          class="shrink-0 rounded-sm border border-red-300 px-2.5 py-1 font-medium hover:bg-red-100 dark:border-red-700 dark:hover:bg-red-900/40"
+                        >
+                          Retry
+                        </button>
+                      </div>
+                    )}
+                  </Show>
                   <Show when={mcpSurfaceToolPosture()}>
                     {(posture) => (
                       <div
@@ -630,10 +699,7 @@ export const AgentIntegrationsPanel: Component = () => {
                         data-testid="agent-mcp-tool-posture"
                       >
                         <span class="h-1.5 w-1.5 rounded-full bg-emerald-500" aria-hidden="true" />
-                        <span>
-                          External agents expose {posture().label}{' '}
-                          <span class="">through Patrol mode</span>
-                        </span>
+                        <span>External agents expose {posture().label} through Patrol mode</span>
                       </div>
                     )}
                   </Show>
@@ -676,215 +742,191 @@ export const AgentIntegrationsPanel: Component = () => {
                     </details>
                   </Show>
                   <Show when={hasManifestInventory()}>
-                    <details class="rounded-md border border-border bg-page p-3">
-                      <summary class="cursor-pointer text-sm font-semibold text-base-content">
-                        Live manifest details
-                      </summary>
-                      <div class="mt-3 space-y-4">
+                    <div class="space-y-3 rounded-md border border-border bg-page p-3">
+                      <div class="space-y-1">
+                        <h4 class="text-sm font-semibold text-base-content">
+                          Live manifest details
+                        </h4>
                         <p class="text-xs text-muted">
                           These values come from{' '}
                           <code class="font-mono">/api/agent/capabilities</code>. Use them to build
                           clients against this instance. They do not change Patrol mode.
                         </p>
-                        <Show when={workflowPrompts().length > 0}>
-                          <details class="rounded-md border border-border p-3">
-                            <summary class="cursor-pointer text-sm font-semibold text-base-content">
-                              <span>Agent starting points</span>{' '}
-                              <span class="ml-2 text-xs font-normal text-muted">
-                                ({workflowPrompts().length} from manifest)
-                              </span>
-                            </summary>
-                            <div class="mt-3 space-y-2">
-                              <ul class="divide-y divide-border rounded-md border border-border bg-page">
-                                <For each={workflowPrompts()}>
-                                  {(prompt) => (
-                                    <li class="space-y-1 p-3">
-                                      <div class="flex flex-wrap items-baseline gap-2">
-                                        <span class="text-sm font-semibold text-base-content">
-                                          {prompt.label ?? prompt.name}
-                                        </span>
-                                        <Show
-                                          when={
-                                            prompt.name === AGENT_WORKFLOW_PROMPT_OPERATIONS_LOOP
-                                          }
-                                        >
-                                          <span class="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950/25 dark:text-emerald-300">
-                                            Patrol
-                                          </span>
-                                        </Show>
-                                      </div>
-                                      <Show when={prompt.description}>
-                                        <p class="text-xs text-muted">{prompt.description}</p>
-                                      </Show>
-                                      <p class="text-[11px] text-muted">
-                                        <span class="font-semibold">Wire name:</span>{' '}
-                                        <code class="font-mono">{prompt.name}</code>
-                                      </p>
-                                      <Show when={(prompt.arguments?.length ?? 0) > 0}>
-                                        <p class="text-[11px] text-muted">
-                                          <span class="font-semibold">Arguments:</span>{' '}
-                                          <For each={prompt.arguments}>
-                                            {(arg, index) => (
-                                              <>
-                                                <code class="font-mono">{arg.name}</code>
-                                                {arg.required ? ' required' : ' optional'}
-                                                {index() < (prompt.arguments?.length ?? 0) - 1
-                                                  ? ', '
-                                                  : ''}
-                                              </>
-                                            )}
-                                          </For>
-                                        </p>
-                                      </Show>
-                                    </li>
-                                  )}
-                                </For>
-                              </ul>
-                            </div>
-                          </details>
-                        </Show>
-                        <Show when={requiredScopes().length > 0}>
-                          <p class="text-xs text-muted">
-                            Manifest scopes:{' '}
-                            <For each={requiredScopes()}>
-                              {(scope, index) => (
-                                <>
-                                  <code class="font-mono">{scope}</code>
-                                  {index() < requiredScopes().length - 1 ? ', ' : ''}
-                                </>
-                              )}
-                            </For>
-                            . Use narrower tokens when the client should only perform part of the
-                            allowed work. Each capability below shows its required scope.
-                          </p>
-                        </Show>
-                        <Show when={errorCodeSummaries().length > 0}>
-                          <details class="rounded-md border border-border p-3 text-xs text-muted">
-                            <summary class="cursor-pointer text-sm font-semibold text-base-content">
-                              Failure codes{' '}
-                              <span class="ml-2 text-xs font-normal text-muted">
-                                ({errorCodeSummaries().length} from the live manifest)
-                              </span>
-                            </summary>
-                            <div class="mt-3 space-y-2">
-                              <p>
-                                Connected agents should branch on these codes instead of scraping
-                                response text.
-                              </p>
-                              <div class="flex flex-wrap gap-2">
-                                <For each={errorCodeSummaries()}>
-                                  {(summary) => (
-                                    <span
-                                      class="rounded-md border border-border bg-page px-2 py-1"
-                                      title={`Declared by ${summary.capabilityNames.join(', ')}`}
-                                    >
-                                      <code class="font-mono">{summary.code}</code>
-                                    </span>
-                                  )}
-                                </For>
-                              </div>
-                            </div>
-                          </details>
-                        </Show>
+                      </div>
+                      <Show when={requiredScopes().length > 0}>
                         <p class="text-xs text-muted">
-                          See{' '}
-                          <ExternalTextLink href={AGENT_SUBSTRATE_DOC_URL} variant="inlineSubtle">
-                            docs/AGENT_SUBSTRATE.md
-                          </ExternalTextLink>{' '}
-                          for build instructions on <code class="font-mono">cmd/pulse-cli</code>{' '}
-                          (and backwards-compatible <code class="font-mono">cmd/pulse-mcp</code>{' '}
-                          with <code class="font-mono">--emit-notifications</code>), the companion
-                          HTTP example at <code class="font-mono">cmd/agent-probe</code>, and the
-                          substrate&apos;s design notes.
+                          Manifest scopes:{' '}
+                          <For each={requiredScopes()}>
+                            {(scope, index) => (
+                              <>
+                                <code class="font-mono">{scope}</code>
+                                {index() < requiredScopes().length - 1 ? ', ' : ''}
+                              </>
+                            )}
+                          </For>
+                          . Use narrower tokens when the client should only perform part of the
+                          allowed work. Each capability below shows its required scope.
                         </p>
-                        <Show when={manifest() && grouped().length > 0}>
-                          <details class="rounded-md border border-border p-3">
-                            <summary class="cursor-pointer text-sm font-semibold text-base-content">
-                              Agent capabilities{' '}
-                              <span class="ml-2 text-xs font-normal text-muted">
-                                (manifest {manifest()?.version} -{' '}
-                                {manifest()?.capabilities.length ?? 0} total)
-                              </span>
-                            </summary>
-                            <div class="mt-3 space-y-4">
-                              <For each={grouped()}>
-                                {(section) => (
-                                  <div class="space-y-2">
-                                    <div>
-                                      <h4 class="text-xs font-semibold uppercase tracking-wide text-muted">
-                                        {section.label}
-                                      </h4>
-                                      <Show when={section.description}>
-                                        <p class="text-xs text-muted">{section.description}</p>
+                      </Show>
+                      <Show when={workflowPrompts().length > 0}>
+                        <details class="rounded-md border border-border bg-surface p-3">
+                          <summary class="cursor-pointer text-sm font-semibold text-base-content">
+                            <span>Agent starting points</span>{' '}
+                            <span class="ml-2 text-xs font-normal text-muted">
+                              ({workflowPrompts().length} from manifest)
+                            </span>
+                          </summary>
+                          <div class="mt-3 space-y-2">
+                            <ul class="divide-y divide-border rounded-md border border-border bg-page">
+                              <For each={workflowPrompts()}>
+                                {(prompt) => (
+                                  <li class="space-y-1 p-3">
+                                    <div class="flex flex-wrap items-baseline gap-2">
+                                      <span class="text-sm font-semibold text-base-content">
+                                        {prompt.label ?? prompt.name}
+                                      </span>
+                                      <Show
+                                        when={prompt.name === AGENT_WORKFLOW_PROMPT_OPERATIONS_LOOP}
+                                      >
+                                        <span class="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950/25 dark:text-emerald-300">
+                                          Patrol
+                                        </span>
                                       </Show>
                                     </div>
-                                    <ul class="divide-y divide-border rounded-md border border-border bg-page">
-                                      <For each={section.entries}>
-                                        {(cap) => (
-                                          <li class="space-y-1 p-3">
-                                            <div class="flex flex-wrap items-baseline gap-2">
-                                              <code class="font-mono text-sm font-semibold text-base-content">
-                                                {cap.name}
-                                              </code>
-                                              <span class="text-xs text-muted">
-                                                <code class="font-mono">{cap.method}</code>{' '}
-                                                {cap.path}
-                                              </span>
-                                              <span class="ml-auto rounded-full border border-border bg-surface-alt px-2 py-0.5 text-[10px] uppercase tracking-wide text-muted">
-                                                {cap.scope}
-                                              </span>
-                                            </div>
-                                            <p class="text-xs text-muted">{cap.description}</p>
-                                            <Show
-                                              when={cap.errorCodes && cap.errorCodes.length > 0}
-                                            >
-                                              <p class="text-[11px] text-muted">
-                                                <span class="font-semibold">
-                                                  Stable error codes:
-                                                </span>{' '}
-                                                <For each={cap.errorCodes}>
-                                                  {(code, idx) => (
-                                                    <>
-                                                      <code class="font-mono">{code}</code>
-                                                      {idx() < cap.errorCodes!.length - 1
-                                                        ? ', '
-                                                        : ''}
-                                                    </>
-                                                  )}
-                                                </For>
-                                              </p>
-                                            </Show>
-                                          </li>
-                                        )}
-                                      </For>
-                                    </ul>
-                                  </div>
+                                    <Show when={prompt.description}>
+                                      <p class="text-xs text-muted">{prompt.description}</p>
+                                    </Show>
+                                    <p class="text-[11px] text-muted">
+                                      <span class="font-semibold">Wire name:</span>{' '}
+                                      <code class="font-mono">{prompt.name}</code>
+                                    </p>
+                                    <Show when={(prompt.arguments?.length ?? 0) > 0}>
+                                      <p class="text-[11px] text-muted">
+                                        <span class="font-semibold">Arguments:</span>{' '}
+                                        <For each={prompt.arguments}>
+                                          {(arg, index) => (
+                                            <>
+                                              <code class="font-mono">{arg.name}</code>
+                                              {arg.required ? ' required' : ' optional'}
+                                              {index() < (prompt.arguments?.length ?? 0) - 1
+                                                ? ', '
+                                                : ''}
+                                            </>
+                                          )}
+                                        </For>
+                                      </p>
+                                    </Show>
+                                  </li>
+                                )}
+                              </For>
+                            </ul>
+                          </div>
+                        </details>
+                      </Show>
+                      <Show when={errorCodeSummaries().length > 0}>
+                        <details class="rounded-md border border-border bg-surface p-3 text-xs text-muted">
+                          <summary class="cursor-pointer text-sm font-semibold text-base-content">
+                            Failure codes{' '}
+                            <span class="ml-2 text-xs font-normal text-muted">
+                              ({errorCodeSummaries().length} from the live manifest)
+                            </span>
+                          </summary>
+                          <div class="mt-3 space-y-2">
+                            <p>
+                              Connected agents should branch on these codes instead of scraping
+                              response text.
+                            </p>
+                            <div class="flex flex-wrap gap-2">
+                              <For each={errorCodeSummaries()}>
+                                {(summary) => (
+                                  <span
+                                    class="rounded-md border border-border bg-page px-2 py-1"
+                                    title={`Declared by ${summary.capabilityNames.join(', ')}`}
+                                  >
+                                    <code class="font-mono">{summary.code}</code>
+                                  </span>
                                 )}
                               </For>
                             </div>
-                          </details>
-                        </Show>
-                      </div>
-                    </details>
+                          </div>
+                        </details>
+                      </Show>
+                      <Show when={manifest() && grouped().length > 0}>
+                        <details class="rounded-md border border-border bg-surface p-3">
+                          <summary class="cursor-pointer text-sm font-semibold text-base-content">
+                            Agent capabilities{' '}
+                            <span class="ml-2 text-xs font-normal text-muted">
+                              (manifest {manifest()?.version} -{' '}
+                              {manifest()?.capabilities.length ?? 0} total)
+                            </span>
+                          </summary>
+                          <div class="mt-3 space-y-4">
+                            <For each={grouped()}>
+                              {(section) => (
+                                <div class="space-y-2">
+                                  <div>
+                                    <h4 class="text-xs font-semibold uppercase tracking-wide text-muted">
+                                      {section.label}
+                                    </h4>
+                                    <Show when={section.description}>
+                                      <p class="text-xs text-muted">{section.description}</p>
+                                    </Show>
+                                  </div>
+                                  <ul class="divide-y divide-border rounded-md border border-border bg-page">
+                                    <For each={section.entries}>
+                                      {(cap) => (
+                                        <li class="space-y-1 p-3">
+                                          <div class="flex flex-wrap items-baseline gap-2">
+                                            <code class="font-mono text-sm font-semibold text-base-content">
+                                              {cap.name}
+                                            </code>
+                                            <span class="text-xs text-muted">
+                                              <code class="font-mono">{cap.method}</code> {cap.path}
+                                            </span>
+                                            <span class="ml-auto rounded-full border border-border bg-surface-alt px-2 py-0.5 text-[10px] uppercase tracking-wide text-muted">
+                                              {cap.scope}
+                                            </span>
+                                          </div>
+                                          <p class="text-xs text-muted">{cap.description}</p>
+                                          <Show when={cap.errorCodes && cap.errorCodes.length > 0}>
+                                            <p class="text-[11px] text-muted">
+                                              <span class="font-semibold">Stable error codes:</span>{' '}
+                                              <For each={cap.errorCodes}>
+                                                {(code, idx) => (
+                                                  <>
+                                                    <code class="font-mono">{code}</code>
+                                                    {idx() < cap.errorCodes!.length - 1 ? ', ' : ''}
+                                                  </>
+                                                )}
+                                              </For>
+                                            </p>
+                                          </Show>
+                                        </li>
+                                      )}
+                                    </For>
+                                  </ul>
+                                </div>
+                              )}
+                            </For>
+                          </div>
+                        </details>
+                      </Show>
+                      <p class="text-xs text-muted">
+                        See the{' '}
+                        <ExternalTextLink href={AGENT_SUBSTRATE_DOC_URL} variant="inlineSubtle">
+                          External Agent Guide
+                        </ExternalTextLink>{' '}
+                        for CLI verification details and custom client integration notes.
+                      </p>
+                    </div>
                   </Show>
                 </div>
               </Show>
             </details>
           </Show>
         </div>
-
-        <Show when={manifest.loading}>
-          <p class="text-sm text-muted">Loading capabilities…</p>
-        </Show>
-
-        <Show when={manifest.error}>
-          <p class="text-sm text-red-600 dark:text-red-300">
-            Could not load <code class="font-mono">/api/agent/capabilities</code>:{' '}
-            {String(manifest.error)}
-          </p>
-        </Show>
       </div>
-    </SettingsPanel>
+    </Card>
   );
 };
 

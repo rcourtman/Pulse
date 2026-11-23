@@ -8,6 +8,7 @@ import {
   type Accessor,
   type Component,
 } from 'solid-js';
+import { A } from '@solidjs/router';
 import {
   AlertTriangle,
   ChevronDown,
@@ -19,7 +20,9 @@ import {
   SlidersHorizontal,
 } from 'lucide-solid';
 import { Button } from '@/components/shared/Button';
+import { SearchField } from '@/components/shared/SearchField';
 import { getAPIReadAccessErrorMessage } from '@/utils/apiAccessError';
+import { useRelativeTimeNow } from '@/utils/relativeTimeClock';
 import SettingsPanel from '@/components/shared/SettingsPanel';
 import {
   Table,
@@ -60,6 +63,7 @@ interface InfrastructureSourceManagerProps {
   inventoryLoading?: boolean;
   inventoryError?: unknown;
   onRetryInventory?: () => void;
+  onRefreshInventory?: () => void;
   discoveredNodes: Accessor<readonly DiscoveredServer[]>;
   discoveryEnabled: boolean;
   discoveryScanStatus: Accessor<DiscoveryScanStatus>;
@@ -131,11 +135,11 @@ const normalizeDiscoveryTimestamp = (value?: number): number | undefined => {
   return value < 1_000_000_000_000 ? value * 1000 : value;
 };
 
-const formatRelativeTimestamp = (value?: number): string | undefined => {
+const formatRelativeTimestamp = (value?: number, nowMs = Date.now()): string | undefined => {
   const timestamp = normalizeDiscoveryTimestamp(value);
   if (!timestamp) return undefined;
 
-  const diff = Math.max(0, Date.now() - timestamp);
+  const diff = Math.max(0, nowMs - timestamp);
   const sec = Math.floor(diff / 1000);
   if (sec < 60) return `${sec}s ago`;
   const min = Math.floor(sec / 60);
@@ -335,11 +339,45 @@ const agentHostProfileGroupLabel = (row: InfrastructureSystemRow): string | null
 
 export const InfrastructureSourceManager: Component<InfrastructureSourceManagerProps> = (props) => {
   let layoutContainerRef: HTMLDivElement | undefined;
+  const now = useRelativeTimeNow();
   const products = createMemo(() => getInfrastructureSourceManagerProducts());
   const inventoryReadUncertain = () => Boolean(props.inventoryLoading || props.inventoryError);
+  const [searchQuery, setSearchQuery] = createSignal('');
+  const [healthFilter, setHealthFilter] = createSignal<'all' | 'attention' | 'updates'>('all');
   const infrastructureRows = createMemo(() =>
     props.rows().filter((row) => row.ownerType !== 'availability'),
   );
+  const normalizedSearch = createMemo(() => searchQuery().trim().toLowerCase());
+  const filteredInfrastructureRows = createMemo(() => {
+    const query = normalizedSearch();
+    const filter = healthFilter();
+    return infrastructureRows().filter((row) => {
+      if (
+        filter === 'attention' &&
+        !row.problem &&
+        !row.members.some((member) => Boolean(member.problem))
+      ) {
+        return false;
+      }
+      if (filter === 'updates' && row.agentUpdateCount === 0) {
+        return false;
+      }
+      if (!query) return true;
+      const haystack = [
+        row.name,
+        row.host,
+        row.subtitle,
+        row.identitySubtitle,
+        row.statusLabel,
+        ...row.coverageLabels,
+        ...row.members.map((member) => `${member.name} ${member.host ?? ''}`),
+      ]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase();
+      return haystack.includes(query);
+    });
+  });
 
   const groupedConfiguredRows = createMemo(() => {
     const next = new Map<InfrastructureOnboardingConnectionType, InfrastructureSystemRow[]>();
@@ -347,7 +385,7 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
       next.set(product.type, []);
     }
 
-    for (const row of infrastructureRows()) {
+    for (const row of filteredInfrastructureRows()) {
       const productRows = next.get(row.ownerType as InfrastructureOnboardingConnectionType);
       if (!productRows) continue;
       productRows.push(row);
@@ -532,7 +570,7 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
       infrastructureRows().some((row) => rowNeedsAgentCoverage(row)),
   );
   const lastDiscoveryResultText = createMemo(() =>
-    formatRelativeTimestamp(props.discoveryScanStatus().lastResultAt),
+    formatRelativeTimestamp(props.discoveryScanStatus().lastResultAt, now()),
   );
   const connectedSystemCount = createMemo(() => infrastructureRows().length);
   const agentConnectionIds = createMemo(() =>
@@ -601,7 +639,7 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
   const discoveryMonitorMeta = createMemo(() => {
     const status = props.discoveryScanStatus();
     if (status.scanning && status.lastScanStartedAt) {
-      return `Started ${formatRelativeTimestamp(status.lastScanStartedAt) ?? 'just now'}`;
+      return `Started ${formatRelativeTimestamp(status.lastScanStartedAt, now()) ?? 'just now'}`;
     }
     if (lastDiscoveryResultText()) return `Last scanned ${lastDiscoveryResultText()}`;
     // Off with no result says nothing more than the Off badge beside it. A
@@ -733,7 +771,7 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
             <Show when={discoveredCandidateCount() > 0 && props.onReviewDiscoveredSource}>
               <Button
                 type="button"
-                variant="primary"
+                variant="secondary"
                 size="mdCompact"
                 class="min-h-11 gap-2 lg:min-h-9"
                 onClick={() => props.onReviewDiscoveredSource?.(props.discoveredNodes()[0])}
@@ -745,7 +783,7 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
             <Show when={props.discoveryEnabled && props.onRunDiscovery}>
               <Button
                 type="button"
-                variant={discoveredCandidateCount() > 0 ? 'secondary' : 'primary'}
+                variant="secondary"
                 size="mdCompact"
                 class="min-h-11 gap-2 lg:min-h-9"
                 onClick={props.onRunDiscovery}
@@ -828,7 +866,7 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
             <Show when={agentConnectionIds().length > 0 && props.onOpenAgentDoctor}>
               <Button
                 type="button"
-                variant={fleetAttentionSystemCount() > 0 ? 'primary' : 'secondary'}
+                variant="secondary"
                 size="mdCompact"
                 onClick={() => props.onOpenAgentDoctor?.()}
                 class="min-h-11 lg:min-h-9"
@@ -865,6 +903,63 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
       <p>{getInfrastructureEmptyStateSummary()}</p>
       <p class="text-xs leading-5 text-muted">{getInfrastructureEmptyStateDetail()}</p>
     </div>
+  );
+
+  const filterBar = () => (
+    <Show when={!inventoryReadUncertain() && connectedSystemCount() >= 4}>
+      <div class="flex flex-col gap-2 border-b border-border bg-surface-alt/40 px-4 py-2.5 sm:flex-row sm:items-center sm:justify-between">
+        <div class="w-full sm:max-w-xs">
+          <SearchField
+            value={searchQuery()}
+            onChange={setSearchQuery}
+            title="Filter connected systems"
+            placeholder="Filter systems by name or host..."
+          />
+        </div>
+        <div class="flex flex-wrap items-center gap-1.5" role="group" aria-label="Filter by status">
+          <button
+            type="button"
+            aria-pressed={healthFilter() === 'all'}
+            onClick={() => setHealthFilter('all')}
+            class={`rounded-full px-2.5 py-1 text-xs font-medium transition-colors ${
+              healthFilter() === 'all'
+                ? 'bg-blue-600 text-white'
+                : 'border border-border bg-surface text-muted hover:text-base-content'
+            }`}
+          >
+            All ({connectedSystemCount()})
+          </button>
+          <Show when={fleetAttentionSystemCount() > 0}>
+            <button
+              type="button"
+              aria-pressed={healthFilter() === 'attention'}
+              onClick={() => setHealthFilter((cur) => (cur === 'attention' ? 'all' : 'attention'))}
+              class={`rounded-full px-2.5 py-1 text-xs font-medium transition-colors ${
+                healthFilter() === 'attention'
+                  ? 'bg-amber-600 text-white'
+                  : 'border border-border bg-surface text-muted hover:text-base-content'
+              }`}
+            >
+              Needs attention ({fleetAttentionSystemCount()})
+            </button>
+          </Show>
+          <Show when={agentUpdateTotal() > 0}>
+            <button
+              type="button"
+              aria-pressed={healthFilter() === 'updates'}
+              onClick={() => setHealthFilter((cur) => (cur === 'updates' ? 'all' : 'updates'))}
+              class={`rounded-full px-2.5 py-1 text-xs font-medium transition-colors ${
+                healthFilter() === 'updates'
+                  ? 'bg-blue-600 text-white'
+                  : 'border border-border bg-surface text-muted hover:text-base-content'
+              }`}
+            >
+              Agent updates ({agentUpdateTotal()})
+            </button>
+          </Show>
+        </div>
+      </div>
+    </Show>
   );
 
   const inventoryReadNotice = () => (
@@ -932,23 +1027,48 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
       >
         {inventoryReadNotice()}
         <Show when={!inventoryReadUncertain()}>{setupSummaryBand()}</Show>
+        {filterBar()}
 
         <Show when={!useCardLayout() && (hasAnyConfigured() || !inventoryReadUncertain())}>
           <Table class="w-full min-w-[820px] table-fixed text-sm">
             <TableHeader class="">
               <TableRow>
-                <TableHead class="w-[29%] py-1.5 pl-3 pr-3 text-left text-[11px] font-medium text-muted whitespace-nowrap">
+                <TableHead
+                  class={`${
+                    actionColumnVisible()
+                      ? actionColumnShowsInstall()
+                        ? 'w-[27%]'
+                        : 'w-[31%]'
+                      : 'w-[35%]'
+                  } py-1.5 pl-3 pr-3 text-left text-[11px] font-medium text-muted whitespace-nowrap`}
+                >
                   System
                 </TableHead>
-                <TableHead class="w-[29%] px-3 py-1.5 text-left text-[11px] font-medium text-muted whitespace-nowrap">
+                <TableHead
+                  class={`${
+                    actionColumnVisible()
+                      ? actionColumnShowsInstall()
+                        ? 'w-[26%]'
+                        : 'w-[30%]'
+                      : 'w-[35%]'
+                  } px-3 py-1.5 text-left text-[11px] font-medium text-muted whitespace-nowrap`}
+                >
                   Coverage
                 </TableHead>
-                <TableHead class="w-[27%] px-3 py-1.5 text-left text-[11px] font-medium text-muted whitespace-nowrap">
+                <TableHead
+                  class={`${
+                    actionColumnVisible()
+                      ? actionColumnShowsInstall()
+                        ? 'w-[25%]'
+                        : 'w-[27%]'
+                      : 'w-[30%]'
+                  } px-3 py-1.5 text-left text-[11px] font-medium text-muted whitespace-nowrap`}
+                >
                   Health
                 </TableHead>
                 <Show when={actionColumnVisible()}>
                   <TableHead
-                    class={`${actionColumnShowsInstall() ? 'w-48' : 'w-28'} px-3 py-1.5 text-right text-[11px] font-medium text-muted whitespace-nowrap`}
+                    class={`${actionColumnShowsInstall() ? 'w-[22%]' : 'w-[12%]'} px-3 py-1.5 text-right text-[11px] font-medium text-muted whitespace-nowrap`}
                   >
                     Actions
                   </TableHead>
@@ -1042,7 +1162,7 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                                             }
                                           >
                                             {(path) => (
-                                              <a
+                                              <A
                                                 href={path()}
                                                 class={`${MONITORING_LINK_CLASS} min-w-0 truncate text-[13px] ${
                                                   row.isCluster ? 'font-medium' : ''
@@ -1050,7 +1170,7 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                                                 title={rowSystemTitle(row)}
                                               >
                                                 {row.name}
-                                              </a>
+                                              </A>
                                             )}
                                           </Show>
                                           {(() => {
@@ -1420,7 +1540,7 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                                             </div>
                                             <span
                                               class="inline-flex shrink-0 items-center rounded-full border border-dashed border-border bg-surface-alt px-2 py-0.5 text-[11px] font-medium text-muted whitespace-nowrap"
-                                              title="Discovery candidate — review to attach a source"
+                                              title="Discovery candidate: review to attach a source"
                                             >
                                               Candidate
                                             </span>
@@ -1499,6 +1619,31 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                   </TableCell>
                 </TableRow>
               </Show>
+              <Show
+                when={(hasAnyConfigured() || hasAnyDiscovered()) && sortedProducts().length === 0}
+              >
+                <TableRow>
+                  <TableCell
+                    colspan={actionColumnVisible() ? 4 : 3}
+                    class="px-4 py-8 text-center text-sm text-muted"
+                  >
+                    <div class="space-y-2">
+                      <p>No connected systems match your current filter.</p>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="xs"
+                        onClick={() => {
+                          setSearchQuery('');
+                          setHealthFilter('all');
+                        }}
+                      >
+                        Clear filters
+                      </Button>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              </Show>
             </TableBody>
           </Table>
         </Show>
@@ -1562,13 +1707,13 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                                       }
                                     >
                                       {(path) => (
-                                        <a
+                                        <A
                                           href={path()}
                                           class={`${MONITORING_LINK_CLASS} block wrap-break-word text-[13px] font-medium`}
                                           title={row.name}
                                         >
                                           {row.name}
-                                        </a>
+                                        </A>
                                       )}
                                     </Show>
                                     <Show when={row.isCluster && row.subtitle}>
@@ -1626,7 +1771,9 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                                 <Show when={row.members.length > 0 && membersExpanded(row)}>
                                   <div class="mt-3 border-t border-border-subtle pt-2">
                                     <div class="text-[11px] font-medium uppercase tracking-[0.08em] text-muted">
-                                      Cluster nodes
+                                      {row.ownerType === 'vmware'
+                                        ? 'Cluster hosts'
+                                        : 'Cluster nodes'}
                                     </div>
                                     <div class="mt-2 space-y-2">
                                       <For each={row.members}>
@@ -1864,7 +2011,7 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                                   </div>
                                   <span
                                     class="inline-flex shrink-0 items-center rounded-full border border-dashed border-border bg-surface-alt px-2 py-0.5 text-[11px] font-medium text-muted whitespace-nowrap"
-                                    title="Discovery candidate — review to attach a source"
+                                    title="Discovery candidate: review to attach a source"
                                   >
                                     Candidate
                                   </span>
@@ -1918,6 +2065,24 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                 {emptyStateContent()}
               </div>
             </Show>
+            <Show
+              when={(hasAnyConfigured() || hasAnyDiscovered()) && sortedProducts().length === 0}
+            >
+              <div class="space-y-2 rounded-md border border-dashed border-border px-3 py-6 text-center text-sm text-muted">
+                <p>No connected systems match your current filter.</p>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="xs"
+                  onClick={() => {
+                    setSearchQuery('');
+                    setHealthFilter('all');
+                  }}
+                >
+                  Clear filters
+                </Button>
+              </div>
+            </Show>
           </div>
         </Show>
         <Show when={!inventoryReadUncertain()}>{discoveryMonitorBand()}</Show>
@@ -1931,6 +2096,7 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
               preselectNodeName={target.nodeName}
               onClose={() => setClusterDeploy(null)}
               onUseInstaller={handleInstallAgentShortcut}
+              onInstalled={() => props.onRefreshInventory?.()}
             />
           )}
         </Show>

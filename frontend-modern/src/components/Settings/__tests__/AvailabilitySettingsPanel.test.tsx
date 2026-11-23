@@ -313,6 +313,24 @@ describe('AvailabilitySettingsPanel', () => {
       'mqtt-broker',
     );
   });
+
+  it('keeps loading and empty states mutually exclusive and renders a single Add button when empty', async () => {
+    let resolveList!: (value: AvailabilityTarget[]) => void;
+    vi.mocked(AvailabilityTargetsAPI.list).mockReturnValue(
+      new Promise<AvailabilityTarget[]>((resolve) => {
+        resolveList = resolve;
+      }),
+    );
+
+    render(() => <AvailabilitySettingsPanel />);
+    expect(screen.getByText('Loading availability checks...')).toBeInTheDocument();
+    expect(screen.queryByText('No availability checks yet')).not.toBeInTheDocument();
+
+    resolveList([]);
+    expect(await screen.findByText('No availability checks yet')).toBeInTheDocument();
+    expect(screen.queryByText('Loading availability checks...')).not.toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: /^Add service\/device check$/i })).toHaveLength(1);
+  });
 });
 
 it('ages loaded availability counts, copy and colour without another target read', async () => {
