@@ -191,7 +191,7 @@ class DependabotConfigTest(unittest.TestCase):
             ],
         )
 
-    def test_npm_updates_preserve_browser_runtime_parity(self) -> None:
+    def test_npm_version_ignores_preserve_browser_and_toolchain_parity(self) -> None:
         all_semver = {
             "version-update:semver-major",
             "version-update:semver-minor",
@@ -212,6 +212,8 @@ class DependabotConfigTest(unittest.TestCase):
                 "lucide-solid",
                 "vitest",
                 "@vitest/coverage-v8",
+                "jsdom",
+                "vite",
             },
         )
         for browser_runtime in ("playwright", "playwright-core", "@playwright/test"):
@@ -229,6 +231,20 @@ class DependabotConfigTest(unittest.TestCase):
                 ignored[dependency],
                 {"version-update:semver-major"},
             )
+
+    def test_jsdom_and_vite_ignore_only_standalone_major_version_updates(self) -> None:
+        npm = self.updates["npm"]
+        for dependency in ("jsdom", "vite"):
+            with self.subTest(dependency=dependency):
+                # No version-range ignore: security updates and ordinary minor
+                # and patch version updates must still be eligible.
+                self.assertEqual(
+                    [rule for rule in npm["ignore"] if rule["dependency-name"] == dependency],
+                    [{
+                        "dependency-name": dependency,
+                        "update-types": ["version-update:semver-major"],
+                    }],
+                )
 
     def test_github_actions_updates_preserve_reviewed_action_pins(self) -> None:
         # action_consumer_manifests.json pins each release-consumed action to an
