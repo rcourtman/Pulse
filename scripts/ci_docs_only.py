@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
-"""Classify documentation and isolated diagnostic recipe tree diffs.
+"""Classify documentation, diagnostic recipes and mirrored Help edits.
 
 Public docs already runs these suites and mirror/link checks. The two diagnostic
 recipes have a distinct route: the caller must run both in a required check
 before marking application CI inapplicable. Only a nonempty diff exclusively
 of those two paths can take that route. The workflow limits both routes to main.
+Post-merge Help routing additionally requires a direct main push with only
+modifications to existing mirror pairs and rendered Help tests.
 """
 
 import argparse
@@ -87,6 +89,9 @@ DOC_SUITES = frozenset({
 DOCUMENT = re.compile(
     rb"(?:[A-Za-z0-9_.-]+\.md|(?:docs|frontend-modern/public/docs)/[A-Za-z0-9_./-]+\.md)"
 )
+HELP_GUIDE = re.compile(rb"(docs|frontend-modern/public/docs)/([A-Za-z0-9_-]+\.md)")
+HELP_TEST = re.compile(rb"frontend-modern/src/features/docs/__tests__/[A-Za-z0-9_-]+\.test\.ts")
+REGULAR_MODIFICATION = re.compile(rb":100644 100644 [a-f0-9]{40} [a-f0-9]{40} M")
 
 
 def docs_only_paths(paths):
@@ -121,12 +126,55 @@ def docs_only_diff(base, head):
     return docs_only_paths(changed_tree_paths(base, head))
 
 
+def help_push_diff(base, head):
+    if not COMMIT.fullmatch(base) or not COMMIT.fullmatch(head):
+        return False
+    try:
+        commit = subprocess.check_output(["git", "cat-file", "commit", head], timeout=30)
+        # The push must advance from the exact first parent. cat-file works
+        # with the shallow workflow checkout; a stale base is not a shortcut.
+        if commit.split(b"\n", 2)[1:2] != [b"parent " + base.encode("ascii")]:
+            return False
+        raw = subprocess.check_output(
+            ["git", "diff", "--raw", "--no-abbrev", "--no-ext-diff", "--no-renames",
+             "--ignore-submodules=none", "-z",
+             base, head, "--"], timeout=30,
+        )
+    except (OSError, subprocess.SubprocessError):
+        print("Help push diff unavailable; retaining ordinary CI.", file=sys.stderr)
+        return False
+    records = raw.split(b"\0")
+    if records.pop() != b"" or len(records) % 2:
+        return False
+    canonical, shipped = set(), set()
+    has_test = False
+    for header, path in zip(records[::2], records[1::2]):
+        # Refuse additions, removal, renames, executables and type changes.
+        if not REGULAR_MODIFICATION.fullmatch(header):
+            return False
+        guide = HELP_GUIDE.fullmatch(path)
+        if guide:
+            root, name = guide.groups()
+            blob = header.split()[3]
+            (canonical if root == b"docs" else shipped).add((name, blob))
+        elif HELP_TEST.fullmatch(path):
+            has_test = True
+        else:
+            return False
+    return has_test and bool(canonical) and canonical == shipped
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--base", required=True)
     parser.add_argument("--head", required=True)
-    parser.add_argument("--route", action="store_true", help="also classify isolated diagnostic recipe edits")
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument("--route", action="store_true", help="also classify isolated diagnostic recipe edits")
+    mode.add_argument("--help-push", action="store_true", help="only for the main push workflow")
     args = parser.parse_args()
+    if args.help_push:
+        print("true" if help_push_diff(args.base, args.head) else "false")
+        return
     if not args.route:
         print("true" if docs_only_diff(args.base, args.head) else "false")
         return

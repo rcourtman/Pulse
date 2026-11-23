@@ -272,6 +272,37 @@ class FrontendWorkflowOrderTest(unittest.TestCase):
                 with self.subTest(name=name, state=state):
                     self.assertNotEqual(self.verdict(**{**values, name: state}).returncode, 0)
 
+    def test_main_push_help_requires_protected_scope_and_completed_checks(self):
+        job = self.jobs["changes"]
+        scope = self.step("Identify a mirrored Help-only main push", job="changes")
+        self.assertEqual(scope["id"], "help-scope")
+        self.assertEqual(scope["if"],
+                         "github.event_name == 'push' && github.ref == 'refs/heads/main' && "
+                         "github.ref_protected && steps.filter.outputs.code == 'true' && "
+                         "steps.filter.outputs.go_compile == 'false' && "
+                         "steps.filter.outputs.frontend_deps == 'false' && "
+                         "steps.filter.outputs.triage_helper == 'false'")
+        self.assertEqual(scope["env"], {
+            "BASE_SHA": "${{ github.event.before }}", "TESTED_SHA": "${{ github.sha }}",
+        })
+        setup = self.step("Set up Node.js for main-push Help checks", job="changes")
+        proof = self.step("Check Help test source and rendered guides", job="changes")
+        self.assertEqual(proof["id"], "help-proof")
+        unit_setup = self.step("Set up Node.js", job="frontend-unit")
+        self.assertEqual(setup["uses"], unit_setup["uses"])
+        self.assertEqual(setup["with"], unit_setup["with"])
+        self.assertEqual(proof["working-directory"], "frontend-modern")
+        self.assertEqual(proof["env"], {"EXPECTED_SOURCE_SHA": "${{ github.sha }}"})
+        for step in (setup, proof):
+            self.assertEqual(step["if"], "steps.help-scope.outputs.selected == 'true'")
+            self.assertNotIn("continue-on-error", step)
+        steps = job["steps"]
+        mirror = self.step("Check shipped docs before dependency work", job="changes")
+        ordered = [steps.index(step) for step in (mirror, scope, setup, proof)]
+        self.assertEqual(ordered, sorted(ordered))
+        self.assertEqual(job["outputs"]["code"],
+                         "${{ steps.help-proof.outputs.completed == 'true' && 'false' || steps.filter.outputs.code }}")
+
     def test_complete_audit_failure_still_fails_after_build_admits_runtime(self):
         required = self.step("Require frontend dependency audit")
         for state in ("success", "failure", "cancelled", "skipped", "", "unknown"):

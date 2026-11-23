@@ -74,9 +74,11 @@ jobs:
   changes:
     name: Detect changed areas
     runs-on: ubuntu-24.04
-    timeout-minutes: 5
+    # Only protected main pushes can run the locked Help validation here.
+    timeout-minutes: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && github.ref_protected && 12 || 5 }}
     outputs:
-      code: ${{ steps.filter.outputs.code }}
+      # Only completed Help proof, not selection alone, can skip runtime.
+      code: ${{ steps.help-proof.outputs.completed == 'true' && 'false' || steps.filter.outputs.code }}
       component_only: ${{ steps.component.outputs.only }}
       # Both matrices use one allocation. An unavailable output keeps the
       # complete two-rest/five-API layout in both consumers.
@@ -274,6 +276,57 @@ jobs:
         if: steps.filter.outputs.code == 'true'
         timeout-minutes: 1
         run: python3 scripts/release_control/run_go_package_slice_test.py
+
+      # A protected direct main advance containing only mirrored guides and
+      # their tests need not repeat the full application matrices. PR, manual,
+      # release-branch, mixed and uncertain validation are unchanged.
+      - name: Identify a mirrored Help-only main push
+        id: help-scope
+        if: >-
+          github.event_name == 'push' && github.ref == 'refs/heads/main' &&
+          github.ref_protected && steps.filter.outputs.code == 'true' &&
+          steps.filter.outputs.go_compile == 'false' &&
+          steps.filter.outputs.frontend_deps == 'false' &&
+          steps.filter.outputs.triage_helper == 'false'
+        env:
+          BASE_SHA: ${{ github.event.before }}
+          TESTED_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          if selected=$(python3 scripts/ci_docs_only.py --help-push --base "$BASE_SHA" --head "$TESTED_SHA") &&
+             [[ "$selected" == true && "$(git rev-parse --verify HEAD)" == "$TESTED_SHA" ]]; then
+            echo "Main push modifies only mirrored Help guides and their tests; running the required focused checks."
+            echo "selected=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Set up Node.js for main-push Help checks
+        if: steps.help-scope.outputs.selected == 'true'
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: frontend-modern/package-lock.json
+
+      # Public docs and the ordinary required verdicts still run; a failure
+      # here fails changed-area admission itself, before any successful skip.
+      - name: Check Help test source and rendered guides
+        id: help-proof
+        if: steps.help-scope.outputs.selected == 'true'
+        working-directory: frontend-modern
+        timeout-minutes: 9
+        env:
+          EXPECTED_SOURCE_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse --verify HEAD)" = "$EXPECTED_SOURCE_SHA"
+          npm ci --no-audit
+          npm run format:check
+          npm run lint
+          npm run lint:headers
+          npm run lint:cpd
+          npm run type-check
+          npm run test -- src/features/docs/__tests__ src/utils/__tests__/docsLinks.test.ts
+          echo "completed=true" >> "$GITHUB_OUTPUT"
 
   triage-helper:
     name: Issue metadata and silent triage policy
@@ -703,7 +756,7 @@ jobs:
             success:true:success:success:success)
               echo "Frontend build, complete audit, runtime and the unit suite passed." ;;
             success:false:skipped:skipped:skipped)
-              echo "Application runtime checks are not applicable to this classified change; no frontend tests ran." ;;
+              echo "Application runtime checks are not applicable; no frontend tests ran in these jobs. See Detect changed areas for any focused checks." ;;
             *)
               echo "::error::Frontend proof is incomplete or failed. Inspect changed-area classification, build/audit/runtime and unit suite."
               exit 1 ;;
