@@ -197,7 +197,7 @@ func previousContainerFromView(ct *unifiedresources.ContainerView) models.Contai
 		Memory: models.Memory{
 			Used:  ct.MemoryUsed(),
 			Total: ct.MemoryTotal(),
-			Usage: ct.MemoryPercent() / 100,
+			Usage: ct.MemoryPercent(), // Both the view and the poller use percentage points.
 		},
 	}
 }
@@ -261,7 +261,7 @@ func previousNodeFromView(node *unifiedresources.NodeView) models.Node {
 		Memory: models.Memory{
 			Used:  node.MemoryUsed(),
 			Total: node.MemoryTotal(),
-			Usage: node.MemoryPercent() / 100,
+			Usage: node.MemoryPercent(), // Both the view and the poller use percentage points.
 		},
 	}
 }

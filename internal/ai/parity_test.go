@@ -22,8 +22,8 @@ func TestParityVMFields(t *testing.T) {
 		Type:         "qemu",
 		CPU:          0.42, // fraction
 		CPUs:         4,
-		Memory:       testMemory(),
-		Disk:         testDisk(),
+		Memory:       testMemoryWithTotal(400 << 30),
+		Disk:         testDiskWithTotal(2000 << 30),
 		Disks:        []models.Disk{testDisk(), testDisk()},
 		IPAddresses:  []string{"10.0.0.10", "fd00::10"},
 		OSName:       "Ubuntu",
@@ -98,13 +98,13 @@ func TestParityVMFields(t *testing.T) {
 	require.Equal(t, vm.CPUs, v.CPUs())
 	require.Equal(t, vm.Uptime, v.Uptime())
 
-	require.InEpsilon(t, percentFromUsage(vm.CPU), v.CPUPercent(), 1e-9)
+	require.InEpsilon(t, 42, v.CPUPercent(), 1e-9)
 	require.Equal(t, vm.Memory.Used, v.MemoryUsed())
 	require.Equal(t, vm.Memory.Total, v.MemoryTotal())
-	require.InEpsilon(t, percentFromUsage(vm.Memory.Usage), v.MemoryPercent(), 1e-9)
+	require.InEpsilon(t, vm.Memory.Usage, v.MemoryPercent(), 1e-9)
 	require.Equal(t, vm.Disk.Used, v.DiskUsed())
 	require.Equal(t, vm.Disk.Total, v.DiskTotal())
-	require.InEpsilon(t, percentFromUsage(vm.Disk.Usage), v.DiskPercent(), 1e-9)
+	require.InEpsilon(t, vm.Disk.Usage, v.DiskPercent(), 1e-9)
 
 	require.Equal(t, vm.Tags, v.Tags())
 	require.True(t, v.LastSeen().Equal(vm.LastSeen))
@@ -123,8 +123,8 @@ func TestParityContainerFields(t *testing.T) {
 		Type:       "lxc",
 		CPU:        0.31,
 		CPUs:       2,
-		Memory:     testMemory(),
-		Disk:       testDisk(),
+		Memory:     testMemoryWithTotal(400 << 30),
+		Disk:       testDiskWithTotal(2000 << 30),
 		Disks:      []models.Disk{testDisk()},
 		NetworkIn:  222,
 		NetworkOut: 333,
@@ -185,13 +185,13 @@ func TestParityContainerFields(t *testing.T) {
 	require.Equal(t, ct.CPUs, v.CPUs())
 	require.Equal(t, ct.Uptime, v.Uptime())
 
-	require.InEpsilon(t, percentFromUsage(ct.CPU), v.CPUPercent(), 1e-9)
+	require.InEpsilon(t, 31, v.CPUPercent(), 1e-9)
 	require.Equal(t, ct.Memory.Used, v.MemoryUsed())
 	require.Equal(t, ct.Memory.Total, v.MemoryTotal())
-	require.InEpsilon(t, percentFromUsage(ct.Memory.Usage), v.MemoryPercent(), 1e-9)
+	require.InEpsilon(t, ct.Memory.Usage, v.MemoryPercent(), 1e-9)
 	require.Equal(t, ct.Disk.Used, v.DiskUsed())
 	require.Equal(t, ct.Disk.Total, v.DiskTotal())
-	require.InEpsilon(t, percentFromUsage(ct.Disk.Usage), v.DiskPercent(), 1e-9)
+	require.InEpsilon(t, ct.Disk.Usage, v.DiskPercent(), 1e-9)
 
 	require.Equal(t, ct.Tags, v.Tags())
 	require.True(t, v.LastSeen().Equal(ct.LastSeen))
@@ -220,8 +220,8 @@ func TestParityNodeFields(t *testing.T) {
 		Status:        "online",
 		Type:          "node",
 		CPU:           0.33,
-		Memory:        testMemory(),
-		Disk:          testDisk(),
+		Memory:        testMemoryWithTotal(400 << 30),
+		Disk:          testDiskWithTotal(2000 << 30),
 		Uptime:        54321,
 		LoadAverage:   []float64{0.12, 0.34, 0.56},
 		KernelVersion: "6.5.0",
@@ -267,9 +267,9 @@ func TestParityNodeFields(t *testing.T) {
 	require.Equal(t, node.PendingUpdates, v.PendingUpdates())
 
 	require.Equal(t, node.CPUInfo.Cores*node.CPUInfo.Sockets, v.CPUs())
-	require.InEpsilon(t, percentFromUsage(node.CPU), v.CPUPercent(), 1e-9)
-	require.InEpsilon(t, percentFromUsage(node.Memory.Usage), v.MemoryPercent(), 1e-9)
-	require.InEpsilon(t, percentFromUsage(node.Disk.Usage), v.DiskPercent(), 1e-9)
+	require.InEpsilon(t, 33, v.CPUPercent(), 1e-9)
+	require.InEpsilon(t, node.Memory.Usage, v.MemoryPercent(), 1e-9)
+	require.InEpsilon(t, node.Disk.Usage, v.DiskPercent(), 1e-9)
 
 	require.Equal(t, node.LinkedAgentID, v.LinkedAgentID())
 }
@@ -289,7 +289,7 @@ func TestParityHostFields(t *testing.T) {
 		Architecture:  "amd64",
 		CPUCount:      16,
 		CPUUsage:      25,
-		Memory:        testMemoryPercent(),
+		Memory:        testMemory(),
 		LoadAverage:   []float64{0.21, 0.18, 0.22},
 		Disks: []models.Disk{
 			{
@@ -377,7 +377,7 @@ func TestParityDockerHostFields(t *testing.T) {
 		UptimeSeconds:     123456,
 		CPUUsage:          15,
 		LoadAverage:       []float64{0.12, 0.10, 0.09},
-		Memory:            testMemoryPercent(),
+		Memory:            testMemory(),
 		Disks: []models.Disk{
 			{
 				Total:      107374182400,
@@ -470,10 +470,10 @@ func TestParityStorageFields(t *testing.T) {
 		Status:   "online",
 		LastSeen: now,
 		Path:     "/tank",
-		Total:    107374182400,
-		Used:     10737418240,
-		Free:     96636764160,
-		Usage:    float64(10737418240) / float64(107374182400),
+		Total:    2000 << 30,
+		Used:     10 << 30,
+		Free:     1990 << 30,
+		Usage:    0.5,
 		Content:  "images, iso, backup",
 		Shared:   false,
 		Enabled:  true,
@@ -521,7 +521,7 @@ func TestParityStorageFields(t *testing.T) {
 
 	require.Equal(t, storage.Used, v.DiskUsed())
 	require.Equal(t, storage.Total, v.DiskTotal())
-	require.InEpsilon(t, percentFromUsage(storage.Usage), v.DiskPercent(), 1e-9)
+	require.InEpsilon(t, storage.Usage, v.DiskPercent(), 1e-9)
 	require.True(t, v.LastSeen().Equal(storage.LastSeen))
 }
 
@@ -536,9 +536,9 @@ func TestParityPBSInstanceFields(t *testing.T) {
 		Status:           "online",
 		Version:          "3.2-1",
 		CPU:              12.3,
-		Memory:           73.0,
-		MemoryUsed:       1073741824,
-		MemoryTotal:      4294967296,
+		Memory:           0.25,
+		MemoryUsed:       1 << 30,
+		MemoryTotal:      400 << 30,
 		Uptime:           222222,
 		Datastores:       []models.PBSDatastore{{Name: "ds1"}, {Name: "ds2"}},
 		BackupJobs:       []models.PBSBackupJob{{ID: "job1"}},
@@ -573,8 +573,8 @@ func TestParityPBSInstanceFields(t *testing.T) {
 	require.Equal(t, len(pbs.PruneJobs), v.PruneJobCount())
 	require.Equal(t, len(pbs.GarbageJobs), v.GarbageJobCount())
 	require.Equal(t, pbs.ConnectionHealth, v.ConnectionHealth())
-	require.InEpsilon(t, percentFromUsage(pbs.CPU), v.CPUPercent(), 1e-9)
-	require.InEpsilon(t, percentFromUsage(pbs.Memory), v.MemoryPercent(), 1e-9)
+	require.InEpsilon(t, 12.3, v.CPUPercent(), 1e-9)
+	require.InEpsilon(t, pbs.Memory, v.MemoryPercent(), 1e-9)
 	require.Equal(t, 0.0, v.DiskPercent())
 	require.True(t, v.LastSeen().Equal(pbs.LastSeen))
 	require.Equal(t, pbs.GuestURL, v.CustomURL())
@@ -730,8 +730,8 @@ func TestParityResourceCounts(t *testing.T) {
 				{Name: "eth0", MAC: "00:11:22:33:44:55", Addresses: []string{"192.168.50.10/24"}},
 			},
 			Sensors:  models.HostSensorSummary{TemperatureCelsius: map[string]float64{"cpu_package": 50.0}},
-			Disks:    []models.Disk{testDiskPercent()},
-			Memory:   testMemoryPercent(),
+			Disks:    []models.Disk{testDisk()},
+			Memory:   testMemory(),
 			CPUUsage: 5,
 		},
 		// One standalone host agent that should not merge with anything.
@@ -750,8 +750,8 @@ func TestParityResourceCounts(t *testing.T) {
 				{Name: "eth0", MAC: "00:aa:bb:cc:dd:ee", Addresses: []string{"10.250.0.10/24"}},
 			},
 			Sensors:  models.HostSensorSummary{TemperatureCelsius: map[string]float64{"cpu_package": 45.0}},
-			Disks:    []models.Disk{testDiskPercent()},
-			Memory:   testMemoryPercent(),
+			Disks:    []models.Disk{testDisk()},
+			Memory:   testMemory(),
 			CPUUsage: 7,
 		},
 	)
@@ -820,8 +820,8 @@ func TestExpectedDeltaHostMerge(t *testing.T) {
 			{Name: "eth0", MAC: "00:11:22:33:44:55", Addresses: []string{"192.168.50.10/24"}},
 		},
 		Sensors:  models.HostSensorSummary{TemperatureCelsius: map[string]float64{"cpu_package": 51.0}},
-		Disks:    []models.Disk{testDiskPercent()},
-		Memory:   testMemoryPercent(),
+		Disks:    []models.Disk{testDisk()},
+		Memory:   testMemory(),
 		CPUUsage: 5,
 	}
 
@@ -876,8 +876,8 @@ func TestExpectedDeltaNodesThroughTwoViews(t *testing.T) {
 			{Name: "eth0", MAC: "00:11:22:33:44:55", Addresses: []string{"192.168.50.10/24"}},
 		},
 		Sensors:  models.HostSensorSummary{TemperatureCelsius: map[string]float64{"cpu_package": 51.0}},
-		Disks:    []models.Disk{testDiskPercent()},
-		Memory:   testMemoryPercent(),
+		Disks:    []models.Disk{testDisk()},
+		Memory:   testMemory(),
 		CPUUsage: 5,
 	}
 
@@ -1105,8 +1105,8 @@ func testStateSnapshot() models.StateSnapshot {
 			UptimeSeconds:     123456,
 			CPUUsage:          15,
 			LoadAverage:       []float64{0.12, 0.10, 0.09},
-			Memory:            testMemoryPercent(),
-			Disks:             []models.Disk{testDiskPercent()},
+			Memory:            testMemory(),
+			Disks:             []models.Disk{testDisk()},
 			NetworkInterfaces: []models.HostNetworkInterface{{Name: "eth0", MAC: "de:ad:be:ef:00:01", Addresses: []string{"10.10.0.10/24"}}},
 			Status:            "online",
 			LastSeen:          now,
@@ -1237,44 +1237,31 @@ func testStateSnapshot() models.StateSnapshot {
 }
 
 func testMemory() models.Memory {
-	used := int64(1073741824)  // 1GB
-	total := int64(4294967296) // 4GB
+	return testMemoryWithTotal(4 << 30)
+}
+
+func testMemoryWithTotal(total int64) models.Memory {
+	const used = 1 << 30
 	return models.Memory{
 		Used:  used,
 		Total: total,
 		Free:  total - used,
-		Usage: float64(used) / float64(total),
+		Usage: 100 * float64(used) / float64(total),
 	}
 }
 
-func testMemoryPercent() models.Memory {
-	mem := testMemory()
-	mem.Usage = 25
-	return mem
+func testDisk() models.Disk {
+	return testDiskWithTotal(100 << 30)
 }
 
-func testDisk() models.Disk {
-	used := int64(10737418240)   // 10GB
-	total := int64(107374182400) // 100GB
+func testDiskWithTotal(total int64) models.Disk {
+	const used = 10 << 30
 	return models.Disk{
 		Used:  used,
 		Total: total,
 		Free:  total - used,
-		Usage: float64(used) / float64(total),
+		Usage: 100 * float64(used) / float64(total),
 	}
-}
-
-func testDiskPercent() models.Disk {
-	disk := testDisk()
-	disk.Usage = 10
-	return disk
-}
-
-func percentFromUsage(value float64) float64 {
-	if value <= 1.0 {
-		return value * 100
-	}
-	return value
 }
 
 func proxmoxNodeID(instance, nodeName string) string {
