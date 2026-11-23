@@ -911,6 +911,14 @@ update, open an outdated-agent notice or
 copy the command for each reported host. Pulse does not remotely execute those
 commands.
 
+**Keep a deliberate Proxmox opt-out on manual Linux updates.** If you
+installed with `--disable-proxmox`, include it alongside `--update` in the
+installer command, even when you copy it from Agent Doctor. The opt-out may
+not be in the saved service arguments, so the installer can detect Proxmox
+again without the flag. This is separate from the built-in binary updater.
+The flag does not change PVE or PBS API connections you added in Pulse. Keep
+your existing local S.M.A.R.T. and LXC filesystem settings and permissions.
+
 If an already-installed v5 `pulse-agent` follows its legacy automatic updater
 path instead of the supported manual installer path, the first hop is performed
 by the v5 updater. That hop verifies TLS by default, the SHA-256 checksum,
