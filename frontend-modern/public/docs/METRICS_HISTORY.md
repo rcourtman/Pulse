@@ -52,7 +52,7 @@ than borrowing one from the current overview.
 | **Stored** while inspecting | Values at the selected stored observation time. | Not a live reading or an interpolated observation between points. |
 | **current**, **last known** or **freshness unknown** with no stored history | A separately qualified fallback reading. Keep its label and explanation. | Not proof that the value was persisted or belongs to a past incident. |
 | **Single observation. No trend yet.** | One stored time in that panel. | Not a flat trend or sustained recovery. |
-| **Missing observations** | Some series lack readings at other stored times in that panel; lines stop across those gaps. | Not the cause or duration of a monitoring outage. Missing is not measured zero. |
+| **Missing observations** | A series lacks readings between its points at times when another metric in the same panel has a stored point. Lines stop across those gaps. | Not the cause or duration of a monitoring outage. Missing is not measured zero. |
 | **Shaded low–high band** | The recorded minimum and maximum within an aggregated bucket, when supplied; the line shows its average. | Not continuous coverage, every original sample, or the duration of a spike. |
 | **peak** while inspecting | That metric's maximum in the inspected bucket, when the panel shows it beside the average. | Not necessarily the highest value in the whole selected range or the value at an alert's exact time. |
 
@@ -81,6 +81,13 @@ from the line alone.
    today's overview. Today's source cannot identify the source of a past
    warning. Follow [guest memory interpretation](TROUBLESHOOTING.md#guest-memory-is-high-but-available-memory-is-plentiful)
    when unlike readings suggest memory pressure.
+
+**Did collection resume after Pulse stopped?** In the shortest range that
+includes the stop, compare the stored times around it. A new point after
+restart shows collection resumed for that resource, not that it was
+uninterrupted. A line can join points across an interval with no stored
+readings at all. Compare with the [checks after a memory stop](TROUBLESHOOTING.md#after-a-memory-cgroup-kill)
+without restarting again.
 
 Use already available observations; do not run Diagnostics or guest-agent
 probes, restart a guest, repeat a backup, clear History or change retention to
