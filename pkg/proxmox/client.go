@@ -1515,7 +1515,7 @@ func (c *Client) GetContainerInterfaces(ctx context.Context, node string, vmid i
 	return result.Data, nil
 }
 
-// GetStorageContent returns the content of a specific storage
+// GetStorageContent returns the backups and container templates in a storage listing.
 func (c *Client) GetStorageContent(ctx context.Context, node, storage string) ([]StorageContent, error) {
 	// Storage content queries can take longer on large storages, especially PBS
 	// with encrypted backups which can take 10-20+ seconds to enumerate.
@@ -1532,20 +1532,7 @@ func (c *Client) GetStorageContent(ctx context.Context, node, storage string) ([
 	if err != nil {
 		return nil, err
 	}
-	contents, err := readStorageContentInventory(resp)
-	if err != nil {
-		return nil, err
-	}
-
-	// Filter for backup content only
-	var backups []StorageContent
-	for _, content := range contents {
-		if content.Content == "backup" || content.Content == "vztmpl" {
-			backups = append(backups, content)
-		}
-	}
-
-	return backups, nil
+	return readStorageContentInventory(resp)
 }
 
 // GetVMSnapshots returns snapshots for a specific VM

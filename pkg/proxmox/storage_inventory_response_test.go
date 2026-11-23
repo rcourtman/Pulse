@@ -2,6 +2,7 @@ package proxmox
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -119,9 +120,9 @@ func TestStorageInventoryAcceptedScopedAndExtendedResponses(t *testing.T) {
 			t.Run(kind+"/"+body, func(t *testing.T) {
 				server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { fmt.Fprint(w, body) }))
 				defer server.Close()
-				count, _, err := readTestStorageInventory(backupTestClient(t, server.URL), kind)
-				if err != nil || count != 0 {
-					t.Fatalf("scoped empty inventory refused: count=%d err=%v", count, err)
+				count, nilRows, err := readTestStorageInventory(backupTestClient(t, server.URL), kind)
+				if err != nil || count != 0 || nilRows != (kind == "content") {
+					t.Fatalf("scoped empty inventory changed: count=%d nil=%t err=%v", count, nilRows, err)
 				}
 			})
 		}
@@ -154,6 +155,49 @@ func TestStorageInventoryAcceptedScopedAndExtendedResponses(t *testing.T) {
 			t.Fatalf("accepted backup/template filter or fields changed: %+v err=%v", rows, err)
 		}
 	})
+}
+
+func TestStorageContentChecksUnmonitoredRowsBeforeReturningBackups(t *testing.T) {
+	const backup = `{"volid":"archive:backup/first","content":"backup","vmid":101}`
+	const skipped = `{"volid":"archive:iso/system","content":"iso","size":1234}`
+	const template = `{"volid":"archive:vztmpl/last","content":"vztmpl","notes":"kept"}`
+	for _, tc := range []struct {
+		name, body string
+		wantIDs    []string
+		wantError  bool
+	}{
+		{name: "preserve filtered order", body: `{"provider":{"revision":7},"errors":null,"data":[` + backup + "," + skipped + "," + template + `]}`, wantIDs: []string{"archive:backup/first", "archive:vztmpl/last"}},
+		{name: "only unmonitored content", body: `{"data":[` + skipped + `]}`},
+		{name: "unread trailing row", body: `{"data":[` + backup + `,{"volid":"archive:iso/second","content":"iso","size":"unknown"}]}`, wantError: true},
+		{name: "duplicate unmonitored identity", body: `{"data":[` + skipped + "," + backup + "," + skipped + `]}`, wantError: true},
+		{name: "error after accepted rows", body: `{"data":[` + backup + `],"errors":{"message":"unread"}}`, wantError: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path != "/api2/json/nodes/member/storage/archive/content" {
+					t.Errorf("unexpected endpoint: %s", r.URL.Path)
+				}
+				fmt.Fprint(w, tc.body)
+			}))
+			defer server.Close()
+
+			rows, err := backupTestClient(t, server.URL).GetStorageContent(context.Background(), "member", "archive")
+			if tc.wantError {
+				if !errors.Is(err, errInvalidStorageInventoryResponse) || rows != nil {
+					t.Fatalf("unread inventory returned rows: %v, err=%v", rows, err)
+				}
+				return
+			}
+			if err != nil || len(rows) != len(tc.wantIDs) || (rows == nil) != (tc.wantIDs == nil) {
+				t.Fatalf("unexpected inventory: %v, err=%v", rows, err)
+			}
+			for i, id := range tc.wantIDs {
+				if rows[i].Volid != id {
+					t.Fatalf("row %d: got %q, want %q", i, rows[i].Volid, id)
+				}
+			}
+		})
+	}
 }
 
 func TestStorageInventoryRequiresCompletedResponse(t *testing.T) {
