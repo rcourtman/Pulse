@@ -90,8 +90,10 @@ describe('installation startup guidance', () => {
     const route = `/docs/TROUBLESHOOTING#${fragment}`;
     const link = rendered.querySelector(`a[data-doc-link][href="${route}"]`);
     expect(link).not.toBeNull();
-    expect(link!.compareDocumentPosition(rendered.querySelector('pre')!) &
-      Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(
+      link!.compareDocumentPosition(rendered.querySelector('pre')!) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
     expect(article('TROUBLESHOOTING').querySelector(`h5#${fragment}`)).not.toBeNull();
   });
 
