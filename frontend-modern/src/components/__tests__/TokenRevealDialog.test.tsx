@@ -1,12 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, render, screen, fireEvent, waitFor } from '@solidjs/testing-library';
+import { cleanup, render, screen, fireEvent, waitFor, within } from '@solidjs/testing-library';
 import { TokenRevealDialog } from '@/components/TokenRevealDialog';
 import { copyToClipboard } from '@/utils/clipboard';
-import { showSuccess, showError } from '@/utils/toast';
+import { showSuccess } from '@/utils/toast';
 import { showTokenReveal, dismissTokenReveal } from '@/stores/tokenReveal';
 
 vi.mock('@/utils/clipboard', () => ({ copyToClipboard: vi.fn() }));
-vi.mock('@/utils/toast', () => ({ showSuccess: vi.fn(), showError: vi.fn() }));
+vi.mock('@/utils/toast', () => ({ showSuccess: vi.fn() }));
 
 function deferredCopy() {
   let settle!: (success: boolean) => void;
@@ -148,20 +148,51 @@ describe('TokenRevealDialog', () => {
     expect(showSuccess).toHaveBeenCalledExactlyOnceWith('Token copied to clipboard');
   });
 
-  it('reports failure only for the current attempt and allows a deliberate retry', async () => {
+  it('shows copy failure inside the reveal and lets the user select only the shown value', async () => {
     const settle = deferredCopy();
     render(() => <TokenRevealDialog />);
     reveal();
+    const dialog = within(await screen.findByRole('dialog'));
+    expect(dialog.queryByRole('button', { name: 'Select token text' })).not.toBeInTheDocument();
     fireEvent.click(await screen.findByRole('button', { name: 'Copy token' }));
     settle(false);
-    await waitFor(() => expect(showError).toHaveBeenCalledExactlyOnceWith('Failed to copy token'));
-    expect(screen.getByRole('button', { name: 'Copy token' })).toBeEnabled();
-    vi.mocked(copyToClipboard).mockResolvedValueOnce(true);
-    fireEvent.click(screen.getByRole('button', { name: 'Copy token' }));
-    await waitFor(() =>
-      expect(screen.getByRole('button', { name: 'Copied!' })).toBeInTheDocument(),
+    expect(await dialog.findByRole('alert')).toHaveTextContent(
+      'Could not copy the token automatically.',
     );
+    expect(window.getSelection()?.toString()).toBe('');
+    fireEvent.click(dialog.getByRole('button', { name: 'Select token text' }));
+    expect(window.getSelection()?.toString()).toBe('synthetic-token-a');
+    expect(copyToClipboard).toHaveBeenCalledTimes(1);
+    expect(dialog.getByRole('button', { name: 'Copy token' })).toBeEnabled();
+    vi.mocked(copyToClipboard).mockResolvedValueOnce(true);
+    fireEvent.click(dialog.getByRole('button', { name: 'Copy token' }));
+    await waitFor(() =>
+      expect(dialog.getByRole('button', { name: 'Copied!' })).toBeInTheDocument(),
+    );
+    expect(dialog.queryByRole('alert')).not.toBeInTheDocument();
+    expect(dialog.queryByRole('button', { name: 'Select token text' })).not.toBeInTheDocument();
     expect(copyToClipboard).toHaveBeenCalledTimes(2);
+  });
+
+  it('withdraws the failed copy action and the selected text with its reveal', async () => {
+    vi.mocked(copyToClipboard).mockResolvedValue(false);
+    render(() => <TokenRevealDialog />);
+    reveal();
+    fireEvent.click(await screen.findByRole('button', { name: 'Copy token' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Select token text' }));
+    expect(window.getSelection()?.toString()).toBe('synthetic-token-a');
+
+    reveal('synthetic-token-b');
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Select token text' })).not.toBeInTheDocument();
+    expect(window.getSelection()?.toString()).toBe('');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Copy token' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Select token text' }));
+    expect(window.getSelection()?.toString()).toBe('synthetic-token-b');
+    fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }));
+    expect(window.getSelection()?.toString()).toBe('');
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 
   it('withdraws an earlier success when a deliberate retry fails', async () => {
@@ -178,7 +209,7 @@ describe('TokenRevealDialog', () => {
     settle(false);
     await waitFor(() => expect(screen.getByRole('button', { name: 'Copy token' })).toBeEnabled());
     expect(showSuccess).toHaveBeenCalledTimes(1);
-    expect(showError).toHaveBeenCalledExactlyOnceWith('Failed to copy token');
+    expect(screen.getByRole('alert')).toHaveTextContent('Could not copy the token automatically.');
   });
 
   it.each([true, false])(
@@ -194,7 +225,7 @@ describe('TokenRevealDialog', () => {
       await Promise.resolve();
       expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
       expect(showSuccess).not.toHaveBeenCalled();
-      expect(showError).not.toHaveBeenCalled();
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument();
     },
   );
 
@@ -213,7 +244,7 @@ describe('TokenRevealDialog', () => {
       expect(screen.getByRole('button', { name: 'Copy token' })).toBeEnabled();
       expect(screen.queryByRole('button', { name: 'Copied!' })).not.toBeInTheDocument();
       expect(showSuccess).not.toHaveBeenCalled();
-      expect(showError).not.toHaveBeenCalled();
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument();
     },
   );
 
@@ -231,7 +262,7 @@ describe('TokenRevealDialog', () => {
       await Promise.resolve();
       expect(screen.getByRole('button', { name: 'Copy token' })).toBeEnabled();
       expect(showSuccess).not.toHaveBeenCalled();
-      expect(showError).not.toHaveBeenCalled();
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument();
     },
   );
 
@@ -247,7 +278,7 @@ describe('TokenRevealDialog', () => {
       await Promise.resolve();
       await Promise.resolve();
       expect(showSuccess).not.toHaveBeenCalled();
-      expect(showError).not.toHaveBeenCalled();
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument();
     },
   );
 
