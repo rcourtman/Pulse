@@ -3,7 +3,10 @@
 
 from __future__ import annotations
 
+import argparse
+import os
 import re
+import subprocess
 import sys
 from pathlib import Path
 from urllib.parse import unquote
@@ -33,6 +36,11 @@ HTML_ASSET = re.compile(r"(?:src|href)=[\"']([^\"']+)[\"']")
 HEADING = re.compile(r"^#{1,6}\s+(.+?)\s*#*\s*$", re.MULTILINE)
 CODE_SPAN = re.compile(r"(?<!`)(`+)(?!`)(.*?)(?<!`)\1(?!`)")
 FENCE_OPEN = re.compile(r"^ {0,3}(`{3,}|~{3,})(.*)$")
+HTML_TAG = re.compile(r"<[^>]+>")
+HTML_ENTITY = re.compile(r"&(?:#\d+|#x[0-9a-fA-F]+|[A-Za-z][A-Za-z0-9]+);")
+BARE_URL = re.compile(r"https?://\S+")
+MARKDOWN_LINK_WITH_TEXT = re.compile(r"(!?\[[^\]]*\])\([^)]*\)")
+DIFF_HUNK = re.compile(r"^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@")
 
 MISLEADING_PUBLIC_CLAIMS = {
     r"dead-man checks can notify when an expected external signal stops arriving": (
@@ -223,11 +231,211 @@ def check_current_claims() -> list[str]:
     return errors
 
 
-def main() -> int:
+
+def strip_non_prose_inline(line: str) -> str:
+    """Remove inline code spans, link targets, HTML tags, URLs, and entities."""
+
+    value = CODE_SPAN.sub("", line)
+    value = MARKDOWN_LINK_WITH_TEXT.sub(r"\1", value)
+    value = HTML_TAG.sub("", value)
+    value = BARE_URL.sub("", value)
+    value = HTML_ENTITY.sub("", value)
+    return value
+
+
+def prose_lines_by_number(text: str) -> dict[int, str]:
+    """Return 1-based line numbers outside fenced code blocks with non-prose stripped."""
+
+    lines: dict[int, str] = {}
+    closing: re.Pattern[str] | None = None
+    for index, raw in enumerate(text.splitlines(), 1):
+        if closing is not None:
+            if closing.fullmatch(raw):
+                closing = None
+            continue
+        opening = FENCE_OPEN.fullmatch(raw)
+        if opening is not None:
+            fence, info = opening.groups()
+            if fence[0] != "`" or "`" not in info:
+                closing = re.compile(
+                    r" {0,3}" + re.escape(fence[0]) + "{" + str(len(fence)) + r",}[ \t]*"
+                )
+                continue
+        lines[index] = strip_non_prose_inline(raw)
+    return lines
+
+
+def check_prose_punctuation_in_text(
+    display_path: str,
+    text: str,
+    line_numbers: set[int] | None = None,
+) -> list[str]:
+    """Reject em dashes and semicolons in public documentation prose."""
+
+    errors: list[str] = []
+    for line_no, prose in prose_lines_by_number(text).items():
+        if line_numbers is not None and line_no not in line_numbers:
+            continue
+        if "\u2014" in prose:
+            errors.append(
+                f"{display_path}:{line_no}: avoid em dashes in public docs prose"
+            )
+        if ";" in prose:
+            errors.append(
+                f"{display_path}:{line_no}: avoid semicolons in public docs prose"
+            )
+    return errors
+
+
+def _git_output(*args: str) -> str | None:
+    try:
+        result = subprocess.run(
+            ["git", *args],
+            cwd=ROOT,
+            text=True,
+            capture_output=True,
+            timeout=10,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if result.returncode != 0:
+        return None
+    return result.stdout
+
+
+def _parse_added_diff_lines(diff_text: str) -> dict[str, set[int]]:
+    added: dict[str, set[int]] = {}
+    current_path: str | None = None
+    for line in diff_text.splitlines():
+        if line.startswith("+++ b/"):
+            current_path = line[6:]
+            continue
+        if line.startswith("+++ /dev/null"):
+            current_path = None
+            continue
+        if current_path is None:
+            continue
+        match = DIFF_HUNK.match(line)
+        if match is None:
+            continue
+        start = int(match.group(1))
+        count = 1 if match.group(2) is None else int(match.group(2))
+        if count == 0:
+            continue
+        added.setdefault(current_path, set()).update(range(start, start + count))
+    return added
+
+
+def _resolve_base_commit(base_ref: str | None) -> str | None:
+    if base_ref and re.fullmatch(r"[0-9a-fA-F]{7,40}|[\w./-]+", base_ref):
+        if _git_output("rev-parse", "--verify", f"{base_ref}^{{commit}}") is not None:
+            return base_ref
+    if base_ref:
+        # Shallow CI push checkouts may omit older base SHAs. Fall back to HEAD~1 when present.
+        if _git_output("rev-parse", "--verify", "HEAD~1^{commit}") is not None:
+            return "HEAD~1"
+    return None
+
+
+def check_changed_prose_punctuation(
+    files: list[Path],
+    *,
+    staged: bool = False,
+    base_ref: str | None = None,
+) -> list[str]:
+    """Check newly added or edited lines in public docs for em dashes and semicolons."""
+
+    if _git_output("rev-parse", "--is-inside-work-tree") is None:
+        return []
+
+    public_by_rel = {path.relative_to(ROOT).as_posix(): path for path in files}
+    if not public_by_rel:
+        return []
+
+    if staged:
+        diff_text = _git_output(
+            "diff", "--cached", "-U0", "--no-ext-diff", "--no-color", "--", *sorted(public_by_rel)
+        )
+        added_lines = _parse_added_diff_lines(diff_text or "")
+        errors: list[str] = []
+        for rel_path, line_numbers in sorted(added_lines.items()):
+            if rel_path not in public_by_rel:
+                continue
+            blob = _git_output("show", f":{rel_path}")
+            if blob is None:
+                continue
+            errors.extend(check_prose_punctuation_in_text(rel_path, blob, line_numbers))
+        return errors
+
+    if base_ref:
+        resolved = _resolve_base_commit(base_ref)
+        if resolved is None:
+            return []
+        diff_text = _git_output(
+            "diff", "-U0", "--no-ext-diff", "--no-color", resolved, "HEAD", "--", *sorted(public_by_rel)
+        )
+        added_lines = _parse_added_diff_lines(diff_text or "")
+        errors = []
+        for rel_path, line_numbers in sorted(added_lines.items()):
+            path = public_by_rel.get(rel_path)
+            if path is None or not path.exists():
+                continue
+            text = path.read_text(encoding="utf-8", errors="replace")
+            errors.extend(check_prose_punctuation_in_text(rel_path, text, line_numbers))
+        return errors
+
+    # Plain local invocation: inspect working tree + staged changes and untracked public docs.
+    diff_text = _git_output(
+        "diff", "-U0", "--no-ext-diff", "--no-color", "HEAD", "--", *sorted(public_by_rel)
+    )
+    added_lines = _parse_added_diff_lines(diff_text or "")
+    untracked = _git_output("ls-files", "--others", "--exclude-standard", "--", *sorted(public_by_rel))
+    errors = []
+    seen: set[str] = set()
+    for rel_path, line_numbers in sorted(added_lines.items()):
+        path = public_by_rel.get(rel_path)
+        if path is None or not path.exists():
+            continue
+        seen.add(rel_path)
+        text = path.read_text(encoding="utf-8", errors="replace")
+        errors.extend(check_prose_punctuation_in_text(rel_path, text, line_numbers))
+    for rel_path in sorted((untracked or "").splitlines()):
+        if rel_path in seen or rel_path not in public_by_rel:
+            continue
+        path = public_by_rel[rel_path]
+        if not path.exists():
+            continue
+        text = path.read_text(encoding="utf-8", errors="replace")
+        errors.extend(check_prose_punctuation_in_text(rel_path, text))
+    return errors
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description="Validate public documentation.")
+    parser.add_argument(
+        "--staged",
+        action="store_true",
+        help="Check added or modified lines in staged public docs.",
+    )
+    parser.add_argument(
+        "--base-ref",
+        default=os.environ.get("PUBLIC_DOCS_BASE_SHA") or None,
+        help="Git base commit or ref to diff HEAD against for prose checks.",
+    )
+    args = parser.parse_args(argv)
+
     files = public_markdown_files()
     errors = check_links(files)
     errors.extend(check_public_claims(files))
     errors.extend(check_current_claims())
+    errors.extend(
+        check_changed_prose_punctuation(
+            files,
+            staged=args.staged,
+            base_ref=args.base_ref,
+        )
+    )
 
     if errors:
         print("Public documentation check failed:", file=sys.stderr)
