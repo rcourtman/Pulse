@@ -1,0 +1,44 @@
+{
+  "version": 1,
+  "base_sha": "30a4ab1ca77ed3eabf31f63f6f512a5688c24427",
+  "verified_at": "2026-11-23T13:50:10Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/OrganizationIncomingSharesSection.tsx",
+    "frontend-modern/src/components/Settings/OrganizationOutgoingSharesSection.tsx",
+    "frontend-modern/src/components/Settings/organizationSharingCells.tsx",
+    "frontend-modern/src/utils/organizationRolePresentation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/OrganizationIncomingSharesSection.tsx": "a6a3741b03abe76ae92d10d744da4716833146902fe4f80e376da0fc4b00fb04",
+    "frontend-modern/src/components/Settings/OrganizationOutgoingSharesSection.tsx": "e2c42cc623a46c3911cc4b830d5f5650b4ed341a9a5531b03eb5aa52380134c1",
+    "frontend-modern/src/components/Settings/organizationSharingCells.tsx": "69a3a13dba6cfa9022cc16c623eebfa932cc2ddeb017ec97050f1fc1c3d1290a",
+    "frontend-modern/src/utils/organizationRolePresentation.ts": "67380af42f4a6e07533c8af63250decf78dbbfa8138e543491e1868eb450b217"
+  },
+  "routes": ["/settings/organization/sharing"],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 844
+    },
+    {
+      "width": 360,
+      "height": 800
+    }
+  ],
+  "states": [
+    "Manager natural start and anchored incoming/outgoing tables with saved pending and active rows, namesake peers and all three thresholds",
+    "Fixture-approved incoming share rereads as Active with the same audience and saved acceptance details",
+    "Narrow viewer sees an accepted incoming share and no management controls"
+  ],
+  "interactions": [
+    "Playwright 1.56.1 and Chromium 141.0.7390.37 on production App assets with loopback-only HTTP fixtures",
+    "Read target audience, exact peer and resource keys, approval state and retained metadata before acting",
+    "Activate the existing Accept button with desktop keyboard and phone touch; observe one exact scoped fixture write and saved reread in each manager session, and no writes as viewer",
+    "Inspect eight matched before/after capture pairs including desktop light, phone dark and compact viewer light"
+  ]
+}

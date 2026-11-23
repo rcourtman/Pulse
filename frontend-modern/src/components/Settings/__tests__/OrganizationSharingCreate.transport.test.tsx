@@ -52,6 +52,11 @@ const resourceRows = (): Resource[] =>
   }));
 type Entry = 'quick pick' | 'manual entry';
 type Role = 'viewer' | 'editor' | 'admin';
+const targetAudiences: Record<Role, string> = {
+  viewer: 'All members (Viewer)',
+  editor: 'Editor or higher',
+  admin: 'Admin or Owner',
+};
 const entries: Entry[] = ['quick pick', 'manual entry'];
 const roles: Role[] = ['viewer', 'editor', 'admin'];
 const manualResourceID = 'manual::host/202?volume=one#saved%雪';
@@ -222,10 +227,11 @@ function expectSavedGrant(entry: Entry, role: Role = 'viewer') {
   expect(row).not.toBeNull();
   expect(row).toHaveTextContent(payload.resourceName);
   expect(row).toHaveTextContent('Namesake organization');
-  // jsdom includes both responsive presentations; each must show the saved role.
-  expect(within(row!).getByRole('cell', { name: role })).toHaveTextContent(role);
-  const mobileAccess = within(row!).getByText('Access:').parentElement!;
-  expect(within(mobileAccess).getByText(role, { exact: true })).toBeInTheDocument();
+  // jsdom includes both responsive presentations; each must show the saved audience.
+  const audience = targetAudiences[role];
+  expect(within(row!).getByRole('cell', { name: audience })).toHaveTextContent(audience);
+  const mobileAudience = within(row!).getByText('Target audience:', { exact: true }).parentElement!;
+  expect(within(mobileAudience).getByText(audience, { exact: true })).toBeInTheDocument();
   expect(row).toHaveTextContent('Pending approval');
   expect(
     within(row!).getByRole('button', {

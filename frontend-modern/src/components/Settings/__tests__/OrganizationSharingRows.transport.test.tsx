@@ -29,6 +29,11 @@ const operations = [
   'remove accepted incoming',
 ] as const;
 type Operation = (typeof operations)[number];
+const targetAudiences: Record<OrganizationShare['accessRole'], string> = {
+  viewer: 'All members (Viewer)',
+  editor: 'Editor or higher',
+  admin: 'Admin or Owner',
+};
 const json = (value: unknown, status = 200) =>
   new Response(JSON.stringify(value), {
     status,
@@ -152,6 +157,11 @@ function rowFor(share: OrganizationShare): HTMLElement {
     .closest('tr');
   expect(row).not.toBeNull();
   return row!;
+}
+function expectCompactAudience(row: HTMLElement, role: OrganizationShare['accessRole']) {
+  const label = within(row).getByText('Target audience:', { exact: true }).parentElement!;
+  expect(within(label).getByText(targetAudiences[role], { exact: true })).toBeInTheDocument();
+  return label;
 }
 function rowAction(operation: Operation, share = selectedShare(operation)) {
   return within(rowFor(share)).getByRole('button', {
@@ -526,21 +536,21 @@ describe('rendered namesake sharing rows through the real transport', () => {
     expectBoundRequests();
   });
 
-  it('keeps each saved access role beside its organization through a reordered refresh', async () => {
+  it('keeps each saved target audience beside its organization through a reordered refresh', async () => {
     const roles = ['viewer', 'editor', 'admin'] as const;
     outgoing = outgoing.map((share, index) => ({ ...share, accessRole: roles[index] }));
     incoming = incoming.map((share, index) => ({ ...share, accessRole: roles[2 - index] }));
     await renderPanel('accept incoming');
 
-    const expectAccessLabels = () => {
+    const expectAudienceLabels = () => {
       for (const share of [...outgoing, ...incoming]) {
-        const label = within(rowFor(share)).getByText('Access:').parentElement!;
-        expect(within(label).getByText(share.accessRole, { exact: true })).toBeInTheDocument();
+        const row = rowFor(share);
+        const label = expectCompactAudience(row, share.accessRole);
         expect(label.parentElement).toHaveTextContent('Namesake organization');
-        expect(rowFor(share)).toHaveTextContent(`${share.resourceType}:${share.resourceId}`);
+        expect(row).toHaveTextContent(`${share.resourceType}:${share.resourceId}`);
       }
     };
-    expectAccessLabels();
+    expectAudienceLabels();
     expect(writes()).toHaveLength(0);
 
     outgoing = [...outgoing]
@@ -552,7 +562,7 @@ describe('rendered namesake sharing rows through the real transport', () => {
     eventBus.emit('organizations_changed');
     await waitFor(() => expect(sharingReads()).toHaveLength(10));
     await screen.findByRole('heading', { name: 'Incoming Shares' });
-    expectAccessLabels();
+    expectAudienceLabels();
     expect(writes()).toHaveLength(0);
     expectBoundRequests();
   });
@@ -573,13 +583,13 @@ describe('rendered namesake sharing rows through the real transport', () => {
       expect(within(row).queryByRole('button')).not.toBeInTheDocument();
       const key = 'sourceOrgId' in share ? share.sourceOrgId : share.targetOrgId;
       expect(within(row).getByText(key as string, { exact: true })).toBeInTheDocument();
-      expect(row).toHaveTextContent(share.accessRole);
+      expectCompactAudience(row, share.accessRole);
     }
     expect(writes()).toHaveLength(0);
     expectBoundRequests();
   });
 
-  it('retains saved access labels for a read-only reader without adding actions', async () => {
+  it('retains saved audience labels for a read-only reader without adding actions', async () => {
     outgoing[1].accessRole = 'admin';
     incoming[1].accessRole = 'editor';
     syncSessionPresentationPolicy({
@@ -595,8 +605,7 @@ describe('rendered namesake sharing rows through the real transport', () => {
 
     for (const share of [...outgoing, ...incoming]) {
       const row = rowFor(share);
-      const label = within(row).getByText('Access:').parentElement!;
-      expect(within(label).getByText(share.accessRole, { exact: true })).toBeInTheDocument();
+      expectCompactAudience(row, share.accessRole);
       const partyID = 'sourceOrgId' in share ? share.sourceOrgId : share.targetOrgId;
       expect(within(row).getByText(partyID as string, { exact: true }).tagName).toBe('BDI');
       expect(within(row).queryByRole('button')).not.toBeInTheDocument();
