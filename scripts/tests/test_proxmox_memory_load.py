@@ -96,6 +96,59 @@ class ProxmoxMemoryLoadTests(unittest.TestCase):
         request("store-archive/snapshots?backup-type=vm&backup-id=100")
         self.assertEqual(gaps(), ["pbs2/store-archive 0/1", "pbs2/store-fast 0/2"])
 
+    def test_pbs_status_window_does_not_credit_a_silent_store_with_its_siblings(self):
+        start = END - 300
+        window = load.PBSStatusWindow(start, END)
+        expected = {}
+        handlers = {}
+        counters = Counter()
+        lock = threading.Lock()
+        for name in ("pbs1", "pbs2"):
+            handler_type, _, expected[name] = load.make_pbs_handler(
+                name, [("pve", "vm", 100, "vm-100")], 3, counters, lock, window,
+            )
+            handlers[name] = object.__new__(handler_type)
+            handlers[name].send_json = Mock()
+
+        def request(name, path, offset):
+            handler = handlers[name]
+            handler.path = f"/api2/json/admin/datastore/{path}"
+            with patch.object(load.time, "time_ns", return_value=(start + offset) * 1_000_000_000):
+                handler.do_GET()
+
+        for offset in (-1, 0, 30, 60, 210, 270, 300, 301):
+            request("pbs1", "store-fast/status", offset)
+        request("pbs1", "store-archive/status", 20)
+        request("pbs2", "store-fast/status", 290)
+        request("pbs2", "store-archive/status", -1)
+        request("pbs2", "store-archive/status/unknown", 40)
+        request("pbs2", "unknown/status", 40)
+        request("pbs2", "store-archive/groups", 40)
+        request("pbs2", "store-archive/snapshots?backup-type=vm&backup-id=100", 40)
+        handlers["pbs2"].send_json.side_effect = BrokenPipeError
+        with self.assertRaises(BrokenPipeError):
+            request("pbs2", "store-archive/status", 40)
+
+        # Moving a snapshot response into the window establishes a response
+        # for that group, not a per-store status response or a Pulse poll.
+        self.assertEqual(expected["pbs2"]["store-archive"].counts(),
+                         {"expected_groups": 1, "served_groups": 1})
+        self.assertIsNone(window.report(expected, END - 1))
+        self.assertIsNone(window.report({}, END))
+        self.assertEqual(window.report(expected, END), {
+            "window_s": 300,
+            "datastores": {
+                "pbs1": {
+                    "store-archive": {"responses": 1, "longest_gap_ms": 280000},
+                    "store-fast": {"responses": 6, "longest_gap_ms": 150000},
+                },
+                "pbs2": {
+                    "store-archive": {"responses": 0, "longest_gap_ms": 300000},
+                    "store-fast": {"responses": 1, "longest_gap_ms": 290000},
+                },
+            },
+        })
+
     def setUp(self):
         self.expected = {("qemu", "vm-100"), ("lxc", "ct-101")}
         self.stats = load.DashboardStats(expected_guests=self.expected)
