@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import type { APITokenRecord } from '@/api/security';
 import {
+  ACTIONS_APPROVE_SCOPE,
+  ACTIONS_EXECUTE_SCOPE,
+  ACTIONS_PLAN_SCOPE,
   API_SCOPE_OPTIONS,
   type APIScopeOption,
   AGENT_CONFIG_READ_SCOPE,
@@ -24,9 +27,13 @@ import {
   API_TOKEN_AUDIT_READ_PRESET_ID,
   API_TOKEN_DOCKER_MANAGE_PRESET_ID,
   API_TOKEN_DOCKER_REPORT_PRESET_ID,
+  API_TOKEN_EXTERNAL_AGENT_PROPOSE_PRESET_ID,
+  API_TOKEN_EXTERNAL_AGENT_PROPOSE_PRESET_LABEL,
+  API_TOKEN_EXTERNAL_AGENT_READ_ONLY_PRESET_ID,
+  API_TOKEN_EXTERNAL_AGENT_READ_ONLY_PRESET_LABEL,
   API_TOKEN_KIOSK_PRESET_ID,
-  API_TOKEN_PATROL_EXTERNAL_AGENT_PRESET_LABEL,
-  API_TOKEN_PULSE_INTELLIGENCE_AGENT_PRESET_ID,
+  API_TOKEN_OPERATOR_CLI_PRESET_ID,
+  API_TOKEN_OPERATOR_CLI_PRESET_LABEL,
   API_TOKEN_SETTINGS_ADMIN_PRESET_ID,
   API_TOKEN_SETTINGS_READ_PRESET_ID,
   API_TOKEN_WILDCARD_SCOPE,
@@ -495,10 +502,13 @@ describe('dockerActionIdForResource (uncovered arms)', () => {
 // shipped preset and the exact ordering, including the Pulse preset insertion.
 
 describe('getAPITokenScopePresets (full structure)', () => {
-  it('returns the seven base presets in canonical order with no pulse scopes', () => {
+  it('returns the ten canonical least-privilege presets in order', () => {
     const presets = getAPITokenScopePresets();
     expect(presets.map((p) => p.id)).toStrictEqual([
       API_TOKEN_KIOSK_PRESET_ID,
+      API_TOKEN_EXTERNAL_AGENT_READ_ONLY_PRESET_ID,
+      API_TOKEN_EXTERNAL_AGENT_PROPOSE_PRESET_ID,
+      API_TOKEN_OPERATOR_CLI_PRESET_ID,
       API_TOKEN_AGENT_PRESET_ID,
       API_TOKEN_DOCKER_REPORT_PRESET_ID,
       API_TOKEN_DOCKER_MANAGE_PRESET_ID,
@@ -516,6 +526,29 @@ describe('getAPITokenScopePresets (full structure)', () => {
       description:
         'Read-only access for wall displays. Use ?token=xxx&kiosk=1 in the URL to hide navigation and filters.',
     });
+    expect(byId.get(API_TOKEN_EXTERNAL_AGENT_READ_ONLY_PRESET_ID)).toStrictEqual({
+      id: API_TOKEN_EXTERNAL_AGENT_READ_ONLY_PRESET_ID,
+      label: API_TOKEN_EXTERNAL_AGENT_READ_ONLY_PRESET_LABEL,
+      scopes: [MONITORING_READ_SCOPE],
+      description:
+        'Recommended default for external agents and CLI reads. Inspects fleet context, metrics, and recent changes with no write permissions.',
+    });
+    expect(byId.get(API_TOKEN_EXTERNAL_AGENT_PROPOSE_PRESET_ID)).toStrictEqual({
+      id: API_TOKEN_EXTERNAL_AGENT_PROPOSE_PRESET_ID,
+      label: API_TOKEN_EXTERNAL_AGENT_PROPOSE_PRESET_LABEL,
+      scopes: [MONITORING_READ_SCOPE, ACTIONS_PLAN_SCOPE],
+      description:
+        'Read fleet context and propose governed action plans to the Decision Inbox. It cannot self-approve or execute.',
+    });
+    const operatorPreset = byId.get(API_TOKEN_OPERATOR_CLI_PRESET_ID);
+    expect(operatorPreset?.label).toBe(API_TOKEN_OPERATOR_CLI_PRESET_LABEL);
+    expect(operatorPreset?.scopes).toStrictEqual([
+      MONITORING_READ_SCOPE,
+      ACTIONS_PLAN_SCOPE,
+      ACTIONS_APPROVE_SCOPE,
+      ACTIONS_EXECUTE_SCOPE,
+    ]);
+    expect(operatorPreset?.description).toContain('Warning:');
     expect(byId.get(API_TOKEN_AGENT_PRESET_ID)).toStrictEqual({
       id: API_TOKEN_AGENT_PRESET_ID,
       label: 'Agent',
@@ -545,30 +578,22 @@ describe('getAPITokenScopePresets (full structure)', () => {
     expect(byId.get(API_TOKEN_AUDIT_READ_PRESET_ID)?.scopes).toStrictEqual([AUDIT_READ_SCOPE]);
   });
 
-  it('inserts the Pulse Intelligence preset at index 1 when required scopes are provided', () => {
-    const presets = getAPITokenScopePresets(['monitoring:read', 'ai:execute']);
-    expect(presets).toHaveLength(8);
-    expect(presets[1]).toStrictEqual({
-      id: API_TOKEN_PULSE_INTELLIGENCE_AGENT_PRESET_ID,
-      label: API_TOKEN_PATROL_EXTERNAL_AGENT_PRESET_LABEL,
-      scopes: ['monitoring:read', 'ai:execute'],
-      description: 'Scopes for connected agents that read Pulse context and request Patrol work.',
-    });
-    // Base presets still follow in canonical order after the inserted preset.
-    expect(presets.map((p) => p.id)).toStrictEqual([
-      API_TOKEN_KIOSK_PRESET_ID,
-      API_TOKEN_PULSE_INTELLIGENCE_AGENT_PRESET_ID,
-      API_TOKEN_AGENT_PRESET_ID,
-      API_TOKEN_DOCKER_REPORT_PRESET_ID,
-      API_TOKEN_DOCKER_MANAGE_PRESET_ID,
-      API_TOKEN_SETTINGS_READ_PRESET_ID,
-      API_TOKEN_SETTINGS_ADMIN_PRESET_ID,
-      API_TOKEN_AUDIT_READ_PRESET_ID,
-    ]);
+  it('never bundles settings:write into any external-agent or Operator CLI preset', () => {
+    const presets = getAPITokenScopePresets();
+    for (const id of [
+      API_TOKEN_EXTERNAL_AGENT_READ_ONLY_PRESET_ID,
+      API_TOKEN_EXTERNAL_AGENT_PROPOSE_PRESET_ID,
+      API_TOKEN_OPERATOR_CLI_PRESET_ID,
+    ]) {
+      const preset = presets.find((p) => p.id === id);
+      expect(preset).toBeDefined();
+      expect(preset?.scopes).not.toContain(SETTINGS_WRITE_SCOPE);
+    }
+    expect(presets.find((p) => p.label === 'Patrol external agent')).toBeUndefined();
   });
 
   it('every preset exposes a non-empty id, label, and description', () => {
-    const presets = getAPITokenScopePresets(['agent:report']);
+    const presets = getAPITokenScopePresets();
     for (const preset of presets) {
       expect(preset.id.length).toBeGreaterThan(0);
       expect(preset.label.length).toBeGreaterThan(0);

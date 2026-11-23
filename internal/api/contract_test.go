@@ -19943,11 +19943,11 @@ func TestContract_AgentSubstrateDocReflectsCurrentMCPOnboarding(t *testing.T) {
 	doc := string(source)
 	normalized := strings.Join(strings.Fields(doc), " ")
 	for _, required := range []string{
-		"Settings, then API Access, then Agent integrations",
+		"Settings, then Pulse Intelligence, then External agents",
 		"lists the declared capabilities by category",
 		"surface contract and affordance badges",
 		"method, path, scope, and stable error codes",
-		"client-ready `pulse-mcp` configuration snippets",
+		"client-ready `pulse-mcp` and `pulse mcp` configuration snippets",
 		"OpenCode's native `opencode.json` shape",
 		"`mcpServers` shape used by Claude-style clients",
 		"API tokens are minted on the same tab",
@@ -20658,8 +20658,8 @@ func TestContract_AgentOperationsLoopStatusEndpointSurfacesStableShape(t *testin
 		"manifest := agentcapabilities.CanonicalManifest()",
 		"ExternalAgentReady: h.agentOperationsLoopExternalAgentReady(r.Context(), manifest, now)",
 		"func agentOperationsLoopExternalAgentTokenReady(manifest agentcapabilities.Manifest, tokens []config.APITokenRecord, now time.Time) bool",
-		"agentcapabilities.RequiredCapabilityScopes(",
-		"coversLoop := true",
+		"agentcapabilities.ExternalAgentMinimumScopes(",
+		"coversMinimum := true",
 		"if !token.HasScope(scope) {",
 		`store.GetActionLifecycleEvents("", since, 0)`,
 		"return pulseIntelligenceActionWasApproved(record) || pulseIntelligenceActionWasRejected(record)",

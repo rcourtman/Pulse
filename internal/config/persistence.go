@@ -3304,6 +3304,7 @@ type AIUsageEventRecord struct {
 const (
 	ExternalAgentActivitySurfaceAgentAPI = "agent_api"
 	ExternalAgentActivitySurfacePulseMCP = "pulse_mcp"
+	ExternalAgentActivitySurfacePulseCLI = "pulse_cli"
 
 	ExternalAgentActivityResourceContext = "resource_context"
 	ExternalAgentActivityFleetContext    = "fleet_context"
@@ -3331,6 +3332,7 @@ const (
 	WorkflowPromptActivitySurfaceProActivation  = "pulse_pro_activation"
 	WorkflowPromptActivitySurfaceAgentAPI       = "agent_api"
 	WorkflowPromptActivitySurfacePulseMCP       = "pulse_mcp"
+	WorkflowPromptActivitySurfacePulseCLI       = "pulse_cli"
 
 	maxWorkflowPromptActivityHistoryRecords = 500
 	workflowPromptActivityHistoryRetention  = 90 * 24 * time.Hour

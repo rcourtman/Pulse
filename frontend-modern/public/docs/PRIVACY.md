@@ -40,7 +40,7 @@ Every field is listed below with the reason it exists. Nothing else is included 
 
 | Field | Example | Purpose |
 |-------|---------|---------|
-| Schema version | `24` | Identify the exact payload contract so old and new signals are not mixed silently |
+| Schema version | `25` | Identify the exact payload contract so old and new signals are not mixed silently |
 | Sent at | `2026-07-23T08:30:00Z` | Date the individual heartbeat without sending a history of client activity |
 | Install ID | `a1b2c3d4-...` | Distinguish active installations within one rotation window without tying telemetry to an account or person |
 | Version | `6.0.0-rc.1` | Track the canonical release identity currently deployed |
@@ -277,6 +277,7 @@ Every field is listed below with the reason it exists. Nothing else is included 
 | Pulse Intelligence external agent enabled | `true`/`false` | See whether at least one token can use the external Pulse Intelligence agent/MCP surface without sending token counts, names, scopes, or values |
 | Pulse Intelligence external agent used 30d | `true`/`false` | See whether an external-agent-capable API token reached a Pulse Intelligence agent/MCP route in the current 30-day telemetry window without sending token identity, route parameters, resource IDs, or request details |
 | Pulse Intelligence MCP adapter used 30d | `true`/`false` | See whether the `pulse-mcp` adapter reached a Pulse Intelligence agent/MCP route in the current 30-day telemetry window without sending token identity, route parameters, resource IDs, prompts, or request details |
+| Pulse Intelligence CLI used 30d | `true`/`false` | See whether the `pulse` CLI reached a Pulse Intelligence agent route in the current 30-day telemetry window without sending token identity, route parameters, resource IDs, prompts, or request details |
 | Pulse Intelligence external agent context requests 30d | `8` | Count external-agent/MCP resource-context and fleet-context requests in the current 30-day telemetry window without sending resource IDs, route parameters, or request details |
 | Pulse Intelligence external agent event stream requests 30d | `3` | Count external-agent/MCP event-stream requests in the current 30-day telemetry window without sending event content, route parameters, or request details |
 | Pulse Intelligence external agent history read days 30d | `4` | Count the distinct days, 0 to 30, in the current 30-day telemetry window on which an external agent or MCP client successfully read change or metric history, so adoption of those reads can be judged without sending queries, resource IDs, time windows, results, or request counts |
@@ -368,7 +369,7 @@ occurrence exists, leaving no trustworthy fired-alert denominator. Detected
 flapping episodes are not reported because their diagnostic event path may be
 dropped under pressure. Configuration adoption is reported instead.
 
-The current telemetry contract is schema version 24. Schema v16 adds four
+The current telemetry contract is schema version 25. Schema v16 adds four
 workload-history adoption counts. The browser
 sends only one closed milestone name to the local Pulse server and deduplicates
 each milestone once per browser session. Pulse stores bounded UTC-day counts
@@ -495,6 +496,7 @@ Every change to the payload bumps the schema version, is listed here with its da
 
 | Schema | Date | Change |
 |--------|------|--------|
+| 25 | 2026-11-23 | Content-free boolean reporting whether the `pulse` CLI reached a Pulse Intelligence agent route in the current 30-day window |
 | 24 | 2026-11-18 | Three content-free infrastructure map counters: sessions that opened the map, sessions that saved an image, and sessions that saved one with names hidden |
 | 23 | 2026-11-17 | Independent closed-investigation-run outcomes, fixed handoff reasons and explicit observation coverage; no customer content or new outbound identifiers |
 | 22 | 2026-11-14 | Counts of agent hosts with commands on and Docker hosts with failure logs on; never which hosts |

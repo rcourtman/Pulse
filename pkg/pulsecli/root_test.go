@@ -77,3 +77,41 @@ func TestNewRootCommandIncludesFleetConnections(t *testing.T) {
 		t.Fatalf("fleet connections command not registered: %#v", found)
 	}
 }
+
+func TestNewRootCommandRegistersSharedRemoteAndLocalCommands(t *testing.T) {
+	cmd := NewRootCommand(CommandSpec{
+		Use:   "pulse",
+		Short: "Pulse",
+		Long:  "Pulse",
+	}, RuntimeSpec{}, CommandDeps{})
+
+	for _, path := range [][]string{
+		{"version"},
+		{"config", "info"},
+		{"config", "export"},
+		{"config", "import"},
+		{"config", "auto-import"},
+		{"bootstrap-token"},
+		{"mock"},
+		{"auth"},
+		{"connect"},
+		{"doctor"},
+		{"mcp"},
+		{"fleet"},
+		{"fleet", "connections"},
+		{"resource"},
+		{"changes"},
+		{"metrics"},
+		{"events"},
+		{"findings"},
+		{"operator-state"},
+		{"actions", "approve"},
+		{"actions", "reject"},
+		{"call"},
+	} {
+		found, _, err := cmd.Find(path)
+		if err != nil || found == nil || found == cmd {
+			t.Fatalf("subcommand %v not registered on NewRootCommand (found=%v err=%v)", path, found, err)
+		}
+	}
+}

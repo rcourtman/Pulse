@@ -227,6 +227,7 @@ func pulseIntelligenceExternalAgentActivity(snap *telemetry.Snapshot) bool {
 	evidence := telemetry.PulseIntelligenceExternalAgentEvidence{
 		Used:                  snap.PulseIntelligenceExternalAgentUsed30d,
 		MCPAdapterUsed:        snap.PulseIntelligenceMCPAdapterUsed30d,
+		CLIUsed:               snap.PulseIntelligenceCLIUsed30d,
 		ContextRequests:       snap.PulseIntelligenceExternalAgentContextRequests30d,
 		EventStreamRequests:   snap.PulseIntelligenceExternalAgentEventStreamRequests30d,
 		ProvisioningRequests:  snap.PulseIntelligenceExternalAgentProvisioningRequests30d,
@@ -379,6 +380,7 @@ func applyPulseIntelligenceExternalAgentSnapshot(
 	evidence := telemetry.PulseIntelligenceExternalAgentEvidenceFromHistory(history, since)
 	snap.PulseIntelligenceExternalAgentUsed30d = evidence.Used
 	snap.PulseIntelligenceMCPAdapterUsed30d = evidence.MCPAdapterUsed
+	snap.PulseIntelligenceCLIUsed30d = evidence.CLIUsed
 	snap.PulseIntelligenceExternalAgentContextRequests30d = evidence.ContextRequests
 	snap.PulseIntelligenceExternalAgentEventStreamRequests30d = evidence.EventStreamRequests
 	snap.PulseIntelligenceExternalAgentHistoryReadDays30d = evidence.HistoryReadDays

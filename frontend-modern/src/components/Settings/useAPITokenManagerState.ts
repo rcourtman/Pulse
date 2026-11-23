@@ -1,23 +1,10 @@
-import {
-  batch,
-  createEffect,
-  createMemo,
-  createResource,
-  createSignal,
-  on,
-  onCleanup,
-  onMount,
-} from 'solid-js';
-import { fetchAgentCapabilitiesManifest } from '@/api/agentCapabilities';
+import { batch, createEffect, createMemo, createSignal, on, onCleanup, onMount } from 'solid-js';
 import { unwrap } from 'solid-js/store';
 import type { APITokenRecord } from '@/api/security';
 import { SecurityAPI } from '@/api/security';
 import { useWebSocket } from '@/contexts/appRuntime';
 import { MONITORING_READ_SCOPE, API_SCOPE_LABELS } from '@/constants/apiScopes';
-import {
-  API_TOKEN_PRESET_QUERY_PARAM,
-  PULSE_INTELLIGENCE_AGENT_TOKEN_PRESET,
-} from '@/routing/resourceLinks';
+import { API_TOKEN_PRESET_QUERY_PARAM } from '@/routing/resourceLinks';
 import { useResources } from '@/hooks/useResources';
 import { notificationStore } from '@/stores/notifications';
 import { dismissTokenReveal, showTokenReveal, useTokenRevealState } from '@/stores/tokenReveal';
@@ -36,7 +23,6 @@ import { getOrgID } from '@/utils/apiClient';
 import { getPulseBaseUrl } from '@/utils/url';
 import {
   API_TOKEN_SCOPES_DOC_URL,
-  API_TOKEN_PULSE_INTELLIGENCE_AGENT_PRESET_ID,
   API_TOKEN_WILDCARD_SCOPE,
   agentActionIdForResource,
   buildAgentTokenUsage,
@@ -50,6 +36,7 @@ import {
   groupAPITokenScopes,
   hasAgentScopeResource,
   matchesScopePreset,
+  resolveAPITokenRoutePreset,
   revokedTokenIdForResource,
   sortAPITokensByCreatedAt,
   tokenIdForResource,
@@ -98,7 +85,7 @@ export const useAPITokenManagerState = (props: APITokenManagerProps) => {
   const [newTokenRecord, setNewTokenRecord] = createSignal<APITokenRecord | null>(null);
   const [nameInput, setNameInput] = createSignal('');
   const [selectedScopes, setSelectedScopes] = createSignal<string[]>([]);
-  const [agentCapabilitiesManifest] = createResource(fetchAgentCapabilitiesManifest);
+  const [selectedPresetId, setSelectedPresetId] = createSignal<string | null>(null);
   const tokenRevealState = useTokenRevealState();
   const managementAllowed = createMemo(() => props.canManage !== false);
   const authenticatedUser = createMemo(() => props.currentUser);
@@ -188,12 +175,7 @@ export const useAPITokenManagerState = (props: APITokenManagerProps) => {
   const scopedTokenCount = createMemo(() => totalTokens() - wildcardCount());
   const hasWildcardTokens = createMemo(() => wildcardCount() > 0);
   const scopeGroups = createMemo(() => groupAPITokenScopes());
-  const scopePresets = createMemo(() =>
-    getAPITokenScopePresets(agentCapabilitiesManifest()?.requiredScopes ?? []),
-  );
-  const pulseIntelligenceAgentPreset = createMemo(() =>
-    scopePresets().find((preset) => preset.id === API_TOKEN_PULSE_INTELLIGENCE_AGENT_PRESET_ID),
-  );
+  const scopePresets = createMemo(() => getAPITokenScopePresets());
   const hasScopeSelection = () => selectedScopes().length > 0;
   const isFullAccessSelected = () => selectedScopes().includes(API_TOKEN_WILDCARD_SCOPE);
   const canGenerateToken = () =>
@@ -369,21 +351,18 @@ export const useAPITokenManagerState = (props: APITokenManagerProps) => {
     });
   });
 
+  const resolvedRoutePreset = createMemo(() =>
+    resolveAPITokenRoutePreset(scopePresets(), requestedTokenPreset()),
+  );
+
   createEffect(() => {
     const requestedPreset = requestedTokenPreset();
-    if (
-      requestedPreset !== PULSE_INTELLIGENCE_AGENT_TOKEN_PRESET ||
-      appliedRoutePreset() === requestedPreset
-    ) {
+    const preset = resolvedRoutePreset();
+    if (!preset || preset.scopes.length === 0 || appliedRoutePreset() === requestedPreset) {
       return;
     }
 
-    const preset = pulseIntelligenceAgentPreset();
-    if (!preset || preset.scopes.length === 0) {
-      return;
-    }
-
-    applyScopePreset(preset.scopes);
+    applyScopePreset(preset.scopes, preset.id);
     if (!nameInput().trim()) {
       setNameInput(preset.label);
     }
@@ -392,7 +371,7 @@ export const useAPITokenManagerState = (props: APITokenManagerProps) => {
 
   createEffect(() => {
     const requestedPreset = requestedTokenPreset();
-    if (requestedPreset !== PULSE_INTELLIGENCE_AGENT_TOKEN_PRESET) {
+    if (!resolvedRoutePreset()) {
       setFocusedRoutePreset('');
       return;
     }
@@ -458,15 +437,20 @@ export const useAPITokenManagerState = (props: APITokenManagerProps) => {
     });
   });
 
-  const applyScopePreset = (scopes: string[]) => {
+  const applyScopePreset = (scopes: string[], presetId?: string) => {
+    setSelectedPresetId(presetId ?? null);
     setSelectedScopes(Array.from(new Set(scopes)).filter(Boolean));
   };
 
   const applyFullAccessPreset = () => applyScopePreset([API_TOKEN_WILDCARD_SCOPE]);
 
-  const clearScopes = () => setSelectedScopes([]);
+  const clearScopes = () => {
+    setSelectedPresetId(null);
+    setSelectedScopes([]);
+  };
 
   const toggleScope = (scope: string) => {
+    setSelectedPresetId(null);
     setSelectedScopes((previous) => {
       // Full access and explicit scopes are mutually exclusive at the API.
       // Choosing a custom capability narrows the selection, as in the editor.
@@ -733,6 +717,11 @@ export const useAPITokenManagerState = (props: APITokenManagerProps) => {
     toggleScope,
     totalTokens,
     wildcardCount,
+    isScopePresetActive: (presetId: string, presetScopes: string[]) => {
+      if (!matchesScopePreset(selectedScopes(), presetScopes)) return false;
+      const activeId = selectedPresetId();
+      return activeId === null || activeId === presetId;
+    },
     presetMatchesSelection: (presetScopes: string[]) =>
       matchesScopePreset(selectedScopes(), presetScopes),
     canGenerateToken,

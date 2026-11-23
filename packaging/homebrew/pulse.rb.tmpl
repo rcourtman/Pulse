@@ -1,0 +1,63 @@
+# Homebrew formula template for rcourtman/homebrew-tap (Formula/pulse.rb).
+#
+# Render on release publication by replacing:
+#   {{VERSION}}               Release version without leading "v" (e.g. 6.9.0)
+#   {{SHA256_DARWIN_ARM64}}   SHA-256 of pulse-cli-v{{VERSION}}-darwin-arm64.tar.gz
+#   {{SHA256_DARWIN_AMD64}}   SHA-256 of pulse-cli-v{{VERSION}}-darwin-amd64.tar.gz
+#   {{SHA256_LINUX_ARM64}}    SHA-256 of pulse-cli-v{{VERSION}}-linux-arm64.tar.gz
+#   {{SHA256_LINUX_AMD64}}    SHA-256 of pulse-cli-v{{VERSION}}-linux-amd64.tar.gz
+#
+# Users install with:
+#   brew install rcourtman/tap/pulse
+
+class Pulse < Formula
+  desc "CLI and MCP client for Pulse infrastructure monitoring"
+  homepage "https://github.com/rcourtman/Pulse"
+  version "{{VERSION}}"
+  license "MIT"
+
+  on_macos do
+    if Hardware::CPU.arm?
+      url "https://github.com/rcourtman/Pulse/releases/download/v{{VERSION}}/pulse-cli-v{{VERSION}}-darwin-arm64.tar.gz"
+      sha256 "{{SHA256_DARWIN_ARM64}}"
+    else
+      url "https://github.com/rcourtman/Pulse/releases/download/v{{VERSION}}/pulse-cli-v{{VERSION}}-darwin-amd64.tar.gz"
+      sha256 "{{SHA256_DARWIN_AMD64}}"
+    end
+  end
+
+  on_linux do
+    if Hardware::CPU.arm? && Hardware::CPU.is_64_bit?
+      url "https://github.com/rcourtman/Pulse/releases/download/v{{VERSION}}/pulse-cli-v{{VERSION}}-linux-arm64.tar.gz"
+      sha256 "{{SHA256_LINUX_ARM64}}"
+    elsif Hardware::CPU.intel?
+      url "https://github.com/rcourtman/Pulse/releases/download/v{{VERSION}}/pulse-cli-v{{VERSION}}-linux-amd64.tar.gz"
+      sha256 "{{SHA256_LINUX_AMD64}}"
+    end
+  end
+
+  def install
+    if OS.mac?
+      binary = Hardware::CPU.arm? ? "pulse-cli-darwin-arm64" : "pulse-cli-darwin-amd64"
+    else
+      binary = Hardware::CPU.arm? ? "pulse-cli-linux-arm64" : "pulse-cli-linux-amd64"
+    end
+    bin.install binary => "pulse"
+  end
+
+  def caveats
+    <<~EOS
+      Quick start:
+        1. Authenticate (read-only monitoring:read token stored in your OS keychain):
+             pulse auth login https://your-pulse-host
+        2. Connect your AI agent (claude-code, codex, opencode, or claude-desktop):
+             pulse connect claude-code
+        3. Verify connectivity:
+             pulse doctor
+    EOS
+  end
+
+  test do
+    assert_match version.to_s, shell_output("#{bin}/pulse --version")
+  end
+end

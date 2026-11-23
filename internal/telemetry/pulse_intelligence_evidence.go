@@ -77,6 +77,7 @@ func PulseIntelligenceAssistantContextEvent(event config.AIUsageEventRecord) boo
 type PulseIntelligenceExternalAgentEvidence struct {
 	Used                  bool
 	MCPAdapterUsed        bool
+	CLIUsed               bool
 	ContextRequests       int
 	EventStreamRequests   int
 	ProvisioningRequests  int
@@ -95,6 +96,7 @@ type PulseIntelligenceExternalAgentEvidence struct {
 func (e PulseIntelligenceExternalAgentEvidence) CollaborationActive() bool {
 	return e.Used ||
 		e.MCPAdapterUsed ||
+		e.CLIUsed ||
 		e.ContextRequests > 0 ||
 		e.EventStreamRequests > 0 ||
 		e.ProvisioningRequests > 0 ||
@@ -114,7 +116,7 @@ func (e PulseIntelligenceExternalAgentEvidence) CollaborationCount() int {
 	if count > 0 {
 		return count
 	}
-	if e.Used || e.MCPAdapterUsed {
+	if e.Used || e.MCPAdapterUsed || e.CLIUsed {
 		return 1
 	}
 	return 0
@@ -143,8 +145,11 @@ func PulseIntelligenceExternalAgentEvidenceFromHistory(history *config.ExternalA
 			continue
 		}
 		evidence.Used = true
-		if strings.TrimSpace(event.Surface) == config.ExternalAgentActivitySurfacePulseMCP {
+		switch strings.TrimSpace(event.Surface) {
+		case config.ExternalAgentActivitySurfacePulseMCP:
 			evidence.MCPAdapterUsed = true
+		case config.ExternalAgentActivitySurfacePulseCLI:
+			evidence.CLIUsed = true
 		}
 		if strings.TrimSpace(event.Activity) == config.ExternalAgentActivityHistoryRead && !event.Timestamp.Before(firstHistoryReadDay) {
 			historyReadDays[event.Timestamp.UTC().Format(time.DateOnly)] = struct{}{}
@@ -159,7 +164,7 @@ func PulseIntelligenceExternalAgentEvidenceFromHistory(history *config.ExternalA
 // activity surface is part of the governed external-agent contract.
 func PulseIntelligenceExternalAgentActivitySurface(surface string) bool {
 	switch strings.TrimSpace(surface) {
-	case config.ExternalAgentActivitySurfaceAgentAPI, config.ExternalAgentActivitySurfacePulseMCP:
+	case config.ExternalAgentActivitySurfaceAgentAPI, config.ExternalAgentActivitySurfacePulseMCP, config.ExternalAgentActivitySurfacePulseCLI:
 		return true
 	default:
 		return false

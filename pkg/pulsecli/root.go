@@ -27,6 +27,11 @@ type CommandDeps struct {
 	Mock      *MockDeps
 	Actions   *ActionsDeps
 	Fleet     *FleetDeps
+	Auth      *AuthDeps
+	Connect   *ConnectDeps
+	Doctor    *DoctorDeps
+	MCP       *MCPDeps
+	Remote    *RemoteDeps
 }
 
 func NewRootCommand(command CommandSpec, runtime RuntimeSpec, deps CommandDeps) *cobra.Command {
@@ -48,12 +53,21 @@ func NewRootCommand(command CommandSpec, runtime RuntimeSpec, deps CommandDeps) 
 		cmd.SetVersionTemplate(command.VersionTemplate)
 	}
 
+	addClientPersistentFlags(cmd)
+
 	cmd.AddCommand(newVersionCmd(command))
 	cmd.AddCommand(newConfigCmd(deps.Config))
 	cmd.AddCommand(newBootstrapTokenCmd(deps.Bootstrap))
 	cmd.AddCommand(newMockCmd(deps.Mock))
-	cmd.AddCommand(newActionsCmd(deps.Actions))
-	cmd.AddCommand(newFleetCmd(deps.Fleet))
+	registerRemoteCommands(cmd, ClientDeps{
+		Auth:    deps.Auth,
+		Connect: deps.Connect,
+		Doctor:  deps.Doctor,
+		MCP:     deps.MCP,
+		Remote:  deps.Remote,
+		Fleet:   deps.Fleet,
+		Actions: deps.Actions,
+	})
 
 	return cmd
 }

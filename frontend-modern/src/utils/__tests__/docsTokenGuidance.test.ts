@@ -53,8 +53,9 @@ describe('shipped API Access guidance', () => {
     expect(normalized).toContain('separate collector and action-runner');
   });
 
-  it('distinguishes backend-required Patrol scopes and wildcard authority from presets', () => {
-    expect(normalized).toContain('its scopes come from the current Patrol requirements');
+  it('distinguishes least-privilege external-agent presets, operator CLI authority, and wildcard access', () => {
+    expect(normalized).toContain('Use **External agent (read-only)** by default');
+    expect(normalized).toContain('Reserve **Operator CLI** for trusted operator workstations');
     expect(normalized).toContain('legacy `*` wildcard, not a least-privilege preset');
     expect(normalized).toContain("Hiding controls does not reduce a token's permissions");
   });

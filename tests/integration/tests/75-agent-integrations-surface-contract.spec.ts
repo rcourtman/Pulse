@@ -37,7 +37,7 @@ const test = base.extend<{}, WorkerFixtures>({
 });
 
 test.describe("Agent integrations surface contract", () => {
-  test("guides external agents through Patrol governance and the live manifest", async ({
+  test("leads with un-collapsed 3-step pulse CLI onboarding, least-privilege token presets, and live manifest", async ({
     page,
   }) => {
     const manifestResponse = page.waitForResponse(
@@ -59,46 +59,61 @@ test.describe("Agent integrations surface contract", () => {
     const response = await manifestResponse;
     expect(response.ok()).toBeTruthy();
 
+    // Un-collapsed 3-step pulse CLI setup immediately visible.
     await expect(
-      page.getByText(
-        "Connect external tools to read Pulse context and request Patrol work.",
-        { exact: true },
-      ),
+      page.getByText("brew install rcourtman/tap/pulse", { exact: true }),
     ).toBeVisible();
     await expect(
-      page.getByText(
-        "Patrol mode and scoped tokens control what connected agents can do.",
-        { exact: true },
-      ),
+      page.getByText("Sign in read-only", { exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.getByText("Connect your agent and verify", { exact: true }),
+    ).toBeVisible();
+
+    // Switch external agent client to Codex.
+    await page.getByRole("button", { name: "Codex" }).click();
+    await expect(
+      page.getByText("pulse connect codex", { exact: false }),
+    ).toBeVisible();
+
+    // Secondary section for proposing fixes + Patrol mode link.
+    await expect(
+      page.getByRole("heading", {
+        level: 3,
+        name: "Want agents to propose fixes?",
+      }),
     ).toBeVisible();
     await expect(
       page.getByRole("link", { name: "Choose Patrol mode" }),
     ).toBeVisible();
 
-    await page.getByRole("button", { name: "Show connector setup" }).click();
+    // Manual config disclosure uses pulse mcp with zero plaintext token placeholders.
+    await page.locator("summary").filter({ hasText: "Manual config" }).click();
     await expect(
-      page.getByRole("heading", { level: 3, name: "Connector setup" }),
+      page.getByRole("heading", { level: 4, name: /Codex.*~\/\.codex\/config\.toml/ }),
     ).toBeVisible();
-    await expect(page.getByText("Create a scoped token", { exact: true })).toBeVisible();
-    await expect(page.getByText("Connect the agent", { exact: true })).toBeVisible();
-
-    await page.locator("summary").filter({ hasText: "Client config" }).click();
-    await expect(page.getByText("PULSE_API_TOKEN").first()).toBeVisible();
+    await expect(
+      page.getByText("[mcp_servers.pulse]", { exact: false }),
+    ).toBeVisible();
     await expect(
       page.getByRole("heading", { level: 4, name: /OpenCode.*opencode\.json/ }),
     ).toBeVisible();
-    await expect(
-      page.getByRole("heading", { level: 4, name: /mcpServers/ }),
-    ).toBeVisible();
 
-    await page.locator("summary").filter({ hasText: "Developer details" }).click();
+    // Developer details disclosure preserves live manifest inspection.
+    await page
+      .locator("summary")
+      .filter({ hasText: "Developer details" })
+      .click();
     await expect(
       page.getByText(
         "Only open this when you are building or debugging a client",
         { exact: false },
       ),
     ).toBeVisible();
-    await page.locator("summary").filter({ hasText: "Live manifest details" }).click();
+    await page
+      .locator("summary")
+      .filter({ hasText: "Live manifest details" })
+      .click();
     await expect(
       page.getByText("/api/agent/capabilities", { exact: true }),
     ).toBeVisible();
@@ -130,7 +145,13 @@ test.describe("Agent integrations surface contract", () => {
       page.getByRole("heading", { level: 2, name: "Create token" }),
     ).toBeVisible();
     await expect(
-      page.getByRole("button", { name: "Patrol external agent" }),
+      page.getByRole("button", { name: "External agent (read-only)" }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "External agent (propose fixes)" }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "Operator CLI" }),
     ).toBeVisible();
   });
 });

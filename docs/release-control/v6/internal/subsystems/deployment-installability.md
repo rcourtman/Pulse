@@ -9888,6 +9888,10 @@ in `internal/updates/ephemeral_data_test.go`, and
 `internal/api/update_readiness_test.go` verify mountpoint matching, parent-mount
 coverage, suppression, fail-safe handling, and readiness payload output.
 
+### Unified `pulse` CLI release artifacts, installers, and macOS notarization (23 November 2026)
+
+Release build targets (`scripts/release_build_targets.sh`, `scripts/build-release-binaries.sh`, `scripts/build-release.sh`, `scripts/release_asset_common.sh`) and release workflows (`.github/workflows/build-release-candidate.yml`, `.github/workflows/create-release.yml`) now build and package `cmd/pulse-cli` across all 12 release targets alongside the existing server and `pulse-mcp` assets, including macOS Developer ID signing and `xcrun notarytool` notarization for `pulse-cli-darwin-*` binaries. Verified standalone installers (`scripts/install-cli.sh` and `scripts/install-cli.ps1`) enforce the same pinned SSH signature verification over `checksums.txt` and SHA256 verification before installing `pulse`, and `packaging/homebrew/pulse.rb.tmpl` provides the Homebrew tap formula template. Capability schemas, MCP wire semantics, and tool definitions remain owned by `internal/agentcapabilities`. Proof: cross-platform `CGO_ENABLED=0` builds (`linux/amd64`, `darwin/arm64`, `windows/amd64`), `bash -n`, `ruby -c`, `YAML.safe_load`, and `test_signed_installer_docs.py`.
+
 ## Release-body updater ownership (30 September 2026)
 
 Each executable `/bin/update --version` example in a published body must carry

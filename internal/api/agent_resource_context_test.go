@@ -1432,11 +1432,9 @@ func TestAgentOperationsLoopExternalAgentTokenReadyUsesPulseMCPSurfaceScopes(t *
 	now := time.Now().UTC()
 	expiredAt := now.Add(-time.Minute)
 	manifest := agentcapabilities.CanonicalManifest()
-	operationLoopScopes := agentcapabilities.RequiredCapabilityScopes(
-		agentcapabilities.ManifestSurfaceToolCapabilities(manifest, agentcapabilities.SurfaceIDPulseMCP),
-	)
-	if len(operationLoopScopes) < 2 {
-		t.Fatalf("Pulse MCP operations loop must require multiple scope classes for this readiness test, got %v", operationLoopScopes)
+	minimumScopes := agentcapabilities.ExternalAgentMinimumScopes(manifest)
+	if len(minimumScopes) == 0 {
+		t.Fatal("Pulse MCP manifest must expose at least one minimum read-only scope")
 	}
 
 	if agentOperationsLoopExternalAgentTokenReady(manifest, nil, now) {
@@ -1453,25 +1451,37 @@ func TestAgentOperationsLoopExternalAgentTokenReadyUsesPulseMCPSurfaceScopes(t *
 		t.Fatal("expired MCP-capable token must not satisfy external-agent readiness")
 	}
 	if agentOperationsLoopExternalAgentTokenReady(manifest, []config.APITokenRecord{
-		{Scopes: []string{config.ScopeMonitoringRead}, CreatedAt: now.Add(-time.Hour)},
-	}, now) {
-		t.Fatal("read-only Pulse MCP token must not satisfy full operations-loop readiness")
-	}
-	if agentOperationsLoopExternalAgentTokenReady(manifest, []config.APITokenRecord{
 		{Scopes: []string{config.ScopeAIExecute}, CreatedAt: now.Add(-time.Hour)},
 	}, now) {
-		t.Fatal("AI-execute-only Pulse MCP token must not satisfy full operations-loop readiness")
+		t.Fatal("AI-execute-only token without monitoring:read must not satisfy external-agent readiness")
 	}
 	if agentOperationsLoopExternalAgentTokenReady(manifest, []config.APITokenRecord{
-		{Scopes: []string{config.ScopeMonitoringRead}, CreatedAt: now.Add(-time.Hour)},
-		{Scopes: []string{config.ScopeAIExecute}, CreatedAt: now.Add(-time.Hour)},
+		{Scopes: []string{config.ScopeActionsPlan}, CreatedAt: now.Add(-time.Hour)},
 	}, now) {
-		t.Fatal("split partial tokens must not satisfy single-token operations-loop readiness")
+		t.Fatal("actions:plan-only token without monitoring:read must not satisfy external-agent readiness")
 	}
 	if !agentOperationsLoopExternalAgentTokenReady(manifest, []config.APITokenRecord{
-		{Scopes: operationLoopScopes, CreatedAt: now.Add(-time.Hour)},
+		{Scopes: []string{config.ScopeMonitoringRead}, CreatedAt: now.Add(-time.Hour)},
 	}, now) {
-		t.Fatalf("one token covering all Pulse MCP operations-loop scopes should satisfy external-agent readiness; scopes=%v", operationLoopScopes)
+		t.Fatal("read-only external-agent token (monitoring:read) should satisfy external-agent readiness")
+	}
+	if !agentOperationsLoopExternalAgentTokenReady(manifest, []config.APITokenRecord{
+		{Scopes: []string{config.ScopeMonitoringRead, config.ScopeActionsPlan}, CreatedAt: now.Add(-time.Hour)},
+	}, now) {
+		t.Fatal("propose-only external-agent token (monitoring:read + actions:plan) should satisfy external-agent readiness")
+	}
+	if !agentOperationsLoopExternalAgentTokenReady(manifest, []config.APITokenRecord{
+		{
+			Scopes: []string{
+				config.ScopeMonitoringRead,
+				config.ScopeActionsPlan,
+				config.ScopeActionsApprove,
+				config.ScopeActionsExecute,
+			},
+			CreatedAt: now.Add(-time.Hour),
+		},
+	}, now) {
+		t.Fatal("operator CLI token should satisfy external-agent readiness")
 	}
 }
 

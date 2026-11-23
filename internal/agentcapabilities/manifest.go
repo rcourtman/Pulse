@@ -175,7 +175,7 @@ func operationsLoopStatusOutputSchema() json.RawMessage {
 		"proActivationResolvedOperationsLoopCount":   integerOption("Compatibility alias for patrolControlResolvedOperationsLoopCount."),
 		"proActivationValueProofState":               stringEnumOption([]string{"not_started", "in_progress", "governed_decision_recorded", "verified_needs_mcp", "verified"}, "Compatibility alias for patrolControlValueState."),
 		"mcpOperationsLoopStarterCount":              integerOption("Count of Patrol work prompt starters rendered by the Pulse MCP surface in the evidence window."),
-		"externalAgentReady":                         booleanOption("Whether the Pulse MCP Patrol work contract is available and one non-expired API token covers every scope required by the published Pulse MCP Patrol work capability set."),
+		"externalAgentReady":                         booleanOption("Whether the Pulse MCP external-agent contract is available and at least one non-expired API token covers the minimum read-only external-agent scopes (such as monitoring:read or monitoring:read + actions:plan)."),
 		"windowStart":                                dateTimeOption("Start of the action-audit evidence window used for governed/verified counts."),
 		"generatedAt":                                dateTimeOption("Server timestamp for this Patrol work status snapshot."),
 	})
@@ -1275,6 +1275,22 @@ func CanonicalManifest() Manifest {
 		WorkflowPrompts:      ClonePulseWorkflowPrompts(ProjectPulseWorkflowPrompts(capabilities)),
 		Capabilities:         capabilities,
 	}
+}
+
+// ExternalAgentMinimumScopes returns the minimum manifest-backed scopes
+// required for an external-agent token to be considered ready (least-privilege
+// read-only context access, e.g. monitoring:read). Propose-only tokens
+// (monitoring:read + actions:plan) and broader operator tokens are supersets
+// and also satisfy this requirement.
+func ExternalAgentMinimumScopes(manifest Manifest) []string {
+	surfaceCaps := ManifestSurfaceToolCapabilities(manifest, SurfaceIDPulseMCP)
+	readCaps := make([]Capability, 0, len(surfaceCaps))
+	for _, cap := range surfaceCaps {
+		if cap.Category == "context" && cap.ActionMode == ActionModeRead {
+			readCaps = append(readCaps, cap)
+		}
+	}
+	return RequiredCapabilityScopes(readCaps)
 }
 
 func canonicalPulseMCPSurfaceToolNames() []string {

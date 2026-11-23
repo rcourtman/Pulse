@@ -36,8 +36,8 @@ the test-signed binaries as a GitHub artifact or assembles a release candidate.
 
 The canonical CI integration uses SignPath's GitHub trusted-build-system
 action, split into two phases because production signing requests require
-manual approval in the SignPath UI. The Windows build job uploads the three
-unsigned agent executables as one immutable workflow artifact, submits it to
+manual approval in the SignPath UI. The Windows build job uploads the unsigned
+Windows executables as one immutable workflow artifact, submits it to
 SignPath without waiting, and records the signing request id. A separate
 collection job absorbs the approval latency: it waits for the recorded request
 to complete, downloads the signed result by request id, and verifies every
@@ -52,6 +52,9 @@ The artifact configuration accepts exactly these ZIP-root files and no others:
 - `pulse-agent-windows-amd64.exe`
 - `pulse-agent-windows-arm64.exe`
 - `pulse-agent-windows-386.exe`
+- `pulse-cli-windows-amd64.exe`
+- `pulse-cli-windows-arm64.exe`
+- `pulse-cli-windows-386.exe`
 
 The repository-secret PFX path is an explicitly selected break-glass fallback.
 Normal stable publication and stable dry runs select `signpath` directly.

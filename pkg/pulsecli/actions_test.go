@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/agentcapabilities"
 	unified "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/spf13/cobra"
 )
@@ -774,5 +775,113 @@ func TestActionAPIDefaultsSeedsFromEnvironment(t *testing.T) {
 	}
 	if token != "" {
 		t.Fatalf("token = %q, want empty when env is unset", token)
+	}
+}
+
+func TestActionsApproveAndRejectShorthandsSendPlanHashAndCLISurface(t *testing.T) {
+	now := time.Date(2026, 11, 23, 14, 0, 0, 0, time.UTC)
+	var seenSurface string
+	var seenAuth string
+	var seenBody struct {
+		Outcome  unified.ApprovalOutcome `json:"outcome"`
+		Reason   string                  `json:"reason"`
+		PlanHash string                  `json:"planHash"`
+	}
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		seenSurface = r.Header.Get(agentcapabilities.AgentSurfaceHeader)
+		seenAuth = r.Header.Get("Authorization")
+		if err := json.NewDecoder(r.Body).Decode(&seenBody); err != nil {
+			t.Fatalf("decode body: %v", err)
+		}
+		state := unified.ActionStateApproved
+		if seenBody.Outcome == unified.OutcomeRejected {
+			state = unified.ActionStateRejected
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(actionDecisionResponse{
+			ActionID: "act_shorthand",
+			State:    state,
+			Approval: unified.ActionApprovalRecord{
+				Actor:     "operator",
+				Method:    unified.MethodAPI,
+				Timestamp: now,
+				Outcome:   seenBody.Outcome,
+				Reason:    seenBody.Reason,
+			},
+			Audit: unified.ActionAuditRecord{ID: "act_shorthand", State: state},
+		})
+	}))
+	defer server.Close()
+
+	store := newCLITestAuthStore(t)
+	if _, err := store.SaveProfile("default", server.URL, "saved-action-token", "operator"); err != nil {
+		t.Fatalf("SaveProfile: %v", err)
+	}
+
+	run := func(args ...string) error {
+		cmd := NewClientRootCommand(CommandSpec{Use: "pulse"}, ClientDeps{
+			Actions: &ActionsDeps{
+				HTTPClient: server.Client(),
+				Store:      store,
+				Getenv:     func(string) string { return "" },
+			},
+		})
+		cmd.SetOut(io.Discard)
+		cmd.SetErr(io.Discard)
+		cmd.SetArgs(args)
+		return cmd.Execute()
+	}
+
+	if err := run("actions", "approve", "act_shorthand", "--plan-hash", "sha256:reviewed", "--reason", "verified"); err != nil {
+		t.Fatalf("actions approve failed: %v", err)
+	}
+	if seenSurface != agentcapabilities.AgentSurfacePulseCLI {
+		t.Fatalf("surface = %q, want %q", seenSurface, agentcapabilities.AgentSurfacePulseCLI)
+	}
+	if seenAuth != "Bearer saved-action-token" {
+		t.Fatalf("Authorization = %q, want saved profile token", seenAuth)
+	}
+	if seenBody.Outcome != unified.OutcomeApproved || seenBody.PlanHash != "sha256:reviewed" || seenBody.Reason != "verified" {
+		t.Fatalf("approve payload = %+v", seenBody)
+	}
+
+	if err := run("actions", "reject", "act_shorthand", "--plan-hash", "sha256:reviewed", "--reason", "not now"); err != nil {
+		t.Fatalf("actions reject failed: %v", err)
+	}
+	if seenBody.Outcome != unified.OutcomeRejected || seenBody.PlanHash != "sha256:reviewed" || seenBody.Reason != "not now" {
+		t.Fatalf("reject payload = %+v", seenBody)
+	}
+}
+
+func TestActionsExecuteRenders402LicenseRequiredWithoutRetry(t *testing.T) {
+	var calls atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls.Add(1)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusPaymentRequired)
+		_, _ = io.WriteString(w, `{"error":"license_required","message":"Fix execution requires Pulse Pro","feature":"ai_autofix","upgrade_url":"https://pulserelay.pro/upgrade"}`)
+	}))
+	defer server.Close()
+
+	cmd := newTestActionsRootCommand(map[string]string{
+		"PULSE_API_TOKEN": "test-token",
+		"PULSE_API_URL":   server.URL,
+	})
+	cmd.SetOut(io.Discard)
+	cmd.SetErr(io.Discard)
+	cmd.SetArgs([]string{"actions", "execute", "--action-id", "act_402", "--plan-hash", "sha256:abc"})
+
+	err := cmd.Execute()
+	if err == nil {
+		t.Fatal("expected HTTP 402 error")
+	}
+	if got := calls.Load(); got != 1 {
+		t.Fatalf("HTTP 402 retried: calls = %d, want 1", got)
+	}
+	for _, want := range []string{"Pulse Pro license", "ai_autofix", "Fix execution requires Pulse Pro", "https://pulserelay.pro/upgrade"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Fatalf("402 error %q missing %q", err.Error(), want)
+		}
 	}
 }

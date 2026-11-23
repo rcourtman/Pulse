@@ -115,6 +115,7 @@ agent_ldflags="$(./scripts/release_ldflags.sh agent \
     --update-public-keys "${PULSE_UPDATE_SIGNING_PUBLIC_KEY}")"
 build_time="$(date -u '+%Y-%m-%d_%H:%M:%S')"
 git_commit="$(git rev-parse --short HEAD)"
+cli_ldflags="-s -w -X main.Version=v${VERSION} -X main.BuildTime=${build_time} -X main.GitCommit=${git_commit}"
 server_ldflags="$(./scripts/release_ldflags.sh server \
     --version "v${VERSION}" \
     --build-time "${build_time}" \
@@ -136,6 +137,8 @@ for target in "${PULSE_RELEASE_AGENT_TARGETS[@]}"; do
     task_components+=(agent)
     task_targets+=("${target}")
     if [[ "${PROFILE}" == "full" ]]; then
+        task_components+=(cli)
+        task_targets+=("${target}")
         task_components+=(mcp)
         task_targets+=("${target}")
     fi
@@ -178,6 +181,10 @@ build_one() {
         agent-runner)
             package=./cmd/pulse-agent-runner
             ldflags=""
+            ;;
+        cli)
+            package=./cmd/pulse-cli
+            ldflags="${cli_ldflags}"
             ;;
         mcp)
             package=./cmd/pulse-mcp

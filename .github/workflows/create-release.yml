@@ -1379,6 +1379,23 @@ jobs:
               release_upload_with_retry "${TAG}" "${bare_agent}" --clobber
             fi
           done
+          for bare_cli in \
+            release/pulse-cli-linux-amd64 \
+            release/pulse-cli-linux-arm64 \
+            release/pulse-cli-linux-armv7 \
+            release/pulse-cli-linux-armv6 \
+            release/pulse-cli-linux-386 \
+            release/pulse-cli-darwin-amd64 \
+            release/pulse-cli-darwin-arm64 \
+            release/pulse-cli-freebsd-amd64 \
+            release/pulse-cli-freebsd-arm64 \
+            release/pulse-cli-windows-amd64.exe \
+            release/pulse-cli-windows-arm64.exe \
+            release/pulse-cli-windows-386.exe; do
+            if [ -f "${bare_cli}" ]; then
+              release_upload_with_retry "${TAG}" "${bare_cli}" --clobber
+            fi
+          done
           for bare_mcp in \
             release/pulse-mcp-linux-amd64 \
             release/pulse-mcp-linux-arm64 \
@@ -1399,6 +1416,12 @@ jobs:
           release_upload_with_retry "${TAG}" release/install.sh --clobber
           if [ -f release/install.ps1 ]; then
             release_upload_with_retry "${TAG}" release/install.ps1 --clobber
+          fi
+          if [ -f release/install-cli.sh ]; then
+            release_upload_with_retry "${TAG}" release/install-cli.sh --clobber
+          fi
+          if [ -f release/install-cli.ps1 ]; then
+            release_upload_with_retry "${TAG}" release/install-cli.ps1 --clobber
           fi
           if [ -f release/install-mcp.sh ]; then
             release_upload_with_retry "${TAG}" release/install-mcp.sh --clobber

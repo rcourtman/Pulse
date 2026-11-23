@@ -77,6 +77,7 @@ pulse_release_binary_filename() {
         agent) filename="pulse-agent-${target}" ;;
         agent-helper) filename="pulse-agent-helper-${target}" ;;
         agent-runner) filename="pulse-agent-runner-${target}" ;;
+        cli) filename="pulse-cli-${target}" ;;
         mcp) filename="pulse-mcp-${target}" ;;
         server) filename="pulse-${target}" ;;
         control-plane) filename="pulse-control-plane-${target}" ;;

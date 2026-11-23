@@ -1,0 +1,52 @@
+{
+  "version": 1,
+  "base_sha": "bf47b7fac3398324e4c12da6e24ab683d79144cb",
+  "verified_at": "2026-11-23T11:36:20Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/APITokenManager.tsx",
+    "frontend-modern/src/components/Settings/AgentIntegrationsPanel.tsx",
+    "frontend-modern/src/components/Settings/CopyCommandBlock.tsx",
+    "frontend-modern/src/components/Settings/apiTokenManagerModel.ts",
+    "frontend-modern/src/components/Settings/useAPITokenManagerState.ts",
+    "frontend-modern/src/constants/apiScopes.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/APITokenManager.tsx": "417e45493a7797c4d9a33c1e5758de0e1c44e1d62488fe47edd9128bc3f7c4e3",
+    "frontend-modern/src/components/Settings/AgentIntegrationsPanel.tsx": "e7a46ad0098e29b0cd5d07672eab6c7768aa0e29ab274ffafb5927f29c2ddb6e",
+    "frontend-modern/src/components/Settings/CopyCommandBlock.tsx": "310148b5128960dae7fcaed75dea842f908dc32d73943a467c163ca0dcc35a5d",
+    "frontend-modern/src/components/Settings/apiTokenManagerModel.ts": "3a943e873528ef9b22c99f619def8ca59ee0fcf06789489f3b391e60c3063715",
+    "frontend-modern/src/components/Settings/useAPITokenManagerState.ts": "5f21bd3e68ead68fee4bc789451e3e1b2b6a677c2112ea6a52de56a1f250e18c",
+    "frontend-modern/src/constants/apiScopes.ts": "fc0bbc631c95a3e9b3944a208b1f0dd741550042a1300240ba08b41c025b4bd8"
+  },
+  "routes": [
+    "/settings/pulse-intelligence/agents",
+    "/settings/security/api#pulse-mcp-setup",
+    "/settings/security/api?tokenPreset=pulse-intelligence-agent#api-token-create",
+    "/settings/security/api?tokenPreset=external-agent-propose#api-token-create"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Desktop 1440x900 /settings/pulse-intelligence/agents: un-collapsed 3-step pulse CLI onboarding (Homebrew, macOS/Linux verified, Windows verified), 4-client switcher (Claude Code, Codex, OpenCode, Claude Desktop), zero plaintext tokens, zero curl|bash, zero Pro badges, zero em-dashes or semicolons in Pillar 1 copy, zero horizontal overflow (html/body 1440x900)",
+    "Desktop 1440x900 Manual config and Developer details disclosures: start collapsed, expand cleanly to zero-token pulse mcp snippets (Claude/Desktop, Codex TOML, OpenCode) and nested Patrol access model without clipping or overlap",
+    "Desktop 1440x900 /settings/security/api?tokenPreset=pulse-intelligence-agent#api-token-create: single-preset highlight on External agent (read-only) with Kiosk / Monitoring unpressed, exact monitoring:read scope, clean switching across presets, zero em-dashes/semicolons in preset tooltips",
+    "Desktop 1440x900 /settings/security/api?tokenPreset=external-agent-propose#api-token-create: single-preset highlight on External agent (propose fixes), exact monitoring:read + actions:plan scopes, Custom scopes Governed actions (plan/approve/execute) toggle cleanly",
+    "Mobile 390x844 /settings/pulse-intelligence/agents and /settings/security/api?tokenPreset=external-agent-propose#api-token-create: inline Copy button layout clears Step 2 command text with zero overlap (codeOverlapsCopy=false), zero horizontal page overflow (html/body 390x844), clean button wrapping"
+  ],
+  "interactions": [
+    "Completed first-boot admin setup and loaded /settings/pulse-intelligence/agents at 1440x900 and 390x844",
+    "Switched Step 1 install methods (Homebrew, macOS / Linux verified, Windows verified), clicked Step 1 and Step 2 Copy buttons and verified Copied to clipboard label/status feedback",
+    "Switched Step 3 clients (Claude Code, Codex, OpenCode, Claude Desktop) and verified command and user-local config path updates",
+    "Expanded Manual config and Developer details (including nested Patrol access model) and verified legacy /settings/security/api#pulse-mcp-setup redirect",
+    "Loaded both tokenPreset URLs, toggled between Kiosk / Monitoring, External agent (read-only), and External agent (propose fixes) verifying unique active preset highlighting, and toggled Custom scopes Governed actions (plan/approve/execute)"
+  ]
+}

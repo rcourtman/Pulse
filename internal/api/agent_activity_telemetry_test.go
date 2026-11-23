@@ -88,6 +88,33 @@ func TestRecordExternalAgentCapabilityActivityPreservesMCPAdapterSurface(t *test
 	}
 }
 
+func TestRecordExternalAgentCapabilityActivityPreservesPulseCLISurfaceAndFiltersFirstPartyUI(t *testing.T) {
+	persistence := config.NewConfigPersistence(t.TempDir())
+	router := &Router{persistence: persistence}
+
+	cliReq := httptest.NewRequest(http.MethodGet, "/api/agent/fleet-context", nil)
+	cliReq.Header.Set(agentcapabilities.AgentSurfaceHeader, agentcapabilities.AgentSurfacePulseCLI)
+	attachAPITokenRecord(cliReq, &config.APITokenRecord{Scopes: []string{config.ScopeMonitoringRead}})
+	router.recordExternalAgentCapabilityActivity(cliReq, agentcapabilities.FleetContextCapabilityName)
+
+	uiReq := httptest.NewRequest(http.MethodGet, "/api/agent/fleet-context", nil)
+	uiReq.Header.Set(agentcapabilities.AgentSurfaceHeader, agentcapabilities.AgentSurfacePulseCLI)
+	uiReq.Header.Set("Sec-Fetch-Site", "same-origin")
+	attachAPITokenRecord(uiReq, &config.APITokenRecord{Scopes: []string{config.ScopeMonitoringRead}})
+	router.recordExternalAgentCapabilityActivity(uiReq, agentcapabilities.FleetContextCapabilityName)
+
+	history, err := persistence.LoadExternalAgentActivityHistory()
+	if err != nil {
+		t.Fatalf("LoadExternalAgentActivityHistory: %v", err)
+	}
+	if len(history.Events) != 1 {
+		t.Fatalf("expected only non-UI CLI event, got %d: %+v", len(history.Events), history.Events)
+	}
+	if history.Events[0].Surface != config.ExternalAgentActivitySurfacePulseCLI {
+		t.Fatalf("CLI event surface = %q, want %q", history.Events[0].Surface, config.ExternalAgentActivitySurfacePulseCLI)
+	}
+}
+
 func TestHandleAgentWorkflowPromptActivityRecordsMCPAdapterSurface(t *testing.T) {
 	persistence := config.NewConfigPersistence(t.TempDir())
 	router := &Router{persistence: persistence}

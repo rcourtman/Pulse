@@ -19,11 +19,21 @@ Everything here is free with Pulse Community.
 2. **Your systems added to Pulse.** Proxmox connects with a read-only API
    token under **Settings → Infrastructure**. Docker hosts need the Pulse
    agent: **Settings → Infrastructure → Install on a host**.
-3. **`pulse-mcp`** on the machine where your agent runs. Install it with the
-   [verified installer steps](AGENT_SUBSTRATE.md#install-the-mcp-adapter-safely),
-   then open **Settings → API Access → Agent integrations**. That tab mints a
-   `monitoring:read` token and generates the configuration for Claude Code and
-   OpenCode. Other MCP clients, such as Codex, use the same command and token.
+3. **The `pulse` CLI** on the machine where your agent runs. Follow the
+   [30-second `pulse` CLI setup](AGENT_SUBSTRATE.md#30-second-setup-with-the-pulse-cli)
+   (verified `install-cli.sh` / `install-cli.ps1` installer, or
+   `brew install rcourtman/tap/pulse` once published to the Homebrew tap on
+   release cut), then authenticate and connect in three commands:
+
+   ```sh
+   pulse auth login https://your-pulse-host   # read-only monitoring:read default, stored in OS keychain
+   pulse connect claude-code                  # or: codex, opencode, claude-desktop
+   pulse doctor
+   ```
+
+   You can also inspect your instance's manifest, mint a read-only token, or
+   copy manual client snippets under **Settings → Pulse Intelligence → External agents**.
+   Existing standalone `pulse-mcp` configurations remain supported.
 
 A `monitoring:read` token can read history and status. It can't change
 anything, and it never receives command text or output.
@@ -33,6 +43,12 @@ anything, and it never receives command text or output.
 In your agent, ask in plain words:
 
 > What happened on my Proxmox and Docker fleet overnight? Use Pulse.
+
+Or check directly from your terminal without an agent:
+
+```sh
+pulse changes --since 12h
+```
 
 Pulse gives the agent four reads for this. The agent chooses which to call;
 here is what each returns, using Pulse's demo data.
@@ -125,8 +141,10 @@ empty or short answer.
 
 ## Get changes as they happen
 
-`pulse-mcp --emit-notifications` also forwards alerts firing and resolving
-and status changes as they happen. Each event carries the `changeId` that
+Run `pulse events --follow` in your terminal to watch alerts firing and
+resolving and status changes live, or run `pulse mcp --emit-notifications`
+(also supported by standalone `pulse-mcp --emit-notifications`) to forward them
+to an MCP client. Each event carries the `changeId` that
 `list_recent_changes` returns, so the agent can read the history around it.
 Not every MCP client shows these notifications; see
 [What ships to help you connect](AGENT_SUBSTRATE.md#what-ships-to-help-you-connect).

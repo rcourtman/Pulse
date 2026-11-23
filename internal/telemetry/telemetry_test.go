@@ -432,6 +432,7 @@ func TestApplySnapshot(t *testing.T) {
 			PulseIntelligenceExternalAgentEnabled:                   true,
 			PulseIntelligenceExternalAgentUsed30d:                   true,
 			PulseIntelligenceMCPAdapterUsed30d:                      true,
+			PulseIntelligenceCLIUsed30d:                             true,
 			PulseIntelligenceExternalAgentContextRequests30d:        8,
 			PulseIntelligenceExternalAgentEventStreamRequests30d:    2,
 			PulseIntelligenceExternalAgentProvisioningRequests30d:   1,
@@ -583,7 +584,7 @@ func TestApplySnapshot(t *testing.T) {
 		t.Fatalf("Pulse Intelligence counters not applied: %#v", ping)
 	}
 	if !ping.PulseIntelligenceExternalAgentEnabled || !ping.PulseIntelligenceExternalAgentUsed30d ||
-		!ping.PulseIntelligenceMCPAdapterUsed30d {
+		!ping.PulseIntelligenceMCPAdapterUsed30d || !ping.PulseIntelligenceCLIUsed30d {
 		t.Fatalf("Pulse Intelligence external-agent booleans not applied: %#v", ping)
 	}
 	if ping.PulseIntelligenceExternalAgentContextRequests30d != 8 ||

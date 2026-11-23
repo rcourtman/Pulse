@@ -236,7 +236,10 @@ const (
 	// sessions that opened the map, sessions that saved an image, and sessions
 	// that saved one with names hidden. Nothing the map draws (names,
 	// addresses, networks) enters the tally or the payload.
-	TelemetrySchemaVersion = 24
+	// Schema v25 adds pulse_intelligence_cli_used_30d, a content-free boolean
+	// reporting whether the unified pulse CLI reached a Pulse Intelligence
+	// agent route in the current 30-day window.
+	TelemetrySchemaVersion = 25
 )
 
 type installIDRecord struct {
@@ -562,6 +565,7 @@ type Ping struct {
 	PulseIntelligenceExternalAgentEnabled                                bool `json:"pulse_intelligence_external_agent_enabled"`
 	PulseIntelligenceExternalAgentUsed30d                                bool `json:"pulse_intelligence_external_agent_used_30d"`
 	PulseIntelligenceMCPAdapterUsed30d                                   bool `json:"pulse_intelligence_mcp_adapter_used_30d"`
+	PulseIntelligenceCLIUsed30d                                          bool `json:"pulse_intelligence_cli_used_30d"`
 	PulseIntelligenceExternalAgentContextRequests30d                     int  `json:"pulse_intelligence_external_agent_context_requests_30d"`
 	PulseIntelligenceExternalAgentEventStreamRequests30d                 int  `json:"pulse_intelligence_external_agent_event_stream_requests_30d"`
 	PulseIntelligenceExternalAgentHistoryReadDays30d                     int  `json:"pulse_intelligence_external_agent_history_read_days_30d"`
@@ -829,6 +833,7 @@ type Snapshot struct {
 	PulseIntelligenceExternalAgentOperationsLoopReady                    bool
 	PulseIntelligenceExternalAgentUsed30d                                bool
 	PulseIntelligenceMCPAdapterUsed30d                                   bool
+	PulseIntelligenceCLIUsed30d                                          bool
 	PulseIntelligenceExternalAgentContextRequests30d                     int
 	PulseIntelligenceExternalAgentEventStreamRequests30d                 int
 	PulseIntelligenceExternalAgentHistoryReadDays30d                     int
@@ -1639,6 +1644,7 @@ func applySnapshot(base Ping, fn SnapshotFunc) Ping {
 	ping.PulseIntelligenceExternalAgentEnabled = s.PulseIntelligenceExternalAgentEnabled
 	ping.PulseIntelligenceExternalAgentUsed30d = s.PulseIntelligenceExternalAgentUsed30d
 	ping.PulseIntelligenceMCPAdapterUsed30d = s.PulseIntelligenceMCPAdapterUsed30d
+	ping.PulseIntelligenceCLIUsed30d = s.PulseIntelligenceCLIUsed30d
 	ping.PulseIntelligenceExternalAgentContextRequests30d = s.PulseIntelligenceExternalAgentContextRequests30d
 	ping.PulseIntelligenceExternalAgentEventStreamRequests30d = s.PulseIntelligenceExternalAgentEventStreamRequests30d
 	ping.PulseIntelligenceExternalAgentHistoryReadDays30d = s.PulseIntelligenceExternalAgentHistoryReadDays30d

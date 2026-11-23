@@ -23,6 +23,7 @@ describe('CopyCommandBlock', () => {
 
     await waitFor(() => expect(copyToClipboard).toHaveBeenCalledWith(command));
     expect(onCopy).toHaveBeenCalledWith(command);
+    expect(screen.getByRole('button', { name: 'Copied to clipboard' })).toBeInTheDocument();
   });
 
   it('does not report copied state when clipboard copy fails', async () => {

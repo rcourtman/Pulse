@@ -3,6 +3,12 @@ import { sanitizeDiagnosticsData } from '../diagnosticsModel';
 import type { DiagnosticsData } from '../diagnosticsModel';
 import { getBrokerRegistryLoginPrompt } from '../updatesSettingsModel';
 import { SETTINGS_NAV_GROUPS } from '../settingsNavCatalog';
+import {
+  API_TOKEN_EXTERNAL_AGENT_PROPOSE_PRESET_ID,
+  API_TOKEN_EXTERNAL_AGENT_READ_ONLY_PRESET_ID,
+  API_TOKEN_OPERATOR_CLI_PRESET_ID,
+  getAPITokenScopePresets,
+} from '../apiTokenManagerModel';
 import settingsSource from '../Settings.tsx?raw';
 import { EN_MESSAGES } from '@/i18n/messages';
 import aiSettingsSource from '../AISettings.tsx?raw';
@@ -505,5 +511,19 @@ describe('User Access reader projection', () => {
     );
     expect(systemGroup?.items.some((item) => item.id === 'system-billing')).toBe(true);
     expect(intelligenceGroup?.items.some((item) => item.id === 'system-billing')).toBe(false);
+  });
+
+  it('keeps External agents under Pulse Intelligence and pairs it with least-privilege token presets', () => {
+    const intelligenceGroup = SETTINGS_NAV_GROUPS.find(
+      (group) => group.id === 'pulse-intelligence',
+    );
+    expect(intelligenceGroup?.items.some((item) => item.id === 'system-ai-agents')).toBe(true);
+
+    const presets = getAPITokenScopePresets();
+    const presetIds = presets.map((preset) => preset.id);
+    expect(presetIds).toContain(API_TOKEN_EXTERNAL_AGENT_READ_ONLY_PRESET_ID);
+    expect(presetIds).toContain(API_TOKEN_EXTERNAL_AGENT_PROPOSE_PRESET_ID);
+    expect(presetIds).toContain(API_TOKEN_OPERATOR_CLI_PRESET_ID);
+    expect(presets.some((preset) => preset.label === 'Patrol external agent')).toBe(false);
   });
 });

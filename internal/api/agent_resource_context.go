@@ -405,8 +405,9 @@ func (fn agentExternalAgentActivityProviderFunc) ExternalAgentActivityHistory(ct
 	return fn(ctx)
 }
 
-// AgentExternalAgentReadinessProvider reports whether the current org has one
-// non-expired token that can use the full Pulse MCP operations-loop tool set.
+// AgentExternalAgentReadinessProvider reports whether the current org has at
+// least one non-expired token covering the minimum read-only external-agent
+// scopes (e.g. monitoring:read, or propose-only monitoring:read + actions:plan).
 // The status payload exposes only the boolean, never token identity or counts.
 type AgentExternalAgentReadinessProvider interface {
 	ExternalAgentReady(ctx context.Context, manifest agentcapabilities.Manifest, now time.Time) bool
@@ -1293,10 +1294,8 @@ func agentOperationsLoopExternalAgentTokenReady(manifest agentcapabilities.Manif
 	if !agentOperationsLoopExternalAgentManifestReady(manifest) {
 		return false
 	}
-	surfaceScopes := agentcapabilities.RequiredCapabilityScopes(
-		agentcapabilities.ManifestSurfaceToolCapabilities(manifest, agentcapabilities.SurfaceIDPulseMCP),
-	)
-	if len(surfaceScopes) == 0 {
+	minimumScopes := agentcapabilities.ExternalAgentMinimumScopes(manifest)
+	if len(minimumScopes) == 0 {
 		return false
 	}
 	for _, token := range tokens {
@@ -1304,17 +1303,17 @@ func agentOperationsLoopExternalAgentTokenReady(manifest agentcapabilities.Manif
 			continue
 		}
 		token = token.Clone()
-		coversLoop := true
-		for _, scope := range surfaceScopes {
+		coversMinimum := true
+		for _, scope := range minimumScopes {
 			if strings.TrimSpace(scope) == "" {
 				continue
 			}
 			if !token.HasScope(scope) {
-				coversLoop = false
+				coversMinimum = false
 				break
 			}
 		}
-		if coversLoop {
+		if coversMinimum {
 			return true
 		}
 	}

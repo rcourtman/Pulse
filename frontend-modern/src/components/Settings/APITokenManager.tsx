@@ -111,7 +111,7 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
     totalTokens,
     updatingTokenId,
     wildcardCount,
-    presetMatchesSelection,
+    isScopePresetActive,
   } = useAPITokenManagerState(props);
 
   const revokeUsage = createMemo(() => {
@@ -950,7 +950,7 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
                   active={isFullAccessSelected()}
                   onClick={applyFullAccessPreset}
                   disabled={!canManage()}
-                  title="Legacy wildcard – all permissions"
+                  title="Legacy wildcard: all permissions"
                 >
                   Full access
                 </SelectablePillButton>
@@ -958,8 +958,8 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
                 <For each={scopePresets()}>
                   {(preset) => (
                     <SelectablePillButton
-                      active={presetMatchesSelection(preset.scopes)}
-                      onClick={() => applyScopePreset(preset.scopes)}
+                      active={isScopePresetActive(preset.id, preset.scopes)}
+                      onClick={() => applyScopePreset(preset.scopes, preset.id)}
                       disabled={!canManage()}
                       title={preset.description}
                     >

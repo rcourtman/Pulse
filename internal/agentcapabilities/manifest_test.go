@@ -904,7 +904,7 @@ func TestCanonicalManifestDeclaresStructuredOutputSchemasForJSONResponses(t *tes
 			`External-agent readiness is exposed separately through externalAgentReady`,
 			`Count-only evidence that the Patrol control journey reached a verified Patrol work result`,
 			`Compatibility alias for patrolControlResolvedOperationsLoopCount`,
-			`one non-expired API token covers every scope required by the published Pulse MCP Patrol work capability set`,
+			`minimum read-only external-agent scopes (such as monitoring:read or monitoring:read + actions:plan)`,
 		},
 		PlanActionCapabilityName:    {`"actionId"`, `"planHash"`},
 		DecideActionCapabilityName:  {`"approval"`, `"audit"`},
@@ -932,6 +932,20 @@ func TestCanonicalManifestRequiredScopesReflectCapabilities(t *testing.T) {
 	want := RequiredCapabilityScopes(manifest.Capabilities)
 	if strings.Join(manifest.RequiredScopes, "\n") != strings.Join(want, "\n") {
 		t.Fatalf("CanonicalManifest RequiredScopes = %v, want %v", manifest.RequiredScopes, want)
+	}
+}
+
+func TestExternalAgentMinimumScopesReturnsReadOnlyContextScopes(t *testing.T) {
+	manifest := CanonicalManifest()
+	got := ExternalAgentMinimumScopes(manifest)
+	want := []string{auth.ScopeMonitoringRead}
+	if strings.Join(got, "\n") != strings.Join(want, "\n") {
+		t.Fatalf("ExternalAgentMinimumScopes(CanonicalManifest()) = %v, want %v", got, want)
+	}
+
+	empty := Manifest{}
+	if gotEmpty := ExternalAgentMinimumScopes(empty); len(gotEmpty) != 0 {
+		t.Fatalf("ExternalAgentMinimumScopes(empty) = %v, want empty", gotEmpty)
 	}
 }
 

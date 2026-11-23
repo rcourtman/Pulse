@@ -333,12 +333,21 @@ jobs:
           ldflags="$(./scripts/release_ldflags.sh agent \
             --version "v${VERSION}" \
             --update-public-keys "$PULSE_UPDATE_SIGNING_PUBLIC_KEY")"
+          build_time="$(date -u '+%Y-%m-%d_%H:%M:%S')"
+          git_commit="$(git rev-parse --short HEAD 2>/dev/null || echo 'unknown')"
+          cli_ldflags="-s -w -X main.Version=v${VERSION} -X main.BuildTime=${build_time} -X main.GitCommit=${git_commit}"
           for arch in amd64 arm64; do
             output="native-agent-binaries/pulse-agent-darwin-${arch}"
             GOOS=darwin GOARCH="$arch" CGO_ENABLED=0 \
               go build -buildvcs=false -trimpath -ldflags="$ldflags" -o "$output" ./cmd/pulse-agent
             codesign --force --timestamp --options runtime --sign "$APPLE_SIGNING_IDENTITY" "$output"
             codesign --verify --deep --strict --verbose=2 "$output"
+
+            cli_output="native-agent-binaries/pulse-cli-darwin-${arch}"
+            GOOS=darwin GOARCH="$arch" CGO_ENABLED=0 \
+              go build -buildvcs=false -trimpath -ldflags="$cli_ldflags" -o "$cli_output" ./cmd/pulse-cli
+            codesign --force --timestamp --options runtime --sign "$APPLE_SIGNING_IDENTITY" "$cli_output"
+            codesign --verify --deep --strict --verbose=2 "$cli_output"
           done
 
           ditto -c -k --keepParent native-agent-binaries pulse-agent-macos-notarization.zip
@@ -356,7 +365,7 @@ jobs:
           if result.get('status') != 'Accepted':
               raise SystemExit(f"Apple notarization was not accepted: {result.get('status', 'unknown')}")
           PY
-          for binary in native-agent-binaries/pulse-agent-darwin-*; do
+          for binary in native-agent-binaries/pulse-agent-darwin-* native-agent-binaries/pulse-cli-darwin-*; do
             # Gatekeeper's spctl app assessment rejects bare command-line
             # Mach-O binaries even when the notary service accepted them.
             # Verify the signed bytes that will be packaged instead.
@@ -915,13 +924,13 @@ jobs:
               --public-key "${PULSE_UPDATE_SIGNING_PUBLIC_KEY}" \
               --comment pulse-installer
           )"
-          for installer in install.sh scripts/pulse-auto-update.sh release/pulse-auto-update.sh scripts/install-mcp.sh release/install-mcp.sh; do
+          for installer in install.sh scripts/pulse-auto-update.sh release/pulse-auto-update.sh scripts/install-mcp.sh release/install-mcp.sh scripts/install-cli.sh release/install-cli.sh; do
             grep -F "PINNED_RELEASE_SSH_PUBLIC_KEY=\"${TRUSTED_SSH_PUBLIC_KEY}\"" "${installer}" >/dev/null || {
               echo "::error::${installer} does not trust the configured release signing key."
               exit 1
             }
           done
-          for installer in scripts/install-mcp.ps1 release/install-mcp.ps1; do
+          for installer in scripts/install-mcp.ps1 release/install-mcp.ps1 scripts/install-cli.ps1 release/install-cli.ps1; do
             grep -F "\$PinnedReleaseSshPublicKey = '${TRUSTED_SSH_PUBLIC_KEY}'" "${installer}" >/dev/null || {
               echo "::error::${installer} does not trust the configured release signing key."
               exit 1

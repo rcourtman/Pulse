@@ -17,6 +17,9 @@ export const KUBERNETES_MANAGE_SCOPE = 'kubernetes:manage';
 export const AGENT_EXEC_SCOPE = 'agent:exec';
 export const AI_EXECUTE_SCOPE = 'ai:execute';
 export const AI_CHAT_SCOPE = 'ai:chat';
+export const ACTIONS_PLAN_SCOPE = 'actions:plan';
+export const ACTIONS_APPROVE_SCOPE = 'actions:approve';
+export const ACTIONS_EXECUTE_SCOPE = 'actions:execute';
 export const MONITORING_READ_SCOPE = 'monitoring:read';
 export const MONITORING_WRITE_SCOPE = 'monitoring:write';
 export const SETTINGS_READ_SCOPE = 'settings:read';
@@ -49,6 +52,25 @@ export const API_SCOPE_OPTIONS: APIScopeOption[] = [
     label: 'Pulse Intelligence actions',
     description:
       'Use governed Patrol actions for plans, approvals, policy-allowed fixes, verification, history, and knowledge changes.',
+    group: 'AI',
+  },
+  {
+    value: ACTIONS_PLAN_SCOPE,
+    label: 'Governed actions (plan)',
+    description:
+      'Propose governed action plans to the Decision Inbox. It cannot self-approve or execute.',
+    group: 'AI',
+  },
+  {
+    value: ACTIONS_APPROVE_SCOPE,
+    label: 'Governed actions (approve)',
+    description: 'Approve or reject planned governed actions in the Decision Inbox.',
+    group: 'AI',
+  },
+  {
+    value: ACTIONS_EXECUTE_SCOPE,
+    label: 'Governed actions (execute)',
+    description: 'Dispatch approved governed actions to host agents.',
     group: 'AI',
   },
   {

@@ -1240,3 +1240,28 @@ func TestPatrolInvestigationTelemetryUsesIndependentInstallationLedger(t *testin
 		t.Fatalf("independent counts lost or mixed with findings: %+v", snap)
 	}
 }
+
+func TestApplyPulseIntelligenceExternalAgentSnapshotTracksPulseCLISurface(t *testing.T) {
+	now := time.Date(2026, 11, 23, 12, 0, 0, 0, time.UTC)
+	persistence := config.NewConfigPersistence(t.TempDir())
+	if err := persistence.SaveExternalAgentActivityHistory([]config.ExternalAgentActivityRecord{
+		{Timestamp: now.Add(-time.Hour), Surface: config.ExternalAgentActivitySurfacePulseCLI, Activity: config.ExternalAgentActivityFleetContext},
+	}); err != nil {
+		t.Fatalf("SaveExternalAgentActivityHistory: %v", err)
+	}
+
+	var snap telemetry.Snapshot
+	applyPulseIntelligenceTelemetrySnapshot(&snap, persistence, nil, telemetry.PulseIntelligenceActionSnapshot{}, now)
+	if !snap.PulseIntelligenceExternalAgentUsed30d {
+		t.Fatalf("expected external-agent used to be true for pulse_cli event: %+v", snap)
+	}
+	if !snap.PulseIntelligenceCLIUsed30d {
+		t.Fatalf("expected PulseIntelligenceCLIUsed30d to be true for pulse_cli event: %+v", snap)
+	}
+	if snap.PulseIntelligenceMCPAdapterUsed30d {
+		t.Fatalf("pulse_cli event must not set PulseIntelligenceMCPAdapterUsed30d: %+v", snap)
+	}
+	if !snap.PulseIntelligenceLoopActive30d {
+		t.Fatalf("pulse_cli activity should mark PulseIntelligenceLoopActive30d true: %+v", snap)
+	}
+}

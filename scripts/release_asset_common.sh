@@ -277,6 +277,15 @@ pulse_release_collect_checksum_files() {
         if compgen -G "pulse-agent-freebsd-*" > /dev/null; then
             checksum_files+=( pulse-agent-freebsd-* )
         fi
+        if compgen -G "pulse-cli-linux-*" > /dev/null; then
+            checksum_files+=( pulse-cli-linux-* )
+        fi
+        if compgen -G "pulse-cli-darwin-*" > /dev/null; then
+            checksum_files+=( pulse-cli-darwin-* )
+        fi
+        if compgen -G "pulse-cli-freebsd-*" > /dev/null; then
+            checksum_files+=( pulse-cli-freebsd-* )
+        fi
         if compgen -G "pulse-mcp-linux-*" > /dev/null; then
             checksum_files+=( pulse-mcp-linux-* )
         fi
@@ -294,6 +303,9 @@ pulse_release_collect_checksum_files() {
         fi
         if [[ -f "install-docker.sh" ]]; then
             checksum_files+=( install-docker.sh )
+        fi
+        if [[ -f "install-cli.sh" ]]; then
+            checksum_files+=( install-cli.sh )
         fi
         if [[ -f "install-mcp.sh" ]]; then
             checksum_files+=( install-mcp.sh )

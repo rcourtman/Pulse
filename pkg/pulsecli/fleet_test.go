@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -11,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/agentcapabilities"
 	"github.com/spf13/cobra"
 )
 
@@ -227,5 +229,82 @@ func TestFleetConnectionsCommandPreservesExplicitInventory(t *testing.T) {
 				})
 			}
 		})
+	}
+}
+
+func TestFleetSummaryCommandSupportsJSONAndTTYTable(t *testing.T) {
+	var seenSurface string
+	var seenQuery string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != agentcapabilities.FleetContextCapabilityPath {
+			http.NotFound(w, r)
+			return
+		}
+		seenSurface = r.Header.Get(agentcapabilities.AgentSurfaceHeader)
+		seenQuery = r.URL.RawQuery
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{
+			"resources": [
+				{
+					"canonicalId": "vm:101",
+					"resourceType": "vm",
+					"resourceName": "app-01",
+					"technology": "proxmox",
+					"neverAutoRemediate": true,
+					"findings": {"total": 2, "critical": 1, "warning": 1, "info": 0},
+					"pendingApprovalCount": 1
+				}
+			],
+			"generatedAt": "2026-11-23T12:00:00Z"
+		}`)
+	}))
+	defer server.Close()
+
+	env := func(key string) string {
+		switch key {
+		case "PULSE_API_URL":
+			return server.URL
+		case "PULSE_API_TOKEN":
+			return "fleet-summary-token"
+		default:
+			return ""
+		}
+	}
+
+	// Non-TTY auto-JSON
+	var jsonOut bytes.Buffer
+	cmd := NewClientRootCommand(CommandSpec{Use: "pulse"}, ClientDeps{
+		Fleet: &FleetDeps{HTTPClient: server.Client(), Getenv: env, IsTerminal: func(io.Writer) bool { return false }},
+	})
+	cmd.SetOut(&jsonOut)
+	cmd.SetArgs([]string{"fleet", "--has-findings", "--severity", "critical"})
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("fleet json: %v", err)
+	}
+	if seenSurface != agentcapabilities.AgentSurfacePulseCLI {
+		t.Fatalf("surface = %q, want %q", seenSurface, agentcapabilities.AgentSurfacePulseCLI)
+	}
+	if !strings.Contains(seenQuery, "hasFindings=true") || !strings.Contains(seenQuery, "severity=critical") {
+		t.Fatalf("unexpected query: %q", seenQuery)
+	}
+	var parsed map[string]any
+	if err := json.Unmarshal(jsonOut.Bytes(), &parsed); err != nil {
+		t.Fatalf("invalid JSON output: %v\n%s", err, jsonOut.String())
+	}
+
+	// TTY human table
+	var ttyOut bytes.Buffer
+	cmdTTY := NewClientRootCommand(CommandSpec{Use: "pulse"}, ClientDeps{
+		Fleet: &FleetDeps{HTTPClient: server.Client(), Getenv: env, IsTerminal: func(io.Writer) bool { return true }},
+	})
+	cmdTTY.SetOut(&ttyOut)
+	cmdTTY.SetArgs([]string{"fleet"})
+	if err := cmdTTY.Execute(); err != nil {
+		t.Fatalf("fleet tty: %v", err)
+	}
+	for _, want := range []string{"RESOURCE", "vm:101", "app-01", "no-remediate"} {
+		if !strings.Contains(ttyOut.String(), want) {
+			t.Fatalf("fleet TTY table missing %q:\n%s", want, ttyOut.String())
+		}
 	}
 }

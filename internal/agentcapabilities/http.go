@@ -21,6 +21,7 @@ const (
 	AgentAPITokenHeader             = "X-API-Token"
 	AgentSurfaceHeader              = "X-Pulse-Agent-Surface"
 	AgentSurfacePulseMCP            = "pulse_mcp"
+	AgentSurfacePulseCLI            = "pulse_cli"
 
 	maxManifestResponseBodyBytes   int64 = 1 << 20  // 1 MiB
 	maxCapabilityResponseBodyBytes int64 = 16 << 20 // 16 MiB

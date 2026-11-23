@@ -10,6 +10,7 @@ import (
 	"time"
 
 	unified "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/pulsecli/authstore"
 	"github.com/spf13/cobra"
 )
 
@@ -19,6 +20,7 @@ const (
 
 type ActionsDeps struct {
 	HTTPClient HTTPDoer
+	Store      *authstore.Store
 	Getenv     func(string) string
 }
 
@@ -47,6 +49,7 @@ type actionDecisionOptions struct {
 	ActionID string
 	Outcome  string
 	Reason   string
+	PlanHash string
 }
 
 type actionExecutionOptions struct {
@@ -54,6 +57,7 @@ type actionExecutionOptions struct {
 	Token    string
 	ActionID string
 	Reason   string
+	PlanHash string
 }
 
 type actionAuditOptions struct {
@@ -140,7 +144,7 @@ func newActionsCmd(deps *ActionsDeps) *cobra.Command {
 	}
 
 	planCmd.Flags().StringVar(&opts.APIURL, "api-url", opts.APIURL, "Pulse server URL or /api base URL")
-	planCmd.Flags().StringVar(&opts.Token, "token", opts.Token, "Pulse API token; defaults to PULSE_API_TOKEN")
+	planCmd.Flags().StringVar(&opts.Token, "token", opts.Token, "Pulse API token (deprecated: prefer pulse auth login or PULSE_API_TOKEN)")
 	planCmd.Flags().StringVar(&opts.RequestFile, "request-file", "", "JSON ActionRequest file; use - for stdin")
 	planCmd.Flags().StringVar(&opts.RequestID, "request-id", "", "caller idempotency key")
 	planCmd.Flags().StringVar(&opts.ResourceID, "resource-id", "", "canonical unified resource id")
@@ -153,10 +157,34 @@ func newActionsCmd(deps *ActionsDeps) *cobra.Command {
 	actionsCmd.AddCommand(planCmd)
 	actionsCmd.AddCommand(newActionCapabilitiesCmd(deps))
 	actionsCmd.AddCommand(newActionDecisionCmd(deps))
+	actionsCmd.AddCommand(newActionOutcomeShorthandCmd(deps, "approve", unified.OutcomeApproved, "Approve a pending governed action plan"))
+	actionsCmd.AddCommand(newActionOutcomeShorthandCmd(deps, "reject", unified.OutcomeRejected, "Reject a pending governed action plan"))
 	actionsCmd.AddCommand(newActionExecutionCmd(deps))
 	actionsCmd.AddCommand(newActionAuditCmd(deps))
 	actionsCmd.AddCommand(newActionEventsCmd(deps))
 	return actionsCmd
+}
+
+func newActionOutcomeShorthandCmd(deps *ActionsDeps, use string, outcome unified.ApprovalOutcome, short string) *cobra.Command {
+	opts := actionDecisionOptions{
+		Outcome: string(outcome),
+	}
+	cmd := &cobra.Command{
+		Use:   use + " <action-id>",
+		Short: short,
+		Args:  cobra.MaximumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			callOpts := opts
+			if len(args) == 1 && strings.TrimSpace(args[0]) != "" {
+				callOpts.ActionID = strings.TrimSpace(args[0])
+			}
+			return runActionDecision(cmd, deps, callOpts)
+		},
+	}
+	cmd.Flags().StringVar(&opts.ActionID, "action-id", "", "governed action id (optional when passed as positional argument)")
+	cmd.Flags().StringVar(&opts.PlanHash, "plan-hash", "", "reviewed planHash binding the decision to the exact inspected plan")
+	cmd.Flags().StringVar(&opts.Reason, "reason", "", "audit reason for the decision")
+	return cmd
 }
 
 func newActionCapabilitiesCmd(deps *ActionsDeps) *cobra.Command {
@@ -174,7 +202,7 @@ func newActionCapabilitiesCmd(deps *ActionsDeps) *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&opts.APIURL, "api-url", opts.APIURL, "Pulse server URL or /api base URL")
-	cmd.Flags().StringVar(&opts.Token, "token", opts.Token, "Pulse API token; defaults to PULSE_API_TOKEN")
+	cmd.Flags().StringVar(&opts.Token, "token", opts.Token, "Pulse API token (deprecated: prefer pulse auth login or PULSE_API_TOKEN)")
 	cmd.Flags().StringVar(&opts.ResourceID, "resource-id", "", "canonical unified resource id")
 	return cmd
 }
@@ -194,9 +222,10 @@ func newActionDecisionCmd(deps *ActionsDeps) *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&opts.APIURL, "api-url", opts.APIURL, "Pulse server URL or /api base URL")
-	cmd.Flags().StringVar(&opts.Token, "token", opts.Token, "Pulse API token; defaults to PULSE_API_TOKEN")
+	cmd.Flags().StringVar(&opts.Token, "token", opts.Token, "Pulse API token (deprecated: prefer pulse auth login or PULSE_API_TOKEN)")
 	cmd.Flags().StringVar(&opts.ActionID, "action-id", "", "governed action id")
 	cmd.Flags().StringVar(&opts.Outcome, "outcome", "", "decision outcome: approved or rejected")
+	cmd.Flags().StringVar(&opts.PlanHash, "plan-hash", "", "reviewed planHash binding the decision to the exact inspected plan")
 	cmd.Flags().StringVar(&opts.Reason, "reason", "", "audit reason for the decision")
 	return cmd
 }
@@ -216,8 +245,9 @@ func newActionExecutionCmd(deps *ActionsDeps) *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&opts.APIURL, "api-url", opts.APIURL, "Pulse server URL or /api base URL")
-	cmd.Flags().StringVar(&opts.Token, "token", opts.Token, "Pulse API token; defaults to PULSE_API_TOKEN")
+	cmd.Flags().StringVar(&opts.Token, "token", opts.Token, "Pulse API token (deprecated: prefer pulse auth login or PULSE_API_TOKEN)")
 	cmd.Flags().StringVar(&opts.ActionID, "action-id", "", "governed action id")
+	cmd.Flags().StringVar(&opts.PlanHash, "plan-hash", "", "reviewed planHash binding execution to the exact approved plan")
 	cmd.Flags().StringVar(&opts.Reason, "reason", "", "audit reason for starting execution")
 	return cmd
 }
@@ -239,7 +269,7 @@ func newActionAuditCmd(deps *ActionsDeps) *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&opts.APIURL, "api-url", opts.APIURL, "Pulse server URL or /api base URL")
-	cmd.Flags().StringVar(&opts.Token, "token", opts.Token, "Pulse API token; defaults to PULSE_API_TOKEN")
+	cmd.Flags().StringVar(&opts.Token, "token", opts.Token, "Pulse API token (deprecated: prefer pulse auth login or PULSE_API_TOKEN)")
 	cmd.Flags().StringVar(&opts.ResourceID, "resource-id", "", "canonical unified resource id")
 	cmd.Flags().StringVar(&opts.Since, "since", "", "RFC3339 lower bound for audit records")
 	cmd.Flags().IntVar(&opts.Limit, "limit", opts.Limit, "maximum audit records to return")
@@ -263,20 +293,38 @@ func newActionEventsCmd(deps *ActionsDeps) *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&opts.APIURL, "api-url", opts.APIURL, "Pulse server URL or /api base URL")
-	cmd.Flags().StringVar(&opts.Token, "token", opts.Token, "Pulse API token; defaults to PULSE_API_TOKEN")
+	cmd.Flags().StringVar(&opts.Token, "token", opts.Token, "Pulse API token (deprecated: prefer pulse auth login or PULSE_API_TOKEN)")
 	cmd.Flags().StringVar(&opts.ActionID, "action-id", "", "governed action id")
 	cmd.Flags().StringVar(&opts.Since, "since", "", "RFC3339 lower bound for lifecycle events")
 	cmd.Flags().IntVar(&opts.Limit, "limit", opts.Limit, "maximum lifecycle events to return")
 	return cmd
 }
 
+func resolveActionTarget(cmd *cobra.Command, deps *ActionsDeps, apiURL, token string) (string, string, error) {
+	var store *authstore.Store
+	var getenv func(string) string
+	if deps != nil {
+		store = deps.Store
+		getenv = deps.Getenv
+	}
+	return resolveLegacyTarget(
+		cmd,
+		apiURL,
+		token,
+		cmd.Flags().Changed("api-url"),
+		cmd.Flags().Changed("token"),
+		store,
+		getenv,
+	)
+}
+
 func runActionPlan(cmd *cobra.Command, deps *ActionsDeps, opts actionPlanOptions) error {
-	token := strings.TrimSpace(opts.Token)
-	if token == "" {
-		return fmt.Errorf("api token is required (use --token or PULSE_API_TOKEN)")
+	apiURL, token, err := resolveActionTarget(cmd, deps, opts.APIURL, opts.Token)
+	if err != nil {
+		return err
 	}
 
-	endpoint, err := actionPlanEndpoint(opts.APIURL)
+	endpoint, err := actionPlanEndpoint(apiURL)
 	if err != nil {
 		return err
 	}
@@ -320,7 +368,7 @@ func runActionPlan(cmd *cobra.Command, deps *ActionsDeps, opts actionPlanOptions
 		return fmt.Errorf("failed to read action plan response: %w", err)
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return apiStatusError("action plan request", resp.Status, respBody)
+		return apiStatusErrorWithCode("action plan request", resp.StatusCode, resp.Status, respBody)
 	}
 
 	var plan unified.ActionPlan
@@ -340,9 +388,9 @@ func runActionPlan(cmd *cobra.Command, deps *ActionsDeps, opts actionPlanOptions
 }
 
 func runActionDecision(cmd *cobra.Command, deps *ActionsDeps, opts actionDecisionOptions) error {
-	token := strings.TrimSpace(opts.Token)
-	if token == "" {
-		return fmt.Errorf("api token is required (use --token or PULSE_API_TOKEN)")
+	apiURL, token, err := resolveActionTarget(cmd, deps, opts.APIURL, opts.Token)
+	if err != nil {
+		return err
 	}
 
 	actionID := strings.TrimSpace(opts.ActionID)
@@ -354,17 +402,19 @@ func runActionDecision(cmd *cobra.Command, deps *ActionsDeps, opts actionDecisio
 		return fmt.Errorf("outcome must be approved or rejected (use --outcome)")
 	}
 
-	endpoint, err := pulseAPIEndpoint(opts.APIURL, "/actions/"+url.PathEscape(actionID)+"/decision")
+	endpoint, err := pulseAPIEndpoint(apiURL, "/actions/"+url.PathEscape(actionID)+"/decision")
 	if err != nil {
 		return err
 	}
 
 	body, err := json.Marshal(struct {
-		Outcome unified.ApprovalOutcome `json:"outcome"`
-		Reason  string                  `json:"reason,omitempty"`
+		Outcome  unified.ApprovalOutcome `json:"outcome"`
+		Reason   string                  `json:"reason,omitempty"`
+		PlanHash string                  `json:"planHash,omitempty"`
 	}{
-		Outcome: outcome,
-		Reason:  strings.TrimSpace(opts.Reason),
+		Outcome:  outcome,
+		Reason:   strings.TrimSpace(opts.Reason),
+		PlanHash: strings.TrimSpace(opts.PlanHash),
 	})
 	if err != nil {
 		return fmt.Errorf("failed to encode action decision: %w", err)
@@ -389,7 +439,7 @@ func runActionDecision(cmd *cobra.Command, deps *ActionsDeps, opts actionDecisio
 		return fmt.Errorf("failed to read action decision response: %w", err)
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return apiStatusError("action decision request", resp.Status, respBody)
+		return apiStatusErrorWithCode("action decision request", resp.StatusCode, resp.Status, respBody)
 	}
 
 	var decision actionDecisionResponse
@@ -409,9 +459,9 @@ func runActionDecision(cmd *cobra.Command, deps *ActionsDeps, opts actionDecisio
 }
 
 func runActionExecution(cmd *cobra.Command, deps *ActionsDeps, opts actionExecutionOptions) error {
-	token := strings.TrimSpace(opts.Token)
-	if token == "" {
-		return fmt.Errorf("api token is required (use --token or PULSE_API_TOKEN)")
+	apiURL, token, err := resolveActionTarget(cmd, deps, opts.APIURL, opts.Token)
+	if err != nil {
+		return err
 	}
 
 	actionID := strings.TrimSpace(opts.ActionID)
@@ -419,15 +469,17 @@ func runActionExecution(cmd *cobra.Command, deps *ActionsDeps, opts actionExecut
 		return fmt.Errorf("actionId is required (use --action-id)")
 	}
 
-	endpoint, err := pulseAPIEndpoint(opts.APIURL, "/actions/"+url.PathEscape(actionID)+"/execute")
+	endpoint, err := pulseAPIEndpoint(apiURL, "/actions/"+url.PathEscape(actionID)+"/execute")
 	if err != nil {
 		return err
 	}
 
 	body, err := json.Marshal(struct {
-		Reason string `json:"reason,omitempty"`
+		Reason   string `json:"reason,omitempty"`
+		PlanHash string `json:"planHash,omitempty"`
 	}{
-		Reason: strings.TrimSpace(opts.Reason),
+		Reason:   strings.TrimSpace(opts.Reason),
+		PlanHash: strings.TrimSpace(opts.PlanHash),
 	})
 	if err != nil {
 		return fmt.Errorf("failed to encode action execution: %w", err)
@@ -452,7 +504,7 @@ func runActionExecution(cmd *cobra.Command, deps *ActionsDeps, opts actionExecut
 		return fmt.Errorf("failed to read action execution response: %w", err)
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return apiStatusError("action execution request", resp.Status, respBody)
+		return apiStatusErrorWithCode("action execution request", resp.StatusCode, resp.Status, respBody)
 	}
 
 	var execution actionExecutionResponse
@@ -501,9 +553,9 @@ func actionConfirmationResponseError(operation string, err error) error {
 }
 
 func runActionCapabilities(cmd *cobra.Command, deps *ActionsDeps, opts actionCapabilitiesOptions) error {
-	token := strings.TrimSpace(opts.Token)
-	if token == "" {
-		return fmt.Errorf("api token is required (use --token or PULSE_API_TOKEN)")
+	apiURL, token, err := resolveActionTarget(cmd, deps, opts.APIURL, opts.Token)
+	if err != nil {
+		return err
 	}
 
 	resourceID := unified.CanonicalResourceID(opts.ResourceID)
@@ -511,7 +563,7 @@ func runActionCapabilities(cmd *cobra.Command, deps *ActionsDeps, opts actionCap
 		return fmt.Errorf("resourceId is required (use --resource-id)")
 	}
 
-	endpoint, err := actionResourceFacetsEndpoint(opts.APIURL, resourceID)
+	endpoint, err := actionResourceFacetsEndpoint(apiURL, resourceID)
 	if err != nil {
 		return err
 	}
@@ -534,7 +586,7 @@ func runActionCapabilities(cmd *cobra.Command, deps *ActionsDeps, opts actionCap
 		return fmt.Errorf("failed to read action capabilities response: %w", err)
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return apiStatusError("action capabilities request", resp.Status, respBody)
+		return apiStatusErrorWithCode("action capabilities request", resp.StatusCode, resp.Status, respBody)
 	}
 
 	var facets actionResourceFacetsResponse
@@ -564,16 +616,16 @@ func runActionCapabilities(cmd *cobra.Command, deps *ActionsDeps, opts actionCap
 }
 
 func runActionAudit(cmd *cobra.Command, deps *ActionsDeps, opts actionAuditOptions) error {
-	token := strings.TrimSpace(opts.Token)
-	if token == "" {
-		return fmt.Errorf("api token is required (use --token or PULSE_API_TOKEN)")
+	apiURL, token, err := resolveActionTarget(cmd, deps, opts.APIURL, opts.Token)
+	if err != nil {
+		return err
 	}
 
 	query, err := actionAuditQuery(opts.ResourceID, opts.Since, opts.Limit)
 	if err != nil {
 		return err
 	}
-	endpoint, err := pulseAPIEndpoint(opts.APIURL, "/audit/actions")
+	endpoint, err := pulseAPIEndpoint(apiURL, "/audit/actions")
 	if err != nil {
 		return err
 	}
@@ -597,7 +649,7 @@ func runActionAudit(cmd *cobra.Command, deps *ActionsDeps, opts actionAuditOptio
 		return fmt.Errorf("failed to read action audit response: %w", err)
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return apiStatusError("action audit request", resp.Status, respBody)
+		return apiStatusErrorWithCode("action audit request", resp.StatusCode, resp.Status, respBody)
 	}
 
 	var audits actionAuditListResponse
@@ -623,9 +675,9 @@ func runActionAudit(cmd *cobra.Command, deps *ActionsDeps, opts actionAuditOptio
 }
 
 func runActionEvents(cmd *cobra.Command, deps *ActionsDeps, opts actionEventsOptions) error {
-	token := strings.TrimSpace(opts.Token)
-	if token == "" {
-		return fmt.Errorf("api token is required (use --token or PULSE_API_TOKEN)")
+	apiURL, token, err := resolveActionTarget(cmd, deps, opts.APIURL, opts.Token)
+	if err != nil {
+		return err
 	}
 
 	actionID := strings.TrimSpace(opts.ActionID)
@@ -637,7 +689,7 @@ func runActionEvents(cmd *cobra.Command, deps *ActionsDeps, opts actionEventsOpt
 	if err != nil {
 		return err
 	}
-	endpoint, err := pulseAPIEndpoint(opts.APIURL, "/audit/actions/"+url.PathEscape(actionID)+"/events")
+	endpoint, err := pulseAPIEndpoint(apiURL, "/audit/actions/"+url.PathEscape(actionID)+"/events")
 	if err != nil {
 		return err
 	}
@@ -661,7 +713,7 @@ func runActionEvents(cmd *cobra.Command, deps *ActionsDeps, opts actionEventsOpt
 		return fmt.Errorf("failed to read action lifecycle response: %w", err)
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return apiStatusError("action lifecycle request", resp.Status, respBody)
+		return apiStatusErrorWithCode("action lifecycle request", resp.StatusCode, resp.Status, respBody)
 	}
 
 	var events actionLifecycleEventsResponse

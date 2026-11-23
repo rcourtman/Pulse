@@ -3,10 +3,13 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@solidjs/testing-li
 import { Route, Router } from '@solidjs/router';
 import type { AgentCapabilitiesManifest } from '@/api/agentCapabilities';
 import {
+  API_TOKEN_CREATE_ANCHOR,
+  API_TOKEN_PRESET_QUERY_PARAM,
   EXTERNAL_AGENT_SETUP_ANCHOR,
   PATROL_CONTROL_PATH,
   PULSE_MCP_SETUP_ANCHOR,
   PULSE_MCP_TOKEN_SETUP_PATH,
+  SETTINGS_API_ACCESS_PATH,
 } from '@/routing/resourceLinks';
 import { AgentIntegrationsPanel } from '../AgentIntegrationsPanel';
 
@@ -188,7 +191,7 @@ describe('AgentIntegrationsPanel', () => {
     window.history.replaceState({}, '', '/');
   });
 
-  it('keeps external agent setup brief and governed by Patrol mode', async () => {
+  it('leads immediately with un-collapsed 3-step pulse CLI onboarding, client switcher, and zero-token manual config', async () => {
     renderPanel();
 
     expect(
@@ -196,107 +199,100 @@ describe('AgentIntegrationsPanel', () => {
         `#${EXTERNAL_AGENT_SETUP_ANCHOR}`,
       ),
     ).not.toBeNull();
-    expect(
-      await screen.findByText('Connect external tools to read Pulse context', {
-        exact: false,
-      }),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByText('Patrol mode and scoped tokens control', { exact: false }),
-    ).toBeInTheDocument();
-    expect(document.body.textContent).not.toContain('Patrol remains the operator');
-    expect(document.body.textContent).not.toContain('Connected tools do not get separate powers');
-    expect(screen.getByRole('link', { name: 'Choose Patrol mode' })).toHaveAttribute(
-      'href',
-      PATROL_CONTROL_PATH,
-    );
-    expect(screen.getByRole('button', { name: 'Show connector setup' })).toHaveAttribute(
-      'aria-expanded',
-      'false',
-    );
-    expect(screen.getAllByRole('link', { name: 'Choose Patrol mode' })).toHaveLength(1);
-    expect(screen.queryByRole('heading', { name: 'Connector setup' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('link', { name: 'Create token' })).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Show connector setup' }));
+    // No outer toggle hiding the 3-step setup, and no curl | bash or irm | iex snippets.
+    expect(screen.queryByRole('button', { name: 'Show connector setup' })).not.toBeInTheDocument();
+    expect(document.body.textContent).not.toContain('curl -fsSL');
+    expect(document.body.textContent).not.toContain('| bash');
+    expect(document.body.textContent).not.toContain('| iex');
+    expect(document.body.textContent).not.toContain('<your-api-token>');
+    expect(document.body.textContent).not.toContain('Patrol external agent');
 
-    expect(screen.getByRole('button', { name: 'Hide connector setup' })).toHaveAttribute(
-      'aria-expanded',
-      'true',
-    );
-    expect(screen.getByRole('heading', { name: 'Connector setup' })).toBeInTheDocument();
+    // Step 1: Install pulse CLI (Homebrew default + verified installers).
     expect(screen.getByText('Step 1')).toBeInTheDocument();
-    expect(screen.getAllByRole('link', { name: 'Choose Patrol mode' })).toHaveLength(1);
-    expect(screen.getByRole('link', { name: 'Choose Patrol mode' })).toHaveAttribute(
-      'href',
-      PATROL_CONTROL_PATH,
-    );
-    expect(
-      screen.getByText('Required before agents can request Patrol work', {
-        exact: false,
-      }),
-    ).toBeInTheDocument();
-    expect(screen.getByText('Step 2')).toBeInTheDocument();
-    expect(screen.getByText('Create a scoped token')).toBeInTheDocument();
-    expect(screen.getByText('Patrol external agent')).toBeInTheDocument();
-    expect(
-      screen.getByText('Create a token with the', {
-        exact: false,
-      }),
-    ).toBeInTheDocument();
-    expect(screen.getByText('Step 3')).toBeInTheDocument();
-    expect(screen.getByText('Connect the agent')).toBeInTheDocument();
-    expect(document.body.textContent).toContain('Install the connector');
-    expect(document.body.textContent).toContain('paste the client config');
-    expect(document.body.textContent).not.toContain('The installer and client snippets are below');
-    expect(document.body.textContent).not.toContain('Install the Pulse MCP bridge');
-    expect(document.body.textContent).not.toContain('on the machine that runs the external tool');
+    expect(screen.getByText('brew install rcourtman/tap/pulse')).toBeInTheDocument();
 
+    const unixButton = screen.getByRole('button', { name: 'macOS / Linux (verified)' });
+    fireEvent.click(unixButton);
+    expect(unixButton).toHaveAttribute('aria-pressed', 'true');
+    expect(document.body.textContent).toContain('gh release verify-asset');
+    expect(document.body.textContent).toContain('install-cli.sh');
+
+    const windowsButton = screen.getByRole('button', { name: 'Windows (verified)' });
+    fireEvent.click(windowsButton);
+    expect(windowsButton).toHaveAttribute('aria-pressed', 'true');
+    expect(document.body.textContent).toContain('install-cli.ps1');
+
+    // Step 2: Sign in read-only with keychain storage & read-only preset link.
+    expect(screen.getByText('Step 2')).toBeInTheDocument();
+    expect(screen.getByText(`pulse auth login ${window.location.origin}`)).toBeInTheDocument();
+    expect(screen.getByText('External agent (read-only)')).toBeInTheDocument();
     const createTokenLink = screen.getByRole('link', { name: 'Create token' });
     expect(createTokenLink).toHaveAttribute('href', PULSE_MCP_TOKEN_SETUP_PATH);
-    const installerCommands = screen.getByText('Installer commands').closest('details');
-    expect(installerCommands).not.toBeNull();
-    expect(installerCommands).not.toHaveAttribute('open');
-    expect(document.body.textContent).not.toContain(
-      'https://github.com/rcourtman/Pulse/releases/latest/download/install-mcp.sh',
+
+    // Step 3: Connect agent with quick switcher for Claude Code, Codex, OpenCode, Claude Desktop.
+    expect(screen.getByText('Step 3')).toBeInTheDocument();
+    const claudeCodeBtn = screen.getByRole('button', { name: 'Claude Code' });
+    expect(claudeCodeBtn).toHaveAttribute('aria-pressed', 'true');
+    expect(document.body.textContent).toContain('pulse connect claude-code');
+    expect(document.body.textContent).toContain('pulse doctor');
+    expect(document.body.textContent).toContain('~/.claude.json');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Codex' }));
+    expect(screen.getByRole('button', { name: 'Codex' })).toHaveAttribute('aria-pressed', 'true');
+    expect(document.body.textContent).toContain('pulse connect codex');
+    expect(document.body.textContent).toContain('~/.codex/config.toml');
+
+    fireEvent.click(screen.getByRole('button', { name: 'OpenCode' }));
+    expect(document.body.textContent).toContain('pulse connect opencode');
+    expect(document.body.textContent).toContain('~/.config/opencode/opencode.json');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Claude Desktop' }));
+    expect(document.body.textContent).toContain('pulse connect claude-desktop');
+    expect(document.body.textContent).toContain('claude_desktop_config.json');
+
+    // Secondary section: Want agents to propose fixes? (demoted Patrol mode + propose token).
+    expect(
+      screen.getByRole('heading', { name: 'Want agents to propose fixes?' }),
+    ).toBeInTheDocument();
+    expect(screen.getByText('External agent (propose fixes)')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Create propose token' })).toHaveAttribute(
+      'href',
+      `${SETTINGS_API_ACCESS_PATH}?${API_TOKEN_PRESET_QUERY_PARAM}=external-agent-propose#${API_TOKEN_CREATE_ANCHOR}`,
     );
-    expect(document.body.textContent).not.toContain(
-      'https://github.com/rcourtman/Pulse/releases/latest/download/install-mcp.ps1',
+    expect(screen.getByRole('link', { name: 'Choose Patrol mode' })).toHaveAttribute(
+      'href',
+      PATROL_CONTROL_PATH,
     );
-    installerCommands!.open = true;
-    fireEvent(installerCommands!, new Event('toggle'));
-    expect(document.body.textContent).toContain(
-      'https://github.com/rcourtman/Pulse/releases/latest/download/install-mcp.sh',
-    );
-    expect(document.body.textContent).toContain(
-      'https://github.com/rcourtman/Pulse/releases/latest/download/install-mcp.ps1',
-    );
-    const clientConfigSnippets = screen.getByText('Client config').closest('details');
-    expect(clientConfigSnippets).not.toBeNull();
-    expect(clientConfigSnippets).not.toHaveAttribute('open');
-    expect(document.body.textContent).not.toContain('pulse-test-mcp');
-    expect(document.body.textContent).not.toContain('--pulse-url');
+
+    // Manual config disclosure (closed by default; zero plaintext tokens, includes Codex TOML).
+    const manualConfig = screen.getByText('Manual config').closest('details');
+    expect(manualConfig).not.toBeNull();
+    expect(manualConfig).not.toHaveAttribute('open');
+    expect(document.body.textContent).not.toContain('[mcp_servers.pulse-test]');
+
+    manualConfig!.open = true;
+    fireEvent(manualConfig!, new Event('toggle'));
+
+    expect(document.body.textContent).toContain('"command": "pulse"');
+    expect(document.body.textContent).toContain('"mcp"');
+    expect(document.body.textContent).toContain('[mcp_servers.pulse-test]');
+    expect(document.body.textContent).toContain('command = "pulse"');
+    expect(document.body.textContent).toContain('args = ["mcp"]');
+    expect(document.body.textContent).not.toContain('PULSE_API_TOKEN');
     expect(document.body.textContent).not.toContain('PULSE_TEST_TOKEN');
-    clientConfigSnippets!.open = true;
-    fireEvent(clientConfigSnippets!, new Event('toggle'));
-    expect(document.body.textContent).toContain('pulse-test-mcp');
-    expect(document.body.textContent).toContain('--pulse-url');
-    expect(document.body.textContent).toContain('PULSE_TEST_TOKEN');
-    expect(screen.getByText('Test OpenCode', { exact: false })).toBeInTheDocument();
-    expect(screen.getByText('Test MCP servers', { exact: false })).toBeInTheDocument();
-    expect(screen.getAllByText('"pulse-test":', { exact: false }).length).toBeGreaterThan(0);
+    expect(document.body.textContent).not.toContain('<your-api-token>');
+
+    // Developer details disclosure (closed by default, preserves manifest inspection).
     const advancedDetails = screen.getByText('Developer details').closest('details');
     expect(advancedDetails).not.toBeNull();
     expect(advancedDetails).not.toHaveAttribute('open');
-    expect(
-      screen.queryByText('Only open this when you are building or debugging a client', {
-        exact: false,
-      }),
-    ).not.toBeInTheDocument();
     expect(screen.queryByText('Patrol access model')).not.toBeInTheDocument();
     expect(screen.queryByText('Live manifest details')).not.toBeInTheDocument();
+
     advancedDetails!.open = true;
     fireEvent(advancedDetails!, new Event('toggle'));
+
     expect(
       screen.getByText('Only open this when you are building or debugging a client', {
         exact: false,
@@ -304,19 +300,10 @@ describe('AgentIntegrationsPanel', () => {
     ).toBeInTheDocument();
     expect(screen.getByText('Patrol access model')).toBeInTheDocument();
     expect(
-      screen.getByText('Built-in Pulse views and connected clients all sit behind', {
-        exact: false,
-      }),
-    ).toBeInTheDocument();
-    expect(
       screen.getByText('Connected agents do not get separate powers', { exact: false }),
     ).toBeInTheDocument();
-    expect(screen.getAllByText('External agents').length).toBeGreaterThanOrEqual(2);
     expect(screen.queryByText('Pulse MCP')).not.toBeInTheDocument();
     expect(screen.getByText('External adapter')).toBeInTheDocument();
-    expect(screen.getAllByText('Actions').length).toBeGreaterThanOrEqual(2);
-    // No Pulse client can answer interactive questions since the web chat
-    // window was retired, so no surface advertises them.
     expect(screen.queryByText('Interactive questions')).not.toBeInTheDocument();
     expect(screen.getByText('Capability metadata')).toBeInTheDocument();
     expect(screen.getByText('Live manifest details')).toBeInTheDocument();
@@ -325,11 +312,7 @@ describe('AgentIntegrationsPanel', () => {
     expect(screen.getByText('Agent starting points')).toBeInTheDocument();
     expect(screen.getByText('(2 from manifest)')).toBeInTheDocument();
     expect(screen.getByText('Ask Patrol to handle an issue')).toBeInTheDocument();
-    expect(screen.getAllByText('Wire name:').length).toBeGreaterThan(0);
     expect(screen.getByText('pulse_operations_loop')).toBeInTheDocument();
-    expect(screen.getByText('Patrol')).toBeInTheDocument();
-    expect(screen.getByText('Investigate resource')).toBeInTheDocument();
-    expect(screen.getByText('resourceId')).toBeInTheDocument();
     expect(screen.getByText('resourceId').closest('p')).toHaveTextContent(
       'Arguments: resourceId required',
     );
@@ -341,7 +324,6 @@ describe('AgentIntegrationsPanel', () => {
     expect(screen.getByText('Failure codes')).toBeInTheDocument();
     expect(screen.getByText('(1 from the live manifest)')).toBeInTheDocument();
     expect(screen.getAllByText('resource_not_found').length).toBeGreaterThanOrEqual(2);
-    expect(screen.getByText('branch on these codes', { exact: false })).toBeInTheDocument();
   });
 
   it('scrolls direct setup links to External agents instead of the API token top', async () => {
@@ -355,7 +337,7 @@ describe('AgentIntegrationsPanel', () => {
       expect(scrollIntoViewMock).toHaveBeenCalledWith({ behavior: 'smooth', block: 'start' });
     });
     expect(panel?.className).toContain('ring-2');
-    expect(screen.getByRole('heading', { name: 'Connector setup' })).toBeInTheDocument();
+    expect(screen.getByText('Step 1')).toBeInTheDocument();
   });
 
   it('normalizes legacy MCP setup links to external agent setup', async () => {
@@ -369,6 +351,6 @@ describe('AgentIntegrationsPanel', () => {
       expect(window.location.hash).toBe(`#${EXTERNAL_AGENT_SETUP_ANCHOR}`);
     });
     expect(scrollIntoViewMock).toHaveBeenCalledWith({ behavior: 'smooth', block: 'start' });
-    expect(screen.getByRole('heading', { name: 'Connector setup' })).toBeInTheDocument();
+    expect(screen.getByText('Step 1')).toBeInTheDocument();
   });
 });

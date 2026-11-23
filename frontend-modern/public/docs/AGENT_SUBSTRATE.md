@@ -1,19 +1,83 @@
 # Pulse agent integrations
 
-Pulse exposes a set of HTTP endpoints so an external agent can read your
-infrastructure and act on it with the same context Pulse Patrol and the Pulse
-Assistant have. Claude Desktop, Claude Code, OpenCode, other MCP clients, and
-plain HTTP consumers can all drive it.
+Pulse exposes a set of HTTP endpoints so an external agent or terminal operator
+can read your infrastructure and act on it with the same context Pulse Patrol
+and the Pulse Assistant have. The `pulse` CLI, Claude Code, Codex, OpenCode,
+Claude Desktop, other MCP clients, and plain HTTP consumers can all drive it.
 
-This page explains what those endpoints offer and what ships to help you
-connect to them. Open **Settings → API Access → Agent integrations** to inspect
-your running instance's manifest and generate a client configuration.
+This page explains how to connect in 30 seconds with the `pulse` CLI, what the
+endpoints offer, and what ships to help you connect safely. Open
+**Settings → Pulse Intelligence → External agents** to inspect your running
+instance's manifest and setup commands.
 
 **Start read-only.** Connecting an external client is a separate trust decision:
 it can read infrastructure context and, with broader credentials, change
 monitoring or act on workloads. A tool listing or readiness badge is not an
 execution grant or proof of recovery. Use only a client and model provider
 permitted to receive the data in those responses.
+
+## 30-second setup with the pulse CLI
+
+The `pulse` client binary is the primary workstation entry point for Pulse. It
+provides direct terminal queries (`pulse fleet`, `pulse changes`, `pulse metrics`,
+`pulse resource`, `pulse events`), keychain-backed login (`pulse auth login`),
+one-command MCP client wiring (`pulse connect`), diagnostics (`pulse doctor`),
+and a built-in stdio MCP server (`pulse mcp`), with no plaintext tokens in
+`.mcp.json`, `opencode.json`, or `~/.codex/config.toml`.
+
+1. **Install the signed `pulse` CLI** on the machine running your agent or
+   terminal (not on every monitored host). It needs no Pulse token to install.
+
+   Download and verify `install-cli.sh` (or `install-cli.ps1` on Windows) from a
+   published Pulse release tag (`vX.Y.Z`) with GitHub CLI **2.97.0 or newer**,
+   review the saved script, then run it as your normal client user:
+
+   ```sh
+   (
+     set -eu
+     version=vX.Y.Z
+     download_dir=$(mktemp -d)
+     gh release download "$version" --repo rcourtman/Pulse \
+       --pattern install-cli.sh --dir "$download_dir"
+     gh release verify "$version" --repo rcourtman/Pulse
+     gh release verify-asset "$version" "$download_dir/install-cli.sh" --repo rcourtman/Pulse
+     printf 'Verified installer saved in %s\n' "$download_dir"
+   )
+   ```
+
+   After reviewing the saved script, run `PULSE_CLI_VERSION=vX.Y.Z bash /path/to/install-cli.sh`
+   (on Windows PowerShell, download and verify `install-cli.ps1` with the same
+   `gh release` checks and run `& (Join-Path $downloadDir 'install-cli.ps1') -Version $version`).
+   On macOS, published `pulse-cli-darwin-*` release binaries are Developer ID
+   signed and Apple-notarized. A Homebrew formula template
+   (`packaging/homebrew/pulse.rb.tmpl`) is maintained for
+   `brew install rcourtman/tap/pulse` once published to the Homebrew tap on
+   release cut. Building from source is also available via
+   `go install github.com/rcourtman/pulse-go-rewrite/cmd/pulse-cli@latest`.
+
+2. **Authenticate read-only** (stores a dedicated `monitoring:read` token in
+   your OS keychain or credential store, never in `.mcp.json`):
+
+   ```sh
+   pulse auth login https://your-pulse-host
+   ```
+
+3. **Connect your AI agent and verify**:
+
+   ```sh
+   pulse connect claude-code   # also supports: codex, opencode, claude-desktop
+   pulse doctor
+   ```
+
+4. **Ask your agent or query directly**:
+   Ask your agent *"What happened overnight?"* or run a direct terminal check:
+
+   ```sh
+   pulse changes --since 12h
+   ```
+
+Standalone `pulse-mcp` binaries and installers remain published alongside
+`pulse` for backwards compatibility with existing client setups.
 
 ## Install the MCP adapter safely
 
@@ -208,17 +272,32 @@ Pulse; verification can be unavailable without proving that nothing ran.
 
 ## What ships to help you connect
 
-- **Settings, then API Access, then Agent integrations** is the in-app
-  surface. It reads `/api/agent/capabilities` from your running instance,
-  lists the declared capabilities by category, shows the surface contract and
-  affordance badges, and shows each capability's method, path, scope, and
-  stable error codes. It also generates client-ready `pulse-mcp` configuration
+- **Settings, then Pulse Intelligence, then External agents** is the in-app
+  surface. It shows the 3-step `pulse` CLI onboarding flow, reads
+  `/api/agent/capabilities` from your running instance, lists the declared
+  capabilities by category, shows the surface contract and affordance badges,
+  and shows each capability's method, path, scope, and stable error codes. It
+  also generates client-ready `pulse-mcp` and `pulse mcp` configuration
   snippets with your instance's URL already filled in, covering OpenCode's
-  native `opencode.json` shape and the `mcpServers` shape used by
-  Claude-style clients. API tokens are minted on the same tab, so one place
-  covers both what agents can do and which token unlocks it.
+  native `opencode.json` shape, Codex's `config.toml` shape, and the
+  `mcpServers` shape used by Claude-style clients. API tokens are minted on the
+  same tab link to API Access, with least-privilege presets starting at
+  `monitoring:read`.
 
-- **`cmd/pulse-mcp`** is the MCP server adapter. Wire it into any MCP client
+- **`cmd/pulse-cli` (`pulse`)** is the unified cross-platform CLI and built-in
+  MCP client. It stores credentials in your OS keychain via `pulse auth login`,
+  wires Claude Code, Codex, OpenCode, or Claude Desktop via `pulse connect`,
+  checks connectivity via `pulse doctor`, runs manifest-driven terminal reads
+  (`pulse fleet`, `pulse resource`, `pulse changes`, `pulse metrics`,
+  `pulse events`, `pulse findings`, `pulse operator-state`, `pulse actions`),
+  and serves stdio MCP via `pulse mcp` (with `--emit-notifications` support and
+  `pulse-mcp` argv0 compatibility). The installers `install-cli.sh` and
+  `install-cli.ps1` verify the signed checksum manifest against Pulse's pinned
+  release key before verifying and installing the `pulse` binary.
+
+- **`cmd/pulse-mcp`** is the standalone MCP server adapter retained for
+  backwards compatibility (sharing the same MCP implementation as `pulse mcp`).
+  Wire it into any MCP client
   that can launch a local server. It projects each manifest capability into
   one MCP tool with an auto-derived input schema, so capabilities added to
   Pulse extend the MCP surface without an adapter change. Run it with
@@ -268,10 +347,13 @@ Pulse; verification can be unavailable without proving that nothing ran.
 
 ## Known rough edges
 
-- **Unsigned macOS binary.** The installer verifies release checksums, but the
-  first launch of the macOS `pulse-mcp` binary can still show a Gatekeeper
-  warning because the binary is not notarised. Homebrew and other
-  package-manager distribution may follow.
+- **Standalone `pulse-mcp` macOS binary signing.** Release builds sign and
+  Apple-notarize the macOS `pulse` CLI binaries (`pulse-cli-darwin-arm64` and
+  `pulse-cli-darwin-amd64`), which include the built-in `pulse mcp` server.
+  The legacy standalone `pulse-mcp` macOS binary is not notarised and can still
+  show a Gatekeeper warning on first launch. Prefer the signed `pulse` CLI.
+  The Homebrew formula template (`packaging/homebrew/pulse.rb.tmpl`) publishes
+  to `rcourtman/tap/pulse` on release cut.
 
 - **Field acceptance is separate.** The in-app panel, adapters and contract
   fixtures do not establish every external client's compatibility, scale or

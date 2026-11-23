@@ -1321,6 +1321,9 @@ verification enabled and do not share verbose or trace output.
 | `agent:exec` | Establish agent command WebSocket connections; not a reporting permission |
 | `ai:chat` | Use Pulse Mobile chat and read knowledge |
 | `ai:execute` | Use governed Patrol plans, approvals, actions, and history |
+| `actions:plan` | Propose governed action plans to the Decision Inbox. It cannot self-approve or execute |
+| `actions:approve` | Approve or reject planned governed actions in the Decision Inbox |
+| `actions:execute` | Dispatch approved governed actions to host agents |
 | `settings:read` | Read configuration |
 | `settings:write` | Modify configuration, manage tokens and trigger updates |
 | `audit:read` | Read audit events, verification results, summaries, and exports |
@@ -1333,6 +1336,9 @@ and choose **Generate**. The current presets are:
 | Preset | Scopes | Use Case |
 | -------- | -------- | ---------- |
 | **Kiosk / Monitoring** | `monitoring:read` | Read-only dashboard displays |
+| **External agent (read-only)** | `monitoring:read` | Recommended default for external agents and CLI reads |
+| **External agent (propose fixes)** | `monitoring:read`, `actions:plan` | Propose governed action plans to the Decision Inbox without approving or executing |
+| **Operator CLI** | `monitoring:read`, `actions:plan`, `actions:approve`, `actions:execute` | High-privilege operator workstations only (can approve and execute governed actions) |
 | **Agent** | `agent:report`, `agent:config:read` | Host telemetry and the agent's bound configuration |
 | **Docker / Podman report** | `docker:report` | Docker / Podman agent (read-only) |
 | **Docker / Podman manage** | `docker:report`, `docker:manage` | Docker / Podman agent with actions |
@@ -1348,10 +1354,12 @@ configuration and diagnostics; it is not a public-display credential. See
 [agent security](AGENT_SECURITY.md) for the separate collector and action-runner
 requirements.
 
-If **Patrol external agent** is offered, its scopes come from the current Patrol
-requirements. Use the displayed set rather than guessing or adding **Full access**.
-The separate **Full access** choice grants the legacy `*` wildcard, not a
-least-privilege preset. Hiding controls does not reduce a token's permissions.
+Use **External agent (read-only)** by default when connecting coding agents or
+the `pulse` CLI, and grant **External agent (propose fixes)** only when an
+agent should submit plans to the Decision Inbox. Reserve **Operator CLI** for
+trusted operator workstations, never autonomous agents. The separate **Full
+access** choice grants the legacy `*` wildcard, not a least-privilege preset.
+Hiding controls does not reduce a token's permissions.
 
 ### Kiosk Mode
 

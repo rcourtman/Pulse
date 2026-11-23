@@ -12279,3 +12279,7 @@ Older agents that omit these optional fields remain wire-compatible and fall
 back to `balloon.current`/`balloon.maximum`. Collection remains strictly
 read-only with no VM lifecycle or configuration authority. Verified by
 `TestCollectLibvirtInventoryUsesReadOnlyBoundedBulkStats`.
+
+### External-agent `pulse_cli` surface telemetry and read-only readiness boundary (23 November 2026)
+
+`internal/api/agent_activity_telemetry.go` records content-free `pulse_cli` surface activity alongside `pulse_mcp`, and `internal/api/agent_resource_context.go` evaluates `externalAgentReady` against `ExternalAgentMinimumScopes` (`monitoring:read`). Host-agent enrollment, credentials, polling, and lifecycle authority under `internal/api/` are unchanged. Proof: `internal/api/agent_activity_telemetry_test.go`, `internal/api/agent_resource_context_test.go`, and `internal/api/contract_test.go`.

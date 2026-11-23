@@ -172,6 +172,7 @@ func TestPulseIntelligenceExternalAgentActivitySurface(t *testing.T) {
 	}{
 		{"agent_api", config.ExternalAgentActivitySurfaceAgentAPI, true},
 		{"pulse_mcp", config.ExternalAgentActivitySurfacePulseMCP, true},
+		{"pulse_cli", config.ExternalAgentActivitySurfacePulseCLI, true},
 		{"whitespace wrapped agent_api", "  " + config.ExternalAgentActivitySurfaceAgentAPI + "  ", true},
 		{"unknown surface", "webhook", false},
 		{"empty surface", "", false},
@@ -197,6 +198,7 @@ func TestPulseIntelligenceExternalAgentEvidence_CollaborationActive(t *testing.T
 		{name: "zero evidence inactive", want: false},
 		{name: "Used flag active", e: PulseIntelligenceExternalAgentEvidence{Used: true}, want: true},
 		{name: "MCPAdapterUsed active", e: PulseIntelligenceExternalAgentEvidence{MCPAdapterUsed: true}, want: true},
+		{name: "CLIUsed active", e: PulseIntelligenceExternalAgentEvidence{CLIUsed: true}, want: true},
 		{name: "ContextRequests active", e: PulseIntelligenceExternalAgentEvidence{ContextRequests: 1}, want: true},
 		{name: "EventStreamRequests active", e: PulseIntelligenceExternalAgentEvidence{EventStreamRequests: 1}, want: true},
 		{name: "ProvisioningRequests active", e: PulseIntelligenceExternalAgentEvidence{ProvisioningRequests: 1}, want: true},
@@ -227,6 +229,7 @@ func TestPulseIntelligenceExternalAgentEvidence_CollaborationCount(t *testing.T)
 		}, want: 10},
 		{name: "Used only collapses to coarse count 1", e: PulseIntelligenceExternalAgentEvidence{Used: true}, want: 1},
 		{name: "MCPAdapterUsed only collapses to coarse count 1", e: PulseIntelligenceExternalAgentEvidence{MCPAdapterUsed: true}, want: 1},
+		{name: "CLIUsed only collapses to coarse count 1", e: PulseIntelligenceExternalAgentEvidence{CLIUsed: true}, want: 1},
 		{name: "request counts take precedence over coarse Used flag", e: PulseIntelligenceExternalAgentEvidence{
 			Used: true, ContextRequests: 4,
 		}, want: 4},
@@ -355,6 +358,15 @@ func TestPulseIntelligenceExternalAgentEvidenceFromHistory(t *testing.T) {
 				},
 			},
 			want: PulseIntelligenceExternalAgentEvidence{Used: true, MCPAdapterUsed: true, ContextRequests: 1},
+		},
+		{
+			name: "pulse_cli surface marks Used and CLIUsed",
+			history: &config.ExternalAgentActivityHistoryData{
+				Events: []config.ExternalAgentActivityRecord{
+					{Timestamp: after, Surface: config.ExternalAgentActivitySurfacePulseCLI, Activity: config.ExternalAgentActivityFleetContext},
+				},
+			},
+			want: PulseIntelligenceExternalAgentEvidence{Used: true, CLIUsed: true, ContextRequests: 1},
 		},
 		{
 			name: "at-cutoff event is included (Before is strict)",

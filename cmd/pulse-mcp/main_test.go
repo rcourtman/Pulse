@@ -223,9 +223,9 @@ func TestMissingAPITokenMessageFallsBackForLegacyManifest(t *testing.T) {
 }
 
 func TestMainTokenGuidanceUsesSharedManifestScopeSummary(t *testing.T) {
-	source, err := os.ReadFile("main.go")
+	source, err := os.ReadFile("../../pkg/pulsecli/mcp_cmd.go")
 	if err != nil {
-		t.Fatalf("read main.go: %v", err)
+		t.Fatalf("read shared mcp_cmd.go: %v", err)
 	}
 	text := string(source)
 	if !strings.Contains(text, "agentcapabilities.ManifestRequiredScopeList(manifest)") {
@@ -248,9 +248,10 @@ func TestMainUsesSharedMCPAdapterRuntimeDefaults(t *testing.T) {
 	for _, want := range []string{
 		`flag.String("base-url", agentcapabilities.DefaultMCPAdapterDefaultBaseURL`,
 		`flag.String("token-env", agentcapabilities.DefaultMCPAdapterTokenEnv`,
+		`pulsecli.RunMCPStdio(`,
 	} {
 		if !strings.Contains(text, want) {
-			t.Fatalf("pulse-mcp runtime defaults must come from the shared MCP adapter contract; missing %s", want)
+			t.Fatalf("pulse-mcp runtime defaults and entrypoint must come from the shared MCP adapter contract; missing %s", want)
 		}
 	}
 }
@@ -829,9 +830,9 @@ func TestServer_PromptsGetRecordsWorkflowPromptActivity(t *testing.T) {
 }
 
 func TestServerDispatchUsesSharedMCPDispatcher(t *testing.T) {
-	src, err := os.ReadFile("main.go")
+	src, err := os.ReadFile("../../pkg/pulsecli/mcp_cmd.go")
 	if err != nil {
-		t.Fatalf("read main.go: %v", err)
+		t.Fatalf("read shared mcp_cmd.go: %v", err)
 	}
 	text := string(src)
 
@@ -839,9 +840,9 @@ func TestServerDispatchUsesSharedMCPDispatcher(t *testing.T) {
 		t.Fatal("pulse-mcp dispatch must delegate MCP method semantics to agentcapabilities")
 	}
 	for _, required := range []string{
-		"s.manifestToolServer().Handlers(func()",
+		"s.ManifestToolServer().Handlers(func()",
 		"agentcapabilities.MCPManifestToolServer{",
-		"ServerName:                   pulseMCPServerName",
+		"ServerName:                   PulseMCPServerName",
 		"SurfaceID:                    agentcapabilities.SurfaceIDPulseMCP",
 		"Manifest:                     manifest",
 	} {

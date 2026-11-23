@@ -12,6 +12,14 @@ With more scopes it exposes the same governed operations substrate that
 Pulse Assistant uses inside the app: list findings, set operator intent,
 and plan, approve and run governed actions.
 
+> **New setups:** Prefer the unified `pulse` CLI (`cmd/pulse-cli`), which
+> ships signed and Apple-notarized on macOS, stores credentials in your OS
+> keychain via `pulse auth login`, configures Claude Code, Codex, OpenCode, or
+> Claude Desktop via `pulse connect`, and includes the same MCP server under
+> `pulse mcp`. Standalone `pulse-mcp` binaries remain published for backwards
+> compatibility and share the exact same MCP runtime. See
+> [30-second setup with the `pulse` CLI](../../docs/AGENT_SUBSTRATE.md#30-second-setup-with-the-pulse-cli).
+
 ## Pulse Intelligence surface contract
 
 <!-- pulse-mcp-surface-contract:start -->
@@ -42,6 +50,11 @@ It also exposes `prompts/list` and `prompts/get` from the manifest-owned
 manifest tools and resource URIs, not a separate MCP playbook layer.
 
 ## Install
+
+> Most users should install the unified `pulse` CLI instead (which includes
+> `pulse mcp`, keychain-backed `pulse auth login`, and `pulse connect`) using
+> the [30-second `pulse` CLI setup](../../docs/AGENT_SUBSTRATE.md#30-second-setup-with-the-pulse-cli).
+> Standalone `pulse-mcp` binaries remain available below for existing setups.
 
 Install the adapter on the machine running your MCP client, not on every
 monitored host. Installation needs no Pulse token.

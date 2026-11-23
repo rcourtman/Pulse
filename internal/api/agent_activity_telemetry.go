@@ -252,6 +252,8 @@ func workflowPromptActivitySurface(req *http.Request) string {
 	switch strings.TrimSpace(req.Header.Get(agentcapabilities.AgentSurfaceHeader)) {
 	case agentcapabilities.AgentSurfacePulseMCP:
 		return config.WorkflowPromptActivitySurfacePulseMCP
+	case agentcapabilities.AgentSurfacePulseCLI:
+		return config.WorkflowPromptActivitySurfacePulseCLI
 	default:
 		return config.WorkflowPromptActivitySurfaceAgentAPI
 	}
@@ -264,6 +266,8 @@ func externalAgentActivitySurface(req *http.Request) string {
 	switch strings.TrimSpace(req.Header.Get(agentcapabilities.AgentSurfaceHeader)) {
 	case agentcapabilities.AgentSurfacePulseMCP:
 		return config.ExternalAgentActivitySurfacePulseMCP
+	case agentcapabilities.AgentSurfacePulseCLI:
+		return config.ExternalAgentActivitySurfacePulseCLI
 	default:
 		return config.ExternalAgentActivitySurfaceAgentAPI
 	}

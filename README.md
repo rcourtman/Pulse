@@ -40,9 +40,12 @@ the live demo — no sign-up required, running on sample data.
   host without external time-series infrastructure.
 - **Optional AI checks.** Connect your own AI provider or local model so Pulse
   Patrol can flag issues on a schedule without someone staring at a dashboard.
-- **Answers your own AI agent.** Connect Claude Code, Codex or OpenCode via
-  [`pulse-mcp`](cmd/pulse-mcp/README.md#quick-start) with a read-only token and
-  [ask what changed overnight](docs/WHAT_HAPPENED_OVERNIGHT.md).
+- **Answers your own AI agent (and terminal).** Install the signed `pulse` CLI
+  (`pulse auth login`, `pulse connect claude-code`, `pulse doctor`) with a
+  read-only token stored in your OS keychain to query `pulse changes --since 12h`
+  or connect Claude Code, Codex, OpenCode, or Claude Desktop and
+  [ask what changed overnight](docs/WHAT_HAPPENED_OVERNIGHT.md). Standalone
+  [`pulse-mcp`](cmd/pulse-mcp/README.md#quick-start) remains supported.
 - **Hands-off by default.** Proxmox uses a read-only API token, credentials are
   encrypted at rest, and remote agent commands stay off unless you enable them.
 
@@ -129,6 +132,26 @@ If the 10-minute first-boot window expires (or you set
 `PULSE_REQUIRE_BOOTSTRAP_TOKEN=true`), restart Pulse for a fresh window or
 unlock with `docker exec pulse /app/pulse bootstrap-token` (Docker) /
 `sudo pulse bootstrap-token` (Linux).
+
+### Connect an AI agent or terminal CLI
+
+Install the `pulse` client on your workstation using the
+[verified `install-cli.sh` / `install-cli.ps1` steps](docs/AGENT_SUBSTRATE.md#30-second-setup-with-the-pulse-cli)
+(or `brew install rcourtman/tap/pulse` once published to the Homebrew tap on
+release cut), then connect with a read-only `monitoring:read` token stored in
+your OS keychain:
+
+```sh
+pulse auth login https://your-pulse-host
+pulse connect claude-code   # or: codex, opencode, claude-desktop
+pulse doctor
+pulse changes --since 12h
+```
+
+Then ask your agent *"What happened overnight?"* See the
+[agent integrations guide](docs/AGENT_SUBSTRATE.md) and
+[overnight walkthrough](docs/WHAT_HAPPENED_OVERNIGHT.md). Existing
+[`pulse-mcp`](cmd/pulse-mcp/README.md) setups continue to work.
 
 ### Do you need an agent?
 

@@ -11781,3 +11781,7 @@ rows and avoids truncating host names on 390px phones. Verified by
 `StandaloneVirtualMachinesTable.test.tsx`, `AgentsMachinesTable.test.tsx`,
 `lint:canonical-platforms`, `lint:table-rows`, and
 `frontend-modern/browser-verification/9b345049621d9e89.json`.
+
+### External agents 3-step `pulse` CLI onboarding and inline copy layout (23 November 2026)
+
+`AgentIntegrationsPanel.tsx` leads directly with an un-collapsed 3-step `pulse` CLI onboarding flow (install method switcher for Homebrew and verified macOS/Linux/Windows installers, `pulse auth login <origin>` with a `Create token` link to the read-only preset, and a 4-client switcher for Claude Code, Codex, OpenCode, and Claude Desktop running `pulse connect <client>` + `pulse doctor`), followed by a secondary `"Want agents to propose fixes?"` handoff and collapsed `Manual config` (zero-token `pulse mcp` snippets) and `Developer details` disclosures. `CopyCommandBlock.tsx` adds an optional `buttonLayout="inline"` mode and built-in `"Copied to clipboard"` button feedback so horizontally scrolling commands never overlap the copy icon on `390px` mobile viewports and Steps 1 to 3 surface inline `Copied` status feedback. Legacy `/settings/security/api#external-agent-setup` and `#pulse-mcp-setup` redirects continue to land on `/settings/pulse-intelligence/agents#external-agent-setup`. Verified by `AgentIntegrationsPanel.test.tsx`, `CopyCommandBlock.test.tsx`, `settingsArchitecture.test.ts`, and `frontend-modern/browser-verification/da4eccb15fd878a4.json`.

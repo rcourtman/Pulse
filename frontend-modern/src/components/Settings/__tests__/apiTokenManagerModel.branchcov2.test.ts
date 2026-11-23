@@ -3,7 +3,9 @@ import type { APITokenRecord } from '@/api/security';
 import type { Resource } from '@/types/resource';
 import { DOCKER_REPORT_SCOPE } from '@/constants/apiScopes';
 import {
-  API_TOKEN_PULSE_INTELLIGENCE_AGENT_PRESET_ID,
+  API_TOKEN_EXTERNAL_AGENT_PROPOSE_PRESET_ID,
+  API_TOKEN_EXTERNAL_AGENT_READ_ONLY_PRESET_ID,
+  API_TOKEN_OPERATOR_CLI_PRESET_ID,
   agentActionIdForResource,
   buildAgentTokenUsage,
   buildDockerTokenUsage,
@@ -14,6 +16,7 @@ import {
   getAPITokenScopePresets,
   hasAgentScopeResource,
   matchesScopePreset,
+  resolveAPITokenRoutePreset,
   tokenRevokedAtForResource,
 } from '../apiTokenManagerModel';
 
@@ -328,41 +331,32 @@ describe('getAPITokenDialogName', () => {
   });
 });
 
-// ---- normalizePresetScopes (private) via getAPITokenScopePresets -----------
-//
-// normalizePresetScopes is module-private; its only caller is
-// getAPITokenScopePresets, which feeds the normalized result to the Pulse
-// Intelligence preset (and gates that preset on length > 0). Asserting that
-// preset's `scopes` and presence exercises every normalizePresetScopes branch:
-// trim(), filter(Boolean), Set dedup, and the scopes ?? [] fallback.
+// ---- least-privilege external-agent presets & route resolution -------------
 
-describe('normalizePresetScopes (via getAPITokenScopePresets)', () => {
-  const PULSE_PRESET_ID = API_TOKEN_PULSE_INTELLIGENCE_AGENT_PRESET_ID;
-
-  it('adds no Pulse Intelligence preset when the required-scopes arg defaults to []', () => {
+describe('least-privilege external-agent presets', () => {
+  it('ships read-only, propose-fixes, and operator-cli presets by default', () => {
     const presets = getAPITokenScopePresets();
-    expect(presets.find((preset) => preset.id === PULSE_PRESET_ID)).toBeUndefined();
-    expect(presets).toHaveLength(7);
+    expect(presets).toHaveLength(10);
+    expect(
+      presets.find((preset) => preset.id === API_TOKEN_EXTERNAL_AGENT_READ_ONLY_PRESET_ID)?.scopes,
+    ).toStrictEqual(['monitoring:read']);
+    expect(
+      presets.find((preset) => preset.id === API_TOKEN_EXTERNAL_AGENT_PROPOSE_PRESET_ID)?.scopes,
+    ).toStrictEqual(['monitoring:read', 'actions:plan']);
+    expect(
+      presets.find((preset) => preset.id === API_TOKEN_OPERATOR_CLI_PRESET_ID)?.scopes,
+    ).toStrictEqual(['monitoring:read', 'actions:plan', 'actions:approve', 'actions:execute']);
   });
 
-  it('adds no Pulse Intelligence preset when every provided scope is blank/whitespace', () => {
-    const presets = getAPITokenScopePresets(['', '   ', '\t']);
-    expect(presets.find((preset) => preset.id === PULSE_PRESET_ID)).toBeUndefined();
-    expect(presets).toHaveLength(7);
-  });
-
-  it('trims, deduplicates, and drops empties, preserving first-seen order', () => {
-    const presets = getAPITokenScopePresets(['  b  ', 'b', '', 'a']);
-    const pulsePreset = presets.find((preset) => preset.id === PULSE_PRESET_ID);
-    expect(pulsePreset?.scopes).toStrictEqual(['b', 'a']);
-    expect(presets).toHaveLength(8);
-  });
-
-  it('keeps a single non-empty scope after normalization', () => {
-    const presets = getAPITokenScopePresets(['  monitoring:read  ']);
-    expect(presets.find((preset) => preset.id === PULSE_PRESET_ID)?.scopes).toStrictEqual([
-      'monitoring:read',
-    ]);
+  it('resolves exact preset ids and query aliases case-insensitively', () => {
+    const presets = getAPITokenScopePresets();
+    expect(resolveAPITokenRoutePreset(presets, 'PULSE-INTELLIGENCE-AGENT')?.id).toBe(
+      API_TOKEN_EXTERNAL_AGENT_READ_ONLY_PRESET_ID,
+    );
+    expect(resolveAPITokenRoutePreset(presets, 'external_agent_propose')?.id).toBe(
+      API_TOKEN_EXTERNAL_AGENT_PROPOSE_PRESET_ID,
+    );
+    expect(resolveAPITokenRoutePreset(presets, null)).toBeUndefined();
   });
 });
 

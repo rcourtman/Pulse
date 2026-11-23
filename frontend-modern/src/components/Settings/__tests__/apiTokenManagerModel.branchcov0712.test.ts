@@ -3,7 +3,9 @@ import type { APITokenRecord } from '@/api/security';
 import type { Resource, ResourceDiscoveryTarget } from '@/types/resource';
 import { DOCKER_REPORT_SCOPE } from '@/constants/apiScopes';
 import {
-  API_TOKEN_PULSE_INTELLIGENCE_AGENT_PRESET_ID,
+  API_TOKEN_EXTERNAL_AGENT_PROPOSE_PRESET_ID,
+  API_TOKEN_EXTERNAL_AGENT_READ_ONLY_PRESET_ID,
+  API_TOKEN_OPERATOR_CLI_PRESET_ID,
   agentActionIdForResource,
   buildAgentTokenUsage,
   buildDockerTokenUsage,
@@ -13,6 +15,7 @@ import {
   getAPITokenScopePresets,
   hasAgentScopeResource,
   matchesScopePreset,
+  resolveAPITokenRoutePreset,
   tokenRevokedAtForResource,
 } from '../apiTokenManagerModel';
 
@@ -301,41 +304,38 @@ describe('getAPITokenDialogName', () => {
   });
 });
 
-// ---- normalizePresetScopes (private) via getAPITokenScopePresets -----------
-//
-// normalizePresetScopes is module-private; its only caller is
-// getAPITokenScopePresets, which feeds the normalized result to the Pulse
-// Intelligence preset (and gates that preset on length > 0). Asserting that
-// preset's `scopes` and presence exercises every normalizePresetScopes branch:
-// trim(), filter(Boolean), Set dedup, and the scopes ?? [] fallback.
+// ---- resolveAPITokenRoutePreset (via getAPITokenScopePresets) --------------
 
-describe('normalizePresetScopes (via getAPITokenScopePresets)', () => {
-  const PULSE_PRESET_ID = API_TOKEN_PULSE_INTELLIGENCE_AGENT_PRESET_ID;
-
-  it('adds no Pulse Intelligence preset when the required-scopes arg defaults to []', () => {
+describe('resolveAPITokenRoutePreset', () => {
+  it('resolves legacy pulse-intelligence-agent and read-only aliases to the least-privilege read-only preset', () => {
     const presets = getAPITokenScopePresets();
-    expect(presets.find((preset) => preset.id === PULSE_PRESET_ID)).toBeUndefined();
-    expect(presets).toHaveLength(7);
+    expect(presets).toHaveLength(10);
+    expect(resolveAPITokenRoutePreset(presets, 'pulse-intelligence-agent')?.id).toBe(
+      API_TOKEN_EXTERNAL_AGENT_READ_ONLY_PRESET_ID,
+    );
+    expect(resolveAPITokenRoutePreset(presets, '  external-agent-read-only  ')?.id).toBe(
+      API_TOKEN_EXTERNAL_AGENT_READ_ONLY_PRESET_ID,
+    );
+    expect(resolveAPITokenRoutePreset(presets, 'read-only')?.id).toBe(
+      API_TOKEN_EXTERNAL_AGENT_READ_ONLY_PRESET_ID,
+    );
   });
 
-  it('adds no Pulse Intelligence preset when every provided scope is blank/whitespace', () => {
-    const presets = getAPITokenScopePresets(['', '   ', '\t']);
-    expect(presets.find((preset) => preset.id === PULSE_PRESET_ID)).toBeUndefined();
-    expect(presets).toHaveLength(7);
-  });
-
-  it('trims, deduplicates, and drops empties, preserving first-seen order', () => {
-    const presets = getAPITokenScopePresets(['  b  ', 'b', '', 'a']);
-    const pulsePreset = presets.find((preset) => preset.id === PULSE_PRESET_ID);
-    expect(pulsePreset?.scopes).toStrictEqual(['b', 'a']);
-    expect(presets).toHaveLength(8);
-  });
-
-  it('keeps a single non-empty scope after normalization', () => {
-    const presets = getAPITokenScopePresets(['  monitoring:read  ']);
-    expect(presets.find((preset) => preset.id === PULSE_PRESET_ID)?.scopes).toStrictEqual([
-      'monitoring:read',
-    ]);
+  it('resolves propose and operator-cli route preset aliases and returns undefined for blank or unknown values', () => {
+    const presets = getAPITokenScopePresets();
+    expect(resolveAPITokenRoutePreset(presets, 'external-agent-propose')?.id).toBe(
+      API_TOKEN_EXTERNAL_AGENT_PROPOSE_PRESET_ID,
+    );
+    expect(resolveAPITokenRoutePreset(presets, 'propose')?.id).toBe(
+      API_TOKEN_EXTERNAL_AGENT_PROPOSE_PRESET_ID,
+    );
+    expect(resolveAPITokenRoutePreset(presets, 'operator-cli')?.id).toBe(
+      API_TOKEN_OPERATOR_CLI_PRESET_ID,
+    );
+    expect(resolveAPITokenRoutePreset(presets, '')).toBeUndefined();
+    expect(resolveAPITokenRoutePreset(presets, '   ')).toBeUndefined();
+    expect(resolveAPITokenRoutePreset(presets, undefined)).toBeUndefined();
+    expect(resolveAPITokenRoutePreset(presets, 'unknown-preset')).toBeUndefined();
   });
 });
 

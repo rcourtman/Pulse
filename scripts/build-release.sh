@@ -206,6 +206,52 @@ for target in "${PULSE_RELEASE_AGENT_TARGETS[@]}"; do
 done
 go run ./cmd/verify-agent-release --version "v${VERSION}" "${agent_identity_inputs[@]}"
 
+# Build pulse-cli (unified cross-platform CLI + built-in MCP client) for the
+# same multi-OS matrix as the unified agent, embedding version metadata.
+echo "Building pulse-cli for all platforms..."
+cli_build_order=("${agent_build_order[@]}")
+
+if [[ -z "${compiled_payload_dir:-}" ]]; then
+    cli_build_time=$(date -u '+%Y-%m-%d_%H:%M:%S')
+    cli_git_commit=$(git rev-parse --short HEAD 2>/dev/null || echo 'unknown')
+    cli_ldflags="-s -w -X main.Version=v${VERSION} -X main.BuildTime=${cli_build_time} -X main.GitCommit=${cli_git_commit}"
+    for target in "${cli_build_order[@]}"; do
+        build_env="$(pulse_release_target_env "${target}")"
+        output_path="${BUILD_DIR}/$(pulse_release_binary_filename cli "${target}")"
+        env ${build_env} go build \
+            -ldflags="${cli_ldflags}" \
+            "${release_go_build_args[@]}" \
+            -o "${output_path}" \
+            ./cmd/pulse-cli
+    done
+fi
+
+# Apply platform-native signed pulse-cli binaries after any local build so
+# Developer ID signed and Apple-notarized macOS binaries (and Authenticode-
+# signed Windows binaries when supplied) are never overwritten.
+if [[ -n "${PULSE_AGENT_NATIVE_BINARIES_DIR:-}" ]]; then
+    native_dir="${PULSE_AGENT_NATIVE_BINARIES_DIR}"
+    if [[ "${PULSE_REQUIRE_MACOS_SIGNING:-false}" == "true" ]]; then
+        for target in darwin-amd64 darwin-arm64; do
+            filename="pulse-cli-${target}"
+            if [[ ! -f "${native_dir}/${filename}" ]]; then
+                echo "Error: native CLI binary override is missing ${filename}." >&2
+                exit 1
+            fi
+            cp "${native_dir}/${filename}" "${BUILD_DIR}/${filename}"
+        done
+        echo "Applied required platform-native signed macOS Pulse CLI binaries."
+    fi
+    if [[ "${PULSE_REQUIRE_WINDOWS_SIGNING:-false}" == "true" ]]; then
+        for target in windows-amd64 windows-arm64 windows-386; do
+            filename="pulse-cli-${target}.exe"
+            if [[ -f "${native_dir}/${filename}" ]]; then
+                cp "${native_dir}/${filename}" "${BUILD_DIR}/${filename}"
+            fi
+        done
+    fi
+fi
+
 # Build pulse-mcp (Model Context Protocol adapter) for the same
 # multi-OS matrix as the unified agent. The MCP server runs on
 # the integrator's machine (Mac, Windows, Linux desktop) and
@@ -256,6 +302,10 @@ fi
 for target in "${agent_build_order[@]}"; do
     test -f "${BUILD_DIR}/$(pulse_release_binary_filename agent "${target}")" || {
         echo "Error: release payload is missing agent binary for ${target}." >&2
+        exit 1
+    }
+    test -f "${BUILD_DIR}/$(pulse_release_binary_filename cli "${target}")" || {
+        echo "Error: release payload is missing CLI binary for ${target}." >&2
         exit 1
     }
     test -f "${BUILD_DIR}/$(pulse_release_binary_filename mcp "${target}")" || {
@@ -449,6 +499,26 @@ for target in "${agent_runner_build_order[@]}"; do
     tar -czf "$RELEASE_DIR/pulse-agent-runner-v${VERSION}-${target}.tar.gz" -C "$BUILD_DIR" "pulse-agent-runner-${target}"
 done
 
+# Package standalone pulse-cli binaries (all platforms). Mirrors
+# the pulse-agent packaging shape so Homebrew and release uploads
+# consume standard versioned tarballs/zips.
+# Linux
+tar -czf "$RELEASE_DIR/pulse-cli-v${VERSION}-linux-amd64.tar.gz" -C "$BUILD_DIR" pulse-cli-linux-amd64
+tar -czf "$RELEASE_DIR/pulse-cli-v${VERSION}-linux-arm64.tar.gz" -C "$BUILD_DIR" pulse-cli-linux-arm64
+tar -czf "$RELEASE_DIR/pulse-cli-v${VERSION}-linux-armv7.tar.gz" -C "$BUILD_DIR" pulse-cli-linux-armv7
+tar -czf "$RELEASE_DIR/pulse-cli-v${VERSION}-linux-armv6.tar.gz" -C "$BUILD_DIR" pulse-cli-linux-armv6
+tar -czf "$RELEASE_DIR/pulse-cli-v${VERSION}-linux-386.tar.gz" -C "$BUILD_DIR" pulse-cli-linux-386
+# Darwin
+tar -czf "$RELEASE_DIR/pulse-cli-v${VERSION}-darwin-amd64.tar.gz" -C "$BUILD_DIR" pulse-cli-darwin-amd64
+tar -czf "$RELEASE_DIR/pulse-cli-v${VERSION}-darwin-arm64.tar.gz" -C "$BUILD_DIR" pulse-cli-darwin-arm64
+# FreeBSD
+tar -czf "$RELEASE_DIR/pulse-cli-v${VERSION}-freebsd-amd64.tar.gz" -C "$BUILD_DIR" pulse-cli-freebsd-amd64
+tar -czf "$RELEASE_DIR/pulse-cli-v${VERSION}-freebsd-arm64.tar.gz" -C "$BUILD_DIR" pulse-cli-freebsd-arm64
+# Windows (zip archives with version in filename)
+zip -j "$RELEASE_DIR/pulse-cli-v${VERSION}-windows-amd64.zip" "$BUILD_DIR/pulse-cli-windows-amd64.exe"
+zip -j "$RELEASE_DIR/pulse-cli-v${VERSION}-windows-arm64.zip" "$BUILD_DIR/pulse-cli-windows-arm64.exe"
+zip -j "$RELEASE_DIR/pulse-cli-v${VERSION}-windows-386.zip" "$BUILD_DIR/pulse-cli-windows-386.exe"
+
 # Package standalone pulse-mcp binaries (all platforms). Mirrors
 # the pulse-agent packaging shape exactly so the release-asset
 # upload step does not need per-binary special cases.
@@ -492,6 +562,22 @@ done
 for target in "${agent_runner_build_order[@]}"; do
     cp "$BUILD_DIR/pulse-agent-runner-${target}" "$RELEASE_DIR/"
 done
+
+# Copy bare pulse-cli binaries for /releases/latest/download/ redirect
+# compatibility. The install-cli.sh / install-cli.ps1 installers fetch these
+# directly from the GitHub Releases endpoint.
+cp "$BUILD_DIR/pulse-cli-linux-amd64" "$RELEASE_DIR/"
+cp "$BUILD_DIR/pulse-cli-linux-arm64" "$RELEASE_DIR/"
+cp "$BUILD_DIR/pulse-cli-linux-armv7" "$RELEASE_DIR/"
+cp "$BUILD_DIR/pulse-cli-linux-armv6" "$RELEASE_DIR/"
+cp "$BUILD_DIR/pulse-cli-linux-386" "$RELEASE_DIR/"
+cp "$BUILD_DIR/pulse-cli-darwin-amd64" "$RELEASE_DIR/"
+cp "$BUILD_DIR/pulse-cli-darwin-arm64" "$RELEASE_DIR/"
+cp "$BUILD_DIR/pulse-cli-windows-amd64.exe" "$RELEASE_DIR/"
+cp "$BUILD_DIR/pulse-cli-windows-arm64.exe" "$RELEASE_DIR/"
+cp "$BUILD_DIR/pulse-cli-windows-386.exe" "$RELEASE_DIR/"
+cp "$BUILD_DIR/pulse-cli-freebsd-amd64" "$RELEASE_DIR/"
+cp "$BUILD_DIR/pulse-cli-freebsd-arm64" "$RELEASE_DIR/"
 
 # Copy bare pulse-mcp binaries for /releases/latest/download/ redirect
 # compatibility. The install-mcp.sh installer fetches these directly from
@@ -561,6 +647,8 @@ cp install.sh "$RELEASE_DIR/install.sh"
 [ -f "${RENDERED_INSTALLERS_DIR}/install.ps1" ] && cp "${RENDERED_INSTALLERS_DIR}/install.ps1" "$RELEASE_DIR/install.ps1"
 cp scripts/install-docker.sh "$RELEASE_DIR/"
 cp scripts/pulse-auto-update.sh "$RELEASE_DIR/"
+cp scripts/install-cli.sh "$RELEASE_DIR/install-cli.sh"
+[ -f scripts/install-cli.ps1 ] && cp scripts/install-cli.ps1 "$RELEASE_DIR/install-cli.ps1"
 cp scripts/install-mcp.sh "$RELEASE_DIR/install-mcp.sh"
 [ -f scripts/install-mcp.ps1 ] && cp scripts/install-mcp.ps1 "$RELEASE_DIR/install-mcp.ps1"
 

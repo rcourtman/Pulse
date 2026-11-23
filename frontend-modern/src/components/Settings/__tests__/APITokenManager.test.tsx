@@ -5,6 +5,9 @@ import { Route, Router } from '@solidjs/router';
 import type { APITokenRecord } from '@/api/security';
 import type { Resource } from '@/types/resource';
 import {
+  ACTIONS_APPROVE_SCOPE,
+  ACTIONS_EXECUTE_SCOPE,
+  ACTIONS_PLAN_SCOPE,
   AI_EXECUTE_SCOPE,
   AGENT_CONFIG_READ_SCOPE,
   AGENT_REPORT_SCOPE,
@@ -704,91 +707,115 @@ describe('APITokenManager', () => {
     expect(createTokenMock).toHaveBeenCalledTimes(2);
   });
 
-  it('creates Patrol external agent tokens from the live manifest scopes', async () => {
+  it('creates least-privilege external-agent and Operator CLI tokens without bundling settings:write', async () => {
     createTokenMock.mockResolvedValueOnce({
-      token: 'pulse_agent_secret',
+      token: 'pulse_agent_propose_secret',
       record: makeToken({
-        id: 'token-agent',
-        name: 'OpenCode Pulse',
-        scopes: [
-          AI_EXECUTE_SCOPE,
-          MONITORING_READ_SCOPE,
-          MONITORING_WRITE_SCOPE,
-          SETTINGS_READ_SCOPE,
-          SETTINGS_WRITE_SCOPE,
-        ],
+        id: 'token-agent-propose',
+        name: 'Claude Code Propose',
+        scopes: [ACTIONS_PLAN_SCOPE, MONITORING_READ_SCOPE],
       }),
     });
 
     render(() => <APITokenManager onTokensChanged={vi.fn()} canManage />);
 
     await waitFor(() => {
-      expect(fetchAgentCapabilitiesManifestMock).toHaveBeenCalledTimes(1);
       expect(listTokensMock).toHaveBeenCalledTimes(1);
     });
 
-    const preset = await screen.findByRole('button', { name: 'Patrol external agent' });
-    expect(preset).toHaveAttribute(
+    expect(screen.queryByRole('button', { name: 'Patrol external agent' })).not.toBeInTheDocument();
+
+    const readOnlyPreset = screen.getByRole('button', { name: 'External agent (read-only)' });
+    expect(readOnlyPreset).toHaveAttribute(
       'title',
-      'Scopes for connected agents that read Pulse context and request Patrol work.',
+      expect.stringContaining('Recommended default for external agents'),
     );
 
+    const kioskPreset = screen.getByRole('button', { name: 'Kiosk / Monitoring' });
+    fireEvent.click(readOnlyPreset);
+    expect(readOnlyPreset).toHaveAttribute('aria-pressed', 'true');
+    expect(kioskPreset).toHaveAttribute('aria-pressed', 'false');
+
+    const proposePreset = screen.getByRole('button', { name: 'External agent (propose fixes)' });
+    expect(proposePreset).toHaveAttribute(
+      'title',
+      expect.stringContaining('cannot self-approve or execute'),
+    );
+
+    const operatorPreset = screen.getByRole('button', { name: 'Operator CLI' });
+    expect(operatorPreset).toHaveAttribute('title', expect.stringContaining('Warning:'));
+
     fireEvent.input(screen.getByPlaceholderText('e.g. Docker / Podman automation'), {
-      target: { value: 'OpenCode Pulse' },
+      target: { value: 'Claude Code Propose' },
     });
-    fireEvent.click(preset);
+    fireEvent.click(proposePreset);
     fireEvent.click(screen.getByRole('button', { name: 'Generate' }));
 
     await waitFor(() => {
       expect(createTokenMock).toHaveBeenCalledWith(
-        'OpenCode Pulse',
-        [
-          AI_EXECUTE_SCOPE,
-          MONITORING_READ_SCOPE,
-          MONITORING_WRITE_SCOPE,
-          SETTINGS_READ_SCOPE,
-          SETTINGS_WRITE_SCOPE,
-        ],
+        'Claude Code Propose',
+        [ACTIONS_PLAN_SCOPE, MONITORING_READ_SCOPE],
         expect.objectContaining({ expectedOrgID: 'default', signal: expect.any(AbortSignal) }),
       );
     });
 
     expect(showTokenRevealMock).toHaveBeenCalledWith(
       expect.objectContaining({
-        token: 'pulse_agent_secret',
+        token: 'pulse_agent_propose_secret',
         source: 'security',
         record: expect.objectContaining({
-          id: 'token-agent',
-          name: 'OpenCode Pulse',
+          id: 'token-agent-propose',
+          name: 'Claude Code Propose',
         }),
       }),
     );
+
+    createTokenMock.mockResolvedValueOnce({
+      token: 'pulse_operator_cli_secret',
+      record: makeToken({
+        id: 'token-operator-cli',
+        name: 'Laptop CLI',
+        scopes: [
+          ACTIONS_APPROVE_SCOPE,
+          ACTIONS_EXECUTE_SCOPE,
+          ACTIONS_PLAN_SCOPE,
+          MONITORING_READ_SCOPE,
+        ],
+      }),
+    });
+
+    fireEvent.input(screen.getByPlaceholderText('e.g. Docker / Podman automation'), {
+      target: { value: 'Laptop CLI' },
+    });
+    fireEvent.click(operatorPreset);
+    fireEvent.click(screen.getByRole('button', { name: 'Generate' }));
+
+    await waitFor(() => {
+      expect(createTokenMock).toHaveBeenLastCalledWith(
+        'Laptop CLI',
+        [ACTIONS_APPROVE_SCOPE, ACTIONS_EXECUTE_SCOPE, ACTIONS_PLAN_SCOPE, MONITORING_READ_SCOPE],
+        expect.objectContaining({ expectedOrgID: 'default', signal: expect.any(AbortSignal) }),
+      );
+    });
   });
 
-  it('preselects the Patrol external agent preset from the MCP setup route', async () => {
+  it('preselects the External agent (read-only) preset from the MCP setup route', async () => {
     window.history.pushState({}, '', PULSE_MCP_TOKEN_SETUP_PATH);
     createTokenMock.mockResolvedValueOnce({
       token: 'pulse_mcp_secret',
       record: makeToken({
         id: 'token-mcp',
-        name: 'Patrol external agent',
-        scopes: [
-          AI_EXECUTE_SCOPE,
-          MONITORING_READ_SCOPE,
-          MONITORING_WRITE_SCOPE,
-          SETTINGS_READ_SCOPE,
-          SETTINGS_WRITE_SCOPE,
-        ],
+        name: 'External agent (read-only)',
+        scopes: [MONITORING_READ_SCOPE],
       }),
     });
 
     render(() => <APITokenManager onTokensChanged={vi.fn()} canManage />);
 
     await waitFor(() => {
-      expect(fetchAgentCapabilitiesManifestMock).toHaveBeenCalledTimes(1);
       expect(listTokensMock).toHaveBeenCalledTimes(1);
     });
-    await screen.findByDisplayValue('Patrol external agent');
+    await screen.findByDisplayValue('External agent (read-only)');
     await waitFor(() => {
       expect(scrollIntoViewMock).toHaveBeenCalledWith({ behavior: 'smooth', block: 'start' });
     });
@@ -798,14 +825,8 @@ describe('APITokenManager', () => {
 
     await waitFor(() => {
       expect(createTokenMock).toHaveBeenCalledWith(
-        'Patrol external agent',
-        [
-          AI_EXECUTE_SCOPE,
-          MONITORING_READ_SCOPE,
-          MONITORING_WRITE_SCOPE,
-          SETTINGS_READ_SCOPE,
-          SETTINGS_WRITE_SCOPE,
-        ],
+        'External agent (read-only)',
+        [MONITORING_READ_SCOPE],
         expect.objectContaining({ expectedOrgID: 'default', signal: expect.any(AbortSignal) }),
       );
     });

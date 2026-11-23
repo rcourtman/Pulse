@@ -10184,3 +10184,7 @@ persistence contracts under `internal/api/` are unchanged
 and `buildStandaloneHostVmsPath` for host-scoped `/standalone/vms?host=<id>`
 links from Machines. No storage, backup, or recovery persistence format or
 read/write path changes. Verified by `resourceLinks.test.ts`.
+
+### External-agent `pulse_cli` telemetry and readiness boundary (23 November 2026)
+
+`internal/api/agent_activity_telemetry.go` adds content-free `pulse_cli` surface tracking (persisted in the existing `ai_agent_activity` store via `internal/config/persistence.go`) and `internal/api/agent_resource_context.go` updates `externalAgentReady` scope matching to `monitoring:read`. No backup, snapshot, encryption-key, or recovery persistence contract changes. Proof: `internal/config`, `internal/api/agent_activity_telemetry_test.go`, and `internal/api/agent_resource_context_test.go`.

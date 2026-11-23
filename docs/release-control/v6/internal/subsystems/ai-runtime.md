@@ -9059,3 +9059,7 @@ alert. With commands off the seed says why Pulse cannot read and the question
 keeps its exit. It exists because on Docker fault set D6 the sustained check
 on a full mount closed with no finding and the finding came only when asked.
 Proof: `internal/ai/patrol_host_disk_wake_test.go`.
+
+### Unified `pulse` CLI and read-only-first external-agent onboarding (23 November 2026)
+
+Workstation external-agent setup now leads with the unified `pulse` client binary (`cmd/pulse-cli`, sharing `pkg/pulsecli` with `cmd/pulse`) and its built-in `pulse mcp` stdio adapter. `cmd/pulse-mcp` stays a thin backwards-compatible delegate to `pulsecli.RunMCPStdio`, and `cmd/pulse-cli` honors `pulse-mcp*` `argv[0]` invocation. `internal/agentcapabilities/mcp_adapter.go` publishes the `pulse mcp` command defaults and Codex TOML config family alongside Claude and OpenCode, while `ExternalAgentMinimumScopes` sets `monitoring:read` as the minimum read-only readiness bar so read-only and propose-only external-agent tokens evaluate as `externalAgentReady: true` without requiring `ai:execute`. `AgentIntegrationsPanel.tsx` leads directly with the un-collapsed 3-step CLI flow (`brew`/verified install, `pulse auth login`, `pulse connect` + `pulse doctor`) and zero-token manual configs. Proof: `pkg/pulsecli`, `cmd/pulse-mcp`, `internal/agentcapabilities`, `AgentIntegrationsPanel.test.tsx`, and live desktop/mobile Playwright verification.
