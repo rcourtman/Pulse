@@ -1,13 +1,15 @@
 #!/usr/bin/env python3
-"""Exercise PVE guest and PBS snapshot coverage in the memory watch."""
+"""Exercise PVE guest/archive and PBS snapshot coverage in the memory watch."""
 
 from collections import Counter
+import hashlib
 import json
 from pathlib import Path
 import sys
 import threading
 import unittest
 from unittest.mock import Mock, patch
+from urllib.error import HTTPError
 from urllib.request import urlopen
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "memory"))
@@ -21,7 +23,10 @@ class ProxmoxMemoryLoadTests(unittest.TestCase):
     def test_cluster_inventory_matches_estate_and_node_lists(self):
         counters = Counter()
         nodes = ["pve1", "pve2", "pve3"]
-        handler, guest_refs = load.make_pve_handler(nodes, 6, 5, counters, threading.Lock())
+        handler, guest_refs, _ = load.make_pve_handler(
+            nodes, 6, 5, counters, threading.Lock(),
+            archive_as_of=END, steady_since=END - 300, sample_until=END,
+        )
         with load.ThreadedHTTPServer(("127.0.0.1", 0), handler) as server:
             worker = threading.Thread(target=server.serve_forever, daemon=True)
             worker.start()
@@ -55,6 +60,100 @@ class ProxmoxMemoryLoadTests(unittest.TestCase):
             finally:
                 server.shutdown()
                 worker.join(timeout=5)
+
+    def test_shared_archive_returns_a_large_mixed_response_with_history_per_guest(self):
+        nodes = ["pve1", "pve2", "pve3"]
+        for vm_count, lxc_count, guest_count in ((6, 5, 35), (60, 50, 330)):
+            with self.subTest(guests=guest_count):
+                handler, guest_refs, archive = load.make_pve_handler(
+                    nodes, vm_count, lxc_count, Counter(), threading.Lock(),
+                    archive_as_of=END, steady_since=END - 300, sample_until=END,
+                )
+                handled = threading.Event()
+
+                class ObservedHandler(handler):
+                    def do_GET(self):
+                        try:
+                            super().do_GET()
+                        finally:
+                            handled.set()
+
+                with load.ThreadedHTTPServer(("127.0.0.1", 0), ObservedHandler) as server:
+                    worker = threading.Thread(target=server.serve_forever, daemon=True)
+                    worker.start()
+                    try:
+                        def get(node, tail):
+                            path = f"/api2/json/nodes/{node}/storage{tail}"
+                            handled.clear()
+                            try:
+                                with urlopen(f"http://127.0.0.1:{server.server_port}{path}", timeout=5) as response:
+                                    self.assertEqual(response.status, 200)
+                                    body = response.read()
+                                    self.assertEqual(int(response.headers["Content-Length"]), len(body))
+                                    return body
+                            finally:
+                                self.assertTrue(handled.wait(5))
+
+                        stores = json.loads(get("pve1", ""))["data"]
+                        shared = next(store for store in stores if store["storage"] == "nfs-backups")
+                        self.assertEqual(shared["shared"], 1)
+                        self.assertEqual(set(shared["content"].split(",")), {"backup", "iso", "vztmpl"})
+                        route = "/nfs-backups/content"
+                        get("pve1", "/local/content")
+                        with self.assertRaises(HTTPError) as missing:
+                            get("not-a-node", route)
+                        self.assertEqual(missing.exception.code, 404)
+                        missing.exception.close()
+                        with patch.object(load.time, "time_ns", return_value=(END - 301) * 1_000_000_000):
+                            body = get("pve1", route)  # startup only
+                        with patch.object(load.time, "time_ns", return_value=(END - 45) * 1_000_000_000):
+                            self.assertEqual(get("pve2", route), body)
+                            filtered = json.loads(get("pve3", route + "?content=backup"))["data"]
+                        rows = json.loads(body)["data"]
+                        self.assertEqual(len({row["volid"] for row in rows}), len(rows))
+                        self.assertEqual(Counter(row["content"] for row in rows),
+                                         {"backup": guest_count * 24, "iso": 24, "vztmpl": 24})
+                        self.assertEqual(filtered, [row for row in rows if row["content"] == "backup"])
+                        self.assertGreater(len(body), 128 * 1024)
+                        ids = Counter(row["vmid"] for row in filtered)
+                        self.assertEqual(ids, {vmid: 24 for _, _, vmid, _ in guest_refs})
+                        self.assertEqual({row["format"] for row in filtered}, {"vma.zst", "tar.zst"})
+                        self.assertEqual(len({row["ctime"] for row in filtered}), 24)
+                        self.assertEqual(max(row["ctime"] for row in filtered), END - 3600)
+                        observation = archive.report(nodes, END)
+                        self.assertEqual(observation["body_bytes"], len(body))
+                        self.assertEqual(observation["body_sha256"], hashlib.sha256(body).hexdigest())
+                        self.assertEqual(observation["nodes"], {
+                            "pve1": {"responses": 1, "steady_responses": 0},
+                            "pve2": {"responses": 1, "steady_responses": 1},
+                            "pve3": {"responses": 0, "steady_responses": 0},
+                        })
+                    finally:
+                        server.shutdown()
+                        worker.join(timeout=5)
+
+    def test_failed_archive_writes_and_out_of_window_completions_do_not_count_as_steady(self):
+        nodes = ["pve1"]
+        handler_type, _, archive = load.make_pve_handler(
+            nodes, 1, 1, Counter(), threading.Lock(),
+            archive_as_of=END, steady_since=END - 300, sample_until=END,
+        )
+        handler = object.__new__(handler_type)
+        handler.path = "/api2/json/nodes/pve1/storage/nfs-backups/content"
+        handler.send_json_body = Mock(side_effect=BrokenPipeError)
+        with patch.object(load.time, "time_ns", return_value=(END - 10) * 1_000_000_000):
+            with self.assertRaises(BrokenPipeError):
+                handler.do_GET()
+        self.assertEqual(archive.report(nodes, END)["nodes"]["pve1"],
+                         {"responses": 0, "steady_responses": 0})
+        handler.send_json_body.side_effect = None
+        for at in (END - 300, END, END + 1):
+            with patch.object(load.time, "time_ns", return_value=at * 1_000_000_000):
+                handler.do_GET()
+        self.assertIsNone(archive.report(nodes, END - 1)["window_s"])
+        self.assertIsNone(archive.report(nodes, END - 1)["nodes"]["pve1"]["steady_responses"])
+        self.assertEqual(archive.report(nodes, END)["nodes"]["pve1"],
+                         {"responses": 3, "steady_responses": 2})
 
     def test_pbs_status_empty_and_duplicate_reads_cannot_cover_snapshot_groups(self):
         guests = [("pve", "vm", 100, "vm-100"), ("pve", "ct", 101, "ct-101")]

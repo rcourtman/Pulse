@@ -32,6 +32,7 @@
 #           did not receive an initial state and a subsequent state update.
 #   proxmox a real, non-mock Pulse with authentication configured, fed by
 #           proxmox_load.py: a synthetic 3-node Proxmox VE cluster (35 guests),
+#           a large shared archive containing backups, ISOs and templates,
 #           2 Proxmox Backup Server instances (~5,250 snapshots total), and one
 #           connected dashboard (#1803). Exercises PVE/PBS polling, recovery.db
 #           ingestion, posture refreshes, and backup state cloning.
@@ -202,6 +203,7 @@ run_tree() {
   elif [[ "${ESTATE}" == proxmox ]]; then
     driver_log="${OUT_DIR}/proxmox-${label}.log"
     python3 "${SCRIPT_DIR}/proxmox_load.py" --port "${port}" --duration "$((DURATION + 120))" \
+      --archive-as-of "${archive_as_of}" \
       --steady-since "$((start + DURATION * 2 / 3))" \
       --sample-until "$((start + DURATION))" \
       --stats "${OUT_DIR}/proxmox-${label}.json" > "${driver_log}" 2>&1 &
@@ -264,6 +266,12 @@ run_tree() {
 
 build_tree baseline "${BASELINE_DIR}"
 build_tree candidate "${CANDIDATE_DIR}"
+
+# Give both drivers identical archive ages, filenames and response bytes,
+# even if the two workers start on different seconds.
+if [[ "${ESTATE}" == proxmox ]]; then
+  archive_as_of="$(date +%s)"
+fi
 
 # Run both at once so they share host conditions. The kernel assigns each
 # instance its own loopback metrics port, so neither loses that listener.
