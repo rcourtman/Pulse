@@ -84,12 +84,13 @@ describe('installation startup guidance', () => {
     expect(prose(rendered)).toContain('not environment values or log content');
   });
 
-  it('offers the existing memory-stop checks before a live service read', () => {
+  it('names the host kernel log before suggesting a live read inside the LXC', () => {
     const rendered = section();
     const fragment = 'after-a-memory-cgroup-kill';
     const route = `/docs/TROUBLESHOOTING#${fragment}`;
     const link = rendered.querySelector(`a[data-doc-link][href="${route}"]`);
-    expect(link).not.toBeNull();
+    expect(link?.textContent).toBe("Check the Proxmox host's kernel log");
+    expect(prose(link!.parentElement!)).toContain('Suspect an LXC memory stop?');
     expect(
       link!.compareDocumentPosition(rendered.querySelector('pre')!) &
         Node.DOCUMENT_POSITION_FOLLOWING,
