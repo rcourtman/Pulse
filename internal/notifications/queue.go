@@ -1475,6 +1475,13 @@ func (nq *NotificationQueue) replayRecoverableDeadLettersForDestination(notif *Q
 	if nq == nil || nq.db == nil || notif == nil {
 		return 0, nil
 	}
+	for _, alert := range notif.Alerts {
+		if rehearsalID(alert) != "" {
+			// Rehearsals exercise the saved queue route without releasing
+			// someone else's retained notifications.
+			return 0, nil
+		}
+	}
 	baseType, _ := normalizeQueueType(notif.Type)
 	rawConfig := string(notif.Config)
 	trimmedConfig := strings.TrimSpace(rawConfig)
@@ -1548,11 +1555,13 @@ func (nq *NotificationQueue) replayRecoverableDeadLettersForDestinationNoLock(tr
 			SELECT 1 FROM notification_audit a
 			WHERE a.notification_id = q.id AND a.success = 1
 		  )
-		  AND (SELECT COUNT(*) FROM notification_audit a WHERE a.notification_id = q.id) > 0
-		  AND (SELECT COUNT(*) FROM notification_audit a WHERE a.notification_id = q.id) <= CASE WHEN q.max_attempts > 0 THEN q.max_attempts ELSE 1 END
+		  AND NOT EXISTS (
+			SELECT 1 FROM notification_rehearsal_jobs j WHERE j.notification_id = q.id
+		  )
+		  AND (SELECT COUNT(*) FROM notification_audit a WHERE a.notification_id = q.id)
+		      BETWEEN 1 AND CASE WHEN q.max_attempts > 0 THEN q.max_attempts ELSE 1 END
 		ORDER BY COALESCE(q.completed_at, q.created_at), q.id
-		LIMIT ?
-	`, triggerID, baseType, resolvedType, rawConfig, cutoff, autoReplayDLQBatchLimit)
+	`, triggerID, baseType, resolvedType, rawConfig, cutoff)
 	if err != nil {
 		return 0, fmt.Errorf("query recoverable dead-letter notifications: %w", err)
 	}
@@ -1562,8 +1571,11 @@ func (nq *NotificationQueue) replayRecoverableDeadLettersForDestinationNoLock(tr
 		maxAttempts int
 		links       []operationaltrust.NotificationLink
 	}
-	candidates := make([]candidate, 0)
-	for rows.Next() {
+	// Cap admitted rows, not the matching prefix: an old configuration
+	// failure (including a legacy audit with no stored class) must not
+	// consume a retry slot on every later success.
+	var candidates []candidate
+	for len(candidates) < autoReplayDLQBatchLimit && rows.Next() {
 		var (
 			id                 string
 			maxAttempts        int
@@ -2288,6 +2300,10 @@ func (nq *NotificationQueue) processNotification(notif *QueuedNotification) {
 		return
 	}
 
+	// The claim refreshed the durable acknowledgement. The real processor
+	// can add one during a new send, or return nil after local settlement
+	// of one that already existed. Only the new send can prove recovery.
+	alreadyAccepted := notif.ProviderAcceptedAt != nil
 	err = processor(notif)
 	var telegramWait *telegramRateHold
 	if errors.As(err, &telegramWait) {
@@ -2455,6 +2471,20 @@ func (nq *NotificationQueue) processNotification(notif *QueuedNotification) {
 	} else {
 		notif.Links = persistedLinks
 	}
+	if success && !alreadyAccepted && notif.Status == QueueStatusSent && !nq.stopping() {
+		replayed, replayErr := nq.replayRecoverableDeadLettersForDestination(notif)
+		if replayErr != nil {
+			log.Error().
+				Err(replayErr).
+				Str("component", "notification_queue").
+				Str("action", "auto_replay_dlq_on_recovery").
+				Str("id", notif.ID).
+				Str("type", notif.Type).
+				Msg("Failed to auto-replay recoverable dead-letter notifications")
+		} else {
+			healthChanged = healthChanged || replayed > 0
+		}
+	}
 	if notif.ProviderAcceptedAt != nil {
 		return
 	}
@@ -2491,21 +2521,6 @@ func (nq *NotificationQueue) processNotification(notif *QueuedNotification) {
 		notif.ProviderAcceptedAt = &at
 		if err := nq.deferSettlement(notif, false); err != nil {
 			log.Error().Err(err).Msg("Failed to retain acknowledged notification settlement")
-		}
-	}
-
-	if success && notif.ProviderAcceptedAt == nil && !nq.stopping() {
-		replayed, replayErr := nq.replayRecoverableDeadLettersForDestination(notif)
-		if replayErr != nil {
-			log.Error().
-				Err(replayErr).
-				Str("component", "notification_queue").
-				Str("action", "auto_replay_dlq_on_recovery").
-				Str("id", notif.ID).
-				Str("type", notif.Type).
-				Msg("Failed to auto-replay recoverable dead-letter notifications")
-		} else if replayed > 0 {
-			healthChanged = true
 		}
 	}
 }
