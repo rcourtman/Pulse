@@ -235,7 +235,7 @@ export const KubernetesNodesTable: Component<{
                   kind="name"
                   sort={sort}
                   sortKey="node"
-                  class="platform-table-mobile-w-30 md:w-[20%]"
+                  class="platform-table-mobile-w-38 md:w-[20%]"
                   bandWidth={30}
                 >
                   Node
@@ -259,7 +259,7 @@ export const KubernetesNodesTable: Component<{
                   kind="text"
                   sort={sort}
                   sortKey="cluster"
-                  class="platform-table-mobile-w-15 md:w-[8%]"
+                  class="platform-table-mobile-w-20 md:w-[8%]"
                   bandWidth={12.1}
                 >
                   <PlatformResponsiveTableLabel compact="Clus" full="Cluster" />
@@ -293,7 +293,7 @@ export const KubernetesNodesTable: Component<{
                   kind="metric-bar"
                   sort={sort}
                   sortKey="cpu"
-                  class="platform-table-mobile-w-15 md:w-[7.5%]"
+                  class="platform-table-mobile-w-20 md:w-[7.5%]"
                   bandWidth={9.2}
                 >
                   CPU
@@ -302,7 +302,7 @@ export const KubernetesNodesTable: Component<{
                   kind="metric-bar"
                   sort={sort}
                   sortKey="memory"
-                  class="platform-table-mobile-w-15 md:w-[10%]"
+                  class="platform-table-mobile-w-20 md:w-[10%]"
                   bandWidth={11.8}
                 >
                   <PlatformResponsiveTableLabel compact="Mem" full="Memory" />
@@ -319,7 +319,7 @@ export const KubernetesNodesTable: Component<{
                   kind="numeric-value"
                   sort={sort}
                   sortKey="capacity"
-                  class="platform-table-mobile-w-10 md:w-[16%]"
+                  class="platform-table-phone-hidden md:w-[16%]"
                   bandWidth={13.1}
                 >
                   <PlatformResponsiveTableLabel compact="Cap" full="Capacity" />
@@ -495,7 +495,7 @@ export const KubernetesNodesTable: Component<{
                             {formatPlatformTableUptimeValue(node.uptime)}
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content tabular-nums`}
+                            class={`${getPlatformTableCellClassForKind('numeric-value')} platform-table-phone-hidden text-base-content tabular-nums`}
                           >
                             <span class="md:hidden">{compactCapacityLabel()}</span>
                             <span class="hidden md:inline">{capacityLabel()}</span>

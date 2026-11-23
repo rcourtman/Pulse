@@ -1028,3 +1028,36 @@ export function buildDockerPageModel(resources: Resource[]): DockerPageModel {
     incidents,
   };
 }
+
+export type DockerStorageFilter = 'all' | 'reclaimable' | 'active';
+
+export function getDockerHostReclaimableBytes(host: Resource): number {
+  const docker = host.docker;
+  if (!docker) return 0;
+  return (
+    (docker.imagesUsage?.reclaimableBytes ?? 0) +
+    (docker.containersUsage?.reclaimableBytes ?? 0) +
+    (docker.volumesUsage?.reclaimableBytes ?? 0) +
+    (docker.buildCacheUsage?.reclaimableBytes ?? 0)
+  );
+}
+
+export function isDockerStorageReclaimable(resource: Resource): boolean {
+  if (resource.type === 'docker-volume') {
+    return (resource.docker?.refCount ?? 0) <= 0;
+  }
+  return getDockerHostReclaimableBytes(resource) > 0;
+}
+
+export function filterDockerStorageResources(
+  resources: Resource[],
+  search: string,
+  filter: DockerStorageFilter,
+): Resource[] {
+  const matchingSearch = filterDockerResources(resources, search, 'all');
+  if (filter === 'all') return matchingSearch;
+  return matchingSearch.filter((resource) => {
+    const reclaimable = isDockerStorageReclaimable(resource);
+    return filter === 'reclaimable' ? reclaimable : !reclaimable;
+  });
+}

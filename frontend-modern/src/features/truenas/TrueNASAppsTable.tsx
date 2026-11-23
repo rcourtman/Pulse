@@ -86,7 +86,7 @@ const formatHostPort = (port: ResourceTrueNASAppPort): string => {
 const formatPorts = (app: ResourceTrueNASAppMeta | undefined): { label: string; title: string } => {
   const ports = app?.usedPorts ?? [];
   const labels = ports.map(formatHostPort).filter(Boolean);
-  if (labels.length === 0) return { label: '-', title: '' };
+  if (labels.length === 0) return { label: '—', title: '' };
   const visible = labels.slice(0, 2);
   const suffix = labels.length > visible.length ? ` +${labels.length - visible.length}` : '';
   return { label: `${visible.join(', ')}${suffix}`, title: labels.join(', ') };
@@ -98,7 +98,7 @@ const formatImages = (
   app: ResourceTrueNASAppMeta | undefined,
 ): { label: string; title: string } => {
   const images = app?.images?.filter((image) => asTrimmedString(image)) ?? [];
-  if (images.length === 0) return { label: '-', title: '' };
+  if (images.length === 0) return { label: '—', title: '' };
   const labels = images.map(shortImage);
   const visible = labels.slice(0, 2);
   const suffix = labels.length > visible.length ? ` +${labels.length - visible.length}` : '';

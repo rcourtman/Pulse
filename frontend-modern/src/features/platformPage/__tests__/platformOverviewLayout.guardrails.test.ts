@@ -232,13 +232,13 @@ describe('platform overview layout guardrails', () => {
       /sortKey="status"[\s\S]{0,120}?class="platform-table-phone-hidden md:w-\[10\.5%\]"\s*bandWidth=\{14\.6\}/,
     );
     expect(kubernetesNodesTableSource).toMatch(
-      /sortKey="cpu"[\s\S]{0,120}?class="platform-table-mobile-w-15 md:w-\[7\.5%\]"\s*bandWidth=\{9\.2\}/,
+      /sortKey="cpu"[\s\S]{0,120}?class="platform-table-mobile-w-20 md:w-\[7\.5%\]"\s*bandWidth=\{9\.2\}/,
     );
     expect(kubernetesNodesTableSource).toMatch(
-      /sortKey="memory"[\s\S]{0,120}?class="platform-table-mobile-w-15 md:w-\[10%\]"\s*bandWidth=\{11\.8\}/,
+      /sortKey="memory"[\s\S]{0,120}?class="platform-table-mobile-w-20 md:w-\[10%\]"\s*bandWidth=\{11\.8\}/,
     );
     expect(kubernetesNodesTableSource).toMatch(
-      /sortKey="capacity"[\s\S]{0,120}?class="platform-table-mobile-w-10 md:w-\[16%\]"\s*bandWidth=\{13\.1\}/,
+      /sortKey="capacity"[\s\S]{0,120}?class="platform-table-phone-hidden md:w-\[16%\]"\s*bandWidth=\{13\.1\}/,
     );
     expect(kubernetesDeploymentsTableSource).toMatch(
       /sortKey="namespace"[\s\S]{0,120}?class="platform-table-mobile-w-15 md:w-\[18%\]"/,

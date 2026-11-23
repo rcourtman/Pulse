@@ -108,7 +108,7 @@ describe('TrueNASProtectionTable', () => {
     for (const outcome of ['failed', 'warning']) {
       const row = document.querySelector(`[data-truenas-protection-row="${outcome}"]`)!;
       expect(row).toHaveAttribute('data-truenas-protection-outcome', outcome);
-      expect(row.querySelectorAll('td')[3]).toHaveTextContent('-');
+      expect(row.querySelectorAll('td')[3]).toHaveTextContent('—');
     }
 
     await fireEvent.click(document.querySelector('[data-truenas-protection-row="failed"]')!);
@@ -222,7 +222,7 @@ describe('TrueNASProtectionTable', () => {
     const row = rows[0];
     expect(row).toHaveAttribute('data-truenas-protection-outcome', 'unknown');
     expect(within(row as HTMLElement).getByText('Unknown')).toBeInTheDocument();
-    expect(row.querySelectorAll('td')[3]).toHaveTextContent('-');
+    expect(row.querySelectorAll('td')[3]).toHaveTextContent('—');
     await fireEvent.click(row);
     const detail = within(screen.getByTestId('truenas-protection-detail'));
     expect(detail.getByText('tank/undated@daily')).toBeInTheDocument();

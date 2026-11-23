@@ -5,7 +5,6 @@ import { getSimpleStatusIndicator } from '@/utils/status';
 import { asTrimmedString } from '@/utils/stringUtils';
 import {
   PlatformWindowedRows,
-  PLATFORM_HEALTH_FILTER_OPTIONS,
   PlatformResponsiveTableLabel,
   PlatformSortableTableHead,
   PlatformTableEmptyState,
@@ -15,6 +14,7 @@ import {
   formatPlatformTableBytesValue,
   formatPlatformTableTextValue,
   getPlatformTableCellClassForKind,
+  type PlatformTableFilterOption,
   PlatformTableShell,
   type PlatformTableSortValue,
   withPlatformStatusCounts,
@@ -28,11 +28,18 @@ import {
 } from '@/features/platformPage/PlatformResourceDetailTableRow';
 import type { Resource } from '@/types/resource';
 import {
-  filterKubernetesResources,
+  filterKubernetesStorageResources,
   kubernetesScopeLabel,
-  type KubernetesResourceStatusFilter,
+  type KubernetesStorageKindFilter,
   isSingleKubernetesCluster,
 } from './kubernetesPageModel';
+
+const KUBERNETES_STORAGE_KIND_OPTIONS: PlatformTableFilterOption<KubernetesStorageKindFilter>[] = [
+  { value: 'all', label: 'All' },
+  { value: 'pvc', label: 'Claims' },
+  { value: 'pv', label: 'Volumes' },
+  { value: 'storageclass', label: 'Classes' },
+];
 import { KubernetesScopeText } from './KubernetesScopeText';
 
 // Kubernetes storage is intentionally not rendered by the generic
@@ -218,8 +225,8 @@ export const KubernetesStorageTable: Component<{
   const singleCluster = createMemo(() => isSingleKubernetesCluster(props.resources));
   const tableState = createPlatformTableFilterState({
     resources: () => props.resources,
-    initialStatus: 'all' as KubernetesResourceStatusFilter,
-    filter: filterKubernetesResources,
+    initialStatus: 'all' as KubernetesStorageKindFilter,
+    filter: filterKubernetesStorageResources,
   });
   const drawer = createPlatformResourceDetailState({ idPrefix: 'kubernetes-storage-drawer' });
   const resolveResourceLabel = createPlatformResourceLabelResolver(() => props.resources);
@@ -253,7 +260,7 @@ export const KubernetesStorageTable: Component<{
             status={tableState.status()}
             onStatusChange={tableState.setStatus}
             statusOptions={withPlatformStatusCounts(
-              PLATFORM_HEALTH_FILTER_OPTIONS,
+              KUBERNETES_STORAGE_KIND_OPTIONS,
               tableState.countForStatus,
             )}
             visible={tableState.visible()}

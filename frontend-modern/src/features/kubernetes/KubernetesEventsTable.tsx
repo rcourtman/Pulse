@@ -1,11 +1,11 @@
 import { Show, createMemo, type Component, type JSX } from 'solid-js';
+import { filterChipStatusDot } from '@/components/shared/FilterBar';
 import { StatusDot } from '@/components/shared/StatusDot';
 import { InlineDetailTableRow } from '@/components/shared/InlineDetailTableRow';
 import { TableCell, TableHead, TableRow } from '@/components/shared/Table';
 import { asTrimmedString } from '@/utils/stringUtils';
 import {
   PlatformWindowedRows,
-  PLATFORM_HEALTH_FILTER_OPTIONS,
   PlatformResponsiveTableLabel,
   PlatformTableEmptyState,
   PlatformTableNumberValue,
@@ -15,6 +15,7 @@ import {
   formatPlatformTableTextValue,
   getPlatformTableCellClassForKind,
   getPlatformTableHeadClassForKind,
+  type PlatformTableFilterOption,
   PlatformTableShell,
   withPlatformStatusCounts,
 } from '@/features/platformPage/sharedPlatformPage';
@@ -26,11 +27,27 @@ import {
 import type { Resource } from '@/types/resource';
 import {
   compareKubernetesEvents,
-  filterKubernetesResources,
+  filterKubernetesEvents,
   mapKubernetesEventSeverity,
-  type KubernetesResourceStatusFilter,
+  type KubernetesEventSeverityFilter,
   isSingleKubernetesCluster,
 } from './kubernetesPageModel';
+
+const KUBERNETES_EVENT_SEVERITY_OPTIONS: PlatformTableFilterOption<KubernetesEventSeverityFilter>[] =
+  [
+    { value: 'all', label: 'All' },
+    {
+      value: 'warning',
+      label: 'Warning',
+      tone: 'warning',
+      leading: filterChipStatusDot('bg-amber-500'),
+    },
+    {
+      value: 'normal',
+      label: 'Normal',
+      leading: filterChipStatusDot('bg-slate-400'),
+    },
+  ];
 import {
   KubernetesEventDetailPanel,
   kubernetesEventInvolvedObject,
@@ -60,8 +77,8 @@ export const KubernetesEventsTable: Component<{
   const singleCluster = createMemo(() => isSingleKubernetesCluster(props.resources));
   const tableState = createPlatformTableFilterState({
     resources: sortedEvents,
-    initialStatus: 'all' as KubernetesResourceStatusFilter,
-    filter: filterKubernetesResources,
+    initialStatus: 'all' as KubernetesEventSeverityFilter,
+    filter: filterKubernetesEvents,
   });
   const drawer = createPlatformResourceDetailState({ idPrefix: 'kubernetes-event-drawer' });
 
@@ -86,7 +103,7 @@ export const KubernetesEventsTable: Component<{
             status={tableState.status()}
             onStatusChange={tableState.setStatus}
             statusOptions={withPlatformStatusCounts(
-              PLATFORM_HEALTH_FILTER_OPTIONS,
+              KUBERNETES_EVENT_SEVERITY_OPTIONS,
               tableState.countForStatus,
             )}
             visible={tableState.visible()}
@@ -111,42 +128,42 @@ export const KubernetesEventsTable: Component<{
             header={
               <>
                 <TableHead
-                  class={`${getPlatformTableHeadClassForKind('name')} platform-table-mobile-w-30 md:w-[24%]`}
+                  class={`${getPlatformTableHeadClassForKind('name')} platform-table-mobile-w-30 md:w-[17%]`}
                 >
                   Event
                 </TableHead>
                 <TableHead
-                  class={`${getPlatformTableHeadClassForKind('text')} hidden lg:table-cell md:w-[15%]`}
+                  class={`${getPlatformTableHeadClassForKind('text')} hidden lg:table-cell md:w-[12%]`}
                 >
                   Scope
                 </TableHead>
                 <TableHead
-                  class={`${getPlatformTableHeadClassForKind('text')} platform-table-phone-hidden md:w-[10%]`}
+                  class={`${getPlatformTableHeadClassForKind('text')} platform-table-phone-hidden md:w-[7%]`}
                 >
                   Type
                 </TableHead>
                 <TableHead
-                  class={`${getPlatformTableHeadClassForKind('text')} platform-table-mobile-w-15 md:w-[14%]`}
+                  class={`${getPlatformTableHeadClassForKind('text')} platform-table-mobile-w-20 md:w-[11%]`}
                 >
                   <PlatformResponsiveTableLabel compact="Why" full="Reason" />
                 </TableHead>
                 <TableHead
-                  class={`${getPlatformTableHeadClassForKind('text')} platform-table-mobile-w-20 md:w-[15%]`}
+                  class={`${getPlatformTableHeadClassForKind('text')} platform-table-mobile-w-25 md:w-[12%]`}
                 >
                   Object
                 </TableHead>
                 <TableHead
-                  class={`${getPlatformTableHeadClassForKind('numeric-value')} platform-table-mobile-w-10 md:w-[7%] platform-table-narrow-hidden`}
+                  class={`${getPlatformTableHeadClassForKind('numeric-value')} platform-table-mobile-w-10 md:w-[5%] platform-table-narrow-hidden`}
                 >
                   Count
                 </TableHead>
                 <TableHead
-                  class={`${getPlatformTableHeadClassForKind('numeric-value')} platform-table-mobile-w-10 md:w-[13%]`}
+                  class={`${getPlatformTableHeadClassForKind('numeric-value')} platform-table-mobile-w-15 md:w-[9%]`}
                 >
                   <PlatformResponsiveTableLabel compact="Seen" full="Observed" />
                 </TableHead>
                 <TableHead
-                  class={`${getPlatformTableHeadClassForKind('text')} hidden sm:table-cell md:w-[10%]`}
+                  class={`${getPlatformTableHeadClassForKind('text')} hidden sm:table-cell md:w-[27%]`}
                 >
                   Message
                 </TableHead>

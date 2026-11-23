@@ -157,10 +157,11 @@ describe('DockerHostsTable', () => {
     expect(await screen.findByText('40.0°C')).toBeInTheDocument();
   });
 
-  it('keeps five readable host fields below 360 pixels without wrapped metadata rows', () => {
+  it('keeps phone host columns within 100 percent width without overflowing or wrapping metadata', () => {
     expect(dockerHostsTableSource).toContain('platform-table-mobile-w-30');
+    expect(dockerHostsTableSource).toContain('platform-table-mobile-w-38');
     expect(dockerHostsTableSource).toContain('platform-table-narrow-hidden');
-    expect(dockerHostsTableSource).toContain('hidden min-[360px]:table-cell min-[360px]:w-[16%]');
+    expect(dockerHostsTableSource).not.toContain('min-[360px]:w-[16%]');
     expect(dockerHostsTableSource).not.toContain('class="max-[359px]:hidden"');
     expect(dockerHostsTableSource).not.toContain('max-[359px]:[&>a]:hidden');
     expect(dockerHostsTableSource).not.toContain('md:hidden" title={badge().title');

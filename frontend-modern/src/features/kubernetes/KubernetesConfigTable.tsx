@@ -1,4 +1,4 @@
-import { Show, createMemo, type Component, type JSX } from 'solid-js';
+import { Show, createMemo, createSignal, type Component, type JSX } from 'solid-js';
 import { StatusDot } from '@/components/shared/StatusDot';
 import {
   compactDetailRows,
@@ -11,7 +11,6 @@ import { getSimpleStatusIndicator } from '@/utils/status';
 import { asTrimmedString } from '@/utils/stringUtils';
 import {
   PlatformWindowedRows,
-  PLATFORM_HEALTH_FILTER_OPTIONS,
   PlatformResponsiveTableLabel,
   PlatformSortableTableHead,
   PlatformTableEmptyState,
@@ -20,6 +19,7 @@ import {
   createPlatformTableSortState,
   formatPlatformTableTextValue,
   getPlatformTableCellClassForKind,
+  type PlatformTableFilterOption,
   summarizePlatformTableValues,
   PlatformTableShell,
   type PlatformTableSortValue,
@@ -36,9 +36,26 @@ import type { Resource } from '@/types/resource';
 import {
   filterKubernetesResources,
   kubernetesScopeLabel,
+  matchesKubernetesConfigCategory,
+  type KubernetesConfigCategoryFilter,
   type KubernetesResourceStatusFilter,
   isSingleKubernetesCluster,
 } from './kubernetesPageModel';
+
+const ROUTINE_METADATA_ONLY_COLLAPSE_THRESHOLD = 6;
+
+const isRoutineMetadataOnlyConfig = (resource: Resource): boolean =>
+  (resource.type === 'k8s-configmap' || resource.type === 'k8s-secret') &&
+  resource.kubernetes?.metadataOnly === true &&
+  getSimpleStatusIndicator(resource.status).variant === 'success';
+
+const KUBERNETES_CONFIG_TABLE_CATEGORY_OPTIONS: PlatformTableFilterOption<KubernetesConfigCategoryFilter>[] =
+  [
+    { value: 'all', label: 'All' },
+    { value: 'namespace', label: 'Namespaces' },
+    { value: 'config', label: 'Config & Secrets' },
+    { value: 'access', label: 'Access' },
+  ];
 import {
   KubernetesRecordDetailPanel,
   kubernetesLabelsSection,
@@ -309,14 +326,58 @@ export const KubernetesConfigTable: Component<{
   showToolbar?: boolean;
   externalSearch?: () => string;
   externalStatus?: () => KubernetesResourceStatusFilter;
+  showRoutineMetadataOnly?: boolean;
 }> = (props) => {
   const singleCluster = createMemo(() => isSingleKubernetesCluster(props.resources));
+  const [categoryFilter, setCategoryFilter] = createSignal<KubernetesConfigCategoryFilter>('all');
+  const [showAllMetadataOnly, setShowAllMetadataOnly] = createSignal(false);
   const tableState = createPlatformTableFilterState({
     resources: () => props.resources,
     initialStatus: 'all' as KubernetesResourceStatusFilter,
-    filter: filterKubernetesResources,
+    filter: (resources, search, status) =>
+      filterKubernetesResources(resources, search, status).filter((resource) =>
+        props.showToolbar === false
+          ? true
+          : matchesKubernetesConfigCategory(resource, categoryFilter()),
+      ),
     externalSearch: props.externalSearch,
     externalStatus: props.externalStatus,
+  });
+  const countForCategory = (category: KubernetesConfigCategoryFilter): number =>
+    filterKubernetesResources(props.resources, tableState.search(), 'all').filter((resource) =>
+      matchesKubernetesConfigCategory(resource, category),
+    ).length;
+  const routineMetadataOnlySummary = createMemo(() => {
+    const routine = tableState.filtered().filter(isRoutineMetadataOnlyConfig);
+    let configMaps = 0;
+    let secrets = 0;
+    const namespaces = new Set<string>();
+    for (const item of routine) {
+      if (item.type === 'k8s-configmap') configMaps += 1;
+      else if (item.type === 'k8s-secret') secrets += 1;
+      const ns = asTrimmedString(item.kubernetes?.namespace);
+      if (ns) namespaces.add(ns);
+    }
+    return {
+      total: routine.length,
+      configMaps,
+      secrets,
+      namespaceCount: namespaces.size,
+    };
+  });
+  const shouldCollapseRoutineMetadataOnly = createMemo(() => {
+    if (props.showRoutineMetadataOnly) return false;
+    if (showAllMetadataOnly()) return false;
+    if (tableState.search().trim().length > 0) return false;
+    if (props.showToolbar !== false && categoryFilter() === 'config') return false;
+    const summary = routineMetadataOnlySummary();
+    if (summary.total < ROUTINE_METADATA_ONLY_COLLAPSE_THRESHOLD) return false;
+    return tableState.filtered().length > summary.total;
+  });
+  const visibleRows = createMemo(() => {
+    const filtered = tableState.filtered();
+    if (!shouldCollapseRoutineMetadataOnly()) return filtered;
+    return filtered.filter((resource) => !isRoutineMetadataOnlyConfig(resource));
   });
   const drawer = createPlatformResourceDetailState({ idPrefix: 'kubernetes-config-drawer' });
   const resolveResourceLabel = createPlatformResourceLabelResolver(() => props.resources);
@@ -324,9 +385,7 @@ export const KubernetesConfigTable: Component<{
     storageKey: 'kubernetesConfig',
     sortKeys: KUBERNETES_CONFIG_SORT_KEYS,
   });
-  const sortedRows = createMemo(() =>
-    sort.sortRows(tableState.filtered(), getKubernetesConfigSortValue),
-  );
+  const sortedRows = createMemo(() => sort.sortRows(visibleRows(), getKubernetesConfigSortValue));
 
   return (
     <Show
@@ -346,11 +405,11 @@ export const KubernetesConfigTable: Component<{
             onSearchChange={tableState.setSearch}
             searchPlaceholder="Search config inventory"
             searchSuggestions={tableState.searchSuggestions}
-            status={tableState.status()}
-            onStatusChange={tableState.setStatus}
+            status={categoryFilter()}
+            onStatusChange={setCategoryFilter}
             statusOptions={withPlatformStatusCounts(
-              PLATFORM_HEALTH_FILTER_OPTIONS,
-              tableState.countForStatus,
+              KUBERNETES_CONFIG_TABLE_CATEGORY_OPTIONS,
+              countForCategory,
             )}
             visible={tableState.visible()}
             total={tableState.total()}
@@ -368,6 +427,42 @@ export const KubernetesConfigTable: Component<{
             />
           }
         >
+          <Show
+            when={routineMetadataOnlySummary().total >= ROUTINE_METADATA_ONLY_COLLAPSE_THRESHOLD}
+          >
+            <div
+              class="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border bg-surface-alt/70 px-3 py-2 text-xs text-muted"
+              data-k8s-metadata-only-summary
+            >
+              <span>
+                {shouldCollapseRoutineMetadataOnly() ? 'Hiding' : 'Showing'}{' '}
+                <strong class="font-medium text-base-content">
+                  {routineMetadataOnlySummary().total} metadata-only
+                </strong>{' '}
+                objects ({routineMetadataOnlySummary().configMaps} ConfigMaps,{' '}
+                {routineMetadataOnlySummary().secrets} Secrets
+                <Show when={routineMetadataOnlySummary().namespaceCount > 0}>
+                  {' '}
+                  across {routineMetadataOnlySummary().namespaceCount}{' '}
+                  {routineMetadataOnlySummary().namespaceCount === 1 ? 'namespace' : 'namespaces'}
+                </Show>
+                ) with payload collection omitted.
+              </span>
+              <Show
+                when={!props.showRoutineMetadataOnly && tableState.search().trim().length === 0}
+              >
+                <button
+                  type="button"
+                  class="shrink-0 font-medium text-primary hover:underline"
+                  onClick={() => setShowAllMetadataOnly((current) => !current)}
+                >
+                  {shouldCollapseRoutineMetadataOnly()
+                    ? `Show all ${routineMetadataOnlySummary().total}`
+                    : 'Hide routine metadata-only'}
+                </button>
+              </Show>
+            </div>
+          </Show>
           <PlatformTableShell
             title={props.title ?? 'Namespaces, ConfigMaps, Secrets, ServiceAccounts, RBAC'}
             tableClass="min-w-full table-fixed text-xs md:min-w-[1160px]"

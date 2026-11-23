@@ -126,18 +126,18 @@ const DOCKER_CONTAINER_COLUMNS: DockerContainerTableColumn[] = [
 // about 77px on a phone and 86px on desktop with padding; it takes that room
 // from the CPU and memory bars, ports and networks, which truncate anyway.
 const DOCKER_CONTAINER_DESKTOP_WIDTHS: Record<DockerContainerTableColumnId, number> = {
-  container: 16,
+  container: 15,
   host: 8,
   runtime: 7,
-  image: 16,
+  image: 20,
   state: 7.5,
   cpu: 6,
   memory: 7,
   restarts: 6,
   uptime: 5,
-  ports: 10,
-  networks: 8,
-  mounts: 5.5,
+  ports: 8,
+  networks: 6.5,
+  mounts: 5,
   updates: 9,
   actions: 9,
 };
@@ -183,16 +183,16 @@ const DOCKER_CONTAINER_RESPONSIVE_WIDTHS: Record<
   // Update control are short values that were clipped ("docker 2…") while the
   // percentage-only CPU and memory bars had room to spare.
   compact: {
-    container: 18,
-    host: 12,
+    container: 16.5,
+    host: 11,
     runtime: 9.5,
-    image: 16.5,
+    image: 20.5,
     state: 10,
     cpu: 6.5,
     memory: 8,
     restarts: 8.5,
     uptime: 7,
-    ports: 8,
+    ports: 6.5,
     updates: 12.5,
     actions: 6,
   },

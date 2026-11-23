@@ -66,7 +66,7 @@ afterEach(() => {
 });
 
 describe('KubernetesNodesTable', () => {
-  it('keeps identity near one-third width while exposing cluster and capacity on phones', () => {
+  it('keeps node identity readable on phones and demotes capacity below tablet width', () => {
     const { container } = render(() => (
       <KubernetesNodesTable
         resources={[makeNodeResource()]}
@@ -79,13 +79,13 @@ describe('KubernetesNodesTable', () => {
 
     const headers = [...container.querySelectorAll('thead th')];
     expect(headers.find((header) => header.textContent?.includes('Node'))).toHaveClass(
-      'platform-table-mobile-w-30',
+      'platform-table-mobile-w-38',
     );
     expect(headers.find((header) => header.textContent?.includes('Cluster'))).toHaveClass(
-      'platform-table-mobile-w-15',
+      'platform-table-mobile-w-20',
     );
     expect(headers.find((header) => header.textContent?.includes('Capacity'))).toHaveClass(
-      'platform-table-mobile-w-10',
+      'platform-table-phone-hidden',
     );
     expect(headers.find((header) => header.textContent?.includes('Role'))).toHaveClass(
       'platform-table-phone-hidden',

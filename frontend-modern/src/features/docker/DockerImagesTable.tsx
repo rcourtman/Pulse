@@ -1,8 +1,8 @@
 import { Show, createMemo, type Component } from 'solid-js';
+import { filterChipStatusDot } from '@/components/shared/FilterBar';
 import { TableCell, TableRow } from '@/components/shared/Table';
 import {
   PlatformWindowedRows,
-  PLATFORM_HEALTH_FILTER_OPTIONS,
   PlatformResponsiveTableLabel,
   PlatformSortableTableHead,
   PlatformTableEmptyState,
@@ -10,6 +10,7 @@ import {
   createPlatformTableFilterState,
   createPlatformTableSortState,
   getPlatformTableCellClassForKind,
+  type PlatformTableFilterOption,
   PlatformTableShell,
   type PlatformTableSortValue,
   withPlatformStatusCounts,
@@ -29,7 +30,30 @@ import {
   type DockerNativeTableProps,
 } from './DockerNativeTableShared';
 import { useDockerHostIdentities } from './dockerHostIdentity';
-import { filterDockerResources, type DockerResourceStatusFilter } from './dockerPageModel';
+import { filterDockerResources } from './dockerPageModel';
+
+type DockerImageFilter = 'all' | 'updates' | 'in-use' | 'unused';
+
+const DOCKER_IMAGE_FILTER_OPTIONS: PlatformTableFilterOption<DockerImageFilter>[] = [
+  { value: 'all', label: 'All' },
+  {
+    value: 'updates',
+    label: 'Updates',
+    tone: 'warning',
+    leading: filterChipStatusDot('bg-amber-500'),
+  },
+  {
+    value: 'in-use',
+    label: 'In use',
+    tone: 'success',
+    leading: filterChipStatusDot('bg-emerald-500'),
+  },
+  {
+    value: 'unused',
+    label: 'Unused',
+    leading: filterChipStatusDot('bg-slate-400'),
+  },
+];
 import {
   getDockerImageOperationalPresentation,
   type DockerImageUpdateTone,
@@ -52,10 +76,27 @@ export const DockerImagesTable: Component<
   DockerNativeTableProps & { relatedContainers?: Resource[] }
 > = (props) => {
   const hostIdentities = useDockerHostIdentities();
+  const filterImages = (
+    resources: Resource[],
+    search: string,
+    filter: DockerImageFilter,
+  ): Resource[] => {
+    const matchingSearch = filterDockerResources(resources, search, 'all');
+    if (filter === 'all') return matchingSearch;
+    const containers = props.relatedContainers ?? [];
+    return matchingSearch.filter((resource) => {
+      const presentation = getDockerImageOperationalPresentation(resource, containers);
+      if (filter === 'updates') {
+        return presentation.updateTone === 'warning' || presentation.updateTone === 'danger';
+      }
+      if (filter === 'in-use') return presentation.consumerCount > 0;
+      return presentation.consumerCount === 0;
+    });
+  };
   const tableState = createPlatformTableFilterState({
     resources: () => props.resources,
-    initialStatus: 'all' as DockerResourceStatusFilter,
-    filter: filterDockerResources,
+    initialStatus: 'all' as DockerImageFilter,
+    filter: filterImages,
   });
   const drawer = createPlatformResourceDetailState({ idPrefix: 'docker-image-drawer' });
   const resolveResourceLabel = createPlatformResourceLabelResolver(() => props.resources);
@@ -119,7 +160,7 @@ export const DockerImagesTable: Component<
             status={tableState.status()}
             onStatusChange={tableState.setStatus}
             statusOptions={withPlatformStatusCounts(
-              PLATFORM_HEALTH_FILTER_OPTIONS,
+              DOCKER_IMAGE_FILTER_OPTIONS,
               tableState.countForStatus,
             )}
             visible={tableState.visible()}

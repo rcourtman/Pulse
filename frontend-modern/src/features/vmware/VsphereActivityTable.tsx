@@ -88,7 +88,7 @@ const formatEntityType = (value: string): string => {
   if (normalized === 'host') return 'Host';
   if (normalized === 'vm') return 'VM';
   if (normalized === 'datastore') return 'Datastore';
-  return normalized ? normalized.charAt(0).toUpperCase() + normalized.slice(1) : '-';
+  return normalized ? normalized.charAt(0).toUpperCase() + normalized.slice(1) : '—';
 };
 
 const formatActivityKind = (kind: VmwareActivityKind): string => {
@@ -124,7 +124,7 @@ const formatIdentifierLabel = (value: string): string =>
     .join(' ');
 
 const formatActivityState = (row: VmwareActivityRow): string =>
-  row.state.trim() ? formatIdentifierLabel(row.state) : '-';
+  row.state.trim() ? formatIdentifierLabel(row.state) : '—';
 
 const detailDateTime = (value?: string): string => {
   if (!value) return '-';
@@ -526,7 +526,7 @@ export const VsphereActivityTable: Component<{
                             <span title={detailDateTime(activityTimestamp(activity))}>
                               <PlatformTableRelativeTimeValue
                                 value={activityTimestamp(activity)}
-                                emptyText="-"
+                                emptyText="—"
                               />
                             </span>
                           </TableCell>

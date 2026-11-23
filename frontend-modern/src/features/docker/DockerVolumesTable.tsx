@@ -1,9 +1,9 @@
 import { Show, createMemo, type Component } from 'solid-js';
 import { TableCell, TableRow } from '@/components/shared/Table';
 import { asTrimmedString } from '@/utils/stringUtils';
+import { filterChipStatusDot } from '@/components/shared/FilterBar';
 import {
   PlatformWindowedRows,
-  PLATFORM_HEALTH_FILTER_OPTIONS,
   PlatformSortableTableHead,
   PlatformTableEmptyState,
   PlatformTableRelativeTimeValue,
@@ -13,6 +13,7 @@ import {
   formatPlatformTableDateTimeValue,
   getPlatformTableCellClassForKind,
   getPlatformTableDateTimeSortValue,
+  type PlatformTableFilterOption,
   PlatformTableShell,
   type PlatformTableSortValue,
   withPlatformStatusCounts,
@@ -32,7 +33,23 @@ import {
   dockerTextValue,
   type DockerNativeTableProps,
 } from './DockerNativeTableShared';
-import { filterDockerResources, type DockerResourceStatusFilter } from './dockerPageModel';
+import { filterDockerStorageResources, type DockerStorageFilter } from './dockerPageModel';
+
+const DOCKER_VOLUME_FILTER_OPTIONS: PlatformTableFilterOption<DockerStorageFilter>[] = [
+  { value: 'all', label: 'All' },
+  {
+    value: 'active',
+    label: 'In use',
+    tone: 'success',
+    leading: filterChipStatusDot('bg-emerald-500'),
+  },
+  {
+    value: 'reclaimable',
+    label: 'Unused',
+    tone: 'warning',
+    leading: filterChipStatusDot('bg-amber-500'),
+  },
+];
 import type { Resource } from '@/types/resource';
 import { getSimpleStatusIndicator } from '@/utils/status';
 
@@ -75,13 +92,17 @@ const getDockerVolumeSortValue = (
   }
 };
 
-export const DockerVolumesTable: Component<DockerNativeTableProps> = (props) => {
+export const DockerVolumesTable: Component<
+  Omit<DockerNativeTableProps, 'externalStatus'> & {
+    externalFilter?: () => DockerStorageFilter;
+  }
+> = (props) => {
   const tableState = createPlatformTableFilterState({
     resources: () => props.resources,
-    initialStatus: 'all' as DockerResourceStatusFilter,
-    filter: filterDockerResources,
+    initialStatus: 'all' as DockerStorageFilter,
+    filter: filterDockerStorageResources,
     externalSearch: props.externalSearch,
-    externalStatus: props.externalStatus,
+    externalStatus: props.externalFilter,
   });
   const drawer = createPlatformResourceDetailState({ idPrefix: 'docker-volume-drawer' });
   const resolveResourceLabel = createPlatformResourceLabelResolver(() => props.resources);
@@ -115,7 +136,7 @@ export const DockerVolumesTable: Component<DockerNativeTableProps> = (props) => 
             status={tableState.status()}
             onStatusChange={tableState.setStatus}
             statusOptions={withPlatformStatusCounts(
-              PLATFORM_HEALTH_FILTER_OPTIONS,
+              DOCKER_VOLUME_FILTER_OPTIONS,
               tableState.countForStatus,
             )}
             visible={tableState.visible()}
