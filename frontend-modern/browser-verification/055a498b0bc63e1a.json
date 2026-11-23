@@ -1,0 +1,64 @@
+{
+  "version": 1,
+  "base_sha": "49dbd8432f6db425fc37c512331f215a94744854",
+  "verified_at": "2026-11-23T12:02:09Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/UserAssignmentsDialog.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/UserAssignmentsDialog.tsx": "9c5a7e4aa0ba619290b0f9b4acdf80ec4994f8ba4052f06983e14038b2e2dc09"
+  },
+  "routes": [
+    "Settings > User Access > Manage Access. Production UserAssignmentsPanel, role editor, runtime gate, shared dialog, RBAC client and CSS in a local fixture; not full App or IdP."
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Matched unchanged and changed drafts in light and dark with two namesake principals, two same-name roles with different IDs and scope descriptions, an unchanged selected role and an unlisted saved role.",
+    "Before shows a two-line cutoff and unchanged selections are indistinguishable from pending additions and removals. After retains full descriptions and shows only draft deltas. Role IDs, saved permissions, retained unlisted role note, and Save/Cancel stay readable.",
+    "Matched duplicate-count case in dark: the selected role stays selected, but two entries become one on save. On the phone the label and saved-role retention explanation both remain visible without scrolling."
+  ],
+  "interactions": [
+    "Use Enter to open the exact saved principal and Space to add, remove and revert roles; no write is submitted by toggling. Check accessible descriptions, focus and disabled Save on unchanged or reverted draft.",
+    "One keyboard submit to the local HTTP fixture sends the exact selected and retained IDs to the exact principal. Reopen to check saved memberships and permission readback, then Escape returns focus.",
+    "Toggle a duplicated role off and on using Space; membership is unchanged, Save is enabled for the entry count change and no write occurred. Escape returns focus."
+  ],
+  "playwright_version": "1.56.1",
+  "browser_version": "Chromium 141.0.7390.37",
+  "themes": [
+    "light",
+    "dark"
+  ],
+  "source_note": "Before is the base archive; after replaces the exact runtime file recorded here. Both locked fixture builds, runtime hashes, scripts, results and ten pairs inspected through the native image tool are linked in the lane outcome.",
+  "capture_sha256": {
+    "before-desktop-light-saved.png": "690ba9406c518b04bb00d66b12c6f22f9aa23c6e9182b2f046d44a80f6951273",
+    "before-desktop-light-draft.png": "1af58d163fdf8109e6bf4ecd6e19d164e3af0525db767ffa11fb41ecd3c66092",
+    "before-desktop-dark-saved.png": "3268ee1bd5ff85d5a751cdb57fc7f1461b1fd6182bac6cf73dd6a65ed8d8f842",
+    "before-desktop-dark-draft.png": "38b2a6e887b01552d166f5a3704b25c210bc444c5a76637e1cd955ccbad2c477",
+    "before-phone-light-saved.png": "ad314004cb693e8d3e602d4ce56b7eeb790c6a1b3312f938d6699906bce3a92b",
+    "before-phone-light-draft.png": "f6e1fbe29f59415ca4cb63cac9fddd599075a275d9f1c1fd366aa5673174abef",
+    "before-phone-dark-saved.png": "a4f4fe2cb436553efc7fdf8b36b4cd21b1a1d3fed1a2cab94ee9d4c8aa51b7f2",
+    "before-phone-dark-draft.png": "99142e3f5416bf75d8a119e3230dcd7e336ea77dbbc84e25b80623be2561544b",
+    "before-desktop-dark-duplicate-draft.png": "953728e670508831ffa66703cdf1204d59db7afd4c5679b5d298c3a832a68c09",
+    "before-phone-dark-duplicate-draft.png": "f88d911f789bd38150d189135ecd0cabfc169bf9b786f77a9a8a0acce1b00e50",
+    "after-desktop-light-saved.png": "b9d66d4ddefdc2c4fe1ddb6a90f2b0c87813ce3f22e8d464e0976776cba40323",
+    "after-desktop-light-draft.png": "9824d86cf88755f0a1b9a72e3677f45d1079d14266866a671e25fa01806c2bfb",
+    "after-desktop-dark-saved.png": "e12b2745de450ad644d02decd31ebd80bc686581b5249004de457ef3261c5407",
+    "after-desktop-dark-draft.png": "b8ea4a6937315c491b464178eb15e31db3d41a90aff1d7917c90b67d9326c5df",
+    "after-phone-light-saved.png": "98b2bbea5e73caf909ccc7c8e84e15f08316321213162608924d5872fb8a2d0c",
+    "after-phone-light-draft.png": "86c29383f8e523e6780a037085815ee8573dbf34e6d434aca41b39eb12745cea",
+    "after-phone-dark-saved.png": "ee331d8d0e8cac068485b9d453fbcd89d7bd6fd33ce875f61a9c2ad22ae963c3",
+    "after-phone-dark-draft.png": "b31fe19d9cff317399f49b92eed368d68b7d624d806d40cb4a813ade64e67a06",
+    "after-desktop-dark-duplicate-draft.png": "7386e0a5a96406659856f67b037060ea794a285f5ad83d123e02a162c0032205",
+    "after-phone-dark-duplicate-draft.png": "76c0feacebe396465d7c9e7f0df8e7337caefe46bde49df0b678d9ebad9c43fe"
+  }
+}

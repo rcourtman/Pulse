@@ -518,6 +518,54 @@ describe('RBAC paywall settings panels', () => {
     expect(dialog.getByRole('button', { name: 'Close user assignments' })).toBeEnabled();
   });
 
+  it('identifies pending additions and removals by exact role and clears them when reverted', async () => {
+    const north = {
+      id: 'north/monitor',
+      name: 'Fleet role',
+      description: 'Read alerts in the North region only.',
+      permissions: [],
+    };
+    const south = {
+      id: 'south/operate',
+      name: north.name,
+      description: 'Operate workloads in the South region only.',
+      permissions: [],
+    };
+    getRolesMock.mockResolvedValue([north, south]);
+    getUsersMock.mockResolvedValue([{ username: 'alice', roleIds: [north.id, 'unlisted-role'] }]);
+    getUserPermissionsMock.mockResolvedValue([{ action: 'read', resource: 'alerts' }]);
+    render(() => <UserAssignmentsPanel />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Manage access for alice' }));
+    const dialog = within(await screen.findByRole('dialog', { name: 'Manage access: alice' }));
+    const remove = dialog.getByRole('checkbox', { name: /north\/monitor/ });
+    const add = dialog.getByRole('checkbox', { name: /south\/operate/ });
+    const save = dialog.getByRole('button', { name: 'Save Changes' });
+    expect(remove).toBeChecked();
+    expect(add).not.toBeChecked();
+    expect(remove).not.toHaveAccessibleDescription();
+    expect(add).not.toHaveAccessibleDescription();
+
+    fireEvent.click(remove);
+    fireEvent.click(add);
+    expect(remove).not.toBeChecked();
+    expect(add).toBeChecked();
+    expect(remove).toHaveAccessibleDescription('Remove on save');
+    expect(add).toHaveAccessibleDescription('Add on save');
+    const saved = within(dialog.getByRole('region', { name: 'Saved permissions' }));
+    const rules = await saved.findByRole('list', { name: 'Returned rules' });
+    expect(rules).toHaveTextContent('read:alerts');
+    expect(saved.getByText('unlisted-role')).toBeVisible();
+    expect(save).toBeEnabled();
+    expect(updateUserRolesMock).not.toHaveBeenCalled();
+
+    fireEvent.click(remove);
+    fireEvent.click(add);
+    expect(remove).not.toHaveAccessibleDescription();
+    expect(add).not.toHaveAccessibleDescription();
+    expect(save).toBeDisabled();
+    expect(updateUserRolesMock).not.toHaveBeenCalled();
+  });
+
   it('conservatively treats changed duplicate counts as a changed draft without sorting the payload', async () => {
     getUsersMock.mockResolvedValue([{ username: 'alice', roleIds: ['admin', 'admin'] }]);
     render(() => <UserAssignmentsPanel />);
@@ -527,7 +575,10 @@ describe('RBAC paywall settings panels', () => {
     const admin = dialog.getByRole('checkbox', { name: /Admin/ });
     expect(save).toBeDisabled();
     fireEvent.click(admin);
+    expect(admin).toHaveAccessibleDescription('Remove on save');
     fireEvent.click(admin);
+    expect(admin).toBeChecked();
+    expect(admin).toHaveAccessibleDescription('Change role entries from 2 to 1 on save');
     expect(save).toBeEnabled();
     fireEvent.click(save);
     await waitFor(() =>

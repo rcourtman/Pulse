@@ -109,6 +109,13 @@ draft. Pending writes remain disabled; uncertain writes still require fresh
 saved-access readback rather than replay. Reader, tenant, capability, CSRF,
 accepted-row and backend authorization rules are unchanged.
 
+Each role choice keeps its full catalogue description visible under its exact
+ID. The editor identifies additions and removals as changes on save, not saved
+assignments or effective permissions, and associates the same text with the
+checkbox. An entry count change without a membership change is described
+separately. Returning to the saved choices clears those cues; the saved
+permissions summary and retained unlisted IDs are not recalculated from the draft.
+
 `RBACPaywallPanels.test.tsx` and the User Access selection/transport suites cover
 unchanged, reverted/reordered, empty, repeated and exact-key selections, changed
 duplicate counts, opaque separators, a

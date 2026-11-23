@@ -77,8 +77,16 @@ interface UserAssignmentsDialogProps {
   onToggleRole: (roleId: string) => void;
 }
 
+function countRoleEntries(roleIds: readonly string[]) {
+  const counts = new Map<string, number>();
+  for (const id of roleIds) counts.set(id, (counts.get(id) ?? 0) + 1);
+  return counts;
+}
+
 export const UserAssignmentsDialog: Component<UserAssignmentsDialogProps> = (props) => {
   const permissionsTitleID = createUniqueId();
+  const savedRoleCounts = createMemo(() => countRoleEntries(props.editingUser?.roleIds ?? []));
+  const draftRoleCounts = createMemo(() => countRoleEntries(props.formRoleIds));
   let savedPermissions: HTMLDivElement | undefined;
   const reloadSavedPermissions = () => {
     // Both controls withdraw as the read changes state. Keep keyboard review
@@ -135,7 +143,7 @@ export const UserAssignmentsDialog: Component<UserAssignmentsDialogProps> = (pro
             </button>
           </div>
 
-          <div class="min-h-0 overflow-y-auto px-4 sm:px-6 py-4 space-y-4 sm:py-6 sm:space-y-8">
+          <div class="min-h-0 overflow-y-auto px-4 py-3 space-y-3 sm:px-6 sm:py-6 sm:space-y-8">
             <Show when={props.actionError}>
               {(message) => (
                 <InlineNotice
@@ -155,42 +163,67 @@ export const UserAssignmentsDialog: Component<UserAssignmentsDialogProps> = (pro
                 <Shield class="w-4 h-4 text-blue-500" />
                 Select Roles
               </h4>
-              <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div class="grid grid-cols-1 gap-2 sm:grid-cols-2 sm:gap-3">
                 <For each={props.roles}>
-                  {(role) => (
-                    <label
-                      class={`flex min-w-0 flex-col p-2 sm:p-3 rounded-md border transition-all [overflow-wrap:anywhere] ${props.saving ? 'cursor-not-allowed' : 'cursor-pointer'} ${props.formRoleIds.includes(role.id) ? 'bg-blue-50 border-blue-200 dark:bg-blue-900/25 dark:border-blue-800' : 'bg-surface border-border hover:border-blue-100 dark:hover:border-blue-900/25'}`}
-                    >
-                      <div class="flex items-start justify-between gap-2 mb-1">
-                        <div class="flex min-w-0 items-start gap-2 shadow-xs">
-                          <input
-                            type="checkbox"
-                            aria-label={`${getRoleIdentityLabel(role)} ${role.description}`.trim()}
-                            checked={props.formRoleIds.includes(role.id)}
-                            disabled={props.saving}
-                            onChange={() => props.onToggleRole(role.id)}
-                            class="mt-0.5 w-4 h-4 shrink-0 text-blue-600 rounded-sm border-border focus:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-60"
-                          />
-                          <RoleAccessIdentity
-                            id={role.id}
-                            name={role.name}
-                            nameClass="text-sm font-semibold text-base-content"
-                          />
+                  {(role) => {
+                    const changeId = createUniqueId();
+                    const draftCount = () => draftRoleCounts().get(role.id) ?? 0;
+                    const change = createMemo(() => {
+                      const saved = savedRoleCounts().get(role.id) ?? 0;
+                      const draft = draftCount();
+                      if (draft === saved) return;
+                      if (!saved) return 'Add on save';
+                      if (!draft) return 'Remove on save';
+                      // Turning a duplicated saved role off and back on keeps
+                      // its membership but changes the submitted entry count.
+                      return `Change role entries from ${saved} to ${draft} on save`;
+                    });
+                    return (
+                      <label
+                        class={`grid min-w-0 grid-cols-[auto_minmax(0,1fr)] items-start gap-x-2 p-2 sm:p-3 rounded-md border transition-all [overflow-wrap:anywhere] ${props.saving ? 'cursor-not-allowed' : 'cursor-pointer'} ${draftCount() ? 'bg-blue-50 border-blue-200 dark:bg-blue-900/25 dark:border-blue-800' : 'bg-surface border-border hover:border-blue-100 dark:hover:border-blue-900/25'}`}
+                      >
+                        <input
+                          type="checkbox"
+                          aria-label={`${getRoleIdentityLabel(role)} ${role.description}`.trim()}
+                          aria-describedby={change() ? changeId : undefined}
+                          checked={draftCount() > 0}
+                          disabled={props.saving}
+                          onChange={() => props.onToggleRole(role.id)}
+                          class="mt-0.5 w-4 h-4 shrink-0 text-blue-600 rounded-sm border-border focus:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-60"
+                        />
+                        <div class="min-w-0">
+                          <div class="flex flex-wrap items-start justify-between gap-x-2 gap-y-0.5">
+                            <RoleAccessIdentity
+                              id={role.id}
+                              name={role.name}
+                              nameClass="text-sm font-semibold text-base-content"
+                            />
+                            <Show when={role.isBuiltIn || change()}>
+                              <div class="flex min-w-0 flex-wrap items-center gap-1">
+                                <Show when={role.isBuiltIn}>
+                                  <BadgeCheck class="w-4 h-4 shrink-0 text-blue-500" />
+                                </Show>
+                                <Show when={change()}>
+                                  <span
+                                    id={changeId}
+                                    class="rounded-sm border border-border bg-surface-alt px-1.5 text-xs font-medium text-base-content"
+                                  >
+                                    {change()}
+                                  </span>
+                                </Show>
+                              </div>
+                            </Show>
+                          </div>
+                          <p class="text-xs leading-4 text-muted sm:mt-1">{role.description}</p>
                         </div>
-                        <Show when={role.isBuiltIn}>
-                          <BadgeCheck class="w-4 h-4 shrink-0 text-blue-500" />
-                        </Show>
-                      </div>
-                      <p class="text-xs text-muted line-clamp-2 leading-relaxed pl-6">
-                        {role.description}
-                      </p>
-                    </label>
-                  )}
+                      </label>
+                    );
+                  }}
                 </For>
               </div>
             </div>
 
-            <div class="space-y-4 pt-4 border-t border-border-subtle">
+            <div class="space-y-3 pt-3 border-t border-border-subtle sm:space-y-4 sm:pt-4">
               <div class="flex items-center gap-2">
                 <h4
                   id={permissionsTitleID}
@@ -253,7 +286,7 @@ export const UserAssignmentsDialog: Component<UserAssignmentsDialogProps> = (pro
                     </Show>
                   )}
                 </Show>
-                <p class="mt-4 text-xs text-muted">
+                <p class="mt-3 text-xs text-muted sm:mt-4">
                   This summary can omit duplicate and inherited rules. Review individual rules in
                   Roles. Unsaved role selections are not included. This is not an access check for a
                   specific resource.
