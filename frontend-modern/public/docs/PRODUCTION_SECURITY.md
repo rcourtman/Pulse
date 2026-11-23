@@ -261,6 +261,16 @@ and measure their own workload.
   during normal staged operation. Keep measurement windows and resource limits
   comparable; database size is not a write rate. Do not prune history or change
   polling to hide a fault; use [performance guidance](TROUBLESHOOTING.md#excessive-cpu-writes-or-database-growth).
+- [ ] Before widening a memory-limited Proxmox LXC rollout, compare ordinary
+  polling before and after the update at the same LXC limit and workload.
+  Use equal windows at comparable uptime. Compare peak **container memory**
+  in each window with the limit. Keep Pulse's process RSS separate. Check for
+  new kernel memory kills, unexpected Pulse restarts and gaps in fresh readings
+  for the same guests and backup datastores. An open dashboard does not prove
+  that polling continued. A lifetime peak from before the window does not
+  measure it. Treat missing evidence as unverified. If Pulse stops, use the
+  [memory-stop checks](TROUBLESHOOTING.md#after-a-memory-cgroup-kill) instead.
+  Do not change the limit, restart again or induce a kill just to collect proof.
 - [ ] Record the Pulse version, enabled integrations, privileges, exposed
   ports, backup location, and rollback procedure in the site's runbook.
 

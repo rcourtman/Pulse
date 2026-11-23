@@ -103,6 +103,23 @@ class ProductionRolloutDocsTest(unittest.TestCase):
         self.assertIn("CONFIGURATION.md#multiple-proxmox-installations", text)
         self.assertIn("TROUBLESHOOTING.md#excessive-cpu-writes-or-database-growth", text)
 
+    def test_lxc_rollout_checks_collection_and_headroom_at_the_same_limit(self):
+        checklist = section("## Production rollout checklist")
+        items = [item for item in checklist.split("- [ ] ")
+                 if item.startswith("Before widening a memory-limited Proxmox LXC rollout")]
+        self.assertEqual(len(items), 1)
+        item = items[0]
+        for requirement in ("same LXC limit and workload", "equal windows at comparable uptime",
+                            "peak **container memory**", "process RSS separate",
+                            "kernel memory kills", "unexpected Pulse restarts", "fresh readings",
+                            "same guests and backup datastores", "lifetime peak from before",
+                            "missing evidence as unverified", "Do not change the limit, restart again or induce a kill"):
+            with self.subTest(requirement=requirement):
+                self.assertIn(requirement, item)
+        self.assertIn("TROUBLESHOOTING.md#after-a-memory-cgroup-kill", item)
+        target = (ROOT / "frontend-modern/public/docs/TROUBLESHOOTING.md").read_text(encoding="utf-8")
+        self.assertIn("\n##### After a memory-cgroup kill\n", target)
+
     def test_scale_and_privilege_limits_remain_explicit(self):
         text = " ".join(DOC.read_text().split())
         for boundary in ("dedicated read-only or narrowly scoped API token",
