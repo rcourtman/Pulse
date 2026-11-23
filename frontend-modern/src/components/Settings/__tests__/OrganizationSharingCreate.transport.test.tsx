@@ -183,7 +183,7 @@ function fillForm(entry: Entry, role: Role = 'viewer') {
   }) as HTMLOptionElement;
   fireEvent.change(targetInput(), { target: { value: destination.value } });
   expect(targetInput()).toHaveAccessibleDescription(`${target.displayName} · ID: ${target.id}`);
-  fireEvent.change(screen.getByRole('combobox', { name: 'Access Role' }), {
+  fireEvent.change(screen.getByRole('combobox', { name: 'Minimum member role' }), {
     target: { value: role },
   });
   if (entry === 'quick pick') {
@@ -683,7 +683,7 @@ describe('Create Share through real capability withdrawal', () => {
     expect(writes()).toHaveLength(0);
     expect(outgoing).toEqual([]);
     expect(targetInput()).toHaveValue(target.id);
-    expect(screen.getByRole('combobox', { name: 'Access Role' })).toHaveValue('admin');
+    expect(screen.getByRole('combobox', { name: 'Minimum member role' })).toHaveValue('admin');
     if (entry === 'quick pick') expect(resourceInput()).toHaveValue(quickPickValue);
     else expect(screen.getByLabelText('Resource ID')).toHaveValue(` ${manualResourceID} `);
     expect(createButton()).toBeEnabled();
@@ -749,7 +749,7 @@ describe('Create Share through real capability withdrawal', () => {
       await turn();
       expect(targetInput()).toHaveValue(target.id);
       expect(screen.getByLabelText('Resource ID')).toHaveValue('current::draft/independent');
-      expect(screen.getByRole('combobox', { name: 'Access Role' })).toHaveValue('admin');
+      expect(screen.getByRole('combobox', { name: 'Minimum member role' })).toHaveValue('admin');
       expect(createButton()).toBeEnabled();
       expectSavedGrant('quick pick', 'editor');
       expect(inventoryReads()).toHaveLength(10);
