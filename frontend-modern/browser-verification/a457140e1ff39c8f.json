@@ -1,0 +1,34 @@
+{
+  "version": 1,
+  "base_sha": "1e0546bad83270ff4cb61999cca761abe19d9fb7",
+  "verified_at": "2026-11-23T06:00:30Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/SSOProvidersPanel.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/SSOProvidersPanel.tsx": "be00af5c4858aec52c6fc6098441d6f312c0009ce5cee15c04627e2c21baccf8"
+  },
+  "routes": [
+    "/settings/security-sso"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 960
+    },
+    {
+      "width": 360,
+      "height": 780
+    }
+  ],
+  "states": [
+    "Matched production-mode Chromium 141.0.7390.37 / Playwright 1.56.1; desktop light and touch phone dark. 746 browser assertions and sixteen inspected before/after captures.",
+    "Add from metadata URL and Edit from saved XML show an unread-signing-cert warning without obscuring metadata read or sign-in not tested. The detailed result keeps the identity, SSO URL and next check. At narrow width, the full dialog title, Test/Preview, metadata URL guidance and footer stay in view.",
+    "A current certificate, mixed current/expired certificates, a manual URL-format check, and incomplete metadata keep distinct existing outcomes. Read-only inventory cannot add or edit."
+  ],
+  "interactions": [
+    "Run Test once per fixture; compare the exact payload and serve the captured offline handler response. Use Enter or touch to navigate from the sticky result to its details; dismiss back to Test and clear old results when the tested input changes.",
+    "Check Save/Create and Cancel remain in view and the diagnostic does not disable Save. No saves, real provider requests or sign-in attempts."
+  ]
+}
