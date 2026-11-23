@@ -254,4 +254,23 @@ describe('ProxmoxBackupJobsCard', () => {
     expect(screen.getAllByRole('button')[0]).not.toHaveClass('opacity-40');
     expect(container.querySelector('[data-backup-jobs-chosen-day]')).toBeNull();
   });
+
+  it('uses compact mobile spacing and pill typography so 24h outcome pills fit on one phone row', () => {
+    const { container } = render(() => (
+      <ProxmoxBackupJobsCard
+        jobs={payload({
+          last24h: {
+            historyState: 'complete',
+            counts: { success: 619, failed: 35, warning: 0, running: 33, unknown: 0 },
+            failures: [],
+          },
+        })}
+      />
+    ));
+
+    const strip = container.querySelector('[data-backup-jobs-last24h]')!;
+    expect(strip).toHaveClass('gap-1', 'sm:gap-1.5');
+    const failedPill = container.querySelector('[data-backup-jobs-pill="failed"]')!;
+    expect(failedPill).toHaveClass('px-1', 'sm:px-1.5', 'text-[10px]', 'sm:text-[11px]');
+  });
 });

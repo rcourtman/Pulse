@@ -7,6 +7,7 @@ import {
 } from '../ProxmoxBackupServersTable';
 import { ProxmoxBackupsCoverageStrip } from '../ProxmoxBackupsCoverageStrip';
 import { ProxmoxRecoverableTable } from '../ProxmoxRecoverableTable';
+import { getRecoverableColumnWidthStyle } from '../proxmoxBackupsTablePresentation';
 import type { RecoverableArtifact } from '../proxmoxBackupRecoveryModel';
 import { collectDatastoreJobFailures } from '../proxmoxBackupServerJobs';
 import type { BackupVerdict } from '../proxmoxBackupVerdict';
@@ -169,5 +170,56 @@ describe('Proxmox backups and PBS audit fixes', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /Sync failed on 2 datastores/i }));
     expect(onSelectDatastoreProblem).toHaveBeenCalledTimes(1);
+  });
+
+  it('gives the By date Workload column generous desktop width and prioritizes the workload name over the connection label', () => {
+    const fullWidth = Number.parseFloat(
+      String(getRecoverableColumnWidthStyle('workload', 'full').width ?? '0'),
+    );
+    expect(fullWidth).toBeGreaterThanOrEqual(22);
+
+    const artifact: RecoverableArtifact = {
+      id: 'rec-1',
+      nativeId: 'backup-1',
+      sourceKind: 'pbs',
+      sourceLabel: 'PBS',
+      workload: {
+        key: 'pve1:qemu:101',
+        type: 'vm',
+        typeLabel: 'VM',
+        vmid: '101',
+        label: 'checkout-web-02',
+        name: 'checkout-web-02',
+        node: 'west-a',
+        instance: 'Production West',
+      },
+      createdAt: '2026-11-23T18:30:00Z',
+      createdMs: Date.parse('2026-11-23T18:30:00Z'),
+      size: 1024 * 1024,
+      location: 'backup-vault / primary-vault',
+      detail: 'PBS backup',
+      protected: true,
+      verified: true,
+    };
+
+    render(() => (
+      <ProxmoxRecoverableTable
+        artifacts={[artifact]}
+        hasAnyArtifacts
+        emptyIcon={<span />}
+        emptyTitle="No backups"
+        emptyDescription="No backups"
+        sortKey={() => 'created'}
+        sortDirection={() => 'desc'}
+        onSort={() => undefined}
+        sizeMaxBytes={1024 * 1024}
+        layoutWidth={() => 1440}
+        showWorkloadConnection
+      />
+    ));
+
+    const nameEl = screen.getByText('checkout-web-02');
+    expect(nameEl).toHaveClass('shrink-0', 'max-w-[72%]');
+    expect(screen.getByText('Production West')).toBeInTheDocument();
   });
 });

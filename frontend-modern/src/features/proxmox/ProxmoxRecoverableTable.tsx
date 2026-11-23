@@ -344,7 +344,14 @@ export function ProxmoxRecoverableTable(props: {
               onToggle={() => drawer.toggle(artifact)}
             />
             <div class="flex min-w-0 flex-1 items-baseline gap-1.5">
-              <span class="truncate font-semibold" title={artifact.workload.label}>
+              <span
+                class={
+                  showWorkloadConnection() && getBackupWorkloadPVEConnection(artifact.workload)
+                    ? 'max-w-[72%] shrink-0 truncate font-semibold'
+                    : 'truncate font-semibold'
+                }
+                title={artifact.workload.label}
+              >
                 {artifact.workload.name || artifact.workload.label}
               </span>
               <Show when={!columnVisible('targetId') && artifact.workload.vmid}>

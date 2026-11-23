@@ -82,12 +82,12 @@ export const CEPH_PHONE_COLUMN_WIDTHS: Readonly<Record<CephPhoneColumn, number>>
 export const CEPH_COLUMN_WEIGHTS: Readonly<Record<CephColumn, number>> = {
   cluster: 20,
   health: 10,
-  quorum: 13,
+  quorum: 11,
   osds: 12,
   pgs: 6,
   pools: 13,
   capacity: 13,
-  services: 22,
+  services: 24,
   detail: 14,
 };
 
@@ -152,9 +152,38 @@ function indicatorFor(category: CephStatusFilter): {
   }
 }
 
-function summarizeServices(services: ResourceCephServiceMeta[] | undefined): string {
-  if (!services || services.length === 0) return '—';
-  return services.map((svc) => `${svc.type}:${svc.running}/${svc.total}`).join(' · ');
+function servicesCell(services: ResourceCephServiceMeta[] | undefined): JSX.Element {
+  const reported = (services ?? []).filter((svc) => svc.total > 0);
+  if (reported.length === 0) return <span class="text-muted">—</span>;
+  return (
+    <span class="tabular-nums">
+      <For each={reported}>
+        {(svc, idx) => {
+          const degraded = svc.running < svc.total;
+          const down = svc.running === 0;
+          const label = `${svc.type.toUpperCase()} ${svc.running}/${svc.total}`;
+          return (
+            <>
+              <Show when={idx() > 0}>
+                <span class="text-muted"> · </span>
+              </Show>
+              <span
+                class={
+                  down
+                    ? 'font-semibold text-red-600 dark:text-red-300'
+                    : degraded
+                      ? 'font-semibold text-amber-600 dark:text-amber-300'
+                      : undefined
+                }
+              >
+                {label}
+              </span>
+            </>
+          );
+        }}
+      </For>
+    </span>
+  );
 }
 
 function poolsLabel(resource: Resource): JSX.Element {
@@ -195,13 +224,50 @@ function osdLabel(resource: Resource): JSX.Element {
   );
 }
 
-function quorumLabel(meta: { numMons: number; numMgrs: number } | undefined): JSX.Element {
+function quorumLabel(
+  meta:
+    | {
+        numMons?: number;
+        numMgrs?: number;
+        services?: ResourceCephServiceMeta[];
+      }
+    | undefined,
+): JSX.Element {
   if (!meta) return <span class="text-muted">—</span>;
+  const monSvc = meta.services?.find((svc) => svc.type.toLowerCase() === 'mon' && svc.total > 0);
+  if (monSvc) {
+    const majority = Math.floor(monSvc.total / 2) + 1;
+    const detail = `${monSvc.running} of ${monSvc.total} monitors running (quorum requires ${majority})`;
+    if (monSvc.running < majority) {
+      return (
+        <span class="font-semibold text-red-600 dark:text-red-300" title={detail}>
+          No quorum
+        </span>
+      );
+    }
+    if (monSvc.running < monSvc.total) {
+      return (
+        <span class="font-semibold text-amber-600 dark:text-amber-300" title={detail}>
+          Degraded
+        </span>
+      );
+    }
+    return <span title={detail}>In quorum</span>;
+  }
+  const mons = meta.numMons ?? 0;
+  if (mons <= 0) {
+    return (
+      <span class="font-semibold text-red-600 dark:text-red-300" title="No Ceph monitors reported">
+        No quorum
+      </span>
+    );
+  }
+  const mgrs = meta.numMgrs ?? 0;
   return (
-    <span class="tabular-nums">
-      MON {meta.numMons}
-      <span class="text-muted"> · </span>
-      MGR {meta.numMgrs}
+    <span
+      title={`${mons} ${mons === 1 ? 'monitor' : 'monitors'} · ${mgrs} ${mgrs === 1 ? 'manager' : 'managers'}`}
+    >
+      In quorum
     </span>
   );
 }
@@ -383,9 +449,7 @@ export const ProxmoxCephTable: Component<{
                   Health
                 </TableHead>
                 <Show when={showQuorum()}>
-                  <TableHead class={`${getPlatformTableHeadClassForKind('numeric-value')}`}>
-                    Quorum
-                  </TableHead>
+                  <TableHead class={getPlatformTableHeadClassForKind('text')}>Quorum</TableHead>
                 </Show>
                 <TableHead
                   class={`${getPlatformTableHeadClassForKind('numeric-value')} platform-table-mobile-w-15`}
@@ -475,7 +539,7 @@ export const ProxmoxCephTable: Component<{
                           </TableCell>
                           <Show when={showQuorum()}>
                             <TableCell
-                              class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
+                              class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
                             >
                               {quorumLabel(cluster.ceph)}
                             </TableCell>
@@ -509,9 +573,9 @@ export const ProxmoxCephTable: Component<{
                           </TableCell>
                           <Show when={showServices()}>
                             <TableCell
-                              class={`${getPlatformTableCellClassForKind('text')} text-base-content font-mono text-[11px]`}
+                              class={`${getPlatformTableCellClassForKind('text')} text-base-content text-[11px]`}
                             >
-                              {summarizeServices(cluster.ceph?.services)}
+                              {servicesCell(cluster.ceph?.services)}
                             </TableCell>
                           </Show>
                           <Show when={showDetail()}>

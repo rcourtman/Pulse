@@ -29,7 +29,7 @@ import {
 type Outcome = keyof BackupJobsCounts;
 
 const PILL_BASE =
-  'inline-flex items-center whitespace-nowrap rounded-md px-1.5 py-0.5 text-[11px] font-semibold tabular-nums';
+  'inline-flex items-center whitespace-nowrap rounded-md px-1 sm:px-1.5 py-0.5 text-[10px] sm:text-[11px] font-semibold tabular-nums';
 
 const OUTCOMES: readonly {
   key: Outcome;
@@ -214,7 +214,7 @@ export const ProxmoxBackupJobsCard: Component<{
             fallback={<span class="text-[11px] text-muted">History unavailable</span>}
           >
             <span
-              class="inline-flex flex-wrap items-center justify-end gap-1.5"
+              class="inline-flex flex-wrap items-center justify-end gap-1 sm:gap-1.5"
               data-backup-jobs-last24h
             >
               <Show

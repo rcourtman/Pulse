@@ -943,6 +943,25 @@ describe('ProxmoxBackupsTable', () => {
       await screen.findAllByText('pbs-docker');
       expect(screen.queryByRole('button', { name: /^Day:/ })).not.toBeInTheDocument();
     });
+
+    it('shows a day-filter hint when no day is active and lets operators clear an active day from the toolbar', async () => {
+      mockBackupAPIs();
+      window.history.replaceState({}, '', '/proxmox/backups/date');
+      renderWithDays();
+      await screen.findAllByText('pbs-docker');
+
+      expect(screen.getByText('Select a bar in Backup jobs to filter by day')).toBeInTheDocument();
+
+      await fireEvent.click(screen.getByRole('button', { name: 'Backed up day' }));
+      await waitFor(() => expect(dayParam()).toBe('2026-05-25'));
+      expect(screen.queryByText('Select a bar in Backup jobs to filter by day')).toBeNull();
+      const activeDay = document.querySelector('[data-backup-active-day]')!;
+      expect(activeDay).toHaveTextContent('Filtered to May 25, 2026');
+
+      await fireEvent.click(screen.getByRole('button', { name: 'Clear day' }));
+      await waitFor(() => expect(dayParam()).toBeNull());
+      expect(screen.getByText('Select a bar in Backup jobs to filter by day')).toBeInTheDocument();
+    });
   });
 
   it('places a page-owned summary beside Backup health', async () => {
