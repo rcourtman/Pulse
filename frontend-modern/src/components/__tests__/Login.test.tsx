@@ -160,6 +160,64 @@ describe('Login', () => {
     afterEach(() => window.history.pushState(null, '', '/'));
 
     it.each([
+      ['oidc=success', false, 'Pulse couldn’t confirm your session after single sign-on.'],
+      ['saml=success', true, 'Pulse couldn’t confirm your session after single sign-on.'],
+      [
+        'oidc=success&saml=error&saml_error=invalid_state',
+        true,
+        'The sign-in attempt expired. Please try again.',
+      ],
+    ])(
+      'does not claim a signed-in session when Login displays after %s',
+      async (returnQuery, hideLocalLogin, message) => {
+        window.history.pushState(null, '', `/login?${returnQuery}&view=fixture`);
+        vi.mocked(window.history.replaceState).mockClear();
+        const onLogin = vi.fn();
+        render(() => (
+          <Login
+            onLogin={onLogin}
+            securityStatus={{
+              hasAuthentication: true,
+              requiresAuth: true,
+              hideLocalLogin,
+              ssoProviders: [
+                {
+                  id: 'workforce',
+                  name: 'Workforce',
+                  displayName: 'Workforce',
+                  type: 'oidc',
+                  loginUrl: '/api/oidc/workforce/login',
+                },
+              ],
+            }}
+          />
+        ));
+
+        const notice = await screen.findByRole('alert');
+        const provider = screen.getByRole('button', { name: 'Continue with Workforce' });
+        expect(notice).toHaveTextContent(message);
+        expect(provider).toBeEnabled();
+        expect(
+          notice.compareDocumentPosition(provider) & Node.DOCUMENT_POSITION_FOLLOWING,
+        ).toBeTruthy();
+        expect(screen.queryByText(/signed in successfully/i)).not.toBeInTheDocument();
+        if (hideLocalLogin) {
+          expect(screen.queryByRole('button', { name: 'Sign in to Pulse' })).toBeNull();
+        } else {
+          expect(screen.getByRole('button', { name: 'Sign in to Pulse' })).toBeVisible();
+        }
+        expect(screen.getByRole('link', { name: 'Can’t sign in?' })).toBeVisible();
+        expect(window.history.replaceState).toHaveBeenCalledExactlyOnceWith(
+          {},
+          expect.any(String),
+          '/login?view=fixture',
+        );
+        expect(mockFetch).not.toHaveBeenCalled();
+        expect(onLogin).not.toHaveBeenCalled();
+      },
+    );
+
+    it.each([
       ['oidc', 'audience_mismatch', 'Check the client ID against your provider application.', true],
       ['saml', 'invalid_state', 'The sign-in attempt expired. Please try again.', false],
     ])(
@@ -271,7 +329,7 @@ describe('Login', () => {
       },
     );
 
-    it('does not report a successful sign-in on an unauthenticated page with no providers', () => {
+    it('explains the unconfirmed session even when no sign-in options are listed', async () => {
       window.history.pushState(null, '', '/?oidc=success');
       const onLogin = vi.fn();
       render(() => (
@@ -281,6 +339,9 @@ describe('Login', () => {
         />
       ));
 
+      expect(await screen.findByRole('alert')).toHaveTextContent(
+        'Pulse couldn’t confirm your session after single sign-on.',
+      );
       expect(screen.queryByText(/signed in successfully/i)).not.toBeInTheDocument();
       expect(
         screen.getByRole('heading', { name: 'No sign-in options on this page' }),
