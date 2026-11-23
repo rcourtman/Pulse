@@ -223,16 +223,16 @@ describe('Audit Log rendered controls through the real HTTP client', () => {
     const successfulEvent = row('East first sign-in');
     const failedEvent = row();
     expect(screen.getByRole('columnheader', { name: 'Outcome' })).toBeInTheDocument();
-    expect(successfulEvent.getByRole('cell', { name: 'Success', exact: true })).toBeInTheDocument();
-    expect(failedEvent.getByRole('cell', { name: 'Failed', exact: true })).toBeInTheDocument();
+    expect(successfulEvent.getByRole('cell', { name: /^Success$/ })).toBeInTheDocument();
+    expect(failedEvent.getByRole('cell', { name: /^Failed$/ })).toBeInTheDocument();
     expect(verificationRequests()).toHaveLength(0);
 
     fireEvent.click(successfulEvent.getByRole('button', { name: /^Verify signature:/ }));
     fireEvent.click(failedEvent.getByRole('button', { name: /^Verify signature:/ }));
     expect(await successfulEvent.findByText('Check failed')).toBeInTheDocument();
     expect(await failedEvent.findByText('Verified')).toBeInTheDocument();
-    expect(successfulEvent.getByRole('cell', { name: 'Success', exact: true })).toBeInTheDocument();
-    expect(failedEvent.getByRole('cell', { name: 'Failed', exact: true })).toBeInTheDocument();
+    expect(successfulEvent.getByRole('cell', { name: /^Success$/ })).toBeInTheDocument();
+    expect(failedEvent.getByRole('cell', { name: /^Failed$/ })).toBeInTheDocument();
     expect(screen.getByText('Checks failed: 1')).toBeInTheDocument();
     expect(screen.getByText('Check errors: 0')).toBeInTheDocument();
     expect(verificationRequests()).toHaveLength(2);
