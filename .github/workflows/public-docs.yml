@@ -103,6 +103,8 @@ jobs:
           fi
 
       - name: Validate public documentation
+        env:
+          PUBLIC_DOCS_BASE_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
         run: python3 scripts/check_public_docs.py
 
       - name: Check getting-started safety and current plans
