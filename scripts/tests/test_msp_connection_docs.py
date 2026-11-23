@@ -74,10 +74,10 @@ class MSPConnectionDocsTest(unittest.TestCase):
             "pveum aclmod / -user pulse-monitor@pve -role PVEAuditor",
             'pveum aclmod / -token "$PULSE_TOKEN_ID" -role PulseMonitor',
             'EXTRA_PRIVS+=("VM.GuestAgent.Audit")',
-            'EXTRA_PRIVS+=("VM.GuestAgent.FileRead")',
             'EXTRA_PRIVS+=("VM.Monitor")',
         ):
             self.assertIn(marker, source)
+        self.assertNotIn("VM.GuestAgent.FileRead", source)
 
     def test_existing_help_targets_safety_and_shipped_copy_remain_usable(self):
         section = connection_help()

@@ -16,6 +16,7 @@ const (
 	vmAgentMemCacheTTL              = 60 * time.Second // Cache guest-agent /proc/meminfo reads.
 	vmAgentMemRequestTTL            = 3 * time.Second  // Bound guest-agent file-read latency.
 	vmAgentMemNegativeTTL           = 5 * time.Minute  // Back off on unsupported or failing guests.
+	vmAgentMemPermissionDeniedTTL   = 30 * time.Minute // Back off on HTTP 403 (matching APT optional-check denial cadence).
 	vmAgentMemNegativeKnownGuestTTL = 30 * time.Second // Retry sooner for guests we know are non-Windows.
 	vmAgentMemCleanupMaxAge         = 2 * vmAgentMemNegativeTTL
 )
@@ -112,8 +113,9 @@ func (m *Monitor) getVMAgentMemoryAvailability(ctx context.Context, client PVECl
 	if entry, ok := m.vmAgentMemCache[cacheKey]; ok {
 		ttl := vmAgentMemCacheTTL
 		if entry.negative {
-			ttl = vmAgentMemNegativeTTL
-			if !entry.permissionDenied {
+			if entry.permissionDenied {
+				ttl = vmAgentMemPermissionDeniedTTL
+			} else {
 				ttl = m.vmAgentMemNegativeCacheTTL(instanceName, node, vmid)
 			}
 		}

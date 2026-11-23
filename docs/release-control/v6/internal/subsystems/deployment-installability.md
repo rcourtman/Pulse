@@ -8194,10 +8194,10 @@ registration cannot drift onto a stale or mismatched bootstrap response.
 Install-time PVE auto-registration must also create privilege-separated
 Pulse-managed monitor tokens and mirror effective ACLs to the concrete token id
 rather than relying on user-only grants or shared-token inheritance. Its
-`PulseMonitor` role setup must prefer `VM.GuestAgent.Audit` plus
-`VM.GuestAgent.FileRead` when those PVE 9+ privileges are available, and fall
-back to legacy `VM.Monitor` only when the guest-agent privilege probe is
-unavailable. That same install-time token creation must extract the token
+`PulseMonitor` role setup must prefer `VM.GuestAgent.Audit` when that PVE 9+
+privilege is available (omitting `VM.GuestAgent.FileRead`, which Proxmox cannot
+path-restrict), and fall back to legacy `VM.Monitor` only when the guest-agent
+privilege probe is unavailable. That same install-time token creation must extract the token
 secret deterministically: it must request the machine-readable
 `pveum ... --output-format json` form first and parse the `value` field,
 falling back to the legacy box-drawing table layout only when an older pveum

@@ -1,0 +1,40 @@
+{
+  "version": 1,
+  "base_sha": "15116e0bc689e6d956aee44f09ec308e890859fd",
+  "verified_at": "2026-11-23T16:02:51Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/NodeModalSetupGuideSection.tsx",
+    "frontend-modern/src/components/Settings/nodeModalModel.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/NodeModalSetupGuideSection.tsx": "15fef58134319dd6044428aa4ac5f020ff0fdf2a9dca27ee28c83de24d543815",
+    "frontend-modern/src/components/Settings/nodeModalModel.ts": "4e90c2394f982e4c202234a30f7978220c0caba3eaf3679266c13a689ae54c89"
+  },
+  "routes": [
+    "/settings/infrastructure",
+    "/docs/AGENT_SECURITY",
+    "/docs/TROUBLESHOOTING#optional-proxmox-checks-return-403-repeatedly"
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 800
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Desktop 1280x800 /settings/infrastructure Add Proxmox VE modal default API inventory view: renders cleanly with zero page errors and Manual Token Setup tab visible",
+    "Desktop 1280x800 Add Proxmox VE Manual Token Setup view: permission command includes VM.GuestAgent.Audit and PVE 8 VM.Monitor fallback, omits VM.GuestAgent.FileRead, explanatory note states Pulse does not grant VM.GuestAgent.FileRead by default because Proxmox cannot restrict it to a single path, and copy button is visible, enabled, and unobscured",
+    "Desktop 1280x800 /docs/AGENT_SECURITY and /docs/TROUBLESHOOTING#optional-proxmox-checks-return-403-repeatedly: updated FileRead blast-radius callout, tightening command, and optional-403 row render cleanly with zero clipping or overflow",
+    "Mobile 390x844 Add Proxmox VE Manual Token Setup view: permission command and updated explanatory note wrap cleanly inside 390px viewport (x=50, width=290) with zero horizontal overflow or clipping"
+  ],
+  "interactions": [
+    "Signed in to private Pulse server built from this checkout and navigated to /settings/infrastructure",
+    "Clicked Add infrastructure -> Proxmox VE -> Manual Token Setup at 1280x800 and 390x844, verified permission snippet text and note copy, hovered and clicked copy button, and dismissed modal via Escape",
+    "Navigated to /docs/AGENT_SECURITY and /docs/TROUBLESHOOTING#optional-proxmox-checks-return-403-repeatedly and verified rendered screenshots"
+  ]
+}

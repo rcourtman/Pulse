@@ -304,7 +304,6 @@ configure_pve_pulse_monitor_role() {
     local apply_token_acl="$1"
     local HAS_VM_MONITOR=false
     local HAS_VM_GUEST_AGENT_AUDIT=false
-    local HAS_VM_GUEST_AGENT_FILE_READ=false
     local HAS_SYS_AUDIT=false
     local PVE_VERSION=""
     local EXTRA_PRIVS=()
@@ -320,13 +319,6 @@ configure_pve_pulse_monitor_role() {
     elif pveum role add TestGuestAgentAudit -privs VM.GuestAgent.Audit 2>/dev/null; then
         HAS_VM_GUEST_AGENT_AUDIT=true
         pveum role delete TestGuestAgentAudit 2>/dev/null || true
-    fi
-
-    if pveum role list 2>/dev/null | grep -q "VM.GuestAgent.FileRead"; then
-        HAS_VM_GUEST_AGENT_FILE_READ=true
-    elif pveum role add TestGuestAgentFileRead -privs VM.GuestAgent.FileRead 2>/dev/null; then
-        HAS_VM_GUEST_AGENT_FILE_READ=true
-        pveum role delete TestGuestAgentFileRead 2>/dev/null || true
     fi
 
     if pveum role list 2>/dev/null | grep -q "Sys.Audit"; then
@@ -346,9 +338,6 @@ configure_pve_pulse_monitor_role() {
 
     if [ "$HAS_VM_GUEST_AGENT_AUDIT" = true ]; then
         EXTRA_PRIVS+=("VM.GuestAgent.Audit")
-        if [ "$HAS_VM_GUEST_AGENT_FILE_READ" = true ]; then
-            EXTRA_PRIVS+=("VM.GuestAgent.FileRead")
-        fi
     elif [ "$HAS_VM_MONITOR" = true ]; then
         EXTRA_PRIVS+=("VM.Monitor")
     fi

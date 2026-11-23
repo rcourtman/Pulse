@@ -100,8 +100,18 @@ func TestOptionalMemoryDenialExpiryRecoveryAndIsolation(t *testing.T) {
 					t.Errorf("denial leaked scope: %+v / %v", info, err)
 				}
 			}
-			// The long retry overrides known-Linux cadence, not the success origin.
-			denied.fetchedAt = time.Now().Add(-vmAgentMemNegativeTTL)
+			// The permission-denial backoff outlasts ordinary negative retries and
+			// routine 10-minute cache cleanup without leaking across targets.
+			denied.fetchedAt = time.Now().Add(-vmAgentMemCleanupMaxAge - time.Minute)
+			m.vmAgentMemCache[key] = denied
+			m.cleanupRRDCache(time.Now())
+			if _, stillCached := m.vmAgentMemCache[key]; !stillCached {
+				t.Fatalf("routine cache cleanup evicted active 403 backoff before %v", vmAgentMemPermissionDeniedTTL)
+			}
+			if _, err := m.getVMAgentMemoryAvailability(context.Background(), client, "lab", "node", 105); err == nil || f.memoryCalls.Load() != 4 {
+				t.Fatalf("permission denial retried before %v expiry: err=%v calls=%d", vmAgentMemPermissionDeniedTTL, err, f.memoryCalls.Load())
+			}
+			denied.fetchedAt = time.Now().Add(-vmAgentMemPermissionDeniedTTL)
 			m.vmAgentMemCache[key] = denied
 			info, err := m.getVMAgentMemoryAvailability(context.Background(), client, "lab", "node", 105)
 			recovered := m.vmAgentMemCache[key]

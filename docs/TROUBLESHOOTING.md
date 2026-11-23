@@ -2157,7 +2157,11 @@ Inspect the existing denial and compare it with the relevant read privileges:
   node/storage scope.
 - VM filesystem usage and guest information on PVE 9+: `VM.GuestAgent.Audit`.
 - Guest memory through `/proc/meminfo` on PVE 9+: also
-  `VM.GuestAgent.FileRead`.
+  `VM.GuestAgent.FileRead` (manual opt-in only — Pulse setup intentionally omits
+  it because Proxmox cannot restrict guest file reads to `/proc/meminfo`; see
+  [Proxmox Deployment Choices](AGENT_SECURITY.md#proxmox-deployment-choices) for
+  the blast radius, safer alternatives, and how to strip it from an older
+  `PulseMonitor` role).
 - On PVE 8, `VM.Monitor` is the legacy guest-agent fallback, not an extra
   requirement for PVE 9+.
 
@@ -2197,7 +2201,7 @@ connection has failed.
 | Denied request | Reading affected | Keep the boundary |
 | --- | --- | --- |
 | `GET /nodes/{node}/apt/update` | Pending package updates | `Sys.Modify` is broader than read-only monitoring; an unavailable badge is a valid choice. See [pending-update access](#proxmox-pending-update-access). |
-| `/nodes/{node}/qemu/{vmid}/agent/file-read` for `/proc/meminfo` | Linux guest-memory detail | On PVE 9+, `VM.GuestAgent.FileRead` is separate from inventory and guest-audit access. Keep it denied if file reads are not intended. |
+| `/nodes/{node}/qemu/{vmid}/agent/file-read` for `/proc/meminfo` | Linux guest-memory detail | On PVE 9+, `VM.GuestAgent.FileRead` is separate from inventory and guest-audit access and is intentionally not granted by Pulse setup because Proxmox cannot restrict it to a single path. Keep it denied if file reads are not intended. |
 
 Repeated refusals can be a polling-backoff defect, as reported in
 [#3546](https://github.com/rcourtman/Pulse/issues/3546), rather than a reason to

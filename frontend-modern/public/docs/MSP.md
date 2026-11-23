@@ -243,8 +243,9 @@ connection:
 4. If choosing guided PVE setup, have the client's administrator inspect it
    before execution. It is an **administrative change, not a read-only test**:
    it creates or updates the monitoring identity, token and ACLs at `/`, and
-   can add `VM.GuestAgent.Audit` and `VM.GuestAgent.FileRead` on PVE 9, or the
-   broader legacy `VM.Monitor` fallback on PVE 8. An existing deliberately
+   can add `VM.GuestAgent.Audit` on PVE 9 (leaving `VM.GuestAgent.FileRead`
+   ungranted because Proxmox cannot restrict guest file reads to a single path),
+   or the broader legacy `VM.Monitor` fallback on PVE 8. An existing deliberately
    scoped token can be entered directly instead. Keep token secrets in the
    private setup prompt or connection form, never a command line or public
    report. Do not rerun setup or rotate a working token to diagnose a missing

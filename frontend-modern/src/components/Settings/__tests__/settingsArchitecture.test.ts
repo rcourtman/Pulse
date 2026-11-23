@@ -26,6 +26,7 @@ import updatesSettingsPanelSource from '../UpdatesSettingsPanel.tsx?raw';
 import infrastructureWorkspaceSource from '../InfrastructureWorkspace.tsx?raw';
 import infrastructureInstallerSectionSource from '../InfrastructureInstallerSection.tsx?raw';
 import nodeCredentialSlotSource from '../ConnectionEditor/CredentialSlots/NodeCredentialSlot.tsx?raw';
+import { PVE_MANUAL_PERMISSION_COMMAND } from '../nodeModalModel';
 import nodeModalSetupGuideSectionSource from '../NodeModalSetupGuideSection.tsx?raw';
 import nodeModalStateSource from '../useNodeModalState.ts?raw';
 import trueNASCredentialSlotSource from '../ConnectionEditor/CredentialSlots/TrueNASCredentialSlot.tsx?raw';
@@ -214,6 +215,15 @@ describe('settings architecture guardrails', () => {
       'const [agentInstallEnableCommands, setAgentInstallEnableCommandsRaw] = createSignal(false)',
     );
     expect(nodeModalStateSource).toContain('enableCommands: agentInstallEnableCommands()');
+  });
+
+  it('keeps VM.GuestAgent.FileRead out of default Proxmox manual setup commands and copy', () => {
+    const normalizedGuide = nodeModalSetupGuideSectionSource.replace(/\s+/g, ' ');
+    expect(PVE_MANUAL_PERMISSION_COMMAND).toContain('VM.GuestAgent.Audit');
+    expect(PVE_MANUAL_PERMISSION_COMMAND).not.toContain('VM.GuestAgent.FileRead');
+    expect(normalizedGuide).toContain(
+      'Pulse does not grant VM.GuestAgent.FileRead by default because Proxmox cannot restrict it to a single path.',
+    );
   });
 
   it('keeps Ollama credentials in the provider editor with write-only saved state', () => {

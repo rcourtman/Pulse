@@ -318,10 +318,14 @@ guest incidents. Table filters and alert suppression do not stop API polling.
 | Collection | Proxmox VE 9+ | Proxmox VE 8 |
 | --- | --- | --- |
 | Filesystem usage and guest information | `VM.GuestAgent.Audit` | `VM.Monitor` |
-| Reading Linux guest memory via `/proc/meminfo` | Also `VM.GuestAgent.FileRead` | `VM.Monitor` |
+| Reading Linux guest memory via `/proc/meminfo` | Also `VM.GuestAgent.FileRead` (manual opt-in; omitted by Pulse setup) | `VM.Monitor` |
 
 Pulse prefers usable, current memory from the VM's linked Pulse Agent and
-skips `/proc/meminfo` when it uses that reading. In **Overview → Details**,
+skips `/proc/meminfo` when it uses that reading. Pulse setup intentionally omits
+`VM.GuestAgent.FileRead` on PVE 9+ because Proxmox cannot restrict it to
+`/proc/meminfo` (granting it on `/` allows reading arbitrary files as the guest
+agent user inside every QGA-enabled VM); prefer QEMU ballooning or a linked Pulse
+Agent instead. In **Overview → Details**,
 check **Memory reading** for the source and time. Proxmox can count ARC as
 used. See [TrueNAS's ARC breakdown](TRUENAS.md#memory-usage-and-arc-cache).
 

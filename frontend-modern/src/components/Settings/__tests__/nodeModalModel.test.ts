@@ -49,9 +49,9 @@ describe('cluster node display-name overrides', () => {
 });
 
 describe('nodeModalModel', () => {
-  it('prefers PVE 9 guest-agent privileges before legacy VM.Monitor', () => {
+  it('prefers PVE 9 guest-agent audit privilege without auto-granting FileRead', () => {
     expect(PVE_MANUAL_PERMISSION_COMMAND).toContain('VM.GuestAgent.Audit');
-    expect(PVE_MANUAL_PERMISSION_COMMAND).toContain('VM.GuestAgent.FileRead');
+    expect(PVE_MANUAL_PERMISSION_COMMAND).not.toContain('VM.GuestAgent.FileRead');
     expect(PVE_MANUAL_PERMISSION_COMMAND).toContain('VM.Monitor');
 
     const guestBranch = PVE_MANUAL_PERMISSION_COMMAND.indexOf(

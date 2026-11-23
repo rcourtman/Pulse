@@ -2912,9 +2912,10 @@ retain the clone-safe fork. Once accepted, bindings for superseded tokens are
 retired so a late old process cannot overwrite the replacement identity.
 
 PVE node setup shared boundaries that render or copy `PulseMonitor`
-permissions must treat `VM.GuestAgent.Audit` plus `VM.GuestAgent.FileRead` as
-the PVE 9+ primary contract, with `VM.Monitor` retained only as the legacy PVE
-8 fallback when guest-agent privileges are unavailable.
+permissions must treat `VM.GuestAgent.Audit` as the PVE 9+ primary contract
+(without auto-granting `VM.GuestAgent.FileRead`, which Proxmox cannot
+path-restrict), with `VM.Monitor` retained only as the legacy PVE 8 fallback
+when guest-agent privileges are unavailable.
 
 `internal/dockeragent/` is lifecycle-adjacent for agent binary/update trust
 and owns the Docker / Podman collection module used by `pulse-agent`, but
@@ -8493,10 +8494,11 @@ presentation in the extracted node setup surface
 `useNodeModalState.ts`): the copied PVE permission snippet must stay
 aligned with the canonical backend setup script, including comma-joined
 privilege transport and non-destructive `PulseMonitor` role updates, instead
-of shipping a stale local fork. PVE 9+ guest-agent privileges
-`VM.GuestAgent.Audit` and `VM.GuestAgent.FileRead` are the primary setup
-contract; legacy `VM.Monitor` may appear only as the PVE 8 fallback when the
-guest-agent privilege probe is unavailable.
+of shipping a stale local fork. The PVE 9+ guest-agent privilege
+`VM.GuestAgent.Audit` is the primary setup contract (`VM.GuestAgent.FileRead`
+must not be auto-granted because Proxmox cannot path-restrict guest file reads);
+legacy `VM.Monitor` may appear only as the PVE 8 fallback when the guest-agent
+privilege probe is unavailable.
 That same node setup modal owner must also route Proxmox agent-install command
 generation through the canonical `NodesAPI.getAgentInstallCommand` client for
 both PVE and PBS, instead of mixing client-mediated and ad hoc raw POST
