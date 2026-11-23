@@ -252,7 +252,10 @@ export const RolesPanel: Component<RolesPanelProps> = (props) => {
                 align: 'right',
                 render: (role) => (
                   <div class="inline-flex items-center gap-1">
-                    <Show when={!role.isBuiltIn}>
+                    <Show
+                      when={!role.isBuiltIn}
+                      fallback={<span class="text-xs text-slate-400 italic">Read-only</span>}
+                    >
                       <ActionIconButton
                         label={`Edit role ${getRoleIdentityLabel(role)}`}
                         tone="accent"
@@ -273,9 +276,6 @@ export const RolesPanel: Component<RolesPanelProps> = (props) => {
                       >
                         <Trash2 class="w-4 h-4" />
                       </ActionIconButton>
-                    </Show>
-                    <Show when={role.isBuiltIn}>
-                      <span class="text-xs text-slate-400 italic">Read-only</span>
                     </Show>
                   </div>
                 ),

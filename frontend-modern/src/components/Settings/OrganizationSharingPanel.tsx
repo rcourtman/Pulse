@@ -1,4 +1,4 @@
-import { Component, Show, createEffect, createUniqueId, onCleanup } from 'solid-js';
+import { Component, Show, createEffect, createMemo, createUniqueId, onCleanup } from 'solid-js';
 import { Button } from '@/components/shared/Button';
 import { Card } from '@/components/shared/Card';
 import SettingsPanel from '@/components/shared/SettingsPanel';
@@ -33,19 +33,45 @@ export const OrganizationSharingPanel: Component<OrganizationSharingPanelProps> 
   let panel: HTMLDivElement | undefined;
   let warning: HTMLDivElement | undefined;
   let summary: HTMLParagraphElement | undefined;
+  // A real scope change retires focus. A refreshed but equivalent status does not.
+  const focusScope = createMemo(
+    () =>
+      [
+        showOrganizationSurface(),
+        state.selectedOrgID(),
+        props.currentUser,
+        state.readOnly(),
+      ] as const,
+    undefined,
+    { equals: (previous, next) => previous.every((value, index) => value === next[index]) },
+  );
   let lastFocused:
     | {
         element: HTMLElement;
-        orgID: string;
-        user: string | undefined;
+        scope: ReturnType<typeof focusScope>;
         action?: string;
         targets: string[];
       }
     | undefined;
-  let focusContext: [string, string | undefined, boolean, boolean] | undefined;
-  let focusTimer: number | undefined;
-  const controls = () =>
-    Array.from(panel?.querySelectorAll<HTMLElement>('[data-org-sharing-action]') ?? []);
+  const controls = (action?: string) =>
+    action
+      ? Array.from(panel?.querySelectorAll<HTMLElement>('[data-org-sharing-action]') ?? []).filter(
+          (control) => control.dataset.orgSharingAction === action,
+        )
+      : [];
+
+  const replacementControl = ({ action, targets }: NonNullable<typeof lastFocused>) => {
+    if (!targets.length) return;
+    // Reverse insertion keeps the first enabled match for an opaque ID.
+    const byTarget = new Map<string | undefined, HTMLElement>();
+    for (const control of controls(action).reverse()) {
+      if (!control.matches(':disabled')) byTarget.set(control.dataset.orgSharingTarget, control);
+    }
+    for (const id of targets) {
+      const control = byTarget.get(id);
+      if (control) return control;
+    }
+  };
   const reloadSharing = () => {
     // The explicit read replaces its button. Keep a stable keyboard position
     // through loading instead of losing focus and moving it after the response.
@@ -55,54 +81,29 @@ export const OrganizationSharingPanel: Component<OrganizationSharingPanelProps> 
   };
 
   createEffect(() => {
-    window.clearTimeout(focusTimer);
-    const orgID = state.selectedOrgID();
-    const user = props.currentUser;
-    const enabled = showOrganizationSurface();
-    const context: typeof focusContext = [orgID, user, enabled, state.readOnly()];
-    if (focusContext?.some((value, index) => value !== context[index])) {
-      lastFocused = undefined;
-    }
-    focusContext = context;
+    const scope = focusScope();
+    if (lastFocused?.scope !== scope) lastFocused = undefined;
     const loading = state.loading();
     const error = state.loadError();
-    const org = state.org();
-    if (!enabled || loading) return;
-    if (!error && !org) return;
+    if (!scope[0] || loading || (!error && !state.org())) return;
 
-    focusTimer = window.setTimeout(() => {
-      if (
-        !panel?.isConnected ||
-        !showOrganizationSurface() ||
-        state.loading() ||
-        state.selectedOrgID() !== orgID ||
-        props.currentUser !== user ||
-        state.loadError() !== error ||
-        state.org() !== org
-      )
-        return;
-      const lostPanelFocus =
-        lastFocused?.orgID === orgID &&
-        lastFocused.user === user &&
-        !lastFocused.element.isConnected;
+    // Effect cleanup cancels this timer whenever the saved view changes or unmounts.
+    const timer = window.setTimeout(() => {
+      const previous = lastFocused;
       // A reread replaces controls. Recover only the focus it removed, never
       // an untouched initial read or a deliberate move to another control.
-      if (lostPanelFocus && (!document.activeElement || document.activeElement === document.body)) {
-        const candidates = controls().filter(
-          (control) =>
-            control.dataset.orgSharingAction === lastFocused?.action &&
-            !control.matches(':disabled'),
-        );
-        // Opaque keys are values, not CSS selectors or current row indices.
-        const replacement = lastFocused?.targets
-          .map((id) => candidates.find((control) => control.dataset.orgSharingTarget === id))
-          .find(Boolean);
-        const target = error ? warning : (replacement ?? summary);
+      if (
+        panel?.isConnected &&
+        previous?.scope === scope &&
+        !previous.element.isConnected &&
+        (!document.activeElement || document.activeElement === document.body)
+      ) {
+        const target = error ? warning : (replacementControl(previous) ?? summary);
         target?.focus();
       }
     }, 0);
+    onCleanup(() => window.clearTimeout(timer));
   });
-  onCleanup(() => window.clearTimeout(focusTimer));
 
   return (
     <Show
@@ -122,14 +123,11 @@ export const OrganizationSharingPanel: Component<OrganizationSharingPanelProps> 
         onFocusIn={(event) => {
           if (event.target instanceof HTMLElement) {
             const action = event.target.dataset.orgSharingAction;
-            const ids = controls()
-              .filter((control) => control.dataset.orgSharingAction === action)
-              .map((control) => control.dataset.orgSharingTarget!);
+            const ids = controls(action).map((control) => control.dataset.orgSharingTarget!);
             const index = ids.indexOf(event.target.dataset.orgSharingTarget!);
             lastFocused = {
               element: event.target,
-              orgID: state.selectedOrgID(),
-              user: props.currentUser,
+              scope: focusScope(),
               action,
               targets: index < 0 ? [] : [...ids.slice(index), ...ids.slice(0, index).reverse()],
             };
