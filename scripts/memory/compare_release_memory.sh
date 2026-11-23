@@ -2,7 +2,7 @@
 # compare_release_memory.sh — run two Pulse source trees against the same
 # estate and compare their steady-state memory (#1803).
 #
-# Usage: bash scripts/memory/compare_release_memory.sh <baseline-tree> <candidate-tree> <out-dir>
+# Usage: bash scripts/memory/compare_release_memory.sh <baseline-tree> <candidate-tree> <out-dir> [stable-tag baseline-sha candidate-sha]
 #
 # Each tree is built from source with a placeholder frontend (release builds
 # refuse mock fixtures), started with telemetry off and no licence server, and
@@ -38,6 +38,10 @@
 
 set -euo pipefail
 
+if (( $# != 3 && $# != 6 )); then
+  echo "Usage: $0 baseline-tree candidate-tree out-dir [stable-tag baseline-sha candidate-sha]" >&2
+  exit 2
+fi
 BASELINE_DIR="${1:?baseline tree}"
 CANDIDATE_DIR="${2:?candidate tree}"
 OUT_DIR="${3:?output directory}"
@@ -45,6 +49,32 @@ DURATION="${PULSE_MEMORY_DURATION:-900}"
 INTERVAL="${PULSE_MEMORY_INTERVAL:-15}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ESTATE="${PULSE_FOOTPRINT_ESTATE:-mock}"
+
+# The hosted watch passes the pair selected before any estate job starts.
+# Verify the actual checkouts before creating build inputs or reporting a pair.
+# Local, unbound comparisons still accept the original three arguments.
+source_binding=()
+check_source() {
+  local label=$1 tree=$2 expected=$3 actual
+  actual="$(git -C "$tree" rev-parse --verify HEAD)" || return 1
+  if [[ "$actual" != "$expected" ]]; then
+    printf '%s checkout %s does not match expected source %s\n' "$label" "$actual" "$expected" >&2
+    return 1
+  fi
+  if ! git -C "$tree" diff --quiet HEAD --; then
+    printf '%s checkout is changed or could not be verified\n' "$label" >&2
+    return 1
+  fi
+}
+if (( $# == 6 )); then
+  if [[ ! "$4" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ || ! "$5" =~ ^[0-9a-f]{40}$ || ! "$6" =~ ^[0-9a-f]{40}$ ]]; then
+    echo "Invalid stable tag or comparison source SHA" >&2
+    exit 2
+  fi
+  check_source baseline "$BASELINE_DIR" "$5" || exit 2
+  check_source candidate "$CANDIDATE_DIR" "$6" || exit 2
+  source_binding=("$4" "$5" "$6")
+fi
 
 if [[ ! "${DURATION}" =~ ^[1-9][0-9]*$ || ! "${INTERVAL}" =~ ^[1-9][0-9]*$ ]]; then
   echo "Memory sampling duration and interval must be positive whole seconds" >&2
@@ -251,4 +281,4 @@ if (( baseline_status == 0 && candidate_status == 0 )) &&
 fi
 
 python3 "${SCRIPT_DIR}/summarize_release_memory.py" "${OUT_DIR}" "${DURATION}" "${INTERVAL}" \
-  "${baseline_status}" "${candidate_status}"
+  "${baseline_status}" "${candidate_status}" "${source_binding[@]}"

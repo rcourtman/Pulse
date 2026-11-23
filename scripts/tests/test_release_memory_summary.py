@@ -20,6 +20,27 @@ summary = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(summary)
 
 HEADER = "elapsed_s\trss_kib\tgo_heap_kib\tgo_other_kib\tanon_other_kib\tfile_kib\tcpu_ticks\twrite_bytes\twchar_bytes\n"
+STABLE_TAG, BASELINE_SHA, CANDIDATE_SHA = "v6.8.0", "a" * 40, "b" * 40
+SOURCE_ARGS = (STABLE_TAG, BASELINE_SHA, CANDIDATE_SHA)
+SOURCE_GIT_SHIM = r'''git() {
+  [[ "$1" == -C ]] || return 2
+  case "${2##*/}" in
+    stable) sha="$PULSE_TEST_BASELINE_SHA" ;;
+    main) sha="$PULSE_TEST_CANDIDATE_SHA" ;;
+    *) return 2 ;;
+  esac
+  case "$3 $4 $5" in
+    "rev-parse --verify HEAD") printf '%s\n' "$sha" ;;
+    "diff --quiet HEAD") [[ "$6" == -- && "${2##*/}" != "${PULSE_TEST_DIRTY_SOURCE-}" ]] ;;
+    *) return 2 ;;
+  esac
+}
+export -f git
+'''
+
+
+def source_env():
+    return {"PULSE_TEST_BASELINE_SHA": BASELINE_SHA, "PULSE_TEST_CANDIDATE_SHA": CANDIDATE_SHA}
 
 
 def samples(rss_kib, ticks_per_s, write_bytes_per_s, io=True, rss_hwm=None, end=900, interval=15):
@@ -383,6 +404,32 @@ class ReleaseMemorySummaryTests(unittest.TestCase):
 
 
 class ReleaseMemoryLauncherTests(unittest.TestCase):
+    def test_invalid_mismatched_or_dirty_source_never_creates_build_inputs(self):
+        for args, dirty_source, message in (
+            (SOURCE_ARGS[:1], "", "Usage:"),
+            (("v6.8.0-rc.1", BASELINE_SHA, CANDIDATE_SHA), "", "Invalid stable tag"),
+            ((STABLE_TAG, "c" * 40, CANDIDATE_SHA), "", "baseline checkout"),
+            ((STABLE_TAG, BASELINE_SHA, "c" * 40), "", "candidate checkout"),
+            (SOURCE_ARGS, "stable", "baseline checkout is changed"),
+            (SOURCE_ARGS, "main", "candidate checkout is changed"),
+        ):
+            with self.subTest(args=args, dirty_source=dirty_source), tempfile.TemporaryDirectory() as tmp:
+                stable, main, output = [Path(tmp) / name for name in ("stable", "main", "out")]
+                stable.mkdir()
+                main.mkdir()
+                result = subprocess.run(
+                    ["bash", "-c", SOURCE_GIT_SHIM + 'exec bash "$@"', "memory-fixture",
+                     str(ROOT / "scripts/memory/compare_release_memory.sh"), str(stable), str(main),
+                     str(output), *args],
+                    env={**os.environ, **source_env(), "PULSE_TEST_DIRTY_SOURCE": dirty_source},
+                    text=True, capture_output=True, timeout=5,
+                )
+                self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
+                self.assertIn(message, result.stderr)
+                self.assertFalse(output.exists())
+                self.assertEqual(list(stable.iterdir()), [])
+                self.assertEqual(list(main.iterdir()), [])
+
     def test_launch_parity_and_incomplete_report_after_early_pulse_exit(self):
         # Exercise the actual Bash launch, not a copy of its env arguments.
         # The fixture records its environment and deliberately exits, so this
@@ -423,6 +470,7 @@ class ReleaseMemoryLauncherTests(unittest.TestCase):
                                      "127.0.0.1:0\n")
             observation = json.loads((output / "result.json").read_text())
             self.assertEqual(observation["status"], "incomplete")
+            self.assertNotIn("sources", observation)  # Legacy local invocation is not source-bound.
             self.assertEqual(observation["failed_runs"], {
                 "baseline": {"worker_wait_status": 1, "pulse_wait_status_before_stop": 0},
                 "candidate": {"worker_wait_status": 1, "pulse_wait_status_before_stop": 42},
@@ -544,9 +592,10 @@ export -f go date awk curl python3 sleep
 exec bash "$@"
 '''
                 result = subprocess.run(
-                    ["bash", "-c", shims, "memory-fixture", str(ROOT / "scripts/memory/compare_release_memory.sh"),
-                     str(baseline), str(candidate), str(output)],
-                    env={**os.environ, "PULSE_TEST_BINARY": str(fixture),
+                    ["bash", "-c", SOURCE_GIT_SHIM + shims, "memory-fixture",
+                     str(ROOT / "scripts/memory/compare_release_memory.sh"),
+                     str(baseline), str(candidate), str(output), *SOURCE_ARGS],
+                    env={**os.environ, **source_env(), "PULSE_TEST_BINARY": str(fixture),
                          "PULSE_TEST_SMAPS": str(smaps),
                          "PULSE_TEST_OUT": str(output), "PULSE_TEST_MODE": mode,
                          "PULSE_FOOTPRINT_ESTATE": "proxmox" if mode == "normal-term" else "mock",
@@ -555,6 +604,12 @@ exec bash "$@"
                 )
                 self.assertEqual(result.returncode, expected, result.stdout + result.stderr)
                 observation = json.loads((output / "result.json").read_text())
+                self.assertEqual(observation["sources"], {
+                    "baseline": {"tag": STABLE_TAG, "sha": BASELINE_SHA},
+                    "candidate": {"sha": CANDIDATE_SHA},
+                })
+                self.assertIn(f"Baseline: `{STABLE_TAG}` at `{BASELINE_SHA}`. Candidate: `{CANDIDATE_SHA}`.",
+                              (output / "summary.md").read_text())
                 for side in ("baseline", "candidate"):
                     self.assertEqual(observation["sampling"][side], {"first_s": 5, "last_s": 7, "count": 3})
                 if failure_field is not None:

@@ -189,9 +189,12 @@ access) reports one outcome under its own title, an error annotation or a
 one that passed. It uploads nothing and gates nothing.
 
 `memory-regression.yml` compares Pulse's memory with the latest stable release,
-daily at 04:41 UTC and on manual dispatch. It builds that release and `main` from
-source with a placeholder frontend, runs both for 15 minutes at once against the
-same small mock estate (2 nodes, 24 guests, a Docker host, telemetry off, no
+daily at 04:41 UTC and on manual dispatch. It pins the stable tag's commit once
+before the estate jobs start. All jobs check out that commit and the workflow
+event's exact candidate commit; their summaries and `result.json` retain both
+commits and the stable tag, even when sampling is incomplete. Each job builds
+that pair from source with a placeholder frontend and runs both for 15 minutes
+at once against the same small mock estate (2 nodes, 24 guests, a Docker host, telemetry off, no
 licence server), and splits steady-state resident memory into the Go heap, memory
 outside Go (where the SQLite driver allocates) and file pages
 (`scripts/memory/compare_release_memory.sh`). Each instance binds its own
