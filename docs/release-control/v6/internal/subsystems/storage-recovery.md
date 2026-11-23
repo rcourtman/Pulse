@@ -2744,6 +2744,9 @@ recovery path.
    registration payload, so honoring it changes neither the backup
    visibility grants the script applies nor the storage-side identity that
    backup and recovery attribution key on (hostname and candidate hosts).
+   On PVE 9+, the shared `PulseMonitor` role helper grants `VM.GuestAgent.Audit`
+   and omits `VM.GuestAgent.FileRead` (leaving `/storage` backup-visibility
+   grants independent of guest file-read access).
 5. `internal/proxmoxidentity/backup_identity.go` shared with `alerts`, `monitoring`: Proxmox PBS backup subject identity is a shared runtime boundary for monitoring backup freshness, backup-age alert attribution, and recovery-point guest mapping.
 
 Storage resource projections may show alert indicators from the canonical

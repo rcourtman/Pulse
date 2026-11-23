@@ -870,9 +870,7 @@ func TestRootInstallScriptAutoRegisterUsesSecureContractShape(t *testing.T) {
 		`pveum aclmod /storage -token "$token_id" -role PVEDatastoreAdmin`,
 		`priv_string="$(IFS=,; echo "${extra_privs[*]}")"`,
 		`pveum role modify PulseMonitor -privs "$priv_string"`,
-		`pveum role add PulseGuestFileReadProbe -privs VM.GuestAgent.FileRead`,
 		`extra_privs+=("VM.GuestAgent.Audit")`,
-		`extra_privs+=("VM.GuestAgent.FileRead")`,
 		`extra_privs+=("VM.Monitor")`,
 		`slug = re.sub(r"[^a-z0-9]+", "-", host)`,
 		`print(f"pulse-{slug}")`,
@@ -896,6 +894,7 @@ func TestRootInstallScriptAutoRegisterUsesSecureContractShape(t *testing.T) {
 		`Discovered bootstrap token from container`,
 		`--privsep 0`,
 		`pveum role delete PulseMonitor`,
+		`VM.GuestAgent.FileRead`,
 	}
 	for _, needle := range forbidden {
 		if strings.Contains(script, needle) {

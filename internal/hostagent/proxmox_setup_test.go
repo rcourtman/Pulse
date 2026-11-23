@@ -1055,8 +1055,11 @@ func TestProxmoxSetup_ConfigurePVEPermissions_PrefersGuestAgentPrivileges(t *tes
 	if !strings.Contains(pulseMonitorPrivs, "VM.GuestAgent.Audit") {
 		t.Fatalf("expected PulseMonitor privileges to include VM.GuestAgent.Audit, got %q", pulseMonitorPrivs)
 	}
-	if !strings.Contains(pulseMonitorPrivs, "VM.GuestAgent.FileRead") {
-		t.Fatalf("expected PulseMonitor privileges to include VM.GuestAgent.FileRead, got %q", pulseMonitorPrivs)
+	if strings.Contains(pulseMonitorPrivs, "VM.GuestAgent.FileRead") {
+		t.Fatalf("did not expect PulseMonitor privileges to auto-grant VM.GuestAgent.FileRead, got %q", pulseMonitorPrivs)
+	}
+	if hasCommandCall(calls, "pveum", "role", "add", privProbeRoleName("VM.GuestAgent.FileRead"), "-privs", "VM.GuestAgent.FileRead") {
+		t.Fatalf("expected setup not to probe VM.GuestAgent.FileRead; calls=%#v", calls)
 	}
 	if strings.Contains(pulseMonitorPrivs, "VM.Monitor") {
 		t.Fatalf("did not expect PulseMonitor privileges to include VM.Monitor when guest-agent privileges are available, got %q", pulseMonitorPrivs)

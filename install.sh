@@ -2670,12 +2670,6 @@ PY
 
     if [[ "$has_guest_audit" == true ]]; then
         extra_privs+=("VM.GuestAgent.Audit")
-        if pveum role list 2>/dev/null | grep -q "VM.GuestAgent.FileRead"; then
-            extra_privs+=("VM.GuestAgent.FileRead")
-        elif pveum role add PulseGuestFileReadProbe -privs VM.GuestAgent.FileRead >/dev/null 2>&1; then
-            extra_privs+=("VM.GuestAgent.FileRead")
-            pveum role delete PulseGuestFileReadProbe >/dev/null 2>&1 || true
-        fi
     else
         local has_vm_monitor=false
         if pveum role list 2>/dev/null | grep -q "VM.Monitor"; then

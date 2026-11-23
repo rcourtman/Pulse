@@ -201,6 +201,11 @@ describe('NodeModalSetupGuideSection', () => {
     expect(screen.getByText('Manual API token')).toBeInTheDocument();
     expect(screen.getByText(/Advanced manual token setup/i)).toBeInTheDocument();
     expect(screen.getByText(/Advanced escape hatch: use this only when/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        /Pulse does not grant VM\.GuestAgent\.FileRead by default because Proxmox cannot restrict it to a single path/i,
+      ),
+    ).toBeInTheDocument();
   });
 
   it('surfaces non-destructive repair guidance for existing Proxmox API sources', () => {

@@ -670,8 +670,10 @@ export const NodeModalSetupGuideSection: Component<NodeModalSetupGuideSectionPro
                       </div>
                       <p class="text-muted text-xs mt-1">
                         Note: PVEAuditor gives read-only API access. PulseMonitor adds Sys.Audit
-                        plus VM.GuestAgent.Audit/FileRead (PVE 9+) or VM.Monitor (PVE 8) for disk
-                        and guest metrics. PVEDatastoreAdmin on /storage adds backup visibility.
+                        plus VM.GuestAgent.Audit (PVE 9+) or VM.Monitor (PVE 8) for guest auditing
+                        and disk metrics. Pulse does not grant VM.GuestAgent.FileRead by default
+                        because Proxmox cannot restrict it to a single path. PVEDatastoreAdmin on
+                        /storage adds backup visibility.
                       </p>
                     </div>
 

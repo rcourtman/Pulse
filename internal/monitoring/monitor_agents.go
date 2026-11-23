@@ -5277,7 +5277,11 @@ func (m *Monitor) cleanupRRDCache(now time.Time) {
 	}
 
 	for key, entry := range m.vmAgentMemCache {
-		if now.Sub(entry.fetchedAt) > vmAgentMemCleanupMaxAge {
+		entryMaxAge := vmAgentMemCleanupMaxAge
+		if entry.permissionDenied && vmAgentMemPermissionDeniedTTL > entryMaxAge {
+			entryMaxAge = vmAgentMemPermissionDeniedTTL
+		}
+		if now.Sub(entry.fetchedAt) > entryMaxAge {
 			delete(m.vmAgentMemCache, key)
 		}
 	}
