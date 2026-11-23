@@ -106,24 +106,39 @@ describe('SSO sign-in restrictions and role mapping guidance', () => {
 
 describe('SSO editor registration authority', () => {
   it.each([metadata, 'https://pulse.lan:8443/api/saml/setup/metadata?view=full'])(
-    'displays and copies the detail metadata URL exactly: %s',
+    'displays and copies both detail URLs exactly, including metadata %s',
     async (canonical) => {
       const writeText = vi.fn().mockResolvedValue(undefined);
       Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
       // A changed public base/path can make the detail read newer than inventory.
-      setup([{ ...saml, samlMetadataUrl: 'https://old.example.test/metadata' }], {
-        ...detail,
-        samlMetadataUrl: canonical,
-      });
+      setup(
+        [
+          {
+            ...saml,
+            samlMetadataUrl: 'https://old.example.test/metadata',
+            samlAcsUrl: 'https://old.example.test/acs',
+          },
+        ],
+        { ...detail, samlMetadataUrl: canonical },
+      );
       render(() => <SSOProvidersPanel />);
       const dialog = await edit();
       const copy = dialog.getByRole('button', { name: 'Copy SP metadata URL' });
       expect(copy).toHaveTextContent(canonical);
-      expect(dialog.queryByText('https://old.example.test/metadata')).toBeNull();
+      expect(dialog.queryByText(/https:\/\/old\.example\.test/)).toBeNull();
       fireEvent.click(copy);
       await waitFor(() => expect(writeText).toHaveBeenCalledExactlyOnceWith(canonical));
       expect(await dialog.findByRole('status')).toHaveTextContent(
         'Metadata URL has been copied to the clipboard.',
+      );
+      const copyAcs = dialog.getByRole('button', { name: 'Copy ACS URL' });
+      expect(copyAcs).toHaveTextContent(acs);
+      fireEvent.click(copyAcs);
+      await waitFor(() => expect(writeText).toHaveBeenNthCalledWith(2, acs));
+      await waitFor(() =>
+        expect(dialog.getByRole('status')).toHaveTextContent(
+          'ACS URL has been copied to the clipboard.',
+        ),
       );
       expect(notices.success).not.toHaveBeenCalled();
       expect(dialog.getByRole('button', { name: 'Save Changes' })).toBeEnabled();
@@ -133,14 +148,16 @@ describe('SSO editor registration authority', () => {
   );
 
   it.each([undefined, ''])(
-    'does not revive a metadata URL omitted from current details: %s',
+    'does not revive either registration URL absent from current details: %s',
     async (missing) => {
       setup([saml], { ...detail, samlMetadataUrl: missing, samlAcsUrl: missing });
       render(() => <SSOProvidersPanel />);
       const dialog = await edit();
       expect(dialog.queryByRole('button', { name: 'Copy SP metadata URL' })).toBeNull();
+      expect(dialog.queryByRole('button', { name: 'Copy ACS URL' })).toBeNull();
       expect(dialog.queryByText(metadata)).toBeNull();
-      expect(dialog.getByText(/No SP Metadata URL available/)).toHaveTextContent(
+      expect(dialog.queryByText(acs)).toBeNull();
+      expect(dialog.getByText(/No SP Metadata or ACS URL available/)).toHaveTextContent(
         'Check Settings > System public URL and saved provider settings.',
       );
       expect(dialog.getByRole('textbox', { name: 'Provider Name' })).toHaveValue('Operations');
@@ -160,7 +177,35 @@ describe('SSO editor registration authority', () => {
     },
   );
 
-  it('explains when a new SAML provider gets its URL instead of advertising a guessed placeholder', async () => {
+  it.each([
+    {
+      details: { samlMetadataUrl: undefined, samlAcsUrl: acs },
+      availableLabel: 'Copy ACS URL',
+      unavailableLabel: 'Copy SP metadata URL',
+      hint: 'No SP Metadata URL available.',
+      available: acs,
+    },
+    {
+      details: { samlMetadataUrl: metadata, samlAcsUrl: undefined },
+      availableLabel: 'Copy SP metadata URL',
+      unavailableLabel: 'Copy ACS URL',
+      hint: 'No ACS URL available.',
+      available: metadata,
+    },
+  ])(
+    'leaves the valid detail URL actionable when $unavailableLabel is unavailable',
+    async ({ details, availableLabel, unavailableLabel, hint, available }) => {
+      setup([saml], { ...detail, ...details });
+      render(() => <SSOProvidersPanel />);
+      const dialog = await edit();
+      expect(dialog.getByRole('button', { name: availableLabel })).toHaveTextContent(available);
+      expect(dialog.queryByRole('button', { name: unavailableLabel })).toBeNull();
+      expect(dialog.getByText(hint, { exact: false })).toBeVisible();
+      readOnlyRequests();
+    },
+  );
+
+  it('explains where to find both URLs after saving, without advertising a guessed value', async () => {
     setup([]);
     render(() => <SSOProvidersPanel />);
     const add = await screen.findByRole('button', { name: 'Add SAML' });
@@ -169,25 +214,48 @@ describe('SSO editor registration authority', () => {
     const dialog = within(screen.getByRole('dialog', { name: 'Add SAML provider' }));
     expect(
       dialog.getByText(
-        'The SP Metadata URL is generated when the provider is saved. Save this provider, then copy it from the provider card.',
+        'After saving, copy the SP Metadata and ACS URLs from the provider card. Open Edit if the provider is disabled.',
       ),
     ).toBeVisible();
     expect(dialog.queryByText(/\/api\/saml\//)).toBeNull();
     expect(dialog.queryByRole('button', { name: 'Copy SP metadata URL' })).toBeNull();
+    expect(dialog.queryByRole('button', { name: 'Copy ACS URL' })).toBeNull();
     expect(dialog.getByRole('button', { name: 'Create Provider' })).toBeEnabled();
     fireEvent.click(dialog.getByRole('button', { name: 'Cancel' }));
     readOnlyRequests();
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
-  it('keeps canonical metadata available when editing a disabled saved provider', async () => {
+  it('points to Edit for a disabled provider and exposes both canonical URLs there', async () => {
     setup([{ ...saml, enabled: false }], { ...detail, enabled: false });
     render(() => <SSOProvidersPanel />);
+    expect(await screen.findByText(/Open Edit to check this provider/)).toBeVisible();
+    expect(screen.queryByRole('button', { name: 'Copy ACS URL' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Enable Operations' })).toHaveAttribute(
+      'aria-pressed',
+      'false',
+    );
     const dialog = await edit();
     expect(dialog.getByRole('button', { name: 'Copy SP metadata URL' })).toHaveTextContent(
       metadata,
     );
+    expect(dialog.getByRole('button', { name: 'Copy ACS URL' })).toHaveTextContent(acs);
+    fireEvent.click(dialog.getByRole('button', { name: 'Cancel' }));
+    expect(screen.getByRole('button', { name: 'Enable Operations' })).toHaveAttribute(
+      'aria-pressed',
+      'false',
+    );
     readOnlyRequests();
+  });
+
+  it('does not direct a read-only user to a disabled provider’s editor', async () => {
+    setup([{ ...saml, enabled: false }], { ...detail, enabled: false });
+    render(() => <SSOProvidersPanel canManage={false} />);
+    expect(await screen.findByRole('button', { name: 'Edit provider Operations' })).toBeDisabled();
+    expect(screen.queryByText(/Open Edit to check this provider/)).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Copy ACS URL' })).toBeNull();
+    readOnlyRequests();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
   it('carries the OIDC registration step from the draft to the saved callback control', async () => {
