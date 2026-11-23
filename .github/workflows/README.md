@@ -262,9 +262,15 @@ PBS backup group on each datastore; registration, status requests and repeat
 reads of one group cannot stand in for snapshot traffic. The per-build
 `proxmox-*.json` in `memory-regression-proxmox` records PVE sightings, including
 which synthetic guests exceeded the gap limit, and PBS group coverage by
-instance and datastore. An unfinished window has no gap observation. Served
-groups do not prove Pulse retained or displayed those snapshots. A passing
-comparison is synthetic polling evidence, not an installed LXC memory test.
+instance and datastore. It also counts completed PBS datastore status responses
+in the steady RSS window, with the longest gap per datastore including both
+edges. This distinguishes ongoing status traffic from silence after warmup,
+without making the memory comparison fail or assuming that cached snapshots
+should be requested again. An unfinished window has no gap
+observation. Status responses do not establish backup reads or Pulse accepting
+the response; served snapshot groups do not prove Pulse retained or displayed
+them. A passing comparison is synthetic evidence, not an installed LXC memory
+test.
 
 `dependency-advisory-watch.yml` strictly audits the product frontend on
 `main` every day. A newly disclosed advisory can affect an unchanged lockfile;

@@ -121,6 +121,7 @@ class ReleaseMemorySummaryTests(unittest.TestCase):
         self.assertIn("| PVE guest poll sightings during steady RSS sampling | n/a | n/a |", lines)
         self.assertIn("| PBS API requests | 210 | 210 |", lines)
         self.assertIn("| PBS snapshot groups served/configured | n/a | 92/104 |", lines)
+        self.assertIn("| PBS datastore status responses during steady RSS sampling | n/a | n/a |", lines)
         self.assertIn("not snapshots Pulse retained or displayed", lines)
 
     def test_steady_proxmox_sighting_gap_is_reported_separately_from_the_rss_result(self):
@@ -151,6 +152,42 @@ class ReleaseMemorySummaryTests(unittest.TestCase):
                       " 35/35 sighted; 0 with a gap over 60 s; longest 10 s in 300 s |"
                       " 35/35 sighted; 1 with a gap over 60 s; longest 150 s in 300 s |", text)
         self.assertIn("a gap does not identify where observation stopped", text)
+
+    def test_steady_pbs_datastore_gap_is_visible_even_when_snapshot_coverage_matches(self):
+        primary = {"store-fast": {"responses": 10, "longest_gap_ms": 30000},
+                   "store-archive": {"responses": 10, "longest_gap_ms": 31000}}
+        baseline = {
+            "pve_nodes": 3, "guests": 35, "pbs_instances": 2, "total_pbs_snapshots": 5200,
+            "snapshots_per_group": 50, "pve_requests": 914, "pbs_requests": 210,
+            "dashboard": {"connects": 1, "messages": 60, "bytes": 1024},
+            "pbs_snapshot_group_coverage": {
+                name: {"store-fast": {"served_groups": 35, "expected_groups": 35},
+                       "store-archive": {"served_groups": 17, "expected_groups": 17}}
+                for name in ("pbs1", "pbs2")
+            },
+            "pbs_steady_datastore_status": {
+                "window_s": 300, "datastores": {"pbs1": primary, "pbs2": primary},
+            },
+        }
+        candidate = dict(baseline, pbs_steady_datastore_status={
+            "window_s": 300,
+            "datastores": {
+                "pbs1": primary,
+                "pbs2": {**primary, "store-archive": {"responses": 0, "longest_gap_ms": 300000}},
+            },
+        })
+        full = samples(131072, 25, 0)
+        code, result, text = self.run_summary(
+            full, full, estate="proxmox", proxmox={"baseline": baseline, "candidate": candidate},
+            env={"PULSE_MEMORY_GATE": "0"}, wait_statuses=(0, 0),
+        )
+        self.assertEqual(code, 0)
+        self.assertEqual(result["status"], "measured")
+        self.assertIn("| PBS snapshot groups served/configured | 104/104 | 104/104 |", text)
+        self.assertIn("| PBS datastore status responses during steady RSS sampling |"
+                      " 4/4 with a response; longest gap 31 s in 300 s |"
+                      " 3/4 with a response; longest gap 300 s in 300 s |", text)
+        self.assertIn("not proof of backup reads or of Pulse accepting the response", text)
 
     def test_mock_estate_is_the_default(self):
         _, result, text = self.run_summary(samples(130000, 25, 0), samples(130000, 25, 0))
