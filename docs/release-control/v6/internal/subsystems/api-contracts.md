@@ -15123,9 +15123,12 @@ input to the existing retry and dismiss calls), `type`, optional `method` and
 `destinationId`, `status`, `attempts`, `maxAttempts`, `createdAt`, and any
 available `lastAttempt`, `nextRetryAt`, `completedAt`, `payloadBytes`, or
 operational `links`. The `alerts` list carries references
-(`id`, `type`, `level`, `resourceId`); `failureClass` is a coarse bucket
-derived from the last error text when present. No provider configuration,
-full alert payload or raw error text is part of the list. For attempt-level
-diagnostics use the separate delivery log. Permissions and action payloads
-are unchanged. `notification_queue_additional_test.go` checks the HTTP shape,
-persisted row and ID-based action responses.
+(`id`, `type`, `level`, `resourceId`). No provider configuration, full alert
+payload, raw error text, or attempt failure class is part of the list. For
+recorded attempt diagnostics, use the separate settings-read
+`GET /api/notifications/delivery-log`. It returns the newest retained attempts,
+50 by default and at most 200 per read. Match the queue `id` to the log's
+`notificationId` and check the attempt timestamp; an older attempt or a missing
+audit row is not a verdict for the current queue entry. Permissions and action
+payloads are unchanged. `notification_queue_additional_test.go` checks the HTTP
+shape, recorded attempt class, persisted row and ID-based action responses.

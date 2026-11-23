@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"testing"
 	"time"
 
@@ -101,6 +102,15 @@ func TestNotificationQueueHandlers_GetDLQAndStats(t *testing.T) {
 }
 
 func TestNotificationQueueHandlers_GetDLQSummaryPreservesStoredRecord(t *testing.T) {
+	for _, status := range []int{http.StatusLocked, http.StatusTooEarly} {
+		t.Run(strconv.Itoa(status), func(t *testing.T) {
+			assertDLQSummaryPreservesStoredRecord(t, status)
+		})
+	}
+}
+
+func assertDLQSummaryPreservesStoredRecord(t *testing.T, status int) {
+	t.Helper()
 	handler, queue := newNotificationQueueHandlers(t)
 	// An unattempted row without a completion time must not displace the
 	// completed row when the list is limited to one.
@@ -124,8 +134,12 @@ func TestNotificationQueueHandlers_GetDLQSummaryPreservesStoredRecord(t *testing
 		}},
 	}
 	require.NoError(t, queue.Enqueue(&item))
-	const failure = "HTTP 503: stored fixture diagnostic"
-	require.NoError(t, queue.MoveToDLQ(item.ID, failure))
+	// Store the prose in the queue and the structured verdict in the audit, as
+	// a sender does. The queue summary must not turn these 4xx codes into a
+	// rejection when the recorded attempt says they were a server error.
+	failure := notifications.FailfWithClass(notifications.ClassFromHTTPStatus(status), "HTTP %d: stored fixture diagnostic", status)
+	require.NoError(t, queue.MoveToDLQ(item.ID, failure.Error()))
+	require.NoError(t, queue.RecordAuditError(&item, false, failure))
 
 	rec := httptest.NewRecorder()
 	handler.GetDLQ(rec, httptest.NewRequest(http.MethodGet, "/api/notifications/dlq?limit=1", nil))
@@ -138,7 +152,7 @@ func TestNotificationQueueHandlers_GetDLQSummaryPreservesStoredRecord(t *testing
 	require.Equal(t, item.ID, saved.ID)
 	require.True(t, bytes.Equal(item.Config, saved.Config), "provider snapshot changed on read")
 	require.NotNil(t, saved.LastError)
-	require.Equal(t, failure, *saved.LastError)
+	require.Equal(t, failure.Error(), *saved.LastError)
 	require.NotNil(t, saved.LastAttempt)
 	require.NotNil(t, saved.CompletedAt)
 	require.Len(t, saved.Alerts, 1)
@@ -155,16 +169,31 @@ func TestNotificationQueueHandlers_GetDLQSummaryPreservesStoredRecord(t *testing
 		"alerts": []map[string]string{{
 			"id": "alert-fixture", "type": "memory", "level": "warning", "resourceId": "resource-fixture",
 		}},
-		"attempts":     2,
-		"maxAttempts":  5,
-		"createdAt":    saved.CreatedAt,
-		"lastAttempt":  saved.LastAttempt,
-		"completedAt":  saved.CompletedAt,
-		"failureClass": "server_error",
+		"attempts":    2,
+		"maxAttempts": 5,
+		"createdAt":   saved.CreatedAt,
+		"lastAttempt": saved.LastAttempt,
+		"completedAt": saved.CompletedAt,
 	}})
 	require.NoError(t, err)
 	require.JSONEq(t, string(want), rec.Body.String())
 	require.True(t, saved.CreatedAt.Equal(item.CreatedAt))
+
+	logRec := httptest.NewRecorder()
+	NewNotificationHandlers(nil, NewNotificationMonitorWrapper(handler.monitor)).GetDeliveryLog(
+		logRec, httptest.NewRequest(http.MethodGet, "/api/notifications/delivery-log?limit=1", nil),
+	)
+	require.Equal(t, http.StatusOK, logRec.Code)
+	var deliveryLog struct {
+		Entries []notifications.DeliveryLogEntry `json:"entries"`
+	}
+	require.NoError(t, json.Unmarshal(logRec.Body.Bytes(), &deliveryLog))
+	require.Len(t, deliveryLog.Entries, 1)
+	attempt := deliveryLog.Entries[0]
+	require.Equal(t, saved.ID, attempt.NotificationID)
+	require.Equal(t, saved.Attempts, attempt.Attempts)
+	require.Equal(t, notifications.DeliveryOutcomeDeadLetter, attempt.Outcome)
+	require.Equal(t, string(notifications.NotificationFailureServerError), attempt.FailureClass)
 }
 
 func TestNotificationQueueHandlers_GetDLQEmpty(t *testing.T) {

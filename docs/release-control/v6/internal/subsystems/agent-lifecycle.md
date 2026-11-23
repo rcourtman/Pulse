@@ -3057,6 +3057,9 @@ The dead-letter queue list can reference an agent alert and its resource ID
 for correlation, but reports delivery state only. It does not contain the
 saved delivery configuration or full alert payload, and an entry does not
 establish agent connectivity or authorize a repair of the agent.
+For an individual notification attempt, consult the separate delivery log;
+the queue status is not an attempt verdict.
+
 Workflow starter counts on that endpoint,
 contextual Assistant/external-agent collaboration counts inside the Assistant
 step, the content-free Patrol control starter split, and Patrol control

@@ -50,21 +50,20 @@ func (h *NotificationQueueHandlers) getQueue() *notifications.NotificationQueue 
 
 // deadLetterEntry is the operator view, not the record used for delivery.
 type deadLetterEntry struct {
-	ID            string                                 `json:"id"`
-	Type          string                                 `json:"type"`
-	Method        string                                 `json:"method,omitempty"`
-	DestinationID string                                 `json:"destinationId,omitempty"`
-	Status        notifications.NotificationQueueStatus  `json:"status"`
-	Alerts        []deadLetterAlertRef                   `json:"alerts"`
-	Links         []operationaltrust.NotificationLink    `json:"links,omitempty"`
-	Attempts      int                                    `json:"attempts"`
-	MaxAttempts   int                                    `json:"maxAttempts"`
-	FailureClass  notifications.NotificationFailureClass `json:"failureClass,omitempty"`
-	LastAttempt   *time.Time                             `json:"lastAttempt,omitempty"`
-	CreatedAt     time.Time                              `json:"createdAt"`
-	NextRetryAt   *time.Time                             `json:"nextRetryAt,omitempty"`
-	CompletedAt   *time.Time                             `json:"completedAt,omitempty"`
-	PayloadBytes  *int                                   `json:"payloadBytes,omitempty"`
+	ID            string                                `json:"id"`
+	Type          string                                `json:"type"`
+	Method        string                                `json:"method,omitempty"`
+	DestinationID string                                `json:"destinationId,omitempty"`
+	Status        notifications.NotificationQueueStatus `json:"status"`
+	Alerts        []deadLetterAlertRef                  `json:"alerts"`
+	Links         []operationaltrust.NotificationLink   `json:"links,omitempty"`
+	Attempts      int                                   `json:"attempts"`
+	MaxAttempts   int                                   `json:"maxAttempts"`
+	LastAttempt   *time.Time                            `json:"lastAttempt,omitempty"`
+	CreatedAt     time.Time                             `json:"createdAt"`
+	NextRetryAt   *time.Time                            `json:"nextRetryAt,omitempty"`
+	CompletedAt   *time.Time                            `json:"completedAt,omitempty"`
+	PayloadBytes  *int                                  `json:"payloadBytes,omitempty"`
 }
 
 type deadLetterAlertRef struct {
@@ -99,11 +98,6 @@ func newDeadLetterEntry(item *notifications.QueuedNotification) deadLetterEntry 
 				})
 			}
 		}
-	}
-	// Provider diagnostics may contain free-form response text. Keep only a
-	// closed class here; per-attempt evidence belongs to the delivery log.
-	if item.LastError != nil && *item.LastError != "" {
-		entry.FailureClass = notifications.ClassifyNotificationFailure(*item.LastError)
 	}
 	return entry
 }
