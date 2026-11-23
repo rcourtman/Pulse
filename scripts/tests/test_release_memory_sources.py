@@ -16,15 +16,17 @@ REPO, TAG, SHA, TAG_SHA = "rcourtman/Pulse", "v6.8.0", "a" * 40, "b" * 40
 LATEST = f"repos/{REPO}/releases/latest"
 REF = f"repos/{REPO}/git/ref/tags/{TAG}"
 OBJECT = f"repos/{REPO}/git/tags/{TAG_SHA}"
-RELEASE = {"tag_name": TAG, "draft": False, "prerelease": False}
+RELEASE = {"tag_name": TAG, "draft": False, "prerelease": False, "immutable": True}
 LIGHTWEIGHT = {"ref": f"refs/tags/{TAG}", "object": {"type": "commit", "sha": SHA}}
 ANNOTATED = {"ref": f"refs/tags/{TAG}", "object": {"type": "tag", "sha": TAG_SHA}}
 PEELED = {"tag": TAG, "sha": TAG_SHA, "object": {"type": "commit", "sha": SHA}}
+CANONICAL_MAIN = "github.repository == 'rcourtman/Pulse' && github.ref == 'refs/heads/main'"
 
 
 class MemoryWatchSources(unittest.TestCase):
     def setUp(self):
-        self.jobs = yaml.safe_load(WORKFLOW.read_text())["jobs"]
+        self.workflow = yaml.safe_load(WORKFLOW.read_text())
+        self.jobs = self.workflow["jobs"]
 
     def run_resolver(self, responses):
         with tempfile.TemporaryDirectory() as tmp:
@@ -83,6 +85,26 @@ class MemoryWatchSources(unittest.TestCase):
                 self.assertEqual(calls, expected_calls)
                 self.assertIsNone(output)
 
+    def test_mutable_or_unverified_stable_never_reaches_tag_lookup(self):
+        unverified = {key: value for key, value in RELEASE.items() if key != "immutable"}
+        for release in (RELEASE | {"immutable": False}, unverified):
+            with self.subTest(release=release):
+                result, calls, output = self.run_resolver({LATEST: release, REF: LIGHTWEIGHT})
+                self.assertNotEqual(result.returncode, 0)
+                self.assertEqual(calls, [LATEST])
+                self.assertIsNone(output)
+                self.assertIn("published immutable stable release", result.stderr)
+
+    def test_builds_and_scheduled_reporter_cannot_select_a_different_ref(self):
+        resolver_if = " ".join(self.jobs["resolve-stable"].get("if", "").split())
+        self.assertEqual(resolver_if, CANONICAL_MAIN +
+                         " && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')")
+        self.assertEqual(self.workflow["permissions"], {"contents": "read"})
+        reporter = self.jobs["report-scheduled-result"]
+        self.assertEqual(" ".join(reporter["if"].split()),
+                         "${{ always() && " + CANONICAL_MAIN + " && github.event_name == 'schedule' }}")
+        self.assertEqual(reporter["permissions"], {"contents": "read", "issues": "write"})
+
     def test_all_estates_use_the_same_pair_and_require_its_identity(self):
         stable_sha = "${{ needs.resolve-stable.outputs.sha }}"
         stable_tag = "${{ needs.resolve-stable.outputs.tag }}"
@@ -91,9 +113,14 @@ class MemoryWatchSources(unittest.TestCase):
             with self.subTest(job=job_name), tempfile.TemporaryDirectory() as tmp:
                 job = self.jobs[job_name]
                 self.assertEqual(job["needs"], "resolve-stable")
+                self.assertNotIn("if", job)  # A non-successful resolver skips every comparison.
+                self.assertNotIn("permissions", job)
                 checkouts = [step["with"] for step in job["steps"] if step.get("uses", "").startswith("actions/checkout@")]
                 self.assertEqual([(step["path"], step["ref"]) for step in checkouts],
                                  [("candidate", "${{ github.sha }}"), ("baseline", stable_sha)])
+                self.assertTrue(all(step.get("persist-credentials") is False for step in checkouts))
+                setup_go, = [step for step in job["steps"] if step.get("uses", "").startswith("actions/setup-go@")]
+                self.assertIs(setup_go["with"].get("cache"), False)
                 step, = [step for step in job["steps"] if step["name"].startswith("Measure both builds")]
                 self.assertEqual(step["env"]["BASELINE_TAG"], stable_tag)
                 self.assertEqual(step["env"]["BASELINE_SHA"], stable_sha)
