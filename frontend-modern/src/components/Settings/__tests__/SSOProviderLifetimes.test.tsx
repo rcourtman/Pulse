@@ -596,7 +596,7 @@ describe('SSO provider read and editor ownership', () => {
       result: {
         success: true,
         message: unreadSigningCertMessage,
-        details: usableMetadata,
+        details: { ...usableMetadata, certificates: undefined },
       },
       summary: ['Metadata read', 'No signing cert read', 'Sign-in not tested'],
       title: 'Check SAML metadata',
