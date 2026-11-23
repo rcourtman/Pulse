@@ -3053,6 +3053,13 @@ The alerts-owned `POST /api/alerts/snooze` and
 pause and resume notification and escalation policy for one existing incident;
 they grant no agent enrollment, liveness, command, update, removal, or
 fleet-control authority, and agent lifecycle state must not key off them.
+The dead-letter queue list can reference an agent alert and its resource ID
+for correlation, but reports delivery state only. It does not contain the
+saved delivery configuration or full alert payload, and an entry does not
+establish agent connectivity or authorize a repair of the agent.
+For an individual notification attempt, consult the separate delivery log;
+the queue status is not an attempt verdict.
+
 Workflow starter counts on that endpoint,
 contextual Assistant/external-agent collaboration counts inside the Assistant
 step, the content-free Patrol control starter split, and Patrol control

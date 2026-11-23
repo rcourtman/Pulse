@@ -15113,3 +15113,22 @@ rune-length bounds (`64`/`80`/`240`) before saving. Existing clients that do not
 send these keys remain fully compatible. `internal/api/alerting/email_branding_test.go`
 and `frontend-modern/src/api/__tests__/notifications.test.ts` verify API
 serialization and presence handling.
+
+### Dead-letter response contract
+
+`GET /api/notifications/dlq` returns queue summaries in existing completion
+order. The default limit stays 100; a valid integer from 1 through 1000
+overrides it, and no rows still returns `null`. Each row retains `id` (the
+input to the existing retry and dismiss calls), `type`, optional `method` and
+`destinationId`, `status`, `attempts`, `maxAttempts`, `createdAt`, and any
+available `lastAttempt`, `nextRetryAt`, `completedAt`, `payloadBytes`, or
+operational `links`. The `alerts` list carries references
+(`id`, `type`, `level`, `resourceId`). No provider configuration, full alert
+payload, raw error text, or attempt failure class is part of the list. For
+recorded attempt diagnostics, use the separate settings-read
+`GET /api/notifications/delivery-log`. It returns the newest retained attempts,
+50 by default and at most 200 per read. Match the queue `id` to the log's
+`notificationId` and check the attempt timestamp; an older attempt or a missing
+audit row is not a verdict for the current queue entry. Permissions and action
+payloads are unchanged. `notification_queue_additional_test.go` checks the HTTP
+shape, recorded attempt class, persisted row and ID-based action responses.
