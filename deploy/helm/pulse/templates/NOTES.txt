@@ -1,4 +1,10 @@
-1. Pulse hub URL: http://{{ include "pulse.fullname" . }}:{{ .Values.service.port }}
-   (Adjust if using ingress or LoadBalancer.)
-2. Create an API token from the Pulse UI under Settings → Security for the Docker agent.
-3. Deploy the optional agent by enabling `agent.enabled` and providing your server URL and token.
+1. Pulse web UI URL: http://{{ include "pulse.fullname" . }}:{{ .Values.service.port }}
+   (Adjust if using Ingress, LoadBalancer, or port-forward:
+   kubectl port-forward svc/{{ include "pulse.fullname" . }} 7655:{{ .Values.service.port }} -n {{ .Release.Namespace }})
+2. On first boot, retrieve your one-time setup token to unlock the setup wizard:
+   kubectl exec -n {{ .Release.Namespace }} deploy/{{ include "pulse.fullname" . }} -- /app/pulse bootstrap-token
+3. Open Pulse in your browser, paste the bootstrap token to create your admin account,
+   then connect your first system under Settings → Infrastructure.
+4. To monitor this Kubernetes cluster with the optional agent, generate an install token
+   under Settings → Infrastructure → Add infrastructure → Kubernetes, then enable
+   `agent.enabled` with your server URL and token.

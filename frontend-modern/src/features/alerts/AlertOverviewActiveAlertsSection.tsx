@@ -1,5 +1,6 @@
 import { For, Show } from 'solid-js';
 
+import { ButtonLink } from '@/components/shared/Button';
 import { SectionHeader } from '@/components/shared/SectionHeader';
 import { PlatformWindowedList } from '@/features/platformPage/PlatformWindowedList';
 import { t } from '@/i18n';
@@ -58,6 +59,8 @@ interface AlertOverviewActiveAlertsSectionProps {
   showAcknowledged: boolean;
   setShowAcknowledged: (value: boolean) => void;
   deliveryPausedGlobally?: boolean;
+  hasMonitoredResources?: boolean;
+  canAddInfrastructure?: boolean;
 }
 
 export function AlertOverviewActiveAlertsSection(props: AlertOverviewActiveAlertsSectionProps) {
@@ -92,31 +95,55 @@ export function AlertOverviewActiveAlertsSection(props: AlertOverviewActiveAlert
                 </>
               }
             >
-              <div class="flex justify-center mb-3">
-                <svg
-                  class="w-12 h-12 text-green-500 dark:text-green-400"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <circle
-                    cx="12"
-                    cy="12"
-                    r="10"
-                    stroke="currentColor"
-                    stroke-width="2"
+              <Show
+                when={props.hasMonitoredResources !== false}
+                fallback={
+                  <div class="mx-auto max-w-md space-y-2">
+                    <p class="text-sm font-medium text-base-content">No systems connected yet</p>
+                    <p class="text-xs text-muted">
+                      Connect a Proxmox server, NAS, Docker host, or machine to start monitoring
+                      alerts.
+                    </p>
+                    <Show when={props.canAddInfrastructure}>
+                      <div class="pt-2">
+                        <ButtonLink
+                          href="/settings/infrastructure?add=pick"
+                          variant="primary"
+                          size="sm"
+                        >
+                          Add infrastructure
+                        </ButtonLink>
+                      </div>
+                    </Show>
+                  </div>
+                }
+              >
+                <div class="flex justify-center mb-3">
+                  <svg
+                    class="w-12 h-12 text-green-500 dark:text-green-400"
                     fill="none"
-                  />
-                  <path
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    stroke-width="2"
-                    d="M9 12l2 2 4-4"
-                  />
-                </svg>
-              </div>
-              <p class="text-sm">{getAlertOverviewEmptyState().title}</p>
-              <p class="text-xs mt-1">{getAlertOverviewEmptyState().description}</p>
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <circle
+                      cx="12"
+                      cy="12"
+                      r="10"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      fill="none"
+                    />
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      d="M9 12l2 2 4-4"
+                    />
+                  </svg>
+                </div>
+                <p class="text-sm">{getAlertOverviewEmptyState().title}</p>
+                <p class="text-xs mt-1">{getAlertOverviewEmptyState().description}</p>
+              </Show>
             </Show>
           </div>
         }

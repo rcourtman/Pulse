@@ -1,0 +1,46 @@
+{
+  "version": 1,
+  "base_sha": "3d1682cf538347223d2a3463926e2f89a2b674b7",
+  "verified_at": "2026-11-23T00:34:11Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/ConnectionEditor/CredentialSlots/TrueNASCredentialSlot.tsx",
+    "frontend-modern/src/features/alerts/AlertOverviewActiveAlertsSection.tsx",
+    "frontend-modern/src/features/alerts/OverviewTab.tsx",
+    "frontend-modern/src/pages/Alerts.tsx",
+    "frontend-modern/src/pages/Docs.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/ConnectionEditor/CredentialSlots/TrueNASCredentialSlot.tsx": "198163f7aaf187abcfb77cb3f6b622e52f33171a7c857995e4ccf2bb82aa4d5a",
+    "frontend-modern/src/features/alerts/AlertOverviewActiveAlertsSection.tsx": "ab5b7eee5635a874fe81524a8238cb932582fbe6fcb02e750144241d7465bfb6",
+    "frontend-modern/src/features/alerts/OverviewTab.tsx": "9d23730b261de485c523a4ae1297ef6ed2da94697831a3f3cdad60db4dbc1cb0",
+    "frontend-modern/src/pages/Alerts.tsx": "4532b76587ac977762ffc5eff5152b19a77fccb44d27502565946a318e4797e1",
+    "frontend-modern/src/pages/Docs.tsx": "20be50aef20a933ba6b0fc53bd169ebd4ccdcf7b0a4a9bb245533334f7ab3e08"
+  },
+  "routes": [
+    "/alerts/overview",
+    "/docs",
+    "/docs/getting-started",
+    "/settings/infrastructure?add=truenas"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Alerts Overview at 1440x900 with 0 monitored resources: renders No systems connected yet empty card with Add infrastructure link instead of misleading all-clear state",
+    "In-app Docs index and article routes at 1440x900 and 390x844: renders Back to Pulse link beside All documentation without wrapping or horizontal overflow",
+    "Add TrueNAS SCALE modal at 1440x900: required asterisk markers on Name, Host, API key owner username, API key, Username, Password; plain-English API key owner username helper text; humanized troubleshooting hint beneath verbatim Connection test failed error; verified single caret rendering on Authentication select in HeadlessChrome against compiled CSS"
+  ],
+  "interactions": [
+    "Visited /alerts/overview on an empty Pulse instance and clicked Add infrastructure to navigate to /settings/infrastructure?add=pick",
+    "Visited /docs and /docs/getting-started on desktop (1440x900) and mobile (390x844), clicked Back to Pulse to return to /",
+    "Opened /settings/infrastructure?add=truenas, switched Authentication between API key and Username and password, and triggered Test connection failure to verify verbatim error plus humanized hint"
+  ]
+}

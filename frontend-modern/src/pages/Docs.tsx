@@ -158,21 +158,29 @@ export default function Docs() {
 
   return (
     <div class="mx-auto w-full max-w-4xl space-y-4">
+      <div class="flex flex-wrap items-center justify-between gap-3">
+        <a
+          href="/"
+          class="inline-flex items-center gap-1 text-sm font-medium text-blue-600 hover:underline dark:text-blue-400"
+        >
+          &larr; Back to Pulse
+        </a>
+        <Show when={docPath() !== DOCS_INDEX_PATH}>
+          <a
+            href={docRouteForPath(DOCS_INDEX_PATH)}
+            data-doc-link=""
+            onClick={handleClick}
+            class="inline-flex items-center gap-1 text-sm text-blue-600 hover:underline dark:text-blue-400"
+          >
+            &larr; All documentation
+          </a>
+        </Show>
+      </div>
+
       <PageHeader
         title={title()}
         description="Documentation shipped with this Pulse installation."
       />
-
-      <Show when={docPath() !== DOCS_INDEX_PATH}>
-        <a
-          href={docRouteForPath(DOCS_INDEX_PATH)}
-          data-doc-link=""
-          onClick={handleClick}
-          class="inline-flex items-center gap-1 text-sm text-blue-600 hover:underline dark:text-blue-400"
-        >
-          &larr; All documentation
-        </a>
-      </Show>
 
       <Show
         when={!waiting() || loadError()}
