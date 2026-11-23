@@ -2,11 +2,53 @@ package models
 
 import (
 	"encoding/json"
+	"maps"
 	"slices"
 	"strings"
 	"testing"
 	"time"
 )
+
+func TestPBSExclusiveConfirmersFiltersWholeSharedViews(t *testing.T) {
+	overlap := PBSSnapshotRef{BackupType: "vm", VMID: 100, Time: 10}
+	mirrorOnly := PBSSnapshotRef{BackupType: "vm", VMID: 101, Time: 10}
+	aliasOnly := PBSSnapshotRef{BackupType: "vm", VMID: 102, Time: 10}
+	peerMirrorOnly := PBSSnapshotRef{BackupType: "vm", VMID: 103, Time: 10}
+	later := PBSSnapshotRef{BackupType: "vm", VMID: 100, Time: 20}
+	container := PBSSnapshotRef{BackupType: "ct", VMID: 100, Time: 10}
+	view := func(storage string, refs ...PBSSnapshotRef) []PBSGuestConfirmation {
+		rows := make([]PBSGuestConfirmation, 0, len(refs))
+		for _, ref := range refs {
+			rows = append(rows, PBSGuestConfirmation{Storage: storage, BackupType: ref.BackupType, VMID: ref.VMID, Time: ref.Time})
+		}
+		return rows
+	}
+
+	state := NewState()
+	// Both aliases on alpha see the overlap, but its private view still
+	// confirms a later snapshot even though the mirror also lists it.
+	alpha := view("mirror", overlap, mirrorOnly, later)
+	alpha = append(alpha, view("alias", overlap, aliasOnly)...)
+	alpha = append(alpha, view("private", later)...)
+	state.UpdatePBSGuestConfirmationsForInstance("alpha", alpha)
+	state.UpdatePBSGuestConfirmationsForInstance("beta", view("mirror", overlap, peerMirrorOnly))
+	// An identically named storage on gamma does not share this view, and
+	// its container is not the VM with the same numeric ID and timestamp.
+	state.UpdatePBSGuestConfirmationsForInstance("gamma", view("mirror", container))
+
+	want := map[PBSSnapshotRef]string{later: "alpha", container: "gamma"}
+	if got := state.PBSExclusiveConfirmers(); !maps.Equal(got, want) {
+		t.Fatalf("confirmers with overlap = %v, want %v", got, want)
+	}
+
+	state.UpdatePBSGuestConfirmationsForInstance("beta", nil)
+	// Once the remaining evidence is uncontested, aliases on the same
+	// connection agree and must not suppress each other.
+	want[overlap], want[mirrorOnly], want[aliasOnly] = "alpha", "alpha", "alpha"
+	if got := state.PBSExclusiveConfirmers(); !maps.Equal(got, want) {
+		t.Fatalf("confirmers after removal = %v, want %v", got, want)
+	}
+}
 
 var pbsAttributionTime = time.Date(2026, time.October, 7, 12, 0, 0, 0, time.UTC)
 
