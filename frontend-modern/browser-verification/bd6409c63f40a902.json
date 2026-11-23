@@ -1,0 +1,38 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "55906deda8f3187615a2562ef61ad0bb2bc7df15",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/RolesPanel.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/RolesPanel.tsx": "b3c3987cd24827e06462630f339385b70206d3b46034804716ab285a5d9f8b9a"
+  },
+  "routes": [
+    "/settings/security-roles",
+    "/docs/RBAC#before-using-the-api"
+  ],
+  "states": [
+    "Existing Roles deletion confirmation for a namesake custom role; displayed and accessible access consequence",
+    "Definite refusal of a synthetic exact-target deletion, same selected role and actions",
+    "Narrow session without roles capability, without a mounted panel or role read",
+    "Rendered shipped RBAC Help at the same Before Using the API position"
+  ],
+  "interactions": [
+    "Open and cancel the exact role by keyboard on desktop and touch on phone, distinguish namesakes, and verify no write on Cancel or Escape",
+    "Activate the one explicitly refused synthetic deletion and verify the same warning, identity, refusal and controls",
+    "Read Help from the built asset with the previous recovery cues in the matched viewport",
+    "Inspect the six matched before and after pairs in production Chromium"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "verified_at": "2026-11-23T09:09:01Z"
+}
