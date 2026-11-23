@@ -1,4 +1,4 @@
-import { Component, createMemo, createSignal, Show } from 'solid-js';
+import { Component, createEffect, createMemo, createSignal, Show } from 'solid-js';
 import { t } from '@/i18n';
 import { WelcomeStep } from './steps/WelcomeStep';
 import { SecurityStep } from './steps/SecurityStep';
@@ -33,6 +33,13 @@ export const SetupWizard: Component<SetupWizardProps> = (props) => {
   const steps: WizardStep[] = ['welcome', 'security', 'completion'];
 
   const currentStepIndex = () => steps.indexOf(currentStep());
+
+  createEffect(() => {
+    currentStep();
+    if (typeof window !== 'undefined' && typeof window.scrollTo === 'function') {
+      window.scrollTo({ top: 0, behavior: 'auto' });
+    }
+  });
 
   const nextStep = () => {
     const idx = currentStepIndex();
@@ -72,7 +79,7 @@ export const SetupWizard: Component<SetupWizardProps> = (props) => {
       <div class="fixed inset-0 overflow-hidden pointer-events-none" aria-hidden="true"></div>
 
       <div
-        class="relative z-10 pt-8 px-4"
+        class="relative z-10 pt-5 pb-1 px-4"
         role="navigation"
         aria-label={t('setup.progress.ariaLabel')}
       >
@@ -80,7 +87,7 @@ export const SetupWizard: Component<SetupWizardProps> = (props) => {
       </div>
 
       {/* Main content */}
-      <div class="flex-1 flex items-center justify-center p-4 relative z-10">
+      <div class="flex-1 flex items-start sm:items-center justify-center px-4 py-4 relative z-10">
         <div class="w-full max-w-2xl" role="region" aria-live="polite">
           <Show when={currentStep() === 'welcome'}>
             <WelcomeStep

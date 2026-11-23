@@ -250,4 +250,34 @@ describe('WelcomeStep', () => {
     expect(apiFetchMock).not.toHaveBeenCalled();
     expect(onNext).not.toHaveBeenCalled();
   });
+
+  it('does not autofocus the token input and shows an inline error on invalid bootstrap token', async () => {
+    apiFetchMock.mockResolvedValue({ ok: false, status: 401 });
+    let tokenValue = 'bad-token-123';
+    const setBootstrapToken = vi.fn((next: string) => {
+      tokenValue = next;
+    });
+
+    render(() => (
+      <WelcomeStep
+        onNext={vi.fn()}
+        bootstrapToken={tokenValue}
+        setBootstrapToken={setBootstrapToken}
+        isUnlocked={false}
+        setIsUnlocked={vi.fn()}
+      />
+    ));
+
+    const input = screen.getByPlaceholderText('Paste your bootstrap token');
+    expect(input).not.toHaveAttribute('autofocus');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Verify bootstrap token →' }));
+
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent('Invalid bootstrap token. Please check and try again.');
+    expect(input).toHaveAttribute('aria-invalid', 'true');
+
+    fireEvent.input(input, { target: { value: 'another-token' } });
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
 });

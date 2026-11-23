@@ -1,0 +1,41 @@
+{
+  "version": 1,
+  "base_sha": "5bac0bd82e32bbbe7333a61792bb8292e8a09668",
+  "verified_at": "2026-11-23T00:08:54Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/SetupWizard/SetupCompletionPanel.tsx",
+    "frontend-modern/src/components/SetupWizard/SetupWizard.tsx",
+    "frontend-modern/src/components/SetupWizard/steps/SecurityStep.tsx",
+    "frontend-modern/src/components/SetupWizard/steps/WelcomeStep.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/SetupWizard/SetupCompletionPanel.tsx": "1ce94ff630a31fb14d01ba839f34483bd16188c42f959803c4a07ba1ddedb747",
+    "frontend-modern/src/components/SetupWizard/SetupWizard.tsx": "8733c75c962e57117636b91f26884a72a6354c436a0b57e8548703b35769d885",
+    "frontend-modern/src/components/SetupWizard/steps/SecurityStep.tsx": "8489261a9b749ddac1deff04ff37f147483d79308c87837ebcbe90716cd7ae32",
+    "frontend-modern/src/components/SetupWizard/steps/WelcomeStep.tsx": "6c12951fb87feeeaba4d3a86abc57c42d19f731f5eef61d45d79cb29d365422a"
+  },
+  "routes": [
+    "/"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "First-run SetupWizard Step 1 (WelcomeStep) at 1440x900 and 390x844: opens at scrollY=0 with hero, 3-step stepper, 2x2 command grid, unlock form, and Verify bootstrap token button (y=731) all above the 900px fold; invalid token shows inline role=alert error with aria-invalid",
+    "First-run SetupWizard Step 2 (SecurityStep) at 1440x900 and 390x844: scrolls to top on step transition, keeps Create Account & Continue button (y=799) above the 900px fold, and shows inline password validation error on mismatched/weak custom password",
+    "First-run SetupWizard Step 3 (SetupCompletionPanel) at 1440x900 and 390x844: scrolls to top on step transition, displays side-by-side Username and Password fields and keeps Add infrastructure button (y=818.5) above the 900px fold with zero horizontal overflow on mobile"
+  ],
+  "interactions": [
+    "Loaded fresh PULSE_DATA_DIR at / on desktop (1440x900) and mobile (390x844), verified scrollY=0 without auto-focus jump",
+    "Submitted an invalid bootstrap token to verify inline role=alert error, then submitted the valid token from pulse bootstrap-token",
+    "Verified scroll reset on Step 1 -> Step 2, tested custom password validation error, created admin account, verified scroll reset on Step 2 -> Step 3 and clicked Add infrastructure"
+  ]
+}

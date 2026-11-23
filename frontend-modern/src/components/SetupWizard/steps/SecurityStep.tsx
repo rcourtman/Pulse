@@ -40,6 +40,7 @@ export const SecurityStep: Component<SecurityStepProps> = (props) => {
   const [confirmPassword, setConfirmPassword] = createSignal('');
   const [showPassword, setShowPassword] = createSignal(false);
   const [isSettingUp, setIsSettingUp] = createSignal(false);
+  const [validationError, setValidationError] = createSignal<string | null>(null);
   // Outbound usage telemetry stays on by default; this is the first
   // authenticated moment where the operator can decide, so the choice lives
   // here instead of as an environment-variable instruction that arrives after
@@ -70,17 +71,24 @@ export const SecurityStep: Component<SecurityStepProps> = (props) => {
   };
 
   const handleSetup = async () => {
+    setValidationError(null);
     if (useCustomPassword()) {
       if (!password()) {
-        showError(t('setup.security.error.passwordRequired'));
+        const message = t('setup.security.error.passwordRequired');
+        setValidationError(message);
+        showError(message);
         return;
       }
       if (password().length < 12) {
-        showError(t('setup.security.error.passwordTooShort'));
+        const message = t('setup.security.error.passwordTooShort');
+        setValidationError(message);
+        showError(message);
         return;
       }
       if (password() !== confirmPassword()) {
-        showError(t('setup.security.error.passwordMismatch'));
+        const message = t('setup.security.error.passwordMismatch');
+        setValidationError(message);
+        showError(message);
         return;
       }
     }
@@ -161,17 +169,17 @@ export const SecurityStep: Component<SecurityStepProps> = (props) => {
 
   return (
     <div class="max-w-lg mx-auto bg-surface border border-border overflow-hidden relative rounded-md">
-      <div class="p-8 border-b border-border relative z-10 text-center">
-        <h2 class="text-2xl font-bold tracking-tight text-base-content">
+      <div class="px-6 py-4 border-b border-border relative z-10 text-center">
+        <h2 class="text-xl sm:text-2xl font-bold tracking-tight text-base-content">
           {t('setup.security.title')}
         </h2>
-        <p class="text-sm text-muted mt-2">{t('setup.security.description')}</p>
+        <p class="text-xs sm:text-sm text-muted mt-1">{t('setup.security.description')}</p>
       </div>
-      <div class="p-8 space-y-6 relative z-10">
+      <div class="px-6 py-4 space-y-4 relative z-10">
         <div>
           <label
             for="setup-security-username"
-            class="block text-sm font-medium text-base-content mb-2"
+            class="block text-sm font-medium text-base-content mb-1.5"
           >
             {t('setup.security.label.username')}
           </label>
@@ -180,20 +188,23 @@ export const SecurityStep: Component<SecurityStepProps> = (props) => {
             type="text"
             value={username()}
             onInput={(e) => setUsername(e.currentTarget.value)}
-            class="w-full px-5 py-3.5 bg-surface border border-border rounded-md text-base-content placeholder-slate-400 focus:outline-hidden focus:ring-0 focus:border-blue-500 transition-colors font-mono"
+            class="w-full px-4 py-2.5 bg-surface border border-border rounded-md text-base-content placeholder-slate-400 focus:outline-hidden focus:ring-0 focus:border-blue-500 transition-colors font-mono text-sm"
             placeholder={t('setup.security.placeholder.username')}
           />
         </div>
 
         <div>
-          <span class="block text-sm font-medium text-base-content mb-3">
+          <span class="block text-sm font-medium text-base-content mb-2">
             {t('setup.security.label.password')}
           </span>
-          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 mb-2.5">
             <button
               type="button"
-              onClick={() => setUseCustomPassword(false)}
-              class={`py-3 px-4 rounded-md text-sm font-medium transition-colors border ${
+              onClick={() => {
+                setUseCustomPassword(false);
+                setValidationError(null);
+              }}
+              class={`py-2.5 px-4 rounded-md text-sm font-medium transition-colors border ${
                 !useCustomPassword()
                   ? 'bg-blue-600 border-blue-600 text-white'
                   : 'bg-surface border-border text-muted hover:bg-surface-hover'
@@ -203,8 +214,11 @@ export const SecurityStep: Component<SecurityStepProps> = (props) => {
             </button>
             <button
               type="button"
-              onClick={() => setUseCustomPassword(true)}
-              class={`py-3 px-4 rounded-md text-sm font-medium transition-colors border ${
+              onClick={() => {
+                setUseCustomPassword(true);
+                setValidationError(null);
+              }}
+              class={`py-2.5 px-4 rounded-md text-sm font-medium transition-colors border ${
                 useCustomPassword()
                   ? 'bg-blue-600 border-blue-600 text-white'
                   : 'bg-surface border-border text-muted hover:bg-surface-hover'
@@ -221,8 +235,11 @@ export const SecurityStep: Component<SecurityStepProps> = (props) => {
                   aria-label={t('setup.security.label.password')}
                   type={showPassword() ? 'text' : 'password'}
                   value={password()}
-                  onInput={(e) => setPassword(e.currentTarget.value)}
-                  class="w-full px-5 py-3.5 pr-20 bg-surface border border-border rounded-md text-base-content placeholder-slate-400 focus:outline-hidden focus:ring-0 focus:border-blue-500 transition-colors font-mono"
+                  onInput={(e) => {
+                    setValidationError(null);
+                    setPassword(e.currentTarget.value);
+                  }}
+                  class="w-full px-4 py-2.5 pr-20 bg-surface border border-border rounded-md text-base-content placeholder-slate-400 focus:outline-hidden focus:ring-0 focus:border-blue-500 transition-colors font-mono text-sm"
                   placeholder={t('setup.security.placeholder.password')}
                 />
                 <button
@@ -239,20 +256,31 @@ export const SecurityStep: Component<SecurityStepProps> = (props) => {
                 aria-label={t('setup.security.label.confirmPassword')}
                 type={showPassword() ? 'text' : 'password'}
                 value={confirmPassword()}
-                onInput={(e) => setConfirmPassword(e.currentTarget.value)}
-                class="w-full px-5 py-3.5 bg-surface border border-border rounded-md text-base-content placeholder-slate-400 focus:outline-hidden focus:ring-0 focus:border-blue-500 transition-colors font-mono"
+                onInput={(e) => {
+                  setValidationError(null);
+                  setConfirmPassword(e.currentTarget.value);
+                }}
+                class="w-full px-4 py-2.5 bg-surface border border-border rounded-md text-base-content placeholder-slate-400 focus:outline-hidden focus:ring-0 focus:border-blue-500 transition-colors font-mono text-sm"
                 placeholder={t('setup.security.label.confirmPassword')}
               />
+              <Show when={validationError()}>
+                <p
+                  role="alert"
+                  class="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700 dark:border-red-800 dark:bg-red-950/40 dark:text-red-200"
+                >
+                  {validationError()}
+                </p>
+              </Show>
               <p class="text-xs text-muted">{t('setup.security.minimumPasswordHelp')}</p>
             </div>
           </Show>
 
           <Show when={!useCustomPassword()}>
-            <p class="text-sm text-muted">{t('setup.security.generatedPasswordHelp')}</p>
+            <p class="text-xs sm:text-sm text-muted">{t('setup.security.generatedPasswordHelp')}</p>
           </Show>
         </div>
 
-        <div class="bg-page rounded-md p-4 border border-border text-left">
+        <div class="bg-page rounded-md p-3 border border-border text-left">
           <Toggle
             checked={shareUsageStatistics()}
             onChange={() => setShareUsageStatistics(!shareUsageStatistics())}
@@ -261,29 +289,31 @@ export const SecurityStep: Component<SecurityStepProps> = (props) => {
           />
         </div>
 
-        <div class="bg-page rounded-md p-4 border border-border text-left">
-          <div class="text-[11px] font-semibold uppercase tracking-wide text-muted mb-2">
+        <div class="bg-page rounded-md p-3 border border-border text-left">
+          <div class="text-[11px] font-semibold uppercase tracking-wide text-muted mb-1">
             {t('setup.security.nextScreen.title')}
           </div>
-          <ul class="text-sm text-muted space-y-1">
+          <ul class="text-xs sm:text-sm text-muted space-y-0.5">
             <li>• {t('setup.security.nextScreen.itemCredentials')}</li>
             <li>• {t('setup.security.nextScreen.itemApiToken')}</li>
           </ul>
-          <p class="mt-2 text-xs text-muted">{t('setup.security.nextScreen.saveOnce')}</p>
+          <p class="mt-1.5 text-xs text-muted">{t('setup.security.nextScreen.saveOnce')}</p>
         </div>
       </div>
       {/* Actions */}
-      <div class="p-8 bg-page flex gap-4 border-t border-border relative z-10">
+      <div class="px-6 py-4 bg-page flex gap-3 border-t border-border relative z-10">
         <button
+          type="button"
           onClick={props.onBack}
-          class="px-6 py-3.5 bg-surface border border-border hover:bg-surface-hover text-base-content font-medium rounded-md transition-colors"
+          class="px-5 py-2.5 bg-surface border border-border hover:bg-surface-hover text-base-content font-medium rounded-md transition-colors"
         >
           <span>←</span> {t('setup.security.action.back')}
         </button>
         <button
+          type="button"
           onClick={handleSetup}
           disabled={isSettingUp()}
-          class="flex-1 py-3.5 px-6 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:bg-surface-alt disabled:text-muted disabled:cursor-not-allowed text-white font-medium rounded-md transition-colors flex justify-center items-center gap-2 duration-200"
+          class="flex-1 py-2.5 px-6 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:bg-surface-alt disabled:text-muted disabled:cursor-not-allowed text-white font-medium rounded-md transition-colors flex justify-center items-center gap-2 duration-200"
         >
           {isSettingUp() ? (
             <>
