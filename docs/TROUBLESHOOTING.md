@@ -1306,10 +1306,10 @@ is unsafe.
 
 ##### After a memory-cgroup kill
 
-A kernel message that names Pulse and records a memory-cgroup kill confirms
-that Pulse was stopped. A high peak or an `oom` count alone does not. On
-cgroup v2, an increase in `oom_kill` counts processes killed in the group or
-its children, but does not say whether one of them was Pulse.
+For LXC, check the Proxmox host's existing kernel log at the stop time. A
+cgroup memory kill naming Pulse in the affected group confirms the stop.
+A high peak or `oom` count alone does not. On cgroup v2, an `oom_kill`
+increase counts kills in that group or its children, not necessarily Pulse.
 
 Once Pulse is running again, open a resource that had stored readings before
 the stop. In its [History chart](METRICS_HISTORY.md#read-a-history-panel), select
