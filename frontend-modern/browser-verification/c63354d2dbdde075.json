@@ -1,0 +1,45 @@
+{
+  "version": 1,
+  "base_sha": "ce0bc5679be6349fada3d0ce4a217119bb74e0f1",
+  "verified_at": "2026-11-23T10:52:56Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/OrganizationSharingCreateSection.tsx",
+    "frontend-modern/src/utils/organizationRolePresentation.ts",
+    "frontend-modern/src/utils/organizationSettingsPresentation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/OrganizationSharingCreateSection.tsx": "513bb2ec983132a83a07d77002ee09189c3f7a699aaa8076b30389d865c908b8",
+    "frontend-modern/src/utils/organizationRolePresentation.ts": "de6910a3fae4c293e88913d46dfbfe3b8bf39874eb005176fae082990f43e4e0",
+    "frontend-modern/src/utils/organizationSettingsPresentation.ts": "0b4c5dff8ef52a437bf7c93070b4a000b13714520303cb72aad74b6618b8aefe"
+  },
+  "routes": [
+    "/settings/organization/sharing"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 844
+    },
+    {
+      "width": 320,
+      "height": 740
+    }
+  ],
+  "states": [
+    "Initial Create Share with no selected recipient and default Viewer",
+    "Draft with namesake recipient and resource IDs, Editor on desktop, Admin on 390px phone, Viewer on 320px phone",
+    "Selected 320px draft scrolled to its full Create Share button",
+    "Saved reread: new pending request beside preexisting active and pending outgoing and incoming rows"
+  ],
+  "interactions": [
+    "Playwright 1.56.1 / Chromium 141 in production App assets, desktop keyboard and narrow touch fixtures",
+    "Read exact target and resource IDs while changing the minimum role; verify the approval explanation describes the native select",
+    "Submit once with each existing role value, reload and check real UI shows the fixture-saved pending result without repeating the write",
+    "Inspect matched before/after captures in light desktop, dark phone, and compact light layouts"
+  ]
+}
