@@ -172,7 +172,8 @@ func TestMustNotExecute(t *testing.T) { record(); t.Fatal("test must not execute
         self.assertIn("needs: changes", job(source, "frontend-build"))
         self.assertIn("needs: changes", job(source, "frontend-unit"))
         self.assertIn("needs: changes\n", job(source, "triage-helper"))
-        self.assertIn("needs: [changes, frontend-build, frontend-checks, frontend-unit, triage-helper]",
+        self.assertIn("needs: changes\n", job(source, "help-proof"))
+        self.assertIn("needs: [changes, frontend-build, frontend-checks, frontend-unit, triage-helper, help-proof]",
                       job(source, "frontend"))
 
     def test_required_checks_admit_only_explicit_consistent_results(self):
