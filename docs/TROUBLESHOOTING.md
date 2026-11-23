@@ -1726,19 +1726,24 @@ or export. Keep those private and follow the
 
 #### Telegram Test works but real alerts say "message text is empty"
 
-With the built-in Telegram template (no custom template), a blank or incorrect
-saved `Content-Type` can make Telegram ignore the JSON body. The HTTP 400 error
-does not by itself prove that Pulse omitted the `text` field. Test can supply
-the correct header even when real delivery uses the saved one.
+**From stable v6.6.0:** The built-in Telegram template (no custom template)
+supplies `Content-Type: application/json` for real alerts as well as Test.
+Keep your settings unchanged for this error. Check whether the next normally
+occurring alert reaches the intended chat and compare its timestamp with
+**Recent delivery activity**.
 
-In **Alerts → Notifications**, edit that Telegram destination's **Custom
-headers**: set one static `Content-Type` header to `application/json` and remove
+**On releases without that fix:** A blank or incorrect saved `Content-Type`
+can make Telegram ignore the JSON body even when Test works. The HTTP 400
+error does not by itself prove that Pulse omitted the `text` field. In
+**Alerts → Notifications**, edit the Telegram destination. Under **Custom
+headers**, set one static `Content-Type` header to `application/json` and remove
 any conflicting duplicate, including differently capitalised names. Save,
-leaving the bot URL, `chat_id`, template and grouping settings unchanged. Check
-whether the next normally occurring alert reaches the intended chat and compare
-its timestamp with **Recent delivery activity**; do not induce an alert or retry
-the old rejected batch to test this edit. Retained jobs keep their original
-settings as explained [above](#recover-retained-delivery-failures).
+leaving the bot URL, `chat_id`, template and grouping settings unchanged.
+
+The webhook log can say `grouped` for one alert even when Smart grouping is
+off. Check the next ordinary delivery; do not induce an alert or retry the
+old rejected batch. A settings edit does not change
+[retained delivery failures](#recover-retained-delivery-failures).
 
 For a custom template, check its JSON and required Telegram fields locally
 instead of assuming this built-in-template workaround applies. If reporting a
