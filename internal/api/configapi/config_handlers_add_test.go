@@ -2,6 +2,7 @@ package configapi
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -515,9 +516,9 @@ func TestHandleAddNodeKeepsDistinctSameNameClustersWithContradictingFingerprints
 	}
 	handler := newTestConfigHandlers(t, cfg)
 
-	originalDetect := detectPVECluster
-	t.Cleanup(func() { detectPVECluster = originalDetect })
-	detectPVECluster = func(clientConfig proxmox.ClientConfig, nodeName string, existing []config.ClusterEndpoint) (bool, string, []config.ClusterEndpoint) {
+	originalDetect := detectPVEClusterContext
+	t.Cleanup(func() { detectPVEClusterContext = originalDetect })
+	detectPVEClusterContext = func(_ context.Context, clientConfig proxmox.ClientConfig, nodeName string, existing []config.ClusterEndpoint) (bool, string, []config.ClusterEndpoint) {
 		return true, "production", []config.ClusterEndpoint{
 			{
 				NodeName:    "pve01",

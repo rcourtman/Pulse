@@ -19,11 +19,11 @@ func TestMaybeRefreshClusterInfo_UpdatesMetadata(t *testing.T) {
 	cfg := &config.Config{DataPath: t.TempDir()}
 	handler := newTestConfigHandlers(t, cfg)
 
-	originalDetect := detectPVECluster
-	t.Cleanup(func() { detectPVECluster = originalDetect })
+	originalDetect := detectPVEClusterContext
+	t.Cleanup(func() { detectPVEClusterContext = originalDetect })
 
 	called := false
-	detectPVECluster = func(clientConfig proxmox.ClientConfig, nodeName string, existing []config.ClusterEndpoint) (bool, string, []config.ClusterEndpoint) {
+	detectPVEClusterContext = func(_ context.Context, clientConfig proxmox.ClientConfig, nodeName string, existing []config.ClusterEndpoint) (bool, string, []config.ClusterEndpoint) {
 		called = true
 		return true, "unknown cluster", []config.ClusterEndpoint{
 			{NodeName: "node-1", Host: "https://node-1.local:8006"},
@@ -39,7 +39,7 @@ func TestMaybeRefreshClusterInfo_UpdatesMetadata(t *testing.T) {
 	handler.maybeRefreshClusterInfo(context.Background(), &instance)
 
 	if !called {
-		t.Fatalf("expected detectPVECluster to be called")
+		t.Fatalf("expected detectPVEClusterContext to be called")
 	}
 	if !instance.IsCluster {
 		t.Fatalf("expected instance to be marked as cluster")
@@ -56,11 +56,11 @@ func TestMaybeRefreshClusterInfo_SkipsWithoutCredentials(t *testing.T) {
 	cfg := &config.Config{DataPath: t.TempDir()}
 	handler := newTestConfigHandlers(t, cfg)
 
-	originalDetect := detectPVECluster
-	t.Cleanup(func() { detectPVECluster = originalDetect })
+	originalDetect := detectPVEClusterContext
+	t.Cleanup(func() { detectPVEClusterContext = originalDetect })
 
 	called := false
-	detectPVECluster = func(clientConfig proxmox.ClientConfig, nodeName string, existing []config.ClusterEndpoint) (bool, string, []config.ClusterEndpoint) {
+	detectPVEClusterContext = func(_ context.Context, clientConfig proxmox.ClientConfig, nodeName string, existing []config.ClusterEndpoint) (bool, string, []config.ClusterEndpoint) {
 		called = true
 		return true, "cluster", nil
 	}
@@ -73,7 +73,7 @@ func TestMaybeRefreshClusterInfo_SkipsWithoutCredentials(t *testing.T) {
 	handler.maybeRefreshClusterInfo(context.Background(), &instance)
 
 	if called {
-		t.Fatalf("expected detectPVECluster to be skipped without credentials")
+		t.Fatalf("expected detectPVEClusterContext to be skipped without credentials")
 	}
 }
 
@@ -81,11 +81,11 @@ func TestMaybeRefreshClusterInfo_SkipsWithinCooldown(t *testing.T) {
 	cfg := &config.Config{DataPath: t.TempDir()}
 	handler := newTestConfigHandlers(t, cfg)
 
-	originalDetect := detectPVECluster
-	t.Cleanup(func() { detectPVECluster = originalDetect })
+	originalDetect := detectPVEClusterContext
+	t.Cleanup(func() { detectPVEClusterContext = originalDetect })
 
 	called := false
-	detectPVECluster = func(clientConfig proxmox.ClientConfig, nodeName string, existing []config.ClusterEndpoint) (bool, string, []config.ClusterEndpoint) {
+	detectPVEClusterContext = func(_ context.Context, clientConfig proxmox.ClientConfig, nodeName string, existing []config.ClusterEndpoint) (bool, string, []config.ClusterEndpoint) {
 		called = true
 		return true, "cluster", nil
 	}
@@ -100,7 +100,7 @@ func TestMaybeRefreshClusterInfo_SkipsWithinCooldown(t *testing.T) {
 	handler.maybeRefreshClusterInfo(context.Background(), &instance)
 
 	if called {
-		t.Fatalf("expected detectPVECluster to be skipped during cooldown")
+		t.Fatalf("expected detectPVEClusterContext to be skipped during cooldown")
 	}
 }
 
@@ -289,9 +289,9 @@ func TestHandleRefreshClusterNodes_Success(t *testing.T) {
 	}
 	handler := newTestConfigHandlers(t, cfg)
 
-	originalDetect := detectPVECluster
-	t.Cleanup(func() { detectPVECluster = originalDetect })
-	detectPVECluster = func(clientConfig proxmox.ClientConfig, nodeName string, existing []config.ClusterEndpoint) (bool, string, []config.ClusterEndpoint) {
+	originalDetect := detectPVEClusterContext
+	t.Cleanup(func() { detectPVEClusterContext = originalDetect })
+	detectPVEClusterContext = func(_ context.Context, clientConfig proxmox.ClientConfig, nodeName string, existing []config.ClusterEndpoint) (bool, string, []config.ClusterEndpoint) {
 		return true, "cluster-1", []config.ClusterEndpoint{
 			{NodeName: "node-1", Host: "https://node-1.local:8006"},
 			{NodeName: "node-2", Host: "https://node-2.local:8006"},
