@@ -11,6 +11,8 @@ import {
   getOrganizationSharingTargetPlaceholder,
   getShareOrganizationLabel,
   ORGANIZATION_SHARING_MANUAL_ENTRY_HIDDEN_MESSAGE,
+  ORGANIZATION_SHARING_MINIMUM_ROLE_GUIDANCE,
+  ORGANIZATION_SHARING_MINIMUM_ROLE_LABEL,
   ORGANIZATION_SHARING_QUICK_PICK_GUIDANCE,
   ORGANIZATION_SHARING_QUICK_PICK_UNAVAILABLE_MESSAGE,
 } from '@/utils/organizationSettingsPresentation';
@@ -55,11 +57,11 @@ const OrganizationSharingCreateSection: Component<OrganizationSharingCreateSecti
     >
       <fieldset
         disabled={props.state.saving() || props.state.sharingChangesPaused()}
-        class="rounded-md border border-border p-3 space-y-2 sm:p-4 sm:space-y-3"
+        class="rounded-md border border-border px-3 py-2 space-y-1.5 sm:p-4 sm:space-y-3"
       >
         <h4 class="text-sm font-semibold text-base-content">Create Share</h4>
 
-        <div class="grid gap-2 sm:gap-3 lg:grid-cols-2">
+        <div class="grid gap-1 sm:gap-3 lg:grid-cols-2">
           <div class="space-y-1">
             <FormSelect
               id={targetOrgID}
@@ -110,7 +112,7 @@ const OrganizationSharingCreateSection: Component<OrganizationSharingCreateSecti
           </div>
 
           <FormSelect
-            label="Access Role"
+            label={ORGANIZATION_SHARING_MINIMUM_ROLE_LABEL}
             labelClass="text-xs font-medium uppercase tracking-wide text-muted"
             fieldBaseClass="space-y-1"
             value={props.state.accessRole()}
@@ -118,6 +120,7 @@ const OrganizationSharingCreateSection: Component<OrganizationSharingCreateSecti
               props.state.setAccessRole(event.currentTarget.value as ShareAccessRole)
             }
             selectBaseClass={defaultControlClass}
+            help={ORGANIZATION_SHARING_MINIMUM_ROLE_GUIDANCE}
           >
             <For each={ORGANIZATION_SHARE_ROLE_OPTIONS}>
               {(option) => <option value={option.value}>{option.label}</option>}

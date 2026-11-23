@@ -35,6 +35,8 @@ export const ORGANIZATION_SHARING_READ_ONLY_MESSAGE =
   'This session is read-only. Sharing changes are disabled.';
 export const ORGANIZATION_SHARING_MANAGER_REQUIRED_MESSAGE =
   'Admin or owner role required to create or remove organization shares.';
+export const ORGANIZATION_SHARING_MINIMUM_ROLE_LABEL = 'Minimum member role';
+export const ORGANIZATION_SHARING_MINIMUM_ROLE_GUIDANCE = 'After a target admin or owner accepts.';
 export const ORGANIZATION_SHARING_QUICK_PICK_UNAVAILABLE_MESSAGE =
   'The selected resource is no longer available. Choose another resource or enter it manually.';
 export const ORGANIZATION_SHARING_QUICK_PICK_GUIDANCE =

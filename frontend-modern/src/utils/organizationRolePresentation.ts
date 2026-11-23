@@ -17,9 +17,9 @@ export const ORGANIZATION_SHARE_ROLE_OPTIONS: Array<{
   value: ShareAccessRole;
   label: string;
 }> = [
-  { value: 'viewer', label: 'Viewer' },
-  { value: 'editor', label: 'Editor' },
-  { value: 'admin', label: 'Admin' },
+  { value: 'viewer', label: 'All members (Viewer)' },
+  { value: 'editor', label: 'Editor or higher' },
+  { value: 'admin', label: 'Admin or Owner' },
 ];
 
 export function normalizeOrganizationShareRole(role: OrganizationRole): ShareAccessRole {

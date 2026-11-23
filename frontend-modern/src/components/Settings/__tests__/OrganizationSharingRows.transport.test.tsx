@@ -838,7 +838,7 @@ describe('sharing rows through real capability withdrawal', () => {
       fireEvent.input(screen.getByLabelText('Resource ID'), {
         target: { value: `current::draft/${operation}` },
       });
-      fireEvent.change(screen.getByRole('combobox', { name: 'Access Role' }), {
+      fireEvent.change(screen.getByRole('combobox', { name: 'Minimum member role' }), {
         target: { value: 'admin' },
       });
       body.resolve(outcome === 'success' ? '{}' : '{"synthetic-private-partial":');
@@ -847,7 +847,7 @@ describe('sharing rows through real capability withdrawal', () => {
         'peer/third',
       );
       expect(screen.getByLabelText('Resource ID')).toHaveValue(`current::draft/${operation}`);
-      expect(screen.getByRole('combobox', { name: 'Access Role' })).toHaveValue('admin');
+      expect(screen.getByRole('combobox', { name: 'Minimum member role' })).toHaveValue('admin');
       expect(screen.getByRole('button', { name: 'Create Share' })).toBeEnabled();
       expectSavedRows(operation, true);
       expect(sharingReads()).toHaveLength(10);
