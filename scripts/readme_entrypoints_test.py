@@ -221,9 +221,7 @@ class ReadmeEntrypointsTest(unittest.TestCase):
     def test_entrypoint_plans_do_not_offer_retired_relay(self) -> None:
         expected = {
             "README.md": (
-                "31 March 2027", "Relay is no longer sold", "current price",
-                "for as long as their subscription continues", "own VPN or tunnel",
-                "ntfy, Gotify or Pushover", "not the web UI",
+                "31 March 2027", "Relay is no longer sold", "docs/PULSE_PRO.md",
             ),
             "docs/i18n/de/README.md": (
                 "31. März 2027", "Relay wird nicht mehr verkauft", "bisherigen Preis",
