@@ -7,6 +7,7 @@ import hashlib
 import importlib.util
 import io
 import json
+import os
 import subprocess
 import tarfile
 import tempfile
@@ -159,23 +160,93 @@ class DownloadConsumerTests(unittest.TestCase):
 class DockerfileTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        text = (ROOT/'Dockerfile').read_text().replace('\\\n', '')
+        cls.dockerfile = (ROOT/'Dockerfile').read_text()
+        text = cls.dockerfile.replace('\\\n', '')
         cls.stages = {}
+        cls.parents = {}
         current = None
         for line in text.splitlines():
             if line.startswith('FROM '):
-                current = line.split(' AS ')[1]
+                source, current = line.split(' AS ')
+                cls.parents[current] = source.split()[-1]
                 cls.stages[current] = []
             elif current and line.strip() and not line.startswith('#'):
                 cls.stages[current].append(line)
 
     def test_final_server_copies_assign_metadata_before_any_runtime_layer(self):
-        for stage in ['pulse-runtime-base', 'prebuilt-runtime-base']:
+        for stage in ['pulse-runtime-base', 'prebuilt-runtime-base', 'e2e_runtime']:
             commands = self.stages[stage]
             pulse = next(c for c in commands if c.startswith('COPY ') and c.endswith(' ./pulse'))
             self.assertIn('--chown=pulse:pulse', pulse)
             self.assertIn('--chmod=0755', pulse)
             self.assertFalse(any(c.startswith('RUN ') for c in commands))
+
+    def run_server_recipe(self, stage, *, target, tags, failing_arch=''):
+        # Execute the Dockerfile's shared shell recipe and actual stage
+        # arguments. Only the compiler and empty secret-mount paths are
+        # doubled; no host secrets or Docker daemon are read.
+        start = "COPY <<'PULSE_BUILD_SERVER' /usr/local/bin/pulse-build-server\n"
+        recipe = self.dockerfile.split(start, 1)[1].split('\nPULSE_BUILD_SERVER\n', 1)[0]
+        call = next(line.split('sh /usr/local/bin/pulse-build-server', 1)[1]
+                    for line in self.stages[stage] if 'sh /usr/local/bin/pulse-build-server' in line)
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            script = root/'compile.sh'
+            script.write_text(recipe.replace('/run/secrets/', str(root/'empty')+'/'))
+            (root/'scripts').mkdir()
+            (root/'scripts'/'release_ldflags.sh').symlink_to(ROOT/'scripts'/'release_ldflags.sh')
+            (root/'VERSION').write_text('1.2.3\n')
+            compiler = root/'go'
+            compiler.write_text(
+                "#!/bin/sh\n"
+                "printf '<%s>' \"$GOOS/$GOARCH/$CGO_ENABLED\" \"$@\"\n"
+                "printf '\\n'\n"
+                "if [ \"$GOARCH\" = \"$FAIL_ARCH\" ]; then exit 19; fi\n"
+            )
+            compiler.chmod(0o755)
+            result = subprocess.run(
+                ['sh', '-c', 'sh "$1"'+call, 'stage', str(script)], cwd=root,
+                env={'PATH': str(root)+os.pathsep+os.defpath, 'TARGETARCH': target,
+                     'GO_BUILD_TAGS': tags, 'FAIL_ARCH': failing_arch},
+                text=True, capture_output=True, check=False,
+            )
+        return result
+
+    def test_e2e_compiles_only_the_architecture_its_image_consumes(self):
+        self.assertEqual(self.parents['backend-e2e-server'], 'backend-builder')
+        self.assertEqual(self.parents['e2e_runtime'], 'pulse-runtime-foundation')
+        for stage in ['backend-e2e-server', 'e2e_runtime']:
+            self.assertIn('ARG TARGETARCH', self.stages[stage])
+        self.assertIn('COPY --from=backend-e2e-server --chown=pulse:pulse --chmod=0755 '
+                      '/app/pulse-linux-${TARGETARCH:-amd64} ./pulse', self.stages['e2e_runtime'])
+        for arch in ('amd64', 'arm64'):
+            with self.subTest(arch=arch):
+                result = self.run_server_recipe('backend-e2e-server', target=arch, tags='')
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(len(result.stdout.splitlines()), 1)
+                self.assertIn(f'<linux/{arch}/0><build><-tags><>', result.stdout)
+                self.assertIn(f'<-buildvcs=false><-trimpath><-o><pulse-linux-{arch}><./cmd/pulse>', result.stdout)
+
+    def test_regular_runtime_still_compiles_and_consumes_both_downloads(self):
+        self.assertEqual(self.parents['runtime'], 'pulse-runtime-base')
+        self.assertEqual(self.parents['hosted_runtime'], 'pulse-runtime-base')
+        self.assertIn('COPY --from=backend-server-pair /app/VERSION ./VERSION',
+                      self.stages['release-assets-builder'])
+        result = self.run_server_recipe('backend-server-pair', target='arm64', tags='release')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        for arch, command in zip(('amd64', 'arm64'), result.stdout.splitlines(), strict=True):
+            self.assertIn(f'<linux/{arch}/0><build><-tags><release>', command)
+            self.assertIn(f'<-buildvcs=false><-trimpath><-o><pulse-linux-{arch}><./cmd/pulse>', command)
+            self.assertIn(f'COPY --chown=pulse:pulse --from=backend-server-pair '
+                          f'/app/pulse-linux-{arch} /opt/pulse/bin/pulse-linux-{arch}', self.stages['runtime'])
+        self.assertIn('COPY --from=backend-server-pair --chown=pulse:pulse --chmod=0755 '
+                      '/app/pulse-linux-${TARGETARCH:-amd64} ./pulse', self.stages['pulse-runtime-base'])
+
+    def test_e2e_compile_failure_is_not_retried_or_hidden(self):
+        result = self.run_server_recipe('backend-e2e-server', target='arm64', tags='', failing_arch='arm64')
+        self.assertEqual(result.returncode, 19, result.stderr)
+        self.assertEqual(len(result.stdout.splitlines()), 1)
+        self.assertIn('<linux/arm64/0><build>', result.stdout)
 
     def test_all_source_payload_copies_have_final_ownership_not_recursive_copyup(self):
         commands = self.stages['runtime']
