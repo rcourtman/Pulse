@@ -1,0 +1,88 @@
+{
+  "version": 1,
+  "base_sha": "f3ab36fd2181085ec4ea78384704880f7084ff06",
+  "verified_at": "2026-11-23T21:22:18Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/App.tsx",
+    "frontend-modern/src/AppLayout.tsx",
+    "frontend-modern/src/components/Login.tsx",
+    "frontend-modern/src/components/SetupWizard/SetupCompletionPanel.tsx",
+    "frontend-modern/src/components/WhatsNewCard.tsx",
+    "frontend-modern/src/components/shared/CommandPaletteModal.tsx",
+    "frontend-modern/src/components/shared/KeyboardShortcutsModal.tsx",
+    "frontend-modern/src/components/shared/MobileNavBar.tsx",
+    "frontend-modern/src/components/shared/commandPaletteModel.ts",
+    "frontend-modern/src/components/shared/mobileNavBarModel.ts",
+    "frontend-modern/src/components/shared/useCommandPaletteState.ts",
+    "frontend-modern/src/hooks/useKeyboardShortcuts.ts",
+    "frontend-modern/src/hooks/useTypeToSearch.ts",
+    "frontend-modern/src/pages/NotFound.tsx",
+    "frontend-modern/src/pages/PricingHandoff.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/App.tsx": "ae0751621f2fa7d04d5c6e12383337d64438359b6deba62acd2d660dd90437cf",
+    "frontend-modern/src/AppLayout.tsx": "44aab8c202924dd513c61f6947447e1e28ea72ce3097c4002f3db15a7791deb8",
+    "frontend-modern/src/components/Login.tsx": "b9530e02e7b2a69dd5f0afa2d42b0ff37ea9d0600009319594b8d692d344337e",
+    "frontend-modern/src/components/SetupWizard/SetupCompletionPanel.tsx": "cf8ab23ef866dc553555077f6f8f1049d7d7b0781a6cff2961aea59d390f6d91",
+    "frontend-modern/src/components/WhatsNewCard.tsx": "bc36848751008eb3c3ac740a65d3b85720d19f9883e241bb3806c98f0f34b204",
+    "frontend-modern/src/components/shared/CommandPaletteModal.tsx": "1d368245b8a9d8c1100758595ae6aea06ff5c8debb46e792574f983083dd92bf",
+    "frontend-modern/src/components/shared/KeyboardShortcutsModal.tsx": "ca4c30b5d85365a07b9f0e5dd02d088b8b8ffd56d35c0709c05b8d796a8d4600",
+    "frontend-modern/src/components/shared/MobileNavBar.tsx": "9102d13ea6d5717aa4c30571e2c36e256a43ee8ce16699ca2ad35e6cbd0607ca",
+    "frontend-modern/src/components/shared/commandPaletteModel.ts": "b355f6934c868755c48b3899741f1850ac6fa4946f47f510a493c3275402ac65",
+    "frontend-modern/src/components/shared/mobileNavBarModel.ts": "b2d82cb80d3845fb8dee2c8b5578393be62aa8b4ba9aff20864be492ea73169c",
+    "frontend-modern/src/components/shared/useCommandPaletteState.ts": "5fb5c11867b36f25e7caf51c74f1ddbfcecb56c283cf7c8c3dbbf50ee5675b26",
+    "frontend-modern/src/hooks/useKeyboardShortcuts.ts": "5099292b7da7054d39800a8d0958aa458f31267d102200aae17523686e93c65f",
+    "frontend-modern/src/hooks/useTypeToSearch.ts": "4acf15e5eddda866eaf44c5e7b7b71e252a80ea6336dc4219c2ba7f32acf91a1",
+    "frontend-modern/src/pages/NotFound.tsx": "eea24a21e6aa7c11b5da717600a6fde4ca0866f7935af627947dcf0c707a908b",
+    "frontend-modern/src/pages/PricingHandoff.tsx": "8426f913411523b27ddcc948a43b73cb116ce825470ebd3b4cd98801508240de"
+  },
+  "routes": [
+    "/proxmox/overview",
+    "/alerts",
+    "/docker/overview",
+    "/settings/infrastructure",
+    "/login",
+    "/does-not-exist",
+    "/pricing",
+    "/preview/setup-complete"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 1024,
+      "height": 768
+    },
+    {
+      "width": 768,
+      "height": 1024
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "dark theme and light theme across desktop, laptop, tablet, and phone viewports",
+    "desktop primary navigation bar visible at 1024x768 and 1440x900 with zero horizontal overflow",
+    "header Search commands button with accessible label matching visible text and aria-hidden shortcut hint",
+    "mobile bottom navigation bar at 768x1024 and 390x844 with non-overlapping alert, patrol, and action count badges and direct Settings tab",
+    "keyboard shortcuts modal with bordered keycaps on dark surface",
+    "command palette with Actions, Map, Docs, Theme, and Kiosk commands and human descriptions",
+    "unauthenticated login form in dark and light themes with visible user and lock icons, h1 heading, and 401 error state",
+    "404 NotFound page with single centered PageHeader heading and route note",
+    "pricing handoff fallback with Pulse branding, centered PageHeader, spinner, and return link",
+    "setup completion preview with left-aligned credentials and clean copy"
+  ],
+  "interactions": [
+    "pressed g then a and g then d on /proxmox/overview to navigate to /alerts and /docker/overview without type-to-search capture",
+    "pressed ? to open KeyboardShortcutsModal and pressed ? again to close it",
+    "clicked header Search commands trigger, pressed Ctrl+K to close and reopen, searched Actions, Map, Docs, Kiosk, and Theme, and switched Light and Dark themes live",
+    "focused desktop primary navigation tab and verified visible blue focus ring without overflow-y clipping",
+    "clicked Settings directly in the fifth MobileNavBar slot at 390x844",
+    "submitted wrong password on simulated unauthenticated /login and verified username remained filled while password cleared"
+  ]
+}

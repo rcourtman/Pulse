@@ -56,7 +56,7 @@ describe('CommandPaletteModal', () => {
     aiAvailabilityStore.setEnabled(true);
   });
 
-  it('renders platform entries, runtime lens commands, and vSphere network inventory', () => {
+  it('renders platform entries, runtime lens commands, utilities, theme, and kiosk commands with human descriptions', () => {
     render(() => (
       <CommandPaletteModal
         isOpen={true}
@@ -67,11 +67,13 @@ describe('CommandPaletteModal', () => {
 
     expect(screen.queryByText('Ask about Proxmox')).not.toBeInTheDocument();
     expect(screen.getByText('Go to Machines')).toBeInTheDocument();
-    expect(screen.getByText('/standalone/machines')).toBeInTheDocument();
+    expect(screen.getByText('Pulse Agent hosts and availability checks')).toBeInTheDocument();
     expect(screen.getByText('Go to Proxmox')).toBeInTheDocument();
     expect(screen.getByText('Go to Docker')).toBeInTheDocument();
     expect(screen.getByText('Go to Kubernetes Workloads')).toBeInTheDocument();
-    expect(screen.getByText('/kubernetes/workloads')).toBeInTheDocument();
+    expect(screen.getByText('Deployments, pods, and controllers')).toBeInTheDocument();
+    expect(screen.queryByText('/standalone/machines')).not.toBeInTheDocument();
+    expect(screen.queryByText('/kubernetes/workloads')).not.toBeInTheDocument();
     expect(screen.queryByText('Go to Workloads')).not.toBeInTheDocument();
     expect(screen.queryByText('/workloads')).not.toBeInTheDocument();
     expect(screen.queryByText('Go to Storage')).not.toBeInTheDocument();
@@ -80,15 +82,47 @@ describe('CommandPaletteModal', () => {
     expect(screen.queryByText('/recovery')).not.toBeInTheDocument();
     expect(screen.getByText('Go to Patrol')).toBeInTheDocument();
     expect(screen.queryByText('Go to Needs Attention')).not.toBeInTheDocument();
+    expect(screen.getByText('Go to Actions')).toBeInTheDocument();
+    expect(screen.getByText('Go to Map')).toBeInTheDocument();
+    expect(screen.getByText('Go to Docs')).toBeInTheDocument();
+    expect(screen.getByText('Switch Theme: Light')).toBeInTheDocument();
+    expect(screen.getByText('Switch Theme: Dark')).toBeInTheDocument();
+    expect(screen.getByText('Switch Theme: System')).toBeInTheDocument();
+    expect(screen.getByText('Enter Kiosk Mode')).toBeInTheDocument();
     expect(screen.getByText('Go to vSphere')).toBeInTheDocument();
     expect(screen.getByText('Go to vSphere Networks')).toBeInTheDocument();
-    expect(screen.getByText('/vmware/networks')).toBeInTheDocument();
+    expect(screen.getByText('Switches and port groups')).toBeInTheDocument();
 
     const commandLabels = screen.getAllByRole('option').map((button) => button.textContent ?? '');
     expect(commandLabels.findIndex((label) => label.includes('Go to Proxmox'))).toBe(0);
     expect(commandLabels.findIndex((label) => label.includes('Go to Proxmox'))).toBeLessThan(
       commandLabels.findIndex((label) => label.includes('Go to Machines')),
     );
+  });
+
+  it('invokes theme and kiosk actions when selected from the palette', async () => {
+    const onClose = vi.fn();
+    const onSetTheme = vi.fn();
+    const onToggleKioskMode = vi.fn();
+    render(() => (
+      <CommandPaletteModal
+        isOpen={true}
+        onClose={onClose}
+        platformVisibility={platformVisibility}
+        themePreference={() => 'dark'}
+        onSetTheme={onSetTheme}
+        kioskMode={() => false}
+        onToggleKioskMode={onToggleKioskMode}
+      />
+    ));
+
+    await fireEvent.click(screen.getByText('Switch Theme: Light'));
+    expect(onSetTheme).toHaveBeenCalledWith('light');
+    expect(onClose).toHaveBeenCalledTimes(1);
+
+    await fireEvent.click(screen.getByText('Enter Kiosk Mode'));
+    expect(onToggleKioskMode).toHaveBeenCalledTimes(1);
+    expect(onClose).toHaveBeenCalledTimes(2);
   });
 
   it('moves the selected command before Enter selection', async () => {
@@ -217,7 +251,7 @@ describe('CommandPaletteModal', () => {
 
     await fireEvent.keyDown(input, { key: 'ArrowUp' });
 
-    expect(screen.getByRole('option', { name: /Go to Settings/ })).toHaveAttribute(
+    expect(screen.getByRole('option', { name: /Enter Kiosk Mode/ })).toHaveAttribute(
       'aria-selected',
       'true',
     );
@@ -231,7 +265,7 @@ describe('CommandPaletteModal', () => {
 
     await fireEvent.keyDown(input, { key: 'End' });
 
-    expect(screen.getByRole('option', { name: /Go to Settings/ })).toHaveAttribute(
+    expect(screen.getByRole('option', { name: /Enter Kiosk Mode/ })).toHaveAttribute(
       'aria-selected',
       'true',
     );

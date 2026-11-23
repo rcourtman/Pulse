@@ -276,8 +276,7 @@ export const Login: Component<LoginProps> = (props) => {
         } else {
           setError(data.message || 'Account temporarily locked due to too many failed attempts.');
         }
-        // Clear the input fields
-        if (!rememberLogin) setUsername('');
+        // Preserve the entered username so the user does not have to retype it.
         setPassword('');
       } else if (response.status === 429) {
         // Rate limited
@@ -293,8 +292,7 @@ export const Login: Component<LoginProps> = (props) => {
         } else {
           setError(data.message || 'Invalid username or password');
         }
-        // Clear the input fields
-        if (!rememberLogin) setUsername('');
+        // Preserve the entered username so the user can retry the password directly.
         setPassword('');
       } else {
         setError(data.message || 'Server error. Please try again.');
@@ -551,12 +549,12 @@ const LoginForm: Component<{
             </div>
           </div>
 
-          <h2
+          <h1
             class="mt-6 text-center text-4xl font-extrabold text-blue-600 animate-fade-in delay-100 pb-1"
             classList={{ 'max-sm:mt-3': providerReturn() }}
           >
             Welcome to Pulse
-          </h2>
+          </h1>
 
           <Show when={showLocalLogin}>
             <p class="mt-3 text-center text-sm text-muted animate-fade-in delay-200">
@@ -618,7 +616,7 @@ const LoginForm: Component<{
           </Show>
           <Show when={!showLocalLogin && !hasSSOProviders && !demoModeEnabled}>
             <div class="space-y-2 text-sm">
-              <h3 class="font-semibold text-base-content">No sign-in options on this page</h3>
+              <h2 class="font-semibold text-base-content">No sign-in options on this page</h2>
               <p class="text-muted">
                 The local sign-in form is hidden and Pulse didn’t list a single sign-on provider.
                 Ask your Pulse administrator how to sign in.
@@ -633,9 +631,9 @@ const LoginForm: Component<{
                 </label>
                 <div
                   aria-hidden="true"
-                  class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none"
+                  class="pointer-events-none absolute inset-y-0 left-0 z-10 flex items-center pl-3 text-muted"
                 >
-                  <svg class="h-5 w-5 " fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path
                       stroke-linecap="round"
                       stroke-linejoin="round"
@@ -662,9 +660,9 @@ const LoginForm: Component<{
                 </label>
                 <div
                   aria-hidden="true"
-                  class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none"
+                  class="pointer-events-none absolute inset-y-0 left-0 z-10 flex items-center pl-3 text-muted"
                 >
-                  <svg class="h-5 w-5 " fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path
                       stroke-linecap="round"
                       stroke-linejoin="round"

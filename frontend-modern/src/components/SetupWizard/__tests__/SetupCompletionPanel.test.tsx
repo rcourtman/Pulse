@@ -85,6 +85,8 @@ describe('SetupCompletionPanel', () => {
     expect(screen.getByText('Ways to connect')).toBeInTheDocument();
     expect(screen.getByText('Connect by API')).toBeInTheDocument();
     expect(screen.getByText('Use both')).toBeInTheDocument();
+    expect(document.body.textContent).not.toContain('—');
+    expect(screen.getByText('admin').closest('.text-left')).not.toBeNull();
     expect(
       screen.getByText(
         'Proxmox VE, Proxmox Backup Server, Proxmox Mail Gateway, TrueNAS, or VMware. Pulse reads VMs, storage, and health through the platform API.',

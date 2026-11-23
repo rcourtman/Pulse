@@ -303,15 +303,15 @@ export const SetupCompletionPanel: Component<CompleteStepProps> = (props) => {
           </button>
 
           <Show when={showCredentials()}>
-            <div class="px-4 pb-4 pt-0 sm:px-6 sm:pb-6 space-y-3 border-t border-border-subtle">
-              <div class="bg-surface-hover dark:bg-black border rounded-md p-3 mt-4">
+            <div class="px-4 pb-4 pt-0 sm:px-6 sm:pb-6 space-y-3 border-t border-border-subtle text-left">
+              <div class="bg-surface-hover dark:bg-black border border-border rounded-md p-3 mt-4">
                 <div class="text-[11px] font-medium text-muted mb-1 uppercase tracking-wider">
                   {t('setup.completion.credentials.usernameLabel')}
                 </div>
                 <div class="text-base-content font-mono text-sm">{props.state.username}</div>
               </div>
 
-              <div class="bg-surface-hover dark:bg-black border rounded-md p-3">
+              <div class="bg-surface-hover dark:bg-black border border-border rounded-md p-3">
                 <div class="text-[11px] font-medium text-muted mb-1 uppercase tracking-wider">
                   {t('setup.completion.credentials.passwordLabel')}
                 </div>
@@ -514,7 +514,7 @@ export const SetupCompletionPanel: Component<CompleteStepProps> = (props) => {
                   {(option) => (
                     <li class="text-xs leading-snug">
                       <span class="font-semibold text-base-content">{option.title}</span>
-                      <span class="text-muted">{' — '}</span>
+                      <span class="text-muted">{': '}</span>
                       <span class="text-muted">{option.description}</span>
                     </li>
                   )}

@@ -226,7 +226,7 @@ describe('mobileNavBarModel.branchcov2', () => {
   });
 
   describe('buildMobileNavBarLayout', () => {
-    it('keeps platforms in a dedicated switcher and daily operations fixed', () => {
+    it('promotes a single remaining utility (Settings) directly into the 5th slot instead of a 1-item More sheet', () => {
       const layout = buildMobileNavBarLayout(
         [makePrimaryTab('standalone'), makePrimaryTab('docker'), makePrimaryTab('proxmox')],
         [
@@ -246,11 +246,38 @@ describe('mobileNavBarModel.branchcov2', () => {
         'alerts',
         'ai',
         'actions',
+        'settings',
+      ]);
+      expect(layout.overflowDestinations).toEqual([]);
+    });
+
+    it('keeps More overflow when two or more secondary utilities remain', () => {
+      const layout = buildMobileNavBarLayout(
+        [makePrimaryTab('proxmox')],
+        [
+          makeUtilityTab({ id: 'alerts' }),
+          makeUtilityTab({ id: 'ai' }),
+          makeUtilityTab({ id: 'actions' }),
+          makeUtilityTab({ id: 'settings' }),
+          makeUtilityTab({
+            id: 'docs' as unknown as MobileNavBarUtilityTab['id'],
+            label: 'Docs',
+            route: '/docs',
+          }),
+        ],
+      );
+
+      expect(layout.fixedDestinations.map((destination) => destination.tab.id)).toEqual([
+        'alerts',
+        'ai',
+        'actions',
       ]);
       expect(layout.overflowDestinations.map((destination) => destination.tab.id)).toEqual([
         'settings',
+        'docs',
       ]);
       expect(layout.overflowDestinations.map((destination) => destination.kind)).toEqual([
+        'utility',
         'utility',
       ]);
     });
@@ -307,7 +334,7 @@ describe('mobileNavBarModel.branchcov2', () => {
 
   describe('getMobileNavTabButtonClass', () => {
     const BASE =
-      'relative flex min-h-10 min-w-0 flex-1 select-none flex-col items-center justify-center gap-0 rounded-md px-1 py-0.5 text-[9px] font-medium transition-colors';
+      'relative flex min-h-10 min-w-0 flex-1 select-none flex-col items-center justify-center gap-0.5 rounded-md px-1 py-0.5 text-[9px] font-medium transition-colors focus-visible:outline-solid focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-blue-500';
     const ACTIVE = 'bg-blue-50 text-blue-700 dark:bg-blue-900/25 dark:text-blue-300';
     const MUTED = 'text-muted';
 

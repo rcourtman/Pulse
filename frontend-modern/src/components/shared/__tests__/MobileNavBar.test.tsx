@@ -58,10 +58,10 @@ describe('MobileNavBar', () => {
   it('keeps the phone bottom nav above the safe area and hidden from the desktop breakpoint', () => {
     // jsdom cannot resolve breakpoints or env(safe-area-inset-bottom), so the
     // classes are the only place a regression shows.
-    expect(mobileNavBarSource).toContain('pb-safe xl:hidden');
+    expect(mobileNavBarSource).toContain('pb-safe lg:hidden');
   });
 
-  it('renders a dedicated platform switcher and keeps More for secondary utilities', async () => {
+  it('renders a dedicated platform switcher and places Settings directly in the 5th slot', async () => {
     const { container } = render(() => (
       <MobileNavBar
         activeTab={() => 'standalone'}
@@ -88,7 +88,8 @@ describe('MobileNavBar', () => {
       Array.from(fixedRail?.querySelectorAll('[data-tab-id]') ?? []).map((item) =>
         item.getAttribute('data-tab-id'),
       ),
-    ).toEqual(['platform-switcher', 'alerts', 'ai', 'actions', 'more']);
+    ).toEqual(['platform-switcher', 'alerts', 'ai', 'actions', 'settings']);
+    expect(screen.queryByRole('button', { name: 'More navigation' })).toBeNull();
 
     const platformSwitcher = screen.getByRole('button', {
       name: 'Switch platform, current Machines',
@@ -99,6 +100,7 @@ describe('MobileNavBar', () => {
     expect(screen.getByRole('link', { name: 'Alerts' })).toHaveAttribute('href', '/alerts');
     expect(screen.getByRole('link', { name: 'Patrol' })).toHaveAttribute('href', '/patrol');
     expect(screen.getByRole('link', { name: 'Actions' })).toHaveAttribute('href', '/actions');
+    expect(screen.getByRole('link', { name: 'Settings' })).toHaveAttribute('href', '/settings');
     fireEvent.click(platformSwitcher);
 
     const platformMenu = await screen.findByRole('menu', { name: 'Switch platform' });
@@ -118,6 +120,29 @@ describe('MobileNavBar', () => {
       '/standalone/overview',
     );
 
+    expect(platformSwitcher).toHaveClass('min-h-10', 'gap-0.5', 'py-0.5', 'text-[9px]');
+  });
+
+  it('uses More menu only when multiple secondary utilities overflow', async () => {
+    const onUtilityClick = vi.fn();
+    render(() => (
+      <MobileNavBar
+        activeTab={() => 'proxmox'}
+        primaryTabs={() => [makePrimary('proxmox', 'Proxmox')]}
+        utilityTabs={() => [
+          makeUtility('alerts', 'Alerts'),
+          makeUtility('ai', 'Patrol'),
+          makeUtility('actions', 'Actions'),
+          makeUtility('settings', 'Settings'),
+          makeUtility('docs' as unknown as MobileNavBarUtilityTab['id'], 'Docs', {
+            route: '/docs',
+          }),
+        ]}
+        onPrimaryClick={() => {}}
+        onUtilityClick={onUtilityClick}
+      />
+    ));
+
     const more = screen.getByRole('button', { name: 'More navigation' });
     expect(more).toHaveAttribute('aria-haspopup', 'menu');
     expect(more).toHaveAttribute('aria-expanded', 'false');
@@ -131,16 +156,14 @@ describe('MobileNavBar', () => {
       within(menu)
         .getAllByRole('menuitem')
         .map((item) => item.getAttribute('data-tab-id')),
-    ).toEqual(['settings']);
-    expect(within(menu).getByRole('menuitem', { name: 'Settings' })).toHaveAttribute(
-      'href',
-      '/settings',
+    ).toEqual(['settings', 'docs']);
+    fireEvent.click(within(menu).getByRole('menuitem', { name: 'Settings' }));
+    expect(onUtilityClick).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'settings', route: '/settings' }),
     );
-
-    expect(platformSwitcher).toHaveClass('min-h-10', 'gap-0', 'py-0.5', 'text-[9px]');
   });
 
-  it('preserves route callbacks for fixed and overflow destinations', async () => {
+  it('preserves route callbacks for fixed and platform destinations', async () => {
     const onPrimaryClick = vi.fn();
     const onUtilityClick = vi.fn();
     render(() => (
@@ -172,15 +195,13 @@ describe('MobileNavBar', () => {
     );
     expect(screen.queryByRole('menu')).toBeNull();
 
-    const more = screen.getByRole('button', { name: 'More navigation' });
-    fireEvent.click(more);
-    fireEvent.click(await screen.findByRole('menuitem', { name: 'Settings' }));
+    fireEvent.click(screen.getByRole('link', { name: 'Settings' }));
     expect(onUtilityClick).toHaveBeenCalledWith(
       expect.objectContaining({ id: 'settings', route: '/settings' }),
     );
   });
 
-  it('preserves fixed and overflow badges and keeps icon labels decorative', async () => {
+  it('renders non-overlapping inline badges and keeps icon labels decorative', async () => {
     render(() => (
       <MobileNavBar
         activeTab={() => 'ai'}
@@ -207,24 +228,24 @@ describe('MobileNavBar', () => {
     // a visible label. Test label order/boundaries and badge contents directly.
     expect(alertsLink.firstElementChild).toHaveClass('order-2');
     expect(alertsLink.firstElementChild?.textContent).toBe('Alerts ');
-    expect(alertsLink.querySelector('.absolute')).toHaveTextContent(/^2 3$/);
+    expect(alertsLink.querySelector('[data-mobile-nav-badge="alerts"]')).toHaveTextContent(/^2 3$/);
+    expect(alertsLink.querySelector('.absolute')).toBeNull();
     expect(alertsLink).toHaveAccessibleDescription('2 critical, 3 warning');
     const patrolLink = within(nav).getByRole('link', { name: 'Patrol: 2 open work items' });
     expect(patrolLink.firstElementChild).toHaveClass('order-2');
     expect(patrolLink.firstElementChild?.textContent).toBe('Patrol ');
-    expect(patrolLink.querySelector('.absolute')).toHaveTextContent(/^2$/);
+    expect(patrolLink.querySelector('[data-mobile-nav-badge="count"]')).toHaveTextContent(/^2$/);
+    expect(patrolLink.querySelector('.absolute')).toBeNull();
     expect(within(nav).queryByRole('link', { name: 'Pulse Patrol Patrol' })).toBeNull();
+
+    const settingsLink = within(nav).getByRole('link', { name: 'Settings' });
+    expect(settingsLink.querySelector('[data-mobile-nav-badge="update"]')).toBeTruthy();
 
     fireEvent.click(within(nav).getByRole('button', { name: 'Switch platform, current Proxmox' }));
     const menu = await screen.findByRole('menu', { name: 'Switch platform' });
     const machinesItem = within(menu).getByRole('menuitem', { name: 'Machines Setup' });
     expect(machinesItem.firstElementChild?.textContent).toBe('Machines ');
     expect(machinesItem.lastElementChild).toHaveTextContent(/^Setup$/);
-    fireEvent.click(within(nav).getByRole('button', { name: 'More navigation' }));
-    const utilityMenu = await screen.findByRole('menu', {
-      name: 'More navigation destinations',
-    });
-    expect(within(utilityMenu).getByRole('menuitem', { name: 'Settings' })).toBeInTheDocument();
   });
 
   it('supports menu arrow keys, Escape focus return, and outside dismissal', async () => {
@@ -235,7 +256,13 @@ describe('MobileNavBar', () => {
           makePrimary('proxmox', 'Proxmox'),
           makePrimary('standalone', 'Machines'),
         ]}
-        utilityTabs={() => [makeUtility('alerts', 'Alerts'), makeUtility('settings', 'Settings')]}
+        utilityTabs={() => [
+          makeUtility('alerts', 'Alerts'),
+          makeUtility('settings', 'Settings'),
+          makeUtility('docs' as unknown as MobileNavBarUtilityTab['id'], 'Docs', {
+            route: '/docs',
+          }),
+        ]}
         onPrimaryClick={() => {}}
         onUtilityClick={() => {}}
       />

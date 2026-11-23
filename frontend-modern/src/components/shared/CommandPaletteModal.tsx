@@ -83,9 +83,9 @@ export function CommandPaletteModal(props: CommandPaletteModalProps) {
                       </Show>
                     </div>
                     <Show when={command.shortcut}>
-                      <span class="rounded-sm border border-border-subtle bg-page px-2 py-1 text-[10px] font-medium text-base-content">
+                      <kbd class="rounded-sm border border-border bg-page px-2 py-1 font-sans text-[10px] font-medium text-base-content">
                         {command.shortcut}
-                      </span>
+                      </kbd>
                     </Show>
                   </button>
                 );

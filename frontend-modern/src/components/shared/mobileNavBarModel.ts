@@ -97,9 +97,10 @@ export function buildOrderedMobileNavUtilityTabs(
 
 /**
  * Keep the bottom bar to five predictable targets at most: a dedicated
- * platform switcher, the three daily operations destinations, and More for
- * secondary utilities. Platform choice is primary navigation and must never
- * be buried in the generic overflow menu.
+ * platform switcher, the daily operations destinations, and either the single
+ * remaining utility (typically Settings) directly in the fifth slot or a More
+ * trigger when multiple secondary utilities remain. Platform choice is primary
+ * navigation and must never be buried in the generic overflow menu.
  */
 export function buildMobileNavBarLayout(
   primaryTabs: MobileNavBarPrimaryTab[],
@@ -110,19 +111,28 @@ export function buildMobileNavBarLayout(
   const fixedUtilityTabs = orderedUtilityTabs.filter((tab) =>
     MOBILE_NAV_FIXED_UTILITY_IDS.has(tab.id),
   );
+  const remainingUtilityTabs = orderedUtilityTabs.filter(
+    (tab) => !MOBILE_NAV_FIXED_UTILITY_IDS.has(tab.id),
+  );
+  const promoteSingleOverflow = remainingUtilityTabs.length === 1;
+  const resolvedFixedUtilityTabs = promoteSingleOverflow
+    ? [...fixedUtilityTabs, ...remainingUtilityTabs]
+    : fixedUtilityTabs;
+  const resolvedOverflowUtilityTabs = promoteSingleOverflow ? [] : remainingUtilityTabs;
 
   return {
     platformDestinations: orderedPrimaryTabs.map((tab): MobileNavBarPrimaryDestination => ({
       kind: 'primary',
       tab,
     })),
-    fixedDestinations: fixedUtilityTabs.map((tab): MobileNavBarDestination => ({
+    fixedDestinations: resolvedFixedUtilityTabs.map((tab): MobileNavBarDestination => ({
       kind: 'utility',
       tab,
     })),
-    overflowDestinations: orderedUtilityTabs
-      .filter((tab) => !MOBILE_NAV_FIXED_UTILITY_IDS.has(tab.id))
-      .map((tab): MobileNavBarDestination => ({ kind: 'utility', tab })),
+    overflowDestinations: resolvedOverflowUtilityTabs.map((tab): MobileNavBarDestination => ({
+      kind: 'utility',
+      tab,
+    })),
   };
 }
 
@@ -197,7 +207,7 @@ export function getMobileNavTabButtonClass(options: {
   active: boolean;
   enabled?: boolean;
 }): string {
-  return `relative flex min-h-10 min-w-0 flex-1 select-none flex-col items-center justify-center gap-0 rounded-md px-1 py-0.5 text-[9px] font-medium transition-colors ${
+  return `relative flex min-h-10 min-w-0 flex-1 select-none flex-col items-center justify-center gap-0.5 rounded-md px-1 py-0.5 text-[9px] font-medium transition-colors focus-visible:outline-solid focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-blue-500 ${
     options.active
       ? 'bg-blue-50 text-blue-700 dark:bg-blue-900/25 dark:text-blue-300'
       : 'text-muted'

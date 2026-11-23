@@ -13,7 +13,7 @@ import {
   filterPlatformNavigationShortcuts,
   type PlatformNavigationVisibility,
 } from '@/features/platformNavigation/platformNavigationModel';
-import { focusActiveTypeToSearch } from '@/hooks/useTypeToSearch';
+import { focusActiveTypeToSearch, registerTypeToSearchKeyGuard } from '@/hooks/useTypeToSearch';
 
 type KeyboardShortcutsOptions = {
   enabled?: Accessor<boolean>;
@@ -40,6 +40,9 @@ const isEditableTarget = (target: EventTarget | null): boolean => {
   if (target.getAttribute('role') === 'textbox') return true;
   return false;
 };
+
+const isModifierOnlyKey = (key: string): boolean =>
+  key === 'Shift' || key === 'Control' || key === 'Alt' || key === 'Meta';
 
 export function useKeyboardShortcuts(options: KeyboardShortcutsOptions = {}) {
   const navigate = useNavigate();
@@ -107,6 +110,18 @@ export function useKeyboardShortcuts(options: KeyboardShortcutsOptions = {}) {
     };
   };
 
+  const shouldReserveKeyForShortcuts = (e: KeyboardEvent): boolean => {
+    if (options.enabled && !options.enabled()) return false;
+    const shortcutsOpen = options.isShortcutsOpen?.() ?? false;
+    const paletteOpen = options.isCommandPaletteOpen?.() ?? false;
+    if (shortcutsOpen || paletteOpen) return false;
+    if (isEditableTarget(e.target) || isEditableTarget(document.activeElement)) return false;
+    if (e.metaKey || e.ctrlKey || e.altKey) return false;
+    if (awaitingSecondKey()) return true;
+    const key = e.key.toLowerCase();
+    return (key === 'g' && !e.shiftKey) || key === '/' || e.key === '?';
+  };
+
   const handleKeyDown = (e: KeyboardEvent) => {
     if (options.enabled && !options.enabled()) {
       return;
@@ -128,15 +143,36 @@ export function useKeyboardShortcuts(options: KeyboardShortcutsOptions = {}) {
       return;
     }
 
-    if (shortcutsOpen || paletteOpen) {
-      return;
-    }
-
     const key = e.key.toLowerCase();
 
     if ((e.metaKey || e.ctrlKey) && key === 'k') {
       e.preventDefault();
-      openCommandPalette();
+      clearAwaiting();
+      if (paletteOpen) {
+        if (options.onToggleCommandPalette) {
+          options.onToggleCommandPalette();
+        } else {
+          options.onCloseCommandPalette?.();
+        }
+      } else {
+        openCommandPalette();
+      }
+      return;
+    }
+
+    if (shortcutsOpen) {
+      if (e.key === '?' && !e.metaKey && !e.ctrlKey && !e.altKey && !isEditableTarget(e.target)) {
+        e.preventDefault();
+        if (options.onToggleShortcuts) {
+          options.onToggleShortcuts();
+        } else {
+          options.onCloseShortcuts?.();
+        }
+      }
+      return;
+    }
+
+    if (paletteOpen) {
       return;
     }
 
@@ -144,19 +180,25 @@ export function useKeyboardShortcuts(options: KeyboardShortcutsOptions = {}) {
       return;
     }
 
-    if (key === 'g' && !awaitingSecondKey() && !e.metaKey && !e.ctrlKey && !e.altKey) {
-      if (!e.repeat) {
-        startAwaiting();
+    if (awaitingSecondKey()) {
+      if (isModifierOnlyKey(e.key)) {
+        return;
+      }
+      clearAwaiting();
+      if (!e.metaKey && !e.ctrlKey && !e.altKey) {
+        e.preventDefault();
+        const route = getRoutes()[key];
+        if (route) {
+          navigate(route);
+        }
       }
       return;
     }
 
-    if (awaitingSecondKey()) {
-      clearAwaiting();
-      const route = getRoutes()[key];
-      if (route) {
-        e.preventDefault();
-        navigate(route);
+    if (key === 'g' && !e.shiftKey && !e.metaKey && !e.ctrlKey && !e.altKey) {
+      e.preventDefault();
+      if (!e.repeat) {
+        startAwaiting();
       }
       return;
     }
@@ -167,21 +209,17 @@ export function useKeyboardShortcuts(options: KeyboardShortcutsOptions = {}) {
       return;
     }
 
-    if ((e.metaKey || e.ctrlKey) && key === 'k') {
-      e.preventDefault();
-      openCommandPalette();
-      return;
-    }
-
-    if (e.key === '?') {
+    if (e.key === '?' && !e.metaKey && !e.ctrlKey && !e.altKey) {
       e.preventDefault();
       openShortcuts();
     }
   };
 
   if (typeof document !== 'undefined') {
+    const unregisterKeyGuard = registerTypeToSearchKeyGuard(shouldReserveKeyForShortcuts);
     document.addEventListener('keydown', handleKeyDown);
     onCleanup(() => {
+      unregisterKeyGuard();
       document.removeEventListener('keydown', handleKeyDown);
       if (awaitingTimeout !== undefined) {
         window.clearTimeout(awaitingTimeout);

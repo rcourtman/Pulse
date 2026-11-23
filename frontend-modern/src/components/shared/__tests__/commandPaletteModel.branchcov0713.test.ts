@@ -93,23 +93,61 @@ describe('commandPaletteModel.branchcov0713', () => {
         expect(ids.filter((id) => id.startsWith('assistant-'))).toStrictEqual([]);
       });
 
-      it('returns exactly the three always-pushed tail commands when nothing is visible', () => {
+      it('returns the non-platform utility, theme, and kiosk commands when no platform is visible', () => {
         const { navigate } = makeNavigateSpy();
         const commands = buildCommandPaletteCommands({
           paths: makePaths(),
           platformVisibility: makeVisibility(),
+          mapAvailable: false,
           navigate,
         });
         expect(commands.map((c) => c.id)).toStrictEqual([
           'nav-alerts',
           'nav-patrol',
+          'nav-actions',
           'nav-settings',
+          'nav-docs',
+          'theme-light',
+          'theme-dark',
+          'theme-system',
+          'toggle-kiosk',
         ]);
+      });
+
+      it('includes nav-map only when mapAvailable is enabled', () => {
+        const { navigate, calls } = makeNavigateSpy();
+        const hidden = buildCommandPaletteCommands({
+          paths: makePaths(),
+          platformVisibility: makeVisibility(),
+          mapAvailable: false,
+          navigate,
+        });
+        expect(hidden.some((c) => c.id === 'nav-map')).toBe(false);
+
+        const shown = buildCommandPaletteCommands({
+          paths: makePaths(),
+          platformVisibility: makeVisibility(),
+          mapAvailable: true,
+          navigate,
+        });
+        const mapCmd = shown.find((c) => c.id === 'nav-map');
+        expect(mapCmd?.label).toBe('Go to Map');
+        mapCmd!.action();
+        expect(calls).toStrictEqual(['/map']);
       });
     });
 
+    const NON_PLATFORM_NAV_IDS = [
+      'nav-alerts',
+      'nav-patrol',
+      'nav-actions',
+      'nav-map',
+      'nav-settings',
+      'nav-docs',
+    ];
+
     describe('per-platform `primaryPlatformNavigationIsVisible` — not-visible arm (every platform)', () => {
-      it('emits zero nav-* platform commands (only the always-pushed tail) when all flags are false', () => {
+      it('emits zero nav-* platform commands when all flags are false', () => {
         const { navigate } = makeNavigateSpy();
         const commands = buildCommandPaletteCommands({
           paths: makePaths(),
@@ -118,10 +156,7 @@ describe('commandPaletteModel.branchcov0713', () => {
         });
         const navIds = commands
           .map((c) => c.id)
-          .filter(
-            (id) =>
-              id.startsWith('nav-') && !['nav-alerts', 'nav-patrol', 'nav-settings'].includes(id),
-          );
+          .filter((id) => id.startsWith('nav-') && !NON_PLATFORM_NAV_IDS.includes(id));
         expect(navIds).toStrictEqual([]);
       });
     });
@@ -136,10 +171,7 @@ describe('commandPaletteModel.branchcov0713', () => {
         });
         const platformIds = commands
           .map((c) => c.id)
-          .filter(
-            (id) =>
-              id.startsWith('nav-') && !['nav-alerts', 'nav-patrol', 'nav-settings'].includes(id),
-          );
+          .filter((id) => id.startsWith('nav-') && !NON_PLATFORM_NAV_IDS.includes(id));
         expect(platformIds).toStrictEqual(['nav-proxmox']);
       });
 
@@ -152,10 +184,7 @@ describe('commandPaletteModel.branchcov0713', () => {
         });
         const platformIds = commands
           .map((c) => c.id)
-          .filter(
-            (id) =>
-              id.startsWith('nav-') && !['nav-alerts', 'nav-patrol', 'nav-settings'].includes(id),
-          );
+          .filter((id) => id.startsWith('nav-') && !NON_PLATFORM_NAV_IDS.includes(id));
         expect(platformIds).toStrictEqual(['nav-docker']);
       });
 
@@ -169,10 +198,7 @@ describe('commandPaletteModel.branchcov0713', () => {
         });
         const platformIds = commands
           .map((c) => c.id)
-          .filter(
-            (id) =>
-              id.startsWith('nav-') && !['nav-alerts', 'nav-patrol', 'nav-settings'].includes(id),
-          );
+          .filter((id) => id.startsWith('nav-') && !NON_PLATFORM_NAV_IDS.includes(id));
         expect(platformIds).toStrictEqual(['nav-kubernetes', 'nav-kubernetes-workloads']);
       });
 
@@ -185,10 +211,7 @@ describe('commandPaletteModel.branchcov0713', () => {
         });
         const platformIds = commands
           .map((c) => c.id)
-          .filter(
-            (id) =>
-              id.startsWith('nav-') && !['nav-alerts', 'nav-patrol', 'nav-settings'].includes(id),
-          );
+          .filter((id) => id.startsWith('nav-') && !NON_PLATFORM_NAV_IDS.includes(id));
         expect(platformIds).toStrictEqual(['nav-truenas']);
       });
 
@@ -202,10 +225,7 @@ describe('commandPaletteModel.branchcov0713', () => {
         });
         const platformIds = commands
           .map((c) => c.id)
-          .filter(
-            (id) =>
-              id.startsWith('nav-') && !['nav-alerts', 'nav-patrol', 'nav-settings'].includes(id),
-          );
+          .filter((id) => id.startsWith('nav-') && !NON_PLATFORM_NAV_IDS.includes(id));
         expect(platformIds).toStrictEqual(['nav-vmware', 'nav-vmware-networks']);
       });
 
@@ -218,16 +238,13 @@ describe('commandPaletteModel.branchcov0713', () => {
         });
         const platformIds = commands
           .map((c) => c.id)
-          .filter(
-            (id) =>
-              id.startsWith('nav-') && !['nav-alerts', 'nav-patrol', 'nav-settings'].includes(id),
-          );
+          .filter((id) => id.startsWith('nav-') && !NON_PLATFORM_NAV_IDS.includes(id));
         expect(platformIds).toStrictEqual(['nav-standalone']);
       });
     });
 
     describe('all platforms visible at once', () => {
-      it('emits all eight platform commands in source order, followed by the three tail commands', () => {
+      it('emits all eight platform commands in source order, followed by utility, theme, and kiosk commands', () => {
         const { navigate } = makeNavigateSpy();
         const commands = buildCommandPaletteCommands({
           paths: makePaths(),
@@ -239,6 +256,7 @@ describe('commandPaletteModel.branchcov0713', () => {
             vmware: true,
             standalone: true,
           }),
+          mapAvailable: true,
           navigate,
         });
         expect(commands.map((c) => c.id)).toStrictEqual([
@@ -252,15 +270,21 @@ describe('commandPaletteModel.branchcov0713', () => {
           'nav-standalone',
           'nav-alerts',
           'nav-patrol',
+          'nav-actions',
+          'nav-map',
           'nav-settings',
+          'nav-docs',
+          'theme-light',
+          'theme-dark',
+          'theme-system',
+          'toggle-kiosk',
         ]);
-        // 8 platform + 3 tail = 11.
-        expect(commands).toHaveLength(11);
+        expect(commands).toHaveLength(18);
       });
     });
 
-    describe('platform command `description` is sourced from `options.paths.*`', () => {
-      it('flows each custom path string into the corresponding command description', () => {
+    describe('command descriptions are human-readable instead of raw URL paths', () => {
+      it('keeps custom paths searchable via keywords while showing human descriptions', () => {
         const { navigate } = makeNavigateSpy();
         const commands = buildCommandPaletteCommands({
           paths: makePaths({
@@ -284,18 +308,20 @@ describe('commandPaletteModel.branchcov0713', () => {
           navigate,
         });
         const byId = new Map(commands.map((c) => [c.id, c]));
-        expect(byId.get('nav-proxmox')?.description).toBe('/custom/pve');
-        expect(byId.get('nav-docker')?.description).toBe('/custom/docker');
-        expect(byId.get('nav-kubernetes')?.description).toBe('/custom/k8s');
-        expect(byId.get('nav-kubernetes-workloads')?.description).toBe('/custom/k8s/wl');
-        expect(byId.get('nav-truenas')?.description).toBe('/custom/tn');
-        expect(byId.get('nav-vmware')?.description).toBe('/custom/vm');
-        expect(byId.get('nav-vmware-networks')?.description).toBe('/custom/vm/net');
-        expect(byId.get('nav-standalone')?.description).toBe('/custom/standalone');
+        for (const cmd of commands) {
+          expect(cmd.description?.startsWith('/')).toBe(false);
+        }
+        expect(byId.get('nav-proxmox')?.keywords).toContain('/custom/pve');
+        expect(byId.get('nav-docker')?.keywords).toContain('/custom/docker');
+        expect(byId.get('nav-kubernetes')?.keywords).toContain('/custom/k8s');
+        expect(byId.get('nav-kubernetes-workloads')?.keywords).toContain('/custom/k8s/wl');
+        expect(byId.get('nav-truenas')?.keywords).toContain('/custom/tn');
+        expect(byId.get('nav-vmware')?.keywords).toContain('/custom/vm');
+        expect(byId.get('nav-vmware-networks')?.keywords).toContain('/custom/vm/net');
+        expect(byId.get('nav-standalone')?.keywords).toContain('/custom/standalone');
       });
 
-      it('uses the hardcoded descriptions for the always-pushed tail commands regardless of paths', () => {
-        // alerts/patrol/settings descriptions are literals, not from options.paths.
+      it('uses human descriptions for tail utility commands', () => {
         const { navigate } = makeNavigateSpy();
         const commands = buildCommandPaletteCommands({
           paths: makePaths(),
@@ -303,9 +329,19 @@ describe('commandPaletteModel.branchcov0713', () => {
           navigate,
         });
         const byId = new Map(commands.map((c) => [c.id, c]));
-        expect(byId.get('nav-alerts')?.description).toBe('/alerts');
-        expect(byId.get('nav-patrol')?.description).toBe('/patrol');
-        expect(byId.get('nav-settings')?.description).toBe('/settings');
+        expect(byId.get('nav-alerts')?.description).toBe(
+          'Active alerts, thresholds, and notification rules',
+        );
+        expect(byId.get('nav-patrol')?.description).toBe('Operational attention and recent checks');
+        expect(byId.get('nav-actions')?.description).toBe(
+          'Approvals, ready tasks, and recorded outcomes',
+        );
+        expect(byId.get('nav-settings')?.description).toBe(
+          'Connections, alerts, appearance, and system settings',
+        );
+        expect(byId.get('nav-docs')?.description).toBe(
+          'Guides, setup instructions, and troubleshooting',
+        );
       });
     });
 
@@ -485,6 +521,7 @@ describe('commandPaletteModel.branchcov0713', () => {
           'ceph',
           'vm',
           'lxc',
+          '/proxmox',
         ]);
       });
     });

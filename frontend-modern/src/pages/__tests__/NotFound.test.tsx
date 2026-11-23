@@ -11,9 +11,11 @@ vi.mock('@solidjs/router', () => ({
 }));
 
 describe('NotFound', () => {
-  it('offers a touch-sized route back to the workspace', () => {
+  it('renders a single PageHeader heading, matched path note, and workspace link', () => {
     render(() => <NotFound />);
 
+    expect(screen.getAllByRole('heading')).toHaveLength(1);
+    expect(screen.getByRole('heading', { level: 1, name: 'Page not found' })).toBeInTheDocument();
     expect(screen.getByText('No route matched /missing?from=test.')).toBeInTheDocument();
     const action = screen.getByRole('button', { name: 'Go to workspace' });
     expect(action).toHaveClass('min-h-11');
