@@ -1460,6 +1460,88 @@ describe('By date qualifies restore-point totals with provider collection eviden
     expect(sourceCalls('pve')).toHaveLength(2);
     expect(sourceCalls('pbs')).toHaveLength(1);
   });
+
+  it('does not claim empty backup history before the first protection read settles', async () => {
+    const pending = deferred<ProtectionPosturesResponse>();
+    apiFetchMock.mockImplementation((url: string) =>
+      Promise.resolve(jsonResponse(url.endsWith('/pve') ? emptyPVE : emptyPBS)),
+    );
+    apiFetchJSONMock.mockReturnValue(pending.promise);
+    window.history.replaceState({}, '', '/proxmox/backups/date');
+    mountBackupReadState();
+
+    expect(await screen.findByText('Backup list not confirmed')).toBeVisible();
+    expect(screen.getByText(/Pulse is still checking protection status/)).toBeVisible();
+    expect(screen.getByText('0 completed restore points read')).toBeVisible();
+    expect(screen.getByText('0 restore points read', { exact: true })).toBeVisible();
+    expect(screen.queryByText('No backups yet')).not.toBeInTheDocument();
+
+    pending.resolve({ data: [posture], policy: protectionPolicy });
+    expect(await screen.findByText('No backups yet')).toBeVisible();
+    expect(screen.queryByText('0 completed restore points read')).not.toBeInTheDocument();
+  });
+
+  it('does not claim empty backup history after the protection read fails and retries it alone', async () => {
+    apiFetchMock.mockImplementation((url: string) =>
+      Promise.resolve(jsonResponse(url.endsWith('/pve') ? emptyPVE : emptyPBS)),
+    );
+    apiFetchJSONMock.mockRejectedValueOnce(new Error('Synthetic protection read failed'));
+    window.history.replaceState({}, '', '/proxmox/backups/date');
+    mountBackupReadState();
+
+    expect(await screen.findByText('Backup list not confirmed')).toBeVisible();
+    expect(
+      screen.getByText(/Protection status is unavailable.*list may be incomplete/),
+    ).toBeVisible();
+    expect(screen.getByText('0 completed restore points read')).toBeVisible();
+    expect(screen.getByText('0 restore points read', { exact: true })).toBeVisible();
+    expect(screen.queryByText('Backup list incomplete')).not.toBeInTheDocument();
+    expect(screen.queryByText('No backups yet')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Retry .* inventory/ })).not.toBeInTheDocument();
+
+    apiFetchJSONMock.mockResolvedValue({ data: [posture], policy: protectionPolicy });
+    await fireEvent.click(screen.getByRole('button', { name: 'Retry protection status' }));
+    expect(await screen.findByText('No backups yet')).toBeVisible();
+    expect(sourceCalls('pve')).toHaveLength(1);
+    expect(sourceCalls('pbs')).toHaveLength(1);
+    expect(apiFetchJSONMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('keeps a readable point and distinguishes day and search misses after the protection read fails', async () => {
+    apiFetchMock.mockImplementation((url: string) =>
+      Promise.resolve(jsonResponse(url.endsWith('/pve') ? readPvePayload : emptyPBS)),
+    );
+    apiFetchJSONMock.mockRejectedValue(new Error('Synthetic protection read failed'));
+    window.history.replaceState({}, '', '/proxmox/backups/date?day=2026-01-01');
+    mountBackupReadState();
+
+    expect(await screen.findByText('No restore points listed for Jan 1, 2026')).toBeVisible();
+    expect(screen.getByText('0 of 1 restore point read', { exact: true })).toBeVisible();
+    expect(screen.queryByText(/A failed backup usually leaves none/)).not.toBeInTheDocument();
+
+    const search = screen.getByPlaceholderText(/search backups by workload/i);
+    fireEvent.input(search, { target: { value: 'no-matching-guest' } });
+    expect(await screen.findByText('No recoverable artifacts match current filters')).toBeVisible();
+    expect(screen.getByText(/Change search or filters. Pulse has not confirmed/)).toBeVisible();
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Clear filters' }));
+    await waitFor(() => expect(recoverableRows()).toHaveLength(1));
+    expect(recoverableRows()[0]).toHaveTextContent('pbs-docker');
+    expect(screen.getByText('1 completed restore point read')).toBeVisible();
+    expect(screen.queryByText('No backups yet')).not.toBeInTheDocument();
+  });
+
+  it('does not wait for a protection read when there are no workloads to check', async () => {
+    apiFetchMock.mockImplementation((url: string) =>
+      Promise.resolve(jsonResponse(url.endsWith('/pve') ? emptyPVE : emptyPBS)),
+    );
+    window.history.replaceState({}, '', '/proxmox/backups/date');
+    renderInRouter(() => <ProxmoxBackupsTable emptyIcon={<span />} />);
+
+    expect(await screen.findByText('No backups yet')).toBeVisible();
+    expect(screen.queryByText('Backup list not confirmed')).not.toBeInTheDocument();
+    expect(apiFetchJSONMock).not.toHaveBeenCalled();
+  });
 });
 
 describe('backup read recovery keeps keyboard position', () => {
