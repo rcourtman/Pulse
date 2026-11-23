@@ -20,7 +20,7 @@
 #   --disable-kubernetes Disable Kubernetes monitoring even if detected
 #   --kube-include-all-pods Include all non-succeeded pods (default: false)
 #   --kube-include-all-deployments Include all deployments (default: false)
-#   --enable-proxmox    Force enable Proxmox integration (default: auto-detect)
+#   --enable-proxmox    Force enable Proxmox setup (auto-detected on fresh installs)
 #   --disable-proxmox   Disable Proxmox integration even if detected
 #   --interval <dur>    Reporting interval (default: 30s)
 #   --agent-id <id>     Custom agent identifier (default: auto-generated)
@@ -48,9 +48,9 @@
 #
 # Auto-Detection:
 #   The installer automatically detects Docker, Kubernetes, and Proxmox on the
-#   target machine and enables monitoring for detected platforms. Proxmox auto
-#   mode keeps the runtime unpinned so the agent can register every detected
-#   PVE / PBS service on that host. Use --disable-* flags to skip specific
+#   target machine and enables monitoring for detected platforms. Fresh
+#   Proxmox auto-detection leaves the type unpinned. Manual updates preserve
+#   the installed setup choice instead. Use --disable-* flags to skip specific
 #   platforms, or --enable-* to force enable even if not detected.
 
 set -euo pipefail
@@ -593,7 +593,8 @@ Options:
   --kubeconfig <path>     Path to kubeconfig file
   --kube-include-all-pods Include all non-succeeded pods
   --kube-include-all-deployments Include all deployments
-  --enable-proxmox        Force enable Proxmox integration
+  --enable-proxmox        Enable automatic Proxmox API setup (auto-detected on fresh installs)
+  --disable-proxmox       Keep automatic Proxmox API setup off
   --agent-id <id>         Custom agent identifier
   --hostname <name>       Override hostname reported to Pulse
   --report-ip <ip>        IP address to report to Pulse (for multi-NIC systems)
@@ -5171,7 +5172,11 @@ build_exec_arg_items() {
     if [[ "$ENABLE_DOCKER" == "false" && "$DOCKER_EXPLICIT" == "true" ]]; then EXEC_ARG_ITEMS+=(--enable-docker=false); fi
     if [[ "$ENABLE_KUBERNETES" == "true" ]]; then EXEC_ARG_ITEMS+=(--enable-kubernetes); fi
     if [[ -n "$KUBECONFIG_PATH" ]]; then EXEC_ARG_ITEMS+=(--kubeconfig "$KUBECONFIG_PATH"); fi
-    if [[ "$ENABLE_PROXMOX" == "true" ]]; then EXEC_ARG_ITEMS+=(--enable-proxmox); fi
+    if [[ "$ENABLE_PROXMOX" == "true" ]]; then
+        EXEC_ARG_ITEMS+=(--enable-proxmox)
+    elif [[ "$ENABLE_PROXMOX" == "false" ]]; then
+        EXEC_ARG_ITEMS+=(--enable-proxmox=false)
+    fi
     if [[ -n "$PROXMOX_TYPE" ]]; then EXEC_ARG_ITEMS+=(--proxmox-type "$PROXMOX_TYPE"); fi
     if [[ "$INSECURE" == "true" ]]; then EXEC_ARG_ITEMS+=(--insecure); fi
     if [[ -n "$SERVER_FINGERPRINT" ]]; then EXEC_ARG_ITEMS+=(--server-fingerprint "$SERVER_FINGERPRINT"); fi
@@ -5535,10 +5540,6 @@ apply_recovered_agent_arg_value() {
             fi
             RECOVERED_AGENT_ARG_STATE="true"
             ;;
-        proxmox-type)
-            if [[ -z "$PROXMOX_TYPE" ]]; then PROXMOX_TYPE="$value"; fi
-            RECOVERED_AGENT_ARG_STATE="true"
-            ;;
         disk-exclude)
             DISK_EXCLUDES+=("$value")
             RECOVERED_AGENT_ARG_STATE="true"
@@ -5586,6 +5587,10 @@ resolve_command_authority_profile() {
 }
 
 recover_connection_state_from_arg_stream() {
+    local setup_state_dir="${1:-}"
+    local saved_state_dir="${2:-}"
+    local saved_setup="false"
+    local saved_type=""
     local arg=""
     local pending_key=""
     local key=""
@@ -5594,21 +5599,47 @@ recover_connection_state_from_arg_stream() {
     RECOVERED_AGENT_ARG_STATE="false"
 
     while IFS= read -r arg; do
+        key=""
         if [[ -n "$pending_key" ]]; then
-            apply_recovered_agent_arg_value "$pending_key" "$arg"
+            key="$pending_key"
+            value="$arg"
             pending_key=""
+        else
+            case "$arg" in
+                --log-file|-log-file|--url|--pulse-url|--token|--token-file|--interval|--agent-id|--hostname|--report-ip|--cacert|--server-fingerprint|--observers-file|--command-authority|--health-addr|--state-dir|--kubeconfig|--proxmox-type|--disk-exclude|--disk-include|-url|-pulse-url|-token|-token-file|-interval|-agent-id|-hostname|-report-ip|-cacert|-server-fingerprint|-observers-file|-command-authority|-health-addr|-state-dir|-kubeconfig|-proxmox-type|-disk-exclude|-disk-include)
+                    pending_key=$(normalize_recovered_agent_arg_key "$arg")
+                    continue
+                    ;;
+                --log-file=*|-log-file=*|--url=*|--pulse-url=*|--token=*|--token-file=*|--interval=*|--agent-id=*|--hostname=*|--report-ip=*|--cacert=*|--server-fingerprint=*|--observers-file=*|--command-authority=*|--health-addr=*|--state-dir=*|--kubeconfig=*|--proxmox-type=*|--disk-exclude=*|--disk-include=*|-url=*|-pulse-url=*|-token=*|-token-file=*|-interval=*|-agent-id=*|-hostname=*|-report-ip=*|-cacert=*|-server-fingerprint=*|-observers-file=*|-command-authority=*|-health-addr=*|-state-dir=*|-kubeconfig=*|-proxmox-type=*|-disk-exclude=*|-disk-include=*)
+                    key="${arg%%=*}"
+                    value="${arg#*=}"
+                    ;;
+                --enable-proxmox|-enable-proxmox|--enable-proxmox=true|-enable-proxmox=true)
+                    saved_setup="true"
+                    continue
+                    ;;
+                --enable-proxmox=false|-enable-proxmox=false|--disable-proxmox|-disable-proxmox)
+                    saved_setup="false"
+                    continue
+                    ;;
+            esac
+        fi
+
+        if [[ -n "$key" ]]; then
+            if [[ -z "$setup_state_dir" ]]; then
+                apply_recovered_agent_arg_value "$key" "$value"
+            else
+                case "$(normalize_recovered_agent_arg_key "$key")" in
+                    state-dir) saved_state_dir=$(strip_recovered_arg_quotes "$value") ;;
+                    proxmox-type) saved_type=$(strip_recovered_arg_quotes "$value") ;;
+                esac
+            fi
             continue
         fi
 
+        # The setup pass does not merge other flags into connection state.
+        [[ -z "$setup_state_dir" ]] || continue
         case "$arg" in
-            --url|--pulse-url|--token|--token-file|--interval|--agent-id|--hostname|--report-ip|--cacert|--server-fingerprint|--observers-file|--command-authority|--health-addr|--state-dir|--kubeconfig|--proxmox-type|--disk-exclude|--disk-include|-url|-pulse-url|-token|-token-file|-interval|-agent-id|-hostname|-report-ip|-cacert|-server-fingerprint|-observers-file|-command-authority|-health-addr|-state-dir|-kubeconfig|-proxmox-type|-disk-exclude|-disk-include)
-                pending_key=$(normalize_recovered_agent_arg_key "$arg")
-                ;;
-            --url=*|--pulse-url=*|--token=*|--token-file=*|--interval=*|--agent-id=*|--hostname=*|--report-ip=*|--cacert=*|--server-fingerprint=*|--observers-file=*|--command-authority=*|--health-addr=*|--state-dir=*|--kubeconfig=*|--proxmox-type=*|--disk-exclude=*|--disk-include=*|-url=*|-pulse-url=*|-token=*|-token-file=*|-interval=*|-agent-id=*|-hostname=*|-report-ip=*|-cacert=*|-server-fingerprint=*|-observers-file=*|-command-authority=*|-health-addr=*|-state-dir=*|-kubeconfig=*|-proxmox-type=*|-disk-exclude=*|-disk-include=*)
-                key="${arg%%=*}"
-                value="${arg#*=}"
-                apply_recovered_agent_arg_value "$key" "$value"
-                ;;
             --enable-host|-enable-host|--enable-host=true|-enable-host=true)
                 if [[ "$HOST_EXPLICIT" != "true" ]]; then ENABLE_HOST="true"; fi
                 RECOVERED_AGENT_ARG_STATE="true"
@@ -5645,20 +5676,6 @@ recover_connection_state_from_arg_stream() {
                 fi
                 RECOVERED_AGENT_ARG_STATE="true"
                 ;;
-            --enable-proxmox|-enable-proxmox|--enable-proxmox=true|-enable-proxmox=true)
-                if [[ "$PROXMOX_EXPLICIT" != "true" ]]; then
-                    ENABLE_PROXMOX="true"
-                    PROXMOX_EXPLICIT="true"
-                fi
-                RECOVERED_AGENT_ARG_STATE="true"
-                ;;
-            --enable-proxmox=false|-enable-proxmox=false|--disable-proxmox|-disable-proxmox)
-                if [[ "$PROXMOX_EXPLICIT" != "true" ]]; then
-                    ENABLE_PROXMOX="false"
-                    PROXMOX_EXPLICIT="true"
-                fi
-                RECOVERED_AGENT_ARG_STATE="true"
-                ;;
             --insecure|-insecure)
                 if [[ "${RETARGET_ONLY:-false}" != "true" || "${INSECURE_EXPLICIT:-false}" == "true" ]]; then
                     INSECURE="true"
@@ -5689,6 +5706,16 @@ recover_connection_state_from_arg_stream() {
                 ;;
         esac
     done
+
+    if [[ -n "$setup_state_dir" ]]; then
+        [[ -z "$pending_key" && "$saved_state_dir" == /* &&
+           "${saved_state_dir%/}" == "${setup_state_dir%/}" ]] || return 1
+        if [[ "$PROXMOX_EXPLICIT" != "true" ]]; then ENABLE_PROXMOX="$saved_setup"; fi
+        if [[ -z "$PROXMOX_TYPE" && ( "$saved_type" == "pve" || "$saved_type" == "pbs" ) ]]; then
+            PROXMOX_TYPE="$saved_type"
+        fi
+        return 0
+    fi
 
     if [[ "$RECOVERED_AGENT_ARG_STATE" == "true" && -z "$PULSE_TOKEN" && -n "$PULSE_URL" ]]; then
         recover_token_from_default_agent_token_file || true
@@ -5917,7 +5944,43 @@ recover_connection_state_from_running_agent() {
     return 1
 }
 
+recover_proxmox_setup_from_systemd_fragment() {
+    local fragment="$1"
+    local line="" payload="" args=""
+    local in_service="false"
+    local legacy_state_dir="$DEFAULT_STATE_DIR"
+
+    # Only a protected installed unit can authorize carrying setup forward.
+    trusted_lifecycle_regular_file "$fragment" 644 ||
+        trusted_lifecycle_regular_file "$fragment" 600 || return 1
+
+    while IFS= read -r line || [[ -n "$line" ]]; do
+        line="${line#"${line%%[![:space:]]*}"}"
+        case "$line" in
+            '[Service]') in_service="true"; continue ;;
+            '['*']') in_service="false"; continue ;;
+        esac
+        [[ "$in_service" == "true" ]] || continue
+        case "$line" in
+            ExecStart=*)
+                [[ -z "$payload" ]] || return 1
+                payload="${line#ExecStart=}"
+                ;;
+            EnvironmentFile=*|PassEnvironment=*|Environment=*PULSE_STATE_DIR=*)
+                # Without --state-dir, an environment override makes the
+                # legacy implicit default insufficient to bind this unit.
+                legacy_state_dir=""
+                ;;
+        esac
+    done < "$fragment"
+    [[ -n "$payload" ]] || return 1
+    args=$(split_recovered_shell_words "$payload") || return 1
+    [[ "${args%%$'\n'*}" == /*/"$BINARY_NAME" ]] || return 1
+    recover_connection_state_from_arg_stream "$STATE_DIR" "$legacy_state_dir" <<< "$args"
+}
+
 recover_connection_state_from_systemd_unit() {
+    local setup_only="${1:-false}"
     local unit_path=""
     local candidate=""
     local line=""
@@ -5929,6 +5992,11 @@ recover_connection_state_from_systemd_unit() {
     fi
 
     for candidate in "$unit_path" "/etc/systemd/system/${AGENT_NAME}.service" "/lib/systemd/system/${AGENT_NAME}.service" "/usr/lib/systemd/system/${AGENT_NAME}.service"; do
+        if [[ "$setup_only" == "true" && -n "$candidate" && ( -e "$candidate" || -L "$candidate" ) ]]; then
+            # Do not borrow an opt-in from a lower-priority, inactive unit.
+            recover_proxmox_setup_from_systemd_fragment "$candidate"
+            return $?
+        fi
         [[ -n "$candidate" && -f "$candidate" ]] || continue
         recovered="false"
         while IFS= read -r line; do
@@ -5986,6 +6054,12 @@ recover_connection_state_from_launchd_plist() {
 }
 
 recover_connection_state_from_service_scripts() {
+    local setup_only="false"
+    local args=""
+    if [[ "${1:-}" == "--proxmox-setup" ]]; then
+        setup_only="true"
+        shift
+    fi
     local candidate=""
     local line=""
     local payload=""
@@ -6007,24 +6081,32 @@ recover_connection_state_from_service_scripts() {
 
     for candidate in "${candidates[@]}"; do
         [[ -n "$candidate" && -f "$candidate" ]] || continue
+        if [[ "$setup_only" == "true" ]]; then
+            trusted_lifecycle_regular_file "$candidate" 755 ||
+                trusted_lifecycle_regular_file "$candidate" 700 ||
+                trusted_lifecycle_regular_file "$candidate" 644 || continue
+        fi
         recovered="false"
 
         while IFS= read -r line; do
             line="${line#"${line%%[![:space:]]*}"}"
             case "$line" in
-                command_args=*)
-                    payload=$(strip_recovered_arg_quotes "${line#command_args=}")
-                    if recover_connection_state_from_arg_stream < <(split_recovered_shell_words "$payload"); then
-                        recovered="true"
-                    fi
-                    ;;
-                exec\ *)
-                    payload="${line#exec }"
-                    if recover_connection_state_from_arg_stream < <(split_recovered_shell_words "$payload"); then
+                command_args=*|exec\ *)
+                    case "$line" in
+                        command_args=*) payload=$(strip_recovered_arg_quotes "${line#command_args=}") ;;
+                        exec\ *) payload="${line#exec }" ;;
+                    esac
+                    if [[ "$setup_only" == "true" ]]; then
+                        args=$(split_recovered_shell_words "$payload") || continue
+                        if recover_connection_state_from_arg_stream "$STATE_DIR" <<< "$args"; then
+                            return 0
+                        fi
+                    elif recover_connection_state_from_arg_stream < <(split_recovered_shell_words "$payload"); then
                         recovered="true"
                     fi
                     ;;
                 export\ PULSE_*=*|PULSE_*=*)
+                    [[ "$setup_only" != "true" ]] || continue
                     assignment="${line#export }"
                     key="${assignment%%=*}"
                     value=$(strip_recovered_arg_quotes "${assignment#*=}")
@@ -6062,6 +6144,19 @@ recover_connection_state_from_existing_agent() {
     fi
 
     return 1
+}
+
+recover_installed_proxmox_setup() {
+    local plist="/Library/LaunchDaemons/com.pulse.agent.plist"
+
+    if command -v systemctl >/dev/null 2>&1; then
+        recover_connection_state_from_systemd_unit true
+    elif [[ -f "$plist" ]]; then
+        trusted_lifecycle_regular_file "$plist" 644 || return 1
+        recover_connection_state_from_arg_stream "$STATE_DIR" < <(launchd_agent_arg_stream "$plist")
+    else
+        recover_connection_state_from_service_scripts --proxmox-setup
+    fi
 }
 
 find_connection_state_file() {
@@ -6718,8 +6813,17 @@ if [[ "$KUBERNETES_EXPLICIT" != "true" ]]; then
     fi
 fi
 
+if [[ "$UPDATE_ONLY" == "true" && "$UNINSTALL" != "true" ]]; then
+    # The selected state directory is now known. Connection recovery can skip
+    # the installed unit when connection.env is complete; setup is independent.
+    recover_installed_proxmox_setup || true
+fi
 if [[ "$PROXMOX_EXPLICIT" != "true" ]]; then
-    if detect_proxmox; then
+    if [[ "$UPDATE_ONLY" == "true" ]]; then
+        # Older units emitted an enable flag only when setup was on. Treat an
+        # unmarked or unmatched service as off, not consent to start API setup.
+        ENABLE_PROXMOX="${ENABLE_PROXMOX:-false}"
+    elif detect_proxmox; then
         log_info "Proxmox detected - enabling Proxmox integration"
         log_info "  (use --disable-proxmox to skip)"
         ENABLE_PROXMOX="true"

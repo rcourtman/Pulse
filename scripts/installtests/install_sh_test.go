@@ -569,6 +569,221 @@ func TestInstallSHAutoDetectProxmoxKeepsRuntimeTypeUnpinned(t *testing.T) {
 	}
 }
 
+func TestInstallSHManualUpdatePreservesSelectedProxmoxSetup(t *testing.T) {
+	source, err := installShellSource()
+	if err != nil {
+		t.Fatal(err)
+	}
+	section := func(start, end string) string {
+		t.Helper()
+		_, tail, ok := strings.Cut(source, start)
+		if !ok {
+			t.Fatalf("missing installer start marker %q", start)
+		}
+		body, _, ok := strings.Cut(tail, end)
+		if !ok {
+			t.Fatalf("missing installer end marker %q", end)
+		}
+		return body
+	}
+
+	// Run the real argument handling, lifecycle ordering, hardware policy and
+	// systemd replacement renderer. No host service, API or privilege changes.
+	script := `set -euo pipefail
+fixture_main() {
+` + section("# --- Configuration ---", "# --- Helper Functions ---") + `
+DEFAULT_STATE_DIR="$FIXTURE/selected state"
+STATE_DIR="$DEFAULT_STATE_DIR"
+TRUENAS_STATE_DIR="$FIXTURE/truenas"
+INSTALL_DIR="$FIXTURE/bin"
+INSTALLER_LIFECYCLE_DIR="$FIXTURE/lifecycle"
+PRIVILEGED_HELPER_CREDENTIAL_DIR="$INSTALLER_LIFECYCLE_DIR"
+PRIVILEGE_HELPER_DIR="$FIXTURE/scoped-helpers"
+TMP_FILES=()
+UNIT="$FIXTURE/pulse-agent.service"
+OS=linux
+log_info() { :; }
+fail() { echo "$1" >&2; exit 99; }
+systemctl() {
+    [[ "$*" == "show -p FragmentPath --value pulse-agent" ]] || exit 98
+    printf '%s\n' "$UNIT"
+}
+detect_proxmox() { printf 'detected\n' >> "$FIXTURE/detection"; }
+detect_kubernetes() { return 1; }
+resolve_initial_container_monitoring_detection() { ENABLE_DOCKER=false; }
+provision_least_privilege_user() { :; }
+provision_privilege_helpers() { :; }
+` + extractTokenRecoveryShellFunctions(t) + "\n"
+	for _, name := range []string{
+		"read_connection_state_value", "recover_connection_state", "strip_recovered_arg_quotes",
+		"normalize_recovered_agent_arg_key", "apply_recovered_agent_arg_value",
+		"recovered_connection_state_ready", "update_connection_state_incomplete",
+		"resolve_command_authority_profile", "build_exec_arg_items", "join_exec_arg_items",
+		"build_exec_args", "render_systemd_agent_unit", "systemd_agent_requires_lxc_attach",
+		"systemd_agent_may_attach_lxc", "ensure_runtime_token_file", "clear_proxmox_state_if_needed",
+		"read_agent_id_file_safely", "recover_agent_id_from_state_file",
+	} {
+		script += extractInstallShellFunction(t, name) + "\n"
+	}
+	script += "recover_connection_state_from_arg_stream() {" + section(
+		"recover_connection_state_from_arg_stream() {", "read_collector_token_file_safely() {") + `
+# Controlled absence of another running process; read the real unit instead.
+collect_running_agent_pids() { :; }
+` + section("# --- Parse Arguments ---", `if [[ "$RETARGET_ONLY" == "true" && -z "$PULSE_URL" ]]; then`) +
+		section("# --- Installed Lifecycle State Recovery ---", "# --- CA Certificate Validation ---") +
+		section("# --- Platform Auto-Detection ---", "# Summary of what will be monitored") +
+		"# A least-privilege install must survive updates" + section(
+		"# A least-privilege install must survive updates", "    # Restore SELinux contexts (required for Fedora, RHEL, CentOS)") + `
+printf '%s/%s\n' "$GRANT_SMART" "$GRANT_PCT"
+}
+fixture_main "$@"
+`
+
+	for _, tc := range []struct {
+		name, savedArgs, pathStyle, override, wantMode, wantType string
+		defaultDir, partial, untrusted, fresh, smart, pct        bool
+	}{
+		{name: "explicit-complete-on-pbs", savedArgs: "--enable-proxmox --proxmox-type pbs", wantMode: "on", wantType: "pbs", smart: true, pct: true},
+		{name: "same-dir-equals-trailing-slash", savedArgs: "-enable-proxmox=true --proxmox-type=pbs", pathStyle: "equals", wantMode: "on", wantType: "pbs"},
+		{name: "explicit-complete-unmarked", wantMode: "off", smart: true, pct: true},
+		{name: "saved-explicit-off", savedArgs: "--enable-proxmox --enable-proxmox=false --proxmox-type pve", wantMode: "off", wantType: "pve", pct: true},
+		{name: "foreign-state-with-connection-fallback", savedArgs: "--enable-proxmox --proxmox-type pbs", pathStyle: "foreign", partial: true, wantMode: "off"},
+		{name: "flag-shaped-value-is-not-consent", savedArgs: "--log-file --enable-proxmox", wantMode: "off"},
+		{name: "untrusted-unit-is-not-consent", savedArgs: "--enable-proxmox --proxmox-type pbs", untrusted: true, wantMode: "off"},
+		{name: "cli-disable-wins", savedArgs: "--enable-proxmox --proxmox-type pbs", override: "--disable-proxmox", wantMode: "off", wantType: "pbs"},
+		{name: "cli-enable-and-type-win", savedArgs: "--enable-proxmox=false --proxmox-type pbs", override: "--enable-proxmox --proxmox-type pve", wantMode: "on", wantType: "pve"},
+		{name: "default-dir-on-pbs", savedArgs: "--enable-proxmox --proxmox-type pbs", defaultDir: true, wantMode: "on", wantType: "pbs"},
+		{name: "legacy-implicit-default-on", savedArgs: "--enable-proxmox", pathStyle: "implicit", defaultDir: true, wantMode: "on"},
+		{name: "legacy-default-not-assumed-with-env-file", savedArgs: "--enable-proxmox", pathStyle: "env-file", defaultDir: true, wantMode: "off"},
+		{name: "fresh-detect-still-unpinned", fresh: true, wantMode: "on"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			root := t.TempDir()
+			state := filepath.Join(root, "selected state")
+			unit := filepath.Join(root, "pulse-agent.service")
+			token := filepath.Join(state, "token")
+			marker := filepath.Join(state, "proxmox-registered")
+			const fixtureToken = "0a1b2c3d"
+			if err := os.Mkdir(state, 0700); err != nil {
+				t.Fatal(err)
+			}
+			for path, contents := range map[string]string{token: fixtureToken, marker: "previous setup marker\n"} {
+				if err := os.WriteFile(path, []byte(contents), 0600); err != nil {
+					t.Fatal(err)
+				}
+			}
+
+			args := []string{"--update"}
+			if !tc.defaultDir {
+				args = append(args, "--state-dir", state)
+			}
+			if tc.fresh {
+				args = []string{"--url", "https://pulse.example.invalid", "--token", fixtureToken, "--agent-id", "selected-agent"}
+			} else {
+				conn := fmt.Sprintf("PULSE_STATE_DIR='%s'\nPULSE_URL='https://pulse.example.invalid'\nPULSE_TOKEN_FILE='%s'\nPULSE_AGENT_ID='selected-agent'\nPULSE_INSECURE_SKIP_VERIFY='true'\nPULSE_CACERT='/fixture/ca.pem'\nPULSE_SERVER_FINGERPRINT='fixture-pin'\n", state, token)
+				if !tc.partial {
+					conn += "PULSE_HOSTNAME='saved-host'\n"
+				}
+				if err := os.WriteFile(filepath.Join(state, "connection.env"), []byte(conn), 0600); err != nil {
+					t.Fatal(err)
+				}
+				pathArg := fmt.Sprintf(" --state-dir %q", state)
+				envLines := ""
+				switch tc.pathStyle {
+				case "foreign":
+					pathArg = fmt.Sprintf(" --state-dir %q", filepath.Join(root, "another state"))
+				case "equals":
+					pathArg = fmt.Sprintf(" --state-dir=%q", state+"/")
+				case "implicit", "env-file":
+					pathArg = ""
+					if tc.pathStyle == "env-file" {
+						envLines = "EnvironmentFile=/fixture/unbound.env\n"
+					}
+				}
+				user := "root"
+				if tc.smart || tc.pct {
+					user = "pulse-agent"
+				}
+				if tc.smart {
+					envLines += "Environment=PULSE_SMARTCTL_PATH=" + root + "/scoped-helpers/smartctl\n"
+				}
+				if tc.pct {
+					envLines += "Environment=PULSE_PCT_PATH=" + root + "/scoped-helpers/pct\n"
+				}
+				unitURL, unitID := "https://prior.example.invalid", "prior-agent"
+				if tc.defaultDir {
+					// Ordinary discovery reads the installed command first without
+					// --state-dir. Represent its real ID and endpoint in that case.
+					unitURL, unitID = "https://pulse.example.invalid", "selected-agent"
+				}
+				oldUnit := "[Service]\nUser=" + user + "\nExecStart=/usr/local/bin/pulse-agent --url " + unitURL + " --agent-id " + unitID + " --interval 75s" + pathArg + " " + tc.savedArgs + "\n" + envLines
+				mode := os.FileMode(0644)
+				if tc.untrusted {
+					mode = 0664
+				}
+				if err := os.WriteFile(unit, []byte(oldUnit), mode); err != nil {
+					t.Fatal(err)
+				}
+				// Force the intended permission even under the proof guest's umask.
+				if err := os.Chmod(unit, mode); err != nil {
+					t.Fatal(err)
+				}
+			}
+
+			args = append(args, strings.Fields(tc.override)...)
+			cmd := exec.Command("bash", append([]string{"-c", script, "installer"}, args...)...)
+			cmd.Env = []string{"PATH=" + os.Getenv("PATH"), "FIXTURE=" + root}
+			out, err := cmd.CombinedOutput()
+			if err != nil {
+				t.Fatalf("lifecycle and rendering failed: %v\n%s", err, out)
+			}
+			if got, want := strings.TrimSpace(string(out)), fmt.Sprintf("%t/%t", tc.smart, tc.pct); got != want {
+				t.Errorf("local SMART/PCT grants = %q; want %q", got, want)
+			}
+			replacement, err := os.ReadFile(unit)
+			if err != nil {
+				t.Fatal(err)
+			}
+			start := regexp.MustCompile(`(?m)^ExecStart=.*$`).FindString(string(replacement))
+			wantFlag, forbiddenFlag := " --enable-proxmox ", " --enable-proxmox=false "
+			if tc.wantMode == "off" {
+				wantFlag, forbiddenFlag = forbiddenFlag, wantFlag
+			}
+			if !strings.Contains(start, wantFlag) || strings.Contains(start, forbiddenFlag) {
+				t.Errorf("replacement should have Proxmox setup %s: %s", tc.wantMode, start)
+			}
+			if (tc.wantType == "" && strings.Contains(start, " --proxmox-type ")) || (tc.wantType != "" && !strings.Contains(start, " --proxmox-type "+tc.wantType+" ")) {
+				t.Errorf("wrong saved/overridden type (want %q): %s", tc.wantType, start)
+			}
+			if !strings.Contains(start, " --url https://pulse.example.invalid ") || !strings.Contains(start, " --agent-id selected-agent ") ||
+				!strings.Contains(start, " --token-file "+strings.ReplaceAll(token, " ", "\\ ")+" ") || strings.Contains(start, fixtureToken) {
+				t.Errorf("replacement lost selected endpoint, ID or protected token reference: %s", start)
+			}
+			interval := "30s"
+			if tc.defaultDir || tc.partial {
+				interval = "75s" // the ordinary connection reader ran
+			}
+			if !strings.Contains(start, " --interval "+interval+" ") {
+				t.Errorf("unexpected change to ordinary connection recovery (want interval %s): %s", interval, start)
+			}
+			if tc.smart || tc.pct {
+				if !strings.Contains(string(replacement), "\nUser=pulse-agent\n") || strings.Contains(start, " --enable-commands ") {
+					t.Errorf("replacement changed the existing collector service user or command scope: %s", replacement)
+				}
+			}
+			if data, err := os.ReadFile(token); err != nil || string(data) != fixtureToken {
+				t.Error("replacement did not keep the saved token bytes")
+			}
+			if _, err := os.Stat(filepath.Join(root, "detection")); (tc.fresh && err != nil) || (!tc.fresh && !os.IsNotExist(err)) {
+				t.Errorf("unexpected platform detection (fresh %t, stat %v)", tc.fresh, err)
+			}
+			if _, err := os.Stat(marker); (tc.wantMode == "off" && err != nil) || (tc.wantMode == "on" && !os.IsNotExist(err)) {
+				t.Errorf("unexpected change to registration state (mode %s, stat %v)", tc.wantMode, err)
+			}
+		})
+	}
+}
+
 func TestInstallSHExplainsCommandExecutionForProxmoxLXCDockerInventory(t *testing.T) {
 	content, err := os.ReadFile(repoFile("scripts", "install.sh"))
 	if err != nil {
