@@ -103,8 +103,9 @@ func (m *Monitor) collectGuestsFromClusterResources(
 	prevVMByID map[string]models.VM,
 	vmIDToHostAgent map[string]models.Host,
 ) ([]models.VM, []models.Container) {
-	// Size each partition to its own guest kind, not the whole inventory.
-	// The entries hold full cluster resource records.
+	// Partition the read-only inventory by index. The workers join before
+	// returning, so they can use the original rows instead of copying them
+	// into another inventory-sized allocation.
 	vmCount, containerCount := 0, 0
 	for i := range resources {
 		switch resources[i].Type {
@@ -114,12 +115,11 @@ func (m *Monitor) collectGuestsFromClusterResources(
 			containerCount++
 		}
 	}
-	vmResources := make([]indexedClusterResource, 0, vmCount)
-	containerResources := make([]indexedClusterResource, 0, containerCount)
+	vmResources := clusterGuestInventory{rows: resources, indices: make([]int, 0, vmCount)}
+	containerResources := clusterGuestInventory{rows: resources, indices: make([]int, 0, containerCount)}
 
-	for _, res := range resources {
-		// Generate canonical guest ID: instance:node:vmid
-		guestID := makeGuestID(instanceName, res.Node, res.VMID)
+	for i := range resources {
+		res := &resources[i]
 
 		// Debug log the resource type
 		log.Debug().
@@ -131,15 +131,9 @@ func (m *Monitor) collectGuestsFromClusterResources(
 
 		switch res.Type {
 		case "qemu":
-			vmResources = append(vmResources, indexedClusterResource{
-				resource: res,
-				guestID:  guestID,
-			})
+			vmResources.indices = append(vmResources.indices, i)
 		case "lxc":
-			containerResources = append(containerResources, indexedClusterResource{
-				resource: res,
-				guestID:  guestID,
-			})
+			containerResources.indices = append(containerResources.indices, i)
 		}
 	}
 
@@ -148,14 +142,14 @@ func (m *Monitor) collectGuestsFromClusterResources(
 	// on a large mixed cluster and permanently starve the other type.
 	allVMs, allContainers := []models.VM{}, []models.Container{}
 	var collectionWG sync.WaitGroup
-	if len(containerResources) > 0 {
+	if containerResources.size() > 0 {
 		collectionWG.Add(1)
 		go func() {
 			defer collectionWG.Done()
 			allContainers = m.collectClusterContainerResources(ctx, instanceName, containerResources, client, prevContainerIsOCI, prevContainerByID, vmIDToHostAgent)
 		}()
 	}
-	if len(vmResources) > 0 {
+	if vmResources.size() > 0 {
 		collectionWG.Add(1)
 		go func() {
 			defer collectionWG.Done()
@@ -167,10 +161,25 @@ func (m *Monitor) collectGuestsFromClusterResources(
 	return allVMs, allContainers
 }
 
-// The entry's index in its partition is its position in inventory order.
-type indexedClusterResource struct {
-	resource proxmox.ClusterResource
-	guestID  string
+// A partition's positions follow provider order. A nil index selects the
+// entire contiguous inventory, used by the single-kind node fallback.
+type clusterGuestInventory struct {
+	rows    []proxmox.ClusterResource
+	indices []int
+}
+
+func (inv clusterGuestInventory) size() int {
+	if inv.indices != nil {
+		return len(inv.indices)
+	}
+	return len(inv.rows)
+}
+
+func (inv clusterGuestInventory) row(position int) proxmox.ClusterResource {
+	if inv.indices != nil {
+		position = inv.indices[position]
+	}
+	return inv.rows[position]
 }
 
 func rotatingResourceOffset(total int) int {
@@ -250,32 +259,34 @@ func preserveContainerOptionalEnrichment(current models.Container, previous *mod
 func (m *Monitor) collectClusterContainerResources(
 	ctx context.Context,
 	instanceName string,
-	resources []indexedClusterResource,
+	resources clusterGuestInventory,
 	client PVEClientInterface,
 	prevContainerIsOCI map[int]bool,
 	prevContainerByID map[string]models.Container,
 	vmIDToHostAgent map[string]models.Host,
 ) []models.Container {
-	orderedContainers := make([]models.Container, len(resources))
-	orderedOK := make([]bool, len(resources))
-	offset := rotatingResourceOffset(len(resources))
+	count := resources.size()
+	orderedContainers := make([]models.Container, count)
+	orderedOK := make([]bool, count)
+	offset := rotatingResourceOffset(count)
 
-	for i := range resources {
-		index := (offset + i) % len(resources)
-		entry := &resources[index]
+	for i := range count {
+		index := (offset + i) % count
+		res := resources.row(index)
+		guestID := makeGuestID(instanceName, res.Node, res.VMID)
 		var container models.Container
 		var ok bool
 		ran := m.runGuestAgentVMWork(ctx, func(workCtx context.Context) {
-			container, ok = m.handleClusterContainerResource(workCtx, instanceName, entry.resource, entry.guestID, client, prevContainerIsOCI, vmIDToHostAgent)
+			container, ok = m.handleClusterContainerResource(workCtx, instanceName, res, guestID, client, prevContainerIsOCI, vmIDToHostAgent)
 		})
 		if !ran {
 			// The enrichment budget is exhausted, but cluster/resources is still
 			// authoritative inventory. A canceled context makes remote detail
 			// calls fail immediately while the builder retains the base row.
-			container, ok = m.handleClusterContainerResource(ctx, instanceName, entry.resource, entry.guestID, client, prevContainerIsOCI, vmIDToHostAgent)
+			container, ok = m.handleClusterContainerResource(ctx, instanceName, res, guestID, client, prevContainerIsOCI, vmIDToHostAgent)
 		}
 		if ctx.Err() != nil {
-			previous := prevContainerByID[entry.guestID]
+			previous := prevContainerByID[guestID]
 			container = preserveContainerOptionalEnrichment(container, &previous)
 		}
 		if ok {
@@ -290,33 +301,35 @@ func (m *Monitor) collectClusterContainerResources(
 func (m *Monitor) collectClusterVMResources(
 	ctx context.Context,
 	instanceName string,
-	resources []indexedClusterResource,
+	resources clusterGuestInventory,
 	client PVEClientInterface,
 	prevVMByID map[string]models.VM,
 	vmIDToHostAgent map[string]models.Host,
 ) []models.VM {
-	workerCount := m.efficientQEMUWorkerCount(len(resources))
+	count := resources.size()
+	workerCount := m.efficientQEMUWorkerCount(count)
 	if workerCount == 0 {
 		return []models.VM{}
 	}
 	// Queue only indexes, bounded by the worker count. Each index is sent
 	// exactly once; its worker owns that output slot until the wait completes.
 	jobCh := make(chan int, workerCount)
-	orderedVMs := make([]models.VM, len(resources))
-	orderedOK := make([]bool, len(resources))
+	orderedVMs := make([]models.VM, count)
+	orderedOK := make([]bool, count)
 	var wg sync.WaitGroup
 	for range workerCount {
 		wg.Go(func() {
 			for index := range jobCh {
-				entry := &resources[index]
+				res := resources.row(index)
+				guestID := makeGuestID(instanceName, res.Node, res.VMID)
 				var previous *models.VM
-				if prev, ok := prevVMByID[entry.guestID]; ok {
+				if prev, ok := prevVMByID[guestID]; ok {
 					previous = &prev
 				}
 				var vm models.VM
 				var ok bool
 				build := func(workCtx context.Context) {
-					vm, ok = m.handleClusterVMResource(workCtx, instanceName, entry.resource, entry.guestID, client, previous, vmIDToHostAgent)
+					vm, ok = m.handleClusterVMResource(workCtx, instanceName, res, guestID, client, previous, vmIDToHostAgent)
 				}
 				if !m.runGuestAgentVMWork(ctx, build) {
 					// Do not turn an exhausted detail budget into missing inventory.
@@ -336,11 +349,11 @@ func (m *Monitor) collectClusterVMResources(
 		})
 	}
 
-	offset := rotatingResourceOffset(len(resources))
+	offset := rotatingResourceOffset(count)
 	// Drain the entire inventory even after the enrichment deadline, so the
 	// canceled-context builders still get to publish every accepted base row.
-	for i := range resources {
-		jobCh <- (offset + i) % len(resources)
+	for i := range count {
+		jobCh <- (offset + i) % count
 	}
 	close(jobCh)
 	wg.Wait()
@@ -378,8 +391,10 @@ func (m *Monitor) handleClusterVMResource(
 		return models.VM{}, false
 	}
 
+	// Staged effects only need these coordinates from the source row.
+	node, vmid := res.Node, res.VMID
 	stagePVEGuestEffect(ctx, func() {
-		m.recordGuestSnapshot(instanceName, vm.Type, res.Node, res.VMID, GuestMemorySnapshot{
+		m.recordGuestSnapshot(instanceName, vm.Type, node, vmid, GuestMemorySnapshot{
 			Name:           vm.Name,
 			Status:         vm.Status,
 			RetrievedAt:    sampleTime,
@@ -410,8 +425,9 @@ func (m *Monitor) handleClusterContainerResource(
 		return models.Container{}, false
 	}
 
+	node, vmid := res.Node, res.VMID
 	stagePVEGuestEffect(ctx, func() {
-		m.recordGuestSnapshot(instanceName, container.Type, res.Node, res.VMID, GuestMemorySnapshot{
+		m.recordGuestSnapshot(instanceName, container.Type, node, vmid, GuestMemorySnapshot{
 			Name:           container.Name,
 			Status:         container.Status,
 			RetrievedAt:    sampleTime,

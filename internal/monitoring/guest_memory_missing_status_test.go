@@ -174,7 +174,7 @@ func pollQEMUWithIndependentMemory(t *testing.T, collector, status, agentCase st
 				client, prev.vmsByID, prev.hostAgentsByVMID)
 		} else {
 			vms = mon.collectClusterVMResources(context.Background(), missingStatusSite,
-				[]indexedClusterResource{{resource: listing, guestID: id}}, client, prev.vmsByID, prev.hostAgentsByVMID)
+				clusterGuestInventory{rows: []proxmox.ClusterResource{listing}}, client, prev.vmsByID, prev.hostAgentsByVMID)
 		}
 		if len(vms) != 1 {
 			t.Fatalf("collector lost the VM: %v", vms)

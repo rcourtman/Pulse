@@ -158,7 +158,7 @@ func replicationSafetyMonitoringJourney(t *testing.T, clientKind, collector stri
 		cycleStart := time.Now()
 		var vms []models.VM
 		if collector == "cluster" {
-			vms = m.collectClusterVMResources(context.Background(), instance, []indexedClusterResource{{resource: res, guestID: id}}, client, previous, nil)
+			vms = m.collectClusterVMResources(context.Background(), instance, clusterGuestInventory{rows: []proxmox.ClusterResource{res}}, client, previous, nil)
 		} else {
 			vms, _ = m.pollNodeVMsWithClusterResourceBuilder(context.Background(), instance, "node", []proxmox.VM{{VMID: 105, Name: res.Name, Status: res.Status, CPU: res.CPU, CPUs: res.MaxCPU, MaxMem: res.MaxMem, Mem: res.Mem, MaxDisk: res.MaxDisk, Uptime: 3600}}, client, previous, nil)
 		}

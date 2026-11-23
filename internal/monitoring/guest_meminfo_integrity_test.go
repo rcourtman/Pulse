@@ -121,7 +121,7 @@ func TestGuestMeminfoIntegrityPollingContract(t *testing.T) {
 						res := proxmox.ClusterResource{Type: "qemu", Node: "node", Name: "cache-aware-guest", VMID: 105, Status: "running", MaxMem: 8 * gib, Mem: 4 * gib, MaxDisk: gib, CPU: .1}
 						var vms []models.VM
 						if collector == "cluster" {
-							vms = m.collectClusterVMResources(ctx, "meminfo-integrity", []indexedClusterResource{{resource: res, guestID: id}}, client, previous, nil)
+							vms = m.collectClusterVMResources(ctx, "meminfo-integrity", clusterGuestInventory{rows: []proxmox.ClusterResource{res}}, client, previous, nil)
 						} else {
 							vms, _ = m.pollNodeVMsWithClusterResourceBuilder(ctx, "meminfo-integrity", "node", []proxmox.VM{{VMID: 105, Name: res.Name, Status: "running", MaxMem: res.MaxMem, Mem: res.Mem, MaxDisk: gib, CPU: .1}}, client, previous, nil)
 						}
