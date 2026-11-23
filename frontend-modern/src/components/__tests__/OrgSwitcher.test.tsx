@@ -39,6 +39,36 @@ describe('OrgSwitcher', () => {
     expect(screen.queryByLabelText('Organization')).toBeNull();
   });
 
+  it('shows the full current workspace name outside the list of native options', () => {
+    const west = 'Regional infrastructure operations West';
+    const east = 'Regional infrastructure operations East';
+    const [selected, setSelected] = createSignal('west');
+    const onChange = vi.fn((id: string) => setSelected(id));
+    render(() => (
+      <OrgSwitcher
+        orgs={[
+          { id: 'west', displayName: west },
+          { id: 'east', displayName: east },
+        ]}
+        selectedOrgId={selected()}
+        onChange={onChange}
+      />
+    ));
+
+    const select = screen.getByRole('combobox', { name: 'Organization' });
+    expect(screen.getByRole('option', { name: west })).toHaveValue('west');
+    expect(screen.getByRole('option', { name: east })).toHaveValue('east');
+    expect(screen.getByText(west, { selector: 'bdi' })).toBeVisible();
+    expect(screen.queryByText(east, { selector: 'bdi' })).not.toBeInTheDocument();
+    expect(select).not.toHaveAccessibleDescription();
+
+    fireEvent.change(select, { target: { value: 'east' } });
+    expect(onChange).toHaveBeenCalledExactlyOnceWith('east');
+    expect(select).toHaveValue('east');
+    expect(screen.getByText(east, { selector: 'bdi' })).toBeVisible();
+    expect(screen.queryByText(west, { selector: 'bdi' })).not.toBeInTheDocument();
+  });
+
   it('disambiguates same-named choices and describes the exact selected organization', () => {
     const [selected, setSelected] = createSignal('west');
     const onChange = vi.fn((id: string) => setSelected(id));

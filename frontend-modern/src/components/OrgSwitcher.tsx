@@ -1,4 +1,5 @@
 import { For, Show, createMemo } from 'solid-js';
+import ChevronDownIcon from 'lucide-solid/icons/chevron-down';
 import type { Organization } from '@/api/orgs';
 import type { OrganizationListIssue } from '@/useAppRuntimeState';
 import { FormSelect } from '@/components/shared/FormSelect';
@@ -25,9 +26,6 @@ export function OrgSwitcher(props: OrgSwitcherProps) {
     }
     return counts;
   });
-  const hasAmbiguousNames = createMemo(() =>
-    Array.from(nameCounts().values()).some((count) => count > 1),
-  );
   const needsIdentity = (org: Organization) => (nameCounts().get(nameKey(org)) ?? 0) > 1;
   const selectedOrg = createMemo(() => props.orgs.find((org) => org.id === props.selectedOrgId));
   const selectedNeedsIdentity = createMemo(() => {
@@ -69,21 +67,31 @@ export function OrgSwitcher(props: OrgSwitcherProps) {
               </span>
             }
           >
+            {/* The native control still sizes the field and owns input.
+                Only its closed display is replaced so it can wrap. */}
             <FormSelect
               id="org-switcher-select"
-              label="Organization"
-              labelClass="sr-only"
-              fieldBaseClass={hasAmbiguousNames() ? 'min-w-0 max-w-44 overflow-clip' : 'contents'}
-              selectClass={hasAmbiguousNames() ? 'focus:ring-inset' : undefined}
-              selectBaseClass="h-7 max-w-44 rounded-md border border-border bg-surface px-2 text-xs text-base-content shadow-xs transition-colors focus:border-blue-500 focus:outline-hidden focus:ring-1 focus:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-60"
+              label={
+                <span
+                  aria-hidden="true"
+                  class="flex min-w-0 flex-1 items-center justify-between gap-1.5 text-xs font-normal"
+                >
+                  <bdi class="min-w-0 [overflow-wrap:anywhere]">{selectedOrgName()}</bdi>
+                  <ChevronDownIcon class="h-3.5 w-3.5 shrink-0 text-muted" />
+                </span>
+              }
+              fieldBaseClass="group/org-picker grid min-w-0 max-w-44 grid-cols-[minmax(0,1fr)]"
+              labelClass={`col-start-1 row-start-1 flex min-h-7 min-w-0 items-center rounded-md border border-border bg-surface px-2 py-1 shadow-xs group-focus-within/org-picker:outline-2 group-focus-within/org-picker:-outline-offset-2 group-focus-within/org-picker:outline-blue-500 ${props.loading ? 'opacity-60' : ''}`}
+              selectBaseClass="z-10 col-start-1 row-start-1 h-full w-full min-w-0 cursor-pointer text-xs opacity-0 disabled:cursor-not-allowed"
               help={
                 selectedNeedsIdentity() ? (
                   <>
-                    Organization ID: <bdi>{props.selectedOrgId}</bdi>
+                    Organization ID:{' '}
+                    <bdi class="inline-block max-w-full align-top">{props.selectedOrgId}</bdi>
                   </>
                 ) : undefined
               }
-              helpClass="mt-1 max-w-44 text-xs leading-4 [overflow-wrap:anywhere]"
+              helpClass="col-start-1 row-start-2 mt-1 leading-4 [overflow-wrap:anywhere]"
               aria-label="Organization"
               value={props.selectedOrgId}
               disabled={Boolean(props.loading)}
