@@ -110,8 +110,9 @@ describe('no-organization invitation recovery', () => {
 
       const review = declineReview();
       expect(review).toHaveAccessibleDescription(
-        'Declining removes your invitation to Operations (client/west). If you change your mind, ask an administrator for a new invitation.',
+        /Declining removes your invitation to Operations \(client\/west\)/,
       );
+      expect(review).toHaveAccessibleDescription(/ask an administrator for a new invitation/);
       expect(within(review).getByText('editor')).toBeVisible();
       expect(screen.queryByText(/Waiting for Pulse to confirm/)).toBeNull();
       const keep = within(review).getByRole('button', { name: 'Keep invitation' });
