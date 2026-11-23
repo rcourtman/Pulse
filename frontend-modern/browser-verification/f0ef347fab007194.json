@@ -1,0 +1,56 @@
+{
+  "version": 1,
+  "base_sha": "c9de2556e9ed3f4b4b7bde2afb2ee1ea9d99f184",
+  "verified_at": "2026-11-17T21:31:13Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Workloads/rowMetricHistoryQueue.ts",
+    "frontend-modern/src/components/Workloads/useWorkloadTableMetricHistory.ts",
+    "frontend-modern/src/features/docker/DockerContainersTable.tsx",
+    "frontend-modern/src/features/docker/DockerHostsTable.tsx",
+    "frontend-modern/src/features/docker/DockerPageSurface.tsx",
+    "frontend-modern/src/features/docker/dockerRowHistoryLens.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Workloads/rowMetricHistoryQueue.ts": "fd09b9ddcb02a43f4818d1a674797b3f22d4f635b8398208c97596bc5ccb7e99",
+    "frontend-modern/src/components/Workloads/useWorkloadTableMetricHistory.ts": "ab7ac1129c6361eab77f5eee6f3f4de96a76e8b1f78b2cf701476f570e8cb3fa",
+    "frontend-modern/src/features/docker/DockerContainersTable.tsx": "41bfcdd7dcaf6d6d3a25326c82fec691627b7ebd8d3ff194b32320f7f6ebf138",
+    "frontend-modern/src/features/docker/DockerHostsTable.tsx": "5be8bf1095bfb6ca40670d3c8e5e3f81621f652a93fa2b33f577368ee7b47051",
+    "frontend-modern/src/features/docker/DockerPageSurface.tsx": "b7a47d3e118bc02656273a277996efe44863b1412c301070bc6d4b270f79d24b",
+    "frontend-modern/src/features/docker/dockerRowHistoryLens.tsx": "31683175b35cf942d367a30b0e04afe49a99683492ac21ddddc1e19cb629f2b7"
+  },
+  "routes": [
+    "/docker (Overview tab): the Docker hosts table and the containers table, served by a mock-mode backend built from this change with the frontend embedded, on a private port on pulse-dev."
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 768,
+      "height": 1000
+    }
+  ],
+  "states": [
+    "Mock estate: 7 Docker hosts and 75 containers, grouped by host, Row hover History, range 1h.",
+    "Hovering host App Platform 01: CPU, memory, disk and temperature sparklines with current values (27.6%, 76.6%, 46.7%, 42.8\u00b0C); the row stays 33px.",
+    "Hovering container loki: CPU and memory sparklines (4.2%, 76.2%) matching its bars (4.2%, 76%) read a moment earlier; the host row's lens cleared when the pointer left it.",
+    "The first host hover read that host's history and its next four neighbours (resourceType=docker-host, maxPoints=36); nothing was read before the first hover.",
+    "View popover: Layout, Row hover (Details/History), History range and Inventory totals.",
+    "Row hover Details: hovering a host row kept its bars and the choice was saved.",
+    "768px: Temp is hidden on the host table; host lens shows CPU, memory and disk at 107px, container lens CPU 32px and memory 53px; rows stay 33px."
+  ],
+  "interactions": [
+    "Hovered host and container rows and read each sparkline's accessible label from the DOM.",
+    "Opened View, switched Row hover to Details, closed it and hovered a host row.",
+    "Listed the metrics-history requests the first hover made.",
+    "Resized to 768px, reloaded and hovered one row in each table."
+  ],
+  "limits": [
+    "Mock values move every few seconds and are mostly flat, so no real spike shape was seen.",
+    "Phones have no hover, so the lens and its View settings are absent below 768px; not checked.",
+    "Swarm tab hosts table has no lens and was not re-checked.",
+    "Dark theme only."
+  ]
+}
