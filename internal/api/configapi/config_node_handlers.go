@@ -6,9 +6,11 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"net"
 	"net/http"
 	"net/url"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -1489,6 +1491,31 @@ func (h *ConfigHandlers) handleUpdateNode(w http.ResponseWriter, r *http.Request
 	}
 	req.normalizeTokenAliases()
 
+	ctx := r.Context()
+	persistence := h.getPersistence(ctx)
+	if persistence == nil {
+		http.Error(w, "Failed to save configuration", http.StatusInternalServerError)
+		return
+	}
+	release, err := h.acquireNodeEdit(ctx, persistence.DataDir())
+	if err != nil {
+		return
+	}
+	defer release()
+	if ctx.Err() != nil {
+		return
+	}
+	if mock.IsMockEnabled() {
+		http.Error(w, "Cannot modify nodes in mock mode", http.StatusForbidden)
+		return
+	}
+	currentPersistence := h.getPersistence(ctx)
+	if currentPersistence == nil || currentPersistence.DataDir() != persistence.DataDir() {
+		http.Error(w, "Failed to save configuration", http.StatusInternalServerError)
+		return
+	}
+	persistence = currentPersistence
+
 	// Debug: Log the received temperatureMonitoringEnabled value
 	log.Info().
 		Str("nodeID", nodeID).
@@ -1756,7 +1783,7 @@ func (h *ConfigHandlers) handleUpdateNode(w http.ResponseWriter, r *http.Request
 	if pendingPMG != nil {
 		pmgToSave = pendingPMG
 	}
-	if err := h.getPersistence(r.Context()).SaveNodesConfig(pveToSave, h.getConfig(r.Context()).PBSInstances, pmgToSave); err != nil {
+	if err := persistence.SaveNodesConfig(pveToSave, h.getConfig(ctx).PBSInstances, pmgToSave); err != nil {
 		log.Error().Err(err).Msg("Failed to save nodes configuration")
 		http.Error(w, "Failed to save configuration", http.StatusInternalServerError)
 		return
@@ -2116,15 +2143,31 @@ func (h *ConfigHandlers) handleRefreshClusterNodes(w http.ResponseWriter, r *htt
 		return
 	}
 
-	// Discovery is read-only. Stage normalization on copies so neither a
-	// cancelled request nor a failed save changes the live inventory.
-	if h.getConfig(ctx) != cfg {
+	// Discovery is read-only. Do not stage a whole-file save until we have the
+	// same-config write turn and can read changes the previous writer applied.
+	release, err := h.acquireNodeEdit(ctx, persistence.DataDir())
+	if err != nil {
+		return
+	}
+	defer release()
+	if ctx.Err() != nil {
+		return
+	}
+	if mock.IsMockEnabled() {
+		http.Error(w, "Cannot refresh cluster in mock mode", http.StatusForbidden)
+		return
+	}
+
+	currentConfig, currentPersistence, _ := h.getContextState(ctx)
+	if currentConfig == nil || currentPersistence == nil || currentPersistence.DataDir() != persistence.DataDir() {
 		http.Error(w, "Failed to save configuration", http.StatusInternalServerError)
 		return
 	}
+	cfg, persistence = currentConfig, currentPersistence
 	config.Mu.RLock()
-	if index >= len(cfg.PVEInstances) || cfg.PVEInstances[index].Name != original.Name ||
-		config.CreateProxmoxConfig(&cfg.PVEInstances[index]) != clientConfig {
+	nodeType, index, err = resolveNodeID(cfg, nodeID)
+	if err != nil || nodeType != "pve" || index < 0 || index >= len(cfg.PVEInstances) ||
+		!sameClusterDiscoveryInput(&cfg.PVEInstances[index], original, clientConfig) {
 		config.Mu.RUnlock()
 		http.Error(w, "Failed to save configuration", http.StatusInternalServerError)
 		return
@@ -2206,6 +2249,20 @@ func (h *ConfigHandlers) handleRefreshClusterNodes(w http.ResponseWriter, r *htt
 		"nodesAdded":   newEndpointCount - oldEndpointCount,
 		"clusterNodes": toClusterEndpointResponses(pve.ClusterEndpoints, pve.ClusterNodeIdentities),
 	})
+}
+
+func sameClusterDiscoveryInput(current *config.PVEInstance, original config.PVEInstance, clientConfig proxmox.ClientConfig) bool {
+	return current.Name == original.Name && current.IsCluster == original.IsCluster && current.ClusterName == original.ClusterName &&
+		config.CreateProxmoxConfig(current) == clientConfig &&
+		maps.Equal(current.TLSFingerprintOverrides, original.TLSFingerprintOverrides) &&
+		slices.EqualFunc(current.ClusterEndpoints, original.ClusterEndpoints, func(a, b config.ClusterEndpoint) bool {
+			// Ordinary polling may update reachability while discovery is
+			// running. Only membership, saved destinations and trust matter
+			// to reusing the result. Merge it into the current inventory.
+			return a.NodeID == b.NodeID && a.NodeIdentity == b.NodeIdentity && a.NativeNodeID == b.NativeNodeID &&
+				a.NodeName == b.NodeName && a.Host == b.Host && a.IP == b.IP && a.IPOverride == b.IPOverride &&
+				a.GuestURL == b.GuestURL && a.Fingerprint == b.Fingerprint
+		})
 }
 
 // HandleTestNodeConfig tests a node connection from provided configuration

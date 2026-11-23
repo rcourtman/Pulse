@@ -3,6 +3,7 @@ package configapi
 import (
 	"context"
 	"crypto/sha256"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -10,8 +11,10 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"sync/atomic"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
@@ -181,6 +184,131 @@ func TestClusterRefreshSaveBoundary(t *testing.T) {
 					t.Fatalf("a cancelled result changed the connection or triggered a reload: %v", err)
 				}
 			}
+		})
+	}
+}
+
+func TestClusterRefreshOrdersSameConfigSavesAndApplies(t *testing.T) {
+	for _, next := range []string{"refresh", "edit", "cancelled refresh"} {
+		t.Run(next, func(t *testing.T) {
+			synctest.Test(t, func(t *testing.T) {
+				cfg := refreshTestConfig(t, "https://one.example.test:8006", "")
+				cfg.PVEInstances = append(cfg.PVEInstances, config.PVEInstance{
+					Name: "other-connection", Host: "https://two.example.test:8006", IsCluster: true, ClusterName: "other-old",
+					ClusterEndpoints: []config.ClusterEndpoint{{NodeName: "delta", NativeNodeID: 1, Host: "https://delta.example.test:8006"}},
+				})
+				persistence := config.NewConfigPersistence(cfg.DataPath)
+				if err := persistence.SaveNodesConfig(cfg.PVEInstances, nil, nil); err != nil {
+					t.Fatal(err)
+				}
+				initial, err := persistence.LoadNodesConfig()
+				if err != nil {
+					t.Fatal(err)
+				}
+				cfg.PVEInstances = initial.PVEInstances
+				initialOther := cfg.PVEInstances[1].DeepCopy()
+
+				restore := ConfigureAutoRegisterNetworkDependencies(func(_ proxmox.ClientConfig, name string, endpoints []config.ClusterEndpoint) (bool, string, []config.ClusterEndpoint) {
+					return true, name + "-new", endpoints
+				}, nil)
+				defer restore()
+
+				firstRead, applyFirst := make(chan struct{}), make(chan struct{})
+				var reloads atomic.Int32
+				h := &ConfigHandlers{defaultConfig: cfg, defaultPersistence: persistence, reloadFunc: func() error {
+					// Model the reload boundary: read the saved config, then
+					// publish it after the previous monitor finishes stopping.
+					first := reloads.Add(1) == 1
+					saved, err := persistence.LoadNodesConfig()
+					if first {
+						close(firstRead)
+						<-applyFirst
+					}
+					if err != nil {
+						return err
+					}
+					config.Mu.Lock()
+					cfg.PVEInstances = saved.PVEInstances
+					config.Mu.Unlock()
+					return nil
+				}}
+				run := func(req *http.Request, handle http.HandlerFunc) <-chan *httptest.ResponseRecorder {
+					done := make(chan *httptest.ResponseRecorder, 1)
+					go func() {
+						rec := httptest.NewRecorder()
+						handle(rec, req)
+						done <- rec
+					}()
+					return done
+				}
+				first := run(httptest.NewRequest(http.MethodPost, refreshPath, nil), h.HandleRefreshClusterNodes)
+				<-firstRead
+
+				ctx, cancel := context.WithCancel(context.Background())
+				defer cancel()
+				var second <-chan *httptest.ResponseRecorder
+				const otherPath = "/api/config/nodes/pve:other-connection"
+				if next == "edit" {
+					second = run(httptest.NewRequest(http.MethodPut, otherPath,
+						strings.NewReader(`{"guestURL":"https://console.example.test"}`)), h.HandleUpdateNode)
+				} else {
+					second = run(httptest.NewRequestWithContext(ctx, http.MethodPost, otherPath+"/refresh-cluster", nil), h.HandleRefreshClusterNodes)
+				}
+				// Both requests have run to completion or reached a blocking
+				// boundary while the first apply still holds its old read.
+				synctest.Wait()
+				waiting := reloads.Load() == 1
+				if next == "cancelled refresh" {
+					cancel()
+					synctest.Wait()
+					select {
+					case <-second:
+					default:
+						t.Error("cancelled request did not return while the older apply was still held")
+					}
+				}
+				close(applyFirst)
+				if rec := <-first; rec.Code != http.StatusOK {
+					t.Fatalf("first refresh: %d %q", rec.Code, rec.Body)
+				}
+				if next != "cancelled refresh" {
+					if rec := <-second; rec.Code != http.StatusOK {
+						t.Fatalf("second %s: %d %q", next, rec.Code, rec.Body)
+					}
+				}
+
+				wantOtherName, wantOtherURL, wantReloads := initialOther.ClusterName, initialOther.GuestURL, int32(2)
+				switch next {
+				case "refresh":
+					wantOtherName = "other-connection-new"
+				case "edit":
+					wantOtherURL = "https://console.example.test"
+				case "cancelled refresh":
+					wantReloads = 1
+				}
+				saved, err := persistence.LoadNodesConfig()
+				if err != nil || len(saved.PVEInstances) != 2 {
+					t.Fatalf("load two saved connections: %v", err)
+				}
+				if saved.PVEInstances[0].ClusterName != "fixture-pve-new" ||
+					saved.PVEInstances[1].ClusterName != wantOtherName || saved.PVEInstances[1].GuestURL != wantOtherURL {
+					t.Errorf("saved inventory did not preserve both outcomes: first cluster=%q, second cluster=%q, second URL=%q",
+						saved.PVEInstances[0].ClusterName, saved.PVEInstances[1].ClusterName, saved.PVEInstances[1].GuestURL)
+				}
+				rec := httptest.NewRecorder()
+				h.HandleGetNodes(rec, httptest.NewRequest(http.MethodGet, "/api/config/nodes", nil))
+				var live []NodeResponse
+				if err := json.Unmarshal(rec.Body.Bytes(), &live); rec.Code != http.StatusOK || err != nil || len(live) != 2 {
+					t.Fatalf("read back two live connections: status=%d, decode=%v", rec.Code, err)
+				}
+				if live[0].ClusterName != "fixture-pve-new" || live[1].ClusterName != wantOtherName || live[1].GuestURL != wantOtherURL {
+					t.Errorf("an older apply erased the live outcome: first cluster=%q, second cluster=%q, second URL=%q",
+						live[0].ClusterName, live[1].ClusterName, live[1].GuestURL)
+				}
+				if !waiting || reloads.Load() != wantReloads {
+					t.Errorf("second request must wait until the first apply returns: waited=%v, reloads=%d, want %d", waiting, reloads.Load(), wantReloads)
+				}
+			})
 		})
 	}
 }

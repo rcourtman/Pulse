@@ -229,6 +229,8 @@ type ConfigHandlers struct {
 	codeMutex                sync.RWMutex                      // Mutex for thread-safe code access
 	clusterDetectMutex       sync.Mutex
 	lastClusterDetection     map[string]time.Time
+	nodeEditMu               sync.Mutex
+	nodeEdits                map[string]*nodeEditGate
 	recentAutoRegistered     map[string]time.Time
 	recentAutoRegMutex       sync.Mutex
 	autoRegisterMutex        sync.Mutex
