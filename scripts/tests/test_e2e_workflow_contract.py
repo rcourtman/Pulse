@@ -32,6 +32,25 @@ class E2EWorkflowContractTest(unittest.TestCase):
         self.assertNotIn("needs.probation", verdict)
         self.assertNotIn("steps.probation", verdict)
 
+    def test_unit_tests_and_mirrored_docs_do_not_trigger_e2e(self) -> None:
+        import yaml
+
+        config = yaml.safe_load(WORKFLOW.read_text())
+        for event in ("pull_request", "push"):
+            paths = config[True][event]["paths"]
+            self.assertIn("frontend-modern/**", paths)
+            self.assertIn("internal/**", paths)
+            for excluded in (
+                "!frontend-modern/public/docs/**",
+                "!frontend-modern/src/**/__tests__/**",
+                "!frontend-modern/src/**/*.test.*",
+                "!frontend-modern/src/**/*.spec.*",
+                "!internal/**/*_test.go",
+            ):
+                self.assertIn(excluded, paths, f"{event} paths missing {excluded}")
+            self.assertLess(paths.index("frontend-modern/**"), paths.index("!frontend-modern/public/docs/**"))
+            self.assertLess(paths.index("internal/**"), paths.index("!internal/**/*_test.go"))
+
 
 if __name__ == "__main__":
     unittest.main()

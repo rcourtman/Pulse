@@ -8,10 +8,10 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
-      day: "tuesday"
+      day: "monday"
       time: "04:00"
       timezone: "Europe/London"
-    open-pull-requests-limit: 3
+    open-pull-requests-limit: 2
     labels:
       - "dependencies"
       - "github_actions"
@@ -46,9 +46,9 @@ updates:
     schedule:
       interval: "weekly"
       day: "tuesday"
-      time: "04:10"
+      time: "04:00"
       timezone: "Europe/London"
-    open-pull-requests-limit: 3
+    open-pull-requests-limit: 2
     labels:
       - "dependencies"
     groups:
@@ -86,10 +86,10 @@ updates:
       - "/tests/integration"
     schedule:
       interval: "weekly"
-      day: "tuesday"
-      time: "04:20"
+      day: "wednesday"
+      time: "04:00"
       timezone: "Europe/London"
-    open-pull-requests-limit: 3
+    open-pull-requests-limit: 2
     labels:
       - "dependencies"
       - "javascript"
@@ -179,10 +179,10 @@ updates:
       - "/tests/integration/mock-github-server"
     schedule:
       interval: "weekly"
-      day: "tuesday"
-      time: "04:30"
+      day: "thursday"
+      time: "04:00"
       timezone: "Europe/London"
-    open-pull-requests-limit: 3
+    open-pull-requests-limit: 2
     labels:
       - "dependencies"
     groups:
@@ -211,10 +211,10 @@ updates:
     directory: "/tests/integration"
     schedule:
       interval: "weekly"
-      day: "tuesday"
-      time: "04:40"
+      day: "friday"
+      time: "04:00"
       timezone: "Europe/London"
-    open-pull-requests-limit: 3
+    open-pull-requests-limit: 2
     labels:
       - "dependencies"
     # Keep the governed Alpine release line explicit while allowing automatic
@@ -230,9 +230,9 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
-      day: "tuesday"
-      time: "04:50"
+      day: "saturday"
+      time: "04:00"
       timezone: "Europe/London"
-    open-pull-requests-limit: 3
+    open-pull-requests-limit: 2
     labels:
       - "dependencies"

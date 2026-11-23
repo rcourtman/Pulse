@@ -1379,7 +1379,7 @@ jobs:
   benchmarks:
     name: Benchmarks (shard ${{ matrix.shard }})
     needs: changes
-    if: needs.changes.outputs.code == 'true' && needs.changes.outputs.component_only != 'true'
+    if: needs.changes.outputs.go_compile == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 35
     strategy:
@@ -1481,7 +1481,7 @@ jobs:
   benchmarks-verdict:
     name: Benchmarks
     needs: [changes, benchmarks]
-    if: always() && needs.changes.outputs.code == 'true' && needs.changes.outputs.component_only != 'true'
+    if: always() && needs.changes.outputs.go_compile == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:

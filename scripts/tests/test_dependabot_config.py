@@ -80,16 +80,23 @@ class DependabotConfigTest(unittest.TestCase):
 
     def test_updates_are_weekly_staggered_and_bounded(self) -> None:
         self.assertEqual(self.config["version"], 2)
-        times = []
+        valid_days = {
+            "monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday",
+        }
+        days = []
         for entry in self.config["updates"]:
             schedule = entry["schedule"]
             self.assertEqual(schedule["interval"], "weekly")
-            self.assertEqual(schedule["day"], "tuesday")
+            self.assertIn(schedule["day"], valid_days)
             self.assertEqual(schedule["timezone"], "Europe/London")
-            self.assertLessEqual(entry["open-pull-requests-limit"], 3)
+            self.assertLessEqual(entry["open-pull-requests-limit"], 2)
             self.assertIn("dependencies", entry["labels"])
-            times.append(schedule["time"])
-        self.assertEqual(len(times), len(set(times)), "update jobs must stay staggered")
+            days.append(schedule["day"])
+        self.assertEqual(
+            len(days),
+            len(set(days)),
+            "update ecosystems must be staggered across distinct days to avoid CI bursts",
+        )
 
     def test_language_updates_group_reviewable_changes(self) -> None:
         for ecosystem, version_group, security_group in (
