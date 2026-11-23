@@ -1107,9 +1107,14 @@ func (r *Router) testSAMLConnection(ctx context.Context, cfg *SAMLTestConfig) SS
 		}
 	}
 
+	message := "SAML metadata includes an IdP identity and an SSO URL. Sign-in has not been tested."
+	if len(details.Certificates) == 0 {
+		// Report what Test could read, not whether the IdP has a key or sign-in will work.
+		message = "No signing certificate could be read from the IdP metadata. Check that it includes an X.509 signing certificate. Sign-in has not been tested."
+	}
 	return SSOTestResponse{
 		Success: true,
-		Message: "SAML metadata includes an IdP identity and an SSO URL. Sign-in has not been tested.",
+		Message: message,
 		Details: details,
 	}
 }
