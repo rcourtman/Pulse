@@ -75,7 +75,7 @@ export function ScheduleTab(props: ScheduleTabProps) {
         </button>
       </div>
 
-      <div class="grid gap-6 xl:grid-cols-2">
+      <div class="grid items-start gap-6 xl:grid-cols-2">
         <AlertQuietHoursSection
           quietHours={props.quietHours()}
           quietHourSuppressOptions={quietHourSuppressOptions}

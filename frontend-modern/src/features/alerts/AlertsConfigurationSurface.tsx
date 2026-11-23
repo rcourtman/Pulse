@@ -1,6 +1,7 @@
 import { createMemo, Show } from 'solid-js';
 
 import { Card } from '@/components/shared/Card';
+import { useResources } from '@/hooks/useResources';
 import {
   getAlertConfigDiscardLabel,
   getAlertConfigLoadingLabel,
@@ -24,6 +25,15 @@ export function AlertsConfigurationSurface(
   props: AlertsConfigurationSurfaceProps & { requestedRehearsalID?: () => string | undefined },
 ) {
   const state = useAlertsConfigurationState(props);
+  const unifiedResources = useResources();
+  const resourcesLoading = () =>
+    props.resourcesLoading
+      ? props.resourcesLoading()
+      : props.allResources().length === 0 && unifiedResources.loading();
+  const showUnsavedChangesBar = () =>
+    props.hasUnsavedChanges() &&
+    props.activeTab() !== 'overview' &&
+    props.activeTab() !== 'history';
   const escalationDestinations = createMemo(() => [
     {
       id: 'email',
@@ -75,66 +85,72 @@ export function AlertsConfigurationSurface(
         </Card>
       </Show>
 
-      <Show
-        when={
-          props.hasUnsavedChanges() &&
-          props.activeTab() !== 'overview' &&
-          props.activeTab() !== 'history'
-        }
-      >
-        <Card tone="warning" padding="sm" class="border-yellow-200 dark:border-yellow-800 sm:p-4">
-          <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div class="flex items-center gap-2 text-yellow-800 dark:text-yellow-200">
-              <svg
-                width="16"
-                height="16"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-              >
-                <circle cx="12" cy="12" r="10"></circle>
-                <line x1="12" y1="8" x2="12" y2="12"></line>
-                <line x1="12" y1="16" x2="12.01" y2="16"></line>
-              </svg>
-              <span class="text-sm font-medium">{getAlertConfigUnsavedChangesLabel()}</span>
-            </div>
-            <div class="flex w-full gap-2 sm:w-auto">
-              <button
-                class="flex-1 px-4 py-2 text-sm text-white transition-colors sm:flex-initial bg-blue-600 rounded-md hover:bg-blue-700 disabled:opacity-60 disabled:cursor-not-allowed"
-                disabled={
-                  !state.isConfigLoaded() ||
-                  state.isReloadingConfig() ||
-                  state.isLoadingDestinations() ||
-                  state.isSavingConfig() ||
-                  !!state.destConfigLoadError()
-                }
-                aria-busy={state.isSavingConfig()}
-                onClick={async () => {
-                  try {
-                    await state.saveAlertConfiguration();
-                  } catch (error) {
-                    logger.error('Failed to save configuration:', error);
-                    notificationStore.error(
-                      error instanceof Error ? error.message : getAlertConfigSaveFailure(),
-                    );
+      <Show when={showUnsavedChangesBar()}>
+        <div
+          data-testid="alerts-unsaved-changes-bar"
+          class="fixed inset-x-3 bottom-20 z-30 mx-auto max-w-4xl sm:inset-x-6 xl:bottom-4"
+        >
+          <Card
+            tone="warning"
+            padding="sm"
+            class="border-2 border-yellow-400 bg-yellow-50/95 shadow-lg backdrop-blur-xs dark:border-yellow-700 dark:bg-yellow-950/95 sm:p-3.5"
+          >
+            <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div class="flex items-center gap-2 text-yellow-800 dark:text-yellow-200">
+                <svg
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  aria-hidden="true"
+                >
+                  <circle cx="12" cy="12" r="10"></circle>
+                  <line x1="12" y1="8" x2="12" y2="12"></line>
+                  <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                </svg>
+                <span class="text-sm font-medium">{getAlertConfigUnsavedChangesLabel()}</span>
+              </div>
+              <div class="flex w-full gap-2 sm:w-auto">
+                <button
+                  type="button"
+                  class="flex-1 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60 sm:flex-initial"
+                  disabled={
+                    !state.isConfigLoaded() ||
+                    state.isReloadingConfig() ||
+                    state.isLoadingDestinations() ||
+                    state.isSavingConfig() ||
+                    !!state.destConfigLoadError()
                   }
-                }}
-              >
-                {getAlertConfigSaveChangesLabel(state.isSavingConfig())}
-              </button>
-              <button
-                class="flex-1 px-4 py-2 text-sm transition-colors border border-border rounded-md text-base-content hover:bg-surface-hover sm:flex-initial disabled:opacity-60 disabled:cursor-not-allowed"
-                disabled={state.isReloadingConfig() || state.isSavingConfig()}
-                onClick={async () => {
-                  await state.loadAlertConfiguration({ notify: true });
-                }}
-              >
-                {getAlertConfigDiscardLabel(state.isReloadingConfig())}
-              </button>
+                  aria-busy={state.isSavingConfig()}
+                  onClick={async () => {
+                    try {
+                      await state.saveAlertConfiguration();
+                    } catch (error) {
+                      logger.error('Failed to save configuration:', error);
+                      notificationStore.error(
+                        error instanceof Error ? error.message : getAlertConfigSaveFailure(),
+                      );
+                    }
+                  }}
+                >
+                  {getAlertConfigSaveChangesLabel(state.isSavingConfig())}
+                </button>
+                <button
+                  type="button"
+                  class="flex-1 rounded-md border border-border bg-surface px-4 py-2 text-sm text-base-content transition-colors hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-60 sm:flex-initial"
+                  disabled={state.isReloadingConfig() || state.isSavingConfig()}
+                  onClick={async () => {
+                    await state.loadAlertConfiguration({ notify: true });
+                  }}
+                >
+                  {getAlertConfigDiscardLabel(state.isReloadingConfig())}
+                </button>
+              </div>
             </div>
-          </div>
-        </Card>
+          </Card>
+        </div>
       </Show>
 
       <Show when={props.activeTab() === 'thresholds' && state.isConfigLoaded()}>
@@ -154,6 +170,7 @@ export function AlertsConfigurationSurface(
             .filter((resource) => resource.type === 'storage' || resource.type === 'datastore')}
           dockerHosts={props.byType('docker-host')}
           allResources={props.allResources()}
+          resourcesLoading={resourcesLoading}
           guestDefaults={state.guestDefaults}
           guestDisableConnectivity={state.guestDisableConnectivity}
           setGuestDefaults={state.setGuestDefaults}
@@ -311,6 +328,10 @@ export function AlertsConfigurationSurface(
           setEscalation={state.setScheduleEscalation}
           escalationDestinations={escalationDestinations}
         />
+      </Show>
+
+      <Show when={showUnsavedChangesBar()}>
+        <div class="h-24" aria-hidden="true" />
       </Show>
     </>
   );

@@ -63,7 +63,11 @@ describe('Alert schedule sections', () => {
     );
     expect(screen.getByLabelText('Start time')).toHaveAttribute('type', 'time');
     expect(screen.getByLabelText('End time')).toHaveAttribute('type', 'time');
-    expect(screen.getByRole('combobox', { name: 'Timezone' })).toBeInTheDocument();
+    const timezoneSelect = screen.getByRole('combobox', { name: 'Timezone' });
+    expect(timezoneSelect).toBeInTheDocument();
+    expect(timezoneSelect.closest('.sm\\:col-span-2')).not.toBeNull();
+    const performanceCard = screen.getByText('Performance').closest('label');
+    expect(performanceCard).toHaveClass('w-full');
     expect(screen.getByRole('button', { name: 'Monday' })).toHaveAttribute('aria-pressed', 'true');
     expect(screen.getByRole('button', { name: 'Saturday' })).toHaveAttribute(
       'aria-pressed',

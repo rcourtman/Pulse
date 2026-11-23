@@ -192,7 +192,10 @@ export function PatrolIntelligenceSurface() {
           aria-labelledby="patrol-activity-tab"
           class="space-y-4 lg:space-y-5"
         >
-          <PatrolWeeklyDigestCard onInitialLoad={() => setDigestLoaded(true)} />
+          <PatrolWeeklyDigestCard
+            effectiveAutonomyMode={state.autoFixLocked?.() ? 'monitor' : state.autonomyLevel?.()}
+            onInitialLoad={() => setDigestLoaded(true)}
+          />
 
           <PatrolRecentWorkPanel onInitialLoad={() => setRecentWorkLoaded(true)} />
 

@@ -407,18 +407,23 @@ export function AlertIntentPolicyPanel(props: {
     <Card
       id="alert-intent-policy-panel"
       ref={panelElement}
-      padding="md"
-      class="space-y-4 scroll-mt-24"
+      padding="sm"
+      class="space-y-3 scroll-mt-24 sm:px-4 sm:py-3"
     >
-      <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <h2 class="text-base font-semibold text-base-content">Alert intent & grace</h2>
-          <p class="mt-1 text-sm text-muted">
+      <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+        <div class="min-w-0">
+          <h2 class="text-sm font-semibold text-base-content">Alert intent & grace</h2>
+          <p class="mt-0.5 text-xs text-muted">
             Delay expected transients, honor operator maintenance state, and extend guest offline
             grace while a backup is active.
           </p>
         </div>
-        <Button variant="secondary" size="sm" onClick={() => setExpanded((value) => !value)}>
+        <Button
+          variant="secondary"
+          size="sm"
+          class="shrink-0 self-start whitespace-nowrap sm:self-center"
+          onClick={() => setExpanded((value) => !value)}
+        >
           {expanded() ? 'Hide policies' : 'Configure policies'}
         </Button>
       </div>

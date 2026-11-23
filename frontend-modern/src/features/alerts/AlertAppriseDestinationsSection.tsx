@@ -96,13 +96,16 @@ export function AlertAppriseDestinationsSection(props: AlertAppriseDestinationsS
               </span>
             }
           />
-          <button
-            class="min-h-11 rounded-sm border border-blue-500 px-3 py-1.5 text-xs font-medium text-blue-600 transition-colors hover:bg-blue-50 disabled:opacity-50 disabled:cursor-not-allowed sm:min-h-0 dark:border-blue-400 dark:text-blue-300 dark:hover:bg-blue-900/25"
-            disabled={!props.config.enabled || props.testing}
-            onClick={props.onTest}
-          >
-            {getAlertDestinationsAppriseTestLabel(props.testing)}
-          </button>
+          <Show when={props.config.enabled || showSettings()}>
+            <button
+              type="button"
+              class="min-h-11 rounded-sm border border-blue-500 px-3 py-1.5 text-xs font-medium text-blue-600 transition-colors hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-50 sm:min-h-0 dark:border-blue-400 dark:text-blue-300 dark:hover:bg-blue-900/25"
+              disabled={!props.config.enabled || props.testing}
+              onClick={props.onTest}
+            >
+              {getAlertDestinationsAppriseTestLabel(props.testing)}
+            </button>
+          </Show>
         </div>
       }
       class="min-w-0"

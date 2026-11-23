@@ -70,7 +70,7 @@ const getUpdateFacts = (summary: string): APTActionPresentationFact[] => {
     { label: 'Recovery required', value: match[5] === 'true' ? 'Yes' : 'No' },
     {
       label: 'Reboot required',
-      value: match[6] === 'true' ? 'Yes — fact only. No reboot was authorized' : 'No',
+      value: match[6] === 'true' ? 'Yes (fact only, no reboot was authorized)' : 'No',
     },
   ];
 };
@@ -98,7 +98,7 @@ const getCleanupFacts = (summary: string): APTActionPresentationFact[] => {
     { label: 'Downloaded package data before', value: formatBytes(before) },
     { label: 'Downloaded package data after', value: formatBytes(after) },
     { label: 'Space reclaimed', value: formatBytes(reclaimed) },
-    { label: 'Rollback', value: 'Unavailable — cleanup is irreversible' },
+    { label: 'Rollback', value: 'Unavailable (cleanup is irreversible)' },
     { label: 'Fresh rescan required', value: match[5] === 'true' ? 'Yes' : 'No' },
   ];
 };

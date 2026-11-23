@@ -5,6 +5,7 @@ import {
   getPatrolDigest,
   PATROL_DIGEST_DEFAULT_DAYS,
   type InvestigationOutcome,
+  type PatrolAutonomyLevel,
   type PatrolDigest,
 } from '@/api/patrol';
 import { Button, ButtonLink } from '@/components/shared/Button';
@@ -94,8 +95,12 @@ interface DigestTile {
   tone?: 'default' | 'positive' | 'attention';
 }
 
-export function buildDigestTiles(digest: PatrolDigest): DigestTile[] {
+export function buildDigestTiles(
+  digest: PatrolDigest,
+  effectiveMode?: PatrolAutonomyLevel,
+): DigestTile[] {
   const { runs, findings, investigations, actions, alerts, spend } = digest;
+  const resolvedMode = effectiveMode ?? digest.mode;
 
   const runDetails = [
     `${plural(runs.checks, 'check')} across ${plural(runs.resources_covered, 'resource')}.`,
@@ -126,7 +131,7 @@ export function buildDigestTiles(digest: PatrolDigest): DigestTile[] {
     // Runs whose outcome has no wording here still happened, so only an empty
     // week may say that nothing was investigated.
     investigationDetails.push(
-      digest.mode === 'monitor'
+      resolvedMode === 'monitor'
         ? 'Patrol is watch only, so it reports issues without investigating them.'
         : 'No issues needed a closer look.',
     );
@@ -140,7 +145,7 @@ export function buildDigestTiles(digest: PatrolDigest): DigestTile[] {
   if (actions.rejected > 0) actionDetails.push(`${actions.rejected} declined by you.`);
   if (actionDetails.length === 0 && actions.pending === 0) {
     actionDetails.push(
-      digest.mode === 'monitor'
+      resolvedMode === 'monitor'
         ? 'Patrol is watch only, so no fixes were proposed.'
         : 'No fixes were needed.',
     );
@@ -192,7 +197,9 @@ export function buildDigestTiles(digest: PatrolDigest): DigestTile[] {
   ];
 }
 
-export function PatrolWeeklyDigestCard(props: { onInitialLoad?: () => void } = {}) {
+export function PatrolWeeklyDigestCard(
+  props: { onInitialLoad?: () => void; effectiveAutonomyMode?: PatrolAutonomyLevel } = {},
+) {
   const [digest, setDigest] = createSignal<PatrolDigest | null>(null);
   const [loading, setLoading] = createSignal(true);
   const [error, setError] = createSignal('');
@@ -242,7 +249,7 @@ export function PatrolWeeklyDigestCard(props: { onInitialLoad?: () => void } = {
 
   const tiles = createMemo(() => {
     const current = digest();
-    return current ? buildDigestTiles(current) : [];
+    return current ? buildDigestTiles(current, props.effectiveAutonomyMode) : [];
   });
 
   const pendingCount = createMemo(() => digest()?.actions.pending ?? 0);

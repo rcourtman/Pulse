@@ -8,6 +8,9 @@ import { PatrolIntelligenceSurface } from '../PatrolIntelligenceSurface';
 const patrolState = vi.hoisted(() => ({
   setupOnly: false,
   enabled: true,
+  autonomyLevel: 'approval' as 'monitor' | 'approval' | 'assisted' | 'full',
+  autoFixLocked: false,
+  lastDigestEffectiveMode: undefined as string | undefined,
   approvalCount: (): number => 0,
   deferInitialLoads: false,
   finishDigest: undefined as (() => void) | undefined,
@@ -27,6 +30,8 @@ vi.mock('../usePatrolIntelligenceState', () => ({
   usePatrolIntelligenceState: () => ({
     shouldShowPatrolSetupOnly: () => patrolState.setupOnly,
     patrolEnabledLocal: () => patrolState.enabled,
+    autonomyLevel: () => patrolState.autonomyLevel,
+    autoFixLocked: () => patrolState.autoFixLocked,
     setActiveTab: vi.fn(),
     setSelectedRun: vi.fn(),
     setFindingsFilterOverride: vi.fn(),
@@ -87,12 +92,16 @@ vi.mock('../PatrolRecentWorkPanel', () => ({
 }));
 
 vi.mock('../PatrolWeeklyDigestCard', () => ({
-  PatrolWeeklyDigestCard: (props: { onInitialLoad?: () => void }) => {
+  PatrolWeeklyDigestCard: (props: {
+    onInitialLoad?: () => void;
+    effectiveAutonomyMode?: string;
+  }) => {
+    patrolState.lastDigestEffectiveMode = props.effectiveAutonomyMode;
     onMount(() => {
       patrolState.finishDigest = props.onInitialLoad;
       if (!patrolState.deferInitialLoads) props.onInitialLoad?.();
     });
-    return <div>This week</div>;
+    return <div data-digest-mode={props.effectiveAutonomyMode ?? ''}>This week</div>;
   },
 }));
 
@@ -126,6 +135,9 @@ describe('PatrolIntelligenceSurface finding handoff', () => {
     cleanup();
     patrolState.setupOnly = false;
     patrolState.enabled = true;
+    patrolState.autonomyLevel = 'approval';
+    patrolState.autoFixLocked = false;
+    patrolState.lastDigestEffectiveMode = undefined;
     patrolState.approvalCount = () => 0;
     patrolState.deferInitialLoads = false;
     patrolState.finishDigest = undefined;
@@ -334,5 +346,15 @@ describe('PatrolIntelligenceSurface finding handoff', () => {
     fireEvent.click(screen.getByRole('tab', { name: 'Inbox' }));
     await vi.waitFor(() => expect(window.location.pathname).toBe('/patrol'));
     expect(window.location.search).toBe('');
+  });
+
+  it('passes monitor effective mode to PatrolWeeklyDigestCard when autonomy is locked', () => {
+    patrolState.autonomyLevel = 'approval';
+    patrolState.autoFixLocked = true;
+    window.history.replaceState(null, '', '/patrol/activity');
+
+    renderSurface();
+
+    expect(patrolState.lastDigestEffectiveMode).toBe('monitor');
   });
 });

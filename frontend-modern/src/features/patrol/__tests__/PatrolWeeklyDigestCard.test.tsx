@@ -332,4 +332,34 @@ describe('PatrolWeeklyDigestCard', () => {
       'No issues needed a closer look.',
     ]);
   });
+
+  it('respects the effective locked Watch only mode even when the backend digest reports approval', async () => {
+    apiMocks.getDigest.mockResolvedValueOnce(
+      digest({
+        mode: 'approval',
+        investigations: { total: 0, by_outcome: {} },
+        actions: {
+          proposed: 0,
+          approved: 0,
+          rejected: 0,
+          executed: 0,
+          verified: 0,
+          failed: 0,
+          pending: 0,
+        },
+      }),
+    );
+
+    render(() => <PatrolWeeklyDigestCard effectiveAutonomyMode="monitor" />);
+
+    expect(
+      await screen.findByText(
+        'Patrol is watch only, so it reports issues without investigating them.',
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText('Patrol is watch only, so no fixes were proposed.'),
+    ).toBeInTheDocument();
+    expect(screen.queryByText('No fixes were needed.')).not.toBeInTheDocument();
+  });
 });

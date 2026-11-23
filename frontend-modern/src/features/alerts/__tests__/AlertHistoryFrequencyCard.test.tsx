@@ -169,4 +169,24 @@ describe('AlertHistoryFrequencyCard', () => {
     expect(bars[1]).not.toHaveClass('ring-2');
     for (const bar of bars) expect(bar.className).not.toMatch(/opacity-/);
   });
+
+  it('auto-scrolls overflowing frequency charts to the latest period edge and shows a scroll cue', () => {
+    const { state } = createFrequencyCardState({ buckets: [0, 1, 2, 3, 4, 5] });
+    const { container } = render(() => <AlertHistoryFrequencyCard state={state} />);
+    const scrollSurface = container.querySelector<HTMLDivElement>('[data-alert-frequency-scroll]')!;
+
+    Object.defineProperty(scrollSurface, 'scrollWidth', { value: 900, configurable: true });
+    Object.defineProperty(scrollSurface, 'clientWidth', { value: 320, configurable: true });
+    scrollSurface.scrollLeft = 0;
+
+    window.dispatchEvent(new Event('resize'));
+    scrollSurface.scrollLeft = scrollSurface.scrollWidth;
+    fireEvent.scroll(scrollSurface);
+
+    expect(scrollSurface.scrollLeft).toBe(900);
+    expect(container.querySelector('[data-alert-frequency-scroll-hint]')).toHaveTextContent(
+      'Showing latest',
+    );
+    expect(container.querySelector('[data-alert-frequency-fade="left"]')).not.toBeNull();
+  });
 });
