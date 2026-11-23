@@ -85,10 +85,10 @@ const INSTALLER_FOCUS_PRESENTATION: Record<
   docker: {
     title: 'Install for Docker / Podman',
     description:
-      'Run on the machine that runs Docker or Podman. For Docker inside Proxmox LXCs, use the Proxmox node path below instead of installing inside every guest.',
-    recommendationTitle: 'Docker install path',
+      'Run the installer on the machine running Docker or Podman to monitor containers, Compose stacks, and host metrics.',
+    recommendationTitle: 'Docker / Podman host',
     recommendationDetail:
-      'For a standalone Docker or Podman host, install Pulse Agent on that host. The Docker profile is selected for this flow so copied commands force runtime monitoring when automatic detection is restricted. Docker discovery inside Proxmox LXCs still uses the transitional command-capable profile until the scoped local helper is available.',
+      'Install Pulse Agent on the host running your containers. The Docker profile is pre-selected so container monitoring starts automatically.',
     preferredProfile: 'docker',
     platforms: ['linux'],
   },
@@ -190,14 +190,11 @@ export const InfrastructureInstallerSection: Component<InfrastructureInstallerSe
     >
       <Show when={state.setupHandoff()}>
         {(handoff) => (
-          <div class="rounded-md border border-emerald-200 bg-emerald-50 px-4 py-4 text-sm text-emerald-950 dark:border-emerald-700 dark:bg-emerald-900/25 dark:text-emerald-50">
-            <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-              <div class="space-y-2">
+          <div class="rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-950 dark:border-emerald-700 dark:bg-emerald-900/25 dark:text-emerald-50">
+            <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div class="min-w-0 space-y-1">
                 <p class="font-semibold">
-                  Security configured. Save these first-run credentials now.
-                </p>
-                <p class="text-xs text-emerald-800 dark:text-emerald-200">
-                  This is the Pulse Agent handoff from first-run setup inside Add infrastructure.
+                  Admin account ready ({handoff().username}).
                   <Show
                     when={state.setupHandoffAutoTokenPending()}
                     fallback={
@@ -206,67 +203,33 @@ export const InfrastructureInstallerSection: Component<InfrastructureInstallerSe
                         fallback={
                           <Show
                             when={state.setupHandoffAutoTokenFailed()}
-                            fallback=" Pulse will prepare the first scoped install token here before you copy agent commands."
+                            fallback=" Generate an install token below to connect your first host."
                           >
                             {' '}
-                            Pulse could not prepare the first scoped install token automatically, so
-                            use the token step below and continue from there.
+                            Generate an install token below to connect your first host.
                           </Show>
                         }
                       >
                         {' '}
-                        Pulse already prepared the first scoped install token for this handoff, so
-                        you can move straight to copying the install command for the first host.
+                        Your first scoped install token is prepared below — copy the install command
+                        to connect your first host.
                       </Show>
                     }
                   >
                     {' '}
-                    Pulse is preparing the first scoped install token now so the install commands
-                    unlock without another setup step.
+                    Preparing your first scoped install token below...
                   </Show>
                 </p>
-                <div class="grid gap-3 sm:grid-cols-2">
-                  <div class="rounded-md border border-emerald-200 bg-white px-3 py-2 dark:border-emerald-800 dark:bg-emerald-950/25">
-                    <div class="text-[11px] font-medium uppercase tracking-wide text-emerald-700 dark:text-emerald-300">
-                      Username
-                    </div>
-                    <div class="mt-1 font-mono text-sm text-base-content">{handoff().username}</div>
-                  </div>
-                  <div class="rounded-md border border-emerald-200 bg-white px-3 py-2 dark:border-emerald-800 dark:bg-emerald-950/25">
-                    <div class="text-[11px] font-medium uppercase tracking-wide text-emerald-700 dark:text-emerald-300">
-                      Admin API Token
-                    </div>
-                    <div class="mt-1 break-all font-mono text-sm text-base-content">
-                      {handoff().apiToken}
-                    </div>
-                  </div>
-                </div>
                 <p class="text-xs text-emerald-800 dark:text-emerald-200">
-                  Your admin password was shown once on the setup screen and isn't stored here. If
-                  you didn't save it, change it from Settings → Security → Change password.
+                  Use the scoped install token below (not your admin API token) when the installer
+                  prompts.
                 </p>
               </div>
-              <div class="flex flex-wrap gap-2 lg:w-64 lg:flex-col">
-                <Button
-                  variant="successOutline"
-                  size="mdCompact"
-                  onClick={() =>
-                    void state.copySetupHandoffField(
-                      handoff().apiToken,
-                      'Copied first-run admin API token.',
-                    )
-                  }
-                >
-                  Copy admin token
+              <div class="flex shrink-0 flex-wrap items-center gap-2">
+                <Button variant="successOutline" size="sm" onClick={state.downloadSetupHandoff}>
+                  Download admin credentials
                 </Button>
-                <Button
-                  variant="successOutline"
-                  size="mdCompact"
-                  onClick={state.downloadSetupHandoff}
-                >
-                  Download credentials
-                </Button>
-                <Button variant="successGhost" size="mdCompact" onClick={state.clearSetupHandoff}>
+                <Button variant="successGhost" size="sm" onClick={state.clearSetupHandoff}>
                   Dismiss
                 </Button>
               </div>
@@ -319,23 +282,23 @@ export const InfrastructureInstallerSection: Component<InfrastructureInstallerSe
         </Show>
 
         <Show when={focus() === 'docker'}>
-          <div class="rounded-md border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-950 dark:border-blue-700 dark:bg-blue-900/25 dark:text-blue-50">
-            <p class="font-semibold">Docker inside Proxmox LXCs</p>
-            <p class="mt-1 text-xs text-blue-800 dark:text-blue-200">
-              Install the agent on the Proxmox node, not inside every LXC. Turn on{' '}
+          <details class="rounded-md border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-950 dark:border-blue-700 dark:bg-blue-900/25 dark:text-blue-50">
+            <summary class="cursor-pointer font-semibold">Docker inside Proxmox LXCs</summary>
+            <p class="mt-2 text-xs leading-5 text-blue-800 dark:text-blue-200">
+              Install the agent on the Proxmox node instead of inside every LXC. Turn on{' '}
               <span class="font-medium">{COMMAND_ACCESS_OPTION_LABEL}</span> below, and in advanced
-              options select <span class="font-medium">Proxmox VE node</span>. This gives Pulse
+              options select <span class="font-medium">Proxmox VE node</span>. This grants Pulse
               command access to the node, so it is not a monitoring-only install. Then turn on{' '}
               <span class="font-medium">Discover Docker in LXC guests</span> in Settings → System →
               General (admin only), or set{' '}
-              <code>PULSE_ENABLE_PROXMOX_GUEST_DOCKER_INVENTORY=true</code> in the server
-              environment to lock it on. Optionally restrict it with{' '}
-              <code>PULSE_PROXMOX_GUEST_DOCKER_INVENTORY_VMIDS=101,102</code>. Pulse uses bounded{' '}
-              <code>pct exec</code> inventory for <code>docker ps</code> and{' '}
+              <code class="break-all">PULSE_ENABLE_PROXMOX_GUEST_DOCKER_INVENTORY=true</code> in the
+              server environment to lock it on. Optionally restrict it with{' '}
+              <code class="break-all">PULSE_PROXMOX_GUEST_DOCKER_INVENTORY_VMIDS=101,102</code>.
+              Pulse uses bounded <code>pct exec</code> inventory for <code>docker ps</code> and{' '}
               <code>docker stats</code>, skips guests that already have their own agent, and does
               not collect inspect, environment, mount, command, or process details.
             </p>
-          </div>
+          </details>
         </Show>
 
         <div class="space-y-3">
@@ -745,8 +708,12 @@ export const InfrastructureInstallerSection: Component<InfrastructureInstallerSe
                               <h6 class="text-xs font-semibold uppercase tracking-wide text-muted">
                                 {snippet.label}
                               </h6>
-                              <div class="relative">
+                              <div class="flex items-start gap-2 rounded-md border border-border bg-page p-2">
+                                <pre class="min-w-0 flex-1 overflow-x-auto px-1 py-1.5 text-xs text-base-content">
+                                  <code>{copyCommand()}</code>
+                                </pre>
                                 <CommandCopyButton
+                                  layout="inline"
                                   onClick={async () => {
                                     const success = await copyToClipboard(copyCommand());
                                     if (success) {
@@ -762,9 +729,6 @@ export const InfrastructureInstallerSection: Component<InfrastructureInstallerSe
                                   title="Copy command"
                                   label={`Copy ${snippet.label} command`}
                                 />
-                                <pre class="overflow-x-auto rounded-md bg-page p-3 pr-12 text-xs text-base-content">
-                                  <code>{copyCommand()}</code>
-                                </pre>
                               </div>
                               <Show when={snippet.note}>
                                 <p class="text-xs text-muted">{snippet.note}</p>
@@ -990,8 +954,12 @@ export const InfrastructureInstallerSection: Component<InfrastructureInstallerSe
             </p>
             <div class="space-y-1">
               <span class="text-xs font-medium text-muted">Linux / macOS / FreeBSD</span>
-              <div class="relative">
+              <div class="flex items-start gap-2 rounded-md border border-border bg-slate-950 p-2">
+                <pre class="min-w-0 flex-1 overflow-x-auto px-1 py-1.5 font-mono text-xs text-red-400">
+                  <code>{state.getUninstallCommand()}</code>
+                </pre>
                 <CommandCopyButton
+                  layout="inline"
                   onClick={async () => {
                     const success = await copyToClipboard(state.getUninstallCommand());
                     if (success) {
@@ -1003,9 +971,6 @@ export const InfrastructureInstallerSection: Component<InfrastructureInstallerSe
                   title="Copy command"
                   label="Copy Linux macOS FreeBSD uninstall command"
                 />
-                <pre class="overflow-x-auto rounded-md bg-slate-950 p-3 pr-12 font-mono text-xs text-red-400">
-                  <code>{state.getUninstallCommand()}</code>
-                </pre>
               </div>
             </div>
             <p class="text-xs italic text-muted">
@@ -1032,8 +997,12 @@ export const InfrastructureInstallerSection: Component<InfrastructureInstallerSe
               <span class="text-xs font-medium text-muted">
                 Windows (PowerShell as Administrator)
               </span>
-              <div class="relative">
+              <div class="flex items-start gap-2 rounded-md border border-border bg-slate-950 p-2">
+                <pre class="min-w-0 flex-1 overflow-x-auto px-1 py-1.5 font-mono text-xs text-red-400">
+                  <code>{state.getWindowsUninstallCommand()}</code>
+                </pre>
                 <CommandCopyButton
+                  layout="inline"
                   onClick={async () => {
                     const success = await copyToClipboard(state.getWindowsUninstallCommand());
                     if (success) {
@@ -1045,9 +1014,6 @@ export const InfrastructureInstallerSection: Component<InfrastructureInstallerSe
                   title="Copy command"
                   label="Copy Windows uninstall command"
                 />
-                <pre class="overflow-x-auto rounded-md bg-slate-950 p-3 pr-12 font-mono text-xs text-red-400">
-                  <code>{state.getWindowsUninstallCommand()}</code>
-                </pre>
               </div>
             </div>
           </div>

@@ -163,7 +163,7 @@ describe('infrastructureOnboardingPresentation', () => {
         label: 'Unraid',
         catalogDescription: 'Array health, disks, Docker, host telemetry',
       }),
-      expect.objectContaining({ id: 'docker', connectionType: 'agent', label: 'Docker' }),
+      expect.objectContaining({ id: 'docker', connectionType: 'agent', label: 'Docker / Podman' }),
       expect.objectContaining({
         id: 'kubernetes',
         connectionType: 'agent',
@@ -231,7 +231,8 @@ describe('infrastructureOnboardingPresentation', () => {
     expect(getInfrastructureSourcePickerItemPresentation('docker')).toMatchObject({
       routeStep: 'docker',
       connectionType: 'agent',
-      label: 'Docker',
+      label: 'Docker / Podman',
+      searchAliases: expect.arrayContaining(['docker', 'podman']),
     });
     expect(getInfrastructureSourcePickerItemPresentation('kubernetes')).toMatchObject({
       routeStep: 'kubernetes',
