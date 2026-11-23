@@ -60,6 +60,7 @@ describe('AppBootstrapStatus', () => {
     expect(await screen.findByText('Acme')).toBeVisible();
     expect(screen.getByRole('main')).toHaveAccessibleName('No organization access yet');
     expect(screen.queryByRole('button', { name: 'Retry connection' })).toBeNull();
+    expect(screen.queryByRole('link', { name: 'Open troubleshooting guide' })).toBeNull();
 
     fireEvent.click(screen.getByRole('button', { name: 'Sign out' }));
     await waitFor(() =>
@@ -114,6 +115,7 @@ describe('AppBootstrapStatus', () => {
       'Checking your session and preparing the workspace.',
     );
     expect(screen.queryByRole('button', { name: 'Retry connection' })).toBeNull();
+    expect(screen.queryByRole('link', { name: 'Open troubleshooting guide' })).toBeNull();
     expect(screen.queryByRole('alert')).toBeNull();
   });
 
@@ -136,6 +138,9 @@ describe('AppBootstrapStatus', () => {
     expect(screen.getByRole('status')).toHaveTextContent(
       'Your saved sign-in details have not been cleared.',
     );
+    const help = screen.getByRole('link', { name: 'Open troubleshooting guide' });
+    expect(help).toHaveAttribute('href', '/docs/TROUBLESHOOTING');
+    expect(help).toHaveAttribute('target', '_self');
     fireEvent.click(await screen.findByRole('button', { name: 'Retry connection' }));
     expect(onRetry).toHaveBeenCalledOnce();
   });
@@ -151,6 +156,7 @@ describe('AppBootstrapStatus', () => {
       'Pulse is taking longer than expected to respond.',
     );
     expect(screen.getByText('You can keep waiting, or retry the connection.')).toBeVisible();
+    expect(screen.queryByRole('link', { name: 'Open troubleshooting guide' })).toBeNull();
 
     const retry = screen.getByRole('button', { name: 'Retry connection' });
     fireEvent.click(retry);
