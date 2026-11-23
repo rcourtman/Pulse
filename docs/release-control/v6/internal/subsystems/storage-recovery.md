@@ -2754,6 +2754,11 @@ states do not change the underlying storage evidence or active lifecycle.
 Likewise, retrying or dismissing retained notification failures changes only
 delivery-queue state and its warning. It does not alter storage health,
 protection posture, recovery-point evidence, or restore readiness.
+When a dead-letter entry concerns storage or backups, the summary's alert
+reference can be matched to the incident without copying the full alert
+payload or the provider configuration. The entry's status, timestamps and
+failure class describe notification delivery, not the outcome of a backup,
+thaw or restore.
 
 A saved PVE membership refresh whose monitor reload fails is not a new
 backup-coverage observation. The saved connection remains readable, but

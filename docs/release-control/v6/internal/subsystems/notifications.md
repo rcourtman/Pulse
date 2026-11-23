@@ -1142,6 +1142,20 @@ same rows to `cancelled`, preserves both queue and audit history, and clears
 the active health warning. Both actions are transactional across the selected
 terminal set and report the number of rows actually transitioned.
 
+### Dead-letter list is a read-only summary
+
+The admin dead-letter list returns a dedicated response type for queue
+inspection. It keeps the row ID used by individual retry and dismiss, the
+delivery type and destination identity, queue status, attempt budget and
+timestamps, alert references, operational links and the optional payload byte
+count. An available last error contributes only a coarse failure class; the
+delivery log remains the separate per-attempt diagnostic. The list does not
+return provider snapshots, complete alert payloads or raw provider errors. It
+does not alter the record used by the worker, change a retry budget or make an
+attempt. The HTTP summary and operator action checks in
+`internal/api/alerting/notification_queue_additional_test.go` exercise these
+boundaries with a synthetic persisted row.
+
 ### User-facing delivery log and honest test sends
 
 The queue owner exposes its retained per-attempt audit rows to the local
