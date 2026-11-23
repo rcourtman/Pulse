@@ -60,6 +60,17 @@ def select_samples(raw, keep):
     return header + "".join(row for row in rows if keep(int(row.split("\t", 1)[0])))
 
 
+def archive_stats(window_s=300):
+    return {
+        "storage": "nfs-backups",
+        "rows_by_content": {"backup": 840, "iso": 24, "vztmpl": 24},
+        "body_bytes": 144000,
+        "body_sha256": "c" * 64,
+        "window_s": window_s,
+        "nodes": {"pve1": {"responses": 10, "steady_responses": 6}},
+    }
+
+
 class ReleaseMemorySummaryTests(unittest.TestCase):
     def run_summary(self, baseline, candidate, estate=None, agents=None, env=None, duration=900, interval=15,
                     wait_statuses=(), child_wait_statuses=None, proxmox=None):
@@ -140,6 +151,8 @@ class ReleaseMemorySummaryTests(unittest.TestCase):
         self.assertIn("| PVE guests observed in dashboard state | n/a | 35 |", lines)
         self.assertIn("| PVE guests with recent poll sightings at measurement end | n/a | 34/35 (last 60 s) |", lines)
         self.assertIn("| PVE guest poll sightings during steady RSS sampling | n/a | n/a |", lines)
+        self.assertIn("| PVE archive entries per response | n/a | n/a |", lines)
+        self.assertIn("| PVE archive responses by node (all / steady) | n/a | n/a |", lines)
         self.assertIn("| PBS API requests | 210 | 210 |", lines)
         self.assertIn("| PBS snapshot groups served/configured | n/a | 92/104 |", lines)
         self.assertIn("| PBS datastore status responses during steady RSS sampling | n/a | n/a |", lines)
@@ -198,6 +211,7 @@ class ReleaseMemorySummaryTests(unittest.TestCase):
             "pbs_steady_datastore_status": {
                 "window_s": 300, "datastores": {"pbs1": primary, "pbs2": primary},
             },
+            "pve_archive_inventory": archive_stats(),
         }
         candidate = dict(baseline, pbs_steady_datastore_status={
             "window_s": 300,
@@ -240,6 +254,49 @@ class ReleaseMemorySummaryTests(unittest.TestCase):
         self.assertIn("Baseline: PBS datastore status evidence is unavailable for the RSS window.", mismatched)
         self.assertNotIn("- Candidate:", mismatched)
         self.assertNotIn("PBS datastores had no status response in the RSS window.", mismatched)
+
+    def test_archive_polling_limits_keep_rss_visible_and_do_not_grant_coverage_for_warmup(self):
+        baseline = {
+            "pve_nodes": 1, "guests": 35, "pbs_instances": 0, "total_pbs_snapshots": 0,
+            "snapshots_per_group": 50, "pve_requests": 914, "pbs_requests": 0,
+            "dashboard": {"connects": 1, "messages": 60, "bytes": 1024},
+            "pve_steady_poll_sightings": {
+                "guests_with_sightings": 35, "guests_over_limit": [], "limit_s": 60,
+                "longest_gap_ms": 10000, "window_s": 300,
+            },
+            "pve_archive_inventory": archive_stats(),
+        }
+
+        def compare(candidate):
+            return self.run_summary(
+                samples(131072, 25, 0), samples(98304, 25, 0), estate="proxmox",
+                proxmox={"baseline": baseline, "candidate": candidate},
+                env={"PULSE_MEMORY_GATE": "0"}, wait_statuses=(0, 0),
+            )
+
+        warmup_only = {
+            **archive_stats(), "nodes": {"pve1": {"responses": 10, "steady_responses": 0}},
+        }
+        code, result, text = compare(dict(baseline, pve_archive_inventory=warmup_only))
+        self.assertEqual(code, 0)
+        self.assertEqual(result["status"], "measured")
+        self.assertEqual(result["rss_growth_kib"], -32768)
+        self.assertEqual(result["candidate_proxmox"]["pve_archive_inventory"], warmup_only)
+        self.assertIn("Candidate: PVE archive inventory had no completed full response in the RSS window on pve1.", text)
+        self.assertIn("This RSS change does not establish memory use under equivalent polling.", text)
+        self.assertIn("| PVE archive entries per response | 840 backups, 24 ISOs, 24 templates (144000 bytes) |", text)
+        self.assertIn("| PVE archive responses by node (all / steady) | pve1 10/6 | pve1 10/0 |", text)
+        self.assertIn("not proof that Pulse accepted or retained those archive rows", text)
+
+        for unavailable in (None, archive_stats(None), archive_stats(299)):
+            with self.subTest(archive=unavailable):
+                _, _, text = compare(dict(baseline, pve_archive_inventory=unavailable))
+                self.assertIn("Candidate: PVE archive response evidence is unavailable for the RSS window.", text)
+
+        _, _, text = compare(dict(baseline, pve_archive_inventory={**archive_stats(), "body_sha256": "d" * 64}))
+        self.assertIn("The two PVE archive fixtures were configured with different response bodies.", text)
+        _, _, text = compare(baseline)
+        self.assertNotIn("Polling evidence limits the comparison", text)
 
     def test_proxmox_unavailable_traffic_does_not_erase_adverse_rss(self):
         code, result, text = self.run_summary(
@@ -578,6 +635,8 @@ while True:
   [[ "$1" == build && "$2" == -o ]] && cp "$PULSE_TEST_BINARY" "$3"
 }
 date() {
+  # The archive pair fixes one timestamp before either worker starts.
+  if [[ -z "${data-}" ]]; then printf '%s\n' 90; return; fi
   local tick=100 i
   for ((i=0; i<100; i++)); do
     [[ -f "$data/ready" ]] && break
@@ -681,6 +740,7 @@ exec bash "$@"
                         args = (output / f"proxmox-args-{side}").read_text().splitlines()
                         self.assertEqual(args[args.index("--steady-since") + 1], "105")
                         self.assertEqual(args[args.index("--sample-until") + 1], "108")
+                        self.assertEqual(args[args.index("--archive-as-of") + 1], "90")
                     args = (output / f"profile-{side}").read_text().splitlines()
                     self.assertIn("--max-time", args)
                     self.assertEqual(args[args.index("--max-time") + 1], "5")

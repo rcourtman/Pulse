@@ -192,6 +192,25 @@ def pve_steady_poll_sightings(stats: dict) -> str:
     )
 
 
+def pve_archive_entries(stats: dict) -> str:
+    archive = stats.get("pve_archive_inventory")
+    if archive is None:
+        return "n/a"
+    rows = archive["rows_by_content"]
+    return (f"{rows.get('backup', 0)} backups, {rows.get('iso', 0)} ISOs, "
+            f"{rows.get('vztmpl', 0)} templates ({archive['body_bytes']} bytes)")
+
+
+def pve_archive_responses(stats: dict) -> str:
+    archive = stats.get("pve_archive_inventory")
+    if archive is None:
+        return "n/a"
+    return ", ".join(
+        f"{node} {row['responses']}/{row['steady_responses'] if row['steady_responses'] is not None else 'n/a'}"
+        for node, row in sorted(archive["nodes"].items())
+    )
+
+
 def pbs_datastore_rows(coverage: dict) -> list[dict]:
     return [store for instance in coverage["datastores"].values() for store in instance.values()]
 
@@ -218,6 +237,15 @@ def proxmox_polling_limits(label: str, stats: dict | None, window_s: int) -> lis
         notes.append(f"- {label}: PVE guest sightings are unavailable for the RSS window.")
     elif pve["guests_with_sightings"] != stats["guests"] or pve["guests_over_limit"]:
         notes.append(f"- {label}: PVE guest sightings were missing or exceeded the {pve['limit_s']} s gap limit.")
+
+    archive = stats.get("pve_archive_inventory")
+    if archive is None or archive["window_s"] != window_s or not archive["nodes"]:
+        notes.append(f"- {label}: PVE archive response evidence is unavailable for the RSS window.")
+    else:
+        silent_nodes = [node for node, row in sorted(archive["nodes"].items()) if row["steady_responses"] == 0]
+        if silent_nodes:
+            notes.append(f"- {label}: PVE archive inventory had no completed full response in the RSS window on "
+                         f"{', '.join(silent_nodes)}.")
 
     if stats["pbs_instances"] > 0:
         pbs = stats.get("pbs_steady_datastore_status")
@@ -246,6 +274,8 @@ def proxmox_lines(baseline: dict | None, candidate: dict | None) -> list[str]:
         "They are diagnostic only, not proof of backup reads or of Pulse accepting the response.",
         "PVE sighting gaps describe what the dashboard observed during steady RSS sampling. "
         "They are reported only; a gap does not identify where observation stopped.",
+        "The PVE archive counts completed, unfiltered responses from the shared fixture, "
+        "not proof that Pulse accepted or retained those archive rows. Steady counts use the RSS window.",
         "",
         "| | Baseline | Candidate |",
         "|---|---:|---:|",
@@ -257,6 +287,8 @@ def proxmox_lines(baseline: dict | None, candidate: dict | None) -> list[str]:
          lambda d: (f"{d['pve_guests_recent']}/{d['guests']} (last {d['pve_guest_freshness_window_s']} s)"
                     if "pve_guests_recent" in d else "n/a")),
         ("PVE guest poll sightings during steady RSS sampling", pve_steady_poll_sightings),
+        ("PVE archive entries per response", pve_archive_entries),
+        ("PVE archive responses by node (all / steady)", pve_archive_responses),
         ("PBS API requests", lambda d: d["pbs_requests"]),
         ("PBS snapshot groups served/configured", pbs_snapshot_coverage),
         ("PBS datastore status responses during steady RSS sampling", pbs_steady_datastore_status),
@@ -457,6 +489,10 @@ def main(argv: list[str]) -> int:
     if estate == "proxmox":
         limits = (proxmox_polling_limits("Baseline", baseline_proxmox, duration - start)
                   + proxmox_polling_limits("Candidate", candidate_proxmox, duration - start))
+        base_archive = (baseline_proxmox or {}).get("pve_archive_inventory")
+        cand_archive = (candidate_proxmox or {}).get("pve_archive_inventory")
+        if base_archive and cand_archive and base_archive["body_sha256"] != cand_archive["body_sha256"]:
+            limits.append("- The two PVE archive fixtures were configured with different response bodies.")
         if limits:
             lines += ["", "**Polling evidence limits the comparison.** "
                       "This RSS change does not establish memory use under equivalent polling.", "", *limits]

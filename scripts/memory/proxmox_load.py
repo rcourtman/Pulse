@@ -8,7 +8,8 @@ Proxmox homelab estate against a Pulse started with development admin bypass
 and authentication configured:
 
 - serves 1 synthetic Proxmox VE cluster (3 nodes, 20 VMs, 15 LXCs, storage,
-  guest snapshots, tasks, physical disks) over local HTTP;
+  guest snapshots, tasks, physical disks) over local HTTP, including a shared
+  archive with 24 restore points per guest interleaved with ISOs and templates;
 - serves 2 synthetic Proxmox Backup Server instances (2 datastores each,
   50 snapshots per backup group by default -> 5,200 PBS snapshots total);
 - registers the PVE cluster and PBS instances via /api/config/nodes;
@@ -20,13 +21,15 @@ the fixture did not serve snapshots for every configured PBS group, or the
 dashboard lacked the full synthetic PVE inventory with recent poll sightings
 at the end of sampling. It also reports gaps between observed guest poll
 sightings and between completed PBS datastore status responses during the
-same final third used for the RSS comparison.
+same final third used for the RSS comparison. PVE archive evidence counts
+completed full responses per member, not rows Pulse accepted or retained.
 """
 
 from __future__ import annotations
 
 import argparse
 import base64
+import hashlib
 import http.server
 import json
 import math
@@ -51,6 +54,9 @@ DASHBOARD_LOCK = threading.Lock()
 # scheduling and delivery slack without accepting the startup roster for RSS
 # measured after collection has stopped.
 GUEST_FRESHNESS_SECONDS = 60
+ARCHIVE_STORE = "nfs-backups"
+ARCHIVE_CONTENT = "backup,iso,vztmpl"
+ARCHIVE_POINTS_PER_GUEST = 24
 
 
 class ThreadedHTTPServer(socketserver.ThreadingMixIn, http.server.HTTPServer):
@@ -221,12 +227,74 @@ class PBSStatusWindow:
         }
 
 
+def archive_rows(guests: list[tuple[str, str, int, str]], as_of: int) -> list[dict]:
+    rows = []
+    for point in range(ARCHIVE_POINTS_PER_GUEST):
+        created = as_of - 3600 - point * 86400
+        stamp = time.strftime("%Y_%m_%d-%H_%M_%S", time.gmtime(created))
+        for _, kind, vmid, _ in guests:
+            file_kind, fmt = ("qemu", "vma.zst") if kind == "vm" else ("lxc", "tar.zst")
+            rows.append({
+                "volid": f"{ARCHIVE_STORE}:backup/vzdump-{file_kind}-{vmid}-{stamp}.{fmt}",
+                "content": "backup",
+                "format": fmt,
+                "size": 512 * 1024**2,
+                "ctime": created,
+                "vmid": vmid,
+            })
+        rows.extend([
+            {"volid": f"{ARCHIVE_STORE}:iso/system-{point}.iso",
+             "content": "iso", "format": "iso", "size": 1024**3},
+            {"volid": f"{ARCHIVE_STORE}:vztmpl/container-{point}.tar.zst",
+             "content": "vztmpl", "format": "tar.zst", "size": 128 * 1024**2},
+        ])
+    return rows
+
+
+class PVEArchiveInventory:
+    def __init__(self, rows: list[dict], start_s: int, end_s: int):
+        self.start_s, self.end_s = start_s, end_s
+        self.body = json.dumps({"data": rows}).encode("utf-8")
+        self.rows_by_content = dict(Counter(row["content"] for row in rows))
+        # A single shared-store body is reused by every member; the fixture
+        # does not regenerate or serialize it during each measured poll.
+        self.body_sha256 = hashlib.sha256(self.body).hexdigest()
+        self.responses: Counter[str] = Counter()
+        self.steady_responses: Counter[str] = Counter()
+
+    def observe(self, node: str, completed_ms: int) -> None:
+        self.responses[node] += 1
+        if self.start_s * 1000 <= completed_ms <= self.end_s * 1000:
+            self.steady_responses[node] += 1
+
+    def report(self, nodes: list[str], finished: float) -> dict:
+        window_complete = finished >= self.end_s
+        return {
+            "storage": ARCHIVE_STORE,
+            "rows_by_content": self.rows_by_content,
+            "body_bytes": len(self.body),
+            "body_sha256": self.body_sha256,
+            "window_s": self.end_s - self.start_s if window_complete else None,
+            "nodes": {
+                node: {
+                    "responses": self.responses[node],
+                    "steady_responses": self.steady_responses[node] if window_complete else None,
+                }
+                for node in sorted(nodes)
+            },
+        }
+
+
 def make_pve_handler(
     nodes: list[str],
     vms_per_node: int,
     lxcs_per_node: int,
     counters: Counter,
     lock: threading.Lock,
+    *,
+    archive_as_of: int,
+    steady_since: int,
+    sample_until: int,
 ):
     guests_by_node: dict[str, tuple[list[dict], list[dict]]] = {}
     vmid = 100
@@ -270,6 +338,9 @@ def make_pve_handler(
         for guest in lxcs:
             all_guest_refs.append((node, "ct", guest["vmid"], guest["name"]))
 
+    stored_rows = archive_rows(all_guest_refs, archive_as_of)
+    archive = PVEArchiveInventory(stored_rows, steady_since, sample_until)
+
     def guest_payload(guest: dict, kind: str, wave: float, now: int) -> dict:
         is_vm = kind == "qemu"
         io_scale = 4 if is_vm else 1
@@ -291,7 +362,9 @@ def make_pve_handler(
             return
 
         def send_json(self, payload: object, status: int = 200) -> None:
-            body = json.dumps({"data": payload}).encode("utf-8")
+            self.send_json_body(json.dumps({"data": payload}).encode("utf-8"), status)
+
+        def send_json_body(self, body: bytes, status: int = 200) -> None:
             self.send_response(status)
             self.send_header("Content-Type", "application/json")
             self.send_header("Content-Length", str(len(body)))
@@ -369,11 +442,24 @@ def make_pve_handler(
                 return self.send_json([
                     {"storage": "local", "type": "dir", "content": "backup,iso,vztmpl", "shared": 0},
                     {"storage": "local-zfs", "type": "zfspool", "content": "images,rootdir", "shared": 0},
-                    {"storage": "nfs-backups", "type": "nfs", "content": "backup", "shared": 1},
+                    {"storage": ARCHIVE_STORE, "type": "nfs", "content": ARCHIVE_CONTENT, "shared": 1},
                     {"storage": "pbs-primary", "type": "pbs", "content": "backup", "shared": 1},
                 ])
 
             parts = [p for p in path.split("/") if p]
+            if len(parts) == 5 and parts[0] == "nodes" and parts[2:] == ["storage", ARCHIVE_STORE, "content"]:
+                node = parts[1]
+                if node not in guests_by_node:
+                    return self.send_json([], 404)
+                if parsed.query:
+                    content = urllib.parse.parse_qs(parsed.query, keep_blank_values=True).get("content")
+                    return self.send_json([row for row in stored_rows if content is None or row["content"] in content])
+                self.send_json_body(archive.body)
+                completed_ms = time.time_ns() // 1_000_000
+                with lock:
+                    archive.observe(node, completed_ms)
+                return
+
             if len(parts) >= 3 and parts[0] == "nodes" and parts[1] in guests_by_node:
                 node = parts[1]
                 vms, lxcs = guests_by_node[node]
@@ -419,9 +505,9 @@ def make_pve_handler(
                             "avail": 1200 * 1024**3,
                         },
                         {
-                            "storage": "nfs-backups",
+                            "storage": ARCHIVE_STORE,
                             "type": "nfs",
-                            "content": "backup",
+                            "content": ARCHIVE_CONTENT,
                             "active": 1,
                             "enabled": 1,
                             "shared": 1,
@@ -431,19 +517,6 @@ def make_pve_handler(
                         },
                     ])
                 if sub == "storage" and len(parts) == 5 and parts[4] == "content":
-                    if parts[3] == "nfs-backups":
-                        items = [
-                            {
-                                "volid": f"nfs-backups:backup/vzdump-{kind}-{gid}-2026_11_20-02_00_00.vma.zst",
-                                "content": "backup",
-                                "format": "vma.zst",
-                                "size": 512 * 1024**2,
-                                "ctime": now - 3600,
-                                "vmid": gid,
-                            }
-                            for _, kind, gid, _ in all_guest_refs[:10]
-                        ]
-                        return self.send_json(items)
                     return self.send_json([])
                 if sub in ("qemu", "lxc") and len(parts) == 5 and parts[4] == "snapshot":
                     gid = int(parts[3])
@@ -493,7 +566,7 @@ def make_pve_handler(
 
             return self.send_json([])
 
-    return PVEHandler, all_guest_refs
+    return PVEHandler, all_guest_refs, archive
 
 
 def make_pbs_handler(
@@ -795,6 +868,7 @@ def main(argv: list[str]) -> int:
     parser.add_argument("--lxcs-per-node", type=int, default=5)
     parser.add_argument("--pbs-instances", type=int, default=2)
     parser.add_argument("--snapshots-per-group", type=int, default=50)
+    parser.add_argument("--archive-as-of", type=int, help="shared Unix time for both builds' synthetic archive")
     parser.add_argument("--duration", type=float, required=True, help="seconds to drive load")
     parser.add_argument("--steady-since", type=int, required=True, help="start of steady RSS sampling (Unix seconds)")
     parser.add_argument("--sample-until", type=int, required=True, help="planned end of RSS sampling (Unix seconds)")
@@ -809,7 +883,11 @@ def main(argv: list[str]) -> int:
     counters: Counter = Counter()
     lock = threading.Lock()
     node_names = [f"pve{i + 1}" for i in range(args.nodes)]
-    pve_handler, guest_refs = make_pve_handler(node_names, args.vms_per_node, args.lxcs_per_node, counters, lock)
+    pve_handler, guest_refs, archive = make_pve_handler(
+        node_names, args.vms_per_node, args.lxcs_per_node, counters, lock,
+        archive_as_of=args.archive_as_of if args.archive_as_of is not None else int(time.time()),
+        steady_since=args.steady_since, sample_until=args.sample_until,
+    )
     pve_srv = ThreadedHTTPServer(("127.0.0.1", 0), pve_handler)
 
     pbs_servers: list[tuple[str, ThreadedHTTPServer]] = []
@@ -907,6 +985,7 @@ def main(argv: list[str]) -> int:
             for name, stores in snapshot_coverage.items()
         }
         status_coverage = status_window.report(snapshot_coverage, finished)
+        archive_coverage = archive.report(node_names, finished)
     pbs_requests = sum(v for k, v in req_counts.items() if k != "pve_requests")
     pve_requests = req_counts.get("pve_requests", 0)
     with dash_stats.lock:
@@ -926,6 +1005,7 @@ def main(argv: list[str]) -> int:
         "pve_guests_recent": len(guest_refs) - len(missing_recent_guests),
         "pve_guest_freshness_window_s": GUEST_FRESHNESS_SECONDS,
         "pve_steady_poll_sightings": poll_coverage,
+        "pve_archive_inventory": archive_coverage,
         "registrations": reg_results,
         "requests": req_counts,
         "pve_requests": pve_requests,
