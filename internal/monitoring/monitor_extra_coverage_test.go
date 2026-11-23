@@ -1428,7 +1428,7 @@ func TestPollVMsAndContainersEfficient_ContinuesGuestAgentQueriesAfterTransientS
 
 	prev := m.previousGuestContextForInstance("pve1")
 	prevVM, ok := prev.vmsByID[guestID]
-	if !ok || !hasRecentGuestAgentEvidence(&prevVM, time.Now()) {
+	if !ok || !hasRecentGuestAgentEvidence(prevVM, time.Now()) {
 		t.Fatalf("expected recent guest-agent evidence for %s, got %#v", guestID, prev.vmsByID)
 	}
 
@@ -1600,7 +1600,7 @@ func TestPollVMsWithNodes_ContinuesGuestAgentQueriesAfterTransientStatusFailure(
 
 	prev := m.previousGuestContextForInstance("pve1")
 	prevVM, ok := prev.vmsByID[guestID]
-	if !ok || !hasRecentGuestAgentEvidence(&prevVM, time.Now()) {
+	if !ok || !hasRecentGuestAgentEvidence(prevVM, time.Now()) {
 		t.Fatalf("expected recent guest-agent evidence for %s, got %#v", guestID, prev.vmsByID)
 	}
 

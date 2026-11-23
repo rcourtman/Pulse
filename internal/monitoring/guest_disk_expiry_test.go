@@ -208,17 +208,17 @@ func testGuestDiskOrdinaryDeferralExpiryAndRecovery(t *testing.T) {
 					t.Helper()
 					// The cycle starts before collection, as in pollVMsAndContainersEfficient.
 					cycleStart := time.Now()
-					previous := m.previousGuestContextForInstance("disk-expiry").vmsByID[id]
+					previous := m.previousGuestContextForInstance("disk-expiry").vmsByID
 					var vm models.VM
 					if path == "node" {
-						vms, _ := m.pollNodeVMsWithClusterResourceBuilder(ctx, "disk-expiry", "node", []proxmox.VM{{VMID: 105, Name: res.Name, Status: res.Status, MaxMem: res.MaxMem, Mem: res.Mem, MaxDisk: res.MaxDisk, CPU: res.CPU}}, client, map[string]models.VM{id: previous}, nil)
+						vms, _ := m.pollNodeVMsWithClusterResourceBuilder(ctx, "disk-expiry", "node", []proxmox.VM{{VMID: 105, Name: res.Name, Status: res.Status, MaxMem: res.MaxMem, Mem: res.Mem, MaxDisk: res.MaxDisk, CPU: res.CPU}}, client, previous, nil)
 						if len(vms) != 1 {
 							t.Fatal("node collector lost the guest")
 						}
 						vm = vms[0]
 					} else {
 						var ok bool
-						vm, _, _, _, _, ok = m.buildVMFromClusterResource(ctx, "disk-expiry", res, client, id, nil, &previous)
+						vm, _, _, _, _, ok = m.buildVMFromClusterResource(ctx, "disk-expiry", res, client, id, nil, previous[id])
 						if !ok {
 							t.Fatal("cluster builder lost the guest")
 						}
@@ -259,7 +259,7 @@ func testGuestDiskOrdinaryDeferralExpiryAndRecovery(t *testing.T) {
 				}
 				// Shift only the accepted source's observation time, not LastSeen.
 				// This models an extended pause without an actual ten-minute delay.
-				aged := m.previousGuestContextForInstance("disk-expiry").vmsByID[id]
+				aged := *m.previousGuestContextForInstance("disk-expiry").vmsByID[id]
 				aged.DiskObservation.ObservedAt = time.Now().Add(-recentGuestAgentEvidenceMaxAge - time.Second)
 				publish(aged)
 				expired := build(context.Background())

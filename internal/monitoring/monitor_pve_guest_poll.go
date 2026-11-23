@@ -99,8 +99,8 @@ func (m *Monitor) collectGuestsFromClusterResources(
 	resources []proxmox.ClusterResource,
 	client PVEClientInterface,
 	prevContainerIsOCI map[int]bool,
-	prevContainerByID map[string]models.Container,
-	prevVMByID map[string]models.VM,
+	prevContainerByID map[string]*models.Container,
+	prevVMByID map[string]*models.VM,
 	vmIDToHostAgent map[string]models.Host,
 ) ([]models.VM, []models.Container) {
 	// Partition the read-only inventory by index. The workers join before
@@ -262,7 +262,7 @@ func (m *Monitor) collectClusterContainerResources(
 	resources clusterGuestInventory,
 	client PVEClientInterface,
 	prevContainerIsOCI map[int]bool,
-	prevContainerByID map[string]models.Container,
+	prevContainerByID map[string]*models.Container,
 	vmIDToHostAgent map[string]models.Host,
 ) []models.Container {
 	count := resources.size()
@@ -287,7 +287,11 @@ func (m *Monitor) collectClusterContainerResources(
 		}
 		if ctx.Err() != nil {
 			previous := prevContainerByID[guestID]
-			container = preserveContainerOptionalEnrichment(container, &previous)
+			if previous == nil {
+				// Keep the same empty carry-over for a guest with no earlier row.
+				previous = &models.Container{}
+			}
+			container = preserveContainerOptionalEnrichment(container, previous)
 		}
 		if ok {
 			orderedContainers[index] = container
@@ -303,7 +307,7 @@ func (m *Monitor) collectClusterVMResources(
 	instanceName string,
 	resources clusterGuestInventory,
 	client PVEClientInterface,
-	prevVMByID map[string]models.VM,
+	prevVMByID map[string]*models.VM,
 	vmIDToHostAgent map[string]models.Host,
 ) []models.VM {
 	count := resources.size()
@@ -322,10 +326,7 @@ func (m *Monitor) collectClusterVMResources(
 			for index := range jobCh {
 				res := resources.row(index)
 				guestID := makeGuestID(instanceName, res.Node, res.VMID)
-				var previous *models.VM
-				if prev, ok := prevVMByID[guestID]; ok {
-					previous = &prev
-				}
+				previous := prevVMByID[guestID]
 				var vm models.VM
 				var ok bool
 				build := func(workCtx context.Context) {

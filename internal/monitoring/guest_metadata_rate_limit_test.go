@@ -103,7 +103,7 @@ func TestGuestMetadataRateLimitRecoveryContract(t *testing.T) {
 						poll := func() models.VM {
 							var vm models.VM
 							if collector == "node" {
-								vms, _ := m.pollNodeVMsWithClusterResourceBuilder(context.Background(), instance, "node", []proxmox.VM{{VMID: 105, Name: "rate-limited-guest", Status: "running", MaxMem: 8 * bootstrapMiB, MaxDisk: 2000 * bootstrapMiB, CPU: .1}}, client, map[string]models.VM{id: previous}, nil)
+								vms, _ := m.pollNodeVMsWithClusterResourceBuilder(context.Background(), instance, "node", []proxmox.VM{{VMID: 105, Name: "rate-limited-guest", Status: "running", MaxMem: 8 * bootstrapMiB, MaxDisk: 2000 * bootstrapMiB, CPU: .1}}, client, map[string]*models.VM{id: &previous}, nil)
 								if len(vms) != 1 {
 									t.Fatal("ordinary node poll lost the guest")
 								}
