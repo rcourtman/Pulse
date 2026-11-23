@@ -45,7 +45,9 @@ For PVE, legacy, disabled, or failed agent updates, use **Agent Doctor** at
 3. **Backup**: Current installation is backed up
 4. **Apply**: Files are updated
 5. **Restart**: Service restarts automatically
-6. **Verify**: Health check confirms success
+6. **Verify**: Pulse checks that the updated server responds. That does not
+   check that monitoring has resumed. [Check for fresh readings](#check-that-monitoring-resumed)
+   after the restart.
 
 ### Progress Tracking
 
@@ -53,7 +55,19 @@ A real-time progress modal shows:
 - Current step
 - Download progress
 - Any warnings or errors
-- Automatic page reload on success
+- Automatic page reload when the update completes
+
+### Check that monitoring resumed
+
+After the next scheduled poll, open a [History chart](METRICS_HISTORY.md#read-a-history-panel)
+for a resource that was already reporting. Look for a sample dated after Pulse
+restarted. A value from before the restart is not enough.
+
+If Pulse runs in a memory-limited Proxmox LXC, check that the same guests and
+any backup datastores you already monitor report again. Before widening the
+rollout, [compare memory and polling at the same limit and workload](PRODUCTION_SECURITY.md#production-rollout-checklist).
+If Pulse stops, use the [memory-stop checks](TROUBLESHOOTING.md#after-a-memory-cgroup-kill).
+Do not restart again or raise the limit just to check the update.
 
 ## Configuration
 
@@ -119,6 +133,8 @@ guest. Follow the [existing-installation update procedure](INSTALL.md#-updates),
 including its helper-ownership check. On a community-scripts installation,
 `/bin/update` can be a different updater; its filename does not establish that
 it uses Pulse's signed installer or accepts an exact target version.
+
+After the update, [check that monitoring resumed](#check-that-monitoring-resumed).
 
 ### Systemd Service (Manual)
 

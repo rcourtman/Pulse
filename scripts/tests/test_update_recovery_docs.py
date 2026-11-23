@@ -84,6 +84,29 @@ class UpdateRecoveryDocsTest(unittest.TestCase):
         self.assertIn("helper whose owner is unknown", systemd)
         self.assertIn("default installation paths", systemd)
 
+    def test_server_update_paths_distinguish_restart_from_fresh_monitoring(self):
+        fragment = "](#check-that-monitoring-resumed)"
+        process = " ".join(section("AUTO_UPDATE", "Update Process", "###").split())
+        self.assertIn("That does not check that monitoring has resumed.", process)
+        self.assertNotIn("Health check confirms success", process)
+        self.assertIn(fragment, process)
+        self.assertIn(fragment, section("AUTO_UPDATE", "ProxmoxVE LXC (Manual)", "###"))
+
+        text = " ".join(section("AUTO_UPDATE", "Check that monitoring resumed", "###").split())
+        self.assertIn("next scheduled poll", text)
+        self.assertIn("sample dated after Pulse restarted", text)
+        self.assertIn("Do not restart again or raise the limit", text)
+        self.assertNotIn("```", text, "These are observational checks, not an update recipe")
+        for name, anchor, heading in (
+            ("METRICS_HISTORY", "read-a-history-panel", "## Read a History panel"),
+            ("PRODUCTION_SECURITY", "production-rollout-checklist", "## Production rollout checklist"),
+            ("TROUBLESHOOTING", "after-a-memory-cgroup-kill", "##### After a memory-cgroup kill"),
+        ):
+            with self.subTest(guide=name):
+                self.assertIn(f"]({name}.md#{anchor})", text)
+                shipped = (ROOT / "frontend-modern/public/docs" / f"{name}.md").read_text()
+                self.assertIn(f"\n{heading}\n", shipped)
+
     def test_chart_selection_help_preserves_evidence_and_exact_installer_trust(self):
         text = " ".join(section("AUTO_UPDATE", "A helper selects a Helm-chart release", "###").split())
         for phrase in (
