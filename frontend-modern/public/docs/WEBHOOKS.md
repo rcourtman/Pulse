@@ -129,10 +129,10 @@ HTTP 429 or 503, a usable `Retry-After` can extend the usual wait up to
 | HTTP 408, 421, 423, 425 or 429; HTTP 5xx; connectivity or unknown failure | Can retry with backoff while the saved attempt budget remains; exhaustion retains a terminal failure. |
 | TLS failure | Can retry within the saved budget, but retrying does not repair certificate trust, expiry or hostname errors. Do not disable verification. |
 
-A terminal failure means **no further automatic retry**, not that the delivery
-was successful or its history was deleted. In **Alerts → Notifications**, use
-**Recent delivery activity** to check the destination, timestamp, failure class
-and HTTP status. A pending or held delivery is not a terminal failure; quiet
+A terminal failure means the **original retry sequence stopped**, not that the
+delivery was successful or its history was deleted. In **Alerts → Notifications**,
+use **Recent delivery activity** to check the destination, timestamp, failure
+class and HTTP status. A pending or held delivery is not a terminal failure; quiet
 hours and other delivery policies can postpone it. There is no fixed delivery
 deadline promised by the attempt count.
 
@@ -158,6 +158,11 @@ does not validate or resend those saved deliveries. Do not repeat tests or
 batch retries to diagnose rate limiting. A receiver can see a duplicate if an
 earlier request was accepted but Pulse did not receive its response; preserve
 [receiver deduplication](#receiver-correlation-and-deduplication).
+
+Automatic delivery recovery, where available, is separate from the original
+attempts. An ordinary success to the same unchanged destination can requeue an
+eligible recent failure once. Use the [retained-failure checks](TROUBLESHOOTING.md#recover-retained-delivery-failures)
+to see whether the older alert actually arrived before resending it.
 
 Turning off the global **Send notifications** switch cancels pending alert
 deliveries and clears buffered groups; turning delivery back on does not replay those cancelled

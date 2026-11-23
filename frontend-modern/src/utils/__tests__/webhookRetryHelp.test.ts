@@ -79,14 +79,46 @@ describe('webhook retry help', () => {
   });
 
   it('distinguishes terminal failure from success, history removal and held delivery', () => {
-    expect(retryText()).toContain('A terminal failure means no further automatic retry');
-    expect(retryText()).toContain(
-      'not that the delivery was successful or its history was deleted',
+    const retry = retryText();
+    expect(retry).toContain('A terminal failure means the original retry sequence stopped');
+    expect(retry).not.toContain('no further automatic retry');
+    expect(retry).toContain('not that the delivery was successful or its history was deleted');
+    expect(retry).toContain('destination, timestamp, failure class and HTTP status');
+    expect(retry).toContain('A pending or held delivery is not a terminal failure');
+    expect(retry).toContain('There is no fixed delivery deadline promised by the attempt count');
+    expect(retry).toContain(
+      'An ordinary success to the same unchanged destination can requeue an eligible recent failure once',
     );
-    expect(retryText()).toContain('destination, timestamp, failure class and HTTP status');
-    expect(retryText()).toContain('A pending or held delivery is not a terminal failure');
-    expect(retryText()).toContain(
-      'There is no fixed delivery deadline promised by the attempt count',
+  });
+
+  it('checks the same alert at its destination before considering a resend', () => {
+    const guide = read('docs/TROUBLESHOOTING.md');
+    const section = guide
+      .split('#### Test succeeds but real alerts are missing')[1]
+      .split('#### Recover retained delivery failures')[0];
+    const element = document.createElement('article');
+    element.innerHTML = renderDocMarkdown(section, 'TROUBLESHOOTING');
+    const diagnosis = text(element);
+    expect(diagnosis).toContain('Refresh delivery status reads activity without sending anything');
+    expect(diagnosis).toContain(
+      'Delivered means Pulse recorded a successful send for that attempt, not that it reached the intended inbox or service',
+    );
+    expect(diagnosis).toContain(
+      "A newer alert's success does not establish receipt of an earlier one",
+    );
+    expect(
+      element.querySelector('a[href="/docs/CONFIGURATION#quiet-hours-and-notification-holds"]'),
+    ).not.toBeNull();
+
+    const recovery = recoveryText();
+    expect(recovery).toContain(
+      'failure from the last 24 hours back in the queue for one more attempt',
+    );
+    expect(recovery).toContain('A Test does not do this');
+    expect(recovery).toContain('Retrying does not mean the next attempt has happened');
+    expect(recovery).toContain('later attempt for the original alert and destination');
+    expect(recovery.indexOf('Completed attempts remain for 7 days')).toBeLessThan(
+      recovery.indexOf('When a destination is back'),
     );
   });
 
@@ -124,6 +156,12 @@ describe('webhook retry help', () => {
         'TROUBLESHOOTING',
         'recover-retained-delivery-failures',
         'retained-failure recovery',
+      ],
+      [
+        'WEBHOOKS',
+        'TROUBLESHOOTING',
+        'recover-retained-delivery-failures',
+        'retained-failure checks',
       ],
       ['TROUBLESHOOTING', 'WEBHOOKS', '-delivery-contract', 'webhook retry behaviour'],
     ];

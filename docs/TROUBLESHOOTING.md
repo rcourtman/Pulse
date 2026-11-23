@@ -1582,6 +1582,11 @@ alert was generated, routed or delivered to the intended recipient.
   and absolute timestamp, including held-notification reasons. An empty window
   is not proof of healthy delivery; an **unavailable** read is not an empty log.
   Do not create an outage or repeat a notification storm to populate it.
+- **Refresh delivery status** reads activity without sending anything.
+  **Delivered** means Pulse recorded a successful send for that attempt, not
+  that it reached the intended inbox or service. Check the receiver's existing
+  history for the same alert and destination. A newer alert's success does not
+  establish receipt of an earlier one.
 
 #### Recover retained delivery failures
 
@@ -1617,8 +1622,18 @@ Start with the failure class and timestamp:
 | Configuration / rejected | Enabled destination, required fields and the provider's endpoint or payload requirements. |
 | Server error / unknown | Destination service status and a relevant, bounded local error excerpt. |
 
-Save the corrected destination settings and send one test; check receipt at the
-intended destination. **Retained deliveries keep the destination settings saved
+When a destination is back, check **Recent delivery activity** before using
+**Retry retained deliveries**. In builds with automatic delivery recovery, a
+successful real delivery to the same unchanged destination can put an eligible
+failure from the last 24 hours back in the queue for one more attempt. A Test
+does not do this, and a later success does not mean every old failure was
+retried. **Retrying** does not mean the next attempt has happened. Look for a
+later attempt for the original alert and destination, then check the receiver's
+existing history.
+
+If you changed the destination settings, save the correction. To check those
+settings, you can send one test and check receipt at the intended destination.
+**Retained deliveries keep the destination settings saved
 when they were queued.** Editing a URL, recipient, credential, header or template
 does not replace that saved configuration. A test uses the edited settings;
 retrying an old delivery can still use the old endpoint or credential and fail

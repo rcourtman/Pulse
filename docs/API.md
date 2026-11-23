@@ -1159,7 +1159,14 @@ Common reporting error codes:
 - `GET /api/notifications/queue/stats` (admin, `settings:read` and `monitoring:read`)
   - Returns counts for all rows still retained by the queue. Status counts have
     different retention windows and are not a delivery rate or lifetime total.
-- `GET /api/notifications/dlq` (admin)
+- `GET /api/notifications/dlq` (admin, `settings:read` and `monitoring:read`)
+  - Lists retained dead-letter queue items, not individual attempts. The
+    summary includes the item `id`, status, attempt counts, timestamps and
+    alert references, not the saved destination configuration or raw error.
+  - For an attempt's outcome or failure class, match the queue item's `id`
+    to `notificationId` in the bounded delivery log. No matching entry in
+    that response does not prove no attempt occurred. Neither read sends
+    anything. Keep delivery evidence private.
 - `POST /api/notifications/dlq/retry` (admin)
 - `POST /api/notifications/dlq/delete` (admin, `settings:write`; `DELETE` also accepted)
   - Body: `{ "id": "<notification id>" }`. Marks that queue row `cancelled`

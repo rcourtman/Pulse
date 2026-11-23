@@ -961,6 +961,11 @@ describe('docsLinks', () => {
     expect(compactQueueTools).toContain('Completed attempts are retained for 7 days');
     expect(compactQueueTools).toContain('dead-letter attempts are retained for 30 days');
     expect(compactQueueTools).toContain('`limit` defaults to 50 and is capped at 200');
+    expect(compactQueueTools).toContain(
+      'Lists retained dead-letter queue items, not individual attempts',
+    );
+    expect(compactQueueTools).toContain("match the queue item's `id` to `notificationId`");
+    expect(compactQueueTools).toContain('does not prove no attempt occurred');
   });
 
   it('ships the bulk active-alert delivery diagnosis contract', () => {
