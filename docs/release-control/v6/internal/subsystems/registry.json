@@ -6103,6 +6103,7 @@
             "test_prefixes": [],
             "exact_files": [
               "frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts",
+              "frontend-modern/src/components/shared/__tests__/Subtabs.test.tsx",
               "frontend-modern/src/components/shared/FilterToolbar.test.tsx"
             ]
           },

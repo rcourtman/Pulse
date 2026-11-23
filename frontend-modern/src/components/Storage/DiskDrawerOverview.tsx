@@ -1,10 +1,7 @@
 import { Component, For, Show, Suspense, createMemo, lazy } from 'solid-js';
 import type { HistoryTimeRange } from '@/api/charts';
 import type { DetailSection } from '@/components/shared/DetailSectionTable';
-import {
-  DrawerAttentionSection,
-  DrawerNoAlertsLine,
-} from '@/components/shared/DrawerAttentionSection';
+import { DrawerAttentionSection } from '@/components/shared/DrawerAttentionSection';
 import {
   TechnicalDetailsDisclosure,
   TechnicalDetailsSection,
@@ -117,9 +114,6 @@ export const DiskDrawerOverview: Component<DiskDrawerOverviewProps> = (props) =>
           acknowledged: alert.acknowledged,
         }))}
       />
-      <Show when={(props.alerts ?? []).length === 0}>
-        <DrawerNoAlertsLine />
-      </Show>
 
       <DrawerExceptionList testId="disk-drawer-exceptions" rows={exceptionRows()} />
 

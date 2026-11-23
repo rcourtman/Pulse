@@ -190,4 +190,23 @@ describe('Subtabs', () => {
       await screen.findByRole('button', { name: 'Resource detail sections: scroll left' }),
     ).toBeInTheDocument();
   });
+
+  it('anchors the tab rail to the bottom edge when a trailing control is rendered', () => {
+    render(() => (
+      <Subtabs
+        value="overview"
+        onChange={vi.fn()}
+        ariaLabel="Guest drawer sections"
+        tabs={[
+          { value: 'overview', label: 'Overview' },
+          { value: 'manage', label: 'Manage' },
+        ]}
+        trailing={<select aria-label="History range" />}
+      />
+    ));
+
+    const tablist = screen.getByRole('tablist', { name: 'Guest drawer sections' });
+    expect(tablist.parentElement).toHaveClass('self-end');
+    expect(screen.getByRole('combobox', { name: 'History range' })).toBeInTheDocument();
+  });
 });

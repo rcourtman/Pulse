@@ -236,7 +236,8 @@ describe('ProxmoxCephTable', () => {
     expect(heading.parentElement?.querySelector('[aria-label="Healthy"]')).not.toBeNull();
     expect(screen.getByRole('tab', { name: 'Overview' })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'Manage' })).toBeInTheDocument();
-    expect(screen.getByTestId('drawer-no-attention')).toHaveTextContent('No active alerts');
+    expect(screen.queryByTestId('drawer-attention-section')).toBeNull();
+    expect(screen.queryByTestId('drawer-no-attention')).toBeNull();
   });
 
   it('lifts health warnings, down OSDs and full pools into Worth checking', () => {

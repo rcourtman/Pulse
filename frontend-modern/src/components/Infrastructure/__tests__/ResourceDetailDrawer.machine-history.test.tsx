@@ -107,7 +107,8 @@ describe('ResourceDetailDrawer machine inventory', () => {
         })}
       />
     ));
-    expect(screen.getByTestId('drawer-no-attention')).toHaveTextContent('No active alerts');
+    expect(screen.queryByTestId('drawer-attention-section')).toBeNull();
+    expect(screen.queryByTestId('drawer-no-attention')).toBeNull();
     expect(screen.queryByTestId('resource-drawer-exceptions')).toBeNull();
     const facts = screen.getByTestId('resource-drawer-facts');
     expect(facts).toHaveTextContent('8 logical CPUs');
@@ -147,8 +148,10 @@ describe('ResourceDetailDrawer machine inventory', () => {
     const machine = render(() => (
       <ResourceDetailDrawer resource={resource({ id: 'agent-checked', availability: passing })} />
     ));
-    expect(screen.getByTestId('drawer-no-attention')).toHaveTextContent(
-      'availability checks passing',
+    expect(screen.queryByTestId('drawer-attention-section')).toBeNull();
+    expect(screen.queryByTestId('drawer-no-attention')).toBeNull();
+    expect(screen.getByTestId('resource-drawer-facts')).toHaveTextContent(
+      'Availability checks passing',
     );
     const details = screen.getByTestId('resource-technical-details');
     expect(details.contains(screen.getByTestId('availability-probe-status'))).toBe(true);

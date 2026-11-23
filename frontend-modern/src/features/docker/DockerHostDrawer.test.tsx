@@ -178,10 +178,15 @@ describe('DockerHostDrawer history', () => {
     expect(screen.queryByRole('tab', { name: 'History' })).toBeNull();
     const history = await screen.findByTestId('docker-host-history');
     expect(history).toHaveAttribute('data-range', '24h');
-    expect(history).toHaveAttribute('data-range-picker', 'true');
+    expect(history).toHaveAttribute('data-range-picker', 'false');
     expect(history).toHaveAttribute('data-enabled', 'true');
+    const rangeSelect = screen.getByTestId('guest-history-range-control');
+    expect(rangeSelect).toHaveValue('24h');
+    fireEvent.change(rangeSelect, { target: { value: '7d' } });
+    expect(history).toHaveAttribute('data-range', '7d');
     fireEvent.click(screen.getByRole('tab', { name: 'Manage' }));
     expect(screen.getByTestId('docker-host-history')).toHaveAttribute('data-enabled', 'false');
+    expect(screen.queryByTestId('guest-history-range-control')).toBeNull();
   });
 
   it('shows live readings for a reporting host', async () => {
@@ -328,7 +333,8 @@ describe('DockerHostDrawer inventory', () => {
 
   it('lifts what needs checking, states one facts line and keeps the rest under Details', () => {
     render(() => <DockerHostDrawer host={inventoryHost()} />);
-    expect(screen.getByTestId('drawer-no-attention')).toHaveTextContent('No active alerts');
+    expect(screen.queryByTestId('drawer-attention-section')).toBeNull();
+    expect(screen.queryByTestId('drawer-no-attention')).toBeNull();
     const lifted = screen.getByTestId('docker-host-drawer-exceptions');
     expect(within(lifted).getByText('Updates')).toBeInTheDocument();
     expect(within(lifted).getByText('2 available')).toBeInTheDocument();
