@@ -19631,8 +19631,17 @@ func TestContract_AgentCapabilitiesFrontendTypesAreGeneratedFromManifest(t *test
 	for _, required := range []string{
 		`getAgentSurfaceContractEntries`,
 		`normalizeAgentMCPAdapter`,
-		`formatAgentOpenCodeMCPConfig`,
-		`formatAgentMCPServersConfig`,
+		`mcpAdapter().serverName`,
+		`formatPulseCLIMCPServersSnippet`,
+		`formatPulseCLICodexTOMLSnippet`,
+		`formatPulseCLIOpenCodeSnippet`,
+		`command: 'pulse'`,
+		`args: ['mcp']`,
+		`command = "pulse"`,
+		`args = ["mcp"]`,
+		`command: ['pulse', 'mcp']`,
+		`pulse auth login`,
+		`pulse connect`,
 		`AGENT_SURFACE_ID_PULSE_MCP`,
 		`getAgentManifestSurfaceToolContract`,
 		`getAgentSurfaceToolPosturePresentation`,
@@ -19642,7 +19651,7 @@ func TestContract_AgentCapabilitiesFrontendTypesAreGeneratedFromManifest(t *test
 		`External agents expose`,
 	} {
 		if !strings.Contains(panel, required) {
-			t.Errorf("Agent integrations panel must project the manifest surface contract through the shared client; missing %s", required)
+			t.Errorf("Agent integrations panel must project the manifest surface contract through the shared client and use pulse mcp, missing %s", required)
 		}
 	}
 	for _, forbidden := range []string{
@@ -19652,13 +19661,15 @@ func TestContract_AgentCapabilitiesFrontendTypesAreGeneratedFromManifest(t *test
 		`Pulse MCP`,
 	} {
 		if strings.Contains(panel, forbidden) {
-			t.Errorf("Agent integrations panel must not duplicate manifest surface labels locally; found %s", forbidden)
+			t.Errorf("Agent integrations panel must not duplicate manifest surface labels locally, found %s", forbidden)
 		}
 	}
 	for _, forbidden := range []string{
 		`const MCP_CLIENT_EXAMPLES`,
 		`function formatClaudeMcpConfig`,
 		`function formatOpenCodeMcpConfig`,
+		`formatAgentOpenCodeMCPConfig`,
+		`formatAgentMCPServersConfig`,
 		`command: 'pulse-mcp'`,
 		`PULSE_API_TOKEN: '<your-api-token>'`,
 		`getAgentMCPClientExamples`,
@@ -19667,7 +19678,7 @@ func TestContract_AgentCapabilitiesFrontendTypesAreGeneratedFromManifest(t *test
 		`capability.name`,
 	} {
 		if strings.Contains(panel, forbidden) {
-			t.Errorf("Agent integrations panel must consume manifest-backed MCP adapter helpers instead of local setup snippets; found %s", forbidden)
+			t.Errorf("Agent integrations panel must use pulse mcp with manifest-backed adapter naming instead of legacy pulse-mcp token snippets, found %s", forbidden)
 		}
 	}
 }
