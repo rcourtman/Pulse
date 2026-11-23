@@ -25,49 +25,53 @@ alerts you when something needs attention.
 
 ## Inside Pulse
 
-<table>
-  <tr>
-    <td width="50%" valign="top">
-      <a href="docs/images/pulse-docker.webp"><img src="docs/images/pulse-docker.webp" alt="Docker hosts and containers" /></a><br />
-      <strong>Docker &amp; Podman:</strong> hosts, containers, Compose stacks, Swarm health, and image updates without mounting the Docker socket on Pulse.
-    </td>
-    <td width="50%" valign="top">
-      <a href="docs/images/pulse-kubernetes.webp"><img src="docs/images/pulse-kubernetes.webp" alt="Kubernetes clusters and workloads" /></a><br />
-      <strong>Kubernetes:</strong> multi-cluster health, degraded nodes, pods, deployments, storage, and events in one view.
-    </td>
-  </tr>
-  <tr>
-    <td width="50%" valign="top">
-      <a href="docs/images/pulse-alerts.webp"><img src="docs/images/pulse-alerts.webp" alt="Active alerts and notifications" /></a><br />
-      <strong><a href="docs/ALERTING.md">Alerts</a> &amp; <a href="docs/AVAILABILITY.md">Availability</a>:</strong> thresholds plus Ping/TCP/UDP/HTTP(S) &amp; TLS checks via email, Discord, Slack, Telegram, ntfy, Gotify, Pushover, PagerDuty, or webhooks.
-    </td>
-    <td width="50%" valign="top">
-      <a href="docs/images/pulse-backups.webp"><img src="docs/images/pulse-backups.webp" alt="Proxmox backup coverage and PBS datastores" /></a><br />
-      <strong>Backup coverage &amp; PBS:</strong> spot unprotected guests, stale backups, and failed sync jobs across PVE and Proxmox Backup Server.
-    </td>
-  </tr>
-  <tr>
-    <td width="50%" valign="top">
-      <a href="docs/images/pulse-history.webp"><img src="docs/images/pulse-history.webp" alt="Metric history and filesystem diagnostics" /></a><br />
-      <strong>Built-in metric history:</strong> CPU, memory, disk, network I/O, and filesystem charts for every host, guest, and container without external databases.
-    </td>
-    <td width="50%" valign="top">
-      <a href="docs/images/pulse-patrol.webp"><img src="docs/images/pulse-patrol.webp" alt="Pulse Patrol attention inbox" /></a><br />
-      <strong>Optional AI &amp; MCP:</strong> <a href="docs/AI.md">Pulse Patrol</a> runs scheduled checks with your own AI provider or local model; <a href="cmd/pulse-mcp/README.md#quick-start"><code>pulse-mcp</code></a> lets Claude Code, Codex, or OpenCode <a href="docs/WHAT_HAPPENED_OVERNIGHT.md">ask what changed overnight</a>.
-    </td>
-  </tr>
-</table>
+### Built-in metric history
+CPU, memory, disk, network I/O, and filesystem charts for every host, guest, and container without external databases.
+
+![Metric history and filesystem diagnostics](docs/images/pulse-history.webp)
+
+### Backup coverage & PBS
+Spot unprotected guests, stale backups, and failed sync jobs across Proxmox VE and Proxmox Backup Server.
+
+![Proxmox backup coverage and PBS datastores](docs/images/pulse-backups.webp)
+
+### [Alerts](docs/ALERTING.md) & [Availability](docs/AVAILABILITY.md)
+Thresholds plus Ping, TCP, UDP, HTTP(S), and TLS expiry checks via email, Discord, Slack, Telegram, ntfy, Gotify, Pushover, PagerDuty, or webhooks.
+
+![Active alerts and incident triage](docs/images/pulse-alerts.webp)
 
 ## Supported platforms
 
+![Zoomed-in views of Docker and Kubernetes monitoring in Pulse](docs/images/pulse-platforms.webp)
+
 | Platform | What Pulse monitors |
 |---|---|
-| Proxmox VE, PBS &amp; PMG | Nodes, VMs, LXCs, storage, backups, replication, Ceph, mail gateways |
-| Docker &amp; Podman | Hosts, containers, Compose projects, Swarm services, image updates |
+| Proxmox VE, PBS & PMG | Nodes, VMs, LXCs, storage, backups, replication, Ceph, mail gateways |
+| Docker & Podman | Hosts, containers, Compose projects, Swarm services, image updates |
 | Kubernetes | Clusters, nodes, workloads, pods, services, storage, events |
-| TrueNAS SCALE &amp; CORE | Pools, datasets, disks, snapshots, replication, apps, VMs |
-| Linux, Windows &amp; macOS | Host health, filesystems, networking, temperatures, RAID, availability |
+| TrueNAS SCALE & CORE | Pools, datasets, disks, snapshots, replication, apps, VMs |
+| Linux, Windows & macOS | Host health, filesystems, networking, temperatures, RAID, availability |
 | VMware vSphere *(early access)* | Hosts, clusters, VMs, datastores, networks, snapshots |
+
+<details>
+<summary><strong>More full-screen views: Docker and Podman, Kubernetes, and Pulse Patrol</strong></summary>
+
+### Docker & Podman
+Hosts, containers, Compose stacks, Swarm health, and image updates without mounting the Docker socket on Pulse.
+
+![Docker hosts and containers](docs/images/pulse-docker.webp)
+
+### Kubernetes
+Multi-cluster health, degraded nodes, pods, deployments, storage, and events in one view.
+
+![Kubernetes clusters and workloads](docs/images/pulse-kubernetes.webp)
+
+### Optional AI & MCP
+[Pulse Patrol](docs/AI.md) runs scheduled checks with your own AI provider or local model. [`pulse-mcp`](cmd/pulse-mcp/README.md#quick-start) lets Claude Code, Codex, or OpenCode [ask what changed overnight](docs/WHAT_HAPPENED_OVERNIGHT.md).
+
+![Pulse Patrol attention inbox](docs/images/pulse-patrol.webp)
+
+</details>
 
 ## Install
 
@@ -142,7 +146,7 @@ Open `http://<your-ip>:7655`, paste the one-time token from `docker exec pulse /
 - **MSP:** isolated per-client workspaces under one Pulse Account, with a 60-day free trial for two clients at [Pulse for MSPs](https://pulserelay.pro/msp).
 
 > [!IMPORTANT]
-> GitHub releases and `rcourtman/pulse` are Community builds; Pro and legacy customers download from the [Pulse download portal](https://pulserelay.pro/download.html). Relay is no longer sold: existing subscribers keep Pro features at their current price, and paired phones keep working until **31 March 2027** ([details](docs/PULSE_PRO.md)).
+> GitHub releases and `rcourtman/pulse` are Community builds. Pro and legacy customers download from the [Pulse download portal](https://pulserelay.pro/download.html). Relay is no longer sold: existing subscribers keep Pro features at their current price, and paired phones keep working until **31 March 2027** ([details](docs/PULSE_PRO.md)).
 
 ## Documentation
 
