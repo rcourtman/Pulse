@@ -2,9 +2,9 @@
 """Exercise documentation admission, its actual shell and owning workflow.
 
 An isolated edit keeps all Public docs suites, mirror/link checks, governance
-and secret scanning. The two diagnostic recipes also keep a required verdict.
-Control changes, uncovered branches, mixed trees and unavailable evidence keep
-application CI.
+and secret scanning. The diagnostic recipes and exact mirrored Help pushes
+also keep a required verdict. Control changes, uncovered branches, mixed trees
+and unavailable evidence keep application CI.
 """
 
 import fnmatch
@@ -29,14 +29,15 @@ SCOPE = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(SCOPE)
 SUITE = "scripts/tests/test_oidc_session_docs.py"
 GUIDES = ("docs/OIDC.md", "frontend-modern/public/docs/OIDC.md")
+HELP_TEST = "frontend-modern/src/features/docs/__tests__/oidcSetupDocs.test.ts"
 DIAGNOSTICS = (
     "scripts/tests/test_troubleshooting_logs.py",
     "scripts/tests/test_vm_disk_diagnostics.py",
 )
 
 
-def classifier_script(source):
-    marker = "      - name: Classify changed files\n"
+def classifier_script(source, name="Classify changed files"):
+    marker = f"      - name: {name}\n"
     if source.count(marker) != 1:
         raise AssertionError("expected one classification step")
     body = source.split(marker, 1)[1].split("\n      - name:", 1)[0]
@@ -232,6 +233,31 @@ class GitClassifierTest(unittest.TestCase):
         self.git("commit", "-q", "-m", "Fixture tree change")
         return self.git("rev-parse", "HEAD")
 
+    def run_help_step(self, name, **env):
+        script = classifier_script(BUILD.read_text(), name)
+        with tempfile.TemporaryDirectory() as temporary:
+            output = Path(temporary) / "output"
+            result = subprocess.run(["bash", "-c", script], cwd=self.repo, capture_output=True,
+                                    text=True, timeout=10, env=dict(os.environ, GITHUB_OUTPUT=str(output),
+                                    **env))
+            return result, output.read_text() if output.exists() else ""
+
+    def help_scope(self, base, head):
+        result, output = self.run_help_step("Identify a mirrored Help-only main push", BASE_SHA=base, TESTED_SHA=head)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        return output
+
+    def add_help_fixture(self):
+        for guide in GUIDES:
+            self.write(guide, "# Existing mirrored Help\n")
+        self.write(HELP_TEST, "// Existing Help assertion\n")
+        return self.commit()
+
+    def update_help_fixture(self):
+        for guide in GUIDES:
+            self.write(guide, "# Updated mirrored Help\n")
+        self.write(HELP_TEST, "// Updated Help assertion\n")
+
     def run_classifier(self, base, head, branch="main", event="pull_request"):
         values = {"github.event_name": event, "github.event.pull_request.base.sha": base,
                   "github.event.before": base, "github.sha": head}
@@ -286,6 +312,103 @@ class GitClassifierTest(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertEqual(fields["code"], "false")
         self.assertIn("Summary: 2/2 passed", result.stdout)
+
+    def test_direct_main_push_with_mirrored_help_and_existing_tests_selects_focus(self):
+        base = self.add_help_fixture()
+        self.update_help_fixture()
+        head = self.commit()
+        self.assertEqual(self.help_scope(base, head), "selected=true\n")
+        # Ordinary classifier outputs do not themselves suppress the full
+        # suite. Only the main-push step can add a focused verdict.
+        self.assertEqual(self.classify(base, head), {
+            "code": "true", "go_compile": "false", "frontend_deps": "false", "triage_helper": "false",
+        })
+        for wrong_base in (self.base, head, "0" * 40, "f" * 40, "main"):
+            with self.subTest(base=wrong_base):
+                self.assertEqual(self.help_scope(wrong_base, head), "")
+        self.write("docs/another.md", "# Other edit\n")
+        self.commit()
+        self.assertEqual(self.help_scope(base, head), "")  # tested checkout does not match
+
+    def test_protected_merge_compares_the_first_parent_not_the_topic(self):
+        base = self.add_help_fixture()
+        self.update_help_fixture()
+        topic = self.commit()
+        merge = self.git("commit-tree", f"{topic}^{{tree}}", "-p", base, "-p", topic,
+                         "-m", "Merge the verified Help change")
+        self.git("reset", "--hard", merge)
+        self.assertEqual(self.help_scope(base, merge), "selected=true\n")
+        self.assertEqual(self.help_scope(topic, merge), "")
+
+    def test_only_exact_completed_help_command_emits_the_proof_marker(self):
+        head = self.add_help_fixture()
+        fake = self.repo / "bin/npm"
+        self.write("bin/npm", '#!/bin/sh\n'
+                   'printf "%s\\n" "$*"\n'
+                   'test "$*" != "$NPM_FAIL_COMMAND"\n')
+        fake.chmod(0o755)
+        env = dict(PATH=f"{fake.parent}:{os.environ['PATH']}", EXPECTED_SOURCE_SHA=head, NPM_FAIL_COMMAND="")
+        name = "Check Help test source and rendered guides"
+        result, output = self.run_help_step(name, **env)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        commands = [
+            "ci --no-audit", "run format:check", "run lint", "run lint:headers",
+            "run lint:cpd", "run type-check",
+            "run test -- src/features/docs/__tests__ src/utils/__tests__/docsLinks.test.ts",
+        ]
+        self.assertEqual(result.stdout.splitlines(), commands)
+        self.assertEqual(output, "completed=true\n")
+        for index, command in enumerate(commands):
+            with self.subTest(command=command):
+                result, output = self.run_help_step(name, **{**env, "NPM_FAIL_COMMAND": command})
+                self.assertNotEqual(result.returncode, 0)
+                self.assertEqual(result.stdout.splitlines(), commands[:index + 1])
+                self.assertEqual(output, "")
+        result, output = self.run_help_step(name, **{**env, "EXPECTED_SOURCE_SHA": self.base})
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(result.stdout, "")
+        self.assertEqual(output, "")
+
+    def test_help_selector_preserves_ordinary_ci_for_mixed_and_nonregular_changes(self):
+        for path in ("frontend-modern/src/features/docs/docMarkdown.ts",
+                     "frontend-modern/src/features/docs/__tests__/guideFixture.ts",
+                     "frontend-modern/package-lock.json", "internal/api/fixture.go",
+                     "install.sh", ".github/workflows/build-and-test.yml",
+                     "docs/release-control/spec.md",
+                     HELP_TEST.replace(".test.ts", "\nquoted.test.ts")):
+            with self.subTest(path=path):
+                self.git("reset", "--hard", self.base)
+                base = self.add_help_fixture()
+                self.update_help_fixture()
+                self.write(path, "// Changed additional path\n")
+                self.assertEqual(self.help_scope(base, self.commit()), "")
+
+        for change in ("chmod", "symlink", "rename", "delete", "add", "one-sided", "different", "test-only"):
+            with self.subTest(change=change):
+                self.git("reset", "--hard", self.base)
+                base = self.add_help_fixture()
+                self.update_help_fixture()
+                test = self.repo / HELP_TEST
+                if change == "chmod":
+                    test.chmod(0o755)
+                elif change == "symlink":
+                    test.unlink()
+                    test.symlink_to("elsewhere.test.ts")
+                elif change == "rename":
+                    self.git("config", "diff.renames", "true")
+                    test.rename(test.with_name("replacement.test.ts"))
+                elif change == "delete":
+                    test.unlink()
+                elif change == "add":
+                    test.with_name("new.test.ts").write_text("// New test\n")
+                elif change == "one-sided":
+                    self.write(GUIDES[1], "# Existing mirrored Help\n")
+                elif change == "different":
+                    self.write(GUIDES[1], "# Different Help\n")
+                elif change == "test-only":
+                    for guide in GUIDES:
+                        self.write(guide, "# Existing mirrored Help\n")
+                self.assertEqual(self.help_scope(base, self.commit()), "")
 
     def test_failed_or_missing_recipe_cannot_return_a_passing_required_result(self):
         start = self.add_recipe_fixtures()

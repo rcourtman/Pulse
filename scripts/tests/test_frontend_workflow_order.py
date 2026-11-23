@@ -12,6 +12,7 @@ import yaml
 ROOT = Path(__file__).resolve().parents[2]
 WORKFLOW = ROOT / ".github/workflows/build-and-test.yml"
 TRIAGE_VERDICT_STEP = "Require applicable triage proof when runtime is not applicable"
+HELP_VERDICT_STEP = "Require selected Help proof"
 RUNTIME_VERDICT_STEP = "Require complete frontend proof"
 
 
@@ -194,7 +195,8 @@ class FrontendWorkflowOrderTest(unittest.TestCase):
     def verdict(self, **values):
         env = dict(os.environ, CHANGE_RESULT="success", CODE_CHANGED="true",
                    BUILD_RESULT="success", CHECKS_RESULT="success", UNIT_RESULT="success",
-                   TRIAGE_REQUIRED="false", TRIAGE_RESULT="skipped")
+                   TRIAGE_REQUIRED="false", TRIAGE_RESULT="skipped",
+                   HELP_ONLY="false", HELP_RESULT="skipped", HELP_COMPLETED="")
         env.update(values)
 
         def run(name):
@@ -202,12 +204,15 @@ class FrontendWorkflowOrderTest(unittest.TestCase):
             return subprocess.run(["bash", "-e", "-u", "-o", "pipefail", "-c", step["run"]],
                                   env=env, text=True, capture_output=True, timeout=5)
 
-        # The first step has its own GitHub condition; a failure prevents the
-        # following step (default success()) from reporting a runtime verdict.
+        # GitHub skips the triage step for runtime changes. The other steps
+        # use default success(); a failed required proof blocks the verdict.
         if env["CODE_CHANGED"] == "false":
             triage = run(TRIAGE_VERDICT_STEP)
             if triage.returncode:
                 return triage
+        help_proof = run(HELP_VERDICT_STEP)
+        if help_proof.returncode:
+            return help_proof
         return run(RUNTIME_VERDICT_STEP)
 
     def test_required_name_depends_on_classification_checks_and_unit_suite(self):
@@ -215,11 +220,13 @@ class FrontendWorkflowOrderTest(unittest.TestCase):
         self.assertEqual(verdict["name"], "Frontend")
         self.assertEqual(sum(job.get("name") == "Frontend" for job in self.jobs.values()), 1)
         self.assertEqual(verdict["needs"],
-                         ["changes", "frontend-build", "frontend-checks", "frontend-unit", "triage-helper"])
+                         ["changes", "frontend-build", "frontend-checks", "frontend-unit",
+                          "triage-helper", "help-proof"])
         self.assertEqual(verdict["if"], "always()")
+        self.assertEqual(verdict["timeout-minutes"], 5)
         self.assertNotIn("continue-on-error", verdict)
         self.assertEqual([item.get("name") for item in verdict["steps"]],
-                         [TRIAGE_VERDICT_STEP, RUNTIME_VERDICT_STEP])
+                         [TRIAGE_VERDICT_STEP, HELP_VERDICT_STEP, RUNTIME_VERDICT_STEP])
         triage = self.step(TRIAGE_VERDICT_STEP, job="frontend")
         self.assertEqual(triage["if"], "always() && needs.changes.outputs.code == 'false'")
         self.assertNotIn("continue-on-error", triage)
@@ -271,6 +278,84 @@ class FrontendWorkflowOrderTest(unittest.TestCase):
             for state in states:
                 with self.subTest(name=name, state=state):
                     self.assertNotEqual(self.verdict(**{**values, name: state}).returncode, 0)
+
+    def test_main_push_help_requires_protected_scope_and_completed_checks(self):
+        changes = self.jobs["changes"]
+        self.assertEqual(changes["timeout-minutes"], 5)
+        scope = self.step("Identify a mirrored Help-only main push", job="changes")
+        self.assertEqual(scope["id"], "help-scope")
+        self.assertEqual(scope["if"],
+                         "github.event_name == 'push' && github.ref == 'refs/heads/main' && "
+                         "github.ref_protected && steps.filter.outputs.code == 'true' && "
+                         "steps.filter.outputs.go_compile == 'false' && "
+                         "steps.filter.outputs.frontend_deps == 'false' && "
+                         "steps.filter.outputs.triage_helper == 'false'")
+        self.assertEqual(scope["env"], {
+            "BASE_SHA": "${{ github.event.before }}", "TESTED_SHA": "${{ github.sha }}",
+        })
+        steps = changes["steps"]
+        mirror = self.step("Check shipped docs before dependency work", job="changes")
+        self.assertLess(steps.index(mirror), steps.index(scope))
+        self.assertEqual(changes["outputs"]["help_only"],
+                         "${{ steps.help-scope.outputs.selected == 'true' && 'true' || 'false' }}")
+        self.assertEqual(changes["outputs"]["code"],
+                         "${{ steps.help-scope.outputs.selected == 'true' && 'false' || steps.filter.outputs.code }}")
+
+        job = self.jobs["help-proof"]
+        self.assertEqual(job["needs"], "changes")
+        self.assertEqual(job["if"], "needs.changes.outputs.help_only == 'true'")
+        self.assertEqual(job["runs-on"], "ubuntu-24.04")
+        self.assertEqual(job["timeout-minutes"], 12)
+        self.assertNotIn("continue-on-error", job)
+        checkout = self.step("Checkout the selected Help source", job="help-proof")
+        self.assertEqual(checkout["uses"], self.step("Checkout repository", job="frontend-unit")["uses"])
+        self.assertEqual(checkout["with"], {"ref": "${{ github.sha }}", "persist-credentials": False})
+        setup = self.step("Set up Node.js for main-push Help checks", job="help-proof")
+        proof = self.step("Check Help test source and rendered guides", job="help-proof")
+        self.assertEqual(proof["id"], "help-proof")
+        unit_setup = self.step("Set up Node.js", job="frontend-unit")
+        self.assertEqual(setup["uses"], unit_setup["uses"])
+        self.assertEqual(setup["with"], unit_setup["with"])
+        self.assertEqual(proof["timeout-minutes"], 9)
+        self.assertEqual(proof["working-directory"], "frontend-modern")
+        self.assertEqual(proof["env"], {"EXPECTED_SOURCE_SHA": "${{ github.sha }}"})
+        self.assertEqual(job["outputs"], {"completed": "${{ steps.help-proof.outputs.completed }}"})
+        self.assertEqual(job["steps"], [checkout, setup, proof])
+        for step in (checkout, setup, proof):
+            self.assertNotIn("if", step)
+            self.assertNotIn("continue-on-error", step)
+
+    def test_selected_help_must_complete_before_frontend_can_pass(self):
+        gate = self.step(HELP_VERDICT_STEP, job="frontend")
+        self.assertNotIn("if", gate)
+        self.assertNotIn("continue-on-error", gate)
+        self.assertEqual(gate["env"], {
+            "CHANGE_RESULT": "${{ needs.changes.result }}",
+            "CODE_CHANGED": "${{ needs.changes.outputs.code }}",
+            "HELP_ONLY": "${{ needs.changes.outputs.help_only }}",
+            "HELP_RESULT": "${{ needs.help-proof.result }}",
+            "HELP_COMPLETED": "${{ needs.help-proof.outputs.completed }}",
+        })
+        selected = dict(CODE_CHANGED="false", BUILD_RESULT="skipped", CHECKS_RESULT="skipped",
+                        UNIT_RESULT="skipped", HELP_ONLY="true", HELP_RESULT="success",
+                        HELP_COMPLETED="true")
+        result = self.verdict(**selected)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        for key, outcomes in (
+            ("HELP_RESULT", ("failure", "cancelled", "skipped", "", "unknown")),
+            ("HELP_COMPLETED", ("false", "", "unknown")),
+            ("HELP_ONLY", ("false", "", "unknown")),
+            ("CHANGE_RESULT", ("failure", "cancelled", "skipped", "")),
+            ("CODE_CHANGED", ("true", "", "unknown")),
+        ):
+            for outcome in outcomes:
+                with self.subTest(key=key, outcome=outcome):
+                    result = self.verdict(**{**selected, key: outcome})
+                    self.assertNotEqual(result.returncode, 0)
+                    self.assertIn("Inspect the mirrored Help selection and proof", result.stdout)
+        for result, completed in (("success", "true"), ("failure", ""), ("skipped", "true")):
+            with self.subTest(unselected_result=result, completed=completed):
+                self.assertNotEqual(self.verdict(HELP_RESULT=result, HELP_COMPLETED=completed).returncode, 0)
 
     def test_complete_audit_failure_still_fails_after_build_admits_runtime(self):
         required = self.step("Require frontend dependency audit")
