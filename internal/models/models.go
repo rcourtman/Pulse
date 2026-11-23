@@ -4699,31 +4699,40 @@ func updateSliceByInstanceWithBackup[T any, K int | int64](
 	clone func(T) T,
 	less func([]T, int, int) bool,
 ) []T {
-	existingByVMID := make(map[K]T)
-	for _, item := range existing {
+	// Keep the working indexes small. VM and container records are too large
+	// to store inline in a Go map, so mapping them by value allocates another
+	// whole row per entry before we even build the published slice.
+	type rowSource struct {
+		index    int
+		incoming bool
+	}
+	existingByVMID := make(map[K]int)
+	byID := make(map[string]rowSource)
+	for i, item := range existing {
 		if getInstance(item) == instanceName {
-			existingByVMID[getVMID(item)] = item
+			existingByVMID[getVMID(item)] = i
+		} else {
+			byID[getID(item)] = rowSource{index: i}
 		}
+	}
+	// Last incoming row per ID wins, as before. Clone only those winners.
+	for i, item := range newItems {
+		byID[getID(item)] = rowSource{index: i, incoming: true}
 	}
 
-	itemMap := make(map[string]T)
-	for _, item := range existing {
-		if getInstance(item) != instanceName {
-			itemMap[getID(item)] = item
+	result := make([]T, 0, len(byID))
+	for _, row := range byID {
+		if !row.incoming {
+			result = append(result, existing[row.index])
+			continue
 		}
-	}
-	for _, item := range newItems {
-		item = clone(item)
+		item := clone(newItems[row.index])
 		// Guest polls know nothing about backups (LastBackup arrives zero);
 		// carry the previously computed backup state forward so it survives
 		// until the next SyncGuestBackupTimes pass recomputes it.
 		if prev, ok := existingByVMID[getVMID(item)]; ok && getLastBackup(item).IsZero() {
-			item = carryBackupState(item, prev)
+			item = carryBackupState(item, existing[prev])
 		}
-		itemMap[getID(item)] = item
-	}
-	result := make([]T, 0, len(itemMap))
-	for _, item := range itemMap {
 		result = append(result, item)
 	}
 	sort.Slice(result, func(i, j int) bool { return less(result, i, j) })
