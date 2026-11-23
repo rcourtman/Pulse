@@ -124,7 +124,10 @@ func externalAgentCapabilityActivity(capabilityName string) (string, string, boo
 		agentcapabilities.TestNodeCredentialsCapabilityName,
 		agentcapabilities.TestNodeConnectionCapabilityName,
 		agentcapabilities.RefreshNodeClusterMembershipCapabilityName,
-		agentcapabilities.DiscoverLANCapabilityName:
+		agentcapabilities.DiscoverLANCapabilityName,
+		agentcapabilities.GetDeclarativeConfigCapabilityName,
+		agentcapabilities.PlanDeclarativeConfigCapabilityName,
+		agentcapabilities.ApplyDeclarativeConfigCapabilityName:
 		activity = config.ExternalAgentActivityProvisioning
 	case agentcapabilities.GetOperatorStateCapabilityName,
 		agentcapabilities.SetOperatorStateCapabilityName,

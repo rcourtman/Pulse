@@ -19,21 +19,65 @@ import (
 // Include a destination here when adding an imported archive section.
 func (c *ConfigPersistence) importWriterLocked(tx *importTransaction) *ConfigPersistence {
 	return &ConfigPersistence{
-		configDir:       c.configDir,
-		nodesFile:       c.nodesFile,
-		alertFile:       c.alertFile,
-		alertIntentFile: c.alertIntentFile,
-		emailFile:       c.emailFile,
-		appriseFile:     c.appriseFile,
-		deadManFile:     c.deadManFile,
-		webhookFile:     c.webhookFile,
-		systemFile:      c.systemFile,
-		apiTokensFile:   c.apiTokensFile,
-		ssoFile:         c.ssoFile,
-		crypto:          c.crypto,
-		fs:              c.fs,
-		tx:              tx,
+		configDir:        c.configDir,
+		nodesFile:        c.nodesFile,
+		alertFile:        c.alertFile,
+		alertIntentFile:  c.alertIntentFile,
+		availabilityFile: c.availabilityFile,
+		emailFile:        c.emailFile,
+		appriseFile:      c.appriseFile,
+		deadManFile:      c.deadManFile,
+		webhookFile:      c.webhookFile,
+		systemFile:       c.systemFile,
+		apiTokensFile:    c.apiTokensFile,
+		ssoFile:          c.ssoFile,
+		crypto:           c.crypto,
+		fs:               c.fs,
+		tx:               tx,
 	}
+}
+
+// WithTransaction runs fn against a transaction-scoped ConfigPersistence writer
+// and commits all staged files atomically. If fn returns an error or panics,
+// staged files are rolled back and no live files are modified.
+func (c *ConfigPersistence) WithTransaction(fn func(writer *ConfigPersistence) error) error {
+	if c == nil {
+		return fmt.Errorf("config persistence is nil")
+	}
+	if fn == nil {
+		return nil
+	}
+
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if err := os.MkdirAll(c.configDir, 0o700); err != nil {
+		return fmt.Errorf("ensure config directory: %w", err)
+	}
+
+	tx, err := newImportTransaction(c.configDir)
+	if err != nil {
+		return fmt.Errorf("start config transaction: %w", err)
+	}
+	defer tx.Cleanup()
+
+	committed := false
+	defer func() {
+		if !committed {
+			tx.Rollback()
+		}
+	}()
+
+	writer := c.importWriterLocked(tx)
+	if err := fn(writer); err != nil {
+		return err
+	}
+
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit config transaction: %w", err)
+	}
+	committed = true
+	return nil
 }
 
 // importTransaction coordinates staging config writes during an import so they

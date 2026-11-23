@@ -92,5 +92,15 @@ func registerRemoteCommands(cmd *cobra.Command, deps ClientDeps) {
 	cmd.AddCommand(newFindingsCmd(deps.Remote))
 	cmd.AddCommand(newOperatorStateCmd(deps.Remote))
 	cmd.AddCommand(newActionsCmd(deps.Actions))
+	hasConfigCmd := false
+	for _, sub := range cmd.Commands() {
+		if sub.Name() == "config" {
+			hasConfigCmd = true
+			break
+		}
+	}
+	if !hasConfigCmd {
+		cmd.AddCommand(newDeclarativeConfigCmd(deps.Remote))
+	}
 	cmd.AddCommand(newCallCmd(deps.Remote))
 }

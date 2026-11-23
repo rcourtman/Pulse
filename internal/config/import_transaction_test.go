@@ -1,10 +1,13 @@
 package config
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 )
 
 func TestNewImportTransaction(t *testing.T) {
@@ -758,4 +761,128 @@ func TestStageFile_EmptyBasename(t *testing.T) {
 	if err != nil {
 		t.Fatalf("StageFile with empty basename: %v", err)
 	}
+}
+
+func TestConfigPersistence_WithTransaction(t *testing.T) {
+	t.Run("commits alerts and availability targets atomically", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		cp := NewConfigPersistence(tmpDir)
+
+		initialAlert := alerts.AlertConfig{Enabled: false, SuppressionWindow: 5}
+		if err := cp.SaveAlertConfig(initialAlert); err != nil {
+			t.Fatalf("SaveAlertConfig initial: %v", err)
+		}
+		initialTargets := []AvailabilityTarget{
+			{
+				ID:       "chk-initial",
+				Name:     "Initial",
+				Address:  "192.0.2.10",
+				Protocol: AvailabilityProbeICMP,
+				Enabled:  true,
+			},
+		}
+		if err := cp.SaveAvailabilityTargets(initialTargets); err != nil {
+			t.Fatalf("SaveAvailabilityTargets initial: %v", err)
+		}
+
+		updatedAlert := alerts.AlertConfig{Enabled: true, SuppressionWindow: 15}
+		updatedTargets := []AvailabilityTarget{
+			{
+				ID:       "chk-updated",
+				Name:     "Updated",
+				Address:  "192.0.2.20",
+				Protocol: AvailabilityProbeICMP,
+				Enabled:  true,
+			},
+		}
+
+		err := cp.WithTransaction(func(writer *ConfigPersistence) error {
+			if err := writer.SaveAlertConfig(updatedAlert); err != nil {
+				return err
+			}
+			if err := writer.SaveAvailabilityTargets(updatedTargets); err != nil {
+				return err
+			}
+			return nil
+		})
+		if err != nil {
+			t.Fatalf("WithTransaction() error = %v", err)
+		}
+
+		loadedAlert, err := cp.LoadAlertConfig()
+		if err != nil {
+			t.Fatalf("LoadAlertConfig: %v", err)
+		}
+		if !loadedAlert.Enabled || loadedAlert.SuppressionWindow != 15 {
+			t.Fatalf("loaded alert config = %+v, want enabled=true suppressionWindow=15", loadedAlert)
+		}
+
+		loadedTargets, err := cp.LoadAvailabilityTargets()
+		if err != nil {
+			t.Fatalf("LoadAvailabilityTargets: %v", err)
+		}
+		if len(loadedTargets) != 1 || loadedTargets[0].ID != "chk-updated" {
+			t.Fatalf("loaded availability targets = %+v, want single target chk-updated", loadedTargets)
+		}
+	})
+
+	t.Run("rolls back staged alerts and availability targets on error", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		cp := NewConfigPersistence(tmpDir)
+
+		initialAlert := alerts.AlertConfig{Enabled: false, SuppressionWindow: 5}
+		if err := cp.SaveAlertConfig(initialAlert); err != nil {
+			t.Fatalf("SaveAlertConfig initial: %v", err)
+		}
+		initialTargets := []AvailabilityTarget{
+			{
+				ID:       "chk-keep",
+				Name:     "Keep Me",
+				Address:  "192.0.2.10",
+				Protocol: AvailabilityProbeICMP,
+				Enabled:  true,
+			},
+		}
+		if err := cp.SaveAvailabilityTargets(initialTargets); err != nil {
+			t.Fatalf("SaveAvailabilityTargets initial: %v", err)
+		}
+
+		sentinel := errors.New("abort transaction")
+		err := cp.WithTransaction(func(writer *ConfigPersistence) error {
+			if err := writer.SaveAlertConfig(alerts.AlertConfig{Enabled: true, SuppressionWindow: 99}); err != nil {
+				return err
+			}
+			if err := writer.SaveAvailabilityTargets([]AvailabilityTarget{
+				{
+					ID:       "chk-should-rollback",
+					Name:     "Rollback",
+					Address:  "192.0.2.99",
+					Protocol: AvailabilityProbeICMP,
+					Enabled:  true,
+				},
+			}); err != nil {
+				return err
+			}
+			return sentinel
+		})
+		if !errors.Is(err, sentinel) {
+			t.Fatalf("WithTransaction() error = %v, want %v", err, sentinel)
+		}
+
+		loadedAlert, err := cp.LoadAlertConfig()
+		if err != nil {
+			t.Fatalf("LoadAlertConfig: %v", err)
+		}
+		if loadedAlert.Enabled || loadedAlert.SuppressionWindow != 5 {
+			t.Fatalf("alert config was mutated despite rollback: %+v", loadedAlert)
+		}
+
+		loadedTargets, err := cp.LoadAvailabilityTargets()
+		if err != nil {
+			t.Fatalf("LoadAvailabilityTargets: %v", err)
+		}
+		if len(loadedTargets) != 1 || loadedTargets[0].ID != "chk-keep" {
+			t.Fatalf("availability targets were mutated despite rollback: %+v", loadedTargets)
+		}
+	})
 }

@@ -1177,6 +1177,67 @@ switching protocol or observation location is not proof that ICMP recovered.
 
 ---
 
+## Declarative monitoring configuration as code
+
+Manage Pulse monitoring rules in Git or CI with the `pulse.monitoring/v1` YAML/JSON format and the `pulse config pull`, `pulse config diff`, and `pulse config apply` commands.
+
+### Scope (`pulse.monitoring/v1`)
+
+A `MonitoringConfig` document covers four monitoring domains:
+
+- `alerts`: alert thresholds, rules, and intent policies (`alerts.json`, `alert_intent_policies.json`)
+- `availabilityTargets`: HTTP, TCP, and ICMP availability checks (`availability_targets.enc`)
+- `operatorStates`: per-resource monitoring posture, maintenance windows, criticality, and remediation locks
+- `notifications`: email (SMTP), webhooks, Apprise, and dead-man switch settings (`email.enc`, `webhooks.enc`, `apprise.enc`, `deadman.enc`)
+
+Omitted top-level sections are left untouched when you apply a document. By default, existing items not listed in an included section are kept. Pass `--prune` to remove omitted items from included sections.
+
+For full encrypted server disaster-recovery backups (including credentials, node connections, and system files), keep using `pulse config export` and `pulse config import`.
+
+### Workflow
+
+1. Pull the current configuration (requires `settings:read`):
+
+```bash
+pulse config pull --output monitoring.yaml
+```
+
+Pass `--format json` to pull JSON instead of YAML.
+
+2. Preview changes and get a drift-guarded plan hash (requires `settings:read`):
+
+```bash
+pulse config diff -f monitoring.yaml
+```
+
+Add `--prune` to preview removals for omitted items in included sections.
+
+3. Apply the reviewed plan atomically (requires `settings:write`):
+
+```bash
+pulse config apply -f monitoring.yaml --plan-hash sha256:...
+```
+
+When you pass `--plan-hash`, Pulse verifies that the live configuration has not drifted since the plan was generated and fails closed with HTTP `409` (`declarative_config_plan_drift`) if it changed. In interactive terminals without `--plan-hash`, `pulse config apply` displays the diff and asks for confirmation. In scripts or CI without a TTY, pass `--plan-hash` from `pulse config diff` or pass `--yes`.
+
+Assigning remote probe agents to availability targets requires a Pulse Pro license (`external_probe`) and returns HTTP `402` when unlicensed.
+
+### Secret handling
+
+`pulse config pull` and `GET /api/config/declarative` never emit plaintext passwords, tokens, webhook URLs, HTTP probe credentials, or signing secrets. Saved secrets are exported as preserved references:
+
+```yaml
+password:
+  secretRef: preserved
+  configured: true
+  redactedHint: configured
+```
+
+- Keep `secretRef: preserved` to retain the existing secret already saved on the Pulse server without checking credentials into version control. If no saved secret exists for that field, Pulse fails closed with `declarative_config_secret_missing`.
+- To supply a new or rotated secret from your workstation or CI environment, set `secretRef: env:VAR_NAME`. The `pulse` CLI resolves `env:` references locally before sending the request over HTTPS, fails fast if the variable is unset, and never prints resolved secret values. The server rejects any unresolved `env:` reference with `declarative_config_unresolved_secret_ref`.
+
+---
+
 ## 🔒 HTTPS / TLS
 
 Enable HTTPS with a certificate and its matching private key. With direct HTTPS,

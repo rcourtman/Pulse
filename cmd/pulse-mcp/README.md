@@ -331,6 +331,9 @@ the live set.
 - `test_node_connection` (Test node connection, `POST /api/config/nodes/{nodeId}/test`, scope `settings:write`, mode `mixed`, approval `scope_only`): Validate the saved connection for an existing configured infrastructure source.
 - `refresh_node_cluster_membership` (Refresh node cluster membership, `POST /api/config/nodes/{nodeId}/refresh-cluster`, scope `settings:write`, mode `write`, approval `scope_only`): Re-detect Proxmox VE cluster membership and endpoint metadata for a configured source.
 - `discover_lan` (Discover LAN, `POST /api/discover`, scope `settings:write`, mode `mixed`, approval `scope_only`): Scan a subnet, or return cached scan results, to find candidate infrastructure hosts before deciding which sources to add to Pulse.
+- `get_declarative_config` (Get declarative config, `GET /api/config/declarative`, scope `settings:read`, mode `read`, approval `scope_only`): Export the current Pulse monitoring configuration as a declarative pulse.monitoring/v1 document covering alerts, availability targets, operator states, and notifications. Stored credentials and secrets are never returned in plaintext and appear as preserved secret references.
+- `plan_declarative_config` (Plan declarative config, `POST /api/config/declarative/plan`, scope `settings:read`, mode `read`, approval `scope_only`): Validate a desired pulse.monitoring/v1 document against current Pulse state and return a deterministic diff and planHash without modifying configuration. Set prune to true to plan removals for omitted items in included sections.
+- `apply_declarative_config` (Apply declarative config, `POST /api/config/declarative/apply`, scope `settings:write`, mode `write`, approval `scope_only`): Apply a desired pulse.monitoring/v1 monitoring configuration atomically and reload live managers. Requires either the reviewed planHash from plan_declarative_config or confirm set to true. Fails closed with declarative_config_plan_drift if state changed since planning.
 <!-- pulse-mcp-tools:end -->
 
 ## Workflow prompts
@@ -382,6 +385,8 @@ Capability-specific stable codes are advertised by the manifest:
 <!-- pulse-mcp-errors:start -->
 - `get_resource_context`: `resource_not_found`
 - `list_resource_capabilities`: `resource_not_found`
+- `plan_declarative_config`: `invalid_declarative_config`, `declarative_config_secret_missing`, and `declarative_config_unresolved_secret_ref`
+- `apply_declarative_config`: `invalid_declarative_config`, `declarative_config_secret_missing`, `declarative_config_unresolved_secret_ref`, `declarative_config_confirmation_required`, `declarative_config_plan_drift`, and `declarative_config_apply_failed`
 - `get_operator_state`: `operator_state_not_set`
 - `set_operator_state`: `operator_state_invalid`
 - `acknowledge_finding`: `invalid_finding_request`, `finding_not_found`, `finding_action_not_allowed`, and `patrol_unavailable`

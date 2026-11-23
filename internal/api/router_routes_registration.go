@@ -488,6 +488,20 @@ func (r *Router) registerConfigSystemRoutes(updateHandlers *UpdateHandlers) {
 		}
 	}))
 
+	// Declarative monitoring configuration as code routes
+	r.mux.HandleFunc("GET /api/config/declarative", RequireOrgAdmin(r.config, RequireScope(config.ScopeSettingsRead, r.withExternalAgentCapabilityActivity(
+		agentcapabilities.GetDeclarativeConfigCapabilityName,
+		r.handleGetDeclarativeConfig,
+	))))
+	r.mux.HandleFunc("POST /api/config/declarative/plan", RequireOrgAdmin(r.config, RequireScope(config.ScopeSettingsRead, r.withExternalAgentCapabilityActivity(
+		agentcapabilities.PlanDeclarativeConfigCapabilityName,
+		r.handlePlanDeclarativeConfig,
+	))))
+	r.mux.HandleFunc("POST /api/config/declarative/apply", RequireOrgAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.withExternalAgentCapabilityActivity(
+		agentcapabilities.ApplyDeclarativeConfigCapabilityName,
+		r.handleApplyDeclarativeConfig,
+	))))
+
 	// Discovery route
 
 	// Setup script route

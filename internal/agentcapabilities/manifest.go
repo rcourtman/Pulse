@@ -25,6 +25,18 @@ const (
 	GetActionCapabilityPath = "/api/actions/{" + ActionIDArgumentName + "}"
 	// RefreshActionCapabilityPath is the manifest-owned governed action refresh route template.
 	RefreshActionCapabilityPath = "/api/actions/{" + ActionIDArgumentName + "}/refresh"
+	// GetDeclarativeConfigCapabilityName is the manifest-owned declarative monitoring config read.
+	GetDeclarativeConfigCapabilityName = "get_declarative_config"
+	// PlanDeclarativeConfigCapabilityName is the manifest-owned declarative monitoring config diff/plan read.
+	PlanDeclarativeConfigCapabilityName = "plan_declarative_config"
+	// ApplyDeclarativeConfigCapabilityName is the manifest-owned declarative monitoring config apply write.
+	ApplyDeclarativeConfigCapabilityName = "apply_declarative_config"
+	// GetDeclarativeConfigCapabilityPath is the manifest-owned declarative monitoring config export route.
+	GetDeclarativeConfigCapabilityPath = "/api/config/declarative"
+	// PlanDeclarativeConfigCapabilityPath is the manifest-owned declarative monitoring config plan route.
+	PlanDeclarativeConfigCapabilityPath = "/api/config/declarative/plan"
+	// ApplyDeclarativeConfigCapabilityPath is the manifest-owned declarative monitoring config apply route.
+	ApplyDeclarativeConfigCapabilityPath = "/api/config/declarative/apply"
 )
 
 func agentObjectInputSchemaMap(required []string, properties map[string]any) map[string]any {
@@ -389,6 +401,59 @@ func discoverLANInputSchema() json.RawMessage {
 			"description": "Return cached discovery results when available instead of starting a new scan.",
 			"default":     false,
 		},
+	})
+}
+
+func getDeclarativeConfigInputSchema() json.RawMessage {
+	return agentObjectInputSchema(nil, map[string]any{
+		"format": stringEnumOption([]string{"json", "yaml"}, "Response format: json (default) or yaml."),
+	})
+}
+
+func declarativeConfigDocumentOutputSchema() json.RawMessage {
+	return agentObjectOutputSchema([]string{"apiVersion", "kind"}, map[string]any{
+		"apiVersion":          stringOption("Schema version, always pulse.monitoring/v1."),
+		"kind":                stringOption("Document kind, always MonitoringConfig."),
+		"alerts":              openObjectOption("Alert thresholds, rules, and intent policies."),
+		"availabilityTargets": objectArrayOption("Configured availability check targets with redacted secret references."),
+		"operatorStates":      objectArrayOption("Per-resource monitoring posture, maintenance windows, and remediation locks."),
+		"notifications":       openObjectOption("Email, webhook, Apprise, and dead-man notification settings with redacted secret references."),
+	})
+}
+
+func planDeclarativeConfigInputSchema() json.RawMessage {
+	return agentObjectInputSchema([]string{"document"}, map[string]any{
+		"document": openObjectOption("Desired pulse.monitoring/v1 MonitoringConfig document. Omitted top-level sections are left untouched."),
+		"prune":    booleanOption("When true, plan removals for existing items omitted from included sections. Defaults to false."),
+	})
+}
+
+func declarativeConfigPlanOutputSchema() json.RawMessage {
+	return agentObjectOutputSchema([]string{"apiVersion", "kind", "planHash", "prune", "summary", "changes"}, map[string]any{
+		"apiVersion": stringOption("Schema version of the planned document."),
+		"kind":       stringOption("Document kind of the planned document."),
+		"planHash":   stringOption("Deterministic SHA-256 hash binding current state, desired state, and prune mode."),
+		"prune":      booleanOption("Whether pruning was enabled for this plan."),
+		"summary":    openObjectOption("Counts of create, update, delete, and unchanged items, plus total and hasChanges."),
+		"changes":    objectArrayOption("Ordered list of planned changes across alerts, availabilityTargets, operatorStates, and notifications without secret values."),
+	})
+}
+
+func applyDeclarativeConfigInputSchema() json.RawMessage {
+	return agentObjectInputSchema([]string{"document"}, map[string]any{
+		"document": openObjectOption("Desired pulse.monitoring/v1 MonitoringConfig document to apply."),
+		"prune":    booleanOption("When true, remove existing items omitted from included sections. Defaults to false."),
+		"planHash": stringOption("Reviewed planHash returned by plan_declarative_config to guard against concurrent drift."),
+		"confirm":  booleanOption("Explicit confirmation when applying without a precomputed planHash."),
+	})
+}
+
+func declarativeConfigApplyOutputSchema() json.RawMessage {
+	return agentObjectOutputSchema([]string{"applied", "planHash", "summary", "changes"}, map[string]any{
+		"applied":  booleanOption("Whether configuration changes were persisted and reloaded."),
+		"planHash": stringOption("Plan hash that was verified and applied."),
+		"summary":  openObjectOption("Counts of applied create, update, delete, and unchanged items."),
+		"changes":  objectArrayOption("Ordered list of changes applied across included domains without secret values."),
 	})
 }
 
@@ -879,6 +944,19 @@ var (
 		AgentErrCodeActionNotExecuting,
 		AgentErrCodeActionReplanRequired,
 	}
+	agentCapabilityDeclarativeConfigPlanErrorCodes = []string{
+		AgentErrCodeInvalidDeclarativeConfig,
+		AgentErrCodeDeclarativeConfigSecretMissing,
+		AgentErrCodeDeclarativeConfigUnresolvedSecretRef,
+	}
+	agentCapabilityDeclarativeConfigApplyErrorCodes = []string{
+		AgentErrCodeInvalidDeclarativeConfig,
+		AgentErrCodeDeclarativeConfigSecretMissing,
+		AgentErrCodeDeclarativeConfigUnresolvedSecretRef,
+		AgentErrCodeDeclarativeConfigConfirmationRequired,
+		AgentErrCodeDeclarativeConfigPlanDrift,
+		AgentErrCodeDeclarativeConfigApplyFailed,
+	}
 )
 
 // canonicalManifest is the v1 declaration of Pulse's
@@ -1164,6 +1242,52 @@ var canonicalManifest = Manifest{
 			OutputSchema:     discoveryOutputSchema(),
 		},
 		{
+			Name:           GetDeclarativeConfigCapabilityName,
+			Title:          "Get declarative config",
+			Description:    "Export the current Pulse monitoring configuration as a declarative pulse.monitoring/v1 document covering alerts, availability targets, operator states, and notifications. Stored credentials and secrets are never returned in plaintext and appear as preserved secret references.",
+			Category:       "provisioning",
+			Method:         http.MethodGet,
+			Path:           GetDeclarativeConfigCapabilityPath,
+			Scope:          agentCapabilityScopeSettingsRead,
+			ActionMode:     agentCapabilityActionModeRead,
+			ApprovalPolicy: agentCapabilityApprovalPolicyScopeOnly,
+			ResponseShape:  "DeclarativeMonitoringConfig",
+			InputSchema:    getDeclarativeConfigInputSchema(),
+			OutputSchema:   declarativeConfigDocumentOutputSchema(),
+		},
+		{
+			Name:             PlanDeclarativeConfigCapabilityName,
+			Title:            "Plan declarative config",
+			Description:      "Validate a desired pulse.monitoring/v1 document against current Pulse state and return a deterministic diff and planHash without modifying configuration. Set prune to true to plan removals for omitted items in included sections.",
+			Category:         "provisioning",
+			Method:           http.MethodPost,
+			Path:             PlanDeclarativeConfigCapabilityPath,
+			Scope:            agentCapabilityScopeSettingsRead,
+			ActionMode:       agentCapabilityActionModeRead,
+			ApprovalPolicy:   agentCapabilityApprovalPolicyScopeOnly,
+			RequestBodyShape: "{ document: DeclarativeMonitoringConfig, prune?: boolean }",
+			ResponseShape:    "DeclarativeConfigPlanResult",
+			ErrorCodes:       agentCapabilityDeclarativeConfigPlanErrorCodes,
+			InputSchema:      planDeclarativeConfigInputSchema(),
+			OutputSchema:     declarativeConfigPlanOutputSchema(),
+		},
+		{
+			Name:             ApplyDeclarativeConfigCapabilityName,
+			Title:            "Apply declarative config",
+			Description:      "Apply a desired pulse.monitoring/v1 monitoring configuration atomically and reload live managers. Requires either the reviewed planHash from plan_declarative_config or confirm set to true. Fails closed with declarative_config_plan_drift if state changed since planning.",
+			Category:         "provisioning",
+			Method:           http.MethodPost,
+			Path:             ApplyDeclarativeConfigCapabilityPath,
+			Scope:            agentCapabilityScopeSettingsWrite,
+			ActionMode:       agentCapabilityActionModeWrite,
+			ApprovalPolicy:   agentCapabilityApprovalPolicyScopeOnly,
+			RequestBodyShape: "{ document: DeclarativeMonitoringConfig, prune?: boolean, planHash?: string, confirm?: boolean }",
+			ResponseShape:    "DeclarativeConfigApplyResult",
+			ErrorCodes:       agentCapabilityDeclarativeConfigApplyErrorCodes,
+			InputSchema:      applyDeclarativeConfigInputSchema(),
+			OutputSchema:     declarativeConfigApplyOutputSchema(),
+		},
+		{
 			Name:           GetOperatorStateCapabilityName,
 			Title:          "Get operator state",
 			Description:    "Read the operator-set monitoring mode, lifecycle state, remediation lock, maintenance window, and criticality for a resource.",
@@ -1446,6 +1570,9 @@ func canonicalPulseMCPSurfaceToolNames() []string {
 		TestNodeConnectionCapabilityName,
 		RefreshNodeClusterMembershipCapabilityName,
 		DiscoverLANCapabilityName,
+		GetDeclarativeConfigCapabilityName,
+		PlanDeclarativeConfigCapabilityName,
+		ApplyDeclarativeConfigCapabilityName,
 		GetOperatorStateCapabilityName,
 		SetOperatorStateCapabilityName,
 		ClearOperatorStateCapabilityName,

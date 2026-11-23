@@ -10192,3 +10192,7 @@ read/write path changes. Verified by `resourceLinks.test.ts`.
 ### External-agent action actor label persistence compatibility (23 November 2026)
 
 `unified.ActionActor` adds optional additive `credentialLabel` JSON metadata serialized within existing action audit records alongside `internal/api/` route and SSE event updates. No backup, snapshot, encryption-key, or recovery storage format changes. Proof: `internal/unifiedresources/actions_harness_test.go` and `internal/api/actions_harness_test.go`.
+
+### Transactional persistence helper for declarative monitoring config (23 November 2026)
+
+`internal/config/import_transaction.go` adds `availabilityFile` to `importWriterLocked` and exports `ConfigPersistence.WithTransaction` so declarative monitoring applies stage and commit `alerts.json`, `alert_intent_policies.json`, `availability_targets.enc`, `email.enc`, `webhooks.enc`, `apprise.enc`, and `deadman.enc` atomically with automatic rollback on failure. Encrypted DR archives (`pulse config export` and `import`), backup formats, and encryption keys are unchanged. Proof: `internal/config/import_transaction_test.go` and `internal/api/declarative_config_test.go`.

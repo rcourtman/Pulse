@@ -56,7 +56,9 @@ func NewRootCommand(command CommandSpec, runtime RuntimeSpec, deps CommandDeps) 
 	addClientPersistentFlags(cmd)
 
 	cmd.AddCommand(newVersionCmd(command))
-	cmd.AddCommand(newConfigCmd(deps.Config))
+	configCmd := newConfigCmd(deps.Config)
+	addDeclarativeConfigSubcommands(configCmd, deps.Remote)
+	cmd.AddCommand(configCmd)
 	cmd.AddCommand(newBootstrapTokenCmd(deps.Bootstrap))
 	cmd.AddCommand(newMockCmd(deps.Mock))
 	registerRemoteCommands(cmd, ClientDeps{

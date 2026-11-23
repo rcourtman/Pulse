@@ -12287,3 +12287,7 @@ read-only with no VM lifecycle or configuration authority. Verified by
 ### External-agent action transition events and own-plan read scope boundary (23 November 2026)
 
 `internal/api/actions.go`, `internal/api/agent_events.go`, `internal/api/router.go`, and `internal/api/router_routes_monitoring.go` add external-agent plan attribution, `actions:plan` own-plan read isolation, org-scoped `approval.pending`/`action.approved`/`action.rejected` SSE events, and operator approval notifications. Host-agent enrollment, command execution allowlists, and agent lifecycle authority are unchanged. Proof: `internal/api/actions_harness_test.go` and `internal/api/agent_events_test.go`.
+
+### Declarative monitoring config API route and telemetry boundary (23 November 2026)
+
+`internal/api/declarative_config.go`, `internal/api/router_routes_registration.go`, and `internal/api/agent_activity_telemetry.go` add `GET /api/config/declarative`, `POST /api/config/declarative/plan`, and `POST /api/config/declarative/apply` with provisioning telemetry markers and `FeatureExternalProbe` license enforcement on remote probe assignments. Host-agent enrollment, credentials, and agent lifecycle authority are unchanged. Proof: `internal/api/declarative_config_test.go` and `internal/api/route_inventory_test.go`.

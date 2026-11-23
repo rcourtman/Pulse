@@ -912,12 +912,15 @@ func TestCanonicalManifestDeclaresStructuredOutputSchemasForJSONResponses(t *tes
 			`Compatibility alias for patrolControlResolvedOperationsLoopCount`,
 			`minimum read-only external-agent scopes (such as monitoring:read or monitoring:read + actions:plan)`,
 		},
-		ListActionsCapabilityName:   {`"view"`, `"actions"`, `"count"`},
-		GetActionCapabilityName:     {`"audit"`, `"events"`, `"readiness"`, `"receipt"`},
-		PlanActionCapabilityName:    {`"actionId"`, `"planHash"`},
-		RefreshActionCapabilityName: {`"audit"`, `"events"`, `"readiness"`},
-		DecideActionCapabilityName:  {`"approval"`, `"audit"`},
-		ExecuteActionCapabilityName: {`"result"`, `"audit"`},
+		ListActionsCapabilityName:            {`"view"`, `"actions"`, `"count"`},
+		GetActionCapabilityName:              {`"audit"`, `"events"`, `"readiness"`, `"receipt"`},
+		PlanActionCapabilityName:             {`"actionId"`, `"planHash"`},
+		RefreshActionCapabilityName:          {`"audit"`, `"events"`, `"readiness"`},
+		DecideActionCapabilityName:           {`"approval"`, `"audit"`},
+		ExecuteActionCapabilityName:          {`"result"`, `"audit"`},
+		GetDeclarativeConfigCapabilityName:   {`"apiVersion"`, `"kind"`, `"alerts"`, `"availabilityTargets"`, `"operatorStates"`, `"notifications"`},
+		PlanDeclarativeConfigCapabilityName:  {`"planHash"`, `"prune"`, `"summary"`, `"changes"`},
+		ApplyDeclarativeConfigCapabilityName: {`"applied"`, `"planHash"`, `"summary"`, `"changes"`},
 	} {
 		cap, ok := byName[name]
 		if !ok {
@@ -1067,6 +1070,80 @@ func TestCanonicalManifestPinsActionReadAndRefreshCapabilities(t *testing.T) {
 	for _, name := range []string{ListActionsCapabilityName, GetActionCapabilityName, RefreshActionCapabilityName} {
 		if !containsString(contract.ToolNames, name) {
 			t.Fatalf("Pulse MCP surface tools missing %q: %v", name, contract.ToolNames)
+		}
+	}
+}
+
+func TestCanonicalManifestPinsDeclarativeConfigCapabilities(t *testing.T) {
+	manifest := CanonicalManifest()
+
+	getCap, ok := FindCapability(manifest.Capabilities, GetDeclarativeConfigCapabilityName)
+	if !ok {
+		t.Fatalf("CanonicalManifest missing %q", GetDeclarativeConfigCapabilityName)
+	}
+	if getCap.Category != "provisioning" || getCap.Method != http.MethodGet || getCap.Path != "/api/config/declarative" ||
+		getCap.Scope != auth.ScopeSettingsRead || getCap.ActionMode != ActionModeRead || getCap.ApprovalPolicy != ApprovalPolicyScopeOnly {
+		t.Fatalf("get_declarative_config contract = %+v", getCap)
+	}
+	getProjected, err := ProjectCapabilityCall(getCap, map[string]any{"format": "yaml"})
+	if err != nil {
+		t.Fatalf("ProjectCapabilityCall(get_declarative_config): %v", err)
+	}
+	if getProjected.Path != "/api/config/declarative" || getProjected.Query.Get("format") != "yaml" || getProjected.HasBody {
+		t.Fatalf("get_declarative_config projection = %+v", getProjected)
+	}
+
+	planCap, ok := FindCapability(manifest.Capabilities, PlanDeclarativeConfigCapabilityName)
+	if !ok {
+		t.Fatalf("CanonicalManifest missing %q", PlanDeclarativeConfigCapabilityName)
+	}
+	if planCap.Category != "provisioning" || planCap.Method != http.MethodPost || planCap.Path != "/api/config/declarative/plan" ||
+		planCap.Scope != auth.ScopeSettingsRead || planCap.ActionMode != ActionModeRead || planCap.ApprovalPolicy != ApprovalPolicyScopeOnly {
+		t.Fatalf("plan_declarative_config contract = %+v", planCap)
+	}
+	for _, code := range []string{
+		AgentErrCodeInvalidDeclarativeConfig,
+		AgentErrCodeDeclarativeConfigSecretMissing,
+		AgentErrCodeDeclarativeConfigUnresolvedSecretRef,
+	} {
+		if !containsString(planCap.ErrorCodes, code) {
+			t.Fatalf("plan_declarative_config missing error code %q: %v", code, planCap.ErrorCodes)
+		}
+	}
+
+	applyCap, ok := FindCapability(manifest.Capabilities, ApplyDeclarativeConfigCapabilityName)
+	if !ok {
+		t.Fatalf("CanonicalManifest missing %q", ApplyDeclarativeConfigCapabilityName)
+	}
+	if applyCap.Category != "provisioning" || applyCap.Method != http.MethodPost || applyCap.Path != "/api/config/declarative/apply" ||
+		applyCap.Scope != auth.ScopeSettingsWrite || applyCap.ActionMode != ActionModeWrite || applyCap.ApprovalPolicy != ApprovalPolicyScopeOnly {
+		t.Fatalf("apply_declarative_config contract = %+v", applyCap)
+	}
+	for _, code := range []string{
+		AgentErrCodeInvalidDeclarativeConfig,
+		AgentErrCodeDeclarativeConfigSecretMissing,
+		AgentErrCodeDeclarativeConfigUnresolvedSecretRef,
+		AgentErrCodeDeclarativeConfigConfirmationRequired,
+		AgentErrCodeDeclarativeConfigPlanDrift,
+		AgentErrCodeDeclarativeConfigApplyFailed,
+	} {
+		if !containsString(applyCap.ErrorCodes, code) {
+			t.Fatalf("apply_declarative_config missing error code %q: %v", code, applyCap.ErrorCodes)
+		}
+	}
+
+	contract, ok := FindManifestSurfaceToolContract(manifest, SurfaceIDPulseMCP)
+	if !ok {
+		t.Fatal("Pulse MCP surface tool contract missing")
+	}
+	for _, cap := range []Capability{getCap, planCap, applyCap} {
+		if !containsString(contract.ToolNames, cap.Name) {
+			t.Fatalf("Pulse MCP surface tools missing %q: %v", cap.Name, contract.ToolNames)
+		}
+		for _, text := range []string{cap.Title, cap.Description, string(cap.InputSchema), string(cap.OutputSchema)} {
+			if strings.Contains(text, "—") || strings.Contains(text, ";") {
+				t.Fatalf("capability %q contains disallowed em-dash or semicolon: %q", cap.Name, text)
+			}
 		}
 	}
 }
