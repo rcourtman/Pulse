@@ -7,7 +7,8 @@ import { getHistoryReadoutLabel } from '@/components/shared/historyChartModel';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../..');
 const read = (file: string) => readFileSync(path.join(root, file), 'utf8');
-const guide = read('docs/METRICS_HISTORY.md');
+const guide = read('frontend-modern/public/docs/METRICS_HISTORY.md');
+const troubleshootingGuide = read('frontend-modern/public/docs/TROUBLESHOOTING.md');
 const render = (markdown: string, name: string) => {
   const article = document.createElement('article');
   article.innerHTML = renderDocMarkdown(markdown, name);
@@ -20,8 +21,11 @@ const text = (element: Element) => element.textContent?.replace(/\s+/g, ' ');
 
 describe('History interpretation help', () => {
   it('ships both changed guides and puts safe interpretation before storage tuning', () => {
-    for (const name of ['METRICS_HISTORY', 'TROUBLESHOOTING']) {
-      expect(read(`frontend-modern/public/docs/${name}.md`)).toBe(read(`docs/${name}.md`));
+    for (const [name, shipped] of [
+      ['METRICS_HISTORY', guide],
+      ['TROUBLESHOOTING', troubleshootingGuide],
+    ]) {
+      expect(shipped).toBe(read(`docs/${name}.md`));
     }
     const headings = [...article().querySelectorAll('h2')].map((heading) => heading.id);
     expect(headings.slice(0, 3)).toEqual([
@@ -78,7 +82,7 @@ describe('History interpretation help', () => {
   });
 
   it('links from the existing memory workflow to working interpretation and safety headings', () => {
-    const troubleshooting = render(read('docs/TROUBLESHOOTING.md'), 'TROUBLESHOOTING');
+    const troubleshooting = render(troubleshootingGuide, 'TROUBLESHOOTING');
     const href = '/docs/METRICS_HISTORY#read-a-history-panel';
     expect(troubleshooting.querySelector(`a[href="${href}"]`)?.textContent).toBe(
       'History panel interpretation',
@@ -98,6 +102,36 @@ describe('History interpretation help', () => {
     expect(text(interpretation())).toContain(
       'do not share raw responses, credentials or a full network export',
     );
+  });
+
+  it('distinguishes resumed collection from a line spanning an interval without readings', () => {
+    const help = interpretation();
+    const missing = [...help.querySelectorAll('tbody tr')].find(
+      (row) => text(row.children[0]) === 'Missing observations',
+    );
+    expect(missing && text(missing.children[1])).toContain(
+      'another metric in the same panel has a stored point',
+    );
+    const check = [...help.querySelectorAll('p')].find((p) =>
+      text(p)?.startsWith('Did collection resume after Pulse stopped?'),
+    );
+    expect(check).toBeDefined();
+    const checkText = text(check!);
+    expect(checkText).toContain('shortest range that includes the stop');
+    expect(checkText).toContain(
+      'shows collection resumed for that resource, not that it was uninterrupted',
+    );
+    expect(checkText).toContain(
+      'A line can join points across an interval with no stored readings at all',
+    );
+    expect(checkText).toContain('without restarting again');
+    const stop = '/docs/TROUBLESHOOTING#after-a-memory-cgroup-kill';
+    expect(check?.querySelector(`a[href="${stop}"]`)?.textContent).toBe(
+      'checks after a memory stop',
+    );
+    expect(
+      render(troubleshootingGuide, 'TROUBLESHOOTING').querySelector('#after-a-memory-cgroup-kill'),
+    ).not.toBeNull();
   });
 
   it('keeps metric history free on every plan and does not sell the retired Relay tier', () => {
