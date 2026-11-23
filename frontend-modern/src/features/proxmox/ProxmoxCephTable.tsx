@@ -443,7 +443,14 @@ export const ProxmoxCephTable: Component<{
                                 controlsId={detailRowId()}
                                 onToggle={() => toggleSelected(cluster.id)}
                               />
-                              <span class="font-semibold text-base-content truncate" title={name}>
+                              <span
+                                class={`font-semibold text-base-content ${
+                                  layout() === 'compact'
+                                    ? 'whitespace-normal wrap-anywhere leading-tight'
+                                    : 'truncate'
+                                }`}
+                                title={name}
+                              >
                                 {name}
                               </span>
                             </div>

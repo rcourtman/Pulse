@@ -434,12 +434,7 @@ export const ProxmoxNodesTable: Component<{
                     layoutMode() === 'mobile') &&
                   column.id === 'memory'
                     ? 'Mem'
-                    : (layoutMode() === 'narrow' ||
-                          layoutMode() === 'phone' ||
-                          layoutMode() === 'mobile') &&
-                        column.id === 'uptime'
-                      ? 'Age'
-                      : column.label}
+                    : column.label}
                 </PlatformSortableTableHead>
               )}
             </For>
@@ -699,7 +694,7 @@ export const ProxmoxNodesTable: Component<{
                       return (
                         <TableCell class={getPlatformTableCellClassForKind(column.kind)}>
                           <Show when={version()} fallback={<span class="text-muted">—</span>}>
-                            <span class="inline-flex items-center rounded-sm bg-surface-alt px-1.5 py-0.5 font-mono text-[10px] text-base-content">
+                            <span class="inline-flex items-center rounded-sm border border-border/70 bg-black/[0.04] px-1.5 py-0.5 font-mono text-[10px] text-base-content dark:border-white/10 dark:bg-white/[0.07]">
                               {version()}
                             </span>
                           </Show>

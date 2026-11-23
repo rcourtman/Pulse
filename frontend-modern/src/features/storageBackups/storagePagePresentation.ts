@@ -57,8 +57,8 @@ const STORAGE_POOL_COLUMN_WEIGHTS: Record<
   StoragePoolTableLayoutMode,
   Partial<Record<StoragePoolTableColumnId, number>>
 > = {
-  narrow: { name: 35, state: 21, host: 31, usage: 13 },
-  compact: { name: 37, state: 18.5, host: 31.5, usage: 13 },
+  narrow: { name: 33, state: 29, host: 24, usage: 14 },
+  compact: { name: 34, state: 28, host: 24, usage: 14 },
   // The full "59% (1.18 TB/2.00 TB)" bar label returns at 544px, so the usage
   // track must hold ~120px of text from the first operational width.
   operational: { name: 27, state: 18, host: 15, protection: 15, usage: 25 },

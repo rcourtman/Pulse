@@ -161,14 +161,20 @@ const buildRecoverableDetailSections = (artifact: RecoverableArtifact): DetailSe
         ...artifactDateRows(artifact),
         makeDetailRow(
           'Size',
-          hasSize ? formatPlatformTableBytesValue(artifact.size) : 'Unknown size',
+          hasSize
+            ? formatPlatformTableBytesValue(artifact.size)
+            : artifact.running
+              ? 'In progress'
+              : 'Unknown size',
           { tone: hasSize ? undefined : 'muted' },
         ),
       ]),
       footerContent: (
         <Show when={!hasSize}>
           <p class="whitespace-normal text-[11px] leading-snug text-muted wrap-anywhere">
-            No usable size was reported. Unknown does not mean this restore point is empty.
+            {artifact.running
+              ? 'Size will be reported after the backup finishes.'
+              : 'No usable size was reported. Unknown does not mean this restore point is empty.'}
           </p>
         </Show>
       ),
@@ -397,7 +403,9 @@ export function ProxmoxRecoverableTable(props: {
           <TableCell class={`${getPlatformTableCellClassForKind('metric-bar')} text-base-content`}>
             <Show
               when={artifact.size && artifact.size > 0}
-              fallback={<span class="text-muted">Unknown size</span>}
+              fallback={
+                <span class="text-muted">{artifact.running ? 'In progress' : 'Unknown size'}</span>
+              }
             >
               <RowMetricBar
                 valuePct={

@@ -836,16 +836,38 @@ export const ProxmoxBackupsTable: Component<{
         });
       }
     } else {
+      const activeException = exceptionFilter();
       filters.push({
         id: 'posture',
         label: 'Protection',
         group: 'status',
         inline: true,
         options: () => COVERAGE_FILTERS,
-        value: coverageFilter,
-        setValue: (v) => setCoverageFilter(v as CoverageFilterValue),
+        value: () => (exceptionFilter() ? '' : coverageFilter()),
+        setValue: (v) => setCoverageFilter((v || 'all') as CoverageFilterValue),
         defaultValue: 'all',
       });
+      if (activeException) {
+        const exceptionLabel =
+          backupVerdict().exceptions.find((group) => group.key === activeException)?.label ??
+          activeException;
+        filters.push({
+          id: 'reason',
+          label: 'Backup health',
+          group: 'status',
+          options: () => [
+            { value: '', label: 'All' },
+            { value: activeException, label: exceptionLabel },
+          ],
+          value: () => exceptionFilter() ?? '',
+          setValue: (v) =>
+            setSearchParams(
+              { [PROXMOX_BACKUPS_QUERY_PARAMS.reason]: v || null },
+              { replace: true },
+            ),
+          defaultValue: '',
+        });
+      }
     }
     return filters;
   };

@@ -174,7 +174,8 @@ describe('PlatformSectionTabs', () => {
       name: 'Example sections: scroll right',
     });
     expect(navigation).toHaveClass('pl-0');
-    expect(navigation).toHaveClass('pr-10');
+    expect(navigation).toHaveClass('pr-0');
+    expect(scrollRight).not.toHaveClass('absolute');
     expect(
       screen.queryByRole('button', { name: 'Example sections: scroll left' }),
     ).not.toBeInTheDocument();
@@ -184,11 +185,18 @@ describe('PlatformSectionTabs', () => {
 
     navigation.scrollLeft = 120;
     navigation.dispatchEvent(new Event('scroll'));
-    expect(
-      await screen.findByRole('button', { name: 'Example sections: scroll left' }),
-    ).toBeInTheDocument();
+    const scrollLeft = await screen.findByRole('button', { name: 'Example sections: scroll left' });
+    expect(scrollLeft).not.toHaveClass('absolute');
     expect(navigation).toHaveClass('pl-0');
-    expect(navigation).toHaveClass('pr-10');
+    expect(navigation).toHaveClass('pr-0');
+
+    navigation.scrollLeft = 300;
+    navigation.dispatchEvent(new Event('scroll'));
+    await waitFor(() =>
+      expect(
+        screen.queryByRole('button', { name: 'Example sections: scroll right' }),
+      ).not.toBeInTheDocument(),
+    );
   });
 
   it('preserves a manually explored position when mobile viewport resizes fire mid-gesture', async () => {
@@ -276,6 +284,6 @@ describe('PlatformSectionTabs', () => {
 
     window.dispatchEvent(new Event('resize'));
 
-    await waitFor(() => expect(navigation.scrollLeft).toBe(298));
+    await waitFor(() => expect(navigation.scrollLeft).toBe(258));
   });
 });

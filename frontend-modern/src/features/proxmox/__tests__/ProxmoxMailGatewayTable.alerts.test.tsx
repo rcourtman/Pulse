@@ -2,7 +2,12 @@ import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Alert } from '@/types/api';
 import type { Resource } from '@/types/resource';
-import { ProxmoxMailGatewayTable, mailGatewayAlertColumn } from '../ProxmoxMailGatewayTable';
+import {
+  ProxmoxMailGatewayTable,
+  mailGatewayAlertColumn,
+  resolveMailGatewayMailIn,
+  resolveMailGatewayQuarantineTotal,
+} from '../ProxmoxMailGatewayTable';
 
 const activeAlerts: Record<string, Alert> = {};
 
@@ -255,5 +260,71 @@ describe('ProxmoxMailGatewayTable open alerts', () => {
     expect(mailGatewayAlertColumn('anomaly-spamOut')).toBeNull();
     expect(mailGatewayAlertColumn('anomaly-virusOut')).toBeNull();
     expect(mailGatewayAlertColumn('offline')).toBeNull();
+  });
+});
+
+describe('ProxmoxMailGatewayTable metrics reconciliation and degradation context', () => {
+  afterEach(() => {
+    cleanup();
+    for (const key of Object.keys(activeAlerts)) delete activeAlerts[key];
+  });
+
+  it('reconciles object quarantine totals and mailStats.countIn with the Mail tab', () => {
+    const gw = {
+      ...gateway('pmg-eu', 'mail-gateway-eu', 'pmg-main'),
+      pmg: {
+        instanceId: 'pmg-main',
+        nodeCount: 2,
+        mailCountTotal: 2745,
+        mailStats: { countIn: 1660, countOut: 858, countTotal: 2745 },
+        quarantine: { spam: 52, virus: 6, attachment: 7, blacklisted: 2 },
+        queueTotal: 121,
+        queueDeferred: 7,
+      },
+    } as unknown as Resource;
+
+    expect(resolveMailGatewayMailIn(gw)).toBe(1660);
+    expect(resolveMailGatewayQuarantineTotal(gw)).toBe(67);
+
+    render(() => (
+      <ProxmoxMailGatewayTable
+        resources={[gw]}
+        emptyTitle="No gateways"
+        emptyDescription="No gateways"
+      />
+    ));
+
+    const row = screen.getByText('mail-gateway-eu').closest('tr');
+    expect(row).toHaveTextContent('1,660');
+    expect(row).toHaveTextContent('67');
+  });
+
+  it('surfaces concrete degradation reasons in the drawer when degraded without active alerts', async () => {
+    const degraded = {
+      ...gateway('pmg-us', 'mail-gateway-us', 'pmg-edge'),
+      status: 'degraded',
+      pmg: {
+        instanceId: 'pmg-edge',
+        nodeCount: 2,
+        connectionHealth: 'degraded',
+        mailCountTotal: 1200,
+        queueTotal: 121,
+        queueDeferred: 7,
+        queueHold: 1,
+      },
+    } as unknown as Resource;
+
+    render(() => (
+      <ProxmoxMailGatewayTable
+        resources={[degraded]}
+        emptyTitle="No gateways"
+        emptyDescription="No gateways"
+      />
+    ));
+
+    fireEvent.click(screen.getByRole('button', { name: /mail-gateway-us/ }));
+    const context = await screen.findByTestId('pmg-drawer-degradation-context');
+    expect(context).toHaveTextContent('Why degraded:');
+    expect(context).toHaveTextContent('7 deferred');
   });
 });
