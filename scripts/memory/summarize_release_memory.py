@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Compare steady-state memory from compare_release_memory.sh samples (#1803).
 
-Usage: summarize_release_memory.py OUTPUT_DIR DURATION_SECONDS INTERVAL_SECONDS [BASELINE_WAIT_STATUS CANDIDATE_WAIT_STATUS]
+Usage: summarize_release_memory.py OUTPUT_DIR DURATION_SECONDS INTERVAL_SECONDS
+       [BASELINE_WAIT_STATUS CANDIDATE_WAIT_STATUS [STABLE_TAG BASELINE_SHA CANDIDATE_SHA]]
 
 Reads both sample files from the output directory and uses the final third of
 the planned duration for both builds. Writes an incomplete observation instead
@@ -34,6 +35,7 @@ from __future__ import annotations
 import csv
 import json
 import os
+import re
 import statistics
 import sys
 from pathlib import Path
@@ -311,8 +313,19 @@ def read_child_wait_statuses(out: Path, label: str) -> dict[str, int]:
 
 
 def main(argv: list[str]) -> int:
+    source = {}
     try:
         out_dir, duration_arg, interval_arg, *wait_args = argv[1:]
+        if len(wait_args) == 5:
+            tag, baseline_sha, candidate_sha = wait_args[2:]
+            if not (re.fullmatch(r"v[0-9]+\.[0-9]+\.[0-9]+", tag)
+                    and all(re.fullmatch(r"[0-9a-f]{40}", sha) for sha in (baseline_sha, candidate_sha))):
+                raise ValueError
+            source = {"sources": {
+                "baseline": {"tag": tag, "sha": baseline_sha},
+                "candidate": {"sha": candidate_sha},
+            }}
+            wait_args = wait_args[:2]
         duration, interval = int(duration_arg), int(interval_arg)
         wait_statuses = [int(arg) for arg in wait_args]
         if (min(duration, interval) <= 0 or len(wait_statuses) not in (0, 2)
@@ -349,13 +362,15 @@ def main(argv: list[str]) -> int:
             f"- {label.capitalize()} run did not complete successfully "
             f"(worker wait status {status}; {details or 'no child wait status observed'})."
         )
-    heading = f"## Pulse memory: candidate against baseline ({estate} estate)"
+    heading = [f"## Pulse memory: candidate against baseline ({estate} estate)"]
+    if source:
+        heading += ["", f"Baseline: `{tag}` at `{baseline_sha}`. Candidate: `{candidate_sha}`."]
     if incomplete:
-        result = {"status": "incomplete", "estate": estate, "sampling": sampling}
+        result = {"status": "incomplete", "estate": estate, "sampling": sampling, **source}
         if failed_runs:
             result["failed_runs"] = failed_runs
         write_observation(out, "\n".join([
-            heading, "", f"**Incomplete measurement:** no comparison for the planned {start}–{duration} s window.",
+            *heading, "", f"**Incomplete measurement:** no comparison for the planned {start}–{duration} s window.",
             "", *incomplete, "",
         ]), result)
         return 1
@@ -374,7 +389,7 @@ def main(argv: list[str]) -> int:
     regressed = exceeded and gated
 
     lines = [
-        heading,
+        *heading,
         "",
         f"Steady state is the median over the planned {start}–{duration} s window, on {ESTATES.get(estate, estate)}.",
         f"RSS samples in that window: {len(baseline_rows)} baseline, {len(candidate_rows)} candidate.",
@@ -469,6 +484,7 @@ def main(argv: list[str]) -> int:
         "tolerance_pct": tolerance,
         "slack_kib": slack_kib,
         "regressed": regressed,
+        **source,
     })
     return 1 if regressed else 0
 

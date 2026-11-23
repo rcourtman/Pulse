@@ -27,33 +27,60 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  resolve-stable:
+    name: Pin the stable comparison source
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      tag: ${{ steps.stable.outputs.tag }}
+      sha: ${{ steps.stable.outputs.sha }}
+    steps:
+      - name: Resolve the exact stable release
+        id: stable
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          release="$(gh api "repos/${GITHUB_REPOSITORY}/releases/latest")"
+          tag="$(jq -er 'select(.draft == false and .prerelease == false) | .tag_name | strings' <<<"$release")"
+          [[ "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "No stable release tag found." >&2; exit 1; }
+
+          ref="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/$tag")"
+          test "$(jq -er '.ref' <<<"$ref")" = "refs/tags/$tag"
+          type="$(jq -er '.object.type' <<<"$ref")"
+          sha="$(jq -er '.object.sha' <<<"$ref")"
+          [[ "$sha" =~ ^[0-9a-f]{40}$ ]] || exit 1
+          if [[ "$type" == tag ]]; then
+            object="$(gh api "repos/${GITHUB_REPOSITORY}/git/tags/$sha")"
+            test "$(jq -er '.sha' <<<"$object")" = "$sha"
+            test "$(jq -er '.tag' <<<"$object")" = "$tag"
+            type="$(jq -er '.object.type' <<<"$object")"
+            sha="$(jq -er '.object.sha' <<<"$object")"
+          fi
+          [[ "$type" == commit && "$sha" =~ ^[0-9a-f]{40}$ ]] || {
+            echo "The stable tag did not resolve to a commit." >&2
+            exit 1
+          }
+          printf 'tag=%s\nsha=%s\n' "$tag" "$sha" >> "$GITHUB_OUTPUT"
+          printf 'Baseline: %s (%s)\n' "$tag" "$sha"
+
   compare:
     name: Compare memory with the latest stable release
+    needs: resolve-stable
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     steps:
       - name: Checkout candidate
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ github.sha }}
           path: candidate
           persist-credentials: false
-
-      - name: Resolve the latest stable release
-        id: stable
-        env:
-          GH_TOKEN: ${{ github.token }}
-          GH_REPO: ${{ github.repository }}
-        run: |
-          set -euo pipefail
-          tag="$(gh release view --json tagName,isPrerelease --jq 'select(.isPrerelease | not) | .tagName')"
-          [[ "${tag}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "No stable release tag found: '${tag}'" >&2; exit 1; }
-          echo "tag=${tag}" >> "$GITHUB_OUTPUT"
-          echo "Baseline: ${tag}"
 
       - name: Checkout baseline
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ steps.stable.outputs.tag }}
+          ref: ${{ needs.resolve-stable.outputs.sha }}
           path: baseline
           persist-credentials: false
 
@@ -68,7 +95,11 @@ jobs:
           # Each tree builds with the toolchain its own go.mod names.
           GOTOOLCHAIN: auto
           PULSE_MEMORY_DURATION: '900'
-        run: bash candidate/scripts/memory/compare_release_memory.sh baseline candidate "$RUNNER_TEMP/memory"
+          BASELINE_TAG: ${{ needs.resolve-stable.outputs.tag }}
+          BASELINE_SHA: ${{ needs.resolve-stable.outputs.sha }}
+        run: |
+          bash candidate/scripts/memory/compare_release_memory.sh baseline candidate "$RUNNER_TEMP/memory" \
+            "${BASELINE_TAG:?}" "${BASELINE_SHA:?}" "${GITHUB_SHA:?}"
 
       - name: Publish the comparison
         if: ${{ !cancelled() }}
@@ -102,31 +133,21 @@ jobs:
   # never opens or comments on the memory watch issue.
   compare-agents:
     name: Compare an agent estate with the latest stable release
+    needs: resolve-stable
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     steps:
       - name: Checkout candidate
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ github.sha }}
           path: candidate
           persist-credentials: false
-
-      - name: Resolve the latest stable release
-        id: stable
-        env:
-          GH_TOKEN: ${{ github.token }}
-          GH_REPO: ${{ github.repository }}
-        run: |
-          set -euo pipefail
-          tag="$(gh release view --json tagName,isPrerelease --jq 'select(.isPrerelease | not) | .tagName')"
-          [[ "${tag}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "No stable release tag found: '${tag}'" >&2; exit 1; }
-          echo "tag=${tag}" >> "$GITHUB_OUTPUT"
-          echo "Baseline: ${tag}"
 
       - name: Checkout baseline
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ steps.stable.outputs.tag }}
+          ref: ${{ needs.resolve-stable.outputs.sha }}
           path: baseline
           persist-credentials: false
 
@@ -142,7 +163,11 @@ jobs:
           PULSE_MEMORY_DURATION: '900'
           PULSE_FOOTPRINT_ESTATE: agents
           PULSE_MEMORY_GATE: '0'
-        run: bash candidate/scripts/memory/compare_release_memory.sh baseline candidate "$RUNNER_TEMP/memory-agents"
+          BASELINE_TAG: ${{ needs.resolve-stable.outputs.tag }}
+          BASELINE_SHA: ${{ needs.resolve-stable.outputs.sha }}
+        run: |
+          bash candidate/scripts/memory/compare_release_memory.sh baseline candidate "$RUNNER_TEMP/memory-agents" \
+            "${BASELINE_TAG:?}" "${BASELINE_SHA:?}" "${GITHUB_SHA:?}"
 
       - name: Publish the comparison
         if: ${{ !cancelled() }}
@@ -178,31 +203,21 @@ jobs:
   # noise is known; the scheduled reporter below reads only the mock job.
   compare-proxmox:
     name: Compare a Proxmox + PBS estate with the latest stable release
+    needs: resolve-stable
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     steps:
       - name: Checkout candidate
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ github.sha }}
           path: candidate
           persist-credentials: false
-
-      - name: Resolve the latest stable release
-        id: stable
-        env:
-          GH_TOKEN: ${{ github.token }}
-          GH_REPO: ${{ github.repository }}
-        run: |
-          set -euo pipefail
-          tag="$(gh release view --json tagName,isPrerelease --jq 'select(.isPrerelease | not) | .tagName')"
-          [[ "${tag}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "No stable release tag found: '${tag}'" >&2; exit 1; }
-          echo "tag=${tag}" >> "$GITHUB_OUTPUT"
-          echo "Baseline: ${tag}"
 
       - name: Checkout baseline
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ steps.stable.outputs.tag }}
+          ref: ${{ needs.resolve-stable.outputs.sha }}
           path: baseline
           persist-credentials: false
 
@@ -218,7 +233,11 @@ jobs:
           PULSE_MEMORY_DURATION: '900'
           PULSE_FOOTPRINT_ESTATE: proxmox
           PULSE_MEMORY_GATE: '0'
-        run: bash candidate/scripts/memory/compare_release_memory.sh baseline candidate "$RUNNER_TEMP/memory-proxmox"
+          BASELINE_TAG: ${{ needs.resolve-stable.outputs.tag }}
+          BASELINE_SHA: ${{ needs.resolve-stable.outputs.sha }}
+        run: |
+          bash candidate/scripts/memory/compare_release_memory.sh baseline candidate "$RUNNER_TEMP/memory-proxmox" \
+            "${BASELINE_TAG:?}" "${BASELINE_SHA:?}" "${GITHUB_SHA:?}"
 
       - name: Publish the comparison
         if: ${{ !cancelled() }}
@@ -250,7 +269,7 @@ jobs:
   # resolution of a human report; recovery comments never close issues.
   report-scheduled-result:
     name: Report scheduled result
-    needs: compare
+    needs: [resolve-stable, compare]
     if: ${{ always() && github.event_name == 'schedule' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 5
@@ -269,5 +288,6 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
-          RESULT: ${{ needs.compare.result }}
+          # A failed shared lookup used to fail inside the mock comparison.
+          RESULT: ${{ needs.resolve-stable.result == 'success' && needs.compare.result || needs.resolve-stable.result }}
         run: python3 .github/scripts/report-ci-watch.py memory "$RESULT"
