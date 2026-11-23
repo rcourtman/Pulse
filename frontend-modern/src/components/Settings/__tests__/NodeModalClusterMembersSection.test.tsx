@@ -127,8 +127,88 @@ describe('Cluster member connection diagnostics', () => {
       const { container } = renderMembers([member({ pulseReachable: reachable })]);
       expect(container.querySelector('details')).not.toBeInTheDocument();
       expect(screen.queryByText(trustReason)).not.toBeInTheDocument();
+      expect(
+        screen.getByText(
+          reachable === true ? 'Last Pulse API check: reachable' : 'No Pulse API check recorded',
+        ),
+      ).toBeVisible();
     },
   );
+
+  it('distinguishes a new address draft from the saved API check without hiding the failure', () => {
+    const { fetch, onSave } = renderMembers([
+      member({
+        ipOverride: 'old-member.example.invalid',
+        tlsEndpoint: 'https://old-member.example.invalid:8006',
+      }),
+    ]);
+    const address = screen.getByLabelText('Connection address for member');
+
+    // A space added to the saved spelling won't change the submitted value.
+    fireEvent.input(address, { target: { value: 'old-member.example.invalid ' } });
+    expect(address).not.toHaveAccessibleDescription();
+
+    for (const value of ['new-member.example.invalid:8443', '']) {
+      fireEvent.input(address, { target: { value } });
+      expect(address).toHaveAccessibleDescription(
+        'Draft only. API checks shown are for the saved address.',
+      );
+      expect(screen.getByText('TLS check failed — details')).toBeVisible();
+      expect(
+        screen.getByText('TLS endpoint: https://old-member.example.invalid:8006'),
+      ).toBeVisible();
+    }
+
+    fireEvent.input(address, { target: { value: 'old-member.example.invalid' } });
+    expect(address).not.toHaveAccessibleDescription();
+    expect(fetch).not.toHaveBeenCalled();
+    expect(onSave).not.toHaveBeenCalled();
+  });
+
+  it('keeps previous evidence readable but blocks that member’s TLS actions until readback', () => {
+    const { fetch, setNode } = renderMembers([
+      member({
+        awaitingAddressReadback: true,
+        ipOverride: 'new-member.example.invalid',
+        tlsEndpoint: 'https://old-member.example.invalid:8006',
+        fingerprint: 'previous-pin',
+      }),
+      member({ nodeName: 'sibling', tlsEndpoint: 'https://sibling.example.invalid:8006' }),
+    ]);
+    const address = screen.getByLabelText('Connection address for member');
+    const test = () => screen.getByRole('button', { name: 'Test TLS for member' });
+    expect(address).toHaveValue('new-member.example.invalid');
+    expect(address).toHaveAccessibleDescription(/Address change saved.*confirm the endpoint/);
+    expect(screen.getByText('Previous check: TLS check failed — details')).toBeVisible();
+    expect(
+      screen.getByText('Previous TLS endpoint: https://old-member.example.invalid:8006'),
+    ).toBeVisible();
+    expect(
+      screen.getByRole('textbox', { name: 'Certificate fingerprint for member' }),
+    ).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Use CA validation for member' })).toBeDisabled();
+    expect(test()).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Test TLS for sibling' })).toBeEnabled();
+    expect(fetch).not.toHaveBeenCalled();
+
+    setNode(
+      cluster([
+        member({
+          ipOverride: 'new-member.example.invalid',
+          tlsEndpoint: 'https://new-member.example.invalid:8006',
+          pulseReachable: undefined,
+          pulseError: undefined,
+        }),
+      ]),
+    );
+    expect(screen.getByText('No Pulse API check recorded')).toBeVisible();
+    expect(
+      screen.queryByText('Previous check: TLS check failed — details'),
+    ).not.toBeInTheDocument();
+    expect(screen.getByText('TLS endpoint: https://new-member.example.invalid:8006')).toBeVisible();
+    expect(test()).toBeEnabled();
+    expect(fetch).not.toHaveBeenCalled();
+  });
 
   it.each([undefined, ''])('keeps a usable generic explanation when the error is %s', (error) => {
     const { container } = renderMembers([member({ pulseError: error })]);
