@@ -393,12 +393,8 @@ func TestPVESetupScript_PrefersGuestAgentPrivileges(t *testing.T) {
 
 	script := rr.Body.String()
 	wantSnippets := []string{
-		`local HAS_VM_GUEST_AGENT_FILE_READ=false`,
-		`pveum role add TestGuestAgentFileRead -privs VM.GuestAgent.FileRead 2>/dev/null`,
 		`if [ "$HAS_VM_GUEST_AGENT_AUDIT" = true ]; then`,
 		`EXTRA_PRIVS+=("VM.GuestAgent.Audit")`,
-		`if [ "$HAS_VM_GUEST_AGENT_FILE_READ" = true ]; then`,
-		`EXTRA_PRIVS+=("VM.GuestAgent.FileRead")`,
 		`elif [ "$HAS_VM_MONITOR" = true ]; then`,
 		`EXTRA_PRIVS+=("VM.Monitor")`,
 	}
@@ -406,6 +402,9 @@ func TestPVESetupScript_PrefersGuestAgentPrivileges(t *testing.T) {
 		if !containsString(script, snippet) {
 			t.Fatalf("expected generated script to contain:\n%s\n\nGot (first 900 chars):\n%s", snippet, truncate(script, 900))
 		}
+	}
+	if containsString(script, "VM.GuestAgent.FileRead") {
+		t.Fatalf("expected generated script not to auto-grant VM.GuestAgent.FileRead")
 	}
 
 	guestBranch := strings.Index(script, `if [ "$HAS_VM_GUEST_AGENT_AUDIT" = true ]; then`)

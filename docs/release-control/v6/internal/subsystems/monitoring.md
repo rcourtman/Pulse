@@ -9421,12 +9421,15 @@ never replaces the last successful count or timestamp: no prior success stays
 every backoff poll. Expiry permits an ordinary reprobe; a successful empty list
 is a fresh checked zero and clears the denial. Offline nodes issue no check.
 
-Guest Linux `/proc/meminfo` likewise retains the existing five-minute negative
-interval for an observed HTTP 403, even when known-Linux metadata would normally
-allow a 30-second retry. Successful memory reads still cache for 60 seconds;
-non-403 failures keep their ordinary OS-specific cadence. Denial is not a memory
-sample or a new successful origin. The same instance/node/VM key, read ownership,
-lifecycle invalidation, cancellation and uncertainty fences remain effective.
+Guest Linux `/proc/meminfo` uses a 30-minute permission-denial backoff
+(`vmAgentMemPermissionDeniedTTL`, matching optional APT 403 cadence) for an
+observed HTTP 403, even when known-Linux metadata would normally allow a
+30-second retry, and routine 10-minute cache cleanup (`cleanupRRDCache`)
+preserves active 403 entries for their full 30-minute window. Successful memory
+reads still cache for 60 seconds; non-403 failures keep their ordinary
+OS-specific cadence. Denial is not a memory sample or a new successful origin.
+The same instance/node/VM key, read ownership, lifecycle invalidation,
+cancellation and uncertainty fences remain effective.
 
 The unified wire serializer keeps an explicit update verdict atomic: measured
 zero, cleared reason and absent origin must replace their stale predecessors

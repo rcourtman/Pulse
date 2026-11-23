@@ -168,13 +168,6 @@ fi
 
 if [ "$HAS_GUEST_AGENT_AUDIT" = true ]; then
   EXTRA_PRIVS+=("VM.GuestAgent.Audit")
-
-  if pveum role list 2>/dev/null | grep -q "VM.GuestAgent.FileRead"; then
-    EXTRA_PRIVS+=("VM.GuestAgent.FileRead")
-  elif pveum role add PulseTmpGuestFileRead -privs VM.GuestAgent.FileRead 2>/dev/null; then
-    EXTRA_PRIVS+=("VM.GuestAgent.FileRead")
-    pveum role delete PulseTmpGuestFileRead 2>/dev/null
-  fi
 else
   if pveum role list 2>/dev/null | grep -q "VM.Monitor"; then
     EXTRA_PRIVS+=("VM.Monitor")

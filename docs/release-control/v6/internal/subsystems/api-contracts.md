@@ -2141,8 +2141,9 @@ ledger's `pbs:<name>` or `pmg:<name>` display identity.
 
 PVE setup API consumers, generated scripts, runtime setup, installer setup, and
 browser manual guidance must share one `PulseMonitor` privilege contract:
-prefer `VM.GuestAgent.Audit` plus `VM.GuestAgent.FileRead` on PVE 9+, and use
-legacy `VM.Monitor` only as the PVE 8 fallback when guest-agent privileges are
+prefer `VM.GuestAgent.Audit` on PVE 9+ (omitting `VM.GuestAgent.FileRead`
+because Proxmox cannot path-restrict guest file reads), and use legacy
+`VM.Monitor` only as the PVE 8 fallback when guest-agent privileges are
 unavailable.
 
 Mobile onboarding QR/deep-link payload readiness is a shared backend/frontend
@@ -3673,10 +3674,11 @@ payload shape change when the portal presents compact client rows.
     id. PBS scripts must grant `Audit` to both `pulse-monitor@pbs` and the
     concrete token id. Browser/runtime setup callers must not fork this into
     token-shared, token-unprivileged, or user-only ACL variants. For PVE,
-    `PulseMonitor` privilege selection must prefer `VM.GuestAgent.Audit` plus
-    `VM.GuestAgent.FileRead` on PVE 9+ and reserve `VM.Monitor` for the legacy
-    PVE 8 fallback, so API-generated scripts, runtime setup, installer setup,
-    and browser manual guidance stay on one privilege contract.
+    `PulseMonitor` privilege selection must prefer `VM.GuestAgent.Audit` on
+    PVE 9+ (without auto-granting `VM.GuestAgent.FileRead`, which Proxmox cannot
+    path-restrict) and reserve `VM.Monitor` for the legacy PVE 8 fallback, so
+    API-generated scripts, runtime setup, installer setup, and browser manual
+    guidance stay on one privilege contract.
 70. `internal/api/enterprise_extension_rbac_admin.go` shared with `organization-settings`: RBAC admin extension endpoints are both an organization settings control surface and a canonical API payload contract boundary.
 71. `internal/api/licensing_bridge.go` shared with `cloud-paid`: commercial licensing bridge handlers carry both API payload contract and cloud-paid entitlement boundary ownership.
 72. `internal/api/licensing_handlers.go` shared with `cloud-paid`: commercial licensing handlers carry both API payload contract and cloud-paid entitlement boundary ownership.
