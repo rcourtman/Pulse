@@ -59,7 +59,7 @@
     "lucide-solid": "^0.577.0",
     "marked": "^18.1.1",
     "qrcode": "^1.5.4",
-    "solid-js": "^1.9.17"
+    "solid-js": "^2.0.3"
   },
   "overrides": {
     "esbuild": "0.28.1",
