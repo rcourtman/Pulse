@@ -1,0 +1,40 @@
+{
+  "version": 1,
+  "base_sha": "8250eda0e96898d92cd2148829cf9bbfde9e58fb",
+  "verified_at": "2026-11-23T21:12:57Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/OrgSwitcher.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/OrgSwitcher.tsx": "396c83c3043b1c9a29b21445bbb52ff37c8a6cf6f025dd34eed25abc0ffa9d97"
+  },
+  "routes": [
+    "/standalone/machines (signed-in organization chooser)"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900,
+      "theme": "light",
+      "browser": "Chromium 141.0.7390.37"
+    },
+    {
+      "width": 320,
+      "height": 800,
+      "theme": "dark",
+      "browser": "WebKit 26.0 touch emulation"
+    }
+  ],
+  "states": [
+    "Two workspaces with a common prefix now show their full East and West names while the chooser is closed.",
+    "Two exactly same-named workspaces still have distinct options and the active ID is visible beside the control.",
+    "A shorter name does not change the chooser width. The single-workspace and unavailable-list states are unchanged."
+  ],
+  "interactions": [
+    "Desktop Tab reaches the native Organization field in the same order; the focus outline is visible. ArrowDown selects East.",
+    "At 320 CSS pixels, touch hits the native control over the whole wrapped label. The emulated browser commits options through the native select.",
+    "Selection reaches the existing runtime reads for each exact ID. Retry restores the list and keeps West. No settings writes."
+  ],
+  "evidence_summary": "Twelve completed journeys on both locked production builds, Playwright 1.56.1. Fourteen comparable desktop and phone capture pairs inspected. The API and WebSocket responses were synthetic; no device-native picker, installed service or identity provider was used."
+}
