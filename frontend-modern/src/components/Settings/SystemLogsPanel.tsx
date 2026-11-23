@@ -1,4 +1,4 @@
-import { Component, For, Show, createUniqueId } from 'solid-js';
+import { Component, For, Show, createMemo, createSignal, createUniqueId } from 'solid-js';
 import OperationsPanel from '@/components/Settings/OperationsPanel';
 import {
   getSystemLogBufferSummary,
@@ -14,16 +14,26 @@ import Trash2 from 'lucide-solid/icons/trash-2';
 import Terminal from 'lucide-solid/icons/terminal';
 import { FormSelect } from '@/components/shared/FormSelect';
 import { Button } from '@/components/shared/Button';
+import { SearchInput } from '@/components/shared/SearchInput';
 import { useSystemLogsPanelState, type SystemLogsPanelProps } from './useSystemLogsPanelState';
 
 export const SystemLogsPanel: Component<SystemLogsPanelProps> = (props) => {
   const state = useSystemLogsPanelState(props);
+  const [filterQuery, setFilterQuery] = createSignal('');
   const levelHelpId = createUniqueId();
   const displayHelpId = createUniqueId();
   const bundleHelpId = createUniqueId();
 
   const streamPresentation = () =>
     getSystemLogStreamPresentation(state.isPaused(), state.connectionState());
+
+  const normalizedFilterQuery = createMemo(() => filterQuery().trim().toLowerCase());
+  const filteredLogs = createMemo(() => {
+    const query = normalizedFilterQuery();
+    const lines = state.logs();
+    if (!query) return lines;
+    return lines.filter((line) => line.toLowerCase().includes(query));
+  });
 
   return (
     <div class="space-y-6">
@@ -117,18 +127,62 @@ export const SystemLogsPanel: Component<SystemLogsPanelProps> = (props) => {
         </div>
 
         {/* Terminal View */}
-        <div class="p-4 sm:p-6">
+        <div class="p-4 sm:p-6 space-y-3">
+          <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <SearchInput
+              value={filterQuery}
+              onChange={setFilterQuery}
+              placeholder="Filter log lines..."
+              class="sm:max-w-md"
+              typeToSearch={false}
+              clearOnFocusedEscape
+            />
+            <Show when={normalizedFilterQuery().length > 0}>
+              <div class="flex items-center gap-2 text-xs text-muted">
+                <span role="status">
+                  Showing {filteredLogs().length} of {state.logs().length} lines
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setFilterQuery('')}
+                  class="text-blue-600 dark:text-blue-400 hover:underline font-medium"
+                >
+                  Clear filter
+                </button>
+              </div>
+            </Show>
+          </div>
+
           <div
             ref={state.setLogContainer}
-            class="bg-slate-950 text-slate-300 font-mono text-xs p-4 rounded-md h-[500px] overflow-y-auto whitespace-pre-wrap wrap-anywhere leading-relaxed border border-border-subtle scrollbar-thin scrollbar-thumb-slate-700 scrollbar-track-transparent"
+            class="bg-slate-950 text-slate-300 font-mono text-xs p-4 rounded-md h-[500px] overflow-y-auto whitespace-pre-wrap wrap-anywhere leading-relaxed border border-slate-800/80 scrollbar-thin scrollbar-thumb-slate-700 scrollbar-track-transparent"
           >
-            <For each={state.logs()}>
+            <For each={filteredLogs()}>
               {(log) => (
-                <div class="border-b border-border-subtle last:border-0 pb-0.5 mb-0.5 hover:bg-surface-hover px-1 -mx-1 rounded-sm">
+                <div class="border-b border-slate-800/80 last:border-0 pb-0.5 mb-0.5 hover:bg-slate-900/70 px-1 -mx-1 rounded-sm">
                   <span class={getSystemLogLineClass(log)}>{log}</span>
                 </div>
               )}
             </For>
+
+            <Show
+              when={
+                normalizedFilterQuery().length > 0 &&
+                state.logs().length > 0 &&
+                filteredLogs().length === 0
+              }
+            >
+              <div class="h-full flex flex-col items-center justify-center gap-2 text-center text-slate-400">
+                <p>No log lines match &ldquo;{filterQuery().trim()}&rdquo;.</p>
+                <button
+                  type="button"
+                  onClick={() => setFilterQuery('')}
+                  class="text-blue-400 hover:underline"
+                >
+                  Clear filter
+                </button>
+              </div>
+            </Show>
 
             {state.logs().length === 0 && !state.isLoading() && (
               <div class="h-full flex flex-col items-center justify-center ">
@@ -142,14 +196,14 @@ export const SystemLogsPanel: Component<SystemLogsPanelProps> = (props) => {
             )}
           </div>
 
-          <div class="text-xs text-muted flex flex-wrap gap-2 justify-between px-1 pt-4">
+          <div class="text-xs text-muted flex flex-wrap gap-2 justify-between px-1 pt-1">
             <span>{getSystemLogBufferSummary(state.logs().length, state.maxLogs)}</span>
             <span role="status" class="flex items-center gap-2">
               <div class={`w-2 h-2 rounded-full ${streamPresentation().indicatorClass}`}></div>
               {streamPresentation().label}
             </span>
           </div>
-          <p class="text-xs text-muted px-1 pt-2">{SYSTEM_LOGS_PANEL_COPY.bufferHelp}</p>
+          <p class="text-xs text-muted px-1">{SYSTEM_LOGS_PANEL_COPY.bufferHelp}</p>
         </div>
       </OperationsPanel>
     </div>

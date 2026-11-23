@@ -1,6 +1,7 @@
 import { createSignal } from 'solid-js';
 import { cleanup, render, screen, waitFor } from '@solidjs/testing-library';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { PulseLogoIcon } from '@/components/icons/PulseLogoIcon';
 import { SettingsPageShell } from '../SettingsPageShell';
 import type { SettingsNavGroup, SettingsTab } from '../settingsNavigationModel';
 
@@ -56,7 +57,10 @@ describe('SettingsPageShell mobile navigation', () => {
     expect(shell).toHaveClass('space-y-0', 'lg:space-y-6');
     expect(navigation?.tagName).toBe('NAV');
     expect(navigation).not.toHaveAttribute('aria-expanded');
-    expect(navigation).toHaveClass('max-h-[calc(100dvh-8rem)]');
+    expect(navigation).toHaveClass(
+      'max-h-[calc(100dvh-var(--pulse-mobile-nav-height,4rem)-4.5rem)]',
+    );
+    expect(screen.getByRole('heading', { name: 'Settings', level: 2 })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Collapse settings navigation' })).toHaveAttribute(
       'aria-controls',
       'settings-sidebar-menu',
@@ -238,5 +242,43 @@ describe('SettingsPageShell mobile navigation', () => {
 
     await screen.getByRole('button', { name: 'Close settings navigation' }).click();
     await waitFor(() => expect(mobileMenuOpen()).toBe(false));
+  });
+
+  it('keeps decorative PulseLogoIcon out of the Plans & Billing button accessible name', () => {
+    const [activeTab] = createSignal<SettingsTab>('system-billing');
+    const [mobileMenuOpen, setMobileMenuOpen] = createSignal(false);
+    const [sidebarCollapsed, setSidebarCollapsed] = createSignal(false);
+    const [searchQuery, setSearchQuery] = createSignal('');
+    const billingTabs: SettingsNavGroup['items'] = [
+      { id: 'system-billing', label: 'Plans & Billing', icon: PulseLogoIcon },
+    ];
+
+    render(() => (
+      <SettingsPageShell
+        headerMeta={() => ({ title: 'Plans & Billing', description: 'Plan and license.' })}
+        hasUnsavedChanges={() => false}
+        activeTabSaveBehavior={() => undefined}
+        saveSettings={() => undefined}
+        discardChanges={() => undefined}
+        isMobileMenuOpen={mobileMenuOpen}
+        setIsMobileMenuOpen={setMobileMenuOpen}
+        sidebarCollapsed={sidebarCollapsed}
+        setSidebarCollapsed={setSidebarCollapsed}
+        searchQuery={searchQuery}
+        setSearchQuery={setSearchQuery}
+        filteredTabGroups={() => [{ id: 'system', label: 'System', items: billingTabs }]}
+        flatTabs={() => billingTabs}
+        activeTab={activeTab}
+        setActiveTab={() => undefined}
+        isPro={() => false}
+      >
+        <div>Billing content</div>
+      </SettingsPageShell>
+    ));
+
+    const button = screen.getByRole('button', { name: 'Plans & Billing' });
+    expect(button).toBeInTheDocument();
+    expect(button.querySelector('svg')).toHaveAttribute('aria-hidden', 'true');
+    expect(button.querySelector('svg title')).toBeNull();
   });
 });

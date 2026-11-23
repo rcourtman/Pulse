@@ -129,17 +129,17 @@ export const SettingsPageShell: Component<SettingsPageShellProps> = (props) => {
       >
         <nav
           data-settings-navigation
-          class={`${props.isMobileMenuOpen() ? 'flex w-full flex-col' : 'hidden lg:flex lg:flex-col'} ${props.sidebarCollapsed() ? 'lg:w-16 lg:min-w-16 lg:max-w-16 lg:basis-16' : 'lg:w-72 lg:min-w-[18rem] lg:max-w-[18rem] lg:basis-[18rem]'} relative z-10 max-h-[calc(100dvh-8rem)] shrink-0 overflow-y-auto overscroll-contain border-b border-border bg-surface transition-all duration-200 lg:max-h-none lg:overflow-visible lg:border-b-0 lg:border-r lg:bg-transparent lg:align-top`}
+          class={`${props.isMobileMenuOpen() ? 'flex w-full flex-col' : 'hidden lg:flex lg:flex-col'} ${props.sidebarCollapsed() ? 'lg:w-16 lg:min-w-16 lg:max-w-16 lg:basis-16' : 'lg:w-72 lg:min-w-[18rem] lg:max-w-[18rem] lg:basis-[18rem]'} relative z-10 max-h-[calc(100dvh-var(--pulse-mobile-nav-height,4rem)-4.5rem)] shrink-0 overflow-y-auto overscroll-contain border-b border-border bg-surface transition-all duration-200 lg:max-h-none lg:overflow-visible lg:border-b-0 lg:border-r lg:bg-transparent lg:align-top`}
           aria-label={shellCopy().navigationAriaLabel}
         >
           <div
-            class={`${props.sidebarCollapsed() ? 'px-2' : 'px-3 lg:px-4'} space-y-4 py-3 transition-all duration-200 lg:sticky lg:top-0 lg:space-y-5 lg:py-5`}
+            class={`${props.sidebarCollapsed() ? 'px-2' : 'px-3 lg:px-4'} space-y-4 pt-3 pb-[calc(var(--pulse-mobile-nav-height,0px)+1rem)] transition-all duration-200 lg:sticky lg:top-0 lg:space-y-5 lg:py-5`}
           >
             <Show when={!props.sidebarCollapsed()}>
               <div class="flex min-h-11 items-center justify-between border-b border-border pb-2 lg:min-h-0">
                 <div
                   role="heading"
-                  aria-level="1"
+                  aria-level="2"
                   class="text-base font-semibold tracking-tight text-base-content lg:text-sm"
                 >
                   {shellCopy().navigationTitle}
@@ -251,6 +251,7 @@ export const SettingsPageShell: Component<SettingsPageShellProps> = (props) => {
                                 props.setActiveTab(item.id);
                                 props.setIsMobileMenuOpen(false);
                               }}
+                              aria-label={props.sidebarCollapsed() ? item.label : undefined}
                               title={props.sidebarCollapsed() ? item.label : undefined}
                             >
                               <div class="flex w-full items-center gap-3 lg:gap-2.5">
@@ -259,6 +260,7 @@ export const SettingsPageShell: Component<SettingsPageShellProps> = (props) => {
                                 >
                                   <item.icon
                                     class="w-5 h-5 lg:w-4 lg:h-4"
+                                    aria-hidden="true"
                                     {...(item.iconProps || {})}
                                   />
                                 </div>

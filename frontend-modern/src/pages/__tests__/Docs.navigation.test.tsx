@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@solidjs/testing-library';
 import { createSignal } from 'solid-js';
 import Docs from '../Docs';
 
@@ -139,13 +139,14 @@ describe('Docs section navigation', () => {
     renderGuide();
     await screen.findByRole('heading', { name: 'Existing section' });
     flushFrames();
-    fireEvent.click(screen.getByRole('link', { name: 'Other section' }));
+    const article = document.querySelector('article')!;
+    fireEvent.click(within(article).getByRole('link', { name: 'Other section' }));
     await waitFor(() => {
       flushFrames();
       expect(screen.getByRole('heading', { name: 'Other section' })).toHaveFocus();
     });
     fetchMock.mockResolvedValueOnce(new Response('# Next guide\n\n## Next section'));
-    fireEvent.click(screen.getByRole('link', { name: 'Next guide' }));
+    fireEvent.click(within(article).getByRole('link', { name: 'Next guide' }));
     const next = await screen.findByRole('heading', { name: 'Next section' });
     flushFrames();
     expect(next).toHaveFocus();
@@ -179,4 +180,69 @@ describe('Docs section navigation', () => {
       expect(screen.queryByRole('heading', { name: 'Existing section' })).not.toBeInTheDocument();
     },
   );
+
+  it('renders Back to Pulse link and collapsible table of contents on rendered guides', async () => {
+    renderGuide();
+    await screen.findByRole('heading', { name: 'Existing section' });
+
+    const tocNav = screen.getByRole('navigation', { name: 'On this page' });
+    expect(within(tocNav).getByRole('link', { name: 'Existing section' })).toBeInTheDocument();
+    expect(within(tocNav).getByRole('link', { name: 'Other section' })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Hide' }));
+    expect(screen.queryByRole('navigation', { name: 'On this page' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Show contents' }));
+    expect(screen.getByRole('navigation', { name: 'On this page' })).toBeInTheDocument();
+
+    const backLink = screen.getByRole('link', { name: 'Back to Pulse' });
+    expect(backLink).toHaveAttribute('href', '/');
+    fireEvent.click(backLink);
+    expect(navigateMock).toHaveBeenCalledWith('/');
+  });
+
+  it('normalizes direct /docs/<NAME>.md routes to the viewer path', async () => {
+    setRoute(new URL('http://localhost/docs/guide.md#other-section'));
+    render(() => <Docs />);
+
+    await screen.findByRole('heading', { name: 'Existing section' });
+    expect(navigateMock).toHaveBeenCalledWith('/docs/guide#other-section', { replace: true });
+    expect(fetchMock).toHaveBeenCalledWith('/docs/guide.md', {
+      headers: { Accept: 'text/markdown, text/plain' },
+    });
+  });
+
+  it('filters guides on the /docs index page and supports clearing the query', async () => {
+    const indexSource = `# Pulse documentation
+
+## Start here
+
+- [Install Pulse](INSTALL.md) - installation steps.
+- [Configure Pulse](CONFIGURATION.md) - authentication and discovery.
+
+## Security
+
+- [OIDC and SSO](OIDC.md) - single sign-on setup.`;
+    fetchMock.mockResolvedValueOnce(
+      new Response(indexSource, { headers: { 'content-type': 'text/markdown' } }),
+    );
+    setRoute(new URL('http://localhost/docs/README'));
+    render(() => <Docs />);
+
+    await screen.findByRole('link', { name: 'OIDC and SSO' });
+    expect(screen.getByText('3 guides')).toBeInTheDocument();
+
+    const search = screen.getByPlaceholderText('Filter guides by topic, platform, or keyword...');
+    fireEvent.input(search, { target: { value: 'oidc' } });
+
+    expect(screen.getByRole('link', { name: 'OIDC and SSO' })).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Install Pulse' })).not.toBeInTheDocument();
+    expect(screen.getByText('Showing 1 of 3 guides')).toBeInTheDocument();
+
+    fireEvent.input(search, { target: { value: 'nonexistent-topic' } });
+    expect(screen.getByText(/No documentation guides match/)).toBeInTheDocument();
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Clear filter' })[0]);
+    expect(screen.getByRole('link', { name: 'Install Pulse' })).toBeInTheDocument();
+    expect(screen.getByText('3 guides')).toBeInTheDocument();
+  });
 });
