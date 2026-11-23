@@ -25,42 +25,24 @@ alerts you when something needs attention.
 
 ## Inside Pulse
 
-### Docker & Podman
-Hosts, containers, Compose stacks, Swarm health, and image updates without mounting the Docker socket on Pulse.
+### Built-in metric history
+CPU, memory, disk, network I/O, and filesystem charts for every host, guest, and container without external databases.
 
-![Docker hosts and containers](docs/images/pulse-docker.webp)
-
-### [Alerts](docs/ALERTING.md) & [Availability](docs/AVAILABILITY.md)
-Thresholds plus Ping, TCP, UDP, HTTP(S), and TLS expiry checks via email, Discord, Slack, Telegram, ntfy, Gotify, Pushover, PagerDuty, or webhooks.
-
-![Active alerts and incident triage](docs/images/pulse-alerts.webp)
-
-<details>
-<summary><strong>More screenshots: Kubernetes, Backup coverage &amp; PBS, Metric history, and Patrol</strong></summary>
-
-### Kubernetes
-Multi-cluster health, degraded nodes, pods, deployments, storage, and events in one view.
-
-![Kubernetes clusters and workloads](docs/images/pulse-kubernetes.webp)
+![Metric history and filesystem diagnostics](docs/images/pulse-history.webp)
 
 ### Backup coverage & PBS
 Spot unprotected guests, stale backups, and failed sync jobs across Proxmox VE and Proxmox Backup Server.
 
 ![Proxmox backup coverage and PBS datastores](docs/images/pulse-backups.webp)
 
-### Built-in metric history
-CPU, memory, disk, network I/O, and filesystem charts for every host, guest, and container without external databases.
+### [Alerts](docs/ALERTING.md) & [Availability](docs/AVAILABILITY.md)
+Thresholds plus Ping, TCP, UDP, HTTP(S), and TLS expiry checks via email, Discord, Slack, Telegram, ntfy, Gotify, Pushover, PagerDuty, or webhooks.
 
-![Metric history and filesystem diagnostics](docs/images/pulse-history.webp)
-
-### Optional AI & MCP
-[Pulse Patrol](docs/AI.md) runs scheduled checks with your own AI provider or local model; [`pulse-mcp`](cmd/pulse-mcp/README.md#quick-start) lets Claude Code, Codex, or OpenCode [ask what changed overnight](docs/WHAT_HAPPENED_OVERNIGHT.md).
-
-![Pulse Patrol attention inbox](docs/images/pulse-patrol.webp)
-
-</details>
+![Active alerts and incident triage](docs/images/pulse-alerts.webp)
 
 ## Supported platforms
+
+![Zoomed-in views of Docker and Kubernetes monitoring in Pulse](docs/images/pulse-platforms.webp)
 
 | Platform | What Pulse monitors |
 |---|---|
@@ -70,6 +52,26 @@ CPU, memory, disk, network I/O, and filesystem charts for every host, guest, and
 | TrueNAS SCALE &amp; CORE | Pools, datasets, disks, snapshots, replication, apps, VMs |
 | Linux, Windows &amp; macOS | Host health, filesystems, networking, temperatures, RAID, availability |
 | VMware vSphere *(early access)* | Hosts, clusters, VMs, datastores, networks, snapshots |
+
+<details>
+<summary><strong>More full-screen views: Docker &amp; Podman, Kubernetes, and Pulse Patrol</strong></summary>
+
+### Docker & Podman
+Hosts, containers, Compose stacks, Swarm health, and image updates without mounting the Docker socket on Pulse.
+
+![Docker hosts and containers](docs/images/pulse-docker.webp)
+
+### Kubernetes
+Multi-cluster health, degraded nodes, pods, deployments, storage, and events in one view.
+
+![Kubernetes clusters and workloads](docs/images/pulse-kubernetes.webp)
+
+### Optional AI & MCP
+[Pulse Patrol](docs/AI.md) runs scheduled checks with your own AI provider or local model; [`pulse-mcp`](cmd/pulse-mcp/README.md#quick-start) lets Claude Code, Codex, or OpenCode [ask what changed overnight](docs/WHAT_HAPPENED_OVERNIGHT.md).
+
+![Pulse Patrol attention inbox](docs/images/pulse-patrol.webp)
+
+</details>
 
 ## Install
 
