@@ -63,6 +63,7 @@ vi.mock('@/components/Workloads/StackedDiskBar', () => ({
 
 vi.mock('@/components/Workloads/MetricMiniSparkline', () => ({
   MetricMiniSparkline: (props: {
+    series: readonly unknown[];
     title?: string;
     valueContent?: JSX.Element;
     valueLabel?: string;
@@ -71,6 +72,7 @@ vi.mock('@/components/Workloads/MetricMiniSparkline', () => ({
       data-testid="metric-mini-sparkline"
       data-title={props.title}
       data-value-label={props.valueLabel}
+      data-series-count={props.series.length}
     >
       {props.valueContent}
     </div>
@@ -159,6 +161,56 @@ afterEach(() => {
 });
 
 describe('ProxmoxNodesTable', () => {
+  it.each([
+    {
+      name: 'prefers the published node history target over the native fallback',
+      metricsTarget: { resourceType: 'node', resourceId: 'recorded-pve-member-231' },
+      linkedAgentId: undefined,
+      expected: { resourceType: 'node', resourceId: 'recorded-pve-member-231' },
+    },
+    {
+      name: 'uses a node-typed native fallback for an API-only row without a target',
+      metricsTarget: undefined,
+      linkedAgentId: undefined,
+      expected: { resourceType: 'node', resourceId: 'native-pve-member-232' },
+    },
+    {
+      name: 'retains the agent target for a linked row',
+      metricsTarget: { resourceType: 'agent', resourceId: 'linked-agent' },
+      linkedAgentId: 'linked-agent',
+      expected: { resourceType: 'agent', resourceId: 'linked-agent' },
+    },
+    {
+      name: 'retains the linked agent path even without a published target',
+      metricsTarget: undefined,
+      linkedAgentId: 'linked-agent',
+      expected: undefined,
+    },
+  ] as const)('$name', ({ metricsTarget, linkedAgentId, expected }) => {
+    const node = makeNodeResource({
+      name: 'Renamed member',
+      sourceType: linkedAgentId ? 'hybrid' : 'api',
+      metricsTarget,
+      agent: linkedAgentId ? { agentId: linkedAgentId } : undefined,
+      proxmox: { instance: 'North cluster', nodeName: 'native', sourceId: 'native-pve-member-232' },
+    });
+    render(() => (
+      <ProxmoxNodesTable
+        nodes={[node]}
+        guests={[]}
+        metricDisplayMode={() => 'sparklines'}
+        emptyIcon={<span />}
+        emptyTitle="No Proxmox VE nodes"
+        emptyDescription="No nodes"
+      />
+    ));
+
+    expect(nodeMetricSeriesMock).toHaveBeenCalledWith(
+      expect.objectContaining({ id: node.id, metricsTarget: expected, linkedAgentId }),
+      'disk',
+    );
+  });
+
   it.each([
     [0, 0, '0%', '0.0%'],
     [49, 49, '0.49%', '0.49%'],

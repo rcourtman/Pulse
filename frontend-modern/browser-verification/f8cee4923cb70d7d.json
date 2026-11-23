@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "base_sha": "852613fa5ccfc01f89d5c075cccf908d6266349a",
+  "verified_at": "2026-11-23T02:11:30Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Workloads/workloadMetricHistoryModel.ts",
+    "frontend-modern/src/features/proxmox/ProxmoxNodesTable.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Workloads/workloadMetricHistoryModel.ts": "e50e21801def5bf753e7e588d9cd8f570c425a6e7f07f5c5e3719cd7a2304fad",
+    "frontend-modern/src/features/proxmox/ProxmoxNodesTable.tsx": "9c5ee33f8cad3b6c693203c017baf50f9dbea647bafebb58963f7cd94f5df5d5"
+  },
+  "routes": [
+    "/proxmox/overview"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 960
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Production-mode previews in Chromium 141.0.7390.37 and Playwright 1.56.1. Matched light desktop and dark touch-phone Bars and Trends, and a desktop History hover at identical pointer coordinates. 394 assertions and 13 inspected captures including the earlier implementation as a negative control.",
+    "A renamed member plots the node samples, not a longer same-ID agent series. An API-only row without a target uses its native node ID, not a same-ID Docker series. A row with no node series has no line despite a measured live value and foreign samples.",
+    "Linked-agent and standalone controls still chart. The live numbers, byte-backed Disk bars, measured zero, unavailable markers and the guest last-known memory cue stay distinct."
+  ],
+  "interactions": [
+    "Sort Disk both ways with Enter or tap, expand Show all nodes on phone, and switch to Trends via View (inside Filters on phone). Check the plotted sample geometry as well as the current labels.",
+    "With Bars and History hover selected on desktop, read the 0.88% historical disk value at its recorded time instead of the 94.0% foreign curve. Move away to restore the Bars and verify the missing series does not open a false preview."
+  ]
+}
