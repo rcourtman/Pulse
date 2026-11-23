@@ -1,12 +1,15 @@
 import { For, Show, createMemo, type Component } from 'solid-js';
 import ChevronDownIcon from 'lucide-solid/icons/chevron-down';
+import { MetadataBadge } from '@/components/shared/MetadataBadge';
 import type { ActionAuditRecord, ActionDetailResponse } from '@/types/actionAudit';
 import {
+  formatActionBlastRadiusCount,
   formatActionName,
   formatEvidenceClass,
   formatPolicyAuthority,
   formatPolicyReason,
   getActionOriginLabel,
+  getActionRequesterPresentation,
   getActionResourcePresentation,
   verificationTruthLabel,
 } from './actionPresentation';
@@ -27,6 +30,7 @@ export const ActionDecisionPacket: Component<{
     return output && !apt() && output !== result()?.execution.summary?.trim() ? output : undefined;
   };
   const originLabel = () => getActionOriginLabel(props.audit.origin);
+  const requester = createMemo(() => getActionRequesterPresentation(props.audit.request));
   const resource = createMemo(() =>
     getActionResourcePresentation(props.audit.request.resourceId, props.audit.resource),
   );
@@ -37,10 +41,16 @@ export const ActionDecisionPacket: Component<{
   // Prefer read-time names for blast-radius entries; fall back to the raw
   // plan IDs so nothing is hidden when a resource cannot be resolved.
   const blastRadiusEntries = createMemo(() => {
-    const ids = props.audit.plan.predictedBlastRadius ?? [];
+    const ids = (props.audit.plan.predictedBlastRadius ?? []).filter((id) => id.trim().length > 0);
     const named = new Map((props.audit.blastRadius ?? []).map((entry) => [entry.id, entry.name]));
-    return ids.map((id) => ({ id, name: named.get(id)?.trim() || '' }));
+    if (ids.length > 0) {
+      return ids.map((id) => ({ id, name: named.get(id)?.trim() || '' }));
+    }
+    return (props.audit.blastRadius ?? [])
+      .filter((entry) => entry.id.trim().length > 0 || entry.name.trim().length > 0)
+      .map((entry) => ({ id: entry.id, name: entry.name.trim() }));
   });
+  const blastRadiusCount = createMemo(() => formatActionBlastRadiusCount(props.audit));
 
   return (
     <div class="space-y-4 wrap-anywhere" data-testid="action-decision-packet">
@@ -52,57 +62,84 @@ export const ActionDecisionPacket: Component<{
           Action plan
         </h3>
         <dl class="mt-3 grid gap-3 text-sm sm:grid-cols-2">
-          <div>
+          <div class="min-w-0">
             <dt class="text-muted">Action</dt>
-            <dd class="font-medium">{formatActionName(props.audit.request.capabilityName)}</dd>
+            <dd class="break-words font-medium">
+              {formatActionName(props.audit.request.capabilityName)}
+            </dd>
           </div>
-          <div>
+          <div class="min-w-0">
             <dt class="text-muted">Resource</dt>
-            <dd class="font-medium">{resource().label}</dd>
+            <dd class="break-words font-medium">{resource().label}</dd>
             <dd class="break-all text-xs text-muted">{props.audit.request.resourceId}</dd>
           </div>
-          <div class="sm:col-span-2">
+          <div class="min-w-0 sm:col-span-2">
             <dt class="text-muted">Reason</dt>
-            <dd>{props.audit.request.reason}</dd>
+            <dd class="break-words">{props.audit.request.reason}</dd>
           </div>
           <Show when={originLabel()}>
             {(label) => (
-              <div>
+              <div class="min-w-0">
                 <dt class="text-muted">Origin</dt>
-                <dd class="font-medium">{label()}</dd>
+                <dd class="break-words font-medium">{label()}</dd>
+              </div>
+            )}
+          </Show>
+          <Show when={requester()}>
+            {(actor) => (
+              <div class="min-w-0" data-testid="action-plan-requester">
+                <dt class="text-muted">Requested by</dt>
+                <dd class="flex flex-wrap items-center gap-1.5 font-medium">
+                  <span class="min-w-0 break-words">{actor().label}</span>
+                  <Show when={actor().badge}>
+                    {(badge) => (
+                      <MetadataBadge tone="neutral" size="xs" shape="rounded" appearance="outline">
+                        {badge()}
+                      </MetadataBadge>
+                    )}
+                  </Show>
+                </dd>
+                <Show when={actor().detail}>
+                  {(detail) => <dd class="break-words text-xs text-muted">{detail()}</dd>}
+                </Show>
               </div>
             )}
           </Show>
           <Show when={props.audit.plan.preflight?.currentState}>
-            <div>
+            <div class="min-w-0">
               <dt class="text-muted">State when planned</dt>
-              <dd>{props.audit.plan.preflight?.currentState}</dd>
+              <dd class="break-words">{props.audit.plan.preflight?.currentState}</dd>
             </div>
           </Show>
           <Show when={props.audit.plan.preflight?.intendedChange}>
-            <div>
+            <div class="min-w-0">
               <dt class="text-muted">Intended change</dt>
-              <dd>{props.audit.plan.preflight?.intendedChange}</dd>
+              <dd class="break-words">{props.audit.plan.preflight?.intendedChange}</dd>
             </div>
           </Show>
-          <div>
+          <div class="min-w-0">
             <dt class="text-muted">Plan expiry</dt>
-            <dd>{expiry()}</dd>
+            <dd class="break-words">{expiry()}</dd>
           </div>
-          <div>
+          <div class="min-w-0">
             <dt class="text-muted">Rollback declared</dt>
             <dd>{props.audit.plan.rollbackAvailable ? 'Yes' : 'No'}</dd>
           </div>
         </dl>
         <Show when={blastRadiusEntries().length > 0}>
-          <div class="mt-3">
-            <div class="text-sm text-muted">Potentially affected</div>
-            <ul class="mt-1 list-disc pl-5 text-sm">
+          <div class="mt-3" data-testid="action-plan-blast-radius">
+            <div class="flex flex-wrap items-baseline justify-between gap-2 text-sm text-muted">
+              <span>Potentially affected</span>
+              <Show when={blastRadiusCount()}>
+                {(count) => <span class="text-xs">{count()}</span>}
+              </Show>
+            </div>
+            <ul class="mt-1 list-disc space-y-0.5 pl-5 text-sm">
               <For each={blastRadiusEntries()}>
                 {(entry) => (
-                  <li>
+                  <li class="min-w-0">
                     <Show when={entry.name} fallback={<span class="break-all">{entry.id}</span>}>
-                      {entry.name}
+                      <span class="break-words">{entry.name}</span>
                       <span class="ml-1 break-all text-xs text-muted">({entry.id})</span>
                     </Show>
                   </li>

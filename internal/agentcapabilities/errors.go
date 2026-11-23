@@ -24,6 +24,7 @@ const (
 	AgentErrCodeActionNotPending           = "action_not_pending"
 	AgentErrCodeActionPlanExpired          = "action_plan_expired"
 	AgentErrCodeActionApprovalForbidden    = "action_approval_forbidden"
+	AgentErrCodeActionReadForbidden        = "action_read_forbidden"
 	AgentErrCodeActionStepUpUnavailable    = "action_step_up_unavailable"
 	AgentErrCodeActionDecisionConflict     = "action_decision_conflict"
 	AgentErrCodeActionSeparationRequired   = "action_separation_required"

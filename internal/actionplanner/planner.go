@@ -16,7 +16,10 @@ import (
 	unified "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
-const DefaultPlanTTL = 5 * time.Minute
+const (
+	DefaultPlanTTL         = 5 * time.Minute
+	DefaultExternalPlanTTL = 30 * time.Minute
+)
 
 var ErrCapabilityNotFound = errors.New("resource capability is not advertised")
 
@@ -44,8 +47,9 @@ func AsValidationError(err error) (*ValidationError, bool) {
 }
 
 type Planner struct {
-	Now func() time.Time
-	TTL time.Duration
+	Now               func() time.Time
+	TTL               time.Duration
+	DisallowRequester bool
 }
 
 func (p Planner) Plan(req unified.ActionRequest, resource unified.Resource) (unified.ActionPlan, error) {
@@ -90,9 +94,14 @@ func (p Planner) PlanWithPolicyFactors(req unified.ActionRequest, resource unifi
 	policy := normalizeApprovalPolicy(capability.MinimumApprovalLevel)
 	requirement := requested
 	if requirement.Version == 0 {
+		disallowRequester := requirement.DisallowRequester
 		requirement = unified.ApprovalRequirementForFloor(policy)
+		requirement.DisallowRequester = disallowRequester
 	} else {
 		requirement = unified.NormalizeApprovalRequirement(requirement, policy)
+	}
+	if p.DisallowRequester {
+		requirement.DisallowRequester = true
 	}
 	if err := unified.ValidateApprovalRequirement(requirement, policy); err != nil {
 		return unified.ActionPlan{}, &ValidationError{Field: "approvalRequirement", Message: err.Error()}

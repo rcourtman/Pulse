@@ -182,6 +182,9 @@ type Router struct {
 	startedPatrolOrgs           map[string]bool
 	patrolAlertSources          patrolAlertSources // which alert manager each organisation's Patrol listens to
 	actionRecoveryMu            sync.Mutex
+	externalAgentNotifyMu       sync.Mutex
+	externalAgentNotified       map[string]struct{}
+	externalAgentAlertNotifier  func(orgID string, alert *alerts.Alert)
 	aiAutoFixEndpoints          extensions.AIAutoFixEndpoints
 	aiAlertAnalysisEndpoints    extensions.AIAlertAnalysisEndpoints
 
@@ -739,7 +742,7 @@ func (r *Router) setupRoutes() {
 		})
 		r.aiSettingsHandler.SetResourceStoreProvider(r.resourceHandlers.getStore)
 		r.aiSettingsHandler.SetPolicyMutationCoordinator(r.resourceHandlers.ActionLifecycle().WithPolicyMutation)
-		r.resourceHandlers.SetActionTransitionPublisher(r.aiSettingsHandler.ReconcilePatrolActionTransition)
+		r.resourceHandlers.SetActionTransitionPublisher(r.handleActionTransition)
 		resourceHandlers := r.resourceHandlers
 		patrolPolicyProvider := func(ctx context.Context, scopedOrgID string) (PatrolActionPolicySnapshot, error) {
 			orgCtx := context.WithValue(ctx, OrgIDContextKey, approval.NormalizeOrgID(scopedOrgID))
@@ -823,6 +826,21 @@ func (r *Router) setupRoutes() {
 		broadcaster := r.agentEventBroadcaster
 		r.aiHandler.SetApprovalCreatedCallback(func(req *approval.ApprovalRequest) {
 			if req == nil {
+				return
+			}
+			if orgID := strings.TrimSpace(req.OrgID); orgID != "" {
+				broadcaster.PublishApprovalPendingForOrg(orgID, AgentEventApprovalPendingPayload{
+					ApprovalID:  req.ID,
+					ResourceID:  req.CanonicalResourceID(),
+					TargetType:  req.TargetType,
+					TargetID:    req.TargetID,
+					TargetName:  req.TargetName,
+					Command:     req.Command,
+					RiskLevel:   string(req.RiskLevel),
+					RequestedBy: req.RequestedBy,
+					RequestedAt: req.RequestedAt,
+					ExpiresAt:   req.ExpiresAt,
+				})
 				return
 			}
 			broadcaster.PublishApprovalPending(AgentEventApprovalPendingPayload{
@@ -3733,6 +3751,144 @@ func (r *Router) patrolFindingNotificationManager(orgID string) *notifications.N
 		return nil
 	}
 	return monitor.GetNotificationManager()
+}
+
+const externalAgentActionAlertIDPrefix = "action-approval:"
+
+// handleActionTransition bridges every persisted action lifecycle transition
+// into Patrol reconciliation, the org-scoped agent SSE event stream, and
+// operator notifications for external-agent pending approval requests.
+func (r *Router) handleActionTransition(orgID string, record unifiedresources.ActionAuditRecord) {
+	if r == nil {
+		return
+	}
+	if r.aiSettingsHandler != nil {
+		r.aiSettingsHandler.ReconcilePatrolActionTransition(orgID, record)
+	}
+	if r.agentEventBroadcaster != nil {
+		r.agentEventBroadcaster.PublishActionTransitionRecord(orgID, record)
+	}
+	if record.Origin != nil && isExternalAgentSurface(record.Origin.Surface) && record.State == unifiedresources.ActionStatePending {
+		r.notifyExternalAgentPendingAction(orgID, record)
+	}
+}
+
+func (r *Router) claimExternalAgentActionNotification(actionID string) bool {
+	actionID = strings.TrimSpace(actionID)
+	if r == nil || actionID == "" {
+		return false
+	}
+	r.externalAgentNotifyMu.Lock()
+	defer r.externalAgentNotifyMu.Unlock()
+	if r.externalAgentNotified == nil {
+		r.externalAgentNotified = make(map[string]struct{})
+	}
+	if _, seen := r.externalAgentNotified[actionID]; seen {
+		return false
+	}
+	if len(r.externalAgentNotified) >= 4096 {
+		r.externalAgentNotified = make(map[string]struct{})
+	}
+	r.externalAgentNotified[actionID] = struct{}{}
+	return true
+}
+
+func (r *Router) notifyExternalAgentPendingAction(orgID string, record unifiedresources.ActionAuditRecord) {
+	if !r.claimExternalAgentActionNotification(record.ID) {
+		return
+	}
+	normalizedOrg := approval.NormalizeOrgID(orgID)
+	resourceLabel := strings.TrimSpace(record.Request.ResourceID)
+	if r.resourceHandlers != nil {
+		if reg, err := r.resourceHandlers.buildRegistry(normalizedOrg); err == nil && reg != nil {
+			if res, ok := resourceapi.PresentationResourceByID(reg, record.Request.ResourceID); ok && res != nil && strings.TrimSpace(res.Name) != "" {
+				resourceLabel = strings.TrimSpace(res.Name)
+			}
+		}
+	}
+	requester := externalAgentRequesterDisplayName(record)
+	capability := strings.TrimSpace(record.Request.CapabilityName)
+	if capability == "" {
+		capability = "action"
+	}
+
+	if normalizedOrg == approval.DefaultOrgID {
+		r.relayMu.RLock()
+		client := r.relayClient
+		r.relayMu.RUnlock()
+		if client != nil {
+			title := fmt.Sprintf("%s requested %s on %s", requester, capability, resourceLabel)
+			if err := client.SendPushNotification(relay.NewActionDecisionNotification(record.ID, title)); err != nil {
+				log.Warn().Err(err).Str("actionID", record.ID).Msg("External agent action push notification send failed")
+			}
+		}
+	}
+
+	if alert := externalAgentPendingActionNotificationAlert(record, resourceLabel); alert != nil {
+		if r.externalAgentAlertNotifier != nil {
+			r.externalAgentAlertNotifier(normalizedOrg, alert)
+		} else if nm := r.patrolFindingNotificationManager(normalizedOrg); nm != nil {
+			nm.SendAlert(alert)
+		}
+	}
+}
+
+func externalAgentRequesterDisplayName(record unifiedresources.ActionAuditRecord) string {
+	if label := strings.TrimSpace(record.Request.Actor.CredentialLabel); label != "" {
+		return label
+	}
+	if requestedBy := strings.TrimSpace(record.Request.RequestedBy); requestedBy != "" {
+		return requestedBy
+	}
+	return "External agent"
+}
+
+func externalAgentPendingActionNotificationAlert(record unifiedresources.ActionAuditRecord, resourceName string) *alerts.Alert {
+	actionID := strings.TrimSpace(record.ID)
+	if actionID == "" {
+		return nil
+	}
+	requester := externalAgentRequesterDisplayName(record)
+	capability := strings.TrimSpace(record.Request.CapabilityName)
+	if capability == "" {
+		capability = "action"
+	}
+	resourceLabel := strings.TrimSpace(resourceName)
+	if resourceLabel == "" {
+		resourceLabel = strings.TrimSpace(record.Request.ResourceID)
+	}
+	actionLink := "/actions?action=" + url.QueryEscape(actionID)
+	startTime := record.Plan.PlannedAt
+	if startTime.IsZero() {
+		startTime = record.CreatedAt
+	}
+	if startTime.IsZero() {
+		startTime = time.Now().UTC()
+	}
+	message := fmt.Sprintf("%s requested %s on %s. Review at %s", requester, capability, resourceLabel, actionLink)
+	metadata := map[string]interface{}{
+		"actionId":       actionID,
+		"capabilityName": capability,
+		"requestedBy":    requester,
+		"actionLink":     actionLink,
+	}
+	if record.Origin != nil && strings.TrimSpace(record.Origin.Surface) != "" {
+		metadata["originSurface"] = strings.TrimSpace(record.Origin.Surface)
+	}
+	if strings.TrimSpace(record.Request.Reason) != "" {
+		metadata["reason"] = strings.TrimSpace(record.Request.Reason)
+	}
+	return &alerts.Alert{
+		ID:           externalAgentActionAlertIDPrefix + actionID,
+		Type:         "action_approval",
+		Level:        alerts.AlertLevelWarning,
+		ResourceID:   record.Request.ResourceID,
+		ResourceName: resourceLabel,
+		Message:      message,
+		StartTime:    startTime,
+		LastSeen:     startTime,
+		Metadata:     metadata,
+	}
 }
 
 // patrolFindingsForOrg returns orgID's Patrol findings store, or nil when that

@@ -46,10 +46,11 @@ func actionActorForRequest(cfg *config.Config, r *http.Request, orgID string) (u
 	if record := getAPITokenRecordFromRequest(r); record != nil {
 		subject := apiTokenAuthenticatedUser(record)
 		actor := unified.ActionActor{
-			SubjectID:    subject,
-			Kind:         unified.ActionActorAPIToken,
-			CredentialID: "api-token:" + strings.TrimSpace(record.ID),
-			OrgID:        orgID,
+			SubjectID:       subject,
+			Kind:            unified.ActionActorAPIToken,
+			CredentialID:    "api-token:" + strings.TrimSpace(record.ID),
+			CredentialLabel: strings.TrimSpace(record.Name),
+			OrgID:           orgID,
 		}
 		if err := unified.ValidateActionActor(actor); err != nil {
 			return unified.ActionActor{}, err
@@ -230,6 +231,39 @@ func requireActionCapability(cfg *config.Config, authorizer auth.Authorizer, cap
 			return
 		}
 		handler(w, r)
+	}
+}
+
+// isPlanOnlyActionReader reports whether r is authenticated with an API token
+// that carries actions:plan without full action-review scopes
+// (actions:approve, ai:execute, or relay:mobile:access). Plan-only tokens may
+// inspect only their own planned actions in read-only mode.
+func isPlanOnlyActionReader(r *http.Request) bool {
+	token := getAPITokenRecordFromRequest(r)
+	if token == nil {
+		return false
+	}
+	if token.HasScope(config.ScopeActionsApprove) ||
+		token.HasScope(config.ScopeAIExecute) ||
+		token.HasScope(config.ScopeRelayMobileAccess) {
+		return false
+	}
+	return token.HasScope(config.ScopeActionsPlan)
+}
+
+// requireActionReadCapability admits full action readers via auth.ActionApprove
+// (preserving the existing admin/approver boundary for browser sessions and
+// approval-scoped tokens) while allowing actions:plan-only API tokens through
+// auth.ActionPlan so handlers can enforce own-plan-only read-only visibility.
+func requireActionReadCapability(cfg *config.Config, authorizer auth.Authorizer, handler http.HandlerFunc) http.HandlerFunc {
+	approveHandler := requireActionCapability(cfg, authorizer, auth.ActionApprove, handler)
+	planHandler := requireActionCapability(cfg, authorizer, auth.ActionPlan, handler)
+	return func(w http.ResponseWriter, r *http.Request) {
+		if isPlanOnlyActionReader(r) {
+			planHandler(w, r)
+			return
+		}
+		approveHandler(w, r)
 	}
 }
 

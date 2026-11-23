@@ -407,3 +407,74 @@ func TestPlannerCarriesCapabilityRollbackSupportIntoPlan(t *testing.T) {
 		t.Fatal("RollbackAvailable = true for a capability with no declared rollback support")
 	}
 }
+
+func TestPlannerExternalPlanTTLAndDisallowRequesterBakedIntoHash(t *testing.T) {
+	if DefaultExternalPlanTTL != 30*time.Minute {
+		t.Fatalf("DefaultExternalPlanTTL = %v, want 30m", DefaultExternalPlanTTL)
+	}
+	now := time.Date(2026, 11, 23, 12, 0, 0, 0, time.UTC)
+	resource := unified.Resource{
+		ID:        "vm:42",
+		Type:      unified.ResourceTypeVM,
+		Name:      "web-42",
+		Status:    unified.StatusWarning,
+		LastSeen:  now,
+		UpdatedAt: now,
+		Capabilities: []unified.ResourceCapability{
+			{
+				Name:                 "restart",
+				Type:                 unified.CapabilityTypeCommon,
+				Description:          "Restart this VM",
+				MinimumApprovalLevel: unified.ApprovalAdmin,
+			},
+		},
+	}
+	req := unified.ActionRequest{
+		RequestID:      "ext-req-1",
+		ResourceID:     "vm:42",
+		CapabilityName: "restart",
+		Reason:         "Recover stuck web worker",
+		Actor: unified.ActionActor{
+			SubjectID:       "agent-owner",
+			Kind:            unified.ActionActorAPIToken,
+			CredentialID:    "api-token:tok-ext",
+			CredentialLabel: "Claude Code",
+			OrgID:           "default",
+		},
+	}
+
+	defaultPlan, err := (Planner{Now: func() time.Time { return now }}).Plan(req, resource)
+	if err != nil {
+		t.Fatalf("default Plan error = %v", err)
+	}
+	externalPlanner := Planner{
+		Now:               func() time.Time { return now },
+		TTL:               DefaultExternalPlanTTL,
+		DisallowRequester: true,
+	}
+	extPlan, err := externalPlanner.Plan(req, resource)
+	if err != nil {
+		t.Fatalf("external Plan error = %v", err)
+	}
+	if !extPlan.ApprovalRequirement.DisallowRequester {
+		t.Fatal("expected DisallowRequester=true on external plan")
+	}
+	if gotTTL := extPlan.ExpiresAt.Sub(extPlan.PlannedAt); gotTTL != DefaultExternalPlanTTL {
+		t.Fatalf("external plan TTL = %v, want %v", gotTTL, DefaultExternalPlanTTL)
+	}
+	if extPlan.PlanHash == defaultPlan.PlanHash || extPlan.ActionID == defaultPlan.ActionID {
+		t.Fatal("DisallowRequester must be bound into both ActionID and PlanHash")
+	}
+
+	// Re-planning with the persisted ApprovalRequirement produces identical identity and hash.
+	replan, err := (Planner{
+		Now:               func() time.Time { return extPlan.PlannedAt },
+		DisallowRequester: extPlan.ApprovalRequirement.DisallowRequester,
+	}).PlanWithPolicyFactors(req, resource, extPlan.ApprovalRequirement, nil)
+	if err != nil {
+		t.Fatalf("replan error = %v", err)
+	}
+	if replan.ActionID != extPlan.ActionID || replan.PlanHash != extPlan.PlanHash {
+		t.Fatalf("replan drifted: got id=%q hash=%q, want id=%q hash=%q", replan.ActionID, replan.PlanHash, extPlan.ActionID, extPlan.PlanHash)
+	}
+}

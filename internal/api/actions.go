@@ -194,7 +194,17 @@ func (h *ResourceHandlers) HandlePlanAction(w http.ResponseWriter, r *http.Reque
 		Params:         publicReq.Params,
 		Reason:         publicReq.Reason,
 	}
-	plan, err := h.ActionLifecycle().Plan(r.Context(), orgID, req, actor)
+	var plan unified.ActionPlan
+	if actor.Kind == unified.ActionActorAPIToken {
+		plan, err = h.ActionLifecycle().PlanWithOptions(r.Context(), orgID, req, actionlifecycle.PlanOptions{
+			Actor:             actor,
+			Origin:            &unified.ActionOrigin{Surface: externalAgentSurfaceFromRequest(r)},
+			TTL:               actionplanner.DefaultExternalPlanTTL,
+			DisallowRequester: true,
+		})
+	} else {
+		plan, err = h.ActionLifecycle().Plan(r.Context(), orgID, req, actor)
+	}
 	if err != nil {
 		writeActionPlanError(w, err)
 		return
@@ -254,6 +264,21 @@ func (h *ResourceHandlers) HandleListActions(w http.ResponseWriter, r *http.Requ
 		}
 		limit = parsed
 	}
+	orgID := GetOrgID(r.Context())
+	planOnly := isPlanOnlyActionReader(r)
+	var planOnlyActor unified.ActionActor
+	if planOnly {
+		actor, err := actionActorForRequest(h.cfg, r, orgID)
+		if err != nil || strings.TrimSpace(actor.CredentialID) == "" {
+			writeJSONError(w, http.StatusForbidden, agentcapabilities.AgentErrCodeActionActorUnavailable, "Authenticated action actor is unavailable")
+			return
+		}
+		planOnlyActor = actor
+	}
+	fetchLimit := limit
+	if planOnly {
+		fetchLimit = 500
+	}
 	if view == "compose" {
 		runtime, project := r.URL.Query().Get("runtime"), r.URL.Query().Get("project")
 		if runtime == "" || project == "" || len(runtime) > 512 || len(project) > 128 {
@@ -265,15 +290,14 @@ func (h *ResourceHandlers) HandleListActions(w http.ResponseWriter, r *http.Requ
 		if mock.IsMockEnabled() {
 			for _, fixture := range mock.ActionFixtures() {
 				a := fixture.Audit
-				if a.Request.CapabilityName == "update" && a.Request.Params["composeRuntime"] == runtime && a.Request.Params["composeProject"] == project && len(records) < limit {
+				if a.Request.CapabilityName == "update" && a.Request.Params["composeRuntime"] == runtime && a.Request.Params["composeProject"] == project && len(records) < fetchLimit {
 					records = append(records, a)
 				}
 			}
 			registry = mockActionResourceRegistry()
 		} else {
-			orgID := GetOrgID(r.Context())
 			var err error
-			records, err = h.ActionLifecycle().ComposeActions(orgID, runtime, project, limit)
+			records, err = h.ActionLifecycle().ComposeActions(orgID, runtime, project, fetchLimit)
 			if err != nil {
 				writeActionLifecycleReadError(w, err, func() {
 					writeJSONError(w, http.StatusInternalServerError, agentcapabilities.AgentErrCodeActionListFailed, "Failed to query Compose deployments")
@@ -284,13 +308,16 @@ func (h *ResourceHandlers) HandleListActions(w http.ResponseWriter, r *http.Requ
 				registry, _ = h.buildRegistry(orgID)
 			}
 		}
+		if planOnly {
+			records = filterActionsForCredential(records, planOnlyActor.CredentialID, orgID, limit)
+		}
 		projected := projectActionAudits(records, registry)
 		observations := composeInventoryForProject(registry, runtime, project)
 		for i := range projected {
 			projected[i].ComposeObservation = observations.observe(projected[i].ActionAuditRecord, time.Now().UTC())
 		}
 		w.Header().Set("Content-Type", "application/json")
-		if err := json.NewEncoder(w).Encode(actionInboxResponse{View: view, Actions: projected, Count: len(projected), ReadOnly: mock.IsMockEnabled()}); err != nil {
+		if err := json.NewEncoder(w).Encode(actionInboxResponse{View: view, Actions: projected, Count: len(projected), ReadOnly: mock.IsMockEnabled() || planOnly}); err != nil {
 			writeJSONError(w, http.StatusInternalServerError, agentcapabilities.AgentErrCodeActionListEncodeFailed, "Failed to encode actions")
 		}
 		return
@@ -303,7 +330,10 @@ func (h *ResourceHandlers) HandleListActions(w http.ResponseWriter, r *http.Requ
 			writeJSONError(w, http.StatusBadRequest, agentcapabilities.AgentErrCodeInvalidActionListView, "Action list view must be pending, settled, or compose")
 			return
 		}
-		actions := mockActionAuditsByState(limit, states...)
+		actions := mockActionAuditsByState(fetchLimit, states...)
+		if planOnly {
+			actions = filterActionsForCredential(actions, planOnlyActor.CredentialID, orgID, limit)
+		}
 		projected := projectActionAudits(actions, mockActionResourceRegistry())
 		w.Header().Set("Content-Type", "application/json")
 		if err := json.NewEncoder(w).Encode(actionInboxResponse{View: view, Actions: projected, Count: len(projected), ReadOnly: true}); err != nil {
@@ -311,7 +341,7 @@ func (h *ResourceHandlers) HandleListActions(w http.ResponseWriter, r *http.Requ
 		}
 		return
 	}
-	actions, err := h.ActionLifecycle().List(GetOrgID(r.Context()), view, limit)
+	actions, err := h.ActionLifecycle().List(orgID, view, fetchLimit)
 	if err != nil {
 		if strings.Contains(err.Error(), "unsupported action list view") {
 			writeJSONError(w, http.StatusBadRequest, agentcapabilities.AgentErrCodeInvalidActionListView, "Action list view must be pending, settled, or compose")
@@ -322,12 +352,15 @@ func (h *ResourceHandlers) HandleListActions(w http.ResponseWriter, r *http.Requ
 		})
 		return
 	}
+	if planOnly {
+		actions = filterActionsForCredential(actions, planOnlyActor.CredentialID, orgID, limit)
+	}
 	if actions == nil {
 		actions = []unified.ActionAuditRecord{}
 	}
-	projected := h.projectActionAudits(GetOrgID(r.Context()), actions)
+	projected := h.projectActionAudits(orgID, actions)
 	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(actionInboxResponse{View: view, Actions: projected, Count: len(projected)}); err != nil {
+	if err := json.NewEncoder(w).Encode(actionInboxResponse{View: view, Actions: projected, Count: len(projected), ReadOnly: planOnly}); err != nil {
 		writeJSONError(w, http.StatusInternalServerError, agentcapabilities.AgentErrCodeActionListEncodeFailed, "Failed to encode actions")
 	}
 }
@@ -339,10 +372,15 @@ func (h *ResourceHandlers) HandleGetAction(w http.ResponseWriter, r *http.Reques
 		writeJSONError(w, http.StatusBadRequest, agentcapabilities.AgentErrCodeInvalidID, "Invalid action ID format")
 		return
 	}
+	planOnly := isPlanOnlyActionReader(r)
 	if mock.IsMockEnabled() {
 		for _, fixture := range mock.ActionFixtures() {
 			if fixture.Audit.ID != actionID {
 				continue
+			}
+			if planOnly {
+				writeJSONError(w, http.StatusForbidden, agentcapabilities.AgentErrCodeActionReadForbidden, "You can only view action plans created by this API token")
+				return
 			}
 			w.Header().Set("Content-Type", "application/json")
 			if err := json.NewEncoder(w).Encode(actionDetailResponse{
@@ -375,7 +413,13 @@ func (h *ResourceHandlers) HandleGetAction(w http.ResponseWriter, r *http.Reques
 	}
 	// The reader's identity decides whether readiness includes the agent
 	// check; a reader without one gets Pulse's own checks only.
-	viewer, _ := actionActorForRequest(h.cfg, r, orgID)
+	viewer, actorErr := actionActorForRequest(h.cfg, r, orgID)
+	if planOnly {
+		if actorErr != nil || !actionBelongsToCredential(detail.Audit, viewer.CredentialID, orgID) {
+			writeJSONError(w, http.StatusForbidden, agentcapabilities.AgentErrCodeActionReadForbidden, "You can only view action plans created by this API token")
+			return
+		}
+	}
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(actionDetailResponse{
 		Audit:     h.projectActionAudit(orgID, detail.Audit),
@@ -383,9 +427,60 @@ func (h *ResourceHandlers) HandleGetAction(w http.ResponseWriter, r *http.Reques
 		Attempt:   detail.Attempt,
 		Receipt:   detail.Receipt,
 		Readiness: h.ActionLifecycle().AssessCurrentReadiness(r.Context(), orgID, detail.Audit, viewer),
+		ReadOnly:  planOnly,
 	}); err != nil {
 		writeJSONError(w, http.StatusInternalServerError, agentcapabilities.AgentErrCodeActionDetailEncodeFailed, "Failed to encode action detail")
 	}
+}
+
+func externalAgentSurfaceFromRequest(r *http.Request) string {
+	if r != nil {
+		switch strings.ToLower(strings.TrimSpace(r.Header.Get(agentcapabilities.AgentSurfaceHeader))) {
+		case agentcapabilities.AgentSurfacePulseMCP:
+			return agentcapabilities.AgentSurfacePulseMCP
+		case agentcapabilities.AgentSurfacePulseCLI:
+			return agentcapabilities.AgentSurfacePulseCLI
+		}
+	}
+	return "api_token"
+}
+
+func isExternalAgentSurface(surface string) bool {
+	switch strings.ToLower(strings.TrimSpace(surface)) {
+	case agentcapabilities.AgentSurfacePulseMCP, agentcapabilities.AgentSurfacePulseCLI, "api_token", "mcp", "agent_api":
+		return true
+	default:
+		return false
+	}
+}
+
+func actionBelongsToCredential(record unified.ActionAuditRecord, credentialID, orgID string) bool {
+	credentialID = strings.TrimSpace(credentialID)
+	if credentialID == "" {
+		return false
+	}
+	if strings.TrimSpace(record.Request.Actor.CredentialID) != credentialID {
+		return false
+	}
+	recordOrg := strings.TrimSpace(record.Request.Actor.OrgID)
+	if recordOrg != "" && strings.TrimSpace(orgID) != "" && recordOrg != strings.TrimSpace(orgID) {
+		return false
+	}
+	return true
+}
+
+func filterActionsForCredential(records []unified.ActionAuditRecord, credentialID, orgID string, limit int) []unified.ActionAuditRecord {
+	filtered := make([]unified.ActionAuditRecord, 0, min(len(records), limit))
+	for _, record := range records {
+		if !actionBelongsToCredential(record, credentialID, orgID) {
+			continue
+		}
+		filtered = append(filtered, record)
+		if limit > 0 && len(filtered) >= limit {
+			break
+		}
+	}
+	return filtered
 }
 
 // writeActionExecutionUnavailable renders an availability refusal into the

@@ -14,6 +14,14 @@ const (
 	// approval.
 	EventKindApprovalPending EventKind = "approval.pending"
 
+	// EventKindActionApproved fires when an operator approves a pending governed
+	// action.
+	EventKindActionApproved EventKind = "action.approved"
+
+	// EventKindActionRejected fires when an operator rejects a pending governed
+	// action.
+	EventKindActionRejected EventKind = "action.rejected"
+
 	// EventKindActionCompleted fires when an action audit reaches a terminal
 	// state.
 	EventKindActionCompleted EventKind = "action.completed"
@@ -41,6 +49,8 @@ const (
 var agentActionableEventKinds = []string{
 	string(EventKindFindingCreated),
 	string(EventKindApprovalPending),
+	string(EventKindActionApproved),
+	string(EventKindActionRejected),
 	string(EventKindActionCompleted),
 	string(EventKindAlertFired),
 	string(EventKindAlertResolved),
@@ -76,8 +86,10 @@ func SubscribeEventsDescription() string {
 	return "Subscribe to the SSE event stream for real-time notifications: " +
 		string(EventKindFindingCreated) + " when a new finding is raised, " +
 		string(EventKindApprovalPending) + " when a remediation request enters StatusPending and waits on operator decision, " +
-		string(EventKindActionCompleted) + " when an action audit reaches a terminal state (Completed or Failed, including refused-before-dispatch failures with stable error-token prefixes; carries a verification block with the read-after-write probe outcome so agents close the certainty loop without polling /api/actions/{id}), " +
+		string(EventKindActionApproved) + " when an operator approves a pending governed action, " +
+		string(EventKindActionRejected) + " when an operator rejects a pending governed action, " +
+		string(EventKindActionCompleted) + " when an action audit reaches a terminal state (Completed or Failed, including refused-before-dispatch failures with stable error-token prefixes, carrying a verification block with the read-after-write probe outcome so agents close the certainty loop without polling /api/actions/{id}), " +
 		string(EventKindAlertFired) + " and " + string(EventKindAlertResolved) + " when an alert fires or clears on a resource (alert identifier, type and level), " +
-		string(EventKindResourceStatusChanged) + " when a resource's status changes (from/to; further changes within " + ResourceStatusEventCoalesceWindow.String() + " fold into one event carrying coalescedTransitions). Change events carry the canonical resourceId, resource name and type, and the changeId and kind that " + ListRecentChangesCapabilityName + " returns, so agents can read the surrounding history; replayed or imported history is not announced. Stream-local " +
-		string(EventKindHeartbeat) + " every 15s. Command fields are redacted for monitoring-read API tokens unless the token also has ai:execute. Long-lived connection; agents listen instead of polling."
+		string(EventKindResourceStatusChanged) + " when a resource's status changes (from/to, with further changes within " + ResourceStatusEventCoalesceWindow.String() + " folded into one event carrying coalescedTransitions). Change events carry the canonical resourceId, resource name and type, and the changeId and kind that " + ListRecentChangesCapabilityName + " returns, so agents can read the surrounding history. Replayed or imported history is not announced. Stream-local " +
+		string(EventKindHeartbeat) + " every 15s. Command fields are redacted for monitoring-read API tokens unless the token also has ai:execute. Long-lived connection so agents listen instead of polling."
 }

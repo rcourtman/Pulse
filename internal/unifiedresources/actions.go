@@ -41,12 +41,14 @@ type ActionRequest struct {
 
 // ActionActor is the immutable server-owned identity bound to a governed
 // action. SubjectID is the durable principal; CredentialID identifies the
-// authenticated credential without persisting a secret.
+// authenticated credential without persisting a secret; CredentialLabel is the
+// optional human-readable display label (such as an API token name).
 type ActionActor struct {
-	SubjectID    string          `json:"subjectId"`
-	Kind         ActionActorKind `json:"kind"`
-	CredentialID string          `json:"credentialId"`
-	OrgID        string          `json:"orgId"`
+	SubjectID       string          `json:"subjectId"`
+	Kind            ActionActorKind `json:"kind"`
+	CredentialID    string          `json:"credentialId"`
+	CredentialLabel string          `json:"credentialLabel,omitempty"`
+	OrgID           string          `json:"orgId"`
 }
 
 type ActionActorKind string
@@ -61,6 +63,7 @@ const (
 func NormalizeActionActor(actor ActionActor) ActionActor {
 	actor.SubjectID = strings.TrimSpace(actor.SubjectID)
 	actor.CredentialID = strings.TrimSpace(actor.CredentialID)
+	actor.CredentialLabel = strings.TrimSpace(actor.CredentialLabel)
 	actor.OrgID = strings.TrimSpace(actor.OrgID)
 	return actor
 }
@@ -81,7 +84,10 @@ func ValidateActionActor(actor ActionActor) error {
 func ActionActorsEqual(left, right ActionActor) bool {
 	left = NormalizeActionActor(left)
 	right = NormalizeActionActor(right)
-	return left == right
+	return left.SubjectID == right.SubjectID &&
+		left.Kind == right.Kind &&
+		left.CredentialID == right.CredentialID &&
+		left.OrgID == right.OrgID
 }
 
 const ActionApprovalRequirementVersion = 1

@@ -781,3 +781,148 @@ func TestAgentEventBroadcaster_PublishActionCompletedRecordScopesToOrg(t *testin
 		t.Fatal("timed out waiting for action.completed event")
 	}
 }
+
+func TestAgentEventBroadcaster_PublishActionTransitionRecordScopesToOrg(t *testing.T) {
+	b := NewAgentEventBroadcaster()
+	events, unsub := b.Subscribe()
+	defer unsub()
+
+	now := time.Now().UTC()
+	baseRecord := unifiedresources.ActionAuditRecord{
+		ID:        "act_org_transition_1",
+		CreatedAt: now,
+		UpdatedAt: now,
+		Request: unifiedresources.ActionRequest{
+			ResourceID:     "docker:alpha-api",
+			CapabilityName: "restart",
+			Params:         map[string]any{"command": "docker restart alpha-api"},
+			RequestedBy:    "alice",
+			Actor: unifiedresources.ActionActor{
+				SubjectID:       "alice",
+				Kind:            unifiedresources.ActionActorAPIToken,
+				CredentialID:    "api-token:tok-alpha",
+				CredentialLabel: "Claude Code",
+				OrgID:           "org-alpha",
+			},
+		},
+		Plan: unifiedresources.ActionPlan{
+			ActionID:       "act_org_transition_1",
+			ApprovalPolicy: unifiedresources.ApprovalAdmin,
+			PlannedAt:      now,
+			ExpiresAt:      now.Add(30 * time.Minute),
+		},
+	}
+
+	pending := baseRecord
+	pending.State = unifiedresources.ActionStatePending
+	b.PublishActionTransitionRecord("org-alpha", pending)
+
+	select {
+	case event := <-events:
+		if event.Kind != AgentEventApprovalPending {
+			t.Fatalf("kind = %q, want %q", event.Kind, AgentEventApprovalPending)
+		}
+		if !event.visibleToOrg("org-alpha") || event.visibleToOrg("org-beta") || event.visibleToOrg("default") {
+			t.Fatal("approval.pending must be scoped strictly to org-alpha")
+		}
+		payload, ok := event.Payload.(AgentEventApprovalPendingPayload)
+		if !ok || payload.ApprovalID != "act_org_transition_1" || payload.ActionID != "act_org_transition_1" || payload.CapabilityName != "restart" {
+			t.Fatalf("unexpected pending payload: %+v", event.Payload)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for approval.pending")
+	}
+
+	approved := baseRecord
+	approved.State = unifiedresources.ActionStateApproved
+	approved.Approvals = []unifiedresources.ActionApprovalRecord{{
+		Actor:     "bob",
+		Outcome:   unifiedresources.OutcomeApproved,
+		Reason:    "looks safe",
+		Timestamp: now.Add(time.Minute),
+	}}
+	b.PublishActionTransitionRecord("org-alpha", approved)
+
+	select {
+	case event := <-events:
+		if event.Kind != AgentEventActionApproved || string(event.Kind) != string(agentcapabilities.EventKindActionApproved) {
+			t.Fatalf("kind = %q, want %q", event.Kind, agentcapabilities.EventKindActionApproved)
+		}
+		if !event.visibleToOrg("org-alpha") || event.visibleToOrg("org-beta") {
+			t.Fatal("action.approved must be scoped strictly to org-alpha")
+		}
+		payload, ok := event.Payload.(AgentEventActionDecisionPayload)
+		if !ok || payload.ActionID != "act_org_transition_1" || payload.DecidedBy != "bob" || payload.Outcome != "approved" || payload.Reason != "looks safe" {
+			t.Fatalf("unexpected approved payload: %+v", event.Payload)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for action.approved")
+	}
+
+	rejected := baseRecord
+	rejected.State = unifiedresources.ActionStateRejected
+	rejected.Approvals = []unifiedresources.ActionApprovalRecord{{
+		Actor:     "carol",
+		Outcome:   unifiedresources.OutcomeRejected,
+		Reason:    "maintenance window closed",
+		Timestamp: now.Add(2 * time.Minute),
+	}}
+	b.PublishActionTransitionRecord("org-alpha", rejected)
+
+	select {
+	case event := <-events:
+		if event.Kind != AgentEventActionRejected || string(event.Kind) != string(agentcapabilities.EventKindActionRejected) {
+			t.Fatalf("kind = %q, want %q", event.Kind, agentcapabilities.EventKindActionRejected)
+		}
+		if !event.visibleToOrg("org-alpha") || event.visibleToOrg("org-beta") {
+			t.Fatal("action.rejected must be scoped strictly to org-alpha")
+		}
+		payload, ok := event.Payload.(AgentEventActionDecisionPayload)
+		if !ok || payload.ActionID != "act_org_transition_1" || payload.DecidedBy != "carol" || payload.Outcome != "rejected" {
+			t.Fatalf("unexpected rejected payload: %+v", event.Payload)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for action.rejected")
+	}
+}
+
+func TestAgentEventDecisionCommandRedaction(t *testing.T) {
+	readReq := httptest.NewRequest(http.MethodGet, "/api/agent/events", nil)
+	attachAPITokenRecord(readReq, &config.APITokenRecord{Scopes: []string{config.ScopeMonitoringRead}})
+
+	event := redactAgentEventForRequest(AgentEvent{
+		Kind: AgentEventActionApproved,
+		Payload: AgentEventActionDecisionPayload{
+			ActionID: "act_redact_1",
+			Command:  "systemctl restart nginx",
+			State:    "approved",
+			Outcome:  "approved",
+		},
+	}, readReq)
+	payload, ok := event.Payload.(AgentEventActionDecisionPayload)
+	if !ok {
+		t.Fatalf("payload type: %T", event.Payload)
+	}
+	if payload.Command != "" || !payload.CommandRedacted {
+		t.Fatalf("expected command to be redacted for monitoring:read token, got %+v", payload)
+	}
+
+	execReq := httptest.NewRequest(http.MethodGet, "/api/agent/events", nil)
+	attachAPITokenRecord(execReq, &config.APITokenRecord{Scopes: []string{config.ScopeMonitoringRead, config.ScopeAIExecute}})
+	allowed := redactAgentEventForRequest(AgentEvent{
+		Kind: AgentEventActionRejected,
+		Payload: AgentEventActionDecisionPayload{
+			ActionID: "act_redact_2",
+			Command:  "systemctl restart nginx",
+			State:    "rejected",
+			Outcome:  "rejected",
+		},
+	}, execReq)
+	allowedPayload, ok := allowed.Payload.(AgentEventActionDecisionPayload)
+	if !ok {
+		t.Fatalf("payload type: %T", allowed.Payload)
+	}
+	if allowedPayload.Command != "systemctl restart nginx" || allowedPayload.CommandRedacted {
+		t.Fatalf("expected command to remain visible for ai:execute token, got %+v", allowedPayload)
+	}
+}

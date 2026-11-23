@@ -1,6 +1,7 @@
 import type {
   ActionAuditOrigin,
   ActionAuditRecord,
+  ActionAuditRequest,
   ActionResourceReference,
   ActionAuditState,
   ActionEvidenceClass,
@@ -38,8 +39,76 @@ export const getActionOriginLabel = (origin?: ActionAuditOrigin): string | undef
   if (surface === 'pulse_assistant' || surface === 'assistant' || surface === 'chat') {
     return 'From Assistant';
   }
+  if (surface === 'pulse_cli') return 'From Pulse CLI';
   if (surface === 'mcp' || surface === 'pulse_mcp') return 'From MCP';
+  if (surface === 'api_token' || surface === 'agent_api') return 'From external agent';
   return 'From Pulse';
+};
+
+export interface ActionRequesterPresentation {
+  label: string;
+  detail?: string;
+  badge?: string;
+}
+
+const RAW_TOKEN_OR_SECRET_PATTERN =
+  /^(?:bearer\s+\S+|(?:pulse|plt)_(?=[a-z0-9_-]*\d)[a-z0-9_-]{8,}|(?:sk|pk|pat|ghp|glpat)[-_][a-z0-9_-]{12,}|[a-f0-9]{32,})$/i;
+
+const INTERNAL_TOKEN_SUBJECT_PATTERN = /^(?:token|api[-_]token):/i;
+
+const sanitizeRequesterValue = (value?: string, credentialId?: string): string => {
+  const trimmed = value?.trim() ?? '';
+  if (!trimmed) return '';
+  if (RAW_TOKEN_OR_SECRET_PATTERN.test(trimmed)) return '';
+  const normalizedCredentialId = credentialId?.trim().toLowerCase() ?? '';
+  if (normalizedCredentialId && trimmed.toLowerCase() === normalizedCredentialId) return '';
+  return trimmed;
+};
+
+export const getActionRequesterPresentation = (
+  request: ActionAuditRequest,
+): ActionRequesterPresentation | null => {
+  const actor = request.actor;
+  const requestedBy = sanitizeRequesterValue(request.requestedBy, actor?.credentialId);
+
+  if (actor?.kind === 'api_token') {
+    const credentialLabel = sanitizeRequesterValue(actor.credentialLabel, actor.credentialId);
+    if (credentialLabel) {
+      const detail =
+        requestedBy &&
+        requestedBy.toLowerCase() !== credentialLabel.toLowerCase() &&
+        !INTERNAL_TOKEN_SUBJECT_PATTERN.test(requestedBy)
+          ? requestedBy
+          : undefined;
+      return detail
+        ? { label: credentialLabel, detail, badge: 'API token' }
+        : { label: credentialLabel, badge: 'API token' };
+    }
+    if (requestedBy && !INTERNAL_TOKEN_SUBJECT_PATTERN.test(requestedBy)) {
+      return { label: requestedBy, badge: 'API token' };
+    }
+    return null;
+  }
+
+  if (requestedBy) {
+    return { label: requestedBy };
+  }
+  return null;
+};
+
+export const getActionBlastRadiusCount = (audit: ActionAuditRecord): number => {
+  const predictedCount =
+    audit.plan?.predictedBlastRadius?.filter((entry) => entry.trim().length > 0).length ?? 0;
+  const resolvedCount =
+    audit.blastRadius?.filter((entry) => entry.id.trim().length > 0 || entry.name.trim().length > 0)
+      .length ?? 0;
+  return Math.max(predictedCount, resolvedCount);
+};
+
+export const formatActionBlastRadiusCount = (audit: ActionAuditRecord): string | null => {
+  const count = getActionBlastRadiusCount(audit);
+  if (count <= 0) return null;
+  return `${count} ${count === 1 ? 'resource' : 'resources'} affected`;
 };
 
 export interface ActionOriginDestination {

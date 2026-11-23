@@ -10657,3 +10657,7 @@ hypervisor, parent host, vCPU, and RAM facts in the VM drawer.
 `StandaloneVirtualMachinesTable.test.tsx`, `StandalonePageSurface.test.tsx`,
 `AgentsMachinesTable.test.tsx`, `resourcePagePath.test.ts`, and
 `frontend-modern/browser-verification/9b345049621d9e89.json`.
+
+### External-agent action attribution and Decision Inbox review presentation (23 November 2026)
+
+`internal/unifiedresources/actions.go` adds optional `CredentialLabel` (`json:"credentialLabel,omitempty"`) to `ActionActor` (trimmed in `NormalizeActionActor` while keeping `ActionActorsEqual` bound to durable identity fields). `frontend-modern/src/features/actions/actionPresentation.ts` adds origin labels for `pulse_cli` (`From Pulse CLI`) and `api_token`/`agent_api` (`From external agent`), requester attribution presentation (`getActionRequesterPresentation` with secret/token-prefix redaction), and blast-radius counts (`formatActionBlastRadiusCount`). `ActionDecisionPacket.tsx` renders the `Requested by` row alongside `Origin`, `Plan expiry`, and `Potentially affected`, `Actions.tsx` surfaces compact requester and blast-radius cues on external-agent queue items, and `ActionReviewDialog.tsx` renders a calm inline HTTP `402` (`license_required`) message with a quiet `Plans & Billing` link gated on commercial visibility. Proof: `internal/unifiedresources/actions_harness_test.go`, `frontend-modern/src/features/actions/__tests__/`, and desktop/mobile Playwright verification on `/actions`.

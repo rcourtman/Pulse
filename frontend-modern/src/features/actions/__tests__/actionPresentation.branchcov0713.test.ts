@@ -1,16 +1,20 @@
 import { describe, expect, it } from 'vitest';
 import type {
   ActionAuditRecord,
+  ActionAuditRequest,
   ActionEvidenceClass,
   ActionPolicyAuthorityFactor,
   ActionPolicyAuthorityKind,
   ActionVerificationTruthStatus,
 } from '@/types/actionAudit';
 import {
+  formatActionBlastRadiusCount,
   formatActionName,
   formatPolicyAuthority,
   getActionAuditStatePresentation,
   getActionInboxStatePresentation,
+  getActionOriginLabel,
+  getActionRequesterPresentation,
   getActionResourcePresentation,
   sortOpenActionsForReview,
   verificationTruthLabel,
@@ -256,5 +260,194 @@ describe('verificationTruthLabel', () => {
     expect(
       verificationTruthLabel('bogus' as unknown as ActionVerificationTruthStatus, 'independent'),
     ).toBeUndefined();
+  });
+});
+
+describe('External-agent origin, requester, and blast radius presentation', () => {
+  it.each([
+    ['pulse_cli', 'From Pulse CLI'],
+    ['mcp', 'From MCP'],
+    ['pulse_mcp', 'From MCP'],
+    ['api_token', 'From external agent'],
+    ['agent_api', 'From external agent'],
+    ['operational_trust_attention', 'From Patrol'],
+    ['pulse_assistant', 'From Assistant'],
+    ['docker_page', 'From Pulse'],
+  ] as const)('maps origin surface %s to %s', (surface, expected) => {
+    expect(getActionOriginLabel({ surface })).toBe(expected);
+  });
+
+  it('returns undefined for missing or blank origin surface', () => {
+    expect(getActionOriginLabel(undefined)).toBeUndefined();
+    expect(getActionOriginLabel({ surface: '   ' })).toBeUndefined();
+  });
+
+  it('attributes API token requests by credentialLabel with an API token badge and non-redundant detail', () => {
+    const request: ActionAuditRequest = {
+      requestId: 'req-1',
+      resourceId: 'docker:container:edge',
+      capabilityName: 'restart',
+      reason: 'Recover edge proxy',
+      requestedBy: 'alice',
+      actor: {
+        subjectId: 'alice',
+        kind: 'api_token',
+        credentialId: 'api-token:tok-1',
+        credentialLabel: 'Claude Code Propose',
+        orgId: 'default',
+      },
+    };
+    expect(getActionRequesterPresentation(request)).toEqual({
+      label: 'Claude Code Propose',
+      detail: 'alice',
+      badge: 'API token',
+    });
+  });
+
+  it('suppresses redundant or internal token detail when credentialLabel is present', () => {
+    const matching: ActionAuditRequest = {
+      requestId: 'req-2',
+      resourceId: 'docker:container:edge',
+      capabilityName: 'restart',
+      reason: 'Recover edge proxy',
+      requestedBy: 'claude code propose',
+      actor: {
+        subjectId: 'token:tok-2',
+        kind: 'api_token',
+        credentialId: 'api-token:tok-2',
+        credentialLabel: 'Claude Code Propose',
+        orgId: 'default',
+      },
+    };
+    expect(getActionRequesterPresentation(matching)).toEqual({
+      label: 'Claude Code Propose',
+      badge: 'API token',
+    });
+
+    const internalSubject: ActionAuditRequest = {
+      ...matching,
+      requestedBy: 'token:tok-2',
+    };
+    expect(getActionRequesterPresentation(internalSubject)).toEqual({
+      label: 'Claude Code Propose',
+      badge: 'API token',
+    });
+  });
+
+  it('falls back to requestedBy with API token badge when credentialLabel is missing', () => {
+    const request: ActionAuditRequest = {
+      requestId: 'req-3',
+      resourceId: 'docker:container:edge',
+      capabilityName: 'restart',
+      reason: 'Recover edge proxy',
+      requestedBy: 'ops-automation',
+      actor: {
+        subjectId: 'ops-automation',
+        kind: 'api_token',
+        credentialId: 'api-token:tok-3',
+        orgId: 'default',
+      },
+    };
+    expect(getActionRequesterPresentation(request)).toEqual({
+      label: 'ops-automation',
+      badge: 'API token',
+    });
+  });
+
+  it('returns plain label without badge for user and fallback requests', () => {
+    const userRequest: ActionAuditRequest = {
+      requestId: 'req-4',
+      resourceId: 'docker:container:edge',
+      capabilityName: 'restart',
+      reason: 'Recover edge proxy',
+      requestedBy: 'admin',
+      actor: {
+        subjectId: 'admin',
+        kind: 'user',
+        credentialId: 'session:abc',
+        orgId: 'default',
+      },
+    };
+    expect(getActionRequesterPresentation(userRequest)).toEqual({ label: 'admin' });
+    expect(
+      getActionRequesterPresentation({
+        ...userRequest,
+        actor: undefined,
+      }),
+    ).toEqual({ label: 'admin' });
+  });
+
+  it('never leaks raw tokens, secret prefixes, or credential IDs', () => {
+    const base: ActionAuditRequest = {
+      requestId: 'req-5',
+      resourceId: 'docker:container:edge',
+      capabilityName: 'restart',
+      reason: 'Recover edge proxy',
+      requestedBy: 'pulse_a1b2c3d4e5f60718',
+      actor: {
+        subjectId: 'token:tok-5',
+        kind: 'api_token',
+        credentialId: 'api-token:tok-5',
+        credentialLabel: 'Codex CLI',
+        orgId: 'default',
+      },
+    };
+    expect(getActionRequesterPresentation(base)).toEqual({
+      label: 'Codex CLI',
+      badge: 'API token',
+    });
+    expect(
+      getActionRequesterPresentation({
+        ...base,
+        requestedBy: 'Bearer super-secret-token',
+        actor: { ...base.actor!, credentialLabel: undefined },
+      }),
+    ).toBeNull();
+    expect(
+      getActionRequesterPresentation({
+        ...base,
+        requestedBy: '0123456789abcdef0123456789abcdef',
+        actor: undefined,
+      }),
+    ).toBeNull();
+    expect(
+      getActionRequesterPresentation({
+        ...base,
+        requestedBy: 'api-token:tok-5',
+        actor: { ...base.actor!, credentialLabel: undefined },
+      }),
+    ).toBeNull();
+  });
+
+  it('formats singular, plural, fallback, and empty blast radius counts', () => {
+    const empty = {
+      plan: { predictedBlastRadius: [] },
+    } as unknown as ActionAuditRecord;
+    expect(formatActionBlastRadiusCount(empty)).toBeNull();
+
+    const single = {
+      plan: { predictedBlastRadius: ['docker:container:edge'] },
+    } as unknown as ActionAuditRecord;
+    expect(formatActionBlastRadiusCount(single)).toBe('1 resource affected');
+
+    const plural = {
+      plan: {
+        predictedBlastRadius: [
+          'docker:container:edge',
+          'docker:container:api',
+          'docker:container:worker',
+        ],
+      },
+    } as unknown as ActionAuditRecord;
+    expect(formatActionBlastRadiusCount(plural)).toBe('3 resources affected');
+
+    const resolvedFallback = {
+      plan: {},
+      blastRadius: [
+        { id: 'docker:container:edge', name: 'Edge', type: 'app-container' },
+        { id: 'docker:container:api', name: 'API', type: 'app-container' },
+      ],
+    } as unknown as ActionAuditRecord;
+    expect(formatActionBlastRadiusCount(resolvedFallback)).toBe('2 resources affected');
   });
 });

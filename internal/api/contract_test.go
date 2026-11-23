@@ -21006,6 +21006,7 @@ func TestContract_AgentSurfaceErrorCodesMatchManifestDeclarations(t *testing.T) 
 		"AgentErrCodeActionNotPending":           agentcapabilities.AgentErrCodeActionNotPending,
 		"AgentErrCodeActionPlanExpired":          agentcapabilities.AgentErrCodeActionPlanExpired,
 		"AgentErrCodeActionApprovalForbidden":    agentcapabilities.AgentErrCodeActionApprovalForbidden,
+		"AgentErrCodeActionReadForbidden":        agentcapabilities.AgentErrCodeActionReadForbidden,
 		"AgentErrCodeActionStepUpUnavailable":    agentcapabilities.AgentErrCodeActionStepUpUnavailable,
 		"AgentErrCodeActionDecisionConflict":     agentcapabilities.AgentErrCodeActionDecisionConflict,
 		"AgentErrCodeActionSeparationRequired":   agentcapabilities.AgentErrCodeActionSeparationRequired,

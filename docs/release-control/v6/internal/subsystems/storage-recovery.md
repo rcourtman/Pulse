@@ -10188,3 +10188,7 @@ read/write path changes. Verified by `resourceLinks.test.ts`.
 ### External-agent `pulse_cli` telemetry and readiness boundary (23 November 2026)
 
 `internal/api/agent_activity_telemetry.go` adds content-free `pulse_cli` surface tracking (persisted in the existing `ai_agent_activity` store via `internal/config/persistence.go`) and `internal/api/agent_resource_context.go` updates `externalAgentReady` scope matching to `monitoring:read`. No backup, snapshot, encryption-key, or recovery persistence contract changes. Proof: `internal/config`, `internal/api/agent_activity_telemetry_test.go`, and `internal/api/agent_resource_context_test.go`.
+
+### External-agent action actor label persistence compatibility (23 November 2026)
+
+`unified.ActionActor` adds optional additive `credentialLabel` JSON metadata serialized within existing action audit records alongside `internal/api/` route and SSE event updates. No backup, snapshot, encryption-key, or recovery storage format changes. Proof: `internal/unifiedresources/actions_harness_test.go` and `internal/api/actions_harness_test.go`.

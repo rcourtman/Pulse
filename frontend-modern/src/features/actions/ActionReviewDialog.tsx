@@ -7,8 +7,13 @@ import { Button, ButtonLink } from '@/components/shared/Button';
 import { Dialog } from '@/components/shared/Dialog';
 import { FormTextarea } from '@/components/shared/FormTextarea';
 import { MetadataBadge } from '@/components/shared/MetadataBadge';
+import { UpgradeButtonLink } from '@/components/shared/UpgradeLink';
+import { getUpgradeActionDestination } from '@/stores/licenseCommercial';
 import { notificationStore } from '@/stores/notifications';
-import { presentationPolicyIsReadOnly } from '@/stores/sessionPresentationPolicy';
+import {
+  presentationPolicyHidesCommercialSurfaces,
+  presentationPolicyIsReadOnly,
+} from '@/stores/sessionPresentationPolicy';
 import type { ActionDetailResponse } from '@/types/actionAudit';
 import { buildResourcePagePath } from '@/features/platformNavigation/resourcePagePath';
 import { useResolvedResource } from '@/features/platformNavigation/useResolvedResource';
@@ -24,6 +29,36 @@ import { getAPTActionPresentation } from './aptActionPresentation';
 // The server's bounded reconciliation window is one hour. This is only a
 // presentation threshold: the server remains the authority for every write.
 const RECEIPT_WAIT_RECOVERY_AGE_MS = 60 * 60 * 1000;
+const DEFAULT_PRO_EXECUTION_ERROR = 'Governed external-agent execution requires Pulse Pro.';
+
+type ActionAPIError = Error & {
+  status?: number;
+  code?: string;
+  details?: Record<string, string>;
+  feature?: string;
+  upgrade_url?: string;
+};
+
+const isLicenseRequiredError = (cause: unknown): cause is ActionAPIError => {
+  if (!cause || typeof cause !== 'object') return false;
+  const candidate = cause as Partial<ActionAPIError>;
+  if (candidate.status === 402) return true;
+  if (candidate.code?.trim().toLowerCase() === 'license_required') return true;
+  return false;
+};
+
+const resolveLicenseRequiredMessage = (cause: ActionAPIError): string => {
+  const detailsReason = cause.details?.reason?.trim();
+  const rawMessage = (detailsReason || cause.message || '').trim();
+  if (
+    !rawMessage ||
+    rawMessage.toLowerCase() === 'license_required' ||
+    /^request failed with status 402$/i.test(rawMessage)
+  ) {
+    return DEFAULT_PRO_EXECUTION_ERROR;
+  }
+  return rawMessage;
+};
 
 const agedReceiptPending = (detail: ActionDetailResponse | null, now: number): boolean => {
   if (detail?.audit.state !== 'executing' || detail.attempt?.state !== 'receipt_pending') {
@@ -52,12 +87,15 @@ export const ActionReviewDialog: Component<{
 }> = (props) => {
   const [busy, setBusy] = createSignal(false);
   const [error, setError] = createSignal('');
+  const [licenseGateMessage, setLicenseGateMessage] = createSignal('');
   const [receiptRefreshError, setReceiptRefreshError] = createSignal('');
   const [clock, setClock] = createSignal(Date.now());
   const [canForceFail, setCanForceFail] = createSignal(false);
   const [recoveryOpen, setRecoveryOpen] = createSignal(false);
   const [recoveryReason, setRecoveryReason] = createSignal('');
   const [recoveryConfirmed, setRecoveryConfirmed] = createSignal(false);
+  const plansBillingDestination = createMemo(() => getUpgradeActionDestination('ai_autofix'));
+  const showPlansBillingLink = createMemo(() => !presentationPolicyHidesCommercialSurfaces());
   const audit = () => props.detail?.audit;
   const receiptWaiting = () =>
     audit()?.state === 'executing' && props.detail?.attempt?.state === 'receipt_pending';
@@ -96,6 +134,15 @@ export const ActionReviewDialog: Component<{
   const canOfferRecovery = createMemo(
     () => !readOnly() && canForceFail() && agedReceiptPending(props.detail, clock()),
   );
+  let activeAuditId: string | undefined;
+  createEffect(() => {
+    const nextAuditId = props.detail?.audit.id;
+    if (nextAuditId !== activeAuditId) {
+      activeAuditId = nextAuditId;
+      setError('');
+      setLicenseGateMessage('');
+    }
+  });
   createEffect(() => {
     const detail = props.detail;
     setReceiptRefreshError('');
@@ -205,6 +252,16 @@ export const ActionReviewDialog: Component<{
     return reason || cause.message || fallback;
   };
 
+  const recordActionError = (cause: unknown, fallback: string) => {
+    if (isLicenseRequiredError(cause)) {
+      setError('');
+      setLicenseGateMessage(resolveLicenseRequiredMessage(cause));
+      return;
+    }
+    setLicenseGateMessage('');
+    setError(actionableErrorMessage(cause, fallback));
+  };
+
   const refresh = async () => {
     const actionId = audit()?.id;
     if (!actionId) return;
@@ -232,6 +289,7 @@ export const ActionReviewDialog: Component<{
     if (!action || busy()) return;
     setBusy(true);
     setError('');
+    setLicenseGateMessage('');
     try {
       await ResourceActionsAPI.decideAction(
         action.id,
@@ -247,7 +305,7 @@ export const ActionReviewDialog: Component<{
       );
       if (outcome === 'rejected') props.onClose();
     } catch (cause) {
-      setError(actionableErrorMessage(cause, 'The decision could not be recorded.'));
+      recordActionError(cause, 'The decision could not be recorded.');
     } finally {
       setBusy(false);
     }
@@ -258,6 +316,7 @@ export const ActionReviewDialog: Component<{
     if (!action || busy()) return;
     setBusy(true);
     setError('');
+    setLicenseGateMessage('');
     try {
       const replacement = await ResourceActionsAPI.refreshAction(action.id, reviewedPlanHash());
       await props.onChanged?.(replacement);
@@ -279,6 +338,7 @@ export const ActionReviewDialog: Component<{
     if (!action || busy()) return;
     setBusy(true);
     setError('');
+    setLicenseGateMessage('');
     try {
       await ResourceActionsAPI.decideAction(
         action.id,
@@ -296,7 +356,7 @@ export const ActionReviewDialog: Component<{
         'Action approved and dispatched. Review the recorded outcome below.',
       );
     } catch (cause) {
-      setError(actionableErrorMessage(cause, 'The action could not be approved and run.'));
+      recordActionError(cause, 'The action could not be approved and run.');
       try {
         await refresh();
       } catch {
@@ -312,6 +372,7 @@ export const ActionReviewDialog: Component<{
     if (!action || busy()) return;
     setBusy(true);
     setError('');
+    setLicenseGateMessage('');
     try {
       await ResourceActionsAPI.executeAction(
         action.id,
@@ -321,7 +382,7 @@ export const ActionReviewDialog: Component<{
       await refresh();
       notificationStore.success('Action sent. Its recorded outcome is below.');
     } catch (cause) {
-      setError(actionableErrorMessage(cause, 'The action could not be run.'));
+      recordActionError(cause, 'The action could not be run.');
       try {
         await refresh();
       } catch {
@@ -347,6 +408,7 @@ export const ActionReviewDialog: Component<{
 
     setBusy(true);
     setError('');
+    setLicenseGateMessage('');
     let recorded = false;
     try {
       const latest = await ResourceActionsAPI.getAction(currentDetail.audit.id);
@@ -583,6 +645,29 @@ export const ActionReviewDialog: Component<{
                 >
                   {invalidActionMessage()}
                 </div>
+              </Show>
+              <Show when={licenseGateMessage()}>
+                {(message) => (
+                  <div
+                    role="alert"
+                    data-testid="action-review-license-gate"
+                    class="mt-4 flex flex-col gap-3 rounded-sm border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200 sm:flex-row sm:items-center sm:justify-between"
+                  >
+                    <p class="min-w-0 break-words">{message()}</p>
+                    <Show when={showPlansBillingLink()}>
+                      <UpgradeButtonLink
+                        destination={plansBillingDestination()}
+                        variant="secondary"
+                        size="xs"
+                        mobileFullWidth={false}
+                        class="shrink-0"
+                        onClick={props.onClose}
+                      >
+                        Plans & Billing
+                      </UpgradeButtonLink>
+                    </Show>
+                  </div>
+                )}
               </Show>
               <Show when={error()}>
                 <div

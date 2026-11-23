@@ -1,0 +1,47 @@
+{
+  "version": 1,
+  "base_sha": "86ec4fd3ffc98be510de04aaec5d134a0455928a",
+  "verified_at": "2026-11-23T12:31:27Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/actions/ActionDecisionPacket.tsx",
+    "frontend-modern/src/features/actions/ActionReviewDialog.tsx",
+    "frontend-modern/src/features/actions/actionPresentation.ts",
+    "frontend-modern/src/pages/Actions.tsx",
+    "frontend-modern/src/types/actionAudit.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/actions/ActionDecisionPacket.tsx": "8107f1f18aa3d430175184c53a1c11dd8940332f9723597cc6887792f41df4a9",
+    "frontend-modern/src/features/actions/ActionReviewDialog.tsx": "6762fad7c112c035cbf5d5cc1e20bc86f9d937cc6e4374f5500f9e5393738641",
+    "frontend-modern/src/features/actions/actionPresentation.ts": "2e66be0b237b290cd38a4e51234dff395334ab95b5e69fcb11bd5656deda3ca1",
+    "frontend-modern/src/pages/Actions.tsx": "4af9d387c66cd7bd45973f3f4705e851cc0df097b17f71c91ea99c310a8a571a",
+    "frontend-modern/src/types/actionAudit.ts": "113ec5e6f179a121a998e6be3cbcec97b0b219fd891ce8eb00b79621143f377b"
+  },
+  "routes": [
+    "/actions",
+    "/actions/history",
+    "/actions?action=action-p2-cli-1",
+    "/actions?action=action-p2-ext-2"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Desktop 1440x900 /actions and /actions/history: clean empty/demo and seeded external-agent queue views showing From Pulse CLI, From external agent, Requested by Claude Code Propose, 3 affected, and Requested by Codex Triage with zero console errors, zero horizontal overflow (html/body 1440x900), and zero em-dashes or semicolons",
+    "Desktop 1440x900 /actions?action=action-p2-cli-1: ActionDecisionPacket displays Requested by Claude Code Propose with API token badge, Origin From Pulse CLI, Plan expiry, and Potentially affected 3 resources affected with zero clipping or overflow",
+    "Desktop 1440x900 /actions?action=action-p2-ext-2: ActionDecisionPacket displays Requested by Codex Triage with API token badge and alice detail, Origin From external agent, and clicking Run action triggers real HTTP 402 license_required rendering data-testid=action-review-license-gate with quiet Plans & Billing link and zero Pro tier badges",
+    "Mobile 390x844 /actions, /actions?action=action-p2-cli-1, and /actions?action=action-p2-ext-2: queue rows, single-column ActionDecisionPacket, and HTTP 402 license-gate alert with full-width Plans & Billing link wrap cleanly inside 390px with zero horizontal overflow or clipping"
+  ],
+  "interactions": [
+    "Signed in via first-boot quick setup and visited live /actions and /actions/history at 1440x900 and 390x844",
+    "Opened action-p2-cli-1 from the Decision Inbox queue at 1440x900 and 390x844, verified URL deep link, attribution fields, blast radius, and dialog close returning to /actions",
+    "Opened approved external-agent action-p2-ext-2 with resolved policy provenance, clicked Run action to exercise live HTTP 402 license_required handling at 1440x900 and 390x844, and verified calm alert copy and Plans & Billing link"
+  ]
+}

@@ -137,7 +137,10 @@ func externalAgentCapabilityActivity(capabilityName string) (string, string, boo
 		agentcapabilities.DismissFindingCapabilityName,
 		agentcapabilities.ResolveFindingCapabilityName:
 		activity = config.ExternalAgentActivityFindingDecision
-	case agentcapabilities.PlanActionCapabilityName:
+	case agentcapabilities.PlanActionCapabilityName,
+		agentcapabilities.ListActionsCapabilityName,
+		agentcapabilities.GetActionCapabilityName,
+		agentcapabilities.RefreshActionCapabilityName:
 		activity = config.ExternalAgentActivityActionPlan
 	case agentcapabilities.DecideActionCapabilityName:
 		activity = config.ExternalAgentActivityActionDecision

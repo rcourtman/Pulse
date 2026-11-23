@@ -11,6 +11,8 @@ func TestAgentActionableEventKindsReturnsDetachedKnownKinds(t *testing.T) {
 	want := []string{
 		string(EventKindFindingCreated),
 		string(EventKindApprovalPending),
+		string(EventKindActionApproved),
+		string(EventKindActionRejected),
 		string(EventKindActionCompleted),
 		string(EventKindAlertFired),
 		string(EventKindAlertResolved),

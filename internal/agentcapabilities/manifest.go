@@ -10,6 +10,23 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/pkg/auth"
 )
 
+const (
+	// ListActionsCapabilityName is the manifest-owned governed action queue read.
+	ListActionsCapabilityName = "list_actions"
+	// GetActionCapabilityName is the manifest-owned governed action detail read.
+	GetActionCapabilityName = "get_action"
+	// RefreshActionCapabilityName is the manifest-owned governed action plan refresh.
+	RefreshActionCapabilityName = "refresh_action"
+	// PlanHashArgumentName is the shared reviewed planHash binding argument.
+	PlanHashArgumentName = "planHash"
+	// ListActionsCapabilityPath is the manifest-owned governed action list route.
+	ListActionsCapabilityPath = "/api/actions"
+	// GetActionCapabilityPath is the manifest-owned governed action detail route template.
+	GetActionCapabilityPath = "/api/actions/{" + ActionIDArgumentName + "}"
+	// RefreshActionCapabilityPath is the manifest-owned governed action refresh route template.
+	RefreshActionCapabilityPath = "/api/actions/{" + ActionIDArgumentName + "}/refresh"
+)
+
 func agentObjectInputSchemaMap(required []string, properties map[string]any) map[string]any {
 	return StrictObjectInputSchemaMap(required, properties)
 }
@@ -294,6 +311,26 @@ func findingActionOutputSchema() json.RawMessage {
 	})
 }
 
+func actionListOutputSchema() json.RawMessage {
+	return agentObjectOutputSchema([]string{"view", "actions", "count"}, map[string]any{
+		"view":     stringOption("Effective action list view."),
+		"actions":  objectArrayOption("Projected governed action records visible to the caller."),
+		"count":    integerOption("Number of action records returned."),
+		"readOnly": booleanOption("Whether the returned actions are read-only for the caller."),
+	})
+}
+
+func actionDetailOutputSchema() json.RawMessage {
+	return agentObjectOutputSchema([]string{"audit", "events", "readiness"}, map[string]any{
+		"audit":     openObjectOption("Projected action audit record including plan, requester attribution, approvals, and execution result."),
+		"events":    objectArrayOption("Append-only lifecycle events recorded for this action."),
+		"attempt":   openObjectOption("Latest durable dispatch attempt when present."),
+		"receipt":   openObjectOption("Durable dispatch receipt when present."),
+		"readiness": openObjectOption("Current server-computed readiness posture for approval and execution."),
+		"readOnly":  booleanOption("Whether the action is read-only for the caller."),
+	})
+}
+
 func actionPlanOutputSchema() json.RawMessage {
 	return agentObjectOutputSchema([]string{ActionIDArgumentName, RequestIDArgumentName, "allowed", "requiresApproval", "approvalPolicy", "rollbackAvailable", "plannedAt", "expiresAt", "resourceVersion", "policyVersion", "planHash"}, map[string]any{
 		ActionIDArgumentName:   stringOption("Durable action id used by " + DecideActionCapabilityName + " and " + ExecuteActionCapabilityName + "."),
@@ -472,6 +509,31 @@ func dismissFindingInputSchema() json.RawMessage {
 			"description": "Dismissal reason: not_an_issue suppresses a false positive, expected_behavior records known/accepted behavior, will_fix_later creates a reminder commitment.",
 		},
 		NoteArgumentName: stringOption("Optional operator note explaining the dismissal."),
+	})
+}
+
+func listActionsInputSchema() json.RawMessage {
+	return agentObjectInputSchema(nil, map[string]any{
+		"view": stringEnumOption([]string{"pending", "settled", "all"}, "Queue view to list: pending, settled, or all. Defaults to pending."),
+		"limit": map[string]any{
+			"type":        "integer",
+			"minimum":     1,
+			"maximum":     500,
+			"description": "Maximum number of actions to return, between 1 and 500.",
+		},
+	})
+}
+
+func getActionInputSchema() json.RawMessage {
+	return agentObjectInputSchema([]string{ActionIDArgumentName}, map[string]any{
+		ActionIDArgumentName: actionIDProperty(),
+	})
+}
+
+func actionRefreshInputSchema() json.RawMessage {
+	return agentObjectInputSchema([]string{ActionIDArgumentName, PlanHashArgumentName}, map[string]any{
+		ActionIDArgumentName: actionIDProperty(),
+		PlanHashArgumentName: stringOption("Reviewed planHash binding the refresh to the exact inspected plan."),
 	})
 }
 
@@ -732,6 +794,35 @@ var (
 		AgentErrCodeFindingNotFound,
 		AgentErrCodeFindingActionNotAllowed,
 		AgentErrCodePatrolUnavailable,
+	}
+	agentCapabilityListActionsErrorCodes = []string{
+		AgentErrCodeActionActorUnavailable,
+		AgentErrCodeInvalidActionListView,
+		AgentErrCodeInvalidActionListLimit,
+		AgentErrCodeActionListFailed,
+	}
+	agentCapabilityGetActionErrorCodes = []string{
+		AgentErrCodeInvalidID,
+		AgentErrCodeActionReadForbidden,
+		AgentErrCodeActionNotFound,
+		AgentErrCodeActionDetailFailed,
+	}
+	agentCapabilityRefreshActionErrorCodes = []string{
+		AgentErrCodeMockModeEnabled,
+		AgentErrCodeInvalidID,
+		AgentErrCodeInvalidActionRequest,
+		AgentErrCodeActionActorUnavailable,
+		AgentErrCodeActionNotFound,
+		AgentErrCodeActionPlanIdentityMismatch,
+		AgentErrCodeActionRefreshNotAllowed,
+		AgentErrCodeActionExecutionUnavailable,
+		AgentErrCodeActionPlanDrift,
+		AgentErrCodeActionEmergencyStop,
+		AgentErrCodeResourceRemediationLocked,
+		AgentErrCodeActionDryRunOnly,
+		AgentErrCodeActionExecutorUnavailable,
+		AgentErrCodeActionReadinessCheckFailed,
+		AgentErrCodeActionDetailFailed,
 	}
 	agentCapabilityPlanActionErrorCodes = []string{
 		AgentErrCodeInvalidActionRequest,
@@ -1203,6 +1294,36 @@ var canonicalManifest = Manifest{
 			OutputSchema:     findingActionOutputSchema(),
 		},
 		{
+			Name:           ListActionsCapabilityName,
+			Title:          "List actions",
+			Description:    "List governed actions in the pending, settled, or combined queue. Tokens with only actions:plan see their own planned actions, while tokens with actions:approve see the organization queue.",
+			Category:       "action",
+			Method:         http.MethodGet,
+			Path:           ListActionsCapabilityPath,
+			Scope:          agentCapabilityScopeActionsPlan,
+			ActionMode:     agentCapabilityActionModeRead,
+			ApprovalPolicy: agentCapabilityApprovalPolicyScopeOnly,
+			ResponseShape:  "ActionListResponse",
+			ErrorCodes:     agentCapabilityListActionsErrorCodes,
+			InputSchema:    listActionsInputSchema(),
+			OutputSchema:   actionListOutputSchema(),
+		},
+		{
+			Name:           GetActionCapabilityName,
+			Title:          "Get action",
+			Description:    "Return full detail for a governed action including its action plan, requester attribution, readiness, lifecycle events, and dispatch receipt. Tokens with only actions:plan may read their own planned actions.",
+			Category:       "action",
+			Method:         http.MethodGet,
+			Path:           GetActionCapabilityPath,
+			Scope:          agentCapabilityScopeActionsPlan,
+			ActionMode:     agentCapabilityActionModeRead,
+			ApprovalPolicy: agentCapabilityApprovalPolicyScopeOnly,
+			ResponseShape:  "ActionDetailResponse",
+			ErrorCodes:     agentCapabilityGetActionErrorCodes,
+			InputSchema:    getActionInputSchema(),
+			OutputSchema:   actionDetailOutputSchema(),
+		},
+		{
 			Name:             PlanActionCapabilityName,
 			Title:            "Plan action",
 			Description:      "Plan an action against a resource. The planner validates the request, looks up the capability on the resource, checks executor-owned live availability, and returns an ActionPlan with the approval policy, blast radius, plan hash, and preflight summary. The plan is persisted to the audit history at the planned/pending state only after the live availability check passes, so subsequent decide_action and execute_action calls can reference it by id. Plan-and-execute is a two-step flow when the resulting plan requires approval, one-step otherwise.",
@@ -1217,6 +1338,22 @@ var canonicalManifest = Manifest{
 			ErrorCodes:       agentCapabilityPlanActionErrorCodes,
 			InputSchema:      actionPlanInputSchema(),
 			OutputSchema:     actionPlanOutputSchema(),
+		},
+		{
+			Name:             RefreshActionCapabilityName,
+			Title:            "Refresh action",
+			Description:      "Refresh an expired or drifted governed action plan by binding the request to the reviewed planHash. Returns the replacement action detail with a new actionId, planHash, and expiresAt.",
+			Category:         "action",
+			Method:           http.MethodPost,
+			Path:             RefreshActionCapabilityPath,
+			Scope:            agentCapabilityScopeActionsPlan,
+			ActionMode:       agentCapabilityActionModeWrite,
+			ApprovalPolicy:   agentCapabilityApprovalPolicyActionPlan,
+			RequestBodyShape: "{ planHash: string }",
+			ResponseShape:    "ActionDetailResponse",
+			ErrorCodes:       agentCapabilityRefreshActionErrorCodes,
+			InputSchema:      actionRefreshInputSchema(),
+			OutputSchema:     actionDetailOutputSchema(),
 		},
 		{
 			Name:             DecideActionCapabilityName,
@@ -1317,7 +1454,10 @@ func canonicalPulseMCPSurfaceToolNames() []string {
 		SnoozeFindingCapabilityName,
 		DismissFindingCapabilityName,
 		ResolveFindingCapabilityName,
+		ListActionsCapabilityName,
+		GetActionCapabilityName,
 		PlanActionCapabilityName,
+		RefreshActionCapabilityName,
 		DecideActionCapabilityName,
 		ExecuteActionCapabilityName,
 	}

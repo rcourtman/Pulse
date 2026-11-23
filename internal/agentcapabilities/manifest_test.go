@@ -266,7 +266,10 @@ func TestCanonicalManifestUsesSharedActionVocabulary(t *testing.T) {
 
 	manifest := CanonicalManifest()
 	for name, path := range map[string]string{
+		ListActionsCapabilityName:   ListActionsCapabilityPath,
+		GetActionCapabilityName:     GetActionCapabilityPath,
 		PlanActionCapabilityName:    PlanActionCapabilityPath,
+		RefreshActionCapabilityName: RefreshActionCapabilityPath,
 		DecideActionCapabilityName:  ActionDecisionCapabilityPath,
 		ExecuteActionCapabilityName: ActionExecutionCapabilityPath,
 	} {
@@ -280,7 +283,10 @@ func TestCanonicalManifestUsesSharedActionVocabulary(t *testing.T) {
 	}
 
 	for name, required := range map[string][]string{
+		ListActionsCapabilityName:   nil,
+		GetActionCapabilityName:     {ActionIDArgumentName},
 		PlanActionCapabilityName:    {RequestIDArgumentName, ResourceIDArgumentName, CapabilityNameArgumentName, ReasonArgumentName, RequestedByArgumentName},
+		RefreshActionCapabilityName: {ActionIDArgumentName, PlanHashArgumentName},
 		DecideActionCapabilityName:  {ActionIDArgumentName, OutcomeArgumentName},
 		ExecuteActionCapabilityName: {ActionIDArgumentName},
 	} {
@@ -906,7 +912,10 @@ func TestCanonicalManifestDeclaresStructuredOutputSchemasForJSONResponses(t *tes
 			`Compatibility alias for patrolControlResolvedOperationsLoopCount`,
 			`minimum read-only external-agent scopes (such as monitoring:read or monitoring:read + actions:plan)`,
 		},
+		ListActionsCapabilityName:   {`"view"`, `"actions"`, `"count"`},
+		GetActionCapabilityName:     {`"audit"`, `"events"`, `"readiness"`, `"receipt"`},
 		PlanActionCapabilityName:    {`"actionId"`, `"planHash"`},
+		RefreshActionCapabilityName: {`"audit"`, `"events"`, `"readiness"`},
 		DecideActionCapabilityName:  {`"approval"`, `"audit"`},
 		ExecuteActionCapabilityName: {`"result"`, `"audit"`},
 	} {
@@ -983,6 +992,82 @@ func TestCanonicalManifestScopeDeclarationsStayPinnedToAuthConstants(t *testing.
 
 	if strings.Contains(text, `Scope:          "`) || strings.Contains(text, `Scope:            "`) {
 		t.Fatal("agent capabilities manifest scopes must use auth-owned constants, not literal strings")
+	}
+}
+
+func TestCanonicalManifestPinsActionReadAndRefreshCapabilities(t *testing.T) {
+	manifest := CanonicalManifest()
+
+	listCap, ok := FindCapability(manifest.Capabilities, ListActionsCapabilityName)
+	if !ok {
+		t.Fatalf("CanonicalManifest missing %q", ListActionsCapabilityName)
+	}
+	if listCap.Method != http.MethodGet || listCap.Path != "/api/actions" || listCap.Scope != auth.ScopeActionsPlan ||
+		listCap.ActionMode != ActionModeRead || listCap.ApprovalPolicy != ApprovalPolicyScopeOnly {
+		t.Fatalf("list_actions contract = %+v", listCap)
+	}
+	if !strings.Contains(listCap.Description, "actions:plan") || !strings.Contains(listCap.Description, "actions:approve") {
+		t.Fatalf("list_actions description must explain actions:plan vs actions:approve visibility: %q", listCap.Description)
+	}
+	var listSchema map[string]any
+	if err := json.Unmarshal(listCap.InputSchema, &listSchema); err != nil {
+		t.Fatalf("list_actions inputSchema: %v", err)
+	}
+	listProps, _ := listSchema["properties"].(map[string]any)
+	viewProp, _ := listProps["view"].(map[string]any)
+	if !reflect.DeepEqual(viewProp["enum"], []any{"pending", "settled", "all"}) {
+		t.Fatalf("list_actions view enum = %v, want [pending settled all]", viewProp["enum"])
+	}
+	if _, ok := listProps["limit"]; !ok {
+		t.Fatalf("list_actions inputSchema missing limit property: %v", listProps)
+	}
+
+	getCap, ok := FindCapability(manifest.Capabilities, GetActionCapabilityName)
+	if !ok {
+		t.Fatalf("CanonicalManifest missing %q", GetActionCapabilityName)
+	}
+	if getCap.Method != http.MethodGet || getCap.Path != "/api/actions/{actionId}" || getCap.Scope != auth.ScopeActionsPlan ||
+		getCap.ActionMode != ActionModeRead || getCap.ApprovalPolicy != ApprovalPolicyScopeOnly {
+		t.Fatalf("get_action contract = %+v", getCap)
+	}
+	if !strings.Contains(getCap.Description, "actions:plan") {
+		t.Fatalf("get_action description must mention actions:plan visibility: %q", getCap.Description)
+	}
+
+	refreshCap, ok := FindCapability(manifest.Capabilities, RefreshActionCapabilityName)
+	if !ok {
+		t.Fatalf("CanonicalManifest missing %q", RefreshActionCapabilityName)
+	}
+	if refreshCap.Method != http.MethodPost || refreshCap.Path != "/api/actions/{actionId}/refresh" || refreshCap.Scope != auth.ScopeActionsPlan ||
+		refreshCap.ActionMode != ActionModeWrite || refreshCap.ApprovalPolicy != ApprovalPolicyActionPlan {
+		t.Fatalf("refresh_action contract = %+v", refreshCap)
+	}
+	projected, err := ProjectCapabilityCall(refreshCap, map[string]any{
+		ActionIDArgumentName: "act_123",
+		PlanHashArgumentName: "sha256:abc",
+	})
+	if err != nil {
+		t.Fatalf("ProjectCapabilityCall(refresh_action): %v", err)
+	}
+	if projected.Path != "/api/actions/act_123/refresh" || !projected.HasBody {
+		t.Fatalf("refresh_action projection = %+v", projected)
+	}
+	var body map[string]any
+	if err := json.Unmarshal(projected.Body, &body); err != nil {
+		t.Fatalf("decode projected refresh body: %v", err)
+	}
+	if body["planHash"] != "sha256:abc" || len(body) != 1 {
+		t.Fatalf("refresh_action projected body = %v, want only planHash", body)
+	}
+
+	contract, ok := FindManifestSurfaceToolContract(manifest, SurfaceIDPulseMCP)
+	if !ok {
+		t.Fatal("Pulse MCP surface tool contract missing")
+	}
+	for _, name := range []string{ListActionsCapabilityName, GetActionCapabilityName, RefreshActionCapabilityName} {
+		if !containsString(contract.ToolNames, name) {
+			t.Fatalf("Pulse MCP surface tools missing %q: %v", name, contract.ToolNames)
+		}
 	}
 }
 

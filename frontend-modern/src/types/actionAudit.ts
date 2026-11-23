@@ -16,6 +16,7 @@ export interface ActionActor {
   subjectId: string;
   kind: ActionActorKind;
   credentialId: string;
+  credentialLabel?: string;
   orgId: string;
 }
 

@@ -684,4 +684,96 @@ describe('ActionReviewDialog trust gates', () => {
     expect(screen.queryByRole('button', { name: 'Approve' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Run action' })).toBeNull();
   });
+
+  it('shows a calm inline alert with a quiet Plans & Billing link when execute returns HTTP 402', async () => {
+    const audit = makeAudit('resolved', '2099-01-01T00:00:00Z');
+    audit.state = 'approved';
+    const current = detail(audit);
+    const licenseError = Object.assign(
+      new Error('Governed external-agent execution requires Pulse Pro.'),
+      {
+        status: 402,
+        code: 'license_required',
+        feature: 'ai_autofix',
+      },
+    );
+    vi.mocked(ResourceActionsAPI.executeAction).mockRejectedValueOnce(licenseError);
+    vi.mocked(ResourceActionsAPI.getAction).mockResolvedValueOnce(current);
+
+    const [selected, setSelected] = createSignal(current);
+    render(() => (
+      <Router>
+        <Route
+          path="*"
+          component={() => (
+            <ActionReviewDialog detail={selected()} onClose={vi.fn()} onChanged={setSelected} />
+          )}
+        />
+      </Router>
+    ));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Run action' }));
+
+    const alert = await screen.findByTestId('action-review-license-gate');
+    expect(alert).toHaveAttribute('role', 'alert');
+    expect(alert).toHaveTextContent('Governed external-agent execution requires Pulse Pro.');
+    expect(alert.textContent).not.toContain('—');
+    expect(alert.textContent).not.toContain(';');
+
+    const plansLink = screen.getByRole('link', { name: 'Plans & Billing' });
+    expect(plansLink).toHaveAttribute(
+      'href',
+      '/settings/pulse-intelligence/billing/plan?intent=self_hosted_plan',
+    );
+  });
+
+  it('handles code license_required on approveAndRun with clean default copy and hides the link when commercial surfaces are hidden', async () => {
+    syncSessionPresentationPolicy({
+      presentationPolicy: {
+        demoMode: false,
+        readOnly: false,
+        hideCommercial: true,
+        hideUpgrade: true,
+      },
+    });
+    const audit = makeAudit('resolved', '2099-01-01T00:00:00Z');
+    audit.capabilityAutoAuthorization = 'low_risk';
+    const approvedAudit = { ...audit, state: 'approved' as const };
+    vi.mocked(ResourceActionsAPI.decideAction).mockResolvedValueOnce({
+      actionId: audit.id,
+      state: 'approved',
+      approval: {
+        actor: 'operator',
+        method: 'api',
+        timestamp: audit.updatedAt,
+        outcome: 'approved',
+      },
+      audit: approvedAudit,
+    });
+    const licenseError = Object.assign(new Error('license_required'), {
+      code: 'license_required',
+    });
+    vi.mocked(ResourceActionsAPI.executeAction).mockRejectedValueOnce(licenseError);
+    vi.mocked(ResourceActionsAPI.getAction).mockResolvedValueOnce(detail(approvedAudit));
+
+    const [selected, setSelected] = createSignal(detail(audit));
+    render(() => (
+      <Router>
+        <Route
+          path="*"
+          component={() => (
+            <ActionReviewDialog detail={selected()} onClose={vi.fn()} onChanged={setSelected} />
+          )}
+        />
+      </Router>
+    ));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Approve and run' }));
+
+    const alert = await screen.findByTestId('action-review-license-gate');
+    expect(alert).toHaveTextContent('Governed external-agent execution requires Pulse Pro.');
+    expect(alert.textContent).not.toContain('—');
+    expect(alert.textContent).not.toContain(';');
+    expect(screen.queryByRole('link', { name: 'Plans & Billing' })).not.toBeInTheDocument();
+  });
 });

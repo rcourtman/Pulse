@@ -37,6 +37,14 @@ const (
 	// approval/action surfaces when authorized.
 	AgentEventApprovalPending AgentEventKind = AgentEventKind(agentcapabilities.EventKindApprovalPending)
 
+	// AgentEventActionApproved fires when an operator approves a pending
+	// governed action.
+	AgentEventActionApproved AgentEventKind = AgentEventKind(agentcapabilities.EventKindActionApproved)
+
+	// AgentEventActionRejected fires when an operator rejects a pending
+	// governed action.
+	AgentEventActionRejected AgentEventKind = AgentEventKind(agentcapabilities.EventKindActionRejected)
+
 	// AgentEventActionCompleted fires when an action audit reaches a
 	// terminal state — Completed (executed and verified) or Failed
 	// (refused before dispatch with a stable error-token prefix, or
@@ -110,7 +118,9 @@ type AgentEventFindingCreatedPayload struct {
 // endpoint — the event is a doorbell, not the approval itself.
 type AgentEventApprovalPendingPayload struct {
 	ApprovalID      string    `json:"approvalId"`
+	ActionID        string    `json:"actionId,omitempty"`
 	ResourceID      string    `json:"resourceId,omitempty"`
+	CapabilityName  string    `json:"capabilityName,omitempty"`
 	TargetType      string    `json:"targetType,omitempty"`
 	TargetID        string    `json:"targetId,omitempty"`
 	TargetName      string    `json:"targetName,omitempty"`
@@ -120,6 +130,25 @@ type AgentEventApprovalPendingPayload struct {
 	RequestedBy     string    `json:"requestedBy,omitempty"`
 	RequestedAt     time.Time `json:"requestedAt"`
 	ExpiresAt       time.Time `json:"expiresAt"`
+}
+
+// AgentEventActionDecisionPayload is the payload shape for action.approved and
+// action.rejected events. Carries the canonical action id, target resource,
+// capability, state, outcome, who decided, optional reason, requester,
+// redacted-or-full command, and decision timestamp so waiting external agents
+// react without polling /api/actions/{id}.
+type AgentEventActionDecisionPayload struct {
+	ActionID        string    `json:"actionId"`
+	ResourceID      string    `json:"resourceId,omitempty"`
+	CapabilityName  string    `json:"capabilityName,omitempty"`
+	Command         string    `json:"command,omitempty"`
+	CommandRedacted bool      `json:"commandRedacted,omitempty"`
+	State           string    `json:"state"`
+	Outcome         string    `json:"outcome"`
+	DecidedBy       string    `json:"decidedBy,omitempty"`
+	Reason          string    `json:"reason,omitempty"`
+	RequestedBy     string    `json:"requestedBy,omitempty"`
+	DecidedAt       time.Time `json:"decidedAt"`
 }
 
 // AgentEventActionCompletedPayload is the payload shape for
@@ -328,7 +357,7 @@ func (b *AgentEventBroadcaster) handleAgentEvents(w http.ResponseWriter, r *http
 			if revalidate != nil && !revalidate() {
 				return
 			}
-			writeAgentSSEEvent(w, redactAgentEventCommandsForRequest(event, r))
+			writeAgentSSEEvent(w, redactAgentEventForRequest(event, r))
 			flusher.Flush()
 		case <-heartbeat.C:
 			if revalidate != nil && !revalidate() {
@@ -383,6 +412,133 @@ func (b *AgentEventBroadcaster) PublishApprovalPending(payload AgentEventApprova
 		Kind:    AgentEventApprovalPending,
 		Payload: payload,
 	})
+}
+
+// PublishApprovalPendingForOrg publishes a tenant-scoped approval.pending event
+// so subscribers in other organizations never receive another tenant's pending
+// approval notifications.
+func (b *AgentEventBroadcaster) PublishApprovalPendingForOrg(orgID string, payload AgentEventApprovalPendingPayload) {
+	b.Publish(AgentEvent{
+		Kind:    AgentEventApprovalPending,
+		Payload: payload,
+		orgID:   normalizeAgentEventOrgID(orgID),
+	})
+}
+
+// PublishActionApprovedForOrg publishes a tenant-scoped action.approved event
+// when a pending governed action is approved.
+func (b *AgentEventBroadcaster) PublishActionApprovedForOrg(orgID string, payload AgentEventActionDecisionPayload) {
+	b.Publish(AgentEvent{
+		Kind:    AgentEventActionApproved,
+		Payload: payload,
+		orgID:   normalizeAgentEventOrgID(orgID),
+	})
+}
+
+// PublishActionRejectedForOrg publishes a tenant-scoped action.rejected event
+// when a pending governed action is rejected.
+func (b *AgentEventBroadcaster) PublishActionRejectedForOrg(orgID string, payload AgentEventActionDecisionPayload) {
+	b.Publish(AgentEvent{
+		Kind:    AgentEventActionRejected,
+		Payload: payload,
+		orgID:   normalizeAgentEventOrgID(orgID),
+	})
+}
+
+// PublishActionTransitionRecord publishes org-scoped SSE events for canonical
+// action lifecycle transitions (pending_approval, approved, rejected).
+func (b *AgentEventBroadcaster) PublishActionTransitionRecord(orgID string, record unifiedresources.ActionAuditRecord) {
+	if b == nil {
+		return
+	}
+	effectiveOrgID := strings.TrimSpace(orgID)
+	if effectiveOrgID == "" {
+		effectiveOrgID = actionCompletedOrgID(record)
+	}
+	command, _ := record.Request.Params["command"].(string)
+	switch record.State {
+	case unifiedresources.ActionStatePending:
+		requestedAt := record.Plan.PlannedAt
+		if requestedAt.IsZero() {
+			requestedAt = record.CreatedAt
+		}
+		riskLevel := string(record.Plan.ApprovalPolicy)
+		if riskLevel == "" {
+			riskLevel = string(unifiedresources.ApprovalAdmin)
+		}
+		b.PublishApprovalPendingForOrg(effectiveOrgID, AgentEventApprovalPendingPayload{
+			ApprovalID:     record.ID,
+			ActionID:       record.ID,
+			ResourceID:     record.Request.ResourceID,
+			CapabilityName: record.Request.CapabilityName,
+			Command:        command,
+			RiskLevel:      riskLevel,
+			RequestedBy:    record.Request.RequestedBy,
+			RequestedAt:    requestedAt,
+			ExpiresAt:      record.Plan.ExpiresAt,
+		})
+	case unifiedresources.ActionStateApproved, unifiedresources.ActionStateRejected:
+		decidedBy := ""
+		reason := ""
+		decidedAt := record.UpdatedAt
+		outcome := string(unifiedresources.OutcomeApproved)
+		if record.State == unifiedresources.ActionStateRejected {
+			outcome = string(unifiedresources.OutcomeRejected)
+		}
+		if len(record.Approvals) > 0 {
+			last := record.Approvals[len(record.Approvals)-1]
+			decidedBy = strings.TrimSpace(last.Actor)
+			reason = strings.TrimSpace(last.Reason)
+			if !last.Timestamp.IsZero() {
+				decidedAt = last.Timestamp
+			}
+			if last.Outcome != "" {
+				outcome = string(last.Outcome)
+			}
+		}
+		payload := AgentEventActionDecisionPayload{
+			ActionID:       record.ID,
+			ResourceID:     record.Request.ResourceID,
+			CapabilityName: record.Request.CapabilityName,
+			Command:        command,
+			State:          string(record.State),
+			Outcome:        outcome,
+			DecidedBy:      decidedBy,
+			Reason:         reason,
+			RequestedBy:    record.Request.RequestedBy,
+			DecidedAt:      decidedAt,
+		}
+		if record.State == unifiedresources.ActionStateApproved {
+			b.PublishActionApprovedForOrg(effectiveOrgID, payload)
+		} else {
+			b.PublishActionRejectedForOrg(effectiveOrgID, payload)
+		}
+	}
+}
+
+func redactAgentEventForRequest(event AgentEvent, r *http.Request) AgentEvent {
+	event = redactAgentEventCommandsForRequest(event, r)
+	if requestCanReadAgentCommandPayloads(r) {
+		return event
+	}
+	switch payload := event.Payload.(type) {
+	case AgentEventActionDecisionPayload:
+		event.Payload = redactAgentEventActionDecisionCommand(payload)
+	case *AgentEventActionDecisionPayload:
+		if payload != nil {
+			redacted := redactAgentEventActionDecisionCommand(*payload)
+			event.Payload = &redacted
+		}
+	}
+	return event
+}
+
+func redactAgentEventActionDecisionCommand(payload AgentEventActionDecisionPayload) AgentEventActionDecisionPayload {
+	if payload.Command != "" {
+		payload.Command = ""
+		payload.CommandRedacted = true
+	}
+	return payload
 }
 
 // PublishActionCompleted is the convenience publisher the executor's

@@ -89,6 +89,81 @@ describe('Actions card resource line', () => {
     expect(type.parentElement).toBe(name.parentElement);
     expect(name.parentElement?.closest(`[title="${resourceId}"]`)).not.toBeNull();
   });
+
+  it('shows external-agent origin, API token requester attribution, and multi-resource blast radius count', async () => {
+    const externalProposal: ActionAuditRecord = {
+      ...audit,
+      id: 'restart-external',
+      state: 'pending_approval',
+      origin: { surface: 'pulse_cli' },
+      request: {
+        ...audit.request,
+        requestId: 'request-external',
+        requestedBy: 'alice',
+        actor: {
+          subjectId: 'alice',
+          kind: 'api_token',
+          credentialId: 'api-token:tok-1',
+          credentialLabel: 'Claude Code Propose',
+          orgId: 'default',
+        },
+      },
+      plan: {
+        ...audit.plan,
+        actionId: 'restart-external',
+        requestId: 'request-external',
+        requiresApproval: true,
+        predictedBlastRadius: [
+          'docker:container:analytics-batch-01',
+          'docker:container:analytics-worker-01',
+          'docker:container:analytics-worker-02',
+        ],
+      },
+    };
+    const browserAction: ActionAuditRecord = {
+      ...audit,
+      id: 'restart-browser',
+      origin: { surface: 'pulse_mcp' },
+      request: {
+        ...audit.request,
+        requestId: 'request-browser',
+        resourceId: 'docker:container:checkout-api',
+        requestedBy: 'operator',
+        actor: {
+          subjectId: 'operator',
+          kind: 'user',
+          credentialId: 'session:abc',
+          orgId: 'default',
+        },
+      },
+      plan: {
+        ...audit.plan,
+        actionId: 'restart-browser',
+        requestId: 'request-browser',
+        predictedBlastRadius: ['docker:container:checkout-api'],
+      },
+    };
+    vi.mocked(ResourceActionsAPI.listActions).mockResolvedValue({
+      actions: [externalProposal, browserAction],
+      count: 2,
+      view: 'pending',
+      readOnly: false,
+    });
+
+    render(() => (
+      <Router>
+        <Route path="*" component={Actions} />
+      </Router>
+    ));
+
+    expect(await screen.findByText('From Pulse CLI')).toBeInTheDocument();
+    expect(screen.getByText('Requested by Claude Code Propose')).toBeInTheDocument();
+    expect(screen.getByText('3 affected')).toBeInTheDocument();
+
+    expect(screen.getByText('From MCP')).toBeInTheDocument();
+    expect(screen.queryByText('Requested by operator')).not.toBeInTheDocument();
+    expect(screen.queryByText('1 affected')).not.toBeInTheDocument();
+  });
 });
 
 describe('Actions empty Open inbox', () => {

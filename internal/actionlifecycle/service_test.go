@@ -2368,3 +2368,120 @@ func TestProxmoxGuestActionUnavailableReasonCodes(t *testing.T) {
 		}
 	}
 }
+
+func TestExternalAgentPlanTTLValidateFreshSeparationAndRefresh(t *testing.T) {
+	now := time.Date(2026, 11, 23, 12, 0, 0, 0, time.UTC)
+	env := newServiceEnv(t, testResource(now, unified.ApprovalAdmin))
+	env.service.Now = func() time.Time { return now }
+
+	agentActor := unified.ActionActor{
+		SubjectID:       "alice",
+		Kind:            unified.ActionActorAPIToken,
+		CredentialID:    "api-token:tok-agent-1",
+		CredentialLabel: "Claude Code",
+		OrgID:           "default",
+	}
+	plan, err := env.service.PlanWithOptions(context.Background(), "default", restartRequest(), PlanOptions{
+		Actor:             agentActor,
+		Origin:            &unified.ActionOrigin{Surface: "pulse_mcp"},
+		TTL:               actionplanner.DefaultExternalPlanTTL,
+		DisallowRequester: true,
+	})
+	if err != nil {
+		t.Fatalf("PlanWithOptions error = %v", err)
+	}
+	if gotTTL := plan.ExpiresAt.Sub(plan.PlannedAt); gotTTL != actionplanner.DefaultExternalPlanTTL {
+		t.Fatalf("plan TTL = %v, want %v", gotTTL, actionplanner.DefaultExternalPlanTTL)
+	}
+	if !plan.ApprovalRequirement.DisallowRequester {
+		t.Fatal("expected DisallowRequester=true on persisted external-agent plan")
+	}
+
+	record := mustActionRecord(t, env.service, plan.ActionID)
+	if record.Request.Actor.CredentialLabel != "Claude Code" {
+		t.Fatalf("CredentialLabel = %q, want Claude Code", record.Request.Actor.CredentialLabel)
+	}
+	if err := env.service.ValidatePlanFresh("default", record); err != nil {
+		t.Fatalf("ValidatePlanFresh rejected external-agent plan as drifted: %v", err)
+	}
+
+	// Self-approval by the requesting actor must be rejected with ErrApprovalSeparationRequired.
+	selfDecision := unified.ActionDecision{
+		Actor:   agentActor,
+		Outcome: unified.OutcomeApproved,
+		Reason:  "self approve attempt",
+		Evidence: unified.ApprovalEvidence{
+			Version:  1,
+			Method:   unified.MethodAPIToken,
+			Actor:    agentActor,
+			OrgID:    "default",
+			ActionID: plan.ActionID,
+			PlanHash: plan.PlanHash,
+			Outcome:  unified.OutcomeApproved,
+			IssuedAt: now,
+		},
+	}
+	if _, err := env.service.Decide(context.Background(), "default", plan.ActionID, selfDecision); !errors.Is(err, ErrApprovalSeparationRequired) {
+		t.Fatalf("self-approval error = %v, want ErrApprovalSeparationRequired", err)
+	}
+
+	// A different human operator can approve the external-agent plan.
+	operatorActor := testActionActor("bob", "default")
+	operatorDecision := unified.ActionDecision{
+		Actor:   operatorActor,
+		Outcome: unified.OutcomeApproved,
+		Reason:  "reviewed and approved",
+		Evidence: unified.ApprovalEvidence{
+			Version:  1,
+			Method:   unified.MethodSession,
+			Actor:    operatorActor,
+			OrgID:    "default",
+			ActionID: plan.ActionID,
+			PlanHash: plan.PlanHash,
+			Outcome:  unified.OutcomeApproved,
+			IssuedAt: now,
+		},
+	}
+	approved, err := env.service.Decide(context.Background(), "default", plan.ActionID, operatorDecision)
+	if err != nil {
+		t.Fatalf("second-operator approval failed: %v", err)
+	}
+	if approved.State != unified.ActionStateApproved {
+		t.Fatalf("approved state = %q, want %q", approved.State, unified.ActionStateApproved)
+	}
+
+	// Refreshing an expired external-agent plan preserves DisallowRequester=true and 30m TTL,
+	// even when a RefreshPlanner returns default PlanOptions.
+	env.service.RefreshPlanner = func(_ context.Context, _ string, previous unified.ActionAuditRecord, actor unified.ActionActor, requestID string) (unified.ActionRequest, PlanOptions, error) {
+		req := previous.Request
+		req.RequestID = requestID
+		req.Actor = unified.ActionActor{}
+		req.RequestedBy = ""
+		return req, PlanOptions{Actor: actor, Origin: previous.Origin}, nil
+	}
+	plan2Req := restartRequest()
+	plan2Req.RequestID = "ext-refresh-seed"
+	plan2, err := env.service.PlanWithOptions(context.Background(), "default", plan2Req, PlanOptions{
+		Actor:             agentActor,
+		Origin:            &unified.ActionOrigin{Surface: "pulse_cli"},
+		TTL:               actionplanner.DefaultExternalPlanTTL,
+		DisallowRequester: true,
+	})
+	if err != nil {
+		t.Fatalf("plan2 error = %v", err)
+	}
+	env.service.Now = func() time.Time { return plan2.ExpiresAt.Add(time.Second) }
+	refreshed, err := env.service.Refresh(context.Background(), "default", plan2.ActionID, agentActor)
+	if err != nil {
+		t.Fatalf("Refresh error = %v", err)
+	}
+	if !refreshed.Plan.ApprovalRequirement.DisallowRequester {
+		t.Fatal("Refresh lost DisallowRequester=true")
+	}
+	if gotTTL := refreshed.Plan.ExpiresAt.Sub(refreshed.Plan.PlannedAt); gotTTL != actionplanner.DefaultExternalPlanTTL {
+		t.Fatalf("refreshed TTL = %v, want %v", gotTTL, actionplanner.DefaultExternalPlanTTL)
+	}
+	if err := env.service.ValidatePlanFresh("default", refreshed); err != nil {
+		t.Fatalf("ValidatePlanFresh on refreshed external plan failed: %v", err)
+	}
+}

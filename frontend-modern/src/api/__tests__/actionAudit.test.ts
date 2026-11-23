@@ -818,4 +818,54 @@ describe('ActionAuditAPI', () => {
     );
     expect(apiFetchJSONMock).not.toHaveBeenCalled();
   });
+
+  it('preserves external-agent actor credentialLabel and origin surface on getAction', async () => {
+    const detail = {
+      audit: {
+        id: 'action-ext-1',
+        createdAt: '2026-11-23T12:00:00Z',
+        updatedAt: '2026-11-23T12:00:00Z',
+        state: 'pending_approval',
+        request: {
+          requestId: 'req-ext-1',
+          resourceId: 'docker:host-1:container:nginx',
+          capabilityName: 'docker_restart_container',
+          reason: 'Restart unhealthy nginx container',
+          requestedBy: 'token:tok-1',
+          actor: {
+            subjectId: 'token:tok-1',
+            kind: 'api_token',
+            credentialId: 'api-token:tok-1',
+            credentialLabel: 'Claude Code Propose',
+            orgId: 'default',
+          },
+        },
+        origin: {
+          surface: 'pulse_cli',
+        },
+        plan: {
+          allowed: true,
+          requiresApproval: true,
+          approvalPolicy: 'explicit_operator',
+          planHash: 'sha256:ext-plan',
+          expiresAt: '2026-11-23T12:30:00Z',
+          predictedBlastRadius: ['docker:host-1:container:nginx'],
+        },
+      },
+      events: [],
+      readiness: {
+        ready: true,
+        checkedAt: '2026-11-23T12:00:00Z',
+      },
+      readOnly: true,
+    };
+    apiFetchJSONMock.mockResolvedValueOnce(detail);
+
+    const result = await ResourceActionsAPI.getAction('action-ext-1');
+
+    expect(apiFetchJSONMock).toHaveBeenCalledWith('/api/actions/action-ext-1');
+    expect(result.audit.request.actor?.credentialLabel).toBe('Claude Code Propose');
+    expect(result.audit.origin?.surface).toBe('pulse_cli');
+    expect(result.readOnly).toBe(true);
+  });
 });

@@ -247,6 +247,11 @@ type PlanOptions struct {
 	// PolicyFactors are trusted, bounded plan-time authorities consulted by
 	// an internal broker in addition to the capability registry.
 	PolicyFactors []unified.ActionPolicyAuthorityFactor
+	// TTL overrides the planner's default plan expiration window when positive.
+	TTL time.Duration
+	// DisallowRequester strengthens the plan's ApprovalRequirement so the
+	// requesting principal cannot approve its own action.
+	DisallowRequester bool
 }
 
 type DecisionAuthorizer interface {
@@ -552,7 +557,11 @@ func (s *Service) PlanWithOptions(ctx context.Context, orgID string, req unified
 		}
 	}
 
-	planner := actionplanner.Planner{}
+	planner := actionplanner.Planner{
+		Now:               s.Now,
+		TTL:               opts.TTL,
+		DisallowRequester: opts.DisallowRequester,
+	}
 	var plan unified.ActionPlan
 	if opts.ApprovalRequirement != nil || len(opts.PolicyFactors) > 0 {
 		requirement := unified.ApprovalRequirement{}
@@ -644,7 +653,11 @@ func (s *Service) Refresh(ctx context.Context, orgID, actionID string, actor uni
 	req.RequestID = requestID
 	req.RequestedBy = ""
 	req.Actor = unified.ActionActor{}
-	opts := PlanOptions{Actor: actor, Origin: previous.Origin}
+	opts := PlanOptions{
+		Actor:             actor,
+		Origin:            previous.Origin,
+		DisallowRequester: previous.Plan.ApprovalRequirement.DisallowRequester,
+	}
 	// A refresh plans under the broker's identity when a broker proposed the
 	// action, but the person asking for it decides whether the agent checks
 	// the replacement.
@@ -656,6 +669,12 @@ func (s *Service) Refresh(ctx context.Context, orgID, actionID string, actor uni
 		if err != nil {
 			return unified.ActionAuditRecord{}, err
 		}
+	}
+	if previous.Plan.ApprovalRequirement.DisallowRequester {
+		opts.DisallowRequester = true
+	}
+	if opts.TTL <= 0 && !previous.Plan.PlannedAt.IsZero() && previous.Plan.ExpiresAt.After(previous.Plan.PlannedAt) {
+		opts.TTL = previous.Plan.ExpiresAt.Sub(previous.Plan.PlannedAt)
 	}
 	plan, err := s.PlanWithOptions(ctx, orgID, req, opts)
 	if err != nil {
@@ -1825,9 +1844,12 @@ func (s *Service) ValidatePlanFresh(orgID string, record unified.ActionAuditReco
 	if len(additionalFactors) > 0 && additionalFactors[0].Kind == unified.ActionPolicyAuthorityCapability {
 		additionalFactors = additionalFactors[1:]
 	}
-	currentPlan, err := (actionplanner.Planner{Now: func() time.Time {
-		return normalized.Plan.PlannedAt
-	}}).PlanWithPolicyFactors(normalized.Request, *resource, normalized.Plan.ApprovalRequirement, additionalFactors)
+	currentPlan, err := (actionplanner.Planner{
+		Now: func() time.Time {
+			return normalized.Plan.PlannedAt
+		},
+		DisallowRequester: normalized.Plan.ApprovalRequirement.DisallowRequester,
+	}).PlanWithPolicyFactors(normalized.Request, *resource, normalized.Plan.ApprovalRequirement, additionalFactors)
 	if err != nil {
 		return fmt.Errorf("%w: %v", unified.ErrActionPlanDrift, err)
 	}

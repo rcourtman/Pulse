@@ -12283,3 +12283,7 @@ read-only with no VM lifecycle or configuration authority. Verified by
 ### External-agent `pulse_cli` surface telemetry and read-only readiness boundary (23 November 2026)
 
 `internal/api/agent_activity_telemetry.go` records content-free `pulse_cli` surface activity alongside `pulse_mcp`, and `internal/api/agent_resource_context.go` evaluates `externalAgentReady` against `ExternalAgentMinimumScopes` (`monitoring:read`). Host-agent enrollment, credentials, polling, and lifecycle authority under `internal/api/` are unchanged. Proof: `internal/api/agent_activity_telemetry_test.go`, `internal/api/agent_resource_context_test.go`, and `internal/api/contract_test.go`.
+
+### External-agent action transition events and own-plan read scope boundary (23 November 2026)
+
+`internal/api/actions.go`, `internal/api/agent_events.go`, `internal/api/router.go`, and `internal/api/router_routes_monitoring.go` add external-agent plan attribution, `actions:plan` own-plan read isolation, org-scoped `approval.pending`/`action.approved`/`action.rejected` SSE events, and operator approval notifications. Host-agent enrollment, command execution allowlists, and agent lifecycle authority are unchanged. Proof: `internal/api/actions_harness_test.go` and `internal/api/agent_events_test.go`.

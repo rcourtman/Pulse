@@ -27,8 +27,10 @@ import {
 } from '@/features/actions/actionRouting';
 import {
   formatActionName,
+  getActionBlastRadiusCount,
   getActionOriginLabel,
   getActionAuditStatePresentation,
+  getActionRequesterPresentation,
   getActionResourcePresentation,
   getActionsWatchOnlyEmptyState,
   sortOpenActionsForReview,
@@ -297,6 +299,14 @@ export function Actions() {
                   getActionResourcePresentation(action.request.resourceId, action.resource);
                 const title = () => formatActionName(action.request.capabilityName);
                 const originLabel = () => getActionOriginLabel(action.origin);
+                const requester = () =>
+                  action.request.actor?.kind === 'api_token'
+                    ? getActionRequesterPresentation(action.request)
+                    : null;
+                const blastRadiusSummary = () => {
+                  const count = getActionBlastRadiusCount(action);
+                  return count > 1 ? `${count} affected` : null;
+                };
                 return (
                   <div role="listitem">
                     <button
@@ -347,6 +357,23 @@ export function Actions() {
                             <span aria-hidden="true">·</span>
                             <span class="shrink-0">{formatRelativeTime(action.updatedAt)}</span>
                           </div>
+                          <Show when={requester() || blastRadiusSummary()}>
+                            <div class="mt-1 flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5 text-xs text-muted">
+                              <Show when={requester()}>
+                                {(actor) => (
+                                  <span class="max-w-full min-w-0 truncate">
+                                    {`Requested by ${actor().label}`}
+                                  </span>
+                                )}
+                              </Show>
+                              <Show when={requester() && blastRadiusSummary()}>
+                                <span aria-hidden="true">·</span>
+                              </Show>
+                              <Show when={blastRadiusSummary()}>
+                                {(summary) => <span class="shrink-0">{summary()}</span>}
+                              </Show>
+                            </div>
+                          </Show>
                           <p class="mt-1.5 truncate text-sm text-muted">{action.request.reason}</p>
                         </div>
                         <span class="inline-flex shrink-0 items-center gap-1 rounded-sm border border-border px-2 py-1 text-xs font-medium text-muted transition-colors group-hover:bg-surface group-hover:text-base-content">

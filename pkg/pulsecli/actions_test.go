@@ -2,6 +2,7 @@ package pulsecli
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"io"
@@ -883,5 +884,592 @@ func TestActionsExecuteRenders402LicenseRequiredWithoutRetry(t *testing.T) {
 		if !strings.Contains(err.Error(), want) {
 			t.Fatalf("402 error %q missing %q", err.Error(), want)
 		}
+	}
+}
+
+func newTestActionsClientCommand(server *httptest.Server, token string, tty bool) (*cobra.Command, *bytes.Buffer) {
+	env := map[string]string{
+		"PULSE_API_TOKEN": token,
+	}
+	if server != nil {
+		env["PULSE_API_URL"] = server.URL
+	}
+	var client HTTPDoer
+	if server != nil {
+		client = server.Client()
+	}
+	cmd := NewClientRootCommand(CommandSpec{Use: "pulse"}, ClientDeps{
+		Actions: &ActionsDeps{
+			HTTPClient: client,
+			Getenv: func(key string) string {
+				return env[key]
+			},
+			IsTerminal: func(io.Writer) bool { return tty },
+		},
+	})
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(io.Discard)
+	return cmd, &out
+}
+
+func TestActionsListCommandHumanAndJSON(t *testing.T) {
+	expires := time.Date(2026, 11, 23, 15, 30, 0, 0, time.UTC)
+	var seenView, seenLimit, seenSurface, seenAuth string
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet || r.URL.Path != "/api/actions" {
+			t.Fatalf("unexpected request %s %s", r.Method, r.URL.Path)
+		}
+		seenView = r.URL.Query().Get("view")
+		seenLimit = r.URL.Query().Get("limit")
+		seenSurface = r.Header.Get(agentcapabilities.AgentSurfaceHeader)
+		seenAuth = r.Header.Get("Authorization")
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(actionListResponse{
+			View:  seenView,
+			Count: 1,
+			Actions: []actionAuditView{
+				{
+					ID:    "act_list_1",
+					State: unified.ActionStatePending,
+					Request: actionRequestView{
+						ResourceID:     "vm:101",
+						CapabilityName: "restart",
+						RequestedBy:    "token:tok_1",
+						Actor: actionActorView{
+							Kind:            "api_token",
+							SubjectID:       "token:tok_1",
+							CredentialLabel: "oncall-agent",
+						},
+					},
+					Resource: &actionResourceView{ID: "vm:101", Name: "web-01", Type: "vm"},
+					Origin:   &unified.ActionOrigin{Surface: "pulse_mcp"},
+					Plan: unified.ActionPlan{
+						ActionID:  "act_list_1",
+						ExpiresAt: expires,
+						PlanHash:  "sha256:list1",
+					},
+				},
+			},
+		})
+	}))
+	defer server.Close()
+
+	// Human TTY table output
+	cmd, out := newTestActionsClientCommand(server, "list-token", true)
+	cmd.SetArgs([]string{"actions", "list", "--view", "all", "--limit", "25"})
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("actions list human failed: %v", err)
+	}
+	if seenView != "all" || seenLimit != "25" {
+		t.Fatalf("query view=%q limit=%q, want all/25", seenView, seenLimit)
+	}
+	if seenSurface != agentcapabilities.AgentSurfacePulseCLI {
+		t.Fatalf("surface = %q, want %q", seenSurface, agentcapabilities.AgentSurfacePulseCLI)
+	}
+	if seenAuth != "Bearer list-token" {
+		t.Fatalf("Authorization = %q", seenAuth)
+	}
+	humanOut := out.String()
+	for _, want := range []string{
+		"ACTION ID", "STATE", "CAPABILITY", "RESOURCE", "ORIGIN", "REQUESTER", "EXPIRES",
+		"act_list_1", "pending_approval", "restart", "web-01 (vm:101)", "pulse_mcp", "token:tok_1 (oncall-agent)", "2026-11-23T15:30:00Z",
+	} {
+		if !strings.Contains(humanOut, want) {
+			t.Fatalf("actions list human output missing %q:\n%s", want, humanOut)
+		}
+	}
+	if strings.Contains(humanOut, "—") || strings.Contains(humanOut, ";") {
+		t.Fatalf("actions list human output must not contain em-dash or semicolon:\n%s", humanOut)
+	}
+
+	// JSON output with --json on TTY
+	cmdJSON, outJSON := newTestActionsClientCommand(server, "list-token", true)
+	cmdJSON.SetArgs([]string{"actions", "list", "--view", "settled", "--json"})
+	if err := cmdJSON.Execute(); err != nil {
+		t.Fatalf("actions list json failed: %v", err)
+	}
+	var decoded actionListResponse
+	if err := json.Unmarshal(outJSON.Bytes(), &decoded); err != nil {
+		t.Fatalf("decode list json: %v\n%s", err, outJSON.String())
+	}
+	if decoded.View != "settled" || decoded.Count != 1 || decoded.Actions[0].ID != "act_list_1" {
+		t.Fatalf("decoded list = %+v", decoded)
+	}
+
+	// Validation errors
+	badView, _ := newTestActionsClientCommand(server, "list-token", true)
+	badView.SetArgs([]string{"actions", "list", "--view", "bogus"})
+	if err := badView.Execute(); err == nil || !strings.Contains(err.Error(), "view must be pending, settled, or all") {
+		t.Fatalf("expected invalid view error, got %v", err)
+	}
+
+	badLimit, _ := newTestActionsClientCommand(server, "list-token", true)
+	badLimit.SetArgs([]string{"actions", "list", "--limit", "501"})
+	if err := badLimit.Execute(); err == nil || !strings.Contains(err.Error(), "limit must be between 1 and 500") {
+		t.Fatalf("expected invalid limit error, got %v", err)
+	}
+}
+
+func TestActionsGetCommandHumanJSONAndForms(t *testing.T) {
+	now := time.Date(2026, 11, 23, 15, 0, 0, 0, time.UTC)
+	var seenPaths []string
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Fatalf("method = %s, want GET", r.Method)
+		}
+		seenPaths = append(seenPaths, r.URL.Path)
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(actionDetailViewResponse{
+			Audit: actionAuditView{
+				ID:        "act_get_1",
+				State:     unified.ActionStateCompleted,
+				UpdatedAt: now,
+				Request: actionRequestView{
+					ResourceID:     "vm:202",
+					CapabilityName: "restart",
+					RequestedBy:    "token:tok_9",
+					Actor: actionActorView{
+						Kind:            "api_token",
+						SubjectID:       "token:tok_9",
+						CredentialLabel: "codex-ops",
+					},
+				},
+				Resource: &actionResourceView{ID: "vm:202", Name: "db-primary", Type: "vm"},
+				Origin:   &unified.ActionOrigin{Surface: "pulse_cli"},
+				Plan: unified.ActionPlan{
+					ActionID:             "act_get_1",
+					PlanHash:             "sha256:gethash",
+					ExpiresAt:            now.Add(30 * time.Minute),
+					PredictedBlastRadius: []string{"vm:202", "service:postgres"},
+				},
+				Result: &unified.ExecutionResult{
+					Success: true,
+					Output:  "service restarted",
+				},
+				VerificationOutcome: unified.VerificationOutcome{
+					Status:          unified.VerificationVerified,
+					EvidenceSummary: "systemd active confirmed",
+				},
+			},
+			Events: []unified.ActionLifecycleEvent{
+				{ActionID: "act_get_1", State: unified.ActionStatePending, Timestamp: now},
+				{ActionID: "act_get_1", State: unified.ActionStateCompleted, Timestamp: now.Add(time.Second)},
+			},
+			Readiness: &actionReadinessView{
+				Ready:   true,
+				Code:    "ready",
+				Message: "Target agent connected",
+			},
+			Receipt: map[string]any{"id": "rcpt_42", "status": "completed"},
+		})
+	}))
+	defer server.Close()
+
+	// Positional form in human mode
+	cmd, out := newTestActionsClientCommand(server, "get-token", true)
+	cmd.SetArgs([]string{"actions", "get", "act_get_1"})
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("actions get positional failed: %v", err)
+	}
+	humanOut := out.String()
+	for _, want := range []string{
+		"Action ID:", "act_get_1",
+		"State:", "completed",
+		"Capability:", "restart",
+		"Resource:", "db-primary (vm:202)",
+		"Origin:", "pulse_cli",
+		"Requester:", "token:tok_9 (codex-ops)",
+		"Plan hash:", "sha256:gethash",
+		"Expires at:", "2026-11-23T15:30:00Z",
+		"Blast radius:", "vm:202, service:postgres",
+		"Readiness:", "ready (ready): Target agent connected",
+		"Outcome:", "success (service restarted)",
+		"Verification:", "verified (systemd active confirmed)",
+		"Events:", "2",
+		"Receipt:", "rcpt_42",
+	} {
+		if !strings.Contains(humanOut, want) {
+			t.Fatalf("actions get human output missing %q:\n%s", want, humanOut)
+		}
+	}
+	if strings.Contains(humanOut, "—") || strings.Contains(humanOut, ";") {
+		t.Fatalf("actions get human output must not contain em-dash or semicolon:\n%s", humanOut)
+	}
+
+	// Flag form in JSON mode with inherited --api-url
+	cmdFlag, outFlag := newTestActionsClientCommand(nil, "get-token", true)
+	cmdFlag.SetArgs([]string{"--api-url", server.URL, "--json", "actions", "get", "--action-id", "act_get_1"})
+	if err := cmdFlag.Execute(); err != nil {
+		t.Fatalf("actions get --action-id failed: %v", err)
+	}
+	var decoded actionDetailViewResponse
+	if err := json.Unmarshal(outFlag.Bytes(), &decoded); err != nil {
+		t.Fatalf("decode get json: %v\n%s", err, outFlag.String())
+	}
+	if decoded.Audit.ID != "act_get_1" || decoded.Audit.Plan.PlanHash != "sha256:gethash" {
+		t.Fatalf("decoded get = %+v", decoded)
+	}
+	if len(seenPaths) != 2 || seenPaths[0] != "/api/actions/act_get_1" || seenPaths[1] != "/api/actions/act_get_1" {
+		t.Fatalf("seenPaths = %v", seenPaths)
+	}
+}
+
+func TestActionsRefreshCommandPostsPlanHashAndRendersOutput(t *testing.T) {
+	newExpiry := time.Date(2026, 11, 23, 16, 0, 0, 0, time.UTC)
+	var seenPath string
+	var seenBody struct {
+		PlanHash string `json:"planHash"`
+	}
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Fatalf("method = %s, want POST", r.Method)
+		}
+		seenPath = r.URL.Path
+		if err := json.NewDecoder(r.Body).Decode(&seenBody); err != nil {
+			t.Fatalf("decode refresh body: %v", err)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(actionDetailViewResponse{
+			Audit: actionAuditView{
+				ID:    "act_refreshed_2",
+				State: unified.ActionStatePending,
+				Plan: unified.ActionPlan{
+					ActionID:  "act_refreshed_2",
+					PlanHash:  "sha256:freshhash",
+					ExpiresAt: newExpiry,
+				},
+			},
+			Events: []unified.ActionLifecycleEvent{},
+		})
+	}))
+	defer server.Close()
+
+	// Human output via positional action ID
+	cmd, out := newTestActionsClientCommand(server, "refresh-token", true)
+	cmd.SetArgs([]string{"actions", "refresh", "act_expired_1", "--plan-hash", "sha256:oldhash"})
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("actions refresh human failed: %v", err)
+	}
+	if seenPath != "/api/actions/act_expired_1/refresh" || seenBody.PlanHash != "sha256:oldhash" {
+		t.Fatalf("refresh request path=%q body=%+v", seenPath, seenBody)
+	}
+	humanOut := out.String()
+	for _, want := range []string{"act_refreshed_2", "sha256:freshhash", "2026-11-23T16:00:00Z"} {
+		if !strings.Contains(humanOut, want) {
+			t.Fatalf("refresh human output missing %q:\n%s", want, humanOut)
+		}
+	}
+	if strings.Contains(humanOut, "—") || strings.Contains(humanOut, ";") {
+		t.Fatalf("refresh human output must not contain em-dash or semicolon:\n%s", humanOut)
+	}
+
+	// JSON output via --action-id
+	cmdJSON, outJSON := newTestActionsClientCommand(server, "refresh-token", true)
+	cmdJSON.SetArgs([]string{"actions", "refresh", "--action-id", "act_expired_1", "--plan-hash", "sha256:oldhash", "--json"})
+	if err := cmdJSON.Execute(); err != nil {
+		t.Fatalf("actions refresh json failed: %v", err)
+	}
+	var decoded actionDetailViewResponse
+	if err := json.Unmarshal(outJSON.Bytes(), &decoded); err != nil {
+		t.Fatalf("decode refresh json: %v", err)
+	}
+	if decoded.Audit.ID != "act_refreshed_2" || decoded.Audit.Plan.PlanHash != "sha256:freshhash" {
+		t.Fatalf("decoded refresh = %+v", decoded)
+	}
+
+	// Missing --plan-hash fails cleanly
+	badCmd, _ := newTestActionsClientCommand(server, "refresh-token", true)
+	badCmd.SetArgs([]string{"actions", "refresh", "act_expired_1"})
+	if err := badCmd.Execute(); err == nil || !strings.Contains(err.Error(), "planHash is required") {
+		t.Fatalf("expected missing planHash error, got %v", err)
+	}
+}
+
+func TestActionsWatchCommandPollsTransitionsTerminalDecidedAndTimeout(t *testing.T) {
+	now := time.Date(2026, 11, 23, 15, 0, 0, 0, time.UTC)
+
+	t.Run("terminal transitions emitted once in human and NDJSON modes", func(t *testing.T) {
+		states := []unified.ActionState{
+			unified.ActionStatePending,
+			unified.ActionStatePending, // duplicate must not print twice
+			unified.ActionStateApproved,
+			unified.ActionStateExecuting,
+			unified.ActionStateCompleted,
+		}
+		var pollCount atomic.Int32
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.URL.Path != "/api/actions/act_watch_1" {
+				t.Fatalf("unexpected path %s", r.URL.Path)
+			}
+			idx := int(pollCount.Add(1)) - 1
+			if idx >= len(states) {
+				idx = len(states) - 1
+			}
+			state := states[idx]
+			audit := actionAuditView{
+				ID:        "act_watch_1",
+				State:     state,
+				UpdatedAt: now.Add(time.Duration(idx) * time.Second),
+				Request: actionRequestView{
+					ResourceID:     "vm:101",
+					CapabilityName: "restart",
+				},
+				Plan: unified.ActionPlan{ActionID: "act_watch_1", PlanHash: "sha256:w1"},
+			}
+			if state == unified.ActionStateCompleted {
+				audit.Result = &unified.ExecutionResult{Success: true, Output: "done"}
+			}
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(actionDetailViewResponse{Audit: audit})
+		}))
+		defer server.Close()
+
+		// Human mode
+		cmd, out := newTestActionsClientCommand(server, "watch-token", true)
+		cmd.SetArgs([]string{"actions", "watch", "act_watch_1", "--interval", "5ms", "--timeout", "5s"})
+		if err := cmd.Execute(); err != nil {
+			t.Fatalf("actions watch human failed: %v", err)
+		}
+		lines := strings.Split(strings.TrimSpace(out.String()), "\n")
+		if len(lines) != 4 {
+			t.Fatalf("got %d lines, want 4 unique transitions:\n%s", len(lines), out.String())
+		}
+		for i, wantState := range []string{"pending_approval", "approved", "executing", "completed"} {
+			if !strings.Contains(lines[i], wantState) {
+				t.Fatalf("line[%d] = %q, want state %q", i, lines[i], wantState)
+			}
+		}
+		if strings.Contains(out.String(), "—") || strings.Contains(out.String(), ";") {
+			t.Fatalf("watch human output must not contain em-dash or semicolon:\n%s", out.String())
+		}
+
+		// NDJSON mode with --json
+		pollCount.Store(0)
+		cmdJSON, outJSON := newTestActionsClientCommand(server, "watch-token", true)
+		cmdJSON.SetArgs([]string{"actions", "watch", "act_watch_1", "--interval", "5ms", "--timeout", "5s", "--json"})
+		if err := cmdJSON.Execute(); err != nil {
+			t.Fatalf("actions watch json failed: %v", err)
+		}
+		jsonLines := strings.Split(strings.TrimSpace(outJSON.String()), "\n")
+		if len(jsonLines) != 4 {
+			t.Fatalf("got %d NDJSON lines, want 4:\n%s", len(jsonLines), outJSON.String())
+		}
+		for i, wantState := range []unified.ActionState{
+			unified.ActionStatePending,
+			unified.ActionStateApproved,
+			unified.ActionStateExecuting,
+			unified.ActionStateCompleted,
+		} {
+			var ev actionWatchEvent
+			if err := json.Unmarshal([]byte(jsonLines[i]), &ev); err != nil {
+				t.Fatalf("decode NDJSON line[%d]: %v", i, err)
+			}
+			if ev.ActionID != "act_watch_1" || ev.State != wantState {
+				t.Fatalf("NDJSON line[%d] = %+v, want state %q", i, ev, wantState)
+			}
+		}
+	})
+
+	t.Run("until decided stops on approved", func(t *testing.T) {
+		states := []unified.ActionState{
+			unified.ActionStatePending,
+			unified.ActionStateApproved,
+			unified.ActionStateCompleted,
+		}
+		var pollCount atomic.Int32
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			idx := int(pollCount.Add(1)) - 1
+			if idx >= len(states) {
+				idx = len(states) - 1
+			}
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(actionDetailViewResponse{
+				Audit: actionAuditView{
+					ID:        "act_watch_decided",
+					State:     states[idx],
+					UpdatedAt: now,
+				},
+			})
+		}))
+		defer server.Close()
+
+		cmd, out := newTestActionsClientCommand(server, "watch-token", false)
+		cmd.SetArgs([]string{"actions", "watch", "act_watch_decided", "--until", "decided", "--interval", "5ms", "--timeout", "5s"})
+		if err := cmd.Execute(); err != nil {
+			t.Fatalf("actions watch --until decided failed: %v", err)
+		}
+		if got := pollCount.Load(); got != 2 {
+			t.Fatalf("pollCount = %d, want 2 (stopped on approved)", got)
+		}
+		lines := strings.Split(strings.TrimSpace(out.String()), "\n")
+		if len(lines) != 2 || !strings.Contains(lines[1], `"approved"`) {
+			t.Fatalf("decided output = %s", out.String())
+		}
+	})
+
+	t.Run("timeout and context cancellation", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(actionDetailViewResponse{
+				Audit: actionAuditView{
+					ID:    "act_stuck",
+					State: unified.ActionStatePending,
+				},
+			})
+		}))
+		defer server.Close()
+
+		cmd, _ := newTestActionsClientCommand(server, "watch-token", true)
+		cmd.SetArgs([]string{"actions", "watch", "act_stuck", "--interval", "10ms", "--timeout", "30ms"})
+		err := cmd.Execute()
+		if err == nil || !strings.Contains(err.Error(), "timed out waiting for action act_stuck") {
+			t.Fatalf("expected timeout error, got %v", err)
+		}
+
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+		cmdCancel, _ := newTestActionsClientCommand(server, "watch-token", true)
+		cmdCancel.SetArgs([]string{"actions", "watch", "act_stuck", "--interval", "10ms", "--timeout", "5s"})
+		err = cmdCancel.ExecuteContext(ctx)
+		if !errors.Is(err, context.Canceled) {
+			t.Fatalf("expected context.Canceled, got %v", err)
+		}
+	})
+}
+
+func TestActionsPositionalAndFlagFormsForApproveRejectExecute(t *testing.T) {
+	now := time.Date(2026, 11, 23, 15, 0, 0, 0, time.UTC)
+	var seenPaths []string
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		seenPaths = append(seenPaths, r.URL.Path)
+		w.Header().Set("Content-Type", "application/json")
+		switch {
+		case strings.HasSuffix(r.URL.Path, "/decision"):
+			id := strings.TrimSuffix(strings.TrimPrefix(r.URL.Path, "/api/actions/"), "/decision")
+			_ = json.NewEncoder(w).Encode(actionDecisionResponse{
+				ActionID: id,
+				State:    unified.ActionStateApproved,
+				Approval: unified.ActionApprovalRecord{Actor: "op", Method: unified.MethodAPI, Timestamp: now, Outcome: unified.OutcomeApproved},
+				Audit:    unified.ActionAuditRecord{ID: id, State: unified.ActionStateApproved},
+			})
+		case strings.HasSuffix(r.URL.Path, "/execute"):
+			id := strings.TrimSuffix(strings.TrimPrefix(r.URL.Path, "/api/actions/"), "/execute")
+			_ = json.NewEncoder(w).Encode(actionExecutionResponse{
+				ActionID: id,
+				State:    unified.ActionStateCompleted,
+				Audit:    unified.ActionAuditRecord{ID: id, State: unified.ActionStateCompleted},
+			})
+		default:
+			t.Fatalf("unexpected path %s", r.URL.Path)
+		}
+	}))
+	defer server.Close()
+
+	cases := [][]string{
+		{"actions", "approve", "act_pos_1"},
+		{"actions", "approve", "--action-id", "act_flag_1"},
+		{"actions", "reject", "act_pos_2"},
+		{"actions", "reject", "--action-id", "act_flag_2"},
+		{"actions", "execute", "act_pos_3", "--plan-hash", "sha256:exec3"},
+		{"actions", "execute", "--action-id", "act_flag_3", "--plan-hash", "sha256:exec3"},
+	}
+	for _, args := range cases {
+		cmd, _ := newTestActionsClientCommand(server, "op-token", false)
+		cmd.SetArgs(args)
+		if err := cmd.Execute(); err != nil {
+			t.Fatalf("args %v failed: %v", args, err)
+		}
+	}
+	wantPaths := []string{
+		"/api/actions/act_pos_1/decision",
+		"/api/actions/act_flag_1/decision",
+		"/api/actions/act_pos_2/decision",
+		"/api/actions/act_flag_2/decision",
+		"/api/actions/act_pos_3/execute",
+		"/api/actions/act_flag_3/execute",
+	}
+	if strings.Join(seenPaths, ",") != strings.Join(wantPaths, ",") {
+		t.Fatalf("seenPaths = %v, want %v", seenPaths, wantPaths)
+	}
+
+	conflictCmd, _ := newTestActionsClientCommand(server, "op-token", false)
+	conflictCmd.SetArgs([]string{"actions", "execute", "act_a", "--action-id", "act_b"})
+	if err := conflictCmd.Execute(); err == nil || !strings.Contains(err.Error(), "conflicting action IDs") {
+		t.Fatalf("expected conflicting action IDs error, got %v", err)
+	}
+}
+
+func TestActionsPlanHumanAndJSONOutput(t *testing.T) {
+	plannedAt := time.Date(2026, 11, 23, 15, 0, 0, 0, time.UTC)
+	expiresAt := plannedAt.Add(30 * time.Minute)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(unified.ActionPlan{
+			ActionID:             "act_plan_human",
+			RequestID:            "req-human-1",
+			Allowed:              true,
+			RequiresApproval:     true,
+			ApprovalPolicy:       unified.ApprovalAdmin,
+			PredictedBlastRadius: []string{"vm:42", "service:api"},
+			PlannedAt:            plannedAt,
+			ExpiresAt:            expiresAt,
+			ResourceVersion:      "rv1",
+			PolicyVersion:        "pv1",
+			PlanHash:             "sha256:planhuman",
+		})
+	}))
+	defer server.Close()
+
+	// Human TTY mode
+	cmd, out := newTestActionsClientCommand(server, "plan-token", true)
+	cmd.SetArgs([]string{
+		"actions", "plan",
+		"--request-id", "req-human-1",
+		"--resource-id", "vm:42",
+		"--capability", "restart",
+		"--reason", "Recover service",
+	})
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("actions plan human failed: %v", err)
+	}
+	humanOut := out.String()
+	for _, want := range []string{
+		"Action ID:", "act_plan_human",
+		"Origin:", "pulse_cli",
+		"Plan hash:", "sha256:planhuman",
+		"Expires at:", "2026-11-23T15:30:00Z",
+		"Blast radius:", "vm:42, service:api",
+	} {
+		if !strings.Contains(humanOut, want) {
+			t.Fatalf("actions plan human output missing %q:\n%s", want, humanOut)
+		}
+	}
+	if strings.Contains(humanOut, "—") || strings.Contains(humanOut, ";") {
+		t.Fatalf("actions plan human output must not contain em-dash or semicolon:\n%s", humanOut)
+	}
+
+	// Explicit --json on TTY
+	cmdJSON, outJSON := newTestActionsClientCommand(server, "plan-token", true)
+	cmdJSON.SetArgs([]string{
+		"actions", "plan", "--json",
+		"--request-id", "req-human-1",
+		"--resource-id", "vm:42",
+		"--capability", "restart",
+		"--reason", "Recover service",
+	})
+	if err := cmdJSON.Execute(); err != nil {
+		t.Fatalf("actions plan --json failed: %v", err)
+	}
+	var plan unified.ActionPlan
+	if err := json.Unmarshal(outJSON.Bytes(), &plan); err != nil {
+		t.Fatalf("decode plan json: %v\n%s", err, outJSON.String())
+	}
+	if plan.ActionID != "act_plan_human" || plan.PlanHash != "sha256:planhuman" {
+		t.Fatalf("decoded plan = %+v", plan)
 	}
 }

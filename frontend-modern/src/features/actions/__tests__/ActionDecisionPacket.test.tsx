@@ -393,4 +393,74 @@ describe('ActionDecisionPacket', () => {
     expect(screen.queryByRole('button', { name: /reboot/i })).toBeNull();
     expect(screen.queryByText('APT package updates:', { exact: false })).toBeNull();
   });
+
+  it('shows API token requester attribution, CLI/external origins, and blast radius count', () => {
+    const externalAudit: ActionAuditRecord = {
+      ...audit,
+      origin: { surface: 'pulse_cli' },
+      request: {
+        ...audit.request,
+        requestedBy: 'alice',
+        actor: {
+          subjectId: 'alice',
+          kind: 'api_token',
+          credentialId: 'api-token:tok-99',
+          credentialLabel: 'Claude Code Propose',
+          orgId: 'org-1',
+        },
+      },
+      plan: {
+        ...audit.plan,
+        predictedBlastRadius: [
+          'docker:container:edge',
+          'docker:container:api',
+          'docker:container:worker',
+        ],
+      },
+      blastRadius: [
+        { id: 'docker:container:edge', name: 'Edge proxy', type: 'app-container' },
+        { id: 'docker:container:api', name: 'Checkout API', type: 'app-container' },
+      ],
+    };
+
+    render(() => <ActionDecisionPacket audit={externalAudit} />);
+
+    expect(screen.getByText('From Pulse CLI')).toBeInTheDocument();
+    const requester = screen.getByTestId('action-plan-requester');
+    expect(within(requester).getByText('Requested by')).toBeInTheDocument();
+    expect(within(requester).getByText('Claude Code Propose')).toBeInTheDocument();
+    expect(within(requester).getByText('API token')).toBeInTheDocument();
+    expect(within(requester).getByText('alice')).toBeInTheDocument();
+    expect(within(requester).queryByText(/api-token:tok-99/)).toBeNull();
+
+    const blastRadius = screen.getByTestId('action-plan-blast-radius');
+    expect(within(blastRadius).getByText('Potentially affected')).toBeInTheDocument();
+    expect(within(blastRadius).getByText('3 resources affected')).toBeInTheDocument();
+    expect(within(blastRadius).getByText('Checkout API')).toBeInTheDocument();
+    expect(within(blastRadius).getByText('docker:container:worker')).toBeInTheDocument();
+  });
+
+  it('renders user requesters without an API token badge and supports external agent origins', () => {
+    const userAudit: ActionAuditRecord = {
+      ...audit,
+      origin: { surface: 'api_token' },
+      request: {
+        ...audit.request,
+        requestedBy: 'operator',
+        actor: {
+          subjectId: 'operator',
+          kind: 'user',
+          credentialId: 'session:123',
+          orgId: 'org-1',
+        },
+      },
+    };
+
+    render(() => <ActionDecisionPacket audit={userAudit} />);
+
+    expect(screen.getByText('From external agent')).toBeInTheDocument();
+    const requester = screen.getByTestId('action-plan-requester');
+    expect(within(requester).getByText('operator')).toBeInTheDocument();
+    expect(within(requester).queryByText('API token')).toBeNull();
+  });
 });
