@@ -3,8 +3,10 @@ package server
 import (
 	"math"
 	"os"
+	"path"
 	"path/filepath"
 	"runtime/debug"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -12,14 +14,12 @@ import (
 )
 
 const (
-	cgroupV2Root    = "/sys/fs/cgroup"
-	procMeminfoPath = "/proc/meminfo"
 	// cgroupV1NoLimit is the value cgroup v1 reports when no memory limit is
 	// set (PAGE_SIZE-rounded max int64).
 	cgroupV1NoLimit = int64(9223372036854771712)
 	// memoryLimitHeadroomPercent is how much of the detected memory limit the
 	// Go runtime may use. The remainder absorbs non-heap memory the GC cannot
-	// control: goroutine stacks, mmap'd files, and CGO allocations.
+	// control, such as mmap'd files and CGO allocations.
 	memoryLimitHeadroomPercent = 90
 	// minimumUsableMemoryLimit guards against nonsense limit values; below
 	// this a soft limit would just make the GC thrash.
@@ -77,18 +77,23 @@ func applyRuntimeMemoryLimit() {
 }
 
 func readRuntimeMemoryLimit() (int64, string, bool) {
-	return readRuntimeMemoryLimitFrom(
-		cgroupV2Root,
-		"/sys/fs/cgroup/memory",
-		"/sys/fs/cgroup/memory/memory.limit_in_bytes",
-		"/proc/self/cgroup",
-		procMeminfoPath,
-	)
+	return readRuntimeMemoryLimitFrom(memoryLimitPaths{
+		cgroup:       "/proc/self/cgroup",
+		mountInfo:    "/proc/self/mountinfo",
+		meminfo:      "/proc/meminfo",
+		legacyV2Root: "/sys/fs/cgroup",
+		legacyV1Root: "/sys/fs/cgroup/memory",
+	})
 }
 
-func readRuntimeMemoryLimitFrom(v2Root, v1Root, v1FallbackFile, procSelfCgroup, meminfoPath string) (int64, string, bool) {
-	cgroupLimit, hasCgroup := readCgroupMemoryLimitFrom(v2Root, v1Root, v1FallbackFile, procSelfCgroup)
-	meminfoTotal, hasMeminfo := readProcMeminfoTotal(meminfoPath)
+type memoryLimitPaths struct {
+	cgroup, mountInfo, meminfo string
+	legacyV2Root, legacyV1Root string
+}
+
+func readRuntimeMemoryLimitFrom(paths memoryLimitPaths) (int64, string, bool) {
+	cgroupLimit, hasCgroup := readCgroupMemoryLimitFrom(paths)
+	meminfoTotal, hasMeminfo := readProcMeminfoTotal(paths.meminfo)
 	return selectRuntimeMemoryLimit(cgroupLimit, hasCgroup, meminfoTotal, hasMeminfo)
 }
 
@@ -114,16 +119,40 @@ func selectRuntimeMemoryLimit(cgroupLimit int64, hasCgroup bool, meminfoTotal in
 	}
 }
 
-func readCgroupMemoryLimitFrom(v2Root, v1Root, v1FallbackFile, procSelfCgroup string) (int64, bool) {
-	if limit, ok := readCgroupV2MemoryLimit(v2Root, procSelfCgroup); ok {
-		return limit, true
+func readCgroupMemoryLimitFrom(paths memoryLimitPaths) (int64, bool) {
+	membership, membershipErr := os.ReadFile(paths.cgroup)
+	v2Path := cgroupV2PathFrom(string(membership))
+	v1Path := cgroupV1MemoryPathFrom(string(membership))
+
+	var lowest int64
+	consider := func(mount cgroupMemoryMount) {
+		memberPath := v2Path
+		if mount.v1 {
+			memberPath = v1Path
+			if membershipErr != nil && mount.root == "/" {
+				// Preserve the best-effort v1 root read if membership is
+				// unavailable. A delegated subtree is not a safe substitute.
+				memberPath = "/"
+			}
+		}
+		if limit, ok := mount.readLimit(memberPath); ok && (lowest == 0 || limit < lowest) {
+			lowest = limit
+		}
 	}
-	if limit, ok := readCgroupV1HierarchyMemoryLimit(v1Root, procSelfCgroup); ok {
-		return limit, true
+
+	if raw, err := os.ReadFile(paths.mountInfo); err == nil {
+		for line := range strings.SplitSeq(string(raw), "\n") {
+			if mount, ok := parseCgroupMemoryMount(line); ok {
+				consider(mount)
+			}
+		}
+	} else {
+		// Keep the conventional layout as a fallback for environments
+		// without mountinfo. Do not guess a mapping when it is available.
+		consider(cgroupMemoryMount{root: "/", point: paths.legacyV2Root})
+		consider(cgroupMemoryMount{root: "/", point: paths.legacyV1Root, v1: true})
 	}
-	// Preserve the original best-effort fallback for unusual v1 mounts that
-	// expose the controller limit but not a readable /proc/self/cgroup.
-	return readCgroupV1MemoryLimit(v1FallbackFile)
+	return lowest, lowest != 0
 }
 
 func readProcMeminfoTotal(path string) (int64, bool) {
@@ -170,140 +199,136 @@ func parseProcMeminfoTotal(content string) (int64, bool) {
 	return 0, false
 }
 
-// readCgroupV2MemoryLimit resolves the process's own cgroup from
-// procSelfCgroup and walks from that directory up to the cgroup root, taking
-// the smallest memory.max on the path. The limit may sit on any ancestor
-// (systemd applies MemoryMax to the service cgroup; container runtimes to the
-// container root).
-func readCgroupV2MemoryLimit(root, procSelfCgroup string) (int64, bool) {
-	data, err := os.ReadFile(procSelfCgroup)
-	if err != nil {
+type cgroupMemoryMount struct {
+	root, point string // controller subtree in cgroup space, and its mount point
+	v1          bool
+}
+
+// mountinfo escapes spaces, tabs, newlines and literal backslashes in paths.
+var mountInfoUnescape = strings.NewReplacer(`\040`, " ", `\011`, "\t", `\012`, "\n", `\134`, "\\")
+
+func parseCgroupMemoryMount(line string) (cgroupMemoryMount, bool) {
+	head, tail, ok := strings.Cut(line, " - ")
+	if !ok {
+		return cgroupMemoryMount{}, false
+	}
+	fs := strings.SplitN(tail, " ", 3)
+	if len(fs) < 3 {
+		return cgroupMemoryMount{}, false
+	}
+	v1 := fs[0] == "cgroup" && slices.Contains(strings.Split(fs[2], ","), "memory")
+	if fs[0] != "cgroup2" && !v1 {
+		return cgroupMemoryMount{}, false
+	}
+	fields := strings.SplitN(head, " ", 6)
+	if len(fields) < 6 {
+		return cgroupMemoryMount{}, false
+	}
+	root := absoluteCgroupPath(mountInfoUnescape.Replace(fields[3]))
+	point := absoluteCgroupPath(mountInfoUnescape.Replace(fields[4]))
+	return cgroupMemoryMount{root: root, point: point, v1: v1}, root != "" && point != "" && path.Clean(point) == point
+}
+
+// readLimit maps a membership path relative to the mounted subtree, then
+// takes the tightest limit visible on that path, including the mount root.
+func (m cgroupMemoryMount) readLimit(memberPath string) (int64, bool) {
+	if memberPath == "" || m.point == "" {
 		return 0, false
 	}
-	rel := cgroupV2PathFrom(string(data))
-	if rel == "" {
-		return 0, false
+	rel := "."
+	if memberPath != m.root {
+		// Match whole path components before interpreting any ".." from
+		// the cgroup namespace. Only the suffix below this mount is local.
+		suffix, ok := strings.CutPrefix(memberPath, strings.TrimSuffix(m.root, "/")+"/")
+		if ok && filepath.IsLocal(suffix) && path.Clean(suffix) == suffix {
+			rel = suffix
+		} else if !isInheritedCgroupAncestor(m.root, memberPath) {
+			return 0, false
+		}
 	}
 
-	lowest := int64(math.MaxInt64)
-	dir := filepath.Join(root, rel)
-	for {
-		if raw, err := os.ReadFile(filepath.Join(dir, "memory.max")); err == nil {
+	limitFile, unlimited := "memory.max", int64(math.MaxInt64)
+	if m.v1 {
+		limitFile, unlimited = "memory.limit_in_bytes", cgroupV1NoLimit
+	}
+	lowest := unlimited
+	point := filepath.Clean(m.point)
+	for dir := filepath.Join(point, rel); ; dir = filepath.Dir(dir) {
+		if raw, err := os.ReadFile(filepath.Join(dir, limitFile)); err == nil {
 			if v, ok := parseCgroupMemoryValue(string(raw)); ok && v < lowest {
 				lowest = v
 			}
 		}
-		if dir == root {
+		if dir == point {
 			break
 		}
-		parent := filepath.Dir(dir)
-		if parent == dir {
-			break
-		}
-		dir = parent
 	}
-
-	if lowest == math.MaxInt64 {
+	if lowest == unlimited {
 		return 0, false
 	}
 	return lowest, true
 }
 
-// cgroupV2PathFrom extracts the unified-hierarchy path from /proc/self/cgroup
-// content ("0::/system.slice/pulse.service" -> "system.slice/pulse.service").
-// A process in a cgroup namespace commonly sees its own cgroup as "0::/";
-// filepath's "." preserves that valid root path without conflating it with a
-// missing unified-hierarchy entry.
+// An inherited mount can show a root of "/.." (cgroup_namespaces(7)).
+// A root made only of parent components encloses the member if it goes up
+// farther than the member path does. The missing intermediate directory
+// names prevent mapping the member to disk, so only the mount root applies.
+func isInheritedCgroupAncestor(root, member string) bool {
+	rootUp, rootRest := splitCgroupNamespaceParents(root)
+	memberUp, memberRest := splitCgroupNamespaceParents(member)
+	if rootRest != "" || rootUp <= memberUp {
+		return false
+	}
+	// Do not infer ancestry from a malformed member suffix. "/" is valid
+	// on its own, but not as a trailing separator after parent components.
+	switch memberRest {
+	case "":
+		return memberUp > 0
+	case "/":
+		return memberUp == 0
+	default:
+		return path.Clean(memberRest) == memberRest
+	}
+}
+
+func splitCgroupNamespaceParents(p string) (up int, rest string) {
+	for p == "/.." || strings.HasPrefix(p, "/../") {
+		up++
+		p = p[len("/.."):]
+	}
+	return up, p
+}
+
+// Preserve the kernel's path verbatim: ".." can be part of the namespace
+// coordinates, and a literal "/" is a valid membership or mount root.
+func absoluteCgroupPath(s string) string {
+	if !strings.HasPrefix(s, "/") {
+		return ""
+	}
+	return s
+}
+
+// cgroupV2PathFrom extracts the unified hierarchy entry in /proc/self/cgroup.
 func cgroupV2PathFrom(content string) string {
-	for _, line := range strings.Split(content, "\n") {
-		if !strings.HasPrefix(line, "0::") {
-			continue
+	for line := range strings.SplitSeq(content, "\n") {
+		if memberPath, ok := strings.CutPrefix(line, "0::"); ok {
+			return absoluteCgroupPath(memberPath)
 		}
-		path := strings.TrimSpace(strings.TrimPrefix(line, "0::"))
-		if path == "/" {
-			return "."
-		}
-		return strings.TrimPrefix(path, "/")
 	}
 	return ""
-}
-
-// readCgroupV1HierarchyMemoryLimit resolves the process's memory-controller
-// path and walks its ancestors just as the v2 reader does. Reading only the
-// controller root misses a tighter systemd MemoryLimit/MemoryMax applied to a
-// service cgroup on v1 hosts.
-func readCgroupV1HierarchyMemoryLimit(root, procSelfCgroup string) (int64, bool) {
-	data, err := os.ReadFile(procSelfCgroup)
-	if err != nil {
-		return 0, false
-	}
-	rel := cgroupV1MemoryPathFrom(string(data))
-	if rel == "" {
-		return 0, false
-	}
-
-	lowest := int64(math.MaxInt64)
-	dir := filepath.Join(root, rel)
-	for {
-		if raw, err := os.ReadFile(filepath.Join(dir, "memory.limit_in_bytes")); err == nil {
-			if v, ok := parseCgroupMemoryValue(string(raw)); ok && v < cgroupV1NoLimit && v < lowest {
-				lowest = v
-			}
-		}
-		if dir == root {
-			break
-		}
-		parent := filepath.Dir(dir)
-		if parent == dir {
-			break
-		}
-		dir = parent
-	}
-
-	if lowest == math.MaxInt64 {
-		return 0, false
-	}
-	return lowest, true
 }
 
 // cgroupV1MemoryPathFrom extracts the path for the v1 memory controller from
 // /proc/self/cgroup. Controllers may be mounted together, so "memory" can be
 // one item in a comma-separated controller field.
 func cgroupV1MemoryPathFrom(content string) string {
-	for _, line := range strings.Split(content, "\n") {
+	for line := range strings.SplitSeq(content, "\n") {
 		fields := strings.SplitN(line, ":", 3)
-		if len(fields) != 3 {
-			continue
+		if len(fields) == 3 && slices.Contains(strings.Split(fields[1], ","), "memory") {
+			return absoluteCgroupPath(fields[2])
 		}
-		hasMemory := false
-		for _, controller := range strings.Split(fields[1], ",") {
-			if strings.TrimSpace(controller) == "memory" {
-				hasMemory = true
-				break
-			}
-		}
-		if !hasMemory {
-			continue
-		}
-		path := strings.TrimSpace(fields[2])
-		if path == "/" {
-			return "."
-		}
-		return strings.TrimPrefix(path, "/")
 	}
 	return ""
-}
-
-func readCgroupV1MemoryLimit(limitFile string) (int64, bool) {
-	raw, err := os.ReadFile(limitFile)
-	if err != nil {
-		return 0, false
-	}
-	v, ok := parseCgroupMemoryValue(string(raw))
-	if !ok || v >= cgroupV1NoLimit {
-		return 0, false
-	}
-	return v, true
 }
 
 // parseCgroupMemoryValue parses a cgroup memory file value. "max" (v2's

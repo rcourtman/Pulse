@@ -80,6 +80,7 @@ export const useInfrastructureConfiguredNodesState = ({
 
   let pendingLoadNodesRetry: ReturnType<typeof setTimeout> | undefined;
   let loadNodesRetryAttempts = 0;
+  let memberAddressSaveVersion = 0;
 
   const clearLoadNodesRetry = () => {
     if (!pendingLoadNodesRetry) return;
@@ -88,9 +89,12 @@ export const useInfrastructureConfiguredNodesState = ({
   };
 
   const loadNodes = async () => {
+    const addressVersion = memberAddressSaveVersion;
     try {
       clearLoadNodesRetry();
       const nodesList = await NodesAPI.getNodes();
+      // An earlier inventory read cannot confirm a subsequently saved address.
+      if (addressVersion !== memberAddressSaveVersion) return;
       const nodeResources = agentResources();
       const nodesWithStatus = nodesList.map((node) => {
         const stateNode = matchConfiguredNodeToResource(node, nodeResources);
@@ -118,6 +122,7 @@ export const useInfrastructureConfiguredNodesState = ({
       loadNodesRetryAttempts = 0;
       setNodes(nodesWithStatus);
     } catch (error) {
+      if (addressVersion !== memberAddressSaveVersion) return;
       logger.error('Failed to load nodes', error);
       if (
         error instanceof Error &&
@@ -321,6 +326,7 @@ export const useInfrastructureConfiguredNodesState = ({
           clusterEndpointTrustOverrides?: ClusterEndpointTrustOverridePayload[];
           clusterNodeDisplayNameOverrides?: ClusterNodeDisplayNameOverridePayload[];
         };
+        if (clusterEndpointOverrides?.length) memberAddressSaveVersion++;
         setNodes(
           nodes().map((node) => {
             if (node.id !== existingNode.id) return node;
@@ -349,7 +355,12 @@ export const useInfrastructureConfiguredNodesState = ({
         );
         // Read back the effective scoped TLS policy instead of guessing how
         // primary/member URL aliases resolve on the server.
-        if (clusterEndpointTrustOverrides?.length || 'fingerprint' in nodeData) await loadNodes();
+        if (
+          clusterEndpointOverrides?.length ||
+          clusterEndpointTrustOverrides?.length ||
+          'fingerprint' in nodeData
+        )
+          await loadNodes();
         notificationStore.success('Node updated successfully');
       } else {
         await NodesAPI.addNode(nodeData as NodeConfig);

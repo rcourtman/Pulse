@@ -91,6 +91,7 @@ describe('troubleshooting workflow entry', () => {
         'Unraid reports missing disks in empty slots:',
         ['/docs/TROUBLESHOOTING#unraid-reports-missing-disks-in-empty-slots'],
       ],
+      ['Pulse stopped and may have run out of memory:', ['#after-a-memory-cgroup-kill']],
       [
         'Dashboard is stuck on “Connecting to Pulse” or stops updating:',
         ['#health-is-green-but-the-dashboard-is-stalled'],
@@ -213,6 +214,26 @@ describe('troubleshooting workflow entry', () => {
     );
     expect(prose(reporting)).toContain('a working Pulse Agent view does not prove API recovery');
     expect(prose(memory)).toContain('Guest usage and database size are different measurements');
+  });
+
+  it('leads from a suspected LXC memory stop to the host record and then ordinary collection', () => {
+    const link = workflow(entry(), 'Pulse stopped and may have run out of memory:').querySelector(
+      'a',
+    )!;
+    const article = renderGuide('TROUBLESHOOTING');
+    const heading = article.querySelector(link.hash)!;
+    const evidence = heading.nextElementSibling as HTMLElement;
+    const collection = evidence.nextElementSibling as HTMLElement;
+    expect(evidence.tagName).toBe('P');
+    expect(prose(evidence)).toContain("Proxmox host's existing kernel log at the stop time");
+    expect(prose(evidence)).toContain('naming Pulse in the affected group');
+    expect(prose(evidence)).toContain('A high peak or oom count alone does not');
+    expect(prose(evidence)).toContain('in that group or its children, not necessarily Pulse');
+    expect(collection.querySelector('a')?.getAttribute('href')).toBe(
+      '/docs/METRICS_HISTORY#read-a-history-panel',
+    );
+    expect(prose(collection)).toContain('Use normal polling for this check.');
+    expect(prose(collection)).toContain('Do not restart again or run a test load.');
   });
 
   it('assigns every entry link to a verified shipped guide', () => {

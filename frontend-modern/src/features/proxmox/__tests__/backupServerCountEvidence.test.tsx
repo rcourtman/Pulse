@@ -160,7 +160,7 @@ describe('PBS server count identity', () => {
     ));
     await screen.findByRole('columnheader', { name: 'Backups' });
     const table = container.querySelector('[data-proxmox-backups-table="servers"]') as HTMLElement;
-    await waitFor(() => expect(displayedCounts(table)).toEqual(['0', '2']));
+    await waitFor(() => expect(displayedCounts(table)).toEqual(['0 listed', '2 listed']));
     const disclosures = within(table).getAllByRole('button', { name: /details/i });
     await fireEvent.click(disclosures[0]);
     await fireEvent.click(screen.getByRole('button', { name: 'Show server' }));
@@ -170,7 +170,7 @@ describe('PBS server count identity', () => {
     // the count producer and no fabricated rendered rows in this consumer test.
     payload = inventory(entry('main'), entry('main', 'tank', '2'), entry('main', 'tank', '3'));
     await vi.advanceTimersByTimeAsync(30_000);
-    await waitFor(() => expect(displayedCounts(table)).toEqual(['3', '0']));
+    await waitFor(() => expect(displayedCounts(table)).toEqual(['3 listed', '0 listed']));
     expect(screen.getByTestId('pbs-count-owner-detail')).toBe(detail);
 
     failed = true;
@@ -186,7 +186,7 @@ describe('PBS server count identity', () => {
     failed = false;
     payload = inventory();
     await fireEvent.click(screen.getByRole('button', { name: 'Retry PBS inventory' }));
-    await waitFor(() => expect(displayedCounts(table)).toEqual(['0', '0']));
+    await waitFor(() => expect(displayedCounts(table)).toEqual(['0 listed', '0 listed']));
     expect(apiFetchMock.mock.calls.filter(([url]) => url === '/api/backups/pbs')).toHaveLength(4);
     expect(
       apiFetchMock.mock.calls.every(([url]) =>

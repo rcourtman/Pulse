@@ -348,14 +348,14 @@ describe('ProxmoxBackupsTable', () => {
         .querySelectorAll('td')[index].textContent;
     };
     await within(table).findByText('Unavailable');
-    await waitFor(() => expect(backupCount()).toBe('1'));
+    await waitFor(() => expect(backupCount()).toBe('1 listed'));
     await screen.findAllByText('Verified');
     expect(container.innerHTML).not.toContain('PRIVATE_PROVIDER_ERROR_SENTINEL');
     expect(apiFetchMock.mock.calls.filter(([url]) => url === '/api/backups/pbs')).toHaveLength(1);
 
     setServers([pbsServerResource]);
     await waitFor(() => expect(within(table).queryByText('Unavailable')).not.toBeInTheDocument());
-    expect(backupCount()).toBe('1');
+    expect(backupCount()).toBe('1 listed');
     expect(apiFetchMock.mock.calls.filter(([url]) => url === '/api/backups/pbs')).toHaveLength(1);
   });
 
@@ -1460,6 +1460,88 @@ describe('By date qualifies restore-point totals with provider collection eviden
     expect(sourceCalls('pve')).toHaveLength(2);
     expect(sourceCalls('pbs')).toHaveLength(1);
   });
+
+  it('does not claim empty backup history before the first protection read settles', async () => {
+    const pending = deferred<ProtectionPosturesResponse>();
+    apiFetchMock.mockImplementation((url: string) =>
+      Promise.resolve(jsonResponse(url.endsWith('/pve') ? emptyPVE : emptyPBS)),
+    );
+    apiFetchJSONMock.mockReturnValue(pending.promise);
+    window.history.replaceState({}, '', '/proxmox/backups/date');
+    mountBackupReadState();
+
+    expect(await screen.findByText('Backup list not confirmed')).toBeVisible();
+    expect(screen.getByText(/Pulse is still checking protection status/)).toBeVisible();
+    expect(screen.getByText('0 completed restore points read')).toBeVisible();
+    expect(screen.getByText('0 restore points read', { exact: true })).toBeVisible();
+    expect(screen.queryByText('No backups yet')).not.toBeInTheDocument();
+
+    pending.resolve({ data: [posture], policy: protectionPolicy });
+    expect(await screen.findByText('No backups yet')).toBeVisible();
+    expect(screen.queryByText('0 completed restore points read')).not.toBeInTheDocument();
+  });
+
+  it('does not claim empty backup history after the protection read fails and retries it alone', async () => {
+    apiFetchMock.mockImplementation((url: string) =>
+      Promise.resolve(jsonResponse(url.endsWith('/pve') ? emptyPVE : emptyPBS)),
+    );
+    apiFetchJSONMock.mockRejectedValueOnce(new Error('Synthetic protection read failed'));
+    window.history.replaceState({}, '', '/proxmox/backups/date');
+    mountBackupReadState();
+
+    expect(await screen.findByText('Backup list not confirmed')).toBeVisible();
+    expect(
+      screen.getByText(/Protection status is unavailable.*list may be incomplete/),
+    ).toBeVisible();
+    expect(screen.getByText('0 completed restore points read')).toBeVisible();
+    expect(screen.getByText('0 restore points read', { exact: true })).toBeVisible();
+    expect(screen.queryByText('Backup list incomplete')).not.toBeInTheDocument();
+    expect(screen.queryByText('No backups yet')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Retry .* inventory/ })).not.toBeInTheDocument();
+
+    apiFetchJSONMock.mockResolvedValue({ data: [posture], policy: protectionPolicy });
+    await fireEvent.click(screen.getByRole('button', { name: 'Retry protection status' }));
+    expect(await screen.findByText('No backups yet')).toBeVisible();
+    expect(sourceCalls('pve')).toHaveLength(1);
+    expect(sourceCalls('pbs')).toHaveLength(1);
+    expect(apiFetchJSONMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('keeps a readable point and distinguishes day and search misses after the protection read fails', async () => {
+    apiFetchMock.mockImplementation((url: string) =>
+      Promise.resolve(jsonResponse(url.endsWith('/pve') ? readPvePayload : emptyPBS)),
+    );
+    apiFetchJSONMock.mockRejectedValue(new Error('Synthetic protection read failed'));
+    window.history.replaceState({}, '', '/proxmox/backups/date?day=2026-01-01');
+    mountBackupReadState();
+
+    expect(await screen.findByText('No restore points listed for Jan 1, 2026')).toBeVisible();
+    expect(screen.getByText('0 of 1 restore point read', { exact: true })).toBeVisible();
+    expect(screen.queryByText(/A failed backup usually leaves none/)).not.toBeInTheDocument();
+
+    const search = screen.getByPlaceholderText(/search backups by workload/i);
+    fireEvent.input(search, { target: { value: 'no-matching-guest' } });
+    expect(await screen.findByText('No recoverable artifacts match current filters')).toBeVisible();
+    expect(screen.getByText(/Change search or filters. Pulse has not confirmed/)).toBeVisible();
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Clear filters' }));
+    await waitFor(() => expect(recoverableRows()).toHaveLength(1));
+    expect(recoverableRows()[0]).toHaveTextContent('pbs-docker');
+    expect(screen.getByText('1 completed restore point read')).toBeVisible();
+    expect(screen.queryByText('No backups yet')).not.toBeInTheDocument();
+  });
+
+  it('does not wait for a protection read when there are no workloads to check', async () => {
+    apiFetchMock.mockImplementation((url: string) =>
+      Promise.resolve(jsonResponse(url.endsWith('/pve') ? emptyPVE : emptyPBS)),
+    );
+    window.history.replaceState({}, '', '/proxmox/backups/date');
+    renderInRouter(() => <ProxmoxBackupsTable emptyIcon={<span />} />);
+
+    expect(await screen.findByText('No backups yet')).toBeVisible();
+    expect(screen.queryByText('Backup list not confirmed')).not.toBeInTheDocument();
+    expect(apiFetchJSONMock).not.toHaveBeenCalled();
+  });
 });
 
 describe('backup read recovery keeps keyboard position', () => {
@@ -1833,7 +1915,7 @@ describe('independent Proxmox backup inventory reads', () => {
     await screen.findByText('No backups yet');
     expect(screen.queryByText(/inventory is unavailable/)).not.toBeInTheDocument();
     expect(
-      within(serverTable() as HTMLElement).getByText('0', { exact: true }),
+      within(serverTable() as HTMLElement).getByText('0 listed', { exact: true }),
     ).toBeInTheDocument();
   });
 
@@ -1851,7 +1933,7 @@ describe('independent Proxmox backup inventory reads', () => {
     await screen.findByText('No backups yet');
     expect(serverTable()).not.toHaveTextContent('Loading');
     expect(
-      within(serverTable() as HTMLElement).getByText('0', { exact: true }),
+      within(serverTable() as HTMLElement).getByText('0 listed', { exact: true }),
     ).toBeInTheDocument();
   });
 
@@ -1935,7 +2017,7 @@ describe('independent Proxmox backup inventory reads', () => {
     await screen.findByText('No backups yet');
     expect(serverTable()).toBe(originalServerTable);
     expect(
-      within(serverTable() as HTMLElement).getByText('0', { exact: true }),
+      within(serverTable() as HTMLElement).getByText('0 listed', { exact: true }),
     ).toBeInTheDocument();
   });
 
@@ -1958,7 +2040,7 @@ describe('independent Proxmox backup inventory reads', () => {
       expect(serverTable()).toHaveTextContent('pbs-main');
       expect(serverTable()).toHaveTextContent('40.0%');
       if (failed === 'pve') {
-        await within(serverTable() as HTMLElement).findByText('0', { exact: true });
+        await within(serverTable() as HTMLElement).findByText('0 listed', { exact: true });
       } else {
         expect(serverTable()).toHaveTextContent('Unavailable');
       }
@@ -1984,7 +2066,7 @@ describe('independent Proxmox backup inventory reads', () => {
       // Read the count from the body: the title strip counts servers too.
       expect(
         within(serverTable().querySelector('tbody') as HTMLElement).getByText(
-          failed === 'pve' ? '0' : '1',
+          failed === 'pve' ? '0 listed' : '1 listed',
           { exact: true },
         ),
       ).toBeInTheDocument();
@@ -2064,7 +2146,7 @@ describe('independent Proxmox backup inventory reads', () => {
     await old.promise;
     await waitFor(() => expect(recoverableRows()).toHaveLength(0));
     expect(
-      within(serverTable() as HTMLElement).getByText('0', { exact: true }),
+      within(serverTable() as HTMLElement).getByText('0 listed', { exact: true }),
     ).toBeInTheDocument();
   });
 
@@ -3643,8 +3725,109 @@ describe('PBS inventory state column', () => {
     expect(cells[1]).toHaveTextContent('40.0%');
     expect(cells[1]).toHaveTextContent('400 B / 1000 B');
     setState('available');
-    expect(cells[3]).toHaveTextContent(/^0$/);
+    expect(cells[3]).toHaveTextContent(/^0 listed$/);
     expect(countColumn.style.width).toBe('13%');
+  });
+
+  it('labels a known PBS reader gap without dropping its listed entries or marking a namesake', async () => {
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
+    const reader = {
+      ...pbsServerResource,
+      pbs: {
+        ...pbsServerResource.pbs!,
+        datastores: [
+          ...(pbsServerResource.pbs!.datastores ?? []),
+          { name: 'archive', total: 10_000, used: 2_000 },
+        ],
+      },
+    };
+    const peer = {
+      ...pbsServerResource,
+      id: 'peer-pbs',
+      name: 'peer-pbs',
+      displayName: reader.name,
+    };
+    const posture = protectionPosture(workloadResource.id);
+    const pbsHistory = {
+      ...posture.providerStates[0],
+      provider: 'proxmox-pbs',
+      source: 'pbs-backup-enumeration',
+      scope: reader.name,
+    } as const;
+    const setHistory = (historyCompleteness: 'complete' | 'partial' | 'unavailable') => {
+      apiFetchJSONMock.mockResolvedValue({
+        data: [
+          {
+            ...posture,
+            providerStates: [
+              { ...pbsHistory, historyCompleteness },
+              // An unrelated PVE reader may share a label with a PBS one.
+              {
+                ...pbsHistory,
+                provider: 'proxmox-pve',
+                source: 'pve-backup-enumeration',
+                scope: peer.name,
+                historyCompleteness: 'partial',
+              },
+            ],
+          },
+        ],
+        policy: protectionPolicy,
+      });
+    };
+    try {
+      apiFetchMock.mockImplementation((url: string) =>
+        Promise.resolve(jsonResponse(url.endsWith('/pbs') ? pbsPayload : emptyPVE)),
+      );
+      setHistory('partial');
+      renderInRouter(() => (
+        <ProxmoxBackupsTable
+          emptyIcon={<span />}
+          workloads={[workloadResource]}
+          servers={[reader, peer]}
+        />
+      ));
+      const main = await screen.findByRole('button', {
+        name: 'Expand details for pbs-main · datastore main',
+      });
+      const other = screen.getByRole('button', {
+        name: 'Expand details for peer-pbs · datastore main',
+      });
+      const archive = screen.getByRole('button', {
+        name: 'Expand details for pbs-main · datastore archive',
+      });
+      const expectGap = (toggle: HTMLElement, count: number) => {
+        const row = toggle.closest('tr')!;
+        expect(within(row).getByText(`${count} listed`)).toBeVisible();
+        expect(within(row).getByText('History gap')).toBeVisible();
+      };
+      await waitFor(() => expectGap(main, 1));
+      expectGap(archive, 0);
+      expect(within(other.closest('tr')!).getByText('0 listed')).toBeVisible();
+      expect(within(other.closest('tr')!).queryByText('History gap')).toBeNull();
+      expect(within(main.closest('tr')!).getByText('40.0%')).toBeVisible();
+
+      fireEvent.click(archive);
+      const detail = screen.getByRole('region', { name: 'Selected PBS datastore' });
+      const gap = 'Backup history is incomplete for this PBS connection.';
+      expect(detail).toHaveTextContent(`0 listed · ${gap}`);
+      expect(detail).toHaveTextContent('They do not prove a guest is protected.');
+
+      setHistory('unavailable');
+      await vi.advanceTimersByTimeAsync(30_000);
+      expectGap(main, 1);
+      expect(detail).toHaveTextContent(`0 listed · ${gap}`);
+
+      setHistory('complete');
+      await vi.advanceTimersByTimeAsync(30_000);
+      expect(screen.getByRole('region', { name: 'Selected PBS datastore' })).toBe(detail);
+      expect(detail).toHaveTextContent('0 listed');
+      expect(detail).not.toHaveTextContent(gap);
+      expect(within(main.closest('tr')!).queryByText('History gap')).toBeNull();
+      expect(sourceCalls('pbs')).toHaveLength(3);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 

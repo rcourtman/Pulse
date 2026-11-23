@@ -190,6 +190,75 @@ describe('SSO editor registration authority', () => {
     readOnlyRequests();
   });
 
+  it('carries the OIDC registration step from the draft to the saved callback control', async () => {
+    const canonical = 'https://pulse.example.test/edge/callback?tenant=ops%2fwest';
+    const stale = 'https://different.example.test/callback';
+    const withoutCallback = {
+      id: 'legacy',
+      name: 'Without callback',
+      type: 'oidc',
+      enabled: false,
+      priority: 0,
+    };
+    const savedProvider = {
+      ...withoutCallback,
+      id: 'new-provider',
+      name: 'Fleet login',
+      oidcCallbackUrl: canonical,
+    };
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    const clipboard = Object.getOwnPropertyDescriptor(navigator, 'clipboard');
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+    let created = false;
+    fetchMock.mockImplementation(async (url: string, options?: RequestInit) => {
+      if (url !== '/api/security/sso/providers') throw new Error('Unexpected request');
+      if (options?.method === 'POST') {
+        created = true;
+        return json({ ...savedProvider, oidcCallbackUrl: stale });
+      }
+      return json({ providers: created ? [savedProvider, withoutCallback] : [withoutCallback] });
+    });
+    try {
+      render(() => <SSOProvidersPanel />);
+      const add = await screen.findByRole('button', { name: 'Add OIDC' });
+      await waitFor(() => expect(add).toBeEnabled());
+      const unavailable = screen.getByText(/No Callback \/ Redirect URL available/);
+      expect(unavailable).toBeVisible();
+      expect(screen.queryByText(/Register this URL as a redirect URI/)).toBeNull();
+      fireEvent.click(add);
+      const draft = within(screen.getByRole('dialog', { name: 'Add OIDC provider' }));
+      expect(draft.getByText(/Create the provider in Pulse/)).toHaveTextContent(
+        'Then copy its Callback / Redirect URL from the saved provider card and register it with your identity provider.',
+      );
+      expect(draft.queryByRole('button', { name: 'Copy callback / redirect URL' })).toBeNull();
+      fireEvent.input(draft.getByLabelText('Provider Name'), { target: { value: 'Fleet login' } });
+      fireEvent.input(draft.getByLabelText('Issuer URL'), {
+        target: { value: 'https://identity.example.test/fleet' },
+      });
+      fireEvent.input(draft.getByLabelText('Client ID'), { target: { value: 'synthetic-fleet' } });
+      fireEvent.click(draft.getByRole('button', { name: 'Create Provider' }));
+
+      const copy = await screen.findByRole('button', { name: 'Copy callback / redirect URL' });
+      expect(copy).toHaveTextContent(canonical);
+      expect(copy).toHaveAccessibleDescription(
+        'Register this URL as a redirect URI in your identity provider before testing sign-in.',
+      );
+      expect(screen.queryByText(stale)).toBeNull();
+      expect(screen.getByText(/No Callback \/ Redirect URL available/)).toBeVisible();
+      expect(screen.getAllByText(/Register this URL as a redirect URI/)).toHaveLength(1);
+      fireEvent.click(copy);
+      await waitFor(() => expect(writeText).toHaveBeenCalledExactlyOnceWith(canonical));
+      expect(fetchMock.mock.calls.map(([, options]) => options?.method ?? 'GET')).toEqual([
+        'GET',
+        'POST',
+        'GET',
+      ]);
+    } finally {
+      if (clipboard) Object.defineProperty(navigator, 'clipboard', clipboard);
+      else Reflect.deleteProperty(navigator, 'clipboard');
+    }
+  });
+
   it.each([undefined, 'https://new.example.test/base/callback?tenant=ops%2fwest'])(
     'uses the current detail callback for OIDC too, including withdrawal: %s',
     async (canonical) => {

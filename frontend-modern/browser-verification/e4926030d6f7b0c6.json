@@ -1,0 +1,35 @@
+{
+  "version": 1,
+  "base_sha": "651537c8569488603e2cf775d73e5a54be840a66",
+  "verified_at": "2026-11-23T04:04:59Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx": "4e43b42f44d6be33bd4c4fd459df09fbc509b2ac939a4e0aaa9683864bcf710f"
+  },
+  "routes": [
+    "/proxmox/backups/date",
+    "/proxmox/backups/date?day=2026-11-21"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 960
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Chromium 141.0.7390.37, Playwright 1.56.1: light desktop and dark touch phone, production-mode previews and matched synthetic HTTP inputs; 282 assertions and 22 inspected captures.",
+    "With both inventories accepted and no points listed, pending and failed protection reads no longer say No backups yet or show unqualified totals. Failed reads are distinct from an accepted empty list and a named provider gap.",
+    "A selected day and a search miss retain their counts and give qualified results. On phone, scrolling exposes the full selected-day guidance. The visible local archive keeps its date, row, source, size, disclosure, and verification and guest-thaw limits."
+  ],
+  "interactions": [
+    "Hold and fail the first protection GET; retry by Enter or tap. Only the same protection query repeats, while both inventory reads remain single. Accepted empty and named partial results stay distinct.",
+    "Use the selected day, open mobile Filters, clear the filters, inspect the readable archive, and search for a nonmatching guest. Both Coverage and By date remain discoverable; keyboard retry focus returns to By date."
+  ]
+}

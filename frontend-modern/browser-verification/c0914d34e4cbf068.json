@@ -1,0 +1,40 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "ccf0af72a594a000ddd3bf421389d97b8d10297a",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/AuditLogPanel.tsx",
+    "frontend-modern/src/utils/auditLogPresentation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/AuditLogPanel.tsx": "67f619dc2b8dbf8ddd9b4320ad86805f86727c0682bc7cb73ae39b4e9ef52c4a",
+    "frontend-modern/src/utils/auditLogPresentation.ts": "7ce0e90da877d9b30d6236ea8e9666aa3c00e30bde00b0ec94ff4dbfad6841f6"
+  },
+  "routes": [
+    "/settings/security-audit"
+  ],
+  "states": [
+    "Ordinary Audit Log with synthetic successful and failed events, signed unchecked and unsigned rows",
+    "Completed negative signature check, verified signature on a failed event, and verification request error",
+    "Signature legend and active page-only Verification filter",
+    "Session without Audit Log capability does not mount rows or request them"
+  ],
+  "interactions": [
+    "Read the Settings panel and audit inventory through the production frontend with local fixtures",
+    "Activate the matching Verify actions using desktop keyboard and phone touch, once per chosen row",
+    "Open and close the signature legend; check focus return",
+    "Apply and remove the existing page-only verification filter without another read",
+    "Inspect matched desktop and phone captures, keeping actors, times, details and controls visible"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "verified_at": "2026-11-23T07:28:07Z"
+}

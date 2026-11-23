@@ -487,8 +487,9 @@ func TestCircuitBreaker_Allow(t *testing.T) {
 
 func TestCircuitBreaker_StateDetails(t *testing.T) {
 	t.Run("closed state", func(t *testing.T) {
+		beforeCreate := time.Now()
 		cb := newCircuitBreaker(3, 5*time.Second, 5*time.Minute, 30*time.Second)
-		beforeCreate := time.Now().Add(-time.Millisecond)
+		afterCreate := time.Now()
 
 		state, failures, retryAt, since, lastTransition := cb.stateDetails()
 
@@ -501,11 +502,11 @@ func TestCircuitBreaker_StateDetails(t *testing.T) {
 		if !retryAt.IsZero() {
 			t.Errorf("retryAt = %v, want zero time", retryAt)
 		}
-		if since.Before(beforeCreate) {
-			t.Errorf("since = %v, should be after %v", since, beforeCreate)
+		if since.Before(beforeCreate) || since.After(afterCreate) {
+			t.Errorf("since = %v, want within construction window [%v, %v]", since, beforeCreate, afterCreate)
 		}
-		if lastTransition.Before(beforeCreate) {
-			t.Errorf("lastTransition = %v, should be after %v", lastTransition, beforeCreate)
+		if !lastTransition.Equal(since) {
+			t.Errorf("lastTransition = %v, want initial state timestamp %v", lastTransition, since)
 		}
 	})
 

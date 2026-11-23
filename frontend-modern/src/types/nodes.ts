@@ -26,6 +26,8 @@ export interface ClusterEndpoint {
   pulseReachable?: boolean | null; // Pulse's view: can Pulse reach this endpoint? null/undefined = not yet checked
   lastPulseCheck?: string | null;
   pulseError?: string; // Last error Pulse encountered connecting to this endpoint
+  // Local editor state only. Evidence and TLS fields still describe the last read.
+  awaitingAddressReadback?: boolean;
 }
 
 // Write-only PUT payload entry: sets or clears the connection address Pulse

@@ -20,6 +20,11 @@ export interface WorkloadGuestMetricSeriesOptions {
   parentMemoryTotal?: number;
 }
 
+export type NodeHistoryIdentity = Pick<
+  Node,
+  'id' | 'name' | 'instance' | 'linkedAgentId' | 'metricsTarget'
+>;
+
 export interface WorkloadMetricHistoryReader {
   hasGuestHistory?: (guest: WorkloadGuest) => boolean;
   getGuestMetricSeries: (
@@ -198,7 +203,16 @@ export const getWorkloadChartKeyCandidates = (guest: WorkloadGuest): string[] =>
   return candidates;
 };
 
-export const getNodeChartKeyCandidates = (node: Node): string[] => {
+type NodeChartKey = { resourceType: 'node'; resourceId: string };
+type ChartKeyCandidates = readonly string[] | readonly [NodeChartKey];
+
+export const getNodeChartKeyCandidates = (node: NodeHistoryIdentity): ChartKeyCandidates => {
+  const target = node.metricsTarget;
+  if (target?.resourceType === 'node') {
+    // This exact key does not fall back to any guessed name or legacy alias.
+    return [{ resourceType: 'node', resourceId: target.resourceId.trim() }];
+  }
+
   const candidates: string[] = [];
   pushCandidate(candidates, node.id);
   pushCandidate(candidates, node.linkedAgentId);
@@ -212,6 +226,16 @@ export const getNodeChartKeyCandidates = (node: Node): string[] => {
 };
 
 type ChartDataMap = Record<string, ChartData | undefined> | Map<string, ChartData> | undefined;
+
+class InfrastructureHistoryChartMap extends Map<string, ChartData> {
+  constructor(private readonly nodeData: InfrastructureChartsResponse['nodeData']) {
+    super();
+  }
+
+  getNode(id: string): ChartData | undefined {
+    return id && this.nodeData && Object.hasOwn(this.nodeData, id) ? this.nodeData[id] : undefined;
+  }
+}
 
 const pickLongerSeries = (
   incoming: MetricPoint[] | undefined,
@@ -239,14 +263,12 @@ const mergeInfrastructureChartData = (
   };
 };
 
-// The infrastructure summary reports node, host-agent and Docker-host series
-// in separate maps. Node rows look them up by one key set, so fold the maps
-// together; where a key appears in more than one, each metric keeps the
-// longer series.
+// Keep the original node series alongside legacy keys, for which each
+// metric still uses the longer series when families share a key.
 export const buildInfrastructureHistoryChartMap = (
   response: Pick<InfrastructureChartsResponse, 'nodeData' | 'agentData' | 'dockerHostData'>,
 ): Map<string, ChartData> => {
-  const map = new Map<string, ChartData>();
+  const map = new InfrastructureHistoryChartMap(response.nodeData);
   for (const source of [response.nodeData, response.agentData, response.dockerHostData]) {
     if (!source) continue;
     for (const [id, data] of Object.entries(source)) {
@@ -263,10 +285,22 @@ const readChartData = (source: ChartDataMap, key: string): ChartData | undefined
 };
 
 export const findChartDataForCandidates = (
-  candidates: readonly string[],
+  candidates: ChartKeyCandidates,
   sources: readonly ChartDataMap[],
 ): ChartData | undefined => {
   for (const candidate of candidates) {
+    if (typeof candidate !== 'string') {
+      // Family and ID together identify the series; never substitute a
+      // different family when this exact node series is absent.
+      for (const source of sources) {
+        const data =
+          source instanceof InfrastructureHistoryChartMap
+            ? source.getNode(candidate.resourceId)
+            : undefined;
+        if (data) return data;
+      }
+      return undefined;
+    }
     const normalizedCandidate = normalizeWorkloadChartKey(candidate);
     for (const source of sources) {
       const direct = readChartData(source, candidate);

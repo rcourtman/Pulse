@@ -76,9 +76,9 @@ describe('getAuditVerificationBadgePresentation (branch coverage)', () => {
     });
   });
 
-  it('returns the Error badge for the error status case', () => {
+  it('returns the Check error badge for the error status case', () => {
     expect(getAuditVerificationBadgePresentation({ status: 'error' })).toStrictEqual({
-      label: 'Error',
+      label: 'Check error',
       className: 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200',
     });
   });

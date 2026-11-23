@@ -86,12 +86,12 @@ export function getAuditVerificationBadgePresentation(
       };
     case 'failed':
       return {
-        label: 'Failed',
+        label: 'Check failed',
         className: 'bg-red-100 text-red-800 dark:bg-red-900/25 dark:text-red-200',
       };
     case 'error':
       return {
-        label: 'Error',
+        label: 'Check error',
         className: 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200',
       };
     default:

@@ -59,7 +59,13 @@ export const buildClusterEndpointTrustOverridesPayload = (
   const changed = new Map<string, string>();
   for (const endpoint of endpoints ?? []) {
     const target = endpoint.tlsEndpoint;
-    if (!target || endpoint.usesPrimaryTLS || !target.startsWith('https://')) continue;
+    if (
+      !target ||
+      endpoint.awaitingAddressReadback ||
+      endpoint.usesPrimaryTLS ||
+      !target.startsWith('https://')
+    )
+      continue;
     const value = fingerprints[target];
     if (value !== undefined && (edited[target] || value !== (endpoint.fingerprint ?? '')))
       changed.set(target, value);
@@ -69,8 +75,9 @@ export const buildClusterEndpointTrustOverridesPayload = (
     : undefined;
 };
 
-// Mirror a saved clusterEndpointOverrides payload onto locally cached
-// endpoints so the editor reflects the save without a full nodes reload.
+// Mirror the requested override after a successful save, but keep the address
+// observation and scoped TLS settings marked as previous until a fresh read.
+// The server alone decides whether the effective destination changed.
 export const applyClusterEndpointOverridesLocally = (
   endpoints: ClusterEndpoint[] | undefined,
   overrides: ClusterEndpointOverridePayload[] | undefined,
@@ -79,8 +86,8 @@ export const applyClusterEndpointOverridesLocally = (
   const byNodeName = new Map(overrides.map((override) => [override.nodeName, override.ipOverride]));
   return endpoints.map((endpoint) => {
     const value = byNodeName.get(endpoint.nodeName);
-    if (value === undefined) return endpoint;
-    return { ...endpoint, ipOverride: value || undefined };
+    if (value === undefined || value === (endpoint.ipOverride ?? '')) return endpoint;
+    return { ...endpoint, ipOverride: value || undefined, awaitingAddressReadback: true };
   });
 };
 

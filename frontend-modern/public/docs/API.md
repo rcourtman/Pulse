@@ -345,6 +345,8 @@ Lightweight HTML status page for quick checks.
 ### Unified Resources
 `GET /api/resources`
 Returns the unified resource list with pagination + aggregations. Requires `monitoring:read`.
+For small memory or disk readings, see
+[Proxmox and PBS capacity percentages](#proxmox-and-pbs-capacity-percentages).
 
 Query params:
 - `type`: comma-separated list (e.g., `agent`, `vm`, `system-container`, `app-container`, `docker-service`, `storage`, `pbs`, `pmg`, `k8s-cluster`, `k8s-node`, `pod`, `k8s-deployment`, `physical_disk`, `ceph`)
@@ -367,6 +369,21 @@ Each list resource can include a backend-owned `health` envelope with a
 canonical `verdict` and stable `reasons` (`code` plus optional compact
 `detail`). Consumers should use this envelope for cross-platform posture
 instead of deriving health from provider-specific status strings.
+
+#### Proxmox and PBS capacity percentages
+
+For Proxmox and PBS memory and disk metrics with `unit: "bytes"`, `percent`
+is already a percentage. A value of `0.49` means 0.49%, not 49%.
+
+Older releases such as v6.8.0 can report a percentage 100 times too high
+when the actual usage is above zero and at most 1%. To check, calculate
+`100 × used / total` from the two byte values in the **same metric**, with
+a positive `total`. For example, 49 of 10,000 bytes is 0.49%.
+
+A measured zero can omit `percent` while still reporting `used: 0` and a
+positive `total`. A missing metric or missing bytes do not establish zero.
+For guest memory, [check the source and age](#guest-readings-availability-and-age)
+before treating the numbers as current.
 
 #### Guest readings: availability and age
 
@@ -848,6 +865,19 @@ fingerprint for the test. A nonempty fingerprint remains enforced regardless of
 Actively rediscovers a saved PVE connection's cluster membership. It does not
 select authorised nodes, grant missing permissions or repair an unrelated
 standalone installation. Keep intentional token restrictions intact.
+
+Use the saved PVE connection `id` from [List Nodes](#list-nodes), not the
+cluster or member name. The refresh changes Pulse, not Proxmox. If you renamed
+the cluster, back up your Pulse data and check that the saved credential can
+still see the same members before refreshing.
+
+**If the refresh times out or you cancel it**, don't send it again just to
+get a reply. Pulse can save the new name and membership before it replies.
+Use [List Nodes](#list-nodes) to check `clusterName` for the same `id`.
+Keep the response private. If the new name appears, check that all expected
+members still update during their normal polls. The name alone doesn't show
+that polling resumed. If the old name remains or you can't read the row,
+leave the connection in place. Don't delete and re-add it to force the rename.
 
 ### Export Configuration
 `POST /api/config/export` (instance admin for the default organization, tenant

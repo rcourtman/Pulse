@@ -534,12 +534,14 @@ An in-progress or unverified entry can count too.
 
 | Backups cell | What it establishes |
 | --- | --- |
-| A number, including **0** | The number of matching entries in the loaded inventory. **0** does not prove that the datastore is empty or that every expected backup was collected. |
+| A number, such as **0 listed** | The number of matching entries in the loaded inventory. **0** does not prove that the datastore is empty or that every expected backup was collected. |
+| **History gap** | Pulse has evidence that collection for this PBS connection was incomplete. The number still describes the entries Pulse lists, which can include older observations. It is not a datastore total. |
 | **Loading** | The PBS inventory has not loaded yet; this is not a zero count. |
 | **Unavailable** | The PBS inventory read failed; this is not a zero count. Server reachability and datastore capacity can still be shown independently. |
 | **—** | This server row has no reported datastore to count, not an empty backup repository. |
 
-The table can hide **Backups** on a narrow screen. A hidden column is not
+The table can hide **Backups** on a narrow screen. Open the datastore row
+to see **Backup entries** and any known history gap. A hidden column is not
 missing inventory. These counts are separate from the filtered **By date**
 list and its completed-point charts; see
 [why backup counts differ](RECOVERY.md#why-proxmox-backup-counts-differ).

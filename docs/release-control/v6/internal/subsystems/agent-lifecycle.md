@@ -3053,6 +3053,13 @@ The alerts-owned `POST /api/alerts/snooze` and
 pause and resume notification and escalation policy for one existing incident;
 they grant no agent enrollment, liveness, command, update, removal, or
 fleet-control authority, and agent lifecycle state must not key off them.
+The dead-letter queue list can reference an agent alert and its resource ID
+for correlation, but reports delivery state only. It does not contain the
+saved delivery configuration or full alert payload, and an entry does not
+establish agent connectivity or authorize a repair of the agent.
+For an individual notification attempt, consult the separate delivery log;
+the queue status is not an attempt verdict.
+
 Workflow starter counts on that endpoint,
 contextual Assistant/external-agent collaboration counts inside the Assistant
 step, the content-free Patrol control starter split, and Patrol control
@@ -3847,6 +3854,10 @@ tools must preserve settings-scope auth, typed manifest schemas, and redacted
 source reads. The manifest does not turn discovered hosts into command-agent
 authority, install-token scope, fleet-command grants, or permission to bypass
 human approval for multi-source imports.
+The cluster membership refresh can save before monitoring fails to apply the
+configuration. Its non-success reply directs the caller to read the saved row;
+it is neither a rollback nor a reason to replay provisioning or mint another
+enrolment token.
 Native provider resource types exposed through shared `internal/api/` resource
 handlers are the same kind of read-only context for lifecycle surfaces. A
 TrueNAS `network-share` resource may appear in resource pickers, connection
@@ -12034,8 +12045,10 @@ or original installed-recovery acceptance.
 
 The API-owned SAML Test now requires IdP identity and a supported HTTP(S) SSO
 endpoint before reporting metadata success, and labels metadata/manual results
-as untested sign-in (manual certificates are untested too). Incomplete metadata
-returns `metadata_incomplete` without details or a manual fallback. This changes
+as untested sign-in. When a metadata read finds no readable signing certificate,
+the result says so; manual URL checks still leave certificates untested.
+Incomplete metadata returns `metadata_incomplete` without details or a manual
+fallback. This changes
 only diagnostic evidence, not agent credentials, enrolment, saved provider
 settings, certificate trust or authentication. The adjacent
 `TestContractSSOSAMLDiagnosticConsumer` proves read-only authenticated results,

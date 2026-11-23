@@ -9,7 +9,7 @@ import {
   onCleanup,
 } from 'solid-js';
 import { ActionIconButton, Button, CopyValueButton } from '@/components/shared/Button';
-import { InlineNotice } from '@/components/shared/InlineNotice';
+import { InlineNotice, INLINE_NOTICE_TONE_CLASSES } from '@/components/shared/InlineNotice';
 import { EmptyState } from '@/components/shared/EmptyState';
 import SettingsPanel from '@/components/shared/SettingsPanel';
 import { Toggle } from '@/components/shared/Toggle';
@@ -23,6 +23,7 @@ import Trash2 from 'lucide-solid/icons/trash-2';
 import Shield from 'lucide-solid/icons/shield';
 import ArrowDown from 'lucide-solid/icons/arrow-down';
 import CheckCircle from 'lucide-solid/icons/check-circle';
+import TriangleAlert from 'lucide-solid/icons/triangle-alert';
 import XCircle from 'lucide-solid/icons/x-circle';
 import Eye from 'lucide-solid/icons/eye';
 import X from 'lucide-solid/icons/x';
@@ -52,24 +53,34 @@ const SSOEndpoint: Component<{
   caption: string;
   value: string | undefined;
   copyLabel: string;
+  copyHint?: string;
   onCopyValue: (value: string) => Promise<void>;
-}> = (props) => (
-  <div class="min-w-0 space-y-1">
-    <dt class="text-muted">{props.caption}</dt>
-    <dd class="min-w-0">
-      <CopyValueButton
-        value={props.value}
-        onCopyValue={props.onCopyValue}
-        label={props.copyLabel}
-        variant="accent"
-        size="sm"
-        class="min-h-11 w-full max-w-full justify-between gap-2 py-2 text-left text-xs sm:min-h-0 sm:w-auto [&>svg]:shrink-0"
-      >
-        <span class="min-w-0 [overflow-wrap:anywhere]">{props.value}</span>
-      </CopyValueButton>
-    </dd>
-  </div>
-);
+}> = (props) => {
+  const hintId = createUniqueId();
+  return (
+    <div class="min-w-0 space-y-1">
+      <dt class="text-muted">{props.caption}</dt>
+      <dd class="min-w-0">
+        <CopyValueButton
+          value={props.value}
+          onCopyValue={props.onCopyValue}
+          label={props.copyLabel}
+          aria-describedby={props.copyHint ? hintId : undefined}
+          variant="accent"
+          size="sm"
+          class="min-h-11 w-full max-w-full justify-between gap-2 py-2 text-left text-xs sm:min-h-0 sm:w-auto [&>svg]:shrink-0"
+        >
+          <span class="min-w-0 [overflow-wrap:anywhere]">{props.value}</span>
+        </CopyValueButton>
+        <Show when={props.copyHint}>
+          <p id={hintId} class="mt-1 text-muted">
+            {props.copyHint}
+          </p>
+        </Show>
+      </dd>
+    </div>
+  );
+};
 
 interface SSOProvidersPanelProps {
   onConfigUpdated?: () => void;
@@ -131,6 +142,20 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
   const clientSecretHintId = `${summaryIdPrefix}-client-secret-hint`;
   const isSamlUrlFormatCheck = () => getProviderTestSource(form) === 'saml-manual-url';
   const hasSamlFinding = () => form.type === 'saml' && !!testResult()?.failureLabel;
+  const signingCertificateUnread = createMemo(() => {
+    const result = testResult();
+    const details = result?.details;
+    // Manual checks can also return an empty certificate list; they only check URL format.
+    return (
+      result?.success === true &&
+      form.type === 'saml' &&
+      !isSamlUrlFormatCheck() &&
+      details?.type === 'saml' &&
+      !!details.entityId &&
+      !!details.ssoUrl &&
+      !details.certificates?.length
+    );
+  });
   const testSummary = createMemo(() => {
     const result = testResult();
     if (!result) return null;
@@ -152,12 +177,17 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
       !isManual &&
       Array.isArray(certificates) &&
       certificates.some((certificate) => certificate?.isExpired === true);
+    const certificateFinding = signingCertificateUnread()
+      ? 'No signing cert read'
+      : hasExpiredCertificate
+        ? 'Expired cert found'
+        : null;
 
     return {
-      lines: hasExpiredCertificate
-        ? [check, 'Expired cert found', 'Sign-in not tested']
+      lines: certificateFinding
+        ? [check, certificateFinding, 'Sign-in not tested']
         : [check, 'Sign-in not tested'],
-      variant: hasExpiredCertificate ? 'warning' : 'successOutline',
+      variant: certificateFinding ? 'warning' : 'successOutline',
     } as const;
   });
   let inventoryRegion: HTMLDivElement | undefined;
@@ -464,6 +494,7 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
                             value={provider.oidcCallbackUrl}
                             onCopyValue={(value) => copyToClipboard(value, 'Callback URL')}
                             copyLabel="Copy callback / redirect URL"
+                            copyHint="Register this URL as a redirect URI in your identity provider before testing sign-in."
                           />
                         </dl>
                       </Show>
@@ -516,7 +547,11 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
           ariaLabel={`${editingProvider() ? 'Edit' : 'Add'} ${getSSOProviderTypeLabel(form.type)} provider`}
         >
           <form class="flex max-h-[calc(100dvh-2rem-2px)] min-h-0 flex-col" onSubmit={handleSave}>
-            <div class="flex shrink-0 items-center justify-between gap-2 border-b border-border bg-surface px-4 py-4 sm:px-6">
+            <div
+              class={`flex shrink-0 items-center justify-between gap-2 border-b border-border bg-surface px-4 py-4 sm:px-6 ${
+                signingCertificateUnread() ? 'max-sm:py-2.5' : ''
+              }`}
+            >
               <h3 class="text-lg font-semibold text-base-content">
                 {getSSOProviderModalTitle(Boolean(editingProvider()), form.type)}
               </h3>
@@ -527,11 +562,13 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
                     variant={summary().variant}
                     size="xs"
                     class={`-my-2 min-w-0 max-w-[60%] shrink-0 gap-1.5 text-left ${
-                      hasSamlFinding()
-                        ? 'max-[360px]:max-w-24'
-                        : testResult()?.failureLabel
-                          ? 'max-[360px]:max-w-25'
-                          : ''
+                      signingCertificateUnread()
+                        ? 'max-sm:-my-1 max-sm:gap-1 max-sm:px-1 max-sm:py-0'
+                        : hasSamlFinding()
+                          ? 'max-[360px]:max-w-24'
+                          : testResult()?.failureLabel
+                            ? 'max-[360px]:max-w-25'
+                            : ''
                     }`}
                     aria-label={`${summary().lines.join(', ')} — view result`}
                     aria-controls={testResultId}
@@ -590,35 +627,44 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
               <Show when={form.type === 'oidc'}>
                 <div class="space-y-4">
                   <div class="bg-surface-alt border border-border rounded-md p-3">
-                    <p class="text-xs text-base-content">
-                      <strong>Setup:</strong> Register this Callback / Redirect URL with your
-                      Identity Provider for Pulse sign-in.
-                    </p>
                     <Show
-                      when={editingProvider()?.oidcCallbackUrl}
+                      when={editingProvider()}
                       fallback={
-                        <p class="mt-2 text-xs text-muted">
-                          {editingProvider()
-                            ? getSSOEndpointUnavailableHint('Callback / Redirect URL')
-                            : 'The Callback / Redirect URL is generated when the provider is saved. Save this provider, then copy it from the provider card.'}
+                        <p class="text-xs text-base-content">
+                          <strong>Setup:</strong> Create the provider in Pulse. Then copy its
+                          Callback / Redirect URL from the saved provider card and register it with
+                          your identity provider.
                         </p>
                       }
                     >
-                      <div class="mt-2 flex flex-col gap-1 sm:flex-row sm:items-center sm:gap-2">
-                        <span class="text-xs text-muted">Callback / Redirect URL:</span>
-                        <CopyValueButton
-                          value={editingProvider()?.oidcCallbackUrl}
-                          onCopyValue={(value) => copyToClipboard(value, 'Callback URL')}
-                          label="Copy callback / redirect URL"
-                          variant="accent"
-                          size="sm"
-                          class="min-w-0 max-w-full justify-between gap-2 py-2 text-left text-xs [&>svg]:shrink-0"
-                        >
-                          <span class="min-w-0 [overflow-wrap:anywhere]">
-                            {editingProvider()?.oidcCallbackUrl}
-                          </span>
-                        </CopyValueButton>
-                      </div>
+                      <p class="text-xs text-base-content">
+                        <strong>Setup:</strong> Register this Callback / Redirect URL with your
+                        Identity Provider for Pulse sign-in.
+                      </p>
+                      <Show
+                        when={editingProvider()?.oidcCallbackUrl}
+                        fallback={
+                          <p class="mt-2 text-xs text-muted">
+                            {getSSOEndpointUnavailableHint('Callback / Redirect URL')}
+                          </p>
+                        }
+                      >
+                        {(url) => (
+                          <div class="mt-2 flex flex-col gap-1 sm:flex-row sm:items-center sm:gap-2">
+                            <span class="text-xs text-muted">Callback / Redirect URL:</span>
+                            <CopyValueButton
+                              value={url()}
+                              onCopyValue={(value) => copyToClipboard(value, 'Callback URL')}
+                              label="Copy callback / redirect URL"
+                              variant="accent"
+                              size="sm"
+                              class="min-w-0 max-w-full justify-between gap-2 py-2 text-left text-xs [&>svg]:shrink-0"
+                            >
+                              <span class="min-w-0 [overflow-wrap:anywhere]">{url()}</span>
+                            </CopyValueButton>
+                          </div>
+                        )}
+                      </Show>
                     </Show>
                   </div>
 
@@ -888,7 +934,11 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
                 <div
                   id={testResultId}
                   ref={testResultPanel}
-                  class={`${testResultPresentation()!.panelClass} focus:outline-hidden focus:ring-2 focus:ring-blue-500 ${
+                  class={`${
+                    signingCertificateUnread()
+                      ? `p-4 rounded-md border ${INLINE_NOTICE_TONE_CLASSES.warning}`
+                      : testResultPresentation()!.panelClass
+                  } focus:outline-hidden focus:ring-2 focus:ring-blue-500 ${
                     hasSamlFinding()
                       ? 'max-sm:px-2 max-sm:py-1 sm:py-2.5'
                       : testResult()?.failureLabel
@@ -900,7 +950,9 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
                   aria-labelledby={testResultTitleId}
                 >
                   <div class={`flex items-start gap-3 ${hasSamlFinding() ? 'max-sm:gap-1.5' : ''}`}>
-                    {testResult()?.success ? (
+                    {signingCertificateUnread() ? (
+                      <TriangleAlert aria-hidden="true" class="w-5 h-5 shrink-0 mt-0.5" />
+                    ) : testResult()?.success ? (
                       <CheckCircle class={testResultPresentation()!.iconClass} />
                     ) : (
                       <XCircle class={testResultPresentation()!.iconClass} />
@@ -908,7 +960,11 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
                     <div class="flex-1 min-w-0">
                       <p
                         id={testResultTitleId}
-                        class={`${testResultPresentation()!.titleClass} ${hasSamlFinding() ? 'max-sm:text-xs max-sm:leading-3.5' : ''}`}
+                        class={`${
+                          signingCertificateUnread()
+                            ? 'text-sm font-medium'
+                            : testResultPresentation()!.titleClass
+                        } ${hasSamlFinding() ? 'max-sm:text-xs max-sm:leading-3.5' : ''}`}
                       >
                         {testResult()?.message}
                       </p>

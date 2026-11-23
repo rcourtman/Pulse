@@ -22,6 +22,7 @@ import { MONITORING_READ_SCOPE } from '@/constants/apiScopes';
 import {
   API_TOKEN_NAME_PLACEHOLDER,
   getAPITokenExpiryPresentation,
+  getAPITokenLastUsePresentation,
   getAPITokenDockerPodmanUsageSummary,
   getAPITokenDockerPodmanUsageTitle,
 } from '@/utils/apiTokenPresentation';
@@ -434,6 +435,17 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
     );
   };
 
+  const renderTokenLastUse = (token: APITokenRecord) => {
+    const lastUse = getAPITokenLastUsePresentation(token.lastUsedAt);
+    return lastUse.state === 'recorded' ? (
+      <time dateTime={lastUse.dateTime} title={lastUse.timestamp}>
+        {formatRelativeTime(lastUse.dateTime, { now: now() })}
+      </time>
+    ) : (
+      lastUse.label
+    );
+  };
+
   const renderTokenActions = (token: APITokenRecord, compact = false) => (
     <div
       class={
@@ -774,11 +786,7 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
                       <div class="text-[0.65rem] font-semibold uppercase tracking-wide text-muted">
                         Last used
                       </div>
-                      <div class="mt-1 text-xs text-base-content">
-                        {token.lastUsedAt
-                          ? formatRelativeTime(new Date(token.lastUsedAt).getTime(), { now: now() })
-                          : 'Never'}
-                      </div>
+                      <div class="mt-1 text-xs text-base-content">{renderTokenLastUse(token)}</div>
                     </div>
                   </div>
 
@@ -849,13 +857,7 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
               {
                 key: 'lastUsedAt',
                 label: 'Last used',
-                render: (token) => (
-                  <span class="text-muted">
-                    {token.lastUsedAt
-                      ? formatRelativeTime(new Date(token.lastUsedAt).getTime(), { now: now() })
-                      : 'Never'}
-                  </span>
-                ),
+                render: (token) => <span class="text-muted">{renderTokenLastUse(token)}</span>,
               },
               {
                 key: 'expiresAt',

@@ -175,6 +175,68 @@ describe('useWorkloadTableMetricHistory', () => {
     expect(setItemSpy).not.toHaveBeenCalled();
   });
 
+  it.each([
+    { hasNodeSeries: true, expectedDisk: '0.49,0.88' },
+    { hasNodeSeries: false, expectedDisk: 'none' },
+  ])(
+    'keeps a PVE target in nodeData (node series present: $hasNodeSeries)',
+    async ({ hasNodeSeries, expectedDisk }) => {
+      const nativeId = 'north-pve-42';
+      const pve = {
+        ...node,
+        name: 'Renamed member',
+        metricsTarget: { resourceType: 'node', resourceId: nativeId },
+      } satisfies Node;
+      const linked = {
+        ...node,
+        id: 'linked-canonical-row',
+        linkedAgentId: 'linked-agent',
+        metricsTarget: { resourceType: 'agent', resourceId: 'linked-agent' },
+      } satisfies Node;
+      const disk = (...values: number[]) => ({
+        disk: values.map((value, index) => ({ timestamp: index + 1, value })),
+      });
+      const infrastructureSpy = vi
+        .spyOn(ChartsAPI, 'getInfrastructureSummaryCharts')
+        .mockResolvedValue({
+          nodeData: {
+            'north:pve:42': disk(25, 26), // A different ID, not an alias for the typed target.
+            ...(hasNodeSeries ? { [nativeId]: disk(0.49, 0.88) } : {}),
+          },
+          agentData: { [nativeId]: disk(82, 88, 94), 'linked-agent': disk(12, 24) },
+          dockerHostData: { [nativeId]: disk(60, 70) },
+          timestamp: 3,
+          stats: { oldestDataTimestamp: 1 },
+        });
+
+      function NodeHistoryProbe() {
+        const reader = useWorkloadTableMetricHistory({
+          enabled: () => true,
+          range: () => '1h',
+          series: 'nodes',
+        });
+        const diskValues = (row: Node) =>
+          reader
+            .getNodeMetricSeries(row, 'disk')[0]
+            ?.points.map(({ value }) => value)
+            .join(',') || 'none';
+        return (
+          <>
+            <div data-testid="pve-disk">{diskValues(pve)}</div>
+            <div data-testid="linked-disk">{diskValues(linked)}</div>
+          </>
+        );
+      }
+
+      render(() => <NodeHistoryProbe />);
+      // The independent linked series shows that the summary is loaded, even
+      // when the typed node should still draw nothing.
+      await waitFor(() => expect(screen.getByTestId('linked-disk').textContent).toBe('12,24'));
+      expect(screen.getByTestId('pve-disk').textContent).toBe(expectedDisk);
+      expect(infrastructureSpy).toHaveBeenCalledTimes(1);
+    },
+  );
+
   // A sparkline under a new History range must never keep drawing the old
   // range's data while the new range loads, for either estate summary.
   it.each([

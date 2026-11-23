@@ -1,0 +1,38 @@
+{
+  "version": 1,
+  "base_sha": "2b07a0e65d51c519e658f8dc4e80f12ec425d18f",
+  "verified_at": "2026-11-23T00:13:11Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/APITokenManager.tsx",
+    "frontend-modern/src/components/Settings/APITokenManagerDialogs.tsx",
+    "frontend-modern/src/utils/apiTokenPresentation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/APITokenManager.tsx": "6ec47b1e8853590a941dc4ca96247023742af5fe3ac8a318bec0c5ad423633f2",
+    "frontend-modern/src/components/Settings/APITokenManagerDialogs.tsx": "36991b6b2bbaed769e37fffe1370b1385947926ea2d5d9ba71353ae27aa13d29",
+    "frontend-modern/src/utils/apiTokenPresentation.ts": "fd0830f09e76b2dd33e621912b4c2ea4d733e233bda35c7a98e215a797267ece"
+  },
+  "routes": [
+    "/settings/security/api"
+  ],
+  "viewports": [
+    {
+      "width": 1720,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Matched production-mode Chromium 141.0.7390.37 / Playwright 1.56.1 on light desktop and dark touch phone: 466 assertions and 24 inspected captures.",
+    "Same scoped inventory responses on both sources: recorded use with or without observed clients, a missing timestamp, a malformed timestamp and a signed-in reader without management. Relative ages, scope labels, expiry and observed clients remain visible.",
+    "The selected token's name and hint, recorded UTC instant or unavailable state, incomplete-coverage caveat and permanent-impact warning are visible together with Cancel and Revoke token."
+  ],
+  "interactions": [
+    "Open each same-named credential by its own row action with Enter on desktop or tap on phone. Check its own recorded date and observed clients before deciding, and no date for missing or malformed data.",
+    "Cancel or press Escape, return focus to the exact original action and confirm no write or extra token lookup. Confirm the read-only role cannot open revocation."
+  ]
+}

@@ -232,19 +232,65 @@ export const ProxmoxBackupsTable: Component<{
   // while a Proxmox collector could not enumerate all of its history. Use an
   // explicit provider observation, not the workload's overall verdict (which
   // can still be protected) or a legacy point with unknown history.
-  const providerInventoryIncomplete = createMemo(() =>
-    protectionPostures
-      .postures()
-      .some((posture) =>
-        posture.providerStates.some(
-          ({ provider, historyCompleteness }) =>
-            (provider === 'proxmox-pve' || provider === 'proxmox-pbs') &&
-            (historyCompleteness === 'partial' || historyCompleteness === 'unavailable'),
-        ),
-      ),
-  );
-  const restorePointInventoryIncomplete = () =>
-    inventoryTransportIncomplete() || providerInventoryIncomplete();
+  const providerHistoryGaps = createMemo(() => {
+    let incomplete = false;
+    const pbsReaders = new Set<string>();
+    for (const posture of protectionPostures.postures()) {
+      for (const { provider, source, scope, historyCompleteness } of posture.providerStates) {
+        if (provider !== 'proxmox-pve' && provider !== 'proxmox-pbs') continue;
+        if (historyCompleteness !== 'partial' && historyCompleteness !== 'unavailable') continue;
+        incomplete = true;
+        // The observation is for the exact configured reader. Unread scope
+        // names can be omitted or capped, so they are not a datastore allowlist.
+        if (provider === 'proxmox-pbs' && source === 'pbs-backup-enumeration')
+          pbsReaders.add(scope);
+      }
+    }
+    return { incomplete, pbsReaders };
+  });
+  // The protection read also carries provider completeness evidence. A
+  // failed or first pending read can leave both inventories readable without
+  // telling us whether the collector missed anything. Do not invent a
+  // provider gap, or treat the absence of that evidence as a complete list.
+  const restorePointListIssue = createMemo(() => {
+    if (inventoryTransportIncomplete()) {
+      const cause = 'Some backup sources are still loading or unavailable.';
+      return {
+        kind: 'inventory',
+        title: 'Backup inventory is incomplete',
+        description: `${cause} Missing restore points do not mean no backups exist.`,
+        dayDescription: cause,
+      } as const;
+    }
+    if (providerHistoryGaps().incomplete) {
+      return {
+        kind: 'provider',
+        title: 'Backup list incomplete',
+        description: PROVIDER_HISTORY_GAP_DESCRIPTION,
+      } as const;
+    }
+    if (protectionPostures.response.error) {
+      return {
+        kind: 'protection-unavailable',
+        title: 'Backup list not confirmed',
+        description:
+          'Retry protection status or check the backup list in Proxmox. Missing restore points do not mean no backups exist.',
+      } as const;
+    }
+    if (
+      !protectionPostures.resolvedOnce() &&
+      props.workloads?.some(({ id }) => Boolean(id.trim()))
+    ) {
+      return {
+        kind: 'protection-pending',
+        title: 'Backup list not confirmed',
+        description:
+          'Pulse is still checking protection status. Missing restore points do not mean no backups exist.',
+      } as const;
+    }
+    return null;
+  });
+  const qualifyRestorePointCounts = () => restorePointListIssue() !== null;
   // One unreadable storage limits every guest's coverage on its connection;
   // say which one once, where the operator can act on it.
   const unreadBackupSourcesNotice = createMemo(() =>
@@ -813,15 +859,18 @@ export const ProxmoxBackupsTable: Component<{
     !typeFilter() &&
     recoverableFilter() === 'all';
   const filteredEmptyDescription = () => {
-    if (!onlyDayFiltered()) {
-      return restorePointInventoryIncomplete()
-        ? 'Change search or filters. The list is incomplete.'
-        : undefined;
+    const issue = restorePointListIssue();
+    if (onlyDayFiltered()) {
+      return (
+        issue?.dayDescription ??
+        issue?.description ??
+        'A failed backup usually leaves none, and retention prunes older ones.'
+      );
     }
-    if (providerInventoryIncomplete()) return PROVIDER_HISTORY_GAP_DESCRIPTION;
-    if (inventoryTransportIncomplete())
-      return 'Some backup sources are still loading or unavailable.';
-    return 'A failed backup usually leaves none, and retention prunes older ones.';
+    if (!issue) return undefined;
+    return issue.kind === 'inventory' || issue.kind === 'provider'
+      ? 'Change search or filters. The list is incomplete.'
+      : 'Change search or filters. Pulse has not confirmed that the backup list is complete.';
   };
   const hasActiveBackupsFilters = (): boolean =>
     Boolean(
@@ -923,7 +972,7 @@ export const ProxmoxBackupsTable: Component<{
               >
                 <span>
                   Protection status is unavailable. Pulse is showing restore evidence without
-                  guessing whether workloads are protected.
+                  guessing whether workloads are protected. The backup list may be incomplete.
                 </span>
                 <button
                   type="button"
@@ -960,7 +1009,7 @@ export const ProxmoxBackupsTable: Component<{
                     {recoveryModel().coverageSummary.recoverableArtifacts === 1
                       ? 'point'
                       : 'points'}
-                    {restorePointInventoryIncomplete() ? ' read' : ''}
+                    {qualifyRestorePointCounts() ? ' read' : ''}
                     <Show when={recoveryModel().coverageSummary.runningArtifacts > 0}>
                       {' · '}
                       {recoveryModel().coverageSummary.runningArtifacts} running
@@ -977,6 +1026,11 @@ export const ProxmoxBackupsTable: Component<{
                     <Show when={orphanedTotalCount() > 0}>
                       {' · '}
                       {orphanedTotalCount()} unmatched
+                    </Show>
+                    <Show when={restorePointListIssue()?.kind === 'protection-pending'}>
+                      <span class="block">
+                        Pulse is still checking whether the list is complete.
+                      </span>
                     </Show>
                   </span>
                 }
@@ -1009,6 +1063,7 @@ export const ProxmoxBackupsTable: Component<{
           <ProxmoxBackupServersTable
             servers={props.servers ?? []}
             backups={pbsArtifacts()}
+            incompleteHistoryReaders={providerHistoryGaps().pbsReaders}
             datastoreAlerts={props.datastoreAlerts}
             backupInventoryState={
               pbsBackups.error()
@@ -1077,7 +1132,7 @@ export const ProxmoxBackupsTable: Component<{
                   view() === 'date'
                     ? restorePointCountNoun(
                         recoveryModel().coverageSummary.recoverableArtifacts,
-                        restorePointInventoryIncomplete(),
+                        qualifyRestorePointCounts(),
                       )
                     : 'targets'
                 }
@@ -1097,23 +1152,14 @@ export const ProxmoxBackupsTable: Component<{
               emptyIcon={props.emptyIcon}
               filteredEmptyTitle={
                 onlyDayFiltered()
-                  ? `No restore points ${restorePointInventoryIncomplete() ? 'listed for' : 'from'} ${getRecoveryFilterDateLabel(selectedDateKey()!)}`
+                  ? `No restore points ${qualifyRestorePointCounts() ? 'listed for' : 'from'} ${getRecoveryFilterDateLabel(selectedDateKey()!)}`
                   : undefined
               }
               filteredEmptyDescription={filteredEmptyDescription()}
-              emptyTitle={
-                inventoryTransportIncomplete()
-                  ? 'Backup inventory is incomplete'
-                  : providerInventoryIncomplete()
-                    ? 'Backup list incomplete'
-                    : 'No backups yet'
-              }
+              emptyTitle={restorePointListIssue()?.title ?? 'No backups yet'}
               emptyDescription={
-                inventoryTransportIncomplete()
-                  ? 'Some backup sources are still loading or unavailable. Missing restore points do not mean no backups exist.'
-                  : providerInventoryIncomplete()
-                    ? PROVIDER_HISTORY_GAP_DESCRIPTION
-                    : 'PBS backups, PVE backup files, and guest snapshots will appear here when available.'
+                restorePointListIssue()?.description ??
+                'PBS backups, PVE backup files, and guest snapshots will appear here when available.'
               }
               sortKey={recoverableSortKey}
               sortDirection={recoverableSortDirection}

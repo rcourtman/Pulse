@@ -159,8 +159,7 @@ export const Login: Component<LoginProps> = (props) => {
     }
   };
   const [oidcLoading] = createSignal(false);
-  const [oidcError, setOidcError] = createSignal('');
-  const [oidcMessage, setOidcMessage] = createSignal('');
+  const [ssoReturnMessage, setSSOReturnMessage] = createSignal('');
   const [demoAutoLogin, setDemoAutoLogin] = createSignal(false);
 
   const ssoProviders = () => authStatus()?.ssoProviders || [];
@@ -180,15 +179,14 @@ export const Login: Component<LoginProps> = (props) => {
     // Retain the return message without using it to select sign-in options.
     const oidcStatus = params.get('oidc');
     const samlStatus = params.get('saml');
-    const returnError = readSSOReturnError(params);
-    if (returnError) {
-      setOidcError(returnError);
-      setError('');
-    }
-    if (oidcStatus === 'success' || samlStatus === 'success') {
-      setOidcMessage('Signed in successfully. Loading Pulse…');
-      setError('');
-    }
+    // The success marker prompts the app's session check; it doesn't prove
+    // sign-in. If the user is still at Login, explain what Pulse couldn't verify.
+    setSSOReturnMessage(
+      readSSOReturnError(params) ||
+        (oidcStatus === 'success' || samlStatus === 'success'
+          ? 'Pulse couldn’t confirm your session after single sign-on.'
+          : ''),
+    );
 
     // Clean up URL parameters
     if (oidcStatus || samlStatus) {
@@ -369,7 +367,7 @@ export const Login: Component<LoginProps> = (props) => {
                       : 'Checking which sign-in options Pulse offers.'
                     : 'Pulse could not read its authentication status. This does not mean authentication is unconfigured.'}
               </p>
-              <SSOReturnError message={oidcError()} duringCheck />
+              <SSOReturnError message={ssoReturnMessage()} duringCheck />
               <Show when={authReadFailed() || authRestart() !== 'hidden'}>
                 <Show when={authReadFailed()}>
                   <p class="mt-3 text-sm leading-6 text-muted">
@@ -412,8 +410,7 @@ export const Login: Component<LoginProps> = (props) => {
                 loading,
                 handleSubmit,
                 oidcLoading,
-                oidcError,
-                oidcMessage,
+                ssoReturnMessage,
                 demoModeEnabled: demoModeEnabled(),
                 demoAutoLogin,
                 showLocalLogin: shouldShowLocalLogin(),
@@ -464,8 +461,7 @@ const LoginForm: Component<{
   loading: () => boolean;
   handleSubmit: (e: Event) => void;
   oidcLoading: () => boolean;
-  oidcError: () => string;
-  oidcMessage: () => string;
+  ssoReturnMessage: () => string;
   demoModeEnabled: boolean;
   demoAutoLogin: () => boolean;
   showLocalLogin: boolean;
@@ -483,16 +479,15 @@ const LoginForm: Component<{
     loading,
     handleSubmit,
     oidcLoading,
-    oidcError,
-    oidcMessage,
+    ssoReturnMessage,
     demoModeEnabled,
     demoAutoLogin,
     showLocalLogin,
     ssoProviders,
   } = props;
   const hasSSOProviders = ssoProviders.length > 0;
-  const providerReturn = () => hasSSOProviders && Boolean(oidcError());
-  const compactReturn = () => Boolean(oidcError()) && (showLocalLogin || hasSSOProviders);
+  const providerReturn = () => hasSSOProviders && Boolean(ssoReturnMessage());
+  const compactReturn = () => Boolean(ssoReturnMessage()) && (showLocalLogin || hasSSOProviders);
 
   return (
     <div
@@ -574,11 +569,11 @@ const LoginForm: Component<{
           classList={{ 'max-sm:mt-4 max-sm:p-4': providerReturn() }}
           onSubmit={handleSubmit}
         >
-          {/* Return errors describe the attempt even when no providers are now listed. */}
-          <Show when={hasSSOProviders || oidcError()}>
+          {/* Return feedback stays visible even when no providers are now listed. */}
+          <Show when={hasSSOProviders || ssoReturnMessage()}>
             <div class="space-y-3">
               {/* Read why the last attempt failed before choosing where to try next. */}
-              <SSOReturnError message={oidcError()} />
+              <SSOReturnError message={ssoReturnMessage()} />
               <For each={ssoProviders}>
                 {(provider) => (
                   <button
@@ -609,11 +604,6 @@ const LoginForm: Component<{
                   </button>
                 )}
               </For>
-              <Show when={hasSSOProviders && oidcMessage()}>
-                <div class="rounded-md bg-green-50 dark:bg-green-900/25 border border-green-200 dark:border-green-700 px-3 py-2 text-sm text-green-600 dark:text-green-300">
-                  {oidcMessage()}
-                </div>
-              </Show>
               <Show when={hasSSOProviders && showLocalLogin}>
                 <div class="flex items-center gap-3 pt-2">
                   <span class="flex-1 h-px bg-surface-hover" />

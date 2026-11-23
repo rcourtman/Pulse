@@ -390,26 +390,26 @@ describe('useSystemSettingsState branch coverage', () => {
       dispose();
     });
 
-    it('hides local login, toasts success, and refreshes security status', async () => {
+    it('hides the local sign-in form, toasts success, and refreshes security status', async () => {
       const loadSecurityStatus = vi.fn().mockResolvedValue(undefined);
       const { hookState, dispose } = mountHook({ loadSecurityStatus });
       await hookState.handleHideLocalLoginChange(true);
       await flushAsync();
       expect(mocks.updateSystemSettingsMock).toHaveBeenCalledWith({ hideLocalLogin: true });
       expect(hookState.hideLocalLogin()).toBe(true);
-      expect(mocks.notificationSuccessMock).toHaveBeenCalledWith('Local login hidden', 2000);
+      expect(mocks.notificationSuccessMock).toHaveBeenCalledWith('Local sign-in form hidden', 2000);
       expect(loadSecurityStatus).toHaveBeenCalledTimes(1);
       expect(hookState.savingHideLocalLogin()).toBe(false);
       dispose();
     });
 
-    it('uses the info toast and posts false when unhiding local login', async () => {
+    it('uses the info toast and posts false when showing the local sign-in form', async () => {
       const loadSecurityStatus = vi.fn().mockResolvedValue(undefined);
       const { hookState, dispose } = mountHook({ loadSecurityStatus });
       await hookState.handleHideLocalLoginChange(false);
       await flushAsync();
       expect(mocks.updateSystemSettingsMock).toHaveBeenCalledWith({ hideLocalLogin: false });
-      expect(mocks.notificationInfoMock).toHaveBeenCalledWith('Local login visible', 2000);
+      expect(mocks.notificationInfoMock).toHaveBeenCalledWith('Local sign-in form shown', 2000);
       expect(hookState.hideLocalLogin()).toBe(false);
       expect(loadSecurityStatus).toHaveBeenCalledTimes(1);
       dispose();

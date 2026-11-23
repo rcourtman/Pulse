@@ -254,6 +254,10 @@ const FORECAST_PILL_CLASS: Record<DatastoreFillForecast['level'], string> = {
   warning: 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300',
 };
 
+const PBS_HISTORY_GAP = 'Backup history is incomplete for this PBS connection.';
+const formatListedBackupEntries = (count: number): string =>
+  `${formatPlatformTableIntegerValue(count)} listed`;
+
 function usageToneClass(pct: number | undefined): string {
   if (pct === undefined) return 'text-muted';
   if (pct >= 90) return 'text-red-600 dark:text-red-300';
@@ -268,6 +272,7 @@ function usageToneClass(pct: number | undefined): string {
 function BackupServerDatastoreContext(props: {
   row: BackupServerRow;
   inventoryState?: 'available' | 'loading' | 'unavailable';
+  historyIncomplete: boolean;
   forecast?: DatastoreFillForecast | null;
   onClose?: () => void;
 }) {
@@ -290,7 +295,8 @@ function BackupServerDatastoreContext(props: {
     if (!props.row.datastore) return 'Not reported';
     if (props.inventoryState === 'loading') return 'Loading';
     if (props.inventoryState === 'unavailable') return 'Unavailable';
-    return formatPlatformTableIntegerValue(props.row.backupCount);
+    const listed = formatListedBackupEntries(props.row.backupCount);
+    return props.historyIncomplete ? `${listed} · ${PBS_HISTORY_GAP}` : listed;
   };
   const capacityTone = (): DetailValueTone | undefined => {
     const reading = datastoreCapacity(props.row.datastore, props.row.connectionVariant);
@@ -667,6 +673,7 @@ export function ProxmoxBackupServersTable(props: {
   servers: readonly Resource[];
   backups?: readonly PBSBackup[];
   backupInventoryState?: 'available' | 'loading' | 'unavailable';
+  incompleteHistoryReaders?: ReadonlySet<string>;
   emptyIcon?: JSX.Element;
   layoutWidth?: Accessor<number | null | undefined>;
   // Open alerts for a datastore's alert keys. The page owns the live alert
@@ -813,6 +820,8 @@ export function ProxmoxBackupServersTable(props: {
                       ? 'Datastore capacity is unavailable. This does not mean the datastore is empty.'
                       : 'Datastore capacity is unknown. This does not mean the datastore is empty.';
                   const rowIdentity = { id: row.key };
+                  const historyIncomplete = () =>
+                    props.incompleteHistoryReaders?.has(row.serverName) === true;
                   const isExpanded = () => detail.isExpanded(rowIdentity);
                   const detailRowId = () => detail.detailRowId(rowIdentity);
                   return (
@@ -1003,10 +1012,21 @@ export function ProxmoxBackupServersTable(props: {
                                   </span>
                                 }
                               >
-                                <PlatformTableNumberValue
-                                  value={row.backupCount}
-                                  format={formatPlatformTableIntegerValue}
-                                />
+                                <div class="text-[11px] leading-3 whitespace-normal">
+                                  <PlatformTableNumberValue
+                                    value={row.backupCount}
+                                    format={formatListedBackupEntries}
+                                  />
+                                  <Show when={historyIncomplete()}>
+                                    {' '}
+                                    <span
+                                      class="block text-[10px] font-medium text-amber-700 dark:text-amber-300"
+                                      title={PBS_HISTORY_GAP}
+                                    >
+                                      History gap
+                                    </span>
+                                  </Show>
+                                </div>
                               </Show>
                             </Show>
                           </TableCell>
@@ -1042,6 +1062,7 @@ export function ProxmoxBackupServersTable(props: {
                           <BackupServerDatastoreContext
                             row={row}
                             inventoryState={props.backupInventoryState}
+                            historyIncomplete={historyIncomplete()}
                             forecast={forecast()}
                             onClose={() => detail.close(rowIdentity)}
                           />

@@ -1,0 +1,40 @@
+{
+  "version": 1,
+  "base_sha": "3d91dab611eb0429b080d48383efb4760e9e7536",
+  "verified_at": "2026-11-23T06:37:42Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Login.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Login.tsx": "3db1efe44d0e119451546bed56baaee55529f73147321ebcb9c8e74583adf3f1"
+  },
+  "routes": [
+    "/login?oidc=success",
+    "/login?saml=success",
+    "/login?oidc=success&saml=error&saml_error=invalid_state",
+    "/login",
+    "/alerts?saml=success",
+    "/docs/TROUBLESHOOTING"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 960
+    },
+    {
+      "width": 360,
+      "height": 780
+    }
+  ],
+  "states": [
+    "Matched production builds in Chromium 141.0.7390.37 / Playwright 1.56.1: 421 assertions, 406 asset hash checks and all 16 before/after captures inspected; desktop light and touch phone dark.",
+    "A held session check still says it is checking the session. After its fixture 401, Login explains the unconfirmed session before sign-in choices. No signed-in success banner.",
+    "With local login shown, both SSO provider buttons, password form and Help remain. With the local form hidden, only the advertised providers and Help remain. With none advertised, the admin guidance remains visible.",
+    "A known callback error stays specific without a contradictory success banner. Ordinary sign-in has no return notice; an accepted synthetic session enters the shell without Login."
+  ],
+  "interactions": [
+    "Follow the existing provider button by keyboard or tap to a fixture-only handoff. With no providers, use the same keyboard/touch actions to open the shipped Troubleshooting route.",
+    "The on-load discovery and ordinary session probe stay unchanged. No password submissions, auth-setting writes, live identity providers or external requests."
+  ]
+}

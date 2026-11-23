@@ -65,6 +65,7 @@ import {
 import {
   hasRenderableMetricSeries,
   TEMPERATURE_SPARKLINE_UNIT,
+  type NodeHistoryIdentity,
   type WorkloadTableMetricHistoryRange,
 } from '@/components/Workloads/workloadMetricHistoryModel';
 import { formatTemperature, getTemperatureTextClass } from '@/utils/temperature';
@@ -112,16 +113,16 @@ const formatNodeUptime = (
   };
 };
 
-// Disk usage is already in percentage points. Under 2%, retain hundredths so
-// 0.88% is not shown as the same reading as 1%, or a small reading as empty.
-const formatLowNodeDiskPercent = (value: number): string | undefined => {
+// Node readings are already in percentage points. Under 2%, retain hundredths
+// so 0.88% is not shown as 1%, or a small reading as empty.
+const formatLowNodePercent = (value: number): string | undefined => {
   if (value <= 0 || value >= 2) return undefined;
   return value < 0.01 ? '<0.01%' : `${Number(value.toFixed(2))}%`;
 };
-const formatNodeDiskBarPercent = (value: number): string =>
-  formatLowNodeDiskPercent(value) ?? formatPercent(value);
-const formatNodeDiskHistoryPercent = (value: number): string =>
-  formatLowNodeDiskPercent(value) ?? formatPlatformTablePercentValue(value);
+const formatNodeBarPercent = (value: number): string =>
+  formatLowNodePercent(value) ?? formatPercent(value);
+const formatNodeHistoryPercent = (value: number): string =>
+  formatLowNodePercent(value) ?? formatPlatformTablePercentValue(value, { clamp: true });
 
 type GuestCounts = { vms: number; containers: number };
 
@@ -144,27 +145,26 @@ const CTS_BADGE =
 const ZERO_BADGE =
   'inline-flex min-w-8 justify-center items-center rounded-md bg-surface-alt px-1.5 py-0.5 text-[11px] font-medium tabular-nums text-muted';
 
-// Shim a canonical Resource into the legacy Node shape that
-// `useWorkloadTableMetricHistory.getNodeMetricSeries` uses for its chart-key
-// candidate lookups. The lookup only reads `id`, `linkedAgentId`, `name`, and
-// `instance`, so a minimal projection is enough; everything else is left at
-// its harmless default. Field-cast through a Partial → unknown → LegacyNode
-// chain because the legacy Node type carries dozens of optional shape fields
-// the table doesn't need to satisfy here.
-const projectResourceToLegacyNode = (resource: Resource): LegacyNode => {
-  const proxmoxMeta = resource.proxmox ?? {};
-  const projected: Partial<LegacyNode> & {
-    id: string;
-    name: string;
-    instance: string;
-    linkedAgentId?: string;
-  } = {
+// The recorded member ID survives display-name changes and may not resemble
+// the canonical row ID. For older API-only rows use the native PVE source ID,
+// not a guessed display name or an agent ID.
+const getNodeHistoryIdentity = (resource: Resource): LegacyNode => {
+  const linkedAgentId = resource.agent?.agentId;
+  const sourceId = asTrimmedString(resource.proxmox?.sourceId);
+  const identity: NodeHistoryIdentity = {
     id: resource.id,
     name: resource.name,
-    instance: proxmoxMeta.instance ?? '',
-    linkedAgentId: resource.agent?.agentId ?? undefined,
+    instance: resource.proxmox?.instance ?? '',
+    linkedAgentId,
+    metricsTarget:
+      resource.metricsTarget ??
+      (sourceId && resource.sourceType === 'api' && !linkedAgentId
+        ? { resourceType: 'node', resourceId: sourceId }
+        : undefined),
   };
-  return projected as unknown as LegacyNode;
+  // The legacy reader accepts a Node, but its chart-key model only reads
+  // these identity fields. Avoid building the full drawer state for charts.
+  return identity as LegacyNode;
 };
 
 // Every host column carries a scalar to order on, so the sortable-key list is
@@ -550,7 +550,7 @@ export const ProxmoxNodesTable: Component<{
                 const diskPercent = createMemo(() => getDiskPercent(node));
                 const diskHistoryLabel = () => {
                   const value = diskPercent();
-                  return value === undefined ? undefined : formatNodeDiskHistoryPercent(value);
+                  return value === undefined ? undefined : formatNodeHistoryPercent(value);
                 };
                 const aggregateDisk = (): Disk | undefined => {
                   if (!node.disk) return undefined;
@@ -559,7 +559,7 @@ export const ProxmoxNodesTable: Component<{
                   // redundant percentage; unavailable is never an empty disk.
                   return { total, used, free, usage: diskPercent() ?? -1 };
                 };
-                const legacyNode = () => projectResourceToLegacyNode(node);
+                const historyIdentity = () => getNodeHistoryIdentity(node);
                 const externalUrl = () => {
                   const shimmed = drawerNode();
                   return shimmed ? getNodeExternalUrl(shimmed) : '';
@@ -591,12 +591,13 @@ export const ProxmoxNodesTable: Component<{
                     ? 'bg-red-50 dark:bg-red-950/25'
                     : 'bg-yellow-50 dark:bg-yellow-950/25';
                 };
-                const cpuSeries = () => metricHistory.getNodeMetricSeries(legacyNode(), 'cpu');
+                const cpuSeries = () => metricHistory.getNodeMetricSeries(historyIdentity(), 'cpu');
                 const memorySeries = () =>
-                  metricHistory.getNodeMetricSeries(legacyNode(), 'memory');
-                const diskSeries = () => metricHistory.getNodeMetricSeries(legacyNode(), 'disk');
+                  metricHistory.getNodeMetricSeries(historyIdentity(), 'memory');
+                const diskSeries = () =>
+                  metricHistory.getNodeMetricSeries(historyIdentity(), 'disk');
                 const temperatureSeries = () =>
-                  metricHistory.getNodeMetricSeries(legacyNode(), 'temperature');
+                  metricHistory.getNodeMetricSeries(historyIdentity(), 'temperature');
                 const [historyLensActive, setHistoryLensActive] = createSignal(false);
                 const [historyCursorRatio, setHistoryCursorRatio] = createSignal<number | null>(
                   null,
@@ -737,10 +738,7 @@ export const ProxmoxNodesTable: Component<{
                             >
                               <MetricMiniSparkline
                                 series={cpuSeries()}
-                                valueLabel={formatPlatformTablePercentValue(cpuPercent(), {
-                                  normalizeRatio: true,
-                                  clamp: true,
-                                })}
+                                valueLabel={formatNodeHistoryPercent(cpuPercent())}
                                 title={`${name()} CPU history`}
                                 {...historyCursorProps()}
                               />
@@ -763,6 +761,7 @@ export const ProxmoxNodesTable: Component<{
                                   total={memoryTotal()}
                                   unavailable={drawerNode()?.memory?.usageUnavailable === true}
                                   percentOnly={memoryPercentOnly()}
+                                  formatUtilizationPercent={formatNodeBarPercent}
                                   cache={drawerNode()?.memory?.cache || 0}
                                   cacheInclusiveLabel="Shown in Proxmox"
                                   swapUsed={drawerNode()?.memory?.swapUsed || 0}
@@ -776,10 +775,7 @@ export const ProxmoxNodesTable: Component<{
                                 valueLabel={
                                   drawerNode()?.memory?.usageUnavailable
                                     ? 'N/A'
-                                    : formatPlatformTablePercentValue(memoryPercent(), {
-                                        normalizeRatio: true,
-                                        clamp: true,
-                                      })
+                                    : formatNodeHistoryPercent(memoryPercent())
                                 }
                                 title={`${name()} memory history`}
                                 {...historyCursorProps()}
@@ -811,7 +807,7 @@ export const ProxmoxNodesTable: Component<{
                                   summaryStrategy="max"
                                   disks={normalizeDiskArray(node.agent?.disks)}
                                   aggregateDisk={aggregateDisk()}
-                                  formatAggregatePercent={formatNodeDiskBarPercent}
+                                  formatAggregatePercent={formatNodeBarPercent}
                                   thresholds={diskThresholds()}
                                 />
                               }
@@ -819,7 +815,7 @@ export const ProxmoxNodesTable: Component<{
                               <MetricMiniSparkline
                                 series={diskSeries()}
                                 valueLabel={diskHistoryLabel()}
-                                formatValue={formatNodeDiskHistoryPercent}
+                                formatValue={formatNodeHistoryPercent}
                                 title={`${name()} disk history`}
                                 {...historyCursorProps()}
                               />

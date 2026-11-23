@@ -120,7 +120,7 @@ export const SystemLogsPanel: Component<SystemLogsPanelProps> = (props) => {
         <div class="p-4 sm:p-6">
           <div
             ref={state.setLogContainer}
-            class="bg-slate-950 text-slate-300 font-mono text-xs p-4 rounded-md h-[500px] overflow-y-auto whitespace-pre-wrap leading-relaxed border border-border-subtle scrollbar-thin scrollbar-thumb-slate-700 scrollbar-track-transparent"
+            class="bg-slate-950 text-slate-300 font-mono text-xs p-4 rounded-md h-[500px] overflow-y-auto whitespace-pre-wrap wrap-anywhere leading-relaxed border border-border-subtle scrollbar-thin scrollbar-thumb-slate-700 scrollbar-track-transparent"
           >
             <For each={state.logs()}>
               {(log) => (

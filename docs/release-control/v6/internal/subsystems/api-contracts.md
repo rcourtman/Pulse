@@ -11265,11 +11265,17 @@ are touched, an empty `ipOverride` clears the stored override, naming an
 unknown cluster member is a `400` rather than a silent no-op, and accepted
 values are normalized to a scheme-less IP or hostname with optional port
 (pasted URLs are reduced to their `host[:port]`). The override writes
-`ClusterEndpoints[n].IPOverride` exclusively; discovered `Host` and `IP`
-remain re-discovery-owned and must not become client-writable through this
-payload. `GET /api/config/nodes` continues to expose the stored value as the
-optional `ipOverride` endpoint field consumed by the shared normalization in
-`frontend-modern/src/api/nodes.ts`.
+`ClusterEndpoints[n].IPOverride` as its only address field; discovered `Host`
+and `IP` remain re-discovery-owned. A save that moves a member's effective dial
+target, including clearing an override or selecting a different discovered
+address through Verify SSL, discards that member's last Pulse reachability
+result, time and error before persistence. A spelling-only edit, an unchanged
+sibling, and Proxmox's own online/last-seen state retain their evidence.
+`GET /api/config/nodes` exposes the saved `ipOverride` next to its effective
+target and omits the discarded observation until checked again.
+`TestPVEEndpointReachabilityAfterAddressEdit` in
+`internal/api/configapi/config_handlers_connection_test.go` covers the
+saved and reopened wire response.
 `ClusterEndpoints[n].IPOverride` has a second canonical writer: when a
 canonical `/api/auto-register` PVE registration in
 `internal/api/configapi/config_setup_handlers.go` matches a non-primary cluster member
@@ -13032,10 +13038,19 @@ The browser config payload remains additive and compatible: no endpoint field
 is removed or renamed. Monitoring owns the later repeated-authoritative-
 absence retirement rule; config handlers must not reinterpret a partial
 membership or telemetry read as deletion.
+
+`POST /api/config/nodes/{id}/refresh-cluster` saves the discovered configuration
+before requesting a monitor reload. If the reload reports failure after the
+save, the API returns HTTP 500 with a saved-but-not-applied message, not the
+success payload. The saved row remains available through
+`GET /api/config/nodes` without another write, and the inventory change event
+still describes the saved change, not a successful poll. A cancelled client
+may receive no response; it does not roll back a completed save.
 `internal/api/configapi/config_handlers_cluster_additional_test.go` and
 `internal/config/pve_instances_test.go` prove unreachable-member persistence,
 evidence preservation, duplicate consolidation, and same-name-cluster
-isolation.
+isolation. `TestContract_PVEClusterRefreshReportsSavedButUnapplied` covers the
+scoped refresh response and saved readback after a failed reload.
 
 ### Canonical pool-health resource transport
 
@@ -14707,14 +14722,19 @@ After the existing XML parser succeeds, the SSO diagnostic on
 `internal/api/identity_sso_handlers.go` requires nonblank IdP identity and an HTTP(S) SSO endpoint in a supported binding before
 returning metadata success. Incomplete, unsupported or credential-bearing
 endpoints return `metadata_incomplete` without success details; selected metadata
-cannot fall back to manual settings. Success says only that identity and an SSO
-URL were found, explicitly not that sign-in was tested. The manual path checks
-URL format only and explicitly leaves certificates and sign-in untested.
-Certificate information remains informational; no new trust, save or login
-policy is introduced. The existing parser still rejects malformed endpoint URLs
+cannot fall back to manual settings. Success retains the observed identity and
+SSO URL and explicitly says sign-in was not tested. When no X.509 signing
+certificate can be read from the selected metadata, the successful result tells
+the administrator what to check in that document. Absent, unreadable and
+encryption-only certificate data do not erase the other results. Parsed signing
+or unspecified-use certificates, including expired ones, remain informational.
+The manual path checks URL format only and leaves certificates and sign-in
+untested. No new trust, save or login policy is introduced.
+The existing parser still rejects malformed endpoint URLs
 as `parse_failed` (or `fetch_failed` for fetched XML), before evidence checking.
-`TestSAMLConnectionRequiresMetadataEvidence` covers format
-and evidence boundaries; `TestContractSSOSAMLDiagnosticConsumer` exercises the
+`TestSAMLConnectionRequiresMetadataEvidence` covers format and
+`TestSAMLConnectionPreservesCertificateInformation` covers certificate evidence;
+`TestContractSSOSAMLDiagnosticConsumer` exercises the
 authenticated route, exact wire results, audit verdicts and unchanged settings,
 files, saved secrets and local administrator recovery. Existing fetch/parse
 categories, metadata-source precedence, limits, rate checks and outbound/TLS
@@ -15098,3 +15118,22 @@ rune-length bounds (`64`/`80`/`240`) before saving. Existing clients that do not
 send these keys remain fully compatible. `internal/api/alerting/email_branding_test.go`
 and `frontend-modern/src/api/__tests__/notifications.test.ts` verify API
 serialization and presence handling.
+
+### Dead-letter response contract
+
+`GET /api/notifications/dlq` returns queue summaries in existing completion
+order. The default limit stays 100; a valid integer from 1 through 1000
+overrides it, and no rows still returns `null`. Each row retains `id` (the
+input to the existing retry and dismiss calls), `type`, optional `method` and
+`destinationId`, `status`, `attempts`, `maxAttempts`, `createdAt`, and any
+available `lastAttempt`, `nextRetryAt`, `completedAt`, `payloadBytes`, or
+operational `links`. The `alerts` list carries references
+(`id`, `type`, `level`, `resourceId`). No provider configuration, full alert
+payload, raw error text, or attempt failure class is part of the list. For
+recorded attempt diagnostics, use the separate settings-read
+`GET /api/notifications/delivery-log`. It returns the newest retained attempts,
+50 by default and at most 200 per read. Match the queue `id` to the log's
+`notificationId` and check the attempt timestamp; an older attempt or a missing
+audit row is not a verdict for the current queue entry. Permissions and action
+payloads are unchanged. `notification_queue_additional_test.go` checks the HTTP
+shape, recorded attempt class, persisted row and ID-based action responses.

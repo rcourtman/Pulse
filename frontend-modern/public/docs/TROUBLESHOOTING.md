@@ -82,6 +82,10 @@ establish safe recovery.
   [unassigned slots, missing members and parity counts](TROUBLESHOOTING.md#unraid-reports-missing-disks-in-empty-slots).
   Unraid parity is not Linux MD RAID; do not rebuild or change disk assignments
   just to make Pulse's count agree.
+- **Pulse stopped and may have run out of memory:** start with the
+  [checks after a suspected memory stop](#after-a-memory-cgroup-kill).
+  A high memory chart is not proof of a kill. If the dashboard opens again,
+  check for new History points before assuming that collection resumed.
 - **Pulse itself uses more memory, CPU or disk writes:** use
   [memory baseline and growth checks](TROUBLESHOOTING.md#memory-use-keeps-growing)
   or [CPU and write-rate checks](TROUBLESHOOTING.md#excessive-cpu-writes-or-database-growth).
@@ -1302,10 +1306,10 @@ is unsafe.
 
 ##### After a memory-cgroup kill
 
-A kernel message that names Pulse and records a memory-cgroup kill confirms
-that Pulse was stopped. A high peak or an `oom` count alone does not. On
-cgroup v2, an increase in `oom_kill` counts processes killed in the group or
-its children, but does not say whether one of them was Pulse.
+For LXC, check the Proxmox host's existing kernel log at the stop time. A
+cgroup memory kill naming Pulse in the affected group confirms the stop.
+A high peak or `oom` count alone does not. On cgroup v2, an `oom_kill`
+increase counts kills in that group or its children, not necessarily Pulse.
 
 Once Pulse is running again, open a resource that had stored readings before
 the stop. In its [History chart](METRICS_HISTORY.md#read-a-history-panel), select
@@ -1322,12 +1326,19 @@ one. After a cgroup is recreated, its counters describe the new group, not
 the one that stopped. A lower reading after Pulse restarts does not explain
 the earlier peak or establish recovery.
 
-If the startup log for that run already says
-`aligned Go memory limit with cgroup memory limit`, `cgroupLimitBytes` is the
-limit Pulse detected and `goMemLimitBytes` is the Go runtime's soft target.
-That target does not cap process RSS or total container memory. A missing
-line does not prove there was no cap; an explicit `GOMEMLIMIT` takes
-precedence over automatic detection.
+If Pulse logged a memory limit at startup, use the line from the same run:
+
+- `aligned Go memory limit with cgroup memory limit`: `cgroupLimitBytes` is
+  the tightest limit Pulse could read from its cgroup and visible parents.
+- `aligned Go memory limit with /proc/meminfo MemTotal`: `memoryLimitBytes`
+  is the RAM reported where Pulse runs. In Proxmox LXC, the enforcing cgroup
+  can be hidden from Pulse. The RAM reading can reflect the configured LXC
+  limit, but it can also reflect host RAM. Compare it with the configured
+  LXC limit or matching host cgroup evidence you already have.
+
+In both cases `goMemLimitBytes` is the Go runtime's soft target, not a cap on
+process RSS or total container memory. A missing line does not prove there
+was no cap. An explicit `GOMEMLIMIT` takes precedence over automatic detection.
 
 Share only the time, running version, scope, counts or byte values, and the
 relevant kernel result with host names and paths removed. Do not restart
