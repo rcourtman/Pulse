@@ -174,10 +174,10 @@ export class ProviderGroupRuleError extends Error {
   constructor(field: GroupRuleField, duplicate = false) {
     super(
       field === 'allowedGroups'
-        ? 'Allowed Groups: separate names with commas or new lines. Use matching double quotes around a name containing a comma or =.'
+        ? 'Allowed Groups: check the separators and double quotes.'
         : duplicate
           ? 'Group Role Mappings: enter each group only once.'
-          : 'Group Role Mappings: enter complete group=roleId pairs. Use matching double quotes around a group name containing a comma or =.',
+          : 'Group Role Mappings: enter complete group=roleId pairs. Check double quotes.',
     );
     this.field = field;
   }

@@ -1070,7 +1070,7 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
                 </Button>
 
                 <Show when={advancedOpen()}>
-                  <div class="mt-4 space-y-4 p-4 bg-surface-alt rounded-md">
+                  <div class="mt-3 space-y-2.5 rounded-md bg-surface-alt p-3">
                     <Show when={form.type === 'oidc'}>
                       <div class={formField}>
                         <label for="sso-oidc-groups-claim" class={labelClass()}>
@@ -1091,18 +1091,18 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
                         </p>
                       </div>
                     </Show>
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div class="grid grid-cols-1 gap-2.5 md:grid-cols-2">
                       <FormTextarea
                         label="Allowed Groups"
                         aria-invalid={editorFeedback()?.field === 'allowedGroups' || undefined}
                         aria-describedby={
                           editorFeedback()?.field === 'allowedGroups' ? editorFeedbackId : undefined
                         }
-                        rows={2}
+                        rows={3}
                         value={form.allowedGroups}
                         onInput={(e) => setForm('allowedGroups', e.currentTarget.value)}
                         placeholder="admin, sso-users"
-                        textareaBaseClass={controlClass('min-h-[60px]')}
+                        textareaBaseClass={controlClass('break-all py-1.5!')}
                         help={
                           <>
                             <span id={signInRestrictionsId}>
@@ -1140,12 +1140,12 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
                             ? editorFeedbackId
                             : undefined
                         }
-                        rows={2}
+                        rows={3}
                         value={form.groupRoleMappings}
                         onInput={(e) => setForm('groupRoleMappings', e.currentTarget.value)}
                         placeholder="admins=admin, ops=operator"
-                        textareaBaseClass={controlClass('min-h-[60px]')}
-                        help='Assigns roles after sign-in checks. Separate group=roleId pairs with commas or new lines. Example: "Ops, East"=viewer.'
+                        textareaBaseClass={controlClass('break-all py-1.5!')}
+                        help='Roles apply after sign-in checks. Use group=roleId, e.g. "Ops, East"=viewer. Commas or new lines.'
                       />
                     </div>
                   </div>

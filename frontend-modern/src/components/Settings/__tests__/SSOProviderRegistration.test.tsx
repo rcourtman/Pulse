@@ -97,7 +97,7 @@ describe('SSO sign-in restrictions and role mapping guidance', () => {
     expect(
       dialog.getByRole('textbox', { name: 'Group Role Mappings' }),
     ).toHaveAccessibleDescription(
-      'Assigns roles after sign-in checks. Separate group=roleId pairs with commas or new lines. Example: "Ops, East"=viewer.',
+      'Roles apply after sign-in checks. Use group=roleId, e.g. "Ops, East"=viewer. Commas or new lines.',
     );
     expect(dialog.queryByText(/Empty allows all/)).toBeNull();
     readOnlyRequests();
