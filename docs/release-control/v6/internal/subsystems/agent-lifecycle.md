@@ -12045,8 +12045,10 @@ or original installed-recovery acceptance.
 
 The API-owned SAML Test now requires IdP identity and a supported HTTP(S) SSO
 endpoint before reporting metadata success, and labels metadata/manual results
-as untested sign-in (manual certificates are untested too). Incomplete metadata
-returns `metadata_incomplete` without details or a manual fallback. This changes
+as untested sign-in. When a metadata read finds no readable signing certificate,
+the result says so; manual URL checks still leave certificates untested.
+Incomplete metadata returns `metadata_incomplete` without details or a manual
+fallback. This changes
 only diagnostic evidence, not agent credentials, enrolment, saved provider
 settings, certificate trust or authentication. The adjacent
 `TestContractSSOSAMLDiagnosticConsumer` proves read-only authenticated results,

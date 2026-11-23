@@ -76,7 +76,7 @@ func TestSAMLConnectionLabelsPartialEvidence(t *testing.T) {
 				result := (&Router{}).testSAMLConnection(t.Context(), &SAMLTestConfig{IDPMetadataXML: xml})
 				require.True(t, result.Success)
 				require.Empty(t, result.Error)
-				require.Equal(t, "SAML metadata includes an IdP identity and an SSO URL. Sign-in has not been tested.", result.Message)
+				require.Equal(t, "No signing certificate could be read from the IdP metadata. Check that it includes an X.509 signing certificate. Sign-in has not been tested.", result.Message)
 				require.Equal(t, "urn:Synthetic:IdP", result.Details.EntityID)
 				require.Equal(t, endpoint, result.Details.SSOURL, "do not rewrite opaque identity or endpoint path/query")
 				require.Empty(t, result.Details.Certificates)
@@ -101,15 +101,38 @@ func TestSAMLConnectionPreservesCertificateInformation(t *testing.T) {
 	cert := &x509.Certificate{SerialNumber: big.NewInt(1), Subject: pkix.Name{CommonName: "Synthetic IdP"}, NotBefore: before, NotAfter: after, KeyUsage: x509.KeyUsageDigitalSignature}
 	der, err := x509.CreateCertificate(rand.Reader, cert, cert, &key.PublicKey, key)
 	require.NoError(t, err)
-	keys := `<KeyDescriptor use="signing"><KeyInfo xmlns="http://www.w3.org/2000/09/xmldsig#"><X509Data><X509Certificate>` + base64.StdEncoding.EncodeToString(der) + `</X509Certificate></X509Data></KeyInfo></KeyDescriptor>`
-	result := (&Router{}).testSAMLConnection(t.Context(), &SAMLTestConfig{IDPMetadataXML: samlDiagnosticMetadata("urn:synthetic:idp", samlDiagnosticDescriptor(saml.HTTPRedirectBinding, "https://idp.example.test/sso", keys))})
-	require.True(t, result.Success, "certificate expiry is reported, not a new diagnostic gate")
-	require.Contains(t, result.Message, "Sign-in has not been tested.")
-	require.Len(t, result.Details.Certificates, 1)
-	require.Equal(t, "CN=Synthetic IdP", result.Details.Certificates[0].Subject)
-	require.Equal(t, before, result.Details.Certificates[0].NotBefore)
-	require.Equal(t, after, result.Details.Certificates[0].NotAfter)
-	require.True(t, result.Details.Certificates[0].IsExpired)
+	encoded := base64.StdEncoding.EncodeToString(der)
+	const ssoURL = "https://idp.example.test/sso"
+	for _, tt := range []struct {
+		name, useAttribute, certificate string
+		wantCertificate                 bool
+	}{
+		{"signing use", ` use="signing"`, encoded, true},
+		{"unspecified use", "", encoded, true},
+		{"encryption only", ` use="encryption"`, encoded, false},
+		{"unreadable signing certificate", ` use="signing"`, base64.StdEncoding.EncodeToString([]byte("not a certificate")), false},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			keys := `<KeyDescriptor` + tt.useAttribute + `><KeyInfo xmlns="http://www.w3.org/2000/09/xmldsig#"><X509Data><X509Certificate>` + tt.certificate + `</X509Certificate></X509Data></KeyInfo></KeyDescriptor>`
+			result := (&Router{}).testSAMLConnection(t.Context(), &SAMLTestConfig{IDPMetadataXML: samlDiagnosticMetadata("urn:synthetic:idp", samlDiagnosticDescriptor(saml.HTTPRedirectBinding, ssoURL, keys))})
+			require.True(t, result.Success, "parsed identity and endpoint remain useful regardless of certificate evidence")
+			require.Empty(t, result.Error)
+			require.NotNil(t, result.Details)
+			require.Equal(t, "urn:synthetic:idp", result.Details.EntityID)
+			require.Equal(t, ssoURL, result.Details.SSOURL)
+			if !tt.wantCertificate {
+				require.Empty(t, result.Details.Certificates)
+				require.Equal(t, "No signing certificate could be read from the IdP metadata. Check that it includes an X.509 signing certificate. Sign-in has not been tested.", result.Message)
+				return
+			}
+			require.Equal(t, "SAML metadata includes an IdP identity and an SSO URL. Sign-in has not been tested.", result.Message)
+			require.Len(t, result.Details.Certificates, 1)
+			require.Equal(t, "CN=Synthetic IdP", result.Details.Certificates[0].Subject)
+			require.Equal(t, before, result.Details.Certificates[0].NotBefore)
+			require.Equal(t, after, result.Details.Certificates[0].NotAfter)
+			require.True(t, result.Details.Certificates[0].IsExpired, "expiry remains informational")
+		})
+	}
 
 	// Manual malformed certificates still fail in actual service setup; the
 	// format-only diagnostic must neither claim nor attempt that validation.

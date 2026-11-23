@@ -14722,14 +14722,19 @@ After the existing XML parser succeeds, the SSO diagnostic on
 `internal/api/identity_sso_handlers.go` requires nonblank IdP identity and an HTTP(S) SSO endpoint in a supported binding before
 returning metadata success. Incomplete, unsupported or credential-bearing
 endpoints return `metadata_incomplete` without success details; selected metadata
-cannot fall back to manual settings. Success says only that identity and an SSO
-URL were found, explicitly not that sign-in was tested. The manual path checks
-URL format only and explicitly leaves certificates and sign-in untested.
-Certificate information remains informational; no new trust, save or login
-policy is introduced. The existing parser still rejects malformed endpoint URLs
+cannot fall back to manual settings. Success retains the observed identity and
+SSO URL and explicitly says sign-in was not tested. When no X.509 signing
+certificate can be read from the selected metadata, the successful result tells
+the administrator what to check in that document. Absent, unreadable and
+encryption-only certificate data do not erase the other results. Parsed signing
+or unspecified-use certificates, including expired ones, remain informational.
+The manual path checks URL format only and leaves certificates and sign-in
+untested. No new trust, save or login policy is introduced.
+The existing parser still rejects malformed endpoint URLs
 as `parse_failed` (or `fetch_failed` for fetched XML), before evidence checking.
-`TestSAMLConnectionRequiresMetadataEvidence` covers format
-and evidence boundaries; `TestContractSSOSAMLDiagnosticConsumer` exercises the
+`TestSAMLConnectionRequiresMetadataEvidence` covers format and
+`TestSAMLConnectionPreservesCertificateInformation` covers certificate evidence;
+`TestContractSSOSAMLDiagnosticConsumer` exercises the
 authenticated route, exact wire results, audit verdicts and unchanged settings,
 files, saved secrets and local administrator recovery. Existing fetch/parse
 categories, metadata-source precedence, limits, rate checks and outbound/TLS

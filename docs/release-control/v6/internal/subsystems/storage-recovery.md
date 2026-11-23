@@ -9750,9 +9750,11 @@ reader identity and full repository context without adding reads or routes.
 The shared API SAML Test rejects missing IdP identity or a supported HTTP(S)
 SSO endpoint as `metadata_incomplete`, without validated details or a fallback
 to manual settings. Its success describes metadata evidence only and states
-that sign-in was not tested; the manual URL-format result also states that
-certificates were not tested. This adds no recovery or certificate-trust
-authority, saves no configuration and changes no sign-in service policy.
+that sign-in was not tested. A metadata read without a parsed signing
+certificate says so without discarding the observed identity and SSO URL.
+The manual URL-format result still says certificates were not tested.
+This adds no recovery or certificate-trust authority, saves no configuration
+and changes no sign-in service policy.
 `TestContractSSOSAMLDiagnosticConsumer` binds the real authenticated diagnostic,
 audit success/failure and preserved settings/files/secrets/admin access. Actual
 native sign-in and installed recovery remain distinct evidence.

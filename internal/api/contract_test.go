@@ -26201,8 +26201,17 @@ func TestContractSSOSAMLDiagnosticConsumer(t *testing.T) {
 				if !strings.Contains(strings.ToLower(result.Message), "not been tested") || result.Details == nil || result.Details.Certificates == nil || result.Details.SupportedScopes == nil {
 					t.Fatal("success must retain diagnostic limits and canonical details")
 				}
-				if tt.cfg.IDPMetadataURL == "" && tt.cfg.IDPMetadataXML == "" && !strings.Contains(result.Message, "Certificates and sign-in") {
-					t.Fatal("manual URL test must not claim certificate validation")
+				if tt.cfg.IDPMetadataURL == "" && tt.cfg.IDPMetadataXML == "" {
+					if !strings.Contains(result.Message, "Certificates and sign-in") {
+						t.Fatal("manual URL test must not claim certificate validation")
+					}
+				} else {
+					if result.Message != "No signing certificate could be read from the IdP metadata. Check that it includes an X.509 signing certificate. Sign-in has not been tested." {
+						t.Fatalf("metadata without a readable signing certificate must say what was not read: %q", result.Message)
+					}
+					if result.Details.EntityID != "urn:Synthetic:IdP" || result.Details.SSOURL != ssoURL || len(result.Details.Certificates) != 0 {
+						t.Fatalf("diagnostic must keep observed identity and endpoint without inventing a certificate: %+v", result.Details)
+					}
 				}
 			} else if result.Details != nil {
 				t.Fatal("failed diagnostic must not return validated details")
