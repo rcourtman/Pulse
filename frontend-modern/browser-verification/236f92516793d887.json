@@ -1,0 +1,42 @@
+{
+  "version": 1,
+  "base_sha": "f7b0027cb6eca5f95f55941eb24d5210a2797751",
+  "verified_at": "2026-11-23T03:26:46Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Workloads/StackedMemoryBar.tsx",
+    "frontend-modern/src/components/Workloads/stackedMemoryBarModel.ts",
+    "frontend-modern/src/features/proxmox/ProxmoxNodesTable.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Workloads/StackedMemoryBar.tsx": "516bf0d26baa62b0e1f4f29c1555bd69b1d27daad164185450689d0d9a3a8dc8",
+    "frontend-modern/src/components/Workloads/stackedMemoryBarModel.ts": "eff65d8e3e7589442af98e6c2c89bed7757dc313227ce91315ff56bac5568d4f",
+    "frontend-modern/src/features/proxmox/ProxmoxNodesTable.tsx": "d845dd364f149f2256c4d41ad8ee159fd0d6638ea5e2fa74f6160cc680bcf67c"
+  },
+  "routes": [
+    "/proxmox/overview"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 960
+    },
+    {
+      "width": 390,
+      "height": 844
+    },
+    {
+      "width": 940,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Paired production-mode Chromium 141.0.7390.37 and Playwright 1.56.1 previews; light desktop and dark touch phone, with 940px light intermediate. Same producer-backed synthetic metric inputs and fixed time. 302 browser assertions and 10 inspected captures.",
+    "Current 0.62%, 0.71%, 0.88% and 1.13% no longer all read 1%. Measured zero stays 0%, unavailable stays a dash and the 16% control is unchanged. Actual bar widths, colors and byte quantities agree with base. Pair wraps only when it would otherwise be lost; no previously visible byte pair was lost across 23 sampled widths.",
+    "Both desktop and touch-phone Trends captures are unchanged. The renamed node, API-only fallback and linked agent use their own samples. Foreign curves do not fill a missing series. The guest current and last-known cues are unchanged."
+  ],
+  "interactions": [
+    "Sort by Memory in both directions with Enter on desktop and a tap on phone; show all seven nodes on narrow layouts. Confirm the unknown row sorts after measured zero.",
+    "Check Memory Composition details on desktop, then use View (inside Filters on phone) to switch Bars to Trends and back without losing sort. At intermediate width, inspect byte pairs on the second line."
+  ]
+}
