@@ -577,15 +577,25 @@ function coverageRestorePointDetails(artifact: RecoverableArtifact) {
               }),
               makeDetailRow('Location', artifact.location, { wrap: true }),
               ...artifactDateRows(artifact),
-              makeDetailRow('Size', formatPlatformTableBytesValue(artifact.size, 'Unknown size'), {
-                tone: hasSize() ? undefined : 'muted',
-              }),
+              makeDetailRow(
+                'Size',
+                hasSize()
+                  ? formatPlatformTableBytesValue(artifact.size)
+                  : artifact.running
+                    ? 'In progress'
+                    : 'Unknown size',
+                {
+                  tone: hasSize() ? undefined : 'muted',
+                },
+              ),
               makeDetailRow('Identifier', artifact.nativeId, { wrap: true }),
               makeDetailRow('Metadata', artifact.detailTitle || artifact.detail, { wrap: true }),
             ]),
             footerContent: hasSize() ? undefined : (
               <p class="whitespace-normal text-[11px] leading-snug text-muted wrap-anywhere">
-                No usable size was reported. Unknown does not mean this restore point is empty.
+                {artifact.running
+                  ? 'Size will be reported after the backup finishes.'
+                  : 'No usable size was reported. Unknown does not mean this restore point is empty.'}
               </p>
             ),
           },
@@ -1251,10 +1261,11 @@ export function ProxmoxCoverageTable(props: {
                                                 <TableCell
                                                   class={`${getPlatformTableCellClassForKind('numeric-value')} tabular-nums text-base-content`}
                                                 >
-                                                  {formatPlatformTableBytesValue(
-                                                    artifact.size,
-                                                    'Unknown size',
-                                                  )}
+                                                  {artifact.size && artifact.size > 0
+                                                    ? formatPlatformTableBytesValue(artifact.size)
+                                                    : artifact.running
+                                                      ? 'In progress'
+                                                      : 'Unknown size'}
                                                 </TableCell>
                                               </Show>
                                               <TableCell

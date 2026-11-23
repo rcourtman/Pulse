@@ -77,6 +77,7 @@ export const StoragePoolRow: Component<StoragePoolRowProps> = (props) => {
     }`
       .replace(/\s+/g, ' ')
       .trim();
+  const isPhoneLayout = () => props.layoutMode === 'narrow' || props.layoutMode === 'compact';
   const row = createMemo(() => buildStoragePoolRowModel(props.record, props.growthDelta ?? null));
   const detailControlsId = createMemo(() =>
     buildSummaryDisclosureControlsId(props.summarySeriesId),
@@ -117,7 +118,14 @@ export const StoragePoolRow: Component<StoragePoolRowProps> = (props) => {
               onAction={props.onToggleExpand}
               onPreviewClear={() => props.onHoverChange?.(null)}
             />
-            <span class={STORAGE_POOL_ROW_NAME_TEXT_CLASS} title={props.record.name}>
+            <span
+              class={
+                isPhoneLayout()
+                  ? 'block min-w-0 whitespace-normal wrap-anywhere text-[12px] font-semibold leading-tight'
+                  : STORAGE_POOL_ROW_NAME_TEXT_CLASS
+              }
+              title={props.record.name}
+            >
               {props.record.name}
             </span>
           </div>
@@ -138,7 +146,11 @@ export const StoragePoolRow: Component<StoragePoolRowProps> = (props) => {
                 fallback={<span class={STORAGE_POOL_ROW_PLACEHOLDER_CLASS}>—</span>}
               >
                 <span
-                  class={`${STORAGE_POOL_ROW_ISSUE_TEXT_CLASS} ${row().stateToneClass}`}
+                  class={`${
+                    isPhoneLayout()
+                      ? 'block whitespace-normal wrap-anywhere text-[11px] font-semibold leading-tight'
+                      : STORAGE_POOL_ROW_ISSUE_TEXT_CLASS
+                  } ${row().stateToneClass}`}
                   title={row().stateTitle || row().stateLabel}
                 >
                   {row().stateLabel}
@@ -148,13 +160,15 @@ export const StoragePoolRow: Component<StoragePoolRowProps> = (props) => {
           >
             {(headline) => (
               <span
-                class={`${STORAGE_POOL_ROW_ISSUE_TEXT_CLASS} ${props.alertHeadlineClass ?? ''}`}
+                class={`${
+                  isPhoneLayout()
+                    ? 'block whitespace-normal wrap-anywhere text-[11px] font-semibold leading-tight'
+                    : STORAGE_POOL_ROW_ISSUE_TEXT_CLASS
+                } ${props.alertHeadlineClass ?? ''}`}
                 title={`${headline()} · ${row().stateTitle || row().stateLabel}`}
                 data-storage-alert-headline
               >
-                {props.layoutMode === 'narrow' || props.layoutMode === 'compact'
-                  ? (props.alertHeadlineCompact ?? headline())
-                  : headline()}
+                {isPhoneLayout() ? (props.alertHeadlineCompact ?? headline()) : headline()}
               </span>
             )}
           </Show>

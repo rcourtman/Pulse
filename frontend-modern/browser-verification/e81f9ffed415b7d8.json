@@ -1,0 +1,66 @@
+{
+  "version": 1,
+  "base_sha": "f3ab36fd2181085ec4ea78384704880f7084ff06",
+  "verified_at": "2026-11-23T20:42:40Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Storage/StoragePoolRow.tsx",
+    "frontend-modern/src/features/platformPage/sharedPlatformPage.tsx",
+    "frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx",
+    "frontend-modern/src/features/proxmox/ProxmoxBackupsCoverageStrip.tsx",
+    "frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx",
+    "frontend-modern/src/features/proxmox/ProxmoxCephTable.tsx",
+    "frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx",
+    "frontend-modern/src/features/proxmox/ProxmoxMailGatewayDrawer.tsx",
+    "frontend-modern/src/features/proxmox/ProxmoxMailGatewayTable.tsx",
+    "frontend-modern/src/features/proxmox/ProxmoxNodesTable.tsx",
+    "frontend-modern/src/features/proxmox/ProxmoxRecoverableTable.tsx",
+    "frontend-modern/src/features/storageBackups/storagePagePresentation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Storage/StoragePoolRow.tsx": "f9e42b14e1db6fa52a3054582adbeaad496376ba15bc219e1e7d40c5c547a4c4",
+    "frontend-modern/src/features/platformPage/sharedPlatformPage.tsx": "5e33d993632d8f90b0458747504e8f6c3627b67e3c3850a0fdca510e3af71c0e",
+    "frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx": "91b0f268d61f2850a1a710a72297bd5c9f925c112b0d950b3ce57efe6d7adf73",
+    "frontend-modern/src/features/proxmox/ProxmoxBackupsCoverageStrip.tsx": "39dae08cfcfe5b8c7b1ee1e968f80991f954e0c1eecc7f0bb5ce5b5f5e7e4982",
+    "frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx": "c415815a397af0cd55e31dbe211679f7a6ce4984c672d0cd2cf0610420020530",
+    "frontend-modern/src/features/proxmox/ProxmoxCephTable.tsx": "8e35ac105a1f24e7536654909827fdc5914b5d9f3e9249a8ffd35f043c29b341",
+    "frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx": "096dfef78c42962a13030ea8dc5279e6e6b2a17578ee467c739a3d9df1d1b4e1",
+    "frontend-modern/src/features/proxmox/ProxmoxMailGatewayDrawer.tsx": "40764a199c6dc0fdd49cbd68127241a676fd1f5d6dae7a3c1667c815ab376e86",
+    "frontend-modern/src/features/proxmox/ProxmoxMailGatewayTable.tsx": "013c671798c4733aa9b0e6c539a62592d94c9ebb644e2fb3345f8ddc176d5226",
+    "frontend-modern/src/features/proxmox/ProxmoxNodesTable.tsx": "909221a415a6455cbfd51ea9985211df0bde8bd4a08bbc527740624408dacc70",
+    "frontend-modern/src/features/proxmox/ProxmoxRecoverableTable.tsx": "ea03b3db5b23678202ff9999d6e4e6f91c4019cbb5d30765a6c72c52df7c807e",
+    "frontend-modern/src/features/storageBackups/storagePagePresentation.ts": "9f2fb3f8fc7b636c1d5293a88085a27cd8152227d0b3438b83d135da0b8c1507"
+  },
+  "routes": [
+    "/proxmox/overview",
+    "/proxmox/storage",
+    "/proxmox/backups/coverage",
+    "/proxmox/backups/date",
+    "/proxmox/ceph",
+    "/proxmox/mail"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Desktop 1440x900 dark and light themes on Overview, Mail Gateway, and Backups",
+    "Mobile 390x844 dark theme on Overview, Storage, Ceph, Backups, and Mail Gateway",
+    "PMG Mail tab inline loading without root Suspense fallback, visible spam histogram bars, quarantine and queue legends, and concrete Degraded reason notice",
+    "PBS dr-vault red status dot beside Sync failed and Coverage exception filter active chip with cleared All pill",
+    "Mobile Storage State warnings and Ceph cluster suffixes without truncation, plus non-overlapping PlatformSectionTabs arrows hiding at the right end"
+  ],
+  "interactions": [
+    "Expanded mail-gateway-eu and switched to Mail tab while observing DOM mutations for root Suspense flashes",
+    "Expanded mail-gateway-us to inspect concrete degradation notice in Overview and Mail tabs",
+    "Clicked Backup health exception row on Coverage, verified active filter chip and cleared All pill, then dismissed chip via X button",
+    "Navigated across all Proxmox tabs on desktop and mobile via PlatformSectionTabs and verified arrow visibility and non-overlap",
+    "Verified zero console errors, zero 4xx/5xx API responses, and zero horizontal overflow across all checked routes and viewports"
+  ]
+}
