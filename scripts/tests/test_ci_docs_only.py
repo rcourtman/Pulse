@@ -167,16 +167,20 @@ class OwningChecksTest(unittest.TestCase):
                          *(p.encode() for p in ("README.md", *GUIDES))]:
                 self.assertTrue(any(fnmatch.fnmatchcase(os.fsdecode(path), p) for p in patterns), path)
         self.assertIn("  push:\n    branches:\n      - main\n", triggers)
-        self.assertIn("        shard: [0, 1, 2, 3]\n", source)
-        self.assertIn("      fail-fast: false\n", source)
-        self.assertIn('        run: scripts/tests/run.sh --docs-shard "${{ matrix.shard }}"\n', source)
-        self.assertIn("    needs: recipes\n    if: ${{ always() }}\n", source)
+        recipes, rest = source.split("\n  recipes:\n", 1)[1].split("\n  docs-and-recipes:\n", 1)
+        validation, verdict = rest.split("\n  check:\n", 1)
+        self.assertIn("        shard: [0, 1, 3]\n", recipes)
+        self.assertIn("      fail-fast: false\n", recipes)
+        self.assertIn('        run: scripts/tests/run.sh --docs-shard "${{ matrix.shard }}"\n', recipes)
+        self.assertIn("        run: scripts/tests/run.sh --docs-shard 2\n", validation)
+        self.assertNotRegex(validation, r"(?m)^    (?:if|needs):")
+        self.assertIn("    needs: [recipes, docs-and-recipes]\n    if: ${{ always() }}\n", verdict)
         self.assertNotIn("continue-on-error:", source)
         for command in ("scripts/check_public_docs.py", "scripts/readme_entrypoints_test.py",
                         "scripts/check_docs_mirror.py", "scripts/tests/test_public_docs_workflow.py"):
-            self.assertIn(f"        run: python3 {command}\n", source)
-        self.assertIn('if [[ "$RECIPE_RESULT" != success ]]; then', source)
-        self.assertIn('            exit 1\n', source)
+            self.assertIn(f"        run: python3 {command}\n", validation)
+        self.assertIn('if [[ "$RECIPE_RESULT" != success || "$DOCS_RESULT" != success ]]; then', verdict)
+        self.assertIn('            exit 1\n', verdict)
 
     def test_independent_secret_scan_and_governance_are_unchanged_gates(self):
         source = BUILD.read_text()

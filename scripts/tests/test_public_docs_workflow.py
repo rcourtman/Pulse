@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import ast
 import fnmatch
+from itertools import product
 import os
 from pathlib import Path
 import re
@@ -24,7 +25,8 @@ import unittest
 ROOT = Path(__file__).resolve().parents[2]
 WORKFLOW = ROOT / ".github/workflows/public-docs.yml"
 SAFETY_STEP = "Exercise documentation safety and diagnostic recipes"
-VERDICT_STEP = "Require every documentation recipe shard"
+DOCS_JOB = "docs-and-recipes"
+VERDICT_STEP = "Require every documentation recipe shard and validation"
 HELP_DIFF_STEP = "Detect in-app Help changes"
 HELP_TEST_STEP = "Check in-app Help content and links"
 # Independent witnesses: all twelve formerly covered suites, plus the critical
@@ -111,15 +113,16 @@ def step_body(source: str, name: str) -> str:
 
 
 def safety_command(source: str, shard: int) -> str:
-    body = step_body(job_body(source, "recipes"), SAFETY_STEP)
+    job = DOCS_JOB if shard == 2 else "recipes"
+    body = step_body(job_body(source, job), SAFETY_STEP)
     run = re.findall(r"^        run: (.+)$", body, re.MULTILINE)
     if len(run) != 1:
         raise AssertionError("expected one literal docs-shard command")
     return run[0].replace("${{ matrix.shard }}", str(shard))
 
 
-def check_step_command(source: str, name: str) -> str:
-    body = step_body(job_body(source, "check"), name)
+def step_script(source: str, job: str, name: str) -> str:
+    body = step_body(job_body(source, job), name)
     marker = "        run: |\n"
     if body.count(marker) != 1:
         raise AssertionError(f"expected a literal script for {name}")
@@ -205,7 +208,7 @@ class PublicDocsWorkflowTest(unittest.TestCase):
         self.assertNotRegex(recipes, r"\b(?:npm|pip|go) (?:ci|install|build|test)\b")
 
     def test_existing_document_admissions_are_preserved(self):
-        check = job_body(self.source, "check")
+        validation = job_body(self.source, DOCS_JOB)
         for name, command in (
             ("Validate public documentation", "python3 scripts/check_public_docs.py"),
             ("Check getting-started safety and current plans", "python3 scripts/readme_entrypoints_test.py"),
@@ -213,43 +216,53 @@ class PublicDocsWorkflowTest(unittest.TestCase):
             ("Check documentation safety workflow contract", "python3 scripts/tests/test_public_docs_workflow.py"),
         ):
             with self.subTest(step=name):
-                step = step_body(check, name)
+                step = step_body(validation, name)
                 self.assertIn(f"        run: {command}\n", step)
                 self.assertNotRegex(step, r"(?m)^        if:")
 
     def test_all_four_isolated_shards_are_mandatory_and_bounded(self):
         recipes = job_body(self.source, "recipes")
-        self.assertIn("        shard: [0, 1, 2, 3]\n", recipes)
+        self.assertIn("        shard: [0, 1, 3]\n", recipes)
         self.assertIn("      fail-fast: false\n", recipes)
         self.assertNotRegex(recipes, r"(?m)^\s*(?:if|continue-on-error|exclude):")
+        validation = job_body(self.source, DOCS_JOB)
+        self.assertIn("    name: Documentation recipes (2)\n", validation)
+        self.assertNotRegex(validation, r"(?m)^    (?:if|needs|strategy):")
+        self.assertNotRegex(step_body(validation, SAFETY_STEP), r"(?m)^        if:")
+        self.assertLess(validation.index(SAFETY_STEP), validation.index("Validate public documentation"))
         self.assertNotIn("continue-on-error:", self.source)
-        for name in ("recipes", "check"):
+        for name in ("recipes", DOCS_JOB, "check"):
             job = job_body(self.source, name)
             self.assertIn("    runs-on: ubuntu-24.04\n", job)
             self.assertIn("    timeout-minutes: 10\n", job)
-            self.assertIn("          persist-credentials: false\n", job)
+            if name != "check":
+                self.assertIn("          persist-credentials: false\n", job)
         self.assertIn("permissions:\n  contents: read\n", self.source)
 
-    def test_required_check_runs_even_when_shards_fail_or_are_skipped(self):
+    def test_required_check_uses_both_jobs_without_queuing_another_checkout(self):
         check = job_body(self.source, "check")
-        self.assertIn("    needs: recipes\n", check)
+        self.assertIn("    needs: [recipes, docs-and-recipes]\n", check)
         self.assertEqual(re.findall(r"(?m)^    if: .+$", check), ["    if: ${{ always() }}"])
         self.assertIn("          RECIPE_RESULT: ${{ needs.recipes.result }}\n", check)
+        self.assertIn("          DOCS_RESULT: ${{ needs.docs-and-recipes.result }}\n", check)
         self.assertNotRegex(step_body(check, VERDICT_STEP), r"(?m)^        if:")
-        self.assertLess(check.index(VERDICT_STEP), check.index("Validate public documentation"))
-        for state in ("success", "failure", "cancelled", "skipped", "", "unknown"):
-            with self.subTest(state=state):
+        self.assertEqual(re.findall(r"(?m)^      - name: (.+)$", check), [VERDICT_STEP])
+        states = ("success", "failure", "cancelled", "skipped", "", "unknown")
+        command = step_script(self.source, "check", VERDICT_STEP)
+        for recipe, docs in product(states, repeat=2):
+            with self.subTest(recipe=recipe, docs=docs):
                 result = subprocess.run(["bash", "-e", "-o", "pipefail", "-c",
-                                         check_step_command(self.source, VERDICT_STEP)],
-                                        env=dict(os.environ, RECIPE_RESULT=state), text=True,
+                                         command],
+                                        env=dict(os.environ, RECIPE_RESULT=recipe, DOCS_RESULT=docs), text=True,
                                         capture_output=True, timeout=5)
-                self.assertEqual(result.returncode == 0, state == "success", result.stdout + result.stderr)
+                self.assertEqual(result.returncode == 0, recipe == docs == "success",
+                                 result.stdout + result.stderr)
 
     def test_help_proof_is_part_of_the_required_check(self):
-        check = job_body(self.source, "check")
-        checkout = step_body(check, "Check out repository")
+        validation = job_body(self.source, DOCS_JOB)
+        checkout = step_body(validation, "Check out repository")
         self.assertIn("          fetch-depth: 2\n", checkout)
-        detector = step_body(check, HELP_DIFF_STEP)
+        detector = step_body(validation, HELP_DIFF_STEP)
         self.assertIn("        id: help\n", detector)
         self.assertIn("github.event.pull_request.base.sha || github.event.before", detector)
         setup, install, test = (
@@ -259,24 +272,24 @@ class PublicDocsWorkflowTest(unittest.TestCase):
         )
         for name in (setup, install, test):
             self.assertIn("        if: steps.help.outputs.required != 'false'\n",
-                          step_body(check, name))
+                          step_body(validation, name))
         self.assertIn("cache-dependency-path: frontend-modern/package-lock.json",
-                      step_body(check, setup))
-        self.assertIn("node-version: '24'", step_body(check, setup))
+                      step_body(validation, setup))
+        self.assertIn("node-version: '24'", step_body(validation, setup))
         for name, command in (
             (install, "npm ci --no-audit --no-fund"),
             (test, "npm run test -- src/features/docs/__tests__ src/utils/__tests__/docsLinks.test.ts"),
         ):
-            step = step_body(check, name)
+            step = step_body(validation, name)
             self.assertIn("        working-directory: frontend-modern\n", step)
             self.assertEqual(re.findall(r"^        run: (.+)$", step, re.MULTILINE), [command])
-        order = [check.index(name) for name in (
+        order = [validation.index(name) for name in (
             "Check shipped docs mirror sync", HELP_DIFF_STEP, setup, install, test
         )]
         self.assertEqual(order, sorted(order))
 
     def test_help_diff_admission_uses_exact_trees_and_fails_safe(self):
-        command = check_step_command(self.source, HELP_DIFF_STEP)
+        command = step_script(self.source, DOCS_JOB, HELP_DIFF_STEP)
         with tempfile.TemporaryDirectory(prefix="help diff ") as temporary:
             root = Path(temporary)
             env = dict(os.environ, GIT_AUTHOR_NAME="Fixture", GIT_AUTHOR_EMAIL="fixture@example.invalid",
