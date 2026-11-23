@@ -1,0 +1,53 @@
+{
+  "version": 1,
+  "base_sha": "f3ab36fd2181085ec4ea78384704880f7084ff06",
+  "verified_at": "2026-11-23T20:20:44Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/infrastructureMap/InfrastructureMapDrawer.tsx",
+    "frontend-modern/src/features/infrastructureMap/InfrastructureMapSurface.tsx",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapDiagram.ts",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapLayout.ts",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapRender.ts",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapServices.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/infrastructureMap/InfrastructureMapDrawer.tsx": "d63b9101c29bb9f5705867667d5c861ab92deef2f37d9b17a7a7519bd9684161",
+    "frontend-modern/src/features/infrastructureMap/InfrastructureMapSurface.tsx": "e7b76504675d862a507fdcb9c2c3b05bcdb6658520eec8f51ede69beec60ed93",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapDiagram.ts": "25e2d06e5893306e98abb01d4c007df600502b199fe07c47ded040f8d2dbdb97",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapLayout.ts": "ce56d3a724f691bc3ff70430f8d6180061211743800b4e9f04f115e3e31414cd",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapRender.ts": "02722e08fd32936b8599e291f2494d58e725c72f399d082825afcb93adf9b206",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapServices.ts": "56e7c1a91ce2d332e95e2dfca189b19398313371654564fd9b929815445c0a0d"
+  },
+  "routes": [
+    "/map"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "desktop 1440x900 light theme default large estate map with readable bold monograms and interactive +N overflow tiles",
+    "desktop 1440x900 dark theme default large estate map and slide-over group drawer",
+    "desktop 1440x900 attention-only filtered map with active amber toggle button and filter summary bar",
+    "desktop 1440x900 full-estate search surfacing resource previously hidden inside +20 overflow tile with auto Names view",
+    "desktop 1440x900 +N group inspector drawer with Critical-first ordering, search, status filter pills, and click-through links",
+    "desktop 1440x900 +N more networks inspector drawer",
+    "mobile 390x844 light theme with full-width search row, centered top gateway and Internet icons, zero horizontal overflow, and downward hover tooltip clear of toolbar",
+    "zero console warnings including Solid createRoot warning and zero console errors across all desktop and mobile checks"
+  ],
+  "interactions": [
+    "hover top map tile on desktop and mobile verifying TooltipPortal flips downward below top tiles clear of toolbar with zero Solid console warnings",
+    "click +N overflow tile to open group slide-over drawer, inspect all 67 items, press Escape to dismiss",
+    "search for hidden overflow resource wireguard-edge-330 and verify it renders directly on the map, then click Clear filters",
+    "click N need attention button to filter map to Critical and Warning resources, verify pressed state and filter bar, click again to restore",
+    "click +N more networks pill to open full network list drawer and press Escape to dismiss",
+    "click Zoom in twice to 150 percent and click Fit to reset zoom to 100 percent"
+  ]
+}
