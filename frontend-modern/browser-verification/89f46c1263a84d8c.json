@@ -1,0 +1,34 @@
+{
+  "version": 1,
+  "base_sha": "ea95add58b0a372f97db66e765120cdf16e37f68",
+  "verified_at": "2026-11-23T02:48:01Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/SSOProvidersPanel.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/SSOProvidersPanel.tsx": "5e134f3402b349b963dc0d4417182b96019e16287f7e12f4deb698db39cc97a4"
+  },
+  "routes": [
+    "/settings/security-sso"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 960
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Matched production-mode full Settings previews on the assigned parent and source, Chromium 141.0.7390.37 / Playwright 1.56.1, desktop light and touch phone dark; six before/after image pairs inspected.",
+    "The Add OIDC draft gives the create, copy, register order without generating a guessed URL. After create, the saved card gives the IdP redirect URI step with the actual copy control. A sibling without a returned URL still presents the System public URL recovery hint, not a copy or registration instruction.",
+    "Opening the missing discovery URLs result keeps the Client ID, Create action, and sign-in-not-tested summary visible at both widths. Fixture responses only; no IdP login."
+  ],
+  "interactions": [
+    "Use keyboard activation on desktop and tap on phone to add, fill, run the draft test, and open its result. The test sends no save.",
+    "Submit exactly once to the offline fixture and copy the exact URL from the following inventory read, not from the create response. Provider state and Edit remain visible."
+  ]
+}
