@@ -100,6 +100,34 @@ describe('History interpretation help', () => {
     );
   });
 
+  it('distinguishes resumed collection from a line spanning an interval without readings', () => {
+    const help = interpretation();
+    const missing = help.querySelectorAll('tbody tr')[4].children[1];
+    expect(text(missing)).toContain('another metric in the same panel has a stored point');
+    const check = [...help.querySelectorAll('p')].find((p) =>
+      text(p)?.startsWith('Did collection resume after Pulse stopped?'),
+    );
+    expect(check).toBeDefined();
+    const checkText = text(check!);
+    expect(checkText).toContain('shortest range that includes the stop');
+    expect(checkText).toContain(
+      'shows collection resumed for that resource, not that it was uninterrupted',
+    );
+    expect(checkText).toContain(
+      'A line can join points across an interval with no stored readings at all',
+    );
+    expect(checkText).toContain('without restarting again');
+    const stop = '/docs/TROUBLESHOOTING#after-a-memory-cgroup-kill';
+    expect(check?.querySelector(`a[href="${stop}"]`)?.textContent).toBe(
+      'checks after a memory stop',
+    );
+    expect(
+      render(read('docs/TROUBLESHOOTING.md'), 'TROUBLESHOOTING').querySelector(
+        '#after-a-memory-cgroup-kill',
+      ),
+    ).not.toBeNull();
+  });
+
   it('keeps metric history free on every plan and does not sell the retired Relay tier', () => {
     const section = guide.split('## Retention and accessible range')[1].split('\n## ')[0];
     const rendered = render(section, 'METRICS_HISTORY');
