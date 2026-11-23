@@ -271,6 +271,8 @@ shortcut.
 An installer banner, a zero exit status or a verified download is not proof of
 a usable Pulse server. Keep the original result and time; do not rerun the
 installer, restart the host or repeat first-time setup just to obtain evidence.
+If a **Pulse LXC** may have run out of memory, use the
+[memory stop checks](TROUBLESHOOTING.md#after-a-memory-cgroup-kill).
 
 For **systemd or Proxmox LXC server installs**, separate these observations:
 

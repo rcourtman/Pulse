@@ -91,6 +91,7 @@ describe('troubleshooting workflow entry', () => {
         'Unraid reports missing disks in empty slots:',
         ['/docs/TROUBLESHOOTING#unraid-reports-missing-disks-in-empty-slots'],
       ],
+      ['Pulse stopped and may have run out of memory:', ['#after-a-memory-cgroup-kill']],
       [
         'Dashboard is stuck on “Connecting to Pulse” or stops updating:',
         ['#health-is-green-but-the-dashboard-is-stalled'],
