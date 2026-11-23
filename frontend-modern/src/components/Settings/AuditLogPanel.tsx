@@ -41,6 +41,8 @@ import { InlineNotice } from '@/components/shared/InlineNotice';
 const AUDIT_PAGE_BUTTON_CLASS =
   'min-h-11 sm:min-h-10 px-1 sm:px-3 py-2.5 text-sm font-medium text-base-content bg-surface border border-border rounded-md hover:bg-surface-hover disabled:opacity-50';
 
+const auditEventOutcomeLabel = (success: boolean) => (success ? 'Success' : 'Failed');
+
 export default function AuditLogPanel(props: AuditLogPanelProps) {
   const { isMobile } = useBreakpoint();
   const {
@@ -129,7 +131,7 @@ export default function AuditLogPanel(props: AuditLogPanelProps) {
     { value: 'all', label: AUDIT_VERIFICATION_FILTER_ALL_LABEL },
     { value: 'needs', label: AUDIT_VERIFICATION_FILTER_NEEDS_LABEL },
     { value: 'verified', label: 'Verified' },
-    { value: 'failed', label: 'Failed/Error' },
+    { value: 'failed', label: 'Check failed or error' },
   ];
 
   const buildAuditFilters = (): FilterDef[] => [
@@ -372,8 +374,8 @@ export default function AuditLogPanel(props: AuditLogPanelProps) {
           <span>Total: {totalEvents()}</span>
           <span>Signed: {verificationSummary().signed}</span>
           <span>Verified: {verificationSummary().verified}</span>
-          <span>Failed: {verificationSummary().failed}</span>
-          <span>Errors: {verificationSummary().error}</span>
+          <span>Checks failed: {verificationSummary().failed}</span>
+          <span>Check errors: {verificationSummary().error}</span>
           <span>Unavailable: {verificationSummary().unavailable}</span>
           <span>Unchecked: {verificationSummary().unchecked}</span>
           <HelpIcon
@@ -384,8 +386,8 @@ export default function AuditLogPanel(props: AuditLogPanelProps) {
                 'Unsigned: no signature stored for this event',
                 'Unavailable: verification not supported by the logger',
                 'Not checked: signature exists but has not been verified',
-                'Failed: signature mismatch or tampering detected',
-                'Error: verification request failed',
+                'Check failed: the signature did not pass verification. The cause is unknown.',
+                'Check error: the check did not return a verification result',
               ].join('\n'),
             }}
             size="xs"
@@ -410,14 +412,17 @@ export default function AuditLogPanel(props: AuditLogPanelProps) {
             columns={[
               {
                 key: 'success',
-                label: 'Status',
-                width: '64px',
-                align: 'center',
+                label: 'Outcome',
                 hiddenOnMobile: true,
                 render: (event) => {
                   const presentation = getAuditEventStatusPresentation(event.success);
                   const Icon = presentation.icon;
-                  return <Icon class={presentation.className} />;
+                  return (
+                    <span class="inline-flex items-center gap-1.5 whitespace-nowrap text-xs">
+                      <Icon class={presentation.className} aria-hidden="true" />
+                      {auditEventOutcomeLabel(event.success)}
+                    </span>
+                  );
                 },
               },
               {
@@ -439,7 +444,7 @@ export default function AuditLogPanel(props: AuditLogPanelProps) {
                       {event.event}
                     </span>
                     <div class="mt-0.5 whitespace-normal wrap-anywhere text-[11px] leading-tight text-muted sm:hidden">
-                      {event.success ? 'Success' : 'Failed'} · {event.user || 'Unknown user'}
+                      {auditEventOutcomeLabel(event.success)} · {event.user || 'Unknown user'}
                       <time class="block" dateTime={event.timestamp}>
                         {formatTimestamp(event.timestamp)}
                       </time>

@@ -212,6 +212,37 @@ describe('Audit Log rendered controls through the real HTTP client', () => {
     ).toHaveAttribute('datetime', first.timestamp);
   });
 
+  it('keeps event outcomes independent of the result of checking each signature', async () => {
+    const [first, second] = events();
+    read = () => json({ ...inventory(), events: [first, { ...second, success: false }] });
+    verify = (url) =>
+      json(verificationResult(url === `/api/audit/${encodeURIComponent(second.id)}/verify`));
+    mount();
+    await loaded();
+
+    const successfulEvent = row('East first sign-in');
+    const failedEvent = row();
+    expect(screen.getByRole('columnheader', { name: 'Outcome' })).toBeInTheDocument();
+    expect(successfulEvent.getByRole('cell', { name: 'Success', exact: true })).toBeInTheDocument();
+    expect(failedEvent.getByRole('cell', { name: 'Failed', exact: true })).toBeInTheDocument();
+    expect(verificationRequests()).toHaveLength(0);
+
+    fireEvent.click(successfulEvent.getByRole('button', { name: /^Verify signature:/ }));
+    fireEvent.click(failedEvent.getByRole('button', { name: /^Verify signature:/ }));
+    expect(await successfulEvent.findByText('Check failed')).toBeInTheDocument();
+    expect(await failedEvent.findByText('Verified')).toBeInTheDocument();
+    expect(successfulEvent.getByRole('cell', { name: 'Success', exact: true })).toBeInTheDocument();
+    expect(failedEvent.getByRole('cell', { name: 'Failed', exact: true })).toBeInTheDocument();
+    expect(screen.getByText('Checks failed: 1')).toBeInTheDocument();
+    expect(screen.getByText('Check errors: 0')).toBeInTheDocument();
+    expect(verificationRequests()).toHaveLength(2);
+    expectBoundRead(verificationRequests()[0], `/api/audit/${encodeURIComponent(first.id)}/verify`);
+    expectBoundRead(
+      verificationRequests()[1],
+      `/api/audit/${encodeURIComponent(second.id)}/verify`,
+    );
+  });
+
   it('restarts the initial load without changing its query or losing keyboard focus', async () => {
     window.history.replaceState({}, '', '/settings/security-audit?event=login&success=success');
     const abandoned = deferred<Response>();
@@ -370,10 +401,10 @@ describe('Audit Log rendered controls through the real HTTP client', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Verify All' }));
     expect(await screen.findByText('Later first sign-in')).toBeInTheDocument();
-    expect(row('Later first sign-in').getByText('Failed')).toBeInTheDocument();
+    expect(row('Later first sign-in').getByText('Check failed')).toBeInTheDocument();
     expect(screen.queryByText('Later selected sign-in')).not.toBeInTheDocument();
     expect(result()).toHaveTextContent('Verification filters this page only: 1 of 2 events shown.');
-    expect(screen.getByText('Failed: 1')).toBeInTheDocument();
+    expect(screen.getByText('Checks failed: 1')).toBeInTheDocument();
     expect(verificationRequests()).toHaveLength(1);
     expectBoundRead(verificationRequests()[0], '/api/audit/later-page-0/verify');
 
@@ -617,8 +648,8 @@ describe('Audit Log rendered controls through the real HTTP client', () => {
         for (const definition of [
           'Unavailable: verification not supported by the logger',
           'Not checked: signature exists but has not been verified',
-          'Failed: signature mismatch or tampering detected',
-          'Error: verification request failed',
+          'Check failed: the signature did not pass verification. The cause is unknown.',
+          'Check error: the check did not return a verification result',
         ]) {
           expect(help).toHaveTextContent(definition);
         }
@@ -701,7 +732,7 @@ describe('Audit Log rendered controls through the real HTTP client', () => {
     // A task boundary lets the native body parser and obsolete continuation run.
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(row('Refreshed selected sign-in').getByText('Verifying…')).toBeInTheDocument();
-    expect(screen.queryByText('Failed: 1')).not.toBeInTheDocument();
+    expect(screen.queryByText('Checks failed: 1')).not.toBeInTheDocument();
     current.resolve(json(verificationResult()));
     await waitFor(() =>
       expect(row('Refreshed selected sign-in').getByText('Verified')).toBeInTheDocument(),
@@ -757,7 +788,7 @@ describe('Audit Log rendered controls through the real HTTP client', () => {
     mount();
     await loaded();
     fireEvent.click(row().getByRole('button', { name: /^Verify signature: / }));
-    await waitFor(() => expect(row().getByText('Error')).toBeInTheDocument());
+    await waitFor(() => expect(row().getByText('Check error')).toBeInTheDocument());
     expect(row('East first sign-in').getByText('Not checked')).toBeInTheDocument();
     expect(verificationRequests()).toHaveLength(1);
     expect(getApiToken()).toBe(token);

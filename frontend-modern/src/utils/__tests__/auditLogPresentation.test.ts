@@ -35,7 +35,7 @@ describe('auditLogPresentation', () => {
       className: 'bg-green-100 text-green-800 dark:bg-green-900/25 dark:text-green-200',
     });
     expect(getAuditVerificationBadgePresentation({ status: 'failed' })).toEqual({
-      label: 'Failed',
+      label: 'Check failed',
       className: 'bg-red-100 text-red-800 dark:bg-red-900/25 dark:text-red-200',
     });
   });
