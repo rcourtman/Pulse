@@ -179,6 +179,26 @@ describe('Authentication status and credential draft refresh', () => {
     expect(writes()).toHaveLength(0);
   });
 
+  it('describes what hiding the form does and keeps the guidance when read-only', () => {
+    const state = mountPanel();
+    const toggle = screen.getByRole('button', { name: 'Hide local login form' });
+    expect(toggle).toBeEnabled();
+    const checkDescription = () => {
+      expect(toggle).toHaveAccessibleDescription(/Hides the form, not password sign-in/);
+      expect(toggle).toHaveAccessibleDescription(/Verify SSO sign-in in a separate session/);
+      expect(toggle).toHaveAccessibleDescription(/Keep a working local admin login/);
+      expect(toggle).toHaveAccessibleDescription(
+        /Add \?show_local=true to the sign-in URL to show the form/,
+      );
+      expect(toggle).toHaveAccessibleDescription(/This does not reset credentials/);
+    };
+    checkDescription();
+    state.setCanManage(false);
+    expect(toggle).toBeDisabled();
+    checkDescription();
+    expect(writes()).toHaveLength(0);
+  });
+
   it('keeps a same-reader custom rotation draft disabled through the real toggle POST and pending status GET', async () => {
     const refresh = deferred();
     let reads = 0;

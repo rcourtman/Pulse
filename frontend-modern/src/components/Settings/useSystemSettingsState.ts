@@ -302,9 +302,9 @@ export function useSystemSettingsState({
     try {
       await SettingsAPI.updateSystemSettings({ hideLocalLogin: enabled });
       if (enabled) {
-        notificationStore.success('Local login hidden', 2000);
+        notificationStore.success('Local sign-in form hidden', 2000);
       } else {
-        notificationStore.info('Local login visible', 2000);
+        notificationStore.info('Local sign-in form shown', 2000);
       }
       await loadSecurityStatus();
     } catch (error) {
