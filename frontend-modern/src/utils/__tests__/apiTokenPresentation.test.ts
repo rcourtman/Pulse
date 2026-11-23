@@ -13,6 +13,7 @@ import {
   getAPITokenDockerPodmanUsageSummary,
   getAPITokenDockerPodmanUsageTitle,
   getAPITokenGenerateErrorMessage,
+  getAPITokenLastUsePresentation,
   getAPITokenManagementLocationMessage,
   getAPITokenRevealSettingsNote,
   getAPITokensLoadErrorMessage,
@@ -21,6 +22,35 @@ import {
 } from '@/utils/apiTokenPresentation';
 
 describe('apiTokenPresentation', () => {
+  it('shows a recorded use as the same UTC instant in the relative and absolute views', () => {
+    expect(getAPITokenLastUsePresentation('2026-11-22T21:30:00.750123456+01:00')).toEqual({
+      state: 'recorded',
+      instant: Date.parse('2026-11-22T20:30:00.750Z'),
+      dateTime: '2026-11-22T20:30:00.750Z',
+      timestamp: '2026-11-22 20:30:00.750 UTC',
+    });
+  });
+
+  it.each([undefined, null, '0001-01-01T00:00:00Z'])(
+    'distinguishes absent use from an unused token (%s)',
+    (value) => {
+      expect(getAPITokenLastUsePresentation(value)).toEqual({
+        state: 'none',
+        label: 'Not recorded',
+      });
+    },
+  );
+
+  it.each(['', 'not a time', '2026-02-30T13:10:00Z', '2026-11-22T25:30:00Z'])(
+    'does not coerce an invalid observation to an age (%s)',
+    (value) => {
+      expect(getAPITokenLastUsePresentation(value)).toEqual({
+        state: 'unknown',
+        label: 'Unavailable',
+      });
+    },
+  );
+
   it('returns canonical API token error copy', () => {
     expect(getAPITokensLoadErrorMessage()).toBe('Unable to load API tokens.');
     expect(getAPITokenGenerateErrorMessage()).toBe('Unable to generate the API token.');

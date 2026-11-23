@@ -202,7 +202,8 @@ describe('APITokenManager', () => {
     expect(input).toHaveValue('Unsaved token name');
     expect(input).toHaveFocus();
     expect(getTokenTableRow(token.name!)).toBe(row);
-    expect(within(card).getByText('Never')).toBeInTheDocument();
+    expect(within(card).getByText('Not recorded')).toBeInTheDocument();
+    expect(tokenCell(row, 'Last used')).toHaveTextContent('Not recorded');
     expect(listTokensMock).toHaveBeenCalledTimes(1);
     expect(createTokenMock).not.toHaveBeenCalled();
     expect(deleteTokenMock).not.toHaveBeenCalled();
@@ -229,6 +230,9 @@ describe('APITokenManager', () => {
     const cardLastUsed = () => within(card).getByText('Last used').nextElementSibling;
     expect(tokenCell(row, 'Last used')).toHaveTextContent('1 min ago');
     expect(cardLastUsed()).toHaveTextContent('1 min ago');
+    for (const lastUsed of [tokenCell(row, 'Last used'), cardLastUsed()]) {
+      expect(lastUsed?.querySelector('time')).toHaveAttribute('datetime', token.lastUsedAt);
+    }
     await vi.advanceTimersByTimeAsync(2 * 3_600_000);
     expect(tokenCell(row, 'Last used')).toHaveTextContent('2 hours ago');
     expect(cardLastUsed()).toHaveTextContent('2 hours ago');
@@ -862,9 +866,10 @@ describe('APITokenManager', () => {
       }),
       makeToken({
         id: 'token-unused',
-        name: 'Unused token',
+        name: 'No use timestamp',
         suffix: '9999',
         scopes: [DOCKER_REPORT_SCOPE],
+        lastUsedAt: undefined,
       }),
     ]);
 
@@ -905,12 +910,13 @@ describe('APITokenManager', () => {
     expect(within(row).getByText('Agent reporting')).toBeInTheDocument();
 
     // No match for this ID is not evidence that the token has no clients.
-    const unmatched = getTokenTableRow('Unused token');
+    const unmatched = getTokenTableRow('No use timestamp');
     fireEvent.click(within(unmatched).getByRole('button', { name: /^Revoke / }));
-    const unmatchedDialog = await screen.findByRole('dialog', { name: /Unused token/ });
+    const unmatchedDialog = await screen.findByRole('dialog', { name: /No use timestamp/ });
     expect(unmatchedDialog).toHaveAccessibleDescription(
-      'Revocation is permanent. Agents, scripts, and integrations using it need a replacement token to authenticate.',
+      'Revocation is permanent. Agents, scripts, and integrations using it need a replacement token to authenticate. Last recorded use: Not recorded Pulse may not know about every client using this token.',
     );
+    expect(unmatchedDialog.querySelector('time')).toBeNull();
     expect(unmatchedDialog).not.toHaveTextContent(/Docker Edge|Edge Agent|Previously seen/);
     fireEvent.click(within(unmatchedDialog).getByRole('button', { name: 'Cancel' }));
 
@@ -918,7 +924,7 @@ describe('APITokenManager', () => {
 
     const confirmation = await screen.findByRole('dialog', { name: /Runtime token/ });
     expect(confirmation).toHaveAccessibleDescription(
-      /Revocation is permanent.*Previously seen using this token.*Docker \/ Podman runtime: Docker Edge.*agent: Edge Agent.*Other clients may also use it/,
+      /Revocation is permanent.*Last recorded use: 2026-03-12 11:00:00 UTC.*Previously seen using this token.*Docker \/ Podman runtime: Docker Edge.*agent: Edge Agent.*Pulse may not know about every client/,
     );
     expect(deleteTokenMock).not.toHaveBeenCalled();
     fireEvent.click(within(confirmation).getByRole('button', { name: 'Revoke token' }));
@@ -943,7 +949,7 @@ describe('APITokenManager', () => {
 
     await waitFor(() => {
       expect(screen.queryByText('Runtime token')).not.toBeInTheDocument();
-      expect(screen.getAllByText('Unused token')).toHaveLength(2);
+      expect(screen.getAllByText('No use timestamp')).toHaveLength(2);
     });
   });
 
@@ -1096,7 +1102,7 @@ describe('APITokenManager', () => {
     const revokeDialog = await screen.findByRole('dialog', { name: /^Revoke API token / });
     expect(revokeDialog).toHaveAccessibleName('Revoke API token for Keyboard token (pulse…1234)');
     expect(revokeDialog).toHaveAccessibleDescription(
-      'Revocation is permanent. Agents, scripts, and integrations using it need a replacement token to authenticate.',
+      'Revocation is permanent. Agents, scripts, and integrations using it need a replacement token to authenticate. Last recorded use: 2026-03-12 11:00:00 UTC Pulse may not know about every client using this token.',
     );
     const cancelRevoke = within(revokeDialog).getByRole('button', { name: 'Cancel' });
     await waitFor(() => expect(cancelRevoke).toHaveFocus());

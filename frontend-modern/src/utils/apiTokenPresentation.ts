@@ -102,19 +102,14 @@ export type APITokenExpiryPresentation =
   | { state: 'none' | 'unknown'; label: string }
   | { state: 'scheduled' | 'expired'; label: string; dateTime: string; timestamp: string };
 
-/** Saved lifetime is metadata, not a claim that a credential can authenticate. */
-export function getAPITokenExpiryPresentation(
-  expiresAt: string | null | undefined,
-  now: number,
-): APITokenExpiryPresentation {
-  // The Go API omits a nil expiry; a present but unreadable value is not "none".
-  if (expiresAt == null) return { state: 'none', label: 'No expiry' };
-  const unknown = { state: 'unknown' as const, label: 'Unavailable' };
+type APITokenTimestamp = { instant: number; dateTime: string; timestamp: string };
+
+function parseAPITokenTimestamp(value: string): APITokenTimestamp | undefined {
   const parts =
     /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d{1,9})?(Z|[+-]\d{2}:\d{2})$/.exec(
-      expiresAt,
+      value,
     );
-  if (!parts) return unknown;
+  if (!parts) return;
   const [, yearText, monthText, dayText, hourText, minuteText, secondText, zone] = parts;
   const [year, month, day, hour, minute, second] = [
     yearText,
@@ -136,16 +131,46 @@ export function getAPITokenExpiryPresentation(
     second > 59 ||
     (zone !== 'Z' && (Number(zone.slice(1, 3)) > 23 || Number(zone.slice(4)) > 59))
   ) {
-    return unknown;
+    return;
   }
-  const instant = Date.parse(expiresAt);
-  if (!Number.isFinite(instant) || !Number.isFinite(now)) return unknown;
+  const instant = Date.parse(value);
+  if (!Number.isFinite(instant)) return;
   const dateTime = new Date(instant).toISOString();
+  return {
+    instant,
+    dateTime,
+    timestamp: dateTime.replace('T', ' ').replace(/(?:\.000)?Z$/, ' UTC'),
+  };
+}
+
+/** Saved lifetime is metadata, not a claim that a credential can authenticate. */
+export function getAPITokenExpiryPresentation(
+  expiresAt: string | null | undefined,
+  now: number,
+): APITokenExpiryPresentation {
+  // The Go API omits a nil expiry; a present but unreadable value is not "none".
+  if (expiresAt == null) return { state: 'none', label: 'No expiry' };
+  const parsed = parseAPITokenTimestamp(expiresAt);
+  if (!parsed || !Number.isFinite(now)) return { state: 'unknown', label: 'Unavailable' };
+  const { instant, dateTime, timestamp } = parsed;
   const expired = instant < now;
   return {
     state: expired ? 'expired' : 'scheduled',
     label: expired ? 'Expired' : 'Expires',
     dateTime,
-    timestamp: dateTime.replace('T', ' ').replace(/(?:\.000)?Z$/, ' UTC'),
+    timestamp,
   };
+}
+
+/** A missing last-use observation does not establish that a token is unused. */
+export function getAPITokenLastUsePresentation(
+  lastUsedAt: string | null | undefined,
+): { state: 'none' | 'unknown'; label: string } | ({ state: 'recorded' } & APITokenTimestamp) {
+  if (lastUsedAt == null) return { state: 'none', label: 'Not recorded' };
+  const parsed = parseAPITokenTimestamp(lastUsedAt);
+  if (!parsed) return { state: 'unknown', label: 'Unavailable' };
+  if (parsed.dateTime === '0001-01-01T00:00:00.000Z') {
+    return { state: 'none', label: 'Not recorded' };
+  }
+  return { state: 'recorded', ...parsed };
 }

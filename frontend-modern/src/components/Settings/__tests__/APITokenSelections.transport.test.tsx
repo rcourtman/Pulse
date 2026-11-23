@@ -335,7 +335,11 @@ describe.each<Layout>(['desktop row', 'compact card'])(
         name: `Revoke API token for ${cancelled.name} (${hint(cancelled)})`,
       });
       expect(cancelledDialog).toHaveAccessibleDescription(
-        `${permanentWarning} Previously seen using this token agent: agent ${cancelled.suffix} Other clients may also use it.`,
+        `${permanentWarning} Last recorded use: 2026-11-04 00:00:02 UTC Previously seen using this token agent: agent ${cancelled.suffix} Pulse may not know about every client using this token.`,
+      );
+      expect(cancelledDialog.querySelector('time')).toHaveAttribute(
+        'datetime',
+        '2026-11-04T00:00:02.000Z',
       );
       expect(writes()).toHaveLength(0);
       fireEvent.click(within(cancelledDialog).getByRole('button', { name: 'Cancel' }));
@@ -345,7 +349,11 @@ describe.each<Layout>(['desktop row', 'compact card'])(
         name: `Revoke API token for ${selected.name} (${hint(selected)})`,
       });
       expect(confirmation).toHaveAccessibleDescription(
-        `${permanentWarning} Previously seen using this token Docker / Podman runtime: docker-host ${selected.suffix} agent: agent ${selected.suffix} Other clients may also use it.`,
+        `${permanentWarning} Last recorded use: 2026-11-04 00:00:01 UTC Previously seen using this token Docker / Podman runtime: docker-host ${selected.suffix} agent: agent ${selected.suffix} Pulse may not know about every client using this token.`,
+      );
+      expect(confirmation.querySelector('time')).toHaveAttribute(
+        'datetime',
+        '2026-11-04T00:00:01.000Z',
       );
       expect(writes()).toHaveLength(0);
       fireEvent.click(within(confirmation).getByRole('button', { name: 'Revoke token' }));

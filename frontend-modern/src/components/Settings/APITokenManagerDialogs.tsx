@@ -3,6 +3,7 @@ import { Dialog } from '@/components/shared/Dialog';
 import { InlineNotice } from '@/components/shared/InlineNotice';
 import type { APIScopeOption } from '@/constants/apiScopes';
 import type { APITokenRecord } from '@/types/api';
+import { getAPITokenLastUsePresentation } from '@/utils/apiTokenPresentation';
 import { getAPITokenHint, getAPITokenIdentityLabel } from './apiTokenManagerModel';
 
 interface APITokenManagerDialogsProps {
@@ -215,13 +216,14 @@ export const APITokenManagerDialogs: Component<APITokenManagerDialogsProps> = (p
       {(token) => {
         const warningId = createUniqueId();
         const usageId = createUniqueId();
+        const lastUse = getAPITokenLastUsePresentation(token.lastUsedAt);
         return (
           <Dialog
             isOpen={true}
             onClose={props.onCancelRevoke}
             panelClass="max-w-md"
             ariaLabel={`Revoke API token for ${getAPITokenIdentityLabel(token)}`}
-            ariaDescribedBy={props.revokeUsage.length > 0 ? `${warningId} ${usageId}` : warningId}
+            ariaDescribedBy={`${warningId} ${usageId}`}
           >
             <div
               role="region"
@@ -245,8 +247,16 @@ export const APITokenManagerDialogs: Component<APITokenManagerDialogsProps> = (p
                 Revocation is permanent. Agents, scripts, and integrations using it need a
                 replacement token to authenticate.
               </p>
-              <Show when={props.revokeUsage.length > 0}>
-                <div id={usageId} class="mt-2 space-y-1 text-xs text-muted wrap-anywhere">
+              <div id={usageId} class="mt-2 space-y-1 text-xs text-muted wrap-anywhere">
+                <p>
+                  <span class="font-semibold text-base-content">Last recorded use:</span>{' '}
+                  {lastUse.state === 'recorded' ? (
+                    <time dateTime={lastUse.dateTime}>{lastUse.timestamp}</time>
+                  ) : (
+                    lastUse.label
+                  )}
+                </p>
+                <Show when={props.revokeUsage.length > 0}>
                   <p class="font-semibold text-base-content">Previously seen using this token</p>
                   <ul class="list-disc pl-4">
                     <For each={props.revokeUsage}>
@@ -257,9 +267,9 @@ export const APITokenManagerDialogs: Component<APITokenManagerDialogsProps> = (p
                       )}
                     </For>
                   </ul>
-                  <p>Other clients may also use it.</p>
-                </div>
-              </Show>
+                </Show>
+                <p>Pulse may not know about every client using this token.</p>
+              </div>
             </div>
             <div class="flex shrink-0 flex-wrap justify-end gap-3 px-4 pt-2 pb-3 sm:px-6 sm:pt-4 sm:pb-6">
               <button
