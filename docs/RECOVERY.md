@@ -91,6 +91,12 @@ use the [PBS evidence checks](PBS.md#backups-are-visible-but-coverage-says-unpro
 An unresponsive guest or uncertain freeze/thaw needs the
 [backup safety precaution](VM_DISK_MONITORING.md#backup-safety), not a count check.
 
+**Backup list not confirmed** can appear even when both inventories have
+loaded. Wait if Pulse is still checking protection status. If it says
+**Protection status is unavailable**, choose **Retry protection status** to
+repeat just that read, not run a backup. Counts ending in **read** cover only
+the restore points Pulse could list.
+
 ## Restore-point sizes and unknown values
 
 In **Proxmox → Backups → By date**, **Unknown size** means no usable byte

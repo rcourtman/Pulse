@@ -121,6 +121,14 @@ describe('completed backup count guidance', () => {
     const copy = text();
     expect(copy).toContain('An empty list is not proof that no backups exist');
     expect(copy).toContain('check any inventory loading or access warning first');
+    expect(copy).toContain(
+      'Backup list not confirmed can appear even when both inventories have loaded',
+    );
+    expect(copy).toContain('Wait if Pulse is still checking protection status');
+    expect(copy).toContain(
+      'Protection status is unavailable, choose Retry protection status to repeat just that read, not run a backup',
+    );
+    expect(copy).toContain('Counts ending in read cover only the restore points Pulse could list');
     expect(copy).toContain('Completed is not Verified, a tested restore or guest thaw');
     expect(copy).toContain(
       'Do not run a new backup, verification or restore, delete entries, or clear History',
