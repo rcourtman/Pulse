@@ -39,19 +39,53 @@ func readBackupInventoryBody(resp *http.Response) ([]byte, error) {
 }
 
 func decodeBackupInventory[T any](body []byte) ([]T, error) {
-	fields, err := decodeBackupInventoryObject(body, "data", "errors")
-	if err != nil {
-		return nil, err
-	}
-	if failure, present := fields["errors"]; present && !bytes.Equal(bytes.TrimSpace(failure), []byte("null")) {
-		return nil, errInvalidBackupInventoryResponse
-	}
-	data := bytes.TrimSpace(fields["data"])
-	if len(data) == 0 || data[0] != '[' {
-		return nil, errInvalidBackupInventoryResponse
-	}
 	var rows []T
-	if json.Unmarshal(data, &rows) != nil {
+	err := readBackupInventoryFields(body, func(decoder *json.Decoder, name string) error {
+		switch name {
+		case "data":
+			var err error
+			rows, err = decodeBackupInventoryRows[T](decoder, body)
+			return err
+		case "errors":
+			status, err := decoder.Token()
+			if err != nil || status != nil {
+				return errInvalidBackupInventoryResponse
+			}
+			return nil
+		default:
+			return discardBackupInventoryField(decoder, name)
+		}
+	}, "data", "errors")
+	// A decoded array is provisional until the complete envelope is accepted.
+	if err != nil || rows == nil {
+		return nil, errInvalidBackupInventoryResponse
+	}
+	return rows, nil
+}
+
+// Decode one row at a time rather than buffering a second copy of the
+// complete array in the decoder and a third in a json.RawMessage.
+func decodeBackupInventoryRows[T any](decoder *json.Decoder, body []byte) ([]T, error) {
+	start, err := decoder.Token()
+	if err != nil || start != json.Delim('[') {
+		return nil, errInvalidBackupInventoryResponse
+	}
+	arrayStart := decoder.InputOffset() - 1
+	rows := []T{}
+	var row, zero T
+	for decoder.More() {
+		if err := decoder.Decode(&row); err != nil {
+			return nil, err
+		}
+		rows = append(rows, row)
+		// Do not carry optional values forward or reuse nested storage from
+		// a row that the result already owns.
+		row = zero
+	}
+	end, err := decoder.Token()
+	// Preserve the JSON decoder's nesting limit on the array as a whole,
+	// not just on each decoded row. Check the original bytes without a copy.
+	if err != nil || end != json.Delim(']') || !json.Valid(body[arrayStart:decoder.InputOffset()]) {
 		return nil, errInvalidBackupInventoryResponse
 	}
 	return rows, nil
@@ -69,13 +103,10 @@ func readBackupGroupInventory(resp *http.Response) ([]BackupGroup, error) {
 	type groupID struct{ kind, id string }
 	seen := make(map[groupID]struct{})
 	for i, row := range rows {
-		fields, err := decodeBackupInventoryObject(row, "backup-type", "backup-id", "backup-count", "last-backup", "files", "owner")
-		if err != nil {
-			return nil, fmt.Errorf("invalid PBS backup group inventory row %d", i)
-		}
-		count := bytes.TrimSpace(fields["backup-count"])
-		var group BackupGroup
-		if len(count) == 0 || bytes.Equal(count, []byte("null")) ||
+		// Missing and null counts both leave the sentinel untouched; an
+		// explicit zero is the valid evidence of an empty group.
+		group := BackupGroup{BackupCount: -1}
+		if readBackupInventoryFields(row, discardBackupInventoryField, "backup-type", "backup-id", "backup-count", "last-backup", "files", "owner") != nil ||
 			json.Unmarshal(row, &group) != nil || group.BackupCount < 0 ||
 			group.BackupType == "" || strings.TrimSpace(group.BackupType) != group.BackupType ||
 			group.BackupID == "" || strings.TrimSpace(group.BackupID) != group.BackupID {
@@ -91,44 +122,53 @@ func readBackupGroupInventory(resp *http.Response) ([]BackupGroup, error) {
 	return groups, nil
 }
 
-// Preserve unknown provider metadata while rejecting duplicate fields and
-// alternate spellings that encoding/json would map onto typed fields.
-func decodeBackupInventoryObject(body []byte, canonical ...string) (map[string]json.RawMessage, error) {
+// Allow unknown provider metadata but reject duplicate keys and alternate
+// spellings of canonical fields. The visitor consumes exactly one value
+// per call. Format errors never expose the provider's contents.
+func readBackupInventoryFields(body []byte, readField func(*json.Decoder, string) error, canonical ...string) error {
 	decoder := json.NewDecoder(bytes.NewReader(body))
 	start, err := decoder.Token()
 	if err != nil || start != json.Delim('{') {
-		return nil, errInvalidBackupInventoryResponse
+		return errInvalidBackupInventoryResponse
 	}
-	fields := make(map[string]json.RawMessage)
+	seen := make(map[string]struct{})
 	for decoder.More() {
 		token, err := decoder.Token()
 		if err != nil {
-			return nil, errInvalidBackupInventoryResponse
+			return errInvalidBackupInventoryResponse
 		}
 		name, ok := token.(string)
 		if !ok {
-			return nil, errInvalidBackupInventoryResponse
+			return errInvalidBackupInventoryResponse
 		}
-		if _, duplicate := fields[name]; duplicate {
-			return nil, errInvalidBackupInventoryResponse
+		if _, duplicate := seen[name]; duplicate {
+			return errInvalidBackupInventoryResponse
 		}
 		for _, key := range canonical {
 			if name != key && strings.EqualFold(name, key) {
-				return nil, errInvalidBackupInventoryResponse
+				return errInvalidBackupInventoryResponse
 			}
 		}
-		var value json.RawMessage
-		if decoder.Decode(&value) != nil {
-			return nil, errInvalidBackupInventoryResponse
+		seen[name] = struct{}{}
+		if readField(decoder, name) != nil {
+			return errInvalidBackupInventoryResponse
 		}
-		fields[name] = value
 	}
 	end, err := decoder.Token()
 	if err != nil || end != json.Delim('}') {
-		return nil, errInvalidBackupInventoryResponse
+		return errInvalidBackupInventoryResponse
 	}
 	if _, err := decoder.Token(); err != io.EOF {
-		return nil, errInvalidBackupInventoryResponse
+		return errInvalidBackupInventoryResponse
 	}
-	return fields, nil
+	return nil
 }
+
+func discardBackupInventoryField(decoder *json.Decoder, _ string) error {
+	// Decode still validates JSON syntax without building or copying a value.
+	return decoder.Decode(&discardedBackupInventoryValue{})
+}
+
+type discardedBackupInventoryValue struct{}
+
+func (*discardedBackupInventoryValue) UnmarshalJSON([]byte) error { return nil }

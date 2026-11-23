@@ -3,6 +3,7 @@ package pbs
 import (
 	"context"
 	"net/http"
+	"reflect"
 	"testing"
 )
 
@@ -52,5 +53,61 @@ func TestBackupInventoryRequiresExplicitArray(t *testing.T) {
 				}
 			})
 		}
+	}
+}
+
+func TestBackupInventoryDecodesIndependentSnapshotRows(t *testing.T) {
+	body := `{
+		"errors": null,
+		"future": {"values": [true, null, {"nested": "温度 ] }"}]},
+		"data"  :  [
+			{"backup-type":"vm","backup-id":"101","backup-time":1795000000,
+			 "comment":"first","protected":true,"owner":"fixture",
+			 "verification":{"state":"ok"},"files":["index.json.blob",{"filename":"disk.img.fidx","size":1024}]},
+			{"backup-type":"vm","backup-id":"101","backup-time":1794900000,
+			 "files":[{"filename":"index.json.blob"}]},
+			{"backup-type":"vm","backup-id":"101","backup-time":1794950000}
+		],
+		"total": 3
+	}`
+	want := []BackupSnapshot{
+		{
+			BackupType: "vm", BackupID: "101", BackupTime: 1795000000,
+			Comment: "first", Protected: true, Owner: "fixture",
+			Verification: map[string]any{"state": "ok"},
+			Files:        []any{"index.json.blob", map[string]any{"filename": "disk.img.fidx", "size": float64(1024)}},
+		},
+		{
+			BackupType: "vm", BackupID: "101", BackupTime: 1794900000,
+			Files: []any{map[string]any{"filename": "index.json.blob"}},
+		},
+		{BackupType: "vm", BackupID: "101", BackupTime: 1794950000},
+	}
+	got, err := decodeBackupInventory[BackupSnapshot]([]byte(body))
+	if err != nil || !reflect.DeepEqual(got, want) {
+		t.Fatalf("snapshot values or response order changed: got %+v, err=%v", got, err)
+	}
+
+	// A usable first row and a complete array cannot establish inventory
+	// when later content makes the read incomplete or ambiguous.
+	const first = `{"backup-type":"vm","backup-id":"101","backup-time":1795000000}`
+	for _, tc := range []struct{ name, tail string }{
+		{"late row type mismatch", `,{"backup-time":"not a number"}]}`},
+		{"truncated row", `,{"backup-time":`},
+		{"array trailing comma", `,]}`},
+		{"duplicate data after complete array", `],"data":[]}`},
+		{"case alias after complete array", `],"DATA":[]}`},
+		{"duplicate metadata", `],"future":{},"future":0}`},
+		{"malformed metadata", `],"future":[1,]}`},
+		{"reported error after complete array", `],"errors":{"fixture":"unread"}}`},
+		{"second object", `]} {"data":[]}`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			body := []byte(`{"data":[` + first + tc.tail)
+			got, err := decodeBackupInventory[BackupSnapshot](body)
+			if got != nil || err != errInvalidBackupInventoryResponse {
+				t.Fatalf("unread inventory returned %d rows; err=%v", len(got), err)
+			}
+		})
 	}
 }
