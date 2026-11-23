@@ -7,7 +7,8 @@ import { getHistoryReadoutLabel } from '@/components/shared/historyChartModel';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../..');
 const read = (file: string) => readFileSync(path.join(root, file), 'utf8');
-const guide = read('docs/METRICS_HISTORY.md');
+const guide = read('frontend-modern/public/docs/METRICS_HISTORY.md');
+const troubleshootingGuide = read('frontend-modern/public/docs/TROUBLESHOOTING.md');
 const render = (markdown: string, name: string) => {
   const article = document.createElement('article');
   article.innerHTML = renderDocMarkdown(markdown, name);
@@ -20,8 +21,11 @@ const text = (element: Element) => element.textContent?.replace(/\s+/g, ' ');
 
 describe('History interpretation help', () => {
   it('ships both changed guides and puts safe interpretation before storage tuning', () => {
-    for (const name of ['METRICS_HISTORY', 'TROUBLESHOOTING']) {
-      expect(read(`frontend-modern/public/docs/${name}.md`)).toBe(read(`docs/${name}.md`));
+    for (const [name, shipped] of [
+      ['METRICS_HISTORY', guide],
+      ['TROUBLESHOOTING', troubleshootingGuide],
+    ]) {
+      expect(shipped).toBe(read(`docs/${name}.md`));
     }
     const headings = [...article().querySelectorAll('h2')].map((heading) => heading.id);
     expect(headings.slice(0, 3)).toEqual([
@@ -78,7 +82,7 @@ describe('History interpretation help', () => {
   });
 
   it('links from the existing memory workflow to working interpretation and safety headings', () => {
-    const troubleshooting = render(read('docs/TROUBLESHOOTING.md'), 'TROUBLESHOOTING');
+    const troubleshooting = render(troubleshootingGuide, 'TROUBLESHOOTING');
     const href = '/docs/METRICS_HISTORY#read-a-history-panel';
     expect(troubleshooting.querySelector(`a[href="${href}"]`)?.textContent).toBe(
       'History panel interpretation',
@@ -102,8 +106,12 @@ describe('History interpretation help', () => {
 
   it('distinguishes resumed collection from a line spanning an interval without readings', () => {
     const help = interpretation();
-    const missing = help.querySelectorAll('tbody tr')[4].children[1];
-    expect(text(missing)).toContain('another metric in the same panel has a stored point');
+    const missing = [...help.querySelectorAll('tbody tr')].find(
+      (row) => text(row.children[0]) === 'Missing observations',
+    );
+    expect(missing && text(missing.children[1])).toContain(
+      'another metric in the same panel has a stored point',
+    );
     const check = [...help.querySelectorAll('p')].find((p) =>
       text(p)?.startsWith('Did collection resume after Pulse stopped?'),
     );
@@ -122,9 +130,7 @@ describe('History interpretation help', () => {
       'checks after a memory stop',
     );
     expect(
-      render(read('docs/TROUBLESHOOTING.md'), 'TROUBLESHOOTING').querySelector(
-        '#after-a-memory-cgroup-kill',
-      ),
+      render(troubleshootingGuide, 'TROUBLESHOOTING').querySelector('#after-a-memory-cgroup-kill'),
     ).not.toBeNull();
   });
 
