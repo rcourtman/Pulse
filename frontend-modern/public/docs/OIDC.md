@@ -237,19 +237,19 @@ separate-session login and permission checks in Quick Start.
 
 ### Safe diagnosis
 
-Start with the existing login error, its time, the provider type and whether the
-failure is at the IdP, callback, login restriction or Pulse permission check.
-Use the configured callback URL and claim names locally; do not paste a full
-IdP response or token to diagnose a missing group. A working login does not
-prove that the user has the intended Pulse role.
+Back at Pulse sign-in after SSO? Your session is unconfirmed. **Retry sign-in
+check**, if shown, only reads the sign-in options. Keep your working admin
+session open and do not resave the provider. Use the existing login error,
+time and provider type to check the IdP, callback or login restriction. If
+Pulse opens without the expected controls, check the role.
 
-Review existing server and IdP logs privately. Do not enable Debug or restart
-Pulse solely to fill in a report; debug logs can contain identity and claim
-details. Share only a locally reviewed, redacted error and the relevant claim
-names or consistent group aliases. Keep client secrets, authorization codes,
-ID/access/refresh tokens, cookies, email addresses, full callback query strings,
-HAR exports and “Copy as cURL” output private. Never disable TLS verification or
-access restrictions as a diagnostic shortcut.
+Check existing logs, callback URLs and claim names locally. Do not paste a
+full IdP response. Do not enable Debug or restart for a report. Debug logs
+can expose identities and claims. Share only a locally reviewed, redacted
+error, claim names or consistent group aliases. Keep client secrets,
+authorization codes, ID/access/refresh tokens, cookies, email addresses, full
+callback query strings, HAR exports and “Copy as cURL” output private. Never
+disable TLS verification or access restrictions.
 
 ### A provider change could not be confirmed
 
