@@ -3,9 +3,11 @@
 
 from pathlib import Path
 import os
+import re
 import shutil
 import subprocess
 import tempfile
+import textwrap
 import unittest
 
 
@@ -38,19 +40,19 @@ class RunnerDependencyTests(unittest.TestCase):
             target = self.fixture / filename
             target.parent.mkdir(parents=True, exist_ok=True)
             if filename.endswith(".sh"):
-                shutil.copyfile(ROOT / filename, target)
+                shutil.copy2(ROOT / filename, target)
             else:
                 target.write_text("")
         self.write("internal/api/handler.go", "package api\n")
         self.write("internal/license/license.go", "package license\n")
         # Exercise the exact audit with only checkout-runner tools available.
         # An installed rg must not accidentally make these fixtures pass.
-        tools = Path(self.temporary.name) / "bin"
-        tools.mkdir()
-        for name in ("bash", "git", "grep", "sed", "sort", "cat", "paste", "cut", "wc", "tr"):
-            (tools / name).symlink_to(shutil.which(name))
-        self.environment = dict(os.environ, PATH=str(tools))
-        self.assertIsNone(shutil.which("rg", path=str(tools)))
+        self.tools = Path(self.temporary.name) / "bin"
+        self.tools.mkdir()
+        for name in ("bash", "git", "grep", "sed", "sort", "mktemp", "rm", "tee", "paste", "cut", "wc", "tr"):
+            (self.tools / name).symlink_to(shutil.which(name))
+        self.environment = dict(os.environ, PATH=str(self.tools))
+        self.assertIsNone(shutil.which("rg", path=str(self.tools)))
 
     def write(self, path, content):
         target = self.fixture / path
@@ -72,6 +74,64 @@ class RunnerDependencyTests(unittest.TestCase):
         for mode in MODES:
             with self.subTest(mode=mode):
                 self.audit(mode, 0)
+
+    def inject_git_read_fault(self, command, exitcode, *, diagnostic="", output="", match=""):
+        shim = self.tools / "git"
+        shim.unlink()
+        shim.write_text(r"""#!/usr/bin/env bash
+if [[ "$1" == "$TEST_GIT_COMMAND" && "$*" == *"$TEST_GIT_MATCH"* ]]; then
+  [[ -z "$TEST_GIT_OUTPUT" ]] || printf '%s\n' "$TEST_GIT_OUTPUT"
+  [[ -z "$TEST_GIT_DIAGNOSTIC" ]] || printf '%s\n' "$TEST_GIT_DIAGNOSTIC" >&2
+  exit "$TEST_GIT_STATUS"
+fi
+exec "$TEST_REAL_GIT" "$@"
+""")
+        shim.chmod(0o755)
+        self.environment.update(
+            TEST_GIT_COMMAND=command, TEST_GIT_STATUS=str(exitcode),
+            TEST_GIT_DIAGNOSTIC=diagnostic, TEST_GIT_OUTPUT=output,
+            TEST_GIT_MATCH=match, TEST_REAL_GIT=shutil.which("git"),
+        )
+
+    def test_incomplete_git_inventory_never_emits_a_summary(self):
+        cases = (
+            ("ls-files", 128, "read failed", "", "", "list candidate paths"),
+            ("ls-files", 1, "", "", "", "list candidate paths"),
+            ("grep", 1, "read failed", "", "", "scan API route paths"),
+            ("grep", 1, "", "partial inventory", "", "scan API route paths"),
+            ("grep", 0, "incomplete scan", "partial inventory", "", "scan API route paths"),
+            ("grep", 2, "read failed", "", ":(exclude)internal/api", "scan non-API licence imports"),
+        )
+        for command, status, diagnostic, output, match, phase in cases:
+            with self.subTest(command=command, status=status, diagnostic=diagnostic, phase=phase):
+                self.inject_git_read_fault(command, status, diagnostic=diagnostic, output=output, match=match)
+                for mode in ("report", "--enforce"):
+                    result = self.audit(mode, 2, f"Boundary audit could not {phase} (git {command} exit {status})")
+                    self.assertNotIn("Private boundary audit", result)
+                    self.assertNotIn("partial inventory", result)
+
+    def test_missing_policy_inventory_is_not_an_empty_inventory(self):
+        for filename in ("repo-boundary-paid-surface.allowlist", "repo-boundary-private-implementation.baseline"):
+            with self.subTest(filename=filename):
+                path = self.fixture / "scripts" / filename
+                path.unlink()
+                result = self.audit("--enforce", 2, f"Boundary audit could not read policy inventory: scripts/{filename}")
+                self.assertNotIn("Private boundary audit", result)
+                path.write_text("")
+
+    def test_workflow_report_propagates_failed_audit_through_tee(self):
+        workflow = (ROOT / ".github/workflows/repo-boundary-audit.yml").read_text()
+        step = re.search(r"(?m)^      - name: Run Boundary Audit \(report mode\)\n"
+                         r"        run: \|\n((?:          [^\n]+\n)+)", workflow)
+        self.assertIsNotNone(step)
+        self.inject_git_read_fault("ls-files", 128, diagnostic="read failed")
+        result = subprocess.run(
+            [shutil.which("bash"), "-e", "-c", textwrap.dedent(step[1])],
+            cwd=self.fixture, env=self.environment, capture_output=True, text=True, timeout=15,
+        )
+        self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
+        self.assertIn("Boundary audit could not list candidate paths", result.stderr)
+        self.assertEqual((self.fixture / "repo-boundary-audit.txt").read_text(), "")
 
     def test_each_enforcement_mode_still_rejects_its_violation(self):
         variants = (
@@ -136,6 +196,10 @@ class RunnerDependencyTests(unittest.TestCase):
         for cwd in (Path(self.temporary.name), self.fixture / "internal/api"):
             with self.subTest(cwd=cwd.name):
                 self.audit("--enforce", 2, "Run the boundary audit from the Git repository root", cwd=cwd)
+
+    def test_missing_git_prefix_result_is_not_the_root(self):
+        self.inject_git_read_fault("rev-parse", 128, match="--show-prefix")
+        self.audit("--enforce", 2, "Run the boundary audit from the Git repository root")
 
     def test_workflow_keeps_all_checks_without_package_bootstrap(self):
         workflow = (ROOT / ".github/workflows/repo-boundary-audit.yml").read_text()

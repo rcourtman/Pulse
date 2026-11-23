@@ -22,6 +22,7 @@ jobs:
 
       - name: Run Boundary Audit (report mode)
         run: |
+          set -o pipefail
           ./scripts/audit-private-boundary.sh | tee repo-boundary-audit.txt
 
       - name: Enforce API Import Boundary
