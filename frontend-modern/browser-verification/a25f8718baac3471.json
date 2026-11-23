@@ -1,0 +1,40 @@
+{
+  "version": 1,
+  "base_sha": "a4d61471369a2b4ccf0a19eb2d7e57a58edafb1a",
+  "verified_at": "2026-11-23T05:11:10Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/SecurityAuthPanel.tsx",
+    "frontend-modern/src/components/Settings/useSystemSettingsState.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/SecurityAuthPanel.tsx": "f5c19fbe46fdb40380f6a1f1b4007e08890da4d759cd19248b7d6c52640a099d",
+    "frontend-modern/src/components/Settings/useSystemSettingsState.ts": "a79c4661d74ed982e8141486fb4e6007bcb01128c0304ea9de9092307449445b"
+  },
+  "routes": [
+    "/settings/security-auth",
+    "/login",
+    "/login?show_local=true"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 960
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Matched production-mode Chromium 141.0.7390.37 / Playwright 1.56.1 previews, desktop light and touch phone dark. 302 fixture assertions and 408 asset/manifest checks; all 24 retained captures inspected.",
+    "Administrator before change and after hiding/showing. Guidance distinguishes form visibility from password authentication, says to verify SSO separately and keep a working local admin login, and shows how to reveal the form without resetting credentials. Confirmations both name the form.",
+    "Read-only and deployment-locked states keep disabled switches, their saved states and unchanged credential controls. New guidance fits with footer and navigation visible.",
+    "The exact reveal parameter stays together on a narrow screen.",
+    "Fresh signed-out contexts with and without a listed SSO provider: hidden password form is absent by default, unchanged reveal shows an empty form and never signs in."
+  ],
+  "interactions": [
+    "Use Space on the focused desktop switch and tap on touch phone. Each change makes one synthetic POST of only hideLocalLogin, reads the resulting flag and displays the matching toast.",
+    "Navigate to the documented URL in a separate signed-out context. No submissions to identity providers or password endpoints, no signed-in session change and no live server operations."
+  ]
+}
