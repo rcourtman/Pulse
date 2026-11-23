@@ -1,4 +1,4 @@
-import { Show, createMemo, type Component, type JSX } from 'solid-js';
+import { Show, createEffect, createMemo, onCleanup, type Component, type JSX } from 'solid-js';
 import { EnhancedCPUBar } from '@/components/Workloads/EnhancedCPUBar';
 import { MetricBar } from '@/components/Workloads/MetricBar';
 import { StatusDot } from '@/components/shared/StatusDot';
@@ -12,7 +12,7 @@ import {
   PlatformResourceDetailToggleButton,
   createPlatformResourceDetailState,
   createPlatformResourceLabelResolver,
-  getPlatformResourceDetailRowClass,
+  getPlatformResourceDetailRowInteractionProps,
 } from '@/features/platformPage/PlatformResourceDetailTableRow';
 import {
   getPlatformInlineStateClass,
@@ -157,6 +157,37 @@ export const StandaloneVirtualMachinesTable: Component<{
     ...props.vms,
   ]);
   const vmsFocus = createPlatformHostScopeFocus();
+
+  createEffect(() => {
+    if (typeof document === 'undefined' || !drawer.expandedResourceId()) return;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (
+        event.key !== 'Escape' ||
+        event.defaultPrevented ||
+        event.altKey ||
+        event.ctrlKey ||
+        event.metaKey ||
+        event.shiftKey
+      ) {
+        return;
+      }
+      const target = event.target;
+      if (target instanceof HTMLElement && target.closest('[role="dialog"], [aria-modal="true"]')) {
+        return;
+      }
+      if (
+        target instanceof HTMLElement &&
+        target.closest('input, textarea, select, [contenteditable="true"]') &&
+        !target.closest('[data-inline-detail-row]')
+      ) {
+        return;
+      }
+      event.preventDefault();
+      drawer.close();
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    onCleanup(() => document.removeEventListener('keydown', handleKeyDown));
+  });
 
   const clearHostScope = () => {
     props.onClearHostScope?.();
@@ -348,9 +379,12 @@ export const StandaloneVirtualMachinesTable: Component<{
                     return (
                       <>
                         <TableRow
-                          class={`${getPlatformResourceDetailRowClass(isExpanded())} text-[11px] sm:text-xs`}
+                          {...getPlatformResourceDetailRowInteractionProps({
+                            expanded: isExpanded(),
+                            onToggle: () => drawer.toggle(vm),
+                            class: 'text-[11px] sm:text-xs',
+                          })}
                           data-standalone-vm-row={vm.id}
-                          onClick={() => drawer.toggle(vm)}
                         >
                           <TableCell class={getPlatformTableCellClassForKind('name')}>
                             <div class="flex min-w-0 items-center gap-2">
@@ -425,6 +459,9 @@ export const StandaloneVirtualMachinesTable: Component<{
                                     {short()}
                                   </span>
                                 )}
+                              </Show>
+                              <Show when={note()}>
+                                {(current) => <span class="sr-only">{current().full}</span>}
                               </Show>
                             </div>
                           </TableCell>

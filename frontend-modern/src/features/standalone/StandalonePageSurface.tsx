@@ -307,8 +307,12 @@ export function StandalonePageSurface() {
         when={!showLoading()}
         fallback={
           <PlatformTableLoadingState
-            title="Loading machines"
-            description="Pulse is loading Pulse Agent machines and availability checks."
+            title={activeTab() === 'vms' ? 'Loading virtual machines' : 'Loading machines'}
+            description={
+              activeTab() === 'vms'
+                ? 'Pulse is loading standalone virtual machines.'
+                : 'Pulse is loading Pulse Agent machines and availability checks.'
+            }
           />
         }
       >
@@ -316,7 +320,11 @@ export function StandalonePageSurface() {
           when={!error()}
           fallback={
             <PlatformErrorState
-              title="Could not load machines"
+              title={
+                activeTab() === 'vms'
+                  ? 'Could not load virtual machines'
+                  : 'Could not load machines'
+              }
               description="Refresh the resource snapshot or check the API connection state."
               onRefresh={() => void refetch()}
             />

@@ -1,0 +1,52 @@
+{
+  "version": 1,
+  "base_sha": "a1bbcb7bbeb0f4b633ef9d6efe4f0d36c5bf9740",
+  "verified_at": "2026-11-23T23:55:57Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/standalone/StandalonePageSurface.tsx",
+    "frontend-modern/src/features/standalone/StandaloneVirtualMachinesTable.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/standalone/StandalonePageSurface.tsx": "a598fdc1fe59bd7cb470bf988def95ab29da87ad3d492ac50513f2d29f36b795",
+    "frontend-modern/src/features/standalone/StandaloneVirtualMachinesTable.tsx": "b0638e8c1e35df2a0e0cc59f55b88e8b732998f6f1189d6aabd52b0aa38bd47d"
+  },
+  "routes": [
+    "/standalone/vms",
+    "/standalone/machines"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 1024,
+      "height": 768
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "populated multi-host standalone VMs in dark and light themes across Chromium and WebKit",
+    "single-host standalone VM estate",
+    "empty 0 standalone VMs state",
+    "cold-load connecting state and API 500 error state with virtual machines error copy and Refresh action",
+    "host-scoped ?host= filter with Show all hosts recovery",
+    "persisted ?status=attention reload state",
+    "search no-match empty filter state with Reset filters recovery",
+    "signed-in non-admin viewer RBAC session on VM table and Overview/Manage drawer tabs",
+    "production dist stable build gating returning Page Not Found on /standalone/vms and hiding Machines VMs tab, host VM counts, and Command Palette entry"
+  ],
+  "interactions": [
+    "opened host-scoped /standalone/vms from /standalone/machines host VM count button and cleared scope via Show all hosts",
+    "filtered by All, Running, Attention, and Stopped pills with keyboard Enter and reload persistence",
+    "sorted VM, Host, State, and CPU columns by keyboard Enter and click",
+    "searched non-matching VM query and recovered with Reset filters",
+    "opened VM detail drawer via keyboard Enter on disclosure button, switched Overview and Manage tabs, pressed Escape to close drawer and verified focus returned to the row disclosure button in both Chromium and WebKit",
+    "verified 0 WCAG 2.0/2.1 A/AA axe-core violations in collapsed, drawer Overview, and drawer Manage states in both dark and light themes",
+    "ran Playwright integration spec tests/integration/tests/72-standalone-vms.spec.ts across chromium, mobile-chrome, and mobile-safari against built production dist"
+  ]
+}
