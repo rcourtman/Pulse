@@ -63,6 +63,9 @@ Open **document-ingest** to trace a failed check to its worker log and compare t
 
 ## Install
 
+[![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/template/pulse)
+
+
 Pulse is one container or service listening on port 7655. The commands below
 install the current stable version. If a [newer release](https://github.com/rcourtman/Pulse/releases/latest)
 is out, use its tag instead.
