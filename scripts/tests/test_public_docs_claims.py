@@ -236,5 +236,84 @@ class PublicDocsLinksTest(unittest.TestCase):
         self.assertEqual(public_docs.check_links([source]), [])
 
 
+
+
+class PublicDocsProsePunctuationTest(unittest.TestCase):
+    def test_rejects_em_dash_and_semicolon_in_prose_only(self) -> None:
+        text = (
+            "Clean line with a period.\n"
+            "Line with an em dash \u2014 should fail.\n"
+            "Line with a semicolon; should fail.\n"
+            "Inline code `foo; bar \u2014 baz` and HTML &amp; entity and "
+            "[link](https://example.invalid/a;b) are allowed.\n"
+            "```sh\n"
+            "echo one; echo two # \u2014 inside code fence\n"
+            "```\n"
+        )
+        errors = public_docs.check_prose_punctuation_in_text("README.md", text)
+        self.assertEqual(
+            errors,
+            [
+                "README.md:2: avoid em dashes in public docs prose",
+                "README.md:3: avoid semicolons in public docs prose",
+            ],
+        )
+
+    def test_diff_mode_checks_only_added_lines_and_ignores_existing_history(self) -> None:
+        import os
+        import subprocess
+
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            env = dict(
+                os.environ,
+                GIT_AUTHOR_NAME="Fixture",
+                GIT_AUTHOR_EMAIL="fixture@example.invalid",
+                GIT_COMMITTER_NAME="Fixture",
+                GIT_COMMITTER_EMAIL="fixture@example.invalid",
+            )
+
+            def git(*args: str) -> str:
+                return subprocess.run(
+                    ["git", *args],
+                    cwd=root,
+                    env=env,
+                    text=True,
+                    check=True,
+                    capture_output=True,
+                    timeout=5,
+                ).stdout.strip()
+
+            git("init", "-q")
+            readme = root / "README.md"
+            readme.write_text("Legacy line; untouched.\n", encoding="utf-8")
+            git("add", "README.md")
+            git("commit", "-qm", "initial")
+            base_sha = git("rev-parse", "HEAD")
+
+            readme.write_text(
+                "Legacy line; untouched.\nAdded line with an em dash \u2014 here.\n",
+                encoding="utf-8",
+            )
+            git("add", "README.md")
+
+            with mock.patch.object(public_docs, "ROOT", root):
+                staged_errors = public_docs.check_changed_prose_punctuation([readme], staged=True)
+            self.assertEqual(
+                staged_errors,
+                ["README.md:2: avoid em dashes in public docs prose"],
+            )
+
+            git("commit", "-qm", "add doc line")
+            with mock.patch.object(public_docs, "ROOT", root):
+                pr_errors = public_docs.check_changed_prose_punctuation(
+                    [readme], base_ref=base_sha
+                )
+            self.assertEqual(
+                pr_errors,
+                ["README.md:2: avoid em dashes in public docs prose"],
+            )
+
+
 if __name__ == "__main__":
     unittest.main()

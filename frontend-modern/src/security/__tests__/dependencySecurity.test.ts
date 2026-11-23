@@ -79,6 +79,22 @@ const dompurifyRangeIsPatched = (range: string): boolean =>
 const prettierPinIsReviewed = (version: string): boolean =>
   /^3\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)$/.test(version) && atLeast(version, [3, 9, 9]);
 
+const vite6VersionIsPatched = (version: string): boolean =>
+  /^6\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)$/.test(version) &&
+  parseVersion(version).every(Number.isSafeInteger) &&
+  atLeast(version, [6, 4, 5]);
+
+const vite6GraphIsPatched = (range: string | undefined, versions: string[]): boolean => {
+  if (!range?.startsWith('^') || versions.length !== 1) return false;
+  const minimum = range.slice(1);
+  const [locked] = versions;
+  return (
+    vite6VersionIsPatched(minimum) &&
+    vite6VersionIsPatched(locked) &&
+    atLeast(locked, parseVersion(minimum))
+  );
+};
+
 describe('frontend dependency security floors', () => {
   it('checks the actual locked Solid serialization edges before accepting security overrides', () => {
     const check = fileURLToPath(
@@ -140,12 +156,39 @@ describe('frontend dependency security floors', () => {
     // GHSA-587h-7wmj-h5pm, GHSA-r825-w8mm-5pxw and GHSA-698v-4r3x-3vcv: Vite
     // bundles launch-editor, fixed on 6.x in 6.4.4. 6.4.5 also applies the
     // server.fs check after stripping the query.
-    expect(manifest.devDependencies.vite).toBe('^6.4.5');
+    const range = manifest.devDependencies.vite;
     const versions = lockedVersions('vite');
-    expect(versions).toHaveLength(1);
-    expect(versions[0]).not.toContain('-');
-    expect(parseVersion(versions[0])[0], 'vite must stay on the reviewed major').toBe(6);
-    expect(atLeast(versions[0], [6, 4, 5]), `vite ${versions[0]} is vulnerable`).toBe(true);
+    expect(
+      vite6GraphIsPatched(range, versions),
+      `expected a Vite 6.x caret range at or above 6.4.5 and one matching stable lock; found ${range} with ${versions.join(', ') || 'no locked version'}`,
+    ).toBe(true);
+  });
+
+  it.each<[string, string[]]>([
+    ['^6.4.5', ['6.4.5']],
+    ['^6.4.5', ['6.4.6']],
+    ['^6.4.6', ['6.4.6']],
+    ['^6.5.0', ['6.5.1']],
+  ])('accepts patched Vite 6.x range %s with lock %j', (range, versions) => {
+    expect(vite6GraphIsPatched(range, versions)).toBe(true);
+  });
+
+  it.each<[string, string[]]>([
+    ['^6.4.4', ['6.4.6']],
+    ['^6.4.5', ['6.4.4']],
+    ['^6.4.6', ['6.4.5']],
+    ['^6.4.6-beta.1', ['6.4.6']],
+    ['^6.4.5', ['6.4.6-beta.1']],
+    ['^6.04.6', ['6.4.6']],
+    ['^6.4.6', ['6.4.x']],
+    ['>=6.4.5', ['6.4.6']],
+    ['^6.4.5 || ^7.0.0', ['6.4.6']],
+    ['^7.0.0', ['7.0.0']],
+    ['^6.4.5', ['7.0.0']],
+    ['^6.4.5', []],
+    ['^6.4.5', ['6.4.5', '6.4.6']],
+  ])('rejects an out-of-policy Vite range %s and lock %j', (range, versions) => {
+    expect(vite6GraphIsPatched(range, versions)).toBe(false);
   });
 
   it('keeps every js-yaml copy above the empty-merge CPU exhaustion floor', () => {

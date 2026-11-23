@@ -1,6 +1,7 @@
 package configapi
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net/http"
@@ -41,7 +42,7 @@ func TestValidateNodeAPI_PinnedPrimaryFingerprintMismatch(t *testing.T) {
 		IP:     "127.0.0.1",
 	}
 
-	isValid, fingerprint, reason := validateNodeAPI(clusterNode, baseConfig)
+	isValid, fingerprint, reason := validateNodeAPI(context.Background(), clusterNode, baseConfig)
 	if !isValid {
 		t.Fatalf("expected member with its own certificate to validate despite primary pin, got invalid (reason %q)", reason)
 	}

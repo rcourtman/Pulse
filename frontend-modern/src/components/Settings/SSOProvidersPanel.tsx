@@ -88,6 +88,67 @@ interface SSOProvidersPanelProps {
   currentUser?: string;
 }
 
+const SamlEditorRegistration: Component<{
+  metadataUrl?: string;
+  acsUrl?: string;
+  copyToClipboard: (value: string, label: string) => Promise<void>;
+}> = (props) => {
+  // Use the selected provider detail URLs, not the inventory card values.
+  const endpoints = () =>
+    [
+      {
+        caption: 'SP Metadata:',
+        value: props.metadataUrl,
+        copyLabel: 'Copy SP metadata URL',
+        statusLabel: 'Metadata URL',
+      },
+      {
+        caption: 'ACS URL:',
+        value: props.acsUrl,
+        copyLabel: 'Copy ACS URL',
+        statusLabel: 'ACS URL',
+      },
+    ].filter((endpoint) => !!endpoint.value);
+  const missingLabel = () => {
+    if (!props.metadataUrl) return props.acsUrl ? 'SP Metadata URL' : 'SP Metadata or ACS URL';
+    return props.acsUrl ? null : 'ACS URL';
+  };
+
+  return (
+    <>
+      <p class="text-xs font-medium text-base-content">
+        Register Pulse with your identity provider
+      </p>
+      <Show when={endpoints().length > 0}>
+        <dl class="mt-1 grid min-w-0 gap-1 text-xs sm:grid-cols-2 sm:gap-3">
+          <For each={endpoints()}>
+            {(endpoint) => (
+              <div class="min-w-0 space-y-1">
+                <dt class="text-muted">{endpoint.caption}</dt>
+                <dd class="min-w-0">
+                  <CopyValueButton
+                    value={endpoint.value}
+                    onCopyValue={(value) => props.copyToClipboard(value, endpoint.statusLabel)}
+                    label={endpoint.copyLabel}
+                    variant="accent"
+                    size="sm"
+                    class="min-h-11 w-full max-w-full justify-between gap-2 py-1 text-left text-xs sm:min-h-0 sm:w-auto [&>svg]:shrink-0"
+                  >
+                    <span class="min-w-0 [overflow-wrap:anywhere]">{endpoint.value}</span>
+                  </CopyValueButton>
+                </dd>
+              </div>
+            )}
+          </For>
+        </dl>
+      </Show>
+      <Show when={missingLabel()}>
+        {(label) => <p class="mt-2 text-xs text-muted">{getSSOEndpointUnavailableHint(label())}</p>}
+      </Show>
+    </>
+  );
+};
+
 export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
   const {
     providers,
@@ -135,11 +196,13 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
   const summaryId = (id: string) => `${summaryIdPrefix}-${encodeURIComponent(id)}`;
   const inventoryTitleId = `${summaryIdPrefix}-inventory-title`;
   const providerDetailErrorId = `${createUniqueId()}-provider-detail-error`;
+  const editorFeedbackId = `${createUniqueId()}-editor-feedback`;
   const testResultSummaryId = `${summaryIdPrefix}-test-summary`;
   const testResultId = `${summaryIdPrefix}-test-result`;
   const testResultTitleId = `${summaryIdPrefix}-test-result-title`;
   const signInRestrictionsId = `${summaryIdPrefix}-sign-in-restrictions`;
   const clientSecretHintId = `${summaryIdPrefix}-client-secret-hint`;
+  const isSamlEdit = () => form.type === 'saml' && !!editingProvider();
   const isSamlUrlFormatCheck = () => getProviderTestSource(form) === 'saml-manual-url';
   const hasSamlFinding = () => form.type === 'saml' && !!testResult()?.failureLabel;
   const signingCertificateUnread = createMemo(() => {
@@ -225,7 +288,10 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
 
   const EditorFields: ParentComponent = (editor) => (
     <div ref={editorScroll} class="min-h-0 min-w-0 flex-1 overflow-y-auto">
-      <fieldset disabled={saving() || !!unconfirmedChange()} class="min-w-0 space-y-4 p-4 sm:p-6">
+      <fieldset
+        disabled={saving() || !!unconfirmedChange()}
+        class={`min-w-0 p-4 sm:p-6 ${isSamlEdit() ? 'space-y-3 sm:space-y-4' : 'space-y-4'}`}
+      >
         {editor.children}
       </fieldset>
     </div>
@@ -502,6 +568,11 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
                   </Show>
 
                   {/* SAML metadata info */}
+                  <Show when={provider.type === 'saml' && !provider.enabled && canManage()}>
+                    <p class="mt-2 text-xs text-muted">
+                      Open Edit to check this provider’s SP Metadata and ACS URLs.
+                    </p>
+                  </Show>
                   <Show when={provider.type === 'saml' && provider.enabled}>
                     <div class="mt-3 pt-3 border-t border-border-subtle">
                       <Show
@@ -591,7 +662,9 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
 
             <EditorFields>
               {/* Common fields */}
-              <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div
+                class={`grid grid-cols-1 md:grid-cols-2 ${isSamlEdit() ? 'gap-2 sm:gap-4' : 'gap-4'}`}
+              >
                 <div class={formField}>
                   <label for="sso-provider-name" class={labelClass()}>
                     Provider Name
@@ -762,38 +835,30 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
 
               {/* SAML-specific fields */}
               <Show when={form.type === 'saml'}>
-                <div class="space-y-4">
+                <div class={isSamlEdit() ? 'space-y-2 sm:space-y-4' : 'space-y-4'}>
                   <div class="bg-surface-alt border border-border rounded-md p-3">
-                    <p class="text-xs text-base-content">
-                      <strong>Setup:</strong> Provide either IdP Metadata URL (preferred) or
-                      configure SSO URL + Certificate manually. Use the SP Metadata URL below to
-                      configure your Identity Provider.
-                    </p>
                     <Show
-                      when={editingProvider()?.samlMetadataUrl}
+                      when={editingProvider()}
                       fallback={
-                        <p class="mt-2 text-xs text-muted">
-                          {editingProvider()
-                            ? getSSOEndpointUnavailableHint('SP Metadata URL')
-                            : 'The SP Metadata URL is generated when the provider is saved. Save this provider, then copy it from the provider card.'}
-                        </p>
+                        <>
+                          <p class="text-xs text-base-content">
+                            <strong>Setup:</strong> Use the IdP Metadata URL (preferred), or enter
+                            the IdP SSO URL and certificate manually.
+                          </p>
+                          <p class="mt-2 text-xs text-muted">
+                            After saving, copy the SP Metadata and ACS URLs from the provider card.
+                            Open Edit if the provider is disabled.
+                          </p>
+                        </>
                       }
                     >
-                      <div class="mt-2 flex flex-col gap-1 sm:flex-row sm:items-center sm:gap-2">
-                        <span class="text-xs text-muted">SP Metadata:</span>
-                        <CopyValueButton
-                          value={editingProvider()?.samlMetadataUrl}
-                          onCopyValue={(value) => copyToClipboard(value, 'Metadata URL')}
-                          label="Copy SP metadata URL"
-                          variant="accent"
-                          size="sm"
-                          class="min-w-0 max-w-full justify-between gap-2 py-0.5 text-left text-xs [&>svg]:shrink-0"
-                        >
-                          <span class="min-w-0 [overflow-wrap:anywhere]">
-                            {editingProvider()?.samlMetadataUrl}
-                          </span>
-                        </CopyValueButton>
-                      </div>
+                      {(saved) => (
+                        <SamlEditorRegistration
+                          metadataUrl={saved().samlMetadataUrl}
+                          acsUrl={saved().samlAcsUrl}
+                          copyToClipboard={copyToClipboard}
+                        />
+                      )}
                     </Show>
                   </div>
 
@@ -833,7 +898,11 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
                     <p class={formHelpText}>URL to fetch IdP metadata (preferred method)</p>
                   </div>
 
-                  <div class="text-center text-xs text-muted">— or configure manually —</div>
+                  <div class="text-center text-xs text-muted">
+                    {isSamlEdit()
+                      ? 'Or enter the IdP SSO URL and certificate'
+                      : '— or configure manually —'}
+                  </div>
 
                   <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div class={formField}>
@@ -1069,7 +1138,7 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
                 </Button>
 
                 <Show when={advancedOpen()}>
-                  <div class="mt-4 space-y-4 p-4 bg-surface-alt rounded-md">
+                  <div class="mt-3 space-y-2.5 rounded-md bg-surface-alt p-3">
                     <Show when={form.type === 'oidc'}>
                       <div class={formField}>
                         <label for="sso-oidc-groups-claim" class={labelClass()}>
@@ -1090,20 +1159,25 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
                         </p>
                       </div>
                     </Show>
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div class="grid grid-cols-1 gap-2.5 md:grid-cols-2">
                       <FormTextarea
                         label="Allowed Groups"
-                        rows={2}
+                        aria-invalid={editorFeedback()?.field === 'allowedGroups' || undefined}
+                        aria-describedby={
+                          editorFeedback()?.field === 'allowedGroups' ? editorFeedbackId : undefined
+                        }
+                        rows={3}
                         value={form.allowedGroups}
                         onInput={(e) => setForm('allowedGroups', e.currentTarget.value)}
                         placeholder="admin, sso-users"
-                        textareaBaseClass={controlClass('min-h-[60px]')}
+                        textareaBaseClass={controlClass('break-all py-1.5!')}
                         help={
                           <>
                             <span id={signInRestrictionsId}>
                               Each filled list needs a match. Blank skips only that check.
                             </span>{' '}
-                            Use commas or new lines. Names can have spaces.
+                            Use commas or new lines. Spaces are fine. Double-quote names with commas
+                            or =.
                           </>
                         }
                       />
@@ -1128,12 +1202,18 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
                       />
                       <FormTextarea
                         label="Group Role Mappings"
-                        rows={2}
+                        aria-invalid={editorFeedback()?.field === 'groupRoleMappings' || undefined}
+                        aria-describedby={
+                          editorFeedback()?.field === 'groupRoleMappings'
+                            ? editorFeedbackId
+                            : undefined
+                        }
+                        rows={3}
                         value={form.groupRoleMappings}
                         onInput={(e) => setForm('groupRoleMappings', e.currentTarget.value)}
                         placeholder="admins=admin, ops=operator"
-                        textareaBaseClass={controlClass('min-h-[60px]')}
-                        help="Assigns roles after sign-in checks. Enter group=roleId. Use commas or new lines. Names can have spaces."
+                        textareaBaseClass={controlClass('break-all py-1.5!')}
+                        help='Roles apply after sign-in checks. Use group=roleId, e.g. "Ops, East"=viewer. Commas or new lines.'
                       />
                     </div>
                   </div>
@@ -1156,6 +1236,7 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
               <Show when={editorFeedback()} keyed>
                 {(feedback) => (
                   <p
+                    id={editorFeedbackId}
                     role={feedback.tone === 'error' ? 'alert' : 'status'}
                     tabindex="0"
                     class={`max-h-48 overflow-y-auto text-sm [overflow-wrap:anywhere] ${

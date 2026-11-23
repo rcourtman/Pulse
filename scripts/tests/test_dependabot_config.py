@@ -15,6 +15,10 @@ SECURITY_SCAN = ROOT / ".github" / "workflows" / "security-scan.yml"
 ACTION_MANIFESTS = ROOT / "scripts" / "release_control" / "action_consumer_manifests.json"
 
 
+def update_directories(entry: dict) -> list[str]:
+    return [entry["directory"]] if "directory" in entry else entry["directories"]
+
+
 def manifest_directories(filename: str) -> list[str]:
     """Return repository-relative Dependabot directories for every manifest."""
     directories = set()
@@ -43,8 +47,12 @@ class DependabotConfigTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         cls.config = yaml.safe_load(CONFIG.read_text(encoding="utf-8"))
+        cls.npm_updates = [
+            entry for entry in cls.config["updates"] if entry["package-ecosystem"] == "npm"
+        ]
         cls.updates = {
-            entry["package-ecosystem"]: entry for entry in cls.config["updates"]
+            entry["package-ecosystem"]: entry
+            for entry in cls.config["updates"] if entry["package-ecosystem"] != "npm"
         }
 
     def test_covers_every_shipped_dependency_ecosystem(self) -> None:
@@ -53,19 +61,20 @@ class DependabotConfigTest(unittest.TestCase):
             {
                 "github-actions",
                 "gomod",
-                "npm",
                 "docker",
                 "docker-compose",
                 "devcontainers",
             },
         )
+        self.assertEqual(len(self.config["updates"]), len(self.updates) + len(self.npm_updates))
         self.assertEqual(self.updates["github-actions"]["directory"], "/")
         self.assertEqual(
             sorted(self.updates["gomod"]["directories"]),
             manifest_directories("go.mod"),
         )
-        self.assertEqual(
-            sorted(self.updates["npm"]["directories"]),
+        # Unlike a set, this check also rejects two entries for the same lock.
+        self.assertCountEqual(
+            [directory for entry in self.npm_updates for directory in update_directories(entry)],
             manifest_directories("package-lock.json"),
         )
         self.assertEqual(
@@ -91,27 +100,53 @@ class DependabotConfigTest(unittest.TestCase):
             times.append(schedule["time"])
         self.assertEqual(len(times), len(set(times)), "update jobs must stay staggered")
 
-    def test_language_updates_group_reviewable_changes(self) -> None:
-        for ecosystem, version_group, security_group in (
-            ("gomod", "go-minor-patch", "go-security"),
-            ("npm", "npm-minor-patch", "npm-security"),
-        ):
-            groups = self.updates[ecosystem]["groups"]
-            version_policy = {
+    def test_go_updates_group_reviewable_changes(self) -> None:
+        groups = self.updates["gomod"]["groups"]
+        self.assertEqual(
+            groups["go-minor-patch"],
+            {
                 "applies-to": "version-updates",
                 "patterns": ["*"],
+                "exclude-patterns": ["modernc.org/*"],
                 "update-types": ["minor", "patch"],
-            }
-            if ecosystem == "gomod":
-                version_policy["exclude-patterns"] = ["modernc.org/*"]
-            self.assertEqual(
-                groups[version_group],
-                version_policy,
-            )
-            self.assertEqual(
-                groups[security_group],
-                {"applies-to": "security-updates", "patterns": ["*"]},
-            )
+            },
+        )
+        self.assertEqual(
+            groups["go-security"],
+            {"applies-to": "security-updates", "patterns": ["*"]},
+        )
+
+    def test_npm_proposals_stay_within_each_consumer_scope(self) -> None:
+        # The Account lock/embedded proof, the product UI, and the integration
+        # harness had different outcomes in the combined update (PR 4970).
+        # Keep them in disjoint update blocks, not just differently named groups
+        # inside one cross-directory block.
+        expected_scopes = {
+            "ui": frozenset({"/frontend-modern"}),
+            "portal": frozenset({"/internal/cloudcp/portal/frontend"}),
+            "tooling": frozenset({"/", "/.github/scripts", "/tests/integration"}),
+        }
+        by_scope = {frozenset(update_directories(entry)): entry for entry in self.npm_updates}
+        self.assertEqual(len(self.npm_updates), len(expected_scopes))
+        self.assertEqual(set(by_scope), set(expected_scopes.values()))
+        for name, directories in expected_scopes.items():
+            with self.subTest(scope=name):
+                entry = by_scope[directories]
+                self.assertEqual(len({"directory", "directories"} & entry.keys()), 1)
+                self.assertNotIn("target-branch", entry)
+                self.assertIn("javascript", entry["labels"])
+                self.assertEqual(entry["open-pull-requests-limit"], 1)
+                self.assertEqual(entry["groups"], {
+                    f"npm-{name}-minor-patch": {
+                        "applies-to": "version-updates",
+                        "patterns": ["*"],
+                        "update-types": ["minor", "patch"],
+                    },
+                    f"npm-{name}-security": {
+                        "applies-to": "security-updates",
+                        "patterns": ["*"],
+                    },
+                })
 
     def test_go_storage_updates_stay_together_without_blocking_other_patches(self) -> None:
         gomod = self.updates["gomod"]
@@ -192,59 +227,36 @@ class DependabotConfigTest(unittest.TestCase):
         )
 
     def test_npm_version_ignores_preserve_browser_and_toolchain_parity(self) -> None:
-        all_semver = {
+        all_semver = [
             "version-update:semver-major",
             "version-update:semver-minor",
             "version-update:semver-patch",
+        ]
+        required_types = {
+            **dict.fromkeys(("playwright", "playwright-core", "@playwright/test"), all_semver),
+            **dict.fromkeys(
+                ("typescript", "eslint", "lucide-solid", "solid-js", "vitest",
+                 "@vitest/coverage-v8", "jsdom", "vite"),
+                ["version-update:semver-major"],
+            ),
         }
-        ignored = {
-            item["dependency-name"]: set(item["update-types"])
-            for item in self.updates["npm"]["ignore"]
-        }
-        self.assertEqual(
-            set(ignored),
-            {
-                "playwright",
-                "playwright-core",
-                "@playwright/test",
-                "typescript",
-                "eslint",
-                "lucide-solid",
-                "vitest",
-                "@vitest/coverage-v8",
-                "jsdom",
-                "vite",
-            },
-        )
-        for browser_runtime in ("playwright", "playwright-core", "@playwright/test"):
-            self.assertEqual(ignored[browser_runtime], all_semver)
-        # These majors require an explicit toolchain or icon-import migration.
-        # Minor and patch version updates must remain eligible for Dependabot.
-        for dependency in (
-            "typescript",
-            "eslint",
-            "lucide-solid",
-            "vitest",
-            "@vitest/coverage-v8",
-        ):
-            self.assertEqual(
-                ignored[dependency],
-                {"version-update:semver-major"},
-            )
-
-    def test_jsdom_and_vite_ignore_only_standalone_major_version_updates(self) -> None:
-        npm = self.updates["npm"]
-        for dependency in ("jsdom", "vite"):
-            with self.subTest(dependency=dependency):
-                # No version-range ignore: security updates and ordinary minor
-                # and patch version updates must still be eligible.
-                self.assertEqual(
-                    [rule for rule in npm["ignore"] if rule["dependency-name"] == dependency],
-                    [{
-                        "dependency-name": dependency,
-                        "update-types": ["version-update:semver-major"],
-                    }],
-                )
+        for entry in self.npm_updates:
+            directories = update_directories(entry)
+            with self.subTest(directories=directories):
+                locked = set()
+                for directory in directories:
+                    lock = ROOT / directory.removeprefix("/") / "package-lock.json"
+                    packages = json.loads(lock.read_text(encoding="utf-8"))["packages"]
+                    locked.update(
+                        path.rsplit("node_modules/", 1)[-1] for path in packages if path
+                    )
+                # Each scope keeps the old version-update-only rules wherever
+                # those packages are locked. No rule may ignore security ranges
+                # or exclude ordinary minor/patch upgrades of coupled majors.
+                self.assertCountEqual(entry["ignore"], [
+                    {"dependency-name": name, "update-types": types}
+                    for name, types in required_types.items() if name in locked
+                ])
 
     def test_github_actions_updates_preserve_reviewed_action_pins(self) -> None:
         # action_consumer_manifests.json pins each release-consumed action to an

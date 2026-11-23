@@ -163,6 +163,13 @@ Names and keys are presented at render time only; governed resource names in
 the grant payload and all existing selection, authority, CSRF and no-write-retry
 fences are unchanged. No recipient is inferred or preselected.
 
+The share form labels the requested role as a minimum membership role, not a
+new role assignment. Viewer includes all target members, Editor includes
+editors and higher roles, and Admin includes admins and owners. Before a share
+is requested, an associated description explains that the target organization
+must accept it through an admin or owner. The default Viewer, submitted
+`accessRole` values, pending/active states, and authority to approve are unchanged.
+
 Phone spacing keeps the role, resource guidance, manual-entry control and
 Create Share action available alongside the additional identity text; desktop
 retains its existing layout. Registered sharing panel/transport tests exercise

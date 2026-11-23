@@ -185,6 +185,20 @@ afterEach(() => {
 });
 
 describe('OrganizationSharingPanel', () => {
+  it('shows the target membership threshold and approval requirement before creating a share', async () => {
+    renderPanel();
+    const role = await screen.findByRole('combobox', { name: 'Minimum member role' });
+    expect(role).toHaveValue('viewer');
+    expect(role).toHaveAccessibleDescription('After a target admin or owner accepts.');
+    expect(within(role).getByRole('option', { name: 'All members (Viewer)' })).toHaveValue(
+      'viewer',
+    );
+    expect(within(role).getByRole('option', { name: 'Editor or higher' })).toHaveValue('editor');
+    expect(within(role).getByRole('option', { name: 'Admin or Owner' })).toHaveValue('admin');
+    expect(screen.getByRole('button', { name: 'Create Share' })).toBeDisabled();
+    expect(createShareMock).not.toHaveBeenCalled();
+  });
+
   it('names the native creation form and keeps manual-entry toggles non-submitting', async () => {
     renderPanel();
     const form = await screen.findByRole('form', { name: 'Create Share' });
@@ -653,7 +667,7 @@ describe('selected sharing snapshot', () => {
     expect(
       within(recipient).getByRole('option', { name: 'Organization list unavailable' }),
     ).toBeInTheDocument();
-    expect(within(form).getByRole('combobox', { name: 'Access Role' })).toBeDisabled();
+    expect(within(form).getByRole('combobox', { name: 'Minimum member role' })).toBeDisabled();
     expect(within(form).getByRole('button', { name: 'Create Share' })).toBeDisabled();
     expect(
       savedRow().getByRole('button', { name: 'Remove share of vm:vm-alpha to org-b' }),

@@ -90,6 +90,11 @@ if staged_files_match '^docs/|^frontend-modern/public/docs/|^(SECURITY|TERMS|ARC
     python3 scripts/check_docs_mirror.py --staged
 fi
 
+if staged_files_match '^docs/|^frontend-modern/public/docs/|^\.github/ISSUE_TEMPLATE/|^(README|CHANGELOG|SECURITY|TERMS|ARCHITECTURE|CONTRIBUTING)\.md$'; then
+    echo "Running public docs check..."
+    python3 scripts/check_public_docs.py --staged
+fi
+
 echo "Running browser verification guard..."
 python3 scripts/release_control/browser_verification_guard.py
 

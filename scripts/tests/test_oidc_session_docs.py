@@ -390,7 +390,13 @@ class OIDCSessionDocsTest(unittest.TestCase):
 
     def test_setup_matches_existing_form_and_discovery_test(self):
         panel = (ROOT / "frontend-modern/src/components/Settings/SSOProvidersPanel.tsx").read_text()
-        self.assertIn("URL is generated when the provider is saved", panel)
+        oidc_fields = panel.split("{/* OIDC-specific fields */}", 1)[1].split(
+            "{/* SAML-specific fields */}", 1
+        )[0]
+        self.assertIn(
+            "Create the provider in Pulse. Then copy its Callback / Redirect URL from the saved provider card",
+            " ".join(oidc_fields.split()),
+        )
         self.assertIn("access restrictions & role mapping", panel)
         self.assertIn('label="Group Role Mappings"', panel)
         model = (ROOT / "frontend-modern/src/components/Settings/ssoProvidersModel.ts").read_text()

@@ -27,3 +27,43 @@ if [ "$body_lines" -eq 0 ]; then
   echo "commit-msg: git commit -m \"<subject>\" -m \"<why>\" is enough." >&2
   exit 1
 fi
+
+if command -v python3 >/dev/null 2>&1; then
+  printf '%s\n' "$message" | python3 -c '
+import re, sys
+
+TRAILER = re.compile(r"^(Change-source|Contract-Neutral|Signed-off-by|Co-authored-by|Fixes|Closes|Resolves|Refs|Reviewed-by|Cc|See-also): ")
+FENCE_OPEN = re.compile(r"^ {0,3}(`{3,}|~{3,})(.*)$")
+CODE_SPAN = re.compile(r"(?<!`)(`+)(?!`)(.*?)(?<!`)\1(?!`)")
+URL = re.compile(r"https?://\S+")
+HTML_ENTITY = re.compile(r"&(?:#\d+|#x[0-9a-fA-F]+|[A-Za-z][A-Za-z0-9]+);")
+
+closing = None
+violations = []
+for idx, raw in enumerate(sys.stdin.read().splitlines(), 1):
+    if closing is not None:
+        if closing.fullmatch(raw):
+            closing = None
+        continue
+    m = FENCE_OPEN.fullmatch(raw)
+    if m is not None:
+        fence, info = m.groups()
+        if fence[0] != "`" or "`" not in info:
+            closing = re.compile(r" {0,3}" + re.escape(fence[0]) + "{" + str(len(fence)) + r",}[ \t]*")
+            continue
+    if idx > 1 and TRAILER.match(raw):
+        continue
+    prose = CODE_SPAN.sub("", raw)
+    prose = URL.sub("", prose)
+    prose = HTML_ENTITY.sub("", prose)
+    if "\u2014" in prose:
+        violations.append(f"line {idx}: avoid em dashes in commit messages")
+    if ";" in prose:
+        violations.append(f"line {idx}: avoid semicolons in commit messages")
+
+if violations:
+    for item in violations:
+        print(f"commit-msg: {item}. Use periods, commas, colons, or parentheses instead.", file=sys.stderr)
+    sys.exit(1)
+'
+fi

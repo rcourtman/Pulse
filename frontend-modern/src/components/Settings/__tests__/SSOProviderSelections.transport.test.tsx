@@ -198,7 +198,15 @@ async function mount() {
   expect(writes()).toHaveLength(0);
   expectClientBinding();
 }
-async function edit(provider: SavedProvider) {
+async function edit(
+  provider: SavedProvider,
+  groupText = {
+    allowedGroups: provider.allowedGroups!.join(', '),
+    groupRoleMappings: Object.entries(provider.groupRoleMappings!)
+      .map(([group, role]) => `${group}=${role}`)
+      .join(', '),
+  },
+) {
   fireEvent.click(cardFor(provider).getByRole('button', { name: /^Edit provider / }));
   const dialog = within(
     await screen.findByRole('dialog', { name: `Edit ${provider.type.toUpperCase()} provider` }),
@@ -226,14 +234,10 @@ async function edit(provider: SavedProvider) {
     expect(dialog.getByLabelText('Allow IdP-initiated SSO')).not.toBeChecked();
   }
   fireEvent.click(dialog.getByRole('button', { name: 'Show access restrictions & role mapping' }));
-  expect(dialog.getByLabelText('Allowed Groups')).toHaveValue(provider.allowedGroups!.join(', '));
+  expect(dialog.getByLabelText('Allowed Groups')).toHaveValue(groupText.allowedGroups);
   expect(dialog.getByLabelText('Allowed Domains')).toHaveValue(provider.allowedDomains!.join(', '));
   expect(dialog.getByLabelText('Allowed Emails')).toHaveValue(provider.allowedEmails!.join(', '));
-  expect(dialog.getByLabelText('Group Role Mappings')).toHaveValue(
-    Object.entries(provider.groupRoleMappings!)
-      .map(([group, role]) => `${group}=${role}`)
-      .join(', '),
-  );
+  expect(dialog.getByLabelText('Group Role Mappings')).toHaveValue(groupText.groupRoleMappings);
   return dialog;
 }
 async function checkReconciled(readCount: number, writeCount: number) {
@@ -335,6 +339,66 @@ afterEach(() => {
 describe.each(types)(
   '%s provider selection through the real rendered controls and client',
   (type) => {
+    it('saves a relabelled provider with exact directory rules and keeps an invalid edit local', async () => {
+      const group = 'CN=Night Operators,OU=Operations,DC=example,DC=test';
+      const provider = {
+        ...selected(type),
+        allowedGroups: [group, 'Read Only Team'],
+        groupRoleMappings: { [group]: 'operator', 'Read Only Team': 'viewer' },
+      };
+      saved = saved.map((p) => (p.id === provider.id ? provider : p));
+      const ruleText = {
+        allowedGroups: `"${group}", Read Only Team`,
+        groupRoleMappings: `"${group}"=operator, Read Only Team=viewer`,
+      };
+      await mount();
+      let dialog = await edit(provider, ruleText);
+      const relabelled = { ...provider, displayName: 'New login label' };
+      fireEvent.input(dialog.getByLabelText('Display Name (Button)'), {
+        target: { value: relabelled.displayName },
+      });
+      const submit = () =>
+        fireEvent.submit(dialog.getByRole('button', { name: 'Save Changes' }).closest('form')!);
+      submit();
+      await checkReconciled(2, 1);
+      expectWrite(provider, 'PUT', expectedSave(relabelled));
+      expect(saved.find((p) => p.id === provider.id)).toEqual(relabelled);
+      expectPreserved(provider.id);
+      dialog = await edit(relabelled, ruleText);
+
+      const groups = dialog.getByLabelText('Allowed Groups');
+      fireEvent.input(groups, { target: { value: group } });
+      submit();
+      expect(await dialog.findByRole('alert')).toHaveTextContent('Allowed Groups:');
+      expect(groups).toHaveValue(group);
+      expect(groups).toHaveAttribute('aria-invalid', 'true');
+      expect(writes()).toHaveLength(1);
+      fireEvent.input(groups, { target: { value: ruleText.allowedGroups } });
+
+      const mappings = dialog.getByLabelText('Group Role Mappings');
+      const incomplete = `"${group}"=operator, Read Only Team=`;
+      fireEvent.input(mappings, { target: { value: incomplete } });
+      submit();
+      expect(await dialog.findByRole('alert')).toHaveTextContent(
+        'Group Role Mappings: enter complete group=roleId pairs.',
+      );
+      expect(mappings).toHaveValue(incomplete);
+      expect(mappings).toHaveAttribute('aria-invalid', 'true');
+      expect(mappings).toHaveAccessibleDescription(/enter complete group=roleId pairs/);
+      expect(writes()).toHaveLength(1);
+      expect(changed).toHaveBeenCalledOnce();
+      expect(notices.success).toHaveBeenCalledOnce();
+
+      // Clearing mappings is explicit; it must not clear the other group list.
+      fireEvent.input(mappings, { target: { value: '' } });
+      expect(mappings).not.toHaveAttribute('aria-invalid');
+      submit();
+      await checkReconciled(3, 2);
+      expectWrite(provider, 'PUT', expectedSave({ ...relabelled, groupRoleMappings: {} }), 1);
+      await edit({ ...relabelled, groupRoleMappings: {} }, { ...ruleText, groupRoleMappings: '' });
+      expectPreserved(provider.id);
+    });
+
     it('saves only the selected namesake unchanged and reopens its complete saved settings', async () => {
       await mount();
       const provider = selected(type);

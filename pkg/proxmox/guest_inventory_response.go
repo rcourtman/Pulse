@@ -21,7 +21,7 @@ var guestInventoryFields = []string{
 	"id", "type", "node", "pool", "status", "name", "vmid", "cpu", "cpus", "maxcpu", "mem", "maxmem", "swap", "maxswap", "disk", "maxdisk", "netin", "netout", "diskread", "diskwrite", "uptime", "template", "tags", "lock", "agent", "hostname", "ip", "ip6", "ipv4", "ipv6", "network", "diskinfo", "rootfs",
 }
 
-func readGuestInventory[T any](resp *http.Response, identity func(T) (string, bool)) ([]T, error) {
+func readGuestInventory[T any](resp *http.Response, decode func(*T, []byte, IOCounterPresence) error, identity func(T) (string, bool)) ([]T, error) {
 	body, readErr := readResponseBodyLimited(resp.Body)
 	closeErr := resp.Body.Close()
 	if readErr != nil || closeErr != nil {
@@ -50,11 +50,14 @@ func readGuestInventory[T any](resp *http.Response, identity func(T) (string, bo
 	values := make([]T, 0, len(rows))
 	seen := make(map[string]bool, len(rows))
 	for _, row := range rows {
-		if _, valid := inventoryResponseObject(row, guestInventoryFields...); !valid {
+		fields, valid := inventoryResponseObject(row, guestInventoryFields...)
+		if !valid {
 			return nil, errInvalidGuestInventoryResponse
 		}
+		// Validation has already captured the original counter fields. Reuse
+		// their presence instead of rebuilding a raw-field map in UnmarshalJSON.
 		var value T
-		if json.Unmarshal(row, &value) != nil {
+		if decode(&value, row, counterPresence(fields)) != nil {
 			return nil, errInvalidGuestInventoryResponse
 		}
 		key, valid := identity(value)

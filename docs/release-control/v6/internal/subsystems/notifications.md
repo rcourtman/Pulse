@@ -2191,24 +2191,31 @@ masquerades as an empty setup.
 
 ### Automatic destination-recovery DLQ replay (21 November 2026)
 
-When a live queued delivery succeeds in `NotificationQueue.processNotification`
-(`internal/notifications/queue.go`), `replayRecoverableDeadLettersForDestination`
-automatically re-queues up to 25 recent (within 24 hours) `failed`/`dlq`
-notifications matching the exact same channel family (alert and `_resolved`) and
-snapshotted destination config JSON, restricted strictly to retryable failure
-classes (`connectivity`, `server_error`, `rate_limited`, `tls`, `unknown`),
-with a 5-minute per-destination cooldown once a batch replays (preventing
-cascading batch storms) and at most one automatic replay per row (enforced via
-immutable `notification_audit` attempt count `<= max_attempts`, with one clean
-delivery attempt on replay). Deterministic failures (`authentication`,
-`configuration`, `rejected`), edited or sibling destinations, stale (>24h)
-dead-letters, and manual `SendTest*` probes remain untouched, while manual
-`RetryTerminalFailures` continues to work unconstrained.
+When a fresh ordinary queued delivery succeeds and reaches `sent`,
+`NotificationQueue.processNotification` uses that delivery as evidence of
+destination recovery. A worker settling an already-recorded provider
+acknowledgement (including after restart) does not trigger recovery or record
+another successful attempt. A send whose acknowledgement is durable but whose
+local completion is pending does not trigger a batch on later settlement.
 
-`internal/notifications/dlq_recovery_replay_test.go` verifies recovery replay,
-non-retryable exclusion, destination/config isolation, 24h freshness cutoff,
-single-replay anti-loop behavior on flapping destinations, and batch capping +
-cooldown drain.
+The queue re-queues up to 25 eligible `failed`/`dlq` rows completed in the
+last 24 hours for the exact same channel family (firing and `_resolved`) and
+snapshotted destination configuration. Rows with a successful audit are never
+re-queued. Deterministic failures (`authentication`, `configuration`,
+`rejected`) do not consume batch slots, including when classified from a
+legacy error without a stored class. The five-minute per-destination cooldown
+and audit attempt ceiling are unchanged; a replay has one delivery attempt.
+Current occurrence, pause and destination checks still apply before sending.
+Direct test sends and queued rehearsal deliveries do not release a recovery
+batch; ordinary recovery does not re-queue labelled rehearsal jobs. Manual
+`RetryTerminalFailures` retains its separate policy.
+
+`internal/notifications/dlq_recovery_replay_test.go` covers the retry window,
+exact snapshots, non-retryable rows ahead of eligible rows, cooldown and the
+one-replay limit. `internal/notifications/dlq_recovery_processor_test.go`
+exercises recipient acceptance, local settlement after restart and labelled
+rehearsal isolation through the real processor. Retained history still
+describes provider acceptance, not inbox receipt.
 
 
 ### Structured email subject prefix, brand name, and footer note

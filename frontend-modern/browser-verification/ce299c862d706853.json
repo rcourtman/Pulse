@@ -1,0 +1,42 @@
+{
+  "version": 1,
+  "base_sha": "673fddc27f6f709dddd2fff9501b1eaf60f30da0",
+  "verified_at": "2026-11-23T13:13:35Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/SSOProvidersPanel.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/SSOProvidersPanel.tsx": "34888a8e9028153f8424c26af3ba9847168bfd43c396cebbe523ab81f1db7cc7"
+  },
+  "routes": [
+    "/settings/security-sso"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 844
+    },
+    {
+      "width": 360,
+      "height": 800
+    }
+  ],
+  "states": [
+    "Enabled SAML card keeps its two existing copy actions; a disabled card directs a manager to Edit",
+    "Add describes where to find the saved addresses and offers no pre-save copy action",
+    "Enabled and disabled saved providers show both detail-supplied addresses in Edit",
+    "An omitted address has guidance and no stale card fallback; a supplied sibling address stays copyable",
+    "A read-only account can still read the permitted inventory, not open the editor"
+  ],
+  "interactions": [
+    "Compared 11 matched before/after desktop and phone-emulated Chromium pairs using the real Settings panel and identical scoped HTTP fixtures; inspected all 22 images",
+    "Used keyboard activation on desktop and touch on phones to open Edit and read both exact registrations from the native clipboard",
+    "Confirmed metadata, Test, Preview and manual setup guidance still fit on the narrow editor; Save/Cancel and existing group rules remain available",
+    "Cancelled or escaped without a settings write; the provider stayed disabled"
+  ]
+}

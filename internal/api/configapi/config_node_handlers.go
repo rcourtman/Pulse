@@ -6,9 +6,11 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"net"
 	"net/http"
 	"net/url"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -1489,6 +1491,31 @@ func (h *ConfigHandlers) handleUpdateNode(w http.ResponseWriter, r *http.Request
 	}
 	req.normalizeTokenAliases()
 
+	ctx := r.Context()
+	persistence := h.getPersistence(ctx)
+	if persistence == nil {
+		http.Error(w, "Failed to save configuration", http.StatusInternalServerError)
+		return
+	}
+	release, err := h.acquireNodeEdit(ctx, persistence.DataDir())
+	if err != nil {
+		return
+	}
+	defer release()
+	if ctx.Err() != nil {
+		return
+	}
+	if mock.IsMockEnabled() {
+		http.Error(w, "Cannot modify nodes in mock mode", http.StatusForbidden)
+		return
+	}
+	currentPersistence := h.getPersistence(ctx)
+	if currentPersistence == nil || currentPersistence.DataDir() != persistence.DataDir() {
+		http.Error(w, "Failed to save configuration", http.StatusInternalServerError)
+		return
+	}
+	persistence = currentPersistence
+
 	// Debug: Log the received temperatureMonitoringEnabled value
 	log.Info().
 		Str("nodeID", nodeID).
@@ -1756,7 +1783,7 @@ func (h *ConfigHandlers) handleUpdateNode(w http.ResponseWriter, r *http.Request
 	if pendingPMG != nil {
 		pmgToSave = pendingPMG
 	}
-	if err := h.getPersistence(r.Context()).SaveNodesConfig(pveToSave, h.getConfig(r.Context()).PBSInstances, pmgToSave); err != nil {
+	if err := persistence.SaveNodesConfig(pveToSave, h.getConfig(ctx).PBSInstances, pmgToSave); err != nil {
 		log.Error().Err(err).Msg("Failed to save nodes configuration")
 		http.Error(w, "Failed to save configuration", http.StatusInternalServerError)
 		return
@@ -2040,6 +2067,10 @@ func (h *ConfigHandlers) handleDeleteNode(w http.ResponseWriter, r *http.Request
 // This handles the case where nodes are added to a Proxmox cluster after initial configuration
 
 func (h *ConfigHandlers) handleRefreshClusterNodes(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	if ctx.Err() != nil {
+		return
+	}
 	// Prevent modifications in mock mode
 	if mock.IsMockEnabled() {
 		http.Error(w, "Cannot refresh cluster in mock mode", http.StatusForbidden)
@@ -2056,7 +2087,19 @@ func (h *ConfigHandlers) handleRefreshClusterNodes(w http.ResponseWriter, r *htt
 		return
 	}
 
-	nodeType, index, err := resolveNodeID(h.getConfig(r.Context()), nodeID)
+	cfg, persistence, _ := h.getContextState(ctx)
+	if cfg == nil || persistence == nil {
+		http.Error(w, "Failed to save configuration", http.StatusInternalServerError)
+		return
+	}
+	config.Mu.RLock()
+	nodeType, index, err := resolveNodeID(cfg, nodeID)
+	var original config.PVEInstance
+	found := err == nil && nodeType == "pve" && index >= 0 && index < len(cfg.PVEInstances)
+	if found {
+		original = cfg.PVEInstances[index].DeepCopy()
+	}
+	config.Mu.RUnlock()
 	if err != nil {
 		if errors.Is(err, errNodeIDNotFound) {
 			http.Error(w, "Node not found", http.StatusNotFound)
@@ -2072,21 +2115,23 @@ func (h *ConfigHandlers) handleRefreshClusterNodes(w http.ResponseWriter, r *htt
 		return
 	}
 
-	if index >= len(h.getConfig(r.Context()).PVEInstances) {
+	if !found {
 		http.Error(w, "Node not found", http.StatusNotFound)
 		return
 	}
 
-	pve := &h.getConfig(r.Context()).PVEInstances[index]
-	if refuseTenantOutboundDestination(w, r, pve.Host) {
+	if refuseTenantOutboundDestination(w, r, original.Host) {
 		return
 	}
 
 	// Create client config for cluster detection
-	clientConfig := config.CreateProxmoxConfig(pve)
+	clientConfig := config.CreateProxmoxConfig(&original)
 
 	// Force cluster re-detection (ignore existing endpoints)
-	isCluster, clusterName, clusterEndpoints := detectPVECluster(clientConfig, pve.Name, pve.ClusterEndpoints)
+	isCluster, clusterName, clusterEndpoints := detectPVEClusterContext(ctx, clientConfig, original.Name, original.ClusterEndpoints)
+	if ctx.Err() != nil {
+		return
+	}
 
 	if !isCluster {
 		http.Error(w, "Node is not part of a cluster", http.StatusBadRequest)
@@ -2098,6 +2143,43 @@ func (h *ConfigHandlers) handleRefreshClusterNodes(w http.ResponseWriter, r *htt
 		return
 	}
 
+	// Discovery is read-only. Do not stage a whole-file save until we have the
+	// same-config write turn and can read changes the previous writer applied.
+	release, err := h.acquireNodeEdit(ctx, persistence.DataDir())
+	if err != nil {
+		return
+	}
+	defer release()
+	if ctx.Err() != nil {
+		return
+	}
+	if mock.IsMockEnabled() {
+		http.Error(w, "Cannot refresh cluster in mock mode", http.StatusForbidden)
+		return
+	}
+
+	currentConfig, currentPersistence, _ := h.getContextState(ctx)
+	if currentConfig == nil || currentPersistence == nil || currentPersistence.DataDir() != persistence.DataDir() {
+		http.Error(w, "Failed to save configuration", http.StatusInternalServerError)
+		return
+	}
+	cfg, persistence = currentConfig, currentPersistence
+	config.Mu.RLock()
+	nodeType, index, err = resolveNodeID(cfg, nodeID)
+	if err != nil || nodeType != "pve" || index < 0 || index >= len(cfg.PVEInstances) ||
+		!sameClusterDiscoveryInput(&cfg.PVEInstances[index], original, clientConfig) {
+		config.Mu.RUnlock()
+		http.Error(w, "Failed to save configuration", http.StatusInternalServerError)
+		return
+	}
+	pending := make([]config.PVEInstance, len(cfg.PVEInstances))
+	for i := range cfg.PVEInstances {
+		pending[i] = cfg.PVEInstances[i].DeepCopy()
+	}
+	pbs, pmg := cfg.PBSInstances, cfg.PMGInstances
+	config.Mu.RUnlock()
+
+	pve := &pending[index]
 	oldEndpointCount := len(pve.ClusterEndpoints)
 	newEndpointCount := len(clusterEndpoints)
 
@@ -2108,13 +2190,23 @@ func (h *ConfigHandlers) handleRefreshClusterNodes(w http.ResponseWriter, r *htt
 	}
 	pve.ClusterEndpoints = mergeDiscoveredClusterEndpointConfiguration(pve.ClusterEndpoints, clusterEndpoints)
 
-	// Save configuration
-	h.normalizePVEConfigState(r.Context())
-	if err := h.getPersistence(r.Context()).SaveNodesConfig(h.getConfig(r.Context()).PVEInstances, h.getConfig(r.Context()).PBSInstances, h.getConfig(r.Context()).PMGInstances); err != nil {
+	if normalized, changed := config.ConsolidatePVEInstances(pending); changed {
+		pending = normalized
+	}
+	config.EnsurePVEClusterNodeIdentities(pending)
+	// This is the last cancellation check before admitting the save. Once
+	// admitted, finish persistence and apply even if the caller disconnects.
+	if ctx.Err() != nil {
+		return
+	}
+	if err := persistence.SaveNodesConfig(pending, pbs, pmg); err != nil {
 		log.Error().Err(err).Msg("Failed to save nodes configuration after cluster refresh")
 		http.Error(w, "Failed to save configuration", http.StatusInternalServerError)
 		return
 	}
+	config.Mu.Lock()
+	cfg.PVEInstances = pending
+	config.Mu.Unlock()
 
 	log.Info().
 		Str("instance", pve.Name).
@@ -2157,6 +2249,20 @@ func (h *ConfigHandlers) handleRefreshClusterNodes(w http.ResponseWriter, r *htt
 		"nodesAdded":   newEndpointCount - oldEndpointCount,
 		"clusterNodes": toClusterEndpointResponses(pve.ClusterEndpoints, pve.ClusterNodeIdentities),
 	})
+}
+
+func sameClusterDiscoveryInput(current *config.PVEInstance, original config.PVEInstance, clientConfig proxmox.ClientConfig) bool {
+	return current.Name == original.Name && current.IsCluster == original.IsCluster && current.ClusterName == original.ClusterName &&
+		config.CreateProxmoxConfig(current) == clientConfig &&
+		maps.Equal(current.TLSFingerprintOverrides, original.TLSFingerprintOverrides) &&
+		slices.EqualFunc(current.ClusterEndpoints, original.ClusterEndpoints, func(a, b config.ClusterEndpoint) bool {
+			// Ordinary polling may update reachability while discovery is
+			// running. Only membership, saved destinations and trust matter
+			// to reusing the result. Merge it into the current inventory.
+			return a.NodeID == b.NodeID && a.NodeIdentity == b.NodeIdentity && a.NativeNodeID == b.NativeNodeID &&
+				a.NodeName == b.NodeName && a.Host == b.Host && a.IP == b.IP && a.IPOverride == b.IPOverride &&
+				a.GuestURL == b.GuestURL && a.Fingerprint == b.Fingerprint
+		})
 }
 
 // HandleTestNodeConfig tests a node connection from provided configuration

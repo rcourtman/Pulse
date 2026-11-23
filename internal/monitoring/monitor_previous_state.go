@@ -18,31 +18,47 @@ type previousGuestContext struct {
 }
 
 func (m *Monitor) previousGuestContextForInstance(instanceName string) previousGuestContext {
+	readState := m.currentModeReadState()
+	var vmViews []*unifiedresources.VMView
+	var containerViews []*unifiedresources.ContainerView
+	if readState != nil {
+		vmViews = readState.VMs()
+		containerViews = readState.Containers()
+	}
+
+	// The views span every connection, but only this connection's rows
+	// belong in the carry-over. Count the matching views before allocating
+	// large guest structs so the slices and indexes do not grow mid-poll.
+	vmCount, containerCount := 0, 0
+	for _, vm := range vmViews {
+		if vm != nil && vm.Instance() == instanceName {
+			vmCount++
+		}
+	}
+	for _, ct := range containerViews {
+		if ct != nil && ct.Instance() == instanceName {
+			containerCount++
+		}
+	}
 	ctx := previousGuestContext{
-		vms:                make([]models.VM, 0),
-		vmsByID:            make(map[string]models.VM),
-		containers:         make([]models.Container, 0),
-		containersByID:     make(map[string]models.Container),
+		vms:                make([]models.VM, 0, vmCount),
+		vmsByID:            make(map[string]models.VM, vmCount),
+		containers:         make([]models.Container, 0, containerCount),
+		containersByID:     make(map[string]models.Container, containerCount),
 		containerOCIByVMID: make(map[int]bool),
 		hostAgentsByVMID:   make(map[string]models.Host),
 	}
-
-	readState := m.currentModeReadState()
 	if readState == nil {
 		return ctx
 	}
 
-	for _, vm := range readState.VMs() {
+	for _, vm := range vmViews {
 		if vm == nil || vm.Instance() != instanceName {
 			continue
 		}
 		modelVM := previousVMFromView(vm)
 		ctx.vms = append(ctx.vms, modelVM)
-		if modelVM.ID != "" {
-			ctx.vmsByID[modelVM.ID] = modelVM
-		}
-		guestID := makeGuestID(modelVM.Instance, modelVM.Node, modelVM.VMID)
-		if guestID != "" {
+		if guestID := modelVM.ID; guestID != "" {
 			ctx.vmsByID[guestID] = modelVM
 			agent := models.Host{LinkedVMID: guestID, Status: "online"}
 			memory, hasMemory := vm.LinkedAgentMemory()
@@ -55,17 +71,13 @@ func (m *Monitor) previousGuestContextForInstance(instanceName string) previousG
 		}
 	}
 
-	for _, ct := range readState.Containers() {
+	for _, ct := range containerViews {
 		if ct == nil || ct.Instance() != instanceName {
 			continue
 		}
 		container := previousContainerFromView(ct)
 		ctx.containers = append(ctx.containers, container)
-		if container.ID != "" {
-			ctx.containersByID[container.ID] = container
-		}
-		guestID := makeGuestID(container.Instance, container.Node, container.VMID)
-		if guestID != "" {
+		if guestID := container.ID; guestID != "" {
 			ctx.containersByID[guestID] = container
 			agent := models.Host{LinkedContainerID: guestID, Status: "online"}
 			memory, hasMemory := ct.LinkedAgentMemory()

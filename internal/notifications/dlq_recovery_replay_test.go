@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -223,11 +224,33 @@ func TestAutoReplayDLQOnDestinationRecovery_RespectsBatchLimitAndCooldown(t *tes
 	var failing atomic.Bool
 	failing.Store(true)
 	q.SetProcessor(func(n *QueuedNotification) error {
+		if strings.HasPrefix(n.ID, "older-auth-") {
+			return errors.New("webhook returned status 401 unauthorized")
+		}
 		if failing.Load() {
 			return errors.New("dial tcp 192.0.2.10:8123: i/o timeout")
 		}
 		return nil
 	})
+
+	// A full batch of deterministically ineligible rows precedes every
+	// eligible one. One legacy row still needs classification from its error.
+	ineligible := autoReplayDLQBatchLimit
+	for i := 0; i < ineligible; i++ {
+		id := fmt.Sprintf("older-auth-%02d", i)
+		if err := q.Enqueue(&QueuedNotification{
+			ID: id, Type: "webhook", Config: destA, MaxAttempts: 1, CreatedAt: base,
+		}); err != nil {
+			t.Fatal(err)
+		}
+		waitForNotificationStatus(t, q, id, QueueStatusDLQ, 1)
+	}
+	if _, err := q.db.Exec(`UPDATE notification_queue SET completed_at=? WHERE id LIKE 'older-auth-%'`, base.Add(-time.Hour).Unix()); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := q.db.Exec(`UPDATE notification_audit SET failure_class='' WHERE notification_id='older-auth-00'`); err != nil {
+		t.Fatal(err)
+	}
 
 	total := autoReplayDLQBatchLimit + 5
 	for i := 0; i < total; i++ {
@@ -247,7 +270,7 @@ func TestAutoReplayDLQOnDestinationRecovery_RespectsBatchLimitAndCooldown(t *tes
 			t.Fatalf("Enqueue %s: %v", id, err)
 		}
 	}
-	waitForStatusCounts(t, q, 0, total)
+	waitForStatusCounts(t, q, 0, ineligible+total)
 
 	// Recovery triggers exactly one bounded batch (25 rows); cooldown prevents
 	// those 25 successes from immediately cascading into the remaining 5 rows.
@@ -265,9 +288,9 @@ func TestAutoReplayDLQOnDestinationRecovery_RespectsBatchLimitAndCooldown(t *tes
 	}); err != nil {
 		t.Fatalf("Enqueue live-trigger-1: %v", err)
 	}
-	waitForStatusCounts(t, q, 1+autoReplayDLQBatchLimit, 5)
+	waitForStatusCounts(t, q, 1+autoReplayDLQBatchLimit, ineligible+5)
 	time.Sleep(50 * time.Millisecond)
-	waitForStatusCounts(t, q, 1+autoReplayDLQBatchLimit, 5)
+	waitForStatusCounts(t, q, 1+autoReplayDLQBatchLimit, ineligible+5)
 
 	// Once cooldown elapses, the next live delivery smoothly drains the remaining 5 rows.
 	clock.Store(base.Add(autoReplayDLQCooldown + time.Minute).UnixNano())
@@ -284,5 +307,5 @@ func TestAutoReplayDLQOnDestinationRecovery_RespectsBatchLimitAndCooldown(t *tes
 	}); err != nil {
 		t.Fatalf("Enqueue live-trigger-2: %v", err)
 	}
-	waitForStatusCounts(t, q, 2+total, 0)
+	waitForStatusCounts(t, q, 2+total, ineligible)
 }
