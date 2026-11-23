@@ -135,12 +135,12 @@ owner-only file. Inspect errors and results privately. Share only a relevant
 redacted excerpt, not full responses, header files or tokens.
 HTTP 401/402/403, redirects and transport errors are not an empty role or user list.
 
-**Choose each operation separately, not as a top-to-bottom script.** Keep an
-administrator recovery path. Deleting a role or user, or sending an empty role
-list, removes access. The helper does not follow redirects or retry. A partial
-response or timeout can follow an applied change. Check saved roles and intended
-access in the UI or a separate read before writing again. HTTP success does not
-prove access or disable an upstream IdP account.
+**Run one operation at a time.** Keep admin recovery access. Role deletion can
+remove grants or lift deny rules. Check assignments in **Users** first.
+Removing a user or clearing their role list clears assignments. The helper
+won't follow redirects or retry. A timeout or partial reply can follow a saved
+change. Check saved roles and intended access before another write. HTTP
+success neither proves access nor disables IdP accounts.
 
 **Role PUT replaces the complete policy.** Read the existing role from
 `GET /api/admin/roles`. Preserve its exact ID, `parentId`, `priority`, and each

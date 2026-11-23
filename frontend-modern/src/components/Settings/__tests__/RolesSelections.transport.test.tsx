@@ -116,6 +116,9 @@ async function openDeletion(role = selected) {
   });
   expect(dialog).toHaveTextContent(`Are you sure you want to delete the role "${role.name}"?`);
   expect(within(dialog).getByText(role.id)).toBeInTheDocument();
+  expect(dialog).toHaveAccessibleDescription(
+    'Deleting an in-use role can take away access or lift restrictions set by deny rules. Review role assignments in Users first.',
+  );
   return dialog;
 }
 async function submit(dialog: HTMLElement, operation: 'edit' | 'delete', role = selected) {
