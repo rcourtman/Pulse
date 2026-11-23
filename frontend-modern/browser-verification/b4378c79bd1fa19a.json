@@ -1,0 +1,40 @@
+{
+  "version": 1,
+  "base_sha": "f630d86f9bea225f97de8d73244d166142ec3812",
+  "verified_at": "2026-11-23T00:48:00Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/NodeModalClusterMembersSection.tsx",
+    "frontend-modern/src/components/Settings/nodeModalModel.ts",
+    "frontend-modern/src/components/Settings/useInfrastructureConfiguredNodesState.ts",
+    "frontend-modern/src/types/nodes.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/NodeModalClusterMembersSection.tsx": "195a1da8d6bc14f7888608eeba79d4ffe015b2d7208780995561570b57eb4bf4",
+    "frontend-modern/src/components/Settings/nodeModalModel.ts": "371aaccdaa4d08e99653ea93e07e0fa8c4e95718b7a502c4d4547ee49153b00c",
+    "frontend-modern/src/components/Settings/useInfrastructureConfiguredNodesState.ts": "f40849bad7a2cc6665f426c62f4491c81d4fd403d7adae30a50156f2318bb189",
+    "frontend-modern/src/types/nodes.ts": "0a082ed29996ceca307e19bcf439690a3cf169605c1fb7f09fdff2afcbfb933f"
+  },
+  "routes": [
+    "/settings/infrastructure"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 960
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Production-mode Chromium 141.0.7390.37 with Playwright 1.56.1: 393 matched desktop and touch-phone assertions and 24 inspected captures.",
+    "Compare the same old failed member, address draft, saved address with readback unavailable, confirmed settings without a recorded API check, unaffected sibling and later reachable result.",
+    "The old failure and its details remain visible while editing, but are marked as previous if the saved address has not been read back. The sibling timeout stays visible on the phone."
+  ],
+  "interactions": [
+    "Open Manage with Enter or tap, edit only the member override, and open its saved failure's details. No write or test is sent by editing.",
+    "Save once against the fixture, then reopen with readback unavailable. Only that member's previous pin and TLS controls are disabled. Reload with the persisted API response and run one explicit fixture test targeting the read-back address."
+  ]
+}
