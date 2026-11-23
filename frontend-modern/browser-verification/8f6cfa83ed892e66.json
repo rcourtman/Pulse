@@ -1,0 +1,40 @@
+{
+  "version": 1,
+  "base_sha": "5d70c7866cc72226dcdf95709f16901b5b8170fa",
+  "verified_at": "2026-11-23T17:08:16.410Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/OrganizationSharingPanel.tsx",
+    "frontend-modern/src/components/Settings/RolesPanel.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/OrganizationSharingPanel.tsx": "8366c332a57d0b33112a3292197f783d338355f5c8e613634eb04c575f56559f",
+    "frontend-modern/src/components/Settings/RolesPanel.tsx": "f15f7ae448d72cc8cda2687deaab99cf7455ebf93db010e0e98bb11ae46f0e5b"
+  },
+  "routes": [
+    "/settings/organization/sharing",
+    "/settings/security-roles"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Organization Sharing with same-named peers, opaque resource and share IDs, saved pending and active rows, and read-only phone inventory",
+    "Confirmed approval and saved reread with the pending sibling reordered",
+    "Roles inventory with built-in read-only and the same custom edit and delete controls"
+  ],
+  "interactions": [
+    "Playwright 1.56.1 and Chromium 141.0.7390.37 on production App assets using loopback-only fixtures",
+    "Approve one exact fixture share via Enter and touch; verify the saved read, relocated sibling focus, and absence of reader actions",
+    "Open the exact custom role editor and cancel with no writes; built-in rows expose no edit or delete",
+    "Verify the 99-row reread preserves the original target with fewer ID lookups; verify ordinary input focus avoids scanning share actions",
+    "Inspect all seven matched desktop light and phone dark pairs"
+  ]
+}
