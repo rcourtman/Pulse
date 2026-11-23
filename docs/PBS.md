@@ -21,7 +21,13 @@ required for these API-backed readings:
 
 ### 2. PVE Passthrough (Automatic)
 
-If your PVE cluster has PBS storage configured, Pulse automatically fetches backup data through the PVE API.
+If your PVE cluster has PBS storage configured, Pulse asks the PVE API for
+backup archives using the saved PVE connection.
+
+A read-only PVE token can show storage usage and completed backup tasks without
+listing the archives. An empty list in Pulse does not mean no backups exist.
+If you chose that scope, keep it. Do not grant storage administration just to
+fill the list.
 
 **Limitations:**
 - ❌ No deduplication stats
@@ -31,9 +37,15 @@ If your PVE cluster has PBS storage configured, Pulse automatically fetches back
 - ❌ Limited metadata per backup
 
 **Recommendation:** Start with a direct API connection when you need PBS
-datastore, job or server status beyond the PVE passthrough. Add a host agent
-only for extra local telemetry such as SMART and temperatures; see
-[Agent Security](AGENT_SECURITY.md#proxmox-deployment-choices).
+datastore, job or server status beyond the PVE passthrough. It uses a separate
+read-only PBS token, even when PBS and PVE are on the same host. It can show
+snapshots on PBS but not archives on local PVE storage.
+[Check the expected restore points in Coverage](#backups-are-visible-but-coverage-says-unprotected)
+against the correct guest. Use the provider's own backup records for archives
+that Pulse cannot read.
+
+Add a host agent only for extra local telemetry such as SMART and temperatures.
+See [Agent Security](AGENT_SECURITY.md#proxmox-deployment-choices).
 
 ---
 
