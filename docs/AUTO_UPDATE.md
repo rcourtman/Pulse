@@ -7,9 +7,9 @@ See [Releases and update channels](RELEASE_PROCESS.md) for Stable and Preview
 expectations, beta and RC testing stages, and the checks required before a release
 becomes stable.
 
-Eligible v6 agents update asynchronously through their own update client. A
+Eligible agents update asynchronously through their own update client. A
 server update changes their target version but does not prove fleet convergence.
-For v5, PVE, disabled, or failed agent updates, use **Agent Doctor** at
+For PVE, legacy, disabled, or failed agent updates, use **Agent Doctor** at
 `/settings/infrastructure?agentDoctor=1` or the installer in
 **Settings → Infrastructure → Install on a host**. See
 [Unified Agent](UNIFIED_AGENT.md#auto-update).

@@ -470,18 +470,18 @@ removes the private runtime hooks.
 
 ### Pulse Agent updates
 
-Eligible v6 agents check the Pulse server for updates and apply them
+Eligible agents check the Pulse server for updates and apply them
 asynchronously. A current server version therefore does not prove every agent is
-current. v5 agents, PVE host agents, agents with auto-update disabled, and agents
-whose authentication, connection state, download, trust, or self-test checks
-fail require manual handling.
+current. PVE host agents, legacy agents, agents with auto-update disabled, and
+agents whose authentication, connection state, download, trust, or self-test
+checks fail require manual handling.
 
 Open an outdated-agent notice, or use **Agent Doctor** at
 `/settings/infrastructure?agentDoctor=1`, to review the agents Pulse currently
 sees and copy the platform-specific command for each host. This surface provides
 commands for the operator to run on the host; it does not remotely execute the
 update. Use **Settings → Infrastructure → Install on a host** for a first install
-or a v5-to-v6 in-place upgrade.
+or an in-place agent reinstall.
 
 ### Rollback
 An update error does not establish which version is running. Check the running

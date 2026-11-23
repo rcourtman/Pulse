@@ -134,7 +134,7 @@ Open `http://<your-ip>:7655`, paste the one-time token from `docker exec pulse /
 
 ### Do you need an agent?
 
-**Often not.** Proxmox VE, PBS and PMG connect over their API with a read-only token, so no Pulse host agent is required. Install the unified agent (including v5-to-v6 agent upgrades) from **Settings → Infrastructure → Install on a host** for Docker/Podman, Kubernetes, standalone machines, or SMART/temperature sensors. Command execution stays off by default ([agent security model](docs/AGENT_SECURITY.md)).
+**Often not.** Proxmox VE, PBS and PMG connect over their API with a read-only token, so no Pulse host agent is required. Install the unified agent from **Settings → Infrastructure → Install on a host** for Docker/Podman, Kubernetes, standalone machines, or SMART/temperature sensors. Command execution stays off by default ([agent security model](docs/AGENT_SECURITY.md)).
 
 > [!NOTE]
 > Proxmox VM disk/memory queries use QEMU Guest Agent, which shares the channel used by freeze-enabled backups. Read the [backup safety precaution](docs/VM_DISK_MONITORING.md#backup-safety) before changing guest-agent settings during backups.
@@ -150,7 +150,7 @@ Open `http://<your-ip>:7655`, paste the one-time token from `docker exec pulse /
 
 ## Documentation
 
-- **Docs:** [Install](docs/INSTALL.md) · [Upgrading from v5](docs/UPGRADE_v6.md) · [Configuration](docs/CONFIGURATION.md) · [Production security](docs/PRODUCTION_SECURITY.md) · [API](docs/API.md) · [Troubleshooting](docs/TROUBLESHOOTING.md) · [Architecture](ARCHITECTURE.md) · [Security](SECURITY.md) · [Privacy](docs/PRIVACY.md) · [Code signing](docs/CODE_SIGNING_POLICY.md)
+- **Docs:** [Install](docs/INSTALL.md) · [Configuration](docs/CONFIGURATION.md) · [Production security](docs/PRODUCTION_SECURITY.md) · [API](docs/API.md) · [Troubleshooting](docs/TROUBLESHOOTING.md) · [Architecture](ARCHITECTURE.md) · [Security](SECURITY.md) · [Privacy](docs/PRIVACY.md) · [Code signing](docs/CODE_SIGNING_POLICY.md)
 - **Other languages:** [Deutsch](docs/i18n/de/README.md) · [Español](docs/i18n/es/README.md) · [Français](docs/i18n/fr/README.md)
 
 ## Community and support
