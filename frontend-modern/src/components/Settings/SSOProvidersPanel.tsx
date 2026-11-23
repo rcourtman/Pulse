@@ -135,6 +135,7 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
   const summaryId = (id: string) => `${summaryIdPrefix}-${encodeURIComponent(id)}`;
   const inventoryTitleId = `${summaryIdPrefix}-inventory-title`;
   const providerDetailErrorId = `${createUniqueId()}-provider-detail-error`;
+  const editorFeedbackId = `${createUniqueId()}-editor-feedback`;
   const testResultSummaryId = `${summaryIdPrefix}-test-summary`;
   const testResultId = `${summaryIdPrefix}-test-result`;
   const testResultTitleId = `${summaryIdPrefix}-test-result-title`;
@@ -1093,6 +1094,10 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <FormTextarea
                         label="Allowed Groups"
+                        aria-invalid={editorFeedback()?.field === 'allowedGroups' || undefined}
+                        aria-describedby={
+                          editorFeedback()?.field === 'allowedGroups' ? editorFeedbackId : undefined
+                        }
                         rows={2}
                         value={form.allowedGroups}
                         onInput={(e) => setForm('allowedGroups', e.currentTarget.value)}
@@ -1103,7 +1108,8 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
                             <span id={signInRestrictionsId}>
                               Each filled list needs a match. Blank skips only that check.
                             </span>{' '}
-                            Use commas or new lines. Names can have spaces.
+                            Use commas or new lines. Spaces are fine. Double-quote names with commas
+                            or =.
                           </>
                         }
                       />
@@ -1128,12 +1134,18 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
                       />
                       <FormTextarea
                         label="Group Role Mappings"
+                        aria-invalid={editorFeedback()?.field === 'groupRoleMappings' || undefined}
+                        aria-describedby={
+                          editorFeedback()?.field === 'groupRoleMappings'
+                            ? editorFeedbackId
+                            : undefined
+                        }
                         rows={2}
                         value={form.groupRoleMappings}
                         onInput={(e) => setForm('groupRoleMappings', e.currentTarget.value)}
                         placeholder="admins=admin, ops=operator"
                         textareaBaseClass={controlClass('min-h-[60px]')}
-                        help="Assigns roles after sign-in checks. Enter group=roleId. Use commas or new lines. Names can have spaces."
+                        help='Assigns roles after sign-in checks. Separate group=roleId pairs with commas or new lines. Example: "Ops, East"=viewer.'
                       />
                     </div>
                   </div>
@@ -1156,6 +1168,7 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
               <Show when={editorFeedback()} keyed>
                 {(feedback) => (
                   <p
+                    id={editorFeedbackId}
                     role={feedback.tone === 'error' ? 'alert' : 'status'}
                     tabindex="0"
                     class={`max-h-48 overflow-y-auto text-sm [overflow-wrap:anywhere] ${

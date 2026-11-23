@@ -166,31 +166,85 @@ export const splitList = (input: string) =>
     .map((value) => value.trim())
     .filter(Boolean);
 
-// Group restrictions use exact IdP names, just like role-mapping keys.
-const splitGroupList = (input: string) =>
-  input
-    .split(/[,\r\n]+/)
-    .map((value) => value.trim())
-    .filter(Boolean);
+type GroupRuleField = 'allowedGroups' | 'groupRoleMappings';
 
-export const mappingsToString = (mappings?: Record<string, string>) =>
-  mappings
-    ? Object.entries(mappings)
-        .map(([key, value]) => `${key}=${value}`)
-        .join(', ')
-    : '';
+export class ProviderGroupRuleError extends Error {
+  readonly field: GroupRuleField;
 
-export const stringToMappings = (input: string) => {
-  const result: Record<string, string> = {};
-  // A group name can contain spaces. Like allowed groups, mappings
-  // are separated only by commas or newlines, as shown by mappingsToString.
-  input.split(/[,\r\n]+/).forEach((pair) => {
-    const [key, value] = pair.split('=').map((segment) => segment.trim());
-    if (key && value) {
-      result[key] = value;
+  constructor(field: GroupRuleField, duplicate = false) {
+    super(
+      field === 'allowedGroups'
+        ? 'Allowed Groups: separate names with commas or new lines. Use matching double quotes around a name containing a comma or =.'
+        : duplicate
+          ? 'Group Role Mappings: enter each group only once.'
+          : 'Group Role Mappings: enter complete group=roleId pairs. Use matching double quotes around a group name containing a comma or =.',
+    );
+    this.field = field;
+  }
+}
+
+const formatGroupToken = (value: string) => {
+  const quoted = JSON.stringify(value);
+  // Quote whenever displaying the bare token could change its meaning on save.
+  return !value || value.trim() !== value || /[,=]/.test(value) || quoted.slice(1, -1) !== value
+    ? quoted
+    : value;
+};
+
+const parseGroupEntries = (input: string, field: GroupRuleField): string[][] => {
+  const invalid = () => new ProviderGroupRuleError(field);
+  let offset = 0;
+  const read = (pattern: RegExp) => {
+    pattern.lastIndex = offset;
+    const match = pattern.exec(input);
+    if (match) offset = pattern.lastIndex;
+    return match?.[0];
+  };
+  const readToken = (): string => {
+    read(/[^\S\r\n]*/y);
+    if (input[offset] === '"') {
+      const quoted = read(/"(?:[^"\\\r\n]|\\.)*"/y);
+      if (!quoted) throw invalid();
+      try {
+        // This token begins and ends with a double quote, so valid JSON is a string.
+        return JSON.parse(quoted) as string;
+      } catch {
+        throw invalid();
+      }
     }
-  });
-  return result;
+    const plain = read(/[^",=\r\n]+/y)?.trim();
+    if (!plain) throw invalid();
+    return plain;
+  };
+
+  const entries: string[][] = [];
+  read(/[,\s]*/y);
+  while (offset < input.length) {
+    const entry = [readToken()];
+    if (field === 'groupRoleMappings') {
+      read(/[^\S\r\n]*/y);
+      if (!read(/=/y)) throw invalid();
+      entry.push(readToken());
+    }
+    read(/[^\S\r\n]*/y);
+    if (offset < input.length && !read(/[,\r\n][,\s]*/y)) throw invalid();
+    entries.push(entry);
+  }
+  // A blank field deliberately clears it. Separators alone are not a group list.
+  if (!entries.length && input.trim()) throw invalid();
+  return entries;
+};
+
+const mappingsToString = (mappings?: Record<string, string>) =>
+  Object.entries(mappings ?? {})
+    .map(([group, role]) => formatGroupToken(group) + '=' + formatGroupToken(role))
+    .join(', ');
+
+const stringToMappings = (input: string) => {
+  const pairs = parseGroupEntries(input, 'groupRoleMappings');
+  if (new Set(pairs.map(([group]) => group)).size !== pairs.length)
+    throw new ProviderGroupRuleError('groupRoleMappings', true);
+  return Object.fromEntries(pairs);
 };
 
 export const mapProviderDetailsToForm = (full: SSOProviderDetailsResponse): ProviderForm => ({
@@ -218,7 +272,7 @@ export const mapProviderDetailsToForm = (full: SSOProviderDetailsResponse): Prov
   // Only new drafts default to 'email'. Saved details omit an unset attribute.
   samlEmailAttr: full.saml?.emailAttr ?? '',
   groupsClaim: full.saml?.groupsAttr || full.groupsClaim || '',
-  allowedGroups: listToString(full.allowedGroups),
+  allowedGroups: (full.allowedGroups ?? []).map(formatGroupToken).join(', '),
   allowedDomains: listToString(full.allowedDomains),
   allowedEmails: listToString(full.allowedEmails),
   groupRoleMappings: mappingsToString(full.groupRoleMappings),
@@ -232,7 +286,7 @@ export const buildProviderPayload = (form: ProviderForm): Record<string, unknown
     enabled: form.enabled,
     displayName: form.displayName.trim() || undefined,
     priority: form.priority,
-    allowedGroups: splitGroupList(form.allowedGroups),
+    allowedGroups: parseGroupEntries(form.allowedGroups, 'allowedGroups').map(([group]) => group),
     allowedDomains: splitList(form.allowedDomains),
     allowedEmails: splitList(form.allowedEmails),
     groupRoleMappings: stringToMappings(form.groupRoleMappings),
