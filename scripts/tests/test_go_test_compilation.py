@@ -123,6 +123,7 @@ func TestMustNotExecute(t *testing.T) { record(); t.Fatal("test must not execute
                     "go.mod", "go.sum", "internal/api/embed.json", "cmd/pulse/main.go",
                     "pkg/native/helper.c", "scripts/compile-go-tests.sh",
                     "scripts/go-test-compile-required.sh", "scripts/ensure_test_assets.sh",
+                    "scripts/run-ci-benchmarks.sh", "scripts/check-bench-regression.sh",
                     "scripts/select-go-test-compile-packages.py",
                     ".github/workflows/build-and-test.yml"]
         irrelevant = ["frontend-modern/src/index.tsx", "frontend-modern/package-lock.json",

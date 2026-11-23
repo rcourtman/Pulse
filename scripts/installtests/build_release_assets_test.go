@@ -4137,7 +4137,7 @@ func TestBenchmarkQualificationRetainsProvenance(t *testing.T) {
 	verdict := workflowJobBlock(t, string(content), "benchmarks-verdict")
 	for _, required := range []string{
 		"name: Benchmarks", "needs: [changes, benchmarks]",
-		"if: always() && needs.changes.outputs.code == 'true'",
+		"if: always() && needs.changes.outputs.go_compile == 'true'",
 		"SHARD_RESULT: ${{ needs.benchmarks.result }}",
 		`if [ "$SHARD_RESULT" != success ]; then`, "exit 1",
 	} {

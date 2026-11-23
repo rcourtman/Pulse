@@ -2127,6 +2127,21 @@ the budget/deadline ordering. These controls establish collection boundaries,
 not a hosted speedup, less total compute, release acceptance or resolution of
 an earlier incomplete performance observation.
 
+`benchmarks` and `benchmarks-verdict` in `.github/workflows/build-and-test.yml`
+run only when `needs.changes.outputs.go_compile == 'true'`, with
+`scripts/go-test-compile-required.sh` also admitting changes to
+`scripts/run-ci-benchmarks.sh` and `scripts/check-bench-regression.sh`. Non-Go
+changes (frontend, scripts, and doc-guard tests) therefore skip Go benchmark
+shards without relaxing Go or benchmark-script coverage. Similarly,
+`.github/workflows/test-e2e.yml` excludes unit-test-only and mirrored-doc paths
+(`!frontend-modern/public/docs/**`, `!frontend-modern/src/**/__tests__/**`,
+`!frontend-modern/src/**/*.test.*`, `!frontend-modern/src/**/*.spec.*`, and
+`!internal/**/*_test.go`) from `pull_request` and `push` path triggers, verified
+by `scripts/tests/test_e2e_workflow_contract.py`. `.github/dependabot.yml`
+staggers its six weekly ecosystems across distinct weekdays (`monday` through
+`saturday`) with `open-pull-requests-limit: 2`, verified by
+`scripts/tests/test_dependabot_config.py`.
+
 ### Public Helm exact-package receipt
 
 Helm Pages admission uses the immutable published packet, not the continued
