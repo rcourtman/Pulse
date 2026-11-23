@@ -6474,23 +6474,33 @@ func (s *State) UpdatePBSBackups(instanceName string, backups []PBSBackup) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	// Create a map of existing backups excluding ones from this instance
-	backupMap := make(map[string]PBSBackup)
-	for _, backup := range s.PBSBackups {
+	// Resolve IDs before copying rows. A PBSBackup is larger than an inline
+	// Go map value; mapping IDs to whole backups allocates a second row per ID
+	// (including unchanged peers) before building the published slice.
+	type rowSource struct {
+		index    int
+		incoming bool
+	}
+	byID := make(map[string]rowSource)
+	for i := range s.PBSBackups {
+		backup := &s.PBSBackups[i]
 		if backup.Instance != instanceName {
-			backupMap[backup.ID] = backup
+			byID[backup.ID] = rowSource{index: i}
 		}
 	}
 
-	// Add new backups from this instance
-	for _, backup := range backups {
-		backupMap[backup.ID] = clonePBSBackup(backup)
+	// The last incoming row for an ID still wins, including over a retained peer.
+	for i := range backups {
+		byID[backups[i].ID] = rowSource{index: i, incoming: true}
 	}
 
-	// Convert map back to slice
-	newBackups := make([]PBSBackup, 0, len(backupMap))
-	for _, backup := range backupMap {
-		newBackups = append(newBackups, backup)
+	newBackups := make([]PBSBackup, 0, len(byID))
+	for _, row := range byID {
+		if row.incoming {
+			newBackups = append(newBackups, clonePBSBackup(backups[row.index]))
+		} else {
+			newBackups = append(newBackups, s.PBSBackups[row.index])
+		}
 	}
 
 	// Sort by backup time (newest first)
