@@ -503,6 +503,13 @@ describe('SSO provider read and editor ownership', () => {
     notAfter: '2026-08-01T00:00:00Z',
     isExpired: true,
   };
+  const usableMetadata = {
+    type: 'saml',
+    entityId: 'urn:Example:Office:IdP',
+    ssoUrl: 'https://idp.example.test/SignIn',
+  };
+  const unreadSigningCertMessage =
+    'No signing certificate could be read from the IdP metadata. Check that it includes an X.509 signing certificate. Sign-in has not been tested.';
   const samlFailure = (error: string) => ({
     success: false,
     error,
@@ -518,6 +525,7 @@ describe('SSO provider read and editor ownership', () => {
         success: true,
         message:
           'Only the SAML SSO URL format was checked. Certificates and sign-in have not been tested.',
+        details: { type: 'saml', ssoUrl: 'https://idp.example.test/sso', certificates: [] },
       },
       summary: ['URL format OK', 'Sign-in not tested'],
       title: 'Check the IdP SSO URL format only',
@@ -572,13 +580,35 @@ describe('SSO provider read and editor ownership', () => {
       title: 'Check SAML metadata',
     },
     {
+      mode: 'metadata URL read without a signing certificate',
+      saved: { idpMetadataUrl: 'https://idp.example.test/metadata' },
+      result: {
+        success: true,
+        message: unreadSigningCertMessage,
+        details: { ...usableMetadata, certificates: [] },
+      },
+      summary: ['Metadata read', 'No signing cert read', 'Sign-in not tested'],
+      title: 'Check SAML metadata',
+    },
+    {
+      mode: 'saved metadata XML read with no reported signing certificates',
+      saved: { idpMetadataXml: '<EntityDescriptor />', idpMetadataUrl: '  ' },
+      result: {
+        success: true,
+        message: unreadSigningCertMessage,
+        details: { ...usableMetadata, certificates: undefined },
+      },
+      summary: ['Metadata read', 'No signing cert read', 'Sign-in not tested'],
+      title: 'Check SAML metadata',
+    },
+    {
       mode: 'metadata URL alongside a manual URL',
       saved: { idpMetadataUrl: 'https://idp.example.test/metadata' },
       result: {
         success: true,
         message:
           'SAML metadata includes an IdP identity and an SSO URL. Sign-in has not been tested.',
-        details: { certificates: [currentCertificate] },
+        details: { ...usableMetadata, certificates: [currentCertificate] },
       },
       summary: ['Metadata read', 'Sign-in not tested'],
       title: 'Check SAML metadata',
@@ -597,7 +627,7 @@ describe('SSO provider read and editor ownership', () => {
         success: true,
         message:
           'SAML metadata includes an IdP identity and an SSO URL. Sign-in has not been tested.',
-        details: { certificates: [expiredCertificate, currentCertificate] },
+        details: { ...usableMetadata, certificates: [expiredCertificate, currentCertificate] },
       },
       summary: ['Metadata read', 'Expired cert found', 'Sign-in not tested'],
       title: 'Check SAML metadata',
@@ -645,7 +675,12 @@ describe('SSO provider read and editor ownership', () => {
     });
     expect(summaryButton).toHaveAttribute('aria-controls', details.id);
     expect(summaryButton).toHaveTextContent(summary.join(' '));
-    if (result.details?.certificates.some((certificate) => certificate === expiredCertificate)) {
+    if (result.message === unreadSigningCertMessage) {
+      expect(details).toHaveTextContent(usableMetadata.entityId);
+      expect(details).toHaveTextContent(usableMetadata.ssoUrl);
+      expect(details).not.toHaveTextContent('Certificates:');
+    }
+    if (result.details?.certificates?.some((certificate) => certificate === expiredCertificate)) {
       expect(details).toHaveTextContent(currentCertificate.subject);
       expect(details).toHaveTextContent(expiredCertificate.subject);
       expect(within(details).getAllByText('(Expired!)')).toHaveLength(1);
