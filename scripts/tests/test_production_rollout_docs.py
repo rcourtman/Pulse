@@ -110,6 +110,7 @@ class ProductionRolloutDocsTest(unittest.TestCase):
         self.assertEqual(len(items), 1)
         item = items[0]
         for requirement in ("same LXC limit and workload", "equal windows at comparable uptime",
+                            "same swap allowance",
                             "peak **container memory**", "process RSS separate",
                             "kernel memory kills", "unexpected Pulse restarts", "fresh readings",
                             "same guests and backup datastores", "lifetime peak from before",
@@ -137,6 +138,18 @@ class ProductionRolloutDocsTest(unittest.TestCase):
         ):
             with self.subTest(evidence=evidence):
                 self.assertIn(evidence, text)
+
+    def test_lxc_headroom_is_not_inferred_from_memory_moving_to_swap(self):
+        text = section("### Compare LXC memory peaks")
+        for guidance in (
+            "`memory.peak` does not count swapped-out pages",
+            "already have `memory.swap.current` readings for the same container cgroup",
+            "A lower memory peak with more swap use is not enough to widen the rollout",
+            "Keep swap samples separate from memory peaks",
+            "Do not change swap or add load just to compare",
+        ):
+            with self.subTest(guidance=guidance):
+                self.assertIn(guidance, text)
 
     def test_scale_and_privilege_limits_remain_explicit(self):
         text = " ".join(DOC.read_text().split())

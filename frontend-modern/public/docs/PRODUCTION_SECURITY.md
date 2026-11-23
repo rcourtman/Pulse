@@ -263,7 +263,8 @@ and measure their own workload.
   polling to hide a fault; use [performance guidance](TROUBLESHOOTING.md#excessive-cpu-writes-or-database-growth).
 - [ ] Before widening a memory-limited Proxmox LXC rollout, compare ordinary
   polling before and after the update at the same LXC limit and workload.
-  Use equal windows at comparable uptime. Compare peak **container memory**
+  Use equal windows at comparable uptime with the same swap allowance.
+  Compare peak **container memory**
   in each window with the limit. Keep Pulse's process RSS separate. Check for
   new kernel memory kills, unexpected Pulse restarts and gaps in fresh readings
   for the same guests and backup datastores. An open dashboard does not prove
@@ -287,6 +288,12 @@ rose, the new peak occurred in that window. If it stayed at an earlier
 high-water mark, you only have an upper bound, not the peak for that window.
 Periodic `memory.current` samples can show a change in steady usage, but
 they can miss short spikes.
+
+`memory.peak` does not count swapped-out pages. If swap is enabled and you
+already have `memory.swap.current` readings for the same container cgroup,
+compare them at similar points during busy polls. A lower memory peak with
+more swap use is not enough to widen the rollout. Keep swap samples separate
+from memory peaks. Do not change swap or add load just to compare.
 
 If the cgroup was recreated, its peak and `oom_kill` counter start over.
 Keep those observations separate and check the existing Proxmox kernel and
