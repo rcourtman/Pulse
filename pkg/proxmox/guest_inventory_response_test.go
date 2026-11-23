@@ -44,6 +44,9 @@ func TestGuestInventoryResponseAdmission(t *testing.T) {
 				{"case-id", `{"data":[{"vmid":105,"VMID":106,"type":"qemu","node":"member"}]}`, false},
 				{"duplicate-row", `{"data":[` + row + `,` + row + `]}`, false},
 				{"bad-row-after-good", `{"data":[` + row + `,{"vmid":106,"type":"qemu","node":"member","mem":"not-a-number"}]}`, false},
+				{"case-counter", `{"data":[{"vmid":105,"type":"qemu","node":"member","Diskread":0}]}`, false},
+				{"escaped-duplicate-counter", `{"data":[{"vmid":105,"type":"qemu","node":"member","netin":1,"\u006eetin":0}]}`, false},
+				{"bad-counter-after-good", `{"data":[` + row + `,{"vmid":106,"type":"qemu","node":"member","diskread":"unavailable"}]}`, false},
 			}
 			if kind == "cluster" {
 				cases = append(cases, struct {
@@ -96,6 +99,67 @@ func TestGuestInventoryResponseAdmission(t *testing.T) {
 						t.Errorf("enumeration was replayed: %d requests", requests.Load())
 					}
 				})
+			}
+		})
+	}
+}
+
+func TestGuestInventoryCountersArePerRow(t *testing.T) {
+	// Use the same ordered fixture on the cluster path and both node paths.
+	// Neither zero nor an integer above 2^53 should be rounded into absence,
+	// and a sibling's counters must not populate a null or omitted field.
+	const body = `{"data":[
+		{"vmid":107,"type":"lxc","node":"member","diskread":0,"diskwrite":null,"\u006eetin":9007199254740993},
+		{"vmid":105,"type":"qemu","node":"member","diskread":null,"diskwrite":42,"netout":0},
+		{"vmid":106,"type":"qemu","node":"member","vendor-metadata":{"count":3}}
+	]}`
+	type observation struct {
+		vmid    int
+		values  [4]uint64 // read, write, receive, transmit
+		present IOCounterPresence
+	}
+	want := []observation{
+		{107, [4]uint64{0, 0, 9007199254740993, 0}, IOCounterPresence{Explicit: true, DiskRead: true, NetworkIn: true}},
+		{105, [4]uint64{0, 42, 0, 0}, IOCounterPresence{Explicit: true, DiskWrite: true, NetworkOut: true}},
+		{106, [4]uint64{}, IOCounterPresence{Explicit: true}},
+	}
+	for _, kind := range []string{"cluster", "qemu", "lxc"} {
+		t.Run(kind, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				fmt.Fprint(w, body)
+			}))
+			defer server.Close()
+			c := backupTestClient(t, server.URL)
+			defer c.httpClient.CloseIdleConnections()
+			got := make([]observation, 0, len(want))
+			switch kind {
+			case "cluster":
+				values, err := c.GetClusterResources(context.Background(), "vm")
+				if err != nil {
+					t.Fatal(err)
+				}
+				for _, v := range values {
+					got = append(got, observation{v.VMID, [4]uint64{v.DiskRead, v.DiskWrite, v.NetIn, v.NetOut}, v.IOCounters})
+				}
+			case "qemu":
+				values, err := c.GetVMs(context.Background(), "member")
+				if err != nil {
+					t.Fatal(err)
+				}
+				for _, v := range values {
+					got = append(got, observation{v.VMID, [4]uint64{v.DiskRead, v.DiskWrite, v.NetIn, v.NetOut}, v.IOCounters})
+				}
+			case "lxc":
+				values, err := c.GetContainers(context.Background(), "member")
+				if err != nil {
+					t.Fatal(err)
+				}
+				for _, v := range values {
+					got = append(got, observation{int(v.VMID), [4]uint64{v.DiskRead, v.DiskWrite, v.NetIn, v.NetOut}, v.IOCounters})
+				}
+			}
+			if !reflect.DeepEqual(got, want) {
+				t.Errorf("inventory counters = %+v, want %+v", got, want)
 			}
 		})
 	}

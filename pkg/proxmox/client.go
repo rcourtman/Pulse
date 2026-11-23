@@ -1325,7 +1325,7 @@ func (c *Client) GetVMs(ctx context.Context, node string) ([]VM, error) {
 	if err != nil {
 		return nil, err
 	}
-	values, err := readGuestInventory(resp, func(vm VM) (string, bool) { return guestInventoryID(vm.VMID) })
+	values, err := readGuestInventory(resp, (*VM).unmarshalWithKnownCounters, func(vm VM) (string, bool) { return guestInventoryID(vm.VMID) })
 	if err != nil {
 		return nil, err
 	}
@@ -1340,7 +1340,7 @@ func (c *Client) GetContainers(ctx context.Context, node string) ([]Container, e
 	if err != nil {
 		return nil, err
 	}
-	values, err := readGuestInventory(resp, func(container Container) (string, bool) { return guestInventoryID(int(container.VMID)) })
+	values, err := readGuestInventory(resp, (*Container).unmarshalWithKnownCounters, func(container Container) (string, bool) { return guestInventoryID(int(container.VMID)) })
 	if err != nil {
 		return nil, err
 	}
@@ -2530,7 +2530,7 @@ func (c *Client) GetClusterResources(ctx context.Context, resourceType string) (
 	if err != nil {
 		return nil, err
 	}
-	values, err := readGuestInventory(resp, func(resource ClusterResource) (string, bool) {
+	values, err := readGuestInventory(resp, (*ClusterResource).unmarshalWithKnownCounters, func(resource ClusterResource) (string, bool) {
 		if resourceType == "vm" && resource.Type != "qemu" && resource.Type != "lxc" {
 			return "", false
 		}

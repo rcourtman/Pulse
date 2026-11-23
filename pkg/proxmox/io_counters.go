@@ -46,62 +46,71 @@ func jsonFieldPresent(raw map[string]json.RawMessage, key string) bool {
 	return ok && !bytes.Equal(bytes.TrimSpace(value), []byte("null"))
 }
 
-func decodeWithCounterPresence(data []byte, target any) (IOCounterPresence, error) {
+func decodeWithCounterPresence(data []byte, decode func([]byte, IOCounterPresence) error) error {
 	var raw map[string]json.RawMessage
 	if err := json.Unmarshal(data, &raw); err != nil {
-		return IOCounterPresence{}, err
+		return err
 	}
-	if err := json.Unmarshal(data, target); err != nil {
-		return IOCounterPresence{}, err
-	}
-	return counterPresence(raw), nil
+	return decode(data, counterPresence(raw))
 }
 
 func (v *VM) UnmarshalJSON(data []byte) error {
+	return decodeWithCounterPresence(data, v.unmarshalWithKnownCounters)
+}
+
+func (v *VM) unmarshalWithKnownCounters(data []byte, presence IOCounterPresence) error {
 	type alias VM
 	var decoded alias
-	presence, err := decodeWithCounterPresence(data, &decoded)
-	if err != nil {
+	if err := json.Unmarshal(data, &decoded); err != nil {
 		return err
 	}
+	decoded.IOCounters = presence
 	*v = VM(decoded)
-	v.IOCounters = presence
 	return nil
 }
 
 func (c *Container) UnmarshalJSON(data []byte) error {
+	return decodeWithCounterPresence(data, c.unmarshalWithKnownCounters)
+}
+
+func (c *Container) unmarshalWithKnownCounters(data []byte, presence IOCounterPresence) error {
 	type alias Container
 	var decoded alias
-	presence, err := decodeWithCounterPresence(data, &decoded)
-	if err != nil {
+	if err := json.Unmarshal(data, &decoded); err != nil {
 		return err
 	}
+	decoded.IOCounters = presence
 	*c = Container(decoded)
-	c.IOCounters = presence
 	return nil
 }
 
 func (r *ClusterResource) UnmarshalJSON(data []byte) error {
+	return decodeWithCounterPresence(data, r.unmarshalWithKnownCounters)
+}
+
+func (r *ClusterResource) unmarshalWithKnownCounters(data []byte, presence IOCounterPresence) error {
 	type alias ClusterResource
 	var decoded alias
-	presence, err := decodeWithCounterPresence(data, &decoded)
-	if err != nil {
+	if err := json.Unmarshal(data, &decoded); err != nil {
 		return err
 	}
+	decoded.IOCounters = presence
 	*r = ClusterResource(decoded)
-	r.IOCounters = presence
 	return nil
 }
 
 func (s *VMStatus) UnmarshalJSON(data []byte) error {
+	return decodeWithCounterPresence(data, s.unmarshalWithKnownCounters)
+}
+
+func (s *VMStatus) unmarshalWithKnownCounters(data []byte, presence IOCounterPresence) error {
 	type alias VMStatus
 	var decoded alias
-	presence, err := decodeWithCounterPresence(data, &decoded)
-	if err != nil {
+	if err := json.Unmarshal(data, &decoded); err != nil {
 		return err
 	}
+	decoded.IOCounters = presence
 	*s = VMStatus(decoded)
-	s.IOCounters = presence
 	return nil
 }
 
