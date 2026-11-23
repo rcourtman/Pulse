@@ -81,11 +81,27 @@ func subjectOfPBSBackup(backup PBSBackup) (pbsBackupSubject, bool) {
 // resolves collision VMIDs that carry no such evidence (#1639). In-flight
 // snapshots and rows carried over a failed read are attributed but teach nothing.
 func AttributePBSBackups(backups []PBSBackup, guests []PBSGuestCandidate, exclusiveConfirmers map[PBSSnapshotRef]string) []string {
+	return attributePBSBackups(backups, guests, func() map[PBSSnapshotRef]string { return exclusiveConfirmers })
+}
+
+func attributePBSBackups(backups []PBSBackup, guests []PBSGuestCandidate, loadConfirmers func() map[PBSSnapshotRef]string) []string {
 	out := make([]string, len(backups))
 	if len(backups) == 0 || len(guests) == 0 {
 		return out
 	}
 
+	if connections := uncontestedPBSGuestConnections(guests); connections != nil {
+		// One connection per typed VMID already settles every matching row.
+		// Resolve directly instead of buffering one learner input per snapshot.
+		for i, backup := range backups {
+			if subject, ok := subjectOfPBSBackup(backup); ok {
+				out[i] = connections[subject]
+			}
+		}
+		return out
+	}
+
+	exclusiveConfirmers := loadConfirmers()
 	guestsBySubject := make(map[pbsBackupSubject][]PBSGuestCandidate, len(guests))
 	for _, guest := range guests {
 		subject := pbsBackupSubject{backupType: guest.BackupType, vmid: guest.VMID}
@@ -114,35 +130,31 @@ func AttributePBSBackups(backups []PBSBackup, guests []PBSGuestCandidate, exclus
 		})
 	}
 
-	// Only a collision consults the learner, so most estates can skip teaching it.
-	var learner *proxmoxidentity.PBSSourceLearner
-	if pbsGuestsCollide(guests) {
-		learner = proxmoxidentity.NewPBSSourceLearner()
-		teaches := func(backup PBSBackup) bool { return !backup.InProgress && !backup.CarriedOver }
-		for _, input := range inputs {
-			backup := backups[input.index]
-			if !teaches(backup) {
-				continue
-			}
-			for _, guest := range input.guests {
-				learner.RegisterCandidate(backup.Instance, guest.Instance)
-			}
+	learner := proxmoxidentity.NewPBSSourceLearner()
+	teaches := func(backup PBSBackup) bool { return !backup.InProgress && !backup.CarriedOver }
+	for _, input := range inputs {
+		backup := backups[input.index]
+		if !teaches(backup) {
+			continue
 		}
-		for _, input := range inputs {
-			backup := backups[input.index]
-			if !teaches(backup) {
-				continue
-			}
-			attributed := attributePBSBackup(backup, input.guests, input.confirmer, nil)
-			if attributed == "" {
-				// An exclusive view is positive evidence about the source even when
-				// that connection no longer has this guest, and it makes the cluster
-				// behind it visible to the learner's coverage check.
-				attributed = input.confirmer
-			}
-			if attributed != "" {
-				learner.Observe(backup.Instance, backup.Datastore, backup.Owner, attributed)
-			}
+		for _, guest := range input.guests {
+			learner.RegisterCandidate(backup.Instance, guest.Instance)
+		}
+	}
+	for _, input := range inputs {
+		backup := backups[input.index]
+		if !teaches(backup) {
+			continue
+		}
+		attributed := attributePBSBackup(backup, input.guests, input.confirmer, nil)
+		if attributed == "" {
+			// An exclusive view is positive evidence about the source even when
+			// that connection no longer has this guest, and it makes the cluster
+			// behind it visible to the learner's coverage check.
+			attributed = input.confirmer
+		}
+		if attributed != "" {
+			learner.Observe(backup.Instance, backup.Datastore, backup.Owner, attributed)
 		}
 	}
 
@@ -267,27 +279,26 @@ func pbsGuestInstancesByID(backups []PBSBackup, guestInstances []string) map[str
 	return out
 }
 
-// pbsGuestsCollide reports whether any type and VMID belongs to guests on more than
-// one connection. Exclusive storage views only ever settle such a collision.
-func pbsGuestsCollide(guests []PBSGuestCandidate) bool {
+// uncontestedPBSGuestConnections indexes the sole connection for each typed
+// VMID. A cross-connection collision returns nil; repeated observations from
+// the same connection agree, regardless of their node or name.
+func uncontestedPBSGuestConnections(guests []PBSGuestCandidate) map[pbsBackupSubject]string {
 	connections := make(map[pbsBackupSubject]string, len(guests))
 	for _, guest := range guests {
 		subject := pbsBackupSubject{backupType: guest.BackupType, vmid: guest.VMID}
 		if seen, ok := connections[subject]; ok && seen != guest.Instance {
-			return true
+			return nil
 		}
 		connections[subject] = guest.Instance
 	}
-	return false
+	return connections
 }
 
 func pbsGuestInstances(backups []PBSBackup, vms []VM, containers []Container, confirmations map[string]map[PBSGuestConfirmation]struct{}) []string {
 	guests := pbsGuestCandidates(backups, vms, containers)
-	var confirmers map[PBSSnapshotRef]string
-	if pbsGuestsCollide(guests) {
-		confirmers = pbsExclusiveConfirmers(confirmations)
-	}
-	return AttributePBSBackups(backups, guests, confirmers)
+	return attributePBSBackups(backups, guests, func() map[PBSSnapshotRef]string {
+		return pbsExclusiveConfirmers(confirmations)
+	})
 }
 
 func (s *State) pbsGuestInstancesLocked() []string {
