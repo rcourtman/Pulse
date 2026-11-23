@@ -210,6 +210,7 @@ class DependabotConfigTest(unittest.TestCase):
                 "typescript",
                 "eslint",
                 "lucide-solid",
+                "solid-js",
                 "vitest",
                 "@vitest/coverage-v8",
                 "jsdom",
@@ -232,9 +233,9 @@ class DependabotConfigTest(unittest.TestCase):
                 {"version-update:semver-major"},
             )
 
-    def test_jsdom_and_vite_ignore_only_standalone_major_version_updates(self) -> None:
+    def test_coupled_npm_dependencies_ignore_only_standalone_major_version_updates(self) -> None:
         npm = self.updates["npm"]
-        for dependency in ("jsdom", "vite"):
+        for dependency in ("jsdom", "vite", "solid-js"):
             with self.subTest(dependency=dependency):
                 # No version-range ignore: security updates and ordinary minor
                 # and patch version updates must still be eligible.
