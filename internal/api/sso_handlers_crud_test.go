@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -239,6 +241,136 @@ func TestSSOProviderDetailRoundTripPreservesOIDCEditableSettings(t *testing.T) {
 	assert.Equal(t, []string{"owner@example.com"}, stored.AllowedEmails)
 	assert.Equal(t, "groups", stored.GroupsClaim)
 	assert.Equal(t, map[string]string{"admins": "admin"}, stored.GroupRoleMappings)
+}
+
+func TestSSOOIDCRejectsUnusableEnabledScopeWrites(t *testing.T) {
+	f := newPresentationFixture(t, config.SSOProviderTypeOIDC)
+	r, original := f.router, f.provider
+	draft := original
+	draft.ID, draft.Enabled = "legacy-draft", false
+	draftOIDC := *original.OIDC
+	draftOIDC.Scopes = []string{"groups"}
+	draft.OIDC = &draftOIDC
+	require.NoError(t, r.ssoConfig.AddProvider(draft))
+	require.NoError(t, r.saveSSOConfig())
+	t.Cleanup(func() {
+		r.oidcManager.RemoveService("new-oidc")
+		r.oidcManager.RemoveService(draft.ID)
+	})
+
+	file := filepath.Join(r.config.DataPath, "sso.enc")
+	before, err := os.ReadFile(file)
+	require.NoError(t, err)
+	snapshot := r.ensureSSOConfig()
+	live := r.oidcManager.GetService(original.ID)
+	requests := f.requests.Load()
+	newProvider := draft
+	newProvider.ID, newProvider.Enabled = "new-oidc", true
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	edit := providerToDetailResponse(&original, r.config.PublicURL, req)
+	edit.OIDC.Scopes = []string{"OpenID", "openid-extra", "groups\topenid"}
+	enable := providerToResponse(&draft, r.config.PublicURL, req)
+	enable.Enabled = true
+
+	for _, tc := range []struct {
+		action, method, suffix string
+		body                   any
+	}{
+		{"add", http.MethodPost, "", newProvider},
+		{"edit", http.MethodPut, "/" + original.ID, edit},
+		{"enable-with-omitted-oidc", http.MethodPut, "/" + draft.ID, enable},
+	} {
+		t.Run(tc.action, func(t *testing.T) {
+			rec := ssoScopeWrite(t, r, tc.method, tc.suffix, tc.body)
+			require.Equal(t, http.StatusBadRequest, rec.Code, rec.Body.String())
+			var reply APIError
+			require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &reply))
+			require.Contains(t, reply.ErrorMessage, "Include openid in Scopes")
+			require.NotContains(t, rec.Body.String(), "openid-extra")
+			require.NotContains(t, rec.Body.String(), original.OIDC.ClientSecret)
+			require.Same(t, snapshot, r.currentSSOConfig())
+			require.Same(t, live, r.oidcManager.GetService(original.ID))
+			require.Nil(t, r.oidcManager.GetService(draft.ID))
+			require.Equal(t, requests, f.requests.Load(), "refused write must not discover the issuer")
+			after, err := os.ReadFile(file)
+			require.NoError(t, err)
+			require.Equal(t, before, after, "refused write must not persist")
+		})
+	}
+}
+
+func TestSSOOIDCScopeWritesKeepDefaultsAndLegacyRecovery(t *testing.T) {
+	f := newPresentationFixture(t, config.SSOProviderTypeOIDC)
+	r, original := f.router, f.provider
+	legacy := original
+	legacy.ID = "legacy-enabled"
+	legacyOIDC := *original.OIDC
+	legacyOIDC.Scopes = []string{"groups"}
+	legacy.OIDC = &legacyOIDC
+	require.NoError(t, r.ssoConfig.AddProvider(legacy))
+	require.NoError(t, r.saveSSOConfig())
+	t.Cleanup(func() { r.oidcManager.RemoveService(legacy.ID) })
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	readBack := func(id string, wantScopes []string, enabled bool) *config.SSOProvider {
+		t.Helper()
+		cfg, err := r.persistence.LoadSSOConfig()
+		require.NoError(t, err)
+		p := cfg.GetProvider(id)
+		require.NotNil(t, p)
+		require.Equal(t, wantScopes, p.OIDC.Scopes)
+		require.Equal(t, enabled, p.Enabled)
+		require.Equal(t, original.OIDC.ClientSecret, p.OIDC.ClientSecret)
+		require.Equal(t, original.AllowedGroups, p.AllowedGroups)
+		require.Equal(t, original.GroupRoleMappings, p.GroupRoleMappings)
+		return p
+	}
+	save := func(p *config.SSOProvider, scopes []string, enabled bool) {
+		t.Helper()
+		edit := providerToDetailResponse(p, r.config.PublicURL, req)
+		edit.Enabled, edit.OIDC.Scopes = enabled, scopes
+		rec := ssoScopeWrite(t, r, http.MethodPut, "/"+p.ID, edit)
+		require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	}
+
+	// A legacy entry elsewhere cannot prevent a valid provider from saving.
+	// A compound ASCII-space entry has the same wire scope as separate entries.
+	custom := []string{"profile openid", "groups"}
+	save(&original, custom, true)
+	saved := readBack(original.ID, custom, true)
+	readBack(legacy.ID, legacyOIDC.Scopes, true)
+	require.Equal(t, custom, r.oidcManager.GetService(original.ID).oauth2Cfg.Scopes)
+
+	// Explicit empty selection still uses the runtime defaults, without
+	// manufacturing a custom array in persistence.
+	save(saved, []string{}, true)
+	readBack(original.ID, nil, true)
+	require.Equal(t, []string{"openid", "profile", "email"}, r.oidcManager.GetService(original.ID).oauth2Cfg.Scopes)
+
+	// Round-tripping a legacy selection doesn't rewrite it. Disabling it is
+	// still possible, as is correcting and enabling it with exact new scopes.
+	save(&legacy, legacyOIDC.Scopes, true)
+	save(&legacy, legacyOIDC.Scopes, false)
+	disabled := readBack(legacy.ID, legacyOIDC.Scopes, false)
+	require.Nil(t, r.oidcManager.GetService(legacy.ID))
+	corrected := []string{"openid", "groups"}
+	save(disabled, corrected, true)
+	readBack(legacy.ID, corrected, true)
+	require.Equal(t, corrected, r.oidcManager.GetService(legacy.ID).oauth2Cfg.Scopes)
+}
+
+func ssoScopeWrite(t *testing.T, r *Router, method, suffix string, payload any) *httptest.ResponseRecorder {
+	t.Helper()
+	data, err := json.Marshal(payload)
+	require.NoError(t, err)
+	req := httptest.NewRequest(method, "/api/security/sso/providers"+suffix, bytes.NewReader(data))
+	rec := httptest.NewRecorder()
+	if suffix == "" {
+		r.handleSSOProviders(rec, req)
+	} else {
+		r.handleSSOProvider(rec, req)
+	}
+	return rec
 }
 
 func TestUpdateSSOProvider_EmptyValuesClearRestrictionFields(t *testing.T) {
