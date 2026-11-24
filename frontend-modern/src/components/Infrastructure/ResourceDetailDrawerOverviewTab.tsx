@@ -84,6 +84,7 @@ const LazyResourcePhysicalDisks = lazy(() =>
     default: GuestPhysicalDisks,
   })),
 );
+const LazyAvailabilityDrawerHistory = lazy(() => import('./AvailabilityDrawerHistory'));
 
 interface ResourceDetailDrawerOverviewTabProps {
   resource: Resource;
@@ -420,6 +421,8 @@ export const ResourceDetailDrawerOverviewTab: Component<ResourceDetailDrawerOver
   // availability check keeps its cards in front: they are its whole reading.
   const isAvailabilityResource = () =>
     resource().type === 'network-endpoint' || resource().platformType === 'availability';
+  const availabilityHistoryTargetId = () =>
+    isAvailabilityResource() ? resource().availability?.targetId?.trim() || '' : '';
   const availabilityHealthy = () =>
     !isAvailabilityResource() &&
     availabilityChecks().length > 0 &&
@@ -455,6 +458,17 @@ export const ResourceDetailDrawerOverviewTab: Component<ResourceDetailDrawerOver
               alerts={chartAlerts()}
             />
           </div>
+        )}
+      </Show>
+      <Show when={!drawer.metricsHistoryTarget() && availabilityHistoryTargetId()}>
+        {(targetId) => (
+          <Suspense fallback={null}>
+            <LazyAvailabilityDrawerHistory
+              targetId={targetId()}
+              protocol={resource().availability?.protocol}
+              enabled={drawer.activeTab() === 'overview'}
+            />
+          </Suspense>
         )}
       </Show>
       <Show when={contentCards().length > 0}>
