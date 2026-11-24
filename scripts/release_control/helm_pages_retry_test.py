@@ -186,13 +186,15 @@ class HelmPagesIdentityTests(unittest.TestCase):
 
 class HelmPagesRetryTests(unittest.TestCase):
     def run_publication(self, *, draft=False, digest=DIGEST, prerelease=False,
-                        version="6.4.3", exists=True):
+                        version="6.4.3", exists=True, index_before=None, index_after=None):
         workflow = (ROOT / ".github/workflows/helm-pages.yml").read_text()
         step = workflow.split("      - name: Publish chart release and merge Pages index\n", 1)[1]
         script = textwrap.dedent(step.split("        run: |\n", 1)[1].split(
-            "          git -C gh-pages config", 1)[0])
+            "      - name:", 1)[0])
         script = script.replace("${{ github.repository }}", "test/pulse")
-        script += '\nprintf "PAGES_BOUNDARY\\n"\n'
+        if index_after is None:
+            script = script.split("git -C gh-pages config", 1)[0]
+            script += '\nprintf "PAGES_BOUNDARY\\n"\n'
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
             (root / "dist").mkdir()
@@ -219,10 +221,46 @@ class HelmPagesRetryTests(unittest.TestCase):
                 sys.exit(result.returncode)
                 '''))
             fake.chmod(0o755)
+            if index_after is not None:
+                (root / "gh-pages").mkdir()
+                if index_before is not None:
+                    (root / "prior.yaml").write_text(index_before)
+                    (root / "gh-pages/index.yaml").write_text(index_before)
+                (root / "regenerated.yaml").write_text(index_after)
+                tool = root / "pages-fixture-tool"
+                tool.write_text(textwrap.dedent('''\
+                    #!/usr/bin/env python3
+                    import json, pathlib, shutil, sys
+                    tool = pathlib.Path(sys.argv[0]).name
+                    args = sys.argv[1:]
+                    with open("calls.jsonl", "a") as log:
+                        log.write(json.dumps([tool, *args]) + "\\n")
+                    if tool == "helm":
+                        assert args[:2] == ["repo", "index"], args
+                        target = pathlib.Path(args[2]) / "index.yaml"
+                        expected_url = "https://github.com/test/pulse/releases/download/helm-chart-6.4.3"
+                        assert args[3:5] == ["--url", expected_url], args
+                        if pathlib.Path("prior.yaml").exists():
+                            assert args[5:] == ["--merge", str(target)], args
+                            assert target.read_bytes() == pathlib.Path("prior.yaml").read_bytes()
+                        else:
+                            assert len(args) == 5, args
+                        shutil.copyfile("regenerated.yaml", target)
+                    else:
+                        assert tool == "git" and args[:2] == ["-C", "gh-pages"], args
+                        assert args[2] in {"config", "add", "diff", "commit", "push"}, args
+                        if args[2:] == ["diff", "--cached", "--quiet"]:
+                            prior = pathlib.Path("prior.yaml")
+                            sys.exit(not prior.exists() or prior.read_bytes() != pathlib.Path(
+                                "gh-pages/index.yaml").read_bytes())
+                    '''))
+                tool.chmod(0o755)
+                for name in ("helm", "git"):
+                    (root / name).symlink_to(tool.name)
             env = {"PATH": f"{root}:{os.environ['PATH']}", "VERSION": version,
                    "GITHUB_REPOSITORY": "test/pulse", "TARGET_COMMITISH": "a" * 40,
                    "DRAFT": json.dumps(draft), "PRERELEASE": json.dumps(prerelease),
-                   "DIGEST": digest, "EXISTS": json.dumps(exists)}
+                   "DIGEST": digest, "EXISTS": json.dumps(exists), "GITHUB_ACTOR": "fixture"}
             result = subprocess.run(["bash", "-c", script], cwd=root, env=env,
                                     capture_output=True, text=True)
             calls = [json.loads(line) for line in (root / "calls.jsonl").read_text().splitlines()]
@@ -273,6 +311,43 @@ class HelmPagesRetryTests(unittest.TestCase):
                 self.assertIn(f"--prerelease={expected}", calls[-1])
                 self.assertIn("--latest=false", calls[-1])
 
+    def chart_index(self, created, generated, *, digest=DIGEST, url=None):
+        url = url or "https://github.com/test/pulse/releases/download/helm-chart-6.4.3/pulse-6.4.3.tgz"
+        return textwrap.dedent(f'''\
+            apiVersion: v1
+            entries:
+              pulse:
+              - appVersion: 6.4.3
+                created: "{created}"
+                digest: {digest.removeprefix("sha256:")}
+                urls:
+                - {url}
+                version: 6.4.3
+            generated: "{generated}"
+            ''')
+
+    def test_retry_does_not_push_a_timestamp_only_index_change(self):
+        # The beta.3 recovery rewrote exactly these two timestamp fields.
+        prior = self.chart_index("2026-11-17T05:47:20.997612816Z", "2026-11-17T05:47:20.996812509Z")
+        new = self.chart_index("2026-11-17T07:41:17.217287934Z", "2026-11-17T07:41:17.216094579Z")
+        result, calls = self.run_publication(index_before=prior, index_after=new)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertFalse(any(c[:3] == ["git", "-C", "gh-pages"] and c[3] in {
+            "add", "commit", "push"} for c in calls), calls)
+
+    def test_new_or_materially_changed_chart_entry_still_pushes(self):
+        prior = self.chart_index("2026-11-17T05:47:20Z", "2026-11-17T05:47:20Z")
+        for changes, label in (({"digest": "sha256:" + "c" * 64}, "digest"),
+                               ({"url": "https://github.com/test/pulse/previous.tgz"}, "url"),
+                               ({}, "new")):
+            with self.subTest(change=label):
+                new = self.chart_index("2026-11-17T07:41:17Z", "2026-11-17T07:41:17Z",
+                                       **changes)
+                result, calls = self.run_publication(
+                    index_before=None if label == "new" else new, index_after=prior)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertIn(["git", "-C", "gh-pages", "push", "origin", "HEAD:gh-pages"], calls)
+
 
 class PublicReceiptTests(unittest.TestCase):
     # Keep the real workflow shell and separate executables on PATH. In a
@@ -297,7 +372,7 @@ case "$tool" in
         ;;
     sleep)
         [ "$#" -eq 1 ] || unexpected
-        case "$1" in 1|2|3|4|5) ;; *) unexpected ;; esac
+        [ "$1" -ge 1 ] && [ "$1" -le 10 ] || unexpected
         printf '%s\n' "$(( now + $1 ))" > clock
         ;;
     curl)
@@ -411,8 +486,8 @@ esac
         # Build 1370229859 took 262003 ms, beyond the former ~60s loop.
         result, proof = self.receipt('match', ready_after=263)
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(proof['elapsed_seconds'], 265)
-        self.assertEqual(sum(c['command'] == 'curl' for c in proof['calls']), 54)
+        self.assertEqual(proof['elapsed_seconds'], 270)
+        self.assertEqual(sum(c['command'] == 'curl' for c in proof['calls']), 28)
         self.assertEqual(sum(c['command'] == 'helm' and c['args'][0] == 'pull'
                              for c in proof['calls']), 1)
 
@@ -425,29 +500,37 @@ esac
         pulls = [c for c in proof['calls'] if c['command'] == 'helm' and c['args'][0] == 'pull']
         self.assertEqual([c['at'] for c in pulls], [750])
 
+    def test_rc4_pages_build_after_old_deadline_is_observed(self):
+        # Pages build of 07bb52d took 1,383,818 ms, after RC.4's 900s failure.
+        result, proof = self.receipt('match', ready_after=1384)
+        self.assertEqual(result.returncode, 0, result.stdout[-600:] + result.stderr)
+        self.assertIn('serves the exact qualified pulse 6.4.3 package', result.stdout)
+        self.assertEqual(proof['elapsed_seconds'], 1390)
+
     def test_delayed_wrong_package_still_fails_immediately(self):
-        result, proof = self.receipt('wrong', ready_after=747)
+        result, proof = self.receipt('wrong', ready_after=1384)
         self.assertNotEqual(result.returncode, 0)
         self.assertIn('bytes differ', result.stdout)
         self.assertNotIn('[OK]', result.stdout)
-        self.assertEqual(proof['elapsed_seconds'], 750)
+        self.assertEqual(proof['elapsed_seconds'], 1390)
         self.assertEqual(sum(c['command'] == 'helm' and c['args'][0] == 'pull'
                              for c in proof['calls']), 1)
 
     def test_index_that_never_exposes_version_fails_at_deadline(self):
-        result, proof = self.receipt('match', ready_after=901)
+        result, proof = self.receipt('match', ready_after=1801)
         self.assertNotEqual(result.returncode, 0)
-        self.assertIn('900-second observation window', result.stdout)
+        self.assertIn('1800-second observation window', result.stdout)
         self.assertNotIn('[OK]', result.stdout)
-        self.assertEqual(proof['elapsed_seconds'], 900)
+        self.assertEqual(proof['elapsed_seconds'], 1800)
+        self.assertEqual(sum(c['command'] == 'curl' for c in proof['calls']), 180)
         self.assertFalse(any(c['command'] == 'helm' for c in proof['calls']))
 
     def test_slow_unavailable_index_cannot_extend_probe_budget(self):
         result, proof = self.receipt('index_unavailable', fetch_seconds=17)
         self.assertNotEqual(result.returncode, 0)
-        self.assertEqual(proof['elapsed_seconds'], 900)
+        self.assertEqual(proof['elapsed_seconds'], 1800)
         probes = [c for c in proof['calls'] if c['command'] == 'curl']
-        self.assertEqual(len(probes), 45)
+        self.assertEqual(len(probes), 72)
         for call in probes:
             args = call['args']
             self.assertIn('--connect-timeout', args)
@@ -456,13 +539,15 @@ esac
         self.assertFalse(any(c['command'] == 'helm' for c in proof['calls']))
 
     def test_last_probe_and_sleep_use_only_remaining_time(self):
-        result, proof = self.receipt('match', ready_after=901, fetch_seconds=8)
+        result, proof = self.receipt('match', ready_after=1801, fetch_seconds=4)
         self.assertNotEqual(result.returncode, 0)
-        self.assertEqual(proof['elapsed_seconds'], 900)
+        self.assertEqual(proof['elapsed_seconds'], 1800)
         probes = [c for c in proof['calls'] if c['command'] == 'curl']
         last = probes[-1]
-        self.assertEqual(last['at'], 897)
-        self.assertEqual(int(last['args'][last['args'].index('--max-time')+1]), 3)
+        self.assertEqual(last['at'], 1792)
+        self.assertEqual(int(last['args'][last['args'].index('--max-time')+1]), 8)
+        sleeps = [c for c in proof['calls'] if c['command'] == 'sleep']
+        self.assertEqual(sleeps[-1], {'command': 'sleep', 'at': 1796, 'args': ['4']})
 
 
 if __name__ == "__main__":
