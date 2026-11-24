@@ -234,10 +234,13 @@ func providerConnectionStatuses[C comparable](
 	}
 
 	var zero C
-	statuses := make(map[string]bool)
 	m.mu.RLock()
+	state := m.state
+	provider := m.pollProviders[instanceType]
 	clients := clientsOf(m)
-	for _, inst := range configInstances(m) {
+	instances := configInstances(m)
+	statuses := make(map[string]bool, len(instances))
+	for _, inst := range instances {
 		name := strings.TrimSpace(inst.Name)
 		if name == "" {
 			name = strings.TrimSpace(inst.Host)
@@ -245,21 +248,27 @@ func providerConnectionStatuses[C comparable](
 		if name == "" {
 			continue
 		}
-		key := keyPrefix + name
-		connected := false
-		if client, exists := clients[name]; exists && client != zero {
-			if m.state != nil && m.state.ConnectionHealth != nil {
-				stateKey := m.connectionHealthStateKey(instanceType, name)
-				connected = m.state.ConnectionHealth[stateKey]
-			} else {
-				connected = true
-			}
-		}
-		statuses[key] = connected
+		statuses[keyPrefix+name] = clients[name] != zero
 	}
 	m.mu.RUnlock()
 	if len(statuses) == 0 {
 		return nil
+	}
+
+	// Only configuration and client presence belong to m.mu. Neither provider
+	// key callbacks nor State health reads run inside it: a queued poll writer
+	// prevents recursive read-locking, and State has its own lock.
+	if state != nil {
+		if provider == nil {
+			provider = builtinPollProvider(instanceType)
+		}
+		for key, hasClient := range statuses {
+			if hasClient {
+				name := strings.TrimPrefix(key, keyPrefix)
+				stateKey := connectionHealthStateKeyFor(m, provider, instanceType, name)
+				statuses[key] = state.ConnectionHealthForClient(stateKey)
+			}
+		}
 	}
 	return statuses
 }
@@ -574,6 +583,10 @@ func (m *Monitor) getPollProvider(instanceType InstanceType) PollProvider {
 		return provider
 	}
 
+	return builtinPollProvider(instanceType)
+}
+
+func builtinPollProvider(instanceType InstanceType) PollProvider {
 	switch instanceType {
 	case InstanceTypePVE:
 		return newPVEPollProvider()
@@ -711,24 +724,27 @@ func (m *Monitor) refreshInstanceInfoCacheFromProviders() {
 }
 
 func (m *Monitor) connectionHealthStateKey(instanceType InstanceType, instanceName string) string {
-	trimmedName := strings.TrimSpace(instanceName)
-	if trimmedName == "" {
+	name := strings.TrimSpace(instanceName)
+	if name == "" {
 		return ""
 	}
+	return connectionHealthStateKeyFor(m, m.getPollProvider(instanceType), instanceType, name)
+}
 
-	if provider := m.getPollProvider(instanceType); provider != nil {
-		if keyProvider, ok := provider.(ConnectionHealthKeyPollProvider); ok {
-			if key := strings.TrimSpace(keyProvider.ConnectionHealthKey(m, trimmedName)); key != "" {
-				return key
-			}
+// name is already normalized by the caller. The provider callback may consult
+// the monitor, so no caller may hold m.mu.
+func connectionHealthStateKeyFor(m *Monitor, provider PollProvider, instanceType InstanceType, name string) string {
+	if keyProvider, ok := provider.(ConnectionHealthKeyPollProvider); ok {
+		if key := strings.TrimSpace(keyProvider.ConnectionHealthKey(m, name)); key != "" {
+			return key
 		}
 	}
 
 	trimmedType := strings.TrimSpace(string(instanceType))
 	if trimmedType == "" {
-		return trimmedName
+		return name
 	}
-	return trimmedType + "-" + trimmedName
+	return trimmedType + "-" + name
 }
 
 func (m *Monitor) setProviderConnectionHealth(instanceType InstanceType, instanceName string, healthy bool) {
@@ -783,15 +799,13 @@ func (m *Monitor) providerConnectionStatuses(provider PollProvider) map[string]b
 		return nil
 	}
 
-	connectionHealth := make(map[string]bool)
 	m.mu.RLock()
-	if m.state != nil && m.state.ConnectionHealth != nil {
-		connectionHealth = make(map[string]bool, len(m.state.ConnectionHealth))
-		for key, healthy := range m.state.ConnectionHealth {
-			connectionHealth[key] = healthy
-		}
-	}
+	state := m.state
 	m.mu.RUnlock()
+	var connectionHealth map[string]bool
+	if state != nil {
+		connectionHealth = state.GetConnectionHealth()
+	}
 
 	statuses := make(map[string]bool, len(names))
 	for _, name := range names {
@@ -801,7 +815,7 @@ func (m *Monitor) providerConnectionStatuses(provider PollProvider) map[string]b
 		}
 
 		key := instanceType + "-" + trimmedName
-		stateKey := m.connectionHealthStateKey(InstanceType(instanceType), trimmedName)
+		stateKey := connectionHealthStateKeyFor(m, provider, InstanceType(instanceType), trimmedName)
 		if stateKey == "" {
 			stateKey = trimmedName
 		}
