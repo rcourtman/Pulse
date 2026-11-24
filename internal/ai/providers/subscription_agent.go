@@ -452,6 +452,12 @@ func (c *SubscriptionAgentClient) run(ctx context.Context, name string, args []s
 	}
 	cmd := exec.CommandContext(ctx, path, args...)
 	cmd.Env = subscriptionAgentEnvironment(os.Environ())
+	if c.agent == SubscriptionAgentClaude {
+		// Second layer behind the "@" escape in subscriptionAgentPrompt: ask
+		// Claude Code not to compute prompt attachments at all. A CLI that
+		// does not know the variable ignores it, so it is never the only guard.
+		cmd.Env = append(cmd.Env, "CLAUDE_CODE_DISABLE_ATTACHMENTS=1")
+	}
 	cmd.Dir = dir
 	cmd.Stdin = bytes.NewReader(stdin)
 	stdout := cappedBuffer{maxBytes: maxSubscriptionAgentOutputBytes}
@@ -467,9 +473,20 @@ func (c *SubscriptionAgentClient) run(ctx context.Context, name string, args []s
 				return nil, ErrProviderRequestRefused
 			}
 		}
+		// A Codex turn that fails is audited like one that completes: its event
+		// stream records every built-in tool the agent ran before the failure.
+		if name == "codex" {
+			if auditErr := rejectCodexAgentToolActivity(stdout.buffer.Bytes()); auditErr != nil {
+				return nil, auditErr
+			}
+		}
 		message := strings.TrimSpace(stderr.buffer.String())
 		if message == "" {
-			message = strings.TrimSpace(stdout.buffer.String())
+			if name == "codex" {
+				message = codexFailureDetail(stdout.buffer.Bytes())
+			} else {
+				message = strings.TrimSpace(stdout.buffer.String())
+			}
 		}
 		if len(message) > 2000 {
 			message = message[len(message)-2000:]
@@ -563,12 +580,22 @@ func subscriptionAgentEnvironment(environment []string) []string {
 	return out
 }
 
+// subscriptionAgentPrompt serializes the provider request as the CLI's prompt
+// input. That input carries untrusted infrastructure names, logs, tool results,
+// and chat text, and Claude Code resolves every @ mention in it (a local file
+// or directory, an MCP resource, an agent) before the model runs. That is
+// prompt preprocessing rather than a tool call, so --tools "", --safe-mode, and
+// --permission-mode do not prevent it and the output stream does not report
+// it. "@" can only occur inside a JSON string, so writing it as its JSON escape
+// leaves the CLI no mention to resolve while REQUEST_JSON still decodes to the
+// same request.
 func subscriptionAgentPrompt(req ChatRequest) ([]byte, error) {
 	payload, err := json.Marshal(req.NormalizeCollections())
 	if err != nil {
 		return nil, fmt.Errorf("encode subscription agent request: %w", err)
 	}
-	return []byte("REQUEST_JSON\n" + string(payload)), nil
+	payload = bytes.ReplaceAll(payload, []byte("@"), []byte(`\u0040`))
+	return append([]byte("REQUEST_JSON\n"), payload...), nil
 }
 
 func subscriptionAgentOutputSchema(req ChatRequest) map[string]interface{} {
@@ -1056,6 +1083,47 @@ func rejectCodexAgentToolActivity(events []byte) error {
 		}
 	}
 	return nil
+}
+
+// codexFailureDetail returns what a failed Codex CLI reported about itself on
+// stdout. With `codex exec --json` stdout is the JSONL event stream, whose items
+// hold model-authored text and built-in tool output; those must never become an
+// error that Patrol stores and shows. Only the CLI's own error events are kept.
+// Output that is not an event stream (`codex login status`) is returned as is.
+func codexFailureDetail(stdout []byte) string {
+	var detail string
+	var eventStream bool
+	for _, line := range bytes.Split(stdout, []byte{'\n'}) {
+		line = bytes.TrimSpace(line)
+		if len(line) == 0 || line[0] != '{' {
+			continue
+		}
+		eventStream = true
+		var event struct {
+			Type    string `json:"type"`
+			Message string `json:"message"`
+			Error   struct {
+				Message string `json:"message"`
+			} `json:"error"`
+		}
+		if json.Unmarshal(line, &event) != nil {
+			continue
+		}
+		switch event.Type {
+		case "error":
+			if message := strings.TrimSpace(event.Message); message != "" {
+				detail = message
+			}
+		case "turn.failed":
+			if message := strings.TrimSpace(event.Error.Message); message != "" {
+				detail = message
+			}
+		}
+	}
+	if !eventStream {
+		return strings.TrimSpace(string(stdout))
+	}
+	return detail
 }
 
 func validateSubscriptionAgentTurn(req ChatRequest, turn *subscriptionAgentTurn) error {

@@ -3686,17 +3686,20 @@ func isBlockedFetchIP(ip net.IP) bool {
 		}
 		return true
 	}
+	// Block multicast, limited broadcast (255.255.255.255), and other non-unicast targets
+	// before consulting the private-IP escape hatch.
+	if !ip.IsGlobalUnicast() {
+		return true
+	}
 	// SECURITY: Block private IP ranges (RFC1918) to prevent SSRF attacks
-	// Private ranges: 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16
-	if ip.IsPrivate() {
+	// Private ranges: 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, plus the
+	// special-use ranges IsPrivate does not cover but that are just as internal
+	// (100.64.0.0/10 overlay/CGNAT space, 192.0.0.0/24, 198.18.0.0/15, ...).
+	if ip.IsPrivate() || securityutil.IsSpecialUseInternalIP(ip) {
 		// Allow private IPs only if explicitly permitted
 		if os.Getenv("PULSE_AI_ALLOW_PRIVATE_IPS") == "true" {
 			return false
 		}
-		return true
-	}
-	// Block multicast and other non-unicast targets.
-	if !ip.IsGlobalUnicast() {
 		return true
 	}
 	// SECURITY: every check above reads the literal address bytes, so an IPv6
