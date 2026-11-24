@@ -1,0 +1,35 @@
+{
+  "version": 1,
+  "base_sha": "ff8de827f9951e1e28a5838daf187f1d0e7d48d1",
+  "verified_at": "2026-11-24T02:43:06Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/proxmox/ProxmoxBackupJobsCard.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/proxmox/ProxmoxBackupJobsCard.tsx": "fe8c9193e8893b4eef9fa6855030b756eb4b3267149d3e4199b1d94d6d7a18ea"
+  },
+  "routes": [
+    "/proxmox/backups/date"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 768
+    },
+    {
+      "width": 320,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Paired with bbf3a441ab20832671171f47c051b54dca15909b: identical timezone, date, fixture and viewport/theme per pair. Playwright 1.56.1, Chromium 141.0.7390.37 light desktop and WebKit 26.0 dark touch phone.",
+    "Production Proxmox Backups page, readers, chart and restore-point table; synthetic read-only REST. Partial warning-only day and partial mixed day, with the original 24-hour pills and independent restore-point counts retained.",
+    "Inspected all before/after captures. The warning-only tap no longer scrolls the card out of view. The selected day shows named warnings and failures separately and preserves all reported outcome counts."
+  ],
+  "interactions": [
+    "Hover to read warning evidence, then select with desktop keyboard Enter and with a phone tap. Verify selected day, date filter, accessible description and the same independent restore points.",
+    "Use View restore points to reach the filtered table; check Show more and Show fewer for warning names and that desktop keyboard focus stays on that control.",
+    "Clear the day by pressing the selected bar again, recover all 15 restore points and verify desktop mouse hover and click still work."
+  ]
+}

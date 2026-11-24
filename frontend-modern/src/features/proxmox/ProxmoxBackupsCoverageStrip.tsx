@@ -78,6 +78,12 @@ const ROW_TONE: Record<RowTone, { dot: string; pill: string; fill: string }> = {
 const ROW_GRID =
   'grid w-full min-w-0 grid-cols-[0.5rem_minmax(0,1fr)_auto_4rem_0.875rem] items-center gap-x-3 px-3 text-xs sm:grid-cols-[0.5rem_minmax(0,16rem)_3rem_minmax(0,22rem)_minmax(0.875rem,1fr)]';
 
+// Datastore job rows carry full `datastore (server)` context rather than a
+// fixed-width share bar. On phones the datastore list sits cleanly beneath the
+// job label so multi-server names like `primary-vault (dr-vault)` stay legible.
+const DATASTORE_PROBLEM_ROW_GRID =
+  'grid w-full min-w-0 grid-cols-[0.5rem_minmax(0,1fr)_auto_0.875rem] items-center gap-x-3 gap-y-0.5 px-3 py-1.5 text-xs sm:min-h-8 sm:grid-cols-[0.5rem_minmax(0,16rem)_3rem_minmax(0,1fr)_0.875rem] sm:gap-y-0 sm:py-1';
+
 const PREVIEW_NAMES = 5;
 
 // Names stay out of the row: a hover title says what a click does and
@@ -105,7 +111,12 @@ const DatastoreProblemCells: Component<{ group: DatastoreJobFailureGroup }> = (p
     <span class={`h-2 w-2 rounded-full ${ROW_TONE.attention.dot}`} aria-hidden="true" />
     <span class="min-w-0 truncate text-left text-base-content">{props.group.label}</span>
     <span class={`${PILL_BASE} ${ROW_TONE.attention.pill}`}>{props.group.datastores.length}</span>
-    <span class="min-w-0 truncate text-left text-muted">{props.group.datastores.join(', ')}</span>
+    <span
+      class="col-span-2 col-start-2 row-start-2 min-w-0 whitespace-normal wrap-anywhere text-left text-[11px] leading-snug text-muted sm:col-span-1 sm:col-start-4 sm:row-start-1 sm:text-xs"
+      data-backup-datastore-names
+    >
+      {props.group.datastores.join(', ')}
+    </span>
   </>
 );
 
@@ -151,7 +162,7 @@ export const ProxmoxBackupsCoverageStrip: Component<CoverageStripProps> = (props
           <span class="inline-flex max-w-full flex-wrap items-center gap-x-2 gap-y-1">
             <span class="whitespace-nowrap">{props.title}</span>
             <span
-              class="inline-flex items-center gap-1.5 normal-case tracking-normal"
+              class="inline-flex min-w-0 items-center gap-1.5 normal-case tracking-normal"
               data-backup-verdict={props.verdict.tone}
             >
               <span
@@ -171,7 +182,9 @@ export const ProxmoxBackupsCoverageStrip: Component<CoverageStripProps> = (props
                   <span class="font-semibold tabular-nums text-base-content">
                     {props.verdict.protected} / {rated()}
                   </span>{' '}
-                  <span class="font-medium">protected</span>
+                  <span class="font-medium">
+                    protected<Show when={asides().length > 0}> (rated only)</Show>
+                  </span>
                 </span>
               </Show>
             </span>
@@ -282,7 +295,7 @@ export const ProxmoxBackupsCoverageStrip: Component<CoverageStripProps> = (props
                 <Show
                   when={props.onSelectDatastoreProblem}
                   fallback={
-                    <span class={`${ROW_GRID} h-8`} title={datastoreProblemName(group)}>
+                    <span class={DATASTORE_PROBLEM_ROW_GRID} title={datastoreProblemName(group)}>
                       <DatastoreProblemCells group={group} />
                     </span>
                   }
@@ -290,14 +303,14 @@ export const ProxmoxBackupsCoverageStrip: Component<CoverageStripProps> = (props
                   {(onSelect) => (
                     <button
                       type="button"
-                      class={`${ROW_GRID} group/reason h-8 hover:bg-surface-hover focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500`}
+                      class={`${DATASTORE_PROBLEM_ROW_GRID} group/reason hover:bg-surface-hover focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500`}
                       aria-label={datastoreProblemName(group)}
                       title={`Show in Backup servers: ${group.datastores.join(', ')}`}
                       onClick={() => onSelect()()}
                     >
                       <DatastoreProblemCells group={group} />
                       <ChevronRightIcon
-                        class="h-3.5 w-3.5 justify-self-end text-muted group-hover/reason:text-base-content"
+                        class="col-start-4 row-start-1 h-3.5 w-3.5 justify-self-end text-muted group-hover/reason:text-base-content sm:col-start-5"
                         aria-hidden="true"
                       />
                     </button>

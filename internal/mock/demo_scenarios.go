@@ -1268,6 +1268,7 @@ func applyDemoHostScenario(state *models.StateSnapshot, now time.Time) {
 		if host.LastSeen.IsZero() || host.LastSeen.Before(now.Add(-2*time.Minute)) || host.LastSeen.After(now) {
 			host.LastSeen = demoRecentSeenAt(now, "host", host.ID, host.Hostname)
 		}
+		rebaseMockHostStandaloneVMTimestamps(host, now)
 	}
 }
 

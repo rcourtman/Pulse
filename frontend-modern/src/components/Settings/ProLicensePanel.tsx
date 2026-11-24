@@ -52,6 +52,12 @@ const ProLicenseHiddenPanel: Component = () => (
 
 const ProLicensePanelContent: Component = () => {
   const state = useProLicensePanelState();
+  const sectionTabs = [
+    {
+      value: 'plan',
+      label: SELF_HOSTED_PRO_BILLING_PRESENTATION.planTabLabel,
+    },
+  ];
 
   return (
     <div class="space-y-6">
@@ -72,17 +78,14 @@ const ProLicensePanelContent: Component = () => {
         loading={false}
       >
         <div class="space-y-6">
-          <Subtabs
-            value={state.activeSection()}
-            onChange={state.setActiveSection}
-            ariaLabel={SELF_HOSTED_PRO_BILLING_PRESENTATION.sectionSelectorAriaLabel}
-            tabs={[
-              {
-                value: 'plan',
-                label: SELF_HOSTED_PRO_BILLING_PRESENTATION.planTabLabel,
-              },
-            ]}
-          />
+          <Show when={sectionTabs.length > 1}>
+            <Subtabs
+              value={state.activeSection()}
+              onChange={state.setActiveSection}
+              ariaLabel={SELF_HOSTED_PRO_BILLING_PRESENTATION.sectionSelectorAriaLabel}
+              tabs={sectionTabs}
+            />
+          </Show>
 
           <Show when={state.activeSection() === 'plan'}>
             <CommercialSection

@@ -582,6 +582,100 @@ export function kubernetesResourceSearchHaystack(resource: Resource): string {
     .toLowerCase();
 }
 
+export type KubernetesEventSeverityFilter = 'all' | 'warning' | 'normal';
+export type KubernetesServiceCategoryFilter = 'all' | 'service' | 'ingress' | 'endpoint';
+export type KubernetesStorageKindFilter = 'all' | 'pvc' | 'pv' | 'storageclass';
+export type KubernetesConfigCategoryFilter = 'all' | 'namespace' | 'config' | 'access' | 'policy';
+
+const matchesKubernetesSearch = (
+  resource: Resource,
+  split: ReturnType<typeof splitSearchExclusions>,
+): boolean => {
+  if (split.needle.length === 0 && split.excludes.length === 0) return true;
+  return matchesSearchTermSplit(kubernetesResourceSearchHaystack(resource), split);
+};
+
+export function filterKubernetesEvents(
+  resources: Resource[],
+  search: string,
+  severity: KubernetesEventSeverityFilter,
+): Resource[] {
+  const split = splitSearchExclusions(search);
+  return resources.filter((resource) => {
+    if (severity !== 'all') {
+      const eventSeverity = mapKubernetesEventSeverity(resource.kubernetes?.eventType);
+      const isWarning = eventSeverity.variant === 'warning';
+      if (severity === 'warning' && !isWarning) return false;
+      if (severity === 'normal' && isWarning) return false;
+    }
+    return matchesKubernetesSearch(resource, split);
+  });
+}
+
+export function matchesKubernetesServiceCategory(
+  resource: Resource,
+  category: KubernetesServiceCategoryFilter,
+): boolean {
+  if (category === 'all') return true;
+  if (category === 'service') return resource.type === 'k8s-service';
+  if (category === 'ingress') return resource.type === 'k8s-ingress';
+  return resource.type === 'k8s-endpoint-slice';
+}
+
+export function filterKubernetesStorageResources(
+  resources: Resource[],
+  search: string,
+  kind: KubernetesStorageKindFilter,
+): Resource[] {
+  const split = splitSearchExclusions(search);
+  return resources.filter((resource) => {
+    if (kind === 'pvc' && resource.type !== 'k8s-persistent-volume-claim') return false;
+    if (kind === 'pv' && resource.type !== 'k8s-persistent-volume') return false;
+    if (kind === 'storageclass' && resource.type !== 'k8s-storage-class') return false;
+    return matchesKubernetesSearch(resource, split);
+  });
+}
+
+export function matchesKubernetesConfigCategory(
+  resource: Resource,
+  category: KubernetesConfigCategoryFilter,
+): boolean {
+  if (category === 'all') return true;
+  if (category === 'namespace') return resource.type === 'k8s-namespace';
+  if (category === 'config') {
+    return resource.type === 'k8s-configmap' || resource.type === 'k8s-secret';
+  }
+  if (category === 'access') {
+    return (
+      resource.type === 'k8s-serviceaccount' ||
+      resource.type === 'k8s-role' ||
+      resource.type === 'k8s-cluster-role' ||
+      resource.type === 'k8s-role-binding' ||
+      resource.type === 'k8s-cluster-role-binding'
+    );
+  }
+  return (
+    resource.type === 'k8s-network-policy' ||
+    resource.type === 'k8s-pod-disruption-budget' ||
+    resource.type === 'k8s-resource-quota' ||
+    resource.type === 'k8s-limit-range'
+  );
+}
+
+export function isKubernetesWorkloadAttention(resource: Resource): boolean {
+  const triad = mapResourceStatusToTriad(resource.status);
+  if (triad === 'degraded' || triad === 'offline') return true;
+  if (resource.type === 'pod') {
+    const variant = mapKubernetesPodStatus(resource).variant;
+    return variant === 'warning' || variant === 'danger';
+  }
+  if (resource.type === 'k8s-deployment') {
+    const variant = mapKubernetesDeploymentStatus(resource).variant;
+    return variant === 'warning' || variant === 'danger';
+  }
+  return false;
+}
+
 export function filterKubernetesResources(
   resources: Resource[],
   search: string,

@@ -8,6 +8,7 @@ import {
   createSignal,
   onCleanup,
   type Component,
+  type JSX,
 } from 'solid-js';
 import { createStore, reconcile } from 'solid-js/store';
 import RefreshCwIcon from 'lucide-solid/icons/refresh-cw';
@@ -350,6 +351,7 @@ export const AvailabilityFleetView: Component<{
   probeAgentOptions?: readonly ProbeAgentOption[];
   onRetryHistory?: () => void;
   getFocusFallback?: () => HTMLElement | undefined;
+  actions?: JSX.Element;
 }> = (props) => {
   const now = useRelativeTimeNow();
   const range = () => props.historyRange ?? '24h';
@@ -416,6 +418,7 @@ export const AvailabilityFleetView: Component<{
               />
             )}
           </Show>
+          {props.actions}
           <Show when={props.historyError}>
             <div class="flex items-center gap-2 text-rose-700 dark:text-rose-300">
               <span>History unavailable. Current health is unchanged.</span>

@@ -577,15 +577,25 @@ function coverageRestorePointDetails(artifact: RecoverableArtifact) {
               }),
               makeDetailRow('Location', artifact.location, { wrap: true }),
               ...artifactDateRows(artifact),
-              makeDetailRow('Size', formatPlatformTableBytesValue(artifact.size, 'Unknown size'), {
-                tone: hasSize() ? undefined : 'muted',
-              }),
+              makeDetailRow(
+                'Size',
+                hasSize()
+                  ? formatPlatformTableBytesValue(artifact.size)
+                  : artifact.running
+                    ? 'In progress'
+                    : 'Unknown size',
+                {
+                  tone: hasSize() ? undefined : 'muted',
+                },
+              ),
               makeDetailRow('Identifier', artifact.nativeId, { wrap: true }),
               makeDetailRow('Metadata', artifact.detailTitle || artifact.detail, { wrap: true }),
             ]),
             footerContent: hasSize() ? undefined : (
               <p class="whitespace-normal text-[11px] leading-snug text-muted wrap-anywhere">
-                No usable size was reported. Unknown does not mean this restore point is empty.
+                {artifact.running
+                  ? 'Size will be reported after the backup finishes.'
+                  : 'No usable size was reported. Unknown does not mean this restore point is empty.'}
               </p>
             ),
           },
@@ -621,7 +631,7 @@ export function ProxmoxCoverageTable(props: {
   // The task column auto-hides when no workload has task history. Per-source
   // ages (PBS snapshot, PVE file, guest snapshot) live in the row expansion.
   showTaskColumn: boolean;
-  /** Inventory or posture read is pending/failed; retained quality cannot confirm absence. */
+  /** A pending/failed inventory or posture read cannot establish the latest point or absence. */
   historyReadIncomplete?: boolean;
   /** Resolved restore-evidence filter; assessments and tasks remain workload-wide. */
   evidenceLocationLabel?: string;
@@ -826,6 +836,10 @@ export function ProxmoxCoverageTable(props: {
                     row.artifacts.filter((artifact) => artifact.createdMs === undefined).length;
                   const backupHistoryComplete = () =>
                     !props.historyReadIncomplete && hasCompleteBackupHistory(row);
+                  // Keep the observed age when evidence is missing or narrowed,
+                  // without calling it the latest backup across all locations.
+                  const backupAgeIsListedOnly = () =>
+                    Boolean(props.evidenceLocationLabel) || !backupHistoryComplete();
                   const detailRowId = () => `proxmox-coverage-evidence-${row.key}`;
                   const evidenceColumnCount = () =>
                     3 +
@@ -984,10 +998,18 @@ export function ProxmoxCoverageTable(props: {
                             }
                           >
                             {(artifact) => (
-                              <ProxmoxBackupAgeText
-                                artifact={artifact()}
-                                compact={layoutMode() === 'compact'}
-                              />
+                              <>
+                                <ProxmoxBackupAgeText
+                                  artifact={artifact()}
+                                  compact={layoutMode() === 'compact'}
+                                />
+                                <Show when={backupAgeIsListedOnly()}>
+                                  <span class="block text-[10px] leading-tight text-muted">
+                                    <span aria-hidden="true">Listed only</span>
+                                    <span class="sr-only">from the available list only</span>
+                                  </span>
+                                </Show>
+                              </>
                             )}
                           </Show>
                         </TableCell>
@@ -1094,12 +1116,16 @@ export function ProxmoxCoverageTable(props: {
                             <Show when={row.latestBackup}>
                               {(backup) => (
                                 <p
-                                  class="flex min-w-0 items-baseline gap-1.5 text-xs text-muted"
+                                  class="flex min-w-0 flex-wrap items-baseline gap-x-1.5 gap-y-0.5 text-xs text-muted"
                                   data-coverage-newest-backup
                                 >
-                                  <span class="shrink-0">Newest backup</span>
+                                  <span>
+                                    {backupAgeIsListedOnly()
+                                      ? 'Newest listed backup'
+                                      : 'Newest backup'}
+                                  </span>
                                   <ProxmoxBackupAgeText artifact={backup()} />
-                                  <span class="min-w-0 truncate text-base-content">
+                                  <span class="min-w-0 text-base-content wrap-anywhere">
                                     {backup().location}
                                   </span>
                                 </p>
@@ -1251,10 +1277,11 @@ export function ProxmoxCoverageTable(props: {
                                                 <TableCell
                                                   class={`${getPlatformTableCellClassForKind('numeric-value')} tabular-nums text-base-content`}
                                                 >
-                                                  {formatPlatformTableBytesValue(
-                                                    artifact.size,
-                                                    'Unknown size',
-                                                  )}
+                                                  {artifact.size && artifact.size > 0
+                                                    ? formatPlatformTableBytesValue(artifact.size)
+                                                    : artifact.running
+                                                      ? 'In progress'
+                                                      : 'Unknown size'}
                                                 </TableCell>
                                               </Show>
                                               <TableCell

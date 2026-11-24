@@ -85,7 +85,7 @@ describe('buildBackupVerdict', () => {
     expect(verdict.tone).toBe('attention');
   });
 
-  it('leaves checking, not-evaluated and orphaned rows out of the rating', () => {
+  it('leaves checking, not-evaluated and orphaned rows out of a qualified rating', () => {
     const verdict = buildBackupVerdict(
       [
         row('a', 'protected', 'recent'),
@@ -96,12 +96,48 @@ describe('buildBackupVerdict', () => {
       protectionPolicy,
     );
     expect(verdict).toMatchObject({
-      headline: '1 of 1 protected',
+      headline: '1 of 1 rated workload protected',
+      tone: 'checking',
       rated: 1,
       checking: 1,
       notEvaluated: 1,
       exceptions: [],
     });
+  });
+
+  it('does not give an all-clear while a host backup has not been evaluated', () => {
+    const verdict = buildBackupVerdict(
+      [
+        row('a', 'protected', 'recent'),
+        row('b', 'protected', 'recent'),
+        row('host', 'not-evaluated'),
+      ],
+      protectionPolicy,
+    );
+    expect(verdict).toMatchObject({
+      headline: '2 of 2 rated workloads protected',
+      tone: 'unknown',
+      notEvaluated: 1,
+      exceptions: [],
+    });
+  });
+
+  it('keeps the worst assessed result when the rating also excludes workloads', () => {
+    const verdict = buildBackupVerdict(
+      [
+        row('a', 'protected', 'recent'),
+        row('b', 'unprotected', 'no-backup'),
+        row('c', 'unknown', 'history-unreadable'),
+        row('d', 'checking'),
+        row('host', 'not-evaluated'),
+      ],
+      protectionPolicy,
+    );
+    expect(verdict).toMatchObject({
+      headline: '1 of 3 rated workloads protected',
+      tone: 'unprotected',
+    });
+    expect(verdict.exceptions.map(({ key }) => key)).toEqual(['no-backup', 'history-unreadable']);
   });
 
   it('says it is still checking before any assessment arrives', () => {

@@ -1,4 +1,5 @@
 import { For, Show, createMemo, type Component, type JSX } from 'solid-js';
+import { InlineNotice } from '@/components/shared/InlineNotice';
 import { StatusDot } from '@/components/shared/StatusDot';
 import { TableCell, TableHead, TableRow } from '@/components/shared/Table';
 import { getSimpleStatusIndicator, type StatusIndicator } from '@/utils/status';
@@ -36,8 +37,73 @@ import {
   PlatformResourceDetailToggleButton,
 } from '@/features/platformPage/PlatformResourceDetailTableRow';
 import type { Resource } from '@/types/resource';
+import { describeMailGatewayDegradation } from './ProxmoxMailGatewayDrawer';
 
 type MailGatewayAlertColumn = 'queue' | 'deferred' | 'quarantine' | 'spam' | 'virus';
+
+type PMGQuarantineLike =
+  | number
+  | {
+      spam?: number;
+      virus?: number;
+      attachment?: number;
+      blacklisted?: number;
+    };
+
+type PMGPayloadLike = {
+  mailCountTotal?: number;
+  mailStats?: {
+    countIn?: number;
+    countOut?: number;
+    countTotal?: number;
+  };
+  quarantine?: PMGQuarantineLike;
+};
+
+const readPmgPayload = (resource: Resource): PMGPayloadLike | undefined => {
+  const direct = resource.pmg as (Resource['pmg'] & PMGPayloadLike) | undefined;
+  const fallback = (resource.platformData as { pmg?: PMGPayloadLike } | undefined)?.pmg;
+  if (!direct) return fallback;
+  if (!fallback) return direct;
+  return {
+    ...fallback,
+    ...direct,
+    mailStats: direct.mailStats ?? fallback.mailStats,
+    quarantine: direct.quarantine ?? fallback.quarantine,
+  };
+};
+
+// The table column is "Mail in", matching the Mail tab's "Mail in / out" row.
+// Prefer mailStats.countIn when present on the unified PMG resource so the row
+// agrees with its expanded drawer, falling back to mailCountTotal only for
+// slim payloads that do not carry mailStats.
+export const resolveMailGatewayMailIn = (resource: Resource): number | undefined => {
+  const payload = readPmgPayload(resource);
+  const countIn = payload?.mailStats?.countIn;
+  if (typeof countIn === 'number' && Number.isFinite(countIn)) return countIn;
+  const total = payload?.mailCountTotal;
+  return typeof total === 'number' && Number.isFinite(total) ? total : undefined;
+};
+
+// Unified PMG resources emit `quarantine` as a category breakdown object
+// ({ spam, virus, attachment, blacklisted }) while older fixtures may pass a
+// pre-summed number. Resolve both into the total quarantined item count so the
+// row matches the Quarantine card in the drawer.
+export const resolveMailGatewayQuarantineTotal = (resource: Resource): number | undefined => {
+  const quarantine = readPmgPayload(resource)?.quarantine;
+  if (typeof quarantine === 'number') {
+    return Number.isFinite(quarantine) ? quarantine : undefined;
+  }
+  if (!quarantine || typeof quarantine !== 'object') return undefined;
+  const values = [
+    quarantine.spam,
+    quarantine.virus,
+    quarantine.attachment,
+    quarantine.blacklisted,
+  ].filter((value): value is number => typeof value === 'number' && Number.isFinite(value));
+  if (values.length === 0) return undefined;
+  return values.reduce((sum, value) => sum + value, 0);
+};
 
 // Each mail gateway alert is about one number in the row, so that number
 // carries it: coloured, with the alert on hover and for screen readers. The
@@ -333,13 +399,13 @@ export const ProxmoxMailGatewayTable: Component<{
                   <TableHead
                     class={`${getPlatformTableHeadClassForKind('numeric-value')} platform-table-mobile-w-15`}
                   >
-                    {layout() === 'compact' ? 'Age' : 'Uptime'}
+                    Uptime
                   </TableHead>
                 </Show>
                 <TableHead
                   class={`${getPlatformTableHeadClassForKind('numeric-value')} platform-table-mobile-w-15`}
                 >
-                  <PlatformResponsiveTableLabel compact="In" full="Mail in" />
+                  <PlatformResponsiveTableLabel compact="Mail" full="Mail in" />
                 </TableHead>
                 <Show when={showOperational()}>
                   <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>
@@ -359,12 +425,12 @@ export const ProxmoxMailGatewayTable: Component<{
                 <TableHead
                   class={`${getPlatformTableHeadClassForKind('numeric-value')} platform-table-mobile-w-15`}
                 >
-                  <PlatformResponsiveTableLabel compact="Q" full="Queue" />
+                  <PlatformResponsiveTableLabel compact="Queue" full="Queue" />
                 </TableHead>
                 <TableHead
                   class={`${getPlatformTableHeadClassForKind('numeric-value')} platform-table-mobile-w-10`}
                 >
-                  <PlatformResponsiveTableLabel compact="Def" full="Deferred" />
+                  <PlatformResponsiveTableLabel compact="Defer" full="Deferred" />
                 </TableHead>
               </>
             }
@@ -457,7 +523,7 @@ export const ProxmoxMailGatewayTable: Component<{
                             class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
                           >
                             <PlatformTableNumberValue
-                              value={pmg()?.mailCountTotal}
+                              value={resolveMailGatewayMailIn(instance)}
                               format={formatPlatformTableIntegerValue}
                             />
                           </TableCell>
@@ -494,7 +560,7 @@ export const ProxmoxMailGatewayTable: Component<{
                                 column="quarantine"
                               >
                                 <PlatformTableNumberValue
-                                  value={pmg()?.quarantine}
+                                  value={resolveMailGatewayQuarantineTotal(instance)}
                                   format={formatPlatformTableIntegerValue}
                                 />
                               </AlertedMetric>
@@ -528,6 +594,21 @@ export const ProxmoxMailGatewayTable: Component<{
                           detailRowId={detailRowId()}
                           colSpan={visibleColumnCount()}
                           onClose={() => detail.close(instance)}
+                          context={
+                            <Show
+                              when={
+                                rowAlerts().length === 0 &&
+                                describeMailGatewayDegradation(instance).length > 0
+                              }
+                            >
+                              <div class="mb-3" data-testid="pmg-drawer-degradation-context">
+                                <InlineNotice tone="warning" role="status">
+                                  <span class="font-medium">Why degraded:</span>{' '}
+                                  {describeMailGatewayDegradation(instance).join(' ')}
+                                </InlineNotice>
+                              </div>
+                            </Show>
+                          }
                         />
                       </>
                     );

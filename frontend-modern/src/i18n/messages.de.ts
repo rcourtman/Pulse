@@ -493,7 +493,7 @@ export const DE_MESSAGE_OVERRIDES = {
     'Pruefen Sie den Live-Pulse-Logstream und laden Sie den erfassten Puffer fuer Supportarbeit herunter.',
   'settings.header.supportLogs.title': 'Systemprotokolle',
   'settings.header.supportReporting.description':
-    'Exportieren Sie Inventardaten und erstellen Sie Leistungsberichte aus der kanonischen Einstellungsoberflaeche.',
+    'Exportieren Sie Inventardaten und erstellen Sie Leistungsberichte.',
   'settings.header.supportReporting.title': 'Daten & Berichte',
   'settings.nav.group.infrastructure': 'Infrastruktur',
   'settings.nav.group.monitoring': 'Monitoring',

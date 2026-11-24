@@ -47,6 +47,7 @@ TERMINAL_FAILURES = {
     "timed_out",
 }
 RETRYABLE_API_READS = frozenset({"http-502", "http-503", "http-504", "peer-cancel"})
+PUBLIC_RELEASE_INVENTORY = "repos/rcourtman/Pulse/releases"
 
 
 class ReconciliationError(ValueError):
@@ -248,6 +249,7 @@ class GitHub:
         token: str = "",
         retry_read: bool = False,
         read_subject: str | None = None,
+        inventory_transport_recovery: bool = False,
     ) -> str:
         env = None
         if token:
@@ -255,7 +257,19 @@ class GitHub:
             env["GH_TOKEN"] = token
         # Only api()/pages() opt in: never replay an uncertain mutation,
         # download, log-reader refusal, or authentication/authorisation failure.
+        peer_cancelled = False
         for attempt in range(3 if retry_read else 1):
+            if attempt == 2 and inventory_transport_recovery and peer_cancelled:
+                # Preserve the same gh GET, identity, TLS and full page set.
+                # Only the existing last attempt may avoid HTTP/2 framing.
+                env = (os.environ if env is None else env).copy()
+                debug = env.get("GODEBUG")
+                env["GODEBUG"] = f"{debug},http2client=0" if debug else "http2client=0"
+                print(
+                    "Requesting HTTP/1.1 for the final GitHub release inventory read "
+                    "after a peer stream cancellation.",
+                    file=sys.stderr,
+                )
             result = subprocess.run(
                 [self.gh, *arguments],
                 check=False,
@@ -269,6 +283,7 @@ class GitHub:
             )
             if attempt == 2 or failure not in RETRYABLE_API_READS:
                 break
+            peer_cancelled |= failure == "peer-cancel"
             print(
                 f"Transient GitHub API read failure; retry {attempt + 1}/2.",
                 file=sys.stderr,
@@ -312,6 +327,7 @@ class GitHub:
         output = self._run(
             ["api", "--paginate", endpoint], token=token, retry_read=True,
             read_subject=api_read_subject(endpoint),
+            inventory_transport_recovery=(endpoint.partition("?")[0] == PUBLIC_RELEASE_INVENTORY),
         )
         decoder = json.JSONDecoder()
         value: list[object] = []

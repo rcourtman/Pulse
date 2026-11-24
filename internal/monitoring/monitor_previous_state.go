@@ -161,6 +161,7 @@ func previousVMFromView(vm *unifiedresources.VMView) models.VM {
 			Usage: vm.DiskPercent(),
 		}
 	}
+	disks, interfaces := vm.ProxmoxPollInventory()
 	return models.VM{
 		ID:                 makeGuestID(instance, node, vmid),
 		Instance:           instance,
@@ -175,8 +176,8 @@ func previousVMFromView(vm *unifiedresources.VMView) models.VM {
 		AgentVersion:       vm.AgentVersion(),
 		Lock:               vm.Lock(),
 		Disk:               disk,
-		NetworkInterfaces:  guestNetworkInterfacesFromReadStateView(vm.NetworkInterfaces()),
-		Disks:              guestDisksFromReadStateView(vm.Disks()),
+		NetworkInterfaces:  interfaces,
+		Disks:              disks,
 		DiskStatusReason:   vm.DiskStatusReason(),
 		DiskObservation:    vm.DiskObservation(),
 		GuestAgentEvidence: vm.GuestAgentEvidence(),
@@ -191,6 +192,7 @@ func previousContainerFromView(ct *unifiedresources.ContainerView) models.Contai
 	instance := ct.Instance()
 	node := ct.Node()
 	vmid := ct.VMID()
+	disks, interfaces := ct.ProxmoxPollInventory()
 	return models.Container{
 		ID:                makeGuestID(instance, node, vmid),
 		Instance:          instance,
@@ -202,12 +204,12 @@ func previousContainerFromView(ct *unifiedresources.ContainerView) models.Contai
 		IsOCI:             ct.IsOCI(),
 		LastSeen:          ct.LastSeen(),
 		IPAddresses:       ct.IPAddresses(),
-		NetworkInterfaces: guestNetworkInterfacesFromReadStateView(ct.NetworkInterfaces()),
+		NetworkInterfaces: interfaces,
 		OSName:            ct.OSName(),
 		OSTemplate:        ct.OSTemplate(),
 		HasDocker:         ct.HasDocker(),
 		DockerCheckedAt:   ct.DockerCheckedAt(),
-		Disks:             guestDisksFromReadStateView(ct.Disks()),
+		Disks:             disks,
 		Lock:              ct.Lock(),
 		Memory: models.Memory{
 			Used:  ct.MemoryUsed(),

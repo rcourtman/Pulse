@@ -1759,14 +1759,14 @@ describe('Docker native tables', () => {
             type: 'docker-volume',
             name: 'app-data',
             status: 'online',
-            docker: { driver: 'local' },
+            docker: { driver: 'local', refCount: 2 },
           }),
           makeResource({
             id: 'volume-cache',
             type: 'docker-volume',
             name: 'cache-data',
-            status: 'offline',
-            docker: { driver: 'local' },
+            status: 'online',
+            docker: { driver: 'local', refCount: 0 },
           }),
         ]}
         emptyIcon={<span />}
@@ -1777,7 +1777,7 @@ describe('Docker native tables', () => {
 
     expect(document.querySelectorAll('[data-docker-volume-row]')).toHaveLength(2);
 
-    fireEvent.click(screen.getByRole('button', { name: /^Offline, \d+$/ }));
+    fireEvent.click(screen.getByRole('button', { name: /^Unused, \d+$/ }));
 
     expect(screen.getByText('1 of 2 volumes')).toBeInTheDocument();
     expect(document.querySelector('[data-docker-volume-row="volume-cache"]')).not.toBeNull();
@@ -2013,11 +2013,10 @@ describe('Docker native tables', () => {
     expect(networkCells[0].querySelector('[title="2 need attention"]')).not.toBeNull();
     expect(networkCells[0].querySelector('[title="Online"]')).toBeNull();
     expect(networkCells[2].querySelectorAll('[title]')).toHaveLength(1);
-    // The health filter reads the same verdict: degraded, not healthy, and not
-    // offline, since the network itself is up.
+    // The domain filter reads the same verdict: Attention, not In use or Unused.
     const networkFilters = within(screen.getByRole('group', { name: 'Status' }));
-    expect(networkFilters.getByRole('button', { name: /^Degraded, 1$/ })).toBeInTheDocument();
-    expect(networkFilters.queryByRole('button', { name: /^Healthy, 1$/ })).toBeNull();
+    expect(networkFilters.getByRole('button', { name: /^Attention, 1$/ })).toBeInTheDocument();
+    expect(networkFilters.queryByRole('button', { name: /^In use, 1$/ })).toBeNull();
 
     fireEvent.click(document.querySelector('[data-docker-network-row="network-dense"]')!);
 

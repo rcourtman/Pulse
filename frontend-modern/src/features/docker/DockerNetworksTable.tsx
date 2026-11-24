@@ -9,8 +9,8 @@ import { InlineNotice } from '@/components/shared/InlineNotice';
 import { InlineDetailTableRow } from '@/components/shared/InlineDetailTableRow';
 import { StatusDot } from '@/components/shared/StatusDot';
 import { TableCell, TableHead, TableRow } from '@/components/shared/Table';
+import { filterChipStatusDot } from '@/components/shared/FilterBar';
 import {
-  PLATFORM_HEALTH_FILTER_OPTIONS,
   PlatformResponsiveTableLabel,
   type PlatformTableFilterOption,
   PlatformTableEmptyState,
@@ -50,8 +50,30 @@ import {
   dockerContainerRunState,
   dockerResourceSearchHaystack,
   type DockerNetworkAttachmentRow,
-  type DockerResourceStatusFilter,
 } from './dockerPageModel';
+
+type DockerNetworkFilter = 'all' | 'attention' | 'in-use' | 'unused';
+
+const DOCKER_NETWORK_FILTER_OPTIONS: PlatformTableFilterOption<DockerNetworkFilter>[] = [
+  { value: 'all', label: 'All' },
+  {
+    value: 'attention',
+    label: 'Attention',
+    tone: 'warning',
+    leading: filterChipStatusDot('bg-amber-500'),
+  },
+  {
+    value: 'in-use',
+    label: 'In use',
+    tone: 'success',
+    leading: filterChipStatusDot('bg-emerald-500'),
+  },
+  {
+    value: 'unused',
+    label: 'Unused',
+    leading: filterChipStatusDot('bg-slate-400'),
+  },
+];
 import type { Resource } from '@/types/resource';
 
 type DockerNetworksTableProps = DockerNativeTableProps & {
@@ -230,12 +252,8 @@ const networkRowIndicator = (resource: Resource, attention: StatusIndicator): St
     : own;
 };
 
-const networkRowHealth = (indicator: StatusIndicator): DockerResourceStatusFilter | 'unknown' => {
-  if (indicator.variant === 'success') return 'online';
-  if (indicator.variant === 'warning') return 'degraded';
-  if (indicator.variant === 'danger') return 'offline';
-  return 'unknown';
-};
+const isNetworkRowAttention = (indicator: StatusIndicator): boolean =>
+  indicator.variant === 'warning' || indicator.variant === 'danger';
 
 // The network's own configuration, below the containers on it: what an
 // operator copies (the ID, subnets, gateways) wraps in full.
@@ -511,13 +529,17 @@ export const DockerNetworksTable: Component<DockerNetworksTableProps> = (props) 
   const filterNetworks = (
     resources: Resource[],
     search: string,
-    status: DockerResourceStatusFilter,
+    filter: DockerNetworkFilter,
   ): Resource[] => {
     const needle = search.trim().toLowerCase();
     return resources.filter((resource) => {
-      if (status !== 'all') {
-        const attention = attachmentAttention(networkAttachments(resource));
-        if (networkRowHealth(networkRowIndicator(resource, attention)) !== status) return false;
+      if (filter !== 'all') {
+        const attachments = networkAttachments(resource);
+        const attention = attachmentAttention(attachments);
+        const hasAttention = isNetworkRowAttention(networkRowIndicator(resource, attention));
+        if (filter === 'attention' && !hasAttention) return false;
+        if (filter === 'in-use' && (hasAttention || attachments.length === 0)) return false;
+        if (filter === 'unused' && (hasAttention || attachments.length > 0)) return false;
       }
       if (!needle) return true;
       if (dockerResourceSearchHaystack(resource).includes(needle)) return true;
@@ -527,7 +549,7 @@ export const DockerNetworksTable: Component<DockerNetworksTableProps> = (props) 
 
   const tableState = createPlatformTableFilterState({
     resources: () => props.resources,
-    initialStatus: 'all' as DockerResourceStatusFilter,
+    initialStatus: 'all' as DockerNetworkFilter,
     filter: filterNetworks,
   });
   const drawer = createPlatformResourceDetailState({ idPrefix: 'docker-network-drawer' });
@@ -565,7 +587,7 @@ export const DockerNetworksTable: Component<DockerNetworksTableProps> = (props) 
             status={tableState.status()}
             onStatusChange={tableState.setStatus}
             statusOptions={withPlatformStatusCounts(
-              PLATFORM_HEALTH_FILTER_OPTIONS,
+              DOCKER_NETWORK_FILTER_OPTIONS,
               tableState.countForStatus,
             )}
             visible={tableState.visible()}

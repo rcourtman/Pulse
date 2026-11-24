@@ -1,0 +1,92 @@
+{
+  "version": 1,
+  "base_sha": "f3ab36fd2181085ec4ea78384704880f7084ff06",
+  "verified_at": "2026-11-23T20:58:40Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/AuditLogPanel.tsx",
+    "frontend-modern/src/components/Settings/AvailabilitySettingsPanel.tsx",
+    "frontend-modern/src/components/Settings/ConnectionEditor/CredentialSlots/AvailabilityTargetSlot.tsx",
+    "frontend-modern/src/components/Settings/DiagnosticsPanel.tsx",
+    "frontend-modern/src/components/Settings/InfrastructureSourceManager.tsx",
+    "frontend-modern/src/components/Settings/ProLicensePanel.tsx",
+    "frontend-modern/src/components/Settings/Settings.tsx",
+    "frontend-modern/src/components/Settings/SettingsPageShell.tsx",
+    "frontend-modern/src/components/Settings/SystemLogsPanel.tsx",
+    "frontend-modern/src/components/Settings/diagnosticsModel.ts",
+    "frontend-modern/src/components/Settings/settingsHeaderMeta.ts",
+    "frontend-modern/src/components/Settings/settingsNavCatalog.ts",
+    "frontend-modern/src/components/Settings/settingsNavigationModel.ts",
+    "frontend-modern/src/components/Settings/useSettingsNavigation.ts",
+    "frontend-modern/src/components/icons/PulseLogoIcon.tsx",
+    "frontend-modern/src/i18n/messages.de.ts",
+    "frontend-modern/src/i18n/messages.es.ts",
+    "frontend-modern/src/i18n/messages.ts",
+    "frontend-modern/src/pages/Docs.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/AuditLogPanel.tsx": "4ae0a39f189aef6308da5c58a3e6ca0a1aec2175836b355b70d385f2fe40f4e4",
+    "frontend-modern/src/components/Settings/AvailabilitySettingsPanel.tsx": "c79d1fb71b38b4bfb7a3940763b466d75ebba6e66c14860b84955de9509cd6d0",
+    "frontend-modern/src/components/Settings/ConnectionEditor/CredentialSlots/AvailabilityTargetSlot.tsx": "7ada96931a5dd98c52787f8b02a34af2eda92348c892647e2a38002f69ee60c3",
+    "frontend-modern/src/components/Settings/DiagnosticsPanel.tsx": "751a4144d4a1638df4d9c93d606868e2a89f480ef478f26e3387a0f840636980",
+    "frontend-modern/src/components/Settings/InfrastructureSourceManager.tsx": "10056eff7fed0b5c4729d9db4c61fd20a3806de03b7d5f5d35bf680d96fd20cb",
+    "frontend-modern/src/components/Settings/ProLicensePanel.tsx": "1a7af80be6612f9e7d080516badf82b2b93b7bd7040c22bb74a63b840629abe3",
+    "frontend-modern/src/components/Settings/Settings.tsx": "651bd4714bacf814aecec94646dd35a61d37f4a7ba32f636182cc3fcce3534c3",
+    "frontend-modern/src/components/Settings/SettingsPageShell.tsx": "5e7927936f9ee8aa96633d7612775ce4d312825ae3ff58fbd4f164d53db4f795",
+    "frontend-modern/src/components/Settings/SystemLogsPanel.tsx": "567f65e5ed3a4670e7f762c945c47dcc57ec6effd83c11e7970305bbd3f2ff69",
+    "frontend-modern/src/components/Settings/diagnosticsModel.ts": "937f3109eb1ddafa508aca3e7e403621a0a8f034c9eed6924072872f56b5bcad",
+    "frontend-modern/src/components/Settings/settingsHeaderMeta.ts": "e1f4656a1c779b3fde562a8d322f685b6d3daeee5f0634672b81185c4219cfbf",
+    "frontend-modern/src/components/Settings/settingsNavCatalog.ts": "b86fafbf22eca8c344d99aa78874b1a9717955f37cfc84684558b94cb51f3c21",
+    "frontend-modern/src/components/Settings/settingsNavigationModel.ts": "d27d1a48ecd882e931d33b90f3f5e4f3e8ad498007ea634e7705d97a4451e19d",
+    "frontend-modern/src/components/Settings/useSettingsNavigation.ts": "e9e8b0e2ba59b9e35a4a104d6e1eacd7ffdd0572a87d03cd4bc90293c10cb212",
+    "frontend-modern/src/components/icons/PulseLogoIcon.tsx": "9c8235ea9a2f33ae1c2e6076c3aa93364aff8a86012e9c64ec2d3d31d40281e1",
+    "frontend-modern/src/i18n/messages.de.ts": "25e3c7740f8f7d87e6350c8d3d71fa3ecea25dca1610e4e86cc717c5ac1fb6ec",
+    "frontend-modern/src/i18n/messages.es.ts": "31a14b0ffe20703e4011f0dd81ffcb3146526f64273c821e7322b603de0e824f",
+    "frontend-modern/src/i18n/messages.ts": "f34effb07bda5c2f8ffb7f2fb243a4415a07509ac822059ffb8d1cc859c85f24",
+    "frontend-modern/src/pages/Docs.tsx": "f3d2e5ca5d18be5f3c77bb3a08a3016736753830bf7ba2a7c6b9bb06e3e5f8a6"
+  },
+  "routes": [
+    "/settings/infrastructure",
+    "/settings/security-sso",
+    "/settings/api",
+    "/settings/security/api",
+    "/settings/pulse-intelligence/billing/plan",
+    "/settings/monitoring/availability",
+    "/settings/support/diagnostics",
+    "/settings/support/logs",
+    "/docs",
+    "/docs/TROUBLESHOOTING.md",
+    "/docs/TROUBLESHOOTING"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "desktop dark mode and light mode",
+    "mobile 390x844 settings navigation drawer open and scrolled to bottom",
+    "infrastructure connected systems list (71 systems) filtered and unfiltered with Discovery band above table",
+    "availability check add modal opened, switched to HTTPS, and scrolled midway with footer outside scroll container",
+    "diagnostics panel after running diagnostics with integer uptime and styled guide link",
+    "system logs viewer in light mode with dark terminal contrast and live filter input",
+    "docs index with guide filter and rendered troubleshooting guide with sticky desktop and collapsible mobile table of contents"
+  ],
+  "interactions": [
+    "scrolled .app-scroll-shell to 600px and clicked Single Sign-On, confirming scrollTop reset to 0",
+    "searched sso and dark in Settings sidebar and verified Single Sign-On and General matched",
+    "filtered 71 connected infrastructure systems with pve (48 matches) and cleared with Escape",
+    "navigated to /settings/api and verified canonical redirect to /settings/security/api",
+    "opened Plans & Billing and confirmed single-tab Plan bar is hidden and sidebar button name is Plans & Billing",
+    "opened Add service/device check modal, selected HTTPS, scrolled body to 260px, confirmed 0px footer bleed, and closed with Escape",
+    "ran Diagnostics and verified integer uptime (38s) and styled blue link",
+    "switched System Logs to light theme and verified dark-surface dividers, hover classes, and filter input",
+    "filtered /docs index with proxmox (5 of 54 guides), navigated to /docs/TROUBLESHOOTING.md and verified normalization to /docs/TROUBLESHOOTING with Back to Pulse link and 27-item ToC",
+    "opened mobile Settings navigation at 390x844, scrolled to bottom, confirmed Recovery and Single Sign-On clear MobileNavBar, and toggled mobile Docs ToC with zero horizontal overflow"
+  ]
+}

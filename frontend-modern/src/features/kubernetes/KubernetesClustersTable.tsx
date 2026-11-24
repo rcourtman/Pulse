@@ -206,34 +206,10 @@ export const KubernetesClustersTable: Component<{
                   <PlatformResponsiveTableLabel compact="Ver" full="Version" />
                 </PlatformSortableTableHead>
                 <PlatformSortableTableHead
-                  kind="numeric-value"
-                  sort={sort}
-                  sortKey="nodes"
-                  class="platform-table-mobile-w-10 md:w-[8%]"
-                >
-                  <PlatformResponsiveTableLabel compact="Nds" full="Nodes" />
-                </PlatformSortableTableHead>
-                <PlatformSortableTableHead
-                  kind="numeric-value"
-                  sort={sort}
-                  sortKey="pods"
-                  class="platform-table-mobile-w-10 md:w-[8%] platform-table-narrow-hidden"
-                >
-                  Pods
-                </PlatformSortableTableHead>
-                <PlatformSortableTableHead
-                  kind="numeric-value"
-                  sort={sort}
-                  sortKey="deployments"
-                  class="hidden md:table-cell md:w-[12%]"
-                >
-                  Deployments
-                </PlatformSortableTableHead>
-                <PlatformSortableTableHead
                   kind="metric-bar"
                   sort={sort}
                   sortKey="cpu"
-                  class="platform-table-mobile-w-15 md:w-[15%]"
+                  class="platform-table-mobile-w-20 md:w-[15%]"
                 >
                   CPU
                 </PlatformSortableTableHead>
@@ -244,6 +220,30 @@ export const KubernetesClustersTable: Component<{
                   class="platform-table-mobile-w-20 md:w-[15%]"
                 >
                   <PlatformResponsiveTableLabel compact="Mem" full="Memory" />
+                </PlatformSortableTableHead>
+                <PlatformSortableTableHead
+                  kind="numeric-value"
+                  sort={sort}
+                  sortKey="nodes"
+                  class="platform-table-mobile-w-15 md:w-[8%]"
+                >
+                  <PlatformResponsiveTableLabel compact="Nds" full="Nodes" />
+                </PlatformSortableTableHead>
+                <PlatformSortableTableHead
+                  kind="numeric-value"
+                  sort={sort}
+                  sortKey="pods"
+                  class="platform-table-mobile-w-15 md:w-[8%] platform-table-narrow-hidden"
+                >
+                  Pods
+                </PlatformSortableTableHead>
+                <PlatformSortableTableHead
+                  kind="numeric-value"
+                  sort={sort}
+                  sortKey="deployments"
+                  class="hidden md:table-cell md:w-[12%]"
+                >
+                  Deployments
                 </PlatformSortableTableHead>
               </>
             }
@@ -359,6 +359,34 @@ export const KubernetesClustersTable: Component<{
                             </span>
                           </TableCell>
                           <TableCell
+                            class={`${getPlatformTableCellClassForKind('metric-bar')} w-[20%] md:w-auto`}
+                          >
+                            <ResponsiveMetricCell
+                              class="w-full"
+                              value={cpuPercent() ?? 0}
+                              type="cpu"
+                              resourceId={metricsKey()}
+                              isRunning={canRenderMetrics() && cpuPercent() !== undefined}
+                              showMobile={false}
+                              thresholds={cpuThresholds()}
+                            />
+                          </TableCell>
+                          <TableCell
+                            class={`${getPlatformTableCellClassForKind('metric-bar')} w-[20%] md:w-auto`}
+                          >
+                            <Show
+                              when={canRenderMetrics() && hasMemoryMetric()}
+                              fallback={<PlatformTableMetricFallback />}
+                            >
+                              <StackedMemoryBar
+                                used={memoryUsed()}
+                                total={memoryTotal()}
+                                percentOnly={memoryPercentOnly()}
+                                thresholds={memoryThresholds()}
+                              />
+                            </Show>
+                          </TableCell>
+                          <TableCell
                             class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
                           >
                             <PlatformTableCountRatioValue
@@ -386,34 +414,6 @@ export const KubernetesClustersTable: Component<{
                                 counts().deployments.attention > 0 ? 'warning' : undefined
                               }
                             />
-                          </TableCell>
-                          <TableCell
-                            class={`${getPlatformTableCellClassForKind('metric-bar')} w-[20%] md:w-auto`}
-                          >
-                            <ResponsiveMetricCell
-                              class="w-full"
-                              value={cpuPercent() ?? 0}
-                              type="cpu"
-                              resourceId={metricsKey()}
-                              isRunning={canRenderMetrics() && cpuPercent() !== undefined}
-                              showMobile={false}
-                              thresholds={cpuThresholds()}
-                            />
-                          </TableCell>
-                          <TableCell
-                            class={`${getPlatformTableCellClassForKind('metric-bar')} w-[20%] md:w-auto`}
-                          >
-                            <Show
-                              when={canRenderMetrics() && hasMemoryMetric()}
-                              fallback={<PlatformTableMetricFallback />}
-                            >
-                              <StackedMemoryBar
-                                used={memoryUsed()}
-                                total={memoryTotal()}
-                                percentOnly={memoryPercentOnly()}
-                                thresholds={memoryThresholds()}
-                              />
-                            </Show>
                           </TableCell>
                         </TableRow>
                         <PlatformResourceDetailTableRow

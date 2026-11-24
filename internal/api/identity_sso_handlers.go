@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"net/url"
 	"regexp"
+	"slices"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -33,6 +34,29 @@ const (
 )
 
 var errSSOProviderManaged = errors.New("provider is managed by OIDC environment variables")
+var errSSOOIDCOpenIDScopeRequired = errors.New("Include openid in Scopes, or clear Scopes to use the defaults. Nothing was saved.")
+
+// Validate the selection at the Community write boundary, not on load or
+// sign-in. Existing malformed selections can be left alone or disabled.
+func validateSSOOIDCScopeWrite(next, previous *config.SSOProvider) error {
+	if !next.Enabled || next.Type != config.SSOProviderTypeOIDC || next.OIDC == nil || len(next.OIDC.Scopes) == 0 {
+		return nil // An empty list uses the existing OpenID Connect defaults.
+	}
+	if previous != nil && previous.Enabled && previous.Type == next.Type && previous.OIDC != nil &&
+		slices.Equal(previous.OIDC.Scopes, next.OIDC.Scopes) {
+		return nil // An already enabled legacy provider can round-trip unchanged.
+	}
+	// The OAuth client joins entries with ASCII spaces. Check exact tokens
+	// as sent (not substrings, case-folded values or other whitespace).
+	for _, entry := range next.OIDC.Scopes {
+		for token := range strings.SplitSeq(entry, " ") {
+			if token == "openid" {
+				return nil
+			}
+		}
+	}
+	return errSSOOIDCOpenIDScopeRequired
+}
 
 // providerIDRegex validates provider IDs (alphanumeric, hyphens, underscores)
 var providerIDRegex = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9_-]{0,62}[a-zA-Z0-9]?$`)
@@ -462,6 +486,10 @@ func (r *Router) handleCreateSSOProvider(w http.ResponseWriter, req *http.Reques
 		writeErrorResponse(w, http.StatusConflict, "duplicate_id", "Provider with this ID already exists", nil)
 		return
 	}
+	if err := validateSSOOIDCScopeWrite(&provider, nil); err != nil {
+		writeErrorResponse(w, http.StatusBadRequest, "validation_error", err.Error(), nil)
+		return
+	}
 
 	// Add and persist the provider; nothing is published if either step fails.
 	addErr, saveErr := r.commitSSOConfig(func(cfg *config.SSOConfig) error {
@@ -590,6 +618,9 @@ func (r *Router) handleUpdateSSOProvider(w http.ResponseWriter, req *http.Reques
 		if err := mergeSSOProviderUpdate(data, &updated, current); err != nil {
 			return err
 		}
+		if err := validateSSOOIDCScopeWrite(&updated, current); err != nil {
+			return err
+		}
 		// UpdateProvider replaces the slice element current points at. Retain
 		// its prior value for the post-commit service lifecycle comparison.
 		existing = &previous
@@ -598,6 +629,10 @@ func (r *Router) handleUpdateSSOProvider(w http.ResponseWriter, req *http.Reques
 	if updateErr != nil {
 		if errors.Is(updateErr, errSSOProviderManaged) {
 			writeErrorResponse(w, http.StatusConflict, "provider_managed_by_environment", "Provider is managed by OIDC environment variables", nil)
+			return
+		}
+		if errors.Is(updateErr, errSSOOIDCOpenIDScopeRequired) {
+			writeErrorResponse(w, http.StatusBadRequest, "validation_error", updateErr.Error(), nil)
 			return
 		}
 		writeErrorResponse(w, http.StatusBadRequest, "update_error", updateErr.Error(), nil)

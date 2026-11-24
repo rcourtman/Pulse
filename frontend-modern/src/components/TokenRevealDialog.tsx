@@ -1,45 +1,43 @@
 import { Show, createSignal, createEffect, onCleanup } from 'solid-js';
 import type { Component } from 'solid-js';
+import { Button } from '@/components/shared/Button';
 import { Card } from '@/components/shared/Card';
 import { Dialog } from '@/components/shared/Dialog';
 import { getSourcePlatformBadge } from '@/components/shared/sourcePlatformBadges';
 import { getSourcePlatformLabel } from '@/utils/sourcePlatforms';
 import { copyToClipboard } from '@/utils/clipboard';
-import { showError, showSuccess } from '@/utils/toast';
+import { showSuccess } from '@/utils/toast';
 import { useTokenRevealState, dismissTokenReveal } from '@/stores/tokenReveal';
+
+type CopyState = 'idle' | 'pending' | 'copied' | 'failed';
 
 export const TokenRevealDialog: Component = () => {
   const state = useTokenRevealState();
-  const [copied, setCopied] = createSignal(false);
-  const [copying, setCopying] = createSignal(false);
+  const [copyState, setCopyState] = createSignal<CopyState>('idle');
   let copyGeneration = 0;
   let copiedTimer: ReturnType<typeof setTimeout> | undefined;
 
   const handleDismiss = () => {
     dismissTokenReveal();
-    setCopied(false);
   };
 
   const handleCopy = async (token: string) => {
     const current = state();
-    if (!current || current.token !== token || copying()) return;
+    if (!current || current.token !== token || copyState() === 'pending') return;
     const generation = ++copyGeneration;
     if (copiedTimer) clearTimeout(copiedTimer);
     copiedTimer = undefined;
-    setCopied(false);
-    setCopying(true);
+    setCopyState('pending');
     const success = await copyToClipboard(token);
     // A clipboard write already requested by the operator cannot be cancelled.
     // Its completion must not confirm a different or dismissed reveal.
     if (generation !== copyGeneration || state() !== current) return;
-    setCopying(false);
     if (success) {
-      setCopied(true);
+      setCopyState('copied');
       showSuccess('Token copied to clipboard');
-      if (copiedTimer) clearTimeout(copiedTimer);
-      copiedTimer = setTimeout(() => setCopied(false), 2000);
+      copiedTimer = setTimeout(() => setCopyState('idle'), 2000);
     } else {
-      showError('Failed to copy token');
+      setCopyState('failed');
     }
   };
 
@@ -53,8 +51,7 @@ export const TokenRevealDialog: Component = () => {
     copyGeneration += 1;
     if (copiedTimer) clearTimeout(copiedTimer);
     copiedTimer = undefined;
-    setCopied(false);
-    setCopying(false);
+    setCopyState('idle');
     if (!current) {
       return;
     }
@@ -72,6 +69,17 @@ export const TokenRevealDialog: Component = () => {
   return (
     <Show when={state()} keyed>
       {(info) => {
+        let tokenText: HTMLElement | undefined;
+        const selectTokenText = () => {
+          if (state() !== info || !tokenText?.isConnected) return;
+          const document = tokenText.ownerDocument;
+          const selection = document.getSelection();
+          if (!selection) return;
+          const range = document.createRange();
+          range.selectNodeContents(tokenText);
+          selection.removeAllRanges();
+          selection.addRange(range);
+        };
         const sourceBadge = getSourcePlatformBadge(info.source);
         const sourceLabel = sourceBadge?.label || getSourcePlatformLabel(info.source);
         const recordName = info.record?.name?.trim() || 'Untitled token';
@@ -145,18 +153,41 @@ export const TokenRevealDialog: Component = () => {
                     Token value
                   </div>
                   <div class="flex flex-col sm:flex-row sm:items-center gap-2">
-                    <code class="min-w-0 flex-1 rounded-md border border-green-300 dark:border-green-700 bg-surface px-4 py-3 font-mono text-base font-semibold text-base-content break-all">
+                    <code
+                      ref={tokenText}
+                      class="min-w-0 flex-1 rounded-md border border-green-300 dark:border-green-700 bg-surface px-4 py-3 font-mono text-base font-semibold text-base-content break-all"
+                    >
                       {info.token}
                     </code>
                     <button
                       type="button"
                       onClick={() => handleCopy(info.token)}
-                      disabled={copying()}
+                      disabled={copyState() === 'pending'}
                       class="disabled:cursor-wait disabled:opacity-60 inline-flex items-center justify-center rounded-md bg-green-600 hover:bg-green-700 text-white text-sm font-semibold px-4 py-2 transition-colors shadow-xs"
                     >
-                      {copying() ? 'Copying…' : copied() ? 'Copied!' : 'Copy token'}
+                      {copyState() === 'pending'
+                        ? 'Copying…'
+                        : copyState() === 'copied'
+                          ? 'Copied!'
+                          : 'Copy token'}
                     </button>
                   </div>
+                  <Show when={copyState() === 'failed'}>
+                    <div class="space-y-2">
+                      <p role="alert" class="text-sm text-red-700 dark:text-red-300">
+                        Could not copy the token automatically. Select the token text, then use your
+                        browser’s Copy command.
+                      </p>
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        class="min-h-11 sm:min-h-0"
+                        onClick={selectTokenText}
+                      >
+                        Select token text
+                      </Button>
+                    </div>
+                  </Show>
                   <div class="text-xs text-muted [overflow-wrap:anywhere]">
                     Label: <span class="font-semibold text-base-content">{recordName}</span>
                     <Show when={tokenHint}>

@@ -147,7 +147,8 @@ const hitLines = (hit: MapHit, density?: MapDensity): string[] =>
   ].filter(Boolean);
 
 export function InfrastructureMapSurface() {
-  const { resources, loading } = useResources();
+  const { resources, loading, error, refetch } = useResources();
+  const loadError = () => error?.();
   const darkMode = useDarkMode();
   const kioskMode = useKioskMode();
   const observed = useObservedElementWidth();
@@ -408,6 +409,7 @@ export function InfrastructureMapSurface() {
     setPan((current) => clampPan(current, clamped));
   };
   const resetZoom = () => {
+    clearSuppressedClick();
     setZoom(MIN_ZOOM);
     setPan({ x: 0, y: 0 });
   };
@@ -422,7 +424,17 @@ export function InfrastructureMapSurface() {
   let dragStart: { x: number; y: number; panX: number; panY: number; pointerId: number } | null =
     null;
   let suppressNextClick = false;
+  let clearSuppressClickTimer: number | undefined;
+  const clearSuppressedClick = () => {
+    suppressNextClick = false;
+    if (clearSuppressClickTimer !== undefined) {
+      window.clearTimeout(clearSuppressClickTimer);
+      clearSuppressClickTimer = undefined;
+    }
+  };
+  onCleanup(clearSuppressedClick);
   const handleViewportPointerDown = (event: PointerEvent) => {
+    clearSuppressedClick();
     if (zoom() <= MIN_ZOOM || event.button !== 0 || event.pointerType === 'touch') return;
     dragStart = {
       x: event.clientX,
@@ -431,7 +443,6 @@ export function InfrastructureMapSurface() {
       panY: pan().y,
       pointerId: event.pointerId,
     };
-    suppressNextClick = false;
   };
   const handleViewportPointerMove = (event: PointerEvent) => {
     if (!dragStart || event.pointerId !== dragStart.pointerId) return;
@@ -450,6 +461,15 @@ export function InfrastructureMapSurface() {
     dragStart = null;
     if (dragging()) {
       setDragging(false);
+    }
+    // WebKit/Safari and off-target drag releases do not always fire a synthetic
+    // click after pointerup. Clear the suppression on the next macrotask so it
+    // never swallows the user's next intentional click on a tile or header.
+    if (suppressNextClick && typeof window !== 'undefined') {
+      clearSuppressClickTimer = window.setTimeout(() => {
+        suppressNextClick = false;
+        clearSuppressClickTimer = undefined;
+      }, 0);
     }
   };
   const handleViewportWheel = (event: WheelEvent) => {
@@ -572,17 +592,62 @@ export function InfrastructureMapSurface() {
     setByKeys(keyedLast);
     showFor(event);
   };
+  // Remember which tile or control opened the drawer so focus returns cleanly
+  // on Escape or Close, including for SVG tiles that survive live redraws.
+  let drawerReturnHitId: string | null = null;
+  let drawerReturnElement: HTMLElement | SVGElement | null = null;
+  const openDrawer = (target: MapInspectTarget, returnHitId?: string) => {
+    drawerReturnHitId = returnHitId ?? null;
+    const active = typeof document !== 'undefined' ? document.activeElement : null;
+    drawerReturnElement =
+      active instanceof HTMLElement || active instanceof SVGElement ? active : null;
+    setHover(null);
+    setDrawerTarget(target);
+  };
+  const closeDrawer = () => {
+    const returnHitId = drawerReturnHitId;
+    const returnEl = drawerReturnElement;
+    drawerReturnHitId = null;
+    drawerReturnElement = null;
+    setDrawerTarget(null);
+    if (typeof requestAnimationFrame === 'undefined') return;
+    requestAnimationFrame(() => {
+      const svg = svgElement();
+      if (returnHitId && svg) {
+        const index = hits().findIndex((hit) => hit.id === returnHitId);
+        if (index >= 0) {
+          tabStopId = returnHitId;
+          setTabStop(svg);
+          svg
+            .querySelector<SVGElement>(`[${MAP_HIT_ATTRIBUTE}="${index}"]`)
+            ?.focus({ preventScroll: true });
+          return;
+        }
+      }
+      if (returnEl && document.contains(returnEl)) {
+        returnEl.focus({ preventScroll: true });
+      }
+    });
+  };
+
   // An arrow key, Home or End moves the focus to another tile. Enter/Space on
-  // an overflow tile opens the group drawer. A key that moves nowhere is left
-  // to the page, which scrolls with it.
+  // an overflow tile opens the group drawer. Escape dismisses an open tooltip.
+  // A key that moves nowhere is left to the page, which scrolls with it.
   const handleKey = (event: KeyboardEvent) => {
     if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
+    if (event.key === 'Escape') {
+      if (hover() !== null || armed() !== null) {
+        event.preventDefault();
+        setHover(null);
+        disarm();
+      }
+      return;
+    }
     if (event.key === 'Enter' || event.key === ' ') {
       const found = hitFromEvent(event);
       if (found?.hit.inspectTarget) {
         event.preventDefault();
-        setHover(null);
-        setDrawerTarget(found.hit.inspectTarget);
+        openDrawer(found.hit.inspectTarget, found.hit.id);
       }
       return;
     }
@@ -623,8 +688,12 @@ export function InfrastructureMapSurface() {
       armedAtPress = armed();
       disarm();
     };
-    const typed = () => {
+    const typed = (event: KeyboardEvent) => {
       keyedLast = true;
+      if (event.key === 'Escape' && !drawerTarget() && (hover() !== null || armed() !== null)) {
+        setHover(null);
+        disarm();
+      }
     };
     // A card is placed where its tile was. On a page that scrolls, the tile
     // moves: a card for the tile with keyboard focus goes with it, leaves
@@ -664,7 +733,7 @@ export function InfrastructureMapSurface() {
   });
   const handleSvgClick = (event: MouseEvent) => {
     if (suppressNextClick) {
-      suppressNextClick = false;
+      clearSuppressedClick();
       event.preventDefault();
       event.stopPropagation();
       return;
@@ -672,16 +741,14 @@ export function InfrastructureMapSurface() {
     const inspectTarget = inspectFromEvent(event);
     if (inspectTarget) {
       event.preventDefault();
-      setHover(null);
-      setDrawerTarget(inspectTarget);
+      openDrawer(inspectTarget);
       return;
     }
     const found = hitFromEvent(event);
     if (!found) return;
     if (found.hit.inspectTarget) {
       event.preventDefault();
-      setHover(null);
-      setDrawerTarget(found.hit.inspectTarget);
+      openDrawer(found.hit.inspectTarget, found.hit.id);
       return;
     }
     if (pressedWith !== 'touch') return;
@@ -812,10 +879,10 @@ export function InfrastructureMapSurface() {
               <button
                 type="button"
                 class="inline-flex h-8 min-w-11 items-center justify-center border-x border-border px-1.5 text-xs font-medium text-base-content tabular-nums transition-colors hover:bg-surface-hover"
-                aria-label="Reset zoom to fit"
+                aria-label={`Zoom ${Math.round(zoom() * 100)}%, reset to default`}
                 title={
                   zoom() > MIN_ZOOM
-                    ? 'Reset zoom and pan to fit screen'
+                    ? 'Reset zoom and pan to default'
                     : 'Current zoom (Ctrl+scroll or click + to zoom in)'
                 }
                 data-testid="infrastructure-map-zoom-reset"
@@ -928,26 +995,42 @@ export function InfrastructureMapSurface() {
               when={!loading() && liveModel().isEmpty}
               fallback={<div class="p-6 text-sm text-muted">Drawing the map...</div>}
             >
-              <EmptyState
-                icon={<MapIcon class="h-6 w-6" aria-hidden="true" />}
-                title="Nothing to draw yet"
-                description={
-                  canAddSystem()
-                    ? 'The map draws itself from the systems Pulse monitors. Add one and it appears here.'
-                    : 'The map draws itself from the systems Pulse monitors. None has been added yet. Ask a Pulse administrator to add one.'
+              <Show
+                when={Boolean(loadError())}
+                fallback={
+                  <EmptyState
+                    icon={<MapIcon class="h-6 w-6" aria-hidden="true" />}
+                    title="Nothing to draw yet"
+                    description={
+                      canAddSystem()
+                        ? 'The map draws itself from the systems Pulse monitors. Add one and it appears here.'
+                        : 'The map draws itself from the systems Pulse monitors. None has been added yet. Ask a Pulse administrator to add one.'
+                    }
+                    actions={
+                      <Show when={canAddSystem()}>
+                        <ButtonLink
+                          href={buildInfrastructureWorkspacePath()}
+                          variant="secondary"
+                          size="sm"
+                        >
+                          Add a system
+                        </ButtonLink>
+                      </Show>
+                    }
+                  />
                 }
-                actions={
-                  <Show when={canAddSystem()}>
-                    <ButtonLink
-                      href={buildInfrastructureWorkspacePath()}
-                      variant="secondary"
-                      size="sm"
-                    >
-                      Add a system
-                    </ButtonLink>
-                  </Show>
-                }
-              />
+              >
+                <EmptyState
+                  icon={<TriangleAlertIcon class="h-6 w-6 text-amber-500" aria-hidden="true" />}
+                  title="Could not load the map"
+                  description="Pulse could not load your monitored resources. Check the connection and try again."
+                  actions={
+                    <Button variant="secondary" size="sm" onClick={() => void refetch?.()}>
+                      Try again
+                    </Button>
+                  }
+                />
+              </Show>
             </Show>
           }
         >
@@ -1089,7 +1172,7 @@ export function InfrastructureMapSurface() {
         hrefForResourceId={hrefForResourceId}
         onSelectTarget={(next) => setDrawerTarget(next)}
         onFilterByNetwork={(next) => setNetworkFilter(next)}
-        onClose={() => setDrawerTarget(null)}
+        onClose={closeDrawer}
       />
 
       {/* A tap's card is the shared pressed tooltip, which a touch screen shows. */}

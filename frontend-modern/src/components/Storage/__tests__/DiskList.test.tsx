@@ -526,7 +526,7 @@ describe('DiskList', () => {
     }
   });
 
-  it('renders SSD life and falls back to the Proxmox usage string for Belongs', () => {
+  it('renders SSD life and falls back to the Proxmox usage string under the Usage header', () => {
     renderDiskList({
       disks: [
         buildDisk('sda', 'tower', {
@@ -661,5 +661,41 @@ describe('DiskList', () => {
     expect(screen.getByText('truenas-main')).toBeInTheDocument();
     fireEvent.click(screen.getByText('Seagate IronWolf'));
     expect(screen.getByTestId('disk-detail')).toHaveTextContent('sda');
+  });
+
+  it('uses the Usage column header and prefers human-readable Proxmox node display names', () => {
+    const disk = {
+      ...buildDisk('nvme0', 'pve20', {
+        model: 'Crucial MX500 2TB',
+        storageGroup: '',
+        used: 'ext4',
+      }),
+      parentId: 'agent-research-d',
+      parentName: 'Research D',
+      proxmox: {
+        nodeName: 'pve20',
+        nodeDisplayName: 'Research D',
+        instance: 'Research',
+      },
+    } as unknown as Resource;
+    const node = {
+      ...buildNode('agent-research-d', 'Research D'),
+      proxmox: { nodeName: 'pve20', nodeDisplayName: 'Research D', instance: 'Research' },
+    } as unknown as Resource;
+
+    renderDiskList({
+      disks: [disk],
+      nodes: [node],
+      selectedNode: null,
+      searchTerm: '',
+    });
+
+    expect(screen.getByRole('columnheader', { name: 'Usage' })).toBeInTheDocument();
+    expect(screen.queryByRole('columnheader', { name: /Belongs/i })).toBeNull();
+    const hostCell = screen.getByText('Research D');
+    expect(hostCell).toBeInTheDocument();
+    expect(hostCell).toHaveAttribute('title', 'Research D (pve20)');
+    expect(screen.queryByText('pve20')).toBeNull();
+    expect(screen.getByText('ext4')).toBeInTheDocument();
   });
 });

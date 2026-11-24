@@ -1,4 +1,12 @@
-import { createMemo, createSignal, For, onCleanup, Show, type Component } from 'solid-js';
+import {
+  createMemo,
+  createSignal,
+  createUniqueId,
+  For,
+  onCleanup,
+  Show,
+  type Component,
+} from 'solid-js';
 import { createNonSuspendingQuery } from '@/hooks/createNonSuspendingQuery';
 import { supportsHoverTooltips } from '@/components/shared/hoverCapability';
 import { InlineNotice } from '@/components/shared/InlineNotice';
@@ -29,7 +37,7 @@ import {
 type Outcome = keyof BackupJobsCounts;
 
 const PILL_BASE =
-  'inline-flex items-center whitespace-nowrap rounded-md px-1.5 py-0.5 text-[11px] font-semibold tabular-nums';
+  'inline-flex items-center whitespace-nowrap rounded-md px-1 sm:px-1.5 py-0.5 text-[10px] sm:text-[11px] font-semibold tabular-nums';
 
 const OUTCOMES: readonly {
   key: Outcome;
@@ -69,7 +77,12 @@ const OUTCOMES: readonly {
   },
 ];
 
-const FAILED_NAMES = 8;
+const OUTCOME_NAME_LIMIT = 8;
+const NAMED_OUTCOMES = [
+  { key: 'failed', label: 'Guests with failures' },
+  { key: 'warning', label: 'Guests with warnings' },
+] as const;
+type NamedOutcome = (typeof NAMED_OUTCOMES)[number];
 
 const dayEmptyLabel = (day: BackupJobsDay): string => {
   if (day.historyState === 'unavailable') return 'Counts unavailable';
@@ -90,21 +103,69 @@ const failureNameList = (failures: readonly BackupJobsFailure[], outcome: string
   ...new Set(
     failures
       .filter((failure) => failure.outcome === outcome)
-      .map((failure) => failure.workloadName),
+      .map((failure) => failure.workloadName)
+      .filter((name) => name.trim() !== ''),
   ),
 ];
 
 const failureNames = (failures: readonly BackupJobsFailure[], outcome: string): string => {
   const names = failureNameList(failures, outcome);
-  const shown = names.slice(0, FAILED_NAMES);
+  const shown = names.slice(0, OUTCOME_NAME_LIMIT);
   const more = names.length - shown.length;
   return more > 0 ? `${shown.join(', ')} and ${more} more` : shown.join(', ');
 };
 
+const dayOutcomeNames = (day: BackupJobsDay, outcome: NamedOutcome) =>
+  day.counts[outcome.key] > 0 ? failureNameList(day.failures, outcome.key) : [];
+
+const hasNamedOutcomes = (day: BackupJobsDay) =>
+  NAMED_OUTCOMES.some((outcome) => dayOutcomeNames(day, outcome).length > 0);
+
+// A keyboard activation or touch on a hybrid device has not seen a mouse
+// tooltip, even when that device's primary pointer supports hover.
+const canPreviewNames = (event: MouseEvent) =>
+  event.detail > 0 &&
+  (!('pointerType' in event) || !event.pointerType || event.pointerType === 'mouse') &&
+  supportsHoverTooltips();
+
+const SelectedBackupJobNames: Component<{ day: BackupJobsDay; outcome: NamedOutcome }> = (
+  props,
+) => {
+  const names = createMemo(() => dayOutcomeNames(props.day, props.outcome));
+  const [expandedDate, setExpandedDate] = createSignal<string | null>(null);
+  const expanded = () => expandedDate() === props.day.date;
+  const namesId = createUniqueId();
+  const toggleLabel = () =>
+    expanded() ? 'Show fewer' : `Show ${names().length - OUTCOME_NAME_LIMIT} more`;
+  return (
+    <Show when={names().length > 0}>
+      <p class="wrap-anywhere">
+        <span class="font-medium">{props.outcome.label}: </span>
+        <span id={namesId}>
+          {(expanded() ? names() : names().slice(0, OUTCOME_NAME_LIMIT)).join(', ')}
+        </span>
+        <Show when={names().length > OUTCOME_NAME_LIMIT}>
+          {' '}
+          <button
+            type="button"
+            class="font-medium text-blue-600 hover:underline dark:text-blue-300"
+            aria-controls={namesId}
+            aria-expanded={expanded()}
+            aria-label={`${toggleLabel()} ${props.outcome.label.toLowerCase()}`}
+            onClick={() => setExpandedDate(expanded() ? null : props.day.date)}
+          >
+            {toggleLabel()}
+          </button>
+        </Show>
+      </p>
+    </Show>
+  );
+};
+
 export interface BackupJobsDaySelection {
   selectedDay: () => string | null;
-  // `reveal` brings the restore points into view. Without hover, a failed day
-  // stays on the card, because the card is what names who failed.
+  // `reveal` brings the restore points into view. Keep the chart in view
+  // when selecting named outcomes that the operator could not preview.
   onSelectDay: (date: string, options: { reveal: boolean }) => void;
   onRevealRestorePoints: () => void;
 }
@@ -149,16 +210,11 @@ export const ProxmoxBackupJobsCard: Component<{
   const chosenDay = createMemo(
     () => props.jobs.days.find((day) => day.date === props.selectedDay) ?? null,
   );
-  // A failed run usually leaves no restore point, so the list can't say who
-  // failed. A tap has no hover, so the chosen day says it here on every device.
-  const chosenFailedNames = createMemo(() => {
+  const chosenDayHasNames = createMemo(() => {
     const day = chosenDay();
-    return day ? failureNameList(day.failures, 'failed') : [];
+    return day !== null && hasNamedOutcomes(day);
   });
-  const [namesOpenedFor, setNamesOpenedFor] = createSignal<string | null>(null);
-  const namesOpen = () => namesOpenedFor() === props.selectedDay;
-  const shownFailedNames = () =>
-    namesOpen() ? chosenFailedNames() : chosenFailedNames().slice(0, FAILED_NAMES);
+  const chosenDayNamesId = createUniqueId();
   const [hover, setHover] = createSignal<{ date: string; x: number; y: number } | null>(null);
   // Read through the payload, so a poll updates an open tooltip and a day that
   // has left the window withdraws it.
@@ -214,7 +270,7 @@ export const ProxmoxBackupJobsCard: Component<{
             fallback={<span class="text-[11px] text-muted">History unavailable</span>}
           >
             <span
-              class="inline-flex flex-wrap items-center justify-end gap-1.5"
+              class="inline-flex flex-wrap items-center justify-end gap-1 sm:gap-1.5"
               data-backup-jobs-last24h
             >
               <Show
@@ -319,9 +375,12 @@ export const ProxmoxBackupJobsCard: Component<{
                             }`
                       }`}
                       aria-pressed={chosen()}
-                      onClick={() =>
+                      aria-describedby={
+                        chosen() && chosenDayHasNames() ? chosenDayNamesId : undefined
+                      }
+                      onClick={(event) =>
                         props.onSelectDay?.(day.date, {
-                          reveal: !failureNames(day.failures, 'failed') || supportsHoverTooltips(),
+                          reveal: !hasNamedOutcomes(day) || canPreviewNames(event),
                         })
                       }
                       onMouseEnter={(event) => showDay(event.currentTarget, day.date)}
@@ -367,31 +426,22 @@ export const ProxmoxBackupJobsCard: Component<{
           </div>
           <Show when={chosenDay()}>
             {(day) => (
-              <p class="mt-1 text-[11px] text-base-content" data-backup-jobs-chosen-day>
-                <Show when={chosenFailedNames().length > 0} fallback={dayTitle(day())}>
-                  {getRecoveryPrettyDateLabel(day().date)}: {day().counts.failed} failed:{' '}
-                  {shownFailedNames().join(', ')}
-                  <Show when={!backupJobsDayObserved(day())}> (not fully observed)</Show>
-                  <Show when={chosenFailedNames().length > shownFailedNames().length}>
-                    {' '}
-                    <button
-                      type="button"
-                      class="font-medium text-blue-600 hover:underline dark:text-blue-300"
-                      onClick={() => setNamesOpenedFor(day().date)}
-                    >
-                      and {chosenFailedNames().length - shownFailedNames().length} more
-                    </button>
-                  </Show>
-                </Show>
+              <div class="mt-1 text-[11px] text-base-content" data-backup-jobs-chosen-day>
+                <p>{dayTitle(day())}</p>
+                <div id={chosenDayNamesId}>
+                  <For each={NAMED_OUTCOMES}>
+                    {(outcome) => <SelectedBackupJobNames day={day()} outcome={outcome} />}
+                  </For>
+                </div>
                 <Show
                   when={
                     props.onRevealRestorePoints &&
-                    (chosenFailedNames().length > 0 || day().historyState === 'unavailable')
+                    (chosenDayHasNames() || day().historyState === 'unavailable')
                   }
                 >
-                  <span class="ml-1">{restorePointsButton()}</span>
+                  {restorePointsButton()}
                 </Show>
-              </p>
+              </div>
             )}
           </Show>
         </div>

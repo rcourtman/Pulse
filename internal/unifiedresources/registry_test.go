@@ -7026,6 +7026,46 @@ func TestProxmoxGuestDeclaresNodeScopedSupersededEras(t *testing.T) {
 	}
 }
 
+func TestProxmoxGuestLegacyAliasOrderAndScope(t *testing.T) {
+	now := time.Now().UTC()
+	snapshot := proxmoxGuestMigrationSnapshot(now, "moved-node")
+	// The provider ID need not contain the current node, and the current
+	// node can be missing from this generation's node list.
+	snapshot.VMs[0].ID = " opaque-source-id "
+	snapshot.Nodes[0].NativeNameAliases = []string{" old-pve1 ", "pve1", "", "PVE1"}
+	snapshot.Nodes = append(snapshot.Nodes, models.Node{
+		ID: "other-node", Name: "other", Instance: "another-estate", Status: "online", LastSeen: now,
+	})
+
+	rr := NewRegistry(nil)
+	rr.IngestSnapshot(snapshot)
+	guestID := ProxmoxGuestCanonicalID(ResourceTypeVM, "delly", 100)
+	guest, ok := rr.Get(guestID)
+	if !ok {
+		t.Fatalf("guest %q missing", guestID)
+	}
+	// Current-node source ID first after the provider ID; then each known
+	// name once in discovery order. The legacy hash is case sensitive.
+	var want []string
+	for _, source := range []string{
+		"opaque-source-id", "delly:moved-node:100", "delly:pve1:100",
+		"delly:old-pve1:100", "delly:PVE1:100", "delly:pve2:100",
+	} {
+		alias := SourceSpecificID(ResourceTypeVM, SourceProxmox, source)
+		want = append(want, alias)
+		if got, resolved := rr.ResolveReferenceID(alias); !resolved || got != guestID {
+			t.Errorf("alias %q resolved to %q (%t), want %q", source, got, resolved, guestID)
+		}
+	}
+	if !slices.Equal(guest.SupersededCanonicalIDs, want) {
+		t.Errorf("retired IDs = %v, want %v", guest.SupersededCanonicalIDs, want)
+	}
+	unrelated := SourceSpecificID(ResourceTypeVM, SourceProxmox, "delly:other:100")
+	if got, ok := rr.ResolveReferenceID(unrelated); ok {
+		t.Errorf("node from a different connection supplied a retired ID for %q", got)
+	}
+}
+
 // Operator-owned rows persisted under a retired node-scoped ID re-key to the
 // node-independent ID during snapshot ingest.
 func TestProxmoxGuestSuccessionRekeysOperatorState(t *testing.T) {

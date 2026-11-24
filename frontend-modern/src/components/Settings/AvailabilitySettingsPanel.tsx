@@ -417,7 +417,7 @@ export const AvailabilitySettingsPanel: Component = () => {
                     <X class="h-4 w-4" />
                   </Button>
                 </div>
-                <div class="min-h-0 flex-1 overflow-y-auto p-4">
+                <div class="flex min-h-0 flex-1 flex-col overflow-hidden">
                   <AvailabilityTargetSlot
                     editingTargetId={editingTarget?.id}
                     initialTargetKind={

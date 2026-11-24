@@ -197,7 +197,7 @@ class ProxmoxMemoryLoadTests(unittest.TestCase):
 
     def test_pbs_status_window_does_not_credit_a_silent_store_with_its_siblings(self):
         start = END - 300
-        window = load.PBSStatusWindow(start, END)
+        window = load.PBSObservationWindow(start, END)
         expected = {}
         handlers = {}
         counters = Counter()
@@ -232,9 +232,9 @@ class ProxmoxMemoryLoadTests(unittest.TestCase):
         # for that group, not a per-store status response or a Pulse poll.
         self.assertEqual(expected["pbs2"]["store-archive"].counts(),
                          {"expected_groups": 1, "served_groups": 1})
-        self.assertIsNone(window.report(expected, END - 1))
-        self.assertIsNone(window.report({}, END))
-        self.assertEqual(window.report(expected, END), {
+        self.assertIsNone(window.status_report(expected, END - 1))
+        self.assertIsNone(window.status_report({}, END))
+        self.assertEqual(window.status_report(expected, END), {
             "window_s": 300,
             "datastores": {
                 "pbs1": {
@@ -247,6 +247,50 @@ class ProxmoxMemoryLoadTests(unittest.TestCase):
                 },
             },
         })
+
+    def test_pbs_snapshot_window_distinguishes_warmup_and_completed_listings(self):
+        start = END - 300
+        window = load.PBSObservationWindow(start, END)
+        guests = [("pve", "vm", 100, "vm-100"), ("pve", "ct", 101, "ct-101")]
+        handler_type, _, stores = load.make_pbs_handler(
+            "pbs1", guests, 3, Counter(), threading.Lock(), window,
+        )
+        handler = object.__new__(handler_type)
+        handler.send_json = Mock()
+        fast_vm = "store-fast/snapshots?backup-type=vm&backup-id=100"
+        fast_ct = "store-fast/snapshots?backup-type=ct&backup-id=101"
+        archive_vm = "store-archive/snapshots?backup-type=vm&backup-id=100"
+
+        def request(path, offset):
+            handler.path = f"/api2/json/admin/datastore/{path}"
+            with patch.object(load.time, "time_ns", return_value=(start + offset) * 1_000_000_000):
+                handler.do_GET()
+
+        for path in (fast_vm, fast_ct, archive_vm):
+            request(path, -1)
+        request("store-archive/status", 15)
+        request("store-archive/groups", 15)
+        request("store-archive/snapshots?backup-type=ct&backup-id=101", 15)
+        request(fast_vm, 0)
+        request(fast_vm, 300)
+        request(archive_vm, 301)
+        handler.send_json.side_effect = BrokenPipeError
+        with self.assertRaises(BrokenPipeError):
+            request(fast_ct, 15)
+
+        self.assertIsNone(window.snapshot_report({"pbs1": stores}, END - 1))
+        self.assertIsNone(window.snapshot_report({}, END))
+        self.assertEqual(window.snapshot_report({"pbs1": stores}, END), {
+            "window_s": 300,
+            "datastores": {"pbs1": {
+                "store-fast": {"expected_groups": 2, "served_groups": 1},
+                "store-archive": {"expected_groups": 1, "served_groups": 0},
+            }},
+        })
+        self.assertEqual(stores["store-fast"].counts(), {"expected_groups": 2, "served_groups": 2})
+        self.assertEqual(stores["store-archive"].counts(), {"expected_groups": 1, "served_groups": 1})
+        status = window.status_report({"pbs1": stores}, END)
+        self.assertEqual(status["datastores"]["pbs1"]["store-archive"]["responses"], 1)
 
     def setUp(self):
         self.expected = {("qemu", "vm-100"), ("lxc", "ct-101")}

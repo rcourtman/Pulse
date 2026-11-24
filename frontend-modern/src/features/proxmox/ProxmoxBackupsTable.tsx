@@ -836,16 +836,38 @@ export const ProxmoxBackupsTable: Component<{
         });
       }
     } else {
+      const activeException = exceptionFilter();
       filters.push({
         id: 'posture',
         label: 'Protection',
         group: 'status',
         inline: true,
         options: () => COVERAGE_FILTERS,
-        value: coverageFilter,
-        setValue: (v) => setCoverageFilter(v as CoverageFilterValue),
+        value: () => (exceptionFilter() ? '' : coverageFilter()),
+        setValue: (v) => setCoverageFilter((v || 'all') as CoverageFilterValue),
         defaultValue: 'all',
       });
+      if (activeException) {
+        const exceptionLabel =
+          backupVerdict().exceptions.find((group) => group.key === activeException)?.label ??
+          activeException;
+        filters.push({
+          id: 'reason',
+          label: 'Backup health',
+          group: 'status',
+          options: () => [
+            { value: '', label: 'All' },
+            { value: activeException, label: exceptionLabel },
+          ],
+          value: () => exceptionFilter() ?? '',
+          setValue: (v) =>
+            setSearchParams(
+              { [PROXMOX_BACKUPS_QUERY_PARAMS.reason]: v || null },
+              { replace: true },
+            ),
+          defaultValue: '',
+        });
+      }
     }
     return filters;
   };
@@ -1087,7 +1109,40 @@ export const ProxmoxBackupsTable: Component<{
           class="space-y-3"
           data-backup-restore-points
         >
-          <PlatformSectionTabs tabs={backupViewTabs()} active={view()} ariaLabel="Backup views" />
+          <div class="flex flex-wrap items-center justify-between gap-2">
+            <PlatformSectionTabs tabs={backupViewTabs()} active={view()} ariaLabel="Backup views" />
+            <Show when={view() === 'date'}>
+              <Show
+                when={selectedDateKey()}
+                fallback={
+                  <Show when={Boolean(props.summaryAside)}>
+                    <p class="text-[11px] text-muted" data-backup-day-filter-hint>
+                      Select a bar in Backup jobs to filter by day
+                    </p>
+                  </Show>
+                }
+              >
+                {(dateKey) => (
+                  <div
+                    class="inline-flex items-center gap-2 rounded-md border border-blue-200 bg-blue-50 px-2 py-1 text-[11px] text-blue-800 dark:border-blue-800/60 dark:bg-blue-950/40 dark:text-blue-200"
+                    data-backup-active-day
+                  >
+                    <span>
+                      Filtered to{' '}
+                      <strong class="font-semibold">{getRecoveryFilterDateLabel(dateKey())}</strong>
+                    </span>
+                    <button
+                      type="button"
+                      class="font-medium underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500"
+                      onClick={() => setSelectedDateKey(null)}
+                    >
+                      Clear day
+                    </button>
+                  </div>
+                )}
+              </Show>
+            </Show>
+          </div>
           <Show when={locationSelection().unresolved}>
             <div role="status" class={BACKUP_READ_NOTICE_CLASS}>
               The saved backup location cannot be identified uniquely in the current inventory.

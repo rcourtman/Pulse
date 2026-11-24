@@ -29,32 +29,27 @@ func readSnapshotInventory(resp *http.Response, vmid int) ([]Snapshot, error) {
 	if failure, exists := envelope["errors"]; exists && !bytes.Equal(bytes.TrimSpace(failure), []byte("null")) {
 		return nil, errInvalidSnapshotInventoryResponse
 	}
-	data := bytes.TrimSpace(envelope["data"])
 	// Only an explicit array is an enumeration. Read and close the whole
 	// bounded response before admitting even an otherwise valid JSON prefix.
-	if len(data) == 0 || data[0] != '[' {
+	data := bytes.TrimSpace(envelope["data"])
+	if len(data) < 2 || data[0] != '[' {
 		return nil, errInvalidSnapshotInventoryResponse
 	}
-	var rows []json.RawMessage
-	if json.Unmarshal(data, &rows) != nil {
+	// The envelope reader has already checked the JSON value, including its
+	// closing bracket. Keep a successful empty read non-nil without a decoder.
+	if len(bytes.TrimSpace(data[1:len(data)-1])) == 0 {
+		return []Snapshot{}, nil
+	}
+	decoder := json.NewDecoder(bytes.NewReader(data))
+	if start, err := decoder.Token(); err != nil || start != json.Delim('[') {
 		return nil, errInvalidSnapshotInventoryResponse
 	}
-	snapshots := make([]Snapshot, 0, len(rows))
-	seen := make(map[string]bool, len(rows))
-	for _, row := range rows {
-		fields, valid := inventoryResponseObject(row, "name", "description", "snaptime", "parent", "vmid", "vmstate")
-		if !valid {
-			return nil, errInvalidSnapshotInventoryResponse
-		}
-		var snap Snapshot
-		if json.Unmarshal(row, &snap) != nil || strings.TrimSpace(snap.Name) == "" || seen[snap.Name] {
-			return nil, errInvalidSnapshotInventoryResponse
-		}
-		// Omission is a legacy response with no memory-state claim. An
-		// explicit flag must be an unambiguous PVE boolean (integer 0/1),
-		// never null or another value coerced into a memory verdict.
-		if flag, present := fields["vmstate"]; present &&
-			(bytes.Equal(bytes.TrimSpace(flag), []byte("null")) || (snap.VMState != 0 && snap.VMState != 1)) {
+	snapshots := make([]Snapshot, 0)
+	seen := make(map[string]bool)
+	keys := make(map[string]struct{})
+	for decoder.More() {
+		snap, valid := readSnapshotInventoryRow(decoder, keys)
+		if !valid || strings.TrimSpace(snap.Name) == "" || seen[snap.Name] {
 			return nil, errInvalidSnapshotInventoryResponse
 		}
 		seen[snap.Name] = true
@@ -69,5 +64,65 @@ func readSnapshotInventory(resp *http.Response, vmid int) ([]Snapshot, error) {
 		snap.VMID = vmid
 		snapshots = append(snapshots, snap)
 	}
+	if end, err := decoder.Token(); err != nil || end != json.Delim(']') {
+		return nil, errInvalidSnapshotInventoryResponse
+	}
 	return snapshots, nil
 }
+
+// Validate field names while decoding their typed values. Avoid copying each
+// row and all of its fields into RawMessages before decoding it again. The
+// containing envelope has already validated the entire data value.
+func readSnapshotInventoryRow(decoder *json.Decoder, keys map[string]struct{}) (Snapshot, bool) {
+	var snap Snapshot
+	if start, err := decoder.Token(); err != nil || start != json.Delim('{') {
+		return snap, false
+	}
+	clear(keys)
+	var ignored ignoredSnapshotInventoryValue
+	for decoder.More() {
+		token, err := decoder.Token()
+		name, named := token.(string)
+		if _, duplicate := keys[name]; err != nil || !named || duplicate {
+			return snap, false
+		}
+		keys[name] = struct{}{}
+
+		var target any
+		switch name {
+		case "name":
+			target = &snap.Name
+		case "description":
+			target = &snap.Description
+		case "snaptime":
+			target = &snap.SnapTime
+		case "parent":
+			target = &snap.Parent
+		case "vmid":
+			target = &snap.VMID // Validate the supplied field before replacing it with the requested VMID.
+		case "vmstate":
+			// A missing flag means no memory claim. An explicit null leaves
+			// scalar fields unchanged in encoding/json, so start outside 0/1.
+			snap.VMState = -1
+			target = &snap.VMState
+		default:
+			for _, expected := range [...]string{"name", "description", "snaptime", "parent", "vmid", "vmstate"} {
+				if strings.EqualFold(name, expected) {
+					return snap, false
+				}
+			}
+			target = &ignored
+		}
+		if decoder.Decode(target) != nil || (name == "vmstate" && snap.VMState != 0 && snap.VMState != 1) {
+			return snap, false
+		}
+	}
+	end, err := decoder.Token()
+	return snap, err == nil && end == json.Delim('}')
+}
+
+// encoding/json validates skipped values without retaining their bytes or
+// interpreting provider metadata as part of the snapshot.
+type ignoredSnapshotInventoryValue struct{}
+
+func (*ignoredSnapshotInventoryValue) UnmarshalJSON([]byte) error { return nil }

@@ -4026,6 +4026,8 @@ func generateHosts(config MockConfig) []models.Host {
 		return hosts[i].Hostname < hosts[j].Hostname
 	})
 
+	attachMockStandaloneVMInventories(hosts, now)
+
 	return hosts
 }
 
@@ -7489,6 +7491,7 @@ func updateHosts(data *models.StateSnapshot, config MockConfig, now time.Time) {
 
 		host.LastSeen = now.Add(-time.Duration(rand.Intn(25)) * time.Second)
 		host.UptimeSeconds += step
+		updateMockHostStandaloneVMs(host, now, step, config.RandomMetrics)
 
 		if !config.RandomMetrics {
 			continue

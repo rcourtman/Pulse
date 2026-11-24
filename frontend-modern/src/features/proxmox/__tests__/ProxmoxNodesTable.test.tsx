@@ -39,11 +39,15 @@ vi.mock('@/components/shared/responsive', () => ({
 
 vi.mock('@/components/Workloads/StackedDiskBar', () => ({
   StackedDiskBar: (props: {
+    mode?: string;
+    summaryStrategy?: string;
     aggregateDisk?: { usage?: number; used?: number; total?: number };
     formatAggregatePercent?: (value: number) => string;
   }) => (
     <div
       data-testid="stacked-disk-bar"
+      data-mode={props.mode}
+      data-summary-strategy={props.summaryStrategy}
       data-usage={props.aggregateDisk?.usage}
       data-used={props.aggregateDisk?.used}
       data-total={props.aggregateDisk?.total}
@@ -1292,5 +1296,58 @@ describe('ProxmoxNodesTable', () => {
       'false',
     );
     expect(screen.queryByTestId('node-drawer')).not.toBeInTheDocument();
+  });
+
+  it('uses consistent aggregate horizontal disk bars for single-disk and multi-disk nodes and derives disk history percent from agent disks when top-level disk is absent', () => {
+    const [mode, setMode] = createSignal<'bars' | 'sparklines'>('bars');
+    const multiDiskNode = makeNodeResource({
+      id: 'agent:analytics-a',
+      name: 'Analytics A',
+      disk: undefined,
+      agent: {
+        disks: [
+          { device: 'rpool', mountpoint: '/', total: 1000, used: 200, free: 800 },
+          { device: '/dev/sdb1', mountpoint: '/data', total: 1000, used: 600, free: 400 },
+        ],
+      },
+    });
+    const singleDiskNode = makeNodeResource({
+      id: 'agent:analytics-b',
+      name: 'Analytics B',
+      disk: undefined,
+      agent: {
+        disks: [{ device: 'rpool', mountpoint: '/', total: 1000, used: 250, free: 750 }],
+      },
+    });
+
+    const { container } = render(() => (
+      <ProxmoxNodesTable
+        nodes={[multiDiskNode, singleDiskNode]}
+        guests={[]}
+        layoutWidth={() => 1440}
+        metricDisplayMode={mode}
+        metricHoverMode={() => 'details'}
+        emptyIcon={<span />}
+        emptyTitle="No Proxmox VE nodes"
+        emptyDescription="No nodes"
+      />
+    ));
+
+    const bars = screen.getAllByTestId('stacked-disk-bar');
+    expect(bars).toHaveLength(2);
+    for (const bar of bars) {
+      expect(bar).toHaveAttribute('data-mode', 'aggregate');
+      expect(bar).toHaveAttribute('data-summary-strategy', 'total');
+    }
+
+    setMode('sparklines');
+    expect(container.querySelector('[data-title="Analytics A disk history"]')).toHaveAttribute(
+      'data-value-label',
+      '40.0%',
+    );
+    expect(container.querySelector('[data-title="Analytics B disk history"]')).toHaveAttribute(
+      'data-value-label',
+      '25.0%',
+    );
   });
 });

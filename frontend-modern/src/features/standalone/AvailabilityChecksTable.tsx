@@ -283,21 +283,16 @@ export const AvailabilityChecksTable: Component<{
           rowNoun="checks"
           hasActiveFilters={tableState.hasActiveFilters()}
           onResetFilters={resetFilters}
-          viewOptions={
-            <div>
-              <div class="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted">
-                Availability presentation
-              </div>
-              <FilterSegmentedControl
-                aria-label="Availability presentation"
-                value={props.view ?? 'table'}
-                onChange={(value) => props.onViewChange?.(value as AvailabilityChecksView)}
-                options={[
-                  { value: 'table', label: 'Table' },
-                  { value: 'fleet', label: 'Fleet' },
-                ]}
-              />
-            </div>
+          leadingControls={
+            <FilterSegmentedControl
+              aria-label="Availability presentation"
+              value={props.view ?? 'table'}
+              onChange={(value) => props.onViewChange?.(value as AvailabilityChecksView)}
+              options={[
+                { value: 'table', label: 'Table' },
+                { value: 'fleet', label: 'Fleet' },
+              ]}
+            />
           }
         />
 
@@ -324,6 +319,12 @@ export const AvailabilityChecksTable: Component<{
                 probeAgentOptions={props.probeAgentOptions}
                 onRetryHistory={() => void historyActions.refetch()}
                 getFocusFallback={getFleetFocusFallback}
+                actions={
+                  <A href={buildAvailabilityTargetAddPath('service')} class={settingsLinkClass}>
+                    <PlusIcon class="h-3.5 w-3.5" />
+                    Add service/device check
+                  </A>
+                }
               />
             }
           >

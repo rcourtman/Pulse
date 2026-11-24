@@ -349,7 +349,7 @@ export function InfrastructureMapDrawer(props: InfrastructureMapDrawerProps) {
                     onClick={() => setHealthFilter(option.value)}
                   >
                     <span>{option.label}</span>
-                    <span class="opacity-75">{option.count.toLocaleString()}</span>
+                    <span class="tabular-nums">{option.count.toLocaleString()}</span>
                   </button>
                 )}
               </For>

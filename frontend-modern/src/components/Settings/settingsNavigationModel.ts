@@ -75,7 +75,11 @@ export interface SettingsNavItem {
   // terms its label/description can't carry, e.g. "mcp" or "claude" for the
   // External agents connector setup.
   keywords?: string[];
-  icon: Component<{ class?: string; strokeWidth?: number }>;
+  icon: Component<{
+    class?: string;
+    strokeWidth?: number;
+    'aria-hidden'?: boolean | 'true' | 'false';
+  }>;
   iconProps?: { strokeWidth?: number };
   hideFromSidebar?: boolean;
   saveBehavior?: 'system';
@@ -216,6 +220,9 @@ export function resolveCanonicalSettingsPath(path: string): string | null {
     normalizedPath === PULSE_INTELLIGENCE_LEGACY_ASSISTANT_PATH
   ) {
     return settingsTabPath('system-ai-agents');
+  }
+  if (normalizedPath === '/settings/api') {
+    return SECURITY_API_PREFIX;
   }
   if (normalizedPath === SUPPORT_PREFIX) {
     return SUPPORT_DIAGNOSTICS_PREFIX;

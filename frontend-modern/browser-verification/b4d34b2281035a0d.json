@@ -1,0 +1,35 @@
+{
+  "version": 1,
+  "base_sha": "6a04040fbd2eb029bc64cef83ca174f19820d273",
+  "verified_at": "2026-11-24T01:57:56Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx": "86ccb82bda054151f637964f23e64b29a906f75fe1ea642020bd93583be39626"
+  },
+  "routes": [
+    "/proxmox/backups/coverage",
+    "/proxmox/backups/date"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 320,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Playwright 1.56.1 with Chromium 141.0.7390.37 at 1440x900 light and touch WebKit 26.0 at 320x844 dark. Source-bound before/after builds mount the existing Backups consumer with the same local read-only resource, backup inventory, job and protection API fixtures.",
+    "Inspected eight matched image pairs. With a location selected, a partial provider read, or an unavailable PBS inventory, the visible age reads Listed only and the expanded summary says Newest listed backup. The age, location, task, protection and restore-point controls stay visible, without horizontal overflow.",
+    "Complete unfiltered read keeps the normal newest backup. The complete sibling stays unqualified when only the first guest has a provider gap. A newer guest snapshot remains separate from the independent backup age."
+  ],
+  "interactions": [
+    "Open and close Coverage and restore-point evidence by keyboard Enter and by touch; open Filters on narrow and apply and clear an older location. The original age and all points return with the filter cleared.",
+    "Switch a live fixture poll to a partial provider state, then a PBS 503. Retry PBS inventory and observe the newer backup and ordinary label return, with the PVE file and guest snapshot intact. Round trip through By date and verify four listed points."
+  ]
+}

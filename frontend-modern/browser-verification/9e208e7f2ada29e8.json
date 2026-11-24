@@ -1,0 +1,37 @@
+{
+  "version": 1,
+  "base_sha": "50919ac1ae32a059b6358508528de2d2e814380a",
+  "verified_at": "2026-11-23T23:42:57Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/proxmox/ProxmoxReplicationTable.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/proxmox/ProxmoxReplicationTable.tsx": "49e698316012a62ed8cbe981148772c6f39180406fd928b3082f89a6b317901a"
+  },
+  "routes": [
+    "/proxmox/replication"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Playwright 1.56.1 / Chromium 141.0.7390.37; desktop light and phone-width dark; compiled application with synthetic read-only replication inventory.",
+    "Matched draft, Tab and Enter states for one job and for two connections reporting the same guest and native job number. The duplicate rows show their connection without losing status, route or timing.",
+    "Matched exact West ID submission: zero rows on the parent application, the failed West row and its remove-filter chip on the candidate.",
+    "Matched failed job disclosures and a narrow scroll to the lower timing rows, preserving the full error, job number, failure count, timing, and scoped guest link."
+  ],
+  "interactions": [
+    "Type ops, complete ops-db with Tab, and submit with Enter; both row sets remain accurate, including after the single-result fixture receives a namesake on a normal poll.",
+    "Complete and submit the native job number 100-0; both connections still match on desktop and phone.",
+    "Open and close West details with a click or row tap; scroll the narrow details and verify the same guest href.",
+    "Complete lab-w with Tab and submit its exact job with Enter; remove West in the next poll and verify the exact filter stays empty until cleared."
+  ]
+}

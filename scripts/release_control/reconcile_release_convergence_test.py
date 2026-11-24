@@ -246,6 +246,72 @@ class PeerStreamCancellationTests(unittest.TestCase):
         self.assertTrue(all("POST" not in call.args[0] for call in command.call_args_list))
         sleep.assert_called_once_with(1)
 
+    def test_discovery_has_a_final_http1_read_after_a_release_stream_cancel(self):
+        github = subject.GitHub("rcourtman/Pulse", "gh")
+        stable = release("v6.8.0", "2026-11-13T02:55:36Z", prerelease=False)
+        preview = release("v6.9.0-rc.4", "2026-11-24T00:10:00Z", prerelease=True)
+        partial = release("v6.9.0-rc.5", "2026-11-24T00:30:00Z", prerelease=True)
+        inventory = "repos/rcourtman/Pulse/releases?per_page=100"
+        workflow = f"repos/rcourtman/Pulse/actions/workflows/{Path(subject.CONVERGENCE_PATH).name}"
+        control_env = {"GH_TOKEN": "fixture-only", "GODEBUG": "http2client=1,netdns=go"}
+
+        def native_gh(argv, *, env, **_options):
+            endpoint = argv[-1]
+            if endpoint == "repos/rcourtman/Pulse":
+                return self.result(stdout='{"default_branch": "main"}')
+            if endpoint == workflow:
+                return self.result(stdout=json.dumps({"id": WORKFLOW_ID}))
+            if endpoint == inventory:
+                if env == {**control_env, "GODEBUG": "http2client=1,netdns=go,http2client=0"}:
+                    return self.result(stdout=json.dumps([preview]) + "\n" + json.dumps([stable]))
+                return self.result(1, json.dumps([partial]), self.CANCEL)
+            if endpoint == workflow + "/runs?event=workflow_dispatch&per_page=100":
+                return self.result(stdout=json.dumps({"workflow_runs": [
+                    run(77, stable["tag_name"], "2026-11-13T03:00:00Z"),
+                    run(80, preview["tag_name"], "2026-11-24T00:11:00Z"),
+                    run(99, partial["tag_name"], "2026-11-24T00:31:00Z"),
+                ]}))
+            self.fail(f"Unexpected GitHub request: {argv}")
+
+        with patch.dict(os.environ, control_env, clear=True), patch.object(
+            subject.subprocess, "run", side_effect=native_gh
+        ) as command, patch("time.sleep") as sleep:
+            self.assertEqual([77, 80], subject.discover(github))
+            self.assertEqual(control_env, dict(os.environ))
+
+        self.assertEqual(6, command.call_count)
+        for call in command.call_args_list[2:5]:
+            self.assertEqual(["gh", "api", "--paginate", inventory], call.args[0])
+        for call in (*command.call_args_list[:4], command.call_args_list[-1]):
+            self.assertIsNone(call.kwargs["env"])
+        self.assertEqual([1, 2], [call.args[0] for call in sleep.call_args_list])
+
+    def test_only_release_inventory_peer_cancels_can_change_transport(self):
+        github = subject.GitHub("rcourtman/Pulse", "gh")
+        for endpoint, diagnostic in (
+            ("repos/rcourtman/Pulse/releases?per_page=100", "gh: HTTP 504"),
+            ("repos/rcourtman/Pulse/actions/runs", self.CANCEL),
+            ("repos/rcourtman/pulse-pro/releases?per_page=100", self.CANCEL),
+        ):
+            with self.subTest(endpoint=endpoint):
+                results = [self.result(1, stderr=diagnostic)] * 2 + [self.result(stdout="[]")]
+                with patch.object(subject.subprocess, "run", side_effect=results) as command, patch("time.sleep"):
+                    self.assertEqual([[]], github.pages(endpoint))
+                self.assertEqual(3, command.call_count)
+                self.assertTrue(all(call.kwargs["env"] is None for call in command.call_args_list))
+
+    def test_inventory_access_refusal_stops_before_the_last_retry(self):
+        github = subject.GitHub("rcourtman/Pulse", "gh")
+        with patch.object(subject.subprocess, "run", side_effect=[
+            self.result(1, '[{"id": 99}]', self.CANCEL),
+            self.result(1, stderr="gh: Forbidden (HTTP 403)"),
+        ]) as command, patch("time.sleep") as sleep:
+            with self.assertRaisesRegex(subject.ReconciliationError, "HTTP 403"):
+                github.pages("repos/rcourtman/Pulse/releases?per_page=100")
+        self.assertEqual(2, command.call_count)
+        self.assertTrue(all(call.kwargs["env"] is None for call in command.call_args_list))
+        sleep.assert_called_once_with(1)
+
 
 class FailedReadIdentityTests(unittest.TestCase):
     def test_header_bearing_api_failure_names_the_resource_without_retry(self):

@@ -2055,10 +2055,9 @@ for (const [name, field] of [
     assert.match(attachment, /For Pulse CPU, memory or disk writes/);
     assert.match(attachment, /existing readings, screenshots or passive checks/);
     assert.match(attachment, /Pulse process, container or host/);
-    for (const context of ["units", "measurement window", "uptime", "CPU or memory limits", "fleet size", "polling interval", "open dashboards"]) {
+    for (const context of ["units", "measurement window", "uptime", "CPU limits", "fleet size", "polling interval", "open dashboards"]) {
       assert.ok(attachment.includes(context), `${name} must distinguish ${context}`);
     }
-    assert.match(attachment, /Add known CPU or memory limits, fleet size, polling interval and open dashboards/);
     assert.match(attachment, /CPU averaged since start is not a recent sample/);
     assert.match(attachment, /Database size is not a write rate/);
     assert.match(attachment, /Write "unavailable" if you cannot measure safely/);
@@ -2071,11 +2070,18 @@ for (const [name, field] of [
     assert.match(attachment, /Summarise reviewed counters, not raw profiles, heap dumps, databases or full process command lines/);
   });
 
-  test(`baseline memory regressions need no continuing growth or restart: ${name}`, () => {
+  test(`memory comparisons retain limits and peak scope per reading without requiring a new sample: ${name}`, () => {
     const attachment = evidenceField();
-    assert.match(attachment, /higher steady memory baseline matters, not just growth during one run/);
-    assert.match(attachment, /Compare at similar uptimes, noting versions, workload and enabled collectors or features/);
-    assert.match(attachment, /Write "unavailable" if you cannot measure safely/);
+    const performance = attachment.match(
+      /<summary>Pulse CPU, memory or disk writes:[^<]*<\/summary>([\s\S]*?)<\/details>/,
+    )?.[1];
+    assert.ok(performance, "keep this guidance in the optional Pulse performance section");
+    assert.match(performance, /RAM and swap limits that applied to each reading, if known/);
+    assert.match(performance, /if a limit changed and whether a peak covers the measurement window or the whole run/);
+    assert.match(performance, /higher steady memory baseline matters, even without growth/);
+    assert.match(performance, /similar uptimes and workloads/);
+    assert.match(performance, /Pulse version and enabled collectors or features for each/);
+    assert.match(performance, /Write "unavailable" if you cannot measure safely/);
     assert.doesNotMatch(attachment, /required: true|render:/);
   });
 

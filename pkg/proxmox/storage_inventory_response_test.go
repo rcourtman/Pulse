@@ -170,6 +170,9 @@ func TestStorageContentChecksUnmonitoredRowsBeforeReturningBackups(t *testing.T)
 		{name: "only unmonitored content", body: `{"data":[` + skipped + `]}`},
 		{name: "unread trailing row", body: `{"data":[` + backup + `,{"volid":"archive:iso/second","content":"iso","size":"unknown"}]}`, wantError: true},
 		{name: "duplicate unmonitored identity", body: `{"data":[` + skipped + "," + backup + "," + skipped + `]}`, wantError: true},
+		{name: "invalid extension in an unmonitored row", body: `{"data":[` + backup + `,{"volid":"archive:iso/second","content":"iso","provider":[1,]}]}`, wantError: true},
+		{name: "duplicate extension in an unmonitored row", body: `{"data":[` + backup + `,{"volid":"archive:iso/second","content":"iso","provider":1,"provid\u0065r":2}]}`, wantError: true},
+		{name: "noncanonical typed field in an unmonitored row", body: `{"data":[` + backup + `,{"volid":"archive:iso/second","content":"iso","FORMAT":"iso"}]}`, wantError: true},
 		{name: "error after accepted rows", body: `{"data":[` + backup + `],"errors":{"message":"unread"}}`, wantError: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -197,6 +200,27 @@ func TestStorageContentChecksUnmonitoredRowsBeforeReturningBackups(t *testing.T)
 				}
 			}
 		})
+	}
+}
+
+func TestStorageContentDecodesTypedRowsBetweenProviderExtensions(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, `{
+			"data": [
+				{"provider":{"revisions":[{"notes":"end }], \u03bb"},null]},"volid":"archive:backup/first","content":"backup","size":9007199254740993,"verification":{"state":"ok"}},
+				{"provider":{"revision":2},"volid":"archive:vztmpl/last","content":"vztmpl","notes":"kept ]}"},
+				{"provider":null,"volid":"archive:iso/system","content":"iso"}
+			],
+			"errors": null
+		}`)
+	}))
+	defer server.Close()
+
+	rows, err := backupTestClient(t, server.URL).GetStorageContent(context.Background(), "member", "archive")
+	if err != nil || len(rows) != 2 ||
+		rows[0].Volid != "archive:backup/first" || rows[0].Size != 9007199254740993 || rows[0].Verification["state"] != "ok" ||
+		rows[1].Volid != "archive:vztmpl/last" || rows[1].Notes != "kept ]}" {
+		t.Fatalf("accepted storage content changed: %+v err=%v", rows, err)
 	}
 }
 

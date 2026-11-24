@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "base_sha": "e69c1120d98204605b84f3d2fdcdbfe4c169a19b",
+  "verified_at": "2026-11-24T01:31:15Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/proxmox/proxmoxBackupUnreadSources.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/proxmox/proxmoxBackupUnreadSources.ts": "df3567b595be6bcc6858a3f7f089456c3d58be10385b016b663f02f30a0861d6"
+  },
+  "routes": [
+    "/proxmox/backups/coverage",
+    "/proxmox/backups/date"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Playwright 1.56.1: Chromium 141.0.7390.37 at 1440x900 light and touch WebKit 26.0 at 390x844 dark. Exact parent/candidate builds mount the production Backups surface and parse same-origin synthetic resource, inventory, job and posture responses.",
+    "Matched pixels on Coverage for direct PBS namespace, mixed denial, both reader paths without an explicit denial and a denied scope past the three displayed names. Direct PBS names its configured connection; mixed results retain access denial without assigning it to other reads.",
+    "Matched mixed-denial By date pixels retain the two verified points. Each comparison keeps both protected guests, both completed restore points read, backup jobs, server capacity, and the existing notice. No horizontal overflow.",
+    "All-denied control keeps token guidance; complete read removes the notice without removing either point."
+  ],
+  "interactions": [
+    "Refresh all six posture states through the consuming production poll without writing to the fixture API.",
+    "Open and close a guest's backup evidence with keyboard Enter or a phone row tap. Navigate from Coverage to By date and back using the existing controls; both backups remain readable."
+  ]
+}

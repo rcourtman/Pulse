@@ -178,9 +178,11 @@ class DashboardStats:
 class SnapshotCoverage:
     expected_groups: int
     served_groups: set[tuple[str, str]] = field(default_factory=set)
+    steady_groups: set[tuple[str, str]] = field(default_factory=set)
 
-    def counts(self) -> dict[str, int]:
-        return {"expected_groups": self.expected_groups, "served_groups": len(self.served_groups)}
+    def counts(self, *, steady: bool = False) -> dict[str, int]:
+        groups = self.steady_groups if steady else self.served_groups
+        return {"expected_groups": self.expected_groups, "served_groups": len(groups)}
 
 
 def missing_snapshot_coverage(coverage: dict[str, dict[str, dict[str, int]]]) -> list[str]:
@@ -193,23 +195,25 @@ def missing_snapshot_coverage(coverage: dict[str, dict[str, dict[str, int]]]) ->
 
 
 @dataclass
-class PBSStatusWindow:
+class PBSObservationWindow:
     start_s: int
     end_s: int
     # (count, last completion, longest gap so far), keyed by instance and
     # datastore. Accessed under the same lock as snapshot coverage.
     responses: dict[tuple[str, str], tuple[int, int, int]] = field(default_factory=dict)
 
-    def observe(self, instance: str, store: str, completed_ms: int) -> None:
-        start_ms, end_ms = self.start_s * 1000, self.end_s * 1000
-        if not start_ms <= completed_ms <= end_ms:
+    def includes(self, completed_ms: int) -> bool:
+        return self.start_s * 1000 <= completed_ms <= self.end_s * 1000
+
+    def observe_status(self, instance: str, store: str, completed_ms: int) -> None:
+        if not self.includes(completed_ms):
             return
         key = (instance, store)
-        count, latest, longest = self.responses.get(key, (0, start_ms, 0))
+        count, latest, longest = self.responses.get(key, (0, self.start_s * 1000, 0))
         if completed_ms >= latest:
             self.responses[key] = (count + 1, completed_ms, max(longest, completed_ms - latest))
 
-    def report(self, expected: dict[str, dict[str, SnapshotCoverage]], finished: float) -> dict | None:
+    def status_report(self, expected: dict[str, dict[str, SnapshotCoverage]], finished: float) -> dict | None:
         if finished < self.end_s or not expected:
             return None
         start_ms, end_ms = self.start_s * 1000, self.end_s * 1000
@@ -222,6 +226,17 @@ class PBSStatusWindow:
             "window_s": self.end_s - self.start_s,
             "datastores": {
                 name: {store: store_result(name, store) for store in sorted(stores)}
+                for name, stores in sorted(expected.items())
+            },
+        }
+
+    def snapshot_report(self, expected: dict[str, dict[str, SnapshotCoverage]], finished: float) -> dict | None:
+        if finished < self.end_s or not expected:
+            return None
+        return {
+            "window_s": self.end_s - self.start_s,
+            "datastores": {
+                name: {store: row.counts(steady=True) for store, row in sorted(stores.items())}
                 for name, stores in sorted(expected.items())
             },
         }
@@ -575,7 +590,7 @@ def make_pbs_handler(
     snapshots_per_group: int,
     counters: Counter,
     lock: threading.Lock,
-    status_window: PBSStatusWindow | None = None,
+    observation_window: PBSObservationWindow | None = None,
 ):
     datastores = ["store-fast", "store-archive"]
     base_time = int(time.time()) - snapshots_per_group * 86400
@@ -685,9 +700,9 @@ def make_pbs_handler(
                         })
                         # Discovery, an attempted write, and a sibling store
                         # must not stand in for this status response.
-                        if status_window is not None and len(parts) == 5 and ds in coverage:
+                        if observation_window is not None and len(parts) == 5 and ds in coverage:
                             with lock:
-                                status_window.observe(name, ds, time.time_ns() // 1_000_000)
+                                observation_window.observe_status(name, ds, time.time_ns() // 1_000_000)
                         return
                     if ep == "gc":
                         return self.send_json({"upid": "", "last-run-state": "OK", "last-run-endtime": now - 86400})
@@ -702,9 +717,16 @@ def make_pbs_handler(
                         self.send_json(snapshots)
                         if snapshots:
                             # Count only a completed, nonempty response. Retries
-                            # for the same group do not cover another group.
+                            # for the same group do not cover another group, and
+                            # a warmup response does not cover the RSS window.
+                            in_window = (observation_window is not None and len(parts) == 5
+                                         and observation_window.includes(time.time_ns() // 1_000_000))
                             with lock:
-                                coverage[ds].served_groups.add((btype, bid))
+                                row = coverage[ds]
+                                group = (btype, bid)
+                                row.served_groups.add(group)
+                                if in_window:
+                                    row.steady_groups.add(group)
                         return
                     if ep == "rrd":
                         return self.send_json([])
@@ -892,12 +914,12 @@ def main(argv: list[str]) -> int:
 
     pbs_servers: list[tuple[str, ThreadedHTTPServer]] = []
     snapshot_coverage: dict[str, dict[str, SnapshotCoverage]] = {}
-    status_window = PBSStatusWindow(args.steady_since, args.sample_until)
+    pbs_window = PBSObservationWindow(args.steady_since, args.sample_until)
     total_pbs_snapshots = 0
     for idx in range(args.pbs_instances):
         name = f"pbs{idx + 1}"
         handler, snap_count, coverage = make_pbs_handler(
-            name, guest_refs, args.snapshots_per_group, counters, lock, status_window,
+            name, guest_refs, args.snapshots_per_group, counters, lock, pbs_window,
         )
         pbs_servers.append((name, ThreadedHTTPServer(("127.0.0.1", 0), handler)))
         total_pbs_snapshots += snap_count
@@ -984,7 +1006,8 @@ def main(argv: list[str]) -> int:
             name: {store: row.counts() for store, row in stores.items()}
             for name, stores in snapshot_coverage.items()
         }
-        status_coverage = status_window.report(snapshot_coverage, finished)
+        status_coverage = pbs_window.status_report(snapshot_coverage, finished)
+        steady_snapshot_counts = pbs_window.snapshot_report(snapshot_coverage, finished)
         archive_coverage = archive.report(node_names, finished)
     pbs_requests = sum(v for k, v in req_counts.items() if k != "pve_requests")
     pve_requests = req_counts.get("pve_requests", 0)
@@ -1011,6 +1034,7 @@ def main(argv: list[str]) -> int:
         "pve_requests": pve_requests,
         "pbs_requests": pbs_requests,
         "pbs_snapshot_group_coverage": snapshot_counts,
+        "pbs_steady_snapshot_group_coverage": steady_snapshot_counts,
         "pbs_steady_datastore_status": status_coverage,
         "dashboard": {
             "connects": dash_stats.ws_connects,

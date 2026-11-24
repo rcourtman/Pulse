@@ -72,7 +72,7 @@ const vmStateNote = (resource: Resource): VMStateNote | null => {
   }
   const state = (asTrimmedString(resource.virtualMachine?.runtimeState) ?? '').toLowerCase();
   if (state === 'crashed') {
-    return { short: 'crashed', full: 'Hypervisor reports this VM crashed', tone: 'danger' };
+    return { short: null, full: 'Hypervisor reports this VM crashed', tone: 'danger' };
   }
   return {
     short: null,
@@ -381,10 +381,10 @@ export const StandaloneVirtualMachinesTable: Component<{
                                   {name()}
                                 </div>
                                 <span
-                                  class={`platform-table-phone-only-inline text-[11px] ${getPlatformInlineStateClass(Boolean(note()))} ${note() ? getPlatformStatusTextToneClass(note()!.tone) : ''}`}
+                                  class={`platform-table-phone-only-inline shrink-0 text-[11px] ${getPlatformInlineStateClass(Boolean(note()))} ${note() ? getPlatformStatusTextToneClass(note()!.tone) : ''}`}
                                   data-standalone-vm-state-phone={note() ? note()!.tone : 'none'}
                                 >
-                                  <span class="min-w-0 truncate">
+                                  <span class="whitespace-nowrap">
                                     {[stateLabel(), note()?.short].filter(Boolean).join(' · ')}
                                   </span>
                                 </span>
@@ -408,7 +408,13 @@ export const StandaloneVirtualMachinesTable: Component<{
                               class="inline-flex max-w-full min-w-0 items-center gap-1.5"
                               title={note()?.full ?? stateLabel()}
                             >
-                              <span class="shrink-0 text-[11px] font-medium text-base-content">
+                              <span
+                                class={`shrink-0 text-[11px] font-medium ${
+                                  note() && !note()!.short
+                                    ? getPlatformStatusTextToneClass(note()!.tone)
+                                    : 'text-base-content'
+                                }`}
+                              >
                                 {stateLabel()}
                               </span>
                               <Show when={note()?.short}>

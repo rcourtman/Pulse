@@ -4,6 +4,7 @@
 import argparse
 from contextlib import redirect_stderr
 import hashlib
+from http.server import BaseHTTPRequestHandler, HTTPServer
 import importlib.util
 import io
 from itertools import product
@@ -13,6 +14,7 @@ from pathlib import Path
 import subprocess
 import sys
 import tempfile
+from threading import Thread
 import unittest
 from unittest.mock import patch
 
@@ -405,6 +407,93 @@ class InventoryCollectionTest(unittest.TestCase):
             "releases": missing,
         })
         self.assertEqual(report["diagnostics"]["activation_binding"]["status"], "success")
+
+
+class RegistryInventoryPolicyTest(unittest.TestCase):
+    workflow = ROOT / ".github/workflows/security-scan.yml"
+    token_path = "/token"
+    tags_path = "/v2/fixture/pulse/tags/list?n=10000"
+    token = b'{"token":"fixture-read-token"}'
+    tags = b'{"name":"fixture/pulse","tags":["v6.8.0"]}'
+
+    def request_inventory(self, token_responses, tag_responses):
+        workflow = yaml.safe_load(self.workflow.read_text())
+        step = next(item for item in workflow["jobs"]["release-continuity"]["steps"]
+                    if item.get("id") == "frontier")
+        body = step["run"]
+        start = body.index("fetch_registry_tags() {")
+        helper = body[start:body.index("\n}\n", start) + 2]
+        token_path, tags_path = self.token_path, self.tags_path
+        responses = {token_path: iter(token_responses), tags_path: iter(tag_responses)}
+        calls = []
+
+        class Registry(BaseHTTPRequestHandler):
+            def do_GET(self):
+                calls.append((self.path, self.headers.get("Authorization")))
+                status, reply = next(responses.get(self.path, iter(())), (404, b""))
+                self.send_response(status)
+                self.send_header("Content-Length", str(len(reply)))
+                self.end_headers()
+                self.wfile.write(reply)
+
+            def log_message(self, *_):
+                pass
+
+        # Execute the actual workflow helper and real curl with no inherited
+        # credentials, proxy configuration or provider endpoints.
+        with tempfile.TemporaryDirectory() as directory, HTTPServer(("127.0.0.1", 0), Registry) as server:
+            base = f"http://127.0.0.1:{server.server_port}"
+            output = Path(directory) / "tags.json"
+            serving = Thread(target=server.serve_forever, kwargs={"poll_interval": 0.05})
+            serving.start()
+            try:
+                result = subprocess.run(
+                    ["bash", "-c", f'set -euo pipefail\n{helper}\nfetch_registry_tags "$@"',
+                     "registry-fixture", "registry.example", base + token_path, base, "fixture/pulse", str(output)],
+                    cwd=directory, env={"PATH": os.environ["PATH"], "HOME": directory, "LC_ALL": "C"},
+                    capture_output=True, text=True, timeout=20,
+                )
+            finally:
+                server.shutdown()
+                serving.join()
+            return result, calls, json.loads(output.read_text()) if output.exists() else None
+
+    def test_access_refusal_is_never_replayed(self):
+        token_call = (self.token_path, None)
+        tags_call = (self.tags_path, "Bearer fixture-read-token")
+        for status, phase in product((401, 403), ("token", "tags")):
+            with self.subTest(status=status, phase=phase):
+                refusal = (status, b'{"error":"denied"}')
+                tokens = [refusal] if phase == "token" else []
+                tags = [refusal] if phase == "tags" else []
+                # The next reply would pass if the refusal were replayed.
+                result, calls, inventory = self.request_inventory(
+                    tokens + [(200, self.token)], tags + [(200, self.tags)],
+                )
+                self.assertEqual(calls, [token_call] if phase == "token" else [token_call, tags_call])
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn(str(status), result.stderr)
+                self.assertNotIn("fixture-read-token", result.stdout + result.stderr)
+                self.assertIsNone(inventory)
+
+    def test_transient_failures_retry_the_same_get_and_keep_only_the_complete_inventory(self):
+        result, calls, inventory = self.request_inventory(
+            [(502, b'{"error":"transient"}'), (200, self.token)],
+            [(503, b'{"error":"transient"}'), (200, self.tags)],
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(calls, [(self.token_path, None)] * 2 +
+                         [(self.tags_path, "Bearer fixture-read-token")] * 2)
+        self.assertEqual(inventory, {"name": "registry.example/fixture/pulse", "tags": ["v6.8.0"]})
+        self.assertNotIn("fixture-read-token", result.stdout + result.stderr)
+
+    def test_partial_or_duplicate_payloads_are_not_inventory(self):
+        for response in (b'{"tags":', self.tags + b"\n" + self.tags):
+            with self.subTest(response=response):
+                result, calls, inventory = self.request_inventory([(200, self.token)], [(200, response)])
+                self.assertNotEqual(result.returncode, 0)
+                self.assertEqual(calls, [(self.token_path, None), (self.tags_path, "Bearer fixture-read-token")])
+                self.assertIsNone(inventory)
 
 
 if __name__ == "__main__":

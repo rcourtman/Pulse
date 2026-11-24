@@ -44,8 +44,11 @@ import {
   parseReplicationInventory,
   readReplicationInventoryJSON,
 } from './proxmoxReplicationInventory';
-import { buildPlatformSearchSuggestions } from '@/features/platformPage/platformSearchSuggestions';
-import { matchesSearchTermSplit, splitSearchExclusions } from '@/utils/searchQuery';
+import {
+  buildPlatformSearchSuggestions,
+  type PlatformSearchSuggestionCandidate,
+} from '@/features/platformPage/platformSearchSuggestions';
+import { splitSearchExclusions } from '@/utils/searchQuery';
 import { buildProxmoxGuestNativeId } from '@/utils/workloads';
 import { parseBackupTimestampMs } from '@/utils/backupTimestamp';
 
@@ -342,7 +345,79 @@ const NEXT_SYNC_DETAIL_TONE: Record<NextSyncTone, DetailValueTone | undefined> =
 // The detail row id follows the job, not its place in the filtered list, so a
 // refresh that reorders rows keeps the disclosure pointing at the same job.
 const replicationJobDetailRowId = (job: ReplicationJob): string =>
-  `replication-job-detail-${(job.id || job.jobId).replace(/[^A-Za-z0-9_-]/g, '-')}`;
+  `replication-job-detail-${encodeURIComponent(job.id)}`;
+
+const REPLICATION_JOB_TERM_PREFIX = 'replication-job:';
+
+// FilterBar serializes selected suggestions into the same search string as
+// free text. Use an exact, comma/space-safe term for a selected job, even if
+// it disappears on the next poll. Escape uppercase literals so the shared
+// search's case folding cannot merge distinct IDs.
+const replicationJobSearchTerm = (id: string): string =>
+  REPLICATION_JOB_TERM_PREFIX +
+  encodeURIComponent(id).replace(/%[0-9A-F]{2}|[A-Z]/g, (part) =>
+    part.startsWith('%') ? part.toLowerCase() : `%${part.charCodeAt(0).toString(16)}`,
+  );
+
+const replicationJobSearchLabel = (job: ReplicationJob): string => `${job.jobId} · ${job.instance}`;
+
+const buildReplicationSearchSuggestions = (jobs: readonly ReplicationJob[]) => {
+  const terms = new Map<string, { label: string; exactJobId?: string }>();
+  const addTerm = (value: string | undefined, exactJobId?: string) => {
+    const label = value?.trim();
+    if (!label) return;
+    const key = label.toLowerCase();
+    const existing = terms.get(key);
+    terms.set(key, {
+      label: existing?.label ?? label,
+      exactJobId: existing && existing.exactJobId !== exactJobId ? undefined : exactJobId,
+    });
+  };
+  for (const job of jobs) {
+    addTerm(job.guestName);
+    addTerm(job.guest);
+    addTerm(job.jobId);
+    addTerm(job.id, job.id);
+    addTerm(replicationJobSearchLabel(job), job.id);
+  }
+
+  // SearchInput can accept a common prefix on Tab and then select an exact
+  // completion on Enter. Keep colliding aliases and shared prefixes as broad
+  // text, just like guest names and native numbers.
+  const keys = [...terms.keys()].sort();
+  const candidates: PlatformSearchSuggestionCandidate[] = [];
+  keys.forEach((key, index) => {
+    const term = terms.get(key)!;
+    if (keys[index + 1]?.startsWith(key)) term.exactJobId = undefined;
+    if (!term.exactJobId) {
+      candidates.push({ id: `text:${key}`, label: term.label, value: term.label });
+    }
+  });
+  const isSelectable = (value: string, job: ReplicationJob) =>
+    terms.get(value.trim().toLowerCase())?.exactJobId === job.id;
+  for (const job of jobs) {
+    const qualifiedLabel = replicationJobSearchLabel(job);
+    const exactId = isSelectable(job.id, job) ? job.id : undefined;
+    const label = isSelectable(qualifiedLabel, job) ? qualifiedLabel : exactId;
+    if (!label) continue;
+    candidates.push({
+      id: `job:${job.id}`,
+      label,
+      value: replicationJobSearchTerm(job.id),
+      completions: exactId && exactId !== label ? [exactId] : undefined,
+      keywords: [
+        job.guestName ?? '',
+        job.guest ?? '',
+        job.jobId,
+        job.guestId?.toString() ?? '',
+        job.sourceNode ?? '',
+        job.targetNode ?? '',
+        job.instance,
+      ],
+    });
+  }
+  return buildPlatformSearchSuggestions(candidates, 'replication');
+};
 
 // The guest the job copies, as the Proxmox workloads table knows it.
 const replicationJobGuestSubject = (job: ReplicationJob) => {
@@ -398,6 +473,7 @@ const buildReplicationJobSections = (
       rows: compactDetailRows([
         makeDetailRow('Guest', guestLabel === '—' ? '' : guestLabel),
         makeDetailRow('Job ID', job.jobId || job.id),
+        makeDetailRow('Connection', job.instance, { wrap: true }),
         classification === 'unknown'
           ? makeDetailRow('Reported outcome', job.lastSyncStatus?.trim() || 'Not reported', {
               wrap: true,
@@ -517,17 +593,23 @@ export const ProxmoxReplicationTable: Component<{
 }> = (props) => {
   const [search, setSearch] = createSignal('');
   const [status, setStatus] = createSignal<ReplicationStatusFilter>('all');
-  const [expandedJobKey, setExpandedJobKey] = createSignal<string | null>(null);
+  const [expandedJobId, setExpandedJobId] = createSignal<string | null>(null);
   // Rows stay mounted between job refreshes, so Last sync and Next sync read
   // the shared clock to keep moving while a job's timestamps do not change.
   const now = useRelativeTimeNow();
 
-  const filterByStatus = (want: ReplicationStatusFilter) => {
-    const split = splitSearchExclusions(search());
-    return (props.jobs ?? []).filter((job) => {
-      if (want !== 'all' && classifyJob(job) !== want) return false;
-      if (!split.needle && split.excludes.length === 0) return true;
+  const matchingJobs = createMemo(() => {
+    const jobs = props.jobs ?? [];
+    const { needle, excludes } = splitSearchExclusions(search());
+    if (!needle && excludes.length === 0) return jobs;
+    // A draft containing only exclusions leaves a comma after its last chip.
+    const terms = needle
+      .split(',')
+      .map((term) => term.trim())
+      .filter(Boolean);
+    return jobs.filter((job) => {
       const haystack = [
+        job.id,
         job.jobId,
         job.guest,
         job.guestName,
@@ -538,40 +620,39 @@ export const ProxmoxReplicationTable: Component<{
         job.lastSyncStatus,
         job.error,
         job.comment,
+        replicationJobSearchLabel(job),
       ]
         .filter(Boolean)
         .join(' ')
         .toLowerCase();
-      return matchesSearchTermSplit(haystack, split);
+      if (excludes.some((exclude) => haystack.includes(exclude))) return false;
+      return (
+        terms.length === 0 ||
+        terms.some((term) =>
+          term.startsWith(REPLICATION_JOB_TERM_PREFIX)
+            ? term === replicationJobSearchTerm(job.id)
+            : haystack.includes(term),
+        )
+      );
     });
-  };
+  });
+  const filterByStatus = (want: ReplicationStatusFilter) =>
+    want === 'all' ? matchingJobs() : matchingJobs().filter((job) => classifyJob(job) === want);
   const filtered = createMemo(() => filterByStatus(status()));
   const countForStatus = (value: ReplicationStatusFilter): number => filterByStatus(value).length;
 
   const total = createMemo(() => (props.jobs ?? []).length);
   const visible = createMemo(() => filtered().length);
-  const searchSuggestions = createMemo(() =>
-    buildPlatformSearchSuggestions(
-      (props.jobs ?? []).map((job, index) => ({
-        id: job.jobId || job.id || `job-${index}`,
-        label: job.guestName?.trim() || job.guest?.trim() || job.jobId || job.id,
-        description: [
-          job.jobId,
-          job.sourceNode && job.targetNode ? `${job.sourceNode} → ${job.targetNode}` : '',
-        ]
-          .filter(Boolean)
-          .join(' · '),
-        keywords: [
-          job.guest ?? '',
-          job.guestId?.toString() ?? '',
-          job.sourceNode ?? '',
-          job.targetNode ?? '',
-          job.instance ?? '',
-        ],
-      })),
-      'replication-job',
-    ),
-  );
+  const repeatedNativeJobIds = createMemo(() => {
+    const seen = new Set<string>();
+    const repeated = new Set<string>();
+    for (const job of props.jobs ?? []) {
+      if (seen.has(job.jobId)) repeated.add(job.jobId);
+      seen.add(job.jobId);
+    }
+    return repeated;
+  });
+  const searchSuggestions = createMemo(() => buildReplicationSearchSuggestions(props.jobs ?? []));
   const observedWidth = useObservedElementWidth();
   const layout = createMemo(() =>
     getPlatformTableContainerLayout(observedWidth.width() ?? 1920, [520, 720, 960, 1200]),
@@ -737,7 +818,7 @@ export const ProxmoxReplicationTable: Component<{
                 body={
                   <>
                     <PlatformWindowedRows items={filtered} estimatedRowHeight={32}>
-                      {(job, index) => {
+                      {(job) => {
                         const classification = classifyJob(job);
                         const ind = indicatorFor(classification);
                         const last = () => lastSyncFor(job, now());
@@ -745,12 +826,12 @@ export const ProxmoxReplicationTable: Component<{
                         const sourceNode = (job.sourceNode ?? '').trim() || '—';
                         const targetNode = (job.targetNode ?? '').trim() || '—';
                         const guestLabel = formatGuestLabel(job);
-                        const jobKey = `${job.id}:${job.jobId}:${job.guestId ?? index()}`;
                         const detailRowId = replicationJobDetailRowId(job);
                         const errorText = (job.error ?? '').trim();
-                        const isExpanded = () => expandedJobKey() === jobKey;
+                        const showConnection = () => repeatedNativeJobIds().has(job.jobId);
+                        const isExpanded = () => expandedJobId() === job.id;
                         const toggleDetails = () => {
-                          setExpandedJobKey(isExpanded() ? null : jobKey);
+                          setExpandedJobId(isExpanded() ? null : job.id);
                         };
                         return (
                           <>
@@ -768,17 +849,22 @@ export const ProxmoxReplicationTable: Component<{
                                 <div class="flex min-w-0 items-center gap-2">
                                   <PlatformResourceDetailToggleButton
                                     expanded={isExpanded()}
-                                    resourceLabel={`replication job ${job.jobId || job.id}`}
+                                    resourceLabel={`replication job ${job.jobId}${showConnection() ? ` on ${job.instance}` : ''}`}
                                     controlsId={detailRowId}
                                     onToggle={toggleDetails}
                                   />
-                                  <span
-                                    class={`min-w-0 truncate ${isCompact() ? 'text-[10px]' : ''}`}
-                                  >
-                                    {isCompact()
-                                      ? formatMobileReplicationGuestLabel(job)
-                                      : guestLabel}
-                                  </span>
+                                  <div class="min-w-0">
+                                    <div class={`truncate ${isCompact() ? 'text-[10px]' : ''}`}>
+                                      {isCompact()
+                                        ? formatMobileReplicationGuestLabel(job)
+                                        : guestLabel}
+                                    </div>
+                                    <Show when={showConnection()}>
+                                      <bdi class="block text-[10px] leading-tight text-muted wrap-anywhere">
+                                        {job.instance}
+                                      </bdi>
+                                    </Show>
+                                  </div>
                                 </div>
                               </TableCell>
                               <TableCell
@@ -942,7 +1028,7 @@ export const ProxmoxReplicationTable: Component<{
                                   classification={classification}
                                   guestLabel={guestLabel}
                                   now={now()}
-                                  onClose={() => setExpandedJobKey(null)}
+                                  onClose={() => setExpandedJobId(null)}
                                 />
                               </InlineDetailTableRow>
                             </Show>

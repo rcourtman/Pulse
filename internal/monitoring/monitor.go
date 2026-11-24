@@ -2515,16 +2515,15 @@ func (m *Monitor) Start(ctx context.Context, wsHub *websocket.Hub) {
 				continue
 			}
 			if logging.IsLevelEnabled(zerolog.DebugLevel) {
-				// Use GetState() instead of m.state.GetSnapshot() to respect mock mode
-				state := m.GetState()
+				counts := m.broadcastInventoryCounts()
 				log.Debug().
-					Int("nodes", len(state.Nodes)).
-					Int("vms", len(state.VMs)).
-					Int("containers", len(state.Containers)).
-					Int("hosts", len(state.Hosts)).
-					Int("pbs", len(state.PBSInstances)).
-					Int("pbsBackups", len(state.Backups.PBS)).
-					Int("physicalDisks", len(state.PhysicalDisks)).
+					Int("nodes", counts.Nodes).
+					Int("vms", counts.VMs).
+					Int("containers", counts.Containers).
+					Int("hosts", counts.Hosts).
+					Int("pbs", counts.PBSInstances).
+					Int("pbsBackups", counts.PBSBackups).
+					Int("physicalDisks", counts.PhysicalDisks).
 					Msg("Broadcasting state update (ticker)")
 			}
 			m.broadcastCurrentState(wsHub)
@@ -4984,6 +4983,19 @@ func currentStateBroadcasterHasSubscribers(hub currentStateBroadcaster, orgID st
 		return counter.GetTenantClientCount(orgID) > 0
 	}
 	return counter.GetClientCount() > 0
+}
+
+// The live debug ticker only needs counts, not the full snapshot, linked guest
+// disks or alert copies. Mock mode retains the selection and upkeep of GetState.
+func (m *Monitor) broadcastInventoryCounts() models.StateInventoryCounts {
+	if mock.IsMockEnabled() {
+		snapshot := m.GetState()
+		return snapshot.InventoryCounts()
+	}
+	m.mu.RLock()
+	state := m.state
+	m.mu.RUnlock()
+	return state.InventoryCounts()
 }
 
 // broadcastState broadcasts state to WebSocket clients.
@@ -7498,6 +7510,7 @@ func monitorResourceToConvertInput(resource unifiedresources.Resource) models.Re
 		VMware:                monitorRawJSON(resource.VMware),
 		Availability:          monitorRawJSON(resource.Availability),
 		AvailabilityChecks:    monitorRawJSON(resource.AvailabilityChecks),
+		VirtualMachine:        monitorRawJSON(resource.VirtualMachine),
 		PlatformData:          monitorPlatformData(&resource, resourceType, platformID),
 	}
 

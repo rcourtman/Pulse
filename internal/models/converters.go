@@ -1214,6 +1214,7 @@ type ResourceConvertInput struct {
 	VMware                json.RawMessage
 	Availability          json.RawMessage
 	AvailabilityChecks    json.RawMessage
+	VirtualMachine        json.RawMessage
 	PlatformData          json.RawMessage
 }
 
@@ -1294,6 +1295,7 @@ func ConvertResourceToFrontend(input ResourceConvertInput) ResourceFrontend {
 		VMware:                input.VMware,
 		Availability:          input.Availability,
 		AvailabilityChecks:    input.AvailabilityChecks,
+		VirtualMachine:        input.VirtualMachine,
 		PlatformData:          input.PlatformData,
 	}
 

@@ -104,6 +104,24 @@ keep the previous binary/image and matching data backup until recovery is checke
 
 ### systemd and Proxmox LXC
 
+For a planned rollout on a memory-limited LXC, save a baseline on the current
+version **before** starting the update:
+
+- Note the Pulse version and uptime, the LXC memory limit and swap allowance,
+  and the start and end of a window that includes your usual busy polls.
+- Keep the container's peak memory for that window and any recorded swap use,
+  pressure counters, kernel kills or unexpected restarts. Keep Pulse's process
+  RSS separate. A peak from before the window is not a measurement of it.
+- Save a recent guest History timestamp and, if you monitor backups, the
+  archive count and date at an existing backup location. Check the same guests
+  and backup location after the update.
+
+Compare windows of the same length at similar uptime and at the same limit,
+swap allowance and workload. Without that comparison, leave memory headroom
+unverified. Fresh readings still matter, but they are not enough to widen the
+rollout. Do not change limits, reset counters or start another backup to fill
+in missing evidence.
+
 Use **Settings → System → Updates**. Follow
 [server update guidance](AUTO_UPDATE.md) for the deployment's update controls and
 Update History. Pulse attempts snapshot and rollback operations; a recorded

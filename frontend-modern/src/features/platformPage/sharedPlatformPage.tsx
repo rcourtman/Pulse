@@ -114,26 +114,34 @@ export function PlatformSectionTabs<TabId extends string>(props: PlatformSection
 
 function PlatformSectionTabRail<TabId extends string>(props: PlatformSectionTabsProps<TabId>) {
   let tabListRef: HTMLElement | undefined;
-  const [hasOverflow, setHasOverflow] = createSignal(false);
   const [canScrollLeft, setCanScrollLeft] = createSignal(false);
   const [canScrollRight, setCanScrollRight] = createSignal(false);
 
   const updateScrollControls = () => {
     const rail = tabListRef;
     if (!rail) return;
-    const maxScrollLeft = Math.max(0, rail.scrollWidth - rail.clientWidth);
-    setHasOverflow(maxScrollLeft > 1);
+    const paddingRight =
+      typeof window !== 'undefined'
+        ? Number.parseFloat(window.getComputedStyle(rail).paddingRight) || 0
+        : 0;
+    const lastTab = rail.lastElementChild as HTMLElement | null;
+    const lastTabRight =
+      lastTab && lastTab.offsetWidth > 0 ? lastTab.offsetLeft + lastTab.offsetWidth : null;
+    const contentRight =
+      lastTabRight !== null
+        ? Math.min(rail.scrollWidth - paddingRight, lastTabRight)
+        : Math.max(0, rail.scrollWidth - paddingRight);
+    const maxScrollLeft = Math.max(0, contentRight - rail.clientWidth);
     setCanScrollLeft(rail.scrollLeft > 1);
-    setCanScrollRight(rail.scrollLeft < maxScrollLeft - 1);
+    setCanScrollRight(rail.scrollLeft < maxScrollLeft - 2);
   };
 
   const activeItemVisibility = useActiveHorizontalRailItemVisibility({
     active: () => props.active,
     rail: () => tabListRef,
-    // The phone-only arrow overlays occupy 40px at either rail edge. Keep
-    // selected labels beyond those controls, with the normal 8px breathing
-    // room, whenever route navigation brings a tab into view.
-    edgePadding: 48,
+    // Scroll controls sit outside the nav track as flex siblings so they never
+    // overlap tab labels; keep the standard 8px breathing room on edges.
+    edgePadding: 8,
   });
 
   createEffect(() => {
@@ -171,14 +179,23 @@ function PlatformSectionTabRail<TabId extends string>(props: PlatformSectionTabs
 
   return (
     <Show when={props.tabs.length > 1}>
-      <div class="relative min-w-0 border-b border-border">
+      <div class="flex min-w-0 items-stretch border-b border-border">
+        <Show when={canScrollLeft()}>
+          <button
+            type="button"
+            class="flex w-9 shrink-0 items-center justify-center border-r border-border/60 bg-surface text-muted hover:text-base-content focus-visible:outline-solid focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-blue-500 sm:hidden"
+            onClick={() => scrollSections(-1)}
+            aria-label={`${props.ariaLabel}: scroll left`}
+          >
+            <ChevronLeftIcon class="h-4 w-4" aria-hidden="true" />
+          </button>
+        </Show>
+
         <nav
           ref={(element) => {
             tabListRef = element;
           }}
-          class={`touch-scroll flex min-w-0 items-center gap-1 overflow-x-auto pl-0 overscroll-x-contain scrollbar-hide sm:pr-0 ${
-            hasOverflow() ? 'pr-10' : 'pr-0'
-          }`}
+          class="touch-scroll relative flex min-w-0 flex-1 items-center gap-1 overflow-x-auto pl-0 pr-0 overscroll-x-contain scrollbar-hide"
           aria-label={props.ariaLabel}
         >
           <For each={props.tabs}>
@@ -198,28 +215,14 @@ function PlatformSectionTabRail<TabId extends string>(props: PlatformSectionTabs
           </For>
         </nav>
 
-        <Show when={canScrollLeft()}>
-          <button
-            type="button"
-            class="absolute inset-y-0 left-0 z-10 flex w-10 items-center justify-start bg-linear-to-r from-surface via-surface to-transparent pl-1 text-muted hover:text-base-content focus-visible:outline-solid focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-blue-500 sm:hidden"
-            onClick={() => scrollSections(-1)}
-            aria-label={`${props.ariaLabel}: scroll left`}
-          >
-            <span class="flex h-8 w-8 items-center justify-center rounded-full border border-border bg-surface shadow-xs">
-              <ChevronLeftIcon class="h-4 w-4" aria-hidden="true" />
-            </span>
-          </button>
-        </Show>
         <Show when={canScrollRight()}>
           <button
             type="button"
-            class="absolute inset-y-0 right-0 z-10 flex w-10 items-center justify-end bg-linear-to-l from-surface via-surface to-transparent pr-1 text-muted hover:text-base-content focus-visible:outline-solid focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-blue-500 sm:hidden"
+            class="flex w-9 shrink-0 items-center justify-center border-l border-border/60 bg-surface text-muted hover:text-base-content focus-visible:outline-solid focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-blue-500 sm:hidden"
             onClick={() => scrollSections(1)}
             aria-label={`${props.ariaLabel}: scroll right`}
           >
-            <span class="flex h-8 w-8 items-center justify-center rounded-full border border-border bg-surface shadow-xs">
-              <ChevronRightIcon class="h-4 w-4" aria-hidden="true" />
-            </span>
+            <ChevronRightIcon class="h-4 w-4" aria-hidden="true" />
           </button>
         </Show>
       </div>

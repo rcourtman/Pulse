@@ -104,6 +104,47 @@ describe('StandaloneVirtualMachinesTable', () => {
     expect(screen.getByTestId('vm-drawer-agent:tower:libvirt:domain-1')).toBeInTheDocument();
   });
 
+  it('renders crashed and paused states cleanly without duplicate state text', () => {
+    const crashed = makeResource({
+      id: 'agent:box:libvirt:crashed',
+      name: 'kvm-legacy-erp',
+      parentId: 'agent:box',
+      parentName: 'LinuxBox',
+      status: 'degraded',
+      technology: 'libvirt',
+      virtualMachine: { runtimeState: 'crashed', hypervisor: 'libvirt', vcpus: 4 },
+    });
+    const paused = makeResource({
+      id: 'agent:box:libvirt:paused',
+      name: 'kvm-build-runner',
+      parentId: 'agent:box',
+      parentName: 'LinuxBox',
+      status: 'degraded',
+      technology: 'libvirt',
+      virtualMachine: { runtimeState: 'paused', hypervisor: 'libvirt', vcpus: 4 },
+    });
+
+    render(() => (
+      <StandaloneVirtualMachinesTable
+        vms={[crashed, paused]}
+        machines={[workstation]}
+        emptyIcon={<span />}
+        emptyTitle="No virtual machines"
+        emptyDescription="Empty"
+      />
+    ));
+
+    const crashedRow = document.querySelector(
+      '[data-standalone-vm-row="agent:box:libvirt:crashed"]',
+    );
+    expect(crashedRow?.textContent).toContain('Crashed');
+    expect(crashedRow?.textContent).not.toContain('Crashedcrashed');
+    expect(crashedRow?.textContent).not.toContain('Crashed crashed');
+
+    const pausedRow = document.querySelector('[data-standalone-vm-row="agent:box:libvirt:paused"]');
+    expect(pausedRow?.textContent).toContain('Paused');
+  });
+
   it('shows the empty state when no standalone VMs are reported', () => {
     render(() => (
       <StandaloneVirtualMachinesTable
