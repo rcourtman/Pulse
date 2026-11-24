@@ -1,0 +1,53 @@
+{
+  "version": 1,
+  "base_sha": "6ca39c4fc709a44a8ea4d71358632ebf0f6f76e5",
+  "verified_at": "2026-11-24T18:29:46Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/api/availabilityTargets.ts",
+    "frontend-modern/src/components/SSOReturnError.tsx",
+    "frontend-modern/src/components/Settings/ConnectionEditor/CredentialSlots/AvailabilityTargetSlot.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/api/availabilityTargets.ts": "233cee338a308ad2f13bba93fd07f1b08ba3ce4f899d29327ece8a713d733f75",
+    "frontend-modern/src/components/SSOReturnError.tsx": "36baf616bca32fbab9875367db1bed0bca2b02f6f088025d303d5246879cb56e",
+    "frontend-modern/src/components/Settings/ConnectionEditor/CredentialSlots/AvailabilityTargetSlot.tsx": "7abfa969127f7631176c5018690b4ab7fdd26469d2325920bb008b43b2048b56"
+  },
+  "routes": [
+    "/login",
+    "/login?oidc=error&oidc_error=email_unverified",
+    "/availability"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Login default state without SSO error alert",
+    "Login with oidc=error&oidc_error=email_unverified alert above SSO provider button and local login form",
+    "Login after reload clears transient SSO return error",
+    "Login with unrecognized oidc_error shows generic fallback without leaking raw query text",
+    "Availability check modal with ICMP, HTTP, and TCP protocols hides HTTPS TLS verification fields",
+    "Availability check modal with HTTPS protocol shows Pinned certificate fingerprint (optional) and Allow an unverified certificate",
+    "Availability HTTPS test probe refusal against untrusted self-signed certificate shows presented certificate SHA-256 without overflow on desktop and mobile",
+    "Availability HTTPS test probe succeeds after pinning the presented SHA-256 fingerprint",
+    "Availability save rejects invalid SHA-256 fingerprint with backend validation alert",
+    "Availability edit modal hydrates persisted normalized SHA-256 fingerprint and Allow an unverified certificate state after reload and persists cleared values"
+  ],
+  "interactions": [
+    "Visited /login, /login?oidc=error&oidc_error=email_unverified, reloaded /login, and visited unknown oidc_error at 1440x900 and 390x844",
+    "Focused SSO provider button on /login and confirmed zero horizontal overflow and no clipped alert text",
+    "Opened Add check modal on /availability and switched Probe across icmp, http, https, tcp, and https",
+    "Entered bearer credentials and tested an ephemeral self-signed HTTPS endpoint to confirm certificate refusal and SHA-256 presentation",
+    "Typed colon-formatted uppercase SHA-256 into Pinned certificate fingerprint (optional) and re-ran Test probe to confirm HTTP 200 success",
+    "Toggled Allow an unverified certificate via Space key and verified invalid fingerprint save error",
+    "Saved HTTPS target, reloaded /availability, opened Edit modal from detail drawer, verified hydrated values, cleared both fields, saved, reloaded, and confirmed cleared persistence",
+    "Dismissed Availability check modal via Escape on desktop and Cancel button on mobile"
+  ]
+}

@@ -410,6 +410,85 @@ describe('AvailabilityTargetSlot', () => {
     );
   });
 
+  it('sends the HTTPS server verification choice with the response contract', async () => {
+    render(() => <AvailabilityTargetSlot onCancel={vi.fn()} onSaved={vi.fn()} />);
+
+    fireEvent.change(screen.getByLabelText('Probe'), { target: { value: 'https' } });
+    expect(screen.getByLabelText('Allow an unverified certificate')).not.toBeChecked();
+    fireEvent.input(screen.getByLabelText('Name'), { target: { value: 'Wiki' } });
+    fireEvent.input(screen.getByLabelText(/^URL or host/), {
+      target: { value: 'https://wiki.example.test/health' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Add service/device check' }));
+
+    await waitFor(() => expect(mockedCreate).toHaveBeenCalled());
+    expect(mockedCreate.mock.calls.at(-1)?.[0].http).toEqual(
+      expect.objectContaining({ tlsFingerprintSha256: '', insecureSkipVerify: false }),
+    );
+
+    fireEvent.input(screen.getByLabelText('Pinned certificate fingerprint (optional)'), {
+      target: { value: ' AB:CD ' },
+    });
+    fireEvent.click(screen.getByLabelText('Allow an unverified certificate'));
+    fireEvent.click(screen.getByRole('button', { name: 'Add service/device check' }));
+
+    await waitFor(() => expect(mockedCreate).toHaveBeenCalledTimes(2));
+    expect(mockedCreate.mock.calls.at(-1)?.[0].http).toEqual(
+      expect.objectContaining({ tlsFingerprintSha256: 'AB:CD', insecureSkipVerify: true }),
+    );
+  });
+
+  it('loads and clears saved HTTPS server verification fields when editing', async () => {
+    const fingerprint = 'ab'.repeat(32);
+    mockedList.mockResolvedValue([
+      {
+        id: 'target-tls',
+        name: 'Internal Wiki',
+        address: 'https://wiki.example.test/health',
+        protocol: 'https',
+        enabled: true,
+        http: {
+          method: 'GET',
+          authentication: { type: 'none' },
+          expectedStatusMin: 200,
+          expectedStatusMax: 399,
+          tlsFingerprintSha256: fingerprint,
+          insecureSkipVerify: true,
+        },
+      },
+    ]);
+    mockedUpdate.mockResolvedValue({
+      id: 'target-tls',
+      name: 'Internal Wiki',
+      address: 'https://wiki.example.test/health',
+      protocol: 'https',
+      enabled: true,
+    });
+
+    render(() => (
+      <AvailabilityTargetSlot editingTargetId="target-tls" onCancel={vi.fn()} onSaved={vi.fn()} />
+    ));
+
+    await waitFor(() =>
+      expect(screen.getByLabelText('Pinned certificate fingerprint (optional)')).toHaveValue(
+        fingerprint,
+      ),
+    );
+    expect(screen.getByLabelText('Allow an unverified certificate')).toBeChecked();
+
+    fireEvent.input(screen.getByLabelText('Pinned certificate fingerprint (optional)'), {
+      target: { value: '' },
+    });
+    fireEvent.click(screen.getByLabelText('Allow an unverified certificate'));
+    fireEvent.click(screen.getByRole('button', { name: 'Save target' }));
+
+    await waitFor(() => expect(mockedUpdate).toHaveBeenCalled());
+    const [, payload] = mockedUpdate.mock.calls.at(-1)!;
+    expect(payload.http).toEqual(
+      expect.objectContaining({ tlsFingerprintSha256: '', insecureSkipVerify: false }),
+    );
+  });
+
   it('creates an HTTP application response contract from the proof question', async () => {
     render(() => <AvailabilityTargetSlot onCancel={vi.fn()} onSaved={vi.fn()} />);
 
@@ -586,6 +665,38 @@ describe('AvailabilityTargetSlot', () => {
       await screen.findByText(/Endpoint answered in 18 ms, but the application contract failed/),
     ).toBeInTheDocument();
     expect(screen.getByText(/HTTP 503/)).toBeInTheDocument();
+  });
+
+  it('shows the fingerprint of a certificate the check refused', async () => {
+    mockedTest.mockResolvedValue({
+      success: false,
+      latencyMillis: 12,
+      outcome: 'unreachable',
+      transportOutcome: 'unreachable',
+      error: 'https certificate is not trusted, so the request was not sent',
+      certificate: {
+        observedAt: '2026-11-20T00:00:00Z',
+        notBefore: '2026-01-01T00:00:00Z',
+        notAfter: '2027-01-01T00:00:00Z',
+        fingerprintSha256: 'ab'.repeat(32),
+        trustStatus: 'self-signed',
+        chainValid: false,
+        hostnameValid: true,
+        selfSigned: true,
+      },
+    });
+    render(() => <AvailabilityTargetSlot onCancel={vi.fn()} onSaved={vi.fn()} />);
+    fireEvent.change(screen.getByLabelText('Probe'), { target: { value: 'https' } });
+    fireEvent.input(screen.getByLabelText(/^URL or host/), {
+      target: { value: 'https://wiki.example.test/health' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Test probe' }));
+
+    expect(
+      await screen.findByText(
+        `https certificate is not trusted, so the request was not sent (presented certificate SHA-256: ${'ab'.repeat(32)})`,
+      ),
+    ).toBeInTheDocument();
   });
 
   describe('external probe assignment', () => {
