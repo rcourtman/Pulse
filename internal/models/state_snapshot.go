@@ -214,14 +214,36 @@ func (s StateSnapshot) Clone() StateSnapshot {
 
 // GetSnapshot returns a detached snapshot of the complete current state.
 func (s *State) GetSnapshot() StateSnapshot {
-	return s.getSnapshot(cloneKubernetesClusters)
+	return s.getSnapshot(cloneKubernetesClusters, clonePBSBackups)
 }
 
-func (s *State) getSnapshot(cloneClusters func([]KubernetesCluster) []KubernetesCluster) StateSnapshot {
+// GetSnapshotForResourceRefresh keeps PBS snapshot attribution and datastore
+// evidence for the canonical registry, but does not copy per-artifact file
+// lists or raw verification details. Use a full snapshot or a backup-specific
+// getter for consumers presenting the artifacts themselves.
+func (s *State) GetSnapshotForResourceRefresh() StateSnapshot {
+	return s.getSnapshot(cloneKubernetesClusters, clonePBSBackupsForResourceRefresh)
+}
+
+func clonePBSBackupsForResourceRefresh(src []PBSBackup) []PBSBackup {
+	if len(src) == 0 {
+		return nil
+	}
+	backups := make([]PBSBackup, len(src))
+	for i := range src {
+		backup := src[i]
+		backup.Files = nil
+		backup.VerificationRaw = nil
+		backups[i] = clonePBSBackup(backup)
+	}
+	return backups
+}
+
+func (s *State) getSnapshot(cloneClusters func([]KubernetesCluster) []KubernetesCluster, clonePBSRows func([]PBSBackup) []PBSBackup) StateSnapshot {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	pbsBackups := clonePBSBackups(s.PBSBackups)
+	pbsBackups := clonePBSRows(s.PBSBackups)
 	pmgBackups := clonePMGBackups(s.PMGBackups)
 	pveBackups := clonePVEBackups(s.PVEBackups)
 

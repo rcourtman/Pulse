@@ -837,7 +837,7 @@ func (m *Monitor) syncGuestBackupTimesAndResourceStore() {
 
 	m.state.SyncGuestBackupTimes()
 	scope := m.mockModeFence.begin()
-	m.updateResourceStore(m.state.GetSnapshot(), scope)
+	m.updateResourceStore(m.state.GetSnapshotForResourceRefresh(), scope)
 }
 
 func (m *Monitor) backupReadStateForInstance(instanceName string) unifiedresources.ReadState {
