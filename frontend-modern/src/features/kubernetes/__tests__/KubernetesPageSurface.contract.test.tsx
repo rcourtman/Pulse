@@ -80,6 +80,7 @@ vi.mock('@/features/platformPage/sharedPlatformPage', () => ({
   ),
   PlatformTableEmptyState: () => <div data-testid="platform-table-empty-state" />,
   PlatformTableLoadingState: () => <div data-testid="platform-table-loading-state" />,
+  PlatformTableResetFiltersButton: () => <button type="button">Reset filters</button>,
   PlatformTableToolbar: () => <div data-testid="platform-table-toolbar" />,
 }));
 

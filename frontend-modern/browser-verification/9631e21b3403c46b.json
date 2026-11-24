@@ -1,0 +1,41 @@
+{
+  "version": 1,
+  "base_sha": "db561c6456e2a62a998a75329732e7b7baabe01d",
+  "verified_at": "2026-11-24T10:53:17Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/kubernetes/KubernetesPageSurface.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/kubernetes/KubernetesPageSurface.tsx": "da10357f62b02e9991fdee61558ea9807758209ae07517981d363734ca67b668"
+  },
+  "routes": [
+    "/kubernetes/overview",
+    "/kubernetes/workloads",
+    "/kubernetes/services",
+    "/kubernetes/configuration"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Desktop 1440x900 dark and light themes on /kubernetes/overview with Review link pointing to /kubernetes/workloads?status=degraded",
+    "Desktop 1440x900 and mobile 390x844 on /kubernetes/workloads?status=degraded showing only the 3 tables containing degraded rows with zero empty stacked tables and 0px overflow",
+    "Desktop 1440x900 on /kubernetes/workloads with Kind: Pods filter applied showing removable Kind chip, pod-scoped status counts (120 of 177 rows), and Pods table at top",
+    "Desktop 1440x900 zero-match searches on /kubernetes/workloads, /kubernetes/services, and /kubernetes/configuration each showing one unified empty state card with Reset filters button and 0 tables",
+    "Desktop 1440x900 and mobile 390x844 on /kubernetes/configuration showing single metadata-only summary banner with 0px overflow and zero console/page errors"
+  ],
+  "interactions": [
+    "Clicked Review on /kubernetes/overview and verified navigation to /kubernetes/workloads?status=degraded with 3 matched tables and zero empty-table spam",
+    "Selected Kind: Pods from the Add filter menu on /kubernetes/workloads and verified single-table isolation and updated counts",
+    "Entered non-matching searches on Workloads, Services, and Configuration and clicked Reset filters on Workloads to restore all 4 tables",
+    "Toggled theme to light mode on /kubernetes/workloads and inspected rendered desktop and mobile screenshots"
+  ]
+}
