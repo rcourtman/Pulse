@@ -8,6 +8,7 @@ import (
 	"math"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 	"time"
@@ -19,6 +20,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/hostmetrics"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	agentsdocker "github.com/rcourtman/pulse-go-rewrite/pkg/agents/docker"
 	"github.com/rs/zerolog"
 )
@@ -125,7 +127,7 @@ func TestPodmanCPUCollectorHistoryAndAlerts(t *testing.T) {
 				},
 			}
 			requestHistory := func(token, id, metric string) *httptest.ResponseRecorder {
-				req := httptest.NewRequest(http.MethodGet, "/api/metrics-store/history?resourceType=app-container&resourceId="+id+"&metric="+metric+"&range=5m&maxPoints=240", nil)
+				req := httptest.NewRequest(http.MethodGet, "/api/metrics-store/history?resourceType=app-container&resourceId="+url.QueryEscape(id)+"&metric="+metric+"&range=5m&maxPoints=240", nil)
 				if token != "" {
 					req.Header.Set("X-API-Token", token)
 				}
@@ -133,11 +135,12 @@ func TestPodmanCPUCollectorHistoryAndAlerts(t *testing.T) {
 				router.Handler().ServeHTTP(rec, req)
 				return rec
 			}
+			fullMetricID := unifiedresources.DockerContainerMetricID(agent.cfg.AgentID, fullID)
 			for _, test := range []struct {
 				token  string
 				status int
 			}{{"", http.StatusUnauthorized}, {reportToken, http.StatusForbidden}} {
-				if rec := requestHistory(test.token, fullID, "cpu"); rec.Code != test.status {
+				if rec := requestHistory(test.token, fullMetricID, "cpu"); rec.Code != test.status {
 					t.Fatalf("History auth/scope status %d, want %d", rec.Code, test.status)
 				}
 			}
@@ -174,11 +177,12 @@ func TestPodmanCPUCollectorHistoryAndAlerts(t *testing.T) {
 					if math.Abs(c.CPUPercent-want) > 1e-8 || math.Abs(c.CPUCapacityPercent-capacity) > 1e-8 || c.MemoryUsage != 1_000_000 || c.MemoryPercent != 25 {
 						t.Errorf("sample %d container %s: raw %g capacity %g memory %g, want raw %g capacity %g memory 25", i, c.ID, c.CPUPercent, c.CPUCapacityPercent, c.MemoryPercent, want, capacity)
 					}
-					memory := monitor.GetMetricsHistory().GetGuestMetrics("docker:"+c.ID, "cpu", 5*time.Minute)
+					metricID := unifiedresources.DockerContainerMetricID(host.ID, c.ID)
+					memory := monitor.GetMetricsHistory().GetGuestMetrics("docker:"+metricID, "cpu", 5*time.Minute)
 					if len(memory) != i+1 || math.Abs(memory[len(memory)-1].Value-capacity) > 1e-8 || memory[len(memory)-1].Timestamp.Before(before) || memory[len(memory)-1].Timestamp.After(after) {
 						t.Errorf("sample %d memory History for %s = %+v, want capacity %g at receipt time", i, c.ID, memory, capacity)
 					}
-					rec := requestHistory(readToken, c.ID, "cpu")
+					rec := requestHistory(readToken, metricID, "cpu")
 					var history struct {
 						ResourceType string `json:"resourceType"`
 						ResourceID   string `json:"resourceId"`
@@ -189,7 +193,7 @@ func TestPodmanCPUCollectorHistoryAndAlerts(t *testing.T) {
 							Value     float64 `json:"value"`
 						} `json:"points"`
 					}
-					if rec.Code != http.StatusOK || json.Unmarshal(rec.Body.Bytes(), &history) != nil || history.ResourceType != "app-container" || history.ResourceID != c.ID || history.Metric != "cpu" || history.Source != "store" || len(history.Points) != i+1 {
+					if rec.Code != http.StatusOK || json.Unmarshal(rec.Body.Bytes(), &history) != nil || history.ResourceType != "app-container" || history.ResourceID != metricID || history.Metric != "cpu" || history.Source != "store" || len(history.Points) != i+1 {
 						t.Fatalf("sample %d stored HTTP History identity/coverage: %d %s", i, rec.Code, rec.Body.String())
 					}
 					point := history.Points[len(history.Points)-1]
@@ -198,7 +202,7 @@ func TestPodmanCPUCollectorHistoryAndAlerts(t *testing.T) {
 					}
 					// The existing drawer asks for all metrics, not just CPU. Require
 					// that response to preserve the same stored identity/value/time.
-					allRec := requestHistory(readToken, c.ID, "")
+					allRec := requestHistory(readToken, metricID, "")
 					var all struct {
 						ResourceType string `json:"resourceType"`
 						ResourceID   string `json:"resourceId"`
@@ -209,7 +213,7 @@ func TestPodmanCPUCollectorHistoryAndAlerts(t *testing.T) {
 							Max       float64 `json:"max"`
 						} `json:"metrics"`
 					}
-					if allRec.Code != http.StatusOK || json.Unmarshal(allRec.Body.Bytes(), &all) != nil || all.ResourceType != "app-container" || all.ResourceID != c.ID || len(all.Metrics["cpu"]) != i+1 || len(all.Metrics["memory"]) != i+1 {
+					if allRec.Code != http.StatusOK || json.Unmarshal(allRec.Body.Bytes(), &all) != nil || all.ResourceType != "app-container" || all.ResourceID != metricID || len(all.Metrics["cpu"]) != i+1 || len(all.Metrics["memory"]) != i+1 {
 						t.Fatalf("sample %d all-metric drawer identity/coverage: %d %s", i, allRec.Code, allRec.Body.String())
 					}
 					cpuPoint := all.Metrics["cpu"][i]
@@ -232,7 +236,7 @@ func TestPodmanCPUCollectorHistoryAndAlerts(t *testing.T) {
 			if err := agent.sendReport(context.Background(), lastReport); err != nil {
 				t.Fatal(err)
 			}
-			if n := len(monitor.GetMetricsHistory().GetGuestMetrics("docker:"+fullID, "cpu", 5*time.Minute)); n != len(samples) {
+			if n := len(monitor.GetMetricsHistory().GetGuestMetrics("docker:"+fullMetricID, "cpu", 5*time.Minute)); n != len(samples) {
 				t.Fatalf("duplicate report added History: %d points", n)
 			}
 			// The History credential must not admit report writes.
