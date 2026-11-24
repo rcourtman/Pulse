@@ -3230,6 +3230,26 @@ payload shape change when the portal presents compact client rows.
     origin change clears omitted body/header values and requires Basic or
     bearer credentials to be entered again before the target can be saved or
     tested; stored credentials must never follow an address edit silently.
+    An update that assigns the target to a host agent it was not already
+    assigned to names a new recipient for the write-only values, because an
+    assigned agent receives them in its remote config. Such an update is
+    refused with `http_secrets_reentry_required` while it would reuse a stored
+    body, credential, or header value: each one must be entered again or
+    cleared in the same request, and the stored target is left unchanged.
+    Removing a location, or an edit that keeps the assigned agents, still
+    merges them.
+    Nor may stored credentials follow the address to whichever server answers
+    there. The `http` block additively carries `tlsFingerprintSha256` and
+    `insecureSkipVerify`, and reachability stays independent from trust
+    posture only for a request that carries nothing stored. An HTTPS contract
+    with authentication, a header value, or a body is written only after the
+    server presented the pinned leaf, or otherwise a chain and host name the
+    observing host trusts, unless the explicit `insecureSkipVerify` opt-out is
+    set. A refusal is an unreachable result whose error says the request was
+    not sent. For an untrusted chain or host name, test and status responses
+    still carry the refused `certificate` observation so its fingerprint can
+    be pinned. The fingerprint is normalized to 64 lowercase hexadecimal
+    characters and anything else is a validation error.
     Test and current-status responses expose transport reachability separately
     from the typed application outcome, status code, and bounded failure code,
     but never return the request body, response body, credential values, or

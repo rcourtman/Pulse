@@ -29,6 +29,11 @@ const (
 	FeatureVMware              = "PULSE_ENABLE_VMWARE"
 	defaultTimeout             = 10 * time.Second
 	inventoryResponseLimitByte = 8 << 20
+	// inventoryListEntryLimit caps the entries of one inventory list. The byte
+	// limit does not bound them: an entry of a few bytes decodes into a struct
+	// of several hundred and then costs per-entity reads. vCenter itself
+	// refuses to list more than 4,000 VMs, so this leaves generous headroom.
+	inventoryListEntryLimit = 20000
 )
 
 // Prefer the canonical four-component release; retain the legacy spelling
@@ -404,6 +409,9 @@ func (c *Client) createAutomationSession(ctx context.Context) (string, error) {
 	return strings.TrimSpace(sessionID), nil
 }
 
+// listAutomationResources reads one Automation API inventory list into target.
+// The entries are counted before they are decoded, so a list beyond
+// inventoryListEntryLimit is refused instead of being built in memory.
 func (c *Client) listAutomationResources(
 	ctx context.Context,
 	sessionID string,
@@ -411,7 +419,38 @@ func (c *Client) listAutomationResources(
 	label string,
 	target any,
 ) error {
-	return c.getAutomationJSON(ctx, sessionID, path, label, target)
+	var body json.RawMessage
+	if err := c.getAutomationJSON(ctx, sessionID, path, label, &body); err != nil {
+		return err
+	}
+	if jsonListExceeds(body, inventoryListEntryLimit) {
+		return &ConnectionError{
+			Category: "endpoint",
+			Message:  fmt.Sprintf("VMware %s response lists more than %d entries", label, inventoryListEntryLimit),
+		}
+	}
+	return decodeVIJSONBody(body, label, target)
+}
+
+// jsonListExceeds reports whether body is a JSON array of more than limit
+// entries. It walks the entries without keeping them and stops at the limit.
+// Anything that is not a well-formed array is left for the typed decode to
+// report.
+func jsonListExceeds(body []byte, limit int) bool {
+	decoder := json.NewDecoder(bytes.NewReader(body))
+	if token, err := decoder.Token(); err != nil || token != json.Delim('[') {
+		return false
+	}
+	var entry json.RawMessage
+	for count := 0; decoder.More(); count++ {
+		if count == limit {
+			return true
+		}
+		if err := decoder.Decode(&entry); err != nil {
+			return false
+		}
+	}
+	return false
 }
 
 // legacyCISSessionWorks probes the pre-7.0 CIS REST session endpoint after an
@@ -741,6 +780,44 @@ func viJSONFaultFieldText(raw string) string {
 	return raw
 }
 
+// jsonArrayElementsExceed reports whether body contains more than limit
+// elements across all JSON arrays (including nested arrays inside objects).
+// Malformed JSON returns false so json.Unmarshal reports the syntax failure.
+func jsonArrayElementsExceed(body []byte, limit int) bool {
+	decoder := json.NewDecoder(bytes.NewReader(body))
+	var stack []byte
+	count := 0
+	for {
+		tok, err := decoder.Token()
+		if err != nil {
+			return false
+		}
+		if delim, ok := tok.(json.Delim); ok {
+			switch delim {
+			case '[', '{':
+				if len(stack) > 0 && stack[len(stack)-1] == '[' {
+					count++
+					if count > limit {
+						return true
+					}
+				}
+				stack = append(stack, byte(delim))
+			case ']', '}':
+				if len(stack) > 0 {
+					stack = stack[:len(stack)-1]
+				}
+			}
+			continue
+		}
+		if len(stack) > 0 && stack[len(stack)-1] == '[' {
+			count++
+			if count > limit {
+				return true
+			}
+		}
+	}
+}
+
 // decodeVIJSONBody decodes a vSphere JSON API response body into target. A
 // successful response with an empty body represents an absent/null value (for
 // example the parent of a top-level folder), not a malformed response, so it
@@ -749,6 +826,14 @@ func viJSONFaultFieldText(raw string) string {
 func decodeVIJSONBody(body []byte, label string, target any) error {
 	if len(bytes.TrimSpace(body)) == 0 {
 		return nil
+	}
+	if _, isRaw := target.(*json.RawMessage); !isRaw {
+		if jsonArrayElementsExceed(body, inventoryListEntryLimit) {
+			return &ConnectionError{
+				Category: "endpoint",
+				Message:  fmt.Sprintf("VMware %s response lists more than %d entries", label, inventoryListEntryLimit),
+			}
+		}
 	}
 	if err := json.Unmarshal(body, target); err != nil {
 		return &ConnectionError{Category: "endpoint", Message: fmt.Sprintf("VMware %s response was not valid JSON", label)}

@@ -1650,15 +1650,29 @@ func (c *Client) GetVMAgentInfo(ctx context.Context, node string, vmid int) (map
 	defer resp.Body.Close()
 
 	var result struct {
-		Data map[string]interface{} `json:"data"`
+		Data json.RawMessage `json:"data"`
 	}
 
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 		return nil, err
 	}
 
-	return result.Data, nil
+	// Keep the operating system fields, in the result dictionary or beside it
+	// in a flat reply, and decode nothing else the guest put around them.
+	info, ok := guestAgentScalarFields(result.Data, guestAgentOSInfoFields...)
+	if !ok {
+		return nil, nil
+	}
+	if nested, _ := guestAgentFields(result.Data, "result"); nested["result"] != nil {
+		if osInfo, ok := guestAgentScalarFields(nested["result"], guestAgentOSInfoFields...); ok {
+			info["result"] = osInfo
+		}
+	}
+	return info, nil
 }
+
+// guestAgentOSInfoFields are the members of the guest agent's OS information.
+var guestAgentOSInfoFields = []string{"id", "name", "pretty-name", "version", "version-id", "variant", "variant-id", "kernel-release", "kernel-version", "machine"}
 
 // GetVMAgentVersion returns the guest agent version information for a VM if available.
 func (c *Client) GetVMAgentVersion(ctx context.Context, node string, vmid int) (string, error) {
@@ -1670,7 +1684,7 @@ func (c *Client) GetVMAgentVersion(ctx context.Context, node string, vmid int) (
 
 	var result struct {
 		Data struct {
-			Result map[string]interface{} `json:"result"`
+			Result json.RawMessage `json:"result"`
 		} `json:"data"`
 	}
 
@@ -1678,29 +1692,25 @@ func (c *Client) GetVMAgentVersion(ctx context.Context, node string, vmid int) (
 		return "", err
 	}
 
-	extractVersion := func(val interface{}) string {
-		switch v := val.(type) {
-		case string:
+	// A version is a string or a dictionary holding one. The rest of the
+	// reply, such as the guest's list of supported commands, is not decoded.
+	extractVersion := func(val json.RawMessage) string {
+		if v, ok := guestAgentScalar(val).(string); ok {
 			return strings.TrimSpace(v)
-		case map[string]interface{}:
-			if ver, ok := v["version"]; ok {
-				if s, ok := ver.(string); ok {
-					return strings.TrimSpace(s)
-				}
-			}
+		}
+		nested, _ := guestAgentScalarFields(val, "version")
+		if s, ok := nested["version"].(string); ok {
+			return strings.TrimSpace(s)
 		}
 		return ""
 	}
 
-	if result.Data.Result != nil {
-		if version := extractVersion(result.Data.Result["version"]); version != "" {
-			return version, nil
-		}
-		if qemuGA, ok := result.Data.Result["qemu-ga"]; ok {
-			if version := extractVersion(qemuGA); version != "" {
-				return version, nil
-			}
-		}
+	fields, _ := guestAgentFields(result.Data.Result, "version", "qemu-ga")
+	if version := extractVersion(fields["version"]); version != "" {
+		return version, nil
+	}
+	if version := extractVersion(fields["qemu-ga"]); version != "" {
+		return version, nil
 	}
 
 	return "", nil
@@ -1715,7 +1725,7 @@ type VMFileSystem struct {
 	TotalBytesPrivileged uint64        `json:"total-bytes-privileged"`
 	UsedBytes            uint64        `json:"used-bytes"`
 	Disk                 string        // Extracted disk device name for duplicate detection
-	DiskRaw              []interface{} `json:"disk"` // Raw disk device info from API
+	DiskRaw              []interface{} `json:"disk"` // Identifying fields of the first disk device from API
 }
 
 func (fs *VMFileSystem) UnmarshalJSON(data []byte) error {
@@ -1746,7 +1756,7 @@ func (fs *VMFileSystem) UnmarshalJSON(data []byte) error {
 		TotalBytes           json.RawMessage `json:"total-bytes"`
 		TotalBytesPrivileged json.RawMessage `json:"total-bytes-privileged"`
 		UsedBytes            json.RawMessage `json:"used-bytes"`
-		DiskRaw              interface{}     `json:"disk"`
+		DiskRaw              json.RawMessage `json:"disk"`
 	}
 
 	var raw rawVMFileSystem
@@ -1789,17 +1799,29 @@ func (fs *VMFileSystem) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-func normalizeVMFilesystemDiskRaw(value interface{}) []interface{} {
-	switch v := value.(type) {
-	case nil:
-		return nil
-	case []interface{}:
-		return v
-	case map[string]interface{}:
-		return []interface{}{v}
-	default:
+// normalizeVMFilesystemDiskRaw keeps what names a filesystem's disk: the
+// identifying fields of the first device, whether the guest reports a list or
+// a single object. The rest of the value is not decoded. These records are
+// cached per VM, and a generic decode of what the guest put here costs many
+// times the bytes the response limit allowed.
+func normalizeVMFilesystemDiskRaw(value json.RawMessage) []interface{} {
+	value = bytes.TrimSpace(value)
+	if len(value) > 0 && value[0] == '[' {
+		decoder := json.NewDecoder(bytes.NewReader(value))
+		if _, err := decoder.Token(); err != nil || !decoder.More() {
+			return nil
+		}
+		var first json.RawMessage
+		if decoder.Decode(&first) != nil {
+			return nil
+		}
+		value = first
+	}
+	disk, ok := guestAgentScalarFields(value, "dev", "serial", "bus-type", "target")
+	if !ok {
 		return nil
 	}
+	return []interface{}{disk}
 }
 
 func normalizeWindowsDriveMountpoint(value string) (string, bool) {
@@ -1892,9 +1914,9 @@ type VMIPAddress struct {
 }
 
 func (a *VMIPAddress) UnmarshalJSON(data []byte) error {
-	var raw map[string]interface{}
-	if err := json.Unmarshal(data, &raw); err != nil {
-		return err
+	raw, ok := guestAgentScalarFields(data, "ip-address", "prefix")
+	if !ok && !bytes.Equal(bytes.TrimSpace(data), []byte("null")) {
+		return fmt.Errorf("guest IP address record is not an object")
 	}
 
 	a.Address = coerceString(raw["ip-address"])
@@ -1934,17 +1956,19 @@ func (iface *VMNetworkInterface) UnmarshalJSON(data []byte) error {
 
 	iface.Statistics = nil
 	if statsRaw, ok := raw["statistics"]; ok && len(statsRaw) > 0 && string(statsRaw) != "null" {
-		var stats interface{}
-		if err := json.Unmarshal(statsRaw, &stats); err == nil {
+		// Only the byte counters are read.
+		if stats, ok := guestAgentScalarFields(statsRaw, "rx-bytes", "tx-bytes"); ok {
 			iface.Statistics = stats
 		}
 	}
 
 	iface.IPAddresses = nil
 	if addressesRaw, ok := raw["ip-addresses"]; ok && len(addressesRaw) > 0 && string(addressesRaw) != "null" {
-		var rawAddresses []json.RawMessage
+		var rawAddresses guestAgentList
 		if err := json.Unmarshal(addressesRaw, &rawAddresses); err == nil {
 			iface.IPAddresses = decodeVMIpAddresses(rawAddresses)
+		} else if errors.Is(err, errGuestAgentListTooLong) {
+			return err
 		} else {
 			var rawAddress json.RawMessage
 			if err := json.Unmarshal(addressesRaw, &rawAddress); err == nil && len(rawAddress) > 0 {
@@ -1983,11 +2007,7 @@ func unmarshalRawString(data json.RawMessage) string {
 		return ""
 	}
 
-	var value interface{}
-	if err := json.Unmarshal(data, &value); err != nil {
-		return ""
-	}
-	return coerceString(value)
+	return coerceString(guestAgentScalar(data))
 }
 
 func unmarshalRawBool(data json.RawMessage) bool {
@@ -2000,12 +2020,7 @@ func unmarshalRawBool(data json.RawMessage) bool {
 		return value
 	}
 
-	var generic interface{}
-	if err := json.Unmarshal(data, &generic); err != nil {
-		return false
-	}
-
-	switch v := generic.(type) {
+	switch v := guestAgentScalar(data).(type) {
 	case string:
 		lower := strings.ToLower(strings.TrimSpace(v))
 		return lower == "true" || lower == "1" || lower == "yes"
@@ -2077,10 +2092,12 @@ func (c *Client) GetVMFSInfo(ctx context.Context, node string, vmid int) ([]VMFi
 	// remainder for a complete inventory after dropping a malformed record.
 	var arrayResult struct {
 		Data struct {
-			Result []json.RawMessage `json:"result"`
+			Result guestAgentList `json:"result"`
 		} `json:"data"`
 	}
-	if err := json.Unmarshal(bodyBytes, &arrayResult); err == nil && arrayResult.Data.Result != nil {
+	if err := json.Unmarshal(bodyBytes, &arrayResult); errors.Is(err, errGuestAgentListTooLong) {
+		return nil, fmt.Errorf("guest agent get-fsinfo: %w", err)
+	} else if err == nil && arrayResult.Data.Result != nil {
 		filesystems := make([]VMFileSystem, 0, len(arrayResult.Data.Result))
 		invalidEntries := 0
 		for idx, rawFS := range arrayResult.Data.Result {
@@ -2120,7 +2137,7 @@ func (c *Client) GetVMFSInfo(ctx context.Context, node string, vmid int) ([]VMFi
 			return []VMFileSystem{}, nil
 		}
 
-		var fsMap map[string]interface{}
+		var fsMap map[string]json.RawMessage
 		if json.Unmarshal(rawFS, &fsMap) == nil && looksLikeVMFilesystemResult(fsMap) {
 			var fs VMFileSystem
 			if unmarshalErr := json.Unmarshal(rawFS, &fs); unmarshalErr != nil {
@@ -2143,7 +2160,7 @@ func (c *Client) GetVMFSInfo(ctx context.Context, node string, vmid int) ([]VMFi
 	return nil, fmt.Errorf("unexpected response format from guest agent get-fsinfo")
 }
 
-func looksLikeVMFilesystemResult(result map[string]interface{}) bool {
+func looksLikeVMFilesystemResult(result map[string]json.RawMessage) bool {
 	if len(result) == 0 {
 		return false
 	}
@@ -2213,10 +2230,12 @@ func (c *Client) GetVMNetworkInterfaces(ctx context.Context, node string, vmid i
 
 	var arrayResult struct {
 		Data struct {
-			Result []json.RawMessage `json:"result"`
+			Result guestAgentList `json:"result"`
 		} `json:"data"`
 	}
-	if err := json.Unmarshal(bodyBytes, &arrayResult); err == nil && arrayResult.Data.Result != nil {
+	if err := json.Unmarshal(bodyBytes, &arrayResult); errors.Is(err, errGuestAgentListTooLong) {
+		return nil, fmt.Errorf("guest agent network-get-interfaces: %w", err)
+	} else if err == nil && arrayResult.Data.Result != nil {
 		interfaces := make([]VMNetworkInterface, 0, len(arrayResult.Data.Result))
 		for idx, rawIface := range arrayResult.Data.Result {
 			var iface VMNetworkInterface
@@ -2239,19 +2258,17 @@ func (c *Client) GetVMNetworkInterfaces(ctx context.Context, node string, vmid i
 
 	var objectResult struct {
 		Data struct {
-			Result interface{} `json:"result"`
+			Result json.RawMessage `json:"result"`
 		} `json:"data"`
 	}
 	if err := json.Unmarshal(bodyBytes, &objectResult); err == nil {
-		if objectResult.Data.Result == nil {
+		rawIface := bytes.TrimSpace(objectResult.Data.Result)
+		if len(rawIface) == 0 || bytes.Equal(rawIface, []byte("null")) {
 			return []VMNetworkInterface{}, nil
 		}
 
-		if ifaceMap, ok := objectResult.Data.Result.(map[string]interface{}); ok && looksLikeVMNetworkInterfaceResult(ifaceMap) {
-			rawIface, marshalErr := json.Marshal(ifaceMap)
-			if marshalErr != nil {
-				return nil, fmt.Errorf("failed to marshal object-style guest network interface result: %w", marshalErr)
-			}
+		var ifaceMap map[string]json.RawMessage
+		if json.Unmarshal(rawIface, &ifaceMap) == nil && looksLikeVMNetworkInterfaceResult(ifaceMap) {
 			var iface VMNetworkInterface
 			if unmarshalErr := json.Unmarshal(rawIface, &iface); unmarshalErr != nil {
 				return nil, fmt.Errorf("failed to parse object-style guest network interface result: %w", unmarshalErr)
@@ -2268,7 +2285,7 @@ func (c *Client) GetVMNetworkInterfaces(ctx context.Context, node string, vmid i
 	return nil, fmt.Errorf("unexpected response format from guest agent network-get-interfaces")
 }
 
-func looksLikeVMNetworkInterfaceResult(result map[string]interface{}) bool {
+func looksLikeVMNetworkInterfaceResult(result map[string]json.RawMessage) bool {
 	if len(result) == 0 {
 		return false
 	}

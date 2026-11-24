@@ -247,6 +247,7 @@ func (h *AvailabilityHandlers) HandleUpdate(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	target.ID = targetID
+	requested := target
 	target = mergeAvailabilityHTTPSecrets(previous, target)
 	target = config.NormalizeAvailabilityTarget(target)
 	target.ConfigRevision = previous.ConfigRevision
@@ -261,6 +262,14 @@ func (h *AvailabilityHandlers) HandleUpdate(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	if !h.requireProbeAssignment(w, r, target) {
+		return
+	}
+	// An assigned agent receives the write-only values in its remote config.
+	// Adding one names a new recipient for them, so the update has to carry
+	// the values itself instead of reusing the stored ones.
+	if availabilityTargetGainsProbeAgent(previous, target) && availabilityTargetReusesHTTPSecrets(requested, target) {
+		writeErrorResponse(w, http.StatusBadRequest, "http_secrets_reentry_required",
+			"Adding an observation location agent requires the stored HTTP request body, credentials and header values to be entered again", nil)
 		return
 	}
 	targets[index] = target
@@ -518,6 +527,39 @@ func mergeAvailabilityHTTPSecrets(previous, next config.AvailabilityTarget) conf
 		}
 	}
 	return next
+}
+
+// availabilityTargetGainsProbeAgent reports whether next is assigned to a host
+// agent that previous was not. Both targets must be normalized.
+func availabilityTargetGainsProbeAgent(previous, next config.AvailabilityTarget) bool {
+	for _, agentID := range next.AssignedProbeAgentIDs() {
+		if !previous.IsAssignedToProbeAgent(agentID) {
+			return true
+		}
+	}
+	return false
+}
+
+// availabilityTargetReusesHTTPSecrets reports whether merged carries a stored
+// write-only value that the requested update left out.
+func availabilityTargetReusesHTTPSecrets(requested, merged config.AvailabilityTarget) bool {
+	if requested.HTTP == nil || merged.HTTP == nil {
+		return false
+	}
+	reused := func(sent, kept *string) bool {
+		return sent == nil && kept != nil && *kept != ""
+	}
+	if reused(requested.HTTP.Body, merged.HTTP.Body) ||
+		reused(requested.HTTP.Authentication.Password, merged.HTTP.Authentication.Password) ||
+		reused(requested.HTTP.Authentication.BearerToken, merged.HTTP.Authentication.BearerToken) {
+		return true
+	}
+	for i := range merged.HTTP.Headers {
+		if i < len(requested.HTTP.Headers) && reused(requested.HTTP.Headers[i].Value, merged.HTTP.Headers[i].Value) {
+			return true
+		}
+	}
+	return false
 }
 
 func sameAvailabilityHTTPOrigin(previous, next config.AvailabilityTarget) bool {

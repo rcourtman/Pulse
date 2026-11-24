@@ -6668,6 +6668,14 @@ not-yet-valid, and otherwise untrusted certificates produce critical provider
 incidents. Certificates inside the warning window produce a warning incident.
 A verified self-signed leaf is identified as `self-signed` and is exempt from
 the untrusted-chain incident, while its identity and expiry remain visible.
+Peer-certificate capture is for requests that carry nothing stored. An HTTPS
+contract that sends authentication, header values, or a body must authenticate
+the server during the handshake: the pinned `http.tlsFingerprintSha256` leaf,
+or otherwise a chain and host name the observing host trusts, unless the
+operator set `http.insecureSkipVerify`. A refused certificate fails the check
+before the request is written. A chain or host name that failed verification
+is still published as the observation. A pin mismatch names the presented
+fingerprint in the probe error.
 These certificate incidents stay owned by the source `network-endpoint` and
 enter the normal unified-incident alert pipeline rather than a second notifier.
 Supplemental records carry the saved target's optional `LinkedResourceID`

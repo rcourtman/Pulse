@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -210,6 +211,87 @@ func TestAvailabilityHandlersRejectUnknownProbeAgent(t *testing.T) {
 	}
 	if payload["code"] != "unknown_probe_agent" {
 		t.Fatalf("400 payload = %+v, want unknown_probe_agent", payload)
+	}
+}
+
+func TestAvailabilityHandlersUpdateKeepsStoredHTTPSecretsFromNewProbeAgent(t *testing.T) {
+	const password = "stored-password"
+	const headerValue = "stored-header"
+	persistence := config.NewConfigPersistence(t.TempDir())
+	monitor := monitorWithHostAgent(t, "probe-host")
+	handler := NewAvailabilityHandlers(
+		func(context.Context) *config.ConfigPersistence { return persistence },
+		func(context.Context) *monitoring.Monitor { return monitor },
+		stubFeatureResolver(featureExternalProbeValue),
+	)
+	passwordValue, headerSecret := password, headerValue
+	createRec := httptest.NewRecorder()
+	handler.HandleAdd(createRec, httptest.NewRequest(http.MethodPost, "/api/availability-targets", availabilityRequestBody(t, config.AvailabilityTarget{
+		ID: "nas", Name: "NAS", Address: "https://nas.service.local/health",
+		Protocol: config.AvailabilityProbeHTTPS, Enabled: true,
+		HTTP: &config.AvailabilityHTTPConfig{
+			Method:         config.AvailabilityHTTPMethodGET,
+			Headers:        []config.AvailabilityHTTPHeader{{ID: "key", Name: "X-Api-Key", Value: &headerSecret}},
+			Authentication: config.AvailabilityHTTPAuthentication{Type: config.AvailabilityHTTPAuthBasic, Username: "monitor", Password: &passwordValue},
+		},
+	})))
+	if createRec.Code != http.StatusCreated {
+		t.Fatalf("HandleAdd status = %d, want 201; body=%s", createRec.Code, createRec.Body.String())
+	}
+	update := func(body string) *httptest.ResponseRecorder {
+		t.Helper()
+		rec := httptest.NewRecorder()
+		handler.HandleUpdate(rec, httptest.NewRequest(http.MethodPut, "/api/availability-targets/nas", bytes.NewBufferString(body)))
+		return rec
+	}
+	stored := func() config.AvailabilityTarget {
+		t.Helper()
+		targets, err := persistence.LoadAvailabilityTargets()
+		if err != nil || len(targets) != 1 {
+			t.Fatalf("LoadAvailabilityTargets() = %+v, %v", targets, err)
+		}
+		return targets[0]
+	}
+
+	// The stored values never follow the check to an agent it gains, whichever
+	// field names the agent and whichever of them the update leaves out.
+	for _, body := range []string{
+		`{"observationLocationIds":["pulse:local","agent:probe-host"]}`,
+		`{"observationLocationIds":["agent:probe-host"]}`,
+		`{"probeAgentId":"probe-host"}`,
+		`{"observationLocationIds":["pulse:local","agent:probe-host"],"http":{"authentication":{"password":"entered-again"}}}`,
+		`{"observationLocationIds":["pulse:local","agent:probe-host"],"http":{"headers":[{"id":"key","name":"X-Api-Key","value":"entered-again"}]}}`,
+	} {
+		rec := update(body)
+		if rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), "http_secrets_reentry_required") {
+			t.Fatalf("HandleUpdate(%s) = %d %s, want http_secrets_reentry_required", body, rec.Code, rec.Body.String())
+		}
+		got := stored()
+		if len(got.AssignedProbeAgentIDs()) != 0 || got.HTTP.Authentication.Password == nil || *got.HTTP.Authentication.Password != password ||
+			got.HTTP.Headers[0].Value == nil || *got.HTTP.Headers[0].Value != headerValue {
+			t.Fatalf("stored target after refused update = %+v, want the local check unchanged", got)
+		}
+	}
+
+	// Entering every stored value again assigns the agent.
+	rec := update(`{"observationLocationIds":["pulse:local","agent:probe-host"],"http":{"headers":[{"id":"key","name":"X-Api-Key","value":"header-again"}],"authentication":{"password":"entered-again"}}}`)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("HandleUpdate with re-entered values status = %d, want 200; body=%s", rec.Code, rec.Body.String())
+	}
+	got := stored()
+	if !got.IsAssignedToProbeAgent("probe-host") || got.HTTP.Authentication.Password == nil || *got.HTTP.Authentication.Password != "entered-again" ||
+		got.HTTP.Headers[0].Value == nil || *got.HTTP.Headers[0].Value != "header-again" {
+		t.Fatalf("stored target = %+v, want the agent assigned with the re-entered values", got)
+	}
+
+	// Edits that add no agent keep reusing the stored values.
+	for _, body := range []string{`{"name":"NAS health"}`, `{"observationLocationIds":["agent:probe-host"]}`} {
+		if rec := update(body); rec.Code != http.StatusOK {
+			t.Fatalf("HandleUpdate(%s) status = %d, want 200; body=%s", body, rec.Code, rec.Body.String())
+		}
+		if got := stored(); got.HTTP.Authentication.Password == nil || *got.HTTP.Authentication.Password != "entered-again" {
+			t.Fatalf("stored target after %s = %+v, want the stored password kept", body, got)
+		}
 	}
 }
 
