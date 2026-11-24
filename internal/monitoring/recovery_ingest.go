@@ -363,6 +363,7 @@ func (m *Monitor) ingestCompleteRecoveryInventory(
 	}
 
 	now := time.Now().UTC()
+	digests := recoveryDigestWriter{hash: sha256.New()}
 	newDigests := make(map[string][16]byte, len(batch.points))
 	subjectKeySet := make(map[string]struct{}, 64)
 	var changedPoints []recovery.RecoveryPoint
@@ -372,7 +373,7 @@ func (m *Monitor) ingestCompleteRecoveryInventory(
 		if id == "" {
 			continue
 		}
-		digest := recoveryPointSemanticDigest(p)
+		digest := digests.point(p)
 		newDigests[id] = digest
 		if sk := strings.TrimSpace(recovery.SubjectKeyForPoint(p)); sk != "" {
 			subjectKeySet[sk] = struct{}{}
@@ -400,12 +401,12 @@ func (m *Monitor) ingestCompleteRecoveryInventory(
 		}
 	}
 
-	obsDigest := recoveryObservationsSemanticDigest(batch.observations)
+	obsDigest := digests.observations(batch.observations)
 	needObsWrite := len(batch.observations) > 0 && (prev == nil ||
 		prev.observationDigest != obsDigest ||
 		now.Sub(prev.lastObservationAt) >= recoverySteadyObservationRefreshInterval)
 
-	unsettledDigest := recoveryUnsettledDigest(batch.evaluatedSubjects, batch.unsettledSubjects)
+	unsettledDigest := digests.unsettled(batch.evaluatedSubjects, batch.unsettledSubjects)
 	needUnsettledWrite := len(batch.evaluatedSubjects) > 0 && (prev == nil ||
 		prev.unsettledDigest != unsettledDigest)
 
@@ -586,28 +587,70 @@ func (m *Monitor) invalidateRecoverySteadyStateForBatch(orgID string, batch reco
 	}
 }
 
-func hashWriteString(h hash.Hash, s string) {
-	var lenBuf [8]byte
-	binary.LittleEndian.PutUint64(lenBuf[:], uint64(len(s)))
-	_, _ = h.Write(lenBuf[:])
-	_, _ = h.Write([]byte(s))
+// recoveryDigestWriter batches the canonical byte stream before writing it to
+// SHA-256. This avoids allocating slices for individual fields on every point
+// in a complete poll, without buffering a whole point or keeping its strings.
+// One writer belongs to one ingest batch; sum256 resets it between records.
+type recoveryDigestWriter struct {
+	hash hash.Hash // initialized with sha256.New
+	buf  [1024]byte
+	used int
+	sum  [sha256.Size]byte
 }
 
-func hashWriteInt64(h hash.Hash, v int64) {
-	var buf [8]byte
-	binary.LittleEndian.PutUint64(buf[:], uint64(v))
-	_, _ = h.Write(buf[:])
-}
-
-func hashWriteBool(h hash.Hash, v bool) {
-	if v {
-		_, _ = h.Write([]byte{1})
-	} else {
-		_, _ = h.Write([]byte{0})
+func (d *recoveryDigestWriter) flush() {
+	if d.used > 0 {
+		// SHA-256 Write never returns an error.
+		_, _ = d.hash.Write(d.buf[:d.used])
+		d.used = 0
 	}
 }
 
-func hashWriteTimePtr(h hash.Hash, t *time.Time) {
+func (d *recoveryDigestWriter) writeByte(value byte) {
+	if d.used == len(d.buf) {
+		d.flush()
+	}
+	d.buf[d.used] = value
+	d.used++
+}
+
+func hashWriteInt64(h *recoveryDigestWriter, value int64) {
+	const width = 8
+	if len(h.buf)-h.used < width {
+		h.flush()
+	}
+	binary.LittleEndian.PutUint64(h.buf[h.used:h.used+width], uint64(value))
+	h.used += width
+}
+
+func hashWriteString(h *recoveryDigestWriter, value string) {
+	hashWriteInt64(h, int64(len(value)))
+	for len(value) > 0 {
+		if h.used == len(h.buf) {
+			h.flush()
+		}
+		n := copy(h.buf[h.used:], value)
+		h.used += n
+		value = value[n:]
+	}
+}
+
+func (d *recoveryDigestWriter) sum256() [sha256.Size]byte {
+	d.flush()
+	d.hash.Sum(d.sum[:0])
+	d.hash.Reset()
+	return d.sum
+}
+
+func hashWriteBool(h *recoveryDigestWriter, v bool) {
+	if v {
+		h.writeByte(1)
+	} else {
+		h.writeByte(0)
+	}
+}
+
+func hashWriteTimePtr(h *recoveryDigestWriter, t *time.Time) {
 	if t == nil || t.IsZero() {
 		hashWriteBool(h, false)
 		return
@@ -616,19 +659,19 @@ func hashWriteTimePtr(h hash.Hash, t *time.Time) {
 	hashWriteInt64(h, t.UTC().UnixMilli())
 }
 
-func hashWriteBoolPtr(h hash.Hash, b *bool) {
+func hashWriteBoolPtr(h *recoveryDigestWriter, b *bool) {
 	if b == nil {
-		_, _ = h.Write([]byte{0})
+		h.writeByte(0)
 		return
 	}
 	if *b {
-		_, _ = h.Write([]byte{2})
+		h.writeByte(2)
 	} else {
-		_, _ = h.Write([]byte{1})
+		h.writeByte(1)
 	}
 }
 
-func hashWriteInt64Ptr(h hash.Hash, v *int64) {
+func hashWriteInt64Ptr(h *recoveryDigestWriter, v *int64) {
 	if v == nil {
 		hashWriteBool(h, false)
 		return
@@ -637,7 +680,7 @@ func hashWriteInt64Ptr(h hash.Hash, v *int64) {
 	hashWriteInt64(h, *v)
 }
 
-func hashWriteExternalRef(h hash.Hash, ref *recovery.ExternalRef) {
+func hashWriteExternalRef(h *recoveryDigestWriter, ref *recovery.ExternalRef) {
 	if ref == nil {
 		hashWriteBool(h, false)
 		return
@@ -649,42 +692,42 @@ func hashWriteExternalRef(h hash.Hash, ref *recovery.ExternalRef) {
 	hashWriteString(h, ref.Namespace)
 }
 
-func hashWriteAny(h hash.Hash, v any) {
+func hashWriteAny(h *recoveryDigestWriter, v any) {
 	switch val := v.(type) {
 	case nil:
-		_, _ = h.Write([]byte{'0'})
+		h.writeByte('0')
 	case string:
-		_, _ = h.Write([]byte{'s'})
+		h.writeByte('s')
 		hashWriteString(h, val)
 	case bool:
-		_, _ = h.Write([]byte{'b'})
+		h.writeByte('b')
 		hashWriteBool(h, val)
 	case int:
-		_, _ = h.Write([]byte{'i'})
+		h.writeByte('i')
 		hashWriteInt64(h, int64(val))
 	case int64:
-		_, _ = h.Write([]byte{'i'})
+		h.writeByte('i')
 		hashWriteInt64(h, val)
 	case uint64:
-		_, _ = h.Write([]byte{'u'})
+		h.writeByte('u')
 		hashWriteInt64(h, int64(val))
 	case float64:
-		_, _ = h.Write([]byte{'f'})
+		h.writeByte('f')
 		hashWriteInt64(h, int64(math.Float64bits(val)))
 	case []string:
-		_, _ = h.Write([]byte{'S'})
+		h.writeByte('S')
 		hashWriteInt64(h, int64(len(val)))
 		for _, item := range val {
 			hashWriteString(h, item)
 		}
 	case []any:
-		_, _ = h.Write([]byte{'A'})
+		h.writeByte('A')
 		hashWriteInt64(h, int64(len(val)))
 		for _, item := range val {
 			hashWriteAny(h, item)
 		}
 	case map[string]string:
-		_, _ = h.Write([]byte{'M'})
+		h.writeByte('M')
 		keys := make([]string, 0, len(val))
 		for k := range val {
 			keys = append(keys, k)
@@ -696,7 +739,7 @@ func hashWriteAny(h hash.Hash, v any) {
 			hashWriteString(h, val[k])
 		}
 	case map[string]any:
-		_, _ = h.Write([]byte{'O'})
+		h.writeByte('O')
 		keys := make([]string, 0, len(val))
 		for k := range val {
 			keys = append(keys, k)
@@ -708,14 +751,13 @@ func hashWriteAny(h hash.Hash, v any) {
 			hashWriteAny(h, val[k])
 		}
 	default:
-		_, _ = h.Write([]byte{'J'})
+		h.writeByte('J')
 		encoded, _ := json.Marshal(val)
 		hashWriteString(h, string(encoded))
 	}
 }
 
-func recoveryPointSemanticDigest(p recovery.RecoveryPoint) [16]byte {
-	h := sha256.New()
+func (h *recoveryDigestWriter) point(p recovery.RecoveryPoint) [16]byte {
 	hashWriteString(h, strings.TrimSpace(p.ID))
 	hashWriteString(h, strings.TrimSpace(string(p.Provider)))
 	hashWriteString(h, strings.TrimSpace(string(p.Kind)))
@@ -776,15 +818,13 @@ func recoveryPointSemanticDigest(p recovery.RecoveryPoint) [16]byte {
 			hashWriteBool(h, false)
 		}
 	}
-	var sum [32]byte
-	h.Sum(sum[:0])
+	sum := h.sum256()
 	var out [16]byte
 	copy(out[:], sum[:16])
 	return out
 }
 
-func recoveryObservationsSemanticDigest(observations []recovery.ProtectionProviderObservation) [32]byte {
-	h := sha256.New()
+func (h *recoveryDigestWriter) observations(observations []recovery.ProtectionProviderObservation) [32]byte {
 	hashWriteInt64(h, int64(len(observations)))
 	for _, obs := range observations {
 		hashWriteString(h, strings.TrimSpace(string(obs.Provider)))
@@ -810,13 +850,10 @@ func recoveryObservationsSemanticDigest(observations []recovery.ProtectionProvid
 			hashWriteBool(h, false)
 		}
 	}
-	var out [32]byte
-	h.Sum(out[:0])
-	return out
+	return h.sum256()
 }
 
-func recoveryUnsettledDigest(evaluated, unsettled []string) [32]byte {
-	h := sha256.New()
+func (h *recoveryDigestWriter) unsettled(evaluated, unsettled []string) [32]byte {
 	writeSet := func(values []string) {
 		set := make(map[string]struct{}, len(values))
 		for _, v := range values {
@@ -836,9 +873,7 @@ func recoveryUnsettledDigest(evaluated, unsettled []string) [32]byte {
 	}
 	writeSet(evaluated)
 	writeSet(unsettled)
-	var out [32]byte
-	h.Sum(out[:0])
-	return out
+	return h.sum256()
 }
 
 // retireUnsettledBackupScopes forgets the unsettled guests of PBS connections that
