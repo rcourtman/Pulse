@@ -2242,7 +2242,7 @@ func (rr *ResourceRegistry) ingestVM(vm models.VM, clusterByInstance map[string]
 	resource, identity := resourceFromVM(vm)
 	sourceID := proxmoxVMSourceID(vm)
 	clusterName := clusterByInstance[vm.Instance]
-	if parentID := rr.proxmoxNodeParentID(vm.Instance, clusterName, vm.Node, ""); parentID != "" {
+	if parentID := rr.proxmoxGuestNodeParentID(vm.Instance, clusterName, vm.Node); parentID != "" {
 		resource.ParentID = &parentID
 		attachLinkedAgentID(resource.Proxmox, rr.linkedAgentIDForResource(parentID))
 	}
@@ -2257,7 +2257,7 @@ func (rr *ResourceRegistry) ingestContainer(ct models.Container, clusterByInstan
 	resource, identity := resourceFromContainer(ct)
 	sourceID := proxmoxContainerSourceID(ct)
 	clusterName := clusterByInstance[ct.Instance]
-	if parentID := rr.proxmoxNodeParentID(ct.Instance, clusterName, ct.Node, ""); parentID != "" {
+	if parentID := rr.proxmoxGuestNodeParentID(ct.Instance, clusterName, ct.Node); parentID != "" {
 		resource.ParentID = &parentID
 		attachLinkedAgentID(resource.Proxmox, rr.linkedAgentIDForResource(parentID))
 	}
@@ -5388,8 +5388,11 @@ func (rr *ResourceRegistry) resolveDerivedParentIDLocked(resource *Resource) *st
 	if resource == nil || resource.Proxmox == nil {
 		return nil
 	}
+	guest := false
 	switch CanonicalResourceType(resource.Type) {
-	case ResourceTypeVM, ResourceTypeSystemContainer, ResourceTypeStorage, ResourceTypePhysicalDisk:
+	case ResourceTypeVM, ResourceTypeSystemContainer:
+		guest = true
+	case ResourceTypeStorage, ResourceTypePhysicalDisk:
 	default:
 		return nil
 	}
@@ -5399,6 +5402,7 @@ func (rr *ResourceRegistry) resolveDerivedParentIDLocked(resource *Resource) *st
 		resource.Proxmox.ClusterName,
 		resource.Proxmox.NodeName,
 		resource.ID,
+		guest,
 	)
 	if parentID == "" {
 		return nil
@@ -5406,13 +5410,19 @@ func (rr *ResourceRegistry) resolveDerivedParentIDLocked(resource *Resource) *st
 	return &parentID
 }
 
-func (rr *ResourceRegistry) proxmoxNodeParentID(instance, clusterName, nodeName, excludeID string) string {
+func (rr *ResourceRegistry) proxmoxGuestNodeParentID(instance, clusterName, nodeName string) string {
 	rr.mu.RLock()
 	defer rr.mu.RUnlock()
-	return rr.proxmoxNodeParentIDLocked(instance, clusterName, nodeName, excludeID)
+	return rr.proxmoxNodeParentIDLocked(instance, clusterName, nodeName, "", true)
 }
 
-func (rr *ResourceRegistry) proxmoxNodeParentIDLocked(instance, clusterName, nodeName, excludeID string) string {
+// proxmoxNodeParentIDLocked finds the node record a Proxmox child belongs
+// under. The node name and the cluster name are what the child's own endpoint
+// reports, and node records of every connection share one source mapping, so
+// for a guest they only choose among the nodes of the guest's own connection
+// (proxmoxNodeOnConnection): commands and lifecycle actions for a guest run on
+// its parent node's agent.
+func (rr *ResourceRegistry) proxmoxNodeParentIDLocked(instance, clusterName, nodeName, excludeID string, guest bool) string {
 	nodeName = strings.TrimSpace(nodeName)
 	if nodeName == "" {
 		return ""
@@ -5434,6 +5444,9 @@ func (rr *ResourceRegistry) proxmoxNodeParentIDLocked(instance, clusterName, nod
 		if parent == nil || CanonicalResourceType(parent.Type) != ResourceTypeAgent {
 			continue
 		}
+		if guest && !proxmoxNodeOnConnection(instance, parent.Proxmox) {
+			continue
+		}
 		if proxmoxNodeParentAgentScore(parent) > 0 {
 			return parentID
 		}
@@ -5441,10 +5454,22 @@ func (rr *ResourceRegistry) proxmoxNodeParentIDLocked(instance, clusterName, nod
 			fallbackParentID = parentID
 		}
 	}
-	if parentID := rr.proxmoxNodeParentIDFromResourcesLocked(instance, clusterName, nodeName, excludeID); parentID != "" {
+	if parentID := rr.proxmoxNodeParentIDFromResourcesLocked(instance, clusterName, nodeName, excludeID, guest); parentID != "" {
 		return parentID
 	}
 	return fallbackParentID
+}
+
+// proxmoxNodeOnConnection reports whether a node record is held under a
+// guest's own connection. The connection name is Pulse's own; a guest's node
+// and cluster names are its endpoint's word, and another connection's node
+// can carry both. A guest with no connection on record has nothing to compare.
+func proxmoxNodeOnConnection(instance string, node *ProxmoxData) bool {
+	instance = strings.TrimSpace(instance)
+	if instance == "" {
+		return true
+	}
+	return node != nil && strings.EqualFold(strings.TrimSpace(node.Instance), instance)
 }
 
 func proxmoxNodeParentSourceIDCandidates(instance, clusterName, nodeName string) []string {
@@ -5474,7 +5499,7 @@ func proxmoxNodeParentSourceIDCandidates(instance, clusterName, nodeName string)
 	return out
 }
 
-func (rr *ResourceRegistry) proxmoxNodeParentIDFromResourcesLocked(instance, clusterName, nodeName, excludeID string) string {
+func (rr *ResourceRegistry) proxmoxNodeParentIDFromResourcesLocked(instance, clusterName, nodeName, excludeID string, guest bool) string {
 	nodeName = strings.TrimSpace(nodeName)
 	if nodeName == "" {
 		return ""
@@ -5498,6 +5523,9 @@ func (rr *ResourceRegistry) proxmoxNodeParentIDFromResourcesLocked(instance, clu
 			return
 		}
 		if !strings.EqualFold(strings.TrimSpace(resource.Proxmox.NodeName), nodeName) {
+			return
+		}
+		if guest && !proxmoxNodeOnConnection(instance, resource.Proxmox) {
 			return
 		}
 		candidateID := CanonicalResourceID(strings.TrimSpace(id))

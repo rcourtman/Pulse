@@ -24,8 +24,10 @@ const pveMembershipRemovalConfirmations = 2
 
 // pveNodeIdentityScope preserves the historical cluster-name node identity
 // while it is unambiguous. If two configured clusters share a display name,
-// the provider instance becomes the identity scope so unrelated nodes cannot
-// collide in state, history, navigation, or resource projection.
+// or the cluster reports the name of another configured connection (whose
+// own nodes and storage that name scopes), the provider instance becomes the
+// identity scope so unrelated nodes cannot collide in state, history,
+// navigation, or resource projection.
 func (m *Monitor) pveNodeIdentityScope(instanceName string, instanceCfg *config.PVEInstance) string {
 	instanceName = strings.TrimSpace(instanceName)
 	if instanceCfg == nil || !instanceCfg.IsCluster || strings.TrimSpace(instanceCfg.ClusterName) == "" {
@@ -39,6 +41,9 @@ func (m *Monitor) pveNodeIdentityScope(instanceName string, instanceCfg *config.
 		matches := 0
 		for i := range m.config.PVEInstances {
 			cfg := &m.config.PVEInstances[i]
+			if name := strings.TrimSpace(cfg.Name); !strings.EqualFold(name, instanceName) && strings.EqualFold(name, clusterName) {
+				return instanceName
+			}
 			if cfg.IsCluster && strings.EqualFold(strings.TrimSpace(cfg.ClusterName), clusterName) {
 				matches++
 				if matches > 1 {

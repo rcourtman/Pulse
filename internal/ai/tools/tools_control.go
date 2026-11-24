@@ -225,11 +225,7 @@ func routeCommandTarget(rs unifiedresources.ReadState, agents []agentexec.Connec
 			}
 			return ""
 		}
-		reference := loc.NodeResourceID
-		if reference == "" {
-			reference = loc.Node
-		}
-		agent, _ := connectedAgentForNodeReference(rs, reference, agents)
+		agent, _ := connectedAgentForLocatedNode(rs, loc.NodeResourceID, loc.Node, agents)
 		return agent.AgentID
 	}
 	// throughGuest sends a command inside a guest through its node's agent. With no
@@ -558,7 +554,7 @@ func ConnectedAgentForGuestNode(rs unifiedresources.ReadState, guestID, instance
 	if !location.Found {
 		return ConnectedAgentForNodeName(rs, instance, nodeName, agents)
 	}
-	return connectedAgentForNodeReference(rs, firstNonEmptyString(location.NodeResourceID, location.Node), agents)
+	return connectedAgentForLocatedNode(rs, location.NodeResourceID, location.Node, agents)
 }
 
 // ConnectedAgentForNodeName answers for a node a request names, optionally on one
@@ -591,11 +587,24 @@ func ConnectedAgentForNodeName(rs unifiedresources.ReadState, instance, name str
 				}
 			}
 		}
-		return connectedAgentForNodeReference(rs, name, agents)
+		return connectedAgentForLocatedNode(rs, "", name, agents)
 	case 1:
 		return connectedAgentForNode(rs, match, agents)
 	}
 	return agentexec.ConnectedAgent{}, false
+}
+
+// connectedAgentForLocatedNode resolves a located node's connected agent
+// without allowing an endpoint-reported bare node name to be interpreted as
+// another node's canonical resource ID.
+func connectedAgentForLocatedNode(rs unifiedresources.ReadState, nodeID, name string, agents []agentexec.ConnectedAgent) (agentexec.ConnectedAgent, bool) {
+	if nodeID != "" {
+		return connectedAgentForNodeReference(rs, nodeID, agents)
+	}
+	if !bareNodeNameCanRoute(rs, name) {
+		return agentexec.ConnectedAgent{}, false
+	}
+	return ConnectedAgentNamed(agents, name)
 }
 
 // connectedAgentForNodeReference answers for a canonical node ID, or for a bare

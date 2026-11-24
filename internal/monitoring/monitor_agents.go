@@ -1275,15 +1275,7 @@ func (m *Monitor) UpdateHostAgentConfig(hostID string, commandsEnabled *bool) er
 		return fmt.Errorf("host metadata store not initialized")
 	}
 
-	// Get existing metadata or create new
-	meta := m.hostMetadataStore.Get(hostID)
-	if meta == nil {
-		meta = &config.HostMetadata{ID: hostID}
-	}
-
-	meta.CommandsEnabled = commandsEnabled
-
-	if err := m.hostMetadataStore.Set(hostID, meta); err != nil {
+	if err := m.hostMetadataStore.SetCommandsEnabled(hostID, commandsEnabled); err != nil {
 		return fmt.Errorf("failed to save host config: %w", err)
 	}
 

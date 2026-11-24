@@ -26,19 +26,24 @@ func EnsurePVEClusterNodeIdentities(instances []PVEInstance) bool {
 	}
 
 	for i := range instances {
-		ensurePVEClusterNodeIdentitiesForInstance(&instances[i], clusterNameCounts)
+		ensurePVEClusterNodeIdentitiesForInstance(instances, &instances[i], clusterNameCounts)
 	}
 	return !reflect.DeepEqual(before, instances)
 }
 
-func ensurePVEClusterNodeIdentitiesForInstance(instance *PVEInstance, clusterNameCounts map[string]int) {
+func ensurePVEClusterNodeIdentitiesForInstance(instances []PVEInstance, instance *PVEInstance, clusterNameCounts map[string]int) {
 	if instance == nil || !instance.IsCluster {
 		return
 	}
 
-	scope := strings.TrimSpace(instance.Name)
+	// The cluster name is what the endpoint reports about itself. It scopes
+	// node identities only while no other cluster reports it and no other
+	// connection is named it: a connection's name scopes its own nodes.
+	connectionScope := strings.TrimSpace(instance.Name)
+	scope := connectionScope
 	clusterName := strings.TrimSpace(instance.ClusterName)
-	if clusterName != "" && clusterNameCounts[strings.ToLower(clusterName)] == 1 {
+	if clusterName != "" && clusterNameCounts[strings.ToLower(clusterName)] == 1 &&
+		!pveConnectionNameHeldElsewhere(instances, instance.Name, clusterName) {
 		scope = clusterName
 	}
 	if scope == "" {
@@ -95,9 +100,19 @@ func ensurePVEClusterNodeIdentitiesForInstance(instance *PVEInstance, clusterNam
 				seed = endpoint.NodeID
 			}
 			candidate := scope + "-" + seed
-			if seed == "" || identityIDConflicts(instance.ClusterNodeIdentities, candidate, endpoint.NativeNodeID, endpoint.NodeName) {
+			if connectionScope != "" && scope != connectionScope &&
+				pveNodeIdentityHeldElsewhere(instances, instance.Name, scope, candidate) {
+				// "<cluster>-<node>" splits at any hyphen, so a reported name
+				// can still spell another connection's node. The connection's
+				// own name scopes this cluster from here on.
+				scope = connectionScope
+				candidate = scope + "-" + seed
+			}
+			if seed == "" || identityIDConflicts(instance.ClusterNodeIdentities, candidate, endpoint.NativeNodeID, endpoint.NodeName) ||
+				pveNodeIdentityHeldElsewhere(instances, instance.Name, scope, candidate) {
 				candidate = deterministicPVEClusterNodeIdentity(scope, *endpoint, endpointIdx)
-				for suffix := 1; identityIDExists(instance.ClusterNodeIdentities, candidate); suffix++ {
+				for suffix := 1; identityIDExists(instance.ClusterNodeIdentities, candidate) ||
+					pveNodeIdentityRecordedElsewhere(instances, instance.Name, candidate); suffix++ {
 					candidate = deterministicPVEClusterNodeIdentity(scope, *endpoint, endpointIdx+suffix)
 				}
 			}
@@ -113,7 +128,8 @@ func ensurePVEClusterNodeIdentitiesForInstance(instance *PVEInstance, clusterNam
 		if previousEndpointIdx, duplicate := usedIdentity[identity.ID]; duplicate &&
 			!samePVEClusterNode(instance.ClusterEndpoints[previousEndpointIdx], *endpoint) {
 			candidate := deterministicPVEClusterNodeIdentity(scope, *endpoint, endpointIdx)
-			for suffix := 1; identityIDExists(instance.ClusterNodeIdentities, candidate); suffix++ {
+			for suffix := 1; identityIDExists(instance.ClusterNodeIdentities, candidate) ||
+				pveNodeIdentityRecordedElsewhere(instances, instance.Name, candidate); suffix++ {
 				candidate = deterministicPVEClusterNodeIdentity(scope, *endpoint, endpointIdx+suffix)
 			}
 			identityIdx = len(instance.ClusterNodeIdentities)
@@ -176,6 +192,83 @@ func findPVEClusterNodeIdentityIndex(instance PVEInstance, endpoint ClusterEndpo
 		return match
 	}
 	return -1
+}
+
+// pveConnectionNameHeldElsewhere reports whether a connection other than
+// owner is configured under name.
+func pveConnectionNameHeldElsewhere(instances []PVEInstance, owner, name string) bool {
+	owner = strings.TrimSpace(owner)
+	name = strings.TrimSpace(name)
+	for i := range instances {
+		other := strings.TrimSpace(instances[i].Name)
+		if !strings.EqualFold(other, owner) && strings.EqualFold(other, name) {
+			return true
+		}
+	}
+	return false
+}
+
+// pveNodeIdentityRecordedElsewhere reports whether a connection other than
+// owner already records id for one of its cluster nodes.
+func pveNodeIdentityRecordedElsewhere(instances []PVEInstance, owner, id string) bool {
+	owner = strings.TrimSpace(owner)
+	for i := range instances {
+		if strings.EqualFold(strings.TrimSpace(instances[i].Name), owner) {
+			continue
+		}
+		for _, identity := range instances[i].ClusterNodeIdentities {
+			if strings.EqualFold(identity.ID, id) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// pveNodeIdentityHeldElsewhere reports whether id, derived under scope for
+// the connection named owner, reads as a node of another connection. Node
+// state, history and agent links are keyed on the identity alone, so it must
+// name one connection's node only. Another connection holds id when it
+// records it, or when id lies in its "<connection name>-" namespace, the
+// scope of every node a standalone connection reports. Connection names may
+// nest ("pve" and "pve-b"); a connection scoped by its own name keeps the
+// namespace below it and the shorter name gives way.
+func pveNodeIdentityHeldElsewhere(instances []PVEInstance, owner, scope, id string) bool {
+	owner = strings.ToLower(strings.TrimSpace(owner))
+	scope = strings.ToLower(strings.TrimSpace(scope))
+	id = strings.ToLower(id)
+	for i := range instances {
+		other := strings.ToLower(strings.TrimSpace(instances[i].Name))
+		if other == "" || other == owner || !strings.HasPrefix(id, other+"-") {
+			continue
+		}
+		if scope != owner || !strings.HasPrefix(owner, other+"-") {
+			return true
+		}
+	}
+	return pveNodeIdentityRecordedElsewhere(instances, owner, id)
+}
+
+// DerivePVENodeIdentity returns the identity of a node that has no recorded
+// one: the node of a standalone connection, or a cluster member polled before
+// the membership ledger lists it. It is "<scope>-<native name>" unless another
+// connection holds that identity.
+func DerivePVENodeIdentity(instances []PVEInstance, instanceName, scope, nativeName string) string {
+	id := scope + "-" + nativeName
+	if !pveNodeIdentityHeldElsewhere(instances, instanceName, scope, id) {
+		return id
+	}
+	connectionScope := strings.TrimSpace(instanceName)
+	if id = connectionScope + "-" + nativeName; !pveNodeIdentityHeldElsewhere(instances, instanceName, connectionScope, id) {
+		return id
+	}
+	endpoint := ClusterEndpoint{NodeName: nativeName}
+	for ordinal := 0; ; ordinal++ {
+		id = deterministicPVEClusterNodeIdentity(connectionScope, endpoint, ordinal)
+		if !pveNodeIdentityRecordedElsewhere(instances, instanceName, id) {
+			return id
+		}
+	}
 }
 
 func identityIDConflicts(identities []PVEClusterNodeIdentity, id string, nativeID int, nativeName string) bool {

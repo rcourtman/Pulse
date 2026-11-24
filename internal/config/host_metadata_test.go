@@ -130,3 +130,29 @@ func TestHostMetadataStore_Save_Error(t *testing.T) {
 	err := store.Set("host1", &HostMetadata{})
 	assert.Error(t, err)
 }
+
+func TestHostMetadataStore_SetCommandsEnabledKeepsRecord(t *testing.T) {
+	store := NewHostMetadataStore(t.TempDir(), nil)
+	off := false
+
+	require.NoError(t, store.SetCommandsEnabled("host1", &off))
+	got := store.Get("host1")
+	require.NotNil(t, got)
+	assert.Equal(t, HostMetadata{ID: "host1", CommandsEnabled: &off}, *got)
+
+	require.NoError(t, store.Set("host2", &HostMetadata{Description: "edge host", Notes: []string{"note"}}))
+	require.NoError(t, store.SetCommandsEnabled("host2", &off))
+	off = true // the store keeps its own copy
+	got = store.Get("host2")
+	require.NotNil(t, got)
+	assert.Equal(t, "edge host", got.Description)
+	assert.Equal(t, []string{"note"}, got.Notes)
+	require.NotNil(t, got.CommandsEnabled)
+	assert.False(t, *got.CommandsEnabled)
+
+	require.NoError(t, store.SetCommandsEnabled("host2", nil))
+	got = store.Get("host2")
+	require.NotNil(t, got)
+	assert.Equal(t, "edge host", got.Description)
+	assert.Nil(t, got.CommandsEnabled)
+}

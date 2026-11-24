@@ -2338,7 +2338,11 @@ func (c *queryCommandConnections) node(reference string) *bool {
 // guestParentNode answers for the node a command to this guest would go through.
 func (c *queryCommandConnections) guestParentNode(guestID string) *bool {
 	location := resourceLocationInReadState(c.rs, guestID)
-	return c.node(firstNonEmptyString(location.NodeResourceID, location.Node))
+	if location.NodeResourceID != "" {
+		return c.node(location.NodeResourceID)
+	}
+	_, connected := connectedAgentForLocatedNode(c.rs, "", location.Node, c.agents)
+	return commandConnectionObservation(c.agents, connected)
 }
 
 // repeatedNodeIdentity names a node whose shown name another node also shows.
