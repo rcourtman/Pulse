@@ -369,7 +369,6 @@ export function StandalonePageSurface() {
           </Show>
 
           <Show when={activeTab() === 'vms'}>
-            <FeaturePreviewTag feature="standaloneVms" />
             <Suspense
               fallback={
                 <PlatformTableLoadingState
@@ -379,6 +378,7 @@ export function StandalonePageSurface() {
               }
             >
               <StandaloneVirtualMachinesTable
+                titleMeta={<FeaturePreviewTag feature="standaloneVms" />}
                 vms={visibleVms()}
                 machines={model().machines}
                 selectedHostId={vmHostFilter}

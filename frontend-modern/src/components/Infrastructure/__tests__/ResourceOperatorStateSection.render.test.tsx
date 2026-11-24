@@ -1,4 +1,5 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { syncSessionPresentationPolicy } from '@/stores/sessionPresentationPolicy';
 import { fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
 
 import type { ResourceCapability } from '@/types/resource';
@@ -166,5 +167,74 @@ describe('operator override validation', () => {
     fireEvent.click(screen.getByRole('checkbox', { name: /^Restart/ }));
     expect(screen.queryByText('Select at least one eligible capability.')).not.toBeInTheDocument();
     expect(save).toBeEnabled();
+  });
+});
+
+describe('ResourceOperatorStateSection read-only sessions', () => {
+  afterEach(() => {
+    syncSessionPresentationPolicy({
+      presentationPolicy: {
+        demoMode: false,
+        readOnly: false,
+        hideCommercial: false,
+        hideUpgrade: true,
+      },
+      sessionCapabilities: { demoMode: false },
+      tokenScopes: undefined,
+    });
+  });
+
+  it('renders persisted overrides as a read-only summary when the token lacks monitoring:write', async () => {
+    syncSessionPresentationPolicy({
+      tokenScopes: ['monitoring:read'],
+    });
+    apiClientMock.apiFetchJSON.mockResolvedValue({
+      canonicalId: 'docker:host-1/ct-readonly',
+      monitoringMode: 'expected_offline',
+      lifecycleState: 'active',
+      neverAutoRemediate: true,
+      criticality: 'high',
+      note: 'Maintenance host',
+      setAt: '2026-11-24T09:00:00Z',
+      setBy: 'admin',
+    });
+
+    render(() => (
+      <ResourceOperatorStateSection
+        resourceId="docker:host-1/ct-readonly"
+        capabilities={RESTART_CAPABILITY}
+      />
+    ));
+
+    expect(await screen.findByText('Expected offline')).toBeTruthy();
+    expect(
+      screen.getByText('This session can view operator overrides but cannot change them.'),
+    ).toBeTruthy();
+    expect(screen.getByText('Locked (never auto-remediate)')).toBeTruthy();
+    expect(screen.getByText('Maintenance host')).toBeTruthy();
+    expect(screen.queryByRole('combobox')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Schedule window' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Clear all overrides' })).toBeNull();
+  });
+
+  it('renders a calm default-posture summary in read-only demo sessions with no overrides', async () => {
+    syncSessionPresentationPolicy({
+      presentationPolicy: {
+        demoMode: true,
+        readOnly: true,
+        hideCommercial: true,
+        hideUpgrade: true,
+      },
+      sessionCapabilities: { demoMode: true },
+    });
+    apiClientMock.apiFetchJSON.mockResolvedValue({ configured: false });
+
+    render(() => <ResourceOperatorStateSection resourceId="vm:demo-1" />);
+
+    expect(
+      await screen.findByText('Default monitoring posture applies. No operator overrides are set.'),
+    ).toBeTruthy();
+    expect(screen.queryByRole('combobox')).toBeNull();
+    expect(screen.queryByRole('textbox')).toBeNull();
   });
 });

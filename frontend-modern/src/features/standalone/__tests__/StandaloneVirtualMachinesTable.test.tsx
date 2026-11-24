@@ -228,4 +228,23 @@ describe('StandaloneVirtualMachinesTable', () => {
 
     expect(screen.getByText('No virtual machines')).toBeInTheDocument();
   });
+
+  it('renders titleMeta inline beside the Virtual Machines heading', () => {
+    render(() => (
+      <StandaloneVirtualMachinesTable
+        titleMeta={<span data-testid="preview-meta">Preview</span>}
+        vms={[makeResource({ id: 'vm-preview', name: 'kvm-app-01' })]}
+        machines={[]}
+        emptyIcon={<span />}
+        emptyTitle="No virtual machines"
+        emptyDescription="Empty"
+      />
+    ));
+
+    const heading = screen.getByRole('heading', { name: 'Virtual Machines' });
+    expect(screen.getByTestId('preview-meta')).toBeTruthy();
+    expect(
+      heading.closest('div')?.parentElement?.querySelector('[data-testid="preview-meta"]'),
+    ).toBeTruthy();
+  });
 });

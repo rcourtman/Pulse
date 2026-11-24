@@ -1,0 +1,49 @@
+{
+  "version": 1,
+  "base_sha": "9255607869c863c5c29985e498d8c3554ccadee9",
+  "verified_at": "2026-11-24T09:28:07Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Infrastructure/ResourceOperatorStateSection.tsx",
+    "frontend-modern/src/components/shared/WebInterfaceUrlField.tsx",
+    "frontend-modern/src/features/standalone/StandalonePageSurface.tsx",
+    "frontend-modern/src/features/standalone/StandaloneVirtualMachinesTable.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Infrastructure/ResourceOperatorStateSection.tsx": "8961e770167bf2faa9f2d31ec1d855bb5713a4c2c738e36ee4dc814325d92b41",
+    "frontend-modern/src/components/shared/WebInterfaceUrlField.tsx": "c8452d0843f0db0a419305788488de8444a9c02f65125e737ced1637d43b0d71",
+    "frontend-modern/src/features/standalone/StandalonePageSurface.tsx": "682ed6fd416f79f03d71982ebc7c06b2b97805a3cc3bf07cefc41cb0513fd1f8",
+    "frontend-modern/src/features/standalone/StandaloneVirtualMachinesTable.tsx": "0580b61121a40de029b0b1ba9d05e6ec87f7fbf8ada1b4956c331013bd78810f"
+  },
+  "routes": [
+    "/proxmox/overview",
+    "/standalone/vms",
+    "/standalone/machines"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 1024,
+      "height": 768
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Admin write session desktop 1440x900 on /proxmox/overview Manage tab renders editable Operator overrides selects, textarea, and Schedule window button",
+    "Read-only session (monitoring:read token and demo readOnly) desktop 1440x900 dark and light themes on Proxmox node, Proxmox guest, and Standalone VM Manage tabs render read-only Operator overrides summary and read-only WebInterfaceUrlField with zero editable inputs or Save/Schedule/Clear buttons",
+    "Desktop 1440x900 and mobile 390x844 on /standalone/vms render Virtual Machines heading with inline titleMeta slot and 0px horizontal overflow",
+    "Post-merge sweep across 18 desktop routes, tablet 1024x768 nav, and 6 mobile routes passed with 0px overflow, 0 page errors, and 0 API 5xx errors"
+  ],
+  "interactions": [
+    "Expanded Proxmox node and guest drawers and switched to Manage tab in both admin and read-only sessions",
+    "Expanded Standalone VM drawer and switched to Manage tab in read-only session to verify zero mutating controls",
+    "Toggled theme to light mode on read-only Manage tab and inspected rendered screenshots",
+    "Verified Ctrl+K Command Palette open and toggle-close on /proxmox/overview"
+  ]
+}
