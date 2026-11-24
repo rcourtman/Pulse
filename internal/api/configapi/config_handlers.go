@@ -1493,9 +1493,10 @@ func findPreferredIP(interfaces []proxmox.NodeNetworkInterface, referenceIP net.
 }
 
 var (
-	detectPVEClusterContext = defaultDetectPVECluster
-	validatePVEClusterNode  = validateNodeAPI
-	fetchTLSFingerprint     = tlsutil.FetchFingerprint
+	detectPVEClusterContext      = defaultDetectPVECluster
+	validatePVEClusterNode       = validateNodeAPI
+	fetchTLSFingerprint          = tlsutil.FetchFingerprint
+	verifyAutoRegisterCredential = defaultVerifyAutoRegisterCredential
 )
 
 func ConfigureAutoRegisterNetworkDependencies(
@@ -1515,6 +1516,20 @@ func ConfigureAutoRegisterNetworkDependencies(
 	return func() {
 		detectPVEClusterContext = previousDetect
 		fetchTLSFingerprint = previousFingerprint
+	}
+}
+
+// ConfigureAutoRegisterCredentialVerifier overrides the live credential probe
+// used by agent-token auto-register updates and returns a restore callback.
+func ConfigureAutoRegisterCredentialVerifier(
+	credential func(context.Context, string, proxmox.ClientConfig) error,
+) func() {
+	previousCredential := verifyAutoRegisterCredential
+	if credential != nil {
+		verifyAutoRegisterCredential = credential
+	}
+	return func() {
+		verifyAutoRegisterCredential = previousCredential
 	}
 }
 

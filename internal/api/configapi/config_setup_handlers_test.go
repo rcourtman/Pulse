@@ -49,6 +49,101 @@ func TestShouldPreserveExistingAutoRegisterHost(t *testing.T) {
 	}
 }
 
+// A stored name that resolves to the registering host today can resolve
+// elsewhere tomorrow. localhost stands in for such a name: it shares resolved
+// identity with 127.0.0.1 and is absent from the incoming candidate list.
+func TestFindCanonicalAutoRegisterMatchKeepsCredentialWithRegisteringHost(t *testing.T) {
+	const (
+		incomingHost = "https://127.0.0.1:8006"
+		pin          = "AA:BB"
+	)
+	recorded := func(want string) func(string) bool {
+		return func(host string) bool { return host == want }
+	}
+	tests := []struct {
+		name           string
+		candidates     []canonicalAutoRegisterCandidate
+		fingerprint    string
+		recordedHost   func(string) bool
+		wantIndex      int
+		wantPreserve   bool
+		wantContinuity bool
+	}{
+		{
+			name:        "plain HTTP stored name is not matched by resolved identity",
+			candidates:  []canonicalAutoRegisterCandidate{{Host: "http://localhost:8006"}},
+			fingerprint: pin,
+			wantIndex:   -1,
+		},
+		{
+			name:       "stored name is not matched without a captured fingerprint",
+			candidates: []canonicalAutoRegisterCandidate{{Host: "https://localhost:8006"}},
+			wantIndex:  -1,
+		},
+		{
+			name:        "unpinned agent-created HTTPS name is not matched by resolved identity",
+			candidates:  []canonicalAutoRegisterCandidate{{Host: "https://localhost:8006", Source: "agent"}},
+			fingerprint: pin,
+			wantIndex:   -1,
+		},
+		{
+			name:        "clustered agent-created HTTPS name is not matched by resolved identity",
+			candidates:  []canonicalAutoRegisterCandidate{{Host: "https://localhost:8006", Source: "agent", Fingerprint: pin, HasClusterEndpoints: true}},
+			fingerprint: pin,
+			wantIndex:   -1,
+		},
+		{
+			name:         "admin TLS stored name is preserved under the captured pin",
+			candidates:   []canonicalAutoRegisterCandidate{{Host: "https://localhost:8006"}},
+			fingerprint:  pin,
+			wantIndex:    0,
+			wantPreserve: true,
+		},
+		{
+			name:         "address recorded by the caller's install grant is preserved",
+			candidates:   []canonicalAutoRegisterCandidate{{Host: "http://localhost:8006"}},
+			recordedHost: recorded("http://localhost:8006"),
+			wantIndex:    0,
+			wantPreserve: true,
+		},
+		{
+			name: "exact host match wins over an earlier resolved identity match",
+			candidates: []canonicalAutoRegisterCandidate{
+				{Host: "https://localhost:8006"},
+				{Host: incomingHost},
+			},
+			fingerprint: pin,
+			wantIndex:   1,
+		},
+		{
+			name: "DHCP continuity match reports continuity flag",
+			candidates: []canonicalAutoRegisterCandidate{
+				{Host: "https://192.0.2.99:8006", Name: "pve-b", TokenName: "pulse-monitor@pve!pulse-b"},
+			},
+			fingerprint:    pin,
+			wantIndex:      0,
+			wantPreserve:   false,
+			wantContinuity: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			index, preserve, continuity := findCanonicalAutoRegisterMatch("pve", canonicalAutoRegisterIdentity{
+				host:           incomingHost,
+				serverName:     "pve-b",
+				fingerprint:    tt.fingerprint,
+				tokenName:      "pulse-monitor@pve!pulse-b",
+				candidateHosts: []string{incomingHost},
+				recordedHost:   tt.recordedHost,
+			}, tt.candidates)
+			if index != tt.wantIndex || preserve != tt.wantPreserve || continuity != tt.wantContinuity {
+				t.Fatalf("findCanonicalAutoRegisterMatch() = (%d, %v, %v), want (%d, %v, %v)", index, preserve, continuity, tt.wantIndex, tt.wantPreserve, tt.wantContinuity)
+			}
+		})
+	}
+}
+
 func TestClusterMemberOverrideIdentity(t *testing.T) {
 	tests := []struct {
 		name  string
