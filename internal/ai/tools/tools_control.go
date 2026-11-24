@@ -636,7 +636,7 @@ func connectedAgentForNode(rs unifiedresources.ReadState, node *unifiedresources
 			if unifiedresources.HostnamesEquivalent(agent.Hostname, hostname) {
 				return agent, true
 			}
-		} else if unifiedresources.HostnamesEquivalent(owned.Resource.Agent.Hostname, hostname) {
+		} else {
 			return agentexec.ConnectedAgent{}, false
 		}
 	}
@@ -659,7 +659,7 @@ func connectedAgentForNode(rs unifiedresources.ReadState, node *unifiedresources
 				return agentexec.ConnectedAgent{}, false
 			}
 			candidate, found = agent, true
-		} else if unifiedresources.HostnamesEquivalent(host.Hostname(), hostname) {
+		} else {
 			linked = true
 		}
 	}
