@@ -164,6 +164,7 @@ func buildDefaultPolicy() *CommandPolicy {
 			// System inspection
 			`^ps(\s|$)`,
 			`^top\s+-bn`,
+			// df: directories and block devices only (see dfArgsSafe).
 			`^df(\s|$)`,
 			`^free(\s|$)`,
 			`^uptime$`,
@@ -225,7 +226,7 @@ func buildDefaultPolicy() *CommandPolicy {
 			`^qm\s+status\s`,
 			`^pvesh\s+get\s`,
 
-			// Disk/storage info. du, file, find, blkid, sar and the other
+			// Disk/storage info. du, file, fdisk, find, blkid, sar and the other
 			// programs autoApprovedArgsSafe names also have their arguments
 			// checked.
 			`^lsblk(\s|$)`,

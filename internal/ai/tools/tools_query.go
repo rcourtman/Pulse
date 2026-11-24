@@ -5899,7 +5899,10 @@ func (e *PulseToolExecutor) executeSearchResources(_ context.Context, args map[s
 
 	connections := e.observeQueryCommandConnections(rs)
 
-	matches := make([]ResourceMatch, 0, limit)
+	// limit is a caller-supplied tool argument with no upper bound, so it must
+	// not size the allocation: a huge value is a fatal out-of-memory error that
+	// the tool panic recovery cannot catch. Grow with the actual matches instead.
+	matches := []ResourceMatch{}
 	total := 0
 
 	addMatch := func(match ResourceMatch) {

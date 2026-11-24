@@ -283,6 +283,12 @@ func psPrintsEnvironment(args []string, bsdOptionSemantics bool) bool {
 	if bsdOptionSemantics {
 		for i := 0; i < len(args); i++ {
 			arg := args[i]
+			// The value letters are a union over the BSDs: -M, -N and -J take
+			// a value on FreeBSD, but -M is a flag on macOS, and a trailing t
+			// in a first word without a dash takes none before an option. A
+			// word that is itself an option is therefore never skipped as a
+			// value.
+			nextIsValue := i+1 < len(args) && !strings.HasPrefix(args[i+1], "-")
 			switch {
 			case strings.HasPrefix(arg, "--"):
 				if !strings.Contains(arg, "=") && wordIn(arg, "--format --sort --pid --ppid --user --group --tty --sid --cols --columns --rows --width") {
@@ -293,14 +299,14 @@ func psPrintsEnvironment(args []string, bsdOptionSemantics bool) bool {
 				if strings.ContainsAny(cluster, "eE") {
 					return true
 				}
-				if valueAt := strings.IndexAny(cluster, "oOptUGMNJ"); valueAt >= 0 && valueAt == len(cluster)-1 {
+				if valueAt := strings.IndexAny(cluster, "oOptUGMNJ"); valueAt >= 0 && valueAt == len(cluster)-1 && nextIsValue {
 					i++
 				}
 			default:
-				if strings.IndexByte(arg, 'e') >= 0 {
+				if strings.ContainsAny(arg, "eE") {
 					return true
 				}
-				if arg != "" && strings.IndexByte("oOptUkq", arg[len(arg)-1]) >= 0 {
+				if arg != "" && strings.IndexByte("oOptUkq", arg[len(arg)-1]) >= 0 && nextIsValue {
 					i++
 				}
 			}

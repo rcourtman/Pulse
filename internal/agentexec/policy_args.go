@@ -1,6 +1,7 @@
 package agentexec
 
 import (
+	"regexp"
 	"strings"
 
 	"github.com/rcourtman/pulse-go-rewrite/pkg/secretredact"
@@ -38,6 +39,12 @@ var (
 		short: "fmCd",
 		long:  []string{"files-from", "magic-file", "compile", "debug"},
 	}
+	// file -s (--special-files) is allowed for block devices only (see
+	// fileArgsSafe).
+	fileSpecialOptions = deniedOptions{
+		short: "s",
+		long:  []string{"special-files"},
+	}
 	lastDeniedOptions = deniedOptions{
 		short: "f",
 		long:  []string{"file"},
@@ -45,6 +52,11 @@ var (
 	blkidDeniedOptions = deniedOptions{
 		short: "cg",
 		long:  []string{"cache-file", "garbage-collect"},
+	}
+	// lsblk --sysroot reads device attributes (model, vendor, serial) from
+	// files below the named directory, following links, and prints them.
+	lsblkDeniedOptions = deniedOptions{
+		long: []string{"sysroot"},
 	}
 	ssDeniedOptions = deniedOptions{
 		short: "KDF",
@@ -77,7 +89,7 @@ var (
 // case without a plain sudo prefix, since many options differ only by case.
 func autoApprovedArgsSafe(name, command string) bool {
 	switch name {
-	case "find", "du", "file", "last", "blkid", "ss", "lsof", "journalctl",
+	case "find", "du", "df", "fdisk", "file", "last", "blkid", "lsblk", "ss", "lsof", "journalctl",
 		"systemctl", "apt-cache", "sar", "ps", "ip", "ifconfig", "dpkg", "pvesh", "docker", "podman":
 	default:
 		return true
@@ -107,12 +119,18 @@ func autoApprovedArgsSafe(name, command string) bool {
 		return findArgsSafe(args)
 	case "du":
 		return duDeniedOptions.allows(args)
+	case "df":
+		return dfArgsSafe(args)
+	case "fdisk":
+		return fdiskArgsSafe(args)
 	case "file":
-		return fileDeniedOptions.allows(args)
+		return fileArgsSafe(args)
 	case "last":
 		return lastDeniedOptions.allows(args)
 	case "blkid":
 		return blkidDeniedOptions.allows(withoutNullBlkidCache(args))
+	case "lsblk":
+		return lsblkDeniedOptions.allows(args)
 	case "ss":
 		return ssDeniedOptions.allows(args)
 	case "lsof":
@@ -146,7 +164,7 @@ func autoApprovedArgsSafe(name, command string) bool {
 
 var globSensitivePrograms = map[string]bool{
 	"ip": true, "ifconfig": true, "ps": true, "sar": true, "pvesh": true,
-	"apt-cache": true,
+	"apt-cache": true, "df": true,
 }
 
 // globKeepsOption reports whether every expansion of an unquoted glob is
@@ -255,6 +273,98 @@ func (d deniedOptions) allows(args []string) bool {
 		}
 	}
 	return true
+}
+
+// blockDeviceRe matches the kernel names of disks and their partitions.
+// Character devices that share a prefix (the NVMe controller /dev/nvme0,
+// /dev/loop-control, /dev/mmcblk0rpmb) do not match.
+var blockDeviceRe = regexp.MustCompile(`^/dev/((sd|hd|vd|xvd)[a-z]+[0-9]*|(nvme[0-9]+n|mmcblk|md|loop|zd)[0-9]+(p[0-9]+)?|dm-[0-9]+)$`)
+
+// fileArgsSafe also limits -s (--special-files) to block devices. Without -s
+// file only stats a device or a zero-size /proc file; with it file opens and
+// reads the operand, and for a character device that is an operation on the
+// device: a watchdog is armed, a tape rewinds, a serial line or /proc/kmsg
+// loses the bytes read. Every word that is not an option must therefore name
+// a block device; a refused option value only costs an approval.
+func fileArgsSafe(args []string) bool {
+	if !fileDeniedOptions.allows(args) {
+		return false
+	}
+	if fileSpecialOptions.allows(args) {
+		return true
+	}
+	return operandsAllMatch(args, blockDeviceRe.MatchString)
+}
+
+// fdiskArgsSafe limits fdisk -l to block devices: fdisk opens every operand
+// to read its partition table. A refused option value only costs an approval.
+func fdiskArgsSafe(args []string) bool {
+	return operandsAllMatch(args, blockDeviceRe.MatchString)
+}
+
+// operandsAllMatch reports whether every word that is not an option, and
+// every word after --, satisfies allowed.
+func operandsAllMatch(args []string, allowed func(string) bool) bool {
+	operandsOnly := false
+	for _, arg := range args {
+		switch {
+		case operandsOnly || !strings.HasPrefix(arg, "-") || arg == "-":
+			if !allowed(arg) {
+				return false
+			}
+		case arg == "--":
+			operandsOnly = true
+		}
+	}
+	return true
+}
+
+// dfValueOptionRe matches a GNU df option cluster whose last letter takes the
+// next word as its value. A value option earlier in the cluster (-Bt) takes
+// the rest of the word instead.
+var dfValueOptionRe = regexp.MustCompile(`^-[aHhiklmPTv]*[BFtx]$`)
+
+// dfArgsSafe limits the operands of df. GNU df opens every operand before it
+// looks up its filesystem (so that an automounted one gets mounted), and for
+// a character device, a FIFO or a link to one that open is an operation on
+// the device, as with file -s: df /dev/watchdog arms the watchdog and the
+// machine resets. The command text cannot show what a path leads to, since a
+// link can be planted wherever someone may write, so an operand must be one
+// the kernel opens only as a directory (see namesDirectory) or the name of a
+// block device. df without operands reports every filesystem.
+func dfArgsSafe(args []string) bool {
+	operandsOnly, operandSeen := false, false
+	for i := 0; i < len(args); i++ {
+		arg := args[i]
+		switch {
+		case operandsOnly || !strings.HasPrefix(arg, "-") || arg == "-":
+			if !namesDirectory(arg) && !blockDeviceRe.MatchString(arg) {
+				return false
+			}
+			operandSeen = true
+		case arg == "--":
+			operandsOnly = true
+		case operandSeen:
+			// With POSIXLY_CORRECT set every word after the first operand
+			// is an operand, so a word that follows one is never skipped as
+			// an option's value; that only costs an approval.
+		case dfValueOptionRe.MatchString(arg), arg == "--block-size", arg == "--type", arg == "--exclude-type":
+			i++
+		}
+	}
+	return true
+}
+
+// namesDirectory reports whether a path can only be opened as a directory:
+// it ends in a slash or in a . or .. component, and the kernel then refuses
+// anything else with ENOTDIR before the open reaches a device driver,
+// whatever links the path passes through.
+func namesDirectory(path string) bool {
+	if strings.HasSuffix(path, "/") {
+		return true
+	}
+	last := path[strings.LastIndexByte(path, '/')+1:]
+	return last == "." || last == ".."
 }
 
 // withoutNullBlkidCache drops a cache file of /dev/null, the usual way to
