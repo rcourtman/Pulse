@@ -673,6 +673,7 @@ func (h *ConfigHandlers) handleAddNode(w http.ResponseWriter, r *http.Request) {
 			TokenValue:                   pbsTokenValue,
 			Fingerprint:                  req.Fingerprint,
 			VerifySSL:                    verifySSL,
+			VerifySSLExplicit:            req.VerifySSL != nil,
 			MonitorBackups:               monitorBackups,
 			MonitorDatastores:            monitorDatastores,
 			MonitorSyncJobs:              monitorSyncJobs,
@@ -1667,6 +1668,7 @@ func (h *ConfigHandlers) handleUpdateNode(w http.ResponseWriter, r *http.Request
 		}
 		if req.VerifySSL != nil {
 			updated.VerifySSL = *req.VerifySSL
+			updated.VerifySSLExplicit = true
 		}
 		if req.MonitorBackups != nil {
 			updated.MonitorBackups = *req.MonitorBackups

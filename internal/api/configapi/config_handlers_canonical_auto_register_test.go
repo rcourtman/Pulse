@@ -1763,6 +1763,120 @@ func TestHandleCanonicalAutoRegister_PBSReservesDisabledVerifySSL(t *testing.T) 
 	}
 }
 
+// An operator who chose "Verify SSL certificate" for a PBS connection whose
+// certificate a trusted CA signed saves the same state the #1303 heal looks
+// for: verification on, no pin. A re-registration during which Pulse cannot
+// fetch the certificate must leave that choice alone, as it does for PVE.
+func TestHandleCanonicalAutoRegister_PBSKeepsExplicitVerifySSLWithoutPin(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		explicit bool
+		want     bool
+	}{
+		{"operator choice", true, true},
+		{"legacy", false, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			stubAutoRegisterNetworkDeps(t)
+			tempDir := t.TempDir()
+			t.Setenv("PULSE_DATA_DIR", tempDir)
+
+			tokenID := "pulse-monitor@pbs!" + buildPulseMonitorTokenName("pulse.example.com")
+			cfg := &config.Config{
+				DataPath:   tempDir,
+				ConfigPath: tempDir,
+				PBSInstances: []config.PBSInstance{{
+					Name:              "pbs01",
+					Host:              "https://pbs01.local:8007",
+					TokenName:         tokenID,
+					TokenValue:        "existing-token",
+					VerifySSL:         true,
+					VerifySSLExplicit: tc.explicit,
+				}},
+			}
+			handler := newTestConfigHandlers(t, cfg)
+
+			reqBody := AutoRegisterRequest{
+				Type:       "pbs",
+				Host:       "https://pbs01.local:8007",
+				ServerName: "pbs01",
+				TokenID:    tokenID,
+				TokenValue: "rotated-token",
+				Source:     "agent",
+			}
+			req := httptest.NewRequest(http.MethodPost, "/api/auto-register", nil)
+			rec := httptest.NewRecorder()
+
+			handler.handleCanonicalAutoRegister(rec, req, &reqBody, "127.0.0.1")
+
+			if rec.Code != http.StatusOK {
+				t.Fatalf("status = %d, want 200: %s", rec.Code, rec.Body.String())
+			}
+			instance := handler.defaultConfig.PBSInstances[0]
+			if instance.TokenValue != "rotated-token" {
+				t.Fatalf("token value = %q, want the rotated token", instance.TokenValue)
+			}
+			if instance.VerifySSL != tc.want || instance.Fingerprint != "" {
+				t.Fatalf("VerifySSL = %v, fingerprint = %q, want VerifySSL %v and no pin", instance.VerifySSL, instance.Fingerprint, tc.want)
+			}
+		})
+	}
+}
+
+// Background agent re-registration without an install grant never pins an
+// unverified certificate over chosen CA verification, never replaces an
+// existing pin with a conflicting certificate, and never lowers VerifySSL even
+// when VerifySSLExplicit was not recorded yet (upgraded installs).
+func TestAgentTokenAutoRegisterKeepsChosenCAVerification(t *testing.T) {
+	const answering = "AA:BB:CC:DD"
+	for _, tc := range []struct {
+		name            string
+		explicit        bool
+		pinned          string
+		fetched         string
+		wantFingerprint string
+	}{
+		{"operator chose CA verification", true, "", answering, ""},
+		{"operator chose verification with a pin", true, "11:22:33:44", answering, "11:22:33:44"},
+		{"no recorded choice with cert capture", false, "", answering, answering},
+		{"no recorded choice and unreachable keeps verifySSL", false, "", "", ""},
+	} {
+		for _, nodeType := range []string{"pve", "pbs"} {
+			t.Run(tc.name+"/"+nodeType, func(t *testing.T) {
+				rawToken := nodeType + "-real-agent.12345678"
+				host := "https://pve-real.local:8006"
+				if nodeType == "pbs" {
+					host = "https://pbs-real.local:8007"
+				}
+				handler, cfg := agentAuthorityFixture(t, rawToken, map[string]string{
+					proxmoxInstallRegistrationTypedKey(proxmoxInstallRegistrationHostKey, nodeType): host,
+				})
+				cfg.PVEInstances[0].VerifySSL, cfg.PVEInstances[0].VerifySSLExplicit, cfg.PVEInstances[0].Fingerprint = true, tc.explicit, tc.pinned
+				cfg.PBSInstances[0].VerifySSL, cfg.PBSInstances[0].VerifySSLExplicit, cfg.PBSInstances[0].Fingerprint = true, tc.explicit, tc.pinned
+				fetchTLSFingerprint = func(string) (string, error) { return tc.fetched, nil }
+
+				rec := runAgentAutoRegister(t, handler, rawToken, AutoRegisterRequest{
+					Type: nodeType, Host: host, ServerName: nodeType + "-real", Source: "agent",
+					TokenID: "pulse-monitor@" + nodeType + "!pulse-rotated", TokenValue: "rotated-secret",
+				})
+				if rec.Code != http.StatusOK {
+					t.Fatalf("status = %d, body=%s", rec.Code, rec.Body.String())
+				}
+				tokenValue, verifySSL, fingerprint := cfg.PVEInstances[0].TokenValue, cfg.PVEInstances[0].VerifySSL, cfg.PVEInstances[0].Fingerprint
+				if nodeType == "pbs" {
+					tokenValue, verifySSL, fingerprint = cfg.PBSInstances[0].TokenValue, cfg.PBSInstances[0].VerifySSL, cfg.PBSInstances[0].Fingerprint
+				}
+				if tokenValue != "rotated-secret" {
+					t.Fatalf("token value = %q, want the rotated token", tokenValue)
+				}
+				if !verifySSL || fingerprint != tc.wantFingerprint {
+					t.Fatalf("VerifySSL = %v, fingerprint = %q, want VerifySSL on and fingerprint %q", verifySSL, fingerprint, tc.wantFingerprint)
+				}
+			})
+		}
+	}
+}
+
 func agentAuthorityFixture(t *testing.T, rawToken string, metadata map[string]string) (*ConfigHandlers, *config.Config) {
 	t.Helper()
 	stubAutoRegisterNetworkDeps(t)

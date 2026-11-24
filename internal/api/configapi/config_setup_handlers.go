@@ -23,6 +23,7 @@ import (
 	"golang.org/x/crypto/ssh"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/api/apicontext"
+	"github.com/rcourtman/pulse-go-rewrite/internal/api/apihttp"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 	"github.com/rcourtman/pulse-go-rewrite/internal/system"
@@ -1747,7 +1748,12 @@ func buildCanonicalAutoUnregisterResponse(req *AutoUnregisterRequest, host strin
 	}
 }
 
-func (h *ConfigHandlers) authenticateSetupScriptTeardownRequest(r *http.Request, nodeType string, authToken string) (*http.Request, bool) {
+// authenticateSetupScriptTeardownRequest admits a teardown request whose setup
+// token, live or inside its post-use grace period, was issued for the request's
+// node type and host. The address is compared as spelled, without resolving
+// names, which matches what the generated setup script sends back. A refused
+// request does not spend the token.
+func (h *ConfigHandlers) authenticateSetupScriptTeardownRequest(r *http.Request, nodeType string, host string, authToken string) (*http.Request, bool) {
 	setupToken := strings.TrimSpace(authToken)
 	if setupToken == "" {
 		return r, false
@@ -1769,6 +1775,9 @@ func (h *ConfigHandlers) authenticateSetupScriptTeardownRequest(r *http.Request,
 		if strings.TrimSpace(record.NodeType) != "" && strings.TrimSpace(record.NodeType) != strings.TrimSpace(nodeType) {
 			return r, false
 		}
+		if !autoRegisterSpelledEndpoint(record.Host, host, nodeType) {
+			return r, false
+		}
 		if !record.Used && now.Before(record.ExpiresAt) {
 			record.Used = true
 			graceExpiry := recentSetupTokenGraceExpiry(record, now)
@@ -1785,6 +1794,9 @@ func (h *ConfigHandlers) authenticateSetupScriptTeardownRequest(r *http.Request,
 		return r, false
 	}
 	if recentRecord.NodeType != "" && recentRecord.NodeType != strings.TrimSpace(nodeType) {
+		return r, false
+	}
+	if !autoRegisterSpelledEndpoint(recentRecord.Host, host, nodeType) {
 		return r, false
 	}
 	if recentRecord.OrgID != "" {
@@ -2187,7 +2199,7 @@ func (h *ConfigHandlers) handleAutoUnregister(w http.ResponseWriter, r *http.Req
 	}
 	req.Host = normalizedCandidates[0]
 
-	updatedRequest, authenticated := h.authenticateSetupScriptTeardownRequest(r, req.Type, req.AuthToken)
+	updatedRequest, authenticated := h.authenticateSetupScriptTeardownRequest(r, req.Type, req.Host, req.AuthToken)
 	if !authenticated {
 		if req.AuthToken == "" {
 			http.Error(w, "Pulse setup token required", http.StatusUnauthorized)
@@ -2352,11 +2364,16 @@ func (h *ConfigHandlers) handleAutoRegister(w http.ResponseWriter, r *http.Reque
 			if len(inventories) > 0 {
 				record, ok := validateAgentTokenLocked(inventories, apiToken)
 				if ok && record != nil && record.HasScope(config.ScopeAgentReport) {
-					// Reject cross-org tokens: if the request context has an explicit
-					// non-default org, the token must belong to that same org.
+					// Reject cross-org tokens: a token bound to organizations acts
+					// only in one of them, the default organization included. Its
+					// inventory is the instance inventory, which also holds every
+					// tenant organization's install tokens. Unbound legacy tokens
+					// keep acting in the request's organization.
 					requestOrgID := apicontext.OrgID(r.Context())
-					orgMismatch := requestOrgID != "" && requestOrgID != "default" &&
-						record.OrgID != "" && record.OrgID != requestOrgID
+					if requestOrgID == "" {
+						requestOrgID = "default"
+					}
+					orgMismatch := !record.IsLegacyToken() && !record.CanAccessOrg(requestOrgID)
 					if !orgMismatch {
 						installBootstrap := canBootstrapProxmoxInstallRegistration(record, &req)
 						if !installBootstrap && proxmoxInstallGrantExpiredForRequest(record, &req) {
@@ -2683,7 +2700,11 @@ func (h *ConfigHandlers) handleCanonicalAutoRegister(w http.ResponseWriter, r *h
 				// of host.
 				if !agentAuthority.installGrant || !config.ProxmoxFingerprintsMatch(current.Fingerprint, fingerprint) {
 					preserveHost = true
-					if !autoRegisterSpelledEndpoint(current.Host, host, "pve") {
+					// Without a grant, background re-registration never pins an
+					// unverified certificate in place of CA verification the
+					// operator explicitly chose.
+					caVerified := !agentAuthority.installGrant && current.VerifySSLExplicit && current.VerifySSL && current.Fingerprint == ""
+					if caVerified || !autoRegisterSpelledEndpoint(current.Host, host, "pve") {
 						pveNode.Fingerprint = ""
 					}
 				}
@@ -2775,8 +2796,9 @@ func (h *ConfigHandlers) handleCanonicalAutoRegister(w http.ResponseWriter, r *h
 			}
 			// Preserve the operator's TLS choice on an existing connection.
 			// Heal only the legacy state where strict verification is on with
-			// no pin and no recorded operator choice (#1303).
-			if !instance.VerifySSLExplicit && instance.VerifySSL && instance.Fingerprint == "" {
+			// no pin and no recorded operator choice (#1303), and never lower
+			// VerifySSL during an unattended background agent re-registration.
+			if !(agentAuth && !agentAuthority.installGrant) && !instance.VerifySSLExplicit && instance.VerifySSL && instance.Fingerprint == "" {
 				instance.VerifySSL = false
 			}
 			if agentAuth {
@@ -2857,7 +2879,8 @@ func (h *ConfigHandlers) handleCanonicalAutoRegister(w http.ResponseWriter, r *h
 			// presenting the certificate pinned for the connection.
 			if !agentAuthority.installGrant || !config.ProxmoxFingerprintsMatch(current.Fingerprint, fingerprint) {
 				preserveHost = true
-				if !autoRegisterSpelledEndpoint(current.Host, host, "pbs") {
+				caVerified := !agentAuthority.installGrant && current.VerifySSLExplicit && current.VerifySSL && current.Fingerprint == ""
+				if caVerified || !autoRegisterSpelledEndpoint(current.Host, host, "pbs") {
 					pbsNode.Fingerprint = ""
 				}
 			}
@@ -2886,8 +2909,9 @@ func (h *ConfigHandlers) handleCanonicalAutoRegister(w http.ResponseWriter, r *h
 			}
 			// Preserve the operator's TLS choice on an existing connection.
 			// Heal only the legacy state where strict verification is on with
-			// no pin, which can never connect to a self-signed endpoint (#1303).
-			if instance.VerifySSL && instance.Fingerprint == "" {
+			// no pin and no recorded operator choice (#1303), and never lower
+			// VerifySSL during an unattended background agent re-registration.
+			if !(agentAuth && !agentAuthority.installGrant) && !instance.VerifySSLExplicit && instance.VerifySSL && instance.Fingerprint == "" {
 				instance.VerifySSL = false
 			}
 			if agentAuth {
@@ -3171,6 +3195,14 @@ func (h *ConfigHandlers) handleAgentInstallCommand(w http.ResponseWriter, r *htt
 	var req AgentInstallCommandRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	// The route admits an API token on settings:write, which covers the
+	// reporting scopes of the token minted here. Command execution is a
+	// further grant: a token cannot hand out agent:exec unless it holds that
+	// scope itself. Sessions carry no scopes and pass.
+	if req.EnableCommands && !apihttp.EnsureScope(w, r, config.ScopeAgentExec) {
 		return
 	}
 

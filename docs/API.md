@@ -1003,7 +1003,9 @@ Mints an install token for an agent. `type` is `host`, `pve` or `pbs`.
 - `{"type":"pve"}` or `{"type":"pbs"}` returns `token` and the Proxmox install
   `command`.
 
-Add `"enableCommands": true` only when the agent should accept commands.
+Add `"enableCommands": true` only when the agent should accept commands. An API
+token must itself hold `agent:exec` to ask for it, otherwise the request fails
+with HTTP 403 `missing_scope`.
 
 ### Discovery
 `GET /api/discover` (admin, `settings:write`)
