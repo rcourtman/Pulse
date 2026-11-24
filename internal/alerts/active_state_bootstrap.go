@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts/eventlog"
@@ -116,7 +117,8 @@ func (m *Manager) bootstrapActiveState(store *eventlog.Store) (authoritative boo
 		log.Warn().Err(err).Msg("could not inspect active alert recovery mirror")
 	}
 
-	partialRecovery := degraded && m.activeRecoveryMarkerIncomplete()
+	oversizedMarker := degraded && m.activeRecoveryMarkerOversized()
+	partialRecovery := degraded && (oversizedMarker || m.activeRecoveryMarkerIncomplete())
 	if !m.skipPersistedRestore && (partialRecovery || (initialized && checkpointComplete && !degraded)) {
 		snapshots, boundary, err := store.LoadActiveStateAtJournalBoundary()
 		if err != nil {
@@ -132,11 +134,13 @@ func (m *Manager) bootstrapActiveState(store *eventlog.Store) (authoritative boo
 		}
 		var partial []*Alert
 		captured := boundary
-		if partialRecovery {
+		if partialRecovery && !oversizedMarker {
 			partial, _, err = m.loadActiveStateDegradedRecovery()
 			if err != nil {
 				return false
 			}
+		} else if oversizedMarker {
+			log.Warn().Int64("maxBytes", maxActiveAlertsFileSizeBytes).Msg("SQLite active alert recovery marker exceeds size limit; recovering from SQLite projection and journal tail")
 		}
 		if partialRecovery && !checkpointComplete {
 			// Neither source proves omissions before the first full checkpoint.
@@ -366,11 +370,38 @@ func (m *Manager) writeActiveStateDegradedRecovery(alerts []*Alert, cause error,
 		envelope.Alerts = []*Alert{}
 	}
 	if cause != nil {
-		envelope.Cause = cause.Error()
+		causeText := cause.Error()
+		if len(causeText) > 4096 {
+			causeText = strings.ToValidUTF8(causeText[:4096], "")
+		}
+		envelope.Cause = causeText
 	}
 	data, err := json.Marshal(envelope)
 	if err != nil {
 		return fmt.Errorf("marshal SQLite active alert recovery marker: %w", err)
+	}
+	if int64(len(data)) > maxActiveAlertsFileSizeBytes {
+		// Never write a marker startup will refuse, and never present a
+		// trimmed snapshot as complete: marking it incomplete tells startup to
+		// restore from the intact SQLite projection plus journal tail and
+		// merge kept observations additively so omissions cannot delete rows.
+		envelope.Incomplete = true
+		envelope.SchemaVersion = activeStatePartialRecoverySchemaVersion
+		kept := activeAlertsWithinRecoveryFileLimit(envelope.Alerts, len(data))
+		if len(kept) == len(envelope.Alerts) {
+			kept = []*Alert{}
+		}
+		envelope.Alerts = kept
+		data, err = json.Marshal(envelope)
+		if err != nil {
+			return fmt.Errorf("marshal SQLite active alert recovery marker: %w", err)
+		}
+		if int64(len(data)) > maxActiveAlertsFileSizeBytes {
+			envelope.Alerts = []*Alert{}
+			if data, err = json.Marshal(envelope); err != nil {
+				return fmt.Errorf("marshal SQLite active alert recovery marker: %w", err)
+			}
+		}
 	}
 	return m.writeActiveStateDegradedMarker(data)
 }
@@ -594,6 +625,14 @@ func (m *Manager) activeRecoverySnapshotBoundary() eventlog.JournalBoundary {
 		return eventlog.JournalBoundary{}
 	}
 	return envelope.SnapshotBoundary
+}
+
+func (m *Manager) activeRecoveryMarkerOversized() bool {
+	info, err := os.Lstat(m.activeStateDegradedPath())
+	if err != nil || !info.Mode().IsRegular() {
+		return false
+	}
+	return info.Size() > maxActiveAlertsFileSizeBytes
 }
 
 func (m *Manager) activeRecoveryMarkerIncomplete() bool {

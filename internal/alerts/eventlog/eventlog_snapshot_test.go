@@ -382,3 +382,186 @@ func TestSnapshotVolumeBoundPrunesOldestAndAdvancesRetention(t *testing.T) {
 		t.Fatalf("prune within the cap changed the boundary: %+v -> %+v", after, again)
 	}
 }
+
+// One source writing more than the cap must lose its own oldest events, not
+// the older history of a source that stores little.
+func TestSnapshotVolumeBoundKeepsHistoryOfOtherSources(t *testing.T) {
+	store := newTestStore(t)
+	base := time.Now().Add(-time.Hour).UTC()
+	payload := bytes.Repeat([]byte("x"), 1024)
+	appendSnapshot := func(at time.Time, eventType, resourceID string) {
+		t.Helper()
+		snapshot, err := json.Marshal(map[string]any{"resourceId": resourceID, "blob": string(payload)})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := store.AppendDurable(Event{
+			OccurredAt: at,
+			Type:       eventType,
+			AlertID:    resourceID + "-oom-kill",
+			ResourceID: resourceID,
+			Snapshot:   snapshot,
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// The quiet host's incident is the oldest history in the log.
+	const quietResource = "docker:nas01/postgres"
+	appendSnapshot(base, TypeFired, quietResource)
+	appendSnapshot(base.Add(time.Minute), TypeResolved, quietResource)
+	// The loud host then reports a new container for every alert.
+	const loudCount = 8
+	for i := 0; i < loudCount; i++ {
+		appendSnapshot(base.Add(time.Duration(i+2)*time.Minute), TypeFired, fmt.Sprintf("docker:loud/job-%d", i))
+	}
+	before, err := store.ReplayBoundary()
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Room for roughly five of the ten snapshots.
+	const maxBytes = 5 * 1200
+	store.pruneSnapshotVolume(maxBytes)
+	after, err := store.ReplayBoundary()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if after.RetentionRevision <= before.RetentionRevision {
+		t.Fatalf("volume prune did not advance retention revision: before=%+v after=%+v", before, after)
+	}
+	remaining, err := store.Query(Filter{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var total, quiet, loud int
+	for _, event := range remaining {
+		total += len(event.Snapshot)
+		if event.ResourceID == quietResource {
+			quiet++
+			continue
+		}
+		loud++
+		if event.ResourceID == "docker:loud/job-0" {
+			t.Fatalf("loud source kept its oldest event: %+v", remaining)
+		}
+	}
+	if total > maxBytes {
+		t.Fatalf("volume prune left %d snapshot bytes, cap %d", total, maxBytes)
+	}
+	if quiet != 2 {
+		t.Fatalf("quiet source kept %d of 2 events after another source exceeded the cap", quiet)
+	}
+	if loud == 0 || loud >= loudCount {
+		t.Fatalf("loud source kept %d of %d events", loud, loudCount)
+	}
+	if newest := remaining[0]; newest.ResourceID != fmt.Sprintf("docker:loud/job-%d", loudCount-1) {
+		t.Fatalf("loud source lost its newest event: %+v", newest)
+	}
+}
+
+// The clear-history tombstone hides every older event. A volume prune keeps the
+// older events of a source within its share, so it must keep the tombstone
+// that hides them.
+func TestSnapshotVolumeBoundKeepsHistoryClearedTombstone(t *testing.T) {
+	store := newTestStore(t)
+	base := time.Now().Add(-time.Hour).UTC()
+	payload := bytes.Repeat([]byte("x"), 1024)
+	appendSnapshot := func(at time.Time, resourceID string) {
+		t.Helper()
+		snapshot, err := json.Marshal(map[string]any{"resourceId": resourceID, "blob": string(payload)})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := store.AppendDurable(Event{
+			OccurredAt: at,
+			Type:       TypeFired,
+			AlertID:    resourceID + "-oom-kill",
+			ResourceID: resourceID,
+			Snapshot:   snapshot,
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	const clearedResource = "docker:nas01/postgres"
+	appendSnapshot(base, clearedResource)
+	if err := store.ImportEvents([]Event{{
+		OccurredAt: base.Add(time.Minute),
+		Type:       TypeHistoryCleared,
+		AlertID:    "history",
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < 4; i++ {
+		appendSnapshot(base.Add(time.Duration(i+2)*time.Minute), fmt.Sprintf("docker:loud/job-%d", i))
+	}
+	store.pruneSnapshotVolume(3 * 1200)
+	remaining, err := store.Query(Filter{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var cleared, tombstones, loud int
+	for _, event := range remaining {
+		switch {
+		case event.Type == TypeHistoryCleared:
+			tombstones++
+		case event.ResourceID == clearedResource:
+			cleared++
+		default:
+			loud++
+		}
+	}
+	if loud == 0 || loud >= 4 {
+		t.Fatalf("volume prune left %d of 4 events of the source over its share", loud)
+	}
+	if cleared != 1 || tombstones != 1 {
+		t.Fatalf("volume prune left %d cleared events and %d tombstones, want 1 and 1", cleared, tombstones)
+	}
+}
+
+// A Docker host reporting an ID with a slash ("nas01/x") records hostId
+// "nas01/x" in its snapshot metadata and must not charge its bytes to "nas01".
+func TestSnapshotVolumeBoundSeparatesSlashPrefixedHostIDs(t *testing.T) {
+	store := newTestStore(t)
+	base := time.Now().Add(-time.Hour).UTC()
+	payload := bytes.Repeat([]byte("x"), 1024)
+	appendHostSnapshot := func(at time.Time, hostID, resourceID string) {
+		t.Helper()
+		snapshot, err := json.Marshal(map[string]any{
+			"resourceId": resourceID,
+			"metadata":   map[string]any{"hostId": hostID},
+			"blob":       string(payload),
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := store.AppendDurable(Event{
+			OccurredAt: at,
+			Type:       TypeFired,
+			AlertID:    resourceID + "-oom-kill",
+			ResourceID: resourceID,
+			Snapshot:   snapshot,
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	const quietResource = "docker:nas01/postgres"
+	appendHostSnapshot(base, "nas01", quietResource)
+	for i := 0; i < 8; i++ {
+		appendHostSnapshot(base.Add(time.Duration(i+1)*time.Minute), "nas01/x", fmt.Sprintf("docker:nas01/x/job-%d", i))
+	}
+
+	store.pruneSnapshotVolume(4 * 1200)
+	remaining, err := store.Query(Filter{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	foundQuiet := false
+	for _, event := range remaining {
+		if event.ResourceID == quietResource {
+			foundQuiet = true
+		}
+	}
+	if !foundQuiet {
+		t.Fatal("slash-prefixed hostId evicted another host's alert snapshot")
+	}
+}

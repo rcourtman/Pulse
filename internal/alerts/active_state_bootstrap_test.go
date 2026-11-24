@@ -1,9 +1,11 @@
 package alerts
 
 import (
+	"bytes"
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -248,6 +250,110 @@ func TestDurableLifecycleFailureSurfacesRecoveryMarkerFailure(t *testing.T) {
 	}
 	if _, statErr := os.Stat(filepath.Join(dataDir, "alerts", "active-alerts.json")); statErr != nil {
 		t.Fatalf("best-effort recovery mirror was not written after marker failure: %v", statErr)
+	}
+}
+
+func TestOversizedAlertIsLeftOutOfReadableRecoveryFiles(t *testing.T) {
+	dataDir := t.TempDir()
+	m := NewManagerWithDataDir(dataDir)
+	m.EnableEventLog()
+
+	acknowledged := durableRestoreAlert(time.Now().Add(-2 * time.Hour).UTC())
+	// JSON stores each "<" as six bytes, so this name alone is larger than a
+	// recovery file may be and its lifecycle event is larger than the journal
+	// accepts.
+	oversized := &Alert{
+		ID:           "oversized-resource::metric-threshold:cpu",
+		Type:         "cpu",
+		Level:        AlertLevelWarning,
+		ResourceID:   "oversized-resource",
+		ResourceName: strings.Repeat("<", 3<<20),
+		StartTime:    time.Now().Add(-time.Hour).UTC(),
+		LastSeen:     time.Now().UTC(),
+	}
+	m.mu.Lock()
+	m.setActiveAlertNoLock(acknowledged.ID, acknowledged)
+	m.recordAlertEvent(eventlog.TypeFired, acknowledged, acknowledged.ID, "threshold", "Alert fired.", nil)
+	m.mu.Unlock()
+	if err := m.SaveActiveAlerts(); err != nil {
+		t.Fatalf("seed active state: %v", err)
+	}
+	m.mu.Lock()
+	m.setActiveAlertNoLock(oversized.ID, oversized)
+	m.recordAlertEvent(eventlog.TypeFired, oversized, oversized.ID, "threshold", "Alert fired.", nil)
+	m.mu.Unlock()
+
+	marker := filepath.Join(dataDir, "alerts", activeStateDegradedMarker)
+	mirror := filepath.Join(dataDir, "alerts", "active-alerts.json")
+	if _, err := os.Stat(marker); err != nil {
+		t.Fatalf("oversized lifecycle event did not degrade SQLite active state: %v", err)
+	}
+	if err := m.SaveActiveAlerts(); err != nil {
+		t.Fatalf("degraded checkpoint: %v", err)
+	}
+	m.Stop()
+	for _, path := range []string{marker, mirror} {
+		data, err := readLimitedRegularFile(path, maxActiveAlertsFileSizeBytes)
+		if err != nil {
+			t.Fatalf("recovery file cannot be read back at startup: %v", err)
+		}
+		if path == marker {
+			var env activeStateRecoveryEnvelope
+			if err := json.Unmarshal(data, &env); err != nil {
+				t.Fatalf("unmarshal degraded marker: %v", err)
+			}
+			if !env.Incomplete || env.SchemaVersion != activeStatePartialRecoverySchemaVersion {
+				t.Fatalf("trimmed recovery marker must be flagged incomplete (got schema=%d incomplete=%v)", env.SchemaVersion, env.Incomplete)
+			}
+		}
+	}
+
+	restarted := NewManagerWithDataDir(dataDir)
+	t.Cleanup(restarted.Stop)
+	restarted.EnableEventLog()
+	restarted.mu.RLock()
+	restored, ok := testLookupActiveAlert(t, restarted, acknowledged.ID)
+	restarted.mu.RUnlock()
+	if !ok {
+		t.Fatal("an oversized alert cost another alert its restart state")
+	}
+	if !restored.Acknowledged || restored.AckUser != acknowledged.AckUser {
+		t.Fatalf("restored alert lost its acknowledgement: %+v", restored)
+	}
+}
+
+func TestPreexistingOversizedRecoveryMarkerRecoversFromSQLite(t *testing.T) {
+	dataDir := t.TempDir()
+	m := NewManagerWithDataDir(dataDir)
+	m.EnableEventLog()
+
+	acknowledged := durableRestoreAlert(time.Now().Add(-2 * time.Hour).UTC())
+	m.mu.Lock()
+	m.setActiveAlertNoLock(acknowledged.ID, acknowledged)
+	m.recordAlertEvent(eventlog.TypeFired, acknowledged, acknowledged.ID, "threshold", "Alert fired.", nil)
+	m.mu.Unlock()
+	if err := m.SaveActiveAlerts(); err != nil {
+		t.Fatalf("seed active state: %v", err)
+	}
+	m.Stop()
+
+	// Simulate a marker written above the startup limit before the fix.
+	marker := filepath.Join(dataDir, "alerts", activeStateDegradedMarker)
+	if err := os.WriteFile(marker, bytes.Repeat([]byte("x"), int(maxActiveAlertsFileSizeBytes)+64), alertsFilePerm); err != nil {
+		t.Fatalf("write oversized marker: %v", err)
+	}
+
+	restarted := NewManagerWithDataDir(dataDir)
+	t.Cleanup(restarted.Stop)
+	restarted.EnableEventLog()
+	restarted.mu.RLock()
+	restored, ok := testLookupActiveAlert(t, restarted, acknowledged.ID)
+	restarted.mu.RUnlock()
+	if !ok {
+		t.Fatal("pre-existing oversized marker dropped intact SQLite alert on startup")
+	}
+	if !restored.Acknowledged || restored.AckUser != acknowledged.AckUser {
+		t.Fatalf("restored alert lost its acknowledgement: %+v", restored)
 	}
 }
 

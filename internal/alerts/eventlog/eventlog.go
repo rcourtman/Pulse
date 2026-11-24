@@ -19,6 +19,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -120,9 +121,9 @@ const (
 	// log keeps. Retention bounds how long an event lives; a single flapping
 	// alert can still write hundreds of megabytes of full state snapshots
 	// inside that window and fill the host disk. When the stored payload
-	// exceeds this cap the oldest events are removed first, exactly as age
-	// pruning removes them, so the history projection rebuilds from what
-	// remains.
+	// exceeds this cap the sources storing the most give up their oldest
+	// events first, removed exactly as age pruning removes them, so the
+	// history projection rebuilds from what remains.
 	maxRetainedSnapshotBytes = 256 << 20
 )
 
@@ -663,11 +664,16 @@ func (s *Store) pruneOld() {
 	s.pruneSnapshotVolume(maxRetainedSnapshotBytes)
 }
 
-// pruneSnapshotVolume removes the oldest events until the total stored snapshot
-// payload is within maxBytes. Age retention alone cannot bound disk use: one
-// flapping alert can write thousands of full state snapshots inside the
-// retention window. Deleting the oldest rows raises the retention revision so
-// the history projection rebuilds from the remaining log.
+// pruneSnapshotVolume removes events until the total stored snapshot payload is
+// within maxBytes. Age retention alone cannot bound disk use: one flapping
+// alert can write thousands of full state snapshots inside the retention
+// window. The cap is shared between the monitored sources rather than spent
+// oldest-first across the whole log: a source decides how large and how
+// frequent its own snapshots are, so only the sources storing more than a fair
+// share lose events, each its own oldest first. Otherwise one host's reports
+// could push every other host's history out of the log. Deleting rows raises
+// the retention revision so the history projection rebuilds from the remaining
+// log.
 func (s *Store) pruneSnapshotVolume(maxBytes int64) {
 	if s == nil || maxBytes <= 0 {
 		return
@@ -680,24 +686,31 @@ func (s *Store) pruneSnapshotVolume(maxBytes int64) {
 	if total <= maxBytes {
 		return
 	}
-	// Read only ids and payload lengths, oldest first, until enough bytes are
-	// scheduled for removal. The cursor must be closed before deleting because
-	// the store serializes writes on a single connection.
-	rows, err := s.db.Query(`SELECT id, length(snapshot) FROM alert_events ORDER BY occurred_at ASC, id ASC`)
+	// Read only ids, resource ids, recorded hostId (when present in the
+	// snapshot metadata) and payload lengths, oldest first. Events without a
+	// snapshot hold none of the payload and are left to age retention. That
+	// keeps the clear-history tombstone for as long as any older event it
+	// hides. The cursor must be closed before deleting because the store
+	// serializes writes on a single connection.
+	rows, err := s.db.Query(`SELECT id, resource_id, COALESCE(CASE WHEN json_valid(snapshot) THEN CAST(json_extract(snapshot, '$.metadata.hostId') AS TEXT) ELSE '' END, ''), length(snapshot) FROM alert_events WHERE snapshot != '' ORDER BY occurred_at ASC, id ASC`)
 	if err != nil {
 		log.Error().Err(err).Msg("alert event log volume scan failed")
 		return
 	}
-	ids := make([]int64, 0)
-	for total > maxBytes && rows.Next() {
-		var id, size int64
-		if scanErr := rows.Scan(&id, &size); scanErr != nil {
+	type storedSnapshot struct{ id, size int64 }
+	snapshots := make(map[string][]storedSnapshot)
+	stored := make(map[string]int64)
+	for rows.Next() {
+		var snapshot storedSnapshot
+		var resourceID, hostID string
+		if scanErr := rows.Scan(&snapshot.id, &resourceID, &hostID, &snapshot.size); scanErr != nil {
 			rows.Close()
 			log.Error().Err(scanErr).Msg("alert event log volume scan failed")
 			return
 		}
-		ids = append(ids, id)
-		total -= size
+		source := snapshotVolumeSource(resourceID, hostID)
+		snapshots[source] = append(snapshots[source], snapshot)
+		stored[source] += snapshot.size
 	}
 	scanErr := rows.Err()
 	rows.Close()
@@ -705,10 +718,59 @@ func (s *Store) pruneSnapshotVolume(maxBytes int64) {
 		log.Error().Err(scanErr).Msg("alert event log volume scan failed")
 		return
 	}
+	share := snapshotVolumeShare(stored, maxBytes)
+	ids := make([]int64, 0)
+	for source, kept := range stored {
+		for _, snapshot := range snapshots[source] {
+			if kept <= share {
+				break
+			}
+			ids = append(ids, snapshot.id)
+			kept -= snapshot.size
+		}
+	}
 	if len(ids) == 0 {
 		return
 	}
 	s.deleteEventsByID(ids)
+}
+
+// snapshotVolumeSource names the monitored source whose share of the snapshot
+// cap an event counts against. When the alert snapshot records a metadata
+// hostId, it is preferred over splitting resourceID at the first "/", so a
+// Docker agent reporting an ID containing "/" (such as "nas01/x") cannot
+// charge its snapshots to another host ("nas01"). Otherwise, the part before
+// the first "/" charges a host for all of its containers, services and devices.
+func snapshotVolumeSource(resourceID, hostID string) string {
+	if trimmedHostID := strings.TrimSpace(hostID); trimmedHostID != "" {
+		if prefix, _, ok := strings.Cut(resourceID, ":"); ok && prefix != "" {
+			return prefix + ":" + trimmedHostID
+		}
+		return "host:" + trimmedHostID
+	}
+	source, _, _ := strings.Cut(resourceID, "/")
+	return source
+}
+
+// snapshotVolumeShare returns the most snapshot payload one source may keep for
+// all of them together to stay within maxBytes. A source storing less than an
+// equal split keeps everything, and what it leaves unused is split between the
+// sources storing more.
+func snapshotVolumeShare(stored map[string]int64, maxBytes int64) int64 {
+	sizes := make([]int64, 0, len(stored))
+	for _, size := range stored {
+		sizes = append(sizes, size)
+	}
+	slices.Sort(sizes)
+	share := maxBytes
+	for i, size := range sizes {
+		share = maxBytes / int64(len(sizes)-i)
+		if size > share {
+			break
+		}
+		maxBytes -= size
+	}
+	return share
 }
 
 func (s *Store) deleteEventsByID(ids []int64) {

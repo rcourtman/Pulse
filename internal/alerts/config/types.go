@@ -3,6 +3,7 @@ package config
 import (
 	"encoding/json"
 	"math"
+	"slices"
 	"strings"
 	"time"
 )
@@ -203,6 +204,9 @@ func NormalizeEscalationDestinationIDs(destinationIDs []string) []string {
 func NormalizeEscalationConfig(config *EscalationConfig) {
 	if config == nil {
 		return
+	}
+	if len(config.Levels) > maxEscalationLevels {
+		config.Levels = slices.Clone(config.Levels[:maxEscalationLevels])
 	}
 	for index := range config.Levels {
 		config.Levels[index].After = max(MinEscalationDelayMinutes, min(MaxEscalationDelayMinutes, config.Levels[index].After))
