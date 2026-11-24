@@ -20,31 +20,16 @@ jobs:
       - name: Verify shared reporting boundary exemption
         run: python3 scripts/repo-boundary-regression.py
 
-      - name: Run Boundary Audit (report mode)
+      - name: Enforce and report the repository boundary
+        id: boundary
         run: |
           set -o pipefail
-          ./scripts/audit-private-boundary.sh | tee repo-boundary-audit.txt
-
-      - name: Enforce API Import Boundary
-        run: ./scripts/audit-private-boundary.sh --enforce-api-imports
-
-      - name: Enforce API Root Import Boundary
-        run: ./scripts/audit-private-boundary.sh --enforce-api-root-imports
-
-      - name: Enforce Non-API Import Boundary
-        run: ./scripts/audit-private-boundary.sh --enforce-nonapi-imports
-
-      - name: Enforce API pkg/licensing Bridge Boundary
-        run: ./scripts/audit-private-boundary.sh --enforce-api-pkg-licensing-imports
-
-      - name: Enforce Paid Surface Allowlist Integrity
-        run: ./scripts/audit-private-boundary.sh --enforce-paid-surface-allowlist
-
-      - name: Enforce Paid-Domain Leakage Ratchet
-        run: ./scripts/audit-private-boundary.sh --enforce
+          ./scripts/audit-private-boundary.sh --enforce 2>&1 | tee repo-boundary-audit.txt
 
       - name: Upload Audit Report
+        if: ${{ !cancelled() && (steps.boundary.outcome == 'success' || steps.boundary.outcome == 'failure') }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: repo-boundary-audit
           path: repo-boundary-audit.txt
+          if-no-files-found: error
