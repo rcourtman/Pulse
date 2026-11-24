@@ -240,6 +240,7 @@ updates:
     directories:
       - "/"
       - "/.devcontainer"
+      - "/.oss-scanner"
       - "/deploy/provider-msp"
       - "/tests/integration/mock-github-server"
     schedule:
