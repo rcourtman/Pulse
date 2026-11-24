@@ -19,6 +19,11 @@ type nativeAgentFrontendStep struct {
 	ContinueOnError  bool `yaml:"continue-on-error"`
 }
 
+const (
+	nativeSerializationScript = "scripts/check-frontend-serialization.mjs"
+	nativeSerializationCheck  = "Check Solid serialization dependency edges"
+)
+
 func validateNativeImagePreflight(steps []nativeAgentFrontendStep) error {
 	goAt, checkAt, nodeAt := -1, -1, -1
 	for i, step := range steps {
@@ -115,7 +120,7 @@ func validateNativeAgentFrontendTriggers(content []byte) error {
 	}
 	for _, event := range []string{"push", "pull_request"} {
 		paths := workflow.On[event].Paths
-		for _, required := range []string{"frontend-modern/package.json", "frontend-modern/package-lock.json"} {
+		for _, required := range []string{"frontend-modern/package.json", "frontend-modern/package-lock.json", nativeSerializationScript} {
 			found := false
 			for _, pattern := range paths {
 				if strings.HasPrefix(pattern, "!") {
@@ -142,7 +147,7 @@ func TestNativeAgentWorkflowAdmitsFrontendGraphChanges(t *testing.T) {
 	// Decode each event, rather than accepting a matching path elsewhere in
 	// the file. Both PR qualification and containing-main checks need it.
 	for _, event := range []string{"push", "pull_request"} {
-		for _, required := range []string{"frontend-modern/package.json", "frontend-modern/package-lock.json"} {
+		for _, required := range []string{"frontend-modern/package.json", "frontend-modern/package-lock.json", nativeSerializationScript} {
 			t.Run(event+" missing "+required, func(t *testing.T) {
 				var workflow map[string]interface{}
 				if err := yaml.Unmarshal(content, &workflow); err != nil {
@@ -182,6 +187,86 @@ func TestNativeAgentWorkflowAdmitsFrontendGraphChanges(t *testing.T) {
 			}
 			if err := validateNativeAgentFrontendTriggers(mutant); err == nil {
 				t.Fatal("accepted a later filter excluding the native frontend graph")
+			}
+		})
+	}
+}
+
+func validateNativeSerializationPreflight(steps []nativeAgentFrontendStep, setup, install string) error {
+	indices := make(map[string]int)
+	for i, step := range steps {
+		switch step.Name {
+		case setup, nativeSerializationCheck, install:
+			if _, found := indices[step.Name]; found {
+				return fmt.Errorf("native serialization preflight step must run once: %s", step.Name)
+			}
+			indices[step.Name] = i
+		}
+	}
+	setupAt, hasSetup := indices[setup]
+	checkAt, hasCheck := indices[nativeSerializationCheck]
+	installAt, hasInstall := indices[install]
+	if !hasSetup || !hasCheck || !hasInstall || !(setupAt < checkAt && checkAt < installAt) {
+		return fmt.Errorf("check the serialization graph after Node setup and before installing it")
+	}
+	check := steps[checkAt]
+	if check.If != "" || check.ContinueOnError || check.WorkingDirectory != "" ||
+		check.Uses != "" || strings.TrimSpace(check.Run) != "node "+nativeSerializationScript {
+		return fmt.Errorf("the existing serialization check must gate every consumer on its own checkout")
+	}
+	return nil
+}
+
+func TestNativeFrontendSerializationPreflight(t *testing.T) {
+	content, err := os.ReadFile(repoFile(".github", "workflows", "unified-agent-native.yml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var workflow struct {
+		Jobs map[string]struct{ Steps []nativeAgentFrontendStep }
+	}
+	if err := yaml.Unmarshal(content, &workflow); err != nil {
+		t.Fatal(err)
+	}
+	for _, consumer := range []struct{ job, setup, install string }{
+		{"native-agent", "Set up Node.js for native runtime test assets", "Install frontend test dependencies"},
+		{"windows-update-producer", "Set up Node for real API embed", "Build real frontend assets"},
+	} {
+		t.Run(consumer.job, func(t *testing.T) {
+			steps := workflow.Jobs[consumer.job].Steps
+			if err := validateNativeSerializationPreflight(steps, consumer.setup, consumer.install); err != nil {
+				t.Fatal(err)
+			}
+			checkAt, installAt := -1, -1
+			for i, step := range steps {
+				switch step.Name {
+				case nativeSerializationCheck:
+					checkAt = i
+				case consumer.install:
+					installAt = i
+				}
+			}
+			for _, scenario := range []string{"missing", "duplicate", "after npm", "conditional", "ignored failure", "different lock"} {
+				t.Run(scenario, func(t *testing.T) {
+					changed := append([]nativeAgentFrontendStep(nil), steps...)
+					switch scenario {
+					case "missing":
+						changed = append(changed[:checkAt], changed[checkAt+1:]...)
+					case "duplicate":
+						changed = append(changed, changed[checkAt])
+					case "after npm":
+						changed[checkAt], changed[installAt] = changed[installAt], changed[checkAt]
+					case "conditional":
+						changed[checkAt].If = "matrix.unix"
+					case "ignored failure":
+						changed[checkAt].ContinueOnError = true
+					case "different lock":
+						changed[checkAt].Run += " --lockfile package-lock.json"
+					}
+					if err := validateNativeSerializationPreflight(changed, consumer.setup, consumer.install); err == nil {
+						t.Fatalf("accepted %s serialization preflight", scenario)
+					}
+				})
 			}
 		})
 	}

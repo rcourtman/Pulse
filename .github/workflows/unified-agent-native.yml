@@ -28,6 +28,7 @@ on:
       # Vitest runtime for the generated PowerShell 5.1 install command.
       - 'frontend-modern/package.json'
       - 'frontend-modern/package-lock.json'
+      - 'scripts/check-frontend-serialization.mjs'
       - 'frontend-modern/src/utils/agentInstallCommand.ts'
       - 'frontend-modern/src/utils/__tests__/agentInstallCommand.windows.test.ts'
       - 'scripts/release_ldflags.sh'
@@ -72,6 +73,7 @@ on:
       - 'pkg/agents/**'
       - 'frontend-modern/package.json'
       - 'frontend-modern/package-lock.json'
+      - 'scripts/check-frontend-serialization.mjs'
       - 'frontend-modern/src/utils/agentInstallCommand.ts'
       - 'frontend-modern/src/utils/__tests__/agentInstallCommand.windows.test.ts'
       - 'scripts/release_ldflags.sh'
@@ -119,6 +121,8 @@ jobs:
           node-version: '24'
           cache: npm
           cache-dependency-path: frontend-modern/package-lock.json
+      - name: Check Solid serialization dependency edges
+        run: node scripts/check-frontend-serialization.mjs
       - name: Build real frontend assets
         working-directory: frontend-modern
         run: npm ci && npm run build
@@ -464,6 +468,11 @@ jobs:
           node-version: '24'
           cache: 'npm'
           cache-dependency-path: 'frontend-modern/package-lock.json'
+
+      # Use the build/audit job's lock check before npm or native runtime
+      # work. npm can install an override outside Solid's declared range.
+      - name: Check Solid serialization dependency edges
+        run: node scripts/check-frontend-serialization.mjs
 
       - name: Install frontend test dependencies
         working-directory: frontend-modern
