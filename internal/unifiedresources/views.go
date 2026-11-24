@@ -1694,6 +1694,14 @@ type DockerHostView struct{ r *Resource }
 
 func NewDockerHostView(r *Resource) DockerHostView { return DockerHostView{r: r} }
 
+// NewDockerHostRecordView builds a DockerHostView directly from one stored
+// models.DockerHost record without merging it with other sources.
+func NewDockerHostRecordView(host models.DockerHost) *DockerHostView {
+	resource, _ := resourceFromDockerHost(host)
+	view := NewDockerHostView(&resource)
+	return &view
+}
+
 func (v DockerHostView) String() string {
 	return fmt.Sprintf("DockerHostView(%s, %q)", v.ID(), v.Name())
 }

@@ -38,6 +38,64 @@ func normalizeKubernetesClusterIdentifier(report agentsk8s.Report) string {
 	return hex.EncodeToString(sum[:])
 }
 
+// resolveKubernetesClusterIdentifier keeps a report off a cluster record that
+// another API token owns. The cluster ID is only what the report states, and it
+// is neither secret nor unique: an in-cluster agent derives it from the API
+// service address, so every cluster on a default service range computes the
+// same one. The token that created a record is therefore what identifies its
+// agent, and a different token naming that ID gets a record of its own instead
+// of replacing the owner's inventory, status and metrics (the Kubernetes analog
+// of the Docker rule that a foreign token must never take over a live host,
+// #1008). The derived ID is a digest like the agent's own, so nothing that
+// embeds a cluster ID has to learn a new shape.
+//
+// A report without a token record comes from a session or from an instance
+// with no API tokens and keeps the reported ID, as in findMatchingDockerHost.
+func resolveKubernetesClusterIdentifier(identifier string, tokenRecord *config.APITokenRecord, clusters []models.KubernetesCluster) string {
+	return resolveKubernetesClusterIdentifierWithActiveTokens(identifier, tokenRecord, clusters, nil)
+}
+
+func resolveKubernetesClusterIdentifierWithActiveTokens(identifier string, tokenRecord *config.APITokenRecord, clusters []models.KubernetesCluster, activeTokens map[string]struct{}) string {
+	if tokenRecord == nil {
+		return identifier
+	}
+	tokenID := strings.TrimSpace(tokenRecord.ID)
+	if tokenID == "" {
+		return identifier
+	}
+
+	sum := sha256.Sum256([]byte(identifier + "|token|" + tokenID))
+	tokenScopedID := hex.EncodeToString(sum[:])
+
+	ownedByOtherToken := false
+	for _, existing := range clusters {
+		existingTokenID := strings.TrimSpace(existing.TokenID)
+		switch existing.ID {
+		case tokenScopedID:
+			// Stay on the record this token was already given, even once the
+			// cluster it collided with has been removed.
+			if existingTokenID == tokenID {
+				return tokenScopedID
+			}
+		case identifier:
+			if existingTokenID != "" && existingTokenID != tokenID {
+				// If the owning token was revoked or expired (such as during
+				// token rotation), let the replacement token keep the cluster record.
+				if len(activeTokens) > 0 {
+					if _, active := activeTokens[existingTokenID]; !active {
+						continue
+					}
+				}
+				ownedByOtherToken = true
+			}
+		}
+	}
+	if ownedByOtherToken {
+		return tokenScopedID
+	}
+	return identifier
+}
+
 // ApplyKubernetesReport ingests a Kubernetes agent report into state.
 func (m *Monitor) ApplyKubernetesReport(report agentsk8s.Report, tokenRecord *config.APITokenRecord) (models.KubernetesCluster, error) {
 	if mock.IsMockEnabled() {
@@ -52,6 +110,31 @@ func (m *Monitor) ApplyKubernetesReport(report agentsk8s.Report, tokenRecord *co
 	identifier := normalizeKubernetesClusterIdentifier(report)
 	if strings.TrimSpace(identifier) == "" {
 		return models.KubernetesCluster{}, fmt.Errorf("kubernetes report missing cluster identifier")
+	}
+
+	var activeTokens map[string]struct{}
+	if snapshot := m.APITokenSnapshot(); len(snapshot) > 0 {
+		now := time.Now()
+		activeTokens = make(map[string]struct{}, len(snapshot))
+		for _, tok := range snapshot {
+			if tok.ExpiresAt != nil && !tok.ExpiresAt.After(now) {
+				continue
+			}
+			if id := strings.TrimSpace(tok.ID); id != "" {
+				activeTokens[id] = struct{}{}
+			}
+		}
+	}
+
+	// Everything below, including the removal block, keys on the record this
+	// token may write to rather than on the ID the report states.
+	if resolved := resolveKubernetesClusterIdentifierWithActiveTokens(identifier, tokenRecord, m.state.GetKubernetesClusters(), activeTokens); resolved != identifier {
+		log.Debug().
+			Str("reportedClusterID", identifier).
+			Str("k8sClusterID", resolved).
+			Str("tokenID", strings.TrimSpace(tokenRecord.ID)).
+			Msg("Kubernetes cluster ID is held by another API token, keeping this agent on its own cluster record")
+		identifier = resolved
 	}
 
 	// Check if this cluster was deliberately removed - reject report to prevent resurrection

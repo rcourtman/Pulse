@@ -532,7 +532,12 @@ func appContainerChartMetricID(container *unifiedresources.DockerContainerView) 
 		}
 	}
 
-	return strings.TrimSpace(container.ContainerID())
+	// Without a target, use the key the Docker report writer records under.
+	containerID := strings.TrimSpace(container.ContainerID())
+	if containerID == "" {
+		return ""
+	}
+	return unifiedresources.DockerContainerMetricID(container.HostSourceID(), containerID)
 }
 
 func appContainerChartRequest(container *unifiedresources.DockerContainerView) (string, monitoring.GuestChartRequest, bool) {

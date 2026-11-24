@@ -610,7 +610,7 @@ func TestApplyDockerReportSkipsMetricsHistoryInMockMode(t *testing.T) {
 	if got := monitor.metricsHistory.GetGuestMetrics("dockerHost:"+host.ID, "cpu", time.Hour); len(got) != 0 {
 		t.Fatalf("expected mock mode to skip docker host metrics history, got %+v", got)
 	}
-	if got := monitor.metricsHistory.GetGuestMetrics("docker:docker-cont-1", "cpu", time.Hour); len(got) != 0 {
+	if got := monitor.metricsHistory.GetGuestMetrics("docker:"+unifiedresources.DockerContainerMetricID(host.ID, "docker-cont-1"), "cpu", time.Hour); len(got) != 0 {
 		t.Fatalf("expected mock mode to skip docker container metrics history, got %+v", got)
 	}
 }

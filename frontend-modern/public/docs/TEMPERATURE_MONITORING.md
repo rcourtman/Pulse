@@ -159,6 +159,8 @@ command="/usr/local/sbin/pulse-sensors",no-port-forwarding,no-X11-forwarding,no-
 
 If you use a non-standard SSH port, set the `SSH_PORT` environment variable on the Pulse server (see `docs/CONFIGURATION.md`). There is no SSH port control in **Settings -> System**.
 
+With [multi-tenant organizations](MULTI_TENANT.md), the SSH key belongs to the Pulse instance, so SSH collection runs only in the **default** organization. Setup scripts generated in other organizations do not offer it. Use the Pulse agent for their hosts.
+
 ### Containerized Pulse
 
 Prefer the local agent. A legacy configured key can still cause SSH fallback

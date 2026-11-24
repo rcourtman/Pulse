@@ -240,10 +240,25 @@ func (rm *ReloadableMonitor) doReload() error {
 	// Authentication middleware and API handlers retain the original runtime
 	// configuration. Refresh that object so the replacement default monitor also
 	// sees later token creation, rotation and revocation through the same owner.
+	//
+	// cfg was read before the previous runtime stopped, so its token inventory
+	// predates every creation, rotation and revocation committed since. Token
+	// writers change the live inventory and its file together under config.Mu,
+	// so read the saved inventory again inside the section that publishes it,
+	// as the config watcher does. Publishing the earlier read would accept a
+	// token revoked in the meantime and drop one created in the meantime.
+	tokenStore := config.NewConfigPersistence(cfg.DataPath)
 	config.Mu.Lock()
 	if rm.config == nil {
 		rm.config = cfg
 	} else {
+		if tokens, err := tokenStore.LoadAPITokens(); err != nil {
+			log.Error().Err(err).Msg("failed to re-read API tokens for monitor reload, keeping the live inventory")
+			cfg.APITokens = rm.config.APITokens
+		} else {
+			cfg.APITokens = tokens
+		}
+		cfg.SortAPITokens()
 		*rm.config = *cfg
 	}
 	config.Mu.Unlock()

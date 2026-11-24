@@ -13,6 +13,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentupdate"
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 	"github.com/rcourtman/pulse-go-rewrite/internal/api/agentbinding"
+	"github.com/rcourtman/pulse-go-rewrite/internal/api/agenttokens"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/logging"
 	"github.com/rcourtman/pulse-go-rewrite/internal/mock"
@@ -498,15 +499,82 @@ func dockerHostBelongsToHostAgent(
 	return hostAgentIdentifiersMatch(dockerMachineID, hostMachineID)
 }
 
+// enrolledHostAgentsExcept returns the identity of every host agent other than
+// hostID that is still enrolled: hosts with a continuity entry, including the
+// ones awaiting their first report after a restart, and live hosts without one.
+func (m *Monitor) enrolledHostAgentsExcept(hostID string) []config.HostContinuityEntry {
+	seen := map[string]struct{}{hostID: {}}
+	var enrolled []config.HostContinuityEntry
+	if m.hostContinuityStore != nil {
+		for _, entry := range m.hostContinuityStore.RecentEntries(time.Time{}) {
+			if _, ok := seen[entry.HostID]; ok {
+				continue
+			}
+			seen[entry.HostID] = struct{}{}
+			enrolled = append(enrolled, entry)
+		}
+	}
+	for _, host := range m.state.GetHosts() {
+		id := strings.TrimSpace(host.ID)
+		if _, ok := seen[id]; ok || id == "" {
+			continue
+		}
+		seen[id] = struct{}{}
+		enrolled = append(enrolled, config.HostContinuityEntry{
+			HostID:    id,
+			MachineID: strings.TrimSpace(host.MachineID),
+			TokenID:   strings.TrimSpace(host.TokenID),
+		})
+	}
+	return enrolled
+}
+
+// hostIdentityEnrolledElsewhere reports whether id is the resolved identity of
+// one of the other enrolled host agents.
+func hostIdentityEnrolledElsewhere(id string, others []config.HostContinuityEntry) bool {
+	for _, other := range others {
+		if hostAgentIdentifiersMatch(other.HostID, id) {
+			return true
+		}
+	}
+	return false
+}
+
+// dockerHostClaimedByOtherHostAgent reports whether one of the other enrolled
+// host agents identifies dockerHost as its own.
+func dockerHostClaimedByOtherHostAgent(dockerHost models.DockerHost, others []config.HostContinuityEntry) bool {
+	for _, other := range others {
+		if dockerHostBelongsToHostAgent(dockerHost, other.HostID, models.Host{}, other) {
+			return true
+		}
+	}
+	return false
+}
+
+// removeDockerHostsForHostAgent removes the Docker hosts of a removed host
+// agent. Host and machine IDs are reported by the agent and can be shared:
+// cloned VMs keep one machine ID, and a report can name any other machine's.
+// A Docker host that reports with the removed record's own token always goes
+// with it. One that reports with another token stays when one of
+// otherHostAgents also identifies it as its own, and always stays when the
+// removal is a collector uninstall (ownCredentialOnly), which is authorized by
+// that token alone.
 func (m *Monitor) removeDockerHostsForHostAgent(
 	hostID string,
 	host models.Host,
 	continuity config.HostContinuityEntry,
+	otherHostAgents []config.HostContinuityEntry,
+	ownCredentialOnly bool,
 	removedAt time.Time,
 ) int {
 	removedCount := 0
+	tokenID := firstNonEmpty(host.TokenID, continuity.TokenID)
 	for _, dockerHost := range m.state.GetDockerHosts() {
 		if !dockerHostBelongsToHostAgent(dockerHost, hostID, host, continuity) {
+			continue
+		}
+		sharesCredential := tokenID != "" && strings.TrimSpace(dockerHost.TokenID) == tokenID
+		if !sharesCredential && (ownCredentialOnly || dockerHostClaimedByOtherHostAgent(dockerHost, otherHostAgents)) {
 			continue
 		}
 		removedDockerHost, removed := m.state.RemoveDockerHost(dockerHost.ID)
@@ -601,6 +669,19 @@ func (m *Monitor) removeHostAgentLocked(hostID, requiredTokenID string, requireD
 		removedAt = continuity.RemovedAt.UTC()
 	}
 	tombstone := removedHostContinuityEntry(hostID, host, continuity, removedAt)
+	// ReportHostID and AgentReportedID are what the record reported, not what
+	// identity resolution gave it: a record forked onto a suffixed ID after
+	// colliding with another host still names that host's ID. The removal
+	// block matches these IDs before it compares tokens, so an ID that is
+	// another enrolled host's own is dropped here, and removing the fork
+	// cannot stop the host it collided with from reporting.
+	otherHostAgents := m.enrolledHostAgentsExcept(hostID)
+	if hostIdentityEnrolledElsewhere(tombstone.ReportHostID, otherHostAgents) {
+		tombstone.ReportHostID = ""
+	}
+	if hostIdentityEnrolledElsewhere(tombstone.AgentReportedID, otherHostAgents) {
+		tombstone.AgentReportedID = ""
+	}
 	tokenID := strings.TrimSpace(host.TokenID)
 	hostname := strings.TrimSpace(host.Hostname)
 	tokenStillUsed := m.hostAgentTokenUsedOutsideRemoval(tokenID, hostID, host, tombstone)
@@ -661,7 +742,7 @@ func (m *Monitor) removeHostAgentLocked(hostID, requiredTokenID string, requireD
 	m.mu.Unlock()
 	m.state.AddRemovedHostAgent(removedEntry)
 
-	removedDockerHosts := m.removeDockerHostsForHostAgent(hostID, host, tombstone, removedAt)
+	removedDockerHosts := m.removeDockerHostsForHostAgent(hostID, host, tombstone, otherHostAgents, requiredTokenID != "", removedAt)
 
 	if tokenID != "" {
 		m.mu.Lock()
@@ -1718,6 +1799,44 @@ func hostContinuityDeniesToken(
 	return false
 }
 
+// persistedHostHeldByAnotherToken returns the persisted record of a host
+// identity that last reported under a token other than tokenID. Live state
+// loses agent-reported hosts across monitor reloads and restarts until the
+// next report lands, and the continuity record is then the only trace of which
+// token holds the identity. A removal tombstone is left to the removal block.
+func (m *Monitor) persistedHostHeldByAnotherToken(hostID, tokenID string) (models.Host, bool) {
+	if m == nil || m.hostContinuityStore == nil {
+		return models.Host{}, false
+	}
+	entry, ok := m.hostContinuityStore.Get(hostID)
+	if !ok || !entry.RemovedAt.IsZero() {
+		return models.Host{}, false
+	}
+	ownerTokenID := strings.TrimSpace(entry.TokenID)
+	if ownerTokenID == "" || ownerTokenID == strings.TrimSpace(tokenID) {
+		return models.Host{}, false
+	}
+	return hostFromContinuityEntry(entry), true
+}
+
+// forkedHostIdentifier derives the identity a token reports under when the
+// identity it names is held by another token's host. The derivation is stable,
+// so the token keeps the same fork across reports and restarts.
+func forkedHostIdentifier(tokenID, hostname, hostID string) string {
+	seed := strings.Join([]string{tokenID, hostname, hostID}, "|")
+	sum := sha1.Sum([]byte(seed))
+	suffix := hex.EncodeToString(sum[:4])
+
+	base := hostID
+	if base == "" {
+		base = "agent"
+	}
+	if len(base) > 40 {
+		base = base[:40]
+	}
+	return fmt.Sprintf("%s-%s", base, suffix)
+}
+
 // MatchHostConfigContinuity resolves a host identity for agent config fetches
 // from the persisted continuity store. Live state loses agent-reported hosts
 // across monitor reloads and restarts until the next report lands, and config
@@ -2129,8 +2248,48 @@ func (m *Monitor) AcknowledgeDockerHostCommand(commandID, hostID, status, messag
 // reporting keeps advancing LastSeen and is never touched. Unlike a
 // user-initiated removal this does not set the resurrection block and does
 // not revoke the orphaned token.
+func (m *Monitor) dockerHostRecordViews() []*unifiedresources.DockerHostView {
+	if m == nil || m.state == nil {
+		return nil
+	}
+	stored := m.state.GetDockerHosts()
+	views := make([]*unifiedresources.DockerHostView, 0, len(stored))
+	for _, host := range stored {
+		views = append(views, unifiedresources.NewDockerHostRecordView(host))
+	}
+	return views
+}
+
+func dockerTokenEnrolledElsewhere(tokenRecord *config.APITokenRecord, dockerHosts []*unifiedresources.DockerHostView, hostModels []models.Host, excludeID string) bool {
+	if tokenRecord == nil {
+		return false
+	}
+	tokenID := strings.TrimSpace(tokenRecord.ID)
+	if tokenID == "" {
+		return false
+	}
+	excludeID = strings.TrimSpace(excludeID)
+	for _, host := range dockerHosts {
+		if host == nil {
+			continue
+		}
+		if strings.TrimSpace(host.TokenID()) == tokenID && dockerHostStableID(host) != excludeID {
+			return true
+		}
+	}
+	for _, host := range hostModels {
+		if strings.TrimSpace(host.TokenID) == tokenID && strings.TrimSpace(host.ID) != excludeID {
+			return true
+		}
+	}
+	return false
+}
+
 func (m *Monitor) supersedeStaleDockerHostDuplicates(current models.DockerHost, tokenRecord *config.APITokenRecord, hosts []*unifiedresources.DockerHostView) {
 	if tokenRecord == nil || tokenRecord.CreatedAt.IsZero() {
+		return
+	}
+	if dockerTokenEnrolledElsewhere(tokenRecord, hosts, m.state.GetHosts(), current.ID) {
 		return
 	}
 	machineID := strings.TrimSpace(current.MachineID)
@@ -2200,11 +2359,7 @@ func (m *Monitor) ApplyDockerReport(report agentsdocker.Report, tokenRecord *con
 		}, nil
 	}
 
-	readState := m.snapshotBackedAgentLookupReadState()
-	var dockerHosts []*unifiedresources.DockerHostView
-	if readState != nil {
-		dockerHosts = readState.DockerHosts()
-	}
+	dockerHosts := m.dockerHostRecordViews()
 	machineRevisit := func(identifier, machineID string) bool {
 		return m.dockerMachineIDRevisit(identifier, machineID, time.Now())
 	}
@@ -2254,19 +2409,15 @@ func (m *Monitor) ApplyDockerReport(report agentsdocker.Report, tokenRecord *con
 	unlockDockerReport := m.lockDockerReportApplication(identifier)
 	defer unlockDockerReport()
 	receivedAt := time.Now()
-	previousState, _ := m.GetDockerHost(identifier)
-	readState = m.snapshotBackedAgentLookupReadState()
-	dockerHosts = nil
+	previousState, hadStoredDockerHost := m.GetDockerHost(identifier)
+	dockerHosts = m.dockerHostRecordViews()
 	previous = nil
 	hasPrevious = false
-	if readState != nil {
-		dockerHosts = readState.DockerHosts()
-		for _, candidate := range dockerHosts {
-			if candidate != nil && dockerHostStableID(candidate) == identifier {
-				previous = candidate
-				hasPrevious = true
-				break
-			}
+	for _, candidate := range dockerHosts {
+		if candidate != nil && dockerHostStableID(candidate) == identifier {
+			previous = candidate
+			hasPrevious = true
+			break
 		}
 	}
 
@@ -2749,7 +2900,9 @@ func (m *Monitor) ApplyDockerReport(report agentsdocker.Report, tokenRecord *con
 	m.state.UpsertDockerHost(host)
 	m.state.SetConnectionHealth(dockerConnectionPrefix+host.ID, true)
 
-	m.supersedeStaleDockerHostDuplicates(host, tokenRecord, dockerHosts)
+	if !hadStoredDockerHost {
+		m.supersedeStaleDockerHostDuplicates(host, tokenRecord, dockerHosts)
+	}
 
 	// Check if the host was previously hidden and is now visible again
 	if hasPrevious && previous.Hidden() && !host.Hidden {
@@ -2810,12 +2963,16 @@ func (m *Monitor) ApplyDockerReport(report agentsdocker.Report, tokenRecord *con
 			m.metricsStore.Write("dockerHost", host.ID, "disk", hostDiskPercent, now)
 		}
 
-		// Use a prefixed key (docker:containerID) to distinguish from Proxmox containers.
+		// Use a prefixed key (docker:<metric ID>) to distinguish from Proxmox containers.
+		// The metric ID carries the Docker host: a container ID is text from
+		// the host's own report, so a series keyed by it alone would also
+		// take the points of any other host that reports the same ID.
 		for i, container := range containers {
 			if container.ID == "" {
 				continue
 			}
-			metricKey := fmt.Sprintf("docker:%s", container.ID)
+			metricID := unifiedresources.DockerContainerMetricID(host.ID, container.ID)
+			metricKey := fmt.Sprintf("docker:%s", metricID)
 
 			// Layer sizes describe container images, not filesystem capacity.
 			// Missing rate observations must not become measured idle samples.
@@ -2847,19 +3004,19 @@ func (m *Monitor) ApplyDockerReport(report agentsdocker.Report, tokenRecord *con
 			}
 
 			if m.metricsStore != nil {
-				m.metricsStore.Write("dockerContainer", container.ID, "cpu", models.DockerContainerCPUCapacityPercent(container, host.CPUs), now)
-				m.metricsStore.Write("dockerContainer", container.ID, "memory", container.MemoryPercent, now)
+				m.metricsStore.Write("dockerContainer", metricID, "cpu", models.DockerContainerCPUCapacityPercent(container, host.CPUs), now)
+				m.metricsStore.Write("dockerContainer", metricID, "memory", container.MemoryPercent, now)
 				if containerNetworkValidity[i].NetworkIn {
-					m.metricsStore.Write("dockerContainer", container.ID, "netin", container.NetInRate, now)
+					m.metricsStore.Write("dockerContainer", metricID, "netin", container.NetInRate, now)
 				}
 				if containerNetworkValidity[i].NetworkOut {
-					m.metricsStore.Write("dockerContainer", container.ID, "netout", container.NetOutRate, now)
+					m.metricsStore.Write("dockerContainer", metricID, "netout", container.NetOutRate, now)
 				}
 				if diskReadRate >= 0 {
-					m.metricsStore.Write("dockerContainer", container.ID, "diskread", diskReadRate, now)
+					m.metricsStore.Write("dockerContainer", metricID, "diskread", diskReadRate, now)
 				}
 				if diskWriteRate >= 0 {
-					m.metricsStore.Write("dockerContainer", container.ID, "diskwrite", diskWriteRate, now)
+					m.metricsStore.Write("dockerContainer", metricID, "diskwrite", diskWriteRate, now)
 				}
 			}
 		}
@@ -2985,12 +3142,47 @@ func normalizedSecurityStrings(values []string) []string {
 	return normalized
 }
 
+// hostTokenEnrolledElsewhere reports whether tokenRecord is already the
+// credential of a host other than exceptHostID. Such a token is in use on that
+// host, so a report presenting a stopped machine's ID and hostname under it is
+// not that machine's reinstall. A live host record held under the token is the
+// direct evidence. The host an install token's command policy was applied to,
+// which is the first host it enrolled, is the durable evidence: the token
+// record keeps it after that host's record is removed while a Docker or
+// Kubernetes record keeps the token valid, which would otherwise leave a used
+// token looking unused.
+func hostTokenEnrolledElsewhere(tokenRecord *config.APITokenRecord, hosts []models.Host, exceptHostID string) bool {
+	if tokenRecord == nil {
+		return false
+	}
+	tokenID := strings.TrimSpace(tokenRecord.ID)
+	if tokenID == "" {
+		return false
+	}
+	exceptHostID = strings.TrimSpace(exceptHostID)
+	if enrolledID := strings.TrimSpace(tokenRecord.Metadata[agenttokens.CommandPolicyAppliedAgentIDMetadataKey]); enrolledID != "" && enrolledID != exceptHostID {
+		return true
+	}
+	for _, host := range hosts {
+		if strings.TrimSpace(host.TokenID) == tokenID && strings.TrimSpace(host.ID) != exceptHostID {
+			return true
+		}
+	}
+	return false
+}
+
 // staleHostIdentityForReenrollment recognizes explicit reinstall intent before
 // a new token is bound. A stopped agent may send a final in-flight report just
 // after the replacement token is minted, so allow one of its own health windows
 // of overlap. The supported install issuer, stable machine/hostname, report-IP,
 // and identity-conflict checks prevent an arbitrary token or visible clone from
 // taking over a live host.
+//
+// The token must also not have enrolled a host yet. A command-enabled install
+// token stops qualifying once its command channel binds it, but a
+// monitoring-only token never records that binding, so CanBindInstallToken
+// holds for its whole life. Once it is another host's credential it must not
+// inherit a stopped machine's identity, and the remote config stored under it.
 func staleHostIdentityForReenrollment(report agentshost.Report, tokenRecord *config.APITokenRecord, hosts []models.Host) string {
 	if tokenRecord == nil || tokenRecord.CreatedAt.IsZero() {
 		return ""
@@ -3005,12 +3197,14 @@ func staleHostIdentityForReenrollment(report agentshost.Report, tokenRecord *con
 	if !agentbinding.CanBindInstallToken(tokenRecord, machineID, hostname) {
 		return ""
 	}
+	if hostTokenEnrolledElsewhere(tokenRecord, hosts, "") {
+		return ""
+	}
 
 	var candidateID string
 	for _, candidate := range hosts {
 		if strings.TrimSpace(candidate.MachineID) != machineID ||
 			!unifiedresources.HostnamesEquivalent(candidate.Hostname, hostname) ||
-			strings.TrimSpace(candidate.TokenID) == tokenID ||
 			candidate.IdentityConflict != nil {
 			continue
 		}
@@ -3134,9 +3328,16 @@ func (m *Monitor) removeSupersededHostRecord(staleID, replacementID, reason stri
 // supersedeStaleHostAgentDuplicates removes older generations left behind by
 // installs completed before this cleanup existed. This is an internal
 // supersession, not a user removal: it deliberately creates no tombstone and
-// does not revoke either token.
+// does not revoke either token. A token that is also another host's credential
+// is not this machine's replacement install, so a record it files under a
+// stopped machine's ID and hostname supersedes nothing: removing the stopped
+// record would leave the token's own record as the only one for that machine,
+// and fold the machine into it when it reports again.
 func (m *Monitor) supersedeStaleHostAgentDuplicates(current models.Host, tokenRecord *config.APITokenRecord, hosts []models.Host) {
 	if tokenRecord == nil || tokenRecord.CreatedAt.IsZero() {
+		return
+	}
+	if hostTokenEnrolledElsewhere(tokenRecord, hosts, current.ID) {
 		return
 	}
 	machineID := strings.TrimSpace(current.MachineID)
@@ -3302,14 +3503,16 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 			if reusedStaleID != "" {
 				bindingID = reusedStaleID
 			}
-			for _, candidate := range existingHosts {
-				if candidate == nil || candidate.AgentID() != bindingID {
+			heldLive := false
+			for _, candidate := range existingHostModels {
+				if strings.TrimSpace(candidate.ID) != bindingID {
 					continue
 				}
+				heldLive = true
 				if reusedStaleID == bindingID {
 					break
 				}
-				if hostAgentHostnamesMatch(candidate.Hostname(), hostname) && strings.TrimSpace(candidate.TokenID()) == tokenID {
+				if hostAgentHostnamesMatch(candidate.Hostname, hostname) && strings.TrimSpace(candidate.TokenID) == tokenID {
 					break
 				}
 
@@ -3321,19 +3524,21 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 					break
 				}
 
-				seed := strings.Join([]string{tokenID, hostname, bindingID}, "|")
-				sum := sha1.Sum([]byte(seed))
-				suffix := hex.EncodeToString(sum[:4])
-
-				base := bindingID
-				if base == "" {
-					base = "agent"
-				}
-				if len(base) > 40 {
-					base = base[:40]
-				}
-				bindingID = fmt.Sprintf("%s-%s", base, suffix)
+				bindingID = forkedHostIdentifier(tokenID, hostname, bindingID)
 				break
+			}
+			if !heldLive {
+				// A restart or monitor reload empties the live host list, so
+				// the loop above has nothing to compare against until the
+				// holder of this identity reports again. Its continuity record
+				// still names the token it reports under: fork another token
+				// exactly as the live check would, rather than hand the
+				// identity to whichever token names it first. A fresh install
+				// token on the same machine still takes it over (#1654).
+				if holder, held := m.persistedHostHeldByAnotherToken(bindingID, tokenID); held &&
+					staleHostIdentityForReenrollment(report, tokenRecord, []models.Host{holder}) != bindingID {
+					bindingID = forkedHostIdentifier(tokenID, hostname, bindingID)
+				}
 			}
 
 			m.mu.Lock()
@@ -3907,8 +4112,9 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 		)
 	}
 
-	// If host reports Ceph data, also update the global CephClusters state
-	if report.Ceph != nil {
+	// If host reports Ceph data, also update the global CephClusters state,
+	// unless another reporting agent currently holds that cluster's record.
+	if report.Ceph != nil && m.admitAgentCephCluster(agentCephClusterID(report.Ceph, identifier), identifier, receivedAt) {
 		cephCluster := convertAgentCephToGlobalCluster(report.Ceph, hostname, identifier, observedAt)
 		storedCephCluster := m.state.UpsertCephCluster(cephCluster)
 		log.Debug().

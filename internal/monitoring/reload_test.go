@@ -152,6 +152,56 @@ func TestReloadPreservesLiveAgentCredentialInventory(t *testing.T) {
 	}
 }
 
+func TestReloadKeepsTokenChangesCommittedWhileItRuns(t *testing.T) {
+	dataDir := t.TempDir()
+	t.Setenv("PULSE_DATA_DIR", dataDir)
+	persistence := config.NewConfigPersistence(dataDir)
+	revoked, err := config.NewAPITokenRecord("revoked-while-reloading-0123456789abcdef", "revoked", []string{config.ScopeSettingsWrite})
+	require.NoError(t, err)
+	require.NoError(t, persistence.SaveAPITokens([]config.APITokenRecord{*revoked}))
+
+	runtimeConfig, err := config.LoadWithoutLoggingInit()
+	require.NoError(t, err)
+	require.Len(t, runtimeConfig.APITokens, 1)
+	rm, err := NewReloadableMonitor(runtimeConfig, config.NewMultiTenantPersistence(runtimeConfig.DataPath), nil)
+	require.NoError(t, err)
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	rm.Start(ctx)
+	t.Cleanup(rm.Stop)
+
+	retired := rm.GetMultiTenantMonitor()
+	reloaded := make(chan error, 1)
+	go func() { reloaded <- rm.Reload() }()
+	// The reload reads its replacement configuration, then stops the previous
+	// runtime and waits for it. Once the retired manager is cancelled that read
+	// is behind it; revoke and create inside the wait, the way the token
+	// handlers do.
+	select {
+	case <-retired.globalCtx.Done():
+	case <-time.After(5 * time.Second):
+		t.Fatal("reload did not stop the previous runtime")
+	}
+	created, err := config.NewAPITokenRecord("created-while-reloading-0123456789abcdef", "created", []string{config.ScopeMonitoringRead})
+	require.NoError(t, err)
+	config.Mu.Lock()
+	removed := runtimeConfig.RemoveAPIToken(revoked.ID)
+	runtimeConfig.APITokens = append(runtimeConfig.APITokens, *created)
+	runtimeConfig.SortAPITokens()
+	saveErr := persistence.SaveAPITokens(runtimeConfig.APITokens)
+	config.Mu.Unlock()
+	require.NotNil(t, removed)
+	require.NoError(t, saveErr)
+	require.NoError(t, <-reloaded)
+
+	config.Mu.RLock()
+	defer config.Mu.RUnlock()
+	require.Same(t, runtimeConfig, rm.GetConfig())
+	require.Len(t, runtimeConfig.APITokens, 1, "reload published the token inventory it read before the changes")
+	require.Equal(t, created.ID, runtimeConfig.APITokens[0].ID, "reload restored a token revoked while it ran")
+	require.Equal(t, created.Hash, runtimeConfig.APIToken, "legacy token field no longer follows the inventory")
+}
+
 func TestReloadableMonitorAggregateInstallSnapshotCountsIncludesProvisionedTenants(t *testing.T) {
 	baseDir := t.TempDir()
 	cfg := &config.Config{DataPath: baseDir}

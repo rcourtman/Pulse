@@ -20,6 +20,7 @@ import (
 	gorillaws "github.com/gorilla/websocket"
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 	"github.com/rcourtman/pulse-go-rewrite/internal/api/agentbinding"
+	"github.com/rcourtman/pulse-go-rewrite/internal/api/agenttokens"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/mock"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
@@ -1117,7 +1118,7 @@ func TestApplyDockerReportNormalizesContainerCPUCapacityAcceptedIngestProof(t *t
 		t.Fatalf("reported container CPU capacity percent = %v, want 60", got)
 	}
 
-	points := monitor.metricsHistory.GetGuestMetrics("docker:"+host.Containers[0].ID, "cpu", time.Hour)
+	points := monitor.metricsHistory.GetGuestMetrics("docker:"+unifiedresources.DockerContainerMetricID(host.ID, host.Containers[0].ID), "cpu", time.Hour)
 	if len(points) != 1 || points[0].Value != 60 {
 		t.Fatalf("metrics history Docker CPU points = %+v, want one normalized value 60", points)
 	}
@@ -2319,6 +2320,151 @@ func TestApplyHostReportReusesPersistedContinuityAcrossRestart(t *testing.T) {
 
 	if restartedHost.ID != firstHost.ID {
 		t.Fatalf("expected persisted continuity to preserve host ID %q, got %q", firstHost.ID, restartedHost.ID)
+	}
+}
+
+// A restart or monitor reload empties the in-memory host list, so the live
+// collision check has nothing to compare against until each host reports
+// again. The persisted continuity record still names the token a host reports
+// under, and another token naming that host's ID must be forked exactly as it
+// is while the host is in memory.
+func TestApplyHostReportKeepsPersistedIdentityFromAnotherTokenAcrossRestart(t *testing.T) {
+	dir := t.TempDir()
+	now := time.Now().UTC()
+
+	newMonitor := func(dir string) *Monitor {
+		monitor := &Monitor{
+			state:               models.NewState(),
+			alertManager:        alerts.NewManager(),
+			hostTokenBindings:   make(map[string]string),
+			config:              &config.Config{DataPath: dir},
+			rateTracker:         NewRateTracker(),
+			hostContinuityStore: config.NewHostContinuityStore(dir, nil),
+		}
+		t.Cleanup(func() { monitor.alertManager.Stop() })
+		return monitor
+	}
+	ownerReport := func(timestamp time.Time) agentshost.Report {
+		return agentshost.Report{
+			Agent:     agentshost.AgentInfo{ID: "machine-1", Version: "6.0.0", IntervalSeconds: 30},
+			Host:      agentshost.HostInfo{ID: "machine-1", MachineID: "machine-1", Hostname: "web01", Platform: "linux"},
+			Timestamp: timestamp,
+		}
+	}
+	claimReport := func(timestamp time.Time) agentshost.Report {
+		return agentshost.Report{
+			Agent:     agentshost.AgentInfo{ID: "machine-1", Version: "6.0.0", IntervalSeconds: 30},
+			Host:      agentshost.HostInfo{ID: "machine-1", Hostname: "other-host", Platform: "linux"},
+			Timestamp: timestamp,
+		}
+	}
+	createdAt := now.Add(-time.Hour)
+	ownerToken := issue1654InstallToken("owner-token", createdAt)
+	otherToken := issue1654InstallToken("other-token", createdAt)
+
+	owner, err := newMonitor(dir).ApplyHostReport(ownerReport(now), ownerToken)
+	if err != nil {
+		t.Fatalf("owner ApplyHostReport: %v", err)
+	}
+
+	restarted := newMonitor(dir)
+	claimed, err := restarted.ApplyHostReport(claimReport(now.Add(time.Second)), otherToken)
+	if err != nil {
+		t.Fatalf("claim ApplyHostReport: %v", err)
+	}
+	if claimed.ID == owner.ID {
+		t.Fatalf("another token took over persisted host identity %q after restart", owner.ID)
+	}
+	if got, ok := restarted.MatchHostConfigContinuity(owner.ID, otherToken.ID); ok && got.ID == owner.ID {
+		t.Fatalf("another token resolves config for persisted host identity %q", owner.ID)
+	}
+	returned, err := restarted.ApplyHostReport(ownerReport(now.Add(2*time.Second)), ownerToken)
+	if err != nil {
+		t.Fatalf("owner ApplyHostReport after claim: %v", err)
+	}
+	if returned.ID != owner.ID {
+		t.Fatalf("owner host ID = %q after a refused claim, want %q", returned.ID, owner.ID)
+	}
+
+	// The fork keeps the claimed ID as an alias and may be the newer record.
+	// Neither token may be resolved to the other's record on the next restart.
+	again := newMonitor(dir)
+	reclaimed, err := again.ApplyHostReport(claimReport(now.Add(3*time.Second)), otherToken)
+	if err != nil {
+		t.Fatalf("repeated claim ApplyHostReport: %v", err)
+	}
+	if reclaimed.ID != claimed.ID {
+		t.Fatalf("forked host ID = %q after restart, want stable %q", reclaimed.ID, claimed.ID)
+	}
+	returned, err = again.ApplyHostReport(ownerReport(now.Add(4*time.Second)), ownerToken)
+	if err != nil {
+		t.Fatalf("owner ApplyHostReport after second restart: %v", err)
+	}
+	if returned.ID != owner.ID {
+		t.Fatalf("owner host ID = %q after second restart, want %q", returned.ID, owner.ID)
+	}
+
+	// Copying the host's machine ID and hostname does not turn a token that
+	// predates the host's last report into a re-enrollment.
+	mimicToken := issue1654InstallToken("mimic-token", createdAt)
+	mimicked, err := newMonitor(dir).ApplyHostReport(ownerReport(now.Add(5*time.Second)), mimicToken)
+	if err != nil {
+		t.Fatalf("mimic ApplyHostReport: %v", err)
+	}
+	if mimicked.ID == owner.ID {
+		t.Fatalf("an older token copying the machine identity took over %q after restart", owner.ID)
+	}
+
+	// A fresh install token on the same machine is explicit re-enrollment and
+	// still takes the persisted identity over (#1654).
+	reinstallDir := t.TempDir()
+	if _, err := newMonitor(reinstallDir).ApplyHostReport(ownerReport(now), ownerToken); err != nil {
+		t.Fatalf("owner ApplyHostReport before reinstall: %v", err)
+	}
+	freshToken := issue1654InstallToken("fresh-token", now.Add(time.Minute))
+	reinstalled, err := newMonitor(reinstallDir).ApplyHostReport(ownerReport(now.Add(2*time.Minute)), freshToken)
+	if err != nil {
+		t.Fatalf("reinstall ApplyHostReport: %v", err)
+	}
+	if reinstalled.ID != owner.ID {
+		t.Fatalf("reinstalled host ID = %q, want persisted %q", reinstalled.ID, owner.ID)
+	}
+
+	// The identity a report resolves to is what is held, however the report
+	// spells it: an ID that matches no continuity alias until it is sanitized
+	// must not slip past the persisted holder.
+	respelledDir := t.TempDir()
+	if _, err := newMonitor(respelledDir).ApplyHostReport(ownerReport(now), ownerToken); err != nil {
+		t.Fatalf("owner ApplyHostReport before respelled claim: %v", err)
+	}
+	respelledReport := claimReport(now.Add(time.Second))
+	respelledReport.Agent.ID, respelledReport.Host.ID = "machine_1", "machine_1"
+	respelled, err := newMonitor(respelledDir).ApplyHostReport(respelledReport, otherToken)
+	if err != nil {
+		t.Fatalf("respelled claim ApplyHostReport: %v", err)
+	}
+	if respelled.ID == owner.ID {
+		t.Fatalf("another token took over persisted host identity %q by respelling it", owner.ID)
+	}
+
+	// A host that has been silent for longer than the continuity window is
+	// still held by its token.
+	silentDir := t.TempDir()
+	if err := config.NewHostContinuityStore(silentDir, nil).Upsert(config.HostContinuityEntry{
+		HostID:    "machine-1",
+		Hostname:  "web01",
+		MachineID: "machine-1",
+		TokenID:   ownerToken.ID,
+		LastSeen:  now.Add(-2 * hostContinuityRetention),
+	}); err != nil {
+		t.Fatalf("Upsert continuity: %v", err)
+	}
+	late, err := newMonitor(silentDir).ApplyHostReport(claimReport(now), otherToken)
+	if err != nil {
+		t.Fatalf("late claim ApplyHostReport: %v", err)
+	}
+	if late.ID == "machine-1" {
+		t.Fatal("another token took over a persisted host identity outside the continuity window")
 	}
 }
 
@@ -5244,6 +5390,85 @@ func TestApplyHostReportCountsStandbyCephManagersAsRunning(t *testing.T) {
 	}
 }
 
+// An agent names its Ceph cluster by the FSID in its own report. A host that
+// merely knows another cluster's FSID must not replace the record the
+// cluster's own agent reports, while a second agent of the same cluster still
+// takes over once the first stops reporting it.
+func TestApplyHostReportCephClusterStaysWithItsReporter(t *testing.T) {
+	const (
+		fsid      = "11111111-2222-3333-4444-555555555555"
+		otherFSID = "99999999-2222-3333-4444-555555555555"
+	)
+	monitor := newTestMonitor(t)
+
+	apply := func(hostname, fsid, health string) models.Host {
+		t.Helper()
+		host, err := monitor.ApplyHostReport(agentshost.Report{
+			Agent:     agentshost.AgentInfo{ID: hostname, Version: "6.0.0", Type: "unified", IntervalSeconds: 30},
+			Host:      agentshost.HostInfo{ID: hostname, Hostname: hostname, Platform: "linux"},
+			Ceph:      &agentshost.CephCluster{FSID: fsid, Health: agentshost.CephHealth{Status: health}},
+			Timestamp: time.Now().UTC(),
+		}, nil)
+		if err != nil {
+			t.Fatalf("ApplyHostReport(%s): %v", hostname, err)
+		}
+		return host
+	}
+	assertClusters := func(want ...string) {
+		t.Helper()
+		var got []string
+		for _, cluster := range monitor.state.GetSnapshot().CephClusters {
+			got = append(got, cluster.Name+"="+cluster.Health)
+		}
+		if !slices.Equal(got, want) {
+			t.Fatalf("Ceph clusters = %v, want %v", got, want)
+		}
+	}
+
+	ceph1 := apply("ceph1", fsid, "HEALTH_ERR")
+	assertClusters("ceph1 Ceph=ERR")
+
+	// Another host reporting the FSID, in any spelling the state would match,
+	// changes neither the cluster nor its own host record's view of Ceph.
+	lab := apply("lab", fsid, "HEALTH_OK")
+	apply("lab", " "+strings.ToUpper(fsid[:8])+fsid[8:], "HEALTH_OK")
+	assertClusters("ceph1 Ceph=ERR")
+	if stored, ok := monitor.state.GetHost(lab.ID); !ok || stored.Ceph == nil || stored.Ceph.Health.Status != "HEALTH_OK" {
+		t.Fatalf("lab's own host record lost its Ceph report: %+v", stored.Ceph)
+	}
+
+	// A cluster of its own is still lab's to report, and ceph1 keeps writing its own.
+	apply("lab", otherFSID, "HEALTH_OK")
+	apply("ceph1", fsid, "HEALTH_WARN")
+	assertClusters("ceph1 Ceph=WARN", "lab Ceph=OK")
+
+	now := time.Now()
+	lease := hostAgentHealthWindow(30)
+	if monitor.admitAgentCephCluster(fsid, lab.ID, now.Add(lease-time.Minute)) {
+		t.Fatal("another host took the cluster inside its reporter's lease")
+	}
+	if !monitor.admitAgentCephCluster(fsid, lab.ID, now.Add(lease+time.Minute)) {
+		t.Fatal("a second agent could not take over a cluster whose reporter went silent")
+	}
+	if monitor.admitAgentCephCluster(fsid, ceph1.ID, now.Add(lease+time.Minute)) {
+		t.Fatal("the takeover did not move the cluster to the second agent")
+	}
+
+	// Removing the reporting host releases its cluster at once.
+	monitor.state.RemoveHost(lab.ID)
+	if !monitor.admitAgentCephCluster(fsid, ceph1.ID, now.Add(lease+time.Minute)) {
+		t.Fatal("a removed host still held the cluster")
+	}
+
+	// So does reporting a different cluster: an agent holds one at a time.
+	if !monitor.admitAgentCephCluster(otherFSID, ceph1.ID, now.Add(lease+time.Minute)) {
+		t.Fatal("the holder could not move to a cluster nobody else reports")
+	}
+	if len(monitor.cephAgentReporters) != 1 {
+		t.Fatalf("expected one held cluster per reporting host, got %+v", monitor.cephAgentReporters)
+	}
+}
+
 func TestApplyHostReportMapsReclaimableMemoryCache(t *testing.T) {
 	monitor := &Monitor{
 		state:             models.NewState(),
@@ -5763,6 +5988,26 @@ func TestInstallHandoffRequiresTrustedUnambiguousIdentityEvidence(t *testing.T) 
 				IntervalSeconds: 30,
 			},
 		},
+		{
+			name:  "install token already reports another host",
+			token: issue1654InstallToken("fresh-token", createdAt),
+			secondary: &models.Host{
+				ID:              "lab-host-id",
+				Hostname:        "lab.local",
+				MachineID:       "machine-lab",
+				TokenID:         "fresh-token",
+				LastSeen:        createdAt.Add(time.Minute),
+				IntervalSeconds: 30,
+			},
+		},
+		{
+			name: "install token already enrolled a host that is gone",
+			token: func() *config.APITokenRecord {
+				token := issue1654InstallToken("fresh-token", createdAt)
+				token.Metadata[agenttokens.CommandPolicyAppliedAgentIDMetadataKey] = "lab-host-id"
+				return token
+			}(),
+		},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			testReport := report
@@ -5776,6 +6021,75 @@ func TestInstallHandoffRequiresTrustedUnambiguousIdentityEvidence(t *testing.T) 
 			}
 			if got := staleHostIdentityForReenrollment(testReport, test.token, hosts); got != "" {
 				t.Fatalf("staleHostIdentityForReenrollment() = %q, want no handoff", got)
+			}
+		})
+	}
+}
+
+// A monitoring-only install token never records a command-channel binding, so
+// it stays bindable for its whole life. Once it is the credential of its own
+// host it is no longer a fresh install command: presenting a stopped machine's
+// ID and hostname must neither hand it that machine's identity nor let the
+// record it is filed under instead supersede the stopped one. That holds while
+// its own host still reports, and after that host was removed while the token
+// stayed valid, when only the token's applied-policy marker names it.
+func TestInstallHandoffRefusesTokenAlreadyEnrolledOnAnotherHost(t *testing.T) {
+	for _, test := range []struct {
+		name   string
+		enroll func(*testing.T, *Monitor, *config.APITokenRecord)
+	}{
+		{
+			name: "own host still reports",
+			enroll: func(t *testing.T, monitor *Monitor, token *config.APITokenRecord) {
+				labReport := issue1654Report(time.Now().UTC())
+				labReport.Agent.ID = "lab-agent"
+				labReport.Host.ID = "lab-host-id"
+				labReport.Host.MachineID = "machine-lab"
+				labReport.Host.Hostname = "lab.local"
+				lab, err := monitor.ApplyHostReport(labReport, token)
+				if err != nil {
+					t.Fatalf("lab ApplyHostReport() error = %v", err)
+				}
+				if lab.ID != "lab-host-id" {
+					t.Fatalf("lab host ID = %q, want lab-host-id", lab.ID)
+				}
+			},
+		},
+		{
+			name: "own host removed",
+			enroll: func(_ *testing.T, _ *Monitor, token *config.APITokenRecord) {
+				token.Metadata[agenttokens.CommandPolicyAppliedAgentIDMetadataKey] = "lab-host-id"
+			},
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			monitor := issue1654Monitor()
+			createdAt := time.Now().UTC().Add(-time.Hour)
+			monitor.state.UpsertHost(models.Host{
+				ID:        "original-host-id",
+				Hostname:  "disk-host.local",
+				MachineID: "machine-stable",
+				TokenID:   "old-token",
+				LastSeen:  createdAt.Add(-time.Minute),
+				Status:    "offline",
+			})
+			monitor.hostTokenBindings["old-token:disk-host.local"] = "original-host-id"
+			labToken := issue1654InstallToken("lab-token", createdAt)
+			test.enroll(t, monitor, labToken)
+
+			claimed, err := monitor.ApplyHostReport(issue1654Report(time.Now().UTC().Add(time.Second)), labToken)
+			if err != nil {
+				t.Fatalf("ApplyHostReport() error = %v", err)
+			}
+			if claimed.ID == "original-host-id" {
+				t.Fatal("in-use install token took over a stopped host's identity")
+			}
+			original, ok := monitor.state.GetHost("original-host-id")
+			if !ok || original.TokenID != "old-token" {
+				t.Fatalf("stopped host after in-use token report is held by token %q (present %v), want it untouched under old-token", original.TokenID, ok)
+			}
+			if got := monitor.hostTokenBindings["old-token:disk-host.local"]; got != "original-host-id" {
+				t.Fatalf("old-token binding = %q, want original-host-id", got)
 			}
 		})
 	}

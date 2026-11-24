@@ -1498,6 +1498,11 @@ type Monitor struct {
 	proxmoxLXCFilesystemsMu    sync.RWMutex
 	proxmoxLXCFilesystemsCache map[string]agentLXCFilesystemCacheEntry
 
+	// Ceph reporters: the host agent whose reports currently write each
+	// agent-reported Ceph cluster's global record. Keyed by lowercase cluster ID.
+	cephAgentReportersMu sync.Mutex
+	cephAgentReporters   map[string]cephAgentReporter
+
 	// Cluster sensor cache: temperature data collected by an agent on one Proxmox
 	// cluster node via SSH to its siblings. Keyed by lowercase node name.
 	clusterSensorsMu    sync.RWMutex
@@ -1562,6 +1567,12 @@ type clusterSensorsCacheEntry struct {
 	nodeName   string // lowercase Proxmox node name the reading describes
 	sensors    models.HostSensorSummary
 	updatedAt  time.Time
+}
+
+// cephAgentReporter is the host agent holding one Ceph cluster's global record.
+type cephAgentReporter struct {
+	hostID     string
+	reportedAt time.Time // the holder's last report of this cluster
 }
 
 type rrdMemCacheEntry struct {

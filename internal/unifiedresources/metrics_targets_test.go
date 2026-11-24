@@ -185,17 +185,22 @@ func TestBuildMetricsTarget_CanonicalizesSourceIDWhitespace(t *testing.T) {
 	}
 }
 
-func TestBuildMetricsTarget_DockerAppContainerUsesRawContainerID(t *testing.T) {
+// A container ID is only what its Docker host reports, so the target has to
+// carry the host: the bare ID would hand every host reporting that ID the
+// same series. The writer records under the same key.
+func TestBuildMetricsTarget_DockerAppContainerIsScopedToItsHost(t *testing.T) {
+	const hostID = "proxmox-lxc-docker:pve-a:node-a:105"
 	target := BuildMetricsTarget(
 		Resource{
 			Type: ResourceTypeAppContainer,
 			Docker: &DockerData{
-				ContainerID: "frigate",
+				HostSourceID: hostID,
+				ContainerID:  "frigate",
 			},
 		},
 		[]SourceTarget{{
 			Source:   SourceDocker,
-			SourceID: "proxmox-lxc-docker:pve-a:node-a:105/container/frigate",
+			SourceID: dockerContainerSourceID(models.DockerHost{ID: hostID}, models.DockerContainer{ID: "frigate"}),
 		}},
 	)
 
@@ -205,8 +210,11 @@ func TestBuildMetricsTarget_DockerAppContainerUsesRawContainerID(t *testing.T) {
 	if target.ResourceType != "app-container" {
 		t.Fatalf("ResourceType = %q, want app-container", target.ResourceType)
 	}
-	if target.ResourceID != "frigate" {
-		t.Fatalf("ResourceID = %q, want raw docker container ID", target.ResourceID)
+	if want := DockerContainerMetricID(hostID, "frigate"); target.ResourceID != want || want == "frigate" {
+		t.Fatalf("ResourceID = %q, want host-scoped metric ID %q", target.ResourceID, want)
+	}
+	if other := DockerContainerMetricID("other-host", "frigate"); other == target.ResourceID {
+		t.Fatalf("two hosts reporting one container ID share metric ID %q", other)
 	}
 }
 

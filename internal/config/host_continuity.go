@@ -453,6 +453,26 @@ func (s *HostContinuityStore) Match(
 
 	var best HostContinuityEntry
 	matched := false
+	bestExactID := false
+	// An alias can name more than one record: a token refused another host's
+	// identity reports under a derived ID that keeps the ID it asked for as an
+	// alias. The reporting token's own record wins over a newer one, and when
+	// neither belongs to the reporting token (such as a fresh install token
+	// after a restart), an exact HostID match beats a forked alias match so a
+	// derived record never captures the host it was forked from.
+	preferred := func(entry HostContinuityEntry, exactID bool) bool {
+		if !matched {
+			return true
+		}
+		own := tokenID != "" && entry.TokenID == tokenID
+		if bestOwn := tokenID != "" && best.TokenID == tokenID; own != bestOwn {
+			return own
+		}
+		if exactID != bestExactID {
+			return exactID
+		}
+		return entry.LastSeen.After(best.LastSeen)
+	}
 
 	for _, entry := range s.entries {
 		if !entry.RemovedAt.IsZero() {
@@ -463,21 +483,26 @@ func (s *HostContinuityStore) Match(
 		}
 
 		matchedByAlias := false
+		exactIDMatch := false
 		for _, candidate := range candidates {
-			if hostContinuityIdentityMatches(entry.HostID, candidate) ||
-				hostContinuityIdentityMatches(entry.ReportHostID, candidate) ||
+			if hostContinuityIdentityMatches(entry.HostID, candidate) {
+				matchedByAlias = true
+				exactIDMatch = true
+				break
+			}
+			if hostContinuityIdentityMatches(entry.ReportHostID, candidate) ||
 				hostContinuityIdentityMatches(entry.MachineID, candidate) ||
 				hostContinuityIdentityMatches(entry.AgentReportedID, candidate) {
-				if !matched || entry.LastSeen.After(best.LastSeen) {
-					best = entry
-					matched = true
-				}
 				matchedByAlias = true
-				break
 			}
 		}
 
 		if matchedByAlias {
+			if preferred(entry, exactIDMatch) {
+				best = entry
+				matched = true
+				bestExactID = exactIDMatch
+			}
 			continue
 		}
 		if !hostContinuityHostnameMatches(entry.Hostname, hostname) {
@@ -494,9 +519,10 @@ func (s *HostContinuityStore) Match(
 		if machineID != "" && strings.TrimSpace(entry.MachineID) != "" && !strings.EqualFold(strings.TrimSpace(entry.MachineID), machineID) {
 			continue
 		}
-		if !matched || entry.LastSeen.After(best.LastSeen) {
+		if preferred(entry, false) {
 			best = entry
 			matched = true
+			bestExactID = false
 		}
 	}
 

@@ -1,6 +1,10 @@
 package unifiedresources
 
-import "strings"
+import (
+	"strings"
+
+	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+)
 
 // BuildMetricsTarget resolves the history/metrics query target for a canonical
 // resource using its source-specific IDs.
@@ -69,19 +73,13 @@ func BuildMetricsTarget(resource Resource, sourceTargets []SourceTarget) *Metric
 		}
 	case ResourceTypeAppContainer:
 		if st, ok := bySource[SourceDocker]; ok {
-			// The bySource source key for docker containers is now
-			// host-scoped (see dockerContainerSourceID), but metrics
-			// writes still key by the raw container ID. Prefer the
-			// container ID surfaced on the canonical resource so the
-			// metrics target the API hands out resolves the same
-			// records the metrics store writes.
-			targetID := st.SourceID
-			if resource.Docker != nil {
-				if ctID := strings.TrimSpace(resource.Docker.ContainerID); ctID != "" {
-					targetID = ctID
-				}
-			}
-			return &MetricsTarget{ResourceType: "app-container", ResourceID: targetID}
+			// Container history is written per Docker host
+			// (DockerContainerMetricID), under the same host-scoped key
+			// the registry ingests the container by. A container ID is
+			// only what a host's report says it is, so the bare ID must
+			// not address a series: two hosts reporting one ID would
+			// share it.
+			return &MetricsTarget{ResourceType: "app-container", ResourceID: st.SourceID}
 		}
 		if st, ok := bySource[SourceTrueNAS]; ok {
 			if resourceID := canonicalAppContainerMetricID(st.SourceID); resourceID != "" {
@@ -159,6 +157,15 @@ func BuildMetricsTarget(resource Resource, sourceTargets []SourceTarget) *Metric
 	}
 
 	return nil
+}
+
+// DockerContainerMetricID returns the key a Docker container's metric history
+// is recorded and read under: the host-scoped source ID the registry ingests
+// the container by (dockerContainerSourceID), which is also its metrics
+// target. Container IDs come from each host's own report, so history is
+// scoped to the reporting host like the container's resource and alerts are.
+func DockerContainerMetricID(hostID, containerID string) string {
+	return dockerContainerSourceID(models.DockerHost{ID: hostID}, models.DockerContainer{ID: containerID})
 }
 
 func CanonicalKubernetesPodMetricID(sourceID string) string {

@@ -160,6 +160,11 @@ func upsertCephClusterInSlice(clusters []CephCluster, cluster CephCluster) ([]Ce
 		if existing.ID == cluster.ID {
 			if cephClustersSamePhysicalCluster(existing, cluster) {
 				cluster = mergeCephClusterForState(existing, cluster)
+			} else if cephClusterSourceRank(cluster) < cephClusterSourceRank(existing) {
+				// An ID alone is not a shared FSID: a host agent whose
+				// reported FSID spells a Proxmox API record's ID describes
+				// some other cluster and must not replace that record.
+				return clusters, existing
 			}
 			clusters[i] = cluster
 			return clusters, cluster

@@ -5,8 +5,10 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	internalauth "github.com/rcourtman/pulse-go-rewrite/pkg/auth"
 )
 
 func TestHandleSetupScriptRejectsUnsafeAuthToken(t *testing.T) {
@@ -1565,5 +1567,47 @@ func TestPBSSetupScript_OnlyShowsAttemptBannerOnRealRequestPath(t *testing.T) {
 	}
 	if attemptBannerIndex < tokenSkipIndex {
 		t.Fatalf("expected PBS auto-registration banner to stay after token-unavailable skip handling, got: %s", truncate(script, 900))
+	}
+}
+
+// The sensors key is the instance's own and only the default organization's
+// monitor collects with it, so a script minted for another organization must
+// not ask that organization's node to trust it.
+func TestSetupScriptOffersInstanceSSHKeyOnlyToDefaultOrg(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("PULSE_DEV_ALLOW_CONTAINER_SSH", "true")
+	tempDir := t.TempDir()
+	handlers := newTestConfigHandlers(t, &config.Config{DataPath: tempDir, ConfigPath: tempDir})
+
+	for _, tc := range []struct {
+		name, token, orgID string
+		wantKey            bool
+	}{
+		{name: "default organization", token: "00112233445566778899aabbccddeeff", orgID: "default", wantKey: true},
+		{name: "unbound token", token: "112233445566778899aabbccddeeff00", orgID: "", wantKey: true},
+		{name: "other organization", token: "2233445566778899aabbccddeeff0011", orgID: "org-a", wantKey: false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			handlers.StoreSetupToken(internalauth.HashAPIToken(tc.token), &SetupTokenRecord{
+				ExpiresAt: time.Now().Add(time.Minute),
+				OrgID:     tc.orgID,
+			})
+			req := httptest.NewRequest(http.MethodGet,
+				"/api/setup-script?type=pve&host=https://pve.example.internal:8006&pulse_url=https://pulse.example.com:7655&setup_token="+tc.token, nil)
+			rr := httptest.NewRecorder()
+
+			handlers.HandleSetupScript(rr, req)
+
+			if rr.Code != http.StatusOK {
+				t.Fatalf("expected 200 OK, got %d (%s)", rr.Code, rr.Body.String())
+			}
+			script := rr.Body.String()
+			if got := strings.Contains(script, `SSH_SENSORS_PUBLIC_KEY="ssh-ed25519 `); got != tc.wantKey {
+				t.Fatalf("script carries the instance SSH key = %v, want %v", got, tc.wantKey)
+			}
+			if !tc.wantKey && !strings.Contains(script, `SSH_SENSORS_PUBLIC_KEY=""`) {
+				t.Fatalf("expected an empty sensors key, got: %s", truncate(script, 900))
+			}
+		})
 	}
 }

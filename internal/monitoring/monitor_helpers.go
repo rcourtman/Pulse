@@ -955,17 +955,20 @@ func agentCephServiceRunning(ceph *agentshost.CephCluster, svc agentshost.CephSe
 	return svc.Running
 }
 
+// agentCephClusterID returns the global CephCluster ID of an agent's Ceph report.
+func agentCephClusterID(ceph *agentshost.CephCluster, hostID string) string {
+	// Use FSID as the primary ID since it's unique per Ceph cluster
+	if ceph.FSID != "" {
+		return ceph.FSID
+	}
+	return "agent-ceph-" + hostID
+}
+
 // convertAgentCephToGlobalCluster converts agent Ceph data to the global CephCluster format
 // used by the State.CephClusters list.
 func convertAgentCephToGlobalCluster(ceph *agentshost.CephCluster, hostname, hostID string, timestamp time.Time) models.CephCluster {
-	// Use FSID as the primary ID since it's unique per Ceph cluster
-	clusterID := ceph.FSID
-	if clusterID == "" {
-		clusterID = "agent-ceph-" + hostID
-	}
-
 	cluster := models.CephCluster{
-		ID:             clusterID,
+		ID:             agentCephClusterID(ceph, hostID),
 		Instance:       hostname,
 		Source:         models.CephClusterSourceHostAgent,
 		Name:           hostname + " Ceph",

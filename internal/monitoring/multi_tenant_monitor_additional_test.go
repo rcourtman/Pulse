@@ -248,3 +248,33 @@ func TestMultiTenantMonitorSetMonitorInitializerAppliesToNewMonitor(t *testing.T
 		t.Fatalf("expected initializer to run for new monitor, got %d", called.Load())
 	}
 }
+
+// The SSH temperature collector logs in with the instance's one sensors key,
+// which nodes of every organization may trust, at an address the polled
+// connection names. Only the default organization's monitor may hold it.
+func TestMultiTenantMonitorSSHTemperatureCollectorStaysOnDefaultOrg(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	mtp, defaultPersistence := newTestTenantPersistence(t)
+	mtm := NewMultiTenantMonitor(&config.Config{DataPath: defaultPersistence.GetConfigDir()}, mtp, nil)
+	t.Cleanup(mtm.Stop)
+	if err := mtp.SaveOrganization(&models.Organization{ID: "org-a", DisplayName: "org-a"}); err != nil {
+		t.Fatalf("SaveOrganization(org-a) error = %v", err)
+	}
+
+	defaultMonitor, err := mtm.GetMonitor("default")
+	if err != nil {
+		t.Fatalf("GetMonitor(default) error = %v", err)
+	}
+	if defaultMonitor.tempCollector == nil {
+		t.Fatal("default organization lost its SSH temperature collector")
+	}
+
+	orgMonitor, err := mtm.GetMonitor("org-a")
+	if err != nil {
+		t.Fatalf("GetMonitor(org-a) error = %v", err)
+	}
+	if orgMonitor.tempCollector != nil {
+		t.Fatal("org-a monitor holds a collector for the instance's SSH key")
+	}
+	orgMonitor.ResetSSHFailureBackoff()
+}

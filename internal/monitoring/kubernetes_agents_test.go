@@ -475,3 +475,158 @@ func TestApplyKubernetesReportUsesReceiptTimeForSkewedAgentClockLiveness(t *test
 		t.Fatalf("cluster LastSeen followed skewed agent timestamp %s: got %s", agentClock, cluster.LastSeen)
 	}
 }
+
+func TestApplyKubernetesReportKeepsForeignTokenOffOwnedCluster(t *testing.T) {
+	monitor := newKubernetesTestMonitor()
+	ownerToken := &config.APITokenRecord{ID: "token-owner", Name: "k8s-prod"}
+	foreignToken := &config.APITokenRecord{ID: "token-laptop", Name: "laptop"}
+
+	ownerReport := agentsk8s.Report{
+		Agent:   agentsk8s.AgentInfo{ID: "prod-agent", IntervalSeconds: 30},
+		Cluster: agentsk8s.ClusterInfo{ID: "cluster-1", Name: "in-cluster"},
+		Nodes:   []agentsk8s.Node{{UID: "n1", Name: "node-1", Ready: false}},
+		Pods:    []agentsk8s.Pod{{UID: "p1", Name: "db-0", Namespace: "prod", NodeName: "node-1", Phase: "Failed"}},
+	}
+	foreignReport := agentsk8s.Report{
+		Agent:   agentsk8s.AgentInfo{ID: "laptop", IntervalSeconds: 30},
+		Cluster: agentsk8s.ClusterInfo{ID: "cluster-1", Name: "in-cluster"},
+		Nodes:   []agentsk8s.Node{{UID: "n1", Name: "node-1", Ready: true}},
+		Pods:    []agentsk8s.Pod{{UID: "p1", Name: "db-0", Namespace: "prod", NodeName: "node-1", Phase: "Running"}},
+	}
+
+	owned, err := monitor.ApplyKubernetesReport(ownerReport, ownerToken)
+	if err != nil {
+		t.Fatalf("ApplyKubernetesReport(owner): %v", err)
+	}
+	if owned.ID != "cluster-1" {
+		t.Fatalf("owner cluster ID = %q, want the reported ID", owned.ID)
+	}
+
+	assertOwnerRecordIntact := func(t *testing.T) {
+		t.Helper()
+		for _, cluster := range monitor.state.GetKubernetesClusters() {
+			if cluster.ID != "cluster-1" {
+				continue
+			}
+			if cluster.TokenID != "token-owner" || cluster.AgentID != "prod-agent" {
+				t.Fatalf("owner record taken over: token=%q agent=%q", cluster.TokenID, cluster.AgentID)
+			}
+			if len(cluster.Nodes) != 1 || cluster.Nodes[0].Ready {
+				t.Fatalf("owner record nodes replaced: %+v", cluster.Nodes)
+			}
+			if len(cluster.Pods) != 1 || cluster.Pods[0].Phase != "Failed" {
+				t.Fatalf("owner record pods replaced: %+v", cluster.Pods)
+			}
+			return
+		}
+		t.Fatal("owner record missing")
+	}
+
+	forked, err := monitor.ApplyKubernetesReport(foreignReport, foreignToken)
+	if err != nil {
+		t.Fatalf("ApplyKubernetesReport(foreign): %v", err)
+	}
+	if forked.ID == "cluster-1" || forked.ID == "" {
+		t.Fatalf("foreign token was stored under %q, want a record of its own", forked.ID)
+	}
+	if forked.TokenID != "token-laptop" {
+		t.Fatalf("forked record token = %q, want the reporting token", forked.TokenID)
+	}
+	if !monitor.state.ConnectionHealth[kubernetesConnectionPrefix+forked.ID] {
+		t.Fatal("expected connection health for the forked record")
+	}
+	assertOwnerRecordIntact(t)
+
+	// The forked identity is stable, and the owner keeps the reported ID.
+	again, err := monitor.ApplyKubernetesReport(foreignReport, foreignToken)
+	if err != nil {
+		t.Fatalf("ApplyKubernetesReport(foreign, repeat): %v", err)
+	}
+	if again.ID != forked.ID {
+		t.Fatalf("forked ID changed from %q to %q", forked.ID, again.ID)
+	}
+	if owned, err = monitor.ApplyKubernetesReport(ownerReport, ownerToken); err != nil || owned.ID != "cluster-1" {
+		t.Fatalf("owner follow-up report: id=%q err=%v", owned.ID, err)
+	}
+	if got := len(monitor.state.GetKubernetesClusters()); got != 2 {
+		t.Fatalf("expected 2 cluster records, got %d", got)
+	}
+	assertOwnerRecordIntact(t)
+
+	// Removing the owner's cluster blocks its ID; the other agent stays on
+	// the record it was given instead of falling into that block.
+	monitor.config.APITokens = []config.APITokenRecord{{ID: "token-owner"}, {ID: "token-laptop"}}
+	if _, err := monitor.RemoveKubernetesCluster("cluster-1"); err != nil {
+		t.Fatalf("RemoveKubernetesCluster: %v", err)
+	}
+	if again, err = monitor.ApplyKubernetesReport(foreignReport, foreignToken); err != nil || again.ID != forked.ID {
+		t.Fatalf("forked record after owner removal: id=%q err=%v", again.ID, err)
+	}
+
+	// Removing the forked record blocks that agent too.
+	if err := monitor.AllowKubernetesClusterReenroll("cluster-1"); err != nil {
+		t.Fatalf("AllowKubernetesClusterReenroll: %v", err)
+	}
+	if _, err := monitor.ApplyKubernetesReport(ownerReport, ownerToken); err != nil {
+		t.Fatalf("ApplyKubernetesReport(owner, re-enrolled): %v", err)
+	}
+	if _, err := monitor.RemoveKubernetesCluster(forked.ID); err != nil {
+		t.Fatalf("RemoveKubernetesCluster(forked): %v", err)
+	}
+	if _, err := monitor.ApplyKubernetesReport(foreignReport, foreignToken); err == nil {
+		t.Fatal("expected the removed forked record to stay blocked")
+	}
+	assertOwnerRecordIntact(t)
+}
+
+func TestResolveKubernetesClusterIdentifier(t *testing.T) {
+	token := &config.APITokenRecord{ID: "token-1"}
+	clusters := []models.KubernetesCluster{
+		{ID: "unowned"},
+		{ID: "mine", TokenID: "token-1"},
+		{ID: "theirs", TokenID: "token-2"},
+	}
+
+	for _, id := range []string{"new", "unowned", "mine"} {
+		if got := resolveKubernetesClusterIdentifier(id, token, clusters); got != id {
+			t.Fatalf("resolve(%q) = %q, want the reported ID", id, got)
+		}
+	}
+	// Reports without a token record are not scoped.
+	if got := resolveKubernetesClusterIdentifier("theirs", nil, clusters); got != "theirs" {
+		t.Fatalf("resolve without token = %q, want the reported ID", got)
+	}
+	if got := resolveKubernetesClusterIdentifier("theirs", &config.APITokenRecord{}, clusters); got != "theirs" {
+		t.Fatalf("resolve with blank token ID = %q, want the reported ID", got)
+	}
+
+	scoped := resolveKubernetesClusterIdentifier("theirs", token, clusters)
+	if scoped == "theirs" || len(scoped) != sha256.Size*2 {
+		t.Fatalf("resolve(theirs) = %q, want a token-scoped digest", scoped)
+	}
+	if other := resolveKubernetesClusterIdentifier("theirs", &config.APITokenRecord{ID: "token-3"}, clusters); other == scoped || other == "theirs" {
+		t.Fatalf("a third token resolved to %q, want its own record", other)
+	}
+
+	// Once the token has its own record it keeps it, whether or not the
+	// reported ID is still held by the other token.
+	clusters = []models.KubernetesCluster{{ID: scoped, TokenID: "token-1"}}
+	if got := resolveKubernetesClusterIdentifier("theirs", token, clusters); got != scoped {
+		t.Fatalf("resolve after owner removal = %q, want %q", got, scoped)
+	}
+	// Naming another token's derived record directly does not reach it.
+	if got := resolveKubernetesClusterIdentifier(scoped, &config.APITokenRecord{ID: "token-3"}, clusters); got == scoped {
+		t.Fatal("a foreign token reached another token's derived record")
+	}
+
+	// After token rotation revokes token-2, a replacement token keeps the cluster ID.
+	activeTokens := map[string]struct{}{"token-1": {}}
+	if got := resolveKubernetesClusterIdentifierWithActiveTokens("theirs", token, []models.KubernetesCluster{{ID: "theirs", TokenID: "token-2"}}, activeTokens); got != "theirs" {
+		t.Fatalf("resolve after owner token revocation = %q, want %q", got, "theirs")
+	}
+	// While token-2 remains active, token-1 still gets its own isolated record.
+	activeTokens["token-2"] = struct{}{}
+	if got := resolveKubernetesClusterIdentifierWithActiveTokens("theirs", token, []models.KubernetesCluster{{ID: "theirs", TokenID: "token-2"}}, activeTokens); got != scoped {
+		t.Fatalf("resolve while owner token is active = %q, want %q", got, scoped)
+	}
+}

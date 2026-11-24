@@ -226,3 +226,75 @@ func TestKubernetesAgentHandlers_HandleSetCustomDisplayName(t *testing.T) {
 		t.Fatalf("status = %d, want 200: %s", rec.Code, rec.Body.String())
 	}
 }
+
+type recordingKubernetesRecoveryIngestor struct {
+	clusterIDs []string
+}
+
+func (i *recordingKubernetesRecoveryIngestor) IngestKubernetesReport(_ context.Context, _ string, report agentsk8s.Report) error {
+	i.clusterIDs = append(i.clusterIDs, report.Cluster.ID)
+	return nil
+}
+
+// A cluster ID is only what a report states, so a report from a token that does
+// not own the cluster record must land on a record of its own, and its recovery
+// artifacts must follow it there.
+func TestKubernetesAgentHandlers_HandleReport_ForeignTokenGetsOwnCluster(t *testing.T) {
+	handler, monitor := newKubernetesAgentHandlers(t, nil)
+	ingestor := &recordingKubernetesRecoveryIngestor{}
+	handler.SetRecoveryIngestor(ingestor)
+
+	send := func(token *config.APITokenRecord, agentID string, nodeReady bool) string {
+		t.Helper()
+		body, _ := json.Marshal(agentsk8s.Report{
+			Agent:     agentsk8s.AgentInfo{ID: agentID, Version: "1.0.0", IntervalSeconds: 30},
+			Cluster:   agentsk8s.ClusterInfo{ID: "shared-cluster-id", Name: "in-cluster"},
+			Nodes:     []agentsk8s.Node{{UID: "n1", Name: "node-1", Ready: nodeReady}},
+			Recovery:  &agentsk8s.RecoveryReport{},
+			Timestamp: time.Now().UTC(),
+		})
+		req := httptest.NewRequest(http.MethodPost, "/api/agents/kubernetes/report", bytes.NewReader(body))
+		attachAPITokenRecord(req, token)
+		rec := httptest.NewRecorder()
+		handler.HandleReport(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status = %d, want 200: %s", rec.Code, rec.Body.String())
+		}
+		var resp struct {
+			ClusterID string `json:"clusterId"`
+		}
+		if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+			t.Fatalf("decode response: %v", err)
+		}
+		return resp.ClusterID
+	}
+
+	ownerToken := &config.APITokenRecord{ID: "token-owner", Scopes: []string{config.ScopeKubernetesReport}}
+	foreignToken := &config.APITokenRecord{ID: "token-laptop", Scopes: []string{config.ScopeKubernetesReport}}
+
+	if got := send(ownerToken, "prod-agent", false); got != "shared-cluster-id" {
+		t.Fatalf("owner clusterId = %q, want the reported ID", got)
+	}
+	foreignID := send(foreignToken, "laptop", true)
+	if foreignID == "" || foreignID == "shared-cluster-id" {
+		t.Fatalf("foreign token clusterId = %q, want a record of its own", foreignID)
+	}
+
+	if len(ingestor.clusterIDs) != 2 || ingestor.clusterIDs[0] != "shared-cluster-id" || ingestor.clusterIDs[1] != foreignID {
+		t.Fatalf("recovery ingest cluster IDs = %v, want [shared-cluster-id %s]", ingestor.clusterIDs, foreignID)
+	}
+
+	for _, cluster := range monitor.GetState().KubernetesClusters {
+		if cluster.ID != "shared-cluster-id" {
+			continue
+		}
+		if cluster.TokenID != "token-owner" || cluster.AgentID != "prod-agent" {
+			t.Fatalf("owner record taken over: token=%q agent=%q", cluster.TokenID, cluster.AgentID)
+		}
+		if len(cluster.Nodes) != 1 || cluster.Nodes[0].Ready {
+			t.Fatalf("owner record nodes replaced: %+v", cluster.Nodes)
+		}
+		return
+	}
+	t.Fatal("owner record missing")
+}

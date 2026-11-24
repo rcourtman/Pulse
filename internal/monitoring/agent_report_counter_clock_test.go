@@ -416,12 +416,14 @@ func TestApplyDockerReportDrainedFIFOContainerRatesUseAuthoredCollectionInterval
 		}
 		return r
 	}
+	var dockerHostID string
 	apply := func(seq uint64, slot int, complete bool) models.DockerContainer {
 		t.Helper()
 		host, err := m.ApplyDockerReport(report(seq, slot, complete), nil)
 		if err != nil {
 			t.Fatalf("ApplyDockerReport slot %d: %v", slot, err)
 		}
+		dockerHostID = host.ID
 		if len(host.Containers) != 1 {
 			t.Fatalf("slot %d containers = %+v, want the one running container", slot, host.Containers)
 		}
@@ -440,7 +442,7 @@ func TestApplyDockerReportDrainedFIFOContainerRatesUseAuthoredCollectionInterval
 	containerHistory := func() map[string][]float64 {
 		series := make(map[string][]float64)
 		for _, metric := range []string{"netin", "netout", "diskread", "diskwrite"} {
-			for _, point := range m.metricsHistory.GetGuestMetrics("docker:counter-clock-container", metric, 24*time.Hour) {
+			for _, point := range m.metricsHistory.GetGuestMetrics("docker:"+unifiedresources.DockerContainerMetricID(dockerHostID, "counter-clock-container"), metric, 24*time.Hour) {
 				series[metric] = append(series[metric], point.Value)
 			}
 		}

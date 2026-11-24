@@ -61,6 +61,9 @@ func (h *KubernetesAgentHandlers) HandleReport(w http.ResponseWriter, r *http.Re
 		writeErrorResponse(w, http.StatusBadRequest, "invalid_report", err.Error(), nil)
 		return
 	}
+	// Recovery artifacts belong to the cluster record the monitor resolved for
+	// this token, not to whichever cluster ID the report states.
+	report.Cluster.ID = cluster.ID
 
 	if h.recoveryIngestor != nil {
 		orgID := GetOrgID(r.Context())

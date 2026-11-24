@@ -715,6 +715,188 @@ func TestHostAgentRemovalLifecycleDoesNotPoisonDuplicateActiveIdentity(t *testin
 	}
 }
 
+// A report may name any other machine's ID. Identity resolution files such a
+// report under a forked ID bound to the reporter's token, and the reporter may
+// uninstall that record. The removal must stay with the forked record: the
+// machine whose ID was named keeps reporting and keeps its Docker host.
+func TestHostAgentRemovalLifecycleForkedRecordDoesNotPoisonClaimedIdentity(t *testing.T) {
+	const victimID = "2c2c2c2c-1111-2222-3333-444444444444"
+	claims := []struct {
+		name      string
+		hostID    string
+		machineID string
+		agentID   string
+	}{
+		{name: "host id", hostID: victimID, machineID: "rogue-machine", agentID: "rogue-agent"},
+		{name: "agent id", hostID: "rogue-host", machineID: "rogue-machine", agentID: victimID},
+		{name: "machine id", hostID: "rogue-host", machineID: victimID, agentID: "rogue-agent"},
+		{name: "every id", hostID: victimID, machineID: victimID, agentID: victimID},
+	}
+
+	for _, claim := range claims {
+		t.Run(claim.name, func(t *testing.T) {
+			dataPath := t.TempDir()
+			monitor := newHostRemovalLifecycleMonitor(t, dataPath)
+			monitor.persistence = config.NewConfigPersistence(dataPath)
+
+			now := time.Now().UTC()
+			victimToken := config.APITokenRecord{ID: "victim-token", Hash: "victim-hash", CreatedAt: now.Add(-time.Hour)}
+			rogueToken := config.APITokenRecord{ID: "rogue-token", Hash: "rogue-hash", CreatedAt: now.Add(-time.Hour)}
+			monitor.config.APITokens = []config.APITokenRecord{victimToken, rogueToken}
+			if err := monitor.persistence.SaveAPITokens(monitor.config.APITokens); err != nil {
+				t.Fatalf("SaveAPITokens: %v", err)
+			}
+
+			victimReport := hostRemovalLifecycleReport(victimID, victimID, victimID, "web9.local", "linux", now)
+			victim, err := monitor.ApplyHostReport(victimReport, &victimToken)
+			if err != nil {
+				t.Fatalf("victim ApplyHostReport: %v", err)
+			}
+			monitor.state.UpsertDockerHost(models.DockerHost{
+				ID:        victimID,
+				AgentID:   victimID,
+				MachineID: victimID,
+				Hostname:  "web9.local",
+				Status:    "online",
+				TokenID:   victimToken.ID,
+			})
+
+			rogueReport := hostRemovalLifecycleReport(claim.hostID, claim.machineID, claim.agentID, "anything.local", "linux", now)
+			forked, err := monitor.ApplyHostReport(rogueReport, &rogueToken)
+			if err != nil {
+				t.Fatalf("rogue ApplyHostReport: %v", err)
+			}
+			if forked.ID == victim.ID {
+				t.Fatalf("report naming another host's ID took over its record %q", victim.ID)
+			}
+			if _, err := monitor.UninstallHostAgent(victim.ID, rogueToken.ID); !errors.Is(err, ErrHostAgentTokenMismatch) {
+				t.Fatalf("UninstallHostAgent(victim, rogue token) error = %v, want token mismatch", err)
+			}
+			if _, err := monitor.UninstallHostAgent(forked.ID, rogueToken.ID); err != nil {
+				t.Fatalf("UninstallHostAgent(forked record): %v", err)
+			}
+
+			victimReport.Timestamp = now.Add(time.Minute)
+			updated, err := monitor.ApplyHostReport(victimReport, &victimToken)
+			if err != nil {
+				t.Fatalf("host was blocked by the removal of a record that named its ID: %v", err)
+			}
+			if updated.ID != victim.ID {
+				t.Fatalf("host changed ID from %q to %q", victim.ID, updated.ID)
+			}
+			if remaining := monitor.state.GetDockerHosts(); len(remaining) != 1 || remaining[0].ID != victimID {
+				t.Fatalf("remaining Docker hosts = %+v, want the host's own", remaining)
+			}
+			if removed := monitor.state.GetRemovedDockerHosts(); len(removed) != 0 {
+				t.Fatalf("removed Docker hosts = %+v, want none", removed)
+			}
+
+			// The forked record itself stays removed.
+			rogueReport.Timestamp = now.Add(time.Minute)
+			if _, err := monitor.ApplyHostReport(rogueReport, &rogueToken); err == nil {
+				t.Fatal("uninstalled record reported again with its detached token")
+			}
+		})
+	}
+}
+
+// Cloned VMs share a machine ID and each reports a Docker host under it.
+// Removing one clone takes the Docker host that reports with that clone's
+// token and leaves the other clone, and its Docker host, alone.
+func TestHostAgentRemovalLifecycleKeepsOtherCloneAndItsDockerHost(t *testing.T) {
+	monitor := newHostRemovalLifecycleMonitor(t, t.TempDir())
+	now := time.Now().UTC()
+	originalReport := hostRemovalLifecycleReport("clone-machine", "clone-machine", "clone-machine", "original.local", "linux", now)
+	copyReport := hostRemovalLifecycleReport("clone-machine", "clone-machine", "clone-machine", "copy.local", "linux", now)
+	originalToken := &config.APITokenRecord{ID: "original-token", CreatedAt: now.Add(-time.Hour)}
+	copyToken := &config.APITokenRecord{ID: "copy-token", CreatedAt: now.Add(-time.Hour)}
+
+	original, err := monitor.ApplyHostReport(originalReport, originalToken)
+	if err != nil {
+		t.Fatalf("original ApplyHostReport: %v", err)
+	}
+	clone, err := monitor.ApplyHostReport(copyReport, copyToken)
+	if err != nil {
+		t.Fatalf("copy ApplyHostReport: %v", err)
+	}
+	if original.ID == clone.ID {
+		t.Fatalf("cloned identities collapsed to %q", original.ID)
+	}
+	for id, tokenID := range map[string]string{"original-docker": originalToken.ID, "copy-docker": copyToken.ID} {
+		monitor.state.UpsertDockerHost(models.DockerHost{
+			ID:        id,
+			AgentID:   "clone-machine",
+			MachineID: "clone-machine",
+			Hostname:  id,
+			Status:    "online",
+			TokenID:   tokenID,
+		})
+	}
+
+	if _, err := monitor.RemoveHostAgent(clone.ID); err != nil {
+		t.Fatalf("RemoveHostAgent(copy): %v", err)
+	}
+	originalReport.Timestamp = now.Add(time.Minute)
+	updated, err := monitor.ApplyHostReport(originalReport, originalToken)
+	if err != nil {
+		t.Fatalf("original was blocked by the removal of its clone: %v", err)
+	}
+	if updated.ID != original.ID {
+		t.Fatalf("original changed ID from %q to %q", original.ID, updated.ID)
+	}
+	if remaining := monitor.state.GetDockerHosts(); len(remaining) != 1 || remaining[0].ID != "original-docker" {
+		t.Fatalf("remaining Docker hosts = %+v, want only the original's", remaining)
+	}
+	copyReport.Timestamp = now.Add(time.Minute)
+	if _, err := monitor.ApplyHostReport(copyReport, copyToken); err == nil {
+		t.Fatal("removed clone reported again with its pre-removal token")
+	}
+}
+
+// A collector uninstall is authorized by the collector's own token. A Docker
+// host that reports with another token is not that collector's record, whatever
+// IDs the collector reported, even when no host agent is enrolled to claim it.
+func TestCollectorUninstallHostAgentRemovesOnlyDockerHostsOfItsCredential(t *testing.T) {
+	dataPath := t.TempDir()
+	monitor := newHostRemovalLifecycleMonitor(t, dataPath)
+	monitor.persistence = config.NewConfigPersistence(dataPath)
+
+	now := time.Now().UTC()
+	token := config.APITokenRecord{ID: "collector-token", Hash: "collector-hash", CreatedAt: now.Add(-time.Hour)}
+	monitor.config.APITokens = []config.APITokenRecord{token}
+	if err := monitor.persistence.SaveAPITokens(monitor.config.APITokens); err != nil {
+		t.Fatalf("SaveAPITokens: %v", err)
+	}
+
+	const dockerOnlyID = "docker-only-machine"
+	for id, tokenID := range map[string]string{dockerOnlyID: "docker-only-token", "collector-docker": token.ID} {
+		monitor.state.UpsertDockerHost(models.DockerHost{
+			ID:        id,
+			AgentID:   dockerOnlyID,
+			MachineID: dockerOnlyID,
+			Hostname:  id,
+			Status:    "online",
+			TokenID:   tokenID,
+		})
+	}
+
+	report := hostRemovalLifecycleReport(dockerOnlyID, dockerOnlyID, dockerOnlyID, "anything.local", "linux", now)
+	host, err := monitor.ApplyHostReport(report, &token)
+	if err != nil {
+		t.Fatalf("ApplyHostReport: %v", err)
+	}
+	if _, err := monitor.UninstallHostAgent(host.ID, token.ID); err != nil {
+		t.Fatalf("UninstallHostAgent: %v", err)
+	}
+
+	if remaining := monitor.state.GetDockerHosts(); len(remaining) != 1 || remaining[0].ID != dockerOnlyID {
+		t.Fatalf("remaining Docker hosts = %+v, want only the one reporting with another token", remaining)
+	}
+	if removed := monitor.state.GetRemovedDockerHosts(); len(removed) != 1 || removed[0].ID != "collector-docker" {
+		t.Fatalf("removed Docker hosts = %+v, want only the collector's own", removed)
+	}
+}
+
 func TestHostAgentRemovalLifecycleDoesNotUseProxmoxDisplayNameAsIdentity(t *testing.T) {
 	monitor := newHostRemovalLifecycleMonitor(t, t.TempDir())
 	monitor.state.UpdateNodesForInstance("production-api", []models.Node{{

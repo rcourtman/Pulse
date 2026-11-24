@@ -5,11 +5,13 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
@@ -259,4 +261,40 @@ func containsImportFailure(failures []string, component string) bool {
 		}
 	}
 	return false
+}
+
+// Token writers change the live inventory and its file together under
+// config.Mu. An import that reaches the lock behind one of them must publish
+// the inventory saved by then, not a copy it read before waiting.
+func TestHandleImportConfigPublishesTokenInventorySavedUnderConfigLock(t *testing.T) {
+	h, _ := replayTestHandler(t)
+	body := replayTestBody(t, replayTestRequest(t, "restored"))
+
+	config.Mu.Lock()
+	done := make(chan *httptest.ResponseRecorder, 1)
+	go func() { done <- replayTestSubmit(h, body) }()
+	committed := false
+	for deadline := time.Now().Add(10 * time.Second); !committed && time.Now().Before(deadline); time.Sleep(10 * time.Millisecond) {
+		saved, err := h.defaultPersistence.LoadAPITokens()
+		committed = err == nil && len(saved) == 1 && saved[0].ID == "restored"
+	}
+	// Leave the handler time to finish the archive and reach the lock.
+	time.Sleep(250 * time.Millisecond)
+	h.defaultConfig.APITokens = []config.APITokenRecord{{ID: "newer-token", Hash: "synthetic-newer-hash", OrgID: "default"}}
+	saveErr := h.defaultPersistence.SaveAPITokens(h.defaultConfig.APITokens)
+	config.Mu.Unlock()
+
+	rec := <-done
+	if !committed || saveErr != nil || rec.Code != http.StatusOK {
+		t.Fatalf("import did not run as arranged: committed=%v save=%v status=%d body=%s", committed, saveErr, rec.Code, rec.Body.String())
+	}
+	saved, err := h.defaultPersistence.LoadAPITokens()
+	if err != nil || len(saved) != 1 || saved[0].ID != "newer-token" {
+		t.Fatalf("saved token inventory changed after the newer write: %+v err=%v", saved, err)
+	}
+	config.Mu.RLock()
+	defer config.Mu.RUnlock()
+	if len(h.defaultConfig.APITokens) != 1 || h.defaultConfig.APITokens[0].ID != "newer-token" {
+		t.Fatalf("import published a token inventory older than the saved one: %+v", h.defaultConfig.APITokens)
+	}
 }

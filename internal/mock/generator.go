@@ -13,6 +13,7 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/mockmodel"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
 // titleCase capitalizes the first letter of each word (simple ASCII-safe version)
@@ -7182,6 +7183,7 @@ func updateDockerHosts(data *models.StateSnapshot, config MockConfig, now time.T
 
 		for j := range host.Containers {
 			container := &host.Containers[j]
+			metricID := unifiedresources.DockerContainerMetricID(host.ID, container.ID)
 			state := strings.ToLower(container.State)
 			health := strings.ToLower(container.Health)
 
@@ -7194,13 +7196,13 @@ func updateDockerHosts(data *models.StateSnapshot, config MockConfig, now time.T
 					container.State = "running"
 					container.Status = "Up a few seconds"
 					container.Health = "starting"
-					container.CPUPercent = SampleMetric("dockerContainer", container.ID, "cpu", now)
-					container.MemoryPercent = SampleMetric("dockerContainer", container.ID, "memory", now)
+					container.CPUPercent = SampleMetric("dockerContainer", metricID, "cpu", now)
+					container.MemoryPercent = SampleMetric("dockerContainer", metricID, "memory", now)
 					if container.MemoryLimit > 0 {
 						container.MemoryUsage = int64(float64(container.MemoryLimit) * (container.MemoryPercent / 100.0))
 					}
 					if container.RootFilesystemBytes > 0 {
-						diskPercent := SampleMetric("dockerContainer", container.ID, "disk", now)
+						diskPercent := SampleMetric("dockerContainer", metricID, "disk", now)
 						container.WritableLayerBytes = int64(float64(container.RootFilesystemBytes) * (diskPercent / 100.0))
 					}
 					container.UptimeSeconds = step
@@ -7218,13 +7220,13 @@ func updateDockerHosts(data *models.StateSnapshot, config MockConfig, now time.T
 				running++
 
 				if config.RandomMetrics {
-					container.CPUPercent = SampleMetric("dockerContainer", container.ID, "cpu", now)
-					container.MemoryPercent = SampleMetric("dockerContainer", container.ID, "memory", now)
+					container.CPUPercent = SampleMetric("dockerContainer", metricID, "cpu", now)
+					container.MemoryPercent = SampleMetric("dockerContainer", metricID, "memory", now)
 					if container.MemoryLimit > 0 {
 						container.MemoryUsage = int64(float64(container.MemoryLimit) * (container.MemoryPercent / 100.0))
 					}
 					if container.RootFilesystemBytes > 0 {
-						diskPercent := SampleMetric("dockerContainer", container.ID, "disk", now)
+						diskPercent := SampleMetric("dockerContainer", metricID, "disk", now)
 						container.WritableLayerBytes = int64(float64(container.RootFilesystemBytes) * (diskPercent / 100.0))
 						if container.WritableLayerBytes > container.RootFilesystemBytes {
 							container.WritableLayerBytes = container.RootFilesystemBytes
