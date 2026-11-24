@@ -23,7 +23,7 @@ func newTestStore(t *testing.T) *Store {
 
 func TestAppendAndQueryRoundTrip(t *testing.T) {
 	store := newTestStore(t)
-	occurred := time.Date(2026, 8, 26, 10, 0, 0, 0, time.UTC)
+	occurred := time.Now().UTC().Truncate(time.Second).Add(-2 * time.Hour)
 
 	store.Append(Event{
 		OccurredAt:   occurred,
@@ -60,7 +60,7 @@ func TestAppendAndQueryRoundTrip(t *testing.T) {
 
 func TestQueryFiltersByTypeAndTime(t *testing.T) {
 	store := newTestStore(t)
-	base := time.Date(2026, 8, 26, 10, 0, 0, 0, time.UTC)
+	base := time.Now().UTC().Truncate(time.Second).Add(-2 * time.Hour)
 
 	store.Append(Event{OccurredAt: base, Type: TypeResolved, AlertID: "a1"})
 	store.Append(Event{OccurredAt: base.Add(time.Minute), Type: TypeAcknowledged, AlertID: "a1"})
@@ -90,7 +90,7 @@ func TestQueryFiltersByTypeAndTime(t *testing.T) {
 
 func TestQueryLimitCaps(t *testing.T) {
 	store := newTestStore(t)
-	base := time.Date(2026, 8, 26, 10, 0, 0, 0, time.UTC)
+	base := time.Now().UTC().Truncate(time.Second).Add(-2 * time.Hour)
 	for i := 0; i < 10; i++ {
 		store.Append(Event{OccurredAt: base.Add(time.Duration(i) * time.Second), Type: TypeResolved, AlertID: "a1"})
 	}
