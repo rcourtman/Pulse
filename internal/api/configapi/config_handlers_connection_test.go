@@ -702,9 +702,9 @@ func TestPVEEndpointReachabilityAfterAddressEdit(t *testing.T) {
 		wasReachable  bool
 		wantUnchecked bool
 	}{
-		{"moved_reachable_member", "old-cedar.lab.test", `{"clusterEndpointOverrides":[{"nodeName":"cedar","ipOverride":"cedar-gateway.lab.test:8443"}]}`, "cedar-gateway.lab.test:8443", "https://cedar-gateway.lab.test:8443", true, true},
-		{"moved_failed_member", "old-cedar.lab.test", `{"clusterEndpointOverrides":[{"nodeName":"cedar","ipOverride":"cedar-gateway.lab.test:8443"}]}`, "cedar-gateway.lab.test:8443", "https://cedar-gateway.lab.test:8443", false, true},
-		{"changed_port", "cedar.lab.test", `{"clusterEndpointOverrides":[{"nodeName":"cedar","ipOverride":"cedar.lab.test:8443"}]}`, "cedar.lab.test:8443", "https://cedar.lab.test:8443", true, true},
+		{"moved_reachable_member", "old-cedar.lab.test", `{"tokenValue":"synthetic-settings-fixture","clusterEndpointOverrides":[{"nodeName":"cedar","ipOverride":"cedar-gateway.lab.test:8443"}]}`, "cedar-gateway.lab.test:8443", "https://cedar-gateway.lab.test:8443", true, true},
+		{"moved_failed_member", "old-cedar.lab.test", `{"tokenValue":"synthetic-settings-fixture","clusterEndpointOverrides":[{"nodeName":"cedar","ipOverride":"cedar-gateway.lab.test:8443"}]}`, "cedar-gateway.lab.test:8443", "https://cedar-gateway.lab.test:8443", false, true},
+		{"changed_port", "cedar.lab.test", `{"tokenValue":"synthetic-settings-fixture","clusterEndpointOverrides":[{"nodeName":"cedar","ipOverride":"cedar.lab.test:8443"}]}`, "cedar.lab.test:8443", "https://cedar.lab.test:8443", true, true},
 		{"cleared_override_moves_target", "old-cedar.lab.test", `{"clusterEndpointOverrides":[{"nodeName":"cedar","ipOverride":""}]}`, "", "https://cedar.lab.test:8006", false, true},
 		{"explicit_noop", "old-cedar.lab.test", `{"clusterEndpointOverrides":[{"nodeName":"cedar","ipOverride":"old-cedar.lab.test"}]}`, "old-cedar.lab.test", "https://old-cedar.lab.test:8006", true, false},
 		{"same_effective_authority", "old-cedar.lab.test", `{"clusterEndpointOverrides":[{"nodeName":"cedar","ipOverride":" https://OLD-CEDAR.lab.test:8006/ "}]}`, "OLD-CEDAR.lab.test:8006", "https://OLD-CEDAR.lab.test:8006", false, false},

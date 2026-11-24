@@ -1488,14 +1488,23 @@ func nodeHostChanged(nodeType, storedHost, updatedHost string) bool {
 }
 
 // clusterEndpointAddressChanged reports whether an update points a cluster
-// member at a new connection address. Clearing an override is not an address
-// edit: the member falls back to the address its own cluster reported.
-func clusterEndpointAddressChanged(stored, updated []config.ClusterEndpoint) bool {
-	for i, endpoint := range updated {
+// member at a new effective connection address. Clearing an override is not
+// an address edit: the member falls back to the address its own cluster
+// reported. Equivalent URL spellings or an override that keeps the member's
+// current effective dial target do not move the destination.
+func clusterEndpointAddressChanged(stored, updated config.PVEInstance) bool {
+	for i, endpoint := range updated.ClusterEndpoints {
 		if endpoint.IPOverride == "" {
 			continue
 		}
-		if i >= len(stored) || !strings.EqualFold(endpoint.IPOverride, strings.TrimSpace(stored[i].IPOverride)) {
+		if i >= len(stored.ClusterEndpoints) {
+			return true
+		}
+		oldURL := monitoring.PVEClusterEndpointURL(stored.ClusterEndpoints[i], stored.VerifySSL, config.DiscoveryConfig{})
+		newURL := monitoring.PVEClusterEndpointURL(endpoint, updated.VerifySSL, config.DiscoveryConfig{})
+		oldKey, oldValid := proxmox.ClusterEndpointIdentity(oldURL)
+		newKey, newValid := proxmox.ClusterEndpointIdentity(newURL)
+		if !oldValid || !newValid || oldKey != newKey {
 			return true
 		}
 	}
@@ -1623,18 +1632,17 @@ func (h *ConfigHandlers) handleUpdateNode(w http.ResponseWriter, r *http.Request
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		if nodeUpdateKeepsStoredSecret(req, updated.Password, updated.TokenValue) &&
-			(nodeHostChanged(nodeType, current.Host, updated.Host) || clusterEndpointAddressChanged(current.ClusterEndpoints, updated.ClusterEndpoints)) {
-			http.Error(w, nodeAddressChangeNeedsCredentialMessage, http.StatusBadRequest)
-			return
-		}
-
 		if req.hasFingerprintField() {
 			updated.Fingerprint = req.Fingerprint
 		}
 		if req.VerifySSL != nil {
 			updated.VerifySSL = *req.VerifySSL
 			updated.VerifySSLExplicit = true
+		}
+		if nodeUpdateKeepsStoredSecret(req, updated.Password, updated.TokenValue) &&
+			(nodeHostChanged(nodeType, current.Host, updated.Host) || clusterEndpointAddressChanged(current, updated)) {
+			http.Error(w, nodeAddressChangeNeedsCredentialMessage, http.StatusBadRequest)
+			return
 		}
 		if req.MonitorVMs != nil {
 			updated.MonitorVMs = *req.MonitorVMs
