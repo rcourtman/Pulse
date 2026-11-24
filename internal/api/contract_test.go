@@ -502,7 +502,7 @@ func TestContract_ConfigTransferRoutesUseCanonicalPreHandlerAuthorization(t *tes
 		handler   string
 	}{
 		{authorize: "authorizeConfigTransfer(w, req, configTransferExport)", handler: "retainTokenResponseAuthority(r.config, config.ScopeSettingsRead, false, r.configHandlers.HandleExportConfig)(w, req)"},
-		{authorize: "authorizeConfigTransfer(w, req, configTransferImport)", handler: "HandleImportConfig(w, req)"},
+		{authorize: "authorizeConfigTransfer(w, req, configTransferImport)", handler: "withTenantOutboundPolicy(r.config, r.configHandlers.HandleImportConfig)(w, req)"},
 	} {
 		authorizeAt := strings.Index(routes, sequence.authorize)
 		handlerAt := strings.Index(routes, sequence.handler)
@@ -25804,6 +25804,11 @@ func TestContract_ConfigImportIncompleteRuntimeKeepsCommittedOutcome(t *testing.
 	cfg := newTestConfigWithTokens(t, record)
 	cfg.DataPath, cfg.ConfigPath = dir, dir
 	if err := os.WriteFile(filepath.Join(dir, "config.json"), []byte("{}"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	// A scoped token's import keeps the destination's saved token inventory,
+	// so the caller must be in it to authenticate the replay.
+	if err := config.NewConfigPersistence(dir).SaveAPITokens(cfg.APITokens); err != nil {
 		t.Fatal(err)
 	}
 	reloads := 0

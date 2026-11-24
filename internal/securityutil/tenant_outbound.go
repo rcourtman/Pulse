@@ -61,7 +61,7 @@ func CheckTenantOutboundDestination(ctx context.Context, destination string) err
 	}
 	opts := RestrictedOutboundHTTPOptions{AllowPrivateIPs: policy.AllowPrivateNetworks}
 	if err := pubsec.ValidateOutboundHost(ctx, host, opts); err != nil {
-		return fmt.Errorf("%w: %v", ErrTenantOutboundDestination, err)
+		return fmt.Errorf("%w: %w", ErrTenantOutboundDestination, err)
 	}
 	return nil
 }

@@ -221,6 +221,7 @@ type ConfigHandlers struct {
 	reloadFunc               func() error
 	reloadSystemSettingsFunc func() // Function to reload cached system settings
 	mockModeChanged          func(bool)
+	ssoConfigReload          func() error
 	wsHub                    *websocket.Hub
 	guestMetadataHandler     GuestMetadataReloader
 	runtime                  RuntimeDependencies
@@ -368,6 +369,15 @@ func (h *ConfigHandlers) SetMockModeChangeHook(hook func(bool)) {
 	h.stateMu.Lock()
 	defer h.stateMu.Unlock()
 	h.mockModeChanged = hook
+}
+
+// SetSSOConfigReloadHook registers the callback that publishes the saved SSO
+// configuration to the running server after a default-organization import
+// replaced it.
+func (h *ConfigHandlers) SetSSOConfigReloadHook(hook func() error) {
+	h.stateMu.Lock()
+	defer h.stateMu.Unlock()
+	h.ssoConfigReload = hook
 }
 
 // getContextState helper to retrieve tenant-specific state

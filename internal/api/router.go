@@ -404,6 +404,7 @@ func (r *Router) setupRoutes() {
 	})
 	r.configHandlers.SetConfig(r.config)
 	r.configHandlers.SetMockModeChangeHook(r.syncPlatformSupplementalProviders)
+	r.configHandlers.SetSSOConfigReloadHook(r.reloadSSOConfigAfterImport)
 	r.trueNASHandlers = &TrueNASHandlers{
 		getPersistence: r.configHandlers.Persistence,
 		getConfig:      r.configHandlers.Config,

@@ -92,6 +92,7 @@ func TestHandleImportConfigRuntimeOutcome(t *testing.T) {
 		name                 string
 		brokenFiles          []string
 		metadataFailure      bool
+		ssoFailure           bool
 		missingAlerts        bool
 		missingNotifications bool
 		withoutMonitor       bool
@@ -104,6 +105,7 @@ func TestHandleImportConfigRuntimeOutcome(t *testing.T) {
 		{name: "email", brokenFiles: []string{"email.enc"}, wantFailures: []string{"email settings"}},
 		{name: "apprise", brokenFiles: []string{"apprise.enc"}, wantFailures: []string{"Apprise settings"}},
 		{name: "metadata", metadataFailure: true, wantFailures: []string{"guest metadata"}},
+		{name: "sso", ssoFailure: true, wantFailures: []string{"SSO settings"}},
 		{name: "missing-alert-manager", missingAlerts: true, wantFailures: []string{"alert settings"}},
 		{name: "missing-notification-manager", missingNotifications: true, wantFailures: []string{"webhook settings", "email settings", "Apprise settings"}},
 		{name: "combined", brokenFiles: []string{"alerts.json", "webhooks.enc", "email.enc", "apprise.enc"}, metadataFailure: true, wantFailures: []string{"alert settings", "webhook settings", "email settings", "Apprise settings", "guest metadata"}},
@@ -144,6 +146,14 @@ func TestHandleImportConfigRuntimeOutcome(t *testing.T) {
 			h.guestMetadataHandler = importMetadataReloadFunc(func(context.Context) error {
 				metadataCalls++
 				if tc.metadataFailure {
+					return errors.New(privateFailure)
+				}
+				return nil
+			})
+			ssoCalls := 0
+			h.SetSSOConfigReloadHook(func() error {
+				ssoCalls++
+				if tc.ssoFailure {
 					return errors.New(privateFailure)
 				}
 				return nil
@@ -194,8 +204,8 @@ func TestHandleImportConfigRuntimeOutcome(t *testing.T) {
 					t.Errorf("partial apply response = %q, want %q", rec.Body.String(), want)
 				}
 			}
-			if rec.Code != wantStatus || calls.Load() != 1 || metadataCalls != 1 || !reflect.DeepEqual(audits, []bool{!failed}) {
-				t.Errorf("status=%d body=%s reloads=%d metadata=%d audits=%v", rec.Code, rec.Body.String(), calls.Load(), metadataCalls, audits)
+			if rec.Code != wantStatus || calls.Load() != 1 || metadataCalls != 1 || ssoCalls != 1 || !reflect.DeepEqual(audits, []bool{!failed}) {
+				t.Errorf("status=%d body=%s reloads=%d metadata=%d sso=%d audits=%v", rec.Code, rec.Body.String(), calls.Load(), metadataCalls, ssoCalls, audits)
 			}
 			for _, secret := range []string{privateFailure, dir, request.Data, request.Passphrase, archive.Email.Password, archive.Apprise.APIKey} {
 				if strings.Contains(rec.Body.String(), secret) || strings.Contains(strings.Join(auditDetails, " "), secret) {
