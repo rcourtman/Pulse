@@ -37,16 +37,27 @@ export const buildStandaloneHostVmsPath = (hostId: string): string => {
   return `${STANDALONE_VMS_PATH}?${params.toString()}`;
 };
 
+export const AVAILABILITY_PATH = '/availability';
+export const AVAILABILITY_QUERY_PARAMS = {
+  query: 'q',
+  status: 'status',
+  view: 'view',
+  /** The availability check whose detail a link opens. */
+  check: 'check',
+} as const;
+
+export const buildAvailabilityPath = (): string => AVAILABILITY_PATH;
+
 /**
- * The Availability checks page with one check's detail open. The table is
+ * The Availability page with one check's detail open. The table is
  * named, because the detail is a row of it and a large estate opens on the
  * fleet view.
  */
 export const buildAvailabilityCheckPath = (checkId: string): string => {
   const params = new URLSearchParams();
-  params.set(STANDALONE_QUERY_PARAMS.view, 'table');
-  params.set(STANDALONE_QUERY_PARAMS.check, checkId);
-  return `${STANDALONE_PATH}/availability?${params.toString()}`;
+  params.set(AVAILABILITY_QUERY_PARAMS.view, 'table');
+  params.set(AVAILABILITY_QUERY_PARAMS.check, checkId);
+  return `${AVAILABILITY_PATH}?${params.toString()}`;
 };
 export const PROXMOX_PATH = '/proxmox';
 export const PROXMOX_DEFAULT_TAB = 'overview';

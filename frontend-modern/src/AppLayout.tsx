@@ -25,6 +25,7 @@ import {
   utilityNavTabEquals,
 } from '@/components/shared/stableNavTabs';
 import {
+  PRIMARY_PLATFORM_NAV_IDS,
   buildPrimaryPlatformNavigationVisibility,
   primaryPlatformNavigationIsVisible,
   selectFirstVisiblePrimaryPlatformNavigationId,
@@ -44,6 +45,7 @@ import { logger } from '@/utils/logger';
 import { getActiveTabForPath } from '@/routing/navigation';
 import { preloadRouteModule } from '@/routing/routePreload';
 import {
+  AVAILABILITY_PATH,
   DOCKER_PATH,
   INFRASTRUCTURE_MAP_PATH,
   KUBERNETES_PATH,
@@ -51,6 +53,7 @@ import {
   STANDALONE_PATH,
   TRUENAS_PATH,
   VMWARE_PATH,
+  buildAvailabilityPath,
   buildDockerPath,
   buildKubernetesPath,
   buildProxmoxPath,
@@ -80,6 +83,7 @@ const ROOT_KUBERNETES_PATH = buildKubernetesPath();
 const ROOT_TRUENAS_PATH = buildTrueNASPath();
 const ROOT_VMWARE_PATH = buildVmwarePath();
 const ROOT_STANDALONE_PATH = buildStandalonePath();
+const ROOT_AVAILABILITY_PATH = buildAvailabilityPath();
 const ROOT_INFRASTRUCTURE_SETTINGS_PATH = buildInfrastructureWorkspacePath();
 const ROOT_ALERTS_PATH = '/alerts';
 const PRIMARY_ROUTE_PREFIX_BY_ID: Record<PrimaryPlatformNavId, string> = {
@@ -89,6 +93,7 @@ const PRIMARY_ROUTE_PREFIX_BY_ID: Record<PrimaryPlatformNavId, string> = {
   truenas: TRUENAS_PATH,
   vmware: VMWARE_PATH,
   standalone: STANDALONE_PATH,
+  availability: AVAILABILITY_PATH,
 };
 type PrimaryRouteMemory = Partial<Record<PrimaryPlatformNavId, string>>;
 let primaryRouteMemory: PrimaryRouteMemory = {};
@@ -102,9 +107,17 @@ function resolveStandaloneSubTabTitle(pathname: string): string {
 const isHeldStandaloneVmsRoute = (route: string) =>
   isStandaloneVmsRoute(route) && !isFeatureAvailable('standaloneVms');
 
+const isLegacyStandaloneAvailabilityRoute = (route: string) =>
+  route.split(/[?#]/, 1)[0]?.replace(/\/+$/, '') === buildStandalonePath('availability');
+
 function routeBelongsToPrimaryTab(route: string, tabId: PrimaryPlatformNavId): boolean {
-  // A guessed address must not become the remembered Machines entry point.
-  if (tabId === 'standalone' && isHeldStandaloneVmsRoute(route)) return false;
+  // A guessed or retired address must not become the remembered Machines entry point.
+  if (
+    tabId === 'standalone' &&
+    (isHeldStandaloneVmsRoute(route) || isLegacyStandaloneAvailabilityRoute(route))
+  ) {
+    return false;
+  }
   const prefix = PRIMARY_ROUTE_PREFIX_BY_ID[tabId];
   const pathname = route.split(/[?#]/, 1)[0]?.replace(/\/+$/, '') || '/';
   return pathname === prefix || pathname.startsWith(`${prefix}/`);
@@ -168,6 +181,7 @@ const PRIMARY_TAB_ICONS: Record<PrimaryPlatformNavId, MobileNavBarIcon> = {
   truenas: makeDecorativePlatformIcon('truenas'),
   vmware: getPlatformIcon('vmware'),
   standalone: getPlatformIcon('standalone'),
+  availability: getPlatformIcon('availability'),
 };
 
 const DecorativePatrolIcon: MobileNavBarIcon = (props) => (
@@ -338,6 +352,7 @@ export function AppLayout(props: AppLayoutProps) {
     truenas: 'TrueNAS',
     vmware: 'vSphere',
     standalone: 'Machines',
+    availability: 'Availability',
     alerts: 'Alerts',
     actions: 'Actions',
     ai: 'Patrol',
@@ -385,6 +400,7 @@ export function AppLayout(props: AppLayoutProps) {
     truenas: ROOT_TRUENAS_PATH,
     vmware: ROOT_VMWARE_PATH,
     standalone: ROOT_STANDALONE_PATH,
+    availability: ROOT_AVAILABILITY_PATH,
   };
   const primaryWorkspacePath = createMemo(() => {
     const navId = selectFirstVisiblePrimaryPlatformNavigationId(platformNavigationVisibility());
@@ -566,10 +582,23 @@ export function AppLayout(props: AppLayoutProps) {
         label: 'Machines',
         route: ROOT_STANDALONE_PATH,
         settingsRoute: ROOT_INFRASTRUCTURE_SETTINGS_PATH,
-        tooltip: 'Pulse Agent machines, agentless computers, and availability checks',
+        tooltip: 'Pulse Agent machines and standalone virtual machines',
         enabled: isVisible('standalone'),
         live: isVisible('standalone'),
         icon: PRIMARY_TAB_ICONS.standalone,
+        alwaysShow: false,
+      },
+      {
+        id: 'availability',
+        label: 'Availability',
+        route: ROOT_AVAILABILITY_PATH,
+        settingsRoute: ROOT_INFRASTRUCTURE_SETTINGS_PATH,
+        tooltip: 'Website, service, device, and TLS certificate checks',
+        enabled:
+          isVisible('availability') ||
+          (hasSettingsAccess() && PRIMARY_PLATFORM_NAV_IDS.some((id) => isVisible(id))),
+        live: isVisible('availability'),
+        icon: PRIMARY_TAB_ICONS.availability,
         alwaysShow: false,
       },
     ];

@@ -21,6 +21,7 @@ const UNIFIED_NAV_SHORTCUTS: ShortcutGroup = {
   title: 'Navigation',
   items: [
     { keys: 'g then s', description: 'Go to Machines' },
+    { keys: 'g then c', description: 'Go to Availability' },
     { keys: 'g then p', description: 'Go to Proxmox' },
     { keys: 'g then d', description: 'Go to Docker' },
     { keys: 'g then k', description: 'Go to Kubernetes' },
@@ -36,6 +37,7 @@ const PATROL_NAV_SHORTCUT_KEYS = 'g then r';
 
 const NAV_PRIMARY_SHORTCUTS: Record<string, keyof PlatformNavigationVisibility> = {
   'g then s': 'standalone',
+  'g then c': 'availability',
   'g then p': 'proxmox',
   'g then d': 'docker',
   'g then k': 'kubernetes',

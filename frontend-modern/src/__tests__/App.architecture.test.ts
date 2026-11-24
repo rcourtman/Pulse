@@ -98,6 +98,7 @@ describe('App platform navigation admission', () => {
         false,
         false,
         false,
+        false,
       ]);
     } finally {
       window.localStorage.removeItem('guest_metadata');
@@ -115,6 +116,7 @@ describe('App platform navigation admission', () => {
       truenas: true,
       vmware: false,
       standalone: false,
+      availability: false,
     });
 
     expect(admission.resolved).toBe(true);
@@ -132,6 +134,7 @@ describe('App platform navigation admission', () => {
       truenas: true,
       vmware: false,
       standalone: false,
+      availability: false,
     });
 
     expect(admission.visibility.standalone).toBe(false);
@@ -148,6 +151,7 @@ describe('App platform navigation admission', () => {
       truenas: false,
       vmware: false,
       standalone: false,
+      availability: false,
     };
     const admission = resolvePlatformNavigationAdmission(authenticatedResources, true, staleFacet);
 
@@ -163,6 +167,7 @@ describe('App platform navigation admission', () => {
       truenas: false,
       vmware: false,
       standalone: false,
+      availability: false,
     };
     expect(resolvePlatformNavigationAdmission([], false, retainedFacet).visibility.docker).toBe(
       true,
@@ -170,6 +175,7 @@ describe('App platform navigation admission', () => {
     const authoritativeEmpty = resolvePlatformNavigationAdmission([], true, retainedFacet);
     expect(authoritativeEmpty.resolved).toBe(true);
     expect(Object.values(authoritativeEmpty.visibility)).toEqual([
+      false,
       false,
       false,
       false,
@@ -184,14 +190,30 @@ describe('App platform navigation admission', () => {
     const admission = resolvePlatformNavigationAdmission([], false, null);
 
     expect(admission.resolved).toBe(false);
-    expect(Object.values(admission.visibility)).toEqual([false, false, false, false, false, false]);
+    expect(Object.values(admission.visibility)).toEqual([
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+    ]);
   });
 
   it('resolves an authenticated empty estate without inventing platform visibility', () => {
     const admission = resolvePlatformNavigationAdmission([], true);
 
     expect(admission.resolved).toBe(true);
-    expect(Object.values(admission.visibility)).toEqual([false, false, false, false, false, false]);
+    expect(Object.values(admission.visibility)).toEqual([
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+    ]);
     expect(getDefaultWorkspaceRoute(admission.visibility, true)).toBe('/settings/infrastructure');
     expect(getDefaultWorkspaceRoute(admission.visibility, false)).toBe('/alerts');
   });

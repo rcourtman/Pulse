@@ -11789,3 +11789,15 @@ rows and avoids truncating host names on 390px phones. Verified by
 DNS protocol labels and summaries for `protocol: "dns"` targets alongside the
 existing HTTP, HTTPS, TCP, and ICMP check types. Shared settings panel layout
 and primitives are unchanged.
+
+### Top-level Availability page and inline management (24 November 2026)
+
+`PlatformResourceDetailTableRow.tsx` and `ResourceDetailDrawer.tsx` forward
+optional `headerActions` into the canonical drawer header so inline check
+management (`Test`, `Pause`/`Resume`, `Edit`) stays inside the shared drawer
+surface, using icon-only mobile triggers below `sm:`. Command palette
+(`commandPaletteModel.ts`, `useCommandPaletteState.ts`), keyboard shortcuts
+(`KeyboardShortcutsModal.tsx`, `useKeyboardShortcuts.ts`), and route preloading
+(`routePreload.ts`) include `/availability`. Verified by
+`SharedPrimitives.guardrails.test.ts`, `AvailabilityPageSurface.test.tsx`, and
+`frontend-modern/browser-verification/754f0ac3ac252718.json`.

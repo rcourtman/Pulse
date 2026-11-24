@@ -4826,3 +4826,11 @@ Cleanup cadence, query paths and write paths are unchanged.
 network interfaces with the Proxmox list instead of replacing it: one name set
 from the agent list, one filter over the Proxmox list, per node per update. No
 extra request, subscription or render path is added.
+
+
+### Top-level Availability page and inline management (24 November 2026)
+
+`frontend-modern/src/routing/routePreload.ts` adds the lazy route preloader for
+`/availability` (`pages/Availability.tsx`). Availability checks stay lazily
+loaded behind the page chunk without increasing the initial bundle or adding
+polling paths.

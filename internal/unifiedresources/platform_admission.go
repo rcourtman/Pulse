@@ -15,12 +15,13 @@ package unifiedresources
 
 // PlatformAdmission reports which primary platform pages an estate admits.
 type PlatformAdmission struct {
-	Proxmox    bool `json:"proxmox"`
-	Docker     bool `json:"docker"`
-	Kubernetes bool `json:"kubernetes"`
-	TrueNAS    bool `json:"truenas"`
-	VMware     bool `json:"vmware"`
-	Standalone bool `json:"standalone"`
+	Proxmox      bool `json:"proxmox"`
+	Docker       bool `json:"docker"`
+	Kubernetes   bool `json:"kubernetes"`
+	TrueNAS      bool `json:"truenas"`
+	VMware       bool `json:"vmware"`
+	Standalone   bool `json:"standalone"`
+	Availability bool `json:"availability"`
 }
 
 // agentProviderOwnerPlatformScopes are the platform scopes that mean an
@@ -105,9 +106,11 @@ func BuildPlatformAdmission(resources []Resource) PlatformAdmission {
 			case "vmware-vsphere":
 				admission.VMware = true
 			case "availability":
-				// Availability endpoints are operated from the standalone page.
-				admission.Standalone = true
+				admission.Availability = true
 			}
+		}
+		if !admission.Availability && CanonicalResourceType(resource.Type) == ResourceTypeNetworkEndpoint {
+			admission.Availability = true
 		}
 		if !admission.Standalone && IsPulseAgentPlatformResource(resource) {
 			admission.Standalone = true

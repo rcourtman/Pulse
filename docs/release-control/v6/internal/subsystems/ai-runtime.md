@@ -9059,3 +9059,11 @@ alert. With commands off the seed says why Pulse cannot read and the question
 keeps its exit. It exists because on Docker fault set D6 the sustained check
 on a full mount closed with no finding and the finding came only when asked.
 Proof: `internal/ai/patrol_host_disk_wake_test.go`.
+
+
+### Top-level Availability page and inline management (24 November 2026)
+
+`frontend-modern/src/App.tsx` and `frontend-modern/src/AppLayout.tsx` register
+the primary `/availability` route and top-level Availability navigation item
+admitted via `PlatformAdmission.Availability`. AI runtime patrol, action
+catalog, and sidecar extension boundaries are unchanged.

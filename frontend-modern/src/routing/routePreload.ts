@@ -1,5 +1,6 @@
 import {
   ACTIONS_PATH,
+  AVAILABILITY_PATH,
   DOCKER_PATH,
   INFRASTRUCTURE_MAP_PATH,
   KUBERNETES_PATH,
@@ -61,6 +62,11 @@ const ROUTE_PRELOADERS: readonly RoutePreloader[] = [
     id: 'standalone',
     matches: (route) => route === STANDALONE_PATH || route.startsWith(`${STANDALONE_PATH}/`),
     preload: () => import('@/pages/Standalone').then(() => undefined),
+  },
+  {
+    id: 'availability',
+    matches: (route) => route === AVAILABILITY_PATH || route.startsWith(`${AVAILABILITY_PATH}/`),
+    preload: () => import('@/pages/Availability').then(() => undefined),
   },
   {
     id: 'alerts',

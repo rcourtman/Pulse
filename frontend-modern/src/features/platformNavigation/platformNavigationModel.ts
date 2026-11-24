@@ -10,7 +10,7 @@ import {
 import { normalizeSourcePlatformKey, resolveResourcePlatformType } from '@/utils/sourcePlatforms';
 
 export type PrimaryPlatformNavId =
-  'proxmox' | 'docker' | 'kubernetes' | 'truenas' | 'vmware' | 'standalone';
+  'proxmox' | 'docker' | 'kubernetes' | 'truenas' | 'vmware' | 'standalone' | 'availability';
 
 export type PlatformNavigationVisibility = Record<PrimaryPlatformNavId, boolean>;
 
@@ -26,6 +26,7 @@ export const PRIMARY_PLATFORM_NAV_IDS: readonly PrimaryPlatformNavId[] = [
   'truenas',
   'vmware',
   'standalone',
+  'availability',
 ] as const;
 
 export const PRIMARY_PLATFORM_NAV_SCOPE_IDS: Record<PrimaryPlatformNavId, readonly string[]> = {
@@ -35,6 +36,7 @@ export const PRIMARY_PLATFORM_NAV_SCOPE_IDS: Record<PrimaryPlatformNavId, readon
   truenas: ['truenas'],
   vmware: ['vmware-vsphere'],
   standalone: ['agent'],
+  availability: ['availability'],
 };
 
 const NAVIGABLE_PLATFORM_ID_SET = new Set<string>([
@@ -181,7 +183,8 @@ export function buildPrimaryPlatformNavigationVisibility(
     ),
     truenas: PRIMARY_PLATFORM_NAV_SCOPE_IDS.truenas.some((id) => presentNavigableScopes.has(id)),
     vmware: PRIMARY_PLATFORM_NAV_SCOPE_IDS.vmware.some((id) => presentNavigableScopes.has(id)),
-    standalone: resources.some(isPulseAgentPlatformResource) || hasAvailabilityEndpoints,
+    standalone: resources.some(isPulseAgentPlatformResource),
+    availability: hasAvailabilityEndpoints,
   };
 }
 
@@ -224,6 +227,7 @@ export function createEmptyPlatformNavigationVisibility(): PlatformNavigationVis
     truenas: false,
     vmware: false,
     standalone: false,
+    availability: false,
   };
 }
 

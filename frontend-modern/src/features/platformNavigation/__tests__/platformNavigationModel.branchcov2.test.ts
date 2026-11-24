@@ -37,6 +37,7 @@ const ALL_FALSE_VISIBILITY: PlatformNavigationVisibility = {
   truenas: false,
   vmware: false,
   standalone: false,
+  availability: false,
 };
 
 // ===========================================================================
@@ -423,22 +424,23 @@ describe('buildNavigableResourcePlatformScopeSet', () => {
 //   - per-platform scope .some() checks
 // ===========================================================================
 
-describe('buildPrimaryPlatformNavigationVisibility — standalone via availability endpoints', () => {
-  it('shows standalone when resource.type is "network-endpoint"', () => {
+describe('buildPrimaryPlatformNavigationVisibility — availability endpoints', () => {
+  it('shows availability (not standalone) when resource.type is "network-endpoint"', () => {
     const visibility = buildPrimaryPlatformNavigationVisibility([
       resource({ id: 'endpoint-1', type: 'network-endpoint', platformType: 'availability' }),
     ]);
-    expect(visibility.standalone).toBe(true);
+    expect(visibility.availability).toBe(true);
+    expect(visibility.standalone).toBe(false);
   });
 
-  it('shows standalone when resource.platformType is "availability"', () => {
+  it('shows availability when resource.platformType is "availability"', () => {
     const visibility = buildPrimaryPlatformNavigationVisibility([
       resource({ id: 'avail-1', type: 'agent', platformType: 'availability' }),
     ]);
-    expect(visibility.standalone).toBe(true);
+    expect(visibility.availability).toBe(true);
   });
 
-  it('shows standalone when resource.sources includes "availability"', () => {
+  it('shows availability when resource.sources includes "availability"', () => {
     const visibility = buildPrimaryPlatformNavigationVisibility([
       resource({
         id: 'avail-src-1',
@@ -447,7 +449,7 @@ describe('buildPrimaryPlatformNavigationVisibility — standalone via availabili
         sources: ['availability'],
       }),
     ]);
-    expect(visibility.standalone).toBe(true);
+    expect(visibility.availability).toBe(true);
   });
 });
 
@@ -508,6 +510,7 @@ describe('filterPlatformNavigationShortcuts', () => {
       truenas: true,
       vmware: true,
       standalone: true,
+      availability: true,
     };
     expect(filterPlatformNavigationShortcuts(allShortcuts, allVisible)).toEqual({
       p: '/proxmox',
@@ -531,6 +534,7 @@ describe('filterPlatformNavigationShortcuts', () => {
       truenas: false,
       vmware: false,
       standalone: false,
+      availability: false,
     };
     expect(filterPlatformNavigationShortcuts(allShortcuts, mixed)).toEqual({
       p: '/proxmox',
@@ -563,6 +567,7 @@ describe('platformNavigationVisibilityFromResources', () => {
       truenas: false,
       vmware: false,
       standalone: false,
+      availability: false,
     });
   });
 });

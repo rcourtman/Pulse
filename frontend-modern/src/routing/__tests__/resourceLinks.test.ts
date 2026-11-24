@@ -202,7 +202,7 @@ describe('resource link routing contract', () => {
     expect(buildStandaloneHostVmsPath('  ')).toBe('/standalone/vms');
     // One check's detail, on the table that holds it.
     expect(buildAvailabilityCheckPath('availability:router 1')).toBe(
-      '/standalone/availability?view=table&check=availability%3Arouter+1',
+      '/availability?view=table&check=availability%3Arouter+1',
     );
     expect(buildStandalonePath()).toBe('/standalone/machines');
     expect(buildStandalonePath('')).toBe('/standalone');

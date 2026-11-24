@@ -426,7 +426,7 @@ describe('AppLayout navigation icons', () => {
       within(infrastructureGroup as HTMLElement)
         .getAllByRole('link')
         .map((tab) => tab.getAttribute('aria-label')),
-    ).toEqual(['Proxmox', 'Docker', 'vSphere', 'Machines']);
+    ).toEqual(['Proxmox', 'Docker', 'vSphere', 'Machines', 'Availability']);
     expect(
       within(infrastructureGroup as HTMLElement).getByRole('link', { name: 'Machines' }),
     ).toBeTruthy();
@@ -455,7 +455,7 @@ describe('AppLayout navigation icons', () => {
       within(platformMenu)
         .getAllByRole('menuitem')
         .map((item) => item.getAttribute('data-tab-id')),
-    ).toEqual(['proxmox', 'docker', 'vmware', 'standalone']);
+    ).toEqual(['proxmox', 'docker', 'vmware', 'standalone', 'availability']);
   });
 
   it('does not expose cached platform evidence before navigation admission resolves', () => {
@@ -469,6 +469,7 @@ describe('AppLayout navigation icons', () => {
         truenas: false,
         vmware: false,
         standalone: false,
+        availability: false,
       },
     );
 
@@ -614,6 +615,7 @@ describe('AppLayout Issue1650 kiosk scope containment', () => {
     truenas: false,
     vmware: false,
     standalone: false,
+    availability: false,
   };
 
   const header = (container: HTMLElement) => container.querySelector('.header') as HTMLElement;

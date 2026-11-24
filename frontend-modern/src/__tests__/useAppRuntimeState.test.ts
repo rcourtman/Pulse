@@ -133,6 +133,7 @@ describe('useAppRuntimeState', () => {
               truenas: false,
               vmware: false,
               standalone: false,
+              availability: false,
             },
           },
         };
@@ -1553,6 +1554,7 @@ describe('useAppRuntimeState', () => {
           truenas: false,
           vmware: false,
           standalone: false,
+          availability: false,
         },
       },
     });
@@ -1564,6 +1566,7 @@ describe('useAppRuntimeState', () => {
     // An authenticated empty estate: admitted nothing, which is a resolved
     // answer rather than an absent one.
     expect(Object.values(hookState.platformAdmission()!)).toEqual([
+      false,
       false,
       false,
       false,
@@ -1711,6 +1714,7 @@ describe('useAppRuntimeState', () => {
           truenas: false,
           vmware: false,
           standalone: false,
+          availability: false,
         },
       },
     }));
@@ -1761,6 +1765,7 @@ describe('useAppRuntimeState', () => {
       truenas: false,
       vmware: false,
       standalone: false,
+      availability: false,
     };
     apiFetchJSONMock.mockResolvedValue({ aggregations: { platformAdmission: empty } });
     reconnect();

@@ -252,7 +252,7 @@ describe('buildResourcePagePath', () => {
         }),
       }),
       // That check, not the list it is in.
-    ).toBe('/standalone/availability?view=table&check=endpoint-1');
+    ).toBe('/availability?view=table&check=endpoint-1');
   });
   it('opens the thresholds tab that holds a resource, searched to its name', () => {
     expect(buildResourceThresholdsPath({ id: 'c-1', name: 'nginx', type: 'app-container' })).toBe(
