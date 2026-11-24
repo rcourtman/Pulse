@@ -4997,7 +4997,10 @@ upgrades included.
 `TestRecoveryTokenRequiresLocalHostAndSameOrigin` and
 `TestNoAuthLoopbackAccessRequiresLocalHostAndSameOrigin` prove a rebound
 host, a same-host proxy passing a public `Host` and a cross-site page get no
-recovery token, session or anonymous access. `GetClientIP` takes the
+recovery token, session or anonymous access. The relay client's in-process
+proxy is such a same-host forwarder: it marks every request it serves for a
+remote app with `Via`, and `TestRelayedRequestGetsNoLoopbackTrust` proves a
+relayed request gets no recovery token or session. `GetClientIP` takes the
 right-most `X-Forwarded-For` hop that is not in `PULSE_TRUSTED_PROXY_CIDRS`,
 reading every header line, so a client behind an appending proxy cannot choose
 its lockout, rate-limit, audit or recovery-binding address

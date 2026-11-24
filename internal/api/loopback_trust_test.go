@@ -1,12 +1,16 @@
 package api
 
 import (
+	"encoding/base64"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rcourtman/pulse-go-rewrite/internal/relay"
+	"github.com/rs/zerolog"
 )
 
 // Loopback trust (no-auth anonymous admin, recovery tokens and sessions,
@@ -168,6 +172,64 @@ func TestRecoveryTokenRequiresLocalHostAndSameOrigin(t *testing.T) {
 				t.Fatalf("status = %d, want token (%s)", rec.Code, rec.Body.String())
 			}
 		})
+	}
+}
+
+// The relay client serves a remote app's request in process, from a loopback
+// peer address and with a loopback Host. That request was not written on the
+// Pulse host, so it gets no recovery token and no recovery session, whichever
+// API token opened the relay channel.
+func TestRelayedRequestGetsNoLoopbackTrust(t *testing.T) {
+	router := newRecoveryRouter(t)
+	rawToken := "relay-mobile-123.12345678"
+	record, err := config.NewAPITokenRecord(rawToken, "phone", []string{config.ScopeRelayMobileAccess})
+	if err != nil {
+		t.Fatalf("NewAPITokenRecord: %v", err)
+	}
+	router.config.APITokens = []config.APITokenRecord{*record}
+
+	var sawRelayedRequest, trusted bool
+	handler := http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		sawRelayedRequest = true
+		trusted = trusted || isDirectLoopbackRequest(req)
+		router.Handler().ServeHTTP(w, req)
+	})
+	proxy := relay.NewHTTPProxyWithLocalHandler("127.0.0.1:7655", handler, zerolog.Nop())
+
+	for _, action := range []string{"generate_token", "disable_auth"} {
+		t.Run(action, func(t *testing.T) {
+			payload, err := json.Marshal(relay.ProxyRequest{
+				ID:      action,
+				Method:  http.MethodPost,
+				Path:    "/api/security/recovery",
+				Headers: map[string]string{"Content-Type": "application/json"},
+				Body:    base64.StdEncoding.EncodeToString([]byte(`{"action":"` + action + `"}`)),
+			})
+			if err != nil {
+				t.Fatalf("marshal relay request: %v", err)
+			}
+			raw, err := proxy.HandleRequest(payload, rawToken)
+			if err != nil {
+				t.Fatalf("HandleRequest: %v", err)
+			}
+			var resp relay.ProxyResponse
+			if err := json.Unmarshal(raw, &resp); err != nil {
+				t.Fatalf("unmarshal relay response: %v", err)
+			}
+			body, _ := base64.StdEncoding.DecodeString(resp.Body)
+			if resp.Status != http.StatusForbidden {
+				t.Fatalf("status = %d, want %d (%s)", resp.Status, http.StatusForbidden, body)
+			}
+			if strings.Contains(string(body), `"token"`) {
+				t.Fatalf("recovery token issued through the relay: %s", body)
+			}
+		})
+	}
+	if !sawRelayedRequest {
+		t.Fatal("relayed requests never reached the router")
+	}
+	if trusted {
+		t.Fatal("relayed request passed isDirectLoopbackRequest")
 	}
 }
 

@@ -100,6 +100,7 @@ dark-site signal and must not be conflated with this per-agent alert.
 2. Letting encrypted DATA frames race ahead of nonce-order guarantees by deferring inbound decrypt work to background goroutines
 3. Treating a missing persisted relay config file as a hard failure instead of falling back to the canonical disabled default
 4. Editing generated mobile compatibility projections directly or landing a mobile-required route/push/pairing change with a stale Pulse Mobile consumer contract
+5. Serving or answering relay DATA in plaintext on a channel that has not completed KEY_EXCHANGE, or replacing established channel keys through a repeated KEY_EXCHANGE
 
 ## Completion Obligations
 
@@ -132,6 +133,19 @@ X25519 shared secret may not feed the generic nil-salt HKDF form: desktop
 relay runtime must domain-separate the channel KDF with the relay-owned salt
 `pulse-relay-e2e-channel-v1` together with the existing directional info
 strings before deriving AES-GCM keys.
+Mandatory channel encryption is part of that same encryption boundary. The
+desktop relay client serves DATA only on a channel that has completed
+KEY_EXCHANGE: a DATA frame on a channel without established keys is never
+parsed as a proxy request or answered in plaintext. The client sends
+CHANNEL_CLOSE with reason `key exchange required` and removes the channel.
+Channel keys are fixed once established, so a second KEY_EXCHANGE on an
+encrypted channel closes it with `key exchange already completed` instead of
+replacing the keys under the channel's authenticated API token. This keeps
+proxied requests and responses out of the relay's view. It does not
+authenticate the app to the instance, because CHANNEL_OPEN still delivers the
+paired token through the relay. Moving that credential inside the encrypted
+channel is coordinated `pulse-mobile` and `pulse-pro:relay-server` protocol
+work, not a desktop-only change.
 Relay status truthfulness is part of the same contract. If the client is in a
 governed reconnect or license-pause window, `ClientStatus.reconnect_in` must
 reflect that delay instead of silently presenting a disconnected state with no
@@ -152,6 +166,18 @@ relay channel may not consume an unbounded share of the local HTTP proxy, so
 desktop relay runtime must enforce a channel-local request budget and fail
 excess DATA frames with owned proxy backpressure instead of letting one
 channel starve the rest of the connection.
+A proxied request is never a local client. It reaches the local API from a
+loopback peer with a loopback `Host`, in process or over the legacy loopback
+dial, but a remote app wrote it. The proxy therefore sets `Via: 1.1
+pulse-relay` on every request after the header allowlist, so the app can
+neither supply nor drop it, and `isDirectLoopbackRequest`
+(`internal/api/loopback_trust.go`) refuses the request like any other
+forwarded one: no recovery token or session, no anonymous or setup access and
+no rate-limit exemption, whatever token opened the channel.
+`TestProxiedRequestsAreMarkedAsForwarded` and
+`TestRelayedRequestGetsNoLoopbackTrust` pin both halves. Relayed requests
+still count against the API rate limits of `127.0.0.1` in addition to the
+channel-local budget.
 Relay mobile observability is part of the server runtime boundary. The Relay
 may expose aggregate connection outcomes, authenticated session counts,
 registered push-token counts, and push delivery health by a bounded platform
