@@ -30,14 +30,15 @@ func TestMaybeRefreshClusterInfo_UpdatesMetadata(t *testing.T) {
 		}
 	}
 
-	instance := config.PVEInstance{
+	cfg.PVEInstances = []config.PVEInstance{{
 		Name:       "pve-1",
 		Host:       "https://pve-1.local:8006",
 		TokenValue: "token",
-	}
+	}}
 
-	handler.maybeRefreshClusterInfo(context.Background(), &instance)
+	handler.maybeRefreshClusterInfo(context.Background(), cfg.PVEInstances[0])
 
+	instance := cfg.PVEInstances[0]
 	if !called {
 		t.Fatalf("expected detectPVEClusterContext to be called")
 	}
@@ -70,7 +71,7 @@ func TestMaybeRefreshClusterInfo_SkipsWithoutCredentials(t *testing.T) {
 		Host: "https://pve-1.local:8006",
 	}
 
-	handler.maybeRefreshClusterInfo(context.Background(), &instance)
+	handler.maybeRefreshClusterInfo(context.Background(), instance)
 
 	if called {
 		t.Fatalf("expected detectPVEClusterContext to be skipped without credentials")
@@ -97,10 +98,110 @@ func TestMaybeRefreshClusterInfo_SkipsWithinCooldown(t *testing.T) {
 	}
 	handler.lastClusterDetection[instance.Name] = time.Now()
 
-	handler.maybeRefreshClusterInfo(context.Background(), &instance)
+	handler.maybeRefreshClusterInfo(context.Background(), instance)
 
 	if called {
 		t.Fatalf("expected detectPVEClusterContext to be skipped during cooldown")
+	}
+}
+
+// Detection waits on the monitored server. A connection removed meanwhile
+// hands its list slot to the next connection, which must not inherit the
+// cluster members the removed server reported: its credential is sent to them.
+func TestClusterDetection_ResultNotStoredOnConnectionThatTookTheSlot(t *testing.T) {
+	hostileMembers := []config.ClusterEndpoint{{NodeName: "node-1", Host: "https://hostile.local:8006", Fingerprint: "hostile"}}
+	setup := func(t *testing.T) (*config.Config, *ConfigHandlers) {
+		cfg := &config.Config{
+			DataPath: t.TempDir(),
+			PVEInstances: []config.PVEInstance{
+				{Name: "pve-a", Host: "https://pve-a.local:8006", TokenName: "pulse@pve!a", TokenValue: "token-a"},
+				{Name: "pve-b", Host: "https://pve-b.local:8006", TokenName: "pulse@pve!b", TokenValue: "token-b", IsCluster: true, ClusterName: "b", ClusterEndpoints: []config.ClusterEndpoint{{NodeName: "b-1", Host: "https://pve-b.local:8006"}}},
+			},
+		}
+		handler := newTestConfigHandlers(t, cfg)
+
+		originalDetect := detectPVEClusterContext
+		t.Cleanup(func() { detectPVEClusterContext = originalDetect })
+		detectPVEClusterContext = func(_ context.Context, clientConfig proxmox.ClientConfig, nodeName string, existing []config.ClusterEndpoint) (bool, string, []config.ClusterEndpoint) {
+			if nodeName != "pve-a" || clientConfig.TokenValue != "token-a" {
+				t.Errorf("detection ran for %q with token %q, want pve-a with its own token", nodeName, clientConfig.TokenValue)
+			}
+			// The administrator removes pve-a while its detection is pending.
+			req := httptest.NewRequest(http.MethodDelete, "/api/config/nodes/pve:pve-a", nil)
+			rec := httptest.NewRecorder()
+			handler.HandleDeleteNode(rec, req)
+			if rec.Code != http.StatusOK {
+				t.Errorf("delete during detection: status %d: %s", rec.Code, rec.Body.String())
+			}
+			return true, "moved", hostileMembers
+		}
+		return cfg, handler
+	}
+	check := func(t *testing.T, cfg *config.Config, handler *ConfigHandlers) {
+		t.Helper()
+		if len(cfg.PVEInstances) != 1 || cfg.PVEInstances[0].Name != "pve-b" {
+			t.Fatalf("connections after removal = %+v, want only pve-b", cfg.PVEInstances)
+		}
+		nodes, err := handler.getPersistence(context.Background()).LoadNodesConfig()
+		if err != nil {
+			t.Fatalf("LoadNodesConfig: %v", err)
+		}
+		if len(nodes.PVEInstances) != 1 {
+			t.Fatalf("saved connections = %+v, want only pve-b", nodes.PVEInstances)
+		}
+		for _, pveB := range []config.PVEInstance{cfg.PVEInstances[0], nodes.PVEInstances[0]} {
+			if pveB.Name != "pve-b" || pveB.ClusterName != "b" || len(pveB.ClusterEndpoints) != 1 || pveB.ClusterEndpoints[0].Host != "https://pve-b.local:8006" {
+				t.Fatalf("pve-b took the removed connection's cluster: %q %+v", pveB.ClusterName, pveB.ClusterEndpoints)
+			}
+		}
+	}
+
+	t.Run("list", func(t *testing.T) {
+		cfg, handler := setup(t)
+		nodes := handler.GetAllNodesForAPI(context.Background())
+		if len(nodes) != 1 || nodes[0].Name != "pve-b" {
+			t.Fatalf("listed connections = %+v, want only pve-b", nodes)
+		}
+		check(t, cfg, handler)
+	})
+
+	t.Run("refresh", func(t *testing.T) {
+		cfg, handler := setup(t)
+		req := httptest.NewRequest(http.MethodPost, "/api/config/nodes/pve:pve-a/refresh-cluster", nil)
+		rec := httptest.NewRecorder()
+		handler.HandleRefreshClusterNodes(rec, req)
+		if rec.Code != http.StatusConflict {
+			t.Fatalf("refresh of a connection removed meanwhile: status %d, want 409: %s", rec.Code, rec.Body.String())
+		}
+		check(t, cfg, handler)
+	})
+}
+
+// A connection that is pointed at another server while its detection is
+// pending keeps its name, but the result describes the server it used to be.
+func TestClusterDetection_ResultNotStoredOnConnectionChangedMeanwhile(t *testing.T) {
+	cfg := &config.Config{
+		DataPath: t.TempDir(),
+		PVEInstances: []config.PVEInstance{
+			{Name: "pve-a", Host: "https://pve-a.local:8006", TokenName: "pulse@pve!a", TokenValue: "token-a"},
+		},
+	}
+	handler := newTestConfigHandlers(t, cfg)
+
+	originalDetect := detectPVEClusterContext
+	t.Cleanup(func() { detectPVEClusterContext = originalDetect })
+	detectPVEClusterContext = func(_ context.Context, clientConfig proxmox.ClientConfig, nodeName string, existing []config.ClusterEndpoint) (bool, string, []config.ClusterEndpoint) {
+		config.Mu.Lock()
+		cfg.PVEInstances[0].Host = "https://replacement.local:8006"
+		cfg.PVEInstances[0].TokenValue = "token-replacement"
+		config.Mu.Unlock()
+		return true, "old", []config.ClusterEndpoint{{NodeName: "node-1", Host: "https://old.local:8006"}}
+	}
+
+	handler.maybeRefreshClusterInfo(context.Background(), cfg.PVEInstances[0].DeepCopy())
+
+	if instance := cfg.PVEInstances[0]; instance.IsCluster || instance.ClusterName != "" || len(instance.ClusterEndpoints) != 0 {
+		t.Fatalf("changed connection took the previous server's cluster: %q %+v", instance.ClusterName, instance.ClusterEndpoints)
 	}
 }
 

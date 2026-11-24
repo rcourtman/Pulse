@@ -1,6 +1,7 @@
 package configapi
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -972,6 +973,47 @@ func TestHandleCanonicalAutoRegisterStateChangingRegistrationStillReloads(t *tes
 	case <-time.After(time.Second):
 		t.Fatal("expected a monitor reload after a real token rotation, none observed")
 	}
+}
+
+func TestReloadAfterAutoRegisterSpacesReloadsForExistingConnections(t *testing.T) {
+	previous := autoRegisterReloadInterval
+	autoRegisterReloadInterval = time.Second
+	t.Cleanup(func() { autoRegisterReloadInterval = previous })
+
+	reloadCalls := make(chan struct{}, 100)
+	handler := &ConfigHandlers{reloadFunc: func() error {
+		reloadCalls <- struct{}{}
+		return nil
+	}}
+	expectReloads := func(step string, want int, within time.Duration) {
+		t.Helper()
+		deadline := time.After(within)
+		for got := 0; ; got++ {
+			select {
+			case <-reloadCalls:
+			case <-deadline:
+				if got != want {
+					t.Fatalf("%s: %d monitor reloads, want %d", step, got, want)
+				}
+				return
+			}
+		}
+	}
+
+	// An agent token may announce a new secret for its own connection as
+	// often as it likes. The first change applies at once; the rest share one
+	// reload at the end of the interval.
+	for i := 0; i < 50; i++ {
+		handler.reloadAfterAutoRegister(context.Background(), false)
+	}
+	expectReloads("burst of re-registrations", 1, 300*time.Millisecond)
+	expectReloads("end of the interval", 1, time.Second)
+
+	// A new connection does not wait behind them.
+	handler.reloadAfterAutoRegister(context.Background(), false)
+	handler.reloadAfterAutoRegister(context.Background(), true)
+	expectReloads("new connection", 1, 300*time.Millisecond)
+	expectReloads("queued re-registration", 1, time.Second)
 }
 
 func TestHandleCanonicalAutoRegister_PVEPreservesExistingHostnameWhenRequestUsesSameIP(t *testing.T) {

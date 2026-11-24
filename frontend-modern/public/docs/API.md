@@ -838,6 +838,11 @@ back as new secrets. Credential rotation and trust changes are separate
 decisions; preserve the existing credential and fingerprint when not changing
 them. A response failure does not prove the update was unapplied.
 
+A saved password or token value is never sent to a new address. A request that
+changes the scheme, host or port of `host`, or sets a cluster member's
+connection address, must include `password` or `tokenValue` again. Otherwise
+the request is refused with `400` and the saved connection is left unchanged.
+
 ### Delete Node
 `DELETE /api/config/nodes/{id}` (admin, `settings:write`)
 

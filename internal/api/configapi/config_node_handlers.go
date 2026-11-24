@@ -474,10 +474,8 @@ func (h *ConfigHandlers) handleAddNode(w http.ResponseWriter, r *http.Request) {
 					}
 
 					// Reload the monitor to pick up the updated endpoints
-					if h.reloadFunc != nil {
-						if err := h.reloadFunc(); err != nil {
-							log.Warn().Err(err).Msg("Failed to reload monitor after cluster merge")
-						}
+					if err := h.reloadMonitor(r.Context()); err != nil {
+						log.Warn().Err(err).Msg("Failed to reload monitor after cluster merge")
 					}
 
 					// Return success - the cluster is now updated with new endpoints
@@ -596,12 +594,15 @@ func (h *ConfigHandlers) handleAddNode(w http.ResponseWriter, r *http.Request) {
 				Str("user", pbsUser).
 				Msg("PBS: Attempting turnkey token creation via API")
 
-			// Try to create a token using the provided credentials
+			// Try to create a token using the provided credentials. The login
+			// carries the operator's password, so it must honor the same TLS
+			// policy (Verify SSL or pinned fingerprint) as the saved connection.
 			pbsClient, err := pbs.NewClient(pbs.ClientConfig{
-				Host:      host,
-				User:      pbsUser,
-				Password:  req.Password,
-				VerifySSL: false, // Self-signed certs common
+				Host:        host,
+				User:        pbsUser,
+				Password:    req.Password,
+				VerifySSL:   req.VerifySSL != nil && *req.VerifySSL,
+				Fingerprint: req.Fingerprint,
 			})
 
 			if err != nil {
@@ -787,12 +788,10 @@ func (h *ConfigHandlers) handleAddNode(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Reload monitor with new configuration
-	if h.reloadFunc != nil {
-		if err := h.reloadFunc(); err != nil {
-			log.Error().Err(err).Msg("Failed to reload monitor")
-			http.Error(w, "Configuration saved but failed to apply changes", http.StatusInternalServerError)
-			return
-		}
+	if err := h.reloadMonitor(r.Context()); err != nil {
+		log.Error().Err(err).Msg("Failed to reload monitor")
+		http.Error(w, "Configuration saved but failed to apply changes", http.StatusInternalServerError)
+		return
 	}
 
 	h.runtimeDependencies().AuditEvent(apicontext.OrgID(r.Context()), "node_added", h.runtimeDependencies().AuthUsername(h.getConfig(r.Context()), r), h.runtimeDependencies().ClientIP(r), r.URL.Path, true,
@@ -1467,6 +1466,42 @@ func applyClusterNodeDisplayNameOverrides(instance config.PVEInstance, overrides
 	return instance, nil
 }
 
+// Stored passwords and token values may be kept while editing the same origin,
+// but must never follow an address edit. Otherwise a caller who cannot read a
+// credential could have it sent to a server of their choice.
+const nodeAddressChangeNeedsCredentialMessage = "Changing the connection address requires entering the password or token value again"
+
+// nodeUpdateKeepsStoredSecret reports whether the connection an update
+// produces still carries a password or token value the request did not supply.
+func nodeUpdateKeepsStoredSecret(req NodeConfigRequest, password, tokenValue string) bool {
+	return (password != "" && password != req.Password) || (tokenValue != "" && tokenValue != req.TokenValue)
+}
+
+// nodeHostChanged reports whether updatedHost, already normalized for
+// nodeType, is a different scheme, host or port than the stored host.
+func nodeHostChanged(nodeType, storedHost, updatedHost string) bool {
+	if updatedHost == storedHost {
+		return false
+	}
+	stored, err := normalizeNodeHost(storedHost, nodeType)
+	return err != nil || !strings.EqualFold(stored, updatedHost)
+}
+
+// clusterEndpointAddressChanged reports whether an update points a cluster
+// member at a new connection address. Clearing an override is not an address
+// edit: the member falls back to the address its own cluster reported.
+func clusterEndpointAddressChanged(stored, updated []config.ClusterEndpoint) bool {
+	for i, endpoint := range updated {
+		if endpoint.IPOverride == "" {
+			continue
+		}
+		if i >= len(stored) || !strings.EqualFold(endpoint.IPOverride, strings.TrimSpace(stored[i].IPOverride)) {
+			return true
+		}
+	}
+	return false
+}
+
 func (h *ConfigHandlers) handleUpdateNode(w http.ResponseWriter, r *http.Request) {
 	// Prevent node modifications in mock mode
 	if mock.IsMockEnabled() {
@@ -1588,6 +1623,11 @@ func (h *ConfigHandlers) handleUpdateNode(w http.ResponseWriter, r *http.Request
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
+		if nodeUpdateKeepsStoredSecret(req, updated.Password, updated.TokenValue) &&
+			(nodeHostChanged(nodeType, current.Host, updated.Host) || clusterEndpointAddressChanged(current.ClusterEndpoints, updated.ClusterEndpoints)) {
+			http.Error(w, nodeAddressChangeNeedsCredentialMessage, http.StatusBadRequest)
+			return
+		}
 
 		if req.hasFingerprintField() {
 			updated.Fingerprint = req.Fingerprint
@@ -1662,6 +1702,10 @@ func (h *ConfigHandlers) handleUpdateNode(w http.ResponseWriter, r *http.Request
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
+		if nodeUpdateKeepsStoredSecret(req, updated.Password, updated.TokenValue) && nodeHostChanged(nodeType, current.Host, updated.Host) {
+			http.Error(w, nodeAddressChangeNeedsCredentialMessage, http.StatusBadRequest)
+			return
+		}
 
 		if req.hasFingerprintField() {
 			updated.Fingerprint = req.Fingerprint
@@ -1726,6 +1770,10 @@ func (h *ConfigHandlers) handleUpdateNode(w http.ResponseWriter, r *http.Request
 
 		if err := applyPMGAuthUpdate(&updated, req); err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		if nodeUpdateKeepsStoredSecret(req, updated.Password, updated.TokenValue) && nodeHostChanged(nodeType, current.Host, updated.Host) {
+			http.Error(w, nodeAddressChangeNeedsCredentialMessage, http.StatusBadRequest)
 			return
 		}
 
@@ -1838,12 +1886,10 @@ func (h *ConfigHandlers) handleUpdateNode(w http.ResponseWriter, r *http.Request
 	}
 
 	// Reload monitor with new configuration
-	if h.reloadFunc != nil {
-		if err := h.reloadFunc(); err != nil {
-			log.Error().Err(err).Msg("Failed to reload monitor")
-			http.Error(w, "Configuration saved but failed to apply changes", http.StatusInternalServerError)
-			return
-		}
+	if err := h.reloadMonitor(r.Context()); err != nil {
+		log.Error().Err(err).Msg("Failed to reload monitor")
+		http.Error(w, "Configuration saved but failed to apply changes", http.StatusInternalServerError)
+		return
 	}
 
 	// Trigger discovery refresh after adding node
@@ -1983,7 +2029,9 @@ func (h *ConfigHandlers) handleDeleteNode(w http.ResponseWriter, r *http.Request
 	if nodeType == "pve" && index < len(h.getConfig(r.Context()).PVEInstances) {
 		deletedNodeHost = h.getConfig(r.Context()).PVEInstances[index].Host
 		log.Info().Str("nodeID", nodeID).Int("index", index).Msg("Deleting PVE node")
+		config.Mu.Lock()
 		h.getConfig(r.Context()).PVEInstances = append(h.getConfig(r.Context()).PVEInstances[:index], h.getConfig(r.Context()).PVEInstances[index+1:]...)
+		config.Mu.Unlock()
 	} else if nodeType == "pbs" && index < len(h.getConfig(r.Context()).PBSInstances) {
 		deletedNodeHost = h.getConfig(r.Context()).PBSInstances[index].Host
 		log.Info().Str("nodeID", nodeID).Int("index", index).Msg("Deleting PBS node")
@@ -2021,12 +2069,10 @@ func (h *ConfigHandlers) handleDeleteNode(w http.ResponseWriter, r *http.Request
 	// deletedNodeHost already captured before removal when available
 
 	// Reload monitor with new configuration
-	if h.reloadFunc != nil {
-		if err := h.reloadFunc(); err != nil {
-			log.Error().Err(err).Msg("Failed to reload monitor")
-			http.Error(w, "Configuration saved but failed to apply changes", http.StatusInternalServerError)
-			return
-		}
+	if err := h.reloadMonitor(r.Context()); err != nil {
+		log.Error().Err(err).Msg("Failed to reload monitor")
+		http.Error(w, "Configuration saved but failed to apply changes", http.StatusInternalServerError)
+		return
 	}
 
 	// Broadcast node deletion to refresh the frontend
@@ -2171,7 +2217,7 @@ func (h *ConfigHandlers) handleRefreshClusterNodes(w http.ResponseWriter, r *htt
 	if err != nil || nodeType != "pve" || index < 0 || index >= len(cfg.PVEInstances) ||
 		!sameClusterDiscoveryInput(&cfg.PVEInstances[index], original, clientConfig) {
 		config.Mu.RUnlock()
-		http.Error(w, "Failed to save configuration", http.StatusInternalServerError)
+		http.Error(w, "Node was removed or changed during cluster refresh", http.StatusConflict)
 		return
 	}
 	pending := make([]config.PVEInstance, len(cfg.PVEInstances))
@@ -2218,11 +2264,9 @@ func (h *ConfigHandlers) handleRefreshClusterNodes(w http.ResponseWriter, r *htt
 		Msg("Refreshed cluster membership")
 
 	// A saved change and a completed runtime reload are different outcomes.
-	var reloadErr error
-	if h.reloadFunc != nil {
-		if reloadErr = h.reloadFunc(); reloadErr != nil {
-			log.Error().Err(reloadErr).Msg("Failed to reload monitor after cluster refresh")
-		}
+	reloadErr := h.reloadMonitor(r.Context())
+	if reloadErr != nil {
+		log.Error().Err(reloadErr).Msg("Failed to reload monitor after cluster refresh")
 	}
 
 	// The saved inventory changed even when monitoring could not reload it.

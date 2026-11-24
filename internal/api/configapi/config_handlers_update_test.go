@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
@@ -229,7 +230,9 @@ func TestHandleUpdateNode_AllowsProjectedNetNewSystemWithoutPaidLimit(t *testing
 	setUnexportedField(t, handler.defaultMonitor, "resourceStore", monitoring.ResourceStoreInterface(unifiedresources.NewMonitorAdapter(registry)))
 
 	body, _ := json.Marshal(map[string]any{
-		"host": "https://backup.local:8006",
+		"host":       "https://backup.local:8006",
+		"tokenName":  "root@pam!pulse",
+		"tokenValue": "secret",
 	})
 	req := httptest.NewRequest(http.MethodPut, "/api/config/nodes/pve-0", bytes.NewBuffer(body))
 	rec := httptest.NewRecorder()
@@ -307,7 +310,7 @@ func TestHandleUpdateNode_ClusterEndpointOverrides(t *testing.T) {
 	update := func(t *testing.T, cfg *config.Config, overrides []map[string]string) *httptest.ResponseRecorder {
 		t.Helper()
 		handler := newTestConfigHandlers(t, cfg)
-		body, _ := json.Marshal(map[string]any{"clusterEndpointOverrides": overrides})
+		body, _ := json.Marshal(map[string]any{"clusterEndpointOverrides": overrides, "tokenValue": "secret"})
 		req := httptest.NewRequest(http.MethodPut, "/api/config/nodes/pve-0", bytes.NewBuffer(body))
 		rec := httptest.NewRecorder()
 		handler.HandleUpdateNode(rec, req)
@@ -379,6 +382,113 @@ func TestHandleUpdateNode_ClusterEndpointOverrides(t *testing.T) {
 			t.Fatalf("expected 400 for invalid address, got %d", rec.Code)
 		}
 	})
+}
+
+// A stored password or token value may be kept while editing the same origin,
+// but must never follow an address edit to another server.
+func TestHandleUpdateNode_StoredSecretDoesNotFollowAddressChange(t *testing.T) {
+	newConfig := func(t *testing.T) *config.Config {
+		t.Helper()
+		return &config.Config{
+			DataPath: t.TempDir(),
+			PVEInstances: []config.PVEInstance{{
+				Name:        "cluster",
+				Host:        "https://pve1.local:8006",
+				TokenName:   "root@pam!pulse",
+				TokenValue:  "pve-secret",
+				IsCluster:   true,
+				ClusterName: "homelab",
+				ClusterEndpoints: []config.ClusterEndpoint{
+					{NodeID: "node/pve1", NodeName: "pve1", Host: "https://pve1.local:8006", IP: "10.0.0.1"},
+					{NodeID: "node/pve2", NodeName: "pve2", Host: "https://pve2.local:8006", IP: "192.168.100.2", IPOverride: "10.0.0.2"},
+				},
+			}},
+			PBSInstances: []config.PBSInstance{{
+				Name:     "backup",
+				Host:     "pbs.local",
+				User:     "root@pam",
+				Password: "pbs-secret",
+			}},
+			PMGInstances: []config.PMGInstance{{
+				Name:       "mail",
+				Host:       "https://pmg.local:8006",
+				TokenName:  "root@pam!pulse",
+				TokenValue: "pmg-secret",
+			}},
+		}
+	}
+	memberOverride := func(nodeName, address string) []map[string]string {
+		return []map[string]string{{"nodeName": nodeName, "ipOverride": address}}
+	}
+
+	cases := []struct {
+		name     string
+		nodeID   string
+		body     map[string]any
+		wantCode int
+	}{
+		{name: "pve_new_host_without_credential", nodeID: "pve-0", body: map[string]any{"host": "https://elsewhere.example:8006"}, wantCode: http.StatusBadRequest},
+		{name: "pve_new_scheme_without_credential", nodeID: "pve-0", body: map[string]any{"host": "http://pve1.local:8006"}, wantCode: http.StatusBadRequest},
+		{name: "pve_new_port_without_credential", nodeID: "pve-0", body: map[string]any{"host": "https://pve1.local:8443"}, wantCode: http.StatusBadRequest},
+		{name: "pve_new_host_with_redacted_placeholder", nodeID: "pve-0", body: map[string]any{"host": "https://elsewhere.example:8006", "tokenValue": "********"}, wantCode: http.StatusBadRequest},
+		{name: "pve_new_host_with_password_ignored_for_stored_token", nodeID: "pve-0", body: map[string]any{"host": "https://elsewhere.example:8006", "tokenName": "root@pam!pulse", "password": "unused"}, wantCode: http.StatusBadRequest},
+		{name: "pve_new_member_address_without_credential", nodeID: "pve-0", body: map[string]any{"clusterEndpointOverrides": memberOverride("pve1", "elsewhere.example:8006")}, wantCode: http.StatusBadRequest},
+		{name: "pve_changed_member_address_without_credential", nodeID: "pve-0", body: map[string]any{"clusterEndpointOverrides": memberOverride("pve2", "10.0.0.22")}, wantCode: http.StatusBadRequest},
+		{name: "pbs_new_host_without_credential", nodeID: "pbs-0", body: map[string]any{"host": "https://elsewhere.example:8007"}, wantCode: http.StatusBadRequest},
+		{name: "pmg_new_host_without_credential", nodeID: "pmg-0", body: map[string]any{"host": "https://elsewhere.example:8006"}, wantCode: http.StatusBadRequest},
+
+		{name: "pve_same_host_without_credential", nodeID: "pve-0", body: map[string]any{"name": "renamed", "host": "https://PVE1.local:8006/"}, wantCode: http.StatusOK},
+		{name: "pve_same_member_address_without_credential", nodeID: "pve-0", body: map[string]any{"clusterEndpointOverrides": memberOverride("pve2", "10.0.0.2")}, wantCode: http.StatusOK},
+		{name: "pve_cleared_member_address_without_credential", nodeID: "pve-0", body: map[string]any{"clusterEndpointOverrides": memberOverride("pve2", "")}, wantCode: http.StatusOK},
+		{name: "pve_new_host_with_token_value", nodeID: "pve-0", body: map[string]any{"host": "https://elsewhere.example:8006", "tokenValue": "entered-again"}, wantCode: http.StatusOK},
+		{name: "pve_new_host_with_password", nodeID: "pve-0", body: map[string]any{"host": "https://elsewhere.example:8006", "user": "root@pam", "password": "entered-again"}, wantCode: http.StatusOK},
+		{name: "pbs_same_host_in_stored_form_without_credential", nodeID: "pbs-0", body: map[string]any{"host": "pbs.local"}, wantCode: http.StatusOK},
+		{name: "pbs_same_host_normalized_without_credential", nodeID: "pbs-0", body: map[string]any{"host": "https://pbs.local:8007"}, wantCode: http.StatusOK},
+		{name: "pbs_new_host_with_password", nodeID: "pbs-0", body: map[string]any{"host": "https://elsewhere.example:8007", "user": "root@pam", "password": "entered-again"}, wantCode: http.StatusOK},
+		{name: "pmg_new_host_with_token_value", nodeID: "pmg-0", body: map[string]any{"host": "https://elsewhere.example:8006", "tokenValue": "entered-again"}, wantCode: http.StatusOK},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := newConfig(t)
+			handler := newTestConfigHandlers(t, cfg)
+			body, _ := json.Marshal(tc.body)
+			req := httptest.NewRequest(http.MethodPut, "/api/config/nodes/"+tc.nodeID, bytes.NewBuffer(body))
+			rec := httptest.NewRecorder()
+
+			handler.HandleUpdateNode(rec, req)
+
+			if rec.Code != tc.wantCode {
+				t.Fatalf("status = %d, want %d: %s", rec.Code, tc.wantCode, rec.Body.String())
+			}
+			if tc.wantCode == http.StatusOK {
+				if pve := cfg.PVEInstances[0]; !strings.EqualFold(pve.Host, "https://pve1.local:8006") && (pve.TokenValue == "pve-secret" || pve.Password == "pve-secret") {
+					t.Fatalf("stored PVE secret followed the connection to %q", pve.Host)
+				}
+				if pbs := cfg.PBSInstances[0]; pbs.Host != "pbs.local" && pbs.Host != "https://pbs.local:8007" && pbs.Password == "pbs-secret" {
+					t.Fatalf("stored PBS secret followed the connection to %q", pbs.Host)
+				}
+				if pmg := cfg.PMGInstances[0]; pmg.Host != "https://pmg.local:8006" && pmg.TokenValue == "pmg-secret" {
+					t.Fatalf("stored PMG secret followed the connection to %q", pmg.Host)
+				}
+				return
+			}
+			if got := cfg.PVEInstances[0].Host; got != "https://pve1.local:8006" {
+				t.Fatalf("refused update changed PVE host to %q", got)
+			}
+			if got := cfg.PVEInstances[0].ClusterEndpoints[0].IPOverride; got != "" {
+				t.Fatalf("refused update set member address %q", got)
+			}
+			if got := cfg.PVEInstances[0].ClusterEndpoints[1].IPOverride; got != "10.0.0.2" {
+				t.Fatalf("refused update changed member address to %q", got)
+			}
+			if got := cfg.PBSInstances[0].Host; got != "pbs.local" {
+				t.Fatalf("refused update changed PBS host to %q", got)
+			}
+			if got := cfg.PMGInstances[0].Host; got != "https://pmg.local:8006" {
+				t.Fatalf("refused update changed PMG host to %q", got)
+			}
+		})
+	}
 }
 
 func TestNormalizeClusterEndpointIPOverride(t *testing.T) {

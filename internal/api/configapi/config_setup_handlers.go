@@ -1830,7 +1830,9 @@ func (h *ConfigHandlers) removeAutoRegisteredNode(ctx context.Context, req *Auto
 			if autoUnregisterNodeMatch(node.Host, candidateHosts, node.TokenName, req.TokenID) {
 				actualName = node.Name
 				removedHost = node.Host
+				config.Mu.Lock()
 				cfg.PVEInstances = append(cfg.PVEInstances[:i], cfg.PVEInstances[i+1:]...)
+				config.Mu.Unlock()
 				h.normalizePVEConfigState(ctx)
 				return true, actualName, removedHost
 			}
@@ -1842,7 +1844,9 @@ func (h *ConfigHandlers) removeAutoRegisteredNode(ctx context.Context, req *Auto
 			node := cfg.PVEInstances[hostOnlyFallback]
 			actualName = node.Name
 			removedHost = node.Host
+			config.Mu.Lock()
 			cfg.PVEInstances = append(cfg.PVEInstances[:hostOnlyFallback], cfg.PVEInstances[hostOnlyFallback+1:]...)
+			config.Mu.Unlock()
 			h.normalizePVEConfigState(ctx)
 			return true, actualName, removedHost
 		}
@@ -2222,12 +2226,10 @@ func (h *ConfigHandlers) handleAutoUnregister(w http.ResponseWriter, r *http.Req
 			return
 		}
 
-		if h.reloadFunc != nil {
-			if err := h.reloadFunc(); err != nil {
-				log.Error().Err(err).Msg("Failed to reload monitor after auto-unregister")
-				http.Error(w, "Configuration saved but failed to apply changes", http.StatusInternalServerError)
-				return
-			}
+		if err := h.reloadMonitor(r.Context()); err != nil {
+			log.Error().Err(err).Msg("Failed to reload monitor after auto-unregister")
+			http.Error(w, "Configuration saved but failed to apply changes", http.StatusInternalServerError)
+			return
 		}
 
 		h.notifyAutoUnregisterSuccess(r.Context(), &req)
@@ -3002,19 +3004,17 @@ func (h *ConfigHandlers) handleCanonicalAutoRegister(w http.ResponseWriter, r *h
 
 	h.markAutoRegistered(req.Type, actualName)
 
+	h.notifyAutoRegistrationSuccess(r.Context(), req, host, actualName, fullTokenID, created)
+
 	// Reload monitor only when the persisted state actually changed. A full
 	// reload stops the multi-tenant monitor and rebuilds it from scratch,
 	// which momentarily empties the WebSocket-visible resource store; for
 	// no-op re-registrations there is nothing for the monitor to pick up.
-	if configChanged && h.reloadFunc != nil {
-		go func() {
-			if err := h.reloadFunc(); err != nil {
-				log.Error().Err(err).Msg("Failed to reload monitor after auto-registration")
-			}
-		}()
+	// Start it after the notification above has read this organization's
+	// monitor: a scoped reload withdraws that monitor while recreating it.
+	if configChanged {
+		h.reloadAfterAutoRegister(r.Context(), created)
 	}
-
-	h.notifyAutoRegistrationSuccess(r.Context(), req, host, actualName, fullTokenID, created)
 
 	response := buildCanonicalAutoRegisterResponse(req, host, actualName, fullTokenID, tokenValue)
 

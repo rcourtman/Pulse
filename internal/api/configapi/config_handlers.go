@@ -234,6 +234,10 @@ type ConfigHandlers struct {
 	recentAutoRegistered     map[string]time.Time
 	recentAutoRegMutex       sync.Mutex
 	autoRegisterMutex        sync.Mutex
+	tenantReloadMutex        sync.Mutex
+	autoRegReloadMutex       sync.Mutex
+	lastAutoRegReload        map[string]time.Time
+	autoRegReloadQueued      map[string]bool
 	importRequests           configImportRequests
 	stopCleanup              chan struct{}
 	stopCleanupOnce          sync.Once
@@ -315,6 +319,27 @@ func (h *ConfigHandlers) MultiTenantMonitor() *monitoring.MultiTenantMonitor {
 	h.stateMu.RLock()
 	defer h.stateMu.RUnlock()
 	return h.mtMonitor
+}
+
+// reloadMonitor applies a saved node change to the runtime that owns it. A
+// non-default organization recreates only its own monitor, as configuration
+// import does: the instance-wide hook stops every organization's monitoring
+// and discards their in-memory alert state. The default organization and
+// single-runtime handlers retain the instance-wide reload.
+func (h *ConfigHandlers) reloadMonitor(ctx context.Context) error {
+	orgID := apicontext.OrgID(ctx)
+	if mtMonitor := h.MultiTenantMonitor(); mtMonitor != nil && orgID != "" && orgID != "default" {
+		// ReloadTenant refuses an organization whose shutdown is in progress.
+		// Queue concurrent node changes as the instance-wide reload does.
+		h.tenantReloadMutex.Lock()
+		defer h.tenantReloadMutex.Unlock()
+		_, err := mtMonitor.ReloadTenant(orgID)
+		return err
+	}
+	if h.reloadFunc != nil {
+		return h.reloadFunc()
+	}
+	return nil
 }
 
 // SetMonitor updates the default-org monitor reference used by the config handlers.
@@ -630,6 +655,71 @@ func (h *ConfigHandlers) markAutoRegistered(nodeType, nodeName string) {
 	h.recentAutoRegMutex.Unlock()
 }
 
+// autoRegisterReloadInterval spaces the monitor reloads that re-registrations
+// of existing connections start. A reload stops and rebuilds the monitors of
+// the target organization (or the instance for the default organization) and
+// drops alerts still pending in them, while an agent token may re-register its
+// own connection with a new secret as often as it likes.
+var autoRegisterReloadInterval = time.Minute
+
+// reloadAfterAutoRegister applies a saved auto-registration to the owning
+// monitor without holding up the response. A new connection is picked up at
+// once: creating one takes an administrator's setup token or one-time install
+// grant. A change to an existing connection reloads at once when none did for
+// that organization within autoRegisterReloadInterval, and changes that follow
+// inside the interval share one reload at its end.
+func (h *ConfigHandlers) reloadAfterAutoRegister(ctx context.Context, created bool) {
+	orgID := apicontext.OrgID(ctx)
+	if orgID == "" {
+		orgID = "default"
+	}
+	scopedTenant := h.MultiTenantMonitor() != nil && orgID != "default"
+	if !scopedTenant && h.reloadFunc == nil {
+		return
+	}
+	var wait time.Duration
+	if !created {
+		h.autoRegReloadMutex.Lock()
+		if h.lastAutoRegReload == nil {
+			h.lastAutoRegReload = make(map[string]time.Time)
+		}
+		if h.autoRegReloadQueued == nil {
+			h.autoRegReloadQueued = make(map[string]bool)
+		}
+		wait = time.Until(h.lastAutoRegReload[orgID].Add(autoRegisterReloadInterval))
+		if wait > 0 && h.autoRegReloadQueued[orgID] {
+			h.autoRegReloadMutex.Unlock()
+			return
+		}
+		if wait > 0 {
+			h.autoRegReloadQueued[orgID] = true
+		} else {
+			h.lastAutoRegReload[orgID] = time.Now()
+		}
+		h.autoRegReloadMutex.Unlock()
+	}
+
+	reloadCtx := context.WithoutCancel(ctx)
+	go func() {
+		if wait > 0 {
+			select {
+			case <-time.After(wait):
+			case <-h.stopCleanup:
+				return
+			}
+			// The reload reads what is saved when it begins; a change saved
+			// after this point queues the next one.
+			h.autoRegReloadMutex.Lock()
+			h.autoRegReloadQueued[orgID] = false
+			h.lastAutoRegReload[orgID] = time.Now()
+			h.autoRegReloadMutex.Unlock()
+		}
+		if err := h.reloadMonitor(reloadCtx); err != nil {
+			log.Error().Err(err).Msg("Failed to reload monitor after auto-registration")
+		}
+	}()
+}
+
 func (h *ConfigHandlers) clearAutoRegistered(nodeType, nodeName string) {
 	if nodeType == "" || nodeName == "" {
 		return
@@ -782,11 +872,32 @@ func shouldSkipClusterAutoDetection(host, name string) bool {
 		strings.Contains(lowerName, "concurrent-")
 }
 
-func (h *ConfigHandlers) maybeRefreshClusterInfo(ctx context.Context, instance *config.PVEInstance) {
-	if instance == nil {
-		return
+// findDetectedPVEInstance returns the configured connection that a cluster
+// detection of probed describes, or nil once that connection has been removed
+// or pointed at another endpoint or credential. Detection waits on the
+// monitored server for as long as that server likes, and the connection list
+// is edited meanwhile, so the result is stored on the connection found here
+// and never through a list slot captured before the wait: a removal hands
+// that slot to the next connection, whose credential would then be sent to
+// the members the removed server reported. The caller holds config.Mu.
+func findDetectedPVEInstance(cfg *config.Config, probed *config.PVEInstance) *config.PVEInstance {
+	if cfg == nil {
+		return nil
 	}
+	index, found := findInstanceIndexByName(cfg, "pve", probed.Name)
+	if !found {
+		return nil
+	}
+	current := &cfg.PVEInstances[index]
+	if config.CreateProxmoxConfig(current) != config.CreateProxmoxConfig(probed) {
+		return nil
+	}
+	return current
+}
 
+// maybeRefreshClusterInfo retries cluster detection for the connection that
+// instance is a copy of and stores the result on that connection.
+func (h *ConfigHandlers) maybeRefreshClusterInfo(ctx context.Context, instance config.PVEInstance) {
 	if shouldSkipClusterAutoDetection(instance.Host, instance.Name) {
 		return
 	}
@@ -815,8 +926,8 @@ func (h *ConfigHandlers) maybeRefreshClusterInfo(ctx context.Context, instance *
 	h.lastClusterDetection[instance.Name] = time.Now()
 	h.clusterDetectMutex.Unlock()
 
-	clientConfig := config.CreateProxmoxConfig(instance)
-	isCluster, clusterName, clusterEndpoints := detectPVECluster(clientConfig, instance.Name, instance.ClusterEndpoints)
+	clientConfig := config.CreateProxmoxConfig(&instance)
+	isCluster, clusterName, clusterEndpoints := detectPVEClusterContext(ctx, clientConfig, instance.Name, instance.ClusterEndpoints)
 	if !isCluster || len(clusterEndpoints) == 0 {
 		log.Debug().
 			Str("instance", instance.Name).
@@ -830,9 +941,19 @@ func (h *ConfigHandlers) maybeRefreshClusterInfo(ctx context.Context, instance *
 		clusterName = instance.Name
 	}
 
-	instance.IsCluster = true
-	instance.ClusterName = clusterName
-	instance.ClusterEndpoints = clusterEndpoints
+	config.Mu.Lock()
+	current := findDetectedPVEInstance(h.getConfig(ctx), &instance)
+	if current == nil {
+		config.Mu.Unlock()
+		log.Info().
+			Str("instance", instance.Name).
+			Msg("Discarded cluster validation retry for a connection that was removed or changed meanwhile")
+		return
+	}
+	current.IsCluster = true
+	current.ClusterName = clusterName
+	current.ClusterEndpoints = clusterEndpoints
+	config.Mu.Unlock()
 
 	log.Info().
 		Str("instance", instance.Name).
@@ -1765,11 +1886,28 @@ func detectPVEClusterWithValidator(ctx context.Context, clientConfig proxmox.Cli
 func (h *ConfigHandlers) GetAllNodesForAPI(ctx context.Context) []NodeResponse {
 	nodes := []NodeResponse{}
 
+	// Refresh cluster metadata if we previously failed to detect endpoints.
+	// Detection waits on the monitored servers, so it works from copies and
+	// the list is read again afterwards.
+	config.Mu.RLock()
+	detectable := make([]config.PVEInstance, len(h.getConfig(ctx).PVEInstances))
+	for i, instance := range h.getConfig(ctx).PVEInstances {
+		detectable[i] = instance.DeepCopy()
+	}
+	config.Mu.RUnlock()
+	for _, instance := range detectable {
+		h.maybeRefreshClusterInfo(ctx, instance)
+	}
+
 	// Add PVE nodes
-	for i := range h.getConfig(ctx).PVEInstances {
-		// Refresh cluster metadata if we previously failed to detect endpoints
-		h.maybeRefreshClusterInfo(ctx, &h.getConfig(ctx).PVEInstances[i])
-		pve := h.getConfig(ctx).PVEInstances[i]
+	config.Mu.RLock()
+	pveSnapshot := make([]config.PVEInstance, len(h.getConfig(ctx).PVEInstances))
+	for i, instance := range h.getConfig(ctx).PVEInstances {
+		pveSnapshot[i] = instance.DeepCopy()
+	}
+	discoveryCfg := h.getConfig(ctx).Discovery
+	config.Mu.RUnlock()
+	for i, pve := range pveSnapshot {
 		node := NodeResponse{
 			ID:                           generateNodeID("pve", i),
 			Type:                         "pve",
@@ -1793,7 +1931,7 @@ func (h *ConfigHandlers) GetAllNodesForAPI(ctx context.Context) []NodeResponse {
 			Status:                       h.getNodeStatus(ctx, "pve", pve.Name),
 			IsCluster:                    pve.IsCluster,
 			ClusterName:                  pve.ClusterName,
-			ClusterEndpoints:             pveClusterEndpointTLSResponses(pve, h.getConfig(ctx).Discovery),
+			ClusterEndpoints:             pveClusterEndpointTLSResponses(pve, discoveryCfg),
 			Source:                       pve.Source,
 		}.NormalizeCollections()
 		nodes = append(nodes, node)
