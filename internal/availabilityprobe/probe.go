@@ -113,6 +113,8 @@ func DetailedResult(ctx context.Context, target config.AvailabilityTarget) (Prob
 		return probeHTTP(probeCtx, target, timeout)
 	case config.AvailabilityProbeDNS:
 		return probeDNS(probeCtx, target, timeout)
+	case config.AvailabilityProbePush:
+		return ProbeResult{Outcome: OutcomeIndeterminate, TransportOutcome: OutcomeIndeterminate}, fmt.Errorf("push availability checks wait for inbound pings and cannot be probed outbound")
 	default:
 		return ProbeResult{Outcome: OutcomeUnreachable, TransportOutcome: OutcomeUnreachable}, fmt.Errorf("unsupported availability protocol %q", target.Protocol)
 	}

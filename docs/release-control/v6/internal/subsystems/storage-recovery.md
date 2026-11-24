@@ -10221,3 +10221,10 @@ Backup, snapshot, and storage-recovery persistence formats are unchanged.
 route availability checks and links to `/availability` while keeping the legacy
 `/standalone/availability` redirect intact. Storage, backup, and recovery paths
 are unchanged.
+
+### Inbound push and heartbeat availability checks (Stage 2 Build, 24 November 2026)
+
+`internal/api/availability_handlers.go` and `internal/api/availability_push_handlers.go`
+persist `protocol: "push"` schedules and 256-bit tokens inside the existing
+encrypted `availability_targets.enc` store without altering backup, snapshot, or
+recovery persistence contracts.

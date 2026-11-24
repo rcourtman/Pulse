@@ -29,6 +29,7 @@ type AvailabilityHandlers struct {
 	dockerHosts              func(ctx context.Context) []models.DockerHost
 	dockerContainerResources func(ctx context.Context) map[string]string
 	dockerPortProbe          dockerPortProbeFunc
+	pushRateLimiter          *availabilityPushRateLimiter
 }
 
 type availabilityTargetResponse struct {
@@ -173,6 +174,17 @@ func (h *AvailabilityHandlers) HandleAdd(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	target = config.NormalizeAvailabilityTarget(target)
+	if target.Protocol == config.AvailabilityProbePush {
+		token, err := config.GenerateAvailabilityPushToken()
+		if err != nil {
+			writeErrorResponse(w, http.StatusInternalServerError, "push_token_generation_failed", "Failed to generate push check token", nil)
+			return
+		}
+		if target.Push == nil {
+			target.Push = &config.AvailabilityPushConfig{}
+		}
+		target.Push.Token = token
+	}
 	target.ConfigRevision = 1
 	if err := target.Validate(); err != nil {
 		writeErrorResponse(w, http.StatusBadRequest, "validation_error", err.Error(), nil)
@@ -250,6 +262,21 @@ func (h *AvailabilityHandlers) HandleUpdate(w http.ResponseWriter, r *http.Reque
 	requested := target
 	target = mergeAvailabilityHTTPSecrets(previous, target)
 	target = config.NormalizeAvailabilityTarget(target)
+	if target.Protocol == config.AvailabilityProbePush {
+		if target.Push == nil {
+			target.Push = &config.AvailabilityPushConfig{}
+		}
+		if previous.Protocol == config.AvailabilityProbePush && previous.Push != nil && strings.TrimSpace(previous.Push.Token) != "" {
+			target.Push.Token = previous.Push.Token
+		} else {
+			token, err := config.GenerateAvailabilityPushToken()
+			if err != nil {
+				writeErrorResponse(w, http.StatusInternalServerError, "push_token_generation_failed", "Failed to generate push check token", nil)
+				return
+			}
+			target.Push.Token = token
+		}
+	}
 	target.ConfigRevision = previous.ConfigRevision
 	if config.AvailabilityExecutionConfigChanged(previous, target) {
 		target.ConfigRevision++
@@ -383,6 +410,10 @@ func (h *AvailabilityHandlers) HandleTestSavedConnection(w http.ResponseWriter, 
 
 func (h *AvailabilityHandlers) testTarget(w http.ResponseWriter, r *http.Request, target config.AvailabilityTarget) {
 	target = config.NormalizeAvailabilityTarget(target)
+	if target.Protocol == config.AvailabilityProbePush {
+		writeErrorResponse(w, http.StatusBadRequest, "push_not_outbound_testable", "Push checks wait for inbound pings and cannot be probed outbound", nil)
+		return
+	}
 	if err := target.Validate(); err != nil {
 		writeErrorResponse(w, http.StatusBadRequest, "validation_error", err.Error(), nil)
 		return
@@ -416,6 +447,9 @@ func (h *AvailabilityHandlers) testTarget(w http.ResponseWriter, r *http.Request
 // check's address. It applies to checks assigned only to host agents too: when
 // the external probe entitlement lapses, those resume on this server.
 func refuseTenantAvailabilityDestination(w http.ResponseWriter, r *http.Request, target config.AvailabilityTarget) bool {
+	if target.Protocol == config.AvailabilityProbePush {
+		return false
+	}
 	destination := target.ProbeAddress()
 	if target.Protocol == config.AvailabilityProbeHTTP || target.Protocol == config.AvailabilityProbeHTTPS {
 		if u, err := target.HTTPURL(); err == nil {
@@ -594,6 +628,10 @@ func cloneAvailabilityTarget(target config.AvailabilityTarget) config.Availabili
 	if target.DNS != nil {
 		dnsClone := *target.DNS
 		clone.DNS = &dnsClone
+	}
+	if target.Push != nil {
+		pushCopy := *target.Push
+		clone.Push = &pushCopy
 	}
 	if target.HTTP == nil {
 		return clone

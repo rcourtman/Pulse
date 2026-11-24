@@ -1,0 +1,55 @@
+{
+  "version": 1,
+  "base_sha": "7635715c45dd7bed2360340312ff1189b9243b49",
+  "verified_at": "2026-11-24T09:47:30Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/api/availabilityTargets.ts",
+    "frontend-modern/src/components/Settings/AvailabilitySettingsPanel.tsx",
+    "frontend-modern/src/components/Settings/ConnectionEditor/CredentialSlots/AvailabilityDnsConfigSection.tsx",
+    "frontend-modern/src/components/Settings/ConnectionEditor/CredentialSlots/AvailabilityPushConfigSection.tsx",
+    "frontend-modern/src/components/Settings/ConnectionEditor/CredentialSlots/AvailabilityTargetSlot.tsx",
+    "frontend-modern/src/components/Settings/ConnectionEditor/availabilityTargetPresets.ts",
+    "frontend-modern/src/components/Settings/availabilitySettingsModel.ts",
+    "frontend-modern/src/utils/availabilityProbePresentation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/api/availabilityTargets.ts": "e0eda772ed6a41d1510b94399c155d9ca4fffad84e0ac771acb90478c27eb6d3",
+    "frontend-modern/src/components/Settings/AvailabilitySettingsPanel.tsx": "415c8a2de39dcac8bfef88d67ac76f44589d7f75298b05f42b8ab962b1073803",
+    "frontend-modern/src/components/Settings/ConnectionEditor/CredentialSlots/AvailabilityDnsConfigSection.tsx": "de4ec96bf37d11cdf4e0fa1dd57aad0a0df1ed27291e9054c01c12537b190d09",
+    "frontend-modern/src/components/Settings/ConnectionEditor/CredentialSlots/AvailabilityPushConfigSection.tsx": "bf0fddbbdde328573ced5b39a7f71129c63de31ef6beee4ff2fc2004de30e5b1",
+    "frontend-modern/src/components/Settings/ConnectionEditor/CredentialSlots/AvailabilityTargetSlot.tsx": "a8e2cea30b8fc2b3b6a08b85562ec9cd8713c4d73ce592b019baf434a4086b77",
+    "frontend-modern/src/components/Settings/ConnectionEditor/availabilityTargetPresets.ts": "b0978cf2708862dbdc976c5b6d95dfdb555817cb782109a98d4821671f66fbed",
+    "frontend-modern/src/components/Settings/availabilitySettingsModel.ts": "16efe08fa7a4d5c86b90eec2ce8a1ac13cab3285fed3223b551614473fbc51e8",
+    "frontend-modern/src/utils/availabilityProbePresentation.ts": "3b928c6dca4373dc28ea9e430d7da59c0f6a1b539b1b27c76a1ae96971ab0b00"
+  },
+  "routes": [
+    "/settings/monitoring/availability"
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 800
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "production build hides Scheduled job / backup (Push) preset and Push / Heartbeat probe while showing DNS resolver preset and lazy-loaded DNS query fields",
+    "development build exposes Scheduled job / backup (Push) preset and Push / Heartbeat probe alongside DNS resolver",
+    "created Cron push check stays open displaying generated Ping URL, Copy URL, Example curl command, and Rotate URL",
+    "two-step Rotate URL confirmation replaces token immediately and updates Ping URL and curl command",
+    "mobile 390x844 saved Push modal has zero horizontal clipping or overflow across Ping URL, wrapped curl snippet, and action buttons",
+    "Settings Availability checks list shows Waiting for first ping pill, Cron schedule metadata, and Pause/Manage actions with no outbound Test button"
+  ],
+  "interactions": [
+    "opened Add service/device check modal on production build (:17657) at 1280x800, verified DNS resolver lazy section renders and push options are absent",
+    "opened Add service/device check modal on development build (:15177) at 1280x800, verified DNS resolver and Scheduled job / backup (Push) lazy sections",
+    "created Nightly backup rebase check with Cron schedule 0 3 * * * and confirmed generated Ping URL and curl snippet",
+    "triggered Rotate URL, confirmed second step, and verified token suffix changed",
+    "resized saved Push modal to 390x844 and verified layout fits within viewport with zero horizontal scroll",
+    "closed modal with Done and verified saved check row at 1280x800 with zero console errors"
+  ]
+}

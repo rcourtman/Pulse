@@ -10321,3 +10321,16 @@ the optional balloon fields onto `models.HostLibvirtDomain`. Verified by
 optional `expectedValue`, default port `53`) using `github.com/miekg/dns`.
 Verified by `internal/config/availability_test.go` and
 `internal/availabilityprobe/dns_test.go`.
+
+### Inbound push and heartbeat availability checks (Stage 2 Build, 24 November 2026)
+
+`internal/config/availability.go`, `internal/config/availability_cron.go`,
+`internal/availabilityprobe/probe.go`, `internal/monitoring/availability_push.go`,
+`internal/monitoring/availability_poller.go`, and `internal/monitoring/monitor.go`
+add inbound push and heartbeat checks (`protocol: "push"`, interval or 5-field
+UTC cron schedule plus grace window, `/start` duration measurement, explicit
+`/fail`, missed-deadline evaluation on 15s ticks, and push validity windows for
+`availability_history` and evidence envelopes). Push targets never dial out and
+reuse the unified `availability_unreachable` incident path. Verified by
+`availability_cron_test.go`, `availability_test.go`, `availability_push_test.go`,
+and `availability_poller_test.go`.

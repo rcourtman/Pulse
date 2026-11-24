@@ -145,6 +145,9 @@ func (availabilityPollProvider) BaseInterval(m *Monitor) time.Duration {
 			continue
 		}
 		interval := time.Duration(target.EffectivePollIntervalSecs()) * time.Second
+		if target.Protocol == config.AvailabilityProbePush {
+			interval = availabilityPushEvalInterval
+		}
 		if interval > 0 && interval < minInterval {
 			minInterval = interval
 		}
@@ -156,6 +159,9 @@ func (availabilityPollProvider) FixedInstanceInterval(m *Monitor, instanceName s
 	target, ok := m.availabilityTargetByID(instanceName)
 	if !ok || !target.Enabled {
 		return 0
+	}
+	if target.Protocol == config.AvailabilityProbePush {
+		return availabilityPushEvalInterval
 	}
 	return clampInterval(time.Duration(target.EffectivePollIntervalSecs())*time.Second, 10*time.Second, time.Hour)
 }
@@ -402,11 +408,15 @@ func (m *Monitor) RefreshAvailabilityTargets() {
 		if m.taskQueue == nil {
 			continue
 		}
+		interval := clampInterval(time.Duration(target.EffectivePollIntervalSecs())*time.Second, 10*time.Second, time.Hour)
+		if target.Protocol == config.AvailabilityProbePush {
+			interval = availabilityPushEvalInterval
+		}
 		task := ScheduledTask{
 			InstanceName: target.ID,
 			InstanceType: InstanceTypeAvailability,
 			NextRun:      now,
-			Interval:     clampInterval(time.Duration(target.EffectivePollIntervalSecs())*time.Second, 10*time.Second, time.Hour),
+			Interval:     interval,
 		}
 		if target.Enabled && m.targetUsesLocalObservation(target) {
 			m.taskQueue.Upsert(task)
@@ -434,6 +444,11 @@ func (m *Monitor) RefreshAvailabilityTargets() {
 			delete(m.availabilityProbeTrackers, id)
 		}
 	}
+	for id := range m.availabilityPushStates {
+		if _, ok := activeIDs[id]; !ok {
+			delete(m.availabilityPushStates, id)
+		}
+	}
 	m.mu.Unlock()
 	for _, id := range removedIDs {
 		m.removeProviderConnectionHealth(InstanceTypeAvailability, id)
@@ -445,6 +460,10 @@ func (m *Monitor) RefreshAvailabilityTargets() {
 
 func (m *Monitor) pollAvailabilityTarget(ctx context.Context, target config.AvailabilityTarget) {
 	target = config.NormalizeAvailabilityTarget(target)
+	if target.Protocol == config.AvailabilityProbePush {
+		m.evaluatePushAvailabilityTarget(target, time.Now().UTC())
+		return
+	}
 	start := time.Now()
 	result, err := ProbeAvailabilityTargetDetailedResult(ctx, target)
 	latency := time.Since(start)
@@ -1021,7 +1040,9 @@ func availabilityEvidenceEnvelope(
 		freshnessAt = observedAt
 	}
 	validityWindow := time.Duration(target.EffectivePollIntervalSecs()*2) * time.Second
-	if strings.TrimSpace(status.ProbeAgentID) != "" || status.ExpectedLocations > 1 {
+	if target.Protocol == config.AvailabilityProbePush {
+		validityWindow = target.EffectivePushValidityWindow(freshnessAt)
+	} else if strings.TrimSpace(status.ProbeAgentID) != "" || status.ExpectedLocations > 1 {
 		validityWindow = availabilityProbeStaleWindow(target)
 	}
 	validUntil := freshnessAt.Add(validityWindow)
@@ -1130,6 +1151,9 @@ func availabilityIncident(target config.AvailabilityTarget, status AvailabilityP
 		return nil
 	}
 	summary := fmt.Sprintf("%s is unreachable from every current observation location by %s probe", target.DisplayName(), strings.ToUpper(string(target.Protocol)))
+	if target.Protocol == config.AvailabilityProbePush {
+		summary = fmt.Sprintf("%s push check failed", target.DisplayName())
+	}
 	if status.LastError != "" {
 		summary = summary + ": " + status.LastError
 	}

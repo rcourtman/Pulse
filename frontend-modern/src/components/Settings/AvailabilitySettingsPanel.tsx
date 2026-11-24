@@ -349,16 +349,18 @@ export const AvailabilitySettingsPanel: Component = () => {
                       </div>
                     </div>
                     <div class="flex flex-wrap items-center gap-2 md:justify-end">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="xs"
-                        class="min-h-11 sm:min-h-8"
-                        onClick={() => void testTarget(target)}
-                        disabled={pending()}
-                      >
-                        {pending() ? 'Testing...' : 'Test'}
-                      </Button>
+                      <Show when={target.protocol !== 'push'}>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="xs"
+                          class="min-h-11 sm:min-h-8"
+                          onClick={() => void testTarget(target)}
+                          disabled={pending()}
+                        >
+                          {pending() ? 'Testing...' : 'Test'}
+                        </Button>
+                      </Show>
                       <Button
                         type="button"
                         variant="outline"

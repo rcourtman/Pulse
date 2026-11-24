@@ -11806,3 +11806,12 @@ surface, using icon-only mobile triggers below `sm:`. Command palette
 (`routePreload.ts`) include `/availability`. Verified by
 `SharedPrimitives.guardrails.test.ts`, `AvailabilityPageSurface.test.tsx`, and
 `frontend-modern/browser-verification/754f0ac3ac252718.json`.
+
+### Inbound push and heartbeat availability checks (Stage 2 Build, 24 November 2026)
+
+`frontend-modern/src/components/Settings/availabilitySettingsModel.ts`,
+`AvailabilitySettingsPanel.tsx`, and `AvailabilityTargetSlot.tsx` add
+feature-gated (`availabilityPushChecks` at stage `build`) push schedule labels,
+pending first-ping status, hidden outbound test actions for push checks, and
+mobile-safe wrapping (`min-w-0`, wrapped `curl` snippet) inside the shared
+availability editor dialog.

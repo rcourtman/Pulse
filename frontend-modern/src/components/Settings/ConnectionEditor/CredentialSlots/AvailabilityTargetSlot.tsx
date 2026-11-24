@@ -1,4 +1,4 @@
-import { Component, For, Show, createMemo, createSignal, onMount } from 'solid-js';
+import { Component, For, Show, Suspense, createMemo, createSignal, lazy, onMount } from 'solid-js';
 import { Button } from '@/components/shared/Button';
 import { CalloutCard } from '@/components/shared/CalloutCard';
 import { FeatureGateSection } from '@/components/shared/FeatureGateSection';
@@ -18,6 +18,7 @@ import {
   type AvailabilityProbeProtocol,
   type AvailabilityHTTPAuthType,
   type AvailabilityHTTPMethod,
+  type AvailabilityPushScheduleType,
   type AvailabilityTarget,
   type AvailabilityTargetKind,
   type AvailabilityTestResponse,
@@ -96,6 +97,11 @@ interface AvailabilityForm {
   httpBodyConfigured: boolean;
   httpBodyTouched: boolean;
   httpHeaders: AvailabilityHTTPHeaderForm[];
+  pushToken: string;
+  pushScheduleType: AvailabilityPushScheduleType;
+  pushIntervalSeconds: string;
+  pushCronExpression: string;
+  pushGraceSeconds: string;
 }
 
 interface AvailabilityHTTPHeaderForm {
@@ -164,6 +170,11 @@ const newAvailabilityForm = (
   httpBodyConfigured: false,
   httpBodyTouched: false,
   httpHeaders: [],
+  pushToken: '',
+  pushScheduleType: 'interval',
+  pushIntervalSeconds: '86400',
+  pushCronExpression: '0 3 * * *',
+  pushGraceSeconds: '300',
 });
 
 const formFromTarget = (target: AvailabilityTarget): AvailabilityForm => {
@@ -218,6 +229,11 @@ const formFromTarget = (target: AvailabilityTarget): AvailabilityForm => {
       value: '',
       valueConfigured: headerSecrets.get(header.id) ?? false,
     })),
+    pushToken: target.push?.token ?? '',
+    pushScheduleType: target.push?.scheduleType ?? 'interval',
+    pushIntervalSeconds: String(target.push?.intervalSeconds ?? 86400),
+    pushCronExpression: target.push?.cronExpression ?? '0 3 * * *',
+    pushGraceSeconds: String(target.push?.graceSeconds ?? 300),
   };
 };
 
@@ -225,6 +241,14 @@ const parsePositiveInt = (value: string): number | undefined => {
   const parsed = Number.parseInt(value.trim(), 10);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined;
 };
+
+const parseNonNegativeInt = (value: string): number | undefined => {
+  const parsed = Number.parseInt(value.trim(), 10);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : undefined;
+};
+
+const AvailabilityDnsConfigSection = lazy(() => import('./AvailabilityDnsConfigSection'));
+const AvailabilityPushConfigSection = lazy(() => import('./AvailabilityPushConfigSection'));
 
 const availabilityTestSuccessDescription = (
   result: AvailabilityTestResponse,
@@ -268,6 +292,7 @@ const availabilityTestFailureDescription = (
 const payloadFromForm = (form: AvailabilityForm): AvailabilityTarget => {
   const port = parsePositiveInt(form.port);
   const isHTTP = form.protocol === 'http' || form.protocol === 'https';
+  const isPush = form.protocol === 'push';
   const httpPassword = form.httpPassword ? form.httpPassword : undefined;
   const httpBearerToken = form.httpBearerToken ? form.httpBearerToken : undefined;
   const httpBody =
@@ -278,10 +303,10 @@ const payloadFromForm = (form: AvailabilityForm): AvailabilityTarget => {
     id: form.id,
     name: form.name.trim(),
     targetKind: form.targetKind,
-    address: form.address.trim(),
+    address: isPush ? '' : form.address.trim(),
     protocol: form.protocol,
-    port: form.protocol === 'icmp' ? undefined : port,
-    path: form.protocol === 'http' || form.protocol === 'https' ? form.path.trim() : undefined,
+    port: form.protocol === 'icmp' || isPush ? undefined : port,
+    path: isHTTP ? form.path.trim() : undefined,
     udpMode: form.protocol === 'udp' ? form.udpMode : undefined,
     udpRequest: form.protocol === 'udp' ? form.udpRequest : undefined,
     udpExpectedResponse: form.protocol === 'udp' ? form.udpExpectedResponse : undefined,
@@ -289,18 +314,33 @@ const payloadFromForm = (form: AvailabilityForm): AvailabilityTarget => {
     // Always serialized, never `undefined`: the server decodes updates onto the
     // existing record, so an explicit empty string is what clears a probe
     // assignment and moves the check back to the local Pulse server.
-    probeAgentId:
-      form.observationLocationIds.length === 1
+    probeAgentId: isPush
+      ? ''
+      : form.observationLocationIds.length === 1
         ? agentIdFromObservationLocation(form.observationLocationIds[0])
         : '',
-    observationLocationIds: [...form.observationLocationIds],
+    observationLocationIds: isPush
+      ? [LOCAL_OBSERVATION_LOCATION_ID]
+      : [...form.observationLocationIds],
     enabled: form.enabled,
-    pollIntervalSeconds: parsePositiveInt(form.pollIntervalSeconds),
-    timeoutMillis: parsePositiveInt(form.timeoutMillis),
-    failureThreshold: parsePositiveInt(form.failureThreshold),
+    pollIntervalSeconds: isPush ? undefined : parsePositiveInt(form.pollIntervalSeconds),
+    timeoutMillis: isPush ? undefined : parsePositiveInt(form.timeoutMillis),
+    failureThreshold: parsePositiveInt(form.failureThreshold) ?? (isPush ? 1 : undefined),
     certificateMonitoringDisabled: form.protocol === 'https' ? !form.monitorCertificate : false,
     certificateExpiryWarningDays:
       form.protocol === 'https' ? parsePositiveInt(form.certificateExpiryWarningDays) : 0,
+    push: isPush
+      ? {
+          scheduleType: form.pushScheduleType,
+          intervalSeconds:
+            form.pushScheduleType === 'interval'
+              ? (parsePositiveInt(form.pushIntervalSeconds) ?? 86400)
+              : undefined,
+          cronExpression:
+            form.pushScheduleType === 'cron' ? form.pushCronExpression.trim() : undefined,
+          graceSeconds: parseNonNegativeInt(form.pushGraceSeconds) ?? 300,
+        }
+      : undefined,
     http: isHTTP
       ? {
           method: form.httpMethod,
@@ -398,8 +438,18 @@ export const AvailabilityTargetSlot: Component<AvailabilityTargetSlotProps> = (p
   const [loading, setLoading] = createSignal(false);
   const [saving, setSaving] = createSignal(false);
   const [testing, setTesting] = createSignal(false);
+  const [rotatingPushToken, setRotatingPushToken] = createSignal(false);
+  const [createdPushTargetId, setCreatedPushTargetId] = createSignal<string | null>(null);
   const [error, setError] = createSignal<string | null>(null);
   const [testResult, setTestResult] = createSignal<AvailabilityTestResponse | null>(null);
+
+  const pushChecksAvailable = () => isFeatureAvailable('availabilityPushChecks');
+  const visiblePresets = createMemo(() =>
+    AVAILABILITY_TARGET_PRESETS.filter(
+      (preset) => !preset.featureGate || isFeatureAvailable(preset.featureGate),
+    ),
+  );
+  const isPushProtocol = () => form().protocol === 'push';
   let feedbackElement: HTMLDivElement | undefined;
   const revealFeedback = () => {
     if (typeof feedbackElement?.scrollIntoView === 'function') {
@@ -569,19 +619,28 @@ export const AvailabilityTargetSlot: Component<AvailabilityTargetSlotProps> = (p
     }
   };
 
+  const activeTargetId = () => props.editingTargetId?.trim() || createdPushTargetId() || '';
+
   const handleSave = async () => {
     setSaving(true);
     setError(null);
     setTestResult(null);
     const payload = payloadFromForm(form());
     try {
-      const targetId = props.editingTargetId?.trim();
+      const targetId = activeTargetId();
       if (targetId) {
         await AvailabilityTargetsAPI.update(targetId, payload);
+        props.onSaved();
       } else {
-        await AvailabilityTargetsAPI.create(payload);
+        const created = await AvailabilityTargetsAPI.create(payload);
+        if (payload.protocol === 'push' && created.push?.token) {
+          setCreatedPushTargetId(created.id);
+          setForm(formFromTarget(created));
+          queueMicrotask(revealFeedback);
+          return;
+        }
+        props.onSaved();
       }
-      props.onSaved();
     } catch (err) {
       if (
         payload.observationLocationIds?.some((locationId) =>
@@ -599,7 +658,8 @@ export const AvailabilityTargetSlot: Component<AvailabilityTargetSlotProps> = (p
     }
   };
 
-  const isBusy = () => loading() || saving() || testing() || Boolean(props.deletePending);
+  const isBusy = () =>
+    loading() || saving() || testing() || rotatingPushToken() || Boolean(props.deletePending);
   const isEditing = () => Boolean(props.editingTargetId);
 
   return (
@@ -611,7 +671,7 @@ export const AvailabilityTargetSlot: Component<AvailabilityTargetSlotProps> = (p
           </div>
         </Show>
 
-        <div class="grid gap-4 sm:grid-cols-2">
+        <div class="grid min-w-0 gap-4 sm:grid-cols-2">
           <FormSelect
             label="Preset"
             value={selectedPreset()}
@@ -621,9 +681,9 @@ export const AvailabilityTargetSlot: Component<AvailabilityTargetSlotProps> = (p
             fieldClass="sm:col-span-2"
           >
             <option value={CUSTOM_AVAILABILITY_PRESET_ID}>Custom endpoint</option>
-            {AVAILABILITY_TARGET_PRESETS.map((preset) => (
-              <option value={preset.id}>{preset.label}</option>
-            ))}
+            <For each={visiblePresets()}>
+              {(preset) => <option value={preset.id}>{preset.label}</option>}
+            </For>
           </FormSelect>
           <FormSelect
             label="Target type"
@@ -667,9 +727,15 @@ export const AvailabilityTargetSlot: Component<AvailabilityTargetSlotProps> = (p
           <FormSelect
             label="Probe"
             value={form().protocol}
-            onChange={(event) =>
-              updateForm({ protocol: event.currentTarget.value as AvailabilityProbeProtocol })
-            }
+            onChange={(event) => {
+              const nextProtocol = event.currentTarget.value as AvailabilityProbeProtocol;
+              updateForm({
+                protocol: nextProtocol,
+                ...(nextProtocol === 'push' && form().failureThreshold === '2'
+                  ? { failureThreshold: '1' }
+                  : {}),
+              });
+            }}
           >
             <option value="icmp">ICMP ping</option>
             <option value="tcp">TCP port</option>
@@ -677,33 +743,55 @@ export const AvailabilityTargetSlot: Component<AvailabilityTargetSlotProps> = (p
             <option value="dns">DNS resolution</option>
             <option value="http">HTTP</option>
             <option value="https">HTTPS</option>
+            <Show when={pushChecksAvailable() || isPushProtocol()}>
+              <option value="push">Push / Heartbeat</option>
+            </Show>
           </FormSelect>
-          <label class={`${formField} sm:col-span-2`}>
-            <span class={formLabel}>
-              {form().protocol === 'http' || form().protocol === 'https'
-                ? 'URL or host'
-                : form().protocol === 'dns'
-                  ? 'DNS server address'
-                  : 'Address'}
-            </span>
-            <input
-              class={formControl}
-              value={form().address}
-              onInput={(event) => updateForm({ address: event.currentTarget.value })}
-              placeholder={addressPlaceholder()}
-            />
-            <span class={formHelpText}>
-              {form().protocol === 'icmp'
-                ? 'Use a hostname or IP address. Pulse will run one ping per poll.'
-                : form().protocol === 'tcp'
-                  ? 'Use a hostname or IP address and the port to open.'
-                  : form().protocol === 'udp'
-                    ? 'Use a hostname or unicast IP. UDP checks send one small datagram per poll.'
-                    : form().protocol === 'dns'
-                      ? 'Use the DNS resolver IP or hostname (for example Pi-hole, AdGuard Home, or Unbound).'
-                      : 'Use a full URL or hostname, then define the accepted application response below.'}
-            </span>
-          </label>
+          <Show when={!isPushProtocol()}>
+            <label class={`${formField} sm:col-span-2`}>
+              <span class={formLabel}>
+                {form().protocol === 'http' || form().protocol === 'https'
+                  ? 'URL or host'
+                  : form().protocol === 'dns'
+                    ? 'DNS server address'
+                    : 'Address'}
+              </span>
+              <input
+                class={formControl}
+                value={form().address}
+                onInput={(event) => updateForm({ address: event.currentTarget.value })}
+                placeholder={addressPlaceholder()}
+              />
+              <span class={formHelpText}>
+                {form().protocol === 'icmp'
+                  ? 'Use a hostname or IP address. Pulse will run one ping per poll.'
+                  : form().protocol === 'tcp'
+                    ? 'Use a hostname or IP address and the port to open.'
+                    : form().protocol === 'udp'
+                      ? 'Use a hostname or unicast IP. UDP checks send one small datagram per poll.'
+                      : form().protocol === 'dns'
+                        ? 'Use the DNS resolver IP or hostname (for example Pi-hole, AdGuard Home, or Unbound).'
+                        : 'Use a full URL or hostname, then define the accepted application response below.'}
+              </span>
+            </label>
+          </Show>
+          <Show when={isPushProtocol() && (pushChecksAvailable() || Boolean(form().pushToken))}>
+            <Suspense>
+              <AvailabilityPushConfigSection
+                activeTargetId={activeTargetId()}
+                justCreated={Boolean(createdPushTargetId())}
+                scheduleType={form().pushScheduleType}
+                intervalSeconds={form().pushIntervalSeconds}
+                cronExpression={form().pushCronExpression}
+                graceSeconds={form().pushGraceSeconds}
+                token={form().pushToken}
+                busy={isBusy()}
+                onChange={(patch) => updateForm(patch)}
+                onError={setError}
+                onRotatingChange={setRotatingPushToken}
+              />
+            </Suspense>
+          </Show>
           <FormSelect
             label="Link to resource (optional)"
             value={form().linkedResourceId}
@@ -735,80 +823,82 @@ export const AvailabilityTargetSlot: Component<AvailabilityTargetSlotProps> = (p
               )}
             </For>
           </FormSelect>
-          <fieldset class="space-y-3 sm:col-span-2">
-            <legend class={formLabel}>Observation locations</legend>
-            <p class={formHelpText}>
-              One logical check can be observed from several networks. Pulse keeps each path
-              separate and shows disagreement instead of turning one path failure into a universal
-              outage.
-            </p>
-            <div class="grid gap-2 sm:grid-cols-2" data-observation-location-picker>
-              <For each={observationLocationOptions()}>
-                {(option) => {
-                  const selected = () => form().observationLocationIds.includes(option.id);
-                  const locked = () => option.kind === 'agent' && externalProbeLocked();
-                  return (
-                    <label class="flex items-start gap-3 rounded-md border border-border bg-surface px-3 py-3 text-sm">
+          <Show when={!isPushProtocol()}>
+            <fieldset class="space-y-3 sm:col-span-2">
+              <legend class={formLabel}>Observation locations</legend>
+              <p class={formHelpText}>
+                One logical check can be observed from several networks. Pulse keeps each path
+                separate and shows disagreement instead of turning one path failure into a universal
+                outage.
+              </p>
+              <div class="grid gap-2 sm:grid-cols-2" data-observation-location-picker>
+                <For each={observationLocationOptions()}>
+                  {(option) => {
+                    const selected = () => form().observationLocationIds.includes(option.id);
+                    const locked = () => option.kind === 'agent' && externalProbeLocked();
+                    return (
+                      <label class="flex items-start gap-3 rounded-md border border-border bg-surface px-3 py-3 text-sm">
+                        <input
+                          class={formCheckbox}
+                          type="checkbox"
+                          checked={selected()}
+                          disabled={
+                            locked() || (selected() && form().observationLocationIds.length === 1)
+                          }
+                          onChange={(event) =>
+                            toggleObservationLocation(option.id, event.currentTarget.checked)
+                          }
+                        />
+                        <span class="min-w-0">
+                          <span class="block font-medium text-foreground">{option.label}</span>
+                          <span class="block text-xs text-muted">
+                            {option.kind === 'pulse'
+                              ? 'Local Pulse path'
+                              : 'Connected Pulse Agent path'}
+                          </span>
+                        </span>
+                      </label>
+                    );
+                  }}
+                </For>
+                <For each={missingObservationLocations()}>
+                  {(locationId) => (
+                    <label class="flex items-start gap-3 rounded-md border border-warning/40 bg-warning/5 px-3 py-3 text-sm">
                       <input
                         class={formCheckbox}
                         type="checkbox"
-                        checked={selected()}
-                        disabled={
-                          locked() || (selected() && form().observationLocationIds.length === 1)
-                        }
+                        checked
+                        disabled={form().observationLocationIds.length === 1}
                         onChange={(event) =>
-                          toggleObservationLocation(option.id, event.currentTarget.checked)
+                          toggleObservationLocation(locationId, event.currentTarget.checked)
                         }
                       />
                       <span class="min-w-0">
-                        <span class="block font-medium text-foreground">{option.label}</span>
-                        <span class="block text-xs text-muted">
-                          {option.kind === 'pulse'
-                            ? 'Local Pulse path'
-                            : 'Connected Pulse Agent path'}
+                        <span class="block font-medium text-foreground">
+                          {agentIdFromObservationLocation(locationId) || locationId}
                         </span>
+                        <span class="block text-xs text-warning">Not currently connected</span>
                       </span>
                     </label>
-                  );
-                }}
-              </For>
-              <For each={missingObservationLocations()}>
-                {(locationId) => (
-                  <label class="flex items-start gap-3 rounded-md border border-warning/40 bg-warning/5 px-3 py-3 text-sm">
-                    <input
-                      class={formCheckbox}
-                      type="checkbox"
-                      checked
-                      disabled={form().observationLocationIds.length === 1}
-                      onChange={(event) =>
-                        toggleObservationLocation(locationId, event.currentTarget.checked)
-                      }
-                    />
-                    <span class="min-w-0">
-                      <span class="block font-medium text-foreground">
-                        {agentIdFromObservationLocation(locationId) || locationId}
-                      </span>
-                      <span class="block text-xs text-warning">Not currently connected</span>
-                    </span>
-                  </label>
-                )}
-              </For>
-            </div>
-            <Show when={externalProbeLocked()}>
-              <p class={formHelpText}>{getExternalProbeLockedHelpText()}</p>
-            </Show>
-            <Show when={externalProbeLocked()}>
-              <div class="rounded-md border border-border bg-surface-alt p-4">
-                <FeatureGateSection
-                  title={getExternalProbeGateTitle()}
-                  body={getExternalProbeGateBody()}
-                  upgradeDestination={getUpgradeActionDestination(EXTERNAL_PROBE_FEATURE)}
-                  showUpgradePrompts={!presentationPolicyHidesCommercialSurfaces()}
-                />
+                  )}
+                </For>
               </div>
-            </Show>
-          </fieldset>
-          <Show when={form().protocol !== 'icmp'}>
+              <Show when={externalProbeLocked()}>
+                <p class={formHelpText}>{getExternalProbeLockedHelpText()}</p>
+              </Show>
+              <Show when={externalProbeLocked()}>
+                <div class="rounded-md border border-border bg-surface-alt p-4">
+                  <FeatureGateSection
+                    title={getExternalProbeGateTitle()}
+                    body={getExternalProbeGateBody()}
+                    upgradeDestination={getUpgradeActionDestination(EXTERNAL_PROBE_FEATURE)}
+                    showUpgradePrompts={!presentationPolicyHidesCommercialSurfaces()}
+                  />
+                </div>
+              </Show>
+            </fieldset>
+          </Show>
+          <Show when={form().protocol !== 'icmp' && !isPushProtocol()}>
             <label class={formField}>
               <span class={formLabel}>Port</span>
               <input
@@ -821,78 +911,15 @@ export const AvailabilityTargetSlot: Component<AvailabilityTargetSlotProps> = (p
             </label>
           </Show>
           <Show when={form().protocol === 'dns'}>
-            <section
-              class="space-y-4 rounded-lg border border-border p-4 sm:col-span-2"
-              data-testid="availability-dns-section"
-            >
-              <div>
-                <h3 class="text-sm font-semibold text-base-content">DNS query</h3>
-                <p class="mt-1 text-xs text-muted">
-                  Send a real DNS query to this resolver and verify that it returns NOERROR with at
-                  least one matching record.
-                </p>
-              </div>
-              <div class="grid gap-4 sm:grid-cols-3">
-                <label class={`${formField} sm:col-span-2`}>
-                  <span class={formLabel}>Query hostname</span>
-                  <input
-                    class={formControl}
-                    value={form().dnsQueryName}
-                    onInput={(event) => updateForm({ dnsQueryName: event.currentTarget.value })}
-                    placeholder="example.com or nas.home.arpa"
-                    data-testid="availability-dns-query-name"
-                  />
-                </label>
-                <FormSelect
-                  label="Record type"
-                  value={form().dnsRecordType}
-                  onChange={(event) =>
-                    updateForm({
-                      dnsRecordType: event.currentTarget.value as AvailabilityDNSRecordType,
-                    })
-                  }
-                  data-testid="availability-dns-record-type"
-                >
-                  <option value="A">A</option>
-                  <option value="AAAA">AAAA</option>
-                  <option value="CNAME">CNAME</option>
-                  <option value="TXT">TXT</option>
-                  <option value="MX">MX</option>
-                  <option value="NS">NS</option>
-                  <option value="SRV">SRV</option>
-                  <option value="PTR">PTR</option>
-                </FormSelect>
-              </div>
-              <div class="grid gap-4 sm:grid-cols-3">
-                <FormSelect
-                  label="Transport"
-                  value={form().dnsTransport}
-                  onChange={(event) =>
-                    updateForm({
-                      dnsTransport: event.currentTarget.value as AvailabilityDNSTransport,
-                    })
-                  }
-                  data-testid="availability-dns-transport"
-                >
-                  <option value="udp">UDP (default)</option>
-                  <option value="tcp">TCP</option>
-                </FormSelect>
-                <label class={`${formField} sm:col-span-2`}>
-                  <span class={formLabel}>Expected answer (optional)</span>
-                  <input
-                    class={formControl}
-                    value={form().dnsExpectedValue}
-                    onInput={(event) => updateForm({ dnsExpectedValue: event.currentTarget.value })}
-                    placeholder="192.168.1.50"
-                    data-testid="availability-dns-expected-value"
-                  />
-                  <span class={formHelpText}>
-                    Leave empty to accept any valid record of that type, or enter an IP, target
-                    hostname, or TXT substring to match.
-                  </span>
-                </label>
-              </div>
-            </section>
+            <Suspense>
+              <AvailabilityDnsConfigSection
+                queryName={form().dnsQueryName}
+                recordType={form().dnsRecordType}
+                transport={form().dnsTransport}
+                expectedValue={form().dnsExpectedValue}
+                onChange={(patch) => updateForm(patch)}
+              />
+            </Suspense>
           </Show>
           <Show when={form().protocol === 'http' || form().protocol === 'https'}>
             <label class={formField}>
@@ -991,7 +1018,7 @@ export const AvailabilityTargetSlot: Component<AvailabilityTargetSlotProps> = (p
                 </div>
               </Show>
 
-              <div class="grid gap-4 sm:grid-cols-2">
+              <div class="grid min-w-0 gap-4 sm:grid-cols-2">
                 <FormSelect
                   label="Authentication"
                   value={form().httpAuthType}
@@ -1118,7 +1145,7 @@ export const AvailabilityTargetSlot: Component<AvailabilityTargetSlotProps> = (p
               </div>
 
               <Show when={form().httpMethod !== 'HEAD'}>
-                <div class="grid gap-4 sm:grid-cols-2">
+                <div class="grid min-w-0 gap-4 sm:grid-cols-2">
                   <label class={formField}>
                     <span class={formLabel}>Response contains text (optional)</span>
                     <input
@@ -1223,26 +1250,28 @@ export const AvailabilityTargetSlot: Component<AvailabilityTargetSlotProps> = (p
               <span class={formHelpText}>Exact UTF-8 match. Empty accepts any reply.</span>
             </label>
           </Show>
-          <label class={formField}>
-            <span class={formLabel}>Poll interval (seconds)</span>
-            <input
-              class={formControl}
-              inputMode="numeric"
-              value={form().pollIntervalSeconds}
-              onInput={(event) => updateForm({ pollIntervalSeconds: event.currentTarget.value })}
-              placeholder="60"
-            />
-          </label>
-          <label class={formField}>
-            <span class={formLabel}>Timeout (milliseconds)</span>
-            <input
-              class={formControl}
-              inputMode="numeric"
-              value={form().timeoutMillis}
-              onInput={(event) => updateForm({ timeoutMillis: event.currentTarget.value })}
-              placeholder="2000"
-            />
-          </label>
+          <Show when={!isPushProtocol()}>
+            <label class={formField}>
+              <span class={formLabel}>Poll interval (seconds)</span>
+              <input
+                class={formControl}
+                inputMode="numeric"
+                value={form().pollIntervalSeconds}
+                onInput={(event) => updateForm({ pollIntervalSeconds: event.currentTarget.value })}
+                placeholder="60"
+              />
+            </label>
+            <label class={formField}>
+              <span class={formLabel}>Timeout (milliseconds)</span>
+              <input
+                class={formControl}
+                inputMode="numeric"
+                value={form().timeoutMillis}
+                onInput={(event) => updateForm({ timeoutMillis: event.currentTarget.value })}
+                placeholder="2000"
+              />
+            </label>
+          </Show>
           <label class={formField}>
             <span class={formLabel}>Failure threshold</span>
             <input
@@ -1335,19 +1364,21 @@ export const AvailabilityTargetSlot: Component<AvailabilityTargetSlotProps> = (p
             <Button
               variant="outline"
               size="settingsAction"
-              onClick={props.onCancel}
+              onClick={() => (createdPushTargetId() ? props.onSaved() : props.onCancel())}
               disabled={isBusy()}
             >
-              Cancel
+              {createdPushTargetId() ? 'Close' : 'Cancel'}
             </Button>
-            <Button
-              variant="outline"
-              size="settingsAction"
-              onClick={handleTest}
-              disabled={isBusy()}
-            >
-              {testing() ? 'Testing…' : 'Test probe'}
-            </Button>
+            <Show when={!isPushProtocol()}>
+              <Button
+                variant="outline"
+                size="settingsAction"
+                onClick={handleTest}
+                disabled={isBusy()}
+              >
+                {testing() ? 'Testing…' : 'Test probe'}
+              </Button>
+            </Show>
           </div>
           <div class="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
             <Show when={isEditing() && props.onToggleEnabled}>
@@ -1380,14 +1411,36 @@ export const AvailabilityTargetSlot: Component<AvailabilityTargetSlotProps> = (p
                     : 'Remove target'}
               </Button>
             </Show>
-            <Button
-              variant="primary"
-              size="settingsAction"
-              onClick={handleSave}
-              disabled={isBusy()}
+            <Show
+              when={createdPushTargetId()}
+              fallback={
+                <Button
+                  variant="primary"
+                  size="settingsAction"
+                  onClick={handleSave}
+                  disabled={isBusy()}
+                >
+                  {saving() ? 'Saving…' : isEditing() ? 'Save target' : addButtonLabel()}
+                </Button>
+              }
             >
-              {saving() ? 'Saving…' : isEditing() ? 'Save target' : addButtonLabel()}
-            </Button>
+              <Button
+                variant="outline"
+                size="settingsAction"
+                onClick={handleSave}
+                disabled={isBusy()}
+              >
+                {saving() ? 'Saving…' : 'Save changes'}
+              </Button>
+              <Button
+                variant="primary"
+                size="settingsAction"
+                onClick={props.onSaved}
+                disabled={isBusy()}
+              >
+                Done
+              </Button>
+            </Show>
           </div>
         </div>
       </div>

@@ -42,6 +42,7 @@ export const getAvailabilityProbeMethodLabel = (
     const path = (availability?.path ?? '').trim();
     return path ? `${protocol.toUpperCase()} ${path}` : protocol.toUpperCase();
   }
+  if (protocol === 'push') return 'Push';
   return protocol ? protocol.toUpperCase() : 'Probe';
 };
 
@@ -134,8 +135,20 @@ const getAvailabilityProbeResultLabel = (
   resource: Pick<Resource, 'status'>,
   availability: ResourceAvailabilityMeta,
 ): string => {
+  const protocol = normalizeAvailabilityProtocol(availability.protocol);
   const latency = availability.latencyMillis;
   const normalizedStatus = (resource.status ?? '').trim().toLowerCase();
+  if (protocol === 'push') {
+    if (!availability.lastChecked) return 'waiting for ping';
+    if (availability.available === false || ['offline', 'degraded'].includes(normalizedStatus)) {
+      const normalizedError = (availability.lastError ?? '').trim().toLowerCase();
+      return normalizedError.includes('missed') ? 'missed' : 'failed';
+    }
+    if (typeof latency === 'number' && Number.isFinite(latency) && latency > 0) {
+      return `${Math.round(latency)} ms`;
+    }
+    return 'ok';
+  }
   if (availability.probeOutcome === 'indeterminate') return 'open or filtered';
   if (availability.available === false || ['offline', 'degraded'].includes(normalizedStatus)) {
     return getAvailabilityProbeFailureLabel(availability);

@@ -101,6 +101,9 @@ func (m *Monitor) effectiveProbeAgentID(target config.AvailabilityTarget) string
 }
 
 func (m *Monitor) effectiveObservationLocationIDs(target config.AvailabilityTarget) []string {
+	if target.Protocol == config.AvailabilityProbePush {
+		return []string{config.AvailabilityObservationLocationLocal}
+	}
 	locations := target.EffectiveObservationLocationIDs()
 	if m.hasLicensedFeature(pkglicensing.FeatureExternalProbe) {
 		return locations
@@ -358,6 +361,9 @@ func availabilityProbeReportIsStale(target config.AvailabilityTarget, lastChecke
 }
 
 func availabilityProbeStaleWindow(target config.AvailabilityTarget) time.Duration {
+	if target.Protocol == config.AvailabilityProbePush {
+		return target.EffectivePushValidityWindow(time.Now().UTC())
+	}
 	window := time.Duration(target.EffectivePollIntervalSecs()) * 3 * time.Second
 	if window < availabilityProbeStaleFloor {
 		return availabilityProbeStaleFloor

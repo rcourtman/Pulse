@@ -3,7 +3,16 @@ import type { ResourceCertificateObservation } from '@/types/resource';
 
 const AVAILABILITY_TARGETS_PATH = '/api/availability-targets';
 
-export type AvailabilityProbeProtocol = 'icmp' | 'tcp' | 'udp' | 'http' | 'https' | 'dns';
+export type AvailabilityProbeProtocol = 'icmp' | 'tcp' | 'udp' | 'dns' | 'http' | 'https' | 'push';
+export type AvailabilityPushScheduleType = 'interval' | 'cron';
+
+export interface AvailabilityPushConfig {
+  token?: string;
+  scheduleType: AvailabilityPushScheduleType;
+  intervalSeconds?: number;
+  cronExpression?: string;
+  graceSeconds?: number;
+}
 export type AvailabilityUDPMode = 'response_required' | 'open_or_filtered';
 export type AvailabilityDNSTransport = 'udp' | 'tcp';
 export type AvailabilityDNSRecordType =
@@ -138,6 +147,7 @@ export interface AvailabilityTarget {
   http?: AvailabilityHTTPConfig;
   httpSecrets?: AvailabilityHTTPSecretState;
   dns?: AvailabilityDNSConfig;
+  push?: AvailabilityPushConfig;
   status?: AvailabilityProbeStatus;
 }
 
@@ -221,6 +231,15 @@ export class AvailabilityTargetsAPI {
     return apiFetchJSON(`${AVAILABILITY_TARGETS_PATH}/${encodeURIComponent(id)}/test`, {
       method: 'POST',
     });
+  }
+
+  static async rotatePushToken(id: string): Promise<AvailabilityTarget> {
+    return apiFetchJSON(
+      `${AVAILABILITY_TARGETS_PATH}/${encodeURIComponent(id)}/rotate-push-token`,
+      {
+        method: 'POST',
+      },
+    );
   }
 
   /** Published container ports that have no availability check. */

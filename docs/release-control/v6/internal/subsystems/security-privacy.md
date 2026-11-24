@@ -5714,3 +5714,17 @@ whole-input rejection, exact private retention, fresh/independent authority,
 durable withdrawal/consumption and reload, plus complete-format/fallback controls.
 The per-store unread-inventory suites retain save/shutdown and failed-preservation
 controls for these semantic failures as well as read/JSON failures.
+
+
+### Inbound push and heartbeat availability checks (Stage 2 Build, 24 November 2026)
+
+`internal/api/router.go` and `internal/api/availability_push_handlers.go` expose
+`/api/push/{token}` (and `/start`, `/fail`) as a narrow token-authenticated
+inbound endpoint with constant-time 256-bit token matching across all push
+targets, per-target and per-IP rate limiting, a 1 KiB POST body limit,
+`Cache-Control: no-store`, and CSRF skip scoped strictly to `/api/push/`. Tokens
+are stored encrypted in `availability_targets.enc`, omitted from unified
+resource snapshots, and rotatable via admin-only
+`POST /api/availability-targets/{id}/rotate-push-token`. Verified by
+`availability_push_handlers_test.go`, `route_inventory_test.go`,
+`router_public_paths_inventory_test.go`, and `router_auth_bypass_inventory_test.go`.

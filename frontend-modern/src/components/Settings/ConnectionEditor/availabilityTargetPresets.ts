@@ -4,6 +4,7 @@ import type {
   AvailabilityProbeProtocol,
   AvailabilityTargetKind,
 } from '@/api/availabilityTargets';
+import type { FeatureId } from '@/utils/featureReleases';
 
 export const CUSTOM_AVAILABILITY_PRESET_ID = 'custom';
 
@@ -14,7 +15,8 @@ export type AvailabilityTargetPresetID =
   | 'dns-resolver'
   | 'mqtt-broker'
   | 'esphome-device'
-  | 'esphome-dashboard';
+  | 'esphome-dashboard'
+  | 'push-job';
 
 export interface AvailabilityTargetPreset {
   id: AvailabilityTargetPresetID;
@@ -28,6 +30,7 @@ export interface AvailabilityTargetPreset {
   dnsTransport?: AvailabilityDNSTransport;
   addressPlaceholder: string;
   portPlaceholder?: string;
+  featureGate?: FeatureId;
 }
 
 export interface AvailabilityPresetFields {
@@ -93,6 +96,14 @@ export const AVAILABILITY_TARGET_PRESETS: readonly AvailabilityTargetPreset[] = 
     port: '6052',
     addressPlaceholder: 'http://esphome.local',
     portPlaceholder: '6052',
+  },
+  {
+    id: 'push-job',
+    label: 'Scheduled job / backup (Push)',
+    targetKind: 'service',
+    protocol: 'push',
+    addressPlaceholder: '',
+    featureGate: 'availabilityPushChecks',
   },
 ] as const;
 

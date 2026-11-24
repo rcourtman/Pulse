@@ -10,5 +10,10 @@
     "stage": "preview",
     "approval": "Richard, 2026-11-24: \"happy to go with your recommendation\"",
     "guides": []
+  },
+  "availabilityPushChecks": {
+    "name": "Push checks",
+    "stage": "build",
+    "guides": []
   }
 }

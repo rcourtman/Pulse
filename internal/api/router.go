@@ -4416,6 +4416,14 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 				}
 			}
 
+			// Inbound push/heartbeat availability checks authenticate via a per-check 256-bit token in the URL path.
+			if strings.HasPrefix(normalizedPath, "/api/push/") {
+				pushParts := strings.Split(strings.TrimPrefix(normalizedPath, "/"), "/")
+				if len(pushParts) == 3 || (len(pushParts) == 4 && (pushParts[3] == "start" || pushParts[3] == "fail")) {
+					isPublic = true
+				}
+			}
+
 			// Special case: setup-script should be public because it authenticates with setup tokens.
 			if normalizedPath == "/api/setup-script" {
 				// The script itself prompts for a setup token.
@@ -4504,6 +4512,10 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		}
 		// Skip CSRF for SSO login/callback endpoints (OIDC and SAML)
 		if strings.HasPrefix(req.URL.Path, "/api/oidc/") || strings.HasPrefix(req.URL.Path, "/api/saml/") {
+			skipCSRF = true
+		}
+		// Skip CSRF for inbound push/heartbeat availability check pings (token-authenticated in URL path).
+		if strings.HasPrefix(req.URL.Path, "/api/push/") {
 			skipCSRF = true
 		}
 		// Skip CSRF for hosted public endpoints (may be called without a session or with a stale cookie).

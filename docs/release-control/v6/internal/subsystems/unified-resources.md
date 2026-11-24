@@ -10697,3 +10697,10 @@ timeline and response-time trend chart (omitting the latency chart when a check
 has no latency measurements). Verified by `AvailabilityDrawerHistory.test.tsx`,
 `ResourceDetailDrawer.history.test.tsx`, `ResourceDetailDrawer.snapshot.test.tsx`,
 and `AvailabilityChecksTable.test.tsx`.
+
+### Inbound push and heartbeat availability checks (Stage 2 Build, 24 November 2026)
+
+`frontend-modern/src/utils/availabilityProbePresentation.ts` adds `Push` method
+and result formatting (`waiting for ping`, `missed`, `failed`, `ok`, or measured
+duration) for unified availability resources backed by `protocol: "push"` checks
+without exposing ping tokens in unified resource payloads.

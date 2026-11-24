@@ -307,8 +307,11 @@ func (r *Router) registerConfigSystemRoutes(updateHandlers *UpdateHandlers) {
 			writeErrorResponse(w, http.StatusServiceUnavailable, "availability_unavailable", "Availability target service unavailable", nil)
 			return
 		}
-		if req.Method == http.MethodPost && strings.HasSuffix(strings.Trim(req.URL.Path, "/"), "/test") {
+		trimmedPath := strings.Trim(req.URL.Path, "/")
+		if req.Method == http.MethodPost && strings.HasSuffix(trimmedPath, "/test") {
 			RequireOrgAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.availabilityHandlers.HandleTestSavedConnection))(w, req)
+		} else if req.Method == http.MethodPost && strings.HasSuffix(trimmedPath, "/rotate-push-token") {
+			RequireOrgAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.availabilityHandlers.HandleRotatePushToken))(w, req)
 		} else if req.Method == http.MethodDelete {
 			RequireOrgAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.availabilityHandlers.HandleDelete))(w, req)
 		} else if req.Method == http.MethodPut {
@@ -316,6 +319,15 @@ func (r *Router) registerConfigSystemRoutes(updateHandlers *UpdateHandlers) {
 		} else {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		}
+	})
+
+	// Inbound push/heartbeat availability pings authenticated via per-check URL token.
+	r.mux.HandleFunc("/api/push/", func(w http.ResponseWriter, req *http.Request) {
+		if r.availabilityHandlers == nil {
+			writeErrorResponse(w, http.StatusServiceUnavailable, "availability_unavailable", "Availability target service unavailable", nil)
+			return
+		}
+		r.availabilityHandlers.HandlePushPing(w, req)
 	})
 
 	// TrueNAS connection management
