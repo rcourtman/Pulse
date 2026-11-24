@@ -1,6 +1,10 @@
 package agentexec
 
-import "strings"
+import (
+	"strings"
+
+	"github.com/rcourtman/pulse-go-rewrite/pkg/secretredact"
+)
 
 // Auto-approve patterns match a command's start, but several approved
 // programs also take arguments that change the system, write files, or read
@@ -74,7 +78,7 @@ var (
 func autoApprovedArgsSafe(name, command string) bool {
 	switch name {
 	case "find", "du", "file", "last", "blkid", "ss", "lsof", "journalctl",
-		"systemctl", "apt-cache", "sar", "ps", "ip", "ifconfig", "dpkg", "pvesh", "podman":
+		"systemctl", "apt-cache", "sar", "ps", "ip", "ifconfig", "dpkg", "pvesh", "docker", "podman":
 	default:
 		return true
 	}
@@ -132,8 +136,10 @@ func autoApprovedArgsSafe(name, command string) bool {
 		return dpkgArgsSafe(args)
 	case "pvesh":
 		return pveshArgsSafe(args)
+	case "docker":
+		return formatTemplatesSelectFields(args)
 	case "podman":
-		return podmanArgsSafe(args)
+		return podmanArgsSafe(args) && formatTemplatesSelectFields(args)
 	}
 	return false
 }
@@ -164,7 +170,9 @@ func globKeepsOption(text string) bool {
 // double-quoted text without expansions, as in --since="1 hour ago". Anything
 // the shell would expand into other words or text the policy cannot see
 // ($, backticks, braces, a ~ other than the home directory, comments) or
-// parse as syntax is refused rather than interpreted.
+// parse as syntax is refused rather than interpreted. Inside double quotes
+// sh keeps a backslash as written unless it escapes $, `, ", \ or a newline,
+// so "table {{.Names}}\t{{.Status}}" is read as docker receives it.
 func splitPolicyWords(command string) ([]logReadWord, bool) {
 	var words []logReadWord
 	i := 0
@@ -189,7 +197,8 @@ func splitPolicyWords(command string) ([]logReadWord, bool) {
 					return nil, false
 				}
 				quoted := command[i+1 : i+1+end]
-				if c == '"' && strings.ContainsAny(quoted, "$`\\") {
+				if c == '"' && (strings.ContainsAny(quoted, "$`") ||
+					strings.Contains(quoted, `\\`) || strings.HasSuffix(quoted, `\`)) {
 					return nil, false
 				}
 				if strings.ContainsAny(quoted, "\x00\n\r") {
@@ -469,17 +478,81 @@ func dpkgArgsSafe(args []string) bool {
 	return noOptionWords(args[1:])
 }
 
-// pveshArgsSafe refuses API paths that return a file's contents from a guest
-// or a backup (qemu agent file-read, storage file-restore).
+// pveshReadPaths are the API subtrees pvesh get may read without approval:
+// node, guest, storage and cluster state. pvesh acts as root@pam, so no
+// Proxmox permission narrows the read, and other subtrees return stored
+// credentials: ACME DNS plugin data (/cluster/acme), SDN DNS and IPAM keys
+// (/cluster/sdn), OpenID client keys (/access/domains), a proxy password
+// (/cluster/options).
+var pveshReadPaths = []string{
+	"version", "nodes", "storage", "pools",
+	"cluster/status", "cluster/resources", "cluster/tasks", "cluster/log", "cluster/nextid",
+	"cluster/ha", "cluster/backup", "cluster/backup-info", "cluster/replication", "cluster/ceph",
+}
+
+// pveshDeniedSegments are refused inside those subtrees too. They return a
+// file's contents from a guest or a backup (qemu agent file-read, storage
+// file-restore, vzdump extractconfig), a guest's generated cloud-init data,
+// the node report with its raw configuration files, or the subscription key.
+var pveshDeniedSegments = []string{
+	"file-read", "file-restore", "extractconfig", "cloudinit", "report", "subscription",
+}
+
+// pveshArgsSafe allows "get PATH" for a PATH under pveshReadPaths. The path
+// must be the word after get: pvesh reads its first operand as the path, and
+// an option in front of it could take it as a value instead. Every later word
+// is an option or the value of the option before it, so there is no second
+// operand either.
 func pveshArgsSafe(args []string) bool {
-	for _, arg := range args {
+	if len(args) < 2 || args[0] != "get" {
+		return false
+	}
+	for i, arg := range args[1:] {
+		if pveshNamesPath(arg) {
+			return false
+		}
+		// args[i] is the word before arg.
+		if i > 0 && !strings.HasPrefix(arg, "-") &&
+			(!strings.HasPrefix(args[i], "-") || strings.Contains(args[i], "=")) {
+			return false
+		}
 		for _, segment := range strings.Split(strings.ToLower(arg), "/") {
-			if segment == "file-read" || segment == "file-restore" {
+			if containsString(pveshDeniedSegments, segment) {
 				return false
 			}
 		}
 	}
-	return true
+	var segments []string
+	for _, segment := range strings.Split(args[1], "/") {
+		switch {
+		case segment == "":
+			// pvesh skips empty segments.
+			continue
+		case segment == "." || segment == ".." || strings.Contains(segment, "%"):
+			// Not a name; how pvesh would resolve it is not guessed.
+			return false
+		}
+		segments = append(segments, segment)
+	}
+	path := strings.Join(segments, "/")
+	for _, allowed := range pveshReadPaths {
+		if path == allowed || strings.HasPrefix(path, allowed+"/") {
+			return true
+		}
+	}
+	return false
+}
+
+// pveshNamesPath reports whether arg names the path as an option. pvesh
+// calls the operand api_path and parses options with Getopt::Long (one or two
+// dashes, any case, abbreviations), so a second path given that way is
+// refused rather than guessed at.
+func pveshNamesPath(arg string) bool {
+	if !strings.HasPrefix(arg, "-") {
+		return false
+	}
+	name, _, _ := strings.Cut(strings.ToLower(strings.TrimLeft(arg, "-")), "=")
+	return name != "" && strings.HasPrefix("api_path", name)
 }
 
 // podmanReadFlags are the display flags of the podman subcommands the policy
@@ -514,6 +587,64 @@ func podmanArgsSafe(args []string) bool {
 					return false
 				}
 			}
+		}
+	}
+	return true
+}
+
+// formatTemplatesSelectFields checks the Go templates docker and podman take
+// in --format (inspect -f). Output masking recognises a credential by the
+// name in front of it (POSTGRES_PASSWORD=...), and a template chooses the
+// output: {{range .Config.Env}}{{index (split . "=") 1}}{{end}} prints the
+// values of a container's environment without their names. Only actions that
+// select a field, alone or through json, run without approval:
+// {{.State.Status}}, {{json .Mounts}}, {{.}}. They print what the plain
+// command prints. Functions, range, with, variables and pipelines can drop
+// the names and need approval. Every word is checked, so it does not matter
+// how the option is spelled or attached.
+func formatTemplatesSelectFields(args []string) bool {
+	for _, arg := range args {
+		for {
+			open := strings.Index(arg, "{{")
+			if open < 0 {
+				break
+			}
+			end := strings.Index(arg[open:], "}}")
+			if end < 0 {
+				return false
+			}
+			action := strings.Fields(arg[open+2 : open+end])
+			arg = arg[open+end+2:]
+			if len(action) == 2 && action[0] == "json" {
+				action = action[1:]
+			}
+			if len(action) != 1 || !templateFieldChainSafe(action[0]) {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+// templateFieldChars are the characters of a field name in a template.
+const templateFieldChars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_"
+
+// templateFieldChainSafe accepts "." and chains such as .HostConfig.Memory.
+// A field that masking would recognise by its own name (.Config.Labels.token)
+// is refused, because the template prints its value without that name.
+func templateFieldChainSafe(chain string) bool {
+	if chain == "." {
+		return true
+	}
+	if !strings.HasPrefix(chain, ".") {
+		return false
+	}
+	for _, field := range strings.Split(chain[1:], ".") {
+		if field == "" || strings.Trim(field, templateFieldChars) != "" {
+			return false
+		}
+		if _, masked := secretredact.Text(`"` + field + `": "value"`); masked > 0 {
+			return false
 		}
 	}
 	return true

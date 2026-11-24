@@ -8,6 +8,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/api/agentbinding"
 	"github.com/rcourtman/pulse-go-rewrite/internal/api/agenttokens"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 	"github.com/rs/zerolog/log"
 )
 
@@ -175,6 +176,24 @@ func (r *Router) admitAgentExecToken(token string, agentID string, hostname stri
 	boundID := strings.TrimSpace(record.Metadata["bound_agent_id"])
 	boundHost := strings.TrimSpace(record.Metadata["bound_hostname"])
 	decision := evaluateAgentExecBinding(record, requestedID, requestedHost)
+
+	// A first bind, a legacy migration and an ID backfill each put on this
+	// token an agent ID that only the registration names. The token's own
+	// record cannot say whose ID that is, so the binding decision alone let an
+	// unused install token take the ID of a host enrolled under another token,
+	// and with it that host's command session. Refuse before anything is
+	// persisted, so the refused token stays free to bind its own identity.
+	if (decision.firstBind || decision.legacyMigrate || decision.backfillID) &&
+		r.agentExecIdentityHeldByAnotherToken(organizationID, tokenID, requestedID) {
+		config.Mu.Unlock()
+		log.Warn().
+			Str("token_id", tokenID).
+			Str("organization_id", organizationID).
+			Str("requested_id", requestedID).
+			Str("requested_hostname", requestedHost).
+			Msg("Agent exec token refused: the registering agent identity belongs to another token")
+		return agentexec.AgentAdmission{}, false
+	}
 
 	switch {
 	case decision.firstBind:
@@ -345,6 +364,80 @@ func (r *Router) admitAgentExecToken(token string, agentID string, hostname stri
 		Str("requested_hostname", requestedHost).
 		Msg("Agent token mismatch: token is not bound to the registering agent")
 	return agentexec.AgentAdmission{}, false
+}
+
+// agentExecIdentityHeldByAnotherToken reports whether an agent ID that a
+// command registration would newly bind to a token already belongs to another
+// credential of the same organization. The caller holds config.Mu.
+//
+// The report path is the authority on which token holds a host ID: it forks a
+// colliding report onto its own ID and hands an existing ID to a fresh token
+// only as a re-enrollment, and the acknowledgement names a command identity
+// only for a host the monitor holds under the reporting token. So a host the
+// monitor holds decides: its own token may bind it (a reinstall that took the
+// host over, whatever the superseded token is still bound to), and no other
+// token may. Live state loses agent-reported hosts across a restart until the
+// next report lands, and an agent whose host is not in state has no holder, so
+// an ID the monitor does not hold falls back to the durable record: an
+// unexpired token of this organization that is already bound to it. An ID
+// neither knows is free, which is what first-use binding exists for.
+//
+// The config gate needs no matching check: it judges a token only against the
+// host the monitor holds under that token.
+func (r *Router) agentExecIdentityHeldByAnotherToken(organizationID, tokenID, agentID string) bool {
+	if r.agentExecServer != nil {
+		if liveTokenID, ok := r.agentExecServer.ConnectedAgentTokenIDForOrganization(organizationID, agentID); ok && liveTokenID != tokenID {
+			for index := range r.config.APITokens {
+				other := &r.config.APITokens[index]
+				if other.ID != liveTokenID || other.IsExpired() {
+					continue
+				}
+				otherOrganizationID := "default"
+				if orgs := other.GetBoundOrgs(); len(orgs) == 1 && strings.TrimSpace(orgs[0]) != "" {
+					otherOrganizationID = strings.TrimSpace(orgs[0])
+				}
+				if otherOrganizationID == organizationID {
+					return true
+				}
+			}
+		}
+	}
+
+	var monitor *monitoring.Monitor
+	if organizationID == "default" {
+		monitor = r.monitor
+	} else if r.mtMonitor != nil {
+		// Peek only. A registration must not start a tenant runtime, and a
+		// runtime that is not loaded holds no live hosts to ask about.
+		monitor, _ = r.mtMonitor.PeekMonitor(organizationID)
+	}
+	if monitor != nil {
+		for _, host := range monitor.GetLiveHostsSnapshot() {
+			if host.ID != agentID {
+				continue
+			}
+			if holder := strings.TrimSpace(host.TokenID); holder != "" {
+				return holder != tokenID
+			}
+			break
+		}
+	}
+
+	for index := range r.config.APITokens {
+		other := &r.config.APITokens[index]
+		if other.ID == tokenID || other.IsExpired() ||
+			strings.TrimSpace(other.Metadata["bound_agent_id"]) != agentID {
+			continue
+		}
+		otherOrganizationID := "default"
+		if orgs := other.GetBoundOrgs(); len(orgs) == 1 && strings.TrimSpace(orgs[0]) != "" {
+			otherOrganizationID = strings.TrimSpace(orgs[0])
+		}
+		if otherOrganizationID == organizationID {
+			return true
+		}
+	}
+	return false
 }
 
 // recordReportedAgentIdentity is the reporting-side identity binding. After an

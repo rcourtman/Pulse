@@ -5,9 +5,9 @@ import (
 	"strings"
 )
 
-// logReadRoot is the only directory the default policy lets cat, head, tail
+// LogReadRoot is the only directory the default policy lets cat, head, tail
 // and grep read without approval.
-const logReadRoot = "/var/log"
+const LogReadRoot = "/var/log"
 
 // logReadWord is one shell word of a log read after quote removal.
 type logReadWord struct {
@@ -15,6 +15,29 @@ type logReadWord struct {
 	// glob is true for an unquoted word holding * or ?, which the shell
 	// expands against the filesystem.
 	glob bool
+	// file is set by parseLogReadArgs on the file operands it accepted.
+	file bool
+}
+
+// LogRead is a command the default policy approves as a log read, as the
+// words the shell would hand the program. The approval reads path names only.
+// A name under /var/log can still be, or pass through, a symbolic link to any
+// other file, and whoever owns a log directory can plant one. Only the host
+// that runs the command can tell, so that host opens the File words itself
+// beneath LogReadRoot and gives the program those descriptors, never the
+// names.
+type LogRead struct {
+	Program string // cat, head, tail or grep
+	Args    []LogReadArg
+}
+
+// LogReadArg is one word after the program name, with its quotes removed.
+type LogReadArg struct {
+	Text string
+	// File marks a file operand: by name, a path under LogReadRoot.
+	File bool
+	// Glob marks a file operand the shell would expand (* and ?).
+	Glob bool
 }
 
 var (
@@ -33,23 +56,51 @@ var (
 // be free of shell control operators. It works on the original case, because
 // grep and tail give upper- and lower-case options different meanings.
 func isAutoApprovedLogRead(command string) bool {
+	_, ok := parseLogRead(command)
+	return ok
+}
+
+// parseLogRead returns the words of a command isAutoApprovedLogRead accepts.
+func parseLogRead(command string) (LogRead, bool) {
 	words, ok := splitLogReadWords(command)
 	if !ok || len(words) < 2 {
-		return false
+		return LogRead{}, false
 	}
 	args := words[1:]
 	switch words[0].text {
 	case "cat":
-		return parseLogReadArgs(args, catLogReadOptions)
+		ok = parseLogReadArgs(args, catLogReadOptions)
 	case "head":
-		return parseLogReadArgs(args, headLogReadOptions)
+		ok = parseLogReadArgs(args, headLogReadOptions)
 	case "tail":
-		return parseLogReadArgs(args, tailLogReadOptions)
+		ok = parseLogReadArgs(args, tailLogReadOptions)
 	case "grep":
-		return parseLogReadArgs(args, grepLogReadOptions)
+		ok = parseLogReadArgs(args, grepLogReadOptions)
 	default:
-		return false
+		ok = false
 	}
+	if !ok {
+		return LogRead{}, false
+	}
+	read := LogRead{Program: words[0].text, Args: make([]LogReadArg, len(args))}
+	for i, word := range args {
+		read.Args[i] = LogReadArg{Text: word.text, File: word.file, Glob: word.file && word.glob}
+	}
+	return read, true
+}
+
+// AutoApprovedLogRead returns the words of a command that Evaluate allows
+// under the log read rule, and false for every other command.
+func (p *CommandPolicy) AutoApprovedLogRead(command string) (LogRead, bool) {
+	if !p.allowLogReads || p.Evaluate(command) != PolicyAllow {
+		return LogRead{}, false
+	}
+	// The same text Evaluate gave the log read check.
+	command = strings.TrimSpace(command)
+	if strings.HasPrefix(strings.ToLower(command), "sudo ") {
+		command = stripPlainSudo(command)
+	}
+	return parseLogRead(command)
 }
 
 // splitLogReadWords splits a command into shell words. A word is unquoted
@@ -104,7 +155,7 @@ func splitLogReadWords(command string) ([]logReadWord, bool) {
 // since only those can expand to "..".
 func isLogReadPath(word logReadWord) bool {
 	p := word.text
-	if p != logReadRoot && !strings.HasPrefix(p, logReadRoot+"/") {
+	if p != LogReadRoot && !strings.HasPrefix(p, LogReadRoot+"/") {
 		return false
 	}
 	for _, segment := range strings.Split(p, "/") {
@@ -287,11 +338,11 @@ func logReadValueAllowed(option logReadOption, value logReadWord) bool {
 // under /var/log. GNU getopt would also take options after operands, but
 // with POSIXLY_CORRECT set, and in BusyBox on musl, those words are file
 // names, so a word after the first operand that looks like an option is
-// refused rather than guessed.
+// refused rather than guessed. The accepted file operands are marked in args.
 func parseLogReadArgs(args []logReadWord, set logReadOptionSet) bool {
 	patternGiven := false
 	recursive := false
-	var operands []logReadWord
+	var operands []*logReadWord
 	endOfOptions := false
 
 	for i := 0; i < len(args); i++ {
@@ -300,7 +351,7 @@ func parseLogReadArgs(args []logReadWord, set logReadOptionSet) bool {
 		// "-" is an operand: grep's pattern, or standard input, which
 		// isLogReadPath refuses.
 		if endOfOptions || text == "" || text == "-" || text[0] != '-' {
-			operands = append(operands, word)
+			operands = append(operands, &args[i])
 			continue
 		}
 		if len(operands) > 0 || word.glob {
@@ -402,7 +453,7 @@ func parseLogReadArgs(args []logReadWord, set logReadOptionSet) bool {
 	}
 	literal := false
 	for _, operand := range operands {
-		if !isLogReadPath(operand) {
+		if !isLogReadPath(*operand) {
 			return false
 		}
 		if !operand.glob {
@@ -414,6 +465,9 @@ func parseLogReadArgs(args []logReadWord, set logReadOptionSet) bool {
 	// directory. One literal operand keeps the search under /var/log.
 	if recursive && !literal {
 		return false
+	}
+	for _, operand := range operands {
+		operand.file = true
 	}
 	return true
 }

@@ -186,7 +186,7 @@ func TestSubscribeDeployProgress(t *testing.T) {
 	s.UnsubscribeDeployProgress("agent-1", "job-1")
 
 	// After unsubscribe, readLoop won't find the channel (tested implicitly).
-	subKey := deploySubKey("agent-1", "job-1")
+	subKey := deploySubKey(agentSessionKey(defaultOrganizationID, "agent-1"), "job-1")
 	s.mu.RLock()
 	_, exists := s.deploySubs[subKey]
 	s.mu.RUnlock()

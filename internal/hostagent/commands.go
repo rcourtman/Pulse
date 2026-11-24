@@ -1674,7 +1674,7 @@ func (c *CommandClient) currentCommandPolicy() *agentexec.CommandPolicy {
 }
 
 func (c *CommandClient) authorizeCommand(payload executeCommandPayload) error {
-	switch c.currentCommandPolicy().Evaluate(payload.Command) {
+	switch c.currentCommandPolicy().EvaluateForTarget(payload.Command, payload.TargetType) {
 	case agentexec.PolicyBlock:
 		return fmt.Errorf("command blocked by policy")
 	case agentexec.PolicyRequireApproval:
@@ -1798,6 +1798,31 @@ func (c *CommandClient) executeCommand(ctx context.Context, payload executeComma
 
 	command := wrapCommand(payload)
 
+	// The policy approves a log read by path name, and a name under /var/log
+	// can be a symbolic link to any file. For a read on this host the agent
+	// opens the files beneath /var/log itself and the program gets those
+	// descriptors. Inside a guest the names resolve in the guest.
+	var logRead *confinedLogRead
+	if guard == nil && command == payload.Command && runtime.GOOS != "windows" {
+		if read, ok := c.currentCommandPolicy().AutoApprovedLogRead(payload.Command); ok {
+			var err error
+			if logRead, err = confineLogRead(read); err != nil {
+				result.Error = err.Error()
+				result.ExitCode = -1
+				return result
+			}
+			defer logRead.Close()
+			if len(logRead.files) == 0 {
+				// Without a file operand the program would read standard
+				// input or the current directory instead.
+				result.ExitCode = 1
+				logRead.finish(&result)
+				return result
+			}
+			command = logRead.command
+		}
+	}
+
 	// Execute the command
 	var cmd *exec.Cmd
 	if guard != nil {
@@ -1830,6 +1855,9 @@ func (c *CommandClient) executeCommand(ctx context.Context, payload executeComma
 	stderr := newCappedBuffer(maxCommandOutputSize)
 	cmd.Stdout = stdout
 	cmd.Stderr = stderr
+	if logRead != nil {
+		cmd.ExtraFiles = logRead.files
+	}
 
 	err := cmd.Run()
 	outputIncomplete := errors.Is(err, exec.ErrWaitDelay)
@@ -1864,6 +1892,9 @@ func (c *CommandClient) executeCommand(ctx context.Context, payload executeComma
 	} else {
 		result.ExitCode = 0
 		result.Success = true
+	}
+	if logRead != nil {
+		logRead.finish(&result)
 	}
 
 	if guard != nil {
