@@ -20,6 +20,7 @@ import {
   PlatformSectionTabs,
   PlatformTableEmptyState,
   PlatformTableLoadingState,
+  PlatformTableResetFiltersButton,
   PlatformTableToolbar,
   type PlatformTableFilterOption,
   withPlatformStatusCounts,
@@ -439,15 +440,19 @@ function createKubernetesInventoryScope(
   };
 }
 
+type KubernetesWorkloadKindFilter = '' | 'deployments' | 'pods' | 'controllers' | 'autoscaling';
+
 function KubernetesWorkloads(props: {
   model: KubernetesPageModel;
   controllers: Resource[];
   attentionCount?: number;
 }) {
+  const [searchParams] = useSearchParams();
   const hasWorkloadInventory = createMemo(
     () => props.model.workloads.length > 0 || props.model.autoscaling.length > 0,
   );
   const toolbar = createKubernetesSharedToolbar();
+  const [kindFilter, setKindFilter] = createSignal<KubernetesWorkloadKindFilter>('');
   const sections = createMemo<Resource[][]>(() => [
     props.model.deployments,
     props.model.pods,
@@ -466,30 +471,128 @@ function KubernetesWorkloads(props: {
   const scopedPods = () => scope.scopedSections()[1];
   const scopedControllers = () => scope.scopedSections()[2];
   const scopedAutoscaling = () => scope.scopedSections()[3];
-  const scopeFilters = scope.scopeFilters;
+
+  const kindOptions = createMemo(() => {
+    const options: Array<{ value: KubernetesWorkloadKindFilter; label: string }> = [
+      { value: '', label: 'All kinds' },
+    ];
+    if (scopedDeployments().length > 0) {
+      options.push({ value: 'deployments', label: 'Deployments' });
+    }
+    if (scopedPods().length > 0) {
+      options.push({ value: 'pods', label: 'Pods' });
+    }
+    if (scopedControllers().length > 0) {
+      options.push({ value: 'controllers', label: 'Controllers' });
+    }
+    if (scopedAutoscaling().length > 0) {
+      options.push({ value: 'autoscaling', label: 'Autoscaling' });
+    }
+    return options;
+  });
+
+  const activeKindFilter = createMemo<KubernetesWorkloadKindFilter>(() => {
+    const current = kindFilter();
+    return kindOptions().some((opt) => opt.value === current) ? current : '';
+  });
+
+  const toolbarFilters = createMemo<FilterDef[]>(() => {
+    const filters = [...scope.scopeFilters()];
+    if (kindOptions().length > 2) {
+      filters.push({
+        id: 'kind',
+        label: 'Kind',
+        group: 'scope',
+        options: kindOptions,
+        value: activeKindFilter,
+        setValue: (value: string) => setKindFilter(value as KubernetesWorkloadKindFilter),
+        defaultValue: '',
+      });
+    }
+    return filters;
+  });
+
+  const kindScopedDeployments = createMemo(() =>
+    activeKindFilter() === '' || activeKindFilter() === 'deployments' ? scopedDeployments() : [],
+  );
+  const kindScopedPods = createMemo(() =>
+    activeKindFilter() === '' || activeKindFilter() === 'pods' ? scopedPods() : [],
+  );
+  const kindScopedControllers = createMemo(() =>
+    activeKindFilter() === '' || activeKindFilter() === 'controllers' ? scopedControllers() : [],
+  );
+  const kindScopedAutoscaling = createMemo(() =>
+    activeKindFilter() === '' || activeKindFilter() === 'autoscaling' ? scopedAutoscaling() : [],
+  );
+
+  const kindScopedSections = createMemo<Resource[][]>(() => [
+    kindScopedDeployments(),
+    kindScopedPods(),
+    kindScopedControllers(),
+    kindScopedAutoscaling(),
+  ]);
+
+  const matchedDeployments = createMemo(() =>
+    filterKubernetesResources(kindScopedDeployments(), toolbar.search(), toolbar.status()),
+  );
+  const matchedPods = createMemo(() =>
+    filterKubernetesResources(kindScopedPods(), toolbar.search(), toolbar.status()),
+  );
+  const matchedControllers = createMemo(() =>
+    filterKubernetesResources(kindScopedControllers(), toolbar.search(), toolbar.status()),
+  );
+  const matchedAutoscaling = createMemo(() =>
+    filterKubernetesResources(kindScopedAutoscaling(), toolbar.search(), toolbar.status()),
+  );
+
   const countForStatus = (value: KubernetesResourceStatusFilter): number =>
-    countKubernetesVisible(scope.scopedSections(), toolbar.search(), value);
+    countKubernetesVisible(kindScopedSections(), toolbar.search(), value);
+
   const attentionCount = createMemo(() => {
     if (props.attentionCount === undefined) return 0;
-    if (!toolbar.search().trim() && !scope.hasActiveScope()) return props.attentionCount;
-    return scope
-      .scopedSections()
-      .reduce(
-        (sum, rows) =>
-          sum +
-          filterKubernetesResources(rows, toolbar.search(), 'all').filter(
-            isKubernetesWorkloadAttention,
-          ).length,
-        0,
-      );
+    if (!toolbar.search().trim() && !scope.hasActiveScope() && activeKindFilter() === '') {
+      return props.attentionCount;
+    }
+    return kindScopedSections().reduce(
+      (sum, rows) =>
+        sum +
+        filterKubernetesResources(rows, toolbar.search(), 'all').filter(
+          isKubernetesWorkloadAttention,
+        ).length,
+      0,
+    );
   });
-  const visibleRows = createMemo(() => countForStatus(toolbar.status()));
-  const hasActiveFilters = () => toolbar.hasActiveFilters() || scope.hasActiveScope();
-  const resetFilters = () =>
+
+  const reviewWorkloadsHref = createMemo(() => {
+    const params = new URLSearchParams();
+    const cluster = searchParams[KUBERNETES_QUERY_PARAMS.cluster];
+    const namespace = searchParams[KUBERNETES_QUERY_PARAMS.namespace];
+    if (typeof cluster === 'string' && cluster.trim()) {
+      params.set(KUBERNETES_QUERY_PARAMS.cluster, cluster.trim());
+    }
+    if (typeof namespace === 'string' && namespace.trim()) {
+      params.set(KUBERNETES_QUERY_PARAMS.namespace, namespace.trim());
+    }
+    params.set(KUBERNETES_QUERY_PARAMS.status, 'degraded');
+    return `${buildKubernetesPath('workloads')}?${params.toString()}`;
+  });
+
+  const visibleRows = createMemo(
+    () =>
+      matchedDeployments().length +
+      matchedPods().length +
+      matchedControllers().length +
+      matchedAutoscaling().length,
+  );
+  const hasActiveFilters = () =>
+    toolbar.hasActiveFilters() || scope.hasActiveScope() || activeKindFilter() !== '';
+  const resetFilters = () => {
+    setKindFilter('');
     toolbar.resetFilters({
       [KUBERNETES_QUERY_PARAMS.cluster]: null,
       [KUBERNETES_QUERY_PARAMS.namespace]: null,
     });
+  };
 
   return (
     <Show
@@ -511,7 +614,7 @@ function KubernetesWorkloads(props: {
           status={toolbar.status()}
           onStatusChange={toolbar.setStatus}
           statusOptions={withPlatformStatusCounts(PLATFORM_HEALTH_FILTER_OPTIONS, countForStatus)}
-          filters={scopeFilters()}
+          filters={toolbarFilters()}
           leadingControls={
             <Show when={attentionCount() > 0}>
               <div
@@ -524,7 +627,7 @@ function KubernetesWorkloads(props: {
                   {attentionCount() === 1 ? 'needs' : 'need'} attention
                 </span>
                 <ButtonLink
-                  href={buildKubernetesPath('workloads')}
+                  href={reviewWorkloadsHref()}
                   variant="warning"
                   size="xs"
                   class="shrink-0 whitespace-nowrap"
@@ -540,49 +643,61 @@ function KubernetesWorkloads(props: {
           hasActiveFilters={hasActiveFilters()}
           onResetFilters={resetFilters}
         />
-        <Show when={scopedDeployments().length > 0}>
-          <KubernetesDeploymentsTable
-            resources={scopedDeployments()}
-            emptyIcon={k8sIcon()}
-            emptyTitle="No deployments reported"
-            emptyDescription="Deployments appear here once the agent can read Deployment resources."
-            showToolbar={false}
-            externalSearch={toolbar.search}
-            externalStatus={toolbar.status}
-          />
-        </Show>
-        <Show when={scopedPods().length > 0}>
-          <KubernetesPodsTable
-            resources={scopedPods()}
-            emptyIcon={k8sIcon()}
-            emptyTitle="No pods reported"
-            emptyDescription="Pods appear here once the agent can read Pod resources."
-            showToolbar={false}
-            externalSearch={toolbar.search}
-            externalStatus={toolbar.status}
-          />
-        </Show>
-        <Show when={scopedControllers().length > 0}>
-          <KubernetesControllersTable
-            resources={scopedControllers()}
-            emptyIcon={k8sIcon()}
-            emptyTitle="No workload controllers reported"
-            emptyDescription="ReplicaSets, StatefulSets, DaemonSets, Jobs, and CronJobs appear here when the agent reports them."
-            showToolbar={false}
-            externalSearch={toolbar.search}
-            externalStatus={toolbar.status}
-          />
-        </Show>
-        <Show when={scopedAutoscaling().length > 0}>
-          <KubernetesAutoscalingTable
-            resources={scopedAutoscaling()}
-            emptyIcon={k8sIcon()}
-            emptyTitle="No autoscaling resources reported"
-            emptyDescription="HorizontalPodAutoscalers appear here once the agent can read autoscaling inventory."
-            showToolbar={false}
-            externalSearch={toolbar.search}
-            externalStatus={toolbar.status}
-          />
+        <Show
+          when={visibleRows() > 0}
+          fallback={
+            <PlatformTableEmptyState
+              icon={k8sIcon()}
+              title="No workloads match current filters"
+              description="Adjust the search, status, scope, or kind filter to see more Kubernetes workloads."
+              actions={<PlatformTableResetFiltersButton onReset={resetFilters} />}
+            />
+          }
+        >
+          <Show when={matchedDeployments().length > 0}>
+            <KubernetesDeploymentsTable
+              resources={kindScopedDeployments()}
+              emptyIcon={k8sIcon()}
+              emptyTitle="No deployments reported"
+              emptyDescription="Deployments appear here once the agent can read Deployment resources."
+              showToolbar={false}
+              externalSearch={toolbar.search}
+              externalStatus={toolbar.status}
+            />
+          </Show>
+          <Show when={matchedPods().length > 0}>
+            <KubernetesPodsTable
+              resources={kindScopedPods()}
+              emptyIcon={k8sIcon()}
+              emptyTitle="No pods reported"
+              emptyDescription="Pods appear here once the agent can read Pod resources."
+              showToolbar={false}
+              externalSearch={toolbar.search}
+              externalStatus={toolbar.status}
+            />
+          </Show>
+          <Show when={matchedControllers().length > 0}>
+            <KubernetesControllersTable
+              resources={kindScopedControllers()}
+              emptyIcon={k8sIcon()}
+              emptyTitle="No workload controllers reported"
+              emptyDescription="ReplicaSets, StatefulSets, DaemonSets, Jobs, and CronJobs appear here when the agent reports them."
+              showToolbar={false}
+              externalSearch={toolbar.search}
+              externalStatus={toolbar.status}
+            />
+          </Show>
+          <Show when={matchedAutoscaling().length > 0}>
+            <KubernetesAutoscalingTable
+              resources={kindScopedAutoscaling()}
+              emptyIcon={k8sIcon()}
+              emptyTitle="No autoscaling resources reported"
+              emptyDescription="HorizontalPodAutoscalers appear here once the agent can read autoscaling inventory."
+              showToolbar={false}
+              externalSearch={toolbar.search}
+              externalStatus={toolbar.status}
+            />
+          </Show>
         </Show>
       </div>
     </Show>
@@ -666,25 +781,41 @@ function KubernetesServices(props: { model: KubernetesPageModel }) {
           hasActiveFilters={hasActiveFilters()}
           onResetFilters={resetFilters}
         />
-        <Show when={scopedServices().length > 0}>
-          <KubernetesServicesTable
-            resources={scopedServices()}
-            emptyIcon={k8sIcon()}
-            emptyTitle="No services reported"
-            emptyDescription="Services appear here once the agent can read Service resources."
-            showToolbar={false}
-            externalSearch={toolbar.search}
-          />
-        </Show>
-        <Show when={scopedNetworking().length > 0}>
-          <KubernetesNetworkingTable
-            resources={scopedNetworking()}
-            emptyIcon={k8sIcon()}
-            emptyTitle="No ingress or endpoint resources reported"
-            emptyDescription="Ingresses and endpoint slices appear here once the agent can read networking inventory."
-            showToolbar={false}
-            externalSearch={toolbar.search}
-          />
+        <Show
+          when={visibleRows() > 0}
+          fallback={
+            <PlatformTableEmptyState
+              icon={k8sIcon()}
+              title="No service or networking resources match current filters"
+              description="Adjust the search, category, or scope filter to see more Kubernetes traffic resources."
+              actions={<PlatformTableResetFiltersButton onReset={resetFilters} />}
+            />
+          }
+        >
+          <Show
+            when={filterKubernetesResources(scopedServices(), toolbar.search(), 'all').length > 0}
+          >
+            <KubernetesServicesTable
+              resources={scopedServices()}
+              emptyIcon={k8sIcon()}
+              emptyTitle="No services reported"
+              emptyDescription="Services appear here once the agent can read Service resources."
+              showToolbar={false}
+              externalSearch={toolbar.search}
+            />
+          </Show>
+          <Show
+            when={filterKubernetesResources(scopedNetworking(), toolbar.search(), 'all').length > 0}
+          >
+            <KubernetesNetworkingTable
+              resources={scopedNetworking()}
+              emptyIcon={k8sIcon()}
+              emptyTitle="No ingress or endpoint resources reported"
+              emptyDescription="Ingresses and endpoint slices appear here once the agent can read networking inventory."
+              showToolbar={false}
+              externalSearch={toolbar.search}
+            />
+          </Show>
         </Show>
       </div>
     </Show>
@@ -765,26 +896,42 @@ function KubernetesConfiguration(props: { model: KubernetesPageModel }) {
           hasActiveFilters={hasActiveFilters()}
           onResetFilters={resetFilters}
         />
-        <Show when={scopedConfig().length > 0}>
-          <KubernetesConfigTable
-            resources={scopedConfig()}
-            emptyIcon={k8sIcon()}
-            emptyTitle="No config resources reported"
-            emptyDescription="Namespaces, ConfigMaps, Secrets, and ServiceAccounts appear here once the agent can read cluster configuration inventory."
-            showToolbar={false}
-            externalSearch={toolbar.search}
-            showRoutineMetadataOnly={category() === 'config'}
-          />
-        </Show>
-        <Show when={scopedPolicy().length > 0}>
-          <KubernetesPolicyTable
-            resources={scopedPolicy()}
-            emptyIcon={k8sIcon()}
-            emptyTitle="No policy resources reported"
-            emptyDescription="NetworkPolicies, PodDisruptionBudgets, ResourceQuotas, and LimitRanges appear here once the agent can read policy inventory."
-            showToolbar={false}
-            externalSearch={toolbar.search}
-          />
+        <Show
+          when={visibleRows() > 0}
+          fallback={
+            <PlatformTableEmptyState
+              icon={k8sIcon()}
+              title="No configuration or policy resources match current filters"
+              description="Adjust the search, category, or scope filter to see more Kubernetes configuration resources."
+              actions={<PlatformTableResetFiltersButton onReset={resetFilters} />}
+            />
+          }
+        >
+          <Show
+            when={filterKubernetesResources(scopedConfig(), toolbar.search(), 'all').length > 0}
+          >
+            <KubernetesConfigTable
+              resources={scopedConfig()}
+              emptyIcon={k8sIcon()}
+              emptyTitle="No config resources reported"
+              emptyDescription="Namespaces, ConfigMaps, Secrets, and ServiceAccounts appear here once the agent can read cluster configuration inventory."
+              showToolbar={false}
+              externalSearch={toolbar.search}
+              showRoutineMetadataOnly={category() === 'config'}
+            />
+          </Show>
+          <Show
+            when={filterKubernetesResources(scopedPolicy(), toolbar.search(), 'all').length > 0}
+          >
+            <KubernetesPolicyTable
+              resources={scopedPolicy()}
+              emptyIcon={k8sIcon()}
+              emptyTitle="No policy resources reported"
+              emptyDescription="NetworkPolicies, PodDisruptionBudgets, ResourceQuotas, and LimitRanges appear here once the agent can read policy inventory."
+              showToolbar={false}
+              externalSearch={toolbar.search}
+            />
+          </Show>
         </Show>
       </div>
     </Show>

@@ -43,6 +43,7 @@ import {
   resolvePlatformTypeFromSources,
 } from '@/utils/sourcePlatforms';
 import {
+  AVAILABILITY_PATH,
   DOCKER_PATH,
   KUBERNETES_PATH,
   PROXMOX_PATH,
@@ -53,6 +54,7 @@ import {
   buildKubernetesPath,
   buildProxmoxPath,
   buildAvailabilityCheckPath,
+  buildAvailabilityPath,
   buildStandalonePath,
   buildTrueNASPath,
   buildVmwarePath,
@@ -88,6 +90,7 @@ const PLATFORM_PAGE_PATHS: Record<PrimaryPlatformNavId, string> = {
   truenas: buildTrueNASPath(),
   vmware: buildVmwarePath(),
   standalone: buildStandalonePath(),
+  availability: buildAvailabilityPath(),
 };
 
 // Units of the threshold metrics, matching the evaluator's metric status unit.
@@ -326,6 +329,7 @@ export function AlertOverviewAlertCard(props: AlertOverviewAlertCardProps) {
     if (link.startsWith(TRUENAS_PATH)) return 'truenas';
     if (link.startsWith(VMWARE_PATH)) return 'vmware';
     if (link.startsWith(STANDALONE_PATH)) return 'agent';
+    if (link.startsWith(AVAILABILITY_PATH)) return 'availability';
     return undefined;
   };
 

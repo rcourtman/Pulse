@@ -66,13 +66,34 @@ export type AvailabilityChecksView = 'table' | 'fleet';
 // table becoming difficult to scan. An explicit route value always wins so a
 // chosen presentation remains shareable and stable across refreshes.
 export const AVAILABILITY_FLEET_DEFAULT_MIN_CHECKS = 20;
+const AVAILABILITY_VIEW_STORAGE_KEY = 'pulse_availability_checks_view_v1';
+
+export const readSavedAvailabilityChecksView = (): AvailabilityChecksView | undefined => {
+  try {
+    const raw = window.localStorage.getItem(AVAILABILITY_VIEW_STORAGE_KEY);
+    if (raw === 'table' || raw === 'fleet') return raw;
+  } catch {
+    // Ignore storage access restrictions.
+  }
+  return undefined;
+};
+
+export const saveAvailabilityChecksView = (view: AvailabilityChecksView): void => {
+  try {
+    window.localStorage.setItem(AVAILABILITY_VIEW_STORAGE_KEY, view);
+  } catch {
+    // Ignore storage access restrictions.
+  }
+};
 
 export const resolveAvailabilityChecksView = (
   routeValue: string | string[] | undefined,
   checkCount: number,
+  savedPreference?: AvailabilityChecksView,
 ): AvailabilityChecksView => {
   const selectedValue = Array.isArray(routeValue) ? routeValue[0] : routeValue;
   if (selectedValue === 'table' || selectedValue === 'fleet') return selectedValue;
+  if (savedPreference === 'table' || savedPreference === 'fleet') return savedPreference;
   return checkCount >= AVAILABILITY_FLEET_DEFAULT_MIN_CHECKS ? 'fleet' : 'table';
 };
 
@@ -132,10 +153,21 @@ export const AvailabilityChecksTable: Component<{
   externalStatus?: () => PlatformResourceStatusFilter;
   onExternalStatusChange?: (status: PlatformResourceStatusFilter) => void;
   onResetFilters?: () => void;
+  /** When false, hides mutating add controls (for read-only/kiosk sessions). Defaults to true. */
+  canManage?: boolean;
+  /** Hides the secondary Add button inside populated table/fleet headers when the page posture bar owns the primary Add CTA. */
+  hideHeaderAddCheck?: boolean;
+  /** Opens the inline Add check modal instead of navigating to Settings. */
+  onAddCheck?: () => void;
+  /** Optional header action buttons rendered inside each expanded check drawer. */
+  renderDetailActions?: (resource: Resource) => JSX.Element;
+  /** Incrementing this counter triggers an immediate availability history refresh. */
+  historyRefreshToken?: number;
 }> = (props) => {
   const now = useRelativeTimeNow();
+  const canManage = () => props.canManage !== false;
   let checks: HTMLDivElement | undefined;
-  let addCheck: HTMLAnchorElement | undefined;
+  let addCheck: HTMLElement | undefined;
   const getFleetFocusFallback = () => {
     if (addCheck?.isConnected) return addCheck;
     if (checks?.isConnected) {
@@ -187,7 +219,7 @@ export const AvailabilityChecksTable: Component<{
   // The table's Uptime column and the fleet view read the same history window.
   const historySource = createMemo(() =>
     historyTargetIDs().length > 0
-      ? `${historyRange()}\u0000${historyTargetIDs().join('\u0000')}`
+      ? `${historyRange()}\u0000${props.historyRefreshToken ?? 0}\u0000${historyTargetIDs().join('\u0000')}`
       : undefined,
   );
   const [history, historyActions] = createResource(historySource, async () => {
@@ -245,6 +277,41 @@ export const AvailabilityChecksTable: Component<{
     });
   });
 
+  const renderAddCheckControl = (withRef = false) => (
+    <Show when={canManage()}>
+      <Show
+        when={props.onAddCheck}
+        fallback={
+          <A
+            ref={(el) => {
+              if (withRef) addCheck = el;
+            }}
+            href={buildAvailabilityTargetAddPath('service')}
+            class={settingsLinkClass}
+          >
+            <PlusIcon class="h-3.5 w-3.5" />
+            Add check
+          </A>
+        }
+      >
+        {(onAddCheck) => (
+          <button
+            ref={(el) => {
+              if (withRef) addCheck = el;
+            }}
+            type="button"
+            class={settingsLinkClass}
+            onClick={() => onAddCheck()()}
+            data-testid="availability-add-check-button"
+          >
+            <PlusIcon class="h-3.5 w-3.5" />
+            Add check
+          </button>
+        )}
+      </Show>
+    </Show>
+  );
+
   return (
     <Show
       when={props.resources.length > 0}
@@ -253,16 +320,7 @@ export const AvailabilityChecksTable: Component<{
           icon={props.emptyIcon}
           title={props.emptyTitle}
           description={props.emptyDescription}
-          actions={
-            <A
-              ref={addCheck}
-              href={buildAvailabilityTargetAddPath('service')}
-              class={settingsLinkClass}
-            >
-              <PlusIcon class="h-3.5 w-3.5" />
-              Add service/device check
-            </A>
-          }
+          actions={renderAddCheckControl(true)}
         />
       }
     >
@@ -319,12 +377,8 @@ export const AvailabilityChecksTable: Component<{
                 probeAgentOptions={props.probeAgentOptions}
                 onRetryHistory={() => void historyActions.refetch()}
                 getFocusFallback={getFleetFocusFallback}
-                actions={
-                  <A href={buildAvailabilityTargetAddPath('service')} class={settingsLinkClass}>
-                    <PlusIcon class="h-3.5 w-3.5" />
-                    Add service/device check
-                  </A>
-                }
+                headerActions={props.hideHeaderAddCheck ? undefined : renderAddCheckControl()}
+                renderDetailActions={props.renderDetailActions}
               />
             }
           >
@@ -341,10 +395,7 @@ export const AvailabilityChecksTable: Component<{
                       label: option.label,
                     }))}
                   />
-                  <A href={buildAvailabilityTargetAddPath('service')} class={settingsLinkClass}>
-                    <PlusIcon class="h-3.5 w-3.5" />
-                    Add service/device check
-                  </A>
+                  <Show when={!props.hideHeaderAddCheck}>{renderAddCheckControl()}</Show>
                 </div>
               }
               tableClass="min-w-full table-fixed text-xs md:min-w-[900px]"
@@ -550,6 +601,7 @@ export const AvailabilityChecksTable: Component<{
                           detailRowId={detailRowId()}
                           colSpan={9}
                           resolveResourceLabel={resolveResourceLabel}
+                          headerActions={props.renderDetailActions?.(check)}
                           onClose={() => drawer.close(check)}
                         />
                       </>

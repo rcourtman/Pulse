@@ -1,3 +1,4 @@
+import { syncSessionPresentationPolicy } from '@/stores/sessionPresentationPolicy';
 import { cleanup, fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -217,6 +218,44 @@ describe('WebInterfaceUrlField', () => {
       });
     } finally {
       window.removeEventListener(RESOURCE_METADATA_CHANGED_EVENT, handler);
+    }
+  });
+
+  it('renders read-only URL text without edit controls when presentationPolicyIsReadOnly is true', async () => {
+    syncSessionPresentationPolicy({
+      presentationPolicy: {
+        demoMode: true,
+        readOnly: true,
+        hideCommercial: true,
+        hideUpgrade: true,
+      },
+      sessionCapabilities: { demoMode: true },
+    });
+    try {
+      render(() => (
+        <WebInterfaceUrlField
+          metadataKind="guest"
+          metadataId="guest-readonly"
+          customUrl="https://app.internal"
+        />
+      ));
+      expect(await screen.findByText('https://app.internal')).toBeTruthy();
+      expect(screen.queryByRole('button', { name: 'Save' })).toBeNull();
+      expect(screen.queryByRole('button', { name: 'Remove' })).toBeNull();
+      expect(
+        screen.getByText('This session can open saved web interface URLs but not change them.'),
+      ).toBeTruthy();
+    } finally {
+      syncSessionPresentationPolicy({
+        presentationPolicy: {
+          demoMode: false,
+          readOnly: false,
+          hideCommercial: false,
+          hideUpgrade: true,
+        },
+        sessionCapabilities: { demoMode: false },
+        tokenScopes: undefined,
+      });
     }
   });
 

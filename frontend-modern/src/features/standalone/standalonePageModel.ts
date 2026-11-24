@@ -73,11 +73,6 @@ export const getStandaloneTabSpecs = (
   if (hasVms || activeTab === 'vms') {
     tabs.push({ id: 'vms', label: 'VMs', path: STANDALONE_VMS_PATH });
   }
-  tabs.push({
-    id: 'availability',
-    label: 'Availability checks',
-    path: buildStandalonePath('availability'),
-  });
   return tabs;
 };
 

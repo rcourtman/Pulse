@@ -10195,6 +10195,13 @@ read/write path changes. Verified by `resourceLinks.test.ts`.
 configuration through the existing encrypted `availability_targets.enc` store.
 Backup, snapshot, and storage-recovery persistence formats are unchanged.
 
+### Top-level Availability page and inline management (24 November 2026)
+
+`frontend-modern/src/App.tsx` and `frontend-modern/src/routing/resourceLinks.ts`
+route availability checks and links to `/availability` while keeping the legacy
+`/standalone/availability` redirect intact. Storage, backup, and recovery paths
+are unchanged.
+
 ### Inbound push and heartbeat availability checks (Stage 2 Build, 24 November 2026)
 
 `internal/api/availability_handlers.go` and `internal/api/availability_push_handlers.go`

@@ -67,7 +67,10 @@ describe('CommandPaletteModal', () => {
 
     expect(screen.queryByText('Ask about Proxmox')).not.toBeInTheDocument();
     expect(screen.getByText('Go to Machines')).toBeInTheDocument();
-    expect(screen.getByText('Pulse Agent hosts and availability checks')).toBeInTheDocument();
+    expect(
+      screen.getByText('Pulse Agent hosts and standalone virtual machines'),
+    ).toBeInTheDocument();
+    expect(screen.getByText('Go to Availability')).toBeInTheDocument();
     expect(screen.getByText('Go to Proxmox')).toBeInTheDocument();
     expect(screen.getByText('Go to Docker')).toBeInTheDocument();
     expect(screen.getByText('Go to Kubernetes Workloads')).toBeInTheDocument();

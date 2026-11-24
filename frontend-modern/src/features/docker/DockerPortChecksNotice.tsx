@@ -6,7 +6,7 @@ import {
   type DockerPortChecksResult,
 } from '@/api/availabilityTargets';
 import { InlineNotice } from '@/components/shared/InlineNotice';
-import { buildStandalonePath } from '@/routing/resourceLinks';
+import { buildAvailabilityPath } from '@/routing/resourceLinks';
 import { presentationPolicyIsReadOnly } from '@/stores/sessionPresentationPolicy';
 import { eventBus } from '@/stores/events';
 import { getOrgID } from '@/utils/apiClient';
@@ -236,7 +236,7 @@ export function DockerPortChecksNotice(props: DockerPortChecksNoticeProps) {
             <Show when={(result()?.created.length ?? 0) > 0}>
               {' '}
               <a
-                href={buildStandalonePath('availability')}
+                href={buildAvailabilityPath()}
                 class="inline-flex items-center gap-1 whitespace-nowrap font-semibold underline-offset-2 hover:underline"
               >
                 View checks

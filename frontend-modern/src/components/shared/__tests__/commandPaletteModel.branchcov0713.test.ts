@@ -60,6 +60,7 @@ function makeVisibility(
     truenas: false,
     vmware: false,
     standalone: false,
+    availability: false,
     ...overrides,
   };
 }
@@ -162,7 +163,7 @@ describe('commandPaletteModel.branchcov0713', () => {
     });
 
     describe('per-platform visible arm — selective single-platform visibility', () => {
-      it('emits only nav-proxmox (of the platform commands) when only proxmox is visible', () => {
+      it('emits nav-proxmox and nav-availability when only proxmox is visible with settings access', () => {
         const { navigate } = makeNavigateSpy();
         const commands = buildCommandPaletteCommands({
           paths: makePaths(),
@@ -172,10 +173,10 @@ describe('commandPaletteModel.branchcov0713', () => {
         const platformIds = commands
           .map((c) => c.id)
           .filter((id) => id.startsWith('nav-') && !NON_PLATFORM_NAV_IDS.includes(id));
-        expect(platformIds).toStrictEqual(['nav-proxmox']);
+        expect(platformIds).toStrictEqual(['nav-proxmox', 'nav-availability']);
       });
 
-      it('emits only nav-docker when only docker is visible', () => {
+      it('emits nav-docker and nav-availability when only docker is visible with settings access', () => {
         const { navigate } = makeNavigateSpy();
         const commands = buildCommandPaletteCommands({
           paths: makePaths(),
@@ -185,10 +186,10 @@ describe('commandPaletteModel.branchcov0713', () => {
         const platformIds = commands
           .map((c) => c.id)
           .filter((id) => id.startsWith('nav-') && !NON_PLATFORM_NAV_IDS.includes(id));
-        expect(platformIds).toStrictEqual(['nav-docker']);
+        expect(platformIds).toStrictEqual(['nav-docker', 'nav-availability']);
       });
 
-      it('emits BOTH nav-kubernetes and nav-kubernetes-workloads when only kubernetes is visible', () => {
+      it('emits nav-kubernetes, nav-kubernetes-workloads, and nav-availability when only kubernetes is visible', () => {
         // The kubernetes block pushes two commands inside one `if`.
         const { navigate } = makeNavigateSpy();
         const commands = buildCommandPaletteCommands({
@@ -199,10 +200,14 @@ describe('commandPaletteModel.branchcov0713', () => {
         const platformIds = commands
           .map((c) => c.id)
           .filter((id) => id.startsWith('nav-') && !NON_PLATFORM_NAV_IDS.includes(id));
-        expect(platformIds).toStrictEqual(['nav-kubernetes', 'nav-kubernetes-workloads']);
+        expect(platformIds).toStrictEqual([
+          'nav-kubernetes',
+          'nav-kubernetes-workloads',
+          'nav-availability',
+        ]);
       });
 
-      it('emits only nav-truenas when only truenas is visible', () => {
+      it('emits nav-truenas and nav-availability when only truenas is visible', () => {
         const { navigate } = makeNavigateSpy();
         const commands = buildCommandPaletteCommands({
           paths: makePaths(),
@@ -212,10 +217,10 @@ describe('commandPaletteModel.branchcov0713', () => {
         const platformIds = commands
           .map((c) => c.id)
           .filter((id) => id.startsWith('nav-') && !NON_PLATFORM_NAV_IDS.includes(id));
-        expect(platformIds).toStrictEqual(['nav-truenas']);
+        expect(platformIds).toStrictEqual(['nav-truenas', 'nav-availability']);
       });
 
-      it('emits BOTH nav-vmware and nav-vmware-networks when only vmware is visible', () => {
+      it('emits nav-vmware, nav-vmware-networks, and nav-availability when only vmware is visible', () => {
         // The vmware block pushes two commands inside one `if`.
         const { navigate } = makeNavigateSpy();
         const commands = buildCommandPaletteCommands({
@@ -226,10 +231,14 @@ describe('commandPaletteModel.branchcov0713', () => {
         const platformIds = commands
           .map((c) => c.id)
           .filter((id) => id.startsWith('nav-') && !NON_PLATFORM_NAV_IDS.includes(id));
-        expect(platformIds).toStrictEqual(['nav-vmware', 'nav-vmware-networks']);
+        expect(platformIds).toStrictEqual([
+          'nav-vmware',
+          'nav-vmware-networks',
+          'nav-availability',
+        ]);
       });
 
-      it('emits only nav-standalone when only standalone is visible', () => {
+      it('emits nav-standalone and nav-availability when only standalone is visible', () => {
         const { navigate } = makeNavigateSpy();
         const commands = buildCommandPaletteCommands({
           paths: makePaths(),
@@ -239,12 +248,12 @@ describe('commandPaletteModel.branchcov0713', () => {
         const platformIds = commands
           .map((c) => c.id)
           .filter((id) => id.startsWith('nav-') && !NON_PLATFORM_NAV_IDS.includes(id));
-        expect(platformIds).toStrictEqual(['nav-standalone']);
+        expect(platformIds).toStrictEqual(['nav-standalone', 'nav-availability']);
       });
     });
 
     describe('all platforms visible at once', () => {
-      it('emits all eight platform commands in source order, followed by utility, theme, and kiosk commands', () => {
+      it('emits all platform commands in source order, followed by utility, theme, and kiosk commands', () => {
         const { navigate } = makeNavigateSpy();
         const commands = buildCommandPaletteCommands({
           paths: makePaths(),
@@ -255,6 +264,7 @@ describe('commandPaletteModel.branchcov0713', () => {
             truenas: true,
             vmware: true,
             standalone: true,
+            availability: true,
           }),
           mapAvailable: true,
           navigate,
@@ -268,6 +278,7 @@ describe('commandPaletteModel.branchcov0713', () => {
           'nav-vmware',
           'nav-vmware-networks',
           'nav-standalone',
+          'nav-availability',
           'nav-alerts',
           'nav-patrol',
           'nav-actions',
@@ -279,7 +290,7 @@ describe('commandPaletteModel.branchcov0713', () => {
           'theme-system',
           'toggle-kiosk',
         ]);
-        expect(commands).toHaveLength(18);
+        expect(commands).toHaveLength(19);
       });
     });
 

@@ -14,6 +14,8 @@ import {
   setResourceOperatorState,
 } from '@/api/resourceOperatorState';
 import { createNonSuspendingQuery } from '@/hooks/createNonSuspendingQuery';
+import { sessionCanWriteMonitoringMetadata } from '@/stores/sessionCapabilities';
+import { presentationPolicyIsReadOnly } from '@/stores/sessionPresentationPolicy';
 import { formatRelativeTime } from '@/utils/format';
 import { useRelativeTimeNow } from '@/utils/relativeTimeClock';
 import type { ResourceCapability } from '@/types/resource';
@@ -46,6 +48,9 @@ export const ResourceOperatorStateSection: Component<ResourceOperatorStateSectio
   props,
 ) => {
   const now = useRelativeTimeNow();
+  // Mirror the backend monitoring:write + read-only demo gate so kiosk tokens
+  // and read-only sessions inspect persisted overrides without 403-failing forms.
+  const canEdit = () => !presentationPolicyIsReadOnly() && sessionCanWriteMonitoringMetadata();
   // Fetch the persisted state via the non-suspending helper so the
   // drawer's parent Suspense boundary does not flicker the page-level
   // fallback while operator-state is in flight. null means "no entry"
@@ -383,6 +388,37 @@ export const ResourceOperatorStateSection: Component<ResourceOperatorStateSectio
     ),
   );
 
+  const monitoringModeLabel = (mode: ResourceMonitoringMode) => {
+    if (mode === 'expected_offline') return 'Expected offline';
+    if (mode === 'muted') return 'Mute all attention';
+    return 'Normal monitoring';
+  };
+
+  const lifecycleStateLabel = (state: ResourceLifecycleState) =>
+    state === 'retired' ? 'Retired from monitoring' : 'Active';
+
+  const criticalityLabel = (value: ResourceCriticality) => {
+    if (value === 'high') return 'High';
+    if (value === 'medium') return 'Medium';
+    if (value === 'low') return 'Low';
+    return 'Default';
+  };
+
+  const hasReadOnlyOverrides = createMemo(() => {
+    const current = persisted();
+    if (!current) return false;
+    const mode =
+      current.monitoringMode ?? (current.intentionallyOffline ? 'expected_offline' : 'normal');
+    return Boolean(
+      mode !== 'normal' ||
+      (current.lifecycleState ?? 'active') !== 'active' ||
+      current.neverAutoRemediate ||
+      current.criticality ||
+      current.note?.trim() ||
+      current.autoRemediationPolicy?.enabled,
+    );
+  });
+
   // Datetime-local input format is "YYYY-MM-DDTHH:mm" in the browser's
   // local timezone. Both directions convert through Date so the API
   // round-trip stays in ISO 8601 / UTC offset.
@@ -649,475 +685,538 @@ export const ResourceOperatorStateSection: Component<ResourceOperatorStateSectio
         </div>
       </Show>
 
-      <div class="grid grid-cols-1 gap-3 pt-2 border-t border-border-subtle sm:grid-cols-[minmax(0,12rem)_minmax(0,1fr)]">
-        <FormSelect
-          label="Patrol priority"
-          density="compact"
-          value={criticality()}
-          onChange={(e) => setCriticality(e.currentTarget.value as ResourceCriticality)}
-          disabled={saving()}
-          help="Orders this resource among same-severity Patrol findings."
-          helpClass="text-[11px] leading-tight"
-        >
-          <option value="">Default</option>
-          <option value="high">High</option>
-          <option value="medium">Medium</option>
-          <option value="low">Low</option>
-        </FormSelect>
+      <Show
+        when={canEdit()}
+        fallback={
+          <div class="space-y-2 border-t border-border-subtle pt-2 text-xs">
+            <p class="text-muted">
+              This session can view operator overrides but cannot change them.
+            </p>
+            <Show
+              when={hasReadOnlyOverrides()}
+              fallback={
+                <Show when={!hasAnyMaintenanceWindow()}>
+                  <p class="text-muted">
+                    Default monitoring posture applies. No operator overrides are set.
+                  </p>
+                </Show>
+              }
+            >
+              <dl class="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                <div>
+                  <dt class="text-[11px] text-muted">Patrol priority</dt>
+                  <dd class="font-medium text-base-content">
+                    {criticalityLabel(persisted()?.criticality ?? '')}
+                  </dd>
+                </div>
+                <div>
+                  <dt class="text-[11px] text-muted">Monitoring</dt>
+                  <dd class="font-medium text-base-content">
+                    {monitoringModeLabel(
+                      persisted()?.monitoringMode ??
+                        (persisted()?.intentionallyOffline ? 'expected_offline' : 'normal'),
+                    )}
+                  </dd>
+                </div>
+                <div>
+                  <dt class="text-[11px] text-muted">Lifecycle</dt>
+                  <dd class="font-medium text-base-content">
+                    {lifecycleStateLabel(persisted()?.lifecycleState ?? 'active')}
+                  </dd>
+                </div>
+                <div>
+                  <dt class="text-[11px] text-muted">Automated remediation</dt>
+                  <dd class="font-medium text-base-content">
+                    {persisted()?.neverAutoRemediate
+                      ? 'Locked (never auto-remediate)'
+                      : persisted()?.autoRemediationPolicy?.enabled
+                        ? `Limited (${(persisted()?.autoRemediationPolicy?.capabilityNames ?? []).length} action${(persisted()?.autoRemediationPolicy?.capabilityNames ?? []).length === 1 ? '' : 's'})`
+                        : 'Follows Patrol mode'}
+                  </dd>
+                </div>
+                <Show when={persisted()?.note?.trim()}>
+                  <div class="sm:col-span-2">
+                    <dt class="text-[11px] text-muted">Operator note</dt>
+                    <dd class="whitespace-pre-wrap text-base-content">{persisted()!.note}</dd>
+                  </div>
+                </Show>
+              </dl>
+            </Show>
+          </div>
+        }
+      >
+        <div class="grid grid-cols-1 gap-3 pt-2 border-t border-border-subtle sm:grid-cols-[minmax(0,12rem)_minmax(0,1fr)]">
+          <FormSelect
+            label="Patrol priority"
+            density="compact"
+            value={criticality()}
+            onChange={(e) => setCriticality(e.currentTarget.value as ResourceCriticality)}
+            disabled={saving()}
+            help="Orders this resource among same-severity Patrol findings."
+            helpClass="text-[11px] leading-tight"
+          >
+            <option value="">Default</option>
+            <option value="high">High</option>
+            <option value="medium">Medium</option>
+            <option value="low">Low</option>
+          </FormSelect>
 
-        <FormTextarea
-          label="Operator note"
-          density="compact"
-          value={note()}
-          onInput={(e) => setNote(e.currentTarget.value)}
-          placeholder="e.g. Production database. Page before rebooting"
-          disabled={saving()}
-          maxLength={500}
-        />
-      </div>
+          <FormTextarea
+            label="Operator note"
+            density="compact"
+            value={note()}
+            onInput={(e) => setNote(e.currentTarget.value)}
+            placeholder="e.g. Production database. Page before rebooting"
+            disabled={saving()}
+            maxLength={500}
+          />
+        </div>
 
-      {/* Maintenance window scheduler. The form is closed by default;
+        {/* Maintenance window scheduler. The form is closed by default;
           opening it pre-fills with sensible defaults (start = now, end
           = +1h) or with the persisted window when one exists. */}
-      <Show when={!schedulerOpen()}>
-        <div class="flex flex-col items-stretch justify-between gap-3 border-t border-border-subtle pt-2 sm:flex-row sm:items-center">
-          <div class="min-w-0 flex-1">
-            <span class="text-sm font-medium text-base-content">Maintenance window</span>
-            <p class="text-[11px] text-muted mt-0.5 leading-tight">
-              Silence alerts and dismiss new Patrol findings during planned work, such as upgrades
-              or reboots.
-            </p>
-          </div>
-          <Show
-            when={hasAnyMaintenanceWindow()}
-            fallback={
-              <button
-                type="button"
-                onClick={handleOpenScheduler}
-                disabled={saving()}
-                class="min-h-11 self-start rounded-sm border border-border px-2.5 py-1 text-xs font-medium text-base-content hover:bg-surface-hover disabled:opacity-50 sm:min-h-0"
-              >
-                Schedule window
-              </button>
-            }
-          >
-            <div class="flex items-center gap-2 self-start">
-              <button
-                type="button"
-                onClick={handleOpenScheduler}
-                disabled={saving()}
-                class="min-h-11 px-2.5 py-1 text-xs font-medium text-base-content border border-border rounded-sm hover:bg-surface-hover disabled:opacity-50 sm:min-h-0"
-              >
-                Edit window
-              </button>
-              <button
-                type="button"
-                onClick={handleClearMaintenanceWindow}
-                disabled={saving()}
-                class="min-h-11 px-2.5 py-1 text-xs font-medium text-amber-700 border border-amber-200 rounded-sm hover:bg-amber-50 dark:text-amber-300 dark:border-amber-800 dark:hover:bg-amber-900/25 disabled:opacity-50 sm:min-h-0"
-              >
-                Cancel window
-              </button>
+        <Show when={!schedulerOpen()}>
+          <div class="flex flex-col items-stretch justify-between gap-3 border-t border-border-subtle pt-2 sm:flex-row sm:items-center">
+            <div class="min-w-0 flex-1">
+              <span class="text-sm font-medium text-base-content">Maintenance window</span>
+              <p class="text-[11px] text-muted mt-0.5 leading-tight">
+                Silence alerts and dismiss new Patrol findings during planned work, such as upgrades
+                or reboots.
+              </p>
             </div>
-          </Show>
-        </div>
-      </Show>
-
-      <Show when={schedulerOpen()}>
-        <div class="rounded-sm border border-border px-3 py-3 space-y-2">
-          <div class="text-xs font-semibold text-base-content">Schedule maintenance window</div>
-          <div class="inline-flex gap-0.5 rounded-sm border border-border bg-surface p-0.5 text-xs">
-            <button
-              type="button"
-              onClick={() => setScheduleKind('once')}
-              class={`rounded-sm px-2.5 py-1 ${scheduleKind() === 'once' ? 'bg-blue-600 text-white' : 'text-muted hover:bg-surface-hover'}`}
-            >
-              One time
-            </button>
-            <button
-              type="button"
-              onClick={() => setScheduleKind('recurring')}
-              class={`rounded-sm px-2.5 py-1 ${scheduleKind() === 'recurring' ? 'bg-blue-600 text-white' : 'text-muted hover:bg-surface-hover'}`}
-            >
-              Recurring
-            </button>
-          </div>
-
-          <Show when={scheduleKind() === 'once'}>
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
-              <label class="block">
-                <span class="text-[11px] text-muted">Start</span>
-                <input
-                  type="datetime-local"
-                  value={scheduleStart()}
-                  onInput={(e) => setScheduleStart(e.currentTarget.value)}
-                  class="mt-0.5 min-h-11 w-full text-xs rounded-sm border border-border bg-surface px-2 py-1 text-base-content focus:outline-hidden focus:ring-1 focus:ring-blue-400 sm:min-h-0"
+            <Show
+              when={hasAnyMaintenanceWindow()}
+              fallback={
+                <button
+                  type="button"
+                  onClick={handleOpenScheduler}
                   disabled={saving()}
-                />
-              </label>
-              <label class="block">
-                <span class="text-[11px] text-muted">End</span>
-                <input
-                  type="datetime-local"
-                  value={scheduleEnd()}
-                  onInput={(e) => setScheduleEnd(e.currentTarget.value)}
-                  class="mt-0.5 min-h-11 w-full text-xs rounded-sm border border-border bg-surface px-2 py-1 text-base-content focus:outline-hidden focus:ring-1 focus:ring-blue-400 sm:min-h-0"
+                  class="min-h-11 self-start rounded-sm border border-border px-2.5 py-1 text-xs font-medium text-base-content hover:bg-surface-hover disabled:opacity-50 sm:min-h-0"
+                >
+                  Schedule window
+                </button>
+              }
+            >
+              <div class="flex items-center gap-2 self-start">
+                <button
+                  type="button"
+                  onClick={handleOpenScheduler}
                   disabled={saving()}
-                />
-              </label>
-            </div>
-            <div class="flex items-center gap-1 text-[11px]">
-              <span class="text-muted">Quick presets:</span>
-              <For each={[1, 4, 24]}>
-                {(hours) => (
-                  <button
-                    type="button"
-                    onClick={() => applyPresetDuration(hours)}
-                    disabled={saving()}
-                    class="min-h-11 min-w-11 px-1.5 py-0.5 rounded-sm border border-border hover:bg-surface-hover disabled:opacity-50 sm:min-h-0 sm:min-w-0"
-                  >
-                    {hours}h
-                  </button>
-                )}
-              </For>
-            </div>
-          </Show>
+                  class="min-h-11 px-2.5 py-1 text-xs font-medium text-base-content border border-border rounded-sm hover:bg-surface-hover disabled:opacity-50 sm:min-h-0"
+                >
+                  Edit window
+                </button>
+                <button
+                  type="button"
+                  onClick={handleClearMaintenanceWindow}
+                  disabled={saving()}
+                  class="min-h-11 px-2.5 py-1 text-xs font-medium text-amber-700 border border-amber-200 rounded-sm hover:bg-amber-50 dark:text-amber-300 dark:border-amber-800 dark:hover:bg-amber-900/25 disabled:opacity-50 sm:min-h-0"
+                >
+                  Cancel window
+                </button>
+              </div>
+            </Show>
+          </div>
+        </Show>
 
-          <Show when={scheduleKind() === 'recurring'}>
-            <div class="space-y-2">
-              <fieldset>
-                <legend class="text-[11px] text-muted">Days the window starts</legend>
-                <div class="mt-1 flex flex-wrap gap-1">
-                  <For each={maintenanceWeekdays}>
-                    {([value, label]) => (
-                      <button
-                        type="button"
-                        aria-pressed={scheduleWeekdays().includes(value)}
-                        onClick={() => toggleMaintenanceWeekday(value)}
-                        class={`min-h-9 rounded-sm border px-2 text-xs ${scheduleWeekdays().includes(value) ? 'border-blue-600 bg-blue-50 text-blue-700 dark:bg-blue-950/25 dark:text-blue-200' : 'border-border text-muted hover:bg-surface-hover'}`}
-                      >
-                        {label}
-                      </button>
-                    )}
-                  </For>
-                </div>
-              </fieldset>
-              <div class="grid grid-cols-1 gap-2 sm:grid-cols-3">
+        <Show when={schedulerOpen()}>
+          <div class="rounded-sm border border-border px-3 py-3 space-y-2">
+            <div class="text-xs font-semibold text-base-content">Schedule maintenance window</div>
+            <div class="inline-flex gap-0.5 rounded-sm border border-border bg-surface p-0.5 text-xs">
+              <button
+                type="button"
+                onClick={() => setScheduleKind('once')}
+                class={`rounded-sm px-2.5 py-1 ${scheduleKind() === 'once' ? 'bg-blue-600 text-white' : 'text-muted hover:bg-surface-hover'}`}
+              >
+                One time
+              </button>
+              <button
+                type="button"
+                onClick={() => setScheduleKind('recurring')}
+                class={`rounded-sm px-2.5 py-1 ${scheduleKind() === 'recurring' ? 'bg-blue-600 text-white' : 'text-muted hover:bg-surface-hover'}`}
+              >
+                Recurring
+              </button>
+            </div>
+
+            <Show when={scheduleKind() === 'once'}>
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 <label class="block">
                   <span class="text-[11px] text-muted">Start</span>
                   <input
-                    type="time"
-                    value={scheduleRecurringStart()}
-                    onInput={(event) => setScheduleRecurringStart(event.currentTarget.value)}
-                    class="mt-0.5 min-h-11 w-full rounded-sm border border-border bg-surface px-2 text-xs text-base-content sm:min-h-0"
+                    type="datetime-local"
+                    value={scheduleStart()}
+                    onInput={(e) => setScheduleStart(e.currentTarget.value)}
+                    class="mt-0.5 min-h-11 w-full text-xs rounded-sm border border-border bg-surface px-2 py-1 text-base-content focus:outline-hidden focus:ring-1 focus:ring-blue-400 sm:min-h-0"
+                    disabled={saving()}
                   />
                 </label>
                 <label class="block">
                   <span class="text-[11px] text-muted">End</span>
                   <input
-                    type="time"
-                    value={scheduleRecurringEnd()}
-                    onInput={(event) => setScheduleRecurringEnd(event.currentTarget.value)}
-                    class="mt-0.5 min-h-11 w-full rounded-sm border border-border bg-surface px-2 text-xs text-base-content sm:min-h-0"
-                  />
-                </label>
-                <label class="block">
-                  <span class="text-[11px] text-muted">Timezone</span>
-                  <input
-                    type="text"
-                    value={scheduleTimezone()}
-                    onInput={(event) => setScheduleTimezone(event.currentTarget.value)}
-                    class="mt-0.5 min-h-11 w-full rounded-sm border border-border bg-surface px-2 text-xs text-base-content sm:min-h-0"
+                    type="datetime-local"
+                    value={scheduleEnd()}
+                    onInput={(e) => setScheduleEnd(e.currentTarget.value)}
+                    class="mt-0.5 min-h-11 w-full text-xs rounded-sm border border-border bg-surface px-2 py-1 text-base-content focus:outline-hidden focus:ring-1 focus:ring-blue-400 sm:min-h-0"
+                    disabled={saving()}
                   />
                 </label>
               </div>
-              <p class="text-[11px] text-muted">
-                End times earlier than start times continue into the following day.
-              </p>
-            </div>
-          </Show>
-
-          <FormSelect
-            label="Applies to"
-            density="compact"
-            value={scheduleScope()}
-            onChange={(event) =>
-              setScheduleScope(event.currentTarget.value as 'resource' | 'resource_and_descendants')
-            }
-            help="With descendants, everything under this resource is covered too, including resources added later: alerts are silenced and new Patrol findings dismissed."
-            helpClass="text-[11px] leading-tight"
-          >
-            <option value="resource">This resource only</option>
-            <option value="resource_and_descendants">This resource and descendants</option>
-          </FormSelect>
-
-          <label class="block">
-            <span class="text-[11px] text-muted">Reason (optional)</span>
-            <input
-              type="text"
-              value={scheduleReason()}
-              onInput={(e) => setScheduleReason(e.currentTarget.value)}
-              placeholder="e.g. Q3 storage upgrade, kernel patch reboot"
-              class="mt-0.5 min-h-11 w-full text-xs rounded-sm border border-border bg-surface px-2 py-1 text-base-content focus:outline-hidden focus:ring-1 focus:ring-blue-400 sm:min-h-0"
-              disabled={saving()}
-              maxLength={200}
-            />
-          </label>
-
-          <Show when={scheduleValidationError()}>
-            <p class="text-[11px] text-red-700 dark:text-red-400">{scheduleValidationError()}</p>
-          </Show>
-
-          <div class="flex items-center justify-end gap-2 pt-1">
-            <button
-              type="button"
-              onClick={() => setSchedulerOpen(false)}
-              disabled={saving()}
-              class="min-h-11 px-2.5 py-1 text-xs font-medium text-muted hover:bg-surface-hover rounded-sm transition-colors disabled:opacity-50 sm:min-h-0"
-            >
-              Cancel
-            </button>
-            <button
-              type="button"
-              onClick={handleScheduleSave}
-              disabled={saving() || Boolean(scheduleValidationError())}
-              class="min-h-11 px-2.5 py-1 text-xs font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 rounded-sm transition-colors sm:min-h-0"
-            >
-              {saving() ? 'Saving…' : 'Save window'}
-            </button>
-          </div>
-        </div>
-      </Show>
-
-      <Show when={eligibleAutoCapabilities().length > 0}>
-        <div class="space-y-3 border-t border-border-subtle pt-3" aria-label="Automatic actions">
-          <div class="flex items-start justify-between gap-3">
-            <div class="min-w-0 flex-1">
-              <span class="text-sm font-medium text-base-content">Automatic action limits</span>
-              <p class="mt-0.5 text-[11px] leading-tight text-muted">
-                This resource follows your Patrol mode by default. Turn this on only to limit
-                automatic work to selected actions or daily hours. Live safety checks and
-                verification always apply.
-              </p>
-            </div>
-            <Toggle
-              ariaLabel="Limit automatic actions for this resource"
-              checked={autoRemediationEnabled()}
-              onChange={(event) => setAutoRemediationEnabled(event.currentTarget.checked)}
-              disabled={saving() || neverAutoRemediate()}
-            />
-          </div>
-
-          <Show when={autoRemediationEnabled()}>
-            <fieldset class="space-y-2 rounded-sm border border-border px-3 py-2.5">
-              <legend class="px-1 text-xs font-semibold text-base-content">
-                Actions allowed by this limit
-              </legend>
-              <For each={eligibleAutoCapabilities()}>
-                {(capability) => (
-                  <label class="flex items-start gap-2 text-xs text-base-content">
-                    <input
-                      type="checkbox"
-                      checked={autoCapabilities().includes(capability.name)}
-                      onChange={(event) =>
-                        toggleAutoCapability(capability.name, event.currentTarget.checked)
-                      }
+              <div class="flex items-center gap-1 text-[11px]">
+                <span class="text-muted">Quick presets:</span>
+                <For each={[1, 4, 24]}>
+                  {(hours) => (
+                    <button
+                      type="button"
+                      onClick={() => applyPresetDuration(hours)}
                       disabled={saving()}
-                      class="mt-0.5"
-                    />
-                    <span class="min-w-0">
-                      <span class="block font-medium">
-                        {capabilityDisplayName(capability.name)}
-                      </span>
-                      <span class="block text-muted">
-                        {capability.description || 'Resource action'}
-                      </span>
-                      <span class="mt-0.5 block text-muted">
-                        {capability.autoAuthorization === 'low_risk'
-                          ? 'Available in Safe auto-fix and Autopilot'
-                          : 'Available only in unlocked Autopilot'}
-                      </span>
-                    </span>
-                  </label>
-                )}
-              </For>
-
-              <div class="flex items-center justify-between gap-3 border-t border-border-subtle pt-2">
-                <span>
-                  <span class="block text-xs font-medium text-base-content">
-                    Restrict to daily hours
-                  </span>
-                  <span class="block text-[11px] text-muted">
-                    Leave off to allow the selected actions at any time.
-                  </span>
-                </span>
-                <Toggle
-                  ariaLabel="Restrict automatic actions to daily hours"
-                  checked={autoWindowEnabled()}
-                  onChange={(event) => setAutoWindowEnabled(event.currentTarget.checked)}
-                  disabled={saving()}
-                />
+                      class="min-h-11 min-w-11 px-1.5 py-0.5 rounded-sm border border-border hover:bg-surface-hover disabled:opacity-50 sm:min-h-0 sm:min-w-0"
+                    >
+                      {hours}h
+                    </button>
+                  )}
+                </For>
               </div>
+            </Show>
 
-              <Show when={autoWindowEnabled()}>
+            <Show when={scheduleKind() === 'recurring'}>
+              <div class="space-y-2">
+                <fieldset>
+                  <legend class="text-[11px] text-muted">Days the window starts</legend>
+                  <div class="mt-1 flex flex-wrap gap-1">
+                    <For each={maintenanceWeekdays}>
+                      {([value, label]) => (
+                        <button
+                          type="button"
+                          aria-pressed={scheduleWeekdays().includes(value)}
+                          onClick={() => toggleMaintenanceWeekday(value)}
+                          class={`min-h-9 rounded-sm border px-2 text-xs ${scheduleWeekdays().includes(value) ? 'border-blue-600 bg-blue-50 text-blue-700 dark:bg-blue-950/25 dark:text-blue-200' : 'border-border text-muted hover:bg-surface-hover'}`}
+                        >
+                          {label}
+                        </button>
+                      )}
+                    </For>
+                  </div>
+                </fieldset>
                 <div class="grid grid-cols-1 gap-2 sm:grid-cols-3">
-                  <label class="block text-[11px] text-muted">
-                    <span class="block">Start</span>
+                  <label class="block">
+                    <span class="text-[11px] text-muted">Start</span>
                     <input
                       type="time"
-                      value={autoWindowStart()}
-                      onInput={(event) => setAutoWindowStart(event.currentTarget.value)}
-                      disabled={saving()}
-                      class="mt-0.5 w-full rounded-sm border border-border bg-surface px-2 py-1 text-xs text-base-content"
+                      value={scheduleRecurringStart()}
+                      onInput={(event) => setScheduleRecurringStart(event.currentTarget.value)}
+                      class="mt-0.5 min-h-11 w-full rounded-sm border border-border bg-surface px-2 text-xs text-base-content sm:min-h-0"
                     />
                   </label>
-                  <label class="block text-[11px] text-muted">
-                    <span class="block">End</span>
+                  <label class="block">
+                    <span class="text-[11px] text-muted">End</span>
                     <input
                       type="time"
-                      value={autoWindowEnd()}
-                      onInput={(event) => setAutoWindowEnd(event.currentTarget.value)}
-                      disabled={saving()}
-                      class="mt-0.5 w-full rounded-sm border border-border bg-surface px-2 py-1 text-xs text-base-content"
+                      value={scheduleRecurringEnd()}
+                      onInput={(event) => setScheduleRecurringEnd(event.currentTarget.value)}
+                      class="mt-0.5 min-h-11 w-full rounded-sm border border-border bg-surface px-2 text-xs text-base-content sm:min-h-0"
                     />
                   </label>
-                  <label class="block text-[11px] text-muted">
-                    <span class="block">Timezone</span>
+                  <label class="block">
+                    <span class="text-[11px] text-muted">Timezone</span>
                     <input
                       type="text"
-                      value={autoWindowTimezone()}
-                      onInput={(event) => setAutoWindowTimezone(event.currentTarget.value)}
-                      disabled={saving()}
-                      class="mt-0.5 w-full rounded-sm border border-border bg-surface px-2 py-1 text-xs text-base-content"
+                      value={scheduleTimezone()}
+                      onInput={(event) => setScheduleTimezone(event.currentTarget.value)}
+                      class="mt-0.5 min-h-11 w-full rounded-sm border border-border bg-surface px-2 text-xs text-base-content sm:min-h-0"
                     />
                   </label>
                 </div>
-              </Show>
-              <Show when={autoPolicyValidationError()}>
-                <p class="text-[11px] text-red-700 dark:text-red-400">
-                  {autoPolicyValidationError()}
+                <p class="text-[11px] text-muted">
+                  End times earlier than start times continue into the following day.
                 </p>
-              </Show>
-            </fieldset>
+              </div>
+            </Show>
+
+            <FormSelect
+              label="Applies to"
+              density="compact"
+              value={scheduleScope()}
+              onChange={(event) =>
+                setScheduleScope(
+                  event.currentTarget.value as 'resource' | 'resource_and_descendants',
+                )
+              }
+              help="With descendants, everything under this resource is covered too, including resources added later: alerts are silenced and new Patrol findings dismissed."
+              helpClass="text-[11px] leading-tight"
+            >
+              <option value="resource">This resource only</option>
+              <option value="resource_and_descendants">This resource and descendants</option>
+            </FormSelect>
+
+            <label class="block">
+              <span class="text-[11px] text-muted">Reason (optional)</span>
+              <input
+                type="text"
+                value={scheduleReason()}
+                onInput={(e) => setScheduleReason(e.currentTarget.value)}
+                placeholder="e.g. Q3 storage upgrade, kernel patch reboot"
+                class="mt-0.5 min-h-11 w-full text-xs rounded-sm border border-border bg-surface px-2 py-1 text-base-content focus:outline-hidden focus:ring-1 focus:ring-blue-400 sm:min-h-0"
+                disabled={saving()}
+                maxLength={200}
+              />
+            </label>
+
+            <Show when={scheduleValidationError()}>
+              <p class="text-[11px] text-red-700 dark:text-red-400">{scheduleValidationError()}</p>
+            </Show>
+
+            <div class="flex items-center justify-end gap-2 pt-1">
+              <button
+                type="button"
+                onClick={() => setSchedulerOpen(false)}
+                disabled={saving()}
+                class="min-h-11 px-2.5 py-1 text-xs font-medium text-muted hover:bg-surface-hover rounded-sm transition-colors disabled:opacity-50 sm:min-h-0"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleScheduleSave}
+                disabled={saving() || Boolean(scheduleValidationError())}
+                class="min-h-11 px-2.5 py-1 text-xs font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 rounded-sm transition-colors sm:min-h-0"
+              >
+                {saving() ? 'Saving…' : 'Save window'}
+              </button>
+            </div>
+          </div>
+        </Show>
+
+        <Show when={eligibleAutoCapabilities().length > 0}>
+          <div class="space-y-3 border-t border-border-subtle pt-3" aria-label="Automatic actions">
+            <div class="flex items-start justify-between gap-3">
+              <div class="min-w-0 flex-1">
+                <span class="text-sm font-medium text-base-content">Automatic action limits</span>
+                <p class="mt-0.5 text-[11px] leading-tight text-muted">
+                  This resource follows your Patrol mode by default. Turn this on only to limit
+                  automatic work to selected actions or daily hours. Live safety checks and
+                  verification always apply.
+                </p>
+              </div>
+              <Toggle
+                ariaLabel="Limit automatic actions for this resource"
+                checked={autoRemediationEnabled()}
+                onChange={(event) => setAutoRemediationEnabled(event.currentTarget.checked)}
+                disabled={saving() || neverAutoRemediate()}
+              />
+            </div>
+
+            <Show when={autoRemediationEnabled()}>
+              <fieldset class="space-y-2 rounded-sm border border-border px-3 py-2.5">
+                <legend class="px-1 text-xs font-semibold text-base-content">
+                  Actions allowed by this limit
+                </legend>
+                <For each={eligibleAutoCapabilities()}>
+                  {(capability) => (
+                    <label class="flex items-start gap-2 text-xs text-base-content">
+                      <input
+                        type="checkbox"
+                        checked={autoCapabilities().includes(capability.name)}
+                        onChange={(event) =>
+                          toggleAutoCapability(capability.name, event.currentTarget.checked)
+                        }
+                        disabled={saving()}
+                        class="mt-0.5"
+                      />
+                      <span class="min-w-0">
+                        <span class="block font-medium">
+                          {capabilityDisplayName(capability.name)}
+                        </span>
+                        <span class="block text-muted">
+                          {capability.description || 'Resource action'}
+                        </span>
+                        <span class="mt-0.5 block text-muted">
+                          {capability.autoAuthorization === 'low_risk'
+                            ? 'Available in Safe auto-fix and Autopilot'
+                            : 'Available only in unlocked Autopilot'}
+                        </span>
+                      </span>
+                    </label>
+                  )}
+                </For>
+
+                <div class="flex items-center justify-between gap-3 border-t border-border-subtle pt-2">
+                  <span>
+                    <span class="block text-xs font-medium text-base-content">
+                      Restrict to daily hours
+                    </span>
+                    <span class="block text-[11px] text-muted">
+                      Leave off to allow the selected actions at any time.
+                    </span>
+                  </span>
+                  <Toggle
+                    ariaLabel="Restrict automatic actions to daily hours"
+                    checked={autoWindowEnabled()}
+                    onChange={(event) => setAutoWindowEnabled(event.currentTarget.checked)}
+                    disabled={saving()}
+                  />
+                </div>
+
+                <Show when={autoWindowEnabled()}>
+                  <div class="grid grid-cols-1 gap-2 sm:grid-cols-3">
+                    <label class="block text-[11px] text-muted">
+                      <span class="block">Start</span>
+                      <input
+                        type="time"
+                        value={autoWindowStart()}
+                        onInput={(event) => setAutoWindowStart(event.currentTarget.value)}
+                        disabled={saving()}
+                        class="mt-0.5 w-full rounded-sm border border-border bg-surface px-2 py-1 text-xs text-base-content"
+                      />
+                    </label>
+                    <label class="block text-[11px] text-muted">
+                      <span class="block">End</span>
+                      <input
+                        type="time"
+                        value={autoWindowEnd()}
+                        onInput={(event) => setAutoWindowEnd(event.currentTarget.value)}
+                        disabled={saving()}
+                        class="mt-0.5 w-full rounded-sm border border-border bg-surface px-2 py-1 text-xs text-base-content"
+                      />
+                    </label>
+                    <label class="block text-[11px] text-muted">
+                      <span class="block">Timezone</span>
+                      <input
+                        type="text"
+                        value={autoWindowTimezone()}
+                        onInput={(event) => setAutoWindowTimezone(event.currentTarget.value)}
+                        disabled={saving()}
+                        class="mt-0.5 w-full rounded-sm border border-border bg-surface px-2 py-1 text-xs text-base-content"
+                      />
+                    </label>
+                  </div>
+                </Show>
+                <Show when={autoPolicyValidationError()}>
+                  <p class="text-[11px] text-red-700 dark:text-red-400">
+                    {autoPolicyValidationError()}
+                  </p>
+                </Show>
+              </fieldset>
+            </Show>
+          </div>
+        </Show>
+
+        <div class="grid grid-cols-1 gap-3 border-t border-border-subtle pt-3 sm:grid-cols-2">
+          <FormSelect
+            label="Monitoring"
+            density="compact"
+            value={monitoringMode()}
+            onChange={(event) =>
+              setMonitoringMode(event.currentTarget.value as ResourceMonitoringMode)
+            }
+            disabled={saving() || lifecycleState() === 'retired'}
+            help="Expected offline hides availability noise only. Mute all stops Alerts and Patrol while keeping this resource visible."
+            helpClass="text-[11px] leading-tight"
+          >
+            <option value="normal">Normal monitoring</option>
+            <option value="expected_offline">Expected offline</option>
+            <option value="muted">Mute all attention</option>
+          </FormSelect>
+
+          <FormSelect
+            label="Lifecycle"
+            density="compact"
+            value={lifecycleState()}
+            onChange={(event) =>
+              setLifecycleState(event.currentTarget.value as ResourceLifecycleState)
+            }
+            disabled={saving()}
+            help={inventoryOwnership().retirementDescription}
+            helpClass="text-[11px] leading-tight"
+          >
+            <option value="active">Active</option>
+            <option value="retired">Retired from monitoring</option>
+          </FormSelect>
+        </div>
+
+        <Show when={lifecycleState() === 'retired'}>
+          <div class="rounded-sm border border-border bg-surface-alt px-3 py-2 text-xs text-base-content">
+            Retired resources remain in {inventoryOwnership().ownerLabel} inventory and keep their
+            Pulse history. All alert attention and automated remediation are disabled until the
+            lifecycle returns to Active.
+          </div>
+        </Show>
+
+        <div class="flex items-start justify-between gap-3 pt-2 border-t border-border-subtle">
+          <div class="min-w-0 flex-1">
+            <span class="text-sm font-medium text-red-700 dark:text-red-400">
+              Never auto-remediate
+            </span>
+            <p class="text-[11px] text-muted mt-0.5 leading-tight">
+              Block every automated fix on this resource, including approved ones. Blocked runs are
+              logged as failed actions.
+            </p>
+          </div>
+          <Toggle
+            ariaLabel="Never auto-remediate this resource"
+            checked={neverAutoRemediate()}
+            onChange={(e) => handleNeverAutoRemediateToggle(e.currentTarget.checked)}
+            disabled={saving() || lifecycleState() === 'retired'}
+          />
+        </div>
+
+        <Show when={confirmingLock()}>
+          <div class="rounded-sm border border-red-300 bg-red-50 px-3 py-2.5 text-xs text-red-900 dark:border-red-800 dark:bg-red-950/25 dark:text-red-100">
+            <p class="font-semibold">Lock this resource against all automated remediation?</p>
+            <p class="mt-1 leading-relaxed">
+              Pulse will block every automated fix on this resource, including ones already
+              approved, until this is turned off.
+            </p>
+            <div class="mt-2 flex items-center gap-2">
+              <button
+                type="button"
+                onClick={confirmLockToggle}
+                class="rounded-sm border border-red-400 bg-white px-2 py-1 text-xs font-medium text-red-900 hover:bg-red-100 dark:border-red-700 dark:bg-red-900/25 dark:text-red-100 dark:hover:bg-red-800"
+              >
+                Lock this resource
+              </button>
+              <button
+                type="button"
+                onClick={cancelLockToggle}
+                class="rounded-sm border border-border bg-surface px-2 py-1 text-xs font-medium text-muted hover:bg-surface-hover"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </Show>
+
+        <div class="flex items-center justify-end gap-2 pt-2 border-t border-border-subtle">
+          <Show when={persisted() && !isDirty()}>
+            <button
+              type="button"
+              onClick={handleClear}
+              disabled={saving()}
+              class="px-2.5 py-1 text-xs font-medium text-muted hover:text-base-content hover:bg-surface-hover rounded-sm transition-colors disabled:opacity-50"
+            >
+              Clear all overrides
+            </button>
+          </Show>
+          <Show when={isDirty()}>
+            <button
+              type="button"
+              onClick={handleDiscard}
+              disabled={saving()}
+              class="px-2.5 py-1 text-xs font-medium text-muted hover:bg-surface-hover rounded-sm transition-colors disabled:opacity-50"
+            >
+              Discard
+            </button>
+            <button
+              type="button"
+              onClick={handleSave}
+              disabled={saving() || Boolean(autoPolicyValidationError())}
+              class="px-2.5 py-1 text-xs font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 rounded-sm transition-colors"
+            >
+              {saving() ? 'Saving…' : 'Save overrides'}
+            </button>
           </Show>
         </div>
       </Show>
-
-      <div class="grid grid-cols-1 gap-3 border-t border-border-subtle pt-3 sm:grid-cols-2">
-        <FormSelect
-          label="Monitoring"
-          density="compact"
-          value={monitoringMode()}
-          onChange={(event) =>
-            setMonitoringMode(event.currentTarget.value as ResourceMonitoringMode)
-          }
-          disabled={saving() || lifecycleState() === 'retired'}
-          help="Expected offline hides availability noise only. Mute all stops Alerts and Patrol while keeping this resource visible."
-          helpClass="text-[11px] leading-tight"
-        >
-          <option value="normal">Normal monitoring</option>
-          <option value="expected_offline">Expected offline</option>
-          <option value="muted">Mute all attention</option>
-        </FormSelect>
-
-        <FormSelect
-          label="Lifecycle"
-          density="compact"
-          value={lifecycleState()}
-          onChange={(event) =>
-            setLifecycleState(event.currentTarget.value as ResourceLifecycleState)
-          }
-          disabled={saving()}
-          help={inventoryOwnership().retirementDescription}
-          helpClass="text-[11px] leading-tight"
-        >
-          <option value="active">Active</option>
-          <option value="retired">Retired from monitoring</option>
-        </FormSelect>
-      </div>
-
-      <Show when={lifecycleState() === 'retired'}>
-        <div class="rounded-sm border border-border bg-surface-alt px-3 py-2 text-xs text-base-content">
-          Retired resources remain in {inventoryOwnership().ownerLabel} inventory and keep their
-          Pulse history. All alert attention and automated remediation are disabled until the
-          lifecycle returns to Active.
-        </div>
-      </Show>
-
-      <div class="flex items-start justify-between gap-3 pt-2 border-t border-border-subtle">
-        <div class="min-w-0 flex-1">
-          <span class="text-sm font-medium text-red-700 dark:text-red-400">
-            Never auto-remediate
-          </span>
-          <p class="text-[11px] text-muted mt-0.5 leading-tight">
-            Block every automated fix on this resource, including approved ones. Blocked runs are
-            logged as failed actions.
-          </p>
-        </div>
-        <Toggle
-          ariaLabel="Never auto-remediate this resource"
-          checked={neverAutoRemediate()}
-          onChange={(e) => handleNeverAutoRemediateToggle(e.currentTarget.checked)}
-          disabled={saving() || lifecycleState() === 'retired'}
-        />
-      </div>
-
-      <Show when={confirmingLock()}>
-        <div class="rounded-sm border border-red-300 bg-red-50 px-3 py-2.5 text-xs text-red-900 dark:border-red-800 dark:bg-red-950/25 dark:text-red-100">
-          <p class="font-semibold">Lock this resource against all automated remediation?</p>
-          <p class="mt-1 leading-relaxed">
-            Pulse will block every automated fix on this resource, including ones already approved,
-            until this is turned off.
-          </p>
-          <div class="mt-2 flex items-center gap-2">
-            <button
-              type="button"
-              onClick={confirmLockToggle}
-              class="rounded-sm border border-red-400 bg-white px-2 py-1 text-xs font-medium text-red-900 hover:bg-red-100 dark:border-red-700 dark:bg-red-900/25 dark:text-red-100 dark:hover:bg-red-800"
-            >
-              Lock this resource
-            </button>
-            <button
-              type="button"
-              onClick={cancelLockToggle}
-              class="rounded-sm border border-border bg-surface px-2 py-1 text-xs font-medium text-muted hover:bg-surface-hover"
-            >
-              Cancel
-            </button>
-          </div>
-        </div>
-      </Show>
-
-      <div class="flex items-center justify-end gap-2 pt-2 border-t border-border-subtle">
-        <Show when={persisted() && !isDirty()}>
-          <button
-            type="button"
-            onClick={handleClear}
-            disabled={saving()}
-            class="px-2.5 py-1 text-xs font-medium text-muted hover:text-base-content hover:bg-surface-hover rounded-sm transition-colors disabled:opacity-50"
-          >
-            Clear all overrides
-          </button>
-        </Show>
-        <Show when={isDirty()}>
-          <button
-            type="button"
-            onClick={handleDiscard}
-            disabled={saving()}
-            class="px-2.5 py-1 text-xs font-medium text-muted hover:bg-surface-hover rounded-sm transition-colors disabled:opacity-50"
-          >
-            Discard
-          </button>
-          <button
-            type="button"
-            onClick={handleSave}
-            disabled={saving() || Boolean(autoPolicyValidationError())}
-            class="px-2.5 py-1 text-xs font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 rounded-sm transition-colors"
-          >
-            {saving() ? 'Saving…' : 'Save overrides'}
-          </button>
-        </Show>
-      </div>
     </section>
   );
 };

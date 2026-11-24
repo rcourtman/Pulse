@@ -112,7 +112,7 @@ describe('Kubernetes URL-backed shared toolbar filters', () => {
     ).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Review' })).toHaveAttribute(
       'href',
-      '/kubernetes/workloads',
+      '/kubernetes/workloads?status=degraded',
     );
   });
 
@@ -347,5 +347,90 @@ describe('Kubernetes URL-backed shared toolbar filters', () => {
     await waitFor(() => expect(window.location.search).toBe(''));
     expect(screen.getByText('checkout-api')).toBeInTheDocument();
     expect(screen.getByText('cache-worker')).toBeInTheDocument();
+  });
+
+  it('hides zero-match stacked workload tables when filtering by status or search and shows one empty state on zero total matches', () => {
+    setResources([
+      makeResource({ id: 'cluster-1', type: 'k8s-cluster' }),
+      makeResource({
+        id: 'web-frontend',
+        name: 'web-frontend',
+        type: 'k8s-deployment',
+        status: 'online',
+        kubernetes: { clusterId: 'cluster-1', clusterName: 'Cluster 1', namespace: 'apps' },
+      }),
+      makeResource({
+        id: 'worker-crash',
+        name: 'worker-crash',
+        type: 'pod',
+        status: 'degraded',
+        kubernetes: {
+          clusterId: 'cluster-1',
+          clusterName: 'Cluster 1',
+          namespace: 'apps',
+          podPhase: 'CrashLoopBackOff',
+        },
+      }),
+    ]);
+
+    renderSurfaceAt('/kubernetes/workloads?status=degraded');
+
+    expect(screen.getByText(kubernetesName('worker-crash'))).toBeInTheDocument();
+    expect(screen.queryByText('No deployments reported')).not.toBeInTheDocument();
+    expect(screen.queryByText('web-frontend')).not.toBeInTheDocument();
+
+    cleanup();
+    renderSurfaceAt('/kubernetes/workloads?q=definitely-does-not-exist');
+    expect(screen.getByText('No workloads match current filters')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Reset filters' })).toBeInTheDocument();
+  });
+
+  it('preserves active cluster and namespace scope in the Overview Review degraded link', () => {
+    setResources([
+      makeResource({ id: 'cluster-1', type: 'k8s-cluster' }),
+      makeResource({
+        id: 'pending-pod',
+        type: 'pod',
+        status: 'degraded',
+        kubernetes: {
+          clusterId: 'cluster-1',
+          clusterName: 'Cluster 1',
+          namespace: 'apps',
+          podPhase: 'Pending',
+        },
+      }),
+    ]);
+
+    renderSurfaceAt('/kubernetes/overview?cluster=cluster-1&namespace=apps');
+
+    expect(screen.getByRole('link', { name: 'Review' })).toHaveAttribute(
+      'href',
+      '/kubernetes/workloads?cluster=cluster-1&namespace=apps&status=degraded',
+    );
+  });
+
+  it('offers a Kind scope filter on Workloads when multiple workload kinds exist', () => {
+    setResources([
+      makeResource({ id: 'cluster-1', type: 'k8s-cluster' }),
+      makeResource({
+        id: 'web-frontend',
+        type: 'k8s-deployment',
+        kubernetes: { clusterId: 'cluster-1', clusterName: 'Cluster 1', namespace: 'apps' },
+      }),
+      makeResource({
+        id: 'worker-pod',
+        type: 'pod',
+        kubernetes: { clusterId: 'cluster-1', clusterName: 'Cluster 1', namespace: 'apps' },
+      }),
+    ]);
+
+    renderSurfaceAt('/kubernetes/workloads');
+
+    const addFilter = screen.getByRole('combobox', { name: 'Filter' });
+    const podsOption = screen.getByRole('option', { name: 'Kind: Pods' }) as HTMLOptionElement;
+    fireEvent.change(addFilter, { target: { value: podsOption.value } });
+
+    expect(screen.getByText(kubernetesName('worker-pod'))).toBeInTheDocument();
+    expect(screen.queryByText('web-frontend')).not.toBeInTheDocument();
   });
 });

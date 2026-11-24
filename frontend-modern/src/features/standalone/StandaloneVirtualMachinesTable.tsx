@@ -82,6 +82,7 @@ const vmStateNote = (resource: Resource): VMStateNote | null => {
 };
 
 export const StandaloneVirtualMachinesTable: Component<{
+  titleMeta?: JSX.Element;
   vms: Resource[];
   machines: Resource[];
   emptyIcon: JSX.Element;
@@ -207,11 +208,21 @@ export const StandaloneVirtualMachinesTable: Component<{
     <Show
       when={props.vms.length > 0}
       fallback={
-        <PlatformTableEmptyState
-          icon={props.emptyIcon}
-          title={props.emptyTitle}
-          description={props.emptyDescription}
-        />
+        <div class="space-y-2">
+          <Show when={props.titleMeta}>
+            <div class="flex items-center gap-2">
+              <h2 class="text-xs font-semibold uppercase tracking-wide text-muted">
+                Virtual Machines
+              </h2>
+              {props.titleMeta}
+            </div>
+          </Show>
+          <PlatformTableEmptyState
+            icon={props.emptyIcon}
+            title={props.emptyTitle}
+            description={props.emptyDescription}
+          />
+        </div>
       }
     >
       <div class="space-y-3" data-testid="standalone-vms-table">
@@ -234,29 +245,42 @@ export const StandaloneVirtualMachinesTable: Component<{
         <Show
           when={tableState.filtered().length > 0}
           fallback={
-            <PlatformTableEmptyState
-              icon={props.emptyIcon}
-              title="No VMs match current filters"
-              description={
-                selectedHostLabel()
-                  ? `No virtual machines on ${selectedHostLabel()} match the current search or status filter.`
-                  : 'Adjust the search or status filter to see more virtual machines.'
-              }
-              actions={<PlatformTableResetFiltersButton onReset={resetFilters} />}
-            />
+            <div class="space-y-2">
+              <Show when={props.titleMeta}>
+                <div class="flex items-center gap-2">
+                  <h2 class="text-xs font-semibold uppercase tracking-wide text-muted">
+                    Virtual Machines
+                  </h2>
+                  {props.titleMeta}
+                </div>
+              </Show>
+              <PlatformTableEmptyState
+                icon={props.emptyIcon}
+                title="No VMs match current filters"
+                description={
+                  selectedHostLabel()
+                    ? `No virtual machines on ${selectedHostLabel()} match the current search or status filter.`
+                    : 'Adjust the search or status filter to see more virtual machines.'
+                }
+                actions={<PlatformTableResetFiltersButton onReset={resetFilters} />}
+              />
+            </div>
           }
         >
           <PlatformTableShell
             title={
-              <PlatformHostScopedTableTitle
-                noun="Virtual Machines"
-                hostLabel={selectedHostLabel()}
-                count={selectedHostLabel() ? sortedRows().length : null}
-                clearLabel="Show all hosts"
-                onClear={clearHostScope}
-                headingId="standalone-vms-heading"
-                headingRef={vmsFocus.setHeading}
-              />
+              <div class="flex flex-wrap items-center gap-2">
+                <PlatformHostScopedTableTitle
+                  noun="Virtual Machines"
+                  hostLabel={selectedHostLabel()}
+                  count={selectedHostLabel() ? sortedRows().length : null}
+                  clearLabel="Show all hosts"
+                  onClear={clearHostScope}
+                  headingId="standalone-vms-heading"
+                  headingRef={vmsFocus.setHeading}
+                />
+                {props.titleMeta}
+              </div>
             }
             tableClass="min-w-full table-fixed text-xs md:min-w-[840px]"
             header={

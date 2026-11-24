@@ -1,0 +1,87 @@
+{
+  "version": 1,
+  "base_sha": "7635715c45dd7bed2360340312ff1189b9243b49",
+  "verified_at": "2026-11-24T10:01:39Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/App.tsx",
+    "frontend-modern/src/AppLayout.tsx",
+    "frontend-modern/src/components/Infrastructure/ResourceDetailDrawer.tsx",
+    "frontend-modern/src/components/shared/KeyboardShortcutsModal.tsx",
+    "frontend-modern/src/components/shared/commandPaletteModel.ts",
+    "frontend-modern/src/components/shared/useCommandPaletteState.ts",
+    "frontend-modern/src/features/alerts/AlertOverviewAlertCard.tsx",
+    "frontend-modern/src/features/availability/AvailabilityPageSurface.tsx",
+    "frontend-modern/src/features/docker/DockerPortChecksNotice.tsx",
+    "frontend-modern/src/features/platformNavigation/platformNavigationModel.ts",
+    "frontend-modern/src/features/platformNavigation/resourcePagePath.ts",
+    "frontend-modern/src/features/platformPage/PlatformResourceDetailTableRow.tsx",
+    "frontend-modern/src/features/platformPage/platformIcon.ts",
+    "frontend-modern/src/features/standalone/AvailabilityChecksTable.tsx",
+    "frontend-modern/src/features/standalone/AvailabilityFleetView.tsx",
+    "frontend-modern/src/features/standalone/StandalonePageSurface.tsx",
+    "frontend-modern/src/features/standalone/standalonePageModel.ts",
+    "frontend-modern/src/hooks/useKeyboardShortcuts.ts",
+    "frontend-modern/src/pages/Availability.tsx",
+    "frontend-modern/src/routing/navigation.ts",
+    "frontend-modern/src/routing/resourceLinks.ts",
+    "frontend-modern/src/routing/routePreload.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/App.tsx": "64fd5e1a67532f1cacb3bbe722a43092ff3b54fd77523aea99759053a596898a",
+    "frontend-modern/src/AppLayout.tsx": "7568e0b28682464ac46bd97a5a4cce4b904664be934c7f8d5fbaf24e47fb50fa",
+    "frontend-modern/src/components/Infrastructure/ResourceDetailDrawer.tsx": "d86b246db6029c67c583847d37604ede1a82d6b6fa304db120749e7402b5ebf8",
+    "frontend-modern/src/components/shared/KeyboardShortcutsModal.tsx": "0c07c8c19731c03fd9ffe7c2ecb1dcc6cec6711511d19fdfa661e5347ed86069",
+    "frontend-modern/src/components/shared/commandPaletteModel.ts": "25f5bd1a01ea7f2138b124377bca3e781bc5b09731bc48523a1586f5793c28c4",
+    "frontend-modern/src/components/shared/useCommandPaletteState.ts": "74ab0afcda158e24a5b5571435d7035cb754ce25a742071c56d407d9a83da8e5",
+    "frontend-modern/src/features/alerts/AlertOverviewAlertCard.tsx": "dff46c82e057ad816d6e171303324b83aa80e59aa78d6374d4cb20c637feba14",
+    "frontend-modern/src/features/availability/AvailabilityPageSurface.tsx": "ee5c975102e86bd301ef59d9a0c347c1df3b8d42c0993a141734a987c354cfc2",
+    "frontend-modern/src/features/docker/DockerPortChecksNotice.tsx": "0dfd82d90fc5d81af21145ebb00dbf6b23526577cc133bcfd5e57862664860d0",
+    "frontend-modern/src/features/platformNavigation/platformNavigationModel.ts": "73becdd20e584bcc70c25a612827d1d106099ca885892d21591317f3100c33c2",
+    "frontend-modern/src/features/platformNavigation/resourcePagePath.ts": "23a34024a9790029499c0844c975fe0a21dddf3f466cf5483dc7cbae7d367b92",
+    "frontend-modern/src/features/platformPage/PlatformResourceDetailTableRow.tsx": "b72df8d5b82cf49936ebd683566fa8a838a9d1cdaf85560fa35b418b97508a57",
+    "frontend-modern/src/features/platformPage/platformIcon.ts": "4469df575a8edd0bf4300ed68e786e93f3d46892e825e39484bb489b0dc779b0",
+    "frontend-modern/src/features/standalone/AvailabilityChecksTable.tsx": "d9b897fd7827e53dae07a0f0ee3480e0294c115ef8a3823c8cb0cf000bde5a5a",
+    "frontend-modern/src/features/standalone/AvailabilityFleetView.tsx": "6f587b3ad0d1491ba4992f427f532e013f65c3875937f1dc677aa1e99bc8abf2",
+    "frontend-modern/src/features/standalone/StandalonePageSurface.tsx": "7378873b86cc4fe6fb4af58e76b7a0421b4a322ec996efc60c96823cbc01c784",
+    "frontend-modern/src/features/standalone/standalonePageModel.ts": "78c64b8de8f1049cd9362b3ac1c9e37216e102bda8d4ac630ec7cad7a8bd2639",
+    "frontend-modern/src/hooks/useKeyboardShortcuts.ts": "e6ed872ceea8cbec6d88504f536b0f75c400fea9daa54e52b3a087279302dcf2",
+    "frontend-modern/src/pages/Availability.tsx": "69d7207914bf22aacd87f226eb55d0401553220efe0e96d13b8b98889277279e",
+    "frontend-modern/src/routing/navigation.ts": "325f0c7bd232d3618b6a892b5d8dee5ceb0371969274e64bf1f3bd21a4d7c576",
+    "frontend-modern/src/routing/resourceLinks.ts": "7ba9d6d5ad66c519ef6c0ad3a681412adbf87089a8f152b1ebbca74300a47e9f",
+    "frontend-modern/src/routing/routePreload.ts": "60df2d60038094e5291b9f2eadb9852da14ef988455798e123132060ad4b95a7"
+  },
+  "routes": [
+    "/availability",
+    "/standalone/availability",
+    "/standalone/machines"
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 800
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Availability renders as a top-level primary navigation item active on /availability with 11 checks",
+    "Table and Fleet presentation toggle persists across full page reload via localStorage",
+    "Add check modal opens inline with DNS resolver preset and closes cleanly on Escape",
+    "expanded check detail drawer renders aligned Test now, Pause, and Edit header actions without clipping",
+    "Command Palette lists Go to Availability (g c) as a top-level destination",
+    "legacy /standalone/availability redirects cleanly to /availability without polluting Machines route memory",
+    "Machines navigation opens /standalone/machines cleanly",
+    "mobile 390x844 layout has zero horizontal overflow across toolbar, Add check, and expanded drawer actions"
+  ],
+  "interactions": [
+    "loaded /availability at 1280x800, switched Table -> Fleet -> reloaded -> confirmed Fleet persisted -> switched back to Table",
+    "opened and dismissed Add check modal with Escape",
+    "expanded Document ingest readiness row, verified inline Test now, Pause, and Edit actions, opened and dismissed Edit modal with Escape",
+    "opened Command Palette via Search button, verified Go to Availability entry, dismissed with Escape",
+    "visited /standalone/availability, confirmed redirect to /availability, then clicked Machines nav item and confirmed /standalone/machines opened",
+    "resized /availability to 390x844, expanded check drawer, verified 44x44 mobile actions and zero horizontal overflow with zero console errors"
+  ]
+}

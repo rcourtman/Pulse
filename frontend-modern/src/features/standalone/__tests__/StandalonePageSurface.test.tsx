@@ -193,55 +193,10 @@ afterEach(() => {
 });
 
 describe('StandalonePageSurface', () => {
-  it('ages the availability posture and latest-data label without reloading resources', () => {
-    const start = Date.parse('2026-10-10T12:00:00Z');
-    vi.useFakeTimers({ toFake: ['Date', 'setInterval', 'clearInterval'], now: start });
-    const resources = [
-      resource({
-        id: 'clock-check',
-        type: 'network-endpoint',
-        platformType: 'availability',
-        sources: ['availability'],
-        lastSeen: start - 60_000,
-        availability: freshAvailability({
-          evidence: {
-            id: 'clock-evidence',
-            source: { provider: 'availability', collector: 'probe' },
-            subject: { resourceId: 'clock-check' },
-            observedAt: new Date(start).toISOString(),
-            ingestedAt: new Date(start).toISOString(),
-            validUntil: new Date(start + 10_000).toISOString(),
-            completeness: 'complete',
-            confidence: 'confirmed',
-            permissions: 'sufficient',
-          },
-        }),
-      }),
-    ];
-    const refetch = vi.fn();
+  it('redirects legacy /standalone/availability links to /availability', () => {
     mocks.pathname = '/standalone/availability';
-    mocks.useUnifiedResources.mockReturnValue({
-      resources: () => resources,
-      loading: () => false,
-      error: () => null,
-      refetch,
-    });
-    try {
-      render(() => <StandalonePageSurface />);
-      const posture = screen.getByTestId('standalone-posture-summary');
-      expect(posture).toHaveTextContent('All 1 check reporting normally');
-      expect(posture).toHaveTextContent('latest data 1m ago');
-      vi.advanceTimersByTime(60_000);
-      expect(posture).toHaveTextContent('1 check needs attention');
-      expect(posture).toHaveTextContent('0 healthy');
-      expect(posture).toHaveTextContent('latest data 2m ago');
-      expect(screen.getByTestId('standalone-posture-summary')).toBe(posture);
-      expect(refetch).not.toHaveBeenCalled();
-      expect(resources[0].availability?.available).toBe(true);
-    } finally {
-      cleanup();
-      vi.useRealTimers();
-    }
+    render(() => <StandalonePageSurface />);
+    expect(mocks.navigate).toHaveBeenCalledWith('/availability', { replace: true });
   });
 
   it('keeps machine search and normalized status in route-owned saved-view state', () => {
@@ -274,10 +229,7 @@ describe('StandalonePageSurface', () => {
           'source=agent,availability&excludeSource=proxmox,kubernetes,truenas,vmware&type=agent,vm,network-endpoint',
       }),
     );
-    expect(screen.getByTestId('standalone-section-tabs')).toHaveAttribute(
-      'data-tabs',
-      'machines,availability',
-    );
+    expect(screen.queryByTestId('standalone-section-tabs')).not.toBeInTheDocument();
     expect(screen.getByTestId('agents-machines-table')).toHaveAttribute('data-resource-count', '1');
     expect(screen.queryByTestId('standalone-posture-summary')).not.toBeInTheDocument();
     expect(screen.queryByTestId('availability-checks-table')).not.toBeInTheDocument();
@@ -344,187 +296,6 @@ describe('StandalonePageSurface', () => {
     render(() => <StandalonePageSurface />);
 
     expect(mocks.navigate).toHaveBeenCalledWith('/standalone/machines', { replace: true });
-    expect(screen.getByTestId('standalone-section-tabs')).toHaveAttribute(
-      'data-active',
-      'machines',
-    );
-  });
-
-  it('uses the availability tab as a focused check monitor', () => {
-    mocks.pathname = '/standalone/availability';
-
-    render(() => <StandalonePageSurface />);
-
-    expect(screen.getByTestId('standalone-section-tabs')).toHaveAttribute(
-      'data-active',
-      'availability',
-    );
-    expect(screen.queryByTestId('agents-machines-table')).not.toBeInTheDocument();
-    expect(screen.getByTestId('availability-checks-table')).toHaveAttribute(
-      'data-resource-count',
-      '2',
-    );
-    expect(screen.getByTestId('availability-checks-table')).toHaveAttribute('data-view', 'table');
-    expect(screen.getByTestId('standalone-posture-summary')).toHaveTextContent(
-      'All 2 checks reporting normally',
-    );
-    expect(screen.getByRole('link', { name: 'Manage checks' })).toHaveAttribute(
-      'href',
-      '/settings/monitoring/availability',
-    );
-  });
-
-  it('defaults estate-sized availability inventories to the fleet view', () => {
-    mocks.pathname = '/standalone/availability';
-    mocks.useUnifiedResources.mockReturnValue({
-      resources: () =>
-        Array.from({ length: 20 }, (_, index) =>
-          resource({
-            id: `availability:service-${index}`,
-            type: 'network-endpoint',
-            platformType: 'availability',
-            sources: ['availability'],
-            availability: freshAvailability({ targetId: `service-${index}` }),
-          }),
-        ),
-      loading: () => false,
-      error: () => null,
-      refetch: vi.fn(),
-    });
-
-    render(() => <StandalonePageSurface />);
-
-    expect(screen.getByTestId('availability-checks-table')).toHaveAttribute('data-view', 'fleet');
-  });
-
-  it('keeps every explicit presentation choice stable for an estate-sized inventory', () => {
-    mocks.pathname = '/standalone/availability';
-    mocks.searchParams = { view: 'table' };
-    mocks.useUnifiedResources.mockReturnValue({
-      resources: () =>
-        Array.from({ length: 20 }, (_, index) =>
-          resource({
-            id: `availability:service-${index}`,
-            type: 'network-endpoint',
-            platformType: 'availability',
-            sources: ['availability'],
-            availability: freshAvailability({ targetId: `service-${index}` }),
-          }),
-        ),
-      loading: () => false,
-      error: () => null,
-      refetch: vi.fn(),
-    });
-
-    render(() => <StandalonePageSurface />);
-
-    const table = screen.getByTestId('availability-checks-table');
-    expect(table).toHaveAttribute('data-view', 'table');
-
-    const props = mocks.AvailabilityChecksTable.mock.calls.at(-1)?.[0];
-    props?.onViewChange?.('fleet');
-    expect(mocks.setSearchParams).toHaveBeenCalledWith({ view: 'fleet' }, { replace: true });
-
-    props?.onViewChange?.('table');
-    expect(mocks.setSearchParams).toHaveBeenCalledWith({ view: 'table' }, { replace: true });
-  });
-
-  it('counts every configured check when two attached services share one monitored host', () => {
-    mocks.pathname = '/standalone/availability';
-    mocks.useUnifiedResources.mockReturnValue({
-      resources: () => [
-        resource({
-          id: 'agent-core2026',
-          type: 'agent',
-          platformType: 'agent',
-          sources: ['agent', 'availability'],
-          availability: freshAvailability({
-            targetId: 'stats-pv',
-            correlationState: 'attached',
-          }),
-        }),
-        resource({
-          id: 'availability:stats-pv',
-          type: 'network-endpoint',
-          platformType: 'availability',
-          sources: ['availability'],
-          availability: freshAvailability({
-            targetId: 'stats-pv',
-            correlationState: 'attached',
-          }),
-        }),
-        resource({
-          id: 'availability:grafana',
-          type: 'network-endpoint',
-          platformType: 'availability',
-          sources: ['availability'],
-          availability: freshAvailability({
-            targetId: 'grafana',
-            correlationState: 'attached',
-          }),
-        }),
-        resource({
-          id: 'availability:public-api',
-          type: 'network-endpoint',
-          platformType: 'availability',
-          sources: ['availability'],
-          availability: freshAvailability({ targetId: 'public-api' }),
-        }),
-        resource({
-          id: 'availability:router',
-          type: 'network-endpoint',
-          platformType: 'availability',
-          sources: ['availability'],
-          availability: freshAvailability({ targetId: 'router' }),
-        }),
-      ],
-      loading: () => false,
-      error: () => null,
-      refetch: vi.fn(),
-    });
-
-    render(() => <StandalonePageSurface />);
-
-    expect(screen.getByTestId('availability-checks-table')).toHaveAttribute(
-      'data-resource-count',
-      '4',
-    );
-    expect(screen.getByTestId('standalone-posture-summary')).toHaveTextContent(
-      'All 4 checks reporting normally',
-    );
-  });
-
-  it('makes failed availability posture visible before the table', () => {
-    mocks.pathname = '/standalone/availability';
-    mocks.useUnifiedResources.mockReturnValue({
-      resources: () => [
-        resource({
-          id: 'failed-check',
-          type: 'network-endpoint',
-          platformType: 'availability',
-          sources: ['availability'],
-          status: 'offline',
-          availability: freshAvailability({ targetKind: 'service', available: false }),
-        }),
-        resource({
-          id: 'healthy-check',
-          type: 'network-endpoint',
-          platformType: 'availability',
-          sources: ['availability'],
-          status: 'online',
-          availability: freshAvailability({ targetKind: 'service' }),
-        }),
-      ],
-      loading: () => false,
-      error: () => null,
-      refetch: vi.fn(),
-    });
-
-    render(() => <StandalonePageSurface />);
-
-    const summary = screen.getByTestId('standalone-posture-summary');
-    expect(summary).toHaveTextContent('1 check offline');
-    expect(summary).toHaveTextContent('1 need attention');
   });
 
   it('uses an overview handoff when only agentless availability checks are present', () => {
@@ -551,7 +322,7 @@ describe('StandalonePageSurface', () => {
     expect(screen.getByRole('button', { name: 'Add agent' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'View checks' })).toHaveAttribute(
       'href',
-      '/standalone/availability',
+      '/availability',
     );
     expect(screen.queryByRole('link', { name: 'Add machine check' })).not.toBeInTheDocument();
   });
@@ -578,7 +349,7 @@ describe('StandalonePageSurface', () => {
     expect(screen.getByText('No Pulse Agent machines')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'View checks' })).toHaveAttribute(
       'href',
-      '/standalone/availability',
+      '/availability',
     );
   });
 
@@ -612,7 +383,7 @@ describe('StandalonePageSurface', () => {
 
     expect(screen.getByTestId('standalone-section-tabs')).toHaveAttribute(
       'data-tabs',
-      'machines,vms,availability',
+      'machines,vms',
     );
     const machineProps = mocks.AgentsMachinesTable.mock.calls.at(-1)?.[0];
     expect(machineProps?.vmCountByMachineId?.().get('agent:tower')).toBe(1);
@@ -641,7 +412,7 @@ describe('StandalonePageSurface', () => {
     );
   });
 
-  it('keeps Machines and Availability checks usable with VM inventory in a release build', () => {
+  it('keeps Machines usable with VM inventory in a release build', () => {
     vi.stubEnv('DEV', false);
     mocks.versionInfo.mockReturnValue({ channel: 'stable' });
     mocks.useUnifiedResources.mockReturnValue({
@@ -656,10 +427,7 @@ describe('StandalonePageSurface', () => {
 
     render(() => <StandalonePageSurface />);
 
-    expect(screen.getByTestId('standalone-section-tabs')).toHaveAttribute(
-      'data-tabs',
-      'machines,availability',
-    );
+    expect(screen.queryByTestId('standalone-section-tabs')).not.toBeInTheDocument();
     expect(screen.getByTestId('agents-machines-table')).toHaveAttribute('data-resource-count', '1');
     expect(screen.queryByTestId('standalone-vms-table-mock')).not.toBeInTheDocument();
     const machineProps = mocks.AgentsMachinesTable.mock.calls.at(-1)?.[0];
@@ -683,7 +451,7 @@ describe('StandalonePageSurface', () => {
     expect(screen.getByRole('button', { name: 'Add agent' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'View checks' })).toHaveAttribute(
       'href',
-      '/standalone/availability',
+      '/availability',
     );
   });
 });

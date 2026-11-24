@@ -37,8 +37,10 @@ import {
 } from '@/features/platformPage/sharedPlatformPage';
 import { useUnifiedResources } from '@/hooks/useUnifiedResources';
 import {
+  AVAILABILITY_PATH,
   STANDALONE_PATH,
   STANDALONE_QUERY_PARAMS,
+  buildAvailabilityPath,
   buildStandaloneHostVmsPath,
   buildStandalonePath,
   isStandaloneVmsRoute,
@@ -86,7 +88,7 @@ const machineIcon = () => <ServerIcon class="h-6 w-6 text-slate-400" />;
 const vmIcon = () => <MonitorIcon class="h-6 w-6 text-slate-400" />;
 const availabilityIcon = () => <ActivityIcon class="h-6 w-6 text-slate-400" />;
 
-const StandalonePostureCard: Component<{
+export const StandalonePostureCard: Component<{
   actions?: JSX.Element;
   label: string;
   noun: string;
@@ -294,6 +296,12 @@ export function StandalonePageSurface() {
 
   createEffect(() => {
     const normalizedPath = location.pathname.replace(/\/+$/, '');
+    if (normalizedPath === buildStandalonePath('availability')) {
+      navigate(`${AVAILABILITY_PATH}${location.search ?? ''}${location.hash ?? ''}`, {
+        replace: true,
+      });
+      return;
+    }
     if (normalizedPath === STANDALONE_PATH || normalizedPath === `${STANDALONE_PATH}/overview`) {
       navigate(buildStandalonePath('machines'), { replace: true });
     }
@@ -301,7 +309,9 @@ export function StandalonePageSurface() {
 
   return (
     <div data-testid="standalone-page" class="pulse-wide-data-surface space-y-3">
-      <PlatformSectionTabs tabs={tabs()} active={activeTab()} ariaLabel="Machines sections" />
+      <Show when={tabs().length > 1}>
+        <PlatformSectionTabs tabs={tabs()} active={activeTab()} ariaLabel="Machines sections" />
+      </Show>
 
       <Show
         when={!showLoading()}
@@ -369,7 +379,6 @@ export function StandalonePageSurface() {
           </Show>
 
           <Show when={activeTab() === 'vms'}>
-            <FeaturePreviewTag feature="standaloneVms" />
             <Suspense
               fallback={
                 <PlatformTableLoadingState
@@ -379,6 +388,7 @@ export function StandalonePageSurface() {
               }
             >
               <StandaloneVirtualMachinesTable
+                titleMeta={<FeaturePreviewTag feature="standaloneVms" />}
                 vms={visibleVms()}
                 machines={model().machines}
                 selectedHostId={vmHostFilter}
@@ -416,7 +426,7 @@ export function StandalonePageSurface() {
                         Add agent
                       </Button>
                       <ButtonLink
-                        href={buildStandalonePath('availability')}
+                        href={buildAvailabilityPath()}
                         variant="secondary"
                         size="sm"
                         class="gap-2 px-3"
@@ -460,7 +470,7 @@ export function StandalonePageSurface() {
                               Add agent
                             </Button>
                             <ButtonLink
-                              href={buildStandalonePath('availability')}
+                              href={buildAvailabilityPath()}
                               variant="secondary"
                               size="sm"
                               class="gap-2 px-3"

@@ -1,5 +1,5 @@
 import { Show, For } from 'solid-js';
-import type { Component } from 'solid-js';
+import type { Component, JSX } from 'solid-js';
 import type { Resource } from '@/types/resource';
 import ExternalLinkIcon from 'lucide-solid/icons/external-link';
 import { getDrawerHeaderActionButtonClass } from '@/components/shared/buttonModel';
@@ -45,6 +45,7 @@ interface ResourceDetailDrawerProps {
   resolveResourceLabel?: (resourceId: string) => string | null | undefined;
   initialShowAccessContext?: boolean;
   initialShowHostDetails?: boolean;
+  headerActions?: JSX.Element;
   onResourceActionSettled?: () => void | Promise<void>;
 }
 
@@ -109,6 +110,7 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
   );
   const HeaderActions = () => (
     <>
+      {props.headerActions}
       <Show when={customUrl()}>
         <WebInterfaceLink
           url={customUrl()}
@@ -299,6 +301,7 @@ export const ResourceDetailDrawer: Component<ResourceDetailDrawerProps> = (props
           resolveResourceLabel={props.resolveResourceLabel}
           initialShowAccessContext={props.initialShowAccessContext}
           initialShowHostDetails={props.initialShowHostDetails}
+          headerActions={props.headerActions}
           onResourceActionSettled={props.onResourceActionSettled}
         />
       )}

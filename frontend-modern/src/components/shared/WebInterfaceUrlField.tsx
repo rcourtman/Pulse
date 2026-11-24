@@ -1,6 +1,7 @@
 import { Component, Show } from 'solid-js';
 import ExternalLinkIcon from 'lucide-solid/icons/external-link';
 import { sessionCanWriteMonitoringMetadata } from '@/stores/sessionCapabilities';
+import { presentationPolicyIsReadOnly } from '@/stores/sessionPresentationPolicy';
 import { Button, CopyValueButton } from './Button';
 import { getInfoCardFrameClass } from './InfoCardFrame';
 import { useWebInterfaceUrlFieldState } from './useWebInterfaceUrlFieldState';
@@ -13,7 +14,7 @@ export const WebInterfaceUrlField: Component<WebInterfaceUrlFieldProps> = (props
   const state = useWebInterfaceUrlFieldState(props);
   // Metadata writes need monitoring:write; read-only API-token sessions such
   // as kiosk links see the saved URL without controls that would be refused.
-  const canEdit = () => sessionCanWriteMonitoringMetadata();
+  const canEdit = () => !presentationPolicyIsReadOnly() && sessionCanWriteMonitoringMetadata();
   const title = () => props.title?.trim() || 'Web Interface URL';
   const rootClass = () =>
     props.embedded ? (props.class ?? '') : getInfoCardFrameClass({ class: props.class });
