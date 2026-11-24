@@ -174,24 +174,32 @@ type agentLookupResult struct {
 	version int
 }
 
-type agentLookupMemo map[agentLookupKey]agentLookupResult
+type agentLookupMemo struct {
+	answers           map[agentLookupKey]agentLookupResult
+	dockerInventories map[dockerReadinessInventoryKey]*dockerReadinessInventory
+}
 
 type agentLookupMemoContextKey struct{}
 
 func withAgentLookupMemo(ctx context.Context) context.Context {
-	return context.WithValue(ctx, agentLookupMemoContextKey{}, agentLookupMemo{})
+	return context.WithValue(ctx, agentLookupMemoContextKey{}, &agentLookupMemo{answers: make(map[agentLookupKey]agentLookupResult)})
+}
+
+func agentLookupMemoForContext(ctx context.Context) *agentLookupMemo {
+	memo, _ := ctx.Value(agentLookupMemoContextKey{}).(*agentLookupMemo)
+	return memo
 }
 
 func memoizedAgentLookup(ctx context.Context, key agentLookupKey, lookup func() agentLookupResult) agentLookupResult {
-	memo, _ := ctx.Value(agentLookupMemoContextKey{}).(agentLookupMemo)
+	memo := agentLookupMemoForContext(ctx)
 	if memo == nil {
 		return lookup()
 	}
-	if result, ok := memo[key]; ok {
+	if result, ok := memo.answers[key]; ok {
 		return result
 	}
 	result := lookup()
-	memo[key] = result
+	memo.answers[key] = result
 	return result
 }
 

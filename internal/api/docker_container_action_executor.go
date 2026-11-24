@@ -612,11 +612,8 @@ func (e dockerContainerActionExecutor) dockerReportTokenReachesCommandSession(ct
 // agent's ID itself, so the row is its own record of which token reports for
 // that machine.
 func (e dockerContainerActionExecutor) hostAgentReportsUnderToken(ctx context.Context, tokenID, agentID, hostname string) bool {
-	if e.resources == nil {
-		return false
-	}
-	registry, err := e.resources.buildRegistry(GetOrgID(ctx))
-	if err != nil {
+	registry, _ := e.dockerReadinessRegistry(ctx)
+	if registry == nil {
 		return false
 	}
 	for _, host := range registry.Hosts() {
@@ -635,32 +632,20 @@ func (e dockerContainerActionExecutor) hostAgentReportsUnderToken(ctx context.Co
 // same token must not borrow the real host's session to act on containers
 // outside the operator lock on the real container resource.
 func (e dockerContainerActionExecutor) dockerTokenHasAmbiguousHosts(ctx context.Context, tokenID, agentID string, singleTokenSession bool) bool {
-	if e.resources == nil || tokenID == "" {
+	if tokenID == "" {
 		return false
 	}
-	registry, err := e.resources.buildRegistry(GetOrgID(ctx))
-	if err != nil {
+	registry, batch := e.dockerReadinessRegistry(ctx)
+	if registry == nil {
 		return false
 	}
-	hostsForToken := make(map[string]struct{})
-	hostsForAgent := make(map[string]struct{})
-	for _, res := range registry.List() {
-		if res.Docker == nil || strings.TrimSpace(res.Docker.TokenID) != tokenID {
-			continue
-		}
-		hostSourceID := strings.TrimSpace(res.Docker.HostSourceID)
-		if hostSourceID == "" {
-			continue
-		}
-		hostsForToken[hostSourceID] = struct{}{}
-		if agentID != "" && strings.TrimSpace(res.Docker.AgentID) == agentID {
-			hostsForAgent[hostSourceID] = struct{}{}
-		}
+	if batch == nil {
+		return indexDockerReportHosts(registry.List(), tokenID).ambiguous(tokenID, agentID, singleTokenSession)
 	}
-	if len(hostsForAgent) > 1 {
-		return true
+	if batch.reportHosts == nil {
+		batch.reportHosts = indexDockerReportHosts(registry.List(), "")
 	}
-	return singleTokenSession && len(hostsForToken) > 1
+	return batch.reportHosts.ambiguous(tokenID, agentID, singleTokenSession)
 }
 
 // agentLookupHostCommandsDisabled memoizes one host's answer for a pass. It sits
@@ -680,8 +665,8 @@ func (e dockerContainerActionExecutor) dockerHostCommandsDisabled(ctx context.Co
 		return false
 	}
 	return memoizedAgentLookup(ctx, agentLookupKey{kind: agentLookupHostCommandsDisabled, first: hostID}, func() agentLookupResult {
-		registry, err := e.resources.buildRegistry(GetOrgID(ctx))
-		if err != nil {
+		registry, _ := e.dockerReadinessRegistry(ctx)
+		if registry == nil {
 			return agentLookupResult{}
 		}
 		host, ok := registry.Get(hostID)
