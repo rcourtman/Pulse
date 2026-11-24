@@ -284,8 +284,11 @@ class GitHub:
             if attempt == 2 or failure not in RETRYABLE_API_READS:
                 break
             peer_cancelled |= failure == "peer-cancel"
+            # The public workflow also reads private resources with an explicit token.
+            retry_subject = "private GitHub API read" if token else read_subject
             print(
-                f"Transient GitHub API read failure; retry {attempt + 1}/2.",
+                f"Transient GitHub API read failure ({retry_subject or 'resource unavailable'}; "
+                f"{failure}); retry {attempt + 1}/2.",
                 file=sys.stderr,
             )
             time.sleep(attempt + 1)

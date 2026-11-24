@@ -66,6 +66,55 @@ class TransientReadTests(unittest.TestCase):
         self.assertEqual(2, command.call_count)
         sleep.assert_called_once_with(1)
 
+    def test_success_after_retries_names_only_the_safe_read_and_class(self):
+        github = subject.GitHub("rcourtman/Pulse", "gh")
+        resource = "repos/rcourtman/Pulse/releases"
+        endpoint = f"{resource}?filter=fixture-only"
+        results = [
+            self.result(1, '[{"partial": true}]', "gh: fixture response detail (HTTP 504)"),
+            self.result(1, stderr="stream error: stream ID 7; CANCEL; received from peer"),
+            self.result(0, '[{"id": 42}]'),
+        ]
+        warnings = io.StringIO()
+        with (
+            patch.object(subject.subprocess, "run", side_effect=results) as command,
+            patch("time.sleep"),
+            contextlib.redirect_stderr(warnings),
+        ):
+            self.assertEqual([[{"id": 42}]], github.pages(endpoint))
+        self.assertEqual(3, command.call_count)
+        lines = warnings.getvalue().splitlines()
+        self.assertEqual(
+            [line for line in lines if line.startswith("Transient GitHub API read failure")],
+            [
+                f"Transient GitHub API read failure (GET {resource}; http-504); retry 1/2.",
+                f"Transient GitHub API read failure (GET {resource}; peer-cancel); retry 2/2.",
+            ],
+        )
+        self.assertNotIn("fixture", warnings.getvalue())
+        self.assertNotIn("stream ID", warnings.getvalue())
+
+    def test_retry_warning_omits_authenticated_private_endpoint(self):
+        github = subject.GitHub("rcourtman/Pulse", "gh")
+        endpoint = "repos/rcourtman/pulse-pro/actions/runs/123/jobs?per_page=100"
+        results = [
+            self.result(1, stderr="gh: Gateway Timeout (HTTP 504)"),
+            self.result(0, '{"jobs": []}'),
+        ]
+        warnings = io.StringIO()
+        with (
+            patch.object(subject.subprocess, "run", side_effect=results) as command,
+            patch("time.sleep"),
+            contextlib.redirect_stderr(warnings),
+        ):
+            self.assertEqual({"jobs": []}, github.api(endpoint, token="fixture-token"))
+        self.assertEqual(2, command.call_count)
+        self.assertEqual(command.call_args_list[0], command.call_args_list[1])
+        self.assertEqual(
+            warnings.getvalue(),
+            "Transient GitHub API read failure (private GitHub API read; http-504); retry 1/2.\n",
+        )
+
     def test_api_retries_transient_errors_with_bounded_backoff(self):
         github = subject.GitHub("rcourtman/Pulse", "gh")
         for diagnostic in ("gh: HTTP 502\n", "gh: unavailable (HTTP 503)", "gh: Gateway Timeout (HTTP 504)"):
