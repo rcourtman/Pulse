@@ -101,13 +101,18 @@ jobs:
 
           fetch_registry_tags() {
             local registry_name="$1" auth_url="$2" registry_url="$3" image="$4" output="$5"
-            local token
-            token="$(curl -fsSL --retry 4 --retry-delay 2 --retry-all-errors "${auth_url}")"
-            token="$(jq -er '.token | select(type == "string" and length > 0)' <<<"${token}")"
-            curl -fsSL --retry 4 --retry-delay 2 --retry-all-errors \
+            local token inventory
+            # Retry only curl's transient failures, never a 401 or 403.
+            # A retry cannot rewind a pipe: require one complete JSON value
+            # and write the inventory only after the entire pipeline succeeds.
+            token="$(curl -q -fsSL --retry 4 --retry-delay 2 "${auth_url}" \
+              | jq -ers 'select(length == 1) | .[0].token | select(type == "string" and length > 0)')" || return
+            inventory="$(curl -q -fsSL --retry 4 --retry-delay 2 \
               -H "Authorization: Bearer ${token}" \
               "${registry_url}/v2/${image}/tags/list?n=10000" \
-              | jq --arg name "${registry_name}/${image}" '.name = $name' > "${output}"
+              | jq -es --arg name "${registry_name}/${image}" \
+                  'select(length == 1) | .[0] | objects | .name = $name')" || return
+            printf '%s\n' "${inventory}" > "${output}"
           }
           owner="${GITHUB_REPOSITORY_OWNER,,}"
           for image in pulse pulse-control-plane; do
