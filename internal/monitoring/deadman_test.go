@@ -660,3 +660,25 @@ func TestDeadManSupersededSnapshotDoesNotSend(t *testing.T) {
 	}, func() time.Time { return now })
 	require.Nil(t, d.statusSnapshot().LastAttemptAt)
 }
+
+func TestDeadManSupersededProgressCannotQueueAStall(t *testing.T) {
+	now := time.Date(2026, 11, 24, 12, 0, 0, 0, time.UTC)
+	d := newDeadManTestRuntime(t, now, deadManRoundTripFunc(func(*http.Request) (*http.Response, error) {
+		t.Error("a removed destination must not receive a request")
+		return deadManResponse(http.StatusOK, ""), nil
+	}))
+	endpoint := "https://watchdog.example.com/ping/fixture"
+	m := &Monitor{deadMan: d, configPersist: config.NewConfigPersistence(t.TempDir()),
+		deadManConfig: notifications.DeadManConfig{PingURL: endpoint}}
+	d.runCycle(context.Background(), func() string { return m.deadManConfigSnapshot().PingURL }, func() time.Time {
+		// The old cycle already has a destination and is still reading
+		// progress when the operator completes removal.
+		require.NoError(t, m.UpdateDeadManConfig(notifications.DeadManConfig{}))
+		return now.Add(-2 * time.Minute)
+	})
+	require.Equal(t, "disabled", m.DeadManStatus().State)
+	for _, update := range d.alertProjection.pending {
+		require.False(t, update.alertType == alerts.DeadManMonitoringStalledAlertType && update.raise != nil,
+			"cancelled cycle queued an obsolete stall after saved removal")
+	}
+}

@@ -9282,7 +9282,9 @@ agent intake, or per-provider success. Ordinary idle time and provider backoff
 do not stop the loop's marker. HTTP liveness remains independent.
 The external sender never waits for the alert manager to raise, refresh, or
 clear a local watchdog alert. A single, bounded projection worker reconciles
-the latest standing condition and retains the restart observation for local
+the latest standing condition. Recovery or a saved destination change makes
+an obsolete raise ineligible even if it has left the queue and is waiting
+for alert-manager admission. A real restart observation still goes to local
 history, even when the same signal reports recovery. Tenant shutdown cancels
 the sender and joins this projection before releasing the alert store.
 Every DNS answer is compared with all Pulse host interface addresses before
@@ -9307,7 +9309,11 @@ manager lock while a fixture receiver accepts the first and later failure
 signals and the recovery report. It verifies the durable restart gap, local
 history and final alert state after release. Configuration tests verify that a
 saved removal cancels an active request under the same lock pressure, and
-that a superseded snapshot cannot start a request.
+that a superseded snapshot cannot start a request or queue a new stall.
+`TestDeadManStandingAlertAdmission` waits for the stall raise to leave the
+queue while holding the real alert-manager lock. Recovery and saved removal
+each prevent obsolete history, firing and delivery callbacks, and a webhook
+attempt. The same path still records and delivers a current stall.
 
 ### Agent removal keeps credential truth continuous across restart
 

@@ -227,7 +227,7 @@ func (d *deadManRuntime) runCycle(
 	}
 
 	if err := notifications.ValidateDeadManPingURL(endpoint); err != nil {
-		d.setMisconfigured(err.Error())
+		d.setMisconfigured(ctx, err.Error())
 		return
 	}
 	fingerprint := deadManEndpointFingerprint(endpoint)
@@ -240,11 +240,10 @@ func (d *deadManRuntime) runCycle(
 	fresh := !progress.IsZero() && !progress.After(now.Add(5*time.Second)) && now.Sub(progress) <= d.progressFreshness
 	d.setMonitoringProgress(progress)
 	if fresh {
-		d.recordHealthyProgress(progress)
 		d.alertProjection.clear(alerts.DeadManMonitoringStalledAlertType)
+		d.recordHealthyProgress(progress)
 	} else {
-		d.setState("monitor_stalled", "Pulse monitoring loop has stopped making progress")
-		d.raiseMonitoringStalled(progress)
+		d.raiseMonitoringStalled(ctx, progress)
 	}
 
 	message := ""
@@ -459,26 +458,22 @@ func (d *deadManRuntime) setAttempt(at time.Time) {
 	d.mu.Unlock()
 }
 
-func (d *deadManRuntime) setState(state, message string) {
-	d.mu.Lock()
-	d.status.State = state
-	d.status.LastError = message
-	d.mu.Unlock()
-}
-
 func (d *deadManRuntime) pendingInterruption() *DeadManInterruption {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
 	return cloneDeadManInterruption(d.pendingGap)
 }
 
-func (d *deadManRuntime) setMisconfigured(message string) {
+func (d *deadManRuntime) setMisconfigured(ctx context.Context, message string) {
 	d.mu.Lock()
+	defer d.mu.Unlock()
+	if d.stopping || ctx.Err() != nil {
+		return
+	}
 	d.status.Configured = true
 	d.status.State = "misconfigured"
 	d.status.LastError = message
 	d.status.ConsecutiveFailures = 0
-	d.mu.Unlock()
 	d.alertProjection.raise(alerts.SystemAlertInput{
 		Type:        alerts.DeadManDeliveryAlertType,
 		Level:       alerts.AlertLevelWarning,
@@ -489,8 +484,8 @@ func (d *deadManRuntime) setMisconfigured(message string) {
 
 func (d *deadManRuntime) recordSignalFailure(ctx context.Context, message string) {
 	d.mu.Lock()
+	defer d.mu.Unlock()
 	if d.stopping || ctx.Err() != nil {
-		d.mu.Unlock()
 		return
 	}
 	d.consecutiveFail++
@@ -500,8 +495,6 @@ func (d *deadManRuntime) recordSignalFailure(ctx context.Context, message string
 	}
 	d.status.LastError = message
 	failures := d.consecutiveFail
-	d.mu.Unlock()
-
 	if failures >= deadManDeliveryAlertThreshold {
 		d.alertProjection.raise(alerts.SystemAlertInput{
 			Type:        alerts.DeadManDeliveryAlertType,
@@ -553,6 +546,10 @@ func (d *deadManRuntime) notifyConfigChanged() {
 		d.activeSignalCancel()
 		d.activeSignalCancel = nil
 	}
+	// Destination-derived raises check their cycle's cancellation under this
+	// same lock before enqueueing. An old cycle cannot restore a raise we
+	// just revoked, even if it was computing progress when the save landed.
+	d.alertProjection.discardStandingRaises(alerts.DeadManMonitoringStalledAlertType, alerts.DeadManDeliveryAlertType)
 	d.mu.Unlock()
 	select {
 	case d.wake <- struct{}{}:
@@ -600,7 +597,14 @@ func (d *deadManRuntime) persistCurrentState() error {
 	return persistDeadManState(d.statePath, state)
 }
 
-func (d *deadManRuntime) raiseMonitoringStalled(progress time.Time) {
+func (d *deadManRuntime) raiseMonitoringStalled(ctx context.Context, progress time.Time) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if d.stopping || ctx.Err() != nil {
+		return
+	}
+	d.status.State = "monitor_stalled"
+	d.status.LastError = "Pulse monitoring loop has stopped making progress"
 	message := "Pulse's external watchdog is running, but the monitoring loop has stopped making progress."
 	metadata := map[string]interface{}{}
 	if !progress.IsZero() {
