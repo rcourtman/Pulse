@@ -129,4 +129,34 @@ func TestStore_ListSeriesAndFacets(t *testing.T) {
 	if len(pvcOnly) != 2 || pvcOnly[0].Total != 1 || pvcOnly[1].Total != 0 {
 		t.Fatalf("ListPointsSeries(itemType) = %#v, want only pvc activity on first day", pvcOnly)
 	}
+
+	// The series is dense, so the widest window a caller can name must still
+	// be a bounded number of buckets: its newest MaxPointsSeriesDays days.
+	widestFrom := time.Date(1, 1, 2, 0, 0, 0, 0, time.UTC)
+	widestTo := time.Date(9999, 12, 30, 0, 0, 0, 0, time.UTC)
+	for _, window := range [][2]*time.Time{{&widestFrom, &widestTo}, {&widestTo, &widestFrom}} {
+		widest, err := store.ListPointsSeries(context.Background(), recovery.ListPointsOptions{From: window[0], To: window[1]}, 0)
+		if err != nil {
+			t.Fatalf("ListPointsSeries(widest) error = %v", err)
+		}
+		if len(widest) != recovery.MaxPointsSeriesDays {
+			t.Fatalf("len(widest series) = %d, want %d", len(widest), recovery.MaxPointsSeriesDays)
+		}
+		if last := widest[len(widest)-1].Day; last != "9999-12-30" {
+			t.Fatalf("widest series ends on %q, want 9999-12-30", last)
+		}
+	}
+
+	// A window wider than the bound keeps its newest days and their counts.
+	wideFrom := to.AddDate(-20, 0, 0)
+	wide, err := store.ListPointsSeries(context.Background(), recovery.ListPointsOptions{From: &wideFrom, To: &to}, 0)
+	if err != nil {
+		t.Fatalf("ListPointsSeries(wide) error = %v", err)
+	}
+	if len(wide) != recovery.MaxPointsSeriesDays {
+		t.Fatalf("len(wide series) = %d, want %d", len(wide), recovery.MaxPointsSeriesDays)
+	}
+	if prev, last := wide[len(wide)-2], wide[len(wide)-1]; prev.Day != "2026-02-13" || prev.Total != 1 || last.Day != "2026-02-14" || last.Total != 1 {
+		t.Fatalf("wide series tail = %#v, %#v, want both seeded days", prev, last)
+	}
 }

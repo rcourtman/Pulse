@@ -297,6 +297,10 @@ type Client struct {
 	// display snapshots and the socket deliberately has no delta baseline.
 	restRecovery    bool
 	maxInboundBytes atomic.Int64
+	// queuedFullState identifies the newest complete-state frame that is on
+	// send and that writePump has not yet taken. While it is set the client is
+	// already owed a full snapshot, so requestData builds no other.
+	queuedFullState atomic.Pointer[byte]
 	// authorizeWrite is immutable after admission and called only by writePump.
 	// Authentication remains owned by the API, not this transport package.
 	authorizeWrite        func() bool
@@ -380,12 +384,30 @@ func (c *Client) queueFullState(messageType string, state interface{}) (int, boo
 	if limit := c.inboundLimitBytes(); limit > 0 && int64(len(data)) > limit {
 		return c.queueStateTooLargeLocked(messageType, snapshot, len(data), limit)
 	}
+	// Mark before queueing: writePump may take the frame as soon as it is sent.
+	c.queuedFullState.Store(&data[0])
 	if !c.safeSend(data) {
+		c.queuedFullState.CompareAndSwap(&data[0], nil)
 		return len(data), false, nil
 	}
 	c.stateSnapshot = snapshot
 	c.restRecovery = false
 	return len(data), true, nil
+}
+
+// fullStateQueued reports whether a complete-state frame is still waiting on
+// send for writePump.
+func (c *Client) fullStateQueued() bool {
+	return c.queuedFullState.Load() != nil
+}
+
+// frameDequeued is called by writePump for every frame it takes off send, so
+// that a requestData sent after the client can have seen its last complete
+// state is answered again.
+func (c *Client) frameDequeued(frame []byte) {
+	if len(frame) > 0 {
+		c.queuedFullState.CompareAndSwap(&frame[0], nil)
+	}
 }
 
 // queueStateTooLargeLocked sends a compact REST-hydration marker without
@@ -978,6 +1000,14 @@ func (h *Hub) sendInitialState(client *Client) {
 
 func (h *Hub) sendRequestedState(client *Client) {
 	if client == nil || !h.hasStateGetter() {
+		return
+	}
+	// requestData costs a few bytes; each answer is a whole-state frame held
+	// on the client's queue. A client whose last complete state is still queued
+	// will receive that one, with later deltas behind it, so answering again
+	// would only stack copies for a peer that is not reading.
+	if client.fullStateQueued() {
+		log.Debug().Str("client", client.id).Msg("ignoring requestData; a full state is already queued for this client")
 		return
 	}
 	if !h.acquireStateBuildSlot(client) {
@@ -2045,6 +2075,7 @@ func (c *Client) writePump() {
 				}
 				return
 			}
+			c.frameDequeued(message)
 			if !c.allowWrite() {
 				return
 			}
@@ -2080,6 +2111,7 @@ func (c *Client) writePump() {
 			for i := 0; i < n; i++ {
 				select {
 				case msg, ok := <-c.send:
+					c.frameDequeued(msg)
 					if !ok || !c.allowWrite() {
 						return
 					}

@@ -2216,6 +2216,19 @@ and slow-client eviction must use the same synchronized send/close ownership;
 recovering a send-on-closed panic is not a substitute for a race-free channel
 lifecycle.
 
+An explicit client data request is a few bytes and its answer is the complete
+state, so the hub must not answer one while that client's previous complete
+snapshot (initial or requested) is still waiting on its send queue. The queued
+snapshot is already that client's delta baseline and later deltas are ordered
+behind it, so the skipped request loses nothing. The request is served again as
+soon as the writer has taken the frame. A client that requests without reading
+therefore retains at most one queued complete snapshot beside the one its
+writer holds, not one per request up to the queue's message capacity.
+`TestHubRequestedStateNotStackedForStalledClient` and
+`TestHubRequestedStateAnsweredAgainForReadingClient` in
+`internal/websocket/hub_test.go` pin both halves. This is not a limit on
+concurrent connections or on the request rate of a client that does read.
+
 Public `GET /api/health` measures process liveness, not dashboard readiness.
 On a self-hosted server with multi-workspace mode disabled it may additionally
 return `"websocketStateStalled": true` while one build has held the hub's shared

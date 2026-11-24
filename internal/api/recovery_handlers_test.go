@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/operationaltrust"
 	"github.com/rcourtman/pulse-go-rewrite/internal/recovery"
 	recoverymanager "github.com/rcourtman/pulse-go-rewrite/internal/recovery/manager"
@@ -812,5 +813,61 @@ func TestHandleListRollupsFutureClockEvidenceAndCorrection(t *testing.T) {
 				check(read("clock-other"), wantCorrected, recent)
 			})
 		}
+	}
+}
+
+// The recovery manager caches an open SQLite handle per org ID. Deleting an
+// org must evict it: the next org created with that ID would otherwise read
+// the deleted org's recovery points from the unlinked database.
+func TestCleanupTenantReleasesDeletedOrgRecoveryStore(t *testing.T) {
+	ctx := context.Background()
+	mtp := config.NewMultiTenantPersistence(t.TempDir())
+	manager := recoverymanager.New(mtp)
+	router := &Router{recoveryHandlers: NewRecoveryHandlers(manager)}
+	t.Cleanup(func() { _ = manager.CloseStoreForOrg("acme") })
+
+	createOrg := func() {
+		t.Helper()
+		if err := mtp.SaveOrganization(&models.Organization{ID: "acme", DisplayName: "Acme"}); err != nil {
+			t.Fatalf("SaveOrganization: %v", err)
+		}
+	}
+
+	createOrg()
+	store, err := manager.StoreForOrg("acme")
+	if err != nil {
+		t.Fatalf("StoreForOrg: %v", err)
+	}
+	completedAt := time.Now().UTC()
+	if err := store.UpsertPoints(ctx, []recovery.RecoveryPoint{{
+		ID:          "deleted-org-point",
+		Provider:    recovery.ProviderKubernetes,
+		Kind:        recovery.KindBackup,
+		Mode:        recovery.ModeRemote,
+		Outcome:     recovery.OutcomeSuccess,
+		CompletedAt: &completedAt,
+	}}); err != nil {
+		t.Fatalf("UpsertPoints: %v", err)
+	}
+
+	if err := mtp.DeleteOrganization("acme"); err != nil {
+		t.Fatalf("DeleteOrganization: %v", err)
+	}
+	if err := router.CleanupTenant(ctx, "acme"); err != nil {
+		t.Fatalf("CleanupTenant: %v", err)
+	}
+
+	createOrg()
+	points, total, err := manager.ListPointsForOrg(ctx, "acme", recovery.ListPointsOptions{})
+	if err != nil {
+		t.Fatalf("ListPointsForOrg: %v", err)
+	}
+	if total != 0 || len(points) != 0 {
+		t.Fatalf("recreated org reads %d recovery point(s) of the deleted org", total)
+	}
+
+	var nilHandlers *RecoveryHandlers
+	if err := nilHandlers.CloseTenantStore("acme"); err != nil {
+		t.Fatalf("nil handler CloseTenantStore: %v", err)
 	}
 }

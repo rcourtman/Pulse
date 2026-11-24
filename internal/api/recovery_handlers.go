@@ -41,6 +41,15 @@ func newRecoveryReadManager(persistence *config.MultiTenantPersistence) *recover
 	return recoverymanager.NewWithPointSource(persistence, mock.RecoveryPointsSource{})
 }
 
+// CloseTenantStore closes and evicts a deleted org's cached recovery store so
+// a later org created under the same ID opens its own database.
+func (h *RecoveryHandlers) CloseTenantStore(orgID string) error {
+	if h == nil {
+		return nil
+	}
+	return h.manager.CloseStoreForOrg(orgID)
+}
+
 func (h *RecoveryHandlers) storeForOrg(orgID string) (*recoverystore.Store, error) {
 	if h == nil || h.manager == nil {
 		return nil, fmt.Errorf("recovery manager is not configured")
@@ -986,6 +995,10 @@ func buildSeriesFromPoints(points []recovery.RecoveryPoint, opts recovery.ListPo
 	}
 	start = time.Date(start.Year(), start.Month(), start.Day(), 0, 0, 0, 0, time.UTC)
 	end = time.Date(end.Year(), end.Month(), end.Day(), 0, 0, 0, 0, time.UTC)
+	// Same bound as store.ListPointsSeries: the window decides the bucket count.
+	if oldest := end.AddDate(0, 0, 1-recovery.MaxPointsSeriesDays); start.Before(oldest) {
+		start = oldest
+	}
 
 	for _, p := range points {
 		if p.CompletedAt == nil || p.CompletedAt.IsZero() {

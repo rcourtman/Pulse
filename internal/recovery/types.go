@@ -57,6 +57,7 @@ type PointsFacets = model.PointsFacets
 const (
 	DefaultListPageLimit = model.DefaultListPageLimit
 	MaxListPageLimit     = model.MaxListPageLimit
+	MaxPointsSeriesDays  = model.MaxPointsSeriesDays
 )
 
 type VerifyIntent = model.VerifyIntent

@@ -5613,6 +5613,9 @@ they can make this server connect to are limited by
 multicast or cloud metadata addresses (including IPv6 transition forms), and on
 Pulse Cloud no private address either. A host name is refused unless every
 address it resolves to passes (`pkg/securityutil.ValidateOutboundHost`).
+A destination must name the same host however its caller dials it: one without
+a scheme that contains `@` (an IPv6 zone when dialed as written, user
+information behind a default scheme) and a URL that is not http(s) are refused.
 Private networks stay open on self-hosted shared-process installs and provider
 client runtimes, where tenants' systems sit on the LAN or behind a VPN. Availability checks are held to it even when assigned only to host agents,
 since a lapsed external probe entitlement moves them back to this server.
