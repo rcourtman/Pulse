@@ -24,9 +24,10 @@ While mock/demo fixture mode is enabled, Pulse suppresses outbound telemetry ent
 
 - During first-run setup, switch off **Usage statistics** on the admin-account step, or
 - **Settings → System → General → Outbound usage telemetry** (toggle off), or
-- Set the environment variable `PULSE_TELEMETRY=false`
+- Set the environment variable `PULSE_TELEMETRY=false`, or
+- Set `DO_NOT_TRACK=1` (honored whenever `PULSE_TELEMETRY` is unset)
 
-The first startup ping is sent about two minutes after Pulse starts. The setup and Settings switches stop every later ping; setting `PULSE_TELEMETRY=false` before the first start prevents the first one as well.
+On a fresh unconfigured installation, Pulse waits until initial setup completes before sending its first startup ping (about two minutes after setup finishes), so switching off **Usage statistics** during setup prevents the first ping. On an already-configured installation, the startup ping is sent about two minutes after Pulse starts. Setting `PULSE_TELEMETRY=false` or `DO_NOT_TRACK=1` before start disables telemetry completely from boot. When telemetry is disabled, the browser also skips local `/api/usage/...` session milestone posts.
 
 #### How to inspect or rotate it
 
@@ -528,16 +529,23 @@ The telemetry implementation is in [`internal/telemetry/telemetry.go`](../intern
 - There is no third-party analytics SDK in the frontend.
 - Telemetry pings go only to the Pulse license server (`license.pulserelay.pro`), not to any third-party service.
 
-## Optional Outbound Connections (Explicitly Enabled)
+## Other Outbound Connections
 
-Pulse can make outbound connections when you enable specific features:
+### Enabled by default (can be disabled)
+
+- **Pulse release update checks**: published builds check for newer Pulse releases on startup and once per hour (via GitHub Releases metadata on Community builds, and the Pulse Pro download broker on licensed Pro builds). Automatic installation (`autoUpdateEnabled`) stays off by default. Set `PULSE_DISABLE_UPDATE_CHECKS=true` to disable all automatic and on-demand release update checks.
+- **Docker image update checks (hosts running `pulse-agent` for Docker)**: the Docker agent checks configured container registries (such as Docker Hub or GHCR) every 6 hours to detect newer image digests. Set `PULSE_DISABLE_DOCKER_UPDATE_CHECKS=true` or pass `--disable-docker-update-checks` on the agent to disable registry checks.
+
+### Optional (off by default, explicitly enabled)
+
+Pulse makes these outbound connections only when you enable or activate the feature:
 
 - **AI providers**: when AI features run, Pulse sends provider-bound monitoring
   and investigation context to the configured endpoint. **BYOK is not local-only
   processing.** See [AI provider data](#ai-provider-data) and the
   [AI privacy guide](AI.md#privacy).
 - **Relay / Pulse Mobile**: when Pulse Mobile connections are on, Pulse connects to the configured relay endpoint so paired Pulse Mobile devices can reach this instance and receive push notifications. Relay does not provide remote access to the web UI. See Settings → Pulse Mobile. Pulse Mobile is being retired on 31 March 2027.
-- **Update checks**: Pulse can check for new releases/updates (for example via GitHub release metadata) depending on your deployment and configuration.
+- **Pulse Pro licensing**: only runs when a Pulse Pro license is activated on disk (contacts `license.pulserelay.pro` to activate, check grant status, and refresh signed grants). Community installations without a license make no license-server calls.
 
 ### AI provider data
 

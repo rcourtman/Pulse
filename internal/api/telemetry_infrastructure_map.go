@@ -46,6 +46,11 @@ func (r *Router) HandleInfrastructureMapActivity(w http.ResponseWriter, req *htt
 		return
 	}
 
+	if r.config != nil && !r.config.TelemetryEnabled {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+
 	persistence := r.persistenceForOrg(req.Context())
 	if persistence != nil {
 		if err := persistence.RecordInfrastructureMapActivity(activity, time.Now().UTC()); err != nil {

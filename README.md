@@ -102,6 +102,8 @@ services:
       - pulse_data:/data
     environment:
       - PULSE_DEPLOYMENT_METHOD=docker_compose
+      # - PULSE_TELEMETRY=false
+      # - PULSE_DISABLE_UPDATE_CHECKS=true
     restart: unless-stopped
 volumes:
   pulse_data:
@@ -130,6 +132,8 @@ Also available: [Kubernetes with Helm](docs/KUBERNETES.md) · [Full install guid
 ### First run
 
 Open `http://<your-ip>:7655`, paste the one-time token from `docker exec pulse /app/pulse bootstrap-token` (Docker) or `sudo pulse bootstrap-token` (Linux), create your admin account, and add your first system under **Settings → Infrastructure**.
+
+**Usage telemetry and update checks:** After initial setup completes, Pulse sends a daily, content-free usage summary (aggregate counts, flags, and a 30-day rotating install ID, with no hostnames, credentials, or stored IP addresses) and checks GitHub Releases for updates. You can opt out of telemetry during first-run setup, in **Settings → System → General**, or before first start with `PULSE_TELEMETRY=false` (or `DO_NOT_TRACK=1`). Set `PULSE_DISABLE_UPDATE_CHECKS=true` for offline or strict-egress deployments. Full field list and details: [docs/PRIVACY.md](docs/PRIVACY.md).
 
 ### Do you need an agent?
 

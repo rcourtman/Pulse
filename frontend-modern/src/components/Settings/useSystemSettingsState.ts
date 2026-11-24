@@ -7,7 +7,11 @@ import { getUpdateCheckNotice } from '@/utils/updatesPresentation';
 import { logger } from '@/utils/logger';
 import { updateStore } from '@/stores/updates';
 import { copyToClipboard } from '@/utils/clipboard';
-import { loadRuntimeBranding, updateDockerUpdateActionsSetting } from '@/stores/systemSettings';
+import {
+  loadRuntimeBranding,
+  updateDockerUpdateActionsSetting,
+  updateTelemetryEnabledSetting,
+} from '@/stores/systemSettings';
 import type { ReportBrandSettings } from '@/types/config';
 import {
   BACKUP_INTERVAL_OPTIONS,
@@ -105,7 +109,15 @@ export function useSystemSettingsState({
       envOverrides()['PULSE_ENABLE_PROXMOX_GUEST_DOCKER_INVENTORY'],
     );
   const telemetryEnabledLocked = () =>
-    Boolean(envOverrides().telemetryEnabled || envOverrides()['PULSE_TELEMETRY']);
+    Boolean(
+      envOverrides().telemetryEnabled ||
+      envOverrides()['PULSE_TELEMETRY'] ||
+      envOverrides()['DO_NOT_TRACK'],
+    );
+  const telemetryLockEnvVar = () =>
+    envOverrides()['DO_NOT_TRACK'] && !envOverrides()['PULSE_TELEMETRY']
+      ? 'DO_NOT_TRACK'
+      : 'PULSE_TELEMETRY';
   const pvePollingEnvLocked = () =>
     Boolean(envOverrides().pvePollingInterval || envOverrides().PVE_POLLING_INTERVAL);
   const backupPollingEnvLocked = () =>
@@ -390,6 +402,7 @@ export function useSystemSettingsState({
 
     try {
       await SettingsAPI.updateSystemSettings({ telemetryEnabled: enabled });
+      updateTelemetryEnabledSetting(enabled);
       notificationStore.success(
         enabled ? 'Outbound usage telemetry enabled' : 'Outbound usage telemetry disabled',
         3000,
@@ -589,6 +602,7 @@ export function useSystemSettingsState({
     reportBrandLogoFormat,
     setReportBrandLogoFormat,
     telemetryEnabledLocked,
+    telemetryLockEnvVar,
     savingTelemetry,
     handleTelemetryEnabledChange,
     telemetryPreview,

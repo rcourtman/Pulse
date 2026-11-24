@@ -30,6 +30,7 @@ const mocks = vi.hoisted(() => ({
   updateStoreIsDismissedMock: vi.fn(),
   updateStoreClearDismissedMock: vi.fn(),
   updateDockerUpdateActionsSettingMock: vi.fn(),
+  updateTelemetryEnabledSettingMock: vi.fn(),
   loadRuntimeBrandingMock: vi.fn(),
 }));
 
@@ -90,6 +91,7 @@ vi.mock('@/stores/updates', () => ({
 
 vi.mock('@/stores/systemSettings', () => ({
   updateDockerUpdateActionsSetting: mocks.updateDockerUpdateActionsSettingMock,
+  updateTelemetryEnabledSetting: mocks.updateTelemetryEnabledSettingMock,
   loadRuntimeBranding: mocks.loadRuntimeBrandingMock,
 }));
 

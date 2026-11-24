@@ -1390,7 +1390,8 @@ func TestTelemetryPrivacyDocsDiscloseSetupChoiceAndPayloadChanges(t *testing.T) 
 		content := string(raw)
 		for _, required := range []string{
 			"During first-run setup, switch off **Usage statistics** on the admin-account step",
-			"The first startup ping is sent about two minutes after Pulse starts",
+			"Pulse waits until initial setup completes before sending its first startup ping",
+			"DO_NOT_TRACK=1",
 			"#### Payload changes",
 			"Every change to the payload bumps the schema version, is listed here with its date, and appears in the release notes",
 			"An in-app notice is reserved for a change in kind",
@@ -1609,4 +1610,72 @@ func TestTelemetryPrivacyReleaseNoticeCoversReporting(t *testing.T) {
 			t.Errorf("reporting release notice must disclose %q", required)
 		}
 	}
+}
+
+func TestIsEnabledHonorsDoNotTrack(t *testing.T) {
+	t.Setenv("PULSE_TELEMETRY", "")
+	t.Setenv("DO_NOT_TRACK", "1")
+	if IsEnabled() {
+		t.Fatal("expected DO_NOT_TRACK=1 to disable telemetry when PULSE_TELEMETRY is unset")
+	}
+
+	t.Setenv("DO_NOT_TRACK", "0")
+	if !IsEnabled() {
+		t.Fatal("expected DO_NOT_TRACK=0 to leave telemetry enabled")
+	}
+
+	t.Setenv("DO_NOT_TRACK", "1")
+	t.Setenv("PULSE_TELEMETRY", "true")
+	if !IsEnabled() {
+		t.Fatal("expected explicit PULSE_TELEMETRY=true to take precedence over DO_NOT_TRACK")
+	}
+}
+
+func TestStartWaitsUntilSetupReady(t *testing.T) {
+	var hits atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hits.Add(1)
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+
+	prevEndpoint := pingEndpoint
+	pingEndpoint = srv.URL
+	defer func() { pingEndpoint = prevEndpoint }()
+
+	var ready atomic.Bool
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	cfg := Config{
+		Version: "6.9.0",
+		DataDir: t.TempDir(),
+		Enabled: true,
+		IsReady: func() bool { return ready.Load() },
+	}
+
+	if err := SendServiceHealthEvent(ctx, cfg, "startup", ServiceHealthObservation{Observed: true, FailureCategory: ServiceHealthFailureStartup}); err != nil {
+		t.Fatalf("SendServiceHealthEvent returned error: %v", err)
+	}
+	if hits.Load() != 0 {
+		t.Fatalf("expected service-health failure ping to stay suppressed before setup, got %d hits", hits.Load())
+	}
+
+	startWithDelays(ctx, cfg, 5*time.Millisecond, 5*time.Millisecond)
+	defer Stop()
+
+	time.Sleep(35 * time.Millisecond)
+	if hits.Load() != 0 {
+		t.Fatalf("expected zero telemetry pings before setup completes, got %d", hits.Load())
+	}
+
+	ready.Store(true)
+	deadline := time.Now().Add(500 * time.Millisecond)
+	for time.Now().Before(deadline) {
+		if hits.Load() >= 1 {
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatalf("expected startup telemetry ping after setup became ready, got %d hits", hits.Load())
 }

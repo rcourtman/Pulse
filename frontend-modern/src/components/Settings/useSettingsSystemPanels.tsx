@@ -46,6 +46,7 @@ export function useSettingsSystemPanels(
     setReportBrandLogoFormat: params.systemSettings.setReportBrandLogoFormat,
     telemetryEnabled: params.systemSettings.telemetryEnabled,
     telemetryEnabledLocked: params.systemSettings.telemetryEnabledLocked,
+    telemetryLockEnvVar: params.systemSettings.telemetryLockEnvVar,
     savingTelemetry: params.systemSettings.savingTelemetry,
     handleTelemetryEnabledChange: params.systemSettings.handleTelemetryEnabledChange,
     telemetryPreview: params.systemSettings.telemetryPreview,

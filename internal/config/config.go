@@ -215,6 +215,7 @@ type Config struct {
 	AllowedOrigins                    string           `envconfig:"ALLOWED_ORIGINS" default:"*"`
 	HideLocalLogin                    bool             `envconfig:"PULSE_AUTH_HIDE_LOCAL_LOGIN" default:"false"`
 	DisableDockerUpdateActions        bool             `envconfig:"PULSE_DISABLE_DOCKER_UPDATE_ACTIONS" default:"false"`                  // Hide Docker update buttons (read-only mode for containers)
+	DisableUpdateChecks               bool             `envconfig:"PULSE_DISABLE_UPDATE_CHECKS" default:"false"`                          // Disable automatic and on-demand Pulse release update checks
 	EnableProxmoxGuestDockerDetection bool             `envconfig:"PULSE_ENABLE_PROXMOX_GUEST_DOCKER_DETECTION" default:"false" json:"-"` // Allow Proxmox-side pct exec probes that only detect Docker socket presence inside LXC guests
 	EnableProxmoxGuestDockerInventory bool             `envconfig:"PULSE_ENABLE_PROXMOX_GUEST_DOCKER_INVENTORY" default:"false" json:"-"` // Allow Proxmox-side pct exec collection of minimal Docker inventory from LXC guests
 	ProxmoxGuestDockerInventoryVMIDs  string           `envconfig:"PULSE_PROXMOX_GUEST_DOCKER_INVENTORY_VMIDS" default:"" json:"-"`       // Optional comma-separated Proxmox VMID allowlist for LXC Docker inventory
@@ -1161,6 +1162,21 @@ func load(initLogging bool) (*Config, error) {
 		} else {
 			log.Warn().Str("value", telemetryStr).Msg("Invalid PULSE_TELEMETRY value, ignoring")
 		}
+	} else if dntStr := utils.GetenvTrim("DO_NOT_TRACK"); IsDoNotTrackEnabled(dntStr) {
+		cfg.TelemetryEnabled = false
+		cfg.EnvOverrides["DO_NOT_TRACK"] = true
+		cfg.EnvOverrides["telemetryEnabled"] = true
+		log.Info().Msg("Disabling outbound usage telemetry via DO_NOT_TRACK environment variable")
+	}
+
+	if disableUpdateChecksStr := utils.GetenvTrim("PULSE_DISABLE_UPDATE_CHECKS"); disableUpdateChecksStr != "" {
+		if disabled, err := strconv.ParseBool(disableUpdateChecksStr); err == nil {
+			cfg.DisableUpdateChecks = disabled
+			cfg.EnvOverrides["PULSE_DISABLE_UPDATE_CHECKS"] = true
+			log.Info().Bool("disabled", disabled).Msg("Overriding update checks setting from environment")
+		} else {
+			log.Warn().Str("value", disableUpdateChecksStr).Msg("Invalid PULSE_DISABLE_UPDATE_CHECKS value, ignoring")
+		}
 	}
 	if trialSignupURL := utils.GetenvTrim(pkglicensing.ProTrialSignupURLEnvVar); trialSignupURL != "" {
 		resolved := pkglicensing.ResolveProTrialSignupURL(trialSignupURL)
@@ -1941,4 +1957,15 @@ func getOutboundIP() string {
 		return ""
 	}
 	return localAddr.IP.String()
+}
+
+// IsDoNotTrackEnabled reports whether a DO_NOT_TRACK environment variable value
+// requests telemetry opt-out (any non-empty value other than 0/false/no/off).
+func IsDoNotTrackEnabled(raw string) bool {
+	switch strings.ToLower(strings.TrimSpace(raw)) {
+	case "", "0", "false", "no", "off":
+		return false
+	default:
+		return true
+	}
 }

@@ -15,6 +15,8 @@ import { logger } from '@/utils/logger';
 
 // Server-side setting to hide Docker update buttons while still detecting updates
 const [disableDockerUpdateActions, setDisableDockerUpdateActions] = createSignal(false);
+// Server-side setting for outbound usage telemetry
+const [telemetryEnabled, setTelemetryEnabled] = createSignal(true);
 // Server-side compatibility setting for proactive commercial prompts
 const [reduceProUpsellNoise, setReduceProUpsellNoise] = createSignal(false);
 const [runtimeBranding, setRuntimeBranding] = createSignal<RuntimeBrandingResponse>({
@@ -31,10 +33,12 @@ const [systemSettingsLoaded, setSystemSettingsLoaded] = createSignal(false);
  */
 export function updateRuntimeDisplayFromResponse(display: RuntimeDisplayResponse): void {
   setDisableDockerUpdateActions(display.disableDockerUpdateActions ?? false);
+  setTelemetryEnabled(display.telemetryEnabled ?? true);
   setReduceProUpsellNoise(display.reduceProUpsellNoise ?? false);
   setSystemSettingsLoaded(true);
   logger.debug('System settings updated from runtime display response', {
     disableDockerUpdateActions: display.disableDockerUpdateActions,
+    telemetryEnabled: display.telemetryEnabled,
     reduceProUpsellNoise: display.reduceProUpsellNoise,
   });
 }
@@ -74,6 +78,10 @@ export function shouldReduceProUpsellNoise(): boolean {
   return reduceProUpsellNoise();
 }
 
+export function isTelemetryEnabled(): boolean {
+  return telemetryEnabled();
+}
+
 /**
  * Check if system settings have been loaded from the server.
  */
@@ -87,6 +95,7 @@ export function areSystemSettingsLoaded(): boolean {
  */
 export function markSystemSettingsLoadedWithDefaults(): void {
   setDisableDockerUpdateActions(false);
+  setTelemetryEnabled(true);
   setReduceProUpsellNoise(false);
   setSystemSettingsLoaded(true);
   logger.debug('System settings marked as loaded with defaults');
@@ -97,6 +106,10 @@ export function markSystemSettingsLoadedWithDefaults(): void {
  */
 export function updateDockerUpdateActionsSetting(disabled: boolean): void {
   setDisableDockerUpdateActions(disabled);
+}
+
+export function updateTelemetryEnabledSetting(enabled: boolean): void {
+  setTelemetryEnabled(enabled);
 }
 
 export function updateReduceProUpsellNoiseSetting(enabled: boolean): void {

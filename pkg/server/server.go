@@ -204,12 +204,16 @@ func Run(ctx context.Context, version string) (runErr error) {
 	// still report the same privacy-bounded service-health contract before exit.
 	mtPersistence := config.NewMultiTenantPersistence(cfg.DataPath)
 	baseDataDir := mtPersistence.BaseDataDir()
+	telemetryPersistence := config.NewConfigPersistence(baseDataDir)
 	isDocker := os.Getenv("PULSE_DOCKER") == "true"
 	failureTelemetryCfg := telemetry.Config{
 		Version:  version,
 		DataDir:  baseDataDir,
 		IsDocker: isDocker,
 		Enabled:  cfg.TelemetryEnabled,
+		IsReady: func() bool {
+			return isTelemetrySetupReady(cfg, telemetryPersistence)
+		},
 	}
 	failureCategory := telemetry.ServiceHealthFailureStartup
 	defer func() {
@@ -519,15 +523,21 @@ func Run(ctx context.Context, version string) (runErr error) {
 	router.WireAlertTriggeredAI()
 	startup.mark("relay and alert AI wired")
 
-	// Start pseudonymous telemetry (enabled by default; opt out via PULSE_TELEMETRY=false or Settings toggle).
-	// Persistence is created once here (outside the closure) to avoid NewConfigPersistence's
+	// Start pseudonymous telemetry (enabled by default; opt out via PULSE_TELEMETRY=false, DO_NOT_TRACK=1, or Settings toggle).
+	// telemetryPersistence was created above (outside any goroutine) to avoid NewConfigPersistence's
 	// fatal-on-error path running inside the telemetry goroutine.
-	telemetryPersistence := config.NewConfigPersistence(baseDataDir)
 	telemetryCfg := telemetry.Config{
-		Version:          version,
-		DataDir:          baseDataDir,
-		IsDocker:         isDocker,
-		Enabled:          cfg.TelemetryEnabled,
+		Version:  version,
+		DataDir:  baseDataDir,
+		IsDocker: isDocker,
+		Enabled:  cfg.TelemetryEnabled,
+		IsReady: func() bool {
+			currentCfg := cfg
+			if reloaded := reloadableMonitor.GetConfig(); reloaded != nil {
+				currentCfg = reloaded
+			}
+			return isTelemetrySetupReady(currentCfg, telemetryPersistence)
+		},
 		GetServiceHealth: newServiceHealthProbe(mainListener, cfg.HTTPSEnabled && cfg.TLSCertFile != "" && cfg.TLSKeyFile != ""),
 		GetSnapshot: func() telemetry.Snapshot {
 			// Use the latest config (may have been swapped by a reload).
@@ -1332,4 +1342,28 @@ func ensureOrgOwnerMembership(org *models.Organization, userID string, now time.
 		AddedBy: userID,
 	})
 	return true
+}
+
+func isTelemetrySetupReady(currentCfg *config.Config, persistence *config.ConfigPersistence) bool {
+	if currentCfg != nil {
+		if currentCfg.AuthUser != "" ||
+			currentCfg.AuthPass != "" ||
+			currentCfg.HasAPITokens() ||
+			currentCfg.ProxyAuthSecret != "" ||
+			currentCfg.EnvOverrides["PULSE_TELEMETRY"] {
+			return true
+		}
+	}
+	if os.Getenv("PULSE_AUTH_USER") != "" || os.Getenv("REQUIRE_AUTH") == "true" {
+		return true
+	}
+	if persistence != nil {
+		if ssoCfg, err := persistence.LoadSSOConfig(); err == nil && ssoCfg != nil && ssoCfg.HasEnabledProviders() {
+			return true
+		}
+		if settings, err := persistence.LoadSystemSettings(); err == nil && settings != nil && settings.TelemetryEnabled != nil {
+			return true
+		}
+	}
+	return false
 }
