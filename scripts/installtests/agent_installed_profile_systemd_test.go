@@ -383,6 +383,8 @@ func nativeProfileAwaitAcknowledgedState(ctx context.Context, before map[string]
 // Mutable descendants are handed to the collector, not restored recursively
 // to root on rollback. Still bind their bytes, mode and exact service owner;
 // protected identity/connection files and the state root are checked separately.
+// Rollback to the root profile discards them, whoever wrote them first: what
+// the collector account held is not state the root collector may load.
 func nativeProfileHistoryHandedOff(before, after secureRuntimeFileIdentity, uid, gid uint32) bool {
 	if !before.Present || before.Hash == "" || uid == 0 || gid == 0 {
 		return false
@@ -692,9 +694,12 @@ func TestAgentInstalledProfileSystemd(t *testing.T) {
 			Hash: secureRuntimeHash([]byte(secureRuntimeLabAgentID))},
 	})
 	historyPath := "/var/lib/pulse-agent/native-history"
-	if err := os.WriteFile(historyPath, []byte("existing-history-must-survive\n"), 0o640); err != nil {
-		t.Fatal(err)
+	seedHistory := func() {
+		if err := os.WriteFile(historyPath, []byte("existing-history-must-survive\n"), 0o640); err != nil {
+			t.Fatal(err)
+		}
 	}
+	seedHistory()
 	statePaths := []string{caPath, "/var/lib/pulse-agent/agent-id", "/var/lib/pulse-agent/connection.env",
 		"/var/lib/pulse-agent/token"}
 	baselineState := nativeProfileFiles(t, statePaths...)
@@ -732,6 +737,13 @@ func TestAgentInstalledProfileSystemd(t *testing.T) {
 		}
 		return history
 	}
+	assertHistoryDiscarded := func() secureRuntimeFileIdentity {
+		history := nativeProfileOptionalFiles(t, historyPath)[historyPath]
+		if history.Present {
+			t.Fatal("rollback left collector-held history in the root collector's state directory")
+		}
+		return history
+	}
 	assertRestoredState := func() {
 		awaitAcknowledgedState("reverse-identity-persistence", baselineReadback)
 		// Retain all paths, including absence/type changes, before the unchanged
@@ -742,7 +754,7 @@ func TestAgentInstalledProfileSystemd(t *testing.T) {
 			baselineRoot != nativeProfileDirectory(t, "/var/lib/pulse-agent") {
 			t.Fatal("reverse changed protected CA/identity/lifecycle files or state-root metadata")
 		}
-		assertHistory()
+		assertHistoryDiscarded()
 	}
 	phase("runner-setup-safe-profile", map[string]any{"history": assertHistory(), "state_root": nativeProfileDirectory(t, "/var/lib/pulse-agent")})
 	if output, err := install(caPath, nativeProfileRunnerInstallArgs(runnerToken)...); err != nil {
@@ -814,7 +826,7 @@ func TestAgentInstalledProfileSystemd(t *testing.T) {
 	}
 	assertProcess("collector-v1")
 	assertSavedTrust()
-	phase("independent-runner-setup", map[string]any{"units": nativeProfileState(t, receipt), "state": nativeProfileFiles(t, statePaths...), "lifecycle": nativeProfileOptionalFiles(t, lifecyclePaths...), "state_root": nativeProfileDirectory(t, "/var/lib/pulse-agent"), "history": assertHistory(), "runner": runnerState, "runner_pid": runnerPID})
+	phase("independent-runner-setup", map[string]any{"units": nativeProfileState(t, receipt), "state": nativeProfileFiles(t, statePaths...), "lifecycle": nativeProfileOptionalFiles(t, lifecyclePaths...), "state_root": nativeProfileDirectory(t, "/var/lib/pulse-agent"), "history": assertHistoryDiscarded(), "runner": runnerState, "runner_pid": runnerPID})
 	// Wrong local CA and a correctly checksummed helper with another artifact's
 	// valid signature must fail before stopping services or replacing files.
 	wrongCAPath := filepath.Join(keyDir, "untrusted-ca.pem")
@@ -856,6 +868,8 @@ func TestAgentInstalledProfileSystemd(t *testing.T) {
 		if baseline["/usr/local/bin/pulse-agent"].Hash != receipt.Artifacts["collector-v1"] {
 			t.Fatal("forward did not start with the original collector executable")
 		}
+		// Every reverse discards the history the previous forward handed off.
+		seedHistory()
 		started := time.Now()
 		if output, err := install(caPath, "--safe-profile-apply"); err != nil {
 			t.Fatalf("signed TLS safe-profile apply: %v\n%s", err, output)
@@ -897,7 +911,7 @@ func TestAgentInstalledProfileSystemd(t *testing.T) {
 		}
 		assertSavedTrust()
 		checkRunner()
-		phase("reverse-"+strconv.FormatBool(flags.active)+"-"+strconv.FormatBool(flags.enabled), map[string]any{"units": nativeProfileState(t, receipt), "state": nativeProfileFiles(t, statePaths...), "lifecycle": nativeProfileOptionalFiles(t, lifecyclePaths...), "state_root": nativeProfileDirectory(t, "/var/lib/pulse-agent"), "history": assertHistory(), "collector_sha256": receipt.Artifacts["collector-v1"], "runner_unchanged": true})
+		phase("reverse-"+strconv.FormatBool(flags.active)+"-"+strconv.FormatBool(flags.enabled), map[string]any{"units": nativeProfileState(t, receipt), "state": nativeProfileFiles(t, statePaths...), "lifecycle": nativeProfileOptionalFiles(t, lifecyclePaths...), "state_root": nativeProfileDirectory(t, "/var/lib/pulse-agent"), "history": assertHistoryDiscarded(), "collector_sha256": receipt.Artifacts["collector-v1"], "runner_unchanged": true})
 	}
 	// A real manager refusal must retain the migrated executable and the whole
 	// recovery snapshot. This final failure is not retried by this lab.

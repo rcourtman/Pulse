@@ -206,6 +206,79 @@ grep -q '^gpasswd -a pulse-agent docker$' "$CALL_LOG"
 	})
 }
 
+// The collector account owns the state directory for as long as the safe
+// profile is active. What it left there must not become the input of a
+// restored service that runs as another account, and must be gone before
+// rollback writes the saved credentials and identity back by name.
+func TestSafeProfileRollbackDiscardsStateOfAnotherAccount(t *testing.T) {
+	if os.Geteuid() != 0 {
+		t.Skip("handing state to another account requires root")
+	}
+	const collector = `
+COLLECTOR_UID=64999
+id() { case "${1:-}" in -nG) printf 'pulse-agent\n' ;; -u) printf '%s\n' "$COLLECTOR_UID" ;; esac; }
+plant_collector_state() {
+  printf 'outside-state\n' > "$EXPECTED_DIR/outside-target"
+  printf 'planted-report\n' > "$STATE_DIR/report-buffer.json"
+  ln -s "$EXPECTED_DIR/outside-target" "$STATE_DIR/report-buffer.json.tmp"
+  mkdir "$STATE_DIR/update-quarantine"
+  printf 'planted-library\n' > "$STATE_DIR/update-quarantine/x.so"
+  chown -hR "$COLLECTOR_UID:$COLLECTOR_UID" "$STATE_DIR"
+}
+`
+	t.Run("root profile", func(t *testing.T) {
+		harness := safeProfileHarness(t, t.TempDir(), false) + collector + `
+safe_profile_begin_transaction
+plant_collector_state
+# A restored name the collector turned into a directory with a link inside
+# must be replaced, not copied into and through.
+rm -f "$STATE_DIR/agent-id"
+mkdir "$STATE_DIR/agent-id"
+ln -s "$EXPECTED_DIR/outside-target" "$STATE_DIR/agent-id/agent-id"
+chown -hR "$COLLECTOR_UID:$COLLECTOR_UID" "$STATE_DIR/agent-id"
+safe_profile_restore_transaction "$SAFE_PROFILE_TRANSACTION_DIR" explicit-operator-rollback
+test "$(stat -c '%u:%a' "$STATE_DIR")" = 0:750
+cmp "$STATE_DIR/token" "$EXPECTED_DIR/state-token"
+cmp "$STATE_DIR/runtime.token" "$EXPECTED_DIR/runtime-token"
+test -f "$STATE_DIR/agent-id"
+cmp "$STATE_DIR/agent-id" "$EXPECTED_DIR/agent-id"
+cmp "$STATE_DIR/connection.env" "$EXPECTED_DIR/connection-env"
+grep -q '^legacy-generic$' "$STATE_DIR/proxmox-registered"
+test -z "$(find "$STATE_DIR" ! -uid 0)"
+test ! -e "$STATE_DIR/report-buffer.json"
+test ! -L "$STATE_DIR/report-buffer.json.tmp"
+test ! -e "$STATE_DIR/update-quarantine"
+test ! -e "$STATE_DIR/cache"
+grep -q '^outside-state$' "$EXPECTED_DIR/outside-target"
+test "$(stat -c '%u' "$EXPECTED_DIR/outside-target")" = 0
+`
+		if out, err := exec.Command("bash", "-c", harness).CombinedOutput(); err != nil {
+			t.Fatalf("rollback to the root profile: %v\n%s", err, out)
+		}
+	})
+
+	t.Run("same collector account", func(t *testing.T) {
+		harness := safeProfileHarness(t, t.TempDir(), false) + collector + `
+chown -R "$COLLECTOR_UID:$COLLECTOR_UID" "$STATE_DIR"
+chown 0:0 "$STATE_DIR/connection.env"
+safe_profile_begin_transaction
+plant_collector_state
+safe_profile_restore_transaction "$SAFE_PROFILE_TRANSACTION_DIR" explicit-operator-rollback
+test "$(stat -c '%u:%a' "$STATE_DIR")" = "$COLLECTOR_UID:750"
+cmp "$STATE_DIR/connection.env" "$EXPECTED_DIR/connection-env"
+test "$(stat -c '%u' "$STATE_DIR/connection.env")" = 0
+test "$(stat -c '%u' "$STATE_DIR/agent-id")" = "$COLLECTOR_UID"
+grep -q '^cached-state$' "$STATE_DIR/cache/sample"
+grep -q '^planted-report$' "$STATE_DIR/report-buffer.json"
+test -L "$STATE_DIR/report-buffer.json.tmp"
+grep -q '^planted-library$' "$STATE_DIR/update-quarantine/x.so"
+`
+		if out, err := exec.Command("bash", "-c", harness).CombinedOutput(); err != nil {
+			t.Fatalf("rollback to the collector's own profile: %v\n%s", err, out)
+		}
+	})
+}
+
 func safeProfileFixtureSnapshot(t *testing.T, root string) map[string]struct {
 	mode os.FileMode
 	body string
@@ -585,6 +658,7 @@ install() { :; }
 chown() { :; }
 chmod() { :; }
 append_service_env() { :; }
+ensure_collector_update_quarantine() { :; }
 log_info() { printf 'complete\n' >> "$ROOT/events"; }
 fail() { printf '%s\n' "$1" >&2; exit "$2"; }
 safe_profile_verify_helper_effective_target() {
@@ -635,6 +709,103 @@ printf 'old-helper\n' > "$ROOT/running-helper"
 				t.Fatalf("restart failure was not surfaced: %s", out)
 			} else if mode == "wrong-target" && !strings.Contains(string(out), "require the fixed /usr/local/bin/pulse-agent target") {
 				t.Fatalf("wrong activation target was not refused: %s", out)
+			}
+		})
+	}
+}
+
+// The collector owns the default state root and therefore chooses what the
+// quarantine pathname resolves to. Root-authority provisioning there would
+// hand a planted link's target to the collector, so only the collector's own
+// authority may touch that name unless its parent is closed to the collector.
+func TestTypedHelperQuarantineUsesCollectorAuthorityInsideCollectorWritableParent(t *testing.T) {
+	provision := extractInstallShellFunction(t, "provision_typed_privileged_helper")
+	if strings.Count(provision, "\n    ensure_collector_update_quarantine\n") != 1 ||
+		strings.Contains(provision, "PRIVILEGED_HELPER_UPDATE_QUARANTINE_DIR") {
+		t.Fatal("typed helper provisioning must delegate the collector quarantine and never address it directly")
+	}
+	ensure := extractInstallShellFunction(t, "ensure_collector_update_quarantine")
+	for _, mode := range []string{"collector-parent", "shared-root-parent", "planted-link", "occupied-name", "root-parent"} {
+		t.Run(mode, func(t *testing.T) {
+			root := t.TempDir()
+			victim := filepath.Join(root, "victim")
+			quarantine := filepath.Join(root, "state", "update-quarantine")
+			mustMkdirAll(t, filepath.Join(root, "state"), victim)
+			if err := os.Chmod(victim, 0o755); err != nil {
+				t.Fatal(err)
+			}
+			switch mode {
+			case "planted-link":
+				if err := os.Symlink(victim, quarantine); err != nil {
+					t.Fatal(err)
+				}
+			case "occupied-name":
+				if err := os.WriteFile(quarantine, nil, 0o600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			// One fixture account stands in for both identities: the events
+			// record which authority each filesystem operation was given.
+			script := `
+set -euo pipefail
+ROOT=` + strconv.Quote(root) + `
+MODE=` + strconv.Quote(mode) + `
+LEAST_PRIVILEGE_USER=pulse-agent
+PRIVILEGED_HELPER_UPDATE_QUARANTINE_DIR="$ROOT/state/update-quarantine"
+EXIT_GENERAL=1
+fail() { printf '%s\n' "$1" >&2; exit "$2"; }
+portable_path_uid() {
+  [[ "$1" == "$ROOT/state" ]] || exit 96
+  case "$MODE" in root-parent|shared-root-parent) echo 0 ;; *) echo 991 ;; esac
+}
+portable_path_mode() {
+  [[ "$1" == "$ROOT/state" ]] || exit 96
+  case "$MODE" in root-parent) echo 755 ;; shared-root-parent) echo 775 ;; *) echo 700 ;; esac
+}
+runuser() {
+  [[ "$1" == -u && "$2" == pulse-agent && "$3" == -- ]] || exit 97
+  shift 3
+  printf 'collector %s\n' "$*" >> "$ROOT/events"
+  command "$@"
+}
+install() { printf 'root %s\n' "$*" >> "$ROOT/events"; }
+: > "$ROOT/events"
+` + ensure + "\nensure_collector_update_quarantine\n"
+			out, err := exec.Command("bash", "-c", script).CombinedOutput()
+			events, readErr := os.ReadFile(filepath.Join(root, "events"))
+			if readErr != nil {
+				t.Fatalf("quarantine fixture events: %v; execution=%v output=%s", readErr, err, out)
+			}
+			collector := "collector install -d -m 0700 " + quarantine + "\n"
+			want := map[string]string{
+				"collector-parent":   collector,
+				"shared-root-parent": collector,
+				"planted-link":       "",
+				"occupied-name":      collector,
+				"root-parent":        "root -d -o pulse-agent -g pulse-agent -m 0700 " + quarantine + "\n",
+			}[mode]
+			refused := mode == "planted-link" || mode == "occupied-name"
+			if string(events) != want || (err == nil) == refused {
+				t.Fatalf("quarantine provisioning: events=%q want=%q err=%v output=%s", events, want, err, out)
+			}
+			victimInfo, statErr := os.Stat(victim)
+			if statErr != nil || victimInfo.Mode().Perm() != 0o755 {
+				t.Fatalf("link target was modified: info=%v err=%v", victimInfo, statErr)
+			}
+			switch mode {
+			case "collector-parent", "shared-root-parent":
+				info, statErr := os.Lstat(quarantine)
+				if statErr != nil || !info.IsDir() || info.Mode().Perm() != 0o700 {
+					t.Fatalf("collector did not receive a real 0700 quarantine: info=%v err=%v", info, statErr)
+				}
+			case "planted-link":
+				if !strings.Contains(string(out), "Refusing symlinked update quarantine") {
+					t.Fatalf("planted quarantine link was not refused: %s", out)
+				}
+			case "occupied-name":
+				if !strings.Contains(string(out), "Failed to prepare the collector-owned update quarantine") {
+					t.Fatalf("collector-authority failure was not surfaced: %s", out)
+				}
 			}
 		})
 	}
