@@ -1,0 +1,45 @@
+{
+  "version": 1,
+  "base_sha": "357f43f32e0a2e309bde14836bb5a4c56ce713ec",
+  "verified_at": "2026-11-24T15:18:12Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Infrastructure/AvailabilityDrawerHistory.tsx",
+    "frontend-modern/src/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx",
+    "frontend-modern/src/features/standalone/AvailabilityFleetView.tsx",
+    "frontend-modern/src/utils/availabilityHistoryPresentation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Infrastructure/AvailabilityDrawerHistory.tsx": "94d80bd389747dcdc8565647e6ac12e439eef45ec5ed512db16886cf16c51009",
+    "frontend-modern/src/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx": "e002b9a7bd4b42dbb3306e67d852d3e5df4063c5f386b741c90b28cf949aba98",
+    "frontend-modern/src/features/standalone/AvailabilityFleetView.tsx": "1e3da5189d2be0e99896fad36b8bfb8f07ddeb98b4ecc4f0eb53badb356d985e",
+    "frontend-modern/src/utils/availabilityHistoryPresentation.ts": "75c844847c2cc6f72597e3ccd80ee06bdbe6d9e121cc8f2954e66a1af335c426"
+  },
+  "routes": [
+    "/availability"
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 800
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Expanded availability check drawer on /availability in dark theme (1280x800) with equal-height Status timeline and Response time cards (182px each), sky-blue gradient latency fill, and Unknown legend matching Fleet view",
+    "Expanded availability check drawer on /availability in light theme (1280x800) with equal-height cards (182px each) and legible status, axis, and legend text",
+    "Expanded availability check drawer on mobile viewport (390x844) with clean 1-column stacking and zero horizontal overflow",
+    "Active hover and keyboard-focused bucket readout state showing synced timestamp, state label (Reachable or Unknown), and latency across both cards",
+    "Switched history range state (7d and back to 24h) updating uptime summary, downtime duration, latency range, and axis labels"
+  ],
+  "interactions": [
+    "Opened /availability and expanded the Document ingest readiness check row to render AvailabilityDrawerHistory",
+    "Hovered segmented timeline bars and verified synchronized hover crosshair and readout updates across Status timeline and Response time cards",
+    "Focused the status timeline group and stepped buckets with ArrowRight, then pressed Escape to clear selection back to summary coverage readout",
+    "Clicked 7d and 24h range buttons in FilterSegmentedControl and verified history data and axis ticks updated cleanly",
+    "Toggled dark and light themes and resized to 390x844 mobile viewport to inspect actual rendered pixels with zero console errors"
+  ]
+}

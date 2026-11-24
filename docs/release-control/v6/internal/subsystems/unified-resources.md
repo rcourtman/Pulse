@@ -10683,3 +10683,17 @@ to `/availability` without polluting Machines tab route memory in
 `AvailabilityPageSurface.test.tsx`, `AvailabilityChecksTable.test.tsx`,
 `StandalonePageSurface.test.tsx`, and
 `frontend-modern/browser-verification/754f0ac3ac252718.json`.
+
+### Availability drawer uptime timeline and response-time charts (24 November 2026)
+
+`ResourceDetailDrawerOverviewTab.tsx` lazy-loads `AvailabilityDrawerHistory.tsx`
+at the top of the Overview tab for availability checks (`network-endpoint` /
+`availability` resources without a separate `metricsHistoryTarget`). The panel
+reads `/api/availability-history` across `24h`, `7d`, `30d`, and `365d` ranges,
+reuses shared coverage and bucket-classification helpers extracted into
+`frontend-modern/src/utils/availabilityHistoryPresentation.ts` (shared with
+`AvailabilityFleetView.tsx`), and renders a synchronized segmented status
+timeline and response-time trend chart (omitting the latency chart when a check
+has no latency measurements). Verified by `AvailabilityDrawerHistory.test.tsx`,
+`ResourceDetailDrawer.history.test.tsx`, `ResourceDetailDrawer.snapshot.test.tsx`,
+and `AvailabilityChecksTable.test.tsx`.

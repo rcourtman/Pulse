@@ -50,6 +50,11 @@ vi.mock('@/api/actionAudit', () => ({ ActionAuditAPI: { listActionAudits: reques
 vi.mock('@/api/resourceOperatorState', () => ({
   getResourceOperatorState: vi.fn(async () => null),
 }));
+vi.mock('@/api/availabilityHistory', () => ({
+  AvailabilityHistoryAPI: {
+    batch: vi.fn(async () => ({ start: '', end: '', targets: [] })),
+  },
+}));
 
 const snapshot = (overrides: Partial<Resource> = {}): Resource => ({
   id: 'pbs-a',

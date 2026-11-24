@@ -22,56 +22,24 @@ import type {
   AvailabilityHistoryRange,
   AvailabilityHistoryTarget,
 } from '@/api/availabilityHistory';
-
-export interface AvailabilityHistoryRangeMeta {
-  value: AvailabilityHistoryRange;
-  label: string;
-  columnLabel: string;
-  windowPhrase: string;
-  evidenceLabel: string;
-  headerTitle: string;
-}
-
-export const AVAILABILITY_HISTORY_RANGE_OPTIONS: readonly AvailabilityHistoryRangeMeta[] = [
-  {
-    value: '24h',
-    label: '24h',
-    columnLabel: 'Uptime 24h',
-    windowPhrase: '24h',
-    evidenceLabel: '24-hour',
-    headerTitle: 'Share of the last 24 hours the check was reachable',
-  },
-  {
-    value: '7d',
-    label: '7d',
-    columnLabel: 'Uptime 7d',
-    windowPhrase: '7 days',
-    evidenceLabel: '7-day',
-    headerTitle: 'Share of the last 7 days the check was reachable',
-  },
-  {
-    value: '30d',
-    label: '30d',
-    columnLabel: 'Uptime 30d',
-    windowPhrase: '30 days',
-    evidenceLabel: '30-day',
-    headerTitle: 'Share of the last 30 days the check was reachable',
-  },
-  {
-    value: '365d',
-    label: '1y',
-    columnLabel: 'Uptime 1y',
-    windowPhrase: '365 days',
-    evidenceLabel: '1-year',
-    headerTitle: 'Share of the last 365 days the check was reachable',
-  },
-];
-
-export const getAvailabilityHistoryRangeMeta = (
-  range: AvailabilityHistoryRange = '24h',
-): AvailabilityHistoryRangeMeta =>
-  AVAILABILITY_HISTORY_RANGE_OPTIONS.find((option) => option.value === range) ??
-  AVAILABILITY_HISTORY_RANGE_OPTIONS[0];
+import {
+  AVAILABILITY_HISTORY_RANGE_OPTIONS,
+  AVAILABILITY_STATE_PRESENTATION,
+  classifyAvailabilityBucket,
+  formatAvailabilityObservedDuration,
+  formatAvailabilityPercent,
+  getAvailabilityHistoryRangeMeta,
+  getAvailabilityUptimeCell,
+  getAvailabilityUptimeVerdict,
+  type AvailabilityHistoryBucketState as AvailabilityFleetHistoryState,
+  type AvailabilityHistoryRangeMeta,
+} from '@/utils/availabilityHistoryPresentation';
+export {
+  AVAILABILITY_HISTORY_RANGE_OPTIONS,
+  getAvailabilityHistoryRangeMeta,
+  getAvailabilityUptimeCell,
+  type AvailabilityHistoryRangeMeta,
+};
 import type { Resource, ResourceAvailabilityMeta } from '@/types/resource';
 import { formatRelativeTime } from '@/utils/format';
 import {
@@ -120,124 +88,24 @@ function recoverWithdrawnTileFocus(
   });
 }
 
-type AvailabilityFleetHistoryState = 'reachable' | 'unreachable' | 'indeterminate' | 'unknown';
-
-const statePresentation: Record<
-  AvailabilityFleetHistoryState,
-  { label: string; className: string }
-> = {
-  reachable: { label: 'Reachable', className: 'bg-emerald-500 dark:bg-emerald-400' },
-  unreachable: { label: 'Unreachable', className: 'bg-rose-500 dark:bg-rose-400' },
-  indeterminate: { label: 'Indeterminate', className: 'bg-amber-400 dark:bg-amber-300' },
-  unknown: { label: 'Unknown', className: 'bg-slate-300 dark:bg-slate-600' },
-};
-
 const availabilityFor = (resource: Resource): ResourceAvailabilityMeta | undefined =>
   resource.availability ??
   (resource.platformData?.availability as ResourceAvailabilityMeta | undefined);
 
-const historyState = (bucket: AvailabilityHistoryBucket): AvailabilityFleetHistoryState => {
-  const durations: Array<[AvailabilityFleetHistoryState, number]> = [
-    ['unreachable', bucket.unreachableSeconds],
-    ['indeterminate', bucket.indeterminateSeconds],
-    ['reachable', bucket.reachableSeconds],
-    ['unknown', bucket.unknownSeconds],
-  ];
-  durations.sort((left, right) => right[1] - left[1]);
-  return durations[0]?.[0] ?? 'unknown';
-};
-
-const formatPercent = (value: number): string =>
-  `${value.toLocaleString(undefined, { maximumFractionDigits: 2 })}%`;
-
-// An uptime percentage is only honest when most of the window had a
-// determinate answer. availabilityPercent leaves out indeterminate time, so a
-// window of mostly inconclusive UDP results could otherwise read 100 percent.
-const MIN_UPTIME_COVERAGE_PERCENT = 90;
-const MIN_DETERMINATE_SHARE = 0.9;
-
-type UptimeVerdict =
-  | { kind: 'ok'; percent: number }
-  | { kind: 'thin'; observedMinutes: number }
-  | { kind: 'inconclusive' };
-
-const getUptimeVerdict = (summary: AvailabilityHistoryTarget['summary']): UptimeVerdict => {
-  const observed =
-    (summary?.reachableSeconds ?? 0) +
-    (summary?.unreachableSeconds ?? 0) +
-    (summary?.indeterminateSeconds ?? 0);
-  if (
-    !summary ||
-    summary.coveragePercent < MIN_UPTIME_COVERAGE_PERCENT ||
-    summary.availabilityPercent === undefined
-  ) {
-    return { kind: 'thin', observedMinutes: Math.round(observed / 60) };
-  }
-  const determinate = summary.reachableSeconds + summary.unreachableSeconds;
-  if (observed <= 0 || determinate / observed < MIN_DETERMINATE_SHARE) {
-    return { kind: 'inconclusive' };
-  }
-  return { kind: 'ok', percent: summary.availabilityPercent };
-};
-
-const formatObservedDuration = (
-  observedMinutes: number,
-  range: AvailabilityHistoryRange,
-): string => {
-  if (range === '24h' || observedMinutes < 120) {
-    return `${observedMinutes.toLocaleString()}m`;
-  }
-  const hours = Math.round(observedMinutes / 60);
-  if (hours < 48) {
-    return `${hours.toLocaleString()}h`;
-  }
-  return `${Math.round(hours / 24).toLocaleString()}d`;
-};
-
-// Compact window uptime for the checks table, on the same coverage rule as the
-// fleet view: below 90 percent observed there is no honest percentage yet.
-export const getAvailabilityUptimeCell = (
-  history: AvailabilityHistoryTarget | undefined,
-  range: AvailabilityHistoryRange = '24h',
-): { label: string; title: string; tone: 'default' | 'warning' | 'danger' | 'muted' } => {
-  const meta = getAvailabilityHistoryRangeMeta(range);
-  if (!history?.summary) {
-    return { label: '—', title: 'History unavailable', tone: 'muted' };
-  }
-  const verdict = getUptimeVerdict(history.summary);
-  if (verdict.kind === 'thin') {
-    return {
-      label: '—',
-      title: `Not enough history yet: ${formatObservedDuration(verdict.observedMinutes, range)} observed in the last ${meta.windowPhrase}`,
-      tone: 'muted',
-    };
-  }
-  if (verdict.kind === 'inconclusive') {
-    return {
-      label: '—',
-      title: `Most results in the last ${meta.windowPhrase} were inconclusive, so there is no uptime figure`,
-      tone: 'muted',
-    };
-  }
-  const percent = verdict.percent;
-  return {
-    label: formatPercent(percent),
-    title: `Available ${formatPercent(percent)} of the last ${meta.windowPhrase} (${formatPercent(history.summary.coveragePercent)} observed)`,
-    tone: percent < 95 ? 'danger' : percent < 99 ? 'warning' : 'default',
-  };
-};
+const statePresentation = AVAILABILITY_STATE_PRESENTATION;
+const historyState = classifyAvailabilityBucket;
 
 const availabilityText = (
   history: AvailabilityHistoryTarget | undefined,
   range: AvailabilityHistoryRange = '24h',
 ): string => {
   if (!history?.summary) return 'History unavailable';
-  const verdict = getUptimeVerdict(history.summary);
+  const verdict = getAvailabilityUptimeVerdict(history.summary);
   if (verdict.kind === 'thin') {
-    return `Insufficient coverage · ${formatObservedDuration(verdict.observedMinutes, range)} observed`;
+    return `Insufficient coverage · ${formatAvailabilityObservedDuration(verdict.observedMinutes, range)} observed`;
   }
   if (verdict.kind === 'inconclusive') return 'Mostly inconclusive results';
-  return `${formatPercent(verdict.percent)} available · ${formatPercent(history.summary.coveragePercent)} observed`;
+  return `${formatAvailabilityPercent(verdict.percent)} available · ${formatAvailabilityPercent(history.summary.coveragePercent)} observed`;
 };
 
 const latencyPaths = (

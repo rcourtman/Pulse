@@ -1911,4 +1911,9 @@ describe('ResourceDetailDrawer Overview physical disks consumer', () => {
     );
     expect(resourceDetailDrawerOverviewSource).toContain('!isTrueNASSystemResource(resource())');
   });
+
+  it('lazy-loads AvailabilityDrawerHistory for standalone availability resources without metricsHistoryTarget', () => {
+    expect(resourceDetailDrawerOverviewSource).toContain("import('./AvailabilityDrawerHistory')");
+    expect(resourceDetailDrawerOverviewSource).toContain('availabilityHistoryTargetId()');
+  });
 });
