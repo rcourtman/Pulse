@@ -116,7 +116,8 @@ describe('FilterHeader', () => {
     expect(statusGroup).toHaveClass('xl:inline-flex');
     const fallbackSelect = screen.getByLabelText('Status', { selector: 'select' });
     expect(fallbackSelect).toBeInTheDocument();
-    expect(fallbackSelect.parentElement).toHaveClass('xl:hidden');
+    const fallbackLabel = document.querySelector(`label[for="${fallbackSelect.id}"]`);
+    expect(fallbackLabel?.parentElement).toHaveClass('xl:hidden');
     const runningButton = screen.getByRole('button', { name: 'Running' });
     expect(runningButton).toHaveAttribute('aria-pressed', 'false');
 

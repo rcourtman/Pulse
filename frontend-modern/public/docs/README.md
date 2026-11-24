@@ -72,9 +72,9 @@ integration against their own vCenter before production use.
 
 ## Pulse Intelligence
 
-- [Assistant, Patrol, and external-agent overview](AI.md)
+- [Patrol and external-agent overview](AI.md)
 - [Patrol modes and safety](AI_AUTONOMY.md)
-- [Assistant safety model](ASSISTANT_SAFETY.md)
+- [Shared AI runtime safety model](ASSISTANT_SAFETY.md)
 - [External agent HTTP and MCP substrate](AGENT_SUBSTRATE.md)
 - [Walkthrough: what happened overnight on my Proxmox and Docker fleet?](WHAT_HAPPENED_OVERNIGHT.md)
 

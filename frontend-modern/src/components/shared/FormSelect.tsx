@@ -1,5 +1,6 @@
 import { Show, createEffect, createUniqueId, onCleanup, splitProps } from 'solid-js';
 import type { Component, JSX } from 'solid-js';
+import ChevronDownIcon from 'lucide-solid/icons/chevron-down';
 import {
   formField,
   formHelpText,
@@ -22,6 +23,37 @@ interface FormSelectProps extends JSX.SelectHTMLAttributes<HTMLSelectElement> {
 }
 
 const joinClass = (...parts: Array<string | undefined>) => parts.filter(Boolean).join(' ');
+
+const tokenizeClasses = (classList: string) => classList.split(/\s+/).filter(Boolean);
+
+const isCompactSelect = (density: FormSelectProps['density'], tokens: string[]) =>
+  density === 'compact' ||
+  tokens.includes('text-xs') ||
+  tokens.includes('text-[11px]') ||
+  tokens.includes('px-2') ||
+  tokens.includes('px-2.5');
+
+const resolveSelectWrapperClass = (tokens: string[]) => {
+  const hasAutoWidth = tokens.includes('w-auto') || tokens.includes('w-fit');
+  const hasFixedWidth = tokens.some((token) => /^w-(?!full$|auto$|fit$)/.test(token));
+  const hasFullWidth =
+    !hasAutoWidth &&
+    !hasFixedWidth &&
+    (tokens.includes('w-full') || tokens.includes('form-select'));
+  const maxWidthTokens = tokens.filter((token) => /^(?:(?:sm|md|lg|xl|2xl):)?max-w-/.test(token));
+
+  if (hasFullWidth) {
+    if (tokens.includes('sm:w-auto')) {
+      return joinClass(
+        'relative inline-grid w-full max-w-full min-w-0 sm:w-fit',
+        ...maxWidthTokens,
+      );
+    }
+    return joinClass('relative grid w-full min-w-0', ...maxWidthTokens);
+  }
+
+  return joinClass('relative inline-grid max-w-full min-w-0', ...maxWidthTokens);
+};
 
 export const FormSelect: Component<FormSelectProps> = (props) => {
   const [local, selectProps] = splitProps(props, [
@@ -55,6 +87,42 @@ export const FormSelect: Component<FormSelectProps> = (props) => {
       .join(' ');
 
     return ids || undefined;
+  };
+  const rawSelectClass = () =>
+    joinClass(
+      local.selectBaseClass ?? (local.density === 'compact' ? formSelectCompact : formSelect),
+      local.class,
+      local.selectClass,
+    );
+  const selectTokens = () => tokenizeClasses(rawSelectClass());
+  const showChevron = () =>
+    !selectProps.multiple &&
+    !(Number(selectProps.size) > 1) &&
+    !selectTokens().includes('opacity-0');
+  const compactSelect = () => isCompactSelect(local.density, selectTokens());
+  const wrapperClass = () => resolveSelectWrapperClass(selectTokens());
+  const styledSelectClass = () =>
+    joinClass(
+      rawSelectClass(),
+      'col-start-1 row-start-1 appearance-none bg-none!',
+      compactSelect() ? 'pr-8!' : 'pr-9!',
+    );
+  const chevronClass = () => {
+    const tokens = selectTokens();
+    const topMarginToken = tokens.find((token) => /^mt-/.test(token));
+    return joinClass(
+      'pointer-events-none col-start-1 row-start-1 self-center justify-self-end text-muted transition-opacity',
+      compactSelect() ? 'mr-2 h-3.5 w-3.5' : 'mr-2.5 h-4 w-4',
+      topMarginToken,
+      selectProps.disabled ? 'opacity-50' : undefined,
+      tokens.includes('form-select-arrow') ? 'forced-colors:hidden' : undefined,
+    );
+  };
+  const attachSelectRef = (element: HTMLSelectElement) => {
+    selectElement = element;
+    if (typeof local.ref === 'function') {
+      local.ref(element);
+    }
   };
 
   createEffect(() => {
@@ -94,24 +162,33 @@ export const FormSelect: Component<FormSelectProps> = (props) => {
       <label for={selectId()} class={joinClass(formLabel, local.labelClass)}>
         {local.label}
       </label>
-      <select
-        ref={(element) => {
-          selectElement = element;
-          if (typeof local.ref === 'function') {
-            local.ref(element);
-          }
-        }}
-        {...selectProps}
-        id={selectId()}
-        aria-describedby={describedBy()}
-        class={joinClass(
-          local.selectBaseClass ?? (local.density === 'compact' ? formSelectCompact : formSelect),
-          local.class,
-          local.selectClass,
-        )}
+      <Show
+        when={showChevron()}
+        fallback={
+          <select
+            ref={attachSelectRef}
+            {...selectProps}
+            id={selectId()}
+            aria-describedby={describedBy()}
+            class={rawSelectClass()}
+          >
+            {local.children}
+          </select>
+        }
       >
-        {local.children}
-      </select>
+        <div class={wrapperClass()}>
+          <select
+            ref={attachSelectRef}
+            {...selectProps}
+            id={selectId()}
+            aria-describedby={describedBy()}
+            class={styledSelectClass()}
+          >
+            {local.children}
+          </select>
+          <ChevronDownIcon aria-hidden="true" class={chevronClass()} />
+        </div>
+      </Show>
       <Show when={local.help}>
         {(help) => (
           <p id={helpId()} class={joinClass(formHelpText, local.helpClass)}>

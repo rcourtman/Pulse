@@ -292,7 +292,7 @@ describe('FilterBar', () => {
     expect(select).toHaveClass('sm:min-h-0');
     expect(select).toHaveClass('w-30');
     expect(select).not.toHaveClass('min-w-30');
-    expect(select.parentElement).not.toHaveClass('p-0.5');
+    expect(label?.parentElement).not.toHaveClass('p-0.5');
   });
 
   it('requires an explicit opt-in to show the visual Filter label', () => {
@@ -309,7 +309,7 @@ describe('FilterBar', () => {
     const label = document.querySelector(`label[for="${select.id}"]`);
     expect(label).not.toHaveClass('sr-only');
     expect(label).toHaveTextContent('Filter');
-    expect(select.parentElement).toHaveClass('p-0.5');
+    expect(label?.parentElement).toHaveClass('p-0.5');
   });
 
   it('completes a matching filter inline before pinning it as a chip on Enter', () => {
