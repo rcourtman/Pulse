@@ -820,8 +820,9 @@ func (b *endSessionOnRead) Read(p []byte) (int, error) {
 // that organization and acting for another member. The organization's owner
 // manages its settings and may import them, but may not issue its tokens
 // (POST /api/security/tokens is instance administration), so the import must
-// not issue the archive's either, also when the owner's session ends before
-// the archive is read. An instance administrator who also manages the
+// not issue the archive's either. When the owner's session ends before the
+// archive is read, request-body authority refuses the import with 401 and
+// restores nothing. An instance administrator who also manages the
 // organization restores them as before.
 func TestConfigImportOrganizationManagerKeepsAccessCredentials(t *testing.T) {
 	f := newBasicTenantFixture(t)
@@ -866,7 +867,7 @@ func TestConfigImportOrganizationManagerKeepsAccessCredentials(t *testing.T) {
 		}
 		return tokens, ssoProviders
 	}
-	importAs := func(user, remoteAddr string, signOutBeforeRead bool) map[string]any {
+	importAs := func(user, remoteAddr string, signOutBeforeRead bool) *httptest.ResponseRecorder {
 		t.Helper()
 		data, err := source.ExportConfig(passphrase)
 		if err != nil {
@@ -889,6 +890,11 @@ func TestConfigImportOrganizationManagerKeepsAccessCredentials(t *testing.T) {
 		req.Header.Set("X-CSRF-Token", generateCSRFToken(sessionToken))
 		rec := httptest.NewRecorder()
 		f.router.Handler().ServeHTTP(rec, req)
+		return rec
+	}
+
+	decodeImport := func(user string, rec *httptest.ResponseRecorder) map[string]any {
+		t.Helper()
 		if rec.Code != http.StatusOK {
 			t.Fatalf("import as %s status = %d: %s", user, rec.Code, rec.Body.String())
 		}
@@ -899,17 +905,24 @@ func TestConfigImportOrganizationManagerKeepsAccessCredentials(t *testing.T) {
 		return response
 	}
 
-	for i, signOutBeforeRead := range []bool{false, true} {
-		response := importAs("managed-owner", "127.0.3."+strconv.Itoa(i+1)+":1234", signOutBeforeRead)
-		if response["accessCredentialsRestored"] != false {
-			t.Fatalf("organization owner import (signed out before read: %v) response = %v, want accessCredentialsRestored=false", signOutBeforeRead, response)
-		}
-		if tokens, ssoProviders := restored(); tokens != 0 || ssoProviders != 0 {
-			t.Fatalf("organization owner import (signed out before read: %v) issued %d archived tokens and %d SSO providers", signOutBeforeRead, tokens, ssoProviders)
-		}
+	rec := importAs("managed-owner", "127.0.3.1:1234", false)
+	response := decodeImport("managed-owner", rec)
+	if response["accessCredentialsRestored"] != false {
+		t.Fatalf("organization owner import response = %v, want accessCredentialsRestored=false", response)
+	}
+	if tokens, ssoProviders := restored(); tokens != 0 || ssoProviders != 0 {
+		t.Fatalf("organization owner import issued %d archived tokens and %d SSO providers", tokens, ssoProviders)
 	}
 
-	response := importAs(basicTenantAdmin, "127.0.3.3:1234", false)
+	signedOutRec := importAs("managed-owner", "127.0.3.2:1234", true)
+	if signedOutRec.Code != http.StatusUnauthorized || signedOutRec.Body.String() != "Authentication required\n" {
+		t.Fatalf("organization owner import after sign-out status = %d body=%q, want 401 Authentication required", signedOutRec.Code, signedOutRec.Body.String())
+	}
+	if tokens, ssoProviders := restored(); tokens != 0 || ssoProviders != 0 {
+		t.Fatalf("organization owner import after sign-out issued %d archived tokens and %d SSO providers", tokens, ssoProviders)
+	}
+
+	response = decodeImport(basicTenantAdmin, importAs(basicTenantAdmin, "127.0.3.3:1234", false))
 	if response["accessCredentialsRestored"] != true {
 		t.Fatalf("instance administrator import response = %v, want accessCredentialsRestored=true", response)
 	}
