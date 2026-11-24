@@ -285,7 +285,8 @@ class GitHub:
                 break
             peer_cancelled |= failure == "peer-cancel"
             print(
-                f"Transient GitHub API read failure; retry {attempt + 1}/2.",
+                f"Transient GitHub API read failure ({read_subject or 'resource unavailable'}; "
+                f"{failure}); retry {attempt + 1}/2.",
                 file=sys.stderr,
             )
             time.sleep(attempt + 1)
