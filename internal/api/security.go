@@ -3,13 +3,16 @@ package api
 import (
 	"context"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
 	"fmt"
 	"net"
 	"net/http"
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/audit"
@@ -80,11 +83,12 @@ func CheckCSRF(w http.ResponseWriter, r *http.Request) bool {
 		return true
 	}
 
-	// Get CSRF token from header or form
+	// The token counts only in the X-CSRF-Token header. A page on another
+	// origin cannot set that header without passing a CORS preflight, whereas a
+	// token in the URL query or a form field travels in a simple request that
+	// needs none, and a page on another port of this host can read the
+	// pulse_csrf cookie. Reading the header alone also leaves the body unparsed.
 	csrfToken := r.Header.Get("X-CSRF-Token")
-	if csrfToken == "" {
-		csrfToken = r.FormValue("csrf_token")
-	}
 
 	// Log CSRF validation attempt for debugging
 	log.Debug().
@@ -148,6 +152,12 @@ func issueNewCSRFCookie(w http.ResponseWriter, r *http.Request, sessionID string
 		return ""
 	}
 	if strings.TrimSpace(sessionID) == "" {
+		return ""
+	}
+	// The session ID comes straight from the request cookie. Only a live session
+	// gets a replacement token: every token is tracked and persisted, so issuing
+	// one for a made-up cookie would let unauthenticated requests grow the store.
+	if !ValidateSession(sessionID) {
 		return ""
 	}
 
@@ -503,15 +513,41 @@ func cleanupExpiredFailedLogins() {
 	}
 }
 
+// maxLockoutIdentifierBytes bounds the identifier text the lockout tracker
+// keeps. A username reaches it from a request that carries no valid
+// credentials, in an Authorization header of up to a megabyte, and an entry
+// outlives that request by 2*lockoutDuration. The bound is the longest
+// username setup accepts, so genuine usernames and client addresses are
+// always tracked, and logged, under their own text.
+const maxLockoutIdentifierBytes = maxLocalAuthUsernameRunes * utf8.UTFMax
+
+// lockoutKey returns the key an identifier's failures are tracked under:
+// the identifier itself, or a digest of it when it is oversized.
+func lockoutKey(identifier string) string {
+	if len(identifier) <= maxLockoutIdentifierBytes {
+		return identifier
+	}
+	digest := sha256.Sum256([]byte(identifier))
+	return "sha256:" + hex.EncodeToString(digest[:])
+}
+
 // RecordFailedLogin tracks failed login attempts
 func RecordFailedLogin(identifier string) {
 	failedMu.Lock()
 	defer failedMu.Unlock()
+	recordFailedLoginLocked(identifier)
+}
 
+// recordFailedLoginLocked requires failedMu to be held for writing.
+func recordFailedLoginLocked(identifier string) {
+	identifier = lockoutKey(identifier)
 	failed, exists := failedLogins[identifier]
 	if !exists {
 		failed = &FailedLogin{}
-		failedLogins[identifier] = failed
+		// Keep a copy: a Basic username is a substring of the request's
+		// decoded credentials, and storing it would retain the password and
+		// the rest of that buffer for as long as the entry lives.
+		failedLogins[strings.Clone(identifier)] = failed
 	}
 
 	failed.Count++
@@ -529,6 +565,7 @@ func RecordFailedLogin(identifier string) {
 
 // ClearFailedLogins resets failed login counter on successful login
 func ClearFailedLogins(identifier string) {
+	identifier = lockoutKey(identifier)
 	failedMu.Lock()
 	defer failedMu.Unlock()
 	delete(failedLogins, identifier)
@@ -538,7 +575,12 @@ func ClearFailedLogins(identifier string) {
 func GetLockoutInfo(identifier string) (attempts int, lockedUntil time.Time, isLocked bool) {
 	failedMu.RLock()
 	defer failedMu.RUnlock()
+	return lockoutInfoLocked(identifier)
+}
 
+// lockoutInfoLocked requires failedMu to be held.
+func lockoutInfoLocked(identifier string) (attempts int, lockedUntil time.Time, isLocked bool) {
+	identifier = lockoutKey(identifier)
 	failed, exists := failedLogins[identifier]
 	if !exists {
 		return 0, time.Time{}, false
@@ -554,8 +596,52 @@ func GetLockoutInfo(identifier string) (attempts int, lockedUntil time.Time, isL
 	return failed.Count, failed.LockedUntil, isLocked
 }
 
+// RecordLoginAttempt counts the outcome of a password check against every
+// identifier it was made under (the username, the client address) and reports
+// whether the attempt has to be refused as locked out instead.
+//
+// Verifying a password takes long enough that any number of attempts can pass
+// GetLockoutInfo before the first of them has failed. The limit is therefore
+// decided here, in one step with the counting: once an identifier is locked,
+// an attempt that was still being verified is over the limit whatever its
+// result, and the caller must answer it exactly as it answers a locked
+// account. Otherwise a failure is counted against each identifier and a
+// success clears them.
+func RecordLoginAttempt(success bool, identifiers ...string) (lockedUntil time.Time, locked bool) {
+	failedMu.Lock()
+	defer failedMu.Unlock()
+
+	for _, identifier := range identifiers {
+		if identifier == "" {
+			continue
+		}
+		if _, until, isLocked := lockoutInfoLocked(identifier); isLocked {
+			locked = true
+			if until.After(lockedUntil) {
+				lockedUntil = until
+			}
+		}
+	}
+	if locked {
+		return lockedUntil, true
+	}
+
+	for _, identifier := range identifiers {
+		if identifier == "" {
+			continue
+		}
+		if success {
+			delete(failedLogins, lockoutKey(identifier))
+		} else {
+			recordFailedLoginLocked(identifier)
+		}
+	}
+	return time.Time{}, false
+}
+
 // ResetLockout manually resets lockout for an identifier (admin function)
 func ResetLockout(identifier string) {
+	identifier = lockoutKey(identifier)
 	failedMu.Lock()
 	defer failedMu.Unlock()
 	delete(failedLogins, identifier)

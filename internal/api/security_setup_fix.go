@@ -670,6 +670,7 @@ func handleQuickSecuritySetupFixed(r *Router) http.HandlerFunc {
 		// Update runtime config immediately with hashed token - no restart needed!
 		config.Mu.Lock()
 		previousTokens := append([]config.APITokenRecord(nil), r.config.APITokens...)
+		previousAuthUser := r.config.AuthUser
 		r.config.AuthUser = setupRequest.Username
 		// Keep permission-gated routes aligned with the configured administrator
 		// immediately, including when token persistence below fails after the
@@ -683,12 +684,18 @@ func handleQuickSecuritySetupFixed(r *Router) http.HandlerFunc {
 				r.config.APITokens = previousTokens
 				r.config.SortAPITokens()
 				config.Mu.Unlock()
+				// The password is already replaced, so its sessions end here too.
+				invalidateAdminCredentialSessions(previousAuthUser, setupRequest.Username)
 				log.Error().Err(err).Msg("Failed to persist API tokens during security setup")
 				http.Error(w, "Password authentication was saved, but the API token could not be saved", http.StatusInternalServerError)
 				return
 			}
 		}
 		config.Mu.Unlock()
+		// Sessions opened with the replaced login must not outlive it, as after
+		// a password change or first-run reset. The caller gets a new session
+		// below.
+		invalidateAdminCredentialSessions(previousAuthUser, setupRequest.Username)
 		log.Info().Msg("Runtime config updated with new security settings - active immediately")
 
 		if err := r.establishSession(w, req, setupRequest.Username); err != nil {
@@ -835,6 +842,16 @@ func handleQuickSecuritySetupFixed(r *Router) http.HandlerFunc {
 			json.NewEncoder(w).Encode(response)
 		}
 	}
+}
+
+// invalidateAdminCredentialSessions ends every session of the administrator
+// login that quick setup replaced and of the login that replaces it, so a
+// session opened with the old password cannot keep acting as the administrator.
+func invalidateAdminCredentialSessions(previousUser, currentUser string) {
+	if previousUser != "" && previousUser != currentUser {
+		InvalidateUserSessions(previousUser)
+	}
+	InvalidateUserSessions(currentUser)
 }
 
 // tokenHasInstanceWideAuthority reports whether a token holds full-access scope

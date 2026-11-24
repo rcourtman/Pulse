@@ -731,6 +731,14 @@ func checkAuth(cfg *config.Config, w http.ResponseWriter, r *http.Request, write
 	// long-lived read. A later proxy/token/basic admission must not inherit an
 	// earlier session marker if middleware checks this request again.
 	*r = *r.WithContext(context.WithValue(r.Context(), sessionReadAdmissionKey{}, (*sessionReadAdmission)(nil)))
+	// Admission sees only the headers. Bind the body, which may arrive much
+	// later, to that same credential. Registered before config.Mu is taken, so
+	// it runs after the read lock below has been released.
+	defer func() {
+		if allowed {
+			retainRequestBodyAuthority(cfg, r)
+		}
+	}()
 
 	// Dev mode bypass for all auth (disabled by default)
 	if adminBypassAppliesToRequest(r) {
@@ -949,20 +957,7 @@ func checkAuth(cfg *config.Config, w http.ResponseWriter, r *http.Request, write
 							if ipLocked && ipLockedUntil.After(lockedUntil) {
 								lockedUntil = ipLockedUntil
 							}
-
-							remainingMinutes := int(time.Until(lockedUntil).Minutes())
-							if remainingMinutes < 1 {
-								remainingMinutes = 1
-							}
-
-							log.Warn().Str("user", parts[0]).Str("ip", clientIP).Msg("Account locked out")
-							LogAuditEventForTenant(GetOrgID(r.Context()), "login", parts[0], clientIP, r.URL.Path, false, "Account locked")
-							if w != nil {
-								w.Header().Set("Content-Type", "application/json")
-								w.WriteHeader(http.StatusForbidden)
-								w.Write([]byte(fmt.Sprintf(`{"error":"Account temporarily locked","message":"Too many failed attempts. Please try again in %d minutes.","lockedUntil":"%s"}`,
-									remainingMinutes, lockedUntil.Format(time.RFC3339))))
-							}
+							writeBasicAuthLockedOut(w, r, parts[0], clientIP, lockedUntil)
 							return false
 						}
 						cfgAuthUser, cfgAuthPass := snapshotLocalAuthCredentialsLocked(cfg)
@@ -976,11 +971,17 @@ func checkAuth(cfg *config.Config, w http.ResponseWriter, r *http.Request, write
 							Bool("pass_match", passMatch).
 							Msg("Auth check")
 
-						if userMatch && passMatch {
-							// Clear failed login attempts
-							ClearFailedLogins(parts[0])
-							ClearFailedLogins(GetClientIP(r))
+						// The lockout check above ran before the password was
+						// hashed, so attempts sent together all passed it. Count
+						// this one in the same step that asks whether the limit
+						// was reached meanwhile: if it was, the attempt is refused
+						// whatever its result. A success clears the failed attempts.
+						if lockedUntil, locked := RecordLoginAttempt(userMatch && passMatch, parts[0], clientIP); locked {
+							writeBasicAuthLockedOut(w, r, parts[0], clientIP, lockedUntil)
+							return false
+						}
 
+						if userMatch && passMatch {
 							// TenantMiddleware admitted this request's organization
 							// before these credentials were verified, so it could not
 							// apply the organization access policy to this principal.
@@ -1030,9 +1031,7 @@ func checkAuth(cfg *config.Config, w http.ResponseWriter, r *http.Request, write
 							w.Header().Set("X-Auth-Method", "basic")
 							return true
 						} else {
-							// Failed login
-							RecordFailedLogin(parts[0])
-							RecordFailedLogin(clientIP)
+							// Failed login, counted by RecordLoginAttempt above
 							LogAuditEventForTenant(GetOrgID(r.Context()), "login", parts[0], clientIP, r.URL.Path, false, "Invalid credentials")
 
 							// Get updated attempt counts
@@ -1069,6 +1068,24 @@ func checkAuth(cfg *config.Config, w http.ResponseWriter, r *http.Request, write
 		writeAuthenticationRequired(w, r)
 	}
 	return false
+}
+
+// writeBasicAuthLockedOut refuses a Basic sign-in for a username or address
+// that has used up its failed attempts.
+func writeBasicAuthLockedOut(w http.ResponseWriter, r *http.Request, username, clientIP string, lockedUntil time.Time) {
+	remainingMinutes := int(time.Until(lockedUntil).Minutes())
+	if remainingMinutes < 1 {
+		remainingMinutes = 1
+	}
+
+	log.Warn().Str("user", username).Str("ip", clientIP).Msg("Account locked out")
+	LogAuditEventForTenant(GetOrgID(r.Context()), "login", username, clientIP, r.URL.Path, false, "Account locked")
+	if w != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusForbidden)
+		w.Write([]byte(fmt.Sprintf(`{"error":"Account temporarily locked","message":"Too many failed attempts. Please try again in %d minutes.","lockedUntil":"%s"}`,
+			remainingMinutes, lockedUntil.Format(time.RFC3339))))
+	}
 }
 
 // RequireAuth middleware checks for authentication

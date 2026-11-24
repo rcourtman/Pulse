@@ -1099,6 +1099,51 @@ func TestResolvePublicURL_NilRequest(t *testing.T) {
 	}
 }
 
+// Public URL detection runs before authentication on every request, public
+// paths included. Verifying a password there is a bcrypt hash per request that
+// no lockout or rate limit bounds, so Basic credentials capture only once
+// checkAuth has accepted them.
+func TestPublicURLCaptureLeavesBasicCredentialsToAuthentication(t *testing.T) {
+	t.Setenv("PULSE_AUTH_BYPASS", "false")
+	resetFailedLogins()
+	t.Cleanup(resetFailedLogins)
+	const password = "Correct-Horse-9battery"
+	hashed, err := auth.HashPassword(password)
+	if err != nil {
+		t.Fatal(err)
+	}
+	dataPath := t.TempDir()
+	cfg := &config.Config{DataPath: dataPath, ConfigPath: dataPath, AuthUser: "admin", AuthPass: hashed}
+	router := newTestRouter(t, cfg, nil, nil, nil, nil, "test")
+
+	serve := func(path, pass string) int {
+		req := httptest.NewRequest(http.MethodGet, "https://pulse.example.test"+path, nil)
+		req.SetBasicAuth("admin", pass)
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, req)
+		return rec.Code
+	}
+
+	serve("/favicon.ico", password)
+	if cfg.PublicURL != "" {
+		t.Fatalf("public path verified Basic credentials before authentication: %q", cfg.PublicURL)
+	}
+
+	if code := serve("/api/no-such-route", "wrong-"+password); code != http.StatusUnauthorized {
+		t.Fatalf("wrong password status = %d, want %d", code, http.StatusUnauthorized)
+	}
+	if cfg.PublicURL != "" {
+		t.Fatalf("rejected Basic credentials captured the public URL: %q", cfg.PublicURL)
+	}
+
+	if code := serve("/api/no-such-route", password); code == http.StatusUnauthorized || code == http.StatusForbidden {
+		t.Fatalf("configured administrator was denied: status=%d", code)
+	}
+	if cfg.PublicURL != "https://pulse.example.test" || !cfg.PublicURLAutoDetected {
+		t.Fatalf("authenticated Basic request did not capture the public URL: %q", cfg.PublicURL)
+	}
+}
+
 func TestCanCapturePublicURL_Security(t *testing.T) {
 	// Proxy Auth Tests
 	t.Run("ProxyAuth", func(t *testing.T) {
@@ -1135,8 +1180,15 @@ func TestCanCapturePublicURL_Security(t *testing.T) {
 		recordRead, _ := config.NewAPITokenRecord("read-token-123.12345678", "read", []string{"start:read"}) // Low scope
 		recordWrite, _ := config.NewAPITokenRecord("write-token-123.12345678", "write", []string{config.ScopeSettingsWrite})
 
+		recordOrgWrite, _ := config.NewAPITokenRecord("org-write-token-123.12345678", "org-write", []string{config.ScopeSettingsWrite})
+		recordOrgWrite.OrgID = "acme"
+		recordOrgsWrite, _ := config.NewAPITokenRecord("orgs-write-token-123.12345678", "orgs-write", []string{config.ScopeSettingsWrite})
+		recordOrgsWrite.OrgIDs = []string{"default", "acme"}
+		recordDefaultWrite, _ := config.NewAPITokenRecord("default-write-token-123.12345678", "default-write", []string{config.ScopeSettingsWrite})
+		recordDefaultWrite.OrgID = "default"
+
 		cfg := &config.Config{
-			APITokens: []config.APITokenRecord{*recordRead, *recordWrite},
+			APITokens: []config.APITokenRecord{*recordRead, *recordWrite, *recordOrgWrite, *recordOrgsWrite, *recordDefaultWrite},
 		}
 
 		t.Run("token with settings:write allowed", func(t *testing.T) {
@@ -1144,6 +1196,30 @@ func TestCanCapturePublicURL_Security(t *testing.T) {
 			req.Header.Set("X-API-Token", "write-token-123.12345678")
 			if !canCapturePublicURL(cfg, req) {
 				t.Error("expected true for token with settings:write")
+			}
+		})
+
+		t.Run("default organization token with settings:write allowed", func(t *testing.T) {
+			req := httptest.NewRequest("GET", "/", nil)
+			req.Header.Set("X-API-Token", "default-write-token-123.12345678")
+			if !canCapturePublicURL(cfg, req) {
+				t.Error("expected true for token bound to the default organization")
+			}
+		})
+
+		t.Run("organization-bound token with settings:write denied", func(t *testing.T) {
+			for _, token := range []string{"org-write-token-123.12345678", "orgs-write-token-123.12345678"} {
+				req := httptest.NewRequest("GET", "/", nil)
+				req.Header.Set("X-API-Token", token)
+				if canCapturePublicURL(cfg, req) {
+					t.Errorf("expected false for X-API-Token %s bound to a tenant organization", token)
+				}
+
+				req = httptest.NewRequest("GET", "/", nil)
+				req.Header.Set("Authorization", "Bearer "+token)
+				if canCapturePublicURL(cfg, req) {
+					t.Errorf("expected false for bearer token %s bound to a tenant organization", token)
+				}
 			}
 		})
 
@@ -1165,12 +1241,12 @@ func TestCanCapturePublicURL_Security(t *testing.T) {
 			AuthPass: hashed,
 		}
 
-		t.Run("valid credentials allowed", func(t *testing.T) {
+		t.Run("credentials are left to checkAuth", func(t *testing.T) {
 			req := httptest.NewRequest("GET", "/", nil)
 			creds := base64.StdEncoding.EncodeToString([]byte("admin:" + password))
 			req.Header.Set("Authorization", "Basic "+creds)
-			if !canCapturePublicURL(cfg, req) {
-				t.Error("expected true for valid basic auth")
+			if canCapturePublicURL(cfg, req) {
+				t.Error("expected no password check before authentication")
 			}
 		})
 	})

@@ -60,7 +60,6 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/websocket"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/aicontracts"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/auth"
-	internalauth "github.com/rcourtman/pulse-go-rewrite/pkg/auth"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/diskinventory"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/extensions"
 	metricstore "github.com/rcourtman/pulse-go-rewrite/pkg/metrics"
@@ -4376,6 +4375,12 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 						Msg("Unauthorized access attempt")
 					return
 				}
+				// checkAuth accepts Basic credentials only for the configured
+				// administrator, behind its lockout. canCapturePublicURL leaves
+				// them to it, so capture for that administrator happens here.
+				if authWriter.Header().Get("X-Auth-Method") == "basic" {
+					r.capturePublicURL(req)
+				}
 			}
 		}
 		// Check CSRF for state-changing requests.
@@ -4459,7 +4464,9 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		// This ensures the frontend has a token before making POST requests
 		if req.Method == "GET" && strings.HasPrefix(req.URL.Path, "/api/") {
 			sessionCookie, err := readSessionCookie(req)
-			if err == nil && sessionCookie.Value != "" {
+			// The cookie value is client-supplied and this runs for public paths too,
+			// so only a live session may add a token to the persisted CSRF store.
+			if err == nil && sessionCookie.Value != "" && ValidateSession(sessionCookie.Value) {
 				// Check if CSRF cookie exists
 				_, csrfErr := req.Cookie(CookieNameCSRF)
 				if csrfErr != nil {
@@ -4524,6 +4531,16 @@ func (r *Router) capturePublicURLFromRequest(req *http.Request) {
 	}
 
 	if !canCapturePublicURL(r.config, req) {
+		return
+	}
+
+	r.capturePublicURL(req)
+}
+
+// capturePublicURL records the request's origin as the auto-detected public
+// URL. The caller has established that the request is an administrator's.
+func (r *Router) capturePublicURL(req *http.Request) {
+	if req == nil || r == nil || r.config == nil || r.hostedMode {
 		return
 	}
 
@@ -4993,14 +5010,17 @@ func canCapturePublicURL(cfg *config.Config, req *http.Request) bool {
 		}
 	}
 
-	// API Tokens: Require settings:write scope. This pre-route check runs
-	// concurrently with authentication. Metadata normalization and LastUsedAt
-	// need the same exclusive ownership; scope checks use a detached snapshot.
+	// API Tokens: Require settings:write scope and instance authority, as the
+	// public URL setting itself does: cfg.APITokens also holds tokens bound to
+	// tenant organizations, and the URL serves every organization. This
+	// pre-route check runs concurrently with authentication. Metadata
+	// normalization and LastUsedAt need the same exclusive ownership; scope
+	// checks use a detached snapshot.
 	tokenAllowsCapture := func(token string) bool {
 		config.Mu.RLock()
 		defer config.Mu.RUnlock()
 		record, ok := validateAPITokenLocked(cfg, token)
-		return ok && record.HasScope(config.ScopeSettingsWrite)
+		return ok && record.HasScope(config.ScopeSettingsWrite) && tokenActsForInstance(record)
 	}
 	if token := strings.TrimSpace(req.Header.Get("X-API-Token")); token != "" {
 		if tokenAllowsCapture(token) {
@@ -5028,20 +5048,11 @@ func canCapturePublicURL(cfg *config.Config, req *http.Request) bool {
 		}
 	}
 
-	// Basic Auth: Trusted (Admin)
-	if cfg.AuthUser != "" && cfg.AuthPass != "" {
-		const prefix = "Basic "
-		if authHeader := req.Header.Get("Authorization"); strings.HasPrefix(authHeader, prefix) {
-			if decoded, err := base64.StdEncoding.DecodeString(authHeader[len(prefix):]); err == nil {
-				if parts := strings.SplitN(string(decoded), ":", 2); len(parts) == 2 {
-					if constantTimeStringEqual(parts[0], cfg.AuthUser) && internalauth.CheckPasswordHash(parts[1], cfg.AuthPass) {
-						return true
-					}
-				}
-			}
-		}
-	}
-
+	// Basic Auth is not judged here. This check runs before authentication on
+	// every request, public paths included, where neither the lockout nor a
+	// rate limit bounds it, and verifying a password costs a bcrypt hash. Only
+	// checkAuth verifies Basic credentials; ServeHTTP captures once it has
+	// accepted them.
 	return false
 }
 
@@ -5117,6 +5128,21 @@ func (r *Router) handleSchedulerHealth(w http.ResponseWriter, req *http.Request)
 	}
 }
 
+// writePasswordChangeLockedOut refuses a password change from an address that
+// has used up its failed attempts at the current password.
+func writePasswordChangeLockedOut(w http.ResponseWriter, clientIP string, lockedUntil time.Time) {
+	remainingMinutes := int(time.Until(lockedUntil).Minutes())
+	if remainingMinutes < 1 {
+		remainingMinutes = 1
+	}
+	log.Warn().
+		Str("ip", clientIP).
+		Time("locked_until", lockedUntil).
+		Msg("Password change blocked - IP locked out")
+	writeErrorResponse(w, http.StatusForbidden, "locked_out",
+		fmt.Sprintf("Too many failed attempts. Try again in %d minutes.", remainingMinutes), nil)
+}
+
 // handleChangePassword handles password change requests
 func (r *Router) handleChangePassword(w http.ResponseWriter, req *http.Request) {
 	if req.Method != http.MethodPost {
@@ -5147,19 +5173,17 @@ func (r *Router) handleChangePassword(w http.ResponseWriter, req *http.Request) 
 		return
 	}
 
-	// Check lockout status for the client IP
-	_, lockedUntil, isLocked := GetLockoutInfo(clientIP)
-	if isLocked {
-		remainingMinutes := int(time.Until(lockedUntil).Minutes())
-		if remainingMinutes < 1 {
-			remainingMinutes = 1
+	// Check lockout status for the client IP and for the account whose password
+	// the request tests, as sign-in does. Failures counted per address alone
+	// let a caller spread guesses over addresses past the account lockout.
+	_, userLockedUntil, userLocked := GetLockoutInfo(r.config.AuthUser)
+	_, ipLockedUntil, ipLocked := GetLockoutInfo(clientIP)
+	if userLocked || ipLocked {
+		lockedUntil := userLockedUntil
+		if ipLocked && ipLockedUntil.After(lockedUntil) {
+			lockedUntil = ipLockedUntil
 		}
-		log.Warn().
-			Str("ip", clientIP).
-			Time("locked_until", lockedUntil).
-			Msg("Password change blocked - IP locked out")
-		writeErrorResponse(w, http.StatusForbidden, "locked_out",
-			fmt.Sprintf("Too many failed attempts. Try again in %d minutes.", remainingMinutes), nil)
+		writePasswordChangeLockedOut(w, clientIP, lockedUntil)
 		return
 	}
 
@@ -5183,17 +5207,19 @@ func (r *Router) handleChangePassword(w http.ResponseWriter, req *http.Request) 
 		}
 	}
 
-	// Hold session callers to the same rule the proxy branch above applies.
-	// Knowing the current password is the real gate on the change itself, so
-	// this is not an escalation, but without it any authenticated non-admin
-	// session could probe the admin password one guess at a time and read the
-	// answer from the 401. ensureAdminSession is a no-op when the request
-	// carries no session cookie, so the Basic Auth flow is unaffected.
-	if !ensureAdminSession(r.config, w, req) {
+	// Hold session and API token callers to the same rule the proxy branch
+	// above applies. Knowing the current password is the real gate on the
+	// change itself, so this is not an escalation, but without it any
+	// authenticated non-admin session, or any API token whatever its scopes,
+	// could probe the admin password one guess at a time and read the answer
+	// from the 401. ensureSettingsWriteScope asks an admin session of session
+	// callers and settings:write of tokens, and is a no-op when the request
+	// carries neither, so the Basic Auth flow is unaffected.
+	if !ensureSettingsWriteScope(r.config, w, req) {
 		log.Warn().
 			Str("ip", req.RemoteAddr).
 			Str("path", req.URL.Path).
-			Msg("Non-admin session attempted to change password")
+			Msg("Caller without instance settings authority attempted to change password")
 		return
 	}
 
@@ -5251,7 +5277,10 @@ func (r *Router) handleChangePassword(w http.ResponseWriter, req *http.Request) 
 								Str("ip", req.RemoteAddr).
 								Str("username", username).
 								Msg("Failed password change attempt - incorrect current password in auth header")
-							RecordFailedLogin(clientIP)
+							if lockedUntil, locked := RecordLoginAttempt(false, r.config.AuthUser, clientIP); locked {
+								writePasswordChangeLockedOut(w, clientIP, lockedUntil)
+								return
+							}
 							writeErrorResponse(w, http.StatusUnauthorized, "unauthorized",
 								"Current password is incorrect", nil)
 							return
@@ -5271,11 +5300,23 @@ func (r *Router) handleChangePassword(w http.ResponseWriter, req *http.Request) 
 				Str("ip", req.RemoteAddr).
 				Str("username", username).
 				Msg("Failed password change attempt - incorrect current password")
-			RecordFailedLogin(clientIP)
+			if lockedUntil, locked := RecordLoginAttempt(false, r.config.AuthUser, clientIP); locked {
+				writePasswordChangeLockedOut(w, clientIP, lockedUntil)
+				return
+			}
 			writeErrorResponse(w, http.StatusUnauthorized, "unauthorized",
 				"Current password is incorrect", nil)
 			return
 		}
+	}
+
+	// The lockout check above ran before the current password was hashed, so
+	// guesses sent together all passed it. One that was still being verified
+	// when the account or address reached its limit is refused even though it
+	// is right, as RecordLoginAttempt refuses the wrong ones.
+	if lockedUntil, locked := RecordLoginAttempt(true, r.config.AuthUser, clientIP); locked {
+		writePasswordChangeLockedOut(w, clientIP, lockedUntil)
+		return
 	}
 
 	// Hash the new password before storing
@@ -5590,22 +5631,7 @@ func (r *Router) handleLogin(w http.ResponseWriter, req *http.Request) {
 		if ipLocked && ipLockedUntil.After(lockedUntil) {
 			lockedUntil = ipLockedUntil
 		}
-
-		remainingMinutes := int(time.Until(lockedUntil).Minutes())
-		if remainingMinutes < 1 {
-			remainingMinutes = 1
-		}
-
-		LogAuditEventForTenant(GetOrgID(req.Context()), "login", loginReq.Username, clientIP, req.URL.Path, false, "Account locked")
-
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusForbidden)
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"error":            "account_locked",
-			"message":          fmt.Sprintf("Too many failed attempts. Account is locked for %d more minutes.", remainingMinutes),
-			"lockedUntil":      lockedUntil.Format(time.RFC3339),
-			"remainingMinutes": remainingMinutes,
-		})
+		writeLoginLockedOut(w, req, loginReq.Username, clientIP, lockedUntil)
 		return
 	}
 
@@ -5632,11 +5658,15 @@ func (r *Router) handleLogin(w http.ResponseWriter, req *http.Request) {
 		credentialsValid = true
 		effectiveUsername = "admin"
 	}
+	// The lockout check above ran before the password was hashed, so attempts
+	// sent together all passed it. Count this one in the same step that asks
+	// whether the limit was reached meanwhile: if it was, the attempt is
+	// refused whatever its result. A success clears the failed attempts.
+	if lockedUntil, locked := RecordLoginAttempt(credentialsValid, loginReq.Username, clientIP); locked {
+		writeLoginLockedOut(w, req, loginReq.Username, clientIP, lockedUntil)
+		return
+	}
 	if credentialsValid {
-		// Clear failed login attempts
-		ClearFailedLogins(loginReq.Username)
-		ClearFailedLogins(clientIP)
-
 		// Invalidate any pre-existing session to prevent session fixation attacks.
 		InvalidateOldSessionFromRequest(req)
 
@@ -5695,9 +5725,7 @@ func (r *Router) handleLogin(w http.ResponseWriter, req *http.Request) {
 			"message": "Successfully logged in",
 		})
 	} else {
-		// Failed login
-		RecordFailedLogin(loginReq.Username)
-		RecordFailedLogin(clientIP)
+		// Failed login, counted by RecordLoginAttempt above
 		LogAuditEventForTenant(GetOrgID(req.Context()), "login", loginReq.Username, clientIP, req.URL.Path, false, "Invalid credentials")
 
 		// Get updated attempt counts
@@ -5733,6 +5761,26 @@ func (r *Router) handleLogin(w http.ResponseWriter, req *http.Request) {
 			})
 		}
 	}
+}
+
+// writeLoginLockedOut refuses a login for a username or address that has used
+// up its failed attempts.
+func writeLoginLockedOut(w http.ResponseWriter, req *http.Request, username, clientIP string, lockedUntil time.Time) {
+	remainingMinutes := int(time.Until(lockedUntil).Minutes())
+	if remainingMinutes < 1 {
+		remainingMinutes = 1
+	}
+
+	LogAuditEventForTenant(GetOrgID(req.Context()), "login", username, clientIP, req.URL.Path, false, "Account locked")
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusForbidden)
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"error":            "account_locked",
+		"message":          fmt.Sprintf("Too many failed attempts. Account is locked for %d more minutes.", remainingMinutes),
+		"lockedUntil":      lockedUntil.Format(time.RFC3339),
+		"remainingMinutes": remainingMinutes,
+	})
 }
 
 // handleResetLockout allows administrators to manually reset account lockouts

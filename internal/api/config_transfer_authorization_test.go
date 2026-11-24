@@ -288,6 +288,60 @@ func TestConfigTransferAuthorizedInstanceModesReachHandler(t *testing.T) {
 	})
 }
 
+// Export and import test the administrator password outside CheckAuth. They
+// must share sign-in's lockout, or they answer password guesses without limit
+// to a caller with no credential at all.
+func TestConfigTransferBasicPasswordGuessesMeetSignInLockout(t *testing.T) {
+	const password = "SyntheticPassword!1"
+	hash, err := internalauth.HashPassword(password)
+	if err != nil {
+		t.Fatalf("hash password: %v", err)
+	}
+	dataDir := t.TempDir()
+	t.Setenv("PULSE_DATA_DIR", dataDir)
+	cfg := &config.Config{DataPath: dataDir, ConfigPath: dataDir, AuthUser: "admin", AuthPass: hash}
+	router := newTestRouter(t, cfg, nil, nil, nil, nil, "test")
+	cleanupTestRouter(t, router)
+	resetFailedLogins()
+	t.Cleanup(resetFailedLogins)
+
+	attempt := func(path, address, guess string) (int, int) {
+		body := &countingConfigTransferBody{reader: strings.NewReader(`{not-json`)}
+		req := httptest.NewRequest(http.MethodPost, path, body)
+		req.RemoteAddr = address + ":54321"
+		req.SetBasicAuth("admin", guess)
+		rec := httptest.NewRecorder()
+		router.Handler().ServeHTTP(rec, req)
+		return rec.Code, body.reads
+	}
+
+	for i := 0; i < maxFailedAttempts; i++ {
+		path := []string{"/api/config/export", "/api/config/import"}[i%2]
+		if code, reads := attempt(path, "203.0.113."+strconv.Itoa(10+i), "wrong-guess"); code != http.StatusUnauthorized || reads != 0 {
+			t.Fatalf("wrong guess %d on %s = status %d, reads %d, want 401 before any read", i+1, path, code, reads)
+		}
+	}
+	if _, _, locked := GetLockoutInfo("admin"); !locked {
+		t.Fatalf("%d wrong passwords from different addresses did not lock the account", maxFailedAttempts)
+	}
+	for _, path := range []string{"/api/config/export", "/api/config/import"} {
+		if code, reads := attempt(path, "203.0.113.200", password); code != http.StatusForbidden || reads != 0 {
+			t.Errorf("%s on a locked account = status %d, reads %d, want 403 before any read", path, code, reads)
+		}
+	}
+
+	resetFailedLogins()
+	if code, _ := attempt("/api/config/export", "203.0.113.201", "wrong-guess"); code != http.StatusUnauthorized {
+		t.Fatalf("wrong guess = %d, want 401", code)
+	}
+	if code, reads := attempt("/api/config/export", "203.0.113.201", password); code != http.StatusBadRequest || reads == 0 {
+		t.Fatalf("right password after one wrong guess = status %d, reads %d, want the handler's 400", code, reads)
+	}
+	if attempts, _, _ := GetLockoutInfo("admin"); attempts != 0 {
+		t.Fatalf("successful Basic authentication left %d failed attempts on the account", attempts)
+	}
+}
+
 func TestConfigTransferTokenScopesAndOrganizationBinding(t *testing.T) {
 	readRaw := "synthetic-read-token-123.12345678"
 	writeRaw := "synthetic-write-token-123.12345678"
