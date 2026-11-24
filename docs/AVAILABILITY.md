@@ -17,6 +17,7 @@ successful HTTP response does not prove every business operation succeeds.
 | Can this location connect to the service port? | TCP | A connection is not an application transaction. |
 | Does this UDP service return the expected response? | UDP, response required | Configure the request and expected response for that service. |
 | Is there evidence a UDP port is closed? | UDP, open or filtered | Silence is indeterminate, not proof of reachability. |
+| Does this DNS server resolve names as expected? | DNS | Tests the configured resolver over UDP or TCP (default port 53) and checks RCODE and optional expected record answers. |
 | Does this web endpoint respond with an acceptable status? | HTTP or HTTPS | Pick a useful health path rather than assuming a landing page proves application health. |
 | Is this HTTPS certificate valid and approaching expiry? | HTTPS | Certificate checks are enabled by default, with a 30-day warning unless overridden or disabled. |
 
@@ -92,22 +93,13 @@ availability of every service.
 
 ## Check that DNS answers correctly
 
-A TCP check on port 53 checks the listener, not name resolution. UDP checks
-send literal UTF-8, without decoding hex or escapes, and can match a reply
-byte for byte. With no expected response, any reply counts. Pulse does not
-parse DNS response codes or verify record values.
+Use the **DNS** probe protocol (or the **DNS resolver** preset) to verify that a resolver such as Pi-hole, AdGuard Home, Technitium, or Unbound answers queries correctly.
 
-If you have a private health endpoint that can run this check, let it test DNS
-and let Pulse monitor its result:
+1. Set **Address** to the DNS server IP or hostname (and **Port** if it listens on a port other than `53`).
+2. Set **Query hostname** to a domain the resolver should answer (for example, `example.com` or an internal hostname such as `nas.home.arpa`).
+3. Choose the **Record type** (`A`, `AAAA`, `CNAME`, `TXT`, `MX`, `NS`, `SRV`, or `PTR`) and **Transport** (`UDP` or `TCP`).
+4. Optionally set **Expected answer** to verify that at least one returned record matches a specific IP, target host, or TXT substring.
 
-1. Have the endpoint query the intended resolver for a known record and check
-   the expected answer on each request. Return `200` only for a correct answer
-   and `503` for a timeout, DNS error or wrong answer.
-2. Point an HTTP or HTTPS availability check directly at that health path,
-   not at the DNS server's admin page. Set **Request method** to **GET** and
-   set both **Accepted status from** and **Accepted status to** to `200`. A
-   `503` fails the application check even though the HTTP endpoint answered.
+Pulse records transport reachability separately from DNS answer validation. A timeout or refused socket marks the resolver unreachable, while a `SERVFAIL`, `NXDOMAIN`, empty answer set, or value mismatch records that the resolver answered but failed the DNS check.
 
-The DNS query runs from the health endpoint's network location, not from Pulse.
-Choose the endpoint's location to match the DNS path you want to check. No Pulse
-agent is required on the DNS server.
+Native DNS checks run locally on the Pulse server in Community, and run from remote host agents when **Observation locations** are configured with Pro. No Pulse agent is required on the DNS server itself.

@@ -12281,3 +12281,11 @@ Older agents that omit these optional fields remain wire-compatible and fall
 back to `balloon.current`/`balloon.maximum`. Collection remains strictly
 read-only with no VM lifecycle or configuration authority. Verified by
 `TestCollectLibvirtInventoryUsesReadOnlyBoundedBulkStats`.
+
+
+### Native DNS resolution availability checks (24 November 2026)
+
+`internal/api/availability_handlers.go` accepts and validates `protocol: "dns"`
+with `dns` configuration (`queryName`, `recordType`, `transport`, `expectedValue`).
+Remote Pro host agents inherit native DNS probing automatically through the shared
+`availabilityprobe.DetailedResult` contract without any protocol wire break.

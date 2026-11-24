@@ -11781,3 +11781,11 @@ rows and avoids truncating host names on 390px phones. Verified by
 `StandaloneVirtualMachinesTable.test.tsx`, `AgentsMachinesTable.test.tsx`,
 `lint:canonical-platforms`, `lint:table-rows`, and
 `frontend-modern/browser-verification/9b345049621d9e89.json`.
+
+
+### Native DNS resolution availability checks (24 November 2026)
+
+`frontend-modern/src/components/Settings/availabilitySettingsModel.ts` includes
+DNS protocol labels and summaries for `protocol: "dns"` targets alongside the
+existing HTTP, HTTPS, TCP, and ICMP check types. Shared settings panel layout
+and primitives are unchanged.

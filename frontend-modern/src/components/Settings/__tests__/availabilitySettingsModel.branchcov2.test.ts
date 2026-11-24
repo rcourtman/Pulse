@@ -223,8 +223,16 @@ describe('getAvailabilityTargetMethodLabel', () => {
     expect(getAvailabilityTargetMethodLabel(target({ protocol: 'http' }))).toBe('HTTP check');
   });
 
-  it('uppercases an unrecognised but valid protocol via the default arm (https)', () => {
-    expect(getAvailabilityTargetMethodLabel(target({ protocol: 'https' }))).toBe('HTTPS');
+  it("returns 'HTTPS check' for an https target", () => {
+    expect(getAvailabilityTargetMethodLabel(target({ protocol: 'https' }))).toBe('HTTPS check');
+  });
+
+  it("returns 'DNS A' or 'DNS' for a dns target", () => {
+    expect(
+      getAvailabilityTargetMethodLabel(
+        target({ protocol: 'dns', dns: { queryName: 'example.com', recordType: 'AAAA' } }),
+      ),
+    ).toBe('DNS AAAA');
   });
 
   it('uppercases an arbitrary protocol string via the default arm (cast)', () => {

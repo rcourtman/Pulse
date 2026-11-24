@@ -982,6 +982,7 @@ Supported protocols:
 | `ping` | API input alias for `icmp`; saved targets return `icmp` | `address` |
 | `tcp` | A reachable port such as MQTT, SSH, or a custom service | `address`, `port` |
 | `udp` | A request/response UDP service, or an open-or-filtered observation | `address`, `port`, UDP result policy |
+| `dns` | Native DNS resolution check against a resolver (for example Pi-hole, AdGuard Home, or Unbound) | `address`, optional `port` (defaults to `53`), `dns.queryName` |
 | `http` / `https` | Web UI or health endpoint availability | `address`, optional `port`, optional `path` |
 
 Saved targets include `name`, `targetKind` (`service`, `machine`, `router`,

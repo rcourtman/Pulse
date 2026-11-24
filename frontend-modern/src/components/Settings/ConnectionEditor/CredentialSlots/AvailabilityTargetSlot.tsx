@@ -13,6 +13,8 @@ import { FormSelect } from '@/components/shared/FormSelect';
 import { FormTextarea } from '@/components/shared/FormTextarea';
 import {
   AvailabilityTargetsAPI,
+  type AvailabilityDNSRecordType,
+  type AvailabilityDNSTransport,
   type AvailabilityProbeProtocol,
   type AvailabilityHTTPAuthType,
   type AvailabilityHTTPMethod,
@@ -66,6 +68,10 @@ interface AvailabilityForm {
   udpMode: AvailabilityUDPMode;
   udpRequest: string;
   udpExpectedResponse: string;
+  dnsQueryName: string;
+  dnsRecordType: AvailabilityDNSRecordType;
+  dnsTransport: AvailabilityDNSTransport;
+  dnsExpectedValue: string;
   linkedResourceId: string;
   observationLocationIds: string[];
   enabled: boolean;
@@ -130,6 +136,10 @@ const newAvailabilityForm = (
   udpMode: 'response_required',
   udpRequest: '',
   udpExpectedResponse: '',
+  dnsQueryName: '',
+  dnsRecordType: 'A',
+  dnsTransport: 'udp',
+  dnsExpectedValue: '',
   linkedResourceId: '',
   observationLocationIds: [LOCAL_OBSERVATION_LOCATION_ID],
   enabled: true,
@@ -171,6 +181,10 @@ const formFromTarget = (target: AvailabilityTarget): AvailabilityForm => {
     udpMode: target.udpMode ?? 'response_required',
     udpRequest: target.udpRequest ?? '',
     udpExpectedResponse: target.udpExpectedResponse ?? '',
+    dnsQueryName: target.dns?.queryName ?? '',
+    dnsRecordType: target.dns?.recordType ?? 'A',
+    dnsTransport: target.dns?.transport ?? 'udp',
+    dnsExpectedValue: target.dns?.expectedValue ?? '',
     linkedResourceId: target.linkedResourceId ?? '',
     observationLocationIds: target.observationLocationIds?.length
       ? [...target.observationLocationIds]
@@ -212,11 +226,16 @@ const parsePositiveInt = (value: string): number | undefined => {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined;
 };
 
-const availabilityTestSuccessDescription = (result: AvailabilityTestResponse): string => {
+const availabilityTestSuccessDescription = (
+  result: AvailabilityTestResponse,
+  protocol?: AvailabilityProbeProtocol,
+): string => {
   const application = result.application;
   const base =
     application?.outcome === 'passed'
-      ? `Endpoint answered in ${result.latencyMillis} ms and the application contract passed${application.statusCode ? ` (HTTP ${application.statusCode})` : ''}.`
+      ? protocol === 'dns'
+        ? `DNS server answered in ${result.latencyMillis} ms and returned a matching record.`
+        : `Endpoint answered in ${result.latencyMillis} ms and the application contract passed${application.statusCode ? ` (HTTP ${application.statusCode})` : ''}.`
       : `Probe reached the target in ${result.latencyMillis} ms.`;
   const certificate = result.certificate;
   if (!certificate) return base;
@@ -232,8 +251,14 @@ const availabilityTestSuccessDescription = (result: AvailabilityTestResponse): s
   })}.`;
 };
 
-const availabilityTestFailureDescription = (result: AvailabilityTestResponse): string => {
+const availabilityTestFailureDescription = (
+  result: AvailabilityTestResponse,
+  protocol?: AvailabilityProbeProtocol,
+): string => {
   if (result.transportOutcome === 'reachable' && result.application?.outcome === 'failed') {
+    if (protocol === 'dns' || result.application.failureCode?.startsWith('dns_')) {
+      return `DNS server answered in ${result.latencyMillis} ms, but the DNS check failed. ${result.error || 'The response did not satisfy the DNS query.'}`;
+    }
     const status = result.application.statusCode ? ` HTTP ${result.application.statusCode}.` : '';
     return `Endpoint answered in ${result.latencyMillis} ms, but the application contract failed.${status} ${result.error || 'The response did not satisfy the configured assertion.'}`;
   }
@@ -300,6 +325,15 @@ const payloadFromForm = (form: AvailabilityForm): AvailabilityTarget => {
             form.httpMethod !== 'HEAD' ? form.httpJSONEquals.trim() || undefined : undefined,
         }
       : undefined,
+    dns:
+      form.protocol === 'dns'
+        ? {
+            queryName: form.dnsQueryName.trim(),
+            recordType: form.dnsRecordType,
+            transport: form.dnsTransport,
+            expectedValue: form.dnsExpectedValue.trim() || undefined,
+          }
+        : undefined,
   };
 };
 
@@ -311,6 +345,10 @@ const presetSensitiveFormKeys: ReadonlySet<keyof AvailabilityForm> = new Set([
   'udpMode',
   'udpRequest',
   'udpExpectedResponse',
+  'dnsQueryName',
+  'dnsRecordType',
+  'dnsTransport',
+  'dnsExpectedValue',
 ]);
 
 const initialPresetForTargetKind = (
@@ -441,11 +479,17 @@ export const AvailabilityTargetSlot: Component<AvailabilityTargetSlotProps> = (p
     selectedPresetConfig()?.addressPlaceholder ??
     (form().protocol === 'http' || form().protocol === 'https'
       ? `${form().protocol}://service.local/status`
-      : (getAvailabilityTargetKindInfo(form().targetKind)?.addressPlaceholder ?? 'device.local'));
+      : form().protocol === 'dns'
+        ? '192.168.1.53'
+        : (getAvailabilityTargetKindInfo(form().targetKind)?.addressPlaceholder ?? 'device.local'));
 
   const portPlaceholder = () =>
     selectedPresetConfig()?.portPlaceholder ??
-    (form().protocol === 'http' || form().protocol === 'https' ? 'Optional' : '1883');
+    (form().protocol === 'http' || form().protocol === 'https'
+      ? 'Optional'
+      : form().protocol === 'dns'
+        ? '53 (default)'
+        : '1883');
 
   const namePlaceholder = () =>
     getAvailabilityTargetKindInfo(form().targetKind)?.namePlaceholder ?? 'energy-monitor';
@@ -630,6 +674,7 @@ export const AvailabilityTargetSlot: Component<AvailabilityTargetSlotProps> = (p
             <option value="icmp">ICMP ping</option>
             <option value="tcp">TCP port</option>
             <option value="udp">UDP datagram</option>
+            <option value="dns">DNS resolution</option>
             <option value="http">HTTP</option>
             <option value="https">HTTPS</option>
           </FormSelect>
@@ -637,7 +682,9 @@ export const AvailabilityTargetSlot: Component<AvailabilityTargetSlotProps> = (p
             <span class={formLabel}>
               {form().protocol === 'http' || form().protocol === 'https'
                 ? 'URL or host'
-                : 'Address'}
+                : form().protocol === 'dns'
+                  ? 'DNS server address'
+                  : 'Address'}
             </span>
             <input
               class={formControl}
@@ -652,7 +699,9 @@ export const AvailabilityTargetSlot: Component<AvailabilityTargetSlotProps> = (p
                   ? 'Use a hostname or IP address and the port to open.'
                   : form().protocol === 'udp'
                     ? 'Use a hostname or unicast IP. UDP checks send one small datagram per poll.'
-                    : 'Use a full URL or hostname, then define the accepted application response below.'}
+                    : form().protocol === 'dns'
+                      ? 'Use the DNS resolver IP or hostname (for example Pi-hole, AdGuard Home, or Unbound).'
+                      : 'Use a full URL or hostname, then define the accepted application response below.'}
             </span>
           </label>
           <FormSelect
@@ -770,6 +819,80 @@ export const AvailabilityTargetSlot: Component<AvailabilityTargetSlotProps> = (p
                 placeholder={portPlaceholder()}
               />
             </label>
+          </Show>
+          <Show when={form().protocol === 'dns'}>
+            <section
+              class="space-y-4 rounded-lg border border-border p-4 sm:col-span-2"
+              data-testid="availability-dns-section"
+            >
+              <div>
+                <h3 class="text-sm font-semibold text-base-content">DNS query</h3>
+                <p class="mt-1 text-xs text-muted">
+                  Send a real DNS query to this resolver and verify that it returns NOERROR with at
+                  least one matching record.
+                </p>
+              </div>
+              <div class="grid gap-4 sm:grid-cols-3">
+                <label class={`${formField} sm:col-span-2`}>
+                  <span class={formLabel}>Query hostname</span>
+                  <input
+                    class={formControl}
+                    value={form().dnsQueryName}
+                    onInput={(event) => updateForm({ dnsQueryName: event.currentTarget.value })}
+                    placeholder="example.com or nas.home.arpa"
+                    data-testid="availability-dns-query-name"
+                  />
+                </label>
+                <FormSelect
+                  label="Record type"
+                  value={form().dnsRecordType}
+                  onChange={(event) =>
+                    updateForm({
+                      dnsRecordType: event.currentTarget.value as AvailabilityDNSRecordType,
+                    })
+                  }
+                  data-testid="availability-dns-record-type"
+                >
+                  <option value="A">A</option>
+                  <option value="AAAA">AAAA</option>
+                  <option value="CNAME">CNAME</option>
+                  <option value="TXT">TXT</option>
+                  <option value="MX">MX</option>
+                  <option value="NS">NS</option>
+                  <option value="SRV">SRV</option>
+                  <option value="PTR">PTR</option>
+                </FormSelect>
+              </div>
+              <div class="grid gap-4 sm:grid-cols-3">
+                <FormSelect
+                  label="Transport"
+                  value={form().dnsTransport}
+                  onChange={(event) =>
+                    updateForm({
+                      dnsTransport: event.currentTarget.value as AvailabilityDNSTransport,
+                    })
+                  }
+                  data-testid="availability-dns-transport"
+                >
+                  <option value="udp">UDP (default)</option>
+                  <option value="tcp">TCP</option>
+                </FormSelect>
+                <label class={`${formField} sm:col-span-2`}>
+                  <span class={formLabel}>Expected answer (optional)</span>
+                  <input
+                    class={formControl}
+                    value={form().dnsExpectedValue}
+                    onInput={(event) => updateForm({ dnsExpectedValue: event.currentTarget.value })}
+                    placeholder="192.168.1.50"
+                    data-testid="availability-dns-expected-value"
+                  />
+                  <span class={formHelpText}>
+                    Leave empty to accept any valid record of that type, or enter an IP, target
+                    hostname, or TXT substring to match.
+                  </span>
+                </label>
+              </div>
+            </section>
           </Show>
           <Show when={form().protocol === 'http' || form().protocol === 'https'}>
             <label class={formField}>
@@ -1164,8 +1287,8 @@ export const AvailabilityTargetSlot: Component<AvailabilityTargetSlotProps> = (p
                   result().outcome === 'indeterminate'
                     ? `No UDP rejection was received in ${result().latencyMillis} ms. The port is open or filtered, not proven reachable.`
                     : result().success
-                      ? availabilityTestSuccessDescription(result())
-                      : availabilityTestFailureDescription(result())
+                      ? availabilityTestSuccessDescription(result(), form().protocol)
+                      : availabilityTestFailureDescription(result(), form().protocol)
                 }
               />
             )}

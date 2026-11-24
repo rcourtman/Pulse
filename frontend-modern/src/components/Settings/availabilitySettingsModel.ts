@@ -112,6 +112,12 @@ export function getAvailabilityTargetMethodLabel(target: AvailabilityTarget): st
       return target.port ? `UDP ${target.port}` : 'UDP port';
     case 'http':
       return 'HTTP check';
+    case 'https':
+      return 'HTTPS check';
+    case 'dns': {
+      const recordType = target.dns?.recordType?.trim().toUpperCase() || 'A';
+      return `DNS ${recordType}`;
+    }
     default:
       return String(target.protocol).toUpperCase();
   }
@@ -132,6 +138,12 @@ export function getAvailabilityTargetAddressLabel(target: AvailabilityTarget): s
       return `${normalizedAddress}${normalizedPath}`;
     }
     return target.address;
+  }
+  if (target.protocol === 'dns') {
+    const query = target.dns?.queryName?.trim();
+    const server =
+      target.port && target.port !== 53 ? `${target.address}:${target.port}` : target.address;
+    return query ? `${query} @ ${server}` : server;
   }
   if ((target.protocol === 'tcp' || target.protocol === 'udp') && target.port) {
     return `${target.address}:${target.port}`;

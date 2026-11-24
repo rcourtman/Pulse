@@ -81,9 +81,27 @@ const (
 	AvailabilityProbeHTTP  AvailabilityProbeProtocol = "http"
 	AvailabilityProbeHTTPS AvailabilityProbeProtocol = "https"
 	AvailabilityProbeUDP   AvailabilityProbeProtocol = "udp"
+	AvailabilityProbeDNS   AvailabilityProbeProtocol = "dns"
 
 	availabilityProbePingAlias AvailabilityProbeProtocol = "ping"
+	DefaultAvailabilityDNSPort                           = 53
 )
+
+type AvailabilityDNSTransport string
+
+const (
+	AvailabilityDNSTransportUDP AvailabilityDNSTransport = "udp"
+	AvailabilityDNSTransportTCP AvailabilityDNSTransport = "tcp"
+)
+
+// AvailabilityDNSConfig defines a native DNS resolution check sent to the
+// target address (the DNS resolver) on its configured port (default 53).
+type AvailabilityDNSConfig struct {
+	QueryName     string                   `json:"queryName"`
+	RecordType    string                   `json:"recordType,omitempty"`
+	Transport     AvailabilityDNSTransport `json:"transport,omitempty"`
+	ExpectedValue string                   `json:"expectedValue,omitempty"`
+}
 
 type AvailabilityUDPMode string
 
@@ -160,6 +178,9 @@ type AvailabilityTarget struct {
 	// header values are encrypted with the rest of availability target storage
 	// and are never returned by the API.
 	HTTP *AvailabilityHTTPConfig `json:"http,omitempty"`
+	// DNS defines the query name, record type, transport, and optional expected
+	// answer for protocol "dns" targets.
+	DNS *AvailabilityDNSConfig `json:"dns,omitempty"`
 	// DockerPort is set on a check Pulse created from a container's published
 	// port. It is absent on checks an operator typed in.
 	DockerPort *AvailabilityDockerPortSource `json:"dockerPort,omitempty"`
@@ -210,6 +231,19 @@ func (t *AvailabilityTarget) ApplyDefaults() {
 		t.UDPMode = normalizeAvailabilityUDPMode(t.UDPMode)
 		if t.UDPMode == "" {
 			t.UDPMode = AvailabilityUDPResponseRequired
+		}
+	}
+	if t.Protocol == AvailabilityProbeDNS {
+		if t.Port == 0 {
+			t.Port = DefaultAvailabilityDNSPort
+		}
+		if t.DNS != nil {
+			if strings.TrimSpace(t.DNS.RecordType) == "" {
+				t.DNS.RecordType = "A"
+			}
+			if strings.TrimSpace(string(t.DNS.Transport)) == "" {
+				t.DNS.Transport = AvailabilityDNSTransportUDP
+			}
 		}
 	}
 	if t.HTTP != nil {
@@ -269,6 +303,7 @@ func AvailabilityExecutionConfigChanged(previous, next AvailabilityTarget) bool 
 		previous.UDPRequest != next.UDPRequest ||
 		previous.UDPExpected != next.UDPExpected ||
 		!reflect.DeepEqual(previous.HTTP, next.HTTP) ||
+		!reflect.DeepEqual(previous.DNS, next.DNS) ||
 		previous.EffectiveTimeoutMillis() != next.EffectiveTimeoutMillis() ||
 		previous.EffectivePollIntervalSecs() != next.EffectivePollIntervalSecs() ||
 		legacyProbeAssignmentChanged ||
@@ -380,6 +415,10 @@ func (t AvailabilityTarget) Validate() error {
 		if t.Port < 0 || t.Port > 65535 {
 			return fmt.Errorf("http availability target port must be valid")
 		}
+	case AvailabilityProbeDNS:
+		if t.Port < 0 || t.Port > 65535 {
+			return fmt.Errorf("dns availability target port must be valid")
+		}
 	default:
 		return fmt.Errorf("unsupported availability protocol %q", t.Protocol)
 	}
@@ -408,6 +447,13 @@ func (t AvailabilityTarget) Validate() error {
 		}
 	} else if t.HTTP != nil {
 		return fmt.Errorf("HTTP response contracts may only be used with HTTP or HTTPS availability targets")
+	}
+	if protocol == AvailabilityProbeDNS {
+		if err := validateAvailabilityDNSConfig(t.DNS); err != nil {
+			return err
+		}
+	} else if t.DNS != nil {
+		return fmt.Errorf("DNS settings may only be used with DNS availability targets")
 	}
 	if protocol != AvailabilityProbeHTTPS && (t.CertificateMonitoringDisabled || t.CertificateExpiryWarningDays != 0) {
 		return fmt.Errorf("certificate monitoring settings may only be used with HTTPS availability targets")
@@ -557,6 +603,17 @@ func NormalizeAvailabilityTarget(target AvailabilityTarget) AvailabilityTarget {
 	if target.Protocol != AvailabilityProbeHTTP && target.Protocol != AvailabilityProbeHTTPS {
 		target.HTTP = nil
 	}
+	if target.DNS != nil {
+		dnsCopy := *target.DNS
+		dnsCopy.QueryName = strings.TrimSpace(dnsCopy.QueryName)
+		dnsCopy.RecordType = strings.ToUpper(strings.TrimSpace(dnsCopy.RecordType))
+		dnsCopy.Transport = AvailabilityDNSTransport(strings.ToLower(strings.TrimSpace(string(dnsCopy.Transport))))
+		dnsCopy.ExpectedValue = strings.TrimSpace(dnsCopy.ExpectedValue)
+		target.DNS = &dnsCopy
+	}
+	if target.Protocol != AvailabilityProbeDNS {
+		target.DNS = nil
+	}
 	target.DockerPort = normalizeAvailabilityDockerPortSource(target.DockerPort)
 	target.ApplyDefaults()
 	return target
@@ -595,6 +652,41 @@ func normalizeAvailabilityObservationLocationIDs(locationIDs []string) []string 
 		return locations[i] < locations[j]
 	})
 	return locations
+}
+
+func validateAvailabilityDNSConfig(dnsCfg *AvailabilityDNSConfig) error {
+	if dnsCfg == nil {
+		return fmt.Errorf("DNS availability targets require DNS query settings")
+	}
+	queryName := strings.TrimSpace(dnsCfg.QueryName)
+	if queryName == "" {
+		return fmt.Errorf("DNS query name is required")
+	}
+	if len(queryName) > 253 {
+		return fmt.Errorf("DNS query name must be 253 characters or less")
+	}
+	if strings.ContainsAny(queryName, " \t\r\n") {
+		return fmt.Errorf("DNS query name must not contain whitespace")
+	}
+	recordType := strings.ToUpper(strings.TrimSpace(dnsCfg.RecordType))
+	if recordType == "" {
+		recordType = "A"
+	}
+	switch recordType {
+	case "A", "AAAA", "CNAME", "TXT", "MX", "NS", "SRV", "PTR":
+	default:
+		return fmt.Errorf("unsupported DNS record type %q", dnsCfg.RecordType)
+	}
+	transport := AvailabilityDNSTransport(strings.ToLower(strings.TrimSpace(string(dnsCfg.Transport))))
+	switch transport {
+	case "", AvailabilityDNSTransportUDP, AvailabilityDNSTransportTCP:
+	default:
+		return fmt.Errorf("DNS transport must be udp or tcp")
+	}
+	if len(dnsCfg.ExpectedValue) > 512 {
+		return fmt.Errorf("DNS expected answer must be 512 characters or less")
+	}
+	return nil
 }
 
 func validateAvailabilityHTTPConfig(contract *AvailabilityHTTPConfig) error {

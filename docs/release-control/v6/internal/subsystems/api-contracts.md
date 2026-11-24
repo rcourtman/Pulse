@@ -15139,3 +15139,16 @@ recorded attempt diagnostics, use the separate settings-read
 audit row is not a verdict for the current queue entry. Permissions and action
 payloads are unchanged. `notification_queue_additional_test.go` checks the HTTP
 shape, recorded attempt class, persisted row and ID-based action responses.
+
+
+### Native DNS resolution availability checks (24 November 2026)
+
+`internal/api/availability_handlers.go`, `frontend-modern/src/api/availabilityTargets.ts`,
+`AvailabilityTargetSlot.tsx`, `availabilitySettingsModel.ts`, `docs/API.md`,
+`docs/AVAILABILITY.md`, `docs/CONFIGURATION.md`, and their mirrored copies under
+`frontend-modern/public/docs/` document and implement `protocol: "dns"` with
+`dns` (`queryName`, `recordType`, `transport`, optional `expectedValue`, default
+port `53`) on `/api/availability-targets` and `/api/availability-targets/test`.
+Verified by `internal/api/availability_handlers_test.go`,
+`AvailabilityTargetSlot.test.tsx`, `docsLinks.test.ts`, and
+`frontend-modern/browser-verification/d920ff2aaa7c5c9c.json`.

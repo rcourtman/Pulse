@@ -3,8 +3,18 @@ import type { ResourceCertificateObservation } from '@/types/resource';
 
 const AVAILABILITY_TARGETS_PATH = '/api/availability-targets';
 
-export type AvailabilityProbeProtocol = 'icmp' | 'tcp' | 'udp' | 'http' | 'https';
+export type AvailabilityProbeProtocol = 'icmp' | 'tcp' | 'udp' | 'http' | 'https' | 'dns';
 export type AvailabilityUDPMode = 'response_required' | 'open_or_filtered';
+export type AvailabilityDNSTransport = 'udp' | 'tcp';
+export type AvailabilityDNSRecordType =
+  'A' | 'AAAA' | 'CNAME' | 'TXT' | 'MX' | 'NS' | 'SRV' | 'PTR';
+
+export interface AvailabilityDNSConfig {
+  queryName: string;
+  recordType?: AvailabilityDNSRecordType;
+  transport?: AvailabilityDNSTransport;
+  expectedValue?: string;
+}
 /** What a check is on. `@/utils/availabilityTargetKinds` says what each one means. */
 export type AvailabilityTargetKind =
   'service' | 'machine' | 'router' | 'switch' | 'access_point' | 'device';
@@ -127,6 +137,7 @@ export interface AvailabilityTarget {
   observationLocationIds?: string[];
   http?: AvailabilityHTTPConfig;
   httpSecrets?: AvailabilityHTTPSecretState;
+  dns?: AvailabilityDNSConfig;
   status?: AvailabilityProbeStatus;
 }
 

@@ -10187,3 +10187,10 @@ persistence contracts under `internal/api/` are unchanged
 and `buildStandaloneHostVmsPath` for host-scoped `/standalone/vms?host=<id>`
 links from Machines. No storage, backup, or recovery persistence format or
 read/write path changes. Verified by `resourceLinks.test.ts`.
+
+
+### Native DNS resolution availability checks (24 November 2026)
+
+`internal/api/availability_handlers.go` persists `protocol: "dns"` and its `dns`
+configuration through the existing encrypted `availability_targets.enc` store.
+Backup, snapshot, and storage-recovery persistence formats are unchanged.

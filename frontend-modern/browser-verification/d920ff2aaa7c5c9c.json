@@ -1,0 +1,49 @@
+{
+  "version": 1,
+  "base_sha": "c3bbe9addda44841492bdad87ee3d3eadbe456b6",
+  "verified_at": "2026-11-24T00:19:43Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/api/availabilityTargets.ts",
+    "frontend-modern/src/components/Settings/ConnectionEditor/CredentialSlots/AvailabilityTargetSlot.tsx",
+    "frontend-modern/src/components/Settings/ConnectionEditor/availabilityTargetPresets.ts",
+    "frontend-modern/src/components/Settings/availabilitySettingsModel.ts",
+    "frontend-modern/src/utils/availabilityProbePresentation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/api/availabilityTargets.ts": "9387cec2b70bd63c4931457b812a89ab7e52774dbeb08bd39cf96247120310d3",
+    "frontend-modern/src/components/Settings/ConnectionEditor/CredentialSlots/AvailabilityTargetSlot.tsx": "4ba8604199ce6eb280a2567efcb1f859d828ea9f67512a1369fc347426074e81",
+    "frontend-modern/src/components/Settings/ConnectionEditor/availabilityTargetPresets.ts": "4dea94a0a5453a33a201c886ba1a1847da7b781ae41a2aa936d4b7a8ade075e1",
+    "frontend-modern/src/components/Settings/availabilitySettingsModel.ts": "9e91ba764414e52666dcf4604efca445afe3ef1fb6f8645bcf717e43e9f0022d",
+    "frontend-modern/src/utils/availabilityProbePresentation.ts": "6cdd1749c5fb68a0930f84aa86e7f8ff747507a140e599f144550d4145387c62"
+  },
+  "routes": [
+    "/settings/monitoring/availability",
+    "/settings/monitoring/availability?add=target&targetKind=service"
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 800
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Add check modal with DNS resolver preset selected (Probe=dns, Port=53, DNS query section visible)",
+    "Live Test probe success state against 1.1.1.1 displaying DNS-specific latency and record-match feedback",
+    "Live Test probe mismatch failure state displaying DNS expected-answer mismatch details",
+    "Saved DNS check row in Settings list showing Service, DNS A, and example.com @ 1.1.1.1",
+    "Reopened Edit check modal preserving saved DNS query name, record type, transport, and port",
+    "Mobile 390x844 responsive DNS form stacking and Escape dismissal with focus return to Manage button"
+  ],
+  "interactions": [
+    "selected DNS resolver preset and verified Probe, DNS server address label, Port 53, and DNS query fields",
+    "ran live Test probe against 1.1.1.1 for example.com A record and verified success feedback",
+    "entered wrong expected answer 127.0.0.1, ran Test probe, and verified mismatch feedback",
+    "cleared expected answer, saved DNS check, and verified persisted row in Availability checks list",
+    "reopened Manage dialog to verify DNS fields round-tripped cleanly, resized to 390x844, and dismissed with Escape"
+  ]
+}
