@@ -1710,6 +1710,46 @@ func aiSettingsUpdateTouchesProviderConfig(req AISettingsUpdateRequest) bool {
 		req.ClaudeSubscriptionEnabled != nil
 }
 
+// officialOpenAIBaseURL is where the OpenAI key goes while no custom base URL
+// is saved; the provider registry leaves that default empty.
+const officialOpenAIBaseURL = "https://api.openai.com/v1"
+
+// aiProviderWithSecretFollowingAddress names the provider whose stored secret
+// this update would carry to a different server. A write-only secret may be
+// reused while editing the same origin, but it must never follow an address
+// edit: otherwise changing only the base URL replays the stored credential to
+// whichever server the new address names.
+func aiProviderWithSecretFollowingAddress(previous, next *config.AIConfig, req AISettingsUpdateRequest) string {
+	address := func(cfg *config.AIConfig, provider string) string {
+		if baseURL := cfg.GetBaseURLForProvider(provider); baseURL != "" {
+			return baseURL
+		}
+		// Only OpenAI has neither a saved URL nor a registry default.
+		return officialOpenAIBaseURL
+	}
+	for _, provider := range []struct {
+		name    string
+		secret  string
+		entered *string
+	}{
+		{config.AIProviderOpenAI, next.OpenAIAPIKey, req.OpenAIAPIKey},
+		{config.AIProviderZai, next.ZaiAPIKey, req.ZaiAPIKey},
+		{config.AIProviderOllama, next.OllamaPassword, req.OllamaPassword},
+	} {
+		// Nothing is replayed when the secret was cleared or entered with
+		// this update, or when the provider is left without an endpoint.
+		if provider.secret == "" || provider.entered != nil || !next.HasProvider(provider.name) {
+			continue
+		}
+		previousURL := address(previous, provider.name)
+		nextURL := address(next, provider.name)
+		if previousURL != nextURL && !sameOrigin(previousURL, nextURL) {
+			return provider.name
+		}
+	}
+	return ""
+}
+
 func shouldRestartAIChat(req AISettingsUpdateRequest) bool {
 	return aiSettingsUpdateTouchesProviderConfig(req) ||
 		req.AutoFixModel != nil
@@ -2759,6 +2799,16 @@ func (h *AISettingsHandler) HandleUpdateAISettings(w http.ResponseWriter, r *htt
 		return
 	}
 
+	// Parse request. The body is read before the stored settings are loaded:
+	// the client decides when its body arrives, and a copy loaded first would
+	// be written back however much had changed in the meantime.
+	r.Body = http.MaxBytesReader(w, r.Body, 16*1024)
+	var req AISettingsUpdateRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
 	// Load existing settings
 	settings, err := h.loadAIConfig(r.Context())
 	if err != nil {
@@ -2774,14 +2824,6 @@ func (h *AISettingsHandler) HandleUpdateAISettings(w http.ResponseWriter, r *htt
 	// Shallow copy is fine — the detection helper only reads scalar
 	// fields (Enabled, PatrolModel, API keys).
 	originalSettings := *settings
-
-	// Parse request
-	r.Body = http.MaxBytesReader(w, r.Body, 16*1024)
-	var req AISettingsUpdateRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
-		return
-	}
 
 	// Validate and apply updates
 	if req.Model != nil {
@@ -2945,6 +2987,10 @@ func (h *AISettingsHandler) HandleUpdateAISettings(w http.ResponseWriter, r *htt
 			return
 		}
 		removedProviders[providerName] = struct{}{}
+	}
+	if provider := aiProviderWithSecretFollowingAddress(&originalSettings, settings, req); provider != "" {
+		http.Error(w, "Changing the "+config.AIProviderDisplayName(provider)+" base URL to a different server requires entering its credential again", http.StatusBadRequest)
+		return
 	}
 
 	if req.Enabled != nil {
@@ -3135,7 +3181,7 @@ func (h *AISettingsHandler) HandleUpdateAISettings(w http.ResponseWriter, r *htt
 	}
 
 	// Save settings
-	if err := h.getPersistence(r.Context()).SaveAIConfig(*settings); err != nil {
+	if err := h.saveAISettingsConfig(r.Context(), settings); err != nil {
 		log.Error().Err(err).Msg("Failed to save AI settings")
 		writeErrorResponse(w, http.StatusInternalServerError, "ai_settings_save_failed", "Failed to save Pulse Intelligence settings", nil)
 		return
@@ -5001,7 +5047,7 @@ func (h *AISettingsHandler) HandleOAuthDisconnect(w http.ResponseWriter, r *http
 	settings.AuthMethod = config.AuthMethodAPIKey
 
 	// Save settings
-	if err := persistence.SaveAIConfig(*settings); err != nil {
+	if err := h.saveAISettingsConfig(r.Context(), settings); err != nil {
 		log.Error().Err(err).Msg("Failed to save settings after OAuth disconnect")
 		http.Error(w, "Failed to save settings", http.StatusInternalServerError)
 		return
@@ -5750,6 +5796,8 @@ func (h *AISettingsHandler) HandlePatrolStream(w http.ResponseWriter, r *http.Re
 	}
 	ch := patrol.SubscribeToStreamFrom(lastID)
 	defer patrol.UnsubscribeFromStream(ch)
+	// tool_end events carry what the tool returned from the host.
+	toolOutputAllowed := patrolToolOutputAllowed(r.Context())
 
 	// Stream events until client disconnects
 	ctx := r.Context()
@@ -5769,6 +5817,9 @@ func (h *AISettingsHandler) HandlePatrolStream(w http.ResponseWriter, r *http.Re
 		case event, ok := <-ch:
 			if !ok {
 				return
+			}
+			if !toolOutputAllowed {
+				event.ToolOutput = ""
 			}
 			data, err := json.Marshal(event)
 			if err != nil {
@@ -6617,6 +6668,10 @@ func (h *AISettingsHandler) HandleResolveFinding(w http.ResponseWriter, r *http.
 	}
 
 	req.ResolutionNote = strings.TrimSpace(req.ResolutionNote)
+	if req.ResolutionNote != "" && !chat.HostCommandAuthorityFromContext(r.Context()) {
+		writeErrorResponse(w, http.StatusForbidden, "action_capability_denied", "Writing a finding resolution note requires permission to execute actions", nil)
+		return
+	}
 
 	if req.FindingID == "" {
 		writeFindingInvalidRequestResponse(w, "finding_id is required", map[string]string{"finding_id": "required"})
@@ -6765,6 +6820,12 @@ func (h *AISettingsHandler) HandleDismissFinding(w http.ResponseWriter, r *http.
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeFindingInvalidRequestResponse(w, "Invalid request body", nil)
+		return
+	}
+
+	req.Note = strings.TrimSpace(req.Note)
+	if req.Note != "" && !chat.HostCommandAuthorityFromContext(r.Context()) {
+		writeErrorResponse(w, http.StatusForbidden, "action_capability_denied", "Writing a dismissal note requires permission to execute actions", nil)
 		return
 	}
 
@@ -7054,6 +7115,34 @@ func (h *AISettingsHandler) HandleGetFindingsHistory(w http.ResponseWriter, r *h
 	}
 }
 
+// patrolToolOutputAllowed reports whether this caller may read what Patrol's
+// tools returned. Patrol and its investigations run host commands with no
+// caller bound, so their run records, stream events and investigation
+// transcripts hold file contents, logs and command output from monitored
+// hosts. Reading that needs the host-command authority the chat route requires
+// before the Assistant runs the same command, bound by
+// withAssistantActionAuthority on the route (absent means no). Run summaries,
+// findings and the model's own analysis stay readable by every caller.
+func patrolToolOutputAllowed(ctx context.Context) bool {
+	return chat.HostCommandAuthorityFromContext(ctx)
+}
+
+// withholdChatMessageToolOutput returns an investigation transcript message
+// without what its tools returned: tool call outputs and tool result bodies.
+// Tool identity, input, status and the tool_use_id linkage are preserved.
+func withholdChatMessageToolOutput(m ai.ChatMessage) ai.ChatMessage {
+	toolCalls := make([]ai.ChatToolCall, len(m.ToolCalls))
+	for i, call := range m.ToolCalls {
+		call.Output = ""
+		toolCalls[i] = call
+	}
+	m.ToolCalls = toolCalls
+	if m.ToolResult != nil {
+		m.ToolResult = &ai.ChatToolResult{ToolUseID: m.ToolResult.ToolUseID, IsError: m.ToolResult.IsError}
+	}
+	return m
+}
+
 // HandleGetPatrolRunHistory returns the history of patrol check runs (GET /api/ai/patrol/runs)
 func (h *AISettingsHandler) HandleGetPatrolRunHistory(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
@@ -7093,8 +7182,9 @@ func (h *AISettingsHandler) HandleGetPatrolRunHistory(w http.ResponseWriter, r *
 	runs := patrol.GetRunHistory(limit)
 
 	// By default, omit full tool call arrays to keep payloads lean.
-	// Use ?include=tool_calls to get the full array.
-	includeToolCalls := r.URL.Query().Get("include") == "tool_calls"
+	// Use ?include=tool_calls to get the full array. Tool calls carry host
+	// command output, so the caller also needs patrolToolOutputAllowed.
+	includeToolCalls := r.URL.Query().Get("include") == "tool_calls" && patrolToolOutputAllowed(r.Context())
 	if !includeToolCalls {
 		for i := range runs {
 			runs[i].ToolCalls = nil
@@ -7163,8 +7253,9 @@ func (h *AISettingsHandler) HandleGetPatrolRun(w http.ResponseWriter, r *http.Re
 	}
 
 	// By default, omit full tool call arrays to keep payloads lean.
-	// Use ?include=tool_calls to get the full array.
-	if r.URL.Query().Get("include") != "tool_calls" {
+	// Use ?include=tool_calls to get the full array. Tool calls carry host
+	// command output, so the caller also needs patrolToolOutputAllowed.
+	if r.URL.Query().Get("include") != "tool_calls" || !patrolToolOutputAllowed(r.Context()) {
 		run.ToolCalls = nil
 	}
 
@@ -8096,6 +8187,46 @@ func (h *AISettingsHandler) mutatePatrolAutopilotConfig(ctx context.Context, mut
 	return nil
 }
 
+// saveAISettingsConfig persists a settings change made on a copy of the AI
+// config that the caller loaded earlier. The same record carries the Patrol
+// autonomy authority, which only mutatePatrolAutopilotConfig may change, and
+// the caller's copy can be older than the stored one: it was held while a
+// provider catalog answered, or while another request changed the mode. The
+// authority is therefore taken from the stored record, inside the
+// policy-mutation coordinator, so a settings save can never put back a mode,
+// activation or acknowledgement ledger that has changed since it loaded.
+func (h *AISettingsHandler) saveAISettingsConfig(ctx context.Context, settings *config.AIConfig) error {
+	persistence := h.getPersistence(ctx)
+	if persistence == nil || settings == nil {
+		return fmt.Errorf("Pulse Assistant config persistence unavailable")
+	}
+	write := func() error {
+		current, err := h.loadAIConfig(ctx)
+		if err != nil {
+			return err
+		}
+		if current == nil {
+			return fmt.Errorf("Pulse Patrol config not configured")
+		}
+		settings.PatrolAutonomyLevel = current.PatrolAutonomyLevel
+		settings.PatrolFullModeUnlocked = current.PatrolFullModeUnlocked
+		settings.PatrolAutopilotAcknowledgements = current.PatrolAutopilotAcknowledgements
+		settings.PatrolAutopilotRevocations = current.PatrolAutopilotRevocations
+		settings.PatrolAutopilotActivation = current.PatrolAutopilotActivation
+		settings.PatrolActionEmergencyStop = current.PatrolActionEmergencyStop
+		settings.PatrolInvestigationBudget = current.PatrolInvestigationBudget
+		settings.PatrolInvestigationTimeoutSec = current.PatrolInvestigationTimeoutSec
+		return persistence.SaveAIConfig(*settings)
+	}
+	h.stateMu.RLock()
+	coordinator := h.policyMutation
+	h.stateMu.RUnlock()
+	if coordinator != nil {
+		return coordinator(write)
+	}
+	return write()
+}
+
 // patrolAutonomyResponseForConfig projects the stored settings. defaultApplied
 // is the runtime's own decision (never chosen and positively licensed), so the
 // response cannot disagree with the mode Patrol actually runs.
@@ -8558,8 +8689,12 @@ func (h *AISettingsHandler) HandleGetInvestigationMessages(w http.ResponseWriter
 		writeErrorResponse(w, http.StatusInternalServerError, "fetch_failed", "Failed to get investigation messages", nil)
 		return
 	}
+	toolOutputAllowed := patrolToolOutputAllowed(r.Context())
 	for i := range messages {
 		messages[i] = messages[i].NormalizeCollections()
+		if !toolOutputAllowed {
+			messages[i] = withholdChatMessageToolOutput(messages[i])
+		}
 	}
 	normalizedInvestigation := investigation.NormalizeCollections()
 

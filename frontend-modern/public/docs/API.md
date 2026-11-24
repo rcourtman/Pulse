@@ -1821,6 +1821,9 @@ Runs a focused investigation for an alert payload (used by the UI).
     `optional_context`, and optional canonical `resource_ids`. `PATCH` also
     accepts `status` (`active`, `paused`, or `archived`) and requires the
     current `revision` in its JSON body.
+  - Creating, changing and deleting an objective needs permission to execute
+    actions: Patrol reads objective text on runs that can run commands on
+    hosts. Reading objectives does not.
   - Responses include server-derived `coverage` (`covered`, `degraded`, or
     `uncovered`) and observer lifecycle state. Clients cannot submit either
     field or mark an objective covered. A saved objective remains uncovered
@@ -1836,18 +1839,24 @@ Runs a focused investigation for an alert payload (used by the UI).
     `?include=tool_calls`. Returns `400` when the ID is empty, `404`
     (`not_found`) when no retained run has that ID, and `503`
     (`service_unavailable`) when the Patrol service is unavailable.
+  - Tool calls hold what Patrol read from monitored hosts (file contents, logs
+    and command output). Both run routes return them only to a caller with
+    permission to execute actions, as running a command on a host through the
+    Assistant needs. Other callers get the run without `tool_calls`, even with
+    `?include=tool_calls`.
 - `GET /api/ai/patrol/stream` (`ai:execute`)
   - Server-sent events for live Patrol progress. Send `Last-Event-ID` (or the
     `last_event_id` query parameter) to resume after the last event `id`;
-    replay is best-effort.
+    replay is best-effort. `tool_end` events carry `tool_output` only for a
+    caller with permission to execute actions.
 - `POST /api/ai/patrol/run` (admin, `ai:execute`)
   - Community installs are limited to one successful full run per hour and
     get `429 patrol_rate_limited` until it has passed. Pro and Cloud have no
     cap.
 - `POST /api/ai/patrol/acknowledge` (`ai:execute`)
-- `POST /api/ai/patrol/dismiss`
-- `POST /api/ai/patrol/findings/note`
-- `POST /api/ai/patrol/resolve`
+- `POST /api/ai/patrol/dismiss` (optional `note` requires permission to execute actions)
+- `POST /api/ai/patrol/findings/note` (`ai:execute`, and permission to execute actions: Patrol reads the note)
+- `POST /api/ai/patrol/resolve` (optional `resolution_note` requires permission to execute actions)
 - `POST /api/ai/patrol/snooze` (`ai:execute`)
 - `POST /api/ai/patrol/suppress` (`ai:execute`)
 - `GET /api/ai/patrol/suppressions` (`ai:execute`)
@@ -1864,6 +1873,9 @@ accepted on the acknowledge, dismiss and snooze routes.
 - `GET /api/ai/unified/findings`
 - `GET /api/ai/findings/{id}/investigation`
 - `GET /api/ai/findings/{id}/investigation/messages`
+  - Tool outputs and tool result bodies are returned only to a caller with
+    permission to execute actions. Other callers get the transcript without
+    them.
 - `POST /api/ai/findings/{id}/reinvestigate` (Pro, `ai:execute`, and permission to plan and execute actions)
   - Needs the `ai_autofix` entitlement (`402 license_required` otherwise) and a
     Patrol mode other than Watch only (`400 autonomy_disabled`). Returns
@@ -1914,6 +1926,10 @@ accepted on the acknowledge, dismiss and snooze routes.
 - `GET /api/ai/knowledge/export?guest_id=<id>`
 - `POST /api/ai/knowledge/import`
 - `POST /api/ai/knowledge/clear`
+
+Patrol reads saved notes on runs that can run commands on hosts, so `save`,
+`delete`, `import` and `clear` need `ai:execute` and permission to execute
+actions, as on the Actions routes. Reading and exporting notes needs `ai:chat`.
 
 ### Debug
 - `GET /api/ai/debug/context` (admin)

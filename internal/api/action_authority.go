@@ -270,6 +270,13 @@ type assistantActionPlanAuthorityContextKey struct{}
 //
 // Everyone who can chat keeps the Assistant for Pulse's own data. The turn is
 // stored in a session, so the caller's session access is bound here as well.
+//
+// The routes that read back what Patrol's unbound runs got from hosts (run
+// tool calls, stream tool output, investigation transcripts) bind it too and
+// serve that output only with the host-command authority
+// (patrolToolOutputAllowed). Dismiss and resolve routes also bind it so
+// callers without host-command authority cannot write free-text notes into
+// Patrol's prompt context.
 func withAssistantActionAuthority(cfg *config.Config, authorizer auth.Authorizer, handler http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		hostCommands := requestHasActionCapability(cfg, authorizer, r, auth.ActionExecute)

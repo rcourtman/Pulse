@@ -1188,7 +1188,9 @@ func (r *Router) routeAIFindings(w http.ResponseWriter, req *http.Request) {
 		if !ensureRelayMobileRuntimeRoute(w, req, relayMobileRouteFindingInvestigationMessages) {
 			return
 		}
-		r.aiSettingsHandler.HandleGetInvestigationMessages(w, req)
+		// The transcript holds host command output: bound as on the Patrol
+		// stream and run routes.
+		withAssistantActionAuthority(r.config, r.authorizer, r.aiSettingsHandler.HandleGetInvestigationMessages)(w, req)
 	case strings.HasSuffix(path, "/investigation"):
 		if !ensureRelayMobileRuntimeRoute(w, req, relayMobileRouteFindingInvestigation) {
 			return
