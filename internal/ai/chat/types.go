@@ -21,6 +21,9 @@ type Session struct {
 	MessageCount   int                    `json:"message_count,omitempty"`
 	System         bool                   `json:"system,omitempty"`
 	HandoffSummary *SessionHandoffSummary `json:"handoff_summary,omitempty"`
+	// Owner is the caller the session belongs to (SessionAccess.Owner). It
+	// decides who may use the session and is not part of the client payload.
+	Owner string `json:"-"`
 }
 
 // IsSystemSessionID reports whether a session ID belongs to a Pulse-owned

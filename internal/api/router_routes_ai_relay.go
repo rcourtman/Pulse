@@ -265,8 +265,9 @@ func (r *Router) registerAIRelayRoutesGroup() {
 	r.mux.HandleFunc("/api/ai/chat", RequireAuth(r.config, requireRelayMobileRuntimeRoute(relayMobileRouteChatSend,
 		retainTokenStreamAuthorityForScopes(r.config, relayMobileRuntimeRouteSpecFor(relayMobileRouteChatSend).compatibleScopes(), false,
 			withAssistantActionAuthority(r.config, r.authorizer, r.aiHandler.HandleChat)))))
-	r.mux.HandleFunc("/api/ai/sessions", RequireAuth(r.config, r.routeAISessionsCollection))
-	r.mux.HandleFunc("/api/ai/sessions/", RequireAuth(r.config, r.routeAISessions))
+	// SECURITY: A session belongs to the caller who started it; see withAssistantSessionAccess.
+	r.mux.HandleFunc("/api/ai/sessions", RequireAuth(r.config, withAssistantSessionAccess(r.config, r.authorizer, r.routeAISessionsCollection)))
+	r.mux.HandleFunc("/api/ai/sessions/", RequireAuth(r.config, withAssistantSessionAccess(r.config, r.authorizer, r.routeAISessions)))
 
 	// AI approval review uses the same session authority as canonical Actions.
 	// Keep legacy AI/mobile token scopes at their existing per-route boundaries.

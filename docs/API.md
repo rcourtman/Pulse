@@ -1733,6 +1733,11 @@ agent, connect an MCP client through `pulse-mcp` instead.
 - `GET /api/ai/sessions/{id}/messages`
 - `POST /api/ai/sessions/{id}/abort`
 
+A session belongs to the user or API token that started it, and these routes list and open only
+the caller's own sessions. Any other session ID answers `404`. Callers with permission to execute
+actions see every session, including Patrol's background sessions and sessions saved before
+ownership was recorded.
+
 ### Kubernetes AI Analysis (Compatibility)
 `POST /api/ai/kubernetes/analyze`
 ```json

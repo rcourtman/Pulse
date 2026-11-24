@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"strconv"
@@ -368,7 +369,9 @@ func (h *AIHandler) GetUnifiedStoreForOrg(orgID string) *unified.UnifiedStore {
 	return nil
 }
 
-// SetReadState stores a unified read-state provider for injection into newly created chat services.
+// SetReadState stores the default organization's unified read-state provider
+// for injection into newly created chat services and re-points every running
+// chat service at its own organization's read state.
 func (h *AIHandler) SetReadState(rs unifiedresources.ReadState) {
 	if h == nil {
 		return
@@ -377,20 +380,24 @@ func (h *AIHandler) SetReadState(rs unifiedresources.ReadState) {
 	h.readState = rs
 	h.stateMu.Unlock()
 
-	var services []AIService
 	h.servicesMu.RLock()
-	if h.defaultService != nil {
-		services = append(services, h.defaultService)
-	}
-	for _, svc := range h.services {
+	defaultService := h.defaultService
+	services := make(map[string]AIService, len(h.services))
+	for orgID, svc := range h.services {
 		if svc != nil {
-			services = append(services, svc)
+			services[orgID] = svc
 		}
 	}
 	h.servicesMu.RUnlock()
-	for _, svc := range services {
+
+	if updater, ok := defaultService.(aiServiceReadStateUpdater); ok {
+		updater.SetReadState(h.readStateForOrg("default"))
+	}
+	// Security: rs belongs to the default org. Tenant services resolve their
+	// own read state and must never be handed the default org's.
+	for orgID, svc := range services {
 		if updater, ok := svc.(aiServiceReadStateUpdater); ok {
-			updater.SetReadState(rs)
+			updater.SetReadState(h.readStateForOrg(orgID))
 		}
 	}
 }
@@ -2431,6 +2438,7 @@ func (h *AIHandler) HandleChat(w http.ResponseWriter, r *http.Request) {
 
 	// Auth already handled by RequireAuth wrapper - no need to check again
 
+	r = r.WithContext(assistantSessionContext(r.Context()))
 	ctx := chat.WithExecuteAuthority(r.Context(), assistantExecuteAuthority(r.Context()))
 	if !h.IsRunning(ctx) {
 		http.Error(w, "Pulse Assistant is not running", http.StatusServiceUnavailable)
@@ -2749,7 +2757,7 @@ func (h *AIHandler) HandleChat(w http.ResponseWriter, r *http.Request) {
 
 // HandleSessions handles GET /api/ai/sessions - list sessions
 func (h *AIHandler) HandleSessions(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
+	ctx := assistantSessionContext(r.Context())
 	if !h.IsRunning(ctx) {
 		http.Error(w, "Pulse Assistant is not running", http.StatusServiceUnavailable)
 		return
@@ -2839,7 +2847,7 @@ func aiChatSessionSearchText(session chat.Session) string {
 
 // HandleCreateSession handles POST /api/ai/sessions - create session
 func (h *AIHandler) HandleCreateSession(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
+	ctx := assistantSessionContext(r.Context())
 	if !h.IsRunning(ctx) {
 		http.Error(w, "Pulse Assistant is not running", http.StatusServiceUnavailable)
 		return
@@ -2861,9 +2869,20 @@ func (h *AIHandler) HandleCreateSession(w http.ResponseWriter, r *http.Request) 
 	json.NewEncoder(w).Encode(session)
 }
 
+// writeAssistantSessionError answers a failed operation on one session. A
+// session that does not exist and one that belongs to another caller are the
+// same 404, so the route does not confirm which IDs are in use.
+func writeAssistantSessionError(w http.ResponseWriter, err error) {
+	if errors.Is(err, chat.ErrSessionNotFound) {
+		http.Error(w, "Session not found", http.StatusNotFound)
+		return
+	}
+	http.Error(w, sanitizeErrorForClient(err, "Internal server error"), http.StatusInternalServerError)
+}
+
 // HandleDeleteSession handles DELETE /api/ai/sessions/{id}
 func (h *AIHandler) HandleDeleteSession(w http.ResponseWriter, r *http.Request, sessionID string) {
-	ctx := r.Context()
+	ctx := assistantSessionContext(r.Context())
 	if !h.IsRunning(ctx) {
 		http.Error(w, "Pulse Assistant is not running", http.StatusServiceUnavailable)
 		return
@@ -2876,7 +2895,7 @@ func (h *AIHandler) HandleDeleteSession(w http.ResponseWriter, r *http.Request, 
 	}
 
 	if err := svc.DeleteSession(ctx, sessionID); err != nil {
-		http.Error(w, sanitizeErrorForClient(err, "Internal server error"), http.StatusInternalServerError)
+		writeAssistantSessionError(w, err)
 		return
 	}
 
@@ -2885,7 +2904,7 @@ func (h *AIHandler) HandleDeleteSession(w http.ResponseWriter, r *http.Request, 
 
 // HandleRenameSession handles PATCH /api/ai/sessions/{id}
 func (h *AIHandler) HandleRenameSession(w http.ResponseWriter, r *http.Request, sessionID string) {
-	ctx := r.Context()
+	ctx := assistantSessionContext(r.Context())
 	if !h.IsRunning(ctx) {
 		http.Error(w, "Pulse Assistant is not running", http.StatusServiceUnavailable)
 		return
@@ -2909,7 +2928,7 @@ func (h *AIHandler) HandleRenameSession(w http.ResponseWriter, r *http.Request, 
 
 	session, err := svc.RenameSession(ctx, sessionID, req.Title)
 	if err != nil {
-		http.Error(w, sanitizeErrorForClient(err, "Internal server error"), http.StatusInternalServerError)
+		writeAssistantSessionError(w, err)
 		return
 	}
 
@@ -2919,7 +2938,7 @@ func (h *AIHandler) HandleRenameSession(w http.ResponseWriter, r *http.Request, 
 
 // HandleMessages handles GET /api/ai/sessions/{id}/messages
 func (h *AIHandler) HandleMessages(w http.ResponseWriter, r *http.Request, sessionID string) {
-	ctx := r.Context()
+	ctx := assistantSessionContext(r.Context())
 	if !h.IsRunning(ctx) {
 		http.Error(w, "Pulse Assistant is not running", http.StatusServiceUnavailable)
 		return
@@ -2933,7 +2952,7 @@ func (h *AIHandler) HandleMessages(w http.ResponseWriter, r *http.Request, sessi
 
 	messages, err := svc.GetMessages(ctx, sessionID)
 	if err != nil {
-		http.Error(w, sanitizeErrorForClient(err, "Internal server error"), http.StatusInternalServerError)
+		writeAssistantSessionError(w, err)
 		return
 	}
 
@@ -2982,7 +3001,7 @@ func (h *AIHandler) HandleAbort(w http.ResponseWriter, r *http.Request, sessionI
 	if !requireAssistantSessionMutationMethod(w, r) {
 		return
 	}
-	ctx := r.Context()
+	ctx := assistantSessionContext(r.Context())
 	if !h.IsRunning(ctx) {
 		http.Error(w, "Pulse Assistant is not running", http.StatusServiceUnavailable)
 		return
@@ -2995,7 +3014,7 @@ func (h *AIHandler) HandleAbort(w http.ResponseWriter, r *http.Request, sessionI
 	}
 
 	if err := svc.AbortSession(ctx, sessionID); err != nil {
-		http.Error(w, sanitizeErrorForClient(err, "Internal server error"), http.StatusInternalServerError)
+		writeAssistantSessionError(w, err)
 		return
 	}
 
