@@ -216,3 +216,73 @@ func TestHandleKeyExchange_SigningFailureClosesChannel(t *testing.T) {
 		t.Fatal("expected CHANNEL_CLOSE frame after key exchange signing failure")
 	}
 }
+
+func TestHandleKeyExchange_RepeatedKeyExchangeClosesChannel(t *testing.T) {
+	identityPriv, _ := testIdentityKeyPair(t)
+	client := NewClient(Config{}, ClientDeps{
+		IdentityPrivateKey: identityPriv,
+	}, zerolog.Nop())
+	client.channels[7] = &channelState{apiToken: "token"}
+	sendCh := make(chan []byte, 2)
+
+	newKeyExchangeFrame := func() Frame {
+		t.Helper()
+		appEphemeral, err := GenerateEphemeralKeyPair()
+		if err != nil {
+			t.Fatalf("GenerateEphemeralKeyPair() error = %v", err)
+		}
+		return NewFrame(FrameKeyExchange, 7, MarshalKeyExchangePayload(appEphemeral.PublicKey().Bytes(), nil))
+	}
+
+	client.handleKeyExchange(newKeyExchangeFrame(), sendCh)
+
+	client.mu.RLock()
+	state, exists := client.channels[7]
+	client.mu.RUnlock()
+	if !exists || state.encryption == nil {
+		t.Fatal("expected channel to be encrypted after the first key exchange")
+	}
+	established := state.encryption
+	firstResp, err := DecodeFrame(<-sendCh)
+	if err != nil {
+		t.Fatalf("DecodeFrame() error = %v", err)
+	}
+	if firstResp.Type != FrameKeyExchange {
+		t.Fatalf("frame type = %s, want KEY_EXCHANGE", FrameTypeName(firstResp.Type))
+	}
+
+	// A second KEY_EXCHANGE with another key pair must not replace the keys of
+	// the channel that already carries an authenticated API token.
+	client.handleKeyExchange(newKeyExchangeFrame(), sendCh)
+
+	client.mu.RLock()
+	_, exists = client.channels[7]
+	client.mu.RUnlock()
+	if exists {
+		t.Fatal("expected channel to be removed after a repeated key exchange")
+	}
+	if state.encryption != established {
+		t.Fatal("repeated key exchange replaced the established channel keys")
+	}
+
+	select {
+	case msg := <-sendCh:
+		closeFrame, err := DecodeFrame(msg)
+		if err != nil {
+			t.Fatalf("DecodeFrame() error = %v", err)
+		}
+		if closeFrame.Type != FrameChannelClose {
+			t.Fatalf("frame type = %s, want CHANNEL_CLOSE", FrameTypeName(closeFrame.Type))
+		}
+
+		var payload ChannelClosePayload
+		if err := UnmarshalControlPayload(closeFrame.Payload, &payload); err != nil {
+			t.Fatalf("UnmarshalControlPayload() error = %v", err)
+		}
+		if payload.Reason != "key exchange already completed" {
+			t.Fatalf("close reason = %q, want %q", payload.Reason, "key exchange already completed")
+		}
+	default:
+		t.Fatal("expected CHANNEL_CLOSE frame after a repeated key exchange")
+	}
+}

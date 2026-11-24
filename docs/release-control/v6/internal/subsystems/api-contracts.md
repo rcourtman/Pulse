@@ -2216,6 +2216,19 @@ and slow-client eviction must use the same synchronized send/close ownership;
 recovering a send-on-closed panic is not a substitute for a race-free channel
 lifecycle.
 
+An explicit client data request is a few bytes and its answer is the complete
+state, so the hub must not answer one while that client's previous complete
+snapshot (initial or requested) is still waiting on its send queue. The queued
+snapshot is already that client's delta baseline and later deltas are ordered
+behind it, so the skipped request loses nothing. The request is served again as
+soon as the writer has taken the frame. A client that requests without reading
+therefore retains at most one queued complete snapshot beside the one its
+writer holds, not one per request up to the queue's message capacity.
+`TestHubRequestedStateNotStackedForStalledClient` and
+`TestHubRequestedStateAnsweredAgainForReadingClient` in
+`internal/websocket/hub_test.go` pin both halves. This is not a limit on
+concurrent connections or on the request rate of a client that does read.
+
 Public `GET /api/health` measures process liveness, not dashboard readiness.
 On a self-hosted server with multi-workspace mode disabled it may additionally
 return `"websocketStateStalled": true` while one build has held the hub's shared
@@ -3230,6 +3243,26 @@ payload shape change when the portal presents compact client rows.
     origin change clears omitted body/header values and requires Basic or
     bearer credentials to be entered again before the target can be saved or
     tested; stored credentials must never follow an address edit silently.
+    An update that assigns the target to a host agent it was not already
+    assigned to names a new recipient for the write-only values, because an
+    assigned agent receives them in its remote config. Such an update is
+    refused with `http_secrets_reentry_required` while it would reuse a stored
+    body, credential, or header value: each one must be entered again or
+    cleared in the same request, and the stored target is left unchanged.
+    Removing a location, or an edit that keeps the assigned agents, still
+    merges them.
+    Nor may stored credentials follow the address to whichever server answers
+    there. The `http` block additively carries `tlsFingerprintSha256` and
+    `insecureSkipVerify`, and reachability stays independent from trust
+    posture only for a request that carries nothing stored. An HTTPS contract
+    with authentication, a header value, or a body is written only after the
+    server presented the pinned leaf, or otherwise a chain and host name the
+    observing host trusts, unless the explicit `insecureSkipVerify` opt-out is
+    set. A refusal is an unreachable result whose error says the request was
+    not sent. For an untrusted chain or host name, test and status responses
+    still carry the refused `certificate` observation so its fingerprint can
+    be pinned. The fingerprint is normalized to 64 lowercase hexadecimal
+    characters and anything else is a validation error.
     Test and current-status responses expose transport reachability separately
     from the typed application outcome, status code, and bounded failure code,
     but never return the request body, response body, credential values, or
@@ -14960,6 +14993,12 @@ comes from `isProviderHostedRuntimeFromLicensing` in
 `internal/api/licensing_bridge.go`, so the policy file imports no licensing
 package. Proof: `internal/api/tenant_outbound_policy_test.go`.
 
+A blank email SMTP server is not a destination for that check.
+`POST /api/notifications/test` answers 400 for one, with supplied or saved
+settings, and connects nowhere: notification delivery refuses a blank server
+before dialing, since `net.Dial` reads an address without a host as this
+machine (`internal/notifications/email_enhanced.go`).
+
 ### SAML login POST admission (16 November 2026)
 
 `POST /api/saml/{providerID}/login` validates the whole optional JSON body
@@ -15152,3 +15191,18 @@ port `53`) on `/api/availability-targets` and `/api/availability-targets/test`.
 Verified by `internal/api/availability_handlers_test.go`,
 `AvailabilityTargetSlot.test.tsx`, `docsLinks.test.ts`, and
 `frontend-modern/browser-verification/d920ff2aaa7c5c9c.json`.
+
+### Saved notification credentials are bound to their destination
+
+`PUT /api/notifications/email`, `PUT /api/notifications/apprise`,
+`PUT /api/notifications/webhooks/:id`, `POST /api/notifications/test` and
+`POST /api/notifications/webhooks/test` still read a blank SMTP password, a
+blank Apprise API key and a masked webhook header or custom-field value as
+"keep the saved value". They now answer 400 with a plain-text reason when the
+same request names another SMTP host or port, drops SMTP encryption, names
+another Apprise or webhook HTTP origin, or turns off the Apprise certificate
+check. The caller must send the value again. Nothing is saved or sent on
+refusal. An email request with a blank server and a blank password is accepted
+as before but is saved or tested without the saved password. Requests that keep
+the destination, or that carry the value, are unchanged, and no payload field
+is added. Proof: `internal/api/alerting/saved_credential_destination_test.go`.

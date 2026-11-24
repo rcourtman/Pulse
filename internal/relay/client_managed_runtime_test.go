@@ -135,6 +135,7 @@ func TestManagedRuntimeRelayRegistrationReconnectDrain(t *testing.T) {
 
 	logBuffer := &safeBuffer{}
 	logger := zerolog.New(logBuffer).With().Timestamp().Logger()
+	identityPriv, identityPub := testIdentityKeyPair(t)
 
 	client := NewClient(
 		Config{
@@ -143,11 +144,12 @@ func TestManagedRuntimeRelayRegistrationReconnectDrain(t *testing.T) {
 			InstanceSecret: "managed-runtime-instance-secret",
 		},
 		ClientDeps{
-			LicenseTokenFunc: func() string { return licenseToken },
-			TokenValidator:   func(token string) bool { return token == "managed-runtime-app-token" },
-			LocalAddr:        strings.TrimPrefix(apiServer.URL, "http://"),
-			ServerVersion:    "6.0.0-rc.2",
-			IdentityPubKey:   "managed-runtime-identity-pub",
+			LicenseTokenFunc:   func() string { return licenseToken },
+			TokenValidator:     func(token string) bool { return token == "managed-runtime-app-token" },
+			LocalAddr:          strings.TrimPrefix(apiServer.URL, "http://"),
+			ServerVersion:      "6.0.0-rc.2",
+			IdentityPubKey:     identityPub,
+			IdentityPrivateKey: identityPriv,
 		},
 		logger,
 	)
@@ -174,14 +176,14 @@ func TestManagedRuntimeRelayRegistrationReconnectDrain(t *testing.T) {
 	if !strings.HasPrefix(instanceID, "relay_") {
 		t.Fatalf("managed runtime instance ID %q does not look canonical", instanceID)
 	}
-	verifyManagedRelayProxyRoundTrip(t, relayAddr, instanceID, "/api/status")
+	verifyManagedRelayProxyRoundTrip(t, relayAddr, instanceID, identityPub, "/api/status")
 
 	// Phase 1: normal reconnect after abrupt relay restart with persistent data.
 	server1.stopKill()
 	server2 := startManagedRelayServer(t, relayBinary, relayAddr, server1.dataDir, publicKeyB64)
 	defer server2.stopKill()
 	waitForManagedRelayConnected(t, client, 20*time.Second)
-	verifyManagedRelayProxyRoundTrip(t, relayAddr, instanceID, "/api/status")
+	verifyManagedRelayProxyRoundTrip(t, relayAddr, instanceID, identityPub, "/api/status")
 
 	// Phase 2: stale-session recovery after relay restart with a fresh data dir.
 	server2.stopKill()
@@ -189,11 +191,11 @@ func TestManagedRuntimeRelayRegistrationReconnectDrain(t *testing.T) {
 	defer server3.stopKill()
 	waitForManagedRelayLog(t, logBuffer, "relay session resume rejected, retrying fresh registration", 20*time.Second)
 	waitForManagedRelayConnected(t, client, 20*time.Second)
-	verifyManagedRelayProxyRoundTrip(t, relayAddr, instanceID, "/api/status")
+	verifyManagedRelayProxyRoundTrip(t, relayAddr, instanceID, identityPub, "/api/status")
 
 	// Phase 3: drain during inflight work, then reconnect to a replacement server.
-	appConn, channelID := openManagedRelayAppConnection(t, relayAddr, instanceID, "managed-runtime-app-token")
-	sendManagedRelayProxyRequest(t, appConn, channelID, ProxyRequest{
+	appConn, channelID, appEnc := openManagedRelayAppConnection(t, relayAddr, instanceID, "managed-runtime-app-token", identityPub)
+	sendManagedRelayProxyRequest(t, appConn, channelID, appEnc, ProxyRequest{
 		ID:     "req_drain_inflight",
 		Method: "GET",
 		Path:   "/api/slow-resource",
@@ -214,7 +216,7 @@ func TestManagedRuntimeRelayRegistrationReconnectDrain(t *testing.T) {
 	}
 	_ = appConn.Close()
 	waitForManagedRelayConnected(t, client, 20*time.Second)
-	verifyManagedRelayProxyRoundTrip(t, relayAddr, instanceID, "/api/status")
+	verifyManagedRelayProxyRoundTrip(t, relayAddr, instanceID, identityPub, "/api/status")
 	waitForManagedRelayIdle(t, client, 5*time.Second)
 
 	if !strings.Contains(logBuffer.String(), "relay session resume rejected, retrying fresh registration") {
@@ -411,7 +413,7 @@ func waitForManagedRelayLog(t *testing.T, logBuf *safeBuffer, needle string, tim
 	t.Fatalf("timed out waiting for managed relay log %q\nlogs:\n%s", needle, logBuf.String())
 }
 
-func openManagedRelayAppConnection(t *testing.T, relayAddr string, instanceID string, authToken string) (*websocket.Conn, uint32) {
+func openManagedRelayAppConnection(t *testing.T, relayAddr string, instanceID string, authToken string, identityPub string) (*websocket.Conn, uint32, *ChannelEncryption) {
 	t.Helper()
 	conn, _, err := websocket.DefaultDialer.Dial("ws://"+relayAddr+"/ws/app", nil)
 	if err != nil {
@@ -453,14 +455,28 @@ func openManagedRelayAppConnection(t *testing.T, relayAddr string, instanceID st
 	if err := UnmarshalControlPayload(ackFrame.Payload, &ack); err != nil {
 		t.Fatalf("unmarshal managed relay connect ack: %v", err)
 	}
-	return conn, ack.ChannelID
+
+	// The instance only serves DATA on a channel that completed KEY_EXCHANGE.
+	if err := conn.SetReadDeadline(time.Now().Add(5 * time.Second)); err != nil {
+		t.Fatalf("set managed relay key exchange read deadline: %v", err)
+	}
+	appEnc, err := testAppKeyExchange(conn, ack.ChannelID, identityPub)
+	if err != nil {
+		t.Fatalf("managed relay key exchange: %v", err)
+	}
+	_ = conn.SetReadDeadline(time.Time{})
+	return conn, ack.ChannelID, appEnc
 }
 
-func sendManagedRelayProxyRequest(t *testing.T, conn *websocket.Conn, channelID uint32, request ProxyRequest) {
+func sendManagedRelayProxyRequest(t *testing.T, conn *websocket.Conn, channelID uint32, appEnc *ChannelEncryption, request ProxyRequest) {
 	t.Helper()
 	payload, err := json.Marshal(request)
 	if err != nil {
 		t.Fatalf("marshal managed relay proxy request: %v", err)
+	}
+	payload, err = appEnc.Encrypt(payload)
+	if err != nil {
+		t.Fatalf("encrypt managed relay proxy request: %v", err)
 	}
 	frame := NewFrame(FrameData, channelID, payload)
 	encoded, err := EncodeFrame(frame)
@@ -472,12 +488,12 @@ func sendManagedRelayProxyRequest(t *testing.T, conn *websocket.Conn, channelID 
 	}
 }
 
-func verifyManagedRelayProxyRoundTrip(t *testing.T, relayAddr string, instanceID string, path string) {
+func verifyManagedRelayProxyRoundTrip(t *testing.T, relayAddr string, instanceID string, identityPub string, path string) {
 	t.Helper()
-	conn, channelID := openManagedRelayAppConnection(t, relayAddr, instanceID, "managed-runtime-app-token")
+	conn, channelID, appEnc := openManagedRelayAppConnection(t, relayAddr, instanceID, "managed-runtime-app-token", identityPub)
 	defer conn.Close()
 
-	sendManagedRelayProxyRequest(t, conn, channelID, ProxyRequest{
+	sendManagedRelayProxyRequest(t, conn, channelID, appEnc, ProxyRequest{
 		ID:     "req_roundtrip_" + strings.Trim(strings.ReplaceAll(path, "/", "_"), "_"),
 		Method: "GET",
 		Path:   path,
@@ -498,8 +514,12 @@ func verifyManagedRelayProxyRoundTrip(t *testing.T, relayAddr string, instanceID
 	if frame.Type != FrameData {
 		t.Fatalf("expected DATA from managed relay roundtrip, got %s", FrameTypeName(frame.Type))
 	}
+	plaintext, err := appEnc.Decrypt(frame.Payload)
+	if err != nil {
+		t.Fatalf("decrypt managed relay proxy response: %v", err)
+	}
 	var response ProxyResponse
-	if err := json.Unmarshal(frame.Payload, &response); err != nil {
+	if err := json.Unmarshal(plaintext, &response); err != nil {
 		t.Fatalf("unmarshal managed relay proxy response: %v", err)
 	}
 	if response.Status != http.StatusOK {

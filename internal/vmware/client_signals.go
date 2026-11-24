@@ -224,11 +224,13 @@ func (c *Client) enrichInventorySnapshot(
 		issuesMu.Unlock()
 	}
 
+	// The slot is taken before the goroutine starts, so a large inventory
+	// waits here instead of parking one goroutine per entity.
 	run := func(fn func() error) {
 		wg.Add(1)
+		sem <- struct{}{}
 		go func() {
 			defer wg.Done()
-			sem <- struct{}{}
 			defer func() { <-sem }()
 
 			if err := fn(); err != nil {

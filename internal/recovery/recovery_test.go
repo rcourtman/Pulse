@@ -516,6 +516,74 @@ func TestSubjectKeyForPoint(t *testing.T) {
 	}
 }
 
+func TestSubjectKeyForPointSeparatesProviderScopes(t *testing.T) {
+	pvc := func(clusterID string) RecoveryPoint {
+		return RecoveryPoint{
+			Provider: ProviderKubernetes,
+			SubjectRef: &ExternalRef{
+				Type:      "k8s-pvc",
+				Namespace: "prod",
+				Name:      "data-postgres-0",
+			},
+			Details: map[string]any{"k8sClusterId": clusterID},
+		}
+	}
+	dataset := func(connectionID string) RecoveryPoint {
+		return RecoveryPoint{
+			Provider: ProviderTrueNAS,
+			SubjectRef: &ExternalRef{
+				Type: "truenas-dataset",
+				Name: "tank/data",
+				ID:   "tank/data",
+			},
+			Details: map[string]any{"connectionId": connectionID},
+		}
+	}
+
+	for _, tc := range []struct {
+		name         string
+		first, other RecoveryPoint
+	}{
+		{name: "kubernetes clusters", first: pvc("cluster-a"), other: pvc("cluster-b")},
+		{name: "truenas connections", first: dataset("nas1"), other: dataset("nas2")},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			first := SubjectKeyForPoint(tc.first)
+			if !strings.HasPrefix(first, "ext:") {
+				t.Fatalf("SubjectKeyForPoint() = %q, want external key", first)
+			}
+			if other := SubjectKeyForPoint(tc.other); other == first {
+				t.Fatalf("same-named subjects of two provider scopes share the key %q", first)
+			}
+			if again := SubjectKeyForPoint(tc.first); again != first {
+				t.Fatalf("SubjectKeyForPoint() is not stable: %q vs %q", first, again)
+			}
+
+			// A point read back from the store carries the scope in ProviderScope.
+			stored := tc.first
+			stored.ProviderScope = ProviderScopeForPoint(tc.first)
+			stored.Details = nil
+			if got := SubjectKeyForPoint(stored); got != first {
+				t.Fatalf("stored point key = %q, want %q", got, first)
+			}
+		})
+	}
+
+	// Proxmox external keys stay unscoped so existing rollups keep their IDs.
+	guest := RecoveryPoint{
+		Provider: ProviderProxmoxPBS,
+		SubjectRef: &ExternalRef{
+			Type:      "proxmox-vm",
+			Namespace: "pbs-main",
+			ID:        "100",
+		},
+		ProviderScope: "pbs-main",
+	}
+	if got, want := SubjectKeyForPoint(guest), SubjectKey(guest.Provider, "", guest.SubjectRef); got != want {
+		t.Fatalf("proxmox external key = %q, want unscoped %q", got, want)
+	}
+}
+
 func TestSubjectKey(t *testing.T) {
 	tests := []struct {
 		name              string

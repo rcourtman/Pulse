@@ -24,6 +24,10 @@ type RestrictedOutboundHTTPOptions struct {
 	ResponseHeaderTimeout time.Duration
 	TLSConfig             *tls.Config
 	ResolveIPAddrs        func(ctx context.Context, host string) ([]net.IPAddr, error)
+	// MaxResponseHeaderBytes bounds the response headers the client reads,
+	// which is also how much of a malformed response net/http quotes in its
+	// error. Zero keeps the transport default.
+	MaxResponseHeaderBytes int64
 }
 
 var resolveOutboundFetchIPs = net.DefaultResolver.LookupIPAddr
@@ -321,6 +325,9 @@ func cloneRestrictedTransport(opts RestrictedOutboundHTTPOptions) *http.Transpor
 	}
 	if opts.ResponseHeaderTimeout > 0 {
 		clone.ResponseHeaderTimeout = opts.ResponseHeaderTimeout
+	}
+	if opts.MaxResponseHeaderBytes > 0 {
+		clone.MaxResponseHeaderBytes = opts.MaxResponseHeaderBytes
 	}
 
 	return clone

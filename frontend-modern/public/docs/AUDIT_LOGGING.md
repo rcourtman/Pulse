@@ -57,6 +57,12 @@ Each event includes:
 - **Details** (human-readable description)
 - **Cryptographic signature** (tamper detection)
 
+Text fields are stored with a size limit: 64 bytes for the event type and the
+client IP, 512 bytes for the user and the request path, and 1,024 bytes for the
+details. Longer text is cut to fit and ends in `...[truncated]`. The signature
+covers the text as stored. Events recorded before this limit existed are kept
+as they are.
+
 ---
 
 ## Viewing Audit Events

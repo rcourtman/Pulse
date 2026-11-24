@@ -1070,6 +1070,11 @@ func (r *Router) CleanupTenant(ctx context.Context, orgID string) error {
 			errs = append(errs, fmt.Errorf("resource store cleanup: %w", err))
 		}
 	}
+	if r.recoveryHandlers != nil {
+		if err := r.recoveryHandlers.CloseTenantStore(orgID); err != nil {
+			errs = append(errs, fmt.Errorf("recovery store cleanup: %w", err))
+		}
+	}
 
 	r.monitorAdapterMu.Lock()
 	delete(r.monitorResourceAdapters, orgID)

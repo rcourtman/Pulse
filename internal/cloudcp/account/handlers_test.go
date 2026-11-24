@@ -2,10 +2,14 @@ package account
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"sort"
+	"strings"
 	"testing"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/admin"
@@ -629,5 +633,149 @@ func TestRemoveMember_ForbiddenWhenActorRoleMissing(t *testing.T) {
 
 	if rec.Code != http.StatusForbidden {
 		t.Fatalf("status = %d, want %d (body=%q)", rec.Code, http.StatusForbidden, rec.Body.String())
+	}
+}
+
+type fakeWorkspaceAccessLimiter struct {
+	reg     *registry.TenantRegistry
+	err     error
+	revoked []string
+	lowered []string
+	synced  []string
+}
+
+func (f *fakeWorkspaceAccessLimiter) RevokeWorkspaceAccess(_ context.Context, accountID, userID string) error {
+	// The membership is still there: workspaces are updated first.
+	if m, err := f.reg.GetMembership(accountID, userID); err != nil || m == nil {
+		return fmt.Errorf("membership of %s already removed (err=%v)", userID, err)
+	}
+	f.revoked = append(f.revoked, userID)
+	return f.err
+}
+
+func (f *fakeWorkspaceAccessLimiter) LowerWorkspaceAccess(_ context.Context, _, userID string, role registry.MemberRole) error {
+	f.lowered = append(f.lowered, userID+"="+string(role))
+	return f.err
+}
+
+func (f *fakeWorkspaceAccessLimiter) SyncWorkspaceAccess(_ context.Context, _, userID string, role registry.MemberRole) error {
+	f.synced = append(f.synced, userID+"="+string(role))
+	return f.err
+}
+
+func TestMemberRemovalAndDemotionAreCarriedIntoWorkspaces(t *testing.T) {
+	reg := newTestRegistry(t)
+	const accountID = "a-workspaces"
+	if err := reg.CreateAccount(&registry.Account{ID: accountID, Kind: registry.AccountKindMSP, DisplayName: "Test"}); err != nil {
+		t.Fatal(err)
+	}
+	for userID, role := range map[string]registry.MemberRole{"u_owner": registry.MemberRoleOwner, "u_admin": registry.MemberRoleAdmin} {
+		if err := reg.CreateUser(&registry.User{ID: userID, Email: userID + "@msp.com"}); err != nil {
+			t.Fatal(err)
+		}
+		if err := reg.CreateMembership(&registry.AccountMembership{AccountID: accountID, UserID: userID, Role: role}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := reg.UpsertInvitation(&registry.AccountInvitation{ID: "inv_pending", AccountID: accountID, Email: "pending@msp.com", Role: registry.MemberRoleAdmin}); err != nil {
+		t.Fatal(err)
+	}
+	pending, err := reg.ListInvitationsByAccount(accountID)
+	if err != nil || len(pending) != 1 {
+		t.Fatalf("ListInvitationsByAccount = %v, %v", pending, err)
+	}
+
+	workspaces := &fakeWorkspaceAccessLimiter{reg: reg}
+	mux := http.NewServeMux()
+	mux.Handle("POST /api/accounts/{account_id}/members", HandleInviteMember(reg, workspaces))
+	mux.Handle("PATCH /api/accounts/{account_id}/members/{user_id}", HandleUpdateMemberRole(reg, workspaces))
+	mux.Handle("DELETE /api/accounts/{account_id}/members/{user_id}", HandleRemoveMember(reg, workspaces))
+	do := func(method, subjectID, body string) int {
+		t.Helper()
+		path := "/api/accounts/" + accountID + "/members"
+		if subjectID != "" {
+			path += "/" + subjectID
+		}
+		req := httptest.NewRequest(method, path, bytes.NewBufferString(body))
+		req.Header.Set("X-User-Role", string(registry.MemberRoleOwner))
+		return doRawRequest(t, mux, req).Code
+	}
+	role := func() registry.MemberRole {
+		t.Helper()
+		m, err := reg.GetMembership(accountID, "u_admin")
+		if err != nil || m == nil {
+			t.Fatalf("GetMembership = %v, %v", m, err)
+		}
+		return m.Role
+	}
+
+	// A pending invitation has opened no workspace.
+	if code := do(http.MethodDelete, pending[0].ID, ""); code != http.StatusNoContent {
+		t.Fatalf("remove invitation: status = %d", code)
+	}
+	if len(workspaces.revoked) != 0 || len(workspaces.lowered) != 0 || len(workspaces.synced) != 0 {
+		t.Fatalf("workspaces touched for pending invitation: revoked=%v lowered=%v synced=%v", workspaces.revoked, workspaces.lowered, workspaces.synced)
+	}
+	// A promotion syncs the higher role into existing workspaces.
+	if code := do(http.MethodPatch, "u_admin", `{"role":"owner"}`); code != http.StatusOK {
+		t.Fatalf("promote: status = %d", code)
+	}
+	if got, want := strings.Join(workspaces.synced, ","), "u_admin=owner"; got != want {
+		t.Fatalf("synced after promote = %q, want %q", got, want)
+	}
+	if len(workspaces.revoked) != 0 || len(workspaces.lowered) != 0 {
+		t.Fatalf("workspaces revoked/lowered on promotion: revoked=%v lowered=%v", workspaces.revoked, workspaces.lowered)
+	}
+
+	// A workspace that cannot be updated keeps the account as it was.
+	workspaces.err = errors.New("workspace unavailable")
+	if code := do(http.MethodPatch, "u_admin", `{"role":"tech"}`); code != http.StatusInternalServerError {
+		t.Fatalf("demote with failing workspaces: status = %d", code)
+	}
+	if got := role(); got != registry.MemberRoleOwner {
+		t.Fatalf("role after failed demotion = %q", got)
+	}
+	if code := do(http.MethodDelete, "u_admin", ""); code != http.StatusInternalServerError {
+		t.Fatalf("remove with failing workspaces: status = %d", code)
+	}
+	role()
+
+	workspaces.err = nil
+	if code := do(http.MethodPatch, "u_admin", `{"role":"tech"}`); code != http.StatusOK {
+		t.Fatalf("demote: status = %d", code)
+	}
+	if got := role(); got != registry.MemberRoleTech {
+		t.Fatalf("role after demotion = %q", got)
+	}
+	if code := do(http.MethodDelete, "u_admin", ""); code != http.StatusNoContent {
+		t.Fatalf("remove: status = %d", code)
+	}
+	if m, err := reg.GetMembership(accountID, "u_admin"); err != nil || m != nil {
+		t.Fatalf("membership after removal = %v, %v", m, err)
+	}
+	// Re-inviting a removed user fails atomically if workspace sync fails, and
+	// syncs into existing workspaces when it succeeds.
+	workspaces.err = errors.New("workspace unavailable")
+	if code := do(http.MethodPost, "", `{"email":"u_admin@msp.com","role":"admin"}`); code != http.StatusInternalServerError {
+		t.Fatalf("re-invite with failing workspaces: status = %d", code)
+	}
+	if m, err := reg.GetMembership(accountID, "u_admin"); err != nil || m != nil {
+		t.Fatalf("membership should be rolled back on failed workspace sync = %v, %v", m, err)
+	}
+	workspaces.err = nil
+	if code := do(http.MethodPost, "", `{"email":"u_admin@msp.com","role":"admin"}`); code != http.StatusCreated {
+		t.Fatalf("re-invite: status = %d", code)
+	}
+	if got := role(); got != registry.MemberRoleAdmin {
+		t.Fatalf("role after re-invite = %q", got)
+	}
+	if got, want := strings.Join(workspaces.lowered, ","), "u_admin=tech,u_admin=tech"; got != want {
+		t.Fatalf("lowered = %q, want %q", got, want)
+	}
+	if got, want := strings.Join(workspaces.revoked, ","), "u_admin,u_admin"; got != want {
+		t.Fatalf("revoked = %q, want %q", got, want)
+	}
+	if got, want := strings.Join(workspaces.synced, ","), "u_admin=owner,u_admin=admin,u_admin=admin"; got != want {
+		t.Fatalf("synced = %q, want %q", got, want)
 	}
 }

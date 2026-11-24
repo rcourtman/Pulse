@@ -137,6 +137,30 @@ func TestBranchcov0722PMBuildSeriesFromPoints(t *testing.T) {
 		}
 	})
 
+	t.Run("window wider than the series bound keeps its newest days", func(t *testing.T) {
+		t.Parallel()
+		points := []recovery.RecoveryPoint{
+			mkPoint("snap", recovery.ModeSnapshot, time.Date(2026, 3, 15, 10, 0, 0, 0, time.UTC)),
+		}
+		widestFrom := time.Date(1, 1, 2, 0, 0, 0, 0, time.UTC)
+		widestTo := time.Date(9999, 12, 30, 0, 0, 0, 0, time.UTC)
+		got := buildSeriesFromPoints(points, recovery.ListPointsOptions{From: &widestFrom, To: &widestTo}, 0)
+		if len(got) != recovery.MaxPointsSeriesDays {
+			t.Fatalf("expected %d day buckets, got %d", recovery.MaxPointsSeriesDays, len(got))
+		}
+		if last := got[len(got)-1].Day; last != "9999-12-30" {
+			t.Fatalf("last bucket Day = %q, want 9999-12-30", last)
+		}
+
+		got = buildSeriesFromPoints(points, recovery.ListPointsOptions{From: &widestFrom, To: &to}, 0)
+		if len(got) != recovery.MaxPointsSeriesDays {
+			t.Fatalf("expected %d day buckets, got %d", recovery.MaxPointsSeriesDays, len(got))
+		}
+		if day15, day16 := got[len(got)-2], got[len(got)-1]; day15.Day != "2026-03-15" || day15.Total != 1 || day16.Day != "2026-03-16" {
+			t.Fatalf("newest buckets = %#v, %#v, want 2026-03-15 total=1 then 2026-03-16", day15, day16)
+		}
+	})
+
 	t.Run("zero tzOffset buckets by UTC day with mode counters", func(t *testing.T) {
 		t.Parallel()
 		points := []recovery.RecoveryPoint{

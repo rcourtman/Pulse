@@ -282,6 +282,20 @@ func TestBranchcov0724pmCloneRestrictedTransport(t *testing.T) {
 		}
 	})
 
+	t.Run("max response header bytes applied when positive", func(t *testing.T) {
+		clone := cloneRestrictedTransport(RestrictedOutboundHTTPOptions{MaxResponseHeaderBytes: 64 << 10})
+		if clone.MaxResponseHeaderBytes != 64<<10 {
+			t.Fatalf("MaxResponseHeaderBytes = %d, want %d", clone.MaxResponseHeaderBytes, 64<<10)
+		}
+	})
+
+	t.Run("max response header bytes left untouched when zero", func(t *testing.T) {
+		clone := cloneRestrictedTransport(RestrictedOutboundHTTPOptions{})
+		if clone.MaxResponseHeaderBytes != 0 {
+			t.Fatalf("MaxResponseHeaderBytes = %d, want 0 (not overridden)", clone.MaxResponseHeaderBytes)
+		}
+	})
+
 	t.Run("fallback transport and fresh tls config when default not http transport", func(t *testing.T) {
 		// Swapping http.DefaultTransport lets the "else" arm run, which creates a
 		// bare *http.Transport with a nil TLSClientConfig, in turn hitting the

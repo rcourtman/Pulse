@@ -49,7 +49,9 @@ var ErrTenantOutboundDestination = errors.New("destination is not available to o
 // tenant outbound policy and the destination names or resolves to an address
 // that policy excludes. Without a policy (instance administrators, and every
 // single-tenant install) it allows everything. destination may be a host, an
-// IP, host:port, [IPv6]:port or an absolute URL.
+// IP, host:port, [IPv6]:port or an absolute http(s) URL. It must name the same
+// host however the caller goes on to dial it, so a destination whose host
+// depends on the reading is refused.
 func CheckTenantOutboundDestination(ctx context.Context, destination string) error {
 	policy, ok := TenantOutboundPolicyFromContext(ctx)
 	if !ok {
@@ -85,11 +87,22 @@ func outboundDestinationHost(destination string) string {
 		return ip.String()
 	}
 	if strings.Contains(destination, "://") {
+		// Only http and https URLs are dialed as URLs. A client that puts its
+		// default scheme in front reads "localhost://203.0.113.7" as
+		// https://localhost:, not as a URL whose host is 203.0.113.7.
 		parsed, err := url.Parse(destination)
-		if err != nil {
+		if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") {
 			return ""
 		}
 		return parsed.Hostname()
+	}
+	// Without a scheme the destination is a host or host:port, and "@" belongs
+	// to neither. Callers that dial it as written connect "::1%25@203.0.113.7"
+	// to ::1 (the rest is an IPv6 zone), and callers that put a scheme in
+	// front connect "203.0.113.7:1@127.0.0.1" to 127.0.0.1 (the rest is user
+	// information). No single host can be judged for both, so there is none.
+	if strings.Contains(destination, "@") {
+		return ""
 	}
 	if host, _, err := net.SplitHostPort(destination); err == nil {
 		return strings.Trim(host, "[]")

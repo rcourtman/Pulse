@@ -18,8 +18,10 @@ type Manager struct {
 	multiTenant *config.MultiTenantPersistence
 	pointSource PointsSource
 
-	mu     sync.Mutex
-	stores map[string]*recoverystore.Store
+	// lifecycle prevents eviction from overtaking in-flight constructors.
+	lifecycle sync.RWMutex
+	mu        sync.Mutex
+	stores    map[string]*recoverystore.Store
 }
 
 // PointsSource supplies read-only recovery evidence from an alternative runtime
@@ -71,6 +73,9 @@ func (m *Manager) StoreForOrg(orgID string) (*recoverystore.Store, error) {
 		return nil, fmt.Errorf("org ID is required")
 	}
 
+	m.lifecycle.RLock()
+	defer m.lifecycle.RUnlock()
+
 	m.mu.Lock()
 	if store := m.stores[orgID]; store != nil {
 		m.mu.Unlock()
@@ -102,4 +107,28 @@ func (m *Manager) StoreForOrg(orgID string) (*recoverystore.Store, error) {
 	m.mu.Unlock()
 
 	return store, nil
+}
+
+// CloseStoreForOrg closes and evicts one org's cached recovery store.
+//
+// StoreForOrg opens a SQLite handle per org and caches it for the process
+// lifetime. Deleting an org unlinks its recovery.db, but the cached handle
+// keeps the unlinked file and every row in it alive, and org IDs can be
+// claimed again. Without this, the next org created under the same ID is
+// served the deleted org's recovery points and its own writes land in the
+// unlinked file.
+func (m *Manager) CloseStoreForOrg(orgID string) error {
+	if m == nil {
+		return nil
+	}
+	orgID = strings.TrimSpace(orgID)
+
+	m.lifecycle.Lock()
+	m.mu.Lock()
+	store := m.stores[orgID]
+	delete(m.stores, orgID)
+	m.mu.Unlock()
+	m.lifecycle.Unlock()
+
+	return store.Close()
 }

@@ -63,6 +63,52 @@ func TestCheckTenantOutboundDestinationHostForms(t *testing.T) {
 	}
 }
 
+// A destination is dialed as written (SMTP, TCP probes) or behind a default
+// scheme (API clients). One that names a different host in each reading must
+// not be judged by the reading its caller does not use.
+func TestCheckTenantOutboundDestinationRefusesAmbiguousHosts(t *testing.T) {
+	selfHosted := WithTenantOutboundPolicy(context.Background(), TenantOutboundPolicy{AllowPrivateNetworks: true})
+
+	for _, destination := range []string{
+		// Dialed as written: an IPv6 literal whose zone is "25@93.184.216.34".
+		"::1%25@93.184.216.34",
+		"::ffff:127.0.0.1%25@93.184.216.34",
+		"::ffff:169.254.169.254%25@93.184.216.34",
+		"fe80::1%25@93.184.216.34",
+		// Behind a default scheme: user information, then the host.
+		"93.184.216.34:1@127.0.0.1",
+		"93.184.216.34:8006@127.0.0.1:8006",
+		"93.184.216.34@127.0.0.1",
+		"user:pass@93.184.216.34",
+		// Behind a default scheme: host "localhost" with an empty port.
+		"localhost://93.184.216.34",
+		"localhost://93.184.216.34:8006/",
+		"tcp://93.184.216.34:25",
+		// Zones without user information still name the loopback address.
+		"::1%25:25",
+		"::1%2525:25",
+		"[::1%25eth0]:25",
+		"[::1%25eth0]",
+	} {
+		err := CheckTenantOutboundDestination(selfHosted, destination)
+		if err == nil {
+			t.Errorf("%q allowed, want refused", destination)
+		} else if !errors.Is(err, ErrTenantOutboundDestination) {
+			t.Errorf("%q refusal %v does not wrap ErrTenantOutboundDestination", destination, err)
+		}
+	}
+
+	for _, destination := range []string{
+		"HTTPS://93.184.216.34:8006",
+		"http://93.184.216.34/path@segment",
+		"93.184.216.34:8006/api2/json",
+	} {
+		if err := CheckTenantOutboundDestination(selfHosted, destination); err != nil {
+			t.Errorf("%q refused: %v", destination, err)
+		}
+	}
+}
+
 func TestTenantOutboundRefusalMessageNamesTheRule(t *testing.T) {
 	selfHosted := WithTenantOutboundPolicy(context.Background(), TenantOutboundPolicy{AllowPrivateNetworks: true})
 	err := CheckTenantOutboundDestination(selfHosted, "127.0.0.1")

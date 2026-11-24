@@ -546,6 +546,10 @@ func auditEventsNeedRebuild(tx *sql.Tx) (bool, error) {
 
 // Log records an audit event with HMAC signature.
 func (l *SQLiteLogger) Record(event Event) error {
+	// Every stored event passes here. Bound its text before it is signed:
+	// readers hold whole pages and exports of stored events in memory.
+	event = boundEvent(event)
+
 	// Sign the event
 	event.Signature = l.signer.Sign(event)
 

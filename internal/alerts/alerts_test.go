@@ -2555,6 +2555,96 @@ func TestCheckBackupsHandlesPmgBackups(t *testing.T) {
 	}
 }
 
+// TestCheckBackupsKeepsNonProxmoxSubjectsOffGuests guards guest attribution:
+// the subject ID of a Kubernetes or TrueNAS rollup is whatever the reporting
+// system chose, so one that looks like a VMID or a guest source ID must not
+// pass its fresh success time to a Proxmox guest whose own backup is stale.
+func TestCheckBackupsKeepsNonProxmoxSubjectsOffGuests(t *testing.T) {
+	now := time.Now()
+	key := BuildGuestKey("inst", "node", 100)
+	guestsByKey := map[string]GuestLookup{
+		key: {
+			ResourceID: "qemu/100",
+			Name:       "app-server",
+			Instance:   "inst",
+			Node:       "node",
+			Type:       "qemu",
+			VMID:       100,
+		},
+	}
+	guestsByVMID := map[string][]GuestLookup{
+		"100": {guestsByKey[key]},
+	}
+	guestRollup := recovery.ProtectionRollup{
+		RollupID: "res:vm:proxmox:inst:node:100",
+		SubjectRef: &recovery.ExternalRef{
+			Type:      "proxmox-vm",
+			Namespace: "inst",
+			Name:      "app-server",
+			ID:        "inst:node:100",
+			Class:     "node",
+		},
+		LastSuccessAt: ptrTime(now.Add(-15 * 24 * time.Hour)),
+		LastOutcome:   recovery.OutcomeSuccess,
+		Providers:     []recovery.Provider{recovery.ProviderProxmoxPVE},
+	}
+
+	cases := []struct {
+		name     string
+		provider recovery.Provider
+		ref      recovery.ExternalRef
+	}{
+		{"kubernetes cluster id is a vmid", recovery.ProviderKubernetes, recovery.ExternalRef{Type: "k8s-cluster", ID: "100", Name: "k3s"}},
+		{"kubernetes cluster id is a guest source id", recovery.ProviderKubernetes, recovery.ExternalRef{Type: "k8s-cluster", ID: "inst:node:100", Name: "k3s"}},
+		{"kubernetes cluster name is a vmid", recovery.ProviderKubernetes, recovery.ExternalRef{Type: "k8s-cluster", Name: "100"}},
+		{"truenas replication task id is a vmid", recovery.ProviderTrueNAS, recovery.ExternalRef{Type: "truenas-replication-task", ID: "100", Name: "offsite"}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			m := newTestManager(t)
+			m.ClearActiveAlerts()
+
+			m.mu.Lock()
+			m.config.Enabled = true
+			m.config.BackupDefaults = BackupAlertConfig{
+				Enabled:      true,
+				WarningDays:  7,
+				CriticalDays: 14,
+			}
+			m.mu.Unlock()
+
+			guestAlert := buildCanonicalStateID("inst:node:100", "inst:node:100-backup-age")
+			m.CheckBackups([]recovery.ProtectionRollup{guestRollup}, guestsByKey, guestsByVMID)
+			if !testHasActiveAlert(t, m, guestAlert) {
+				t.Fatalf("expected backup age alert for the guest's stale backup")
+			}
+
+			ref := tc.ref
+			other := recovery.ProtectionRollup{
+				RollupID:      "ext:other-provider",
+				SubjectRef:    &ref,
+				LastSuccessAt: ptrTime(now.Add(-time.Minute)),
+				LastOutcome:   recovery.OutcomeSuccess,
+				Providers:     []recovery.Provider{tc.provider},
+			}
+			m.CheckBackups([]recovery.ProtectionRollup{guestRollup, other}, guestsByKey, guestsByVMID)
+			if !testHasActiveAlert(t, m, guestAlert) {
+				t.Fatalf("fresh %s rollup cleared the guest's backup age alert", tc.provider)
+			}
+
+			// The other provider's subject keeps its own rollup-backed alert.
+			other.LastSuccessAt = ptrTime(now.Add(-15 * 24 * time.Hour))
+			m.CheckBackups([]recovery.ProtectionRollup{guestRollup, other}, guestsByKey, guestsByVMID)
+			if !testHasActiveAlert(t, m, guestAlert) {
+				t.Fatalf("stale %s rollup replaced the guest's backup age alert", tc.provider)
+			}
+			if !testHasActiveAlert(t, m, buildCanonicalStateID("backup-subject:ext-other-provider", "backup-subject:ext-other-provider-backup-age")) {
+				t.Fatalf("expected %s rollup to keep its own backup age alert", tc.provider)
+			}
+		})
+	}
+}
+
 // TestCheckBackupsIgnoresPBSHostBackupSubject covers #2136: a PBS host config
 // backup (backup-type "host") is keyed by the node name, not a VMID, and must
 // not raise a guest backup-age alert. The node name subject ("nas backup")
@@ -7580,6 +7670,45 @@ func TestCleanupDockerContainerAlerts(t *testing.T) {
 			t.Error("expected state confirm to be cleared with empty seen set")
 		}
 	})
+}
+
+// A Docker host ID may contain "/", so the references of a host
+// "<manager ID>/service" share the prefix of the manager's service references.
+// Its reports and its removal must leave the manager's service alerts alone.
+func TestDockerHostCleanupLeavesAlertsRecordedForAnotherHost(t *testing.T) {
+	m := newTestManager(t)
+	cfg := m.GetConfig()
+	cfg.Enabled = true
+	m.UpdateConfig(cfg)
+
+	manager := models.DockerHost{
+		ID:       "manager-id",
+		Hostname: "manager-1",
+		Services: []models.DockerService{{ID: "svc-shop", Name: "shop", DesiredTasks: 3, RunningTasks: 0}},
+	}
+	serviceAlertID := "docker-service-health-" + DockerServiceResourceID(manager.ID, "svc-shop", "shop")
+	other := models.DockerHost{ID: manager.ID + "/service", Hostname: "web-a"}
+
+	m.CheckDockerHost(manager)
+	if !testHasActiveAlert(t, m, serviceAlertID) {
+		t.Fatalf("expected the manager's service alert to be raised")
+	}
+
+	m.CheckDockerHost(other)
+	if !testHasActiveAlert(t, m, serviceAlertID) {
+		t.Fatalf("another host's report cleared the manager's service alert")
+	}
+
+	m.HandleDockerHostRemoved(other)
+	if !testHasActiveAlert(t, m, serviceAlertID) {
+		t.Fatalf("another host's removal cleared the manager's service alert")
+	}
+
+	manager.Services = nil
+	m.CheckDockerHost(manager)
+	if testHasActiveAlert(t, m, serviceAlertID) {
+		t.Fatalf("expected the manager's own report to clear the alert of its removed service")
+	}
 }
 
 func TestSafeCallEscalateCallback(t *testing.T) {
@@ -14642,7 +14771,10 @@ func TestDockerContainerRestartLoopAlert(t *testing.T) {
 		// Verify we tracked 3 restarts
 		m.mu.Lock()
 		record := m.dockerRestartTracking[resourceID]
-		recentCount := len(record.times)
+		recentCount := 0
+		for _, increase := range record.increases {
+			recentCount += increase.count
+		}
 		m.mu.Unlock()
 		if recentCount != 3 {
 			t.Fatalf("expected 3 tracked restarts, got %d", recentCount)
@@ -14723,7 +14855,7 @@ func TestDockerContainerRestartLoopAlert(t *testing.T) {
 		m.dockerRestartTracking[resourceID] = &dockerRestartRecord{
 			count:       5,
 			lastCount:   5,
-			times:       []time.Time{now, now, now, now}, // 4 recent restarts
+			increases:   []dockerRestartIncrease{{at: now, count: 4}}, // 4 recent restarts
 			lastChecked: now,
 		}
 		m.mu.Unlock()
@@ -14754,8 +14886,8 @@ func TestDockerContainerRestartLoopAlert(t *testing.T) {
 		m.mu.Lock()
 		if rec, ok := m.dockerRestartTracking[resourceID]; ok {
 			past := time.Now().Add(-2 * time.Second)
-			for i := range rec.times {
-				rec.times[i] = past
+			for i := range rec.increases {
+				rec.increases[i].at = past
 			}
 			rec.lastChecked = past
 		}
@@ -14817,6 +14949,102 @@ func TestDockerContainerRestartLoopAlert(t *testing.T) {
 		m.CheckDockerHost(host)
 		if !testHasActiveAlert(t, m, alertID) {
 			t.Fatal("expected alert after 3 restarts (>2 threshold)")
+		}
+	})
+
+	t.Run("reported restart jump does not size the tracking record", func(t *testing.T) {
+		m := newTestManager(t)
+		m.config.DockerDefaults.RestartCount = 3
+		m.config.DockerDefaults.RestartWindow = 300
+
+		hostID := "host-restart-jump"
+		containerID := "container-jump"
+
+		host := models.DockerHost{
+			ID:          hostID,
+			DisplayName: "Docker Host",
+			Hostname:    "docker.local",
+			Containers: []models.DockerContainer{
+				{
+					ID:           containerID,
+					Name:         "jump-app",
+					State:        "running",
+					Status:       "Up 1 minute",
+					RestartCount: 0,
+				},
+			},
+		}
+		m.CheckDockerHost(host)
+
+		// The count comes straight from the agent report.
+		host.Containers[0].RestartCount = math.MaxInt - 1
+		m.CheckDockerHost(host)
+		host.Containers[0].RestartCount = math.MaxInt
+		m.CheckDockerHost(host)
+
+		resourceID := DockerContainerResourceID(hostID, containerID, "")
+		m.mu.Lock()
+		record := m.dockerRestartTracking[resourceID]
+		tracked, lastCount := len(record.increases), record.lastCount
+		m.mu.Unlock()
+		if tracked != 2 {
+			t.Fatalf("expected one tracked increase per report, got %d", tracked)
+		}
+		if lastCount != math.MaxInt {
+			t.Fatalf("expected lastCount to follow the report, got %d", lastCount)
+		}
+
+		alertID := fmt.Sprintf("docker-container-restart-loop-%s", resourceID)
+		alert, exists := testLookupActiveAlert(t, m, alertID)
+		if !exists {
+			t.Fatal("expected restart loop alert when restarts > threshold")
+		}
+		if alert.Metadata["recentRestarts"] != math.MaxInt {
+			t.Fatalf("expected recentRestarts to add up the reported increases, got %v", alert.Metadata["recentRestarts"])
+		}
+	})
+
+	t.Run("negative restart count reads as zero", func(t *testing.T) {
+		m := newTestManager(t)
+		m.config.DockerDefaults.RestartCount = 3
+		m.config.DockerDefaults.RestartWindow = 300
+
+		hostID := "host-restart-negative"
+		containerID := "container-negative"
+
+		host := models.DockerHost{
+			ID:          hostID,
+			DisplayName: "Docker Host",
+			Hostname:    "docker.local",
+			Containers: []models.DockerContainer{
+				{
+					ID:           containerID,
+					Name:         "negative-app",
+					State:        "running",
+					Status:       "Up 1 minute",
+					RestartCount: math.MinInt,
+				},
+			},
+		}
+		m.CheckDockerHost(host)
+
+		// Counted from the stored floor, the difference to the first report
+		// would not fit an int.
+		host.Containers[0].RestartCount = 2
+		m.CheckDockerHost(host)
+
+		resourceID := DockerContainerResourceID(hostID, containerID, "")
+		m.mu.Lock()
+		record := m.dockerRestartTracking[resourceID]
+		increases := append([]dockerRestartIncrease(nil), record.increases...)
+		m.mu.Unlock()
+		if len(increases) != 1 || increases[0].count != 2 {
+			t.Fatalf("expected one increase of 2, got %+v", increases)
+		}
+
+		alertID := fmt.Sprintf("docker-container-restart-loop-%s", resourceID)
+		if testHasActiveAlert(t, m, alertID) {
+			t.Fatal("expected no restart loop alert when restarts <= threshold")
 		}
 	})
 

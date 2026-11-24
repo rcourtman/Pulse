@@ -2,6 +2,7 @@ package auth
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
@@ -18,6 +19,10 @@ import (
 )
 
 const handoffTTL = 60 * time.Second
+
+// errAccountMembershipRequired is returned when a sign-in link is bound to an
+// account that already has members and the link's email is not one of them.
+var errAccountMembershipRequired = errors.New("account membership required")
 
 type adminGenerateMagicLinkRequest struct {
 	Email     string `json:"email"`
@@ -77,6 +82,15 @@ func HandleMagicLinkVerify(svc *Service, reg *registry.TenantRegistry, tenantsDi
 				redirectPath = "/portal"
 			}
 			userID, err := ensurePortalUserAndMembership(reg, token.TenantID, token.Email)
+			if errors.Is(err, errAccountMembershipRequired) {
+				auditEvent(r, "cp_magic_link_verify", "failure").
+					Str("tenant_id", token.TenantID).
+					Str("email", token.Email).
+					Str("reason", "account_membership_required").
+					Msg("Magic link verification failed")
+				writeError(w, http.StatusForbidden, "forbidden", "Account membership required")
+				return
+			}
 			if err != nil {
 				auditEvent(r, "cp_magic_link_verify", "failure").
 					Err(err).
@@ -152,6 +166,15 @@ func HandleMagicLinkVerify(svc *Service, reg *registry.TenantRegistry, tenantsDi
 		}
 
 		userID, err := ensureAccountUserAndMembership(reg, tenant, token.Email)
+		if errors.Is(err, errAccountMembershipRequired) {
+			auditEvent(r, "cp_magic_link_verify", "failure").
+				Str("tenant_id", tenant.ID).
+				Str("email", token.Email).
+				Str("reason", "account_membership_required").
+				Msg("Magic link verification failed")
+			writeError(w, http.StatusForbidden, "forbidden", "Account membership required")
+			return
+		}
 		trimmedUserID := strings.TrimSpace(userID)
 		if err != nil || trimmedUserID == "" || strings.Contains(trimmedUserID, "@") {
 			auditEvent(r, "cp_magic_link_verify", "failure").
@@ -361,15 +384,10 @@ func auditEvent(r *http.Request, eventName, outcome string) *zerolog.Event {
 		e = log.Warn()
 	}
 
-	actorID := auditlog.ActorID(r)
-	if actorID == "" {
-		actorID = "admin_key"
-	}
-
 	return e.
 		Str("audit_event", eventName).
 		Str("outcome", outcome).
-		Str("actor_id", actorID).
+		Str("actor_id", auditlog.ActorID(r)).
 		Str("client_ip", auditlog.ClientIP(r)).
 		Str("method", r.Method).
 		Str("path", auditlog.RequestPath(r))
@@ -493,6 +511,18 @@ func ensureAccountUserAndMembership(reg *registry.TenantRegistry, tenant *regist
 		return "", fmt.Errorf("lookup membership: %w", err)
 	}
 	if m == nil {
+		// A sign-in link proves control of a mailbox, not authority over the
+		// account. It may seed the first owner of an account nobody belongs to
+		// yet; once the account has members, access comes only from an accepted
+		// invitation, so a link mailed to stored contact email cannot undo a
+		// member's removal.
+		members, listErr := reg.ListMembersByAccount(accountID)
+		if listErr != nil {
+			return "", fmt.Errorf("list account members: %w", listErr)
+		}
+		if len(members) > 0 {
+			return "", errAccountMembershipRequired
+		}
 		newMembership := &registry.AccountMembership{
 			AccountID: accountID,
 			UserID:    user.ID,

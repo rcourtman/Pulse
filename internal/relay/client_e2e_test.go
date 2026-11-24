@@ -10,6 +10,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -19,13 +20,14 @@ import (
 
 // TestClient_E2E_MultiMobileClientRelay simulates a realistic production scenario:
 // one Pulse instance connected through the relay server, with three mobile app
-// clients connecting concurrently — two using encrypted channels and one using
-// plaintext. Each mobile client sends a different API request through the relay,
-// which the Pulse client proxies to its local API. The test verifies:
+// clients connecting concurrently — two using encrypted channels and one that
+// skips KEY_EXCHANGE. Each mobile client sends a different API request through
+// the relay, which the Pulse client proxies to its local API. The test verifies:
 //
 //   - All three channels open successfully and concurrently
-//   - Each mobile client receives the correct response for its specific request
-//   - Encrypted and plaintext channels can coexist on the same connection
+//   - Each encrypted client receives the correct response for its specific request
+//   - The plaintext channel is closed without being served, and does not
+//     disturb the encrypted channels on the same connection
 //   - Channel cleanup (CHANNEL_CLOSE) works for all channels
 //   - The Pulse client remains connected throughout
 //
@@ -37,6 +39,9 @@ func TestClient_E2E_MultiMobileClientRelay(t *testing.T) {
 	logger := zerolog.Nop()
 
 	identityPriv, identityPub := testIdentityKeyPair(t)
+
+	// Counts requests for the endpoint only the plaintext channel asks for.
+	var plaintextAPIRequests atomic.Int32
 
 	// Mock local Pulse API with multiple endpoints that return distinct responses.
 	// Each endpoint includes an "endpoint" key so we can verify correct routing.
@@ -54,6 +59,7 @@ func TestClient_E2E_MultiMobileClientRelay(t *testing.T) {
 				"active":   2,
 			})
 		case "/api/status":
+			plaintextAPIRequests.Add(1)
 			json.NewEncoder(w).Encode(map[string]interface{}{
 				"endpoint": "status",
 				"healthy":  true,
@@ -73,6 +79,7 @@ func TestClient_E2E_MultiMobileClientRelay(t *testing.T) {
 		encrypted bool
 	}
 	results := make(chan e2eResult, 3)
+	plaintextClosed := make(chan ChannelClosePayload, 1)
 
 	// channelSpec defines what each simulated mobile client does
 	type channelSpec struct {
@@ -242,6 +249,16 @@ func TestClient_E2E_MultiMobileClientRelay(t *testing.T) {
 			if err != nil {
 				return
 			}
+			if f.Type == FrameChannelClose {
+				// The plaintext channel is refused instead of served
+				var closePayload ChannelClosePayload
+				if err := UnmarshalControlPayload(f.Payload, &closePayload); err != nil {
+					return
+				}
+				plaintextClosed <- closePayload
+				received++
+				continue
+			}
 			if f.Type != FrameData {
 				// Skip non-data frames (e.g. PONG)
 				continue
@@ -320,9 +337,9 @@ func TestClient_E2E_MultiMobileClientRelay(t *testing.T) {
 		errCh <- client.Run(ctx)
 	}()
 
-	// Collect and verify all three responses
+	// Collect and verify the two encrypted responses
 	gotResponses := make(map[string]e2eResult)
-	for i := 0; i < 3; i++ {
+	for i := 0; i < 2; i++ {
 		select {
 		case r := <-results:
 			gotResponses[r.response.ID] = r
@@ -331,7 +348,7 @@ func TestClient_E2E_MultiMobileClientRelay(t *testing.T) {
 			for k := range gotResponses {
 				got = append(got, k)
 			}
-			t.Fatalf("timed out waiting for response %d/3 (got: %v)", i+1, got)
+			t.Fatalf("timed out waiting for response %d/2 (got: %v)", i+1, got)
 		}
 	}
 
@@ -365,7 +382,28 @@ func TestClient_E2E_MultiMobileClientRelay(t *testing.T) {
 
 	verifyResponse("req_nodes", 1, true, "nodes")
 	verifyResponse("req_alerts", 2, true, "alerts")
-	verifyResponse("req_status", 3, false, "status")
+
+	// The channel that skipped KEY_EXCHANGE is closed and its request never
+	// reaches the local API.
+	select {
+	case closePayload := <-plaintextClosed:
+		if closePayload.ChannelID != 3 {
+			t.Errorf("closed channelID = %d, want 3", closePayload.ChannelID)
+		}
+		if closePayload.Reason != "key exchange required" {
+			t.Errorf("close reason = %q, want %q", closePayload.Reason, "key exchange required")
+		}
+	case <-time.After(8 * time.Second):
+		t.Fatal("timed out waiting for CHANNEL_CLOSE on the plaintext channel")
+	}
+	select {
+	case r := <-results:
+		t.Fatalf("unexpected DATA response %q on channel %d", r.response.ID, r.channelID)
+	default:
+	}
+	if got := plaintextAPIRequests.Load(); got != 0 {
+		t.Errorf("plaintext channel reached the local API %d times, want 0", got)
+	}
 
 	// Verify client stayed connected throughout
 	time.Sleep(200 * time.Millisecond)
@@ -403,6 +441,8 @@ func TestClient_E2E_ChannelRejectAndRecoverFlow(t *testing.T) {
 	var mu sync.Mutex
 	var rejectedChannelClose *ChannelClosePayload
 	goodDataCh := make(chan ProxyResponse, 1)
+
+	identityPriv, identityPub := testIdentityKeyPair(t)
 
 	relayServer := mockRelayServer(t, func(conn *websocket.Conn) {
 		// REGISTER
@@ -456,6 +496,13 @@ func TestClient_E2E_ChannelRejectAndRecoverFlow(t *testing.T) {
 			return
 		}
 
+		// Complete KEY_EXCHANGE as the app: DATA is only served on an encrypted channel
+		appEnc, err := testAppKeyExchange(conn, 20, identityPub)
+		if err != nil {
+			t.Logf("key exchange: %v", err)
+			return
+		}
+
 		// Send DATA on the good channel
 		proxyReq := ProxyRequest{
 			ID:     "req_after_reject",
@@ -463,6 +510,7 @@ func TestClient_E2E_ChannelRejectAndRecoverFlow(t *testing.T) {
 			Path:   "/api/status",
 		}
 		proxyReqBytes, _ := json.Marshal(proxyReq)
+		proxyReqBytes, _ = appEnc.Encrypt(proxyReqBytes)
 		dataFrame := NewFrame(FrameData, 20, proxyReqBytes)
 		dataBytes, _ := EncodeFrame(dataFrame)
 		_ = conn.WriteMessage(websocket.BinaryMessage, dataBytes)
@@ -472,6 +520,7 @@ func TestClient_E2E_ChannelRejectAndRecoverFlow(t *testing.T) {
 		frame, _ = DecodeFrame(msg)
 		if frame.Type == FrameData {
 			var resp ProxyResponse
+			frame.Payload, _ = appEnc.Decrypt(frame.Payload)
 			_ = json.Unmarshal(frame.Payload, &resp)
 			goodDataCh <- resp
 		}
@@ -486,11 +535,12 @@ func TestClient_E2E_ChannelRejectAndRecoverFlow(t *testing.T) {
 	}
 
 	deps := ClientDeps{
-		LicenseTokenFunc: func() string { return "test-jwt" },
-		TokenValidator:   func(token string) bool { return token == "valid-mobile" },
-		LocalAddr:        localAddr,
-		ServerVersion:    "6.0.0-test",
-		IdentityPubKey:   "test-pub-key",
+		LicenseTokenFunc:   func() string { return "test-jwt" },
+		TokenValidator:     func(token string) bool { return token == "valid-mobile" },
+		LocalAddr:          localAddr,
+		ServerVersion:      "6.0.0-test",
+		IdentityPubKey:     identityPub,
+		IdentityPrivateKey: identityPriv,
 	}
 
 	client := NewClient(cfg, deps, logger)
@@ -563,6 +613,8 @@ func TestClient_E2E_LegacyJWTFallbackFlow(t *testing.T) {
 
 	const legacyToken = "legacy.jwt.token-v5"
 
+	identityPriv, identityPub := testIdentityKeyPair(t)
+
 	relayServer := mockRelayServer(t, func(conn *websocket.Conn) {
 		// REGISTER — verify we receive the expected legacy JWT
 		_, msg, err := conn.ReadMessage()
@@ -608,6 +660,13 @@ func TestClient_E2E_LegacyJWTFallbackFlow(t *testing.T) {
 			return
 		}
 
+		// Complete KEY_EXCHANGE as the app: DATA is only served on an encrypted channel
+		appEnc, err := testAppKeyExchange(conn, 1, identityPub)
+		if err != nil {
+			t.Logf("key exchange: %v", err)
+			return
+		}
+
 		// DATA request for /api/version
 		proxyReq := ProxyRequest{
 			ID:     "req_legacy_version",
@@ -615,6 +674,7 @@ func TestClient_E2E_LegacyJWTFallbackFlow(t *testing.T) {
 			Path:   "/api/version",
 		}
 		proxyReqBytes, _ := json.Marshal(proxyReq)
+		proxyReqBytes, _ = appEnc.Encrypt(proxyReqBytes)
 		dataFrame := NewFrame(FrameData, 1, proxyReqBytes)
 		dataBytes, _ := EncodeFrame(dataFrame)
 		_ = conn.WriteMessage(websocket.BinaryMessage, dataBytes)
@@ -624,6 +684,7 @@ func TestClient_E2E_LegacyJWTFallbackFlow(t *testing.T) {
 		frame, _ = DecodeFrame(msg)
 		if frame.Type == FrameData {
 			var resp ProxyResponse
+			frame.Payload, _ = appEnc.Decrypt(frame.Payload)
 			_ = json.Unmarshal(frame.Payload, &resp)
 			dataResponseCh <- resp
 		}
@@ -644,10 +705,11 @@ func TestClient_E2E_LegacyJWTFallbackFlow(t *testing.T) {
 			tokenMu.Unlock()
 			return legacyToken
 		},
-		TokenValidator: func(token string) bool { return token == "legacy-app-token" },
-		LocalAddr:      localAddr,
-		ServerVersion:  "5.4.2",
-		IdentityPubKey: "test-pub-key",
+		TokenValidator:     func(token string) bool { return token == "legacy-app-token" },
+		LocalAddr:          localAddr,
+		ServerVersion:      "5.4.2",
+		IdentityPubKey:     identityPub,
+		IdentityPrivateKey: identityPriv,
 	}
 
 	client := NewClient(cfg, deps, logger)
@@ -726,6 +788,8 @@ func TestClient_E2E_POSTWithBodyProxy(t *testing.T) {
 	defer mockAPI.Close()
 	localAddr := strings.TrimPrefix(mockAPI.URL, "http://")
 
+	identityPriv, identityPub := testIdentityKeyPair(t)
+
 	relayServer := mockRelayServer(t, func(conn *websocket.Conn) {
 		// REGISTER
 		_, msg, _ := conn.ReadMessage()
@@ -759,6 +823,13 @@ func TestClient_E2E_POSTWithBodyProxy(t *testing.T) {
 			return
 		}
 
+		// Complete KEY_EXCHANGE as the app: DATA is only served on an encrypted channel
+		appEnc, err := testAppKeyExchange(conn, 1, identityPub)
+		if err != nil {
+			t.Logf("key exchange: %v", err)
+			return
+		}
+
 		// Send POST request with body
 		proxyReq := ProxyRequest{
 			ID:     "req_ack_alert",
@@ -770,6 +841,7 @@ func TestClient_E2E_POSTWithBodyProxy(t *testing.T) {
 			Body: "eyJhY2tub3dsZWRnZWRfYnkiOiJ1c2VyQGV4YW1wbGUuY29tIn0=", // base64 of {"acknowledged_by":"user@example.com"}
 		}
 		proxyReqBytes, _ := json.Marshal(proxyReq)
+		proxyReqBytes, _ = appEnc.Encrypt(proxyReqBytes)
 		dataFrame := NewFrame(FrameData, 1, proxyReqBytes)
 		dataBytes, _ := EncodeFrame(dataFrame)
 		_ = conn.WriteMessage(websocket.BinaryMessage, dataBytes)
@@ -779,6 +851,7 @@ func TestClient_E2E_POSTWithBodyProxy(t *testing.T) {
 		frame, _ = DecodeFrame(msg)
 		if frame.Type == FrameData {
 			var resp ProxyResponse
+			frame.Payload, _ = appEnc.Decrypt(frame.Payload)
 			_ = json.Unmarshal(frame.Payload, &resp)
 			dataResponseCh <- resp
 		}
@@ -793,11 +866,12 @@ func TestClient_E2E_POSTWithBodyProxy(t *testing.T) {
 	}
 
 	deps := ClientDeps{
-		LicenseTokenFunc: func() string { return "test-jwt" },
-		TokenValidator:   func(token string) bool { return token == "write-token" },
-		LocalAddr:        localAddr,
-		ServerVersion:    "6.0.0-test",
-		IdentityPubKey:   "test-pub-key",
+		LicenseTokenFunc:   func() string { return "test-jwt" },
+		TokenValidator:     func(token string) bool { return token == "write-token" },
+		LocalAddr:          localAddr,
+		ServerVersion:      "6.0.0-test",
+		IdentityPubKey:     identityPub,
+		IdentityPrivateKey: identityPriv,
 	}
 
 	client := NewClient(cfg, deps, logger)

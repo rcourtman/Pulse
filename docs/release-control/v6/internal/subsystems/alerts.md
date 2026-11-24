@@ -2814,6 +2814,16 @@ marker; stale periodic work can never overwrite the failure recovery snapshot.
 An unreadable or malformed mirror is write-blocked and preserved for manual
 recovery even when healthy SQLite can continue serving current state; startup
 must never silently replace a recoverable source with an empty snapshot.
+The degraded marker and the recovery mirror are never written larger than the
+`maxActiveAlertsFileSizeBytes` their startup readers accept. When a snapshot
+does not fit, `writeActiveStateDegradedRecovery` trims oversized records and
+marks the envelope incomplete (`activeStatePartialRecoverySchemaVersion`) so
+startup restores the intact SQLite projection plus journal tail and merges kept
+observations additively without deleting omitted alerts. Startup also treats a
+pre-existing oversized degraded marker on disk as incomplete so existing
+installations recover from SQLite rather than starting empty.
+`TestOversizedAlertIsLeftOutOfReadableRecoveryFiles` in
+`internal/alerts/active_state_bootstrap_test.go` pins both paths.
 Acknowledgement and incident age are never implicit resolution evidence:
 restart restores long-running and long-acknowledged occurrences until fresh
 healthy evidence or an explicit operator action resolves them.
@@ -3266,7 +3276,12 @@ history reads to the recovery model without hiding live active-alert truth.
 Events retain for 90 days and prune hourly. Retention alone does not bound disk
 use: one flapping alert can write thousands of full alert-state snapshots inside
 the window, so the hourly prune also enforces a total stored snapshot-payload
-cap and removes the oldest events first when it is exceeded. A volume prune
+cap. The cap is shared between monitored sources, a host and everything
+referenced beneath its resource ID counting as one: a source storing no more
+than a fair share keeps all of its events, and a source storing more loses its
+own oldest snapshot events first, so no report can push another source's
+history out of the log. Events without a snapshot, including the clear-history
+tombstone, are left to age retention. A volume prune
 raises the same retention revision as age pruning, so the history projection
 rebuilds from the remaining log rather than reusing a stale fold. Fired and
 refired lifecycle events come only from the reducer core's explicit activation

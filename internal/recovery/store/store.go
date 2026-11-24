@@ -888,16 +888,32 @@ func (s *Store) BackfillKeys(ctx context.Context) error {
 	}
 
 	// Subject keys own rollup truth, so proxmox guest rows need canonical Go-side normalization
-	// even when a subject key already exists in the DB.
+	// even when a subject key already exists in the DB. Kubernetes and TrueNAS rows are re-keyed
+	// too: keys written before the provider scope joined the external key merge same-named
+	// subjects of different clusters or connections into one rollup. They get their own bound
+	// so a large proxmox history cannot crowd them out of the pass.
 	const maxBackfillRows = 5000
 
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT id, provider, subject_key, subject_resource_id, subject_ref_json
-		FROM recovery_points
-		WHERE
-			(subject_key IS NULL OR subject_key = '') OR
-			provider IN ('proxmox-pve', 'proxmox-pbs')
-		LIMIT `+fmt.Sprint(maxBackfillRows)+`
+		SELECT id, provider, subject_key, subject_resource_id, subject_ref_json, provider_scope, details_json
+		FROM (
+			SELECT id, provider, subject_key, subject_resource_id, subject_ref_json, provider_scope, details_json
+			FROM recovery_points
+			WHERE
+				(subject_key IS NULL OR subject_key = '') OR
+				provider IN ('proxmox-pve', 'proxmox-pbs')
+			LIMIT `+fmt.Sprint(maxBackfillRows)+`
+		)
+		UNION ALL
+		SELECT id, provider, subject_key, subject_resource_id, subject_ref_json, provider_scope, details_json
+		FROM (
+			SELECT id, provider, subject_key, subject_resource_id, subject_ref_json, provider_scope, details_json
+			FROM recovery_points
+			WHERE
+				subject_key IS NOT NULL AND subject_key != '' AND
+				provider IN ('kubernetes', 'truenas')
+			LIMIT `+fmt.Sprint(maxBackfillRows)+`
+		)
 	`)
 	if err != nil {
 		return err
@@ -905,17 +921,19 @@ func (s *Store) BackfillKeys(ctx context.Context) error {
 	defer rows.Close()
 
 	type subjectRow struct {
-		id         string
-		provider   string
-		subjectKey sql.NullString
-		rid        string
-		refRaw     sql.NullString
+		id            string
+		provider      string
+		subjectKey    sql.NullString
+		rid           string
+		refRaw        sql.NullString
+		providerScope sql.NullString
+		detailsRaw    sql.NullString
 	}
 
 	subjectItems := make([]subjectRow, 0, 256)
 	for rows.Next() {
 		var item subjectRow
-		if err := rows.Scan(&item.id, &item.provider, &item.subjectKey, &item.rid, &item.refRaw); err != nil {
+		if err := rows.Scan(&item.id, &item.provider, &item.subjectKey, &item.rid, &item.refRaw, &item.providerScope, &item.detailsRaw); err != nil {
 			return err
 		}
 		subjectItems = append(subjectItems, item)
@@ -964,7 +982,19 @@ func (s *Store) BackfillKeys(ctx context.Context) error {
 				rid = canonicalRID
 			}
 
-			key := recovery.SubjectKey(provider, rid, refPtr)
+			point := recovery.RecoveryPoint{
+				Provider:          provider,
+				SubjectResourceID: rid,
+				SubjectRef:        refPtr,
+				ProviderScope:     strings.TrimSpace(item.providerScope.String),
+			}
+			if point.ProviderScope == "" {
+				// Rows that predate provider_scope still name their cluster or
+				// connection in the details.
+				_ = unmarshalJSON(item.detailsRaw, &point.Details) // best-effort
+			}
+
+			key := recovery.SubjectKeyForPoint(point)
 			if strings.TrimSpace(key) == "" || strings.TrimSpace(item.subjectKey.String) == key {
 				continue
 			}

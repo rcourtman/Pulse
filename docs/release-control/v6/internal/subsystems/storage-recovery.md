@@ -7227,6 +7227,17 @@ derivation — sweeping protection-posture rows stranded under retired
 subject keys — so a live migration or a canonical-ID era change never forks
 one guest's protected item into stale and fresh rows. Rows without a
 recomputable guest identity keep their stored keys unchanged.
+That same key boundary is provider-scoped for Kubernetes and TrueNAS. A PVC
+or dataset ref is only unique inside the cluster or connection that reported
+it, so `recovery.SubjectKeyForPoint` hashes `ProviderScopeForPoint` into the
+external subject key for those providers: a point reported by one cluster or
+appliance must never decide the rollup outcome, success time, or backup-age
+alert of a same-named subject on another. The store's startup `BackfillKeys`
+pass re-keys stored Kubernetes and TrueNAS rows from `provider_scope` (or the
+scope in `details_json` for rows that predate that column) under a row bound
+of their own, which changes the rollup IDs of existing external Kubernetes
+and TrueNAS subjects once. Scope-less `recovery.SubjectKey` and Proxmox
+external keys are unchanged.
 The frontend decode boundary owns the runtime recovery display model:
 `frontend-modern/src/utils/recoveryPlatformModel.ts`, which
 `frontend-modern/src/hooks/useRecoveryPoints.ts` applies to every response,

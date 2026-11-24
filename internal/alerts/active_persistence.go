@@ -200,6 +200,54 @@ func (m *Manager) writeActiveAlertsRecoveryMirror(alerts []*Alert, boundaries ..
 	return m.writeActiveAlertsRecoveryMirrorLocked(alerts, boundaries...)
 }
 
+// activeAlertsWithinRecoveryFileLimit returns the alerts a recovery file can
+// carry, given the encoded size of the file that holds all of them. Startup
+// refuses a marker or mirror above maxActiveAlertsFileSizeBytes, so a writer
+// must never produce one. The largest records are left out until the rest fits.
+func activeAlertsWithinRecoveryFileLimit(alerts []*Alert, encoded int) []*Alert {
+	excess := int64(encoded) - maxActiveAlertsFileSizeBytes
+	if excess <= 0 || len(alerts) == 0 {
+		return alerts
+	}
+	records := make([][]byte, len(alerts))
+	largestFirst := make([]int, len(alerts))
+	for i, alert := range alerts {
+		largestFirst[i] = i
+		records[i], _ = json.Marshal(alert)
+	}
+	// Equal sizes fall back to the record bytes so the same alert set always
+	// yields the same file, whatever order the snapshot arrived in.
+	sort.Slice(largestFirst, func(i, j int) bool {
+		a, b := records[largestFirst[i]], records[largestFirst[j]]
+		if len(a) != len(b) {
+			return len(a) > len(b)
+		}
+		return bytes.Compare(a, b) < 0
+	})
+	omitted := make([]bool, len(alerts))
+	omittedCount := 0
+	for _, i := range largestFirst {
+		if excess <= 0 {
+			break
+		}
+		omitted[i] = true
+		omittedCount++
+		excess -= int64(len(records[i])) + 1 // the record and its separator
+	}
+	kept := make([]*Alert, 0, len(alerts)-omittedCount)
+	for i, alert := range alerts {
+		if !omitted[i] {
+			kept = append(kept, alert)
+		}
+	}
+	log.Warn().
+		Int("omitted", omittedCount).
+		Int("kept", len(kept)).
+		Int64("maxBytes", maxActiveAlertsFileSizeBytes).
+		Msg("Active alerts exceed the recovery file size limit; largest alerts left out of the recovery checkpoint")
+	return kept
+}
+
 func (m *Manager) writeActiveAlertsRecoveryMirrorLocked(alerts []*Alert, boundaries ...eventlog.JournalBoundary) error {
 	if m.activeRecoveryWriteBlock.Load() {
 		return fmt.Errorf("active alert recovery mirror is write-blocked because its startup source was unreadable")
@@ -237,6 +285,13 @@ func (m *Manager) writeActiveAlertsRecoveryMirrorLocked(alerts []*Alert, boundar
 	data, err := json.Marshal(records)
 	if err != nil {
 		return fmt.Errorf("failed to marshal active alerts: %w", err)
+	}
+	if int64(len(data)) > maxActiveAlertsFileSizeBytes {
+		kept := activeAlertsWithinRecoveryFileLimit(alerts, len(data))
+		if len(kept) == len(alerts) {
+			kept = []*Alert{}
+		}
+		return m.writeActiveAlertsRecoveryMirrorLocked(kept, boundaries...)
 	}
 
 	finalFile := filepath.Join(alertsDir, "active-alerts.json")

@@ -48,6 +48,8 @@ func (l *AsyncLogger) Record(event Event) error {
 	if l == nil {
 		return nil
 	}
+	// Bound the event here as well: the queue holds it until the backend does.
+	event = boundEvent(event)
 	if l.closed.Load() {
 		return l.backend.Record(event)
 	}

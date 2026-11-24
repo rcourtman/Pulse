@@ -24,6 +24,13 @@ const (
 
 	// proxyRequestTimeout is the per-request timeout for proxied HTTP calls.
 	proxyRequestTimeout = 30 * time.Second
+
+	// relayViaHeader marks every proxied request as forwarded. The request
+	// reaches the local API from a loopback peer with a loopback Host, but a
+	// remote app wrote it, so it must never pass for a client on the Pulse
+	// host: Via is one of the forwarding headers that the API's loopback
+	// trust rule (isDirectLoopbackRequest) refuses.
+	relayViaHeader = "1.1 pulse-relay"
 )
 
 // ProxyRequest is the JSON payload inside a DATA frame from the app to the instance.
@@ -155,6 +162,8 @@ func (p *HTTPProxy) HandleRequest(payload []byte, apiToken string) ([]byte, erro
 
 	// Inject the API token for Pulse auth middleware
 	httpReq.Header.Set("X-API-Token", apiToken)
+	// Set after the allowlist so the app can neither supply nor drop it.
+	httpReq.Header.Set("Via", relayViaHeader)
 
 	p.logger.Debug().
 		Str("request_id", req.ID).
@@ -262,6 +271,7 @@ func (p *HTTPProxy) HandleStreamRequest(ctx context.Context, payload []byte, api
 		}
 	}
 	httpReq.Header.Set("X-API-Token", apiToken)
+	httpReq.Header.Set("Via", relayViaHeader)
 
 	p.logger.Debug().
 		Str("request_id", req.ID).

@@ -165,6 +165,27 @@ func TestAvailabilityHTTPContractRejectsUnboundedOrExecutableShapes(t *testing.T
 	}
 }
 
+func TestAvailabilityHTTPContractNormalizesAndValidatesCertificateFingerprint(t *testing.T) {
+	target := AvailabilityTarget{
+		Address: "https://service.local/health", Protocol: AvailabilityProbeHTTPS, Enabled: true,
+		HTTP: &AvailabilityHTTPConfig{TLSFingerprintSHA256: " AB:" + strings.Repeat("cd:", 30) + "EF "},
+	}
+	normalized := NormalizeAvailabilityTarget(target)
+	if want := "ab" + strings.Repeat("cd", 30) + "ef"; normalized.HTTP.TLSFingerprintSHA256 != want {
+		t.Fatalf("fingerprint = %q, want %q", normalized.HTTP.TLSFingerprintSHA256, want)
+	}
+	if err := normalized.Validate(); err != nil {
+		t.Fatalf("Validate() error = %v, want a SHA-256 fingerprint accepted", err)
+	}
+
+	for _, fingerprint := range []string{"abcd", strings.Repeat("zz", 32), strings.Repeat("ab", 20)} {
+		target.HTTP = &AvailabilityHTTPConfig{TLSFingerprintSHA256: fingerprint}
+		if err := NormalizeAvailabilityTarget(target).Validate(); err == nil {
+			t.Fatalf("Validate() error = nil for fingerprint %q, want SHA-256 validation", fingerprint)
+		}
+	}
+}
+
 func TestAvailabilityTargetValidateRejectsTCPWithoutPort(t *testing.T) {
 	target := NormalizeAvailabilityTarget(AvailabilityTarget{
 		Address:  "device.local",
