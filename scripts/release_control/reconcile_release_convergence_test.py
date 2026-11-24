@@ -94,6 +94,27 @@ class TransientReadTests(unittest.TestCase):
         self.assertNotIn("fixture", warnings.getvalue())
         self.assertNotIn("stream ID", warnings.getvalue())
 
+    def test_retry_warning_omits_authenticated_private_endpoint(self):
+        github = subject.GitHub("rcourtman/Pulse", "gh")
+        endpoint = "repos/rcourtman/pulse-pro/actions/runs/123/jobs?per_page=100"
+        results = [
+            self.result(1, stderr="gh: Gateway Timeout (HTTP 504)"),
+            self.result(0, '{"jobs": []}'),
+        ]
+        warnings = io.StringIO()
+        with (
+            patch.object(subject.subprocess, "run", side_effect=results) as command,
+            patch("time.sleep"),
+            contextlib.redirect_stderr(warnings),
+        ):
+            self.assertEqual({"jobs": []}, github.api(endpoint, token="fixture-token"))
+        self.assertEqual(2, command.call_count)
+        self.assertEqual(command.call_args_list[0], command.call_args_list[1])
+        self.assertEqual(
+            warnings.getvalue(),
+            "Transient GitHub API read failure (private GitHub API read; http-504); retry 1/2.\n",
+        )
+
     def test_api_retries_transient_errors_with_bounded_backoff(self):
         github = subject.GitHub("rcourtman/Pulse", "gh")
         for diagnostic in ("gh: HTTP 502\n", "gh: unavailable (HTTP 503)", "gh: Gateway Timeout (HTTP 504)"):
