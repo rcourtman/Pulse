@@ -488,23 +488,25 @@ describe('AgentsMachinesTable', () => {
     expect(row('nas')).not.toHaveClass('bg-red-50');
   });
 
-  it('explains an open Unraid array assessment only on its owning machine', () => {
-    const machine = (id: string, agentId: string, sourceType: Resource['sourceType'] = 'agent') =>
+  it('explains active alerts and degraded health on the StatusDot tooltip without adding inline prose to the row', () => {
+    const machine = (id: string, agentId: string, overrides: Partial<Resource> = {}) =>
       resource({
         id,
         name: 'Tower',
-        sourceType,
+        sourceType: 'agent',
+        lastSeen: Date.now(),
         agent: { agentId, unraid: { arrayState: 'STARTED' } },
+        ...overrides,
       });
     const assessment: Alert = {
       id: 'array-assessment',
       type: 'storage-topology',
-      level: 'critical',
+      level: 'warning',
       resourceId: 'agent:host-tower/storage:unraid-array',
       resourceName: 'Tower - Unraid Array',
       node: 'tower',
       instance: 'unraid',
-      message: 'Unraid array reports 1 missing disk(s)',
+      message: 'Unraid array is running without parity protection',
       value: 0,
       threshold: 0,
       startTime: '2026-11-19T16:17:51Z',
@@ -514,35 +516,69 @@ describe('AgentsMachinesTable', () => {
     render(() => (
       <AgentsMachinesTable
         resources={[
-          machine('owner', 'host-tower'),
+          machine('owner', 'host-tower', {
+            status: 'warning',
+            agent: {
+              agentId: 'host-tower',
+              unraid: {
+                arrayState: 'STARTED',
+                riskSummary: 'Unraid array is running without parity protection',
+              },
+            },
+          }),
           machine('namesake', 'foreign-host'),
-          machine('api', 'host-tower', 'api'),
         ]}
         emptyIcon={emptyIcon}
         emptyTitle="No machines"
         emptyDescription="Install Pulse Agent."
       />
     ));
-    const rows = (id: string) =>
-      within(document.querySelector<HTMLElement>(`[data-agents-machine-row="${id}"]`)!);
-    const copy = 'Critical · 1 missing disk';
-    expect(screen.queryByText(copy)).toBeNull();
+    const rowEl = (id: string) =>
+      document.querySelector<HTMLElement>(`[data-agents-machine-row="${id}"]`)!;
+    const dot = (id: string) => rowEl(id).querySelector<HTMLElement>('span[role="img"]')!;
 
-    setActiveAlerts({ assessment: { ...assessment } });
-    expect(rows('owner').getByText(copy)).toBeVisible();
-    expect(rows('namesake').queryByText(copy)).toBeNull();
-    expect(rows('api').queryByText(copy)).toBeNull();
-    setActiveAlerts('assessment', 'acknowledged', true);
-    expect(screen.queryByText(copy)).toBeNull();
-    setActiveAlerts('assessment', {
-      acknowledged: false,
-      resourceId: 'agent:host-tower/storage:cache',
+    // Health risk fallback is exposed on the StatusDot without cluttering the row.
+    expect(dot('owner')).toHaveAttribute(
+      'title',
+      'Warning · Unraid array is running without parity protection',
+    );
+    expect(dot('owner')).toHaveAttribute(
+      'aria-label',
+      'Warning · Unraid array is running without parity protection',
+    );
+    expect(dot('namesake')).toHaveAttribute('title', 'Online');
+    expect(rowEl('owner').querySelector('[data-unraid-array-alert]')).toBeNull();
+    expect(
+      within(rowEl('owner')).queryByText(/Unraid array is running without parity protection/),
+    ).toBeNull();
+
+    // Active unacknowledged alerts override the tooltip only on the owning machine.
+    setActiveAlerts({
+      assessment: {
+        ...assessment,
+        level: 'critical',
+        message: 'Unraid array reports 1 missing disk(s)',
+      },
     });
-    expect(screen.queryByText(copy)).toBeNull();
-    setActiveAlerts({ assessment: { ...assessment } });
-    expect(rows('owner').getByText(copy)).toBeVisible();
+    expect(dot('owner')).toHaveAttribute(
+      'title',
+      'Critical · Unraid array reports 1 missing disk(s)',
+    );
+    expect(dot('namesake')).toHaveAttribute('title', 'Online');
+    expect(rowEl('owner').querySelector('[data-unraid-array-alert]')).toBeNull();
+    expect(within(rowEl('owner')).queryByText(/missing disk/)).toBeNull();
+
+    // Acknowledging falls back to the underlying health risk summary.
+    setActiveAlerts('assessment', 'acknowledged', true);
+    expect(dot('owner')).toHaveAttribute(
+      'title',
+      'Warning · Unraid array is running without parity protection',
+    );
     setActiveAlerts(reconcile({}));
-    expect(screen.queryByText(copy)).toBeNull();
+    expect(dot('owner')).toHaveAttribute(
+      'title',
+      'Warning · Unraid array is running without parity protection',
+    );
   });
 
   it('keeps the column picker inside the shared View preferences disclosure', async () => {
