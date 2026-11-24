@@ -211,6 +211,46 @@ describe('useConnectionsLedger', () => {
     ]);
   });
 
+  it('includes enabled Docker and Kubernetes agent modules in coverage labels', async () => {
+    const connections: Connection[] = [
+      {
+        id: 'agent:unraid-docker',
+        type: 'agent',
+        name: 'Tower',
+        address: 'Tower',
+        state: 'active',
+        stateReason: '',
+        enabled: true,
+        surfaces: ['host'],
+        scope: { host: true },
+        lastSeen: '2026-04-23T12:00:00Z',
+        lastError: null,
+        source: 'agent',
+        agentModules: [
+          {
+            name: 'docker',
+            enabled: true,
+            state: 'running',
+            updatedAt: '2026-04-23T12:00:00Z',
+          },
+          {
+            name: 'kubernetes',
+            enabled: false,
+            state: 'disabled',
+            updatedAt: '2026-04-23T12:00:00Z',
+          },
+        ],
+        capabilities: { supportsPause: false, supportsScope: false, supportsTest: false },
+      },
+    ];
+    vi.spyOn(ConnectionsAPI, 'list').mockResolvedValue({ connections, systems: [] });
+
+    const { result } = renderHook(() => useConnectionsLedger());
+
+    await waitFor(() => expect(result.rows()).toHaveLength(1));
+    expect(result.rows()[0].coverageLabels).toEqual(['Host telemetry', 'Docker']);
+  });
+
   it('presents successful TrueNAS runtime state as verified activity', async () => {
     const lastSeen = '2026-05-28T12:00:00Z';
     const connections: Connection[] = [
@@ -866,7 +906,7 @@ describe('useConnectionsLedger', () => {
       source: 'both',
       host: undefined,
       isCluster: true,
-      coverageLabels: ['VMs', 'Containers', 'Storage', 'Backups'],
+      coverageLabels: ['VMs', 'Containers', 'Storage', 'Backups', 'Host telemetry'],
     });
     expect(result.rows()[0].attachedConnections.map((connection) => connection.id)).toEqual([
       'agent:agent-delly',

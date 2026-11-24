@@ -1282,8 +1282,81 @@ describe('InfrastructureSourceManager setup summary', () => {
     expect(new Set(hrefs('backup-vault'))).toEqual(new Set(['/proxmox/backups']));
     expect(new Set(hrefs('mail-gateway'))).toEqual(new Set(['/proxmox/mail']));
     expect(new Set(hrefs('Lab vCenter'))).toEqual(new Set(['/vmware/overview']));
-    // An agent host shows on a different page depending on what it runs.
-    expect(screen.queryByRole('link', { name: 'host-1' })).toBeNull();
-    expect(screen.getAllByText('host-1').length).toBeGreaterThan(0);
+    expect(new Set(hrefs('host-1'))).toEqual(new Set(['/standalone/machines']));
+  });
+
+  it('groups standalone agent hosts by detected OS family and compacts off discovery when systems exist', () => {
+    const macConn = connectionFixture({
+      id: 'agent:mac-mini',
+      name: 'mac-mini.local',
+      agentIdentity: {
+        hostname: 'mac-mini.local',
+        platform: 'darwin',
+        osName: 'macOS',
+        osVersion: '15.2',
+      },
+    });
+    const ubuntuConn = connectionFixture({
+      id: 'agent:ubuntu-box',
+      name: 'ubuntu-box.local',
+      agentIdentity: {
+        hostname: 'ubuntu-box.local',
+        platform: 'linux',
+        osName: 'Ubuntu',
+        osVersion: '24.04',
+      },
+    });
+    const debianConn = connectionFixture({
+      id: 'agent:debian-box',
+      name: 'debian-box.local',
+      agentIdentity: {
+        hostname: 'debian-box.local',
+        platform: 'linux',
+        osName: 'Debian',
+        osVersion: '12',
+      },
+    });
+    const onAddSource = vi.fn();
+    const onAddSourceStep = vi.fn();
+    render(() => (
+      <InfrastructureSourceManager
+        rows={() => [
+          row({
+            id: macConn.id,
+            name: macConn.name,
+            connection: macConn,
+          }),
+          row({
+            id: ubuntuConn.id,
+            name: ubuntuConn.name,
+            connection: ubuntuConn,
+          }),
+          row({
+            id: debianConn.id,
+            name: debianConn.name,
+            connection: debianConn,
+          }),
+        ]}
+        discoveredNodes={() => []}
+        discoveryEnabled={false}
+        discoveryScanStatus={() => ({ scanning: false })}
+        readOnly={false}
+        onAddSource={onAddSource}
+        onAddSourceStep={onAddSourceStep}
+        onOpenDiscoverySettings={vi.fn()}
+      />
+    ));
+
+    expect(screen.getByText('macOS')).toBeInTheDocument();
+    expect(screen.getByText('Linux')).toBeInTheDocument();
+    expect(screen.queryByText('Ubuntu')).not.toBeInTheDocument();
+    expect(screen.queryByText('Debian')).not.toBeInTheDocument();
+    expect(screen.queryByText('Pulse Agent hosts')).not.toBeInTheDocument();
+    expect(screen.queryByText('Optional setup')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Configure discovery' })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Add macOS' }));
+    expect(onAddSource).toHaveBeenCalledWith('agent');
+    expect(onAddSourceStep).not.toHaveBeenCalled();
   });
 });

@@ -1,0 +1,69 @@
+{
+  "version": 1,
+  "base_sha": "679007e638aa09a748691a3b686f456abac2c651",
+  "verified_at": "2026-11-24T23:33:02Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/ConnectionEditor/CredentialSlots/NodeCredentialSlot.tsx",
+    "frontend-modern/src/components/Settings/InfrastructureAgentDoctorPage.tsx",
+    "frontend-modern/src/components/Settings/InfrastructureInstallerSection.tsx",
+    "frontend-modern/src/components/Settings/InfrastructureSourceManager.tsx",
+    "frontend-modern/src/components/Settings/InfrastructureWorkspace.tsx",
+    "frontend-modern/src/components/Settings/NodeModalAuthenticationSection.tsx",
+    "frontend-modern/src/components/Settings/NodeModalBasicInfoSection.tsx",
+    "frontend-modern/src/components/Settings/NodeModalClusterMembersSection.tsx",
+    "frontend-modern/src/components/Settings/NodeModalMonitoringSection.tsx",
+    "frontend-modern/src/components/Settings/NodeModalStatusFooter.tsx",
+    "frontend-modern/src/components/Settings/connectionsTableModel.ts",
+    "frontend-modern/src/components/Settings/infrastructureAgentUpdateCommandsModel.ts",
+    "frontend-modern/src/components/Settings/useConnectionsLedger.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/ConnectionEditor/CredentialSlots/NodeCredentialSlot.tsx": "c4897ea74553e90251208b84767b32f6fc12d4eab2816105015ab7e59727edd9",
+    "frontend-modern/src/components/Settings/InfrastructureAgentDoctorPage.tsx": "4039494b245f6ba222de13c43676256ccec2c4b05a43cf7ff2b651ccdea27f83",
+    "frontend-modern/src/components/Settings/InfrastructureInstallerSection.tsx": "0ba3c97e062ce92af77fccb747800c9ff2e7aeb5d764f6350ee188f117088798",
+    "frontend-modern/src/components/Settings/InfrastructureSourceManager.tsx": "62c60e1503d17281f03a983ab9a28ea3c112ae2313b0d94778742ac7e1da214c",
+    "frontend-modern/src/components/Settings/InfrastructureWorkspace.tsx": "9fe4ee4c43277a7641220c624f975725b1ef363a493e62948ba137ee33619740",
+    "frontend-modern/src/components/Settings/NodeModalAuthenticationSection.tsx": "616944b648afb32c82c5bf4d530fa17c565e5edaf0b49bc5f64fdd9d0abe4fb5",
+    "frontend-modern/src/components/Settings/NodeModalBasicInfoSection.tsx": "78f0c48c9564dd1912aee767d55ecc69789e00e4a9d8779fb541d92de670575c",
+    "frontend-modern/src/components/Settings/NodeModalClusterMembersSection.tsx": "1b3ec2217f31d04ccdfaa7b8f1e90e9e642ea24bac98f84fcf171b86bb7cb3f0",
+    "frontend-modern/src/components/Settings/NodeModalMonitoringSection.tsx": "4453ab2f1a297fc9a4694dc0b5e84e3cd5785ab971f6956ea7277b5b51702f14",
+    "frontend-modern/src/components/Settings/NodeModalStatusFooter.tsx": "385d4fd436549dd019adc420f906bf7b32294b87f621bdaf8c0c36f7dbda7765",
+    "frontend-modern/src/components/Settings/connectionsTableModel.ts": "3a755ab64bdc81193317863e454b1852fba1d7e2e54854be36ed32d77058ed1c",
+    "frontend-modern/src/components/Settings/infrastructureAgentUpdateCommandsModel.ts": "b1a344a0f4dfa5b437eae0a0e676f0e72fbc898c023c7b51b610af43664562ec",
+    "frontend-modern/src/components/Settings/useConnectionsLedger.ts": "e5e56f438bf556dd5f9154240c75e9f7ac6de411bc4831331940756b8270ddd2"
+  },
+  "routes": [
+    "/settings/infrastructure",
+    "/settings/infrastructure?add=linux-host",
+    "/settings/infrastructure?add=unraid",
+    "/settings/infrastructure/agent-doctor"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Connected systems desktop table with Proxmox cluster, Unraid, and macOS OS-family sections",
+    "Compact off-state Discover Proxmox systems strip when systems exist",
+    "Manage Proxmox cluster dialog with hidden 1-2-3 stepper, Cluster Name label, collapsed Cluster members and Setup scripts disclosures, Pulse Agent augmentation cards with Open in Agent Doctor buttons, and sticky footer",
+    "Manage standalone Unraid agent dialog with status pill, relative and localized Last seen, single OS-filtered Unix uninstall card, Open in Agent Doctor button, and Remove source button",
+    "Install Pulse Agent dialog with compact Step 1 above the fold and Monitoring-only token disclosure",
+    "Agent Doctor overview and expanded healthy row with collapsed Security disclosure and clean privilege copy",
+    "Mobile 390x844 overview and expanded Proxmox cluster card with parent Manage above Cluster nodes and zero horizontal overflow"
+  ],
+  "interactions": [
+    "Verified system link targets to /proxmox/overview and /standalone/machines plus Host telemetry and Docker coverage labels",
+    "Opened Manage homelab, expanded and collapsed Cluster members (3), scrolled to verify Pulse Agent augmentation renders above sticky Save changes footer, dismissed with Escape",
+    "Opened Manage Tower, verified single Unix uninstall card and Open in Agent Doctor button, clicked Get install command to verify ?add=unraid routing, clicked Add macOS to verify Add Pulse Agent dialog, clicked Open in Agent Doctor to verify scoped Agent Doctor navigation",
+    "Opened ?add=linux-host installer, verified Generate token sits above the fold at 1440x900, toggled Monitoring-only token details disclosure",
+    "Opened Agent Doctor, expanded healthy delly row, expanded Security disclosure to verify privilege label without stutter",
+    "Switched to 390x844, verified zero horizontal overflow, expanded homelab cluster nodes to verify parent Manage sits above Cluster nodes"
+  ]
+}

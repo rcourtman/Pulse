@@ -35,6 +35,7 @@ import {
   getGroupedTableRowClass,
 } from '@/components/shared/groupedTableRowPresentation';
 import {
+  connectionAgentPlatformFamilyLabel,
   connectionAgentVersionPresentation,
   infrastructureRowMonitoringPath,
   infrastructureSourcePresentation,
@@ -363,7 +364,11 @@ const agentHostProfileRouteStep = (
 
 const agentHostProfileGroupLabel = (row: InfrastructureSystemRow): string | null => {
   if (row.connection.type !== 'agent') return null;
-  return getAgentHostProfileFamily(row.connection.agentIdentity?.hostProfile) ?? null;
+  return (
+    getAgentHostProfileFamily(row.connection.agentIdentity?.hostProfile) ??
+    connectionAgentPlatformFamilyLabel(row.connection.agentIdentity) ??
+    null
+  );
 };
 
 export const InfrastructureSourceManager: Component<InfrastructureSourceManagerProps> = (props) => {
@@ -457,23 +462,24 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
     for (const row of rows) {
       const profileLabel = agentHostProfileGroupLabel(row);
       const profileStep = agentHostProfileRouteStep(row);
-      if (!profileLabel || !profileStep) {
+      if (!profileLabel) {
         genericRows.push(row);
         continue;
       }
 
-      const existing = profileGroups.get(profileStep);
+      const groupKey = profileLabel.toLowerCase();
+      const existing = profileGroups.get(groupKey);
       if (existing) {
         existing.rows.push(row);
         continue;
       }
 
-      profileGroups.set(profileStep, {
-        id: `agent-profile:${profileStep}`,
+      profileGroups.set(groupKey, {
+        id: `agent-profile:${groupKey}`,
         label: profileLabel,
         actionLabel: `Add ${profileLabel}`,
         actionType: product.type,
-        actionStep: profileStep,
+        actionStep: profileStep ?? undefined,
         rows: [row],
       });
     }
@@ -731,6 +737,15 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
   });
   const useCardLayout = createMemo(() => layoutWidth() <= CARD_LAYOUT_MAX_WIDTH_PX);
 
+  const discoveryCompact = createMemo(
+    () =>
+      !props.discoveryEnabled &&
+      discoveredCandidateCount() === 0 &&
+      !props.discoveryScanStatus().scanning &&
+      !discoveryErrorSummary(props.discoveryScanStatus().errors) &&
+      hasAnyConfigured(),
+  );
+
   const discoveryMonitorBand = () => (
     <section
       aria-label="Discover Proxmox systems"
@@ -739,10 +754,12 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
     >
       <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <div class="min-w-0 flex-1">
-          <div class="text-[11px] font-medium uppercase tracking-[0.08em] text-muted">
-            Optional setup
-          </div>
-          <div class="mt-1 flex flex-wrap items-center gap-2">
+          <Show when={!discoveryCompact()}>
+            <div class="text-[11px] font-medium uppercase tracking-[0.08em] text-muted">
+              Optional setup
+            </div>
+          </Show>
+          <div class={`${discoveryCompact() ? '' : 'mt-1 '}flex flex-wrap items-center gap-2`}>
             <h3 class="flex items-center gap-2 text-sm font-semibold text-base-content">
               <Search class="h-4 w-4 text-blue-600 dark:text-blue-300" aria-hidden="true" />
               Discover Proxmox systems
@@ -764,7 +781,9 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
               <span class="text-xs text-muted">{discoveryMonitorMeta()}</span>
             </Show>
           </div>
-          <p class="mt-1 max-w-4xl text-xs leading-5 text-muted">{discoveryMonitorDetail()}</p>
+          <Show when={!discoveryCompact()}>
+            <p class="mt-1 max-w-4xl text-xs leading-5 text-muted">{discoveryMonitorDetail()}</p>
+          </Show>
           <Show when={discoveryErrorSummary(props.discoveryScanStatus().errors)}>
             {(summary) => (
               <div class="mt-2 flex items-start gap-2 text-xs text-amber-800 dark:text-amber-200">
@@ -1734,6 +1753,116 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                                   </div>
                                 </Show>
 
+                                <footer class="mt-2 border-t border-border-subtle pt-2">
+                                  <div class="flex items-center justify-between gap-2">
+                                    <div class="flex flex-wrap items-center gap-1.5">
+                                      <span
+                                        class={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium whitespace-nowrap ${row.statusClassName}`}
+                                      >
+                                        {row.statusLabel}
+                                      </span>
+                                      <Show when={row.agentUpdateCount > 0}>
+                                        <Show
+                                          when={!props.readOnly && props.onOpenAgentDoctor}
+                                          fallback={
+                                            <span class="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-800 dark:bg-amber-900/25 dark:text-amber-200">
+                                              {row.agentUpdateCount === 1
+                                                ? 'Agent update'
+                                                : `${row.agentUpdateCount} agent updates`}
+                                            </span>
+                                          }
+                                        >
+                                          <button
+                                            type="button"
+                                            class="inline-flex min-h-11 items-center rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-800 transition-colors hover:bg-amber-200 lg:min-h-0 dark:bg-amber-900/25 dark:text-amber-200 dark:hover:bg-amber-800"
+                                            onClick={() =>
+                                              props.onOpenAgentDoctor?.(
+                                                agentConnectionIDsForInfrastructureRow(row, true),
+                                              )
+                                            }
+                                            aria-label={`${row.agentUpdateCount === 1 ? 'Agent update' : `${row.agentUpdateCount} agent updates`}: open Agent Doctor for ${row.name}`}
+                                          >
+                                            {row.agentUpdateCount === 1
+                                              ? 'Agent update'
+                                              : `${row.agentUpdateCount} agent updates`}
+                                          </button>
+                                        </Show>
+                                      </Show>
+                                      <span
+                                        class="text-[12px]"
+                                        title={
+                                          row.isCluster
+                                            ? 'Oldest activity across cluster API and member agents'
+                                            : undefined
+                                        }
+                                      >
+                                        {row.lastActivityText}
+                                      </span>
+                                    </div>
+                                    <Show when={!props.readOnly && rowInteractive(row)}>
+                                      <div class="flex flex-wrap justify-end gap-1.5">
+                                        <Show
+                                          when={
+                                            rowNeedsAgentCoverage(row) &&
+                                            Boolean(props.onAddSourceStep || props.onAddSource)
+                                          }
+                                        >
+                                          <Button
+                                            type="button"
+                                            variant="outline"
+                                            size="xs"
+                                            class="min-h-11 gap-1.5 lg:min-h-0"
+                                            onClick={() => handleInstallAgent(row)}
+                                            aria-label={installAgentActionLabel(row)}
+                                            title={
+                                              row.isCluster
+                                                ? canInstallFromCluster(row)
+                                                  ? 'Install Pulse Agent on the uncovered nodes from a node that already runs it.'
+                                                  : 'Generate an installer command to run once on each uncovered Proxmox node.'
+                                                : 'Install Pulse Agent on this system to add node-local telemetry (temperatures, SMART, host identity).'
+                                            }
+                                          >
+                                            <Cpu class="h-3.5 w-3.5" />
+                                            {row.isCluster
+                                              ? 'Install node agents'
+                                              : 'Install agent'}
+                                          </Button>
+                                        </Show>
+                                        <Button
+                                          type="button"
+                                          variant="outline"
+                                          size="xs"
+                                          class="min-h-11 min-w-18 shrink-0 lg:min-h-0"
+                                          onClick={() => props.onOpenConnection?.(row)}
+                                          data-infrastructure-manage-id={row.id}
+                                        >
+                                          Manage
+                                        </Button>
+                                      </div>
+                                    </Show>
+                                  </div>
+                                  <Show when={row.problem}>
+                                    {(problem) => (
+                                      <div
+                                        class={`mt-1 text-[11px] italic ${
+                                          problem().tone === 'critical'
+                                            ? 'text-rose-700 dark:text-rose-300'
+                                            : 'text-amber-700 dark:text-amber-300'
+                                        }`}
+                                        title={problem().detail}
+                                      >
+                                        {problem().label}
+                                      </div>
+                                    )}
+                                  </Show>
+                                </footer>
+
+                                <Show when={row.lastErrorMessage}>
+                                  <div role="alert" class={`mt-2 ${rowErrorBannerClass(row)}`}>
+                                    {row.lastErrorMessage}
+                                  </div>
+                                </Show>
+
                                 <Show when={row.members.length > 0 && membersExpanded(row)}>
                                   <div class="mt-3 border-t border-border-subtle pt-2">
                                     <div class="text-[11px] font-medium uppercase tracking-[0.08em] text-muted">
@@ -1845,116 +1974,6 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                                         }}
                                       </For>
                                     </div>
-                                  </div>
-                                </Show>
-
-                                <footer class="mt-2 border-t border-border-subtle pt-2">
-                                  <div class="flex items-center justify-between gap-2">
-                                    <div class="flex flex-wrap items-center gap-1.5">
-                                      <span
-                                        class={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium whitespace-nowrap ${row.statusClassName}`}
-                                      >
-                                        {row.statusLabel}
-                                      </span>
-                                      <Show when={row.agentUpdateCount > 0}>
-                                        <Show
-                                          when={!props.readOnly && props.onOpenAgentDoctor}
-                                          fallback={
-                                            <span class="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-800 dark:bg-amber-900/25 dark:text-amber-200">
-                                              {row.agentUpdateCount === 1
-                                                ? 'Agent update'
-                                                : `${row.agentUpdateCount} agent updates`}
-                                            </span>
-                                          }
-                                        >
-                                          <button
-                                            type="button"
-                                            class="inline-flex min-h-11 items-center rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-800 transition-colors hover:bg-amber-200 lg:min-h-0 dark:bg-amber-900/25 dark:text-amber-200 dark:hover:bg-amber-800"
-                                            onClick={() =>
-                                              props.onOpenAgentDoctor?.(
-                                                agentConnectionIDsForInfrastructureRow(row, true),
-                                              )
-                                            }
-                                            aria-label={`${row.agentUpdateCount === 1 ? 'Agent update' : `${row.agentUpdateCount} agent updates`}: open Agent Doctor for ${row.name}`}
-                                          >
-                                            {row.agentUpdateCount === 1
-                                              ? 'Agent update'
-                                              : `${row.agentUpdateCount} agent updates`}
-                                          </button>
-                                        </Show>
-                                      </Show>
-                                      <span
-                                        class="text-[12px]"
-                                        title={
-                                          row.isCluster
-                                            ? 'Oldest activity across cluster API and member agents'
-                                            : undefined
-                                        }
-                                      >
-                                        {row.lastActivityText}
-                                      </span>
-                                    </div>
-                                    <Show when={!props.readOnly && rowInteractive(row)}>
-                                      <div class="flex flex-wrap justify-end gap-1.5">
-                                        <Show
-                                          when={
-                                            rowNeedsAgentCoverage(row) &&
-                                            Boolean(props.onAddSourceStep || props.onAddSource)
-                                          }
-                                        >
-                                          <Button
-                                            type="button"
-                                            variant="outline"
-                                            size="xs"
-                                            class="min-h-11 gap-1.5 lg:min-h-0"
-                                            onClick={() => handleInstallAgent(row)}
-                                            aria-label={installAgentActionLabel(row)}
-                                            title={
-                                              row.isCluster
-                                                ? canInstallFromCluster(row)
-                                                  ? 'Install Pulse Agent on the uncovered nodes from a node that already runs it.'
-                                                  : 'Generate an installer command to run once on each uncovered Proxmox node.'
-                                                : 'Install Pulse Agent on this system to add node-local telemetry (temperatures, SMART, host identity).'
-                                            }
-                                          >
-                                            <Cpu class="h-3.5 w-3.5" />
-                                            {row.isCluster
-                                              ? 'Install node agents'
-                                              : 'Install agent'}
-                                          </Button>
-                                        </Show>
-                                        <Button
-                                          type="button"
-                                          variant="outline"
-                                          size="xs"
-                                          class="min-h-11 min-w-18 shrink-0 lg:min-h-0"
-                                          onClick={() => props.onOpenConnection?.(row)}
-                                          data-infrastructure-manage-id={row.id}
-                                        >
-                                          Manage
-                                        </Button>
-                                      </div>
-                                    </Show>
-                                  </div>
-                                  <Show when={row.problem}>
-                                    {(problem) => (
-                                      <div
-                                        class={`mt-1 text-[11px] italic ${
-                                          problem().tone === 'critical'
-                                            ? 'text-rose-700 dark:text-rose-300'
-                                            : 'text-amber-700 dark:text-amber-300'
-                                        }`}
-                                        title={problem().detail}
-                                      >
-                                        {problem().label}
-                                      </div>
-                                    )}
-                                  </Show>
-                                </footer>
-
-                                <Show when={row.lastErrorMessage}>
-                                  <div role="alert" class={`mt-2 ${rowErrorBannerClass(row)}`}>
-                                    {row.lastErrorMessage}
                                   </div>
                                 </Show>
                               </article>

@@ -359,37 +359,44 @@ export const InfrastructureInstallerSection: Component<InfrastructureInstallerSe
             </p>
           </div>
 
-          <div class="ml-6 rounded-md border border-blue-200 bg-blue-50 p-3 dark:border-blue-800 dark:bg-blue-900/25">
-            <p class="mb-2 text-sm font-semibold text-blue-800 dark:text-blue-200">
-              What this token authorizes:
-            </p>
-            <ul class="space-y-1 text-xs text-blue-700 dark:text-blue-300">
-              <li class="flex items-start">
-                <span class="mr-2 mt-0.5 text-emerald-500">✓</span>
-                <span>
-                  Pulse Agent on this host reports its own telemetry to this Pulse instance.
-                </span>
-              </li>
-              <li class="flex items-start">
-                <span class="mr-2 mt-0.5 text-emerald-500">✓</span>
-                <span>
-                  {state.enableCommands()
-                    ? 'Pulse can run commands as root on this host, including container updates and Patrol actions.'
-                    : 'Monitoring only. Pulse cannot run commands or change containers on this host.'}
-                </span>
-              </li>
-              <li class="flex items-start">
-                <span class="mr-2 mt-0.5 text-emerald-500">✓</span>
-                <span>
-                  Revoke the token any time from{' '}
-                  <span class="font-medium">Settings → Infrastructure → Tokens</span>. The agent
-                  stops reporting immediately.
-                </span>
-              </li>
-            </ul>
-          </div>
+          <details class="ml-6 rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-800 dark:border-blue-800 dark:bg-blue-900/25 dark:text-blue-200">
+            <summary class="cursor-pointer font-medium">
+              {state.enableCommands()
+                ? 'Command-capable token (root access on this host) · Revoke anytime in Settings → Security → API Access'
+                : 'Monitoring-only token · Revoke anytime in Settings → Security → API Access'}
+            </summary>
+            <div class="mt-2 border-t border-blue-200/70 pt-2 dark:border-blue-800/70">
+              <p class="mb-1.5 font-semibold text-blue-900 dark:text-blue-100">
+                What this token authorizes:
+              </p>
+              <ul class="space-y-1 text-blue-700 dark:text-blue-300">
+                <li class="flex items-start">
+                  <span class="mr-2 mt-0.5 text-emerald-500">✓</span>
+                  <span>
+                    Pulse Agent on this host reports its own telemetry to this Pulse instance.
+                  </span>
+                </li>
+                <li class="flex items-start">
+                  <span class="mr-2 mt-0.5 text-emerald-500">✓</span>
+                  <span>
+                    {state.enableCommands()
+                      ? 'Pulse can run commands as root on this host, including container updates and Patrol actions.'
+                      : 'Monitoring only. Pulse cannot run commands or change containers on this host.'}
+                  </span>
+                </li>
+                <li class="flex items-start">
+                  <span class="mr-2 mt-0.5 text-emerald-500">✓</span>
+                  <span>
+                    Revoke the token any time from{' '}
+                    <span class="font-medium">Settings → Security → API Access</span>. The agent
+                    stops reporting immediately.
+                  </span>
+                </li>
+              </ul>
+            </div>
+          </details>
 
-          <div class="ml-6 rounded-md border border-border bg-surface-hover px-4 py-3">
+          <div class="ml-6 rounded-md border border-border bg-surface-hover px-3 py-2.5">
             <label
               class={`flex items-start gap-2 text-sm font-medium text-base-content ${state.isGeneratingToken() ? 'cursor-wait opacity-70' : 'cursor-pointer'}`}
             >
@@ -398,51 +405,54 @@ export const InfrastructureInstallerSection: Component<InfrastructureInstallerSe
                 checked={state.enableCommands()}
                 disabled={state.isGeneratingToken()}
                 onChange={(event) => void state.setEnableCommands(event.currentTarget.checked)}
-                aria-describedby="install-command-access-description install-token-replacement-description"
+                aria-describedby="install-command-access-description install-command-scope-details install-token-replacement-description"
                 class="mt-0.5 rounded-sm text-blue-600 focus:ring-blue-500"
               />
               {COMMAND_ACCESS_OPTION_LABEL}
             </label>
             <p id="install-command-access-description" class="ml-6 mt-1 text-xs text-muted">
-              Needed to update, start, stop or restart Docker and Podman containers from Pulse, and
-              for Patrol actions. On a Proxmox node it also lets Pulse start a stopped guest after
-              an admin approves it. Stopping or restarting a guest still needs the action runner.
-              Pulse can then run commands as root on this host, so leave it off if you only want
-              monitoring. It cannot be switched on later from Pulse: rerun the install command with
-              this selected.
+              Needed to update, start, stop or restart Docker and Podman containers, run Patrol
+              actions, and start stopped Proxmox guests. Pulse can then run commands as root on this
+              host, so leave it off for monitoring only.
             </p>
-            <p id="install-token-replacement-description" class="ml-6 mt-2 text-xs text-muted">
-              Changing this choice prepares a new token and command. It does not reconfigure an
-              installed agent. Rerun the installer on the intended host with the new token. Earlier
-              tokens remain valid. Revoke them from Settings → Infrastructure → Tokens only when no
-              agent still uses them.
-            </p>
+            <details class="ml-6 mt-1.5 text-xs text-muted">
+              <summary class="cursor-pointer font-medium text-base-content/80 hover:text-base-content">
+                Command scope &amp; token replacement details
+              </summary>
+              <p id="install-command-scope-details" class="mt-1.5 leading-5">
+                On a Proxmox node it also lets Pulse start a stopped guest after an admin approves
+                it. Stopping or restarting a guest still needs the action runner. It cannot be
+                switched on later from Pulse: rerun the install command with this selected.
+              </p>
+              <p id="install-token-replacement-description" class="mt-1.5 leading-5">
+                Changing this choice prepares a new token and command. It does not reconfigure an
+                installed agent. Rerun the installer on the intended host with the new token.
+                Earlier tokens remain valid. Revoke them from Settings → Security → API Access only
+                when no agent still uses them.
+              </p>
+            </details>
           </div>
 
           <div class="ml-6 space-y-3">
-            <div class="rounded-md border border-border bg-surface-hover px-4 py-3">
-              <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                <div class="space-y-1">
-                  <p class="text-sm font-semibold text-base-content">
-                    Advanced connection and install options
-                  </p>
-                  <p class="text-xs text-muted">
-                    Default commands use the auto-detected Pulse URL. Open this before or after
-                    generating a token if the target host needs a different URL, custom CA trust,
-                    TLS override, or a specific install profile.
-                  </p>
-                </div>
-                <Button
-                  type="button"
-                  variant="secondary"
-                  size="mdCompact"
-                  onClick={() => setShowAdvancedOptions((current) => !current)}
-                >
-                  {showAdvancedOptions()
-                    ? 'Hide advanced connection and install options'
-                    : 'Show advanced connection and install options'}
-                </Button>
+            <div class="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border bg-surface-hover px-3 py-2">
+              <div class="min-w-0">
+                <span class="text-xs font-semibold text-base-content">
+                  Advanced connection and install options
+                </span>
+                <span class="ml-2 text-xs text-muted">
+                  Custom Pulse URL, CA certificate, TLS override, or install profile
+                </span>
               </div>
+              <Button
+                type="button"
+                variant="secondary"
+                size="xs"
+                onClick={() => setShowAdvancedOptions((current) => !current)}
+              >
+                {showAdvancedOptions()
+                  ? 'Hide advanced connection and install options'
+                  : 'Show advanced connection and install options'}
+              </Button>
             </div>
 
             <Show when={showAdvancedOptions()}>

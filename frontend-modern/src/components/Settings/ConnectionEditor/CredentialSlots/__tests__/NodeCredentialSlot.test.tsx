@@ -165,6 +165,7 @@ describe('NodeCredentialSlot', () => {
       />
     ));
 
+    fireEvent.click(screen.getByRole('button', { name: /Setup scripts & host telemetry agent/i }));
     fireEvent.click(screen.getByRole('button', { name: /^Host Telemetry Agent$/i }));
     const agentPanel = screen.getByText('Host telemetry agent');
     for (let poll = 1; poll <= 2; poll += 1) {
@@ -314,6 +315,7 @@ describe('NodeCredentialSlot', () => {
       />
     ));
 
+    fireEvent.click(screen.getByRole('button', { name: /Setup scripts & host telemetry agent/i }));
     fireEvent.click(screen.getByRole('button', { name: 'Manual Token Setup' }));
     const tokenId = screen.getByLabelText(/^Token ID/);
     fireEvent.input(tokenId, { target: { value: 'fixture@pve!narrow' } });
@@ -506,6 +508,7 @@ describe('NodeCredentialSlot', () => {
       />
     ));
 
+    fireEvent.click(screen.getByRole('button', { name: /Cluster members \(1\)/i }));
     const input = screen.getByLabelText('Connection address for pve2') as HTMLInputElement;
     fireEvent.submit(input.closest('form')!);
 

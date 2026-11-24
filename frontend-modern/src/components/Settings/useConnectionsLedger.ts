@@ -116,6 +116,13 @@ const coverageLabelsFor = (connections: readonly Connection[]): string[] => {
     for (const key of coverage) {
       seen.add(surfaceLabel(key));
     }
+    for (const module of connection.agentModules ?? []) {
+      if (!module.enabled) continue;
+      const name = module.name.trim().toLowerCase();
+      if (name === 'docker' || name === 'kubernetes') {
+        seen.add(surfaceLabel(name));
+      }
+    }
   }
   return [...seen];
 };
@@ -385,16 +392,17 @@ const buildRow = (
       ? 'warning'
       : 'critical'
     : undefined;
+  const source: InfrastructureSourceKind = sourceFor(componentConnections);
   const hostTelemetryLabel = surfaceLabel('host');
-  const coverageLabels = isCluster
-    ? coverageLabelsFor(componentConnections).filter((label) => label !== hostTelemetryLabel)
-    : coverageLabelsFor(componentConnections);
+  const coverageLabels =
+    isCluster && source !== 'both'
+      ? coverageLabelsFor(componentConnections).filter((label) => label !== hostTelemetryLabel)
+      : coverageLabelsFor(componentConnections);
   const savedScope = Object.values(primaryConnection.scope ?? {});
   const apiScopeOff =
     PLATFORM_API_TYPES.has(primaryConnection.type) &&
     savedScope.length > 0 &&
     savedScope.every((enabled) => enabled === false);
-  const source: InfrastructureSourceKind = sourceFor(componentConnections);
   const subtitle = isCluster
     ? `Cluster · ${members.length} ${members.length === 1 ? 'node' : 'nodes'}`
     : subtitleFor(componentConnections, primaryConnection);

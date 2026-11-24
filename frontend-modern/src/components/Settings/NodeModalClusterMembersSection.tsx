@@ -1,4 +1,5 @@
-import { Component, For, Show, createMemo, createUniqueId } from 'solid-js';
+import { Component, For, Show, createMemo, createSignal, createUniqueId } from 'solid-js';
+import { ChevronDown, ChevronRight } from 'lucide-solid';
 import type { ClusterEndpoint } from '@/types/nodes';
 import type { NodeModalProps } from '@/components/Settings/nodeModalModel';
 import type { NodeModalState } from '@/components/Settings/useNodeModalState';
@@ -9,6 +10,7 @@ import { controlClass, formHelpText } from '@/components/shared/Form';
 interface NodeModalClusterMembersSectionProps {
   modalProps: NodeModalProps;
   state: NodeModalState;
+  defaultCollapsedWhenHealthy?: boolean;
 }
 
 const discoveredAddress = (endpoint: ClusterEndpoint): string => {
@@ -86,244 +88,310 @@ export const NodeModalClusterMembersSection: Component<NodeModalClusterMembersSe
     if (!node || node.type !== 'pve' || !('clusterEndpoints' in node)) return [];
     return node.clusterEndpoints ?? [];
   });
+  const hasMemberAttention = createMemo(() =>
+    endpoints().some(
+      (endpoint) =>
+        endpoint.pulseReachable === false ||
+        Boolean(endpoint.awaitingAddressReadback) ||
+        hasAddressDraft(endpoint),
+    ),
+  );
+  const [userExpanded, setUserExpanded] = createSignal(false);
+  const membersExpanded = () =>
+    !props.defaultCollapsedWhenHealthy || hasMemberAttention() || userExpanded();
+  const memberNamesSummary = createMemo(() =>
+    endpoints()
+      .map((endpoint) => endpoint.displayName || endpoint.nodeName)
+      .join(', '),
+  );
 
   return (
     <Show when={endpoints().length > 0}>
       <div>
-        <SectionHeader
-          title="Cluster members"
-          size="sm"
-          class="mb-1"
-          titleClass="text-base-content"
-        />
-        <p class="mb-3 text-xs text-muted">
-          Give each node an optional display name for Pulse. This never changes its Proxmox name,
-          identity, credentials, or connection address.
-        </p>
-        <div class="rounded-md border border-border">
-          <For each={endpoints()}>
-            {(endpoint, index) => (
-              <div class="grid gap-3 border-b border-border-subtle p-3 last:border-b-0 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
-                <div class="min-w-0">
-                  <div class="flex items-center gap-1.5 text-sm text-base-content">
-                    <span class="truncate">{endpoint.displayName || endpoint.nodeName}</span>
-                  </div>
-                  <Show when={endpoint.displayName}>
-                    <div class="truncate text-xs text-muted" title={endpoint.nodeName}>
-                      Proxmox node: {endpoint.nodeName}
-                    </div>
-                  </Show>
-                  <div class="truncate text-xs text-muted" title={discoveredAddress(endpoint)}>
-                    Discovered: {discoveredAddress(endpoint)}
-                  </div>
-                  <Show when={memberCheckContext(endpoint)}>
-                    {(context) => <p class="mt-2 text-xs text-muted">{context()}</p>}
-                  </Show>
-                  <Show
-                    when={
-                      endpoint.pulseReachable === false && memberCheckFailure(endpoint.pulseError)
-                    }
-                  >
-                    {(failure) => (
-                      <details class="mt-2 rounded-md bg-amber-100 text-xs text-amber-800 dark:bg-amber-950/25 dark:text-amber-300">
-                        <summary class="min-h-11 cursor-pointer rounded-md px-3 py-3 font-medium focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-600 dark:focus-visible:outline-amber-300">
-                          {endpoint.awaitingAddressReadback ? 'Previous check: ' : ''}
-                          {failure().label} — details
-                          <span class="sr-only"> for {endpoint.nodeName}</span>
-                        </summary>
-                        <p class="break-words whitespace-pre-wrap px-3 pb-3 pt-1">
-                          {failure().detail}
-                        </p>
-                      </details>
-                    )}
-                  </Show>
+        <Show
+          when={props.defaultCollapsedWhenHealthy && !hasMemberAttention()}
+          fallback={
+            <>
+              <SectionHeader
+                title="Cluster members"
+                size="sm"
+                class="mb-1"
+                titleClass="text-base-content"
+              />
+              <p class="mb-3 text-xs text-muted">
+                Give each node an optional display name for Pulse. This never changes its Proxmox
+                name, identity, credentials, or connection address.
+              </p>
+            </>
+          }
+        >
+          <div class="rounded-md border border-border bg-surface-alt">
+            <button
+              type="button"
+              aria-expanded={membersExpanded()}
+              onClick={() => setUserExpanded((open) => !open)}
+              class="flex w-full items-center justify-between gap-3 px-3 py-2.5 text-left text-sm transition-colors hover:bg-surface-hover"
+            >
+              <div class="min-w-0">
+                <div class="font-medium text-base-content">
+                  Cluster members ({endpoints().length})
                 </div>
-                <div class="grid gap-2">
-                  <label class="grid gap-1 text-xs text-muted">
-                    Display name
-                    <input
-                      type="text"
-                      maxlength={128}
-                      value={
-                        endpoint.nodeIdentity
-                          ? (state.formData().clusterNodeDisplayNames[endpoint.nodeIdentity] ?? '')
-                          : ''
-                      }
-                      onInput={(event) => {
-                        if (endpoint.nodeIdentity) {
-                          state.updateClusterNodeDisplayName(
-                            endpoint.nodeIdentity,
-                            event.currentTarget.value,
-                          );
-                        }
-                      }}
-                      disabled={!endpoint.nodeIdentity}
-                      placeholder={endpoint.nodeName}
-                      aria-label={`Display name for ${endpoint.nodeName}`}
-                      class={controlClass()}
-                    />
-                  </label>
-                  <label class="grid gap-1 text-xs text-muted">
-                    Connection address override
-                    <input
-                      type="text"
-                      value={addressValue(endpoint)}
-                      onInput={(event) =>
-                        state.updateClusterEndpointOverride(
-                          endpoint.nodeName,
-                          event.currentTarget.value,
-                        )
-                      }
-                      placeholder={endpoint.ip || 'IP or hostname'}
-                      aria-label={`Connection address for ${endpoint.nodeName}`}
-                      aria-describedby={
-                        addressNotice(endpoint) ? `${addressDescriptionId}-${index()}` : undefined
-                      }
-                      class={controlClass()}
-                    />
-                    <Show when={addressNotice(endpoint)}>
-                      {(notice) => (
-                        <p id={`${addressDescriptionId}-${index()}`} class="text-xs text-muted">
-                          {notice()}
-                        </p>
-                      )}
-                    </Show>
-                  </label>
-                  <Show when={endpoint.tlsEndpoint}>
-                    <div class="grid min-w-0 gap-2">
-                      <p class="break-all text-xs text-muted">
-                        {endpoint.awaitingAddressReadback
-                          ? 'Previous TLS endpoint: '
-                          : 'TLS endpoint: '}
-                        {endpoint.tlsEndpoint}
-                      </p>
+                <p class="truncate text-xs text-muted">
+                  {memberNamesSummary()} · Edit display names, connection addresses, or TLS pins
+                </p>
+              </div>
+              <span class="inline-flex shrink-0 items-center gap-1 text-xs font-medium text-blue-700 dark:text-blue-300">
+                {membersExpanded() ? 'Hide' : 'Edit'}
+                <Show
+                  when={membersExpanded()}
+                  fallback={<ChevronRight class="h-4 w-4" aria-hidden="true" />}
+                >
+                  <ChevronDown class="h-4 w-4" aria-hidden="true" />
+                </Show>
+              </span>
+            </button>
+          </div>
+        </Show>
+        <Show when={membersExpanded()}>
+          <div
+            class={
+              props.defaultCollapsedWhenHealthy && !hasMemberAttention() ? 'mt-3 space-y-2' : ''
+            }
+          >
+            <div class="rounded-md border border-border">
+              <For each={endpoints()}>
+                {(endpoint, index) => (
+                  <div class="grid gap-3 border-b border-border-subtle p-3 last:border-b-0 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+                    <div class="min-w-0">
+                      <div class="flex items-center gap-1.5 text-sm text-base-content">
+                        <span class="truncate">{endpoint.displayName || endpoint.nodeName}</span>
+                      </div>
+                      <Show when={endpoint.displayName}>
+                        <div class="truncate text-xs text-muted" title={endpoint.nodeName}>
+                          Proxmox node: {endpoint.nodeName}
+                        </div>
+                      </Show>
+                      <div class="truncate text-xs text-muted" title={discoveredAddress(endpoint)}>
+                        Discovered: {discoveredAddress(endpoint)}
+                      </div>
+                      <Show when={memberCheckContext(endpoint)}>
+                        {(context) => <p class="mt-2 text-xs text-muted">{context()}</p>}
+                      </Show>
                       <Show
-                        when={!endpoint.usesPrimaryTLS}
-                        fallback={
-                          <p class="text-xs text-muted">
-                            Uses the primary SSL settings. Editing them does not change other
-                            members.
-                          </p>
+                        when={
+                          endpoint.pulseReachable === false &&
+                          memberCheckFailure(endpoint.pulseError)
                         }
                       >
-                        <label class="grid gap-1 text-xs text-muted">
-                          Certificate fingerprint (optional)
-                          <input
-                            type="text"
-                            value={
-                              state.formData().clusterEndpointFingerprints[endpoint.tlsEndpoint!] ??
-                              endpoint.fingerprint ??
-                              ''
-                            }
-                            onInput={(event) =>
-                              state.updateClusterEndpointFingerprint(
-                                endpoint.tlsEndpoint!,
+                        {(failure) => (
+                          <details class="mt-2 rounded-md bg-amber-100 text-xs text-amber-800 dark:bg-amber-950/25 dark:text-amber-300">
+                            <summary class="min-h-11 cursor-pointer rounded-md px-3 py-3 font-medium focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-600 dark:focus-visible:outline-amber-300">
+                              {endpoint.awaitingAddressReadback ? 'Previous check: ' : ''}
+                              {failure().label} — details
+                              <span class="sr-only"> for {endpoint.nodeName}</span>
+                            </summary>
+                            <p class="break-words whitespace-pre-wrap px-3 pb-3 pt-1">
+                              {failure().detail}
+                            </p>
+                          </details>
+                        )}
+                      </Show>
+                    </div>
+                    <div class="grid gap-2">
+                      <label class="grid gap-1 text-xs text-muted">
+                        Display name
+                        <input
+                          type="text"
+                          maxlength={128}
+                          value={
+                            endpoint.nodeIdentity
+                              ? (state.formData().clusterNodeDisplayNames[endpoint.nodeIdentity] ??
+                                '')
+                              : ''
+                          }
+                          onInput={(event) => {
+                            if (endpoint.nodeIdentity) {
+                              state.updateClusterNodeDisplayName(
+                                endpoint.nodeIdentity,
                                 event.currentTarget.value,
-                              )
+                              );
                             }
-                            aria-label={`Certificate fingerprint for ${endpoint.nodeName}`}
-                            aria-describedby={`${trustDescriptionId}-${index()}`}
-                            disabled={
-                              endpoint.awaitingAddressReadback ||
-                              !endpoint.tlsEndpoint?.startsWith('https://')
-                            }
-                            class={controlClass('font-mono')}
-                          />
-                        </label>
-                      </Show>
-                      <p id={`${trustDescriptionId}-${index()}`} class="text-xs text-muted">
-                        {endpoint.usesPrimaryTLS
-                          ? 'Primary endpoint only.'
-                          : endpoint.tlsFirstUse &&
-                              !state.formData().clusterEndpointTrustEdited[endpoint.tlsEndpoint!]
-                            ? 'No saved member pin. Existing first-use policy applies. Enter a verified pin or explicitly choose CA validation.'
-                            : (state.formData().clusterEndpointFingerprints[
-                                  endpoint.tlsEndpoint!
-                                ] ??
-                                  endpoint.fingerprint ??
-                                  '') !== ''
-                              ? 'This endpoint must present the matching certificate.'
-                              : state.formData().verifySSL
-                                ? 'No pin: a trusted, hostname-matching certificate is required.'
-                                : 'No pin and verification unchecked: certificate identity is not verified.'}
-                      </p>
-                      <Show
-                        when={
-                          !endpoint.usesPrimaryTLS &&
-                          state.formData().verifySSL &&
-                          endpoint.tlsEndpoint?.startsWith('https://')
-                        }
-                      >
-                        <button
-                          type="button"
-                          class="min-h-11 justify-self-start rounded-md border border-border px-3 py-2 text-xs text-base-content hover:bg-surface-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 disabled:cursor-not-allowed disabled:opacity-50"
-                          disabled={endpoint.awaitingAddressReadback}
-                          onClick={() =>
-                            state.updateClusterEndpointFingerprint(endpoint.tlsEndpoint!, '')
+                          }}
+                          disabled={!endpoint.nodeIdentity}
+                          placeholder={endpoint.nodeName}
+                          aria-label={`Display name for ${endpoint.nodeName}`}
+                          class={controlClass()}
+                        />
+                      </label>
+                      <label class="grid gap-1 text-xs text-muted">
+                        Connection address override
+                        <input
+                          type="text"
+                          value={addressValue(endpoint)}
+                          onInput={(event) =>
+                            state.updateClusterEndpointOverride(
+                              endpoint.nodeName,
+                              event.currentTarget.value,
+                            )
                           }
-                        >
-                          Use CA validation for {endpoint.nodeName}
-                        </button>
-                      </Show>
-                      <button
-                        type="button"
-                        class="min-h-11 justify-self-start rounded-md border border-border px-3 py-2 text-xs text-base-content hover:bg-surface-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 disabled:cursor-not-allowed disabled:opacity-50"
-                        disabled={endpoint.awaitingAddressReadback || state.isTesting()}
-                        onClick={() => void state.handleTestClusterEndpoint(endpoint)}
-                      >
-                        Test TLS for {endpoint.nodeName}
-                      </button>
-                      <Show
-                        when={
-                          !endpoint.awaitingAddressReadback &&
-                          state.testResult()?.endpoint === endpoint.tlsEndpoint
-                        }
-                      >
-                        <div
-                          ref={(element) =>
-                            queueMicrotask(() => {
-                              if (element.isConnected)
-                                element.scrollIntoView?.({ block: 'nearest' });
-                            })
+                          placeholder={endpoint.ip || 'IP or hostname'}
+                          aria-label={`Connection address for ${endpoint.nodeName}`}
+                          aria-describedby={
+                            addressNotice(endpoint)
+                              ? `${addressDescriptionId}-${index()}`
+                              : undefined
                           }
-                        >
-                          <InlineNotice
-                            class="break-words"
-                            tone={
-                              state.testResult()?.status === 'error'
-                                ? 'danger'
-                                : state.testResult()?.status === 'warning'
-                                  ? 'warning'
-                                  : 'success'
+                          class={controlClass()}
+                        />
+                        <Show when={addressNotice(endpoint)}>
+                          {(notice) => (
+                            <p id={`${addressDescriptionId}-${index()}`} class="text-xs text-muted">
+                              {notice()}
+                            </p>
+                          )}
+                        </Show>
+                      </label>
+                      <Show when={endpoint.tlsEndpoint}>
+                        <div class="grid min-w-0 gap-2">
+                          <p class="break-all text-xs text-muted">
+                            {endpoint.awaitingAddressReadback
+                              ? 'Previous TLS endpoint: '
+                              : 'TLS endpoint: '}
+                            {endpoint.tlsEndpoint}
+                          </p>
+                          <Show
+                            when={!endpoint.usesPrimaryTLS}
+                            fallback={
+                              <p class="text-xs text-muted">
+                                Uses the primary SSL settings. Editing them does not change other
+                                members.
+                              </p>
                             }
-                            role="status"
-                            aria-label={`TLS test result for ${endpoint.nodeName}`}
-                            aria-live="polite"
-                            aria-atomic="true"
                           >
-                            {state.testResult()?.message}
-                          </InlineNotice>
+                            <label class="grid gap-1 text-xs text-muted">
+                              Certificate fingerprint (optional)
+                              <input
+                                type="text"
+                                value={
+                                  state.formData().clusterEndpointFingerprints[
+                                    endpoint.tlsEndpoint!
+                                  ] ??
+                                  endpoint.fingerprint ??
+                                  ''
+                                }
+                                onInput={(event) =>
+                                  state.updateClusterEndpointFingerprint(
+                                    endpoint.tlsEndpoint!,
+                                    event.currentTarget.value,
+                                  )
+                                }
+                                aria-label={`Certificate fingerprint for ${endpoint.nodeName}`}
+                                aria-describedby={`${trustDescriptionId}-${index()}`}
+                                disabled={
+                                  endpoint.awaitingAddressReadback ||
+                                  !endpoint.tlsEndpoint?.startsWith('https://')
+                                }
+                                class={controlClass('font-mono')}
+                              />
+                            </label>
+                          </Show>
+                          <p id={`${trustDescriptionId}-${index()}`} class="text-xs text-muted">
+                            {endpoint.usesPrimaryTLS
+                              ? 'Primary endpoint only.'
+                              : endpoint.tlsFirstUse &&
+                                  !state.formData().clusterEndpointTrustEdited[
+                                    endpoint.tlsEndpoint!
+                                  ]
+                                ? 'No saved member pin. Existing first-use policy applies. Enter a verified pin or explicitly choose CA validation.'
+                                : (state.formData().clusterEndpointFingerprints[
+                                      endpoint.tlsEndpoint!
+                                    ] ??
+                                      endpoint.fingerprint ??
+                                      '') !== ''
+                                  ? 'This endpoint must present the matching certificate.'
+                                  : state.formData().verifySSL
+                                    ? 'No pin: a trusted, hostname-matching certificate is required.'
+                                    : 'No pin and verification unchecked: certificate identity is not verified.'}
+                          </p>
+                          <Show
+                            when={
+                              !endpoint.usesPrimaryTLS &&
+                              state.formData().verifySSL &&
+                              endpoint.tlsEndpoint?.startsWith('https://')
+                            }
+                          >
+                            <button
+                              type="button"
+                              class="min-h-11 justify-self-start rounded-md border border-border px-3 py-2 text-xs text-base-content hover:bg-surface-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 disabled:cursor-not-allowed disabled:opacity-50"
+                              disabled={endpoint.awaitingAddressReadback}
+                              onClick={() =>
+                                state.updateClusterEndpointFingerprint(endpoint.tlsEndpoint!, '')
+                              }
+                            >
+                              Use CA validation for {endpoint.nodeName}
+                            </button>
+                          </Show>
+                          <button
+                            type="button"
+                            class="min-h-11 justify-self-start rounded-md border border-border px-3 py-2 text-xs text-base-content hover:bg-surface-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 disabled:cursor-not-allowed disabled:opacity-50"
+                            disabled={endpoint.awaitingAddressReadback || state.isTesting()}
+                            onClick={() => void state.handleTestClusterEndpoint(endpoint)}
+                          >
+                            Test TLS for {endpoint.nodeName}
+                          </button>
+                          <Show
+                            when={
+                              !endpoint.awaitingAddressReadback &&
+                              state.testResult()?.endpoint === endpoint.tlsEndpoint
+                            }
+                          >
+                            <div
+                              ref={(element) =>
+                                queueMicrotask(() => {
+                                  if (element.isConnected)
+                                    element.scrollIntoView?.({ block: 'nearest' });
+                                })
+                              }
+                            >
+                              <InlineNotice
+                                class="break-words"
+                                tone={
+                                  state.testResult()?.status === 'error'
+                                    ? 'danger'
+                                    : state.testResult()?.status === 'warning'
+                                      ? 'warning'
+                                      : 'success'
+                                }
+                                role="status"
+                                aria-label={`TLS test result for ${endpoint.nodeName}`}
+                                aria-live="polite"
+                                aria-atomic="true"
+                              >
+                                {state.testResult()?.message}
+                              </InlineNotice>
+                            </div>
+                          </Show>
                         </div>
                       </Show>
                     </div>
-                  </Show>
-                </div>
-              </div>
-            )}
-          </For>
-        </div>
-        <p class={formHelpText}>
-          Leave a display name blank to use the native Proxmox name. Connection addresses are also
-          optional. Enter an IP or hostname, with a port if it isn't 8006, only when Pulse cannot
-          reach the discovered address.
-        </p>
-        <p class={formHelpText}>
-          Trust edits apply only to the displayed TLS endpoint. Independently verify a renewed
-          certificate through an already-trusted administration channel before changing a pin. For
-          CA-managed certificates, clear only that endpoint's pin and keep Verify SSL enabled. Tests
-          use stored credentials without saving TLS edits or updating background/agent health. Save
-          address or credential changes before testing them.
-        </p>
+                  </div>
+                )}
+              </For>
+            </div>
+            <p class={formHelpText}>
+              Leave a display name blank to use the native Proxmox name. Connection addresses are
+              also optional. Enter an IP or hostname, with a port if it isn't 8006, only when Pulse
+              cannot reach the discovered address.
+            </p>
+            <p class={formHelpText}>
+              Trust edits apply only to the displayed TLS endpoint. Independently verify a renewed
+              certificate through an already-trusted administration channel before changing a pin.
+              For CA-managed certificates, clear only that endpoint's pin and keep Verify SSL
+              enabled. Tests use stored credentials without saving TLS edits or updating
+              background/agent health. Save address or credential changes before testing them.
+            </p>
+          </div>
+        </Show>
       </div>
     </Show>
   );

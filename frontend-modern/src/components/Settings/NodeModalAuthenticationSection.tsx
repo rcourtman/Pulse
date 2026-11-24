@@ -1,4 +1,5 @@
-import { Component, Show } from 'solid-js';
+import { Component, Show, createEffect, createMemo, createSignal } from 'solid-js';
+import { ChevronDown, ChevronRight } from 'lucide-solid';
 import type { NodeModalProps } from '@/components/Settings/nodeModalModel';
 import { NodeModalSetupGuideSection } from '@/components/Settings/NodeModalSetupGuideSection';
 import type { NodeModalState } from '@/components/Settings/useNodeModalState';
@@ -19,6 +20,12 @@ export const NodeModalAuthenticationSection: Component<NodeModalAuthenticationSe
   props,
 ) => {
   const { modalProps, state } = props;
+  const [setupGuideExpanded, setSetupGuideExpanded] = createSignal(false);
+  const editingNodeId = createMemo(() => modalProps.editingNode?.id ?? null);
+  createEffect(() => {
+    editingNodeId();
+    setSetupGuideExpanded(false);
+  });
 
   return (
     <div>
@@ -107,7 +114,43 @@ export const NodeModalAuthenticationSection: Component<NodeModalAuthenticationSe
 
       <Show when={state.formData().authType === 'token'}>
         <div class="space-y-4">
-          <NodeModalSetupGuideSection modalProps={modalProps} state={state} />
+          <Show
+            when={state.isEditingExistingNode()}
+            fallback={<NodeModalSetupGuideSection modalProps={modalProps} state={state} />}
+          >
+            <div class="rounded-md border border-border bg-surface-alt">
+              <button
+                type="button"
+                aria-expanded={setupGuideExpanded()}
+                onClick={() => setSetupGuideExpanded((open) => !open)}
+                class="flex w-full items-center justify-between gap-3 px-3 py-2.5 text-left text-sm transition-colors hover:bg-surface-hover"
+              >
+                <div class="min-w-0">
+                  <div class="font-medium text-base-content">
+                    Setup scripts &amp; host telemetry agent
+                  </div>
+                  <p class="text-xs text-muted">
+                    Expand to re-run assisted setup, install a host agent, or switch to a manual API
+                    token.
+                  </p>
+                </div>
+                <span class="inline-flex shrink-0 items-center gap-1 text-xs font-medium text-blue-700 dark:text-blue-300">
+                  {setupGuideExpanded() ? 'Hide' : 'Show'}
+                  <Show
+                    when={setupGuideExpanded()}
+                    fallback={<ChevronRight class="h-4 w-4" aria-hidden="true" />}
+                  >
+                    <ChevronDown class="h-4 w-4" aria-hidden="true" />
+                  </Show>
+                </span>
+              </button>
+              <Show when={setupGuideExpanded()}>
+                <div class="border-t border-border p-3">
+                  <NodeModalSetupGuideSection modalProps={modalProps} state={state} />
+                </div>
+              </Show>
+            </div>
+          </Show>
 
           <Show when={state.formData().setupMode === 'manual'}>
             <div class="rounded-md border border-border bg-surface-alt px-3 py-2 text-xs leading-5 text-muted">

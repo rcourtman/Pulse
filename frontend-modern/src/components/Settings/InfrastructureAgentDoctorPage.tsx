@@ -24,6 +24,7 @@ import { SummaryRowActionButton } from '@/components/shared/SummaryRowActionButt
 import { TechnicalDetailsDisclosure } from '@/components/shared/TechnicalDetailsDisclosure';
 import type { StatusIndicatorVariant } from '@/utils/status';
 import { copyToClipboard } from '@/utils/clipboard';
+import { formatAgentVersionDisplay } from '@/utils/agentVersion';
 import { formatRelativeTime } from '@/utils/format';
 import { useRelativeTimeNow } from '@/utils/relativeTimeClock';
 import { notificationStore } from '@/stores/notifications';
@@ -89,6 +90,14 @@ const STATUS_PRESENTATION: Record<
     label: 'Unknown',
     badgeClass: 'bg-surface-alt text-base-content',
   },
+};
+
+const formatAlignedExpectedVersion = (current?: string, expected?: string): string | undefined => {
+  if (!expected) return undefined;
+  if (current?.trim().startsWith('v') && !expected.trim().startsWith('v')) {
+    return formatAgentVersionDisplay(expected) || expected;
+  }
+  return expected;
 };
 
 const doctorDetailRowId = (target: InfrastructureAgentDoctorTarget): string =>
@@ -591,55 +600,71 @@ export const InfrastructureAgentDoctorPage: Component<InfrastructureAgentDoctorP
                     getInfrastructureAgentDoctorUninstallHandoff(target());
                   const expanded = () => isExpanded(target());
                   const detailRowId = () => doctorDetailRowId(target());
+                  const expectedVersionDisplay = () =>
+                    formatAlignedExpectedVersion(target().currentVersion, target().expectedVersion);
+                  const collapseSecurityDetails = () =>
+                    target().status === 'healthy' &&
+                    target().reasons.length === 0 &&
+                    !target().actionRunnerCredentialEligible &&
+                    !runnerCredentialReveal();
+                  const agentFactSection = (): DetailSection => ({
+                    label: 'Agent',
+                    rows: compactDetailRows([
+                      makeDetailRow('System', target().contextLabel, { wrap: true }),
+                      makeDetailRow('Version', target().currentVersion),
+                      makeDetailRow('Target version', expectedVersionDisplay()),
+                      makeDetailRow(
+                        'Last seen',
+                        lastSeen() ? `${lastSeen()} (${lastSeenRelative()})` : undefined,
+                        { wrap: true },
+                      ),
+                      makeDetailRow('Updater', target().updaterLabel, { wrap: true }),
+                      makeDetailRow(
+                        'Profile',
+                        target().profileLabel
+                          ? [target().profileLabel, target().profileVersionLabel]
+                              .filter(Boolean)
+                              .join(' ')
+                          : undefined,
+                        { wrap: true },
+                      ),
+                    ]),
+                  });
+                  const securityFactSection = (): DetailSection => ({
+                    label: 'Security',
+                    rows: compactDetailRows([
+                      makeDetailRow('Privilege', target().privilegeLabel, { wrap: true }),
+                      target().status !== 'removed'
+                        ? makeDetailRow(
+                            'Safe collector',
+                            target().safeCollector ? 'Confirmed' : 'Not confirmed',
+                            target().safeCollector
+                              ? { tone: 'success' }
+                              : target().status === 'healthy'
+                                ? undefined
+                                : { tone: 'warning' },
+                          )
+                        : null,
+                      makeDetailRow('Action runner', target().actionRunnerPosture.join(' · '), {
+                        wrap: true,
+                      }),
+                      makeDetailRow(
+                        'Runner credential',
+                        target().actionRunnerCredentialEligible
+                          ? undefined
+                          : target().actionRunnerCredentialBlockReason,
+                        { wrap: true },
+                      ),
+                    ]),
+                  });
                   const factSections = (): DetailSection[] =>
-                    compactDetailSections([
-                      {
-                        label: 'Agent',
-                        rows: compactDetailRows([
-                          makeDetailRow('System', target().contextLabel, { wrap: true }),
-                          makeDetailRow('Version', target().currentVersion),
-                          makeDetailRow('Target version', target().expectedVersion),
-                          makeDetailRow(
-                            'Last seen',
-                            lastSeen() ? `${lastSeen()} (${lastSeenRelative()})` : undefined,
-                            { wrap: true },
-                          ),
-                          makeDetailRow('Updater', target().updaterLabel, { wrap: true }),
-                          makeDetailRow(
-                            'Profile',
-                            target().profileLabel
-                              ? [target().profileLabel, target().profileVersionLabel]
-                                  .filter(Boolean)
-                                  .join(' ')
-                              : undefined,
-                            { wrap: true },
-                          ),
-                        ]),
-                      },
-                      {
-                        label: 'Security',
-                        rows: compactDetailRows([
-                          makeDetailRow('Privilege', target().privilegeLabel, { wrap: true }),
-                          target().status !== 'removed'
-                            ? makeDetailRow(
-                                'Safe collector',
-                                target().safeCollector ? 'Confirmed' : 'Not confirmed',
-                                { tone: target().safeCollector ? 'success' : 'warning' },
-                              )
-                            : null,
-                          makeDetailRow('Action runner', target().actionRunnerPosture.join(' · '), {
-                            wrap: true,
-                          }),
-                          makeDetailRow(
-                            'Runner credential',
-                            target().actionRunnerCredentialEligible
-                              ? undefined
-                              : target().actionRunnerCredentialBlockReason,
-                            { wrap: true },
-                          ),
-                        ]),
-                      },
-                    ]);
+                    compactDetailSections(
+                      collapseSecurityDetails()
+                        ? [agentFactSection()]
+                        : [agentFactSection(), securityFactSection()],
+                    );
+                  const collapsedSecuritySections = (): DetailSection[] =>
+                    compactDetailSections([securityFactSection()]);
                   const evidenceSections = (): DetailSection[] =>
                     compactDetailSections([
                       {
@@ -686,7 +711,7 @@ export const InfrastructureAgentDoctorPage: Component<InfrastructureAgentDoctorP
                           {target().currentVersion || '—'}
                         </TableCell>
                         <TableCell class="agent-doctor-target-column px-3 py-1.5 text-xs text-base-content">
-                          {target().expectedVersion || '—'}
+                          {expectedVersionDisplay() || '—'}
                         </TableCell>
                         <TableCell
                           class="px-2 py-1.5 text-xs text-muted sm:px-3"
@@ -892,83 +917,123 @@ export const InfrastructureAgentDoctorPage: Component<InfrastructureAgentDoctorP
                               wrapValues
                             />
 
-                            <Show when={target().safeProfileGuidance}>
-                              {(guidance) => <InlineNotice tone="info">{guidance()}</InlineNotice>}
-                            </Show>
-                            <Show
-                              when={
-                                !target().safeCollector &&
-                                target().status !== 'removed' &&
-                                target().commandPlatform === 'linux' &&
-                                target().actionRunnerAgentId &&
-                                target().actionRunnerHostname
-                              }
-                            >
-                              <div class="space-y-2 text-xs">
-                                <div>
-                                  <div class="mb-1 font-medium text-base-content">
-                                    Inspect current service profile
-                                  </div>
-                                  <div class="relative">
-                                    <CommandCopyButton
-                                      onClick={() =>
-                                        void copyCommand(
-                                          buildSafeCollectorInspectCommand({
-                                            pulseUrl: operations.selectedAgentUrl(),
-                                            insecure: operations.insecureMode(),
-                                            customCaPath: operations.customCaPath(),
-                                          }),
-                                        )
-                                      }
-                                      label="Copy safe-profile inspection command"
-                                    />
-                                    <pre
-                                      tabIndex={0}
-                                      class="overflow-x-auto rounded-md bg-page p-3 pr-12 text-xs text-base-content focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500"
+                            {(() => {
+                              const renderSafeProfileContent = () => (
+                                <>
+                                  <Show when={target().safeProfileGuidance}>
+                                    {(guidance) => (
+                                      <InlineNotice tone="info">{guidance()}</InlineNotice>
+                                    )}
+                                  </Show>
+                                  <Show
+                                    when={
+                                      !target().safeCollector &&
+                                      target().status !== 'removed' &&
+                                      target().commandPlatform === 'linux' &&
+                                      target().actionRunnerAgentId &&
+                                      target().actionRunnerHostname
+                                    }
+                                  >
+                                    <div class="space-y-2 text-xs">
+                                      <div>
+                                        <div class="mb-1 font-medium text-base-content">
+                                          Inspect current service profile
+                                        </div>
+                                        <div class="relative">
+                                          <CommandCopyButton
+                                            onClick={() =>
+                                              void copyCommand(
+                                                buildSafeCollectorInspectCommand({
+                                                  pulseUrl: operations.selectedAgentUrl(),
+                                                  insecure: operations.insecureMode(),
+                                                  customCaPath: operations.customCaPath(),
+                                                }),
+                                              )
+                                            }
+                                            label="Copy safe-profile inspection command"
+                                          />
+                                          <pre
+                                            tabIndex={0}
+                                            class="overflow-x-auto rounded-md bg-page p-3 pr-12 text-xs text-base-content focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500"
+                                          >
+                                            <code>
+                                              {buildSafeCollectorInspectCommand({
+                                                pulseUrl: operations.selectedAgentUrl(),
+                                                insecure: operations.insecureMode(),
+                                                customCaPath: operations.customCaPath(),
+                                              })}
+                                            </code>
+                                          </pre>
+                                        </div>
+                                      </div>
+                                      <div>
+                                        <div class="mb-1 font-medium text-base-content">
+                                          Apply reviewed safe collector profile
+                                        </div>
+                                        <div class="relative">
+                                          <CommandCopyButton
+                                            onClick={() =>
+                                              void copyCommand(
+                                                buildSafeCollectorApplyCommand({
+                                                  pulseUrl: operations.selectedAgentUrl(),
+                                                  insecure: operations.insecureMode(),
+                                                  customCaPath: operations.customCaPath(),
+                                                }),
+                                              )
+                                            }
+                                            label="Copy safe-profile apply command"
+                                          />
+                                          <pre
+                                            tabIndex={0}
+                                            class="overflow-x-auto rounded-md bg-page p-3 pr-12 text-xs text-base-content focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500"
+                                          >
+                                            <code>
+                                              {buildSafeCollectorApplyCommand({
+                                                pulseUrl: operations.selectedAgentUrl(),
+                                                insecure: operations.insecureMode(),
+                                                customCaPath: operations.customCaPath(),
+                                              })}
+                                            </code>
+                                          </pre>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  </Show>
+                                </>
+                              );
+
+                              return (
+                                <Show
+                                  when={collapseSecurityDetails()}
+                                  fallback={renderSafeProfileContent()}
+                                >
+                                  <Show
+                                    when={
+                                      collapsedSecuritySections().length > 0 ||
+                                      Boolean(target().safeProfileGuidance)
+                                    }
+                                  >
+                                    <details
+                                      data-testid="agent-doctor-security-details"
+                                      class="rounded-md border border-border bg-surface-alt/50 px-3 py-2 text-xs"
                                     >
-                                      <code>
-                                        {buildSafeCollectorInspectCommand({
-                                          pulseUrl: operations.selectedAgentUrl(),
-                                          insecure: operations.insecureMode(),
-                                          customCaPath: operations.customCaPath(),
-                                        })}
-                                      </code>
-                                    </pre>
-                                  </div>
-                                </div>
-                                <div>
-                                  <div class="mb-1 font-medium text-base-content">
-                                    Apply reviewed safe collector profile
-                                  </div>
-                                  <div class="relative">
-                                    <CommandCopyButton
-                                      onClick={() =>
-                                        void copyCommand(
-                                          buildSafeCollectorApplyCommand({
-                                            pulseUrl: operations.selectedAgentUrl(),
-                                            insecure: operations.insecureMode(),
-                                            customCaPath: operations.customCaPath(),
-                                          }),
-                                        )
-                                      }
-                                      label="Copy safe-profile apply command"
-                                    />
-                                    <pre
-                                      tabIndex={0}
-                                      class="overflow-x-auto rounded-md bg-page p-3 pr-12 text-xs text-base-content focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500"
-                                    >
-                                      <code>
-                                        {buildSafeCollectorApplyCommand({
-                                          pulseUrl: operations.selectedAgentUrl(),
-                                          insecure: operations.insecureMode(),
-                                          customCaPath: operations.customCaPath(),
-                                        })}
-                                      </code>
-                                    </pre>
-                                  </div>
-                                </div>
-                              </div>
-                            </Show>
+                                      <summary class="cursor-pointer font-medium text-muted hover:text-base-content">
+                                        Security &amp; least-privilege details
+                                      </summary>
+                                      <div class="mt-3 space-y-3">
+                                        <Show when={collapsedSecuritySections().length > 0}>
+                                          <DetailSectionTable
+                                            sections={collapsedSecuritySections()}
+                                            wrapValues
+                                          />
+                                        </Show>
+                                        {renderSafeProfileContent()}
+                                      </div>
+                                    </details>
+                                  </Show>
+                                </Show>
+                              );
+                            })()}
 
                             <Show when={target().actionRunnerCredentialEligible}>
                               <Button

@@ -16,6 +16,13 @@ interface NodeModalBasicInfoSectionProps {
 
 export const NodeModalBasicInfoSection: Component<NodeModalBasicInfoSectionProps> = (props) => {
   const { modalProps, state } = props;
+  const isClusterEdit = () =>
+    Boolean(
+      modalProps.editingNode &&
+      modalProps.editingNode.type === 'pve' &&
+      'isCluster' in modalProps.editingNode &&
+      modalProps.editingNode.isCluster,
+    );
 
   return (
     <div>
@@ -46,19 +53,22 @@ export const NodeModalBasicInfoSection: Component<NodeModalBasicInfoSectionProps
 
         <div class={formField}>
           <label for="node-name" class={labelClass('flex items-center gap-1')}>
-            Node Name <span class="text-slate-500 text-xs font-normal">(Optional)</span>
+            {isClusterEdit() ? 'Cluster Name' : 'Node Name'}{' '}
+            <span class="text-slate-500 text-xs font-normal">(Optional)</span>
           </label>
           <input
             id="node-name"
             type="text"
             value={state.formData().name}
             onInput={(event) => state.updateField('name', event.currentTarget.value)}
-            placeholder="Defaults to the host name"
+            placeholder={
+              isClusterEdit() ? 'Defaults to the cluster name' : 'Defaults to the host name'
+            }
             class={controlClass()}
           />
           <p class={formHelpText}>
             Pulse shows this name across its monitoring views. If you leave it empty, Pulse names it
-            after the host.
+            after the {isClusterEdit() ? 'cluster' : 'host'}.
           </p>
         </div>
 
