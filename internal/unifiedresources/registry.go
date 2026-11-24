@@ -8,6 +8,7 @@ import (
 	"maps"
 	"slices"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -434,10 +435,10 @@ func (rr *ResourceRegistry) ingestSnapshot(snapshot models.StateSnapshot, thresh
 	rr.agentNodeScanIndex = rr.buildAgentNodeScanIndexLocked()
 	rr.mu.Unlock()
 	for _, vm := range snapshot.VMs {
-		guestSuccessions = append(guestSuccessions, rr.ingestVM(vm, clusterByInstance, nodeNamesByInstance)...)
+		guestSuccessions = rr.ingestVM(vm, clusterByInstance, nodeNamesByInstance, guestSuccessions)
 	}
 	for _, ct := range snapshot.Containers {
-		guestSuccessions = append(guestSuccessions, rr.ingestContainer(ct, clusterByInstance, nodeNamesByInstance)...)
+		guestSuccessions = rr.ingestContainer(ct, clusterByInstance, nodeNamesByInstance, guestSuccessions)
 	}
 	rr.mu.Lock()
 	rr.agentNodeScanIndex = nil
@@ -969,7 +970,8 @@ func (rr *ResourceRegistry) linkFoldHolderLocked(ref string) (holderID string, a
 // successions in PersistIdentityPins: a superseded ID still observed, live or
 // folded into another resource by a manual link, is skipped so a genuinely
 // distinct sibling never has its rows stolen. Re-runs are cheap no-ops once
-// the old rows are gone.
+// the old rows are gone. The caller gives up its scratch batch, so compact
+// it in place rather than allocating another fleet-sized slice.
 func (rr *ResourceRegistry) applyRecordSuccessions(successions []CanonicalIDSuccession) {
 	if len(successions) == 0 || rr.store == nil {
 		return
@@ -980,13 +982,9 @@ func (rr *ResourceRegistry) applyRecordSuccessions(successions []CanonicalIDSucc
 	}
 
 	rr.mu.RLock()
-	kept := make([]CanonicalIDSuccession, 0, len(successions))
-	for _, succession := range successions {
-		if rr.canonicalIDObservedLocked(succession.OldCanonicalID) {
-			continue
-		}
-		kept = append(kept, succession)
-	}
+	kept := slices.DeleteFunc(successions, func(succession CanonicalIDSuccession) bool {
+		return rr.canonicalIDObservedLocked(succession.OldCanonicalID)
+	})
 	rr.mu.RUnlock()
 
 	if len(kept) == 0 {
@@ -2240,7 +2238,7 @@ func (rr *ResourceRegistry) ingestPMGInstance(instance models.PMGInstance) {
 	rr.ingest(SourcePMG, sourceID, resource, identity)
 }
 
-func (rr *ResourceRegistry) ingestVM(vm models.VM, clusterByInstance map[string]string, nodeNamesByInstance map[string][]string) []CanonicalIDSuccession {
+func (rr *ResourceRegistry) ingestVM(vm models.VM, clusterByInstance map[string]string, nodeNamesByInstance map[string][]string, successions []CanonicalIDSuccession) []CanonicalIDSuccession {
 	resource, identity := resourceFromVM(vm)
 	sourceID := proxmoxVMSourceID(vm)
 	clusterName := clusterByInstance[vm.Instance]
@@ -2252,10 +2250,10 @@ func (rr *ResourceRegistry) ingestVM(vm models.VM, clusterByInstance map[string]
 		resource.Proxmox.ClusterName = clusterName
 	}
 	newID := rr.ingest(SourceProxmox, sourceID, resource, identity)
-	return rr.declareGuestSupersededEras(newID, ResourceTypeVM, sourceID, vm.Instance, vm.Node, vm.VMID, nodeNamesByInstance)
+	return rr.declareGuestSupersededEras(newID, ResourceTypeVM, sourceID, vm.Instance, vm.Node, vm.VMID, nodeNamesByInstance, successions)
 }
 
-func (rr *ResourceRegistry) ingestContainer(ct models.Container, clusterByInstance map[string]string, nodeNamesByInstance map[string][]string) []CanonicalIDSuccession {
+func (rr *ResourceRegistry) ingestContainer(ct models.Container, clusterByInstance map[string]string, nodeNamesByInstance map[string][]string, successions []CanonicalIDSuccession) []CanonicalIDSuccession {
 	resource, identity := resourceFromContainer(ct)
 	sourceID := proxmoxContainerSourceID(ct)
 	clusterName := clusterByInstance[ct.Instance]
@@ -2267,7 +2265,7 @@ func (rr *ResourceRegistry) ingestContainer(ct models.Container, clusterByInstan
 		resource.Proxmox.ClusterName = clusterName
 	}
 	newID := rr.ingest(SourceProxmox, sourceID, resource, identity)
-	return rr.declareGuestSupersededEras(newID, ResourceTypeSystemContainer, sourceID, ct.Instance, ct.Node, ct.VMID, nodeNamesByInstance)
+	return rr.declareGuestSupersededEras(newID, ResourceTypeSystemContainer, sourceID, ct.Instance, ct.Node, ct.VMID, nodeNamesByInstance, successions)
 }
 
 // declareGuestSupersededEras names the node-scoped canonical IDs a Proxmox
@@ -2277,52 +2275,62 @@ func (rr *ResourceRegistry) ingestContainer(ct models.Container, clusterByInstan
 // orphaned by a pre-upgrade live migration still succeed into the guest's
 // current canonical ID. The IDs are retained on the resource for alert
 // override migration and old-reference resolution, and returned as
-// successions for the store re-key pass.
-func (rr *ResourceRegistry) declareGuestSupersededEras(newID string, resourceType ResourceType, sourceID, instance, node string, vmid int, nodeNamesByInstance map[string][]string) []CanonicalIDSuccession {
+// successions for the store re-key pass. The batch is shared by the snapshot
+// so each guest need not allocate its own list of pairs.
+func (rr *ResourceRegistry) declareGuestSupersededEras(newID string, resourceType ResourceType, sourceID, instance, node string, vmid int, nodeNamesByInstance map[string][]string, successions []CanonicalIDSuccession) []CanonicalIDSuccession {
 	newID = CanonicalResourceID(newID)
-	if newID == "" || ProxmoxGuestIdentityKey(instance, vmid) == "" {
+	instance = strings.TrimSpace(instance)
+	if newID == "" || instance == "" || vmid <= 0 {
 		// Guests without an instance+VMID identity keep the source-specific
 		// derivation; there is no retired era to succeed from.
-		return nil
+		return successions
 	}
 
-	legacySourceIDs := []string{sourceID}
-	seenNodes := map[string]struct{}{}
-	for _, nodeName := range append([]string{node}, nodeNamesByInstance[strings.TrimSpace(instance)]...) {
-		nodeName = strings.TrimSpace(nodeName)
-		if nodeName == "" {
-			continue
-		}
-		if _, dup := seenNodes[nodeName]; dup {
-			continue
-		}
-		seenNodes[nodeName] = struct{}{}
-		legacySourceIDs = append(legacySourceIDs, fmt.Sprintf("%s:%s:%d", strings.TrimSpace(instance), nodeName, vmid))
-	}
-
-	supersededIDs := make([]string, 0, len(legacySourceIDs))
+	// Project each alias directly instead of retaining a second slice of
+	// un-hashed source IDs for this guest.
+	nodes := nodeNamesByInstance[instance]
+	supersededIDs := make([]string, 0, len(nodes)+2)
 	seenIDs := map[string]struct{}{}
-	for _, legacySourceID := range legacySourceIDs {
-		legacySourceID = normalizeSourceID(legacySourceID)
+	addSource := func(legacySourceID string) {
 		if legacySourceID == "" {
-			continue
+			return
 		}
 		legacyID := rr.sourceSpecificID(resourceType, SourceProxmox, legacySourceID)
 		if legacyID == newID {
-			continue
+			return
 		}
 		if _, dup := seenIDs[legacyID]; dup {
-			continue
+			return
 		}
 		seenIDs[legacyID] = struct{}{}
 		supersededIDs = append(supersededIDs, legacyID)
 	}
-	if len(supersededIDs) == 0 {
-		return nil
+	sourceID = normalizeSourceID(sourceID)
+	addSource(sourceID)
+	vmidText := strconv.Itoa(vmid)
+	seenNodes := map[string]struct{}{}
+	addNode := func(nodeName string) {
+		nodeName = strings.TrimSpace(nodeName)
+		if nodeName == "" {
+			return
+		}
+		if _, dup := seenNodes[nodeName]; dup {
+			return
+		}
+		seenNodes[nodeName] = struct{}{}
+		legacySourceID := instance + ":" + nodeName + ":" + vmidText
+		// In ordinary polls the provider's ID already names the current
+		// node. Avoid hashing the same string twice.
+		if legacySourceID != sourceID {
+			addSource(legacySourceID)
+		}
+	}
+	addNode(node)
+	for _, nodeName := range nodes {
+		addNode(nodeName)
 	}
 
 	rr.retainSupersededCanonicalIDs(newID, supersededIDs)
-	successions := make([]CanonicalIDSuccession, 0, len(supersededIDs))
 	for _, supersededID := range supersededIDs {
 		successions = append(successions, CanonicalIDSuccession{
 			OldCanonicalID: supersededID,
