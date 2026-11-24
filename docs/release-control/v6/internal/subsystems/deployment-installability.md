@@ -8734,8 +8734,9 @@ because an evaluation licence could not be obtained.
 
 The unified agent installer (`scripts/install.sh`) offers
 `--least-privilege` on standard Linux systemd hosts: a dedicated nologin
-`pulse-agent` system user owns the service, state directory, and binary;
-docker-group membership covers socket reads; and the optional
+`pulse-agent` system user owns the service and state directory while the
+binary stays root-owned because later installer runs execute it as root.
+Docker-group membership covers socket reads, and the optional
 `--grant-smart` / `--grant-pct` flags install visudo-validated,
 exact-command sudoers rules with root-owned wrapper helpers wired through
 `PULSE_SMARTCTL_PATH` / `PULSE_PCT_PATH`. Installability boundaries: the

@@ -28,29 +28,39 @@ import (
 func TestRootInstallerDownloadCurlConfigIsolation(t *testing.T) {
 	assets := t.TempDir()
 	key := filepath.Join(assets, "key")
-	payload := []byte("inert transport fixture; never executed\n")
-	file := filepath.Join(assets, "payload")
-	writeTestFile(t, file, payload, 0600)
-	for _, args := range [][]string{
-		{"-q", "-t", "ed25519", "-N", "", "-f", key},
-		{"-q", "-Y", "sign", "-f", key, "-n", "pulse-install", file},
-	} {
-		if out, err := exec.Command("ssh-keygen", args...).CombinedOutput(); err != nil {
-			t.Fatalf("synthetic signature: %v\n%s", err, out)
-		}
+	if out, err := exec.Command("ssh-keygen", "-q", "-t", "ed25519", "-N", "", "-f", key).CombinedOutput(); err != nil {
+		t.Fatalf("synthetic signing key: %v\n%s", err, out)
 	}
 	public, err := os.ReadFile(key + ".pub")
 	if err != nil {
 		t.Fatal(err)
 	}
-	signature, err := os.ReadFile(file + ".sig")
-	if err != nil {
-		t.Fatal(err)
+	// One key and namespace sign both assets, as in a release. Each names
+	// itself inside its signed bytes so another signed asset cannot replace it.
+	payloads := map[string][]byte{
+		"installer": []byte("PULSE_RELEASE_ASSET=\"install.sh\"\ninert transport fixture, never executed\n"),
+		"helper":    []byte("PULSE_RELEASE_ASSET=\"pulse-auto-update.sh\"\ninert transport fixture, never executed\n"),
+	}
+	signatures := map[string][]byte{}
+	for name, body := range payloads {
+		file := filepath.Join(assets, name)
+		writeTestFile(t, file, body, 0600)
+		if out, err := exec.Command("ssh-keygen", "-q", "-Y", "sign", "-f", key, "-n", "pulse-install", file).CombinedOutput(); err != nil {
+			t.Fatalf("synthetic signature: %v\n%s", err, out)
+		}
+		if signatures[name], err = os.ReadFile(file + ".sig"); err != nil {
+			t.Fatal(err)
+		}
 	}
 	for _, phase := range []string{"installer", "helper"} {
 		for _, noTimeout := range []bool{false, true} {
-			for _, mode := range []string{"trusted", "untrusted-ca", "http-error", "redirect", "bad-signature", "environment-proxy"} {
+			for _, mode := range []string{"trusted", "untrusted-ca", "http-error", "redirect", "bad-signature", "other-signed-asset", "environment-proxy"} {
 				t.Run(fmt.Sprintf("%s/no-timeout-%t/%s", phase, noTimeout, mode), func(t *testing.T) {
+					served := phase
+					if mode == "other-signed-asset" {
+						served = map[string]string{"installer": "helper", "helper": "installer"}[phase]
+					}
+					payload, signature := payloads[served], signatures[served]
 					root := t.TempDir()
 					var mu sync.Mutex
 					var requests []string
@@ -150,7 +160,7 @@ fi
 					env = append(env, proxyEnv...)
 					exit := runRootCurlFixture(t, script, env)
 					accepted, readErr := os.ReadFile(filepath.Join(root, "accepted"))
-					ok := mode != "untrusted-ca" && mode != "http-error" && mode != "bad-signature"
+					ok := mode != "untrusted-ca" && mode != "http-error" && mode != "bad-signature" && mode != "other-signed-asset"
 					if ok {
 						if exit != 0 || readErr != nil || !bytes.Equal(accepted, payload) {
 							t.Fatalf("signed transport rejected: exit=%d read=%v payload=%q", exit, readErr, accepted)
@@ -169,7 +179,7 @@ fi
 						want = 3 // Existing script-owned attempts, not curlrc retries.
 					} else if mode == "redirect" {
 						want = 4
-					} else if mode == "bad-signature" && phase == "helper" {
+					} else if (mode == "bad-signature" || mode == "other-signed-asset") && phase == "helper" {
 						want = 6 // Three existing signed-pair attempts, never acceptance.
 					}
 					if len(got) != want || hasInjected || strings.Contains(strings.Join(got, "\n"), "/ambient") {

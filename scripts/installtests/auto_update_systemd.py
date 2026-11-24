@@ -97,6 +97,7 @@ else:
 
 INSTALLER = r'''#!/bin/bash
 set -euo pipefail
+PULSE_RELEASE_ASSET="install.sh"
 [[ $# == 2 && "$1" == --version ]]
 case "$2" in v0.0.1|v0.0.2) ;; *) exit 97 ;; esac
 source "$PULSE_NATIVE_ROOT/installer-definitions"

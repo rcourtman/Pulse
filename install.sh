@@ -93,6 +93,11 @@ DOCKER_IMAGE_REPO="${DOCKER_IMAGE_REPO:-rcourtman/pulse}"
 INSTALL_SIGNATURE_IDENTITY="pulse-installer"
 INSTALL_SIGNATURE_NAMESPACE="pulse-install"
 PINNED_RELEASE_SSH_PUBLIC_KEY="ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIMZd/DaH+BldzOkq1A8KVTcFk73nAyrE8aJOyf7i00jm pulse-installer"
+# Release asset identity. Every asset of every release is signed with the same
+# key, identity and namespace, so a signature alone does not say which asset
+# the signed bytes are. verify_release_signature checks this exact line inside
+# the signed bytes before a downloaded copy of this script is run.
+PULSE_RELEASE_ASSET="install.sh"
 BUILD_FROM_SOURCE=false
 SKIP_DOWNLOAD=false
 IN_CONTAINER=false
@@ -134,6 +139,7 @@ verify_release_signature() {
     local target_path="$1"
     local signature_path="$2"
     local context="${3:-downloaded file}"
+    local expected_asset="${4:-}"
     local allowed_signers=""
 
     if ! require_release_signature_verifier; then
@@ -154,6 +160,20 @@ verify_release_signature() {
     fi
 
     rm -f "$allowed_signers"
+
+    # The signature proves that Pulse published these bytes once, not which
+    # asset they are. When an asset declaration is present inside the signed
+    # bytes, require it to match the expected asset exactly so another signed
+    # script cannot be substituted. Missing declarations remain accepted here
+    # until a stamped stable release is published as releases/latest.
+    if [[ -n "$expected_asset" ]]; then
+        local declared_assets=""
+        declared_assets=$(grep -E '^PULSE_RELEASE_ASSET=' "$target_path" 2>/dev/null || true)
+        if [[ -n "$declared_assets" && "$declared_assets" != "PULSE_RELEASE_ASSET=\"${expected_asset}\"" ]]; then
+            echo "Signed ${context} does not declare itself as the ${expected_asset} release asset. Refusing it." >&2
+            return 1
+        fi
+    fi
     return 0
 }
 
@@ -2440,8 +2460,11 @@ auto_register_pve_node() {
         host_input="$(hostname -f 2>/dev/null || hostname)"
     fi
 
+    # The installer keeps the administrator's working directory, which may be a
+    # shared one such as /tmp. Every inline Python program runs isolated (-I) so
+    # its imports never resolve from there, PYTHONPATH or the user site directory.
     local normalized_host_url
-    normalized_host_url=$(python3 - <<'PY' "$host_input" "$default_port"
+    normalized_host_url=$(python3 -I - <<'PY' "$host_input" "$default_port"
 import sys, urllib.parse
 raw = sys.argv[1].strip()
 default_port = sys.argv[2]
@@ -2483,7 +2506,7 @@ PY
     fi
 
     local setup_payload
-    setup_payload=$(python3 - <<'PY' "$normalized_host_url" "$backup_perms"
+    setup_payload=$(python3 -I - <<'PY' "$normalized_host_url" "$backup_perms"
 import json, sys
 host = sys.argv[1]
 backup = sys.argv[2].lower() == "true"
@@ -2518,7 +2541,7 @@ PY
     local setup_token_hint
     local setup_expires
     local setup_expiry_state
-    IFS=$'\t' read -r setup_token setup_type setup_host setup_url setup_download_url setup_script_name setup_command setup_command_with_env setup_command_without_env setup_token_hint setup_expires setup_expiry_state <<<"$(python3 - "$pulse_url" "$normalized_host_url" "$backup_perms" 3<<<"$setup_response" <<'PY'
+    IFS=$'\t' read -r setup_token setup_type setup_host setup_url setup_download_url setup_script_name setup_command setup_command_with_env setup_command_without_env setup_token_hint setup_expires setup_expiry_state <<<"$(python3 -I - "$pulse_url" "$normalized_host_url" "$backup_perms" 3<<<"$setup_response" <<'PY'
 import json, sys
 import time
 from urllib.parse import quote
@@ -2617,18 +2640,18 @@ PY
 
     local backup_query=""
     [[ "$backup_perms" == "true" ]] && backup_query="backup_perms=true&"
-    local expected_setup_url="${pulse_url}/api/setup-script?${backup_query}host=$(python3 - <<'PY' "$normalized_host_url"
+    local expected_setup_url="${pulse_url}/api/setup-script?${backup_query}host=$(python3 -I - <<'PY' "$normalized_host_url"
 from urllib.parse import quote
 import sys
 print(quote(sys.argv[1], safe=''))
 PY
-)&pulse_url=$(python3 - <<'PY' "$pulse_url"
+)&pulse_url=$(python3 -I - <<'PY' "$pulse_url"
 from urllib.parse import quote
 import sys
 print(quote(sys.argv[1], safe=''))
 PY
 )&type=pve"
-    local expected_download_url="$(python3 - <<'PY' "$normalized_host_url" "$pulse_url" "$backup_perms" 3<<<"$setup_token"
+    local expected_download_url="$(python3 -I - <<'PY' "$normalized_host_url" "$pulse_url" "$backup_perms" 3<<<"$setup_token"
 from urllib.parse import quote
 import sys
 host, pulse_url, backup_perms = sys.argv[1:]
@@ -2693,7 +2716,7 @@ PY
     fi
 
     local token_name
-    token_name=$(python3 - <<'PY' "$pulse_url"
+    token_name=$(python3 -I - <<'PY' "$pulse_url"
 import re, sys, urllib.parse
 
 raw = sys.argv[1].strip()
@@ -2752,7 +2775,7 @@ PY
     fi
 
     local register_payload
-    register_payload=$(python3 - "$normalized_host_url" "$token_id" "$server_name" 3<<<"$(printf '%s\n%s\n' "$token_value" "$setup_token")" <<'PY'
+    register_payload=$(python3 -I - "$normalized_host_url" "$token_id" "$server_name" 3<<<"$(printf '%s\n%s\n' "$token_value" "$setup_token")" <<'PY'
 import json, sys
 host, token_id, server_name = sys.argv[1:]
 token_value, setup_token = __import__("os").fdopen(3).read().splitlines()
@@ -2788,7 +2811,7 @@ PY
     local register_token_value
     local register_node_id
     local register_node_name
-    IFS=$'\t' read -r register_status register_action register_type register_source register_host register_token_id register_token_value register_node_id register_node_name <<<"$(python3 - "$register_response" <<'PY'
+    IFS=$'\t' read -r register_status register_action register_type register_source register_host register_token_id register_token_value register_node_id register_node_name <<<"$(python3 -I - "$register_response" <<'PY'
 import json, sys
 try:
     data = json.loads(sys.argv[1])
@@ -2940,7 +2963,8 @@ inspect_api_tokens_for_upgrade() {
         return 1
     fi
 
-    python3 - "$token_file" <<'PY'
+    # Isolated (-I): no imports from the working directory or PYTHONPATH.
+    python3 -I - "$token_file" <<'PY'
 import datetime
 import json
 import sys
@@ -3653,7 +3677,7 @@ download_container_installer() {
         print_error "Failed to download container installer signature; refusing to copy or run the installer"
         return 1
     fi
-    if ! verify_release_signature "$staged_installer" "$staged_signature" "downloaded container installer"; then
+    if ! verify_release_signature "$staged_installer" "$staged_signature" "downloaded container installer" "install.sh"; then
         return 1
     fi
     printf -v "$source_output" '%s' "$staged_installer"
@@ -4293,6 +4317,7 @@ build_from_source() {
     local GO_INSTALLED=false
     local arch=""
     local go_arch=""
+    local go_archive=""
     local service_name=""
     local binary_stage=""
     local version_output=""
@@ -4335,27 +4360,28 @@ build_from_source() {
                 ;;
         esac
 
-        if ! cd /tmp; then
+        # /tmp is writable by every local account. wget without -O keeps a file
+        # that already has the download's name and saves beside it, so a fixed
+        # name there lets another user choose what root unpacks. Download to an
+        # explicit path inside an owner-only directory instead.
+        if ! go_archive=$(create_temp_archive_path "/tmp/go${GO_MIN_VERSION}.linux-${go_arch}"); then
             print_error "Failed to prepare Go installation directory"
-            cd "$original_dir" >/dev/null 2>&1 || true
             return 1
         fi
 
-        if ! wget -q "https://go.dev/dl/go${GO_MIN_VERSION}.linux-${go_arch}.tar.gz"; then
+        if ! wget -q -O "$go_archive" "https://go.dev/dl/go${GO_MIN_VERSION}.linux-${go_arch}.tar.gz"; then
             print_error "Failed to download Go toolchain"
-            cd "$original_dir" >/dev/null 2>&1 || true
+            cleanup_temp_archive_path "$go_archive"
             return 1
         fi
 
         rm -rf /usr/local/go
-        if ! tar -C /usr/local -xzf "go${GO_MIN_VERSION}.linux-${go_arch}.tar.gz"; then
+        if ! tar -C /usr/local -xzf "$go_archive"; then
             print_error "Failed to extract Go toolchain"
-            rm -f "go${GO_MIN_VERSION}.linux-${go_arch}.tar.gz"
-            cd "$original_dir" >/dev/null 2>&1 || true
+            cleanup_temp_archive_path "$go_archive"
             return 1
         fi
-        rm -f "go${GO_MIN_VERSION}.linux-${go_arch}.tar.gz"
-        cd "$original_dir" >/dev/null 2>&1 || true
+        cleanup_temp_archive_path "$go_archive"
     fi
 
     export PATH=/usr/local/go/bin:$PATH
@@ -4708,7 +4734,7 @@ if ! curl -q -fsSL --connect-timeout 10 --max-time 60 --proto '=https' --proto-r
     echo "Failed to download Pulse installer signature from \$INSTALLER_SIG_URL" >&2
     exit 1
 fi
-if ! verify_release_signature "\$tmp_installer" "\$tmp_signature" "downloaded Pulse installer"; then
+if ! verify_release_signature "\$tmp_installer" "\$tmp_signature" "downloaded Pulse installer" "install.sh"; then
     exit 1
 fi
 # The installer owns its outcome and exit status. Help, cancellation and
@@ -4796,7 +4822,7 @@ download_auto_update_script() {
             if [[ $curl_status -ne 0 ]]; then
                 print_warn "Failed to download signature for pulse-auto-update.sh"
                 rm -f "$signature_file" "$dest"
-            elif ! verify_release_signature "$dest" "$signature_file" "downloaded pulse-auto-update.sh"; then
+            elif ! verify_release_signature "$dest" "$signature_file" "downloaded pulse-auto-update.sh" "pulse-auto-update.sh"; then
                 rm -f "$signature_file" "$dest"
                 curl_status=1
             else

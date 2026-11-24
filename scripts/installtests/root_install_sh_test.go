@@ -357,6 +357,122 @@ func TestRootInstallScriptStagesUpdateBeforeStoppingService(t *testing.T) {
 	}
 }
 
+// A source build that has to fetch the Go toolchain runs as root and used to
+// unpack a fixed name in shared /tmp. The fixture relocates /tmp and replaces
+// only the network, the toolchain unpack and the clone. The download must be
+// the archive that is unpacked even when that name was planted beforehand.
+func TestRootInstallScriptSourceBuildIgnoresPlantedGoArchive(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Unix installer fixture")
+	}
+	sourceInstall := extractRootInstallShellFunction(t, "build_from_source")
+	version := regexp.MustCompile(`GO_MIN_VERSION="([^"]+)"`).FindStringSubmatch(sourceInstall)
+	if version == nil {
+		t.Fatal("build_from_source no longer pins GO_MIN_VERSION")
+	}
+	fixture := t.TempDir()
+	sharedTmp := filepath.Join(fixture, "tmp")
+	if err := os.Mkdir(sharedTmp, 0777); err != nil {
+		t.Fatal(err)
+	}
+	planted := filepath.Join(sharedTmp, "go"+version[1]+".linux-amd64.tar.gz")
+	if err := os.WriteFile(planted, []byte("planted\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	script := `
+		set -uo pipefail
+		GITHUB_REPO=fixture/Pulse
+		print_info() { :; }
+		print_error() { printf '%s\n' "$*" >&2; }
+` + extractRootInstallShellFunction(t, "create_temp_archive_path") + `
+` + extractRootInstallShellFunction(t, "cleanup_temp_archive_path") + `
+` + sourceInstall + `
+		apt-get() { return 0; }
+		uname() { printf 'x86_64\n'; }
+		# No toolchain on PATH selects the download branch.
+		command() {
+			if [[ "$1" == -v && "$2" == go ]]; then return 1; fi
+			builtin command "$@"
+		}
+		cd() {
+			if [[ "$1" == /tmp ]]; then set -- "$SHARED_TMP"; fi
+			builtin cd "$@"
+		}
+		mktemp() { command mktemp "${@/#\/tmp\//$SHARED_TMP/}"; }
+		# Like wget, save under the URL's name unless -O names the output, and
+		# never replace a file that already has that name.
+		wget() {
+			local output="" url=""
+			while (($#)); do
+				case "$1" in
+					-O) output="$2"; shift ;;
+					-*) ;;
+					*) url="$1" ;;
+				esac
+				shift
+			done
+			if [[ -z "$output" ]]; then
+				output="${url##*/}"
+				[[ ! -e "$output" ]] || output="$output.1"
+			fi
+			printf 'downloaded %s\n' "$url" > "$output"
+		}
+		tar() {
+			local archive=""
+			while (($#)); do
+				case "$1" in
+					-xzf) archive="$2"; shift ;;
+				esac
+				shift
+			done
+			command cat "$archive" > "$FIXTURE/unpacked"
+			command ls -ld "$(dirname "$archive")" | command cut -c1-10 > "$FIXTURE/stage-mode"
+		}
+		rm() {
+			if [[ "$*" == *'/usr/local/go'* ]]; then return 0; fi
+			command rm "$@"
+		}
+		git() { return 1; }
+		if build_from_source main; then
+			echo "fixture clone unexpectedly succeeded" >&2
+			exit 1
+		fi
+	`
+	cmd := exec.Command("bash", "-c", script)
+	cmd.Env = append(os.Environ(), "FIXTURE="+fixture, "SHARED_TMP="+sharedTmp)
+	out, err := cmd.CombinedOutput()
+	if err != nil || !strings.Contains(string(out), "Failed to clone repository") {
+		t.Fatalf("source build fixture did not reach the clone: %v\n%s", err, out)
+	}
+
+	unpacked, err := os.ReadFile(filepath.Join(fixture, "unpacked"))
+	if err != nil {
+		t.Fatalf("toolchain archive was not unpacked: %v\n%s", err, out)
+	}
+	want := "downloaded https://go.dev/dl/go" + version[1] + ".linux-amd64.tar.gz\n"
+	if string(unpacked) != want {
+		t.Fatalf("unpacked archive = %q, want the download %q", unpacked, want)
+	}
+	if mode, err := os.ReadFile(filepath.Join(fixture, "stage-mode")); err != nil || strings.TrimSpace(string(mode)) != "drwx------" {
+		t.Fatalf("toolchain archive was staged in a directory with mode %q (%v), want owner-only", mode, err)
+	}
+	if content, err := os.ReadFile(planted); err != nil || string(content) != "planted\n" {
+		t.Fatalf("another user's file was changed or removed: %q, %v", content, err)
+	}
+	entries, err := os.ReadDir(sharedTmp)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 1 {
+		names := make([]string, 0, len(entries))
+		for _, entry := range entries {
+			names = append(names, entry.Name())
+		}
+		t.Fatalf("source build left staging behind in /tmp: %v", names)
+	}
+}
+
 func TestRootInstallScriptInstallsSignatureVerificationDependencies(t *testing.T) {
 	content, err := os.ReadFile(filepath.Join("..", "..", "install.sh"))
 	if err != nil {
@@ -786,8 +902,12 @@ func TestRootInstallScriptV5ToV6PreflightAcceptsLegacyHostAgentScope(t *testing.
 		run_upgrade_readiness_preflight v5.1.23 v6.0.0
 	`
 
+	// An upgrade started from a shared directory must not read its modules.
+	caller := t.TempDir()
+	plantCallerPythonModules(t, caller)
 	cmd := exec.Command("bash", "-c", script)
-	cmd.Env = append(os.Environ(), "CONFIG_DIR="+configDir)
+	cmd.Dir = caller
+	cmd.Env = append(os.Environ(), "CONFIG_DIR="+configDir, "PYTHONPATH="+caller)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("bash: %v\n%s", err, out)
@@ -795,6 +915,7 @@ func TestRootInstallScriptV5ToV6PreflightAcceptsLegacyHostAgentScope(t *testing.
 	if !strings.Contains(string(out), "Agent reporting token scope is present") {
 		t.Fatalf("expected success output, got:\n%s", out)
 	}
+	assertCallerPythonModulesUnused(t, caller)
 }
 
 func TestRootInstallScriptAutoRegisterUsesSecureContractShape(t *testing.T) {
@@ -1066,14 +1187,32 @@ func TestRootInstallScriptRequiresSignedReleaseDownloads(t *testing.T) {
 		`Failed to download signature for Pulse release`,
 		`verify_release_signature "$archive_path" "$signature_file" "downloaded Pulse release"`,
 		`INSTALLER_SIG_URL="\${INSTALLER_URL}.sshsig"`,
-		`verify_release_signature "\$tmp_installer" "\$tmp_signature" "downloaded Pulse installer"`,
+		`verify_release_signature "\$tmp_installer" "\$tmp_signature" "downloaded Pulse installer" "install.sh"`,
 		`Failed to download signature for pulse-auto-update.sh`,
-		`verify_release_signature "$dest" "$signature_file" "downloaded pulse-auto-update.sh"`,
+		`verify_release_signature "$dest" "$signature_file" "downloaded pulse-auto-update.sh" "pulse-auto-update.sh"`,
+		`verify_release_signature "$staged_installer" "$staged_signature" "downloaded container installer" "install.sh"`,
+		`declared_assets=$(grep -E '^PULSE_RELEASE_ASSET=' "$target_path" 2>/dev/null || true)`,
 	}
 	for _, needle := range required {
 		if !strings.Contains(script, needle) {
 			t.Fatalf("root install.sh missing signed-release verification contract: %s", needle)
 		}
+	}
+	requireSingleReleaseAssetDeclaration(t, script, "install.sh")
+}
+
+// A script is admitted as a release asset only through one whole line naming
+// it. A second declaration would let it pass as another signed asset too.
+func requireSingleReleaseAssetDeclaration(t *testing.T, script, asset string) {
+	t.Helper()
+	var declared []string
+	for _, line := range strings.Split(script, "\n") {
+		if strings.HasPrefix(line, "PULSE_RELEASE_ASSET=") {
+			declared = append(declared, line)
+		}
+	}
+	if want := `PULSE_RELEASE_ASSET="` + asset + `"`; len(declared) != 1 || declared[0] != want {
+		t.Fatalf("%s must declare its release asset identity exactly once as %s, got %q", asset, want, declared)
 	}
 }
 
@@ -1115,7 +1254,8 @@ func TestPulseAutoUpdateScriptRequiresSignedInstallerDownloads(t *testing.T) {
 		`verify_release_signature() {`,
 		`local install_signature_url="${install_script_url}.sshsig"`,
 		`Failed to download installer signature from $install_signature_url`,
-		`verify_release_signature "$installer_tmp" "$signature_tmp" "downloaded Pulse installer"`,
+		`verify_release_signature "$installer_tmp" "$signature_tmp" "downloaded Pulse installer" "install.sh"`,
+		`declared_assets=$(grep -E '^PULSE_RELEASE_ASSET=' "$target_path" 2>/dev/null || true)`,
 		`Installer signature verified`,
 	}
 	for _, needle := range required {
@@ -1123,6 +1263,7 @@ func TestPulseAutoUpdateScriptRequiresSignedInstallerDownloads(t *testing.T) {
 			t.Fatalf("pulse-auto-update.sh missing signed-installer verification contract: %s", needle)
 		}
 	}
+	requireSingleReleaseAssetDeclaration(t, script, "pulse-auto-update.sh")
 }
 
 func TestOperatorInstallDocsAvoidUnverifiedBootstrapAndFloatingImageTags(t *testing.T) {
@@ -3149,7 +3290,7 @@ func TestRootManualUpdateDownloadDeadlines(t *testing.T) {
 	key := filepath.Join(assets, "key")
 	installer := filepath.Join(assets, "install.sh")
 	const installerResult = "Signed fixture installer returned"
-	if err := os.WriteFile(installer, []byte("#!/bin/bash\nprintf '%s\\n' EXECUTED \"$@\" > \"$FIXTURE/executed\"\nprintf '%s\\n' '"+installerResult+"'\n"), 0600); err != nil {
+	if err := os.WriteFile(installer, []byte("#!/bin/bash\nPULSE_RELEASE_ASSET=\"install.sh\"\nprintf '%s\\n' EXECUTED \"$@\" > \"$FIXTURE/executed\"\nprintf '%s\\n' '"+installerResult+"'\n"), 0600); err != nil {
 		t.Fatal(err)
 	}
 	for _, args := range [][]string{
@@ -3308,7 +3449,7 @@ func TestRootManualUpdateHTTPSOnly(t *testing.T) {
 	assets := t.TempDir()
 	key := filepath.Join(assets, "key")
 	installer := filepath.Join(assets, "installer")
-	const payload = "#!/bin/bash\nprintf '%s\\n' \"$@\" > \"$PUBLICATION_ROOT/executed\"\n"
+	const payload = "#!/bin/bash\nPULSE_RELEASE_ASSET=\"install.sh\"\nprintf '%s\\n' \"$@\" > \"$PUBLICATION_ROOT/executed\"\n"
 	if err := os.WriteFile(installer, []byte(payload), 0o600); err != nil {
 		t.Fatal(err)
 	}

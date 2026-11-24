@@ -17,6 +17,11 @@ MAX_LOG_SIZE=10485760  # 10MB
 INSTALL_SIGNATURE_IDENTITY="pulse-installer"
 INSTALL_SIGNATURE_NAMESPACE="pulse-install"
 PINNED_RELEASE_SSH_PUBLIC_KEY="ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIMZd/DaH+BldzOkq1A8KVTcFk73nAyrE8aJOyf7i00jm pulse-installer"
+# Release asset identity. Every asset of every release is signed with the same
+# key, identity and namespace, so a signature alone does not say which asset
+# the signed bytes are. verify_release_signature requires this exact line
+# inside the signed bytes before a downloaded copy of this script is run.
+PULSE_RELEASE_ASSET="pulse-auto-update.sh"
 
 log_stdout() {
     local level=$1 timestamp=""
@@ -64,6 +69,7 @@ verify_release_signature() {
     local target_path="$1"
     local signature_path="$2"
     local context="${3:-downloaded file}"
+    local expected_asset="${4:-}"
     local allowed_signers=""
 
     if ! require_release_signature_verifier; then
@@ -84,6 +90,19 @@ verify_release_signature() {
     fi
 
     rm -f "$allowed_signers"
+
+    # The signature proves that Pulse published these bytes once, not which
+    # asset or release they are. A script that is about to be run must also
+    # name itself inside the signed bytes. A missing or mismatched declaration
+    # is a refusal because auto-updates only advance to newer releases.
+    if [[ -n "$expected_asset" ]]; then
+        local declared_assets=""
+        declared_assets=$(grep -E '^PULSE_RELEASE_ASSET=' "$target_path" 2>/dev/null || true)
+        if [[ "$declared_assets" != "PULSE_RELEASE_ASSET=\"${expected_asset}\"" ]]; then
+            log error "Signed ${context} does not declare itself as the ${expected_asset} release asset. Refusing it."
+            return 1
+        fi
+    fi
     return 0
 }
 
@@ -785,7 +804,7 @@ perform_update() {
         log error "Failed to download installer signature from $install_signature_url"
         return 1
     fi
-    if ! verify_release_signature "$installer_tmp" "$signature_tmp" "downloaded Pulse installer"; then
+    if ! verify_release_signature "$installer_tmp" "$signature_tmp" "downloaded Pulse installer" "install.sh"; then
         return 1
     fi
     log info "Installer signature verified"
