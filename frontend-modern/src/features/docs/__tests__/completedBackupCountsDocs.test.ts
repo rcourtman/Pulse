@@ -58,7 +58,7 @@ describe('completed backup count guidance', () => {
     expect(copy).toContain("List filters don't change it");
     expect(copy).toContain('so daily totals can differ');
     expect(copy).toContain(
-      'The list follows the By date search, Node, Backup location, Type and Source filters, including Verified or Unverified',
+      'The list follows the selected day and the By date search, Node, Backup location, Type and Source filters, including Verified or Unverified',
     );
     expect(copy).toContain('a non-zero total there can sit beside an empty filtered list');
     expect(copy).toContain(
@@ -71,11 +71,29 @@ describe('completed backup count guidance', () => {
     expect(copy).toContain('Older versions may use different labels');
   });
 
+  it('separates unrated rows from an unknown assessment and links to its evidence', () => {
+    const link = section().querySelector('a[href="#protection-posture"]');
+    const rating = link?.closest('li');
+    const copy = rating?.textContent?.replace(/\s+/g, ' ');
+    expect(link?.textContent).toBe('protection evidence');
+    expect(guide('RECOVERY').querySelector('#protection-posture')).not.toBeNull();
+    expect(copy).toContain('Unknown counts towards the total but not as protected');
+    expect(copy).toContain('Checking means Pulse is still waiting for a protection assessment');
+    expect(copy).toContain('Not evaluated means Pulse has no linked resource to assess');
+    expect(copy).toContain('neither means a workload was deliberately excluded from backups');
+    expect(copy).toContain('Unmatched backups are also outside this ratio');
+    expect(copy).toContain(
+      '2 / 2 protected (rated only) beside 1 checking does not tell you whether the third workload is protected',
+    );
+  });
+
   it('separates fresh running activity, guest results and stale readings', () => {
     const fragment = '#backup-task-results-and-backup-age';
     const link = section().querySelector(`a[href="${fragment}"]`);
     expect(link?.textContent).toBe('no guest result');
     const jobCopy = link?.closest('li')?.textContent?.replace(/\s+/g, ' ');
+    expect(jobCopy).toContain("Select a bar to show that day's restore points in By date");
+    expect(jobCopy).toContain('Use Clear day above the list or select the same bar again');
     expect(jobCopy).toContain('Running can mean a fresh read with no guest result.');
     expect(jobCopy).toContain('Stale reads count as Unknown.');
     expect(guide('RECOVERY').querySelector(fragment)?.textContent).toBe(
