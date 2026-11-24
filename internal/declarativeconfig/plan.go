@@ -1318,7 +1318,7 @@ func diffJSONTopLevelFields(prev, next any) ([]string, bool, error) {
 	if err != nil {
 		return nil, false, err
 	}
-	keySet := make(map[string]struct{}, len(prevMap)+len(nextMap))
+	keySet := map[string]struct{}{}
 	for k := range prevMap {
 		keySet[k] = struct{}{}
 	}
