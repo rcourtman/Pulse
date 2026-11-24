@@ -10,6 +10,7 @@ import { Subtabs } from '@/components/shared/Subtabs';
 import { WebInterfaceLink } from '@/components/shared/WebInterfaceLink';
 import { getSimpleStatusIndicator } from '@/utils/status';
 import { GUEST_DRAWER_HISTORY_DEFAULT_RANGE } from '@/components/Workloads/guestDrawerModel';
+import { GuestDrawerHistoryRangeSelect } from '@/components/Workloads/GuestDrawerHistoryRangeSelect';
 import { ResourceOperatorStateSection } from '@/components/Infrastructure/ResourceOperatorStateSection';
 import { WebInterfaceUrlField } from '@/components/shared/WebInterfaceUrlField';
 import type { Resource } from '@/types/resource';
@@ -98,6 +99,15 @@ export const DockerHostDrawer: Component<DockerHostDrawerProps> = (props) => {
           { value: 'overview', label: 'Overview' },
           { value: 'manage', label: 'Manage' },
         ]}
+        trailing={
+          <Show when={activeTab() === 'overview' && historyTarget()}>
+            <GuestDrawerHistoryRangeSelect
+              range={historyRange()}
+              onRangeChange={setHistoryRange}
+              class="mb-1 sm:mb-0"
+            />
+          </Show>
+        }
       />
 
       {/* Use CSS hidden instead of Show to avoid mount/unmount which causes scroll jumps.
@@ -107,7 +117,6 @@ export const DockerHostDrawer: Component<DockerHostDrawerProps> = (props) => {
           host={props.host}
           historyTarget={historyTarget()}
           historyRange={historyRange()}
-          onHistoryRangeChange={setHistoryRange}
           historyGroups={DOCKER_HOST_DRAWER_HISTORY_GROUPS}
           currentMetrics={currentMetrics()}
           historyEnabled={activeTab() === 'overview'}

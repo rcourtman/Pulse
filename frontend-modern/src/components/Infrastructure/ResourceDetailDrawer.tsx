@@ -29,6 +29,7 @@ import { ResourceActionHistory } from './ResourceActionHistory';
 import { CONTAINER_CPU_CAPACITY_DESCRIPTION } from '@/features/docker/dockerCpuPresentation';
 import { InlineNotice } from '@/components/shared/InlineNotice';
 import { GUEST_DRAWER_BACKUP_PRECAUTION } from '@/components/Workloads/guestDrawerModel';
+import { GuestDrawerHistoryRangeSelect } from '@/components/Workloads/GuestDrawerHistoryRangeSelect';
 import { getShippedDocUrl } from '@/utils/docsLinks';
 
 interface ResourceDetailDrawerProps {
@@ -184,6 +185,15 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
           drawer.setActiveTab(value as Parameters<typeof drawer.setActiveTab>[0])
         }
         tabs={drawer.tabs().map((tab) => ({ value: tab.id, label: tab.label }))}
+        trailing={
+          <Show when={drawer.activeTab() === 'overview' && drawer.metricsHistoryTarget()}>
+            <GuestDrawerHistoryRangeSelect
+              range={drawer.metricsHistoryRange()}
+              onRangeChange={drawer.setMetricsHistoryRange}
+              class="mb-1 sm:mb-0"
+            />
+          </Show>
+        }
       />
 
       <div class={`[overflow-anchor:none] ${drawer.activeTab() === 'overview' ? '' : 'hidden'}`}>

@@ -131,12 +131,11 @@ describe('GuestPhysicalDisks', () => {
     const row = within(card).getByTestId('guest-physical-disk') as HTMLDetailsElement;
     row.open = true;
     fireEvent(row, new Event('toggle'));
-    // The same Overview the Storage tab's disk drawer shows: alerts line,
-    // charts, facts, SMART health card, then every attribute under Details.
+    // The same Overview the Storage tab's disk drawer shows: charts first when
+    // healthy, then facts, SMART health card, and every attribute under Details.
     const overview = await within(card).findByTestId('disk-drawer-overview');
-    expect(within(overview).getByTestId('drawer-no-attention')).toHaveTextContent(
-      'No active alerts',
-    );
+    expect(within(overview).queryByTestId('drawer-attention-section')).toBeNull();
+    expect(within(overview).queryByTestId('drawer-no-attention')).toBeNull();
     expect(await within(overview).findByTestId('history-chart')).toHaveAttribute(
       'data-range',
       '24h',

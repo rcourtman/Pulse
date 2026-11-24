@@ -10,10 +10,7 @@ import {
   TechnicalDetailsDisclosure,
   TechnicalDetailsSection,
 } from '@/components/shared/TechnicalDetailsDisclosure';
-import {
-  DrawerAttentionSection,
-  DrawerNoAlertsLine,
-} from '@/components/shared/DrawerAttentionSection';
+import { DrawerAttentionSection } from '@/components/shared/DrawerAttentionSection';
 import { DrawerExceptionList } from './DrawerExceptionList';
 import type { Alert } from '@/types/api';
 import { AvailabilityProbeStatusCards } from '@/components/Infrastructure/AvailabilityProbeStatusCard';
@@ -440,6 +437,7 @@ export function GuestDrawerOverview(props: GuestDrawerOverviewProps) {
       protectionPresentation().tone === 'success'
         ? `Last completed backup ${protectionPresentation().label}`
         : '',
+      availabilityHealthy() ? 'Availability checks passing' : '',
     ].filter((fact) => fact.trim().length > 0);
 
   // A tag that repeats a fact already on the strip (often the IP) adds nothing.
@@ -463,9 +461,6 @@ export function GuestDrawerOverview(props: GuestDrawerOverviewProps) {
           acknowledged: alert.acknowledged,
         }))}
       />
-      <Show when={(props.alerts ?? []).length === 0}>
-        <DrawerNoAlertsLine availabilityPassing={availabilityHealthy()} />
-      </Show>
 
       <DrawerExceptionList testId="guest-drawer-exceptions" rows={exceptionRows()} />
 
@@ -518,7 +513,7 @@ export function GuestDrawerOverview(props: GuestDrawerOverviewProps) {
       </Show>
 
       {/* A failing or unknown check is something to act on, so it stays in
-          front. A passing one is summarised above and kept under Details. */}
+          front. A passing one is summarised in the facts strip and kept under Details. */}
       <Show when={hasAvailability() && !availabilityHealthy()}>
         <div class="max-w-sm space-y-3">
           <AvailabilityProbeStatusCards

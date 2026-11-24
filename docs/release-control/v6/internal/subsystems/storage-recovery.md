@@ -31,6 +31,10 @@ image from recovering application data. Git proposals have their own review
 branch and commit. The action protocol declares manual recovery for both
 deployment owners.
 
+### Storage disk and pool drawers follow the compact healthy header (23 November 2026)
+
+`DiskDrawer`, `DiskDrawerOverview`, `StoragePoolDrawer`, and `StoragePoolDetail` omit the standalone "No active alerts" row when healthy and render the `History range` picker in `Subtabs` trailing while Overview is active. Active alerts and `Worth checking` rows continue to appear above the charts when present, and tabless inline disk expansions inside `GuestPhysicalDisks` retain the in-panel range picker fallback inside `GuestDrawerHistory`.
+
 ### Ended reset requests do not spend saved recovery (17 November 2026)
 
 Public reset-admin cancellation observed before one-use validation returns fixed

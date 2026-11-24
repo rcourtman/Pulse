@@ -21,6 +21,10 @@ files to read. Deployment history is requested on expansion or refresh,
 filters by runtime and project before the result limit, and indexes service
 and image observations once for the returned records.
 
+### Tab-bar range picker keeps drawer history lazy-loaded (23 November 2026)
+
+`GuestDrawerHistoryRangeSelect` is extracted into its own module so drawer shells (`GuestDrawer`, `NodeDrawer`, `DockerHostDrawer`, `ResourceDetailDrawer`, `DiskDrawer`, `StoragePoolDrawer`, and `ProxmoxCephClusterDrawer`) can render the `History range` control in `Subtabs` trailing without eagerly importing `GuestDrawerHistory`. `GuestDrawerHistory` stays lazy-loaded behind `Suspense` on drawer open, adds no requests, timers, or polling, and collapses its toolbar row out of layout when neither the inline fallback picker nor an error notice is shown.
+
 ### Workload chart keys stop at the guest connection (4 November 2026)
 
 `getWorkloadChartKeyCandidates` emits node-only keys only for a guest with no
