@@ -234,10 +234,10 @@ func TestClient_RegisterAndChannelLifecycle(t *testing.T) {
 		ackBytes, _ := EncodeFrame(ack)
 		_ = conn.WriteMessage(websocket.BinaryMessage, ackBytes)
 
-		// 3. Send CHANNEL_OPEN
+		// 3. Send CHANNEL_OPEN (encrypted auth mode, no plaintext token)
 		chOpen, _ := NewControlFrame(FrameChannelOpen, 1, ChannelOpenPayload{
 			ChannelID: 1,
-			AuthToken: "valid-api-token",
+			AuthMode:  AuthModeEncrypted,
 		})
 		chOpenBytes, _ := EncodeFrame(chOpen)
 		time.Sleep(50 * time.Millisecond) // let client set up
@@ -254,10 +254,14 @@ func TestClient_RegisterAndChannelLifecycle(t *testing.T) {
 		channelOpenAckReceived = frame.Type == FrameChannelOpen
 		mu.Unlock()
 
-		// 5. Complete KEY_EXCHANGE as the app: DATA is only served on an encrypted channel
+		// 5. Complete KEY_EXCHANGE and encrypted channel_auth as the app
 		appEnc, err := testAppKeyExchange(conn, 1, identityPub)
 		if err != nil {
 			t.Logf("key exchange: %v", err)
+			return
+		}
+		if err := testAppAuthenticateChannelDirect(conn, 1, appEnc, "valid-api-token"); err != nil {
+			t.Logf("channel auth: %v", err)
 			return
 		}
 
@@ -368,6 +372,7 @@ func TestClient_RegisterAndChannelLifecycle(t *testing.T) {
 
 func TestClient_RejectInvalidToken(t *testing.T) {
 	logger := zerolog.New(zerolog.NewTestWriter(t))
+	identityPriv, identityPub := testIdentityKeyPair(t)
 
 	channelCloseCh := make(chan ChannelClosePayload, 1)
 
@@ -388,17 +393,38 @@ func TestClient_RejectInvalidToken(t *testing.T) {
 		ackBytes, _ := EncodeFrame(ack)
 		_ = conn.WriteMessage(websocket.BinaryMessage, ackBytes)
 
-		// Send CHANNEL_OPEN with bad token
+		// Open encrypted channel
 		time.Sleep(50 * time.Millisecond)
 		chOpen, _ := NewControlFrame(FrameChannelOpen, 99, ChannelOpenPayload{
 			ChannelID: 99,
-			AuthToken: "INVALID-TOKEN",
+			AuthMode:  AuthModeEncrypted,
 		})
 		chOpenBytes, _ := EncodeFrame(chOpen)
 		_ = conn.WriteMessage(websocket.BinaryMessage, chOpenBytes)
 
-		// Read CHANNEL_CLOSE (reject)
+		// Read CHANNEL_OPEN echo
 		_, msg, err := conn.ReadMessage()
+		if err != nil {
+			return
+		}
+		frame, _ = DecodeFrame(msg)
+		if frame.Type != FrameChannelOpen {
+			return
+		}
+
+		// Complete KEY_EXCHANGE then present an invalid token inside encrypted DATA
+		appEnc, err := testAppKeyExchange(conn, 99, identityPub)
+		if err != nil {
+			t.Logf("key exchange: %v", err)
+			return
+		}
+		if err := sendEncryptedChannelAuth(conn, 99, appEnc, "INVALID-TOKEN"); err != nil {
+			t.Logf("send channel_auth: %v", err)
+			return
+		}
+
+		// Read CHANNEL_CLOSE (reject)
+		_, msg, err = conn.ReadMessage()
 		if err != nil {
 			return
 		}
@@ -419,11 +445,12 @@ func TestClient_RejectInvalidToken(t *testing.T) {
 	}
 
 	deps := ClientDeps{
-		LicenseTokenFunc: func() string { return "test-jwt" },
-		TokenValidator:   func(token string) bool { return token == "good-token" },
-		LocalAddr:        "127.0.0.1:9999",
-		ServerVersion:    "1.0.0",
-		IdentityPubKey:   "test-pub-key",
+		LicenseTokenFunc:   func() string { return "test-jwt" },
+		TokenValidator:     func(token string) bool { return token == "good-token" },
+		LocalAddr:          "127.0.0.1:9999",
+		ServerVersion:      "1.0.0",
+		IdentityPubKey:     identityPub,
+		IdentityPrivateKey: identityPriv,
 	}
 
 	client := NewClient(cfg, deps, logger)
@@ -438,8 +465,8 @@ func TestClient_RejectInvalidToken(t *testing.T) {
 		if closePayload.ChannelID != 99 {
 			t.Errorf("channel ID: got %d, want 99", closePayload.ChannelID)
 		}
-		if closePayload.Reason != "invalid auth token" {
-			t.Errorf("reason: got %q, want %q", closePayload.Reason, "invalid auth token")
+		if closePayload.Reason != "invalid token" {
+			t.Errorf("reason: got %q, want %q", closePayload.Reason, "invalid token")
 		}
 	case <-time.After(3 * time.Second):
 		t.Fatal("timed out waiting for CHANNEL_CLOSE")
@@ -838,6 +865,95 @@ func testAppKeyExchange(conn *websocket.Conn, channelID uint32, identityPub stri
 	return DeriveChannelKeys(appPriv, instancePubKey, false)
 }
 
+func sendEncryptedChannelAuth(conn *websocket.Conn, channelID uint32, appEnc *ChannelEncryption, authToken string) error {
+	authBytes, err := json.Marshal(channelAuthMessage{
+		Type:      channelAuthMessageType,
+		AuthToken: authToken,
+	})
+	if err != nil {
+		return fmt.Errorf("marshal channel_auth: %w", err)
+	}
+	encrypted, err := appEnc.Encrypt(authBytes)
+	if err != nil {
+		return fmt.Errorf("encrypt channel_auth: %w", err)
+	}
+	frameBytes, err := EncodeFrame(NewFrame(FrameData, channelID, encrypted))
+	if err != nil {
+		return fmt.Errorf("encode channel_auth frame: %w", err)
+	}
+	if err := conn.WriteMessage(websocket.BinaryMessage, frameBytes); err != nil {
+		return fmt.Errorf("write channel_auth: %w", err)
+	}
+	return nil
+}
+
+func readEncryptedChannelAuthAck(conn *websocket.Conn, channelID uint32, appEnc *ChannelEncryption) error {
+	_, msg, err := conn.ReadMessage()
+	if err != nil {
+		return fmt.Errorf("read channel_auth_ack: %w", err)
+	}
+	frame, err := DecodeFrame(msg)
+	if err != nil {
+		return fmt.Errorf("decode channel_auth_ack frame: %w", err)
+	}
+	if frame.Type != FrameData || frame.Channel != channelID {
+		return fmt.Errorf("expected DATA channel_auth_ack on channel %d, got %s on channel %d", channelID, FrameTypeName(frame.Type), frame.Channel)
+	}
+	plaintext, err := appEnc.Decrypt(frame.Payload)
+	if err != nil {
+		return fmt.Errorf("decrypt channel_auth_ack: %w", err)
+	}
+	var ack channelAuthAckMessage
+	if err := json.Unmarshal(plaintext, &ack); err != nil {
+		return fmt.Errorf("unmarshal channel_auth_ack: %w", err)
+	}
+	if ack.Type != channelAuthAckMessageType || !ack.OK {
+		return fmt.Errorf("unexpected channel_auth_ack payload: %+v", ack)
+	}
+	return nil
+}
+
+// testAppAuthenticateChannelDirect completes encrypted channel_auth directly
+// against a mock relay connection, asserting both the encrypted DATA ack and
+// the follow-up CHANNEL_OPEN(authenticated=true) frame sent to the relay.
+func testAppAuthenticateChannelDirect(conn *websocket.Conn, channelID uint32, appEnc *ChannelEncryption, authToken string) error {
+	if err := sendEncryptedChannelAuth(conn, channelID, appEnc, authToken); err != nil {
+		return err
+	}
+	if err := readEncryptedChannelAuthAck(conn, channelID, appEnc); err != nil {
+		return err
+	}
+	_, msg, err := conn.ReadMessage()
+	if err != nil {
+		return fmt.Errorf("read authenticated CHANNEL_OPEN: %w", err)
+	}
+	frame, err := DecodeFrame(msg)
+	if err != nil {
+		return fmt.Errorf("decode authenticated CHANNEL_OPEN: %w", err)
+	}
+	if frame.Type != FrameChannelOpen || frame.Channel != channelID {
+		return fmt.Errorf("expected authenticated CHANNEL_OPEN on channel %d, got %s on channel %d", channelID, FrameTypeName(frame.Type), frame.Channel)
+	}
+	var open ChannelOpenPayload
+	if err := UnmarshalControlPayload(frame.Payload, &open); err != nil {
+		return fmt.Errorf("unmarshal authenticated CHANNEL_OPEN: %w", err)
+	}
+	if open.AuthMode != AuthModeEncrypted || !open.Authenticated || open.AuthToken != "" {
+		return fmt.Errorf("unexpected authenticated CHANNEL_OPEN payload: %+v", open)
+	}
+	return nil
+}
+
+// testAppAuthenticateChannelViaRelay completes encrypted channel_auth through a
+// real relay-server WebSocket, which consumes CHANNEL_OPEN(authenticated=true)
+// internally and forwards only the encrypted DATA channel_auth_ack to the app.
+func testAppAuthenticateChannelViaRelay(conn *websocket.Conn, channelID uint32, appEnc *ChannelEncryption, authToken string) error {
+	if err := sendEncryptedChannelAuth(conn, channelID, appEnc, authToken); err != nil {
+		return err
+	}
+	return readEncryptedChannelAuthAck(conn, channelID, appEnc)
+}
+
 func TestClient_EncryptedChannelLifecycle(t *testing.T) {
 	logger := zerolog.New(zerolog.NewTestWriter(t))
 
@@ -875,10 +991,10 @@ func TestClient_EncryptedChannelLifecycle(t *testing.T) {
 		ackBytes, _ := EncodeFrame(ack)
 		_ = conn.WriteMessage(websocket.BinaryMessage, ackBytes)
 
-		// 3. Send CHANNEL_OPEN
+		// 3. Send CHANNEL_OPEN (encrypted auth mode, no plaintext token)
 		chOpen, _ := NewControlFrame(FrameChannelOpen, 10, ChannelOpenPayload{
 			ChannelID: 10,
-			AuthToken: "valid-token",
+			AuthMode:  AuthModeEncrypted,
 		})
 		chOpenBytes, _ := EncodeFrame(chOpen)
 		time.Sleep(50 * time.Millisecond)
@@ -938,6 +1054,12 @@ func TestClient_EncryptedChannelLifecycle(t *testing.T) {
 		appEnc, err := DeriveChannelKeys(appPriv, instancePubKey, false)
 		if err != nil {
 			t.Logf("derive channel keys: %v", err)
+			return
+		}
+
+		// 6b. Authenticate inside the encrypted channel
+		if err := testAppAuthenticateChannelDirect(conn, 10, appEnc, "valid-token"); err != nil {
+			t.Logf("channel auth: %v", err)
 			return
 		}
 
@@ -1040,7 +1162,8 @@ func TestClient_HandleDataDecryptsBeforeReturning(t *testing.T) {
 		logger: logger,
 		channels: map[uint32]*channelState{
 			7: {
-				apiToken: "valid-token",
+				apiToken:      "valid-token",
+				authenticated: true,
 				encryption: &ChannelEncryption{
 					sendCipher: &channelCipher{aead: blockingAEAD},
 					recvCipher: &channelCipher{aead: blockingAEAD},
@@ -1122,7 +1245,7 @@ func TestClient_DataWithoutKeyExchange(t *testing.T) {
 		// CHANNEL_OPEN (no KEY_EXCHANGE follows)
 		chOpen, _ := NewControlFrame(FrameChannelOpen, 5, ChannelOpenPayload{
 			ChannelID: 5,
-			AuthToken: "plain-token",
+			AuthMode:  AuthModeEncrypted,
 		})
 		chOpenBytes, _ := EncodeFrame(chOpen)
 		time.Sleep(50 * time.Millisecond)
@@ -1265,7 +1388,7 @@ func TestClient_KeyExchangeRejectedWithoutIdentityKey(t *testing.T) {
 		// CHANNEL_OPEN
 		chOpen, _ := NewControlFrame(FrameChannelOpen, 20, ChannelOpenPayload{
 			ChannelID: 20,
-			AuthToken: "token-nosign",
+			AuthMode:  AuthModeEncrypted,
 		})
 		chOpenBytes, _ := EncodeFrame(chOpen)
 		time.Sleep(50 * time.Millisecond)
@@ -1743,7 +1866,7 @@ func TestClient_OverloadedDataReturnsBusyResponse(t *testing.T) {
 		time.Sleep(50 * time.Millisecond)
 		chOpen, _ := NewControlFrame(FrameChannelOpen, 1, ChannelOpenPayload{
 			ChannelID: 1,
-			AuthToken: "valid-token",
+			AuthMode:  AuthModeEncrypted,
 		})
 		chOpenBytes, _ := EncodeFrame(chOpen)
 		_ = conn.WriteMessage(websocket.BinaryMessage, chOpenBytes)
@@ -1758,10 +1881,14 @@ func TestClient_OverloadedDataReturnsBusyResponse(t *testing.T) {
 			return
 		}
 
-		// Complete KEY_EXCHANGE as the app: DATA is only served on an encrypted channel
+		// Complete KEY_EXCHANGE and encrypted channel_auth as the app
 		appEnc, err := testAppKeyExchange(conn, 1, identityPub)
 		if err != nil {
 			t.Logf("key exchange: %v", err)
+			return
+		}
+		if err := testAppAuthenticateChannelDirect(conn, 1, appEnc, "valid-token"); err != nil {
+			t.Logf("channel auth: %v", err)
 			return
 		}
 
@@ -1883,7 +2010,7 @@ func TestClient_ChannelRateLimitReturnsTooManyRequests(t *testing.T) {
 		time.Sleep(50 * time.Millisecond)
 		chOpen, _ := NewControlFrame(FrameChannelOpen, 1, ChannelOpenPayload{
 			ChannelID: 1,
-			AuthToken: "valid-token",
+			AuthMode:  AuthModeEncrypted,
 		})
 		chOpenBytes, _ := EncodeFrame(chOpen)
 		_ = conn.WriteMessage(websocket.BinaryMessage, chOpenBytes)
@@ -1897,10 +2024,14 @@ func TestClient_ChannelRateLimitReturnsTooManyRequests(t *testing.T) {
 			return
 		}
 
-		// Complete KEY_EXCHANGE as the app: DATA is only served on an encrypted channel
+		// Complete KEY_EXCHANGE and encrypted channel_auth as the app
 		appEnc, err := testAppKeyExchange(conn, 1, identityPub)
 		if err != nil {
 			t.Logf("key exchange: %v", err)
+			return
+		}
+		if err := testAppAuthenticateChannelDirect(conn, 1, appEnc, "valid-token"); err != nil {
+			t.Logf("channel auth: %v", err)
 			return
 		}
 
@@ -2042,5 +2173,503 @@ func TestNextConsecutiveFailures(t *testing.T) {
 				t.Fatalf("nextConsecutiveFailures(%d, %v) = %d, want %d", tt.current, tt.connected, got, tt.want)
 			}
 		})
+	}
+}
+
+func TestClient_ChannelOpenRejectsPlaintextAuthToken(t *testing.T) {
+	tests := []struct {
+		name    string
+		payload ChannelOpenPayload
+	}{
+		{
+			name: "legacy plaintext auth_token without auth_mode",
+			payload: ChannelOpenPayload{
+				ChannelID: 41,
+				AuthToken: "valid-token",
+			},
+		},
+		{
+			name: "missing auth_mode and auth_token",
+			payload: ChannelOpenPayload{
+				ChannelID: 42,
+			},
+		},
+		{
+			name: "encrypted auth_mode with plaintext auth_token",
+			payload: ChannelOpenPayload{
+				ChannelID: 43,
+				AuthMode:  AuthModeEncrypted,
+				AuthToken: "valid-token",
+			},
+		},
+		{
+			name: "encrypted auth_mode with spoofed authenticated true",
+			payload: ChannelOpenPayload{
+				ChannelID:     44,
+				AuthMode:      AuthModeEncrypted,
+				Authenticated: true,
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			client := NewClient(Config{}, ClientDeps{
+				TokenValidator: func(token string) bool { return token == "valid-token" },
+			}, zerolog.Nop())
+
+			openFrame, err := NewControlFrame(FrameChannelOpen, tc.payload.ChannelID, tc.payload)
+			if err != nil {
+				t.Fatalf("NewControlFrame: %v", err)
+			}
+			sendCh := make(chan []byte, 2)
+			client.handleChannelOpen(openFrame, sendCh)
+
+			if got := client.Status().ActiveChannels; got != 0 {
+				t.Fatalf("active channels = %d, want 0", got)
+			}
+
+			select {
+			case raw := <-sendCh:
+				frame, err := DecodeFrame(raw)
+				if err != nil {
+					t.Fatalf("DecodeFrame: %v", err)
+				}
+				if frame.Type != FrameChannelClose {
+					t.Fatalf("frame type = %s, want CHANNEL_CLOSE", FrameTypeName(frame.Type))
+				}
+				var closePayload ChannelClosePayload
+				if err := UnmarshalControlPayload(frame.Payload, &closePayload); err != nil {
+					t.Fatalf("UnmarshalControlPayload: %v", err)
+				}
+				if closePayload.Reason != "encrypted channel authentication required" {
+					t.Fatalf("reason = %q, want %q", closePayload.Reason, "encrypted channel authentication required")
+				}
+			default:
+				t.Fatal("expected CHANNEL_CLOSE frame")
+			}
+		})
+	}
+}
+
+func TestClient_DataBeforeChannelAuthRefused(t *testing.T) {
+	logger := zerolog.New(zerolog.NewTestWriter(t))
+	identityPriv, identityPub := testIdentityKeyPair(t)
+
+	var apiHits atomic.Int32
+	mockAPI := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		apiHits.Add(1)
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer mockAPI.Close()
+
+	closeCh := make(chan ChannelClosePayload, 1)
+	relayServer := mockRelayServer(t, func(conn *websocket.Conn) {
+		_, msg, err := conn.ReadMessage()
+		if err != nil {
+			return
+		}
+		if frame, _ := DecodeFrame(msg); frame.Type != FrameRegister {
+			return
+		}
+		ack, _ := NewControlFrame(FrameRegisterAck, 0, RegisterAckPayload{
+			InstanceID:   "inst_preauth",
+			SessionToken: "sess_preauth",
+			ExpiresAt:    time.Now().Add(time.Hour).Unix(),
+		})
+		ackBytes, _ := EncodeFrame(ack)
+		_ = conn.WriteMessage(websocket.BinaryMessage, ackBytes)
+
+		time.Sleep(50 * time.Millisecond)
+		chOpen, _ := NewControlFrame(FrameChannelOpen, 51, ChannelOpenPayload{
+			ChannelID: 51,
+			AuthMode:  AuthModeEncrypted,
+		})
+		chOpenBytes, _ := EncodeFrame(chOpen)
+		_ = conn.WriteMessage(websocket.BinaryMessage, chOpenBytes)
+
+		_, msg, err = conn.ReadMessage()
+		if err != nil {
+			return
+		}
+		if frame, _ := DecodeFrame(msg); frame.Type != FrameChannelOpen {
+			return
+		}
+
+		appEnc, err := testAppKeyExchange(conn, 51, identityPub)
+		if err != nil {
+			t.Logf("key exchange: %v", err)
+			return
+		}
+
+		// Send an encrypted ProxyRequest without first authenticating the channel.
+		reqBytes, _ := json.Marshal(ProxyRequest{
+			ID:     "req_unauthenticated",
+			Method: "GET",
+			Path:   "/api/status",
+		})
+		encrypted, _ := appEnc.Encrypt(reqBytes)
+		frameBytes, _ := EncodeFrame(NewFrame(FrameData, 51, encrypted))
+		_ = conn.WriteMessage(websocket.BinaryMessage, frameBytes)
+
+		_, msg, err = conn.ReadMessage()
+		if err != nil {
+			return
+		}
+		frame, _ := DecodeFrame(msg)
+		if frame.Type == FrameChannelClose {
+			var closePayload ChannelClosePayload
+			_ = UnmarshalControlPayload(frame.Payload, &closePayload)
+			closeCh <- closePayload
+		}
+	})
+	defer relayServer.Close()
+
+	client := NewClient(
+		Config{Enabled: true, ServerURL: wsURL(relayServer)},
+		ClientDeps{
+			LicenseTokenFunc:   func() string { return "test-jwt" },
+			TokenValidator:     func(token string) bool { return token == "valid-token" },
+			LocalAddr:          strings.TrimPrefix(mockAPI.URL, "http://"),
+			ServerVersion:      "1.0.0",
+			IdentityPubKey:     identityPub,
+			IdentityPrivateKey: identityPriv,
+		},
+		logger,
+	)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	errCh := make(chan error, 1)
+	go func() { errCh <- client.Run(ctx) }()
+
+	select {
+	case closePayload := <-closeCh:
+		if closePayload.ChannelID != 51 {
+			t.Errorf("channel ID = %d, want 51", closePayload.ChannelID)
+		}
+		if closePayload.Reason != "channel authentication required" {
+			t.Errorf("reason = %q, want %q", closePayload.Reason, "channel authentication required")
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("timed out waiting for CHANNEL_CLOSE")
+	}
+
+	if got := apiHits.Load(); got != 0 {
+		t.Fatalf("unauthenticated encrypted DATA reached local API %d times, want 0", got)
+	}
+
+	cancel()
+	<-errCh
+}
+
+func TestClient_MaliciousRelayCannotImpersonateWithoutToken(t *testing.T) {
+	// Simulates a malicious relay server that opens its own channel, completes
+	// X25519 KEY_EXCHANGE with its own ephemeral keypair, and attempts to call
+	// sensitive action routes without possessing the phone's API token.
+	logger := zerolog.New(zerolog.NewTestWriter(t))
+	identityPriv, identityPub := testIdentityKeyPair(t)
+
+	var apiHits atomic.Int32
+	mockAPI := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		apiHits.Add(1)
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer mockAPI.Close()
+
+	verdictCh := make(chan error, 1)
+	relayServer := mockRelayServer(t, func(conn *websocket.Conn) {
+		_, msg, err := conn.ReadMessage()
+		if err != nil {
+			verdictCh <- err
+			return
+		}
+		if frame, _ := DecodeFrame(msg); frame.Type != FrameRegister {
+			verdictCh <- fmt.Errorf("expected REGISTER")
+			return
+		}
+		ack, _ := NewControlFrame(FrameRegisterAck, 0, RegisterAckPayload{
+			InstanceID:   "inst_malicious_relay",
+			SessionToken: "sess_malicious_relay",
+			ExpiresAt:    time.Now().Add(time.Hour).Unix(),
+		})
+		ackBytes, _ := EncodeFrame(ack)
+		_ = conn.WriteMessage(websocket.BinaryMessage, ackBytes)
+
+		time.Sleep(50 * time.Millisecond)
+
+		// Attempt 1: Relay opens channel 4242, completes KEY_EXCHANGE with its own
+		// X25519 keypair, and tries to call POST /api/actions/act_1/decision directly.
+		chOpen1, _ := NewControlFrame(FrameChannelOpen, 4242, ChannelOpenPayload{
+			ChannelID: 4242,
+			AuthMode:  AuthModeEncrypted,
+		})
+		chOpenBytes1, _ := EncodeFrame(chOpen1)
+		_ = conn.WriteMessage(websocket.BinaryMessage, chOpenBytes1)
+		_, msg, err = conn.ReadMessage()
+		if err != nil {
+			verdictCh <- err
+			return
+		}
+		if frame, _ := DecodeFrame(msg); frame.Type != FrameChannelOpen {
+			verdictCh <- fmt.Errorf("attempt 1: expected CHANNEL_OPEN echo, got %s", FrameTypeName(frame.Type))
+			return
+		}
+		relayEnc1, err := testAppKeyExchange(conn, 4242, identityPub)
+		if err != nil {
+			verdictCh <- fmt.Errorf("attempt 1 key exchange: %w", err)
+			return
+		}
+		approveReq, _ := json.Marshal(ProxyRequest{
+			ID:     "relay-attack-1",
+			Method: "POST",
+			Path:   "/api/actions/act_1/decision",
+			Body:   "eyJvdXRjb21lIjoiYXBwcm92ZWQifQ==",
+		})
+		encAttack1, _ := relayEnc1.Encrypt(approveReq)
+		attackFrame1, _ := EncodeFrame(NewFrame(FrameData, 4242, encAttack1))
+		_ = conn.WriteMessage(websocket.BinaryMessage, attackFrame1)
+
+		_, msg, err = conn.ReadMessage()
+		if err != nil {
+			verdictCh <- err
+			return
+		}
+		frame1, _ := DecodeFrame(msg)
+		if frame1.Type != FrameChannelClose {
+			verdictCh <- fmt.Errorf("attempt 1: expected CHANNEL_CLOSE, got %s", FrameTypeName(frame1.Type))
+			return
+		}
+
+		// Attempt 2: Relay opens channel 4243, completes KEY_EXCHANGE, and tries a
+		// guessed/empty token in channel_auth before calling the proxy route.
+		chOpen2, _ := NewControlFrame(FrameChannelOpen, 4243, ChannelOpenPayload{
+			ChannelID: 4243,
+			AuthMode:  AuthModeEncrypted,
+		})
+		chOpenBytes2, _ := EncodeFrame(chOpen2)
+		_ = conn.WriteMessage(websocket.BinaryMessage, chOpenBytes2)
+		_, msg, err = conn.ReadMessage()
+		if err != nil {
+			verdictCh <- err
+			return
+		}
+		if frame, _ := DecodeFrame(msg); frame.Type != FrameChannelOpen {
+			verdictCh <- fmt.Errorf("attempt 2: expected CHANNEL_OPEN echo, got %s", FrameTypeName(frame.Type))
+			return
+		}
+		relayEnc2, err := testAppKeyExchange(conn, 4243, identityPub)
+		if err != nil {
+			verdictCh <- fmt.Errorf("attempt 2 key exchange: %w", err)
+			return
+		}
+		if err := sendEncryptedChannelAuth(conn, 4243, relayEnc2, "guessed-token"); err != nil {
+			verdictCh <- err
+			return
+		}
+		_, msg, err = conn.ReadMessage()
+		if err != nil {
+			verdictCh <- err
+			return
+		}
+		frame2, _ := DecodeFrame(msg)
+		if frame2.Type != FrameChannelClose {
+			verdictCh <- fmt.Errorf("attempt 2: expected CHANNEL_CLOSE, got %s", FrameTypeName(frame2.Type))
+			return
+		}
+		var close2 ChannelClosePayload
+		_ = UnmarshalControlPayload(frame2.Payload, &close2)
+		if close2.Reason != "invalid token" {
+			verdictCh <- fmt.Errorf("attempt 2: close reason = %q, want %q", close2.Reason, "invalid token")
+			return
+		}
+
+		verdictCh <- nil
+	})
+	defer relayServer.Close()
+
+	client := NewClient(
+		Config{Enabled: true, ServerURL: wsURL(relayServer)},
+		ClientDeps{
+			LicenseTokenFunc:   func() string { return "test-jwt" },
+			TokenValidator:     func(token string) bool { return token == "phones-secret-token" },
+			LocalAddr:          strings.TrimPrefix(mockAPI.URL, "http://"),
+			ServerVersion:      "1.0.0",
+			IdentityPubKey:     identityPub,
+			IdentityPrivateKey: identityPriv,
+		},
+		logger,
+	)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	errCh := make(chan error, 1)
+	go func() { errCh <- client.Run(ctx) }()
+
+	select {
+	case err := <-verdictCh:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("timed out waiting for malicious relay scenario")
+	}
+
+	if got := apiHits.Load(); got != 0 {
+		t.Fatalf("malicious relay reached local API %d times, want 0", got)
+	}
+
+	cancel()
+	<-errCh
+}
+
+func TestClient_DuplicateChannelAuthRefused(t *testing.T) {
+	logger := zerolog.New(zerolog.NewTestWriter(t))
+	identityPriv, identityPub := testIdentityKeyPair(t)
+
+	closeCh := make(chan ChannelClosePayload, 1)
+	relayServer := mockRelayServer(t, func(conn *websocket.Conn) {
+		_, msg, err := conn.ReadMessage()
+		if err != nil {
+			return
+		}
+		if frame, _ := DecodeFrame(msg); frame.Type != FrameRegister {
+			return
+		}
+		ack, _ := NewControlFrame(FrameRegisterAck, 0, RegisterAckPayload{
+			InstanceID:   "inst_dup_auth",
+			SessionToken: "sess_dup_auth",
+			ExpiresAt:    time.Now().Add(time.Hour).Unix(),
+		})
+		ackBytes, _ := EncodeFrame(ack)
+		_ = conn.WriteMessage(websocket.BinaryMessage, ackBytes)
+
+		time.Sleep(50 * time.Millisecond)
+		chOpen, _ := NewControlFrame(FrameChannelOpen, 61, ChannelOpenPayload{
+			ChannelID: 61,
+			AuthMode:  AuthModeEncrypted,
+		})
+		chOpenBytes, _ := EncodeFrame(chOpen)
+		_ = conn.WriteMessage(websocket.BinaryMessage, chOpenBytes)
+
+		_, msg, err = conn.ReadMessage()
+		if err != nil {
+			return
+		}
+		if frame, _ := DecodeFrame(msg); frame.Type != FrameChannelOpen {
+			return
+		}
+
+		appEnc, err := testAppKeyExchange(conn, 61, identityPub)
+		if err != nil {
+			t.Logf("key exchange: %v", err)
+			return
+		}
+		if err := testAppAuthenticateChannelDirect(conn, 61, appEnc, "valid-token"); err != nil {
+			t.Logf("first channel auth: %v", err)
+			return
+		}
+
+		// Send duplicate channel_auth on already authenticated channel
+		if err := sendEncryptedChannelAuth(conn, 61, appEnc, "valid-token"); err != nil {
+			t.Logf("second channel auth: %v", err)
+			return
+		}
+
+		_, msg, err = conn.ReadMessage()
+		if err != nil {
+			return
+		}
+		frame, _ := DecodeFrame(msg)
+		if frame.Type == FrameChannelClose {
+			var closePayload ChannelClosePayload
+			_ = UnmarshalControlPayload(frame.Payload, &closePayload)
+			closeCh <- closePayload
+		}
+	})
+	defer relayServer.Close()
+
+	client := NewClient(
+		Config{Enabled: true, ServerURL: wsURL(relayServer)},
+		ClientDeps{
+			LicenseTokenFunc:   func() string { return "test-jwt" },
+			TokenValidator:     func(token string) bool { return token == "valid-token" },
+			LocalAddr:          "127.0.0.1:9999",
+			ServerVersion:      "1.0.0",
+			IdentityPubKey:     identityPub,
+			IdentityPrivateKey: identityPriv,
+		},
+		logger,
+	)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	errCh := make(chan error, 1)
+	go func() { errCh <- client.Run(ctx) }()
+
+	select {
+	case closePayload := <-closeCh:
+		if closePayload.ChannelID != 61 {
+			t.Errorf("channel ID = %d, want 61", closePayload.ChannelID)
+		}
+		if closePayload.Reason != "duplicate channel authentication" {
+			t.Errorf("reason = %q, want %q", closePayload.Reason, "duplicate channel authentication")
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("timed out waiting for CHANNEL_CLOSE on duplicate channel_auth")
+	}
+
+	cancel()
+	<-errCh
+}
+
+func TestClient_ChannelAuthTimeoutClosesUnauthenticatedChannel(t *testing.T) {
+	origTimeout := relayChannelAuthTimeout
+	relayChannelAuthTimeout = 100 * time.Millisecond
+	defer func() { relayChannelAuthTimeout = origTimeout }()
+
+	client := NewClient(Config{}, ClientDeps{
+		TokenValidator: func(token string) bool { return token == "valid-token" },
+	}, zerolog.Nop())
+
+	openFrame, err := NewControlFrame(FrameChannelOpen, 77, ChannelOpenPayload{
+		ChannelID: 77,
+		AuthMode:  AuthModeEncrypted,
+	})
+	if err != nil {
+		t.Fatalf("NewControlFrame: %v", err)
+	}
+	sendCh := make(chan []byte, 4)
+	client.handleChannelOpen(openFrame, sendCh)
+
+	// Drain initial CHANNEL_OPEN echo
+	echoRaw := <-sendCh
+	echoFrame, err := DecodeFrame(echoRaw)
+	if err != nil || echoFrame.Type != FrameChannelOpen {
+		t.Fatalf("expected CHANNEL_OPEN echo, got frame=%v err=%v", echoFrame, err)
+	}
+
+	select {
+	case closeRaw := <-sendCh:
+		closeFrame, err := DecodeFrame(closeRaw)
+		if err != nil {
+			t.Fatalf("DecodeFrame: %v", err)
+		}
+		if closeFrame.Type != FrameChannelClose {
+			t.Fatalf("frame type = %s, want CHANNEL_CLOSE", FrameTypeName(closeFrame.Type))
+		}
+		var closePayload ChannelClosePayload
+		if err := UnmarshalControlPayload(closeFrame.Payload, &closePayload); err != nil {
+			t.Fatalf("UnmarshalControlPayload: %v", err)
+		}
+		if closePayload.Reason != "channel authentication timeout" {
+			t.Fatalf("reason = %q, want %q", closePayload.Reason, "channel authentication timeout")
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for auth timeout CHANNEL_CLOSE")
+	}
+
+	if got := client.Status().ActiveChannels; got != 0 {
+		t.Fatalf("active channels = %d, want 0 after auth timeout", got)
 	}
 }

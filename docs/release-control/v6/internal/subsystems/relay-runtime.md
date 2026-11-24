@@ -100,7 +100,7 @@ dark-site signal and must not be conflated with this per-agent alert.
 2. Letting encrypted DATA frames race ahead of nonce-order guarantees by deferring inbound decrypt work to background goroutines
 3. Treating a missing persisted relay config file as a hard failure instead of falling back to the canonical disabled default
 4. Editing generated mobile compatibility projections directly or landing a mobile-required route/push/pairing change with a stale Pulse Mobile consumer contract
-5. Serving or answering relay DATA in plaintext on a channel that has not completed KEY_EXCHANGE, or replacing established channel keys through a repeated KEY_EXCHANGE
+5. Serving or answering relay DATA in plaintext on a channel that has not completed KEY_EXCHANGE, replacing established channel keys through a repeated KEY_EXCHANGE, accepting a plaintext `auth_token` in CONNECT or CHANNEL_OPEN, or serving proxy requests before encrypted in-channel authentication succeeds
 
 ## Completion Obligations
 
@@ -133,19 +133,25 @@ X25519 shared secret may not feed the generic nil-salt HKDF form: desktop
 relay runtime must domain-separate the channel KDF with the relay-owned salt
 `pulse-relay-e2e-channel-v1` together with the existing directional info
 strings before deriving AES-GCM keys.
-Mandatory channel encryption is part of that same encryption boundary. The
-desktop relay client serves DATA only on a channel that has completed
-KEY_EXCHANGE: a DATA frame on a channel without established keys is never
-parsed as a proxy request or answered in plaintext. The client sends
-CHANNEL_CLOSE with reason `key exchange required` and removes the channel.
-Channel keys are fixed once established, so a second KEY_EXCHANGE on an
-encrypted channel closes it with `key exchange already completed` instead of
-replacing the keys under the channel's authenticated API token. This keeps
-proxied requests and responses out of the relay's view. It does not
-authenticate the app to the instance, because CHANNEL_OPEN still delivers the
-paired token through the relay. Moving that credential inside the encrypted
-channel is coordinated `pulse-mobile` and `pulse-pro:relay-server` protocol
-work, not a desktop-only change.
+Mandatory channel encryption and encrypted channel authentication are part of that
+same encryption boundary. Both the relay server and desktop relay client require
+`auth_mode: "encrypted"` and refuse any plaintext `auth_token` in CONNECT or
+CHANNEL_OPEN. The desktop relay client serves DATA only on a channel that has
+completed KEY_EXCHANGE: a DATA frame on a channel without established keys is
+never parsed as a proxy request or answered in plaintext, closing the channel
+with `key exchange required`. Channel keys are fixed once established, so a
+second KEY_EXCHANGE on an encrypted channel closes it with `key exchange already
+completed`. After verifying the instance's Ed25519 KEY_EXCHANGE signature
+against its pinned identity key, Pulse Mobile presents its API token only inside
+the first encrypted DATA frame (`channel_auth`). Until that token validates, the
+desktop relay client rejects proxy requests (`channel authentication required`)
+and closes unauthenticated channels after an auth deadline. On success, the
+instance binds the token to the channel, replies with encrypted
+`channel_auth_ack`, rejects duplicate `channel_auth` frames, and sends
+`CHANNEL_OPEN` with `authenticated: true` so the relay server registers push
+device tokens only for authenticated sessions. Because the relay server never
+receives the API token and cannot obtain it without the instance's Ed25519
+private key, a compromised relay cannot impersonate paired phones.
 Relay status truthfulness is part of the same contract. If the client is in a
 governed reconnect or license-pause window, `ClientStatus.reconnect_in` must
 reflect that delay instead of silently presenting a disconnected state with no

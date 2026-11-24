@@ -422,7 +422,7 @@ func openManagedRelayAppConnection(t *testing.T, relayAddr string, instanceID st
 
 	connectBytes, err := MarshalControlPayload(ConnectPayload{
 		InstanceID: instanceID,
-		AuthToken:  authToken,
+		AuthMode:   AuthModeEncrypted,
 	})
 	if err != nil {
 		t.Fatalf("marshal managed relay connect payload: %v", err)
@@ -455,14 +455,20 @@ func openManagedRelayAppConnection(t *testing.T, relayAddr string, instanceID st
 	if err := UnmarshalControlPayload(ackFrame.Payload, &ack); err != nil {
 		t.Fatalf("unmarshal managed relay connect ack: %v", err)
 	}
+	if ack.AuthMode != AuthModeEncrypted {
+		t.Fatalf("managed relay CONNECT_ACK auth_mode = %q, want %q", ack.AuthMode, AuthModeEncrypted)
+	}
 
-	// The instance only serves DATA on a channel that completed KEY_EXCHANGE.
+	// The instance only serves DATA on a channel that completed KEY_EXCHANGE and encrypted channel_auth.
 	if err := conn.SetReadDeadline(time.Now().Add(5 * time.Second)); err != nil {
 		t.Fatalf("set managed relay key exchange read deadline: %v", err)
 	}
 	appEnc, err := testAppKeyExchange(conn, ack.ChannelID, identityPub)
 	if err != nil {
 		t.Fatalf("managed relay key exchange: %v", err)
+	}
+	if err := testAppAuthenticateChannelViaRelay(conn, ack.ChannelID, appEnc, authToken); err != nil {
+		t.Fatalf("managed relay encrypted channel auth: %v", err)
 	}
 	_ = conn.SetReadDeadline(time.Time{})
 	return conn, ack.ChannelID, appEnc

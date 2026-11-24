@@ -138,7 +138,7 @@ func TestClient_E2E_MultiMobileClientRelay(t *testing.T) {
 		for _, ch := range channels {
 			chOpen, _ := NewControlFrame(FrameChannelOpen, ch.channelID, ChannelOpenPayload{
 				ChannelID: ch.channelID,
-				AuthToken: ch.authToken,
+				AuthMode:  AuthModeEncrypted,
 			})
 			chOpenBytes, _ := EncodeFrame(chOpen)
 			if err := conn.WriteMessage(websocket.BinaryMessage, chOpenBytes); err != nil {
@@ -156,8 +156,8 @@ func TestClient_E2E_MultiMobileClientRelay(t *testing.T) {
 		}
 
 		// 4. Exchange data on all channels concurrently
-		// For encrypted channels, perform KEY_EXCHANGE first (serialized since
-		// the instance responds on the same connection).
+		// For encrypted channels, perform KEY_EXCHANGE and encrypted channel_auth
+		// first (serialized since the instance responds on the same connection).
 		type channelEncryption struct {
 			enc *ChannelEncryption
 		}
@@ -209,6 +209,12 @@ func TestClient_E2E_MultiMobileClientRelay(t *testing.T) {
 			if err != nil {
 				return
 			}
+			_ = conn.SetReadDeadline(time.Now().Add(5 * time.Second))
+			if err := testAppAuthenticateChannelDirect(conn, ch.channelID, enc, ch.authToken); err != nil {
+				t.Logf("channel %d auth failed: %v", ch.channelID, err)
+				return
+			}
+			_ = conn.SetReadDeadline(time.Time{})
 			encryptors[ch.channelID] = &channelEncryption{enc: enc}
 		}
 
@@ -462,13 +468,28 @@ func TestClient_E2E_ChannelRejectAndRecoverFlow(t *testing.T) {
 
 		time.Sleep(50 * time.Millisecond)
 
-		// Open channel 10 with BAD token
+		// Open channel 10 and attempt encrypted channel_auth with a BAD token
 		chBad, _ := NewControlFrame(FrameChannelOpen, 10, ChannelOpenPayload{
 			ChannelID: 10,
-			AuthToken: "INVALID-mobile-token",
+			AuthMode:  AuthModeEncrypted,
 		})
 		chBadBytes, _ := EncodeFrame(chBad)
 		_ = conn.WriteMessage(websocket.BinaryMessage, chBadBytes)
+
+		_, msg, _ = conn.ReadMessage()
+		frame, _ = DecodeFrame(msg)
+		if frame.Type != FrameChannelOpen {
+			return
+		}
+		badEnc, err := testAppKeyExchange(conn, 10, identityPub)
+		if err != nil {
+			t.Logf("bad channel key exchange: %v", err)
+			return
+		}
+		if err := sendEncryptedChannelAuth(conn, 10, badEnc, "INVALID-mobile-token"); err != nil {
+			t.Logf("bad channel auth: %v", err)
+			return
+		}
 
 		// Read response — should be CHANNEL_CLOSE (rejection)
 		_, msg, _ = conn.ReadMessage()
@@ -481,10 +502,10 @@ func TestClient_E2E_ChannelRejectAndRecoverFlow(t *testing.T) {
 			mu.Unlock()
 		}
 
-		// Now open channel 20 with GOOD token
+		// Now open channel 20 and authenticate with GOOD token
 		chGood, _ := NewControlFrame(FrameChannelOpen, 20, ChannelOpenPayload{
 			ChannelID: 20,
-			AuthToken: "valid-mobile",
+			AuthMode:  AuthModeEncrypted,
 		})
 		chGoodBytes, _ := EncodeFrame(chGood)
 		_ = conn.WriteMessage(websocket.BinaryMessage, chGoodBytes)
@@ -496,10 +517,14 @@ func TestClient_E2E_ChannelRejectAndRecoverFlow(t *testing.T) {
 			return
 		}
 
-		// Complete KEY_EXCHANGE as the app: DATA is only served on an encrypted channel
+		// Complete KEY_EXCHANGE and encrypted channel_auth as the app
 		appEnc, err := testAppKeyExchange(conn, 20, identityPub)
 		if err != nil {
 			t.Logf("key exchange: %v", err)
+			return
+		}
+		if err := testAppAuthenticateChannelDirect(conn, 20, appEnc, "valid-mobile"); err != nil {
+			t.Logf("good channel auth: %v", err)
 			return
 		}
 
@@ -571,8 +596,8 @@ func TestClient_E2E_ChannelRejectAndRecoverFlow(t *testing.T) {
 		if rejectedChannelClose.ChannelID != 10 {
 			t.Errorf("rejected channelID = %d, want 10", rejectedChannelClose.ChannelID)
 		}
-		if rejectedChannelClose.Reason != "invalid auth token" {
-			t.Errorf("rejected reason = %q, want %q", rejectedChannelClose.Reason, "invalid auth token")
+		if rejectedChannelClose.Reason != "invalid token" {
+			t.Errorf("rejected reason = %q, want %q", rejectedChannelClose.Reason, "invalid token")
 		}
 	}
 	mu.Unlock()
@@ -648,7 +673,7 @@ func TestClient_E2E_LegacyJWTFallbackFlow(t *testing.T) {
 		// CHANNEL_OPEN
 		chOpen, _ := NewControlFrame(FrameChannelOpen, 1, ChannelOpenPayload{
 			ChannelID: 1,
-			AuthToken: "legacy-app-token",
+			AuthMode:  AuthModeEncrypted,
 		})
 		chOpenBytes, _ := EncodeFrame(chOpen)
 		_ = conn.WriteMessage(websocket.BinaryMessage, chOpenBytes)
@@ -660,10 +685,14 @@ func TestClient_E2E_LegacyJWTFallbackFlow(t *testing.T) {
 			return
 		}
 
-		// Complete KEY_EXCHANGE as the app: DATA is only served on an encrypted channel
+		// Complete KEY_EXCHANGE and encrypted channel_auth as the app
 		appEnc, err := testAppKeyExchange(conn, 1, identityPub)
 		if err != nil {
 			t.Logf("key exchange: %v", err)
+			return
+		}
+		if err := testAppAuthenticateChannelDirect(conn, 1, appEnc, "legacy-app-token"); err != nil {
+			t.Logf("channel auth: %v", err)
 			return
 		}
 
@@ -811,7 +840,7 @@ func TestClient_E2E_POSTWithBodyProxy(t *testing.T) {
 		// CHANNEL_OPEN
 		chOpen, _ := NewControlFrame(FrameChannelOpen, 1, ChannelOpenPayload{
 			ChannelID: 1,
-			AuthToken: "write-token",
+			AuthMode:  AuthModeEncrypted,
 		})
 		chOpenBytes, _ := EncodeFrame(chOpen)
 		_ = conn.WriteMessage(websocket.BinaryMessage, chOpenBytes)
@@ -823,10 +852,14 @@ func TestClient_E2E_POSTWithBodyProxy(t *testing.T) {
 			return
 		}
 
-		// Complete KEY_EXCHANGE as the app: DATA is only served on an encrypted channel
+		// Complete KEY_EXCHANGE and encrypted channel_auth as the app
 		appEnc, err := testAppKeyExchange(conn, 1, identityPub)
 		if err != nil {
 			t.Logf("key exchange: %v", err)
+			return
+		}
+		if err := testAppAuthenticateChannelDirect(conn, 1, appEnc, "write-token"); err != nil {
+			t.Logf("channel auth: %v", err)
 			return
 		}
 

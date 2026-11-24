@@ -562,7 +562,7 @@ func TestRunLoop_MidSessionLicenseErrorAfterChannelOpen(t *testing.T) {
 				// Send CHANNEL_OPEN to establish a channel (simulates app connecting)
 				chanOpen, _ := NewControlFrame(FrameChannelOpen, 1, ChannelOpenPayload{
 					ChannelID: 1,
-					AuthToken: "app_test_token",
+					AuthMode:  AuthModeEncrypted,
 				})
 				chanOpenBytes, _ := EncodeFrame(chanOpen)
 				_ = conn.WriteMessage(websocket.BinaryMessage, chanOpenBytes)

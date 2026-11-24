@@ -47,6 +47,10 @@ var maxConcurrentDataHandlers = 64
 // single relay channel within relayChannelRateLimitWindow.
 var relayMaxRequestsPerChannelWindow = 300
 
+// relayChannelAuthTimeout bounds how long a newly opened channel may remain
+// unauthenticated after CHANNEL_OPEN before the instance closes it.
+var relayChannelAuthTimeout = 15 * time.Second
+
 const (
 	wsMaxMessageSize            = wsReadLimit
 	wsPongWait                  = 60 * time.Second
@@ -54,14 +58,28 @@ const (
 	relayOverloadedReason       = "relay proxy overloaded"
 	relayChannelRateLimitWindow = time.Minute
 	relayRateLimitedReason      = "relay proxy rate limited"
+	channelAuthMessageType      = "channel_auth"
+	channelAuthAckMessageType   = "channel_auth_ack"
 )
 
-// TokenValidator validates an API token and returns the raw token if valid.
+type channelAuthMessage struct {
+	Type      string `json:"type"`
+	AuthToken string `json:"auth_token,omitempty"`
+}
+
+type channelAuthAckMessage struct {
+	Type string `json:"type"`
+	OK   bool   `json:"ok"`
+}
+
+// TokenValidator validates an API token and returns true if valid.
 type TokenValidator func(token string) bool
 
 // channelState holds per-channel state including auth and encryption.
 type channelState struct {
 	apiToken       string
+	authenticated  bool
+	authTimer      *time.Timer
 	encryption     *ChannelEncryption // nil until key exchange completes
 	ephemeral      *ecdh.PrivateKey   // ephemeral keypair, cleared after handshake
 	requestLimiter *relayChannelRequestLimiter
@@ -77,8 +95,17 @@ type relayChannelRequestLimiter struct {
 func newRelayChannelState(apiToken string) *channelState {
 	return &channelState{
 		apiToken:       apiToken,
+		authenticated:  apiToken != "",
 		requestLimiter: newRelayChannelRequestLimiter(relayMaxRequestsPerChannelWindow, relayChannelRateLimitWindow),
 	}
+}
+
+func stopChannelAuthTimer(ch *channelState) {
+	if ch == nil || ch.authTimer == nil {
+		return
+	}
+	ch.authTimer.Stop()
+	ch.authTimer = nil
 }
 
 func newRelayChannelRequestLimiter(limit int, window time.Duration) *relayChannelRequestLimiter {
@@ -120,7 +147,7 @@ func (l *relayChannelRequestLimiter) Allow(now time.Time) bool {
 // ClientDeps holds injectable dependencies for the relay client.
 type ClientDeps struct {
 	LicenseTokenFunc   func() string  // returns the raw license JWT
-	TokenValidator     TokenValidator // validates API tokens from CHANNEL_OPEN
+	TokenValidator     TokenValidator // validates API tokens from encrypted channel_auth frames
 	LocalAddr          string         // e.g. "127.0.0.1:7655"
 	LocalHandler       http.Handler   // in-process local API dispatch; when set, LocalAddr is never dialed (required when the listener serves TLS or binds a non-loopback address)
 	ServerVersion      string         // Pulse version for ClientVersion in REGISTER
@@ -414,6 +441,9 @@ func (c *Client) connectAndHandle(ctx context.Context) (bool, error) {
 	sendCh := make(chan []byte, sendChBufferSize)
 
 	c.mu.Lock()
+	for _, ch := range c.channels {
+		stopChannelAuthTimer(ch)
+	}
 	c.conn = conn
 	c.channels = make(map[uint32]*channelState)
 	c.mu.Unlock()
@@ -422,6 +452,9 @@ func (c *Client) connectAndHandle(ctx context.Context) (bool, error) {
 		c.mu.Lock()
 		instanceID := c.instanceID
 		activeChannels := len(c.channels)
+		for _, ch := range c.channels {
+			stopChannelAuthTimer(ch)
+		}
 		c.sendCh = nil
 		c.conn = nil
 		c.channels = make(map[uint32]*channelState)
@@ -739,14 +772,13 @@ func (c *Client) handleChannelOpen(frame Frame, sendCh chan<- []byte) {
 		return
 	}
 
-	payload.AuthToken = strings.TrimSpace(payload.AuthToken)
-
-	// Validate the auth token
-	if payload.AuthToken == "" || !c.deps.TokenValidator(payload.AuthToken) {
-		c.logger.Warn().Uint32("channel", payload.ChannelID).Msg("Rejecting channel: invalid auth token")
+	// Fail closed: require encrypted in-channel authentication and reject any
+	// plaintext auth_token or spoofed authenticated flag in CHANNEL_OPEN.
+	if payload.AuthMode != AuthModeEncrypted || strings.TrimSpace(payload.AuthToken) != "" || payload.Authenticated {
+		c.logger.Warn().Uint32("channel", payload.ChannelID).Msg("Rejecting channel: encrypted channel authentication required")
 		closeFrame, err := NewControlFrame(FrameChannelClose, payload.ChannelID, ChannelClosePayload{
 			ChannelID: payload.ChannelID,
-			Reason:    "invalid auth token",
+			Reason:    "encrypted channel authentication required",
 		})
 		if err != nil {
 			c.logger.Warn().Err(err).Uint32("channel", payload.ChannelID).Msg("Failed to build CHANNEL_CLOSE frame")
@@ -756,17 +788,49 @@ func (c *Client) handleChannelOpen(frame Frame, sendCh chan<- []byte) {
 		return
 	}
 
-	// Accept: store channel and echo CHANNEL_OPEN back
+	state := newRelayChannelState("")
+	state.authenticated = false
+	channelID := payload.ChannelID
+	if relayChannelAuthTimeout > 0 {
+		state.authTimer = time.AfterFunc(relayChannelAuthTimeout, func() {
+			c.mu.Lock()
+			current, exists := c.channels[channelID]
+			if !exists || current != state || current.authenticated {
+				c.mu.Unlock()
+				return
+			}
+			delete(c.channels, channelID)
+			current.authTimer = nil
+			c.mu.Unlock()
+
+			c.logger.Warn().Uint32("channel", channelID).Msg("closing channel: encrypted authentication timed out")
+			closeFrame, err := NewControlFrame(FrameChannelClose, channelID, ChannelClosePayload{
+				ChannelID: channelID,
+				Reason:    "channel authentication timeout",
+			})
+			if err == nil {
+				queueFrame(sendCh, closeFrame, c.logger)
+			}
+		})
+	}
+
+	// Accept tunnel open: store unauthenticated channel and echo CHANNEL_OPEN back
 	c.mu.Lock()
-	c.channels[payload.ChannelID] = newRelayChannelState(payload.AuthToken)
+	if prev, exists := c.channels[channelID]; exists {
+		stopChannelAuthTimer(prev)
+	}
+	c.channels[channelID] = state
 	c.mu.Unlock()
 
-	c.logger.Info().Uint32("channel", payload.ChannelID).Msg("channel opened")
+	c.logger.Info().Uint32("channel", channelID).Msg("channel opened awaiting encrypted authentication")
 
-	// Echo CHANNEL_OPEN to acknowledge
-	ackFrame, err := NewControlFrame(FrameChannelOpen, payload.ChannelID, payload)
+	// Echo CHANNEL_OPEN to acknowledge tunnel open (not yet authenticated)
+	ackFrame, err := NewControlFrame(FrameChannelOpen, channelID, ChannelOpenPayload{
+		ChannelID: channelID,
+		AuthMode:  AuthModeEncrypted,
+	})
 	if err != nil {
-		c.logger.Warn().Err(err).Uint32("channel", payload.ChannelID).Msg("Failed to build CHANNEL_OPEN ack frame")
+		c.logger.Warn().Err(err).Uint32("channel", channelID).Msg("Failed to build CHANNEL_OPEN ack frame")
 	} else {
 		queueFrame(sendCh, ackFrame, c.logger)
 	}
@@ -776,14 +840,16 @@ func (c *Client) handleData(connCtx context.Context, frame Frame, sendCh chan<- 
 	channelID := frame.Channel
 
 	// Snapshot channel state under lock so the goroutine below doesn't race
-	// with handleKeyExchange writing state.encryption.
+	// with handleKeyExchange or encrypted channel authentication.
 	c.mu.RLock()
 	state, ok := c.channels[channelID]
 	var enc *ChannelEncryption
+	var authenticated bool
 	var apiToken string
 	var requestLimiter *relayChannelRequestLimiter
 	if ok {
 		enc = state.encryption
+		authenticated = state.authenticated
 		apiToken = state.apiToken
 		requestLimiter = state.requestLimiter
 	}
@@ -795,8 +861,7 @@ func (c *Client) handleData(connCtx context.Context, frame Frame, sendCh chan<- 
 	}
 
 	// Fail closed: requests are only served inside a channel that completed
-	// KEY_EXCHANGE. Plaintext DATA would let the relay issue requests with the
-	// channel's API token and read the responses.
+	// KEY_EXCHANGE. Plaintext DATA is never accepted.
 	if enc == nil {
 		c.logger.Warn().Uint32("channel", channelID).Msg("rejecting DATA: key exchange not completed")
 		c.closeAndRemoveChannel(channelID, "key exchange required", sendCh)
@@ -809,6 +874,29 @@ func (c *Client) handleData(connCtx context.Context, frame Frame, sendCh chan<- 
 	payload, err := enc.Decrypt(frame.Payload)
 	if err != nil {
 		c.logger.Warn().Err(err).Uint32("channel", channelID).Msg("failed to decrypt DATA payload")
+		return
+	}
+
+	// First encrypted DATA frame on a new channel must authenticate the app
+	// with its API token before any proxy request is served.
+	if !authenticated {
+		c.handleChannelAuth(channelID, state, enc, payload, sendCh)
+		return
+	}
+
+	// Reject duplicate channel_auth payloads once authenticated.
+	var controlMsg struct {
+		Type string `json:"type"`
+	}
+	if json.Unmarshal(payload, &controlMsg) == nil && controlMsg.Type == channelAuthMessageType {
+		c.logger.Warn().Uint32("channel", channelID).Msg("rejecting duplicate channel_auth on authenticated channel")
+		c.closeAndRemoveChannel(channelID, "duplicate channel authentication", sendCh)
+		return
+	}
+
+	if apiToken == "" {
+		c.logger.Warn().Uint32("channel", channelID).Msg("rejecting DATA: channel missing authenticated token")
+		c.closeAndRemoveChannel(channelID, "channel authentication required", sendCh)
 		return
 	}
 
@@ -968,24 +1056,93 @@ func (c *Client) handleKeyExchange(frame Frame, sendCh chan<- []byte) {
 		return
 	}
 
+	// Store encryption state only if the channel is still active
+	c.mu.Lock()
+	current, exists := c.channels[channelID]
+	if !exists || current != state || current.encryption != nil {
+		c.mu.Unlock()
+		return
+	}
+	current.encryption = encryption
+	c.mu.Unlock()
+
 	// Send KEY_EXCHANGE response with instance public key + signature
 	respPayload := MarshalKeyExchangePayload(instancePubBytes, sig)
 	respFrame := NewFrame(FrameKeyExchange, channelID, respPayload)
 	queueFrame(sendCh, respFrame, c.logger)
 
-	// Store encryption state
+	c.logger.Info().Uint32("channel", channelID).Msg("key exchange completed, channel encrypted")
+}
+
+// handleChannelAuth validates the encrypted channel_auth control frame and binds
+// the validated API token to the encrypted channel.
+func (c *Client) handleChannelAuth(channelID uint32, state *channelState, enc *ChannelEncryption, payload []byte, sendCh chan<- []byte) {
+	var authMsg channelAuthMessage
+	if err := json.Unmarshal(payload, &authMsg); err != nil || authMsg.Type != channelAuthMessageType {
+		c.logger.Warn().Uint32("channel", channelID).Msg("rejecting DATA: channel authentication required")
+		c.closeAndRemoveChannel(channelID, "channel authentication required", sendCh)
+		return
+	}
+
+	authToken := strings.TrimSpace(authMsg.AuthToken)
+	if authToken == "" || c.deps.TokenValidator == nil || !c.deps.TokenValidator(authToken) {
+		c.logger.Warn().Uint32("channel", channelID).Msg("rejecting channel_auth: invalid token")
+		c.closeAndRemoveChannel(channelID, "invalid token", sendCh)
+		return
+	}
+
 	c.mu.Lock()
-	state.encryption = encryption
+	current, exists := c.channels[channelID]
+	if !exists || current != state || current.authenticated {
+		c.mu.Unlock()
+		return
+	}
+	current.apiToken = authToken
+	current.authenticated = true
+	stopChannelAuthTimer(current)
 	c.mu.Unlock()
 
-	c.logger.Info().Uint32("channel", channelID).Msg("key exchange completed, channel encrypted")
+	ackPayload, err := json.Marshal(channelAuthAckMessage{
+		Type: channelAuthAckMessageType,
+		OK:   true,
+	})
+	if err != nil {
+		c.logger.Warn().Err(err).Uint32("channel", channelID).Msg("failed to marshal channel_auth_ack")
+		c.closeAndRemoveChannel(channelID, "channel authentication failed", sendCh)
+		return
+	}
+	encryptedAck, err := enc.Encrypt(ackPayload)
+	if err != nil {
+		c.logger.Warn().Err(err).Uint32("channel", channelID).Msg("failed to encrypt channel_auth_ack")
+		c.closeAndRemoveChannel(channelID, "channel authentication failed", sendCh)
+		return
+	}
+	queueFrame(sendCh, NewFrame(FrameData, channelID, encryptedAck), c.logger)
+
+	// Notify the relay server that encrypted channel authentication succeeded
+	// so it can safely register the paired device's push notification token.
+	authOpenFrame, err := NewControlFrame(FrameChannelOpen, channelID, ChannelOpenPayload{
+		ChannelID:     channelID,
+		AuthMode:      AuthModeEncrypted,
+		Authenticated: true,
+	})
+	if err != nil {
+		c.logger.Warn().Err(err).Uint32("channel", channelID).Msg("Failed to build authenticated CHANNEL_OPEN frame")
+	} else {
+		queueFrame(sendCh, authOpenFrame, c.logger)
+	}
+
+	c.logger.Info().Uint32("channel", channelID).Msg("channel authenticated over encrypted session")
 }
 
 // closeAndRemoveChannel sends CHANNEL_CLOSE to the peer and removes the
 // channel locally so no further DATA frames are processed.
 func (c *Client) closeAndRemoveChannel(channelID uint32, reason string, sendCh chan<- []byte) {
 	c.mu.Lock()
-	delete(c.channels, channelID)
+	if ch, exists := c.channels[channelID]; exists {
+		stopChannelAuthTimer(ch)
+		delete(c.channels, channelID)
+	}
 	c.mu.Unlock()
 
 	closeFrame, err := NewControlFrame(FrameChannelClose, channelID, ChannelClosePayload{
@@ -1008,7 +1165,10 @@ func (c *Client) handleChannelClose(frame Frame) {
 	}
 
 	c.mu.Lock()
-	delete(c.channels, payload.ChannelID)
+	if ch, exists := c.channels[payload.ChannelID]; exists {
+		stopChannelAuthTimer(ch)
+		delete(c.channels, payload.ChannelID)
+	}
 	c.mu.Unlock()
 
 	c.logger.Info().Uint32("channel", payload.ChannelID).Str("reason", payload.Reason).Msg("channel closed")
