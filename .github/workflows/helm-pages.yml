@@ -35,7 +35,7 @@ permissions:
 jobs:
   release:
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 35
     steps:
       - name: Checkout release verification control
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -249,12 +249,25 @@ jobs:
           else
             helm repo index "${index_work}" --url "${chart_release_url}"
           fi
-          cp "${index_work}/index.yaml" gh-pages/index.yaml
-
-          if ! grep -q "version: ${VERSION}" gh-pages/index.yaml; then
+          if ! grep -q "version: ${VERSION}" "${index_work}/index.yaml"; then
             echo "::error::Helm Pages index is missing version ${VERSION}."
             exit 1
           fi
+
+          # Helm regenerates these two timestamps even for the same chart.
+          # Do not start another Pages build just to rewrite them on recovery.
+          if [[ -f gh-pages/index.yaml ]]; then
+            stamp='^\(generated:\|    created:\) "[0-9]\{4\}-[0-9]\{2\}-[0-9]\{2\}T[0-9:.]\+Z"$'
+            if diff -I "${stamp}" gh-pages/index.yaml "${index_work}/index.yaml" >/dev/null; then
+              echo "Helm Pages index already contains the qualified ${VERSION} entry; keeping the existing Pages build."
+              exit 0
+            elif [ "$?" -ne 1 ]; then
+              echo "::error::Could not compare the generated Helm Pages index."
+              exit 1
+            fi
+          fi
+
+          cp "${index_work}/index.yaml" gh-pages/index.yaml
           git -C gh-pages add index.yaml
           if git -C gh-pages diff --cached --quiet; then
             echo "Helm Pages index already contains ${VERSION}."
@@ -274,11 +287,11 @@ jobs:
           trap 'rm -rf "${public_work}"' EXIT
           qualified_chart="dist/pulse-${VERSION}.tgz"
           test -f "${qualified_chart}"
-          # The v6.9.0-beta.3 index build took 746 seconds after the push.
-          # Allow 15 minutes for public index propagation; publication alone
-          # is not readback. The 20-minute job ceiling still applies to Helm.
-          public_wait_seconds=900
-          public_poll_seconds=5
+          # The v6.9.0-rc.4 Pages build of 07bb52d took 1,384 seconds.
+          # Allow 30 minutes for public propagation, with at most the same
+          # 180 index probes and a separate job ceiling for prep/readback.
+          public_wait_seconds=1800
+          public_poll_seconds=10
           public_attempts=$(( public_wait_seconds / public_poll_seconds ))
           public_deadline=$(( $(date +%s) + public_wait_seconds ))
           for attempt in $(seq 1 "${public_attempts}"); do
