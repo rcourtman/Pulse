@@ -534,6 +534,72 @@ test.describe("Infrastructure map", () => {
     await expect.poll(() => pathOf(page), { timeout: 30_000 }).toBe(href);
   });
 
+  test("search, attention filter, group drawer, and zoom controls work together", async ({
+    page,
+  }, testInfo) => {
+    test.skip(
+      isPhoneProject(testInfo.project.name),
+      "Covered once, with a pointer",
+    );
+    await asDevelopmentBuild(page);
+    await openMap(page);
+
+    // Search filters across all resources and surfaces the count bar.
+    const { name } = await pinGuest(page);
+    const search = page.getByTestId("infrastructure-map-search");
+    await search.fill(name);
+    await expect(
+      page.getByTestId("infrastructure-map-filter-bar"),
+    ).toBeVisible();
+    await expect(
+      page
+        .locator(`${MAP} [data-map-hit][aria-label^=${JSON.stringify(`${name},`)}]`)
+        .first(),
+    ).toBeVisible();
+    await page.getByRole("button", { name: "Clear filters" }).click();
+    await expect(
+      page.getByTestId("infrastructure-map-filter-bar"),
+    ).toBeHidden();
+
+    // If the estate has items needing attention, the badge toggles the filter.
+    const attention = page.getByTestId("infrastructure-map-attention-filter");
+    if (await attention.isVisible()) {
+      await attention.click();
+      await expect(attention).toHaveAttribute("aria-pressed", "true");
+      await expect(
+        page.getByTestId("infrastructure-map-filter-bar"),
+      ).toContainText("Critical & Warning");
+      await attention.click();
+      await expect(attention).toHaveAttribute("aria-pressed", "false");
+    }
+
+    // Opening a +N overflow tile (or group header) opens the searchable drawer
+    // and Escape closes it cleanly.
+    const overflowTile = page
+      .locator(`${MAP} [data-map-hit][aria-label^="+"]`)
+      .first();
+    if ((await overflowTile.count()) > 0) {
+      await overflowTile.click();
+    } else {
+      await page.locator(`${MAP} [data-map-inspect]`).first().click();
+    }
+    const drawer = page.getByTestId("infrastructure-map-drawer");
+    await expect(drawer).toBeVisible();
+    await expect(
+      page.getByTestId("infrastructure-map-drawer-search"),
+    ).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(drawer).toBeHidden();
+
+    // Zoom controls step cleanly and Fit resets to 100%.
+    const zoomReset = page.getByTestId("infrastructure-map-zoom-reset");
+    await expect(zoomReset).toHaveText("100%");
+    await page.getByRole("button", { name: "Zoom in" }).click();
+    await expect(zoomReset).toHaveText("125%");
+    await page.getByRole("button", { name: "Fit", exact: true }).click();
+    await expect(zoomReset).toHaveText("100%");
+  });
+
   test("the guide opens from the map in a development build", async ({
     page,
   }, testInfo) => {
