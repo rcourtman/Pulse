@@ -631,7 +631,7 @@ export function ProxmoxCoverageTable(props: {
   // The task column auto-hides when no workload has task history. Per-source
   // ages (PBS snapshot, PVE file, guest snapshot) live in the row expansion.
   showTaskColumn: boolean;
-  /** Inventory or posture read is pending/failed; retained quality cannot confirm absence. */
+  /** A pending/failed inventory or posture read cannot establish the latest point or absence. */
   historyReadIncomplete?: boolean;
   /** Resolved restore-evidence filter; assessments and tasks remain workload-wide. */
   evidenceLocationLabel?: string;
@@ -836,6 +836,10 @@ export function ProxmoxCoverageTable(props: {
                     row.artifacts.filter((artifact) => artifact.createdMs === undefined).length;
                   const backupHistoryComplete = () =>
                     !props.historyReadIncomplete && hasCompleteBackupHistory(row);
+                  // Keep the observed age when evidence is missing or narrowed,
+                  // without calling it the latest backup across all locations.
+                  const backupAgeIsListedOnly = () =>
+                    Boolean(props.evidenceLocationLabel) || !backupHistoryComplete();
                   const detailRowId = () => `proxmox-coverage-evidence-${row.key}`;
                   const evidenceColumnCount = () =>
                     3 +
@@ -994,10 +998,18 @@ export function ProxmoxCoverageTable(props: {
                             }
                           >
                             {(artifact) => (
-                              <ProxmoxBackupAgeText
-                                artifact={artifact()}
-                                compact={layoutMode() === 'compact'}
-                              />
+                              <>
+                                <ProxmoxBackupAgeText
+                                  artifact={artifact()}
+                                  compact={layoutMode() === 'compact'}
+                                />
+                                <Show when={backupAgeIsListedOnly()}>
+                                  <span class="block text-[10px] leading-tight text-muted">
+                                    <span aria-hidden="true">Listed only</span>
+                                    <span class="sr-only">from the available list only</span>
+                                  </span>
+                                </Show>
+                              </>
                             )}
                           </Show>
                         </TableCell>
@@ -1104,12 +1116,16 @@ export function ProxmoxCoverageTable(props: {
                             <Show when={row.latestBackup}>
                               {(backup) => (
                                 <p
-                                  class="flex min-w-0 items-baseline gap-1.5 text-xs text-muted"
+                                  class="flex min-w-0 flex-wrap items-baseline gap-x-1.5 gap-y-0.5 text-xs text-muted"
                                   data-coverage-newest-backup
                                 >
-                                  <span class="shrink-0">Newest backup</span>
+                                  <span>
+                                    {backupAgeIsListedOnly()
+                                      ? 'Newest listed backup'
+                                      : 'Newest backup'}
+                                  </span>
                                   <ProxmoxBackupAgeText artifact={backup()} />
-                                  <span class="min-w-0 truncate text-base-content">
+                                  <span class="min-w-0 text-base-content wrap-anywhere">
                                     {backup().location}
                                   </span>
                                 </p>
