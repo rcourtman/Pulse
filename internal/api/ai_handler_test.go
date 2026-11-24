@@ -2560,6 +2560,8 @@ func TestSetReadStateKeepsTenantServicesOnTenantReadState(t *testing.T) {
 // organization's replacement read state, not on the default organization's.
 func TestMonitorReloadKeepsTenantChatServiceOnTenantReadState(t *testing.T) {
 	dataDir := t.TempDir()
+	t.Setenv("PULSE_DATA_DIR", dataDir)
+	t.Setenv("PULSE_LEGACY_KEY_PATH", filepath.Join(dataDir, ".legacy.key"))
 	cfg := &config.Config{DataPath: dataDir}
 	mtp := config.NewMultiTenantPersistence(dataDir)
 	require.NoError(t, mtp.SaveOrganization(&models.Organization{ID: "acme", DisplayName: "Acme"}))
