@@ -1408,6 +1408,7 @@ type Monitor struct {
 	removedHostAgents          map[string]time.Time            // Track deliberately removed host agents (ID -> removal time)
 	hostTokenBindings          map[string]string               // Track tokenID:hostname -> host identity bindings
 	hostIdentityFlaps          map[string]*identityFlapTracker // Track per-host-agent identity flapping (cloned machines sharing machine-id)
+	hostCephClusters           map[string]string               // Track host agent ID -> the Ceph cluster it last reported
 	hostReportApplyLocksMu     sync.Mutex
 	hostReportApplyLocks       map[string]*hostReportApplyLock
 	hostReportOrderMu          sync.Mutex
@@ -2118,6 +2119,7 @@ func New(cfg *config.Config) (*Monitor, error) {
 		removedHostAgents:          make(map[string]time.Time),
 		hostTokenBindings:          make(map[string]string),
 		hostIdentityFlaps:          make(map[string]*identityFlapTracker),
+		hostCephClusters:           make(map[string]string),
 		hostReportApplyLocks:       make(map[string]*hostReportApplyLock),
 		hostReportOrders:           make(map[string]hostReportOrder),
 		clusterSensorsCache:        make(map[string]clusterSensorsCacheEntry),
@@ -3175,6 +3177,17 @@ func (m *Monitor) recordTaskOutcome(instanceType InstanceType, instance string, 
 
 	breaker := m.ensureBreaker(key)
 
+	// Render the outstanding error before taking m.mu. Its text comes from the
+	// monitored system's replies, and every poll and state read waits on the
+	// lock while it is held.
+	var errorMessage string
+	switch {
+	case pollErr != nil:
+		errorMessage = pollErr.Error()
+	case readErr != nil:
+		errorMessage = readErr.Error()
+	}
+
 	m.mu.Lock()
 	status, ok := m.pollStatusMap[key]
 	if !ok {
@@ -3207,7 +3220,7 @@ func (m *Monitor) recordTaskOutcome(instanceType InstanceType, instance string, 
 		status.LastErrorCategory = ""
 		if readErr != nil {
 			status.LastErrorAt = now
-			status.LastErrorMessage = readErr.Error()
+			status.LastErrorMessage = errorMessage
 			status.LastErrorCategory = pollReadErrorCategory
 		}
 		m.mu.Unlock()
@@ -3235,7 +3248,7 @@ func (m *Monitor) recordTaskOutcome(instanceType InstanceType, instance string, 
 		}
 	}
 	status.LastErrorAt = now
-	status.LastErrorMessage = pollErr.Error()
+	status.LastErrorMessage = errorMessage
 	status.LastErrorCategory = category
 	status.ConsecutiveFailures++
 	if status.ConsecutiveFailures == 1 {

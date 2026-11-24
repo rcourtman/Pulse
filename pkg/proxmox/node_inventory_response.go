@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
 	"unicode/utf8"
 )
@@ -32,6 +33,11 @@ func decodeNodeInventory(body []byte) ([]Node, error) {
 	var rows []json.RawMessage
 	if json.Unmarshal(data, &rows) != nil {
 		return nil, errInvalidNodeInventoryResponse
+	}
+	// Every listed node is polled on its own. More of them than a cluster can
+	// have is not an inventory to act on.
+	if len(rows) > maxClusterNodes {
+		return nil, fmt.Errorf("%w: more than %d nodes", errInvalidNodeInventoryResponse, maxClusterNodes)
 	}
 	nodes := make([]Node, 0, len(rows))
 	seen := make(map[string]bool, len(rows))

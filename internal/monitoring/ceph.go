@@ -118,6 +118,42 @@ func (m *Monitor) admitAgentCephCluster(clusterID, hostID string, now time.Time)
 	return true
 }
 
+// trackAgentCephCluster records the Ceph cluster hostID reports and retires
+// the record of the cluster it reported before. A host belongs to one Ceph
+// cluster, so the cluster it names now replaces the one it named earlier; left
+// in state, every ID a host ever reported would keep a cluster and all of its
+// pools there. An empty clusterID retires the record of a host that is being
+// removed. A record another host agent still reports stays, and so does one
+// the Proxmox API describes.
+func (m *Monitor) trackAgentCephCluster(hostID, clusterID string) {
+	key := strings.ToLower(strings.TrimSpace(clusterID))
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	previous := m.hostCephClusters[hostID]
+	if previous == key {
+		return
+	}
+	if key == "" {
+		delete(m.hostCephClusters, hostID)
+	} else {
+		if m.hostCephClusters == nil {
+			m.hostCephClusters = make(map[string]string)
+		}
+		m.hostCephClusters[hostID] = key
+	}
+	if previous == "" {
+		return
+	}
+	for _, reported := range m.hostCephClusters {
+		if reported == previous {
+			return
+		}
+	}
+	m.state.RemoveHostAgentCephCluster(previous)
+}
+
 func (m *Monitor) checkCephPoolStorage(cluster models.CephCluster) {
 	storagePools := models.CephPoolStorage(cluster)
 	if len(storagePools) == 0 {

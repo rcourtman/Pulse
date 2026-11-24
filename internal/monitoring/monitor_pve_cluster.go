@@ -537,6 +537,10 @@ func (m *Monitor) refreshClusterEndpoints(instanceName string, instanceCfg *conf
 		return
 	}
 	refreshed := mergeRefreshedClusterEndpoints(instanceCfg.ClusterEndpoints, discovered, instanceCfg.VerifySSL)
+	const maxStoredClusterEndpoints = 256
+	if len(refreshed) > maxStoredClusterEndpoints {
+		refreshed = refreshed[:maxStoredClusterEndpoints]
+	}
 	if !clusterEndpointIdentityChanged(instanceCfg.ClusterEndpoints, refreshed) {
 		return
 	}

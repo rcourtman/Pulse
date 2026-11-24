@@ -831,6 +831,16 @@ func pmgPollLogger(ctx context.Context) *zerolog.Logger {
 	return logger
 }
 
+// maxPMGReadErrorsPerOperation bounds how many failures of one read a single
+// poll keeps. Queue and backup reads run once per cluster member, and the
+// gateway decides how many members it lists, so the collected error must not
+// grow with that list.
+const maxPMGReadErrorsPerOperation = 5
+
+// errPMGReadErrorsOmitted stands in for the failures of one read beyond
+// maxPMGReadErrorsPerOperation.
+var errPMGReadErrorsOmitted = stderrors.New("further failures of this read are not listed")
+
 // pollPMGInstance polls a single Proxmox Mail Gateway instance
 func (m *Monitor) pollPMGInstance(ctx context.Context, instanceName string, client pmgPollClient) {
 	defer recoverFromPanic(fmt.Sprintf("pollPMGInstance-%s", instanceName))
@@ -951,10 +961,19 @@ func (m *Monitor) pollPMGInstance(ctx context.Context, instanceName string, clie
 
 	// A successful version read establishes connection health, not complete
 	// downstream collection. Preserve missing readings and report failed reads
-	// without backing off the readings that succeeded.
+	// without backing off the readings that succeeded. The gateway chooses how
+	// many members it lists, so each read keeps only its first failures.
+	readErrorCounts := make(map[string]int)
 	recordReadError := func(operation string, err error) {
-		if err != nil {
+		if err == nil {
+			return
+		}
+		readErrorCounts[operation]++
+		switch count := readErrorCounts[operation]; {
+		case count <= maxPMGReadErrorsPerOperation:
 			readErr = stderrors.Join(readErr, errors.WrapAPIError(operation, instanceName, err, 0))
+		case count == maxPMGReadErrorsPerOperation+1:
+			readErr = stderrors.Join(readErr, errors.WrapAPIError(operation, instanceName, errPMGReadErrorsOmitted, 0))
 		}
 	}
 

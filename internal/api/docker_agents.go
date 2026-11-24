@@ -120,9 +120,20 @@ func (h *DockerAgentHandlers) HandleReport(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
+	// Bytes do not bound how many records a report decodes into, so hold it to
+	// the shared item and record limits as well before decoding any of them.
+	if err := newAgentReportItemCounter(agentsdocker.ReportDecodedBodyLimitBytes).add(body); err != nil {
+		writeAgentReportDecodeError(w, err)
+		return
+	}
+
 	var report agentsdocker.Report
 	if err := json.Unmarshal(body, &report); err != nil {
 		writeErrorResponse(w, http.StatusBadRequest, "invalid_json", "Failed to decode request body", map[string]string{"error": err.Error()})
+		return
+	}
+	if err := validateAgentReportTimes(&report); err != nil {
+		writeErrorResponse(w, http.StatusBadRequest, "invalid_report", err.Error(), nil)
 		return
 	}
 

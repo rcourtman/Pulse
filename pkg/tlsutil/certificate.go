@@ -79,8 +79,8 @@ func ObservePeerCertificate(state *tls.ConnectionState, serverName string, now t
 		SerialNumber:      strings.ToUpper(leaf.SerialNumber.Text(16)),
 		DNSNames:          append([]string(nil), leaf.DNSNames...),
 		ObservedAt:        now,
-		NotBefore:         leaf.NotBefore.UTC(),
-		NotAfter:          leaf.NotAfter.UTC(),
+		NotBefore:         observedCertificateTime(leaf.NotBefore),
+		NotAfter:          observedCertificateTime(leaf.NotAfter),
 		FingerprintSHA256: hex.EncodeToString(fingerprint[:]),
 		SelfSigned:        certificateIsSelfSigned(leaf),
 	}
@@ -104,6 +104,17 @@ func ObservePeerCertificate(state *tls.ConnectionState, serverName string, now t
 	}
 	observation.TrustError = certificateTrustError(chainErr, hostnameErr, observation.SelfSigned)
 	return observation
+}
+
+func observedCertificateTime(t time.Time) time.Time {
+	if t.IsZero() {
+		return time.Time{}
+	}
+	utc := t.UTC()
+	if y := utc.Year(); y < 0 || y > 9999 {
+		return time.Time{}
+	}
+	return utc
 }
 
 func certificateName(commonName, distinguishedName string) string {

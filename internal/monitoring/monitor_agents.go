@@ -42,7 +42,68 @@ const (
 	maxHostZFSDatasetsPerPool  = 128
 	maxHostZFSDatasetNameBytes = 512
 	maxHostZFSMountpointBytes  = 1024
+	maxHostRAIDArrays          = 128
+
+	maxReportedIdentityBytes   = 256
+	maxReportedHostTags        = 32
+	maxReportedHostTagBytes    = 64
+	maxReportedDockerTextBytes = 1024
+	maxReportedDockerLabels    = 128
 )
+
+type reportedIdentityField struct {
+	name  string
+	value string
+}
+
+func validateReportedIdentity(kind string, fields ...reportedIdentityField) error {
+	for _, field := range fields {
+		if len(field.value) > maxReportedIdentityBytes {
+			return fmt.Errorf("%s report %s exceeds %d bytes", kind, field.name, maxReportedIdentityBytes)
+		}
+	}
+	return nil
+}
+
+func validateDockerReportIdentity(report agentsdocker.Report) error {
+	return validateReportedIdentity("docker",
+		reportedIdentityField{"agent.id", report.Agent.ID},
+		reportedIdentityField{"agent.version", report.Agent.Version},
+		reportedIdentityField{"host.hostname", report.Host.Hostname},
+		reportedIdentityField{"host.name", report.Host.Name},
+		reportedIdentityField{"host.machineId", report.Host.MachineID},
+	)
+}
+
+func validateHostReportIdentity(report agentshost.Report) error {
+	return validateReportedIdentity("host",
+		reportedIdentityField{"agent.id", report.Agent.ID},
+		reportedIdentityField{"agent.version", report.Agent.Version},
+		reportedIdentityField{"agent.hostname", report.Agent.Hostname},
+		reportedIdentityField{"host.id", report.Host.ID},
+		reportedIdentityField{"host.hostname", report.Host.Hostname},
+		reportedIdentityField{"host.displayName", report.Host.DisplayName},
+		reportedIdentityField{"host.machineId", report.Host.MachineID},
+		reportedIdentityField{"host.platform", report.Host.Platform},
+		reportedIdentityField{"host.osName", report.Host.OSName},
+		reportedIdentityField{"host.osVersion", report.Host.OSVersion},
+		reportedIdentityField{"host.kernelVersion", report.Host.KernelVersion},
+		reportedIdentityField{"host.architecture", report.Host.Architecture},
+		reportedIdentityField{"host.reportIp", report.Host.ReportIP},
+	)
+}
+
+func truncateReportedHostTags(tags []string) []string {
+	if len(tags) == 0 {
+		return nil
+	}
+	limit := min(len(tags), maxReportedHostTags)
+	out := make([]string, limit)
+	for i := 0; i < limit; i++ {
+		out[i] = truncateReportedUTF8(tags[i], maxReportedHostTagBytes)
+	}
+	return out
+}
 
 func normalizeAgentMemory(total, used, free, cache int64, usage float64, swapTotal, swapUsed int64) models.Memory {
 	if total <= 0 {
@@ -614,6 +675,28 @@ func (m *Monitor) UninstallHostAgent(hostID, tokenID string) (models.Host, error
 		return models.Host{}, fmt.Errorf("host id and token id are required")
 	}
 
+	// Reject unknown hosts and foreign tokens before queueing for the exclusive
+	// lifecycle lock so an unowned uninstall request cannot stall concurrent
+	// host reports. Ownership is rechecked under the lock.
+	continuity, hasContinuity := config.HostContinuityEntry{}, false
+	if m.hostContinuityStore != nil {
+		continuity, hasContinuity = m.hostContinuityStore.Get(hostID)
+	}
+	host, present := m.hostByID(hostID)
+	boundTokenID := strings.TrimSpace(host.TokenID)
+	if boundTokenID == "" {
+		boundTokenID = strings.TrimSpace(continuity.TokenID)
+	}
+	if boundTokenID != tokenID {
+		if !present && hasContinuity && !continuity.RemovedAt.IsZero() && slices.Contains(continuity.DeniedTokenIDs, tokenID) {
+			return hostFromContinuityEntry(continuity), nil
+		}
+		if !present && !hasContinuity {
+			return models.Host{}, ErrHostAgentNotFound
+		}
+		return models.Host{}, ErrHostAgentTokenMismatch
+	}
+
 	m.hostAgentLifecycleMu.Lock()
 	defer m.hostAgentLifecycleMu.Unlock()
 	return m.removeHostAgentLocked(hostID, tokenID, true)
@@ -740,6 +823,7 @@ func (m *Monitor) removeHostAgentLocked(hostID, requiredTokenID string, requireD
 	m.removedHostAgents[hostID] = removedAt
 	m.clearHostAgentIdentityTrackingLocked(hostID)
 	m.mu.Unlock()
+	m.trackAgentCephCluster(hostID, "")
 	m.state.AddRemovedHostAgent(removedEntry)
 
 	removedDockerHosts := m.removeDockerHostsForHostAgent(hostID, host, tombstone, otherHostAgents, requiredTokenID != "", removedAt)
@@ -2359,6 +2443,10 @@ func (m *Monitor) ApplyDockerReport(report agentsdocker.Report, tokenRecord *con
 		}, nil
 	}
 
+	if err := validateDockerReportIdentity(report); err != nil {
+		return models.DockerHost{}, err
+	}
+
 	dockerHosts := m.dockerHostRecordViews()
 	machineRevisit := func(identifier, machineID string) bool {
 		return m.dockerMachineIDRevisit(identifier, machineID, time.Now())
@@ -2575,13 +2663,13 @@ func (m *Monitor) ApplyDockerReport(report agentsdocker.Report, tokenRecord *con
 	containerNetworkValidity := make([]models.IORateValidity, len(report.Containers))
 	for i, payload := range report.Containers {
 		container := models.DockerContainer{
-			ID:                 payload.ID,
-			Name:               payload.Name,
-			Image:              payload.Image,
-			ImageDigest:        payload.ImageDigest,
-			State:              payload.State,
-			Status:             payload.Status,
-			Health:             payload.Health,
+			ID:                 truncateReportedUTF8(payload.ID, maxReportedDockerTextBytes),
+			Name:               truncateReportedUTF8(payload.Name, maxReportedDockerTextBytes),
+			Image:              truncateReportedUTF8(payload.Image, maxReportedDockerTextBytes),
+			ImageDigest:        truncateReportedUTF8(payload.ImageDigest, maxReportedDockerTextBytes),
+			State:              truncateReportedUTF8(payload.State, maxReportedDockerTextBytes),
+			Status:             truncateReportedUTF8(payload.Status, maxReportedDockerTextBytes),
+			Health:             truncateReportedUTF8(payload.Health, maxReportedDockerTextBytes),
 			HealthcheckTargets: append([]string(nil), payload.HealthcheckTargets...),
 			HealthProbe:        dockerHealthProbeFromReport(payload.Health, payload.HealthProbe),
 			FailureLog:         dockerFailureLogFromReport(payload.FailureLog, time.Now()),
@@ -2636,9 +2724,13 @@ func (m *Monitor) ApplyDockerReport(report agentsdocker.Report, tokenRecord *con
 		}
 
 		if len(payload.Labels) > 0 {
-			labels := make(map[string]string, len(payload.Labels))
+			limit := min(len(payload.Labels), maxReportedDockerLabels)
+			labels := make(map[string]string, limit)
 			for k, v := range payload.Labels {
-				labels[k] = v
+				if len(labels) >= maxReportedDockerLabels {
+					break
+				}
+				labels[truncateReportedUTF8(k, maxReportedDockerTextBytes)] = truncateReportedUTF8(v, maxReportedDockerTextBytes)
 			}
 			container.Labels = labels
 		}
@@ -3302,6 +3394,7 @@ func (m *Monitor) removeSupersededHostRecord(staleID, replacementID, reason stri
 	}
 	m.clearHostAgentIdentityTrackingLocked(staleID)
 	m.mu.Unlock()
+	m.trackAgentCephCluster(staleID, "")
 
 	m.hostReportOrderMu.Lock()
 	delete(m.hostReportOrders, staleID)
@@ -3400,6 +3493,9 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 	hostname := strings.TrimSpace(report.Host.Hostname)
 	if hostname == "" {
 		return models.Host{}, fmt.Errorf("host report missing hostname")
+	}
+	if err := validateHostReportIdentity(report); err != nil {
+		return models.Host{}, err
 	}
 
 	baseIdentifier := strings.TrimSpace(report.Host.ID)
@@ -3675,9 +3771,12 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 		report.Metrics.Memory.SwapUsed,
 	)
 
-	disks := make([]models.Disk, 0, len(report.Disks))
+	disks := make([]models.Disk, 0, min(len(report.Disks), maxReportedPhysicalDisks))
 	hostZFSPools := hostZFSPoolsFromAgentDisks(report.Disks)
 	for _, disk := range report.Disks {
+		if len(disks) == maxReportedPhysicalDisks {
+			break
+		}
 		// Filter virtual/system filesystems and read-only filesystems to avoid cluttering
 		// the UI with tmpfs, devtmpfs, /dev, /run, /sys, docker overlay mounts, snap mounts,
 		// immutable OS images, etc. (issues #505, #690, #790). Preserve the
@@ -3695,9 +3794,9 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 			Used:       disk.UsedBytes,
 			Free:       disk.FreeBytes,
 			Usage:      usage,
-			Mountpoint: disk.Mountpoint,
-			Type:       disk.Type,
-			Device:     disk.Device,
+			Mountpoint: truncateReportedUTF8(disk.Mountpoint, maxHostZFSMountpointBytes),
+			Type:       truncateReportedUTF8(disk.Type, maxReportedIdentityBytes),
+			Device:     truncateReportedUTF8(disk.Device, maxHostZFSMountpointBytes),
 		})
 	}
 
@@ -3730,35 +3829,38 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 
 	defaultGateways, dnsServers := hostRoutingFromReport(report.Routing)
 
-	raid := make([]models.HostRAIDArray, 0, len(report.RAID))
+	raid := make([]models.HostRAIDArray, 0, min(len(report.RAID), maxHostRAIDArrays))
 	for _, array := range report.RAID {
+		if len(raid) == maxHostRAIDArrays {
+			break
+		}
 		devices := make([]models.HostRAIDDevice, 0, len(array.Devices))
 		for _, dev := range array.Devices {
 			devices = append(devices, models.HostRAIDDevice{
-				Device: dev.Device,
-				State:  dev.State,
+				Device: truncateReportedUTF8(dev.Device, maxReportedIdentityBytes),
+				State:  truncateReportedUTF8(dev.State, maxReportedIdentityBytes),
 				Slot:   dev.Slot,
 			})
 		}
-		operation := strings.TrimSpace(array.Operation)
+		operation := truncateReportedUTF8(strings.TrimSpace(array.Operation), maxReportedIdentityBytes)
 		rebuildPercent := safeFloat(array.RebuildPercent)
-		rebuildSpeed := strings.TrimSpace(array.RebuildSpeed)
+		rebuildSpeed := truncateReportedUTF8(strings.TrimSpace(array.RebuildSpeed), maxReportedIdentityBytes)
 		if operation == "" {
 			rebuildPercent = 0
 			rebuildSpeed = ""
 		}
 		raid = append(raid, models.HostRAIDArray{
-			Device:          array.Device,
-			Name:            array.Name,
-			Level:           array.Level,
-			State:           array.State,
+			Device:          truncateReportedUTF8(array.Device, maxReportedIdentityBytes),
+			Name:            truncateReportedUTF8(array.Name, maxReportedIdentityBytes),
+			Level:           truncateReportedUTF8(array.Level, maxReportedIdentityBytes),
+			State:           truncateReportedUTF8(array.State, maxReportedIdentityBytes),
 			RequiredDevices: array.RequiredDevices,
 			TotalDevices:    array.TotalDevices,
 			ActiveDevices:   array.ActiveDevices,
 			WorkingDevices:  array.WorkingDevices,
 			FailedDevices:   array.FailedDevices,
 			SpareDevices:    array.SpareDevices,
-			UUID:            array.UUID,
+			UUID:            truncateReportedUTF8(array.UUID, maxReportedIdentityBytes),
 			Devices:         devices,
 			RebuildPercent:  rebuildPercent,
 			RebuildSpeed:    rebuildSpeed,
@@ -3774,8 +3876,11 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 
 	var unraidData *models.HostUnraidStorage
 	if report.Unraid != nil {
-		disks := make([]models.HostUnraidDisk, 0, len(report.Unraid.Disks))
+		disks := make([]models.HostUnraidDisk, 0, min(len(report.Unraid.Disks), maxReportedPhysicalDisks))
 		for _, disk := range report.Unraid.Disks {
+			if len(disks) == maxReportedPhysicalDisks {
+				break
+			}
 			device := strings.TrimSpace(disk.Device)
 			rawStatus := strings.TrimSpace(disk.RawStatus)
 			status := strings.TrimSpace(disk.Status)
@@ -3908,7 +4013,7 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 		CommandsEnabled:         report.Agent.CommandsEnabled,
 		OperationReceiptVersion: report.Agent.OperationReceiptVersion,
 		ReportIP:                strings.TrimSpace(report.Host.ReportIP),
-		Tags:                    append([]string(nil), report.Tags...),
+		Tags:                    truncateReportedHostTags(report.Tags),
 		DiskExclude:             append([]string(nil), report.Agent.DiskExclude...),
 		AppliedConfig:           convertAgentConfigFingerprint(report.Agent.AppliedConfig),
 		AgentUpdate:             agentUpdate,
@@ -4114,25 +4219,31 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 
 	// If host reports Ceph data, also update the global CephClusters state,
 	// unless another reporting agent currently holds that cluster's record.
-	if report.Ceph != nil && m.admitAgentCephCluster(agentCephClusterID(report.Ceph, identifier), identifier, receivedAt) {
-		cephCluster := convertAgentCephToGlobalCluster(report.Ceph, hostname, identifier, observedAt)
-		storedCephCluster := m.state.UpsertCephCluster(cephCluster)
-		log.Debug().
-			Str("hostId", identifier).
-			Str("hostname", hostname).
-			Str("fsid", storedCephCluster.FSID).
-			Str("source", storedCephCluster.Source).
-			Str("health", storedCephCluster.Health).
-			Int("osds", storedCephCluster.NumOSDs).
-			Msg("Updated Ceph cluster from host agent")
+	if report.Ceph != nil {
+		cephClusterID := agentCephClusterID(report.Ceph, identifier)
+		if m.admitAgentCephCluster(cephClusterID, identifier, receivedAt) {
+			cephCluster := convertAgentCephToGlobalCluster(report.Ceph, hostname, identifier, observedAt)
+			m.trackAgentCephCluster(identifier, cephCluster.ID)
+			storedCephCluster := m.state.UpsertCephCluster(cephCluster)
+			log.Debug().
+				Str("hostId", identifier).
+				Str("hostname", hostname).
+				Str("fsid", storedCephCluster.FSID).
+				Str("source", storedCephCluster.Source).
+				Str("health", storedCephCluster.Health).
+				Int("osds", storedCephCluster.NumOSDs).
+				Msg("Updated Ceph cluster from host agent")
 
-		// #1341: the agent-reported Ceph cluster used to land in state but
-		// never get evaluated for pool alerts. Only the Proxmox-API polling
-		// path ran checkCephPoolStorage, so overrides set against
-		// agent-prefixed pool IDs (e.g. agent:hostname-ceph-pool-foo) were
-		// silently dormant. Run the alert check here so agent-sourced pools
-		// actually fire.
-		m.checkCephPoolStorage(storedCephCluster)
+			// #1341: the agent-reported Ceph cluster used to land in state but
+			// never get evaluated for pool alerts. Only the Proxmox-API polling
+			// path ran checkCephPoolStorage, so overrides set against
+			// agent-prefixed pool IDs (e.g. agent:hostname-ceph-pool-foo) were
+			// silently dormant. Run the alert check here so agent-sourced pools
+			// actually fire.
+			m.checkCephPoolStorage(storedCephCluster)
+		} else {
+			m.trackAgentCephCluster(identifier, "")
+		}
 	}
 
 	if m.alertManager != nil {
@@ -5282,13 +5393,8 @@ func (m *Monitor) hydrateRemovedHostAgents(now time.Time) {
 	}
 }
 
-// cleanupRemovedHostAgents expires removal tombstones older than 24 hours.
-// Durable state is deleted before memory so a persistence failure retains the
-// deny boundary across this process and the next restart.
-func (m *Monitor) cleanupRemovedHostAgents(now time.Time) {
-	m.hostAgentLifecycleMu.Lock()
-	defer m.hostAgentLifecycleMu.Unlock()
-
+// expiredRemovedHostAgents returns the removal tombstones older than 24 hours.
+func (m *Monitor) expiredRemovedHostAgents(now time.Time) map[string]time.Time {
 	expired := make(map[string]time.Time)
 
 	for _, entry := range m.state.GetRemovedHostAgents() {
@@ -5305,7 +5411,25 @@ func (m *Monitor) cleanupRemovedHostAgents(now time.Time) {
 	}
 	m.mu.Unlock()
 
-	for hostID, removedAt := range expired {
+	return expired
+}
+
+// cleanupRemovedHostAgents expires removal tombstones older than 24 hours.
+// Durable state is deleted before memory so a persistence failure retains the
+// deny boundary across this process and the next restart.
+func (m *Monitor) cleanupRemovedHostAgents(now time.Time) {
+	// This runs on every tick of the monitor loop. A host report holds the
+	// lifecycle lock for reading until it is fully applied, and a writer that
+	// waits for it holds back every later report, so ask for the lock only
+	// when a tombstone is due. What is due is read again under the lock.
+	if len(m.expiredRemovedHostAgents(now)) == 0 {
+		return
+	}
+
+	m.hostAgentLifecycleMu.Lock()
+	defer m.hostAgentLifecycleMu.Unlock()
+
+	for hostID, removedAt := range m.expiredRemovedHostAgents(now) {
 		if m.hostContinuityStore != nil {
 			if continuity, ok := m.hostContinuityStore.Get(hostID); ok && !continuity.RemovedAt.IsZero() {
 				if err := m.hostContinuityStore.Delete(hostID); err != nil {

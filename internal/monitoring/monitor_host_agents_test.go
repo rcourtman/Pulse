@@ -3248,6 +3248,60 @@ func TestApplyHostReportFiltersVendorManagedSystemRAIDArrays(t *testing.T) {
 	}
 }
 
+// TestApplyHostReportBoundsRAIDArrays pins that one report cannot hand the
+// alert evaluation an unbounded RAID list: the report holds the host-agent
+// lifecycle lock until every array has been evaluated.
+func TestApplyHostReportBoundsRAIDArrays(t *testing.T) {
+	monitor := &Monitor{
+		state:             models.NewState(),
+		alertManager:      alerts.NewManager(),
+		hostTokenBindings: make(map[string]string),
+		config:            &config.Config{},
+		rateTracker:       NewRateTracker(),
+	}
+	t.Cleanup(func() { monitor.alertManager.Stop() })
+
+	arrays := make([]agentshost.RAIDArray, 0, maxHostRAIDArrays+2)
+	for i := 0; i < maxHostRAIDArrays+2; i++ {
+		arrays = append(arrays, agentshost.RAIDArray{
+			Device: fmt.Sprintf("/dev/md%d", i),
+			Level:  "raid1",
+			State:  "clean",
+		})
+	}
+
+	host, err := monitor.ApplyHostReport(agentshost.Report{
+		Agent: agentshost.AgentInfo{
+			ID:              "agent-raid-bound",
+			Version:         "1.0.0",
+			IntervalSeconds: 30,
+		},
+		Host: agentshost.HostInfo{
+			ID:       "machine-raid-bound",
+			Hostname: "raid-bound.local",
+			Platform: "linux",
+			OSName:   "Ubuntu",
+		},
+		Timestamp: time.Now().UTC(),
+		RAID:      arrays,
+	}, nil)
+	if err != nil {
+		t.Fatalf("ApplyHostReport: %v", err)
+	}
+
+	if len(host.RAID) != maxHostRAIDArrays {
+		t.Fatalf("host RAID count = %d, want %d", len(host.RAID), maxHostRAIDArrays)
+	}
+	if host.RAID[0].Device != "/dev/md0" || host.RAID[maxHostRAIDArrays-1].Device != fmt.Sprintf("/dev/md%d", maxHostRAIDArrays-1) {
+		t.Fatalf("bounded RAID arrays are not the first reported: first=%q last=%q", host.RAID[0].Device, host.RAID[maxHostRAIDArrays-1].Device)
+	}
+
+	stored, ok := monitor.state.GetHost(host.ID)
+	if !ok || len(stored.RAID) != maxHostRAIDArrays {
+		t.Fatalf("stored host RAID count = %d (found=%v), want %d", len(stored.RAID), ok, maxHostRAIDArrays)
+	}
+}
+
 func TestApplyHostReportKeepsLocalMergerFSMounts(t *testing.T) {
 	t.Helper()
 
@@ -4975,6 +5029,45 @@ func TestCleanupRemovedHostAgents_ExpiresStateMirrorEntries(t *testing.T) {
 	}
 	if remaining[0].ID != "host-recent" {
 		t.Fatalf("expected host-recent to survive, got %q", remaining[0].ID)
+	}
+}
+
+// TestCleanupRemovedHostAgents_LeavesLifecycleLockAloneWhenNothingIsDue pins
+// that the per-tick cleanup does not queue for the exclusive lifecycle lock
+// unless a tombstone is due. A report holds that lock for reading while it is
+// applied, and a waiting writer would hold back the monitor loop and every
+// other host's report for as long as that one report takes.
+func TestCleanupRemovedHostAgents_LeavesLifecycleLockAloneWhenNothingIsDue(t *testing.T) {
+	recent := time.Now().Add(-time.Hour)
+	monitor := &Monitor{
+		state:             models.NewState(),
+		hostTokenBindings: make(map[string]string),
+		removedHostAgents: map[string]time.Time{"host-recent": recent},
+		config:            &config.Config{},
+	}
+	monitor.state.AddRemovedHostAgent(models.RemovedHostAgent{
+		ID:        "host-recent",
+		Hostname:  "recent.local",
+		RemovedAt: recent,
+	})
+
+	// A report that is still being applied.
+	monitor.hostAgentLifecycleMu.RLock()
+	defer monitor.hostAgentLifecycleMu.RUnlock()
+
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		monitor.cleanupRemovedHostAgents(time.Now())
+	}()
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("cleanup waited for the lifecycle lock although no tombstone was due")
+	}
+
+	if remaining := monitor.state.GetRemovedHostAgents(); len(remaining) != 1 || remaining[0].ID != "host-recent" {
+		t.Fatalf("expected host-recent to survive, got %+v", remaining)
 	}
 }
 

@@ -1949,6 +1949,52 @@ func TestRecordTaskOutcomeReadErrorSchedulesAsSuccess(t *testing.T) {
 	}
 }
 
+// monitorLockProbeError records whether the monitor lock was held while the
+// error was rendered.
+type monitorLockProbeError struct {
+	m    *Monitor
+	held *bool
+}
+
+func (e monitorLockProbeError) Error() string {
+	if e.m.mu.TryLock() {
+		e.m.mu.Unlock()
+	} else {
+		*e.held = true
+	}
+	return "probe failed"
+}
+
+// An error's text is built from a monitored system's replies and can be large.
+// Rendering it must not hold the lock every poll and state read waits on.
+func TestRecordTaskOutcomeRendersErrorsOutsideMonitorLock(t *testing.T) {
+	for _, kind := range []string{"poll", "read"} {
+		t.Run(kind, func(t *testing.T) {
+			m := &Monitor{
+				config:          &config.Config{},
+				circuitBreakers: make(map[string]*circuitBreaker),
+				pollStatusMap:   make(map[string]*pollStatus),
+				failureCounts:   make(map[string]int),
+				lastOutcome:     make(map[string]taskOutcome),
+			}
+			var held bool
+			var pollErr, readErr error
+			if kind == "poll" {
+				pollErr = monitorLockProbeError{m: m, held: &held}
+			} else {
+				readErr = monitorLockProbeError{m: m, held: &held}
+			}
+			m.recordTaskOutcome(InstanceTypePMG, "gateway", pollErr, readErr)
+			if held {
+				t.Fatalf("%s error rendered while holding the monitor lock", kind)
+			}
+			if status := m.pollStatusMap[schedulerKey(InstanceTypePMG, "gateway")]; status.LastErrorMessage != "probe failed" {
+				t.Fatalf("%s error not recorded: %+v", kind, status)
+			}
+		})
+	}
+}
+
 func TestGuestConfigPlacement(t *testing.T) {
 	for _, kind := range []string{"vm", "container", "lxc"} {
 		for _, reverse := range []bool{false, true} {

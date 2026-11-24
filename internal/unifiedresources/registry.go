@@ -3434,7 +3434,7 @@ func (rr *ResourceRegistry) mergeLinkedKubernetesNode(
 
 func (rr *ResourceRegistry) findMatch(incoming Resource, candidateID string) (*MatchResult, bool) {
 	excludedMatch := false
-	candidates := rr.matcher.FindCandidates(incoming.Identity)
+	candidates := rr.matcher.findCandidatesAtLeast(incoming.Identity, autoMergeThreshold)
 	for _, candidate := range candidates {
 		if candidate.ID == "" {
 			continue
