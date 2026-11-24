@@ -33,7 +33,10 @@ for (const [name, summary, evidence] of [
     const blocks = form.split(/(?=^  - type: )/m).slice(1);
     const expectedByField = new Map([
       ["upgrade_context", ["Failed upgrade: which attempt, stop and recovery?"]],
-      [summary, ["Several hosts or clusters: preserve which names and IDs repeat"]],
+      [summary, [
+        "Several hosts or clusters: preserve which names and IDs repeat",
+        "Dashboard stuck or readings stopped",
+      ]],
       [evidence, [
         "Notification delivery: Test versus ordinary alerts",
         "Proxmox backups: what to report",
@@ -70,6 +73,21 @@ for (const [name, summary, evidence] of [
     const attachment = blocks.find(block => block.includes(`    id: ${evidence}\n`));
     assert.match(attachment, /Review files and screenshots locally/);
     assert.doesNotMatch(attachment, /<details|For notification reports|For CPU, memory or disk-write reports/);
+  });
+
+  test(`stalled dashboard guidance separates collection from liveness without asking for a new check: ${name}`, () => {
+    const form = fs.readFileSync(path.resolve(__dirname, "../ISSUE_TEMPLATE", name), "utf8");
+    const guidance = fieldGuidance(form, summary);
+    const stall = guidance.match(/<summary>Dashboard stuck or readings stopped<\/summary>([\s\S]*?)<\/details>/)?.[1];
+    assert.ok(stall, "keep the stall guidance by the description, not in a new submitted field");
+    assert.match(stall, /Connecting to Pulse.*dashboard opened but readings stopped changing/);
+    assert.match(stall, /If known, give the last time you saw fresh readings.*time zone.*one source or several/);
+    assert.match(stall, /agent's \*\*Last seen\*\* time advanced.*new alerts appeared/);
+    assert.match(stall, /already have a Pulse health check from the same time, give only its status/);
+    assert.match(stall, /Pulse answered, not that it was collecting data/);
+    assert.match(stall, /write "unknown"/);
+    assert.match(stall, /Do not run Diagnostics, restart Pulse or take a process dump just to report it/);
+    assert.match(stall, /Keep full responses, network exports and dumps private/);
   });
 
   test(`sign-in evidence distinguishes the failed step without requiring another attempt: ${name}`, () => {
