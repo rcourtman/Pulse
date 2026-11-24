@@ -55,6 +55,14 @@ export interface AvailabilityHTTPConfig {
   textContains?: string;
   jsonPath?: string;
   jsonEquals?: string;
+  /**
+   * SHA-256 of the HTTPS leaf certificate to pin. Without it, a check that
+   * sends authentication, header values or a body first verifies the server's
+   * certificate chain and host name.
+   */
+  tlsFingerprintSha256?: string;
+  /** Explicit opt-out: accept whatever certificate the HTTPS server presents. */
+  insecureSkipVerify?: boolean;
 }
 
 export interface AvailabilityHTTPSecretState {

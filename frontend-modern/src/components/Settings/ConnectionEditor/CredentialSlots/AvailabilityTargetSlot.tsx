@@ -97,6 +97,8 @@ interface AvailabilityForm {
   httpBodyConfigured: boolean;
   httpBodyTouched: boolean;
   httpHeaders: AvailabilityHTTPHeaderForm[];
+  httpTLSFingerprint: string;
+  httpInsecureSkipVerify: boolean;
   pushToken: string;
   pushScheduleType: AvailabilityPushScheduleType;
   pushIntervalSeconds: string;
@@ -170,6 +172,8 @@ const newAvailabilityForm = (
   httpBodyConfigured: false,
   httpBodyTouched: false,
   httpHeaders: [],
+  httpTLSFingerprint: '',
+  httpInsecureSkipVerify: false,
   pushToken: '',
   pushScheduleType: 'interval',
   pushIntervalSeconds: '86400',
@@ -229,6 +233,8 @@ const formFromTarget = (target: AvailabilityTarget): AvailabilityForm => {
       value: '',
       valueConfigured: headerSecrets.get(header.id) ?? false,
     })),
+    httpTLSFingerprint: target.http?.tlsFingerprintSha256 ?? '',
+    httpInsecureSkipVerify: target.http?.insecureSkipVerify === true,
     pushToken: target.push?.token ?? '',
     pushScheduleType: target.push?.scheduleType ?? 'interval',
     pushIntervalSeconds: String(target.push?.intervalSeconds ?? 86400),
@@ -286,7 +292,13 @@ const availabilityTestFailureDescription = (
     const status = result.application.statusCode ? ` HTTP ${result.application.statusCode}.` : '';
     return `Endpoint answered in ${result.latencyMillis} ms, but the application contract failed.${status} ${result.error || 'The response did not satisfy the configured assertion.'}`;
   }
-  return result.error || 'Probe failed.';
+  // Only a refused HTTPS certificate comes back with a failed transport, and
+  // its fingerprint is what the operator needs in order to pin it.
+  const refused =
+    result.transportOutcome === 'unreachable' && result.certificate?.fingerprintSha256
+      ? ` (presented certificate SHA-256: ${result.certificate.fingerprintSha256})`
+      : '';
+  return `${result.error || 'Probe failed.'}${refused}`;
 };
 
 const payloadFromForm = (form: AvailabilityForm): AvailabilityTarget => {
@@ -363,6 +375,10 @@ const payloadFromForm = (form: AvailabilityForm): AvailabilityTarget => {
           jsonPath: form.httpMethod !== 'HEAD' ? form.httpJSONPath.trim() || undefined : undefined,
           jsonEquals:
             form.httpMethod !== 'HEAD' ? form.httpJSONEquals.trim() || undefined : undefined,
+          // Always serialized: the server decodes updates onto the existing
+          // record, so an omitted value would keep the stored one.
+          tlsFingerprintSha256: form.protocol === 'https' ? form.httpTLSFingerprint.trim() : '',
+          insecureSkipVerify: form.protocol === 'https' && form.httpInsecureSkipVerify,
         }
       : undefined,
     dns:
@@ -1214,6 +1230,33 @@ export const AvailabilityTargetSlot: Component<AvailabilityTargetSlotProps> = (p
                 Raise an alert when the certificate enters this expiry window.
               </span>
             </label>
+            <label class={formField}>
+              <span class={formLabel}>Pinned certificate fingerprint (optional)</span>
+              <input
+                class={formControl}
+                aria-label="Pinned certificate fingerprint (optional)"
+                value={form().httpTLSFingerprint}
+                onInput={(event) => updateForm({ httpTLSFingerprint: event.currentTarget.value })}
+                placeholder="SHA-256"
+              />
+              <span class={formHelpText}>
+                Credentials, header values and a request body are only sent to a server whose
+                certificate is trusted by the checking host, or matches this fingerprint.
+              </span>
+            </label>
+            <div class="flex items-center rounded-md border border-border bg-surface-alt px-4 py-3">
+              <label class="flex items-center gap-3">
+                <input
+                  type="checkbox"
+                  class={formCheckbox}
+                  checked={form().httpInsecureSkipVerify}
+                  onChange={(event) =>
+                    updateForm({ httpInsecureSkipVerify: event.currentTarget.checked })
+                  }
+                />
+                <span class="text-sm text-base-content">Allow an unverified certificate</span>
+              </label>
+            </div>
           </Show>
           <Show when={form().protocol === 'udp'}>
             <FormSelect
@@ -1303,6 +1346,7 @@ export const AvailabilityTargetSlot: Component<AvailabilityTargetSlotProps> = (p
             {(result) => (
               <CalloutCard
                 role={result().success ? 'status' : 'alert'}
+                class="[overflow-wrap:anywhere]"
                 tone={
                   result().outcome === 'indeterminate'
                     ? 'warning'

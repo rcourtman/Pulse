@@ -12,6 +12,8 @@ export function readSSOReturnError(params: URLSearchParams): string {
       return 'Your account email is not permitted to access Pulse.';
     case 'domain_restricted':
       return 'Your email domain is not allowed for Pulse access.';
+    case 'email_unverified':
+      return 'Your identity provider has not verified your email address. Verify it there, then sign in again.';
     case 'group_restricted':
       return 'Your account is not part of an authorized group to use Pulse.';
     case 'invalid_state':

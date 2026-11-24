@@ -228,6 +228,12 @@ describe('Login', () => {
 
     it.each([
       ['oidc', 'audience_mismatch', 'Check the client ID against your provider application.', true],
+      [
+        'oidc',
+        'email_unverified',
+        'Your identity provider has not verified your email address. Verify it there, then sign in again.',
+        false,
+      ],
       ['saml', 'invalid_state', 'The sign-in attempt expired. Please try again.', false],
     ])(
       'shows the %s return reason before any retry choice (%s)',
