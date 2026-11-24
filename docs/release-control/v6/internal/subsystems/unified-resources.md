@@ -31,6 +31,10 @@ runtime and service identity across container replacement.
 
 Docker runtime metadata includes the agent’s local live-log opt-in. The Compose application view requests the selected container from that runtime and discards log text when the selection or organization changes.
 
+### Resource and Docker host drawers omit the empty alerts row (23 November 2026)
+
+`ResourceDetailDrawer`, `ResourceDetailDrawerOverviewTab`, and `DockerHostDrawerOverview` omit the standalone "No active alerts" line when healthy and render `GuestDrawerHistoryRangeSelect` in `Subtabs` trailing while Overview is active and a metrics history target exists. Passing availability checks are summarised on the facts strip (`Availability checks passing`) and kept in full under Details, while failing checks and active alerts remain at the front.
+
 ### Maintenance resolves connection and PBS datastore subjects (13 November 2026)
 
 Reference lookups accept the existing PVE/PBS connection subjects and PBS

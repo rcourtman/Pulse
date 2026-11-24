@@ -1,7 +1,10 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { render as renderComponent } from '@solidjs/testing-library';
+import { createComponent } from 'solid-js';
 import { describe, expect, it } from 'vitest';
+import { GuestDrawerHistoryRangeSelect } from '@/components/Workloads/GuestDrawerHistoryRangeSelect';
 import { createGuideFixture } from './guideFixture';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../../..');
@@ -53,14 +56,15 @@ describe('stored-chart navigation and interpretation help', () => {
   });
 
   it('binds the new instructions to the current consuming drawer and control', () => {
-    const overview = read(
-      'frontend-modern/src/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx',
+    const drawer = read('frontend-modern/src/components/Infrastructure/ResourceDetailDrawer.tsx');
+    expect(drawer).toContain('<GuestDrawerHistoryRangeSelect');
+    expect(drawer).toContain('onRangeChange={drawer.setMetricsHistoryRange}');
+    const rangeView = renderComponent(() =>
+      createComponent(GuestDrawerHistoryRangeSelect, { range: '24h', onRangeChange: () => {} }),
     );
-    expect(overview).toContain('<GuestDrawerHistory');
-    expect(overview).toContain("enabled={drawer.activeTab() === 'overview'}");
-    expect(overview).toContain('onRangeChange={drawer.setMetricsHistoryRange}');
+    expect(rangeView.getByLabelText('History range')).toBeInTheDocument();
+    rangeView.unmount();
     const panel = read('frontend-modern/src/components/Workloads/GuestDrawerHistory.tsx');
-    expect(panel).toContain('label="History range"');
     expect(panel).toContain('point.min ?? point.value');
     expect(panel).toContain('point.max ?? point.value');
     expect(panel).toContain('average, ${low} to ${high}');

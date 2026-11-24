@@ -107,10 +107,11 @@ describe('DiskDrawer', () => {
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
-  it('says there are no active alerts, or lists the disk alerts first', () => {
+  it('omits the attention section when healthy, and lists the disk alerts first when active', () => {
     const [alerts, setAlerts] = createSignal<Alert[]>([]);
     render(() => <DiskDrawer disk={buildDisk()} alerts={alerts()} onClose={() => {}} />);
-    expect(screen.getByTestId('drawer-no-attention')).toHaveTextContent('No active alerts');
+    expect(screen.queryByTestId('drawer-attention-section')).toBeNull();
+    expect(screen.queryByTestId('drawer-no-attention')).toBeNull();
 
     setAlerts([alert()]);
     expect(screen.queryByTestId('drawer-no-attention')).toBeNull();

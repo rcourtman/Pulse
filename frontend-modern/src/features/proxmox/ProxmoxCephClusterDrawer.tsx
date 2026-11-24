@@ -8,10 +8,7 @@ import {
   getResourceMetricsHistoryTarget,
 } from '@/components/Infrastructure/resourceDetailDrawerMetricsHistoryModel';
 import { DetailSectionTable } from '@/components/shared/DetailSectionTable';
-import {
-  DrawerAttentionSection,
-  DrawerNoAlertsLine,
-} from '@/components/shared/DrawerAttentionSection';
+import { DrawerAttentionSection } from '@/components/shared/DrawerAttentionSection';
 import { DrawerSubjectHeading } from '@/components/shared/DrawerSubjectHeading';
 import { InlineNotice } from '@/components/shared/InlineNotice';
 import { ObjectDrawerHeader } from '@/components/shared/ObjectDrawerHeader';
@@ -23,6 +20,7 @@ import {
 import { DrawerExceptionList } from '@/components/Workloads/DrawerExceptionList';
 import { getDrawerChartAlerts } from '@/components/Workloads/drawerOverviewModel';
 import { GUEST_DRAWER_HISTORY_DEFAULT_RANGE } from '@/components/Workloads/guestDrawerModel';
+import { GuestDrawerHistoryRangeSelect } from '@/components/Workloads/GuestDrawerHistoryRangeSelect';
 import { alertTypeDisplayLabel } from '@/features/alerts/helpers';
 import { getAlertAttentionCopy } from '@/features/alerts/metricAlertPresentation';
 import { useAlertsActivation } from '@/stores/alertsActivation';
@@ -61,7 +59,6 @@ type CephClusterDrawerTab = 'overview' | 'manage';
 const CephClusterOverview: Component<{
   cluster: Resource;
   historyRange: HistoryTimeRange;
-  onHistoryRangeChange: (range: HistoryTimeRange) => void;
   historyEnabled: boolean;
 }> = (props) => {
   const now = useRelativeTimeNow();
@@ -113,9 +110,6 @@ const CephClusterOverview: Component<{
           acknowledged: alert.acknowledged,
         }))}
       />
-      <Show when={alerts().length === 0}>
-        <DrawerNoAlertsLine />
-      </Show>
 
       <DrawerExceptionList testId="ceph-cluster-drawer-exceptions" rows={exceptionRows()} />
 
@@ -125,7 +119,6 @@ const CephClusterOverview: Component<{
             <GuestDrawerHistory
               target={target()}
               range={props.historyRange}
-              onRangeChange={props.onHistoryRangeChange}
               enabled={props.historyEnabled}
               groups={historyGroups()}
               currentMetrics={getResourceMetricsHistoryCurrentMetrics(props.cluster)}
@@ -180,6 +173,7 @@ const ProxmoxCephClusterDrawerContent: Component<ProxmoxCephClusterDrawerProps> 
   );
   const name = () => asTrimmedString(props.cluster.name) || props.cluster.id;
   const headingId = () => `proxmox-ceph-cluster-drawer-heading-${props.cluster.id}`;
+  const historyTarget = createMemo(() => getResourceMetricsHistoryTarget(props.cluster));
 
   return (
     <section class="space-y-3" aria-labelledby={headingId()} data-testid="ceph-cluster-drawer">
@@ -201,6 +195,15 @@ const ProxmoxCephClusterDrawerContent: Component<ProxmoxCephClusterDrawerProps> 
           { value: 'overview', label: 'Overview' },
           { value: 'manage', label: 'Manage' },
         ]}
+        trailing={
+          <Show when={activeTab() === 'overview' && historyTarget()}>
+            <GuestDrawerHistoryRangeSelect
+              range={historyRange()}
+              onRangeChange={setHistoryRange}
+              class="mb-1 sm:mb-0"
+            />
+          </Show>
+        }
       />
 
       {/* Hidden with CSS rather than unmounted, so switching tabs keeps the
@@ -209,7 +212,6 @@ const ProxmoxCephClusterDrawerContent: Component<ProxmoxCephClusterDrawerProps> 
         <CephClusterOverview
           cluster={props.cluster}
           historyRange={historyRange()}
-          onHistoryRangeChange={setHistoryRange}
           historyEnabled={activeTab() === 'overview'}
         />
       </div>

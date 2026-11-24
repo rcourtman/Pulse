@@ -10,10 +10,7 @@ import { InfoCardFrame, InfoCardKeyValueRow } from '@/components/shared/InfoCard
 import { InlineNotice } from '@/components/shared/InlineNotice';
 import { TechnicalDetailsDisclosure } from '@/components/shared/TechnicalDetailsDisclosure';
 import { DrawerExceptionList } from '@/components/Workloads/DrawerExceptionList';
-import {
-  DrawerAttentionSection,
-  DrawerNoAlertsLine,
-} from '@/components/shared/DrawerAttentionSection';
+import { DrawerAttentionSection } from '@/components/shared/DrawerAttentionSection';
 import {
   DetailSectionTable,
   compactDetailRows,
@@ -473,6 +470,13 @@ export function DockerHostDrawerOverview(props: DockerHostDrawerOverviewProps) {
       ? `${formatBytes(used)} of ${formatBytes(total)} ${label}`
       : `${formatBytes(total)} ${label}`;
   };
+  const availabilityChecks = () => [
+    ...(props.host.availability ? [props.host.availability] : []),
+    ...(props.host.availabilityChecks ?? []),
+  ];
+  const availabilityHealthy = () =>
+    availabilityChecks().length > 0 &&
+    availabilityChecks().every((check) => isDrawerAvailabilityHealthy(check, now()));
   const facts = () => {
     const system = osLabel();
     // The row already states the engine version; the facts add what it lacks.
@@ -481,15 +485,9 @@ export function DockerHostDrawerOverview(props: DockerHostDrawerOverviewProps) {
       system && system.toLowerCase() !== 'linux' ? system : '',
       sizeFact(memorySource(), 'RAM'),
       sizeFact(diskSource(), 'disk'),
+      availabilityHealthy() ? 'Availability checks passing' : '',
     ].filter(Boolean);
   };
-  const availabilityChecks = () => [
-    ...(props.host.availability ? [props.host.availability] : []),
-    ...(props.host.availabilityChecks ?? []),
-  ];
-  const availabilityHealthy = () =>
-    availabilityChecks().length > 0 &&
-    availabilityChecks().every((check) => isDrawerAvailabilityHealthy(check, now()));
   const attentionItems = () => [
     ...(summaryOnly()
       ? [
@@ -515,9 +513,6 @@ export function DockerHostDrawerOverview(props: DockerHostDrawerOverviewProps) {
   return (
     <div class="space-y-3">
       <DrawerAttentionSection items={attentionItems()} />
-      <Show when={attentionItems().length === 0}>
-        <DrawerNoAlertsLine availabilityPassing={availabilityHealthy()} />
-      </Show>
       <DrawerExceptionList testId="docker-host-drawer-exceptions" rows={exceptionRows()} />
       <Show when={props.historyTarget}>
         <Show when={liveReadingsWithheld()}>

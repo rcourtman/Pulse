@@ -5,6 +5,7 @@ import { DrawerSubjectHeading } from '@/components/shared/DrawerSubjectHeading';
 import { ObjectDrawerHeader } from '@/components/shared/ObjectDrawerHeader';
 import { Subtabs } from '@/components/shared/Subtabs';
 import { GUEST_DRAWER_HISTORY_DEFAULT_RANGE } from '@/components/Workloads/guestDrawerModel';
+import { GuestDrawerHistoryRangeSelect } from '@/components/Workloads/GuestDrawerHistoryRangeSelect';
 import {
   extractPhysicalDiskPresentationData,
   getPhysicalDiskHealthIndicator,
@@ -13,6 +14,7 @@ import { useAlertsActivation } from '@/stores/alertsActivation';
 import type { Alert } from '@/types/api';
 import type { Resource } from '@/types/resource';
 import { DiskDrawerOverview } from './DiskDrawerOverview';
+import { resolvePhysicalDiskHistoryResourceId } from './diskResourceUtils';
 
 interface DiskDrawerProps {
   disk: Resource;
@@ -43,6 +45,9 @@ const DiskDrawerContent: Component<DiskDrawerProps> = (props) => {
   const title = () => diskData().model || props.disk.name || 'Unknown Disk';
   const headingId = () => `disk-drawer-heading-${props.disk.id}`;
   const headerIndicator = createMemo(() => getPhysicalDiskHealthIndicator(diskData()));
+  const hasHistoryTarget = createMemo(() =>
+    Boolean(resolvePhysicalDiskHistoryResourceId(props.disk)),
+  );
 
   return (
     <section class="space-y-3" aria-labelledby={headingId()} data-testid="disk-drawer">
@@ -64,6 +69,15 @@ const DiskDrawerContent: Component<DiskDrawerProps> = (props) => {
           { value: 'overview', label: 'Overview' },
           { value: 'manage', label: 'Manage' },
         ]}
+        trailing={
+          <Show when={activeTab() === 'overview' && hasHistoryTarget()}>
+            <GuestDrawerHistoryRangeSelect
+              range={historyRange()}
+              onRangeChange={setHistoryRange}
+              class="mb-1 sm:mb-0"
+            />
+          </Show>
+        }
       />
 
       {/* Use CSS hidden instead of Show to avoid mount/unmount which causes scroll jumps.
@@ -74,7 +88,6 @@ const DiskDrawerContent: Component<DiskDrawerProps> = (props) => {
           diskData={diskData()}
           alerts={props.alerts}
           historyRange={historyRange()}
-          onHistoryRangeChange={setHistoryRange}
           historyEnabled={activeTab() === 'overview'}
         />
       </div>

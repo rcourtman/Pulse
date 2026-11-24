@@ -56,7 +56,6 @@ import {
 import {
   DrawerAttentionSection,
   type DrawerAttentionItem,
-  DrawerNoAlertsLine,
 } from '@/components/shared/DrawerAttentionSection';
 import {
   RESOURCE_CHANGE_KIND_ORDER,
@@ -398,8 +397,10 @@ export const ResourceDetailDrawerOverviewTab: Component<ResourceDetailDrawerOver
     detailSections()
       .map((section) => section.label.toLowerCase())
       .join(', ');
-  const facts = () =>
-    getResourceDrawerFacts(resource(), drawer.identityIpValues()[0], relatedResources());
+  const facts = () => [
+    ...getResourceDrawerFacts(resource(), drawer.identityIpValues()[0], relatedResources()),
+    ...(availabilityHealthy() ? ['Availability checks passing'] : []),
+  ];
   const hasPlatformDetails = () =>
     drawer.hasServiceDetails() || drawer.hasHostDetails() || drawer.hasInvestigationContext();
   const showAgentPhysicalDisks = () =>
@@ -415,7 +416,7 @@ export const ResourceDetailDrawerOverviewTab: Component<ResourceDetailDrawerOver
     ...(resource().availabilityChecks ?? []),
   ];
   // A failing or unknown check stays in front; a passing one is summarised in
-  // the alerts line and kept under Details. An endpoint that is itself an
+  // the facts strip and kept under Details. An endpoint that is itself an
   // availability check keeps its cards in front: they are its whole reading.
   const isAvailabilityResource = () =>
     resource().type === 'network-endpoint' || resource().platformType === 'availability';
@@ -434,9 +435,6 @@ export const ResourceDetailDrawerOverviewTab: Component<ResourceDetailDrawerOver
         )}
       </Show>
       <DrawerAttentionSection items={attentionItems()} />
-      <Show when={attentionItems().length === 0}>
-        <DrawerNoAlertsLine availabilityPassing={availabilityHealthy()} />
-      </Show>
       <DrawerExceptionList testId="resource-drawer-exceptions" rows={exceptionRows()} />
       {/* Stored history leads the reading path: the charts answer "is this
           normal or getting worse?" before the inventory below. */}
@@ -446,7 +444,6 @@ export const ResourceDetailDrawerOverviewTab: Component<ResourceDetailDrawerOver
             <GuestDrawerHistory
               target={target()}
               range={drawer.metricsHistoryRange()}
-              onRangeChange={drawer.setMetricsHistoryRange}
               enabled={drawer.activeTab() === 'overview'}
               currentMetrics={drawer.metricsHistoryCurrentMetrics()}
               liveReadingsAvailable={
