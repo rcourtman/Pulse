@@ -147,14 +147,15 @@ class ReleaseMemorySummaryTests(unittest.TestCase):
             "pbs2": {"store-fast": {"served_groups": 35, "expected_groups": 35},
                      "store-archive": {"served_groups": 5, "expected_groups": 17}},
         })
-        lines = "\n".join(summary.proxmox_lines(legacy, candidate))
+        lines = "\n".join(summary.proxmox_lines(legacy, candidate, 300))
         self.assertIn("| PVE guests observed in dashboard state | n/a | 35 |", lines)
         self.assertIn("| PVE guests with recent poll sightings at measurement end | n/a | 34/35 (last 60 s) |", lines)
         self.assertIn("| PVE guest poll sightings during steady RSS sampling | n/a | n/a |", lines)
         self.assertIn("| PVE archive entries per response | n/a | n/a |", lines)
         self.assertIn("| PVE archive responses by node (all / steady) | n/a | n/a |", lines)
         self.assertIn("| PBS API requests | 210 | 210 |", lines)
-        self.assertIn("| PBS snapshot groups served/configured | n/a | 92/104 |", lines)
+        self.assertIn("| PBS snapshot groups served/configured (whole run) | n/a | 92/104 |", lines)
+        self.assertIn("No same-window snapshot-listing evidence is available.", lines)
         self.assertIn("| PBS datastore status responses during steady RSS sampling | n/a | n/a |", lines)
         self.assertIn("not snapshots Pulse retained or displayed", lines)
 
@@ -230,7 +231,7 @@ class ReleaseMemorySummaryTests(unittest.TestCase):
         self.assertIn("Candidate: 1 of 4 PBS datastores had no status response in the RSS window.", text)
         self.assertNotIn("- Baseline:", text)
         self.assertNotIn("No steady-state RSS regression", text)
-        self.assertIn("| PBS snapshot groups served/configured | 104/104 | 104/104 |", text)
+        self.assertIn("| PBS snapshot groups served/configured (whole run) | 104/104 | 104/104 |", text)
         self.assertIn("| PBS datastore status responses during steady RSS sampling |"
                       " 4/4 with a response; longest gap 31 s in 300 s |"
                       " 3/4 with a response; longest gap 300 s in 300 s |", text)
@@ -297,6 +298,62 @@ class ReleaseMemorySummaryTests(unittest.TestCase):
         self.assertIn("The two PVE archive fixtures were configured with different response bodies.", text)
         _, _, text = compare(baseline)
         self.assertNotIn("Polling evidence limits the comparison", text)
+
+    def test_pbs_warmup_coverage_and_steady_status_do_not_hide_missing_snapshot_listings(self):
+        whole_run = {"pbs1": {"store-fast": {"served_groups": 2, "expected_groups": 2},
+                              "store-archive": {"served_groups": 1, "expected_groups": 1}}}
+        baseline = {
+            "pve_nodes": 1, "guests": 2, "pbs_instances": 1, "total_pbs_snapshots": 150,
+            "snapshots_per_group": 50, "pve_requests": 90, "pbs_requests": 50,
+            "dashboard": {"connects": 1, "messages": 60, "bytes": 1024},
+            "pve_steady_poll_sightings": {
+                "guests_with_sightings": 2, "guests_over_limit": [], "limit_s": 60,
+                "longest_gap_ms": 10000, "window_s": 300,
+            },
+            "pve_archive_inventory": archive_stats(),
+            "pbs_snapshot_group_coverage": whole_run,
+            "pbs_steady_snapshot_group_coverage": {"window_s": 300, "datastores": whole_run},
+            "pbs_steady_datastore_status": {
+                "window_s": 300, "datastores": {"pbs1": {
+                    "store-fast": {"responses": 10, "longest_gap_ms": 30000},
+                    "store-archive": {"responses": 10, "longest_gap_ms": 30000},
+                }},
+            },
+        }
+
+        def compare(snapshot_window):
+            candidate = dict(baseline, pbs_steady_snapshot_group_coverage=snapshot_window)
+            return self.run_summary(
+                samples(131072, 25, 0), samples(98304, 25, 0), estate="proxmox",
+                proxmox={"baseline": baseline, "candidate": candidate},
+                env={"PULSE_MEMORY_GATE": "0"}, wait_statuses=(0, 0),
+            )
+
+        steady = {"window_s": 300, "datastores": {"pbs1": {
+            **whole_run["pbs1"], "store-archive": {"served_groups": 0, "expected_groups": 1},
+        }}}
+        code, result, text = compare(steady)
+        self.assertEqual(code, 0)
+        self.assertEqual(result["status"], "measured")
+        self.assertEqual(result["rss_growth_kib"], -32768)
+        self.assertEqual(result["candidate_proxmox"]["pbs_steady_snapshot_group_coverage"], steady)
+        self.assertIn("| pbs1/store-archive | 1/1 | 0/1 |", text)
+        self.assertIn("| PBS snapshot groups served/configured (whole run) | 3/3 | 3/3 |", text)
+        self.assertIn("| PBS datastore status responses during steady RSS sampling |"
+                      " 2/2 with a response; longest gap 30 s in 300 s |"
+                      " 2/2 with a response; longest gap 30 s in 300 s |", text)
+        self.assertIn("| pbs1/store-fast | 2/2 | 2/2 |", text)
+        self.assertIn("PBS snapshot-listing evidence differs", text)
+        self.assertIn("not a backup failure", text)
+
+        partial = {"window_s": 300, "datastores": {"pbs1": {"store-fast": whole_run["pbs1"]["store-fast"]}}}
+        for unavailable in (None, {**steady, "window_s": 299}, partial):
+            with self.subTest(unavailable=unavailable):
+                _, _, text = compare(unavailable)
+                self.assertIn("| pbs1/store-archive | 1/1 | n/a |", text)
+                self.assertIn("PBS snapshot-listing evidence differs", text)
+        _, _, text = compare(baseline["pbs_steady_snapshot_group_coverage"])
+        self.assertNotIn("PBS snapshot-listing evidence differs", text)
 
     def test_proxmox_unavailable_traffic_does_not_erase_adverse_rss(self):
         code, result, text = self.run_summary(
