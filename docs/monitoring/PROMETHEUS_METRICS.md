@@ -66,10 +66,24 @@ series is not an age of zero: Pulse may not have completed a successful poll
 since it started, or Prometheus may not have a current scrape. Check the
 expected series and scrape gaps separately.
 
+If the age keeps rising during successful scrapes, plot the matching
+`pulse_monitor_poll_total` for each connection, split by `result`. For a
+Proxmox node, use `pulse_monitor_node_poll_total` instead. Compare several
+scrapes of the same source without a Pulse restart. Choose a window longer
+than its usual time between results, including poll duration and retry
+backoff. Do not fill absent series with zero. For example, the
+`result="error"` series may not exist until the first failure is recorded.
+
+| What you see | What it means |
+| :--- | :--- |
+| No new success, but the `result="error"` counter rises | Pulse is still recording outcomes for that source. Check why its polls are failing. |
+| No new outcomes across several sources that normally poll in that window, despite fresh scrapes | Check for intentional pauses and normal backoff. If neither explains the gap, note when the last readings advanced and whether the monitored systems were still responding. Flat counters alone do not distinguish slow polls from stopped work. |
+
 When comparing runs before and after an update, check the same connections and
 nodes in both windows. A new poll timestamp does not prove every guest or
-backup datastore refreshed. Check the actual readings for those resources,
-and treat a gap as unverified rather than a memory saving.
+backup datastore refreshed, that agent reports were accepted, or that alerts
+were evaluated. Check those paths separately, and treat a gap as unverified
+rather than a memory saving.
 
 ## 🧠 Scheduler Health
 
