@@ -1,14 +1,19 @@
 package cloudcp
 
 import (
+	"bytes"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/auditlog"
 	cpauth "github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/auth"
 	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/portal"
 	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/registry"
+	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 )
 
 func TestRegisterRoutes_StatusAuthModes(t *testing.T) {
@@ -241,6 +246,161 @@ func TestRegisterRoutes_LogoutRevokesSession(t *testing.T) {
 	mux.ServeHTTP(afterRec, afterReq)
 	if afterRec.Code != http.StatusUnauthorized {
 		t.Fatalf("post-logout status = %d, want %d (body=%q)", afterRec.Code, http.StatusUnauthorized, afterRec.Body.String())
+	}
+}
+
+func TestRegisterRoutes_AuditActorIgnoresClientHeaders(t *testing.T) {
+	dir := t.TempDir()
+	reg, err := registry.NewTenantRegistry(dir)
+	if err != nil {
+		t.Fatalf("NewTenantRegistry: %v", err)
+	}
+	t.Cleanup(func() { _ = reg.Close() })
+
+	accountID, err := registry.GenerateAccountID()
+	if err != nil {
+		t.Fatalf("GenerateAccountID: %v", err)
+	}
+	if err := reg.CreateAccount(&registry.Account{
+		ID:          accountID,
+		Kind:        registry.AccountKindMSP,
+		DisplayName: "Acme MSP",
+	}); err != nil {
+		t.Fatalf("CreateAccount: %v", err)
+	}
+
+	userID, err := registry.GenerateUserID()
+	if err != nil {
+		t.Fatalf("GenerateUserID: %v", err)
+	}
+	if err := reg.CreateUser(&registry.User{
+		ID:    userID,
+		Email: "admin@example.com",
+	}); err != nil {
+		t.Fatalf("CreateUser: %v", err)
+	}
+	if err := reg.CreateMembership(&registry.AccountMembership{
+		AccountID: accountID,
+		UserID:    userID,
+		Role:      registry.MemberRoleAdmin,
+	}); err != nil {
+		t.Fatalf("CreateMembership: %v", err)
+	}
+
+	magicSvc, err := cpauth.NewService(dir)
+	if err != nil {
+		t.Fatalf("NewService: %v", err)
+	}
+	t.Cleanup(magicSvc.Close)
+
+	token, err := magicSvc.GenerateSessionToken(userID, "admin@example.com", cpauth.SessionTTL)
+	if err != nil {
+		t.Fatalf("GenerateSessionToken: %v", err)
+	}
+
+	mux := http.NewServeMux()
+	RegisterRoutes(mux, &Deps{
+		Config: &CPConfig{
+			DataDir:             dir,
+			AdminKey:            "test-admin-key",
+			BaseURL:             "https://cloud.example.com",
+			StripeWebhookSecret: "whsec_test",
+		},
+		Registry:   reg,
+		MagicLinks: magicSvc,
+		Version:    "test",
+	})
+
+	tests := []struct {
+		name       string
+		method     string
+		path       string
+		body       string
+		headers    map[string]string
+		auditEvent string
+		wantActor  string
+	}{
+		{
+			name:   "session request claiming another user",
+			method: http.MethodPost,
+			path:   "/api/accounts/" + accountID + "/members",
+			body:   `{"email":"tech@example.com","role":"tech"}`,
+			headers: map[string]string{
+				"Authorization": "Bearer " + token,
+				"X-Actor-ID":    "u_SOMEONEELSE",
+			},
+			auditEvent: "cp_account_member_invite",
+			wantActor:  userID,
+		},
+		{
+			name:   "session request claiming the admin key",
+			method: http.MethodPost,
+			path:   "/api/accounts/" + accountID + "/members",
+			body:   `{"email":"viewer@example.com","role":"read_only"}`,
+			headers: map[string]string{
+				"Authorization": "Bearer " + token,
+				"X-Actor-ID":    auditlog.ActorAdminKey,
+			},
+			auditEvent: "cp_account_member_invite",
+			wantActor:  userID,
+		},
+		{
+			name:   "unauthenticated magic link verification",
+			method: http.MethodGet,
+			path:   "/auth/magic-link/verify?token=invalid",
+			headers: map[string]string{
+				"Accept":     "application/json",
+				"X-Actor-ID": userID,
+				"X-User-ID":  userID,
+			},
+			auditEvent: "cp_magic_link_verify",
+			wantActor:  auditlog.ActorAnonymous,
+		},
+		{
+			name:   "admin key request claiming a user",
+			method: http.MethodPost,
+			path:   "/admin/magic-link",
+			body:   `{}`,
+			headers: map[string]string{
+				"X-Admin-Key": "test-admin-key",
+				"X-Actor-ID":  userID,
+				"X-User-ID":   userID,
+			},
+			auditEvent: "cp_magic_link_admin_generate",
+			wantActor:  auditlog.ActorAdminKey,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			var audit bytes.Buffer
+			oldLogger := log.Logger
+			log.Logger = zerolog.New(&audit)
+			defer func() { log.Logger = oldLogger }()
+
+			req := httptest.NewRequest(tc.method, tc.path, strings.NewReader(tc.body))
+			for k, v := range tc.headers {
+				req.Header.Set(k, v)
+			}
+			mux.ServeHTTP(httptest.NewRecorder(), req)
+
+			actors := []string{}
+			for _, line := range strings.Split(audit.String(), "\n") {
+				var event map[string]any
+				if json.Unmarshal([]byte(line), &event) == nil && event["audit_event"] == tc.auditEvent {
+					actor, _ := event["actor_id"].(string)
+					actors = append(actors, actor)
+				}
+			}
+			if len(actors) == 0 {
+				t.Fatalf("no %s audit event in %q", tc.auditEvent, audit.String())
+			}
+			for _, actor := range actors {
+				if actor != tc.wantActor {
+					t.Fatalf("%s actor_id = %q, want %q", tc.auditEvent, actor, tc.wantActor)
+				}
+			}
+		})
 	}
 }
 

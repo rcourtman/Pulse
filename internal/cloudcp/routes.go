@@ -203,9 +203,9 @@ func RegisterRoutes(mux *http.ServeMux, deps *Deps) {
 
 	// Account membership (session + account-membership authenticated)
 	listMembers := account.HandleListMembers(deps.Registry)
-	inviteMember := account.HandleInviteMember(deps.Registry)
-	updateRole := account.HandleUpdateMemberRole(deps.Registry)
-	removeMember := account.HandleRemoveMember(deps.Registry)
+	inviteMember := account.HandleInviteMember(deps.Registry, provisioner)
+	updateRole := account.HandleUpdateMemberRole(deps.Registry, provisioner)
+	removeMember := account.HandleRemoveMember(deps.Registry, provisioner)
 
 	membersCollection := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {

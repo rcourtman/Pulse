@@ -14,15 +14,10 @@ func auditEvent(r *http.Request, eventName, outcome string) *zerolog.Event {
 		e = log.Warn()
 	}
 
-	actorID := auditlog.ActorID(r)
-	if actorID == "" {
-		actorID = "admin_key"
-	}
-
 	return e.
 		Str("audit_event", eventName).
 		Str("outcome", outcome).
-		Str("actor_id", actorID).
+		Str("actor_id", auditlog.ActorID(r)).
 		Str("client_ip", auditlog.ClientIP(r)).
 		Str("method", r.Method).
 		Str("path", auditlog.RequestPath(r))
