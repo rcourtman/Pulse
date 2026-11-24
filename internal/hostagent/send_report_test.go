@@ -604,3 +604,65 @@ func TestAgentSendReport_RedirectCannotConsumeAcknowledgement(t *testing.T) {
 		})
 	}
 }
+
+// The report acknowledgement carries no signature. An agent that requires
+// signed remote config must not let it turn command execution on; it may still
+// withdraw it, and an agent without the requirement keeps following the ack.
+func TestAgentSendReport_UnsignedAckCannotEnableCommandsWhenSignatureRequired(t *testing.T) {
+	for _, test := range []struct {
+		name              string
+		signatureRequired string
+		startEnabled      bool
+		ack               string
+		wantEnabled       bool
+	}{
+		{name: "required refuses enable", signatureRequired: "true", ack: `{"commandsEnabled":true}`},
+		{name: "required keeps signed enable", signatureRequired: "true", startEnabled: true, ack: `{"commandsEnabled":true}`, wantEnabled: true},
+		{name: "required honors disable", signatureRequired: "true", startEnabled: true, ack: `{"commandsEnabled":false}`},
+		{name: "not required follows enable", signatureRequired: "false", ack: `{"commandsEnabled":true}`, wantEnabled: true},
+		{name: "not required follows disable", signatureRequired: "false", startEnabled: true, ack: `{"commandsEnabled":false}`},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			t.Setenv("PULSE_AGENT_CONFIG_SIGNATURE_REQUIRED", test.signatureRequired)
+
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = io.WriteString(w, `{"success":true,"agentId":"agent-1","config":`+test.ack+`}`)
+			}))
+			defer server.Close()
+
+			logger := zerolog.Nop()
+			agent, err := New(Config{
+				APIToken:                "test-token",
+				PulseURL:                "https://pulse",
+				AgentID:                 "agent-1",
+				EnableCommands:          test.startEnabled,
+				CommandAuthorityProfile: CommandAuthorityLegacy,
+				StateDir:                t.TempDir(),
+				Collector:               &mockCollector{},
+				Logger:                  &logger,
+			})
+			if err != nil {
+				t.Fatalf("New: %v", err)
+			}
+			t.Cleanup(func() { agent.stopCommandClient(true) })
+			agent.httpClient = server.Client()
+			agent.trimmedPulseURL = server.URL
+
+			report := agentshost.Report{Agent: agentshost.AgentInfo{ID: "agent-1"}}
+			if err := agent.sendReport(context.Background(), report); err != nil {
+				t.Fatalf("sendReport: %v", err)
+			}
+
+			agent.configMu.RLock()
+			enabled := agent.cfg.EnableCommands
+			agent.configMu.RUnlock()
+			agent.commandClientMu.Lock()
+			hasClient := agent.commandClient != nil
+			agent.commandClientMu.Unlock()
+			if enabled != test.wantEnabled || hasClient != test.wantEnabled {
+				t.Fatalf("after unsigned ack: EnableCommands=%v commandClient=%v, want %v", enabled, hasClient, test.wantEnabled)
+			}
+		})
+	}
+}
