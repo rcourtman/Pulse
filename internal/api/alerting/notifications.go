@@ -310,11 +310,14 @@ func (h *NotificationHandlers) UpdateEmailConfig(w http.ResponseWriter, r *http.
 	manager := monitor.GetNotificationManager()
 	existingConfig := manager.GetEmailConfig()
 
-	// If password is empty, preserve the existing password
-	config, err = restoreSavedSMTPPassword(config, existingConfig)
+	// If password is empty, preserve the existing password only for the same destination
+	keepPassword, err := allowPreservingSavedSMTPDestination(config, existingConfig)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
+	}
+	if keepPassword {
+		config.Password = existingConfig.Password
 	}
 
 	// If rateLimit was NOT provided (nil in presence check), preserve existing
@@ -412,37 +415,36 @@ const (
 	webhookAddressChangeNeedsValuesMessage = "Changing the webhook address requires entering its saved header and custom field values again"
 )
 
-// restoreSavedSMTPPassword is the shared Update/Test policy for a blank
-// password, which means keep the saved one: responses never include it. It is
-// restored only for the server it was entered for. Naming another server is an
-// error. Naming none restores nothing: the mailer dials a blank host as this
-// machine.
-func restoreSavedSMTPPassword(requested, saved notifications.EmailConfig) (notifications.EmailConfig, error) {
+// allowPreservingSavedSMTPDestination is the shared Update/Test policy for a
+// blank password, which means keep the saved one: responses never include it.
+// It allows keeping the saved password only for the server it was entered for.
+// Naming another server is an error. Naming none keeps nothing: the mailer
+// rejects or dials a blank host without reusing the saved password.
+func allowPreservingSavedSMTPDestination(requested, saved notifications.EmailConfig) (bool, error) {
 	if requested.Password != "" || saved.Password == "" {
-		return requested, nil
+		return false, nil
 	}
 	if notifications.EmailConfigKeepsSMTPServer(saved, requested) {
-		requested.Password = saved.Password
-		return requested, nil
+		return true, nil
 	}
 	if strings.TrimSpace(requested.SMTPHost) != "" {
-		return notifications.EmailConfig{}, errors.New(smtpServerChangeNeedsPasswordMessage)
+		return false, errors.New(smtpServerChangeNeedsPasswordMessage)
 	}
-	return requested, nil
+	return false, nil
 }
 
-// restoreSavedAppriseAPIKey is restoreSavedSMTPPassword for the Apprise API
-// key. A config that names no server still keeps the key: without a server URL
-// Apprise sends it nowhere, and a URL named later has no saved one to match.
-func restoreSavedAppriseAPIKey(requested, saved notifications.AppriseConfig) (notifications.AppriseConfig, error) {
+// allowPreservingSavedAppriseDestination is the shared Update/Test policy for
+// the Apprise API key. A config that names no server still keeps the key:
+// without a server URL Apprise sends it nowhere, and a URL named later has no
+// saved one to match.
+func allowPreservingSavedAppriseDestination(requested, saved notifications.AppriseConfig) (bool, error) {
 	if requested.APIKey != "" || saved.APIKey == "" {
-		return requested, nil
+		return false, nil
 	}
 	if strings.TrimSpace(requested.ServerURL) != "" && !notifications.AppriseConfigKeepsServer(saved, requested) {
-		return notifications.AppriseConfig{}, errors.New(appriseServerChangeNeedsAPIKeyMessage)
+		return false, errors.New(appriseServerChangeNeedsAPIKeyMessage)
 	}
-	requested.APIKey = saved.APIKey
-	return requested, nil
+	return true, nil
 }
 
 // GetAppriseConfig returns the current Apprise configuration.
@@ -494,10 +496,13 @@ func (h *NotificationHandlers) UpdateAppriseConfig(w http.ResponseWriter, r *htt
 
 	// An empty API key means "keep the saved key": responses never include the
 	// stored value, so the settings form cannot round-trip it.
-	config, err = restoreSavedAppriseAPIKey(config, existingConfig)
+	keepAPIKey, err := allowPreservingSavedAppriseDestination(config, existingConfig)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
+	}
+	if keepAPIKey {
+		config.APIKey = existingConfig.APIKey
 	}
 	if presenceCheck.MinimumSeverity == nil {
 		config.MinimumSeverity = existingConfig.MinimumSeverity
@@ -1058,13 +1063,16 @@ func (h *NotificationHandlers) TestNotification(w http.ResponseWriter, r *http.R
 			return
 		}
 
-		// If password is empty, use the saved password
+		// If password is empty, use the saved password only for the same destination
 		if emailConfig.Password == "" {
 			savedConfig := monitor.GetNotificationManager().GetEmailConfig()
-			emailConfig, err = restoreSavedSMTPPassword(emailConfig, savedConfig)
+			keepPassword, err := allowPreservingSavedSMTPDestination(emailConfig, savedConfig)
 			if err != nil {
 				http.Error(w, err.Error(), http.StatusBadRequest)
 				return
+			}
+			if keepPassword {
+				emailConfig.Password = savedConfig.Password
 			}
 		}
 
@@ -1092,13 +1100,16 @@ func (h *NotificationHandlers) TestNotification(w http.ResponseWriter, r *http.R
 			return
 		}
 
-		// If the API key is empty, use the saved key
+		// If the API key is empty, use the saved key only for the same destination
 		if appriseConfig.APIKey == "" {
 			savedConfig := monitor.GetNotificationManager().GetAppriseConfig()
-			appriseConfig, err = restoreSavedAppriseAPIKey(appriseConfig, savedConfig)
+			keepAPIKey, err := allowPreservingSavedAppriseDestination(appriseConfig, savedConfig)
 			if err != nil {
 				http.Error(w, err.Error(), http.StatusBadRequest)
 				return
+			}
+			if keepAPIKey {
+				appriseConfig.APIKey = savedConfig.APIKey
 			}
 		}
 
