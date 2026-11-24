@@ -163,3 +163,12 @@ func (s *State) GetConnectionHealth() map[string]bool {
 	}
 	return health
 }
+
+// ConnectionHealthForClient reads the health of an existing connection client.
+// Before the health map is initialized, client presence is the health signal.
+// Once initialized, a missing entry is not evidence of a healthy connection.
+func (s *State) ConnectionHealthForClient(instanceID string) bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.ConnectionHealth == nil || s.ConnectionHealth[instanceID]
+}

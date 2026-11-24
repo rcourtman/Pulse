@@ -6,11 +6,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"math"
 	"net/http"
 	"net/http/httptest"
+	"runtime"
 	"strconv"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -2895,6 +2898,143 @@ func TestGetConnectionStatuses_BuiltInPMGSupport(t *testing.T) {
 	}
 	if connected, ok := statuses["pmg-pmg-2"]; !ok || connected {
 		t.Fatalf("expected pmg-pmg-2 disconnected, got exists=%v value=%v", ok, connected)
+	}
+}
+
+func TestGetConnectionStatuses_AllowsQueuedPollOutcome(t *testing.T) {
+	monitor := &Monitor{
+		config:        &config.Config{PVEInstances: []config.PVEInstance{{Name: "cluster"}}},
+		state:         models.NewState(),
+		pveClients:    map[string]PVEClientInterface{"cluster": &mockPVEClient{}},
+		pollStatusMap: make(map[string]*pollStatus),
+	}
+	monitor.state.SetConnectionHealth("custom/cluster", true)
+
+	readerLocked, resumeReader := make(chan struct{}), make(chan struct{})
+	resume := sync.OnceFunc(func() { close(resumeReader) })
+	defer resume()
+	provider := newPVEPollProvider().(pollProviderAdapter)
+	provider.connectionStatus = func(m *Monitor) map[string]bool {
+		return providerConnectionStatuses(m, InstanceTypePVE, "pve-", func(m *Monitor) []pollProviderInstanceConfig {
+			close(readerLocked)
+			<-resumeReader
+			return pveInstanceConfigs(m)
+		}, pveClientMap)
+	}
+	// Registered providers can override the health key and consult the monitor.
+	provider.connectionKey = func(m *Monitor, name string) string {
+		if _, ok := m.getPVEClient(name); ok {
+			return "custom/" + name
+		}
+		return ""
+	}
+	monitor.pollProviders = map[InstanceType]PollProvider{InstanceTypePVE: provider}
+
+	statuses := make(chan map[string]bool, 1)
+	go func() { statuses <- monitor.GetConnectionStatuses() }()
+	select {
+	case <-readerLocked:
+	case <-time.After(2 * time.Second):
+		t.Fatal("connection-status reader did not enter the monitor read lock")
+	}
+
+	pollDone := make(chan struct{})
+	go func() {
+		monitor.recordTaskOutcome(InstanceTypePVE, "cluster", nil, nil)
+		close(pollDone)
+	}()
+	// The reader still holds m.mu. Since there can be no active writer yet,
+	// TryRLock failing proves that the poll writer is queued, not just started.
+	deadline := time.Now().Add(2 * time.Second)
+	for monitor.mu.TryRLock() {
+		monitor.mu.RUnlock()
+		if time.Now().After(deadline) {
+			t.Fatal("poll writer did not queue behind the connection-status reader")
+		}
+		runtime.Gosched()
+	}
+	resume()
+
+	select {
+	case got := <-statuses:
+		want := map[string]bool{"pve-cluster": true}
+		if !maps.Equal(got, want) {
+			t.Fatalf("connection statuses = %v, want %v", got, want)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("connection-status read did not complete with a queued poll writer")
+	}
+	select {
+	case <-pollDone:
+		if status := monitor.pollStatusMap[schedulerKey(InstanceTypePVE, "cluster")]; status == nil || status.LastSuccess.IsZero() {
+			t.Fatalf("poll success was not recorded: %+v", status)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("poll outcome did not complete")
+	}
+}
+
+func TestGetConnectionStatuses_ConfiguredClientHealth(t *testing.T) {
+	monitor := &Monitor{
+		config: &config.Config{
+			PVEInstances: []config.PVEInstance{{Name: " cluster "}, {Name: "not-loaded"}},
+			PBSInstances: []config.PBSInstance{{Host: " backup.example "}},
+			PMGInstances: []config.PMGInstance{{Name: "mail"}},
+		},
+		pveClients: map[string]PVEClientInterface{"cluster": &mockPVEClient{}},
+		pbsClients: map[string]*pbs.Client{"backup.example": {}},
+		pmgClients: map[string]*pmg.Client{"mail": {}},
+	}
+	want := map[string]bool{
+		"pve-cluster": true, "pve-not-loaded": false, "pbs-backup.example": true, "pmg-mail": true,
+	}
+	for _, state := range []*models.State{nil, {}} {
+		monitor.state = state
+		if got := monitor.GetConnectionStatuses(); !maps.Equal(got, want) {
+			t.Fatalf("without initialized health: statuses = %v, want %v", got, want)
+		}
+	}
+
+	monitor.state = models.NewState()
+	monitor.state.SetConnectionHealth("cluster", true)
+	monitor.state.SetConnectionHealth("not-loaded", true) // A stale entry cannot stand in for a missing client.
+	monitor.state.SetConnectionHealth("pmg-mail", false)
+	want["pbs-backup.example"] = false // Initialized health with no PBS entry yet.
+	want["pmg-mail"] = false
+	if got := monitor.GetConnectionStatuses(); !maps.Equal(got, want) {
+		t.Fatalf("with initialized health: statuses = %v, want %v", got, want)
+	}
+}
+
+func TestGetConnectionStatuses_ReadsConcurrentHealthChanges(t *testing.T) {
+	monitor := &Monitor{
+		config:     &config.Config{PVEInstances: []config.PVEInstance{{Name: "cluster"}}},
+		state:      models.NewState(),
+		pveClients: map[string]PVEClientInterface{"cluster": &mockPVEClient{}},
+		pollProviders: map[InstanceType]PollProvider{
+			"xcp": testPollProvider{
+				providerType: "xcp", instances: []string{"one"}, connectionKey: "xcp/one",
+			},
+		},
+	}
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		for range 256 {
+			monitor.state.SetConnectionHealth("cluster", true)
+			monitor.state.SetConnectionHealth("xcp/one", false)
+			monitor.state.RemoveConnectionHealth("cluster")
+			monitor.state.RemoveConnectionHealth("xcp/one")
+		}
+	}()
+	defer func() { <-done }()
+	for range 256 {
+		got := monitor.GetConnectionStatuses()
+		for _, key := range []string{"pve-cluster", "xcp-one"} {
+			if _, ok := got[key]; !ok {
+				t.Fatalf("configured status %q disappeared: %v", key, got)
+			}
+		}
 	}
 }
 
