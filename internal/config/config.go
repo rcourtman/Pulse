@@ -647,6 +647,7 @@ type PBSInstance struct {
 	TokenValue                   string
 	Fingerprint                  string
 	VerifySSL                    bool
+	VerifySSLExplicit            bool `json:"verifySSLExplicit,omitempty"` // operator-chosen VerifySSL, survives agent re-registration. See PVEInstance.VerifySSLExplicit.
 	MonitorBackups               bool
 	MonitorDatastores            bool
 	MonitorSyncJobs              bool

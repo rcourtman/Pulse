@@ -260,6 +260,7 @@ type Service struct {
 	resourceExportStore      unifiedresources.ResourceStore
 	resourceExportStoreOrgID string
 	patrolAutopilotPolicy    func() unifiedresources.PatrolAutopilotServerPolicy
+	patrolAutonomyRevision   uint64 // Counts ApplyPatrolAutonomyConfig publications; guarded by mu
 	patrolObjectiveStore     *PatrolObjectiveStore
 	patrolService            *PatrolService        // Background AI monitoring service
 	thresholdProvider        ThresholdProvider     // User-configured alert thresholds; nil means factory defaults
@@ -912,20 +913,27 @@ func (s *Service) ApplyPatrolAutonomyConfig(cfg *config.AIConfig) error {
 	if s.cfg == nil {
 		s.cfg = config.NewDefaultAIConfig()
 	}
-	s.cfg.PatrolAutonomyLevel = cfg.PatrolAutonomyLevel
-	s.cfg.PatrolFullModeUnlocked = cfg.PatrolFullModeUnlocked
-	s.cfg.PatrolInvestigationBudget = cfg.PatrolInvestigationBudget
-	s.cfg.PatrolInvestigationTimeoutSec = cfg.PatrolInvestigationTimeoutSec
-	s.cfg.PatrolAutopilotAcknowledgements = clonePatrolAutopilotAcknowledgements(cfg.PatrolAutopilotAcknowledgements)
-	s.cfg.PatrolAutopilotRevocations = append([]unifiedresources.PatrolAutopilotRevocation(nil), cfg.PatrolAutopilotRevocations...)
-	if cfg.PatrolAutopilotActivation == nil {
-		s.cfg.PatrolAutopilotActivation = nil
-	} else {
-		activation := *cfg.PatrolAutopilotActivation
-		s.cfg.PatrolAutopilotActivation = &activation
-	}
+	copyPatrolAutonomyConfig(s.cfg, cfg)
+	s.patrolAutonomyRevision++
 	publishInvestigationExecutionLimits(orchestrator, s.cfg)
 	return nil
+}
+
+// copyPatrolAutonomyConfig copies the autonomy fields that
+// ApplyPatrolAutonomyConfig publishes from src into dst.
+func copyPatrolAutonomyConfig(dst, src *config.AIConfig) {
+	dst.PatrolAutonomyLevel = src.PatrolAutonomyLevel
+	dst.PatrolFullModeUnlocked = src.PatrolFullModeUnlocked
+	dst.PatrolInvestigationBudget = src.PatrolInvestigationBudget
+	dst.PatrolInvestigationTimeoutSec = src.PatrolInvestigationTimeoutSec
+	dst.PatrolAutopilotAcknowledgements = clonePatrolAutopilotAcknowledgements(src.PatrolAutopilotAcknowledgements)
+	dst.PatrolAutopilotRevocations = append([]unifiedresources.PatrolAutopilotRevocation(nil), src.PatrolAutopilotRevocations...)
+	if src.PatrolAutopilotActivation == nil {
+		dst.PatrolAutopilotActivation = nil
+	} else {
+		activation := *src.PatrolAutopilotActivation
+		dst.PatrolAutopilotActivation = &activation
+	}
 }
 
 // liveInvestigationOrchestrator returns the Patrol investigation orchestrator
@@ -1573,6 +1581,7 @@ func (s *Service) LoadConfig() error {
 	s.mu.RLock()
 	persistence := s.persistence
 	orgID := s.orgID
+	autonomyRevision := s.patrolAutonomyRevision
 	s.mu.RUnlock()
 
 	if persistence == nil {
@@ -1597,6 +1606,13 @@ func (s *Service) LoadConfig() error {
 
 	orchestrator := s.liveInvestigationOrchestrator()
 	s.mu.Lock()
+	if cfg != nil && s.cfg != nil && s.patrolAutonomyRevision != autonomyRevision {
+		// An autonomy change was persisted and published while this load was
+		// building the provider, which can wait on a provider's model catalog.
+		// The copy read before it is older than the runtime: keep the runtime's
+		// autonomy rather than publishing a mode or activation that is gone.
+		copyPatrolAutonomyConfig(cfg, s.cfg)
+	}
 	s.cfg = cfg
 	s.provider = providerClient
 	s.providerInitErr = providerInitErr
@@ -3686,17 +3702,20 @@ func isBlockedFetchIP(ip net.IP) bool {
 		}
 		return true
 	}
+	// Block multicast, limited broadcast (255.255.255.255), and other non-unicast targets
+	// before consulting the private-IP escape hatch.
+	if !ip.IsGlobalUnicast() {
+		return true
+	}
 	// SECURITY: Block private IP ranges (RFC1918) to prevent SSRF attacks
-	// Private ranges: 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16
-	if ip.IsPrivate() {
+	// Private ranges: 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, plus the
+	// special-use ranges IsPrivate does not cover but that are just as internal
+	// (100.64.0.0/10 overlay/CGNAT space, 192.0.0.0/24, 198.18.0.0/15, ...).
+	if ip.IsPrivate() || securityutil.IsSpecialUseInternalIP(ip) {
 		// Allow private IPs only if explicitly permitted
 		if os.Getenv("PULSE_AI_ALLOW_PRIVATE_IPS") == "true" {
 			return false
 		}
-		return true
-	}
-	// Block multicast and other non-unicast targets.
-	if !ip.IsGlobalUnicast() {
 		return true
 	}
 	// SECURITY: every check above reads the literal address bytes, so an IPv6

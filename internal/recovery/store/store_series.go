@@ -183,6 +183,10 @@ func (s *Store) ListPointsSeries(ctx context.Context, opts recovery.ListPointsOp
 	// Normalize to day boundaries in UTC (client grouping offset is handled in SQLite).
 	startDay = time.Date(startDay.Year(), startDay.Month(), startDay.Day(), 0, 0, 0, 0, time.UTC)
 	endDay = time.Date(endDay.Year(), endDay.Month(), endDay.Day(), 0, 0, 0, 0, time.UTC)
+	// The window comes from the caller and decides how many buckets are built.
+	if oldest := endDay.AddDate(0, 0, 1-recovery.MaxPointsSeriesDays); startDay.Before(oldest) {
+		startDay = oldest
+	}
 
 	buckets := make(map[string]*recovery.PointsSeriesBucket, len(raw)+32)
 	for _, r := range raw {

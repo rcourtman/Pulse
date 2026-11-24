@@ -8,10 +8,7 @@ import {
 } from '@/components/shared/TechnicalDetailsDisclosure';
 import { HOST_METRICS_HISTORY_GROUPS } from '@/components/shared/hostMetricsHistoryModel';
 import type { HistoryTimeRange } from '@/api/charts';
-import {
-  DrawerAttentionSection,
-  DrawerNoAlertsLine,
-} from '@/components/shared/DrawerAttentionSection';
+import { DrawerAttentionSection } from '@/components/shared/DrawerAttentionSection';
 import { DrawerExceptionList } from './DrawerExceptionList';
 import {
   compactDetailRows,
@@ -650,9 +647,6 @@ export function NodeDrawerOverview(props: NodeDrawerOverviewProps) {
           acknowledged: alert.acknowledged,
         }))}
       />
-      <Show when={(props.alerts ?? []).length === 0}>
-        <DrawerNoAlertsLine />
-      </Show>
 
       <DrawerExceptionList testId="node-drawer-exceptions" rows={exceptionRows()} />
 

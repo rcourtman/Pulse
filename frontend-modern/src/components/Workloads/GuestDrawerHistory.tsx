@@ -11,16 +11,12 @@ import {
 } from 'solid-js';
 
 import { type AggregatedMetricPoint, type HistoryTimeRange } from '@/api/charts';
-import { FormSelect } from '@/components/shared/FormSelect';
-import { filterSelectClass } from '@/components/shared/FilterToolbar';
 import { Button } from '@/components/shared/Button';
 import { InlineNotice } from '@/components/shared/InlineNotice';
 import { LoadingSpinner } from '@/components/shared/LoadingSpinner';
 import { PhoneChartsToggle } from '@/components/shared/PhoneChartsToggle';
 import {
-  HISTORY_CHART_RANGES,
   formatHistoryChartTooltipValue,
-  formatHistoryRangeOptionLabel,
   formatHistoryChartTimeLabel,
   getHistoryReadoutLabel,
   getHistorySourceNotice,
@@ -48,6 +44,9 @@ import {
   createGuestDrawerHistoryQuery,
   createGuestDrawerHistorySource,
 } from './guestDrawerHistoryQuery';
+import { GuestDrawerHistoryRangeSelect } from './GuestDrawerHistoryRangeSelect';
+
+export { GuestDrawerHistoryRangeSelect };
 
 /** An active alert on one charted metric; a numeric trigger draws a dashed line. */
 export interface GuestDrawerHistoryAlert {
@@ -68,11 +67,6 @@ interface GuestDrawerHistoryProps {
   /** False while the charts are hidden (another drawer tab), so they do not poll. */
   enabled?: boolean;
   alerts?: Record<string, GuestDrawerHistoryAlert | undefined>;
-}
-
-interface GuestDrawerHistoryRangeSelectProps {
-  onRangeChange: (range: HistoryTimeRange) => void;
-  range: HistoryTimeRange;
 }
 
 interface GuestDrawerHistoryGroupChartProps {
@@ -98,31 +92,6 @@ const GUEST_DRAWER_HISTORY_PLOT_LEFT = 34;
 const GUEST_DRAWER_HISTORY_PLOT_RIGHT = 8;
 const GUEST_DRAWER_HISTORY_PLOT_TOP = 8;
 const GUEST_DRAWER_HISTORY_PLOT_BOTTOM = 18;
-
-// A guest and a node drawer can be open together, so each picker owns its id.
-export const GuestDrawerHistoryRangeSelect: Component<GuestDrawerHistoryRangeSelectProps> = (
-  props,
-) => {
-  // Created once: a getter prop would mint a new id on every read, splitting
-  // the label from its select.
-  const id = `guest-history-range-${createUniqueId()}`;
-  return (
-    <FormSelect
-      id={id}
-      label="History range"
-      labelClass="sr-only"
-      fieldBaseClass="contents"
-      selectBaseClass={`${filterSelectClass} h-7 min-h-11 py-0 text-[11px] sm:min-h-0`}
-      data-testid="guest-history-range-control"
-      value={props.range}
-      onChange={(event) => props.onRangeChange(event.currentTarget.value as HistoryTimeRange)}
-    >
-      <For each={HISTORY_CHART_RANGES}>
-        {(option) => <option value={option}>{formatHistoryRangeOptionLabel(option)}</option>}
-      </For>
-    </FormSelect>
-  );
-};
 
 // Gridline labels state the scale's actual value at each line, so a reader
 // can tell a KB/s peak from a MB/s one. ("Avg" used to mark the midpoint of
@@ -1225,6 +1194,8 @@ export const GuestDrawerHistory: Component<GuestDrawerHistoryProps> = (props) =>
     </Show>
   );
 
+  const showToolbar = () => Boolean(props.onRangeChange || historyQuery.error());
+
   return (
     <Show
       when={props.target}
@@ -1234,13 +1205,15 @@ export const GuestDrawerHistory: Component<GuestDrawerHistoryProps> = (props) =>
         ref={regionRef}
         tabIndex={-1}
         data-testid="guest-history-region"
-        class="space-y-3 outline-none"
+        class="outline-none"
         onPointerDown={(event) => setTouchInspection(event.pointerType === 'touch')}
         onPointerMove={(event) => {
           if (event.pointerType === 'mouse') setTouchInspection(false);
         }}
       >
-        <div class="flex flex-wrap items-start justify-end gap-2">
+        <div
+          class={showToolbar() ? 'mb-3 flex flex-wrap items-start justify-end gap-2' : 'sr-only'}
+        >
           <div
             class="min-w-0 flex-1"
             role="status"
@@ -1291,46 +1264,48 @@ export const GuestDrawerHistory: Component<GuestDrawerHistoryProps> = (props) =>
             }}
           </Show>
         </div>
-        <Show when={!historyQuery.error() || hasHistoryPoints()} fallback={liveReadings()}>
-          <Show when={hasHistoryPoints() && sourceNotice()}>
-            {(notice) => (
-              <p class="text-xs text-muted" data-testid="history-source-notice">
-                {notice()}
-              </p>
-            )}
-          </Show>
-          <div
-            id={gridId}
-            class={`grid gap-3 md:grid-cols-2 ${groups().length > 3 ? 'xl:grid-cols-4' : 'xl:grid-cols-3'}`}
-          >
-            <For each={groups()}>
-              {(group) => (
-                <GuestDrawerHistoryGroupChart
-                  alerts={props.alerts}
-                  hiddenOnPhone={!showAllOnPhone() && phoneCollapsedGroups().includes(group)}
-                  group={group}
-                  loading={historyQuery.loading() && !historyQuery.resolvedOnce()}
-                  metrics={metrics()}
-                  currentMetrics={liveCurrentMetrics()}
-                  deferredMetrics={props.deferredMetrics}
-                  range={props.range}
-                  source={sourceForGroup(group)}
-                  sourceKey={sourceKey()}
-                  timeBounds={timeBounds()}
-                  touchInspection={touchInspection()}
-                />
+        <div class="space-y-3">
+          <Show when={!historyQuery.error() || hasHistoryPoints()} fallback={liveReadings()}>
+            <Show when={hasHistoryPoints() && sourceNotice()}>
+              {(notice) => (
+                <p class="text-xs text-muted" data-testid="history-source-notice">
+                  {notice()}
+                </p>
               )}
-            </For>
-          </div>
-          {/* Keep collapse after the chart stack, in reach from the final
-              chart's inspector and in the same place in empty ranges. */}
-          <PhoneChartsToggle
-            hiddenLabels={phoneCollapsedGroups().map((group) => group.label)}
-            expanded={showAllOnPhone()}
-            onToggle={() => setShowAllOnPhone((open) => !open)}
-            controls={gridId}
-          />
-        </Show>
+            </Show>
+            <div
+              id={gridId}
+              class={`grid gap-3 md:grid-cols-2 ${groups().length > 3 ? 'xl:grid-cols-4' : 'xl:grid-cols-3'}`}
+            >
+              <For each={groups()}>
+                {(group) => (
+                  <GuestDrawerHistoryGroupChart
+                    alerts={props.alerts}
+                    hiddenOnPhone={!showAllOnPhone() && phoneCollapsedGroups().includes(group)}
+                    group={group}
+                    loading={historyQuery.loading() && !historyQuery.resolvedOnce()}
+                    metrics={metrics()}
+                    currentMetrics={liveCurrentMetrics()}
+                    deferredMetrics={props.deferredMetrics}
+                    range={props.range}
+                    source={sourceForGroup(group)}
+                    sourceKey={sourceKey()}
+                    timeBounds={timeBounds()}
+                    touchInspection={touchInspection()}
+                  />
+                )}
+              </For>
+            </div>
+            {/* Keep collapse after the chart stack, in reach from the final
+                chart's inspector and in the same place in empty ranges. */}
+            <PhoneChartsToggle
+              hiddenLabels={phoneCollapsedGroups().map((group) => group.label)}
+              expanded={showAllOnPhone()}
+              onToggle={() => setShowAllOnPhone((open) => !open)}
+              controls={gridId}
+            />
+          </Show>
+        </div>
       </div>
     </Show>
   );

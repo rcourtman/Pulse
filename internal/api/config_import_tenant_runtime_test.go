@@ -47,7 +47,10 @@ func TestConfigImportAppliesOnlySelectedTenant(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Local instance identity is outside the archive and must remain intact.
-	cfg.AuthUser, cfg.AuthPass = "instance-admin", "synthetic-instance-password-hash"
+	// The organizations' owner is the instance administrator: restoring an
+	// archive's API tokens issues them, which an owner alone may not do
+	// (TestConfigImportOrganizationManagerKeepsAccessCredentials).
+	cfg.AuthUser, cfg.AuthPass = "import-owner", "synthetic-instance-password-hash"
 	cfg.ProxyAuthSecret = "synthetic-instance-proxy-secret"
 	mtm := monitoring.NewMultiTenantMonitor(cfg, mtp, nil)
 	t.Cleanup(mtm.Stop)
@@ -174,9 +177,16 @@ func TestConfigImportAppliesOnlySelectedTenant(t *testing.T) {
 	}
 }
 
+// configImportNodeHost gives each synthetic node a documentation address. The
+// tenant owner's import is held to the tenant outbound policy, which refuses a
+// name that does not resolve; the nodes stay disabled, so nothing dials them.
+func configImportNodeHost(name string) string {
+	return "https://" + map[string]string{"default": "192.0.2.10", "tenant-a": "192.0.2.11", "tenant-b": "192.0.2.12", "restored": "192.0.2.13"}[name] + ":8006"
+}
+
 func seedConfigImportRuntime(t *testing.T, p *config.ConfigPersistence, name, orgID string, interval int) {
 	t.Helper()
-	if err := p.SaveNodesConfig([]config.PVEInstance{{Name: name, Host: "https://" + name + ".invalid:8006", TokenName: "synthetic@pve!monitor", TokenValue: "synthetic-" + name + "-node-secret", VerifySSL: true, Disabled: true}}, nil, nil); err != nil {
+	if err := p.SaveNodesConfig([]config.PVEInstance{{Name: name, Host: configImportNodeHost(name), TokenName: "synthetic@pve!monitor", TokenValue: "synthetic-" + name + "-node-secret", VerifySSL: true, Disabled: true}}, nil, nil); err != nil {
 		t.Fatal(err)
 	}
 	settings := config.DefaultSystemSettings()
@@ -241,7 +251,7 @@ func logConfigImportNodes(t *testing.T, router *Router, orgID, token, phase stri
 	if phase == "after" && orgID == "tenant-a" {
 		expectedName = "restored"
 	}
-	if len(nodes) != 1 || nodes[0].Name != expectedName || nodes[0].Host != "https://"+expectedName+".invalid:8006" || !nodes[0].HasToken || !nodes[0].VerifySSL {
+	if len(nodes) != 1 || nodes[0].Name != expectedName || nodes[0].Host != configImportNodeHost(expectedName) || !nodes[0].HasToken || !nodes[0].VerifySSL {
 		t.Errorf("%s %s consuming node API did not return its own trusted connection", phase, orgID)
 	}
 	if bytes.Contains(rec.Body.Bytes(), []byte("synthetic-"+expectedName+"-node-secret")) {

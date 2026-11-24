@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -908,6 +909,56 @@ func TestHandleWebSocket_AgentPingRespondsWithPong(t *testing.T) {
 	}
 }
 
+func TestSendMessage_AgentThatStopsReadingIsTimedOutAndRetired(t *testing.T) {
+	oldWait := messageWriteWait
+	messageWriteWait = 100 * time.Millisecond
+	defer func() { messageWriteWait = oldWait }()
+
+	s := NewServer(allowAllTestTokens)
+	// The agent registers and then never reads its socket again.
+	_, cleanup := registeredTestAgent(t, s, "a1")
+	defer cleanup()
+
+	s.mu.RLock()
+	ac := s.agents[agentSessionKey(defaultOrganizationID, "a1")]
+	s.mu.RUnlock()
+	if ac == nil {
+		t.Fatal("agent session not registered")
+	}
+
+	msg := mustNewMessage(t, MsgTypePong, "", strings.Repeat("x", 256<<10))
+	sendErr := make(chan error, 1)
+	go func() {
+		ac.writeMu.Lock()
+		defer ac.writeMu.Unlock()
+		for {
+			if err := s.sendMessage(ac.conn, msg); err != nil {
+				sendErr <- err
+				return
+			}
+		}
+	}()
+
+	select {
+	case err := <-sendErr:
+		var netErr net.Error
+		if !errors.As(err, &netErr) || !netErr.Timeout() {
+			t.Fatalf("sendMessage error = %v, want a write timeout", err)
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("sendMessage kept the session write lock while the agent was not reading")
+	}
+
+	select {
+	case <-ac.done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("session was not retired after its write timed out")
+	}
+	if s.IsAgentConnected("a1") {
+		t.Fatal("agent is still connected after its write timed out")
+	}
+}
+
 func TestExecuteCommand_RoundTripViaWebSocket(t *testing.T) {
 	s := NewServer(allowAllTestTokens)
 	callerGrant := &CommandApprovalGrant{Signature: "caller-supplied"}
@@ -1551,6 +1602,72 @@ func TestCommandSessionsAreTenantScopedAndDuplicateIdentityFailsClosed(t *testin
 	}
 	if !s.IsAgentConnectedForOrganization("org-a", "shared") || !s.IsAgentConnectedForOrganization("org-a", "other-id") {
 		t.Fatal("a same-named session must not evict the original")
+	}
+}
+
+// The default organization's keys are tenant-qualified like every other
+// organization's, so nothing a default-organization agent calls itself or
+// reports can name another tenant's session or deploy subscription.
+func TestDefaultOrganizationAgentCannotNameAnotherTenantsSession(t *testing.T) {
+	s := NewServerWithAdmissionValidator(func(token, agentID, hostname string) (AgentAdmission, bool) {
+		switch token {
+		case "token-acme":
+			return AgentAdmission{OrganizationID: "acme", TokenID: token, AgentID: "db1-agent", Hostname: "db1"}, true
+		case "token-default":
+			// An unbound install token binds to whatever identity registers first.
+			return AgentAdmission{TokenID: token, AgentID: agentID, Hostname: hostname}, true
+		}
+		return AgentAdmission{}, false
+	}, func(AgentAdmission) bool { return true })
+	ts := newWSServer(t, s)
+	defer ts.Close()
+
+	register := func(token, agentID, hostname string) (*websocket.Conn, RegisteredPayload) {
+		t.Helper()
+		conn, _, err := dialAgentExecWebSocket(t, ts.URL)
+		if err != nil {
+			t.Fatalf("Dial: %v", err)
+		}
+		wsWriteMessage(t, conn, mustNewMessage(t, MsgTypeAgentRegister, "", AgentRegisterPayload{
+			AgentID: agentID, Hostname: hostname, Token: token,
+		}))
+		return conn, wsReadRegisteredPayload(t, conn)
+	}
+
+	acme, ack := register("token-acme", "db1-agent", "db1")
+	defer acme.Close()
+	if !ack.Success {
+		t.Fatalf("acme registration failed: %s", ack.Message)
+	}
+
+	forged, ack := register("token-default", "acme\x00db1-agent", "db1")
+	defer forged.Close()
+	if ack.Success {
+		t.Fatal("an agent ID carrying the session-key delimiter was admitted")
+	}
+	if !s.IsAgentConnectedForOrganization("acme", "db1-agent") {
+		t.Fatal("a default-organization registration evicted another tenant's session")
+	}
+	if s.IsAgentConnected("acme\x00db1-agent") {
+		t.Fatal("a default-organization lookup resolved another tenant's session")
+	}
+
+	progress := s.SubscribeDeployProgressForOrganization("acme", "db1-agent", "job-1", 1)
+	defer s.UnsubscribeDeployProgressForOrganization("acme", "db1-agent", "job-1")
+	namesake, ack := register("token-default", "acme", "lab7")
+	defer namesake.Close()
+	if !ack.Success {
+		t.Fatalf("default-organization registration failed: %s", ack.Message)
+	}
+	wsWriteMessage(t, namesake, mustNewMessage(t, MsgTypeDeployProgress, "", DeployProgressPayload{
+		JobID: "db1-agent\x00job-1", Phase: DeployPhasePreflightSSH, Status: DeployStepStarted,
+	}))
+	_ = namesake.Close()
+	waitFor(t, 2*time.Second, func() bool { return !s.IsAgentConnected("acme") })
+	select {
+	case event, open := <-progress:
+		t.Fatalf("default-organization agent reached another tenant's deploy subscription: open=%v event=%+v", open, event)
+	default:
 	}
 }
 

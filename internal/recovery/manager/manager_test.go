@@ -4,7 +4,10 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/recovery"
 )
 
@@ -78,5 +81,93 @@ func TestNew_NilPersistence(t *testing.T) {
 	// persistence should fail appropriately
 	if m.stores == nil {
 		t.Error("Manager.stores should be initialized even with nil persistence")
+	}
+}
+
+// A deleted org's ID can be claimed again. The org created under it must open
+// its own recovery database, not the cached handle of the deleted one.
+func TestCloseStoreForOrgEvictsDeletedOrgStore(t *testing.T) {
+	ctx := context.Background()
+	mtp := config.NewMultiTenantPersistence(t.TempDir())
+	m := New(mtp)
+	t.Cleanup(func() { _ = m.CloseStoreForOrg("acme") })
+
+	createOrg := func() {
+		t.Helper()
+		if err := mtp.SaveOrganization(&models.Organization{ID: "acme", DisplayName: "Acme"}); err != nil {
+			t.Fatalf("SaveOrganization: %v", err)
+		}
+	}
+
+	createOrg()
+	store, err := m.StoreForOrg("acme")
+	if err != nil {
+		t.Fatalf("StoreForOrg: %v", err)
+	}
+	completedAt := time.Now().UTC()
+	if err := store.UpsertPoints(ctx, []recovery.RecoveryPoint{{
+		ID:          "deleted-org-point",
+		Provider:    recovery.ProviderKubernetes,
+		Kind:        recovery.KindBackup,
+		Mode:        recovery.ModeRemote,
+		Outcome:     recovery.OutcomeSuccess,
+		CompletedAt: &completedAt,
+	}}); err != nil {
+		t.Fatalf("UpsertPoints: %v", err)
+	}
+	if _, total, err := m.ListPointsForOrg(ctx, "acme", recovery.ListPointsOptions{}); err != nil || total != 1 {
+		t.Fatalf("points before deletion = %d, %v; want 1", total, err)
+	}
+
+	if err := mtp.DeleteOrganization("acme"); err != nil {
+		t.Fatalf("DeleteOrganization: %v", err)
+	}
+	if err := m.CloseStoreForOrg(" acme "); err != nil {
+		t.Fatalf("CloseStoreForOrg: %v", err)
+	}
+	if err := m.CloseStoreForOrg("acme"); err != nil {
+		t.Fatalf("CloseStoreForOrg on an evicted org must be a no-op: %v", err)
+	}
+	var nilManager *Manager
+	if err := nilManager.CloseStoreForOrg("acme"); err != nil {
+		t.Fatalf("nil manager CloseStoreForOrg: %v", err)
+	}
+
+	createOrg()
+	reopened, err := m.StoreForOrg("acme")
+	if err != nil {
+		t.Fatalf("StoreForOrg after recreation: %v", err)
+	}
+	if reopened == store {
+		t.Fatal("recreated org was served the deleted org's store")
+	}
+	if points, total, err := m.ListPointsForOrg(ctx, "acme", recovery.ListPointsOptions{}); err != nil || total != 0 || len(points) != 0 {
+		t.Fatalf("recreated org reads %d points (%v), want none", total, err)
+	}
+}
+
+// A StoreForOrg call that missed the cache before the eviction must not insert
+// its handle after it: eviction waits for constructors that are in flight.
+func TestCloseStoreForOrgWaitsForInFlightConstructors(t *testing.T) {
+	m := New(nil)
+
+	m.lifecycle.RLock()
+	evicted := make(chan error, 1)
+	go func() { evicted <- m.CloseStoreForOrg("acme") }()
+	select {
+	case err := <-evicted:
+		m.lifecycle.RUnlock()
+		t.Fatalf("eviction overtook an in-flight constructor: %v", err)
+	case <-time.After(50 * time.Millisecond):
+	}
+	m.lifecycle.RUnlock()
+
+	select {
+	case err := <-evicted:
+		if err != nil {
+			t.Fatalf("CloseStoreForOrg: %v", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("eviction did not finish after the constructor returned")
 	}
 }

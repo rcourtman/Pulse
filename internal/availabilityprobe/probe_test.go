@@ -2,6 +2,8 @@ package availabilityprobe
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"io"
 	"net"
@@ -9,6 +11,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"strings"
+	"sync/atomic"
 	"syscall"
 	"testing"
 	"time"
@@ -187,6 +190,144 @@ func TestDetailedResultCapturesHTTPSCertificatePosture(t *testing.T) {
 	}
 	if !result.Certificate.HostnameValid || result.Certificate.FingerprintSHA256 == "" {
 		t.Fatalf("certificate projection = %+v", result.Certificate)
+	}
+}
+
+func TestDetailedResultSendsStoredValuesOnlyToAuthenticatedHTTPSServer(t *testing.T) {
+	password := "secret-password"
+	headerValue := "header-secret"
+	requestBody := "body-secret"
+	var requests atomic.Int32
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		requests.Add(1)
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer server.Close()
+	leaf := sha256.Sum256(server.Certificate().Raw)
+	pinned := hex.EncodeToString(leaf[:])
+	other := sha256.Sum256([]byte("another certificate"))
+
+	basic := config.AvailabilityHTTPAuthentication{Type: config.AvailabilityHTTPAuthBasic, Username: "pulse", Password: &password}
+	bearer := config.AvailabilityHTTPAuthentication{Type: config.AvailabilityHTTPAuthBearer, BearerToken: &password}
+	tests := []struct {
+		name     string
+		contract config.AvailabilityHTTPConfig
+		wantSent bool
+	}{
+		{name: "basic credentials", contract: config.AvailabilityHTTPConfig{Authentication: basic}},
+		{name: "bearer token", contract: config.AvailabilityHTTPConfig{Authentication: bearer}},
+		{name: "header value", contract: config.AvailabilityHTTPConfig{Headers: []config.AvailabilityHTTPHeader{{ID: "key", Name: "X-Api-Key", Value: &headerValue}}}},
+		{name: "request body", contract: config.AvailabilityHTTPConfig{Method: config.AvailabilityHTTPMethodPOST, Body: &requestBody}},
+		{name: "another pinned certificate", contract: config.AvailabilityHTTPConfig{TLSFingerprintSHA256: hex.EncodeToString(other[:])}},
+		{name: "pinned certificate", contract: config.AvailabilityHTTPConfig{Authentication: basic, TLSFingerprintSHA256: pinned}, wantSent: true},
+		{name: "explicitly unverified", contract: config.AvailabilityHTTPConfig{Authentication: basic, InsecureSkipVerify: true}, wantSent: true},
+		{name: "no stored values", contract: config.AvailabilityHTTPConfig{}, wantSent: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			requests.Store(0)
+			contract := tt.contract
+			result, err := DetailedResult(context.Background(), config.AvailabilityTarget{
+				Address: server.URL, Protocol: config.AvailabilityProbeHTTPS, Enabled: true, TimeoutMillis: 1000, HTTP: &contract,
+			})
+			if !tt.wantSent {
+				if err == nil || requests.Load() != 0 {
+					t.Fatalf("error = %v with %d requests served, want the request withheld", err, requests.Load())
+				}
+				if result.Outcome != OutcomeUnreachable || result.TransportOutcome != OutcomeUnreachable {
+					t.Fatalf("result outcomes = %+v, want unreachable", result)
+				}
+				return
+			}
+			if err != nil || requests.Load() != 1 {
+				t.Fatalf("error = %v with %d requests served, want one accepted request", err, requests.Load())
+			}
+			if result.Certificate == nil || result.Certificate.FingerprintSHA256 != pinned {
+				t.Fatalf("certificate observation = %+v, want the server's leaf", result.Certificate)
+			}
+		})
+	}
+}
+
+func TestDetailedResultPublishesTheCertificateItRefused(t *testing.T) {
+	password := "secret-password"
+	server := httptest.NewTLSServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+		t.Error("request reached a server whose certificate is not trusted")
+	}))
+	defer server.Close()
+	leaf := sha256.Sum256(server.Certificate().Raw)
+
+	result, err := DetailedResult(context.Background(), config.AvailabilityTarget{
+		Address: server.URL, Protocol: config.AvailabilityProbeHTTPS, Enabled: true, TimeoutMillis: 1000,
+		HTTP: &config.AvailabilityHTTPConfig{
+			Authentication: config.AvailabilityHTTPAuthentication{Type: config.AvailabilityHTTPAuthBasic, Username: "pulse", Password: &password},
+		},
+	})
+	if err == nil || !strings.Contains(err.Error(), "certificate is not trusted") {
+		t.Fatalf("DetailedResult() error = %v, want a certificate refusal", err)
+	}
+	if result.Certificate == nil || result.Certificate.FingerprintSHA256 != hex.EncodeToString(leaf[:]) {
+		t.Fatalf("certificate observation = %+v, want the refused leaf so it can be pinned", result.Certificate)
+	}
+	if result.Certificate.ChainValid || result.Certificate.TrustStatus == tlsutil.CertificateTrustTrusted {
+		t.Fatalf("certificate observation = %+v, want an untrusted chain", result.Certificate)
+	}
+}
+
+func TestDetailedResultBoundsHTTPTransportErrorQuotingTheEndpoint(t *testing.T) {
+	if limit := httpOutboundOptions().MaxResponseHeaderBytes; limit != httpProbeMaxResponseHeaderBytes {
+		t.Fatalf("availability response header limit = %d, want %d", limit, httpProbeMaxResponseHeaderBytes)
+	}
+
+	// Not HTTP: net/http quotes the whole first line in its error, and every
+	// NUL byte becomes four characters.
+	for _, tc := range []struct {
+		name      string
+		firstLine int
+		want      string
+	}{
+		{name: "within the header limit", firstLine: httpProbeMaxResponseHeaderBytes / 2, want: "malformed HTTP response"},
+		{name: "beyond the header limit", firstLine: 4 * httpProbeMaxResponseHeaderBytes, want: "server response headers exceeded"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			answer := append(make([]byte, tc.firstLine), "\r\n\r\n"...)
+			listener, err := net.Listen("tcp", "127.0.0.1:0")
+			if err != nil {
+				t.Fatalf("listen: %v", err)
+			}
+			defer listener.Close()
+			go func() {
+				for {
+					conn, err := listener.Accept()
+					if err != nil {
+						return
+					}
+					go func() {
+						defer conn.Close()
+						if _, err := conn.Read(make([]byte, 4096)); err != nil {
+							return
+						}
+						_, _ = conn.Write(answer)
+					}()
+				}
+			}()
+
+			result, err := DetailedResult(context.Background(), config.AvailabilityTarget{
+				Address: "http://" + listener.Addr().String(), Protocol: config.AvailabilityProbeHTTP, Enabled: true, TimeoutMillis: 5000,
+			})
+			if err == nil {
+				t.Fatal("DetailedResult() error = nil, want transport failure")
+			}
+			if len(err.Error()) > httpProbeErrorLimit {
+				t.Fatalf("error is %d bytes, want at most %d", len(err.Error()), httpProbeErrorLimit)
+			}
+			if !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("error = %q, want the transport's reason %q kept", err, tc.want)
+			}
+			if result.Outcome != OutcomeUnreachable || result.TransportOutcome != OutcomeUnreachable {
+				t.Fatalf("result outcomes = %+v, want unreachable", result)
+			}
+		})
 	}
 }
 

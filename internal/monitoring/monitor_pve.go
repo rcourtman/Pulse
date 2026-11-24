@@ -408,7 +408,24 @@ func (m *Monitor) retryPVEPortFallback(ctx context.Context, instanceName string,
 		return nil, currentClient, cause
 	}
 
+	// Preserve the saved endpoint pin polling enforces so a port fallback
+	// cannot bypass cluster member or endpoint-override trust on port 443.
+	discoveryCfg := monitorDiscoveryConfig(m)
+	primaryPin, err := PVEEndpointFingerprint(*instanceCfg, instanceCfg.Host, discoveryCfg)
+	if err != nil {
+		return nil, currentClient, cause
+	}
+	fallbackPin, err := PVEEndpointFingerprint(*instanceCfg, fallbackHost, discoveryCfg)
+	if err != nil {
+		return nil, currentClient, cause
+	}
+
 	clientCfg := config.CreateProxmoxConfigWithHost(instanceCfg, fallbackHost, false)
+	if fallbackPin != "" {
+		clientCfg.Fingerprint = fallbackPin
+	} else if primaryPin != "" {
+		clientCfg.Fingerprint = primaryPin
+	}
 	if clientCfg.Timeout <= 0 {
 		m.mu.RLock()
 		if m.config != nil {

@@ -12,6 +12,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/gorilla/websocket"
+	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
 	"github.com/rcourtman/pulse-go-rewrite/internal/api/agenttokens"
 	"github.com/rcourtman/pulse-go-rewrite/internal/api/apicontext"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
@@ -705,6 +707,137 @@ func TestHostAgentCommandChannelBindsTheIdentityPulseAcknowledges(t *testing.T) 
 	}
 	if _, ok := runtime.router.admitAgentExecToken(install.Token, presentedID, hostname); ok {
 		t.Fatal("the install token admitted the presented identity as a second command identity")
+	}
+}
+
+// An install token is minted before Pulse knows its host, so its command
+// channel binds the first agent ID it presents. Admission judged only that
+// token's own record, so an unused token could present the ID of a host
+// enrolled under another token: it was bound to that ID for good, replaced
+// the host's command session by registering under the host's name, and then
+// received the host's approved actions and had invented results recorded for
+// it. First use now binds only an identity no other token holds, and a refused
+// token stays free for the machine it was minted for.
+func TestUnusedInstallTokenCannotBindAnotherTokensCommandIdentity(t *testing.T) {
+	dataPath := t.TempDir()
+	const adminRaw = "command-identity-owner-admin-token.12345678"
+	admin := newTokenRecord(t, adminRaw, []string{config.ScopeWildcard}, nil)
+	if err := config.NewConfigPersistence(dataPath).SaveAPITokens([]config.APITokenRecord{admin}); err != nil {
+		t.Fatalf("SaveAPITokens: %v", err)
+	}
+	runtime := newHostRemovalLifecycleHTTPRuntime(t, dataPath, []config.APITokenRecord{admin})
+	t.Cleanup(runtime.stop)
+
+	mint := func(name string) AgentInstallCommandResponse {
+		t.Helper()
+		rec := serveHostRemovalLifecycleRequest(t, runtime, http.MethodPost, "/api/agent-install-command", adminRaw,
+			[]byte(`{"type":"host","enableCommands":true,"name":"`+name+`"}`))
+		install := decodeHostAgentInstallResponse(t, rec)
+		if install.Token == "" || install.Record == nil {
+			t.Fatalf("commands-enabled install %q omitted token record: %+v", name, install)
+		}
+		return install
+	}
+	// enroll is an agent's first contact: a report, then a command registration
+	// under the identity the acknowledgement names.
+	enroll := func(install AgentInstallCommandResponse, machineID, hostname string) (string, bool) {
+		t.Helper()
+		status, resolved, body := postHostRemovalLifecycleReport(t, runtime, install.Token, agentshost.Report{
+			Agent:     agentshost.AgentInfo{ID: machineID, Version: "6.5.0", Type: "unified", IntervalSeconds: 30, CommandsEnabled: true},
+			Host:      agentshost.HostInfo{ID: machineID, MachineID: machineID, Hostname: hostname, Platform: "linux"},
+			Timestamp: time.Now().UTC(),
+		})
+		if status != http.StatusOK {
+			t.Fatalf("report for %s = %d: %s", hostname, status, body)
+		}
+		_, ok := runtime.router.admitAgentExecToken(install.Token, resolved, hostname)
+		return resolved, ok
+	}
+	boundAgentID := func(install AgentInstallCommandResponse) string {
+		t.Helper()
+		config.Mu.Lock()
+		defer config.Mu.Unlock()
+		record := tokenRecordByID(runtime.config.APITokens, install.Record.ID)
+		if record == nil {
+			t.Fatalf("install token %s is gone", install.Record.ID)
+		}
+		return record.Metadata["bound_agent_id"]
+	}
+
+	const (
+		nasMachineID = "machine-command-identity-nas01"
+		nasHostname  = "nas01"
+	)
+	nas := mint("nas01")
+	nasID, ok := enroll(nas, nasMachineID, nasHostname)
+	if !ok || nasID != nasMachineID {
+		t.Fatalf("nas01 enrollment = (%q, %v), want its own identity admitted", nasID, ok)
+	}
+
+	// Whatever hostname it claims, another token does not get nas01's identity.
+	spare := mint("spare")
+	for _, hostname := range []string{"attacker-box", nasHostname} {
+		if _, ok := runtime.router.admitAgentExecToken(spare.Token, nasID, hostname); ok {
+			t.Fatalf("an unused install token bound nas01's identity as %q", hostname)
+		}
+	}
+	// Live state loses agent-reported hosts across a restart until the next
+	// report lands. The token nas01 bound still says whose identity this is.
+	if _, ok := (&Router{config: runtime.config}).admitAgentExecToken(spare.Token, nasID, nasHostname); ok {
+		t.Fatal("an unused install token bound nas01's identity while the monitor held no host for it")
+	}
+	if got := boundAgentID(spare); got != "" {
+		t.Fatalf("a refused registration left the token bound to %q", got)
+	}
+	if _, ok := runtime.router.admitAgentExecToken(nas.Token, nasID, nasHostname); !ok {
+		t.Fatal("nas01's own token lost its command identity")
+	}
+
+	// The refused token still enrolls the machine it was minted for.
+	spareID, ok := enroll(spare, "machine-command-identity-spare", "spare01")
+	if !ok || spareID == nasID || boundAgentID(spare) != spareID {
+		t.Fatalf("spare enrollment = (%q, %v), bound %q, want its own identity", spareID, ok, boundAgentID(spare))
+	}
+
+	// While nas01 holds a live command session, even a fresh install token that
+	// posts a host report claiming nas01's machine ID and hostname must not
+	// bind or replace its command identity.
+	wsServer := httptest.NewServer(http.HandlerFunc(runtime.router.agentExecServer.HandleWebSocket))
+	t.Cleanup(wsServer.Close)
+	wsURL := "ws" + strings.TrimPrefix(wsServer.URL, "http")
+	nasConn, _, err := websocket.DefaultDialer.Dial(wsURL, wsHeadersForHTTP(t, wsServer.URL))
+	require.NoError(t, err)
+	regMsg, err := agentexec.NewMessage(agentexec.MsgTypeAgentRegister, "", agentexec.AgentRegisterPayload{
+		AgentID:  nasID,
+		Hostname: nasHostname,
+		Token:    nas.Token,
+	})
+	require.NoError(t, err)
+	require.NoError(t, nasConn.WriteJSON(regMsg))
+	var ackMsg agentexec.Message
+	require.NoError(t, nasConn.ReadJSON(&ackMsg))
+	var ackPayload agentexec.RegisteredPayload
+	require.NoError(t, json.Unmarshal(ackMsg.Payload, &ackPayload))
+	require.True(t, ackPayload.Success, "nas01 websocket register failed: %s", ackPayload.Message)
+
+	reinstall := mint("nas01-reinstall")
+	reinstalledID, ok := enroll(reinstall, nasMachineID, nasHostname)
+	if reinstalledID != nasID {
+		t.Fatalf("reinstall resolved to %q, want the host's identity %q", reinstalledID, nasID)
+	}
+	if ok || boundAgentID(reinstall) != "" {
+		t.Fatal("a fresh token bound nas01's command identity while nas01's live command session was still connected")
+	}
+
+	// Once nas01's live command session disconnects (genuine reinstall), the
+	// fresh token is admitted immediately without waiting for an idle window.
+	require.NoError(t, nasConn.Close())
+	require.Eventually(t, func() bool {
+		_, connected := runtime.router.agentExecServer.ConnectedAgentTokenIDForOrganization("default", nasID)
+		return !connected
+	}, 2*time.Second, 20*time.Millisecond)
+	if _, ok := runtime.router.admitAgentExecToken(reinstall.Token, nasID, nasHostname); !ok {
+		t.Fatal("a reinstalled agent was refused the identity the report path handed to its token after the old session closed")
 	}
 }
 

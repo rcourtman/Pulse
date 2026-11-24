@@ -2630,6 +2630,121 @@ func TestResourceRegistry_IngestSnapshotDerivesProxmoxWorkloadParentWhenNodeSour
 	}
 }
 
+// A guest's node name and its cluster's name are its own endpoint's word. They
+// must not place the guest on a node of another connection: commands and
+// lifecycle actions for a guest run on its parent node's agent, and the same
+// VMID there is a different guest.
+func TestResourceRegistry_ProxmoxGuestParentStaysOnItsOwnConnection(t *testing.T) {
+	now := time.Date(2026, 11, 18, 10, 0, 0, 0, time.UTC)
+	cases := []struct {
+		name          string
+		honestCluster string
+		labCluster    string
+		claimedNode   string
+		labHasNode    bool
+	}{
+		{name: "cluster named after the other connection", labCluster: "pve-b", claimedNode: "pve-b", labHasNode: true},
+		{name: "cluster named after the other connection, node not on record", labCluster: "pve-b", claimedNode: "pve-b"},
+		{name: "cluster named after the other connection's cluster", honestCluster: "homelab", labCluster: "homelab", claimedNode: "pve-b"},
+		{name: "node named after the other connection's node ID", labCluster: "lab", claimedNode: "pve-b-pve-b"},
+		{name: "node name alone", claimedNode: "pve-b"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			nodes := []models.Node{
+				{
+					ID: "pve-b-pve-b", Name: "pve-b", Instance: "pve-b", ClusterName: tc.honestCluster,
+					IsClusterMember: tc.honestCluster != "", Host: "https://10.20.0.11:8006",
+					LinkedAgentID: "agent-pve-b", Status: "online", LastSeen: now,
+				},
+				{
+					ID: "lab-lab1", Name: "lab1", Instance: "lab", ClusterName: tc.labCluster,
+					IsClusterMember: tc.labCluster != "", Host: "https://10.20.0.66:8006",
+					Status: "online", LastSeen: now,
+				},
+			}
+			if tc.labHasNode {
+				nodes = append(nodes, models.Node{
+					ID: "lab-" + tc.claimedNode, Name: tc.claimedNode, Instance: "lab", ClusterName: tc.labCluster,
+					IsClusterMember: true, Host: "https://10.20.0.67:8006", Status: "online", LastSeen: now,
+				})
+			}
+			rr := NewRegistry(nil)
+			rr.IngestSnapshot(models.StateSnapshot{
+				Nodes: nodes,
+				Hosts: []models.Host{{
+					ID: "agent-pve-b", Hostname: "pve-b", MachineID: "machine-pve-b", Status: "online",
+					LastSeen: now, LinkedNodeID: "pve-b-pve-b",
+				}},
+				VMs: []models.VM{
+					{ID: "pve-b:pve-b:100", VMID: 100, Name: "mail", Node: "pve-b", Instance: "pve-b", Status: "running", LastSeen: now},
+					{ID: "lab:lab1:101", VMID: 101, Name: "scratch", Node: "lab1", Instance: "lab", Status: "running", LastSeen: now},
+					{ID: "lab:" + tc.claimedNode + ":100", VMID: 100, Name: "runaway", Node: tc.claimedNode, Instance: "lab", Status: "running", LastSeen: now},
+				},
+				Containers: []models.Container{
+					{ID: "lab:" + tc.claimedNode + ":200", VMID: 200, Name: "runaway-ct", Node: tc.claimedNode, Instance: "lab", Status: "running", LastSeen: now},
+				},
+			})
+
+			nodeID := func(instance, name string) string {
+				t.Helper()
+				for _, node := range rr.Nodes() {
+					if node.Instance() == instance && node.NodeName() == name {
+						return node.ID()
+					}
+				}
+				t.Fatalf("node %q of connection %q is not on record", name, instance)
+				return ""
+			}
+			guest := func(name string) Resource {
+				t.Helper()
+				for _, resourceType := range []ResourceType{ResourceTypeVM, ResourceTypeSystemContainer} {
+					for _, resource := range rr.ListByType(resourceType) {
+						if resource.Name == name {
+							return resource
+						}
+					}
+				}
+				t.Fatalf("guest %q is not on record", name)
+				return Resource{}
+			}
+
+			mail := guest("mail")
+			if want := nodeID("pve-b", "pve-b"); mail.ParentID == nil || *mail.ParentID != want {
+				t.Fatalf("mail parent = %v, want its own node %s", mail.ParentID, want)
+			}
+			if mail.Proxmox == nil || mail.Proxmox.LinkedAgentID != "agent-pve-b" {
+				t.Fatalf("mail lost its node's agent: %+v", mail.Proxmox)
+			}
+			scratch := guest("scratch")
+			if want := nodeID("lab", "lab1"); scratch.ParentID == nil || *scratch.ParentID != want {
+				t.Fatalf("scratch parent = %v, want its own node %s", scratch.ParentID, want)
+			}
+			for _, name := range []string{"runaway", "runaway-ct"} {
+				resource := guest(name)
+				wantParent := ""
+				if tc.labHasNode {
+					wantParent = nodeID("lab", tc.claimedNode)
+				}
+				gotParent := ""
+				if resource.ParentID != nil {
+					gotParent = *resource.ParentID
+				}
+				if gotParent != wantParent {
+					t.Fatalf("%s of connection lab was placed on %q, want %q", name, gotParent, wantParent)
+				}
+				if resource.Proxmox == nil || resource.Proxmox.LinkedAgentID != "" {
+					t.Fatalf("%s of connection lab took an agent from another connection's node: %+v", name, resource.Proxmox)
+				}
+				location := ResolveResourceContext(rr, resource.ID).Location
+				if !location.Found || location.NodeResourceID != wantParent || location.AgentID != "" {
+					t.Fatalf("%s routes through another connection's node: %+v", name, location)
+				}
+			}
+		})
+	}
+}
+
 func TestResourceRegistry_IngestSnapshotUnifiesHostLinkedProxmoxNodeViewsAcrossEndpointForms(t *testing.T) {
 	rr := NewRegistry(nil)
 	now := time.Date(2026, 3, 7, 12, 0, 0, 0, time.UTC)
@@ -7566,15 +7681,14 @@ func TestIssue2076USBLinkedDiskAmbiguity(t *testing.T) {
 // agentNodeScanFixture spans three clusters that reuse node names, so a
 // by-name bucket holds candidates from every cluster and scope scoring has to
 // pick the right one. Every other node runs a linked host agent. A fourth
-// cluster's nodes are keyed by their endpoint instance while its guests report
-// the cluster name, so no direct source mapping reaches their parent and only
-// the agent scan resolves it.
+// cluster's nodes keep an identity minted under an earlier name, so no direct
+// source mapping reaches their parent and only the agent scan resolves it.
 func agentNodeScanFixture(now time.Time) models.StateSnapshot {
 	snapshot := models.StateSnapshot{LastUpdate: now}
 	for n := 0; n < 2; n++ {
 		nodeName := fmt.Sprintf("pve%d", n)
 		snapshot.Nodes = append(snapshot.Nodes, models.Node{
-			ID: "ep-" + nodeName, Name: nodeName, Instance: "ep", ClusterName: "prod",
+			ID: "prod-was-" + nodeName, Name: nodeName, Instance: "prod", ClusterName: "prod",
 			Status: "online", Type: "node", LastSeen: now,
 		})
 		vmid := 900 + n
@@ -7647,7 +7761,7 @@ func TestGuestIngestParentsMatchFullAgentScan(t *testing.T) {
 			t.Fatalf("guest %s has no Proxmox data", id)
 		}
 		// With the index nil this resolves through the full scan.
-		want := rr.proxmoxNodeParentIDLocked(resource.Proxmox.Instance, resource.Proxmox.ClusterName, resource.Proxmox.NodeName, "")
+		want := rr.proxmoxNodeParentIDLocked(resource.Proxmox.Instance, resource.Proxmox.ClusterName, resource.Proxmox.NodeName, "", true)
 		if want == "" {
 			t.Fatalf("full scan found no parent for guest %s on %s/%s", id, resource.Proxmox.Instance, resource.Proxmox.NodeName)
 		}

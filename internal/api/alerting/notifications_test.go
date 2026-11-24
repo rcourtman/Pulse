@@ -1065,6 +1065,7 @@ func TestNotificationHandlers(t *testing.T) {
 	t.Run("UpdateWebhook_PreserveRedacted", func(t *testing.T) {
 		existing := notifications.WebhookConfig{
 			ID:           "wh1",
+			URL:          "https://example.com/old",
 			Headers:      map[string]string{"Auth": "secret"},
 			CustomFields: map[string]string{"Key": "value"},
 		}

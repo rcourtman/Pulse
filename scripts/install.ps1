@@ -343,9 +343,7 @@ function Invoke-InstallerSignatureVerification {
 
     $allowedSignersPath = [System.IO.Path]::GetTempFileName()
     $signaturePath = [System.IO.Path]::GetTempFileName()
-    $stdoutPath = [System.IO.Path]::GetTempFileName()
-    $stderrPath = [System.IO.Path]::GetTempFileName()
-    $script:TempFiles += @($allowedSignersPath, $signaturePath, $stdoutPath, $stderrPath)
+    $script:TempFiles += @($allowedSignersPath, $signaturePath)
 
     [System.IO.File]::WriteAllText($allowedSignersPath, "$InstallerSignatureIdentity $PinnedInstallerSshPublicKey`n")
     try {
@@ -355,19 +353,47 @@ function Invoke-InstallerSignatureVerification {
     }
 
     $sshKeygen = Get-SshKeygenPath
-    $commandLine = "`"$sshKeygen`" -Y verify -f `"$allowedSignersPath`" -I `"$InstallerSignatureIdentity`" -n `"$InstallerSignatureNamespace`" -s `"$signaturePath`" < `"$FilePath`""
-    $process = Start-Process -FilePath "cmd.exe" `
-                             -ArgumentList "/d", "/s", "/c", $commandLine `
-                             -NoNewWindow `
-                             -Wait `
-                             -PassThru `
-                             -RedirectStandardOutput $stdoutPath `
-                             -RedirectStandardError $stderrPath
-    if ($process.ExitCode -ne 0) {
-        $stderr = ""
-        if (Test-Path $stderrPath) {
-            $stderr = (Get-Content $stderrPath -Raw -ErrorAction SilentlyContinue).Trim()
+    # Invoke ssh-keygen directly and stream raw bytes into stdin instead of
+    # going through cmd.exe (whose /s /c quote stripping breaks quoted paths)
+    # or Start-Process -RedirectStandardInput (which re-encodes binary input).
+    $psi = New-Object System.Diagnostics.ProcessStartInfo
+    $psi.FileName = $sshKeygen
+    $psi.Arguments = "-Y verify -f `"$allowedSignersPath`" -I `"$InstallerSignatureIdentity`" -n `"$InstallerSignatureNamespace`" -s `"$signaturePath`""
+    $psi.UseShellExecute = $false
+    $psi.CreateNoWindow = $true
+    $psi.RedirectStandardInput = $true
+    $psi.RedirectStandardOutput = $true
+    $psi.RedirectStandardError = $true
+
+    $process = New-Object System.Diagnostics.Process
+    $process.StartInfo = $psi
+    $exitCode = 1
+    $stderr = ""
+    try {
+        [void]$process.Start()
+        $stdoutTask = $process.StandardOutput.ReadToEndAsync()
+        $stderrTask = $process.StandardError.ReadToEndAsync()
+        $fileStream = [System.IO.File]::OpenRead($FilePath)
+        try {
+            try {
+                $fileStream.CopyTo($process.StandardInput.BaseStream)
+                $process.StandardInput.BaseStream.Flush()
+            } catch [System.IO.IOException] {
+                # ssh-keygen may exit early on a malformed signature before
+                # reading all of stdin. Report its exit code and stderr below.
+            }
+        } finally {
+            $fileStream.Dispose()
+            $process.StandardInput.Close()
         }
+        $process.WaitForExit()
+        $exitCode = $process.ExitCode
+        [void]$stdoutTask.GetAwaiter().GetResult()
+        $stderr = $stderrTask.GetAwaiter().GetResult().Trim()
+    } finally {
+        $process.Dispose()
+    }
+    if ($exitCode -ne 0) {
         if ([string]::IsNullOrWhiteSpace($stderr)) {
             throw "Cryptographic signature verification failed for the downloaded agent binary."
         }

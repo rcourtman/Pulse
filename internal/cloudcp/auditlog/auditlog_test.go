@@ -85,6 +85,10 @@ func TestClientIP(t *testing.T) {
 }
 
 func TestActorID(t *testing.T) {
+	withActor := func(r *http.Request, actorID string) *http.Request {
+		return r.WithContext(WithActor(r.Context(), actorID))
+	}
+
 	tests := []struct {
 		name       string
 		request    *http.Request
@@ -93,47 +97,47 @@ func TestActorID(t *testing.T) {
 		{
 			name:       "nil request",
 			request:    nil,
-			expectedID: "",
+			expectedID: ActorAnonymous,
 		},
 		{
-			name:       "X-Actor-ID header",
-			request:    newRequestWithHeaders(t, "", map[string]string{"X-Actor-ID": "user-123"}),
+			name:       "no authenticated actor",
+			request:    newRequestWithHeaders(t, "", nil),
+			expectedID: ActorAnonymous,
+		},
+		{
+			name:       "authenticated actor from context",
+			request:    withActor(newRequestWithHeaders(t, "", nil), "user-123"),
 			expectedID: "user-123",
 		},
 		{
-			name:       "X-Actor-Id header (mixed case)",
-			request:    newRequestWithHeaders(t, "", map[string]string{"X-Actor-Id": "user-456"}),
+			name:       "admin key actor from context",
+			request:    withActor(newRequestWithHeaders(t, "", nil), ActorAdminKey),
+			expectedID: ActorAdminKey,
+		},
+		{
+			name:       "authenticated actor is trimmed",
+			request:    withActor(newRequestWithHeaders(t, "", nil), "  user-456  "),
 			expectedID: "user-456",
 		},
 		{
-			name:       "X-User-ID fallback",
+			name:       "whitespace-only actor is anonymous",
+			request:    withActor(newRequestWithHeaders(t, "", nil), "   "),
+			expectedID: ActorAnonymous,
+		},
+		{
+			name:       "X-Actor-ID header is ignored",
+			request:    newRequestWithHeaders(t, "", map[string]string{"X-Actor-ID": "actor-1"}),
+			expectedID: ActorAnonymous,
+		},
+		{
+			name:       "X-User-ID header is ignored",
 			request:    newRequestWithHeaders(t, "", map[string]string{"X-User-ID": "user-789"}),
-			expectedID: "user-789",
+			expectedID: ActorAnonymous,
 		},
 		{
-			name:       "X-User-Id fallback",
-			request:    newRequestWithHeaders(t, "", map[string]string{"X-User-Id": "user-abc"}),
-			expectedID: "user-abc",
-		},
-		{
-			name:       "X-Actor-ID takes precedence over X-User-ID",
-			request:    newRequestWithHeaders(t, "", map[string]string{"X-Actor-ID": "actor-1", "X-User-ID": "user-1"}),
-			expectedID: "actor-1",
-		},
-		{
-			name:       "whitespace-only returns empty",
-			request:    newRequestWithHeaders(t, "", map[string]string{"X-Actor-ID": "   "}),
-			expectedID: "",
-		},
-		{
-			name:       "no matching headers",
-			request:    newRequestWithHeaders(t, "", map[string]string{"Accept": "application/json"}),
-			expectedID: "",
-		},
-		{
-			name:       "empty headers",
-			request:    newRequestWithHeaders(t, "", nil),
-			expectedID: "",
+			name:       "client headers do not override authenticated actor",
+			request:    withActor(newRequestWithHeaders(t, "", map[string]string{"X-Actor-ID": "actor-1", "X-User-ID": "user-1"}), "user-123"),
+			expectedID: "user-123",
 		},
 	}
 

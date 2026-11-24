@@ -131,3 +131,57 @@ func TestCollectEntityReferenceSurfacesFaultDetail(t *testing.T) {
 		t.Fatalf("message %q should carry the fault detail", connectionErr.Message)
 	}
 }
+
+func TestResolvePlacementStopsAtParentLoop(t *testing.T) {
+	// Names stay unanswered and are never cached, so a walk that follows the
+	// loop keeps sending requests and fails on the deadline.
+	parents := map[string]string{
+		"/sdk/vim25/9.0.0.0/Network/network-1/parent":       `{"type":"Folder","value":"group-a"}`,
+		"/sdk/vim25/9.0.0.0/Folder/group-a/parent":          `{"type":"Folder","value":"group-b"}`,
+		"/sdk/vim25/9.0.0.0/Folder/group-b/parent":          `{"type":"Folder","value":"group-a"}`,
+		"/sdk/vim25/9.0.0.0/Network/network-2/parent":       `{"type":"Datacenter","value":"datacenter-1"}`,
+		"/sdk/vim25/9.0.0.0/Datacenter/datacenter-1/parent": `{"type":"Datacenter","value":"datacenter-1"}`,
+	}
+	mux := http.NewServeMux()
+	for path, body := range parents {
+		body := body
+		mux.HandleFunc(path, func(w http.ResponseWriter, _ *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(body))
+		})
+	}
+	server := httptest.NewTLSServer(mux)
+	defer server.Close()
+
+	client, err := NewClient(ClientConfig{
+		Host:               server.URL,
+		Username:           "admin",
+		Password:           "secret",
+		InsecureSkipVerify: true,
+		Timeout:            5 * time.Second,
+	})
+	if err != nil {
+		t.Fatalf("NewClient: %v", err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	cache := newVMwareTopologyCache()
+
+	for _, tc := range []struct {
+		ref  viJSONReference
+		want vmwarePlacement
+	}{
+		{viJSONReference{Type: "Network", Value: "network-1"}, vmwarePlacement{FolderID: "group-a", FolderName: "group-a"}},
+		{viJSONReference{Type: "Folder", Value: "group-b"}, vmwarePlacement{FolderID: "group-b", FolderName: "group-b"}},
+		{viJSONReference{Type: "Network", Value: "network-2"}, vmwarePlacement{DatacenterID: "datacenter-1", DatacenterName: "datacenter-1"}},
+	} {
+		got, err := cache.resolvePlacement(ctx, client, "9.0.0.0", "vi-session", tc.ref)
+		if err != nil {
+			t.Fatalf("%s: parent loop should not fail placement: %v", tc.ref.Value, err)
+		}
+		if got != tc.want {
+			t.Fatalf("%s: placement = %+v, want %+v", tc.ref.Value, got, tc.want)
+		}
+	}
+}

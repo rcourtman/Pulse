@@ -5,14 +5,21 @@ package installtests
 import (
 	"bytes"
 	"context"
+	"crypto/ecdsa"
 	"crypto/ed25519"
+	"crypto/elliptic"
 	"crypto/rand"
+	"crypto/sha256"
+	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
+	"encoding/base64"
 	"encoding/pem"
 	"errors"
 	"fmt"
+	"io"
 	"math/big"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -33,8 +40,11 @@ import (
 // This is transport proof, not signature, service or installed-profile proof.
 func TestAgentInstallerDownloadCurlConfigIsolation(t *testing.T) {
 	for _, phase := range []string{"version", "agent", "helper", "runner"} {
-		for _, mode := range []string{"trusted", "untrusted-ca", "http-error", "redirect", "explicit-insecure", "environment-ca", "environment-proxy"} {
+		for _, mode := range []string{"trusted", "untrusted-ca", "http-error", "redirect", "explicit-insecure", "environment-ca", "environment-proxy", "pinned-public-key", "other-pinned-public-key"} {
 			t.Run(phase+"/"+mode, func(t *testing.T) {
+				// A verified --server-fingerprint leaves INSECURE=true, so the
+				// pin is all that identifies the peer of these transfers.
+				pinned := strings.HasSuffix(mode, "pinned-public-key")
 				root := t.TempDir()
 				trace := filepath.Join(root, "ambient-trace")
 				var mu sync.Mutex
@@ -86,7 +96,7 @@ func TestAgentInstallerDownloadCurlConfigIsolation(t *testing.T) {
 					proxyEnv = []string{"http_proxy=" + proxy.URL, "NO_PROXY=", "no_proxy="}
 				}
 				ca := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: server.Certificate().Raw})
-				if mode == "untrusted-ca" || mode == "explicit-insecure" {
+				if mode == "untrusted-ca" || mode == "explicit-insecure" || pinned {
 					// httptest TLS servers share a certificate; create a distinct
 					// trust root rather than using another httptest server's CA.
 					public, private, err := ed25519.GenerateKey(rand.Reader)
@@ -150,8 +160,15 @@ DOWNLOAD_QUERY=arch=linux-amd64
 					// curl must retain the standard SSL_CERT_FILE environment CA.
 					cmd.Env = append(cmd.Env, "CURL_CA_BUNDLE=")
 				}
-				if mode == "explicit-insecure" {
+				if mode == "explicit-insecure" || pinned {
 					cmd.Env = append(cmd.Env, "INSECURE=true")
+				}
+				if pinned {
+					pin := sha256.Sum256(server.Certificate().RawSubjectPublicKeyInfo)
+					if mode == "other-pinned-public-key" {
+						pin = sha256.Sum256([]byte("public key of another server"))
+					}
+					cmd.Env = append(cmd.Env, "CURL_PINNED_PUBKEY=sha256//"+base64.StdEncoding.EncodeToString(pin[:]))
 				}
 				cmd.Env = append(cmd.Env, proxyEnv...)
 				// A deadline regression must not strand curl after its shell exits.
@@ -173,7 +190,7 @@ DOWNLOAD_QUERY=arch=linux-amd64
 						t.Fatal(err)
 					}
 				}
-				transferOK := mode != "untrusted-ca" && mode != "http-error"
+				transferOK := mode != "untrusted-ca" && mode != "http-error" && mode != "other-pinned-public-key"
 				wantExit := 0
 				if phase != "version" {
 					if !transferOK {
@@ -215,7 +232,7 @@ DOWNLOAD_QUERY=arch=linux-amd64
 				}
 				mu.Lock()
 				wantRequests := []string{"GET " + path}
-				if mode == "untrusted-ca" {
+				if mode == "untrusted-ca" || mode == "other-pinned-public-key" {
 					wantRequests = nil
 				} else if mode == "redirect" {
 					wantRequests = append(wantRequests, "GET /redirected")
@@ -238,6 +255,129 @@ DOWNLOAD_QUERY=arch=linux-amd64
 				t.Logf("%s/%s exit=%d requests=%v", phase, mode, exit, requests)
 			})
 		}
+	}
+}
+
+// --server-fingerprint must hold for every connection the installer opens, not
+// only for its openssl probe. The relay stands for a peer on the network path:
+// it hands the first connections to the pinned server and every later one to a
+// server with another self-signed certificate. Preflight only: nothing is
+// downloaded, installed or run.
+func TestAgentInstallerServerFingerprintBindsEveryCurlConnection(t *testing.T) {
+	if _, err := exec.LookPath("openssl"); err != nil {
+		t.Fatal("installer fingerprint prerequisite openssl missing")
+	}
+	for _, tc := range []struct {
+		name     string
+		relayed  int // connections that reach the pinned server before the swap
+		wantExit int
+	}{
+		{"every-connection-reaches-pinned-server", 1 << 30, 0},
+		{"only-fingerprint-probe-reaches-pinned-server", 1, 11},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var mu sync.Mutex
+			var pinnedRequests, otherRequests []string
+			handler := func(requests *[]string) http.Handler {
+				return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					mu.Lock()
+					*requests = append(*requests, r.Method+" "+r.URL.Path)
+					mu.Unlock()
+					switch r.URL.Path {
+					case "/api/health":
+						w.WriteHeader(http.StatusOK)
+					case "/download/pulse-agent":
+						w.Header().Set("X-Checksum-Sha256", strings.Repeat("a", 64))
+						w.WriteHeader(http.StatusOK)
+					default:
+						http.NotFound(w, r)
+					}
+				})
+			}
+			pinned := httptest.NewTLSServer(handler(&pinnedRequests))
+			defer pinned.Close()
+			// httptest TLS servers share a certificate; the other peer needs
+			// a key of its own.
+			key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+			if err != nil {
+				t.Fatal(err)
+			}
+			template := &x509.Certificate{
+				SerialNumber: big.NewInt(1), Subject: pkix.Name{CommonName: "unpinned installer fixture"},
+				NotBefore: time.Now().Add(-time.Hour), NotAfter: time.Now().Add(time.Hour),
+				KeyUsage: x509.KeyUsageDigitalSignature, ExtKeyUsage: []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
+				IPAddresses: []net.IP{net.ParseIP("127.0.0.1")},
+			}
+			der, err := x509.CreateCertificate(rand.Reader, template, template, &key.PublicKey, key)
+			if err != nil {
+				t.Fatal(err)
+			}
+			other := httptest.NewUnstartedServer(handler(&otherRequests))
+			other.TLS = &tls.Config{Certificates: []tls.Certificate{{Certificate: [][]byte{der}, PrivateKey: key}}}
+			other.StartTLS()
+			defer other.Close()
+
+			relay, err := net.Listen("tcp", "127.0.0.1:0")
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer relay.Close()
+			go func() {
+				for accepted := 0; ; accepted++ {
+					client, err := relay.Accept()
+					if err != nil {
+						return
+					}
+					target := pinned.Listener.Addr().String()
+					if accepted >= tc.relayed {
+						target = other.Listener.Addr().String()
+					}
+					go func() {
+						defer client.Close()
+						upstream, err := net.Dial("tcp", target)
+						if err != nil {
+							return
+						}
+						defer upstream.Close()
+						go func() { _, _ = io.Copy(upstream, client) }()
+						_, _ = io.Copy(client, upstream)
+					}()
+				}
+			}()
+
+			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer cancel()
+			cmd := exec.CommandContext(ctx, "bash", repoFile("scripts", "install.sh"),
+				"--url", "https://"+relay.Addr().String(), "--state-dir", t.TempDir(),
+				"--server-fingerprint", fmt.Sprintf("%x", sha256.Sum256(pinned.Certificate().Raw)),
+				"--preflight-only", "--output", "json", "--non-interactive",
+				"--disable-docker", "--disable-kubernetes", "--disable-proxmox")
+			out, err := cmd.CombinedOutput()
+			exit := 0
+			if err != nil {
+				ee, ok := err.(*exec.ExitError)
+				if !ok {
+					t.Fatal(err)
+				}
+				exit = ee.ExitCode()
+			}
+			if ctx.Err() != nil || exit != tc.wantExit {
+				t.Fatalf("preflight exit=%d want=%d observer=%v: %s", exit, tc.wantExit, ctx.Err(), out)
+			}
+			mu.Lock()
+			defer mu.Unlock()
+			if len(otherRequests) != 0 {
+				t.Fatalf("installer sent requests to a server without the pinned certificate: %v\n%s", otherRequests, out)
+			}
+			wantRequests := []string{"GET /api/health", "HEAD /download/pulse-agent"}
+			if tc.wantExit != 0 {
+				wantRequests = nil
+			}
+			reported := strings.Contains(string(out), `"code":"pulse_unreachable"`) && strings.Contains(string(out), `"code":"agent_download_unavailable"`)
+			if strings.Join(pinnedRequests, "\n") != strings.Join(wantRequests, "\n") || reported != (tc.wantExit != 0) {
+				t.Fatalf("requests=%v want=%v refusal-reported=%v: %s", pinnedRequests, wantRequests, reported, out)
+			}
+		})
 	}
 }
 

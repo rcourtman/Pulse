@@ -3,6 +3,7 @@ package config
 import (
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -53,6 +54,51 @@ func TestImportConfigRejectsAmbiguousWebhookIDsBeforeMutation(t *testing.T) {
 				t.Fatal("rejected inventory changed the persisted restart input")
 			}
 		})
+	}
+}
+
+// A caller's check sees the decoded archive before anything is staged, and its
+// refusal is returned as it is so the caller can recognise it.
+func TestImportConfigWithCheckRefusesBeforeMutation(t *testing.T) {
+	cp := seedImportValidationState(t)
+	before := importValidationFiles(t, cp.GetConfigDir())
+	source := NewConfigPersistence(t.TempDir())
+	if err := source.SaveNodesConfig(nil, []PBSInstance{{Name: "archived", Host: "https://192.0.2.20:8007"}}, nil); err != nil {
+		t.Fatal(err)
+	}
+	archive, err := source.ExportConfig("synthetic-import-validation-passphrase")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	refusal := errors.New("synthetic refusal")
+	var seen []string
+	err = cp.ImportConfigWithCheck(archive, "synthetic-import-validation-passphrase", func(data *ExportData) error {
+		for _, pbs := range data.Nodes.PBSInstances {
+			seen = append(seen, pbs.Host)
+		}
+		// The check may read what is saved: it runs outside the import lock.
+		if _, err := cp.LoadAppriseConfig(); err != nil {
+			t.Errorf("check could not read saved configuration: %v", err)
+		}
+		return refusal
+	})
+	if err != refusal {
+		t.Fatalf("err = %v, want the check's own refusal", err)
+	}
+	if !reflect.DeepEqual(seen, []string{"https://192.0.2.20:8007"}) {
+		t.Fatalf("check saw %v, want the archive's decoded nodes", seen)
+	}
+	if !reflect.DeepEqual(before, importValidationFiles(t, cp.GetConfigDir())) {
+		t.Fatal("refused backup changed persisted configuration, credentials or import artifacts")
+	}
+
+	if err := cp.ImportConfigWithCheck(archive, "synthetic-import-validation-passphrase", func(*ExportData) error { return nil }); err != nil {
+		t.Fatalf("admitted backup was not imported: %v", err)
+	}
+	nodes, err := cp.LoadNodesConfig()
+	if err != nil || len(nodes.PBSInstances) != 1 || nodes.PBSInstances[0].Name != "archived" {
+		t.Fatalf("admitted backup was not persisted: %v", err)
 	}
 }
 

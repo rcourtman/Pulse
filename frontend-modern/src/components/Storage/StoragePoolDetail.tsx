@@ -6,10 +6,7 @@ import {
   type DetailRow,
   type DetailSection,
 } from '@/components/shared/DetailSectionTable';
-import {
-  DrawerAttentionSection,
-  DrawerNoAlertsLine,
-} from '@/components/shared/DrawerAttentionSection';
+import { DrawerAttentionSection } from '@/components/shared/DrawerAttentionSection';
 import { StatusDot } from '@/components/shared/StatusDot';
 import {
   TechnicalDetailsDisclosure,
@@ -189,9 +186,6 @@ export const StoragePoolDetail: Component<StoragePoolDetailProps> = (props) => {
           acknowledged: alert.acknowledged,
         }))}
       />
-      <Show when={(props.alerts ?? []).length === 0}>
-        <DrawerNoAlertsLine />
-      </Show>
 
       <DrawerExceptionList testId="storage-pool-drawer-exceptions" rows={exceptionRows()} />
 

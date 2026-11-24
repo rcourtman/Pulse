@@ -727,8 +727,16 @@ func (m *Manager) CheckBackupsWithInventory(
 			subjectType = normalizeBackupGuestType(ref.Type)
 		}
 
+		// Only Proxmox rollups name Proxmox guests. Other providers fill the
+		// subject ref with identifiers chosen by the reporting system (a
+		// Kubernetes cluster ID, a TrueNAS task ID or dataset name), so an ID
+		// there that merely looks like a VMID or an instance:node:vmid source
+		// ID must not attribute the rollup to a guest: its success time would
+		// then replace the guest's own backup evidence and clear its alert.
+		guestSubject := source != "Recovery"
+
 		// Primary: subjectRef.ID is the canonical proxmox guest source ID (instance:node:vmid) when linked.
-		if ref != nil && strings.TrimSpace(ref.ID) != "" {
+		if guestSubject && ref != nil && strings.TrimSpace(ref.ID) != "" {
 			if inst, nd, vmid, ok := parseGuestID(ref.ID); ok {
 				refInstance = inst
 				refNode = nd
@@ -747,7 +755,7 @@ func (m *Manager) CheckBackupsWithInventory(
 		}
 
 		// Secondary: attempt to map by VMID for orphaned/ambiguous backups.
-		if key == "" && ref != nil {
+		if guestSubject && key == "" && ref != nil {
 			vmidStr := strings.TrimSpace(vmID)
 			if vmidStr == "" {
 				vmidStr = strings.TrimSpace(ref.ID)

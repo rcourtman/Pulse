@@ -25,7 +25,7 @@ func TestAppriseTargetsNeverReachTheCommandLineAsOptions(t *testing.T) {
 	manager := NewNotificationManager("")
 	t.Cleanup(manager.Stop)
 	var args []string
-	manager.appriseExec = func(_ context.Context, got []string) (int64, error) {
+	manager.appriseExec = func(_ context.Context, got []string, _ string) (int64, error) {
 		args = got
 		return 0, nil
 	}

@@ -17,8 +17,9 @@ func (s *Server) TestRegisterAgent(agentID, hostname string) (cleanup func()) {
 		return nil
 	}
 
+	key := agentSessionKey(defaultOrganizationID, agentID)
 	s.mu.Lock()
-	s.agents[agentID] = &agentConn{
+	s.agents[key] = &agentConn{
 		agent: ConnectedAgent{
 			AgentID:  agentID,
 			Hostname: hostname,
@@ -30,7 +31,7 @@ func (s *Server) TestRegisterAgent(agentID, hostname string) (cleanup func()) {
 	return func() {
 		writeTextMessage = origWriter
 		s.mu.Lock()
-		delete(s.agents, agentID)
+		delete(s.agents, key)
 		s.mu.Unlock()
 	}
 }

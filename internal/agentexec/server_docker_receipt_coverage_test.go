@@ -136,7 +136,7 @@ func TestAgentOperationReceiptVersion_Coverage(t *testing.T) {
 			build: func() (*Server, string) {
 				s := NewServer(allowAllTestTokens)
 				s.mu.Lock()
-				s.agents["a1"] = &agentConn{agent: ConnectedAgent{AgentID: "a1", OperationReceiptVersion: 7}}
+				s.agents[agentSessionKey(defaultOrganizationID, "a1")] = &agentConn{agent: ConnectedAgent{AgentID: "a1", OperationReceiptVersion: 7}}
 				s.mu.Unlock()
 				return s, "a2"
 			},
@@ -147,7 +147,7 @@ func TestAgentOperationReceiptVersion_Coverage(t *testing.T) {
 			build: func() (*Server, string) {
 				s := NewServer(allowAllTestTokens)
 				s.mu.Lock()
-				s.agents["a1"] = &agentConn{agent: ConnectedAgent{AgentID: "a1", OperationReceiptVersion: 7}}
+				s.agents[agentSessionKey(defaultOrganizationID, "a1")] = &agentConn{agent: ConnectedAgent{AgentID: "a1", OperationReceiptVersion: 7}}
 				s.mu.Unlock()
 				return s, "a1"
 			},
@@ -158,7 +158,7 @@ func TestAgentOperationReceiptVersion_Coverage(t *testing.T) {
 			build: func() (*Server, string) {
 				s := NewServer(allowAllTestTokens)
 				s.mu.Lock()
-				s.agents["a1"] = &agentConn{agent: ConnectedAgent{AgentID: "a1", OperationReceiptVersion: 7}}
+				s.agents[agentSessionKey(defaultOrganizationID, "a1")] = &agentConn{agent: ConnectedAgent{AgentID: "a1", OperationReceiptVersion: 7}}
 				s.mu.Unlock()
 				return s, "  a1  "
 			},
@@ -169,7 +169,7 @@ func TestAgentOperationReceiptVersion_Coverage(t *testing.T) {
 			build: func() (*Server, string) {
 				s := NewServer(allowAllTestTokens)
 				s.mu.Lock()
-				s.agents["a1"] = &agentConn{agent: ConnectedAgent{AgentID: "a1", OperationReceiptVersion: 0}}
+				s.agents[agentSessionKey(defaultOrganizationID, "a1")] = &agentConn{agent: ConnectedAgent{AgentID: "a1", OperationReceiptVersion: 0}}
 				s.mu.Unlock()
 				return s, "a1"
 			},

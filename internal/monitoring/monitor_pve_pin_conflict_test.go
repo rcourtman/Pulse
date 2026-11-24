@@ -258,3 +258,111 @@ func TestClusterPinConflictsSurviveMonitorLifecycle(t *testing.T) {
 		}
 	}
 }
+
+// The storage fallback dials one member directly, outside the cluster client.
+// Hold that address to the pin saved for it, exactly as polling does, so a
+// machine polling refuses there is never sent the stored credential.
+func TestStorageFallbackHonoursMemberPin(t *testing.T) {
+	var requests atomic.Int32
+	member := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests.Add(1)
+		fmt.Fprint(w, `{"data":[]}`)
+	}))
+	t.Cleanup(member.Close)
+	sum := sha256.Sum256(member.Certificate().Raw)
+	for _, tc := range []struct {
+		name      string
+		pin       string
+		verifySSL bool
+		requests  int32
+	}{
+		{"saved pin matches", hex.EncodeToString(sum[:]), true, 1},
+		{"saved pin differs", strings.Repeat("0", 64), false, 0},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			requests.Store(0)
+			inst := config.PVEInstance{Name: "fallback-cluster", Host: "https://192.0.2.10:8006", TokenName: "fixture@pve!pulse", TokenValue: "fixture", VerifySSL: tc.verifySSL, IsCluster: true, ClusterEndpoints: []config.ClusterEndpoint{
+				{NodeName: "member", Host: member.URL, Fingerprint: tc.pin},
+			}}
+			m := &Monitor{config: &config.Config{}}
+			_, err := m.fetchNodeStorageFallback(context.Background(), &inst, "member")
+			if got := requests.Load(); got != tc.requests || (err == nil) != (tc.requests > 0) {
+				t.Fatalf("member received %d authenticated requests (err=%v), want %d", got, err, tc.requests)
+			}
+		})
+	}
+}
+
+// Port fallback strips :8006 to probe port 443 when the primary fails with a
+// connection error. On a cluster with a saved primary endpoint pin or
+// contradicting pins, fallback must carry the saved pin (or refuse to dial)
+// rather than sending credentials unverified on port 443.
+func TestRetryPVEPortFallbackHonoursClusterEndpointPin(t *testing.T) {
+	const primary = "https://192.0.2.10:8006"
+	cause := fmt.Errorf("dial tcp 192.0.2.10:8006: connect: connection refused")
+
+	for _, tc := range []struct {
+		name     string
+		inst     config.PVEInstance
+		wantDial bool
+		wantPin  string
+	}{
+		{
+			name: "captured primary pin carried to port fallback",
+			inst: config.PVEInstance{
+				Name: "lab", Host: primary, IsCluster: true, ClusterName: "lab",
+				ClusterEndpoints: []config.ClusterEndpoint{
+					{NodeName: "pve1", Host: primary, IP: "192.0.2.10", Fingerprint: "aa:bb"},
+				},
+			},
+			wantDial: true,
+			wantPin:  "aa:bb",
+		},
+		{
+			name: "explicit override carried to port fallback",
+			inst: config.PVEInstance{
+				Name: "lab", Host: primary, IsCluster: true, ClusterName: "lab",
+				ClusterEndpoints:        []config.ClusterEndpoint{{NodeName: "pve1", Host: primary, IP: "192.0.2.10"}},
+				TLSFingerprintOverrides: map[string]string{primary: "ee:ff"},
+			},
+			wantDial: true,
+			wantPin:  "ee:ff",
+		},
+		{
+			name: "contradicting saved pins abort port fallback without dialing",
+			inst: config.PVEInstance{
+				Name: "lab", Host: primary, IsCluster: true, ClusterName: "lab",
+				ClusterEndpoints: []config.ClusterEndpoint{
+					{NodeName: "pve1", Host: primary, Fingerprint: "aa:bb"},
+					{NodeName: "pve1-alias", Host: primary, Fingerprint: "cc:dd"},
+				},
+			},
+			wantDial: false,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			origNewClient := newProxmoxClientFunc
+			t.Cleanup(func() { newProxmoxClientFunc = origNewClient })
+
+			var dialed bool
+			var gotPin string
+			newProxmoxClientFunc = func(_ context.Context, cfg proxmox.ClientConfig) (PVEClientInterface, error) {
+				dialed = true
+				gotPin = cfg.Fingerprint
+				return nil, fmt.Errorf("tls pin rejected")
+			}
+
+			m := &Monitor{config: &config.Config{PVEInstances: []config.PVEInstance{tc.inst}}}
+			_, _, err := m.retryPVEPortFallback(context.Background(), tc.inst.Name, &tc.inst, nil, cause)
+			if err != cause {
+				t.Fatalf("err = %v, want original cause", err)
+			}
+			if dialed != tc.wantDial {
+				t.Fatalf("dialed = %v, want %v", dialed, tc.wantDial)
+			}
+			if tc.wantDial && gotPin != tc.wantPin {
+				t.Fatalf("fallback pin = %q, want %q", gotPin, tc.wantPin)
+			}
+		})
+	}
+}

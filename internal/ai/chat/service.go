@@ -526,8 +526,8 @@ func (s *Service) ExecuteStream(ctx context.Context, req ExecuteRequest, callbac
 		Bool("has_agentic_loop", agenticLoop != nil).
 		Msg("[ChatService] Retrieved internal state")
 
-	// Ensure session exists
-	session, err := sessions.EnsureSession(req.SessionID)
+	// Ensure session exists and is the caller's to continue
+	session, err := sessions.EnsureSessionFor(req.SessionID, sessionAccessFromContext(ctx))
 	if err != nil {
 		log.Error().Err(err).Str("session_id", req.SessionID).Msg("[ChatService] Failed to ensure session")
 		return fmt.Errorf("failed to ensure session: %w", err)
@@ -563,12 +563,16 @@ func (s *Service) ExecuteStream(ctx context.Context, req ExecuteRequest, callbac
 		len(handoffResources) > 0 ||
 		len(handoffActions) > 0 ||
 		handoffMetadataCarriesEnvelope
+	callerAuthority := HandoffAuthority{
+		HostCommands: req.HasHostCommandAuthority,
+		Execute:      req.HasExecuteAuthority,
+	}
 	if hasRequestHandoffEnvelope {
-		if err := sessions.SetModelHandoffEnvelope(session.ID, handoffFindingID, handoffContext, handoffResources, handoffActions, handoffMetadata); err != nil {
+		if err := sessions.SetModelHandoffEnvelopeFor(session.ID, handoffFindingID, handoffContext, handoffResources, handoffActions, handoffMetadata, callerAuthority); err != nil {
 			log.Warn().Err(err).Str("session_id", session.ID).Msg("[ChatService] Failed to persist model handoff envelope")
 		}
 	} else {
-		storedContext, storedResources, storedActions, storedMetadata, err := sessions.GetModelHandoffEnvelope(session.ID)
+		storedContext, storedResources, storedActions, storedMetadata, err := sessions.GetModelHandoffEnvelopeFor(session.ID, callerAuthority)
 		if err != nil {
 			log.Warn().Err(err).Str("session_id", session.ID).Msg("[ChatService] Failed to load model handoff envelope")
 		} else {
@@ -3037,16 +3041,43 @@ func (s *Service) ListSessions(ctx context.Context) ([]Session, error) {
 		return nil, fmt.Errorf("service not started")
 	}
 
+	access := sessionAccessFromContext(ctx)
 	list, err := sessions.List()
 	if err != nil {
 		return nil, err
 	}
+	list = access.visibleSessions(list)
 	if refreshSessionHandoffActionSummaries(sessions, orgID, actionAuditStore, list) {
 		// Some summaries were rewritten on disk; re-list (cheap, cached) so
 		// the response carries the refreshed action status.
-		return sessions.List()
+		list, err = sessions.List()
+		if err != nil {
+			return nil, err
+		}
+		list = access.visibleSessions(list)
 	}
 	return list, nil
+}
+
+// authorizeSession confines a session read or write to the sessions of the
+// caller bound to ctx (WithSessionAccess). A session the caller may not use
+// gets the store's not-found error.
+func authorizeSession(ctx context.Context, sessions *SessionStore, sessionID string) error {
+	access := sessionAccessFromContext(ctx)
+	if access.All {
+		return nil
+	}
+	if sessions == nil {
+		return sessionNotFoundError(sessionID)
+	}
+	session, err := sessions.Get(sessionID)
+	if err != nil {
+		return err
+	}
+	if !access.allows(session.ID, session.Owner) {
+		return sessionNotFoundError(sessionID)
+	}
+	return nil
 }
 
 // refreshSessionHandoffActionSummaries re-checks handoff action status against
@@ -3109,7 +3140,7 @@ func (s *Service) CreateSession(ctx context.Context) (*Session, error) {
 		return nil, fmt.Errorf("service not started")
 	}
 
-	return sessions.Create()
+	return sessions.CreateFor(sessionAccessFromContext(ctx).Owner)
 }
 
 // DeleteSession deletes a session
@@ -3120,6 +3151,9 @@ func (s *Service) DeleteSession(ctx context.Context, sessionID string) error {
 
 	if sessions == nil {
 		return fmt.Errorf("service not started")
+	}
+	if err := authorizeSession(ctx, sessions, sessionID); err != nil {
+		return err
 	}
 
 	return sessions.Delete(sessionID)
@@ -3134,6 +3168,9 @@ func (s *Service) RenameSession(ctx context.Context, sessionID, title string) (*
 	if sessions == nil {
 		return nil, fmt.Errorf("service not started")
 	}
+	if err := authorizeSession(ctx, sessions, sessionID); err != nil {
+		return nil, err
+	}
 
 	return sessions.Rename(sessionID, title)
 }
@@ -3146,6 +3183,9 @@ func (s *Service) GetMessages(ctx context.Context, sessionID string) ([]Message,
 
 	if sessions == nil {
 		return nil, fmt.Errorf("service not started")
+	}
+	if err := authorizeSession(ctx, sessions, sessionID); err != nil {
+		return nil, err
 	}
 
 	messages, err := sessions.GetMessages(sessionID)
@@ -3209,6 +3249,9 @@ func (s *Service) GetModelHandoffFindingID(ctx context.Context, sessionID string
 	if sessions == nil {
 		return "", fmt.Errorf("service not started")
 	}
+	if err := authorizeSession(ctx, sessions, sessionID); err != nil {
+		return "", err
+	}
 
 	return sessions.GetModelHandoffFindingID(sessionID)
 }
@@ -3222,6 +3265,9 @@ func (s *Service) GetModelHandoffMetadata(ctx context.Context, sessionID string)
 
 	if sessions == nil {
 		return HandoffMetadata{}, fmt.Errorf("service not started")
+	}
+	if err := authorizeSession(ctx, sessions, sessionID); err != nil {
+		return HandoffMetadata{}, err
 	}
 
 	return sessions.GetModelHandoffMetadata(sessionID)
@@ -3249,6 +3295,9 @@ func (s *Service) ClearModelHandoffContext(ctx context.Context, sessionID string
 	if sessions == nil {
 		return fmt.Errorf("service not started")
 	}
+	if err := authorizeSession(ctx, sessions, sessionID); err != nil {
+		return err
+	}
 
 	err := sessions.ClearModelHandoffContext(sessionID)
 	sessions.ClearSessionState(sessionID, true)
@@ -3259,26 +3308,23 @@ func (s *Service) ClearModelHandoffContext(ctx context.Context, sessionID string
 func (s *Service) AbortSession(ctx context.Context, sessionID string) error {
 	s.mu.RLock()
 	started := s.started
-	agenticLoop := s.agenticLoop
+	sessions := s.sessions
 	s.mu.RUnlock()
 
 	if !started {
 		return fmt.Errorf("service not started")
 	}
-
-	activeLoops := s.getActiveLoops(sessionID)
-	if len(activeLoops) > 0 {
-		for _, loop := range activeLoops {
-			loop.Abort(sessionID)
-		}
-		return nil
+	if err := authorizeSession(ctx, sessions, sessionID); err != nil {
+		return err
 	}
 
-	if agenticLoop == nil {
-		return fmt.Errorf("service not started")
+	// Each turn runs in its own loop, registered for as long as it runs, and
+	// only that loop reads and clears its abort flag. A session with no running
+	// turn has nothing to abort, so nothing is recorded for it: the ID is
+	// caller-supplied and a flag set on an idle loop would never be released.
+	for _, loop := range s.getActiveLoops(sessionID) {
+		loop.Abort(sessionID)
 	}
-
-	agenticLoop.Abort(sessionID)
 	return nil
 }
 

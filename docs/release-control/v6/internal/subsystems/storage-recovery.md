@@ -31,6 +31,10 @@ image from recovering application data. Git proposals have their own review
 branch and commit. The action protocol declares manual recovery for both
 deployment owners.
 
+### Storage disk and pool drawers follow the compact healthy header (23 November 2026)
+
+`DiskDrawer`, `DiskDrawerOverview`, `StoragePoolDrawer`, and `StoragePoolDetail` omit the standalone "No active alerts" row when healthy and render the `History range` picker in `Subtabs` trailing while Overview is active. Active alerts and `Worth checking` rows continue to appear above the charts when present, and tabless inline disk expansions inside `GuestPhysicalDisks` retain the in-panel range picker fallback inside `GuestDrawerHistory`.
+
 ### Ended reset requests do not spend saved recovery (17 November 2026)
 
 Public reset-admin cancellation observed before one-use validation returns fixed
@@ -7223,6 +7227,17 @@ derivation — sweeping protection-posture rows stranded under retired
 subject keys — so a live migration or a canonical-ID era change never forks
 one guest's protected item into stale and fresh rows. Rows without a
 recomputable guest identity keep their stored keys unchanged.
+That same key boundary is provider-scoped for Kubernetes and TrueNAS. A PVC
+or dataset ref is only unique inside the cluster or connection that reported
+it, so `recovery.SubjectKeyForPoint` hashes `ProviderScopeForPoint` into the
+external subject key for those providers: a point reported by one cluster or
+appliance must never decide the rollup outcome, success time, or backup-age
+alert of a same-named subject on another. The store's startup `BackfillKeys`
+pass re-keys stored Kubernetes and TrueNAS rows from `provider_scope` (or the
+scope in `details_json` for rows that predate that column) under a row bound
+of their own, which changes the rollup IDs of existing external Kubernetes
+and TrueNAS subjects once. Scope-less `recovery.SubjectKey` and Proxmox
+external keys are unchanged.
 The frontend decode boundary owns the runtime recovery display model:
 `frontend-modern/src/utils/recoveryPlatformModel.ts`, which
 `frontend-modern/src/hooks/useRecoveryPoints.ts` applies to every response,

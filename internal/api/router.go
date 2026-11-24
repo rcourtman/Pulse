@@ -404,6 +404,7 @@ func (r *Router) setupRoutes() {
 	})
 	r.configHandlers.SetConfig(r.config)
 	r.configHandlers.SetMockModeChangeHook(r.syncPlatformSupplementalProviders)
+	r.configHandlers.SetSSOConfigReloadHook(r.reloadSSOConfigAfterImport)
 	r.trueNASHandlers = &TrueNASHandlers{
 		getPersistence: r.configHandlers.Persistence,
 		getConfig:      r.configHandlers.Config,
@@ -1069,6 +1070,11 @@ func (r *Router) CleanupTenant(ctx context.Context, orgID string) error {
 			errs = append(errs, fmt.Errorf("resource store cleanup: %w", err))
 		}
 	}
+	if r.recoveryHandlers != nil {
+		if err := r.recoveryHandlers.CloseTenantStore(orgID); err != nil {
+			errs = append(errs, fmt.Errorf("recovery store cleanup: %w", err))
+		}
+	}
 
 	r.monitorAdapterMu.Lock()
 	delete(r.monitorResourceAdapters, orgID)
@@ -1188,7 +1194,9 @@ func (r *Router) routeAIFindings(w http.ResponseWriter, req *http.Request) {
 		if !ensureRelayMobileRuntimeRoute(w, req, relayMobileRouteFindingInvestigationMessages) {
 			return
 		}
-		r.aiSettingsHandler.HandleGetInvestigationMessages(w, req)
+		// The transcript holds host command output: bound as on the Patrol
+		// stream and run routes.
+		withAssistantActionAuthority(r.config, r.authorizer, r.aiSettingsHandler.HandleGetInvestigationMessages)(w, req)
 	case strings.HasSuffix(path, "/investigation"):
 		if !ensureRelayMobileRuntimeRoute(w, req, relayMobileRouteFindingInvestigation) {
 			return

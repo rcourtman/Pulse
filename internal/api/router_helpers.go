@@ -168,6 +168,13 @@ func (r *Router) SetMultiTenantMonitor(mtm *monitoring.MultiTenantMonitor) {
 		}
 		mtm.SetMonitorInitializer(r.configureMonitorDependencies)
 	}
+	// Chat services resolve their organization's read state through the
+	// monitor manager. A reload runs SetMonitor while the handler still holds
+	// the retired manager, so re-point them once the replacement and its
+	// initializer are in place.
+	if r.aiHandler != nil {
+		r.aiHandler.SetReadState(r.defaultReadState())
+	}
 	r.configureMetadataProviderFactory()
 
 	// Wire tenant state provider to resource handlers

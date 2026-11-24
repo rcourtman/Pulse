@@ -904,6 +904,31 @@ func TestExecuteSearchResources(t *testing.T) {
 	}
 }
 
+func TestExecuteSearchResources_HugeLimitDoesNotSizeAllocation(t *testing.T) {
+	executor := NewPulseToolExecutor(ExecutorConfig{
+		StateProvider: &mockStateProvider{state: models.StateSnapshot{
+			VMs: []models.VM{{ID: "vm1", VMID: 100, Name: "web-vm", Status: "running", Node: "node1"}},
+		}},
+	})
+
+	// The limit is model-chosen. Preallocating by it was a fatal, unrecoverable
+	// out-of-memory error for the whole process rather than a failed tool call.
+	result, err := executor.executeSearchResources(context.Background(), map[string]interface{}{
+		"query": "web",
+		"limit": float64(1_000_000_000_000),
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	var response ResourceSearchResponse
+	if err := json.Unmarshal([]byte(result.Content[0].Text), &response); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if len(response.Matches) != 1 || response.Matches[0].Name != "web-vm" || response.Total != 1 {
+		t.Fatalf("unexpected search response: %+v", response)
+	}
+}
+
 func TestExecuteSearchResources_Errors(t *testing.T) {
 	executor := NewPulseToolExecutor(ExecutorConfig{
 		StateProvider: &mockStateProvider{state: models.StateSnapshot{}},

@@ -494,7 +494,10 @@ func (r *Router) registerConfigSystemRoutes(updateHandlers *UpdateHandlers) {
 			if !r.authorizeConfigTransfer(w, req, configTransferImport) {
 				return
 			}
-			r.configHandlers.HandleImportConfig(w, req)
+			// An archive names addresses this server will connect to. A caller
+			// without instance authority imports it under the tenant outbound
+			// policy, as on the settings routes RequireOrgAdmin wraps.
+			withTenantOutboundPolicy(r.config, r.configHandlers.HandleImportConfig)(w, req)
 		} else {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		}

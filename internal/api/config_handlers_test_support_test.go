@@ -2,6 +2,7 @@ package api
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -40,7 +41,13 @@ func stubAutoRegisterNetworkDeps(t *testing.T) {
 		},
 		func(string) (string, error) { return "", nil },
 	)
-	t.Cleanup(restore)
+	restoreCredential := configapi.ConfigureAutoRegisterCredentialVerifier(
+		func(context.Context, string, proxmox.ClientConfig) error { return nil },
+	)
+	t.Cleanup(func() {
+		restoreCredential()
+		restore()
+	})
 }
 
 func runAgentAutoRegister(t *testing.T, handler *ConfigHandlers, rawToken string, payload AutoRegisterRequest) *httptest.ResponseRecorder {

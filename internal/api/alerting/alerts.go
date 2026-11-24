@@ -1203,6 +1203,14 @@ func (r alertIdentifierRequest) identifier() string {
 	return strings.TrimSpace(r.AlertIdentifier)
 }
 
+// maxBulkAlertIdentifiers bounds the identifiers one bulk request may name.
+// The 1MB body limit does not: every identifier costs a lookup and a result
+// entry however short it is, so a body of one-byte identifiers asks for far
+// more memory than it sends. 16384 is about what that body holds of
+// identifiers the length Pulse generates, so ack-all during an alert flood
+// keeps the room the body limit gives it (#1601).
+const maxBulkAlertIdentifiers = 16384
+
 type alertIdentifiersRequest struct {
 	AlertIdentifiers []string `json:"alertIdentifiers"`
 	User             string   `json:"user,omitempty"`
@@ -1468,6 +1476,10 @@ func (h *AlertHandlers) BulkAcknowledgeAlerts(w http.ResponseWriter, r *http.Req
 		http.Error(w, "No alert identifiers provided", http.StatusBadRequest)
 		return
 	}
+	if len(alertIdentifiers) > maxBulkAlertIdentifiers {
+		http.Error(w, fmt.Sprintf("Too many alert identifiers: %d exceeds maximum of %d", len(alertIdentifiers), maxBulkAlertIdentifiers), http.StatusBadRequest)
+		return
+	}
 
 	// Get the authenticated user from the auth middleware - ignore request.User to prevent spoofing
 	user := w.Header().Get("X-Authenticated-User")
@@ -1491,6 +1503,11 @@ func (h *AlertHandlers) BulkAcknowledgeAlerts(w http.ResponseWriter, r *http.Req
 		if err := monitor.GetAlertManager().AcknowledgeAlert(alertID, user); err != nil {
 			result["success"] = false
 			result["error"] = err.Error()
+			// The result already names the alert, so do not repeat the
+			// identifier the manager appends to its not-found error.
+			if errors.Is(err, alerts.ErrAlertNotFound) {
+				result["error"] = alerts.ErrAlertNotFound.Error()
+			}
 		} else {
 			anySuccess = true
 		}
@@ -1534,6 +1551,10 @@ func (h *AlertHandlers) BulkClearAlerts(w http.ResponseWriter, r *http.Request) 
 	alertIdentifiers := request.identifiers()
 	if len(alertIdentifiers) == 0 {
 		http.Error(w, "No alert identifiers provided", http.StatusBadRequest)
+		return
+	}
+	if len(alertIdentifiers) > maxBulkAlertIdentifiers {
+		http.Error(w, fmt.Sprintf("Too many alert identifiers: %d exceeds maximum of %d", len(alertIdentifiers), maxBulkAlertIdentifiers), http.StatusBadRequest)
 		return
 	}
 

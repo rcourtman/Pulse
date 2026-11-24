@@ -20,6 +20,7 @@ import {
   buildReleaseNotesUrl,
 } from '@/components/updateVersion';
 import { isReleaseVersion } from '@/components/whatsNewModel';
+import { openWhatsNewDialog } from '@/components/WhatsNewCard';
 import { UpdateInstallGuide } from '@/components/Settings/UpdateInstallGuide';
 import { UpdateHistorySection } from '@/components/Settings/UpdateHistorySection';
 import { ExternalTextLink } from '@/components/shared/ExternalTextLink';
@@ -148,13 +149,21 @@ export const UpdatesSettingsPanel: Component<UpdatesSettingsPanelProps> = (props
                         isReleaseVersion(props.versionInfo()?.version ?? '')
                       }
                     >
-                      <ExternalTextLink
-                        href={buildReleaseNotesUrl(props.versionInfo()?.version)}
-                        variant="compactAction"
-                        class="mt-1 -ml-1"
-                      >
-                        Current release notes
-                      </ExternalTextLink>
+                      <div class="mt-1 -ml-1 flex flex-wrap items-center gap-x-3 gap-y-1">
+                        <button
+                          type="button"
+                          onClick={() => openWhatsNewDialog()}
+                          class="inline-flex min-h-10 items-center rounded-sm px-1 text-xs font-medium text-blue-700 underline-offset-2 transition-colors hover:underline focus:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500/60 dark:text-blue-300 sm:min-h-9"
+                        >
+                          What's new
+                        </button>
+                        <ExternalTextLink
+                          href={buildReleaseNotesUrl(props.versionInfo()?.version)}
+                          variant="compactAction"
+                        >
+                          Current release notes
+                        </ExternalTextLink>
+                      </div>
                     </Show>
                   </div>
                 </div>

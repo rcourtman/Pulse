@@ -10046,6 +10046,16 @@ every 10 seconds and read as not connected, and whichever machine reconnected fi
 after a Pulse restart took the channel, dropping the other node's LXC Docker
 containers from the Docker page.
 
+The tenant is part of every session key, the default organization's included.
+The default key used to be the bare agent ID, which a token holder picks at
+first use, while every other tenant's was `<organization>\x00<agent ID>`. A
+default-organization agent that registered as `acme\x00<agent ID>` therefore
+held acme's slot for that host: it replaced acme's session and received the
+typed host dispatches acme approved. `/api/agent/ws` now refuses an agent ID
+that carries a control character before the token can bind to it, so the ID
+cannot hold the delimiter of a session, request or deploy-subscription key,
+and a lookup returns a session only to the organization that admitted it.
+
 A blocked registration is not a silent skip. When the pre-registration check
 reports `canRegister=false`, the agent must log at error level, return a setup
 error to its caller, and record the operator-facing reason in a

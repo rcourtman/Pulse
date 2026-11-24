@@ -397,3 +397,132 @@ func TestStore_ListRollups_IgnoresMalformedSubjectRefJSON(t *testing.T) {
 		t.Fatalf("Display = %#v, want preserved normalized item type", got[0].Display)
 	}
 }
+
+func sameNamedVolumeSnapshotPoints(failedAt, succeededAt time.Time) []recovery.RecoveryPoint {
+	point := func(id, clusterID, clusterName string, outcome recovery.Outcome, at time.Time) recovery.RecoveryPoint {
+		return recovery.RecoveryPoint{
+			ID:          id,
+			Provider:    recovery.ProviderKubernetes,
+			Kind:        recovery.KindSnapshot,
+			Mode:        recovery.ModeSnapshot,
+			Outcome:     outcome,
+			StartedAt:   &at,
+			CompletedAt: &at,
+			SubjectRef: &recovery.ExternalRef{
+				Type:      "k8s-pvc",
+				Namespace: "prod",
+				Name:      "data-postgres-0",
+			},
+			Details: map[string]any{
+				"k8sClusterId":   clusterID,
+				"k8sClusterName": clusterName,
+			},
+		}
+	}
+	return []recovery.RecoveryPoint{
+		point("prod-snapshot", "cluster-prod", "production", recovery.OutcomeFailed, failedAt),
+		point("dev-snapshot", "cluster-dev", "dev", recovery.OutcomeSuccess, succeededAt),
+	}
+}
+
+func requireRollupPerCluster(t *testing.T, store *Store) {
+	t.Helper()
+
+	rollups, total, err := store.ListRollups(context.Background(), recovery.ListPointsOptions{Page: 1, Limit: 50})
+	if err != nil {
+		t.Fatalf("ListRollups() error = %v", err)
+	}
+	if total != 2 || len(rollups) != 2 {
+		t.Fatalf("ListRollups() total=%d len=%d, want one rollup per cluster", total, len(rollups))
+	}
+	if rollups[0].RollupID == rollups[1].RollupID {
+		t.Fatalf("both clusters share rollup %q", rollups[0].RollupID)
+	}
+	outcomes := map[string]recovery.Outcome{}
+	for _, rollup := range rollups {
+		if rollup.Display == nil {
+			t.Fatalf("rollup %q has no display", rollup.RollupID)
+		}
+		outcomes[rollup.Display.ClusterLabel] = rollup.LastOutcome
+	}
+	if outcomes["production"] != recovery.OutcomeFailed || outcomes["dev"] != recovery.OutcomeSuccess {
+		t.Fatalf("rollup outcomes by cluster = %v, want production failed and dev success", outcomes)
+	}
+}
+
+func TestStore_ListRollups_KeepsSameNamedSubjectsOfOtherClustersApart(t *testing.T) {
+	t.Parallel()
+
+	store, err := Open(filepath.Join(t.TempDir(), "recovery.db"))
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+
+	failedAt := time.Date(2026, 2, 19, 11, 0, 0, 0, time.UTC)
+	points := sameNamedVolumeSnapshotPoints(failedAt, failedAt.Add(time.Hour))
+	if err := store.UpsertPoints(context.Background(), points); err != nil {
+		t.Fatalf("UpsertPoints() error = %v", err)
+	}
+
+	// The newer success of the dev cluster must not answer for production's volume.
+	requireRollupPerCluster(t, store)
+}
+
+func TestStore_OpenBackfillsProviderScopedSubjectKeys(t *testing.T) {
+	t.Parallel()
+
+	dbPath := filepath.Join(t.TempDir(), "recovery.db")
+	store, err := Open(dbPath)
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+
+	failedAt := time.Date(2026, 2, 19, 11, 0, 0, 0, time.UTC)
+	points := sameNamedVolumeSnapshotPoints(failedAt, failedAt.Add(time.Hour))
+	if err := store.UpsertPoints(context.Background(), points); err != nil {
+		t.Fatalf("UpsertPoints() error = %v", err)
+	}
+
+	// Rows written before the provider scope joined the key share one unscoped key,
+	// and the oldest of them predate the provider_scope column.
+	legacyKey := recovery.SubjectKey(recovery.ProviderKubernetes, "", points[0].SubjectRef)
+	if _, err := store.db.ExecContext(
+		context.Background(),
+		`UPDATE recovery_points SET subject_key = ?`,
+		legacyKey,
+	); err != nil {
+		t.Fatalf("degrade provider scoped subject keys: %v", err)
+	}
+	if _, err := store.db.ExecContext(
+		context.Background(),
+		`UPDATE recovery_points SET provider_scope = NULL WHERE id = ?`,
+		points[0].ID,
+	); err != nil {
+		t.Fatalf("clear provider scope: %v", err)
+	}
+	if err := store.Close(); err != nil {
+		t.Fatalf("Close() error = %v", err)
+	}
+
+	reopened, err := Open(dbPath)
+	if err != nil {
+		t.Fatalf("reopen Open() error = %v", err)
+	}
+	t.Cleanup(func() { _ = reopened.Close() })
+
+	requireRollupPerCluster(t, reopened)
+	for _, point := range points {
+		var subjectKey string
+		if err := reopened.db.QueryRowContext(
+			context.Background(),
+			`SELECT subject_key FROM recovery_points WHERE id = ?`,
+			point.ID,
+		).Scan(&subjectKey); err != nil {
+			t.Fatalf("read subject key of %s: %v", point.ID, err)
+		}
+		if want := recovery.SubjectKeyForPoint(point); subjectKey != want {
+			t.Fatalf("subject key of %s = %q, want %q", point.ID, subjectKey, want)
+		}
+	}
+}

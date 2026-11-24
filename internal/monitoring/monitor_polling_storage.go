@@ -781,10 +781,16 @@ func (m *Monitor) fetchNodeStorageFallback(ctx context.Context, instanceCfg *con
 		return nil, fmt.Errorf("fallback endpoint missing for node %s", nodeName)
 	}
 
+	// The direct client bypasses the cluster client; keep the member's own pin.
+	fingerprint, err := PVEEndpointFingerprint(*instanceCfg, target, discoveryCfg)
+	if err != nil {
+		return nil, fmt.Errorf("fallback endpoint for node %s: %w", nodeName, err)
+	}
+
 	cfg := proxmox.ClientConfig{
 		Host:        target,
 		VerifySSL:   instanceCfg.VerifySSL,
-		Fingerprint: instanceCfg.Fingerprint,
+		Fingerprint: fingerprint,
 		Timeout:     m.pollTimeout,
 	}
 	if instanceCfg.TokenName != "" && instanceCfg.TokenValue != "" {

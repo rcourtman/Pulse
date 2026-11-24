@@ -952,6 +952,7 @@ echo "AFTER_CALLER"
 }
 
 const autoUpdateTransactionInstaller = `set -euo pipefail
+PULSE_RELEASE_ASSET="install.sh"
 printf 'executed\n' > "$FIXTURE_DIR/installer-executed"
 printf 'false\n' > "$FIXTURE_DIR/active"
 [[ "$FAULT" != stop ]] || printf 'true\n' > "$FIXTURE_DIR/active"
@@ -998,38 +999,62 @@ exit 0
 // and still runs the real installer and signature verifier through curl's
 // fixture transport. The signing key never leaves this setup's private path.
 type signedAutoUpdateTransactionFixture struct {
-	publicKey string
-	signature []byte
+	publicKey           string
+	signature           []byte
+	undeclaredInstaller string
+	undeclaredSignature []byte
+	wrongAssetInstaller string
+	wrongAssetSignature []byte
 }
 
 func signAutoUpdateTransactionFixture(t *testing.T, sshKeygen string) signedAutoUpdateTransactionFixture {
 	t.Helper()
 	dir := t.TempDir()
 	key := filepath.Join(dir, "fixture-key")
-	installer := filepath.Join(dir, "installer")
-	if err := os.WriteFile(installer, []byte(autoUpdateTransactionInstaller), 0600); err != nil {
-		t.Fatal(err)
-	}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	if out, err := exec.CommandContext(ctx, sshKeygen, "-q", "-t", "ed25519", "-N", "", "-f", key).CombinedOutput(); err != nil {
 		t.Fatalf("generate transaction fixture signer: %v\n%s", err, out)
 	}
-	if out, err := exec.CommandContext(ctx, sshKeygen, "-Y", "sign", "-f", key, "-n", "pulse-install", installer).CombinedOutput(); err != nil {
-		t.Fatalf("sign transaction fixture: %v\n%s", err, out)
+	sign := func(name, content string) []byte {
+		t.Helper()
+		p := filepath.Join(dir, name)
+		if err := os.WriteFile(p, []byte(content), 0600); err != nil {
+			t.Fatal(err)
+		}
+		if out, err := exec.CommandContext(ctx, sshKeygen, "-Y", "sign", "-f", key, "-n", "pulse-install", p).CombinedOutput(); err != nil {
+			t.Fatalf("sign transaction fixture %s: %v\n%s", name, err, out)
+		}
+		sig, err := os.ReadFile(p + ".sig")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(sig) == 0 {
+			t.Fatalf("empty transaction fixture signature for %s", name)
+		}
+		return sig
+	}
+	const assetLine = `PULSE_RELEASE_ASSET="install.sh"` + "\n"
+	undeclared := strings.Replace(autoUpdateTransactionInstaller, assetLine, "", 1)
+	wrongAsset := strings.Replace(autoUpdateTransactionInstaller, assetLine, `PULSE_RELEASE_ASSET="pulse-auto-update.sh"`+"\n", 1)
+	if undeclared == autoUpdateTransactionInstaller || wrongAsset == autoUpdateTransactionInstaller {
+		t.Fatal("transaction fixture missing PULSE_RELEASE_ASSET declaration")
 	}
 	publicKey, err := os.ReadFile(key + ".pub")
 	if err != nil {
 		t.Fatal(err)
 	}
-	signature, err := os.ReadFile(installer + ".sig")
-	if err != nil {
-		t.Fatal(err)
+	if len(strings.TrimSpace(string(publicKey))) == 0 {
+		t.Fatal("empty transaction fixture public key")
 	}
-	if len(signature) == 0 || len(strings.TrimSpace(string(publicKey))) == 0 {
-		t.Fatal("empty transaction fixture signature or public key")
+	return signedAutoUpdateTransactionFixture{
+		publicKey:           strings.TrimRight(string(publicKey), "\n"),
+		signature:           sign("installer", autoUpdateTransactionInstaller),
+		undeclaredInstaller: undeclared,
+		undeclaredSignature: sign("installer-undeclared", undeclared),
+		wrongAssetInstaller: wrongAsset,
+		wrongAssetSignature: sign("installer-wrong-asset", wrongAsset),
 	}
-	return signedAutoUpdateTransactionFixture{publicKey: strings.TrimRight(string(publicKey), "\n"), signature: signature}
 }
 
 // Exercise the complete sourced updater in its real conditional-call context.
@@ -1064,6 +1089,8 @@ func TestAutoUpdateBackupTransaction(t *testing.T) {
 		{name: "installer_download_failure", fault: "download_installer", preflight: true},
 		{name: "signature_download_failure", fault: "download_signature", preflight: true},
 		{name: "invalid_signature", fault: "invalid_signature", preflight: true},
+		{name: "signed_installer_without_identity", fault: "undeclared_installer", preflight: true},
+		{name: "signed_wrong_asset_installer", fault: "wrong_asset_installer", preflight: true},
 		{name: "installer_failure", outcome: "failure"},
 		{name: "wrong_version", outcome: "mismatch"},
 		{name: "failed_version_probe", outcome: "probe_failure"},
@@ -1124,14 +1151,22 @@ func runAutoUpdateTransactionScenario(t *testing.T, fixture signedAutoUpdateTran
 	}
 	dir := t.TempDir()
 	download := autoUpdateTransactionInstaller
-	if fault == "invalid_signature" {
+	sig := fixture.signature
+	switch fault {
+	case "invalid_signature":
 		// Keep the original signature so rejection proves real verification.
 		download += "tampered\n"
+	case "undeclared_installer":
+		download = fixture.undeclaredInstaller
+		sig = fixture.undeclaredSignature
+	case "wrong_asset_installer":
+		download = fixture.wrongAssetInstaller
+		sig = fixture.wrongAssetSignature
 	}
 	if err := os.WriteFile(filepath.Join(dir, "installer"), []byte(download), 0600); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(dir, "installer.sig"), fixture.signature, 0600); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "installer.sig"), sig, 0600); err != nil {
 		t.Fatal(err)
 	}
 	script := `

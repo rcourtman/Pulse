@@ -1308,6 +1308,15 @@ func TestPVEOutageWritebackKeepsNodeIdentity(t *testing.T) {
 			wantID:         "pve-a-node1",
 			providerScoped: true,
 		},
+		{
+			name: "cluster named after another connection",
+			instances: []config.PVEInstance{
+				{Name: "pve-a", Host: "https://10.0.0.1:8006", IsCluster: true, ClusterName: "lab"},
+				{Name: "lab", Host: "https://10.0.1.1:8006"},
+			},
+			wantID:         "pve-a-node1",
+			providerScoped: true,
+		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			adapter := unifiedresources.NewMonitorAdapter(unifiedresources.NewRegistry(nil))

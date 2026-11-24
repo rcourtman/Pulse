@@ -18,6 +18,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/approval"
+	"github.com/rcourtman/pulse-go-rewrite/internal/ai/chat"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
@@ -133,6 +134,7 @@ func TestAISettingsHandler_ResolveFindingPersistsResolutionNote(t *testing.T) {
 	addUnifiedFinding(unifiedStore, "finding-resolve-note", detectedAt)
 
 	req := newLoopbackRequest(http.MethodPost, "/api/ai/patrol/resolve", strings.NewReader(`{"finding_id":"finding-resolve-note","resolution_note":" fixed after restarting the worker "}`))
+	req = req.WithContext(chat.WithHostCommandAuthority(req.Context(), true))
 	rec := httptest.NewRecorder()
 
 	handler.HandleResolveFinding(rec, req)
@@ -253,6 +255,83 @@ func TestMutatePatrolAutopilotConfigReconcilesBacklogOnlyWhenLeavingMonitor(t *t
 		t.Fatalf("Watch Only control update retriggered finding %q", findingID)
 	case <-time.After(50 * time.Millisecond):
 	}
+}
+
+// readHookBody runs a hook the first time the handler reads the request body,
+// which is the moment a client that withholds its body would release it.
+type readHookBody struct {
+	hook func()
+	body *strings.Reader
+}
+
+func (b *readHookBody) Read(p []byte) (int, error) {
+	if b.hook != nil {
+		hook := b.hook
+		b.hook = nil
+		hook()
+	}
+	return b.body.Read(p)
+}
+
+func TestAISettingsHandler_UpdateSettingsCannotRestorePatrolAutonomyChangedWhileBodyWasHeld(t *testing.T) {
+	tmp := t.TempDir()
+	persistence := config.NewConfigPersistence(tmp)
+	aiCfg := config.NewDefaultAIConfig()
+	aiCfg.PatrolAutonomyLevel = config.PatrolAutonomyApproval
+	require.NoError(t, persistence.SaveAIConfig(*aiCfg))
+	handler := newTestAISettingsHandler(&config.Config{DataPath: tmp}, persistence, nil)
+
+	setMonitor := func(cfg *config.AIConfig, _ unifiedresources.PatrolAutopilotServerPolicy) (bool, error) {
+		cfg.PatrolAutonomyLevel = config.PatrolAutonomyMonitor
+		return true, nil
+	}
+	body := &readHookBody{
+		hook: func() { require.NoError(t, handler.mutatePatrolAutopilotConfig(context.Background(), setMonitor)) },
+		body: strings.NewReader(`{"request_timeout_seconds":120}`),
+	}
+	req := newLoopbackRequest(http.MethodPut, "/api/settings/ai/update", body)
+	rec := httptest.NewRecorder()
+	handler.HandleUpdateAISettings(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	persisted, err := persistence.LoadAIConfig()
+	require.NoError(t, err)
+	require.Equal(t, 120, persisted.RequestTimeoutSeconds)
+	require.Equal(t, config.PatrolAutonomyMonitor, persisted.PatrolAutonomyLevel, "a settings save must not write back the mode it loaded")
+	require.Equal(t, config.PatrolAutonomyMonitor, handler.GetAIService(context.Background()).GetConfig().PatrolAutonomyLevel)
+}
+
+func TestSaveAISettingsConfigKeepsStoredPatrolAuthority(t *testing.T) {
+	tmp := t.TempDir()
+	persistence := config.NewConfigPersistence(tmp)
+	aiCfg := config.NewDefaultAIConfig()
+	aiCfg.PatrolAutonomyLevel = config.PatrolAutonomyApproval
+	aiCfg.PatrolInvestigationBudget = 10
+	require.NoError(t, persistence.SaveAIConfig(*aiCfg))
+	handler := newTestAISettingsHandler(&config.Config{DataPath: tmp}, persistence, nil)
+	policyMutationCalls := 0
+	handler.SetPolicyMutationCoordinator(func(write func() error) error {
+		policyMutationCalls++
+		return write()
+	})
+
+	// A settings writer loads its copy, then the mode changes before it saves.
+	stale, err := handler.loadAIConfig(context.Background())
+	require.NoError(t, err)
+	require.NoError(t, handler.mutatePatrolAutopilotConfig(context.Background(), func(cfg *config.AIConfig, _ unifiedresources.PatrolAutopilotServerPolicy) (bool, error) {
+		cfg.PatrolAutonomyLevel = config.PatrolAutonomyMonitor
+		cfg.PatrolInvestigationBudget = 20
+		return true, nil
+	}))
+	stale.RequestTimeoutSeconds = 120
+	require.NoError(t, handler.saveAISettingsConfig(context.Background(), stale))
+
+	require.Equal(t, 2, policyMutationCalls, "the settings save must serialize with autonomy mutations")
+	persisted, err := persistence.LoadAIConfig()
+	require.NoError(t, err)
+	require.Equal(t, 120, persisted.RequestTimeoutSeconds)
+	require.Equal(t, config.PatrolAutonomyMonitor, persisted.PatrolAutonomyLevel)
+	require.Equal(t, 20, persisted.PatrolInvestigationBudget)
 }
 
 func TestAISettingsProvidersProjectionCarriesSuggestedModelWireShape(t *testing.T) {
@@ -941,6 +1020,100 @@ func TestAISettingsHandler_KeylessOpenAICompatibleSetupIsConfiguredAndValidated(
 	handler.HandleUpdateAISettings(rec, req)
 	require.Equal(t, http.StatusBadRequest, rec.Code)
 	require.Contains(t, rec.Body.String(), "openai_base_url")
+}
+
+func TestAISettingsHandler_UpdateSettingsKeepsStoredSecretsOnTheirOrigin(t *testing.T) {
+	t.Parallel()
+
+	tmp := t.TempDir()
+	appConfig := &config.Config{DataPath: tmp}
+	persistence := config.NewConfigPersistence(tmp)
+	aiConfig := config.NewDefaultAIConfig()
+	aiConfig.OpenAIAPIKey = "openai-secret"
+	aiConfig.OpenAIBaseURL = "http://127.0.0.1:8080/v1"
+	aiConfig.ZaiAPIKey = "zai-secret"
+	aiConfig.OllamaBaseURL = "http://127.0.0.1:11434"
+	aiConfig.OllamaUsername = "pulse"
+	aiConfig.OllamaPassword = "ollama-secret"
+	require.NoError(t, persistence.SaveAIConfig(*aiConfig))
+	handler := newTestAISettingsHandler(appConfig, persistence, nil)
+
+	update := func(update AISettingsUpdateRequest) *httptest.ResponseRecorder {
+		t.Helper()
+		body, err := json.Marshal(update)
+		require.NoError(t, err)
+		rec := httptest.NewRecorder()
+		handler.HandleUpdateAISettings(rec, newLoopbackRequest(http.MethodPut, "/api/settings/ai/update", bytes.NewReader(body)))
+		return rec
+	}
+
+	for _, moved := range []struct {
+		name   string
+		update AISettingsUpdateRequest
+	}{
+		{"openai host", AISettingsUpdateRequest{OpenAIBaseURL: ptr("http://192.0.2.10:8080/v1")}},
+		{"openai port", AISettingsUpdateRequest{OpenAIBaseURL: ptr("http://127.0.0.1:8081/v1")}},
+		{"openai default", AISettingsUpdateRequest{OpenAIBaseURL: ptr("")}},
+		{"zai", AISettingsUpdateRequest{ZaiBaseURL: ptr("https://192.0.2.10/api/paas/v4")}},
+		{"ollama", AISettingsUpdateRequest{OllamaBaseURL: ptr("http://192.0.2.10:11434")}},
+		{"ollama password kept", AISettingsUpdateRequest{OllamaBaseURL: ptr("http://192.0.2.10:11434"), ClearOllamaPassword: ptr(false)}},
+	} {
+		rec := update(moved.update)
+		require.Equal(t, http.StatusBadRequest, rec.Code, moved.name)
+		require.Contains(t, rec.Body.String(), "credential", moved.name)
+	}
+	reopened, err := config.NewConfigPersistence(tmp).LoadAIConfig()
+	require.NoError(t, err)
+	require.Equal(t, "http://127.0.0.1:8080/v1", reopened.OpenAIBaseURL)
+	require.Empty(t, reopened.ZaiBaseURL)
+	require.Equal(t, "http://127.0.0.1:11434", reopened.OllamaBaseURL)
+
+	for _, allowed := range []struct {
+		name   string
+		update AISettingsUpdateRequest
+	}{
+		{"same origin path", AISettingsUpdateRequest{OpenAIBaseURL: ptr("http://127.0.0.1:8080/v2")}},
+		{"openai key entered", AISettingsUpdateRequest{OpenAIBaseURL: ptr("http://192.0.2.10:8080/v1"), OpenAIAPIKey: ptr("new-secret")}},
+		{"zai key cleared", AISettingsUpdateRequest{ZaiBaseURL: ptr("https://192.0.2.10/api/paas/v4"), ClearZaiKey: ptr(true)}},
+		{"ollama password entered", AISettingsUpdateRequest{OllamaBaseURL: ptr("http://192.0.2.10:11434"), OllamaPassword: ptr("new-secret")}},
+		{"ollama url cleared", AISettingsUpdateRequest{ClearOllamaURL: ptr(true)}},
+	} {
+		rec := update(allowed.update)
+		require.Equal(t, http.StatusOK, rec.Code, allowed.name+": "+rec.Body.String())
+	}
+	reopened, err = config.NewConfigPersistence(tmp).LoadAIConfig()
+	require.NoError(t, err)
+	require.Equal(t, "new-secret", reopened.OpenAIAPIKey)
+	require.Equal(t, "http://192.0.2.10:8080/v1", reopened.OpenAIBaseURL)
+	require.Empty(t, reopened.ZaiAPIKey)
+	require.Empty(t, reopened.OllamaBaseURL)
+	require.Equal(t, "new-secret", reopened.OllamaPassword)
+
+	// The stored password stays behind a cleared URL, so the next address
+	// still needs it entered.
+	rec := update(AISettingsUpdateRequest{OllamaBaseURL: ptr("http://192.0.2.20:11434")})
+	require.Equal(t, http.StatusBadRequest, rec.Code, rec.Body.String())
+
+	// An unset OpenAI URL is the official API: naming it is not a move, but
+	// its cleartext port or a custom server is.
+	for _, official := range []struct {
+		name   string
+		update AISettingsUpdateRequest
+		status int
+	}{
+		{"key for the official API", AISettingsUpdateRequest{OpenAIBaseURL: ptr(""), OpenAIAPIKey: ptr("official-secret")}, http.StatusOK},
+		{"official named", AISettingsUpdateRequest{OpenAIBaseURL: ptr("https://api.openai.com/v1")}, http.StatusOK},
+		{"official unset", AISettingsUpdateRequest{OpenAIBaseURL: ptr("")}, http.StatusOK},
+		{"official cleartext", AISettingsUpdateRequest{OpenAIBaseURL: ptr("http://api.openai.com/v1")}, http.StatusBadRequest},
+		{"official to custom", AISettingsUpdateRequest{OpenAIBaseURL: ptr("http://192.0.2.10:8080/v1")}, http.StatusBadRequest},
+	} {
+		rec := update(official.update)
+		require.Equal(t, official.status, rec.Code, official.name+": "+rec.Body.String())
+	}
+	reopened, err = config.NewConfigPersistence(tmp).LoadAIConfig()
+	require.NoError(t, err)
+	require.Equal(t, "official-secret", reopened.OpenAIAPIKey)
+	require.Empty(t, reopened.OpenAIBaseURL)
 }
 
 func TestAISettingsHandler_UpdateSettingsRejectsInvalidOllamaKeepAlive(t *testing.T) {

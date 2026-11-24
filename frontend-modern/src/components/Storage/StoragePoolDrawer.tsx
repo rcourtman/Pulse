@@ -5,6 +5,7 @@ import { DrawerSubjectHeading } from '@/components/shared/DrawerSubjectHeading';
 import { ObjectDrawerHeader } from '@/components/shared/ObjectDrawerHeader';
 import { Subtabs } from '@/components/shared/Subtabs';
 import { GUEST_DRAWER_HISTORY_DEFAULT_RANGE } from '@/components/Workloads/guestDrawerModel';
+import { GuestDrawerHistoryRangeSelect } from '@/components/Workloads/GuestDrawerHistoryRangeSelect';
 import type { PhysicalDiskAlertResourceIdResolver } from '@/features/storageBackups/diskPresentation';
 import type { StorageRecord } from '@/features/storageBackups/models';
 import { getStoragePoolStateIndicator } from '@/features/storageBackups/rowPresentation';
@@ -55,6 +56,15 @@ const StoragePoolDrawerContent: Component<StoragePoolDrawerProps> = (props) => {
           { value: 'overview', label: 'Overview' },
           { value: 'manage', label: 'Manage' },
         ]}
+        trailing={
+          <Show when={activeTab() === 'overview'}>
+            <GuestDrawerHistoryRangeSelect
+              range={historyRange()}
+              onRangeChange={setHistoryRange}
+              class="mb-1 sm:mb-0"
+            />
+          </Show>
+        }
       />
 
       {/* Use CSS hidden instead of Show to avoid mount/unmount which causes scroll jumps.
@@ -66,7 +76,6 @@ const StoragePoolDrawerContent: Component<StoragePoolDrawerProps> = (props) => {
           getDiskAlertResourceIds={props.getDiskAlertResourceIds}
           alerts={props.alerts}
           historyRange={historyRange()}
-          onHistoryRangeChange={setHistoryRange}
           historyEnabled={activeTab() === 'overview'}
         />
       </div>

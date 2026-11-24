@@ -393,6 +393,7 @@ func TestAgentInstalledProfileRollbackMetadataDoesNotReclaimDescendants(t *testi
 ROOT="$1"
 STATE_DIR="$ROOT/state"
 SAFE_PROFILE_TRANSACTION_DIR="$ROOT/transaction"
+LEAST_PRIVILEGE_USER=pulse-agent
 fail() { exit "$2"; }
 # Observe the requested ownership operations without granting root to this
 # component test. The hosted journey checks actual service ownership.

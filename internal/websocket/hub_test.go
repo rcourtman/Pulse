@@ -288,6 +288,81 @@ func TestHubRequestedStateBuildsShareSerialization(t *testing.T) {
 	}
 }
 
+// requestData is a few bytes and its answer is the whole state. A client that
+// keeps asking without taking the previous answer must not make the hub build
+// and retain one copy per request.
+func TestHubRequestedStateNotStackedForStalledClient(t *testing.T) {
+	var builds atomic.Int64
+	hub := NewHub(func(string) interface{} {
+		builds.Add(1)
+		return map[string]string{"status": "ok"}
+	})
+	// No writer drains this client, as with a peer that has stopped reading.
+	client := &Client{hub: hub, id: "stalled-requested-state", send: make(chan []byte, 128)}
+	hub.mu.Lock()
+	hub.clients[client] = true
+	hub.mu.Unlock()
+
+	for i := 0; i < cap(client.send); i++ {
+		hub.sendRequestedState(client)
+	}
+	if got := builds.Load(); got != 1 {
+		t.Fatalf("state builds for an unread client = %d, want 1", got)
+	}
+	if got := len(client.send); got != 1 {
+		t.Fatalf("queued full-state frames for an unread client = %d, want 1", got)
+	}
+
+	// Once the writer has taken that frame the next request is served.
+	client.frameDequeued(<-client.send)
+	hub.sendRequestedState(client)
+	hub.sendRequestedState(client)
+	if got := builds.Load(); got != 2 {
+		t.Fatalf("state builds after the writer took the frame = %d, want 2", got)
+	}
+	if got := len(client.send); got != 1 {
+		t.Fatalf("queued full-state frames after the writer took the frame = %d, want 1", got)
+	}
+}
+
+func TestHubRequestedStateAnsweredAgainForReadingClient(t *testing.T) {
+	hub := NewHub(func(string) interface{} {
+		return map[string]string{"status": "ok"}
+	})
+	go hub.Run()
+	t.Cleanup(hub.Stop)
+	server := httptest.NewServer(http.HandlerFunc(hub.HandleWebSocket))
+	t.Cleanup(server.Close)
+	conn, _, err := gorillawebsocket.DefaultDialer.Dial("ws"+strings.TrimPrefix(server.URL, "http")+"?org_id=default", wsHeadersForHTTP(t, server.URL))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { conn.Close() })
+	if err := conn.SetReadDeadline(time.Now().Add(10 * time.Second)); err != nil {
+		t.Fatal(err)
+	}
+	readType := func(want string) {
+		t.Helper()
+		for {
+			var msg Message
+			if err := conn.ReadJSON(&msg); err != nil {
+				t.Fatalf("waiting for %s: %v", want, err)
+			}
+			if msg.Type == want {
+				return
+			}
+		}
+	}
+
+	readType("initialState")
+	for i := 0; i < 3; i++ {
+		if err := conn.WriteJSON(Message{Type: "requestData"}); err != nil {
+			t.Fatal(err)
+		}
+		readType("rawData")
+	}
+}
+
 func TestIsValidPrivateOrigin(t *testing.T) {
 	tests := []struct {
 		name     string

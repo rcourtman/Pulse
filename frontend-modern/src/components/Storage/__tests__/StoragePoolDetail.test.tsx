@@ -183,11 +183,12 @@ describe('StoragePoolDetail (pool drawer Overview)', () => {
     );
   });
 
-  it('says there are no active alerts, or lists the pool alerts and draws their trigger', async () => {
+  it('omits the attention section when healthy, and lists pool alerts with their trigger', async () => {
     historySpy.mockClear();
     const [alerts, setAlerts] = createSignal<Alert[]>([]);
     render(() => <StoragePoolDetail record={makeRecord()} physicalDisks={[]} alerts={alerts()} />);
-    expect(screen.getByTestId('drawer-no-attention')).toHaveTextContent('No active alerts');
+    expect(screen.queryByTestId('drawer-attention-section')).toBeNull();
+    expect(screen.queryByTestId('drawer-no-attention')).toBeNull();
 
     setAlerts([alert()]);
     expect(screen.queryByTestId('drawer-no-attention')).toBeNull();
@@ -348,8 +349,8 @@ describe('StoragePoolDetail (pool drawer Overview)', () => {
   it('orders the Overview like the guest and node drawers', async () => {
     renderOverview(() => makeRecord());
     const overview = screen.getByTestId('storage-pool-drawer-overview');
+    expect(screen.queryByTestId('drawer-attention-section')).toBeNull();
     const order = [
-      screen.getByTestId('drawer-no-attention'),
       await screen.findByTestId('drawer-history'),
       screen.getByTestId('storage-pool-drawer-facts'),
       screen.getByTestId('storage-pool-technical-details'),
@@ -401,10 +402,13 @@ describe('StoragePoolDrawer', () => {
   it('owns the chart range in the drawer and resets it for another pool', async () => {
     const [record, setRecord] = createSignal(makeRecord());
     render(() => <StoragePoolDrawer record={record()} physicalDisks={[]} onClose={() => {}} />);
-    fireEvent.click(await screen.findByRole('button', { name: 'Pick 7 days' }));
-    expect(screen.getByTestId('drawer-history')).toHaveAttribute('data-range', '7d');
+    const rangeSelect = screen.getByTestId('guest-history-range-control');
+    expect(rangeSelect).toHaveValue('24h');
+    fireEvent.change(rangeSelect, { target: { value: '7d' } });
+    expect(await screen.findByTestId('drawer-history')).toHaveAttribute('data-range', '7d');
 
     setRecord(makeRecord({ id: 'storage-2', name: 'backup' }));
     expect(await screen.findByTestId('drawer-history')).toHaveAttribute('data-range', '24h');
+    expect(screen.getByTestId('guest-history-range-control')).toHaveValue('24h');
   });
 });

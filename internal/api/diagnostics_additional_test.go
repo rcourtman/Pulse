@@ -319,6 +319,79 @@ func TestComputeDiagnostics_PVE_HonoursStoredFingerprint(t *testing.T) {
 	}
 }
 
+// A cluster's certificate pins are saved per endpoint, and the connection's own
+// Fingerprint field is empty when they were captured at discovery. The probe
+// must resolve the pin for the address it dials the way polling does, so a
+// machine polling refuses never receives the stored credential from diagnostics.
+func TestComputeDiagnostics_PVE_HonoursClusterEndpointTrust(t *testing.T) {
+	otherPin := strings.Repeat("0", 64)
+	tests := []struct {
+		name          string
+		verifySSL     bool
+		trust         func(instance *config.PVEInstance, host, serverPin string)
+		wantConnected bool
+	}{
+		{name: "pin captured for the member", trust: func(instance *config.PVEInstance, host, _ string) {
+			instance.ClusterEndpoints[0].Fingerprint = otherPin
+		}},
+		{name: "pin saved for the endpoint", trust: func(instance *config.PVEInstance, host, _ string) {
+			instance.TLSFingerprintOverrides = map[string]string{host: otherPin}
+		}},
+		{name: "contradicting saved pins", trust: func(instance *config.PVEInstance, host, serverPin string) {
+			instance.ClusterEndpoints[0].Fingerprint = serverPin
+			instance.ClusterEndpoints = append(instance.ClusterEndpoints, config.ClusterEndpoint{NodeName: "node2", Host: host, Fingerprint: otherPin})
+		}},
+		{name: "matching member pin", verifySSL: true, wantConnected: true, trust: func(instance *config.PVEInstance, _, serverPin string) {
+			instance.ClusterEndpoints[0].Fingerprint = serverPin
+		}},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			var requests atomic.Int32
+			server := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				requests.Add(1)
+				w.Header().Set("Content-Type", "application/json")
+				switch r.URL.Path {
+				case "/api2/json/nodes":
+					_, _ = w.Write([]byte(`{"data":[{"node":"node1","status":"online"}]}`))
+				default:
+					_, _ = w.Write([]byte(`{"data":[]}`))
+				}
+			}))
+			server.Config.ErrorLog = log.New(io.Discard, "", 0)
+			server.StartTLS()
+			t.Cleanup(server.Close)
+			sum := sha256.Sum256(server.Certificate().Raw)
+
+			instance := config.PVEInstance{
+				Name:             "cluster",
+				Host:             server.URL,
+				TokenName:        "user@pam!token",
+				TokenValue:       "secret",
+				VerifySSL:        tc.verifySSL,
+				IsCluster:        true,
+				ClusterName:      "cluster",
+				ClusterEndpoints: []config.ClusterEndpoint{{NodeName: "node1", Host: server.URL}},
+			}
+			tc.trust(&instance, server.URL, hex.EncodeToString(sum[:]))
+			// No monitor client is built, so every request counted is the probe's.
+			router := &Router{config: &config.Config{DataPath: t.TempDir(), PVEInstances: []config.PVEInstance{instance}}, monitor: newMonitorForDiagnostics(t, nil)}
+
+			diag := router.computeDiagnostics(context.Background())
+
+			if len(diag.Nodes) != 1 {
+				t.Fatalf("expected 1 PVE node diagnostic, got %d", len(diag.Nodes))
+			}
+			if diag.Nodes[0].Connected != tc.wantConnected {
+				t.Fatalf("Connected = %v, want %v (error %q)", diag.Nodes[0].Connected, tc.wantConnected, diag.Nodes[0].Error)
+			}
+			if got := requests.Load(); (got > 0) != tc.wantConnected {
+				t.Fatalf("server received %d authenticated requests, want any = %v", got, tc.wantConnected)
+			}
+		})
+	}
+}
+
 // Real loopback TLS probes exercise the production PVE/PBS diagnostics, not
 // just the guidance helper. No native guest, backup or trust setting is changed.
 func TestComputeDiagnosticsTLSRefusalAndVerifiedRecovery(t *testing.T) {

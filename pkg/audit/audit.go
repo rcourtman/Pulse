@@ -13,6 +13,7 @@ import (
 	"encoding/hex"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	"github.com/google/uuid"
 	"github.com/rs/zerolog"
@@ -30,6 +31,48 @@ type Event struct {
 	Success   bool      `json:"success"`
 	Details   string    `json:"details,omitempty"`
 	Signature string    `json:"signature,omitempty"` // Empty for OSS, HMAC for enterprise
+}
+
+// Bounds on the text of a recorded event. Event text can come from requests
+// that carry no credentials (the user name of a failed Basic sign-in, the
+// request path, an identity provider's error), while readers bound only how
+// many events they hold in memory: up to MaxExportEvents, whose JSON can take
+// six bytes for each byte of text. The user bound keeps the longest local
+// user name (128 characters of up to four bytes) whole, so filtering by user
+// still finds its events.
+const (
+	maxEventTypeBytes    = 64
+	maxEventUserBytes    = 512
+	maxEventIPBytes      = 64
+	maxEventPathBytes    = 512
+	maxEventDetailsBytes = 1024
+
+	eventTruncationTag = "...[truncated]"
+)
+
+// boundEvent bounds event text before it is queued, signed or stored, so the
+// signature covers exactly what is kept. Events that fit are unchanged.
+func boundEvent(event Event) Event {
+	event.EventType = boundEventText(event.EventType, maxEventTypeBytes)
+	event.User = boundEventText(event.User, maxEventUserBytes)
+	event.IP = boundEventText(event.IP, maxEventIPBytes)
+	event.Path = boundEventText(event.Path, maxEventPathBytes)
+	event.Details = boundEventText(event.Details, maxEventDetailsBytes)
+	return event
+}
+
+func boundEventText(text string, maxBytes int) string {
+	if len(text) <= maxBytes {
+		return text
+	}
+	end := maxBytes - len(eventTruncationTag)
+	// Do not split a multi-byte character.
+	for back := 1; back < utf8.UTFMax && end > 0 && !utf8.RuneStart(text[end]); back++ {
+		end--
+	}
+	// The concatenation copies the kept prefix: the oversized original is not
+	// retained by the event.
+	return text[:end] + eventTruncationTag
 }
 
 // QueryFilter defines filters for querying audit events.
@@ -214,6 +257,8 @@ func (c *ConsoleLogger) IsPersistentAuditLogger() bool {
 
 // Record writes a redacted audit event projection to zerolog.
 func (c *ConsoleLogger) Record(event Event) error {
+	event = boundEvent(event)
+
 	logContext := log.With().
 		Str("audit_id", event.ID).
 		Str("event", event.EventType).

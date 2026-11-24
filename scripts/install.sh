@@ -118,6 +118,7 @@ UNINSTALL="false"
 INSECURE="false"
 INSECURE_EXPLICIT="false"
 SERVER_FINGERPRINT="${PULSE_SERVER_FINGERPRINT:-}"
+CURL_PINNED_PUBKEY="" # curl --pinnedpubkey value derived from the verified --server-fingerprint certificate
 OBSERVERS_FILE="${PULSE_OBSERVERS_FILE:-}"
 AGENT_ID=""
 HOSTNAME_OVERRIDE=""
@@ -1794,7 +1795,8 @@ read_truenas_agent_removal_tasks() {
         printf '\n%s' '__pulse_truenas_tasks_complete__') || return 1
     # Parse the complete inventory, including indirect/other-install bootstrap
     # references. No task command, name, argument or credential is returned.
-    python3 -c '
+    # Isolated (-I): no imports from the working directory or PYTHONPATH.
+    python3 -I -c '
 import json, pathlib, sys
 def unique_object(pairs):
     result = {}
@@ -2883,6 +2885,7 @@ safe_profile_restore_state_metadata() {
     local snapshot_state_dir="$2"
     local metadata_file="${transaction_dir}/state-metadata.bin"
     local relative_path="" uid="" gid="" mode="" entry_type="" destination=""
+    local collector_uid=""
 
     [[ -f "$metadata_file" && ! -L "$metadata_file" ]] || return 1
     while IFS= read -r -d '' relative_path &&
@@ -2899,6 +2902,19 @@ safe_profile_restore_state_metadata() {
         [[ -d "$destination" && ! -L "$destination" && "$entry_type" == "directory" ]] || return 1
         chown "${uid}:${gid}" "$destination" || return 1
         chmod "$mode" "$destination" || return 1
+        # Not replaying descendants is only half of that boundary. The
+        # collector account owned this directory while the safe profile was
+        # active, so it chose every name, link target and byte still below it,
+        # and a restored service running as another account (root in the
+        # default profile) loads and rewrites its state there by name. Unless
+        # the directory returns to that same collector account, keep only what
+        # the restored owner already holds and discard the rest rather than
+        # re-owning it. The state root was taken back above, so the collector
+        # account cannot plant anything below it again.
+        collector_uid=$(id -u "$LEAST_PRIVILEGE_USER" 2>/dev/null || true)
+        if [[ "$uid" != "$collector_uid" ]]; then
+            find "$destination" -mindepth 1 ! -uid "$uid" -prune -exec rm -rf -- {} + || return 1
+        fi
     done < "$metadata_file"
 }
 
@@ -3022,10 +3038,13 @@ safe_profile_restore_entry() {
     local manifest_key="$4"
     local present=""
     present=$(safe_profile_manifest_value "${transaction_dir}/manifest.env" "$manifest_key")
-    rm -f "$destination"
+    # Replace the destination name itself. cp would copy into a directory left
+    # there and write through any symlink waiting inside it. Rollback runs
+    # with errexit suppressed by its callers, so every step reports failure.
+    rm -rf -- "$destination" || return 1
     if [[ "$present" == "true" ]]; then
-        mkdir -p "$(dirname "$destination")"
-        cp -a "${transaction_dir}/${snapshot_name}" "$destination"
+        mkdir -p "$(dirname "$destination")" || return 1
+        cp -a "${transaction_dir}/${snapshot_name}" "$destination" || return 1
     fi
 }
 
@@ -3070,6 +3089,10 @@ safe_profile_restore_transaction() {
     [[ "$format_version" == "1" || "$format_version" == "2" || "$format_version" == "3" ]] || return 1
     snapshot_state_dir=$(safe_profile_manifest_value "$manifest_file" STATE_DIR)
     [[ -n "$snapshot_state_dir" && "$snapshot_state_dir" == /* && "$snapshot_state_dir" != "/" ]] || return 1
+    if [[ ! -d "$snapshot_state_dir" || -L "$snapshot_state_dir" ]]; then
+        log_error "Refusing unsafe safe-profile state directory: ${snapshot_state_dir}"
+        return 1
+    fi
     prior_profile=$(safe_profile_manifest_value "$manifest_file" PRIOR_PROFILE)
 
     # Restoration replaces executables, credentials and saved identity. A
@@ -3081,36 +3104,44 @@ safe_profile_restore_transaction() {
         log_error "Safe-profile rollback could not confirm stopped, disabled collector/helper units; installed files and the rollback snapshot were retained. Some units may now be stopped or disabled; reconcile service state before retrying."
         return 1
     fi
-    safe_profile_restore_entry "$transaction_dir" collector-binary "${INSTALL_DIR}/${BINARY_NAME}" COLLECTOR_BINARY
-    safe_profile_restore_entry "$transaction_dir" collector-unit "$SAFE_PROFILE_COLLECTOR_UNIT" COLLECTOR_UNIT
+    # The collector account owns the state root during the safe profile and
+    # can leave a directory or symlink at any name restored beneath it, or put
+    # one back between a removal and its copy. Take write access to the root
+    # away from that account before the first root-owned pathname operation
+    # inside it. Its parent is root, so the root itself cannot be replaced.
+    # The saved owner and mode return only after every entry is restored.
+    chown "$EUID" "$snapshot_state_dir" || return 1
+    chmod go-w "$snapshot_state_dir" || return 1
+    safe_profile_restore_entry "$transaction_dir" collector-binary "${INSTALL_DIR}/${BINARY_NAME}" COLLECTOR_BINARY || return 1
+    safe_profile_restore_entry "$transaction_dir" collector-unit "$SAFE_PROFILE_COLLECTOR_UNIT" COLLECTOR_UNIT || return 1
     # The server-side execution-scope reduction deliberately survives both
     # explicit and automatic local rollback. Never recreate a command-capable
     # collector configuration around that monitoring-only credential.
     safe_profile_remove_collector_command_authority "$SAFE_PROFILE_COLLECTOR_UNIT" || return 1
-    safe_profile_restore_entry "$transaction_dir" helper-binary "$PRIVILEGED_HELPER_BINARY_PATH" HELPER_BINARY
-    safe_profile_restore_entry "$transaction_dir" helper-service-unit "$PRIVILEGED_HELPER_SERVICE_UNIT" HELPER_SERVICE_UNIT
-    safe_profile_restore_entry "$transaction_dir" helper-socket-unit "$PRIVILEGED_HELPER_SOCKET_UNIT" HELPER_SOCKET_UNIT
-    safe_profile_restore_entry "$transaction_dir" legacy-sudoers "$PRIVILEGE_SUDOERS_FILE" LEGACY_SUDOERS
-    safe_profile_restore_entry "$transaction_dir" legacy-smartctl-wrapper "${PRIVILEGE_HELPER_DIR}/smartctl" LEGACY_SMARTCTL_WRAPPER
-    safe_profile_restore_entry "$transaction_dir" legacy-pct-wrapper "${PRIVILEGE_HELPER_DIR}/pct" LEGACY_PCT_WRAPPER
-    safe_profile_restore_entry "$transaction_dir" state-token "${snapshot_state_dir%/}/token" STATE_TOKEN
-    safe_profile_restore_entry "$transaction_dir" runtime-token "${snapshot_state_dir%/}/runtime.token" RUNTIME_TOKEN
-    safe_profile_restore_entry "$transaction_dir" agent-id "${snapshot_state_dir%/}/agent-id" AGENT_ID_FILE
-    safe_profile_restore_entry "$transaction_dir" connection-env "${snapshot_state_dir%/}/connection.env" CONNECTION_ENV
+    safe_profile_restore_entry "$transaction_dir" helper-binary "$PRIVILEGED_HELPER_BINARY_PATH" HELPER_BINARY || return 1
+    safe_profile_restore_entry "$transaction_dir" helper-service-unit "$PRIVILEGED_HELPER_SERVICE_UNIT" HELPER_SERVICE_UNIT || return 1
+    safe_profile_restore_entry "$transaction_dir" helper-socket-unit "$PRIVILEGED_HELPER_SOCKET_UNIT" HELPER_SOCKET_UNIT || return 1
+    safe_profile_restore_entry "$transaction_dir" legacy-sudoers "$PRIVILEGE_SUDOERS_FILE" LEGACY_SUDOERS || return 1
+    safe_profile_restore_entry "$transaction_dir" legacy-smartctl-wrapper "${PRIVILEGE_HELPER_DIR}/smartctl" LEGACY_SMARTCTL_WRAPPER || return 1
+    safe_profile_restore_entry "$transaction_dir" legacy-pct-wrapper "${PRIVILEGE_HELPER_DIR}/pct" LEGACY_PCT_WRAPPER || return 1
+    safe_profile_restore_entry "$transaction_dir" state-token "${snapshot_state_dir%/}/token" STATE_TOKEN || return 1
+    safe_profile_restore_entry "$transaction_dir" runtime-token "${snapshot_state_dir%/}/runtime.token" RUNTIME_TOKEN || return 1
+    safe_profile_restore_entry "$transaction_dir" agent-id "${snapshot_state_dir%/}/agent-id" AGENT_ID_FILE || return 1
+    safe_profile_restore_entry "$transaction_dir" connection-env "${snapshot_state_dir%/}/connection.env" CONNECTION_ENV || return 1
     if [[ "$format_version" == "3" ]]; then
-        safe_profile_restore_entry "$transaction_dir" lifecycle-connection-env "${INSTALLER_LIFECYCLE_DIR%/}/connection.env" LIFECYCLE_CONNECTION_ENV
-        safe_profile_restore_entry "$transaction_dir" lifecycle-install-script "${INSTALLER_LIFECYCLE_DIR%/}/install.sh" LIFECYCLE_INSTALL_SCRIPT
-        safe_profile_restore_entry "$transaction_dir" lifecycle-install-checksum "${INSTALLER_LIFECYCLE_DIR%/}/install.sh.sha256" LIFECYCLE_INSTALL_CHECKSUM
+        safe_profile_restore_entry "$transaction_dir" lifecycle-connection-env "${INSTALLER_LIFECYCLE_DIR%/}/connection.env" LIFECYCLE_CONNECTION_ENV || return 1
+        safe_profile_restore_entry "$transaction_dir" lifecycle-install-script "${INSTALLER_LIFECYCLE_DIR%/}/install.sh" LIFECYCLE_INSTALL_SCRIPT || return 1
+        safe_profile_restore_entry "$transaction_dir" lifecycle-install-checksum "${INSTALLER_LIFECYCLE_DIR%/}/install.sh.sha256" LIFECYCLE_INSTALL_CHECKSUM || return 1
     fi
     if [[ "$format_version" == "2" || "$format_version" == "3" ]]; then
-        safe_profile_restore_entry "$transaction_dir" proxmox-registered "${snapshot_state_dir%/}/proxmox-registered" PROXMOX_REGISTERED
-        safe_profile_restore_entry "$transaction_dir" proxmox-pve-registered "${snapshot_state_dir%/}/proxmox-pve-registered" PROXMOX_PVE_REGISTERED
-        safe_profile_restore_entry "$transaction_dir" proxmox-pbs-registered "${snapshot_state_dir%/}/proxmox-pbs-registered" PROXMOX_PBS_REGISTERED
-        safe_profile_restore_entry "$transaction_dir" proxmox-pve-registration-blocked "${snapshot_state_dir%/}/proxmox-pve-registration-blocked" PROXMOX_PVE_REGISTRATION_BLOCKED
-        safe_profile_restore_entry "$transaction_dir" proxmox-pbs-registration-blocked "${snapshot_state_dir%/}/proxmox-pbs-registration-blocked" PROXMOX_PBS_REGISTRATION_BLOCKED
-        safe_profile_restore_entry "$transaction_dir" proxmox-detected-types "${snapshot_state_dir%/}/proxmox-detected-types" PROXMOX_DETECTED_TYPES
+        safe_profile_restore_entry "$transaction_dir" proxmox-registered "${snapshot_state_dir%/}/proxmox-registered" PROXMOX_REGISTERED || return 1
+        safe_profile_restore_entry "$transaction_dir" proxmox-pve-registered "${snapshot_state_dir%/}/proxmox-pve-registered" PROXMOX_PVE_REGISTERED || return 1
+        safe_profile_restore_entry "$transaction_dir" proxmox-pbs-registered "${snapshot_state_dir%/}/proxmox-pbs-registered" PROXMOX_PBS_REGISTERED || return 1
+        safe_profile_restore_entry "$transaction_dir" proxmox-pve-registration-blocked "${snapshot_state_dir%/}/proxmox-pve-registration-blocked" PROXMOX_PVE_REGISTRATION_BLOCKED || return 1
+        safe_profile_restore_entry "$transaction_dir" proxmox-pbs-registration-blocked "${snapshot_state_dir%/}/proxmox-pbs-registration-blocked" PROXMOX_PBS_REGISTRATION_BLOCKED || return 1
+        safe_profile_restore_entry "$transaction_dir" proxmox-detected-types "${snapshot_state_dir%/}/proxmox-detected-types" PROXMOX_DETECTED_TYPES || return 1
     fi
-    safe_profile_restore_entry "$transaction_dir" protected-token "${PRIVILEGED_HELPER_CREDENTIAL_DIR}/token" PROTECTED_TOKEN
+    safe_profile_restore_entry "$transaction_dir" protected-token "${PRIVILEGED_HELPER_CREDENTIAL_DIR}/token" PROTECTED_TOKEN || return 1
     if [[ "$(safe_profile_manifest_value "$manifest_file" PROTECTED_DIR)" == "true" ]]; then
         chown "$(safe_profile_manifest_value "$manifest_file" PROTECTED_DIR_UID):$(safe_profile_manifest_value "$manifest_file" PROTECTED_DIR_GID)" "$PRIVILEGED_HELPER_CREDENTIAL_DIR" || return 1
         chmod "$(safe_profile_manifest_value "$manifest_file" PROTECTED_DIR_MODE)" "$PRIVILEGED_HELPER_CREDENTIAL_DIR" || return 1
@@ -3119,6 +3150,10 @@ safe_profile_restore_transaction() {
     fi
     if [[ "$format_version" == "2" || "$format_version" == "3" ]]; then
         safe_profile_restore_state_metadata "$transaction_dir" "$snapshot_state_dir" || return 1
+    else
+        # Format-v1 snapshots recorded no state-root metadata and left the
+        # root with the collector account. Hand it back in the same way.
+        chown "$LEAST_PRIVILEGE_USER" "$snapshot_state_dir" || return 1
     fi
     rm -f "$PRIVILEGED_HELPER_SOCKET_PATH"
 
@@ -5117,6 +5152,8 @@ verify_pinned_server_certificate() {
     local host=""
     local target=""
     local actual=""
+    local certificate=""
+    local public_key_pin=""
     normalized=$(printf '%s' "$SERVER_FINGERPRINT" | tr -d ': \t\r\n\v\f' | LC_ALL=C tr 'ABCDEFGHIJKLMNOPQRSTUVWXYZ' 'abcdefghijklmnopqrstuvwxyz')
     if [[ ! "$normalized" =~ ^[a-f0-9]{64}$ ]]; then
         fail "Invalid --server-fingerprint value. Expected a SHA-256 certificate fingerprint (64 hexadecimal characters)." "$EXIT_PREFLIGHT_FAILED"
@@ -5135,7 +5172,9 @@ verify_pinned_server_certificate() {
         if [[ "$authority" != *:* ]]; then target="${authority}:443"; fi
     fi
 
-    actual=$(openssl s_client -connect "$target" -servername "$host" </dev/null 2>/dev/null \
+    certificate=$(openssl s_client -connect "$target" -servername "$host" </dev/null 2>/dev/null \
+        | openssl x509 2>/dev/null)
+    actual=$(printf '%s\n' "$certificate" \
         | openssl x509 -outform DER 2>/dev/null \
         | openssl dgst -sha256 2>/dev/null \
         | awk '{print tolower($NF)}')
@@ -5143,9 +5182,24 @@ verify_pinned_server_certificate() {
         fail "Pulse server certificate fingerprint mismatch. Expected ${normalized}, got ${actual:-unavailable}." "$EXIT_PREFLIGHT_FAILED"
     fi
 
+    # The probe authenticates only its own connection, and curl opens a new one
+    # for every request. Bind each of those to the public key of the certificate
+    # that matched the fingerprint, because -k alone would accept any peer.
+    public_key_pin=$(printf '%s\n' "$certificate" \
+        | openssl x509 -pubkey -noout 2>/dev/null \
+        | openssl pkey -pubin -outform DER 2>/dev/null \
+        | openssl dgst -sha256 -binary 2>/dev/null \
+        | openssl base64 2>/dev/null \
+        | tr -d '\r\n') || public_key_pin=""
+    if [[ ! "$public_key_pin" =~ ^[A-Za-z0-9+/]{43}=$ ]]; then
+        fail "Could not derive the public key pin of the verified Pulse server certificate. Refusing to download without it." "$EXIT_PREFLIGHT_FAILED"
+    fi
+
     SERVER_FINGERPRINT="$normalized"
-    # curl must accept the self-signed chain after the explicit pin check. The
-    # downloaded installer and binary still require their own signatures.
+    CURL_PINNED_PUBKEY="sha256//${public_key_pin}"
+    # curl must accept the self-signed chain after the explicit pin check, and
+    # still enforces --pinnedpubkey with -k. The downloaded installer and
+    # binary still require their own signatures.
     INSECURE="true"
     log_info "Pulse server certificate fingerprint verified."
 }
@@ -5800,6 +5854,47 @@ recover_connection_state_from_env_stream() {
     [[ "$RECOVERED_AGENT_ENV_STATE" == "true" ]] && recovered_connection_state_ready
 }
 
+# A process chooses its own name and arguments, and root sees the processes of
+# every local user and of every container, guest and jail on the host. Only a
+# root-run agent of this system may therefore lend its settings to the service
+# the installer writes. Anything else (including a least-privilege collector)
+# is recovered from the root-owned service definition and connection.env.
+running_agent_process_is_trusted() {
+    local pid="$1"
+    local uids=""
+    local exe=""
+    local jail=""
+
+    [[ "$pid" =~ ^[1-9][0-9]*$ ]] || return 1
+
+    if [[ "$(uname -s)" == "Linux" ]]; then
+        # Real and effective UID as seen from here: a setuid program keeps its
+        # caller's real UID, and a user-namespace root maps to a non-zero UID.
+        uids=$(awk '$1 == "Uid:" { print $2, $3 }' "/proc/${pid}/status" 2>/dev/null || true)
+        [[ "$uids" == "0 0" ]] || return 1
+        # The name and arguments are whatever the process says. The executable
+        # is what it really runs. An agent whose binary was replaced under it
+        # by an update still counts.
+        exe=$(readlink "/proc/${pid}/exe" 2>/dev/null || true)
+        exe="${exe% (deleted)}"
+        [[ "${exe##*/}" == "$BINARY_NAME" ]] || return 1
+        # Root inside a container or chroot has another root directory.
+        [[ "/proc/${pid}/root" -ef "/" ]] || return 1
+        return 0
+    fi
+
+    # No Linux procfs (macOS, FreeBSD): ask ps for the same facts. A jailed
+    # root process differs from the host's only in its jail ID. macOS has no
+    # jails and reports nothing for either side.
+    uids=$(ps -o ruid= -o uid= -p "$pid" 2>/dev/null | awk '{ print $1, $2 }' || true)
+    [[ "$uids" == "0 0" ]] || return 1
+    exe=$(ps -o comm= -p "$pid" 2>/dev/null | sed 's/[[:space:]]*$//' || true)
+    [[ "${exe##*/}" == "$BINARY_NAME" ]] || return 1
+    jail=$(ps -o jid= -p "$pid" 2>/dev/null | tr -d '[:space:]' || true)
+    [[ "$jail" == "$(ps -o jid= -p "$$" 2>/dev/null | tr -d '[:space:]' || true)" ]] || return 1
+    return 0
+}
+
 collect_running_agent_pids() {
     local path=""
     local pid=""
@@ -5808,7 +5903,9 @@ collect_running_agent_pids() {
         {
             pgrep -x "$BINARY_NAME" 2>/dev/null || true
             pgrep -f "/${BINARY_NAME}( |$)" 2>/dev/null || true
-        } | awk '!seen[$0]++'
+        } | awk '!seen[$0]++' | while IFS= read -r pid; do
+            if running_agent_process_is_trusted "$pid"; then printf '%s\n' "$pid"; fi
+        done
         return 0
     fi
 
@@ -5816,7 +5913,8 @@ collect_running_agent_pids() {
         [[ -r "$path" ]] || continue
         if tr '\0' '\n' < "$path" 2>/dev/null | grep -qx ".*/${BINARY_NAME}"; then
             pid="${path%/cmdline}"
-            printf '%s\n' "${pid##*/}"
+            pid="${pid##*/}"
+            if running_agent_process_is_trusted "$pid"; then printf '%s\n' "$pid"; fi
         fi
     done
 }
@@ -7055,7 +7153,7 @@ if [[ "$UNINSTALL" == "true" ]]; then
         log_info "Removing TrueNAS CORE installation..."
         # Remove Init/Shutdown task
         if command -v midclt >/dev/null 2>&1 && command -v python3 >/dev/null 2>&1; then
-            TASK_ID=$(midclt call initshutdownscript.query '[["script","=","'"$TRUENAS_BOOTSTRAP_SCRIPT"'"]]' 2>/dev/null | python3 -c "import json,sys; d=json.load(sys.stdin); print(d[0]['id'] if d else '')" 2>/dev/null || echo "")
+            TASK_ID=$(midclt call initshutdownscript.query '[["script","=","'"$TRUENAS_BOOTSTRAP_SCRIPT"'"]]' 2>/dev/null | python3 -I -c "import json,sys; d=json.load(sys.stdin); print(d[0]['id'] if d else '')" 2>/dev/null || echo "")
             if [[ -n "$TASK_ID" ]]; then
                 midclt call initshutdownscript.delete "$TASK_ID" >/dev/null 2>&1 || log_warn "Failed to remove Init/Shutdown task (id $TASK_ID)"
             fi
@@ -7227,10 +7325,12 @@ if [[ "$SAFE_PROFILE_ACTION" == "apply" ]]; then
 fi
 
 # Create the dedicated service account for the least-privilege profile and
-# hand it the mutable state directory. The legacy least-privilege profile also
-# owns its agent binary so its in-process updater keeps working. The typed
-# helper profile instead keeps both executables root-owned and disables direct
-# collector activation until the helper owns that operation.
+# hand it the mutable state directory. The agent binary stays root-owned in
+# both least-privilege profiles: later installer runs execute it as root, and
+# the in-process updater stages beside it in the root-owned INSTALL_DIR, so
+# collector ownership of the file never enabled self-update. The typed helper
+# profile also keeps its helper root-owned and disables direct collector
+# activation until the helper owns that operation.
 provision_least_privilege_user() {
     if ! id -u "$LEAST_PRIVILEGE_USER" >/dev/null 2>&1; then
         if ! command -v useradd >/dev/null 2>&1; then
@@ -7256,12 +7356,8 @@ provision_least_privilege_user() {
     fi
 
     chown -R "${LEAST_PRIVILEGE_USER}:${LEAST_PRIVILEGE_USER}" "$STATE_DIR" 2>/dev/null || true
-    if [[ "$PRIVILEGED_HELPER_ENABLED" == "true" ]]; then
-        chown root:root "${INSTALL_DIR}/${BINARY_NAME}" 2>/dev/null || true
-        chmod 0755 "${INSTALL_DIR}/${BINARY_NAME}"
-    else
-        chown "${LEAST_PRIVILEGE_USER}:${LEAST_PRIVILEGE_USER}" "${INSTALL_DIR}/${BINARY_NAME}" 2>/dev/null || true
-    fi
+    chown root:root "${INSTALL_DIR}/${BINARY_NAME}" 2>/dev/null || true
+    chmod 0755 "${INSTALL_DIR}/${BINARY_NAME}"
 }
 
 # Keep the installer token in a root-owned directory outside the service
@@ -7377,13 +7473,39 @@ verify_privileged_helper_socket() {
     fi
 }
 
+# The collector owns the default state root and therefore chooses what the
+# quarantine pathname resolves to. Root must never create, re-own, or re-mode
+# that name there: install -d follows a planted link and would hand the link's
+# target to the collector. Prepare it with the collector's own authority
+# instead, so a link grants nothing the collector does not already hold. Root
+# provisions it only under a real parent that is root-owned and closed to
+# group and world writes, which is what a custom --state-dir leaves behind.
+ensure_collector_update_quarantine() {
+    local quarantine="$PRIVILEGED_HELPER_UPDATE_QUARANTINE_DIR"
+    local parent="${quarantine%/*}"
+    local parent_uid=""
+    local parent_mode=""
+
+    [[ -d "$parent" ]] || install -d -o root -g root -m 0755 "$parent"
+    if [[ -L "$quarantine" ]]; then
+        fail "Refusing symlinked update quarantine: ${quarantine}" "$EXIT_GENERAL"
+    fi
+    parent_uid=$(portable_path_uid "$parent" || true)
+    parent_mode=$(portable_path_mode "$parent" || true)
+    if [[ ! -L "$parent" && "$parent_uid" == "0" && "$parent_mode" =~ ^[0-7]{3,4}$ ]] &&
+        (( (8#$parent_mode & 0022) == 0 )); then
+        install -d -o "$LEAST_PRIVILEGE_USER" -g "$LEAST_PRIVILEGE_USER" -m 0700 "$quarantine"
+    elif ! runuser -u "$LEAST_PRIVILEGE_USER" -- install -d -m 0700 "$quarantine"; then
+        fail "Failed to prepare the collector-owned update quarantine: ${quarantine}" "$EXIT_GENERAL"
+    fi
+}
+
 provision_typed_privileged_helper() {
     # The collector may write only into its quarantine. The root helper may
     # read that tree, but activation and rollback state live in a separate
     # root-only boundary. The helper's protocol fixes the sole activation
     # target at /usr/local/bin/pulse-agent.
-    install -d -o "$LEAST_PRIVILEGE_USER" -g "$LEAST_PRIVILEGE_USER" -m 0700 \
-        "$PRIVILEGED_HELPER_UPDATE_QUARANTINE_DIR"
+    ensure_collector_update_quarantine
     install -d -o root -g root -m 0700 \
         "$PRIVILEGED_HELPER_STATE_DIR" "$PRIVILEGED_HELPER_UPDATE_STAGING_DIR"
     if [[ -L "${INSTALL_DIR}/${BINARY_NAME}" || ! -f "${INSTALL_DIR}/${BINARY_NAME}" ]]; then
@@ -7502,6 +7624,7 @@ if [[ "$PREFLIGHT_ONLY" == "true" ]]; then
         # explicit installer trust flags and environment proxies still apply.
         CURL_TEST_ARGS=(-q -sfL --connect-timeout 5 --max-time 10 -o /dev/null)
         if [[ "$INSECURE" == "true" ]]; then CURL_TEST_ARGS+=(-k); fi
+        if [[ -n "${CURL_PINNED_PUBKEY:-}" ]]; then CURL_TEST_ARGS+=(--pinnedpubkey "$CURL_PINNED_PUBKEY"); fi
         if [[ -n "$CURL_CA_BUNDLE" ]]; then CURL_TEST_ARGS+=(--cacert "$CURL_CA_BUNDLE"); fi
         if curl "${CURL_TEST_ARGS[@]}" "${PULSE_URL}/api/health"; then
             json_event "preflight" "pulse_reachable" "Pulse URL reachable"
@@ -7514,6 +7637,7 @@ if [[ "$PREFLIGHT_ONLY" == "true" ]]; then
         TMP_FILES+=("$PREFLIGHT_HEADERS")
         CURL_DOWNLOAD_CHECK_ARGS=(-q -fsSIL --connect-timeout 5 --max-time 30 -D "$PREFLIGHT_HEADERS" -o /dev/null)
         if [[ "$INSECURE" == "true" ]]; then CURL_DOWNLOAD_CHECK_ARGS+=(-k); fi
+        if [[ -n "${CURL_PINNED_PUBKEY:-}" ]]; then CURL_DOWNLOAD_CHECK_ARGS+=(--pinnedpubkey "$CURL_PINNED_PUBKEY"); fi
         if [[ -n "$CURL_CA_BUNDLE" ]]; then CURL_DOWNLOAD_CHECK_ARGS+=(--cacert "$CURL_CA_BUNDLE"); fi
 
         DOWNLOAD_CHECK_URL="${PULSE_URL}/download/${BINARY_NAME}?arch=${PF_ARCH_PARAM}"
@@ -7615,11 +7739,13 @@ TMP_FILES+=("$TMP_HEADERS")
 # Build curl arguments as array for proper quoting
 CURL_ARGS=(-fsSL --connect-timeout 30 --max-time 300 -D "$TMP_HEADERS" -o "$TMP_BIN")
 if [[ "$INSECURE" == "true" ]]; then CURL_ARGS+=(-k); fi
+if [[ -n "${CURL_PINNED_PUBKEY:-}" ]]; then CURL_ARGS+=(--pinnedpubkey "$CURL_PINNED_PUBKEY"); fi
 if [[ -n "$CURL_CA_BUNDLE" ]]; then CURL_ARGS+=(--cacert "$CURL_CA_BUNDLE"); fi
 
 SERVER_VERSION=""
 VERSION_CURL_ARGS=(-fsSL --connect-timeout 10 --max-time 30)
 if [[ "$INSECURE" == "true" ]]; then VERSION_CURL_ARGS+=(-k); fi
+if [[ -n "${CURL_PINNED_PUBKEY:-}" ]]; then VERSION_CURL_ARGS+=(--pinnedpubkey "$CURL_PINNED_PUBKEY"); fi
 if [[ -n "$CURL_CA_BUNDLE" ]]; then VERSION_CURL_ARGS+=(--cacert "$CURL_CA_BUNDLE"); fi
 if server_version_json="$(curl -q "${VERSION_CURL_ARGS[@]}" "${PULSE_URL}/api/version" 2>/dev/null)"; then
     SERVER_VERSION="$(printf '%s' "$server_version_json" | sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -1)"
@@ -7669,6 +7795,7 @@ download_verified_privileged_helper() {
     TMP_FILES+=("$TMP_HELPER_BIN" "$helper_headers")
     helper_curl_args=(-fsSL --connect-timeout 30 --max-time 300 -D "$helper_headers" -o "$TMP_HELPER_BIN")
     if [[ "$INSECURE" == "true" ]]; then helper_curl_args+=(-k); fi
+    if [[ -n "${CURL_PINNED_PUBKEY:-}" ]]; then helper_curl_args+=(--pinnedpubkey "$CURL_PINNED_PUBKEY"); fi
     if [[ -n "$CURL_CA_BUNDLE" ]]; then helper_curl_args+=(--cacert "$CURL_CA_BUNDLE"); fi
 
     helper_url="${PULSE_URL}/download/${PRIVILEGED_HELPER_BINARY_NAME}?${DOWNLOAD_QUERY}"
@@ -7716,6 +7843,7 @@ download_verified_action_runner() {
     TMP_FILES+=("$TMP_ACTION_RUNNER_BIN" "$runner_headers")
     runner_curl_args=(-fsSL --connect-timeout 30 --max-time 300 -D "$runner_headers" -o "$TMP_ACTION_RUNNER_BIN")
     if [[ "$INSECURE" == "true" ]]; then runner_curl_args+=(-k); fi
+    if [[ -n "${CURL_PINNED_PUBKEY:-}" ]]; then runner_curl_args+=(--pinnedpubkey "$CURL_PINNED_PUBKEY"); fi
     if [[ -n "$CURL_CA_BUNDLE" ]]; then runner_curl_args+=(--cacert "$CURL_CA_BUNDLE"); fi
 
     runner_url="${PULSE_URL}/download/${ACTION_RUNNER_BINARY_NAME}?${DOWNLOAD_QUERY}"
@@ -7878,7 +8006,16 @@ EXISTING_VERSION=""
 UPGRADE_MODE=false
 
 if [[ -x "${INSTALL_DIR}/${BINARY_NAME}" ]]; then
-    EXISTING_VERSION=$("${INSTALL_DIR}/${BINARY_NAME}" --version 2>/dev/null | head -1 || echo "unknown")
+    # This probe runs the installed binary with the installer's authority, so
+    # it needs the same ownership proof as the other lifecycle commands. Older
+    # legacy least-privilege installs left the binary owned by the collector
+    # account. That file is still an existing installation to stop and replace
+    # with the verified download, but it is never executed here.
+    if trusted_lifecycle_regular_file "${INSTALL_DIR}/${BINARY_NAME}" 755; then
+        EXISTING_VERSION=$("${INSTALL_DIR}/${BINARY_NAME}" --version 2>/dev/null | head -1 || echo "unknown")
+    else
+        EXISTING_VERSION="not queried (installed binary ownership or mode is not trusted)"
+    fi
 
     if [[ -n "$EXISTING_VERSION" && "$EXISTING_VERSION" != "unknown" ]]; then
         UPGRADE_MODE=true
@@ -8432,7 +8569,7 @@ EOF
         log_info "Registering TrueNAS Init/Shutdown task..."
 
         # Check if task already exists
-        EXISTING_TASK=$(midclt call initshutdownscript.query '[["script","=","'"$TRUENAS_BOOTSTRAP_SCRIPT"'"]]' 2>/dev/null | python3 -c "import json,sys; d=json.load(sys.stdin); print(d[0]['id'] if d else '')" 2>/dev/null || echo "")
+        EXISTING_TASK=$(midclt call initshutdownscript.query '[["script","=","'"$TRUENAS_BOOTSTRAP_SCRIPT"'"]]' 2>/dev/null | python3 -I -c "import json,sys; d=json.load(sys.stdin); print(d[0]['id'] if d else '')" 2>/dev/null || echo "")
 
         if [[ -n "$EXISTING_TASK" ]]; then
             log_info "Init/Shutdown task already exists (id $EXISTING_TASK), updating..."

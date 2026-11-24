@@ -60,12 +60,20 @@ func (r *Router) registerAIRelayRoutesGroup() {
 
 	r.mux.HandleFunc("/api/ai/run-command", RequireAdmin(r.config, RequireScope(config.ScopeAIExecute, r.aiSettingsHandler.HandleRunCommand)))
 	// Knowledge reads belong to ai:chat; durable mutations require ai:execute.
+	// SECURITY: Saved notes are copied into the prompt of Patrol runs, which
+	// can run commands on hosts. The scope only constrains API tokens, so
+	// sessions and proxy users also need the action-execute capability, the
+	// one the Assistant needs before it runs a host command for its caller.
 	r.mux.HandleFunc("/api/ai/knowledge", RequireAuth(r.config, RequireScope(config.ScopeAIChat, r.aiSettingsHandler.HandleGetGuestKnowledge)))
-	r.mux.HandleFunc("/api/ai/knowledge/save", RequireAuth(r.config, RequireScope(config.ScopeAIExecute, r.aiSettingsHandler.HandleSaveGuestNote)))
-	r.mux.HandleFunc("/api/ai/knowledge/delete", RequireAuth(r.config, RequireScope(config.ScopeAIExecute, r.aiSettingsHandler.HandleDeleteGuestNote)))
+	r.mux.HandleFunc("/api/ai/knowledge/save", RequireAuth(r.config, RequireScope(config.ScopeAIExecute,
+		requireActionCapability(r.config, r.authorizer, auth.ActionExecute, r.aiSettingsHandler.HandleSaveGuestNote))))
+	r.mux.HandleFunc("/api/ai/knowledge/delete", RequireAuth(r.config, RequireScope(config.ScopeAIExecute,
+		requireActionCapability(r.config, r.authorizer, auth.ActionExecute, r.aiSettingsHandler.HandleDeleteGuestNote))))
 	r.mux.HandleFunc("/api/ai/knowledge/export", RequireAuth(r.config, RequireScope(config.ScopeAIChat, r.aiSettingsHandler.HandleExportGuestKnowledge)))
-	r.mux.HandleFunc("/api/ai/knowledge/import", RequireAuth(r.config, RequireScope(config.ScopeAIExecute, r.aiSettingsHandler.HandleImportGuestKnowledge)))
-	r.mux.HandleFunc("/api/ai/knowledge/clear", RequireAuth(r.config, RequireScope(config.ScopeAIExecute, r.aiSettingsHandler.HandleClearGuestKnowledge)))
+	r.mux.HandleFunc("/api/ai/knowledge/import", RequireAuth(r.config, RequireScope(config.ScopeAIExecute,
+		requireActionCapability(r.config, r.authorizer, auth.ActionExecute, r.aiSettingsHandler.HandleImportGuestKnowledge))))
+	r.mux.HandleFunc("/api/ai/knowledge/clear", RequireAuth(r.config, RequireScope(config.ScopeAIExecute,
+		requireActionCapability(r.config, r.authorizer, auth.ActionExecute, r.aiSettingsHandler.HandleClearGuestKnowledge))))
 	// SECURITY: Debug context leaks system prompt and infra details - require settings:read scope
 	r.mux.HandleFunc("/api/ai/debug/context", RequireAdmin(r.config, RequireScope(config.ScopeSettingsRead, r.aiSettingsHandler.HandleDebugContext)))
 	// SECURITY: Connected agents list could reveal fleet topology - require ai:execute scope
@@ -120,11 +128,28 @@ func (r *Router) registerAIRelayRoutesGroup() {
 	// they sit behind the same settings:read scope as the cost summary.
 	r.mux.HandleFunc("/api/ai/patrol/cost-preview", RequireAuth(r.config, RequireScope(config.ScopeSettingsRead, r.aiSettingsHandler.HandleGetPatrolCostPreview)))
 	r.mux.HandleFunc("/api/ai/patrol/model-guidance", RequireAuth(r.config, RequireScope(config.ScopeSettingsRead, r.aiSettingsHandler.HandleGetPatrolModelGuidance)))
+	// Patrol runs host commands with no caller bound, so the routes that serve
+	// its tool output (stream, run history, investigation transcript) bind the
+	// Assistant's host-command authority and withhold that output without it.
 	r.mux.HandleFunc("/api/ai/patrol/stream", RequireAuth(r.config, RequireScope(config.ScopeAIExecute,
-		retainTokenStreamAuthority(r.config, config.ScopeAIExecute, false, r.aiSettingsHandler.HandlePatrolStream))))
+		retainTokenStreamAuthority(r.config, config.ScopeAIExecute, false,
+			withAssistantActionAuthority(r.config, r.authorizer, r.aiSettingsHandler.HandlePatrolStream)))))
 	r.mux.HandleFunc("/api/ai/patrol/findings", RequireAuth(r.config, r.routeAIPatrolFindings))
-	r.mux.HandleFunc("/api/ai/patrol/objectives", RequireAuth(r.config, RequireScope(config.ScopeAIExecute, r.aiSettingsHandler.HandlePatrolObjectives)))
-	r.mux.HandleFunc("/api/ai/patrol/objectives/", RequireAuth(r.config, RequireScope(config.ScopeAIExecute, r.aiSettingsHandler.HandlePatrolObjective)))
+	// SECURITY: Objective text is Patrol prompt context like knowledge notes,
+	// and saving one queues a Patrol check. Reads stay with every signed-in
+	// user; every other method needs the action-execute capability.
+	patrolObjectiveRoute := func(handler http.HandlerFunc) http.HandlerFunc {
+		write := requireActionCapability(r.config, r.authorizer, auth.ActionExecute, handler)
+		return func(w http.ResponseWriter, req *http.Request) {
+			if req.Method == http.MethodGet {
+				handler(w, req)
+				return
+			}
+			write(w, req)
+		}
+	}
+	r.mux.HandleFunc("/api/ai/patrol/objectives", RequireAuth(r.config, RequireScope(config.ScopeAIExecute, patrolObjectiveRoute(r.aiSettingsHandler.HandlePatrolObjectives))))
+	r.mux.HandleFunc("/api/ai/patrol/objectives/", RequireAuth(r.config, RequireScope(config.ScopeAIExecute, patrolObjectiveRoute(r.aiSettingsHandler.HandlePatrolObjective))))
 	r.mux.HandleFunc("/api/ai/patrol/attention", RequireAuth(r.config, requireRelayMobileRuntimeRoute(relayMobileRouteAttentionList, r.attentionHandlers.HandleAttention)))
 	// One prefix serves reads, lifecycle mutations and action planning. The
 	// outer gate follows the dispatch in HandleAttention: a lifecycle mutation
@@ -160,14 +185,19 @@ func (r *Router) registerAIRelayRoutesGroup() {
 	)))
 	// Dismiss and resolve don't require Pro license - users should be able to clear findings they can see
 	// This is especially important for users who accumulated findings before fixing the patrol-without-AI bug
+	// Free-text notes on dismiss/resolve enter Patrol's prompt context, so bind
+	// action authority and refuse non-empty notes without it.
 	r.mux.HandleFunc("/api/ai/patrol/dismiss", RequireAuth(r.config, requireRelayMobileRuntimeRoute(
 		relayMobileRoutePatrolDismiss,
 		r.withExternalAgentCapabilityActivity(
 			agentcapabilities.DismissFindingCapabilityName,
-			r.aiSettingsHandler.HandleDismissFinding,
+			withAssistantActionAuthority(r.config, r.authorizer, r.aiSettingsHandler.HandleDismissFinding),
 		),
 	)))
-	r.mux.HandleFunc("/api/ai/patrol/findings/note", RequireAuth(r.config, RequireScope(config.ScopeAIExecute, r.aiSettingsHandler.HandleSetFindingNote)))
+	// SECURITY: A finding note is written for Patrol to read on later runs, so
+	// it needs the same capability as a knowledge note.
+	r.mux.HandleFunc("/api/ai/patrol/findings/note", RequireAuth(r.config, RequireScope(config.ScopeAIExecute,
+		requireActionCapability(r.config, r.authorizer, auth.ActionExecute, r.aiSettingsHandler.HandleSetFindingNote))))
 	r.mux.HandleFunc("/api/ai/patrol/suppress", RequireAuth(r.config, RequireScope(config.ScopeAIExecute, r.aiSettingsHandler.HandleSuppressFinding)))
 	r.mux.HandleFunc("/api/ai/patrol/snooze", RequireAuth(r.config, requireRelayMobileRuntimeRoute(
 		relayMobileRoutePatrolSnooze,
@@ -178,10 +208,13 @@ func (r *Router) registerAIRelayRoutesGroup() {
 	)))
 	r.mux.HandleFunc("/api/ai/patrol/resolve", RequireAuth(r.config, RequireScope(config.ScopeAIExecute, r.withExternalAgentCapabilityActivity(
 		agentcapabilities.ResolveFindingCapabilityName,
-		r.aiSettingsHandler.HandleResolveFinding,
+		withAssistantActionAuthority(r.config, r.authorizer, r.aiSettingsHandler.HandleResolveFinding),
 	))))
-	r.mux.HandleFunc("/api/ai/patrol/runs", RequireAuth(r.config, RequireScope(config.ScopeAIExecute, r.aiSettingsHandler.HandleGetPatrolRunHistory)))
-	r.mux.HandleFunc("/api/ai/patrol/runs/", RequireAuth(r.config, RequireScope(config.ScopeAIExecute, r.aiSettingsHandler.HandleGetPatrolRun)))
+	// A run's tool calls hold host command output: bound as on the stream route.
+	r.mux.HandleFunc("/api/ai/patrol/runs", RequireAuth(r.config, RequireScope(config.ScopeAIExecute,
+		withAssistantActionAuthority(r.config, r.authorizer, r.aiSettingsHandler.HandleGetPatrolRunHistory))))
+	r.mux.HandleFunc("/api/ai/patrol/runs/", RequireAuth(r.config, RequireScope(config.ScopeAIExecute,
+		withAssistantActionAuthority(r.config, r.authorizer, r.aiSettingsHandler.HandleGetPatrolRun))))
 	r.mux.HandleFunc("/api/ai/patrol/digest", RequireAuth(r.config, RequireScope(config.ScopeAIExecute, r.aiSettingsHandler.HandleGetPatrolDigest)))
 	// Suppression rules management - require scope to prevent low-privilege tokens from creating suppression rules
 	r.mux.HandleFunc("/api/ai/patrol/suppressions", RequireAuth(r.config, RequireScope(config.ScopeAIExecute, func(w http.ResponseWriter, req *http.Request) {
@@ -265,8 +298,9 @@ func (r *Router) registerAIRelayRoutesGroup() {
 	r.mux.HandleFunc("/api/ai/chat", RequireAuth(r.config, requireRelayMobileRuntimeRoute(relayMobileRouteChatSend,
 		retainTokenStreamAuthorityForScopes(r.config, relayMobileRuntimeRouteSpecFor(relayMobileRouteChatSend).compatibleScopes(), false,
 			withAssistantActionAuthority(r.config, r.authorizer, r.aiHandler.HandleChat)))))
-	r.mux.HandleFunc("/api/ai/sessions", RequireAuth(r.config, r.routeAISessionsCollection))
-	r.mux.HandleFunc("/api/ai/sessions/", RequireAuth(r.config, r.routeAISessions))
+	// SECURITY: A session belongs to the caller who started it; see withAssistantSessionAccess.
+	r.mux.HandleFunc("/api/ai/sessions", RequireAuth(r.config, withAssistantSessionAccess(r.config, r.authorizer, r.routeAISessionsCollection)))
+	r.mux.HandleFunc("/api/ai/sessions/", RequireAuth(r.config, withAssistantSessionAccess(r.config, r.authorizer, r.routeAISessions)))
 
 	// AI approval review uses the same session authority as canonical Actions.
 	// Keep legacy AI/mobile token scopes at their existing per-route boundaries.

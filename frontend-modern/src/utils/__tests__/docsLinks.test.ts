@@ -302,9 +302,19 @@ describe('docsLinks', () => {
       'Empty/old input: `400`; changed ports: `409 docker_ports_changed`, no checks added.',
     );
     expect(api).toContain('Refresh and review.');
+    // A check's stored values go only to a server it authenticated.
+    expect(api).toContain(
+      "sends authentication, header values or a body verifies the server's certificate chain and host name before sending them, and fails without sending them otherwise",
+    );
+    expect(api).toContain('`http.tlsFingerprintSha256` - Optional SHA-256 fingerprint');
+    expect(api).toContain('`http.insecureSkipVerify` - Explicit opt-out');
     // A scripted first run chooses the setup token and needs the host type.
     expect(api).toContain('A token shorter than 32 characters gets\n`400`');
     expect(api).toContain('`{"type":"host","name":"docker-host"}` returns `token`');
+    // Asking for a command-enabled agent token is a grant of agent:exec.
+    expect(api).toContain(
+      'An API\ntoken must itself hold `agent:exec` to ask for it, otherwise the request fails\nwith HTTP 403 `missing_scope`.',
+    );
   });
 
   it('documents action permissions on routes that start work on a host', () => {

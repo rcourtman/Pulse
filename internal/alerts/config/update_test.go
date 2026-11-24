@@ -233,6 +233,55 @@ func TestApplyAlertConfigUpdateRejectsMalformedBodies(t *testing.T) {
 	}
 }
 
+// "{}" is a whole list entry in the body and a complete rule, filter or
+// escalation level once decoded, so the size limit of the request does not
+// bound these lists. Custom rules are refused before they are decoded, for
+// every spelling and occurrence of their key.
+func TestApplyAlertConfigUpdateBoundsListsOfObjects(t *testing.T) {
+	stored := storedAlertConfigForUpdate()
+	list := func(entries int) string {
+		return "[" + strings.TrimSuffix(strings.Repeat("{},", entries), ",") + "]"
+	}
+
+	for _, body := range []string{
+		`{"customRules": ` + list(maxCustomRules+1) + `}`,
+		`{"CUSTOMRULES": ` + list(maxCustomRules+1) + `}`,
+		`{"customRules": ` + list(maxCustomRules+1) + `, "customRules": []}`,
+		`{"enabled": "yes", "customRules": ` + list(maxCustomRules+1) + `}`,
+		`{"customRules": [0, ` + list(maxCustomRules)[1:] + `}`,
+		`{"customRules": [{"filterConditions": {"filters": ` + list(maxCustomRuleFilters+1) + `}}]}`,
+		`{"schedule": {"escalation": {"levels": ` + list(maxEscalationLevels+1) + `}}}`,
+	} {
+		_, err := ApplyAlertConfigUpdate(stored, []byte(body))
+		if err == nil || !strings.Contains(err.Error(), "are supported") {
+			t.Fatalf("ApplyAlertConfigUpdate(%.40s...) = %v, want the list refused for its length", body, err)
+		}
+	}
+
+	got, err := ApplyAlertConfigUpdate(stored, []byte(`{"customRules": [{"filterConditions": {"filters": `+
+		list(maxCustomRuleFilters)+`}}, `+list(maxCustomRules - 1)[1:]+
+		`, "schedule": {"escalation": {"levels": `+list(maxEscalationLevels)+`}}}`))
+	if err != nil {
+		t.Fatalf("ApplyAlertConfigUpdate with every list at its limit: %v", err)
+	}
+	if len(got.CustomRules) != maxCustomRules || len(got.CustomRules[0].FilterConditions.Filters) != maxCustomRuleFilters ||
+		len(got.Schedule.Escalation.Levels) != maxEscalationLevels {
+		t.Fatalf("lists at their limits decoded to %d rules, %d filters and %d levels",
+			len(got.CustomRules), len(got.CustomRules[0].FilterConditions.Filters), len(got.Schedule.Escalation.Levels))
+	}
+
+	// The stand-in that counts custom rules leaves every other judgement of
+	// the value to the decode of the update.
+	for _, body := range []string{`{"customRules": null}`, `{"customRules": []}`} {
+		if got, err := ApplyAlertConfigUpdate(stored, []byte(body)); err != nil || len(got.CustomRules) != 0 {
+			t.Fatalf("ApplyAlertConfigUpdate(%s) = %d rules, %v, want the rules cleared", body, len(got.CustomRules), err)
+		}
+	}
+	if _, err := ApplyAlertConfigUpdate(stored, []byte(`{"customRules": "all"}`)); err == nil || strings.Contains(err.Error(), "are supported") {
+		t.Fatalf("custom rules sent as a string = %v, want the decoder's type error", err)
+	}
+}
+
 // A config marshaled by a Go client still replaces every field it writes.
 // Empty omitempty fields are left out of that body, so they keep their
 // stored values like any other unsent key.

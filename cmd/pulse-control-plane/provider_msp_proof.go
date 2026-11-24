@@ -19,6 +19,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/api"
 	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp"
 	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/account"
+	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/auditlog"
 	cpDocker "github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/docker"
 	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/entitlements"
 	cphandoff "github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/handoff"
@@ -454,7 +455,9 @@ func (rt *providerMSPProofRuntime) createProviderMSPProofWorkspace(ctx context.C
 	}
 	path := "/api/accounts/" + url.PathEscape(accountID) + "/tenants"
 	req := httptest.NewRequest(http.MethodPost, path, bytes.NewReader(payload))
-	req = req.WithContext(ctx)
+	// No middleware runs in front of this in-process call; keep its audit
+	// events attributed to the operator.
+	req = req.WithContext(auditlog.WithActor(ctx, auditlog.ActorAdminKey))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-User-Email", ownerEmail)
 	rec := httptest.NewRecorder()

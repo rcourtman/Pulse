@@ -57,6 +57,13 @@ import truenasProtectionTableSource from '@/features/truenas/TrueNASProtectionTa
 import guestRowSource from '@/components/Workloads/GuestRow.tsx?raw';
 import guestDrawerSource from '@/components/Workloads/GuestDrawer.tsx?raw';
 import guestDrawerHistorySource from '@/components/Workloads/GuestDrawerHistory.tsx?raw';
+import { GuestDrawerHistoryRangeSelect } from '@/components/Workloads/GuestDrawerHistoryRangeSelect';
+import {
+  HISTORY_CHART_RANGES,
+  formatHistoryRangeOptionLabel,
+} from '@/components/shared/historyChartModel';
+import { render } from '@solidjs/testing-library';
+import { createComponent } from 'solid-js';
 import nodeDrawerSource from '@/components/Workloads/NodeDrawer.tsx?raw';
 import workloadsTableSource from '@/components/Workloads/WorkloadsTable.tsx?raw';
 import workloadTableHeaderSource from '@/components/Workloads/WorkloadTableHeader.tsx?raw';
@@ -283,7 +290,17 @@ describe('shared primitive guardrails', () => {
     expect(dockerHostDrawerOverviewSource).toContain('getAlertAttentionCopy(alert, now)');
     expect(resourceDetailDrawerOverviewTabSource).toContain('getAlertAttentionCopy(alert, now)');
     // Range pickers name their options from one table, never a local list.
-    expect(guestDrawerHistorySource).toContain('formatHistoryRangeOptionLabel(option)');
+    const rangeView = render(() =>
+      createComponent(GuestDrawerHistoryRangeSelect, { range: '24h', onRangeChange: () => {} }),
+    );
+    const renderedRangeLabels = Array.from(
+      rangeView.container.querySelectorAll('option'),
+      (option) => option.textContent,
+    );
+    expect(renderedRangeLabels).toEqual(
+      HISTORY_CHART_RANGES.map((option) => formatHistoryRangeOptionLabel(option)),
+    );
+    rangeView.unmount();
     expect(guestDrawerHistorySource).not.toContain('const formatRangeLabel');
 
     expect(resourceDetailDrawerSource).toContain('@/components/shared/Subtabs');

@@ -2,6 +2,7 @@ package config
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -100,8 +101,9 @@ func (s *HostMetadataStore) Load() error {
 	return nil
 }
 
-// save writes metadata to disk (must be called with lock held)
-func (s *HostMetadataStore) save() error {
+// save writes metadata to disk (must be called with lock held). It refuses a
+// file above maxBytes, which is never more than Load accepts.
+func (s *HostMetadataStore) save(maxBytes int64) error {
 	filePath := filepath.Join(s.dataPath, "host_metadata.json")
 
 	log.Debug().Str("path", filePath).Msg("Saving host metadata to disk")
@@ -109,6 +111,10 @@ func (s *HostMetadataStore) save() error {
 	data, err := json.Marshal(s.metadata)
 	if err != nil {
 		return fmt.Errorf("failed to marshal metadata: %w", err)
+	}
+
+	if err := checkMetadataFileSize("host_metadata.json", data, maxBytes); err != nil {
+		return err
 	}
 
 	if err := persistMetadata(s.fs, s.dataPath, "host_metadata.json", data); err != nil {
@@ -144,7 +150,10 @@ func (s *HostMetadataStore) GetAll() map[string]*HostMetadata {
 	return result
 }
 
-// Set updates or creates metadata for a host
+// Set updates or creates metadata for a host. The metadata routes, open to
+// every signed-in user, write through it, so it is refused once the file
+// would pass maxHostAnnotationsFileSizeBytes. The room above that is kept for
+// SetCommandsEnabled.
 func (s *HostMetadataStore) Set(hostID string, meta *HostMetadata) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -155,10 +164,50 @@ func (s *HostMetadataStore) Set(hostID string, meta *HostMetadata) error {
 
 	clone := cloneHostMetadata(meta)
 	clone.ID = hostID
-	s.metadata[hostID] = clone
+
+	return s.setAndSave(hostID, clone, maxHostAnnotationsFileSizeBytes)
+}
+
+// SetCommandsEnabled sets the command policy of a host (nil = use agent
+// default) and keeps the rest of its record. It may use the whole file,
+// including the room Set leaves free.
+func (s *HostMetadataStore) SetCommandsEnabled(hostID string, commandsEnabled *bool) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	clone := cloneHostMetadata(s.metadata[hostID])
+	if clone == nil {
+		clone = &HostMetadata{}
+	}
+	clone.ID = hostID
+	clone.CommandsEnabled = nil
+	if commandsEnabled != nil {
+		enabled := *commandsEnabled
+		clone.CommandsEnabled = &enabled
+	}
+
+	return s.setAndSave(hostID, clone, maxHostMetadataFileSizeBytes)
+}
+
+// setAndSave stores one record and saves (must be called with lock held). A
+// record the file has no room for is not kept in memory either, or every
+// later save would be refused along with it.
+func (s *HostMetadataStore) setAndSave(hostID string, meta *HostMetadata, maxBytes int64) error {
+	previous, existed := s.metadata[hostID]
+	s.metadata[hostID] = meta
 
 	// Save to disk
-	return s.save()
+	if err := s.save(maxBytes); err != nil {
+		if errors.Is(err, ErrMetadataFileTooLarge) {
+			if existed {
+				s.metadata[hostID] = previous
+			} else {
+				delete(s.metadata, hostID)
+			}
+		}
+		return err
+	}
+	return nil
 }
 
 // Delete removes metadata for a host
@@ -169,7 +218,7 @@ func (s *HostMetadataStore) Delete(hostID string) error {
 	delete(s.metadata, hostID)
 
 	// Save to disk
-	return s.save()
+	return s.save(maxHostMetadataFileSizeBytes)
 }
 
 // ReplaceAll replaces all metadata entries and persists them to disk.
@@ -177,6 +226,7 @@ func (s *HostMetadataStore) ReplaceAll(metadata map[string]*HostMetadata) error 
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
+	previous := s.metadata
 	s.metadata = make(map[string]*HostMetadata)
 
 	for hostID, meta := range metadata {
@@ -193,5 +243,11 @@ func (s *HostMetadataStore) ReplaceAll(metadata map[string]*HostMetadata) error 
 		s.metadata[hostID] = clone
 	}
 
-	return s.save()
+	if err := s.save(maxHostMetadataFileSizeBytes); err != nil {
+		if errors.Is(err, ErrMetadataFileTooLarge) {
+			s.metadata = previous
+		}
+		return err
+	}
+	return nil
 }

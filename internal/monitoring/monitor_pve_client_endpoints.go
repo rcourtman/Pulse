@@ -31,6 +31,28 @@ func PVEClusterEndpointURL(endpoint config.ClusterEndpoint, verifySSL bool, disc
 	return clusterEndpointRuntimeURL(endpoint, verifySSL, false, discoveryCfg)
 }
 
+// PVEEndpointFingerprint returns the certificate pin polling enforces for one
+// dial target of a connection. Cluster trust is scoped to endpoints: the pin
+// captured when a member was discovered, or the one an operator saved for that
+// endpoint, takes precedence over the connection's own field, and contradicting
+// saved pins refuse the endpoint. A one-off client built outside the cluster
+// client must resolve its pin here; the connection's field alone is empty when
+// trust was captured per member. It performs no network operation.
+func PVEEndpointFingerprint(pve config.PVEInstance, endpoint string, discoveryCfg config.DiscoveryConfig) (string, error) {
+	if !pve.IsCluster || len(pve.ClusterEndpoints) == 0 {
+		return pve.Fingerprint, nil
+	}
+	_, pins, conflicts := BuildPVEClusterClientEndpoints(pve, discoveryCfg)
+	fingerprint, known, err := proxmox.ResolveEndpointFingerprint(endpoint, pins, conflicts...)
+	if err != nil {
+		return "", err
+	}
+	if !known {
+		return pve.Fingerprint, nil
+	}
+	return fingerprint, nil
+}
+
 // BuildPVEClusterClientEndpoints constructs polling trust, including explicit
 // decisions for exact endpoint identities. It performs no network operation.
 func BuildPVEClusterClientEndpoints(pve config.PVEInstance, discoveryCfg config.DiscoveryConfig) ([]string, map[string]string, []string) {

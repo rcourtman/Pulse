@@ -1,6 +1,7 @@
 package auditlog
 
 import (
+	"context"
 	"net/http"
 	"strings"
 
@@ -12,18 +13,33 @@ func ClientIP(r *http.Request) string {
 	return proxytrust.ClientIP(r)
 }
 
-// ActorID returns the request actor identifier from common headers.
+const (
+	// ActorAdminKey is the audit actor for admin-key authenticated requests.
+	ActorAdminKey = "admin_key"
+	// ActorAnonymous is the audit actor for requests nothing authenticated.
+	ActorAnonymous = "anonymous"
+)
+
+// actorKey is the context key for the authenticated audit actor.
+type actorKey struct{}
+
+// WithActor returns a copy of ctx carrying the actor that authentication
+// middleware verified for the request.
+func WithActor(ctx context.Context, actorID string) context.Context {
+	return context.WithValue(ctx, actorKey{}, strings.TrimSpace(actorID))
+}
+
+// ActorID returns the actor that authentication middleware verified for the
+// request, or ActorAnonymous when nothing authenticated it. Request headers
+// are client-controlled and are never consulted.
 func ActorID(r *http.Request) string {
 	if r == nil {
-		return ""
+		return ActorAnonymous
 	}
-
-	for _, header := range []string{"X-Actor-ID", "X-Actor-Id", "X-User-ID", "X-User-Id"} {
-		if v := strings.TrimSpace(r.Header.Get(header)); v != "" {
-			return v
-		}
+	if v, ok := r.Context().Value(actorKey{}).(string); ok && v != "" {
+		return v
 	}
-	return ""
+	return ActorAnonymous
 }
 
 // RequestPath returns a stable request path for audit metadata.

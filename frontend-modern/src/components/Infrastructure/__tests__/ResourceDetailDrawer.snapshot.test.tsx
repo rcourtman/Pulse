@@ -28,16 +28,7 @@ vi.mock('@/components/Workloads/GuestDrawerHistory', () => ({
       data-target={props.target.resourceId}
       data-cpu={props.currentMetrics?.cpu}
       data-range={props.range}
-    >
-      <select
-        aria-label="History range"
-        value={props.range}
-        onChange={(event) => props.onRangeChange?.(event.currentTarget.value)}
-      >
-        <option value="24h">24 hours</option>
-        <option value="7d">7 days</option>
-      </select>
-    </div>
+    />
   ),
   GuestDrawerHistoryRangeSelect: (props: {
     range: string;
@@ -58,6 +49,11 @@ vi.mock('@/api/ai', () => ({ AIAPI: { getResourceIntelligence: requests.intellig
 vi.mock('@/api/actionAudit', () => ({ ActionAuditAPI: { listActionAudits: requests.audits } }));
 vi.mock('@/api/resourceOperatorState', () => ({
   getResourceOperatorState: vi.fn(async () => null),
+}));
+vi.mock('@/api/availabilityHistory', () => ({
+  AvailabilityHistoryAPI: {
+    batch: vi.fn(async () => ({ start: '', end: '', targets: [] })),
+  },
 }));
 
 const snapshot = (overrides: Partial<Resource> = {}): Resource => ({

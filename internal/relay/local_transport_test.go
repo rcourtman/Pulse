@@ -199,3 +199,60 @@ func TestLocalHandlerDispatchRecoversFromHandlerPanic(t *testing.T) {
 		t.Fatalf("expected 502 or 500 after handler panic, got %d", resp.Status)
 	}
 }
+
+// A proxied request reaches the local API from a loopback peer with a loopback
+// Host, which is what a client on the Pulse host looks like. The proxy must
+// mark it as forwarded on both transports and both entry points, and the app
+// must not be able to replace or add forwarding headers of its own.
+func TestProxiedRequestsAreMarkedAsForwarded(t *testing.T) {
+	var seen http.Header
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		seen = r.Header.Clone()
+		w.WriteHeader(http.StatusNoContent)
+	})
+	listener := httptest.NewServer(handler)
+	defer listener.Close()
+	localAddr := strings.TrimPrefix(listener.URL, "http://")
+
+	payload, _ := json.Marshal(ProxyRequest{
+		ID:     "r1",
+		Method: "POST",
+		Path:   "/api/security/recovery",
+		Headers: map[string]string{
+			"Via":             "1.1 app",
+			"X-Forwarded-For": "203.0.113.7",
+			"Content-Type":    "application/json",
+		},
+		Body: base64.StdEncoding.EncodeToString([]byte(`{"action":"generate_token"}`)),
+	})
+
+	proxies := map[string]*HTTPProxy{
+		"loopback dial":      NewHTTPProxy(localAddr, zerolog.Nop()),
+		"in-process handler": NewHTTPProxyWithLocalHandler(localAddr, handler, zerolog.Nop()),
+	}
+	for name, proxy := range proxies {
+		sends := map[string]func() error{
+			"HandleRequest": func() error {
+				_, err := proxy.HandleRequest(payload, "token")
+				return err
+			},
+			"HandleStreamRequest": func() error {
+				return proxy.HandleStreamRequest(t.Context(), payload, "token", func([]byte) {})
+			},
+		}
+		for entry, send := range sends {
+			t.Run(name+" "+entry, func(t *testing.T) {
+				seen = nil
+				if err := send(); err != nil {
+					t.Fatalf("%s returned error: %v", entry, err)
+				}
+				if got := seen.Values("Via"); len(got) != 1 || got[0] != relayViaHeader {
+					t.Fatalf("Via = %q, want exactly %q", got, relayViaHeader)
+				}
+				if got := seen.Get("X-Forwarded-For"); got != "" {
+					t.Fatalf("app-supplied X-Forwarded-For %q reached the local API", got)
+				}
+			})
+		}
+	}
+}

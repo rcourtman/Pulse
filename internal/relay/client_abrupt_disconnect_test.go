@@ -52,6 +52,8 @@ func TestClient_AbruptDisconnectCancelsInFlightHandlers(t *testing.T) {
 	connectCount := 0
 	secondConnRegistered := make(chan struct{}, 1)
 
+	identityPriv, identityPub := testIdentityKeyPair(t)
+
 	relayServer := mockRelayServer(t, func(conn *websocket.Conn) {
 		_, msg, err := conn.ReadMessage()
 		if err != nil {
@@ -95,6 +97,13 @@ func TestClient_AbruptDisconnectCancelsInFlightHandlers(t *testing.T) {
 			}
 			_ = conn.SetReadDeadline(time.Time{})
 
+			// Complete KEY_EXCHANGE as the app: DATA is only served on an encrypted channel
+			appEnc, err := testAppKeyExchange(conn, 1, identityPub)
+			if err != nil {
+				t.Logf("key exchange: %v", err)
+				return
+			}
+
 			// Send DATA that will block in the API handler
 			req := ProxyRequest{
 				ID:     "req_will_be_interrupted",
@@ -102,6 +111,7 @@ func TestClient_AbruptDisconnectCancelsInFlightHandlers(t *testing.T) {
 				Path:   "/api/slow-query",
 			}
 			reqBytes, _ := json.Marshal(req)
+			reqBytes, _ = appEnc.Encrypt(reqBytes)
 			dataFrame := NewFrame(FrameData, 1, reqBytes)
 			dataBytes, _ := EncodeFrame(dataFrame)
 			_ = conn.WriteMessage(websocket.BinaryMessage, dataBytes)
@@ -141,11 +151,12 @@ func TestClient_AbruptDisconnectCancelsInFlightHandlers(t *testing.T) {
 	}
 
 	deps := ClientDeps{
-		LicenseTokenFunc: func() string { return "test-jwt" },
-		TokenValidator:   func(token string) bool { return token == "valid-token" },
-		LocalAddr:        localAddr,
-		ServerVersion:    "1.0.0",
-		IdentityPubKey:   "test-pub-key",
+		LicenseTokenFunc:   func() string { return "test-jwt" },
+		TokenValidator:     func(token string) bool { return token == "valid-token" },
+		LocalAddr:          localAddr,
+		ServerVersion:      "1.0.0",
+		IdentityPubKey:     identityPub,
+		IdentityPrivateKey: identityPriv,
 	}
 
 	client := NewClient(cfg, deps, logger)
@@ -229,6 +240,8 @@ func TestClient_AbruptDisconnectMultipleChannelCleanup(t *testing.T) {
 	secondConnRegistered := make(chan struct{}, 1)
 	newChannelDataResponse := make(chan ProxyResponse, 1)
 
+	identityPriv, identityPub := testIdentityKeyPair(t)
+
 	relayServer := mockRelayServer(t, func(conn *websocket.Conn) {
 		_, msg, err := conn.ReadMessage()
 		if err != nil {
@@ -276,6 +289,17 @@ func TestClient_AbruptDisconnectMultipleChannelCleanup(t *testing.T) {
 			}
 			_ = conn.SetReadDeadline(time.Time{})
 
+			// Complete KEY_EXCHANGE as the app on each channel: DATA is only served on an encrypted channel
+			appEncs := make(map[uint32]*ChannelEncryption)
+			for _, chID := range []uint32{10, 20, 30} {
+				appEnc, err := testAppKeyExchange(conn, chID, identityPub)
+				if err != nil {
+					t.Logf("key exchange on channel %d: %v", chID, err)
+					return
+				}
+				appEncs[chID] = appEnc
+			}
+
 			// Send blocking DATA on all three channels
 			for _, chID := range []uint32{10, 20, 30} {
 				req := ProxyRequest{
@@ -284,6 +308,7 @@ func TestClient_AbruptDisconnectMultipleChannelCleanup(t *testing.T) {
 					Path:   "/api/blocking/" + string(rune('0'+chID/10)),
 				}
 				reqBytes, _ := json.Marshal(req)
+				reqBytes, _ = appEncs[chID].Encrypt(reqBytes)
 				df := NewFrame(FrameData, chID, reqBytes)
 				dfBytes, _ := EncodeFrame(df)
 				_ = conn.WriteMessage(websocket.BinaryMessage, dfBytes)
@@ -333,6 +358,13 @@ func TestClient_AbruptDisconnectMultipleChannelCleanup(t *testing.T) {
 		}
 		_ = conn.SetReadDeadline(time.Time{})
 
+		// Complete KEY_EXCHANGE as the app: DATA is only served on an encrypted channel
+		appEnc, err := testAppKeyExchange(conn, 99, identityPub)
+		if err != nil {
+			t.Logf("key exchange: %v", err)
+			return
+		}
+
 		// Send a fast DATA request on the new channel
 		fastReq := ProxyRequest{
 			ID:     "req_new_channel",
@@ -340,6 +372,7 @@ func TestClient_AbruptDisconnectMultipleChannelCleanup(t *testing.T) {
 			Path:   "/api/status",
 		}
 		fastReqBytes, _ := json.Marshal(fastReq)
+		fastReqBytes, _ = appEnc.Encrypt(fastReqBytes)
 		df := NewFrame(FrameData, 99, fastReqBytes)
 		dfBytes, _ := EncodeFrame(df)
 		_ = conn.WriteMessage(websocket.BinaryMessage, dfBytes)
@@ -354,6 +387,7 @@ func TestClient_AbruptDisconnectMultipleChannelCleanup(t *testing.T) {
 		frame, _ = DecodeFrame(msg)
 		if frame.Type == FrameData {
 			var resp ProxyResponse
+			frame.Payload, _ = appEnc.Decrypt(frame.Payload)
 			_ = json.Unmarshal(frame.Payload, &resp)
 			newChannelDataResponse <- resp
 		}
@@ -369,11 +403,12 @@ func TestClient_AbruptDisconnectMultipleChannelCleanup(t *testing.T) {
 	}
 
 	deps := ClientDeps{
-		LicenseTokenFunc: func() string { return "test-jwt" },
-		TokenValidator:   func(token string) bool { return token == "valid-token" },
-		LocalAddr:        localAddr,
-		ServerVersion:    "1.0.0",
-		IdentityPubKey:   "test-pub-key",
+		LicenseTokenFunc:   func() string { return "test-jwt" },
+		TokenValidator:     func(token string) bool { return token == "valid-token" },
+		LocalAddr:          localAddr,
+		ServerVersion:      "1.0.0",
+		IdentityPubKey:     identityPub,
+		IdentityPrivateKey: identityPriv,
 	}
 
 	client := NewClient(cfg, deps, logger)

@@ -12,6 +12,7 @@ package availabilityprobe
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -391,6 +392,9 @@ func probeHTTP(ctx context.Context, target config.AvailabilityTarget, timeout ti
 	if err != nil {
 		return httpTransportFailure(fmt.Errorf("http availability target URL validation failed: %w", err))
 	}
+	if target.HTTP != nil {
+		opts.TLSConfig = httpContractTLSConfig(target.HTTP)
+	}
 	client := securityutil.NewRestrictedOutboundHTTPClient(timeout, opts)
 	if target.HTTP != nil {
 		return probeHTTPContract(ctx, client, u, target.HTTP)
@@ -419,7 +423,21 @@ func probeHTTP(ctx context.Context, target config.AvailabilityTarget, timeout ti
 	return httpTransportFailure(fmt.Errorf("http probe failed: %w", err))
 }
 
+// httpProbeErrorLimit bounds the failure text of an HTTP check to the limit the
+// ICMP and TCP probes and the agent's probe module use. net/http quotes what
+// the endpoint sent (a malformed status line, a redirect location), and the
+// text is kept in status, alerts and resource history on every failed poll.
+const httpProbeErrorLimit = 240
+
+// httpProbeMaxResponseHeaderBytes bounds the response headers a check reads.
+// The transport default of 10 MiB is also how much of a malformed response
+// net/http quotes, before httpTransportFailure can cut the text.
+const httpProbeMaxResponseHeaderBytes = 64 << 10
+
 func httpTransportFailure(err error) (ProbeResult, error) {
+	if message := err.Error(); len(message) > httpProbeErrorLimit {
+		err = errors.New(strings.ToValidUTF8(message[:httpProbeErrorLimit], ""))
+	}
 	return ProbeResult{Outcome: OutcomeUnreachable, TransportOutcome: OutcomeUnreachable}, err
 }
 
@@ -429,7 +447,40 @@ func httpOutboundOptions() securityutil.RestrictedOutboundHTTPOptions {
 		AllowPrivateIPs: true,
 		AllowLoopback:   true,
 		TLSConfig:       tlsutil.UnverifiedPeerCertificateCaptureTLSConfig(),
+
+		MaxResponseHeaderBytes: httpProbeMaxResponseHeaderBytes,
 	}
+}
+
+// httpContractTLSConfig decides how an HTTPS check authenticates the server
+// before its request is written. Peer-certificate capture accepts any server,
+// which suits a check that only asks whether an endpoint answers and which
+// certificate it shows. A request that carries stored credentials, header
+// values or a body must not go to whichever server answers at the address: it
+// requires the pinned leaf certificate, or a chain and host name this host
+// trusts, unless the operator explicitly accepted an unverified certificate.
+func httpContractTLSConfig(contract *config.AvailabilityHTTPConfig) *tls.Config {
+	switch {
+	case contract.TLSFingerprintSHA256 != "":
+		return tlsutil.FingerprintVerifier(contract.TLSFingerprintSHA256)
+	case contract.InsecureSkipVerify || !contract.SendsStoredValues():
+		return tlsutil.UnverifiedPeerCertificateCaptureTLSConfig()
+	default:
+		return &tls.Config{MinVersion: tls.VersionTLS12}
+	}
+}
+
+// httpCertificateRefusal reports a server whose certificate failed
+// verification. Nothing was sent to it. The refused certificate is still
+// published, so the operator can see what answered and pin it if it is theirs.
+func httpCertificateRefusal(u *url.URL, refused *tls.CertificateVerificationError) (ProbeResult, error) {
+	presented := &tls.ConnectionState{PeerCertificates: refused.UnverifiedCertificates}
+	result := ProbeResult{
+		Outcome:          OutcomeUnreachable,
+		TransportOutcome: OutcomeUnreachable,
+		Certificate:      tlsutil.ObservePeerCertificate(presented, u.Hostname(), time.Now().UTC()),
+	}
+	return result, fmt.Errorf("https certificate is not trusted, so the request was not sent (pin its fingerprint or allow an unverified certificate for this check): %w", refused.Err)
 }
 
 func probeHTTPGet(ctx context.Context, client *http.Client, u *url.URL) (ProbeResult, error) {
@@ -479,6 +530,10 @@ func probeHTTPContract(ctx context.Context, client *http.Client, u *url.URL, con
 	if err != nil {
 		if ctxErr := ctx.Err(); ctxErr != nil {
 			return httpTransportFailure(ctxErr)
+		}
+		var refused *tls.CertificateVerificationError
+		if errors.As(err, &refused) {
+			return httpCertificateRefusal(u, refused)
 		}
 		return httpTransportFailure(fmt.Errorf("http probe failed: %w", err))
 	}

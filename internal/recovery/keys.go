@@ -15,18 +15,38 @@ const (
 
 // SubjectKeyForPoint returns a stable grouping key for rollups. When a recovery point can be linked
 // to a unified resource, the key is "res:<resource-id>". Otherwise it is a hashed external key
-// derived from provider + external ref fields.
+// derived from provider + external ref fields, plus the provider scope that reported the point
+// when the ref only identifies the subject inside that scope.
 func SubjectKeyForPoint(p RecoveryPoint) string {
-	return SubjectKey(p.Provider, p.SubjectResourceID, p.SubjectRef)
+	return subjectKey(p.Provider, p.SubjectResourceID, p.SubjectRef, externalSubjectScope(p))
 }
 
 // SubjectKey builds a stable grouping key from the point provider + subject identifiers.
+// It cannot see which cluster or connection reported the subject, so callers that hold the
+// point must use SubjectKeyForPoint.
 func SubjectKey(provider Provider, subjectResourceID string, subjectRef *ExternalRef) string {
+	return subjectKey(provider, subjectResourceID, subjectRef, "")
+}
+
+func subjectKey(provider Provider, subjectResourceID string, subjectRef *ExternalRef, scope string) string {
 	rid := canonicalizeProxmoxLinkedSubjectResourceID(provider, subjectResourceID, subjectRef)
 	if rid != "" {
 		return subjectKeyResourcePrefix + rid
 	}
-	return externalKey(provider, subjectRef)
+	return externalKey(provider, subjectRef, scope)
+}
+
+// externalSubjectScope returns the provider scope that belongs in the external subject key.
+// A Kubernetes PVC or TrueNAS dataset ref is only unique inside the cluster or connection that
+// reported it. Without the scope, same-named subjects of two clusters or appliances share one
+// rollup, and whichever of them reported last decides its outcome.
+func externalSubjectScope(p RecoveryPoint) string {
+	switch p.Provider {
+	case ProviderKubernetes, ProviderTrueNAS:
+		return ProviderScopeForPoint(p)
+	default:
+		return ""
+	}
 }
 
 // RepositoryKey builds a stable grouping key for the repository/destination side (best-effort).
@@ -35,10 +55,10 @@ func RepositoryKey(provider Provider, repositoryResourceID string, repositoryRef
 	if rid != "" {
 		return subjectKeyResourcePrefix + rid
 	}
-	return externalKey(provider, repositoryRef)
+	return externalKey(provider, repositoryRef, "")
 }
 
-func externalKey(provider Provider, ref *ExternalRef) string {
+func externalKey(provider Provider, ref *ExternalRef, scope string) string {
 	if ref == nil {
 		return ""
 	}
@@ -67,6 +87,10 @@ func externalKey(provider Provider, ref *ExternalRef) string {
 	write(ref.Namespace)
 	write(ref.Name)
 	write(ref.Class)
+	// Unscoped keys keep their historical hash.
+	if strings.TrimSpace(scope) != "" {
+		write(scope)
+	}
 
 	// Extra is intentionally excluded: it is often high-entropy and non-stable.
 	return subjectKeyExternalPrefix + hex.EncodeToString(h.Sum(nil))

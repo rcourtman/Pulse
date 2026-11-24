@@ -277,7 +277,7 @@ func TestReadLoopDone(t *testing.T) {
 	close(ac.done)
 
 	s.mu.Lock()
-	s.agents["a1"] = ac
+	s.agents[agentSessionKey(defaultOrganizationID, "a1")] = ac
 	s.mu.Unlock()
 
 	s.readLoop(ac)
@@ -300,7 +300,7 @@ func TestReadLoopUnexpectedCloseError(t *testing.T) {
 	}
 
 	s.mu.Lock()
-	s.agents["a1"] = ac
+	s.agents[agentSessionKey(defaultOrganizationID, "a1")] = ac
 	s.mu.Unlock()
 
 	done := make(chan struct{})
@@ -334,8 +334,8 @@ func TestReadLoopCommandResultBranches(t *testing.T) {
 	}
 
 	s.mu.Lock()
-	s.agents["a1"] = ac
-	s.pendingReqs[pendingRequestKey("a1", "req-full")] = make(chan CommandResultPayload)
+	s.agents[agentSessionKey(defaultOrganizationID, "a1")] = ac
+	s.pendingReqs[pendingRequestKey(connectionAuthorityKey(ac), "req-full")] = make(chan CommandResultPayload)
 	s.mu.Unlock()
 
 	done := make(chan struct{})
@@ -358,7 +358,7 @@ func TestReadLoopCommandResultBranches(t *testing.T) {
 	}
 
 	s.mu.Lock()
-	delete(s.pendingReqs, pendingRequestKey("a1", "req-full"))
+	delete(s.pendingReqs, pendingRequestKey(connectionAuthorityKey(ac), "req-full"))
 	s.mu.Unlock()
 }
 
@@ -382,7 +382,7 @@ func TestReadLoopAgentPingPongSendFailure(t *testing.T) {
 	foreignCh := make(chan CommandResultPayload, 1)
 
 	s.mu.Lock()
-	s.agents["a1"] = ac
+	s.agents[agentSessionKey(defaultOrganizationID, "a1")] = ac
 	s.pendingReqs[pendingRequestKey("a2", "req-shared")] = foreignCh
 	s.mu.Unlock()
 
@@ -488,7 +488,7 @@ func TestExecuteCommandSendError(t *testing.T) {
 		done:  make(chan struct{}),
 	}
 	s.mu.Lock()
-	s.agents["a1"] = ac
+	s.agents[agentSessionKey(defaultOrganizationID, "a1")] = ac
 	s.mu.Unlock()
 
 	_, err := s.ExecuteCommand(context.Background(), "a1", ExecuteCommandPayload{
@@ -513,7 +513,7 @@ func TestExecuteCommandTimeoutAndCancel(t *testing.T) {
 		done:  make(chan struct{}),
 	}
 	s.mu.Lock()
-	s.agents["a1"] = ac
+	s.agents[agentSessionKey(defaultOrganizationID, "a1")] = ac
 	s.mu.Unlock()
 
 	_, err := s.ExecuteCommand(context.Background(), "a1", ExecuteCommandPayload{
@@ -550,13 +550,13 @@ func TestExecuteCommandDefaultTimeout(t *testing.T) {
 		done:  make(chan struct{}),
 	}
 	s.mu.Lock()
-	s.agents["a1"] = ac
+	s.agents[agentSessionKey(defaultOrganizationID, "a1")] = ac
 	s.mu.Unlock()
 
 	go func() {
 		for {
 			s.mu.RLock()
-			ch := s.pendingReqs[pendingRequestKey("a1", "r-default")]
+			ch := s.pendingReqs[pendingRequestKey(connectionAuthorityKey(ac), "r-default")]
 			s.mu.RUnlock()
 			if ch != nil {
 				ch <- CommandResultPayload{RequestID: "r-default", Success: true}
@@ -648,7 +648,7 @@ func TestReadFileTimeoutCancelAndSendError(t *testing.T) {
 		done:  make(chan struct{}),
 	}
 	s.mu.Lock()
-	s.agents["a1"] = ac
+	s.agents[agentSessionKey(defaultOrganizationID, "a1")] = ac
 	s.mu.Unlock()
 
 	if _, err := s.ReadFile(context.Background(), "a1", ReadFilePayload{
@@ -743,7 +743,7 @@ func TestExecuteCommandAndReadFileReturnShutdownError(t *testing.T) {
 			done:  make(chan struct{}),
 		}
 		s.mu.Lock()
-		s.agents["a1"] = ac
+		s.agents[agentSessionKey(defaultOrganizationID, "a1")] = ac
 		s.mu.Unlock()
 
 		errCh := make(chan error, 1)
@@ -776,7 +776,7 @@ func TestExecuteCommandAndReadFileReturnShutdownError(t *testing.T) {
 			done:  make(chan struct{}),
 		}
 		s.mu.Lock()
-		s.agents["a1"] = ac
+		s.agents[agentSessionKey(defaultOrganizationID, "a1")] = ac
 		s.mu.Unlock()
 
 		errCh := make(chan error, 1)

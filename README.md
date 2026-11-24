@@ -13,7 +13,7 @@
 </div>
 
 Pulse is a self-hosted monitoring and alerting dashboard for Proxmox, Docker,
-Kubernetes, TrueNAS, vSphere, and Linux/Windows/macOS hosts. One lightweight
+Kubernetes, TrueNAS, and Linux/Windows/macOS hosts. One lightweight
 server tracks health, backups, availability checks, and metric history, and
 alerts you when something needs attention.
 
@@ -51,7 +51,6 @@ Thresholds plus Ping, TCP, UDP, HTTP(S), and TLS expiry checks via email, Discor
 | Kubernetes | Clusters, nodes, workloads, pods, services, storage, events |
 | TrueNAS SCALE & CORE | Pools, datasets, disks, snapshots, replication, apps, VMs |
 | Linux, Windows & macOS | Host health, filesystems, networking, temperatures, RAID, availability |
-| VMware vSphere *(early access)* | Hosts, clusters, VMs, datastores, networks, snapshots |
 
 <details>
 <summary><strong>More full-screen views: Docker and Podman, Kubernetes, and Pulse Patrol</strong></summary>

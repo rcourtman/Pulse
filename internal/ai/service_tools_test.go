@@ -184,6 +184,18 @@ func TestIsBlockedFetchIP(t *testing.T) {
 		{"172.16.0.1", true},  // Private range 172.16.x.x blocked
 		{"8.8.8.8", false},    // Global is allowed
 		{"224.0.0.1", true},   // Multicast
+		// Special-use ranges IsPrivate does not cover but that are internal all the same.
+		{"100.101.102.103", true},    // Shared address space (Tailscale, CGNAT)
+		{"100.100.100.200", true},    // Cloud metadata service in shared address space
+		{"192.0.0.192", true},        // Cloud metadata service in the IETF protocol block
+		{"198.18.0.1", true},         // Benchmarking
+		{"0.1.2.3", true},            // "This" network
+		{"240.0.0.1", true},          // Reserved
+		{"64:ff9b::6465:6667", true}, // NAT64 -> 100.101.102.103
+		{"100.63.255.255", false},    // Public neighbours stay allowed
+		{"100.128.0.1", false},
+		{"192.0.1.1", false},
+		{"198.20.0.1", false},
 	}
 
 	for _, tt := range tests {
@@ -204,6 +216,12 @@ func TestIsBlockedFetchIP(t *testing.T) {
 	privateIP := net.ParseIP("192.168.1.1")
 	if isBlockedFetchIP(privateIP) {
 		t.Error("Private IP should be allowed when PULSE_AI_ALLOW_PRIVATE_IPS=true")
+	}
+	if isBlockedFetchIP(net.ParseIP("100.101.102.103")) {
+		t.Error("Shared address space should be allowed when PULSE_AI_ALLOW_PRIVATE_IPS=true")
+	}
+	if !isBlockedFetchIP(net.ParseIP("255.255.255.255")) {
+		t.Error("Limited broadcast should stay blocked even when PULSE_AI_ALLOW_PRIVATE_IPS=true")
 	}
 
 	// Test that loopback IPs can be allowed via environment variable

@@ -539,6 +539,20 @@ if ! echo "$install_help_output" | grep -qF "Install specific version (e.g."; th
 fi
 success "install.sh is the Pulse server installer (handles --version, --help prints server help)"
 
+# The update helpers run a downloaded script only when it is signed and names
+# itself as the asset it was fetched as, because one key and namespace sign
+# every asset of every release. A release whose script lacks that line would be
+# refused by auto-updaters, and a second line could pass as another asset.
+info "Validating release scripts declare their asset identity..."
+for script_asset in install.sh pulse-auto-update.sh; do
+    declared_assets="$(grep -E '^PULSE_RELEASE_ASSET=' "$script_asset" || true)"
+    if [ "$declared_assets" != "PULSE_RELEASE_ASSET=\"${script_asset}\"" ]; then
+        error "${script_asset} must declare PULSE_RELEASE_ASSET=\"${script_asset}\" exactly once. Update helpers refuse a signed script with missing or mismatched identity."
+        exit 1
+    fi
+done
+success "install.sh and pulse-auto-update.sh declare their release asset identity"
+
 # Validate tarball contents
 section "Validating tarball contents"
 tar_arches=(linux-amd64 linux-arm64 linux-armv7 linux-armv6 linux-386)

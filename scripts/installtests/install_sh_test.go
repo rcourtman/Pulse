@@ -1571,6 +1571,8 @@ func TestInstallSHSupportsSavedStateUpdateMode(t *testing.T) {
 		`recover_connection_state "$lifecycle_conn_env"`,
 		`recover_connection_state_from_existing_agent() {`,
 		`recover_connection_state_from_running_agent`,
+		`running_agent_process_is_trusted() {`,
+		`if running_agent_process_is_trusted "$pid"; then printf '%s\n' "$pid"; fi`,
 		`recover_connection_state_from_systemd_unit`,
 		`recover_connection_state_from_launchd_plist`,
 		`recover_connection_state_from_service_scripts`,
@@ -1942,6 +1944,76 @@ func TestInstallSHRecoversV5ProcessArgsWithoutProcfs(t *testing.T) {
 	}
 	if strings.Contains(got, "--token deadbeef") {
 		t.Fatalf("non-procfs process recovery leaked raw token into service args:\n%s", got)
+	}
+}
+
+func TestInstallSHIgnoresForeignProcessesNamedLikeTheAgent(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("process identity is read from Linux procfs")
+	}
+	dir := t.TempDir()
+	start := func(path string, args ...string) string {
+		t.Helper()
+		cmd := exec.Command(path, args...)
+		stdin, err := cmd.StdinPipe() // held open so the process stays in read
+		if err != nil {
+			t.Fatalf("stdin pipe: %v", err)
+		}
+		if err := cmd.Start(); err != nil {
+			t.Fatalf("start %s: %v", path, err)
+		}
+		t.Cleanup(func() {
+			_ = stdin.Close()
+			_ = cmd.Process.Kill()
+			_ = cmd.Wait()
+		})
+		return strconv.Itoa(cmd.Process.Pid)
+	}
+
+	// Any user or guest can run something under the agent's name with
+	// arguments of its choice: here a shell script, as the installer sees it.
+	foreign := filepath.Join(dir, "foreign", "pulse-agent")
+	if err := os.MkdirAll(filepath.Dir(foreign), 0700); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	if err := os.WriteFile(foreign, []byte("#!/bin/sh\nread -r _\n"), 0700); err != nil {
+		t.Fatalf("write foreign process: %v", err)
+	}
+	pids := []string{start(foreign, "--url", "http://attacker.invalid:8655", "--token", "deadbeef", "--enable-commands")}
+
+	// Only root can show what is accepted: a root process of this system
+	// whose executable is the agent binary.
+	want := ""
+	if os.Geteuid() == 0 {
+		bash, err := exec.LookPath("bash")
+		if err != nil {
+			t.Fatalf("bash: %v", err)
+		}
+		binary, err := os.ReadFile(bash)
+		if err != nil {
+			t.Fatalf("read bash: %v", err)
+		}
+		agent := filepath.Join(dir, "pulse-agent")
+		if err := os.WriteFile(agent, binary, 0700); err != nil {
+			t.Fatalf("write agent stand-in: %v", err)
+		}
+		want = start(agent, "-c", "read -r _; :", "--url", "http://pulse.invalid:7655")
+		pids = append(pids, want)
+	}
+
+	script := `
+		BINARY_NAME="pulse-agent"
+` + extractInstallShellFunction(t, "running_agent_process_is_trusted") + `
+` + extractInstallShellFunction(t, "collect_running_agent_pids") + `
+		pgrep() { printf '%s\n' ` + strings.Join(pids, " ") + `; }
+		collect_running_agent_pids | tr '\n' ' '
+	`
+	out, err := exec.Command("bash", "-c", script).CombinedOutput()
+	if err != nil {
+		t.Fatalf("bash: %v\n%s", err, out)
+	}
+	if got := strings.TrimSpace(string(out)); got != want {
+		t.Fatalf("running agent pids = %q, want %q (foreign process %s must not supply settings)", got, want, pids[0])
 	}
 }
 
@@ -4285,6 +4357,76 @@ func TestAPIDeregistrationCurlWithoutToken(t *testing.T) {
 	if got := gotHeaders.Get("Content-Type"); got != "application/json" {
 		t.Errorf("Content-Type = %q, want application/json", got)
 	}
+}
+
+// plantCallerPythonModules fills dir with modules named like the standard
+// library ones the installers' inline Python imports. Each leaves a
+// "<module>.py.imported" file beside itself when Python loads it.
+func plantCallerPythonModules(t *testing.T, dir string) {
+	t.Helper()
+	if err := os.MkdirAll(dir, 0700); err != nil {
+		t.Fatal(err)
+	}
+	for _, module := range []string{"datetime", "ipaddress", "json", "pathlib", "re", "time", "urllib"} {
+		writeTestFile(t, filepath.Join(dir, module+".py"), []byte("open(__file__ + '.imported', 'w').close()\n"), 0600)
+	}
+}
+
+func assertCallerPythonModulesUnused(t *testing.T, dir string) {
+	t.Helper()
+	imported, err := filepath.Glob(filepath.Join(dir, "*.imported"))
+	if err != nil || len(imported) != 0 {
+		t.Errorf("inline Python loaded modules from the caller's directory or PYTHONPATH: %v, %v", imported, err)
+	}
+}
+
+// Administrators start these scripts as root from whatever directory their
+// shell is in, often a shared one such as /tmp. "python3 -" and "python3 -c"
+// search that directory before the standard library unless -I is given.
+func TestInstallerInlinePythonStartsIsolated(t *testing.T) {
+	invocation := regexp.MustCompile(`\bpython3[ \t]+-\S*`)
+	for _, script := range []string{
+		repoFile("install.sh"),
+		repoFile("scripts", "install.sh"),
+		repoFile("scripts", "uninstall-sensor-proxy.sh"),
+	} {
+		content, err := os.ReadFile(script)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for line, text := range strings.Split(string(content), "\n") {
+			for _, found := range invocation.FindAllString(text, -1) {
+				if strings.Fields(found)[1] != "-I" {
+					t.Errorf("%s:%d: %q does not start Python isolated (-I)", script, line+1, found)
+				}
+			}
+		}
+	}
+}
+
+func TestInstallSHTrueNASTaskInventoryIgnoresCallerPythonModules(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Unix installer")
+	}
+	caller := t.TempDir()
+	plantCallerPythonModules(t, caller)
+	script := `set -euo pipefail
+timeout() { shift 3; "$@"; }
+midclt() {
+    printf '%s\n' '[{"id":7,"type":"SCRIPT","script":"/fixture/bootstrap-pulse-agent.sh","command":"","when":"POSTINIT","enabled":true,"timeout":30,"comment":"Pulse Agent Bootstrap"}]'
+}
+TRUENAS_BOOTSTRAP_SCRIPT=/fixture/bootstrap-pulse-agent.sh
+` + extractInstallShellFunction(t, "read_truenas_agent_removal_tasks") + `
+read_truenas_agent_removal_tasks
+`
+	cmd := exec.Command("bash", "-c", script)
+	cmd.Dir = caller
+	cmd.Env = append(os.Environ(), "PYTHONPATH="+caller)
+	out, err := cmd.CombinedOutput()
+	if err != nil || string(out) != "7 true\ncomplete\n" {
+		t.Fatalf("owned boot-task inventory changed: %v\n%s", err, out)
+	}
+	assertCallerPythonModulesUnused(t, caller)
 }
 
 // Fixture cases use the same checked-in installer for the life of this test
@@ -6836,6 +6978,7 @@ case "$url" in
         cat > "$out" <<'INSTALLER'
 #!/usr/bin/env bash
 set -eu
+PULSE_RELEASE_ASSET="install.sh"
 [[ "$*" == "--version v9.9.9" ]]
 [[ "$PULSE_SERVICE_NAME" == pulse-url-fixture ]]
 [[ "$PULSE_INSTALL_DIR" == "$FIXTURE_DIR/install" ]]
@@ -8303,6 +8446,47 @@ func TestInstallSHLeastPrivilegeProfile(t *testing.T) {
 	}
 }
 
+// Root executes the installed collector on later installer runs, so neither
+// least-privilege profile may hand that file to the service account. Only the
+// mutable state directory belongs to it.
+func TestInstallSHLeastPrivilegeProfilesKeepCollectorBinaryRootOwned(t *testing.T) {
+	for _, helper := range []string{"false", "true"} {
+		t.Run("helper="+helper, func(t *testing.T) {
+			root := t.TempDir()
+			stateDir := filepath.Join(root, "state")
+			binary := filepath.Join(root, "bin", "pulse-agent")
+			trace := filepath.Join(root, "operations")
+			script := `
+		set -euo pipefail
+		LEAST_PRIVILEGE_USER="pulse-agent"
+		PRIVILEGED_HELPER_ENABLED="` + helper + `"
+		ENABLE_DOCKER="false"
+		STATE_DIR="` + stateDir + `"
+		INSTALL_DIR="` + filepath.Dir(binary) + `"
+		BINARY_NAME="pulse-agent"
+		id() { return 0; }
+		chown() { printf 'chown %s\n' "$*" >> "` + trace + `"; }
+		chmod() { printf 'chmod %s\n' "$*" >> "` + trace + `"; }
+` + extractInstallShellFunction(t, "provision_least_privilege_user") + `
+		provision_least_privilege_user
+	`
+			if out, err := exec.Command("bash", "-c", script).CombinedOutput(); err != nil {
+				t.Fatalf("provision least-privilege user: %v\n%s", err, out)
+			}
+			operations, err := os.ReadFile(trace)
+			if err != nil {
+				t.Fatal(err)
+			}
+			want := "chown -R pulse-agent:pulse-agent " + stateDir + "\n" +
+				"chown root:root " + binary + "\n" +
+				"chmod 0755 " + binary + "\n"
+			if string(operations) != want {
+				t.Fatalf("ownership operations = %q, want %q", operations, want)
+			}
+		})
+	}
+}
+
 func TestInstallSHTypedPrivilegedHelperUnits(t *testing.T) {
 	root := t.TempDir()
 	socketUnit := filepath.Join(root, "pulse-agent-helper.socket")
@@ -8423,6 +8607,7 @@ func TestInstallSHTypedPrivilegeHelperUpdateFilesystemBoundary(t *testing.T) {
 		`ReadOnlyPaths=${PRIVILEGED_HELPER_UPDATE_QUARANTINE_DIR}`,
 		`ReadWritePaths=${PRIVILEGED_HELPER_STATE_DIR} /usr/local/bin`,
 		`install -d -o "$LEAST_PRIVILEGE_USER" -g "$LEAST_PRIVILEGE_USER" -m 0700`,
+		`runuser -u "$LEAST_PRIVILEGE_USER" -- install -d -m 0700 "$quarantine"`,
 		`install -d -o root -g root -m 0700`,
 		`Typed privileged-helper updates require the fixed /usr/local/bin/pulse-agent target`,
 	} {

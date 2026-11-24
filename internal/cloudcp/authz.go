@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/auditlog"
 	cpauth "github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/auth"
 	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/registry"
 )
@@ -43,7 +44,7 @@ func requireSessionAuth(sessionSvc *cpauth.Service, reg *registry.TenantRegistry
 			return
 		}
 
-		req := r.Clone(r.Context())
+		req := r.Clone(auditlog.WithActor(r.Context(), claims.UserID))
 		req.Header.Set("X-User-ID", claims.UserID)
 		req.Header.Set("X-User-Email", claims.Email)
 		next.ServeHTTP(w, req)

@@ -19,6 +19,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/unified"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	mockfixtures "github.com/rcourtman/pulse-go-rewrite/internal/mock"
+	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/aicontracts"
@@ -2491,6 +2492,113 @@ func TestSetReadStatePropagatesToExistingServices(t *testing.T) {
 	_, _, _, _, storedReadState, _ := h.stateRefs()
 	if storedReadState != readState {
 		t.Fatalf("handler stored read state = %#v, want %#v", storedReadState, readState)
+	}
+}
+
+func TestSetReadStateKeepsTenantServicesOnTenantReadState(t *testing.T) {
+	mtp := config.NewMultiTenantPersistence(t.TempDir())
+	newManager := func() (*monitoring.MultiTenantMonitor, unifiedresources.ReadState, unifiedresources.ReadState) {
+		defaultAdapter := unifiedresources.NewMonitorAdapter(unifiedresources.NewRegistry(nil))
+		defaultMonitor := &monitoring.Monitor{}
+		defaultMonitor.SetResourceStore(defaultAdapter)
+		tenantAdapter := unifiedresources.NewMonitorAdapter(unifiedresources.NewRegistry(nil))
+		tenantMonitor := &monitoring.Monitor{}
+		tenantMonitor.SetResourceStore(tenantAdapter)
+		mtm := monitoring.NewMultiTenantMonitor(&config.Config{}, mtp, nil)
+		t.Cleanup(mtm.Stop)
+		setUnexportedField(t, mtm, "monitors", map[string]*monitoring.Monitor{"default": defaultMonitor, "acme": tenantMonitor})
+		return mtm, defaultAdapter, tenantAdapter
+	}
+	last := func(svc *readStateCapturingMockAIService) unifiedresources.ReadState {
+		t.Helper()
+		if len(svc.updates) == 0 {
+			t.Fatalf("service received no read-state update")
+		}
+		return svc.updates[len(svc.updates)-1]
+	}
+
+	retired, defaultReadState, tenantReadState := newManager()
+	h := NewAIHandler(mtp, retired, nil)
+	defaultSvc := &readStateCapturingMockAIService{}
+	tenantSvc := &readStateCapturingMockAIService{}
+	h.defaultService = defaultSvc
+	h.services["acme"] = tenantSvc
+
+	h.SetReadState(defaultReadState)
+	if got := last(defaultSvc); got != defaultReadState {
+		t.Fatalf("default service read state: want the default organization's")
+	}
+	if got := last(tenantSvc); got != tenantReadState {
+		t.Fatalf("tenant service read state: want the tenant's own")
+	}
+
+	// A monitor reload retires the manager. The router refreshes the read
+	// state once before and once after it hands over the replacement manager.
+	retired.Stop()
+	replacement, reloadedDefaultReadState, reloadedTenantReadState := newManager()
+
+	h.SetReadState(reloadedDefaultReadState)
+	if got := last(defaultSvc); got != reloadedDefaultReadState {
+		t.Fatalf("default service read state after reload: want the replacement default's")
+	}
+	if got := last(tenantSvc); got != nil {
+		t.Fatalf("tenant service read state after reload: want none until its own monitor is available")
+	}
+
+	h.SetMultiTenantMonitor(replacement)
+	h.SetReadState(reloadedDefaultReadState)
+	if got := last(defaultSvc); got != reloadedDefaultReadState {
+		t.Fatalf("default service read state after manager swap: want the replacement default's")
+	}
+	if got := last(tenantSvc); got != reloadedTenantReadState {
+		t.Fatalf("tenant service read state after manager swap: want the tenant's own")
+	}
+}
+
+// A monitor reload hands the router the replacement default monitor before the
+// replacement manager. Tenant chat services must end up on their own
+// organization's replacement read state, not on the default organization's.
+func TestMonitorReloadKeepsTenantChatServiceOnTenantReadState(t *testing.T) {
+	dataDir := t.TempDir()
+	t.Setenv("PULSE_DATA_DIR", dataDir)
+	t.Setenv("PULSE_LEGACY_KEY_PATH", filepath.Join(dataDir, ".legacy.key"))
+	cfg := &config.Config{DataPath: dataDir}
+	mtp := config.NewMultiTenantPersistence(dataDir)
+	require.NoError(t, mtp.SaveOrganization(&models.Organization{ID: "acme", DisplayName: "Acme"}))
+	newManager := func() (*monitoring.MultiTenantMonitor, *monitoring.Monitor) {
+		t.Helper()
+		mtm := monitoring.NewMultiTenantMonitor(cfg, mtp, nil)
+		t.Cleanup(mtm.Stop)
+		defaultMonitor, err := mtm.GetMonitor("default")
+		require.NoError(t, err)
+		return mtm, defaultMonitor
+	}
+
+	retired, defaultMonitor := newManager()
+	router := newTestRouter(t, cfg, defaultMonitor, retired, nil, func() error { return nil }, "test")
+	router.SetMonitor(defaultMonitor)
+	router.SetMultiTenantMonitor(retired)
+	tenantSvc := &readStateCapturingMockAIService{}
+	router.aiHandler.services["acme"] = tenantSvc
+
+	retired.Stop()
+	replacement, reloadedDefaultMonitor := newManager()
+	router.SetMonitor(reloadedDefaultMonitor)
+	router.SetMultiTenantMonitor(replacement)
+
+	tenantMonitor, err := replacement.GetMonitor("acme")
+	require.NoError(t, err)
+	tenantReadState := tenantMonitor.GetUnifiedReadState()
+	if tenantReadState == nil || tenantReadState == router.defaultReadState() {
+		t.Fatalf("tenant monitor has no read state of its own")
+	}
+	for _, got := range tenantSvc.updates {
+		if got != nil && got != tenantReadState {
+			t.Fatalf("tenant service was handed a read state that is not its organization's")
+		}
+	}
+	if len(tenantSvc.updates) == 0 || tenantSvc.updates[len(tenantSvc.updates)-1] != tenantReadState {
+		t.Fatalf("tenant service read state after reload: want the tenant's own")
 	}
 }
 

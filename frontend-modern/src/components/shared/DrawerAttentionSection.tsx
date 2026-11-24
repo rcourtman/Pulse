@@ -1,6 +1,5 @@
 import { For, Show, createSignal, createUniqueId, type Component } from 'solid-js';
 
-import { ALERTS_EMPTY_STATE } from '@/utils/alertOverviewPresentation';
 import {
   formatAlertSeverityLabel,
   getAlertSeverityBadgeClass,
@@ -121,17 +120,3 @@ export const DrawerAttentionSection: Component<DrawerAttentionSectionProps> = (p
     </Show>
   );
 };
-
-/**
- * The line every drawer shows in place of the attention section when the
- * object has no active alerts, so "nothing is wrong" reads the same in every
- * drawer. `availabilityPassing` adds the one reassurance that is not an alert.
- */
-export const DrawerNoAlertsLine: Component<{ availabilityPassing?: boolean }> = (props) => (
-  <p data-testid="drawer-no-attention" class="text-xs text-muted">
-    <span class="font-medium text-base-content">{ALERTS_EMPTY_STATE}</span>
-    <Show when={props.availabilityPassing}>
-      <span> · availability checks passing</span>
-    </Show>
-  </p>
-);

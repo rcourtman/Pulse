@@ -18,7 +18,7 @@ Pulse Relay is the end-to-end encrypted connection between a Pulse instance and 
 1. Your Pulse server maintains a persistent WebSocket connection to the relay server.
 2. A mobile client connects to the relay server and authenticates.
 3. An ECDH key exchange creates a per-channel encryption key.
-4. Tunneled remote-access traffic is encrypted end-to-end — the relay server **never sees plaintext data**.
+4. Tunneled remote-access traffic on an active mobile channel is encrypted end-to-end after ECDH key exchange, so the relay server does not see plaintext traffic on that channel.
 
 ## Quick Start
 
@@ -37,12 +37,12 @@ Pulse Relay is the end-to-end encrypted connection between a Pulse instance and 
 
 ## Security
 
-Relay was designed with a zero-trust model:
+Relay encrypts tunneled request and response payloads per channel, while the relay server still handles channel admission:
 
 | Property | Detail |
 |---|---|
-| **Encryption** | End-to-end ECDH key exchange per channel |
-| **Plaintext** | Relay server never sees your monitoring data |
+| **Encryption** | Mandatory per-channel ECDH key exchange before any DATA frame is served |
+| **Trust boundary** | Active channel traffic is encrypted in transit, but the relay server receives the phone's `relay:mobile:access` pairing token during channel admission and is therefore trusted with that mobile-scoped credential |
 | **Authentication** | Per-session mobile authentication |
 | **Back-pressure** | Data limiters prevent channel flooding |
 | **License-gated** | Requires an active licence with the `relay` entitlement |

@@ -119,7 +119,15 @@ func (m *Monitor) pveNodeID(instanceName string, instanceCfg *config.PVEInstance
 			return identityID
 		}
 	}
-	return m.pveNodeIdentityScope(instanceName, instanceCfg) + "-" + nativeName
+	scope := m.pveNodeIdentityScope(instanceName, instanceCfg)
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	if m.config == nil {
+		return scope + "-" + nativeName
+	}
+	// The native name is reported by the endpoint; it must not spell a node
+	// of another configured connection.
+	return config.DerivePVENodeIdentity(m.config.PVEInstances, instanceName, scope, nativeName)
 }
 
 // pveNodeTLSFingerprint resolves the TOFU-captured TLS certificate

@@ -16,17 +16,21 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
 	"golang.org/x/crypto/ssh"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/api/apicontext"
+	"github.com/rcourtman/pulse-go-rewrite/internal/api/apihttp"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 	"github.com/rcourtman/pulse-go-rewrite/internal/system"
 	"github.com/rcourtman/pulse-go-rewrite/internal/websocket"
 	internalauth "github.com/rcourtman/pulse-go-rewrite/pkg/auth"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/pbs"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/proxmox"
 	"github.com/rs/zerolog/log"
 )
 
@@ -365,18 +369,6 @@ type agentAutoRegisterAuthority struct {
 	ownedHosts []string
 }
 
-// autoRegisterSameEndpoint reports whether two connection addresses name the
-// same service: the same port (after the type's default) on the same host or
-// resolved address. Unlike source matching it never ignores the port, so two
-// connections behind one address stay distinct.
-func autoRegisterSameEndpoint(a, b, nodeType string) bool {
-	left, right, ok := normalizeAutoRegisterEndpointPair(a, b, nodeType)
-	if !ok {
-		return false
-	}
-	return strings.EqualFold(left.hostname, right.hostname) || hostsShareResolvedIdentity(left.address, right.address)
-}
-
 // autoRegisterSpelledEndpoint reports whether two connection addresses spell
 // the same host and port after normalisation, without resolving names. A
 // caller-supplied name can resolve to one address when checked and another
@@ -419,7 +411,7 @@ func (a agentAutoRegisterAuthority) owns(address string) bool {
 		return false
 	}
 	for _, owned := range a.ownedHosts {
-		if autoRegisterSameEndpoint(address, owned, a.nodeType) {
+		if autoRegisterSpelledEndpoint(address, owned, a.nodeType) {
 			return true
 		}
 	}
@@ -544,6 +536,68 @@ func (h *ConfigHandlers) agentAutoRegisterAuthority(ctx context.Context, req *Au
 		}
 	}
 	return authority
+}
+
+// defaultVerifyAutoRegisterCredential asks the Proxmox API at clientConfig
+// whether it accepts the credential in clientConfig, using the same endpoint
+// check as connection testing.
+func defaultVerifyAutoRegisterCredential(ctx context.Context, nodeType string, clientConfig proxmox.ClientConfig) error {
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+
+	if nodeType == "pbs" {
+		client, err := pbs.NewClientWithContext(ctx, pbs.ClientConfig(clientConfig))
+		if err != nil {
+			return err
+		}
+		_, err = client.GetDatastores(ctx)
+		return err
+	}
+	client, err := proxmox.NewClientWithContext(ctx, clientConfig)
+	if err != nil {
+		return err
+	}
+	_, err = client.GetNodes(ctx)
+	return err
+}
+
+func refuseAgentAutoRegisterCredential(w http.ResponseWriter, nodeType, serverName, target string, err error) {
+	log.Warn().
+		Err(err).
+		Str("type", nodeType).
+		Str("serverName", serverName).
+		Str("target", target).
+		Msg("Agent API token auto-register refused: the matched connection does not accept the submitted token")
+	http.Error(w, "agent token auth may change a connection only to a token that connection accepts", http.StatusForbidden)
+}
+
+// agentAutoRegisterAuthorityStands reports whether the caller's token is still
+// admitted and carries the same authority a change was decided on. Deciding
+// waits on addresses the caller supplied, so a token revoked or changed during
+// that wait must not mutate any connection.
+func (h *ConfigHandlers) agentAutoRegisterAuthorityStands(ctx context.Context, req *AutoRegisterRequest, decided agentAutoRegisterAuthority) bool {
+	auth, ok := getAgentAutoRegAuth(ctx)
+	if !ok {
+		return false
+	}
+	inventories := h.agentTokenInventories(ctx)
+	config.Mu.RLock()
+	record, _, found := monitoring.FindAPITokenLocked(inventories, strings.TrimSpace(auth.tokenID))
+	admitted := found && record != nil && !record.IsExpired() && record.HasScope(config.ScopeAgentReport)
+	config.Mu.RUnlock()
+	if !admitted {
+		return false
+	}
+	current := h.agentAutoRegisterAuthority(ctx, req)
+	return current.installGrant == decided.installGrant && slices.Equal(current.ownedHosts, decided.ownedHosts)
+}
+
+func refuseLapsedAgentAutoRegister(w http.ResponseWriter, nodeType, serverName string) {
+	log.Warn().
+		Str("type", nodeType).
+		Str("serverName", serverName).
+		Msg("Agent API token auto-register refused: the token was revoked or its registration authority changed while the request was open")
+	http.Error(w, "agent token is no longer authorized for this registration", http.StatusForbidden)
 }
 
 func refuseAgentAutoRegisterChange(w http.ResponseWriter, nodeType, serverName, target string) {
@@ -1161,15 +1215,39 @@ func shouldPreserveExistingAutoRegisterHost(existingHost string, candidateHosts 
 	return true
 }
 
+// autoRegisterCredentialStaysWithStoredHost reports whether the credential
+// being registered may be saved on a connection that keeps a stored address the
+// caller did not list. Because DNS can point elsewhere after this check runs,
+// something else must bind the credential to the registering host: the caller's
+// own spent install grant recorded that address, or the TLS certificate just
+// fetched from the registering host is saved on an HTTPS address that is not an
+// unpinned or clustered agent-created entry.
+func autoRegisterCredentialStaysWithStoredHost(nodeType string, candidate canonicalAutoRegisterCandidate, incoming canonicalAutoRegisterIdentity) bool {
+	if incoming.recordedHost != nil && incoming.recordedHost(candidate.Host) {
+		return true
+	}
+	if strings.TrimSpace(incoming.fingerprint) == "" {
+		return false
+	}
+	if strings.EqualFold(strings.TrimSpace(candidate.Source), "agent") &&
+		(strings.TrimSpace(candidate.Fingerprint) == "" || candidate.HasClusterEndpoints) {
+		return false
+	}
+	normalized, err := normalizeNodeHost(candidate.Host, nodeType)
+	return err == nil && strings.HasPrefix(normalized, "https://")
+}
+
 // canonicalAutoRegisterCandidate is the identity view of an already-configured
 // instance that canonical auto-registration matches an incoming registration
 // against. PVE and PBS instances are projected onto this shape so one matcher
 // serves both node types.
 type canonicalAutoRegisterCandidate struct {
-	Host        string
-	Name        string
-	Fingerprint string
-	TokenName   string
+	Host                string
+	Name                string
+	Fingerprint         string
+	TokenName           string
+	Source              string
+	HasClusterEndpoints bool
 }
 
 // canonicalAutoRegisterIdentity is the identity of the incoming registration.
@@ -1181,14 +1259,20 @@ type canonicalAutoRegisterIdentity struct {
 	fingerprint    string
 	tokenName      string
 	candidateHosts []string
+	// recordedHost reports whether a stored address is the one the caller's
+	// spent install grant recorded, spelled the same. It is nil for a caller
+	// with no connection of its own (a setup token or an unspent grant).
+	recordedHost func(string) bool
 }
 
 func pveAutoRegisterCandidate(instance config.PVEInstance) canonicalAutoRegisterCandidate {
 	return canonicalAutoRegisterCandidate{
-		Host:        instance.Host,
-		Name:        instance.Name,
-		Fingerprint: instance.Fingerprint,
-		TokenName:   instance.TokenName,
+		Host:                instance.Host,
+		Name:                instance.Name,
+		Fingerprint:         instance.Fingerprint,
+		TokenName:           instance.TokenName,
+		Source:              instance.Source,
+		HasClusterEndpoints: len(instance.ClusterEndpoints) > 0,
 	}
 }
 
@@ -1198,6 +1282,7 @@ func pbsAutoRegisterCandidate(instance config.PBSInstance) canonicalAutoRegister
 		Name:        instance.Name,
 		Fingerprint: instance.Fingerprint,
 		TokenName:   instance.TokenName,
+		Source:      instance.Source,
 	}
 }
 
@@ -1212,19 +1297,23 @@ func autoRegisterCandidates[T any](instances []T, view func(T) canonicalAutoRegi
 }
 
 // findCanonicalAutoRegisterMatch reports which configured instance an incoming
-// canonical auto-registration should update in place, and whether that instance
-// keeps its stored host. It returns (-1, false) when the registration belongs to
-// a node Pulse has not seen, which is the caller's signal to create one.
+// canonical auto-registration should update in place, whether that instance
+// keeps its stored host, and whether the match came from DHCP continuity
+// (name plus token identity). It returns (-1, false, false) when the
+// registration belongs to a node Pulse has not seen.
 //
-// The ladder, in order: exact host match, then — only for candidates whose TLS
-// fingerprint does not conflict with the incoming one — resolved host identity
-// (the same box reached by a different address), then DHCP continuity by node
-// name plus token identity. nodeType ("pve"/"pbs") is log attribution only.
-func findCanonicalAutoRegisterMatch(nodeType string, incoming canonicalAutoRegisterIdentity, candidates []canonicalAutoRegisterCandidate) (int, bool) {
+// The ladder, in order: exact host match against every candidate, then (only
+// for candidates whose TLS fingerprint does not conflict with the incoming one)
+// resolved host identity, then DHCP continuity by node name plus token
+// identity. A candidate whose stored host a resolved-identity match would keep
+// is skipped unless autoRegisterCredentialStaysWithStoredHost holds.
+func findCanonicalAutoRegisterMatch(nodeType string, incoming canonicalAutoRegisterIdentity, candidates []canonicalAutoRegisterCandidate) (int, bool, bool) {
 	for i, node := range candidates {
 		if node.Host == incoming.host {
-			return i, false
+			return i, false, false
 		}
+	}
+	for i, node := range candidates {
 		if config.ProxmoxFingerprintsConflict(node.Fingerprint, incoming.fingerprint) {
 			log.Warn().
 				Str("existingHost", node.Host).
@@ -1235,13 +1324,21 @@ func findCanonicalAutoRegisterMatch(nodeType string, incoming canonicalAutoRegis
 		}
 		if hostsShareResolvedIdentity(node.Host, incoming.host) {
 			preserveHost := shouldPreserveExistingAutoRegisterHost(node.Host, incoming.candidateHosts)
+			if preserveHost && !autoRegisterCredentialStaysWithStoredHost(nodeType, node, incoming) {
+				log.Warn().
+					Str("existingHost", node.Host).
+					Str("newHost", incoming.host).
+					Str("type", nodeType).
+					Msg("Canonical auto-register rejected inferred node match because no TLS fingerprint would bind the credential at the preserved host")
+				continue
+			}
 			log.Info().
 				Str("existingHost", node.Host).
 				Str("newHost", incoming.host).
 				Bool("preserveHost", preserveHost).
 				Str("type", nodeType).
 				Msg(canonicalAutoRegisterMatchMessage("resolved host identity"))
-			return i, preserveHost
+			return i, preserveHost, false
 		}
 		if incoming.serverName != "" &&
 			strings.EqualFold(strings.TrimSpace(node.Name), incoming.serverName) &&
@@ -1252,10 +1349,10 @@ func findCanonicalAutoRegisterMatch(nodeType string, incoming canonicalAutoRegis
 				Str("type", nodeType).
 				Str("node", incoming.serverName).
 				Msg(canonicalAutoRegisterMatchMessage("DHCP continuity token identity"))
-			return i, false
+			return i, false, true
 		}
 	}
-	return -1, false
+	return -1, false, false
 }
 
 // clusterMemberOverrideIdentity canonicalizes a connection address (bare
@@ -1348,25 +1445,66 @@ func shouldAdoptClusterMemberAutoRegisterAddress(existingOverride string, candid
 	return false
 }
 
+// readAutoRegisterClusterView reads the cluster a registering host reports
+// for itself, with the token it presented. Only that host is contacted: the
+// member addresses in its answer are compared, never dialled, so the validator
+// accepts them unprobed. A variable so tests can stand in for the host.
+var readAutoRegisterClusterView = func(ctx context.Context, clientConfig proxmox.ClientConfig, nodeName string) (bool, []config.ClusterEndpoint) {
+	isCluster, _, endpoints := detectPVEClusterWithValidator(ctx, clientConfig, nodeName, nil,
+		func(context.Context, proxmox.ClusterStatus, proxmox.ClientConfig, string) (bool, string, string) { return true, "", "" })
+	return isCluster, endpoints
+}
+
+// autoRegisterHostConfirmsClusterMembership reports whether the registering
+// host itself places a cluster connection's saved host inside its own cluster.
+// The connection's member rows are only what its endpoint answered to
+// /cluster/status, so a row naming the registering host is that endpoint's
+// claim. Pulse asks only the selected host whose certificate it just captured,
+// pinned to that certificate, so this contacts no address the registration
+// could not already make Pulse contact.
+func autoRegisterHostConfirmsClusterMembership(ctx context.Context, instance config.PVEInstance, serverName, selectedHost, fingerprint, tokenID, tokenValue string) bool {
+	if strings.TrimSpace(selectedHost) == "" || strings.TrimSpace(fingerprint) == "" || tokenValue == "" {
+		return false
+	}
+	authority := clusterMemberOverrideIdentity(instance.Host)
+	if host, _, err := net.SplitHostPort(authority); err != nil || net.ParseIP(host) == nil {
+		return false
+	}
+	clientConfig := config.CreateProxmoxConfigFromFields(selectedHost, "", "", tokenID, tokenValue, fingerprint, true)
+	isCluster, endpoints := readAutoRegisterClusterView(ctx, clientConfig, serverName)
+	if !isCluster {
+		return false
+	}
+	for _, endpoint := range endpoints {
+		for _, address := range []string{endpoint.IP, endpoint.IPOverride} {
+			if clusterMemberOverrideIdentity(address) == authority {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 // adoptCanonicalAutoRegisterClusterMember handles re-registration of an agent
 // whose node is a non-primary cluster member rather than a top-level instance:
 // the cluster connection already covers it, so instead of creating a
-// standalone duplicate (which ConsolidatePVEInstances would fold back in,
-// discarding the agent's address), adopt the Pulse-verified selected host as
-// the member's connection override. A covered member must not replace the
-// cluster's credentials with its own per-node token; the only credential
-// writes are a same-token-identity secret refresh (the agent rotates its
-// token in place on reinstall, so the stored secret is already dead) and a
-// full promotion onto a cluster that has no credentials at all.
+// standalone duplicate, adopt the Pulse-verified selected host as the member's
+// connection override only when proven by its pinned certificate. A covered
+// member must not replace the cluster's credentials with its own per-node
+// token: the only credential writes are a same-token-identity secret refresh
+// (confirmed by the registering host's own /cluster/status) and a full
+// promotion onto a cluster that has no credentials at all.
 //
-// allowAddressChange is false for an agent token without an install grant:
-// such a caller may refresh the member's credentials but not move its
-// address or re-pin it to another address.
-func (h *ConfigHandlers) adoptCanonicalAutoRegisterClusterMember(ctx context.Context, serverName, selectedHost, fingerprint, tokenID, tokenValue string, candidateHosts []string, source string, allowAddressChange bool) bool {
+// Because the member keeps the cluster's credentials, Pulse presents them
+// wherever the member's address points. The address therefore moves only to a
+// host that presented the certificate already pinned for the member, and an
+// agent token never replaces a pinned certificate with a different one.
+//
+// i and j are the member findCanonicalAutoRegisterClusterMember matched.
+func (h *ConfigHandlers) adoptCanonicalAutoRegisterClusterMember(ctx context.Context, i, j int, serverName, selectedHost, fingerprint, tokenID, tokenValue string, candidateHosts []string, source string, allowAddressChange bool, confirmedSecretRefresh bool) (bool, string) {
 	instances := h.getConfig(ctx).PVEInstances
-	i, j, ok := findCanonicalAutoRegisterClusterMember(instances, serverName, candidateHosts)
-	if !ok {
-		return false
+	if i < 0 || i >= len(instances) || j < 0 || j >= len(instances[i].ClusterEndpoints) {
+		return false, ""
 	}
 	instance := &instances[i]
 	endpoint := &instance.ClusterEndpoints[j]
@@ -1383,14 +1521,22 @@ func (h *ConfigHandlers) adoptCanonicalAutoRegisterClusterMember(ctx context.Con
 			Str("existingHost", endpoint.EffectiveIP()).
 			Str("newHost", selectedHost).
 			Msg("Canonical auto-register rejected inferred cluster member match because TLS fingerprints conflict")
-		return false
+		return false, ""
+	}
+
+	refreshesSecret := tokenID != "" && instance.TokenName == tokenID && tokenValue != "" && tokenValue != instance.TokenValue
+	if refreshesSecret && !confirmedSecretRefresh && !autoRegisterHostConfirmsClusterMembership(ctx, *instance, serverName, selectedHost, fingerprint, tokenID, tokenValue) {
+		log.Warn().
+			Str("cluster", instance.Name).
+			Str("node", endpoint.NodeName).
+			Str("newHost", selectedHost).
+			Msg("Canonical auto-register rejected inferred cluster member match because the registering host did not confirm the cluster's saved host")
+		return false, ""
 	}
 
 	switch {
-	case tokenID != "" && instance.TokenName == tokenID:
-		if tokenValue != "" {
-			instance.TokenValue = tokenValue
-		}
+	case refreshesSecret:
+		instance.TokenValue = tokenValue
 	case tokenID != "" && instance.TokenName == "" && instance.TokenValue == "" && instance.User == "" && instance.Password == "":
 		instance.TokenName = tokenID
 		instance.TokenValue = tokenValue
@@ -1399,42 +1545,77 @@ func (h *ConfigHandlers) adoptCanonicalAutoRegisterClusterMember(ctx context.Con
 		instance.Source = strings.TrimSpace(source)
 	}
 
+	recordedAddress := func() string {
+		if effective := strings.TrimSpace(endpoint.EffectiveIP()); effective != "" {
+			if normalized, err := normalizeNodeHost(effective, "pve"); err == nil {
+				return normalized
+			}
+			return effective
+		}
+		if strings.TrimSpace(endpoint.Host) != "" {
+			return strings.TrimSpace(endpoint.Host)
+		}
+		return selectedHost
+	}
+
 	switch {
 	case selectedIdentity == "":
-		return true
+		return true, recordedAddress()
 	case selectedIdentity == effectiveIdentity:
 		// The member's effective address already routes to the agent's
-		// selection; just refresh the certificate pin below.
+		// selection. Refresh the certificate pin below if allowed.
+	case willAdoptSelectedAddress && !config.ProxmoxFingerprintsMatch(endpoint.Fingerprint, fingerprint):
+		// Unproven: no saved pin for this member, or no certificate captured
+		// from the selected host. Keep the address and the pin so the
+		// cluster's credentials never follow a caller-chosen address.
+		log.Warn().
+			Str("cluster", instance.Name).
+			Str("node", endpoint.NodeName).
+			Str("existingHost", endpoint.EffectiveIP()).
+			Str("newHost", selectedHost).
+			Msg(canonicalAutoRegisterMatchMessage("cluster member endpoint, kept its address because selected host is not proven by the member's pinned certificate"))
+		return true, recordedAddress()
 	case allowAddressChange && shouldAdoptClusterMemberAutoRegisterAddress(endpoint.IPOverride, candidateHosts):
 		override, err := normalizeClusterEndpointIPOverride(selectedHost)
 		if err != nil || override == "" {
-			return true
+			return true, recordedAddress()
 		}
 		log.Info().
 			Str("cluster", instances[i].Name).
 			Str("node", endpoint.NodeName).
 			Str("previousOverride", endpoint.IPOverride).
 			Str("override", override).
-			Msg(canonicalAutoRegisterMatchMessage("cluster member endpoint; adopted agent connection address"))
+			Msg(canonicalAutoRegisterMatchMessage("cluster member endpoint, adopted agent connection address"))
 		endpoint.IPOverride = override
 	default:
-		// Admin-managed override the agent cannot see; keep it and leave the
+		// Admin-managed override the agent cannot see. Keep it and leave the
 		// fingerprint pinned to that address.
 		log.Info().
 			Str("cluster", instances[i].Name).
 			Str("node", endpoint.NodeName).
 			Str("override", endpoint.IPOverride).
-			Msg(canonicalAutoRegisterMatchMessage("cluster member endpoint; preserved admin-managed override"))
-		return true
+			Msg(canonicalAutoRegisterMatchMessage("cluster member endpoint, preserved admin-managed override"))
+		return true, recordedAddress()
+	}
+
+	// The pin is what ties the member's address to the member. An agent token
+	// never replaces a known pin with a conflicting certificate. Re-pinning
+	// takes a setup token or the node's TLS settings.
+	if isAgentAutoRegAuth(ctx) && config.ProxmoxFingerprintsConflict(endpoint.Fingerprint, fingerprint) {
+		log.Warn().
+			Str("cluster", instance.Name).
+			Str("node", endpoint.NodeName).
+			Str("host", endpoint.EffectiveIP()).
+			Msg("Canonical auto-register kept cluster member TLS pin because the agent-registered certificate conflicts with it")
+		return true, recordedAddress()
 	}
 
 	// The fingerprint was captured from selectedHost, which is now the
-	// member's effective address; a reinstall may have regenerated the node's
-	// TLS certificate, so refresh the pin whenever one was captured.
+	// member's effective address. Refresh the pin whenever one was captured.
 	if strings.TrimSpace(fingerprint) != "" {
 		endpoint.Fingerprint = fingerprint
 	}
-	return true
+	return true, recordedAddress()
 }
 
 func canonicalAutoRegisterCompletionPayloadMessage() string {
@@ -1567,7 +1748,12 @@ func buildCanonicalAutoUnregisterResponse(req *AutoUnregisterRequest, host strin
 	}
 }
 
-func (h *ConfigHandlers) authenticateSetupScriptTeardownRequest(r *http.Request, nodeType string, authToken string) (*http.Request, bool) {
+// authenticateSetupScriptTeardownRequest admits a teardown request whose setup
+// token, live or inside its post-use grace period, was issued for the request's
+// node type and host. The address is compared as spelled, without resolving
+// names, which matches what the generated setup script sends back. A refused
+// request does not spend the token.
+func (h *ConfigHandlers) authenticateSetupScriptTeardownRequest(r *http.Request, nodeType string, host string, authToken string) (*http.Request, bool) {
 	setupToken := strings.TrimSpace(authToken)
 	if setupToken == "" {
 		return r, false
@@ -1589,6 +1775,9 @@ func (h *ConfigHandlers) authenticateSetupScriptTeardownRequest(r *http.Request,
 		if strings.TrimSpace(record.NodeType) != "" && strings.TrimSpace(record.NodeType) != strings.TrimSpace(nodeType) {
 			return r, false
 		}
+		if !autoRegisterSpelledEndpoint(record.Host, host, nodeType) {
+			return r, false
+		}
 		if !record.Used && now.Before(record.ExpiresAt) {
 			record.Used = true
 			graceExpiry := recentSetupTokenGraceExpiry(record, now)
@@ -1605,6 +1794,9 @@ func (h *ConfigHandlers) authenticateSetupScriptTeardownRequest(r *http.Request,
 		return r, false
 	}
 	if recentRecord.NodeType != "" && recentRecord.NodeType != strings.TrimSpace(nodeType) {
+		return r, false
+	}
+	if !autoRegisterSpelledEndpoint(recentRecord.Host, host, nodeType) {
 		return r, false
 	}
 	if recentRecord.OrgID != "" {
@@ -1638,7 +1830,9 @@ func (h *ConfigHandlers) removeAutoRegisteredNode(ctx context.Context, req *Auto
 			if autoUnregisterNodeMatch(node.Host, candidateHosts, node.TokenName, req.TokenID) {
 				actualName = node.Name
 				removedHost = node.Host
+				config.Mu.Lock()
 				cfg.PVEInstances = append(cfg.PVEInstances[:i], cfg.PVEInstances[i+1:]...)
+				config.Mu.Unlock()
 				h.normalizePVEConfigState(ctx)
 				return true, actualName, removedHost
 			}
@@ -1650,7 +1844,9 @@ func (h *ConfigHandlers) removeAutoRegisteredNode(ctx context.Context, req *Auto
 			node := cfg.PVEInstances[hostOnlyFallback]
 			actualName = node.Name
 			removedHost = node.Host
+			config.Mu.Lock()
 			cfg.PVEInstances = append(cfg.PVEInstances[:hostOnlyFallback], cfg.PVEInstances[hostOnlyFallback+1:]...)
+			config.Mu.Unlock()
 			h.normalizePVEConfigState(ctx)
 			return true, actualName, removedHost
 		}
@@ -2007,7 +2203,7 @@ func (h *ConfigHandlers) handleAutoUnregister(w http.ResponseWriter, r *http.Req
 	}
 	req.Host = normalizedCandidates[0]
 
-	updatedRequest, authenticated := h.authenticateSetupScriptTeardownRequest(r, req.Type, req.AuthToken)
+	updatedRequest, authenticated := h.authenticateSetupScriptTeardownRequest(r, req.Type, req.Host, req.AuthToken)
 	if !authenticated {
 		if req.AuthToken == "" {
 			http.Error(w, "Pulse setup token required", http.StatusUnauthorized)
@@ -2030,12 +2226,10 @@ func (h *ConfigHandlers) handleAutoUnregister(w http.ResponseWriter, r *http.Req
 			return
 		}
 
-		if h.reloadFunc != nil {
-			if err := h.reloadFunc(); err != nil {
-				log.Error().Err(err).Msg("Failed to reload monitor after auto-unregister")
-				http.Error(w, "Configuration saved but failed to apply changes", http.StatusInternalServerError)
-				return
-			}
+		if err := h.reloadMonitor(r.Context()); err != nil {
+			log.Error().Err(err).Msg("Failed to reload monitor after auto-unregister")
+			http.Error(w, "Configuration saved but failed to apply changes", http.StatusInternalServerError)
+			return
 		}
 
 		h.notifyAutoUnregisterSuccess(r.Context(), &req)
@@ -2172,11 +2366,16 @@ func (h *ConfigHandlers) handleAutoRegister(w http.ResponseWriter, r *http.Reque
 			if len(inventories) > 0 {
 				record, ok := validateAgentTokenLocked(inventories, apiToken)
 				if ok && record != nil && record.HasScope(config.ScopeAgentReport) {
-					// Reject cross-org tokens: if the request context has an explicit
-					// non-default org, the token must belong to that same org.
+					// Reject cross-org tokens: a token bound to organizations acts
+					// only in one of them, the default organization included. Its
+					// inventory is the instance inventory, which also holds every
+					// tenant organization's install tokens. Unbound legacy tokens
+					// keep acting in the request's organization.
 					requestOrgID := apicontext.OrgID(r.Context())
-					orgMismatch := requestOrgID != "" && requestOrgID != "default" &&
-						record.OrgID != "" && record.OrgID != requestOrgID
+					if requestOrgID == "" {
+						requestOrgID = "default"
+					}
+					orgMismatch := !record.IsLegacyToken() && !record.CanAccessOrg(requestOrgID)
 					if !orgMismatch {
 						installBootstrap := canBootstrapProxmoxInstallRegistration(record, &req)
 						if !installBootstrap && proxmoxInstallGrantExpiredForRequest(record, &req) {
@@ -2450,16 +2649,23 @@ func (h *ConfigHandlers) handleCanonicalAutoRegister(w http.ResponseWriter, r *h
 		tokenName:      fullTokenID,
 		candidateHosts: candidateHosts,
 	}
+	if agentAuth && !agentAuthority.installGrant {
+		incomingIdentity.recordedHost = agentAuthority.mayProbe
+	}
 
 	// Add the node to configuration. A name typed in the add dialog rides the
-	// setup token as the desired name and wins over the node's own hostname;
-	// the dedup/adoption identity below still matches on serverName so
-	// renaming cannot fork an existing connection.
+	// setup token as the desired name and wins over the node's own hostname.
+	// The dedup/adoption identity below still matches on serverName so renaming
+	// cannot fork an existing connection.
 	connectionName := serverName
 	if desired := setupDesiredNameFromContext(r.Context()); desired != "" {
 		connectionName = desired
 	}
 	created := false
+	// The address the install grant records as the token's own. An existing
+	// connection that keeps its stored address is recorded there, not at the
+	// selected candidate, so a later rotation still finds it.
+	recordedHost := host
 	if req.Type == "pve" {
 		pveDisplayName := h.disambiguateNodeName(r.Context(), connectionName, host, "pve")
 		pveNode := config.PVEInstance{
@@ -2476,30 +2682,104 @@ func (h *ConfigHandlers) handleCanonicalAutoRegister(w http.ResponseWriter, r *h
 			Source:            registrationSource,
 		}
 		// Deduplicate by host to keep canonical auto-registration idempotent on reruns.
-		existingIndex, preserveHost := findCanonicalAutoRegisterMatch("pve", incomingIdentity,
+		existingIndex, preserveHost, continuityMatch := findCanonicalAutoRegisterMatch("pve", incomingIdentity,
 			autoRegisterCandidates(h.getConfig(r.Context()).PVEInstances, pveAutoRegisterCandidate))
+		memberInstance, memberEndpoint, memberFound := -1, -1, false
+		if existingIndex < 0 {
+			memberInstance, memberEndpoint, memberFound = findCanonicalAutoRegisterClusterMember(h.getConfig(r.Context()).PVEInstances, serverName, candidateHosts)
+		}
+		confirmedMemberSecretRefresh := false
 		if agentAuth {
 			if existingIndex >= 0 {
-				if instance := h.getConfig(r.Context()).PVEInstances[existingIndex]; !agentAuthority.mayChangePVEInstance(instance) {
-					refuseAgentAutoRegisterChange(w, "pve", serverName, instance.Name)
+				current := h.getConfig(r.Context()).PVEInstances[existingIndex]
+				if !agentAuthority.mayChangePVEInstance(current) {
+					refuseAgentAutoRegisterChange(w, "pve", serverName, current.Name)
 					return
 				}
-				if !agentAuthority.installGrant {
+				// A grant moves the stored address only to a service presenting
+				// the certificate pinned for the connection. Anywhere else the
+				// caller's token would be checked against the caller's choice
+				// of host.
+				if !agentAuthority.installGrant || !config.ProxmoxFingerprintsMatch(current.Fingerprint, fingerprint) {
 					preserveHost = true
-					if !autoRegisterSameEndpoint(h.getConfig(r.Context()).PVEInstances[existingIndex].Host, host, "pve") {
+					// Without a grant, background re-registration never pins an
+					// unverified certificate in place of CA verification the
+					// operator explicitly chose.
+					caVerified := !agentAuthority.installGrant && current.VerifySSLExplicit && current.VerifySSL && current.Fingerprint == ""
+					if caVerified || !autoRegisterSpelledEndpoint(current.Host, host, "pve") {
 						pveNode.Fingerprint = ""
 					}
 				}
-			} else if i, j, ok := findCanonicalAutoRegisterClusterMember(h.getConfig(r.Context()).PVEInstances, serverName, candidateHosts); ok {
-				if endpoint := h.getConfig(r.Context()).PVEInstances[i].ClusterEndpoints[j]; !agentAuthority.mayChangeClusterMember(endpoint) {
+			} else if memberFound {
+				cluster := h.getConfig(r.Context()).PVEInstances[memberInstance]
+				endpoint := cluster.ClusterEndpoints[memberEndpoint]
+				if !agentAuthority.mayChangeClusterMember(endpoint) {
 					refuseAgentAutoRegisterChange(w, "pve", serverName, endpoint.NodeName)
 					return
 				}
+				// Confirm cluster membership from the registering host before
+				// sending the submitted token to the cluster's saved host.
+				refreshesSecret := fullTokenID != "" && cluster.TokenName == fullTokenID && tokenValue != "" && tokenValue != cluster.TokenValue
+				if refreshesSecret {
+					if !autoRegisterHostConfirmsClusterMembership(r.Context(), cluster, serverName, host, fingerprint, fullTokenID, tokenValue) {
+						log.Warn().
+							Str("cluster", cluster.Name).
+							Str("node", endpoint.NodeName).
+							Str("newHost", host).
+							Msg("Canonical auto-register rejected inferred cluster member match because the registering host did not confirm the cluster's saved host")
+						memberFound = false
+					} else {
+						confirmedMemberSecretRefresh = true
+					}
+				}
+				if memberFound {
+					probeCluster := cluster
+					probeCluster.User, probeCluster.Password = "", ""
+					probeCluster.TokenName, probeCluster.TokenValue = fullTokenID, tokenValue
+					if err := verifyAutoRegisterCredential(r.Context(), "pve", config.CreateProxmoxConfig(&probeCluster)); err != nil {
+						refuseAgentAutoRegisterCredential(w, "pve", serverName, cluster.Name, err)
+						return
+					}
+					// Re-locate the cluster and endpoint after the network call
+					// so a concurrent removal cannot shift the slice slot.
+					reFoundCluster, reFoundEndpoint := -1, -1
+					for ci, candidate := range h.getConfig(r.Context()).PVEInstances {
+						if candidate.Name == cluster.Name && candidate.Host == cluster.Host {
+							for ei, ep := range candidate.ClusterEndpoints {
+								if ep.NodeName == endpoint.NodeName {
+									reFoundCluster, reFoundEndpoint = ci, ei
+									break
+								}
+							}
+							break
+						}
+					}
+					if reFoundCluster < 0 {
+						http.Error(w, "target cluster configuration changed while verifying credentials", http.StatusConflict)
+						return
+					}
+					memberInstance, memberEndpoint = reFoundCluster, reFoundEndpoint
+				}
+			}
+			if existingIndex < 0 && !h.agentAutoRegisterAuthorityStands(r.Context(), req, agentAuthority) {
+				refuseLapsedAgentAutoRegister(w, "pve", serverName)
+				return
 			}
 		}
 		if existingIndex >= 0 {
-			instance := &h.getConfig(r.Context()).PVEInstances[existingIndex]
+			// Work on a copy so an agent token's change is verified before
+			// mutating live state, and re-locate the slot afterwards so a
+			// concurrent removal cannot overwrite a neighbor or drop the update.
+			current := h.getConfig(r.Context()).PVEInstances[existingIndex]
+			origName, origHost := current.Name, current.Host
+			instance := current
 			if !preserveHost {
+				if continuityMatch {
+					instance.IsCluster = false
+					instance.ClusterName = ""
+					instance.ClusterEndpoints = nil
+					instance.ClusterNodeIdentities = nil
+				}
 				instance.Host = host
 			}
 			instance.User = ""
@@ -2509,27 +2789,57 @@ func (h *ConfigHandlers) handleCanonicalAutoRegister(w http.ResponseWriter, r *h
 			if pveNode.Source != "" {
 				instance.Source = pveNode.Source
 			}
-			// Update TLS fingerprint only when one was captured; a failed
-			// FetchFingerprint must not erase a previously valid pin.
-			if pveNode.Fingerprint != "" {
+			// Update TLS fingerprint only when one was captured. A failed
+			// FetchFingerprint must not erase a valid pin, and an agent token
+			// never replaces an existing pin with a conflicting certificate.
+			if pveNode.Fingerprint != "" &&
+				!(agentAuth && config.ProxmoxFingerprintsConflict(instance.Fingerprint, pveNode.Fingerprint)) {
 				instance.Fingerprint = pveNode.Fingerprint
 			}
 			// Preserve the operator's TLS choice on an existing connection.
-			// The incoming value records only whether this registration
-			// captured a fingerprint; applying it unconditionally re-enabled a
-			// disabled "Verify SSL certificate" setting on every agent
-			// health-check re-registration (#2140). Heal only the legacy state
-			// where strict verification is on with no pin and no recorded
-			// operator choice, which can never connect to a self-signed
-			// endpoint (#1303).
-			if !instance.VerifySSLExplicit && instance.VerifySSL && instance.Fingerprint == "" {
+			// Heal only the legacy state where strict verification is on with
+			// no pin and no recorded operator choice (#1303), and never lower
+			// VerifySSL during an unattended background agent re-registration.
+			if !(agentAuth && !agentAuthority.installGrant) && !instance.VerifySSLExplicit && instance.VerifySSL && instance.Fingerprint == "" {
 				instance.VerifySSL = false
 			}
-			log.Info().Str("host", host).Str("type", "pve").Msg(canonicalAutoRegisterMatchMessage("host; updated token in-place"))
-		} else if h.adoptCanonicalAutoRegisterClusterMember(r.Context(), serverName, host, fingerprint, fullTokenID, tokenValue, candidateHosts, registrationSource, !agentAuth || agentAuthority.installGrant) {
+			if agentAuth {
+				if err := verifyAutoRegisterCredential(r.Context(), "pve", config.CreateProxmoxConfig(&instance)); err != nil {
+					refuseAgentAutoRegisterCredential(w, "pve", serverName, instance.Name, err)
+					return
+				}
+				if !h.agentAutoRegisterAuthorityStands(r.Context(), req, agentAuthority) {
+					refuseLapsedAgentAutoRegister(w, "pve", serverName)
+					return
+				}
+				targetIndex := -1
+				for idx, candidate := range h.getConfig(r.Context()).PVEInstances {
+					if candidate.Name == origName && candidate.Host == origHost {
+						targetIndex = idx
+						break
+					}
+				}
+				if targetIndex < 0 {
+					http.Error(w, "target node configuration changed while verifying credentials", http.StatusConflict)
+					return
+				}
+				existingIndex = targetIndex
+			}
+			h.getConfig(r.Context()).PVEInstances[existingIndex] = instance
+			recordedHost = instance.Host
+			log.Info().Str("host", host).Str("type", "pve").Msg(canonicalAutoRegisterMatchMessage("host, updated token in-place"))
+		} else if adopted, memberRecordedHost := func() (bool, string) {
+			if !memberFound {
+				return false, ""
+			}
+			return h.adoptCanonicalAutoRegisterClusterMember(r.Context(), memberInstance, memberEndpoint, serverName, host, fingerprint, fullTokenID, tokenValue, candidateHosts, registrationSource, !agentAuth || agentAuthority.installGrant, confirmedMemberSecretRefresh)
+		}(); adopted {
 			// A non-primary cluster member: the cluster connection already
 			// covers this node, so no instance is created and the shared
 			// cluster token is left untouched.
+			if memberRecordedHost != "" {
+				recordedHost = memberRecordedHost
+			}
 			log.Info().Str("host", host).Str("type", "pve").Msg(canonicalAutoRegisterMatchMessage("cluster member endpoint"))
 		} else {
 			// Agent-token auth is restricted to updating existing nodes only.
@@ -2559,22 +2869,29 @@ func (h *ConfigHandlers) handleCanonicalAutoRegister(w http.ResponseWriter, r *h
 			Source:            registrationSource,
 		}
 		// Deduplicate by host to keep canonical auto-registration idempotent on reruns.
-		existingIndex, preserveHost := findCanonicalAutoRegisterMatch("pbs", incomingIdentity,
+		existingIndex, preserveHost, _ := findCanonicalAutoRegisterMatch("pbs", incomingIdentity,
 			autoRegisterCandidates(h.getConfig(r.Context()).PBSInstances, pbsAutoRegisterCandidate))
 		if agentAuth && existingIndex >= 0 {
-			if instance := h.getConfig(r.Context()).PBSInstances[existingIndex]; !agentAuthority.mayChangeHost(instance.Host) {
-				refuseAgentAutoRegisterChange(w, "pbs", serverName, instance.Name)
+			current := h.getConfig(r.Context()).PBSInstances[existingIndex]
+			if !agentAuthority.mayChangeHost(current.Host) {
+				refuseAgentAutoRegisterChange(w, "pbs", serverName, current.Name)
 				return
 			}
-			if !agentAuthority.installGrant {
+			// As for PVE: a grant moves the stored address only to a service
+			// presenting the certificate pinned for the connection.
+			if !agentAuthority.installGrant || !config.ProxmoxFingerprintsMatch(current.Fingerprint, fingerprint) {
 				preserveHost = true
-				if !autoRegisterSameEndpoint(h.getConfig(r.Context()).PBSInstances[existingIndex].Host, host, "pbs") {
+				caVerified := !agentAuthority.installGrant && current.VerifySSLExplicit && current.VerifySSL && current.Fingerprint == ""
+				if caVerified || !autoRegisterSpelledEndpoint(current.Host, host, "pbs") {
 					pbsNode.Fingerprint = ""
 				}
 			}
 		}
 		if existingIndex >= 0 {
-			instance := &h.getConfig(r.Context()).PBSInstances[existingIndex]
+			// Work on a copy, as for PVE, until the connection accepts the token.
+			current := h.getConfig(r.Context()).PBSInstances[existingIndex]
+			origName, origHost := current.Name, current.Host
+			instance := current
 			if !preserveHost {
 				instance.Host = host
 			}
@@ -2585,23 +2902,50 @@ func (h *ConfigHandlers) handleCanonicalAutoRegister(w http.ResponseWriter, r *h
 			if pbsNode.Source != "" {
 				instance.Source = pbsNode.Source
 			}
-			// Update TLS fingerprint only when one was captured; a failed
-			// FetchFingerprint must not erase a previously valid pin.
-			if pbsNode.Fingerprint != "" {
+			// Update TLS fingerprint only when one was captured. A failed
+			// FetchFingerprint must not erase a valid pin, and an agent token
+			// never replaces an existing pin with a conflicting certificate.
+			if pbsNode.Fingerprint != "" &&
+				!(agentAuth && config.ProxmoxFingerprintsConflict(instance.Fingerprint, pbsNode.Fingerprint)) {
 				instance.Fingerprint = pbsNode.Fingerprint
 			}
 			// Preserve the operator's TLS choice on an existing connection.
-			// The incoming value records only whether this registration
-			// captured a fingerprint; applying it unconditionally re-enabled a
-			// disabled "Verify SSL certificate" setting on every agent
-			// health-check re-registration (#2140). Heal only the legacy state
-			// where strict verification is on with no pin, which can never
-			// connect to a self-signed endpoint (#1303).
-			if instance.VerifySSL && instance.Fingerprint == "" {
+			// Heal only the legacy state where strict verification is on with
+			// no pin and no recorded operator choice (#1303), and never lower
+			// VerifySSL during an unattended background agent re-registration.
+			if !(agentAuth && !agentAuthority.installGrant) && !instance.VerifySSLExplicit && instance.VerifySSL && instance.Fingerprint == "" {
 				instance.VerifySSL = false
 			}
-			log.Info().Str("host", host).Str("type", "pbs").Msg(canonicalAutoRegisterMatchMessage("host; updated token in-place"))
+			if agentAuth {
+				if err := verifyAutoRegisterCredential(r.Context(), "pbs", proxmox.ClientConfig(config.CreatePBSConfig(&instance))); err != nil {
+					refuseAgentAutoRegisterCredential(w, "pbs", serverName, instance.Name, err)
+					return
+				}
+				if !h.agentAutoRegisterAuthorityStands(r.Context(), req, agentAuthority) {
+					refuseLapsedAgentAutoRegister(w, "pbs", serverName)
+					return
+				}
+				targetIndex := -1
+				for idx, candidate := range h.getConfig(r.Context()).PBSInstances {
+					if candidate.Name == origName && candidate.Host == origHost {
+						targetIndex = idx
+						break
+					}
+				}
+				if targetIndex < 0 {
+					http.Error(w, "target node configuration changed while verifying credentials", http.StatusConflict)
+					return
+				}
+				existingIndex = targetIndex
+			}
+			h.getConfig(r.Context()).PBSInstances[existingIndex] = instance
+			recordedHost = instance.Host
+			log.Info().Str("host", host).Str("type", "pbs").Msg(canonicalAutoRegisterMatchMessage("host, updated token in-place"))
 		} else {
+			if agentAuth && !h.agentAutoRegisterAuthorityStands(r.Context(), req, agentAuthority) {
+				refuseLapsedAgentAutoRegister(w, "pbs", serverName)
+				return
+			}
 			// Agent-token auth is restricted to updating existing nodes only.
 			if isAgentAutoRegAuth(r.Context()) && !h.proxmoxInstallBootstrapAvailable(r.Context(), req) {
 				log.Warn().Str("host", host).Str("type", "pbs").Msg("Agent API token auth rejected for new PBS node registration")
@@ -2619,7 +2963,10 @@ func (h *ConfigHandlers) handleCanonicalAutoRegister(w http.ResponseWriter, r *h
 	afterFingerprint := nodesConfigFingerprint(postCfg.PVEInstances, postCfg.PBSInstances, postCfg.PMGInstances)
 	configChanged := beforeFingerprint != afterFingerprint
 
-	actualName := h.findInstanceNameByHost(r.Context(), req.Type, host)
+	actualName := h.findInstanceNameByHost(r.Context(), req.Type, recordedHost)
+	if actualName == "" {
+		actualName = h.findInstanceNameByHost(r.Context(), req.Type, host)
+	}
 	if actualName == "" {
 		actualName = serverName
 	}
@@ -2630,7 +2977,7 @@ func (h *ConfigHandlers) handleCanonicalAutoRegister(w http.ResponseWriter, r *h
 	// grant stays unconsumed, so the same install token can be replayed. If
 	// the node save then fails, the consumption is rolled back so the failure
 	// stays atomic and a genuine retry still works.
-	consumption, err := h.completeProxmoxInstallBootstrap(r.Context(), req, host, actualName)
+	consumption, err := h.completeProxmoxInstallBootstrap(r.Context(), req, recordedHost, actualName)
 	if err != nil {
 		log.Error().
 			Err(err).
@@ -2657,19 +3004,17 @@ func (h *ConfigHandlers) handleCanonicalAutoRegister(w http.ResponseWriter, r *h
 
 	h.markAutoRegistered(req.Type, actualName)
 
+	h.notifyAutoRegistrationSuccess(r.Context(), req, host, actualName, fullTokenID, created)
+
 	// Reload monitor only when the persisted state actually changed. A full
 	// reload stops the multi-tenant monitor and rebuilds it from scratch,
 	// which momentarily empties the WebSocket-visible resource store; for
 	// no-op re-registrations there is nothing for the monitor to pick up.
-	if configChanged && h.reloadFunc != nil {
-		go func() {
-			if err := h.reloadFunc(); err != nil {
-				log.Error().Err(err).Msg("Failed to reload monitor after auto-registration")
-			}
-		}()
+	// Start it after the notification above has read this organization's
+	// monitor: a scoped reload withdraws that monitor while recreating it.
+	if configChanged {
+		h.reloadAfterAutoRegister(r.Context(), created)
 	}
-
-	h.notifyAutoRegistrationSuccess(r.Context(), req, host, actualName, fullTokenID, created)
 
 	response := buildCanonicalAutoRegisterResponse(req, host, actualName, fullTokenID, tokenValue)
 
@@ -2850,6 +3195,14 @@ func (h *ConfigHandlers) handleAgentInstallCommand(w http.ResponseWriter, r *htt
 	var req AgentInstallCommandRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	// The route admits an API token on settings:write, which covers the
+	// reporting scopes of the token minted here. Command execution is a
+	// further grant: a token cannot hand out agent:exec unless it holds that
+	// scope itself. Sessions carry no scopes and pass.
+	if req.EnableCommands && !apihttp.EnsureScope(w, r, config.ScopeAgentExec) {
 		return
 	}
 

@@ -838,6 +838,11 @@ back as new secrets. Credential rotation and trust changes are separate
 decisions; preserve the existing credential and fingerprint when not changing
 them. A response failure does not prove the update was unapplied.
 
+A saved password or token value is never sent to a new address. A request that
+changes the scheme, host or port of `host`, or sets a cluster member's
+connection address, must include `password` or `tokenValue` again. Otherwise
+the request is refused with `400` and the saved connection is left unchanged.
+
 ### Delete Node
 `DELETE /api/config/nodes/{id}` (admin, `settings:write`)
 
@@ -904,11 +909,22 @@ Request body:
 }
 ```
 
-Import replaces the included settings; it is not an idempotent merge. HTTP 500
+Import replaces the included settings. It is not an idempotent merge. The
+archive's API tokens and SSO configuration are restored only for an instance
+administrator sign-in or a full-access (`*`) API token that is not bound to a
+non-default organization. A tenant manager who is not an instance administrator
+and any other API token restore the remaining sections, keep the destination's
+own tokens and SSO configuration, and receive
+`"accessCredentialsRestored": false`. HTTP 500
 can follow a **saved** archive when live apply fails. In particular,
 `Configuration saved, but live reload failed:` names the affected live
 components, not a rejected file or rollback. Other components may already have
 applied. Do not automatically retry this POST after an error or lost response.
+
+HTTP 403 with `Backup not imported.` means nothing was saved. A tenant manager
+or organization-bound token cannot import a backup that connects Pulse to an
+address [organization admins cannot use](MULTI_TENANT.md), or that adds
+Apprise command-line targets. An instance administrator can import it.
 
 HTTP 409 can mean an import is still running or the same backup was submitted
 recently. It does not establish the original attempt's outcome. The duplicate
@@ -1003,7 +1019,9 @@ Mints an install token for an agent. `type` is `host`, `pve` or `pbs`.
 - `{"type":"pve"}` or `{"type":"pbs"}` returns `token` and the Proxmox install
   `command`.
 
-Add `"enableCommands": true` only when the agent should accept commands.
+Add `"enableCommands": true` only when the agent should accept commands. An API
+token must itself hold `agent:exec` to ask for it, otherwise the request fails
+with HTTP 403 `missing_scope`.
 
 ### Discovery
 `GET /api/discover` (admin, `settings:write`)
@@ -1733,6 +1751,11 @@ agent, connect an MCP client through `pulse-mcp` instead.
 - `GET /api/ai/sessions/{id}/messages`
 - `POST /api/ai/sessions/{id}/abort`
 
+A session belongs to the user or API token that started it, and these routes list and open only
+the caller's own sessions. Any other session ID answers `404`. Callers with permission to execute
+actions see every session, including Patrol's background sessions and sessions saved before
+ownership was recorded.
+
 ### Kubernetes AI Analysis (Compatibility)
 `POST /api/ai/kubernetes/analyze`
 ```json
@@ -1816,6 +1839,9 @@ Runs a focused investigation for an alert payload (used by the UI).
     `optional_context`, and optional canonical `resource_ids`. `PATCH` also
     accepts `status` (`active`, `paused`, or `archived`) and requires the
     current `revision` in its JSON body.
+  - Creating, changing and deleting an objective needs permission to execute
+    actions: Patrol reads objective text on runs that can run commands on
+    hosts. Reading objectives does not.
   - Responses include server-derived `coverage` (`covered`, `degraded`, or
     `uncovered`) and observer lifecycle state. Clients cannot submit either
     field or mark an objective covered. A saved objective remains uncovered
@@ -1831,18 +1857,24 @@ Runs a focused investigation for an alert payload (used by the UI).
     `?include=tool_calls`. Returns `400` when the ID is empty, `404`
     (`not_found`) when no retained run has that ID, and `503`
     (`service_unavailable`) when the Patrol service is unavailable.
+  - Tool calls hold what Patrol read from monitored hosts (file contents, logs
+    and command output). Both run routes return them only to a caller with
+    permission to execute actions, as running a command on a host through the
+    Assistant needs. Other callers get the run without `tool_calls`, even with
+    `?include=tool_calls`.
 - `GET /api/ai/patrol/stream` (`ai:execute`)
   - Server-sent events for live Patrol progress. Send `Last-Event-ID` (or the
     `last_event_id` query parameter) to resume after the last event `id`;
-    replay is best-effort.
+    replay is best-effort. `tool_end` events carry `tool_output` only for a
+    caller with permission to execute actions.
 - `POST /api/ai/patrol/run` (admin, `ai:execute`)
   - Community installs are limited to one successful full run per hour and
     get `429 patrol_rate_limited` until it has passed. Pro and Cloud have no
     cap.
 - `POST /api/ai/patrol/acknowledge` (`ai:execute`)
-- `POST /api/ai/patrol/dismiss`
-- `POST /api/ai/patrol/findings/note`
-- `POST /api/ai/patrol/resolve`
+- `POST /api/ai/patrol/dismiss` (optional `note` requires permission to execute actions)
+- `POST /api/ai/patrol/findings/note` (`ai:execute`, and permission to execute actions: Patrol reads the note)
+- `POST /api/ai/patrol/resolve` (optional `resolution_note` requires permission to execute actions)
 - `POST /api/ai/patrol/snooze` (`ai:execute`)
 - `POST /api/ai/patrol/suppress` (`ai:execute`)
 - `GET /api/ai/patrol/suppressions` (`ai:execute`)
@@ -1859,6 +1891,9 @@ accepted on the acknowledge, dismiss and snooze routes.
 - `GET /api/ai/unified/findings`
 - `GET /api/ai/findings/{id}/investigation`
 - `GET /api/ai/findings/{id}/investigation/messages`
+  - Tool outputs and tool result bodies are returned only to a caller with
+    permission to execute actions. Other callers get the transcript without
+    them.
 - `POST /api/ai/findings/{id}/reinvestigate` (Pro, `ai:execute`, and permission to plan and execute actions)
   - Needs the `ai_autofix` entitlement (`402 license_required` otherwise) and a
     Patrol mode other than Watch only (`400 autonomy_disabled`). Returns
@@ -1909,6 +1944,10 @@ accepted on the acknowledge, dismiss and snooze routes.
 - `GET /api/ai/knowledge/export?guest_id=<id>`
 - `POST /api/ai/knowledge/import`
 - `POST /api/ai/knowledge/clear`
+
+Patrol reads saved notes on runs that can run commands on hosts, so `save`,
+`delete`, `import` and `clear` need `ai:execute` and permission to execute
+actions, as on the Actions routes. Reading and exporting notes needs `ai:chat`.
 
 ### Debug
 - `GET /api/ai/debug/context` (admin)
@@ -2139,6 +2178,8 @@ Target payload fields:
 - `linkedResourceId` - Optional resource id hint for attaching the probe facet to an existing resource.
 - `certificateMonitoringDisabled` - Explicit HTTPS-only opt-out; certificate validity monitoring is enabled by default.
 - `certificateExpiryWarningDays` - HTTPS certificate expiry warning window; defaults to 30 days.
+- `http.tlsFingerprintSha256` - Optional SHA-256 fingerprint of the HTTPS server's leaf certificate. An HTTPS check whose `http` contract sends authentication, header values or a body verifies the server's certificate chain and host name before sending them, and fails without sending them otherwise. Set this to pin a certificate that the host running the check (this server or the assigned agent) does not trust. The refused certificate is returned as `certificate.fingerprintSha256` by the test endpoints and in `status`. Colons and upper case are accepted.
+- `http.insecureSkipVerify` - Explicit opt-out: send the request to the HTTPS server whatever certificate it presents. Ignored when a fingerprint is pinned.
 - `observationLocationIds` - Observation locations for this one logical check: `pulse:local` for this Pulse server and `agent:<host-agent-id>` for a connected agent. Agent locations require the Pro `external_probe` entitlement. Include `pulse:local` only when a local observation is wanted; agent-only sets do not also run locally. Each location retains separate evidence rather than treating one path failure as a universal outage.
 - `probeAgentId` - Compatibility field for single-location clients. A non-empty registered host-agent ID selects that agent; an explicit empty string selects local execution. When updating only this field, omit `observationLocationIds`. For multi-location updates, send the complete desired `observationLocationIds` set and clear `probeAgentId` to `""` so a legacy value cannot override a single-location edit.
 

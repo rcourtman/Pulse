@@ -1,6 +1,7 @@
 package account
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -9,8 +10,36 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/registry"
+	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rs/zerolog/log"
 )
+
+// WorkspaceAccessLimiter carries account membership changes into the account's
+// workspaces, which authorize requests against their own member list rather
+// than the registry. Implemented by internal/cloudcp/stripe.Provisioner.
+type WorkspaceAccessLimiter interface {
+	RevokeWorkspaceAccess(ctx context.Context, accountID, userID string) error
+	LowerWorkspaceAccess(ctx context.Context, accountID, userID string, role registry.MemberRole) error
+	SyncWorkspaceAccess(ctx context.Context, accountID, userID string, role registry.MemberRole) error
+}
+
+// memberRoleLowered reports whether an account role change takes workspace
+// authority away from the member.
+func memberRoleLowered(from, to registry.MemberRole) bool {
+	return !models.OrganizationRoleAtLeast(
+		models.OrganizationRoleFromAccountRole(string(to)),
+		models.OrganizationRoleFromAccountRole(string(from)),
+	)
+}
+
+// memberRoleRaised reports whether an account role change grants higher
+// workspace authority than the member previously held.
+func memberRoleRaised(from, to registry.MemberRole) bool {
+	return !models.OrganizationRoleAtLeast(
+		models.OrganizationRoleFromAccountRole(string(from)),
+		models.OrganizationRoleFromAccountRole(string(to)),
+	)
+}
 
 type accessSubjectResponse struct {
 	SubjectID string                      `json:"subject_id"`
@@ -135,7 +164,7 @@ func loadAccountAccessTarget(reg *registry.TenantRegistry, accountID string, sub
 }
 
 // HandleInviteMember returns an authenticated handler that invites a user to an account.
-func HandleInviteMember(reg *registry.TenantRegistry) http.HandlerFunc {
+func HandleInviteMember(reg *registry.TenantRegistry, workspaces ...WorkspaceAccessLimiter) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -308,6 +337,24 @@ func HandleInviteMember(reg *registry.TenantRegistry) http.HandlerFunc {
 			http.Error(w, "internal error", http.StatusInternalServerError)
 			return
 		}
+		// Keep existing workspaces aligned so a re-invited member can enter
+		// workspaces they were previously removed from. Roll back on failure so
+		// the invite can be retried cleanly.
+		if len(workspaces) > 0 && workspaces[0] != nil {
+			if err := workspaces[0].SyncWorkspaceAccess(r.Context(), accountID, u.ID, role); err != nil {
+				_ = reg.DeleteMembership(accountID, u.ID)
+				auditEvent(r, "cp_account_member_invite", "failure").
+					Err(err).
+					Str("account_id", accountID).
+					Str("user_id", u.ID).
+					Str("email", email).
+					Str("role", string(role)).
+					Str("reason", "workspace_access_sync_failed").
+					Msg("Account member invite failed")
+				http.Error(w, "internal error", http.StatusInternalServerError)
+				return
+			}
+		}
 		if err := reg.DeleteInvitationByAccountAndEmail(accountID, email); err != nil {
 			auditEvent(r, "cp_account_member_invite", "failure").
 				Err(err).
@@ -343,7 +390,7 @@ type updateMemberRoleRequest struct {
 }
 
 // HandleUpdateMemberRole returns an authenticated handler that updates a member's role.
-func HandleUpdateMemberRole(reg *registry.TenantRegistry) http.HandlerFunc {
+func HandleUpdateMemberRole(reg *registry.TenantRegistry, workspaces ...WorkspaceAccessLimiter) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPatch {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -488,6 +535,26 @@ func HandleUpdateMemberRole(reg *registry.TenantRegistry) http.HandlerFunc {
 		}
 
 		if target.membership != nil {
+			// Workspaces first: if the registry write then fails, the change can
+			// be retried without leaving workspaces out of sync.
+			if len(workspaces) > 0 && workspaces[0] != nil {
+				var syncErr error
+				if memberRoleLowered(currentRole, role) {
+					syncErr = workspaces[0].LowerWorkspaceAccess(r.Context(), accountID, userID, role)
+				} else if memberRoleRaised(currentRole, role) {
+					syncErr = workspaces[0].SyncWorkspaceAccess(r.Context(), accountID, userID, role)
+				}
+				if syncErr != nil {
+					auditEvent(r, "cp_account_member_role_update", "failure").
+						Err(syncErr).
+						Str("account_id", accountID).
+						Str("user_id", userID).
+						Str("reason", "workspace_access_update_failed").
+						Msg("Account member role update failed")
+					http.Error(w, "internal error", http.StatusInternalServerError)
+					return
+				}
+			}
 			if err := reg.UpdateMembershipRole(accountID, userID, role); err != nil {
 				if isNotFoundErr(err) {
 					auditEvent(r, "cp_account_member_role_update", "failure").
@@ -543,7 +610,7 @@ func HandleUpdateMemberRole(reg *registry.TenantRegistry) http.HandlerFunc {
 }
 
 // HandleRemoveMember returns an authenticated handler that removes a user from an account.
-func HandleRemoveMember(reg *registry.TenantRegistry) http.HandlerFunc {
+func HandleRemoveMember(reg *registry.TenantRegistry, workspaces ...WorkspaceAccessLimiter) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodDelete {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -667,6 +734,21 @@ func HandleRemoveMember(reg *registry.TenantRegistry) http.HandlerFunc {
 		}
 
 		if target.membership != nil {
+			// Workspaces first: the membership is what makes a failed removal
+			// retryable, and a member already gone from a workspace cannot
+			// hand off into it again.
+			if len(workspaces) > 0 && workspaces[0] != nil {
+				if err := workspaces[0].RevokeWorkspaceAccess(r.Context(), accountID, userID); err != nil {
+					auditEvent(r, "cp_account_member_remove", "failure").
+						Err(err).
+						Str("account_id", accountID).
+						Str("user_id", userID).
+						Str("reason", "workspace_access_revoke_failed").
+						Msg("Account member removal failed")
+					http.Error(w, "internal error", http.StatusInternalServerError)
+					return
+				}
+			}
 			if err := reg.DeleteMembership(accountID, userID); err != nil {
 				if isNotFoundErr(err) {
 					auditEvent(r, "cp_account_member_remove", "failure").

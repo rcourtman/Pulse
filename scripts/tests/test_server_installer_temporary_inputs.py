@@ -16,6 +16,10 @@ from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[2]
 INSTALLER = Path(os.environ.get("PULSE_INSTALLER_UNDER_TEST", ROOT / "install.sh"))
+# Every release asset is signed with the same key and namespace. A signed copy
+# declaring another release asset must be refused as the container installer.
+SIGNED_INSTALLER = b'#!/bin/bash\nPULSE_RELEASE_ASSET="install.sh"\n# inert signed fixture\n'
+WRONG_ASSET_INSTALLER = b'#!/bin/bash\nPULSE_RELEASE_ASSET="pulse-auto-update.sh"\n# inert signed fixture\n'
 
 HARNESS = r'''
 source "$INSTALLER"
@@ -241,7 +245,8 @@ class ServerInstallerTemporaryInputsTest(unittest.TestCase):
             (fixture / "shared").chmod(0o1777)
             (fixture / "install").mkdir()
             (fixture / "install/BUILD_FROM_SOURCE").write_text("old marker")
-            (fixture / "installer-input").write_text("#!/bin/bash\n# inert signed fixture\n")
+            (fixture / "installer-input").write_bytes(
+                WRONG_ASSET_INSTALLER if fault == "wrong_asset_installer" else SIGNED_INSTALLER)
             key = fixture / "signing-key"
             subprocess.run(["ssh-keygen", "-q", "-t", "ed25519", "-N", "", "-f", str(key)],
                            check=True, capture_output=True)
@@ -351,8 +356,8 @@ class ServerInstallerTemporaryInputsTest(unittest.TestCase):
     def test_bootstrap_checks_real_signature_before_copy(self):
         r, o = self.exercise("bootstrap")
         self.assertEqual(r.returncode, 0, r.stderr)
-        self.assertEqual(o["copied"], b"#!/bin/bash\n# inert signed fixture\n")
-        self.assertEqual(o["caller-script"], b"#!/bin/bash\n# inert signed fixture\n")
+        self.assertEqual(o["copied"], SIGNED_INSTALLER)
+        self.assertEqual(o["caller-script"], SIGNED_INSTALLER)
         self.assertEqual(o["transport"], [
             "https://github.com/rcourtman/Pulse/releases/download/v6.6.0/install.sh",
             "https://github.com/rcourtman/Pulse/releases/download/v6.6.0/install.sh.sshsig"])
@@ -360,7 +365,8 @@ class ServerInstallerTemporaryInputsTest(unittest.TestCase):
 
     def test_bootstrap_fails_closed_and_cleans_every_owned_input(self):
         for fault in ("metadata", "verifier", "allocation", "script_transport",
-                      "signature_transport", "missing_signature", "bad_signature"):
+                      "signature_transport", "missing_signature", "bad_signature",
+                      "wrong_asset_installer"):
             with self.subTest(fault=fault):
                 r, o = self.exercise("bootstrap", fault)
                 self.assertNotEqual(r.returncode, 0, r.stdout + r.stderr)
@@ -383,12 +389,12 @@ class ServerInstallerTemporaryInputsTest(unittest.TestCase):
     def test_production_container_bootstrap_copies_only_the_verified_installer(self):
         r, o = self.exercise("connected_container")
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
-        self.assertEqual(o["copied"], b"#!/bin/bash\n# inert signed fixture\n")
+        self.assertEqual(o["copied"], SIGNED_INSTALLER)
         self.assertIn("EXECUTE", o["calls"])
         self.assertEqual(o["shared_entries"], [])
 
     def test_production_container_never_copies_invalid_or_unavailable_signed_input(self):
-        for fault in ("bad_signature", "script_transport", "signature_transport", "missing_signature", "script_interrupt"):
+        for fault in ("bad_signature", "wrong_asset_installer", "script_transport", "signature_transport", "missing_signature", "script_interrupt"):
             with self.subTest(fault=fault):
                 r, o = self.exercise("connected_container", fault)
                 self.assertEqual(r.returncode, 143 if fault == "script_interrupt" else 1,
@@ -409,8 +415,8 @@ class ServerInstallerTemporaryInputsTest(unittest.TestCase):
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
         self.assertEqual(o["transport"], [])
         self.assertEqual(o["override"], (b"caller archive", b"caller signature"))
-        self.assertEqual(o["copied"], b"#!/bin/bash\n# inert signed fixture\n")
-        self.assertEqual(o["caller-script"], b"#!/bin/bash\n# inert signed fixture\n")
+        self.assertEqual(o["copied"], SIGNED_INSTALLER)
+        self.assertEqual(o["caller-script"], SIGNED_INSTALLER)
         self.assertEqual(o["shared_entries"], [])
 
 
