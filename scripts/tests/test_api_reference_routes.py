@@ -275,6 +275,26 @@ class APIReferenceRoutesTest(unittest.TestCase):
         self.assertIn("the old token stops working", rotate)
         self.assertIn("metadata and expiry", rotate)
 
+    def test_org_ownership_limit_and_attention_suppression_bounds_documented(self) -> None:
+        self.assertIn(
+            "A user who is not an instance administrator can own at most 20 organizations. Past that the request returns `409` with `organization_limit_reached`.",
+            self.doc,
+        )
+        self.assertIn(
+            "a new owner who already owns 20 organizations is refused with `409` `organization_limit_reached`",
+            self.doc,
+        )
+        self.assertIn(
+            "returns `409` with `organization_limit_reached`",
+            read("docs/MULTI_TENANT.md"),
+        )
+        suppress = (
+            self.doc.split("`POST /api/ai/patrol/attention/{id}/suppress`", 1)[1]
+            .split("`POST /api/ai/patrol/attention/{id}/unsuppress`", 1)[0]
+        )
+        self.assertIn("The reason is required and is at most 240 characters.", suppress)
+        self.assertEqual(read("frontend-modern/public/docs/API.md"), self.doc)
+
     def test_negative_controls_fail_when_reference_or_code_drift(self) -> None:
         # An invented scope on a route line is reported.
         drifted = self.doc.replace("`POST /api/availability-history` (`monitoring:read`)",
