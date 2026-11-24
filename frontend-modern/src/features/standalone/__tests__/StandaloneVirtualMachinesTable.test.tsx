@@ -145,6 +145,76 @@ describe('StandaloneVirtualMachinesTable', () => {
     expect(pausedRow?.textContent).toContain('Paused');
   });
 
+  it('closes an open VM detail drawer on Escape while ignoring Escape from dialogs and toolbar search', () => {
+    render(() => (
+      <StandaloneVirtualMachinesTable
+        vms={[pulseDev, win11]}
+        machines={[tower, workstation]}
+        emptyIcon={<span />}
+        emptyTitle="No virtual machines"
+        emptyDescription="Empty"
+      />
+    ));
+
+    fireEvent.click(screen.getByText('pulse-dev'));
+    expect(screen.getByTestId('vm-drawer-agent:tower:libvirt:domain-1')).toBeInTheDocument();
+
+    // Escape inside toolbar search should not collapse the drawer.
+    const searchInput = screen.getByPlaceholderText(/Search VMs/i);
+    fireEvent.keyDown(searchInput, { key: 'Escape' });
+    expect(screen.getByTestId('vm-drawer-agent:tower:libvirt:domain-1')).toBeInTheDocument();
+
+    // Escape inside a nested dialog should be left to the dialog.
+    const dialog = document.createElement('div');
+    dialog.setAttribute('role', 'dialog');
+    document.body.appendChild(dialog);
+    try {
+      fireEvent.keyDown(dialog, { key: 'Escape' });
+      expect(screen.getByTestId('vm-drawer-agent:tower:libvirt:domain-1')).toBeInTheDocument();
+    } finally {
+      dialog.remove();
+    }
+
+    // Escape from the table or drawer collapses the open detail row.
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(screen.queryByTestId('vm-drawer-agent:tower:libvirt:domain-1')).not.toBeInTheDocument();
+  });
+
+  it('announces full attention state reasons for screen readers', () => {
+    const crashed = makeResource({
+      id: 'agent:box:libvirt:crashed-sr',
+      name: 'kvm-legacy-erp',
+      parentId: 'agent:box',
+      parentName: 'LinuxBox',
+      status: 'degraded',
+      technology: 'libvirt',
+      virtualMachine: { runtimeState: 'crashed', hypervisor: 'libvirt', vcpus: 4 },
+    });
+    const stale = makeResource({
+      id: 'agent:box:libvirt:stale-sr',
+      name: 'kvm-stale-host',
+      parentId: 'agent:box',
+      parentName: 'LinuxBox',
+      status: 'degraded',
+      technology: 'libvirt',
+      sourceStatus: { agent: { status: 'stale' } },
+      virtualMachine: { runtimeState: 'running', hypervisor: 'libvirt', vcpus: 2 },
+    });
+
+    render(() => (
+      <StandaloneVirtualMachinesTable
+        vms={[crashed, stale]}
+        machines={[workstation]}
+        emptyIcon={<span />}
+        emptyTitle="No virtual machines"
+        emptyDescription="Empty"
+      />
+    ));
+
+    expect(screen.getByText('Hypervisor reports this VM crashed')).toBeInTheDocument();
+    expect(screen.getByText('Host agent has not reported recently')).toBeInTheDocument();
+  });
+
   it('shows the empty state when no standalone VMs are reported', () => {
     render(() => (
       <StandaloneVirtualMachinesTable
