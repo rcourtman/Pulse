@@ -10,6 +10,9 @@ on:
       - 'deploy/provider-msp/**'
       - 'scripts/installtests/provider_msp*'
       - 'frontend-modern/**'
+      # Public docs validates these Markdown mirrors. A mixed diff still
+      # runs Compose when another path matches a startup input.
+      - '!frontend-modern/public/docs/**.md'
       - 'go.mod'
       - 'go.sum'
       - '.github/workflows/provider-msp-startup.yml'
@@ -22,6 +25,7 @@ on:
       - 'deploy/provider-msp/**'
       - 'scripts/installtests/provider_msp*'
       - 'frontend-modern/**'
+      - '!frontend-modern/public/docs/**.md'
       - 'go.mod'
       - 'go.sum'
       - '.github/workflows/provider-msp-startup.yml'
