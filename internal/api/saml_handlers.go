@@ -363,7 +363,11 @@ func (r *Router) handleSAMLACS(w http.ResponseWriter, req *http.Request) {
 		}
 	}
 
-	principal, err := stableSSOPrincipal(config.SSOProviderTypeSAML, providerID, result.NameID)
+	verifiedIssuer := strings.TrimSpace(result.Issuer)
+	if verifiedIssuer == "" {
+		verifiedIssuer = strings.TrimSpace(service.GetIDPEntityID())
+	}
+	principal, err := stableSSOPrincipalForIssuer(internalauth.GetManager(), config.SSOProviderTypeSAML, providerID, verifiedIssuer, result.NameID)
 	if err != nil {
 		log.Error().Err(err).Str("provider_id", providerID).Msg("SAML NameID is not usable as a stable SSO principal")
 		LogAuditEventForTenant(GetOrgID(req.Context()), "saml_login", result.Username, GetClientIP(req), req.URL.Path, false, "Missing stable SAML subject")
@@ -386,6 +390,9 @@ func (r *Router) handleSAMLACS(w http.ResponseWriter, req *http.Request) {
 				log.Error().Err(roleErr).Str("user", principal).Str("display_user", result.Username).Msg("Failed to update SAML user roles")
 				if len(rolesToAssign) > 0 {
 					LogAuditEventForTenant(GetOrgID(req.Context()), "saml_role_assignment", principal, GetClientIP(req), req.URL.Path, false, "Failed to auto-assign roles: "+strings.Join(rolesToAssign, ", "))
+				}
+				if errors.Is(roleErr, errSSORolesNotReplaced) {
+					return roleErr
 				}
 			} else if len(rolesToAssign) > 0 {
 				log.Info().

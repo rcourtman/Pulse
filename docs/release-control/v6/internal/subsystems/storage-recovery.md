@@ -8699,6 +8699,11 @@ restore, retention, resource-store, or recovery evidence. Additive RBAC schema
 upgrade preserves older identities and fails construction on migration errors;
 the security-privacy and api-contracts contracts own the authoritative shape
 and proof.
+The additive `roles_from_mapping` column follows the same upgrade rule. It
+defaults to zero for older identities, so upgrade withdraws no saved role, and
+it marks role lists written by an SSO group role mapping for withdrawal at
+login once that mapping is removed. No backup, restore, retention, or recovery
+state reads or writes it.
 
 ### Resource monitoring lifecycle preserves recovery evidence
 

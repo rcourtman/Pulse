@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -648,7 +649,14 @@ func (r *Router) handleSSOOIDCCallback(w http.ResponseWriter, req *http.Request)
 	if username == "" {
 		username = idToken.Subject
 	}
-	principal, err := stableSSOPrincipal(config.SSOProviderTypeOIDC, providerID, idToken.Subject)
+	// The subject belongs to the issuer this service's verifier just admitted
+	// the ID token for. Name that issuer URL rather than the raw iss claim:
+	// go-oidc also accepts Google's scheme-less spelling for the same accounts.
+	verifiedIssuer := strings.TrimSpace(service.snapshot.issuer)
+	if verifiedIssuer == "" && provider.OIDC != nil {
+		verifiedIssuer = strings.TrimSpace(provider.OIDC.IssuerURL)
+	}
+	principal, err := stableSSOPrincipalForIssuer(internalauth.GetManager(), config.SSOProviderTypeOIDC, providerID, verifiedIssuer, idToken.Subject)
 	if err != nil {
 		log.Error().Err(err).Str("provider_id", providerID).Msg("OIDC subject is not usable as a stable SSO principal")
 		LogAuditEventForTenant(GetOrgID(req.Context()), "sso_oidc_login", username, GetClientIP(req), req.URL.Path, false, "Missing stable OIDC subject")
@@ -685,9 +693,15 @@ func (r *Router) handleSSOOIDCCallback(w http.ResponseWriter, req *http.Request)
 		if authManager := internalauth.GetManager(); authManager != nil {
 			groups := extractStringSliceClaim(claims, provider.GroupsClaim)
 			rolesToAssign := resolveGroupRoles(groups, provider.GroupRoleMappings)
-			legacyCandidates := ssoLegacyPrincipalCandidates(username, email, extractStringClaim(claims, "name"))
+			// Pre-principal assignments were keyed by the resolved username,
+			// which already falls back to email and then the display name. A
+			// separately supplied free-form name claim was never a lookup key.
+			legacyCandidates := ssoLegacyPrincipalCandidates(username, email)
 			if err := applySSORoleAssignments(authManager, principal, legacyCandidates, rolesToAssign, len(provider.GroupRoleMappings) > 0, true); err != nil {
 				log.Error().Err(err).Str("user", principal).Str("display_user", username).Msg("Failed to update SSO OIDC user roles")
+				if errors.Is(err, errSSORolesNotReplaced) {
+					return err
+				}
 			} else if len(rolesToAssign) > 0 {
 				LogAuditEventForTenant(GetOrgID(req.Context()), "sso_oidc_role_assignment", principal, GetClientIP(req), req.URL.Path, true, "Auto-assigned roles: "+strings.Join(rolesToAssign, ", "))
 			}

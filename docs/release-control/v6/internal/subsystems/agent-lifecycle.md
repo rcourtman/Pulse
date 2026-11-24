@@ -10394,6 +10394,9 @@ agent tokens, command sessions, and report identity. Deprovisioning a human
 principal revokes that principal's browser sessions only and does not delete,
 reassign, or synthesize agent lifecycle state. The api-contracts and
 security-privacy contracts own the authoritative behavior and proof.
+The same separation holds when SSO login withdraws roles that a removed group
+role mapping had saved: only the human principal's role list changes, and no
+agent token, enrollment, command session, or report identity is touched.
 
 ### Resource monitoring policy does not mutate agent lifecycle
 

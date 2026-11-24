@@ -288,7 +288,10 @@ func NewRouter(cfg *config.Config, monitor *monitoring.Monitor, mtMonitor *monit
 	// Load persisted and environment-backed SSO before routes begin serving.
 	// Configuration transfer and no-auth recovery must never observe the old
 	// lazy-loading window as an unauthenticated installation.
-	r.ensureSSOConfig()
+	ssoConfig := r.ensureSSOConfig()
+	for i := range ssoConfig.Providers {
+		r.bindSSOProviderOriginalIssuer(&ssoConfig.Providers[i], false)
+	}
 	if err := r.syncSAMLPublicURL(); err != nil {
 		log.Error().Err(err).Msg("Failed to initialize SAML public URL")
 	}

@@ -134,6 +134,49 @@ func TestSQLiteManagerAddsIdentityMetadataColumnsOnUpgrade(t *testing.T) {
 	if !ok || assignment.DisplayName != "Alice Example" || assignment.Email != "alice@example.com" || assignment.ProviderType != "oidc" || assignment.ProviderID != "okta" || assignment.LastLoginAt == nil {
 		t.Fatalf("upgraded identity metadata = %#v, exists=%v", assignment, ok)
 	}
+	if assignment.RolesFromMapping {
+		t.Fatalf("upgraded assignment claims a mapping origin: %#v", assignment)
+	}
+	if err := manager.UpdateUserRolesFromMapping("legacy-user", []string{RoleViewer}); err != nil {
+		t.Fatalf("write mapped roles after upgrade: %v", err)
+	}
+	if assignment, _ := manager.GetUserAssignment("legacy-user"); !assignment.RolesFromMapping {
+		t.Fatalf("upgraded assignment lost its mapping origin: %#v", assignment)
+	}
+}
+
+func TestManagersRecordRoleMappingOrigin(t *testing.T) {
+	sqliteManager, err := NewSQLiteManager(SQLiteManagerConfig{DataDir: t.TempDir()})
+	if err != nil {
+		t.Fatalf("NewSQLiteManager: %v", err)
+	}
+	defer sqliteManager.Close()
+	fileManager, err := NewFileManager(t.TempDir())
+	if err != nil {
+		t.Fatalf("NewFileManager: %v", err)
+	}
+
+	principal := "sso:oidc:okta:stable"
+	for name, manager := range map[string]Manager{"sqlite": sqliteManager, "file": fileManager} {
+		mapped, ok := manager.(MappedRoleManager)
+		if !ok {
+			t.Fatalf("%s manager does not record mapped roles", name)
+		}
+		if err := mapped.UpdateUserRolesFromMapping(principal, []string{RoleAdmin}); err != nil {
+			t.Fatalf("%s UpdateUserRolesFromMapping: %v", name, err)
+		}
+		assignment, ok := manager.GetUserAssignment(principal)
+		if !ok || !assignment.RolesFromMapping || len(assignment.RoleIDs) != 1 || assignment.RoleIDs[0] != RoleAdmin {
+			t.Fatalf("%s mapped assignment = %#v, exists=%v", name, assignment, ok)
+		}
+		if err := manager.UpdateUserRoles(principal, []string{RoleAdmin}); err != nil {
+			t.Fatalf("%s UpdateUserRoles: %v", name, err)
+		}
+		assignment, ok = manager.GetUserAssignment(principal)
+		if !ok || assignment.RolesFromMapping || len(assignment.RoleIDs) != 1 {
+			t.Fatalf("%s manual assignment kept a mapping origin: %#v, exists=%v", name, assignment, ok)
+		}
+	}
 }
 
 func TestSQLiteManager(t *testing.T) {

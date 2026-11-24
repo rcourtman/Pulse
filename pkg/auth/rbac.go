@@ -63,6 +63,9 @@ type UserRoleAssignment struct {
 	ProviderID   string     `json:"providerId,omitempty"`
 	LastLoginAt  *time.Time `json:"lastLoginAt,omitempty"`
 	UpdatedAt    time.Time  `json:"updatedAt"`
+	// RolesFromMapping reports that RoleIDs was last written by an SSO
+	// provider's group role mapping rather than assigned by an administrator.
+	RolesFromMapping bool `json:"rolesFromMapping,omitempty"`
 }
 
 const (
@@ -200,6 +203,23 @@ type AssignmentMigrator interface {
 // durable principal used for authorization.
 type UserIdentityManager interface {
 	UpsertUserIdentity(username string, metadata UserIdentityMetadata) error
+}
+
+// MappedRoleManager replaces a principal's roles with the result of an SSO
+// provider's group role mapping and records that origin on the assignment, so
+// the roles can be withdrawn once the provider no longer maps groups.
+// UpdateUserRoles marks the replaced list as assigned by an administrator.
+type MappedRoleManager interface {
+	UpdateUserRolesFromMapping(username string, roleIDs []string) error
+}
+
+// ProviderIssuerRegistry records the original issuer bound to an SSO provider
+// entry (providerType, providerID) in durable storage that survives provider
+// deletion. Keeping the first issuer bound lets existing principals stay stable
+// while any later issuer for the same entry ID is hashed into the principal.
+type ProviderIssuerRegistry interface {
+	BindProviderOriginalIssuer(providerType, providerID, issuer string) error
+	GetOrBindProviderOriginalIssuer(providerType, providerID, issuer string) (string, error)
 }
 
 // UserDeprovisioner removes a known RBAC identity and all of its assignments.

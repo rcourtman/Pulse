@@ -8852,7 +8852,12 @@ That same runtime SSO contract also owns browser-session principal identity:
 OIDC/SAML session users from provider-scoped stable subjects (`sub`/`NameID`
 plus provider ID), not mutable username, email, or display-name claims. Legacy
 username/email RBAC assignments may be copied only as compatibility migration
-inputs when no authoritative group mapping is present. Successful OIDC/SAML
+inputs when no authoritative group mapping is present. Roles written by an
+authoritative group mapping are saved with that origin (`rolesFromMapping` on
+RBAC user-assignment reads). The first login after the provider stops mapping
+groups must withdraw them before legacy or manual assignments are considered.
+Roles saved through `PUT /api/admin/users/{username}/roles` clear the origin
+and are kept. Successful OIDC/SAML
 login may upsert bounded `displayName`, `email`, `providerType`, `providerId`,
 and `lastLoginAt` presentation metadata against that stable principal; these
 fields are returned by RBAC user-assignment reads but never become session or
