@@ -4359,6 +4359,76 @@ func TestAPIDeregistrationCurlWithoutToken(t *testing.T) {
 	}
 }
 
+// plantCallerPythonModules fills dir with modules named like the standard
+// library ones the installers' inline Python imports. Each leaves a
+// "<module>.py.imported" file beside itself when Python loads it.
+func plantCallerPythonModules(t *testing.T, dir string) {
+	t.Helper()
+	if err := os.MkdirAll(dir, 0700); err != nil {
+		t.Fatal(err)
+	}
+	for _, module := range []string{"datetime", "ipaddress", "json", "pathlib", "re", "time", "urllib"} {
+		writeTestFile(t, filepath.Join(dir, module+".py"), []byte("open(__file__ + '.imported', 'w').close()\n"), 0600)
+	}
+}
+
+func assertCallerPythonModulesUnused(t *testing.T, dir string) {
+	t.Helper()
+	imported, err := filepath.Glob(filepath.Join(dir, "*.imported"))
+	if err != nil || len(imported) != 0 {
+		t.Errorf("inline Python loaded modules from the caller's directory or PYTHONPATH: %v, %v", imported, err)
+	}
+}
+
+// Administrators start these scripts as root from whatever directory their
+// shell is in, often a shared one such as /tmp. "python3 -" and "python3 -c"
+// search that directory before the standard library unless -I is given.
+func TestInstallerInlinePythonStartsIsolated(t *testing.T) {
+	invocation := regexp.MustCompile(`\bpython3[ \t]+-\S*`)
+	for _, script := range []string{
+		repoFile("install.sh"),
+		repoFile("scripts", "install.sh"),
+		repoFile("scripts", "uninstall-sensor-proxy.sh"),
+	} {
+		content, err := os.ReadFile(script)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for line, text := range strings.Split(string(content), "\n") {
+			for _, found := range invocation.FindAllString(text, -1) {
+				if strings.Fields(found)[1] != "-I" {
+					t.Errorf("%s:%d: %q does not start Python isolated (-I)", script, line+1, found)
+				}
+			}
+		}
+	}
+}
+
+func TestInstallSHTrueNASTaskInventoryIgnoresCallerPythonModules(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Unix installer")
+	}
+	caller := t.TempDir()
+	plantCallerPythonModules(t, caller)
+	script := `set -euo pipefail
+timeout() { shift 3; "$@"; }
+midclt() {
+    printf '%s\n' '[{"id":7,"type":"SCRIPT","script":"/fixture/bootstrap-pulse-agent.sh","command":"","when":"POSTINIT","enabled":true,"timeout":30,"comment":"Pulse Agent Bootstrap"}]'
+}
+TRUENAS_BOOTSTRAP_SCRIPT=/fixture/bootstrap-pulse-agent.sh
+` + extractInstallShellFunction(t, "read_truenas_agent_removal_tasks") + `
+read_truenas_agent_removal_tasks
+`
+	cmd := exec.Command("bash", "-c", script)
+	cmd.Dir = caller
+	cmd.Env = append(os.Environ(), "PYTHONPATH="+caller)
+	out, err := cmd.CombinedOutput()
+	if err != nil || string(out) != "7 true\ncomplete\n" {
+		t.Fatalf("owned boot-task inventory changed: %v\n%s", err, out)
+	}
+	assertCallerPythonModulesUnused(t, caller)
+}
+
 // Fixture cases use the same checked-in installer for the life of this test
 // process. Share its immutable function text, not generated scripts or fixture
 // state: each case still builds its own harness and runs all its assertions.
@@ -6908,6 +6978,7 @@ case "$url" in
         cat > "$out" <<'INSTALLER'
 #!/usr/bin/env bash
 set -eu
+PULSE_RELEASE_ASSET="install.sh"
 [[ "$*" == "--version v9.9.9" ]]
 [[ "$PULSE_SERVICE_NAME" == pulse-url-fixture ]]
 [[ "$PULSE_INSTALL_DIR" == "$FIXTURE_DIR/install" ]]

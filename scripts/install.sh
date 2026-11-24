@@ -1795,7 +1795,8 @@ read_truenas_agent_removal_tasks() {
         printf '\n%s' '__pulse_truenas_tasks_complete__') || return 1
     # Parse the complete inventory, including indirect/other-install bootstrap
     # references. No task command, name, argument or credential is returned.
-    python3 -c '
+    # Isolated (-I): no imports from the working directory or PYTHONPATH.
+    python3 -I -c '
 import json, pathlib, sys
 def unique_object(pairs):
     result = {}
@@ -7152,7 +7153,7 @@ if [[ "$UNINSTALL" == "true" ]]; then
         log_info "Removing TrueNAS CORE installation..."
         # Remove Init/Shutdown task
         if command -v midclt >/dev/null 2>&1 && command -v python3 >/dev/null 2>&1; then
-            TASK_ID=$(midclt call initshutdownscript.query '[["script","=","'"$TRUENAS_BOOTSTRAP_SCRIPT"'"]]' 2>/dev/null | python3 -c "import json,sys; d=json.load(sys.stdin); print(d[0]['id'] if d else '')" 2>/dev/null || echo "")
+            TASK_ID=$(midclt call initshutdownscript.query '[["script","=","'"$TRUENAS_BOOTSTRAP_SCRIPT"'"]]' 2>/dev/null | python3 -I -c "import json,sys; d=json.load(sys.stdin); print(d[0]['id'] if d else '')" 2>/dev/null || echo "")
             if [[ -n "$TASK_ID" ]]; then
                 midclt call initshutdownscript.delete "$TASK_ID" >/dev/null 2>&1 || log_warn "Failed to remove Init/Shutdown task (id $TASK_ID)"
             fi
@@ -8568,7 +8569,7 @@ EOF
         log_info "Registering TrueNAS Init/Shutdown task..."
 
         # Check if task already exists
-        EXISTING_TASK=$(midclt call initshutdownscript.query '[["script","=","'"$TRUENAS_BOOTSTRAP_SCRIPT"'"]]' 2>/dev/null | python3 -c "import json,sys; d=json.load(sys.stdin); print(d[0]['id'] if d else '')" 2>/dev/null || echo "")
+        EXISTING_TASK=$(midclt call initshutdownscript.query '[["script","=","'"$TRUENAS_BOOTSTRAP_SCRIPT"'"]]' 2>/dev/null | python3 -I -c "import json,sys; d=json.load(sys.stdin); print(d[0]['id'] if d else '')" 2>/dev/null || echo "")
 
         if [[ -n "$EXISTING_TASK" ]]; then
             log_info "Init/Shutdown task already exists (id $EXISTING_TASK), updating..."

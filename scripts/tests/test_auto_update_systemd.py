@@ -155,7 +155,8 @@ class NativeContracts(unittest.TestCase):
                 path.write_text(native.TRANSPORT)
                 path.chmod(0o755)
             installer = root / "installer"
-            installer.write_text('#!/bin/bash\nprintf "%s\\n" "$@" > "$PULSE_NATIVE_ROOT/executed"\n')
+            installer.write_text('#!/bin/bash\nPULSE_RELEASE_ASSET="install.sh"\n'
+                                 'printf "%s\\n" "$@" > "$PULSE_NATIVE_ROOT/executed"\n')
             key = root / "key"
             subprocess.run(["ssh-keygen", "-q", "-t", "ed25519", "-N", "", "-f", str(key)],
                            check=True, capture_output=True)

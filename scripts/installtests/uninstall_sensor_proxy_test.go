@@ -377,7 +377,16 @@ func TestUninstallSensorProxyClusterInventoryUsesEveryValidatedNode(t *testing.T
 	if err := os.WriteFile(filepath.Join(dir, "inventory"), []byte(`[{"node":"pve-b"},{"node":"pve-a"},{"node":"pve-b"},{"node":"pve-v6"}]`), 0600); err != nil {
 		t.Fatal(err)
 	}
-	out, code := runSensorProxySafetyShell(t, repoFile("scripts", "uninstall-sensor-proxy.sh"), dir, "success", proxyInventoryFixture)
+	// The documented "curl | bash" run keeps the administrator's working
+	// directory. Modules left in a shared one must not join the validators.
+	script, err := filepath.Abs(repoFile("scripts", "uninstall-sensor-proxy.sh"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	caller := filepath.Join(dir, "caller")
+	plantCallerPythonModules(t, caller)
+	out, code := runSensorProxySafetyShell(t, script, dir, "success", `cd "$FIXTURE_DIR/caller"
+`+proxyInventoryFixture)
 	if code != 0 {
 		t.Fatalf("exit %d: %s", code, out)
 	}
@@ -385,6 +394,7 @@ func TestUninstallSensorProxyClusterInventoryUsesEveryValidatedNode(t *testing.T
 	if err != nil || string(got) != "local\nremote 192.0.2.11\nremote 2001:db8::12\n" {
 		t.Fatalf("incomplete or duplicated cleanup: %q, %v", got, err)
 	}
+	assertCallerPythonModulesUnused(t, caller)
 }
 
 func TestUninstallSensorProxyIncompleteInventoryNeverStartsKeyCleanup(t *testing.T) {
