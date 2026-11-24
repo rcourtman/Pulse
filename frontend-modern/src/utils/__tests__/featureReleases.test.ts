@@ -65,11 +65,13 @@ describe('feature release stages', () => {
     expect(normalizeFeatureStage(undefined)).toBe('build');
   });
 
-  // Moving the map past build is Richard's call after its review. This fails
-  // on purpose when the stage changes, so the change is never a side effect.
-  it('holds the map at build', () => {
-    expect(getFeatureStage('infrastructureMap')).toBe('build');
-    expect(isFeatureInPreview('infrastructureMap')).toBe(false);
+  // Moving a feature past build is Richard's call after its review. This fails
+  // on purpose when a stage changes, so the change is never a side effect.
+  it('holds the map and standalone VMs in preview', () => {
+    expect(getFeatureStage('infrastructureMap')).toBe('preview');
+    expect(isFeatureInPreview('infrastructureMap')).toBe(true);
+    expect(getFeatureStage('standaloneVms')).toBe('preview');
+    expect(isFeatureInPreview('standaloneVms')).toBe(true);
   });
 
   it('shows the map in this development build and not in a release build', () => {

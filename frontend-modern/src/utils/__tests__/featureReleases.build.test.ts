@@ -1,7 +1,14 @@
 import { createMemo, createRoot, createSignal } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-// The real Build-stage registry in a production bundle, read from the version reply.
+// A feature at build stage in a production bundle, read from the version reply.
+// Mocked here so build-stage gating stays covered after features graduate to preview.
+vi.mock('../featureReleases.json', () => ({
+  default: {
+    infrastructureMap: { name: 'Map', stage: 'build', guides: ['MAP.md'] },
+    standaloneVms: { name: 'Machines VMs', stage: 'build', guides: [] },
+  },
+}));
 const [version, setVersion] = createSignal<Record<string, unknown> | null>(null);
 const [lastError, setLastError] = createSignal<string | null>(null);
 
