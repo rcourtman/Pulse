@@ -183,6 +183,9 @@ func (s *HostContinuityStore) save() error {
 	if err != nil {
 		return fmt.Errorf("failed to marshal continuity: %w", err)
 	}
+	if err := checkMetadataFileSize("host_continuity.json", data, maxHostContinuityFileSizeBytes); err != nil {
+		return err
+	}
 	if err := persistMetadata(s.fs, s.dataPath, "host_continuity.json", data); err != nil {
 		return err
 	}

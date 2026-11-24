@@ -1579,6 +1579,62 @@ func TestAgentInstallCommandRequiresSettingsWriteScope(t *testing.T) {
 	}
 }
 
+// settings:write admits a token to the install command route and covers the
+// reporting scopes of the token it mints. Command execution is a further
+// grant: as on the token routes, a token cannot hand out agent:exec unless it
+// holds that scope itself.
+func TestAgentInstallCommandCannotGrantExecBeyondCaller(t *testing.T) {
+	const callerRaw = "agent-install-caller-123.12345678"
+	cases := []struct {
+		name     string
+		scopes   []string
+		body     string
+		wantCode int
+		wantExec bool
+	}{
+		{"host commands without agent:exec", []string{config.ScopeSettingsRead, config.ScopeSettingsWrite}, `{"type":"host","enableCommands":true}`, http.StatusForbidden, false},
+		{"pve commands without agent:exec", []string{config.ScopeSettingsWrite}, `{"type":"pve","enableCommands":true}`, http.StatusForbidden, false},
+		{"pbs commands without agent:exec", []string{config.ScopeSettingsWrite}, `{"type":"pbs","enableCommands":true}`, http.StatusForbidden, false},
+		{"host monitoring only", []string{config.ScopeSettingsWrite}, `{"type":"host"}`, http.StatusOK, false},
+		{"pve monitoring only", []string{config.ScopeSettingsWrite}, `{"type":"pve"}`, http.StatusOK, false},
+		{"host commands with agent:exec", []string{config.ScopeSettingsWrite, config.ScopeAgentExec}, `{"type":"host","enableCommands":true}`, http.StatusOK, true},
+		{"pve commands with full access", []string{config.ScopeWildcard}, `{"type":"pve","enableCommands":true}`, http.StatusOK, true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			caller := newTokenRecord(t, callerRaw, tc.scopes, nil)
+			cfg := newTestConfigWithTokens(t, caller)
+			router := newTestRouter(t, cfg, nil, nil, nil, nil, "1.0.0")
+
+			req := httptest.NewRequest(http.MethodPost, "/api/agent-install-command", strings.NewReader(tc.body))
+			req.Header.Set("X-API-Token", callerRaw)
+			rec := httptest.NewRecorder()
+			router.Handler().ServeHTTP(rec, req)
+			if rec.Code != tc.wantCode {
+				t.Fatalf("status = %d, want %d: %s", rec.Code, tc.wantCode, rec.Body.String())
+			}
+			if tc.wantCode == http.StatusForbidden && !strings.Contains(rec.Body.String(), config.ScopeAgentExec) {
+				t.Fatalf("expected missing scope response to mention %q, got %q", config.ScopeAgentExec, rec.Body.String())
+			}
+
+			config.Mu.RLock()
+			defer config.Mu.RUnlock()
+			wantRecords := 1
+			if tc.wantCode == http.StatusOK {
+				wantRecords = 2
+			}
+			if len(cfg.APITokens) != wantRecords {
+				t.Fatalf("token inventory holds %d records, want %d", len(cfg.APITokens), wantRecords)
+			}
+			for _, record := range cfg.APITokens {
+				if record.ID != caller.ID && record.HasScope(config.ScopeAgentExec) != tc.wantExec {
+					t.Fatalf("minted token scopes = %v, want agent:exec=%v", record.Scopes, tc.wantExec)
+				}
+			}
+		})
+	}
+}
+
 func TestDiscoverRequiresSettingsWriteScope(t *testing.T) {
 	rawToken := "discover-token-123.12345678"
 	record := newTokenRecord(t, rawToken, []string{config.ScopeSettingsRead}, nil)

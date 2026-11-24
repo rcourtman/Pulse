@@ -151,3 +151,103 @@ func TestConfigDeepCopyIsolatesPVEClusterIdentityMetadata(t *testing.T) {
 		t.Fatal("tenant-scoped deep copy leaked nested Proxmox cluster metadata")
 	}
 }
+
+func TestEnsurePVEClusterNodeIdentitiesKeepsOtherConnectionsNodeIdentities(t *testing.T) {
+	// A standalone connection "pve-b" reports its node "pve-b" as
+	// "pve-b-pve-b". The cluster name and node names are what the other
+	// endpoint says about itself and must not spell that identity.
+	for _, tc := range []struct {
+		name, clusterName, nodeName string
+	}{
+		{"cluster named after the connection", "pve-b", "pve-b"},
+		{"same name in another case", "PVE-B", "pve-b"},
+		{"split at an earlier hyphen", "pve", "b-pve-b"},
+		{"split at a later hyphen", "pve-b-pve", "b"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			instances := []PVEInstance{
+				{Name: "pve-b"},
+				{
+					Name: "lab", IsCluster: true, ClusterName: tc.clusterName,
+					ClusterEndpoints: []ClusterEndpoint{
+						{NodeName: "lab1", NativeNodeID: 1},
+						{NodeName: tc.nodeName, NativeNodeID: 2},
+					},
+				},
+			}
+			EnsurePVEClusterNodeIdentities(instances)
+			for _, endpoint := range instances[1].ClusterEndpoints {
+				if strings.HasPrefix(strings.ToLower(endpoint.NodeIdentity), "pve-b-") {
+					t.Fatalf("node %q got identity %q in connection pve-b's namespace", endpoint.NodeName, endpoint.NodeIdentity)
+				}
+			}
+			if got, want := instances[1].ClusterEndpoints[1].NodeIdentity, "lab-"+tc.nodeName; got != want {
+				t.Fatalf("identity = %q, want connection-scoped %q", got, want)
+			}
+			if EnsurePVEClusterNodeIdentities(instances) {
+				t.Fatal("second normalization should be stable")
+			}
+		})
+	}
+}
+
+func TestEnsurePVEClusterNodeIdentitiesRejectsIdentityRecordedByOtherConnection(t *testing.T) {
+	instances := []PVEInstance{
+		{
+			Name: "site-a", IsCluster: true, ClusterName: "prod",
+			ClusterEndpoints:      []ClusterEndpoint{{NodeName: "dr-1", NativeNodeID: 1, NodeIdentity: "prod-dr-1"}},
+			ClusterNodeIdentities: []PVEClusterNodeIdentity{{ID: "prod-dr-1", NativeNodeID: 1, NativeName: "dr-1"}},
+		},
+		{
+			Name: "site-b", IsCluster: true, ClusterName: "prod-dr",
+			ClusterEndpoints: []ClusterEndpoint{{NodeName: "1", NativeNodeID: 1}},
+		},
+	}
+	EnsurePVEClusterNodeIdentities(instances)
+	if got := instances[0].ClusterEndpoints[0].NodeIdentity; got != "prod-dr-1" {
+		t.Fatalf("recorded identity changed to %q", got)
+	}
+	if got := instances[1].ClusterEndpoints[0].NodeIdentity; got != "site-b-1" {
+		t.Fatalf("identity = %q, want connection-scoped %q", got, "site-b-1")
+	}
+}
+
+func TestDerivePVENodeIdentity(t *testing.T) {
+	instances := []PVEInstance{
+		{Name: "pve"},
+		{Name: "pve-b"},
+		{
+			Name: "lab", IsCluster: true, ClusterName: "homelab",
+			ClusterNodeIdentities: []PVEClusterNodeIdentity{{ID: "homelab-n1", NativeNodeID: 1, NativeName: "n1"}},
+		},
+		{Name: "homelab"},
+	}
+	for _, tc := range []struct {
+		instance, scope, node, want string
+	}{
+		{"pve-b", "pve-b", "pve-b", "pve-b-pve-b"},
+		{"pve", "pve", "pve", "pve-pve"},
+		{"lab", "homelab", "n2", "lab-n2"},
+		{"lab", "pve-b", "pve-b", "lab-pve-b"},
+	} {
+		if got := DerivePVENodeIdentity(instances, tc.instance, tc.scope, tc.node); got != tc.want {
+			t.Errorf("DerivePVENodeIdentity(%q, %q, %q) = %q, want %q", tc.instance, tc.scope, tc.node, got, tc.want)
+		}
+	}
+	// A node name that reaches into a longer connection name's namespace, or
+	// spells an identity another connection records, gets an opaque identity.
+	for _, tc := range []struct {
+		instance, node, taken string
+	}{
+		{"pve", "b-pve-b", "pve-b-pve-b"},
+		{"homelab", "n1", "homelab-n1"},
+	} {
+		got := DerivePVENodeIdentity(instances, tc.instance, tc.instance, tc.node)
+		if strings.EqualFold(got, tc.taken) || !strings.HasPrefix(got, tc.instance+"-node-") {
+			t.Errorf("DerivePVENodeIdentity(%q, %q) = %q, want an opaque identity other than %q", tc.instance, tc.node, got, tc.taken)
+		}
+		if again := DerivePVENodeIdentity(instances, tc.instance, tc.instance, tc.node); again != got {
+			t.Errorf("DerivePVENodeIdentity(%q, %q) is not stable: %q then %q", tc.instance, tc.node, got, again)
+		}
+	}
+}

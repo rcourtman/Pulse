@@ -35,6 +35,9 @@ func (s *GuestMetadataStore) commitImport(tx *importTransaction, metadata map[st
 	if err != nil {
 		return fmt.Errorf("serialize imported guest metadata: %w", err)
 	}
+	if err := checkMetadataFileSize("guest_metadata.json", data, maxGuestMetadataFileSizeBytes); err != nil {
+		return fmt.Errorf("stage imported guest metadata: %w", err)
+	}
 	if err := tx.StageFile(filepath.Join(s.dataPath, "guest_metadata.json"), data, 0600); err != nil {
 		return fmt.Errorf("stage imported guest metadata: %w", err)
 	}

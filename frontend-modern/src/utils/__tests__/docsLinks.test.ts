@@ -305,6 +305,10 @@ describe('docsLinks', () => {
     // A scripted first run chooses the setup token and needs the host type.
     expect(api).toContain('A token shorter than 32 characters gets\n`400`');
     expect(api).toContain('`{"type":"host","name":"docker-host"}` returns `token`');
+    // Asking for a command-enabled agent token is a grant of agent:exec.
+    expect(api).toContain(
+      'An API\ntoken must itself hold `agent:exec` to ask for it, otherwise the request fails\nwith HTTP 403 `missing_scope`.',
+    );
   });
 
   it('documents action permissions on routes that start work on a host', () => {

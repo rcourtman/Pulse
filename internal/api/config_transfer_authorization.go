@@ -5,6 +5,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/api/apicontext"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	internalauth "github.com/rcourtman/pulse-go-rewrite/pkg/auth"
 	"github.com/rs/zerolog/log"
@@ -76,10 +77,24 @@ func configTransferUserManagesOrganization(cfg *config.Config, req *http.Request
 	return sessionUserCarriesAdminPrivileges(cfg, userID)
 }
 
+// keepImportAccessCredentials marks an admitted import whose caller may not
+// issue the archive's API tokens or SSO configuration. Restoring those sections
+// issues every credential in the file, whatever its scopes, organization
+// binding or owner, and anyone can build an archive. It therefore needs the
+// authority that issuing them directly needs: instance administration for a
+// user (ensureAdminSession), which a tenant's own owners and admins do not
+// carry, and instance-wide full access for an API token, as for regenerating
+// every token. Any other admitted caller restores the remaining sections.
+func keepImportAccessCredentials(req *http.Request) {
+	*req = *req.WithContext(apicontext.WithImportKeepingAccessCredentials(req.Context()))
+}
+
 // authorizeConfigTransfer is the single route-local boundary for export and
 // import. It runs before either handler receives the request, so denial cannot
 // parse an archive, read export persistence, write import state, or reload the
-// runtime.
+// runtime. It also decides, from the credential it admits, whether an import
+// may replace access credentials (keepImportAccessCredentials), so that
+// decision cannot change while the body is outstanding.
 func (r *Router) authorizeConfigTransfer(w http.ResponseWriter, req *http.Request, op configTransferOperation) bool {
 	if adminBypassEnabled() {
 		return true
@@ -104,6 +119,9 @@ func (r *Router) authorizeConfigTransfer(w http.ResponseWriter, req *http.Reques
 		if !record.HasScope(scope) {
 			respondMissingScope(w, scope)
 			return false
+		}
+		if op == configTransferImport && !tokenHasInstanceWideAuthority(record) {
+			keepImportAccessCredentials(req)
 		}
 		return true
 	}
@@ -141,6 +159,9 @@ func (r *Router) authorizeConfigTransfer(w http.ResponseWriter, req *http.Reques
 			// CheckAuth's session admission. Retain the session actually admitted
 			// here, not an ambient cookie discovered after the export has run.
 			attachSessionReadAdmission(req, cookie.Value, session)
+			if op == configTransferImport && !sessionUserCarriesAdminPrivileges(r.config, sessionUser) {
+				keepImportAccessCredentials(req)
+			}
 			return true
 		}
 	}

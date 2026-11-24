@@ -385,11 +385,13 @@ func TestHandleAutoUnregisterAcceptsRecentSetupTokenAndRemovesMatchingPVEInstanc
 		ExpiresAt: time.Now().Add(5 * time.Minute),
 		Used:      true,
 		NodeType:  "pve",
+		Host:      "https://pve.local:8006",
 		OrgID:     "default",
 	}
 	handler.recentSetupTokens[tokenHash] = RecentSetupTokenRecord{
 		ExpiresAt: time.Now().Add(1 * time.Minute),
 		NodeType:  "pve",
+		Host:      "https://pve.local:8006",
 		OrgID:     "default",
 	}
 	handler.codeMutex.Unlock()
@@ -432,6 +434,90 @@ func TestHandleAutoUnregisterAcceptsRecentSetupTokenAndRemovesMatchingPVEInstanc
 	}
 }
 
+// A setup token is issued for one host, so it must not remove the connection
+// at another address, before or after it is spent, whether that connection was
+// added by hand or by the setup script.
+func TestHandleAutoUnregisterRefusesConnectionAtAnotherHost(t *testing.T) {
+	tempDir := t.TempDir()
+	t.Setenv("PULSE_DATA_DIR", tempDir)
+
+	const tokenValue = "TEMP-TOKEN-OTHER-HOST"
+	tokenHash := internalauth.HashAPIToken(tokenValue)
+
+	for _, nodeType := range []string{"pve", "pbs"} {
+		for _, spent := range []bool{false, true} {
+			cfg := &config.Config{
+				DataPath:     tempDir,
+				ConfigPath:   tempDir,
+				PVEInstances: []config.PVEInstance{{Name: "production", Host: "https://192.0.2.10:8006", TokenName: "pulse@pve!monitor"}},
+				PBSInstances: []config.PBSInstance{{Name: "backups", Host: "https://192.0.2.10:8007", TokenName: "pulse@pbs!monitor", Source: "script"}},
+			}
+			handler := newTestConfigHandlers(t, cfg)
+
+			tokenHost := "https://192.0.2.66:8006"
+			otherHost := cfg.PVEInstances[0].Host
+			if nodeType == "pbs" {
+				tokenHost = "https://192.0.2.66:8007"
+				otherHost = cfg.PBSInstances[0].Host
+			}
+			record := &SetupTokenRecord{
+				ExpiresAt: time.Now().Add(5 * time.Minute),
+				Used:      spent,
+				NodeType:  nodeType,
+				Host:      tokenHost,
+				OrgID:     "default",
+			}
+			handler.codeMutex.Lock()
+			handler.setupTokens[tokenHash] = record
+			if spent {
+				handler.recentSetupTokens[tokenHash] = buildRecentSetupTokenRecord(record, time.Now().Add(time.Minute))
+			}
+			handler.codeMutex.Unlock()
+
+			unregister := func(host string) (int, string) {
+				t.Helper()
+				body, err := json.Marshal(AutoUnregisterRequest{
+					Type:       nodeType,
+					Host:       host,
+					ServerName: "edge",
+					AuthToken:  tokenValue,
+					Source:     "script",
+				})
+				if err != nil {
+					t.Fatalf("failed to marshal request: %v", err)
+				}
+				rec := httptest.NewRecorder()
+				handler.HandleAutoUnregister(rec, httptest.NewRequest(http.MethodPost, "/api/auto-unregister", bytes.NewReader(body)))
+				return rec.Code, rec.Body.String()
+			}
+
+			if code, body := unregister(otherHost); code != http.StatusUnauthorized {
+				t.Fatalf("%s spent=%v: another host's connection: status = %d, want 401, body=%s", nodeType, spent, code, body)
+			}
+			if len(cfg.PVEInstances) != 1 || len(cfg.PBSInstances) != 1 {
+				t.Fatalf("%s spent=%v: connections = %d PVE, %d PBS, want both kept", nodeType, spent, len(cfg.PVEInstances), len(cfg.PBSInstances))
+			}
+			if !spent {
+				handler.codeMutex.RLock()
+				used := handler.setupTokens[tokenHash].Used
+				handler.codeMutex.RUnlock()
+				if used {
+					t.Fatalf("%s: refused request spent the setup token", nodeType)
+				}
+			}
+			if code, body := unregister(tokenHost); code != http.StatusOK {
+				t.Fatalf("%s spent=%v: the token's own host: status = %d, want 200, body=%s", nodeType, spent, code, body)
+			}
+			if code, body := unregister(otherHost); code != http.StatusUnauthorized {
+				t.Fatalf("%s spent=%v: another host's connection in the grace period: status = %d, want 401, body=%s", nodeType, spent, code, body)
+			}
+			if len(cfg.PVEInstances) != 1 || len(cfg.PBSInstances) != 1 {
+				t.Fatalf("%s spent=%v: connections = %d PVE, %d PBS, want both kept", nodeType, spent, len(cfg.PVEInstances), len(cfg.PBSInstances))
+			}
+		}
+	}
+}
+
 func TestHandleAutoUnregisterIsIdempotentWhenNodeAlreadyMissing(t *testing.T) {
 	tempDir := t.TempDir()
 	t.Setenv("PULSE_DATA_DIR", tempDir)
@@ -449,6 +535,7 @@ func TestHandleAutoUnregisterIsIdempotentWhenNodeAlreadyMissing(t *testing.T) {
 	handler.setupTokens[tokenHash] = &SetupTokenRecord{
 		ExpiresAt: time.Now().Add(5 * time.Minute),
 		NodeType:  "pve",
+		Host:      "https://pve.local:8006",
 		OrgID:     "default",
 	}
 	handler.codeMutex.Unlock()

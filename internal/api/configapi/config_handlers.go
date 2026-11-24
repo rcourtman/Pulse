@@ -221,6 +221,7 @@ type ConfigHandlers struct {
 	reloadFunc               func() error
 	reloadSystemSettingsFunc func() // Function to reload cached system settings
 	mockModeChanged          func(bool)
+	ssoConfigReload          func() error
 	wsHub                    *websocket.Hub
 	guestMetadataHandler     GuestMetadataReloader
 	runtime                  RuntimeDependencies
@@ -234,6 +235,10 @@ type ConfigHandlers struct {
 	recentAutoRegistered     map[string]time.Time
 	recentAutoRegMutex       sync.Mutex
 	autoRegisterMutex        sync.Mutex
+	tenantReloadMutex        sync.Mutex
+	autoRegReloadMutex       sync.Mutex
+	lastAutoRegReload        map[string]time.Time
+	autoRegReloadQueued      map[string]bool
 	importRequests           configImportRequests
 	stopCleanup              chan struct{}
 	stopCleanupOnce          sync.Once
@@ -317,6 +322,27 @@ func (h *ConfigHandlers) MultiTenantMonitor() *monitoring.MultiTenantMonitor {
 	return h.mtMonitor
 }
 
+// reloadMonitor applies a saved node change to the runtime that owns it. A
+// non-default organization recreates only its own monitor, as configuration
+// import does: the instance-wide hook stops every organization's monitoring
+// and discards their in-memory alert state. The default organization and
+// single-runtime handlers retain the instance-wide reload.
+func (h *ConfigHandlers) reloadMonitor(ctx context.Context) error {
+	orgID := apicontext.OrgID(ctx)
+	if mtMonitor := h.MultiTenantMonitor(); mtMonitor != nil && orgID != "" && orgID != "default" {
+		// ReloadTenant refuses an organization whose shutdown is in progress.
+		// Queue concurrent node changes as the instance-wide reload does.
+		h.tenantReloadMutex.Lock()
+		defer h.tenantReloadMutex.Unlock()
+		_, err := mtMonitor.ReloadTenant(orgID)
+		return err
+	}
+	if h.reloadFunc != nil {
+		return h.reloadFunc()
+	}
+	return nil
+}
+
 // SetMonitor updates the default-org monitor reference used by the config handlers.
 func (h *ConfigHandlers) SetMonitor(m *monitoring.Monitor) {
 	h.stateMu.Lock()
@@ -343,6 +369,15 @@ func (h *ConfigHandlers) SetMockModeChangeHook(hook func(bool)) {
 	h.stateMu.Lock()
 	defer h.stateMu.Unlock()
 	h.mockModeChanged = hook
+}
+
+// SetSSOConfigReloadHook registers the callback that publishes the saved SSO
+// configuration to the running server after a default-organization import
+// replaced it.
+func (h *ConfigHandlers) SetSSOConfigReloadHook(hook func() error) {
+	h.stateMu.Lock()
+	defer h.stateMu.Unlock()
+	h.ssoConfigReload = hook
 }
 
 // getContextState helper to retrieve tenant-specific state
@@ -630,6 +665,71 @@ func (h *ConfigHandlers) markAutoRegistered(nodeType, nodeName string) {
 	h.recentAutoRegMutex.Unlock()
 }
 
+// autoRegisterReloadInterval spaces the monitor reloads that re-registrations
+// of existing connections start. A reload stops and rebuilds the monitors of
+// the target organization (or the instance for the default organization) and
+// drops alerts still pending in them, while an agent token may re-register its
+// own connection with a new secret as often as it likes.
+var autoRegisterReloadInterval = time.Minute
+
+// reloadAfterAutoRegister applies a saved auto-registration to the owning
+// monitor without holding up the response. A new connection is picked up at
+// once: creating one takes an administrator's setup token or one-time install
+// grant. A change to an existing connection reloads at once when none did for
+// that organization within autoRegisterReloadInterval, and changes that follow
+// inside the interval share one reload at its end.
+func (h *ConfigHandlers) reloadAfterAutoRegister(ctx context.Context, created bool) {
+	orgID := apicontext.OrgID(ctx)
+	if orgID == "" {
+		orgID = "default"
+	}
+	scopedTenant := h.MultiTenantMonitor() != nil && orgID != "default"
+	if !scopedTenant && h.reloadFunc == nil {
+		return
+	}
+	var wait time.Duration
+	if !created {
+		h.autoRegReloadMutex.Lock()
+		if h.lastAutoRegReload == nil {
+			h.lastAutoRegReload = make(map[string]time.Time)
+		}
+		if h.autoRegReloadQueued == nil {
+			h.autoRegReloadQueued = make(map[string]bool)
+		}
+		wait = time.Until(h.lastAutoRegReload[orgID].Add(autoRegisterReloadInterval))
+		if wait > 0 && h.autoRegReloadQueued[orgID] {
+			h.autoRegReloadMutex.Unlock()
+			return
+		}
+		if wait > 0 {
+			h.autoRegReloadQueued[orgID] = true
+		} else {
+			h.lastAutoRegReload[orgID] = time.Now()
+		}
+		h.autoRegReloadMutex.Unlock()
+	}
+
+	reloadCtx := context.WithoutCancel(ctx)
+	go func() {
+		if wait > 0 {
+			select {
+			case <-time.After(wait):
+			case <-h.stopCleanup:
+				return
+			}
+			// The reload reads what is saved when it begins; a change saved
+			// after this point queues the next one.
+			h.autoRegReloadMutex.Lock()
+			h.autoRegReloadQueued[orgID] = false
+			h.lastAutoRegReload[orgID] = time.Now()
+			h.autoRegReloadMutex.Unlock()
+		}
+		if err := h.reloadMonitor(reloadCtx); err != nil {
+			log.Error().Err(err).Msg("Failed to reload monitor after auto-registration")
+		}
+	}()
+}
+
 func (h *ConfigHandlers) clearAutoRegistered(nodeType, nodeName string) {
 	if nodeType == "" || nodeName == "" {
 		return
@@ -782,11 +882,32 @@ func shouldSkipClusterAutoDetection(host, name string) bool {
 		strings.Contains(lowerName, "concurrent-")
 }
 
-func (h *ConfigHandlers) maybeRefreshClusterInfo(ctx context.Context, instance *config.PVEInstance) {
-	if instance == nil {
-		return
+// findDetectedPVEInstance returns the configured connection that a cluster
+// detection of probed describes, or nil once that connection has been removed
+// or pointed at another endpoint or credential. Detection waits on the
+// monitored server for as long as that server likes, and the connection list
+// is edited meanwhile, so the result is stored on the connection found here
+// and never through a list slot captured before the wait: a removal hands
+// that slot to the next connection, whose credential would then be sent to
+// the members the removed server reported. The caller holds config.Mu.
+func findDetectedPVEInstance(cfg *config.Config, probed *config.PVEInstance) *config.PVEInstance {
+	if cfg == nil {
+		return nil
 	}
+	index, found := findInstanceIndexByName(cfg, "pve", probed.Name)
+	if !found {
+		return nil
+	}
+	current := &cfg.PVEInstances[index]
+	if config.CreateProxmoxConfig(current) != config.CreateProxmoxConfig(probed) {
+		return nil
+	}
+	return current
+}
 
+// maybeRefreshClusterInfo retries cluster detection for the connection that
+// instance is a copy of and stores the result on that connection.
+func (h *ConfigHandlers) maybeRefreshClusterInfo(ctx context.Context, instance config.PVEInstance) {
 	if shouldSkipClusterAutoDetection(instance.Host, instance.Name) {
 		return
 	}
@@ -815,8 +936,16 @@ func (h *ConfigHandlers) maybeRefreshClusterInfo(ctx context.Context, instance *
 	h.lastClusterDetection[instance.Name] = time.Now()
 	h.clusterDetectMutex.Unlock()
 
-	clientConfig := config.CreateProxmoxConfig(instance)
-	isCluster, clusterName, clusterEndpoints := detectPVECluster(clientConfig, instance.Name, instance.ClusterEndpoints)
+	clientConfig := config.CreateProxmoxConfig(&instance)
+	// Re-detection must not reach a saved cluster address past its endpoint pin.
+	discoveryCfg := h.getConfig(ctx).Discovery
+	fingerprint, err := monitoring.PVEEndpointFingerprint(instance, clientConfig.Host, discoveryCfg)
+	if err != nil {
+		log.Warn().Str("instance", instance.Name).Err(err).Msg("Skipping cluster validation retry until saved TLS trust is reconciled")
+		return
+	}
+	clientConfig.Fingerprint = fingerprint
+	isCluster, clusterName, clusterEndpoints := detectPVEClusterContext(ctx, clientConfig, instance.Name, clusterEndpointsWithSavedTrust(instance, discoveryCfg))
 	if !isCluster || len(clusterEndpoints) == 0 {
 		log.Debug().
 			Str("instance", instance.Name).
@@ -830,9 +959,19 @@ func (h *ConfigHandlers) maybeRefreshClusterInfo(ctx context.Context, instance *
 		clusterName = instance.Name
 	}
 
-	instance.IsCluster = true
-	instance.ClusterName = clusterName
-	instance.ClusterEndpoints = clusterEndpoints
+	config.Mu.Lock()
+	current := findDetectedPVEInstance(h.getConfig(ctx), &instance)
+	if current == nil {
+		config.Mu.Unlock()
+		log.Info().
+			Str("instance", instance.Name).
+			Msg("Discarded cluster validation retry for a connection that was removed or changed meanwhile")
+		return
+	}
+	current.IsCluster = true
+	current.ClusterName = clusterName
+	current.ClusterEndpoints = clusterEndpoints
+	config.Mu.Unlock()
 
 	log.Info().
 		Str("instance", instance.Name).
@@ -1175,6 +1314,55 @@ func isNodeValidationTLSError(errStr string) bool {
 	return strings.Contains(errStr, "fingerprint") || strings.Contains(errStr, "x509") || strings.Contains(errStr, "certificate")
 }
 
+// isNodeValidationFingerprintMismatch reports whether validation failed the
+// local certificate-pin check. Only that typed failure can admit a member on
+// first use; error text that merely mentions certificates is not trust evidence.
+func isNodeValidationFingerprintMismatch(err error) bool {
+	var mismatch *tlsutil.FingerprintMismatchError
+	return errors.As(err, &mismatch)
+}
+
+// clusterEndpointsWithSavedTrust returns a shallow copy of instance's cluster
+// endpoints with explicit endpoint-level TLS overrides materialized into each
+// matching member's Fingerprint field so cluster discovery validates members
+// against the same pin polling enforces.
+func clusterEndpointsWithSavedTrust(instance config.PVEInstance, discoveryCfg config.DiscoveryConfig) []config.ClusterEndpoint {
+	if len(instance.ClusterEndpoints) == 0 {
+		return nil
+	}
+	endpoints := make([]config.ClusterEndpoint, len(instance.ClusterEndpoints))
+	copy(endpoints, instance.ClusterEndpoints)
+	if len(instance.TLSFingerprintOverrides) == 0 {
+		return endpoints
+	}
+	scheme, defaultPort := deriveSchemeAndPort(instance.Host)
+	for i := range endpoints {
+		ep := &endpoints[i]
+		candidates := make([]string, 0, 4)
+		for _, raw := range []string{ep.IP, ep.NodeName, ep.Host} {
+			raw = strings.TrimSpace(raw)
+			if raw == "" {
+				continue
+			}
+			target := raw
+			if !strings.HasPrefix(target, "http") {
+				target = fmt.Sprintf("%s://%s", scheme, ensureHostHasPort(target, defaultPort))
+			}
+			candidates = append(candidates, target)
+		}
+		if runtimeURL := monitoring.PVEClusterEndpointURL(*ep, instance.VerifySSL, discoveryCfg); runtimeURL != "" {
+			candidates = append(candidates, runtimeURL)
+		}
+		for _, candidate := range candidates {
+			if overridePin, known, err := proxmox.ResolveEndpointFingerprint(candidate, instance.TLSFingerprintOverrides); err == nil && known && overridePin != "" {
+				ep.Fingerprint = overridePin
+				break
+			}
+		}
+	}
+	return endpoints
+}
+
 // isNodeValidationAuthError reports whether the node's API answered but denied
 // access — proof enough that a real Proxmox endpoint is listening.
 func isNodeValidationAuthError(errStr string) bool {
@@ -1205,9 +1393,10 @@ func nodeValidationFailureReason(err error) string {
 
 // validateNodeAPI tests if a cluster node has a working Proxmox API
 // This helps filter out qdevice VMs and other non-Proxmox participants.
+// savedFingerprint is the pin already saved for this member, empty when none.
 // Returns (isValid, fingerprint, failureReason) - fingerprint is captured for
 // TOFU (Trust On First Use); failureReason is empty when the node validates.
-func validateNodeAPI(ctx context.Context, clusterNode proxmox.ClusterStatus, baseConfig proxmox.ClientConfig) (bool, string, string) {
+func validateNodeAPI(ctx context.Context, clusterNode proxmox.ClusterStatus, baseConfig proxmox.ClientConfig, savedFingerprint string) (bool, string, string) {
 	// Determine the host to test - prefer IP if available, otherwise use node name
 	testHost := clusterNode.IP
 	if testHost == "" {
@@ -1232,15 +1421,40 @@ func validateNodeAPI(ctx context.Context, clusterNode proxmox.ClusterStatus, bas
 	// Use a very short timeout for validation - we just need to know if the API exists
 	testConfig.Timeout = 2 * time.Second
 
+	// Validation sends the cluster credential to this member, so it must not
+	// trust the member more loosely than polling will. A saved member pin is
+	// the only certificate accepted and is never replaced. Only a member
+	// without one may be trusted on first use, and only under a pinned primary
+	// (#1664) whose own endpoint this is not: CA validation and the primary's
+	// pin are never relaxed to whatever certificate the peer presents.
+	firstUse := false
+	if savedFingerprint != "" {
+		testConfig.Fingerprint = savedFingerprint
+	} else if baseConfig.Fingerprint != "" {
+		member, memberValid := proxmox.ClusterEndpointIdentity(testConfig.Host)
+		primary, primaryValid := proxmox.ClusterEndpointIdentity(baseConfig.Host)
+		firstUse = memberValid && primaryValid && member != primary
+	}
+
 	log.Debug().
 		Str("node", clusterNode.Name).
 		Str("test_host", testConfig.Host).
 		Msg("Validating Proxmox API for cluster node")
 
-	// Capture the fingerprint for TOFU (Trust On First Use)
+	// Capture the fingerprint for TOFU (Trust On First Use). A pin already
+	// established for this endpoint is kept instead, and under CA validation
+	// the capture is verified as well, so that a certificate the configured
+	// policy would refuse can never be saved as this member's pin.
 	var capturedFingerprint string
-	if testHost != "" {
-		fp, err := tlsutil.FetchFingerprintContext(ctx, testConfig.Host)
+	if !firstUse {
+		capturedFingerprint = testConfig.Fingerprint
+	}
+	if capturedFingerprint == "" {
+		captureFingerprint := tlsutil.FetchFingerprintContext
+		if testConfig.VerifySSL && !firstUse {
+			captureFingerprint = tlsutil.FetchVerifiedFingerprintContext
+		}
+		fp, err := captureFingerprint(ctx, testConfig.Host)
 		if err != nil {
 			log.Debug().
 				Str("node", clusterNode.Name).
@@ -1260,15 +1474,15 @@ func validateNodeAPI(ctx context.Context, clusterNode proxmox.ClusterStatus, bas
 	if err != nil {
 		// Many clusters use unique certificates per node. If the primary node
 		// was configured with fingerprint pinning, connecting to peers with the
-		// same fingerprint will fail. Fall back to a relaxed TLS check so we can
-		// still detect valid cluster members while keeping other errors (like
-		// auth) as hard failures.
-		if isNodeValidationTLSError(err.Error()) {
+		// same fingerprint will fail. Password authentication logs in here, so
+		// retry a first-use member against its own captured certificate only;
+		// every other failure (like auth, CA validation or a saved member pin)
+		// stays a hard failure and the password is not sent again.
+		if firstUse && capturedFingerprint != "" && isNodeValidationFingerprintMismatch(err) {
 			log.Debug().
 				Str("node", clusterNode.Name).
-				Msg("Retrying cluster node validation without fingerprint pinning")
-			testConfig.Fingerprint = ""
-			testConfig.VerifySSL = false
+				Msg("Retrying cluster node validation with the member's own certificate")
+			testConfig.Fingerprint = capturedFingerprint
 			testClient, err = proxmox.NewClientWithContext(ctx, testConfig)
 		}
 		if err != nil {
@@ -1291,8 +1505,9 @@ func validateNodeAPI(ctx context.Context, clusterNode proxmox.ClusterStatus, bas
 		errMsg := err.Error()
 		// If we reached the API but were denied (common when per-node permissions
 		// differ), treat it as valid. We only want to filter out hosts that aren't
-		// actually Proxmox endpoints.
-		if isNodeValidationAuthError(errMsg) {
+		// actually Proxmox endpoints. A failed TLS check never reached the API,
+		// whatever status-like digits its fingerprints or addresses contain.
+		if isNodeValidationAuthError(errMsg) && !isNodeValidationTLSError(errMsg) {
 			log.Debug().
 				Str("node", clusterNode.Name).
 				Err(err).
@@ -1302,14 +1517,13 @@ func validateNodeAPI(ctx context.Context, clusterNode proxmox.ClusterStatus, bas
 
 		// A pinned-fingerprint mismatch surfaces here, not from NewClient: the
 		// verifier runs during the TLS handshake of the first request. Cluster
-		// members normally carry their own per-node certificates, so retry with
-		// the member's own captured fingerprint before rejecting it.
-		if isNodeValidationTLSError(errMsg) {
+		// members normally carry their own per-node certificates, so retry a
+		// first-use member with its own captured fingerprint before rejecting
+		// it. A failed CA validation or saved member pin is never retried: that
+		// would hand the credential to the peer that just failed the check.
+		if firstUse && capturedFingerprint != "" && isNodeValidationFingerprintMismatch(err) {
 			retryConfig := testConfig
 			retryConfig.Fingerprint = capturedFingerprint
-			if capturedFingerprint == "" {
-				retryConfig.VerifySSL = false
-			}
 			if retryNodeValidation(ctx, retryConfig) {
 				log.Debug().
 					Str("node", clusterNode.Name).
@@ -1343,7 +1557,7 @@ func retryNodeValidation(ctx context.Context, cfg proxmox.ClientConfig) bool {
 	readCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
 	defer cancel()
 	if _, err := retryClient.GetNodes(readCtx); err != nil {
-		return isNodeValidationAuthError(err.Error())
+		return isNodeValidationAuthError(err.Error()) && !isNodeValidationTLSError(err.Error())
 	}
 	return true
 }
@@ -1493,9 +1707,10 @@ func findPreferredIP(interfaces []proxmox.NodeNetworkInterface, referenceIP net.
 }
 
 var (
-	detectPVEClusterContext = defaultDetectPVECluster
-	validatePVEClusterNode  = validateNodeAPI
-	fetchTLSFingerprint     = tlsutil.FetchFingerprint
+	detectPVEClusterContext      = defaultDetectPVECluster
+	validatePVEClusterNode       = validateNodeAPI
+	fetchTLSFingerprint          = tlsutil.FetchFingerprint
+	verifyAutoRegisterCredential = defaultVerifyAutoRegisterCredential
 )
 
 func ConfigureAutoRegisterNetworkDependencies(
@@ -1518,6 +1733,20 @@ func ConfigureAutoRegisterNetworkDependencies(
 	}
 }
 
+// ConfigureAutoRegisterCredentialVerifier overrides the live credential probe
+// used by agent-token auto-register updates and returns a restore callback.
+func ConfigureAutoRegisterCredentialVerifier(
+	credential func(context.Context, string, proxmox.ClientConfig) error,
+) func() {
+	previousCredential := verifyAutoRegisterCredential
+	if credential != nil {
+		verifyAutoRegisterCredential = credential
+	}
+	return func() {
+		verifyAutoRegisterCredential = previousCredential
+	}
+}
+
 // detectPVECluster checks if a PVE node is part of a cluster and returns cluster information
 // If existingEndpoints is provided, GuestURL values will be preserved for matching nodes
 func detectPVECluster(clientConfig proxmox.ClientConfig, nodeName string, existingEndpoints []config.ClusterEndpoint) (bool, string, []config.ClusterEndpoint) {
@@ -1528,14 +1757,14 @@ func defaultDetectPVECluster(ctx context.Context, clientConfig proxmox.ClientCon
 	return detectPVEClusterWithValidator(ctx, clientConfig, nodeName, existingEndpoints, validatePVEClusterNode)
 }
 
-func DetectPVEClusterWithValidator(clientConfig proxmox.ClientConfig, nodeName string, existingEndpoints []config.ClusterEndpoint, validator func(proxmox.ClusterStatus, proxmox.ClientConfig) (bool, string, string)) (isCluster bool, clusterName string, clusterEndpoints []config.ClusterEndpoint) {
+func DetectPVEClusterWithValidator(clientConfig proxmox.ClientConfig, nodeName string, existingEndpoints []config.ClusterEndpoint, validator func(proxmox.ClusterStatus, proxmox.ClientConfig, string) (bool, string, string)) (isCluster bool, clusterName string, clusterEndpoints []config.ClusterEndpoint) {
 	return detectPVEClusterWithValidator(context.Background(), clientConfig, nodeName, existingEndpoints,
-		func(_ context.Context, node proxmox.ClusterStatus, cfg proxmox.ClientConfig) (bool, string, string) {
-			return validator(node, cfg)
+		func(_ context.Context, node proxmox.ClusterStatus, cfg proxmox.ClientConfig, savedFingerprint string) (bool, string, string) {
+			return validator(node, cfg, savedFingerprint)
 		})
 }
 
-func detectPVEClusterWithValidator(ctx context.Context, clientConfig proxmox.ClientConfig, nodeName string, existingEndpoints []config.ClusterEndpoint, validator func(context.Context, proxmox.ClusterStatus, proxmox.ClientConfig) (bool, string, string)) (isCluster bool, clusterName string, clusterEndpoints []config.ClusterEndpoint) {
+func detectPVEClusterWithValidator(ctx context.Context, clientConfig proxmox.ClientConfig, nodeName string, existingEndpoints []config.ClusterEndpoint, validator func(context.Context, proxmox.ClusterStatus, proxmox.ClientConfig, string) (bool, string, string)) (isCluster bool, clusterName string, clusterEndpoints []config.ClusterEndpoint) {
 	tempClient, err := proxmox.NewClientWithContext(ctx, clientConfig)
 	if err != nil {
 		log.Warn().Err(err).Msg("Failed to create client for cluster detection")
@@ -1629,11 +1858,11 @@ func detectPVEClusterWithValidator(ctx context.Context, clientConfig proxmox.Cli
 			// Reachability enriches a member endpoint but never defines cluster
 			// membership. Powered-off nodes remain canonical members even
 			// though their individual API cannot answer during discovery.
-			isValid, nodeFingerprint, failureReason := validator(ctx, clusterNode, clientConfig)
+			existingEndpoint, hadExistingEndpoint := findExistingClusterEndpoint(clusterNode.Name, existingEndpoints)
+			isValid, nodeFingerprint, failureReason := validator(ctx, clusterNode, clientConfig, existingEndpoint.Fingerprint)
 			if ctx.Err() != nil {
 				return false, "", nil
 			}
-			existingEndpoint, hadExistingEndpoint := findExistingClusterEndpoint(clusterNode.Name, existingEndpoints)
 			if !isValid {
 				log.Info().
 					Str("node", clusterNode.Name).
@@ -1653,7 +1882,8 @@ func detectPVEClusterWithValidator(ctx context.Context, clientConfig proxmox.Cli
 			if isValid {
 				lastSeen = now
 			}
-			if nodeFingerprint == "" && hadExistingEndpoint {
+			// Discovery can establish a member's pin but never replaces a saved one.
+			if hadExistingEndpoint && existingEndpoint.Fingerprint != "" {
 				nodeFingerprint = existingEndpoint.Fingerprint
 			}
 			pulseReachable := isValid
@@ -1750,11 +1980,28 @@ func detectPVEClusterWithValidator(ctx context.Context, clientConfig proxmox.Cli
 func (h *ConfigHandlers) GetAllNodesForAPI(ctx context.Context) []NodeResponse {
 	nodes := []NodeResponse{}
 
+	// Refresh cluster metadata if we previously failed to detect endpoints.
+	// Detection waits on the monitored servers, so it works from copies and
+	// the list is read again afterwards.
+	config.Mu.RLock()
+	detectable := make([]config.PVEInstance, len(h.getConfig(ctx).PVEInstances))
+	for i, instance := range h.getConfig(ctx).PVEInstances {
+		detectable[i] = instance.DeepCopy()
+	}
+	config.Mu.RUnlock()
+	for _, instance := range detectable {
+		h.maybeRefreshClusterInfo(ctx, instance)
+	}
+
 	// Add PVE nodes
-	for i := range h.getConfig(ctx).PVEInstances {
-		// Refresh cluster metadata if we previously failed to detect endpoints
-		h.maybeRefreshClusterInfo(ctx, &h.getConfig(ctx).PVEInstances[i])
-		pve := h.getConfig(ctx).PVEInstances[i]
+	config.Mu.RLock()
+	pveSnapshot := make([]config.PVEInstance, len(h.getConfig(ctx).PVEInstances))
+	for i, instance := range h.getConfig(ctx).PVEInstances {
+		pveSnapshot[i] = instance.DeepCopy()
+	}
+	discoveryCfg := h.getConfig(ctx).Discovery
+	config.Mu.RUnlock()
+	for i, pve := range pveSnapshot {
 		node := NodeResponse{
 			ID:                           generateNodeID("pve", i),
 			Type:                         "pve",
@@ -1778,7 +2025,7 @@ func (h *ConfigHandlers) GetAllNodesForAPI(ctx context.Context) []NodeResponse {
 			Status:                       h.getNodeStatus(ctx, "pve", pve.Name),
 			IsCluster:                    pve.IsCluster,
 			ClusterName:                  pve.ClusterName,
-			ClusterEndpoints:             pveClusterEndpointTLSResponses(pve, h.getConfig(ctx).Discovery),
+			ClusterEndpoints:             pveClusterEndpointTLSResponses(pve, discoveryCfg),
 			Source:                       pve.Source,
 		}.NormalizeCollections()
 		nodes = append(nodes, node)

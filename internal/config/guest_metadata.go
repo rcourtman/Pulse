@@ -53,6 +53,21 @@ type guestMetadataCloseAttempt struct {
 
 var ErrGuestMetadataStoreClosed = errors.New("guest metadata store is closed")
 
+// maxGuestIdentityNameBytes caps polled guest names remembered in metadata so
+// a single endpoint cannot inflate guest_metadata.json with long names.
+const maxGuestIdentityNameBytes = 255
+
+func truncateUTF8Bytes(s string, maxBytes int) string {
+	if len(s) <= maxBytes {
+		return s
+	}
+	cut := maxBytes
+	for cut > 0 && (s[cut]&0xc0) == 0x80 {
+		cut--
+	}
+	return s[:cut]
+}
+
 // SetAsync admits a detached replacement before returning. One store-owned
 // writer persists the newest complete snapshot, coalescing changes that arrive
 // during I/O. It does not start a goroutine or rewrite the file per guest.
@@ -70,7 +85,18 @@ func (s *GuestMetadataStore) SetAsync(guestID string, meta *GuestMetadata) error
 	if s.closed.Load() {
 		return ErrGuestMetadataStoreClosed
 	}
+	previous, existed := s.metadata[guestID]
 	s.metadata[guestID] = clone
+	if data, err := json.Marshal(s.metadata); err == nil {
+		if sizeErr := checkMetadataFileSize("guest_metadata.json", data, maxGuestMetadataFileSizeBytes); sizeErr != nil {
+			if existed {
+				s.metadata[guestID] = previous
+			} else {
+				delete(s.metadata, guestID)
+			}
+			return sizeErr
+		}
+	}
 	s.queueSaveLocked()
 	return nil
 }
@@ -87,12 +113,14 @@ func (s *GuestMetadataStore) RememberIdentity(guestID, name, guestType string) e
 	if guestType == "" {
 		return nil
 	}
+	name = truncateUTF8Bytes(name, maxGuestIdentityNameBytes)
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.closed.Load() {
 		return ErrGuestMetadataStoreClosed
 	}
-	meta := cloneGuestMetadata(s.metadata[guestID])
+	previous, existed := s.metadata[guestID]
+	meta := cloneGuestMetadata(previous)
 	if meta == nil {
 		meta = &GuestMetadata{ID: guestID, Tags: []string{}}
 	}
@@ -105,6 +133,16 @@ func (s *GuestMetadataStore) RememberIdentity(guestID, name, guestType string) e
 	meta.LastKnownName = name
 	meta.LastKnownType = guestType
 	s.metadata[guestID] = meta
+	if data, err := json.Marshal(s.metadata); err == nil {
+		if sizeErr := checkMetadataFileSize("guest_metadata.json", data, maxGuestMetadataFileSizeBytes); sizeErr != nil {
+			if existed {
+				s.metadata[guestID] = previous
+			} else {
+				delete(s.metadata, guestID)
+			}
+			return sizeErr
+		}
+	}
 	s.queueSaveLocked()
 	return nil
 }
@@ -132,6 +170,9 @@ func (s *GuestMetadataStore) writePendingSnapshots() {
 		revision := s.revision
 		data, err := json.Marshal(s.metadata)
 		s.mu.Unlock()
+		if err == nil {
+			err = checkMetadataFileSize("guest_metadata.json", data, maxGuestMetadataFileSizeBytes)
+		}
 		if err == nil {
 			err = persistMetadata(s.fs, s.dataPath, "guest_metadata.json", data)
 		}
@@ -302,8 +343,16 @@ func (s *GuestMetadataStore) Load() error {
 
 // save writes a synchronous mutation (writeMu and mu must both be held).
 func (s *GuestMetadataStore) save() error {
-	s.revision++
 	data, err := json.Marshal(s.metadata)
+	if err == nil {
+		if sizeErr := checkMetadataFileSize("guest_metadata.json", data, maxGuestMetadataFileSizeBytes); sizeErr != nil {
+			// Return before advancing revision or lastWriteErr so a refused
+			// oversized write (whose caller rolls back memory) does not poison
+			// Close() or subsequent monitor reloads.
+			return sizeErr
+		}
+	}
+	s.revision++
 	if err == nil {
 		err = persistMetadata(s.fs, s.dataPath, "guest_metadata.json", data)
 	}
@@ -468,10 +517,22 @@ func (s *GuestMetadataStore) Set(guestID string, meta *GuestMetadata) error {
 
 	clone := cloneGuestMetadata(meta)
 	clone.ID = guestID
+	previous, existed := s.metadata[guestID]
 	s.metadata[guestID] = clone
 
-	// Save to disk
-	return s.save()
+	// Save to disk. A record the file has no room for is not kept in memory
+	// either, or every later save would be refused along with it.
+	if err := s.save(); err != nil {
+		if errors.Is(err, ErrMetadataFileTooLarge) {
+			if existed {
+				s.metadata[guestID] = previous
+			} else {
+				delete(s.metadata, guestID)
+			}
+		}
+		return err
+	}
+	return nil
 }
 
 // Delete removes metadata for a guest
@@ -500,6 +561,7 @@ func (s *GuestMetadataStore) ReplaceAll(metadata map[string]*GuestMetadata) erro
 		return ErrGuestMetadataStoreClosed
 	}
 
+	previous := s.metadata
 	s.metadata = make(map[string]*GuestMetadata)
 
 	for guestID, meta := range metadata {
@@ -516,7 +578,13 @@ func (s *GuestMetadataStore) ReplaceAll(metadata map[string]*GuestMetadata) erro
 		s.metadata[guestID] = clone
 	}
 
-	return s.save()
+	if err := s.save(); err != nil {
+		if errors.Is(err, ErrMetadataFileTooLarge) {
+			s.metadata = previous
+		}
+		return err
+	}
+	return nil
 }
 
 // UpdateAll applies one atomic in-memory mutation and persists it once.

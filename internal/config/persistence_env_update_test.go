@@ -65,7 +65,7 @@ func TestSaveSystemSettings_UpdateEnvFile_NoUpdate(t *testing.T) {
 
 	// Case where settings values are empty, shouldn't replace if not set?
 	// Based on code:
-	// UPDATE_CHANNEL replaced if settings.UpdateChannel != ""
+	// UPDATE_CHANNEL replaced if settings.UpdateChannel is a supported channel
 	// AUTO_UPDATE_ENABLED always replaced
 	// AUTO_UPDATE_CHECK_INTERVAL is legacy and always preserved verbatim
 
@@ -89,6 +89,44 @@ AUTO_UPDATE_CHECK_INTERVAL=3600
 
 	assert.Contains(t, content, "UPDATE_CHANNEL=beta")
 	assert.Contains(t, content, "AUTO_UPDATE_CHECK_INTERVAL=3600")
+}
+
+func TestSaveSystemSettings_UpdateEnvFile_WritesOnlySupportedChannels(t *testing.T) {
+	const initialContent = "PULSE_AUTH_USER=admin\nUPDATE_CHANNEL=rc\nOTHER_VAR=value\n"
+
+	// A channel is one line of .env. Values the settings API would refuse can
+	// still arrive from an imported backup, and must not add lines of their own.
+	for _, channel := range []string{
+		"stable\nPROXY_AUTH_SECRET=planted\nPROXY_AUTH_USER_HEADER=X-Remote-User",
+		"stable\r\nPROXY_AUTH_SECRET=planted",
+		"stable\rPROXY_AUTH_SECRET=planted",
+		"stable # comment",
+		"'stable'",
+		"beta",
+	} {
+		tempDir := t.TempDir()
+		cp := NewConfigPersistence(tempDir)
+		envFile := filepath.Join(tempDir, ".env")
+		require.NoError(t, os.WriteFile(envFile, []byte(initialContent), 0600))
+
+		require.NoError(t, cp.SaveSystemSettings(SystemSettings{UpdateChannel: channel}))
+
+		data, err := os.ReadFile(envFile)
+		require.NoError(t, err)
+		assert.Equal(t, initialContent, string(data), "channel %q must leave .env unchanged", channel)
+	}
+
+	// A supported channel is still kept in sync, in its canonical spelling.
+	tempDir := t.TempDir()
+	cp := NewConfigPersistence(tempDir)
+	envFile := filepath.Join(tempDir, ".env")
+	require.NoError(t, os.WriteFile(envFile, []byte(initialContent), 0600))
+
+	require.NoError(t, cp.SaveSystemSettings(SystemSettings{UpdateChannel: " Stable "}))
+
+	data, err := os.ReadFile(envFile)
+	require.NoError(t, err)
+	assert.Equal(t, "PULSE_AUTH_USER=admin\nUPDATE_CHANNEL=stable\nOTHER_VAR=value\n", string(data))
 }
 
 func TestSaveSystemSettings_EnvFileMissing(t *testing.T) {

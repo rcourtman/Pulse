@@ -124,7 +124,7 @@ func TestValidateNodeAPI(t *testing.T) {
 		IP:     "127.0.0.1",
 	}
 
-	isValid, fingerprint, _ := validateNodeAPI(context.Background(), clusterNode, clientConfig)
+	isValid, fingerprint, _ := validateNodeAPI(context.Background(), clusterNode, clientConfig, "")
 
 	if isValid {
 		t.Error("expected isValid=false for invalid connection, got true")
@@ -138,7 +138,7 @@ func TestValidateNodeAPI(t *testing.T) {
 	configInvalid := proxmox.ClientConfig{
 		Host: "::invalid-url::",
 	}
-	isValid2, _, _ := validateNodeAPI(context.Background(), clusterNode, configInvalid)
+	isValid2, _, _ := validateNodeAPI(context.Background(), clusterNode, configInvalid, "")
 	if isValid2 {
 		t.Error("expected isValid=false for invalid url")
 	}

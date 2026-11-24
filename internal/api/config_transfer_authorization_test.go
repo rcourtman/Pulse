@@ -648,3 +648,218 @@ func TestConfigTransferVerifiedUsersRequireTenantManagement(t *testing.T) {
 		t.Fatalf("transfer matrix created tokens: %+v", f.cfg.APITokens)
 	}
 }
+
+// TestConfigImportTokenAuthorityBoundsAccessCredentials restores an archive
+// that carries its own full-access API token and SSO provider. A settings:write
+// token imports the settings but must not thereby issue the archive's
+// credentials; an instance-wide full-access token restores them as before.
+func TestConfigImportTokenAuthorityBoundsAccessCredentials(t *testing.T) {
+	const passphrase = "synthetic-passphrase"
+	writeRaw := "synthetic-write-token-123.12345678"
+	fullRaw := "synthetic-full-token-123.12345678"
+	archivedRaw := "synthetic-archived-token-123.12345678"
+
+	source := config.NewConfigPersistence(t.TempDir())
+	archivedRecord := newTokenRecord(t, archivedRaw, []string{config.ScopeWildcard}, nil)
+	if err := source.SaveAPITokens([]config.APITokenRecord{archivedRecord}); err != nil {
+		t.Fatalf("save archived tokens: %v", err)
+	}
+	if err := source.SaveSSOConfig(enabledConfigTransferSSO(config.SSOProviderTypeOIDC)); err != nil {
+		t.Fatalf("save archived SSO config: %v", err)
+	}
+	archive := func() string {
+		t.Helper()
+		data, err := source.ExportConfig(passphrase)
+		if err != nil {
+			t.Fatalf("export archive: %v", err)
+		}
+		body, err := json.Marshal(map[string]string{"data": data, "passphrase": passphrase})
+		if err != nil {
+			t.Fatalf("marshal import request: %v", err)
+		}
+		return string(body)
+	}
+
+	cfg := newTestConfigWithTokens(t,
+		newTokenRecord(t, writeRaw, []string{config.ScopeSettingsWrite}, nil),
+		newTokenRecord(t, fullRaw, []string{config.ScopeWildcard}, nil),
+	)
+	t.Setenv("PULSE_DATA_DIR", cfg.DataPath)
+	persistence := config.NewConfigPersistence(cfg.DataPath)
+	if err := persistence.SaveAPITokens(cfg.APITokens); err != nil {
+		t.Fatalf("save destination tokens: %v", err)
+	}
+	router := newTestRouter(t, cfg, nil, nil, nil, nil, "test")
+	cleanupTestRouter(t, router)
+
+	importAs := func(token, remoteAddr string) map[string]any {
+		t.Helper()
+		req := httptest.NewRequest(http.MethodPost, "/api/config/import", strings.NewReader(archive()))
+		req.RemoteAddr = remoteAddr
+		req.Header.Set("X-API-Token", token)
+		rec := httptest.NewRecorder()
+		router.Handler().ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("import status = %d: %s", rec.Code, rec.Body.String())
+		}
+		var response map[string]any
+		if err := json.Unmarshal(rec.Body.Bytes(), &response); err != nil {
+			t.Fatalf("decode import response: %v", err)
+		}
+		return response
+	}
+	ssoProviders := func() int {
+		t.Helper()
+		sso, err := persistence.LoadSSOConfig()
+		if err != nil {
+			t.Fatalf("load destination SSO config: %v", err)
+		}
+		if sso == nil {
+			return 0
+		}
+		return len(sso.Providers)
+	}
+
+	response := importAs(writeRaw, "127.0.2.1:1234")
+	if response["accessCredentialsRestored"] != false {
+		t.Fatalf("settings:write import response = %v, want accessCredentialsRestored=false", response)
+	}
+	if cfg.IsValidAPIToken(archivedRaw) {
+		t.Fatal("settings:write import issued the archive's full-access token")
+	}
+	if !cfg.IsValidAPIToken(writeRaw) || !cfg.IsValidAPIToken(fullRaw) {
+		t.Fatal("settings:write import replaced the destination's API tokens")
+	}
+	if got := ssoProviders(); got != 0 {
+		t.Fatalf("settings:write import restored %d SSO providers", got)
+	}
+
+	response = importAs(fullRaw, "127.0.2.2:1234")
+	if response["accessCredentialsRestored"] != true {
+		t.Fatalf("full-access import response = %v, want accessCredentialsRestored=true", response)
+	}
+	if !cfg.IsValidAPIToken(archivedRaw) || cfg.IsValidAPIToken(writeRaw) {
+		t.Fatal("full-access import did not replace the API token inventory")
+	}
+	if got := ssoProviders(); got != 1 {
+		t.Fatalf("full-access import restored %d SSO providers, want 1", got)
+	}
+}
+
+// endSessionOnRead ends a session when the handler first reads the request
+// body, as a caller who signs out while the archive is still outstanding does.
+type endSessionOnRead struct {
+	reader  io.Reader
+	session string
+}
+
+func (b *endSessionOnRead) Read(p []byte) (int, error) {
+	if b.session != "" {
+		GetSessionStore().DeleteSession(b.session)
+		b.session = ""
+	}
+	return b.reader.Read(p)
+}
+
+// TestConfigImportOrganizationManagerKeepsAccessCredentials restores, into an
+// organization, an archive that carries an action-scoped API token bound to
+// that organization and acting for another member. The organization's owner
+// manages its settings and may import them, but may not issue its tokens
+// (POST /api/security/tokens is instance administration), so the import must
+// not issue the archive's either, also when the owner's session ends before
+// the archive is read. An instance administrator who also manages the
+// organization restores them as before.
+func TestConfigImportOrganizationManagerKeepsAccessCredentials(t *testing.T) {
+	f := newBasicTenantFixture(t)
+	const (
+		passphrase  = "synthetic-passphrase"
+		orgID       = "tenant-managed"
+		archivedRaw = "synthetic-archived-token-123.12345678"
+	)
+
+	source := config.NewConfigPersistence(t.TempDir())
+	archivedRecord := newTokenRecord(t, archivedRaw, []string{config.ScopeActionsPlan, config.ScopeActionsApprove, config.ScopeActionsExecute}, nil)
+	archivedRecord.OrgID = orgID
+	setAPITokenOwnerUserID(&archivedRecord, basicTenantAdmin)
+	if err := source.SaveAPITokens([]config.APITokenRecord{archivedRecord}); err != nil {
+		t.Fatalf("save archived tokens: %v", err)
+	}
+	if err := source.SaveSSOConfig(enabledConfigTransferSSO(config.SSOProviderTypeOIDC)); err != nil {
+		t.Fatalf("save archived SSO config: %v", err)
+	}
+
+	destination, err := f.router.multiTenant.GetPersistence(orgID)
+	if err != nil {
+		t.Fatalf("organization persistence: %v", err)
+	}
+	restored := func() (tokens, ssoProviders int) {
+		t.Helper()
+		records, err := destination.LoadAPITokens()
+		if err != nil {
+			t.Fatalf("load organization tokens: %v", err)
+		}
+		for _, record := range records {
+			if record.Hash == archivedRecord.Hash {
+				tokens++
+			}
+		}
+		sso, err := destination.LoadSSOConfig()
+		if err != nil {
+			t.Fatalf("load organization SSO config: %v", err)
+		}
+		if sso != nil {
+			ssoProviders = len(sso.Providers)
+		}
+		return tokens, ssoProviders
+	}
+	importAs := func(user, remoteAddr string, signOutBeforeRead bool) map[string]any {
+		t.Helper()
+		data, err := source.ExportConfig(passphrase)
+		if err != nil {
+			t.Fatalf("export archive: %v", err)
+		}
+		body, err := json.Marshal(map[string]string{"data": data, "passphrase": passphrase})
+		if err != nil {
+			t.Fatalf("marshal import request: %v", err)
+		}
+		sessionToken := "synthetic-import-session-" + user + "-" + remoteAddr
+		GetSessionStore().CreateSession(sessionToken, time.Hour, "browser", "198.51.100.1", user)
+		archive := &endSessionOnRead{reader: strings.NewReader(string(body))}
+		if signOutBeforeRead {
+			archive.session = sessionToken
+		}
+		req := httptest.NewRequest(http.MethodPost, "/api/config/import", archive)
+		req.RemoteAddr = remoteAddr
+		req.Header.Set("X-Pulse-Org-ID", orgID)
+		req.AddCookie(&http.Cookie{Name: cookieNameSession, Value: sessionToken})
+		req.Header.Set("X-CSRF-Token", generateCSRFToken(sessionToken))
+		rec := httptest.NewRecorder()
+		f.router.Handler().ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("import as %s status = %d: %s", user, rec.Code, rec.Body.String())
+		}
+		var response map[string]any
+		if err := json.Unmarshal(rec.Body.Bytes(), &response); err != nil {
+			t.Fatalf("decode import response: %v", err)
+		}
+		return response
+	}
+
+	for i, signOutBeforeRead := range []bool{false, true} {
+		response := importAs("managed-owner", "127.0.3."+strconv.Itoa(i+1)+":1234", signOutBeforeRead)
+		if response["accessCredentialsRestored"] != false {
+			t.Fatalf("organization owner import (signed out before read: %v) response = %v, want accessCredentialsRestored=false", signOutBeforeRead, response)
+		}
+		if tokens, ssoProviders := restored(); tokens != 0 || ssoProviders != 0 {
+			t.Fatalf("organization owner import (signed out before read: %v) issued %d archived tokens and %d SSO providers", signOutBeforeRead, tokens, ssoProviders)
+		}
+	}
+
+	response := importAs(basicTenantAdmin, "127.0.3.3:1234", false)
+	if response["accessCredentialsRestored"] != true {
+		t.Fatalf("instance administrator import response = %v, want accessCredentialsRestored=true", response)
+	}
+	if tokens, ssoProviders := restored(); tokens != 1 || ssoProviders != 1 {
+		t.Fatalf("instance administrator import restored %d archived tokens and %d SSO providers, want 1 and 1", tokens, ssoProviders)
+	}
+}

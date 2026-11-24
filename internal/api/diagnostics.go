@@ -1203,6 +1203,17 @@ func (r *Router) computeDiagnostics(ctx context.Context) DiagnosticsInfo {
 			continue
 		}
 
+		// Trust the certificate polling trusts for this address: a cluster's
+		// pins are saved per endpoint, not in the connection's own field.
+		fingerprint, err := monitoring.PVEEndpointFingerprint(node, node.Host, r.config.Discovery)
+		if err != nil {
+			applyNodeDiagnosticFailure(&nodeDiag, classifyDiagnosticsConnectionFailure(err, "Failed to initialize connection"))
+			log.Error().Err(err).Str("node", node.Name).Msg("Diagnostics: saved Proxmox TLS trust is ambiguous")
+			nodeDiag.Connected, nodeDiag.Error = mergeDiagnosticsConnection(nodeDiag.Connected, nodeDiag.Error, monitorConnected, hasMonitorStatus)
+			diag.Nodes = append(diag.Nodes, nodeDiag)
+			continue
+		}
+
 		// Test connection
 		testCfg := proxmox.ClientConfig{
 			Host:        node.Host,
@@ -1210,7 +1221,7 @@ func (r *Router) computeDiagnostics(ctx context.Context) DiagnosticsInfo {
 			Password:    node.Password,
 			TokenName:   node.TokenName,
 			TokenValue:  node.TokenValue,
-			Fingerprint: node.Fingerprint,
+			Fingerprint: fingerprint,
 			VerifySSL:   node.VerifySSL,
 		}
 

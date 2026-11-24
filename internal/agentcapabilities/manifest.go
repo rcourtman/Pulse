@@ -988,7 +988,7 @@ var canonicalManifest = Manifest{
 		{
 			Name:             UpdateNodeCapabilityName,
 			Title:            "Update node",
-			Description:      "Update a configured infrastructure source. Omitted fields preserve the current value; tokenValue or password only changes when supplied.",
+			Description:      "Update a configured infrastructure source. Omitted fields preserve the current value. Supply tokenValue or password to change credentials, and supply them again when host or a cluster member address changes.",
 			Category:         "provisioning",
 			Method:           http.MethodPut,
 			Path:             "/api/config/nodes/{nodeId}",

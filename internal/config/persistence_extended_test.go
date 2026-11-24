@@ -200,7 +200,7 @@ CUSTOM_VAR=value`
 	cp := config.NewConfigPersistence(tempDir)
 
 	settings := config.SystemSettings{
-		UpdateChannel:     "beta",
+		UpdateChannel:     "rc",
 		AutoUpdateEnabled: true,
 	}
 
@@ -214,7 +214,7 @@ CUSTOM_VAR=value`
 	}
 	updatedContent := string(updatedData)
 
-	if !strings.Contains(updatedContent, "UPDATE_CHANNEL=beta") {
+	if !strings.Contains(updatedContent, "UPDATE_CHANNEL=rc") {
 		t.Errorf("UPDATE_CHANNEL not updated. Content: %s", updatedContent)
 	}
 	if !strings.Contains(updatedContent, "AUTO_UPDATE_ENABLED=true") {

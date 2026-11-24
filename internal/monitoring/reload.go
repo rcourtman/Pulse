@@ -71,6 +71,23 @@ type ReloadableMonitor struct {
 	cancel      context.CancelFunc
 	parentCtx   context.Context
 	reloadChan  chan chan error
+
+	// pending is the reload that has been requested and has not begun. A
+	// reload reads everything saved before it begins, so every caller that
+	// arrives in that time shares it instead of queueing a full stop and
+	// rebuild of its own behind it. Callers join under mu.RLock and doReload
+	// clears it under mu.Lock, so a reload never begins between a caller's
+	// arrival and its joining.
+	pendingMu sync.Mutex
+	pending   *pendingReload
+}
+
+// pendingReload is one requested reload and the callers waiting for it. The
+// caller that created it hands reply to the watcher and publishes the result.
+type pendingReload struct {
+	reply chan error
+	done  chan struct{}
+	err   error
 }
 
 // NewReloadableMonitor creates a new reloadable monitor
@@ -109,26 +126,53 @@ func (rm *ReloadableMonitor) Start(ctx context.Context) {
 func (rm *ReloadableMonitor) Reload() error {
 	rm.mu.RLock()
 	ctx := rm.parentCtx
-	rm.mu.RUnlock()
 	if ctx == nil {
+		rm.mu.RUnlock()
 		return fmt.Errorf("reloadable monitor has not been started")
 	}
 	if err := ctx.Err(); err != nil {
+		rm.mu.RUnlock()
 		return err
 	}
 
+	// A reload takes about a second and replaces every monitor, and not every
+	// caller is an administrator: an agent's re-registration asks for one too.
+	// Join the reload that is waiting to begin rather than adding another;
+	// only a reload that has begun may have missed this caller's change and
+	// needs a successor. Callers that arrive during a reload wait for mu
+	// above and are admitted together when it ends, so they share that one
+	// successor.
+	rm.pendingMu.Lock()
+	pending := rm.pending
+	requester := pending == nil
+	if requester {
+		// Keep the reply buffered so an in-flight reload can still finish.
+		pending = &pendingReload{reply: make(chan error, 1), done: make(chan struct{})}
+		rm.pending = pending
+	}
+	rm.pendingMu.Unlock()
+	rm.mu.RUnlock()
+
 	// The watcher exits with the server context. Neither a full request
 	// channel nor an abandoned reply may keep a caller waiting after that.
-	// Keep the reply buffered so an in-flight reload can still finish.
-	done := make(chan error, 1)
-	select {
-	case rm.reloadChan <- done:
-	case <-ctx.Done():
-		return ctx.Err()
+	// Every caller waits on the same context, so the ones sharing a reload
+	// are released with the caller that requested it.
+	if requester {
+		select {
+		case rm.reloadChan <- pending.reply:
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+		select {
+		case pending.err = <-pending.reply:
+			close(pending.done)
+		case <-ctx.Done():
+			return ctx.Err()
+		}
 	}
 	select {
-	case err := <-done:
-		return err
+	case <-pending.done:
+		return pending.err
 	case <-ctx.Done():
 		return ctx.Err()
 	}
@@ -157,6 +201,12 @@ func (rm *ReloadableMonitor) watchReload(ctx context.Context) {
 func (rm *ReloadableMonitor) doReload() error {
 	rm.mu.Lock()
 	defer rm.mu.Unlock()
+
+	// This reload begins now. A change saved from here on may be missed by
+	// it, so the next caller requests a new one.
+	rm.pendingMu.Lock()
+	rm.pending = nil
+	rm.pendingMu.Unlock()
 
 	// Load fresh configuration
 	cfg, err := config.LoadWithoutLoggingInit()

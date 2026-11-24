@@ -838,6 +838,11 @@ back as new secrets. Credential rotation and trust changes are separate
 decisions; preserve the existing credential and fingerprint when not changing
 them. A response failure does not prove the update was unapplied.
 
+A saved password or token value is never sent to a new address. A request that
+changes the scheme, host or port of `host`, or sets a cluster member's
+connection address, must include `password` or `tokenValue` again. Otherwise
+the request is refused with `400` and the saved connection is left unchanged.
+
 ### Delete Node
 `DELETE /api/config/nodes/{id}` (admin, `settings:write`)
 
@@ -904,11 +909,22 @@ Request body:
 }
 ```
 
-Import replaces the included settings; it is not an idempotent merge. HTTP 500
+Import replaces the included settings. It is not an idempotent merge. The
+archive's API tokens and SSO configuration are restored only for an instance
+administrator sign-in or a full-access (`*`) API token that is not bound to a
+non-default organization. A tenant manager who is not an instance administrator
+and any other API token restore the remaining sections, keep the destination's
+own tokens and SSO configuration, and receive
+`"accessCredentialsRestored": false`. HTTP 500
 can follow a **saved** archive when live apply fails. In particular,
 `Configuration saved, but live reload failed:` names the affected live
 components, not a rejected file or rollback. Other components may already have
 applied. Do not automatically retry this POST after an error or lost response.
+
+HTTP 403 with `Backup not imported.` means nothing was saved. A tenant manager
+or organization-bound token cannot import a backup that connects Pulse to an
+address [organization admins cannot use](MULTI_TENANT.md), or that adds
+Apprise command-line targets. An instance administrator can import it.
 
 HTTP 409 can mean an import is still running or the same backup was submitted
 recently. It does not establish the original attempt's outcome. The duplicate
@@ -1003,7 +1019,9 @@ Mints an install token for an agent. `type` is `host`, `pve` or `pbs`.
 - `{"type":"pve"}` or `{"type":"pbs"}` returns `token` and the Proxmox install
   `command`.
 
-Add `"enableCommands": true` only when the agent should accept commands.
+Add `"enableCommands": true` only when the agent should accept commands. An API
+token must itself hold `agent:exec` to ask for it, otherwise the request fails
+with HTTP 403 `missing_scope`.
 
 ### Discovery
 `GET /api/discover` (admin, `settings:write`)

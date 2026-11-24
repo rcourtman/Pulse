@@ -262,6 +262,11 @@ func safePrefixForLog(value string, n int) string {
 	return value[:n]
 }
 
+// explicitAPITokenFromRequest must find exactly the token that the api
+// package's explicitAPITokenFromRequest finds. Authentication and organization
+// selection judged that one before the handler ran. Comparing Upgrade untrimmed
+// matches isWebSocketUpgrade so U+00A0 or U+0085 cannot hide a query token from
+// the middleware.
 func explicitAPITokenFromRequest(r *http.Request) (string, bool) {
 	if r == nil {
 		return "", false
@@ -272,7 +277,7 @@ func explicitAPITokenFromRequest(r *http.Request) (string, bool) {
 	if header := r.Header.Get("Authorization"); strings.HasPrefix(strings.ToLower(header), "bearer ") {
 		return strings.TrimSpace(header[7:]), true
 	}
-	if strings.EqualFold(strings.TrimSpace(r.Header.Get("Upgrade")), "websocket") {
+	if strings.EqualFold(r.Header.Get("Upgrade"), "websocket") {
 		if values, ok := r.URL.Query()["token"]; ok && len(values) > 0 {
 			return strings.TrimSpace(values[0]), true
 		}

@@ -380,6 +380,45 @@ func TestReloadHandshakeResult(t *testing.T) {
 	}
 }
 
+// A reload that has not begun reads everything saved so far, so the callers
+// waiting behind a running reload share one successor instead of one each.
+func TestReloadCallersWaitingBehindARunningReloadShareOne(t *testing.T) {
+	t.Setenv("PULSE_DATA_DIR", t.TempDir())
+	cfg, err := config.LoadWithoutLoggingInit()
+	require.NoError(t, err)
+	rm, err := NewReloadableMonitor(cfg, config.NewMultiTenantPersistence(cfg.DataPath), nil)
+	require.NoError(t, err)
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	rm.Start(ctx)
+	t.Cleanup(rm.Stop)
+
+	const callers = 12
+	results := make(chan error, callers+1)
+	go func() { results <- rm.Reload() }()
+	// doReload holds the write lock from start to finish, including its
+	// one-second wait for the previous runtime.
+	require.Eventually(t, func() bool {
+		if rm.mu.TryRLock() {
+			rm.mu.RUnlock()
+			return false
+		}
+		return true
+	}, 5*time.Second, time.Millisecond, "first reload did not begin")
+	started := time.Now()
+	for i := 0; i < callers; i++ {
+		go func() { results <- rm.Reload() }()
+	}
+	for i := 0; i < callers+1; i++ {
+		require.NoError(t, <-results)
+	}
+	elapsed := time.Since(started)
+	// The running reload may have missed what these callers saved, so they
+	// get a reload that begins after it; one each would take twelve seconds.
+	require.Greater(t, elapsed, time.Second, "callers were answered by the reload that was already running")
+	require.Less(t, elapsed, 6*time.Second, "callers waiting for a reload did not share one")
+}
+
 func TestReloadBeforeStart(t *testing.T) {
 	rm := &ReloadableMonitor{reloadChan: make(chan chan error, 1)}
 	if err := rm.Reload(); err == nil {

@@ -2,6 +2,7 @@ package config
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -162,6 +163,10 @@ func (s *DockerMetadataStore) save() error {
 		return fmt.Errorf("failed to marshal metadata: %w", err)
 	}
 
+	if err := checkMetadataFileSize("docker_metadata.json", data, maxDockerMetadataFileSizeBytes); err != nil {
+		return err
+	}
+
 	// Restrict metadata persistence to owner-only access.
 	if err := s.fs.MkdirAll(s.dataPath, 0o700); err != nil {
 		return fmt.Errorf("failed to create data directory: %w", err)
@@ -236,6 +241,8 @@ func (s *DockerMetadataStore) SetHostMetadata(hostID string, meta *DockerHostMet
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
+	previous, existed := s.hostMetadata[hostID]
+
 	// If metadata is nil or all fields are empty, delete the entry
 	if meta == nil || (meta.CustomDisplayName == "" && meta.CustomURL == "" && len(meta.Notes) == 0) {
 		delete(s.hostMetadata, hostID)
@@ -243,9 +250,19 @@ func (s *DockerMetadataStore) SetHostMetadata(hostID string, meta *DockerHostMet
 		s.hostMetadata[hostID] = cloneDockerHostMetadata(meta)
 	}
 
-	// Save to disk
-	return s.save()
-
+	// Save to disk. A record the file has no room for is not kept in memory
+	// either, or every later save would be refused along with it.
+	if err := s.save(); err != nil {
+		if errors.Is(err, ErrMetadataFileTooLarge) {
+			if existed {
+				s.hostMetadata[hostID] = previous
+			} else {
+				delete(s.hostMetadata, hostID)
+			}
+		}
+		return err
+	}
+	return nil
 }
 
 // Set updates or creates metadata for a Docker resource
@@ -259,10 +276,22 @@ func (s *DockerMetadataStore) Set(resourceID string, meta *DockerMetadata) error
 
 	clone := cloneDockerMetadata(meta)
 	clone.ID = resourceID
+	previous, existed := s.metadata[resourceID]
 	s.metadata[resourceID] = clone
 
-	// Save to disk
-	return s.save()
+	// Save to disk. A record the file has no room for is not kept in memory
+	// either, or every later save would be refused along with it.
+	if err := s.save(); err != nil {
+		if errors.Is(err, ErrMetadataFileTooLarge) {
+			if existed {
+				s.metadata[resourceID] = previous
+			} else {
+				delete(s.metadata, resourceID)
+			}
+		}
+		return err
+	}
+	return nil
 }
 
 // Delete removes metadata for a Docker resource
@@ -281,6 +310,7 @@ func (s *DockerMetadataStore) ReplaceAll(metadata map[string]*DockerMetadata) er
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
+	previous := s.metadata
 	s.metadata = make(map[string]*DockerMetadata)
 
 	for resourceID, meta := range metadata {
@@ -297,7 +327,13 @@ func (s *DockerMetadataStore) ReplaceAll(metadata map[string]*DockerMetadata) er
 		s.metadata[resourceID] = clone
 	}
 
-	return s.save()
+	if err := s.save(); err != nil {
+		if errors.Is(err, ErrMetadataFileTooLarge) {
+			s.metadata = previous
+		}
+		return err
+	}
+	return nil
 }
 
 // UpdateAll applies one atomic in-memory container-metadata mutation and
