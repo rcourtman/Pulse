@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -50,6 +51,9 @@ func TestSnapshotInventoryResponseAdmission(t *testing.T) {
 		{"whitespace-name", `{"data":[{"name":"  ","snaptime":1700000000}]}`, false},
 		{"duplicate-name-field", `{"data":[{"name":"other","name":"weekly","snaptime":1700000000}]}`, false},
 		{"case-name-field", `{"data":[{"name":"weekly","Name":"other","snaptime":1700000000}]}`, false},
+		{"case-optional-field", `{"data":[` + row + `,{"name":"second","snaptime":1700000000,"Parent":null}]}`, false},
+		{"duplicate-extension-key", `{"data":[` + row + `,{"name":"second","snaptime":1700000000,"extra":{"values":[1]},"\u0065xtra":null}]}`, false},
+		{"invalid-vmid", `{"data":[` + row + `,{"name":"second","snaptime":1700000000,"vmid":"105"}]}`, false},
 		{"missing-time", `{"data":[{"name":"weekly"}]}`, false},
 		{"null-time", `{"data":[{"name":"weekly","snaptime":null}]}`, false},
 		{"zero-time", `{"data":[{"name":"weekly","snaptime":0}]}`, false},
@@ -100,6 +104,7 @@ func TestSnapshotInventoryAcceptedScopedAndExtendedResponses(t *testing.T) {
 		count int
 	}{
 		{`{"data":[]}`, 0},
+		{"{\"data\":[ \t\r\n ]}", 0},
 		{`{"data":[],"errors":null,"total":0}`, 0},
 		{`{"data":[{"name":"current","description":"You are here!","digest":"metadata"}]}`, 0},
 		{`{"data":[{"name":"current"},{"name":"weekly","snaptime":1700000000,"description":"accepted","parent":"base","vmstate":1,"additional":{"version":1}}],"errors":null}`, 1},
@@ -110,7 +115,7 @@ func TestSnapshotInventoryAcceptedScopedAndExtendedResponses(t *testing.T) {
 				server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { fmt.Fprint(w, tc.body) }))
 				defer server.Close()
 				snapshots, err := readTestSnapshotInventory(backupTestClient(t, server.URL), kind)
-				if err != nil || len(snapshots) != tc.count {
+				if err != nil || snapshots == nil || len(snapshots) != tc.count {
 					t.Fatalf("accepted inventory refused: snapshots=%+v err=%v", snapshots, err)
 				}
 				if tc.count == 1 && (snapshots[0].Name != "weekly" || snapshots[0].SnapTime != 1700000000 || snapshots[0].Description != "accepted" || snapshots[0].Parent != "base" || snapshots[0].VMID != 105) {
@@ -118,6 +123,24 @@ func TestSnapshotInventoryAcceptedScopedAndExtendedResponses(t *testing.T) {
 				}
 			})
 		}
+	}
+}
+
+func TestSnapshotInventoryKeepsOrderedTypedRows(t *testing.T) {
+	const body = `{"total":3,"data":[
+		{"name":"weekly","description":"first \u2603","vmid":999,"vmstate":1,"snaptime":1700000000,
+		 "metadata":{"seen":[true,null,{"contents":"ignored"}]}},
+		{"name":"current","snaptime":null,"parent":"weekly","vmstate":0},
+		{"n\u0061me":"monthly","description":null,"parent":null,"vmid":null,"snaptime":9007199254740993}
+	],"errors":null}`
+	want := []Snapshot{
+		{Name: "weekly", Description: "first ☃", VMID: 105, VMState: 1, SnapTime: 1700000000},
+		{Name: "monthly", VMID: 105, SnapTime: 9007199254740993},
+	}
+	resp := &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(body))}
+	rows, err := readSnapshotInventory(resp, 105)
+	if err != nil || !reflect.DeepEqual(rows, want) {
+		t.Fatalf("ordered snapshot rows = %#v, %v; want %#v", rows, err, want)
 	}
 }
 
