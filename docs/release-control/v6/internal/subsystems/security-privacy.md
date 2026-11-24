@@ -5715,3 +5715,14 @@ resource snapshots, and rotatable via admin-only
 `POST /api/availability-targets/{id}/rotate-push-token`. Verified by
 `availability_push_handlers_test.go`, `route_inventory_test.go`,
 `router_public_paths_inventory_test.go`, and `router_auth_bypass_inventory_test.go`.
+
+### Push and DNS availability telemetry schema v25 (Stage 3 Review, 24 November 2026)
+
+`internal/telemetry/telemetry.go` bumps `TelemetrySchemaVersion` to `25` and
+adds two counts-only adoption fields (`availability_dns_targets` and
+`availability_push_targets`), populated from configured availability targets in
+`pkg/server/server.go` without exporting tokens, schedules, hostnames, or
+answers. Both fields and the schema v25 change are disclosed identically in
+`docs/PRIVACY.md` and `frontend-modern/public/docs/PRIVACY.md`. Verified by
+`internal/telemetry/telemetry_test.go` and
+`internal/telemetry/availability_push_test.go`.

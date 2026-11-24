@@ -8,6 +8,7 @@ import {
   getAvailabilityProbeMethodLabel,
   getAvailabilityProbeEndpointLabel,
   getAvailabilityProbePresentation,
+  isAvailabilityPushWaitingForFirstPing,
 } from '@/utils/availabilityProbePresentation';
 import { formatRelativeTime } from '@/utils/format';
 
@@ -49,12 +50,17 @@ export function AvailabilityProbeStatusCards(props: AvailabilityProbeStatusCards
 export function AvailabilityProbeStatusCard(props: AvailabilityProbeStatusCardProps) {
   const now = useRelativeTimeNow();
   const aggregateState = () => props.availability.aggregateState;
+  const isWaitingForFirstPing = () => isAvailabilityPushWaitingForFirstPing(props.availability);
   const isUp = () =>
-    aggregateState() ? aggregateState() === 'healthy' : props.availability.available === true;
-  const isDegraded = () => aggregateState() === 'degraded';
-  const isUnknown = () => aggregateState() === 'unknown';
+    !isWaitingForFirstPing() &&
+    (aggregateState() ? aggregateState() === 'healthy' : props.availability.available === true);
+  const isDegraded = () => !isWaitingForFirstPing() && aggregateState() === 'degraded';
+  const isUnknown = () => !isWaitingForFirstPing() && aggregateState() === 'unknown';
   const isDown = () =>
-    aggregateState() ? aggregateState() === 'unavailable' : props.availability.available === false;
+    !isWaitingForFirstPing() &&
+    (aggregateState()
+      ? aggregateState() === 'unavailable'
+      : props.availability.available === false);
   const latency = () => {
     const ms = props.availability.latencyMillis;
     return typeof ms === 'number' && Number.isFinite(ms) && ms > 0 ? `${Math.round(ms)}ms` : null;
@@ -165,25 +171,29 @@ export function AvailabilityProbeStatusCard(props: AvailabilityProbeStatusCardPr
         <span
           class="shrink-0 rounded-sm px-1.5 py-0.5 text-[10px] font-semibold"
           classList={{
+            'bg-sky-100 text-sky-800 dark:bg-sky-900/40 dark:text-sky-200': isWaitingForFirstPing(),
             'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300':
               isFreshUp(),
             'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300': isDown() && !isStale(),
             'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300':
               isStale() || isDegraded(),
-            'bg-base-200 text-muted': isUnknown() || (!isUp() && !isDown() && !isStale()),
+            'bg-base-200 text-muted':
+              !isWaitingForFirstPing() && (isUnknown() || (!isUp() && !isDown() && !isStale())),
           }}
         >
-          {isDegraded()
-            ? 'Paths disagree'
-            : isUnknown()
-              ? 'Coverage incomplete'
-              : isStale()
-                ? 'Stale'
-                : isUp()
-                  ? 'Up'
-                  : isDown()
-                    ? 'Down'
-                    : 'Not checked'}
+          {isWaitingForFirstPing()
+            ? 'Waiting for ping'
+            : isDegraded()
+              ? 'Paths disagree'
+              : isUnknown()
+                ? 'Coverage incomplete'
+                : isStale()
+                  ? 'Stale'
+                  : isUp()
+                    ? 'Up'
+                    : isDown()
+                      ? 'Down'
+                      : 'Not checked'}
         </span>
       </div>
       <div class="space-y-1.5 text-[11px]">
@@ -192,7 +202,13 @@ export function AvailabilityProbeStatusCard(props: AvailabilityProbeStatusCardPr
           value={
             <Show
               when={isUp() && latency()}
-              fallback={<span class="text-red-600 dark:text-red-400">—</span>}
+              fallback={
+                <span
+                  class={isWaitingForFirstPing() ? 'text-muted' : 'text-red-600 dark:text-red-400'}
+                >
+                  —
+                </span>
+              }
             >
               <span
                 classList={{

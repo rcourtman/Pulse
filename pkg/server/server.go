@@ -552,6 +552,12 @@ func Run(ctx context.Context, version string) (runErr error) {
 				snap.ConfiguredConnections += len(targets)
 				probeAgents := make(map[string]struct{})
 				for _, target := range targets {
+					switch target.Protocol {
+					case config.AvailabilityProbeDNS:
+						snap.AvailabilityDNSTargets++
+					case config.AvailabilityProbePush:
+						snap.AvailabilityPushTargets++
+					}
 					if agentID := strings.TrimSpace(target.ProbeAgentID); agentID != "" {
 						snap.AvailabilityProbeTargets++
 						probeAgents[agentID] = struct{}{}

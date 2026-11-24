@@ -5,6 +5,7 @@ import { createSignal } from 'solid-js';
 import type { Resource } from '@/types/resource';
 import { AvailabilityTargetsAPI, type AvailabilityTarget } from '@/api/availabilityTargets';
 import { AvailabilityHistoryAPI } from '@/api/availabilityHistory';
+import { syncSessionPresentationPolicy } from '@/stores/sessionPresentationPolicy';
 import { syncSessionSettingsCapabilities } from '@/stores/sessionSettingsCapabilities';
 import { WebSocketContext } from '@/contexts/appRuntime';
 import { AvailabilityPageSurface } from '../AvailabilityPageSurface';
@@ -124,8 +125,14 @@ describe('AvailabilityPageSurface', () => {
     window.localStorage.clear();
     setMockResources([]);
     refetchMock.mockClear();
-    syncSessionSettingsCapabilities({
+    syncSessionPresentationPolicy({
       requiresAuth: false,
+      presentationPolicy: {
+        demoMode: false,
+        readOnly: false,
+        hideCommercial: false,
+        hideUpgrade: true,
+      },
       settingsCapabilities: {
         availabilityRead: true,
       } as never,
@@ -178,6 +185,77 @@ describe('AvailabilityPageSurface', () => {
     expect(screen.queryByTestId('availability-drawer-edit-button')).toBeNull();
     expect(screen.queryByTestId('availability-drawer-test-button')).toBeNull();
     expect(screen.queryByTestId('availability-drawer-toggle-button')).toBeNull();
+    expect(AvailabilityTargetsAPI.list).not.toHaveBeenCalled();
+  });
+
+  it('hides mutating controls and skips target fetch when presentation policy is read-only', async () => {
+    syncSessionPresentationPolicy({
+      requiresAuth: false,
+      presentationPolicy: {
+        demoMode: true,
+        readOnly: true,
+        hideCommercial: true,
+        hideUpgrade: true,
+      },
+      settingsCapabilities: {
+        availabilityRead: true,
+      } as never,
+    });
+    setMockResources([makeEndpointResource()]);
+
+    renderPage();
+
+    expect(await screen.findByText('Jellyfin')).toBeInTheDocument();
+    expect(screen.queryByTestId('availability-posture-add-button')).toBeNull();
+    fireEvent.click(screen.getByText('Jellyfin'));
+    expect(screen.queryByTestId('availability-drawer-edit-button')).toBeNull();
+    expect(screen.queryByTestId('availability-drawer-test-button')).toBeNull();
+    expect(screen.queryByTestId('availability-drawer-toggle-button')).toBeNull();
+    expect(AvailabilityTargetsAPI.list).not.toHaveBeenCalled();
+  });
+
+  it('hides Test now in the expanded drawer for push heartbeat checks while keeping Pause and Edit', async () => {
+    const pushTarget = makeTarget({
+      id: 'target-push',
+      name: 'Nightly backup',
+      protocol: 'push',
+      address: '',
+      port: undefined,
+      push: {
+        scheduleType: 'interval',
+        intervalSeconds: 86400,
+        graceSeconds: 300,
+      },
+    });
+    vi.spyOn(AvailabilityTargetsAPI, 'list').mockResolvedValue([pushTarget]);
+    setMockResources([
+      makeEndpointResource({
+        id: 'availability:target-push',
+        name: 'Nightly backup',
+        displayName: 'Nightly backup',
+        platformId: 'target-push',
+        availability: {
+          targetId: 'target-push',
+          protocol: 'push',
+          address: '',
+          available: true,
+          aggregateState: 'healthy',
+          lastChecked: new Date().toISOString(),
+          lastSuccess: new Date().toISOString(),
+          pollIntervalSeconds: 86400,
+          consecutiveFailures: 0,
+          failureThreshold: 1,
+        },
+      }),
+    ]);
+
+    renderPage();
+
+    expect(await screen.findByText('Inbound heartbeat')).toBeInTheDocument();
+    fireEvent.click(screen.getByText('Nightly backup'));
+    expect(await screen.findByTestId('availability-drawer-toggle-button')).toBeInTheDocument();
+    expect(screen.getByTestId('availability-drawer-edit-button')).toBeInTheDocument();
+    expect(screen.queryByTestId('availability-drawer-test-button')).toBeNull();
   });
 
   it('runs Test now, Pause, and Edit inline from the expanded check drawer', async () => {

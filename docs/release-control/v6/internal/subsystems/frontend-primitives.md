@@ -11810,3 +11810,18 @@ feature-gated (`availabilityPushChecks` at stage `build`) push schedule labels,
 pending first-ping status, hidden outbound test actions for push checks, and
 mobile-safe wrapping (`min-w-0`, wrapped `curl` snippet) inside the shared
 availability editor dialog.
+
+### Push checks Stage 3 completeness review (24 November 2026)
+
+`AvailabilityPageSurface.tsx` waits for `sessionSettingsCapabilitiesResolved()`,
+honors `presentationPolicyIsReadOnly()`, and hides outbound `Test now` controls
+for push checks. `standalonePageModel.ts`, `AvailabilityProbeStatusCard.tsx`,
+`ResourceDetailSummary.tsx`, and `availabilityProbePresentation.ts` present
+newly created waiting push checks with a calm `Waiting for ping` status and
+`Inbound heartbeat` endpoint label instead of an attention warning or red
+`Down` badge. `featureReleases.json` registers held guide `PUSH_CHECKS.md`
+while keeping `availabilityPushChecks` at stage `build`. Verified by
+`AvailabilityPageSurface.test.tsx`, `standalonePageModel.test.ts`,
+`availabilityProbePresentation.test.ts`, `ResourceDetailDrawer.snapshot.test.tsx`,
+`docsLinks.test.ts`, `lint:feature-releases`, and
+`tests/integration/tests/73-availability-push-checks.spec.ts`.

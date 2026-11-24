@@ -1610,3 +1610,26 @@ func TestTelemetryPrivacyReleaseNoticeCoversReporting(t *testing.T) {
 		}
 	}
 }
+
+func TestTelemetryPrivacyDocsDiscloseAvailabilityDNSAndPushCounts(t *testing.T) {
+	for _, relativePath := range []string{
+		filepath.Join("..", "..", "docs", "PRIVACY.md"),
+		filepath.Join("..", "..", "frontend-modern", "public", "docs", "PRIVACY.md"),
+	} {
+		raw, err := os.ReadFile(relativePath)
+		if err != nil {
+			t.Fatalf("read %s: %v", relativePath, err)
+		}
+		doc := string(raw)
+		for _, required := range []string{
+			"| Schema version | `25` |",
+			"| Availability DNS targets |",
+			"| Availability push targets |",
+			"| 25 | 2026-11-24 |",
+		} {
+			if !strings.Contains(doc, required) {
+				t.Errorf("%s missing schema v25 disclosure %q", relativePath, required)
+			}
+		}
+	}
+}

@@ -236,7 +236,10 @@ const (
 	// sessions that opened the map, sessions that saved an image, and sessions
 	// that saved one with names hidden. Nothing the map draws (names,
 	// addresses, networks) enters the tally or the payload.
-	TelemetrySchemaVersion = 24
+	// Schema v25 adds two content-free availability check counters: configured
+	// DNS checks and configured inbound push heartbeat checks. Counts only,
+	// never tokens, schedules, hostnames, or answers.
+	TelemetrySchemaVersion = 25
 )
 
 type installIDRecord struct {
@@ -362,6 +365,8 @@ type Ping struct {
 	// addresses leave the install.
 	AvailabilityProbeTargets int `json:"availability_probe_targets"`
 	AvailabilityProbeAgents  int `json:"availability_probe_agents"`
+	AvailabilityDNSTargets   int `json:"availability_dns_targets"`
+	AvailabilityPushTargets  int `json:"availability_push_targets"`
 	// Schema v22 agent opt-ins. Counts of hosts whose owner turned on a
 	// local agent setting; never which hosts.
 	AgentHostsCommandsEnabled     int `json:"agent_hosts_commands_enabled"`
@@ -685,6 +690,8 @@ type Snapshot struct {
 	AvailabilityTargets                                                  int
 	AvailabilityProbeTargets                                             int
 	AvailabilityProbeAgents                                              int
+	AvailabilityDNSTargets                                               int
+	AvailabilityPushTargets                                              int
 	AgentHostsCommandsEnabled                                            int
 	DockerHostsFailureLogsEnabled                                        int
 	AIEnabled                                                            bool
@@ -1493,6 +1500,8 @@ func applySnapshot(base Ping, fn SnapshotFunc) Ping {
 	ping.AvailabilityTargets = s.AvailabilityTargets
 	ping.AvailabilityProbeTargets = s.AvailabilityProbeTargets
 	ping.AvailabilityProbeAgents = s.AvailabilityProbeAgents
+	ping.AvailabilityDNSTargets = s.AvailabilityDNSTargets
+	ping.AvailabilityPushTargets = s.AvailabilityPushTargets
 	ping.AgentHostsCommandsEnabled = s.AgentHostsCommandsEnabled
 	ping.DockerHostsFailureLogsEnabled = s.DockerHostsFailureLogsEnabled
 	ping.AIEnabled = s.AIEnabled
