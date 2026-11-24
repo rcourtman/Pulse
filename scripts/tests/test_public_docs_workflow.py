@@ -198,6 +198,15 @@ class PublicDocsWorkflowTest(unittest.TestCase):
                     self.assertFalse(any(matches_path(path, pattern)
                                          for pattern in workflow_paths(self.source, event)))
 
+    def test_pushes_keep_the_active_verdict_and_prs_cancel_stale_checks(self):
+        concurrency = self.source.split("\nconcurrency:\n", 1)[1].split("\njobs:\n", 1)[0]
+        policy = [line.strip() for line in concurrency.splitlines()
+                  if line.strip() and not line.lstrip().startswith("#")]
+        self.assertEqual(policy, [
+            "group: public-docs-${{ github.ref }}",
+            "cancel-in-progress: ${{ github.event_name == 'pull_request' }}",
+        ])
+
     def test_shards_discover_current_suites_without_dependency_setup(self):
         self.assertTrue(set(REQUIRED_SUITES).issubset(documentation_suites()))
         for shard in range(4):
