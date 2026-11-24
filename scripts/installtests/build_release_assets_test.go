@@ -1617,6 +1617,12 @@ func TestReleaseValidationRequiresSignedSidecars(t *testing.T) {
 		`Pulse Unified Agent Installer`,
 		`bash "$install_sh_path" --help`,
 		`Install specific version (e.g.`,
+		// Update helpers refuse a signed script that declares the wrong asset
+		// identity, and auto-updaters require the declaration.
+		`Validating release scripts declare their asset identity`,
+		`for script_asset in install.sh pulse-auto-update.sh; do`,
+		`declared_assets="$(grep -E '^PULSE_RELEASE_ASSET=' "$script_asset" || true)"`,
+		`if [ "$declared_assets" != "PULSE_RELEASE_ASSET=\"${script_asset}\"" ]; then`,
 		// README key drift guard — across v6 rc.2 → rc.5 the README pinned a
 		// stale ed25519 key that did not verify install.sh.sshsig, so anyone
 		// following the secure-install path saw "Could not verify signature".

@@ -391,8 +391,6 @@ var publicRouteAllowlist = []string{
 	"/api/setup-script",
 	"/api/config/export",
 	"/api/config/import",
-	"/api/system/verify-temperature-ssh",
-	"/api/system/ssh-config",
 	"/api/auto-register",
 	"/api/auto-unregister",
 	"/auth/cloud-handoff",

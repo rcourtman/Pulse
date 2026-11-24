@@ -502,7 +502,7 @@ func TestContract_ConfigTransferRoutesUseCanonicalPreHandlerAuthorization(t *tes
 		handler   string
 	}{
 		{authorize: "authorizeConfigTransfer(w, req, configTransferExport)", handler: "retainTokenResponseAuthority(r.config, config.ScopeSettingsRead, false, r.configHandlers.HandleExportConfig)(w, req)"},
-		{authorize: "authorizeConfigTransfer(w, req, configTransferImport)", handler: "HandleImportConfig(w, req)"},
+		{authorize: "authorizeConfigTransfer(w, req, configTransferImport)", handler: "withTenantOutboundPolicy(r.config, r.configHandlers.HandleImportConfig)(w, req)"},
 	} {
 		authorizeAt := strings.Index(routes, sequence.authorize)
 		handlerAt := strings.Index(routes, sequence.handler)
@@ -632,7 +632,7 @@ func TestContract_DefaultDetectPVEClusterRetainsUnreachableMembers(t *testing.T)
 	}))
 	defer server.Close()
 
-	validator := func(node proxmox.ClusterStatus, _ proxmox.ClientConfig) (bool, string, string) {
+	validator := func(node proxmox.ClusterStatus, _ proxmox.ClientConfig, _ string) (bool, string, string) {
 		if node.Name == "pve-a" {
 			return true, "fingerprint-a", ""
 		}
@@ -7371,7 +7371,7 @@ func TestContract_OnboardingDeepLinkIgnoresQueryAuthToken(t *testing.T) {
 	}
 }
 
-func TestContract_SetupTokenRoutesRejectQueryAuthToken(t *testing.T) {
+func TestContract_TemperatureSSHRoutesRejectSetupToken(t *testing.T) {
 	cfg := newTestConfigWithTokens(t, newTokenRecord(t, "settings-write-token", []string{config.ScopeSettingsWrite}, nil))
 	router := newTestRouter(t, cfg, nil, nil, nil, nil, "1.0.0")
 	t.Setenv("HOME", t.TempDir())
@@ -7380,7 +7380,7 @@ func TestContract_SetupTokenRoutesRejectQueryAuthToken(t *testing.T) {
 	tokenHash := authpkg.HashAPIToken(token)
 	router.configHandlers.StoreSetupToken(tokenHash, &SetupTokenRecord{ExpiresAt: time.Now().Add(time.Minute)})
 
-	t.Run("verify-temperature-ssh requires header token transport", func(t *testing.T) {
+	t.Run("verify-temperature-ssh rejects setup token in query and header", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodPost, "/api/system/verify-temperature-ssh?auth_token="+token, strings.NewReader(`{"nodes":""}`))
 		rec := httptest.NewRecorder()
 		router.Handler().ServeHTTP(rec, req)
@@ -7394,12 +7394,12 @@ func TestContract_SetupTokenRoutesRejectQueryAuthToken(t *testing.T) {
 		rec = httptest.NewRecorder()
 		router.Handler().ServeHTTP(rec, req)
 
-		if rec.Code != http.StatusOK {
-			t.Fatalf("status = %d, want %d when setup token is provided in header", rec.Code, http.StatusOK)
+		if rec.Code != http.StatusUnauthorized {
+			t.Fatalf("status = %d, want %d when setup token is provided in header", rec.Code, http.StatusUnauthorized)
 		}
 	})
 
-	t.Run("ssh-config requires header token transport", func(t *testing.T) {
+	t.Run("ssh-config rejects setup token in query and header", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodPost, "/api/system/ssh-config?auth_token="+token, strings.NewReader("Host example\nHostname example\n"))
 		rec := httptest.NewRecorder()
 		router.Handler().ServeHTTP(rec, req)
@@ -7413,8 +7413,8 @@ func TestContract_SetupTokenRoutesRejectQueryAuthToken(t *testing.T) {
 		rec = httptest.NewRecorder()
 		router.Handler().ServeHTTP(rec, req)
 
-		if rec.Code != http.StatusOK {
-			t.Fatalf("status = %d, want %d when setup token is provided in header", rec.Code, http.StatusOK)
+		if rec.Code != http.StatusUnauthorized {
+			t.Fatalf("status = %d, want %d when setup token is provided in header", rec.Code, http.StatusUnauthorized)
 		}
 	})
 }
@@ -19002,7 +19002,7 @@ func TestContract_AgentEventsStreamPublishesOnApprovalPending(t *testing.T) {
 	if !strings.Contains(src, "r.aiHandler.SetApprovalCreatedCallback(") {
 		t.Error("router.go must install the approval-created callback on AIHandler so the agent SSE stream is wired before the first approval lands")
 	}
-	if !strings.Contains(src, "broadcaster.PublishApprovalPending(AgentEventApprovalPendingPayload{") {
+	if !strings.Contains(src, "broadcaster.PublishApprovalPending(req.OrgID, AgentEventApprovalPendingPayload{") {
 		t.Error("router.go must bridge approval creation into PublishApprovalPending — drift means agents lose the push-notification path for governance state")
 	}
 	if !strings.Contains(src, "ApprovalID:  req.ID") {
@@ -19081,7 +19081,7 @@ func TestContract_AgentEventsStreamPublishesOnActionCompleted(t *testing.T) {
 	if !strings.Contains(src, "executor.SetOnActionCompleted(func(record unifiedresources.ActionAuditRecord)") {
 		t.Error("router.go must install the post-completion callback on the executor returned from chatService.GetExecutor() so the agent SSE stream is wired per-org")
 	}
-	if !strings.Contains(src, "broadcaster.PublishActionCompletedRecord(record)") {
+	if !strings.Contains(src, "broadcaster.PublishActionCompletedRecord(orgID, record)") {
 		t.Error("router.go must bridge executor action completion into PublishActionCompletedRecord — drift means agents lose the push-notification path for dispatch outcomes")
 	}
 	if !strings.Contains(src, "r.resourceHandlers.SetActionCompletedPublisher(r.agentEventBroadcaster.PublishActionCompletedRecord)") {
@@ -19092,7 +19092,7 @@ func TestContract_AgentEventsStreamPublishesOnActionCompleted(t *testing.T) {
 		t.Fatalf("read agent_events.go: %v", err)
 	}
 	eventsSrc := string(eventsSource)
-	if !strings.Contains(eventsSrc, "func (b *AgentEventBroadcaster) PublishActionCompletedRecord(record unifiedresources.ActionAuditRecord)") {
+	if !strings.Contains(eventsSrc, "func (b *AgentEventBroadcaster) PublishActionCompletedRecord(orgID string, record unifiedresources.ActionAuditRecord)") {
 		t.Error("agent_events.go must keep a shared action-audit-record projector for every action.completed producer")
 	}
 	if !strings.Contains(eventsSrc, "ActionID:       record.ID") {
@@ -25806,6 +25806,11 @@ func TestContract_ConfigImportIncompleteRuntimeKeepsCommittedOutcome(t *testing.
 	if err := os.WriteFile(filepath.Join(dir, "config.json"), []byte("{}"), 0600); err != nil {
 		t.Fatal(err)
 	}
+	// A scoped token's import keeps the destination's saved token inventory,
+	// so the caller must be in it to authenticate the replay.
+	if err := config.NewConfigPersistence(dir).SaveAPITokens(cfg.APITokens); err != nil {
+		t.Fatal(err)
+	}
 	reloads := 0
 	router := newTestRouter(t, cfg, nil, nil, nil, func() error {
 		reloads++
@@ -25890,7 +25895,7 @@ func TestContract_ConfigImportIncompleteRuntimeKeepsCommittedOutcome(t *testing.
 func TestContractSSOEnvironmentBoundaryConsumer(t *testing.T) {
 	fixture := environmentBoundaryRouter(t)
 	const token = "sso-environment-consumer-synthetic-token.12345678"
-	record := newTokenRecord(t, token, []string{config.ScopeSettingsRead, config.ScopeSettingsWrite}, nil)
+	record := newTokenRecord(t, token, []string{config.ScopeWildcard}, nil)
 	cfg := newTestConfigWithTokens(t, record)
 	cfg.PublicURL = "https://pulse.example.test"
 	var probe *environmentBoundaryEndpointProbe
@@ -26365,8 +26370,9 @@ func TestContract_PulseMCPReadmeIntroNamesPublishedReadTools(t *testing.T) {
 }
 
 // Change events reach only subscribers in the organization whose monitor
-// recorded them, and finding events only those in the organization whose
-// Patrol raised them.
+// recorded them, finding events only those in the organization whose
+// Patrol raised them, and approval and action events only those in the
+// organization that owns the approval or action.
 func TestContract_AgentChangeEventsStayInsideTheirOrganization(t *testing.T) {
 	b := NewAgentEventBroadcaster()
 	producer, _ := newTestAgentChangeEventProducer(b)
@@ -26394,6 +26400,14 @@ func TestContract_AgentChangeEventsStayInsideTheirOrganization(t *testing.T) {
 	producer.observer("tenant-b", nil)(unifiedresources.ResourceChange{ID: "foreign", ResourceID: "vm-b", Kind: unifiedresources.ChangeAlertFired})
 	producer.observer("", nil)(unifiedresources.ResourceChange{ID: "default-org", ResourceID: "vm-d", Kind: unifiedresources.ChangeAlertFired})
 	producer.observer("tenant-a", nil)(unifiedresources.ResourceChange{ID: "own", ResourceID: "vm-a", Kind: unifiedresources.ChangeAlertFired})
+	b.PublishApprovalPending("tenant-b", AgentEventApprovalPendingPayload{ApprovalID: "foreign-approval"})
+	b.PublishApprovalPending("", AgentEventApprovalPendingPayload{ApprovalID: "default-approval"})
+	b.PublishApprovalPending("tenant-a", AgentEventApprovalPendingPayload{ApprovalID: "own-approval"})
+	completed := unifiedresources.ActionAuditRecord{State: unifiedresources.ActionStateCompleted}
+	for _, action := range [][2]string{{"tenant-b", "foreign-action"}, {"", "default-action"}, {"tenant-a", "own-action"}} {
+		completed.ID = action[1]
+		b.PublishActionCompletedRecord(action[0], completed)
+	}
 	b.PublishFindingCreated("tenant-b", AgentEventFindingCreatedPayload{FindingID: "foreign-finding"})
 	b.PublishFindingCreated("", AgentEventFindingCreatedPayload{FindingID: "default-finding"})
 	b.PublishFindingCreated("tenant-a", AgentEventFindingCreatedPayload{FindingID: "own-finding"})
@@ -26416,7 +26430,13 @@ func TestContract_AgentChangeEventsStayInsideTheirOrganization(t *testing.T) {
 		if !strings.Contains(stream, "event: alert.fired") || !strings.Contains(stream, `"changeId":"own"`) {
 			t.Fatalf("own organization's alert missing from stream:\n%s", stream)
 		}
-		for _, foreign := range []string{`"changeId":"foreign"`, `"changeId":"default-org"`, "foreign-finding", "default-finding"} {
+		for _, own := range []string{"own-approval", "own-action"} {
+			if !strings.Contains(stream, own) {
+				t.Fatalf("own organization's %s missing from stream:\n%s", own, stream)
+			}
+		}
+		for _, foreign := range []string{`"changeId":"foreign"`, `"changeId":"default-org"`, "foreign-finding", "default-finding",
+			"foreign-approval", "default-approval", "foreign-action", "default-action"} {
 			if strings.Contains(stream, foreign) {
 				t.Fatalf("stream leaked %s:\n%s", foreign, stream)
 			}
@@ -26444,7 +26464,7 @@ func TestAgentEventTokenLifecycleRefreshesDisclosure(t *testing.T) {
 	control := openAgentLifecycleStream(t, server, agentEventControlToken, "header")
 	record := agentDisclosureRecord(t, false)
 	before, _ := json.Marshal(record)
-	router.agentEventBroadcaster.PublishActionCompletedRecord(record)
+	router.agentEventBroadcaster.PublishActionCompletedRecord("default", record)
 	for _, stream := range []*agentLifecycleStream{primary, control} {
 		body, _ := json.Marshal(stream.next(t))
 		assertAgentDisclosureWire(t, body, false)
@@ -26453,8 +26473,8 @@ func TestAgentEventTokenLifecycleRefreshesDisclosure(t *testing.T) {
 	config.Mu.Lock()
 	cfg.APITokens[0].Scopes = []string{config.ScopeMonitoringRead}
 	config.Mu.Unlock()
-	router.agentEventBroadcaster.PublishApprovalPending(AgentEventApprovalPendingPayload{ApprovalID: "after-downgrade", Command: agentPrivateDetail})
-	router.agentEventBroadcaster.PublishActionCompletedRecord(record)
+	router.agentEventBroadcaster.PublishApprovalPending("default", AgentEventApprovalPendingPayload{ApprovalID: "after-downgrade", Command: agentPrivateDetail})
+	router.agentEventBroadcaster.PublishActionCompletedRecord("default", record)
 	for i, stream := range []*agentLifecycleStream{primary, control} {
 		approval, _ := json.Marshal(stream.next(t))
 		if strings.Contains(string(approval), agentPrivateDetail) != (i == 1) {

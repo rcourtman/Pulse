@@ -30,6 +30,11 @@ const defaultHTTPTimeout = 30 * time.Second
 
 const maxResponseBodyBytes int64 = 4 * 1024 * 1024
 
+// maxRPCWebSocketMessageBytes bounds a single TrueNAS JSON-RPC WebSocket frame
+// so a compromised or misbehaving appliance cannot exhaust process memory with
+// one oversized message while leaving room for large snapshot or dataset lists.
+const maxRPCWebSocketMessageBytes int64 = 32 * 1024 * 1024
+
 const defaultRealtimeIntervalSeconds = 2
 
 // legacyRESTTelemetryWindowSeconds bounds the reporting.get_data window used
@@ -47,6 +52,18 @@ const defaultAppLogInitialWait = 2 * time.Second
 const defaultAppLogIdleWait = 250 * time.Millisecond
 
 const maxAppLogTailLines = 500
+
+// Pool topology bounds. Every vdev without a GUID gets an ID built from its
+// group name and its position path, so an appliance-chosen group name or
+// nesting depth is repeated once per vdev below it. ZFS itself only knows a
+// few short vdev classes (data, log, cache, spare, special, dedup) nested a
+// handful of levels deep, so anything past these bounds is not a topology
+// Pulse can describe and is left out instead of being multiplied in memory.
+const (
+	maxPoolTopologyGroupNameBytes = 64
+	maxPoolTopologyDepth          = 16
+	maxPoolTopologyVDevs          = 16384
+)
 
 // ClientConfig configures the TrueNAS API client.
 type ClientConfig struct {
@@ -773,7 +790,9 @@ func poolDiskMembersFromTopology(topology any) []PoolDiskMember {
 
 // poolTopologyFromTopology flattens native vdev topology without discarding
 // group roles or parentage. It separately returns leaf membership for the
-// existing disk-enrichment path.
+// existing disk-enrichment path. The topology is appliance-controlled, so
+// oversized group names, vdevs nested beyond maxPoolTopologyDepth and vdevs
+// beyond maxPoolTopologyVDevs are skipped.
 func poolTopologyFromTopology(topology any) ([]PoolVDev, []PoolDiskMember) {
 	groups, ok := topology.(map[string]any)
 	if !ok {
@@ -788,10 +807,10 @@ func poolTopologyFromTopology(topology any) ([]PoolVDev, []PoolDiskMember) {
 
 	var vdevs []PoolVDev
 	var members []PoolDiskMember
-	var walk func(node any, role, parentID, position string)
-	walk = func(node any, role, parentID, position string) {
+	var walk func(node any, role, parentID, position string, depth int)
+	walk = func(node any, role, parentID, position string, depth int) {
 		vdev, ok := node.(map[string]any)
-		if !ok {
+		if !ok || depth > maxPoolTopologyDepth || len(vdevs) >= maxPoolTopologyVDevs {
 			return
 		}
 
@@ -856,7 +875,7 @@ func poolTopologyFromTopology(topology any) ([]PoolVDev, []PoolDiskMember) {
 		children, hasChildren := vdev["children"].([]any)
 		if hasChildren && len(children) > 0 {
 			for index, child := range children {
-				walk(child, role, id, position+"."+strconv.Itoa(index))
+				walk(child, role, id, position+"."+strconv.Itoa(index), depth+1)
 			}
 			return
 		}
@@ -884,11 +903,11 @@ func poolTopologyFromTopology(topology any) ([]PoolVDev, []PoolDiskMember) {
 	for _, groupName := range groupNames {
 		group := groups[groupName]
 		nodes, ok := group.([]any)
-		if !ok {
+		if !ok || len(groupName) > maxPoolTopologyGroupNameBytes {
 			continue
 		}
 		for index, node := range nodes {
-			walk(node, groupName, "", strconv.Itoa(index))
+			walk(node, groupName, "", strconv.Itoa(index), 1)
 		}
 	}
 	return vdevs, members
@@ -2610,6 +2629,7 @@ func (c *Client) dialRPCEndpoint(ctx context.Context, rpcURL string, useTLS bool
 		}
 		return nil, &RPCHandshakeError{StatusCode: statusCode, Location: location, Err: err}
 	}
+	conn.SetReadLimit(maxRPCWebSocketMessageBytes)
 	return conn, nil
 }
 

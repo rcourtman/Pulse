@@ -89,11 +89,61 @@ export type ReleaseVisual = {
   after: string;
 };
 
+export type ReleaseChangeGroup = {
+  label: string;
+  body: string;
+  itemCount: number;
+};
+
 export type WhatsNewContent = {
+  highlights: string[];
+  breakingChanges: string | null;
+  knownIssues: string | null;
+  knownIssuesCount: number;
+  changeGroups: ReleaseChangeGroup[];
   changes: string | null;
   important: string | null;
   upgradeNotes: string | null;
+  upgradeNotesCount: number;
   visuals: ReleaseVisual[];
+};
+
+const countMarkdownItems = (markdown: string): number => {
+  const tokens = marked.lexer(markdown);
+  let listItems = 0;
+  let blockItems = 0;
+  for (const token of tokens) {
+    if (token.type === 'list') {
+      listItems += token.items.length;
+    } else if (token.type === 'paragraph' || token.type === 'blockquote') {
+      blockItems += 1;
+    }
+  }
+  return listItems > 0 ? listItems : blockItems;
+};
+
+const extractHighlightItems = (lines: string[], headings: Heading[]): string[] => {
+  const highlightsIndex = headings.findIndex((heading) => /^highlights\b/i.test(heading.title));
+  if (highlightsIndex === -1) return [];
+  const body = sectionBody(lines, headings, highlightsIndex);
+  if (!body) return [];
+
+  const tokens = marked.lexer(body);
+  const items: string[] = [];
+  for (const token of tokens) {
+    if (token.type === 'list') {
+      for (const item of token.items) {
+        const text = item.text.trim();
+        if (text) items.push(text);
+      }
+    }
+  }
+  if (items.length > 0) return items;
+
+  return body
+    .split('\n')
+    .map((line) => line.replace(/^\s*[-*+]\s+/, '').trim())
+    .filter(Boolean);
 };
 
 // Only published screenshot sidecars for this exact running release may load.
@@ -142,41 +192,12 @@ export const extractReleaseVisuals = (markdown: string, version: string): Releas
 };
 
 /**
- * Read the same authored release body used by GitHub and the update preview.
- * The post-update dialog is a changelog: the curated Highlights summary only
- * stands in for the change groups when a release has none.
+ * Extract structured user-facing change groups from a published release body.
  */
-export const extractWhatsNew = (markdown: string, version: string): WhatsNewContent | null => {
+export const extractChangeGroups = (markdown: string): ReleaseChangeGroup[] => {
   const lines = markdown.replace(/\r\n/g, '\n').split('\n');
   const headings = headingsIn(lines);
-  const sectionMarkdown = (titles: ReadonlySet<string>, includeTitles = true) =>
-    headings
-      .flatMap((heading, index) => {
-        if (!titles.has(heading.title.toLowerCase())) return [];
-        const body = sectionBody(lines, headings, index);
-        return body ? [includeTitles ? `### ${heading.title}\n\n${body}` : body] : [];
-      })
-      .join('\n\n') || null;
-  // Authored warning sections lead the changelog, without inferring severity
-  // from individual words.
-  const important = sectionMarkdown(new Set(['known issues', 'breaking changes']));
-  const upgradeNotes = sectionMarkdown(new Set(['before you upgrade', 'upgrade notes']), false);
-  const changes = extractChangelog(markdown) ?? extractHighlights(markdown);
-  const visuals = extractReleaseVisuals(markdown, version);
-  return changes || important || upgradeNotes || visuals.length
-    ? { changes, important, upgradeNotes, visuals }
-    : null;
-};
-
-/**
- * Build the post-update changelog from the user-facing change categories in a
- * published release body. Warnings, upgrade notes and visuals render
- * separately around it.
- */
-export const extractChangelog = (markdown: string): string | null => {
-  const lines = markdown.replace(/\r\n/g, '\n').split('\n');
-  const headings = headingsIn(lines);
-  const sections: string[] = [];
+  const groups: ReleaseChangeGroup[] = [];
   let coveredThrough = -1;
 
   headings.forEach((heading, headingIndex) => {
@@ -197,13 +218,80 @@ export const extractChangelog = (markdown: string): string | null => {
     }
     if (!label) return;
 
-    const content = sectionBody(lines, headings, headingIndex);
-    if (content) {
-      sections.push(`### ${label}\n\n${content}`);
+    const body = sectionBody(lines, headings, headingIndex);
+    if (body) {
+      groups.push({ label, body, itemCount: countMarkdownItems(body) });
     }
   });
 
-  return sections.length > 0 ? sections.join('\n\n') : null;
+  return groups;
+};
+
+/**
+ * Read the same authored release body used by GitHub and the update preview.
+ * Surfaces Highlights, Breaking changes, Known issues, visuals, structured
+ * change groups, and Upgrade notes so the modal can keep large releases easy
+ * to scan while still exposing every published detail.
+ */
+export const extractWhatsNew = (markdown: string, version: string): WhatsNewContent | null => {
+  const lines = markdown.replace(/\r\n/g, '\n').split('\n');
+  const headings = headingsIn(lines);
+  const sectionMarkdown = (titles: ReadonlySet<string>, includeTitles = true) =>
+    headings
+      .flatMap((heading, index) => {
+        if (!titles.has(heading.title.toLowerCase())) return [];
+        const body = sectionBody(lines, headings, index);
+        return body ? [includeTitles ? `### ${heading.title}\n\n${body}` : body] : [];
+      })
+      .join('\n\n') || null;
+
+  const highlights = extractHighlightItems(lines, headings);
+  const breakingChanges = sectionMarkdown(new Set(['breaking changes']), false);
+  const knownIssues = sectionMarkdown(new Set(['known issues']), false);
+  const knownIssuesCount = knownIssues ? countMarkdownItems(knownIssues) : 0;
+  // Authored warning sections stay distinct so Breaking changes can always lead
+  // while long Known issues lists stay compact until expanded.
+  const important = sectionMarkdown(new Set(['known issues', 'breaking changes']));
+  const upgradeNotes = sectionMarkdown(new Set(['before you upgrade', 'upgrade notes']), false);
+  const upgradeNotesCount = upgradeNotes ? countMarkdownItems(upgradeNotes) : 0;
+  const changeGroups = extractChangeGroups(markdown);
+  const changes =
+    (changeGroups.length > 0
+      ? changeGroups.map((group) => `### ${group.label}\n\n${group.body}`).join('\n\n')
+      : null) ?? extractHighlights(markdown);
+  const visuals = extractReleaseVisuals(markdown, version);
+
+  return highlights.length ||
+    changeGroups.length ||
+    changes ||
+    important ||
+    upgradeNotes ||
+    visuals.length
+    ? {
+        highlights,
+        breakingChanges,
+        knownIssues,
+        knownIssuesCount,
+        changeGroups,
+        changes,
+        important,
+        upgradeNotes,
+        upgradeNotesCount,
+        visuals,
+      }
+    : null;
+};
+
+/**
+ * Build the post-update changelog from the user-facing change categories in a
+ * published release body. Warnings, upgrade notes and visuals render
+ * separately around it.
+ */
+export const extractChangelog = (markdown: string): string | null => {
+  const groups = extractChangeGroups(markdown);
+  return groups.length > 0
+    ? groups.map((group) => `### ${group.label}\n\n${group.body}`).join('\n\n')
+    : null;
 };
 
 // Dev builds carry -dirty or a -g<hash> suffix; they never correspond to a

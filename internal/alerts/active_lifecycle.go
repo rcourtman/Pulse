@@ -5,6 +5,7 @@ import (
 	"sort"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts/eventlog"
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts/reducer"
@@ -214,6 +215,12 @@ func (m *Manager) UnacknowledgeAlert(alertID string) error {
 	return nil
 }
 
+// MaxOperationalSuppressionReasonRunes bounds the operator-written reason of a
+// suppression. The reason is retained in the alert's lifecycle transitions, and
+// every later alert event snapshots the whole alert, so an unbounded reason is
+// multiplied by the transition bound in each subsequent event.
+const MaxOperationalSuppressionReasonRunes = 240
+
 // SuppressOperationalAlert moves one canonical operational record out of the
 // default attention queue without changing the detector's underlying finding.
 // Suppression is bounded by an optional expiry and remains inspectable.
@@ -230,6 +237,12 @@ func (m *Manager) SuppressOperationalAlert(
 	}
 	if reason == "" {
 		return fmt.Errorf("suppression reason is required")
+	}
+	if utf8.RuneCountInString(reason) > MaxOperationalSuppressionReasonRunes {
+		return fmt.Errorf(
+			"suppression reason must be at most %d characters",
+			MaxOperationalSuppressionReasonRunes,
+		)
 	}
 
 	now := m.policyNow().UTC()

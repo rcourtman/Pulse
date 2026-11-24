@@ -268,7 +268,7 @@ describe('post-update release content', () => {
       'Not part of the visual.',
     ].join('\n');
 
-  it('reads current grouped release notes without repeating the Highlights summary', () => {
+  it('reads current grouped release notes with structured highlights and change groups', () => {
     const content = extractWhatsNew(
       [
         '## Highlights',
@@ -278,26 +278,45 @@ describe('post-update release content', () => {
         '- Open Backups to find guests without protection.',
         '## Alerts and notifications',
         '- Acknowledgements persist after reconnecting.',
+        '- Delivery retries handle longer outages.',
         '## Before you upgrade',
-        'Update older agents.',
+        '- Update older agents.',
         '## Release Qualification',
         'Internal evidence.',
       ].join('\n'),
       '6.6.0',
     );
+    expect(content?.highlights).toEqual(['Spot backup gaps.', 'Keep important alerts visible.']);
+    expect(content?.changeGroups).toEqual([
+      {
+        label: 'Proxmox, PBS and backups',
+        body: '- Open Backups to find guests without protection.',
+        itemCount: 1,
+      },
+      {
+        label: 'Alerts and notifications',
+        body: '- Acknowledgements persist after reconnecting.\n- Delivery retries handle longer outages.',
+        itemCount: 2,
+      },
+    ]);
     expect(content?.changes).not.toContain('Spot backup gaps.');
     expect(content?.changes).toContain('Proxmox, PBS and backups');
     expect(content?.changes).toContain('Acknowledgements persist');
     expect(content?.changes).not.toContain('Internal evidence');
-    expect(content?.upgradeNotes).toBe('Update older agents.');
+    expect(content?.upgradeNotes).toBe('- Update older agents.');
+    expect(content?.upgradeNotesCount).toBe(1);
+    expect(content?.breakingChanges).toBeNull();
+    expect(content?.knownIssues).toBeNull();
+    expect(content?.knownIssuesCount).toBe(0);
     expect(content?.important).toBeNull();
   });
 
-  it('separates authored warnings from routine upgrade instructions', () => {
+  it('separates breaking changes, known issues, and routine upgrade instructions', () => {
     const content = extractWhatsNew(
       [
         '## Known issues',
         '- Do not restart monitoring on an affected guest.',
+        '- Check older agent versions after updating.',
         '## Before you upgrade',
         '- Verify the published checksums.',
         '## Breaking changes',
@@ -305,10 +324,15 @@ describe('post-update release content', () => {
       ].join('\n'),
       '6.6.0',
     );
+    expect(content?.breakingChanges).toBe('- Older configuration needs migration.');
+    expect(content?.knownIssues).toContain('Do not restart monitoring');
+    expect(content?.knownIssuesCount).toBe(2);
     expect(content?.important).toContain('Do not restart monitoring');
     expect(content?.important).toContain('Older configuration needs migration.');
     expect(content?.important).not.toContain('published checksums');
     expect(content?.upgradeNotes).toBe('- Verify the published checksums.');
+    expect(content?.upgradeNotesCount).toBe(1);
+    expect(content?.changeGroups).toEqual([]);
     expect(content?.changes).toBeNull();
   });
 

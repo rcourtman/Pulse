@@ -60,43 +60,6 @@ func TestExtractBearerToken(t *testing.T) {
 	}
 }
 
-func TestExtractSetupToken(t *testing.T) {
-	t.Run("prefers header token", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/setup?auth_token=query-token", nil)
-		req.Header.Set("X-Setup-Token", " header-token ")
-		req.Header.Set("Authorization", "Bearer auth-token")
-
-		if got := extractSetupToken(req); got != "header-token" {
-			t.Fatalf("expected header token, got %q", got)
-		}
-	})
-
-	t.Run("falls back to bearer", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/setup?auth_token=query-token", nil)
-		req.Header.Set("X-Setup-Token", " ")
-		req.Header.Set("Authorization", "Bearer auth-token")
-
-		if got := extractSetupToken(req); got != "auth-token" {
-			t.Fatalf("expected bearer token, got %q", got)
-		}
-	})
-
-	t.Run("ignores query auth_token", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/setup?auth_token=query-token", nil)
-
-		if got := extractSetupToken(req); got != "" {
-			t.Fatalf("expected empty token, got %q", got)
-		}
-	})
-
-	t.Run("returns empty when missing", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/setup", nil)
-		if got := extractSetupToken(req); got != "" {
-			t.Fatalf("expected empty token, got %q", got)
-		}
-	})
-}
-
 func TestFileExists(t *testing.T) {
 	dir := t.TempDir()
 	filePath := filepath.Join(dir, "exists.txt")

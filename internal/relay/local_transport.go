@@ -33,6 +33,8 @@ func (t *handlerTransport) RoundTrip(req *http.Request) (*http.Response, error) 
 	if outReq.RemoteAddr == "" {
 		// Match the loopback dial this transport replaces so address-keyed
 		// middleware (rate limits, lockouts, audit logs) behaves the same.
+		// The address is not a claim to be a local client: the proxy marks
+		// the request as forwarded (relayViaHeader).
 		outReq.RemoteAddr = "127.0.0.1:0"
 	}
 	if outReq.Body == nil {

@@ -47,6 +47,31 @@ func (r *Router) currentTokenMutationCallerLocked(req *http.Request) (*config.AP
 	if live == nil {
 		return nil, invalid
 	}
+	current := admittedTokenLocked(live, admitted)
+	if current == nil {
+		return nil, invalid
+	}
+	if !current.HasScope(config.ScopeSettingsWrite) {
+		return nil, &tokenMutationFailure{status: http.StatusForbidden, message: "Missing settings:write scope", missingScope: true}
+	}
+	// Keep the route's original instance boundary, without imposing one on
+	// the existing org-scoped issuer. A binding edit cannot turn an admitted
+	// instance request into permission to mutate the global inventory.
+	if (tokenActsForInstance(admitted) && !tokenActsForInstance(current)) ||
+		!NewAuthorizationChecker(nil).CheckAccess(current, "", GetOrgID(req.Context())).Allowed {
+		return nil, &tokenMutationFailure{status: http.StatusForbidden, message: "Admin privileges required"}
+	}
+	clone := current.Clone()
+	attachAPITokenRecord(req, &clone)
+	return &clone, nil
+}
+
+// admittedTokenLocked returns the live record of the credential a request was
+// admitted with, or nil once that credential has been revoked, rotated,
+// expired, re-owned or given an invalid runtime role. Scope and organization
+// edits leave the credential valid; callers judge those against their route.
+// The caller holds config.Mu.
+func admittedTokenLocked(live *config.Config, admitted *config.APITokenRecord) *config.APITokenRecord {
 	for i := range live.APITokens {
 		current := &live.APITokens[i]
 		if !constantTimeStringEqual(current.Hash, admitted.Hash) {
@@ -55,26 +80,14 @@ func (r *Router) currentTokenMutationCallerLocked(req *http.Request) (*config.AP
 		// Authentication chooses the first matching credential hash. A newly
 		// shadowing record must not let an older context choose a later grant.
 		if current.ID != admitted.ID {
-			return nil, invalid
+			return nil
 		}
 		role := strings.TrimSpace(current.Metadata[internalauth.RuntimeRoleMetadataKey])
 		if current.IsExpired() || apiTokenAuthenticatedUser(current) != apiTokenAuthenticatedUser(admitted) ||
 			internalauth.ValidateRoleScopes(role, current.Scopes) != nil {
-			return nil, invalid
+			return nil
 		}
-		if !current.HasScope(config.ScopeSettingsWrite) {
-			return nil, &tokenMutationFailure{status: http.StatusForbidden, message: "Missing settings:write scope", missingScope: true}
-		}
-		// Keep the route's original instance boundary, without imposing one on
-		// the existing org-scoped issuer. A binding edit cannot turn an admitted
-		// instance request into permission to mutate the global inventory.
-		if (tokenActsForInstance(admitted) && !tokenActsForInstance(current)) ||
-			!NewAuthorizationChecker(nil).CheckAccess(current, "", GetOrgID(req.Context())).Allowed {
-			return nil, &tokenMutationFailure{status: http.StatusForbidden, message: "Admin privileges required"}
-		}
-		clone := current.Clone()
-		attachAPITokenRecord(req, &clone)
-		return &clone, nil
+		return current
 	}
-	return nil, invalid
+	return nil
 }

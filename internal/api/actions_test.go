@@ -674,7 +674,7 @@ func TestHandleExecuteActionRunsApprovedPlanThroughExecutor(t *testing.T) {
 	executor := &stubActionExecutor{result: &unified.ExecutionResult{Success: true, Output: "restart dispatched"}}
 	h.SetActionExecutor(executor)
 	published := make(chan unified.ActionAuditRecord, 1)
-	h.SetActionCompletedPublisher(func(record unified.ActionAuditRecord) {
+	h.SetActionCompletedPublisher(func(_ string, record unified.ActionAuditRecord) {
 		published <- record
 	})
 
@@ -770,6 +770,155 @@ func TestHandleExecuteActionRunsApprovedPlanThroughExecutor(t *testing.T) {
 	}
 }
 
+type heldActionExecutor struct {
+	stubActionExecutor
+	entered chan struct{}
+	release chan struct{}
+}
+
+func (e *heldActionExecutor) ExecuteAction(ctx context.Context, record unified.ActionAuditRecord) (*unified.ExecutionResult, error) {
+	close(e.entered)
+	<-e.release
+	return e.stubActionExecutor.ExecuteAction(ctx, record)
+}
+
+// An execute that dispatches nothing (the action is already final, or another
+// caller holds its dispatch) is answered from the stored record, so it is a
+// read. An actions:execute token, which GET /api/actions/{id} refuses, gets
+// the lifecycle refusal instead; a token that may also review the action
+// keeps the replay, and the token whose request ran the action still gets the
+// result in that request's own answer.
+func TestHandleExecuteActionReplaysRecordOnlyToActionReviewers(t *testing.T) {
+	now := time.Date(2026, 5, 4, 14, 0, 0, 0, time.UTC)
+	const (
+		runnerRaw    = "synthetic-execute-runner.12345678"
+		bystanderRaw = "synthetic-execute-bystander.12345678"
+		reviewerRaw  = "synthetic-execute-reviewer.12345678"
+	)
+	runnerRec := newTokenRecord(t, runnerRaw, []string{config.ScopeActionsExecute}, nil)
+	runnerRec.ID = "execute-runner"
+	setAPITokenOwnerUserID(&runnerRec, "operator@example.com")
+	bystanderRec := newTokenRecord(t, bystanderRaw, []string{config.ScopeActionsExecute}, nil)
+	bystanderRec.ID = "execute-bystander"
+	setAPITokenOwnerUserID(&bystanderRec, "integration@example.com")
+	reviewerRec := newTokenRecord(t, reviewerRaw, []string{config.ScopeActionsExecute, config.ScopeActionsApprove}, nil)
+	reviewerRec.ID = "execute-reviewer"
+	setAPITokenOwnerUserID(&reviewerRec, "operator@example.com")
+
+	cfg := &config.Config{
+		DataPath:  t.TempDir(),
+		APITokens: []config.APITokenRecord{runnerRec, bystanderRec, reviewerRec},
+	}
+	h := NewResourceHandlers(cfg)
+	authority := testActionAuthority()
+	h.SetActionAuthorizers(authority, authority, authority)
+	h.SetStateProvider(resourceUnifiedSeedProvider{
+		snapshot: models.StateSnapshot{LastUpdate: now},
+		resources: []unified.Resource{{
+			ID: "vm:42", Type: unified.ResourceTypeVM, Name: "web-42", Status: unified.StatusWarning,
+			LastSeen: now, UpdatedAt: now, Sources: []unified.DataSource{unified.SourceProxmox},
+			Capabilities: []unified.ResourceCapability{{
+				Name: "restart", Type: unified.CapabilityTypeCommon, Description: "Restart the VM",
+				MinimumApprovalLevel: unified.ApprovalAdmin, InternalHandler: "proxmox.vm.restart",
+			}},
+		}},
+	})
+	executor := &heldActionExecutor{
+		stubActionExecutor: stubActionExecutor{result: &unified.ExecutionResult{Success: true, Output: "restart dispatched"}},
+		entered:            make(chan struct{}),
+		release:            make(chan struct{}),
+	}
+	h.SetActionExecutor(executor)
+
+	planRec := httptest.NewRecorder()
+	planReq := httptest.NewRequest(http.MethodPost, "/api/actions/plan", bytes.NewBufferString(`{
+		"requestId":"agent-run-execute-replay",
+		"resourceId":"vm:42",
+		"capabilityName":"restart",
+		"reason":"Recover after confirmed outage"
+	}`))
+	h.HandlePlanAction(planRec, actionHandlerTestRequest(planReq, ""))
+	if planRec.Code != http.StatusOK {
+		t.Fatalf("plan status = %d, body=%s", planRec.Code, planRec.Body.String())
+	}
+	var plan unified.ActionPlan
+	if err := json.Unmarshal(planRec.Body.Bytes(), &plan); err != nil {
+		t.Fatalf("decode plan response: %v", err)
+	}
+	decisionRec := httptest.NewRecorder()
+	decisionReq := httptest.NewRequest(http.MethodPost, "/api/actions/"+plan.ActionID+"/decision", bytes.NewBufferString(`{
+		"outcome":"approved",
+		"reason":"approver-only rationale"
+	}`))
+	decisionReq.SetPathValue("id", plan.ActionID)
+	h.HandleDecideAction(decisionRec, actionHandlerTestRequest(decisionReq, "operator@example.com"))
+	if decisionRec.Code != http.StatusOK {
+		t.Fatalf("decision status = %d, body=%s", decisionRec.Code, decisionRec.Body.String())
+	}
+
+	runner := &runnerRec
+	bystander := &bystanderRec
+	reviewer := &reviewerRec
+	execute := func(token *config.APITokenRecord, raw, body string) *httptest.ResponseRecorder {
+		req := httptest.NewRequest(http.MethodPost, "/api/actions/"+plan.ActionID+"/execute", bytes.NewBufferString(body))
+		req.Header.Set("X-API-Token", raw)
+		req.SetPathValue("id", plan.ActionID)
+		rec := httptest.NewRecorder()
+		h.HandleExecuteAction(rec, req.WithContext(actionAuthorityContext(token)))
+		return rec
+	}
+	assertRefused := func(rec *httptest.ResponseRecorder, code string) {
+		t.Helper()
+		if rec.Code != http.StatusConflict || !strings.Contains(rec.Body.String(), code) {
+			t.Fatalf("execute-only status = %d, want 409 %s, body=%s", rec.Code, code, rec.Body.String())
+		}
+		for _, recorded := range []string{"restart dispatched", "approver-only rationale", "Recover after confirmed outage", "operator@example.com"} {
+			if strings.Contains(rec.Body.String(), recorded) {
+				t.Fatalf("execute-only answer disclosed %q: %s", recorded, rec.Body.String())
+			}
+		}
+	}
+	assertReplayed := func(rec *httptest.ResponseRecorder, state unified.ActionState) {
+		t.Helper()
+		var answer actionExecutionResponse
+		if rec.Code != http.StatusOK {
+			t.Fatalf("reviewer status = %d, body=%s", rec.Code, rec.Body.String())
+		}
+		if err := json.Unmarshal(rec.Body.Bytes(), &answer); err != nil {
+			t.Fatalf("decode reviewer answer: %v", err)
+		}
+		if answer.State != state || len(answer.Audit.Approvals) != 1 {
+			t.Fatalf("reviewer answer = %#v, want state %q with the approval", answer, state)
+		}
+	}
+
+	ran := make(chan *httptest.ResponseRecorder, 1)
+	go func() { ran <- execute(runner, runnerRaw, `{}`) }()
+	select {
+	case <-executor.entered:
+	case rec := <-ran:
+		t.Fatalf("runner finished before entering executor: status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	assertRefused(execute(bystander, bystanderRaw, `{}`), "action_already_executing")
+	assertReplayed(execute(reviewer, reviewerRaw, `{}`), unified.ActionStateExecuting)
+	close(executor.release)
+	if own := <-ran; own.Code != http.StatusOK || !strings.Contains(own.Body.String(), "restart dispatched") || !strings.Contains(own.Body.String(), "approver-only rationale") {
+		t.Fatalf("executing caller status = %d, body=%s", own.Code, own.Body.String())
+	}
+
+	for _, body := range []string{`{}`, `{"planHash":"` + plan.PlanHash + `"}`} {
+		assertRefused(execute(bystander, bystanderRaw, body), "action_execution_final")
+	}
+	settled := execute(reviewer, reviewerRaw, `{}`)
+	assertReplayed(settled, unified.ActionStateCompleted)
+	if !strings.Contains(settled.Body.String(), "restart dispatched") {
+		t.Fatalf("reviewer replay lost the result: %s", settled.Body.String())
+	}
+	if executor.calls != 1 {
+		t.Fatalf("executor calls = %d, want 1", executor.calls)
+	}
+}
+
 func TestHandleExecuteActionReturnsStableLostReadinessRefusal(t *testing.T) {
 	now := time.Date(2026, 7, 20, 20, 0, 0, 0, time.UTC)
 	h := newActionTestResourceHandlers(t, &config.Config{DataPath: t.TempDir()})
@@ -805,7 +954,7 @@ func TestHandleExecuteActionReturnsStableLostReadinessRefusal(t *testing.T) {
 	}
 	h.SetActionExecutor(executor)
 	published := make(chan unified.ActionAuditRecord, 1)
-	h.SetActionCompletedPublisher(func(record unified.ActionAuditRecord) { published <- record })
+	h.SetActionCompletedPublisher(func(_ string, record unified.ActionAuditRecord) { published <- record })
 
 	planRec := httptest.NewRecorder()
 	planReq := httptest.NewRequest(http.MethodPost, "/api/actions/plan", bytes.NewBufferString(`{
@@ -915,7 +1064,7 @@ func TestHandleExecuteActionRejectsStalePlanBeforeExecutor(t *testing.T) {
 	executor := &stubActionExecutor{result: &unified.ExecutionResult{Success: true, Output: "should not run"}}
 	h.SetActionExecutor(executor)
 	published := make(chan unified.ActionAuditRecord, 1)
-	h.SetActionCompletedPublisher(func(record unified.ActionAuditRecord) {
+	h.SetActionCompletedPublisher(func(_ string, record unified.ActionAuditRecord) {
 		published <- record
 	})
 
@@ -1087,7 +1236,7 @@ func TestHandleExecuteActionRejectsDryRunOnlyPlan(t *testing.T) {
 	executor := &stubActionExecutor{result: &unified.ExecutionResult{Success: true, Output: "should not run"}}
 	h.SetActionExecutor(executor)
 	published := make(chan unified.ActionAuditRecord, 1)
-	h.SetActionCompletedPublisher(func(record unified.ActionAuditRecord) {
+	h.SetActionCompletedPublisher(func(_ string, record unified.ActionAuditRecord) {
 		published <- record
 	})
 
@@ -1163,7 +1312,7 @@ func TestHandleExecuteActionMaterializesExplicitExpiredState(t *testing.T) {
 	executor := &stubActionExecutor{result: &unified.ExecutionResult{Success: true, Output: "should not run"}}
 	h.SetActionExecutor(executor)
 	published := make(chan unified.ActionAuditRecord, 1)
-	h.SetActionCompletedPublisher(func(record unified.ActionAuditRecord) {
+	h.SetActionCompletedPublisher(func(_ string, record unified.ActionAuditRecord) {
 		published <- record
 	})
 

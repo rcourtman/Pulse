@@ -35,7 +35,7 @@ func TestSSOLoadFailureDoesNotMigrateLegacyOnRecovery(t *testing.T) {
 		t.Run(map[bool]string{false: "core", true: "bound"}[bound], func(t *testing.T) {
 			fixture, file, saved := ssoLoadFixture(t)
 			const token = "sso-legacy-recovery-synthetic-token.12345678"
-			fixture.config.APITokens = []config.APITokenRecord{newTokenRecord(t, token, []string{config.ScopeSettingsRead, config.ScopeSettingsWrite}, nil)}
+			fixture.config.APITokens = []config.APITokenRecord{newTokenRecord(t, token, []string{config.ScopeWildcard}, nil)}
 			legacyFile := filepath.Join(filepath.Dir(file), "oidc.enc")
 			legacy := []byte(`{"enabled":true,"issuerUrl":"https://obsolete.example.test","clientId":"obsolete","clientSecret":"synthetic-obsolete-secret","allowedGroups":["obsolete-admins"]}`)
 			require.NoError(t, os.WriteFile(legacyFile, legacy, 0600))

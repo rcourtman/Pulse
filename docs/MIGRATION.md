@@ -143,9 +143,9 @@ destination's pre-import backup. Distinguish these outcomes:
   reported error. Do not delete destination data or regenerate encryption keys.
 - **Saved, but not applied:** `Configuration saved, but live reload failed:`
   means the imported settings are on disk, but the named live components did
-  not all reload. The list can name alert settings, webhook settings, email
-  settings, Apprise settings or guest metadata; other components may already
-  have applied.
+  not all reload. The list can name SSO settings, alert settings, webhook
+  settings, email settings, Apprise settings or guest metadata, while other
+  components may already have applied.
   Older messages `Configuration imported but failed to reload` and
   `Configuration imported but failed to apply changes` also follow a saved
   import. **Do not repeat the import.** It can overwrite legitimate changes

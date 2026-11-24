@@ -278,11 +278,13 @@ func (c *Client) enrichInventoryTopology(
 		issuesMu.Unlock()
 	}
 
+	// As in enrichInventorySnapshot, the slot is taken before the goroutine
+	// starts.
 	run := func(fn func() error) {
 		wg.Add(1)
+		sem <- struct{}{}
 		go func() {
 			defer wg.Done()
-			sem <- struct{}{}
 			defer func() { <-sem }()
 
 			if err := fn(); err != nil {
@@ -1132,6 +1134,10 @@ func (c *Client) collectEntityReferenceList(
 	return cloneVIJSONReferences(refs), nil
 }
 
+// resolvePlacement walks ref's ancestors up to the first one already resolved
+// and folds their placements back down. vCenter reports every parent, so the
+// walk is a loop that ends at an object it has already visited: a parent chain
+// that leads back into itself must not keep the poller walking it.
 func (cache *vmwareTopologyCache) resolvePlacement(
 	ctx context.Context,
 	client *Client,
@@ -1139,60 +1145,75 @@ func (cache *vmwareTopologyCache) resolvePlacement(
 	sessionID string,
 	ref viJSONReference,
 ) (vmwarePlacement, error) {
-	key := managedObjectKey(ref.Type, ref.Value)
-	if key == "" {
-		return vmwarePlacement{}, nil
+	type pendingPlacement struct {
+		key       string
+		placement vmwarePlacement
 	}
+	var pending []pendingPlacement
+	var inherited vmwarePlacement
+	seen := make(map[string]struct{})
 
-	cache.mu.Lock()
-	if cache.placementLoaded[key] {
-		placement := cache.placements[key]
+	for current := &ref; current != nil; {
+		key := managedObjectKey(current.Type, current.Value)
+		if key == "" {
+			break
+		}
+		if _, ok := seen[key]; ok {
+			break
+		}
+		seen[key] = struct{}{}
+
+		cache.mu.Lock()
+		if cache.placementLoaded[key] {
+			inherited = cache.placements[key]
+			cache.mu.Unlock()
+			break
+		}
 		cache.mu.Unlock()
-		return placement, nil
-	}
-	cache.mu.Unlock()
 
-	placement := vmwarePlacement{}
-	name, err := cache.resolveName(ctx, client, release, sessionID, ref)
-	if err != nil && !isVIJSONNotFound(err) {
-		return vmwarePlacement{}, err
-	}
-	name = firstNonEmptyTrimmed(name, ref.Value)
-
-	switch strings.TrimSpace(ref.Type) {
-	case "Datacenter":
-		placement.DatacenterID = strings.TrimSpace(ref.Value)
-		placement.DatacenterName = name
-	case "Folder":
-		placement.FolderID = strings.TrimSpace(ref.Value)
-		placement.FolderName = name
-	case "ClusterComputeResource":
-		placement.ClusterID = strings.TrimSpace(ref.Value)
-		placement.ClusterName = name
-		placement.ComputeResourceID = strings.TrimSpace(ref.Value)
-		placement.ComputeResourceName = name
-	case "ComputeResource":
-		placement.ComputeResourceID = strings.TrimSpace(ref.Value)
-		placement.ComputeResourceName = name
-	}
-
-	parentRef, err := cache.resolveParent(ctx, client, release, sessionID, ref)
-	if err != nil && !isVIJSONNotFound(err) {
-		return vmwarePlacement{}, err
-	}
-	if parentRef != nil {
-		parentPlacement, err := cache.resolvePlacement(ctx, client, release, sessionID, *parentRef)
+		placement := vmwarePlacement{}
+		name, err := cache.resolveName(ctx, client, release, sessionID, *current)
 		if err != nil && !isVIJSONNotFound(err) {
 			return vmwarePlacement{}, err
 		}
-		mergePlacement(&placement, parentPlacement)
+		name = firstNonEmptyTrimmed(name, current.Value)
+
+		switch strings.TrimSpace(current.Type) {
+		case "Datacenter":
+			placement.DatacenterID = strings.TrimSpace(current.Value)
+			placement.DatacenterName = name
+		case "Folder":
+			placement.FolderID = strings.TrimSpace(current.Value)
+			placement.FolderName = name
+		case "ClusterComputeResource":
+			placement.ClusterID = strings.TrimSpace(current.Value)
+			placement.ClusterName = name
+			placement.ComputeResourceID = strings.TrimSpace(current.Value)
+			placement.ComputeResourceName = name
+		case "ComputeResource":
+			placement.ComputeResourceID = strings.TrimSpace(current.Value)
+			placement.ComputeResourceName = name
+		}
+		pending = append(pending, pendingPlacement{key: key, placement: placement})
+
+		parentRef, err := cache.resolveParent(ctx, client, release, sessionID, *current)
+		if err != nil && !isVIJSONNotFound(err) {
+			return vmwarePlacement{}, err
+		}
+		current = parentRef
 	}
 
-	cache.mu.Lock()
-	cache.placementLoaded[key] = true
-	cache.placements[key] = placement
-	cache.mu.Unlock()
-	return placement, nil
+	for i := len(pending) - 1; i >= 0; i-- {
+		placement := pending[i].placement
+		mergePlacement(&placement, inherited)
+
+		cache.mu.Lock()
+		cache.placementLoaded[pending[i].key] = true
+		cache.placements[pending[i].key] = placement
+		cache.mu.Unlock()
+		inherited = placement
+	}
+	return inherited, nil
 }
 
 func (cache *vmwareTopologyCache) resolveName(

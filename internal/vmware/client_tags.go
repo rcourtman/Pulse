@@ -280,11 +280,13 @@ func (c *Client) resolveTagCatalog(
 	)
 	sem := make(chan struct{}, vmwareTagMetadataConcurrency)
 
+	// The slot is taken before the goroutine starts, so many distinct tags
+	// wait here instead of parking one goroutine each.
 	for _, tagID := range missing {
 		wg.Add(1)
+		sem <- struct{}{}
 		go func(tagID string) {
 			defer wg.Done()
-			sem <- struct{}{}
 			defer func() { <-sem }()
 
 			tag, err := c.fetchTag(ctx, sessionID, tagID)

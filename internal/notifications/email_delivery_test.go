@@ -1,6 +1,7 @@
 package notifications
 
 import (
+	"crypto/tls"
 	"errors"
 	"net"
 	"net/textproto"
@@ -92,4 +93,43 @@ func TestEmailDoesNotRepeatUnconfirmedCompletedMessage(t *testing.T) {
 	var unconfirmed *EmailAcceptanceUnconfirmedError
 	require.True(t, errors.As(err, &unconfirmed), "expected an explicit uncertain acceptance result, got %v", err)
 	require.Equal(t, 1, attempts, "repeating this message could create duplicates")
+}
+
+// net.Dial reads an address without a host as this machine, so a blank SMTP
+// server must stop before any transport dials.
+func TestEmailBlankServerIsNeverDialed(t *testing.T) {
+	originalDial, originalTLSDial := smtpDialTimeout, smtpTLSDialWithDialer
+	t.Cleanup(func() { smtpDialTimeout, smtpTLSDialWithDialer = originalDial, originalTLSDial })
+	smtpDialTimeout = func(_, address string, _ time.Duration) (net.Conn, error) {
+		t.Errorf("dialed %q", address)
+		return nil, errors.New("dial refused by test")
+	}
+	smtpTLSDialWithDialer = func(_ *net.Dialer, _, address string, _ *tls.Config) (*tls.Conn, error) {
+		t.Errorf("dialed %q over TLS", address)
+		return nil, errors.New("dial refused by test")
+	}
+
+	for _, host := range []string{"", " "} {
+		for _, transport := range []struct {
+			name          string
+			tls, startTLS bool
+		}{{"plain", false, false}, {"STARTTLS", false, true}, {"TLS", true, false}} {
+			cfg := EmailProviderConfig{EmailConfig: EmailConfig{
+				SMTPHost: host, SMTPPort: 2525, From: "pulse@example.test", To: []string{"ops@example.test"}, TLS: transport.tls,
+			}, StartTLS: transport.startTLS}
+			manager := NewEnhancedEmailManager(cfg)
+			for name, err := range map[string]error{
+				"send":            manager.SendEmailWithRetry("subject", "<p>body</p>", "body"),
+				"connection test": manager.TestConnection(),
+			} {
+				require.Error(t, err, "%s, %s, server %q", name, transport.name, host)
+				require.Equal(t, NotificationFailureConfiguration, ClassifyNotificationFailureError(err), "%s, %s, server %q", name, transport.name, host)
+			}
+		}
+	}
+
+	err := NewNotificationManager("").SendTestNotificationWithConfig("email", &EmailConfig{
+		Enabled: true, SMTPHost: " ", SMTPPort: 2525, From: "pulse@example.test", To: []string{"ops@example.test"},
+	}, nil)
+	require.ErrorContains(t, err, "SMTP host and from address are required")
 }

@@ -4025,6 +4025,11 @@ func (c *ConfigPersistence) updateEnvFile(envFile string, settings SystemSetting
 		return fmt.Errorf("read env file %s: %w", envFile, err)
 	}
 
+	// Every line of .env is a setting, and the channel may come from an
+	// imported backup or a hand-edited system.json. Only a supported channel
+	// is written; any other value leaves the legacy line as it is.
+	updateChannel, knownChannel := CanonicalUpdateChannel(settings.UpdateChannel)
+
 	var lines []string
 	scanner := bufio.NewScanner(bytes.NewReader(existingContent))
 
@@ -4034,8 +4039,8 @@ func (c *ConfigPersistence) updateEnvFile(envFile string, settings SystemSetting
 		// Skip legacy POLLING_INTERVAL lines - replaced by system.json PVE_POLLING_INTERVAL
 		if strings.HasPrefix(line, "POLLING_INTERVAL=") {
 			continue
-		} else if strings.HasPrefix(line, "UPDATE_CHANNEL=") && settings.UpdateChannel != "" {
-			lines = append(lines, fmt.Sprintf("UPDATE_CHANNEL=%s", settings.UpdateChannel))
+		} else if strings.HasPrefix(line, "UPDATE_CHANNEL=") && knownChannel {
+			lines = append(lines, fmt.Sprintf("UPDATE_CHANNEL=%s", updateChannel))
 		} else if strings.HasPrefix(line, "AUTO_UPDATE_ENABLED=") {
 			// Always update AUTO_UPDATE_ENABLED when the line exists
 			lines = append(lines, fmt.Sprintf("AUTO_UPDATE_ENABLED=%t", settings.AutoUpdateEnabled))

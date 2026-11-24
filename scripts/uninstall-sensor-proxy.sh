@@ -72,7 +72,7 @@ resolve_path() {
     fi
 
     if command -v python3 >/dev/null 2>&1; then
-        python3 - "$path" <<'PY'
+        python3 -I - "$path" <<'PY'
 import os
 import sys
 print(os.path.realpath(sys.argv[1]))
@@ -209,8 +209,10 @@ is_local_host() {
 
 # The program is passed with -c so stdin remains the complete API response.
 # Validate every row before emitting any identities; a partial list is unsafe.
+# Inline Python runs isolated (-I): this script is started from the caller's
+# working directory, and modules there or on PYTHONPATH must not be imported.
 sensor_proxy_inventory() {
-    python3 -c '
+    python3 -I -c '
 import json, re, sys
 field = sys.argv[1]
 try:
@@ -249,7 +251,7 @@ discover_cluster_node_addresses() {
         if [[ -z "$node_ip" ]]; then
             node_ip=$(getent hosts "$node" 2>/dev/null | awk 'NR==1 {print $1}') || node_ip=""
         fi
-        if [[ -z "$node_ip" ]] || ! node_ip=$(python3 -c '
+        if [[ -z "$node_ip" ]] || ! node_ip=$(python3 -I -c '
 import ipaddress, sys
 try:
     print(ipaddress.ip_address(sys.argv[1]))

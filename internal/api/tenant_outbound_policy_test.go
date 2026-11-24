@@ -76,6 +76,18 @@ func TestTenantAdministratorCannotPointOutboundConnectionsAtLoopback(t *testing.
 			fmt.Sprintf(`{"method":"email","config":{"enabled":true,"server":"127.0.0.1","port":%d,"from":"a@example.com","to":["b@example.com"]}}`, port)},
 		{"cloud metadata", http.MethodPost, "/api/availability-targets/test",
 			`{"name":"meta","targetKind":"service","address":"169.254.169.254","protocol":"tcp","port":80}`},
+		// Names whose host depends on the reader: an IPv6 zone when dialed as
+		// written, user information or a port behind a default scheme.
+		{"SMTP server with a zone", http.MethodPut, "/api/notifications/email",
+			fmt.Sprintf(`{"enabled":true,"server":"::ffff:127.0.0.1%%25@93.184.216.34","port":%d,"from":"a@example.com","to":["b@example.com"]}`, port)},
+		{"SMTP test with a zone", http.MethodPost, "/api/notifications/test",
+			fmt.Sprintf(`{"method":"email","config":{"enabled":true,"server":"::ffff:127.0.0.1%%25@93.184.216.34","port":%d,"from":"a@example.com","to":["b@example.com"]}}`, port)},
+		{"availability check with a zone", http.MethodPost, "/api/availability-targets/test",
+			fmt.Sprintf(`{"name":"loop","targetKind":"service","address":"::ffff:127.0.0.1%%25@93.184.216.34","protocol":"tcp","port":%d}`, port)},
+		{"vCenter connection test with user information", http.MethodPost, "/api/vmware/connections/test",
+			fmt.Sprintf(`{"name":"loop","host":"93.184.216.34:1@127.0.0.1","port":%d,"username":"u","password":"p"}`, port)},
+		{"Proxmox credential test behind the default scheme", http.MethodPost, "/api/config/nodes/test-config",
+			`{"type":"pbs","host":"localhost://93.184.216.34","tokenName":"root@pam!pulse","tokenValue":"secret"}`},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			rec := notificationAuthorityRequest(t, router, tc.method, tc.path, tc.body, "org-a-owner", "org-a")
@@ -155,5 +167,33 @@ func TestRequireOrgAdminAttachesTenantOutboundPolicyOnlyToTenantCallers(t *testi
 		if seen[0] != tc.want {
 			t.Fatalf("%s in %s: policy attached = %v, want %v", tc.user, tc.org, seen[0], tc.want)
 		}
+	}
+}
+
+// A blank SMTP server names no destination for the tenant outbound policy to
+// judge, and a dialer handed ":port" connects to this machine. Neither a test
+// with a blank server nor settings saved with one may reach the loopback.
+func TestTenantAdministratorCannotReachLoopbackThroughBlankSMTPServer(t *testing.T) {
+	router := notificationAuthorityRouter(t)
+	port, accepted := loopbackListener(t)
+
+	for _, server := range []string{"", " ", "\t"} {
+		settings := fmt.Sprintf(`{"enabled":true,"server":%q,"port":%d,"from":"a@example.com","to":["b@example.com"]}`, server, port)
+		rec := notificationAuthorityRequest(t, router, http.MethodPost, "/api/notifications/test",
+			`{"method":"email","config":`+settings+`}`, "org-a-owner", "org-a")
+		if rec.Code == http.StatusOK {
+			t.Fatalf("test mail through SMTP server %q = %d, want a refusal: %s", server, rec.Code, rec.Body.String())
+		}
+		notificationAuthorityRequest(t, router, http.MethodPut, "/api/notifications/email", settings, "org-a-owner", "org-a")
+		rec = notificationAuthorityRequest(t, router, http.MethodPost, "/api/notifications/test",
+			`{"method":"email"}`, "org-a-owner", "org-a")
+		if rec.Code == http.StatusOK {
+			t.Fatalf("test mail through saved SMTP server %q = %d, want a refusal: %s", server, rec.Code, rec.Body.String())
+		}
+	}
+	// Give any stray dial a moment to land before asserting none did.
+	time.Sleep(50 * time.Millisecond)
+	if got := accepted.Load(); got != 0 {
+		t.Fatalf("blank SMTP server reached the loopback listener %d times", got)
 	}
 }

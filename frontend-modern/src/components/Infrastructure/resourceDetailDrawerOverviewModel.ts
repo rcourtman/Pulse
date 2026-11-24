@@ -35,6 +35,17 @@ const isStatedBy = (row: DetailRow, statedMessages: readonly string[]): boolean 
   return statedMessages.some((message) => `. ${sentenceKey(message)}. `.includes(sentence));
 };
 
+// Generic rolled-up states ("Warning", "Degraded") restate the alert or health
+// summary already shown in "Needs attention". Leave them under Details when
+// "Needs attention" has an explanation, while still lifting specific runtime
+// states ("Offline", "Stale", "Exited (1)") or an unexplained degraded state.
+const GENERIC_ATTENTION_OBSERVED_STATES = new Set(['warning', 'degraded']);
+
+const isRedundantObservedState = (row: DetailRow, statedMessages: readonly string[]): boolean =>
+  statedMessages.length > 0 &&
+  row.label === 'Observed state' &&
+  GENERIC_ATTENTION_OBSERVED_STATES.has(sentenceKey(row.value));
+
 export interface ResourceDrawerOverviewInventory {
   /** Warning, danger and actionable rows for "Worth checking". */
   lifted: DetailRow[];
@@ -60,7 +71,7 @@ export const buildResourceDrawerOverviewInventory = (options: {
   const sections = [...options.summarySections, ...options.platformSections];
   const statedMessages = options.statedMessages ?? [];
   const lifted = partitionDrawerExceptionRows(sections, options.statedRowLabels).lifted.filter(
-    (row) => !isStatedBy(row, statedMessages),
+    (row) => !isStatedBy(row, statedMessages) && !isRedundantObservedState(row, statedMessages),
   );
   // Lifted rows move rather than repeat. A row left in front only because an
   // alert states it stays in Details, where the record is complete.

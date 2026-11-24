@@ -148,10 +148,12 @@ type Service struct {
 	LiveCheckAuthorizer LiveCheckAuthorizer
 	StepUpVerifier      StepUpVerifier
 	RefreshPlanner      RefreshPlanner
-	// OnActionCompleted receives every terminal (completed/failed) audit
-	// record, including refused-before-dispatch failures, so SSE bridges
-	// and reconcilers observe the full lifecycle regardless of transport.
-	OnActionCompleted func(unified.ActionAuditRecord)
+	// OnActionCompleted receives the org ID and every terminal
+	// (completed/failed) audit record, including refused-before-dispatch
+	// failures, so SSE bridges and reconcilers observe the full lifecycle
+	// regardless of transport. The org ID scopes the resulting agent event
+	// to the organization whose store holds the action.
+	OnActionCompleted func(orgID string, record unified.ActionAuditRecord)
 	// OnActionTransition receives the org ID and audit record after every
 	// successfully persisted state transition: plan creation, approval
 	// decisions, and terminal execution outcomes (including refusals).
@@ -997,6 +999,11 @@ func (s *Service) Decide(ctx context.Context, orgID, actionID string, decision u
 		if err := s.validateCurrentReadiness(ctx, orgID, record, liveCheck); err != nil {
 			return unified.ActionAuditRecord{}, err
 		}
+		// The agent's answer can outlive the reviewer's authority. Ask again
+		// before the approval is persisted.
+		if err := s.DecisionAuthorizer.AuthorizeDecision(ctx, orgID, record, decision); err != nil {
+			return unified.ActionAuditRecord{}, err
+		}
 	}
 	if err := s.validateApprovalFloor(ctx, record, decision, true); err != nil {
 		return unified.ActionAuditRecord{}, err
@@ -1046,6 +1053,9 @@ func (s *Service) Decide(ctx context.Context, orgID, actionID string, decision u
 				}
 				if decision.Outcome == unified.OutcomeApproved {
 					if err := s.validateCurrentReadiness(ctx, orgID, current, liveCheck); err != nil {
+						return unified.ActionAuditRecord{}, err
+					}
+					if err := s.DecisionAuthorizer.AuthorizeDecision(ctx, orgID, current, decision); err != nil {
 						return unified.ActionAuditRecord{}, err
 					}
 				}
@@ -1308,43 +1318,74 @@ func (s *Service) validateApprovalFloor(ctx context.Context, record unified.Acti
 // linearization point against an operator policy save: a lock saved before it
 // refuses the dispatch, a lock saved after it queues behind it and does not
 // recall a dispatch that is already admitted.
+//
+// A call that dispatches nothing (the action is already final, or another
+// caller holds its dispatch) replays the stored record only to an actor who
+// may also review the action. Execute authority alone gets
+// ErrActionExecutionFinal or ErrActionAlreadyExecuting, so the record of an
+// action the caller did not run is never the answer to running it again.
 func (s *Service) Execute(ctx context.Context, orgID, actionID string, actor unified.ActionActor, reason string) (unified.ActionAuditRecord, error) {
+	record, dispatched, err := s.execute(ctx, orgID, actionID, actor, reason)
+	if err != nil || dispatched || s.recordReplayAllowed(ctx, orgID, record, actor) {
+		return record, err
+	}
+	if record.State == unified.ActionStateExecuting {
+		return unified.ActionAuditRecord{}, unified.ErrActionAlreadyExecuting
+	}
+	return unified.ActionAuditRecord{}, unified.ErrActionExecutionFinal
+}
+
+// recordReplayAllowed reports whether actor may be handed the stored record of
+// an action this call did not dispatch. That is a read of what others planned,
+// approved and ran, so it takes the review authority the DecisionAuthorizer
+// holds, the same one the transports ask for before showing an action. It
+// fails closed.
+func (s *Service) recordReplayAllowed(ctx context.Context, orgID string, record unified.ActionAuditRecord, actor unified.ActionActor) bool {
+	if s.DecisionAuthorizer == nil {
+		return false
+	}
+	return s.DecisionAuthorizer.AuthorizeDecision(ctx, orgID, record, unified.ActionDecision{Actor: unified.NormalizeActionActor(actor)}) == nil
+}
+
+// execute is Execute before the replay rule. The bool reports whether this
+// call handed the action to the executor.
+func (s *Service) execute(ctx context.Context, orgID, actionID string, actor unified.ActionActor, reason string) (unified.ActionAuditRecord, bool, error) {
 	actionID = strings.TrimSpace(actionID)
 	if actionID == "" {
-		return unified.ActionAuditRecord{}, &ActionNotFoundError{ActionID: actionID}
+		return unified.ActionAuditRecord{}, false, &ActionNotFoundError{ActionID: actionID}
 	}
 	store, err := s.store(orgID)
 	if err != nil {
-		return unified.ActionAuditRecord{}, err
+		return unified.ActionAuditRecord{}, false, err
 	}
 	record, ok, err := store.GetActionAudit(actionID)
 	if err != nil {
-		return unified.ActionAuditRecord{}, &QueryError{Op: "action audit", Err: err}
+		return unified.ActionAuditRecord{}, false, &QueryError{Op: "action audit", Err: err}
 	}
 	if !ok {
-		return unified.ActionAuditRecord{}, &ActionNotFoundError{ActionID: actionID}
+		return unified.ActionAuditRecord{}, false, &ActionNotFoundError{ActionID: actionID}
 	}
 	actor = unified.NormalizeActionActor(actor)
 	if err := unified.ValidateActionActor(actor); err != nil ||
 		(actor.Kind != unified.ActionActorUser && actor.Kind != unified.ActionActorAPIToken) ||
 		actor.OrgID != strings.TrimSpace(orgID) {
-		return unified.ActionAuditRecord{}, ErrApprovalActorNotHuman
+		return unified.ActionAuditRecord{}, false, ErrApprovalActorNotHuman
 	}
 	if err := unified.ValidateHumanActionBinding(record, orgID); err != nil {
-		return unified.ActionAuditRecord{}, err
+		return unified.ActionAuditRecord{}, false, err
 	}
 	if s.ExecutionAuthorizer == nil {
-		return unified.ActionAuditRecord{}, ErrExecutionAuthorizationUnavailable
+		return unified.ActionAuditRecord{}, false, ErrExecutionAuthorizationUnavailable
 	}
 	if err := s.ExecutionAuthorizer.AuthorizeExecution(ctx, orgID, record, actor); err != nil {
-		return unified.ActionAuditRecord{}, err
+		return unified.ActionAuditRecord{}, false, err
 	}
 	actorID := actor.SubjectID
 	if record.State == unified.ActionStateExecuting {
 		return s.dispatchCommitted(ctx, orgID, store, record, actorID)
 	}
 	if record.State == unified.ActionStateCompleted || record.State == unified.ActionStateFailed {
-		return record, nil
+		return record, false, nil
 	}
 
 	// Human admission shares the automatic path's boundary: the operator
@@ -1355,10 +1396,10 @@ func (s *Service) Execute(ctx context.Context, orgID, actionID string, actor uni
 	// is released before the executor runs.
 	coordinator := s.admissionCoordinator()
 	coordinator.mu.RLock()
-	started, admitted, admissionErr := s.beginHumanExecution(ctx, orgID, store, record, actorID, reason)
+	started, admitted, admissionErr := s.beginHumanExecution(ctx, orgID, store, record, actor, reason)
 	coordinator.mu.RUnlock()
 	if !admitted {
-		return started, admissionErr
+		return started, false, admissionErr
 	}
 	return s.dispatchCommitted(ctx, orgID, store, started, actorID)
 }
@@ -1368,7 +1409,8 @@ func (s *Service) Execute(ctx context.Context, orgID, actionID string, actor uni
 // admission read lock. A true result means the action is executing and its
 // durable dispatch attempt may be driven, including when a concurrent caller
 // won the admission.
-func (s *Service) beginHumanExecution(ctx context.Context, orgID string, store Store, record unified.ActionAuditRecord, actorID, reason string) (unified.ActionAuditRecord, bool, error) {
+func (s *Service) beginHumanExecution(ctx context.Context, orgID string, store Store, record unified.ActionAuditRecord, actor unified.ActionActor, reason string) (unified.ActionAuditRecord, bool, error) {
+	actorID := actor.SubjectID
 	now := s.now()
 	record, err := s.materializeExpiry(store, orgID, record)
 	if err != nil {
@@ -1384,7 +1426,7 @@ func (s *Service) beginHumanExecution(ctx context.Context, orgID string, store S
 				return unified.ActionAuditRecord{}, false, &PersistError{Op: "refused action execution", Err: persistErr}
 			}
 			s.publishTransition(orgID, failed)
-			s.publishCompleted(failed)
+			s.publishCompleted(orgID, failed)
 			return failed, false, err
 		}
 		return unified.ActionAuditRecord{}, false, err
@@ -1400,9 +1442,16 @@ func (s *Service) beginHumanExecution(ctx context.Context, orgID string, store S
 				return unified.ActionAuditRecord{}, false, &PersistError{Op: "refused action execution", Err: persistErr}
 			}
 			s.publishTransition(orgID, failed)
-			s.publishCompleted(failed)
+			s.publishCompleted(orgID, failed)
 			return failed, false, err
 		}
+		return unified.ActionAuditRecord{}, false, err
+	}
+	// Waiting for the admission lock and for the agent's answer can outlive
+	// the caller's authority. Ask again at the commit, so a credential
+	// withdrawn during the wait does not start the dispatch. The action stays
+	// approved for a caller who may still run it.
+	if err := s.ExecutionAuthorizer.AuthorizeExecution(ctx, orgID, record, actor); err != nil {
 		return unified.ActionAuditRecord{}, false, err
 	}
 
@@ -1447,7 +1496,8 @@ func (s *Service) ExecuteUnderPolicy(ctx context.Context, orgID, actionID, actor
 	if !admitted {
 		return started, admissionErr
 	}
-	return s.dispatchCommitted(ctx, orgID, store, started, actor)
+	completed, _, err := s.dispatchCommitted(ctx, orgID, store, started, actor)
+	return completed, err
 }
 
 func (s *Service) beginPolicyExecution(ctx context.Context, orgID, actionID, actor string, authorize PolicyAuthorizer) (unified.ActionAuditRecord, Store, bool, error) {
@@ -1581,45 +1631,51 @@ func (s *Service) materializeExpiry(store Store, orgID string, record unified.Ac
 	return expired, nil
 }
 
-func (s *Service) dispatchCommitted(ctx context.Context, orgID string, store Store, record unified.ActionAuditRecord, actor string) (unified.ActionAuditRecord, error) {
+// dispatchCommitted drives the durable dispatch attempt of an executing action.
+// The bool reports whether this call won the claim and handed the action to
+// the executor. It is false when the attempt belongs to another caller: a
+// legacy row, a lost claim, or the reconciliation of a dispatch already sent.
+func (s *Service) dispatchCommitted(ctx context.Context, orgID string, store Store, record unified.ActionAuditRecord, actor string) (unified.ActionAuditRecord, bool, error) {
 	attempt, found, err := store.GetActionDispatchAttempt(record.ID)
 	if err != nil {
-		return unified.ActionAuditRecord{}, &QueryError{Op: "action dispatch attempt", Err: err}
+		return unified.ActionAuditRecord{}, false, &QueryError{Op: "action dispatch attempt", Err: err}
 	}
 	if !found {
 		// Legacy executing rows predate durable dispatch authority. They must
 		// remain observable, but can never be readmitted or blindly resent.
-		return record, nil
+		return record, false, nil
 	}
 	if attempt.State == unified.ActionDispatchReceiptPending || attempt.State == unified.ActionDispatchReceiptRecorded {
-		return s.reconcileCommitted(ctx, orgID, store, record, attempt, actor)
+		reconciled, err := s.reconcileCommitted(ctx, orgID, store, record, attempt, actor)
+		return reconciled, false, err
 	}
 	owner := fmt.Sprintf("action-lifecycle:%s:%d", attempt.ID, dispatchWorkerSequence.Add(1))
 	attempt, claimed, err := store.ClaimActionDispatch(record.ID, owner, s.now(), 30*time.Second)
 	if err != nil {
-		return unified.ActionAuditRecord{}, &PersistError{Op: "action dispatch claim", Err: err}
+		return unified.ActionAuditRecord{}, false, &PersistError{Op: "action dispatch claim", Err: err}
 	}
 	if !claimed {
-		return record, nil
+		return record, false, nil
 	}
 	attempt, err = store.MarkActionDispatchStarted(attempt.ID, owner, s.now())
 	if err != nil {
-		return unified.ActionAuditRecord{}, &PersistError{Op: "action dispatch start", Err: err}
+		return unified.ActionAuditRecord{}, false, &PersistError{Op: "action dispatch start", Err: err}
 	}
 	result, execErr := s.Executor.ExecuteAction(withDispatchAttempt(ctx, attempt), record)
 	if execErr != nil {
 		if result != nil {
-			return record, fmt.Errorf("%w: executor returned both result and error", unified.ErrExecutorResultContract)
+			return record, true, fmt.Errorf("%w: executor returned both result and error", unified.ErrExecutorResultContract)
 		}
 		// A timeout, disconnect, cancellation, or generic executor error is not
 		// proof that the transport answered. Preserve receipt_pending so a
 		// reconciler can query by attempt ID without resending.
-		return record, execErr
+		return record, true, execErr
 	}
 	receipt := unified.ActionDispatchReceipt{
 		AttemptID: attempt.ID, ActionID: record.ID, TransportRequestID: attempt.ID, ReceivedAt: s.now(),
 	}
-	return s.completeCorrelatedDispatch(orgID, store, record, receipt, result, actor)
+	completed, err := s.completeCorrelatedDispatch(orgID, store, record, receipt, result, actor)
+	return completed, true, err
 }
 
 func (s *Service) reconcileCommitted(ctx context.Context, orgID string, store Store, record unified.ActionAuditRecord, attempt unified.ActionDispatchAttempt, actor string) (unified.ActionAuditRecord, error) {
@@ -1663,7 +1719,7 @@ func (s *Service) completeCorrelatedDispatch(orgID string, store Store, record u
 		return unified.ActionAuditRecord{}, &PersistError{Op: "correlated action dispatch completion", Err: err}
 	}
 	s.publishTransition(orgID, completed)
-	s.publishCompleted(completed)
+	s.publishCompleted(orgID, completed)
 	truth := unified.CanonicalActionResultV2(completed)
 	verificationOutcome := string(truth.Verification.Status)
 	if truth.Verification.Status == unified.ActionVerificationInconclusive &&
@@ -1759,7 +1815,7 @@ func (s *Service) ForceFail(orgID, actionID, actor, reason string) (unified.Acti
 		return unified.ActionAuditRecord{}, &PersistError{Op: "action force fail", Err: err}
 	}
 	s.publishTransition(orgID, failed)
-	s.publishCompleted(failed)
+	s.publishCompleted(orgID, failed)
 	return failed, nil
 }
 
@@ -1777,7 +1833,7 @@ func (s *Service) RecoverExecutingActions(ctx context.Context, orgID, actor stri
 	}
 	recovered := make([]unified.ActionAuditRecord, 0, len(records))
 	for _, record := range records {
-		current, recoverErr := s.dispatchCommitted(ctx, orgID, store, record, actor)
+		current, _, recoverErr := s.dispatchCommitted(ctx, orgID, store, record, actor)
 		if recoverErr != nil {
 			continue
 		}
@@ -1799,7 +1855,7 @@ func (s *Service) refusePolicyAdmission(store Store, orgID string, record unifie
 		return unified.ActionAuditRecord{}, &PersistError{Op: "policy admission refusal", Err: persistErr}
 	}
 	s.publishTransition(orgID, failed)
-	s.publishCompleted(failed)
+	s.publishCompleted(orgID, failed)
 	return failed, reason
 }
 
@@ -1949,14 +2005,14 @@ func RecordRefusedExecution(store Store, record unified.ActionAuditRecord, actor
 	return failed, nil
 }
 
-func (s *Service) publishCompleted(record unified.ActionAuditRecord) {
+func (s *Service) publishCompleted(orgID string, record unified.ActionAuditRecord) {
 	if s == nil || s.OnActionCompleted == nil {
 		return
 	}
 	if record.State != unified.ActionStateCompleted && record.State != unified.ActionStateFailed {
 		return
 	}
-	s.OnActionCompleted(record)
+	s.OnActionCompleted(orgID, record)
 }
 
 // publishTransition notifies the persisted-state subscriber. Callers invoke

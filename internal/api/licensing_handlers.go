@@ -42,6 +42,12 @@ const (
 	selfHostedBillingPurchaseFailed         = "failed"
 	selfHostedBillingPurchaseUnavailable    = "unavailable"
 	purchaseReturnKeyPurpose                = "pulse-license-purchase-return"
+
+	// The purchase return token is a JWT whose header and claims are
+	// JSON-decoded before its signature is checked, and the activation route is
+	// public. Pulse mints the token itself: well under 1 KiB.
+	maxPurchaseReturnTokenBytes              = 8 * 1024
+	maxLicensePurchaseActivationRequestBytes = 2 * maxPurchaseReturnTokenBytes
 )
 
 // Where checkout finishes when this instance has no secure address to return
@@ -491,6 +497,9 @@ func (h *LicenseHandlers) verifiedPurchaseReturnClaims(
 	r *http.Request,
 	returnToken string,
 ) (*purchaseReturnClaimsModel, error) {
+	if len(returnToken) > maxPurchaseReturnTokenBytes {
+		return nil, fmt.Errorf("purchase return token exceeds %d bytes", maxPurchaseReturnTokenBytes)
+	}
 	expectedHost := purchaseReturnExpectedHost(r, h.cfg)
 	if expectedHost == "" {
 		return nil, fmt.Errorf("purchase return expected host is unavailable")
@@ -1036,7 +1045,7 @@ func (h *LicenseHandlers) HandleActivateLicense(w http.ResponseWriter, r *http.R
 	}
 
 	var req ActivateLicenseRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 64*1024)).Decode(&req); err != nil {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(ActivateLicenseResponse{
@@ -1238,6 +1247,7 @@ func (h *LicenseHandlers) HandleCheckoutActivation(w http.ResponseWriter, r *htt
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
+	r.Body = http.MaxBytesReader(w, r.Body, maxLicensePurchaseActivationRequestBytes)
 	if err := r.ParseForm(); err != nil {
 		writeLicensePurchaseActivationFailurePage(w, http.StatusBadRequest, "", selfHostedBillingPurchaseFailed, "Purchase activation request was invalid.")
 		return

@@ -1,12 +1,15 @@
 package tlsutil
 
 import (
+	"context"
 	"crypto/sha256"
+	"crypto/tls"
 	"crypto/x509"
 	"encoding/hex"
 	"errors"
 	"fmt"
 	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"strings"
 	"testing"
@@ -15,6 +18,37 @@ import (
 
 func TestFetchFingerprintCancellationContract(t *testing.T) {
 	testFetchFingerprintCancellation(t)
+}
+
+// A verified capture yields the same leaf fingerprint as first-use capture, but
+// only for a chain and name the verifier accepts. The fixture certificate is
+// not in the system pool, so the public helper must refuse it without a result.
+func TestFetchVerifiedFingerprintRequiresTrustedPeer(t *testing.T) {
+	server := httptest.NewTLSServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
+	defer server.Close()
+	sum := sha256.Sum256(server.Certificate().Raw)
+	leaf := hex.EncodeToString(sum[:])
+
+	if fingerprint, err := FetchFingerprint(server.URL); err != nil || fingerprint != leaf {
+		t.Fatalf("first-use capture = %q, %v; want %q", fingerprint, err, leaf)
+	}
+	var unknownAuthority x509.UnknownAuthorityError
+	if fingerprint, err := FetchVerifiedFingerprint(server.URL); fingerprint != "" || !errors.As(err, &unknownAuthority) {
+		t.Fatalf("verified capture accepted an untrusted peer: fingerprint=%q error=%v", fingerprint, err)
+	}
+
+	roots := x509.NewCertPool()
+	roots.AddCert(server.Certificate())
+	trusted := &tls.Config{MinVersion: minimumTLSVersion, RootCAs: roots}
+	if fingerprint, err := fetchFingerprint(context.Background(), server.URL, trusted); err != nil || fingerprint != leaf {
+		t.Fatalf("verified capture of a trusted peer = %q, %v; want %q", fingerprint, err, leaf)
+	}
+	// The fixture certificate names 127.0.0.1 and example.com only.
+	wrongName := strings.Replace(server.URL, "127.0.0.1", "localhost", 1)
+	var hostname x509.HostnameError
+	if fingerprint, err := fetchFingerprint(context.Background(), wrongName, trusted); fingerprint != "" || !errors.As(err, &hostname) {
+		t.Fatalf("verified capture accepted a certificate for another name: fingerprint=%q error=%v", fingerprint, err)
+	}
 }
 
 func TestCreateHTTPClientRedirectAuthorityValidation(t *testing.T) {

@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -15,6 +16,10 @@ import (
 	"sync"
 	"testing"
 	"time"
+	"unicode"
+	"unicode/utf8"
+
+	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 )
 
 const appriseOutputBlockBytes = 32 * 1024
@@ -34,6 +39,12 @@ func TestAppriseOutputProcessHelper(t *testing.T) {
 		separator := slices.Index(os.Args, "--")
 		if separator < 0 || !slices.Equal(os.Args[separator+1:], expected) {
 			os.Exit(42)
+		}
+	}
+	if path := os.Getenv("PULSE_APPRISE_OUTPUT_STDIN"); path != "" {
+		body, err := io.ReadAll(os.Stdin)
+		if err != nil || os.WriteFile(path, body, 0600) != nil {
+			os.Exit(47)
 		}
 	}
 	blocks, err := strconv.Atoi(os.Getenv("PULSE_APPRISE_OUTPUT_BLOCKS"))
@@ -88,6 +99,7 @@ func appriseOutputProcessFixture(t *testing.T, blocks, exit int) string {
 	t.Setenv("PULSE_APPRISE_OUTPUT_READY", ready)
 	t.Setenv("PULSE_APPRISE_OUTPUT_HOLD", "")
 	t.Setenv("PULSE_APPRISE_OUTPUT_ARGS", "")
+	t.Setenv("PULSE_APPRISE_OUTPUT_STDIN", "")
 	launcher := "#!/bin/sh\nexec \"$PULSE_APPRISE_OUTPUT_BINARY\" -test.run=^TestAppriseOutputProcessHelper$ -- \"$@\"\n"
 	if err := os.WriteFile(filepath.Join(dir, "apprise"), []byte(launcher), 0700); err != nil {
 		t.Fatal(err)
@@ -107,7 +119,7 @@ func TestDefaultAppriseExecCountsOutputWithoutRetainingContent(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			appriseOutputProcessFixture(t, tc.blocks, tc.exit)
-			args := []string{"-t", "synthetic title", "-b", "synthetic body", "json://synthetic/one value"}
+			args := []string{"-t", "synthetic title", "json://synthetic/one value"}
 			encoded, err := json.Marshal(args)
 			if err != nil {
 				t.Fatal(err)
@@ -117,7 +129,7 @@ func TestDefaultAppriseExecCountsOutputWithoutRetainingContent(t *testing.T) {
 			defer cancel()
 			var before, after runtime.MemStats
 			runtime.ReadMemStats(&before)
-			count, err := defaultAppriseExec(ctx, args)
+			count, err := defaultAppriseExec(ctx, args, "synthetic body")
 			runtime.ReadMemStats(&after)
 			want := int64(2 * tc.blocks * appriseOutputBlockBytes)
 			if count != want {
@@ -147,7 +159,7 @@ func TestDefaultAppriseExecPreservesStartFailures(t *testing.T) {
 			t.Skip("the executable fixture is Unix-specific")
 		}
 		t.Setenv("PATH", t.TempDir())
-		count, err := defaultAppriseExec(context.Background(), nil)
+		count, err := defaultAppriseExec(context.Background(), nil, "")
 		if count != 0 || !errors.Is(err, exec.ErrNotFound) {
 			t.Fatalf("missing executable: count=%d, err=%v", count, err)
 		}
@@ -156,7 +168,7 @@ func TestDefaultAppriseExecPreservesStartFailures(t *testing.T) {
 		appriseOutputProcessFixture(t, 0, 0)
 		ctx, cancel := context.WithCancel(context.Background())
 		cancel()
-		count, err := defaultAppriseExec(ctx, nil)
+		count, err := defaultAppriseExec(ctx, nil, "")
 		if count != 0 || !errors.Is(err, context.Canceled) {
 			t.Fatalf("cancelled start: count=%d, err=%v", count, err)
 		}
@@ -174,7 +186,7 @@ func TestDefaultAppriseExecPreservesCancellationAfterOutput(t *testing.T) {
 	}
 	done := make(chan result, 1)
 	go func() {
-		count, err := defaultAppriseExec(ctx, nil)
+		count, err := defaultAppriseExec(ctx, nil, "")
 		done <- result{count, err}
 	}()
 	joined := false
@@ -251,6 +263,81 @@ func TestAppriseCLIOutputCountsAcrossSenders(t *testing.T) {
 				}
 			})
 		}
+	}
+}
+
+// A reported resource name is not the operator's to choose. One that cannot be a
+// process argument must not keep the CLI from starting, for its own alert or for
+// the alerts grouped with it.
+func TestAppriseCLIStartsWithUnrepresentableAlertText(t *testing.T) {
+	hostile := "web\x00" + strings.Repeat("é", 140_000)
+	honest := &alerts.Alert{ID: "honest", ResourceName: "payments-db", Node: "production-host", Message: "payments-db is unhealthy", Level: alerts.AlertLevelCritical}
+	crafted := &alerts.Alert{ID: "crafted", ResourceName: hostile, Node: hostile, Instance: "Docker:" + hostile, Message: hostile + " is unhealthy", Level: alerts.AlertLevelCritical}
+	cfg := AppriseConfig{Enabled: true, Mode: AppriseModeCLI, TimeoutSeconds: 15, Targets: []string{"json://synthetic-one"}}
+	for _, tc := range []struct {
+		name   string
+		alerts []*alerts.Alert
+		title  string
+	}{
+		{"grouped-crafted-first", []*alerts.Alert{crafted, honest}, "Pulse alerts (2)"},
+		{"grouped-crafted-last", []*alerts.Alert{honest, crafted}, "Pulse alerts (2)"},
+		{"alone", []*alerts.Alert{crafted}, ""},
+	} {
+		for _, kind := range []string{"firing", "resolved"} {
+			t.Run(tc.name+"/"+kind, func(t *testing.T) {
+				appriseOutputProcessFixture(t, 0, 0)
+				received := filepath.Join(t.TempDir(), "stdin")
+				t.Setenv("PULSE_APPRISE_OUTPUT_STDIN", received)
+				if tc.title != "" && kind == "firing" {
+					encoded, err := json.Marshal(append([]string{"-t", tc.title}, cfg.Targets...))
+					if err != nil {
+						t.Fatal(err)
+					}
+					t.Setenv("PULSE_APPRISE_OUTPUT_ARGS", string(encoded))
+				}
+				n := &NotificationManager{}
+				var err error
+				if kind == "resolved" {
+					err = n.sendResolvedApprise(cfg, tc.alerts, time.Now())
+				} else {
+					err = n.sendGroupedApprise(cfg, tc.alerts)
+				}
+				if err != nil {
+					t.Fatalf("CLI did not run: %v", err)
+				}
+				body, err := os.ReadFile(received)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if bytes.IndexByte(body, 0) >= 0 || !utf8.Valid(body) {
+					t.Error("body on standard input is not clean text")
+				}
+				if !bytes.Contains(body, []byte(strings.Repeat("é", 140_000))) {
+					t.Error("body on standard input was truncated")
+				}
+				if len(tc.alerts) > 1 && !bytes.Contains(body, []byte("payments-db")) {
+					t.Error("the alert grouped with the crafted name was not delivered")
+				}
+			})
+		}
+	}
+}
+
+func TestAppriseCLITitleIsOneBoundedArgument(t *testing.T) {
+	if got := appriseCLITitle("Pulse alert: db-1"); got != "Pulse alert: db-1" {
+		t.Fatalf("ordinary title changed: %q", got)
+	}
+	for _, name := range []string{"web\x00", "web\r\n--attach=/etc/passwd", strings.Repeat("é", 140_000), strings.Repeat("\xff", 4096)} {
+		got := appriseCLITitle("Pulse alert: " + name)
+		if len(got) > appriseCLITitleBytes || !utf8.ValidString(got) || !strings.HasPrefix(got, "Pulse alert: ") {
+			t.Fatalf("title is not a bounded text argument: %d bytes", len(got))
+		}
+		if strings.ContainsFunc(got, unicode.IsControl) {
+			t.Fatalf("title kept a control character: %q", got)
+		}
+	}
+	if got := appriseCLIBody("a\x00b\xff\nc"); got != "ab\uFFFD\nc" {
+		t.Fatalf("body = %q", got)
 	}
 }
 

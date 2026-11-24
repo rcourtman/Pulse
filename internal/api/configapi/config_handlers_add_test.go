@@ -3,10 +3,14 @@ package configapi
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strings"
+	"sync/atomic"
 	"testing"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
@@ -303,6 +307,76 @@ func TestHandleAddNode_PBSTurnkeyTokenCreationUsesCanonicalPulseURL(t *testing.T
 	}
 	if got := cfg.PBSInstances[0].Password; got != "" {
 		t.Fatalf("Password = %q, want cleared after turnkey token creation", got)
+	}
+}
+
+func TestHandleAddNode_PBSTurnkeyTokenCreationHonorsRequestTLSPolicy(t *testing.T) {
+	cases := []struct {
+		name        string
+		tls         func(leaf []byte) map[string]any
+		wantContact bool
+	}{
+		{
+			name: "verify ssl rejects untrusted certificate",
+			tls:  func([]byte) map[string]any { return map[string]any{"verifySSL": true} },
+		},
+		{
+			name: "pinned fingerprint rejects other certificate",
+			tls:  func([]byte) map[string]any { return map[string]any{"fingerprint": strings.Repeat("ab", 32)} },
+		},
+		{
+			name: "pinned fingerprint accepts matching certificate",
+			tls: func(leaf []byte) map[string]any {
+				sum := sha256.Sum256(leaf)
+				return map[string]any{"verifySSL": true, "fingerprint": hex.EncodeToString(sum[:])}
+			},
+			wantContact: true,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			tempDir := t.TempDir()
+
+			// The turnkey login carries the operator's PBS password, so an
+			// endpoint that fails the requested TLS policy must never see it.
+			var logins atomic.Int32
+			pbsServer := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				logins.Add(1)
+				http.Error(w, "authentication failure", http.StatusUnauthorized)
+			}))
+			defer pbsServer.Close()
+
+			cfg := &config.Config{
+				DataPath:     tempDir,
+				ConfigPath:   tempDir,
+				PublicURL:    "https://public.example.com",
+				FrontendPort: 7655,
+			}
+			handler := newTestConfigHandlers(t, cfg)
+
+			payload := map[string]any{
+				"name":     "test-pbs",
+				"type":     "pbs",
+				"host":     pbsServer.URL,
+				"user":     "root@pam",
+				"password": "secret",
+			}
+			for key, value := range tc.tls(pbsServer.Certificate().Raw) {
+				payload[key] = value
+			}
+			body, _ := json.Marshal(payload)
+
+			req := httptest.NewRequest(http.MethodPost, "/api/config/nodes", bytes.NewBuffer(body))
+			req.Host = "127.0.0.1:7655"
+			rec := httptest.NewRecorder()
+
+			handler.HandleAddNode(rec, req)
+
+			if got := logins.Load() > 0; got != tc.wantContact {
+				t.Fatalf("PBS endpoint contacted = %v (%d request(s)), want %v", got, logins.Load(), tc.wantContact)
+			}
+		})
 	}
 }
 

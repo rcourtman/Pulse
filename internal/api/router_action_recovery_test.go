@@ -15,6 +15,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/operationreceipt"
 	unified "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/auth"
 )
 
 // callbackLossDockerExecutor simulates a server that dies (or loses the agent
@@ -254,5 +255,81 @@ func TestRouterRecoverExecutingDockerUpdateAfterCapabilityDisappears(t *testing.
 	}
 	if len(agents.queries) != 1 {
 		t.Fatalf("receipt queries=%d, want one", len(agents.queries))
+	}
+}
+
+// receiptQueryOrgExecutor loses every dispatch callback and records which
+// organization its reconciler would query for the receipt.
+type receiptQueryOrgExecutor struct {
+	queriedOrgs []string
+}
+
+func (e *receiptQueryOrgExecutor) ExecuteAction(context.Context, unified.ActionAuditRecord) (*unified.ExecutionResult, error) {
+	return nil, errors.New("simulated callback loss after transport send")
+}
+
+func (e *receiptQueryOrgExecutor) ReconcileActionDispatch(ctx context.Context, _ unified.ActionAuditRecord, _ unified.ActionDispatchAttempt) (*unified.ExecutionResult, unified.ActionDispatchReceipt, bool, error) {
+	e.queriedOrgs = append(e.queriedOrgs, GetOrgID(ctx))
+	return nil, unified.ActionDispatchReceipt{}, false, nil
+}
+
+// The recovery pass walks every organization from one lifecycle context.
+// Executors take the organization of the agent session from the context, so
+// an organization's receipt must be asked of its own agents and never of the
+// default organization's.
+func TestRouterRecoverExecutingActionsQueriesTheActionsOwnOrganization(t *testing.T) {
+	now := time.Now().UTC()
+	resource := dockerContainerActionResource("app-container:api", "docker", "running", now)
+	cfg := &config.Config{DataPath: t.TempDir()}
+	h := newActionTestResourceHandlers(t, cfg)
+	h.SetTenantStateProvider(assistantTenantSeedProvider{orgID: "acme", snapshot: models.StateSnapshot{LastUpdate: now}, vm: resource})
+	executor := &receiptQueryOrgExecutor{}
+	h.SetActionExecutor(executor)
+	persistence := config.NewMultiTenantPersistence(cfg.DataPath)
+	if err := persistence.SaveOrganization(&models.Organization{ID: "acme", DisplayName: "Acme"}); err != nil {
+		t.Fatal(err)
+	}
+
+	acmeRequest := func(req *http.Request) *http.Request {
+		actor := unified.ActionActor{SubjectID: "operator@example.com", Kind: unified.ActionActorUser, CredentialID: "session:test", OrgID: "acme"}
+		ctx := context.WithValue(req.Context(), OrgIDContextKey, "acme")
+		return req.WithContext(withTrustedActionActor(auth.WithUser(ctx, actor.SubjectID), actor))
+	}
+	planRec := httptest.NewRecorder()
+	h.HandlePlanAction(planRec, acmeRequest(httptest.NewRequest(http.MethodPost, "/api/actions/plan", bytes.NewBufferString(`{
+		"requestId":"req-acme-recovery",
+		"resourceId":"app-container:api",
+		"capabilityName":"restart",
+		"reason":"exercise tenant recovery"
+	}`))))
+	var plan unified.ActionPlan
+	if err := json.Unmarshal(planRec.Body.Bytes(), &plan); planRec.Code != http.StatusOK || err != nil || plan.ActionID == "" {
+		t.Fatalf("plan status=%d err=%v body=%s", planRec.Code, err, planRec.Body.String())
+	}
+	decisionRec := httptest.NewRecorder()
+	decisionReq := httptest.NewRequest(http.MethodPost, "/api/actions/"+plan.ActionID+"/decision", bytes.NewBufferString(`{"outcome":"approved","reason":"controlled recovery proof"}`))
+	decisionReq.SetPathValue("id", plan.ActionID)
+	h.HandleDecideAction(decisionRec, acmeRequest(decisionReq))
+	if decisionRec.Code != http.StatusOK {
+		t.Fatalf("decision status=%d body=%s", decisionRec.Code, decisionRec.Body.String())
+	}
+	executionReq := httptest.NewRequest(http.MethodPost, "/api/actions/"+plan.ActionID+"/execute", bytes.NewBufferString(`{"reason":"controlled callback loss"}`))
+	executionReq.SetPathValue("id", plan.ActionID)
+	h.HandleExecuteAction(httptest.NewRecorder(), acmeRequest(executionReq))
+
+	store, err := h.getStore("acme")
+	if err != nil {
+		t.Fatal(err)
+	}
+	attempt, found, err := store.GetActionDispatchAttempt(plan.ActionID)
+	if err != nil || !found || attempt.State != unified.ActionDispatchReceiptPending {
+		t.Fatalf("pending attempt found=%v err=%v attempt=%#v", found, err, attempt)
+	}
+
+	router := &Router{resourceHandlers: h, multiTenant: persistence}
+	router.recoverExecutingActions("system:periodic-recovery")
+
+	if len(executor.queriedOrgs) != 1 || executor.queriedOrgs[0] != "acme" {
+		t.Fatalf("receipt queried in organizations %q, want only acme", executor.queriedOrgs)
 	}
 }

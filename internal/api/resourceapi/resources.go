@@ -773,6 +773,11 @@ func (h *QueryService) HandleStats(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(stats)
 }
 
+// maxResourceMutationRequestBytes bounds the link, unlink and report-merge
+// bodies, which carry resource identifiers and a short operator note that is
+// persisted.
+const maxResourceMutationRequestBytes = 64 << 10
+
 // HandleLink handles POST /api/resources/{id}/link.
 func (h *QueryService) HandleLink(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
@@ -800,7 +805,7 @@ func (h *QueryService) HandleLink(w http.ResponseWriter, r *http.Request) {
 		TargetID string `json:"targetId"`
 		Reason   string `json:"reason"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxResourceMutationRequestBytes)).Decode(&payload); err != nil {
 		http.Error(w, "Invalid JSON", http.StatusBadRequest)
 		return
 	}
@@ -859,7 +864,7 @@ func (h *QueryService) HandleUnlink(w http.ResponseWriter, r *http.Request) {
 		TargetID string `json:"targetId"`
 		Reason   string `json:"reason"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxResourceMutationRequestBytes)).Decode(&payload); err != nil {
 		http.Error(w, "Invalid JSON", http.StatusBadRequest)
 		return
 	}
@@ -917,7 +922,7 @@ func (h *QueryService) HandleReportMerge(w http.ResponseWriter, r *http.Request)
 		Sources []string `json:"sources"`
 		Notes   string   `json:"notes"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil && !errors.Is(err, io.EOF) {
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxResourceMutationRequestBytes)).Decode(&payload); err != nil && !errors.Is(err, io.EOF) {
 		http.Error(w, "Invalid JSON", http.StatusBadRequest)
 		return
 	}

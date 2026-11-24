@@ -88,7 +88,7 @@ func AdminKeyMiddleware(adminKey string, next http.Handler) http.Handler {
 		// Admin-key authenticated requests bypass session/membership middleware.
 		// Provide a conservative default role so downstream account-mutation auth
 		// checks stay fail-closed on missing role context.
-		req := r.Clone(r.Context())
+		req := r.Clone(auditlog.WithActor(r.Context(), auditlog.ActorAdminKey))
 		req.Header.Set("X-User-Role", string(registry.MemberRoleOwner))
 		next.ServeHTTP(w, req)
 	})

@@ -5454,11 +5454,19 @@ func (m *Monitor) hasLicensedFeature(feature string) bool {
 func (m *Monitor) SetRecoveryManager(manager *recoverymanager.Manager) {
 	m.mu.Lock()
 	m.recoveryManager = manager
+	orgID := strings.TrimSpace(m.orgID)
+	hasPBSDirectConnection := m.config != nil && len(m.config.PBSInstances) > 0
 	m.mu.Unlock()
 
+	if !hasPBSDirectConnection || manager == nil {
+		return
+	}
+
 	// Try cleanup during wiring so monitors that are already running still get
-	// the migration once a recovery manager becomes available.
-	go m.purgeStalePVEPBSBackupsBestEffort(context.Background())
+	// the migration once a recovery manager becomes available. Capture the
+	// snapshot synchronously above so the background goroutine does not read
+	// shared config slices concurrently with a subsequent monitor reload.
+	go m.purgeStalePVEPBSBackupsBestEffortWithSnapshot(context.Background(), manager, orgID)
 }
 
 // GetNotificationManager returns the notification manager

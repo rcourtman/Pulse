@@ -48,7 +48,8 @@ func testAgentInstallerStaging(t *testing.T, helper, relocated bool) {
 		extractInstallShellFunction(t, "pulse_url_uses_plain_http") + "\n" +
 		extractInstallShellFunction(t, "validate_staged_agent_url") + "\n" +
 		extractInstallShellFunction(t, "fail") + "\n" +
-		extractInstallShellFunction(t, "json_event") + "\n"
+		extractInstallShellFunction(t, "json_event") + "\n" +
+		extractLifecycleTrustShellFunctions(t)
 	oldBinary := "#!/bin/sh\nprintf 'old-fixture-version\\n'\n"
 	newBinary := `#!/bin/sh
 case "$1" in
@@ -387,5 +388,99 @@ mv() {
 				}
 			})
 		}
+	}
+}
+
+// Upgrade detection runs the installed collector with the installer's own
+// authority. Execute the shipped detection statements against real fixture
+// files: only a collector that no other account can rewrite may be run, and
+// every other existing collector is still stopped and replaced, not executed.
+func TestAgentInstallerUpgradeProbeRequiresTrustedCollector(t *testing.T) {
+	installer, err := os.ReadFile("../install.sh")
+	if err != nil {
+		t.Fatal(err)
+	}
+	start := strings.Index(string(installer), "# --- Upgrade Detection ---")
+	end := strings.Index(string(installer), "# Install Binary")
+	if start < 0 || end <= start {
+		t.Fatal("upgrade detection statements not found")
+	}
+	detection := string(installer[start:end])
+	oldBinary := "#!/bin/sh\nprintf 'executed\\n' >> \"$TRACE\"\nprintf 'old-fixture-version\\n'\n"
+	for _, tc := range []struct {
+		name     string
+		distrust func(t *testing.T, installDir, installed string) error
+	}{
+		{"installer-owned", nil},
+		{"collector-owned", func(t *testing.T, _, installed string) error {
+			if os.Geteuid() != 0 {
+				t.Skip("handing the fixture to another account requires root")
+			}
+			return os.Chown(installed, 65534, 65534)
+		}},
+		{"group-writable", func(_ *testing.T, _, installed string) error { return os.Chmod(installed, 0775) }},
+		{"writable-directory", func(_ *testing.T, installDir, _ string) error { return os.Chmod(installDir, 0777) }},
+		{"symlink", func(_ *testing.T, installDir, installed string) error {
+			target := filepath.Join(installDir, "collector-target")
+			if err := os.Rename(installed, target); err != nil {
+				return err
+			}
+			return os.Symlink(target, installed)
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			root := t.TempDir()
+			installDir := filepath.Join(root, "installation with spaces")
+			if err := os.Mkdir(installDir, 0755); err != nil {
+				t.Fatal(err)
+			}
+			installed := filepath.Join(installDir, "pulse-agent")
+			writeTestFile(t, installed, []byte(oldBinary), 0755)
+			if tc.distrust != nil {
+				if err := tc.distrust(t, installDir, installed); err != nil {
+					t.Fatal(err)
+				}
+			}
+			trace := filepath.Join(root, "operations")
+			writeTestFile(t, trace, nil, 0600)
+			script := `set -euo pipefail
+SAFE_PROFILE_ACTION=none
+UPDATE_ONLY=true
+EXIT_MISSING_ARGS=2
+AGENT_NAME=pulse-agent
+BINARY_NAME=pulse-agent
+NEW_VERSION=new-fixture-version
+log_info() { printf '%s\n' "$*"; }
+fail() { printf '%s\n' "$1"; exit "$2"; }
+stop_existing_agent_service() { printf 'stop\n' >> "$TRACE"; }
+systemctl() { return 1; }
+pkill() { printf 'kill\n' >> "$TRACE"; }
+sleep() { :; }
+` + extractLifecycleTrustShellFunctions(t) + detection + "\nprintf 'upgrade=%s\\n' \"$UPGRADE_MODE\"\n"
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			cmd := exec.CommandContext(ctx, "bash", "-c", script)
+			cmd.Env = append(os.Environ(), "INSTALL_DIR="+installDir, "TRACE="+trace)
+			output, err := cmd.CombinedOutput()
+			if err != nil {
+				t.Fatalf("upgrade detection: %v\n%s", err, output)
+			}
+			operations, err := os.ReadFile(trace)
+			if err != nil {
+				t.Fatal(err)
+			}
+			// An --update must stay on the upgrade path either way, so an
+			// untrusted collector is replaced instead of stranding the host.
+			wantOperations, wantVersion := "stop\nkill\n", "Existing installation detected: not queried"
+			if tc.distrust == nil {
+				wantOperations, wantVersion = "executed\n"+wantOperations, "Existing installation detected: old-fixture-version\n"
+			}
+			if string(operations) != wantOperations {
+				t.Fatalf("operations = %q, want %q\n%s", operations, wantOperations, output)
+			}
+			if !strings.Contains(string(output), wantVersion) || !strings.Contains(string(output), "upgrade=true\n") {
+				t.Fatalf("unexpected upgrade detection result:\n%s", output)
+			}
+		})
 	}
 }

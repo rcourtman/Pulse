@@ -1796,6 +1796,33 @@ func TestResourceLinkMergesResources(t *testing.T) {
 	}
 }
 
+func TestResourceMutationsRejectOversizedBody(t *testing.T) {
+	h := NewQueryService(&config.Config{DataPath: t.TempDir()})
+	h.SetStateProvider(resourceStateProvider{})
+
+	padding := strings.Repeat("a", maxResourceMutationRequestBytes)
+	cases := []struct {
+		action  string
+		handler http.HandlerFunc
+		payload map[string]any
+	}{
+		{"link", h.HandleLink, map[string]any{"targetId": "agent:beta", "reason": padding}},
+		{"unlink", h.HandleUnlink, map[string]any{"targetId": "agent:beta", "reason": padding}},
+		{"report-merge", h.HandleReportMerge, map[string]any{"sources": []string{"agent"}, "notes": padding}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.action, func(t *testing.T) {
+			body, _ := json.Marshal(tc.payload)
+			rec := httptest.NewRecorder()
+			req := httptest.NewRequest(http.MethodPost, "/api/resources/agent:alpha/"+tc.action, bytes.NewReader(body))
+			tc.handler(rec, req)
+			if rec.Code != http.StatusBadRequest || strings.TrimSpace(rec.Body.String()) != "Invalid JSON" {
+				t.Fatalf("%s status = %d body=%q, want 400 Invalid JSON", tc.action, rec.Code, rec.Body.String())
+			}
+		})
+	}
+}
+
 func TestResourceLinkFromAgentKeepsHypervisorGuestAuthorityInAPIState(t *testing.T) {
 	now := time.Now().UTC()
 	tests := []struct {

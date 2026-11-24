@@ -70,8 +70,12 @@ func actionActorForRequest(cfg *config.Config, r *http.Request, orgID string) (u
 		if valid, proxyUser, _ := CheckProxyAuth(cfg, r); valid && strings.EqualFold(strings.TrimSpace(proxyUser), user) {
 			credentialID = actionCredentialID("proxy", user)
 		}
-	} else if authorization := strings.TrimSpace(r.Header.Get("Authorization")); authorization != "" {
-		credentialID = actionCredentialID("http-auth", authorization)
+	} else if strings.TrimSpace(r.Header.Get("Authorization")) != "" {
+		// A Basic header carries the password, and the credential ID is
+		// persisted and returned to every action reader. Bind the verified
+		// principal, as the proxy branch does: an unkeyed digest of the
+		// header would let a reader test password guesses offline.
+		credentialID = actionCredentialID("http-auth", user)
 	} else if adminBypassEnabled() {
 		credentialID = "development-bypass"
 	} else if strings.TrimSpace(auth.GetUser(r.Context())) != "" {
@@ -103,6 +107,28 @@ func approvalEvidenceForRequest(actor unified.ActionActor, record unified.Action
 	}
 }
 
+type liveActionCredentialContextKey struct{}
+
+// withLiveActionCredential lets authorizeActor ask, every time the lifecycle
+// consults it, whether the credential that admitted this request still holds
+// the capability. Body reads, the admission lock and the agent's answer to a
+// check can outlive revocation, a scope edit or sign-out, and the request's
+// own token record is a detached snapshot that shows none of them. A token is
+// re-read in place of a session, as at admission. Proxy and basic credentials
+// have nothing to re-read and stay with the route.
+func withLiveActionCredential(cfg *config.Config, r *http.Request) context.Context {
+	session := sessionReadRevalidator(r)
+	live := func(capability string) bool {
+		token := tokenStreamSnapshotRevalidator(cfg, r, actionCapabilityScopes(capability)...)
+		if token == nil {
+			return session == nil || session()
+		}
+		_, ok := token()
+		return ok
+	}
+	return context.WithValue(r.Context(), liveActionCredentialContextKey{}, live)
+}
+
 type actionAuthority struct {
 	authorizer auth.Authorizer
 	orgChecker *DefaultAuthorizationChecker
@@ -110,6 +136,9 @@ type actionAuthority struct {
 
 func (a actionAuthority) authorizeActor(ctx context.Context, orgID string, actor unified.ActionActor, capability string) error {
 	actor = unified.NormalizeActionActor(actor)
+	if live, ok := ctx.Value(liveActionCredentialContextKey{}).(func(string) bool); ok && !live(capability) {
+		return actionlifecycle.ErrActionAuthorizationDenied
+	}
 	var token *config.APITokenRecord
 	if actor.Kind == unified.ActionActorAPIToken {
 		current, ok := auth.GetAPIToken(ctx).(*config.APITokenRecord)
@@ -133,22 +162,31 @@ func (a actionAuthority) authorizeActor(ctx context.Context, orgID string, actor
 	return authorizeActionCapability(ctx, a.authorizer, capability)
 }
 
-func tokenHasActionCapabilityScope(token *config.APITokenRecord, capability string) bool {
-	if token == nil {
-		return false
-	}
-	var scopes []string
+func actionCapabilityScopes(capability string) []string {
 	switch capability {
 	case auth.ActionPlan:
-		scopes = []string{config.ScopeActionsPlan, config.ScopeAIExecute}
+		return []string{config.ScopeActionsPlan, config.ScopeAIExecute}
 	case auth.ActionApprove:
-		scopes = []string{config.ScopeActionsApprove, config.ScopeAIExecute, config.ScopeRelayMobileAccess}
+		return []string{config.ScopeActionsApprove, config.ScopeAIExecute, config.ScopeRelayMobileAccess}
 	case auth.ActionExecute:
-		scopes = []string{config.ScopeActionsExecute, config.ScopeAIExecute, config.ScopeRelayMobileAccess}
+		return []string{config.ScopeActionsExecute, config.ScopeAIExecute, config.ScopeRelayMobileAccess}
 	default:
+		return nil
+	}
+}
+
+// tokenActionsWithheld reports whether a token was minted by a caller who
+// could not review or run actions (apiTokenMetadataActionsWithheld). Such a
+// token's scopes grant no action capability.
+func tokenActionsWithheld(token *config.APITokenRecord) bool {
+	return token != nil && token.Metadata[apiTokenMetadataActionsWithheld] == "true"
+}
+
+func tokenHasActionCapabilityScope(token *config.APITokenRecord, capability string) bool {
+	if token == nil || tokenActionsWithheld(token) {
 		return false
 	}
-	for _, scope := range scopes {
+	for _, scope := range actionCapabilityScopes(capability) {
 		if token.HasScope(scope) {
 			return true
 		}
@@ -214,6 +252,10 @@ func authorizeActionCapability(ctx context.Context, authorizer auth.Authorizer, 
 // action lifecycle.
 func requireActionCapability(cfg *config.Config, authorizer auth.Authorizer, capability string, handler http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		if tokenActionsWithheld(getAPITokenRecordFromRequest(r)) {
+			writeJSONError(w, http.StatusForbidden, "action_capability_denied", "Administrator privileges or an explicit action grant are required")
+			return
+		}
 		if _, isDefaultAuthorizer := authorizer.(*auth.DefaultAuthorizer); isDefaultAuthorizer && getAPITokenRecordFromRequest(r) == nil {
 			if cfg != nil && strings.TrimSpace(cfg.ProxyAuthSecret) != "" {
 				if valid, _, isAdmin := CheckProxyAuth(cfg, r); valid && !isAdmin {
@@ -268,15 +310,70 @@ type assistantActionPlanAuthorityContextKey struct{}
 //   - planning an action (pulse_control) needs action-plan, the capability
 //     POST /api/actions/plan requires.
 //
-// Everyone who can chat keeps the Assistant for Pulse's own data.
+// Everyone who can chat keeps the Assistant for Pulse's own data. The turn is
+// stored in a session, so the caller's session access is bound here as well.
+//
+// The routes that read back what Patrol's unbound runs got from hosts (run
+// tool calls, stream tool output, investigation transcripts) bind it too and
+// serve that output only with the host-command authority
+// (patrolToolOutputAllowed). Dismiss and resolve routes also bind it so
+// callers without host-command authority cannot write free-text notes into
+// Patrol's prompt context.
 func withAssistantActionAuthority(cfg *config.Config, authorizer auth.Authorizer, handler http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		hostCommands := requestHasActionCapability(cfg, authorizer, r, auth.ActionExecute)
 		plan := assistantRequestHasActionPlanCapability(cfg, authorizer, r)
 		ctx := chat.WithHostCommandAuthority(r.Context(), hostCommands)
 		ctx = context.WithValue(ctx, assistantActionPlanAuthorityContextKey{}, plan)
+		ctx = chat.WithSessionAccess(ctx, assistantSessionAccessForRequest(cfg, r, hostCommands))
 		handler(w, r.WithContext(ctx))
 	}
+}
+
+// assistantSessionAccessForRequest names the caller for Assistant session
+// ownership. A person owns sessions under their user name, whichever login
+// made them. An API token owns them under its own ID and not under the user
+// it is bound to: an ai:chat token of an administrator cannot have the
+// Assistant run host commands, so it must not read them out of that
+// administrator's sessions either. A caller that cannot be identified owns
+// nothing. hostCommands is the caller's action-execute capability; it opens
+// every session, since such a caller could run the same commands itself.
+func assistantSessionAccessForRequest(cfg *config.Config, r *http.Request, hostCommands bool) chat.SessionAccess {
+	access := chat.SessionAccess{All: hostCommands}
+	actor, err := actionActorForRequest(cfg, r, GetOrgID(r.Context()))
+	if err != nil {
+		return access
+	}
+	switch actor.Kind {
+	case unified.ActionActorAPIToken:
+		access.Owner = actor.CredentialID
+	case unified.ActionActorUser:
+		access.Owner = "user:" + strings.ToLower(actor.SubjectID)
+	}
+	return access
+}
+
+// withAssistantSessionAccess confines the Assistant session routes to the
+// caller's own sessions. Transcripts hold the output of host commands the
+// Assistant ran, so only a caller with the action-execute capability, who may
+// have the Assistant run them, sees the sessions of others.
+func withAssistantSessionAccess(cfg *config.Config, authorizer auth.Authorizer, handler http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		hostCommands := requestHasActionCapability(cfg, authorizer, r, auth.ActionExecute)
+		ctx := chat.WithSessionAccess(r.Context(), assistantSessionAccessForRequest(cfg, r, hostCommands))
+		handler(w, r.WithContext(ctx))
+	}
+}
+
+// assistantSessionContext returns the context the Assistant session handlers
+// hand to the chat service. A request that reached a handler without a bound
+// caller gets the zero access, which owns and sees nothing, because the chat
+// service reads an unbound context as Pulse's own work.
+func assistantSessionContext(ctx context.Context) context.Context {
+	if _, bound := chat.SessionAccessFromContext(ctx); bound {
+		return ctx
+	}
+	return chat.WithSessionAccess(ctx, chat.SessionAccess{})
 }
 
 // assistantRequestHasActionPlanCapability is the role half of the Assistant's
@@ -286,8 +383,8 @@ func withAssistantActionAuthority(cfg *config.Config, authorizer auth.Authorizer
 // approval) and must still pass the authorizer, so an RBAC role without the
 // plan grant cannot plan through a token either.
 func assistantRequestHasActionPlanCapability(cfg *config.Config, authorizer auth.Authorizer, r *http.Request) bool {
-	if getAPITokenRecordFromRequest(r) != nil {
-		return authorizeActionCapability(r.Context(), authorizer, auth.ActionPlan) == nil
+	if record := getAPITokenRecordFromRequest(r); record != nil {
+		return !tokenActionsWithheld(record) && authorizeActionCapability(r.Context(), authorizer, auth.ActionPlan) == nil
 	}
 	return requestHasActionCapability(cfg, authorizer, r, auth.ActionPlan)
 }
@@ -306,7 +403,7 @@ func assistantActionPlanAuthorityFromContext(ctx context.Context) bool {
 func requireAIApprovalReview(cfg *config.Config, authorizer auth.Authorizer, handler http.HandlerFunc) http.HandlerFunc {
 	sessionReview := requireActionCapability(cfg, authorizer, auth.ActionApprove, handler)
 	return func(w http.ResponseWriter, r *http.Request) {
-		if getAPITokenRecordFromRequest(r) != nil {
+		if record := getAPITokenRecordFromRequest(r); record != nil && !tokenActionsWithheld(record) {
 			handler(w, r)
 			return
 		}

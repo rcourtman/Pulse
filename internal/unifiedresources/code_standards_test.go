@@ -931,7 +931,7 @@ func TestActionExecutionContractStaysAPIOwned(t *testing.T) {
 			"ErrActionExecutionUnavailable",
 			"func (s *Service) ExecuteUnderPolicy(",
 			"func RecordRefusedExecution(store Store, record unified.ActionAuditRecord",
-			"func (s *Service) publishCompleted(record unified.ActionAuditRecord)",
+			"func (s *Service) publishCompleted(orgID string, record unified.ActionAuditRecord)",
 			// The persisted-state transition hook is org-scoped so
 			// multi-tenant reconcilers (e.g. Patrol finding outcomes)
 			// can never apply a transition to the wrong tenant, and it
@@ -957,7 +957,7 @@ func TestActionExecutionContractStaysAPIOwned(t *testing.T) {
 		},
 		filepath.Join("..", "api", "resources_compat.go"): {
 			"actionExecutor            ActionExecutor",
-			"actionCompleted           func(unified.ActionAuditRecord)",
+			"actionCompleted           func(orgID string, record unified.ActionAuditRecord)",
 			"actionTransition          func(orgID string, record unified.ActionAuditRecord)",
 			"func (h *ResourceHandlers) SetActionExecutor(executor ActionExecutor)",
 			"func (h *ResourceHandlers) SetActionCompletedPublisher(",
@@ -970,9 +970,9 @@ func TestActionExecutionContractStaysAPIOwned(t *testing.T) {
 			"actionlifecycle.ProjectActionAvailability(ctx, h.actionAvailability, resources)",
 		},
 		filepath.Join("..", "api", "agent_events.go"): {
-			"func (b *AgentEventBroadcaster) PublishActionCompletedRecord(record unifiedresources.ActionAuditRecord)",
+			"func (b *AgentEventBroadcaster) PublishActionCompletedRecord(orgID string, record unifiedresources.ActionAuditRecord)",
 			"payload := AgentEventActionCompletedPayload{",
-			"b.PublishActionCompleted(payload)",
+			"b.PublishActionCompleted(orgID, payload)",
 		},
 		filepath.Join("..", "api", "router.go"): {
 			"r.resourceHandlers.SetActionCompletedPublisher(r.agentEventBroadcaster.PublishActionCompletedRecord)",

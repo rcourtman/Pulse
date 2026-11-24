@@ -1,6 +1,7 @@
 package configapi
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -10,6 +11,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/proxmox"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/tlsutil"
 )
 
@@ -237,6 +239,18 @@ func TestHandleCanonicalAutoRegisterAdoptsClusterMemberConnectionAddress(t *test
 	tempDir := t.TempDir()
 	t.Setenv("PULSE_DATA_DIR", tempDir)
 
+	server := newIPv4TLSServer(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	expectedFingerprint, err := tlsutil.FetchFingerprint(server.URL)
+	if err != nil {
+		t.Fatalf("fetch expected fingerprint: %v", err)
+	}
+
+	// The member's saved pin is what proves the agent's new address is the
+	// same machine.
 	cfg := &config.Config{
 		DataPath:   tempDir,
 		ConfigPath: tempDir,
@@ -250,20 +264,15 @@ func TestHandleCanonicalAutoRegisterAdoptsClusterMemberConnectionAddress(t *test
 				ClusterName: "homelab",
 				ClusterEndpoints: []config.ClusterEndpoint{
 					{NodeID: "node/pve01", NodeName: "pve01", Host: "https://pve01:8006", IP: "192.0.2.10"},
-					{NodeID: "node/pve02", NodeName: "pve02", Host: "https://pve02:8006", IP: "192.0.2.11"},
+					{NodeID: "node/pve02", NodeName: "pve02", Host: "https://pve02:8006", IP: "192.0.2.11", Fingerprint: expectedFingerprint},
 				},
 			},
 		},
 	}
 	handler := newTestConfigHandlers(t, cfg)
 
-	server := newIPv4TLSServer(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	}))
-	defer server.Close()
-
 	// A reinstalled agent on the second cluster member re-registers with a
-	// fresh route-aware address; the member's stored short-DNS host must not
+	// fresh route-aware address. The member's stored short-DNS host must not
 	// win. The stale hostname rides along as an outranked candidate.
 	reqBody := AutoRegisterRequest{
 		Type:           "pve",
@@ -305,10 +314,6 @@ func TestHandleCanonicalAutoRegisterAdoptsClusterMemberConnectionAddress(t *test
 		t.Fatalf("member override = %q, want adopted agent address %q", member.IPOverride, wantOverride)
 	}
 
-	expectedFingerprint, err := tlsutil.FetchFingerprint(server.URL)
-	if err != nil {
-		t.Fatalf("fetch expected fingerprint: %v", err)
-	}
 	if member.Fingerprint != expectedFingerprint {
 		t.Fatalf("member fingerprint = %q, want pin captured from adopted address %q", member.Fingerprint, expectedFingerprint)
 	}
@@ -316,6 +321,102 @@ func TestHandleCanonicalAutoRegisterAdoptsClusterMemberConnectionAddress(t *test
 	untouched := instance.ClusterEndpoints[0]
 	if untouched.IPOverride != "" || untouched.Fingerprint != "" {
 		t.Fatalf("primary member endpoint mutated: override=%q fingerprint=%q", untouched.IPOverride, untouched.Fingerprint)
+	}
+}
+
+// A covered member keeps the cluster's stored credentials, so its address is
+// where Pulse presents them. Neither a setup token nor an install grant proves
+// the caller is the member it names: an unpinned member keeps its address and
+// stays unpinned, and no source is created at the caller's address.
+func TestHandleCanonicalAutoRegisterKeepsUnpinnedClusterMemberAddress(t *testing.T) {
+	server := newIPv4TLSServer(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	const installToken = "host-install-grant.12345678"
+	newHandler := func(t *testing.T) (*ConfigHandlers, *config.Config) {
+		t.Helper()
+		stubAutoRegisterNetworkDeps(t)
+		// Restore real TLS fingerprint fetch against our local test server.
+		fetchTLSFingerprint = tlsutil.FetchFingerprint
+		tempDir := t.TempDir()
+		t.Setenv("PULSE_DATA_DIR", tempDir)
+		record := newTokenRecord(t, installToken, []string{config.ScopeAgentReport}, map[string]string{
+			"install_type": agentInstallTypeHost,
+			"issued_via":   agentInstallIssuedViaConfig,
+		})
+		cfg := &config.Config{
+			DataPath:   tempDir,
+			ConfigPath: tempDir,
+			APITokens:  []config.APITokenRecord{record},
+			PVEInstances: []config.PVEInstance{{
+				Name:        "prod",
+				Host:        "https://192.0.2.10:8006",
+				TokenName:   "pulse-monitor@pve!pulse-prod",
+				TokenValue:  "cluster-secret",
+				Fingerprint: "AA:AA",
+				VerifySSL:   true,
+				IsCluster:   true,
+				ClusterName: "prod",
+				ClusterEndpoints: []config.ClusterEndpoint{
+					{NodeName: "pve1", Host: "https://pve1:8006", IP: "192.0.2.10", Fingerprint: "AA:AA"},
+					{NodeName: "pve3", Host: "https://pve3:8006", IP: "192.0.2.13"},
+				},
+			}},
+		}
+		return newTestConfigHandlers(t, cfg), cfg
+	}
+
+	requests := map[string]AutoRegisterRequest{
+		"node name": {
+			Type: "pve", Host: server.URL, ServerName: "pve3",
+			TokenID: "pulse-monitor@pve!pulse-x", TokenValue: "caller-secret",
+		},
+		"member address": {
+			Type: "pve", Host: server.URL, CandidateHosts: []string{server.URL, "https://192.0.2.13:8006"},
+			ServerName: "elsewhere",
+			TokenID:    "pulse-monitor@pve!pulse-x", TokenValue: "caller-secret",
+		},
+	}
+	callers := map[string]func(*testing.T, *ConfigHandlers, AutoRegisterRequest) *httptest.ResponseRecorder{
+		"install grant": func(t *testing.T, handler *ConfigHandlers, payload AutoRegisterRequest) *httptest.ResponseRecorder {
+			payload.Source = "agent"
+			return runAgentAutoRegister(t, handler, installToken, payload)
+		},
+		"setup token": func(_ *testing.T, handler *ConfigHandlers, payload AutoRegisterRequest) *httptest.ResponseRecorder {
+			payload.Source = "script"
+			rec := httptest.NewRecorder()
+			handler.handleCanonicalAutoRegister(rec, httptest.NewRequest(http.MethodPost, "/api/auto-register", nil), &payload, "127.0.0.1")
+			return rec
+		},
+	}
+
+	for callerName, register := range callers {
+		for requestName, payload := range requests {
+			t.Run(callerName+"/"+requestName, func(t *testing.T) {
+				handler, cfg := newHandler(t)
+
+				rec := register(t, handler, payload)
+				if rec.Code != http.StatusOK {
+					t.Fatalf("status = %d, want 200: %s", rec.Code, rec.Body.String())
+				}
+				if len(cfg.PVEInstances) != 1 {
+					t.Fatalf("PVE instances = %d, want the covering cluster only", len(cfg.PVEInstances))
+				}
+				cluster := cfg.PVEInstances[0]
+				if cluster.Host != "https://192.0.2.10:8006" || cluster.TokenName != "pulse-monitor@pve!pulse-prod" || cluster.TokenValue != "cluster-secret" {
+					t.Fatalf("cluster connection changed: host=%q token=%q", cluster.Host, cluster.TokenName)
+				}
+				member := cluster.ClusterEndpoints[1]
+				if member.IPOverride != "" {
+					t.Fatalf("unpinned member moved to the caller's address %q", member.IPOverride)
+				}
+				if member.Fingerprint != "" {
+					t.Fatalf("unpinned member pinned to the caller's certificate %q", member.Fingerprint)
+				}
+			})
+		}
 	}
 }
 
@@ -815,13 +916,18 @@ func TestHandleCanonicalAutoRegisterStateChangingRegistrationStillReloads(t *tes
 
 	// Initial state: a cluster with a stale token. The auto-register payload
 	// carries a fresh token that must be persisted, so SaveNodesConfig and the
-	// monitor reload should still fire.
+	// monitor reload should still fire. The member's own cluster status lists
+	// the cluster's saved host, which is what lets it rotate the shared token.
+	stubAutoRegisterClusterView(t, func(proxmox.ClientConfig) (bool, []config.ClusterEndpoint) {
+		return true, []config.ClusterEndpoint{{NodeName: "delly", IP: "192.0.2.10"}, {NodeName: "minipc", IP: "192.0.2.11"}}
+	})
 	cfg := &config.Config{
 		DataPath:   tempDir,
 		ConfigPath: tempDir,
 		PVEInstances: []config.PVEInstance{
 			{
 				Name:        "delly",
+				Host:        "https://192.0.2.10:8006",
 				ClusterName: "delly",
 				IsCluster:   true,
 				TokenName:   "pulse-monitor@pve!pulse-cluster-node",
@@ -867,6 +973,47 @@ func TestHandleCanonicalAutoRegisterStateChangingRegistrationStillReloads(t *tes
 	case <-time.After(time.Second):
 		t.Fatal("expected a monitor reload after a real token rotation, none observed")
 	}
+}
+
+func TestReloadAfterAutoRegisterSpacesReloadsForExistingConnections(t *testing.T) {
+	previous := autoRegisterReloadInterval
+	autoRegisterReloadInterval = time.Second
+	t.Cleanup(func() { autoRegisterReloadInterval = previous })
+
+	reloadCalls := make(chan struct{}, 100)
+	handler := &ConfigHandlers{reloadFunc: func() error {
+		reloadCalls <- struct{}{}
+		return nil
+	}}
+	expectReloads := func(step string, want int, within time.Duration) {
+		t.Helper()
+		deadline := time.After(within)
+		for got := 0; ; got++ {
+			select {
+			case <-reloadCalls:
+			case <-deadline:
+				if got != want {
+					t.Fatalf("%s: %d monitor reloads, want %d", step, got, want)
+				}
+				return
+			}
+		}
+	}
+
+	// An agent token may announce a new secret for its own connection as
+	// often as it likes. The first change applies at once; the rest share one
+	// reload at the end of the interval.
+	for i := 0; i < 50; i++ {
+		handler.reloadAfterAutoRegister(context.Background(), false)
+	}
+	expectReloads("burst of re-registrations", 1, 300*time.Millisecond)
+	expectReloads("end of the interval", 1, time.Second)
+
+	// A new connection does not wait behind them.
+	handler.reloadAfterAutoRegister(context.Background(), false)
+	handler.reloadAfterAutoRegister(context.Background(), true)
+	expectReloads("new connection", 1, 300*time.Millisecond)
+	expectReloads("queued re-registration", 1, time.Second)
 }
 
 func TestHandleCanonicalAutoRegister_PVEPreservesExistingHostnameWhenRequestUsesSameIP(t *testing.T) {
@@ -1658,6 +1805,120 @@ func TestHandleCanonicalAutoRegister_PBSReservesDisabledVerifySSL(t *testing.T) 
 	}
 }
 
+// An operator who chose "Verify SSL certificate" for a PBS connection whose
+// certificate a trusted CA signed saves the same state the #1303 heal looks
+// for: verification on, no pin. A re-registration during which Pulse cannot
+// fetch the certificate must leave that choice alone, as it does for PVE.
+func TestHandleCanonicalAutoRegister_PBSKeepsExplicitVerifySSLWithoutPin(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		explicit bool
+		want     bool
+	}{
+		{"operator choice", true, true},
+		{"legacy", false, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			stubAutoRegisterNetworkDeps(t)
+			tempDir := t.TempDir()
+			t.Setenv("PULSE_DATA_DIR", tempDir)
+
+			tokenID := "pulse-monitor@pbs!" + buildPulseMonitorTokenName("pulse.example.com")
+			cfg := &config.Config{
+				DataPath:   tempDir,
+				ConfigPath: tempDir,
+				PBSInstances: []config.PBSInstance{{
+					Name:              "pbs01",
+					Host:              "https://pbs01.local:8007",
+					TokenName:         tokenID,
+					TokenValue:        "existing-token",
+					VerifySSL:         true,
+					VerifySSLExplicit: tc.explicit,
+				}},
+			}
+			handler := newTestConfigHandlers(t, cfg)
+
+			reqBody := AutoRegisterRequest{
+				Type:       "pbs",
+				Host:       "https://pbs01.local:8007",
+				ServerName: "pbs01",
+				TokenID:    tokenID,
+				TokenValue: "rotated-token",
+				Source:     "agent",
+			}
+			req := httptest.NewRequest(http.MethodPost, "/api/auto-register", nil)
+			rec := httptest.NewRecorder()
+
+			handler.handleCanonicalAutoRegister(rec, req, &reqBody, "127.0.0.1")
+
+			if rec.Code != http.StatusOK {
+				t.Fatalf("status = %d, want 200: %s", rec.Code, rec.Body.String())
+			}
+			instance := handler.defaultConfig.PBSInstances[0]
+			if instance.TokenValue != "rotated-token" {
+				t.Fatalf("token value = %q, want the rotated token", instance.TokenValue)
+			}
+			if instance.VerifySSL != tc.want || instance.Fingerprint != "" {
+				t.Fatalf("VerifySSL = %v, fingerprint = %q, want VerifySSL %v and no pin", instance.VerifySSL, instance.Fingerprint, tc.want)
+			}
+		})
+	}
+}
+
+// Background agent re-registration without an install grant never pins an
+// unverified certificate over chosen CA verification, never replaces an
+// existing pin with a conflicting certificate, and never lowers VerifySSL even
+// when VerifySSLExplicit was not recorded yet (upgraded installs).
+func TestAgentTokenAutoRegisterKeepsChosenCAVerification(t *testing.T) {
+	const answering = "AA:BB:CC:DD"
+	for _, tc := range []struct {
+		name            string
+		explicit        bool
+		pinned          string
+		fetched         string
+		wantFingerprint string
+	}{
+		{"operator chose CA verification", true, "", answering, ""},
+		{"operator chose verification with a pin", true, "11:22:33:44", answering, "11:22:33:44"},
+		{"no recorded choice with cert capture", false, "", answering, answering},
+		{"no recorded choice and unreachable keeps verifySSL", false, "", "", ""},
+	} {
+		for _, nodeType := range []string{"pve", "pbs"} {
+			t.Run(tc.name+"/"+nodeType, func(t *testing.T) {
+				rawToken := nodeType + "-real-agent.12345678"
+				host := "https://pve-real.local:8006"
+				if nodeType == "pbs" {
+					host = "https://pbs-real.local:8007"
+				}
+				handler, cfg := agentAuthorityFixture(t, rawToken, map[string]string{
+					proxmoxInstallRegistrationTypedKey(proxmoxInstallRegistrationHostKey, nodeType): host,
+				})
+				cfg.PVEInstances[0].VerifySSL, cfg.PVEInstances[0].VerifySSLExplicit, cfg.PVEInstances[0].Fingerprint = true, tc.explicit, tc.pinned
+				cfg.PBSInstances[0].VerifySSL, cfg.PBSInstances[0].VerifySSLExplicit, cfg.PBSInstances[0].Fingerprint = true, tc.explicit, tc.pinned
+				fetchTLSFingerprint = func(string) (string, error) { return tc.fetched, nil }
+
+				rec := runAgentAutoRegister(t, handler, rawToken, AutoRegisterRequest{
+					Type: nodeType, Host: host, ServerName: nodeType + "-real", Source: "agent",
+					TokenID: "pulse-monitor@" + nodeType + "!pulse-rotated", TokenValue: "rotated-secret",
+				})
+				if rec.Code != http.StatusOK {
+					t.Fatalf("status = %d, body=%s", rec.Code, rec.Body.String())
+				}
+				tokenValue, verifySSL, fingerprint := cfg.PVEInstances[0].TokenValue, cfg.PVEInstances[0].VerifySSL, cfg.PVEInstances[0].Fingerprint
+				if nodeType == "pbs" {
+					tokenValue, verifySSL, fingerprint = cfg.PBSInstances[0].TokenValue, cfg.PBSInstances[0].VerifySSL, cfg.PBSInstances[0].Fingerprint
+				}
+				if tokenValue != "rotated-secret" {
+					t.Fatalf("token value = %q, want the rotated token", tokenValue)
+				}
+				if !verifySSL || fingerprint != tc.wantFingerprint {
+					t.Fatalf("VerifySSL = %v, fingerprint = %q, want VerifySSL on and fingerprint %q", verifySSL, fingerprint, tc.wantFingerprint)
+				}
+			})
+		}
+	}
+}
+
 func agentAuthorityFixture(t *testing.T, rawToken string, metadata map[string]string) (*ConfigHandlers, *config.Config) {
 	t.Helper()
 	stubAutoRegisterNetworkDeps(t)
@@ -1815,11 +2076,17 @@ func TestAgentTokenAutoRegisterUpdatesItsRecordedConnection(t *testing.T) {
 }
 
 // A non-primary cluster member heals the shared connection through its own
-// recorded address.
+// recorded address, once its own cluster status places the connection's saved
+// host in its cluster.
 func TestAgentTokenAutoRegisterHealsThroughItsClusterMember(t *testing.T) {
 	rawToken := "pve2-agent.12345678"
 	handler, cfg := agentAuthorityFixture(t, rawToken, map[string]string{
 		proxmoxInstallRegistrationTypedKey(proxmoxInstallRegistrationHostKey, "pve"): "https://pve2.local:8006",
+	})
+	cfg.PVEInstances[1].Host = "https://192.0.2.1:8006"
+	fetchTLSFingerprint = func(string) (string, error) { return "AA:AA", nil }
+	stubAutoRegisterClusterView(t, func(proxmox.ClientConfig) (bool, []config.ClusterEndpoint) {
+		return true, []config.ClusterEndpoint{{NodeName: "pve1", IP: "192.0.2.1"}, {NodeName: "pve2", IP: "192.0.2.2"}}
 	})
 	rec := runAgentAutoRegister(t, handler, rawToken, AutoRegisterRequest{
 		Type: "pve", Host: "https://pve2.local:8006", CandidateHosts: []string{"https://pve2.local:8006"},
@@ -1833,8 +2100,153 @@ func TestAgentTokenAutoRegisterHealsThroughItsClusterMember(t *testing.T) {
 	if cluster.TokenValue != "rotated-cluster-secret" {
 		t.Fatalf("cluster member did not refresh the shared token: %q", cluster.TokenValue)
 	}
-	if cluster.Host != "https://pve1.local:8006" || cluster.ClusterEndpoints[1].IPOverride != "" {
+	if cluster.Host != "https://192.0.2.1:8006" || cluster.ClusterEndpoints[1].IPOverride != "" {
 		t.Fatalf("cluster member heal moved an address: host=%q override=%q", cluster.Host, cluster.ClusterEndpoints[1].IPOverride)
+	}
+}
+
+// A cluster connection's member rows are only what its endpoint answered to
+// /cluster/status, and the setup script's token ID is the same on every host
+// one Pulse sets up. A monitored endpoint that lists another host as a member
+// must not receive the token that host registers with: the secret reaches the
+// cluster's saved host only when the registering host's own cluster status
+// contains that host.
+func TestHandleCanonicalAutoRegisterRefreshesClusterTokenOnlyForConfirmedMember(t *testing.T) {
+	const (
+		registering = "https://10.20.0.12:8006"
+		pin         = "AA:AA"
+	)
+	tokenID := "pulse-monitor@pve!" + buildPulseMonitorTokenName("pulse.example.com")
+	for name, tc := range map[string]struct {
+		savedHost   string
+		fingerprint string
+		isCluster   bool
+		members     []config.ClusterEndpoint
+		wantAsked   bool
+		wantSecret  string
+	}{
+		"standalone host": {
+			savedHost:   "https://10.20.0.11:8006",
+			fingerprint: pin,
+			wantAsked:   true,
+			wantSecret:  "cluster-secret",
+		},
+		"host in another cluster": {
+			savedHost:   "https://10.20.0.11:8006",
+			fingerprint: pin,
+			isCluster:   true,
+			members: []config.ClusterEndpoint{
+				{NodeName: "pve-a", Host: "https://pve-a:8006", IP: "10.30.0.11"},
+				{NodeName: "pve-b", Host: "https://pve-b:8006", IP: "10.20.0.12"},
+			},
+			wantAsked:  true,
+			wantSecret: "cluster-secret",
+		},
+		"host whose certificate Pulse could not capture": {
+			savedHost:  "https://10.20.0.11:8006",
+			isCluster:  true,
+			members:    []config.ClusterEndpoint{{NodeName: "pve-a", IP: "10.20.0.11"}, {NodeName: "pve-b", IP: "10.20.0.12"}},
+			wantSecret: "cluster-secret",
+		},
+		"cluster saved under a name": {
+			savedHost:   "https://pve-a:8006",
+			fingerprint: pin,
+			isCluster:   true,
+			members: []config.ClusterEndpoint{
+				{NodeName: "pve-a", Host: "https://pve-a:8006", IP: "10.20.0.11"},
+				{NodeName: "pve-b", Host: "https://pve-b:8006", IP: "10.20.0.12"},
+			},
+			wantSecret: "cluster-secret",
+		},
+		"cluster saved on another port": {
+			savedHost:   "https://10.20.0.11:8443",
+			fingerprint: pin,
+			isCluster:   true,
+			members:     []config.ClusterEndpoint{{NodeName: "pve-a", IP: "10.20.0.11"}, {NodeName: "pve-b", IP: "10.20.0.12"}},
+			wantAsked:   true,
+			wantSecret:  "cluster-secret",
+		},
+		"host in this cluster": {
+			savedHost:   "https://10.20.0.11:8006",
+			fingerprint: pin,
+			isCluster:   true,
+			members:     []config.ClusterEndpoint{{NodeName: "pve-a", IP: "10.20.0.11"}, {NodeName: "pve-b", IP: "10.20.0.12"}},
+			wantAsked:   true,
+			wantSecret:  "pve-b-secret",
+		},
+		"host in this cluster reached on its management network": {
+			savedHost:   "https://10.20.0.11:8006",
+			fingerprint: pin,
+			isCluster:   true,
+			members:     []config.ClusterEndpoint{{NodeName: "pve-a", IP: "172.16.0.11", IPOverride: "10.20.0.11"}, {NodeName: "pve-b", IP: "172.16.0.12"}},
+			wantAsked:   true,
+			wantSecret:  "pve-b-secret",
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			stubAutoRegisterNetworkDeps(t)
+			fetchTLSFingerprint = func(string) (string, error) { return tc.fingerprint, nil }
+			asked := false
+			stubAutoRegisterClusterView(t, func(clientConfig proxmox.ClientConfig) (bool, []config.ClusterEndpoint) {
+				asked = true
+				if clientConfig.Host != registering || clientConfig.TokenName != tokenID || clientConfig.TokenValue != "pve-b-secret" || clientConfig.Fingerprint != pin {
+					t.Errorf("cluster view read with %+v, want the registering host, its token and its captured certificate", clientConfig)
+				}
+				return tc.isCluster, tc.members
+			})
+
+			tempDir := t.TempDir()
+			t.Setenv("PULSE_DATA_DIR", tempDir)
+			cfg := &config.Config{
+				DataPath:   tempDir,
+				ConfigPath: tempDir,
+				PVEInstances: []config.PVEInstance{{
+					Name:        "pve-a",
+					Host:        tc.savedHost,
+					TokenName:   tokenID,
+					TokenValue:  "cluster-secret",
+					IsCluster:   true,
+					ClusterName: "lab",
+					ClusterEndpoints: []config.ClusterEndpoint{
+						{NodeName: "pve-a", Host: "https://pve-a:8006", IP: "10.20.0.11"},
+						{NodeName: "pve-b", Host: "https://pve-b:8006", IP: "10.20.0.12"},
+					},
+				}},
+			}
+			handler := newTestConfigHandlers(t, cfg)
+
+			reqBody := AutoRegisterRequest{
+				Type:       "pve",
+				Host:       registering,
+				ServerName: "pve-b",
+				TokenID:    tokenID,
+				TokenValue: "pve-b-secret",
+				Source:     "script",
+			}
+			req := httptest.NewRequest(http.MethodPost, "/api/auto-register", nil)
+			req.Host = "pulse.example.com"
+			rec := httptest.NewRecorder()
+
+			handler.handleCanonicalAutoRegister(rec, req, &reqBody, "127.0.0.1")
+
+			if rec.Code != http.StatusOK {
+				t.Fatalf("status = %d, want 200: %s", rec.Code, rec.Body.String())
+			}
+			if asked != tc.wantAsked {
+				t.Fatalf("registering host asked for its cluster = %v, want %v", asked, tc.wantAsked)
+			}
+			for _, instance := range handler.defaultConfig.PVEInstances {
+				if instance.Host == tc.savedHost && instance.TokenValue != tc.wantSecret {
+					t.Fatalf("token sent to the cluster's saved host = %q, want %q", instance.TokenValue, tc.wantSecret)
+				}
+			}
+			if tc.wantSecret == "pve-b-secret" && len(handler.defaultConfig.PVEInstances) != 1 {
+				t.Fatalf("confirmed member created a connection: %+v", handler.defaultConfig.PVEInstances)
+			}
+			if tc.wantSecret == "cluster-secret" && len(handler.defaultConfig.PVEInstances) != 2 {
+				t.Fatalf("unconfirmed host did not keep its own connection: %+v", handler.defaultConfig.PVEInstances)
+			}
+		})
 	}
 }
 
@@ -1845,8 +2257,6 @@ func TestAgentTokenAutoRegisterKeepsTheRecordedAddress(t *testing.T) {
 	handler, cfg := agentAuthorityFixture(t, rawToken, map[string]string{
 		proxmoxInstallRegistrationTypedKey(proxmoxInstallRegistrationHostKey, "pve"): "https://pve-real.local:8006",
 	})
-	// A stored pin that conflicts with the new address already stops the
-	// inferred match; an unpinned connection is the case that reaches here.
 	fetchTLSFingerprint = func(string) (string, error) { return "BB:BB", nil }
 
 	rec := runAgentAutoRegister(t, handler, rawToken, AutoRegisterRequest{
@@ -1865,6 +2275,222 @@ func TestAgentTokenAutoRegisterKeepsTheRecordedAddress(t *testing.T) {
 	}
 	if got.TokenValue != "rotated-secret" {
 		t.Fatalf("own connection credentials not rotated: %q", got.TokenValue)
+	}
+}
+
+// An agent token, spent grant or fresh, never replaces a known pin with a
+// conflicting certificate on a cluster member, PVE connection, or PBS connection.
+func TestAgentTokenKeepsClusterMemberPinAtItsRegisteredAddress(t *testing.T) {
+	const registered = "https://192.0.2.66:8006"
+	tokens := map[string]map[string]string{
+		"spent grant": {proxmoxInstallRegistrationTypedKey(proxmoxInstallRegistrationHostKey, "pve"): registered},
+		"fresh grant": {"install_type": agentInstallTypeHost, "issued_via": agentInstallIssuedViaConfig},
+	}
+	for name, tc := range map[string]struct {
+		pinned  string
+		wantPin string
+	}{
+		"another certificate": {pinned: "aa:aa", wantPin: "aa:aa"},
+		"same certificate":    {pinned: "bb:bb", wantPin: "BB:BB"},
+		"unpinned member":     {pinned: "", wantPin: "BB:BB"},
+	} {
+		for tokenName, metadata := range tokens {
+			t.Run(name+"/"+tokenName, func(t *testing.T) {
+				rawToken := "docker-host-repin.12345678"
+				handler, cfg := agentAuthorityFixture(t, rawToken, metadata)
+				cfg.PVEInstances[1].ClusterEndpoints[1].IPOverride = "192.0.2.66:8006"
+				cfg.PVEInstances[1].ClusterEndpoints[1].Fingerprint = tc.pinned
+				fetchTLSFingerprint = func(string) (string, error) { return "BB:BB", nil }
+
+				rec := runAgentAutoRegister(t, handler, rawToken, AutoRegisterRequest{
+					Type: "pve", Host: registered, ServerName: "web1", Source: "agent",
+					TokenID: "pulse-monitor@pve!pulse-web1", TokenValue: "made-up",
+				})
+				if rec.Code != http.StatusOK {
+					t.Fatalf("status = %d, body=%s", rec.Code, rec.Body.String())
+				}
+				if got := len(cfg.PVEInstances); got != 2 {
+					t.Fatalf("connections = %d, want the member matched and none added", got)
+				}
+				cluster := cfg.PVEInstances[1]
+				if cluster.TokenName != "pulse-monitor@pve!pulse-cluster" || cluster.TokenValue != "cluster-secret" {
+					t.Fatalf("cluster credentials = (%q, %q), want untouched", cluster.TokenName, cluster.TokenValue)
+				}
+				member := cluster.ClusterEndpoints[1]
+				if member.IPOverride != "192.0.2.66:8006" {
+					t.Fatalf("member override = %q, want it left in place", member.IPOverride)
+				}
+				if member.Fingerprint != tc.wantPin {
+					t.Fatalf("member pin = %q, want %q", member.Fingerprint, tc.wantPin)
+				}
+			})
+		}
+	}
+}
+
+// An agent token never replaces a conflicting TLS pin on top-level PVE or PBS connections.
+func TestAgentTokenKeepsTopLevelPinOnConflictingCertificate(t *testing.T) {
+	for _, nodeType := range []string{"pve", "pbs"} {
+		t.Run(nodeType, func(t *testing.T) {
+			rawToken := "repin-" + nodeType + ".12345678"
+			host := "https://pve-real.local:8006"
+			if nodeType == "pbs" {
+				host = "https://pbs-real.local:8007"
+			}
+			handler, cfg := agentAuthorityFixture(t, rawToken, map[string]string{
+				proxmoxInstallRegistrationTypedKey(proxmoxInstallRegistrationHostKey, nodeType): host,
+			})
+			cfg.PVEInstances[0].Fingerprint = "aa:aa"
+			cfg.PBSInstances[0].Fingerprint = "aa:aa"
+			fetchTLSFingerprint = func(string) (string, error) { return "BB:BB", nil }
+
+			rec := runAgentAutoRegister(t, handler, rawToken, AutoRegisterRequest{
+				Type: nodeType, Host: host, ServerName: nodeType + "-real", Source: "agent",
+				TokenID: "pulse-monitor@" + nodeType + "!pulse-rotated", TokenValue: "rotated-secret",
+			})
+			if rec.Code != http.StatusOK {
+				t.Fatalf("status = %d, body=%s", rec.Code, rec.Body.String())
+			}
+			gotPin := cfg.PVEInstances[0].Fingerprint
+			if nodeType == "pbs" {
+				gotPin = cfg.PBSInstances[0].Fingerprint
+			}
+			if gotPin != "aa:aa" {
+				t.Fatalf("%s pin = %q, want aa:aa preserved", nodeType, gotPin)
+			}
+		})
+	}
+}
+
+// A setup token is issued by an admin for one node, so it still refreshes the
+// pin of the member it registers at that member's address.
+func TestSetupTokenRefreshesClusterMemberPinAtItsAddress(t *testing.T) {
+	handler, cfg := agentAuthorityFixture(t, "unused.12345678", nil)
+	cfg.PVEInstances[1].ClusterEndpoints[1].IPOverride = "192.0.2.66:8006"
+	cfg.PVEInstances[1].ClusterEndpoints[1].Fingerprint = "aa:aa"
+	fetchTLSFingerprint = func(string) (string, error) { return "BB:BB", nil }
+
+	reqBody := AutoRegisterRequest{
+		Type: "pve", Host: "https://192.0.2.66:8006", ServerName: "pve2", Source: "script",
+		TokenID: "pulse-monitor@pve!pulse-pve2", TokenValue: "member-token",
+	}
+	rec := httptest.NewRecorder()
+	handler.handleCanonicalAutoRegister(rec, httptest.NewRequest(http.MethodPost, "/api/auto-register", nil), &reqBody, "127.0.0.1")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body=%s", rec.Code, rec.Body.String())
+	}
+	if got := cfg.PVEInstances[1].ClusterEndpoints[1].Fingerprint; got != "BB:BB" {
+		t.Fatalf("member pin = %q, want the certificate now at its address", got)
+	}
+}
+
+// The recorded address may be a name the agent does not list, kept when the
+// grant adopted an admin-managed connection. Pulse fetches no certificate for a
+// token without a grant, so the recorded address itself is what lets the
+// rotation keep it.
+func TestAgentTokenAutoRegisterRotatesItsRecordedConnectionUnderAnUnlistedName(t *testing.T) {
+	rawToken := "named-connection-agent.12345678"
+	handler, cfg := agentAuthorityFixture(t, rawToken, map[string]string{
+		proxmoxInstallRegistrationTypedKey(proxmoxInstallRegistrationHostKey, "pve"): "https://localhost:8006",
+	})
+	cfg.PVEInstances[0].Host = "https://localhost:8006"
+
+	rec := runAgentAutoRegister(t, handler, rawToken, AutoRegisterRequest{
+		Type: "pve", Host: "https://127.0.0.1:8006", ServerName: "pve-real", Source: "agent",
+		TokenID: "pulse-monitor@pve!pulse-rotated", TokenValue: "rotated-secret",
+	})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("recorded connection status = %d, body=%s", rec.Code, rec.Body.String())
+	}
+	got := cfg.PVEInstances[0]
+	if got.Host != "https://localhost:8006" || got.TokenValue != "rotated-secret" {
+		t.Fatalf("recorded connection = (%q, %q), want the stored name with the rotated token", got.Host, got.TokenValue)
+	}
+}
+
+// A connection another host's agent saved under a name it controls is not the
+// registering host merely because the name resolves to that host today.
+func TestHandleCanonicalAutoRegisterKeepsCredentialOffAnotherHostsUnpinnedName(t *testing.T) {
+	for _, nodeType := range []string{"pve", "pbs"} {
+		t.Run(nodeType, func(t *testing.T) {
+			stubAutoRegisterNetworkDeps(t)
+			fetchTLSFingerprint = func(string) (string, error) { return "AA:AA", nil }
+
+			port := defaultPortForNodeType(nodeType)
+			storedHost := "http://localhost:" + port
+			registeringHost := "https://127.0.0.1:" + port
+			storedToken := "pulse-monitor@" + nodeType + "!pulse-mallory"
+			cfg := &config.Config{DataPath: t.TempDir()}
+			if nodeType == "pve" {
+				cfg.PVEInstances = []config.PVEInstance{{Name: "mallory", Host: storedHost, TokenName: storedToken, TokenValue: "made-up", Source: "agent"}}
+			} else {
+				cfg.PBSInstances = []config.PBSInstance{{Name: "mallory", Host: storedHost, TokenName: storedToken, TokenValue: "made-up", Source: "agent"}}
+			}
+			handler := newTestConfigHandlers(t, cfg)
+
+			rec := httptest.NewRecorder()
+			handler.handleCanonicalAutoRegister(rec, httptest.NewRequest(http.MethodPost, "/api/auto-register", nil), &AutoRegisterRequest{
+				Type: nodeType, Host: registeringHost, ServerName: "victim", Source: "script",
+				TokenID: "pulse-monitor@" + nodeType + "!pulse-victim", TokenValue: "victim-secret",
+			}, "127.0.0.1")
+			if rec.Code != http.StatusOK {
+				t.Fatalf("status = %d, want 200: %s", rec.Code, rec.Body.String())
+			}
+
+			type connection struct{ host, tokenValue string }
+			var got []connection
+			for _, instance := range handler.defaultConfig.PVEInstances {
+				got = append(got, connection{instance.Host, instance.TokenValue})
+			}
+			for _, instance := range handler.defaultConfig.PBSInstances {
+				got = append(got, connection{instance.Host, instance.TokenValue})
+			}
+			want := []connection{{storedHost, "made-up"}, {registeringHost, "victim-secret"}}
+			if !reflect.DeepEqual(got, want) {
+				t.Fatalf("connections = %+v, want %+v", got, want)
+			}
+		})
+	}
+}
+
+// DHCP continuity (name + token ID) must clear previously recorded cluster
+// members when moving the host so planted endpoints cannot receive the new token.
+func TestHandleCanonicalAutoRegisterDHCPContinuityClearsClusterMembers(t *testing.T) {
+	stubAutoRegisterNetworkDeps(t)
+	fetchTLSFingerprint = func(string) (string, error) { return "AA:AA", nil }
+
+	tokenID := "pulse-monitor@pve!" + buildPulseMonitorTokenName("pulse.example.com")
+	cfg := &config.Config{
+		DataPath: t.TempDir(),
+		PVEInstances: []config.PVEInstance{{
+			Name:        "pve-b",
+			Host:        "https://10.20.0.66:8006",
+			TokenName:   tokenID,
+			TokenValue:  "made-up",
+			IsCluster:   true,
+			ClusterName: "planted",
+			ClusterEndpoints: []config.ClusterEndpoint{
+				{NodeName: "attacker-1", Host: "https://10.20.0.66:8006", IP: "10.20.0.66"},
+			},
+			Source: "agent",
+		}},
+	}
+	handler := newTestConfigHandlers(t, cfg)
+
+	rec := httptest.NewRecorder()
+	handler.handleCanonicalAutoRegister(rec, httptest.NewRequest(http.MethodPost, "/api/auto-register", nil), &AutoRegisterRequest{
+		Type: "pve", Host: "https://10.20.0.12:8006", ServerName: "pve-b", Source: "script",
+		TokenID: tokenID, TokenValue: "real-pve-b-secret",
+	}, "127.0.0.1")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200: %s", rec.Code, rec.Body.String())
+	}
+	got := handler.defaultConfig.PVEInstances[0]
+	if got.Host != "https://10.20.0.12:8006" || got.TokenValue != "real-pve-b-secret" {
+		t.Fatalf("updated instance = (%q, %q)", got.Host, got.TokenValue)
+	}
+	if got.IsCluster || got.ClusterName != "" || len(got.ClusterEndpoints) != 0 {
+		t.Fatalf("continuity match retained planted cluster metadata: %+v", got)
 	}
 }
 

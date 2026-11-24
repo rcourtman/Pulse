@@ -17,6 +17,7 @@ import { getCanonicalWorkloadId } from '@/utils/workloads';
 import { InlineNotice } from '@/components/shared/InlineNotice';
 import { getShippedDocUrl } from '@/utils/docsLinks';
 import { useGuestDrawerState } from './useGuestDrawerState';
+import { GuestDrawerHistoryRangeSelect } from './GuestDrawerHistoryRangeSelect';
 import { GuestDrawerOverview } from './GuestDrawerOverview';
 import { GuestDrawerManage } from './GuestDrawerManage';
 
@@ -106,6 +107,15 @@ const GuestDrawerContent: Component<GuestDrawerProps> = (props) => {
           { value: 'overview', label: 'Overview' },
           { value: 'manage', label: 'Manage' },
         ]}
+        trailing={
+          <Show when={activeTab() === 'overview' && hasHistorySupport() && historyTarget()}>
+            <GuestDrawerHistoryRangeSelect
+              range={historyRange()}
+              onRangeChange={setHistoryRange}
+              class="mb-1 sm:mb-0"
+            />
+          </Show>
+        }
       />
 
       {/* Use CSS hidden instead of Show to avoid mount/unmount which causes scroll jumps.
@@ -135,7 +145,6 @@ const GuestDrawerContent: Component<GuestDrawerProps> = (props) => {
           alerts={props.alerts}
           historyTarget={hasHistorySupport() ? historyTarget() : null}
           historyRange={historyRange()}
-          onHistoryRangeChange={setHistoryRange}
           historyEnabled={activeTab() === 'overview'}
           currentMetrics={historyCurrentMetrics()}
           deferredMetrics={historyDeferredMetrics()}

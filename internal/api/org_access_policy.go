@@ -97,7 +97,7 @@ var orgAccessRecheckInterval = 10 * time.Second
 // signed-in user's long-lived read (WebSocket or SSE). Membership removal,
 // default-organization revocation and losing instance administration end the
 // stream within orgAccessRecheckInterval. Token readers keep their own
-// credential revalidation, which already rechecks organization bindings.
+// credential revalidation, which rechecks the token against this policy.
 // It returns nil when the request has no user to recheck.
 func orgAccessRevalidator(req *http.Request) func() bool {
 	return orgAccessRevalidatorWithInterval(req, orgAccessRecheckInterval)

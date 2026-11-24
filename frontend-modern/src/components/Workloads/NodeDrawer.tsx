@@ -16,6 +16,7 @@ import { getNodeDisplayName } from '@/utils/nodes';
 import { getSimpleStatusIndicator } from '@/utils/status';
 
 import { GUEST_DRAWER_HISTORY_DEFAULT_RANGE } from './guestDrawerModel';
+import { GuestDrawerHistoryRangeSelect } from './GuestDrawerHistoryRangeSelect';
 import { NodeDrawerOverview } from './NodeDrawerOverview';
 import {
   getNodeDrawerCurrentMetrics,
@@ -119,6 +120,15 @@ export const NodeDrawer: Component<NodeDrawerProps> = (props) => {
           { value: 'overview', label: 'Overview' },
           { value: 'manage', label: 'Manage' },
         ]}
+        trailing={
+          <Show when={activeTab() === 'overview' && historyTarget()}>
+            <GuestDrawerHistoryRangeSelect
+              range={historyRange()}
+              onRangeChange={setHistoryRange}
+              class="mb-1 sm:mb-0"
+            />
+          </Show>
+        }
       />
 
       {/* Use CSS hidden instead of Show to avoid mount/unmount which causes scroll jumps.
@@ -131,7 +141,6 @@ export const NodeDrawer: Component<NodeDrawerProps> = (props) => {
           alerts={props.alerts}
           historyTarget={historyTarget()}
           historyRange={historyRange()}
-          onHistoryRangeChange={setHistoryRange}
           historyGroups={historyGroups()}
           currentMetrics={currentMetrics()}
           historyEnabled={activeTab() === 'overview'}

@@ -1,6 +1,7 @@
 package api
 
 import (
+	"net/http"
 	"strconv"
 	"strings"
 	"sync"
@@ -66,6 +67,7 @@ func initHTTPMetrics() {
 func recordAPIRequest(method, route string, status int, elapsed time.Duration) {
 	httpMetricsOnce.Do(initHTTPMetrics)
 
+	method = metricMethodLabel(method)
 	statusCode := strconv.Itoa(status)
 
 	apiRequestDuration.WithLabelValues(method, route, statusCode).Observe(elapsed.Seconds())
@@ -90,6 +92,47 @@ func classifyStatus(status int) string {
 	default:
 		return "none"
 	}
+}
+
+// unmatchedRouteLabel is the route label of a request that no registered
+// pattern serves: unknown API paths and everything the frontend answers.
+const unmatchedRouteLabel = "unmatched"
+
+// muxRouteLabel labels a request with the registered pattern that serves it.
+// Patterns are a fixed set chosen at startup, so a client that invents paths
+// cannot add metric series the way it can with a label built from the path.
+func muxRouteLabel(mux *http.ServeMux, r *http.Request) string {
+	// For CONNECT, ServeMux can report the request's own path as the pattern.
+	if r.Method == http.MethodConnect {
+		return unmatchedRouteLabel
+	}
+	_, pattern := mux.Handler(r)
+	// "GET /api/orgs/{id}": the method already has its own label.
+	if idx := strings.LastIndexByte(pattern, ' '); idx >= 0 {
+		pattern = pattern[idx+1:]
+	}
+	if pattern == "" {
+		return unmatchedRouteLabel
+	}
+	return pattern
+}
+
+var metricMethodLabels = [...]string{
+	http.MethodGet, http.MethodHead, http.MethodPost, http.MethodPut, http.MethodPatch,
+	http.MethodDelete, http.MethodConnect, http.MethodOptions, http.MethodTrace,
+}
+
+// metricMethodLabel maps a request method to one of a fixed set of labels. The
+// method is any token the client sends, and net/http hands it over as part of
+// the request line: stored as a label, it would be an unbounded value that
+// also keeps that whole line, query included, alive.
+func metricMethodLabel(method string) string {
+	for _, label := range metricMethodLabels {
+		if method == label {
+			return label
+		}
+	}
+	return "other"
 }
 
 func normalizeRoute(path string) string {

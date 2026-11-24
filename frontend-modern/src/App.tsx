@@ -555,11 +555,13 @@ function App() {
                           <DemoBanner />
                           <CommercialMigrationBanner />
                           <UpdateBanner />
-                          <WhatsNewCard />
                           <GitHubStarBanner />
                           <Show when={canReadUpdateStatus()}>
                             <GlobalUpdateProgressWatcher />
                           </Show>
+                        </Show>
+                        <Show when={!kioskMode()}>
+                          <WhatsNewCard allowAutoNotice={hasSettingsAccess()} />
                         </Show>
                         {/* Main layout container: the content area scrolls independently */}
                         <div class="flex min-h-[60vh] flex-1 overflow-hidden">

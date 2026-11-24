@@ -1,10 +1,12 @@
 package api
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -106,6 +108,69 @@ func TestMaintenanceVerification_RerunWritesReport(t *testing.T) {
 	}
 }
 
+func TestMaintenanceVerification_RerunIsScopedToRequestOrg(t *testing.T) {
+	h, defaultStore := newMaintenanceVerificationFixture(t)
+	acmeStore, err := h.resources.getStore("acme")
+	if err != nil {
+		t.Fatalf("get acme store: %v", err)
+	}
+	now := time.Date(2026, 5, 12, 12, 0, 0, 0, time.UTC)
+	seedMaintenanceWindow(t, defaultStore, "vm:101", now.Add(-time.Hour), now.Add(-15*time.Minute))
+
+	rerunAsAcme := func() *httptest.ResponseRecorder {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/api/resources/vm:101/maintenance-verifications/rerun", nil)
+		req = req.WithContext(context.WithValue(req.Context(), OrgIDContextKey, "acme"))
+		h.HandleRerun(rec, req)
+		return rec
+	}
+	countReports := func(store unified.ResourceStore) int {
+		t.Helper()
+		reports, err := store.ListLoopReportsForResource(unified.LoopReportTypeMaintenanceVerification, "vm:101", 0)
+		if err != nil {
+			t.Fatalf("list: %v", err)
+		}
+		return len(reports)
+	}
+
+	// The window belongs to the default org. A rerun authorized for
+	// another org must neither disclose it nor add to its history.
+	rec := rerunAsAcme()
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("cross-org rerun status = %d body=%s", rec.Code, rec.Body.String())
+	}
+	var body map[string]string
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatalf("body must be JSON: %v", err)
+	}
+	if body["error"] != "maintenance_window_missing" {
+		t.Fatalf("error code = %q want maintenance_window_missing", body["error"])
+	}
+	if got := countReports(defaultStore); got != 0 {
+		t.Fatalf("cross-org rerun wrote %d reports into the default org", got)
+	}
+
+	acmeEnd := now.Add(-2 * time.Hour)
+	seedMaintenanceWindow(t, acmeStore, "vm:101", now.Add(-3*time.Hour), acmeEnd)
+	rec = rerunAsAcme()
+	if rec.Code != http.StatusOK {
+		t.Fatalf("acme rerun status = %d body=%s", rec.Code, rec.Body.String())
+	}
+	var report maintenanceVerificationReportAPI
+	if err := json.Unmarshal(rec.Body.Bytes(), &report); err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	if report.WindowEndedAt == nil || !report.WindowEndedAt.Equal(acmeEnd) {
+		t.Fatalf("window end = %v, want acme's %v", report.WindowEndedAt, acmeEnd)
+	}
+	if got := countReports(acmeStore); got != 1 {
+		t.Fatalf("acme reports = %d, want 1", got)
+	}
+	if got := countReports(defaultStore); got != 0 {
+		t.Fatalf("acme rerun wrote %d reports into the default org", got)
+	}
+}
+
 func TestMaintenanceVerification_RerunWithoutWindowReturns400(t *testing.T) {
 	h, _ := newMaintenanceVerificationFixture(t)
 	rec := httptest.NewRecorder()
@@ -158,6 +223,45 @@ func TestMaintenanceVerification_ReviewMarksReportReviewed(t *testing.T) {
 	}
 	if reviewed.Status != seeded.Status {
 		t.Fatalf("status mutated: was %q, now %q", seeded.Status, reviewed.Status)
+	}
+}
+
+func TestMaintenanceVerification_ReviewRejectsOversizedBody(t *testing.T) {
+	h, store := newMaintenanceVerificationFixture(t)
+	now := time.Date(2026, 5, 12, 12, 0, 0, 0, time.UTC)
+	seedMaintenanceWindow(t, store, "vm:101", now.Add(-time.Hour), now.Add(-15*time.Minute))
+
+	rerunRec := httptest.NewRecorder()
+	rerunReq := withDefaultOrg(httptest.NewRequest(http.MethodPost, "/api/resources/vm:101/maintenance-verifications/rerun", nil))
+	h.HandleRerun(rerunRec, rerunReq)
+	if rerunRec.Code != http.StatusOK {
+		t.Fatalf("rerun status = %d body=%s", rerunRec.Code, rerunRec.Body.String())
+	}
+	var seeded maintenanceVerificationReportAPI
+	if err := json.Unmarshal(rerunRec.Body.Bytes(), &seeded); err != nil {
+		t.Fatalf("parse rerun: %v", err)
+	}
+
+	body, _ := json.Marshal(map[string]string{
+		"note": strings.Repeat("a", maxMaintenanceVerificationReviewRequestBytes),
+	})
+	rec := httptest.NewRecorder()
+	req := withDefaultOrg(httptest.NewRequest(
+		http.MethodPost,
+		"/api/maintenance-verifications/"+seeded.ID+"/review",
+		bytes.NewReader(body),
+	))
+	h.HandleReview(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 on oversized body, got %d", rec.Code)
+	}
+
+	persisted, found, err := store.GetLoopReport(seeded.ID)
+	if err != nil || !found {
+		t.Fatalf("get report: found=%v err=%v", found, err)
+	}
+	if persisted.UserOutcome == unified.LoopReportUserOutcomeReviewed || persisted.ReviewNote != "" {
+		t.Fatalf("oversized review must not persist; outcome=%q note length=%d", persisted.UserOutcome, len(persisted.ReviewNote))
 	}
 }
 

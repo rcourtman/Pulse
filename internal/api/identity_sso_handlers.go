@@ -22,6 +22,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/securityutil"
+	internalauth "github.com/rcourtman/pulse-go-rewrite/pkg/auth"
 	"github.com/rs/zerolog/log"
 )
 
@@ -356,11 +357,95 @@ func (r *Router) commitSSOConfig(mutate func(*config.SSOConfig) error) (applyErr
 			return fmt.Errorf("invalid SAML SP paths for provider %q: %w", provider.ID, err), nil
 		}
 	}
+	// Record the original issuer of every existing provider before an edit or
+	// deletion can repoint its ID at another IdP. If a provider is deleted or
+	// its issuer config changes while its original issuer cannot be resolved,
+	// fail closed so future logins on that ID get issuer-scoped principals.
+	for i := range current.Providers {
+		prev := &current.Providers[i]
+		updated := next.GetProvider(prev.ID)
+		retargetedOrRemoved := updated == nil || ssoProviderIssuerChanged(prev, updated)
+		r.bindSSOProviderOriginalIssuer(prev, retargetedOrRemoved)
+	}
 	if err := r.persistSSOConfigLocked(next); err != nil {
 		return nil, err
 	}
 	r.publishSSOConfigLocked(next)
 	return nil, nil
+}
+
+func ssoProviderIssuerChanged(prev, next *config.SSOProvider) bool {
+	if prev == nil || next == nil || prev.Type != next.Type {
+		return true
+	}
+	switch prev.Type {
+	case config.SSOProviderTypeOIDC:
+		if prev.OIDC == nil || next.OIDC == nil {
+			return true
+		}
+		return strings.TrimSpace(prev.OIDC.IssuerURL) != strings.TrimSpace(next.OIDC.IssuerURL)
+	case config.SSOProviderTypeSAML:
+		if prev.SAML == nil || next.SAML == nil {
+			return true
+		}
+		return strings.TrimSpace(prev.SAML.IDPEntityID) != strings.TrimSpace(next.SAML.IDPEntityID) ||
+			strings.TrimSpace(prev.SAML.IDPMetadataURL) != strings.TrimSpace(next.SAML.IDPMetadataURL) ||
+			strings.TrimSpace(prev.SAML.IDPMetadataXML) != strings.TrimSpace(next.SAML.IDPMetadataXML) ||
+			strings.TrimSpace(prev.SAML.IDPSSOURL) != strings.TrimSpace(next.SAML.IDPSSOURL)
+	default:
+		return true
+	}
+}
+
+func (r *Router) resolveConfiguredSSOProviderIssuer(provider *config.SSOProvider) string {
+	if provider == nil {
+		return ""
+	}
+	switch provider.Type {
+	case config.SSOProviderTypeOIDC:
+		if provider.OIDC != nil {
+			if iss := strings.TrimSpace(provider.OIDC.IssuerURL); iss != "" {
+				return iss
+			}
+		}
+		if r != nil && r.oidcManager != nil {
+			if svc := r.oidcManager.GetService(provider.ID); svc != nil {
+				if iss := strings.TrimSpace(svc.snapshot.issuer); iss != "" {
+					return iss
+				}
+			}
+		}
+	case config.SSOProviderTypeSAML:
+		if provider.SAML != nil {
+			if iss := strings.TrimSpace(provider.SAML.IDPEntityID); iss != "" {
+				return iss
+			}
+		}
+		if r != nil && r.samlManager != nil {
+			if svc := r.samlManager.GetService(provider.ID); svc != nil {
+				if iss := strings.TrimSpace(svc.GetIDPEntityID()); iss != "" {
+					return iss
+				}
+			}
+		}
+		if provider.SAML != nil {
+			if iss := extractSAMLEntityIDFromXML(provider.SAML.IDPMetadataXML); iss != "" {
+				return iss
+			}
+		}
+	}
+	return ""
+}
+
+func (r *Router) bindSSOProviderOriginalIssuer(provider *config.SSOProvider, failClosedIfUnknown bool) {
+	if provider == nil {
+		return
+	}
+	authManager := internalauth.GetManager()
+	if authManager == nil {
+		return
+	}
+	bindSSOProviderOriginalIssuer(authManager, provider.Type, provider.ID, r.resolveConfiguredSSOProviderIssuer(provider), failClosedIfUnknown)
 }
 
 func (r *Router) ssoAuthenticationLoadFailed() bool {

@@ -390,3 +390,59 @@ func TestAuthContextMiddlewareUsesCurrentTenantManager(t *testing.T) {
 		})
 	}
 }
+
+// The auth context runs for every request before any credential is enforced.
+// It must not start the tenant a request merely names, and a token request
+// that does need a cold tenant's inventory must not hold config.Mu while that
+// tenant starts: every token check queues as a writer behind that reader, and
+// a settings save takes config.Mu under the lock the start is waiting for.
+func TestExtractAndStoreAuthContextResolvesColdTenantOutsideConfigLock(t *testing.T) {
+	const orgID = "starting"
+	dir := t.TempDir()
+	mtp := config.NewMultiTenantPersistence(dir)
+	if _, err := mtp.GetPersistence(orgID); err != nil {
+		t.Fatal(err)
+	}
+	cfg := &config.Config{DataPath: dir, ConfigPath: dir}
+	manager := monitoring.NewMultiTenantMonitor(cfg, mtp, nil)
+	t.Cleanup(manager.Stop)
+	starts, startsUnderConfigLock := 0, 0
+	manager.SetMonitorInitializer(func(*monitoring.Monitor) {
+		starts++
+		writer := make(chan struct{})
+		go func() {
+			config.Mu.Lock()
+			close(writer)
+			config.Mu.Unlock()
+		}()
+		select {
+		case <-writer:
+		case <-time.After(2 * time.Second):
+			startsUnderConfigLock++
+		}
+	})
+	newRequest := func(token string) *http.Request {
+		req := httptest.NewRequest(http.MethodGet, "/", nil)
+		req.Header.Set("X-Pulse-Org-ID", orgID)
+		if token != "" {
+			req.Header.Set("X-API-Token", token)
+		}
+		return req
+	}
+
+	extractAndStoreAuthContext(cfg, manager, newRequest(""))
+	if _, started := manager.PeekMonitor(orgID); started || starts != 0 {
+		t.Fatal("a request without credentials started the tenant it named")
+	}
+
+	req := extractAndStoreAuthContext(cfg, manager, newRequest("unknown-token-123.12345678"))
+	if internalauth.GetUser(req.Context()) != "" || internalauth.GetAPIToken(req.Context()) != nil {
+		t.Fatal("unknown token must not receive user or API token context")
+	}
+	if _, started := manager.PeekMonitor(orgID); !started || starts != 1 {
+		t.Fatalf("tenant token inventory was not resolved (starts = %d)", starts)
+	}
+	if startsUnderConfigLock != 0 {
+		t.Fatal("config.Mu was held while the tenant monitor started")
+	}
+}

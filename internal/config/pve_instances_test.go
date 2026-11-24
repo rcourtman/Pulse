@@ -237,6 +237,66 @@ func TestConsolidatePVEInstancesKeepsSameNameClustersWithCollidingPrivateIPs(t *
 	}
 }
 
+func TestConsolidatePVEInstancesRequiresMutualClusterEndpointEvidence(t *testing.T) {
+	// Cluster name and member addresses are whatever a connection's own
+	// endpoint reports. A view that merely names another cluster and lists one
+	// of its addresses must not be folded into it: the fold would send the
+	// surviving connection's credentials to endpoints the claimant supplied.
+	prod := PVEInstance{
+		Name:        "prod",
+		Host:        "https://10.20.0.11:8006",
+		ClusterName: "prod",
+		IsCluster:   true,
+		TokenName:   "pulse@pve!prod",
+		TokenValue:  "prod-secret",
+		ClusterEndpoints: []ClusterEndpoint{
+			{NodeName: "pve1", Host: "https://pve1:8006", IP: "10.20.0.11"},
+			{NodeName: "pve2", Host: "https://pve2:8006", IP: "10.20.0.12"},
+		},
+	}
+	claimant := PVEInstance{
+		Name:        "web1",
+		Host:        "https://10.20.0.66:8006",
+		ClusterName: "prod",
+		IsCluster:   true,
+		TokenName:   "pulse-monitor@pve!pulse-web1",
+		TokenValue:  "made-up",
+		ClusterEndpoints: []ClusterEndpoint{
+			{NodeName: "10.20.0.66", Host: "https://10.20.0.66:8006", IP: "10.20.0.66"},
+			{NodeName: "10.20.0.11", Host: "https://10.20.0.11:8006", IP: "10.20.0.11"},
+		},
+	}
+	for _, order := range [][]PVEInstance{{prod, claimant}, {claimant, prod}} {
+		if PVEClusterInstancesShareIdentity(order[0], order[1]) {
+			t.Fatalf("%s and %s share identity on a one-sided member claim", order[0].Name, order[1].Name)
+		}
+		instances, changed := ConsolidatePVEInstances(order)
+		if changed || len(instances) != 2 {
+			t.Fatalf("one-sided member claim consolidated %s and %s", order[0].Name, order[1].Name)
+		}
+	}
+
+	// A second view saved through another member that the first view itself
+	// lists is still recognized as the same cluster.
+	member := PVEInstance{
+		Name:        "prod-pve2",
+		Host:        "https://10.20.0.12:8006",
+		ClusterName: "prod",
+		IsCluster:   true,
+		ClusterEndpoints: []ClusterEndpoint{
+			{NodeName: "pve1", Host: "https://pve1:8006", IP: "10.20.0.11"},
+			{NodeName: "pve2", Host: "https://pve2:8006", IP: "10.20.0.12"},
+		},
+	}
+	instances, changed := ConsolidatePVEInstances([]PVEInstance{prod, member})
+	if !changed || len(instances) != 1 {
+		t.Fatalf("mutually listed cluster views were not consolidated: changed=%v instances=%d", changed, len(instances))
+	}
+	if instances[0].TokenValue != "prod-secret" || len(instances[0].ClusterEndpoints) != 2 {
+		t.Fatalf("consolidated cluster = %+v", instances[0])
+	}
+}
+
 func TestPVEClusterInstancesShareIdentityRejectsSameNameWithContradictingFingerprints(t *testing.T) {
 	siteA := PVEInstance{
 		Name:        "enacon",
@@ -257,6 +317,53 @@ func TestPVEClusterInstancesShareIdentityRejectsSameNameWithContradictingFingerp
 
 	if PVEClusterInstancesShareIdentity(siteA, siteB) {
 		t.Fatal("same-name clusters with contradicting TLS fingerprints must not share identity")
+	}
+}
+
+func TestProxmoxFingerprintsMatchNeedsBothKnown(t *testing.T) {
+	for _, tc := range []struct {
+		a, b string
+		want bool
+	}{
+		{"AA:BB", "aabb", true},
+		{"sha256:aabb", " AA BB ", true},
+		{"AA:BB", "AA:CC", false},
+		{"AA:BB", "", false},
+		{"", "AA:BB", false},
+		{"", "", false},
+	} {
+		if got := ProxmoxFingerprintsMatch(tc.a, tc.b); got != tc.want {
+			t.Fatalf("ProxmoxFingerprintsMatch(%q, %q) = %v, want %v", tc.a, tc.b, got, tc.want)
+		}
+		if tc.want && ProxmoxFingerprintsConflict(tc.a, tc.b) {
+			t.Fatalf("fingerprints %q and %q both match and conflict", tc.a, tc.b)
+		}
+	}
+}
+
+func TestConsolidatePVEInstancesKeepsStandaloneWithDifferentSecretForSameTokenID(t *testing.T) {
+	instances, changed := ConsolidatePVEInstances([]PVEInstance{
+		{
+			Name:        "pve-a",
+			Host:        "https://10.20.0.11:8006",
+			ClusterName: "lab",
+			IsCluster:   true,
+			TokenName:   "pulse-monitor@pve!pulse-host",
+			TokenValue:  "secret-a",
+			ClusterEndpoints: []ClusterEndpoint{
+				{NodeName: "pve-a", Host: "https://pve-a:8006", IP: "10.20.0.11"},
+				{NodeName: "pve-b", Host: "https://pve-b:8006", IP: "10.20.0.12"},
+			},
+		},
+		{
+			Name:       "pve-b",
+			Host:       "https://10.20.0.12:8006",
+			TokenName:  "pulse-monitor@pve!pulse-host",
+			TokenValue: "secret-b",
+		},
+	})
+	if changed || len(instances) != 2 {
+		t.Fatalf("standalone with differing secret for same token ID was folded: changed=%v len=%d", changed, len(instances))
 	}
 }
 

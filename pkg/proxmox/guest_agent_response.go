@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"slices"
 	"strings"
 	"unicode/utf8"
 )
@@ -221,6 +222,101 @@ func guestAgentCommandResponse(path string, body []byte) bool {
 	}
 	end, err := decoder.Token()
 	return err == nil && end == json.Delim(']')
+}
+
+// maxGuestAgentListEntries bounds each list a guest agent returns: filesystems,
+// network interfaces and the addresses of one interface. The guest writes the
+// reply and an entry can be two bytes long, while every entry is decoded into
+// a record and a rejected one is also logged, so the byte limit of the
+// response does not bound what a list costs.
+const maxGuestAgentListEntries = 4096
+
+var errGuestAgentListTooLong = fmt.Errorf("guest agent list exceeds %d entries", maxGuestAgentListEntries)
+
+// guestAgentList splits a guest agent list into its entries and refuses a
+// longer list before the entries beyond the bound are allocated. Like
+// []json.RawMessage it leaves null as nil and fails for any other non-list.
+type guestAgentList []json.RawMessage
+
+func (list *guestAgentList) UnmarshalJSON(data []byte) error {
+	*list = nil
+	if bytes.Equal(data, []byte("null")) {
+		return nil
+	}
+	decoder := json.NewDecoder(bytes.NewReader(data))
+	if start, err := decoder.Token(); err != nil || start != json.Delim('[') {
+		return errors.New("guest agent result is not a list")
+	}
+	entries := guestAgentList{}
+	for decoder.More() {
+		if len(entries) == maxGuestAgentListEntries {
+			return errGuestAgentListTooLong
+		}
+		var entry json.RawMessage
+		if err := decoder.Decode(&entry); err != nil {
+			return err
+		}
+		entries = append(entries, entry)
+	}
+	*list = entries
+	return nil
+}
+
+// guestAgentFields returns the named fields of an object the guest wrote and
+// decodes nothing else of it. A generic decode allocates a map or slice for
+// every nested value, many times the bytes the response limit counted, while
+// callers read a few fields. As in a generic decode, names match exactly and
+// the last value of a repeated name counts.
+func guestAgentFields(data []byte, names ...string) (map[string]json.RawMessage, bool) {
+	decoder := json.NewDecoder(bytes.NewReader(data))
+	if start, err := decoder.Token(); err != nil || start != json.Delim('{') {
+		return nil, false
+	}
+	fields := make(map[string]json.RawMessage, len(names))
+	for decoder.More() {
+		key, err := decoder.Token()
+		if err != nil {
+			return nil, false
+		}
+		var value json.RawMessage
+		if decoder.Decode(&value) != nil {
+			return nil, false
+		}
+		if name, _ := key.(string); slices.Contains(names, name) {
+			fields[name] = value
+		}
+	}
+	return fields, true
+}
+
+// guestAgentScalarFields decodes those named fields of a guest's object that
+// hold a string, number or boolean.
+func guestAgentScalarFields(data []byte, names ...string) (map[string]interface{}, bool) {
+	fields, ok := guestAgentFields(data, names...)
+	if !ok {
+		return nil, false
+	}
+	scalars := make(map[string]interface{}, len(fields))
+	for name, value := range fields {
+		if scalar := guestAgentScalar(value); scalar != nil {
+			scalars[name] = scalar
+		}
+	}
+	return scalars, true
+}
+
+// guestAgentScalar decodes a string, number or boolean. Null, an object and a
+// list all yield nil, as none of them is a usable scalar reading.
+func guestAgentScalar(data json.RawMessage) interface{} {
+	data = bytes.TrimSpace(data)
+	if len(data) == 0 || data[0] == '{' || data[0] == '[' {
+		return nil
+	}
+	var value interface{}
+	if json.Unmarshal(data, &value) != nil {
+		return nil
+	}
+	return value
 }
 
 func guestAgentReplyFieldsCompatible(fields map[string]json.RawMessage, command string) bool {

@@ -56,19 +56,25 @@ func tokenStreamSnapshotRevalidator(cfg *config.Config, req *http.Request, scope
 	orgID := GetOrgID(req.Context())
 	source, tenantInventory := req.Context().Value(tenantTokenSourceContextKey).(tenantTokenSource)
 	tenantInventory = tenantInventory && source.orgID != "" && source.orgID != "default"
-	checker := NewAuthorizationChecker(nil)
+	// Recheck the policy that admitted the request, so the stream of a token
+	// that acts for its owner also ends when the owner loses membership.
+	// A request TenantMiddleware did not admit rechecks the binding only.
+	var checker AuthorizationChecker = NewAuthorizationChecker(nil)
+	if policy, ok := req.Context().Value(orgAccessCheckerContextKey{}).(AuthorizationChecker); ok && policy != nil {
+		checker = policy
+	}
 
 	return func() (*config.APITokenRecord, bool) {
 		if !provided || raw == "" {
 			return nil, false
 		}
 		config.Mu.RLock()
-		defer config.Mu.RUnlock()
 
 		live := cfg
 		if tenantInventory {
 			live = tenantTokenConfigForRequest(req)
 			if live == nil {
+				config.Mu.RUnlock()
 				return nil, false
 			}
 		}
@@ -77,8 +83,12 @@ func tokenStreamSnapshotRevalidator(cfg *config.Config, req *http.Request, scope
 		// when its current owner disappears or revokes the credential.
 		current, ok := validateAPITokenLocked(live, raw)
 		if !ok || (tenantInventory && tenantTokenConfigForRequest(req) != live) {
+			config.Mu.RUnlock()
 			return nil, false
 		}
+		// Release the global config lock before checking organization
+		// membership, which may read organization metadata from disk.
+		config.Mu.RUnlock()
 		// Keep the route's existing scope alternatives (notably mobile chat)
 		// rather than requiring a new grant or pinning one interchangeable scope.
 		hasScope := false

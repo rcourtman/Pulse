@@ -1,0 +1,68 @@
+{
+  "version": 1,
+  "base_sha": "54d42326bd16258726e8895815a7d25c28a375f8",
+  "verified_at": "2026-11-24T11:11:44Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Infrastructure/ResourceDetailDrawer.tsx",
+    "frontend-modern/src/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx",
+    "frontend-modern/src/components/Storage/DiskDrawer.tsx",
+    "frontend-modern/src/components/Storage/DiskDrawerOverview.tsx",
+    "frontend-modern/src/components/Storage/StoragePoolDetail.tsx",
+    "frontend-modern/src/components/Storage/StoragePoolDrawer.tsx",
+    "frontend-modern/src/components/Workloads/GuestDrawer.tsx",
+    "frontend-modern/src/components/Workloads/GuestDrawerHistory.tsx",
+    "frontend-modern/src/components/Workloads/GuestDrawerHistoryRangeSelect.tsx",
+    "frontend-modern/src/components/Workloads/GuestDrawerOverview.tsx",
+    "frontend-modern/src/components/Workloads/NodeDrawer.tsx",
+    "frontend-modern/src/components/Workloads/NodeDrawerOverview.tsx",
+    "frontend-modern/src/components/shared/DrawerAttentionSection.tsx",
+    "frontend-modern/src/components/shared/Subtabs.tsx",
+    "frontend-modern/src/features/docker/DockerHostDrawer.tsx",
+    "frontend-modern/src/features/docker/DockerHostDrawerOverview.tsx",
+    "frontend-modern/src/features/proxmox/ProxmoxCephClusterDrawer.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Infrastructure/ResourceDetailDrawer.tsx": "ef1610a01f871cdeb92a41be3adf278c25f47ebd03d6770c225810275125dd08",
+    "frontend-modern/src/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx": "a129d8b9de8d51d8f1fd4e179c24e8991a02d62f78571a68bd261fca5491ba18",
+    "frontend-modern/src/components/Storage/DiskDrawer.tsx": "9066a60f2c13a1488aa6266d25cd43d08d8eb607403ded77eae9aaba3958131e",
+    "frontend-modern/src/components/Storage/DiskDrawerOverview.tsx": "4f33c582236591f4f39362ccfc259d703783d061ee6fdbe75f6c776fb32f48af",
+    "frontend-modern/src/components/Storage/StoragePoolDetail.tsx": "8409e6c08feb619241a57ec4aec12e33414372d8ba0e40f3ceb6b98ede37f634",
+    "frontend-modern/src/components/Storage/StoragePoolDrawer.tsx": "dd038988cd1ec168750ae79614d19a54a5f6ad78d6989867e69a3115ca1fd17c",
+    "frontend-modern/src/components/Workloads/GuestDrawer.tsx": "8fec9c1e0d6d7428bd9721a575abd9f8b5ccdf53e5d6f574707d04f109feacc6",
+    "frontend-modern/src/components/Workloads/GuestDrawerHistory.tsx": "a737ec8a1e3f1ca050c8ac13ab05ea87fc2790445895f2d21d9f779c8bead8af",
+    "frontend-modern/src/components/Workloads/GuestDrawerHistoryRangeSelect.tsx": "ea68795d471fcb1c07dc4233a6788571684f70cbedf36fa82e480da6724f3a98",
+    "frontend-modern/src/components/Workloads/GuestDrawerOverview.tsx": "27d9bc51b0db1bf7e73edaaf4a57cd40bcfc3955b364dabd43d6c5da7ce1c776",
+    "frontend-modern/src/components/Workloads/NodeDrawer.tsx": "b9500086730c062ba4fccd0bdcbeed64f558235bac743c6929bf94fa9ddfd292",
+    "frontend-modern/src/components/Workloads/NodeDrawerOverview.tsx": "25df61f02fbb0cde3b644fabc4b602ce0f3e71a828412e6a8257927b13eaef21",
+    "frontend-modern/src/components/shared/DrawerAttentionSection.tsx": "440a231a32ae1fdc2cd8a50f1f5d3f75c94d2f7ecc6bf77d565505139c2e8104",
+    "frontend-modern/src/components/shared/Subtabs.tsx": "ece0c5712e661e1e1aa22e1e6b9c32442d71bdcd1dd37ef8fac34de0b7e6aef5",
+    "frontend-modern/src/features/docker/DockerHostDrawer.tsx": "053258869419f931c55ac84df712b121f42483edd7034b5f582e482fb10727c2",
+    "frontend-modern/src/features/docker/DockerHostDrawerOverview.tsx": "f40241bd5d1385c4b8d70fd4445f0520df0a09d7cb2998a885f68dfa0e4f8653",
+    "frontend-modern/src/features/proxmox/ProxmoxCephClusterDrawer.tsx": "9ddcc83813618796d4ad5a0675e444cf20940d2df949a0bea4880892580001a6"
+  },
+  "routes": [
+    "/proxmox/overview",
+    "/docker/overview",
+    "/standalone/vms"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Desktop 1440x900 dark and light themes on Proxmox node, Proxmox guest, Docker host, and Standalone VM drawers showing compact healthy header without empty alerts band and a single History range picker in the tab bar",
+    "Switching History range to 7 days updates chart window cleanly and switching to Manage hides the History range picker",
+    "Mobile 390x844 dark theme on Proxmox node drawer shows aligned tab-bar History range picker with 0px horizontal overflow and zero page errors"
+  ],
+  "interactions": [
+    "Expanded Proxmox node drawer, changed History range to 7d, switched to Manage tab and back to Overview, toggled light mode, and inspected desktop and mobile screenshots",
+    "Expanded Proxmox guest, Docker host, and Standalone VM drawers and verified a single History range control with zero duplicate comboboxes"
+  ]
+}

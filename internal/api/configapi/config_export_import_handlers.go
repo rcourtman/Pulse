@@ -2,6 +2,7 @@ package configapi
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strings"
 	"time"
@@ -137,17 +138,58 @@ func (h *ConfigHandlers) handleImportConfig(w http.ResponseWriter, r *http.Reque
 	deps := h.runtimeDependencies()
 	importUser := deps.AuthUsername(currentConfig, r)
 
-	// Import configuration.
-	if err := persistence.ImportConfig(req.Data, req.Passphrase); err != nil {
+	// An archive's API tokens and SSO configuration are credentials the
+	// importer issues. The transfer boundary marks a caller without the
+	// authority to issue them; that import restores every other section and
+	// keeps the destination's own.
+	keepAccessCredentials := apicontext.ImportKeepsAccessCredentials(r.Context())
+
+	// Import configuration. An organization administrator's archive is held
+	// to that administrator's limits before any of it is staged.
+	if err := persistence.ImportConfigWithOptions(req.Data, req.Passphrase, config.ImportOptions{
+		KeepAccessCredentials: keepAccessCredentials,
+		Validate: func(archive *config.ExportData) error {
+			return checkTenantImport(r.Context(), archive, persistence)
+		},
+	}); err != nil {
 		// No archive committed: a corrected storage failure or passphrase may
 		// be retried. Once persistence succeeds, even failed runtime apply
 		// must not replay the replacement over a newer legitimate edit.
 		retainAttempt = false
+		var refusal *importRefusal
+		if errors.As(err, &refusal) {
+			deps.AuditEvent(orgID, "config_imported", importUser, deps.ClientIP(r), r.URL.Path, false,
+				"Import refused: backup exceeds organization administrator limits")
+			log.Warn().Err(err).Str("org_id", orgID).Msg("Refused configuration import")
+			http.Error(w, refusal.message, http.StatusForbidden)
+			return
+		}
 		deps.AuditEvent(apicontext.OrgID(r.Context()), "config_imported", importUser, deps.ClientIP(r), r.URL.Path, false,
 			"Import failed")
 		log.Error().Err(err).Msg("Failed to import configuration")
 		http.Error(w, "Failed to import configuration. Verify the backup file and passphrase are correct.", http.StatusBadRequest)
 		return
+	}
+
+	// Sign-in is served from the SSO configuration the server has published,
+	// never from the file the import replaced. Publish the restored section
+	// before any reload below can return early: a provider the archive removed
+	// or changed must stop admitting sign-ins under its previous policy now,
+	// and the next SSO settings save must not write it back over the archive.
+	// The SSO configuration is the instance's; a tenant import or an import
+	// that kept access credentials does not touch it.
+	var ssoReloadErr error
+	if !isTenant && !keepAccessCredentials {
+		h.stateMu.RLock()
+		reloadSSOConfig := h.ssoConfigReload
+		h.stateMu.RUnlock()
+		if reloadSSOConfig != nil {
+			if ssoReloadErr = reloadSSOConfig(); ssoReloadErr != nil {
+				log.Warn().Err(ssoReloadErr).Msg("Failed to reload SSO configuration after import")
+			} else {
+				log.Info().Msg("Reloaded SSO configuration after import")
+			}
+		}
 	}
 
 	if isTenant {
@@ -192,6 +234,9 @@ func (h *ConfigHandlers) handleImportConfig(w http.ResponseWriter, r *http.Reque
 	// not turn a partial live apply into a successful import acknowledgement.
 	// Only fixed component names may reach the response or audit detail.
 	var reloadFailures []string
+	if ssoReloadErr != nil {
+		reloadFailures = append(reloadFailures, "SSO settings")
+	}
 	// Apply the normal non-notification reloads even while delivery is held.
 	// Otherwise a later edit can save stale live state over the imported archive.
 	// A full owner reconstruction may already have cleared the original hold.
@@ -299,15 +344,21 @@ func (h *ConfigHandlers) handleImportConfig(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
+	auditDetail, message := "Configuration imported", "Configuration imported successfully"
+	if keepAccessCredentials {
+		auditDetail += " (API tokens and SSO settings kept)"
+		message += ". API tokens and SSO settings were left unchanged: restoring them needs an instance administrator sign-in or a full-access API token that is not bound to any non-default organization."
+	}
 	deps.AuditEvent(apicontext.OrgID(r.Context()), "config_imported", importUser, deps.ClientIP(r), r.URL.Path, true,
-		"Configuration imported")
+		auditDetail)
 
-	log.Info().Msg("Configuration imported successfully")
+	log.Info().Bool("access_credentials_kept", keepAccessCredentials).Msg("Configuration imported successfully")
 
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(map[string]interface{}{
-		"status":  "success",
-		"message": "Configuration imported successfully",
+		"status":                    "success",
+		"message":                   message,
+		"accessCredentialsRestored": !keepAccessCredentials,
 		"remoteAgentEndpoints": map[string]bool{
 			"reconfigured":                         false,
 			"actionRequiredIfServerAddressChanged": true,

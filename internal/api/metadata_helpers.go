@@ -1,9 +1,12 @@
 package api
 
 import (
+	"errors"
 	"fmt"
 	"net/url"
 	"strings"
+
+	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 )
 
 // validateCustomURL validates a custom URL string.
@@ -30,6 +33,9 @@ func validateCustomURL(rawURL string) string {
 
 // metadataSaveErrorMessage returns a user-friendly error message for metadata save failures.
 func metadataSaveErrorMessage(err error) string {
+	if errors.Is(err, config.ErrMetadataFileTooLarge) {
+		return "Metadata storage is full - remove metadata that is no longer needed"
+	}
 	if strings.Contains(err.Error(), "permission") {
 		return "Permission denied - check file permissions"
 	}

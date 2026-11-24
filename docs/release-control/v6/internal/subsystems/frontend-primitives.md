@@ -61,6 +61,10 @@ drawer an `AlertNodeScope` rather than a name. The rows and drawer keep their
 existing presentation; only which alerts they admit changes (#2681). The alerts
 contract holds the matching rules.
 
+### Healthy drawers omit the empty alerts band (23 November 2026)
+
+Overview drawers no longer render a standalone "No active alerts" row when healthy (`DrawerNoAlertsLine` was removed). Passing availability checks are summarised on the drawer's facts strip (alongside healthy backup status) and kept in full under Details, while failing checks and active alerts remain at the front. The history range selector (`GuestDrawerHistoryRangeSelect`, split out so `GuestDrawerHistory` stays lazy-loaded) sits in `Subtabs`'s `trailing` slot on Overview, leaving only tabless inline disk expansions (`GuestPhysicalDisks`) to render the fallback picker inside `GuestDrawerHistory`. `GuestDrawerHistory` collapses its toolbar out of layout when neither the fallback picker nor a refresh error is shown.
+
 ### Needs attention fills its drawer (4 November 2026)
 
 `DrawerAttentionSection` was capped at 768px, which left an empty region beside it
@@ -6564,9 +6568,10 @@ The Proxmox guest and node drawers (`GuestDrawerOverview.tsx`,
 `NodeDrawerOverview.tsx`) are the exception, by maintainer decision on
 2026-10-13 (demand ledger "Drawer Overview leads with attention and trends",
 a named bet): a grid of equal-weight inventory cards buried the drawer's job.
-Their Overview leads with active alerts (or one "No active alerts" line), then
-the resource's history charts (`GuestDrawerHistory`, lazy-loaded) opening on
-24 hours with the range picker beside them. These drawers have no History tab
+Their Overview leads with active alerts when present (omitting the section when
+healthy), then the resource's history charts (`GuestDrawerHistory`, lazy-loaded)
+opening on 24 hours with the range picker in the `Subtabs` trailing slot (or
+beside the charts in tabless inline disk expansions). These drawers have no History tab
 (nor, since the same change was carried to them, do the Docker host drawer and
 the shared resource-detail drawer for agents, containers and other platform
 rows):

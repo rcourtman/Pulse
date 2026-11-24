@@ -12,6 +12,8 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rcourtman/pulse-go-rewrite/internal/license/entitlements"
+	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/auth"
 )
 
@@ -142,6 +144,160 @@ func TestHostedSignupHostedModeGate(t *testing.T) {
 	rec := doHostedSignupRequest(router, `{"email":"owner@example.com","org_name":"My Organization"}`)
 	if rec.Code != http.StatusNotFound {
 		t.Fatalf("expected 404 when hosted mode is disabled, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+// A runtime the control plane provisioned for one workspace is reachable at
+// that workspace's public address, and its organization, owner and entitlement
+// come from the control plane. Its signup route must stay closed to everyone.
+func TestHostedSignupClosedOnProvisionedWorkspaceRuntime(t *testing.T) {
+	t.Setenv("PULSE_TENANT_ID", "t-workspace")
+	router, persistence, _, emailer, baseDir := newHostedSignupTestRouter(t, true)
+
+	addedAt := time.Unix(1700000000, 0).UTC()
+	if err := persistence.SaveOrganization(&models.Organization{
+		ID:          "t-workspace",
+		DisplayName: "Workspace",
+		CreatedAt:   addedAt,
+		OwnerUserID: "u_workspace_owner",
+		OwnerEmail:  "alice.smith@example.com",
+		Members: []models.OrganizationMember{
+			{UserID: "u_workspace_owner", Email: "alice.smith@example.com", Role: models.OrgRoleOwner, AddedAt: addedAt, AddedBy: "u_workspace_owner"},
+		},
+	}); err != nil {
+		t.Fatalf("save workspace org: %v", err)
+	}
+
+	for _, email := range []string{"alice.smith@example.com", "alice.\u017fmith@example.com", "stranger@example.com"} {
+		rec := doHostedSignupRequest(router, fmt.Sprintf(`{"email":%q,"org_name":"anything"}`, email))
+		if rec.Code != http.StatusNotFound {
+			t.Fatalf("signup for %q on a provisioned runtime: expected 404, got %d: %s", email, rec.Code, rec.Body.String())
+		}
+	}
+
+	org, err := persistence.LoadOrganization("t-workspace")
+	if err != nil {
+		t.Fatalf("load workspace org: %v", err)
+	}
+	if org.OwnerUserID != "u_workspace_owner" || org.OwnerEmail != "alice.smith@example.com" {
+		t.Fatalf("workspace owner = (%q, %q), want it unchanged", org.OwnerUserID, org.OwnerEmail)
+	}
+	if len(org.Members) != 1 || org.Members[0].UserID != "u_workspace_owner" {
+		t.Fatalf("workspace members = %+v, want the owner unchanged", org.Members)
+	}
+	state, err := config.NewFileBillingStore(baseDir).GetBillingState("t-workspace")
+	if err != nil {
+		t.Fatalf("get workspace billing state: %v", err)
+	}
+	if state != nil {
+		t.Fatalf("expected no billing state beside the control plane's, got %+v", state)
+	}
+	orgs, err := persistence.ListOrganizations()
+	if err != nil {
+		t.Fatalf("list orgs: %v", err)
+	}
+	for _, listed := range orgs {
+		if listed != nil && listed.ID != "default" && listed.ID != "t-workspace" {
+			t.Fatalf("signup created organization %q inside a provisioned runtime", listed.ID)
+		}
+	}
+
+	emailer.mu.Lock()
+	defer emailer.mu.Unlock()
+	if emailer.calls != 0 {
+		t.Fatalf("expected no magic link email, got %d", emailer.calls)
+	}
+}
+
+// Signing up again with an owner's address resolves to the organization that
+// owner already has. The request must not put it back on a trial.
+func TestHostedSignupExistingOwnerKeepsBillingState(t *testing.T) {
+	router, persistence, _, emailer, baseDir := newHostedSignupTestRouter(t, true)
+
+	first := doHostedSignupRequest(router, `{"email":"owner@example.com","org_name":"My Organization"}`)
+	if first.Code != http.StatusAccepted {
+		t.Fatalf("first signup expected 202, got %d: %s", first.Code, first.Body.String())
+	}
+	orgID := requireHostedSignupProvisionedOrgID(t, persistence, "owner@example.com")
+
+	store := config.NewFileBillingStore(baseDir)
+	seeded, err := store.GetBillingState(orgID)
+	if err != nil {
+		t.Fatalf("get seeded billing state: %v", err)
+	}
+	if seeded == nil || seeded.SubscriptionState != entitlements.SubStateTrial || seeded.PlanVersion != "cloud_trial" {
+		t.Fatalf("expected a seeded cloud trial for the new organization, got %+v", seeded)
+	}
+	if err := store.SaveBillingState(orgID, &entitlements.BillingState{
+		Capabilities:      seeded.Capabilities,
+		Limits:            map[string]int64{"max_monitored_systems": 10},
+		PlanVersion:       "cloud_starter",
+		SubscriptionState: entitlements.SubStateActive,
+	}); err != nil {
+		t.Fatalf("save active billing state: %v", err)
+	}
+
+	second := doHostedSignupRequest(router, `{"email":"Owner@Example.com","org_name":"Another Name"}`)
+	if second.Code != http.StatusAccepted {
+		t.Fatalf("second signup expected 202, got %d: %s", second.Code, second.Body.String())
+	}
+
+	state, err := store.GetBillingState(orgID)
+	if err != nil {
+		t.Fatalf("get billing state after second signup: %v", err)
+	}
+	if state == nil || state.SubscriptionState != entitlements.SubStateActive || state.PlanVersion != "cloud_starter" {
+		t.Fatalf("expected the active subscription to survive a repeated signup, got %+v", state)
+	}
+	if state.TrialStartedAt != nil || state.TrialEndsAt != nil {
+		t.Fatalf("expected no trial window on the active subscription, got started=%v ends=%v", state.TrialStartedAt, state.TrialEndsAt)
+	}
+
+	emailer.mu.Lock()
+	defer emailer.mu.Unlock()
+	if emailer.calls != 2 {
+		t.Fatalf("expected a sign-in link for each accepted request, got %d", emailer.calls)
+	}
+}
+
+// Rollback undoes what a failed signup created. An organization that was
+// already there is not that request's to delete.
+func TestHostedSignupExistingOrganizationSurvivesMagicLinkFailure(t *testing.T) {
+	router, persistence, rbacProvider, emailer, _ := newHostedSignupTestRouter(t, true)
+
+	first := doHostedSignupRequest(router, `{"email":"owner@example.com","org_name":"My Organization"}`)
+	if first.Code != http.StatusAccepted {
+		t.Fatalf("first signup expected 202, got %d: %s", first.Code, first.Body.String())
+	}
+	orgID := requireHostedSignupProvisionedOrgID(t, persistence, "owner@example.com")
+	before, err := persistence.LoadOrganization(orgID)
+	if err != nil {
+		t.Fatalf("load org: %v", err)
+	}
+
+	emailer.mu.Lock()
+	emailer.err = fmt.Errorf("forced SendMagicLink failure")
+	emailer.mu.Unlock()
+
+	second := doHostedSignupRequest(router, `{"email":"owner@example.com","org_name":"My Organization"}`)
+	if second.Code != http.StatusInternalServerError {
+		t.Fatalf("second signup expected 500, got %d: %s", second.Code, second.Body.String())
+	}
+
+	after, err := persistence.LoadOrganization(orgID)
+	if err != nil {
+		t.Fatalf("expected the existing organization to survive a failed repeat signup: %v", err)
+	}
+	if after.OwnerUserID != before.OwnerUserID || after.OwnerEmail != before.OwnerEmail || len(after.Members) != len(before.Members) {
+		t.Fatalf("existing organization changed: before=%+v after=%+v", before, after)
+	}
+	manager, err := rbacProvider.GetManager(orgID)
+	if err != nil {
+		t.Fatalf("get rbac manager: %v", err)
+	}
+	assignment, ok := manager.GetUserAssignment(before.OwnerUserID)
+	if !ok || !containsRoleID(assignment.RoleIDs, auth.RoleAdmin) {
+		t.Fatalf("expected the owner to keep the admin role, got %+v (found=%v)", assignment, ok)
 	}
 }
 
@@ -415,6 +571,7 @@ type captureMagicLinkEmailer struct {
 	calls        int
 	to           string
 	magicLinkURL string
+	err          error
 }
 
 func (c *captureMagicLinkEmailer) SendMagicLink(to, magicLinkURL string) error {
@@ -423,5 +580,5 @@ func (c *captureMagicLinkEmailer) SendMagicLink(to, magicLinkURL string) error {
 	c.calls++
 	c.to = to
 	c.magicLinkURL = magicLinkURL
-	return nil
+	return c.err
 }

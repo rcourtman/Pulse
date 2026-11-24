@@ -50,7 +50,20 @@ func (h *BillingStateHandlers) HandleGetBillingState(w http.ResponseWriter, r *h
 		state = defaultBillingState()
 	}
 
-	writeJSON(w, http.StatusOK, normalizeBillingState(state))
+	writeJSON(w, http.StatusOK, redactBillingStateCredentials(state))
+}
+
+// redactBillingStateCredentials returns the billing state as it may leave the
+// runtime. The hosted entitlement lease and its refresh token are the
+// credentials this runtime presents to the control plane and the relay. No
+// caller of the billing-state API needs them, and a hosted org without billing
+// state of its own inherits the default org's record, so they are never
+// included in a response or a log line.
+func redactBillingStateCredentials(state *billingState) *billingState {
+	redacted := *normalizeBillingState(state)
+	redacted.EntitlementJWT = ""
+	redacted.EntitlementRefreshToken = ""
+	return &redacted
 }
 
 func (h *BillingStateHandlers) loadEffectiveBillingState(orgID string) (*billingState, error) {
@@ -114,6 +127,17 @@ func (h *BillingStateHandlers) HandlePutBillingState(w http.ResponseWriter, r *h
 		return
 	}
 
+	// Reads do not disclose the entitlement lease or its refresh token, so a
+	// caller writing back what it read must not erase the stored ones.
+	if before != nil {
+		if state.EntitlementJWT == "" {
+			state.EntitlementJWT = before.EntitlementJWT
+		}
+		if state.EntitlementRefreshToken == "" {
+			state.EntitlementRefreshToken = before.EntitlementRefreshToken
+		}
+	}
+
 	if err := h.store.SaveBillingState(orgID, state); err != nil {
 		writeErrorResponse(w, http.StatusInternalServerError, "billing_state_save_failed", "Failed to save billing state", nil)
 		return
@@ -121,11 +145,11 @@ func (h *BillingStateHandlers) HandlePutBillingState(w http.ResponseWriter, r *h
 
 	log.Info().
 		Str("org_id", orgID).
-		Interface("before", normalizeBillingState(before)).
-		Interface("after", state).
+		Interface("before", redactBillingStateCredentials(before)).
+		Interface("after", redactBillingStateCredentials(state)).
 		Msg("Billing state updated")
 
-	writeJSON(w, http.StatusOK, state)
+	writeJSON(w, http.StatusOK, redactBillingStateCredentials(state))
 }
 
 func defaultBillingState() *billingState {

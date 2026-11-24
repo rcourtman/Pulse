@@ -17,8 +17,16 @@ import (
 type dockerRestartRecord struct {
 	count       int
 	lastCount   int
-	times       []time.Time // Track restart times for loop detection
+	increases   []dockerRestartIncrease // Track restart-count increases for loop detection
 	lastChecked time.Time
+}
+
+// dockerRestartIncrease is how far one report moved a container's restart
+// count. The count is whatever the agent reported, so it is kept as a number
+// and never as one entry per restart.
+type dockerRestartIncrease struct {
+	at    time.Time
+	count int
 }
 
 // dockerInstanceName returns the logical instance name used for Docker alerts.
@@ -972,25 +980,36 @@ func dockerContainerAlertMetadata(host models.DockerHost, container models.Docke
 	}
 }
 
+const (
+	maxDockerLabelTags     = 64
+	maxDockerLabelTagBytes = 256
+)
+
 func dockerLabelTags(labels map[string]string) []string {
 	if len(labels) == 0 {
 		return nil
 	}
 
-	tags := make([]string, 0, len(labels))
+	tags := make([]string, 0, min(len(labels), maxDockerLabelTags))
 	for rawKey, rawValue := range labels {
 		key := strings.TrimSpace(rawKey)
 		if key == "" {
 			continue
 		}
 		value := strings.TrimSpace(rawValue)
-		if value == "" {
-			tags = append(tags, key)
-			continue
+		tag := key
+		if value != "" {
+			tag = key + ":" + value
 		}
-		tags = append(tags, key+":"+value)
+		if len(tag) > maxDockerLabelTagBytes {
+			tag = strings.ToValidUTF8(tag[:maxDockerLabelTagBytes], "")
+		}
+		tags = append(tags, tag)
 	}
 	sort.Strings(tags)
+	if len(tags) > maxDockerLabelTags {
+		tags = tags[:maxDockerLabelTags]
+	}
 	return tags
 }
 
@@ -1100,12 +1119,16 @@ func (m *Manager) checkDockerContainerRestartLoop(host models.DockerHost, contai
 		return
 	}
 
+	// Docker never reports a negative count. Reading one as zero keeps every
+	// increase positive and their sum within the latest reported count.
+	restartCount := max(container.RestartCount, 0)
+
 	record, exists := m.dockerRestartTracking[resourceID]
 	if !exists {
 		record = &dockerRestartRecord{
-			count:       container.RestartCount,
-			lastCount:   container.RestartCount,
-			times:       []time.Time{},
+			count:       restartCount,
+			lastCount:   restartCount,
+			increases:   []dockerRestartIncrease{},
 			lastChecked: now,
 		}
 		m.dockerRestartTracking[resourceID] = record
@@ -1114,26 +1137,24 @@ func (m *Manager) checkDockerContainerRestartLoop(host models.DockerHost, contai
 	}
 
 	// If restart count increased, track it
-	if container.RestartCount > record.lastCount {
-		newRestarts := container.RestartCount - record.lastCount
-		for i := 0; i < newRestarts; i++ {
-			record.times = append(record.times, now)
-		}
-		record.lastCount = container.RestartCount
+	if restartCount > record.lastCount {
+		record.increases = append(record.increases, dockerRestartIncrease{at: now, count: restartCount - record.lastCount})
+		record.lastCount = restartCount
 	}
 
-	// Clean up old restart times outside the window
+	// Clean up old restarts outside the window
 	cutoff := now.Add(-time.Duration(timeWindow) * time.Second)
-	var recentRestarts []time.Time
-	for _, t := range record.times {
-		if t.After(cutoff) {
-			recentRestarts = append(recentRestarts, t)
+	var recentIncreases []dockerRestartIncrease
+	recentCount := 0
+	for _, increase := range record.increases {
+		if increase.at.After(cutoff) {
+			recentIncreases = append(recentIncreases, increase)
+			recentCount += increase.count
 		}
 	}
-	record.times = recentRestarts
+	record.increases = recentIncreases
 	record.lastChecked = now
 
-	recentCount := len(record.times)
 	m.mu.Unlock()
 
 	// Check if we have a restart loop
@@ -1646,6 +1667,22 @@ func isLegacyDockerHostContainerAlert(alert *Alert, host models.DockerHost) bool
 		alertMetadataString(alert, "hostId") == strings.TrimSpace(host.ID) && alertMetadataString(alert, "containerId") == ""
 }
 
+// dockerHostOwnsResourceAlert reports whether an alert under this host's
+// container and service references ("docker:<host ID>/...") belongs to the
+// host. The reference alone does not settle that: a host ID is whatever the
+// agent reported and may contain "/", so every reference of a host "a/service"
+// also starts the way the service references of host "a" do. Each Docker alert
+// records the host it was raised for, and one recorded for another host is
+// that host's to clear. Alerts stored without a recorded host are matched by
+// reference only.
+func dockerHostOwnsResourceAlert(alert *Alert, host models.DockerHost, prefix string) bool {
+	if alert == nil || !strings.HasPrefix(alert.ResourceID, prefix) {
+		return false
+	}
+	recordedHostID := alertMetadataString(alert, "hostId")
+	return recordedHostID == "" || recordedHostID == strings.TrimSpace(host.ID)
+}
+
 func (m *Manager) cleanupDockerContainerAlertsWithTracking(host models.DockerHost, seen map[string]struct{}, seenUpdateTracking map[string]struct{}) {
 	prefix := fmt.Sprintf("docker:%s/", strings.TrimSpace(host.ID))
 	updateTrackingPrefix := dockerUpdateTrackingHostPrefix(host)
@@ -1658,7 +1695,7 @@ func (m *Manager) cleanupDockerContainerAlertsWithTracking(host models.DockerHos
 			toClear = append(toClear, alertID)
 			continue
 		}
-		if !strings.HasPrefix(alert.ResourceID, prefix) {
+		if !dockerHostOwnsResourceAlert(alert, host, prefix) {
 			continue
 		}
 		if _, exists := seen[alert.ResourceID]; exists {
@@ -1709,7 +1746,7 @@ func (m *Manager) clearDockerHostContainerAlerts(host models.DockerHost) {
 	toClear := make([]string, 0)
 	for storageKey, alert := range m.activeAlerts {
 		alertID := effectiveAlertID(alert, storageKey)
-		if strings.HasPrefix(alert.ResourceID, prefix) || isLegacyDockerHostContainerAlert(alert, host) {
+		if dockerHostOwnsResourceAlert(alert, host, prefix) || isLegacyDockerHostContainerAlert(alert, host) {
 			toClear = append(toClear, alertID)
 		}
 	}

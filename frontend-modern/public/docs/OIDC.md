@@ -76,6 +76,8 @@ At sign-in, every non-empty list must match. Entries within one list are alterna
 > [Check admin access in a separate browser session](#-quick-start) and keep
 > your independent administrator login even after SSO works.
 
+An address the IdP reports as unverified (`email_verified: false`) matches neither **Allowed Domains** nor **Allowed Emails**. Sign-in fails with `email_unverified` until the user verifies it at the IdP. An IdP that omits `email_verified` is not affected.
+
 ### Group-to-Role Mapping
 
 Automatically assign Pulse roles based on OIDC group membership. When a user logs in, Pulse checks their groups claim and assigns the corresponding roles. Mapping groups to the built-in `admin`, `operator`, and `viewer` roles is included with Community SSO. Creating custom roles and manually managing user assignments remain Pro RBAC features.

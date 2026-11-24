@@ -60,6 +60,7 @@ describe('Configuration import outcome guidance', () => {
     ].map((match) => match[1]);
     expect(new Set(componentNames)).toEqual(
       new Set([
+        'SSO settings',
         'alert settings',
         'webhook settings',
         'email settings',

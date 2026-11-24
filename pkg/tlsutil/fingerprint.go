@@ -68,6 +68,26 @@ func FetchFingerprint(host string) (string, error) {
 // respecting the caller's cancellation and deadline. The existing five-second
 // capture limit remains an upper bound, not an extension of the caller's budget.
 func FetchFingerprintContext(ctx context.Context, host string) (string, error) {
+	// Create a TLS connection that explicitly accepts parseable peer certificates
+	// for fingerprint capture without relying on blanket skip-verify alone.
+	return fetchFingerprint(ctx, host, UnverifiedPeerCertificateCaptureTLSConfig())
+}
+
+// FetchVerifiedFingerprint captures the same credential-free TLS leaf, but only
+// from a peer that passes ordinary certificate chain and hostname verification.
+// It is for callers whose policy is CA validation rather than first use, where
+// an unverified capture must never become a saved pin.
+func FetchVerifiedFingerprint(host string) (string, error) {
+	return FetchVerifiedFingerprintContext(context.Background(), host)
+}
+
+// FetchVerifiedFingerprintContext captures a CA-verified TLS leaf while
+// respecting the caller's cancellation and deadline.
+func FetchVerifiedFingerprintContext(ctx context.Context, host string) (string, error) {
+	return fetchFingerprint(ctx, host, &tls.Config{MinVersion: minimumTLSVersion})
+}
+
+func fetchFingerprint(ctx context.Context, host string, config *tls.Config) (string, error) {
 	if err := ctx.Err(); err != nil {
 		return "", err
 	}
@@ -76,14 +96,12 @@ func FetchFingerprintContext(ctx context.Context, host string) (string, error) {
 		return "", fmt.Errorf("failed to parse host URL: %w", err)
 	}
 
-	// Create a TLS connection that explicitly accepts parseable peer certificates
-	// for fingerprint capture without relying on blanket skip-verify alone.
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 
 	dialer := &tls.Dialer{
 		NetDialer: &net.Dialer{Timeout: 5 * time.Second},
-		Config:    UnverifiedPeerCertificateCaptureTLSConfig(),
+		Config:    config,
 	}
 	conn, err := dialer.DialContext(ctx, "tcp", targetHost)
 	if err != nil {

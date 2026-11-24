@@ -12,18 +12,20 @@ import (
 
 // FileManager implements the Manager interface with file-based persistence.
 type FileManager struct {
-	mu          sync.RWMutex
-	dataDir     string
-	roles       map[string]Role
-	assignments map[string]UserRoleAssignment
+	mu              sync.RWMutex
+	dataDir         string
+	roles           map[string]Role
+	assignments     map[string]UserRoleAssignment
+	providerIssuers map[string]string
 }
 
 // NewFileManager creates a new file-based RBAC manager.
 func NewFileManager(dataDir string) (*FileManager, error) {
 	m := &FileManager{
-		dataDir:     dataDir,
-		roles:       make(map[string]Role),
-		assignments: make(map[string]UserRoleAssignment),
+		dataDir:         dataDir,
+		roles:           make(map[string]Role),
+		assignments:     make(map[string]UserRoleAssignment),
+		providerIssuers: make(map[string]string),
 	}
 
 	// Initialize built-in roles
@@ -110,6 +112,10 @@ func (m *FileManager) assignmentsFile() string {
 	return filepath.Join(m.dataDir, "rbac_assignments.json")
 }
 
+func (m *FileManager) providerIssuersFile() string {
+	return filepath.Join(m.dataDir, "rbac_provider_issuers.json")
+}
+
 func (m *FileManager) load() error {
 	// Load custom roles (built-in roles are always initialized)
 	if data, err := os.ReadFile(m.rolesFile()); err == nil {
@@ -132,6 +138,17 @@ func (m *FileManager) load() error {
 		}
 		for _, a := range assignments {
 			m.assignments[a.Username] = a
+		}
+	}
+
+	// Load bound SSO provider original issuers
+	if data, err := os.ReadFile(m.providerIssuersFile()); err == nil {
+		var issuers map[string]string
+		if err := json.Unmarshal(data, &issuers); err != nil {
+			return err
+		}
+		for k, v := range issuers {
+			m.providerIssuers[k] = v
 		}
 	}
 
@@ -279,6 +296,16 @@ func (m *FileManager) AssignRole(username string, roleID string) error {
 
 // UpdateUserRoles replaces all roles for a user.
 func (m *FileManager) UpdateUserRoles(username string, roleIDs []string) error {
+	return m.replaceUserRoles(username, roleIDs, false)
+}
+
+// UpdateUserRolesFromMapping replaces all roles for a user with the roles an
+// SSO group role mapping resolved, and records that origin.
+func (m *FileManager) UpdateUserRolesFromMapping(username string, roleIDs []string) error {
+	return m.replaceUserRoles(username, roleIDs, true)
+}
+
+func (m *FileManager) replaceUserRoles(username string, roleIDs []string, fromMapping bool) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -292,6 +319,7 @@ func (m *FileManager) UpdateUserRoles(username string, roleIDs []string) error {
 	assignment := m.assignments[username]
 	assignment.Username = username
 	assignment.RoleIDs = roleIDs
+	assignment.RolesFromMapping = fromMapping
 	assignment.UpdatedAt = time.Now()
 	m.assignments[username] = assignment
 
@@ -405,4 +433,50 @@ func (m *FileManager) GetUserPermissions(username string) []Permission {
 		perms = append(perms, perm)
 	}
 	return perms
+}
+
+func providerIssuerKey(providerType, providerID string) (string, bool) {
+	typ := strings.TrimSpace(strings.ToLower(providerType))
+	id := strings.TrimSpace(providerID)
+	if typ == "" || id == "" {
+		return "", false
+	}
+	return typ + "\x00" + id, true
+}
+
+func (m *FileManager) saveProviderIssuers() error {
+	data, err := json.MarshalIndent(m.providerIssuers, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(m.providerIssuersFile(), data, 0600)
+}
+
+// BindProviderOriginalIssuer records the first issuer seen for a provider entry.
+func (m *FileManager) BindProviderOriginalIssuer(providerType, providerID, issuer string) error {
+	_, err := m.GetOrBindProviderOriginalIssuer(providerType, providerID, issuer)
+	return err
+}
+
+// GetOrBindProviderOriginalIssuer returns the original issuer bound to a provider
+// entry, binding issuer if no original issuer has been recorded yet.
+func (m *FileManager) GetOrBindProviderOriginalIssuer(providerType, providerID, issuer string) (string, error) {
+	key, ok := providerIssuerKey(providerType, providerID)
+	iss := strings.TrimSpace(issuer)
+	if !ok || iss == "" {
+		return "", nil
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if existing, exists := m.providerIssuers[key]; exists && existing != "" {
+		return existing, nil
+	}
+	m.providerIssuers[key] = iss
+	if m.dataDir != "" {
+		if err := m.saveProviderIssuers(); err != nil {
+			delete(m.providerIssuers, key)
+			return "", err
+		}
+	}
+	return iss, nil
 }

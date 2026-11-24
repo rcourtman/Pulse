@@ -15,6 +15,7 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentcapabilities"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai"
+	"github.com/rcourtman/pulse-go-rewrite/internal/ai/chat"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/learning"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/unified"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
@@ -411,6 +412,7 @@ func TestPatrolFindingLifecycleHandlers_ReturnAgentStableValidationErrors(t *tes
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			req := newLoopbackRequest(http.MethodPost, tt.path, strings.NewReader(tt.body))
+			req = req.WithContext(chat.WithHostCommandAuthority(req.Context(), true))
 			rec := httptest.NewRecorder()
 
 			tt.handler(rec, req)
@@ -484,6 +486,7 @@ func TestPatrolFindingLifecycleHandlers_ReturnAgentStableNotFoundErrors(t *testi
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			req := newLoopbackRequest(http.MethodPost, tt.path, strings.NewReader(tt.body))
+			req = req.WithContext(chat.WithHostCommandAuthority(req.Context(), true))
 			rec := httptest.NewRecorder()
 
 			tt.handler(rec, req)
@@ -665,6 +668,7 @@ func TestHandleResolveFinding_SetsResolved(t *testing.T) {
 	addUnifiedFinding(unifiedStore, "finding-resolve", detectedAt)
 
 	req := newLoopbackRequest(http.MethodPost, "/api/ai/patrol/resolve", strings.NewReader(`{"finding_id":"finding-resolve","resolution_note":"fixed after restarting the worker"}`))
+	req = req.WithContext(chat.WithHostCommandAuthority(req.Context(), true))
 	rec := httptest.NewRecorder()
 
 	handler.HandleResolveFinding(rec, req)
@@ -706,6 +710,7 @@ func TestHandleDismissFinding_ValidReason(t *testing.T) {
 	}
 	body, _ := json.Marshal(payload)
 	req := newLoopbackRequest(http.MethodPost, "/api/ai/patrol/dismiss", bytes.NewReader(body))
+	req = req.WithContext(chat.WithHostCommandAuthority(req.Context(), true))
 	rec := httptest.NewRecorder()
 
 	handler.HandleDismissFinding(rec, req)
@@ -870,6 +875,7 @@ func TestHandlePatrolRuntimeFindingActions_AreRejected(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			req := newLoopbackRequest(http.MethodPost, tt.path, strings.NewReader(tt.body))
+			req = req.WithContext(chat.WithHostCommandAuthority(req.Context(), true))
 			rec := httptest.NewRecorder()
 
 			tt.handler(rec, req)

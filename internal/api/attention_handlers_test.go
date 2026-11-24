@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"strings"
 	"testing"
 	"time"
 
@@ -465,6 +466,70 @@ func TestAttentionLifecycleMutationsRefreshTheCanonicalProjection(t *testing.T) 
 	if len(active.Data) != 0 || active.Summary.SuppressedCount != 1 {
 		t.Fatalf("suppressed active projection = %+v", active)
 	}
+}
+
+func TestAttentionSuppressionReasonIsBounded(t *testing.T) {
+	now := time.Now().UTC()
+	alert := attentionHandlerAlert(
+		"agent:node-1/disk:mnt-disk2::metric-threshold:disk",
+		operationaltrust.OperationalOpen,
+		now,
+	)
+	manager := alerts.NewManagerWithDataDir(t.TempDir())
+	t.Cleanup(manager.Stop)
+	setUnexportedField(
+		t,
+		manager,
+		"activeAlerts",
+		map[string]*alerts.Alert{alert.ID: alert.Clone()},
+	)
+	setUnexportedField(
+		t,
+		manager,
+		"activeAlertAlias",
+		map[string]string{alert.OperationalRecord.ID: alert.ID},
+	)
+	monitor := &monitoring.Monitor{}
+	setUnexportedField(t, monitor, "state", models.NewState())
+	setUnexportedField(t, monitor, "alertManager", manager)
+	handler := NewAttentionHandlers(
+		func(context.Context) *monitoring.Monitor { return monitor },
+		nil,
+	)
+	suppress := func(reason string) *httptest.ResponseRecorder {
+		body, err := json.Marshal(map[string]string{
+			"reason":    reason,
+			"expiresAt": now.Add(time.Hour).Format(time.RFC3339Nano),
+		})
+		if err != nil {
+			t.Fatalf("encode suppression: %v", err)
+		}
+		response := httptest.NewRecorder()
+		handler.HandleAttention(response, httptest.NewRequest(
+			http.MethodPost,
+			"/api/ai/patrol/attention/agent:node-1/disk:mnt-disk2::metric-threshold:disk/suppress",
+			bytes.NewReader(body),
+		))
+		return response
+	}
+
+	oversized := strings.Repeat("<", alerts.MaxOperationalSuppressionReasonRunes+1)
+	if response := suppress(oversized); response.Code != http.StatusBadRequest ||
+		!strings.Contains(response.Body.String(), "invalid_attention_suppression") {
+		t.Fatalf("oversized reason status = %d: %s", response.Code, response.Body.String())
+	}
+	if active := manager.GetActiveAlerts(); len(active) != 1 ||
+		active[0].OperationalRecord.State != operationaltrust.OperationalOpen ||
+		active[0].OperationalRecord.Suppression != nil {
+		t.Fatalf("rejected suppression changed the alert: %+v", active)
+	}
+
+	// The bound counts characters, and surrounding whitespace is not stored.
+	boundary := strings.Repeat("日", alerts.MaxOperationalSuppressionReasonRunes)
+	if response := suppress("  " + boundary + "  "); response.Code != http.StatusOK {
+		t.Fatalf("boundary reason status = %d: %s", response.Code, response.Body.String())
+	}
+	assertAttentionHandlerState(t, handler, alert.ID, operationaltrust.OperationalSuppressed)
 }
 
 func assertAttentionHandlerState(

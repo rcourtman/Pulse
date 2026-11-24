@@ -414,15 +414,18 @@ func nativeProfileAPT(t *testing.T, receipt *nativeProfileReceipt, fixture *secu
 	secureRuntimeAssertRootMonitoringProfile(t)
 	nativeAPTNoRunner(t, receipt)
 	if !reflect.DeepEqual(state, nativeProfileFiles(t, statePaths...)) || !reflect.DeepEqual(lifecycle, nativeProfileOptionalFiles(t, lifecyclePaths...)) ||
-		stateRoot != nativeProfileDirectory(t, "/var/lib/pulse-agent") ||
-		!nativeProfileHistoryHandedOff(history, nativeProfileFiles(t, historyPath)[historyPath], uint32(uid), uint32(gid)) {
-		t.Fatal("no-runner rollback changed saved identity/CA/token/lifecycle/history or state-root metadata")
+		stateRoot != nativeProfileDirectory(t, "/var/lib/pulse-agent") {
+		t.Fatal("no-runner rollback changed saved identity/CA/token/lifecycle or state-root metadata")
+	}
+	// History the collector account held is not state the root collector may load.
+	if nativeProfileOptionalFiles(t, historyPath)[historyPath].Present {
+		t.Fatal("no-runner rollback left collector-held history in the root collector's state directory")
 	}
 	hostAfter := nativeAPTMachineState(t)
 	if !reflect.DeepEqual(hostBefore, hostAfter) || !reflect.DeepEqual(fixtureBefore, nativeProfileTree(t, root)) {
 		t.Fatal("APT inspection changed package database/index bytes or metadata")
 	}
-	phase("root-no-runner-restored", map[string]any{"authenticated_report": report, "state": state, "history_preserved": true,
+	phase("root-no-runner-restored", map[string]any{"authenticated_report": report, "state": state, "collector_history_discarded": true,
 		"host_package_state_unchanged": true, "host_package_state_after": hostAfter,
 		"fixture_unchanged": true, "state_root": stateRoot, "lifecycle": lifecycle})
 	receipt.Passed = true

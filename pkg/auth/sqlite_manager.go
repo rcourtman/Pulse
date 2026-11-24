@@ -173,6 +173,7 @@ func (m *SQLiteManager) initSchema() error {
 		provider_type TEXT NOT NULL DEFAULT '',
 		provider_id TEXT NOT NULL DEFAULT '',
 		last_login_at INTEGER NOT NULL DEFAULT 0,
+		roles_from_mapping INTEGER NOT NULL DEFAULT 0,
 		updated_at INTEGER NOT NULL
 	);
 
@@ -191,6 +192,15 @@ func (m *SQLiteManager) initSchema() error {
 	SELECT username, MAX(updated_at)
 	FROM rbac_user_assignments
 	GROUP BY username;
+
+	-- Original issuer bound to each SSO provider entry ID (survives provider deletion)
+	CREATE TABLE IF NOT EXISTS rbac_sso_provider_issuers (
+		provider_type TEXT NOT NULL,
+		provider_id TEXT NOT NULL,
+		original_issuer TEXT NOT NULL,
+		created_at INTEGER NOT NULL,
+		PRIMARY KEY (provider_type, provider_id)
+	);
 
 	-- Change log
 	CREATE TABLE IF NOT EXISTS rbac_changelog (
@@ -251,6 +261,7 @@ func (m *SQLiteManager) ensureRBACUserIdentityColumns() error {
 		{name: "provider_type", definition: "TEXT NOT NULL DEFAULT ''"},
 		{name: "provider_id", definition: "TEXT NOT NULL DEFAULT ''"},
 		{name: "last_login_at", definition: "INTEGER NOT NULL DEFAULT 0"},
+		{name: "roles_from_mapping", definition: "INTEGER NOT NULL DEFAULT 0"},
 	}
 	for _, column := range required {
 		if _, ok := existing[column.name]; ok {
@@ -763,11 +774,12 @@ func (m *SQLiteManager) getUserAssignmentUnsafe(username string) UserRoleAssignm
 func (m *SQLiteManager) getUserAssignmentWithErrorUnsafe(username string) (UserRoleAssignment, bool, error) {
 	var displayName, email, providerType, providerID string
 	var lastLoginAt, userUpdatedAt int64
+	var rolesFromMapping int
 	err := m.db.QueryRow(`
-		SELECT display_name, email, provider_type, provider_id, last_login_at, updated_at
+		SELECT display_name, email, provider_type, provider_id, last_login_at, roles_from_mapping, updated_at
 		FROM rbac_users
 		WHERE username = ?
-	`, username).Scan(&displayName, &email, &providerType, &providerID, &lastLoginAt, &userUpdatedAt)
+	`, username).Scan(&displayName, &email, &providerType, &providerID, &lastLoginAt, &rolesFromMapping, &userUpdatedAt)
 	if err == sql.ErrNoRows {
 		return UserRoleAssignment{Username: username, RoleIDs: []string{}}, false, nil
 	}
@@ -812,6 +824,7 @@ func (m *SQLiteManager) getUserAssignmentWithErrorUnsafe(username string) (UserR
 		ProviderID:   providerID,
 		UpdatedAt:    time.Unix(latestUpdate, 0),
 	}
+	assignment.RolesFromMapping = rolesFromMapping != 0
 	if lastLoginAt > 0 {
 		value := time.Unix(lastLoginAt, 0)
 		assignment.LastLoginAt = &value
@@ -882,6 +895,16 @@ func (m *SQLiteManager) UpdateUserRoles(username string, roleIDs []string) error
 
 // UpdateUserRolesWithContext replaces all roles for a user with audit context.
 func (m *SQLiteManager) UpdateUserRolesWithContext(username string, roleIDs []string, byUser string) error {
+	return m.replaceUserRoles(username, roleIDs, byUser, false)
+}
+
+// UpdateUserRolesFromMapping replaces all roles for a user with the roles an
+// SSO group role mapping resolved, and records that origin.
+func (m *SQLiteManager) UpdateUserRolesFromMapping(username string, roleIDs []string) error {
+	return m.replaceUserRoles(username, roleIDs, "", true)
+}
+
+func (m *SQLiteManager) replaceUserRoles(username string, roleIDs []string, byUser string, fromMapping bool) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -907,11 +930,17 @@ func (m *SQLiteManager) UpdateUserRolesWithContext(username string, roleIDs []st
 	defer func() { _ = tx.Rollback() }()
 
 	now := time.Now().Unix()
+	rolesFromMapping := 0
+	if fromMapping {
+		rolesFromMapping = 1
+	}
 	if _, err = tx.Exec(`
-		INSERT INTO rbac_users (username, updated_at)
-		VALUES (?, ?)
-		ON CONFLICT(username) DO UPDATE SET updated_at = excluded.updated_at
-	`, username, now); err != nil {
+		INSERT INTO rbac_users (username, roles_from_mapping, updated_at)
+		VALUES (?, ?, ?)
+		ON CONFLICT(username) DO UPDATE SET
+			roles_from_mapping = excluded.roles_from_mapping,
+			updated_at = excluded.updated_at
+	`, username, rolesFromMapping, now); err != nil {
 		return err
 	}
 
@@ -940,6 +969,7 @@ func (m *SQLiteManager) UpdateUserRolesWithContext(username string, roleIDs []st
 	newAssignment := oldAssignment
 	newAssignment.Username = username
 	newAssignment.RoleIDs = roleIDs
+	newAssignment.RolesFromMapping = fromMapping
 	newAssignment.UpdatedAt = time.Unix(now, 0)
 	newValueJSON, _ := json.Marshal(newAssignment)
 	m.logChangeUnsafe(ActionUserRolesUpdate, "assignment", username, string(oldValueJSON), string(newValueJSON), byUser)
@@ -1033,6 +1063,9 @@ func (m *SQLiteManager) MigrateUserAssignment(fromUsername, toUsername string) e
 	if fromUsername == toUsername {
 		return nil
 	}
+	if strings.HasPrefix(strings.ToLower(fromUsername), "sso:") {
+		return fmt.Errorf("cannot migrate canonical sso principal %q", fromUsername)
+	}
 
 	source, sourceExists, err := m.getUserAssignmentWithErrorUnsafe(fromUsername)
 	if err != nil {
@@ -1040,6 +1073,9 @@ func (m *SQLiteManager) MigrateUserAssignment(fromUsername, toUsername string) e
 	}
 	if !sourceExists {
 		return nil
+	}
+	if source.ProviderType != "" || source.ProviderID != "" {
+		return fmt.Errorf("cannot migrate provider-bound identity %q", fromUsername)
 	}
 	target, targetExists, err := m.getUserAssignmentWithErrorUnsafe(toUsername)
 	if err != nil {
@@ -1118,6 +1154,45 @@ func (m *SQLiteManager) MigrateUserAssignment(fromUsername, toUsername string) e
 		"identity-migration",
 	)
 	return nil
+}
+
+// BindProviderOriginalIssuer records the original issuer for a provider entry
+// (providerType, providerID) if none has been recorded yet. The record lives in
+// its own table so it survives deleting and recreating a provider with the same ID.
+func (m *SQLiteManager) BindProviderOriginalIssuer(providerType, providerID, issuer string) error {
+	_, err := m.GetOrBindProviderOriginalIssuer(providerType, providerID, issuer)
+	return err
+}
+
+// GetOrBindProviderOriginalIssuer atomically returns the original issuer bound
+// to (providerType, providerID), binding issuer first if no record exists.
+func (m *SQLiteManager) GetOrBindProviderOriginalIssuer(providerType, providerID, issuer string) (string, error) {
+	typ := strings.TrimSpace(strings.ToLower(providerType))
+	id := strings.TrimSpace(providerID)
+	iss := strings.TrimSpace(issuer)
+	if typ == "" || id == "" || iss == "" {
+		return "", nil
+	}
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if _, err := m.db.Exec(`
+		INSERT OR IGNORE INTO rbac_sso_provider_issuers (provider_type, provider_id, original_issuer, created_at)
+		VALUES (?, ?, ?, ?)
+	`, typ, id, iss, time.Now().Unix()); err != nil {
+		return "", err
+	}
+
+	var original string
+	if err := m.db.QueryRow(`
+		SELECT original_issuer
+		FROM rbac_sso_provider_issuers
+		WHERE provider_type = ? AND provider_id = ?
+	`, typ, id).Scan(&original); err != nil {
+		return "", err
+	}
+	return original, nil
 }
 
 // RemoveRole removes a role from a user.

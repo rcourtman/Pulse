@@ -1134,6 +1134,12 @@ responsive shell appear to ignore an operator.
    control-plane registry cannot resolve a stable account `User.ID`; it must
    not sign a tenant handoff with a blank subject and let the tenant runtime
    promote contact email into identity.
+   Control-plane magic-link verification may seed an owner membership only on
+   an account that has no members yet. Once an account has members, a
+   tenant-bound link, tenant- or portal-targeted, must fail closed with `403`
+   for an email that is not a current member: stored tenant contact email must
+   not restore a removed member, and access returns only through an accepted
+   invitation.
    That same portal boundary also owns the signed-in shell shape: hosted
    arrivals default to `Workspaces`, self-hosted-only arrivals default to
    `Billing`, and the shell destinations are limited to `Workspaces`,
@@ -4467,9 +4473,44 @@ generated-report purge) are removed, so nothing deletes history or reports
 because a plan ended. Plan copy, the billing summary and the comparison table
 no longer list history as a paid line. Continuing subscribers lose nothing.
 
-
 ### Top-level Availability page and inline management (24 November 2026)
 
 `frontend-modern/src/App.tsx` and `frontend-modern/src/AppLayout.tsx` expose
 the primary `/availability` route when `PlatformAdmission.Availability` is true.
 Cloud, licensing, and paid feature entitlement boundaries are unchanged.
+
+### Account membership changes reach existing workspaces
+
+A hosted workspace authorizes every request against its own organization
+metadata, seeded from the account's members at provisioning, and its sessions
+carry no account fact. Deleting or lowering an account membership in the
+registry alone stops new handoffs but leaves an open workspace session with the
+earlier role. `internal/cloudcp/account/handlers.go` carries removals,
+demotions, promotions and re-additions into every workspace of the account
+through `internal/cloudcp/stripe/workspace_access.go`.
+
+Removal drops the member and any pending workspace invitation, matched by the
+stable user ID or by a legacy email-keyed record the handoff would still admit.
+A lowered account role caps the stored workspace role at the shared
+account-role-to-organization-role mapping. A raised account role or a
+re-added existing member is synced into every existing workspace with at least
+the mapped organization role, preserving any higher workspace-local grant so
+undoing a demotion or re-inviting a removed member restores workspace access.
+A workspace owned by a removed or demoted member passes to the account's
+longest-standing other owner, the same deterministic fallback provisioning uses.
+An open workspace session is held to the rewritten membership from its next
+request, as after a change made inside the workspace. The session record, API
+tokens minted in the workspace and session lifetime are unchanged.
+
+The workspace write uses the organization's optimistic save, reloads and
+reapplies when the running workspace wrote in between, and restores runtime
+file ownership. Every workspace is attempted. If one cannot be updated the
+request fails and the account membership stays as it was, so the change can be
+repeated. The write takes no runtime lifecycle lease: a rollout, health check
+or recovery hold on one workspace must not keep access in place elsewhere. A
+rollout that restores its snapshot can bring an earlier member list back and is
+not reconciled here. Pending account invitations have opened no workspace and
+are not carried. Routes, request fields and account roles are unchanged.
+Registered account-handler, route and Stripe provisioner tests cover ordering,
+failure retention, ownership succession, two-way restoration, legacy records,
+the registered wiring and the boundary to other accounts.

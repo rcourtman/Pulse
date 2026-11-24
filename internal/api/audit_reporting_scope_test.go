@@ -38,6 +38,71 @@ func TestAuditEndpointsRequireAuditReadScope(t *testing.T) {
 	}
 }
 
+func TestRBACEndpointsRequireFullAccessScope(t *testing.T) {
+	t.Setenv("PULSE_DEV", "true")
+
+	cases := []struct {
+		method string
+		path   string
+		body   string
+	}{
+		{method: http.MethodGet, path: "/api/admin/roles", body: ""},
+		{method: http.MethodPost, path: "/api/admin/roles", body: `{"id":"role-1","name":"Role 1"}`},
+		{method: http.MethodPut, path: "/api/admin/roles/role-1", body: `{"id":"role-1","name":"Role 1"}`},
+		{method: http.MethodDelete, path: "/api/admin/roles/role-1", body: ""},
+		{method: http.MethodGet, path: "/api/admin/users", body: ""},
+		{method: http.MethodGet, path: "/api/admin/users/alice/permissions", body: ""},
+		{method: http.MethodPut, path: "/api/admin/users/alice/roles", body: `{"roleIds":["admin"]}`},
+		{method: http.MethodDelete, path: "/api/admin/users/alice", body: ""},
+		{method: http.MethodGet, path: "/api/admin/rbac/integrity", body: ""},
+		{method: http.MethodPost, path: "/api/admin/rbac/reset-admin", body: `{}`},
+	}
+
+	// An agent install token and the widest settings token both stop short of
+	// full access, so neither may read or change who administers the instance.
+	for name, scopes := range map[string][]string{
+		"agent":    {config.ScopeAgentReport, config.ScopeAgentConfigRead, config.ScopeDockerReport, config.ScopeKubernetesReport},
+		"settings": {config.ScopeSettingsRead, config.ScopeSettingsWrite},
+	} {
+		t.Run(name, func(t *testing.T) {
+			rawToken := "rbac-scope-" + name + "-token-123.12345678"
+			record := newTokenRecord(t, rawToken, scopes, nil)
+			cfg := newTestConfigWithTokens(t, record)
+			router := newTestRouter(t, cfg, nil, nil, nil, nil, "1.0.0")
+
+			for _, tc := range cases {
+				req := httptest.NewRequest(tc.method, tc.path, strings.NewReader(tc.body))
+				req.Header.Set("X-API-Token", rawToken)
+				rec := httptest.NewRecorder()
+				router.Handler().ServeHTTP(rec, req)
+				if rec.Code != http.StatusForbidden {
+					t.Fatalf("expected 403 for missing full-access scope on %s %s, got %d", tc.method, tc.path, rec.Code)
+				}
+				if !strings.Contains(rec.Body.String(), `"requiredScope":"`+config.ScopeWildcard+`"`) {
+					t.Fatalf("expected missing scope response to name %q on %s %s, got %q", config.ScopeWildcard, tc.method, tc.path, rec.Body.String())
+				}
+			}
+		})
+	}
+
+	t.Run("full access", func(t *testing.T) {
+		rawToken := "rbac-scope-full-access-token-123.12345678"
+		record := newTokenRecord(t, rawToken, []string{config.ScopeWildcard}, nil)
+		cfg := newTestConfigWithTokens(t, record)
+		router := newTestRouter(t, cfg, nil, nil, nil, nil, "1.0.0")
+
+		for _, path := range []string{"/api/admin/roles", "/api/admin/users"} {
+			req := httptest.NewRequest(http.MethodGet, path, nil)
+			req.Header.Set("X-API-Token", rawToken)
+			rec := httptest.NewRecorder()
+			router.Handler().ServeHTTP(rec, req)
+			if rec.Code != http.StatusOK {
+				t.Fatalf("expected 200 for a full-access token on %s, got %d %q", path, rec.Code, rec.Body.String())
+			}
+		}
+	})
+}
+
 func TestReportingEndpointsRequireSettingsReadScope(t *testing.T) {
 	t.Setenv("PULSE_DEV", "true")
 

@@ -67,6 +67,16 @@ func (r *Router) registerMonitoringResourceRoutes(
 	// schedule maintenance) so they require the write scope. Method-keyed
 	// scope wrap mirrors the guests-metadata and docker-metadata pattern
 	// elsewhere in this file.
+	//
+	// Scopes bind API tokens only, and part of the record is the policy every
+	// approval and dispatch obeys: the remediation lock, the lifecycle state
+	// and the automatic remediation policy. Browser and proxy sessions change
+	// those only with the action review capability the Actions routes
+	// require, so a signed-in viewer cannot lift the operator's lock; the rest
+	// of the record stays open to them. Tokens keep the documented write scope.
+	r.resourceHandlers.SetOperatorStateRemediationAuthority(func(req *http.Request) bool {
+		return getAPITokenRecordFromRequest(req) != nil || requestHasActionCapability(r.config, r.authorizer, req, auth.ActionApprove)
+	})
 	r.mux.HandleFunc("/api/resources/{id}/operator-state", RequireAuth(r.config, func(w http.ResponseWriter, req *http.Request) {
 		switch req.Method {
 		case http.MethodGet:
@@ -355,7 +365,11 @@ func (r *Router) registerMonitoringResourceRoutes(
 		r.configHandlers.HandleDiscoverServers,
 	))))
 	// Alert routes enforce read/write scopes inside HandleAlerts per endpoint method.
-	r.mux.HandleFunc("/api/alerts/", RequireAuth(r.config, r.alertHandlers.HandleAlerts))
+	// Scopes bind API tokens only, so the requests that change the
+	// organization's alert policy or erase its history also need one of its
+	// managers, or an RBAC grant to write alerts, in a session
+	// (requireAlertPolicyManager).
+	r.mux.HandleFunc("/api/alerts/", RequireAuth(r.config, requireAlertPolicyManager(r.config, r.authorizer, r.alertHandlers.HandleAlerts)))
 
 	// Notification destinations are the request organization's own: every
 	// handler reads and writes through that organization's monitor, so its
@@ -412,4 +426,53 @@ func (r *Router) registerMonitoringResourceRoutes(
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		}
 	})))
+}
+
+// requireAlertPolicyManager holds the alert requests that decide whether and
+// when the organization is alerted at all to RequireOrgAdmin: a proxy user
+// outside the admin role, or a session user who is neither an instance
+// administrator nor a manager of the request organization, is refused unless
+// a real RBAC authorizer grants them write on alerts. Every signed-in user
+// keeps the reads and the per-alert actions (acknowledge, snooze, clear,
+// incident notes), and API tokens keep the scope rules in HandleAlerts.
+func requireAlertPolicyManager(cfg *config.Config, authorizer auth.Authorizer, handler http.HandlerFunc) http.HandlerFunc {
+	manage := RequireOrgAdmin(cfg, handler)
+	return func(w http.ResponseWriter, req *http.Request) {
+		if !alertRequestChangesPolicy(req) || requestHoldsAlertWriteGrant(authorizer, req) {
+			handler(w, req)
+			return
+		}
+		manage(w, req)
+	}
+}
+
+// requestHoldsAlertWriteGrant reports an explicit RBAC grant to write alerts,
+// the one the built-in operator role carries. The default authorizer allows
+// everything and so grants nothing here, as in requireActionCapability, and
+// API tokens are judged by their scopes.
+func requestHoldsAlertWriteGrant(authorizer auth.Authorizer, req *http.Request) bool {
+	if authorizer == nil || getAPITokenRecordFromRequest(req) != nil {
+		return false
+	}
+	if _, isDefaultAuthorizer := authorizer.(*auth.DefaultAuthorizer); isDefaultAuthorizer {
+		return false
+	}
+	allowed, err := authorizer.Authorize(req.Context(), auth.ActionWrite, auth.ResourceAlerts)
+	return err == nil && allowed
+}
+
+// alertRequestChangesPolicy follows the dispatch in HandleAlerts: saving the
+// alert configuration (thresholds, schedule, the enabled and activation
+// switches), the intent policies or the external watchdog, activating
+// delivery, and clearing alert history.
+func alertRequestChangesPolicy(req *http.Request) bool {
+	switch strings.TrimPrefix(req.URL.Path, "/api/alerts/") {
+	case "config", "deadman/config", "intent-policies":
+		return req.Method == http.MethodPut
+	case "activate":
+		return req.Method == http.MethodPost
+	case "history":
+		return req.Method == http.MethodDelete
+	}
+	return false
 }

@@ -6,6 +6,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 )
 
 // This file raises branch/function coverage for a set of previously
@@ -174,6 +176,11 @@ func TestBranchcov0722PMMetadataSaveErrorMessage(t *testing.T) {
 			name: "no_space_substring",
 			err:  errors.New("write failed: no space left on device"),
 			want: "Disk full - cannot save metadata",
+		},
+		{
+			name: "wrapped_file_size_limit",
+			err:  fmt.Errorf("failed to save host config: %w", config.ErrMetadataFileTooLarge),
+			want: "Metadata storage is full - remove metadata that is no longer needed",
 		},
 		{
 			name: "plain_error_default",

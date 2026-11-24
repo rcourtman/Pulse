@@ -351,6 +351,11 @@ func (b *patrolActionBroker) submit(ctx context.Context, proposal aicontracts.Ac
 	if proposal.InvestigationID == "" {
 		return aicontracts.ActionDisposition{}, fmt.Errorf("action proposal requires an investigation id")
 	}
+	// As in Capabilities: executors plan and dispatch for the organization in
+	// the context, so bind the broker's own before the lifecycle sees it.
+	if b.orgID != "" {
+		ctx = context.WithValue(ctx, OrgIDContextKey, b.orgID)
+	}
 	proposal = b.withProposalNote(ctx, proposal)
 
 	policyFactors, planningAutoAuthorized := b.planPolicyFactors(ctx, proposal, b.currentTime())

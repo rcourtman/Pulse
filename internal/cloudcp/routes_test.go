@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	cpauth "github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/auth"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
@@ -662,5 +663,99 @@ func TestRegisterRoutesResumeUsesConfiguredBillingMode(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// The workspace authorizes against its own org.json, so the registered member
+// routes must carry a removal or demotion there, not only into the registry.
+func TestRegisterRoutesMemberRemovalAndDemotionReachWorkspaceOrganization(t *testing.T) {
+	dir := t.TempDir()
+	reg, err := registry.NewTenantRegistry(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer reg.Close()
+	const accountID, tenantID = "a-route-members", "t-route-members"
+	if err := reg.CreateAccount(&registry.Account{ID: accountID, Kind: registry.AccountKindMSP}); err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now().UTC()
+	org := &models.Organization{ID: tenantID, DisplayName: "Client", Status: models.OrgStatusActive, CreatedAt: now, OwnerUserID: "u-owner", OwnerEmail: "owner@example.test"}
+	for userID, role := range map[string]registry.MemberRole{"u-owner": registry.MemberRoleOwner, "u-removed": registry.MemberRoleAdmin, "u-demoted": registry.MemberRoleAdmin} {
+		email := strings.TrimPrefix(userID, "u-") + "@example.test"
+		if err := reg.CreateUser(&registry.User{ID: userID, Email: email}); err != nil {
+			t.Fatal(err)
+		}
+		if err := reg.CreateMembership(&registry.AccountMembership{AccountID: accountID, UserID: userID, Role: role}); err != nil {
+			t.Fatal(err)
+		}
+		org.Members = append(org.Members, models.OrganizationMember{UserID: userID, Email: email, Role: models.OrganizationRoleFromAccountRole(string(role)), AddedAt: now, AddedBy: "u-owner"})
+	}
+	if err := reg.Create(&registry.Tenant{ID: tenantID, AccountID: accountID, State: registry.TenantStateActive, PlanVersion: "msp_starter"}); err != nil {
+		t.Fatal(err)
+	}
+	session, err := cpauth.NewService(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer session.Close()
+	cfg := &CPConfig{DataDir: dir, BaseURL: "https://cloud.example.com", AdminKey: "fixture-only", ControlPlaneMode: ControlPlaneModeProviderHostedMSP}
+	workspace := config.NewMultiTenantPersistence(filepath.Join(cfg.TenantsDir(), tenantID))
+	if err := workspace.SaveOrganization(org); err != nil {
+		t.Fatal(err)
+	}
+	mux := http.NewServeMux()
+	RegisterRoutes(mux, &Deps{Config: cfg, Registry: reg, MagicLinks: session})
+	token, err := session.GenerateSessionToken("u-owner", "owner@example.test", time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+	do := func(method, userID, body string, want int) {
+		t.Helper()
+		req := httptest.NewRequest(method, "https://cloud.example.com/api/accounts/"+accountID+"/members/"+userID, strings.NewReader(body))
+		req.AddCookie(&http.Cookie{Name: cpauth.SessionCookieName, Value: token})
+		res := httptest.NewRecorder()
+		mux.ServeHTTP(res, req)
+		if res.Code != want {
+			t.Fatalf("%s %s = %d %s, want %d", method, userID, res.Code, res.Body.String(), want)
+		}
+	}
+
+	do(http.MethodDelete, "u-removed", "", http.StatusNoContent)
+	do(http.MethodPatch, "u-demoted", `{"role":"read_only"}`, http.StatusOK)
+
+	stored, err := workspace.LoadOrganizationStrict(tenantID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stored.CanUserIDAccess("u-removed") {
+		t.Fatalf("removed account member is still a workspace member: %+v", stored.Members)
+	}
+	if got := stored.GetMemberRoleByUserID("u-demoted"); got != models.OrgRoleViewer {
+		t.Fatalf("demoted account member has workspace role %q, want %q", got, models.OrgRoleViewer)
+	}
+	if stored.OwnerUserID != "u-owner" || stored.GetMemberRoleByUserID("u-owner") != models.OrgRoleOwner {
+		t.Fatalf("workspace owner changed: %q %+v", stored.OwnerUserID, stored.Members)
+	}
+
+	// Undoing a demotion and re-inviting a removed member restore workspace access.
+	do(http.MethodPatch, "u-demoted", `{"role":"admin"}`, http.StatusOK)
+	inviteReq := httptest.NewRequest(http.MethodPost, "https://cloud.example.com/api/accounts/"+accountID+"/members", strings.NewReader(`{"email":"removed@example.test","role":"tech"}`))
+	inviteReq.AddCookie(&http.Cookie{Name: cpauth.SessionCookieName, Value: token})
+	inviteRes := httptest.NewRecorder()
+	mux.ServeHTTP(inviteRes, inviteReq)
+	if inviteRes.Code != http.StatusCreated {
+		t.Fatalf("POST re-invite = %d %s, want %d", inviteRes.Code, inviteRes.Body.String(), http.StatusCreated)
+	}
+
+	stored, err = workspace.LoadOrganizationStrict(tenantID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := stored.GetMemberRoleByUserID("u-demoted"); got != models.OrgRoleAdmin {
+		t.Fatalf("restored admin has workspace role %q, want %q", got, models.OrgRoleAdmin)
+	}
+	if got := stored.GetMemberRoleByUserID("u-removed"); got != models.OrgRoleEditor {
+		t.Fatalf("re-invited member has workspace role %q, want %q", got, models.OrgRoleEditor)
 	}
 }

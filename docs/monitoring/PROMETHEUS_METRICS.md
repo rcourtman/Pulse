@@ -29,6 +29,8 @@ In Docker and Kubernetes you must expose `9091` explicitly if you want to scrape
 | `pulse_http_requests_total` | Counter | Total requests by `method`, `route`, `status`. |
 | `pulse_http_request_errors_total` | Counter | Error totals by `method`, `route`, `status_class` (`client_error`, `server_error`, `none`). |
 
+`route` is the registered route pattern that serves the request (for example `/api/state` or `/api/orgs/{id}`), not the requested path. Requests that match no pattern, including frontend pages and assets, are recorded as `unmatched`. `method` is a standard HTTP method or `other`.
+
 ## 🔄 Polling & Nodes
 
 | Metric | Type | Description |

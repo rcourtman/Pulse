@@ -521,10 +521,11 @@ remains available for compatibility. Its trade-offs are documented below.
 
 On standard Linux systemd hosts, `install.sh --least-privilege` is a supported
 alternative to the root profile. It runs the service as a dedicated
-`pulse-agent` system user (nologin shell, owning only its state directory and
-binary), joins the `docker` group when Docker monitoring is enabled so socket
-reads keep working, and keeps every hardening directive of the root unit while
-dropping the LXC-attach ambient capability grant entirely.
+`pulse-agent` system user (nologin shell, owning only its state directory, while
+the agent binary stays root-owned), joins the `docker` group when Docker
+monitoring is enabled so socket reads keep working, and keeps every hardening
+directive of the root unit while dropping the LXC-attach ambient capability
+grant entirely.
 
 Two optional flags restore the collectors that genuinely need elevation, each
 through an exact-command sudoers grant validated with `visudo` and a

@@ -441,6 +441,48 @@ func TestPatrolActionBrokerCapabilitiesCatalog(t *testing.T) {
 	}
 }
 
+// availabilityOrgExecutor records the organization each availability check
+// was asked about.
+type availabilityOrgExecutor struct {
+	stubActionExecutor
+	orgs []string
+}
+
+func (e *availabilityOrgExecutor) CheckActionAvailable(ctx context.Context, _ unified.ActionRequest, _ unified.Resource) unified.ResourceActionReadiness {
+	e.orgs = append(e.orgs, GetOrgID(ctx))
+	return unified.ResourceActionReadiness{}
+}
+
+// An investigation's context names no organization, which executors read as
+// the default one. The broker is bound to a tenant, so a proposal must be
+// planned against that tenant's agents.
+func TestPatrolActionBrokerSubmitPlansForTheBrokersOrganization(t *testing.T) {
+	h, _ := newPatrolBrokerTestHandlers(t, unified.ApprovalAdmin)
+	registry, err := h.buildRegistry("default")
+	if err != nil {
+		t.Fatal(err)
+	}
+	vm, ok := registry.Get("vm:42")
+	if !ok {
+		t.Fatal("seeded VM missing")
+	}
+	h.SetTenantStateProvider(assistantTenantSeedProvider{orgID: "acme", snapshot: models.StateSnapshot{LastUpdate: time.Now().UTC()}, vm: *vm})
+	executor := &availabilityOrgExecutor{}
+	h.SetActionExecutor(executor)
+
+	if _, err := NewPatrolActionBroker("acme", h).Submit(context.Background(), patrolTestProposal()); err != nil {
+		t.Fatalf("Submit: %v", err)
+	}
+	if len(executor.orgs) == 0 {
+		t.Fatal("planning did not check availability")
+	}
+	for _, orgID := range executor.orgs {
+		if orgID != "acme" {
+			t.Fatalf("availability checked in organizations %q, want only acme", executor.orgs)
+		}
+	}
+}
+
 func TestPatrolActionBrokerOptionalResourceScopeStillAuthorizesEligibleCapability(t *testing.T) {
 	h, executor := newPatrolBrokerTestHandlers(t, unified.ApprovalAdmin)
 	store, err := h.getStore("default")

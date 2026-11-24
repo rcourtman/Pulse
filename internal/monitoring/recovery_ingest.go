@@ -14,6 +14,7 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/operationaltrust"
 	"github.com/rcourtman/pulse-go-rewrite/internal/recovery"
+	recoverymanager "github.com/rcourtman/pulse-go-rewrite/internal/recovery/manager"
 	proxmoxmapper "github.com/rcourtman/pulse-go-rewrite/internal/recovery/mapper/proxmox"
 	recoverystore "github.com/rcourtman/pulse-go-rewrite/internal/recovery/store"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
@@ -907,6 +908,13 @@ func (m *Monitor) purgeStalePVEPBSBackupsBestEffort(ctx context.Context) {
 	m.mu.RUnlock()
 
 	if !hasPBSDirectConnection || rm == nil {
+		return
+	}
+	m.purgeStalePVEPBSBackupsBestEffortWithSnapshot(ctx, rm, orgID)
+}
+
+func (m *Monitor) purgeStalePVEPBSBackupsBestEffortWithSnapshot(ctx context.Context, rm *recoverymanager.Manager, orgID string) {
+	if m == nil || rm == nil {
 		return
 	}
 	if orgID == "" {

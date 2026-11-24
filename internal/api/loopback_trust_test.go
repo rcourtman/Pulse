@@ -1,12 +1,16 @@
 package api
 
 import (
+	"encoding/base64"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rcourtman/pulse-go-rewrite/internal/relay"
+	"github.com/rs/zerolog"
 )
 
 // Loopback trust (no-auth anonymous admin, recovery tokens and sessions,
@@ -171,6 +175,64 @@ func TestRecoveryTokenRequiresLocalHostAndSameOrigin(t *testing.T) {
 	}
 }
 
+// The relay client serves a remote app's request in process, from a loopback
+// peer address and with a loopback Host. That request was not written on the
+// Pulse host, so it gets no recovery token and no recovery session, whichever
+// API token opened the relay channel.
+func TestRelayedRequestGetsNoLoopbackTrust(t *testing.T) {
+	router := newRecoveryRouter(t)
+	rawToken := "relay-mobile-123.12345678"
+	record, err := config.NewAPITokenRecord(rawToken, "phone", []string{config.ScopeRelayMobileAccess})
+	if err != nil {
+		t.Fatalf("NewAPITokenRecord: %v", err)
+	}
+	router.config.APITokens = []config.APITokenRecord{*record}
+
+	var sawRelayedRequest, trusted bool
+	handler := http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		sawRelayedRequest = true
+		trusted = trusted || isDirectLoopbackRequest(req)
+		router.Handler().ServeHTTP(w, req)
+	})
+	proxy := relay.NewHTTPProxyWithLocalHandler("127.0.0.1:7655", handler, zerolog.Nop())
+
+	for _, action := range []string{"generate_token", "disable_auth"} {
+		t.Run(action, func(t *testing.T) {
+			payload, err := json.Marshal(relay.ProxyRequest{
+				ID:      action,
+				Method:  http.MethodPost,
+				Path:    "/api/security/recovery",
+				Headers: map[string]string{"Content-Type": "application/json"},
+				Body:    base64.StdEncoding.EncodeToString([]byte(`{"action":"` + action + `"}`)),
+			})
+			if err != nil {
+				t.Fatalf("marshal relay request: %v", err)
+			}
+			raw, err := proxy.HandleRequest(payload, rawToken)
+			if err != nil {
+				t.Fatalf("HandleRequest: %v", err)
+			}
+			var resp relay.ProxyResponse
+			if err := json.Unmarshal(raw, &resp); err != nil {
+				t.Fatalf("unmarshal relay response: %v", err)
+			}
+			body, _ := base64.StdEncoding.DecodeString(resp.Body)
+			if resp.Status != http.StatusForbidden {
+				t.Fatalf("status = %d, want %d (%s)", resp.Status, http.StatusForbidden, body)
+			}
+			if strings.Contains(string(body), `"token"`) {
+				t.Fatalf("recovery token issued through the relay: %s", body)
+			}
+		})
+	}
+	if !sawRelayedRequest {
+		t.Fatal("relayed requests never reached the router")
+	}
+	if trusted {
+		t.Fatal("relayed request passed isDirectLoopbackRequest")
+	}
+}
+
 func TestRecoverySessionRefusesRebindingHost(t *testing.T) {
 	router := newRecoveryRouter(t)
 
@@ -218,4 +280,69 @@ func TestNoAuthLoopbackAccessRequiresLocalHostAndSameOrigin(t *testing.T) {
 			}
 		})
 	}
+}
+
+// A hosted runtime has no operator on its own host: its users arrive through
+// the control plane handoff and it never goes through first-run setup. What
+// reaches its loopback port are the requests it sends for its tenants (webhook
+// and Apprise tests), so a runtime without local credentials must not serve
+// them as the anonymous administrator or hand them recovery.
+func TestHostedRuntimeGivesLoopbackNoTrust(t *testing.T) {
+	t.Setenv("PULSE_TRUSTED_PROXY_CIDRS", "")
+	resetTrustedProxyConfig()
+
+	adminRequests := []struct {
+		name   string
+		method string
+		path   string
+		body   string
+	}{
+		{name: "list API tokens", method: http.MethodGet, path: "/api/security/tokens"},
+		{name: "change system settings", method: http.MethodPost, path: "/api/system/settings/update", body: `{"webhookAllowedPrivateCIDRs":"127.0.0.0/8"}`},
+		{name: "register an SSO provider", method: http.MethodPost, path: "/api/security/sso/providers", body: `{"id":"x","name":"x","type":"oidc","enabled":true}`},
+	}
+
+	t.Run("hosted", func(t *testing.T) {
+		router := newConfigTransferTestRouter(t, true, nil)
+
+		if CheckAuth(router.config, httptest.NewRecorder(), newLoopbackTrustRequest(http.MethodGet, "/api/state", "localhost:7655", nil, "")) {
+			t.Fatal("hosted runtime admitted a loopback request without credentials")
+		}
+		for _, tc := range adminRequests {
+			req := newLoopbackTrustRequest(tc.method, tc.path, "127.0.0.1:7655", nil, tc.body)
+			rec := httptest.NewRecorder()
+			router.ServeHTTP(rec, req)
+			if rec.Code != http.StatusUnauthorized {
+				t.Errorf("%s: status = %d, want %d (%s)", tc.name, rec.Code, http.StatusUnauthorized, rec.Body.String())
+			}
+		}
+
+		for _, action := range []string{"generate_token", "disable_auth"} {
+			req := newLoopbackTrustRequest(http.MethodPost, "/api/security/recovery", "127.0.0.1:7655", nil, `{"action":"`+action+`"}`)
+			rec := httptest.NewRecorder()
+			router.ServeHTTP(rec, req)
+			if rec.Code != http.StatusForbidden {
+				t.Errorf("recovery %s: status = %d, want %d (%s)", action, rec.Code, http.StatusForbidden, rec.Body.String())
+			}
+			if strings.Contains(rec.Body.String(), `"token"`) {
+				t.Errorf("recovery %s: token issued: %s", action, rec.Body.String())
+			}
+			for _, cookie := range rec.Result().Cookies() {
+				if cookie.Name == cookieNameSession || cookie.Name == cookieNameSessionSecure {
+					t.Errorf("recovery %s: session cookie issued", action)
+				}
+			}
+		}
+	})
+
+	t.Run("self-hosted before first-run setup", func(t *testing.T) {
+		router := newConfigTransferTestRouter(t, false, nil)
+
+		req := newLoopbackTrustRequest(http.MethodGet, "/api/security/tokens", "127.0.0.1:7655", nil, "")
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status = %d, want the console lane to stay open (%s)", rec.Code, rec.Body.String())
+		}
+	})
 }

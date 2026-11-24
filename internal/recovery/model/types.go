@@ -244,6 +244,13 @@ const (
 	MaxListPageLimit     = 500
 )
 
+// MaxPointsSeriesDays bounds the day buckets of one points series. The series
+// is dense: it carries one bucket per day of the window the caller asks for,
+// whatever the store holds, so the window itself must be bounded. Every series
+// serving path keeps the newest MaxPointsSeriesDays days of a wider window.
+// Ten years is far beyond the retention of recovery points.
+const MaxPointsSeriesDays = 3660
+
 // PointsSeriesBucket is a per-day aggregation of recovery points within a time window.
 // Day is formatted as YYYY-MM-DD in the requested (client) timezone.
 type PointsSeriesBucket struct {

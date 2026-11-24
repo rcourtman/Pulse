@@ -122,6 +122,9 @@ func (s *DockerReportOrderStore) save() error {
 	if err != nil {
 		return fmt.Errorf("failed to marshal Docker report order journal: %w", err)
 	}
+	if err := checkMetadataFileSize(dockerReportOrderFileName, data, maxDockerReportOrderFileSizeBytes); err != nil {
+		return err
+	}
 	return persistMetadata(s.fs, s.dataPath, dockerReportOrderFileName, data)
 }
 

@@ -29,3 +29,19 @@ func Organization(ctx context.Context) *models.Organization {
 	}
 	return &models.Organization{ID: "default", DisplayName: "Default Organization"}
 }
+
+type importKeepsAccessCredentialsKey struct{}
+
+// WithImportKeepingAccessCredentials marks a configuration import admitted for
+// a caller who may not issue API tokens or write SSO configuration, so the
+// import must leave both as the destination has them.
+func WithImportKeepingAccessCredentials(ctx context.Context) context.Context {
+	return context.WithValue(ctx, importKeepsAccessCredentialsKey{}, true)
+}
+
+// ImportKeepsAccessCredentials reports whether the transfer boundary marked
+// this import with WithImportKeepingAccessCredentials.
+func ImportKeepsAccessCredentials(ctx context.Context) bool {
+	kept, _ := ctx.Value(importKeepsAccessCredentialsKey{}).(bool)
+	return kept
+}

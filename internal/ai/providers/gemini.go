@@ -17,6 +17,10 @@ const (
 	geminiAPIURL         = "https://generativelanguage.googleapis.com/v1beta"
 	geminiMaxRetries     = 3
 	geminiInitialBackoff = 2 * time.Second
+	// geminiAPIKeyHeader carries the API key. The key must never be placed in
+	// the request URL: net/http quotes the full URL in every transport error,
+	// and those errors are logged and returned to callers.
+	geminiAPIKeyHeader = "x-goog-api-key"
 )
 
 // GeminiClient implements the Provider interface for Google's Gemini API
@@ -43,9 +47,27 @@ func NewGeminiClient(apiKey, model, baseURL string, timeout time.Duration) *Gemi
 		model:   model,
 		baseURL: baseURL,
 		client: &http.Client{
-			Timeout: timeout,
+			Timeout:       timeout,
+			CheckRedirect: geminiSameOriginRedirectPolicy,
 		},
 	}
+}
+
+// geminiSameOriginRedirectPolicy keeps redirects on the configured API origin.
+// net/http replays custom request headers on every redirect hop, so without
+// this a redirect would hand the API key header to another host.
+func geminiSameOriginRedirectPolicy(req *http.Request, via []*http.Request) error {
+	if len(via) >= 10 {
+		return fmt.Errorf("stopped after 10 redirects")
+	}
+	if len(via) == 0 {
+		return nil
+	}
+	origin := via[0].URL
+	if !strings.EqualFold(req.URL.Scheme, origin.Scheme) || !strings.EqualFold(req.URL.Host, origin.Host) {
+		return fmt.Errorf("redirects must stay on the same origin")
+	}
+	return nil
 }
 
 // Name returns the provider name
@@ -495,8 +517,8 @@ func (c *GeminiClient) Chat(ctx context.Context, req ChatRequest) (*ChatResponse
 		return nil, fmt.Errorf("failed to marshal request: %w", err)
 	}
 
-	// Build the URL with API key
-	generateContentURL := fmt.Sprintf("%s/models/%s:generateContent?key=%s", c.baseURL, model, c.apiKey)
+	// The API key is sent in a header, never in the URL (see geminiAPIKeyHeader).
+	generateContentURL := fmt.Sprintf("%s/models/%s:generateContent", c.baseURL, model)
 
 	log.Debug().Str("model", model).Str("base_url", c.baseURL).Msg("gemini Chat request")
 
@@ -535,6 +557,7 @@ func (c *GeminiClient) Chat(ctx context.Context, req ChatRequest) (*ChatResponse
 		}
 
 		httpReq.Header.Set("Content-Type", "application/json")
+		httpReq.Header.Set(geminiAPIKeyHeader, c.apiKey)
 
 		resp, err := c.client.Do(httpReq)
 		if err != nil {
@@ -757,7 +780,7 @@ func (c *GeminiClient) ChatStream(ctx context.Context, req ChatRequest, callback
 		Msg("Gemini stream request body")
 
 	// Use streamGenerateContent endpoint for streaming
-	streamGenerateContentURL := fmt.Sprintf("%s/models/%s:streamGenerateContent?key=%s&alt=sse", c.baseURL, model, c.apiKey)
+	streamGenerateContentURL := fmt.Sprintf("%s/models/%s:streamGenerateContent?alt=sse", c.baseURL, model)
 
 	// Retry loop for transient errors (matching non-streaming Chat behavior)
 	var resp *http.Response
@@ -802,6 +825,7 @@ func (c *GeminiClient) ChatStream(ctx context.Context, req ChatRequest, callback
 
 		httpReq.Header.Set("Content-Type", "application/json")
 		httpReq.Header.Set("Accept", "text/event-stream")
+		httpReq.Header.Set(geminiAPIKeyHeader, c.apiKey)
 
 		resp, err = c.client.Do(httpReq)
 		if err != nil {
@@ -980,12 +1004,13 @@ func (c *GeminiClient) ChatStream(ctx context.Context, req ChatRequest, callback
 
 // ListModels fetches available models from the Gemini API
 func (c *GeminiClient) ListModels(ctx context.Context) ([]ModelInfo, error) {
-	modelsURL := fmt.Sprintf("%s/models?key=%s", c.baseURL, c.apiKey)
+	modelsURL := c.baseURL + "/models"
 
 	req, err := http.NewRequestWithContext(ctx, "GET", modelsURL, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
+	req.Header.Set(geminiAPIKeyHeader, c.apiKey)
 
 	resp, err := c.client.Do(req)
 	if err != nil {

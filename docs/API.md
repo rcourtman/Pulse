@@ -491,6 +491,15 @@ request path. Do not substitute a display name or a Proxmox VM number.
 | `PUT /api/resources/{id}/operator-state` | `monitoring:write` | Replaces the entire state and returns the saved record. |
 | `DELETE /api/resources/{id}/operator-state` | `monitoring:write` | Removes the entire state, returning HTTP 204 even if it was already absent. |
 
+Scopes apply to API tokens. A signed-in browser or proxy user needs the same
+authority as reviewing actions (an administrator, or an explicit action approval
+grant) to change `neverAutoRemediate`, `lifecycleState` or
+`autoRemediationPolicy`, because Pulse obeys them when it approves and runs
+actions. Without it, a `PUT` must carry those three settings as saved, and a
+`DELETE` is refused with HTTP 403 while any of them differs from the default.
+Monitoring mode, maintenance windows, criticality and notes stay open to every
+signed-in user, as does reading.
+
 **PUT replaces the whole record, not just the fields supplied.** Read the current
 state first and preserve unrelated settings, such as monitoring mode, lifecycle,
 remediation policy, criticality and notes. Treat only `operator_state_not_set`
@@ -838,6 +847,11 @@ back as new secrets. Credential rotation and trust changes are separate
 decisions; preserve the existing credential and fingerprint when not changing
 them. A response failure does not prove the update was unapplied.
 
+A saved password or token value is never sent to a new address. A request that
+changes the scheme, host or port of `host`, or sets a cluster member's
+connection address, must include `password` or `tokenValue` again. Otherwise
+the request is refused with `400` and the saved connection is left unchanged.
+
 ### Delete Node
 `DELETE /api/config/nodes/{id}` (admin, `settings:write`)
 
@@ -904,11 +918,22 @@ Request body:
 }
 ```
 
-Import replaces the included settings; it is not an idempotent merge. HTTP 500
+Import replaces the included settings. It is not an idempotent merge. The
+archive's API tokens and SSO configuration are restored only for an instance
+administrator sign-in or a full-access (`*`) API token that is not bound to a
+non-default organization. A tenant manager who is not an instance administrator
+and any other API token restore the remaining sections, keep the destination's
+own tokens and SSO configuration, and receive
+`"accessCredentialsRestored": false`. HTTP 500
 can follow a **saved** archive when live apply fails. In particular,
 `Configuration saved, but live reload failed:` names the affected live
 components, not a rejected file or rollback. Other components may already have
 applied. Do not automatically retry this POST after an error or lost response.
+
+HTTP 403 with `Backup not imported.` means nothing was saved. A tenant manager
+or organization-bound token cannot import a backup that connects Pulse to an
+address [organization admins cannot use](MULTI_TENANT.md), or that adds
+Apprise command-line targets. An instance administrator can import it.
 
 HTTP 409 can mean an import is still running or the same backup was submitted
 recently. It does not establish the original attempt's outcome. The duplicate
@@ -1003,7 +1028,9 @@ Mints an install token for an agent. `type` is `host`, `pve` or `pbs`.
 - `{"type":"pve"}` or `{"type":"pbs"}` returns `token` and the Proxmox install
   `command`.
 
-Add `"enableCommands": true` only when the agent should accept commands.
+Add `"enableCommands": true` only when the agent should accept commands. An API
+token must itself hold `agent:exec` to ask for it, otherwise the request fails
+with HTTP 403 `missing_scope`.
 
 ### Discovery
 `GET /api/discover` (admin, `settings:write`)
@@ -1181,6 +1208,14 @@ Common reporting error codes:
 ## 🚨 Alerts
 
 Alert configuration and history (requires `monitoring:read`/`monitoring:write`).
+
+Scopes apply to API tokens. In a browser or proxy session, every signed-in user
+can read these routes and acknowledge, snooze or clear single alerts. Saving
+the alert configuration, the intent policies or the external watchdog,
+activating delivery and deleting alert history also need an administrator, with
+multiple organizations a manager of the organization, or, where RBAC roles are
+enforced, a role that grants `write` on `alerts` such as the built-in `operator`
+(`403` otherwise).
 
 For planned downtime, use [Resource Maintenance and Operator State](#resource-maintenance-and-operator-state).
 For an existing incident whose notifications should be paused without clearing
@@ -1452,11 +1487,11 @@ Enable or disable mock data generation (dev/demo only).
 
 ### SSH Config (Temperature Monitoring)
 `POST /api/system/ssh-config`
-Writes the SSH config used for temperature collection (requires setup token or auth).
+Writes the SSH config used for temperature collection. Requires admin + `settings:write`. Setup tokens are not accepted. Only `Host`, `HostName`, `ProxyJump`, `User`, `IdentityFile` and `StrictHostKeyChecking` are allowed, with plain host, user and path values.
 
 ### Verify Temperature SSH
 `POST /api/system/verify-temperature-ssh`
-Tests SSH connectivity for temperature collection (requires setup token or auth).
+Tests SSH connectivity for temperature collection. Requires admin + `settings:write`. Setup tokens are not accepted.
 
 ### Scheduler Health
 `GET /api/monitoring/scheduler/health`
@@ -1523,6 +1558,11 @@ OIDC and SAML configuration is managed via SSO providers.
 - `GET /api/security/sso/providers/{id}` (admin, `settings:read`)
 - `PUT /api/security/sso/providers/{id}` (admin, `settings:write`)
 - `DELETE /api/security/sso/providers/{id}` (admin, `settings:write`)
+
+A provider decides who can sign in and which roles its groups receive, so an
+API token may create, update or delete one only if it has full-access scope
+(`*`) and is not bound to a non-default organization. Any other token gets
+`403`. Browser sessions are not limited this way.
 
 Provider mutation request contract:
 - Max request body: 1MB.
@@ -1623,7 +1663,7 @@ Returns organizations accessible to the authenticated user.
 ```json
 { "id": "acme-corp", "displayName": "Acme Corporation" }
 ```
-The creator becomes the owner and first member. Organization IDs use letters, digits, periods, underscores or hyphens, 1–64 characters, but cannot be `.` or `..`. Prefer a simple lowercase/hyphen ID such as the example.
+The creator becomes the owner and first member. A user who is not an instance administrator can own at most 20 organizations. Past that the request returns `409` with `organization_limit_reached`. Organization IDs use letters, digits, periods, underscores or hyphens, 1–64 characters, but cannot be `.` or `..`. Prefer a simple lowercase/hyphen ID such as the example.
 
 ### Get Organization
 `GET /api/orgs/{id}` (requires `settings:read`)
@@ -1649,7 +1689,7 @@ Returns all members with their roles. User must be a member of the org.
 ```json
 { "userId": "jane", "role": "editor" }
 ```
-Roles: `owner`, `admin`, `editor`, `viewer`. Admin or owner role required. A new user receives a pending invitation (`202`) and must accept it in Pulse before gaining membership. Posting an existing member's `userId` updates their role; there is no member PATCH endpoint. Setting role to `owner` transfers ownership only to an existing member, by the current owner after fresh sign-in. Default org members cannot be managed.
+Roles: `owner`, `admin`, `editor`, `viewer`. Admin or owner role required. A new user receives a pending invitation (`202`) and must accept it in Pulse before gaining membership. Posting an existing member's `userId` updates their role. There is no member PATCH endpoint. Setting role to `owner` transfers ownership only to an existing member, by the current owner after fresh sign-in. Unless either is an instance administrator, a new owner who already owns 20 organizations is refused with `409` `organization_limit_reached`. Default org members cannot be managed.
 
 ### Remove Member
 `DELETE /api/orgs/{id}/members/{userId}` (requires `settings:write`, session auth only)
@@ -1733,6 +1773,11 @@ agent, connect an MCP client through `pulse-mcp` instead.
 - `GET /api/ai/sessions/{id}/messages`
 - `POST /api/ai/sessions/{id}/abort`
 
+A session belongs to the user or API token that started it, and these routes list and open only
+the caller's own sessions. Any other session ID answers `404`. Callers with permission to execute
+actions see every session, including Patrol's background sessions and sessions saved before
+ownership was recorded.
+
 ### Kubernetes AI Analysis (Compatibility)
 `POST /api/ai/kubernetes/analyze`
 ```json
@@ -1789,6 +1834,7 @@ Runs a focused investigation for an alert payload (used by the UI).
 - `POST /api/ai/patrol/attention/{id}/unacknowledge`
 - `POST /api/ai/patrol/attention/{id}/suppress`
   - Body: `{ "reason": "...", "expiresAt": "<RFC3339>" }`.
+  - The reason is required and is at most 240 characters.
   - The expiry must be in the future and no more than 30 days away.
 - `POST /api/ai/patrol/attention/{id}/unsuppress`
 - `POST /api/ai/patrol/attention/{id}/actions/restart/plan`
@@ -1806,7 +1852,7 @@ Runs a focused investigation for an alert payload (used by the UI).
 - `PUT /api/ai/patrol/autonomy`
 - `GET /api/ai/patrol/status`
 - `GET /api/ai/patrol/findings`
-- `DELETE /api/ai/patrol/findings` (clear all findings)
+- `DELETE /api/ai/patrol/findings` (clear all findings, in a session an administrator or organization manager)
 - `GET /api/ai/patrol/objectives`
 - `POST /api/ai/patrol/objectives`
 - `GET /api/ai/patrol/objectives/{id}`
@@ -1816,6 +1862,9 @@ Runs a focused investigation for an alert payload (used by the UI).
     `optional_context`, and optional canonical `resource_ids`. `PATCH` also
     accepts `status` (`active`, `paused`, or `archived`) and requires the
     current `revision` in its JSON body.
+  - Creating, changing and deleting an objective needs permission to execute
+    actions: Patrol reads objective text on runs that can run commands on
+    hosts. Reading objectives does not.
   - Responses include server-derived `coverage` (`covered`, `degraded`, or
     `uncovered`) and observer lifecycle state. Clients cannot submit either
     field or mark an objective covered. A saved objective remains uncovered
@@ -1831,23 +1880,30 @@ Runs a focused investigation for an alert payload (used by the UI).
     `?include=tool_calls`. Returns `400` when the ID is empty, `404`
     (`not_found`) when no retained run has that ID, and `503`
     (`service_unavailable`) when the Patrol service is unavailable.
+  - Tool calls hold what Patrol read from monitored hosts (file contents, logs
+    and command output). Both run routes return them only to a caller with
+    permission to execute actions, as running a command on a host through the
+    Assistant needs. Other callers get the run without `tool_calls`, even with
+    `?include=tool_calls`.
 - `GET /api/ai/patrol/stream` (`ai:execute`)
   - Server-sent events for live Patrol progress. Send `Last-Event-ID` (or the
     `last_event_id` query parameter) to resume after the last event `id`;
-    replay is best-effort.
+    replay is best-effort. `tool_end` events carry `tool_output` only for a
+    caller with permission to execute actions.
 - `POST /api/ai/patrol/run` (admin, `ai:execute`)
   - Community installs are limited to one successful full run per hour and
     get `429 patrol_rate_limited` until it has passed. Pro and Cloud have no
     cap.
 - `POST /api/ai/patrol/acknowledge` (`ai:execute`)
-- `POST /api/ai/patrol/dismiss`
-- `POST /api/ai/patrol/findings/note`
-- `POST /api/ai/patrol/resolve`
+- `POST /api/ai/patrol/dismiss` (optional `note` requires permission to execute actions)
+- `POST /api/ai/patrol/findings/note` (`ai:execute`, and permission to execute actions: Patrol reads the note)
+- `POST /api/ai/patrol/resolve` (optional `resolution_note` requires permission to execute actions)
 - `POST /api/ai/patrol/snooze` (`ai:execute`)
-- `POST /api/ai/patrol/suppress` (`ai:execute`)
+- `POST /api/ai/patrol/suppress` (`ai:execute`, in a session an administrator or organization manager)
 - `GET /api/ai/patrol/suppressions` (`ai:execute`)
-- `POST /api/ai/patrol/suppressions` (`ai:execute`)
-- `DELETE /api/ai/patrol/suppressions/{id}` (`ai:execute`)
+- `POST /api/ai/patrol/suppressions` (`ai:execute`, in a session an administrator or organization manager)
+- `DELETE /api/ai/patrol/suppressions/{id}` (`ai:execute`, in a session an administrator or organization
+  manager, except a `finding_` row, which reopens a dismissed finding)
 - `GET /api/ai/patrol/dismissed` (`ai:execute`)
 
 Patrol itself and managing its findings (acknowledge, snooze, suppress,
@@ -1859,6 +1915,9 @@ accepted on the acknowledge, dismiss and snooze routes.
 - `GET /api/ai/unified/findings`
 - `GET /api/ai/findings/{id}/investigation`
 - `GET /api/ai/findings/{id}/investigation/messages`
+  - Tool outputs and tool result bodies are returned only to a caller with
+    permission to execute actions. Other callers get the transcript without
+    them.
 - `POST /api/ai/findings/{id}/reinvestigate` (Pro, `ai:execute`, and permission to plan and execute actions)
   - Needs the `ai_autofix` entitlement (`402 license_required` otherwise) and a
     Patrol mode other than Watch only (`400 autonomy_disabled`). Returns
@@ -1909,6 +1968,10 @@ accepted on the acknowledge, dismiss and snooze routes.
 - `GET /api/ai/knowledge/export?guest_id=<id>`
 - `POST /api/ai/knowledge/import`
 - `POST /api/ai/knowledge/clear`
+
+Patrol reads saved notes on runs that can run commands on hosts, so `save`,
+`delete`, `import` and `clear` need `ai:execute` and permission to execute
+actions, as on the Actions routes. Reading and exporting notes needs `ai:chat`.
 
 ### Debug
 - `GET /api/ai/debug/context` (admin)
@@ -2139,6 +2202,8 @@ Target payload fields:
 - `linkedResourceId` - Optional resource id hint for attaching the probe facet to an existing resource.
 - `certificateMonitoringDisabled` - Explicit HTTPS-only opt-out; certificate validity monitoring is enabled by default.
 - `certificateExpiryWarningDays` - HTTPS certificate expiry warning window; defaults to 30 days.
+- `http.tlsFingerprintSha256` - Optional SHA-256 fingerprint of the HTTPS server's leaf certificate. An HTTPS check whose `http` contract sends authentication, header values or a body verifies the server's certificate chain and host name before sending them, and fails without sending them otherwise. Set this to pin a certificate that the host running the check (this server or the assigned agent) does not trust. The refused certificate is returned as `certificate.fingerprintSha256` by the test endpoints and in `status`. Colons and upper case are accepted.
+- `http.insecureSkipVerify` - Explicit opt-out: send the request to the HTTPS server whatever certificate it presents. Ignored when a fingerprint is pinned.
 - `observationLocationIds` - Observation locations for this one logical check: `pulse:local` for this Pulse server and `agent:<host-agent-id>` for a connected agent. Agent locations require the Pro `external_probe` entitlement. Include `pulse:local` only when a local observation is wanted; agent-only sets do not also run locally. Each location retains separate evidence rather than treating one path failure as a universal outage.
 - `probeAgentId` - Compatibility field for single-location clients. A non-empty registered host-agent ID selects that agent; an explicit empty string selects local execution. When updating only this field, omit `observationLocationIds`. For multi-location updates, send the complete desired `observationLocationIds` set and clear `probeAgentId` to `""` so a legacy value cannot override a single-location edit.
 

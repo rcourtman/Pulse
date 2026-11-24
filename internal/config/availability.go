@@ -2,7 +2,9 @@ package config
 
 import (
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
 	"fmt"
 	"net"
 	"net/url"
@@ -79,6 +81,34 @@ type AvailabilityHTTPConfig struct {
 	TextContains      string                         `json:"textContains,omitempty"`
 	JSONPath          string                         `json:"jsonPath,omitempty"`
 	JSONEquals        string                         `json:"jsonEquals,omitempty"`
+	// An HTTPS check that sends credentials, header values or a body first
+	// verifies the server's certificate chain and host name, so that those
+	// values are not handed to whichever server answers at the address.
+	// TLSFingerprintSHA256 instead pins the SHA-256 of the leaf certificate,
+	// for a service whose certificate this host does not trust.
+	// InsecureSkipVerify is the explicit opt-out that accepts any certificate.
+	TLSFingerprintSHA256 string `json:"tlsFingerprintSha256,omitempty"`
+	InsecureSkipVerify   bool   `json:"insecureSkipVerify,omitempty"`
+}
+
+// SendsStoredValues reports whether the request carries any of the values the
+// API stores write-only: credentials, header values or a body.
+func (c *AvailabilityHTTPConfig) SendsStoredValues() bool {
+	if c == nil {
+		return false
+	}
+	if c.Authentication.Type == AvailabilityHTTPAuthBasic || c.Authentication.Type == AvailabilityHTTPAuthBearer {
+		return true
+	}
+	if c.Body != nil && *c.Body != "" {
+		return true
+	}
+	for _, header := range c.Headers {
+		if header.Value != nil && *header.Value != "" {
+			return true
+		}
+	}
+	return false
 }
 
 type AvailabilityProbeProtocol string
@@ -725,6 +755,7 @@ func NormalizeAvailabilityTarget(target AvailabilityTarget) AvailabilityTarget {
 		target.HTTP.TextContains = strings.TrimSpace(target.HTTP.TextContains)
 		target.HTTP.JSONPath = strings.TrimSpace(target.HTTP.JSONPath)
 		target.HTTP.JSONEquals = strings.TrimSpace(target.HTTP.JSONEquals)
+		target.HTTP.TLSFingerprintSHA256 = strings.ToLower(strings.ReplaceAll(strings.TrimSpace(target.HTTP.TLSFingerprintSHA256), ":", ""))
 		for i := range target.HTTP.Headers {
 			target.HTTP.Headers[i].ID = strings.TrimSpace(target.HTTP.Headers[i].ID)
 			target.HTTP.Headers[i].Name = strings.TrimSpace(target.HTTP.Headers[i].Name)
@@ -917,6 +948,11 @@ func validateAvailabilityHTTPConfig(contract *AvailabilityHTTPConfig) error {
 	}
 	if contract.JSONEquals != "" && contract.JSONPath == "" {
 		return fmt.Errorf("HTTP JSON expected value requires a JSON path")
+	}
+	if contract.TLSFingerprintSHA256 != "" {
+		if digest, err := hex.DecodeString(contract.TLSFingerprintSHA256); err != nil || len(digest) != sha256.Size {
+			return fmt.Errorf("HTTP certificate fingerprint must be a SHA-256 value (64 hexadecimal characters)")
+		}
 	}
 	if len(contract.Headers) > 16 {
 		return fmt.Errorf("HTTP response contracts support at most 16 request headers")

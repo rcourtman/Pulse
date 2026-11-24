@@ -1,0 +1,35 @@
+{
+  "version": 1,
+  "base_sha": "54d42326bd16258726e8895815a7d25c28a375f8",
+  "verified_at": "2026-11-24T11:20:45Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/standalone/AgentsMachinesTable.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/standalone/AgentsMachinesTable.tsx": "869aafd7fef586caa0281a62113f20e273966a0f8e9c81b019ce12af0b90f651"
+  },
+  "routes": [
+    "/standalone/machines"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Collapsed Machines rows in dark and light themes with healthy sibling and degraded Unraid host",
+    "Expanded inline resource detail drawer showing full Unraid array alert under Needs attention",
+    "Live WebSocket escalation from warning no-parity alert to critical missing-disk alert"
+  ],
+  "interactions": [
+    "Desktop Chromium 1440x900 dark and light: verified uniform row heights, StatusDot title and aria-label tooltips, and absence of inline alert prose",
+    "Desktop Chromium keyboard Enter on disclosure button opens and closes drawer with full alert visible",
+    "Mobile Chromium 390x844 dark: verified uniform 32px rows, tap expansion into drawer, and zero horizontal overflow"
+  ]
+}

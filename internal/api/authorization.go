@@ -362,6 +362,20 @@ func (c *DefaultAuthorizationChecker) CheckAccessContext(ctx context.Context, to
 				Reason:  "Token is not authorized for this organization",
 			}
 		}
+		// A token that acts for its owner (apiTokenActsForOwner) reaches a
+		// tenant organization only while the owner could: removing a member
+		// revokes none of their tokens, so the binding alone would outlive
+		// the membership. Machine credentials stay with the organization
+		// they were issued for, and default-organization tokens keep the
+		// binding rule. A checker built without an organization loader has
+		// no membership data and rechecks bindings only.
+		if orgID != "default" && c.orgLoader != nil && apiTokenActsForOwner(token) &&
+			!c.UserCanAccessOrg(apiTokenBoundUser(token), orgID) {
+			return AuthorizationResult{
+				Allowed: false,
+				Reason:  "Token owner is not a member of the organization",
+			}
+		}
 		return AuthorizationResult{
 			Allowed: true,
 			Reason:  "Token authorized for organization",

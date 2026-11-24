@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"maps"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -12,6 +13,7 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/logging"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/proxmox"
 )
 
 // recordTLSFingerprintFetches replaces the fingerprint fetch with one that
@@ -192,6 +194,112 @@ func TestInstallGrantAutoRegisterStillSelectsReachableFallback(t *testing.T) {
 	recordedKey := proxmoxInstallRegistrationTypedKey(proxmoxInstallRegistrationHostKey, "pve")
 	if got := cfg.APITokens[0].Metadata[recordedKey]; got != "https://10.0.0.2:8006" {
 		t.Fatalf("grant recorded %q, want the registered address", got)
+	}
+}
+
+// The certificate fetch waits on an address the caller chose, so the caller
+// decides how long a registration stays open. A token revoked in that time
+// changes nothing: its authority is confirmed again once the change is decided.
+func TestAgentTokenAutoRegisterRevokedWhileOpenChangesNothing(t *testing.T) {
+	pveKey := proxmoxInstallRegistrationTypedKey(proxmoxInstallRegistrationHostKey, "pve")
+	pbsKey := proxmoxInstallRegistrationTypedKey(proxmoxInstallRegistrationHostKey, "pbs")
+	for name, tc := range map[string]struct {
+		metadata map[string]string
+		request  AutoRegisterRequest
+		cluster  bool
+	}{
+		"recorded pve connection": {
+			metadata: map[string]string{pveKey: "https://pve-real.local:8006"},
+			request: AutoRegisterRequest{
+				Type: "pve", Host: "https://pve-real.local:8006", ServerName: "pve-real", Source: "agent",
+				TokenID: "pulse-monitor@pve!pulse-real", TokenValue: "after-revocation",
+			},
+		},
+		"recorded cluster member": {
+			metadata: map[string]string{pveKey: "https://pve2.local:8006"},
+			request: AutoRegisterRequest{
+				Type: "pve", Host: "https://pve2.local:8006", ServerName: "pve2", Source: "agent",
+				TokenID: "pulse-monitor@pve!pulse-cluster", TokenValue: "after-revocation",
+			},
+			cluster: true,
+		},
+		"recorded pbs connection": {
+			metadata: map[string]string{pbsKey: "https://pbs-real.local:8007"},
+			request: AutoRegisterRequest{
+				Type: "pbs", Host: "https://pbs-real.local:8007", ServerName: "pbs-real", Source: "agent",
+				TokenID: "pulse-monitor@pbs!pulse-real", TokenValue: "after-revocation",
+			},
+		},
+		"unspent install grant": {
+			metadata: map[string]string{"install_type": agentInstallTypeHost, "issued_via": agentInstallIssuedViaConfig},
+			request: AutoRegisterRequest{
+				Type: "pve", Host: "https://pve-real.local:8006", ServerName: "pve-real", Source: "agent",
+				TokenID: "pulse-monitor@pve!pulse-real", TokenValue: "after-revocation",
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			for _, revoke := range []bool{false, true} {
+				rawToken := "revoked-while-open.12345678"
+				handler, cfg := agentAuthorityFixture(t, rawToken, maps.Clone(tc.metadata))
+				if tc.cluster {
+					cfg.PVEInstances[1].Host = "https://192.0.2.1:8006"
+					stubAutoRegisterClusterView(t, func(proxmox.ClientConfig) (bool, []config.ClusterEndpoint) {
+						return true, []config.ClusterEndpoint{{NodeName: "pve1", IP: "192.0.2.1"}, {NodeName: "pve2", IP: "192.0.2.2"}}
+					})
+				}
+				tokenID := cfg.APITokens[0].ID
+				pve, pbs := snapshotAutoRegisterSources(cfg)
+				contacted := recordTLSFingerprintFetches(t, func(string) (string, error) {
+					if revoke {
+						config.Mu.Lock()
+						cfg.RemoveAPIToken(tokenID)
+						config.Mu.Unlock()
+					}
+					return "AA:AA", nil
+				})
+
+				rec := runAgentAutoRegister(t, handler, rawToken, tc.request)
+				if got := contacted(); len(got) != 1 {
+					t.Fatalf("revoke=%v: contacted %v, want the one address of the connection", revoke, got)
+				}
+				if !revoke {
+					if rec.Code != http.StatusOK {
+						t.Fatalf("open registration status = %d, body=%s", rec.Code, rec.Body.String())
+					}
+					continue
+				}
+				if rec.Code != http.StatusForbidden {
+					t.Fatalf("status = %d, want 403, body=%s", rec.Code, rec.Body.String())
+				}
+				assertAutoRegisterSourcesUnchanged(t, name, cfg, pve, pbs)
+			}
+		})
+	}
+}
+
+// Both routes are public and read the body before the setup token is checked,
+// so the body is bounded before it is read.
+func TestAutoRegisterRejectsOversizedBody(t *testing.T) {
+	body := `{"type":"pve","host":"https://pve.example:8006","serverName":"` + strings.Repeat("a", 64*1024) + `"}`
+	for _, tc := range []struct {
+		path   string
+		handle func(*ConfigHandlers, http.ResponseWriter, *http.Request)
+	}{
+		{"/api/auto-register", (*ConfigHandlers).HandleAutoRegister},
+		{"/api/auto-unregister", (*ConfigHandlers).HandleAutoUnregister},
+	} {
+		t.Run(strings.TrimPrefix(tc.path, "/api/"), func(t *testing.T) {
+			handler := newTestConfigHandlers(t, &config.Config{DataPath: t.TempDir()})
+			req := httptest.NewRequest(http.MethodPost, tc.path, strings.NewReader(body))
+			req.Header.Set("Content-Type", "application/json")
+			rec := httptest.NewRecorder()
+			tc.handle(handler, rec, req)
+
+			if rec.Code != http.StatusBadRequest || strings.TrimSpace(rec.Body.String()) != "Failed to read request body" {
+				t.Fatalf("%s status = %d body=%q, want 400 Failed to read request body", tc.path, rec.Code, rec.Body.String())
+			}
+		})
 	}
 }
 

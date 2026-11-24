@@ -109,7 +109,9 @@ describe('WhatsNewCard', () => {
 
     expect(screen.queryByTestId('whats-new-notice')).not.toBeInTheDocument();
     expect(screen.getByRole('dialog')).toBeInTheDocument();
-    expect(screen.getByText("What's new in Pulse v6.1.0-rc.1")).toBeInTheDocument();
+    expect(
+      screen.getByRole('heading', { name: "What's new in Pulse v6.1.0-rc.1" }),
+    ).toBeInTheDocument();
     expect(
       screen.getByText(`Released ${new Date('2026-07-13T12:00:00Z').toLocaleDateString()}`),
     ).toBeInTheDocument();
@@ -122,10 +124,9 @@ describe('WhatsNewCard', () => {
       screen.getByText('Acknowledged alerts now stay dismissed after refresh.'),
     ).toBeInTheDocument();
     expect(screen.getByText('Acknowledged alerts now stay dismissed after refresh.')).toBeVisible();
-    // The dialog is a changelog: the Highlights summary is not repeated above it.
-    expect(screen.queryByText('General agent improvements')).not.toBeInTheDocument();
-    expect(screen.queryByText('All changes')).not.toBeInTheDocument();
-    expect(document.querySelector('[data-testid="whats-new-modal"] details')).toBeNull();
+    // Highlights lead the dialog so users immediately see the headline summary.
+    expect(screen.getByRole('region', { name: 'Highlights' })).toBeVisible();
+    expect(screen.getByText('General agent improvements')).toBeVisible();
     expect(screen.queryByText('Internal work')).not.toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Full release notes →' })).toHaveAttribute(
       'href',
@@ -213,7 +214,7 @@ describe('WhatsNewCard', () => {
     expect(screen.getByText('General improvements')).toBeVisible();
   });
 
-  it('orders warnings, screenshots, changes and upgrade notes without disclosures', async () => {
+  it('orders breaking changes, highlights, screenshots, compact known issues, changes and upgrade notes inline', async () => {
     localStorage.setItem(STORAGE_KEYS.WHATS_NEW_LAST_SEEN, '6.5.0');
     versionInfoMock.mockReturnValue({
       version: '6.6.0',
@@ -229,11 +230,11 @@ describe('WhatsNewCard', () => {
         '## Proxmox, PBS and backups',
         '- Open Backups to inspect recent failures.',
         '## Known issues',
-        'Older agents need an update.',
+        '- Older agents need an update.',
         '## Breaking changes',
-        'Migrate the old configuration before enabling collection.',
+        '- Migrate the old configuration before enabling collection.',
         '## Before you upgrade',
-        'Verify the published checksums.',
+        '- Verify the published checksums.',
         '## See the difference',
         '### Backup coverage at a glance',
         'Compare backup coverage across nodes.',
@@ -250,18 +251,20 @@ describe('WhatsNewCard', () => {
     expect(
       screen.getByText('Migrate the old configuration before enabling collection.'),
     ).toBeVisible();
-    const warnings = screen.getByRole('region', { name: 'Important release information' });
+    const breaking = screen.getByRole('region', { name: 'Breaking changes' });
+    const highlights = screen.getByRole('region', { name: 'Highlights' });
     const comparison = screen.getByRole('region', { name: 'Backup coverage at a glance' });
+    const knownIssues = screen.getByRole('region', { name: 'Known issues' });
     const changes = screen.getByRole('region', { name: 'Changes' });
     const upgradeNotes = screen.getByRole('region', { name: 'Upgrade notes' });
-    expect(warnings.nextElementSibling).toBe(comparison);
-    expect(comparison.nextElementSibling).toBe(changes);
+    expect(breaking.nextElementSibling).toBe(highlights);
+    expect(highlights.nextElementSibling).toBe(comparison);
+    expect(comparison.nextElementSibling).toBe(knownIssues);
+    expect(knownIssues.nextElementSibling).toBe(changes);
     expect(changes.nextElementSibling).toBe(upgradeNotes);
-    expect(screen.queryByRole('region', { name: 'Release highlights' })).toBeNull();
-    expect(screen.queryByText('Find backup failures faster.')).not.toBeInTheDocument();
+    expect(screen.getByText('Find backup failures faster.')).toBeVisible();
     expect(screen.getByText('Open Backups to inspect recent failures.')).toBeVisible();
     expect(screen.getByText('Verify the published checksums.')).toBeVisible();
-    expect(document.querySelector('[data-testid="whats-new-modal"] details')).toBeNull();
     const after = screen.getByRole('img', { name: 'Backup coverage at a glance, now' });
     expect(after).toHaveAttribute(
       'src',
@@ -279,6 +282,76 @@ describe('WhatsNewCard', () => {
     expect(screen.queryByText('Internal installation instructions.')).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Got it' }));
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  it('collapses long known issues, multi-section changes, and multi-item upgrade notes until expanded', async () => {
+    localStorage.setItem(STORAGE_KEYS.WHATS_NEW_LAST_SEEN, '6.8.0');
+    versionInfoMock.mockReturnValue({
+      version: '6.9.0-rc.3',
+      isDevelopment: false,
+      isSourceBuild: false,
+    });
+    getReleaseNotesMock.mockResolvedValue({
+      version: '6.9.0-rc.3',
+      releaseNotes: [
+        '## Highlights',
+        '- History charts now show up to 90 days on every plan.',
+        '- Docker Applications groups Compose services by project.',
+        '## Alerts and notifications',
+        '- Rehearsal reports show delivery outcomes.',
+        '- Maintenance windows cover PBS datastore alerts.',
+        '## Disks and storage',
+        '- Machine details include SMART inventory.',
+        '## Proxmox, PBS and backups',
+        '- Node History includes temperature on hover.',
+        '## Known issues',
+        '- Pause monitoring before freeze-enabled backups.',
+        '- Some Windows guests lack Proxmox disk readings.',
+        '- Older ARMv6 agents need a manual update.',
+        '## Before you upgrade',
+        '- Windows agent binaries are unsigned.',
+        '- Roll back to v6.8.0 if needed.',
+      ].join('\n'),
+    });
+    await renderCard();
+    fireEvent.click(
+      await screen.findByRole('button', { name: "See what's new in Pulse 6.9.0-rc.3" }),
+    );
+
+    // Highlights stay visible immediately while long sections stay compact.
+    expect(screen.getByText('History charts now show up to 90 days on every plan.')).toBeVisible();
+    const knownToggle = screen.getByRole('button', { name: /Known issues\s*3/i });
+    expect(knownToggle).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.queryByText('Pause monitoring before freeze-enabled backups.')).toBeNull();
+
+    const alertsToggle = screen.getByRole('button', { name: /Alerts and notifications\s*2/i });
+    expect(alertsToggle).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.queryByText('Rehearsal reports show delivery outcomes.')).toBeNull();
+
+    const upgradeToggle = screen.getByRole('button', { name: /Upgrade notes\s*2/i });
+    expect(upgradeToggle).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.queryByText('Windows agent binaries are unsigned.')).toBeNull();
+
+    // Expanding Known issues, one category, Expand all, and Upgrade notes reveals details.
+    fireEvent.click(knownToggle);
+    expect(knownToggle).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByText('Pause monitoring before freeze-enabled backups.')).toBeVisible();
+
+    fireEvent.click(alertsToggle);
+    expect(alertsToggle).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByText('Rehearsal reports show delivery outcomes.')).toBeVisible();
+    expect(screen.queryByText('Node History includes temperature on hover.')).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Expand all' }));
+    expect(screen.getByText('Node History includes temperature on hover.')).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Collapse all' })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Collapse all' }));
+    expect(screen.queryByText('Rehearsal reports show delivery outcomes.')).toBeNull();
+
+    fireEvent.click(upgradeToggle);
+    expect(upgradeToggle).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByText('Windows agent binaries are unsigned.')).toBeVisible();
   });
 
   it('renders text-only legacy releases without requiring highlights or images', async () => {
@@ -313,5 +386,60 @@ describe('WhatsNewCard', () => {
     expect(screen.queryByTestId('whats-new-modal')).not.toBeInTheDocument();
     expect(getReleaseNotesMock).not.toHaveBeenCalled();
     expect(localStorage.getItem(STORAGE_KEYS.WHATS_NEW_LAST_SEEN)).toBe('6.0.5');
+  });
+
+  it('opens on demand after the version was already seen and suppresses auto notice when disabled', async () => {
+    localStorage.setItem(STORAGE_KEYS.WHATS_NEW_LAST_SEEN, '6.9.0');
+    versionInfoMock.mockReturnValue({
+      version: '6.9.0',
+      isDevelopment: false,
+      isSourceBuild: false,
+    });
+    getReleaseNotesMock.mockResolvedValue({
+      version: '6.9.0',
+      releaseNotes: '## Highlights\n- Longer history on every plan.',
+      releaseDate: '2026-11-22T12:00:00Z',
+      isPrerelease: false,
+    });
+
+    const { WhatsNewCard, openWhatsNewDialog } = await import('../WhatsNewCard');
+    render(() => <WhatsNewCard allowAutoNotice={false} />);
+
+    expect(screen.queryByTestId('whats-new-notice')).not.toBeInTheDocument();
+    expect(getReleaseNotesMock).not.toHaveBeenCalled();
+
+    expect(openWhatsNewDialog()).toBe(true);
+    expect(await screen.findByText('Longer history on every plan.')).toBeVisible();
+    expect(getReleaseNotesMock).toHaveBeenCalledTimes(1);
+
+    // Reopening in the same session reuses the cached notes without refetching.
+    fireEvent.click(screen.getByRole('button', { name: 'Got it' }));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(openWhatsNewDialog()).toBe(true);
+    expect(screen.getByText('Longer history on every plan.')).toBeVisible();
+    expect(getReleaseNotesMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows retryable error and empty states when opened on demand', async () => {
+    localStorage.setItem(STORAGE_KEYS.WHATS_NEW_LAST_SEEN, '6.9.0');
+    versionInfoMock.mockReturnValue({
+      version: '6.9.0',
+      isDevelopment: false,
+      isSourceBuild: false,
+    });
+    getReleaseNotesMock
+      .mockRejectedValueOnce(new Error('offline'))
+      .mockRejectedValueOnce({ status: 404 });
+
+    const { WhatsNewCard, openWhatsNewDialog } = await import('../WhatsNewCard');
+    render(() => <WhatsNewCard />);
+
+    openWhatsNewDialog();
+    expect(
+      await screen.findByText("Couldn't load release notes for v6.9.0 right now."),
+    ).toBeVisible();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+    expect(await screen.findByText('No release notes are published for v6.9.0 yet.')).toBeVisible();
   });
 });

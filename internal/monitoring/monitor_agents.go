@@ -1275,15 +1275,7 @@ func (m *Monitor) UpdateHostAgentConfig(hostID string, commandsEnabled *bool) er
 		return fmt.Errorf("host metadata store not initialized")
 	}
 
-	// Get existing metadata or create new
-	meta := m.hostMetadataStore.Get(hostID)
-	if meta == nil {
-		meta = &config.HostMetadata{ID: hostID}
-	}
-
-	meta.CommandsEnabled = commandsEnabled
-
-	if err := m.hostMetadataStore.Set(hostID, meta); err != nil {
+	if err := m.hostMetadataStore.SetCommandsEnabled(hostID, commandsEnabled); err != nil {
 		return fmt.Errorf("failed to save host config: %w", err)
 	}
 
@@ -1975,13 +1967,16 @@ func (m *Monitor) RebuildTokenBindings() {
 		return
 	}
 
-	// Build a set of valid token IDs from the current config
+	// Build a set of valid token IDs from the current config. Token writers
+	// edit the inventory in place under config.Mu.
 	validTokens := make(map[string]struct{})
+	config.Mu.RLock()
 	for _, token := range m.config.APITokens {
 		if token.ID != "" {
 			validTokens[token.ID] = struct{}{}
 		}
 	}
+	config.Mu.RUnlock()
 
 	// Rebuild Docker token bindings
 	newDockerBindings := make(map[string]string)

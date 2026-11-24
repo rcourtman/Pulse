@@ -72,6 +72,13 @@ func (h *HostedSignupHandlers) HandlePublicSignup(w http.ResponseWriter, r *http
 		http.NotFound(w, r)
 		return
 	}
+	// A runtime the control plane provisioned for one workspace already has its
+	// organization, owner and signed entitlement from there. Signup belongs to
+	// the control plane, so the runtime offers none of its own.
+	if hostedRuntimeHomeOrgID() != "" {
+		http.NotFound(w, r)
+		return
+	}
 	if h.persistence == nil {
 		writeErrorResponse(w, http.StatusServiceUnavailable, "orgs_unavailable", "Organization persistence is not configured", nil)
 		return
@@ -144,17 +151,24 @@ func (h *HostedSignupHandlers) HandlePublicSignup(w http.ResponseWriter, r *http
 		ownerEmail = strings.ToLower(strings.TrimSpace(req.Email))
 	}
 
+	// An organization the provisioner found rather than created is not this
+	// request's to initialize or to undo: it keeps its billing state, and a
+	// later failure must not delete it.
+	created := result.Status == hosted.ProvisionStatusCreated
+
 	var cleanupOnce sync.Once
 	cleanupProvisioning := func() {
 		cleanupOnce.Do(func() {
 			hosted.GetHostedMetrics().RecordProvisionStatus(hosted.ProvisionMetricStatusFailure)
-			provisioner.RollbackProvisioning(orgID)
+			if created {
+				provisioner.RollbackProvisioning(orgID)
+			}
 		})
 	}
 
 	// Seed trial billing state so the tenant is usable immediately (before Stripe checkout completes).
 	// Stripe webhook will overwrite this with active subscription state on successful checkout.
-	if h.billingStore != nil {
+	if h.billingStore != nil && created {
 		now := time.Now().UTC()
 		trialState := buildTrialBillingStateWithPlanFromLicensing(
 			now,

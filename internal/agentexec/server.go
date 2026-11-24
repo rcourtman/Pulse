@@ -13,6 +13,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+	"unicode"
 
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
@@ -33,10 +34,25 @@ var upgrader = websocket.Upgrader{
 var (
 	jsonMarshal      = json.Marshal
 	writeTextMessage = func(conn *websocket.Conn, data []byte) error {
-		return conn.WriteMessage(websocket.TextMessage, data)
+		// Session writes are made under the session's writeMu. Bound each one so
+		// an agent that stops reading its socket cannot keep that lock, and every
+		// dispatcher queued behind it, for as long as it leaves the connection open.
+		if err := conn.SetWriteDeadline(time.Now().Add(messageWriteWait)); err != nil {
+			return err
+		}
+		err := conn.WriteMessage(websocket.TextMessage, data)
+		var netErr net.Error
+		if errors.As(err, &netErr) && netErr.Timeout() {
+			// A timed-out write leaves the stream unusable while the peer can
+			// still send. Closing ends the read loop, which retires the session
+			// and releases its in-flight dispatches.
+			_ = conn.Close()
+		}
+		return err
 	}
 	defaultPingInterval   = 5 * time.Second
 	pingWriteWait         = 5 * time.Second
+	messageWriteWait      = 10 * time.Second
 	readFileTimeout       = 30 * time.Second
 	operationQueryTimeout = 10 * time.Second
 
@@ -363,14 +379,12 @@ func (s *OrganizationServer) ExecuteCommand(ctx context.Context, agentID string,
 	return s.server.ExecuteCommand(WithOrganizationID(ctx, s.organizationID), agentID, cmd)
 }
 
+// agentSessionKey names one tenant's session slot for an agent ID. The
+// organization is always part of the key, including for the default
+// organization: an unqualified default key shares its namespace with the
+// "<organization>\x00" prefix of every other tenant's session and deploy keys.
 func agentSessionKey(organizationID, agentID string) string {
-	organizationID = normalizeOrganizationID(organizationID)
-	agentID = strings.TrimSpace(agentID)
-	if organizationID == defaultOrganizationID {
-		// Preserve the historical key for direct single-tenant users and tests.
-		return agentID
-	}
-	return organizationID + "\x00" + agentID
+	return normalizeOrganizationID(organizationID) + "\x00" + strings.TrimSpace(agentID)
 }
 
 func connectionSessionKey(ac *agentConn) string {
@@ -468,7 +482,7 @@ func (s *Server) connectionForOrganization(organizationID, agentID string) (*age
 	ac, ok := s.agents[key]
 	fenced := s.actionRunnerPromotionFences[key] != nil
 	s.mu.RUnlock()
-	if !ok || fenced {
+	if !ok || fenced || normalizeOrganizationID(ac.admission.OrganizationID) != normalizeOrganizationID(organizationID) {
 		return nil, false
 	}
 	// Prepared action runners live only in pendingActionRunners. Membership in
@@ -491,6 +505,31 @@ func (s *Server) connectionForOrganization(organizationID, agentID string) (*age
 		_ = ac.conn.Close()
 	}
 	return nil, false
+}
+
+// ConnectedAgentTokenIDForOrganization reports the token ID that admitted a
+// live command session for (organizationID, agentID). It inspects only the
+// active session table without calling validateSession, so callers holding
+// config locks can check live session ownership without lock-ordering cycles.
+func (s *Server) ConnectedAgentTokenIDForOrganization(organizationID, agentID string) (string, bool) {
+	if s == nil {
+		return "", false
+	}
+	key := agentSessionKey(organizationID, agentID)
+	s.mu.RLock()
+	ac, ok := s.agents[key]
+	s.mu.RUnlock()
+	if !ok || ac == nil {
+		return "", false
+	}
+	if normalizeOrganizationID(ac.admission.OrganizationID) != normalizeOrganizationID(organizationID) {
+		return "", false
+	}
+	tokenID := strings.TrimSpace(ac.admission.TokenID)
+	if tokenID == "" {
+		return "", false
+	}
+	return tokenID, true
 }
 
 // HasActionRunnerSession reports whether the exact runner transport is
@@ -904,7 +943,7 @@ func (s *Server) authorizeCommandPayload(cmd ExecuteCommandPayload) error {
 		return nil
 	}
 
-	switch s.commandPolicy.Evaluate(cmd.Command) {
+	switch s.commandPolicy.EvaluateForTarget(cmd.Command, cmd.TargetType) {
 	case PolicyBlock:
 		return fmt.Errorf("command blocked by policy")
 	case PolicyRequireApproval:
@@ -1304,10 +1343,12 @@ func (s *Server) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 		conn.Close()
 		return
 	}
-	if len(reg.AgentID) > maxAgentIDLength {
+	// Session, request, and deploy keys join the agent ID to their other parts
+	// with a NUL, so an ID must not be able to carry the delimiter.
+	if len(reg.AgentID) > maxAgentIDLength || strings.ContainsFunc(reg.AgentID, unicode.IsControl) {
 		log.Warn().
 			Int("agent_id_length", len(reg.AgentID)).
-			Msg("Agent registration rejected: agent_id exceeds maximum length")
+			Msg("Agent registration rejected: agent_id exceeds maximum length or contains control characters")
 		rejMsg, rejErr := NewMessage(MsgTypeRegistered, "", RegisteredPayload{Success: false, Message: "Invalid agent_id"})
 		if rejErr != nil {
 			log.Warn().Err(rejErr).Msg("Failed to encode rejection for oversized agent_id")

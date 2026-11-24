@@ -52,7 +52,7 @@ type agentDockerContainerPostconditionObserver struct {
 }
 
 func (o agentDockerContainerPostconditionObserver) ObserveDockerContainer(ctx context.Context, actionID, agentID, runtime, containerID string) (dockerContainerPostconditionObservation, error) {
-	result, err := o.commander.ObserveDockerContainer(ctx, agentID, agentexec.DockerContainerObservationPayload{
+	result, err := o.commander.ObserveDockerContainer(agentCommandContext(ctx), agentID, agentexec.DockerContainerObservationPayload{
 		ActionID: actionID, Runtime: runtime, ContainerID: containerID,
 	})
 	if err != nil {

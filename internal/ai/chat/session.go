@@ -60,12 +60,16 @@ type sessionSummaryCacheEntry struct {
 // hand-edited index only costs a re-parse, never a wrong summary.
 const sessionSummaryIndexFile = ".sessions_index.json"
 
-const sessionSummaryIndexVersion = 1
+// Version 2 added the session owner. An index written before that carries
+// none, so it is rebuilt rather than trusted.
+const sessionSummaryIndexVersion = 2
 
 type sessionSummaryIndexEntry struct {
 	ModTime time.Time `json:"mod_time"`
 	Size    int64     `json:"size"`
 	Summary Session   `json:"summary"`
+	// Owner is kept beside the summary because Session never serializes it.
+	Owner string `json:"owner,omitempty"`
 }
 
 type sessionSummaryIndexData struct {
@@ -73,14 +77,29 @@ type sessionSummaryIndexData struct {
 	Entries map[string]sessionSummaryIndexEntry `json:"entries"`
 }
 
-// sessionData is the on-disk format for a session
+// sessionData is the on-disk format for a session. Owner is the
+// SessionAccess.Owner of the caller the session belongs to; it is empty for
+// Pulse's own sessions and for sessions stored before owners were recorded.
 type sessionData struct {
 	ID           string               `json:"id"`
 	Title        string               `json:"title"`
+	Owner        string               `json:"owner,omitempty"`
 	Messages     []Message            `json:"messages"`
 	ModelContext *sessionModelContext `json:"model_context,omitempty"`
 	CreatedAt    time.Time            `json:"created_at"`
 	UpdatedAt    time.Time            `json:"updated_at"`
+}
+
+// HandoffAuthority records the authority of the caller that supplied a stored
+// handoff envelope so a lower-privilege caller's handoff text cannot replay
+// into a later turn with higher authority.
+type HandoffAuthority struct {
+	HostCommands bool `json:"host_commands,omitempty"`
+	Execute      bool `json:"execute,omitempty"`
+}
+
+func (supplier HandoffAuthority) covers(current HandoffAuthority) bool {
+	return (supplier.HostCommands || !current.HostCommands) && (supplier.Execute || !current.Execute)
 }
 
 type sessionModelContext struct {
@@ -89,6 +108,7 @@ type sessionModelContext struct {
 	HandoffResources []HandoffResource `json:"handoff_resources,omitempty"`
 	HandoffActions   []HandoffAction   `json:"handoff_actions,omitempty"`
 	HandoffMetadata  HandoffMetadata   `json:"handoff_metadata,omitempty"`
+	Authority        HandoffAuthority  `json:"authority,omitempty"`
 	UpdatedAt        time.Time         `json:"updated_at,omitempty"`
 }
 
@@ -382,6 +402,7 @@ func sessionSummaryFromData(data sessionData) Session {
 	return Session{
 		ID:             data.ID,
 		Title:          data.Title,
+		Owner:          data.Owner,
 		CreatedAt:      data.CreatedAt,
 		UpdatedAt:      data.UpdatedAt,
 		MessageCount:   len(data.Messages),
@@ -396,6 +417,7 @@ func sessionSummaryFromData(data sessionData) Session {
 type sessionListData struct {
 	ID           string               `json:"id"`
 	Title        string               `json:"title"`
+	Owner        string               `json:"owner,omitempty"`
 	Messages     []json.RawMessage    `json:"messages"`
 	ModelContext *sessionModelContext `json:"model_context,omitempty"`
 	CreatedAt    time.Time            `json:"created_at"`
@@ -406,6 +428,7 @@ func sessionSummaryFromListData(data sessionListData) Session {
 	return Session{
 		ID:             data.ID,
 		Title:          data.Title,
+		Owner:          data.Owner,
 		CreatedAt:      data.CreatedAt,
 		UpdatedAt:      data.UpdatedAt,
 		MessageCount:   len(data.Messages),
@@ -419,7 +442,9 @@ const (
 	maxSessionTitleRunes = 120
 )
 
-var errSessionNotFound = errors.New("session not found")
+// ErrSessionNotFound is returned for a session that does not exist, and for
+// one the caller may not use (SessionAccess), so the two cannot be told apart.
+var ErrSessionNotFound = errors.New("session not found")
 
 // NewSessionStore creates a new session store
 func NewSessionStore(dataDir string) (*SessionStore, error) {
@@ -615,6 +640,7 @@ func (s *SessionStore) loadSummaryIndex() {
 		if strings.HasPrefix(name, ".") || !strings.HasSuffix(name, ".json") {
 			continue
 		}
+		entry.Summary.Owner = entry.Owner
 		s.summaryCache[name] = sessionSummaryCacheEntry{modTime: entry.ModTime, size: entry.Size, summary: entry.Summary}
 	}
 }
@@ -628,7 +654,7 @@ func (s *SessionStore) saveSummaryIndex() {
 		Entries: make(map[string]sessionSummaryIndexEntry, len(s.summaryCache)),
 	}
 	for name, entry := range s.summaryCache {
-		data.Entries[name] = sessionSummaryIndexEntry{ModTime: entry.modTime, Size: entry.size, Summary: entry.summary}
+		data.Entries[name] = sessionSummaryIndexEntry{ModTime: entry.modTime, Size: entry.size, Summary: entry.summary, Owner: entry.summary.Owner}
 	}
 	s.summaryMu.Unlock()
 
@@ -664,6 +690,11 @@ func (s *SessionStore) saveSummaryIndex() {
 
 // Create creates a new session
 func (s *SessionStore) Create() (*Session, error) {
+	return s.CreateFor("")
+}
+
+// CreateFor creates a new session that belongs to owner (SessionAccess.Owner).
+func (s *SessionStore) CreateFor(owner string) (*Session, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -671,6 +702,7 @@ func (s *SessionStore) Create() (*Session, error) {
 	data := sessionData{
 		ID:        uuid.New().String(),
 		Title:     "",
+		Owner:     owner,
 		Messages:  []Message{},
 		CreatedAt: now,
 		UpdatedAt: now,
@@ -754,7 +786,7 @@ func (s *SessionStore) Delete(id string) error {
 		s.summaryMu.Unlock()
 	}
 	if !removed {
-		return fmt.Errorf("session not found: %s", id)
+		return sessionNotFoundError(id)
 	}
 	s.saveSummaryIndex()
 
@@ -874,6 +906,12 @@ func (s *SessionStore) SetModelHandoffFindingID(id, findingID string) error {
 // as one coherent scope. This avoids stale finding, run, resource, or action
 // identity leaking between separate handoffs within the same chat session.
 func (s *SessionStore) SetModelHandoffEnvelope(id string, findingID string, handoffContext string, handoffResources []HandoffResource, handoffActions []HandoffAction, handoffMetadata HandoffMetadata) error {
+	return s.SetModelHandoffEnvelopeFor(id, findingID, handoffContext, handoffResources, handoffActions, handoffMetadata, HandoffAuthority{})
+}
+
+// SetModelHandoffEnvelopeFor replaces the session's product-originated handoff
+// and records the authority of the caller that supplied it.
+func (s *SessionStore) SetModelHandoffEnvelopeFor(id string, findingID string, handoffContext string, handoffResources []HandoffResource, handoffActions []HandoffAction, handoffMetadata HandoffMetadata, supplier HandoffAuthority) error {
 	findingID = strings.TrimSpace(findingID)
 	handoffContext = strings.TrimSpace(handoffContext)
 	resources := normalizeHandoffResources(handoffResources)
@@ -895,6 +933,7 @@ func (s *SessionStore) SetModelHandoffEnvelope(id string, findingID string, hand
 		HandoffResources: resources,
 		HandoffActions:   actions,
 		HandoffMetadata:  metadata,
+		Authority:        supplier,
 		UpdatedAt:        now,
 	}
 	if modelContextEmpty(modelContext) {
@@ -1101,6 +1140,14 @@ func (s *SessionStore) GetModelHandoffActions(id string) ([]HandoffAction, error
 // one read. Send paths use this instead of several independent metadata reads
 // so large stores do not pay repeated session-file I/O before the model starts.
 func (s *SessionStore) GetModelHandoffEnvelope(id string) (string, []HandoffResource, []HandoffAction, HandoffMetadata, error) {
+	return s.GetModelHandoffEnvelopeFor(id, HandoffAuthority{})
+}
+
+// GetModelHandoffEnvelopeFor returns the persisted model-only handoff fields
+// only when the supplying caller's authority covers the current caller's
+// authority. Envelopes supplied by a lower-privilege caller are withheld from
+// a higher-privilege turn so planted handoff text cannot steer privileged tools.
+func (s *SessionStore) GetModelHandoffEnvelopeFor(id string, caller HandoffAuthority) (string, []HandoffResource, []HandoffAction, HandoffMetadata, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
@@ -1108,7 +1155,7 @@ func (s *SessionStore) GetModelHandoffEnvelope(id string) (string, []HandoffReso
 	if err != nil {
 		return "", nil, nil, HandoffMetadata{}, err
 	}
-	if data.ModelContext == nil {
+	if data.ModelContext == nil || !data.ModelContext.Authority.covers(caller) {
 		return "", nil, nil, HandoffMetadata{}, nil
 	}
 	return strings.TrimSpace(data.ModelContext.HandoffContext),
@@ -1324,37 +1371,69 @@ func normalizeSessionTitle(title string) string {
 	return string(runes[:maxSessionTitleRunes])
 }
 
-// EnsureSession ensures a session exists, creating one if needed
+// EnsureSession ensures a session exists, creating one if needed. It is for
+// Pulse's own runs; a turn made for a caller goes through EnsureSessionFor.
 func (s *SessionStore) EnsureSession(id string) (*Session, error) {
+	return s.ensureSession(id, nil)
+}
+
+// EnsureSessionFor is EnsureSession for a caller's turn. An existing session
+// the caller may not use is reported as not found, and so is a background
+// session ID the caller may not claim. The session belongs to the caller
+// afterwards: a new one from the start, and one that a caller with access to
+// all sessions continues is handed over, so that what the Assistant reads for
+// that caller is not left in a transcript the previous owner can still open.
+func (s *SessionStore) EnsureSessionFor(id string, access SessionAccess) (*Session, error) {
+	return s.ensureSession(id, &access)
+}
+
+func (s *SessionStore) ensureSession(id string, access *SessionAccess) (*Session, error) {
+	owner := ""
+	if access != nil {
+		owner = access.Owner
+	}
 	if id == "" {
-		return s.Create()
+		return s.CreateFor(owner)
 	}
 	if err := validateSessionID(id); err != nil {
 		return nil, err
+	}
+	if access != nil && !access.allows(id, owner) {
+		return nil, sessionNotFoundError(id)
 	}
 
 	s.mu.RLock()
 	data, err := s.readSessionFast(id)
 	s.mu.RUnlock()
-	if err == nil {
+	if err == nil && (access == nil || data.Owner == owner) {
 		session := sessionSummaryFromData(*data)
 		return &session, nil
 	}
-	if !errors.Is(err, errSessionNotFound) {
+	if err != nil && !errors.Is(err, ErrSessionNotFound) {
 		return nil, err
 	}
 
-	// Session doesn't exist, create it with the specified ID. Re-check under the
-	// write lock so concurrent callers do not race into duplicate writes.
+	// Session doesn't exist, or changes hands: create it with the specified ID
+	// or record its new owner. Re-check under the write lock so concurrent
+	// callers do not race into duplicate writes.
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	data, err = s.readSessionFast(id)
 	if err == nil {
+		if access != nil && data.Owner != owner {
+			if !access.allows(id, data.Owner) {
+				return nil, sessionNotFoundError(id)
+			}
+			data.Owner = owner
+			if err := s.writeSession(*data); err != nil {
+				return nil, err
+			}
+		}
 		session := sessionSummaryFromData(*data)
 		return &session, nil
 	}
-	if !errors.Is(err, errSessionNotFound) {
+	if !errors.Is(err, ErrSessionNotFound) {
 		return nil, err
 	}
 
@@ -1362,6 +1441,7 @@ func (s *SessionStore) EnsureSession(id string) (*Session, error) {
 	data = &sessionData{
 		ID:        id,
 		Title:     "",
+		Owner:     owner,
 		Messages:  []Message{},
 		CreatedAt: now,
 		UpdatedAt: now,
@@ -1395,7 +1475,7 @@ func validateSessionID(id string) error {
 }
 
 func sessionNotFoundError(id string) error {
-	return fmt.Errorf("%w: %s", errSessionNotFound, id)
+	return fmt.Errorf("%w: %s", ErrSessionNotFound, id)
 }
 
 // GetResolvedContext returns the resolved context for a session, creating one if needed

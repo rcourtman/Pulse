@@ -18,8 +18,9 @@ import (
 // and `internal/monitoring` imports so there are no cycles.
 type Providers struct {
 	// Stores resolves the ResourceStore for the given org id. The
-	// sentinel runs against the default org for MVP; tenant-scoped
-	// scheduling is left to a future change.
+	// scheduled sweep runs against the default org for MVP;
+	// tenant-scoped scheduling is left to a future change. Request
+	// driven reruns (EvaluateOnce) resolve the caller's org.
 	Stores func(orgID string) (unified.ResourceStore, error)
 	// ActiveAlerts returns active alerts for a resource at this moment.
 	ActiveAlerts func(orgID, canonicalID string) []AlertSummary
@@ -52,8 +53,9 @@ type Sentinel struct {
 
 // Config configures a Sentinel instance.
 type Config struct {
-	// OrgID is the tenant the sentinel scans. MVP runs the default
-	// org only — multi-tenant scheduling is deferred.
+	// OrgID is the tenant the scheduled sweep scans. MVP runs the
+	// default org only — multi-tenant scheduling is deferred. It
+	// never scopes EvaluateOnce, which takes the org of its caller.
 	OrgID string
 	// Tick controls the sweep cadence. Defaults to one minute.
 	Tick time.Duration
@@ -153,7 +155,7 @@ func (s *Sentinel) evaluateForOccurrence(state unified.ResourceOperatorState, oc
 		return
 	}
 
-	inputs := s.buildInputs(state, occurrence, now)
+	inputs := s.buildInputs(s.orgID, state, occurrence, now)
 	report := EvaluateVerification(inputs)
 	if err := store.RecordLoopReport(report); err != nil {
 		// A unique-constraint conflict (race against a parallel
@@ -170,8 +172,9 @@ func (s *Sentinel) evaluateForOccurrence(state unified.ResourceOperatorState, oc
 
 // buildInputs gathers the deterministic input bundle for the
 // evaluator. Provider closures may be nil — the inputs simply carry
-// zero values in that case.
-func (s *Sentinel) buildInputs(state unified.ResourceOperatorState, occurrence unified.MaintenanceWindowOccurrence, now time.Time) VerificationInputs {
+// zero values in that case. orgID must be the org whose store supplied
+// state, so the evidence never mixes tenants.
+func (s *Sentinel) buildInputs(orgID string, state unified.ResourceOperatorState, occurrence unified.MaintenanceWindowOccurrence, now time.Time) VerificationInputs {
 	canonicalID := unified.CanonicalResourceID(state.CanonicalID)
 	stateForOccurrence := cloneOperatorState(state)
 	startAt, endAt := occurrence.StartAt.UTC(), occurrence.EndAt.UTC()
@@ -185,20 +188,20 @@ func (s *Sentinel) buildInputs(state unified.ResourceOperatorState, occurrence u
 		WindowEndedAt:   endAt,
 	}
 	if s.providers.ActiveAlerts != nil {
-		inputs.ActiveAlerts = s.providers.ActiveAlerts(s.orgID, canonicalID)
+		inputs.ActiveAlerts = s.providers.ActiveAlerts(orgID, canonicalID)
 	}
 	if s.providers.ActiveFindings != nil {
-		inputs.ActiveFindings = s.providers.ActiveFindings(s.orgID, canonicalID)
+		inputs.ActiveFindings = s.providers.ActiveFindings(orgID, canonicalID)
 	}
 	if s.providers.RecentActions != nil {
 		windowStart := inputs.WindowStartedAt
 		if windowStart.IsZero() {
 			windowStart = now.Add(-24 * time.Hour)
 		}
-		inputs.RecentActions = s.providers.RecentActions(s.orgID, canonicalID, windowStart)
+		inputs.RecentActions = s.providers.RecentActions(orgID, canonicalID, windowStart)
 	}
 	if s.providers.PostWindowMetricSamples != nil {
-		samples, available := s.providers.PostWindowMetricSamples(s.orgID, canonicalID, inputs.WindowEndedAt, now)
+		samples, available := s.providers.PostWindowMetricSamples(orgID, canonicalID, inputs.WindowEndedAt, now)
 		inputs.PostWindowMetricSamples = samples
 		inputs.MetricSourceAvailable = available
 	}
@@ -235,10 +238,15 @@ func (s *Sentinel) now() time.Time {
 // the "rerun verification" handler so an operator can re-evaluate
 // without waiting for the next tick.
 //
+// orgID is the org the caller was authorized for. Operator state,
+// evidence and the persisted report are all scoped to it; the org the
+// scheduled sweep is configured for (Config.OrgID) plays no part, so a
+// rerun requested in one org can neither read nor write another's.
+//
 // If the existing report for the (resource, window-end) triple is
 // found, this writes a *new* report with a -rerun-N suffix so the
 // review history is preserved.
-func (s *Sentinel) EvaluateOnce(ctx context.Context, canonicalID string) (unified.LoopReport, error) {
+func (s *Sentinel) EvaluateOnce(ctx context.Context, orgID, canonicalID string) (unified.LoopReport, error) {
 	if ctx.Err() != nil {
 		return unified.LoopReport{}, ctx.Err()
 	}
@@ -246,7 +254,7 @@ func (s *Sentinel) EvaluateOnce(ctx context.Context, canonicalID string) (unifie
 	if canonicalID == "" {
 		return unified.LoopReport{}, fmt.Errorf("maintenancesentinel: canonical id is required")
 	}
-	store, err := s.providers.Stores(s.orgID)
+	store, err := s.providers.Stores(orgID)
 	if err != nil {
 		return unified.LoopReport{}, err
 	}
@@ -263,7 +271,7 @@ func (s *Sentinel) EvaluateOnce(ctx context.Context, canonicalID string) (unifie
 		return unified.LoopReport{}, fmt.Errorf("maintenancesentinel: resource %q has no maintenance window to verify", canonicalID)
 	}
 	occurrence := occurrences[len(occurrences)-1]
-	inputs := s.buildInputs(state, occurrence, now)
+	inputs := s.buildInputs(orgID, state, occurrence, now)
 	report := EvaluateVerification(inputs)
 	report.ID = uniqueRerunID(store, report.ID)
 	if err := store.RecordLoopReport(report); err != nil {

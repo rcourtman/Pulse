@@ -12,6 +12,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
@@ -25,6 +26,19 @@ const (
 	orgRequestBodyLimit          = 64 * 1024
 	licenseFeatureMultiTenantKey = "multi_tenant"
 )
+
+// maxOwnedOrganizations bounds the organizations one user below instance
+// administrator may own. An organization is not just its org.json: it gets a
+// monitor with its own alert manager, notification manager and stores,
+// started when it is first used and again by the report scheduler after every
+// restart. Without a bound, any signed-in user could exhaust the server's
+// memory with small requests, and the saved organizations would exhaust it
+// again on every start.
+const maxOwnedOrganizations = 20
+
+// orgOwnershipMu serializes counting a user's organizations and saving the
+// one that adds to them, so parallel requests cannot pass the limit together.
+var orgOwnershipMu sync.Mutex
 
 var organizationIDPattern = regexp.MustCompile(`^[A-Za-z0-9._-]{1,64}$`)
 
@@ -94,6 +108,8 @@ type OrgHandlers struct {
 	onDelete     func(ctx context.Context, orgID string) error
 	hostedMode   bool
 	accessPolicy *DefaultAuthorizationChecker
+	// revokeCredentials withdraws the credentials bound to an org ID.
+	revokeCredentials func(orgID string) error
 }
 
 func NewOrgHandlers(
@@ -111,6 +127,18 @@ func NewOrgHandlers(
 		mtMonitor:    mtMonitor,
 		rbacProvider: provider,
 	}
+}
+
+// SetCredentialRevoker configures an optional callback that withdraws the
+// credentials bound to an org ID. It runs before an org's data is removed and
+// before a free ID is claimed by a new org, and an error aborts either:
+// credentials are matched to an org by ID alone and must not pass from one
+// holder of an ID to the next.
+func (h *OrgHandlers) SetCredentialRevoker(callback func(orgID string) error) {
+	if h == nil {
+		return
+	}
+	h.revokeCredentials = callback
 }
 
 // SetOnDelete configures an optional callback invoked after org deletion.
@@ -367,9 +395,25 @@ func (h *OrgHandlers) HandleCreateOrg(w http.ResponseWriter, r *http.Request) {
 		writeErrorResponse(w, http.StatusBadRequest, "invalid_display_name", "Display name is required", nil)
 		return
 	}
+	orgOwnershipMu.Lock()
+	defer orgOwnershipMu.Unlock()
 	if h.persistence.OrgExists(req.ID) {
 		writeErrorResponse(w, http.StatusConflict, "already_exists", "Organization already exists", nil)
 		return
+	}
+	if !h.admitOrganizationOwner(w, r, username) {
+		return
+	}
+
+	// Credentials still bound to a free ID belong to an organization that no
+	// longer exists (deleted before deletion revoked them, or removed outside
+	// the API). They must not carry over to this one.
+	if h.revokeCredentials != nil {
+		if err := h.revokeCredentials(req.ID); err != nil {
+			log.Error().Err(err).Str("org_id", req.ID).Msg("Failed to revoke credentials left bound to organization ID; not creating it")
+			writeErrorResponse(w, http.StatusInternalServerError, "create_failed", "Failed to create organization", nil)
+			return
+		}
 	}
 
 	now := time.Now().UTC()
@@ -394,6 +438,36 @@ func (h *OrgHandlers) HandleCreateOrg(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusCreated, org)
+}
+
+// admitOrganizationOwner reports whether owner may own one more organization,
+// and writes the refusal when not. The limit binds users below instance
+// administrator in what they create and what they hand to each other;
+// instance administrators set up the organizations of a multi-organization
+// instance and may create, receive and hand over any number. The caller holds
+// orgOwnershipMu until the organization is saved.
+func (h *OrgHandlers) admitOrganizationOwner(w http.ResponseWriter, r *http.Request, owner string) bool {
+	if h.accessPolicy != nil && h.accessPolicy.instanceAdmin != nil {
+		if h.accessPolicy.instanceAdmin(r.Context(), auth.GetUser(r.Context())) || h.accessPolicy.instanceAdmin(r.Context(), owner) {
+			return true
+		}
+	}
+	orgs, err := h.persistence.ListOrganizations()
+	if err != nil {
+		writeErrorResponse(w, http.StatusInternalServerError, "list_failed", "Failed to list organizations", nil)
+		return false
+	}
+	owned := 0
+	for _, org := range orgs {
+		if org != nil && org.IsOwnerUserID(owner) {
+			owned++
+		}
+	}
+	if owned >= maxOwnedOrganizations {
+		writeErrorResponse(w, http.StatusConflict, "organization_limit_reached", fmt.Sprintf("A user can own at most %d organizations", maxOwnedOrganizations), nil)
+		return false
+	}
+	return true
 }
 
 func (h *OrgHandlers) HandleGetOrg(w http.ResponseWriter, r *http.Request) {
@@ -522,6 +596,14 @@ func (h *OrgHandlers) HandleDeleteOrg(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		defer h.mtMonitor.FinishTenantDeletion(orgID)
+	}
+
+	if h.revokeCredentials != nil {
+		if err := h.revokeCredentials(orgID); err != nil {
+			log.Error().Err(err).Str("org_id", orgID).Msg("Failed to revoke organization credentials; retaining data")
+			writeErrorResponse(w, http.StatusInternalServerError, "delete_failed", "Failed to delete organization", nil)
+			return
+		}
 	}
 
 	if err := h.persistence.DeleteOrganization(orgID); err != nil {
@@ -653,6 +735,13 @@ func (h *OrgHandlers) HandleInviteMember(w http.ResponseWriter, r *http.Request)
 		}
 		if authErr := validateFreshBrowserSession(r, username, "transfer ownership", privilegedBrowserSessionMaxAge); authErr != nil {
 			writeErrorResponse(w, authErr.Status, authErr.Code, authErr.Message, nil)
+			return
+		}
+		// A transfer counts against the new owner like a creation, or a
+		// user could keep creating organizations and handing them on.
+		orgOwnershipMu.Lock()
+		defer orgOwnershipMu.Unlock()
+		if !h.admitOrganizationOwner(w, r, req.UserID) {
 			return
 		}
 		for i := range org.Members {

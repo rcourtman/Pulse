@@ -49,12 +49,12 @@ func TestManualUpdateChannelAdmission(t *testing.T) {
 		}
 		selectionFunctions += string(body) + "\n"
 	}
-	installer := filepath.Join(assets, "install.sh")
 	// The real installer reads configuration again unless the helper forwards
 	// an explicit channel. Use its actual selection functions to catch that
 	// crossing rather than accepting helper arguments alone as the outcome.
 	fixture := `#!/bin/bash
 set -eu
+PULSE_RELEASE_ASSET="install.sh"
 CONFIG_DIR="$PULSE_CONFIG_DIR"
 FORCE_CHANNEL=""
 FORCE_VERSION=""
@@ -74,11 +74,26 @@ if [[ -n "$MANUAL_UPDATE_OUTPUT" ]]; then
 fi
 exit "$MANUAL_UPDATE_EXIT"
 `
-	if err := os.WriteFile(installer, []byte(fixture), 0600); err != nil {
-		t.Fatal(err)
+	// Every release asset carries a signature from the same key and namespace.
+	// Signed assets declaring another release asset must be refused, while
+	// unstamped pre-rollout installers remain accepted until a stamped stable
+	// release is published as releases/latest.
+	const identity = `PULSE_RELEASE_ASSET="install.sh"` + "\n"
+	signedAssets := map[string]string{
+		"install.sh":           fixture,
+		"earlier-install.sh":   strings.Replace(fixture, identity, "", 1),
+		"pulse-auto-update.sh": strings.Replace(fixture, identity, `PULSE_RELEASE_ASSET="pulse-auto-update.sh"`+"\n", 1),
 	}
-	if out, err := exec.Command("ssh-keygen", "-q", "-Y", "sign", "-f", key, "-n", "pulse-install", installer).CombinedOutput(); err != nil {
-		t.Fatalf("sign fixture installer: %v\n%s", err, out)
+	for name, body := range signedAssets {
+		if name != "install.sh" && body == fixture {
+			t.Fatalf("fixture %s still declares the installer identity", name)
+		}
+		if err := os.WriteFile(filepath.Join(assets, name), []byte(body), 0600); err != nil {
+			t.Fatal(err)
+		}
+		if out, err := exec.Command("ssh-keygen", "-q", "-Y", "sign", "-f", key, "-n", "pulse-install", filepath.Join(assets, name)).CombinedOutput(); err != nil {
+			t.Fatalf("sign fixture %s: %v\n%s", name, err, out)
+		}
 	}
 
 	cases := []struct {
@@ -90,6 +105,7 @@ exit "$MANUAL_UPDATE_EXIT"
 		directory            bool
 		brokenLink           bool
 		badSignature         bool
+		servedAsset          string
 		installerOutput      string
 		installerExit        int
 	}{
@@ -129,6 +145,8 @@ exit "$MANUAL_UPDATE_EXIT"
 		{name: "source_marker_over_invalid", config: `{`, marker: "maintenance\n", want: []string{"--source", "maintenance"}},
 		{name: "explicit_channel_over_source_marker", config: `{`, marker: "main\n", args: []string{"--stable"}, want: []string{"--stable"}},
 		{name: "signature_still_required", config: `{"updateChannel":"rc"}`, badSignature: true, blocked: true},
+		{name: "signed_unstamped_latest_still_allowed", config: `{"updateChannel":"rc"}`, servedAsset: "earlier-install.sh", want: []string{"--rc"}},
+		{name: "signed_other_asset_is_refused", config: `{"updateChannel":"stable"}`, servedAsset: "pulse-auto-update.sh", blocked: true},
 		{name: "help_is_not_an_update", config: `{`, args: []string{"--help"}, want: []string{"--help"}, installerOutput: "Usage: fixture installer [OPTIONS]"},
 		{name: "cancel_is_not_an_update", missingConfig: true, installerOutput: "Installation cancelled"},
 		{name: "removal_does_not_promise_restart", missingConfig: true, installerOutput: "Pulse removed successfully"},
@@ -193,8 +211,8 @@ done
 [[ -n "$url" && -n "$dest" && "$https_only" == true && "$https_redirects_only" == true ]] || exit 97
 printf '%s\n' "$url" >> "$MANUAL_UPDATE_TRANSPORT"
 case "$url" in
-    *.sshsig) if [[ "$BAD_SIGNATURE" == true ]]; then printf invalid > "$dest"; else cp "$FIXTURE_ASSETS/install.sh.sig" "$dest"; fi ;;
-    */install.sh) cp "$FIXTURE_ASSETS/install.sh" "$dest" ;;
+    *.sshsig) if [[ "$BAD_SIGNATURE" == true ]]; then printf invalid > "$dest"; else cp "$FIXTURE_ASSETS/$SERVED_ASSET.sig" "$dest"; fi ;;
+    */install.sh) cp "$FIXTURE_ASSETS/$SERVED_ASSET" "$dest" ;;
     *) exit 96 ;;
 esac
 `
@@ -208,9 +226,13 @@ esac
 			calls := filepath.Join(dir, "calls")
 			transport := filepath.Join(dir, "transport")
 			channel := filepath.Join(dir, "channel")
+			servedAsset := tc.servedAsset
+			if servedAsset == "" {
+				servedAsset = "install.sh"
+			}
 			cmd := exec.Command(bash, append([]string{helper}, tc.args...)...)
 			cmd.Env = append(os.Environ(), "PATH="+path, "FIXTURE_ASSETS="+assets, "MANUAL_UPDATE_CALLS="+calls, "MANUAL_UPDATE_TRANSPORT="+transport, "MANUAL_UPDATE_CHANNEL="+channel,
-				"BAD_SIGNATURE="+map[bool]string{true: "true", false: "false"}[tc.badSignature],
+				"BAD_SIGNATURE="+map[bool]string{true: "true", false: "false"}[tc.badSignature], "SERVED_ASSET="+servedAsset,
 				"MANUAL_UPDATE_OUTPUT="+tc.installerOutput, "MANUAL_UPDATE_EXIT="+strconv.Itoa(tc.installerExit))
 			out, runErr := cmd.CombinedOutput()
 			if tc.blocked {
@@ -220,7 +242,7 @@ esac
 				if _, err := os.Stat(calls); !os.IsNotExist(err) {
 					t.Fatalf("rejected helper executed installer: %v\n%s", err, out)
 				}
-				if tc.badSignature {
+				if tc.badSignature || tc.servedAsset != "" {
 					// A transport-fixture refusal must not masquerade as proof
 					// that the actual SSH verifier rejected a bad signature.
 					got, err := os.ReadFile(transport)
@@ -228,8 +250,13 @@ esac
 					if err != nil || string(got) != assetURL+"\n"+assetURL+".sshsig\n" {
 						t.Fatalf("signature control did not fetch both signed inputs: %v, %q\n%s", err, got, out)
 					}
-					if !strings.Contains(string(out), "Cryptographic signature verification failed") {
+					signatureRefused := strings.Contains(string(out), "Cryptographic signature verification failed")
+					identityRefused := strings.Contains(string(out), "does not declare itself as the install.sh release asset")
+					if tc.badSignature && !signatureRefused {
 						t.Fatalf("signature control did not reach the actual verifier: %s", out)
+					}
+					if tc.servedAsset != "" && (signatureRefused || !identityRefused) {
+						t.Fatalf("validly signed %s was not refused for its identity: %s", tc.servedAsset, out)
 					}
 				} else {
 					if _, err := os.Stat(transport); !os.IsNotExist(err) {

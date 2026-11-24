@@ -67,8 +67,13 @@ func TestRootInstallerRegistrationDiagnostics(t *testing.T) {
 			if strings.HasPrefix(mode, "smoke-") {
 				exitCode = strings.TrimPrefix(mode, "smoke-")
 			}
+			// The installer keeps the administrator's working directory, which may
+			// be shared (/tmp). Modules there or on PYTHONPATH are not installer code.
+			caller := filepath.Join(root, "caller")
+			plantCallerPythonModules(t, caller)
 			env := append(rootCurlFixtureEnvironment(t, root, host), "FIXTURE_CURL_EXIT="+exitCode,
-				"PULSE_PVE_HOST_URL="+host, "PULSE_SKIP_AUTO_NODE=", "PULSE_AUTO_BACKUP_PERMS=true")
+				"PULSE_PVE_HOST_URL="+host, "PULSE_SKIP_AUTO_NODE=", "PULSE_AUTO_BACKUP_PERMS=true",
+				"PYTHONPATH="+caller)
 			script := `source "$ROOT_INSTALLER_SOURCE"
 print_info() { :; }
 print_warn() { printf 'WARN:%s\n' "$*"; }
@@ -113,6 +118,7 @@ IN_CONTAINER=false
 AUTO_NODE_REGISTERED=false
 AUTO_NODE_REGISTERED_NAME=unchanged
 AUTO_NODE_REGISTER_ERROR=
+cd "$FIXTURE_ROOT/caller"
 auto_register_pve_node 600 127.0.0.1 7655 > "$FIXTURE_ROOT/output" 2>&1
 printf '%s\n%s\n%s\n' "$AUTO_NODE_REGISTERED" "$AUTO_NODE_REGISTERED_NAME" "$AUTO_NODE_REGISTER_ERROR" > "$FIXTURE_ROOT/result"
 `
@@ -166,6 +172,7 @@ printf '%s\n%s\n%s\n' "$AUTO_NODE_REGISTERED" "$AUTO_NODE_REGISTERED_NAME" "$AUT
 				}
 			}
 			assertRootCurlFixtureUnchanged(t, root, filepath.Join(root, "ambient-trace"), saved)
+			assertCallerPythonModulesUnused(t, caller)
 			t.Logf("%s: synthetic response; %s; no saved-state or request-identity change", mode, fmt.Sprintf("curl exit %s", exitCode))
 		})
 	}

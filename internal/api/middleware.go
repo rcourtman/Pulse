@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"runtime/debug"
@@ -44,6 +45,13 @@ func (e *APIError) Error() string {
 
 // ErrorHandler is a middleware that handles panics and errors
 func ErrorHandler(next http.Handler) http.Handler {
+	return errorHandler(next, func(r *http.Request) string { return normalizeRoute(r.URL.Path) })
+}
+
+// errorHandler is ErrorHandler with the caller choosing the route label of the
+// HTTP metrics. The label must come from a fixed set when clients choose the
+// paths: every new label is a set of metric series kept until the process exits.
+func errorHandler(next http.Handler, metricRoute func(*http.Request) string) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Fix for issue #334: Normalize empty path to "/" before ServeMux processes it
 		// This prevents the automatic redirect from "" to "./"
@@ -65,9 +73,11 @@ func ErrorHandler(next http.Handler) http.Handler {
 		// Create a custom response writer to capture status codes
 		rw := &responseWriter{ResponseWriter: w, statusCode: http.StatusOK}
 		rw.Header().Set("X-Request-ID", requestID)
+		// A body can outlive the credential that admitted its headers.
+		r, rw.bodyAuthority = withRequestBodyAuthority(r)
 
 		start := time.Now()
-		routeLabel := normalizeRoute(r.URL.Path)
+		routeLabel := metricRoute(r)
 		method := r.Method
 
 		defer func() {
@@ -93,6 +103,10 @@ func ErrorHandler(next http.Handler) http.Handler {
 
 		// Call the next handler
 		next.ServeHTTP(rw, r)
+		// A handler that wrote nothing must not imply 200 after withdrawal.
+		if rw.bodyAuthority.refused() {
+			rw.WriteHeader(http.StatusOK)
+		}
 
 		// A 5xx is ours to explain, so it warns. A 4xx is the client being told
 		// no — an unauthenticated bootstrap request, an RBAC refusal, a probe for
@@ -166,6 +180,11 @@ type responseWriter struct {
 	http.ResponseWriter
 	statusCode int
 	written    bool
+	// bodyAuthority is nil for bodyless requests. Once a body read finds the
+	// admitted credential withdrawn, an unstarted response becomes the
+	// generic 401 and the handler's own output is dropped.
+	bodyAuthority *requestBodyAuthority
+	refused       bool
 }
 
 // Keep ResponseController deadline operations available to streaming handlers.
@@ -181,6 +200,13 @@ func (rw *responseWriter) SetReadDeadline(deadline time.Time) error {
 
 func (rw *responseWriter) WriteHeader(code int) {
 	if !rw.written {
+		if rw.bodyAuthority.refused() {
+			rw.statusCode = http.StatusUnauthorized
+			rw.written = true
+			rw.refused = true
+			http.Error(rw.ResponseWriter, "Authentication required", http.StatusUnauthorized)
+			return
+		}
 		rw.statusCode = code
 		rw.ResponseWriter.WriteHeader(code)
 		rw.written = true
@@ -190,6 +216,9 @@ func (rw *responseWriter) WriteHeader(code int) {
 func (rw *responseWriter) Write(b []byte) (int, error) {
 	if !rw.written {
 		rw.WriteHeader(http.StatusOK)
+	}
+	if rw.refused {
+		return 0, io.ErrClosedPipe
 	}
 	return rw.ResponseWriter.Write(b)
 }

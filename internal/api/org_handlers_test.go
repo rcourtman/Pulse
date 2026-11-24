@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -2028,5 +2029,172 @@ func TestOrgHandlersWriteBodyNativeHTTP(t *testing.T) {
 				}
 			})
 		}
+	}
+}
+
+func createOrgForTest(h *OrgHandlers, user, orgID string) int {
+	req := withUser(httptest.NewRequest(http.MethodPost, "/api/orgs", bytes.NewBufferString(`{"id":"`+orgID+`","displayName":"`+orgID+`"}`)), user)
+	rec := httptest.NewRecorder()
+	h.HandleCreateOrg(rec, req)
+	return rec.Code
+}
+
+func transferOrgForTest(h *OrgHandlers, orgID, owner, target string) *httptest.ResponseRecorder {
+	req := withUser(
+		httptest.NewRequest(http.MethodPost, "/api/orgs/"+orgID+"/members", bytes.NewBufferString(`{"userId":"`+target+`","role":"owner"}`)),
+		owner,
+	)
+	session := generateSessionToken()
+	GetSessionStore().CreateSession(session, time.Hour, "browser", "127.0.0.1", owner)
+	req.AddCookie(&http.Cookie{Name: cookieNameSession, Value: session})
+	req.SetPathValue("id", orgID)
+	rec := httptest.NewRecorder()
+	h.HandleInviteMember(rec, req)
+	return rec
+}
+
+func ownedOrganizationsForTest(t *testing.T, persistence *config.MultiTenantPersistence, user string) int {
+	t.Helper()
+	orgs, err := persistence.ListOrganizations()
+	if err != nil {
+		t.Fatalf("list organizations: %v", err)
+	}
+	owned := 0
+	for _, org := range orgs {
+		if org.IsOwnerUserID(user) {
+			owned++
+		}
+	}
+	return owned
+}
+
+func newOrgOwnershipLimitHandlers(t *testing.T) (*OrgHandlers, *config.MultiTenantPersistence) {
+	t.Helper()
+	t.Setenv("PULSE_DEV", "true")
+	previous := IsMultiTenantEnabled()
+	SetMultiTenantEnabled(true)
+	t.Cleanup(func() { SetMultiTenantEnabled(previous) })
+	InitSessionStore(t.TempDir())
+
+	persistence := config.NewMultiTenantPersistence(t.TempDir())
+	checker := NewAuthorizationChecker(NewMultiTenantOrganizationLoader(persistence))
+	checker.SetInstanceAdminResolver(func(_ context.Context, userID string) bool { return userID == "root" })
+	h := NewOrgHandlers(persistence, nil)
+	h.SetAccessPolicy(checker)
+	return h, persistence
+}
+
+func TestOrgHandlersCreateBoundsOrganizationsPerOwner(t *testing.T) {
+	h, persistence := newOrgOwnershipLimitHandlers(t)
+
+	for i := 0; i < maxOwnedOrganizations; i++ {
+		if code := createOrgForTest(h, "alice", fmt.Sprintf("alice-%d", i)); code != http.StatusCreated {
+			t.Fatalf("organization %d: status %d, want 201", i, code)
+		}
+	}
+	req := withUser(httptest.NewRequest(http.MethodPost, "/api/orgs", bytes.NewBufferString(`{"id":"alice-over","displayName":"Over"}`)), "alice")
+	rec := httptest.NewRecorder()
+	h.HandleCreateOrg(rec, req)
+	if rec.Code != http.StatusConflict || !strings.Contains(rec.Body.String(), "organization_limit_reached") {
+		t.Fatalf("organization past the limit: %d %s, want 409 organization_limit_reached", rec.Code, rec.Body.String())
+	}
+	if persistence.OrgExists("alice-over") {
+		t.Fatal("the refused organization was saved")
+	}
+
+	if code := createOrgForTest(h, "bob", "bob-0"); code != http.StatusCreated {
+		t.Fatalf("another user's first organization: status %d, want 201", code)
+	}
+	deleteReq := withUser(httptest.NewRequest(http.MethodDelete, "/api/orgs/alice-0", nil), "alice")
+	deleteReq.SetPathValue("id", "alice-0")
+	deleteRec := httptest.NewRecorder()
+	h.HandleDeleteOrg(deleteRec, deleteReq)
+	if deleteRec.Code != http.StatusNoContent {
+		t.Fatalf("delete: status %d: %s", deleteRec.Code, deleteRec.Body.String())
+	}
+	if code := createOrgForTest(h, "alice", "alice-again"); code != http.StatusCreated {
+		t.Fatalf("organization after deleting one: status %d, want 201", code)
+	}
+
+	for i := 0; i <= maxOwnedOrganizations; i++ {
+		if code := createOrgForTest(h, "root", fmt.Sprintf("root-%d", i)); code != http.StatusCreated {
+			t.Fatalf("administrator's organization %d: status %d, want 201", i, code)
+		}
+	}
+}
+
+func TestOrgHandlersCreateBoundsOrganizationsWithoutAccessPolicy(t *testing.T) {
+	t.Setenv("PULSE_DEV", "true")
+	previous := IsMultiTenantEnabled()
+	SetMultiTenantEnabled(true)
+	t.Cleanup(func() { SetMultiTenantEnabled(previous) })
+
+	persistence := config.NewMultiTenantPersistence(t.TempDir())
+	h := NewOrgHandlers(persistence, nil)
+	for i := 0; i < maxOwnedOrganizations; i++ {
+		if code := createOrgForTest(h, "alice", fmt.Sprintf("alice-%d", i)); code != http.StatusCreated {
+			t.Fatalf("organization %d: status %d, want 201", i, code)
+		}
+	}
+	if code := createOrgForTest(h, "alice", "alice-over"); code != http.StatusConflict {
+		t.Fatalf("organization past the limit: status %d, want 409", code)
+	}
+	if owned := ownedOrganizationsForTest(t, persistence, "alice"); owned != maxOwnedOrganizations {
+		t.Fatalf("alice owns %d organizations, want %d", owned, maxOwnedOrganizations)
+	}
+}
+
+func TestOrgHandlersCreateBoundsParallelRequests(t *testing.T) {
+	h, persistence := newOrgOwnershipLimitHandlers(t)
+
+	var wg sync.WaitGroup
+	for i := 0; i < maxOwnedOrganizations*2; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			createOrgForTest(h, "alice", fmt.Sprintf("alice-%d", i))
+		}(i)
+	}
+	wg.Wait()
+
+	if owned := ownedOrganizationsForTest(t, persistence, "alice"); owned != maxOwnedOrganizations {
+		t.Fatalf("alice owns %d organizations, want %d", owned, maxOwnedOrganizations)
+	}
+}
+
+func TestOrgHandlersOwnershipTransferCountsAgainstNewOwner(t *testing.T) {
+	h, persistence := newOrgOwnershipLimitHandlers(t)
+
+	for i := 0; i < maxOwnedOrganizations; i++ {
+		if code := createOrgForTest(h, "bob", fmt.Sprintf("bob-%d", i)); code != http.StatusCreated {
+			t.Fatalf("bob's organization %d: status %d, want 201", i, code)
+		}
+	}
+	for _, creator := range []string{"alice", "root"} {
+		orgID := creator + "-org"
+		if code := createOrgForTest(h, creator, orgID); code != http.StatusCreated {
+			t.Fatalf("%s: status %d, want 201", orgID, code)
+		}
+		inviteMemberForTest(t, h, orgID, creator, "bob", "admin", http.StatusAccepted)
+		acceptInvitationForTest(t, h, orgID, "bob")
+	}
+
+	rec := transferOrgForTest(h, "alice-org", "alice", "bob")
+	if rec.Code != http.StatusConflict || !strings.Contains(rec.Body.String(), "organization_limit_reached") {
+		t.Fatalf("transfer to an owner at the limit: %d %s, want 409 organization_limit_reached", rec.Code, rec.Body.String())
+	}
+	org, err := persistence.LoadOrganization("alice-org")
+	if err != nil || org.OwnerUserID != "alice" || org.GetMemberRole("bob") != models.OrgRoleAdmin {
+		t.Fatalf("refused transfer changed the organization: %+v, %v", org, err)
+	}
+
+	if rec := transferOrgForTest(h, "root-org", "root", "bob"); rec.Code != http.StatusOK {
+		t.Fatalf("administrator's transfer: status %d, want 200: %s", rec.Code, rec.Body.String())
+	}
+
+	inviteMemberForTest(t, h, "alice-org", "alice", "carol", "viewer", http.StatusAccepted)
+	acceptInvitationForTest(t, h, "alice-org", "carol")
+	if rec := transferOrgForTest(h, "alice-org", "alice", "carol"); rec.Code != http.StatusOK {
+		t.Fatalf("transfer below the limit: status %d, want 200: %s", rec.Code, rec.Body.String())
 	}
 }

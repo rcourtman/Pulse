@@ -5,6 +5,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/api/apicontext"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	internalauth "github.com/rcourtman/pulse-go-rewrite/pkg/auth"
 	"github.com/rs/zerolog/log"
@@ -76,10 +77,24 @@ func configTransferUserManagesOrganization(cfg *config.Config, req *http.Request
 	return sessionUserCarriesAdminPrivileges(cfg, userID)
 }
 
+// keepImportAccessCredentials marks an admitted import whose caller may not
+// issue the archive's API tokens or SSO configuration. Restoring those sections
+// issues every credential in the file, whatever its scopes, organization
+// binding or owner, and anyone can build an archive. It therefore needs the
+// authority that issuing them directly needs: instance administration for a
+// user (ensureAdminSession), which a tenant's own owners and admins do not
+// carry, and instance-wide full access for an API token, as for regenerating
+// every token. Any other admitted caller restores the remaining sections.
+func keepImportAccessCredentials(req *http.Request) {
+	*req = *req.WithContext(apicontext.WithImportKeepingAccessCredentials(req.Context()))
+}
+
 // authorizeConfigTransfer is the single route-local boundary for export and
 // import. It runs before either handler receives the request, so denial cannot
 // parse an archive, read export persistence, write import state, or reload the
-// runtime.
+// runtime. It also decides, from the credential it admits, whether an import
+// may replace access credentials (keepImportAccessCredentials), so that
+// decision cannot change while the body is outstanding.
 func (r *Router) authorizeConfigTransfer(w http.ResponseWriter, req *http.Request, op configTransferOperation) bool {
 	if adminBypassEnabled() {
 		return true
@@ -105,6 +120,12 @@ func (r *Router) authorizeConfigTransfer(w http.ResponseWriter, req *http.Reques
 			respondMissingScope(w, scope)
 			return false
 		}
+		if op == configTransferImport && !tokenHasInstanceWideAuthority(record) {
+			keepImportAccessCredentials(req)
+		}
+		// Neither credential here passes through CheckAuth; an import archive
+		// must not arrive after the token or session that admitted it is gone.
+		retainRequestBodyAuthority(r.config, req)
 		return true
 	}
 
@@ -141,6 +162,10 @@ func (r *Router) authorizeConfigTransfer(w http.ResponseWriter, req *http.Reques
 			// CheckAuth's session admission. Retain the session actually admitted
 			// here, not an ambient cookie discovered after the export has run.
 			attachSessionReadAdmission(req, cookie.Value, session)
+			if op == configTransferImport && !sessionUserCarriesAdminPrivileges(r.config, sessionUser) {
+				keepImportAccessCredentials(req)
+			}
+			retainRequestBodyAuthority(r.config, req)
 			return true
 		}
 	}
@@ -156,9 +181,31 @@ func (r *Router) authorizeConfigTransfer(w http.ResponseWriter, req *http.Reques
 		configuredUser := r.config.AuthUser
 		configuredHash := r.config.AuthPass
 		config.Mu.RUnlock()
-		if configuredUser != "" && configuredHash != "" &&
+		// This route does not pass through CheckAuth, so the password test
+		// below keeps sign-in's lockout itself: it refuses while the account
+		// or the address is locked and atomically counts outcomes against both.
+		passwordConfigured := configuredUser != "" && configuredHash != ""
+		clientIP := GetClientIP(req)
+		if passwordConfigured {
+			_, _, userLocked := GetLockoutInfo(username)
+			_, _, ipLocked := GetLockoutInfo(clientIP)
+			if userLocked || ipLocked {
+				logAuthDenial(req, username, "Basic credentials refused for configuration transfer during lockout", nil)
+				http.Error(w, "Too many failed attempts. Please try again later.", http.StatusForbidden)
+				return false
+			}
+		}
+		credentialsValid := passwordConfigured &&
 			constantTimeStringEqual(username, configuredUser) &&
-			internalauth.CheckPasswordHash(password, configuredHash) {
+			internalauth.CheckPasswordHash(password, configuredHash)
+		if passwordConfigured {
+			if _, locked := RecordLoginAttempt(credentialsValid, username, clientIP); locked {
+				logAuthDenial(req, username, "Basic credentials refused for configuration transfer during lockout", nil)
+				http.Error(w, "Too many failed attempts. Please try again later.", http.StatusForbidden)
+				return false
+			}
+		}
+		if credentialsValid {
 			if access := authorizeVerifiedUserForRequestOrganization(req, configuredUser); !access.Allowed {
 				logAuthDenial(req, configuredUser, "Basic credentials refused for the request organization during configuration transfer", nil)
 				writeJSONError(w, http.StatusForbidden, "access_denied", access.Reason)

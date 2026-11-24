@@ -269,7 +269,7 @@ func TestSSOLoadFailureRegisteredBoundary(t *testing.T) {
 				const monitor = "sso-load-monitor-synthetic-token.12345678"
 				cfg := fixture.config
 				cfg.APITokens = []config.APITokenRecord{
-					newTokenRecord(t, full, []string{config.ScopeSettingsRead, config.ScopeSettingsWrite}, nil),
+					newTokenRecord(t, full, []string{config.ScopeWildcard}, nil),
 					newTokenRecord(t, read, []string{config.ScopeSettingsRead}, nil),
 					newTokenRecord(t, monitor, []string{config.ScopeMonitoringRead}, nil),
 				}

@@ -15,6 +15,7 @@ import { Portal } from 'solid-js/web';
 import { AgentMetadataAPI, type AgentMetadata } from '@/api/agentMetadata';
 import { MonitoringAPI } from '@/api/monitoring';
 import { HOST_AGENT_STOPPED_REPORTING_REASON } from '@/components/Infrastructure/resourceDetailMappers';
+import { getResourceHealthIssuePresentation } from '@/components/Infrastructure/resourceHealthPresentation';
 import { EnhancedCPUBar } from '@/components/Workloads/EnhancedCPUBar';
 import { MetricBar } from '@/components/Workloads/MetricBar';
 import { StackedDiskBar } from '@/components/Workloads/StackedDiskBar';
@@ -67,11 +68,8 @@ import {
   getActionableAgentIdFromResource,
   getAgentFirstReportStatusIndicator,
 } from '@/utils/agentResources';
-import { getAlertsForResource, getUnifiedResourceAlertStyles } from '@/utils/alerts';
-import {
-  formatAlertSeverityLabel,
-  getAlertSeverityTextClass,
-} from '@/utils/alertSeverityPresentation';
+import { getAlertsForUnifiedResource, getUnifiedResourceAlertStyles } from '@/utils/alerts';
+import { formatAlertSeverityLabel } from '@/utils/alertSeverityPresentation';
 import { formatBytes, formatSpeed, formatObservedSpeed, normalizeDiskArray } from '@/utils/format';
 import { STORAGE_KEYS } from '@/utils/localStorage';
 import { useAlertsActivation } from '@/stores/alertsActivation';
@@ -129,15 +127,6 @@ import { getStandaloneResourceStatusIndicator } from './standalonePageModel';
 type MetricFallbackReason = {
   label: string;
   title: string;
-};
-
-const compactUnraidArrayAlert = (message: string): string => {
-  // Shorten only the single-reason message. A raw slot count can differ from
-  // the alert evaluator's assigned-disk count.
-  const missing = /^Unraid array reports ([1-9]\d*) missing disk\(s\)$/.exec(message);
-  if (!missing) return message;
-  const count = missing[1];
-  return `${count} missing disk${count === '1' ? '' : 's'}`;
 };
 
 const hasPositiveTemperature = (celsius: number | undefined): celsius is number =>
@@ -1699,21 +1688,26 @@ export const AgentsMachinesTable: Component<{
                         alertsActivation.detectionEnabled(),
                       ),
                     );
-                    const arrayAlert = createMemo(() => {
-                      const agentId = asTrimmedString(machine.agent?.agentId);
-                      if (
-                        !agentId ||
-                        !machine.agent?.unraid ||
-                        (machine.sourceType !== 'agent' && machine.sourceType !== 'hybrid')
-                      )
-                        return undefined;
-                      // CheckHost uses this child key, never the machine name,
-                      // a cache-pool ID, or the registry ID used for History.
-                      return getAlertsForResource(
-                        [`agent:${agentId}/storage:unraid-array`],
+                    const statusDotLabel = createMemo(() => {
+                      const baseLabel = indicator().label;
+                      const topAlert = getAlertsForUnifiedResource(
+                        machine,
                         activeAlerts,
                         alertsActivation.detectionEnabled(),
-                      ).find((alert) => alert.type === 'storage-topology' && !alert.acknowledged);
+                      ).find((alert) => !alert.acknowledged);
+                      const alertMessage = topAlert?.message?.trim();
+                      if (topAlert && alertMessage) {
+                        const severityLabel = formatAlertSeverityLabel(topAlert.level, baseLabel);
+                        return alertMessage.toLowerCase() === severityLabel.toLowerCase()
+                          ? severityLabel
+                          : `${severityLabel} · ${alertMessage}`;
+                      }
+                      const healthReason =
+                        getResourceHealthIssuePresentation(machine)?.primary?.trim();
+                      if (healthReason && healthReason.toLowerCase() !== baseLabel.toLowerCase()) {
+                        return `${baseLabel} · ${healthReason}`;
+                      }
+                      return baseLabel;
                     });
                     const machineAlertBg = () => {
                       const s = machineAlertStyles();
@@ -1754,8 +1748,8 @@ export const AgentsMachinesTable: Component<{
                               <StatusDot
                                 size="sm"
                                 variant={indicator().variant}
-                                title={indicator().label}
-                                ariaLabel={indicator().label}
+                                title={statusDotLabel()}
+                                ariaLabel={statusDotLabel()}
                               />
                               <div class="min-w-0 flex-1">
                                 <div class="flex min-w-0 items-center gap-1.5">
@@ -1800,19 +1794,6 @@ export const AgentsMachinesTable: Component<{
                                 </Show>
                               </div>
                             </div>
-                            <Show when={!isExpanded() && arrayAlert()}>
-                              {(alert) => (
-                                <span
-                                  class={`block whitespace-normal wrap-break-word text-[10px] font-semibold leading-tight ${getAlertSeverityTextClass(alert().level)}`}
-                                  data-unraid-array-alert
-                                >
-                                  {formatAlertSeverityLabel(alert().level)} ·{' '}
-                                  {compactUnraidArrayAlert(
-                                    alert().message.trim() || 'Unraid array alert',
-                                  )}
-                                </span>
-                              )}
-                            </Show>
                           </TableCell>
                           <Show when={columnVisibility.isColumnVisible('system')}>
                             <TableCell

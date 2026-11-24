@@ -1,0 +1,48 @@
+{
+  "version": 1,
+  "base_sha": "357f43f32e0a2e309bde14836bb5a4c56ce713ec",
+  "verified_at": "2026-11-24T14:58:57Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/App.tsx",
+    "frontend-modern/src/AppLayout.tsx",
+    "frontend-modern/src/components/Settings/UpdatesSettingsPanel.tsx",
+    "frontend-modern/src/components/WhatsNewCard.tsx",
+    "frontend-modern/src/components/WhatsNewContent.tsx",
+    "frontend-modern/src/components/whatsNewModel.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/App.tsx": "b60730210ada9419efac5fd67677a8df5284b8dec62b8a47c0689d7820491056",
+    "frontend-modern/src/AppLayout.tsx": "4fc2ae07776dba875a34e55bc1b6af3c57be24cdd438ca08447d4c4f5f7ff59d",
+    "frontend-modern/src/components/Settings/UpdatesSettingsPanel.tsx": "85ce818d36265f23b0bc855a6627f5b176299e356a993496011a40ea41153fe0",
+    "frontend-modern/src/components/WhatsNewCard.tsx": "0b2ae60e3f9cf3fd0a602f4deab4080e3cf21c168107353f946d26a75596c9a1",
+    "frontend-modern/src/components/WhatsNewContent.tsx": "f65a257ec9b4700446012626c8b604daa5758f199a5abe7339782db91bd2cefc",
+    "frontend-modern/src/components/whatsNewModel.ts": "26a767f43d887e345339b0a126d5fe4bca16188b18a49051a58720f5b29aa8b5"
+  },
+  "routes": [
+    "/actions",
+    "/settings/system-updates"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "release-version footer button on authenticated /actions and Updates views",
+    "What's New modal open and dismissed via Escape",
+    "mobile phone viewport (390x844) with long prerelease version string"
+  ],
+  "interactions": [
+    "Verified footer version button accessible name contains exact visible version text (6.10.0-beta.2, see what's new) to satisfy WCAG 2.5.3 label-content-name-mismatch",
+    "Clicked footer version button on 390x844 mobile /actions and confirmed What's New dialog opens cleanly with wrapped version title and zero horizontal overflow",
+    "Dismissed What's New dialog with Escape and verified Settings Updates What's new reopen button on 1440x900 desktop with zero page errors (5/5 checks passed)"
+  ],
+  "tool": "playwright",
+  "summary": "Verified What's New footer reopen button WCAG label-in-name compliance, mobile dialog wrapping on 390x844, and desktop Updates reopen button against the built Pulse binary (5/5 checks passed, zero page errors)."
+}

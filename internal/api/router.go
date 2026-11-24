@@ -17,6 +17,7 @@ import (
 	"path"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -60,7 +61,6 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/websocket"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/aicontracts"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/auth"
-	internalauth "github.com/rcourtman/pulse-go-rewrite/pkg/auth"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/diskinventory"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/extensions"
 	metricstore "github.com/rcourtman/pulse-go-rewrite/pkg/metrics"
@@ -164,6 +164,7 @@ type Router struct {
 	checksumCache               map[string]checksumCacheEntry
 	unifiedAgentValidationCache sync.Map
 	installScriptClient         *http.Client
+	proxiedReleaseAssets        proxiedReleaseAssets
 	relayMu                     sync.RWMutex
 	relayClient                 relayRuntimeClient
 	relayCancel                 context.CancelFunc
@@ -288,7 +289,10 @@ func NewRouter(cfg *config.Config, monitor *monitoring.Monitor, mtMonitor *monit
 	// Load persisted and environment-backed SSO before routes begin serving.
 	// Configuration transfer and no-auth recovery must never observe the old
 	// lazy-loading window as an unauthenticated installation.
-	r.ensureSSOConfig()
+	ssoConfig := r.ensureSSOConfig()
+	for i := range ssoConfig.Providers {
+		r.bindSSOProviderOriginalIssuer(&ssoConfig.Providers[i], false)
+	}
 	if err := r.syncSAMLPublicURL(); err != nil {
 		log.Error().Err(err).Msg("Failed to initialize SAML public URL")
 	}
@@ -317,7 +321,7 @@ func NewRouter(cfg *config.Config, monitor *monitoring.Monitor, mtMonitor *monit
 	// Note: TimeoutHandler breaks WebSocket upgrades
 	devMode := utils.GetenvTrim("FRONTEND_DEV_SERVER") != ""
 	handler := SecurityHeadersWithConfig(r, allowEmbedding, allowedOrigins, devMode)
-	handler = ErrorHandler(handler)
+	handler = errorHandler(handler, func(req *http.Request) string { return muxRouteLabel(r.mux, req) })
 	handler = DemoModeMiddleware(cfg, handler)
 
 	// Create tenant middleware with authorization checker.
@@ -404,6 +408,7 @@ func (r *Router) setupRoutes() {
 	})
 	r.configHandlers.SetConfig(r.config)
 	r.configHandlers.SetMockModeChangeHook(r.syncPlatformSupplementalProviders)
+	r.configHandlers.SetSSOConfigReloadHook(r.reloadSSOConfigAfterImport)
 	r.trueNASHandlers = &TrueNASHandlers{
 		getPersistence: r.configHandlers.Persistence,
 		getConfig:      r.configHandlers.Config,
@@ -541,11 +546,9 @@ func (r *Router) setupRoutes() {
 		if r.config == nil {
 			return false
 		}
-		config.Mu.Lock()
-		tokens := make([]config.APITokenRecord, len(r.config.APITokens))
-		copy(tokens, r.config.APITokens)
-		config.Mu.Unlock()
-		return agentOperationsLoopExternalAgentTokenReady(manifest, tokens, now)
+		// A shallow copy still shares each record's Metadata map with the
+		// live inventory, and the readiness check clones every record.
+		return agentOperationsLoopExternalAgentTokenReady(manifest, snapshotAPITokenRecords(r.config), now)
 	}))
 	// Wire pending-approvals into the bundle. The provider resolves
 	// the approval store at request time so multi-tenant rebuilds
@@ -620,6 +623,7 @@ func (r *Router) setupRoutes() {
 	orgHandlers := NewOrgHandlers(r.multiTenant, r.mtMonitor, rbacProvider)
 	orgHandlers.SetHostedMode(r.hostedMode)
 	orgHandlers.SetAccessPolicy(r.orgAccess)
+	orgHandlers.SetCredentialRevoker(r.revokeTenantCredentials)
 	orgHandlers.SetOnDelete(func(ctx context.Context, orgID string) error {
 		return r.CleanupTenant(ctx, orgID)
 	})
@@ -768,7 +772,9 @@ func (r *Router) setupRoutes() {
 		})
 		r.aiSettingsHandler.SetProposalCatalogFactory(func(orgID string) tools.ProposalCatalog {
 			return func(ctx context.Context, resourceID string) ([]unifiedresources.ResourceCapability, error) {
-				return resourceHandlers.ActionLifecycle().Capabilities(ctx, orgID, resourceID)
+				// An investigation's context names no organization.
+				orgCtx := context.WithValue(ctx, OrgIDContextKey, approval.NormalizeOrgID(orgID))
+				return resourceHandlers.ActionLifecycle().Capabilities(orgCtx, orgID, resourceID)
 			}
 		})
 	}
@@ -815,7 +821,7 @@ func (r *Router) setupRoutes() {
 			if req == nil {
 				return
 			}
-			broadcaster.PublishApprovalPending(AgentEventApprovalPendingPayload{
+			broadcaster.PublishApprovalPending(req.OrgID, AgentEventApprovalPendingPayload{
 				ApprovalID:  req.ID,
 				ResourceID:  req.CanonicalResourceID(),
 				TargetType:  req.TargetType,
@@ -1034,7 +1040,7 @@ func (r *Router) wireReportingAIResolvers() {
 	}
 }
 
-// CleanupTenant removes all per-tenant resources (RBAC, AI, License) for a deleted org.
+// CleanupTenant removes all per-tenant resources (credentials, RBAC, AI, License) for a deleted org.
 func (r *Router) CleanupTenant(ctx context.Context, orgID string) error {
 	orgID = strings.TrimSpace(orgID)
 	if orgID == "" || orgID == "default" {
@@ -1042,6 +1048,10 @@ func (r *Router) CleanupTenant(ctx context.Context, orgID string) error {
 	}
 
 	var errs []error
+
+	if err := r.revokeTenantCredentials(orgID); err != nil {
+		errs = append(errs, fmt.Errorf("credential cleanup: %w", err))
+	}
 
 	r.StopPatrolForOrg(orgID)
 
@@ -1069,6 +1079,11 @@ func (r *Router) CleanupTenant(ctx context.Context, orgID string) error {
 			errs = append(errs, fmt.Errorf("resource store cleanup: %w", err))
 		}
 	}
+	if r.recoveryHandlers != nil {
+		if err := r.recoveryHandlers.CloseTenantStore(orgID); err != nil {
+			errs = append(errs, fmt.Errorf("recovery store cleanup: %w", err))
+		}
+	}
 
 	r.monitorAdapterMu.Lock()
 	delete(r.monitorResourceAdapters, orgID)
@@ -1076,6 +1091,78 @@ func (r *Router) CleanupTenant(ctx context.Context, orgID string) error {
 
 	if len(errs) > 0 {
 		return errors.Join(errs...)
+	}
+	return nil
+}
+
+// revokeTenantCredentials withdraws every instance API token from an
+// organization ID and ends its agent command sessions. It runs when the
+// organization is deleted and again before the ID is claimed by a new one.
+// Org-bound tokens (agent install tokens included) live in the instance
+// inventory, not in the organization's directory, and are matched to an
+// organization by ID alone. An ID is free to be claimed again once its
+// organization is gone, so a credential that outlived the deletion would be
+// valid in whichever organization takes the ID next. A save failure leaves the
+// inventory untouched and is returned so the caller can abort the change.
+func (r *Router) revokeTenantCredentials(orgID string) error {
+	orgID = strings.TrimSpace(orgID)
+	if r == nil || r.config == nil || orgID == "" || orgID == "default" {
+		return nil
+	}
+
+	config.Mu.Lock()
+	previousTokens := append([]config.APITokenRecord(nil), r.config.APITokens...)
+	keptTokens := make([]config.APITokenRecord, 0, len(previousTokens))
+	revoked := 0
+	for _, record := range previousTokens {
+		bound := record.GetBoundOrgs()
+		remaining := slices.DeleteFunc(slices.Clone(bound), func(boundOrgID string) bool {
+			return strings.TrimSpace(boundOrgID) == orgID
+		})
+		if len(remaining) == len(bound) {
+			keptTokens = append(keptTokens, record)
+			continue
+		}
+		revoked++
+		// A multi-org token keeps its other organizations.
+		narrowed := record.Clone()
+		narrowed.OrgIDs = remaining
+		if strings.TrimSpace(narrowed.OrgID) == orgID {
+			narrowed.OrgID = ""
+		}
+		// Losing the binding must never widen the token: with no organization
+		// left it would read as an unbound legacy token, and with only the
+		// default one left it would start acting for the instance. Remove it.
+		if len(remaining) == 0 || tokenActsForInstance(&narrowed) {
+			continue
+		}
+		keptTokens = append(keptTokens, narrowed)
+	}
+	if revoked > 0 {
+		r.config.APITokens = keptTokens
+		r.config.SortAPITokens()
+		if r.persistence != nil {
+			if err := r.persistence.SaveAPITokens(r.config.APITokens); err != nil {
+				r.config.APITokens = previousTokens
+				r.config.SortAPITokens()
+				config.Mu.Unlock()
+				return fmt.Errorf("persist API token revocation: %w", err)
+			}
+		}
+	}
+	config.Mu.Unlock()
+
+	if revoked > 0 {
+		log.Info().
+			Str("org_id", orgID).
+			Int("tokens", revoked).
+			Msg("Revoked API tokens bound to organization ID")
+	}
+
+	if r.agentExecServer != nil {
+		// Listing revalidates each of the organization's command sessions and
+		// closes those whose token is gone.
+		r.agentExecServer.GetConnectedAgentsForOrganization(orgID)
 	}
 	return nil
 }
@@ -1171,8 +1258,10 @@ func (r *Router) routeAIPatrolFindings(w http.ResponseWriter, req *http.Request)
 		if !ensureScope(w, req, config.ScopeAIExecute) {
 			return
 		}
-		// Clear all findings - doesn't require Pro license so users can clean up accumulated findings
-		r.aiSettingsHandler.HandleClearAllFindings(w, req)
+		// Clear all findings - doesn't require Pro license so users can clean up accumulated findings.
+		// It erases the organization's whole findings store, so a session
+		// caller must be one of its managers.
+		RequireOrgAdmin(r.config, r.aiSettingsHandler.HandleClearAllFindings)(w, req)
 	default:
 		if !ensureScope(w, req, config.ScopeAIExecute) {
 			return
@@ -1188,7 +1277,9 @@ func (r *Router) routeAIFindings(w http.ResponseWriter, req *http.Request) {
 		if !ensureRelayMobileRuntimeRoute(w, req, relayMobileRouteFindingInvestigationMessages) {
 			return
 		}
-		r.aiSettingsHandler.HandleGetInvestigationMessages(w, req)
+		// The transcript holds host command output: bound as on the Patrol
+		// stream and run routes.
+		withAssistantActionAuthority(r.config, r.authorizer, r.aiSettingsHandler.HandleGetInvestigationMessages)(w, req)
 	case strings.HasSuffix(path, "/investigation"):
 		if !ensureRelayMobileRuntimeRoute(w, req, relayMobileRouteFindingInvestigation) {
 			return
@@ -1273,17 +1364,12 @@ func (r *Router) handleAgentWebSocket(w http.ResponseWriter, req *http.Request) 
 	r.agentExecServer.HandleWebSocket(w, req)
 }
 
-// serveSetupTokenOrSettingsWrite gates a privileged settings endpoint behind
-// either a valid setup token (setup scripts) or full authentication plus
-// proxy-auth admin and settings:write scope. logLabel tags the unauthorized
-// log line; nonAdminMsg is the proxy-auth denial log message.
-func (r *Router) serveSetupTokenOrSettingsWrite(w http.ResponseWriter, req *http.Request, logLabel, nonAdminMsg string, delegate http.HandlerFunc) {
-	// Check setup token first (for setup scripts)
-	if r.isValidSetupTokenForRequest(req) {
-		delegate(w, req)
-		return
-	}
-
+// serveSettingsWrite gates a privileged settings endpoint behind full
+// authentication plus proxy-auth admin and settings:write scope. A setup token
+// is not accepted: it only authorizes registering the node it was issued for.
+// logLabel tags the unauthorized log line; nonAdminMsg is the proxy-auth
+// denial log message.
+func (r *Router) serveSettingsWrite(w http.ResponseWriter, req *http.Request, logLabel, nonAdminMsg string, delegate http.HandlerFunc) {
 	// Require authentication
 	authWriter := &responseCapture{ResponseWriter: w}
 	if !checkAuth(r.config, authWriter, req, false) {
@@ -1324,44 +1410,16 @@ func (r *Router) handleVerifyTemperatureSSH(w http.ResponseWriter, req *http.Req
 		http.Error(w, "Service unavailable", http.StatusServiceUnavailable)
 		return
 	}
-	r.serveSetupTokenOrSettingsWrite(w, req, "verify-temperature-ssh", "Non-admin user attempted verify-temperature-ssh", r.configHandlers.HandleVerifyTemperatureSSH)
+	r.serveSettingsWrite(w, req, "verify-temperature-ssh", "Non-admin user attempted verify-temperature-ssh", r.configHandlers.HandleVerifyTemperatureSSH)
 }
 
-// handleSSHConfig handles SSH config writes with setup token or API auth
+// handleSSHConfig handles SSH config writes with admin session or API auth
 func (r *Router) handleSSHConfig(w http.ResponseWriter, req *http.Request) {
 	if r.systemSettingsHandler == nil {
 		http.Error(w, "Service unavailable", http.StatusServiceUnavailable)
 		return
 	}
-	r.serveSetupTokenOrSettingsWrite(w, req, "ssh-config", "Non-admin user attempted ssh-config update", r.systemSettingsHandler.HandleSSHConfig)
-}
-
-func extractSetupToken(req *http.Request) string {
-	if token := strings.TrimSpace(req.Header.Get("X-Setup-Token")); token != "" {
-		return token
-	}
-	if token := extractBearerToken(req.Header.Get("Authorization")); token != "" {
-		return token
-	}
-	return ""
-}
-
-func (r *Router) isValidSetupTokenForRequest(req *http.Request) bool {
-	if r == nil || r.configHandlers == nil || req == nil {
-		return false
-	}
-
-	token := extractSetupToken(req)
-	if token == "" {
-		return false
-	}
-
-	requestOrgID := resolveTenantOrgID(req)
-	if !isValidOrganizationID(requestOrgID) {
-		return false
-	}
-
-	return r.configHandlers.ValidateSetupTokenForOrg(token, requestOrgID)
+	r.serveSettingsWrite(w, req, "ssh-config", "Non-admin user attempted ssh-config update", r.systemSettingsHandler.HandleSSHConfig)
 }
 
 func extractBearerToken(header string) string {
@@ -1488,7 +1546,11 @@ func (r *Router) recoverExecutingActions(actor string) {
 		if ctx.Err() != nil {
 			return
 		}
-		recovered, err := lifecycle.RecoverExecutingActions(ctx, orgID, actor, maxExecutingActionRecoveryBatch)
+		// Executors resolve the agent session and resources from the context's
+		// organization. The lifecycle context names none, which reads as the
+		// default organization, so bind the one whose records are recovered.
+		orgCtx := context.WithValue(ctx, OrgIDContextKey, orgID)
+		recovered, err := lifecycle.RecoverExecutingActions(orgCtx, orgID, actor, maxExecutingActionRecoveryBatch)
 		if err != nil {
 			log.Warn().Err(err).Str("org_id", orgID).Str("actor", actor).Msg("Executing-action recovery pass failed")
 			continue
@@ -2984,7 +3046,7 @@ func (r *Router) wireAIChatDependenciesForService(ctx context.Context, service A
 		if executor := chatService.GetExecutor(); executor != nil {
 			broadcaster := r.agentEventBroadcaster
 			executor.SetOnActionCompleted(func(record unifiedresources.ActionAuditRecord) {
-				r.publishActionCompletedAgentEvent(broadcaster, record)
+				r.publishActionCompletedAgentEvent(broadcaster, orgID, record)
 			})
 		}
 	}
@@ -3253,16 +3315,16 @@ func (w *forecastResourceIterator) ForecastStoragePools() []forecast.ResourceInf
 	return result
 }
 
-func (r *Router) publishActionCompletedAgentEvent(broadcaster *AgentEventBroadcaster, record unifiedresources.ActionAuditRecord) {
+func (r *Router) publishActionCompletedAgentEvent(broadcaster *AgentEventBroadcaster, orgID string, record unifiedresources.ActionAuditRecord) {
 	if broadcaster == nil {
 		return
 	}
 	payload, ok := projectAgentActionCompletedPayload(record)
 	if !ok {
-		broadcaster.PublishActionCompletedRecord(record)
+		broadcaster.PublishActionCompletedRecord(orgID, record)
 		return
 	}
-	broadcaster.PublishActionCompleted(payload)
+	broadcaster.PublishActionCompleted(orgID, payload)
 }
 
 func projectAgentActionCompletedPayload(record unifiedresources.ActionAuditRecord) (AgentEventActionCompletedPayload, bool) {
@@ -4368,19 +4430,6 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 				isPublic = true
 			}
 
-			// Allow temperature verification endpoint when a setup token is provided
-			if normalizedPath == "/api/system/verify-temperature-ssh" && r.configHandlers != nil {
-				if r.isValidSetupTokenForRequest(req) {
-					isPublic = true
-				}
-			}
-
-			// Allow SSH config endpoint when a setup token is provided
-			if normalizedPath == "/api/system/ssh-config" && r.configHandlers != nil {
-				if r.isValidSetupTokenForRequest(req) {
-					isPublic = true
-				}
-			}
 			if normalizedPath == "/api/config/export" || normalizedPath == "/api/config/import" {
 				// These handlers apply stricter route-local auth and public-network checks.
 				isPublic = true
@@ -4416,6 +4465,12 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 						Str("path", req.URL.Path).
 						Msg("Unauthorized access attempt")
 					return
+				}
+				// checkAuth accepts Basic credentials only for the configured
+				// administrator, behind its lockout. canCapturePublicURL leaves
+				// them to it, so capture for that administrator happens here.
+				if authWriter.Header().Get("X-Auth-Method") == "basic" {
+					r.capturePublicURL(req)
 				}
 			}
 		}
@@ -4504,7 +4559,9 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		// This ensures the frontend has a token before making POST requests
 		if req.Method == "GET" && strings.HasPrefix(req.URL.Path, "/api/") {
 			sessionCookie, err := readSessionCookie(req)
-			if err == nil && sessionCookie.Value != "" {
+			// The cookie value is client-supplied and this runs for public paths too,
+			// so only a live session may add a token to the persisted CSRF store.
+			if err == nil && sessionCookie.Value != "" && ValidateSession(sessionCookie.Value) {
 				// Check if CSRF cookie exists
 				_, csrfErr := req.Cookie(CookieNameCSRF)
 				if csrfErr != nil {
@@ -4569,6 +4626,16 @@ func (r *Router) capturePublicURLFromRequest(req *http.Request) {
 	}
 
 	if !canCapturePublicURL(r.config, req) {
+		return
+	}
+
+	r.capturePublicURL(req)
+}
+
+// capturePublicURL records the request's origin as the auto-detected public
+// URL. The caller has established that the request is an administrator's.
+func (r *Router) capturePublicURL(req *http.Request) {
+	if req == nil || r == nil || r.config == nil || r.hostedMode {
 		return
 	}
 
@@ -5038,14 +5105,17 @@ func canCapturePublicURL(cfg *config.Config, req *http.Request) bool {
 		}
 	}
 
-	// API Tokens: Require settings:write scope. This pre-route check runs
-	// concurrently with authentication. Metadata normalization and LastUsedAt
-	// need the same exclusive ownership; scope checks use a detached snapshot.
+	// API Tokens: Require settings:write scope and instance authority, as the
+	// public URL setting itself does: cfg.APITokens also holds tokens bound to
+	// tenant organizations, and the URL serves every organization. This
+	// pre-route check runs concurrently with authentication. Metadata
+	// normalization and LastUsedAt need the same exclusive ownership; scope
+	// checks use a detached snapshot.
 	tokenAllowsCapture := func(token string) bool {
 		config.Mu.RLock()
 		defer config.Mu.RUnlock()
 		record, ok := validateAPITokenLocked(cfg, token)
-		return ok && record.HasScope(config.ScopeSettingsWrite)
+		return ok && record.HasScope(config.ScopeSettingsWrite) && tokenActsForInstance(record)
 	}
 	if token := strings.TrimSpace(req.Header.Get("X-API-Token")); token != "" {
 		if tokenAllowsCapture(token) {
@@ -5073,20 +5143,11 @@ func canCapturePublicURL(cfg *config.Config, req *http.Request) bool {
 		}
 	}
 
-	// Basic Auth: Trusted (Admin)
-	if cfg.AuthUser != "" && cfg.AuthPass != "" {
-		const prefix = "Basic "
-		if authHeader := req.Header.Get("Authorization"); strings.HasPrefix(authHeader, prefix) {
-			if decoded, err := base64.StdEncoding.DecodeString(authHeader[len(prefix):]); err == nil {
-				if parts := strings.SplitN(string(decoded), ":", 2); len(parts) == 2 {
-					if constantTimeStringEqual(parts[0], cfg.AuthUser) && internalauth.CheckPasswordHash(parts[1], cfg.AuthPass) {
-						return true
-					}
-				}
-			}
-		}
-	}
-
+	// Basic Auth is not judged here. This check runs before authentication on
+	// every request, public paths included, where neither the lockout nor a
+	// rate limit bounds it, and verifying a password costs a bcrypt hash. Only
+	// checkAuth verifies Basic credentials; ServeHTTP captures once it has
+	// accepted them.
 	return false
 }
 
@@ -5162,6 +5223,21 @@ func (r *Router) handleSchedulerHealth(w http.ResponseWriter, req *http.Request)
 	}
 }
 
+// writePasswordChangeLockedOut refuses a password change from an address that
+// has used up its failed attempts at the current password.
+func writePasswordChangeLockedOut(w http.ResponseWriter, clientIP string, lockedUntil time.Time) {
+	remainingMinutes := int(time.Until(lockedUntil).Minutes())
+	if remainingMinutes < 1 {
+		remainingMinutes = 1
+	}
+	log.Warn().
+		Str("ip", clientIP).
+		Time("locked_until", lockedUntil).
+		Msg("Password change blocked - IP locked out")
+	writeErrorResponse(w, http.StatusForbidden, "locked_out",
+		fmt.Sprintf("Too many failed attempts. Try again in %d minutes.", remainingMinutes), nil)
+}
+
 // handleChangePassword handles password change requests
 func (r *Router) handleChangePassword(w http.ResponseWriter, req *http.Request) {
 	if req.Method != http.MethodPost {
@@ -5192,19 +5268,17 @@ func (r *Router) handleChangePassword(w http.ResponseWriter, req *http.Request) 
 		return
 	}
 
-	// Check lockout status for the client IP
-	_, lockedUntil, isLocked := GetLockoutInfo(clientIP)
-	if isLocked {
-		remainingMinutes := int(time.Until(lockedUntil).Minutes())
-		if remainingMinutes < 1 {
-			remainingMinutes = 1
+	// Check lockout status for the client IP and for the account whose password
+	// the request tests, as sign-in does. Failures counted per address alone
+	// let a caller spread guesses over addresses past the account lockout.
+	_, userLockedUntil, userLocked := GetLockoutInfo(r.config.AuthUser)
+	_, ipLockedUntil, ipLocked := GetLockoutInfo(clientIP)
+	if userLocked || ipLocked {
+		lockedUntil := userLockedUntil
+		if ipLocked && ipLockedUntil.After(lockedUntil) {
+			lockedUntil = ipLockedUntil
 		}
-		log.Warn().
-			Str("ip", clientIP).
-			Time("locked_until", lockedUntil).
-			Msg("Password change blocked - IP locked out")
-		writeErrorResponse(w, http.StatusForbidden, "locked_out",
-			fmt.Sprintf("Too many failed attempts. Try again in %d minutes.", remainingMinutes), nil)
+		writePasswordChangeLockedOut(w, clientIP, lockedUntil)
 		return
 	}
 
@@ -5228,17 +5302,19 @@ func (r *Router) handleChangePassword(w http.ResponseWriter, req *http.Request) 
 		}
 	}
 
-	// Hold session callers to the same rule the proxy branch above applies.
-	// Knowing the current password is the real gate on the change itself, so
-	// this is not an escalation, but without it any authenticated non-admin
-	// session could probe the admin password one guess at a time and read the
-	// answer from the 401. ensureAdminSession is a no-op when the request
-	// carries no session cookie, so the Basic Auth flow is unaffected.
-	if !ensureAdminSession(r.config, w, req) {
+	// Hold session and API token callers to the same rule the proxy branch
+	// above applies. Knowing the current password is the real gate on the
+	// change itself, so this is not an escalation, but without it any
+	// authenticated non-admin session, or any API token whatever its scopes,
+	// could probe the admin password one guess at a time and read the answer
+	// from the 401. ensureSettingsWriteScope asks an admin session of session
+	// callers and settings:write of tokens, and is a no-op when the request
+	// carries neither, so the Basic Auth flow is unaffected.
+	if !ensureSettingsWriteScope(r.config, w, req) {
 		log.Warn().
 			Str("ip", req.RemoteAddr).
 			Str("path", req.URL.Path).
-			Msg("Non-admin session attempted to change password")
+			Msg("Caller without instance settings authority attempted to change password")
 		return
 	}
 
@@ -5296,7 +5372,10 @@ func (r *Router) handleChangePassword(w http.ResponseWriter, req *http.Request) 
 								Str("ip", req.RemoteAddr).
 								Str("username", username).
 								Msg("Failed password change attempt - incorrect current password in auth header")
-							RecordFailedLogin(clientIP)
+							if lockedUntil, locked := RecordLoginAttempt(false, r.config.AuthUser, clientIP); locked {
+								writePasswordChangeLockedOut(w, clientIP, lockedUntil)
+								return
+							}
 							writeErrorResponse(w, http.StatusUnauthorized, "unauthorized",
 								"Current password is incorrect", nil)
 							return
@@ -5316,11 +5395,23 @@ func (r *Router) handleChangePassword(w http.ResponseWriter, req *http.Request) 
 				Str("ip", req.RemoteAddr).
 				Str("username", username).
 				Msg("Failed password change attempt - incorrect current password")
-			RecordFailedLogin(clientIP)
+			if lockedUntil, locked := RecordLoginAttempt(false, r.config.AuthUser, clientIP); locked {
+				writePasswordChangeLockedOut(w, clientIP, lockedUntil)
+				return
+			}
 			writeErrorResponse(w, http.StatusUnauthorized, "unauthorized",
 				"Current password is incorrect", nil)
 			return
 		}
+	}
+
+	// The lockout check above ran before the current password was hashed, so
+	// guesses sent together all passed it. One that was still being verified
+	// when the account or address reached its limit is refused even though it
+	// is right, as RecordLoginAttempt refuses the wrong ones.
+	if lockedUntil, locked := RecordLoginAttempt(true, r.config.AuthUser, clientIP); locked {
+		writePasswordChangeLockedOut(w, clientIP, lockedUntil)
+		return
 	}
 
 	// Hash the new password before storing
@@ -5635,22 +5726,7 @@ func (r *Router) handleLogin(w http.ResponseWriter, req *http.Request) {
 		if ipLocked && ipLockedUntil.After(lockedUntil) {
 			lockedUntil = ipLockedUntil
 		}
-
-		remainingMinutes := int(time.Until(lockedUntil).Minutes())
-		if remainingMinutes < 1 {
-			remainingMinutes = 1
-		}
-
-		LogAuditEventForTenant(GetOrgID(req.Context()), "login", loginReq.Username, clientIP, req.URL.Path, false, "Account locked")
-
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusForbidden)
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"error":            "account_locked",
-			"message":          fmt.Sprintf("Too many failed attempts. Account is locked for %d more minutes.", remainingMinutes),
-			"lockedUntil":      lockedUntil.Format(time.RFC3339),
-			"remainingMinutes": remainingMinutes,
-		})
+		writeLoginLockedOut(w, req, loginReq.Username, clientIP, lockedUntil)
 		return
 	}
 
@@ -5677,11 +5753,15 @@ func (r *Router) handleLogin(w http.ResponseWriter, req *http.Request) {
 		credentialsValid = true
 		effectiveUsername = "admin"
 	}
+	// The lockout check above ran before the password was hashed, so attempts
+	// sent together all passed it. Count this one in the same step that asks
+	// whether the limit was reached meanwhile: if it was, the attempt is
+	// refused whatever its result. A success clears the failed attempts.
+	if lockedUntil, locked := RecordLoginAttempt(credentialsValid, loginReq.Username, clientIP); locked {
+		writeLoginLockedOut(w, req, loginReq.Username, clientIP, lockedUntil)
+		return
+	}
 	if credentialsValid {
-		// Clear failed login attempts
-		ClearFailedLogins(loginReq.Username)
-		ClearFailedLogins(clientIP)
-
 		// Invalidate any pre-existing session to prevent session fixation attacks.
 		InvalidateOldSessionFromRequest(req)
 
@@ -5740,9 +5820,7 @@ func (r *Router) handleLogin(w http.ResponseWriter, req *http.Request) {
 			"message": "Successfully logged in",
 		})
 	} else {
-		// Failed login
-		RecordFailedLogin(loginReq.Username)
-		RecordFailedLogin(clientIP)
+		// Failed login, counted by RecordLoginAttempt above
 		LogAuditEventForTenant(GetOrgID(req.Context()), "login", loginReq.Username, clientIP, req.URL.Path, false, "Invalid credentials")
 
 		// Get updated attempt counts
@@ -5778,6 +5856,26 @@ func (r *Router) handleLogin(w http.ResponseWriter, req *http.Request) {
 			})
 		}
 	}
+}
+
+// writeLoginLockedOut refuses a login for a username or address that has used
+// up its failed attempts.
+func writeLoginLockedOut(w http.ResponseWriter, req *http.Request, username, clientIP string, lockedUntil time.Time) {
+	remainingMinutes := int(time.Until(lockedUntil).Minutes())
+	if remainingMinutes < 1 {
+		remainingMinutes = 1
+	}
+
+	LogAuditEventForTenant(GetOrgID(req.Context()), "login", username, clientIP, req.URL.Path, false, "Account locked")
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusForbidden)
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"error":            "account_locked",
+		"message":          fmt.Sprintf("Too many failed attempts. Account is locked for %d more minutes.", remainingMinutes),
+		"lockedUntil":      lockedUntil.Format(time.RFC3339),
+		"remainingMinutes": remainingMinutes,
+	})
 }
 
 // handleResetLockout allows administrators to manually reset account lockouts
@@ -8120,7 +8218,7 @@ func (r *Router) handleDiagnosticsDockerPrepareToken(w http.ResponseWriter, req 
 		EnableHost *bool  `json:"enableHost,omitempty"`
 	}
 
-	if err := json.NewDecoder(req.Body).Decode(&payload); err != nil {
+	if err := json.NewDecoder(http.MaxBytesReader(w, req.Body, 8*1024)).Decode(&payload); err != nil {
 		writeErrorResponse(w, http.StatusBadRequest, "invalid_json", "Failed to decode request body", nil)
 		return
 	}
@@ -8221,39 +8319,26 @@ func (r *Router) handleDiagnosticsDockerPrepareToken(w http.ResponseWriter, req 
 	}
 	setAPITokenOwnerUserID(record, apiTokenOwnerUserIDForRequest(r.config, req))
 
-	activeConfig := r.config
-	activePersistence := r.persistence
-	if orgID != "" && orgID != "default" {
-		activeConfig = monitor.GetConfig()
-		if activeConfig == nil {
-			writeErrorResponse(w, http.StatusInternalServerError, "tenant_config_unavailable", "Tenant config is not available", nil)
-			return
-		}
-		if r.multiTenant == nil {
-			writeErrorResponse(w, http.StatusInternalServerError, "tenant_persistence_unavailable", "Tenant persistence is not configured", nil)
-			return
-		}
-		tenantPersistence, err := r.multiTenant.GetPersistence(orgID)
-		if err != nil {
-			writeErrorResponse(w, http.StatusInternalServerError, "tenant_persistence_unavailable", "Failed to resolve tenant persistence", nil)
-			return
-		}
-		activePersistence = tenantPersistence
-	}
-	if activeConfig == nil {
+	// A tenant organization's record also goes into the instance inventory,
+	// bound to it by OrgID, the same as agenttokens.IssueAndPersistForOrganization.
+	// That is the inventory header-less agents authenticate against and the
+	// only one /api/security/tokens lists, revokes and rotates. A record kept
+	// in the organization's own config copy still authenticates requests that
+	// name the organization, and no token route can show or revoke it.
+	if r.config == nil {
 		writeErrorResponse(w, http.StatusInternalServerError, "config_unavailable", "Configuration is not loaded", nil)
 		return
 	}
 
 	config.Mu.Lock()
-	previousTokens := append([]config.APITokenRecord(nil), activeConfig.APITokens...)
-	activeConfig.APITokens = append(activeConfig.APITokens, *record)
-	activeConfig.SortAPITokens()
+	previousTokens := append([]config.APITokenRecord(nil), r.config.APITokens...)
+	r.config.APITokens = append(r.config.APITokens, *record)
+	r.config.SortAPITokens()
 
-	if activePersistence != nil {
-		if err := activePersistence.SaveAPITokens(activeConfig.APITokens); err != nil {
-			activeConfig.APITokens = previousTokens
-			activeConfig.SortAPITokens()
+	if r.persistence != nil {
+		if err := r.persistence.SaveAPITokens(r.config.APITokens); err != nil {
+			r.config.APITokens = previousTokens
+			r.config.SortAPITokens()
 			config.Mu.Unlock()
 			log.Error().Err(err).Msg("Failed to persist API tokens after container runtime migration generation")
 			writeErrorResponse(w, http.StatusInternalServerError, "token_persist_failed", "Failed to persist API token", nil)

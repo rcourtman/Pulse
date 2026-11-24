@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/api/apicontext"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
@@ -86,6 +87,19 @@ func TestTenantProxmoxInstallTokenGrantLivesOnInstanceRecord(t *testing.T) {
 	persisted, err := config.NewConfigPersistence(dataDir).LoadAPITokens()
 	if err != nil || len(persisted) != 1 || persisted[0].Metadata[proxmoxInstallRegistrationCompletedKey] != "true" {
 		t.Fatalf("persisted instance inventory = %+v (err %v), want the consumed grant", persisted, err)
+	}
+
+	// The registration recreates this tenant's runtime in the background. Let
+	// that finish before reloading: a tenant refuses overlapping shutdowns.
+	deadline := time.Now().Add(10 * time.Second)
+	for {
+		if m, ok := mtm.PeekMonitor(orgID); ok && m != tenantMonitor {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("tenant auto-register did not reload the tenant runtime")
+		}
+		time.Sleep(10 * time.Millisecond)
 	}
 
 	// A reloaded tenant runtime still sees the consumed grant.

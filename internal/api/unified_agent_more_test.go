@@ -6,12 +6,16 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
+	"time"
 )
 
 func TestDownloadAgentHelperRejectsUnsupportedArchitecture(t *testing.T) {
@@ -357,4 +361,189 @@ func TestDownloadUnifiedAgent_NoArchNotFound(t *testing.T) {
 	if !strings.Contains(w.Body.String(), "Specify ?arch=linux-amd64") {
 		t.Fatalf("expected guidance message")
 	}
+}
+
+const proxiedHelperAssetBase = "https://github.com/rcourtman/Pulse/releases/download/v6.0.0-rc.1/"
+
+// newBlockingReleaseAssetClient stands in for GitHub. Binary fetches block
+// until their gate is closed; signature sidecars are answered at once.
+func newBlockingReleaseAssetClient(body string, gates map[string]chan struct{}, binaryFetches *atomic.Int32) *http.Client {
+	return &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		content := "signature"
+		if gate, ok := gates[req.URL.String()]; ok {
+			binaryFetches.Add(1)
+			<-gate
+			content = body
+		} else if !strings.HasSuffix(req.URL.Path, ".sig") && !strings.HasSuffix(req.URL.Path, ".sshsig") {
+			return nil, fmt.Errorf("unexpected request: %s", req.URL)
+		}
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Header:     make(http.Header),
+			Body:       io.NopCloser(strings.NewReader(content)),
+		}, nil
+	})}
+}
+
+func waitForProxiedReleaseAssets(t *testing.T, router *Router, done func(assets map[string]*proxiedReleaseAsset) bool) {
+	t.Helper()
+	deadline := time.Now().Add(10 * time.Second)
+	for {
+		router.proxiedReleaseAssets.mu.Lock()
+		ok := done(router.proxiedReleaseAssets.assets)
+		router.proxiedReleaseAssets.mu.Unlock()
+		if ok {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("proxied release assets did not reach the expected state")
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+}
+
+func TestProxiedReleaseAssetIsSharedByConcurrentDownloads(t *testing.T) {
+	const downloads = 12
+	assetURL := proxiedHelperAssetBase + "pulse-agent-helper-linux-amd64"
+	gates := map[string]chan struct{}{assetURL: make(chan struct{})}
+	var binaryFetches atomic.Int32
+
+	router, _ := setupUnifiedAgentRouter(t)
+	router.serverVersion = "v6.0.0-rc.1"
+	router.installScriptClient = newBlockingReleaseAssetClient("helper", gates, &binaryFetches)
+
+	responses := make([]*httptest.ResponseRecorder, downloads)
+	var wg sync.WaitGroup
+	for i := range responses {
+		responses[i] = httptest.NewRecorder()
+		wg.Add(1)
+		go func(response *httptest.ResponseRecorder) {
+			defer wg.Done()
+			router.handleDownloadAgentHelper(response, httptest.NewRequest(http.MethodGet, "/download/pulse-agent-helper?arch=linux-amd64", nil))
+		}(responses[i])
+	}
+	waitForProxiedReleaseAssets(t, router, func(assets map[string]*proxiedReleaseAsset) bool {
+		return assets[assetURL] != nil && assets[assetURL].refs == downloads
+	})
+	close(gates[assetURL])
+	wg.Wait()
+
+	if got := binaryFetches.Load(); got != 1 {
+		t.Fatalf("binary fetched %d times for %d concurrent downloads, want 1", got, downloads)
+	}
+	for i, response := range responses {
+		if response.Code != http.StatusOK || response.Body.String() != "helper" {
+			t.Fatalf("download %d: status = %d, body = %q", i, response.Code, response.Body.String())
+		}
+		if response.Header().Get(checksumHeaderName) == "" {
+			t.Fatalf("download %d: missing checksum header", i)
+		}
+	}
+	waitForProxiedReleaseAssets(t, router, func(assets map[string]*proxiedReleaseAsset) bool { return len(assets) == 0 })
+}
+
+func TestProxiedReleaseAssetsAreBoundedAcrossDistinctAssets(t *testing.T) {
+	previousWait := proxiedReleaseAssetSlotWait
+	t.Cleanup(func() { proxiedReleaseAssetSlotWait = previousWait })
+
+	helperAMD64 := proxiedHelperAssetBase + "pulse-agent-helper-linux-amd64"
+	runnerAMD64 := proxiedHelperAssetBase + "pulse-agent-runner-linux-amd64"
+	helperARM64 := proxiedHelperAssetBase + "pulse-agent-helper-linux-arm64"
+	gates := map[string]chan struct{}{
+		helperAMD64: make(chan struct{}),
+		runnerAMD64: make(chan struct{}),
+		helperARM64: make(chan struct{}),
+	}
+	close(gates[helperARM64])
+	var binaryFetches atomic.Int32
+
+	router, _ := setupUnifiedAgentRouter(t)
+	router.serverVersion = "v6.0.0-rc.1"
+	router.installScriptClient = newBlockingReleaseAssetClient("binary", gates, &binaryFetches)
+
+	held := []*httptest.ResponseRecorder{httptest.NewRecorder(), httptest.NewRecorder()}
+	var wg sync.WaitGroup
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+		router.handleDownloadAgentHelper(held[0], httptest.NewRequest(http.MethodGet, "/download/pulse-agent-helper?arch=linux-amd64", nil))
+	}()
+	go func() {
+		defer wg.Done()
+		router.handleDownloadAgentRunner(held[1], httptest.NewRequest(http.MethodGet, "/download/pulse-agent-runner?arch=linux-amd64", nil))
+	}()
+	waitForProxiedReleaseAssets(t, router, func(assets map[string]*proxiedReleaseAsset) bool {
+		return len(assets) == maxProxiedReleaseAssets
+	})
+
+	// A third asset is refused while both copies are in use...
+	proxiedReleaseAssetSlotWait = 20 * time.Millisecond
+	refused := httptest.NewRecorder()
+	router.handleDownloadAgentHelper(refused, httptest.NewRequest(http.MethodGet, "/download/pulse-agent-helper?arch=linux-arm64", nil))
+	if refused.Code != http.StatusServiceUnavailable || refused.Header().Get("Retry-After") == "" {
+		t.Fatalf("third asset: status = %d, Retry-After = %q", refused.Code, refused.Header().Get("Retry-After"))
+	}
+	if got := binaryFetches.Load(); got != maxProxiedReleaseAssets {
+		t.Fatalf("binary fetches = %d, want %d", got, maxProxiedReleaseAssets)
+	}
+
+	// ...and served as soon as one of them is released.
+	proxiedReleaseAssetSlotWait = time.Minute
+	waited := httptest.NewRecorder()
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		router.handleDownloadAgentHelper(waited, httptest.NewRequest(http.MethodGet, "/download/pulse-agent-helper?arch=linux-arm64", nil))
+	}()
+	close(gates[helperAMD64])
+	close(gates[runnerAMD64])
+	wg.Wait()
+
+	for i, response := range append(held, waited) {
+		if response.Code != http.StatusOK || response.Body.String() != "binary" {
+			t.Fatalf("download %d: status = %d, body = %q", i, response.Code, response.Body.String())
+		}
+	}
+}
+
+func TestProxiedReleaseAssetIsReleasedWhenClientNeverReads(t *testing.T) {
+	previousTimeout := proxiedReleaseAssetWriteTimeout
+	proxiedReleaseAssetWriteTimeout = 100 * time.Millisecond
+	t.Cleanup(func() { proxiedReleaseAssetWriteTimeout = previousTimeout })
+
+	assetURL := proxiedHelperAssetBase + "pulse-agent-helper-linux-amd64"
+	gates := map[string]chan struct{}{assetURL: make(chan struct{})}
+	close(gates[assetURL])
+	var binaryFetches atomic.Int32
+
+	router, _ := setupUnifiedAgentRouter(t)
+	router.serverVersion = "v6.0.0-rc.1"
+	// Larger than the loopback socket buffers, so the write cannot complete unread.
+	router.installScriptClient = newBlockingReleaseAssetClient(strings.Repeat("x", 32<<20), gates, &binaryFetches)
+
+	var serving atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		serving.Add(1)
+		defer serving.Add(-1)
+		router.handleDownloadAgentHelper(w, req)
+	}))
+	defer server.Close()
+
+	conn, err := net.Dial("tcp", server.Listener.Addr().String())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+	if _, err := io.WriteString(conn, "GET /download/pulse-agent-helper?arch=linux-amd64 HTTP/1.1\r\nHost: pulse\r\n\r\n"); err != nil {
+		t.Fatal(err)
+	}
+
+	deadline := time.Now().Add(10 * time.Second)
+	for binaryFetches.Load() == 0 || serving.Load() != 0 {
+		if time.Now().After(deadline) {
+			t.Fatal("response to a client that never reads was not abandoned")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	waitForProxiedReleaseAssets(t, router, func(assets map[string]*proxiedReleaseAsset) bool { return len(assets) == 0 })
 }

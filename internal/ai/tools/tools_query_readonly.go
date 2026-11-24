@@ -234,7 +234,7 @@ func isReadOnlyByConstruction(command string) bool {
 	}
 	// These programs only inspect data. Their options do not select write or
 	// execution modes. Other allowlisted programs require argument validation.
-	if wordIn(words[0], "cat head tail ls ll dir ps free du iostat vmstat mpstat grep locate which whereis whoami id groups echo printf uptime printenv locale netstat stat wc cut tr getent nproc lscpu lsmem lsblk lxc-ls lxc-info zcat zgrep bzcat xzcat md5sum sha256sum sha1sum test pgrep pidof pstree last who w lspci lsusb pveversion") {
+	if wordIn(words[0], "cat head tail ls ll dir ps free du iostat vmstat mpstat grep locate which whereis whoami id groups echo printf uptime printenv locale netstat stat wc cut tr getent nproc lxc-ls lxc-info zcat zgrep bzcat xzcat md5sum sha256sum sha1sum test pgrep pidof pstree last who w lspci lsusb pveversion") {
 		return true
 	}
 	if words[0] == "[" {
@@ -245,6 +245,15 @@ func isReadOnlyByConstruction(command string) bool {
 	}
 	args := words[1:]
 	switch words[0] {
+	case "lsblk":
+		// Not --sysroot: it reads device attributes from files below a
+		// directory named in the command, following links there, and prints
+		// them. The same goes for lscpu and lsmem -s/--sysroot.
+		return safeReadOptions(args, "-A -a -b -D -d -E= -e= -f -H -I= -i -J -l -M -m -N -n -O -o= -P -p -Q= -r -S -s -T? -t -v -w= -x= -y -z --noempty --all --bytes --discard --nodeps --dedup= --exclude= --fs --list-columns --include= --ascii --json --list --merge --perms --nvme --noheadings --output-all --output= --pairs --paths --filter= --highlight= --raw --scsi --inverse --tree? --topology --virtio --width= --sort= --shell --zoned -h -V --help --version", -1)
+	case "lscpu":
+		return safeReadOptions(args, "-a -B -b -C? -c -e? -J -p? -r -x -y --all --bytes --online --caches? --offline --extended? --hierarchic? --json --parse? --raw --hex --physical --output-all -h -V --help --version", 0)
+	case "lsmem":
+		return safeReadOptions(args, "-a -b -J -n -o= -P -r -S= --all --bytes --json --noheadings --output= --output-all --pairs --raw --split= --summary? -h -V --help --version", 0)
 	case "uname":
 		return safeReadOptions(args, "-a -s -n -r -v -m -p -i -o --all --kernel-name --nodename --kernel-release --kernel-version --machine --processor --hardware-platform --operating-system --help --version", 0)
 	case "ping", "ping6":
@@ -279,7 +288,7 @@ func isReadOnlyByConstruction(command string) bool {
 	case "fuser":
 		return safeReadOptions(args, "-a -c -f -m -M -n= -s -u -v -4 -6 --all --mount --ismountpoint --namespace= --silent --user --verbose --ipv4 --ipv6 --help --version", -1)
 	case "ss":
-		return safeReadOptions(args, "-4 -6 -0 -a -d -e -f= -F= -H -i -l -m -n -N= -o -p -r -s -t -u -w -x -A= -O -T -b --ipv4 --ipv6 --all --dccp --extended --family= --filter= --no-header --info --listening --memory --numeric --net= --options --processes --query= --resolve --summary --tcp --udp --raw --unix --oneline --threads --bpf --help --version", -1)
+		return safeReadOptions(args, ssOptions, -1)
 	case "ifconfig":
 		return safeReadOptions(args, "-a -s -v --help --version", 1)
 	case "route":
@@ -416,25 +425,56 @@ func lsofNamesHost(args []string) bool {
 	return false
 }
 
-// ssFilterNamesHost reports a dst or src filter whose address is a host name,
-// which ss resolves. ss splits quoted expressions itself, so every operand is
-// tokenised the same way.
+// ssOptions leaves out -F (--filter), which reads filter words from a file,
+// where ssFilterNamesHost cannot see them.
+const ssOptions = "-4 -6 -0 -a -d -e -f= -H -i -l -m -n -N= -o -p -r -s -t -u -w -x -A= -O -T -b --ipv4 --ipv6 --all --dccp --extended --family= --no-header --info --listening --memory --numeric --net= --options --processes --query= --resolve --summary --tcp --udp --raw --unix --oneline --threads --bpf --help --version"
+
+const ssStates = "all connected synchronized bucket big established syn-sent syn-recv syn-rcv fin-wait-1 fin-wait-2 time-wait unconnected close closed close-wait last-ack listening closing"
+
+// ssFilterNamesHost reports an ss filter with a host name, which ss resolves.
+// ss reads its filter one space-separated word at a time and, before it looks
+// at the grammar, takes every word that is not a keyword for an address and
+// resolves it when it is a name, so a name counts wherever it stands and not
+// only after dst or src. Besides keywords, address literals and port numbers,
+// only the value of a device, mark or cgroup comparison is accepted.
 func ssFilterNamesHost(args []string) bool {
-	var tokens []string
-	for _, arg := range args {
-		if strings.HasPrefix(arg, "-") {
-			continue
-		}
-		if strings.ContainsRune(arg, '\\') {
-			// ss decodes backslash escapes inside its filter expressions.
+	operands, ok := readOptionOperands(args, ssOptions, -1)
+	if !ok {
+		// Not an ss command the allowlist accepts.
+		return false
+	}
+	// ss takes leading socket state selections itself, before the filter.
+	for len(operands) > 1 && wordIn(operands[0], "state exclude excl") && wordIn(strings.ToLower(operands[1]), ssStates) {
+		operands = operands[2:]
+	}
+	value := false
+	for _, operand := range operands {
+		if strings.ContainsAny(operand, "\\\t\n\v\f\r") {
+			// ss decodes backslash escapes inside its filter expressions,
+			// and only spaces are known to separate its words.
 			return true
 		}
-		tokens = append(tokens, strings.Fields(strings.NewReplacer("(", " ", ")", " ").Replace(arg))...)
-	}
-	for i := 0; i < len(tokens); i++ {
-		if wordIn(strings.ToLower(tokens[i]), "dst src") {
-			if i+1 >= len(tokens) || !isLiteralNetworkHost(tokens[i+1]) {
-				return true
+		// ss splits quoted expressions itself, so every operand is
+		// tokenised the same way.
+		for _, word := range strings.Split(operand, " ") {
+			switch {
+			case word == "":
+			case wordIn(word, "dev fwmark cgroup"):
+				value = true
+			case wordIn(word, "dst src dport sport autobound"):
+				value = false
+			case wordIn(word, "! not & && and | || or ( ) >= ge geq <= le leq != ne neq = == eq > gt < lt"):
+			case value:
+				// The value of the comparison; the next word is not.
+				value = false
+			case isLiteralNetworkHost(word):
+			default:
+				// A port is ":22", ":ssh" or a number. ss releases differ
+				// on whether any other word after dport or sport is a
+				// service or a host.
+				if _, err := strconv.ParseUint(word, 10, 16); err != nil {
+					return true
+				}
 			}
 		}
 	}
@@ -452,9 +492,21 @@ func isLiteralNetworkHost(value string) bool {
 		}
 		host = host[1:end]
 	} else if strings.Count(host, ":") == 1 {
-		host, _, _ = strings.Cut(host, ":")
+		var port string
+		host, port, _ = strings.Cut(host, ":")
+		if strings.Contains(port, "/") {
+			// A prefix length stands before the port.
+			return false
+		}
 	}
-	host, _, _ = strings.Cut(host, "/")
+	if host, length, prefix := strings.Cut(host, "/"); prefix {
+		// Anything but an address with a length or netmask is not a prefix,
+		// and the whole word goes to the resolver.
+		if _, err := strconv.Atoi(length); err != nil && net.ParseIP(length) == nil {
+			return false
+		}
+		return net.ParseIP(host) != nil
+	}
 	return host == "" || host == "*" || net.ParseIP(host) != nil
 }
 

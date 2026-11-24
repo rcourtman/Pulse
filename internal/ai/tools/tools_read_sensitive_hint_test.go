@@ -112,3 +112,45 @@ func TestApprovalRefusalNamesASingleCommand(t *testing.T) {
 	assert.Contains(t, text, "command execution failed: agent disconnected")
 	assert.NotContains(t, text, "APPROVAL_REQUIRED")
 }
+
+// df of a path that is not visibly a directory or a disk needs approval,
+// because df opens it. The refusal names the forms that run, and they pass
+// the same three gates.
+func TestDiskFreeRefusalNamesAFormThatWorks(t *testing.T) {
+	t.Setenv("PULSE_STRICT_RESOLUTION", "false")
+	policy := agentexec.DefaultPolicy()
+	for _, command := range []string{"df /dev/watchdog", "df -h /var/lib/docker", "df -h /tmp/link"} {
+		require.Equal(t, agentexec.PolicyRequireApproval, policy.Evaluate(command), command)
+
+		agentSrv := &mockAgentServer{}
+		agentSrv.On("GetConnectedAgents").Return([]agentexec.ConnectedAgent{{AgentID: "agent1", Hostname: "docker01", Platform: "linux"}})
+		agentSrv.On("ExecuteCommand", mock.Anything, "agent1", mock.Anything).Return((*agentexec.CommandResultPayload)(nil), agentexec.ErrCommandRequiresApproval)
+		exec := NewPulseToolExecutor(ExecutorConfig{AgentServer: agentSrv})
+		result, err := exec.executeReadExec(context.Background(), map[string]interface{}{
+			"command":     command,
+			"target_host": "docker01",
+		})
+		require.NoError(t, err)
+		require.NotEmpty(t, result.Content)
+		text := result.Content[0].Text
+		assert.Contains(t, text, "APPROVAL_REQUIRED", command)
+		assert.Contains(t, text, "trailing slash", command)
+	}
+
+	forms := regexp.MustCompile("`([^`]+)`").FindAllStringSubmatch(DiskFreePathHint, -1)
+	require.Len(t, forms, 2)
+	for _, form := range forms {
+		for _, dir := range []string{"", "/var/lib/docker", "/mnt/nvr/frigate"} {
+			command := strings.ReplaceAll(form[1], "<directory>", dir)
+			if sensitive, reason := safety.CommandTouchesSensitivePath(command); sensitive {
+				t.Fatalf("%q is refused as sensitive: %s", command, reason)
+			}
+			if intent := ClassifyExecutionIntent(command); intent.Intent == IntentWriteOrUnknown {
+				t.Fatalf("%q is refused as not read-only: %s", command, intent.Reason)
+			}
+			if !policy.IsAutoApproved(command) {
+				t.Fatalf("%q needs approval under the agent's command policy (%s)", command, policy.Evaluate(command))
+			}
+		}
+	}
+}

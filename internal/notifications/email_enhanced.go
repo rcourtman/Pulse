@@ -712,8 +712,23 @@ func (e *EnhancedEmailManager) usesImplicitTLS() bool {
 	return e.config.TLS || e.config.SMTPPort == 465
 }
 
+// smtpServerAddress is the address every SMTP connection dials. A blank server
+// is refused rather than joined with the port: net.Dial reads ":25" as this
+// machine, so an unset server would reach whatever listens on the Pulse
+// server's own loopback, which the tenant outbound policy keeps from
+// organization administrators.
+func (e *EnhancedEmailManager) smtpServerAddress() (string, error) {
+	if strings.TrimSpace(e.config.SMTPHost) == "" {
+		return "", FailfWithClass(NotificationFailureConfiguration, "configure an SMTP server in email notification settings")
+	}
+	return net.JoinHostPort(e.config.SMTPHost, strconv.Itoa(e.config.SMTPPort)), nil
+}
+
 func (e *EnhancedEmailManager) sendViaProviderWithAddresses(msg []byte, addresses resolvedEmailAddresses) error {
-	addr := net.JoinHostPort(e.config.SMTPHost, strconv.Itoa(e.config.SMTPPort))
+	addr, err := e.smtpServerAddress()
+	if err != nil {
+		return err
+	}
 
 	// Provider-specific usernames are resolved in negotiateAuth without
 	// mutating the shared config struct.
@@ -868,11 +883,13 @@ func (e *EnhancedEmailManager) sendStartTLS(addr string, msg []byte, addresses r
 
 // TestConnection tests the email server connection
 func (e *EnhancedEmailManager) TestConnection() error {
-	addr := net.JoinHostPort(e.config.SMTPHost, strconv.Itoa(e.config.SMTPPort))
+	addr, err := e.smtpServerAddress()
+	if err != nil {
+		return err
+	}
 
 	// Try to connect
 	var conn net.Conn
-	var err error
 
 	if e.usesImplicitTLS() {
 		tlsConfig := &tls.Config{

@@ -794,17 +794,22 @@ func (c *Client) handleData(connCtx context.Context, frame Frame, sendCh chan<- 
 		return
 	}
 
-	payload := frame.Payload
+	// Fail closed: requests are only served inside a channel that completed
+	// KEY_EXCHANGE. Plaintext DATA would let the relay issue requests with the
+	// channel's API token and read the responses.
+	if enc == nil {
+		c.logger.Warn().Uint32("channel", channelID).Msg("rejecting DATA: key exchange not completed")
+		c.closeAndRemoveChannel(channelID, "key exchange required", sendCh)
+		return
+	}
+
 	// Preserve relay frame arrival order through decryption. The channel nonce
 	// guard is strictly monotonic; decrypting in background goroutines lets
 	// later frames win the race and falsely trip replay protection.
-	if enc != nil {
-		decrypted, err := enc.Decrypt(payload)
-		if err != nil {
-			c.logger.Warn().Err(err).Uint32("channel", channelID).Msg("failed to decrypt DATA payload")
-			return
-		}
-		payload = decrypted
+	payload, err := enc.Decrypt(frame.Payload)
+	if err != nil {
+		c.logger.Warn().Err(err).Uint32("channel", channelID).Msg("failed to decrypt DATA payload")
+		return
 	}
 
 	if requestLimiter != nil && !requestLimiter.Allow(time.Now()) {
@@ -835,15 +840,12 @@ func (c *Client) handleData(connCtx context.Context, frame Frame, sendCh chan<- 
 		defer cancel()
 
 		err := c.proxy.HandleStreamRequest(ctx, payload, apiToken, func(respPayload []byte) {
-			if enc != nil {
-				encrypted, err := enc.Encrypt(respPayload)
-				if err != nil {
-					c.logger.Warn().Err(err).Uint32("channel", channelID).Msg("failed to encrypt DATA response")
-					return
-				}
-				respPayload = encrypted
+			encrypted, err := enc.Encrypt(respPayload)
+			if err != nil {
+				c.logger.Warn().Err(err).Uint32("channel", channelID).Msg("failed to encrypt DATA response")
+				return
 			}
-			respFrame := NewFrame(FrameData, channelID, respPayload)
+			respFrame := NewFrame(FrameData, channelID, encrypted)
 			queueFrame(sendCh, respFrame, c.logger)
 		})
 		if err != nil && connCtx.Err() == nil {
@@ -906,10 +908,20 @@ func (c *Client) handleKeyExchange(frame Frame, sendCh chan<- []byte) {
 
 	c.mu.RLock()
 	state, ok := c.channels[channelID]
+	encrypted := ok && state.encryption != nil
 	c.mu.RUnlock()
 
 	if !ok {
 		c.logger.Warn().Uint32("channel", channelID).Msg("KEY_EXCHANGE for unknown channel")
+		return
+	}
+
+	// Fail closed: channel keys are fixed once established. A second
+	// KEY_EXCHANGE would let the relay swap in keys of its own while the
+	// channel keeps its authenticated API token.
+	if encrypted {
+		c.logger.Warn().Uint32("channel", channelID).Msg("rejecting KEY_EXCHANGE: channel already encrypted")
+		c.closeAndRemoveChannel(channelID, "key exchange already completed", sendCh)
 		return
 	}
 

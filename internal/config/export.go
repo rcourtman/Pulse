@@ -138,8 +138,37 @@ func (c *ConfigPersistence) ExportConfig(passphrase string) (string, error) {
 	return base64.StdEncoding.EncodeToString(encrypted), nil
 }
 
+// ImportOptions narrows what an import replaces and validates decoded archives
+// before staging.
+type ImportOptions struct {
+	// KeepAccessCredentials leaves the destination's API token inventory and
+	// SSO configuration as saved instead of replacing them from the archive.
+	// Restoring either section issues every credential in the file, so it is
+	// set for a caller that could not have issued those credentials directly.
+	KeepAccessCredentials bool
+
+	// Validate sees the decoded archive before anything is staged and before
+	// the import takes the persistence lock, so it may read saved configuration.
+	// When it returns an error that error is returned as it is and no persisted
+	// file changes.
+	Validate func(*ExportData) error
+}
+
 // ImportConfig imports configuration from encrypted export
 func (c *ConfigPersistence) ImportConfig(encryptedData string, passphrase string) error {
+	return c.ImportConfigWithOptions(encryptedData, passphrase, ImportOptions{})
+}
+
+// ImportConfigWithCheck is ImportConfig for a caller that must hold the
+// archive's content to limits of its own before staging.
+func (c *ConfigPersistence) ImportConfigWithCheck(encryptedData string, passphrase string, check func(*ExportData) error) error {
+	return c.ImportConfigWithOptions(encryptedData, passphrase, ImportOptions{Validate: check})
+}
+
+// ImportConfigWithOptions imports configuration from encrypted export, running
+// any pre-stage validation and leaving the sections opts excludes untouched
+// within the same import transaction.
+func (c *ConfigPersistence) ImportConfigWithOptions(encryptedData string, passphrase string, opts ImportOptions) error {
 	if passphrase == "" {
 		return fmt.Errorf("passphrase is required for import")
 	}
@@ -169,6 +198,11 @@ func (c *ConfigPersistence) ImportConfig(encryptedData string, passphrase string
 	}
 	if err := notifications.ValidateWebhookInventory(exportData.Webhooks); err != nil {
 		return fmt.Errorf("invalid imported webhook inventory: %w", err)
+	}
+	if opts.Validate != nil {
+		if err := opts.Validate(&exportData); err != nil {
+			return err
+		}
 	}
 
 	// Check version compatibility (warn but don't fail)
@@ -246,7 +280,7 @@ func (c *ConfigPersistence) ImportConfig(encryptedData string, passphrase string
 	}
 
 	// Import API tokens for export versions that include them.
-	if exportData.Version != "4.0" {
+	if exportData.Version != "4.0" && !opts.KeepAccessCredentials {
 		if exportData.APITokens == nil {
 			exportData.APITokens = []APITokenRecord{}
 		}
@@ -256,13 +290,15 @@ func (c *ConfigPersistence) ImportConfig(encryptedData string, passphrase string
 	}
 
 	// Import SSO configuration
-	if exportData.SSO != nil {
-		if err := writer.SaveSSOConfig(exportData.SSO); err != nil {
-			return fmt.Errorf("failed to import sso configuration: %w", err)
-		}
-	} else {
-		if err := writer.SaveSSOConfig(NewSSOConfig()); err != nil {
-			return fmt.Errorf("failed to reset sso configuration: %w", err)
+	if !opts.KeepAccessCredentials {
+		if exportData.SSO != nil {
+			if err := writer.SaveSSOConfig(exportData.SSO); err != nil {
+				return fmt.Errorf("failed to import sso configuration: %w", err)
+			}
+		} else {
+			if err := writer.SaveSSOConfig(NewSSOConfig()); err != nil {
+				return fmt.Errorf("failed to reset sso configuration: %w", err)
+			}
 		}
 	}
 

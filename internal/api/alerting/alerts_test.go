@@ -1170,6 +1170,52 @@ func TestBulkClearAlerts(t *testing.T) {
 	assert.Equal(t, 200, w.Code)
 }
 
+// The 1MB body limit does not bound a bulk request's cost: every identifier
+// costs a lookup and a result entry however short it is, so the count is
+// bounded before any of that work and a miss is not echoed a second time.
+func TestBulkAlertHandlersBoundIdentifierCount(t *testing.T) {
+	bodyOf := func(count int) string {
+		return `{"alertIdentifiers":["a"` + strings.Repeat(`,"a"`, count-1) + `]}`
+	}
+
+	handlers := map[string]func(*AlertHandlers, http.ResponseWriter, *http.Request){
+		"/api/alerts/bulk/acknowledge": (*AlertHandlers).BulkAcknowledgeAlerts,
+		"/api/alerts/bulk/clear":       (*AlertHandlers).BulkClearAlerts,
+	}
+	for path, handle := range handlers {
+		t.Run(path, func(t *testing.T) {
+			mockMonitor := new(MockAlertMonitor)
+			mockManager := new(MockAlertManager)
+			mockMonitor.On("GetAlertManager").Return(mockManager)
+			mockManager.On("AcknowledgeAlert", "a", testifymock.Anything).Return(fmt.Errorf("%w: %s", alerts.ErrAlertNotFound, "a"))
+			mockManager.On("ClearAlert", "a").Return(false)
+			h := NewAlertHandlers(nil, mockMonitor, nil)
+
+			over := httptest.NewRecorder()
+			handle(h, over, httptest.NewRequest("POST", path, strings.NewReader(bodyOf(maxBulkAlertIdentifiers+1))))
+			assert.Equal(t, http.StatusBadRequest, over.Code)
+			assert.Contains(t, over.Body.String(), "Too many alert identifiers")
+			mockManager.AssertNotCalled(t, "AcknowledgeAlert", testifymock.Anything, testifymock.Anything)
+			mockManager.AssertNotCalled(t, "ClearAlert", testifymock.Anything)
+
+			atLimit := httptest.NewRecorder()
+			handle(h, atLimit, httptest.NewRequest("POST", path, strings.NewReader(bodyOf(maxBulkAlertIdentifiers))))
+			assert.Equal(t, http.StatusOK, atLimit.Code)
+			var resp struct {
+				Results []map[string]interface{} `json:"results"`
+			}
+			assert.NoError(t, json.NewDecoder(atLimit.Body).Decode(&resp))
+			if assert.Len(t, resp.Results, maxBulkAlertIdentifiers) {
+				assert.Equal(t, map[string]interface{}{
+					"alertIdentifier": "a",
+					"success":         false,
+					"error":           "alert not found",
+				}, resp.Results[0])
+			}
+		})
+	}
+}
+
 func TestAcknowledgeAlertByBody_Success(t *testing.T) {
 	mockMonitor := new(MockAlertMonitor)
 	mockManager := new(MockAlertManager)
@@ -1322,6 +1368,20 @@ func TestAlertHandlers_ErrorCases(t *testing.T) {
 		w := httptest.NewRecorder()
 		h.AcknowledgeAlertByBody(w, req)
 		assert.Equal(t, 400, w.Code)
+	})
+
+	t.Run("ByBody_OversizedBody", func(t *testing.T) {
+		body := `{"alertIdentifier": "a1", "padding": "` + strings.Repeat("a", 16<<10) + `"}`
+		for path, handler := range map[string]http.HandlerFunc{
+			"/api/alerts/acknowledge":   h.AcknowledgeAlertByBody,
+			"/api/alerts/unacknowledge": h.UnacknowledgeAlertByBody,
+			"/api/alerts/clear":         h.ClearAlertByBody,
+		} {
+			req := httptest.NewRequest("POST", path, strings.NewReader(body))
+			w := httptest.NewRecorder()
+			handler(w, req)
+			assert.Equal(t, 400, w.Code, path)
+		}
 	})
 
 	t.Run("AcknowledgeAlertByBody_MissingID", func(t *testing.T) {

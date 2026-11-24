@@ -119,7 +119,7 @@ func TestAgentActionDisclosureAcrossProducersAndScopes(t *testing.T) {
 				broadcaster := NewAgentEventBroadcaster()
 				events, unsubscribe := broadcaster.Subscribe()
 				defer unsubscribe()
-				broadcaster.PublishActionCompletedRecord(record)
+				broadcaster.PublishActionCompletedRecord("default", record)
 				for _, event := range []AgentEvent{
 					{Kind: AgentEventActionCompleted, Payload: payload},
 					{Kind: AgentEventActionCompleted, Payload: &payload},
@@ -279,7 +279,7 @@ func TestAgentActionDisclosureConcurrentSSESubscribers(t *testing.T) {
 		t.Fatal("both streams must subscribe before publish")
 	}
 	record := agentDisclosureRecord(t, false)
-	b.PublishActionCompletedRecord(record)
+	b.PublishActionCompletedRecord("default", record)
 	var wg sync.WaitGroup
 	for _, client := range clients {
 		wg.Add(1)
