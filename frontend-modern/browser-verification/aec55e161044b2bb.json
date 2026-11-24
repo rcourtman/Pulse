@@ -1,0 +1,31 @@
+{
+  "version": 1,
+  "base_sha": "301a006dad035ee954788130691d21f3a5572a61",
+  "verified_at": "2026-11-23T23:04:41Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/AppLayout.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/AppLayout.tsx": "09aa1538651876100708592414b4782ad471dae7e641636e2e2f5c38ac4b4455"
+  },
+  "routes": [
+    "/alerts/overview"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Desktop 1440x900 and mobile 390x844 /alerts/overview header Search button uses sr-only/not-sr-only Search text without overriding aria-label so axe-core WCAG 2.5.3 label-content-name-mismatch passes with zero violations"
+  ],
+  "interactions": [
+    "Ran @axe-core/playwright WCAG 2.0/2.1 A and AA scan on /alerts/overview at 1440x900 and 390x844 with zero label-content-name-mismatch or button-name violations, clicked header Search trigger to open command palette and closed with Escape"
+  ]
+}

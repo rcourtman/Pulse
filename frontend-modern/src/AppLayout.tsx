@@ -804,12 +804,11 @@ export function AppLayout(props: AppLayoutProps) {
                 type="button"
                 onClick={() => props.onOpenCommandPalette?.()}
                 class="inline-flex h-9 items-center gap-1.5 rounded-md border border-border bg-surface px-2 text-xs font-medium text-muted shadow-xs transition-colors hover:bg-surface-hover hover:text-base-content focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 sm:px-2.5"
-                aria-label="Search commands"
                 title="Search commands (Cmd+K / Ctrl+K)"
                 data-testid="command-palette-trigger"
               >
                 <SearchIcon class="h-4 w-4 shrink-0" aria-hidden="true" />
-                <span class="hidden sm:inline">Search</span>
+                <span class="sr-only sm:not-sr-only">Search</span>
                 <kbd
                   aria-hidden="true"
                   class="hidden rounded-sm border border-border bg-page px-1.5 py-0.5 font-sans text-[10px] font-medium text-muted md:inline-block"
