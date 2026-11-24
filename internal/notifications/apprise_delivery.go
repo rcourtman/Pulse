@@ -212,7 +212,8 @@ func (n *NotificationManager) sendAppriseViaCLI(cfg AppriseConfig, title, body s
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(cfg.TimeoutSeconds)*time.Second)
 	defer cancel()
 
-	args := []string{"-t", title, "-b", body}
+	// Without -b the CLI reads the body from standard input.
+	args := []string{"-t", appriseCLITitle(title)}
 	args = append(args, cfg.Targets...)
 
 	execFn := n.appriseExec
@@ -220,7 +221,7 @@ func (n *NotificationManager) sendAppriseViaCLI(cfg AppriseConfig, title, body s
 		execFn = defaultAppriseExec
 	}
 
-	outputBytes, err := execFn(ctx, args)
+	outputBytes, err := execFn(ctx, args, appriseCLIBody(body))
 	if err != nil {
 		if outputBytes > 0 {
 			log.Debug().

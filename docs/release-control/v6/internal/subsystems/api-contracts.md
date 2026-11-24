@@ -14960,6 +14960,12 @@ comes from `isProviderHostedRuntimeFromLicensing` in
 `internal/api/licensing_bridge.go`, so the policy file imports no licensing
 package. Proof: `internal/api/tenant_outbound_policy_test.go`.
 
+A blank email SMTP server is not a destination for that check.
+`POST /api/notifications/test` answers 400 for one, with supplied or saved
+settings, and connects nowhere: notification delivery refuses a blank server
+before dialing, since `net.Dial` reads an address without a host as this
+machine (`internal/notifications/email_enhanced.go`).
+
 ### SAML login POST admission (16 November 2026)
 
 `POST /api/saml/{providerID}/login` validates the whole optional JSON body
@@ -15152,3 +15158,18 @@ port `53`) on `/api/availability-targets` and `/api/availability-targets/test`.
 Verified by `internal/api/availability_handlers_test.go`,
 `AvailabilityTargetSlot.test.tsx`, `docsLinks.test.ts`, and
 `frontend-modern/browser-verification/d920ff2aaa7c5c9c.json`.
+
+### Saved notification credentials are bound to their destination
+
+`PUT /api/notifications/email`, `PUT /api/notifications/apprise`,
+`PUT /api/notifications/webhooks/:id`, `POST /api/notifications/test` and
+`POST /api/notifications/webhooks/test` still read a blank SMTP password, a
+blank Apprise API key and a masked webhook header or custom-field value as
+"keep the saved value". They now answer 400 with a plain-text reason when the
+same request names another SMTP host or port, drops SMTP encryption, names
+another Apprise or webhook HTTP origin, or turns off the Apprise certificate
+check. The caller must send the value again. Nothing is saved or sent on
+refusal. An email request with a blank server and a blank password is accepted
+as before but is saved or tested without the saved password. Requests that keep
+the destination, or that carry the value, are unchanged, and no payload field
+is added. Proof: `internal/api/alerting/saved_credential_destination_test.go`.

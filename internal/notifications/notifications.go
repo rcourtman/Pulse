@@ -266,7 +266,7 @@ type webhookRequestOptions struct {
 // It exists so tests can disable or inline async behavior without relying on sleeps.
 var spawnAsync = func(f func()) { go f() }
 
-type appriseExecFunc func(ctx context.Context, args []string) (int64, error)
+type appriseExecFunc func(ctx context.Context, args []string, body string) (int64, error)
 
 // NewNotificationManager creates a new notification manager using the global data directory.
 // For multi-tenant deployments, use NewNotificationManagerWithDataDir instead.
@@ -1125,7 +1125,7 @@ func (n *NotificationManager) SendTestNotificationWithConfig(method string, conf
 			return fmt.Errorf("email notifications are not enabled in the provided configuration")
 		}
 
-		if config.SMTPHost == "" || config.From == "" {
+		if strings.TrimSpace(config.SMTPHost) == "" || config.From == "" {
 			return fmt.Errorf("email configuration is incomplete: SMTP host and from address are required")
 		}
 

@@ -2077,6 +2077,15 @@ metadata address (or, on Pulse Cloud, a private address). The check is
 `internal/api/alerting/notifications.go`. Webhook and Apprise API targets keep
 their existing outbound validation.
 
+A blank SMTP server names no destination for that check, so unset and disabled
+settings still save, and delivery refuses it instead: `net.Dial` reads an
+address without a host as this machine.
+`EnhancedEmailManager.smtpServerAddress` in
+`internal/notifications/email_enhanced.go` returns a configuration failure
+before any dial, for tests with supplied settings, tests of saved settings and
+alert delivery alike. `TestEmailBlankServerIsNeverDialed` and
+`TestTenantAdministratorCannotReachLoopbackThroughBlankSMTPServer` pin this.
+
 ### Alert-delivery rehearsal (16 November 2026)
 
 `StartDeliveryRehearsal` admits an identified, labelled notification producer
@@ -2242,3 +2251,24 @@ continuity across edits.
 `internal/api/alerting/email_branding_test.go` verify default compatibility,
 custom single/grouped/resolved rendering, CRLF and HTML-escaping sanitization,
 rune bounds, destination continuity stability, and API presence/clear semantics.
+
+### Saved destination credentials stay with their destination
+
+A blank SMTP password, a blank Apprise API key and a masked webhook header or
+custom-field value mean "keep the saved value" on both update and Test. The
+saved value is kept only for the destination it was entered for: the same SMTP
+host and port without losing TLS/STARTTLS, the same Apprise server origin
+without turning off its certificate check, or the same webhook URL or HTTP
+origin (scheme, host and port, with templated origins matching only themselves).
+Any other request fails with HTTP 400 before a save, live mutation or send and
+asks for the value again, so a caller who cannot read a credential cannot have
+it delivered to a server of their choice. An email config that names no server
+restores no password, because the mailer dials a blank host as this machine.
+An Apprise config that names no server keeps the key, which is sent nowhere
+without a server URL. The policy lives in
+`internal/notifications/saved_credential_destination.go`.
+`TestSavedSMTPPasswordStaysWithItsServer`,
+`TestSavedAppriseAPIKeyStaysWithItsServer` and
+`TestSavedWebhookValuesStayWithTheirAddress` in
+`internal/api/alerting/saved_credential_destination_test.go` pin update and
+Test for each destination.

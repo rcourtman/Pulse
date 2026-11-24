@@ -305,7 +305,7 @@ func withNtfyAlertHeaders(webhook WebhookConfig, alertList []*alerts.Alert) Webh
 	}
 
 	webhook.Headers["Content-Type"] = "text/plain"
-	webhook.Headers["Title"] = fmt.Sprintf("%s: %s", levelLabel, titleSubject)
+	webhook.Headers["Title"] = webhookHeaderValue(fmt.Sprintf("%s: %s", levelLabel, titleSubject))
 	webhook.Headers["Priority"] = priority
 	webhook.Headers["Tags"] = fmt.Sprintf("%s,pulse,%s", severityTag, typeTag)
 	return webhook
@@ -550,7 +550,7 @@ func (n *NotificationManager) sendResolvedWebhookNtfy(webhook WebhookConfig, ale
 	}
 
 	req.Header.Set("Content-Type", "text/plain")
-	req.Header.Set("Title", title)
+	req.Header.Set("Title", webhookHeaderValue(title))
 	req.Header.Set("Priority", "default")
 	req.Header.Set("Tags", tags)
 	req.Header.Set("User-Agent", "Pulse-Monitoring/2.0")
@@ -862,13 +862,43 @@ func isEmptyInterface(value interface{}) bool {
 // actual wire payload, without changing empty-secret (unsigned) behavior.
 func setWebhookIntegrityHeaders(req *http.Request, secret, eventID string, payload []byte) {
 	if eventID != "" {
-		req.Header.Set("X-Pulse-Event-ID", eventID)
+		req.Header.Set("X-Pulse-Event-ID", webhookHeaderValue(eventID))
 	}
 	if secret = strings.TrimSpace(secret); secret != "" {
 		timestamp := strconv.FormatInt(time.Now().Unix(), 10)
 		req.Header.Set("X-Pulse-Timestamp", timestamp)
 		req.Header.Set("X-Pulse-Signature", "v1="+signWebhookPayload(secret, timestamp, payload))
 	}
+}
+
+// maxWebhookHeaderValueBytes caps alert-derived header values so an oversized
+// agent-reported identifier cannot exceed HTTP receiver header line limits.
+const maxWebhookHeaderValueBytes = 2048
+
+// webhookHeaderValue makes a value built from alert data safe to send as a
+// request header. Alert IDs and resource names carry identifiers reported by
+// agents and monitored systems, and net/http refuses a whole request when a
+// header value holds a control byte other than tab, so one such alert would
+// dead-letter every alert grouped with it. Those bytes are percent-encoded,
+// which stays stable across retries, and oversized values are deterministically
+// shortened with a SHA-256 suffix.
+func webhookHeaderValue(value string) string {
+	var safe strings.Builder
+	for i := 0; i < len(value); i++ {
+		if c := value[i]; (c < 0x20 && c != '\t') || c == 0x7f {
+			fmt.Fprintf(&safe, "%%%02X", c)
+		} else {
+			safe.WriteByte(c)
+		}
+	}
+	encoded := safe.String()
+	if len(encoded) <= maxWebhookHeaderValueBytes {
+		return encoded
+	}
+	sum := sha256.Sum256([]byte(encoded))
+	suffix := ":" + hex.EncodeToString(sum[:8])
+	prefixLen := maxWebhookHeaderValueBytes - len(suffix)
+	return strings.ToValidUTF8(encoded[:prefixLen], "") + suffix
 }
 
 // signWebhookPayload computes the hex HMAC-SHA256 of "timestamp.body" with

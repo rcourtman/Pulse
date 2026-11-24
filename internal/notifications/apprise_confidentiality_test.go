@@ -82,12 +82,12 @@ func TestAppriseCLIConfidentiality(t *testing.T) {
 				targets := []string{"tgram://" + appriseSecret + "/-1001234567890:42", "future-provider://user:" + appriseSecret + "@fixture/path"}
 				cause := errors.New("provider-private-content " + appriseSecret)
 				calls := 0
-				n := &NotificationManager{appriseExec: func(_ context.Context, args []string) (int64, error) {
+				n := &NotificationManager{appriseExec: func(_ context.Context, args []string, body string) (int64, error) {
 					calls++
-					if len(args) != 4+len(targets) || args[0] != "-t" || args[2] != "-b" || !slices.Equal(args[4:], targets) {
+					if len(args) != 2+len(targets) || args[0] != "-t" || !slices.Equal(args[2:], targets) {
 						t.Error("CLI payload or exact target arguments changed")
 					}
-					if kind != "test" && !strings.Contains(args[3], "private-alert-body") {
+					if kind != "test" && !strings.Contains(body, "private-alert-body") {
 						t.Error("alert content was removed from delivery, not just diagnostics")
 					}
 					if failing {

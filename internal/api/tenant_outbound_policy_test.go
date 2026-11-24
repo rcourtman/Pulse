@@ -157,3 +157,31 @@ func TestRequireOrgAdminAttachesTenantOutboundPolicyOnlyToTenantCallers(t *testi
 		}
 	}
 }
+
+// A blank SMTP server names no destination for the tenant outbound policy to
+// judge, and a dialer handed ":port" connects to this machine. Neither a test
+// with a blank server nor settings saved with one may reach the loopback.
+func TestTenantAdministratorCannotReachLoopbackThroughBlankSMTPServer(t *testing.T) {
+	router := notificationAuthorityRouter(t)
+	port, accepted := loopbackListener(t)
+
+	for _, server := range []string{"", " ", "\t"} {
+		settings := fmt.Sprintf(`{"enabled":true,"server":%q,"port":%d,"from":"a@example.com","to":["b@example.com"]}`, server, port)
+		rec := notificationAuthorityRequest(t, router, http.MethodPost, "/api/notifications/test",
+			`{"method":"email","config":`+settings+`}`, "org-a-owner", "org-a")
+		if rec.Code == http.StatusOK {
+			t.Fatalf("test mail through SMTP server %q = %d, want a refusal: %s", server, rec.Code, rec.Body.String())
+		}
+		notificationAuthorityRequest(t, router, http.MethodPut, "/api/notifications/email", settings, "org-a-owner", "org-a")
+		rec = notificationAuthorityRequest(t, router, http.MethodPost, "/api/notifications/test",
+			`{"method":"email"}`, "org-a-owner", "org-a")
+		if rec.Code == http.StatusOK {
+			t.Fatalf("test mail through saved SMTP server %q = %d, want a refusal: %s", server, rec.Code, rec.Body.String())
+		}
+	}
+	// Give any stray dial a moment to land before asserting none did.
+	time.Sleep(50 * time.Millisecond)
+	if got := accepted.Load(); got != 0 {
+		t.Fatalf("blank SMTP server reached the loopback listener %d times", got)
+	}
+}
