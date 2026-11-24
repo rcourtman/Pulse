@@ -15044,7 +15044,7 @@ func TestContract_TenantResourcesDoNotFallbackToRawSnapshotSeeding(t *testing.T)
 		t.Fatalf("status = %d, body=%s", rec.Code, rec.Body.String())
 	}
 
-	const want = `{"data":[],"meta":{"page":1,"limit":50,"total":0,"totalPages":0},"aggregations":{"total":0,"byType":{},"byStatus":{},"bySource":{},"policyPosture":{"totalResources":0,"sensitivityCounts":{},"routingCounts":{},"redactionCounts":{}},"platformAdmission":{"proxmox":false,"docker":false,"kubernetes":false,"truenas":false,"vmware":false,"standalone":false}},"facets":{"byType":{},"incidentCount":0}}`
+	const want = `{"data":[],"meta":{"page":1,"limit":50,"total":0,"totalPages":0},"aggregations":{"total":0,"byType":{},"byStatus":{},"bySource":{},"policyPosture":{"totalResources":0,"sensitivityCounts":{},"routingCounts":{},"redactionCounts":{}},"platformAdmission":{"proxmox":false,"docker":false,"kubernetes":false,"truenas":false,"vmware":false,"standalone":false,"availability":false}},"facets":{"byType":{},"incidentCount":0}}`
 	if got := strings.TrimSpace(rec.Body.String()); got != want {
 		t.Fatalf("tenant resource fallback contract = %s, want %s", got, want)
 	}

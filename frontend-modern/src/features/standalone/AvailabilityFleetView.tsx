@@ -351,7 +351,8 @@ export const AvailabilityFleetView: Component<{
   probeAgentOptions?: readonly ProbeAgentOption[];
   onRetryHistory?: () => void;
   getFocusFallback?: () => HTMLElement | undefined;
-  actions?: JSX.Element;
+  headerActions?: JSX.Element;
+  renderDetailActions?: (resource: Resource) => JSX.Element;
 }> = (props) => {
   const now = useRelativeTimeNow();
   const range = () => props.historyRange ?? '24h';
@@ -418,7 +419,7 @@ export const AvailabilityFleetView: Component<{
               />
             )}
           </Show>
-          {props.actions}
+          {props.headerActions}
           <Show when={props.historyError}>
             <div class="flex items-center gap-2 text-rose-700 dark:text-rose-300">
               <span>History unavailable. Current health is unchanged.</span>
@@ -575,6 +576,7 @@ export const AvailabilityFleetView: Component<{
                       statusIndicator={indicator()}
                       presentation="table-row"
                       resolveResourceLabel={resolveResourceLabel}
+                      headerActions={props.renderDetailActions?.(resource)}
                       onClose={() => closeResource(tile)}
                     />
                   </div>

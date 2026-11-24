@@ -10665,3 +10665,17 @@ hypervisor, parent host, vCPU, and RAM facts in the VM drawer.
 targets, record types, transports, and expected answers for unified availability
 check rows and drawers. Verified by `AvailabilityTargetSlot.test.tsx` and
 `frontend-modern/browser-verification/d920ff2aaa7c5c9c.json`.
+
+### Top-level Availability page and inline management (24 November 2026)
+
+`internal/unifiedresources/platform_admission.go` adds `PlatformAdmission.Availability`,
+allowing Availability to mount as a primary top-level platform page at
+`/availability` (`pages/Availability.tsx`, `AvailabilityPageSurface.tsx`) with
+inline Add, Edit, Test, and Pause/Resume management powered by
+`AvailabilityTargetSlot` and `localStorage`-persisted Table/Fleet presentation.
+`StandalonePageSurface.tsx` redirects legacy `/standalone/availability` visits
+to `/availability` without polluting Machines tab route memory in
+`AppLayout.tsx`. Verified by `platform_admission_test.go`, `contract_test.go`,
+`AvailabilityPageSurface.test.tsx`, `AvailabilityChecksTable.test.tsx`,
+`StandalonePageSurface.test.tsx`, and
+`frontend-modern/browser-verification/754f0ac3ac252718.json`.

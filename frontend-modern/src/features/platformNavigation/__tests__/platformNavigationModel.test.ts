@@ -28,6 +28,7 @@ describe('platformNavigationModel', () => {
       truenas: false,
       vmware: false,
       standalone: false,
+      availability: false,
     });
 
     expect(
@@ -49,6 +50,7 @@ describe('platformNavigationModel', () => {
       truenas: true,
       vmware: true,
       standalone: false,
+      availability: false,
     });
   });
 

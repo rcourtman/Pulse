@@ -124,7 +124,7 @@ describe('AvailabilityChecksTable', () => {
         expect(search).toHaveValue('MQTT');
         expect(search).toHaveFocus();
       } else {
-        expect(screen.getByRole('link', { name: 'Add service/device check' })).toHaveFocus();
+        expect(screen.getByRole('link', { name: 'Add check' })).toHaveFocus();
       }
       setResources([check, other]);
       expect(screen.queryByTestId('availability-fleet-detail')).not.toBeInTheDocument();
@@ -334,7 +334,7 @@ describe('AvailabilityChecksTable', () => {
   it('links the empty state back to the availability check add flow', () => {
     renderTable([]);
 
-    expect(screen.getByRole('link', { name: 'Add service/device check' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: 'Add check' })).toHaveAttribute(
       'href',
       '/settings/monitoring/availability?add=target&targetKind=service',
     );
@@ -516,7 +516,7 @@ describe('AvailabilityChecksTable', () => {
     fireEvent.click(tableBtn);
     expect(onViewChange).toHaveBeenCalledWith('table');
 
-    // + Add service/device check remains visible in Fleet view
-    expect(screen.getByRole('link', { name: /Add service\/device check/i })).toBeInTheDocument();
+    // + Add check remains visible in Fleet view
+    expect(screen.getByRole('link', { name: /Add check/i })).toBeInTheDocument();
   });
 });

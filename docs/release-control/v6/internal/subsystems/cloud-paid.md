@@ -4466,3 +4466,10 @@ reason; `TierHistoryDays`, `max_history_days` and the downgrade purge
 generated-report purge) are removed, so nothing deletes history or reports
 because a plan ended. Plan copy, the billing summary and the comparison table
 no longer list history as a paid line. Continuing subscribers lose nothing.
+
+
+### Top-level Availability page and inline management (24 November 2026)
+
+`frontend-modern/src/App.tsx` and `frontend-modern/src/AppLayout.tsx` expose
+the primary `/availability` route when `PlatformAdmission.Availability` is true.
+Cloud, licensing, and paid feature entitlement boundaries are unchanged.

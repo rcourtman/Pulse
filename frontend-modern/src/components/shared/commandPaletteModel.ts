@@ -1,4 +1,5 @@
 import {
+  PRIMARY_PLATFORM_NAV_IDS,
   primaryPlatformNavigationIsVisible,
   type PlatformNavigationVisibility,
 } from '@/features/platformNavigation/platformNavigationModel';
@@ -33,6 +34,7 @@ export type CommandPaletteModalCommand = {
 };
 
 export type CommandPaletteCommandPaths = {
+  availabilityPath?: string;
   standalonePath: string;
   proxmoxPath: string;
   dockerPath: string;
@@ -186,18 +188,13 @@ export function buildCommandPaletteCommands(options: {
     commands.push({
       id: 'nav-standalone',
       label: 'Go to Machines',
-      description: 'Pulse Agent hosts and availability checks',
+      description: 'Pulse Agent hosts and standalone virtual machines',
       shortcut: 'g s',
       keywords: [
         'standalone',
         'agents',
         'hosts',
         'machines',
-        'availability',
-        'endpoints',
-        'mqtt',
-        'http',
-        'ping',
         'linux',
         'macos',
         'windows',
@@ -205,6 +202,39 @@ export function buildCommandPaletteCommands(options: {
         options.paths.standalonePath,
       ],
       action: () => options.navigate(options.paths.standalonePath),
+    });
+  }
+
+  const hasAnyPrimaryInfra = PRIMARY_PLATFORM_NAV_IDS.some((id) =>
+    primaryPlatformNavigationIsVisible(options.platformVisibility, id),
+  );
+  if (
+    primaryPlatformNavigationIsVisible(options.platformVisibility, 'availability') ||
+    (options.settingsVisible !== false && hasAnyPrimaryInfra)
+  ) {
+    const availabilityPath = options.paths.availabilityPath ?? '/availability';
+    commands.push({
+      id: 'nav-availability',
+      label: 'Go to Availability',
+      description: 'Website, service, device, and TLS certificate checks',
+      shortcut: 'g c',
+      keywords: [
+        'availability',
+        'checks',
+        'uptime',
+        'endpoints',
+        'ping',
+        'icmp',
+        'tcp',
+        'udp',
+        'http',
+        'https',
+        'tls',
+        'certificate',
+        'mqtt',
+        availabilityPath,
+      ],
+      action: () => options.navigate(availabilityPath),
     });
   }
 

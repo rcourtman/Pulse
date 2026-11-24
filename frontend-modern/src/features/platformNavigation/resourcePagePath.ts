@@ -5,6 +5,7 @@ import {
   buildKubernetesPath,
   buildProxmoxPath,
   buildAvailabilityCheckPath,
+  buildAvailabilityPath,
   buildStandalonePath,
   buildStorageRouteSearch,
   buildTrueNASPath,
@@ -191,6 +192,7 @@ const THRESHOLDS_TAB_BY_PLATFORM: Record<PrimaryPlatformNavId, AlertThresholdsTa
   truenas: 'truenas',
   vmware: 'vmware',
   standalone: 'systems',
+  availability: 'systems',
 };
 
 /**
@@ -240,9 +242,9 @@ export function buildResourcePagePath(subject: ResourcePageSubject): string | nu
   const isDisk = DISK_TYPES.has(type) || DISK_TYPES.has(hintType);
   const isNetwork = NETWORK_TYPES.has(type) || NETWORK_TYPES.has(hintType);
 
-  // Availability checks are endpoints Pulse probes, listed beside Machines.
+  // Availability checks are endpoints Pulse probes, listed on the Availability page.
   if (type === 'network-endpoint') {
-    return id ? buildAvailabilityCheckPath(id) : buildStandalonePath('availability');
+    return id ? buildAvailabilityCheckPath(id) : buildAvailabilityPath();
   }
 
   switch (platform) {

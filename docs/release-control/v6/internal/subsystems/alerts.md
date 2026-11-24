@@ -5908,3 +5908,11 @@ before saving.
 cover collapsed defaults, expanding advanced options, editing, payload
 round-tripping, and supported-settings invariants alongside desktop (`1280x900`
 light/dark) and mobile (`390x844`) browser verification on `/alerts/notifications`.
+
+
+### Top-level Availability page and inline management (24 November 2026)
+
+`frontend-modern/src/features/alerts/AlertOverviewAlertCard.tsx` now links
+availability alerts directly to `/availability` instead of the legacy
+`/standalone/availability` subtab path. Alert evaluation, routing, and
+notification contracts are unchanged.

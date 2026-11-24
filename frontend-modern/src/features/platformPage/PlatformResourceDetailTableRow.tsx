@@ -150,6 +150,7 @@ export const PlatformResourceDetailTableRow: Component<{
   resolveResourceLabel?: (resourceId: string) => string | null | undefined;
   initialShowAccessContext?: boolean;
   initialShowHostDetails?: boolean;
+  headerActions?: JSX.Element;
   /** Row-specific evidence, separate from the canonical host/resource inspector. */
   context?: JSX.Element;
   /**
@@ -171,6 +172,7 @@ export const PlatformResourceDetailTableRow: Component<{
       resolveResourceLabel={props.resolveResourceLabel}
       initialShowAccessContext={props.initialShowAccessContext}
       initialShowHostDetails={props.initialShowHostDetails}
+      headerActions={props.headerActions}
       onResourceActionSettled={props.onResourceActionSettled}
       onClose={closesRow ? props.onClose : undefined}
     />

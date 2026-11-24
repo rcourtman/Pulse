@@ -320,19 +320,11 @@ describe('standalonePageModel', () => {
     const counts = buildStandaloneMachineVmCounts(model.machines, model.vms);
     expect(counts.get('agent:tower')).toBe(1);
     expect(counts.get('agent:mac')).toBeUndefined();
-    expect(getStandaloneTabSpecs(false, 'machines').map((tab) => tab.id)).toEqual([
-      'machines',
-      'availability',
-    ]);
+    expect(getStandaloneTabSpecs(false, 'machines').map((tab) => tab.id)).toEqual(['machines']);
     expect(getStandaloneTabSpecs(true, 'machines').map((tab) => tab.id)).toEqual([
       'machines',
       'vms',
-      'availability',
     ]);
-    expect(getStandaloneTabSpecs(false, 'vms').map((tab) => tab.id)).toEqual([
-      'machines',
-      'vms',
-      'availability',
-    ]);
+    expect(getStandaloneTabSpecs(false, 'vms').map((tab) => tab.id)).toEqual(['machines', 'vms']);
   });
 });

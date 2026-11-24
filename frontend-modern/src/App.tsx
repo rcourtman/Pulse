@@ -38,6 +38,7 @@ import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 import { useKioskMode } from '@/hooks/useKioskMode';
 import { setKioskMode } from '@/utils/url';
 import {
+  AVAILABILITY_PATH,
   DOCKER_PATH,
   INFRASTRUCTURE_MAP_PATH,
   KUBERNETES_PATH,
@@ -47,6 +48,7 @@ import {
   STANDALONE_VMS_PATH,
   TRUENAS_PATH,
   VMWARE_PATH,
+  buildAvailabilityPath,
   buildDockerPath,
   buildKubernetesPath,
   buildProxmoxPath,
@@ -109,6 +111,7 @@ const KubernetesPage = lazy(() => import('./pages/Kubernetes'));
 const TrueNASPage = lazy(() => import('./pages/TrueNAS'));
 const VmwarePage = lazy(() => import('./pages/Vmware'));
 const StandalonePage = lazy(() => import('./pages/Standalone'));
+const AvailabilityPage = lazy(() => import('./pages/Availability'));
 const AIIntelligencePage = lazy(() =>
   import('./pages/AIIntelligence').then((module) => ({ default: module.AIIntelligence })),
 );
@@ -137,6 +140,7 @@ const PRIMARY_INFRASTRUCTURE_ROUTE_BY_ID: Record<PrimaryPlatformNavId, string> =
   truenas: buildTrueNASPath(),
   vmware: buildVmwarePath(),
   standalone: buildStandalonePath(),
+  availability: buildAvailabilityPath(),
 };
 
 export function resolvePlatformNavigationAdmission(
@@ -655,6 +659,8 @@ function App() {
       <Route path={STANDALONE_PATH} component={StandalonePage} />
       <Route path={STANDALONE_VMS_PATH} component={StandaloneVmsRoute} />
       <Route path={`${STANDALONE_PATH}/*`} component={StandalonePage} />
+      <Route path={AVAILABILITY_PATH} component={AvailabilityPage} />
+      <Route path={`${AVAILABILITY_PATH}/*`} component={AvailabilityPage} />
 
       {/* Not in every build yet: utils/featureReleases says which builds show it. */}
       <Route path={INFRASTRUCTURE_MAP_PATH} component={InfrastructureMapRoute} />

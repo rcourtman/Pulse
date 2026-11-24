@@ -57,13 +57,16 @@ func TestBuildPlatformAdmission_SourceStatusEvidenceCountsAsProviderOwnership(t 
 	}
 }
 
-func TestBuildPlatformAdmission_AvailabilityEndpointAdmitsStandalone(t *testing.T) {
+func TestBuildPlatformAdmission_AvailabilityEndpointAdmitsAvailabilityOnly(t *testing.T) {
 	endpoint := Resource{ID: "check-1", Type: ResourceTypeNetworkEndpoint, Sources: []DataSource{SourceAvailability}}
 	RefreshPlatformScopes(&endpoint)
 
 	admission := BuildPlatformAdmission([]Resource{endpoint})
-	if !admission.Standalone {
-		t.Fatalf("availability endpoint must admit standalone, got %+v", admission)
+	if !admission.Availability {
+		t.Fatalf("availability endpoint must admit availability, got %+v", admission)
+	}
+	if admission.Standalone {
+		t.Fatalf("availability endpoint must not admit standalone, got %+v", admission)
 	}
 }
 

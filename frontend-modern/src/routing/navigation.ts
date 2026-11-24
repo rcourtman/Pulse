@@ -1,4 +1,5 @@
 import {
+  AVAILABILITY_PATH,
   DOCKER_PATH,
   ACTIONS_PATH,
   KUBERNETES_PATH,
@@ -10,6 +11,7 @@ import {
 } from './resourceLinks';
 
 export type AppTabId =
+  | 'availability'
   | 'standalone'
   | 'proxmox'
   | 'docker'
@@ -30,6 +32,7 @@ export function getActiveTabForPath(path: string): ActiveAppTabId {
   if (path.startsWith(TRUENAS_PATH)) return 'truenas';
   if (path.startsWith(VMWARE_PATH)) return 'vmware';
   if (path.startsWith(STANDALONE_PATH)) return 'standalone';
+  if (path.startsWith(AVAILABILITY_PATH)) return 'availability';
   if (path.startsWith('/alerts')) return 'alerts';
   if (path.startsWith(ACTIONS_PATH)) return 'actions';
   if (path.startsWith(PATROL_PATH)) return 'ai';
