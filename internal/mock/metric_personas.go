@@ -124,6 +124,14 @@ func buildMetricMemoryTotalRegistry(graph FixtureGraph) map[string]float64 {
 	for _, ct := range graph.State.Containers {
 		record("container", ct.ID, ct.Memory.Total)
 	}
+	for _, host := range graph.State.Hosts {
+		if host.Libvirt == nil {
+			continue
+		}
+		for _, domain := range host.Libvirt.Domains {
+			record("vm", mockLibvirtDomainMetricID(host.ID, domain.ID), domain.MemoryMaximumBytes)
+		}
+	}
 
 	return registry
 }
@@ -156,6 +164,11 @@ func buildMetricRoleRegistry(graph FixtureGraph) map[string]string {
 	}
 	for _, host := range graph.State.Hosts {
 		register("agent", host.ID, host.Hostname, host.DisplayName, host.Platform, host.OSName, strings.Join(host.Tags, " "))
+		if host.Libvirt != nil {
+			for _, domain := range host.Libvirt.Domains {
+				register("vm", mockLibvirtDomainMetricID(host.ID, domain.ID), domain.Name, host.Hostname, "libvirt", "kvm")
+			}
+		}
 	}
 	for _, host := range graph.State.DockerHosts {
 		register("dockerHost", host.ID, host.Hostname, host.DisplayName, host.OS, host.Runtime)

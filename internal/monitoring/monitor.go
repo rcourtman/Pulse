@@ -7498,6 +7498,7 @@ func monitorResourceToConvertInput(resource unifiedresources.Resource) models.Re
 		VMware:                monitorRawJSON(resource.VMware),
 		Availability:          monitorRawJSON(resource.Availability),
 		AvailabilityChecks:    monitorRawJSON(resource.AvailabilityChecks),
+		VirtualMachine:        monitorRawJSON(resource.VirtualMachine),
 		PlatformData:          monitorPlatformData(&resource, resourceType, platformID),
 	}
 

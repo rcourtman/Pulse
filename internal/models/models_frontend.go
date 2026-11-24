@@ -1128,6 +1128,7 @@ type ResourceFrontend struct {
 	VMware             json.RawMessage `json:"vmware,omitempty"`
 	Availability       json.RawMessage `json:"availability,omitempty"`
 	AvailabilityChecks json.RawMessage `json:"availabilityChecks,omitempty"`
+	VirtualMachine     json.RawMessage `json:"virtualMachine,omitempty"`
 
 	// Platform-specific data (JSON blob)
 	PlatformData json.RawMessage `json:"platformData,omitempty"`
