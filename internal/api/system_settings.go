@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -1270,6 +1271,39 @@ func (h *SystemSettingsHandler) HandleUpdateSystemSettings(w http.ResponseWriter
 	}
 }
 
+// sshConfigJumpHop matches one [user@]host[:port] hop of a ProxyJump value.
+const sshConfigJumpHop = `(?:[A-Za-z0-9_][A-Za-z0-9._-]*@)?[A-Za-z0-9][A-Za-z0-9._-]*(?::[0-9]{1,5})?`
+
+// sshConfigDirectiveValues lists the only directives Pulse needs for ProxyJump
+// and the form each of their arguments must take. Values are limited to plain
+// names, addresses and paths: OpenSSH builds the jump command from ProxyJump
+// (and from Hostname, through %h) and hands it to a shell, so shell syntax,
+// quoting or a leading '-' in a value is command execution on the Pulse host.
+var sshConfigDirectiveValues = map[string]*regexp.Regexp{
+	"host":                  regexp.MustCompile(`^!?[A-Za-z0-9*?:][A-Za-z0-9._:*?-]*$`),
+	"hostname":              regexp.MustCompile(`^[A-Za-z0-9:][A-Za-z0-9._:-]*$`),
+	"proxyjump":             regexp.MustCompile(`^` + sshConfigJumpHop + `(?:,` + sshConfigJumpHop + `)*$`),
+	"user":                  regexp.MustCompile(`^[A-Za-z0-9_][A-Za-z0-9._-]*$`),
+	"identityfile":          regexp.MustCompile(`^[A-Za-z0-9._~/][A-Za-z0-9._~/-]*$`),
+	"stricthostkeychecking": regexp.MustCompile(`^(?i:yes|no|accept-new|ask|off)$`),
+}
+
+// validSSHConfigArguments reports whether args are acceptable arguments for an
+// allowlisted directive. Host takes one or more patterns; every other
+// directive takes exactly one value.
+func validSSHConfigArguments(directive string, args []string) bool {
+	valuePattern := sshConfigDirectiveValues[directive]
+	if valuePattern == nil || len(args) == 0 || (directive != "host" && len(args) != 1) {
+		return false
+	}
+	for _, arg := range args {
+		if !valuePattern.MatchString(arg) {
+			return false
+		}
+	}
+	return true
+}
+
 // HandleSSHConfig writes SSH configuration for Pulse user
 func (h *SystemSettingsHandler) HandleSSHConfig(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
@@ -1305,47 +1339,50 @@ func (h *SystemSettingsHandler) HandleSSHConfig(w http.ResponseWriter, r *http.R
 	}
 
 	// Security: Use allowlist-based validation (safer than blocklist)
-	// Only permit the specific directives Pulse needs for ProxyJump
-	allowedDirectives := map[string]bool{
-		"host":                  true,
-		"hostname":              true,
-		"proxyjump":             true,
-		"user":                  true,
-		"identityfile":          true,
-		"stricthostkeychecking": true,
-	}
-
+	// Only permit the specific directives Pulse needs for ProxyJump, and only
+	// with values that cannot reach a shell (see sshConfigDirectiveValues).
 	// Parse and validate each line
 	scanner := bufio.NewScanner(strings.NewReader(configStr))
 	lineNum := 0
 	for scanner.Scan() {
 		lineNum++
-		line := scanner.Text()
 
-		// Strip comments
-		if idx := strings.Index(line, "#"); idx >= 0 {
-			line = line[:idx]
-		}
+		// Split into words on blanks only, as OpenSSH does, so the words
+		// checked here are the words ssh reads back from the written file.
+		fields := strings.FieldsFunc(scanner.Text(), func(r rune) bool { return r == ' ' || r == '\t' })
 
-		// Skip empty lines and whitespace
-		line = strings.TrimSpace(line)
-		if line == "" {
+		// Skip empty lines and comment lines
+		if len(fields) == 0 || strings.HasPrefix(fields[0], "#") {
 			continue
 		}
 
 		// Extract directive (first word)
-		fields := strings.Fields(line)
-		if len(fields) == 0 {
-			continue
-		}
-
 		directive := strings.ToLower(fields[0])
-		if !allowedDirectives[directive] {
+		if _, allowed := sshConfigDirectiveValues[directive]; !allowed {
 			log.Warn().
 				Str("directive", fields[0]).
 				Int("line", lineNum).
 				Msg("Rejected SSH config with forbidden directive")
 			writeErrorResponse(w, http.StatusBadRequest, "validation_error", fmt.Sprintf("SSH config contains forbidden directive: %s", fields[0]), nil)
+			return
+		}
+
+		// Strip a trailing comment. Only a word that starts with '#' begins
+		// one; OpenSSH keeps a '#' inside a word as part of the value.
+		args := fields[1:]
+		for i, arg := range args {
+			if strings.HasPrefix(arg, "#") {
+				args = args[:i]
+				break
+			}
+		}
+
+		if !validSSHConfigArguments(directive, args) {
+			log.Warn().
+				Str("directive", fields[0]).
+				Int("line", lineNum).
+				Msg("Rejected SSH config with invalid directive value")
+			writeErrorResponse(w, http.StatusBadRequest, "validation_error", fmt.Sprintf("SSH config contains invalid value for directive: %s", fields[0]), nil)
 			return
 		}
 	}

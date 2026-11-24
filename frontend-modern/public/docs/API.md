@@ -1470,11 +1470,11 @@ Enable or disable mock data generation (dev/demo only).
 
 ### SSH Config (Temperature Monitoring)
 `POST /api/system/ssh-config`
-Writes the SSH config used for temperature collection (requires setup token or auth).
+Writes the SSH config used for temperature collection. Requires admin + `settings:write`. Setup tokens are not accepted. Only `Host`, `HostName`, `ProxyJump`, `User`, `IdentityFile` and `StrictHostKeyChecking` are allowed, with plain host, user and path values.
 
 ### Verify Temperature SSH
 `POST /api/system/verify-temperature-ssh`
-Tests SSH connectivity for temperature collection (requires setup token or auth).
+Tests SSH connectivity for temperature collection. Requires admin + `settings:write`. Setup tokens are not accepted.
 
 ### Scheduler Health
 `GET /api/monitoring/scheduler/health`

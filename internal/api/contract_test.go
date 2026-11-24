@@ -7371,7 +7371,7 @@ func TestContract_OnboardingDeepLinkIgnoresQueryAuthToken(t *testing.T) {
 	}
 }
 
-func TestContract_SetupTokenRoutesRejectQueryAuthToken(t *testing.T) {
+func TestContract_TemperatureSSHRoutesRejectSetupToken(t *testing.T) {
 	cfg := newTestConfigWithTokens(t, newTokenRecord(t, "settings-write-token", []string{config.ScopeSettingsWrite}, nil))
 	router := newTestRouter(t, cfg, nil, nil, nil, nil, "1.0.0")
 	t.Setenv("HOME", t.TempDir())
@@ -7380,7 +7380,7 @@ func TestContract_SetupTokenRoutesRejectQueryAuthToken(t *testing.T) {
 	tokenHash := authpkg.HashAPIToken(token)
 	router.configHandlers.StoreSetupToken(tokenHash, &SetupTokenRecord{ExpiresAt: time.Now().Add(time.Minute)})
 
-	t.Run("verify-temperature-ssh requires header token transport", func(t *testing.T) {
+	t.Run("verify-temperature-ssh rejects setup token in query and header", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodPost, "/api/system/verify-temperature-ssh?auth_token="+token, strings.NewReader(`{"nodes":""}`))
 		rec := httptest.NewRecorder()
 		router.Handler().ServeHTTP(rec, req)
@@ -7394,12 +7394,12 @@ func TestContract_SetupTokenRoutesRejectQueryAuthToken(t *testing.T) {
 		rec = httptest.NewRecorder()
 		router.Handler().ServeHTTP(rec, req)
 
-		if rec.Code != http.StatusOK {
-			t.Fatalf("status = %d, want %d when setup token is provided in header", rec.Code, http.StatusOK)
+		if rec.Code != http.StatusUnauthorized {
+			t.Fatalf("status = %d, want %d when setup token is provided in header", rec.Code, http.StatusUnauthorized)
 		}
 	})
 
-	t.Run("ssh-config requires header token transport", func(t *testing.T) {
+	t.Run("ssh-config rejects setup token in query and header", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodPost, "/api/system/ssh-config?auth_token="+token, strings.NewReader("Host example\nHostname example\n"))
 		rec := httptest.NewRecorder()
 		router.Handler().ServeHTTP(rec, req)
@@ -7413,8 +7413,8 @@ func TestContract_SetupTokenRoutesRejectQueryAuthToken(t *testing.T) {
 		rec = httptest.NewRecorder()
 		router.Handler().ServeHTTP(rec, req)
 
-		if rec.Code != http.StatusOK {
-			t.Fatalf("status = %d, want %d when setup token is provided in header", rec.Code, http.StatusOK)
+		if rec.Code != http.StatusUnauthorized {
+			t.Fatalf("status = %d, want %d when setup token is provided in header", rec.Code, http.StatusUnauthorized)
 		}
 	})
 }

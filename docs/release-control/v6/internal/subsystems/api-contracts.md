@@ -3995,7 +3995,7 @@ a new API state machine, queue contract, or verification-accounting field.
    sqlite stores (handoff JTI, purchase-return redemptions) open through
    `openHardenedSecretsDB` so the private-permission hardening policy stays
    single-sourced; privileged settings endpoints gate through
-   `serveSetupTokenOrSettingsWrite` in `internal/api/router.go`; patrol
+   `serveSettingsWrite` in `internal/api/router.go`; patrol
    findings convert to the unified store through one `unifiedFindingFromAI`.
 1. Add or change payload fields through handler + contract tests together
 2. Update frontend API types in lockstep with backend contract changes.

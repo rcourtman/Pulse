@@ -5091,23 +5091,25 @@ func TestStateSummaryRequiresMonitoringReadScope(t *testing.T) {
 	}
 }
 
-func TestVerifyTemperatureSSHAllowsSetupToken(t *testing.T) {
-	cfg := newTestConfigWithTokens(t)
+// A setup token only authorizes registering the node it was issued for. It
+// must not stand in for an administrator on the routes that write the Pulse
+// user's SSH config or run ssh with it.
+func TestVerifyTemperatureSSHRejectsSetupToken(t *testing.T) {
+	cfg := newTestConfigWithTokens(t, newTokenRecord(t, "settings-write-token", []string{config.ScopeSettingsWrite}, nil))
 	router := newTestRouter(t, cfg, nil, nil, nil, nil, "1.0.0")
 
 	token := "0123456789abcdef0123456789abcdef"
 	tokenHash := auth.HashAPIToken(token)
 	router.configHandlers.StoreSetupToken(tokenHash, &SetupTokenRecord{ExpiresAt: time.Now().Add(time.Minute)})
 
-	req := httptest.NewRequest(http.MethodPost, "/api/system/verify-temperature-ssh", strings.NewReader(`{"nodes":""}`))
-	req.Header.Set("X-Setup-Token", token)
-	rec := httptest.NewRecorder()
-	router.Handler().ServeHTTP(rec, req)
-	if rec.Code != http.StatusOK {
-		t.Fatalf("expected 200 with setup token, got %d", rec.Code)
-	}
-	if !strings.Contains(rec.Body.String(), "No nodes to verify") {
-		t.Fatalf("expected verify response, got %q", rec.Body.String())
+	for header, value := range map[string]string{"X-Setup-Token": token, "Authorization": "Bearer " + token} {
+		req := httptest.NewRequest(http.MethodPost, "/api/system/verify-temperature-ssh", strings.NewReader(`{"nodes":""}`))
+		req.Header.Set(header, value)
+		rec := httptest.NewRecorder()
+		router.Handler().ServeHTTP(rec, req)
+		if rec.Code != http.StatusUnauthorized {
+			t.Fatalf("expected 401 with setup token in %s, got %d: %s", header, rec.Code, rec.Body.String())
+		}
 	}
 }
 
@@ -5156,21 +5158,43 @@ func TestVerifyTemperatureSSHRejectsSetupTokenOrgIDQueryBypass(t *testing.T) {
 	}
 }
 
-func TestSSHConfigAllowsSetupToken(t *testing.T) {
-	cfg := newTestConfigWithTokens(t)
+func TestSSHConfigRejectsSetupToken(t *testing.T) {
+	cfg := newTestConfigWithTokens(t, newTokenRecord(t, "settings-write-token", []string{config.ScopeSettingsWrite}, nil))
 	router := newTestRouter(t, cfg, nil, nil, nil, nil, "1.0.0")
-	t.Setenv("HOME", t.TempDir())
+	home := t.TempDir()
+	t.Setenv("HOME", home)
 
 	token := "abcdef0123456789abcdef0123456789"
 	tokenHash := auth.HashAPIToken(token)
 	router.configHandlers.StoreSetupToken(tokenHash, &SetupTokenRecord{ExpiresAt: time.Now().Add(time.Minute)})
 
+	for header, value := range map[string]string{"X-Setup-Token": token, "Authorization": "Bearer " + token} {
+		req := httptest.NewRequest(http.MethodPost, "/api/system/ssh-config", strings.NewReader("Host example\nHostname example\n"))
+		req.Header.Set(header, value)
+		rec := httptest.NewRecorder()
+		router.Handler().ServeHTTP(rec, req)
+		if rec.Code != http.StatusUnauthorized {
+			t.Fatalf("expected 401 with setup token in %s, got %d: %s", header, rec.Code, rec.Body.String())
+		}
+	}
+	if _, err := os.Stat(filepath.Join(home, ".ssh", "config")); !os.IsNotExist(err) {
+		t.Fatalf("expected no SSH config to be written with a setup token, stat err = %v", err)
+	}
+}
+
+func TestSSHConfigAllowsSettingsWriteToken(t *testing.T) {
+	rawToken := "ssh-config-write-token-123.12345678"
+	record := newTokenRecord(t, rawToken, []string{config.ScopeSettingsWrite}, nil)
+	cfg := newTestConfigWithTokens(t, record)
+	router := newTestRouter(t, cfg, nil, nil, nil, nil, "1.0.0")
+	t.Setenv("HOME", t.TempDir())
+
 	req := httptest.NewRequest(http.MethodPost, "/api/system/ssh-config", strings.NewReader("Host example\nHostname example\n"))
-	req.Header.Set("X-Setup-Token", token)
+	req.Header.Set("X-API-Token", rawToken)
 	rec := httptest.NewRecorder()
 	router.Handler().ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
-		t.Fatalf("expected 200 with setup token, got %d", rec.Code)
+		t.Fatalf("expected 200 with settings:write token, got %d: %s", rec.Code, rec.Body.String())
 	}
 	if !strings.Contains(rec.Body.String(), `"success":true`) {
 		t.Fatalf("expected success response, got %q", rec.Body.String())

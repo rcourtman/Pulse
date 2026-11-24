@@ -1281,17 +1281,12 @@ func (r *Router) handleAgentWebSocket(w http.ResponseWriter, req *http.Request) 
 	r.agentExecServer.HandleWebSocket(w, req)
 }
 
-// serveSetupTokenOrSettingsWrite gates a privileged settings endpoint behind
-// either a valid setup token (setup scripts) or full authentication plus
-// proxy-auth admin and settings:write scope. logLabel tags the unauthorized
-// log line; nonAdminMsg is the proxy-auth denial log message.
-func (r *Router) serveSetupTokenOrSettingsWrite(w http.ResponseWriter, req *http.Request, logLabel, nonAdminMsg string, delegate http.HandlerFunc) {
-	// Check setup token first (for setup scripts)
-	if r.isValidSetupTokenForRequest(req) {
-		delegate(w, req)
-		return
-	}
-
+// serveSettingsWrite gates a privileged settings endpoint behind full
+// authentication plus proxy-auth admin and settings:write scope. A setup token
+// is not accepted: it only authorizes registering the node it was issued for.
+// logLabel tags the unauthorized log line; nonAdminMsg is the proxy-auth
+// denial log message.
+func (r *Router) serveSettingsWrite(w http.ResponseWriter, req *http.Request, logLabel, nonAdminMsg string, delegate http.HandlerFunc) {
 	// Require authentication
 	authWriter := &responseCapture{ResponseWriter: w}
 	if !checkAuth(r.config, authWriter, req, false) {
@@ -1332,44 +1327,16 @@ func (r *Router) handleVerifyTemperatureSSH(w http.ResponseWriter, req *http.Req
 		http.Error(w, "Service unavailable", http.StatusServiceUnavailable)
 		return
 	}
-	r.serveSetupTokenOrSettingsWrite(w, req, "verify-temperature-ssh", "Non-admin user attempted verify-temperature-ssh", r.configHandlers.HandleVerifyTemperatureSSH)
+	r.serveSettingsWrite(w, req, "verify-temperature-ssh", "Non-admin user attempted verify-temperature-ssh", r.configHandlers.HandleVerifyTemperatureSSH)
 }
 
-// handleSSHConfig handles SSH config writes with setup token or API auth
+// handleSSHConfig handles SSH config writes with admin session or API auth
 func (r *Router) handleSSHConfig(w http.ResponseWriter, req *http.Request) {
 	if r.systemSettingsHandler == nil {
 		http.Error(w, "Service unavailable", http.StatusServiceUnavailable)
 		return
 	}
-	r.serveSetupTokenOrSettingsWrite(w, req, "ssh-config", "Non-admin user attempted ssh-config update", r.systemSettingsHandler.HandleSSHConfig)
-}
-
-func extractSetupToken(req *http.Request) string {
-	if token := strings.TrimSpace(req.Header.Get("X-Setup-Token")); token != "" {
-		return token
-	}
-	if token := extractBearerToken(req.Header.Get("Authorization")); token != "" {
-		return token
-	}
-	return ""
-}
-
-func (r *Router) isValidSetupTokenForRequest(req *http.Request) bool {
-	if r == nil || r.configHandlers == nil || req == nil {
-		return false
-	}
-
-	token := extractSetupToken(req)
-	if token == "" {
-		return false
-	}
-
-	requestOrgID := resolveTenantOrgID(req)
-	if !isValidOrganizationID(requestOrgID) {
-		return false
-	}
-
-	return r.configHandlers.ValidateSetupTokenForOrg(token, requestOrgID)
+	r.serveSettingsWrite(w, req, "ssh-config", "Non-admin user attempted ssh-config update", r.systemSettingsHandler.HandleSSHConfig)
 }
 
 func extractBearerToken(header string) string {
@@ -4368,19 +4335,6 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 				isPublic = true
 			}
 
-			// Allow temperature verification endpoint when a setup token is provided
-			if normalizedPath == "/api/system/verify-temperature-ssh" && r.configHandlers != nil {
-				if r.isValidSetupTokenForRequest(req) {
-					isPublic = true
-				}
-			}
-
-			// Allow SSH config endpoint when a setup token is provided
-			if normalizedPath == "/api/system/ssh-config" && r.configHandlers != nil {
-				if r.isValidSetupTokenForRequest(req) {
-					isPublic = true
-				}
-			}
 			if normalizedPath == "/api/config/export" || normalizedPath == "/api/config/import" {
 				// These handlers apply stricter route-local auth and public-network checks.
 				isPublic = true

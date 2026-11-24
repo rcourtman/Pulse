@@ -61,6 +61,75 @@ Host bad
 	assert.Contains(t, w.Body.String(), "forbidden directive")
 }
 
+func TestHandleSSHConfig_RejectsUnsafeValues(t *testing.T) {
+	handler := &SystemSettingsHandler{}
+
+	tests := []struct {
+		name   string
+		config string
+	}{
+		{"command substitution in jump user", "Host *\n\tProxyJump $(touch${IFS}/tmp/pwned)@jump.invalid\n"},
+		{"backticks in jump host", "Host *\n\tProxyJump root@`id`\n"},
+		{"option as jump host", "Host *\n\tProxyJump -oProxyCommand\n"},
+		{"option as jump user", "Host *\n\tProxyJump -A@jump\n"},
+		{"unsafe later hop", "Host *\n\tProxyJump jump1,root@jump2;id\n"},
+		{"hash inside a word is not a comment", "Host *\n\tProxyJump jump#$(id)@jump.invalid\n"},
+		{"hash inside user is not a comment", "Host *\n\tUser root#$(id)\n"},
+		{"quote in hostname", "Host node\n\tHostname node';id;'\n"},
+		{"quoted hostname", "Host node\n\tHostname \"node';id;'\"\n"},
+		{"hostname token", "Host node\n\tHostname %h\n"},
+		{"command substitution in user", "Host *\n\tUser $(id)\n"},
+		{"command substitution in host pattern", "Host $(id)\n"},
+		{"command substitution in identity file", "Host *\n\tIdentityFile ~/.ssh/$(id)\n"},
+		{"unknown strict host key checking value", "Host *\n\tStrictHostKeyChecking $(id)\n"},
+		{"extra argument", "Host *\n\tUser root extra\n"},
+		{"missing value", "Host *\n\tProxyJump\n"},
+		{"missing value before comment", "Host *\n\tProxyJump # jump\n"},
+		{"equals separator", "Host *\n\tProxyJump = jump\n"},
+		{"carriage return inside value", "Host *\n\tUser root\rProxyCommand id\n"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tempHome := t.TempDir()
+			t.Setenv("HOME", tempHome)
+
+			req := httptest.NewRequest(http.MethodPost, "/api/config/ssh", strings.NewReader(tt.config))
+			w := httptest.NewRecorder()
+
+			handler.HandleSSHConfig(w, req)
+
+			assert.Equal(t, http.StatusBadRequest, w.Code)
+			assert.Contains(t, w.Body.String(), "validation_error")
+			assert.NoFileExists(t, filepath.Join(tempHome, ".ssh", "config"))
+		})
+	}
+}
+
+func TestHandleSSHConfig_AllowsCommentsAndJumpLists(t *testing.T) {
+	tempHome := t.TempDir()
+	t.Setenv("HOME", tempHome)
+
+	handler := &SystemSettingsHandler{}
+
+	validConfig := "# Written by the Pulse setup script\r\n" +
+		"Host pve1 10.0.0.* !10.0.0.1 fd00::*\r\n" +
+		"    HostName fd00::10 # via the management network\r\n" +
+		"    ProxyJump root@bastion.example.com:2222,jump_2\r\n" +
+		"    IdentityFile /opt/pulse/.ssh/id_ed25519_sensors\r\n" +
+		"    StrictHostKeyChecking accept-new\r\n"
+	req := httptest.NewRequest(http.MethodPost, "/api/config/ssh", strings.NewReader(validConfig))
+	w := httptest.NewRecorder()
+
+	handler.HandleSSHConfig(w, req)
+
+	require.Equal(t, http.StatusOK, w.Code)
+
+	content, err := os.ReadFile(filepath.Join(tempHome, ".ssh", "config"))
+	require.NoError(t, err)
+	assert.Equal(t, validConfig, string(content))
+}
+
 func TestHandleSSHConfig_Empty(t *testing.T) {
 	handler := &SystemSettingsHandler{}
 
