@@ -56,7 +56,9 @@ permissions:
 
 concurrency:
   group: public-docs-${{ github.ref }}
-  cancel-in-progress: true
+  # Main needs a complete verdict even when several doc changes land quickly.
+  # Keep one active run and let GitHub replace only the pending main run.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   recipes:
