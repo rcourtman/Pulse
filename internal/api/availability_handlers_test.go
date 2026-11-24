@@ -500,3 +500,31 @@ func TestAvailabilityTargetLinkedResourceIDRoundTrip(t *testing.T) {
 		t.Fatalf("LinkedResourceID = %q, want empty string", createdNoID.LinkedResourceID)
 	}
 }
+
+func TestAvailabilityHandlersPushTokenLifecycleProof(t *testing.T) {
+	persistence := config.NewConfigPersistence(t.TempDir())
+	handler := NewAvailabilityHandlers(
+		func(context.Context) *config.ConfigPersistence { return persistence },
+		nil,
+		nil,
+	)
+	createRec := httptest.NewRecorder()
+	handler.HandleAdd(createRec, httptest.NewRequest(http.MethodPost, "/api/availability-targets", bytes.NewBufferString(`{"name":"Backup job","protocol":"push","enabled":true,"push":{"scheduleType":"interval","intervalSeconds":3600,"graceSeconds":300}}`)))
+	if createRec.Code != http.StatusCreated {
+		t.Fatalf("HandleAdd status = %d, body = %s", createRec.Code, createRec.Body.String())
+	}
+	var created availabilityTargetResponse
+	if err := json.Unmarshal(createRec.Body.Bytes(), &created); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	pingRec := httptest.NewRecorder()
+	handler.HandlePushPing(pingRec, httptest.NewRequest(http.MethodGet, "/api/push/"+created.Push.Token, nil))
+	if pingRec.Code != http.StatusOK {
+		t.Fatalf("HandlePushPing status = %d", pingRec.Code)
+	}
+	rotateRec := httptest.NewRecorder()
+	handler.HandleRotatePushToken(rotateRec, httptest.NewRequest(http.MethodPost, "/api/availability-targets/"+created.ID+"/rotate-push-token", nil))
+	if rotateRec.Code != http.StatusOK {
+		t.Fatalf("HandleRotatePushToken status = %d", rotateRec.Code)
+	}
+}

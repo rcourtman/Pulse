@@ -8,11 +8,24 @@ vi.mock('@/api/availabilityTargets', () => ({
     create: vi.fn(),
     list: vi.fn(),
     remove: vi.fn(),
+    rotatePushToken: vi.fn(),
     test: vi.fn(),
     testSaved: vi.fn(),
     update: vi.fn(),
   },
 }));
+
+const featureMocks = vi.hoisted(() => ({
+  enabled: new Set<string>(['infrastructureMap', 'availabilityPushChecks']),
+}));
+
+vi.mock('@/utils/featureReleases', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/utils/featureReleases')>();
+  return {
+    ...actual,
+    isFeatureAvailable: (feature: string) => featureMocks.enabled.has(feature),
+  };
+});
 
 const resourceMocks = vi.hoisted(() => ({
   resources: [] as Array<Record<string, unknown>>,
@@ -64,10 +77,12 @@ const mockedCreate = vi.mocked(AvailabilityTargetsAPI.create);
 const mockedList = vi.mocked(AvailabilityTargetsAPI.list);
 const mockedUpdate = vi.mocked(AvailabilityTargetsAPI.update);
 const mockedTest = vi.mocked(AvailabilityTargetsAPI.test);
+const mockedRotatePushToken = vi.mocked(AvailabilityTargetsAPI.rotatePushToken);
 
 describe('AvailabilityTargetSlot', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    featureMocks.enabled = new Set(['infrastructureMap', 'availabilityPushChecks']);
     resourceMocks.resources = [];
     licenseMocks.features = new Set(['external_probe']);
     licenseMocks.loaded = true;
@@ -745,7 +760,7 @@ describe('AvailabilityTargetSlot', () => {
       render(() => <AvailabilityTargetSlot onCancel={vi.fn()} onSaved={onSaved} />);
 
       fireEvent.change(screen.getByLabelText('Preset'), { target: { value: 'dns-resolver' } });
-      expect(screen.getByTestId('availability-dns-section')).toBeInTheDocument();
+      expect(await screen.findByTestId('availability-dns-section')).toBeInTheDocument();
       expect(screen.getByTestId('availability-dns-query-name')).toHaveValue('example.com');
 
       fireEvent.input(screen.getByLabelText('Name'), { target: { value: 'Pi-hole DNS' } });
@@ -805,6 +820,109 @@ describe('AvailabilityTargetSlot', () => {
       expect(
         await screen.findByText('DNS server answered in 9 ms and returned a matching record.'),
       ).toBeInTheDocument();
+    });
+  });
+
+  describe('push heartbeat checks', () => {
+    it('hides push preset and protocol when availabilityPushChecks feature gate is off', () => {
+      featureMocks.enabled = new Set(['infrastructureMap']);
+      render(() => <AvailabilityTargetSlot onCancel={vi.fn()} onSaved={vi.fn()} />);
+
+      expect(screen.queryByRole('option', { name: 'Push / Heartbeat' })).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole('option', { name: 'Scheduled job / backup (Push)' }),
+      ).not.toBeInTheDocument();
+      expect(screen.queryByTestId('availability-push-config')).not.toBeInTheDocument();
+    });
+
+    it('creates a push check, reveals the generated ping URL, and rotates the token', async () => {
+      const onSaved = vi.fn();
+      mockedCreate.mockResolvedValueOnce({
+        id: 'push-1',
+        name: 'Nightly restic backup',
+        targetKind: 'service',
+        address: '',
+        protocol: 'push',
+        enabled: true,
+        failureThreshold: 1,
+        push: {
+          token: 'initial-token-0123456789abcdef',
+          scheduleType: 'cron',
+          cronExpression: '0 3 * * *',
+          graceSeconds: 600,
+        },
+      });
+      mockedRotatePushToken.mockResolvedValueOnce({
+        id: 'push-1',
+        name: 'Nightly restic backup',
+        targetKind: 'service',
+        address: '',
+        protocol: 'push',
+        enabled: true,
+        failureThreshold: 1,
+        push: {
+          token: 'rotated-token-fedcba9876543210',
+          scheduleType: 'cron',
+          cronExpression: '0 3 * * *',
+          graceSeconds: 600,
+        },
+      });
+
+      render(() => <AvailabilityTargetSlot onCancel={vi.fn()} onSaved={onSaved} />);
+
+      fireEvent.change(screen.getByLabelText('Preset'), { target: { value: 'push-job' } });
+      expect(await screen.findByTestId('availability-push-config')).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Test probe' })).not.toBeInTheDocument();
+      expect(screen.queryByLabelText(/^Address/)).not.toBeInTheDocument();
+
+      fireEvent.input(screen.getByLabelText('Name'), {
+        target: { value: 'Nightly restic backup' },
+      });
+      fireEvent.change(screen.getByLabelText('Schedule type'), { target: { value: 'cron' } });
+      fireEvent.input(screen.getByLabelText(/^Cron expression \(5-field UTC\)/), {
+        target: { value: '0 3 * * *' },
+      });
+      fireEvent.input(screen.getByLabelText(/^Grace period \(seconds\)/), {
+        target: { value: '600' },
+      });
+
+      fireEvent.click(screen.getByRole('button', { name: 'Add service/device check' }));
+
+      await waitFor(() =>
+        expect(mockedCreate).toHaveBeenCalledWith(
+          expect.objectContaining({
+            name: 'Nightly restic backup',
+            protocol: 'push',
+            address: '',
+            push: {
+              scheduleType: 'cron',
+              cronExpression: '0 3 * * *',
+              graceSeconds: 600,
+            },
+          }),
+        ),
+      );
+
+      // Keeps dialog open so the operator can copy the generated Ping URL.
+      expect(onSaved).not.toHaveBeenCalled();
+      const pingUrlInput = await screen.findByLabelText('Ping URL');
+      expect((pingUrlInput as HTMLInputElement).value).toContain(
+        '/api/push/initial-token-0123456789abcdef',
+      );
+
+      // Two-step rotate confirmation prevents accidental URL revocation.
+      fireEvent.click(screen.getByRole('button', { name: 'Rotate URL' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Confirm rotate URL' }));
+
+      await waitFor(() => expect(mockedRotatePushToken).toHaveBeenCalledWith('push-1'));
+      await waitFor(() =>
+        expect((screen.getByLabelText('Ping URL') as HTMLInputElement).value).toContain(
+          '/api/push/rotated-token-fedcba9876543210',
+        ),
+      );
+
+      fireEvent.click(screen.getByRole('button', { name: 'Done' }));
+      expect(onSaved).toHaveBeenCalledTimes(1);
     });
   });
 });

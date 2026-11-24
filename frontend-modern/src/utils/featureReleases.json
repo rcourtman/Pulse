@@ -8,5 +8,10 @@
     "name": "Machines VMs",
     "stage": "build",
     "guides": []
+  },
+  "availabilityPushChecks": {
+    "name": "Push checks",
+    "stage": "build",
+    "guides": []
   }
 }

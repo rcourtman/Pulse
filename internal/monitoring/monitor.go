@@ -1315,6 +1315,7 @@ type Monitor struct {
 	availabilityStatuses       map[string]AvailabilityProbeStatus
 	availabilityByLocation     map[string]map[string]AvailabilityProbeStatus
 	availabilityProbeTrackers  map[string]availabilityProbeAssignmentTracker
+	availabilityPushStates     map[string]availabilityPushState
 	pollProviders              map[InstanceType]PollProvider
 	pollMetrics                *PollMetrics
 	scheduler                  *AdaptiveScheduler
@@ -2047,6 +2048,7 @@ func New(cfg *config.Config) (*Monitor, error) {
 		availabilityStatuses:       make(map[string]AvailabilityProbeStatus),
 		availabilityByLocation:     make(map[string]map[string]AvailabilityProbeStatus),
 		availabilityProbeTrackers:  make(map[string]availabilityProbeAssignmentTracker),
+		availabilityPushStates:     make(map[string]availabilityPushState),
 		pollProviders:              make(map[InstanceType]PollProvider),
 		pollMetrics:                getPollMetrics(),
 		scheduler:                  scheduler,

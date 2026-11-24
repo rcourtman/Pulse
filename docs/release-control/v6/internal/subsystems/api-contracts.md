@@ -15152,3 +15152,19 @@ port `53`) on `/api/availability-targets` and `/api/availability-targets/test`.
 Verified by `internal/api/availability_handlers_test.go`,
 `AvailabilityTargetSlot.test.tsx`, `docsLinks.test.ts`, and
 `frontend-modern/browser-verification/d920ff2aaa7c5c9c.json`.
+
+### Inbound push and heartbeat availability checks (Stage 2 Build, 24 November 2026)
+
+`internal/api/availability_handlers.go`, `internal/api/availability_push_handlers.go`,
+`internal/api/router.go`, and `internal/api/router_routes_registration.go` add
+`protocol: "push"` targets with server-generated 256-bit tokens, admin
+`POST /api/availability-targets/{id}/rotate-push-token`, and token-authenticated
+inbound `GET`/`POST`/`HEAD /api/push/{token}` (with `/start`, `/fail`,
+`?status=up|down`, `?msg=`, `?ping=`, constant-time token comparison, rate
+limiting, and 1 KiB body cap). Frontend entry points in
+`AvailabilityTargetSlot.tsx` and `availabilityTargetPresets.ts` are strictly
+gated behind `availabilityPushChecks` at stage `build` in
+`frontend-modern/src/utils/featureReleases.json` and hidden from production
+builds and shipped guides. Verified by `availability_push_handlers_test.go`,
+`availability_handlers_test.go`, `route_inventory_test.go`,
+`AvailabilityTargetSlot.test.tsx`, and `npm run lint:feature-releases`.

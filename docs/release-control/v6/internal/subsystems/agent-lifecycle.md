@@ -12289,3 +12289,10 @@ read-only with no VM lifecycle or configuration authority. Verified by
 with `dns` configuration (`queryName`, `recordType`, `transport`, `expectedValue`).
 Remote Pro host agents inherit native DNS probing automatically through the shared
 `availabilityprobe.DetailedResult` contract without any protocol wire break.
+
+### Inbound push and heartbeat availability checks (Stage 2 Build, 24 November 2026)
+
+`internal/monitoring/monitor.go` and `internal/monitoring/availability_probe_agent.go`
+keep `protocol: "push"` availability targets strictly local to the Pulse server
+(`pulse:local`). Push checks are never assigned to remote host agents and do not
+change agent polling or wire contracts.

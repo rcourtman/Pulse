@@ -372,3 +372,28 @@ func TestBuildScheduledTasksWithoutSchedulerPreservesPendingFixedIntervalSlot(t 
 		t.Fatalf("tightened NextRun = %v, want %v", tightened[0].NextRun, want)
 	}
 }
+
+func TestAvailabilityPollerPushDeadlineProof(t *testing.T) {
+	m := newPushTestMonitor()
+	target := config.NormalizeAvailabilityTarget(config.AvailabilityTarget{
+		ID:       "poller-push-proof",
+		Name:     "Nightly cron",
+		Protocol: config.AvailabilityProbePush,
+		Enabled:  true,
+		Push: &config.AvailabilityPushConfig{
+			Token:           "abcdefghijklmnopqrstuvwxyz123456",
+			ScheduleType:    config.AvailabilityPushScheduleInterval,
+			IntervalSeconds: 600,
+			GraceSeconds:    60,
+		},
+	})
+	start := time.Date(2026, 11, 24, 1, 0, 0, 0, time.UTC)
+	res := m.RecordAvailabilityPushPing(target, AvailabilityPushEventSuccess, "ok", nil, start)
+	if !res.Accepted {
+		t.Fatalf("expected push ping accepted")
+	}
+	m.evaluatePushAvailabilityTarget(target, start.Add(12*time.Minute))
+	if m.availabilityStatuses[target.ID].Available {
+		t.Fatalf("expected push target unavailable after interval plus grace elapsed")
+	}
+}

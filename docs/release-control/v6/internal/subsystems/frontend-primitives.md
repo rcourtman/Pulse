@@ -11789,3 +11789,12 @@ rows and avoids truncating host names on 390px phones. Verified by
 DNS protocol labels and summaries for `protocol: "dns"` targets alongside the
 existing HTTP, HTTPS, TCP, and ICMP check types. Shared settings panel layout
 and primitives are unchanged.
+
+### Inbound push and heartbeat availability checks (Stage 2 Build, 24 November 2026)
+
+`frontend-modern/src/components/Settings/availabilitySettingsModel.ts`,
+`AvailabilitySettingsPanel.tsx`, and `AvailabilityTargetSlot.tsx` add
+feature-gated (`availabilityPushChecks` at stage `build`) push schedule labels,
+pending first-ping status, hidden outbound test actions for push checks, and
+mobile-safe wrapping (`min-w-0`, wrapped `curl` snippet) inside the shared
+availability editor dialog.

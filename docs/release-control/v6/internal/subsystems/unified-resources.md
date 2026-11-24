@@ -10665,3 +10665,10 @@ hypervisor, parent host, vCPU, and RAM facts in the VM drawer.
 targets, record types, transports, and expected answers for unified availability
 check rows and drawers. Verified by `AvailabilityTargetSlot.test.tsx` and
 `frontend-modern/browser-verification/d920ff2aaa7c5c9c.json`.
+
+### Inbound push and heartbeat availability checks (Stage 2 Build, 24 November 2026)
+
+`frontend-modern/src/utils/availabilityProbePresentation.ts` adds `Push` method
+and result formatting (`waiting for ping`, `missed`, `failed`, `ok`, or measured
+duration) for unified availability resources backed by `protocol: "push"` checks
+without exposing ping tokens in unified resource payloads.

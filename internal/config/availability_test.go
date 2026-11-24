@@ -519,3 +519,96 @@ func TestAvailabilityDNSValidationAndRevision(t *testing.T) {
 		t.Fatal("non-DNS target with DNS config should fail validation")
 	}
 }
+
+func TestAvailabilityTargetPushDefaultsValidationAndPersistence(t *testing.T) {
+	token, err := GenerateAvailabilityPushToken()
+	if err != nil {
+		t.Fatalf("GenerateAvailabilityPushToken() error = %v", err)
+	}
+	if len(token) < 32 {
+		t.Fatalf("expected high-entropy token length >= 32, got %d", len(token))
+	}
+
+	target := NormalizeAvailabilityTarget(AvailabilityTarget{
+		Name:     "Nightly restic backup",
+		Protocol: AvailabilityProbePush,
+		Enabled:  true,
+		Push: &AvailabilityPushConfig{
+			Token:           token,
+			ScheduleType:    AvailabilityPushScheduleInterval,
+			IntervalSeconds: 86400,
+			GraceSeconds:    600,
+		},
+	})
+	if err := target.Validate(); err != nil {
+		t.Fatalf("Validate() unexpected error for valid interval push target: %v", err)
+	}
+	if target.FailureThreshold != 1 {
+		t.Fatalf("FailureThreshold = %d, want 1", target.FailureThreshold)
+	}
+	if !reflect.DeepEqual(target.ObservationLocationIDs, []string{AvailabilityObservationLocationLocal}) {
+		t.Fatalf("ObservationLocationIDs = %#v, want [pulse:local]", target.ObservationLocationIDs)
+	}
+
+	// Token rotation should not bump execution config revision.
+	rotated := target
+	rotatedPush := *target.Push
+	rotatedPush.Token, _ = GenerateAvailabilityPushToken()
+	rotated.Push = &rotatedPush
+	if AvailabilityExecutionConfigChanged(target, rotated) {
+		t.Fatalf("token rotation should not trigger AvailabilityExecutionConfigChanged")
+	}
+
+	// Schedule changes should bump execution config revision.
+	cronTarget := target
+	cronPush := *target.Push
+	cronPush.ScheduleType = AvailabilityPushScheduleCron
+	cronPush.CronExpression = "0 3 * * *"
+	cronTarget.Push = &cronPush
+	cronTarget = NormalizeAvailabilityTarget(cronTarget)
+	if err := cronTarget.Validate(); err != nil {
+		t.Fatalf("Validate() unexpected error for valid cron push target: %v", err)
+	}
+	if !AvailabilityExecutionConfigChanged(target, cronTarget) {
+		t.Fatalf("changing push schedule should trigger AvailabilityExecutionConfigChanged")
+	}
+
+	// Missing name is rejected.
+	noName := target
+	noName.Name = "   "
+	if err := noName.Validate(); err == nil {
+		t.Fatalf("expected error for push target without name")
+	}
+
+	// Invalid cron is rejected.
+	badCron := cronTarget
+	badCronPush := *cronTarget.Push
+	badCronPush.CronExpression = "invalid cron"
+	badCron.Push = &badCronPush
+	if err := badCron.Validate(); err == nil {
+		t.Fatalf("expected error for invalid push cron expression")
+	}
+
+	// Push config on non-push protocol is rejected.
+	wrongProto := AvailabilityTarget{
+		Address:  "1.1.1.1",
+		Protocol: AvailabilityProbeICMP,
+		Push:     target.Push,
+	}
+	if err := wrongProto.Validate(); err == nil {
+		t.Fatalf("expected error for push config on ICMP target")
+	}
+
+	// Encrypted persistence round-trip preserves token and schedule.
+	persistence := NewConfigPersistence(t.TempDir())
+	if err := persistence.SaveAvailabilityTargets([]AvailabilityTarget{cronTarget}); err != nil {
+		t.Fatalf("SaveAvailabilityTargets() error = %v", err)
+	}
+	loaded, err := persistence.LoadAvailabilityTargets()
+	if err != nil {
+		t.Fatalf("LoadAvailabilityTargets() error = %v", err)
+	}
+	if len(loaded) != 1 || loaded[0].Push == nil || loaded[0].Push.Token != cronTarget.Push.Token || loaded[0].Push.CronExpression != "0 3 * * *" {
+		t.Fatalf("loaded push target mismatch: %+v", loaded)
+	}
+}

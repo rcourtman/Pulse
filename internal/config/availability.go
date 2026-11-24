@@ -1,6 +1,8 @@
 package config
 
 import (
+	"crypto/rand"
+	"encoding/base64"
 	"fmt"
 	"net"
 	"net/url"
@@ -8,6 +10,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 )
@@ -17,6 +20,11 @@ const (
 	DefaultAvailabilityTimeoutMillis           = 2000
 	DefaultAvailabilityFailureThreshold        = 2
 	DefaultCertificateExpiryWarningDays        = 30
+	DefaultAvailabilityPushIntervalSecs        = 86400
+	MinAvailabilityPushIntervalSecs            = 60
+	MaxAvailabilityPushIntervalSecs            = 365 * 24 * 3600
+	DefaultAvailabilityPushGraceSecs           = 300
+	MaxAvailabilityPushGraceSecs               = 7 * 24 * 3600
 	MaxAvailabilityHTTPBodyBytes               = 8192
 	MaxAvailabilityHTTPResponseBytes           = 65536
 	MaxAvailabilityUDPExpectedResponseBytes    = 4096
@@ -82,6 +90,7 @@ const (
 	AvailabilityProbeHTTPS AvailabilityProbeProtocol = "https"
 	AvailabilityProbeUDP   AvailabilityProbeProtocol = "udp"
 	AvailabilityProbeDNS   AvailabilityProbeProtocol = "dns"
+	AvailabilityProbePush  AvailabilityProbeProtocol = "push"
 
 	availabilityProbePingAlias AvailabilityProbeProtocol = "ping"
 	DefaultAvailabilityDNSPort                           = 53
@@ -101,6 +110,33 @@ type AvailabilityDNSConfig struct {
 	RecordType    string                   `json:"recordType,omitempty"`
 	Transport     AvailabilityDNSTransport `json:"transport,omitempty"`
 	ExpectedValue string                   `json:"expectedValue,omitempty"`
+}
+
+type AvailabilityPushScheduleType string
+
+const (
+	AvailabilityPushScheduleInterval AvailabilityPushScheduleType = "interval"
+	AvailabilityPushScheduleCron     AvailabilityPushScheduleType = "cron"
+)
+
+// AvailabilityPushConfig defines an inbound push/heartbeat check schedule and
+// per-check authentication token. Stored encrypted with the target list.
+type AvailabilityPushConfig struct {
+	Token           string                       `json:"token,omitempty"`
+	ScheduleType    AvailabilityPushScheduleType `json:"scheduleType,omitempty"`
+	IntervalSeconds int                          `json:"intervalSeconds,omitempty"`
+	CronExpression  string                       `json:"cronExpression,omitempty"`
+	GraceSeconds    int                          `json:"graceSeconds,omitempty"`
+}
+
+// GenerateAvailabilityPushToken returns a 256-bit cryptographically random
+// URL-safe token for an inbound push availability check.
+func GenerateAvailabilityPushToken() (string, error) {
+	var raw [32]byte
+	if _, err := rand.Read(raw[:]); err != nil {
+		return "", fmt.Errorf("generate push token: %w", err)
+	}
+	return base64.RawURLEncoding.EncodeToString(raw[:]), nil
 }
 
 type AvailabilityUDPMode string
@@ -181,6 +217,8 @@ type AvailabilityTarget struct {
 	// DNS defines the query name, record type, transport, and optional expected
 	// answer for protocol "dns" targets.
 	DNS *AvailabilityDNSConfig `json:"dns,omitempty"`
+	// Push defines an inbound heartbeat/cron check when Protocol is "push".
+	Push *AvailabilityPushConfig `json:"push,omitempty"`
 	// DockerPort is set on a check Pulse created from a container's published
 	// port. It is absent on checks an operator typed in.
 	DockerPort *AvailabilityDockerPortSource `json:"dockerPort,omitempty"`
@@ -225,7 +263,26 @@ func (t *AvailabilityTarget) ApplyDefaults() {
 		t.TimeoutMillis = DefaultAvailabilityTimeoutMillis
 	}
 	if t.FailureThreshold <= 0 {
-		t.FailureThreshold = DefaultAvailabilityFailureThreshold
+		if t.Protocol == AvailabilityProbePush {
+			t.FailureThreshold = 1
+		} else {
+			t.FailureThreshold = DefaultAvailabilityFailureThreshold
+		}
+	}
+	if t.Protocol == AvailabilityProbePush {
+		if t.Push == nil {
+			t.Push = &AvailabilityPushConfig{
+				ScheduleType:    AvailabilityPushScheduleInterval,
+				IntervalSeconds: DefaultAvailabilityPushIntervalSecs,
+				GraceSeconds:    DefaultAvailabilityPushGraceSecs,
+			}
+		}
+		if t.Push.ScheduleType == "" {
+			t.Push.ScheduleType = AvailabilityPushScheduleInterval
+		}
+		if t.Push.ScheduleType == AvailabilityPushScheduleInterval && t.Push.IntervalSeconds <= 0 {
+			t.Push.IntervalSeconds = DefaultAvailabilityPushIntervalSecs
+		}
 	}
 	if t.Protocol == AvailabilityProbeUDP {
 		t.UDPMode = normalizeAvailabilityUDPMode(t.UDPMode)
@@ -285,7 +342,43 @@ func (t AvailabilityTarget) EffectiveFailureThreshold() int {
 	if t.FailureThreshold > 0 {
 		return t.FailureThreshold
 	}
+	if normalizeAvailabilityProbeProtocol(t.Protocol) == AvailabilityProbePush {
+		return 1
+	}
 	return DefaultAvailabilityFailureThreshold
+}
+
+// EffectivePushValidityWindow returns how long a healthy push ping remains
+// current before the next scheduled deadline and grace period expire.
+func (t AvailabilityTarget) EffectivePushValidityWindow(now time.Time) time.Duration {
+	if normalizeAvailabilityProbeProtocol(t.Protocol) != AvailabilityProbePush || t.Push == nil {
+		return time.Duration(t.EffectivePollIntervalSecs()*2) * time.Second
+	}
+	grace := time.Duration(t.Push.GraceSeconds) * time.Second
+	if grace < 0 {
+		grace = 0
+	}
+	if t.Push.ScheduleType == AvailabilityPushScheduleCron {
+		if sched, err := ParseAvailabilityCron(t.Push.CronExpression); err == nil {
+			if next, ok := sched.Next(now); ok {
+				window := next.Sub(now) + grace
+				if window < time.Minute {
+					return time.Minute
+				}
+				return window
+			}
+		}
+		return 24*time.Hour + grace
+	}
+	interval := t.Push.IntervalSeconds
+	if interval <= 0 {
+		interval = DefaultAvailabilityPushIntervalSecs
+	}
+	window := time.Duration(interval)*time.Second + grace
+	if window < time.Minute {
+		return time.Minute
+	}
+	return window
 }
 
 // AvailabilityExecutionConfigChanged reports whether an edit changes what is
@@ -304,10 +397,24 @@ func AvailabilityExecutionConfigChanged(previous, next AvailabilityTarget) bool 
 		previous.UDPExpected != next.UDPExpected ||
 		!reflect.DeepEqual(previous.HTTP, next.HTTP) ||
 		!reflect.DeepEqual(previous.DNS, next.DNS) ||
+		!sameAvailabilityPushSchedule(previous.Push, next.Push) ||
 		previous.EffectiveTimeoutMillis() != next.EffectiveTimeoutMillis() ||
 		previous.EffectivePollIntervalSecs() != next.EffectivePollIntervalSecs() ||
 		legacyProbeAssignmentChanged ||
 		!reflect.DeepEqual(previous.EffectiveObservationLocationIDs(), next.EffectiveObservationLocationIDs())
+}
+
+func sameAvailabilityPushSchedule(a, b *AvailabilityPushConfig) bool {
+	if a == nil && b == nil {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.ScheduleType == b.ScheduleType &&
+		a.IntervalSeconds == b.IntervalSeconds &&
+		a.CronExpression == b.CronExpression &&
+		a.GraceSeconds == b.GraceSeconds
 }
 
 func AvailabilityAgentObservationLocationID(agentID string) string {
@@ -392,7 +499,12 @@ func (t AvailabilityTarget) ProbeAddress() string {
 }
 
 func (t AvailabilityTarget) Validate() error {
-	if strings.TrimSpace(t.Address) == "" {
+	protocol := normalizeAvailabilityProbeProtocol(t.Protocol)
+	if protocol == AvailabilityProbePush {
+		if strings.TrimSpace(t.Name) == "" {
+			return fmt.Errorf("push availability targets require a name")
+		}
+	} else if strings.TrimSpace(t.Address) == "" {
 		return fmt.Errorf("availability target address is required")
 	}
 	switch t.TargetKind {
@@ -401,7 +513,6 @@ func (t AvailabilityTarget) Validate() error {
 	default:
 		return fmt.Errorf("unsupported availability target kind %q", t.TargetKind)
 	}
-	protocol := normalizeAvailabilityProbeProtocol(t.Protocol)
 	switch protocol {
 	case AvailabilityProbeICMP:
 		if t.Port != 0 {
@@ -419,8 +530,25 @@ func (t AvailabilityTarget) Validate() error {
 		if t.Port < 0 || t.Port > 65535 {
 			return fmt.Errorf("dns availability target port must be valid")
 		}
+	case AvailabilityProbePush:
+		if t.Port != 0 {
+			return fmt.Errorf("push availability targets must not set a port")
+		}
+		if strings.TrimSpace(t.Path) != "" {
+			return fmt.Errorf("push availability targets must not set a path")
+		}
 	default:
 		return fmt.Errorf("unsupported availability protocol %q", t.Protocol)
+	}
+	if protocol == AvailabilityProbePush {
+		if err := validateAvailabilityPushConfig(t.Push); err != nil {
+			return err
+		}
+		if t.DockerPort != nil {
+			return fmt.Errorf("push availability targets cannot be bound to a Docker port source")
+		}
+	} else if t.Push != nil {
+		return fmt.Errorf("push settings may only be used with push availability targets")
 	}
 	if protocol == AvailabilityProbeUDP {
 		mode := normalizeAvailabilityUDPMode(t.UDPMode)
@@ -484,9 +612,15 @@ func (t AvailabilityTarget) Validate() error {
 		if locationID == AvailabilityObservationLocationLocal {
 			continue
 		}
+		if protocol == AvailabilityProbePush {
+			return fmt.Errorf("push availability targets are evaluated on the Pulse server and cannot use remote observation locations")
+		}
 		if AvailabilityObservationLocationAgentID(locationID) == "" {
 			return fmt.Errorf("unsupported availability observation location %q", locationID)
 		}
+	}
+	if protocol == AvailabilityProbePush {
+		return nil
 	}
 	if protocol == AvailabilityProbeHTTP || protocol == AvailabilityProbeHTTPS {
 		if _, err := t.HTTPURL(); err != nil {
@@ -548,6 +682,12 @@ func NormalizeAvailabilityTarget(target AvailabilityTarget) AvailabilityTarget {
 	target.Protocol = normalizeAvailabilityProbeProtocol(target.Protocol)
 	if target.Protocol == AvailabilityProbeHTTP || target.Protocol == AvailabilityProbeHTTPS {
 		target.Address = strings.TrimSpace(target.Address)
+	} else if target.Protocol == AvailabilityProbePush {
+		target.Address = strings.TrimSpace(target.Address)
+		target.Port = 0
+		target.Path = ""
+		target.ProbeAgentID = ""
+		target.ObservationLocationIDs = []string{AvailabilityObservationLocationLocal}
 	} else {
 		target.Address = normalizeAvailabilityAddress(target.Address)
 	}
@@ -614,9 +754,61 @@ func NormalizeAvailabilityTarget(target AvailabilityTarget) AvailabilityTarget {
 	if target.Protocol != AvailabilityProbeDNS {
 		target.DNS = nil
 	}
+	if target.Protocol == AvailabilityProbePush {
+		if target.Push != nil {
+			target.Push.Token = strings.TrimSpace(target.Push.Token)
+			target.Push.ScheduleType = AvailabilityPushScheduleType(strings.ToLower(strings.TrimSpace(string(target.Push.ScheduleType))))
+			target.Push.CronExpression = strings.Join(strings.Fields(strings.TrimSpace(target.Push.CronExpression)), " ")
+			if target.Push.ScheduleType == AvailabilityPushScheduleInterval {
+				target.Push.CronExpression = ""
+			} else if target.Push.ScheduleType == AvailabilityPushScheduleCron {
+				target.Push.IntervalSeconds = 0
+			}
+		}
+	} else {
+		target.Push = nil
+	}
 	target.DockerPort = normalizeAvailabilityDockerPortSource(target.DockerPort)
 	target.ApplyDefaults()
 	return target
+}
+
+func validateAvailabilityPushConfig(push *AvailabilityPushConfig) error {
+	if push == nil {
+		return fmt.Errorf("push availability targets require push schedule configuration")
+	}
+	if push.GraceSeconds < 0 || push.GraceSeconds > MaxAvailabilityPushGraceSecs {
+		return fmt.Errorf("push grace period must be between 0 and %d seconds", MaxAvailabilityPushGraceSecs)
+	}
+	if push.Token != "" {
+		if len(push.Token) < 16 || len(push.Token) > 128 {
+			return fmt.Errorf("push token must be between 16 and 128 characters")
+		}
+		for _, ch := range push.Token {
+			if !((ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9') || ch == '-' || ch == '_') {
+				return fmt.Errorf("push token must use URL-safe characters only")
+			}
+		}
+	}
+	switch push.ScheduleType {
+	case AvailabilityPushScheduleInterval:
+		if push.IntervalSeconds < MinAvailabilityPushIntervalSecs || push.IntervalSeconds > MaxAvailabilityPushIntervalSecs {
+			return fmt.Errorf("push interval must be between %d and %d seconds", MinAvailabilityPushIntervalSecs, MaxAvailabilityPushIntervalSecs)
+		}
+		if strings.TrimSpace(push.CronExpression) != "" {
+			return fmt.Errorf("push interval checks must not set a cron expression")
+		}
+	case AvailabilityPushScheduleCron:
+		if strings.TrimSpace(push.CronExpression) == "" {
+			return fmt.Errorf("push cron checks require a 5-field cron expression")
+		}
+		if _, err := ParseAvailabilityCron(push.CronExpression); err != nil {
+			return fmt.Errorf("invalid push cron expression: %w", err)
+		}
+	default:
+		return fmt.Errorf("unsupported push schedule type %q", push.ScheduleType)
+	}
+	return nil
 }
 
 func normalizeAvailabilityObservationLocationIDs(locationIDs []string) []string {

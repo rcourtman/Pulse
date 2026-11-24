@@ -10194,3 +10194,10 @@ read/write path changes. Verified by `resourceLinks.test.ts`.
 `internal/api/availability_handlers.go` persists `protocol: "dns"` and its `dns`
 configuration through the existing encrypted `availability_targets.enc` store.
 Backup, snapshot, and storage-recovery persistence formats are unchanged.
+
+### Inbound push and heartbeat availability checks (Stage 2 Build, 24 November 2026)
+
+`internal/api/availability_handlers.go` and `internal/api/availability_push_handlers.go`
+persist `protocol: "push"` schedules and 256-bit tokens inside the existing
+encrypted `availability_targets.enc` store without altering backup, snapshot, or
+recovery persistence contracts.

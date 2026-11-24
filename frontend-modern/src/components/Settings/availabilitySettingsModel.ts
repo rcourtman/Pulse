@@ -118,6 +118,8 @@ export function getAvailabilityTargetMethodLabel(target: AvailabilityTarget): st
       const recordType = target.dns?.recordType?.trim().toUpperCase() || 'A';
       return `DNS ${recordType}`;
     }
+    case 'push':
+      return 'Push heartbeat';
     default:
       return String(target.protocol).toUpperCase();
   }
@@ -130,6 +132,16 @@ export function getAvailabilityTargetKindLabel(target: AvailabilityTarget): stri
 }
 
 export function getAvailabilityTargetAddressLabel(target: AvailabilityTarget): string {
+  if (target.protocol === 'push') {
+    if (target.push?.scheduleType === 'cron' && target.push.cronExpression?.trim()) {
+      return `Cron ${target.push.cronExpression.trim()} (UTC)`;
+    }
+    const secs = target.push?.intervalSeconds ?? 86400;
+    if (secs % 86400 === 0) return `Every ${secs / 86400}d`;
+    if (secs % 3600 === 0) return `Every ${secs / 3600}h`;
+    if (secs % 60 === 0) return `Every ${secs / 60}m`;
+    return `Every ${secs}s`;
+  }
   if (target.protocol === 'http') {
     const path = target.path?.trim();
     if (path && !target.address.endsWith(path)) {
@@ -158,6 +170,9 @@ export function getAvailabilityTargetStatusLabel(
 ): string {
   if (!target.enabled) return 'Paused';
   const status = target.status;
+  if (target.protocol === 'push' && (!status || !status.lastChecked)) {
+    return 'Waiting for first ping';
+  }
   if (!status) return 'Not checked yet';
   if (resource && getStandaloneResourceStatusIndicator(resource, nowMs).label === 'Stale') {
     return isProbeAgentStaleStatus(status) ? PROBE_AGENT_STALE_LABEL : 'Stale';
@@ -207,6 +222,9 @@ export function getAvailabilityTargetHealth(
   nowMs: number = Date.now(),
 ): AvailabilityTargetHealth {
   if (!target.enabled) return 'paused';
+  if (target.protocol === 'push' && (!target.status || !target.status.lastChecked)) {
+    return 'pending';
+  }
   if (resource) {
     const variant = getStandaloneResourceStatusIndicator(resource, nowMs).variant;
     if (variant === 'success') return 'healthy';
