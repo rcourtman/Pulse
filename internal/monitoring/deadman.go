@@ -92,6 +92,7 @@ type deadManRuntime struct {
 	stopping           bool
 	status             DeadManStatus
 	wake               chan struct{}
+	alertProjection    deadManAlertProjection
 	signalGeneration   uint64
 	activeSignalCancel context.CancelFunc
 
@@ -119,6 +120,9 @@ func newDeadManRuntime(dataDir string) *deadManRuntime {
 			RecommendedGraceSecs:  int64((3 * deadManHeartbeatInterval) / time.Second),
 		},
 		wake: make(chan struct{}, 1),
+		alertProjection: deadManAlertProjection{
+			wake: make(chan struct{}, 1),
+		},
 	}
 	transport := http.DefaultTransport.(*http.Transport).Clone()
 	// A credential-bearing health URL must not inherit a process-wide proxy:
@@ -169,16 +173,27 @@ func (d *deadManRuntime) run(
 	if d == nil {
 		return
 	}
-	d.runCycle(ctx, configURL, monitorProgress, manager)
+	if manager != nil {
+		projected := make(chan struct{})
+		go func() {
+			defer close(projected)
+			d.alertProjection.run(manager)
+		}()
+		defer func() {
+			d.alertProjection.close()
+			<-projected
+		}()
+	}
+	d.runCycle(ctx, configURL, monitorProgress)
 
 	ticker := time.NewTicker(d.interval)
 	defer ticker.Stop()
 	for {
 		select {
 		case <-ticker.C:
-			d.runCycle(ctx, configURL, monitorProgress, manager)
+			d.runCycle(ctx, configURL, monitorProgress)
 		case <-d.wake:
-			d.runCycle(ctx, configURL, monitorProgress, manager)
+			d.runCycle(ctx, configURL, monitorProgress)
 		case <-ctx.Done():
 			return
 		}
@@ -189,30 +204,34 @@ func (d *deadManRuntime) runCycle(
 	ctx context.Context,
 	configURL func() string,
 	monitorProgress func() time.Time,
-	manager *alerts.Manager,
 ) {
-	now := d.now()
-	d.mu.RLock()
-	stopping := d.stopping
-	d.mu.RUnlock()
-	if stopping {
+	// Register cancellation before taking the configuration snapshot. A
+	// save that supersedes that snapshot can then cancel even the part of
+	// the cycle that precedes the HTTP request.
+	ctx, generation, ok := d.beginSignal(ctx)
+	if !ok {
 		return
 	}
+	defer d.finishSignal(generation)
+	now := d.now()
 	endpoint := ""
 	if configURL != nil {
 		endpoint = strings.TrimSpace(configURL())
 	}
+	if ctx.Err() != nil {
+		return
+	}
 	if endpoint == "" {
-		d.disable(now, manager)
+		d.disable(now)
 		return
 	}
 
 	if err := notifications.ValidateDeadManPingURL(endpoint); err != nil {
-		d.setMisconfigured(err.Error(), manager)
+		d.setMisconfigured(err.Error())
 		return
 	}
 	fingerprint := deadManEndpointFingerprint(endpoint)
-	d.ensureEndpoint(now, fingerprint, manager)
+	d.ensureEndpoint(now, fingerprint)
 
 	progress := time.Time{}
 	if monitorProgress != nil {
@@ -221,11 +240,11 @@ func (d *deadManRuntime) runCycle(
 	fresh := !progress.IsZero() && !progress.After(now.Add(5*time.Second)) && now.Sub(progress) <= d.progressFreshness
 	d.setMonitoringProgress(progress)
 	if fresh {
-		d.recordHealthyProgress(progress, manager)
-		d.clearSystemAlert(manager, alerts.DeadManMonitoringStalledAlertType)
+		d.recordHealthyProgress(progress)
+		d.alertProjection.clear(alerts.DeadManMonitoringStalledAlertType)
 	} else {
 		d.setState("monitor_stalled", "Pulse monitoring loop has stopped making progress")
-		d.raiseMonitoringStalled(manager, progress)
+		d.raiseMonitoringStalled(progress)
 	}
 
 	message := ""
@@ -237,25 +256,19 @@ func (d *deadManRuntime) runCycle(
 		message = deadManInterruptionMessage(gap)
 	}
 
-	attemptAt := d.now()
-	d.setAttempt(attemptAt)
-	signalCtx, generation, ok := d.beginSignal(ctx)
-	if !ok {
+	if ctx.Err() != nil {
 		return
 	}
-	defer d.finishSignal(generation)
-	err := d.sendWithRetry(signalCtx, signalURL, message)
-	if signalCtx.Err() != nil {
-		return
-	}
+	d.setAttempt(d.now())
+	err := d.sendWithRetry(ctx, signalURL, message)
 	if err != nil {
-		d.recordSignalFailure(err.Error(), manager)
+		d.recordSignalFailure(ctx, err.Error())
 		return
 	}
-	d.recordSignalSuccess(d.now(), fresh, manager)
+	d.recordSignalSuccess(ctx, d.now(), fresh)
 }
 
-func (d *deadManRuntime) ensureEndpoint(now time.Time, fingerprint string, manager *alerts.Manager) {
+func (d *deadManRuntime) ensureEndpoint(now time.Time, fingerprint string) {
 	d.mu.Lock()
 	if d.initialized && d.persisted.EndpointFingerprint == fingerprint && d.persisted.Enabled {
 		d.mu.Unlock()
@@ -306,8 +319,8 @@ func (d *deadManRuntime) ensureEndpoint(now time.Time, fingerprint string, manag
 	d.loadError = nil
 	d.mu.Unlock()
 
-	if loadErr != nil && manager != nil {
-		manager.RaiseSystemAlert(alerts.SystemAlertInput{
+	if loadErr != nil {
+		d.alertProjection.record(alerts.SystemAlertInput{
 			Type:        alerts.DeadManStateAlertType,
 			Level:       alerts.AlertLevelWarning,
 			Message:     "Pulse could not read its previous dead-man restart record. Future outage reporting has restarted from a clean baseline.",
@@ -315,16 +328,16 @@ func (d *deadManRuntime) ensureEndpoint(now time.Time, fingerprint string, manag
 		})
 	}
 	if err := d.persistCurrentState(); err != nil {
-		d.handlePersistenceError(err, manager)
+		d.alertProjection.raise(deadManPersistenceAlert(err))
 	} else {
-		d.clearSystemAlert(manager, alerts.DeadManStateAlertType)
+		d.alertProjection.clear(alerts.DeadManStateAlertType)
 	}
-	if gap != nil && manager != nil {
+	if gap != nil {
 		level := alerts.AlertLevelWarning
 		if !gap.CleanShutdown {
 			level = alerts.AlertLevelCritical
 		}
-		manager.RaiseSystemAlert(alerts.SystemAlertInput{
+		d.alertProjection.record(alerts.SystemAlertInput{
 			Type:        alerts.DeadManInterruptionAlertType,
 			Level:       level,
 			Message:     deadManInterruptionAlertMessage(gap),
@@ -339,7 +352,7 @@ func (d *deadManRuntime) ensureEndpoint(now time.Time, fingerprint string, manag
 	}
 }
 
-func (d *deadManRuntime) disable(now time.Time, manager *alerts.Manager) {
+func (d *deadManRuntime) disable(now time.Time) {
 	d.mu.Lock()
 	wasEnabled := d.initialized && d.persisted.Enabled
 	if wasEnabled {
@@ -358,7 +371,7 @@ func (d *deadManRuntime) disable(now time.Time, manager *alerts.Manager) {
 
 	if wasEnabled {
 		if err := d.persistCurrentState(); err != nil {
-			d.handlePersistenceError(err, manager)
+			d.alertProjection.raise(deadManPersistenceAlert(err))
 		}
 	}
 	for _, alertType := range []string{
@@ -366,7 +379,7 @@ func (d *deadManRuntime) disable(now time.Time, manager *alerts.Manager) {
 		alerts.DeadManMonitoringStalledAlertType,
 		alerts.DeadManInterruptionAlertType,
 	} {
-		d.clearSystemAlert(manager, alertType)
+		d.alertProjection.clear(alertType)
 	}
 }
 
@@ -391,7 +404,10 @@ func (d *deadManRuntime) stop(now time.Time, manager *alerts.Manager) {
 		cancel()
 	}
 	if err := d.persistCurrentState(); err != nil {
-		d.handlePersistenceError(err, manager)
+		input := deadManPersistenceAlert(err)
+		if manager != nil {
+			manager.RaiseSystemAlert(input)
+		}
 	}
 }
 
@@ -421,7 +437,7 @@ func (d *deadManRuntime) setMonitoringProgress(progress time.Time) {
 	d.mu.Unlock()
 }
 
-func (d *deadManRuntime) recordHealthyProgress(progress time.Time, manager *alerts.Manager) {
+func (d *deadManRuntime) recordHealthyProgress(progress time.Time) {
 	d.mu.Lock()
 	if d.stopping {
 		d.mu.Unlock()
@@ -431,9 +447,9 @@ func (d *deadManRuntime) recordHealthyProgress(progress time.Time, manager *aler
 	d.persisted.StoppedAt = time.Time{}
 	d.mu.Unlock()
 	if err := d.persistCurrentState(); err != nil {
-		d.handlePersistenceError(err, manager)
+		d.alertProjection.raise(deadManPersistenceAlert(err))
 	} else {
-		d.clearSystemAlert(manager, alerts.DeadManStateAlertType)
+		d.alertProjection.clear(alerts.DeadManStateAlertType)
 	}
 }
 
@@ -456,26 +472,24 @@ func (d *deadManRuntime) pendingInterruption() *DeadManInterruption {
 	return cloneDeadManInterruption(d.pendingGap)
 }
 
-func (d *deadManRuntime) setMisconfigured(message string, manager *alerts.Manager) {
+func (d *deadManRuntime) setMisconfigured(message string) {
 	d.mu.Lock()
 	d.status.Configured = true
 	d.status.State = "misconfigured"
 	d.status.LastError = message
 	d.status.ConsecutiveFailures = 0
 	d.mu.Unlock()
-	if manager != nil {
-		manager.RaiseSystemAlert(alerts.SystemAlertInput{
-			Type:        alerts.DeadManDeliveryAlertType,
-			Level:       alerts.AlertLevelWarning,
-			Message:     "The external dead-man destination is invalid and Pulse cannot send watchdog signals.",
-			Fingerprint: "misconfigured",
-		})
-	}
+	d.alertProjection.raise(alerts.SystemAlertInput{
+		Type:        alerts.DeadManDeliveryAlertType,
+		Level:       alerts.AlertLevelWarning,
+		Message:     "The external dead-man destination is invalid and Pulse cannot send watchdog signals.",
+		Fingerprint: "misconfigured",
+	})
 }
 
-func (d *deadManRuntime) recordSignalFailure(message string, manager *alerts.Manager) {
+func (d *deadManRuntime) recordSignalFailure(ctx context.Context, message string) {
 	d.mu.Lock()
-	if d.stopping {
+	if d.stopping || ctx.Err() != nil {
 		d.mu.Unlock()
 		return
 	}
@@ -488,8 +502,8 @@ func (d *deadManRuntime) recordSignalFailure(message string, manager *alerts.Man
 	failures := d.consecutiveFail
 	d.mu.Unlock()
 
-	if failures >= deadManDeliveryAlertThreshold && manager != nil {
-		manager.RaiseSystemAlert(alerts.SystemAlertInput{
+	if failures >= deadManDeliveryAlertThreshold {
+		d.alertProjection.raise(alerts.SystemAlertInput{
 			Type:        alerts.DeadManDeliveryAlertType,
 			Level:       alerts.AlertLevelWarning,
 			Message:     fmt.Sprintf("Pulse monitoring is running, but the external dead-man destination has failed %d consecutive heartbeat cycles.", failures),
@@ -501,9 +515,9 @@ func (d *deadManRuntime) recordSignalFailure(message string, manager *alerts.Man
 	}
 }
 
-func (d *deadManRuntime) recordSignalSuccess(at time.Time, monitoringFresh bool, manager *alerts.Manager) {
+func (d *deadManRuntime) recordSignalSuccess(ctx context.Context, at time.Time, monitoringFresh bool) {
 	d.mu.Lock()
-	if d.stopping {
+	if d.stopping || ctx.Err() != nil {
 		d.mu.Unlock()
 		return
 	}
@@ -522,11 +536,11 @@ func (d *deadManRuntime) recordSignalSuccess(at time.Time, monitoringFresh bool,
 	d.mu.Unlock()
 
 	if err := d.persistCurrentState(); err != nil {
-		d.handlePersistenceError(err, manager)
+		d.alertProjection.raise(deadManPersistenceAlert(err))
 	}
-	d.clearSystemAlert(manager, alerts.DeadManDeliveryAlertType)
+	d.alertProjection.clear(alerts.DeadManDeliveryAlertType)
 	if monitoringFresh {
-		d.clearSystemAlert(manager, alerts.DeadManInterruptionAlertType)
+		d.alertProjection.clear(alerts.DeadManInterruptionAlertType)
 	}
 }
 
@@ -535,12 +549,11 @@ func (d *deadManRuntime) notifyConfigChanged() {
 		return
 	}
 	d.mu.Lock()
-	cancel := d.activeSignalCancel
-	d.activeSignalCancel = nil
-	d.mu.Unlock()
-	if cancel != nil {
-		cancel()
+	if d.activeSignalCancel != nil {
+		d.activeSignalCancel()
+		d.activeSignalCancel = nil
 	}
+	d.mu.Unlock()
 	select {
 	case d.wake <- struct{}{}:
 	default:
@@ -550,7 +563,7 @@ func (d *deadManRuntime) notifyConfigChanged() {
 func (d *deadManRuntime) beginSignal(ctx context.Context) (context.Context, uint64, bool) {
 	signalCtx, cancel := context.WithCancel(ctx)
 	d.mu.Lock()
-	if d.stopping {
+	if d.stopping || signalCtx.Err() != nil {
 		d.mu.Unlock()
 		cancel()
 		return signalCtx, 0, false
@@ -587,16 +600,13 @@ func (d *deadManRuntime) persistCurrentState() error {
 	return persistDeadManState(d.statePath, state)
 }
 
-func (d *deadManRuntime) raiseMonitoringStalled(manager *alerts.Manager, progress time.Time) {
-	if manager == nil {
-		return
-	}
+func (d *deadManRuntime) raiseMonitoringStalled(progress time.Time) {
 	message := "Pulse's external watchdog is running, but the monitoring loop has stopped making progress."
 	metadata := map[string]interface{}{}
 	if !progress.IsZero() {
 		metadata["lastMonitoringProgress"] = progress
 	}
-	manager.RaiseSystemAlert(alerts.SystemAlertInput{
+	d.alertProjection.raise(alerts.SystemAlertInput{
 		Type:        alerts.DeadManMonitoringStalledAlertType,
 		Level:       alerts.AlertLevelCritical,
 		Message:     message,
@@ -605,21 +615,13 @@ func (d *deadManRuntime) raiseMonitoringStalled(manager *alerts.Manager, progres
 	})
 }
 
-func (d *deadManRuntime) handlePersistenceError(err error, manager *alerts.Manager) {
+func deadManPersistenceAlert(err error) alerts.SystemAlertInput {
 	log.Error().Err(err).Msg("failed to persist dead-man restart state")
-	if manager != nil {
-		manager.RaiseSystemAlert(alerts.SystemAlertInput{
-			Type:        alerts.DeadManStateAlertType,
-			Level:       alerts.AlertLevelWarning,
-			Message:     "Pulse cannot persist its dead-man restart record, so a later restart may not report the full monitoring gap.",
-			Fingerprint: "state-write-failed",
-		})
-	}
-}
-
-func (d *deadManRuntime) clearSystemAlert(manager *alerts.Manager, alertType string) {
-	if manager != nil {
-		manager.ClearSystemAlert(alertType)
+	return alerts.SystemAlertInput{
+		Type:        alerts.DeadManStateAlertType,
+		Level:       alerts.AlertLevelWarning,
+		Message:     "Pulse cannot persist its dead-man restart record, so a later restart may not report the full monitoring gap.",
+		Fingerprint: "state-write-failed",
 	}
 }
 
@@ -670,6 +672,9 @@ func deadManInterruptionAlertMessage(gap *DeadManInterruption) string {
 func (d *deadManRuntime) sendWithRetry(ctx context.Context, endpoint, message string) error {
 	var lastErr error
 	for attempt := 0; ; attempt++ {
+		if ctx.Err() != nil {
+			return &deadManSignalError{message: "heartbeat cancelled"}
+		}
 		err := d.sendSignal(ctx, endpoint, message)
 		if err == nil {
 			return nil

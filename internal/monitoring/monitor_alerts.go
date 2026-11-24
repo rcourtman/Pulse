@@ -100,15 +100,16 @@ func (m *Monitor) UpdateDeadManConfig(config notifications.DeadManConfig) error 
 		return err
 	}
 	m.deadManConfigMu.Lock()
+	wasUnreadable := m.deadManConfigLoadErr != nil
 	m.deadManConfig = config
 	m.deadManConfigLoadErr = nil
-	m.deadManConfigMu.Unlock()
-	if m.alertManager != nil {
-		m.alertManager.ClearSystemAlert(alerts.DeadManStateAlertType)
-	}
 	if m.deadMan != nil {
+		if wasUnreadable {
+			m.deadMan.alertProjection.clear(alerts.DeadManStateAlertType)
+		}
 		m.deadMan.notifyConfigChanged()
 	}
+	m.deadManConfigMu.Unlock()
 	return nil
 }
 
