@@ -2172,11 +2172,18 @@ func (h *ConfigHandlers) handleRefreshClusterNodes(w http.ResponseWriter, r *htt
 		return
 	}
 
-	// Create client config for cluster detection
+	// Create client config for cluster detection. The saved address keeps the
+	// endpoint pin polling enforces for it.
 	clientConfig := config.CreateProxmoxConfig(&original)
+	fingerprint, err := monitoring.PVEEndpointFingerprint(original, clientConfig.Host, cfg.Discovery)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	clientConfig.Fingerprint = fingerprint
 
 	// Force cluster re-detection (ignore existing endpoints)
-	isCluster, clusterName, clusterEndpoints := detectPVEClusterContext(ctx, clientConfig, original.Name, original.ClusterEndpoints)
+	isCluster, clusterName, clusterEndpoints := detectPVEClusterContext(ctx, clientConfig, original.Name, clusterEndpointsWithSavedTrust(original, cfg.Discovery))
 	if ctx.Err() != nil {
 		return
 	}
@@ -2297,9 +2304,9 @@ func (h *ConfigHandlers) handleRefreshClusterNodes(w http.ResponseWriter, r *htt
 	})
 }
 
-func sameClusterDiscoveryInput(current *config.PVEInstance, original config.PVEInstance, clientConfig proxmox.ClientConfig) bool {
+func sameClusterDiscoveryInput(current *config.PVEInstance, original config.PVEInstance, _ proxmox.ClientConfig) bool {
 	return current.Name == original.Name && current.IsCluster == original.IsCluster && current.ClusterName == original.ClusterName &&
-		config.CreateProxmoxConfig(current) == clientConfig &&
+		config.CreateProxmoxConfig(current) == config.CreateProxmoxConfig(&original) &&
 		maps.Equal(current.TLSFingerprintOverrides, original.TLSFingerprintOverrides) &&
 		slices.EqualFunc(current.ClusterEndpoints, original.ClusterEndpoints, func(a, b config.ClusterEndpoint) bool {
 			// Ordinary polling may update reachability while discovery is

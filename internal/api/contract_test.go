@@ -632,7 +632,7 @@ func TestContract_DefaultDetectPVEClusterRetainsUnreachableMembers(t *testing.T)
 	}))
 	defer server.Close()
 
-	validator := func(node proxmox.ClusterStatus, _ proxmox.ClientConfig) (bool, string, string) {
+	validator := func(node proxmox.ClusterStatus, _ proxmox.ClientConfig, _ string) (bool, string, string) {
 		if node.Name == "pve-a" {
 			return true, "fingerprint-a", ""
 		}

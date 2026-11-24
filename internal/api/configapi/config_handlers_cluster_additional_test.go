@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -433,6 +434,61 @@ func TestHandleRefreshClusterNodes_Success(t *testing.T) {
 	}
 	if len(cfg.PVEInstances[0].ClusterEndpoints) != 2 {
 		t.Fatalf("expected cluster endpoints to be updated")
+	}
+}
+
+// Cluster re-detection dials the saved address outside the cluster client. It
+// must carry the pin polling enforces for that endpoint, and must not dial at
+// all while the saved pins for it contradict each other.
+func TestClusterRedetectionUsesSavedEndpointTrust(t *testing.T) {
+	const primary = "https://192.0.2.10:8006"
+	for _, tc := range []struct {
+		name     string
+		extra    []config.ClusterEndpoint
+		retry    bool // maybeRefreshClusterInfo, which only retries an unnamed cluster
+		wantPins []string
+		wantCode int
+	}{
+		{name: "refresh uses the primary endpoint pin", wantPins: []string{"aa:bb"}, wantCode: http.StatusOK},
+		{name: "refresh refuses contradicting pins", extra: []config.ClusterEndpoint{{NodeName: "pve-1-alias", Host: primary, Fingerprint: "cc:dd"}}, wantCode: http.StatusBadRequest},
+		{name: "validation retry uses the primary endpoint pin", retry: true, wantPins: []string{"aa:bb"}},
+		{name: "validation retry skips contradicting pins", retry: true, extra: []config.ClusterEndpoint{{NodeName: "pve-1-alias", Host: primary, Fingerprint: "cc:dd"}}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			instance := config.PVEInstance{
+				Name: "pve-1", Host: primary, TokenValue: "token", IsCluster: true, ClusterName: "cluster-1",
+				ClusterEndpoints: append([]config.ClusterEndpoint{
+					{NodeName: "pve-1", Host: primary, Fingerprint: "aa:bb"},
+					{NodeName: "pve-2", Host: "https://192.0.2.11:8006"},
+				}, tc.extra...),
+			}
+			if tc.retry {
+				instance.ClusterName = ""
+			}
+			cfg := &config.Config{DataPath: t.TempDir(), PVEInstances: []config.PVEInstance{instance}}
+			handler := newTestConfigHandlers(t, cfg)
+
+			originalDetect := detectPVEClusterContext
+			t.Cleanup(func() { detectPVEClusterContext = originalDetect })
+			var pins []string
+			detectPVEClusterContext = func(_ context.Context, clientConfig proxmox.ClientConfig, nodeName string, existing []config.ClusterEndpoint) (bool, string, []config.ClusterEndpoint) {
+				pins = append(pins, clientConfig.Fingerprint)
+				return true, "cluster-1", existing
+			}
+
+			if tc.retry {
+				handler.maybeRefreshClusterInfo(context.Background(), cfg.PVEInstances[0].DeepCopy())
+			} else {
+				rec := httptest.NewRecorder()
+				handler.HandleRefreshClusterNodes(rec, httptest.NewRequest(http.MethodPost, "/api/config/nodes/pve-0/refresh-cluster", nil))
+				if rec.Code != tc.wantCode {
+					t.Fatalf("status = %d, want %d: %s", rec.Code, tc.wantCode, rec.Body.String())
+				}
+			}
+			if !reflect.DeepEqual(pins, tc.wantPins) {
+				t.Fatalf("cluster detection dialed with pins %q, want %q", pins, tc.wantPins)
+			}
+		})
 	}
 }
 

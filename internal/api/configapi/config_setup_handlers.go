@@ -1451,7 +1451,7 @@ func shouldAdoptClusterMemberAutoRegisterAddress(existingOverride string, candid
 // accepts them unprobed. A variable so tests can stand in for the host.
 var readAutoRegisterClusterView = func(ctx context.Context, clientConfig proxmox.ClientConfig, nodeName string) (bool, []config.ClusterEndpoint) {
 	isCluster, _, endpoints := detectPVEClusterWithValidator(ctx, clientConfig, nodeName, nil,
-		func(context.Context, proxmox.ClusterStatus, proxmox.ClientConfig) (bool, string, string) { return true, "", "" })
+		func(context.Context, proxmox.ClusterStatus, proxmox.ClientConfig, string) (bool, string, string) { return true, "", "" })
 	return isCluster, endpoints
 }
 

@@ -466,6 +466,13 @@ func (m *Monitor) detectClusterMembership(ctx context.Context, instanceName stri
 	m.lastClusterCheck[instanceName] = time.Now()
 
 	clientConfig := config.CreateProxmoxConfig(instanceCfg)
+	// Re-detection dials outside the cluster client; keep its endpoint trust.
+	fingerprint, err := PVEEndpointFingerprint(*instanceCfg, clientConfig.Host, monitorDiscoveryConfig(m))
+	if err != nil {
+		log.Warn().Str("instance", instanceName).Err(err).Msg("Skipping cluster re-detection until saved TLS trust is reconciled")
+		return
+	}
+	clientConfig.Fingerprint = fingerprint
 	isCluster, clusterName, clusterEndpoints := detectMonitorPVECluster(clientConfig, instanceCfg.ClusterEndpoints)
 	if !isCluster || strings.TrimSpace(clusterName) == "" || len(clusterEndpoints) == 0 {
 		return

@@ -426,6 +426,62 @@ func TestPBSStartupCancellationKeepsFirstPollBoundary(t *testing.T) {
 	testPBSStartupCancellationKeepsFirstPollBoundary(t)
 }
 
+// One-off clients built outside the cluster client (diagnostics, cluster
+// re-detection, the storage fallback) must resolve the pin polling enforces for
+// the address they dial; the connection's own field is empty when pins were
+// captured per member.
+func TestPVEEndpointFingerprintFollowsPollingTrust(t *testing.T) {
+	const primary, member = "https://127.0.0.1:8006", "https://127.0.0.2:8006"
+	cluster := config.PVEInstance{
+		Name: "lab", Host: primary, IsCluster: true, ClusterName: "lab",
+		ClusterEndpoints: []config.ClusterEndpoint{{NodeName: "pve1", IP: "127.0.0.1", Fingerprint: "aa:bb"}, {NodeName: "pve2", IP: "127.0.0.2"}},
+	}
+	overridden := cluster.DeepCopy()
+	overridden.TLSFingerprintOverrides = map[string]string{primary: "ee:ff"}
+	conflicting := cluster.DeepCopy()
+	conflicting.ClusterEndpoints = append(conflicting.ClusterEndpoints, config.ClusterEndpoint{NodeName: "pve1-alias", IP: "127.0.0.1", Fingerprint: "cc:dd"})
+	standalone := config.PVEInstance{Name: "solo", Host: primary, Fingerprint: "11:22"}
+
+	for _, tc := range []struct {
+		name     string
+		instance config.PVEInstance
+		endpoint string
+		want     string
+		wantErr  bool
+	}{
+		{"captured member pin", cluster, primary, "aa:bb", false},
+		{"operator endpoint pin", overridden, primary, "ee:ff", false},
+		{"unpinned member keeps connection field", cluster, member, "", false},
+		{"contradicting pins refuse the endpoint", conflicting, primary, "", true},
+		{"standalone keeps connection field", standalone, primary, "11:22", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := PVEEndpointFingerprint(tc.instance, tc.endpoint, config.DiscoveryConfig{})
+			if (err != nil) != tc.wantErr || got != tc.want {
+				t.Fatalf("fingerprint = %q, err = %v; want %q, error = %v", got, err, tc.want, tc.wantErr)
+			}
+		})
+	}
+
+	originalDetect := detectMonitorPVECluster
+	t.Cleanup(func() { detectMonitorPVECluster = originalDetect })
+	var dialed []string
+	detectMonitorPVECluster = func(clientConfig proxmox.ClientConfig, _ []config.ClusterEndpoint) (bool, string, []config.ClusterEndpoint) {
+		dialed = append(dialed, clientConfig.Fingerprint)
+		return false, "", nil
+	}
+	m := &Monitor{
+		config:           &config.Config{PVEInstances: []config.PVEInstance{cluster, conflicting}},
+		state:            models.NewState(),
+		lastClusterCheck: make(map[string]time.Time),
+	}
+	m.detectClusterMembership(context.Background(), "lab", &m.config.PVEInstances[0], nil)
+	m.detectClusterMembership(context.Background(), "conflicting", &m.config.PVEInstances[1], nil)
+	if !reflect.DeepEqual(dialed, []string{"aa:bb"}) {
+		t.Fatalf("cluster re-detection dialed with pins %q, want only the primary endpoint's saved pin", dialed)
+	}
+}
+
 func TestBuildClusterEndpointsRetainsDuplicatePinConflicts(t *testing.T) {
 	monitor := &Monitor{config: &config.Config{}}
 	const member = "https://member.example.invalid:8006"

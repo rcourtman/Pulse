@@ -927,7 +927,15 @@ func (h *ConfigHandlers) maybeRefreshClusterInfo(ctx context.Context, instance c
 	h.clusterDetectMutex.Unlock()
 
 	clientConfig := config.CreateProxmoxConfig(&instance)
-	isCluster, clusterName, clusterEndpoints := detectPVEClusterContext(ctx, clientConfig, instance.Name, instance.ClusterEndpoints)
+	// Re-detection must not reach a saved cluster address past its endpoint pin.
+	discoveryCfg := h.getConfig(ctx).Discovery
+	fingerprint, err := monitoring.PVEEndpointFingerprint(instance, clientConfig.Host, discoveryCfg)
+	if err != nil {
+		log.Warn().Str("instance", instance.Name).Err(err).Msg("Skipping cluster validation retry until saved TLS trust is reconciled")
+		return
+	}
+	clientConfig.Fingerprint = fingerprint
+	isCluster, clusterName, clusterEndpoints := detectPVEClusterContext(ctx, clientConfig, instance.Name, clusterEndpointsWithSavedTrust(instance, discoveryCfg))
 	if !isCluster || len(clusterEndpoints) == 0 {
 		log.Debug().
 			Str("instance", instance.Name).
@@ -1296,6 +1304,55 @@ func isNodeValidationTLSError(errStr string) bool {
 	return strings.Contains(errStr, "fingerprint") || strings.Contains(errStr, "x509") || strings.Contains(errStr, "certificate")
 }
 
+// isNodeValidationFingerprintMismatch reports whether validation failed the
+// local certificate-pin check. Only that typed failure can admit a member on
+// first use; error text that merely mentions certificates is not trust evidence.
+func isNodeValidationFingerprintMismatch(err error) bool {
+	var mismatch *tlsutil.FingerprintMismatchError
+	return errors.As(err, &mismatch)
+}
+
+// clusterEndpointsWithSavedTrust returns a shallow copy of instance's cluster
+// endpoints with explicit endpoint-level TLS overrides materialized into each
+// matching member's Fingerprint field so cluster discovery validates members
+// against the same pin polling enforces.
+func clusterEndpointsWithSavedTrust(instance config.PVEInstance, discoveryCfg config.DiscoveryConfig) []config.ClusterEndpoint {
+	if len(instance.ClusterEndpoints) == 0 {
+		return nil
+	}
+	endpoints := make([]config.ClusterEndpoint, len(instance.ClusterEndpoints))
+	copy(endpoints, instance.ClusterEndpoints)
+	if len(instance.TLSFingerprintOverrides) == 0 {
+		return endpoints
+	}
+	scheme, defaultPort := deriveSchemeAndPort(instance.Host)
+	for i := range endpoints {
+		ep := &endpoints[i]
+		candidates := make([]string, 0, 4)
+		for _, raw := range []string{ep.IP, ep.NodeName, ep.Host} {
+			raw = strings.TrimSpace(raw)
+			if raw == "" {
+				continue
+			}
+			target := raw
+			if !strings.HasPrefix(target, "http") {
+				target = fmt.Sprintf("%s://%s", scheme, ensureHostHasPort(target, defaultPort))
+			}
+			candidates = append(candidates, target)
+		}
+		if runtimeURL := monitoring.PVEClusterEndpointURL(*ep, instance.VerifySSL, discoveryCfg); runtimeURL != "" {
+			candidates = append(candidates, runtimeURL)
+		}
+		for _, candidate := range candidates {
+			if overridePin, known, err := proxmox.ResolveEndpointFingerprint(candidate, instance.TLSFingerprintOverrides); err == nil && known && overridePin != "" {
+				ep.Fingerprint = overridePin
+				break
+			}
+		}
+	}
+	return endpoints
+}
+
 // isNodeValidationAuthError reports whether the node's API answered but denied
 // access — proof enough that a real Proxmox endpoint is listening.
 func isNodeValidationAuthError(errStr string) bool {
@@ -1326,9 +1383,10 @@ func nodeValidationFailureReason(err error) string {
 
 // validateNodeAPI tests if a cluster node has a working Proxmox API
 // This helps filter out qdevice VMs and other non-Proxmox participants.
+// savedFingerprint is the pin already saved for this member, empty when none.
 // Returns (isValid, fingerprint, failureReason) - fingerprint is captured for
 // TOFU (Trust On First Use); failureReason is empty when the node validates.
-func validateNodeAPI(ctx context.Context, clusterNode proxmox.ClusterStatus, baseConfig proxmox.ClientConfig) (bool, string, string) {
+func validateNodeAPI(ctx context.Context, clusterNode proxmox.ClusterStatus, baseConfig proxmox.ClientConfig, savedFingerprint string) (bool, string, string) {
 	// Determine the host to test - prefer IP if available, otherwise use node name
 	testHost := clusterNode.IP
 	if testHost == "" {
@@ -1353,15 +1411,40 @@ func validateNodeAPI(ctx context.Context, clusterNode proxmox.ClusterStatus, bas
 	// Use a very short timeout for validation - we just need to know if the API exists
 	testConfig.Timeout = 2 * time.Second
 
+	// Validation sends the cluster credential to this member, so it must not
+	// trust the member more loosely than polling will. A saved member pin is
+	// the only certificate accepted and is never replaced. Only a member
+	// without one may be trusted on first use, and only under a pinned primary
+	// (#1664) whose own endpoint this is not: CA validation and the primary's
+	// pin are never relaxed to whatever certificate the peer presents.
+	firstUse := false
+	if savedFingerprint != "" {
+		testConfig.Fingerprint = savedFingerprint
+	} else if baseConfig.Fingerprint != "" {
+		member, memberValid := proxmox.ClusterEndpointIdentity(testConfig.Host)
+		primary, primaryValid := proxmox.ClusterEndpointIdentity(baseConfig.Host)
+		firstUse = memberValid && primaryValid && member != primary
+	}
+
 	log.Debug().
 		Str("node", clusterNode.Name).
 		Str("test_host", testConfig.Host).
 		Msg("Validating Proxmox API for cluster node")
 
-	// Capture the fingerprint for TOFU (Trust On First Use)
+	// Capture the fingerprint for TOFU (Trust On First Use). A pin already
+	// established for this endpoint is kept instead, and under CA validation
+	// the capture is verified as well, so that a certificate the configured
+	// policy would refuse can never be saved as this member's pin.
 	var capturedFingerprint string
-	if testHost != "" {
-		fp, err := tlsutil.FetchFingerprintContext(ctx, testConfig.Host)
+	if !firstUse {
+		capturedFingerprint = testConfig.Fingerprint
+	}
+	if capturedFingerprint == "" {
+		captureFingerprint := tlsutil.FetchFingerprintContext
+		if testConfig.VerifySSL && !firstUse {
+			captureFingerprint = tlsutil.FetchVerifiedFingerprintContext
+		}
+		fp, err := captureFingerprint(ctx, testConfig.Host)
 		if err != nil {
 			log.Debug().
 				Str("node", clusterNode.Name).
@@ -1381,15 +1464,15 @@ func validateNodeAPI(ctx context.Context, clusterNode proxmox.ClusterStatus, bas
 	if err != nil {
 		// Many clusters use unique certificates per node. If the primary node
 		// was configured with fingerprint pinning, connecting to peers with the
-		// same fingerprint will fail. Fall back to a relaxed TLS check so we can
-		// still detect valid cluster members while keeping other errors (like
-		// auth) as hard failures.
-		if isNodeValidationTLSError(err.Error()) {
+		// same fingerprint will fail. Password authentication logs in here, so
+		// retry a first-use member against its own captured certificate only;
+		// every other failure (like auth, CA validation or a saved member pin)
+		// stays a hard failure and the password is not sent again.
+		if firstUse && capturedFingerprint != "" && isNodeValidationFingerprintMismatch(err) {
 			log.Debug().
 				Str("node", clusterNode.Name).
-				Msg("Retrying cluster node validation without fingerprint pinning")
-			testConfig.Fingerprint = ""
-			testConfig.VerifySSL = false
+				Msg("Retrying cluster node validation with the member's own certificate")
+			testConfig.Fingerprint = capturedFingerprint
 			testClient, err = proxmox.NewClientWithContext(ctx, testConfig)
 		}
 		if err != nil {
@@ -1412,8 +1495,9 @@ func validateNodeAPI(ctx context.Context, clusterNode proxmox.ClusterStatus, bas
 		errMsg := err.Error()
 		// If we reached the API but were denied (common when per-node permissions
 		// differ), treat it as valid. We only want to filter out hosts that aren't
-		// actually Proxmox endpoints.
-		if isNodeValidationAuthError(errMsg) {
+		// actually Proxmox endpoints. A failed TLS check never reached the API,
+		// whatever status-like digits its fingerprints or addresses contain.
+		if isNodeValidationAuthError(errMsg) && !isNodeValidationTLSError(errMsg) {
 			log.Debug().
 				Str("node", clusterNode.Name).
 				Err(err).
@@ -1423,14 +1507,13 @@ func validateNodeAPI(ctx context.Context, clusterNode proxmox.ClusterStatus, bas
 
 		// A pinned-fingerprint mismatch surfaces here, not from NewClient: the
 		// verifier runs during the TLS handshake of the first request. Cluster
-		// members normally carry their own per-node certificates, so retry with
-		// the member's own captured fingerprint before rejecting it.
-		if isNodeValidationTLSError(errMsg) {
+		// members normally carry their own per-node certificates, so retry a
+		// first-use member with its own captured fingerprint before rejecting
+		// it. A failed CA validation or saved member pin is never retried: that
+		// would hand the credential to the peer that just failed the check.
+		if firstUse && capturedFingerprint != "" && isNodeValidationFingerprintMismatch(err) {
 			retryConfig := testConfig
 			retryConfig.Fingerprint = capturedFingerprint
-			if capturedFingerprint == "" {
-				retryConfig.VerifySSL = false
-			}
 			if retryNodeValidation(ctx, retryConfig) {
 				log.Debug().
 					Str("node", clusterNode.Name).
@@ -1464,7 +1547,7 @@ func retryNodeValidation(ctx context.Context, cfg proxmox.ClientConfig) bool {
 	readCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
 	defer cancel()
 	if _, err := retryClient.GetNodes(readCtx); err != nil {
-		return isNodeValidationAuthError(err.Error())
+		return isNodeValidationAuthError(err.Error()) && !isNodeValidationTLSError(err.Error())
 	}
 	return true
 }
@@ -1664,14 +1747,14 @@ func defaultDetectPVECluster(ctx context.Context, clientConfig proxmox.ClientCon
 	return detectPVEClusterWithValidator(ctx, clientConfig, nodeName, existingEndpoints, validatePVEClusterNode)
 }
 
-func DetectPVEClusterWithValidator(clientConfig proxmox.ClientConfig, nodeName string, existingEndpoints []config.ClusterEndpoint, validator func(proxmox.ClusterStatus, proxmox.ClientConfig) (bool, string, string)) (isCluster bool, clusterName string, clusterEndpoints []config.ClusterEndpoint) {
+func DetectPVEClusterWithValidator(clientConfig proxmox.ClientConfig, nodeName string, existingEndpoints []config.ClusterEndpoint, validator func(proxmox.ClusterStatus, proxmox.ClientConfig, string) (bool, string, string)) (isCluster bool, clusterName string, clusterEndpoints []config.ClusterEndpoint) {
 	return detectPVEClusterWithValidator(context.Background(), clientConfig, nodeName, existingEndpoints,
-		func(_ context.Context, node proxmox.ClusterStatus, cfg proxmox.ClientConfig) (bool, string, string) {
-			return validator(node, cfg)
+		func(_ context.Context, node proxmox.ClusterStatus, cfg proxmox.ClientConfig, savedFingerprint string) (bool, string, string) {
+			return validator(node, cfg, savedFingerprint)
 		})
 }
 
-func detectPVEClusterWithValidator(ctx context.Context, clientConfig proxmox.ClientConfig, nodeName string, existingEndpoints []config.ClusterEndpoint, validator func(context.Context, proxmox.ClusterStatus, proxmox.ClientConfig) (bool, string, string)) (isCluster bool, clusterName string, clusterEndpoints []config.ClusterEndpoint) {
+func detectPVEClusterWithValidator(ctx context.Context, clientConfig proxmox.ClientConfig, nodeName string, existingEndpoints []config.ClusterEndpoint, validator func(context.Context, proxmox.ClusterStatus, proxmox.ClientConfig, string) (bool, string, string)) (isCluster bool, clusterName string, clusterEndpoints []config.ClusterEndpoint) {
 	tempClient, err := proxmox.NewClientWithContext(ctx, clientConfig)
 	if err != nil {
 		log.Warn().Err(err).Msg("Failed to create client for cluster detection")
@@ -1765,11 +1848,11 @@ func detectPVEClusterWithValidator(ctx context.Context, clientConfig proxmox.Cli
 			// Reachability enriches a member endpoint but never defines cluster
 			// membership. Powered-off nodes remain canonical members even
 			// though their individual API cannot answer during discovery.
-			isValid, nodeFingerprint, failureReason := validator(ctx, clusterNode, clientConfig)
+			existingEndpoint, hadExistingEndpoint := findExistingClusterEndpoint(clusterNode.Name, existingEndpoints)
+			isValid, nodeFingerprint, failureReason := validator(ctx, clusterNode, clientConfig, existingEndpoint.Fingerprint)
 			if ctx.Err() != nil {
 				return false, "", nil
 			}
-			existingEndpoint, hadExistingEndpoint := findExistingClusterEndpoint(clusterNode.Name, existingEndpoints)
 			if !isValid {
 				log.Info().
 					Str("node", clusterNode.Name).
@@ -1789,7 +1872,8 @@ func detectPVEClusterWithValidator(ctx context.Context, clientConfig proxmox.Cli
 			if isValid {
 				lastSeen = now
 			}
-			if nodeFingerprint == "" && hadExistingEndpoint {
+			// Discovery can establish a member's pin but never replaces a saved one.
+			if hadExistingEndpoint && existingEndpoint.Fingerprint != "" {
 				nodeFingerprint = existingEndpoint.Fingerprint
 			}
 			pulseReachable := isValid
