@@ -186,6 +186,29 @@ const PROXMOX_HOST_SORT_KEYS = [
 
 type HostSortKey = (typeof PROXMOX_HOST_SORT_KEYS)[number];
 
+const getEffectiveNodeDiskPercent = (node: Resource): number | undefined => {
+  const direct = getDiskPercent(node);
+  if (direct !== undefined) return direct;
+  const disks = normalizeDiskArray(node.agent?.disks);
+  if (!disks || disks.length === 0) return undefined;
+  let total = 0;
+  let used = 0;
+  for (const disk of disks) {
+    if (
+      typeof disk.total === 'number' &&
+      Number.isFinite(disk.total) &&
+      disk.total > 0 &&
+      typeof disk.used === 'number' &&
+      Number.isFinite(disk.used) &&
+      disk.used >= 0
+    ) {
+      total += disk.total;
+      used += disk.used;
+    }
+  }
+  return total > 0 ? (used / total) * 100 : undefined;
+};
+
 const getHostSortValue = (
   node: Resource,
   guests: Resource[],
@@ -206,7 +229,7 @@ const getHostSortValue = (
       return typeof node.memory?.current === 'number' ? node.memory.current : null;
     }
     case 'disk':
-      return getDiskPercent(node) ?? null;
+      return getEffectiveNodeDiskPercent(node) ?? null;
     case 'temp':
       return typeof node.temperature === 'number' && node.temperature > 0 ? node.temperature : null;
     case 'uptime':
@@ -542,7 +565,7 @@ export const ProxmoxNodesTable: Component<{
                   !memoryTotal() && getPlatformTableFiniteMetric(node.memory?.current) !== undefined
                     ? getPlatformTableFiniteMetric(node.memory?.current)
                     : undefined;
-                const diskPercent = createMemo(() => getDiskPercent(node));
+                const diskPercent = createMemo(() => getEffectiveNodeDiskPercent(node));
                 const diskHistoryLabel = () => {
                   const value = diskPercent();
                   return value === undefined ? undefined : formatNodeHistoryPercent(value);
@@ -790,16 +813,11 @@ export const ProxmoxNodesTable: Component<{
                               when={showsHistory()}
                               fallback={
                                 <StackedDiskBar
-                                  mode={
-                                    usesCompactMetrics()
-                                      ? 'aggregate'
-                                      : (node.agent?.disks?.length ?? 0) > 1
-                                        ? 'vertical-bars'
-                                        : undefined
-                                  }
-                                  // A compact cell has no room for per-disk bars; summarise it
-                                  // by the fullest disk so a full one is not averaged away.
-                                  summaryStrategy="max"
+                                  mode="aggregate"
+                                  // Keep a consistent horizontal usage bar across single-disk
+                                  // and multi-disk nodes; compact cells summarize by the fullest
+                                  // disk so a nearly full mount is never averaged away.
+                                  summaryStrategy={usesCompactMetrics() ? 'max' : 'total'}
                                   disks={normalizeDiskArray(node.agent?.disks)}
                                   aggregateDisk={aggregateDisk()}
                                   formatAggregatePercent={formatNodeBarPercent}

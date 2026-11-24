@@ -91,4 +91,38 @@ describe('useDiskListModel', () => {
     result.toggleSelectedDisk(result.filteredDisks()[0]!);
     expect(result.selectedDisk()?.id).toBe('sdb');
   });
+
+  it('resolves human-readable node display names and allows searching by them', () => {
+    const rawDisk = {
+      ...buildDisk('sda', 'pve20', 'Crucial MX500 2TB'),
+      parentId: 'agent-research-d',
+      parentName: 'Research D',
+      proxmox: { nodeName: 'pve20', nodeDisplayName: 'Research D', instance: 'Research' },
+    } as unknown as Resource;
+    const node = {
+      ...buildNode('agent-research-d', 'Research D'),
+      proxmox: { nodeName: 'pve20', nodeDisplayName: 'Research D', instance: 'Research' },
+    } as unknown as Resource;
+
+    const [disks] = createSignal<Resource[]>([rawDisk]);
+    const [nodes] = createSignal<Resource[]>([node]);
+    const [selectedNode] = createSignal<string | null>(null);
+    const [searchTerm] = createSignal('Research D');
+    const [selectedDiskId, setSelectedDiskId] = createSignal<string | null>(null);
+
+    const { result } = renderHook(() =>
+      useDiskListModel({
+        disks,
+        nodes,
+        selectedNode,
+        searchTerm,
+        selectedDiskId,
+        setSelectedDiskId,
+      }),
+    );
+
+    expect(result.getDiskHostLabel(rawDisk)).toBe('Research D');
+    expect(result.getDiskHostTitle(rawDisk)).toBe('Research D (pve20)');
+    expect(result.filteredDisks().map((d) => d.id)).toEqual(['sda']);
+  });
 });
