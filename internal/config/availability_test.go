@@ -464,3 +464,58 @@ func TestAvailabilityTargetCertificateMonitoringDefaultsAndValidation(t *testing
 		t.Fatal("HTTPS target accepted an excessive certificate warning window")
 	}
 }
+
+func TestAvailabilityDNSValidationAndRevision(t *testing.T) {
+	target := NormalizeAvailabilityTarget(AvailabilityTarget{
+		Address:  "192.168.1.53",
+		Protocol: AvailabilityProbeDNS,
+		Enabled:  true,
+		DNS: &AvailabilityDNSConfig{
+			QueryName: " example.com ",
+		},
+	})
+	if target.Port != DefaultAvailabilityDNSPort {
+		t.Fatalf("default DNS port = %d, want %d", target.Port, DefaultAvailabilityDNSPort)
+	}
+	if target.DNS.RecordType != "A" || target.DNS.Transport != AvailabilityDNSTransportUDP {
+		t.Fatalf("unexpected DNS defaults: %+v", target.DNS)
+	}
+	if err := target.Validate(); err != nil {
+		t.Fatalf("Validate() error = %v", err)
+	}
+
+	next := target
+	nextDNS := *target.DNS
+	nextDNS.ExpectedValue = "93.184.216.34"
+	next.DNS = &nextDNS
+	if !AvailabilityExecutionConfigChanged(target, next) {
+		t.Fatal("expected DNS expectedValue edit to trigger config revision")
+	}
+
+	missingDNS := AvailabilityTarget{
+		TargetKind: AvailabilityTargetService,
+		Address:    "192.168.1.53",
+		Protocol:   AvailabilityProbeDNS,
+		Enabled:    true,
+	}
+	if err := missingDNS.Validate(); err == nil {
+		t.Fatal("DNS target without DNS config should fail validation")
+	}
+
+	badRecord := target
+	badRecord.DNS = &AvailabilityDNSConfig{QueryName: "example.com", RecordType: "AXFR"}
+	if err := badRecord.Validate(); err == nil {
+		t.Fatal("unsupported DNS record type should fail validation")
+	}
+
+	wrongProtocol := AvailabilityTarget{
+		TargetKind: AvailabilityTargetService,
+		Address:    "192.168.1.53",
+		Protocol:   AvailabilityProbeICMP,
+		Enabled:    true,
+		DNS:        &AvailabilityDNSConfig{QueryName: "example.com"},
+	}
+	if err := wrongProtocol.Validate(); err == nil {
+		t.Fatal("non-DNS target with DNS config should fail validation")
+	}
+}

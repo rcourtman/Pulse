@@ -9881,6 +9881,12 @@ in `internal/updates/ephemeral_data_test.go`, and
 `internal/api/update_readiness_test.go` verify mountpoint matching, parent-mount
 coverage, suppression, fail-safe handling, and readiness payload output.
 
+### Native DNS resolution availability checks (24 November 2026)
+
+`go.mod` and `go.sum` add pure-Go `github.com/miekg/dns v1.1.73` for native DNS
+resolution checks (`A`, `AAAA`, `CNAME`, `TXT`, `MX`, `NS`, `SRV`, `PTR` over
+UDP or TCP) with `CGO_ENABLED=0` static build compatibility preserved.
+
 ## Release-body updater ownership (30 September 2026)
 
 Each executable `/bin/update --version` example in a published body must carry

@@ -549,6 +549,10 @@ func cloneAvailabilityTarget(target config.AvailabilityTarget) config.Availabili
 		source := *target.DockerPort
 		clone.DockerPort = &source
 	}
+	if target.DNS != nil {
+		dnsClone := *target.DNS
+		clone.DNS = &dnsClone
+	}
 	if target.HTTP == nil {
 		return clone
 	}

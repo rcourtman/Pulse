@@ -10302,3 +10302,14 @@ configured maximum and skip writing live memory history samples in
 the optional balloon fields onto `models.HostLibvirtDomain`. Verified by
 `TestNormalizeAgentLibvirtInventoryDerivesCPUAndIORates` and
 `TestLibvirtMemoryPrefersBalloonUsableAndZerosShutoff`.
+
+
+### Native DNS resolution availability checks (24 November 2026)
+
+`internal/config/availability.go`, `internal/availabilityprobe/dns.go`, and
+`internal/availabilityprobe/probe.go` add native DNS resolution checks
+(`protocol: "dns"`, `AvailabilityDNSConfig` with `queryName`, `recordType`
+`A`/`AAAA`/`CNAME`/`TXT`/`MX`/`NS`/`SRV`/`PTR`, `transport` `udp`/`tcp`,
+optional `expectedValue`, default port `53`) using `github.com/miekg/dns`.
+Verified by `internal/config/availability_test.go` and
+`internal/availabilityprobe/dns_test.go`.

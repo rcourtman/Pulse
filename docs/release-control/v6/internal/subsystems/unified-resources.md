@@ -10657,3 +10657,11 @@ hypervisor, parent host, vCPU, and RAM facts in the VM drawer.
 `StandaloneVirtualMachinesTable.test.tsx`, `StandalonePageSurface.test.tsx`,
 `AgentsMachinesTable.test.tsx`, `resourcePagePath.test.ts`, and
 `frontend-modern/browser-verification/9b345049621d9e89.json`.
+
+
+### Native DNS resolution availability checks (24 November 2026)
+
+`frontend-modern/src/utils/availabilityProbePresentation.ts` formats DNS query
+targets, record types, transports, and expected answers for unified availability
+check rows and drawers. Verified by `AvailabilityTargetSlot.test.tsx` and
+`frontend-modern/browser-verification/d920ff2aaa7c5c9c.json`.

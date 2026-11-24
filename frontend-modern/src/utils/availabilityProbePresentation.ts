@@ -35,6 +35,9 @@ export const getAvailabilityProbeMethodLabel = (
     const label = protocol.toUpperCase();
     return availability?.port ? `${label} ${availability.port}` : label;
   }
+  if (protocol === 'dns') {
+    return availability?.port && availability.port !== 53 ? `DNS ${availability.port}` : 'DNS';
+  }
   if (protocol === 'http' || protocol === 'https') {
     const path = (availability?.path ?? '').trim();
     return path ? `${protocol.toUpperCase()} ${path}` : protocol.toUpperCase();

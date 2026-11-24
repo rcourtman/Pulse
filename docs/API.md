@@ -2125,8 +2125,9 @@ Target payload fields:
 - `name` - Display name.
 - `targetKind` - what the check is on: `service`, `machine`, `router`, `switch`, `access_point`, or `device`; defaults to `service`.
 - `address` - Hostname, IP address, or URL.
-- `protocol` - `icmp`, `tcp`, `udp`, `http`, or `https`. The input alias `ping` is accepted and is stored/returned as canonical `icmp`.
-- `port` - Required for `tcp`/`udp`, optional for `http`/`https`, and omitted for `icmp`.
+- `protocol` - `icmp`, `tcp`, `udp`, `dns`, `http`, or `https`. The input alias `ping` is accepted and is stored/returned as canonical `icmp`.
+- `port` - Required for `tcp`/`udp`, optional for `dns` (defaults to `53`) and `http`/`https`, and omitted for `icmp`.
+- `dns` - Required for `dns` targets: `{ "queryName": "example.com", "recordType": "A", "transport": "udp", "expectedValue": "93.184.216.34" }`. Supported record types are `A`, `AAAA`, `CNAME`, `TXT`, `MX`, `NS`, `SRV`, and `PTR` (defaults to `A`). Supported transports are `udp` (default) and `tcp`. `expectedValue` is optional.
 - `path` - Optional HTTP path.
 - `udpMode` - For UDP, `response_required` (default) or `open_or_filtered`. The latter reports silence as indeterminate and fails only on an explicit rejection.
 - `udpRequest` - UTF-8 request bytes, up to 512 bytes. Required by `response_required`; optional in `open_or_filtered` mode.

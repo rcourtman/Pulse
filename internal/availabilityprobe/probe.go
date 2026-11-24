@@ -110,6 +110,8 @@ func DetailedResult(ctx context.Context, target config.AvailabilityTarget) (Prob
 		return ProbeResult{Outcome: outcome, TransportOutcome: outcome}, err
 	case config.AvailabilityProbeHTTP, config.AvailabilityProbeHTTPS:
 		return probeHTTP(probeCtx, target, timeout)
+	case config.AvailabilityProbeDNS:
+		return probeDNS(probeCtx, target, timeout)
 	default:
 		return ProbeResult{Outcome: OutcomeUnreachable, TransportOutcome: OutcomeUnreachable}, fmt.Errorf("unsupported availability protocol %q", target.Protocol)
 	}

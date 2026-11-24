@@ -722,4 +722,89 @@ describe('AvailabilityTargetSlot', () => {
       expect(screen.getByRole('link', { name: 'View plans' })).toBeInTheDocument();
     });
   });
+
+  describe('DNS resolution checks', () => {
+    it('submits a DNS check payload from the DNS resolver preset and custom DNS fields', async () => {
+      mockedCreate.mockResolvedValue({
+        id: 'dns-1',
+        name: 'Pi-hole DNS',
+        targetKind: 'service',
+        address: '192.168.1.53',
+        protocol: 'dns',
+        port: 53,
+        enabled: true,
+        dns: {
+          queryName: 'nas.home.arpa',
+          recordType: 'AAAA',
+          transport: 'tcp',
+          expectedValue: '2001:db8::50',
+        },
+      });
+      const onSaved = vi.fn();
+
+      render(() => <AvailabilityTargetSlot onCancel={vi.fn()} onSaved={onSaved} />);
+
+      fireEvent.change(screen.getByLabelText('Preset'), { target: { value: 'dns-resolver' } });
+      expect(screen.getByTestId('availability-dns-section')).toBeInTheDocument();
+      expect(screen.getByTestId('availability-dns-query-name')).toHaveValue('example.com');
+
+      fireEvent.input(screen.getByLabelText('Name'), { target: { value: 'Pi-hole DNS' } });
+      fireEvent.input(screen.getByLabelText(/^DNS server address/), {
+        target: { value: '192.168.1.53' },
+      });
+      fireEvent.input(screen.getByTestId('availability-dns-query-name'), {
+        target: { value: 'nas.home.arpa' },
+      });
+      fireEvent.change(screen.getByTestId('availability-dns-record-type'), {
+        target: { value: 'AAAA' },
+      });
+      fireEvent.change(screen.getByTestId('availability-dns-transport'), {
+        target: { value: 'tcp' },
+      });
+      fireEvent.input(screen.getByTestId('availability-dns-expected-value'), {
+        target: { value: '2001:db8::50' },
+      });
+
+      fireEvent.click(screen.getByRole('button', { name: 'Add service/device check' }));
+
+      await waitFor(() => expect(mockedCreate).toHaveBeenCalled());
+      expect(mockedCreate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          name: 'Pi-hole DNS',
+          address: '192.168.1.53',
+          protocol: 'dns',
+          port: 53,
+          dns: {
+            queryName: 'nas.home.arpa',
+            recordType: 'AAAA',
+            transport: 'tcp',
+            expectedValue: '2001:db8::50',
+          },
+        }),
+      );
+      expect(onSaved).toHaveBeenCalled();
+    });
+
+    it('formats DNS test probe feedback without HTTP status phrasing', async () => {
+      mockedTest.mockResolvedValue({
+        success: true,
+        latencyMillis: 9,
+        outcome: 'reachable',
+        transportOutcome: 'reachable',
+        application: { outcome: 'passed', statusCode: 0 },
+      });
+
+      render(() => <AvailabilityTargetSlot onCancel={vi.fn()} onSaved={vi.fn()} />);
+
+      fireEvent.change(screen.getByLabelText('Preset'), { target: { value: 'dns-resolver' } });
+      fireEvent.input(screen.getByLabelText(/^DNS server address/), {
+        target: { value: '1.1.1.1' },
+      });
+      fireEvent.click(screen.getByRole('button', { name: 'Test probe' }));
+
+      expect(
+        await screen.findByText('DNS server answered in 9 ms and returned a matching record.'),
+      ).toBeInTheDocument();
+    });
+  });
 });

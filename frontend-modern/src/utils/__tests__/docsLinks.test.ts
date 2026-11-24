@@ -111,9 +111,22 @@ describe('docsLinks', () => {
     // The in-app docs serve these copies; the history route's accepted
     // resourceType list and the availability check types an API client may
     // send must not differ between the two.
-    for (const guide of ['API.md', 'CONFIGURATION.md', 'METRICS_HISTORY.md', 'MSP.md']) {
+    for (const guide of [
+      'API.md',
+      'AVAILABILITY.md',
+      'CONFIGURATION.md',
+      'METRICS_HISTORY.md',
+      'MSP.md',
+    ]) {
       const shipped = readFileSync(path.join(frontendRoot, 'public/docs', guide), 'utf8');
       expect(shipped).toBe(readFileSync(path.join(repoRoot, 'docs', guide), 'utf8'));
+      if (guide === 'AVAILABILITY.md') {
+        expect(shipped).toContain('Check that DNS answers correctly');
+        expect(shipped).toContain('Query hostname');
+      }
+      if (guide === 'API.md') {
+        expect(shipped).toContain('"queryName"');
+      }
       if (guide === 'MSP.md') {
         expect(shipped).toContain('`VM.GuestAgent.Audit`');
         expect(shipped).toContain('leaving `VM.GuestAgent.FileRead`');
