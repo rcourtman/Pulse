@@ -711,6 +711,8 @@ These routes do not require admin access. Any authenticated browser session can 
 - `PUT /api/agents/metadata/{agentId}` (`monitoring:write`)
 - `DELETE /api/agents/metadata/{agentId}` (`monitoring:write`)
 
+  The agent record also returns `commandsEnabled`, the administrator's command-execution override. These routes never change it: `PUT` ignores the field and `DELETE` keeps it. Use `PATCH /api/agents/agent/{agent_id}/config`.
+
 - `GET /api/guests/metadata` (`monitoring:read`)
 - `GET /api/guests/metadata/{guestId}` (`monitoring:read`)
 - `PUT /api/guests/metadata/{guestId}` (`monitoring:write`)

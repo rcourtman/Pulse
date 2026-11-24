@@ -378,15 +378,25 @@ func TestAgentEventTokenLifecycleResolvesLiveTenantInventory(t *testing.T) {
 	}
 }
 
+// A session keeps full detail only with the action authority GET /api/actions
+// requires: the configured administrator does, another signed-in user gets the
+// redacted projection a monitoring:read token gets.
 func TestAgentEventTokenLifecyclePreservesSessionDisclosure(t *testing.T) {
-	router, _, server := newAgentLifecycleRouter(t, time.Hour)
-	const session = "synthetic-event-browser-session"
-	GetSessionStore().CreateSession(session, time.Hour, "fixture", "127.0.0.1", "operator")
-	t.Cleanup(func() { GetSessionStore().DeleteSession(session) })
-	stream := openAgentLifecycleStream(t, server, session, "session")
-	router.agentEventBroadcaster.PublishActionCompletedRecord("default", agentDisclosureRecord(t, false))
-	body, _ := json.Marshal(stream.next(t))
-	assertAgentDisclosureWire(t, body, false)
+	for user, restricted := range map[string]bool{"operator": false, "viewer": true} {
+		t.Run(user, func(t *testing.T) {
+			router, cfg, server := newAgentLifecycleRouter(t, time.Hour)
+			config.Mu.Lock()
+			cfg.AuthUser = "operator"
+			config.Mu.Unlock()
+			session := "synthetic-event-browser-session-" + user
+			GetSessionStore().CreateSession(session, time.Hour, "fixture", "127.0.0.1", user)
+			t.Cleanup(func() { GetSessionStore().DeleteSession(session) })
+			stream := openAgentLifecycleStream(t, server, session, "session")
+			router.agentEventBroadcaster.PublishActionCompletedRecord("default", agentDisclosureRecord(t, false))
+			body, _ := json.Marshal(stream.next(t))
+			assertAgentDisclosureWire(t, body, restricted)
+		})
+	}
 }
 
 type agentLifecycleMCPClient struct {

@@ -221,6 +221,49 @@ func (s *HostMetadataStore) Delete(hostID string) error {
 	return s.save(maxHostMetadataFileSizeBytes)
 }
 
+// SetUserMetadata merges only the user-authored fields (custom URL,
+// description, tags and notes) into a host's record. The command-execution
+// override shares the record but belongs to SetCommandsEnabled: a metadata
+// edit must never change it, nor restore an old value over a concurrent
+// administrator change.
+func (s *HostMetadataStore) SetUserMetadata(hostID string, meta *HostMetadata) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if meta == nil {
+		return fmt.Errorf("metadata cannot be nil")
+	}
+
+	incoming := cloneHostMetadata(meta)
+	stored := cloneHostMetadata(s.metadata[hostID])
+	if stored == nil {
+		stored = &HostMetadata{}
+	}
+	stored.ID = hostID
+	stored.CustomURL = incoming.CustomURL
+	stored.Description = incoming.Description
+	stored.Tags = incoming.Tags
+	stored.Notes = incoming.Notes
+
+	return s.setAndSave(hostID, stored, maxHostAnnotationsFileSizeBytes)
+}
+
+// DeleteUserMetadata removes the user-authored metadata for a host. A
+// command-execution override stored in the same record is kept.
+func (s *HostMetadataStore) DeleteUserMetadata(hostID string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if stored := cloneHostMetadata(s.metadata[hostID]); stored != nil && stored.CommandsEnabled != nil {
+		s.metadata[hostID] = &HostMetadata{ID: hostID, CommandsEnabled: stored.CommandsEnabled}
+	} else {
+		delete(s.metadata, hostID)
+	}
+
+	// Save to disk
+	return s.save(maxHostMetadataFileSizeBytes)
+}
+
 // ReplaceAll replaces all metadata entries and persists them to disk.
 func (s *HostMetadataStore) ReplaceAll(metadata map[string]*HostMetadata) error {
 	s.mu.Lock()

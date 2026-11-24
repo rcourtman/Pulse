@@ -8073,6 +8073,11 @@ ingest surface is the Pulse Unified Agent boundary in
 storage and recovery transport may not depend on `host`-named handler or
 router state as if `/api/agents/host/*` were still a first-class API family
 instead of a compatibility alias.
+That same shared `internal/api/` dependency also assumes
+`internal/api/agent_ingest.go` returns the write-only values of assigned HTTP
+checks only to the token the host reports under, so adjacent storage and
+recovery transport may not treat a management read of agent configuration as
+a source of probe credentials.
 That same shared `internal/api/` dependency also assumes the canonical
 Unified Agent route family remains the primary auth/management surface:
 adjacent storage and recovery-linked transport must treat `/api/agents/agent/*`
@@ -8781,7 +8786,9 @@ expiry must not be interpreted as recovery evidence.
 
 The shared Docker / Podman action executor may recover from a stale telemetry
 token only when one live tenant-scoped command admission matches both the
-resource agent ID and canonical hostname. This identity reconciliation changes
+resource agent ID and canonical hostname, and Pulse itself ties the report
+token to that admission: it holds the token, or it is an action runner whose
+host agent reports with it. This identity reconciliation changes
 neither backup, snapshot, restore, retention, nor recovery authority; those
 operations remain governed by their existing resource capabilities and action
 lifecycle contracts.

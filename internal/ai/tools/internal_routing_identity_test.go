@@ -244,3 +244,41 @@ func TestConnectedAgentForGuestNodeFollowsTheGuestsOwnRecord(t *testing.T) {
 		t.Fatalf("hetzner's new guest went to the only node on record: %q", agent.AgentID)
 	}
 }
+
+func TestConnectedAgentForNodeRefusesForgedLinkForAnotherHostname(t *testing.T) {
+	pveA := unifiedresources.Resource{
+		ID: "node-pve-a", Type: unifiedresources.ResourceTypeAgent, Name: "pve-a",
+		Sources: []unifiedresources.DataSource{unifiedresources.SourceProxmox, unifiedresources.SourceAgent},
+		Proxmox: &unifiedresources.ProxmoxData{Instance: "pve-a", NodeName: "pve-a", SourceID: "pve-a:pve-a"},
+		Agent:   &unifiedresources.AgentData{AgentID: "agent-pve-a", Hostname: "pve-a"},
+	}
+	pveBForged := unifiedresources.Resource{
+		ID: "node-pve-b", Type: unifiedresources.ResourceTypeAgent, Name: "pve-b",
+		Sources: []unifiedresources.DataSource{unifiedresources.SourceProxmox, unifiedresources.SourceAgent},
+		Proxmox: &unifiedresources.ProxmoxData{Instance: "pve-b", NodeName: "pve-b", SourceID: "pve-b:pve-b"},
+		Agent:   &unifiedresources.AgentData{AgentID: "agent-pve-a", Hostname: "pve-a"},
+	}
+	guestB := unifiedresources.Resource{
+		ID: unifiedresources.ProxmoxGuestCanonicalID(unifiedresources.ResourceTypeVM, "pve-b", 100), Type: unifiedresources.ResourceTypeVM, Name: "build",
+		Sources: []unifiedresources.DataSource{unifiedresources.SourceProxmox},
+		Proxmox: &unifiedresources.ProxmoxData{Instance: "pve-b", NodeName: "pve-b", VMID: 100, SourceID: "pve-b:pve-b:100"},
+	}
+	reg := unifiedresources.NewRegistry(nil)
+	reg.IngestResources([]unifiedresources.Resource{pveA, pveBForged, guestB})
+	agentA := []agentexec.ConnectedAgent{{AgentID: "agent-pve-a", Hostname: "pve-a"}}
+
+	if agent, found := ConnectedAgentForNodeName(reg, "pve-b", "pve-b", agentA); found {
+		t.Fatalf("forged link routed ConnectedAgentForNodeName(pve-b) to %q", agent.AgentID)
+	}
+	if agent, found := ConnectedAgentForGuestNode(reg, guestB.ID, "pve-b", "pve-b", agentA); found {
+		t.Fatalf("forged link routed ConnectedAgentForGuestNode(pve-b) to %q", agent.AgentID)
+	}
+	if agent, found := ConnectedAgentForNodeName(reg, "pve-a", "pve-a", agentA); !found || agent.AgentID != "agent-pve-a" {
+		t.Fatalf("legitimate pve-a lookup got %q, %v", agent.AgentID, found)
+	}
+	// If pve-b also has its own runner connected, it remains reachable despite the forged link.
+	both := append(agentA, agentexec.ConnectedAgent{AgentID: "agent-pve-b", Hostname: "pve-b"})
+	if agent, found := ConnectedAgentForGuestNode(reg, guestB.ID, "pve-b", "pve-b", both); !found || agent.AgentID != "agent-pve-b" {
+		t.Fatalf("pve-b own runner lookup got %q, %v", agent.AgentID, found)
+	}
+}

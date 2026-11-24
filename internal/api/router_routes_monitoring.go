@@ -137,7 +137,7 @@ func (r *Router) registerMonitoringResourceRoutes(
 	// resource + operator-state + findings + audit calls.
 	r.mux.HandleFunc("/api/agent/resource-context/{id}", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.withExternalAgentCapabilityActivity(
 		agentcapabilities.ResourceContextCapabilityName,
-		retainAgentCommandResponseAuthority(r.config, r.agentContextHandler.HandleResourceContext),
+		withAgentCommandDisclosure(r.config, r.authorizer, retainAgentCommandResponseAuthority(r.config, r.agentContextHandler.HandleResourceContext)),
 	))))
 	// Agent-consumable structured capability surface for a single resource.
 	// Companion to the resource-context bundle above: that renders capabilities
@@ -162,7 +162,7 @@ func (r *Router) registerMonitoringResourceRoutes(
 	// triage view above, which answers "where do I look now?".
 	r.mux.HandleFunc(agentcapabilities.RecentChangesCapabilityPath, RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.withExternalAgentCapabilityActivity(
 		agentcapabilities.ListRecentChangesCapabilityName,
-		retainAgentCommandResponseAuthority(r.config, r.agentContextHandler.HandleRecentChanges),
+		withAgentCommandDisclosure(r.config, r.authorizer, retainAgentCommandResponseAuthority(r.config, r.agentContextHandler.HandleRecentChanges)),
 	))))
 	// Agent-consumable metric history — "how did it move?" for one resource,
 	// served by the same history read the charts use.
@@ -198,7 +198,7 @@ func (r *Router) registerMonitoringResourceRoutes(
 	if r.agentEventBroadcaster != nil {
 		r.mux.HandleFunc("/api/agent/events", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.withExternalAgentCapabilityActivity(
 			agentcapabilities.EventSubscriptionCapabilityName,
-			r.handleAgentEvents,
+			withAgentCommandDisclosure(r.config, r.authorizer, r.handleAgentEvents),
 		))))
 	}
 	r.mux.HandleFunc("POST /api/actions/plan", RequireAuth(r.config, RequireAnyScope([]string{config.ScopeActionsPlan, config.ScopeAIExecute}, requireActionCapability(r.config, r.authorizer, auth.ActionPlan, r.withExternalAgentCapabilityActivity(

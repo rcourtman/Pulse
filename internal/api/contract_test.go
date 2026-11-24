@@ -20480,6 +20480,16 @@ func TestContract_AgentCommandPayloadsRequireActionScope(t *testing.T) {
 	if !strings.Contains(src, "token.HasScope(config.ScopeAIExecute)") {
 		t.Error("agent command payloads must require ai:execute on API-token callers, not only monitoring:read")
 	}
+	if !strings.Contains(src, "requestHasActionCapability(cfg, authorizer, current, auth.ActionApprove)") {
+		t.Error("agent command payloads must require the action-approve capability on callers without an API token")
+	}
+	routes, err := os.ReadFile("router_routes_monitoring.go")
+	if err != nil {
+		t.Fatalf("read router_routes_monitoring.go: %v", err)
+	}
+	if got := strings.Count(string(routes), "withAgentCommandDisclosure(r.config, r.authorizer, "); got != 3 {
+		t.Errorf("agent resource-context, changes and events routes must each bind command disclosure, got %d bindings", got)
+	}
 	if !strings.Contains(src, "redactAgentEventCommandsForRequest") {
 		t.Error("agent SSE events must pass through command redaction before serialization")
 	}
@@ -21202,6 +21212,7 @@ func TestContract_DockerLifecycleActionsResolveCommandAgentAndDispatchOneTypedOp
 		"resource.Docker.TokenID",
 		"commandAgentForToken(ctx, e.agents, resource.Docker.TokenID)",
 		"commandAgentForIdentity(ctx, e.agents, resource.Docker.AgentID, resource.Docker.Hostname)",
+		"e.dockerReportTokenReachesCommandSession(ctx, tokenID, agentID, resource.Docker.Hostname)",
 		"resource.Docker.AgentID",
 		"commandAgentForIdentity(ctx, e.agents, tokenAgentID, resource.Docker.Hostname)",
 		"ExecuteDockerContainerLifecycle(context.Context, string, agentexec.DockerContainerLifecyclePayload)",

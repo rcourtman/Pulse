@@ -1820,6 +1820,33 @@ func (m *Monitor) hostByID(hostID string) (models.Host, bool) {
 	return m.state.GetHost(hostID)
 }
 
+func (m *Monitor) nodeLinkHeldByOtherAgent(nodeID, hostID string, now time.Time) bool {
+	nodeID = strings.TrimSpace(nodeID)
+	hostID = strings.TrimSpace(hostID)
+	if nodeID == "" {
+		return false
+	}
+	if m.hostContinuityStore != nil {
+		for _, entry := range m.hostContinuityStore.RecentEntries(m.hostContinuitySince(now)) {
+			if strings.TrimSpace(entry.HostID) == hostID || strings.TrimSpace(entry.LinkedNodeID) != nodeID {
+				continue
+			}
+			if hostAgentReportCurrent(entry.LastSeen, entry.IntervalSeconds, now) {
+				return true
+			}
+		}
+	}
+	for _, existing := range m.GetLiveHostsSnapshot() {
+		if strings.TrimSpace(existing.ID) == hostID || strings.TrimSpace(existing.LinkedNodeID) != nodeID {
+			continue
+		}
+		if hostAgentReportCurrent(existing.LastSeen, existing.IntervalSeconds, now) {
+			return true
+		}
+	}
+	return false
+}
+
 func (m *Monitor) applyRejectedHostReportLiveness(
 	hostID string,
 	report agentshost.Report,
@@ -3772,8 +3799,9 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 			m.clearAgentLXCFilesystems(host.ID)
 		}
 	}
-	if linkedNodeID != "" && host.NodeLinkSource != "manual" && m.hostContinuityStore != nil &&
-		m.hostContinuityStore.NodeLinkReservedByOther(host.ID, linkedNodeID) {
+	if linkedNodeID != "" && host.NodeLinkSource != "manual" &&
+		((m.hostContinuityStore != nil && m.hostContinuityStore.NodeLinkReservedByOther(host.ID, linkedNodeID)) ||
+			m.nodeLinkHeldByOtherAgent(linkedNodeID, host.ID, receivedAt)) {
 		linkedNodeID = ""
 	}
 	// The operator split this node from the agent (resources API unlink or

@@ -83,5 +83,5 @@ func (m *MetadataProviderImpl) SetHostURL(hostID, customURL string) error {
 	// Update the URL
 	existing.CustomURL = customURL
 
-	return m.hostStore.Set(hostID, existing)
+	return m.hostStore.SetUserMetadata(hostID, existing)
 }

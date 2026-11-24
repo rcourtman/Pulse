@@ -768,7 +768,13 @@ HTTP, MCP and JSON snapshot tests own this disclosure boundary.
 ### Agent action details follow command-disclosure authority
 
 The existing agent event and resource-context reads require `monitoring:read`,
-but that scope does not disclose command/output detail. API tokens without
+but that scope does not disclose command/output detail. Callers without an API
+token are bound at the route by `withAgentCommandDisclosure` to the
+action-approve capability answered by `requestHasActionCapability`, the
+question `GET /api/actions` asks before showing the same detail, so a signed-in
+user who may not review actions reads the restricted projection on
+`/api/agent/resource-context/{id}`, `/api/agent/changes` and
+`/api/agent/events`, and an unbound request fails closed. API tokens without
 `ai:execute` receive no full `actionResultV2`: arbitrary result summaries,
 reason strings, evidence identities/references and recovery detail can carry
 command or provider output even after credential-pattern redaction. Instead,
@@ -781,7 +787,8 @@ re-digested or invented, and a malformed canonical result remains inconclusive.
 Restricted legacy errors retain only an exact known refusal prefix (such as
 `plan_drift:`), never its arbitrary suffix or an unknown prefix. Verification
 notes follow the command redaction rule even when the command is absent.
-Session and existing `ai:execute` disclosure are unchanged. Per-request copies
+Existing `ai:execute` token disclosure is unchanged. Session and proxy callers
+keep it only with the action-approve capability above. Per-request copies
 must preserve other subscribers' and stored evidence, auth and tenant boundaries.
 
 Ordinary-suite `agent_action_disclosure_test.go` checks both completion producers,
@@ -4997,7 +5004,10 @@ a new API state machine, queue contract, or verification-accounting field.
     share keeps it empty too (#2681). The connections ledger reads a row's own
     token or agent ID and never its hostname, so a machine with no session does
     not read as connected through a namesake's, and a Proxmox guest action finds
-    its runner through `tools.ConnectedAgentForGuestNode`. A Docker action's token
+    its runner through `tools.ConnectedAgentForGuestNode`. That runner must also
+    hold the name of the guest's node: Pulse links an agent to a node on the
+    addresses the agent reports, which a report token can write, and the
+    runner's hostname is the one an admin bound. A Docker action's token
     session counts on a hostname match only after the resource's own session has
     missed, since another machine can hold that name.
     That same shared runtime-token boundary also owns agent-exec binding.
@@ -6940,7 +6950,15 @@ that sticky token no longer names a live session, fallback is allowed only when
 one tenant-scoped command admission matches both the resource's agent ID and
 canonical hostname. A token-named resource never falls back through agent ID
 or hostname independently, so token rotation restores control for the same
-installed agent without permitting cross-host dispatch (#1728).
+installed agent without permitting cross-host dispatch (#1728). Because that
+agent ID and hostname come from the report body, the fallback also requires
+Pulse's own tie between the report token and that admission: the admission
+holds the report token, or it is an action runner and the host agent Pulse
+resolved under that agent ID and hostname reports with the report token
+(`Server.GetAgentAdmissionForIdentityForOrganization` names the admission's
+token and runtime role). Any other report token leaves the action at
+`command_agent_disconnected`, including the row a rotated token leaves behind
+until it ages out.
 
 ### Agent install command policy is a one-shot first-report contract
 
@@ -7602,10 +7620,11 @@ notifications: `finding.created` when a new finding is raised
 `StatusPending` and is waiting on operator decision (carries
 `approvalId`, `resourceId`, target tuple, `riskLevel`,
 `requestedBy`, `requestedAt`, `expiresAt`, plus `command` only for
-session callers or API tokens that also carry `ai:execute`; plain
-`monitoring:read` tokens receive `commandRedacted:true` — full
-detail stays behind `/api/approvals/{id}`, the event is a
-doorbell),
+API tokens that also carry `ai:execute` or session and proxy callers
+with the action-approve capability `GET /api/actions` requires. Plain
+`monitoring:read` tokens and other signed-in users receive
+`commandRedacted:true` (full detail stays behind
+`/api/approvals/{id}`, the event is a doorbell),
 `action.completed` when an action audit reaches a terminal state —
 Completed, runtime-Failed, or refused-before-dispatch (refusals
 carry stable error-token prefixes such as `plan_drift:`,
@@ -12985,6 +13004,11 @@ and Kubernetes telemetry writes, Docker command acknowledgements, and agent
 configuration reads also require organization-admin authority for browser or
 proxy identities. Scoped agent tokens retain their existing admission and
 binding rules; a token scope check alone does not authorize a browser session.
+A management read of agent configuration through `agent:manage` or
+`settings:write` is resolved by agent ID rather than by binding, so it follows
+the availability-target write-only rule: assigned HTTP checks are returned
+without request body, password, bearer token or header values unless the
+caller's token is the one the host reports under.
 
 A successful delete means the durable removal tombstone exists before the API
 returns. Journal persistence failure returns `500 agent_removal_failed` and

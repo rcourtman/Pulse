@@ -37,6 +37,8 @@ type scopedFakeDockerActionAgentCommander struct {
 	tokenAgents      map[string]string
 	lastOrg          string
 	sessionHostnames map[string]string
+	sessionTokens    map[string]string // agent ID -> token its session was admitted under
+	actionRunners    map[string]bool   // agent IDs whose session is an action runner
 }
 
 type observingDockerActionAgentCommander struct {
@@ -79,6 +81,18 @@ func (f *scopedFakeDockerActionAgentCommander) GetAgentForIdentityForOrganizatio
 	}
 	hostAgentID, ok := f.GetAgentForHost(hostname)
 	return agentID, ok && hostAgentID == agentID && f.IsAgentConnected(agentID)
+}
+
+func (f *scopedFakeDockerActionAgentCommander) GetAgentAdmissionForIdentityForOrganization(organizationID, agentID, hostname string) (agentexec.AgentAdmission, bool) {
+	if _, ok := f.GetAgentForIdentityForOrganization(organizationID, agentID, hostname); !ok {
+		return agentexec.AgentAdmission{}, false
+	}
+	admission := agentexec.AgentAdmission{OrganizationID: organizationID, TokenID: f.sessionTokens[agentID], AgentID: agentID, Hostname: hostname, RuntimeRole: agentexec.RuntimeRoleLegacyFullTrust}
+	if f.actionRunners[agentID] {
+		admission.RuntimeRole = agentexec.RuntimeRoleActionRunner
+		admission.ActionCapability = agentexec.ActionCapabilityTypedV1
+	}
+	return admission, true
 }
 
 func dockerActionDispatchContext(t *testing.T, executor dockerContainerActionExecutor, record unified.ActionAuditRecord) context.Context {
@@ -172,7 +186,38 @@ func dockerActionReadinessByName(readinesses []unified.ResourceActionReadiness, 
 	return unified.ResourceActionReadiness{}, false
 }
 
-func TestDockerCommandSessionResolutionUsesTenantAndRecoversFromStaleReportToken(t *testing.T) {
+type dockerActionTenantSeed struct {
+	snapshot  models.StateSnapshot
+	resources []unified.Resource
+}
+
+func (p dockerActionTenantSeed) UnifiedReadStateForTenant(string) unified.ReadState {
+	return SnapshotReadState(p.snapshot)
+}
+
+func (p dockerActionTenantSeed) UnifiedResourceSnapshotForTenant(string) ([]unified.Resource, time.Time) {
+	return append([]unified.Resource(nil), p.resources...), p.snapshot.LastUpdate
+}
+
+// dockerActionHostAgentResources seeds the host agents Pulse resolved, each with
+// the token it reports under.
+func dockerActionHostAgentResources(t *testing.T, hosts ...models.Host) *ResourceHandlers {
+	t.Helper()
+	now := time.Now().UTC()
+	for index := range hosts {
+		hosts[index].Status = "online"
+		hosts[index].LastSeen = now
+	}
+	snapshot := models.StateSnapshot{LastUpdate: now, Hosts: hosts}
+	registry := unified.NewRegistry(nil)
+	registry.IngestSnapshot(snapshot)
+	h := newActionTestResourceHandlers(t, &config.Config{DataPath: t.TempDir()})
+	h.SetStateProvider(resourceStateProvider{snapshot: snapshot})
+	h.SetTenantStateProvider(dockerActionTenantSeed{snapshot: snapshot, resources: registry.List()})
+	return h
+}
+
+func TestDockerCommandSessionResolutionUsesTenantAndProvesReportIdentity(t *testing.T) {
 	agents := &scopedFakeDockerActionAgentCommander{
 		fakeDockerActionAgentCommander: &fakeDockerActionAgentCommander{
 			connected:   map[string]bool{"canonical-agent": true, "stale-agent": true},
@@ -196,13 +241,36 @@ func TestDockerCommandSessionResolutionUsesTenantAndRecoversFromStaleReportToken
 		t.Fatalf("resolved agent/org = %q/%q, want canonical-agent/org-b", agentID, agents.lastOrg)
 	}
 
+	// One token can front several sessions, and the token lookup then names none.
+	// The session the report names is still reached when it holds the report token.
 	delete(agents.tokenAgents, "fresh-token")
 	agents.agentByHost["docker-host"] = "canonical-agent"
+	agents.sessionTokens = map[string]string{"canonical-agent": "fresh-token"}
 	resource.Docker.AgentID = "canonical-agent"
 	if agentID, err := executor.connectedDockerCommandAgentID(ctx, resource); err != nil || agentID != "canonical-agent" {
-		t.Fatalf("stale token exact-identity fallback = %q, %v; want canonical-agent", agentID, err)
+		t.Fatalf("exact-identity fallback to a session under the report token = %q, %v; want canonical-agent", agentID, err)
 	}
 
+	// The agent ID and hostname are the report's word. A full-trust session under
+	// another token is not the reporter's, whatever its host agent row shows.
+	agents.sessionTokens["canonical-agent"] = "session-token"
+	executor.resources = dockerActionHostAgentResources(t, models.Host{ID: "canonical-agent", Hostname: "docker-host", TokenID: "fresh-token"})
+	if agentID, err := executor.connectedDockerCommandAgentID(ctx, resource); err == nil {
+		t.Fatalf("report token reached the full-trust session %q of another credential", agentID)
+	}
+
+	// An action runner holds its own credential beside the collector that reports,
+	// so it is reached through the token its host agent reports under, and no other.
+	agents.actionRunners = map[string]bool{"canonical-agent": true}
+	if agentID, err := executor.connectedDockerCommandAgentID(ctx, resource); err != nil || agentID != "canonical-agent" {
+		t.Fatalf("collector token fallback to its action runner = %q, %v; want canonical-agent", agentID, err)
+	}
+	resource.Docker.TokenID = "other-host-token"
+	if agentID, err := executor.connectedDockerCommandAgentID(ctx, resource); err == nil {
+		t.Fatalf("another host's report token reached action runner %q on the report's word", agentID)
+	}
+
+	resource.Docker.TokenID = "fresh-token"
 	resource.Docker.AgentID = "stale-agent"
 	if agentID, err := executor.connectedDockerCommandAgentID(ctx, resource); err == nil {
 		t.Fatalf("stale token unexpectedly crossed report identity to %q", agentID)
@@ -408,6 +476,9 @@ func TestDockerCommandSessionOnlyReachesTheResourcesOwnAgent(t *testing.T) {
 		agentByHost map[string]string
 		tokenAgents map[string]string
 		sessions    map[string]string // agent ID -> hostname, where two sessions share one
+		tokens      map[string]string // agent ID -> token its session was admitted under
+		runners     map[string]bool   // agent IDs whose session is an action runner
+		hostAgents  []models.Host     // host agents Pulse resolved, each with its report token
 		wantAgent   string
 	}{
 		{
@@ -429,7 +500,63 @@ func TestDockerCommandSessionOnlyReachesTheResourcesOwnAgent(t *testing.T) {
 			docker:      unified.DockerData{TokenID: "shared-token", AgentID: "agent-b", Hostname: "tower"},
 			tokenAgents: map[string]string{"shared-token": "agent-a"},
 			sessions:    map[string]string{"agent-a": "tower", "agent-b": "tower"},
+			tokens:      map[string]string{"agent-a": "shared-token", "agent-b": "runner-token-b"},
+			runners:     map[string]bool{"agent-b": true},
+			hostAgents:  []models.Host{{ID: "agent-a", Hostname: "tower", TokenID: "shared-token"}, {ID: "agent-b", Hostname: "tower", TokenID: "shared-token"}},
 			wantAgent:   "agent-b",
+		},
+		{
+			name:      "one token behind two sessions reaches the one the report names",
+			docker:    unified.DockerData{TokenID: "shared-token", AgentID: "agent-b", Hostname: "tower"},
+			sessions:  map[string]string{"agent-a": "tower", "agent-b": "tower"},
+			tokens:    map[string]string{"agent-a": "shared-token", "agent-b": "shared-token"},
+			wantAgent: "agent-b",
+		},
+		{
+			name:       "a collector's report token reaches its host's action runner session",
+			docker:     unified.DockerData{TokenID: "collector-token", AgentID: "agent-b", Hostname: "tower"},
+			sessions:   map[string]string{"agent-b": "tower"},
+			tokens:     map[string]string{"agent-b": "runner-token-b"},
+			runners:    map[string]bool{"agent-b": true},
+			hostAgents: []models.Host{{ID: "agent-b", Hostname: "tower.example.com", TokenID: "collector-token"}},
+			wantAgent:  "agent-b",
+		},
+		{
+			name:       "a report naming another machine's agent and hostname is refused",
+			docker:     unified.DockerData{TokenID: "token-a", AgentID: "agent-b", Hostname: "host-b"},
+			sessions:   map[string]string{"agent-b": "host-b"},
+			tokens:     map[string]string{"agent-b": "token-b"},
+			hostAgents: []models.Host{{ID: "agent-a", Hostname: "host-a", TokenID: "token-a"}, {ID: "agent-b", Hostname: "host-b", TokenID: "token-b"}},
+		},
+		{
+			name:       "a host agent row under the report token does not reach a full-trust session",
+			docker:     unified.DockerData{TokenID: "token-a", AgentID: "agent-b", Hostname: "host-b"},
+			sessions:   map[string]string{"agent-b": "host-b"},
+			tokens:     map[string]string{"agent-b": "token-b"},
+			hostAgents: []models.Host{{ID: "agent-b", Hostname: "host-b", TokenID: "token-a"}},
+		},
+		{
+			name:       "a report naming a runner whose host agent reports under another token is refused",
+			docker:     unified.DockerData{TokenID: "token-a", AgentID: "agent-b", Hostname: "host-b"},
+			sessions:   map[string]string{"agent-b": "host-b"},
+			tokens:     map[string]string{"agent-b": "runner-token-b"},
+			runners:    map[string]bool{"agent-b": true},
+			hostAgents: []models.Host{{ID: "agent-a", Hostname: "host-a", TokenID: "token-a"}, {ID: "agent-b", Hostname: "host-b", TokenID: "token-b"}},
+		},
+		{
+			name:     "a report naming a runner with no host agent behind it is refused",
+			docker:   unified.DockerData{TokenID: "token-a", AgentID: "agent-b", Hostname: "host-b"},
+			sessions: map[string]string{"agent-b": "host-b"},
+			tokens:   map[string]string{"agent-b": "runner-token-b"},
+			runners:  map[string]bool{"agent-b": true},
+		},
+		{
+			name:        "a report naming another machine is refused, not sent to the token's own session",
+			docker:      unified.DockerData{TokenID: "token-a", AgentID: "agent-b", Hostname: "tower"},
+			tokenAgents: map[string]string{"token-a": "agent-a"},
+			sessions:    map[string]string{"agent-a": "tower", "agent-b": "tower"},
+			tokens:      map[string]string{"agent-a": "token-a", "agent-b": "token-b"},
+			hostAgents:  []models.Host{{ID: "agent-a", Hostname: "tower", TokenID: "token-a"}, {ID: "agent-b", Hostname: "tower", TokenID: "token-b"}},
 		},
 		{
 			name:        "tokenless host with no session of its own stays off a namesake",
@@ -487,7 +614,12 @@ func TestDockerCommandSessionOnlyReachesTheResourcesOwnAgent(t *testing.T) {
 				fakeDockerActionAgentCommander: &fakeDockerActionAgentCommander{connected: tt.connected, agentByHost: tt.agentByHost},
 				tokenAgents:                    tt.tokenAgents,
 				sessionHostnames:               tt.sessions,
+				sessionTokens:                  tt.tokens,
+				actionRunners:                  tt.runners,
 			}}
+			if len(tt.hostAgents) > 0 {
+				executor.resources = dockerActionHostAgentResources(t, tt.hostAgents...)
+			}
 			docker := tt.docker
 			agentID, err := executor.connectedDockerCommandAgentID(context.Background(), unified.Resource{Docker: &docker})
 			if tt.wantAgent == "" {
@@ -500,6 +632,41 @@ func TestDockerCommandSessionOnlyReachesTheResourcesOwnAgent(t *testing.T) {
 				t.Fatalf("resolved %q, %v; want %q", agentID, err, tt.wantAgent)
 			}
 		})
+	}
+}
+
+func TestDockerCommandSessionRefusesAmbiguousTokenHosts(t *testing.T) {
+	now := time.Now().UTC()
+	realHost := unified.Resource{
+		ID: "docker-host:shop", Type: unified.ResourceTypeAgent, Name: "shop-host", LastSeen: now,
+		Sources: []unified.DataSource{unified.SourceDocker},
+		Docker:  &unified.DockerData{HostSourceID: "shop-host-id", AgentID: "agent-shop", Hostname: "shop-host", TokenID: "shop-token"},
+	}
+	forgedHost := unified.Resource{
+		ID: "docker-host:staging", Type: unified.ResourceTypeAgent, Name: "staging-host", LastSeen: now,
+		Sources: []unified.DataSource{unified.SourceDocker},
+		Docker:  &unified.DockerData{HostSourceID: "staging-host-id", AgentID: "agent-shop", Hostname: "staging-host", TokenID: "shop-token"},
+	}
+	forgedContainer := dockerContainerActionResource("app-container:staging-web", "docker", "running", now)
+	forgedContainer.Docker.HostSourceID = "staging-host-id"
+	forgedContainer.Docker.AgentID = "agent-shop"
+	forgedContainer.Docker.Hostname = "staging-host"
+	forgedContainer.Docker.TokenID = "shop-token"
+
+	h := newActionTestResourceHandlers(t, &config.Config{DataPath: t.TempDir()})
+	h.SetStateProvider(resourceUnifiedSeedProvider{
+		snapshot:  models.StateSnapshot{LastUpdate: now},
+		resources: []unified.Resource{realHost, forgedHost, forgedContainer},
+	})
+	agents := &scopedFakeDockerActionAgentCommander{
+		fakeDockerActionAgentCommander: &fakeDockerActionAgentCommander{connected: map[string]bool{"agent-shop": true}},
+		tokenAgents:                    map[string]string{"shop-token": "agent-shop"},
+		sessionHostnames:               map[string]string{"agent-shop": "shop-host"},
+		sessionTokens:                  map[string]string{"agent-shop": "shop-token"},
+	}
+	executor := dockerContainerActionExecutor{resources: h, agents: agents}
+	if agentID, err := executor.connectedDockerCommandAgentID(context.Background(), forgedContainer); err == nil {
+		t.Fatalf("second Docker host under same token unexpectedly routed to %q", agentID)
 	}
 }
 
@@ -878,6 +1045,54 @@ func TestHandleExecuteActionRejectsNeverAutoRemediateBeforeExecutor(t *testing.T
 	}
 	if !ok || audit.State != unified.ActionStateFailed || audit.Result == nil || !strings.HasPrefix(audit.Result.ErrorMessage, "resource_remediation_locked:") {
 		t.Fatalf("locked audit = %#v, ok=%v", audit, ok)
+	}
+}
+
+// The operator's lock and limits are stored under the resource ID, which is a
+// hash of the container ID as the report spelled it. The typed payload
+// lower-cases the ID and the daemon resolves a prefix, so any spelling but the
+// full lower-case one is a second, unlocked resource for the same container.
+func TestDockerContainerActionExecutorRefusesAnotherSpellingOfAContainerID(t *testing.T) {
+	now := time.Now().UTC()
+	fullID := dockerContainerActionResource("app-container:api", "docker", "running", now).Docker.ContainerID
+	for name, tc := range map[string]struct {
+		containerID string
+		executable  bool
+	}{
+		"full lower-case id": {fullID, true},
+		"upper case":         {strings.ToUpper(fullID), false},
+		"one upper letter":   {strings.Replace(fullID, "a", "A", 1), false},
+		"short id":           {fullID[:12], false},
+		"prefix":             {fullID[:63], false},
+		"name":               {"api", false},
+		"empty":              {"", false},
+	} {
+		t.Run(name, func(t *testing.T) {
+			resource := dockerContainerActionResource("app-container:api", "docker", "running", now)
+			resource.Docker.ContainerID = tc.containerID
+			h := newActionTestResourceHandlers(t, &config.Config{DataPath: t.TempDir()})
+			h.SetStateProvider(resourceUnifiedSeedProvider{snapshot: models.StateSnapshot{LastUpdate: now}, resources: []unified.Resource{resource}})
+			agents := &fakeDockerActionAgentCommander{}
+			executor := newDockerContainerActionExecutor(h, agents).(dockerContainerActionExecutor)
+			record := dockerContainerActionRecord("act_container", resource.ID, "restart")
+
+			readiness := executor.CheckActionAvailable(context.Background(), record.Request, resource)
+			if readiness.Name != "restart" || readiness.Available != tc.executable {
+				t.Fatalf("CheckActionAvailable readiness = %#v, want available=%v", readiness, tc.executable)
+			}
+			attempt, err := unified.NewActionDispatchAttempt(record.ID, now)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := executor.BindActionDispatch(context.Background(), record, attempt); (err == nil) != tc.executable {
+				t.Fatalf("BindActionDispatch err = %v, want executable=%v", err, tc.executable)
+			} else if err != nil && !strings.Contains(err.Error(), "has no executable container id") {
+				t.Fatalf("BindActionDispatch err = %v, want the container id refusal", err)
+			}
+			if len(agents.typedCalls) != 0 || len(agents.calls) != 0 {
+				t.Fatalf("typed/raw agent calls = %d/%d, want none", len(agents.typedCalls), len(agents.calls))
+			}
+		})
 	}
 }
 

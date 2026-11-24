@@ -3137,22 +3137,35 @@ func (s *Server) GetAgentForTokenForOrganization(organizationID, tokenID string)
 // canonical hostname. This is the safe recovery path for telemetry whose
 // last-seen token ID predates an enrollment-token rotation.
 func (s *Server) GetAgentForIdentityForOrganization(organizationID, agentID, hostname string) (string, bool) {
-	if s == nil {
+	admission, ok := s.GetAgentAdmissionForIdentityForOrganization(organizationID, agentID, hostname)
+	if !ok {
 		return "", false
+	}
+	return strings.TrimSpace(admission.AgentID), true
+}
+
+// GetAgentAdmissionForIdentityForOrganization returns the admission behind the
+// session GetAgentForIdentityForOrganization resolves. An agent ID and a
+// hostname name a session, not the credential that opened it. A caller that
+// took them from telemetry reads the session's token and runtime role here
+// before it treats that telemetry as the session's own.
+func (s *Server) GetAgentAdmissionForIdentityForOrganization(organizationID, agentID, hostname string) (AgentAdmission, bool) {
+	if s == nil {
+		return AgentAdmission{}, false
 	}
 	organizationID = normalizeOrganizationID(organizationID)
 	agentID = strings.TrimSpace(agentID)
 	hostname = strings.TrimSpace(hostname)
 	if agentID == "" || hostname == "" {
-		return "", false
+		return AgentAdmission{}, false
 	}
 	ac, ok := s.connectionForOrganization(organizationID, agentID)
 	if !ok || normalizeOrganizationID(ac.admission.OrganizationID) != organizationID ||
 		strings.TrimSpace(ac.admission.AgentID) != agentID ||
 		!unifiedresources.HostnamesEquivalent(ac.admission.Hostname, hostname) {
-		return "", false
+		return AgentAdmission{}, false
 	}
-	return agentID, true
+	return ac.admission, true
 }
 
 // --- Deploy protocol ---

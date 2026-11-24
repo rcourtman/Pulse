@@ -14,6 +14,7 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	unified "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
+	internalauth "github.com/rcourtman/pulse-go-rewrite/pkg/auth"
 )
 
 // These strings deliberately match no credential-shaped redactor. Command and
@@ -91,6 +92,76 @@ func assertAgentDisclosureWire(t *testing.T, body []byte, restricted bool) {
 	}
 }
 
+// serveWithAgentCommandDisclosure serves a handler behind the binding its route
+// registers, for a caller the Actions routes admit: no session, proxy role or
+// token that the default authorizer would hold back.
+func serveWithAgentCommandDisclosure(handler http.HandlerFunc, w http.ResponseWriter, r *http.Request) {
+	withAgentCommandDisclosure(nil, &internalauth.DefaultAuthorizer{}, handler)(w, r)
+}
+
+// A signed-in caller reads command and result detail on the agent routes only
+// with the capability GET /api/actions requires of the same caller.
+func TestAgentCommandDisclosureRequiresActionCapabilityWithoutToken(t *testing.T) {
+	InitSessionStore(t.TempDir())
+	cfg := &config.Config{AuthUser: "admin"}
+	bind := func(cfg *config.Config, authorizer internalauth.Authorizer, req *http.Request) *http.Request {
+		var bound *http.Request
+		withAgentCommandDisclosure(cfg, authorizer, func(_ http.ResponseWriter, r *http.Request) { bound = r })(httptest.NewRecorder(), req)
+		return bound
+	}
+	for _, caller := range []assistantHostCommandCaller{
+		{name: "viewer session", authorizer: &internalauth.DefaultAuthorizer{}, prepare: assistantSessionCaller("viewer"), want: false},
+		{name: "administrator session", authorizer: &internalauth.DefaultAuthorizer{}, prepare: assistantSessionCaller("admin"), want: true},
+		{name: "explicit action grant", authorizer: allowActionAuthorityAuthorizer{}, prepare: assistantSessionCaller("operator"), want: true},
+		{name: "RBAC denies approve", authorizer: fixedActionAuthorityAuthorizer(false), prepare: assistantSessionCaller("admin"), want: false},
+	} {
+		t.Run(caller.name, func(t *testing.T) {
+			req := bind(cfg, caller.authorizer, caller.prepare(t, httptest.NewRequest(http.MethodGet, "/api/agent/events", nil)))
+			if got := requestCanReadAgentCommandPayloads(req); got != caller.want {
+				t.Fatalf("requestCanReadAgentCommandPayloads = %v, want %v", got, caller.want)
+			}
+		})
+	}
+
+	t.Run("proxy roles", func(t *testing.T) {
+		proxy := &config.Config{ProxyAuthSecret: "proxy-secret", ProxyAuthUserHeader: "X-Remote-User", ProxyAuthRoleHeader: "X-Remote-Roles", ProxyAuthAdminRole: "admin"}
+		for role, want := range map[string]bool{"viewer": false, "admin": true} {
+			req := httptest.NewRequest(http.MethodGet, "/api/agent/events", nil)
+			req.Header.Set("X-Proxy-Secret", "proxy-secret")
+			req.Header.Set("X-Remote-User", "someone")
+			req.Header.Set("X-Remote-Roles", role)
+			req = bind(proxy, &internalauth.DefaultAuthorizer{}, req.WithContext(internalauth.WithUser(req.Context(), "someone")))
+			if got := requestCanReadAgentCommandPayloads(req); got != want {
+				t.Fatalf("proxy role %q: requestCanReadAgentCommandPayloads = %v, want %v", role, got, want)
+			}
+		}
+	})
+
+	t.Run("unbound request fails closed", func(t *testing.T) {
+		if requestCanReadAgentCommandPayloads(httptest.NewRequest(http.MethodGet, "/api/agent/events", nil)) {
+			t.Fatal("a tokenless request without a bound answer read command detail")
+		}
+	})
+
+	// An open stream keeps its request: a withdrawn role redacts the next
+	// event, and a role gained later does not widen the admitted stream.
+	t.Run("follows the current role without widening", func(t *testing.T) {
+		live := &config.Config{AuthUser: "admin"}
+		admin := bind(live, &internalauth.DefaultAuthorizer{}, assistantSessionCaller("admin")(t, httptest.NewRequest(http.MethodGet, "/api/agent/events", nil)))
+		viewer := bind(live, &internalauth.DefaultAuthorizer{}, assistantSessionCaller("viewer")(t, httptest.NewRequest(http.MethodGet, "/api/agent/events", nil)))
+		if !requestCanReadAgentCommandPayloads(admin) || requestCanReadAgentCommandPayloads(viewer) {
+			t.Fatal("admission did not follow the administrator boundary")
+		}
+		live.AuthUser = "viewer"
+		if requestCanReadAgentCommandPayloads(admin) {
+			t.Fatal("a withdrawn administrator role kept command disclosure")
+		}
+		if requestCanReadAgentCommandPayloads(viewer) {
+			t.Fatal("a role gained after admission widened command disclosure")
+		}
+	})
+}
+
 func TestAgentActionDisclosureAcrossProducersAndScopes(t *testing.T) {
 	for _, legacy := range []bool{false, true} {
 		for _, scopes := range [][]string{
@@ -110,8 +181,13 @@ func TestAgentActionDisclosureAcrossProducersAndScopes(t *testing.T) {
 				req := httptest.NewRequest(http.MethodGet, "/api/agent/events", nil)
 				if scopes != nil {
 					attachAPITokenRecord(req, &config.APITokenRecord{Scopes: scopes})
+				} else {
+					serveWithAgentCommandDisclosure(func(_ http.ResponseWriter, bound *http.Request) { req = bound }, httptest.NewRecorder(), req)
 				}
 				restricted := !requestCanReadAgentCommandPayloads(req)
+				if scopes == nil && restricted {
+					t.Fatal("a caller the Actions routes admit lost command detail")
+				}
 				payload, ok := projectAgentActionCompletedPayload(record)
 				if !ok {
 					t.Fatal("terminal record did not project")
@@ -225,7 +301,7 @@ func TestAgentActionDisclosureContextHTTPPreservesStoredEvidence(t *testing.T) {
 			attachAPITokenRecord(req, &config.APITokenRecord{Scopes: []string{config.ScopeMonitoringRead}})
 		}
 		res := httptest.NewRecorder()
-		h.HandleResourceContext(res, req)
+		serveWithAgentCommandDisclosure(h.HandleResourceContext, res, req)
 		if res.Code != http.StatusOK {
 			t.Fatalf("context HTTP %d: %s", res.Code, res.Body.String())
 		}
