@@ -70,6 +70,8 @@ At sign-in, every non-empty list must match. Entries within one list are alterna
 - **Allowed Domains**: Match the email domain (e.g., `example.com`).
 - **Allowed Emails**: Match an email address. This does not bypass the other lists.
 
+An address the IdP reports as unverified (`email_verified: false`) matches neither **Allowed Domains** nor **Allowed Emails**. Sign-in fails with `email_unverified` until the user verifies it at the IdP. An IdP that omits `email_verified` is not affected.
+
 > **Administrator access:** Passing the sign-in rules does not grant instance
 > administrator privileges by itself. For SSO administrators, map a trusted
 > IdP group to the built-in `admin` role in **Group Role Mappings**.

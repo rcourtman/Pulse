@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -137,6 +138,28 @@ func extractStringSliceClaim(claims map[string]any, key string) []string {
 		return parts
 	default:
 		return nil
+	}
+}
+
+// oidcEmailUnverified reports whether the provider states that the address in
+// the standard email claim is not verified. Such an address is whatever the
+// account holder typed, so it identifies nobody. A provider that omits
+// email_verified makes no such statement, and the claim does not describe an
+// address an administrator maps from another claim; both stay as they were.
+func oidcEmailUnverified(claims map[string]any, emailClaim string) bool {
+	if emailClaim != "email" {
+		return false
+	}
+	switch verified := claims["email_verified"].(type) {
+	case nil:
+		return false
+	case bool:
+		return !verified
+	case string:
+		// Some providers send the boolean as text.
+		return !strings.EqualFold(strings.TrimSpace(verified), "true")
+	default:
+		return true
 	}
 }
 
@@ -665,6 +688,12 @@ func (r *Router) handleSSOOIDCCallback(w http.ResponseWriter, req *http.Request)
 	}
 
 	// Apply access restrictions from SSO provider config
+	emailUnverified := oidcEmailUnverified(claims, emailClaim)
+	if emailUnverified && (len(provider.AllowedEmails) > 0 || len(provider.AllowedDomains) > 0) {
+		LogAuditEventForTenant(GetOrgID(req.Context()), "sso_oidc_login", email, GetClientIP(req), req.URL.Path, false, "Email not verified by the provider")
+		r.redirectOIDCError(w, req, entry.ReturnTo, "email_unverified")
+		return
+	}
 	if len(provider.AllowedEmails) > 0 && !matchesValue(email, provider.AllowedEmails) {
 		LogAuditEventForTenant(GetOrgID(req.Context()), "sso_oidc_login", email, GetClientIP(req), req.URL.Path, false, "Email not permitted")
 		r.redirectOIDCError(w, req, entry.ReturnTo, "email_restricted")
@@ -697,6 +726,13 @@ func (r *Router) handleSSOOIDCCallback(w http.ResponseWriter, req *http.Request)
 			// which already falls back to email and then the display name. A
 			// separately supplied free-form name claim was never a lookup key.
 			legacyCandidates := ssoLegacyPrincipalCandidates(username, email)
+			if emailUnverified {
+				// Legacy assignments may be keyed by an address. One the provider
+				// has not verified is no key to them, whichever claim carries it.
+				legacyCandidates = slices.DeleteFunc(legacyCandidates, func(candidate string) bool {
+					return strings.EqualFold(candidate, email)
+				})
+			}
 			if err := applySSORoleAssignments(authManager, principal, legacyCandidates, rolesToAssign, len(provider.GroupRoleMappings) > 0, true); err != nil {
 				log.Error().Err(err).Str("user", principal).Str("display_user", username).Msg("Failed to update SSO OIDC user roles")
 				if errors.Is(err, errSSORolesNotReplaced) {
