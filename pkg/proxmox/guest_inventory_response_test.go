@@ -27,6 +27,9 @@ func TestGuestInventoryResponseAdmission(t *testing.T) {
 				{"null-data", `{"data":null}`, false},
 				{"null-envelope", `null`, false},
 				{"conflicting-error", `{"data":[],"errors":{"message":"fixture-private-detail"}}`, false},
+				{"late-error-after-valid-rows", `{"data":[` + row + `],"errors":{"message":"fixture-private-detail"}}`, false},
+				{"late-error-alias", `{"data":[` + row + `],"ERRORS":null}`, false},
+				{"late-duplicate-provider-field", `{"vendor":{"before":1},"data":[` + row + `],"\u0076endor":{"after":2}}`, false},
 				{"case-data", `{"Data":[]}`, false},
 				{"duplicate-data", `{"data":[` + row + `],"data":[]}`, false},
 				{"escaped-duplicate-data", `{"data":[],"\u0064ata":[` + row + `]}`, false},
@@ -108,11 +111,11 @@ func TestGuestInventoryCountersArePerRow(t *testing.T) {
 	// Use the same ordered fixture on the cluster path and both node paths.
 	// Neither zero nor an integer above 2^53 should be rounded into absence,
 	// and a sibling's counters must not populate a null or omitted field.
-	const body = `{"data":[
+	const body = `{"vendor-envelope":{"large":1e1000},"data":[
 		{"vmid":107,"type":"lxc","node":"member","diskread":0,"diskwrite":null,"\u006eetin":9007199254740993},
 		{"vmid":105,"type":"qemu","node":"member","diskread":null,"diskwrite":42,"netout":0},
 		{"vmid":106,"type":"qemu","node":"member","vendor-metadata":{"count":3}}
-	]}`
+	],"errors":null,"extension":[true,{"nested":2}]}`
 	type observation struct {
 		vmid    int
 		values  [4]uint64 // read, write, receive, transmit
