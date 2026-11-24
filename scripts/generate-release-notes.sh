@@ -202,27 +202,36 @@ then
 
 ## Proxmox, PBS and backups
 
-- [Plain-language change, where users notice it and why it matters.]
+- [One short, plain sentence stating what users will notice and why it matters.]
 
-[Choose only relevant change groups: Alerts and notifications, Disks and
-storage, Proxmox, PBS and backups, TrueNAS, vSphere and Docker, Install, updates
-and agents, Updates and agents, Pulse Pro, AI and hosted, Monitoring and service
+[Write for someone scanning the in-app What's new dialog in under a minute, not
+reading an exhaustive commit log. Choose only relevant change groups that have
+real user-visible changes: Alerts and notifications, Disks and storage,
+Proxmox, PBS and backups, TrueNAS, vSphere and Docker, Install, updates and
+agents, Updates and agents, Pulse Pro, AI and hosted, Monitoring and service
 health, Security, Other improvements. A narrow patch may use What's improved
-instead. Do not create empty groups or repeat the same change between groups.
-Each full bullet must be 260 characters or fewer. No semicolons or em dashes.]
+instead. Do not fill every heading, do not create empty groups, and do not
+repeat the same change between groups. Omit minor defensive hardening, routine
+retry or focus tweaks, and narrow edge cases that belong in the full PR
+changelog. Prefer one crisp sentence per bullet (around 100 to 150 characters;
+each full bullet must be 260 characters or fewer) instead of packing several
+fixes into a multi-sentence paragraph. No semicolons or em dashes.]
 
 ## Known issues
 
 [Only unresolved user symptoms with an actionable workaround or next step.
 Include critical risks and required safety actions here, even when they apply
-before upgrading. This section leads the post-update changelog.
-Omit this section when there are none.]
+before upgrading. Keep this list brief and non-repetitive: combine related
+cautions for the same underlying issue into one concise bullet rather than
+splitting one problem across several bullets. Omit this section when there are
+none.]
 
 ## Before you upgrade
 
 [Only compatibility, signing, companion-app or required operator information.
-It appears last in the post-update changelog as Upgrade notes. Put critical
-warnings in Known issues. Omit this section when there is none.
+Keep each item brief and actionable. It appears at the bottom of the
+post-update dialog as Upgrade notes. Put critical warnings in Known issues or
+Breaking changes. Omit this section when there is none.
 No internal verification status.]
 EOF
 fi
@@ -468,12 +477,18 @@ fi
 save_trace research.md "$RESEARCH_BRIEF"
 
 read -r -d '' DRAFT_PROMPT <<EOF || true
-Write the most useful customer release notes for Pulse v${VERSION}.
+Write concise, scannable customer release notes for Pulse v${VERSION}.
 
 ${RELEASE_RANGE_GUIDANCE}
 
-Use your judgment to select and explain what matters most to users. The
-read-only repository and GitHub tools are available as you judge useful.
+Write for a Pulse user opening the in-app What's new dialog right after
+updating. They want to scan what actually matters in under a minute. Use your
+judgment to select and explain the changes users will genuinely notice or act
+on, and leave minor internal hardening, defensive retries, and edge-case polish
+to the full PR changelog. Keep bullets short (usually one crisp sentence), skip
+thin categories rather than padding every heading, and combine related cautions
+for the same problem into a single Known issues bullet. The read-only
+repository and GitHub tools are available as you judge useful.
 
 Use exactly this public shape:
 
@@ -503,6 +518,14 @@ repository and GitHub tools as you judge useful, along with the internal brief.
 Decide whether the draft selected, weighted, and explained the changes in the
 way most useful to users, and make any changes you judge warranted.
 
+Edit ruthlessly for readability and brevity as well as accuracy:
+- Cut low-signal edge-case hardening and internal polish that a typical user
+  will never consciously notice.
+- Tighten multi-sentence bullets down to one crisp, plain-language sentence
+  instead of cramming multiple unrelated fixes into one bullet.
+- Drop thin categories that do not earn a heading.
+- Merge repetitive Known issues bullets that describe the same underlying issue.
+
 Use this public shape:
 
 ${NOTE_FORMAT}
@@ -531,8 +554,13 @@ The comparison range is ${PREVIOUS_TAG}..HEAD. Use the available read-only
 repository and GitHub tools as you judge useful, along with the factual account.
 Look for distinct user-observable changes that are absent or materially
 underweighted. Decide whether any omission warrants changing the customer
-story. Keep the notes concise by combining related work around customer
-outcomes rather than listing implementation details.
+story. Only add genuinely significant user-facing features, visible fixes, or
+required safety warnings that a typical user would miss. Do not pad the notes
+with minor edge-case hardening, defensive retries, or internal polish, and trim
+repetitive or low-value bullets so the full notes stay quick to scan rather
+than turning into an exhaustive PR inventory. Keep the notes concise by
+combining related work around customer outcomes rather than listing
+implementation details.
 
 Use this public shape:
 

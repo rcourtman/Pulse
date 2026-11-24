@@ -33,6 +33,9 @@ import {
   type PrimaryPlatformNavId,
 } from '@/features/platformNavigation/platformNavigationModel';
 import { OrgSwitcher } from '@/components/OrgSwitcher';
+import { openWhatsNewDialog } from '@/components/WhatsNewCard';
+import { normalizeReleaseVersion } from '@/components/updateVersion';
+import { isReleaseVersion } from '@/components/whatsNewModel';
 import { PulseBrandMark } from '@/components/Brand/PulseBrandMark';
 import { PulsePatrolLogo } from '@/components/Brand/PulsePatrolLogo';
 import { MONITORING_READ_SCOPE, SETTINGS_READ_SCOPE } from '@/constants/apiScopes';
@@ -1086,14 +1089,33 @@ export function AppLayout(props: AppLayoutProps) {
         <footer class="pulse-footer px-2 py-2 text-xs leading-relaxed text-muted sm:px-4 sm:py-4">
           <div class="text-center">
             <span>Pulse | Version: </span>
-            <a
-              href="https://github.com/rcourtman/Pulse/releases"
-              target="_blank"
-              rel="noopener noreferrer"
-              class="inline-flex min-h-8 items-center break-all rounded-sm px-1 py-1 text-blue-600 hover:underline focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 dark:text-blue-400 sm:min-h-9"
+            <Show
+              when={
+                !props.versionInfo()?.isDevelopment &&
+                !props.versionInfo()?.isSourceBuild &&
+                isReleaseVersion(props.versionInfo()?.version ?? '')
+              }
+              fallback={
+                <a
+                  href="https://github.com/rcourtman/Pulse/releases"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="inline-flex min-h-8 items-center break-all rounded-sm px-1 py-1 text-blue-600 hover:underline focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 dark:text-blue-400 sm:min-h-9"
+                >
+                  {props.versionInfo()?.version || 'loading...'}
+                </a>
+              }
             >
-              {props.versionInfo()?.version || 'loading...'}
-            </a>
+              <button
+                type="button"
+                onClick={() => openWhatsNewDialog()}
+                title={`See what's new in Pulse v${normalizeReleaseVersion(props.versionInfo()?.version)}`}
+                aria-label={`${props.versionInfo()?.version}, see what's new`}
+                class="inline-flex min-h-8 items-center break-all rounded-sm px-1 py-1 text-blue-600 hover:underline focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 dark:text-blue-400 sm:min-h-9"
+              >
+                {props.versionInfo()?.version}
+              </button>
+            </Show>
             {props.versionInfo()?.isDevelopment && ' (Development)'}
             {props.versionInfo()?.isDocker && ' - Docker'}
           </div>
