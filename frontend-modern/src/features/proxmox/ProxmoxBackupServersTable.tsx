@@ -322,10 +322,27 @@ function BackupServerDatastoreContext(props: {
 }) {
   const id = createUniqueId();
   const headingId = () => `backup-datastore-drawer-${id}`;
+  const capacity = createMemo(() =>
+    datastoreCapacity(props.row.datastore, props.row.connectionVariant),
+  );
+  const headingStatus = createMemo<{ variant: StatusIndicatorVariant; label: string }>(() => {
+    const status = effectiveBackupServerStatus(
+      props.row.connectionVariant,
+      props.row.connectionLabel,
+      [props.row.jobs],
+    );
+    const state = capacity().state;
+    // A healthy PBS connection can still fail to read an individual datastore.
+    // Keep the server's own connection indicator and any known job problem.
+    if (status.variant === 'success' && (state === 'unavailable' || state === 'unknown')) {
+      return { variant: 'warning', label: `Datastore capacity ${state}` };
+    }
+    return status;
+  });
   const capacityText = () => {
     const datastore = props.row.datastore;
     if (!datastore) return 'No datastore data';
-    const reading = datastoreCapacity(datastore, props.row.connectionVariant);
+    const reading = capacity();
     if (reading.state !== 'available') {
       return `${reading.state === 'unavailable' ? 'Unavailable' : 'Unknown'}. This does not mean the datastore is empty.`;
     }
@@ -343,7 +360,7 @@ function BackupServerDatastoreContext(props: {
     return props.historyIncomplete ? `${listed} · ${PBS_HISTORY_GAP}` : listed;
   };
   const capacityTone = (): DetailValueTone | undefined => {
-    const reading = datastoreCapacity(props.row.datastore, props.row.connectionVariant);
+    const reading = capacity();
     if (reading.state === 'unavailable' || reading.state === 'unknown') return 'warning';
     if (reading.percent !== undefined && reading.percent >= 90) return 'danger';
     if (reading.percent !== undefined && reading.percent >= 75) return 'warning';
@@ -364,20 +381,8 @@ function BackupServerDatastoreContext(props: {
             <DrawerSubjectHeading
               headingId={headingId()}
               title={datastore().name}
-              statusVariant={
-                effectiveBackupServerStatus(
-                  props.row.connectionVariant,
-                  props.row.connectionLabel,
-                  [props.row.jobs],
-                ).variant
-              }
-              statusLabel={
-                effectiveBackupServerStatus(
-                  props.row.connectionVariant,
-                  props.row.connectionLabel,
-                  [props.row.jobs],
-                ).label
-              }
+              statusVariant={headingStatus().variant}
+              statusLabel={headingStatus().label}
               trailing={<span class="truncate text-xs text-muted">on {props.row.serverName}</span>}
             />
           </ObjectDrawerHeader>
