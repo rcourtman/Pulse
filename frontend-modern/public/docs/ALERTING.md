@@ -125,3 +125,16 @@ explains heartbeat timing and a controlled outage test.
 For website, port and device reachability, use [availability checks](AVAILABILITY.md).
 Pro remote probe agents report back to Pulse. They do not replace the independent
 watchdog or deliver notifications while Pulse is down.
+
+A successful watchdog heartbeat means the receiver heard from Pulse. Pulse
+sends it based on recent activity in the monitoring loop, not on whether polls
+finished, agent reports were accepted or alert rules ran. A `200` from
+`/api/health` only means the web server answered.
+
+If readings look frozen while the monitored systems still respond, compare the
+newest sample times in **History** and the reporting agents' **Seen** times in
+**Machines**. Allow for normal poll and report intervals, including retry delays.
+If you already scrape Prometheus, compare `pulse_monitor_poll_total` by
+`result`. Rising errors mean Pulse is still recording poll outcomes. If
+several expected sources give no new results, check whether collection has
+stopped. [Check real alert delivery separately](#choose-where-notifications-go).
