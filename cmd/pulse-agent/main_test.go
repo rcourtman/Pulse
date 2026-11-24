@@ -3029,26 +3029,19 @@ func TestWindowsServiceRuntimeStartsHealthServer(t *testing.T) {
 			t.Fatalf("expected Windows service runtime to include %q", want)
 		}
 	}
-}
 
-// The Windows service builds its own module configs. Restrictions the operator
-// set locally must reach the modules as they do in the foreground runtime: a
-// dropped command authority profile is read as legacy, which lets server
-// configuration enable commands on a monitoring-only service.
-func TestWindowsServiceRuntimeKeepsLocalRestrictions(t *testing.T) {
-	source, err := os.ReadFile("service_windows.go")
-	if err != nil {
-		t.Fatalf("read pulse-agent service_windows.go: %v", err)
-	}
-	text := strings.Join(strings.Fields(string(source)), " ")
-
-	required := []string{
+	// The Windows service builds its own module configs. Restrictions the
+	// operator set locally must reach the modules as they do in the foreground
+	// runtime: a dropped command authority profile is read as legacy, which
+	// lets server configuration enable commands on a monitoring-only service.
+	normalized := strings.Join(strings.Fields(text), " ")
+	localRestrictions := []string{
 		`CommandAuthorityProfile: ws.cfg.CommandAuthorityProfile,`,
 		`DisableUpdateChecks: ws.cfg.DisableDockerUpdateChecks,`,
 		`DisableRegistryCredentials: ws.cfg.DisableRegistryCredentials,`,
 	}
-	for _, want := range required {
-		if !strings.Contains(text, want) {
+	for _, want := range localRestrictions {
+		if !strings.Contains(normalized, want) {
 			t.Fatalf("expected Windows service runtime to include %q", want)
 		}
 	}
