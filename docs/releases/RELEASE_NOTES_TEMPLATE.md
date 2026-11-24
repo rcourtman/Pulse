@@ -16,14 +16,15 @@ what feels better or works now, not how it was implemented.
 
 ## Proxmox, PBS and backups
 
-- Explain a change in plain language, where users notice it and why it matters.
+- One short, plain sentence explaining what users will notice and why it matters.
 
 From v6.4.6 onward, group related changes under the relevant reader-facing
 headings: Alerts and notifications, Disks and storage, Proxmox, PBS and backups,
 TrueNAS, vSphere and Docker, Install, updates and agents, Updates and agents,
 Pulse Pro, AI and hosted, Monitoring and service health, Security, and Other
-improvements. Omit unused groups. A narrow patch can keep the simpler section
-below instead. Do not repeat a change between groups or add empty sections.
+improvements. Omit unused or thin groups instead of filling every heading. A
+narrow patch can keep the simpler section below instead. Do not repeat a change
+between groups or add empty sections.
 
 ## What's improved
 
@@ -32,11 +33,15 @@ below instead. Do not repeat a change between groups or add empty sections.
 - **Short outcome** - Include fixes here as outcomes rather than repeating
   them in a second section.
 
-Use a concise set of meaningful improvements. A narrow patch may use fewer
-rather than padding the notes with internal work. Each user-visible change
-belongs in the grouped changes exactly once. Prefer observable behavior over component
-names, group related implementation work into one user-recognizable theme, and
-use plain language. Each complete bullet, including Markdown links, must be no
+Write for someone scanning the in-app What's new dialog in under a minute, not
+reading a commit dump. Use a concise set of meaningful improvements that users
+will actually notice or act on, and leave minor defensive hardening, routine
+retry or focus tweaks, and narrow edge cases to the full PR changelog. Each
+user-visible change belongs in the grouped changes exactly once. Prefer
+observable behavior over component names, group related implementation work into
+one user-recognizable theme, and use plain language. Prefer one crisp sentence
+per bullet (around 100 to 150 characters) rather than packing several fixes into
+a multi-sentence paragraph. Each complete bullet, including Markdown links, must be no
 more than 260 characters. New release notes must not contain semicolons or em
 dashes.
 
@@ -52,10 +57,13 @@ receives both. The models decide what to inspect, what matters, and how to tell
 the release story. The harness owns the release boundary, public format, safety
 constraints, and optional per-pass traces.
 
-The post-update dialog is a plain changelog: Known issues first, optional
-screenshots, every change group, then Before you upgrade as Upgrade notes, with
-nothing collapsed. Highlights appear only in the update banner before users
-install, and the dialog shows them only when a release has no change groups.
+The post-update dialog is designed to be scanned quickly: Breaking changes (when
+present) lead at the top, followed by Highlights and optional screenshots so
+users immediately see what changed. Compact Known issues, short change lists,
+and brief Upgrade notes appear directly inline, while long Known issues, large
+multi-section change lists, and multi-item Upgrade notes collapse into compact
+expandable rows with item counts (plus an Expand all control for change groups)
+so large releases stay readable.
 The visual investigation also reads the Visual evidence sections and images
 from merged PRs in this release range. It may reuse a public GitHub image
 attachment or immutable committed screenshot when inspected, safe and still
@@ -71,18 +79,20 @@ be described twice as both an improvement and a fix.
 ## Known issues
 
 Describe remaining user symptoms and an actionable workaround or next step.
-Put critical risks and required safety actions here so they lead the
-post-update changelog, including risks that apply before an upgrade.
-Omit this section when there are none. Do not substitute internal verification
-status for information users can act on.
+Put critical risks and required safety actions here, including risks that apply
+before an upgrade. Keep the list brief and non-repetitive by combining related
+cautions for the same underlying issue into one concise bullet instead of
+splitting one problem across several bullets. Omit this section when there are
+none. Do not substitute internal verification status for information users can
+act on.
 
 ## Before you upgrade
 
 Include only compatibility, migration, signing, companion-app, known-risk, or
-required operator information. Omit this section when users do not need to do
-or understand anything before upgrading.
-This section appears last in the post-update changelog as Upgrade notes. Put
-critical warnings in Known issues so they lead instead.
+required operator information. Keep each item short and actionable. Omit this
+section when users do not need to do or understand anything before upgrading.
+This section appears at the bottom of the post-update dialog as Upgrade notes.
+Put critical warnings in Breaking changes or Known issues.
 
 The release pipeline appends the `Install` and `Roll back` sections from
 governed version metadata. Do not add release qualification, validation,
