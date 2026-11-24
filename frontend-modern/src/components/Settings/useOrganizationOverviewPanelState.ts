@@ -1,5 +1,6 @@
 import { batch, createEffect, createMemo, createSignal, on, onCleanup } from 'solid-js';
 import { OrgsAPI, type Organization, type OrganizationMember } from '@/api/orgs';
+import { apiErrorStatus } from '@/api/responseUtils';
 import { eventBus } from '@/stores/events';
 import { isMultiTenantEnabled } from '@/stores/license';
 import { notificationStore } from '@/stores/notifications';
@@ -44,10 +45,20 @@ const isMemberList = (value: unknown): value is OrganizationMember[] =>
 export function useOrganizationOverviewPanelState(props: OrganizationOverviewPanelProps) {
   const [loading, setLoading] = createSignal(true);
   const [loadError, setLoadError] = createSignal<string | null>(null);
+  const [mutationError, setMutationError] = createSignal<string | null>(null);
   const [saving, setSaving] = createSignal(false);
   const [org, setOrg] = createSignal<Organization | null>(null);
   const [members, setMembers] = createSignal<OrganizationMember[]>([]);
-  const [displayNameDraft, setDisplayNameDraft] = createSignal('');
+  const [displayNameDraft, setDisplayNameDraftRaw] = createSignal('');
+  const setDisplayNameDraft = (value: string) => {
+    setMutationError(null);
+    setDisplayNameDraftRaw(value);
+  };
+  const displayNameDirty = createMemo(() => {
+    const currentOrg = org();
+    if (!currentOrg) return false;
+    return displayNameDraft().trim() !== (currentOrg.displayName || '').trim();
+  });
 
   const activeOrgId = () => normalizeOrgScope(getOrgID());
   const [selectedOrgID, setSelectedOrgID] = createSignal(activeOrgId());
@@ -75,7 +86,8 @@ export function useOrganizationOverviewPanelState(props: OrganizationOverviewPan
   const clearOrganization = () => {
     setOrg(null);
     setMembers([]);
-    setDisplayNameDraft('');
+    setDisplayNameDraftRaw('');
+    setMutationError(null);
   };
   const invalidateRequests = () => {
     generation += 1;
@@ -146,7 +158,9 @@ export function useOrganizationOverviewPanelState(props: OrganizationOverviewPan
     const currentOrg = org()!;
     const nextName = displayNameDraft().trim();
     if (!nextName) {
-      notificationStore.error(getOrganizationDisplayNameRequiredMessage());
+      const requiredMessage = getOrganizationDisplayNameRequiredMessage();
+      setMutationError(requiredMessage);
+      notificationStore.error(requiredMessage);
       return;
     }
     if (nextName === currentOrg.displayName) return;
@@ -155,6 +169,7 @@ export function useOrganizationOverviewPanelState(props: OrganizationOverviewPan
     const controller = new AbortController();
     mutationController = controller;
     const isCurrent = () => request === generation && selectionIsCurrent();
+    setMutationError(null);
     setSaving(true);
     try {
       const updated = await OrgsAPI.update(
@@ -178,6 +193,15 @@ export function useOrganizationOverviewPanelState(props: OrganizationOverviewPan
     } catch (error) {
       if (!isCurrent()) return;
       logger.error('Failed to update organization display name', error);
+      const status = apiErrorStatus(error);
+      if (status === 400 || status === 422) {
+        const errorText = getOrganizationDisplayNameUpdateErrorMessage(
+          error instanceof Error ? error.message : undefined,
+        );
+        notificationStore.error(errorText);
+        setMutationError(errorText);
+        return;
+      }
       notificationStore.error(getOrganizationDisplayNameUpdateErrorMessage());
       batch(() => {
         clearOrganization();
@@ -218,9 +242,11 @@ export function useOrganizationOverviewPanelState(props: OrganizationOverviewPan
 
   return {
     canManageCurrentOrg,
+    displayNameDirty,
     displayNameDraft,
     loading,
     loadError,
+    mutationError,
     reloadOrganization,
     restartOrganizationRead,
     selectedOrgID,

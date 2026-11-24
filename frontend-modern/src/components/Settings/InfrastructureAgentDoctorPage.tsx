@@ -1,7 +1,18 @@
-import { For, Show, createEffect, createMemo, createSignal, type Component } from 'solid-js';
+import {
+  For,
+  Show,
+  createEffect,
+  createMemo,
+  createSignal,
+  onCleanup,
+  onMount,
+  type Component,
+} from 'solid-js';
+import { A } from '@solidjs/router';
 import { ChevronLeft, RefreshCw } from 'lucide-solid';
 import { Button, CommandCopyButton } from '@/components/shared/Button';
 import { FormSelect } from '@/components/shared/FormSelect';
+import { SearchField } from '@/components/shared/SearchField';
 import {
   Table,
   TableBody,
@@ -216,6 +227,42 @@ export const InfrastructureAgentDoctorPage: Component<InfrastructureAgentDoctorP
   const [statusFilter, setStatusFilter] = createSignal<InfrastructureAgentDoctorStatus | null>(
     null,
   );
+  const [searchQuery, setSearchQuery] = createSignal('');
+  let tableContainerRef: HTMLDivElement | undefined;
+  const [visibleColumnCount, setVisibleColumnCount] = createSignal(6);
+
+  const computeVisibleColumns = (containerWidth: number) => {
+    const viewportWidth = typeof window !== 'undefined' ? window.innerWidth : containerWidth;
+    if (viewportWidth < 640) {
+      return containerWidth >= 800 ? 4 : 3;
+    }
+    return containerWidth >= 800 ? 6 : 5;
+  };
+
+  onMount(() => {
+    const updateCols = (width?: number) => {
+      const measured =
+        width ??
+        tableContainerRef?.getBoundingClientRect().width ??
+        (typeof window !== 'undefined' ? window.innerWidth : 1024);
+      if (Number.isFinite(measured) && measured > 0) {
+        setVisibleColumnCount(computeVisibleColumns(measured));
+      }
+    };
+    updateCols();
+    if (typeof ResizeObserver === 'undefined' || !tableContainerRef) {
+      const onResize = () => updateCols();
+      window.addEventListener('resize', onResize);
+      onCleanup(() => window.removeEventListener('resize', onResize));
+      return;
+    }
+    const observer = new ResizeObserver((entries) => {
+      updateCols(entries[0]?.contentRect.width);
+    });
+    observer.observe(tableContainerRef);
+    onCleanup(() => observer.disconnect());
+  });
+
   // A filtered status can empty out as agents recover, taking its chip with
   // it; clear the filter then so the table never dead-ends under a filter the
   // user can no longer see or unset.
@@ -227,8 +274,23 @@ export const InfrastructureAgentDoctorPage: Component<InfrastructureAgentDoctorP
   });
   const visibleTargets = createMemo(() => {
     const filter = statusFilter();
-    if (!filter) return props.targets;
-    return props.targets.filter((target) => target.status === filter);
+    const query = searchQuery().trim().toLowerCase();
+    return props.targets.filter((target) => {
+      if (filter && target.status !== filter) return false;
+      if (!query) return true;
+      const haystack = [
+        target.displayName,
+        target.contextLabel,
+        target.connectionId,
+        target.currentVersion,
+        target.expectedVersion,
+        STATUS_PRESENTATION[target.status].label,
+      ]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase();
+      return haystack.includes(query);
+    });
   });
 
   // Fleet reads replace target objects. Keep rendered records keyed by
@@ -315,15 +377,15 @@ export const InfrastructureAgentDoctorPage: Component<InfrastructureAgentDoctorP
       } else if (type === 'agent') {
         await MonitoringAPI.allowHostAgentReenroll(id);
       } else {
-        throw new Error(`Allow re-enrol is not supported for ${type || 'unknown'} diagnostics.`);
+        throw new Error(`Allow re-enroll is not supported for ${type || 'unknown'} diagnostics.`);
       }
-      notificationStore.success(`${target.displayName} can re-enrol on its next report.`);
+      notificationStore.success(`${target.displayName} can re-enroll on its next report.`);
       await props.onRetryDiagnostics?.();
     } catch (error) {
       notificationStore.error(
         error instanceof Error
           ? error.message
-          : `Failed to allow ${target.displayName} to re-enrol.`,
+          : `Failed to allow ${target.displayName} to re-enroll.`,
       );
     } finally {
       setReenrollPendingId('');
@@ -341,27 +403,45 @@ export const InfrastructureAgentDoctorPage: Component<InfrastructureAgentDoctorP
 
   return (
     <div class="space-y-4">
-      <div class="space-y-1">
-        <a
-          href={buildInfrastructureWorkspacePath()}
-          class="inline-flex items-center gap-1 text-sm text-muted transition-colors hover:text-base-content"
-        >
-          <ChevronLeft class="h-4 w-4" aria-hidden="true" />
-          Infrastructure
-        </a>
-        <h2 class="text-base font-semibold text-base-content">Agent Doctor</h2>
-        <p class="text-sm text-muted">
-          Diagnose fleet connectivity, versions, identity, profiles, and removed-agent state.
-        </p>
+      <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div class="space-y-1">
+          <A
+            href={buildInfrastructureWorkspacePath()}
+            class="inline-flex items-center gap-1 text-sm text-muted transition-colors hover:text-base-content"
+          >
+            <ChevronLeft class="h-4 w-4" aria-hidden="true" />
+            Infrastructure
+          </A>
+          <h2 class="text-base font-semibold text-base-content">Agent Doctor</h2>
+          <p class="text-sm text-muted">
+            Check agent health, versions, identity, profiles, and removed agents.
+          </p>
+        </div>
+        <Show when={props.onRetryDiagnostics}>
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            class="min-h-10 gap-2 self-start sm:min-h-9"
+            disabled={props.diagnosticsLoading}
+            onClick={() => props.onRetryDiagnostics?.()}
+          >
+            <RefreshCw
+              class={`h-3.5 w-3.5 ${props.diagnosticsLoading ? 'animate-spin' : ''}`}
+              aria-hidden="true"
+            />
+            {props.diagnosticsLoading ? 'Refreshing...' : 'Refresh'}
+          </Button>
+        </Show>
       </div>
 
       <Show when={props.diagnosticsError}>
         <section class="flex flex-col gap-3 rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-100 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <div class="font-semibold">Structured diagnostics are temporarily unavailable</div>
+            <div class="font-semibold">Detailed diagnostics are temporarily unavailable</div>
             <p class="mt-1 text-xs leading-5 text-amber-800 dark:text-amber-200">
-              Showing the last known connection-ledger assessment. Profile and removed-agent details
-              may be incomplete.
+              Showing the last known connection summary. Profile and removed-agent details may be
+              incomplete.
             </p>
           </div>
           <Show when={props.onRetryDiagnostics}>
@@ -389,15 +469,19 @@ export const InfrastructureAgentDoctorPage: Component<InfrastructureAgentDoctorP
         when={props.targets.length > 0}
         fallback={
           <Show when={!props.diagnosticsLoading}>
-            <div class="rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-100">
-              No Pulse Agent connections are currently in scope.
+            <div class="rounded-md border border-border bg-surface-alt px-4 py-4 text-sm text-muted">
+              <p class="font-medium text-base-content">No Pulse Agent connections in this view</p>
+              <p class="mt-1 text-xs">
+                Install a Pulse Agent from Infrastructure, or return to Infrastructure to inspect
+                connected systems.
+              </p>
             </div>
           </Show>
         }
       >
         <section
           aria-label="Agent Doctor summary"
-          class="flex flex-wrap items-center justify-between gap-2"
+          class="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between"
         >
           <div class="flex flex-wrap items-center gap-2">
             <For each={summaryChips()}>
@@ -420,14 +504,26 @@ export const InfrastructureAgentDoctorPage: Component<InfrastructureAgentDoctorP
               )}
             </For>
           </div>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => void copyReport(visibleTargets())}
-          >
-            Copy diagnostic report
-          </Button>
+          <div class="flex flex-wrap items-center gap-2">
+            <Show when={props.targets.length > 1}>
+              <div class="w-full sm:w-56">
+                <SearchField
+                  value={searchQuery()}
+                  onChange={setSearchQuery}
+                  title="Search agents"
+                  placeholder="Filter agents..."
+                />
+              </div>
+            </Show>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => void copyReport(visibleTargets())}
+            >
+              Copy diagnostic report
+            </Button>
+          </div>
         </section>
 
         <Show when={anyTargetNeedsRepair()}>
@@ -478,6 +574,7 @@ export const InfrastructureAgentDoctorPage: Component<InfrastructureAgentDoctorP
               </Show>
               <input
                 type="text"
+                aria-label="Update token name (optional)"
                 value={operations.tokenName()}
                 onInput={(event) => operations.setTokenName(event.currentTarget.value)}
                 onKeyDown={(event) => {
@@ -527,7 +624,7 @@ export const InfrastructureAgentDoctorPage: Component<InfrastructureAgentDoctorP
           </section>
         </Show>
 
-        <div class="rounded-md border border-border bg-surface">
+        <div ref={tableContainerRef} class="rounded-md border border-border bg-surface">
           <Table class="w-full min-w-0 table-fixed text-sm">
             <TableHeader class="">
               <TableRow>
@@ -537,7 +634,7 @@ export const InfrastructureAgentDoctorPage: Component<InfrastructureAgentDoctorP
                 <TableHead class="hidden w-[15%] px-3 py-1.5 text-left text-[11px] font-medium text-muted whitespace-nowrap sm:table-cell">
                   System
                 </TableHead>
-                <TableHead class="w-[38%] px-3 py-1.5 text-left text-[11px] font-medium text-muted whitespace-nowrap sm:w-[20%] lg:w-[15%]">
+                <TableHead class="w-[38%] px-3 py-1.5 text-left text-[11px] font-medium text-muted whitespace-nowrap sm:w-[15%]">
                   Status
                 </TableHead>
                 <TableHead class="hidden w-[12%] px-3 py-1.5 text-left text-[11px] font-medium text-muted whitespace-nowrap sm:table-cell">
@@ -622,16 +719,20 @@ export const InfrastructureAgentDoctorPage: Component<InfrastructureAgentDoctorP
                           makeDetailRow('Privilege', target().privilegeLabel, { wrap: true }),
                           target().status !== 'removed'
                             ? makeDetailRow(
-                                'Safe collector',
+                                'Least-privilege service',
                                 target().safeCollector ? 'Confirmed' : 'Not confirmed',
                                 { tone: target().safeCollector ? 'success' : 'warning' },
                               )
                             : null,
-                          makeDetailRow('Action runner', target().actionRunnerPosture.join(' · '), {
-                            wrap: true,
-                          }),
                           makeDetailRow(
-                            'Runner credential',
+                            'Remote action helper',
+                            target().actionRunnerPosture.join(' · '),
+                            {
+                              wrap: true,
+                            },
+                          ),
+                          makeDetailRow(
+                            'Action helper credential',
                             target().actionRunnerCredentialEligible
                               ? undefined
                               : target().actionRunnerCredentialBlockReason,
@@ -700,7 +801,7 @@ export const InfrastructureAgentDoctorPage: Component<InfrastructureAgentDoctorP
                       <Show when={expanded()}>
                         <InlineDetailTableRow
                           cellId={detailRowId()}
-                          colspan={6}
+                          colspan={visibleColumnCount()}
                           data-agent-doctor-detail-for={target().connectionId}
                         >
                           <InlineDetailPanel
@@ -793,11 +894,38 @@ export const InfrastructureAgentDoctorPage: Component<InfrastructureAgentDoctorP
                                         target().commandPlatform !== 'windows'
                                       }
                                     >
-                                      <p class="mt-2 text-xs text-muted">
-                                        Run this command in a console or SSH session first, then
-                                        paste the separately revealed token at the silent Pulse
-                                        agent token prompt. Never insert the token into the command.
-                                      </p>
+                                      <div class="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                                        <p class="text-xs text-muted">
+                                          Run this command in a console or SSH session first, then
+                                          paste the token at the silent Pulse agent prompt. Never
+                                          insert the token into the command.
+                                        </p>
+                                        <Show when={operations.currentToken?.()}>
+                                          <div class="flex shrink-0 flex-wrap items-center gap-2">
+                                            <Show when={operations.showCurrentTokenOnly}>
+                                              <Button
+                                                type="button"
+                                                variant="outline"
+                                                size="xs"
+                                                onClick={() => operations.showCurrentTokenOnly?.()}
+                                              >
+                                                Show token
+                                              </Button>
+                                            </Show>
+                                            <Button
+                                              type="button"
+                                              variant="secondary"
+                                              size="xs"
+                                              onClick={() => {
+                                                const token = operations.currentToken?.();
+                                                if (token) void copyCommand(token);
+                                              }}
+                                            >
+                                              Copy token
+                                            </Button>
+                                          </div>
+                                        </Show>
+                                      </div>
                                     </Show>
                                   </div>
                                 </Show>
@@ -806,7 +934,7 @@ export const InfrastructureAgentDoctorPage: Component<InfrastructureAgentDoctorP
 
                             <Show when={canAllowReenroll()}>
                               <InlineNotice tone="info">
-                                <p class="font-medium">Allow re-enrol</p>
+                                <p class="font-medium">Allow re-enroll</p>
                                 <p class="mt-0.5">
                                   Clear the removal block so this agent can reconnect on its next
                                   report.
@@ -821,7 +949,7 @@ export const InfrastructureAgentDoctorPage: Component<InfrastructureAgentDoctorP
                                 >
                                   {reenrollPendingId() === target().connectionId
                                     ? 'Allowing…'
-                                    : 'Allow re-enrol'}
+                                    : 'Allow re-enroll'}
                                 </Button>
                               </InlineNotice>
                             </Show>
@@ -985,8 +1113,8 @@ export const InfrastructureAgentDoctorPage: Component<InfrastructureAgentDoctorP
                                 {issuedRunnerCredentialKeys().has(target().key)
                                   ? 'Credential issued for this page session'
                                   : target().actionRunnerCredentialAction === 'rotate'
-                                    ? 'Rotate action-runner credential'
-                                    : 'Issue one-time action-runner credential'}
+                                    ? 'Rotate remote action credential'
+                                    : 'Issue one-time remote action credential'}
                               </Button>
                             </Show>
 
@@ -1105,6 +1233,29 @@ export const InfrastructureAgentDoctorPage: Component<InfrastructureAgentDoctorP
                   );
                 }}
               </For>
+              <Show when={visibleTargets().length === 0}>
+                <TableRow>
+                  <TableCell
+                    colspan={visibleColumnCount()}
+                    class="px-4 py-6 text-center text-sm text-muted"
+                  >
+                    <div class="space-y-2">
+                      <p>No agents match your current filter.</p>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="xs"
+                        onClick={() => {
+                          setSearchQuery('');
+                          setStatusFilter(null);
+                        }}
+                      >
+                        Clear filters
+                      </Button>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              </Show>
             </TableBody>
           </Table>
         </div>

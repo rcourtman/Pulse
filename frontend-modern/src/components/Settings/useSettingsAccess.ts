@@ -174,6 +174,7 @@ export function useSettingsAccess({
 
     return groups
       .map((group) => {
+        const matchGroup = group.label.toLowerCase().includes(q);
         const filteredItems = group.items.filter((item) => {
           const matchLabel = item.label.toLowerCase().includes(q);
           const description = settingsHeaderMeta()[item.id]?.description?.toLowerCase() || '';
@@ -181,7 +182,7 @@ export function useSettingsAccess({
           const matchKeyword = (item.keywords ?? []).some((keyword) =>
             keyword.toLowerCase().includes(q),
           );
-          return matchLabel || matchDesc || matchKeyword;
+          return matchGroup || matchLabel || matchDesc || matchKeyword;
         });
         return { ...group, items: filteredItems };
       })

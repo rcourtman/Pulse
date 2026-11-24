@@ -117,8 +117,16 @@ export const useDiagnosticsPanelState = (props: DiagnosticsPanelProps = {}) => {
       }
       setResult(stripInternalAnalyticsDiagnosticsFields(data));
       setNotice(DIAGNOSTICS_PANEL_COPY.runSuccess);
-    } catch {
-      if (isCurrent()) setError(DIAGNOSTICS_PANEL_COPY.runError);
+    } catch (caughtError) {
+      if (isCurrent()) {
+        const rawMessage = caughtError instanceof Error ? caughtError.message : '';
+        const safeHint = /\b(401|403)\b|forbidden|unauthorized/i.test(rawMessage)
+          ? ' Access was denied.'
+          : /timeout|timed out|abort/i.test(rawMessage)
+            ? ' The request timed out.'
+            : '';
+        setError(`${DIAGNOSTICS_PANEL_COPY.runError}${safeHint}`);
+      }
     } finally {
       if (controller === request) {
         controller = undefined;

@@ -78,9 +78,10 @@ export interface SettingsNavItem {
   icon: Component<{
     class?: string;
     strokeWidth?: number;
+    decorative?: boolean;
     'aria-hidden'?: boolean | 'true' | 'false';
   }>;
-  iconProps?: { strokeWidth?: number };
+  iconProps?: { strokeWidth?: number; decorative?: boolean };
   hideFromSidebar?: boolean;
   saveBehavior?: 'system';
   disabled?: boolean;

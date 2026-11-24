@@ -214,16 +214,24 @@ describe('Settings usability audit fixes', () => {
       makeRow('docker-edge-01', 'agent', '10.0.0.30'),
     ];
 
+    window.history.replaceState({}, '', '/settings/infrastructure');
     render(() => (
-      <InfrastructureSourceManager
-        rows={() => rows}
-        discoveredNodes={() => []}
-        discoveryEnabled={true}
-        discoveryScanStatus={() => ({ scanning: false })}
-        readOnly={false}
-        onRunDiscovery={vi.fn()}
-        onOpenDiscoverySettings={vi.fn()}
-      />
+      <Router>
+        <Route
+          path="/settings/infrastructure"
+          component={() => (
+            <InfrastructureSourceManager
+              rows={() => rows}
+              discoveredNodes={() => []}
+              discoveryEnabled={true}
+              discoveryScanStatus={() => ({ scanning: false })}
+              readOnly={false}
+              onRunDiscovery={vi.fn()}
+              onOpenDiscoverySettings={vi.fn()}
+            />
+          )}
+        />
+      </Router>
     ));
 
     const discovery = screen.getByRole('region', { name: 'Discover Proxmox systems' });

@@ -540,7 +540,7 @@ describe('useSystemSettingsState', () => {
     }
   });
 
-  it('reloads the page when saving from Network tab', async () => {
+  it('does not reload the page when saving from Network tab', async () => {
     const savedLocation = window.location;
     vi.useFakeTimers();
     try {
@@ -556,8 +556,8 @@ describe('useSystemSettingsState', () => {
       await hookState.saveSettings();
       await flushAsync();
 
-      vi.advanceTimersByTime(3000);
-      expect(reloadMock).toHaveBeenCalledOnce();
+      vi.advanceTimersByTime(5000);
+      expect(reloadMock).not.toHaveBeenCalled();
 
       dispose();
     } finally {
@@ -568,6 +568,37 @@ describe('useSystemSettingsState', () => {
       });
       vi.useRealTimers();
     }
+  });
+
+  it('restores edited drafts in memory when discardChanges is called', async () => {
+    getSystemSettingsMock.mockResolvedValue({
+      pvePollingInterval: 30,
+      publicURL: 'https://pulse.example.com',
+      allowedOrigins: 'https://app.example.com',
+      updateChannel: 'stable',
+      autoUpdateEnabled: true,
+      backupPollingEnabled: true,
+      backupPollingInterval: 300,
+    });
+
+    const { hookState, dispose } = mountHookWithTab('system-network');
+    await hookState.initializeSystemSettingsState();
+    await flushAsync();
+
+    hookState.setPublicURL('https://draft.example.com');
+    hookState.setAllowedOrigins('*');
+    hookState.setPVEPollingInterval(60);
+    hookState.setUpdateChannel('rc');
+    hookState.setHasUnsavedChanges(true);
+
+    hookState.discardChanges();
+
+    expect(hookState.publicURL()).toBe('https://pulse.example.com');
+    expect(hookState.allowedOrigins()).toBe('https://app.example.com');
+    expect(hookState.pvePollingInterval()).toBe(30);
+    expect(hookState.updateChannel()).toBe('stable');
+    expect(hookState.hasUnsavedChanges()).toBe(false);
+    dispose();
   });
 
   it('normalizes persisted RC auto-updates off during initialization', async () => {
@@ -679,7 +710,7 @@ describe('useSystemSettingsState', () => {
     dispose();
   });
 
-  it('resets the telemetry install ID after confirmation', async () => {
+  it('resets the telemetry install ID without native window.confirm', async () => {
     const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
     resetTelemetryInstallIDMock.mockResolvedValue({
       enabled: true,
@@ -699,10 +730,13 @@ describe('useSystemSettingsState', () => {
     const { hookState, dispose } = mountHookWithTab('system-general');
     const { notificationStore } = await import('@/stores/notifications');
 
+    hookState.requestResetTelemetryInstallID();
+    expect(hookState.showResetTelemetryConfirm()).toBe(true);
     await hookState.handleResetTelemetryInstallID();
     await flushAsync();
 
-    expect(confirmSpy).toHaveBeenCalled();
+    expect(confirmSpy).not.toHaveBeenCalled();
+    expect(hookState.showResetTelemetryConfirm()).toBe(false);
     expect(resetTelemetryInstallIDMock).toHaveBeenCalledOnce();
     expect(hookState.telemetryPreviewPayload()).toContain('"install_id": "rotated-install-id"');
     expect(notificationStore.success).toHaveBeenCalledWith('Telemetry install ID reset', 3000);

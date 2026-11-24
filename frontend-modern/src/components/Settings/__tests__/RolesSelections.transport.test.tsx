@@ -185,7 +185,9 @@ function expectSavedRows(expected: Role[]) {
     const buttons = row.queryAllByRole('button');
     if (role.isBuiltIn) {
       expect(row.getByText('Read-only')).toBeInTheDocument();
-      expect(buttons).toHaveLength(0);
+      expect(buttons).toHaveLength(1);
+      expect(buttons[0]).toHaveAccessibleName(`Duplicate role ${role.name} (Role ID: ${role.id})`);
+      expect(buttons[0]).toBeEnabled();
     } else {
       expect(buttons).toHaveLength(2);
       expect(buttons[0]).toHaveAccessibleName(`Edit role ${role.name} (Role ID: ${role.id})`);

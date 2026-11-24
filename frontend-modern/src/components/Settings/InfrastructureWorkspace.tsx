@@ -1,5 +1,6 @@
 import {
   Component,
+  For,
   Match,
   Show,
   Switch,
@@ -129,6 +130,43 @@ const ADD_STEP_TO_INSTALLER_FOCUS: Partial<
 };
 
 const trimSentenceTerminal = (value: string): string => value.trim().replace(/\.+$/, '');
+
+const formatConnectionStateLabel = (state?: string): string => {
+  switch (state) {
+    case 'active':
+      return 'Active';
+    case 'degraded':
+      return 'Degraded';
+    case 'offline':
+      return 'Offline';
+    case 'paused':
+      return 'Paused';
+    case 'unauthorized':
+      return 'Unauthorized';
+    case 'error':
+      return 'Error';
+    default:
+      return state ? state.charAt(0).toUpperCase() + state.slice(1) : 'Unknown';
+  }
+};
+
+const connectionStateBadgeClass = (state?: string): string => {
+  switch (state) {
+    case 'active':
+      return 'bg-green-100 text-green-800 dark:bg-green-900/25 dark:text-green-300';
+    case 'degraded':
+    case 'unauthorized':
+      return 'bg-amber-100 text-amber-800 dark:bg-amber-900/25 dark:text-amber-300';
+    case 'offline':
+    case 'error':
+      return 'bg-rose-100 text-rose-800 dark:bg-rose-900/25 dark:text-rose-300';
+    default:
+      return 'bg-surface-alt text-muted';
+  }
+};
+
+const isWindowsAgentConnection = (connection: Connection): boolean =>
+  Boolean(connection.agentIdentity?.platform?.toLowerCase().includes('win'));
 
 const describeManagedSourceType = (type: ConnectionType | null): string => {
   if (!type) return 'Infrastructure';
@@ -498,12 +536,14 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
         onToggleEnabled={
           editingRow
             ? () => {
-                void rowActions.togglePause(editingRow);
+                void rowActions.togglePause(editingConnection() ?? editingRow);
               }
             : undefined
         }
         togglePending={connectionId ? rowActions.pendingAction(connectionId) === 'pause' : false}
-        connectionEnabled={editingRow?.enabled}
+        connectionEnabled={
+          editingRow ? (editingConnection()?.enabled ?? editingRow.enabled) : undefined
+        }
         onDelete={
           editingRow
             ? () => {
@@ -589,12 +629,21 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
     </Show>
   );
 
-  const renderAgentConnectionDetails = (connection: Connection) => {
-    const removePending = () => rowActions.pendingAction(connection.id) === 'remove';
-    const removeConfirming = () => rowActions.confirmingRemove(connection.id);
-    const error = () => rowActions.actionError(connection.id);
-    const versionPresentation = () => connectionAgentVersionPresentation(connection);
-    const identitySummary = () => connectionAgentIdentitySummary(connection);
+  const renderAgentConnectionDetails = (connectionAccessor: () => Connection) => {
+    const connection = () => connectionAccessor();
+    const removePending = () => rowActions.pendingAction(connection().id) === 'remove';
+    const removeConfirming = () => rowActions.confirmingRemove(connection().id);
+    const error = () => rowActions.actionError(connection().id);
+    const versionPresentation = () => connectionAgentVersionPresentation(connection());
+    const identitySummary = () => connectionAgentIdentitySummary(connection());
+    const formattedLastSeen = () => {
+      const conn = connection();
+      if (!conn.lastSeen) return 'No activity yet';
+      const relative = connectionLastActivityText(conn);
+      const parsed = Date.parse(conn.lastSeen);
+      if (!Number.isFinite(parsed)) return relative;
+      return `${relative} (${new Date(parsed).toLocaleString()})`;
+    };
     const infoCard = (label: string, value: string) => (
       <div class="rounded-lg border border-border bg-surface-alt px-3 py-3">
         <div class="text-[11px] font-medium uppercase tracking-wide text-muted">{label}</div>
@@ -606,8 +655,19 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
       <div class="space-y-6 p-4">
         <section class="rounded-xl border border-border bg-surface p-4">
           <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {infoCard('Connection state', connection.state)}
-            {infoCard('Last seen', connection.lastSeen ? connection.lastSeen : 'No activity yet')}
+            <div class="rounded-lg border border-border bg-surface-alt px-3 py-3">
+              <div class="text-[11px] font-medium uppercase tracking-wide text-muted">
+                Connection state
+              </div>
+              <div class="mt-1.5">
+                <span
+                  class={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${connectionStateBadgeClass(connection().state)}`}
+                >
+                  {formatConnectionStateLabel(connection().state)}
+                </span>
+              </div>
+            </div>
+            {infoCard('Last seen', formattedLastSeen())}
             <Show when={versionPresentation()}>
               {(presentation) => (
                 <div class="rounded-lg border border-border bg-surface-alt px-3 py-3">
@@ -626,31 +686,31 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
             <Show when={identitySummary()}>
               {(summary) => infoCard('Operating system', summary())}
             </Show>
-            <Show when={connection.agentIdentity?.hostname?.trim()}>
+            <Show when={connection().agentIdentity?.hostname?.trim()}>
               {(hostname) => infoCard('Reported hostname', hostname())}
             </Show>
-            <Show when={connection.agentIdentity?.reportIp?.trim()}>
+            <Show when={connection().agentIdentity?.reportIp?.trim()}>
               {(reportIp) => infoCard('Reported IP', reportIp())}
             </Show>
-            <Show when={connection.agentIdentity?.kernelVersion?.trim()}>
+            <Show when={connection().agentIdentity?.kernelVersion?.trim()}>
               {(kernelVersion) => infoCard('Kernel', kernelVersion())}
             </Show>
-            <Show when={connection.agentIdentity?.architecture?.trim()}>
+            <Show when={connection().agentIdentity?.architecture?.trim()}>
               {(architecture) => infoCard('Architecture', architecture())}
             </Show>
-            <Show when={connection.agentIdentity?.commandsEnabled}>
+            <Show when={connection().agentIdentity?.commandsEnabled}>
               {infoCard('Remote commands', 'Enabled')}
             </Show>
           </div>
 
-          <Show when={connection.lastError?.message}>
+          <Show when={connection().lastError?.message}>
             <div class="mt-4 rounded-md border border-rose-300 bg-rose-50 px-4 py-3 text-sm text-rose-800 dark:border-rose-900/25 dark:bg-rose-950/25 dark:text-rose-200">
-              {connection.lastError?.message}
+              {connection().lastError?.message}
             </div>
           </Show>
         </section>
 
-        {renderRemoteCommandsSetup(connection)}
+        {renderRemoteCommandsSetup(connection())}
 
         <section class="rounded-xl border border-border bg-surface p-4">
           <div class="space-y-3">
@@ -723,7 +783,7 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
           <Button
             variant={removeConfirming() ? 'danger' : 'dangerOutline'}
             size="settingsAction"
-            onClick={() => void rowActions.requestRemove(connection)}
+            onClick={() => void rowActions.requestRemove(connection())}
             disabled={removePending()}
           >
             {removePending()
@@ -751,78 +811,88 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
         </div>
 
         <div class="space-y-3">
-          {connections.map((connection) => {
-            const removePending = () => rowActions.pendingAction(connection.id) === 'remove';
-            const removeConfirming = () => rowActions.confirmingRemove(connection.id);
-            const error = () => rowActions.actionError(connection.id);
-            const versionPresentation = () => connectionAgentVersionPresentation(connection);
+          <For each={connections}>
+            {(connection) => {
+              const removePending = () => rowActions.pendingAction(connection.id) === 'remove';
+              const removeConfirming = () => rowActions.confirmingRemove(connection.id);
+              const error = () => rowActions.actionError(connection.id);
+              const versionPresentation = () => connectionAgentVersionPresentation(connection);
+              const uninstallCommand = () =>
+                isWindowsAgentConnection(connection)
+                  ? agentUninstallCommands().windows
+                  : agentUninstallCommands().linux;
 
-            return (
-              <div class="rounded-lg border border-border bg-surface-alt px-4 py-4">
-                <div class="flex flex-wrap items-start justify-between gap-4">
-                  <div class="space-y-1">
-                    <div class="text-sm font-medium text-base-content">{connection.name}</div>
-                    <Show when={connection.address && connection.address !== connection.name}>
-                      <div class="wrap-break-word text-xs text-muted">{connection.address}</div>
-                    </Show>
-                    <Show when={versionPresentation()}>
-                      {(presentation) => (
-                        <div class="flex flex-wrap items-center gap-2 pt-1">
-                          <span class={presentation().badgeClassName}>
-                            {presentation().badgeLabel}
-                          </span>
-                          <span class="text-xs text-muted" title={presentation().title}>
-                            {presentation().detail}
-                          </span>
-                        </div>
-                      )}
-                    </Show>
-                  </div>
-                  <div class="flex items-center gap-2">
-                    <span class="inline-flex items-center rounded-full bg-green-100 px-2 py-0.5 text-[11px] font-medium text-green-800 dark:bg-green-900/25 dark:text-green-300">
-                      {connection.state === 'active' ? 'Active' : connection.state}
-                    </span>
-                    <span class="text-xs text-muted">{connectionLastActivityText(connection)}</span>
-                  </div>
-                </div>
-
-                <div class="mt-3 empty:hidden">{renderRemoteCommandsSetup(connection)}</div>
-
-                <Show when={error()}>
-                  {(message) => (
-                    <div
-                      role="alert"
-                      class="mt-3 rounded-md border border-rose-300 bg-rose-50 px-3 py-2 text-xs text-rose-800 dark:border-rose-900/25 dark:bg-rose-950/25 dark:text-rose-200"
-                    >
-                      {message()}
+              return (
+                <div class="rounded-lg border border-border bg-surface-alt px-4 py-4">
+                  <div class="flex flex-wrap items-start justify-between gap-4">
+                    <div class="space-y-1">
+                      <div class="text-sm font-medium text-base-content">{connection.name}</div>
+                      <Show when={connection.address && connection.address !== connection.name}>
+                        <div class="wrap-break-word text-xs text-muted">{connection.address}</div>
+                      </Show>
+                      <Show when={versionPresentation()}>
+                        {(presentation) => (
+                          <div class="flex flex-wrap items-center gap-2 pt-1">
+                            <span class={presentation().badgeClassName}>
+                              {presentation().badgeLabel}
+                            </span>
+                            <span class="text-xs text-muted" title={presentation().title}>
+                              {presentation().detail}
+                            </span>
+                          </div>
+                        )}
+                      </Show>
                     </div>
-                  )}
-                </Show>
+                    <div class="flex items-center gap-2">
+                      <span
+                        class={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${connectionStateBadgeClass(connection.state)}`}
+                      >
+                        {formatConnectionStateLabel(connection.state)}
+                      </span>
+                      <span class="text-xs text-muted">
+                        {connectionLastActivityText(connection)}
+                      </span>
+                    </div>
+                  </div>
 
-                <div class="mt-4 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-                  <Button
-                    variant="outline"
-                    size="settingsAction"
-                    onClick={() => void handleCopy(agentUninstallCommands().linux)}
-                  >
-                    Copy uninstall command
-                  </Button>
-                  <Button
-                    variant={removeConfirming() ? 'danger' : 'dangerOutline'}
-                    size="settingsAction"
-                    onClick={() => void rowActions.requestRemove(connection)}
-                    disabled={removePending()}
-                  >
-                    {removePending()
-                      ? 'Removing…'
-                      : removeConfirming()
-                        ? 'Click again to confirm'
-                        : 'Remove Pulse Agent'}
-                  </Button>
+                  <div class="mt-3 empty:hidden">{renderRemoteCommandsSetup(connection)}</div>
+
+                  <Show when={error()}>
+                    {(message) => (
+                      <div
+                        role="alert"
+                        class="mt-3 rounded-md border border-rose-300 bg-rose-50 px-3 py-2 text-xs text-rose-800 dark:border-rose-900/25 dark:bg-rose-950/25 dark:text-rose-200"
+                      >
+                        {message()}
+                      </div>
+                    )}
+                  </Show>
+
+                  <div class="mt-4 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                    <Button
+                      variant="outline"
+                      size="settingsAction"
+                      onClick={() => void handleCopy(uninstallCommand())}
+                    >
+                      Copy uninstall command
+                    </Button>
+                    <Button
+                      variant={removeConfirming() ? 'danger' : 'dangerOutline'}
+                      size="settingsAction"
+                      onClick={() => void rowActions.requestRemove(connection)}
+                      disabled={removePending()}
+                    >
+                      {removePending()
+                        ? 'Removing…'
+                        : removeConfirming()
+                          ? 'Click again to confirm'
+                          : 'Remove Pulse Agent'}
+                    </Button>
+                  </div>
                 </div>
-              </div>
-            );
-          })}
+              );
+            }}
+          </For>
         </div>
       </section>
     );
@@ -944,9 +1014,11 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
                   editingConnection={editableConnection()}
                   onCancel={context.onCancel}
                   onSaved={context.onSaved}
-                  onToggleEnabled={() => void rowActions.togglePause(connection)}
+                  onToggleEnabled={() =>
+                    void rowActions.togglePause(editingConnection() ?? connection)
+                  }
                   togglePending={rowActions.pendingAction(connection.id) === 'pause'}
-                  connectionEnabled={connection.enabled}
+                  connectionEnabled={editingConnection()?.enabled ?? connection.enabled}
                   onDelete={() => void rowActions.requestRemove(connection)}
                   deletePending={rowActions.pendingAction(connection.id) === 'remove'}
                   deleteConfirming={rowActions.confirmingRemove(connection.id)}
@@ -972,9 +1044,11 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
                   editingConnection={editableConnection()}
                   onCancel={context.onCancel}
                   onSaved={context.onSaved}
-                  onToggleEnabled={() => void rowActions.togglePause(connection)}
+                  onToggleEnabled={() =>
+                    void rowActions.togglePause(editingConnection() ?? connection)
+                  }
                   togglePending={rowActions.pendingAction(connection.id) === 'pause'}
-                  connectionEnabled={connection.enabled}
+                  connectionEnabled={editingConnection()?.enabled ?? connection.enabled}
                   onDelete={() => void rowActions.requestRemove(connection)}
                   deletePending={rowActions.pendingAction(connection.id) === 'remove'}
                   deleteConfirming={rowActions.confirmingRemove(connection.id)}
@@ -1145,6 +1219,7 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
           inventoryLoading={!ledger.resolvedOnce() || ledger.loading()}
           inventoryError={ledger.error()}
           onRetryInventory={handleRetryInventory}
+          onRefreshInventory={() => ledger.reload()}
           discoveredNodes={visibleDiscoveredNodes}
           discoveryEnabled={props.discoveryEnabled()}
           discoveryScanStatus={props.discoveryScanStatus}
@@ -1242,7 +1317,7 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
             ariaDescribedBy={ADD_DIALOG_DESCRIPTION_ID}
             panelClass={isAgentDialog() ? 'max-w-6xl' : 'max-w-5xl'}
           >
-            <div class="flex h-full min-h-0 flex-col">
+            <div class="flex max-h-[calc(100dvh-2rem)] min-h-0 flex-col">
               <div class="flex items-start justify-between gap-4 border-b border-border bg-surface-alt px-4 py-4 sm:px-6">
                 <div class="space-y-1">
                   <h2 id={ADD_DIALOG_TITLE_ID} class="text-base font-semibold text-base-content">
@@ -1315,9 +1390,9 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
                 onClose={closeEditFlow}
                 ariaLabelledBy={EDIT_DIALOG_TITLE_ID}
                 ariaDescribedBy={EDIT_DIALOG_DESCRIPTION_ID}
-                panelClass={connection.type === 'agent' ? 'max-w-5xl' : 'max-w-5xl'}
+                panelClass="max-w-5xl"
               >
-                <div class="flex h-full min-h-0 flex-col">
+                <div class="flex max-h-[calc(100dvh-2rem)] min-h-0 flex-col">
                   <div class="flex items-start justify-between gap-4 border-b border-border bg-surface-alt px-4 py-4 sm:px-6">
                     <div class="space-y-1">
                       <h2
@@ -1363,7 +1438,7 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
                         </div>
                       }
                     >
-                      {renderAgentConnectionDetails(connection)}
+                      {renderAgentConnectionDetails(connectionAccessor)}
                     </Show>
                   </div>
                 </div>

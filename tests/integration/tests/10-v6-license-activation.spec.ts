@@ -191,11 +191,13 @@ test.describe.serial("V6 license activation flow", () => {
       timeout: 30_000,
     });
 
-    // Clearing asks for a native confirm() first.
-    page.once("dialog", (dialog) => dialog.accept());
+    // Clearing opens an accessible confirmation dialog first.
     const clearButton = licenseRecovery(page).getByRole("button", { name: "Clear key" });
     await expect(clearButton).toBeEnabled();
     await clearButton.click();
+    const confirmDialog = page.getByRole("dialog", { name: "Clear Pro license" });
+    await expect(confirmDialog).toBeVisible();
+    await confirmDialog.getByRole("button", { name: "Clear license" }).click();
 
     await expect(page.getByText(/License cleared/i).first()).toBeVisible();
     await expect

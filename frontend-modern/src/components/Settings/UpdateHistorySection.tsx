@@ -4,6 +4,7 @@ import { UpdatesAPI, type UpdateHistoryEntry } from '@/api/updates';
 import { updateStore } from '@/stores/updates';
 import { Button } from '@/components/shared/Button';
 import { Dialog } from '@/components/shared/Dialog';
+import { ExternalTextLink } from '@/components/shared/ExternalTextLink';
 import { LoadingSpinner } from '@/components/shared/LoadingSpinner';
 import { getShippedDocUrl } from '@/utils/docsLinks';
 
@@ -117,11 +118,11 @@ export const UpdateHistorySection: Component = () => {
               <table class="w-full min-w-0 table-fixed text-left text-sm">
                 <thead class="border-b border-border bg-surface-alt text-xs uppercase text-muted">
                   <tr>
-                    <th class="w-[26%] px-3 py-2 font-semibold">When</th>
+                    <th class="w-[32%] px-3 py-2 font-semibold sm:w-[26%]">When</th>
                     <th class="hidden w-[20%] px-3 py-2 font-semibold sm:table-cell">Action</th>
-                    <th class="w-[24%] px-3 py-2 font-semibold">Version</th>
-                    <th class="w-[15%] px-3 py-2 font-semibold">Result</th>
-                    <th class="w-[15%] px-3 py-2 text-right font-semibold"></th>
+                    <th class="w-[30%] px-3 py-2 font-semibold sm:w-[24%]">Version</th>
+                    <th class="w-[18%] px-3 py-2 font-semibold sm:w-[15%]">Result</th>
+                    <th class="w-[20%] px-3 py-2 text-right font-semibold sm:w-[15%]"></th>
                   </tr>
                 </thead>
                 <tbody class="divide-y divide-border">
@@ -205,12 +206,9 @@ export const UpdateHistorySection: Component = () => {
                 <p>
                   Do not assume this will undo settings or alerts. Full-state recovery requires
                   Pulse to be stopped and a consistent backup of every active store.{' '}
-                  <a
-                    class="text-primary underline"
-                    href={`${getShippedDocUrl('AUTO_UPDATE.md')}#manual-rollback`}
-                  >
+                  <ExternalTextLink href={`${getShippedDocUrl('AUTO_UPDATE.md')}#manual-rollback`}>
                     Read the recovery instructions
-                  </a>
+                  </ExternalTextLink>
                   .
                 </p>
               </div>

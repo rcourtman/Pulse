@@ -405,19 +405,24 @@ describe('ProLicensePanel', () => {
       const clear = recovery.getByRole('button', { name: 'Clear key' });
       await waitFor(() => expect(clear).toBeEnabled());
       fireEvent.click(clear);
-      expect(confirm).toHaveBeenCalledOnce();
+      const cancelDialog = screen.getByRole('dialog', { name: 'Clear Pro license' });
+      fireEvent.click(within(cancelDialog).getByRole('button', { name: 'Cancel' }));
+      expect(confirm).not.toHaveBeenCalled();
       expect(clearLicenseMock).not.toHaveBeenCalled();
       expect(recovery.queryByRole('alert')).not.toBeInTheDocument();
       expect(recovery.queryByRole('status')).not.toBeInTheDocument();
 
-      confirm.mockReturnValue(true);
       clearLicenseMock.mockRejectedValueOnce(new Error('Synthetic clear failure'));
       fireEvent.click(clear);
+      const failDialog = screen.getByRole('dialog', { name: 'Clear Pro license' });
+      fireEvent.click(within(failDialog).getByRole('button', { name: 'Clear license' }));
       await waitFor(() =>
         expect(recovery.getByRole('alert')).toHaveTextContent('Synthetic clear failure'),
       );
       clearLicenseMock.mockResolvedValueOnce({ success: true, message: 'License cleared' });
       fireEvent.click(clear);
+      const okDialog = screen.getByRole('dialog', { name: 'Clear Pro license' });
+      fireEvent.click(within(okDialog).getByRole('button', { name: 'Clear license' }));
       await waitFor(() =>
         expect(recovery.getByRole('status')).toHaveTextContent('License cleared'),
       );
@@ -469,8 +474,8 @@ describe('ProLicensePanel', () => {
       expect(loadLicenseEntitlementsMock).toHaveBeenCalled();
     });
 
-    expect(screen.getByText('Plans & Billing')).toBeInTheDocument();
     expect(screen.getByText('Current plan: Community')).toBeInTheDocument();
+    expect(screen.queryByRole('tab', { name: 'Plan' })).not.toBeInTheDocument();
     expect(screen.queryByRole('tab', { name: 'Usage' })).not.toBeInTheDocument();
     expect(
       screen.queryByRole('button', { name: /start 14-day pro trial/i }),

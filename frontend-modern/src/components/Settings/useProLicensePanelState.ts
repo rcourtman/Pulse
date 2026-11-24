@@ -83,6 +83,7 @@ export function useProLicensePanelState() {
   );
   const [activating, setActivating] = createSignal(false);
   const [clearing, setClearing] = createSignal(false);
+  const [showClearConfirm, setShowClearConfirm] = createSignal(false);
   const [recoveryFeedback, setRecoveryFeedback] = createSignal<{
     type: 'success' | 'error';
     message: string;
@@ -510,11 +511,14 @@ export function useProLicensePanelState() {
     }
   };
 
+  const requestClear = () => {
+    if (activating() || clearing() || loading() || !hasLicenseDetails()) return;
+    setShowClearConfirm(true);
+  };
+
   const handleClear = async () => {
     if (activating() || clearing()) return;
-    if (!confirm('Clear the current Pro license?')) {
-      return;
-    }
+    setShowClearConfirm(false);
     setRecoveryFeedback(null);
     setClearing(true);
     try {
@@ -644,10 +648,16 @@ export function useProLicensePanelState() {
     }, 1500);
   };
 
+  const isProRuntime = createMemo(() => entitlements()?.runtime?.build === 'pro');
+
   return {
     activeSection,
     activating,
     clearing,
+    showClearConfirm,
+    setShowClearConfirm,
+    requestClear,
+    isProRuntime,
     activationSuccessSummary,
     planStatus,
     commercialMigrationNotice,

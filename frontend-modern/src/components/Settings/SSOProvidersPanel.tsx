@@ -5,13 +5,14 @@ import {
   Show,
   createEffect,
   createMemo,
+  createSignal,
   createUniqueId,
   onCleanup,
 } from 'solid-js';
 import { ActionIconButton, Button, CopyValueButton } from '@/components/shared/Button';
+import { Card } from '@/components/shared/Card';
 import { InlineNotice, INLINE_NOTICE_TONE_CLASSES } from '@/components/shared/InlineNotice';
 import { EmptyState } from '@/components/shared/EmptyState';
-import SettingsPanel from '@/components/shared/SettingsPanel';
 import { Toggle } from '@/components/shared/Toggle';
 import { formField, labelClass, controlClass, formHelpText } from '@/components/shared/Form';
 import { FormTextarea } from '@/components/shared/FormTextarea';
@@ -23,6 +24,8 @@ import Trash2 from 'lucide-solid/icons/trash-2';
 import Shield from 'lucide-solid/icons/shield';
 import ArrowDown from 'lucide-solid/icons/arrow-down';
 import CheckCircle from 'lucide-solid/icons/check-circle';
+import ChevronDown from 'lucide-solid/icons/chevron-down';
+import ChevronRight from 'lucide-solid/icons/chevron-right';
 import TriangleAlert from 'lucide-solid/icons/triangle-alert';
 import XCircle from 'lucide-solid/icons/x-circle';
 import Eye from 'lucide-solid/icons/eye';
@@ -44,7 +47,13 @@ import {
   getSSOProviderTypeLabel,
 } from '@/utils/ssoProviderPresentation';
 import { ALERT_EMAIL_REPLY_TO_PLACEHOLDER } from '@/utils/alertEmailPresentation';
-import { getProviderTestSource } from '@/components/Settings/ssoProvidersModel';
+import {
+  getProviderTestSource,
+  parseGroupRoleMappingRows,
+  serializeGroupRoleMappingRows,
+  type GroupRoleMappingRow,
+  type SSOProvider,
+} from '@/components/Settings/ssoProvidersModel';
 import { useSSOProvidersState } from '@/components/Settings/useSSOProvidersState';
 
 // Endpoint labels and values have separate lines so neither a long URL nor
@@ -86,6 +95,7 @@ interface SSOProvidersPanelProps {
   onConfigUpdated?: () => void;
   canManage?: boolean;
   currentUser?: string;
+  hideLocalLogin?: boolean;
 }
 
 const SamlEditorRegistration: Component<{
@@ -192,9 +202,54 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
     fetchMetadataPreview,
   } = useSSOProvidersState(props);
   const deletingProvider = () => providers().find((provider) => provider.id === deleteConfirm());
+  const enabledProviderCount = createMemo(
+    () => providers().filter((provider) => provider.enabled).length,
+  );
+  const [disableLockoutProvider, setDisableLockoutProvider] = createSignal<SSOProvider | null>(
+    null,
+  );
+  const [draftMappingGroup, setDraftMappingGroup] = createSignal('');
+  const [draftMappingRole, setDraftMappingRole] = createSignal('');
+  const parsedRoleMappingRows = createMemo(() => parseGroupRoleMappingRows(form.groupRoleMappings));
+  const addRoleMappingRow = () => {
+    const group = draftMappingGroup().trim();
+    const roleId = draftMappingRole().trim();
+    if (!group || !roleId) return;
+    const current = parsedRoleMappingRows() ?? [];
+    const next: GroupRoleMappingRow[] = [
+      ...current.filter((entry) => entry.group !== group),
+      { group, roleId },
+    ];
+    setForm('groupRoleMappings', serializeGroupRoleMappingRows(next));
+    setDraftMappingGroup('');
+    setDraftMappingRole('');
+  };
+  const removeRoleMappingRow = (index: number) => {
+    const current = parsedRoleMappingRows();
+    if (!current) return;
+    setForm(
+      'groupRoleMappings',
+      serializeGroupRoleMappingRows(current.filter((_, idx) => idx !== index)),
+    );
+  };
+  const requestToggleEnabled = (provider: SSOProvider) => {
+    if (provider.enabled && props.hideLocalLogin && enabledProviderCount() <= 1) {
+      setDisableLockoutProvider(provider);
+      return;
+    }
+    void handleToggleEnabled(provider);
+  };
+  createEffect(() => {
+    if (!showModal()) {
+      setDraftMappingGroup('');
+      setDraftMappingRole('');
+    }
+    if (!canEdit()) {
+      setDisableLockoutProvider(null);
+    }
+  });
   const summaryIdPrefix = createUniqueId();
   const summaryId = (id: string) => `${summaryIdPrefix}-${encodeURIComponent(id)}`;
-  const inventoryTitleId = `${summaryIdPrefix}-inventory-title`;
   const providerDetailErrorId = `${createUniqueId()}-provider-detail-error`;
   const editorFeedbackId = `${createUniqueId()}-editor-feedback`;
   const testResultSummaryId = `${summaryIdPrefix}-test-summary`;
@@ -378,16 +433,20 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
   return (
     <div class="space-y-6">
       {/* Main panel */}
-      <SettingsPanel
+      <Card
         ref={inventoryRegion}
-        title="Single Sign-On Providers"
-        titleId={inventoryTitleId}
+        padding="none"
+        border={false}
         role="region"
-        aria-labelledby={inventoryTitleId}
+        aria-label="Single Sign-On Providers"
         aria-busy={loading()}
         tabindex={-1}
-        class="focus:outline-hidden focus:ring-2 focus:ring-inset focus:ring-blue-500"
-        action={
+        class="overflow-hidden border border-border focus:outline-hidden focus:ring-2 focus:ring-inset focus:ring-blue-500"
+      >
+        <div class="flex flex-wrap items-center justify-between gap-2 border-b border-border bg-surface-alt px-3 py-3 sm:px-6 sm:py-4">
+          <p class="text-xs text-muted sm:text-sm">
+            Connect OIDC or SAML identity providers for team sign-in.
+          </p>
           <div class="flex flex-wrap justify-end gap-2">
             <Button
               type="button"
@@ -412,200 +471,200 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
               {getSSOProviderAddButtonLabel('saml')}
             </Button>
           </div>
-        }
-        bodyClass="space-y-6"
-      >
-        <Show when={!canManage()}>
-          <div class="rounded-md border border-blue-200 bg-blue-50 px-4 py-3 text-xs text-blue-800 dark:border-blue-800 dark:bg-blue-900/25 dark:text-blue-200">
-            Single sign-on is read-only for this account. You can review configured providers but
-            cannot add, edit, enable, or delete them.
-          </div>
-        </Show>
+        </div>
+        <div class="space-y-6 p-3 sm:p-6">
+          <Show when={!canManage()}>
+            <div class="rounded-md border border-blue-200 bg-blue-50 px-4 py-3 text-xs text-blue-800 dark:border-blue-800 dark:bg-blue-900/25 dark:text-blue-200">
+              Single sign-on is read-only for this account. You can review configured providers but
+              cannot add, edit, enable, or delete them.
+            </div>
+          </Show>
 
-        {/* Content */}
-        <Show when={unconfirmedChange() && !showModal() && !deleteConfirm()}>
-          <InventoryCheckNotice lastRead />
-        </Show>
-        <Show when={loading()}>
-          <div class="flex flex-wrap items-center gap-x-4 gap-y-2">
-            <p class="flex items-center gap-3 text-sm text-muted">
-              <LoadingSpinner size="md" tone="current" />
-              {getSSOProvidersLoadingState().text}
+          {/* Content */}
+          <Show when={unconfirmedChange() && !showModal() && !deleteConfirm()}>
+            <InventoryCheckNotice lastRead />
+          </Show>
+          <Show when={loading()}>
+            <div class="flex flex-wrap items-center gap-x-4 gap-y-2">
+              <p class="flex items-center gap-3 text-sm text-muted">
+                <LoadingSpinner size="md" tone="current" />
+                {getSSOProvidersLoadingState().text}
+              </p>
+              <RestartProviderCheck />
+            </div>
+          </Show>
+
+          <Show when={!loading() && loadError()}>
+            <InlineNotice
+              role="alert"
+              tone="danger"
+              layout="banner"
+              actionLabel={unconfirmedChange() ? undefined : 'Retry'}
+              actionOnClick={checkSavedProviders}
+            >
+              {getSSOProvidersLoadErrorMessage()} Configured providers are unknown.
+            </InlineNotice>
+          </Show>
+          <Show when={loadingDetails()}>
+            <p role="status" class="text-sm text-muted">
+              Loading provider details…
             </p>
-            <RestartProviderCheck />
-          </div>
-        </Show>
+          </Show>
+          <Show when={!loading() && !loadError() && providers().length === 0}>
+            <EmptyState
+              variant="panel"
+              icon={<Shield class="h-5 w-5" />}
+              title={getSSOProviderEmptyStateTitle()}
+              description={getSSOProviderEmptyStateDescription()}
+            />
+          </Show>
 
-        <Show when={!loading() && loadError()}>
-          <InlineNotice
-            role="alert"
-            tone="danger"
-            layout="banner"
-            actionLabel={unconfirmedChange() ? undefined : 'Retry'}
-            actionOnClick={checkSavedProviders}
-          >
-            {getSSOProvidersLoadErrorMessage()} Configured providers are unknown.
-          </InlineNotice>
-        </Show>
-        <Show when={loadingDetails()}>
-          <p role="status" class="text-sm text-muted">
-            Loading provider details…
-          </p>
-        </Show>
-        <Show when={!loading() && !loadError() && providers().length === 0}>
-          <EmptyState
-            variant="panel"
-            icon={<Shield class="h-5 w-5" />}
-            title={getSSOProviderEmptyStateTitle()}
-            description={getSSOProviderEmptyStateDescription()}
-          />
-        </Show>
-
-        <Show when={!loading() && !loadError() && providers().length > 0}>
-          <div class="space-y-3">
-            <For each={providers()}>
-              {(provider) => (
-                <div class={getSSOProviderCardClass(provider.enabled)}>
-                  <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                    <div class="flex min-w-0 items-center gap-3 sm:flex-1">
-                      <div class="shrink-0 p-2 rounded-md bg-surface-hover">
-                        <SSOProviderTypeIcon type={provider.type} class="w-5 h-5 text-muted" />
-                      </div>
-                      <div class="min-w-0 flex-1">
-                        <div class="flex items-start gap-2">
-                          <span
-                            class="min-w-0 font-medium text-base-content [overflow-wrap:anywhere]"
-                            title={provider.name}
-                          >
-                            {provider.name}
-                          </span>
-                          <span class={`shrink-0 ${getSSOProviderTypeBadgeClass()}`}>
-                            {getSSOProviderTypeLabel(provider.type)}
-                          </span>
+          <Show when={!loading() && !loadError() && providers().length > 0}>
+            <div class="space-y-3">
+              <For each={providers()}>
+                {(provider) => (
+                  <div class={getSSOProviderCardClass(provider.enabled)}>
+                    <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                      <div class="flex min-w-0 items-center gap-3 sm:flex-1">
+                        <div class="shrink-0 p-2 rounded-md bg-surface-hover">
+                          <SSOProviderTypeIcon type={provider.type} class="w-5 h-5 text-muted" />
                         </div>
-                        <p
-                          id={summaryId(provider.id)}
-                          class="text-xs text-muted [overflow-wrap:anywhere]"
-                          title={getSSOProviderSummary(provider)}
+                        <div class="min-w-0 flex-1">
+                          <div class="flex items-start gap-2">
+                            <span
+                              class="min-w-0 font-medium text-base-content [overflow-wrap:anywhere]"
+                              title={provider.name}
+                            >
+                              {provider.name}
+                            </span>
+                            <span class={`shrink-0 ${getSSOProviderTypeBadgeClass()}`}>
+                              {getSSOProviderTypeLabel(provider.type)}
+                            </span>
+                          </div>
+                          <p
+                            id={summaryId(provider.id)}
+                            class="text-xs text-muted [overflow-wrap:anywhere]"
+                            title={getSSOProviderSummary(provider)}
+                          >
+                            {getSSOProviderSummary(provider)}
+                          </p>
+                        </div>
+                      </div>
+                      <div class="flex shrink-0 items-center gap-2 self-end sm:self-auto">
+                        <Toggle
+                          checked={provider.enabled}
+                          ariaLabel={`${provider.enabled ? 'Disable' : 'Enable'} ${provider.name}`}
+                          ariaDescribedBy={summaryId(provider.id)}
+                          label={provider.enabled ? 'Enabled' : 'Disabled'}
+                          onChange={() => requestToggleEnabled(provider)}
+                          disabled={!canEdit()}
+                          containerClass="items-center"
+                        />
+                        <ActionIconButton
+                          type="button"
+                          onClick={() => openEditModal(provider)}
+                          disabled={!canEdit()}
+                          label={`Edit provider ${provider.name}`}
+                          aria-describedby={
+                            failedProviderDetails() === provider
+                              ? `${summaryId(provider.id)} ${providerDetailErrorId}`
+                              : summaryId(provider.id)
+                          }
+                          tone="accent"
+                          size="md"
+                          class="min-h-11 min-w-11 sm:min-h-0 sm:min-w-0"
                         >
-                          {getSSOProviderSummary(provider)}
-                        </p>
+                          <Pencil class="w-4 h-4" />
+                        </ActionIconButton>
+                        <ActionIconButton
+                          type="button"
+                          onClick={() => setDeleteConfirm(provider.id)}
+                          disabled={!canEdit()}
+                          label={`Delete provider ${provider.name}`}
+                          aria-describedby={summaryId(provider.id)}
+                          tone="danger"
+                          size="md"
+                          class="min-h-11 min-w-11 sm:min-h-0 sm:min-w-0"
+                        >
+                          <Trash2 class="w-4 h-4" />
+                        </ActionIconButton>
                       </div>
                     </div>
-                    <div class="flex shrink-0 items-center gap-2 self-end sm:self-auto">
-                      <Toggle
-                        checked={provider.enabled}
-                        ariaLabel={`${provider.enabled ? 'Disable' : 'Enable'} ${provider.name}`}
-                        ariaDescribedBy={summaryId(provider.id)}
-                        label={provider.enabled ? 'Enabled' : 'Disabled'}
-                        onChange={() => handleToggleEnabled(provider)}
-                        disabled={!canEdit()}
-                        containerClass="items-center"
-                      />
-                      <ActionIconButton
-                        type="button"
-                        onClick={() => openEditModal(provider)}
-                        disabled={!canEdit()}
-                        label={`Edit provider ${provider.name}`}
-                        aria-describedby={
-                          failedProviderDetails() === provider
-                            ? `${summaryId(provider.id)} ${providerDetailErrorId}`
-                            : summaryId(provider.id)
-                        }
-                        tone="accent"
-                        size="md"
-                        class="min-h-11 min-w-11 sm:min-h-0 sm:min-w-0"
+
+                    <Show when={failedProviderDetails() === provider}>
+                      <p
+                        id={providerDetailErrorId}
+                        role="alert"
+                        class="mt-2 text-xs text-red-700 dark:text-red-300"
                       >
-                        <Pencil class="w-4 h-4" />
-                      </ActionIconButton>
-                      <ActionIconButton
-                        type="button"
-                        onClick={() => setDeleteConfirm(provider.id)}
-                        disabled={!canEdit()}
-                        label={`Delete provider ${provider.name}`}
-                        aria-describedby={summaryId(provider.id)}
-                        tone="danger"
-                        size="md"
-                        class="min-h-11 min-w-11 sm:min-h-0 sm:min-w-0"
-                      >
-                        <Trash2 class="w-4 h-4" />
-                      </ActionIconButton>
-                    </div>
+                        {getSSOProviderDetailsLoadErrorMessage()}
+                      </p>
+                    </Show>
+
+                    {/* OIDC callback info */}
+                    <Show when={provider.type === 'oidc'}>
+                      <div class="mt-3 pt-3 border-t border-border-subtle">
+                        <Show
+                          when={provider.oidcCallbackUrl}
+                          fallback={
+                            <p class="text-xs text-muted">
+                              {getSSOEndpointUnavailableHint('Callback / Redirect URL')}
+                            </p>
+                          }
+                        >
+                          <dl class="grid min-w-0 gap-3 text-xs">
+                            <SSOEndpoint
+                              caption="Callback / Redirect URL:"
+                              value={provider.oidcCallbackUrl}
+                              onCopyValue={(value) => copyToClipboard(value, 'Callback URL')}
+                              copyLabel="Copy callback / redirect URL"
+                              copyHint="Register this URL as a redirect URI in your identity provider before testing sign-in."
+                            />
+                          </dl>
+                        </Show>
+                      </div>
+                    </Show>
+
+                    {/* SAML metadata info */}
+                    <Show when={provider.type === 'saml' && !provider.enabled && canManage()}>
+                      <p class="mt-2 text-xs text-muted">
+                        Open Edit to check this provider’s SP Metadata and ACS URLs.
+                      </p>
+                    </Show>
+                    <Show when={provider.type === 'saml' && provider.enabled}>
+                      <div class="mt-3 pt-3 border-t border-border-subtle">
+                        <Show
+                          when={provider.samlMetadataUrl && provider.samlAcsUrl}
+                          fallback={
+                            <p class="text-xs text-muted">
+                              {getSSOEndpointUnavailableHint('SP metadata and ACS URLs')}
+                            </p>
+                          }
+                        >
+                          <dl class="grid min-w-0 gap-3 text-xs">
+                            <SSOEndpoint
+                              caption="SP Metadata:"
+                              value={provider.samlMetadataUrl}
+                              onCopyValue={(value) => copyToClipboard(value, 'Metadata URL')}
+                              copyLabel="Copy SP metadata URL"
+                            />
+                            <SSOEndpoint
+                              caption="ACS URL:"
+                              value={provider.samlAcsUrl}
+                              onCopyValue={(value) => copyToClipboard(value, 'ACS URL')}
+                              copyLabel="Copy ACS URL"
+                            />
+                          </dl>
+                        </Show>
+                      </div>
+                    </Show>
                   </div>
-
-                  <Show when={failedProviderDetails() === provider}>
-                    <p
-                      id={providerDetailErrorId}
-                      role="alert"
-                      class="mt-2 text-xs text-red-700 dark:text-red-300"
-                    >
-                      {getSSOProviderDetailsLoadErrorMessage()}
-                    </p>
-                  </Show>
-
-                  {/* OIDC callback info */}
-                  <Show when={provider.type === 'oidc'}>
-                    <div class="mt-3 pt-3 border-t border-border-subtle">
-                      <Show
-                        when={provider.oidcCallbackUrl}
-                        fallback={
-                          <p class="text-xs text-muted">
-                            {getSSOEndpointUnavailableHint('Callback / Redirect URL')}
-                          </p>
-                        }
-                      >
-                        <dl class="grid min-w-0 gap-3 text-xs">
-                          <SSOEndpoint
-                            caption="Callback / Redirect URL:"
-                            value={provider.oidcCallbackUrl}
-                            onCopyValue={(value) => copyToClipboard(value, 'Callback URL')}
-                            copyLabel="Copy callback / redirect URL"
-                            copyHint="Register this URL as a redirect URI in your identity provider before testing sign-in."
-                          />
-                        </dl>
-                      </Show>
-                    </div>
-                  </Show>
-
-                  {/* SAML metadata info */}
-                  <Show when={provider.type === 'saml' && !provider.enabled && canManage()}>
-                    <p class="mt-2 text-xs text-muted">
-                      Open Edit to check this provider’s SP Metadata and ACS URLs.
-                    </p>
-                  </Show>
-                  <Show when={provider.type === 'saml' && provider.enabled}>
-                    <div class="mt-3 pt-3 border-t border-border-subtle">
-                      <Show
-                        when={provider.samlMetadataUrl && provider.samlAcsUrl}
-                        fallback={
-                          <p class="text-xs text-muted">
-                            {getSSOEndpointUnavailableHint('SP metadata and ACS URLs')}
-                          </p>
-                        }
-                      >
-                        <dl class="grid min-w-0 gap-3 text-xs">
-                          <SSOEndpoint
-                            caption="SP Metadata:"
-                            value={provider.samlMetadataUrl}
-                            onCopyValue={(value) => copyToClipboard(value, 'Metadata URL')}
-                            copyLabel="Copy SP metadata URL"
-                          />
-                          <SSOEndpoint
-                            caption="ACS URL:"
-                            value={provider.samlAcsUrl}
-                            onCopyValue={(value) => copyToClipboard(value, 'ACS URL')}
-                            copyLabel="Copy ACS URL"
-                          />
-                        </dl>
-                      </Show>
-                    </div>
-                  </Show>
-                </div>
-              )}
-            </For>
-          </div>
-        </Show>
-      </SettingsPanel>
+                )}
+              </For>
+            </div>
+          </Show>
+        </div>
+      </Card>
 
       {/* Add/Edit Modal */}
       <Show when={showModal()}>
@@ -641,7 +700,7 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
                             ? 'max-[360px]:max-w-25'
                             : ''
                     }`}
-                    aria-label={`${summary().lines.join(', ')} — view result`}
+                    aria-label={`${summary().lines.join(', ')}: view result`}
                     aria-controls={testResultId}
                     disabled={saving() || !!unconfirmedChange()}
                     onClick={() => focusEditorContent(testResultPanel)}
@@ -791,6 +850,8 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
                       <input
                         id="sso-oidc-client-secret"
                         type="password"
+                        autocomplete="new-password"
+                        spellcheck={false}
                         value={form.oidcClientSecret}
                         onInput={(e) => setForm('oidcClientSecret', e.currentTarget.value)}
                         aria-describedby={editingProvider() ? clientSecretHintId : undefined}
@@ -901,7 +962,7 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
                   <div class="text-center text-xs text-muted">
                     {isSamlEdit()
                       ? 'Or enter the IdP SSO URL and certificate'
-                      : '— or configure manually —'}
+                      : 'Or configure manually'}
                   </div>
 
                   <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1129,11 +1190,18 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
               <div class="pt-2">
                 <Button
                   type="button"
-                  variant="ghost"
-                  size="xs"
-                  class="h-auto max-w-full whitespace-normal text-left font-semibold hover:underline"
+                  variant="outline"
+                  size="sm"
+                  aria-expanded={advancedOpen()}
+                  class="max-w-full gap-1.5 whitespace-normal text-left font-semibold"
                   onClick={() => setAdvancedOpen(!advancedOpen())}
                 >
+                  <Show
+                    when={advancedOpen()}
+                    fallback={<ChevronRight class="h-4 w-4 shrink-0" aria-hidden="true" />}
+                  >
+                    <ChevronDown class="h-4 w-4 shrink-0" aria-hidden="true" />
+                  </Show>
                   {advancedOpen() ? 'Hide' : 'Show'} access restrictions & role mapping
                 </Button>
 
@@ -1200,21 +1268,85 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
                         placeholder={ALERT_EMAIL_REPLY_TO_PLACEHOLDER}
                         textareaBaseClass={controlClass('min-h-[60px]')}
                       />
-                      <FormTextarea
-                        label="Group Role Mappings"
-                        aria-invalid={editorFeedback()?.field === 'groupRoleMappings' || undefined}
-                        aria-describedby={
-                          editorFeedback()?.field === 'groupRoleMappings'
-                            ? editorFeedbackId
-                            : undefined
-                        }
-                        rows={3}
-                        value={form.groupRoleMappings}
-                        onInput={(e) => setForm('groupRoleMappings', e.currentTarget.value)}
-                        placeholder="admins=admin, ops=operator"
-                        textareaBaseClass={controlClass('break-all py-1.5!')}
-                        help='Roles apply after sign-in checks. Use group=roleId, e.g. "Ops, East"=viewer. Commas or new lines.'
-                      />
+                      <div class="space-y-2 md:col-span-2">
+                        <Show when={parsedRoleMappingRows()}>
+                          {(rows) => (
+                            <div class="space-y-2 rounded-md border border-border bg-surface p-3">
+                              <div class="text-xs font-semibold text-base-content">
+                                Structured Group to Role Mappings
+                              </div>
+                              <Show when={rows().length > 0}>
+                                <ul class="space-y-1.5">
+                                  <For each={rows()}>
+                                    {(row, index) => (
+                                      <li class="flex flex-wrap items-center justify-between gap-2 rounded-sm border border-border-subtle bg-surface-alt px-2.5 py-1.5 text-xs">
+                                        <span class="min-w-0 font-mono [overflow-wrap:anywhere]">
+                                          {row.group} =&gt; {row.roleId}
+                                        </span>
+                                        <Button
+                                          type="button"
+                                          variant="ghost"
+                                          size="xs"
+                                          onClick={() => removeRoleMappingRow(index())}
+                                          aria-label={`Remove mapping for ${row.group}`}
+                                        >
+                                          Remove
+                                        </Button>
+                                      </li>
+                                    )}
+                                  </For>
+                                </ul>
+                              </Show>
+                              <div class="grid grid-cols-1 gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
+                                <input
+                                  type="text"
+                                  aria-label="IdP group name"
+                                  placeholder="IdP group (e.g. admins)"
+                                  value={draftMappingGroup()}
+                                  onInput={(e) => setDraftMappingGroup(e.currentTarget.value)}
+                                  class={controlClass()}
+                                />
+                                <input
+                                  type="text"
+                                  aria-label="Pulse role ID"
+                                  placeholder="Pulse role ID (e.g. admin)"
+                                  value={draftMappingRole()}
+                                  onInput={(e) => setDraftMappingRole(e.currentTarget.value)}
+                                  class={controlClass()}
+                                />
+                                <Button
+                                  type="button"
+                                  variant="secondary"
+                                  size="mdCompact"
+                                  disabled={
+                                    !draftMappingGroup().trim() || !draftMappingRole().trim()
+                                  }
+                                  onClick={addRoleMappingRow}
+                                >
+                                  Add mapping
+                                </Button>
+                              </div>
+                            </div>
+                          )}
+                        </Show>
+                        <FormTextarea
+                          label="Group Role Mappings"
+                          aria-invalid={
+                            editorFeedback()?.field === 'groupRoleMappings' || undefined
+                          }
+                          aria-describedby={
+                            editorFeedback()?.field === 'groupRoleMappings'
+                              ? editorFeedbackId
+                              : undefined
+                          }
+                          rows={3}
+                          value={form.groupRoleMappings}
+                          onInput={(e) => setForm('groupRoleMappings', e.currentTarget.value)}
+                          placeholder="admins=admin, ops=operator"
+                          textareaBaseClass={controlClass('break-all py-1.5!')}
+                          help='Roles apply after sign-in checks. Use group=roleId, e.g. "Ops, East"=viewer. Commas or new lines.'
+                        />
+                      </div>
                     </div>
                   </div>
                 </Show>
@@ -1329,6 +1461,17 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
               This will permanently delete this SSO provider. Users will no longer be able to sign
               in using this provider.
             </p>
+            <Show when={deletingProvider()?.enabled && enabledProviderCount() <= 1}>
+              <InlineNotice
+                tone={props.hideLocalLogin ? 'danger' : 'warning'}
+                role="note"
+                class="mb-4"
+              >
+                {props.hideLocalLogin
+                  ? 'This is the last enabled SSO provider and the local login form is hidden. Deleting it can lock users out until ?show_local=true is added to the sign-in URL.'
+                  : 'This is the last enabled SSO provider. Make sure a local admin password or proxy authentication is available before deleting it.'}
+              </InlineNotice>
+            </Show>
             <Show when={deleteFeedback()}>
               <InlineNotice role="alert" tone="danger" class="mb-4">
                 {deleteFeedback()}
@@ -1361,6 +1504,50 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
             </div>
           </div>
         </Dialog>
+      </Show>
+
+      {/* Disable last active SSO provider lockout confirmation */}
+      <Show when={disableLockoutProvider()} keyed>
+        {(provider) => (
+          <Dialog
+            isOpen={true}
+            onClose={() => setDisableLockoutProvider(null)}
+            panelClass="max-w-md"
+            ariaLabel="Confirm disabling last active SSO provider"
+          >
+            <div class="w-full space-y-4 p-6">
+              <h3 class="text-lg font-semibold text-base-content">
+                Disable last active SSO provider?
+              </h3>
+              <InlineNotice tone="danger" role="alert">
+                The local login form is currently hidden. Disabling <strong>{provider.name}</strong>{' '}
+                leaves no enabled SSO provider and can lock users out until{' '}
+                <code>?show_local=true</code> is added to the sign-in URL.
+              </InlineNotice>
+              <div class="flex justify-end gap-3 pt-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="md"
+                  onClick={() => setDisableLockoutProvider(null)}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="button"
+                  variant="danger"
+                  size="md"
+                  onClick={() => {
+                    setDisableLockoutProvider(null);
+                    void handleToggleEnabled(provider);
+                  }}
+                >
+                  Disable provider
+                </Button>
+              </div>
+            </div>
+          </Dialog>
+        )}
       </Show>
 
       {/* Metadata Preview modal */}

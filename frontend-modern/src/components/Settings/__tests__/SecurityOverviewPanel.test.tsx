@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@solidjs/testing-library';
 import { SecurityOverviewPanel } from '../SecurityOverviewPanel';
 
@@ -77,11 +77,26 @@ describe('SecurityOverviewPanel', () => {
       />
     ));
 
-    expect(screen.getByText('Request not classified as private')).toBeInTheDocument();
+    expect(screen.getByText('Accessed from a non-private network')).toBeInTheDocument();
     expect(screen.getByText('Recommended hardening steps')).toBeInTheDocument();
     expect(screen.getByText('Create an API token')).toBeInTheDocument();
     expect(screen.queryByText(/appears private/i)).not.toBeInTheDocument();
     expect(screen.queryByText('Act now')).not.toBeInTheDocument();
+  });
+
+  it('shows a retryable error callout instead of a blank panel when status fails to load', () => {
+    const onRetry = vi.fn();
+    render(() => (
+      <SecurityOverviewPanel
+        securityStatus={() => null}
+        securityStatusLoading={() => false}
+        onRetry={onRetry}
+      />
+    ));
+
+    expect(screen.getByText('Unable to load security status')).toBeInTheDocument();
+    screen.getByRole('button', { name: 'Retry' }).click();
+    expect(onRetry).toHaveBeenCalledOnce();
   });
 
   // A truncated status response omits the settings-derived posture fields, so
@@ -153,6 +168,6 @@ describe('SecurityOverviewPanel', () => {
     expect(screen.queryByText('Password login')).not.toBeInTheDocument();
     expect(screen.getByText('Single sign-on')).toBeInTheDocument();
     expect(screen.getByText('Provider configured')).toBeInTheDocument();
-    expect(screen.getByText('91%')).toBeInTheDocument();
+    expect(screen.getByText('83%')).toBeInTheDocument();
   });
 });

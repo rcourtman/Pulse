@@ -34,6 +34,43 @@ const WEEKDAY_OPTIONS = [
   'sunday',
 ];
 
+const FALLBACK_TIMEZONES = [
+  'UTC',
+  'America/New_York',
+  'America/Chicago',
+  'America/Denver',
+  'America/Los_Angeles',
+  'America/Toronto',
+  'Europe/London',
+  'Europe/Berlin',
+  'Europe/Paris',
+  'Europe/Amsterdam',
+  'Asia/Tokyo',
+  'Asia/Singapore',
+  'Australia/Sydney',
+];
+
+function getTimezoneOptions(currentValue: string): string[] {
+  let supported: string[] = [];
+  try {
+    const intlWithSupported = Intl as typeof Intl & {
+      supportedValuesOf?: (key: string) => string[];
+    };
+    if (typeof intlWithSupported.supportedValuesOf === 'function') {
+      supported = intlWithSupported.supportedValuesOf('timeZone');
+    }
+  } catch {
+    supported = [];
+  }
+  const base = supported.length > 0 ? supported : FALLBACK_TIMEZONES;
+  const trimmed = currentValue.trim();
+  const list = base.includes('UTC') ? base : ['UTC', ...base];
+  if (trimmed && !list.includes(trimmed)) {
+    return [trimmed, ...list];
+  }
+  return list;
+}
+
 export default function ReportScheduleEditor(props: { state: EditorState }) {
   let nameInput: HTMLInputElement | undefined;
   onMount(() => nameInput?.focus());
@@ -62,7 +99,7 @@ export default function ReportScheduleEditor(props: { state: EditorState }) {
     !!performanceReport() ||
     isBackupHealthForm();
   return (
-    <section class="space-y-4 border-y border-base-300 py-4">
+    <section class="space-y-4 rounded-md border border-border bg-surface-alt/50 p-4">
       <Show when={showReportTypeSelect()}>
         <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
           <FormSelect
@@ -112,16 +149,15 @@ export default function ReportScheduleEditor(props: { state: EditorState }) {
             }
           />
         </FormField>
-        <FormField label="Timezone">
-          <input
-            aria-label="Timezone"
-            type="text"
-            class={formControl}
-            value={scheduleForm().timezone}
-            onInput={(e) => updateScheduleForm({ timezone: e.currentTarget.value })}
-            placeholder="Europe/London"
-          />
-        </FormField>
+        <FormSelect
+          label="Timezone"
+          value={scheduleForm().timezone || 'UTC'}
+          onChange={(e) => updateScheduleForm({ timezone: e.currentTarget.value })}
+        >
+          <For each={getTimezoneOptions(scheduleForm().timezone || 'UTC')}>
+            {(tz) => <option value={tz}>{tz}</option>}
+          </For>
+        </FormSelect>
       </div>
 
       <div

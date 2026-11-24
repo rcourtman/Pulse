@@ -109,9 +109,7 @@ export const DiagnosticsResultsPanel: Component<DiagnosticsResultsPanelProps> = 
               label="OS / Arch"
               value={`${props.diagnosticsData?.system?.os || '?'} / ${props.diagnosticsData?.system?.arch || '?'}`}
             />
-            <MetricRow label="Go Runtime" value={props.diagnosticsData?.system?.goVersion} mono />
             <MetricRow label="CPU Cores" value={props.diagnosticsData?.system?.numCPU} />
-            <MetricRow label="Goroutines" value={props.diagnosticsData?.system?.numGoroutine} />
             <MetricRow
               label="Live Heap"
               value={`${props.diagnosticsData?.system?.heapAllocMB ?? props.diagnosticsData?.system?.memoryMB ?? 0} MB`}
@@ -122,67 +120,98 @@ export const DiagnosticsResultsPanel: Component<DiagnosticsResultsPanelProps> = 
                 value={`${props.diagnosticsData?.system?.processRssMB ?? 0} MB`}
               />
             </Show>
-            <Show when={props.diagnosticsData?.system?.runtimeRetainedMB !== undefined}>
-              <MetricRow
-                label="Go Retained"
-                value={`${props.diagnosticsData?.system?.runtimeRetainedMB ?? 0} MB`}
-              />
-            </Show>
-            <Show when={props.diagnosticsData?.system?.heapIdleMB !== undefined}>
-              <MetricRow
-                label="Heap Idle / Released"
-                value={`${props.diagnosticsData?.system?.heapIdleMB ?? 0} / ${props.diagnosticsData?.system?.heapReleasedMB ?? 0} MB`}
-              />
-            </Show>
-            <Show when={(props.diagnosticsData?.system?.gcMemoryLimitMB ?? 0) > 0}>
-              <MetricRow
-                label="GC Soft Limit"
-                value={`${props.diagnosticsData?.system?.gcMemoryLimitMB ?? 0} MB`}
-              />
-            </Show>
+            <details class="mt-2 border-t border-border-subtle pt-2">
+              <summary class="cursor-pointer text-xs font-medium text-blue-600 hover:underline dark:text-blue-400">
+                Runtime internals
+              </summary>
+              <div class="mt-1.5 space-y-1">
+                <MetricRow
+                  label="Go Runtime"
+                  value={props.diagnosticsData?.system?.goVersion}
+                  mono
+                />
+                <MetricRow label="Goroutines" value={props.diagnosticsData?.system?.numGoroutine} />
+                <Show when={props.diagnosticsData?.system?.runtimeRetainedMB !== undefined}>
+                  <MetricRow
+                    label="Go Retained"
+                    value={`${props.diagnosticsData?.system?.runtimeRetainedMB ?? 0} MB`}
+                  />
+                </Show>
+                <Show when={props.diagnosticsData?.system?.heapIdleMB !== undefined}>
+                  <MetricRow
+                    label="Heap Idle / Released"
+                    value={`${props.diagnosticsData?.system?.heapIdleMB ?? 0} / ${props.diagnosticsData?.system?.heapReleasedMB ?? 0} MB`}
+                  />
+                </Show>
+                <Show when={(props.diagnosticsData?.system?.gcMemoryLimitMB ?? 0) > 0}>
+                  <MetricRow
+                    label="GC Soft Limit"
+                    value={`${props.diagnosticsData?.system?.gcMemoryLimitMB ?? 0} MB`}
+                  />
+                </Show>
+              </div>
+            </details>
           </DiagnosticCard>
 
           <DiagnosticCard
             title="PVE Nodes"
             icon={Server}
             status={
-              props.diagnosticsData?.nodes?.every((node) => node.connected) ? 'success' : 'warning'
+              (props.diagnosticsData?.nodes?.length ?? 0) === 0
+                ? 'info'
+                : props.diagnosticsData!.nodes.every((node) => node.connected)
+                  ? 'success'
+                  : 'warning'
             }
           >
-            <div class="mb-2 flex items-center justify-between">
-              <span>Total Nodes</span>
-              <span class="text-lg font-bold text-base-content">
-                {props.diagnosticsData?.nodes?.length || 0}
-              </span>
-            </div>
-            <div class="space-y-1">
-              <For each={props.diagnosticsData?.nodes || []}>
-                {(node) => (
-                  <div class="flex items-center justify-between border-b border-border-subtle py-1 last:border-0">
-                    <span class="max-w-[120px] truncate" title={node.host}>
-                      {node.name}
-                    </span>
-                    <StatusIndicatorBadge
-                      status={node.connected ? 'online' : 'offline'}
-                      dot
-                      uppercase
-                      size="xs"
-                    />
-                  </div>
-                )}
-              </For>
-            </div>
+            <Show
+              when={(props.diagnosticsData?.nodes?.length || 0) > 0}
+              fallback={
+                <div class="py-4 text-center text-muted">No Proxmox VE nodes configured.</div>
+              }
+            >
+              <div class="mb-2 flex items-center justify-between">
+                <span>Total Nodes</span>
+                <span class="text-lg font-bold text-base-content">
+                  {props.diagnosticsData?.nodes?.length || 0}
+                </span>
+              </div>
+              <div class="space-y-1">
+                <For each={props.diagnosticsData?.nodes || []}>
+                  {(node) => (
+                    <div class="border-b border-border-subtle py-1 last:border-0">
+                      <div class="flex items-center justify-between gap-2">
+                        <span class="min-w-0 flex-1 truncate" title={node.host}>
+                          {node.name}
+                        </span>
+                        <StatusIndicatorBadge
+                          status={node.connected ? 'online' : 'offline'}
+                          dot
+                          uppercase
+                          size="xs"
+                        />
+                      </div>
+                      <Show when={!node.connected && node.error}>
+                        <div class="mt-0.5 text-xs text-amber-700 dark:text-amber-300 break-words">
+                          {node.error}
+                        </div>
+                      </Show>
+                    </div>
+                  )}
+                </For>
+              </div>
+            </Show>
           </DiagnosticCard>
 
           <DiagnosticCard
             title="PBS Instances"
             icon={HardDrive}
             status={
-              props.diagnosticsData?.pbs?.every((pbs) => pbs.connected)
-                ? 'success'
-                : props.diagnosticsData?.pbs?.length
-                  ? 'warning'
-                  : 'info'
+              (props.diagnosticsData?.pbs?.length ?? 0) === 0
+                ? 'info'
+                : props.diagnosticsData!.pbs.every((pbs) => pbs.connected)
+                  ? 'success'
+                  : 'warning'
             }
           >
             <Show
@@ -201,8 +230,8 @@ export const DiagnosticsResultsPanel: Component<DiagnosticsResultsPanelProps> = 
                 <For each={props.diagnosticsData?.pbs || []}>
                   {(pbs) => (
                     <div class="border-b border-border-subtle py-1 last:border-0">
-                      <div class="flex items-center justify-between">
-                        <span class="max-w-[120px] truncate" title={pbs.host}>
+                      <div class="flex items-center justify-between gap-2">
+                        <span class="min-w-0 flex-1 truncate" title={pbs.host}>
                           {pbs.name}
                         </span>
                         <StatusIndicatorBadge

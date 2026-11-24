@@ -656,4 +656,17 @@ describe('audit webhook alert-notifications signpost (#1344)', () => {
     expect(await screen.findByText(/These carry security events only/)).toBeInTheDocument();
     expect(await signpostLink()).toHaveAttribute('href', '/alerts/notifications');
   });
+
+  it.each(['javascript:alert(1)', 'ftp://example.com/hook'])(
+    'rejects non-HTTP webhook protocol %s before sending a request',
+    async (badUrl) => {
+      const input = await openPanel();
+      fireEvent.input(input, { target: { value: badUrl } });
+      fireEvent.click(screen.getByRole('button', { name: 'Add Endpoint' }));
+      expect(screen.getByRole('alert')).toHaveTextContent(
+        'Please enter a valid http:// or https:// URL',
+      );
+      expect(apiFetchJSON).toHaveBeenCalledTimes(1);
+    },
+  );
 });

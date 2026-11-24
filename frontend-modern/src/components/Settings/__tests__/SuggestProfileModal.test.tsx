@@ -102,7 +102,7 @@ describe('SuggestProfileModal', () => {
     await vi.advanceTimersByTimeAsync(0);
     await vi.advanceTimersByTimeAsync(60_000);
     fireEvent.input(prompt, { target: { value: 'Second draft request' } });
-    fireEvent.click(screen.getByRole('button', { name: /try again/i }));
+    fireEvent.click(screen.getByRole('button', { name: /regenerate/i }));
     await vi.advanceTimersByTimeAsync(0);
     const older = screen.getByRole('button', { name: /First saved draft/ });
     expect(older).toHaveTextContent('1 min ago');
@@ -226,7 +226,7 @@ describe('SuggestProfileModal', () => {
     expect(await screen.findByText('Production Profile')).toBeInTheDocument();
 
     fireEvent.input(promptInput, { target: { value: 'Development profile' } });
-    fireEvent.click(screen.getByRole('button', { name: /try again/i }));
+    fireEvent.click(screen.getByRole('button', { name: /regenerate/i }));
 
     expect(await screen.findByText('Development Profile')).toBeInTheDocument();
     expect(screen.getByText('Recent drafts')).toBeInTheDocument();

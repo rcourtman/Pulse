@@ -60,18 +60,30 @@ export const OrganizationOverviewDetailsSection: Component<
               value={props.state.displayNameDraft()}
               onInput={(event) => props.state.setDisplayNameDraft(event.currentTarget.value)}
               disabled={!props.state.canManageCurrentOrg() || props.state.saving()}
-              class="w-full rounded-md border px-3 py-2 text-sm shadow-xs focus:border-blue-500 focus:outline-hidden focus:ring-2 focus:ring-blue-500 "
+              aria-invalid={props.state.mutationError() ? true : undefined}
+              class="w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-base-content shadow-xs focus:border-blue-500 focus:outline-hidden focus:ring-2 focus:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-60"
             />
             <Button
               type="submit"
               variant="primary"
               size="settingsAction"
               class="w-full sm:w-auto"
-              disabled={!props.state.canManageCurrentOrg() || props.state.saving()}
+              disabled={
+                !props.state.canManageCurrentOrg() ||
+                props.state.saving() ||
+                !props.state.displayNameDirty()
+              }
             >
               {props.state.saving() ? 'Saving...' : 'Save'}
             </Button>
           </div>
+          <Show when={props.state.mutationError()}>
+            {(error) => (
+              <p role="alert" class="text-xs text-red-600 dark:text-red-400">
+                {error()}
+              </p>
+            )}
+          </Show>
           <Show when={!props.state.canManageCurrentOrg()}>
             <p class="text-xs text-muted">
               {getOrganizationOverviewManageRequiredMessage(presentationPolicyIsReadOnly())}

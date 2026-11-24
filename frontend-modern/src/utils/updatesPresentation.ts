@@ -124,7 +124,7 @@ export function getUpdateCheckNotice(info: UpdateInfo | null | undefined):
 
 export function getUpdateCheckModeLabel(enabled: boolean, sourceBuild = false): string {
   if (sourceBuild) return 'Release updates disabled';
-  return enabled ? 'Auto-check enabled' : 'Manual checks only';
+  return enabled ? 'Automatic stable updates enabled' : 'Manual updates only';
 }
 
 // The displayed verdict can come from a day-old cached check, so "Up to date"

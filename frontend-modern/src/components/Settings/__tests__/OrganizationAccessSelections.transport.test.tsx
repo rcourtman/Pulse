@@ -635,13 +635,17 @@ describe('organization access selections through rendered controls and real tran
     const selected = people[1];
     const remove = () =>
       screen.getByRole('button', { name: `Remove ${selected} from organization` });
-    confirmMock.mockReturnValueOnce(false);
     fireEvent.click(remove());
-    expect(confirmMock).toHaveBeenLastCalledWith(`Remove ${selected} from ${displayName}?`);
+    const cancelDialog = screen.getByRole('dialog', { name: 'Remove organization member' });
+    expect(cancelDialog).toHaveTextContent(`Remove ${selected} from ${displayName}?`);
+    fireEvent.click(within(cancelDialog).getByRole('button', { name: 'Cancel' }));
+    expect(screen.queryByRole('dialog')).toBeNull();
     expect(writes()).toHaveLength(0);
     expect(members).toEqual(originalMembers);
     expect(roleFor(selected)).toHaveValue('viewer');
     fireEvent.click(remove());
+    const confirmDialog = screen.getByRole('dialog', { name: 'Remove organization member' });
+    fireEvent.click(within(confirmDialog).getByRole('button', { name: 'Remove member' }));
     await expectSavedReread();
     expectWrite(`${orgPath}/members/${encodeURIComponent(selected)}`, 'DELETE');
     expect(members).toEqual(originalMembers.filter((member) => member.userId !== selected));
@@ -798,6 +802,8 @@ describe('organization access selections through rendered controls and real tran
     });
     nextWriteStatus = 502;
     fireEvent.click(screen.getByRole('button', { name: `Remove ${selected} from organization` }));
+    const confirmDialog = screen.getByRole('dialog', { name: 'Remove organization member' });
+    fireEvent.click(within(confirmDialog).getByRole('button', { name: 'Remove member' }));
     const warning = await screen.findByRole('alert');
     expect(
       within(warning).getByText(/last access change could not be confirmed/),

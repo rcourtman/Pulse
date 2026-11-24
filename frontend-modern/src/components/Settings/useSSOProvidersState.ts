@@ -41,6 +41,7 @@ interface SSOProvidersPanelProps {
   onConfigUpdated?: () => void;
   canManage?: boolean;
   currentUser?: string;
+  hideLocalLogin?: boolean;
 }
 
 const createInventoryCheck = () => {

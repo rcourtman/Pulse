@@ -163,7 +163,7 @@ describe('useDiagnosticsPanelState', () => {
     expect(anchorClickMock).toHaveBeenCalledOnce();
     expect(createdAnchor?.download).toBe(`pulse-diagnostics-full-${currentExportDate()}.json`);
     expect(revokeObjectURLMock).toHaveBeenCalledWith('blob:diagnostics-export');
-    expect(result.notice()).toBe('Full diagnostics downloaded — keep this file private');
+    expect(result.notice()).toBe('Full diagnostics downloaded. Keep this file private.');
 
     const payload = JSON.parse(
       await readBlobText(createObjectURLMock.mock.calls[0][0] as Blob),
@@ -186,7 +186,7 @@ describe('useDiagnosticsPanelState', () => {
 
     expect(anchorClickMock).toHaveBeenCalledOnce();
     expect(createdAnchor?.download).toBe(`pulse-diagnostics-sanitized-${currentExportDate()}.json`);
-    expect(result.notice()).toBe('Sanitised diagnostics downloaded — review before sharing');
+    expect(result.notice()).toBe('Sanitized diagnostics downloaded. Review before sharing.');
 
     const payload = JSON.parse(
       await readBlobText(createObjectURLMock.mock.calls[0][0] as Blob),

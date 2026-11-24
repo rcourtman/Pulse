@@ -125,6 +125,7 @@ vi.mock('@solidjs/router', async () => {
   const actual = await vi.importActual<typeof import('@solidjs/router')>('@solidjs/router');
   return {
     ...actual,
+    A: (props: Record<string, unknown>) => <a {...props} />,
     useLocation: () => ({ pathname: routeState.pathname, search: routeState.search }),
     useNavigate: () => navigateSpy,
   };

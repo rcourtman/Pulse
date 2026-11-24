@@ -227,6 +227,28 @@ describe('AICostDashboard', () => {
     expect(screen.getByText('24,000 tokens')).toBeInTheDocument();
   });
 
+  it('hides the Pulse Mobile chat card when chat has zero recorded tokens', async () => {
+    getCostSummaryMock.mockResolvedValue(
+      baseSummary({
+        use_cases: [
+          {
+            use_case: 'patrol',
+            input_tokens: 20000,
+            output_tokens: 4000,
+            total_tokens: 24000,
+            estimated_usd: 0.17,
+            pricing_known: true,
+          },
+        ],
+      }),
+    );
+    renderDashboard();
+    await waitFor(() => {
+      expect(screen.getByText('Patrol')).toBeInTheDocument();
+    });
+    expect(screen.queryByText('Pulse Mobile chat')).not.toBeInTheDocument();
+  });
+
   // ---- provider/model table ----
 
   it('renders provider/model table with correct data', async () => {
@@ -449,14 +471,21 @@ describe('AICostDashboard', () => {
 
   // ---- error states ----
 
-  it('shows error message on initial load failure', async () => {
-    getCostSummaryMock.mockRejectedValue(new Error('Network error'));
+  it('shows error message with Retry button on initial load failure', async () => {
+    getCostSummaryMock.mockRejectedValueOnce(new Error('Network error'));
     renderDashboard();
     await waitFor(() => {
       expect(screen.getByText('Network error')).toBeInTheDocument();
     });
+    expect(screen.getByRole('button', { name: 'Retry' })).toBeInTheDocument();
     // Should NOT show notification on initial load failure
     expect(notificationErrorMock).not.toHaveBeenCalled();
+
+    getCostSummaryMock.mockResolvedValueOnce(baseSummary());
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    await waitFor(() => {
+      expect(screen.getByText('Estimated spend')).toBeInTheDocument();
+    });
   });
 
   it('shows fallback error message for non-Error thrown values', async () => {
@@ -516,8 +545,6 @@ describe('AICostDashboard', () => {
   // ---- reset history ----
 
   it('calls resetCostHistory and shows success notification with backup file', async () => {
-    // Mock window.confirm to return true
-    vi.spyOn(globalThis, 'confirm').mockReturnValue(true);
     resetCostHistoryMock.mockResolvedValue({ ok: true, backup_file: '/data/backup.json' });
 
     renderDashboard();
@@ -526,6 +553,8 @@ describe('AICostDashboard', () => {
     });
 
     fireEvent.click(screen.getByText('Reset usage history'));
+    const dialog = await screen.findByRole('dialog', { name: 'Reset usage history' });
+    fireEvent.click(dialog.querySelector('button.bg-red-600') as HTMLButtonElement);
 
     await waitFor(() => {
       expect(resetCostHistoryMock).toHaveBeenCalled();
@@ -538,7 +567,6 @@ describe('AICostDashboard', () => {
   });
 
   it('calls resetCostHistory and shows success notification without backup file', async () => {
-    vi.spyOn(globalThis, 'confirm').mockReturnValue(true);
     resetCostHistoryMock.mockResolvedValue({ ok: true });
 
     renderDashboard();
@@ -547,27 +575,28 @@ describe('AICostDashboard', () => {
     });
 
     fireEvent.click(screen.getByText('Reset usage history'));
+    const dialog = await screen.findByRole('dialog', { name: 'Reset usage history' });
+    fireEvent.click(dialog.querySelector('button.bg-red-600') as HTMLButtonElement);
 
     await waitFor(() => {
       expect(notificationSuccessMock).toHaveBeenCalledWith('Provider usage history reset');
     });
   });
 
-  it('does not call resetCostHistory when user cancels confirm', async () => {
-    vi.spyOn(globalThis, 'confirm').mockReturnValue(false);
-
+  it('does not call resetCostHistory when user cancels reset dialog', async () => {
     renderDashboard();
     await waitFor(() => {
       expect(screen.getByText('Estimated spend')).toBeInTheDocument();
     });
 
     fireEvent.click(screen.getByText('Reset usage history'));
+    await screen.findByRole('dialog', { name: 'Reset usage history' });
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
 
     expect(resetCostHistoryMock).not.toHaveBeenCalled();
   });
 
   it('shows error notification when reset fails', async () => {
-    vi.spyOn(globalThis, 'confirm').mockReturnValue(true);
     resetCostHistoryMock.mockRejectedValue(new Error('Server error'));
 
     renderDashboard();
@@ -576,6 +605,8 @@ describe('AICostDashboard', () => {
     });
 
     fireEvent.click(screen.getByText('Reset usage history'));
+    const dialog = await screen.findByRole('dialog', { name: 'Reset usage history' });
+    fireEvent.click(dialog.querySelector('button.bg-red-600') as HTMLButtonElement);
 
     await waitFor(() => {
       expect(notificationErrorMock).toHaveBeenCalledWith('Failed to reset provider usage history');

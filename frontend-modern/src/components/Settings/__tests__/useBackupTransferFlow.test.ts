@@ -253,7 +253,7 @@ describe('configuration transfers keep their confirmed workspace and one dispatc
       await (kind === 'import' ? flow.handleImport() : flow.handleExport());
       expect(fetchMock).not.toHaveBeenCalled();
       expect(flow.transferOrgID()).toBe('tenant-a');
-      expect(flow.transferError()).toContain('Organisation changed');
+      expect(flow.transferError()).toContain('Organization changed');
       expect(notificationStore.error).not.toHaveBeenCalled();
     },
   );
@@ -281,7 +281,7 @@ describe('configuration transfers keep their confirmed workspace and one dispatc
     csrf.resolve('synthetic-csrf');
     await pending;
     expect(fetchMock).not.toHaveBeenCalled();
-    expect(flow.transferError()).toContain('Organisation changed');
+    expect(flow.transferError()).toContain('Organization changed');
   });
 
   it.each(['export', 'import'] as const)(

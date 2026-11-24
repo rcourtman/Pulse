@@ -37,7 +37,7 @@ export interface AISettingsSetupDialogPresentation {
 }
 
 export function getAIProviderTestResultTextClass(success: boolean): string {
-  return success ? 'text-green-600' : 'text-red-600';
+  return success ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400';
 }
 
 export function getAISettingsSetupDialogPresentation(): AISettingsSetupDialogPresentation {
@@ -73,14 +73,17 @@ export function getAIOAuthErrorMessage(errorCode: string): string {
   return AI_OAUTH_ERROR_MESSAGES[errorCode] || `Authentication error: ${errorCode}`;
 }
 
-export function getAISettingsLoadingState() {
+export function getAISettingsLoadingState(page: 'provider' | 'patrol' = 'provider') {
   return {
-    text: 'Loading Provider & Models settings...',
+    text:
+      page === 'patrol' ? 'Loading Patrol settings...' : 'Loading Provider & Models settings...',
   } as const;
 }
 
-export function getAISettingsLoadErrorMessage() {
-  return AI_SETTINGS_LOAD_FAILURE_MESSAGE;
+export function getAISettingsLoadErrorMessage(page: 'provider' | 'patrol' = 'provider') {
+  return page === 'patrol'
+    ? 'Unable to load Patrol settings. Your configuration could not be retrieved.'
+    : AI_SETTINGS_LOAD_FAILURE_MESSAGE;
 }
 
 export function getAISettingsRetryLabel() {

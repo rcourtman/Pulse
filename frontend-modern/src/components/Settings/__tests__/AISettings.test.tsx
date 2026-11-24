@@ -12,6 +12,7 @@ const getModelsMock = vi.fn();
 const testProviderMock = vi.fn();
 const testConnectionMock = vi.fn();
 const runPatrolModelReadinessMock = vi.fn();
+const getPatrolAutonomySettingsMock = vi.fn();
 const getPatrolCostPreviewMock = vi.fn();
 const getPatrolModelGuidanceMock = vi.fn();
 const fetchAgentCapabilitiesManifestMock = vi.fn();
@@ -50,6 +51,7 @@ vi.mock('@/api/ai', () => ({
 }));
 
 vi.mock('@/api/patrol', () => ({
+  getPatrolAutonomySettings: (...args: unknown[]) => getPatrolAutonomySettingsMock(...args),
   runPatrolModelReadiness: (...args: unknown[]) => runPatrolModelReadinessMock(...args),
 }));
 
@@ -150,6 +152,7 @@ const resetAllMocks = () => {
   testProviderMock.mockReset();
   testConnectionMock.mockReset();
   runPatrolModelReadinessMock.mockReset();
+  getPatrolAutonomySettingsMock.mockReset();
   getPatrolCostPreviewMock.mockReset();
   getPatrolModelGuidanceMock.mockReset();
   fetchAgentCapabilitiesManifestMock.mockReset();
@@ -176,6 +179,15 @@ const setupDefaultMocks = () => {
   entitlementsMock.mockReturnValue({ trial_eligible: true });
   getSettingsMock.mockResolvedValue(baseSettings());
   getModelsMock.mockResolvedValue({ models: [] });
+  getPatrolAutonomySettingsMock.mockResolvedValue({
+    autonomy_level: 'approval',
+    requested_autonomy_level: 'approval',
+    effective_autonomy_level: 'approval',
+    full_mode_unlocked: false,
+    autopilot_acknowledgement: { acknowledged: false },
+    investigation_budget: 10,
+    investigation_timeout_sec: 180,
+  });
   getPatrolCostPreviewMock.mockResolvedValue(null);
   getPatrolModelGuidanceMock.mockResolvedValue({ rules: [] });
   testConnectionMock.mockResolvedValue({ success: true, message: 'ok' });
@@ -212,9 +224,10 @@ describe('AISettings model loading error states', () => {
 
     expect(await screen.findByText('Provider Configuration')).toBeInTheDocument();
     expect(screen.getByText('30-day Budget')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Enable Pulse Intelligence' })).toBeInTheDocument();
+    expect(screen.getByRole('switch', { name: 'Enable Pulse Intelligence' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Test Connection/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Save provider settings/i })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Provider & Models' })).not.toBeInTheDocument();
     expect(screen.queryByText('Assistant chat actions')).not.toBeInTheDocument();
     expect(screen.queryByText('External agents')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Service Context/i })).not.toBeInTheDocument();
@@ -260,8 +273,11 @@ describe('AISettings model loading error states', () => {
     expect(screen.getByRole('button', { name: /Open Patrol/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Save Patrol settings/i })).toBeInTheDocument();
     expect(
-      screen.queryByRole('button', { name: 'Enable Pulse Intelligence' }),
+      screen.queryByRole('switch', { name: 'Enable Pulse Intelligence' }),
     ).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Patrol' })).not.toBeInTheDocument();
+    expect(await screen.findByTestId('patrol-active-mode-badge')).toHaveTextContent('Ask first');
+    expect(testProviderMock).not.toHaveBeenCalled();
     expect(screen.queryByRole('button', { name: /Test Connection/i })).not.toBeInTheDocument();
     expect(screen.queryByText('Provider Configuration')).not.toBeInTheDocument();
     expect(screen.queryByText('External agents')).not.toBeInTheDocument();
@@ -1256,11 +1272,13 @@ describe('AISettings OpenAI-compatible provider lifecycle', () => {
       model: '',
       openai_base_url: '',
     });
-    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
-
     renderComponent();
     fireEvent.click(await screen.findByRole('button', { name: /openai/i }));
     fireEvent.click(await screen.findByRole('button', { name: 'Remove' }));
+
+    const dialog = await screen.findByRole('dialog', { name: 'Remove OpenAI' });
+    expect(within(dialog).getByText(/only configured provider/)).toBeInTheDocument();
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Remove provider' }));
 
     await waitFor(() => {
       expect(updateSettingsMock).toHaveBeenCalledWith({
@@ -1269,8 +1287,6 @@ describe('AISettings OpenAI-compatible provider lifecycle', () => {
     });
     // AI is now off, so Patrol entry points must re-read availability.
     await waitFor(() => expect(refreshAIAvailabilityMock).toHaveBeenCalled());
-    expect(confirmSpy).toHaveBeenCalledWith(expect.stringContaining('only configured provider'));
-    confirmSpy.mockRestore();
   });
 });
 
@@ -1643,7 +1659,7 @@ describe('AISettings provider setup flow', () => {
       expect(getSettingsMock).toHaveBeenCalledTimes(1);
     });
 
-    fireEvent.click(screen.getByRole('button', { name: /enable pulse intelligence/i }));
+    fireEvent.click(screen.getByRole('switch', { name: /enable pulse intelligence/i }));
     const setupDialog = await screen.findByRole('dialog', {
       name: 'Set up Pulse Intelligence',
     });
@@ -1683,7 +1699,7 @@ describe('AISettings provider setup flow', () => {
       expect(getSettingsMock).toHaveBeenCalledTimes(1);
     });
 
-    fireEvent.click(screen.getByRole('button', { name: /enable pulse intelligence/i }));
+    fireEvent.click(screen.getByRole('switch', { name: /enable pulse intelligence/i }));
     const setupDialog = await screen.findByRole('dialog', {
       name: 'Set up Pulse Intelligence',
     });
@@ -1721,7 +1737,7 @@ describe('AISettings provider setup flow', () => {
       expect(getSettingsMock).toHaveBeenCalledTimes(1);
     });
 
-    fireEvent.click(screen.getByRole('button', { name: /enable pulse intelligence/i }));
+    fireEvent.click(screen.getByRole('switch', { name: /enable pulse intelligence/i }));
     const setupDialog = await screen.findByRole('dialog', {
       name: 'Set up Pulse Intelligence',
     });
@@ -1756,7 +1772,7 @@ describe('AISettings provider setup flow', () => {
       expect(getSettingsMock).toHaveBeenCalledTimes(1);
     });
 
-    fireEvent.click(screen.getByRole('button', { name: /enable pulse intelligence/i }));
+    fireEvent.click(screen.getByRole('switch', { name: /enable pulse intelligence/i }));
 
     expect(getModelsMock).not.toHaveBeenCalled();
     expect(updateSettingsMock).not.toHaveBeenCalled();
@@ -1780,7 +1796,7 @@ describe('AISettings provider setup flow', () => {
       expect(getSettingsMock).toHaveBeenCalledTimes(1);
     });
 
-    fireEvent.click(screen.getByRole('button', { name: /enable pulse intelligence/i }));
+    fireEvent.click(screen.getByRole('switch', { name: /enable pulse intelligence/i }));
 
     expect(updateSettingsMock).not.toHaveBeenCalled();
     expect(await screen.findByText('Set Up Pulse Intelligence')).toBeInTheDocument();
@@ -1805,7 +1821,7 @@ describe('AISettings provider setup flow', () => {
       expect(getSettingsMock).toHaveBeenCalledTimes(1);
     });
 
-    fireEvent.click(screen.getByRole('button', { name: /enable pulse intelligence/i }));
+    fireEvent.click(screen.getByRole('switch', { name: /enable pulse intelligence/i }));
 
     expect(updateSettingsMock).not.toHaveBeenCalled();
     expect(await screen.findByText('Set Up Pulse Intelligence')).toBeInTheDocument();
@@ -2091,5 +2107,26 @@ describe('AISettings Patrol cost preview and model guidance', () => {
     expect(preview).toHaveTextContent(
       'Budget reached: about $20.40 of your $20 30-day budget is spent, so Patrol is paused',
     );
+  });
+
+  it('shows a disabled banner on Patrol when Pulse Intelligence is off, preserves custom intervals, and disables readiness check with no provider', async () => {
+    getSettingsMock.mockResolvedValue({
+      ...baseSettings(),
+      enabled: false,
+      configured: false,
+      patrol_interval_minutes: 45,
+    });
+
+    renderComponent('patrol');
+
+    const banner = await screen.findByTestId('patrol-disabled-banner');
+    expect(banner).toHaveTextContent('Pulse Intelligence is disabled');
+    expect(within(banner).getByRole('link', { name: 'Open Provider & Models' })).toHaveAttribute(
+      'href',
+      '/settings/pulse-intelligence/provider',
+    );
+    expect(screen.getByLabelText('Schedule')).toHaveValue('45');
+    expect(screen.getByRole('button', { name: 'Check Patrol model' })).toBeDisabled();
+    expect(testProviderMock).not.toHaveBeenCalled();
   });
 });

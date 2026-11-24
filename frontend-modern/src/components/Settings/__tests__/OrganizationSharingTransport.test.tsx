@@ -131,10 +131,16 @@ async function prepared() {
 
 function confirm(state: State, operation: Operation) {
   if (operation === 'create') return state.createShare();
-  if (operation === 'remove') return state.deleteShare(state.outgoingShares()[0] ?? outgoing);
+  if (operation === 'remove') {
+    state.deleteShare(state.outgoingShares()[0] ?? outgoing);
+    const confirmation = state.shareConfirmation();
+    return confirmation ? state.confirmShareAction(confirmation) : Promise.resolve();
+  }
   if (operation === 'accept')
     return state.acceptIncomingShare(state.incomingShares()[0] ?? incoming);
-  return state.declineIncomingShare(state.incomingShares()[0] ?? incoming);
+  state.declineIncomingShare(state.incomingShares()[0] ?? incoming);
+  const confirmation = state.shareConfirmation();
+  return confirmation ? state.confirmShareAction(confirmation) : Promise.resolve();
 }
 
 const writes = () =>

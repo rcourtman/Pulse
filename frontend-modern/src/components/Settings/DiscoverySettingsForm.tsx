@@ -1,5 +1,6 @@
-import { Component, For, Show } from 'solid-js';
+import { Component, For, Show, createSignal } from 'solid-js';
 import InfoIcon from 'lucide-solid/icons/info';
+import { Button } from '@/components/shared/Button';
 import { CalloutCard } from '@/components/shared/CalloutCard';
 import { SectionHeader } from '@/components/shared/SectionHeader';
 import { Toggle } from '@/components/shared/Toggle';
@@ -16,7 +17,37 @@ import { COMMON_DISCOVERY_SUBNETS } from '@/utils/systemSettingsPresentation';
 import type { DiscoverySettingsFormProps } from './discoverySettingsModel';
 
 export const DiscoverySettingsForm: Component<DiscoverySettingsFormProps> = (props) => {
-  const priorityNotice = getNetworkDiscoveryPriorityNotice();
+  const [savedFeedback, setSavedFeedback] = createSignal(false);
+  const rawPriorityNotice = getNetworkDiscoveryPriorityNotice();
+  const priorityNotice = {
+    title: rawPriorityNotice.title,
+    items: rawPriorityNotice.items.map((item) =>
+      item.includes('system.json') ? 'Changes made here save automatically.' : item,
+    ),
+  };
+  const markSaved = () => {
+    setSavedFeedback(true);
+  };
+  const commitCustomSubnets = async (rawValue: string) => {
+    if (props.envOverrides().discoverySubnet || props.discoveryMode() !== 'custom') {
+      return;
+    }
+    props.setDiscoverySubnetDraft(rawValue);
+    const trimmed = rawValue.trim();
+    if (!trimmed) {
+      props.setDiscoverySubnetError(getDiscoverySubnetRequiredMessage());
+      return;
+    }
+    if (!props.isValidCIDR(trimmed)) {
+      props.setDiscoverySubnetError(getDiscoverySubnetInvalidFormatMessage());
+      return;
+    }
+    props.setDiscoverySubnetError(undefined);
+    const ok = await props.commitDiscoverySubnet(rawValue);
+    if (ok !== false) {
+      markSaved();
+    }
+  };
   const sectionPresentation = () =>
     getNetworkDiscoverySectionPresentation(props.discoveryEnabled());
   const autoModePresentation = getNetworkDiscoveryModePresentation('auto');
@@ -174,63 +205,69 @@ export const DiscoverySettingsForm: Component<DiscoverySettingsFormProps> = (pro
                     <p class="text-xs text-muted">{customModePresentation.description}</p>
                   </div>
                 </button>
-
-                <Show when={props.discoveryMode() === 'custom'}>
-                  <div class="flex flex-wrap items-center gap-2 pl-9 pr-2">
-                    <span class="text-[0.68rem] uppercase tracking-wide text-muted">
-                      {sectionPresentation().commonNetworksLabel}:
-                    </span>
-                    <For each={COMMON_DISCOVERY_SUBNETS}>
-                      {(preset) => {
-                        const baseValue = props.currentDraftSubnetValue();
-                        const currentSelections = props.parseSubnetList(baseValue);
-                        const isActive = currentSelections.includes(preset);
-                        return (
-                          <button
-                            type="button"
-                            class={`rounded border px-2.5 py-1 text-[0.7rem] transition-colors ${
-                              isActive
-                                ? 'border-blue-500 bg-blue-600 text-white dark:border-blue-400 dark:bg-blue-500'
-                                : 'border-border text-base-content hover:border-blue-400 hover:bg-blue-50 dark:hover:border-blue-500 dark:hover:bg-blue-900/25'
-                            }`}
-                            onClick={async () => {
-                              if (scanScopeLocked()) {
-                                return;
-                              }
-                              let selections = [...currentSelections];
-                              if (isActive) {
-                                selections = selections.filter((item) => item !== preset);
-                              } else {
-                                selections.push(preset);
-                              }
-
-                              if (selections.length === 0) {
-                                props.setDiscoverySubnetDraft('');
-                                props.setLastCustomSubnet('');
-                                props.setDiscoverySubnetError(getDiscoverySubnetRequiredMessage());
-                                return;
-                              }
-
-                              const updatedValue = props.normalizeSubnetList(selections.join(', '));
-                              props.setDiscoveryMode('custom');
-                              props.setDiscoverySubnetDraft(updatedValue);
-                              props.setLastCustomSubnet(updatedValue);
-                              props.setDiscoverySubnetError(undefined);
-                              await props.commitDiscoverySubnet(updatedValue);
-                            }}
-                            disabled={scanScopeLocked()}
-                            classList={{
-                              'cursor-not-allowed opacity-60': scanScopeLocked(),
-                            }}
-                          >
-                            {preset}
-                          </button>
-                        );
-                      }}
-                    </For>
-                  </div>
-                </Show>
               </div>
+
+              <Show when={props.discoveryMode() === 'custom'}>
+                <div class="flex flex-wrap items-center gap-2 pl-9 pr-2 pt-1">
+                  <span class="text-[0.68rem] uppercase tracking-wide text-muted">
+                    {sectionPresentation().commonNetworksLabel}:
+                  </span>
+                  <For each={COMMON_DISCOVERY_SUBNETS}>
+                    {(preset) => {
+                      const currentSelections = () =>
+                        props.parseSubnetList(props.currentDraftSubnetValue());
+                      const isActive = () => currentSelections().includes(preset);
+                      return (
+                        <button
+                          type="button"
+                          aria-pressed={isActive()}
+                          class={`rounded border px-2.5 py-1 text-[0.7rem] transition-colors ${
+                            isActive()
+                              ? 'border-blue-500 bg-blue-600 text-white dark:border-blue-400 dark:bg-blue-500'
+                              : 'border-border text-base-content hover:border-blue-400 hover:bg-blue-50 dark:hover:border-blue-500 dark:hover:bg-blue-900/25'
+                          }`}
+                          onClick={async () => {
+                            if (scanScopeLocked()) {
+                              return;
+                            }
+                            const selectionsList = currentSelections();
+                            let selections = [...selectionsList];
+                            if (isActive()) {
+                              selections = selections.filter((item) => item !== preset);
+                            } else {
+                              selections.push(preset);
+                            }
+
+                            if (selections.length === 0) {
+                              props.setDiscoverySubnetDraft('');
+                              props.setLastCustomSubnet('');
+                              props.setDiscoverySubnetError(getDiscoverySubnetRequiredMessage());
+                              setSavedFeedback(false);
+                              return;
+                            }
+
+                            const updatedValue = props.normalizeSubnetList(selections.join(', '));
+                            props.setDiscoveryMode('custom');
+                            props.setDiscoverySubnetDraft(updatedValue);
+                            props.setLastCustomSubnet(updatedValue);
+                            props.setDiscoverySubnetError(undefined);
+                            const ok = await props.commitDiscoverySubnet(updatedValue);
+                            if (ok !== false) {
+                              markSaved();
+                            }
+                          }}
+                          disabled={scanScopeLocked()}
+                          classList={{
+                            'cursor-not-allowed opacity-60': scanScopeLocked(),
+                          }}
+                        >
+                          {preset}
+                        </button>
+                      );
+                    }}
+                  </For>
+                </div>
+              </Show>
             </fieldset>
 
             <div class="space-y-2">
@@ -248,6 +285,7 @@ export const DiscoverySettingsForm: Component<DiscoverySettingsFormProps> = (pro
                     fill="none"
                     stroke="currentColor"
                     stroke-width="2"
+                    aria-hidden="true"
                   >
                     <circle cx="12" cy="12" r="10"></circle>
                     <path d="M12 16v-4"></path>
@@ -255,66 +293,81 @@ export const DiscoverySettingsForm: Component<DiscoverySettingsFormProps> = (pro
                   </svg>
                 </span>
               </div>
-              <input
-                id="discoverySubnetInput"
-                ref={props.discoverySubnetInputRef}
-                type="text"
-                value={props.discoverySubnetDraft()}
-                placeholder={subnetPresentation().placeholder}
-                class={`w-full min-h-10 rounded-md border px-3 py-2.5 text-sm transition-colors focus:outline-hidden focus:ring-2 focus:ring-blue-500 sm:min-h-10 ${
-                  props.envOverrides().discoverySubnet
-                    ? 'cursor-not-allowed border-amber-300 bg-amber-50 text-amber-800 opacity-60 dark:border-amber-600 dark:bg-amber-900/25 dark:text-amber-200'
-                    : 'border-border bg-surface'
-                }`}
-                disabled={props.envOverrides().discoverySubnet}
-                onInput={(e) => {
-                  if (props.envOverrides().discoverySubnet) {
-                    return;
-                  }
-                  const rawValue = e.currentTarget.value;
-                  props.setDiscoverySubnetDraft(rawValue);
-                  if (props.discoveryMode() !== 'custom') {
-                    props.setDiscoveryMode('custom');
-                  }
-                  props.setLastCustomSubnet(rawValue);
-                  const trimmed = rawValue.trim();
-                  if (!trimmed) {
-                    props.setDiscoverySubnetError(undefined);
-                    return;
-                  }
-                  if (!props.isValidCIDR(trimmed)) {
-                    props.setDiscoverySubnetError(getDiscoverySubnetInvalidFormatMessage());
-                  } else {
-                    props.setDiscoverySubnetError(undefined);
-                  }
-                }}
-                onBlur={async (e) => {
-                  if (props.envOverrides().discoverySubnet || props.discoveryMode() !== 'custom') {
-                    return;
-                  }
-                  const rawValue = e.currentTarget.value;
-                  props.setDiscoverySubnetDraft(rawValue);
-                  const trimmed = rawValue.trim();
-                  if (!trimmed) {
-                    props.setDiscoverySubnetError(getDiscoverySubnetRequiredMessage());
-                    return;
-                  }
-                  if (!props.isValidCIDR(trimmed)) {
-                    props.setDiscoverySubnetError(getDiscoverySubnetInvalidFormatMessage());
-                    return;
-                  }
-                  props.setDiscoverySubnetError(undefined);
-                  await props.commitDiscoverySubnet(rawValue);
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault();
-                    (e.currentTarget as HTMLInputElement).blur();
-                  }
-                }}
-              />
+              <div class="flex flex-col gap-2 sm:flex-row sm:items-center">
+                <input
+                  id="discoverySubnetInput"
+                  ref={props.discoverySubnetInputRef}
+                  type="text"
+                  value={props.discoverySubnetDraft()}
+                  placeholder={subnetPresentation().placeholder}
+                  class={`w-full flex-1 min-h-10 rounded-md border px-3 py-2.5 text-sm transition-colors focus:outline-hidden focus:ring-2 focus:ring-blue-500 sm:min-h-10 ${
+                    props.envOverrides().discoverySubnet
+                      ? 'cursor-not-allowed border-amber-300 bg-amber-50 text-amber-800 opacity-60 dark:border-amber-600 dark:bg-amber-900/25 dark:text-amber-200'
+                      : 'border-border bg-surface'
+                  }`}
+                  disabled={props.envOverrides().discoverySubnet}
+                  onInput={(e) => {
+                    if (props.envOverrides().discoverySubnet) {
+                      return;
+                    }
+                    setSavedFeedback(false);
+                    const rawValue = e.currentTarget.value;
+                    props.setDiscoverySubnetDraft(rawValue);
+                    if (props.discoveryMode() !== 'custom') {
+                      props.setDiscoveryMode('custom');
+                    }
+                    props.setLastCustomSubnet(rawValue);
+                    const trimmed = rawValue.trim();
+                    if (!trimmed) {
+                      props.setDiscoverySubnetError(undefined);
+                      return;
+                    }
+                    if (!props.isValidCIDR(trimmed)) {
+                      props.setDiscoverySubnetError(getDiscoverySubnetInvalidFormatMessage());
+                    } else {
+                      props.setDiscoverySubnetError(undefined);
+                    }
+                  }}
+                  onBlur={async (e) => {
+                    await commitCustomSubnets(e.currentTarget.value);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      void commitCustomSubnets(e.currentTarget.value);
+                    }
+                  }}
+                />
+                <Show
+                  when={props.discoveryMode() === 'custom' && !props.envOverrides().discoverySubnet}
+                >
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="mdCompact"
+                    class="min-h-10 shrink-0"
+                    disabled={props.savingDiscoverySettings()}
+                    onClick={() => void commitCustomSubnets(props.discoverySubnetDraft())}
+                  >
+                    {props.savingDiscoverySettings() ? 'Saving...' : 'Save subnets'}
+                  </Button>
+                </Show>
+              </div>
               <Show when={props.discoverySubnetError()}>
-                <p class="text-xs text-red-600 dark:text-red-400">{props.discoverySubnetError()}</p>
+                <p role="alert" class="text-xs text-red-600 dark:text-red-400">
+                  {props.discoverySubnetError()}
+                </p>
+              </Show>
+              <Show
+                when={
+                  !props.discoverySubnetError() &&
+                  savedFeedback() &&
+                  !props.savingDiscoverySettings()
+                }
+              >
+                <p role="status" class="text-xs font-medium text-emerald-700 dark:text-emerald-300">
+                  Subnets saved.
+                </p>
               </Show>
               <Show when={!props.discoverySubnetError() && props.discoveryMode() === 'auto'}>
                 <p class="text-xs text-muted">{subnetPresentation().guidance}</p>

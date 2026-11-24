@@ -223,8 +223,7 @@ describe('getSettingsHeaderMeta', () => {
     it('localizes organization-billing-admin to the English baseline', () => {
       expect(en['organization-billing-admin']).toEqual({
         title: 'Billing Admin',
-        description:
-          'Review and manage tenant billing state across all organizations (hosted mode only).',
+        description: 'Review and manage tenant billing state across all organizations.',
       });
     });
 

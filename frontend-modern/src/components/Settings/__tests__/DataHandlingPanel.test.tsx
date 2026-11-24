@@ -47,15 +47,17 @@ describe('DataHandlingPanel', () => {
   it('explains the empty resource posture instead of leading with zero-value counters', () => {
     renderPanel();
 
-    expect(screen.getByText('Resource Data Policy')).toBeInTheDocument();
-    expect(screen.getByText('Read-only resource privacy posture')).toBeInTheDocument();
+    expect(screen.getByText('Read-only resource privacy summary')).toBeInTheDocument();
     expect(screen.getByText('No monitored resources to classify')).toBeInTheDocument();
     expect(screen.getByText(/fresh instance, before discovery finishes/i)).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Open Infrastructure' })).toHaveAttribute(
       'href',
       '/settings/infrastructure',
     );
-    expect(screen.queryByText('Governed Resources')).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Open Infrastructure' })).toHaveClass(
+      'whitespace-nowrap',
+    );
+    expect(screen.queryByText('Classified Resources')).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Refresh' })).toHaveClass('min-h-11', 'sm:min-h-0');
   });
 
@@ -80,11 +82,12 @@ describe('DataHandlingPanel', () => {
 
     renderPanel();
 
-    expect(screen.getByText('Governed Resources')).toBeInTheDocument();
+    expect(screen.getByText('Classified Resources')).toBeInTheDocument();
     expect(screen.getByText('Local-Only')).toBeInTheDocument();
-    expect(screen.getByText('Redaction Hints')).toBeInTheDocument();
+    expect(screen.getByText('Redacted Fields')).toBeInTheDocument();
     expect(screen.getByText('Sensitivity')).toBeInTheDocument();
     expect(screen.getByText('Handling Boundary')).toBeInTheDocument();
+    expect(screen.getAllByRole('progressbar').length).toBeGreaterThan(0);
     expect(screen.queryByText('No monitored resources to classify')).not.toBeInTheDocument();
   });
 });

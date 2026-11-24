@@ -48,7 +48,7 @@ describe('SecurityPostureSummary', () => {
     expect(screen.getByText('Weak')).toBeInTheDocument();
   });
 
-  it('retains the established HTTP scores across the two request classifications', () => {
+  it('calibrates scores honestly across private and non-private HTTP setups', () => {
     const status = {
       hasAuthentication: true,
       ssoEnabled: false,
@@ -65,11 +65,16 @@ describe('SecurityPostureSummary', () => {
         status={{ ...status, clientIP: '10.0.0.5', publicAccess: false, isPrivateNetwork: true }}
       />
     ));
-    // Private network: HTTPS is a recommended step, so no Critical tag and the
-    // critical share of the score is complete (0.7 + 2 of 7 x 0.3 = 79).
+    // Private network with 2 of 6 security dimensions active (Auth + Export):
+    // no Critical tag on HTTPS, score reflects 2/6 = 33% instead of inflated 79%.
     expect(screen.queryByText('Critical')).toBeNull();
-    expect(screen.getByText('79%')).toBeInTheDocument();
-    expect(screen.getByText('Request IP: private')).toBeInTheDocument();
+    expect(screen.getByText('33%')).toBeInTheDocument();
+    expect(screen.getByText('2 of 6 checks active')).toBeInTheDocument();
+    expect(screen.getByText('Accessed from a private network')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Authentication/i })).toHaveAttribute(
+      'href',
+      '/settings/security-auth',
+    );
     unmount();
 
     render(() => (
@@ -78,7 +83,7 @@ describe('SecurityPostureSummary', () => {
       />
     ));
     expect(screen.getByText('Critical')).toBeInTheDocument();
-    expect(screen.getByText('55%')).toBeInTheDocument();
-    expect(screen.getByText('Request not classified as private')).toBeInTheDocument();
+    expect(screen.getByText('33%')).toBeInTheDocument();
+    expect(screen.getByText('Accessed from a non-private network')).toBeInTheDocument();
   });
 });

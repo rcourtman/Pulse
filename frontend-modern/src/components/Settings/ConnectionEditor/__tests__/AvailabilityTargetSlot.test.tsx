@@ -311,7 +311,7 @@ describe('AvailabilityTargetSlot', () => {
   it('explains UDP limits beside both policies without adding them to other probes', () => {
     render(() => <AvailabilityTargetSlot onCancel={vi.fn()} onSaved={vi.fn()} />);
     const policyHelp =
-      'No DNS-answer validation. Open or filtered keeps silence indeterminate. Port-unreachable replies still fail.';
+      'No DNS-answer validation. Open or filtered treats silence as unconfirmed. Port-unreachable replies still fail.';
     const requestHelp = 'Literal UTF-8 only, up to 512 bytes. No hex or escape decoding.';
     const responseHelp = 'Exact UTF-8 match. Empty accepts any reply.';
 
@@ -482,11 +482,11 @@ describe('AvailabilityTargetSlot', () => {
     await waitFor(() => expect(screen.getByLabelText('Request method')).toHaveValue('POST'));
     expect(screen.getByLabelText('Password')).toHaveAttribute(
       'placeholder',
-      'Stored securely — leave blank to keep it',
+      'Stored securely. Leave blank to keep it',
     );
     expect(screen.getByLabelText(/^Request body \(optional\)/)).toHaveAttribute(
       'placeholder',
-      'Stored securely — leave blank to keep it',
+      'Stored securely. Leave blank to keep it',
     );
     // The request body composes FormTextarea, which links its size note.
     expect(screen.getByLabelText(/^Request body \(optional\)/)).toHaveAccessibleDescription(
@@ -494,10 +494,10 @@ describe('AvailabilityTargetSlot', () => {
     );
     expect(screen.getByLabelText('Header value')).toHaveAttribute(
       'placeholder',
-      'Stored securely — leave blank to keep it',
+      'Stored securely. Leave blank to keep it',
     );
 
-    fireEvent.click(screen.getByRole('button', { name: 'Save target' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save check' }));
     await waitFor(() => expect(mockedUpdate).toHaveBeenCalled());
     const [, payload] = mockedUpdate.mock.calls.at(-1)!;
     expect(payload.http?.body).toBeUndefined();
@@ -543,7 +543,7 @@ describe('AvailabilityTargetSlot', () => {
     ));
     await waitFor(() => expect(screen.getByLabelText('Request method')).toHaveValue('POST'));
     fireEvent.click(screen.getByRole('button', { name: 'Remove stored body' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Save target' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save check' }));
 
     await waitFor(() => expect(mockedUpdate).toHaveBeenCalled());
     const [, payload] = mockedUpdate.mock.calls.at(-1)!;
@@ -568,7 +568,7 @@ describe('AvailabilityTargetSlot', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Test probe' }));
 
     expect(
-      await screen.findByText(/Endpoint answered in 18 ms, but the application contract failed/),
+      await screen.findByText(/Endpoint answered in 18 ms, but the response check failed/),
     ).toBeInTheDocument();
     expect(screen.getByText(/HTTP 503/)).toBeInTheDocument();
   });
@@ -666,7 +666,7 @@ describe('AvailabilityTargetSlot', () => {
 
       fireEvent.click(screen.getByRole('checkbox', { name: /This Pulse server/ }));
       fireEvent.click(screen.getByRole('checkbox', { name: /Edge 01/ }));
-      fireEvent.click(screen.getByRole('button', { name: 'Save target' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Save check' }));
 
       await waitFor(() => expect(mockedUpdate).toHaveBeenCalled());
       const [, payload] = mockedUpdate.mock.calls.at(-1)!;

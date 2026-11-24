@@ -1,5 +1,6 @@
 import { Component, Show, createMemo, createSignal, onMount, For } from 'solid-js';
 import { Card } from '@/components/shared/Card';
+import { Dialog } from '@/components/shared/Dialog';
 import {
   Table,
   TableHeader,
@@ -101,6 +102,8 @@ export const AICostDashboard: Component = () => {
   const [loadError, setLoadError] = createSignal<string | null>(null);
   const [summary, setSummary] = createSignal<AICostSummary | null>(null);
   const [showAllModels, setShowAllModels] = createSignal(false);
+  const [showResetDialog, setShowResetDialog] = createSignal(false);
+  const [resetting, setResetting] = createSignal(false);
   let requestSeq = 0;
 
   const anyPricingKnown = createMemo(() => {
@@ -246,15 +249,24 @@ export const AICostDashboard: Component = () => {
     return usd > budget;
   });
 
-  const resetHistory = async () => {
-    if (!confirm(getAICostResetHistoryConfirmationMessage())) return;
+  const hasChatUsage = createMemo(() => (useCaseMap().get('chat')?.tokens ?? 0) > 0);
+
+  const resetHistory = () => {
+    setShowResetDialog(true);
+  };
+
+  const confirmResetHistory = async () => {
+    setResetting(true);
     try {
       const result = await AIAPI.resetCostHistory();
+      setShowResetDialog(false);
       notificationStore.success(getAICostResetHistorySuccessMessage(result.backup_file));
       await loadSummary(days());
     } catch (err) {
       logger.error('[AICostDashboard] Failed to reset AI cost history:', err);
       notificationStore.error(getAICostResetHistoryErrorMessage());
+    } finally {
+      setResetting(false);
     }
   };
 
@@ -372,7 +384,20 @@ export const AICostDashboard: Component = () => {
         </Show>
 
         <Show when={!summary() && !loading() && loadError()}>
-          <div class="text-sm text-muted">{loadError()}</div>
+          <div
+            role="alert"
+            aria-live="polite"
+            class="flex items-center justify-between gap-3 rounded-sm border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-800 dark:bg-red-900/25 dark:text-red-300"
+          >
+            <span>{loadError()}</span>
+            <button
+              type="button"
+              onClick={() => void loadSummary(days())}
+              class="shrink-0 rounded-sm border border-red-300 px-2.5 py-1 text-xs font-medium hover:bg-red-100 dark:border-red-700 dark:hover:bg-red-900/40"
+            >
+              Retry
+            </button>
+          </div>
         </Show>
 
         <Show when={!summary() && !loading() && !loadError()}>
@@ -421,18 +446,20 @@ export const AICostDashboard: Component = () => {
                 </div>
               </div>
 
-              <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div class="p-3 rounded-md bg-surface-alt border border-border">
-                  <div class="text-xs text-muted">{AI_COST_ASSISTANT_USE_CASE_LABEL}</div>
-                  <div class="text-sm font-semibold text-base-content">
-                    {formatNumber(useCaseMap().get('chat')?.tokens ?? 0)} tokens
+              <div class={`grid grid-cols-1 ${hasChatUsage() ? 'sm:grid-cols-2' : ''} gap-3`}>
+                <Show when={hasChatUsage()}>
+                  <div class="p-3 rounded-md bg-surface-alt border border-border">
+                    <div class="text-xs text-muted">{AI_COST_ASSISTANT_USE_CASE_LABEL}</div>
+                    <div class="text-sm font-semibold text-base-content">
+                      {formatNumber(useCaseMap().get('chat')?.tokens ?? 0)} tokens
+                    </div>
+                    <div class="text-xs text-muted">
+                      <Show when={useCaseMap().get('chat')?.pricingKnown} fallback={<span>—</span>}>
+                        {formatUSD(useCaseMap().get('chat')?.usd ?? 0)}
+                      </Show>
+                    </div>
                   </div>
-                  <div class="text-xs text-muted">
-                    <Show when={useCaseMap().get('chat')?.pricingKnown} fallback={<span>—</span>}>
-                      {formatUSD(useCaseMap().get('chat')?.usd ?? 0)}
-                    </Show>
-                  </div>
-                </div>
+                </Show>
                 <div class="p-3 rounded-md bg-surface-alt border border-border">
                   <div class="text-xs text-muted">{AI_COST_PATROL_USE_CASE_LABEL}</div>
                   <div class="text-sm font-semibold text-base-content">
@@ -504,7 +531,7 @@ export const AICostDashboard: Component = () => {
                       )
                       .join('\n')}`}
                   >
-                    Estimated spend is partial — {unpricedProviderModels().length} model
+                    Estimated spend is partial: {unpricedProviderModels().length} model
                     {unpricedProviderModels().length === 1 ? '' : 's'} have unknown pricing.
                   </span>
                 </Show>
@@ -622,6 +649,47 @@ export const AICostDashboard: Component = () => {
           )}
         </Show>
       </div>
+
+      <Show when={showResetDialog()}>
+        <Dialog
+          isOpen={true}
+          onClose={() => {
+            if (!resetting()) setShowResetDialog(false);
+          }}
+          panelClass="max-w-md"
+          closeOnBackdrop={false}
+          ariaLabel={AI_COST_RESET_HISTORY_LABEL}
+        >
+          <div class="flex min-h-0 w-full flex-1 flex-col overflow-hidden">
+            <div class="shrink-0 border-b border-border bg-surface-alt px-6 py-4">
+              <h3 class="text-base font-semibold text-base-content">
+                {AI_COST_RESET_HISTORY_LABEL}
+              </h3>
+            </div>
+            <div class="min-h-0 flex-1 overflow-y-auto px-6 py-4">
+              <p class="text-sm text-muted">{getAICostResetHistoryConfirmationMessage()}</p>
+            </div>
+            <div class="shrink-0 flex justify-end gap-3 border-t border-border bg-surface-alt px-6 py-4">
+              <button
+                type="button"
+                onClick={() => setShowResetDialog(false)}
+                disabled={resetting()}
+                class="min-h-10 sm:min-h-9 rounded-md px-4 py-2 text-sm text-base-content hover:bg-surface-hover disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => void confirmResetHistory()}
+                disabled={resetting()}
+                class="min-h-10 sm:min-h-9 rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50"
+              >
+                {resetting() ? 'Resetting...' : 'Reset history'}
+              </button>
+            </div>
+          </div>
+        </Dialog>
+      </Show>
     </Card>
   );
 };

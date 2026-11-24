@@ -5,7 +5,7 @@ import type { NetworkSettingsPanelProps } from './networkSettingsModel';
 
 export const NetworkSettingsPanel: Component<NetworkSettingsPanelProps> = (props) => {
   return (
-    <SettingsPanel title="Network" noPadding>
+    <SettingsPanel noPadding bodyClass="divide-y divide-border">
       <NetworkBoundarySettingsSection {...props} />
     </SettingsPanel>
   );

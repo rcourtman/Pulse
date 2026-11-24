@@ -235,9 +235,33 @@ const parseGroupEntries = (input: string, field: GroupRuleField): string[][] => 
   return entries;
 };
 
-const mappingsToString = (mappings?: Record<string, string>) =>
+export const mappingsToString = (mappings?: Record<string, string>) =>
   Object.entries(mappings ?? {})
     .map(([group, role]) => formatGroupToken(group) + '=' + formatGroupToken(role))
+    .join(', ');
+
+export interface GroupRoleMappingRow {
+  group: string;
+  roleId: string;
+}
+
+export const parseGroupRoleMappingRows = (input: string): GroupRoleMappingRow[] | null => {
+  if (!input.trim()) return [];
+  try {
+    return parseGroupEntries(input, 'groupRoleMappings').map(([group, roleId]) => ({
+      group,
+      roleId,
+    }));
+  } catch {
+    return null;
+  }
+};
+
+export const serializeGroupRoleMappingRows = (rows: GroupRoleMappingRow[]): string =>
+  rows
+    .map((row) => ({ group: row.group.trim(), roleId: row.roleId.trim() }))
+    .filter((row) => row.group || row.roleId)
+    .map((row) => `${formatGroupToken(row.group)}=${formatGroupToken(row.roleId)}`)
     .join(', ');
 
 const stringToMappings = (input: string) => {

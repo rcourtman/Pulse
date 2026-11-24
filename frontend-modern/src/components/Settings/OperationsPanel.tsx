@@ -2,7 +2,7 @@ import { JSX } from 'solid-js';
 import SettingsPanel from '@/components/shared/SettingsPanel';
 
 type OperationsPanelProps = {
-  title: JSX.Element;
+  title?: JSX.Element;
   description?: JSX.Element;
   action?: JSX.Element;
   class?: string;

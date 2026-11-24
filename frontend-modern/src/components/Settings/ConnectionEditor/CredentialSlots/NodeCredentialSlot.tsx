@@ -161,56 +161,58 @@ export const NodeCredentialSlot: Component<NodeCredentialSlotProps> = (props) =>
   };
 
   return (
-    <form onSubmit={handleSubmit} class="space-y-6">
-      <section
-        aria-label="Infrastructure connection sequence"
-        class="rounded-md border border-border bg-surface-alt px-4 py-3"
-      >
-        <div class="grid gap-3 text-sm sm:grid-cols-3">
-          <div class="flex items-start gap-2">
-            <span class="mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-blue-600 text-xs font-semibold text-white">
-              1
-            </span>
-            <div>
-              <div class="font-medium text-base-content">Endpoint</div>
-              <div class="text-xs text-muted">API address and name</div>
+    <form onSubmit={handleSubmit} class="flex min-h-full flex-col gap-6">
+      <div class="space-y-6 pb-2">
+        <section
+          aria-label="Infrastructure connection sequence"
+          class="rounded-md border border-border bg-surface-alt px-4 py-3"
+        >
+          <div class="grid gap-3 text-sm sm:grid-cols-3">
+            <div class="flex items-start gap-2">
+              <span class="mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-blue-600 text-xs font-semibold text-white">
+                1
+              </span>
+              <div>
+                <div class="font-medium text-base-content">Endpoint</div>
+                <div class="text-xs text-muted">API address and name</div>
+              </div>
+            </div>
+            <div class="flex items-start gap-2">
+              <span class="mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-blue-600 text-xs font-semibold text-white">
+                2
+              </span>
+              <div>
+                <div class="font-medium text-base-content">Authentication</div>
+                <div class="text-xs text-muted">Assisted setup or manual token</div>
+              </div>
+            </div>
+            <div class="flex items-start gap-2">
+              <span class="mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-blue-600 text-xs font-semibold text-white">
+                3
+              </span>
+              <div>
+                <div class="font-medium text-base-content">Coverage</div>
+                <div class="text-xs text-muted">Monitoring scope and save</div>
+              </div>
             </div>
           </div>
-          <div class="flex items-start gap-2">
-            <span class="mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-blue-600 text-xs font-semibold text-white">
-              2
-            </span>
-            <div>
-              <div class="font-medium text-base-content">Authentication</div>
-              <div class="text-xs text-muted">Assisted setup or manual token</div>
-            </div>
-          </div>
-          <div class="flex items-start gap-2">
-            <span class="mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-blue-600 text-xs font-semibold text-white">
-              3
-            </span>
-            <div>
-              <div class="font-medium text-base-content">Coverage</div>
-              <div class="text-xs text-muted">Monitoring scope and save</div>
-            </div>
-          </div>
-        </div>
-      </section>
-      {importPlan() && (
-        <NodeCandidateImportPlan
-          plan={importPlan()!}
-          approved={importApproved()}
-          onApprovedChange={setImportApproved}
-          onPreviewImpact={handlePreviewImportImpact}
-          preview={importImpactPreview()}
-          previewing={previewingImportImpact()}
-          previewError={importImpactPreviewError()}
-        />
-      )}
-      <NodeModalBasicInfoSection modalProps={modalProps} state={state} />
-      <NodeModalClusterMembersSection modalProps={modalProps} state={state} />
-      <NodeModalAuthenticationSection modalProps={modalProps} state={state} />
-      <NodeModalMonitoringSection modalProps={modalProps} state={state} />
+        </section>
+        {importPlan() && (
+          <NodeCandidateImportPlan
+            plan={importPlan()!}
+            approved={importApproved()}
+            onApprovedChange={setImportApproved}
+            onPreviewImpact={handlePreviewImportImpact}
+            preview={importImpactPreview()}
+            previewing={previewingImportImpact()}
+            previewError={importImpactPreviewError()}
+          />
+        )}
+        <NodeModalBasicInfoSection modalProps={modalProps} state={state} />
+        <NodeModalClusterMembersSection modalProps={modalProps} state={state} />
+        <NodeModalAuthenticationSection modalProps={modalProps} state={state} />
+        <NodeModalMonitoringSection modalProps={modalProps} state={state} />
+      </div>
       <NodeModalStatusFooter
         modalProps={modalProps}
         state={state}

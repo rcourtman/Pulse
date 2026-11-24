@@ -1,8 +1,10 @@
 import { Component } from 'solid-js';
+import { ButtonLink } from '@/components/shared/Button';
 import { OrganizationRoleBadge } from '@/components/shared/OrganizationBadges';
 import { PulseDataGrid } from '@/components/shared/PulseDataGrid';
 import { getOrganizationOverviewMembersEmptyState } from '@/utils/organizationSettingsPresentation';
 import { formatOrgDate, normalizeRole } from '@/utils/orgUtils';
+import { settingsTabPath } from './settingsNavigationModel';
 import type { useOrganizationOverviewPanelState } from './useOrganizationOverviewPanelState';
 
 interface OrganizationOverviewMembersSectionProps {
@@ -13,7 +15,17 @@ export const OrganizationOverviewMembersSection: Component<
   OrganizationOverviewMembersSectionProps
 > = (props) => (
   <div class="space-y-2 p-4 sm:p-6">
-    <h4 class="text-sm font-semibold text-base-content">Membership</h4>
+    <div class="flex items-center justify-between gap-2">
+      <h4 class="text-sm font-semibold text-base-content">Membership</h4>
+      <ButtonLink
+        href={settingsTabPath('organization-access')}
+        variant="secondary"
+        size="xs"
+        hardNavigation
+      >
+        Manage access
+      </ButtonLink>
+    </div>
     <PulseDataGrid
       class="mt-4 [&_table]:table-fixed sm:[&_table]:table-auto [&_td]:py-1 sm:[&_td]:py-3.5 [&_th:nth-child(2)]:w-20 sm:[&_th:nth-child(2)]:w-auto"
       data={props.state.members()}

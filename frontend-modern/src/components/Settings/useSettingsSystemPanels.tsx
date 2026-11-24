@@ -12,6 +12,7 @@ interface UseSettingsSystemPanelsParams {
   themePreference: Accessor<'light' | 'dark' | 'system'>;
   setThemePreference: (pref: 'light' | 'dark' | 'system') => void;
   initialLoadComplete: Accessor<boolean>;
+  canManageSystem?: Accessor<boolean>;
   systemSettings: ReturnType<typeof useSystemSettingsState>;
   backupTransferFlow: ReturnType<typeof useBackupTransferFlow>;
 }
@@ -26,10 +27,16 @@ export interface SettingsSystemPanels {
 export function useSettingsSystemPanels(
   params: UseSettingsSystemPanelsParams,
 ): SettingsSystemPanels {
+  const canManageSystemSettings = () =>
+    params.canManageSystem
+      ? params.canManageSystem()
+      : params.systemSettings.canManageSystemSettings();
+
   const systemGeneralPanelProps = (): GeneralSettingsPanelProps => ({
     darkMode: params.darkMode,
     themePreference: params.themePreference,
     setThemePreference: params.setThemePreference,
+    canManageSystemSettings,
     pvePollingInterval: params.systemSettings.pvePollingInterval,
     setPVEPollingInterval: params.systemSettings.setPVEPollingInterval,
     pvePollingSelection: params.systemSettings.pvePollingSelection,
@@ -53,6 +60,8 @@ export function useSettingsSystemPanels(
     telemetryPreviewPayload: params.systemSettings.telemetryPreviewPayload,
     loadingTelemetryPreview: params.systemSettings.loadingTelemetryPreview,
     resettingTelemetryInstallID: params.systemSettings.resettingTelemetryInstallID,
+    showResetTelemetryConfirm: params.systemSettings.showResetTelemetryConfirm,
+    setShowResetTelemetryConfirm: params.systemSettings.setShowResetTelemetryConfirm,
     handleLoadTelemetryPreview: params.systemSettings.handleLoadTelemetryPreview,
     handleCopyTelemetryPreview: params.systemSettings.handleCopyTelemetryPreview,
     handleResetTelemetryInstallID: params.systemSettings.handleResetTelemetryInstallID,
@@ -95,6 +104,7 @@ export function useSettingsSystemPanels(
       publicURL: params.systemSettings.publicURL,
       setPublicURL: params.systemSettings.setPublicURL,
       setHasUnsavedChanges: params.systemSettings.setHasUnsavedChanges,
+      versionInfo: params.systemSettings.versionInfo,
     }),
     getUpdatesPanelProps: () => ({
       versionInfo: params.systemSettings.versionInfo,

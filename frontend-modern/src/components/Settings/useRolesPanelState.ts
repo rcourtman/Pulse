@@ -32,6 +32,7 @@ export function useRolesPanelState(props: RolesPanelProps = {}) {
   const [deleting, setDeleting] = createSignal(false);
   const [rolePendingDeletion, setRolePendingDeletion] = createSignal<Role | null>(null);
   const [formId, setFormId] = createSignal('');
+  const [roleIdTouched, setRoleIdTouched] = createSignal(false);
   const [formName, setFormName] = createSignal('');
   const [formDescription, setFormDescription] = createSignal('');
   const [formPermissions, setFormPermissions] = createSignal<Permission[]>([]);
@@ -77,10 +78,18 @@ export function useRolesPanelState(props: RolesPanelProps = {}) {
     retry: false,
   });
 
+  const slugifyRoleId = (name: string) =>
+    name
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '');
+
   const clearEditor = () => {
     setShowModal(false);
     setEditingRole(null);
     setFormId('');
+    setRoleIdTouched(false);
     setFormName('');
     setFormDescription('');
     setFormPermissions([]);
@@ -181,6 +190,31 @@ export function useRolesPanelState(props: RolesPanelProps = {}) {
       setShowModal(true);
     });
   };
+  const openDuplicateRole = (role: Role) => {
+    if (!canEdit() || !isCurrentRole(role)) return;
+    const baseId = `${role.id}-copy`;
+    let candidateId = baseId;
+    let suffix = 2;
+    while (roles().some((existing) => existing.id === candidateId)) {
+      candidateId = `${baseId}-${suffix}`;
+      suffix += 1;
+    }
+    batch(() => {
+      clearEditor();
+      setRolePendingDeletion(null);
+      setSuccessNotice(null);
+      setFormId(candidateId);
+      setRoleIdTouched(true);
+      setFormName(`${role.name} Copy`);
+      setFormDescription(role.description);
+      setFormPermissions(
+        role.permissions.length > 0
+          ? role.permissions.map((permission) => ({ ...permission }))
+          : [createDefaultRBACPermission()],
+      );
+      setShowModal(true);
+    });
+  };
   const openEditRole = (role: Role) => {
     if (!canEdit() || !isCurrentRole(role) || role.isBuiltIn) return;
     batch(() => {
@@ -233,7 +267,18 @@ export function useRolesPanelState(props: RolesPanelProps = {}) {
       // A definite rejection can be corrected in the draft. A lost response,
       // server error or unreadable success does not establish rollback.
       if (status && [400, 401, 403, 404, 409, 422, 429].includes(status)) {
-        setActionError(remove ? getRolesDeleteErrorMessage() : getRolesSaveErrorMessage());
+        const code = (error as { code?: unknown } | null)?.code;
+        if (remove) {
+          setActionError(getRolesDeleteErrorMessage());
+        } else if (code === 'role_id_exists') {
+          setActionError(`${getRolesSaveErrorMessage()}: a role with this ID already exists.`);
+        } else if (code === 'validation_error' || code === 'invalid_role') {
+          setActionError(
+            `${getRolesSaveErrorMessage()}: check the role ID, name, and permissions.`,
+          );
+        } else {
+          setActionError(getRolesSaveErrorMessage());
+        }
       } else {
         batch(() => {
           clearEditor();
@@ -289,8 +334,16 @@ export function useRolesPanelState(props: RolesPanelProps = {}) {
     );
   };
   const updateFormId = (value: string) => {
+    setRoleIdTouched(true);
     setFormId(value);
     if (actionError()?.startsWith(ROLE_ID_COLLISION)) setActionError(null);
+  };
+  const updateFormName = (value: string) => {
+    setFormName(value);
+    if (!editingRole() && !roleIdTouched()) {
+      setFormId(slugifyRoleId(value));
+      if (actionError()?.startsWith(ROLE_ID_COLLISION)) setActionError(null);
+    }
   };
   const addPermission = () => {
     if (canEdit() && showModal())
@@ -330,6 +383,7 @@ export function useRolesPanelState(props: RolesPanelProps = {}) {
     loadRoles,
     openCreateRole,
     openDeleteRole,
+    openDuplicateRole,
     openEditRole,
     removePermission,
     restartRead: () => loadRoles(true),
@@ -338,7 +392,7 @@ export function useRolesPanelState(props: RolesPanelProps = {}) {
     saving,
     setFormDescription,
     setFormId: updateFormId,
-    setFormName,
+    setFormName: updateFormName,
     showModal,
     successNotice,
     unconfirmedChange,
