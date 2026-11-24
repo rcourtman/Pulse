@@ -488,7 +488,7 @@ describe('AgentsMachinesTable', () => {
     expect(row('nas')).not.toHaveClass('bg-red-50');
   });
 
-  it('explains active alerts and degraded health on the StatusDot tooltip without adding inline prose to the row', () => {
+  it('shows the live Unraid array reason on its collapsed row and keeps the full status explanation', () => {
     const machine = (id: string, agentId: string, overrides: Partial<Resource> = {}) =>
       resource({
         id,
@@ -552,7 +552,7 @@ describe('AgentsMachinesTable', () => {
       within(rowEl('owner')).queryByText(/Unraid array is running without parity protection/),
     ).toBeNull();
 
-    // Active unacknowledged alerts override the tooltip only on the owning machine.
+    // An active assessment adds a readable headline only to its owning machine.
     setActiveAlerts({
       assessment: {
         ...assessment,
@@ -565,20 +565,35 @@ describe('AgentsMachinesTable', () => {
       'Critical · Unraid array reports 1 missing disk(s)',
     );
     expect(dot('namesake')).toHaveAttribute('title', 'Online');
-    expect(rowEl('owner').querySelector('[data-unraid-array-alert]')).toBeNull();
-    expect(within(rowEl('owner')).queryByText(/missing disk/)).toBeNull();
+    expect(within(rowEl('owner')).getByText('Critical · 1 missing disk')).toBeVisible();
+    expect(rowEl('owner')).toHaveClass('bg-red-50');
+    expect(within(rowEl('namesake')).queryByText(/missing disk/)).toBeNull();
+    expect(rowEl('namesake')).not.toHaveClass('bg-red-50');
 
     // Acknowledging falls back to the underlying health risk summary.
     setActiveAlerts('assessment', 'acknowledged', true);
+    expect(within(rowEl('owner')).queryByText(/missing disk/)).toBeNull();
     expect(dot('owner')).toHaveAttribute(
       'title',
       'Warning · Unraid array is running without parity protection',
     );
     setActiveAlerts(reconcile({}));
+    expect(rowEl('owner')).not.toHaveClass('bg-red-50');
     expect(dot('owner')).toHaveAttribute(
       'title',
       'Warning · Unraid array is running without parity protection',
     );
+
+    setActiveAlerts({
+      cache: {
+        ...assessment,
+        id: 'cache',
+        resourceId: 'agent:host-tower/storage:unraid-cache:cache',
+        message: 'Cache pool issue',
+      },
+    });
+    expect(dot('owner')).toHaveAttribute('title', 'Warning · Cache pool issue');
+    expect(rowEl('owner').querySelector('[data-unraid-array-alert]')).toBeNull();
   });
 
   it('keeps the column picker inside the shared View preferences disclosure', async () => {

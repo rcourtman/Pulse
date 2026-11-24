@@ -129,6 +129,18 @@ type MetricFallbackReason = {
   title: string;
 };
 
+const compactUnraidArrayReason = (message: string): string => {
+  // Use the evaluator's assigned-member count, never the raw slot count.
+  const count = /^Unraid array reports ([1-9]\d*) (missing|disabled|invalid) disk\(s\)$/.exec(
+    message,
+  );
+  if (count) return `${count[1]} ${count[2]} disk${count[1] === '1' ? '' : 's'}`;
+  if (message === 'Unraid array is running without parity protection') {
+    return 'No parity protection';
+  }
+  return message || 'Unraid array alert';
+};
+
 const hasPositiveTemperature = (celsius: number | undefined): celsius is number =>
   typeof celsius === 'number' && Number.isFinite(celsius) && celsius > 0;
 
@@ -1688,13 +1700,34 @@ export const AgentsMachinesTable: Component<{
                         alertsActivation.detectionEnabled(),
                       ),
                     );
-                    const statusDotLabel = createMemo(() => {
-                      const baseLabel = indicator().label;
-                      const topAlert = getAlertsForUnifiedResource(
+                    const machineAlerts = createMemo(() =>
+                      getAlertsForUnifiedResource(
                         machine,
                         activeAlerts,
                         alertsActivation.detectionEnabled(),
-                      ).find((alert) => !alert.acknowledged);
+                      ),
+                    );
+                    const arrayAlert = createMemo(() => {
+                      if (isExpanded()) return undefined;
+                      const agentId = asTrimmedString(machine.agent?.agentId);
+                      if (
+                        !agentId ||
+                        !machine.agent?.unraid ||
+                        (machine.sourceType !== 'agent' && machine.sourceType !== 'hybrid')
+                      )
+                        return undefined;
+                      // Only the array assessment, not another disk, pool or
+                      // similarly named machine's alert, explains this row.
+                      return machineAlerts().find(
+                        (alert) =>
+                          alert.resourceId === `agent:${agentId}/storage:unraid-array` &&
+                          alert.type === 'storage-topology' &&
+                          !alert.acknowledged,
+                      );
+                    });
+                    const statusDotLabel = createMemo(() => {
+                      const baseLabel = indicator().label;
+                      const topAlert = machineAlerts().find((alert) => !alert.acknowledged);
                       const alertMessage = topAlert?.message?.trim();
                       if (topAlert && alertMessage) {
                         const severityLabel = formatAlertSeverityLabel(topAlert.level, baseLabel);
@@ -1734,6 +1767,7 @@ export const AgentsMachinesTable: Component<{
                         >
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('name')} ${machineColumnWidthClass('machine')}`}
+                            classList={{ 'py-0.5!': Boolean(arrayAlert()) }}
                             title={[name(), machineSubtitle() || systemLabel()]
                               .filter(Boolean)
                               .join(' · ')}
@@ -1794,6 +1828,21 @@ export const AgentsMachinesTable: Component<{
                                 </Show>
                               </div>
                             </div>
+                            <Show when={arrayAlert()}>
+                              {(alert) => (
+                                <span
+                                  data-unraid-array-alert
+                                  class={`block whitespace-normal wrap-anywhere text-[10px] leading-tight font-semibold tracking-tight ${
+                                    alert().level === 'critical'
+                                      ? 'text-red-700 dark:text-red-300'
+                                      : 'text-amber-700 dark:text-amber-300'
+                                  }`}
+                                >
+                                  {formatAlertSeverityLabel(alert().level)} ·{' '}
+                                  {compactUnraidArrayReason(alert().message?.trim() ?? '')}
+                                </span>
+                              )}
+                            </Show>
                           </TableCell>
                           <Show when={columnVisibility.isColumnVisible('system')}>
                             <TableCell
