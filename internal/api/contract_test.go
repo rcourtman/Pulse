@@ -21208,7 +21208,8 @@ func TestContract_DockerLifecycleActionsResolveCommandAgentAndDispatchOneTypedOp
 	for _, snippet := range []string{
 		"func (e dockerContainerActionExecutor) connectedDockerCommandAgentID(ctx context.Context, resource unified.Resource) (string, error)",
 		"resource.Docker.TokenID",
-		"commandAgentForToken(ctx, e.agents, resource.Docker.TokenID)",
+		"commandAgentForToken(ctx, e.agents, tokenID)",
+		`e.dockerTokenHasAmbiguousHosts(ctx, tokenID, strings.TrimSpace(resource.Docker.AgentID), tokenAgentID != "")`,
 		"commandAgentForIdentity(ctx, e.agents, resource.Docker.AgentID, resource.Docker.Hostname)",
 		"e.dockerReportTokenReachesCommandSession(ctx, tokenID, agentID, resource.Docker.Hostname)",
 		"resource.Docker.AgentID",
