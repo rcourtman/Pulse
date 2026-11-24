@@ -12,6 +12,7 @@ import {
 import { Button } from '@/components/shared/Button';
 import { CalloutCard } from '@/components/shared/CalloutCard';
 import SettingsPanel from '@/components/shared/SettingsPanel';
+import { Dialog } from '@/components/shared/Dialog';
 import { Toggle } from '@/components/shared/Toggle';
 import { InlineNotice } from '@/components/shared/InlineNotice';
 import { LoadingSpinner } from '@/components/shared/LoadingSpinner';
@@ -35,6 +36,7 @@ import type { VersionInfo } from '@/api/updates';
 
 interface SecurityStatusInfo {
   hasAuthentication: boolean;
+  ssoEnabled?: boolean;
   currentUsername?: string;
   apiTokenHint?: string;
   tokenScopes?: string[];
@@ -82,7 +84,11 @@ export const SecurityAuthPanel: Component<SecurityAuthPanelProps> = (props) => {
     ]),
   );
   const [credentialChangePending, setCredentialChangePending] = createSignal(false);
+  const [confirmHideLocalOpen, setConfirmHideLocalOpen] = createSignal(false);
+  const hasAlternativeSignIn = () =>
+    Boolean(props.securityStatus()?.ssoEnabled || props.securityStatus()?.hasProxyAuth);
   const closeCredentialForms = () => {
+    setConfirmHideLocalOpen(false);
     props.setShowQuickSecuritySetup(false);
     props.setShowQuickSecurityWizard(false);
   };
@@ -92,194 +98,261 @@ export const SecurityAuthPanel: Component<SecurityAuthPanelProps> = (props) => {
   const unsubscribeOrg = eventBus.on('org_switched', closeCredentialForms);
   onCleanup(unsubscribeOrg);
 
+  const handleHideLocalToggle = (enabled: boolean) => {
+    if (!enabled) {
+      setConfirmHideLocalOpen(false);
+      void props.handleHideLocalLoginChange(false);
+      return;
+    }
+    setConfirmHideLocalOpen(true);
+  };
+
+  const confirmHideLocalLogin = () => {
+    setConfirmHideLocalOpen(false);
+    void props.handleHideLocalLoginChange(true);
+  };
+
   return (
-    <SettingsPanel
-      title="Authentication"
-      action={
-        <Show when={props.securityStatusLoading()}>
+    <SettingsPanel noPadding>
+      <Show when={props.securityStatusLoading()}>
+        <div class="flex items-center justify-end border-b border-border bg-surface-alt px-4 py-2.5 sm:px-6">
           <span role="status" aria-live="polite" class="flex items-center gap-2 text-xs text-muted">
             <LoadingSpinner size="sm" tone="muted" />
             {props.securityStatus()
               ? 'Refreshing authentication status…'
               : 'Checking authentication status…'}
           </span>
+        </div>
+      </Show>
+
+      <div class={showAuthenticationControls() ? 'divide-y divide-border' : 'space-y-6 p-3 sm:p-6'}>
+        <Show when={!props.securityStatusLoading() && !props.securityStatus()}>
+          <InlineNotice tone="warning" role="status">
+            Authentication status is unavailable. Check settings access before making changes.
+          </InlineNotice>
         </Show>
-      }
-      noPadding={showAuthenticationControls()}
-      bodyClass={showAuthenticationControls() ? 'divide-y divide-border' : 'space-y-6'}
-    >
-      <Show when={!props.securityStatusLoading() && !props.securityStatus()}>
-        <InlineNotice tone="warning" role="status">
-          Authentication status is unavailable. Check settings access before making changes.
-        </InlineNotice>
-      </Show>
 
-      <Show when={props.securityStatus()?.hasAuthentication === false}>
-        <CalloutCard
-          tone="warning"
-          title={SECURITY_AUTH_DISABLED_PANEL_TITLE}
-          description={SECURITY_AUTH_DISABLED_MESSAGE}
-          icon={<AlertTriangle class="h-5 w-5" />}
-          class="space-y-4"
-        >
-          <div class="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
-            <Show when={!props.canManage}>
-              <p class="text-xs text-amber-700 dark:text-amber-300">
-                {SECURITY_AUTH_DISABLED_READ_ONLY_MESSAGE}
-              </p>
-            </Show>
-            <Button
-              variant="warning"
-              size="settingsActionXs"
-              class="w-full sm:w-auto"
-              onClick={() => {
-                props.setShowQuickSecurityWizard(false);
-                props.setShowQuickSecuritySetup(!props.showQuickSecuritySetup());
-              }}
-              disabled={
-                !props.canManage || props.securityStatusLoading() || credentialChangePending()
-              }
-            >
-              {SECURITY_AUTH_SETUP_LABEL}
-            </Button>
-          </div>
-
-          <Show when={props.canManage && props.showQuickSecuritySetup()}>
-            <fieldset
-              disabled={props.securityStatusLoading()}
-              class="min-w-0 border-t border-amber-200 pt-4 dark:border-amber-700"
-            >
-              <QuickSecuritySetup
-                owner={credentialOwner()}
-                disabled={props.securityStatusLoading() || credentialChangePending()}
-                onPendingChange={setCredentialChangePending}
-                onConfigured={() => {
-                  props.setShowQuickSecuritySetup(false);
-                  props.loadSecurityStatus();
-                }}
-              />
-            </fieldset>
-          </Show>
-        </CalloutCard>
-      </Show>
-
-      <Show when={showAuthenticationControls()}>
-        <fieldset disabled={props.securityStatusLoading()} class="min-w-0">
-          <div class="p-4 sm:p-6 flex flex-col gap-3 sm:gap-4">
-            <Show when={!props.canManage}>
-              <div class="rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-800 dark:border-blue-800 dark:bg-blue-900/25 dark:text-blue-200">
-                {SECURITY_AUTH_SETTINGS_READ_ONLY_MESSAGE}
-              </div>
-            </Show>
-            <div class="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
+        <Show when={props.securityStatus()?.hasAuthentication === false}>
+          <CalloutCard
+            tone="warning"
+            title={SECURITY_AUTH_DISABLED_PANEL_TITLE}
+            description={SECURITY_AUTH_DISABLED_MESSAGE}
+            icon={<AlertTriangle class="h-5 w-5" />}
+            class="space-y-4"
+          >
+            <div class="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+              <Show when={!props.canManage}>
+                <p class="text-xs text-amber-700 dark:text-amber-300">
+                  {SECURITY_AUTH_DISABLED_READ_ONLY_MESSAGE}
+                </p>
+              </Show>
               <Button
-                variant="primary"
-                size="settingsAction"
-                class="w-full sm:w-auto"
-                onClick={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  props.setShowPasswordModal(true);
-                }}
-                disabled={!props.canManage || credentialChangePending()}
-              >
-                Change password
-              </Button>
-              <Button
-                variant="secondary"
-                size="settingsAction"
+                variant="warning"
+                size="settingsActionXs"
                 class="w-full sm:w-auto"
                 onClick={() => {
-                  props.setShowQuickSecuritySetup(false);
-                  props.setShowQuickSecurityWizard(!props.showQuickSecurityWizard());
+                  props.setShowQuickSecurityWizard(false);
+                  props.setShowQuickSecuritySetup(!props.showQuickSecuritySetup());
                 }}
-                disabled={!props.canManage || credentialChangePending()}
+                disabled={
+                  !props.canManage || props.securityStatusLoading() || credentialChangePending()
+                }
               >
-                Rotate credentials
+                {SECURITY_AUTH_SETUP_LABEL}
               </Button>
             </div>
-            <div class="text-xs text-muted">
-              <span class="font-medium text-base-content">User:</span>{' '}
-              {props.securityStatus()?.authUsername || 'Not configured'}
+
+            <Show when={props.canManage && props.showQuickSecuritySetup()}>
+              <fieldset
+                disabled={props.securityStatusLoading()}
+                class="min-w-0 border-t border-amber-200 pt-4 dark:border-amber-700"
+              >
+                <QuickSecuritySetup
+                  owner={credentialOwner()}
+                  disabled={props.securityStatusLoading() || credentialChangePending()}
+                  onPendingChange={setCredentialChangePending}
+                  onConfigured={() => {
+                    props.setShowQuickSecuritySetup(false);
+                    props.loadSecurityStatus();
+                  }}
+                />
+              </fieldset>
+            </Show>
+          </CalloutCard>
+        </Show>
+
+        <Show when={showAuthenticationControls()}>
+          <fieldset disabled={props.securityStatusLoading()} class="min-w-0">
+            <div class="p-4 sm:p-6 flex flex-col gap-3 sm:gap-4">
+              <Show when={!props.canManage}>
+                <div class="rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-800 dark:border-blue-800 dark:bg-blue-900/25 dark:text-blue-200">
+                  {SECURITY_AUTH_SETTINGS_READ_ONLY_MESSAGE}
+                </div>
+              </Show>
+              <div class="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
+                <Button
+                  variant="primary"
+                  size="settingsAction"
+                  class="w-full sm:w-auto"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    props.setShowPasswordModal(true);
+                  }}
+                  disabled={!props.canManage || credentialChangePending()}
+                >
+                  Change password
+                </Button>
+                <Button
+                  variant="secondary"
+                  size="settingsAction"
+                  class="w-full sm:w-auto"
+                  onClick={() => {
+                    props.setShowQuickSecuritySetup(false);
+                    props.setShowQuickSecurityWizard(!props.showQuickSecurityWizard());
+                  }}
+                  disabled={!props.canManage || credentialChangePending()}
+                >
+                  Rotate credentials
+                </Button>
+              </div>
+              <div class="text-xs text-muted">
+                <span class="font-medium text-base-content">User:</span>{' '}
+                {props.securityStatus()?.authUsername || 'Not configured'}
+              </div>
             </div>
-          </div>
 
-          <div class="p-4 sm:p-6">
-            <Toggle
-              label="Hide local login form"
-              description={
-                <span>
-                  Hides the form, not password sign-in. Verify SSO sign-in in a separate session.
-                  Keep a working local admin login. Add{' '}
-                  <code class="whitespace-nowrap">?show_local=true</code> to the sign-in URL to show
-                  the form. This does not reset credentials.
-                </span>
-              }
-              checked={props.hideLocalLogin()}
-              onChange={(e: ToggleChangeEvent) =>
-                props.handleHideLocalLoginChange(e.currentTarget.checked)
-              }
-              disabled={
-                !props.canManage ||
-                props.hideLocalLoginLocked() ||
-                props.savingHideLocalLogin() ||
-                credentialChangePending()
-              }
-            />
-          </div>
-
-          <Show when={props.canManage && props.showQuickSecurityWizard()}>
-            <div class="p-4 sm:p-6">
-              <QuickSecuritySetup
-                owner={credentialOwner()}
-                disabled={props.securityStatusLoading() || credentialChangePending()}
-                onPendingChange={setCredentialChangePending}
-                mode="rotate"
-                defaultUsername={props.securityStatus()?.authUsername || 'admin'}
-                onConfigured={() => {
-                  props.setShowQuickSecurityWizard(false);
-                  props.loadSecurityStatus();
-                }}
+            <div class="p-4 sm:p-6 space-y-2">
+              <Toggle
+                label="Hide local login form"
+                description={
+                  <span>
+                    Hides the form, not password sign-in. Verify SSO sign-in in a separate session.
+                    Keep a working local admin login. Add{' '}
+                    <code class="whitespace-nowrap">?show_local=true</code> to the sign-in URL to
+                    show the form. This does not reset credentials.
+                  </span>
+                }
+                containerClass="flex-row-reverse justify-between w-full"
+                checked={props.hideLocalLogin()}
+                onChange={(e: ToggleChangeEvent) => handleHideLocalToggle(e.currentTarget.checked)}
+                disabled={
+                  !props.canManage ||
+                  props.hideLocalLoginLocked() ||
+                  props.savingHideLocalLogin() ||
+                  credentialChangePending()
+                }
               />
-            </div>
-          </Show>
-        </fieldset>
-      </Show>
-
-      <Show when={props.securityStatus()?.configuredButPendingRestart}>
-        <CalloutCard
-          tone="warning"
-          title={SECURITY_AUTH_RESTART_REQUIRED_TITLE}
-          description={
-            <>
-              <p>{SECURITY_AUTH_RESTART_REQUIRED_MESSAGE}</p>
-              <p class="mt-2">{SECURITY_AUTH_RESTART_FOOTER}</p>
-            </>
-          }
-          icon={<AlertTriangle class="h-5 w-5" />}
-          class="space-y-4"
-        >
-          <div class="rounded-md border border-amber-200 bg-surface p-3 dark:border-amber-700">
-            <p class="text-xs font-semibold text-base-content mb-2">How to restart Pulse:</p>
-
-            <div class="space-y-1">
-              <p class="text-xs text-base-content">{restartInstruction().label}</p>
-              <Show when={restartInstruction().command}>
-                {(command) => (
-                  <code class="block text-xs bg-surface-hover p-2 rounded-sm mt-1">
-                    {command()}
-                  </code>
-                )}
+              <Show when={props.hideLocalLoginLocked()}>
+                <p class="text-xs text-muted">
+                  Managed by environment variable <code>PULSE_AUTH_HIDE_LOCAL_LOGIN</code>.
+                </p>
               </Show>
             </div>
-          </div>
 
-          <div class="rounded-sm border border-green-200 bg-green-50 p-2 dark:border-green-800 dark:bg-green-900/25">
-            <p class="text-xs text-green-700 dark:text-green-300">
-              <strong>Tip:</strong> {SECURITY_AUTH_RESTART_TIP.replace(/^Tip:\s*/, '')}
+            <Show when={props.canManage && props.showQuickSecurityWizard()}>
+              <div class="p-4 sm:p-6">
+                <QuickSecuritySetup
+                  owner={credentialOwner()}
+                  disabled={props.securityStatusLoading() || credentialChangePending()}
+                  onPendingChange={setCredentialChangePending}
+                  mode="rotate"
+                  defaultUsername={props.securityStatus()?.authUsername || 'admin'}
+                  onConfigured={() => {
+                    props.setShowQuickSecurityWizard(false);
+                    props.loadSecurityStatus();
+                  }}
+                />
+              </div>
+            </Show>
+          </fieldset>
+        </Show>
+
+        <Show when={props.securityStatus()?.configuredButPendingRestart}>
+          <CalloutCard
+            tone="warning"
+            title={SECURITY_AUTH_RESTART_REQUIRED_TITLE}
+            description={
+              <>
+                <p>{SECURITY_AUTH_RESTART_REQUIRED_MESSAGE}</p>
+                <p class="mt-2">{SECURITY_AUTH_RESTART_FOOTER}</p>
+              </>
+            }
+            icon={<AlertTriangle class="h-5 w-5" />}
+            class="space-y-4"
+          >
+            <div class="rounded-md border border-amber-200 bg-surface p-3 dark:border-amber-700">
+              <p class="text-xs font-semibold text-base-content mb-2">How to restart Pulse:</p>
+
+              <div class="space-y-1">
+                <p class="text-xs text-base-content">{restartInstruction().label}</p>
+                <Show when={restartInstruction().command}>
+                  {(command) => (
+                    <code class="block text-xs bg-surface-hover p-2 rounded-sm mt-1">
+                      {command()}
+                    </code>
+                  )}
+                </Show>
+              </div>
+            </div>
+
+            <div class="rounded-sm border border-green-200 bg-green-50 p-2 dark:border-green-800 dark:bg-green-900/25">
+              <p class="text-xs text-green-700 dark:text-green-300">
+                <strong>Tip:</strong> {SECURITY_AUTH_RESTART_TIP.replace(/^Tip:\s*/, '')}
+              </p>
+            </div>
+          </CalloutCard>
+        </Show>
+      </div>
+
+      <Show when={confirmHideLocalOpen()}>
+        <Dialog
+          isOpen={true}
+          onClose={() => setConfirmHideLocalOpen(false)}
+          panelClass="max-w-md"
+          ariaLabel="Confirm hiding local login form"
+        >
+          <div class="w-full space-y-4 p-6">
+            <h3 class="text-lg font-semibold text-base-content">Hide local login form?</h3>
+            <Show
+              when={hasAlternativeSignIn()}
+              fallback={
+                <InlineNotice tone="danger" role="alert">
+                  No SSO provider or proxy authentication is active. Hiding the local login form now
+                  can lock you out unless you append <code>?show_local=true</code> to the sign-in
+                  URL.
+                </InlineNotice>
+              }
+            >
+              <p class="text-sm text-muted">
+                Verify that your SSO or proxy sign-in works in a separate session before hiding the
+                local login form.
+              </p>
+            </Show>
+            <p class="text-xs text-muted">
+              You can reveal the local form again at any time by opening the sign-in page with{' '}
+              <code>?show_local=true</code>.
             </p>
+            <div class="flex justify-end gap-3 pt-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="md"
+                onClick={() => setConfirmHideLocalOpen(false)}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                variant={hasAlternativeSignIn() ? 'primary' : 'danger'}
+                size="md"
+                onClick={confirmHideLocalLogin}
+              >
+                Confirm hide form
+              </Button>
+            </div>
           </div>
-        </CalloutCard>
+        </Dialog>
       </Show>
     </SettingsPanel>
   );

@@ -43,7 +43,7 @@ describe('RecoverySettingsPanel', () => {
     expect(text).toContain('selected workspace, not a full-server backup');
     expect(text).toContain('Proxmox connections & credentials');
     expect(text).toContain(
-      'History, TrueNAS/vSphere connections, local login credentials and agent enrolment state are not included',
+      'History, TrueNAS/vSphere connections, local login credentials and agent enrollment state are not included',
     );
     expect(text).not.toContain('All node connections');
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();

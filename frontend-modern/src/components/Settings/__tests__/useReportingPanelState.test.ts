@@ -716,8 +716,11 @@ describe('useReportingPanelState', () => {
     await settleMountLoads(hookState);
     apiFetchMock.mockClear();
     await hookState.runReportScheduleNow(hookState.reportSchedules()[0]);
-    expect(confirm).toHaveBeenCalledWith(expect.stringContaining('risk of a duplicate'));
+    expect(confirm).not.toHaveBeenCalled();
+    expect(hookState.pendingRetrySchedule()?.id).toBe('weekly');
     expect(apiFetchMock).not.toHaveBeenCalled();
+    hookState.cancelRetryReportSchedule();
+    expect(hookState.pendingRetrySchedule()).toBeNull();
     confirm.mockRestore();
     dispose();
   });

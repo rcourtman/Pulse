@@ -52,8 +52,8 @@ describe('updatesPresentation', () => {
     expect(getUpdatePrimaryStatusLabel('preparing')).toBe('Update is still being prepared');
     expect(getUpdatePrimaryStatusLabel('unavailable')).toBe('Could not confirm update status');
     expect(getUpdatePrimaryStatusLabel('not_checked')).toBe('Not checked yet');
-    expect(getUpdateCheckModeLabel(true)).toBe('Auto-check enabled');
-    expect(getUpdateCheckModeLabel(false)).toBe('Manual checks only');
+    expect(getUpdateCheckModeLabel(true)).toBe('Automatic stable updates enabled');
+    expect(getUpdateCheckModeLabel(false)).toBe('Manual updates only');
     expect(getUpdateCheckModeLabel(true, true)).toBe('Release updates disabled');
     expect(getUpdateCheckActionLabel(true)).toBe('Checking...');
     expect(getUpdateCheckActionLabel(false)).toBe('Check Now');

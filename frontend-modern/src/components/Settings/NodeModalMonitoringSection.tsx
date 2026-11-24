@@ -298,14 +298,14 @@ export const NodeModalMonitoringSection: Component<NodeModalMonitoringSectionPro
             </Show>
           </div>
 
-          <Show when={state.showTemperatureMonitoringSection()}>
+          <Show when={state.isEditingExistingNode() && state.showTemperatureMonitoringSection()}>
             <div class="rounded-md border border-border bg-surface p-3 text-sm shadow-xs">
               <div class="flex items-start justify-between gap-3">
                 <div>
                   <p class="font-medium text-base-content">Temperature monitoring</p>
                   <p class="mt-1 text-xs text-muted">
-                    Uses the Pulse sensors key or proxy to read CPU/NVMe temperatures for this node.
-                    Disable if you don't need temperature data or haven't deployed the proxy yet.
+                    Uses Pulse Agent or configured host sensors to read CPU and NVMe temperatures
+                    for this node. Changes apply immediately for this node.
                   </p>
                 </div>
                 <TogglePrimitive
@@ -325,7 +325,7 @@ export const NodeModalMonitoringSection: Component<NodeModalMonitoringSectionPro
               </div>
               <Show when={!state.temperatureMonitoringEnabledValue()}>
                 <p class="mt-3 rounded-sm border border-blue-200 bg-blue-50 p-2 text-xs text-blue-700 dark:border-blue-700 dark:bg-blue-900/25 dark:text-blue-200">
-                  Pulse will skip SSH temperature polling for this node. Existing monitoring
+                  Pulse will skip host temperature polling for this node. Existing monitoring
                   readings will stop refreshing.
                 </p>
               </Show>

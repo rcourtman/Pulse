@@ -211,7 +211,7 @@ export const UpdateInstallGuide: Component<UpdateInstallGuideProps> = (props) =>
         </div>
       </Show>
 
-      <Show when={props.updateInfo?.warning}>
+      <Show when={props.updateInfo?.warning && props.updateInfo?.available}>
         <div class="rounded-md border border-amber-200 bg-amber-50 p-3 dark:border-amber-700 dark:bg-amber-900/25">
           <p class="text-xs text-amber-800 dark:text-amber-200">{props.updateInfo?.warning}</p>
         </div>

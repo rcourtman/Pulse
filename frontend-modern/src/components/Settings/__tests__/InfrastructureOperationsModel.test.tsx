@@ -311,7 +311,7 @@ describe('infrastructure operations model', () => {
       'Pulse Agent is a low-overhead background service.',
     );
     expect(infrastructureInstallerSectionSource).toContain(
-      'API-backed platforms such as Proxmox start under Platform connections.',
+      'API-backed platforms such as Proxmox connect directly via Add infrastructure.',
     );
     expect(infrastructureInstallerSectionSource).toContain(
       'Use Availability checks for ping-only or agentless device monitoring.',

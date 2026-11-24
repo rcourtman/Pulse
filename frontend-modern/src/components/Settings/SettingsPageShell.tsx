@@ -41,6 +41,19 @@ export const SettingsPageShell: Component<SettingsPageShellProps> = (props) => {
       : props.activeTab() === itemId;
 
   let mobileHeader: HTMLDivElement | undefined;
+  let mobileBackButton: HTMLButtonElement | undefined;
+  const closeMobileMenu = (restoreFocus = false) => {
+    props.setIsMobileMenuOpen(false);
+    if (restoreFocus) {
+      queueMicrotask(() => mobileBackButton?.focus());
+    }
+  };
+  const handleNavKeyDown = (event: KeyboardEvent) => {
+    if (event.key === 'Escape' && props.isMobileMenuOpen()) {
+      event.preventDefault();
+      closeMobileMenu(true);
+    }
+  };
   const revealFocusedControl = ({ target }: FocusEvent) => {
     const header = mobileHeader;
     if (!header?.offsetHeight || !(target instanceof HTMLElement)) return;
@@ -77,7 +90,10 @@ export const SettingsPageShell: Component<SettingsPageShellProps> = (props) => {
       </div>
 
       <Show when={props.hasUnsavedChanges() && props.activeTabSaveBehavior() === 'system'}>
-        <div class="mb-3 border-l-4 border-amber-500 bg-amber-50 p-3 shadow-xs dark:border-amber-400 dark:bg-amber-900/25 sm:rounded-r-lg sm:p-4 lg:mb-0">
+        <div
+          role="status"
+          class="sticky top-0 z-20 mb-3 border-l-4 border-amber-500 bg-amber-50/95 p-3 shadow-sm backdrop-blur-sm dark:border-amber-400 dark:bg-amber-950/95 sm:rounded-r-lg sm:p-4 lg:mb-0"
+        >
           <div class="flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-center sm:gap-4">
             <div class="flex items-start gap-3">
               <svg
@@ -129,24 +145,25 @@ export const SettingsPageShell: Component<SettingsPageShellProps> = (props) => {
       >
         <nav
           data-settings-navigation
+          onKeyDown={handleNavKeyDown}
           class={`${props.isMobileMenuOpen() ? 'flex w-full flex-col' : 'hidden lg:flex lg:flex-col'} ${props.sidebarCollapsed() ? 'lg:w-16 lg:min-w-16 lg:max-w-16 lg:basis-16' : 'lg:w-72 lg:min-w-[18rem] lg:max-w-[18rem] lg:basis-[18rem]'} relative z-10 max-h-[calc(100dvh-var(--pulse-mobile-nav-height,4rem)-4.5rem)] shrink-0 overflow-y-auto overscroll-contain border-b border-border bg-surface transition-all duration-200 lg:max-h-none lg:overflow-visible lg:border-b-0 lg:border-r lg:bg-transparent lg:align-top`}
           aria-label={shellCopy().navigationAriaLabel}
         >
           <div
-            class={`${props.sidebarCollapsed() ? 'px-2' : 'px-3 lg:px-4'} space-y-4 pt-3 pb-[calc(var(--pulse-mobile-nav-height,0px)+1rem)] transition-all duration-200 lg:sticky lg:top-0 lg:space-y-5 lg:py-5`}
+            class={`${props.sidebarCollapsed() ? 'px-2' : 'px-3 lg:px-4'} space-y-4 pt-3 pb-[calc(var(--pulse-mobile-nav-height,0px)+1rem)] transition-all duration-200 lg:sticky lg:top-0 lg:max-h-[calc(100dvh-6rem)] lg:space-y-5 lg:overflow-y-auto lg:overscroll-contain lg:pb-8 lg:pt-5`}
           >
             <Show when={!props.sidebarCollapsed()}>
               <div class="flex min-h-11 items-center justify-between border-b border-border pb-2 lg:min-h-0">
                 <div
-                  role="heading"
-                  aria-level="2"
+                  role={props.isMobileMenuOpen() ? 'heading' : undefined}
+                  aria-level={props.isMobileMenuOpen() ? '1' : undefined}
                   class="text-base font-semibold tracking-tight text-base-content lg:text-sm"
                 >
                   {shellCopy().navigationTitle}
                 </div>
                 <button
                   type="button"
-                  onClick={() => props.setIsMobileMenuOpen(false)}
+                  onClick={() => closeMobileMenu(true)}
                   class="inline-flex min-h-11 min-w-11 items-center justify-center rounded-md text-muted transition-colors active:bg-surface-hover lg:hidden"
                   aria-label={shellCopy().mobileCloseLabel}
                 >
@@ -256,6 +273,7 @@ export const SettingsPageShell: Component<SettingsPageShellProps> = (props) => {
                             >
                               <div class="flex w-full items-center gap-3 lg:gap-2.5">
                                 <div
+                                  aria-hidden="true"
                                   class={`flex h-8 w-8 items-center justify-center rounded-md lg:h-auto lg:w-auto lg:rounded-none ${isActive() ? 'bg-blue-100 text-blue-600 dark:bg-blue-900/25 dark:text-blue-400 lg:bg-transparent' : 'bg-surface text-muted lg:bg-transparent lg:text-inherit'}`}
                                 >
                                   <item.icon
@@ -300,6 +318,7 @@ export const SettingsPageShell: Component<SettingsPageShellProps> = (props) => {
               class="sticky top-0 z-40 flex min-h-12 items-center border-b border-border-subtle bg-surface/95 px-2 backdrop-blur-sm lg:hidden"
             >
               <button
+                ref={mobileBackButton}
                 type="button"
                 onClick={() => {
                   props.setSidebarCollapsed(false);

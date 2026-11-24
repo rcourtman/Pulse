@@ -121,10 +121,28 @@ describe('DiscoverySettingsForm', () => {
       initialMode: 'custom',
     });
 
-    fireEvent.click(screen.getByRole('button', { name: '192.168.0.0/24' }));
+    const chip = screen.getByRole('button', { name: '192.168.0.0/24' });
+    expect(chip).toHaveAttribute('aria-pressed', 'false');
+
+    fireEvent.click(chip);
 
     await waitFor(() => expect(commitDiscoverySubnet).toHaveBeenCalledWith('192.168.0.0/24'));
     expect(discoverySubnetDraft()).toBe('192.168.0.0/24');
     expect(screen.getByLabelText('Discovery subnets')).toHaveValue('192.168.0.0/24');
+    expect(chip).toHaveAttribute('aria-pressed', 'true');
+
+    // Selecting a second chip appends it cleanly and preserves reactive toggle state.
+    const secondChip = screen.getByRole('button', { name: '192.168.1.0/24' });
+    fireEvent.click(secondChip);
+    await waitFor(() =>
+      expect(commitDiscoverySubnet).toHaveBeenCalledWith('192.168.0.0/24, 192.168.1.0/24'),
+    );
+    expect(secondChip).toHaveAttribute('aria-pressed', 'true');
+
+    // Clicking the first chip again deselects it reactively.
+    fireEvent.click(chip);
+    await waitFor(() => expect(commitDiscoverySubnet).toHaveBeenCalledWith('192.168.1.0/24'));
+    expect(chip).toHaveAttribute('aria-pressed', 'false');
+    expect(screen.queryByText(/system\.json/i)).not.toBeInTheDocument();
   });
 });

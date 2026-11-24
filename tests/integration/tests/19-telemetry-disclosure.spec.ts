@@ -259,8 +259,10 @@ test.describe("Telemetry disclosure", () => {
       ),
     ).toBe(true);
 
-    page.once("dialog", (dialog) => dialog.accept());
     await page.getByRole("button", { name: "Reset ID" }).click();
+    const resetDialog = page.getByRole("dialog", { name: "Reset telemetry install ID" });
+    await expect(resetDialog).toBeVisible();
+    await resetDialog.getByRole("button", { name: "Reset ID" }).click();
 
     await expect
       .poll(async () => {

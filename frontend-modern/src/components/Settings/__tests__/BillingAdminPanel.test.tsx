@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@solidjs/testing-library';
 
 import { BillingAdminPanel } from '../BillingAdminPanel';
 
@@ -150,6 +150,8 @@ describe('BillingAdminPanel', () => {
     });
 
     await fireEvent.click(screen.getByRole('button', { name: 'Suspend Org for Org One (org-1)' }));
+    const dialog = screen.getByRole('dialog', { name: 'Suspend organization' });
+    await fireEvent.click(within(dialog).getByRole('button', { name: 'Suspend organization' }));
 
     await waitFor(() => {
       expect(putBillingStateMock).toHaveBeenCalledTimes(1);
@@ -180,6 +182,8 @@ describe('BillingAdminPanel', () => {
     });
 
     await fireEvent.click(screen.getByRole('button', { name: 'Suspend Org for Org One (org-1)' }));
+    const dialog = screen.getByRole('dialog', { name: 'Suspend organization' });
+    await fireEvent.click(within(dialog).getByRole('button', { name: 'Suspend organization' }));
 
     await waitFor(() => {
       expect(putBillingStateMock).toHaveBeenCalledTimes(1);
@@ -188,6 +192,27 @@ describe('BillingAdminPanel', () => {
     const payload = putBillingStateMock.mock.calls[0][1] as Record<string, unknown>;
     expect(payload.subscription_state).toBe('suspended');
     expect(payload.plan_version).toBe('cloud_power');
+  });
+
+  it('keeps organization active when suspension dialog is cancelled', async () => {
+    getBillingStateMock.mockResolvedValue({
+      capabilities: ['multi_tenant'],
+      limits: {},
+      subscription_state: 'active',
+    });
+
+    render(() => <BillingAdminPanel />);
+
+    const suspendButton = await screen.findByRole('button', {
+      name: 'Suspend Org for Org One (org-1)',
+    });
+    await waitFor(() => expect(suspendButton).toBeEnabled());
+    await fireEvent.click(suspendButton);
+    const dialog = screen.getByRole('dialog', { name: 'Suspend organization' });
+    await fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+
+    expect(screen.queryByRole('dialog', { name: 'Suspend organization' })).not.toBeInTheDocument();
+    expect(putBillingStateMock).not.toHaveBeenCalled();
   });
 
   it('stays unavailable in demo mode without loading hosted billing admin data', () => {
@@ -224,6 +249,8 @@ describe('BillingAdminPanel', () => {
       screen.getByRole('button', { name: 'Suspend Org for Org One (org-1)' }).closest('td'),
     ).toHaveTextContent('Active');
     await fireEvent.click(screen.getByRole('button', { name: 'Suspend Org for Org One (org-1)' }));
+    const dialog = screen.getByRole('dialog', { name: 'Suspend organization' });
+    await fireEvent.click(within(dialog).getByRole('button', { name: 'Suspend organization' }));
     await waitFor(() => expect(putBillingStateMock).toHaveBeenCalledTimes(1));
     expect(putBillingStateMock.mock.calls[0][0]).toBe('org-1');
     expect(putBillingStateMock.mock.calls[0][1].subscription_state).toBe('suspended');

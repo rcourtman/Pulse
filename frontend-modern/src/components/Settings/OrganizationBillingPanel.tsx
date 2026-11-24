@@ -106,6 +106,8 @@ export const OrganizationBillingPanel: Component<OrganizationBillingPanelProps> 
             showHeaderAction() ? (
               <Button
                 ref={headerAction}
+                variant={loading() ? 'ghost' : 'secondary'}
+                size={loading() ? 'xs' : 'sm'}
                 onClick={reloadBilling}
                 aria-describedby={loading() ? checkingID : undefined}
                 class="w-full sm:w-auto"

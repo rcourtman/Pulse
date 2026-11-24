@@ -348,7 +348,7 @@ export const EN_MESSAGES = {
     'Discover Docker containers running inside Proxmox LXC guests without installing an agent in every guest.',
   'settings.general.guestDocker.toggle.title': 'Discover Docker in LXC guests',
   'settings.general.guestDocker.toggle.description':
-    'When enabled, Pulse runs bounded pct exec checks through connected Proxmox node agents to find Docker inside LXC guests and list their containers. Guests that already report through their own agent are skipped, and Pulse collects only the container list and usage stats — no inspect, environment, mount, command, or process details.',
+    'When enabled, Pulse runs bounded pct exec checks through connected Proxmox node agents to find Docker inside LXC guests and list their containers. Guests that already report through their own agent are skipped, and Pulse collects only the container list and usage stats, with no inspect, environment, mount, command, or process details.',
   'settings.general.guestDocker.requirements':
     'Requires a Pulse agent on the Proxmox node with command execution enabled. Admin only.',
   'settings.general.language.ariaLabel': 'App language',
@@ -413,7 +413,7 @@ export const EN_MESSAGES = {
     'Review your organization plan, applicable usage policies, and subscription status for paid access.',
   'settings.header.organizationBilling.title': 'Billing & Usage',
   'settings.header.organizationBillingAdmin.description':
-    'Review and manage tenant billing state across all organizations (hosted mode only).',
+    'Review and manage tenant billing state across all organizations.',
   'settings.header.organizationBillingAdmin.title': 'Billing Admin',
   'settings.header.organizationOverview.description':
     'Review organization metadata, membership footprint, and ownership.',

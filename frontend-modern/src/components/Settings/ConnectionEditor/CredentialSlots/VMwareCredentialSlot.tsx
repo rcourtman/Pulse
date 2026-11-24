@@ -31,6 +31,7 @@ export interface VMwareCredentialSlotProps {
 
 export const VMwareCredentialSlot: Component<VMwareCredentialSlotProps> = (props) => {
   let primed = false;
+  let cancelled = false;
   let testArea: HTMLDivElement | undefined;
 
   onMount(() => {
@@ -46,8 +47,16 @@ export const VMwareCredentialSlot: Component<VMwareCredentialSlotProps> = (props
 
   createEffect(() => {
     const open = props.state.dialogOpen();
-    if (primed && !open && !props.state.saving()) {
+    if (primed && !cancelled && !open && !props.state.saving()) {
       props.onSaved();
+    }
+  });
+
+  createEffect(() => {
+    if (props.editingConnection && typeof props.connectionEnabled === 'boolean') {
+      if (props.state.form().enabled !== props.connectionEnabled) {
+        props.state.updateForm({ enabled: props.connectionEnabled });
+      }
     }
   });
 
@@ -58,6 +67,7 @@ export const VMwareCredentialSlot: Component<VMwareCredentialSlotProps> = (props
   });
 
   const handleCancel = () => {
+    cancelled = true;
     props.state.closeDialog();
     props.onCancel();
   };
@@ -173,15 +183,19 @@ export const VMwareCredentialSlot: Component<VMwareCredentialSlotProps> = (props
             />
             <span class="text-sm text-base-content">Skip TLS verification</span>
           </label>
-          <label class="flex items-center gap-3">
-            <input
-              type="checkbox"
-              class={formCheckbox}
-              checked={props.state.form().enabled}
-              onChange={(event) => props.state.updateForm({ enabled: event.currentTarget.checked })}
-            />
-            <span class="text-sm text-base-content">Enable this vCenter connection</span>
-          </label>
+          <Show when={!(isEditing() && props.onToggleEnabled)}>
+            <label class="flex items-center gap-3">
+              <input
+                type="checkbox"
+                class={formCheckbox}
+                checked={props.state.form().enabled}
+                onChange={(event) =>
+                  props.state.updateForm({ enabled: event.currentTarget.checked })
+                }
+              />
+              <span class="text-sm text-base-content">Enable this vCenter connection</span>
+            </label>
+          </Show>
         </div>
 
         <div class="space-y-3 rounded-md border border-border bg-surface p-4">

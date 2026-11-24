@@ -12,6 +12,7 @@ import { SELF_HOSTED_PRO_BILLING_PRESENTATION } from './selfHostedBillingPresent
 interface SelfHostedCommercialRecoverySectionProps {
   sectionId?: string;
   open?: boolean;
+  isProRuntime?: boolean;
   licenseKey: string;
   activating: boolean;
   clearing: boolean;
@@ -69,21 +70,23 @@ export const SelfHostedCommercialRecoverySection: Component<
               </>
             }
           />
-          <div class="mt-3 rounded-md border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/25 p-3 text-sm text-amber-800 dark:text-amber-200">
-            <p class="font-medium">
-              {SELF_HOSTED_RECOVERY_PRESENTATION.privateRuntimeNotice.title}
-            </p>
-            <p class="mt-1 text-xs text-amber-700 dark:text-amber-300">
-              {SELF_HOSTED_RECOVERY_PRESENTATION.privateRuntimeNotice.body}
-            </p>
-            <ExternalTextLink
-              href={SELF_HOSTED_RECOVERY_PRESENTATION.privateRuntimeNotice.actionUrl}
-              variant="compactAction"
-              class="mt-2"
-            >
-              {SELF_HOSTED_RECOVERY_PRESENTATION.privateRuntimeNotice.actionLabel}
-            </ExternalTextLink>
-          </div>
+          <Show when={!props.isProRuntime}>
+            <div class="mt-3 rounded-md border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/25 p-3 text-sm text-amber-800 dark:text-amber-200">
+              <p class="font-medium">
+                {SELF_HOSTED_RECOVERY_PRESENTATION.privateRuntimeNotice.title}
+              </p>
+              <p class="mt-1 text-xs text-amber-700 dark:text-amber-300">
+                {SELF_HOSTED_RECOVERY_PRESENTATION.privateRuntimeNotice.body}
+              </p>
+              <ExternalTextLink
+                href={SELF_HOSTED_RECOVERY_PRESENTATION.privateRuntimeNotice.actionUrl}
+                variant="compactAction"
+                class="mt-2"
+              >
+                {SELF_HOSTED_RECOVERY_PRESENTATION.privateRuntimeNotice.actionLabel}
+              </ExternalTextLink>
+            </div>
+          </Show>
           <Show when={props.looksLikeLegacyLicenseKey}>
             <div class="mt-3 rounded-md border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/25 p-3 text-sm text-amber-800 dark:text-amber-200">
               <p class="font-medium">{SELF_HOSTED_RECOVERY_PRESENTATION.legacyNotice.title}</p>

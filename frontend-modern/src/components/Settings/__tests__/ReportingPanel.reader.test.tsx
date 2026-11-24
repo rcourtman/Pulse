@@ -1,6 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@solidjs/testing-library';
 import { createSignal, type Accessor, type Setter } from 'solid-js';
+
+vi.mock('@solidjs/router', () => ({
+  A: (props: { href: string; class?: string; children?: unknown }) => (
+    <a href={props.href} class={props.class}>
+      {props.children as any}
+    </a>
+  ),
+}));
+
 import { ReportingPanel, type ReportingPanelProps } from '../ReportingPanel';
 import { buildLegacyReportingCatalogFallback } from '../reportingCatalogModel';
 import { eventBus } from '@/stores/events';
@@ -285,12 +294,10 @@ describe('Reporting reader lifetime', () => {
   it('revalidates the reader after a delete confirmation and never changes another organisation', async () => {
     mount();
     await ready();
-    vi.spyOn(window, 'confirm').mockImplementation(() => {
-      org = 'other';
-      return true;
-    });
-    await fireEvent.click(screen.getByLabelText('Details for North private report'));
     await fireEvent.click(screen.getByRole('button', { name: 'Delete North private report' }));
+    const dialog = screen.getByRole('dialog', { name: 'Delete report schedule' });
+    org = 'other';
+    await fireEvent.click(within(dialog).getByRole('button', { name: 'Delete schedule' }));
     expect(api.mock.calls.some(([, init]) => init?.method === 'DELETE')).toBe(false);
   });
 });

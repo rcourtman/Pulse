@@ -24,6 +24,14 @@ export function TogglePrimitive(props: BaseToggleProps): JSX.Element {
   const size = resolveToggleSize(props.size);
   const state = useToggleState(props);
 
+  const knobClass = () => {
+    const base = getToggleKnobClass(size, props.checked, state.isDisabled());
+    const surfaceReplacement = props.checked
+      ? 'bg-white border border-white/80 shadow-xs'
+      : 'bg-white dark:bg-slate-100 border border-slate-300/80 dark:border-slate-500/40 shadow-xs';
+    return base.replace('bg-surface border border-border-subtle', surfaceReplacement);
+  };
+
   return (
     <button
       type="button"
@@ -36,7 +44,7 @@ export function TogglePrimitive(props: BaseToggleProps): JSX.Element {
       aria-labelledby={props.ariaLabel ? undefined : props.ariaLabelledBy}
       aria-describedby={props.ariaDescribedBy}
     >
-      <span class={getToggleKnobClass(size, props.checked, state.isDisabled())} />
+      <span class={knobClass()} />
     </button>
   );
 }

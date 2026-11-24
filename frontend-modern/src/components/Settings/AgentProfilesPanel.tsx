@@ -53,9 +53,15 @@ export const AgentProfilesPanel: Component = () => {
     handleSuggest,
     handleSuggestionAccepted,
     hasAgentProfiles,
+    loadData,
+    loadError,
     loading,
     profiles,
     saving,
+    deletingProfile,
+    setDeletingProfile,
+    deleting,
+    confirmDeleteProfile,
     setFormDescription,
     setFormName,
     setShowModal,
@@ -154,7 +160,30 @@ export const AgentProfilesPanel: Component = () => {
               </div>
             </Show>
 
-            <Show when={!loading() && profiles().length === 0}>
+            <Show when={!loading() && loadError()}>
+              {(message) => (
+                <div
+                  role="alert"
+                  class="flex flex-col gap-3 px-4 py-4 text-sm text-rose-800 dark:text-rose-200 sm:flex-row sm:items-center sm:justify-between"
+                >
+                  <div>
+                    <p class="font-semibold">Unable to load configuration profiles</p>
+                    <p class="mt-0.5 text-xs">{message()}</p>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    class="self-start sm:self-center"
+                    onClick={() => void loadData()}
+                  >
+                    Retry
+                  </Button>
+                </div>
+              )}
+            </Show>
+
+            <Show when={!loading() && !loadError() && profiles().length === 0}>
               <EmptyState
                 variant="panel"
                 icon={<Settings class="h-5 w-5" />}
@@ -162,7 +191,7 @@ export const AgentProfilesPanel: Component = () => {
               />
             </Show>
 
-            <Show when={!loading() && profiles().length > 0}>
+            <Show when={!loading() && !loadError() && profiles().length > 0}>
               <PulseDataGrid
                 data={profiles()}
                 columns={[
@@ -202,16 +231,18 @@ export const AgentProfilesPanel: Component = () => {
                           onClick={() => handleEdit(profile)}
                           class="inline-flex min-h-11 min-w-11 items-center justify-center rounded-md p-1.5 hover:text-blue-600 hover:bg-blue-50 sm:min-h-0 sm:min-w-0 dark:hover:text-blue-400 dark:hover:bg-blue-900/25"
                           title="Edit profile"
+                          aria-label={`Edit profile ${profile.name}`}
                         >
-                          <Pencil class="w-4 h-4" />
+                          <Pencil class="w-4 h-4" aria-hidden="true" />
                         </button>
                         <button
                           type="button"
                           onClick={() => handleDelete(profile)}
                           class="inline-flex min-h-11 min-w-11 items-center justify-center rounded-md p-1.5 hover:text-red-600 hover:bg-red-50 sm:min-h-0 sm:min-w-0 dark:hover:text-red-400 dark:hover:bg-red-900/25"
                           title="Delete profile"
+                          aria-label={`Delete profile ${profile.name}`}
                         >
-                          <Trash2 class="w-4 h-4" />
+                          <Trash2 class="w-4 h-4" aria-hidden="true" />
                         </button>
                       </div>
                     ),
@@ -405,42 +436,57 @@ export const AgentProfilesPanel: Component = () => {
                               {setting.label}
                             </span>
                             <Show when={setting.type === 'boolean'}>
-                              <button
-                                type="button"
-                                aria-label={`${setting.label}: ${String(formSettings()[setting.key] ?? 'default')}`}
-                                aria-pressed={
-                                  formSettings()[setting.key] === undefined
-                                    ? 'mixed'
-                                    : formSettings()[setting.key] === true
-                                }
-                                onClick={() => {
-                                  const current = formSettings()[setting.key];
-                                  if (current === undefined) {
-                                    updateSetting(setting.key, true);
-                                  } else if (current === true) {
-                                    updateSetting(setting.key, false);
-                                  } else {
-                                    updateSetting(setting.key, undefined);
-                                  }
-                                }}
-                                class={`relative inline-flex h-8 w-12 sm:h-7 sm:w-12 items-center rounded-full transition-colors ${
-                                  formSettings()[setting.key] === true
-                                    ? 'bg-blue-600'
+                              <div class="flex items-center gap-2">
+                                <span class="text-xs font-medium text-muted">
+                                  {formSettings()[setting.key] === true
+                                    ? 'Enabled'
                                     : formSettings()[setting.key] === false
-                                      ? 'bg-slate-400'
-                                      : 'bg-surface-hover'
-                                }`}
-                              >
-                                <span
-                                  class={`inline-block h-6 w-6 sm:h-5 sm:w-5 transform rounded-full bg-white transition-transform ${
+                                      ? 'Disabled'
+                                      : 'Default'}
+                                </span>
+                                <button
+                                  type="button"
+                                  aria-label={`${setting.label}: ${
                                     formSettings()[setting.key] === true
-                                      ? 'translate-x-4 sm:translate-x-5'
+                                      ? 'enabled'
                                       : formSettings()[setting.key] === false
-                                        ? 'translate-x-1'
-                                        : 'translate-x-3'
+                                        ? 'disabled'
+                                        : 'default'
                                   }`}
-                                />
-                              </button>
+                                  aria-pressed={
+                                    formSettings()[setting.key] === undefined
+                                      ? 'mixed'
+                                      : formSettings()[setting.key] === true
+                                  }
+                                  onClick={() => {
+                                    const current = formSettings()[setting.key];
+                                    if (current === undefined) {
+                                      updateSetting(setting.key, true);
+                                    } else if (current === true) {
+                                      updateSetting(setting.key, false);
+                                    } else {
+                                      updateSetting(setting.key, undefined);
+                                    }
+                                  }}
+                                  class={`relative inline-flex h-8 w-12 sm:h-7 sm:w-12 items-center rounded-full border border-border transition-colors ${
+                                    formSettings()[setting.key] === true
+                                      ? 'bg-blue-600 border-blue-600'
+                                      : formSettings()[setting.key] === false
+                                        ? 'bg-slate-400 border-slate-400'
+                                        : 'bg-surface-hover'
+                                  }`}
+                                >
+                                  <span
+                                    class={`inline-block h-6 w-6 sm:h-5 sm:w-5 transform rounded-full bg-white shadow-xs transition-transform ${
+                                      formSettings()[setting.key] === true
+                                        ? 'translate-x-4 sm:translate-x-5'
+                                        : formSettings()[setting.key] === false
+                                          ? 'translate-x-1'
+                                          : 'translate-x-3'
+                                    }`}
+                                  />
+                                </button>
+                              </div>
                             </Show>
                             <Show when={setting.type === 'select'}>
                               <FormSelect
@@ -480,7 +526,7 @@ export const AgentProfilesPanel: Component = () => {
                                   updateSetting(setting.key, e.currentTarget.value || undefined)
                                 }
                                 placeholder={(setting as StringSetting).placeholder || ''}
-                                class="min-h-10 sm:min-h-9 w-40 rounded-md border bg-surface px-2.5 py-1.5 text-sm shadow-xs focus:border-blue-500 focus:outline-hidden focus:ring-1 focus:ring-blue-500"
+                                class="min-h-10 sm:min-h-9 w-40 rounded-md border border-border bg-surface px-2.5 py-1.5 text-sm text-base-content shadow-xs focus:border-blue-500 focus:outline-hidden focus:ring-1 focus:ring-blue-500"
                               />
                             </Show>
                           </div>
@@ -496,52 +542,67 @@ export const AgentProfilesPanel: Component = () => {
                           Additional settings (not in standard list):
                         </p>
                         <For each={unknownKeys()}>
-                          {(key) => (
-                            <div class="rounded-md border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/25 p-3 mb-2">
-                              <div class="flex items-center justify-between">
-                                <span class="text-sm font-medium text-base-content font-mono">
-                                  {key}
-                                </span>
-                                <div class="flex items-center gap-2">
-                                  <input
-                                    type="text"
-                                    aria-label={key}
-                                    value={String(formSettings()[key] ?? '')}
-                                    onInput={(e) => {
-                                      const val = e.currentTarget.value;
-                                      // Try to parse as JSON for complex values
-                                      try {
-                                        updateSetting(key, JSON.parse(val));
-                                      } catch {
-                                        updateSetting(key, val || undefined);
-                                      }
-                                    }}
-                                    class="min-h-10 sm:min-h-9 w-32 rounded-md border bg-surface px-2.5 py-1.5 text-sm text-base-content shadow-xs focus:border-blue-500 focus:outline-hidden focus:ring-1 focus:ring-blue-500"
-                                  />
-                                  <button
-                                    type="button"
-                                    onClick={() => updateSetting(key, undefined)}
-                                    class="inline-flex min-h-10 min-w-10 sm:min-h-9 sm:min-w-9 items-center justify-center rounded-sm text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/25"
-                                    title="Remove this setting"
-                                  >
-                                    <svg
-                                      class="w-4 h-4"
-                                      fill="none"
-                                      viewBox="0 0 24 24"
-                                      stroke="currentColor"
+                          {(key) => {
+                            const formattedValue = () => {
+                              const raw = formSettings()[key];
+                              if (raw === undefined || raw === null) return '';
+                              if (typeof raw === 'object') {
+                                try {
+                                  return JSON.stringify(raw);
+                                } catch {
+                                  return String(raw);
+                                }
+                              }
+                              return String(raw);
+                            };
+                            return (
+                              <div class="rounded-md border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/25 p-3 mb-2">
+                                <div class="flex items-center justify-between gap-2">
+                                  <span class="text-sm font-medium text-base-content font-mono">
+                                    {key}
+                                  </span>
+                                  <div class="flex items-center gap-2">
+                                    <input
+                                      type="text"
+                                      aria-label={key}
+                                      value={formattedValue()}
+                                      onInput={(e) => {
+                                        const val = e.currentTarget.value;
+                                        try {
+                                          updateSetting(key, JSON.parse(val));
+                                        } catch {
+                                          updateSetting(key, val || undefined);
+                                        }
+                                      }}
+                                      class="min-h-10 sm:min-h-9 w-36 rounded-md border border-border bg-surface px-2.5 py-1.5 text-sm text-base-content shadow-xs focus:border-blue-500 focus:outline-hidden focus:ring-1 focus:ring-blue-500"
+                                    />
+                                    <button
+                                      type="button"
+                                      onClick={() => updateSetting(key, undefined)}
+                                      class="inline-flex min-h-10 min-w-10 sm:min-h-9 sm:min-w-9 items-center justify-center rounded-sm text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/25"
+                                      title="Remove this setting"
+                                      aria-label={`Remove setting ${key}`}
                                     >
-                                      <path
-                                        stroke-linecap="round"
-                                        stroke-linejoin="round"
-                                        stroke-width="2"
-                                        d="M6 18L18 6M6 6l12 12"
-                                      />
-                                    </svg>
-                                  </button>
+                                      <svg
+                                        class="w-4 h-4"
+                                        fill="none"
+                                        viewBox="0 0 24 24"
+                                        stroke="currentColor"
+                                        aria-hidden="true"
+                                      >
+                                        <path
+                                          stroke-linecap="round"
+                                          stroke-linejoin="round"
+                                          stroke-width="2"
+                                          d="M6 18L18 6M6 6l12 12"
+                                        />
+                                      </svg>
+                                    </button>
+                                  </div>
                                 </div>
                               </div>
-                            </div>
-                          )}
+                            );
+                          }}
                         </For>
                       </div>
                     </Show>
@@ -571,6 +632,54 @@ export const AgentProfilesPanel: Component = () => {
                 </div>
               </div>
             </Dialog>
+          </Show>
+
+          {/* Delete Profile Confirmation Dialog */}
+          <Show when={deletingProfile()}>
+            {(profile) => {
+              const assignedCount = () => getAssignmentCount(profile().id);
+              return (
+                <Dialog
+                  isOpen={true}
+                  onClose={() => !deleting() && setDeletingProfile(null)}
+                  panelClass="max-w-md"
+                  ariaLabel={`Delete profile ${profile().name}`}
+                >
+                  <div class="w-full">
+                    <div class="border-b border-border px-6 py-4">
+                      <h3 class="text-base font-semibold text-base-content">
+                        Delete profile &ldquo;{profile().name}&rdquo;?
+                      </h3>
+                    </div>
+                    <div class="px-6 py-4 text-sm text-muted">
+                      {assignedCount() > 0
+                        ? `This profile is assigned to ${assignedCount()} ${assignedCount() === 1 ? 'agent' : 'agents'}. Deleting it will unassign ${assignedCount() === 1 ? 'that agent' : 'those agents'}.`
+                        : 'This removes the configuration profile permanently.'}
+                    </div>
+                    <div class="flex items-center justify-end gap-2 border-t border-border px-6 py-3">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        disabled={deleting()}
+                        onClick={() => setDeletingProfile(null)}
+                      >
+                        Cancel
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="danger"
+                        size="sm"
+                        disabled={deleting()}
+                        onClick={() => void confirmDeleteProfile()}
+                      >
+                        {deleting() ? 'Deleting...' : 'Delete profile'}
+                      </Button>
+                    </div>
+                  </div>
+                </Dialog>
+              );
+            }}
           </Show>
 
           {/* Suggest Profile Modal */}

@@ -43,6 +43,8 @@ export function useSystemSettingsState({
   const normalizeAutoUpdateEnabled = (channel: 'stable' | 'rc', enabled: boolean) =>
     channel === 'stable' && enabled;
   const [hasUnsavedChanges, setHasUnsavedChanges] = createSignal(false);
+  const [canManageSystemSettings, setCanManageSystemSettings] = createSignal(true);
+  const [showResetTelemetryConfirm, setShowResetTelemetryConfirm] = createSignal(false);
   const [pvePollingInterval, setPVEPollingInterval] = createSignal<number>(PVE_POLLING_MIN_SECONDS);
   const [pvePollingSelection, setPVEPollingSelection] = createSignal<number | 'custom'>(
     PVE_POLLING_MIN_SECONDS,
@@ -86,6 +88,81 @@ export function useSystemSettingsState({
   const [backupPollingInterval, setBackupPollingInterval] = createSignal(0);
   const [backupPollingCustomMinutes, setBackupPollingCustomMinutes] = createSignal(60);
   const [backupPollingUseCustom, setBackupPollingUseCustom] = createSignal(false);
+
+  interface SystemSettingsDraftSnapshot {
+    pvePollingInterval: number;
+    allowedOrigins: string;
+    allowEmbedding: boolean;
+    allowedEmbedOrigins: string;
+    webhookAllowedPrivateCIDRs: string;
+    publicURL: string;
+    reportBrandDisplayName: string;
+    reportBrandLogoBase64: string;
+    reportBrandLogoFormat: NonNullable<ReportBrandSettings['logoFormat']>;
+    updateChannel: 'stable' | 'rc';
+    autoUpdateEnabled: boolean;
+    backupPollingEnabled: boolean;
+    backupPollingInterval: number;
+    backupPollingCustomMinutes: number;
+    backupPollingUseCustom: boolean;
+  }
+
+  let savedDraftSnapshot: SystemSettingsDraftSnapshot = {
+    pvePollingInterval: PVE_POLLING_MIN_SECONDS,
+    allowedOrigins: '',
+    allowEmbedding: false,
+    allowedEmbedOrigins: '',
+    webhookAllowedPrivateCIDRs: '',
+    publicURL: '',
+    reportBrandDisplayName: '',
+    reportBrandLogoBase64: '',
+    reportBrandLogoFormat: '',
+    updateChannel: 'stable',
+    autoUpdateEnabled: false,
+    backupPollingEnabled: true,
+    backupPollingInterval: 0,
+    backupPollingCustomMinutes: 60,
+    backupPollingUseCustom: false,
+  };
+
+  const captureSavedDraftSnapshot = () => {
+    savedDraftSnapshot = {
+      pvePollingInterval: pvePollingInterval(),
+      allowedOrigins: allowedOrigins(),
+      allowEmbedding: allowEmbedding(),
+      allowedEmbedOrigins: allowedEmbedOrigins(),
+      webhookAllowedPrivateCIDRs: webhookAllowedPrivateCIDRs(),
+      publicURL: publicURL(),
+      reportBrandDisplayName: reportBrandDisplayName(),
+      reportBrandLogoBase64: reportBrandLogoBase64(),
+      reportBrandLogoFormat: reportBrandLogoFormat(),
+      updateChannel: updateChannel(),
+      autoUpdateEnabled: autoUpdateEnabled(),
+      backupPollingEnabled: backupPollingEnabled(),
+      backupPollingInterval: backupPollingInterval(),
+      backupPollingCustomMinutes: backupPollingCustomMinutes(),
+      backupPollingUseCustom: backupPollingUseCustom(),
+    };
+  };
+
+  const discardChanges = () => {
+    applyPVEPollingSeconds(savedDraftSnapshot.pvePollingInterval);
+    setAllowedOrigins(savedDraftSnapshot.allowedOrigins);
+    setAllowEmbedding(savedDraftSnapshot.allowEmbedding);
+    setAllowedEmbedOrigins(savedDraftSnapshot.allowedEmbedOrigins);
+    setWebhookAllowedPrivateCIDRs(savedDraftSnapshot.webhookAllowedPrivateCIDRs);
+    setPublicURL(savedDraftSnapshot.publicURL);
+    setReportBrandDisplayName(savedDraftSnapshot.reportBrandDisplayName);
+    setReportBrandLogoBase64(savedDraftSnapshot.reportBrandLogoBase64);
+    setReportBrandLogoFormat(savedDraftSnapshot.reportBrandLogoFormat);
+    setUpdateChannel(savedDraftSnapshot.updateChannel);
+    setAutoUpdateEnabled(savedDraftSnapshot.autoUpdateEnabled);
+    setBackupPollingEnabled(savedDraftSnapshot.backupPollingEnabled);
+    setBackupPollingInterval(savedDraftSnapshot.backupPollingInterval);
+    setBackupPollingCustomMinutes(savedDraftSnapshot.backupPollingCustomMinutes);
+    setBackupPollingUseCustom(savedDraftSnapshot.backupPollingUseCustom);
+    setHasUnsavedChanges(false);
+  };
 
   const temperatureMonitoringLocked = () =>
     Boolean(
@@ -193,8 +270,11 @@ export function useSystemSettingsState({
       if (systemSettings.envOverrides) {
         setEnvOverrides(systemSettings.envOverrides);
       }
+      setCanManageSystemSettings(true);
+      captureSavedDraftSnapshot();
     } catch (error) {
       logger.error('Failed to load settings', error);
+      setCanManageSystemSettings(false);
 
       // Viewers cannot read the admin settings payload, but they still need to
       // see the effective server-wide state of read-only controls. Use the
@@ -213,6 +293,7 @@ export function useSystemSettingsState({
         ) {
           applyPVEPollingSeconds(runtimeDisplay.pvePollingInterval);
         }
+        captureSavedDraftSnapshot();
       } catch (runtimeDisplayError) {
         logger.warn('Failed to load read-only runtime settings', runtimeDisplayError);
       }
@@ -272,17 +353,12 @@ export function useSystemSettingsState({
           ? 'Settings saved successfully. Service restart may be required for network changes.'
           : 'Settings saved successfully.',
       );
+      captureSavedDraftSnapshot();
       setHasUnsavedChanges(false);
 
       // Saving an update channel changes the comparison being requested.
       // Replace the old channel's cached verdict with a fresh check.
       if (initiatingTab === 'system-updates') await checkForUpdates();
-
-      if (isNetworkTab) {
-        setTimeout(() => {
-          window.location.reload();
-        }, 3000);
-      }
     } catch (error) {
       notificationStore.error(
         getSystemSettingsSaveErrorMessage(error instanceof Error ? error.message : undefined),
@@ -319,7 +395,11 @@ export function useSystemSettingsState({
   };
 
   const handleDisableDockerUpdateActionsChange = async (disabled: boolean): Promise<void> => {
-    if (disableDockerUpdateActionsLocked() || savingDockerUpdateActions()) {
+    if (
+      !canManageSystemSettings() ||
+      disableDockerUpdateActionsLocked() ||
+      savingDockerUpdateActions()
+    ) {
       return;
     }
 
@@ -350,7 +430,11 @@ export function useSystemSettingsState({
   };
 
   const handleGuestDockerInventoryChange = async (enabled: boolean): Promise<void> => {
-    if (guestDockerInventoryLocked() || savingGuestDockerInventory()) {
+    if (
+      !canManageSystemSettings() ||
+      guestDockerInventoryLocked() ||
+      savingGuestDockerInventory()
+    ) {
       return;
     }
 
@@ -380,7 +464,7 @@ export function useSystemSettingsState({
   };
 
   const handleTelemetryEnabledChange = async (enabled: boolean): Promise<void> => {
-    if (telemetryEnabledLocked() || savingTelemetry()) {
+    if (!canManageSystemSettings() || telemetryEnabledLocked() || savingTelemetry()) {
       return;
     }
 
@@ -436,16 +520,15 @@ export function useSystemSettingsState({
     notificationStore.error('Failed to copy telemetry payload');
   };
 
-  const handleResetTelemetryInstallID = async (): Promise<void> => {
-    if (resettingTelemetryInstallID()) {
+  const requestResetTelemetryInstallID = () => {
+    if (resettingTelemetryInstallID() || !canManageSystemSettings()) {
       return;
     }
+    setShowResetTelemetryConfirm(true);
+  };
 
-    if (
-      !confirm(
-        'Reset the rotating telemetry install ID now? This immediately replaces the local pseudonymous identifier used for outbound usage telemetry.',
-      )
-    ) {
+  const handleResetTelemetryInstallID = async (): Promise<void> => {
+    if (resettingTelemetryInstallID() || !canManageSystemSettings()) {
       return;
     }
 
@@ -453,6 +536,7 @@ export function useSystemSettingsState({
     try {
       const preview = await SettingsAPI.resetTelemetryInstallID();
       setTelemetryPreview(preview);
+      setShowResetTelemetryConfirm(false);
       notificationStore.success('Telemetry install ID reset', 3000);
     } catch (error) {
       logger.error('Failed to reset telemetry install ID', error);
@@ -545,6 +629,11 @@ export function useSystemSettingsState({
   return {
     hasUnsavedChanges,
     setHasUnsavedChanges,
+    canManageSystemSettings,
+    discardChanges,
+    showResetTelemetryConfirm,
+    setShowResetTelemetryConfirm,
+    requestResetTelemetryInstallID,
     pvePollingInterval,
     setPVEPollingInterval,
     pvePollingSelection,

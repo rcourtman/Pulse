@@ -160,10 +160,12 @@ describe('Overview pending renames with the real store and HTTP client', () => {
     expect(writes()).toHaveLength(0);
 
     policy(false);
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled());
+    await waitFor(() => expect(screen.getByLabelText('Display Name')).toBeEnabled());
+    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
     expect(screen.queryByText(readOnlyHint)).not.toBeInTheDocument();
     expect(screen.queryByText(roleHint)).not.toBeInTheDocument();
     fireEvent.input(screen.getByLabelText('Display Name'), { target: { value: savedName } });
+    expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled();
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
     await waitFor(() => expect(writes()).toHaveLength(1));
     applied = true;
@@ -288,7 +290,7 @@ describe('Overview pending renames with the real store and HTTP client', () => {
         break;
       case 'same-ID rebind':
         eventBus.emit('org_switched', orgID);
-        await waitFor(() => expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled());
+        await waitFor(() => expect(screen.getByLabelText('Display Name')).toBeEnabled());
         break;
       case 'disposal':
         view.unmount();

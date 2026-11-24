@@ -1,7 +1,12 @@
 import { createEffect, createMemo, createSignal, on, onCleanup, onMount } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { AIAPI } from '@/api/ai';
-import { runPatrolModelReadiness, type PatrolModelReadinessResponse } from '@/api/patrol';
+import {
+  getPatrolAutonomySettings,
+  runPatrolModelReadiness,
+  type PatrolAutonomyLevel,
+  type PatrolModelReadinessResponse,
+} from '@/api/patrol';
 import { getPatrolCostPreview, getPatrolModelGuidance } from '@/api/aiPatrolCost';
 import {
   AI_PROVIDERS,
@@ -19,14 +24,11 @@ import {
   syncAIRuntimeSettings,
 } from '@/stores/aiRuntimeState';
 import { hasFeature, loadRuntimeCapabilities } from '@/stores/license';
-import { getUpgradeActionDestination } from '@/stores/licenseCommercial';
-import { presentationPolicyHidesUpgradePrompts } from '@/stores/sessionPresentationPolicy';
 import { aiAvailabilityStore } from '@/stores/aiAvailability';
 import { notificationStore } from '@/stores/notifications';
 import type {
   AISettings as AISettingsType,
   AIProvider,
-  AuthMethod,
   ModelInfo,
   PatrolCostProjection,
   PatrolModelGuidanceResponse,
@@ -46,6 +48,12 @@ import {
 } from '@/utils/aiSettingsPresentation';
 import { logger } from '@/utils/logger';
 
+export type PendingRemoveProvider = {
+  provider: AIProvider;
+  providerLabel: string;
+  message: string;
+};
+
 type AISettingsSaveProviderFailure = {
   provider: string;
   model?: string;
@@ -53,6 +61,7 @@ type AISettingsSaveProviderFailure = {
 };
 
 interface AISettingsStateOptions {
+  page?: 'provider' | 'patrol';
   saveErrorFallback?: string;
   savedLabel?: string;
 }
@@ -242,11 +251,17 @@ export function resolveAISettingsSaveProviderFailure(input: {
 }
 
 export const useAISettingsState = (options: AISettingsStateOptions = {}) => {
+  const isProviderPage = () => (options.page ?? 'provider') === 'provider';
   const [settings, setSettings] = createSignal<AISettingsType | null>(null);
   const [loading, setLoading] = createSignal(false);
   const [loadError, setLoadError] = createSignal(false);
   const [saving, setSaving] = createSignal(false);
   const [testing, setTesting] = createSignal(false);
+  const [patrolAutonomyLevel, setPatrolAutonomyLevel] = createSignal<PatrolAutonomyLevel | null>(
+    null,
+  );
+  const [pendingRemoveProvider, setPendingRemoveProvider] =
+    createSignal<PendingRemoveProvider | null>(null);
 
   const [availableModels, setAvailableModels] = createSignal<ModelInfo[]>([]);
   const [modelsLoading, setModelsLoading] = createSignal(false);
@@ -359,16 +374,14 @@ export const useAISettingsState = (options: AISettingsStateOptions = {}) => {
   const [showSetupModal, setShowSetupModal] = createSignal(false);
   const [setupProvider, setSetupProvider] = createSignal<AIProvider>('anthropic');
   const [setupApiKey, setSetupApiKey] = createSignal('');
+  const [setupOpenAIBaseUrl, setSetupOpenAIBaseUrl] = createSignal('');
   const [setupOllamaUrl, setSetupOllamaUrl] = createSignal('http://localhost:11434');
   const [setupSaving, setSetupSaving] = createSignal(false);
-  const [showAdvancedModels, setShowAdvancedModels] = createSignal(false);
 
   const [form, setForm] = createStore({
     enabled: false,
     model: '',
     patrolModel: '',
-    autoFixModel: '',
-    authMethod: 'api_key' as AuthMethod,
     patrolIntervalMinutes: 360,
     alertTriggeredAnalysis: true,
     patrolAlertTriggers: true,
@@ -376,7 +389,6 @@ export const useAISettingsState = (options: AISettingsStateOptions = {}) => {
     patrolAlertTriggerMinSeverity: 'critical' as 'warning' | 'critical',
     patrolFindingNotifications: true,
     patrolFindingNotifyMinSeverity: 'warning' as 'warning' | 'critical',
-    patrolAutoFix: false,
     anthropicApiKey: '',
     openaiApiKey: '',
     openrouterApiKey: '',
@@ -401,8 +413,6 @@ export const useAISettingsState = (options: AISettingsStateOptions = {}) => {
     requestTimeoutSeconds: 300,
   });
 
-  const showUpgradePrompts = () => !presentationPolicyHidesUpgradePrompts();
-
   const settingsReadiness = createMemo(() =>
     getAISettingsReadinessPresentation({
       configured: Boolean(settings()?.configured),
@@ -410,7 +420,6 @@ export const useAISettingsState = (options: AISettingsStateOptions = {}) => {
       modelCount: availableModels().length,
     }),
   );
-  const autoFixLocked = createMemo(() => !hasFeature('ai_autofix'));
   const alertAnalysisLocked = createMemo(() => !hasFeature('ai_alerts'));
   const providerIssueCount = createMemo(
     () => AI_PROVIDERS.filter((provider) => providerHealth[provider].status === 'error').length,
@@ -437,7 +446,6 @@ export const useAISettingsState = (options: AISettingsStateOptions = {}) => {
   });
 
   const effectivePatrolModel = createMemo(() => (form.patrolModel || form.model).trim());
-  const upgradeAutofixDestination = () => getUpgradeActionDestination('ai_autofix');
 
   const hasProviderBackedModels = (data: AISettingsType | null | undefined) =>
     (data?.configured_providers?.length ?? 0) > 0;
@@ -459,8 +467,6 @@ export const useAISettingsState = (options: AISettingsStateOptions = {}) => {
         enabled: false,
         model: '',
         patrolModel: '',
-        autoFixModel: '',
-        authMethod: 'api_key',
         patrolIntervalMinutes: 360,
         alertTriggeredAnalysis: true,
         patrolAlertTriggers: true,
@@ -468,7 +474,6 @@ export const useAISettingsState = (options: AISettingsStateOptions = {}) => {
         patrolAlertTriggerMinSeverity: 'critical',
         patrolFindingNotifications: true,
         patrolFindingNotifyMinSeverity: 'warning',
-        patrolAutoFix: false,
         anthropicApiKey: '',
         openaiApiKey: '',
         openrouterApiKey: '',
@@ -502,8 +507,6 @@ export const useAISettingsState = (options: AISettingsStateOptions = {}) => {
       enabled: data.enabled,
       model: data.model || '',
       patrolModel: data.patrol_model || '',
-      autoFixModel: data.auto_fix_model || '',
-      authMethod: data.auth_method || 'api_key',
       patrolIntervalMinutes: data.patrol_interval_minutes ?? 360,
       alertTriggeredAnalysis: data.alert_triggered_analysis !== false,
       patrolAlertTriggers: data.patrol_alert_triggers_enabled ?? legacyEventTriggersEnabled,
@@ -513,7 +516,6 @@ export const useAISettingsState = (options: AISettingsStateOptions = {}) => {
       patrolFindingNotifications: data.patrol_finding_notifications_enabled !== false,
       patrolFindingNotifyMinSeverity:
         data.patrol_finding_notify_min_severity === 'critical' ? 'critical' : 'warning',
-      patrolAutoFix: data.patrol_auto_fix || false,
       anthropicApiKey: '',
       openaiApiKey: '',
       openrouterApiKey: '',
@@ -593,13 +595,14 @@ export const useAISettingsState = (options: AISettingsStateOptions = {}) => {
   };
 
   const selectedModelForProviderTest = (provider: AIProvider): string | undefined =>
-    compactUnique([form.patrolModel, form.autoFixModel, form.model]).find(
+    compactUnique([form.patrolModel, form.model]).find(
       (model) => getProviderFromModelId(model) === provider,
     );
 
   const handleCloseSetupModal = () => {
     setShowSetupModal(false);
     setSetupApiKey('');
+    setSetupOpenAIBaseUrl('');
   };
 
   const openEnableSetupModal = () => {
@@ -777,6 +780,20 @@ export const useAISettingsState = (options: AISettingsStateOptions = {}) => {
     patrolModelReadinessAbortController?.abort();
   };
 
+  const loadPatrolAutonomy = async () => {
+    if (typeof getPatrolAutonomySettings !== 'function') {
+      return;
+    }
+    try {
+      const autonomy = await getPatrolAutonomySettings();
+      setPatrolAutonomyLevel(
+        autonomy?.effective_autonomy_level ?? autonomy?.autonomy_level ?? null,
+      );
+    } catch (error) {
+      logger.debug('[AISettings] Failed to load Patrol autonomy mode:', error);
+    }
+  };
+
   const loadSettings = async () => {
     setLoading(true);
     setLoadError(false);
@@ -787,7 +804,11 @@ export const useAISettingsState = (options: AISettingsStateOptions = {}) => {
       syncModelCatalogForSettings(data);
       hydratePatrolModelReadinessFromSettings(data);
       void loadPatrolModelGuidance();
-      void runProviderPreflight(data);
+      if (isProviderPage()) {
+        void runProviderPreflight(data);
+      } else {
+        void loadPatrolAutonomy();
+      }
     } catch (error) {
       logger.error('[AISettings] Failed to load settings:', error);
       setLoadError(true);
@@ -816,11 +837,18 @@ export const useAISettingsState = (options: AISettingsStateOptions = {}) => {
         }
         payload.anthropic_api_key = setupApiKey().trim();
       } else if (setupProvider() === 'openai') {
-        if (!setupApiKey().trim()) {
-          notificationStore.error('Please enter your OpenAI API key');
+        const key = setupApiKey().trim();
+        const baseUrl = setupOpenAIBaseUrl().trim();
+        if (!key && !baseUrl) {
+          notificationStore.error('Please enter an OpenAI API key or a custom base URL');
           return;
         }
-        payload.openai_api_key = setupApiKey().trim();
+        if (key) {
+          payload.openai_api_key = key;
+        }
+        if (baseUrl) {
+          payload.openai_base_url = baseUrl;
+        }
       } else if (setupProvider() === 'openrouter') {
         if (!setupApiKey().trim()) {
           notificationStore.error('Please enter your OpenRouter API key');
@@ -893,7 +921,9 @@ export const useAISettingsState = (options: AISettingsStateOptions = {}) => {
       resetForm(updated);
       syncModelCatalogForSettings(updated);
       hydratePatrolModelReadinessFromSettings(updated);
-      void runProviderPreflight(updated);
+      if (isProviderPage()) {
+        void runProviderPreflight(updated);
+      }
       handleCloseSetupModal();
       // Reveal the Patrol entry points without a reload (the bootstrap only
       // reads the capability on page load).
@@ -915,7 +945,7 @@ export const useAISettingsState = (options: AISettingsStateOptions = {}) => {
         error,
         payload,
         providerHealth,
-        models: [form.model, form.patrolModel, form.autoFixModel],
+        models: [form.model, form.patrolModel],
       });
       notificationStore.error(
         getAISettingsSaveProviderFailureMessage(
@@ -1011,14 +1041,8 @@ export const useAISettingsState = (options: AISettingsStateOptions = {}) => {
       ) {
         payload.patrol_finding_notify_min_severity = form.patrolFindingNotifyMinSeverity;
       }
-      if (form.patrolAutoFix !== settings()?.patrol_auto_fix) {
-        payload.patrol_auto_fix = form.patrolAutoFix;
-      }
       if (form.patrolModel !== (settings()?.patrol_model || '')) {
         payload.patrol_model = form.patrolModel;
-      }
-      if (form.autoFixModel !== (settings()?.auto_fix_model || '')) {
-        payload.auto_fix_model = form.autoFixModel;
       }
       if (form.anthropicApiKey.trim()) {
         payload.anthropic_api_key = form.anthropicApiKey.trim();
@@ -1103,7 +1127,9 @@ export const useAISettingsState = (options: AISettingsStateOptions = {}) => {
       resetForm(updated);
       syncModelCatalogForSettings(updated);
       hydratePatrolModelReadinessFromSettings(updated);
-      void runProviderPreflight(updated);
+      if (isProviderPage()) {
+        void runProviderPreflight(updated);
+      }
       void aiAvailabilityStore.refreshEnabledFromServer();
       const savedLabel = options.savedLabel ?? 'Provider & Models settings saved';
       const patrolReadinessMessage = getAISettingsPatrolReadinessSaveMessage(
@@ -1121,7 +1147,7 @@ export const useAISettingsState = (options: AISettingsStateOptions = {}) => {
         error,
         payload,
         providerHealth,
-        models: [selectedModel, form.patrolModel, form.autoFixModel],
+        models: [selectedModel, form.patrolModel],
       });
       notificationStore.error(
         getAISettingsSaveProviderFailureMessage(
@@ -1189,33 +1215,49 @@ export const useAISettingsState = (options: AISettingsStateOptions = {}) => {
     const isLastProvider = configuredCount === 1 && isAIProviderConfigured(provider, current);
     const currentModel = form.model.trim();
     const modelUsesProvider = currentModel && getProviderFromModelId(currentModel) === provider;
+    const providerLabel = getAIProviderDisplayName(provider) || provider;
 
-    let confirmMessage = `Remove ${getAIProviderDisplayName(provider) || provider} and its saved settings?`;
+    let confirmMessage = `Remove ${providerLabel} and its saved settings?`;
     if (isLastProvider) {
       confirmMessage =
-        'Warning: this is your only configured provider. Removing it will stop Patrol and clear its selected models until you configure another provider. Continue?';
+        'Warning: this is your only configured provider. Removing it will stop Patrol and clear its selected models until you configure another provider.';
     } else if (modelUsesProvider) {
-      confirmMessage = `Your current model uses ${getAIProviderDisplayName(provider) || provider}. Removing it will clear provider-owned model selections. Continue?`;
+      confirmMessage = `Your current model uses ${providerLabel}. Removing it will clear provider-owned model selections.`;
     } else {
       confirmMessage += " You'll need to configure it again to use this provider.";
     }
 
-    if (!confirm(confirmMessage)) {
-      return;
-    }
+    setPendingRemoveProvider({
+      provider,
+      providerLabel,
+      message: confirmMessage,
+    });
+  };
+
+  const cancelRemoveProvider = () => {
+    setPendingRemoveProvider(null);
+  };
+
+  const confirmRemoveProvider = async () => {
+    const pending = pendingRemoveProvider();
+    if (!pending) return;
+    const { provider, providerLabel } = pending;
 
     setSaving(true);
     try {
       const newSettings = await AIAPI.updateSettings({ remove_providers: [provider] });
+      setPendingRemoveProvider(null);
       setSettings(newSettings);
       resetForm(newSettings);
       syncModelCatalogForSettings(newSettings);
-      void runProviderPreflight(newSettings);
+      if (isProviderPage()) {
+        void runProviderPreflight(newSettings);
+      }
       // Removing the last provider disables AI, so Patrol entry points and
       // alert Investigate must drop without a reload.
       void aiAvailabilityStore.refreshEnabledFromServer();
 
-      notificationStore.success(`${getAIProviderDisplayName(provider) || provider} removed`);
+      notificationStore.success(`${providerLabel} removed`);
     } catch (error) {
       logger.error(`[AISettings] Remove ${provider} failed:`, error);
       const detail = error instanceof Error ? error.message.trim() : '';
@@ -1233,7 +1275,9 @@ export const useAISettingsState = (options: AISettingsStateOptions = {}) => {
       const updated = await AIAPI.updateSettings({ enabled: newValue });
       setSettings(updated);
       syncModelCatalogForSettings(updated);
-      void runProviderPreflight(updated);
+      if (isProviderPage()) {
+        void runProviderPreflight(updated);
+      }
       void aiAvailabilityStore.refreshEnabledFromServer();
       notificationStore.success(
         newValue
@@ -1264,16 +1308,15 @@ export const useAISettingsState = (options: AISettingsStateOptions = {}) => {
   onMount(() => {
     loadRuntimeCapabilities();
 
-    if (typeof window !== 'undefined') {
+    if (isProviderPage() && typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search);
-      const oauthSuccess = params.get('ai_oauth_success');
       const oauthError = params.get('ai_oauth_error');
+      const hasLegacyOAuthParam = params.has('ai_oauth_success') || Boolean(oauthError);
 
-      if (oauthSuccess === 'true') {
-        notificationStore.success('Successfully connected to Claude with your subscription!');
-        window.history.replaceState({}, '', window.location.pathname);
-      } else if (oauthError) {
+      if (oauthError) {
         notificationStore.error(getAIOAuthErrorMessage(oauthError));
+      }
+      if (hasLegacyOAuthParam) {
         window.history.replaceState({}, '', window.location.pathname);
       }
     }
@@ -1299,8 +1342,9 @@ export const useAISettingsState = (options: AISettingsStateOptions = {}) => {
 
   return {
     alertAnalysisLocked,
-    autoFixLocked,
     availableModels,
+    cancelRemoveProvider,
+    confirmRemoveProvider,
     effectivePatrolModel,
     expandedProviders,
     form,
@@ -1320,12 +1364,14 @@ export const useAISettingsState = (options: AISettingsStateOptions = {}) => {
     loadSettings,
     modelsError,
     modelsLoading,
+    patrolAutonomyLevel,
     patrolCostPreview,
     patrolCostPreviewLoading,
     patrolIntervalAutoAdjust,
     patrolModelGuidance,
     patrolModelReadinessResult,
     patrolModelReadinessRunning,
+    pendingRemoveProvider,
     preflightLastCheckedAt,
     preflightRunning,
     providerHealth,
@@ -1340,21 +1386,19 @@ export const useAISettingsState = (options: AISettingsStateOptions = {}) => {
     setForm,
     setSetupApiKey,
     setSetupOllamaUrl,
+    setSetupOpenAIBaseUrl,
     setSetupProvider,
-    setShowAdvancedModels,
     setShowSetupModal,
     settings,
     settingsReadiness,
     setupApiKey,
     setupOllamaUrl,
+    setupOpenAIBaseUrl,
     setupProvider,
     setupSaving,
-    showAdvancedModels,
     showSetupModal,
-    showUpgradePrompts,
     testing,
     testingProvider,
-    upgradeAutofixDestination,
   };
 };
 

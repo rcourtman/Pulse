@@ -15,6 +15,12 @@ import { getBillingAdminStateUpdateSuccessMessage } from '@/utils/licensePresent
 import { getOrganizationSettingsLoadErrorMessage } from '@/utils/organizationSettingsPresentation';
 
 export type BillingStateCache = Record<string, BillingState | undefined>;
+
+export interface BillingAdminSuspendConfirmation {
+  orgID: string;
+  displayName?: string;
+  generation: number;
+}
 const emptyRecord = <T>(): Record<string, T> => Object.create(null);
 const withEntry = <T>(entries: Record<string, T>, key: string, value: T): Record<string, T> =>
   Object.assign(emptyRecord<T>(), entries, { [key]: value });
@@ -76,6 +82,8 @@ export function useBillingAdminPanelState() {
     createSignal<Record<string, string>>(emptyRecord());
   const [savingByOrgID, setSavingByOrgID] = createSignal<Record<string, boolean>>(emptyRecord());
   const [expandedOrgID, setExpandedOrgID] = createSignal<string | null>(null);
+  const [pendingSuspension, setPendingSuspension] =
+    createSignal<BillingAdminSuspendConfirmation | null>(null);
   let generation = 0;
   let disposed = false;
   let listController: AbortController | undefined;
@@ -95,6 +103,7 @@ export function useBillingAdminPanelState() {
 
   const invalidateRequests = () => {
     generation += 1;
+    setPendingSuspension(null);
     listController?.abort();
     listController = undefined;
     for (const controller of billingReads.values()) controller.abort();
@@ -248,6 +257,39 @@ export function useBillingAdminPanelState() {
     }
   };
 
+  const requestSuspendOrganization = (orgID: string) => {
+    const request = generation;
+    const current = billingByOrgID()[orgID];
+    if (
+      !isCurrent(request) ||
+      !canManageBilling() ||
+      !hasCurrentOrganization(orgID) ||
+      !current ||
+      billingReads.has(orgID) ||
+      billingWrites.has(orgID) ||
+      billingErrorByOrgID()[orgID] ||
+      current.subscription_state.toLowerCase() === 'suspended'
+    )
+      return;
+    const summary = orgs().find((org) => org.org_id === orgID);
+    setPendingSuspension({
+      orgID,
+      displayName: summary?.display_name,
+      generation: request,
+    });
+  };
+
+  const cancelSuspendOrganization = (confirmation: BillingAdminSuspendConfirmation) => {
+    if (pendingSuspension() === confirmation) setPendingSuspension(null);
+  };
+
+  const confirmSuspendOrganization = async (confirmation: BillingAdminSuspendConfirmation) => {
+    if (pendingSuspension() !== confirmation) return;
+    setPendingSuspension(null);
+    if (confirmation.generation !== generation) return;
+    await updateSubscriptionState(confirmation.orgID, 'suspended');
+  };
+
   const toggleExpandedOrganization = async (orgID: string) => {
     if (!isCurrent(generation) || !hasCurrentOrganization(orgID)) return;
     const opening = expandedOrgID() !== orgID;
@@ -288,13 +330,17 @@ export function useBillingAdminPanelState() {
     billingErrorByOrgID,
     billingLoadingByOrgID,
     canManageBilling,
+    cancelSuspendOrganization,
+    confirmSuspendOrganization,
     expandedOrgID,
     hostedEnabled,
     loadingOrgs,
     orgs,
     orgsError,
+    pendingSuspension,
     refreshOrganizations,
     reloadOrganization,
+    requestSuspendOrganization,
     savingByOrgID,
     toggleExpandedOrganization,
     updateSubscriptionState,

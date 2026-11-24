@@ -1,8 +1,11 @@
 import { For, Show, Suspense, createMemo, createSignal, lazy, onCleanup } from 'solid-js';
+import { A } from '@solidjs/router';
 import { getOrgID } from '@/utils/apiClient';
 import { eventBus } from '@/stores/events';
 import { hasFeature, runtimeCapabilitiesLoaded } from '@/stores/license';
 import { Portal } from 'solid-js/web';
+import { Card } from '@/components/shared/Card';
+import { Dialog } from '@/components/shared/Dialog';
 import { InlineNotice } from '@/components/shared/InlineNotice';
 import FileText from 'lucide-solid/icons/file-text';
 import Download from 'lucide-solid/icons/download';
@@ -17,6 +20,7 @@ import OperationsPanel from '@/components/Settings/OperationsPanel';
 import { Button } from '@/components/shared/Button';
 import { CalloutCard } from '@/components/shared/CalloutCard';
 import { formControl } from '@/components/shared/Form';
+import { FormSelect } from '@/components/shared/FormSelect';
 import { FilterButtonGroup, type FilterOption } from '@/components/shared/FilterButtonGroup';
 import { FeatureGateSection } from '@/components/shared/FeatureGateSection';
 import { useReportingPanelState } from '@/components/Settings/useReportingPanelState';
@@ -39,6 +43,15 @@ const REPORTING_FORMAT_ICONS: Record<ReportingFormat, typeof FileText> = {
   csv: BarChart,
   pdf: FileText,
 };
+
+const METRIC_TYPE_PRESETS: readonly { value: string; label: string }[] = [
+  { value: '', label: 'All metrics' },
+  { value: 'cpu', label: 'CPU usage' },
+  { value: 'memory', label: 'Memory usage' },
+  { value: 'disk', label: 'Disk usage' },
+  { value: 'temperature', label: 'Temperature' },
+  { value: 'network', label: 'Network' },
+];
 
 const ReportScheduleEditor = lazy(() => import('./ReportScheduleEditor'));
 
@@ -244,9 +257,11 @@ function ReportingWorkspace(props: { isCurrentReader: () => boolean }) {
       </Show>
 
       <Show when={isReportingEnabled()}>
-        <OperationsPanel
-          title={reportingCatalog()!.title}
-          description={reportingCatalog()!.description}
+        <Card
+          data-settings-panel
+          padding="none"
+          border={false}
+          class="overflow-hidden border border-border"
         >
           <div class="space-y-6 p-4 sm:p-6">
             <Show when={reportingCatalogLoading()}>
@@ -280,20 +295,25 @@ function ReportingWorkspace(props: { isCurrentReader: () => boolean }) {
                 <Show when={optionalFieldCount() > 0}>
                   <div class={optionalFieldGridClass()}>
                     <Show when={supportsMetricFilter()}>
-                      <FormField
+                      <FormSelect
+                        id="metric-type"
                         label="Metric Type (Optional)"
-                        helpText="Filter by specific metric type"
+                        help="Filter by specific metric type"
+                        value={metricType()}
+                        onChange={(e) => setMetricType(e.currentTarget.value)}
                       >
-                        <input
-                          id="metric-type"
-                          aria-label="Metric Type (Optional)"
-                          type="text"
-                          class={formControl}
-                          placeholder="e.g. cpu, memory, disk, temperature (leave empty for all)"
-                          value={metricType()}
-                          onInput={(e) => setMetricType(e.currentTarget.value)}
-                        />
-                      </FormField>
+                        <For each={METRIC_TYPE_PRESETS}>
+                          {(option) => <option value={option.value}>{option.label}</option>}
+                        </For>
+                        <Show
+                          when={
+                            metricType() &&
+                            !METRIC_TYPE_PRESETS.some((option) => option.value === metricType())
+                          }
+                        >
+                          <option value={metricType()}>{metricType()}</option>
+                        </Show>
+                      </FormSelect>
                     </Show>
 
                     <Show when={supportsCustomTitle()}>
@@ -356,7 +376,7 @@ function ReportingWorkspace(props: { isCurrentReader: () => boolean }) {
               </section>
             </Show>
 
-            <section class="space-y-4 border-t border-base-300/80 pt-6">
+            <section class="space-y-4 border-t border-border pt-6">
               <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div class="space-y-1">
                   <h4 class="text-base font-semibold text-base-content">Scheduled reports</h4>
@@ -409,7 +429,7 @@ function ReportingWorkspace(props: { isCurrentReader: () => boolean }) {
                 when={reportSchedules().length > 0}
                 fallback={
                   <Show when={!reportSchedulesLoading() && !reportSchedulesError()}>
-                    <div class="flex flex-col gap-3 border border-dashed border-base-300 p-4 sm:flex-row sm:items-center sm:justify-between">
+                    <div class="flex flex-col gap-3 rounded-md border border-dashed border-border p-4 sm:flex-row sm:items-center sm:justify-between">
                       <p class="text-sm text-muted">No scheduled reports are configured yet.</p>
                       <Button
                         variant="secondary"
@@ -426,14 +446,14 @@ function ReportingWorkspace(props: { isCurrentReader: () => boolean }) {
                 }
               >
                 <ul
-                  class="divide-y divide-base-300 rounded-md border border-base-300 text-sm"
+                  class="divide-y divide-border rounded-md border border-border text-sm"
                   aria-label="Scheduled reports"
                 >
                   <For each={reportSchedules()}>
                     {(schedule) => (
                       <li class="space-y-3 p-3">
-                        <div class="grid grid-cols-[minmax(0,1fr)_auto_auto] items-start gap-3">
-                          <div class="min-w-0 whitespace-normal break-words">
+                        <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                          <div class="min-w-0 flex-1 whitespace-normal break-words">
                             <div class="font-medium text-base-content">{schedule.name}</div>
                             <div class="mt-1 text-xs text-muted">
                               {reportScheduleCadenceLabel(schedule)}
@@ -447,22 +467,22 @@ function ReportingWorkspace(props: { isCurrentReader: () => boolean }) {
                               </div>
                             </Show>
                           </div>
-                          <label class="flex min-h-11 cursor-pointer flex-col items-center gap-2 text-xs text-muted">
-                            Enabled
-                            <input
-                              type="checkbox"
-                              class="h-4 w-4"
-                              disabled={!canEditSchedules()}
-                              checked={schedule.enabled}
-                              aria-label={`Enable ${schedule.name}`}
-                              onChange={() => toggleReportSchedule(schedule)}
-                            />
-                          </label>
-                          <div class="w-20">
+                          <div class="flex flex-wrap items-center gap-2 shrink-0">
+                            <label class="inline-flex min-h-11 sm:min-h-9 cursor-pointer items-center gap-2 rounded-md border border-border bg-surface-alt px-2.5 text-xs text-muted">
+                              <input
+                                type="checkbox"
+                                class="h-4 w-4"
+                                disabled={!canEditSchedules()}
+                                checked={schedule.enabled}
+                                aria-label={`Enable ${schedule.name}`}
+                                onChange={() => toggleReportSchedule(schedule)}
+                              />
+                              <span>Enabled</span>
+                            </label>
                             <Button
                               variant="ghost"
                               size="sm"
-                              class="min-h-11 w-full gap-1 px-1"
+                              class="min-h-11 sm:min-h-9 gap-1 px-2"
                               aria-label={`${reportScheduleRunActionLabel(schedule)} ${schedule.name} now`}
                               isLoading={runningScheduleID() === schedule.id}
                               disabled={
@@ -476,6 +496,29 @@ function ReportingWorkspace(props: { isCurrentReader: () => boolean }) {
                                 <Play size={15} />
                               </Show>
                               {reportScheduleRunActionLabel(schedule)}
+                            </Button>
+                            <Button
+                              variant="secondary"
+                              size="sm"
+                              class="min-h-11 sm:min-h-9 gap-1.5"
+                              aria-label={`Edit ${schedule.name}`}
+                              disabled={!canEditSchedules()}
+                              onClick={() => startEditSchedule(schedule)}
+                            >
+                              <Pencil size={14} />
+                              Edit
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              class="min-h-11 sm:min-h-9 gap-1.5 text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/30"
+                              aria-label={`Delete ${schedule.name}`}
+                              isLoading={deletingScheduleID() === schedule.id}
+                              disabled={!canEditSchedules() || deletingScheduleID() !== ''}
+                              onClick={() => deleteReportSchedule(schedule)}
+                            >
+                              <Trash2 size={14} />
+                              Delete
                             </Button>
                           </div>
                         </div>
@@ -498,9 +541,9 @@ function ReportingWorkspace(props: { isCurrentReader: () => boolean }) {
                           <Show when={schedule.delivery_check && !schedule.delivery_check.ready}>
                             <p class="text-warning">
                               {schedule.delivery_check?.message}{' '}
-                              <a href="/alerts/notifications" class="underline">
+                              <A href="/alerts/notifications" class="underline">
                                 Email settings
-                              </a>
+                              </A>
                             </p>
                           </Show>
                           <Show when={schedule.retry_at && schedule.enabled}>
@@ -532,12 +575,12 @@ function ReportingWorkspace(props: { isCurrentReader: () => boolean }) {
                           </Show>
                           <details>
                             <summary
-                              class="cursor-pointer py-2"
+                              class="cursor-pointer py-1.5"
                               aria-label={`Details for ${schedule.name}`}
                             >
                               Report details
                             </summary>
-                            <div class="space-y-2 pb-1 pt-2">
+                            <div class="space-y-1.5 pb-1 pt-1.5">
                               <p>
                                 <span>{reportScheduleScopeLabel(schedule)}</span> ·{' '}
                                 <span>{reportScheduleDeliveryLabel(schedule)}</span> ·{' '}
@@ -559,31 +602,6 @@ function ReportingWorkspace(props: { isCurrentReader: () => boolean }) {
                                   Last saved report on this server: {schedule.last_report_path}
                                 </p>
                               </Show>
-                              <div class="flex flex-wrap gap-2 pt-1">
-                                <Button
-                                  variant="secondary"
-                                  size="sm"
-                                  class="min-h-11 gap-2"
-                                  aria-label={`Edit ${schedule.name}`}
-                                  disabled={!canEditSchedules()}
-                                  onClick={() => startEditSchedule(schedule)}
-                                >
-                                  <Pencil size={15} />
-                                  Edit schedule
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  class="min-h-11 gap-2"
-                                  aria-label={`Delete ${schedule.name}`}
-                                  isLoading={deletingScheduleID() === schedule.id}
-                                  disabled={!canEditSchedules() || deletingScheduleID() !== ''}
-                                  onClick={() => deleteReportSchedule(schedule)}
-                                >
-                                  <Trash2 size={15} />
-                                  Delete schedule
-                                </Button>
-                              </div>
                             </div>
                           </details>
                         </div>
@@ -595,7 +613,7 @@ function ReportingWorkspace(props: { isCurrentReader: () => boolean }) {
             </section>
 
             <Show when={inventoryDefinition()}>
-              <section class="space-y-4 rounded-xl border border-base-300/80 bg-base-200/30 p-4 sm:p-5">
+              <section class="space-y-4 rounded-xl border border-border bg-surface-alt p-4 sm:p-5">
                 <div class="space-y-2">
                   <h4 class="text-base font-semibold text-base-content">
                     {inventoryDefinition()?.title}
@@ -604,18 +622,23 @@ function ReportingWorkspace(props: { isCurrentReader: () => boolean }) {
                 </div>
 
                 <Show when={inventoryDefinition()?.columns.length}>
-                  <div class="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
-                    <For each={inventoryDefinition()?.columns ?? []}>
-                      {(column) => (
-                        <div class="space-y-1 rounded-lg border border-base-300/70 bg-base-100/70 p-3">
-                          <div class="text-xs font-semibold uppercase tracking-wide">
-                            {column.label}
+                  <details class="rounded-md border border-border bg-surface p-3">
+                    <summary class="cursor-pointer text-xs font-medium text-base-content">
+                      Included columns ({inventoryDefinition()?.columns.length})
+                    </summary>
+                    <div class="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+                      <For each={inventoryDefinition()?.columns ?? []}>
+                        {(column) => (
+                          <div class="space-y-1 rounded-lg border border-border bg-surface-alt p-3">
+                            <div class="text-xs font-semibold uppercase tracking-wide text-base-content">
+                              {column.label}
+                            </div>
+                            <p class="text-xs leading-relaxed text-muted">{column.description}</p>
                           </div>
-                          <p class="text-xs leading-relaxed text-muted">{column.description}</p>
-                        </div>
-                      )}
-                    </For>
-                  </div>
+                        )}
+                      </For>
+                    </div>
+                  </details>
                 </Show>
 
                 <div class="flex justify-end">
@@ -636,7 +659,7 @@ function ReportingWorkspace(props: { isCurrentReader: () => boolean }) {
               </section>
             </Show>
           </div>
-        </OperationsPanel>
+        </Card>
 
         <Show when={guidance()}>
           {(card) => (
@@ -648,6 +671,88 @@ function ReportingWorkspace(props: { isCurrentReader: () => boolean }) {
             />
           )}
         </Show>
+
+        <Dialog
+          isOpen={Boolean(state.pendingDeleteSchedule?.())}
+          onClose={() => state.cancelDeleteReportSchedule?.()}
+          panelClass="max-w-md"
+          ariaLabel="Delete report schedule"
+        >
+          <Show when={state.pendingDeleteSchedule?.()}>
+            {(schedule) => (
+              <div class="w-full">
+                <div class="border-b border-border px-6 py-4">
+                  <h3 class="text-base font-semibold text-base-content">
+                    Delete {schedule().name}?
+                  </h3>
+                </div>
+                <div class="px-6 py-4 text-sm text-muted">
+                  This removes the scheduled report and stops future runs. Previously saved files on
+                  disk are not deleted.
+                </div>
+                <div class="flex items-center justify-end gap-3 border-t border-border bg-surface-alt px-6 py-4">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="md"
+                    onClick={() => state.cancelDeleteReportSchedule?.()}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="danger"
+                    size="md"
+                    onClick={() => void state.confirmDeleteReportSchedule?.()}
+                  >
+                    Delete schedule
+                  </Button>
+                </div>
+              </div>
+            )}
+          </Show>
+        </Dialog>
+
+        <Dialog
+          isOpen={Boolean(state.pendingRetrySchedule?.())}
+          onClose={() => state.cancelRetryReportSchedule?.()}
+          panelClass="max-w-md"
+          ariaLabel="Retry unconfirmed report delivery"
+        >
+          <Show when={state.pendingRetrySchedule?.()}>
+            {(schedule) => (
+              <div class="w-full">
+                <div class="border-b border-border px-6 py-4">
+                  <h3 class="text-base font-semibold text-base-content">
+                    Retry {schedule().name}?
+                  </h3>
+                </div>
+                <div class="px-6 py-4 text-sm text-muted">
+                  The previous email may have been accepted. Check the recipient first. Retry
+                  anyway, with a risk of a duplicate?
+                </div>
+                <div class="flex items-center justify-end gap-3 border-t border-border bg-surface-alt px-6 py-4">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="md"
+                    onClick={() => state.cancelRetryReportSchedule?.()}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="primary"
+                    size="md"
+                    onClick={() => void state.confirmRetryReportSchedule?.()}
+                  >
+                    Retry anyway
+                  </Button>
+                </div>
+              </div>
+            )}
+          </Show>
+        </Dialog>
       </Show>
     </div>
   );

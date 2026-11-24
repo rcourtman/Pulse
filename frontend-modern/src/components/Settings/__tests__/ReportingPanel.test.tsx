@@ -1,8 +1,17 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, render, screen } from '@solidjs/testing-library';
-import { ReportingPanel } from '../ReportingPanel';
 import type { JSX } from 'solid-js';
 import { getPublicPricingUrl } from '@/utils/pricingHandoff';
+
+vi.mock('@solidjs/router', () => ({
+  A: (props: { href: string; class?: string; children?: unknown }) => (
+    <a href={props.href} class={props.class}>
+      {props.children as any}
+    </a>
+  ),
+}));
+
+import { ReportingPanel } from '../ReportingPanel';
 
 const useReportingPanelStateMock = vi.fn();
 

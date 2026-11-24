@@ -238,10 +238,15 @@ export const PatrolModelReadinessControl: Component<{ state: AISettingsState }> 
 
   return (
     <div class="mt-2 flex flex-col gap-2">
-      <div class="flex items-center justify-between gap-2">
-        <p class="text-[11px] text-muted">
-          Evaluate connectivity, streaming tools, context handling, latency, and suitable Patrol
-          modes. Uses synthetic data only and may take up to two minutes.
+      <div class="flex flex-wrap items-center justify-between gap-2">
+        <p class="text-xs text-muted min-w-0 flex-1">
+          <Show
+            when={state.hasConfiguredProvider()}
+            fallback="Configure a provider on Provider & Models before checking a Patrol model."
+          >
+            Evaluate connectivity, streaming tools, context handling, latency, and suitable Patrol
+            modes. Uses synthetic data only and may take up to two minutes.
+          </Show>
         </p>
         <button
           type="button"
@@ -250,8 +255,11 @@ export const PatrolModelReadinessControl: Component<{ state: AISettingsState }> 
               ? state.cancelPatrolModelReadinessAdvisor()
               : void state.runPatrolModelReadinessAdvisor()
           }
-          disabled={state.saving()}
-          class={`inline-flex min-h-9 items-center rounded-md px-3 py-1.5 text-sm disabled:opacity-50 whitespace-nowrap ${
+          disabled={
+            state.saving() ||
+            (!state.patrolModelReadinessRunning() && !state.hasConfiguredProvider())
+          }
+          class={`inline-flex shrink-0 min-h-9 items-center rounded-md px-3 py-1.5 text-sm disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap ${
             state.patrolModelReadinessRunning()
               ? 'bg-amber-100 dark:bg-amber-900/25 text-amber-700 dark:text-amber-300 hover:bg-amber-200 dark:hover:bg-amber-800'
               : 'bg-blue-100 dark:bg-blue-900/25 text-blue-700 dark:text-blue-300 hover:bg-blue-200 dark:hover:bg-blue-800'
@@ -261,7 +269,7 @@ export const PatrolModelReadinessControl: Component<{ state: AISettingsState }> 
         </button>
       </div>
       <Show when={state.patrolModelReadinessRunning()}>
-        <p class="text-[11px] text-muted" role="status">
+        <p class="text-xs text-muted" role="status">
           Running synthetic streaming scenarios. Pulse will not call infrastructure tools.
         </p>
       </Show>
@@ -277,26 +285,6 @@ export const PatrolModelReadinessControl: Component<{ state: AISettingsState }> 
             <Show when={detail()}>
               <p class="text-[11px] mt-1 opacity-90">{detail()}</p>
             </Show>
-            <div class="mt-2 grid gap-1 sm:grid-cols-2">
-              <For each={dimensionRows()}>
-                {(dimension) => (
-                  <div class="rounded-sm bg-white/40 px-2 py-1 dark:bg-black/10">
-                    <div class="flex items-center justify-between gap-2">
-                      <span class="text-[11px]">{dimension.label}</span>
-                      <span
-                        class={`text-[11px] font-medium ${readinessStatusTextClass(dimension.value.status)}`}
-                      >
-                        {dimension.value.attempts
-                          ? `${dimension.value.passed ?? 0}/${dimension.value.attempts} · `
-                          : ''}
-                        {statusLabel(dimension.value.status)}
-                      </span>
-                    </div>
-                    <p class="mt-0.5 text-[10px] opacity-75">{dimension.value.summary}</p>
-                  </div>
-                )}
-              </For>
-            </div>
             <div class="mt-2 border-t border-current/15 pt-2">
               <p class="text-[11px] font-medium mb-1">Autonomy suitability</p>
               <div class="grid gap-1 sm:grid-cols-2">
@@ -318,31 +306,57 @@ export const PatrolModelReadinessControl: Component<{ state: AISettingsState }> 
               </div>
             </div>
             <Show when={r().recommendation}>
-              <p class="text-[11px] mt-1 opacity-90">{r().recommendation}</p>
+              <p class="text-[11px] mt-1.5 opacity-90">{r().recommendation}</p>
             </Show>
-            <Show when={(r().details?.length ?? 0) > 0}>
-              <div class="mt-1">
-                <p class="text-[11px] font-medium">Evaluation detail</p>
-                <ul class="mt-0.5 list-disc pl-4 text-[10px] opacity-80">
-                  <For each={r().details}>{(item) => <li>{item}</li>}</For>
-                </ul>
+            <details
+              class="mt-2 border-t border-current/15 pt-2"
+              data-testid="patrol-readiness-details"
+            >
+              <summary class="cursor-pointer text-[11px] font-medium">Check details</summary>
+              <div class="mt-2 grid gap-1 sm:grid-cols-2">
+                <For each={dimensionRows()}>
+                  {(dimension) => (
+                    <div class="rounded-sm bg-white/40 px-2 py-1 dark:bg-black/10">
+                      <div class="flex items-center justify-between gap-2">
+                        <span class="text-[11px]">{dimension.label}</span>
+                        <span
+                          class={`text-[11px] font-medium ${readinessStatusTextClass(dimension.value.status)}`}
+                        >
+                          {dimension.value.attempts
+                            ? `${dimension.value.passed ?? 0}/${dimension.value.attempts} · `
+                            : ''}
+                          {statusLabel(dimension.value.status)}
+                        </span>
+                      </div>
+                      <p class="mt-0.5 text-[10px] opacity-75">{dimension.value.summary}</p>
+                    </div>
+                  )}
+                </For>
               </div>
-            </Show>
-            <Show when={r().metadata?.context_window || r().metadata?.quantization_level}>
-              <p class="text-[11px] mt-1 opacity-70">
-                <Show when={r().metadata?.context_window}>
-                  Context {r().metadata?.context_window?.toLocaleString()} tokens
-                </Show>
-                <Show when={r().metadata?.context_window && r().metadata?.quantization_level}>
-                  {' · '}
-                </Show>
-                <Show when={r().metadata?.quantization_level}>
-                  {r().metadata?.quantization_level}
-                </Show>
-              </p>
-            </Show>
+              <Show when={(r().details?.length ?? 0) > 0}>
+                <div class="mt-2">
+                  <p class="text-[11px] font-medium">Evaluation detail</p>
+                  <ul class="mt-0.5 list-disc pl-4 text-[10px] opacity-80">
+                    <For each={r().details}>{(item) => <li>{item}</li>}</For>
+                  </ul>
+                </div>
+              </Show>
+              <Show when={r().metadata?.context_window || r().metadata?.quantization_level}>
+                <p class="text-[11px] mt-1.5 opacity-70">
+                  <Show when={r().metadata?.context_window}>
+                    Context {r().metadata?.context_window?.toLocaleString()} tokens
+                  </Show>
+                  <Show when={r().metadata?.context_window && r().metadata?.quantization_level}>
+                    {' · '}
+                  </Show>
+                  <Show when={r().metadata?.quantization_level}>
+                    {r().metadata?.quantization_level}
+                  </Show>
+                </p>
+              </Show>
+            </details>
             <Show when={r().provider || r().model || r().recorded_at_unix}>
-              <p class="text-[11px] mt-1 opacity-70">
+              <p class="text-[11px] mt-1.5 opacity-70">
                 {r().provider}
                 {r().provider && r().model ? ' · ' : ''}
                 {r().model}
@@ -612,132 +626,151 @@ export const AIModelSelectionSection: Component<AIModelSelectionSectionProps> = 
   const pickerLabelClass = 'min-w-0 flex-1 truncate text-left font-normal';
   const pickerDropdownClass = 'w-[calc(100vw-2rem)] max-w-xl';
 
-  return (
-    <>
-      <div class={formField}>
-        <div class="flex items-center justify-between mb-1">
-          <span class={labelClass()}>
-            Shared Default Model
-            {state.modelsLoading() && <span class="ml-2 text-xs text-muted">(loading...)</span>}
-          </span>
-          <button
-            type="button"
-            onClick={state.loadModels}
-            disabled={state.modelsLoading()}
-            class="inline-flex min-h-11 sm:min-h-9 items-center gap-1 rounded-md px-2 py-1.5 text-sm text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 disabled:opacity-50"
-            title="Refresh model list from all configured providers"
-          >
-            <svg
-              class={`w-3 h-3 ${state.modelsLoading() ? 'animate-spin' : ''}`}
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2"
-                d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
-              />
-            </svg>
-            Refresh
-          </button>
-        </div>
-        <Show
-          when={sharedModelOptions().length > 0}
-          fallback={
-            <input
-              type="text"
-              value={state.form.model}
-              onInput={(e) => state.setForm('model', e.currentTarget.value)}
-              placeholder="Configure a provider below to see available models"
-              aria-label="Default model identifier"
-              autocomplete="off"
-              class={controlClass()}
-              disabled={state.saving()}
-            />
-          }
-        >
-          <AIModelPicker
-            models={sharedModelOptions()}
-            selectedModel={state.form.model}
-            onModelSelect={(modelId) => state.handleModelSelection('model', modelId)}
-            emptySelectionLabel="Select a model..."
-            title="Select shared default model"
-            searchPlaceholder="Search configured provider models"
-            customModelDescription="Custom provider:model ID"
-            disabled={state.saving()}
-            isLoading={state.modelsLoading()}
-            error={state.modelsError()}
-            onRefresh={state.loadModels}
-            align="left"
-            buttonClass={pickerButtonClass()}
-            buttonLabelClass={pickerLabelClass}
-            dropdownClass={pickerDropdownClass}
-            modelSections={sharedGuidance.sections()}
-            modelAnnotations={sharedGuidance.annotationRecord()}
-          />
-        </Show>
-        <SelectedModelGuidanceNote annotation={sharedSelectedAnnotation} />
-        <Show when={state.modelsError()}>
-          <p class="text-xs text-amber-600 dark:text-amber-400 mt-1 flex items-center gap-1">
-            <svg class="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2"
-                d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
-              />
-            </svg>
-            Failed to load models: {state.modelsError()}. Enter a model ID manually (format:
-            provider:model-name) or click Refresh to retry.
-          </p>
-        </Show>
-        <Show
-          when={state.form.model && !isModelProviderConfigured(state.form.model, state.settings())}
-        >
-          <p class="text-xs text-amber-600 dark:text-amber-400 mt-1 flex items-center gap-1">
-            <svg class="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2"
-                d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
-              />
-            </svg>
-            This model requires{' '}
-            {getAIProviderDisplayName(getProviderFromModelId(state.form.model)) ||
-              getProviderFromModelId(state.form.model)}{' '}
-            to be configured. Add an API key below or select a different model.
-          </p>
-        </Show>
-        <p class="text-[11px] text-muted mt-1">
-          Used by Patrol and report summaries unless Patrol settings choose another model.
-        </p>
-        <Show when={sharedDrivesPatrol()}>
-          <PatrolCostPreview state={state} />
-        </Show>
-      </div>
+  const renderProviderSection = () => (
+    <div class={formField}>
+      <AIProviderConfigurationSection
+        settings={state.settings}
+        form={state.form}
+        setForm={state.setForm}
+        expandedProviders={state.expandedProviders}
+        setExpandedProviders={state.setExpandedProviders}
+        providerHealth={state.providerHealth}
+        preflightRunning={state.preflightRunning}
+        preflightLastCheckedAt={state.preflightLastCheckedAt}
+        providerIssueCount={state.providerIssueCount}
+        testingProvider={state.testingProvider}
+        providerTestResult={state.providerTestResult}
+        saving={state.saving}
+        runProviderPreflight={() => state.runProviderPreflight()}
+        handleTestProvider={state.handleTestProvider}
+        handleClearProvider={state.handleClearProvider}
+      />
+    </div>
+  );
 
-      <div class={formField}>
-        <AIProviderConfigurationSection
-          settings={state.settings}
-          form={state.form}
-          setForm={state.setForm}
-          expandedProviders={state.expandedProviders}
-          setExpandedProviders={state.setExpandedProviders}
-          providerHealth={state.providerHealth}
-          preflightRunning={state.preflightRunning}
-          preflightLastCheckedAt={state.preflightLastCheckedAt}
-          providerIssueCount={state.providerIssueCount}
-          testingProvider={state.testingProvider}
-          providerTestResult={state.providerTestResult}
-          saving={state.saving}
-          runProviderPreflight={() => state.runProviderPreflight()}
-          handleTestProvider={state.handleTestProvider}
-          handleClearProvider={state.handleClearProvider}
-        />
+  const renderSharedModelSection = () => (
+    <div class={formField}>
+      <div class="flex flex-wrap items-center justify-between gap-2 mb-1">
+        <span class={`${labelClass()} min-w-0`}>
+          Shared Default Model
+          {state.modelsLoading() && <span class="ml-2 text-xs text-muted">(loading...)</span>}
+        </span>
+        <button
+          type="button"
+          onClick={state.loadModels}
+          disabled={state.modelsLoading() || !state.hasConfiguredProvider()}
+          class="inline-flex shrink-0 whitespace-nowrap min-h-11 sm:min-h-9 items-center gap-1 rounded-md px-2 py-1.5 text-sm text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 disabled:opacity-50 disabled:cursor-not-allowed"
+          title="Refresh model list from all configured providers"
+        >
+          <svg
+            class={`w-3 h-3 ${state.modelsLoading() ? 'animate-spin' : ''}`}
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+            />
+          </svg>
+          Refresh
+        </button>
       </div>
-    </>
+      <Show
+        when={sharedModelOptions().length > 0}
+        fallback={
+          <input
+            type="text"
+            value={state.form.model}
+            onInput={(e) => state.setForm('model', e.currentTarget.value)}
+            placeholder={
+              state.hasConfiguredProvider()
+                ? 'Configure a provider below to see available models'
+                : 'Configure a provider above to see available models'
+            }
+            aria-label="Default model identifier"
+            autocomplete="off"
+            class={controlClass()}
+            disabled={state.saving()}
+          />
+        }
+      >
+        <AIModelPicker
+          models={sharedModelOptions()}
+          selectedModel={state.form.model}
+          onModelSelect={(modelId) => state.handleModelSelection('model', modelId)}
+          emptySelectionLabel="Select a model..."
+          title="Select shared default model"
+          searchPlaceholder="Search configured provider models"
+          customModelDescription="Custom provider:model ID"
+          disabled={state.saving()}
+          isLoading={state.modelsLoading()}
+          error={state.modelsError()}
+          onRefresh={state.loadModels}
+          align="left"
+          buttonClass={pickerButtonClass()}
+          buttonLabelClass={pickerLabelClass}
+          dropdownClass={pickerDropdownClass}
+          modelSections={sharedGuidance.sections()}
+          modelAnnotations={sharedGuidance.annotationRecord()}
+        />
+      </Show>
+      <SelectedModelGuidanceNote annotation={sharedSelectedAnnotation} />
+      <Show when={state.modelsError()}>
+        <p class="text-xs text-amber-600 dark:text-amber-400 mt-1 flex items-center gap-1">
+          <svg class="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+            />
+          </svg>
+          Failed to load models: {state.modelsError()}. Enter a model ID manually (format:
+          provider:model-name) or click Refresh to retry.
+        </p>
+      </Show>
+      <Show
+        when={state.form.model && !isModelProviderConfigured(state.form.model, state.settings())}
+      >
+        <p class="text-xs text-amber-600 dark:text-amber-400 mt-1 flex items-center gap-1">
+          <svg class="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+            />
+          </svg>
+          This model requires{' '}
+          {getAIProviderDisplayName(getProviderFromModelId(state.form.model)) ||
+            getProviderFromModelId(state.form.model)}{' '}
+          to be configured. Add an API key or select a different model.
+        </p>
+      </Show>
+      <p class="text-[11px] text-muted mt-1">
+        Used by Patrol and report summaries unless Patrol settings choose another model.
+      </p>
+      <Show when={sharedDrivesPatrol()}>
+        <PatrolCostPreview state={state} />
+      </Show>
+    </div>
+  );
+
+  return (
+    <Show
+      when={state.hasConfiguredProvider()}
+      fallback={
+        <>
+          {renderProviderSection()}
+          {renderSharedModelSection()}
+        </>
+      }
+    >
+      {renderSharedModelSection()}
+      {renderProviderSection()}
+    </Show>
   );
 };

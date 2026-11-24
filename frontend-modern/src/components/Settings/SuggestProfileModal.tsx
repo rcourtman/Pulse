@@ -335,7 +335,7 @@ export const SuggestProfileModal: Component<SuggestProfileModalProps> = (props) 
                 <div class="flex items-start gap-2 p-3 rounded-md bg-amber-50 dark:bg-amber-900/25 border border-amber-200 dark:border-amber-800">
                   <AlertCircle class="w-4 h-4 text-amber-600 dark:text-amber-400 mt-0.5 shrink-0" />
                   <p class="text-sm text-amber-700 dark:text-amber-300">
-                    Draft suggestion — review settings before creating the profile.
+                    Draft suggestion. Review settings before creating the profile.
                   </p>
                 </div>
 
@@ -622,12 +622,17 @@ export const SuggestProfileModal: Component<SuggestProfileModalProps> = (props) 
               title="Regenerate using the current prompt"
             >
               <Lightbulb class="w-4 h-4" />
-              {loading() ? 'Generating...' : 'Try Again'}
+              {loading() ? 'Generating...' : 'Regenerate'}
             </button>
             <button
               type="button"
               onClick={handleAccept}
-              disabled={loading()}
+              disabled={loading() || Boolean(validation()?.errors?.length)}
+              title={
+                validation()?.errors?.length
+                  ? 'Fix validation errors before using this profile'
+                  : undefined
+              }
               class="inline-flex items-center gap-2 rounded-md bg-green-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-60"
             >
               <Check class="w-4 h-4" />

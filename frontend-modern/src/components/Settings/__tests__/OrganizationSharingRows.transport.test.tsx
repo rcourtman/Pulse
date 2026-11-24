@@ -218,14 +218,25 @@ function expectWrite(operation: Operation, count = 1) {
   expect(options?.body).toBeUndefined();
   expectBoundRequests();
 }
+async function confirmDialogFor(operation: Operation) {
+  if (operation === 'accept incoming') {
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    return;
+  }
+  const dialog = screen.getByRole('dialog');
+  expect(dialog).toHaveTextContent(confirmationFor(operation));
+  fireEvent.click(
+    within(dialog).getByRole('button', {
+      name: operation === 'decline incoming' ? 'Decline share' : 'Remove share',
+    }),
+  );
+}
 async function openPanel(operation: Operation) {
   await renderPanel(operation);
   fireEvent.click(rowAction(operation));
+  await confirmDialogFor(operation);
   await waitFor(() => expect(writes()).toHaveLength(1));
   expectWrite(operation);
-  if (operation !== 'accept incoming')
-    expect(confirmMock).toHaveBeenCalledExactlyOnceWith(confirmationFor(operation));
-  else expect(confirmMock).not.toHaveBeenCalled();
   return selectedShare(operation);
 }
 // Apply the actual dispatched identity, not the test's intended identity. A
@@ -636,9 +647,11 @@ describe('rendered namesake sharing rows through the real transport', () => {
       await renderPanel(operation);
       const savedOutgoing = structuredClone(outgoing);
       const savedIncoming = structuredClone(incoming);
-      confirmMock.mockReturnValueOnce(false);
       fireEvent.click(rowAction(operation));
-      expect(confirmMock).toHaveBeenCalledExactlyOnceWith(confirmationFor(operation));
+      const cancelDialog = screen.getByRole('dialog');
+      expect(cancelDialog).toHaveTextContent(confirmationFor(operation));
+      fireEvent.click(within(cancelDialog).getByRole('button', { name: 'Cancel' }));
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
       expect(rowAction(operation)).toBeEnabled();
       expectSavedRows(operation, false);
       expect(writes()).toHaveLength(0);
@@ -649,10 +662,9 @@ describe('rendered namesake sharing rows through the real transport', () => {
       expect(notices.error).not.toHaveBeenCalled();
 
       fireEvent.click(rowAction(operation));
+      await confirmDialogFor(operation);
       await waitFor(() => expect(writes()).toHaveLength(1));
       expectWrite(operation);
-      expect(confirmMock).toHaveBeenCalledTimes(2);
-      expect(confirmMock).toHaveBeenLastCalledWith(confirmationFor(operation));
       applyDispatchedWrite();
       completion.resolve(new Response(null, { status: 204 }));
       await waitFor(() => expect(sharingReads()).toHaveLength(10));
@@ -673,15 +685,12 @@ describe('rendered namesake sharing rows through the real transport', () => {
     await waitFor(() => expect(sharingReads()).toHaveLength(10));
     await screen.findByRole('heading', { name: 'Incoming Shares' });
     expectSavedRows('accept incoming', true);
-    expect(confirmMock).not.toHaveBeenCalled();
 
     completion = deferred<Response>();
     fireEvent.click(rowAction('remove accepted incoming'));
+    await confirmDialogFor('remove accepted incoming');
     await waitFor(() => expect(writes()).toHaveLength(2));
     expectWrite('remove accepted incoming', 2);
-    expect(confirmMock).toHaveBeenCalledExactlyOnceWith(
-      confirmationFor('remove accepted incoming'),
-    );
     applyDispatchedWrite(1);
     completion.resolve(new Response(null, { status: 204 }));
     await waitFor(() => expect(sharingReads()).toHaveLength(15));
@@ -758,6 +767,7 @@ describe('sharing rows through real capability withdrawal', () => {
     const savedIncoming = structuredClone(incoming);
     document.cookie = 'pulse_csrf=; Max-Age=0; Path=/';
     fireEvent.click(rowAction(operation));
+    await confirmDialogFor(operation);
     await waitFor(() => expect(reads('/api/health')).toHaveLength(1));
     expect(writes()).toHaveLength(0);
     expect(rowAction(operation)).toBeDisabled();
@@ -788,6 +798,7 @@ describe('sharing rows through real capability withdrawal', () => {
       await renderPanel(operation);
       document.cookie = 'pulse_csrf=; Max-Age=0; Path=/';
       fireEvent.click(rowAction(operation));
+      await confirmDialogFor(operation);
       await waitFor(() => expect(reads('/api/health')).toHaveLength(1));
       const oldReply = hold(json(capabilityBody(false)));
       const oldLoad = refresh(() => oldReply.promise);
@@ -820,6 +831,7 @@ describe('sharing rows through real capability withdrawal', () => {
       completion.resolve(response);
       await renderPanel(operation);
       fireEvent.click(rowAction(operation));
+      await confirmDialogFor(operation);
       await waitFor(() => expect(read).toHaveBeenCalledOnce());
       expectWrite(operation);
       applyDispatchedWrite();
@@ -834,7 +846,7 @@ describe('sharing rows through real capability withdrawal', () => {
       fireEvent.change(screen.getByRole('combobox', { name: 'Target Organization' }), {
         target: { value: 'peer/third' },
       });
-      fireEvent.input(screen.getByLabelText('Resource Type'), { target: { value: 'vm' } });
+      fireEvent.change(screen.getByLabelText('Resource Type'), { target: { value: 'vm' } });
       fireEvent.input(screen.getByLabelText('Resource ID'), {
         target: { value: `current::draft/${operation}` },
       });

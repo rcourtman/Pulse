@@ -1,3 +1,4 @@
+import type { JSX } from 'solid-js';
 import {
   cleanup,
   fireEvent,
@@ -8,6 +9,10 @@ import {
   within,
 } from '@solidjs/testing-library';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+
+vi.mock('@solidjs/router', () => ({
+  A: (props: JSX.AnchorHTMLAttributes<HTMLAnchorElement>) => <a {...props} />,
+}));
 import infrastructureSourceManagerSource from '../InfrastructureSourceManager.tsx?raw';
 import {
   InfrastructureSourceManager,

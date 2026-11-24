@@ -214,20 +214,32 @@ export const OrganizationAccessPanel: Component<OrganizationAccessPanelProps> = 
             )}
           </Show>
           <Show when={state.loading() && !warningMessage()}>
-            <div class="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
-              <p id={checkingID} class="min-w-0 max-w-full break-words text-sm text-muted">
+            <div class="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 rounded-md border border-border/60 bg-surface-alt/50 px-3 py-2">
+              <p id={checkingID} class="min-w-0 max-w-full break-words text-xs text-muted">
                 Checking saved members and invitations for {state.selectedOrgID()}. Restarting does
                 not repeat a change.
               </p>
               <Button
                 ref={restartButton}
+                variant="ghost"
+                size="xs"
                 aria-describedby={checkingID}
                 onClick={reloadAccess}
-                class="min-h-11 w-full sm:min-h-0 sm:w-auto"
+                class="w-full sm:w-auto"
               >
                 Restart access check
               </Button>
             </div>
+          </Show>
+          <Show when={state.mutationError() && !warningMessage()}>
+            {(message) => (
+              <div
+                role="alert"
+                class="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800 dark:border-red-900/40 dark:bg-red-950/40 dark:text-red-200"
+              >
+                {message()}
+              </div>
+            )}
           </Show>
           <Show
             when={!state.loading()}
@@ -303,6 +315,31 @@ export const OrganizationAccessPanel: Component<OrganizationAccessPanelProps> = 
                     onClick={() => void state.confirmOwnershipTransfer(transfer)}
                   >
                     Transfer ownership
+                  </Button>
+                </div>
+              </Card>
+            </Dialog>
+          )}
+        </Show>
+        <Show keyed when={state.memberRemoval()}>
+          {(removal) => (
+            <Dialog
+              isOpen={true}
+              ariaLabel="Remove organization member"
+              onClose={() => state.cancelMemberRemoval(removal)}
+              panelClass="max-w-lg"
+            >
+              <Card padding="lg" class="min-h-0 overflow-y-auto space-y-4">
+                <h3 class="text-lg font-semibold text-base-content">Remove organization member?</h3>
+                <p class="text-sm text-base-content break-words">{removal.message}</p>
+                <p class="text-sm text-muted break-words">
+                  {removal.member.userId} will lose access to{' '}
+                  {removal.organization.displayName || removal.organization.id} immediately.
+                </p>
+                <div class="flex flex-col gap-2 sm:flex-row sm:justify-end">
+                  <Button onClick={() => state.cancelMemberRemoval(removal)}>Cancel</Button>
+                  <Button variant="danger" onClick={() => void state.confirmMemberRemoval(removal)}>
+                    Remove member
                   </Button>
                 </div>
               </Card>

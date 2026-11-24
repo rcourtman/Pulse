@@ -522,4 +522,38 @@ describe('SSOProvidersPanel modal feedback and recovery', () => {
     fireEvent.click(screen.getByRole('button', { name: /^Edit provider / }));
     expect((await screen.findByRole('dialog')).querySelector('[role="alert"]')).toBeNull();
   });
+
+  it('guards disabling the last active SSO provider when local login is hidden', async () => {
+    setupFetch([corpProvider]);
+    render(() => <SSOProvidersPanel hideLocalLogin />);
+
+    const toggle = await screen.findByRole('button', { name: 'Disable Corporate OIDC' });
+    fireEvent.click(toggle);
+
+    const dialog = await screen.findByRole('dialog', {
+      name: 'Confirm disabling last active SSO provider',
+    });
+    expect(dialog).toHaveTextContent('The local login form is currently hidden.');
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(fetchMock.mock.calls.every(([, options]) => !options?.method)).toBe(true);
+  });
+
+  it('supports adding and removing structured Group Role Mappings synced to the textarea', async () => {
+    setupFetch([corpProvider]);
+    const dialog = await editProvider();
+    fireEvent.click(
+      dialog.getByRole('button', { name: 'Show access restrictions & role mapping' }),
+    );
+
+    fireEvent.input(dialog.getByLabelText('IdP group name'), { target: { value: 'Ops, East' } });
+    fireEvent.input(dialog.getByLabelText('Pulse role ID'), { target: { value: 'operator' } });
+    fireEvent.click(dialog.getByRole('button', { name: 'Add mapping' }));
+
+    expect(dialog.getByLabelText('Group Role Mappings')).toHaveValue(
+      'admins=admin, "Ops, East"=operator',
+    );
+    fireEvent.click(dialog.getByRole('button', { name: 'Remove mapping for Ops, East' }));
+    expect(dialog.getByLabelText('Group Role Mappings')).toHaveValue('admins=admin');
+  });
 });

@@ -1,4 +1,5 @@
 import { Component, For, JSX, Show } from 'solid-js';
+import { Card } from '@/components/shared/Card';
 import SettingsPanel from '@/components/shared/SettingsPanel';
 
 export type CommercialStatItem = {
@@ -31,7 +32,7 @@ interface CommercialUsageMetersProps {
 }
 
 interface CommercialBillingShellProps {
-  title: string;
+  title?: string;
   description?: string;
   action?: JSX.Element;
   loading?: boolean;
@@ -103,14 +104,44 @@ export const CommercialUsageMeters: Component<CommercialUsageMetersProps> = (pro
 );
 
 export const CommercialBillingShell: Component<CommercialBillingShellProps> = (props) => (
-  <SettingsPanel
-    title={props.title}
-    description={props.description}
-    action={props.action}
-    bodyClass="space-y-5"
+  <Show
+    when={props.title}
+    fallback={
+      <Card
+        data-settings-panel
+        padding="none"
+        border={false}
+        class="overflow-hidden border border-border"
+      >
+        <Show when={props.description || props.action}>
+          <div class="flex flex-wrap items-center justify-between gap-2 border-b border-border bg-surface-alt px-3 py-2.5 sm:px-6 sm:py-3.5">
+            <Show when={props.description} fallback={<div />}>
+              <p class="text-xs text-muted sm:text-sm">{props.description}</p>
+            </Show>
+            <Show when={props.action}>
+              <div class="w-auto min-w-0 max-w-full shrink-0">{props.action}</div>
+            </Show>
+          </div>
+        </Show>
+        <div class="space-y-5 p-3 sm:p-6">
+          <Show when={!props.loading} fallback={props.loadingFallback}>
+            {props.children}
+          </Show>
+        </div>
+      </Card>
+    }
   >
-    <Show when={!props.loading} fallback={props.loadingFallback}>
-      {props.children}
-    </Show>
-  </SettingsPanel>
+    {(title) => (
+      <SettingsPanel
+        title={title()}
+        description={props.description}
+        action={props.action}
+        bodyClass="space-y-5"
+      >
+        <Show when={!props.loading} fallback={props.loadingFallback}>
+          {props.children}
+        </Show>
+      </SettingsPanel>
+    )}
+  </Show>
 );

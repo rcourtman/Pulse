@@ -4,6 +4,7 @@ import RefreshCw from 'lucide-solid/icons/refresh-cw';
 import type { ProRuntimeSwitch, UpdateStatus } from '@/api/updates';
 import { Button, ButtonLink } from '@/components/shared/Button';
 import { InlineNotice, type InlineNoticeTone } from '@/components/shared/InlineNotice';
+import { LoadingSpinner } from '@/components/shared/LoadingSpinner';
 import { UpgradeButtonLink } from '@/components/shared/UpgradeLink';
 import { CopyCommandBlock } from '@/components/Settings/CopyCommandBlock';
 import { getBrokerRegistryLoginPrompt } from '@/components/Settings/updatesSettingsModel';
@@ -712,7 +713,12 @@ export const ProLicensePlanSection: Component<ProLicensePlanSectionProps> = (pro
       <Show when={!licenseEntitlementsLoadError()}>
         <Show
           when={!props.loading}
-          fallback={<p class="text-sm ">{getLicenseStatusLoadingState().text}</p>}
+          fallback={
+            <div class="flex items-center gap-2 text-sm text-muted" role="status">
+              <LoadingSpinner size="sm" />
+              <span>{getLicenseStatusLoadingState().text}</span>
+            </div>
+          }
         >
           <Show
             when={props.hasLicenseDetails}

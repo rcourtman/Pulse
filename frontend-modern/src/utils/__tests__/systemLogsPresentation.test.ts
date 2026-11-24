@@ -3,6 +3,7 @@ import {
   getSystemLogBufferSummary,
   getSystemLogLineClass,
   getSystemLogStreamPresentation,
+  parseSystemLogLine,
   SYSTEM_LOG_LEVEL_OPTIONS,
   SYSTEM_LOGS_PANEL_COPY,
 } from '@/utils/systemLogsPresentation';
@@ -28,9 +29,9 @@ describe('systemLogsPresentation', () => {
       readerChanged:
         'The reader or workspace changed. Buffered lines were cleared. Reconnect to read current logs.',
       reconnecting:
-        'The log connection was interrupted. Buffered lines were cleared while the stream reconnects.',
+        'The log connection was interrupted. Reconnecting while keeping buffered lines visible.',
       levelError:
-        'The log level change could not be confirmed. Buffered lines were cleared. Reconnect to check the current level.',
+        'The log level change could not be confirmed. Buffered lines are preserved while you retry.',
       bufferHelp:
         'This view keeps only the latest 1,000 received lines. Paused lines are not collected. Clearing the view does not delete server logs.',
     });
@@ -81,5 +82,20 @@ describe('systemLogsPresentation', () => {
 
   it('formats the canonical log buffer summary', () => {
     expect(getSystemLogBufferSummary(24, 500)).toBe('Buffer: 24 / 500 lines');
+  });
+
+  it('parses structured JSON log lines and falls back cleanly for plain text', () => {
+    const structured = parseSystemLogLine(
+      '{"level":"error","time":"2026-11-23T12:34:56Z","message":"Node unreachable","host":"pve1"}',
+    );
+    expect(structured.isStructured).toBe(true);
+    expect(structured.level).toBe('error');
+    expect(structured.message).toBe('Node unreachable');
+    expect(structured.fields).toBe('host=pve1');
+
+    const plain = parseSystemLogLine('INFO plain startup line');
+    expect(plain.isStructured).toBe(false);
+    expect(plain.level).toBe('info');
+    expect(plain.message).toBe('INFO plain startup line');
   });
 });

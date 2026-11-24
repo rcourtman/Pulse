@@ -1,6 +1,11 @@
+import type { JSX } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import { InfrastructureSourcePicker } from '../InfrastructureSourcePicker';
+
+vi.mock('@solidjs/router', () => ({
+  A: (props: JSX.AnchorHTMLAttributes<HTMLAnchorElement>) => <a {...props} />,
+}));
 
 describe('InfrastructureSourcePicker', () => {
   afterEach(() => {
@@ -61,6 +66,10 @@ describe('InfrastructureSourcePicker', () => {
     });
 
     expect(screen.queryByText('Network endpoint')).toBeNull();
+    expect(screen.getByRole('link', { name: 'Open Availability checks' })).toHaveAttribute(
+      'href',
+      '/settings/monitoring/availability',
+    );
 
     fireEvent.input(screen.getByPlaceholderText('Search sources, devices, services...'), {
       target: { value: 'windows' },

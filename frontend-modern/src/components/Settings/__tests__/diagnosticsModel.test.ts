@@ -217,6 +217,8 @@ describe('diagnosticsModel', () => {
 
   it('formats uptime using floored whole seconds without floating-point noise', () => {
     expect(formatUptime(12.987)).toBe('12s');
+    expect(formatUptime(59.99)).toBe('59s');
+    expect(formatUptime(454.71988866700002)).toBe('7m 34s');
     expect(formatUptime(1285.723469934999912)).toBe('21m 25s');
     expect(formatUptime(3665.9)).toBe('1h 1m');
     expect(formatUptime(90061.4)).toBe('1d 1h');

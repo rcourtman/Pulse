@@ -24,6 +24,7 @@ vi.mock('../useSystemLogsPanelState', () => ({
     togglePaused: vi.fn(),
     handleDownload: vi.fn(),
     handleLevelChange: vi.fn(),
+    handleLogScroll: vi.fn(),
     setLogContainer: vi.fn(),
   }),
 }));

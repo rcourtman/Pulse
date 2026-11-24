@@ -188,7 +188,12 @@ async function intent(state: State) {
     expect(transfer).not.toBeNull();
     return () => state.confirmOwnershipTransfer(transfer);
   }
-  if (operation === 'remove') return () => state.removeMember(row);
+  if (operation === 'remove') {
+    state.removeMember(row);
+    const removal = state.memberRemoval()!;
+    expect(removal).not.toBeNull();
+    return () => state.confirmMemberRemoval(removal);
+  }
   if (operation === 'revoke') return () => state.revokeInvitation(pendingUser);
   if (operation === 'accept') return () => state.acceptInvitation(invitingOrg);
   return () => state.declineInvitation(invitingOrg);

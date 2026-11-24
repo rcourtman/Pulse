@@ -1,4 +1,5 @@
 import { Accessor, Component, Show } from 'solid-js';
+import { Button } from '@/components/shared/Button';
 import { Card } from '@/components/shared/Card';
 import { Dialog } from '@/components/shared/Dialog';
 import { SectionHeader } from '@/components/shared/SectionHeader';
@@ -35,6 +36,13 @@ interface BackupTransferDialogsProps {
 }
 
 export const BackupTransferDialogs: Component<BackupTransferDialogsProps> = (props) => {
+  const showWorkspaceId = () =>
+    Boolean(props.transferOrgID() && props.transferOrgID() !== 'default');
+  const exportPassphraseLength = () => props.exportPassphrase().length;
+  const exportPassphraseMismatch = () =>
+    props.exportPassphraseConfirmation().length > 0 &&
+    props.exportPassphrase() !== props.exportPassphraseConfirmation();
+
   return (
     <>
       <Show when={props.showExportDialog()}>
@@ -46,9 +54,11 @@ export const BackupTransferDialogs: Component<BackupTransferDialogsProps> = (pro
         >
           <Card padding="lg" class="max-w-md w-full min-h-0 overflow-y-auto">
             <SectionHeader title="Export configuration" size="md" class="mb-4" />
-            <p class="mb-4 text-sm text-muted break-all">
-              Workspace ID: <strong class="text-base-content">{props.transferOrgID()}</strong>
-            </p>
+            <Show when={showWorkspaceId()}>
+              <p class="mb-4 text-sm text-muted break-all">
+                Workspace ID: <strong class="text-base-content">{props.transferOrgID()}</strong>
+              </p>
+            </Show>
             <Show when={props.transferError() && !props.showApiTokenModal()}>
               <p role="alert" class="mb-4 text-sm text-red-700 dark:text-red-300">
                 {props.transferError()}
@@ -86,6 +96,11 @@ export const BackupTransferDialogs: Component<BackupTransferDialogsProps> = (pro
                   encrypts the backup. It does not verify your login. Store it separately from the
                   file. Pulse cannot recover a forgotten passphrase.
                 </p>
+                <Show when={exportPassphraseLength() > 0 && exportPassphraseLength() < 12}>
+                  <p class="mt-1 text-xs text-amber-700 dark:text-amber-300">
+                    {exportPassphraseLength()} of 12 minimum characters entered.
+                  </p>
+                </Show>
               </div>
 
               <div class={formField}>
@@ -108,6 +123,11 @@ export const BackupTransferDialogs: Component<BackupTransferDialogsProps> = (pro
                 <p id="backup-export-confirmation-help" class={`${formHelpText} mt-1`}>
                   Enter it again to catch typing mistakes before creating the file.
                 </p>
+                <Show when={exportPassphraseMismatch()}>
+                  <p class="mt-1 text-xs text-amber-700 dark:text-amber-300">
+                    Passphrases do not match yet.
+                  </p>
+                </Show>
               </div>
 
               <div class="bg-amber-50 dark:bg-amber-900/25 border border-amber-200 dark:border-amber-800 rounded-md p-3">
@@ -117,6 +137,7 @@ export const BackupTransferDialogs: Component<BackupTransferDialogsProps> = (pro
                     fill="none"
                     stroke="currentColor"
                     viewBox="0 0 24 24"
+                    aria-hidden="true"
                   >
                     <path
                       stroke-linecap="round"
@@ -128,7 +149,7 @@ export const BackupTransferDialogs: Component<BackupTransferDialogsProps> = (pro
                   <div class="text-xs text-amber-700 dark:text-amber-300">
                     <strong>Configuration only:</strong> Includes Proxmox connections, SSO settings
                     and API-token records, but not history, TrueNAS/vSphere connections or agent
-                    enrolment state. Local login credentials and sessions are not included. Check
+                    enrollment state. Local login credentials and sessions are not included. Check
                     the{' '}
                     <ExternalTextLink
                       href={getShippedDocUrl('MIGRATION.md')}
@@ -141,27 +162,29 @@ export const BackupTransferDialogs: Component<BackupTransferDialogsProps> = (pro
                 </div>
               </div>
 
-              <div class="flex justify-end space-x-3">
-                <button
+              <div class="flex justify-end gap-3">
+                <Button
                   type="button"
+                  variant="secondary"
+                  size="md"
                   onClick={props.closeExportDialog}
                   disabled={props.isTransferring()}
-                  class="px-4 py-2 border border-border text-base-content rounded-md hover:bg-surface-hover"
                 >
                   Cancel
-                </button>
-                <button
+                </Button>
+                <Button
                   type="button"
+                  variant="primary"
+                  size="md"
                   onClick={props.handleExport}
                   disabled={
                     props.isTransferring() ||
                     props.exportPassphrase().length < 12 ||
                     !props.exportPassphraseConfirmation()
                   }
-                  class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Export
-                </button>
+                </Button>
               </div>
             </div>
           </Card>
@@ -186,7 +209,7 @@ export const BackupTransferDialogs: Component<BackupTransferDialogsProps> = (pro
             <div class="space-y-4">
               <p class="text-sm text-muted">
                 This Pulse instance requires an API token for export/import operations. Please enter
-                a token authorised for this workspace. Saving it does not repeat the transfer.
+                a token authorized for this workspace. Saving it does not repeat the transfer.
                 Review the workspace and submit again yourself.
               </p>
 
@@ -206,28 +229,28 @@ export const BackupTransferDialogs: Component<BackupTransferDialogsProps> = (pro
 
               <div class="text-xs text-muted rounded-sm p-2">
                 <p class="font-semibold mb-1">{getAPITokenManagementLocationMessage()}</p>
-                <p>
-                  Tokens are managed in the UI and stored in <code>api_tokens.json</code>.
-                </p>
+                <p>Tokens are managed in Settings under Security and API Access.</p>
               </div>
             </div>
 
-            <div class="flex justify-end space-x-2 mt-6">
-              <button
+            <div class="flex justify-end gap-2 mt-6">
+              <Button
                 type="button"
+                variant="secondary"
+                size="md"
                 onClick={props.closeApiTokenModal}
-                class="px-4 py-2 border border-border text-base-content rounded-md hover:bg-surface-hover"
               >
                 Cancel
-              </button>
-              <button
+              </Button>
+              <Button
                 type="button"
+                variant="primary"
+                size="md"
                 onClick={props.handleApiTokenAuthenticate}
                 disabled={!props.apiTokenInput()}
-                class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Authenticate
-              </button>
+              </Button>
             </div>
           </Card>
         </Dialog>
@@ -242,9 +265,11 @@ export const BackupTransferDialogs: Component<BackupTransferDialogsProps> = (pro
         >
           <Card padding="lg" class="max-w-md w-full min-h-0 overflow-y-auto">
             <SectionHeader title="Import configuration" size="md" class="mb-4" />
-            <p class="mb-4 text-sm text-muted break-all">
-              Workspace ID: <strong class="text-base-content">{props.transferOrgID()}</strong>
-            </p>
+            <Show when={showWorkspaceId()}>
+              <p class="mb-4 text-sm text-muted break-all">
+                Workspace ID: <strong class="text-base-content">{props.transferOrgID()}</strong>
+              </p>
+            </Show>
             <Show when={props.transferError() && !props.showApiTokenModal()}>
               <p role="alert" class="mb-4 text-sm text-red-700 dark:text-red-300">
                 {props.transferError()}
@@ -321,32 +346,34 @@ export const BackupTransferDialogs: Component<BackupTransferDialogsProps> = (pro
                   </p>
                   <p>
                     <strong>Agent migration:</strong> API-token records are included, but agent
-                    inventory, enrolment state, profiles and assignments are not. Import cannot
+                    inventory, enrollment state, profiles and assignments are not. Import cannot
                     change the Pulse URL stored on remote agents. Preserve each agent's identity and
                     private credential, retarget if the address changes, and verify fresh admission.
                   </p>
                 </div>
               </div>
 
-              <div class="flex justify-end space-x-3">
-                <button
+              <div class="flex justify-end gap-3">
+                <Button
                   type="button"
+                  variant="secondary"
+                  size="md"
                   onClick={props.closeImportDialog}
                   disabled={props.isTransferring()}
-                  class="px-4 py-2 border border-border text-base-content rounded-md hover:bg-surface-hover"
                 >
                   Cancel
-                </button>
-                <button
+                </Button>
+                <Button
                   type="button"
+                  variant="primary"
+                  size="md"
                   onClick={props.handleImport}
                   disabled={
                     props.isTransferring() || !props.importPassphrase() || !props.importFile()
                   }
-                  class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Import
-                </button>
+                </Button>
               </div>
             </div>
           </Card>

@@ -169,6 +169,9 @@ describe('role feedback through the consuming editor and real HTTP client', () =
     fireEvent.input(within(dialog).getByLabelText('Role Name'), {
       target: { value: 'New auditor' },
     });
+    fireEvent.input(within(dialog).getByLabelText('Role ID'), {
+      target: { value: '' },
+    });
     save(dialog, 'Create Role');
     const notice = await focusedNotice(dialog);
     expect(notice).toHaveTextContent('ID and Name are required');

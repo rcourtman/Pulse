@@ -298,6 +298,10 @@ describe('manual sharing rereads retain keyboard context through real transport'
       });
       action.focus();
       fireEvent.click(action);
+      if (operation === 'remove outgoing') {
+        const dialog = screen.getByRole('dialog', { name: 'Remove outgoing share?' });
+        fireEvent.click(within(dialog).getByRole('button', { name: 'Remove share' }));
+      }
       await waitFor(() => expect(warning()).toHaveFocus());
       expect(warning()).toHaveTextContent('The last sharing change could not be confirmed.');
       expect(writes()).toHaveLength(1);

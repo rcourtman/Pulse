@@ -1,4 +1,4 @@
-import { Component, For, Show, createMemo, createSignal, onMount } from 'solid-js';
+import { Component, For, Show, createEffect, createMemo, createSignal, onMount } from 'solid-js';
 import { Button } from '@/components/shared/Button';
 import { CalloutCard } from '@/components/shared/CalloutCard';
 import { FeatureGateSection } from '@/components/shared/FeatureGateSection';
@@ -107,6 +107,8 @@ interface AvailabilityHTTPHeaderForm {
 
 export interface AvailabilityTargetSlotProps {
   editingTargetId?: string | null;
+  /** Already-loaded target when opened from the list, avoiding a duplicate fetch flash. */
+  initialTarget?: AvailabilityTarget | null;
   onCancel: () => void;
   onSaved: () => void;
   initialTargetKind?: AvailabilityTargetKind;
@@ -235,7 +237,7 @@ const availabilityTestSuccessDescription = (
     application?.outcome === 'passed'
       ? protocol === 'dns'
         ? `DNS server answered in ${result.latencyMillis} ms and returned a matching record.`
-        : `Endpoint answered in ${result.latencyMillis} ms and the application contract passed${application.statusCode ? ` (HTTP ${application.statusCode})` : ''}.`
+        : `Endpoint answered in ${result.latencyMillis} ms and the response check passed${application.statusCode ? ` (HTTP ${application.statusCode})` : ''}.`
       : `Probe reached the target in ${result.latencyMillis} ms.`;
   const certificate = result.certificate;
   if (!certificate) return base;
@@ -260,7 +262,7 @@ const availabilityTestFailureDescription = (
       return `DNS server answered in ${result.latencyMillis} ms, but the DNS check failed. ${result.error || 'The response did not satisfy the DNS query.'}`;
     }
     const status = result.application.statusCode ? ` HTTP ${result.application.statusCode}.` : '';
-    return `Endpoint answered in ${result.latencyMillis} ms, but the application contract failed.${status} ${result.error || 'The response did not satisfy the configured assertion.'}`;
+    return `Endpoint answered in ${result.latencyMillis} ms, but the response check failed.${status} ${result.error || 'The response did not satisfy the configured assertion.'}`;
   }
   return result.error || 'Probe failed.';
 };
@@ -387,14 +389,26 @@ export const AvailabilityTargetSlot: Component<AvailabilityTargetSlotProps> = (p
   });
 
   const [form, setForm] = createSignal<AvailabilityForm>(
-    newAvailabilityForm(props.initialTargetKind, {
-      name: props.initialName,
-      address: props.initialAddress,
-    }),
+    props.initialTarget
+      ? formFromTarget(props.initialTarget)
+      : newAvailabilityForm(props.initialTargetKind, {
+          name: props.initialName,
+          address: props.initialAddress,
+        }),
   );
   const [selectedPreset, setSelectedPreset] = createSignal<AvailabilityTargetPresetID>(
-    initialPresetForTargetKind(props.initialTargetKind),
+    props.initialTarget
+      ? CUSTOM_AVAILABILITY_PRESET_ID
+      : initialPresetForTargetKind(props.initialTargetKind),
   );
+
+  createEffect(() => {
+    if (props.editingTargetId && typeof props.connectionEnabled === 'boolean') {
+      if (form().enabled !== props.connectionEnabled) {
+        setForm((current) => ({ ...current, enabled: props.connectionEnabled! }));
+      }
+    }
+  });
   const [loading, setLoading] = createSignal(false);
   const [saving, setSaving] = createSignal(false);
   const [testing, setTesting] = createSignal(false);
@@ -535,7 +549,7 @@ export const AvailabilityTargetSlot: Component<AvailabilityTargetSlotProps> = (p
   onMount(async () => {
     void loadRuntimeCapabilities();
     const targetId = props.editingTargetId?.trim();
-    if (!targetId) return;
+    if (!targetId || props.initialTarget) return;
     setLoading(true);
     setError(null);
     try {
@@ -967,7 +981,7 @@ export const AvailabilityTargetSlot: Component<AvailabilityTargetSlotProps> = (p
                     }
                     placeholder={
                       form().httpBodyConfigured
-                        ? 'Stored securely — leave blank to keep it'
+                        ? 'Stored securely. Leave blank to keep it'
                         : '{"operation":"health"}'
                     }
                   />
@@ -1030,7 +1044,7 @@ export const AvailabilityTargetSlot: Component<AvailabilityTargetSlotProps> = (p
                       }
                       placeholder={
                         form().httpPasswordConfigured
-                          ? 'Stored securely — leave blank to keep it'
+                          ? 'Stored securely. Leave blank to keep it'
                           : 'Required'
                       }
                     />
@@ -1052,7 +1066,7 @@ export const AvailabilityTargetSlot: Component<AvailabilityTargetSlotProps> = (p
                       }
                       placeholder={
                         form().httpBearerTokenConfigured
-                          ? 'Stored securely — leave blank to keep it'
+                          ? 'Stored securely. Leave blank to keep it'
                           : 'Required'
                       }
                     />
@@ -1100,7 +1114,7 @@ export const AvailabilityTargetSlot: Component<AvailabilityTargetSlotProps> = (p
                           }
                           placeholder={
                             header.valueConfigured
-                              ? 'Stored securely — leave blank to keep it'
+                              ? 'Stored securely. Leave blank to keep it'
                               : 'Value'
                           }
                         />
@@ -1195,7 +1209,7 @@ export const AvailabilityTargetSlot: Component<AvailabilityTargetSlotProps> = (p
               onChange={(event) =>
                 updateForm({ udpMode: event.currentTarget.value as AvailabilityUDPMode })
               }
-              help="No DNS-answer validation. Open or filtered keeps silence indeterminate. Port-unreachable replies still fail."
+              help="No DNS-answer validation. Open or filtered treats silence as unconfirmed. Port-unreachable replies still fail."
             >
               <option value="response_required">Require a response</option>
               <option value="open_or_filtered">Accept open or filtered</option>
@@ -1386,7 +1400,7 @@ export const AvailabilityTargetSlot: Component<AvailabilityTargetSlotProps> = (p
               onClick={handleSave}
               disabled={isBusy()}
             >
-              {saving() ? 'Saving…' : isEditing() ? 'Save target' : addButtonLabel()}
+              {saving() ? 'Saving…' : isEditing() ? 'Save check' : addButtonLabel()}
             </Button>
           </div>
         </div>

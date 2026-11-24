@@ -509,8 +509,8 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
         <div class="flex flex-col gap-6 p-4 sm:p-6 lg:p-8">
           <div class="flex flex-wrap items-center justify-between gap-4">
             <div class="flex flex-wrap items-center gap-3">
-              <div class="flex h-10 w-10 items-center justify-center rounded-md bg-blue-600 text-blue-600 dark:bg-blue-500 dark:text-blue-200">
-                <BadgeCheck class="h-5 w-5" />
+              <div class="flex h-10 w-10 items-center justify-center rounded-md bg-blue-600 text-white dark:bg-blue-500 dark:text-white">
+                <BadgeCheck class="h-5 w-5" aria-hidden="true" />
               </div>
               <SectionHeader
                 label="Token inventory"
@@ -525,7 +525,7 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
               ref={newTokenTrigger}
               onClick={focusCreateSection}
               disabled={!canManage()}
-              class="inline-flex min-h-10 sm:min-h-10 items-center gap-2 rounded-md bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-xs transition hover:bg-blue-700 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1 focus-visible:ring-offset-white"
+              class="inline-flex min-h-10 sm:min-h-10 items-center gap-2 rounded-md bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-xs transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1 focus-visible:ring-offset-white"
             >
               <svg
                 class="h-4 w-4"
@@ -595,7 +595,7 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
                 {!tokensLoaded()
                   ? 'Token scopes have not been checked.'
                   : hasWildcardTokens()
-                    ? 'Legacy wildcard tokens – rotate into scoped presets when possible.'
+                    ? 'Legacy wildcard tokens. Rotate into scoped presets when possible.'
                     : 'No full access tokens in this inventory.'}
               </p>
             </div>
@@ -733,15 +733,8 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
               padding="md"
               class="border border-dashed border-border text-sm text-muted"
             >
-              No tokens yet.{' '}
-              <button
-                onClick={focusCreateSection}
-                disabled={!canManage()}
-                class="font-medium text-blue-600 underline-offset-2 hover:underline dark:text-blue-400"
-              >
-                Create one
-              </button>{' '}
-              to authenticate agents and integrations.
+              No tokens yet. Use the form below to create a scoped token for agents and
+              integrations.
             </Card>
           </Show>
         }
@@ -754,14 +747,6 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
                 Saved credentials sorted by most recent creation date.
               </p>
             </div>
-            <button
-              type="button"
-              onClick={focusCreateSection}
-              disabled={!canManage()}
-              class="inline-flex min-h-10 sm:min-h-10 items-center gap-2 rounded-md border border-blue-200 px-3 py-2 text-sm font-semibold text-blue-600 transition hover:bg-blue-50 dark:border-blue-700 dark:text-blue-200 dark:hover:bg-blue-900/25"
-            >
-              Generate new
-            </button>
           </div>
 
           <div
@@ -936,25 +921,16 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
                 </span>
                 <button
                   type="button"
-                  class="inline-flex min-h-10 sm:min-h-10 items-center rounded-md px-2.5 py-2 text-sm font-medium text-blue-600 underline-offset-2 hover:underline dark:text-blue-300"
+                  class="inline-flex min-h-10 sm:min-h-10 items-center rounded-md px-2.5 py-2 text-sm font-medium text-blue-600 underline-offset-2 hover:underline disabled:cursor-not-allowed disabled:opacity-50 dark:text-blue-300"
                   onClick={clearScopes}
                   disabled={!canManage()}
-                  title="Legacy wildcard – all permissions"
+                  title="Clear selected scopes"
                 >
                   Clear selection
                 </button>
               </div>
 
               <div class="flex flex-wrap gap-2">
-                <SelectablePillButton
-                  active={isFullAccessSelected()}
-                  onClick={applyFullAccessPreset}
-                  disabled={!canManage()}
-                  title="Legacy wildcard – all permissions"
-                >
-                  Full access
-                </SelectablePillButton>
-
                 <For each={scopePresets()}>
                   {(preset) => (
                     <SelectablePillButton
@@ -967,6 +943,15 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
                     </SelectablePillButton>
                   )}
                 </For>
+
+                <SelectablePillButton
+                  active={isFullAccessSelected()}
+                  onClick={applyFullAccessPreset}
+                  disabled={!canManage()}
+                  title="Legacy wildcard: all permissions"
+                >
+                  Full access
+                </SelectablePillButton>
               </div>
               <Show when={!hasScopeSelection()}>
                 <p class="text-xs text-muted">
@@ -1018,7 +1003,7 @@ export const APITokenManager: Component<APITokenManagerProps> = (props) => {
           padding="sm"
           class="flex flex-wrap items-center gap-3 border border-amber-300 text-sm text-amber-800 dark:border-amber-700 dark:text-amber-100"
         >
-          ⚠ {wildcardCount()} full access {wildcardCount() === 1 ? 'token' : 'tokens'} – consider
+          ⚠ {wildcardCount()} full access {wildcardCount() === 1 ? 'token' : 'tokens'}: consider
           switching to scoped presets for least privilege.
         </Card>
       </Show>

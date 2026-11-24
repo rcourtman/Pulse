@@ -40,19 +40,19 @@ const formatCount = (value: number): string => new Intl.NumberFormat().format(va
 
 const policyScopeItems = [
   {
-    label: 'Resource classification',
+    label: 'Sensitivity level',
     description:
-      'Groups monitored resources by sensitivity so restricted infrastructure is not treated like routine inventory.',
+      'Groups monitored resources by sensitivity so restricted infrastructure is handled separately from routine inventory.',
   },
   {
     label: 'AI context boundary',
     description:
-      'Shows which resource details can be summarized externally, should prefer local handling, or must stay local.',
+      'Shows which resource details can be summarized externally, prefer local handling, or stay local.',
   },
   {
     label: 'Identifier redaction',
     description:
-      'Counts hostnames, IP addresses, platform IDs, aliases, and paths marked for removal from guarded views.',
+      'Counts hostnames, IP addresses, platform IDs, aliases, and file paths stripped from external summaries.',
   },
 ] as const;
 
@@ -60,7 +60,7 @@ const errorMessageFor = (error: unknown): string => {
   if (error instanceof Error && error.message.trim()) {
     return error.message;
   }
-  return 'Unable to load resource policy posture.';
+  return 'Unable to load resource privacy summary.';
 };
 
 const PolicyScopeSummary: Component = () => (
@@ -68,10 +68,10 @@ const PolicyScopeSummary: Component = () => (
     <div class="flex items-start gap-3">
       <Info class="mt-0.5 h-4 w-4 shrink-0 text-sky-700 dark:text-sky-300" aria-hidden="true" />
       <div class="min-w-0">
-        <h3 class="text-sm font-semibold text-base-content">Read-only resource privacy posture</h3>
+        <h3 class="text-sm font-semibold text-base-content">Read-only resource privacy summary</h3>
         <p class="mt-1 text-sm text-muted">
-          Pulse derives this from the unified resource registry. It does not configure retention,
-          backups, credentials, or billing data.
+          Pulse computes this summary automatically from your monitored infrastructure. It does not
+          change retention, backups, credentials, or billing settings.
         </p>
       </div>
     </div>
@@ -96,9 +96,9 @@ const EmptyPolicyPostureState: Component = () => (
       <div class="max-w-3xl">
         <p class="text-sm font-semibold text-base-content">No monitored resources to classify</p>
         <p class="mt-2 text-sm text-muted">
-          Pulse has not received canonical resource data for this scope yet. Once infrastructure
-          discovery has resources, this page will show which resource details stay local, which can
-          be summarized, and which identifiers are redacted.
+          No monitored infrastructure has reported data for this workspace yet. Once discovery finds
+          resources, this page shows which details stay local, which can be summarized, and which
+          identifiers are redacted.
         </p>
         <p class="mt-2 text-sm text-muted">
           This is expected on a fresh instance, before discovery finishes, or when the selected
@@ -109,7 +109,7 @@ const EmptyPolicyPostureState: Component = () => (
         href={settingsTabPath('infrastructure-systems')}
         variant="secondary"
         size="mdCompact"
-        class="w-fit"
+        class="w-fit shrink-0 whitespace-nowrap"
       >
         Open Infrastructure
       </ButtonLink>
@@ -131,8 +131,12 @@ const PostureMeter: Component<{ item: DataHandlingPostureItem }> = (props) => (
       </span>
     </div>
     <div
+      role="progressbar"
+      aria-label={props.item.label}
+      aria-valuenow={props.item.percentage}
+      aria-valuemin={0}
+      aria-valuemax={100}
       class="mt-3 h-2 overflow-hidden rounded-sm bg-surface-hover"
-      aria-label={`${props.item.label} ${props.item.percentage}%`}
     >
       <div
         class={`h-full rounded-sm ${meterClassByTone[props.item.tone]}`}
@@ -151,16 +155,16 @@ export const DataHandlingPanel: Component = () => {
   });
 
   return (
-    <SettingsPanel
-      title="Resource Data Policy"
-      description="Review the current privacy boundary for monitored resource data."
-      bodyClass="space-y-5"
-      action={
+    <SettingsPanel noPadding>
+      <div class="flex flex-wrap items-center justify-between gap-3 border-b border-border bg-surface-alt px-3 py-3 sm:px-6 sm:py-4">
+        <p class="text-xs text-muted sm:text-sm">
+          Review the current privacy boundary for monitored infrastructure data.
+        </p>
         <Button
           type="button"
           variant="outline"
           size="sm"
-          class="min-h-11 sm:min-h-0"
+          class="min-h-11 shrink-0 sm:min-h-0"
           isLoading={resources.loading()}
           onClick={() => {
             void resources.refetch();
@@ -169,138 +173,146 @@ export const DataHandlingPanel: Component = () => {
           <RefreshCw class="mr-2 h-4 w-4" aria-hidden="true" />
           Refresh
         </Button>
-      }
-    >
-      <Show when={errorMessage()}>
-        {(message) => (
-          <div
-            role="alert"
-            aria-live="polite"
-            class="rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-900/25 dark:text-amber-100"
-          >
-            <div class="flex items-start gap-3">
-              <AlertTriangle class="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
-              <p>{message()}</p>
-            </div>
-          </div>
-        )}
-      </Show>
+      </div>
 
-      <Show
-        when={!resources.loading() || resources.policyPosture()}
-        fallback={
-          <SettingsLoadingSkeleton label="Loading resource data policy">
-            <div class="grid gap-3 md:grid-cols-3">
-              <For each={[1, 2, 3]}>
-                {() => (
-                  <SettingsSkeletonCard class="min-h-28 bg-surface-alt p-4 space-y-0">
-                    <SettingsSkeletonBlock class="h-4 w-24" />
-                    <SettingsSkeletonBlock class="mt-4 h-8 w-16" />
-                    <SettingsSkeletonBlock class="mt-3 h-3 w-32" />
-                  </SettingsSkeletonCard>
-                )}
-              </For>
+      <div class="space-y-5 p-3 sm:p-6">
+        <Show when={errorMessage()}>
+          {(message) => (
+            <div
+              role="alert"
+              aria-live="polite"
+              class="rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-900/25 dark:text-amber-100"
+            >
+              <div class="flex items-start gap-3">
+                <AlertTriangle class="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+                <p>{message()}</p>
+              </div>
             </div>
-          </SettingsLoadingSkeleton>
-        }
-      >
-        <PolicyScopeSummary />
+          )}
+        </Show>
 
-        <Show when={model().hasResources} fallback={<EmptyPolicyPostureState />}>
-          <div class="grid gap-3 md:grid-cols-3">
-            <div class="rounded-md border border-border bg-surface-alt p-4">
-              <div class="flex items-center gap-2 text-sm font-semibold text-base-content">
-                <ShieldCheck class="h-4 w-4 text-emerald-600 dark:text-emerald-300" />
-                Governed Resources
-              </div>
-              <p class="mt-3 text-3xl font-semibold text-base-content">
-                {formatCount(model().totalResources)}
-              </p>
-              <p class="mt-1 text-xs text-muted">Resources carrying policy metadata.</p>
-            </div>
-            <div class="rounded-md border border-border bg-surface-alt p-4">
-              <div class="flex items-center gap-2 text-sm font-semibold text-base-content">
-                <Lock class="h-4 w-4 text-teal-600 dark:text-teal-300" />
-                Local-Only
-              </div>
-              <p class="mt-3 text-3xl font-semibold text-base-content">
-                {formatCount(model().localOnlyResources)}
-              </p>
-              <p class="mt-1 text-xs text-muted">Resources kept inside this Pulse instance.</p>
-            </div>
-            <div class="rounded-md border border-border bg-surface-alt p-4">
-              <div class="flex items-center gap-2 text-sm font-semibold text-base-content">
-                <EyeOff class="h-4 w-4 text-muted" />
-                Redaction Hints
-              </div>
-              <p class="mt-3 text-3xl font-semibold text-base-content">
-                {formatCount(model().redactionHintCount)}
-              </p>
-              <p class="mt-1 text-xs text-muted">Field-level protections applied by policy.</p>
-            </div>
-          </div>
-
-          <div class="grid gap-4 xl:grid-cols-2">
-            <section class="space-y-3">
-              <div>
-                <h3 class="text-sm font-semibold text-base-content">Sensitivity</h3>
-                <p class="mt-1 text-xs text-muted">
-                  Classification applied to monitored resources.
-                </p>
-              </div>
-              <div class="space-y-2">
-                <For each={model().sensitivityItems}>{(item) => <PostureMeter item={item} />}</For>
-              </div>
-            </section>
-
-            <section class="space-y-3">
-              <div class="flex items-start gap-2">
-                <Cloud class="mt-0.5 h-4 w-4 text-sky-600 dark:text-sky-300" />
-                <div>
-                  <h3 class="text-sm font-semibold text-base-content">Handling Boundary</h3>
-                  <p class="mt-1 text-xs text-muted">
-                    Routing policy for summaries and local-only resource data.
-                  </p>
-                </div>
-              </div>
-              <div class="space-y-2">
-                <For each={model().routingItems}>{(item) => <PostureMeter item={item} />}</For>
-              </div>
-            </section>
-          </div>
-
-          <section class="rounded-md border border-border bg-surface-alt px-4 py-4">
-            <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-              <div>
-                <h3 class="text-sm font-semibold text-base-content">Redaction Coverage</h3>
-                <p class="mt-1 text-xs text-muted">
-                  Fields removed when a resource requires a guarded display.
-                </p>
-              </div>
-              <Show when={!model().hasRedactions}>
-                <span class="w-fit rounded-sm bg-surface px-2 py-1 text-xs font-medium text-muted">
-                  No active redaction hints
-                </span>
-              </Show>
-            </div>
-            <Show when={model().hasRedactions}>
-              <div class="mt-4 flex flex-wrap gap-2">
-                <For each={model().redactionItems}>
-                  {(item) => (
-                    <span
-                      class={`inline-flex items-center gap-1.5 rounded-sm px-2.5 py-1 text-xs font-medium ${badgeClassByTone[item.tone]}`}
-                      title={item.description}
-                    >
-                      {item.label}
-                      <span class="font-semibold">{formatCount(item.count)}</span>
-                    </span>
+        <Show
+          when={!resources.loading() || resources.policyPosture()}
+          fallback={
+            <SettingsLoadingSkeleton label="Loading resource privacy summary">
+              <div class="grid gap-3 md:grid-cols-3">
+                <For each={[1, 2, 3]}>
+                  {() => (
+                    <SettingsSkeletonCard class="min-h-28 bg-surface-alt p-4 space-y-0">
+                      <SettingsSkeletonBlock class="h-4 w-24" />
+                      <SettingsSkeletonBlock class="mt-4 h-8 w-16" />
+                      <SettingsSkeletonBlock class="mt-3 h-3 w-32" />
+                    </SettingsSkeletonCard>
                   )}
                 </For>
               </div>
-            </Show>
-          </section>
+            </SettingsLoadingSkeleton>
+          }
+        >
+          <PolicyScopeSummary />
+
+          <Show when={model().hasResources} fallback={<EmptyPolicyPostureState />}>
+            <div class="grid gap-3 md:grid-cols-3">
+              <div class="rounded-md border border-border bg-surface-alt p-4">
+                <div class="flex items-center gap-2 text-sm font-semibold text-base-content">
+                  <ShieldCheck class="h-4 w-4 text-emerald-600 dark:text-emerald-300" />
+                  Classified Resources
+                </div>
+                <p class="mt-3 text-3xl font-semibold text-base-content">
+                  {formatCount(model().totalResources)}
+                </p>
+                <p class="mt-1 text-xs text-muted">
+                  Monitored resources with active privacy rules.
+                </p>
+              </div>
+              <div class="rounded-md border border-border bg-surface-alt p-4">
+                <div class="flex items-center gap-2 text-sm font-semibold text-base-content">
+                  <Lock class="h-4 w-4 text-teal-600 dark:text-teal-300" />
+                  Local-Only
+                </div>
+                <p class="mt-3 text-3xl font-semibold text-base-content">
+                  {formatCount(model().localOnlyResources)}
+                </p>
+                <p class="mt-1 text-xs text-muted">Resources kept inside this Pulse instance.</p>
+              </div>
+              <div class="rounded-md border border-border bg-surface-alt p-4">
+                <div class="flex items-center gap-2 text-sm font-semibold text-base-content">
+                  <EyeOff class="h-4 w-4 text-muted" />
+                  Redacted Fields
+                </div>
+                <p class="mt-3 text-3xl font-semibold text-base-content">
+                  {formatCount(model().redactionHintCount)}
+                </p>
+                <p class="mt-1 text-xs text-muted">
+                  Identifiers stripped before external summaries.
+                </p>
+              </div>
+            </div>
+
+            <div class="grid gap-4 xl:grid-cols-2">
+              <section class="space-y-3">
+                <div>
+                  <h3 class="text-sm font-semibold text-base-content">Sensitivity</h3>
+                  <p class="mt-1 text-xs text-muted">
+                    Classification applied to monitored resources.
+                  </p>
+                </div>
+                <div class="space-y-2">
+                  <For each={model().sensitivityItems}>
+                    {(item) => <PostureMeter item={item} />}
+                  </For>
+                </div>
+              </section>
+
+              <section class="space-y-3">
+                <div class="flex items-start gap-2">
+                  <Cloud class="mt-0.5 h-4 w-4 text-sky-600 dark:text-sky-300" />
+                  <div>
+                    <h3 class="text-sm font-semibold text-base-content">Handling Boundary</h3>
+                    <p class="mt-1 text-xs text-muted">
+                      Routing policy for summaries and local-only resource data.
+                    </p>
+                  </div>
+                </div>
+                <div class="space-y-2">
+                  <For each={model().routingItems}>{(item) => <PostureMeter item={item} />}</For>
+                </div>
+              </section>
+            </div>
+
+            <section class="rounded-md border border-border bg-surface-alt px-4 py-4">
+              <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                  <h3 class="text-sm font-semibold text-base-content">Redaction Coverage</h3>
+                  <p class="mt-1 text-xs text-muted">
+                    Fields stripped before resource details appear in external summaries.
+                  </p>
+                </div>
+                <Show when={!model().hasRedactions}>
+                  <span class="w-fit rounded-sm bg-surface px-2 py-1 text-xs font-medium text-muted">
+                    No redacted fields
+                  </span>
+                </Show>
+              </div>
+              <Show when={model().hasRedactions}>
+                <div class="mt-4 flex flex-wrap gap-2">
+                  <For each={model().redactionItems}>
+                    {(item) => (
+                      <span
+                        class={`inline-flex items-center gap-1.5 rounded-sm px-2.5 py-1 text-xs font-medium ${badgeClassByTone[item.tone]}`}
+                        title={item.description}
+                      >
+                        {item.label}
+                        <span class="font-semibold">{formatCount(item.count)}</span>
+                      </span>
+                    )}
+                  </For>
+                </div>
+              </Show>
+            </section>
+          </Show>
         </Show>
-      </Show>
+      </div>
     </SettingsPanel>
   );
 };

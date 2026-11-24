@@ -85,8 +85,7 @@ export const SETTINGS_HEADER_META: SettingsHeaderMetaMap = {
   },
   'organization-billing-admin': {
     title: 'Billing Admin',
-    description:
-      'Review and manage tenant billing state across all organizations (hosted mode only).',
+    description: 'Review and manage tenant billing state across all organizations.',
   },
   api: {
     title: 'API Access',

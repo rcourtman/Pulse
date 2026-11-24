@@ -221,20 +221,17 @@ describe('OrganizationSharingPanel', () => {
     renderPanel();
     const target = await screen.findByRole('combobox', { name: 'Target Organization' });
     fireEvent.click(screen.getByRole('button', { name: 'Enter manually' }));
-    const type = screen.getByRole('textbox', { name: 'Resource Type' });
+    const type = screen.getByRole('combobox', { name: 'Resource Type' });
     const id = screen.getByRole('textbox', { name: 'Resource ID' });
     const create = screen.getByRole('button', { name: 'Create Share' });
 
     fireEvent.change(target, { target: { value: 'org-b' } });
     fireEvent.change(target, { target: { value: '' } });
-    fireEvent.input(type, { target: { value: 'storage-poool' } });
     fireEvent.input(id, { target: { value: '   ' } });
 
     expect(target).toHaveAttribute('aria-invalid', 'true');
     expect(target).toHaveAccessibleDescription('Target organization is required');
-    expect(type).toHaveAttribute('aria-invalid', 'true');
     expect(type).toHaveAccessibleName('Resource Type');
-    expect(type).toHaveAccessibleDescription(/Invalid resource type\. Valid types:/);
     expect(id).toHaveAttribute('aria-invalid', 'true');
     expect(id).toHaveAccessibleName('Resource ID');
     expect(id).toHaveAccessibleDescription('Resource ID is required');
@@ -242,7 +239,7 @@ describe('OrganizationSharingPanel', () => {
     expect(createShareMock).not.toHaveBeenCalled();
 
     fireEvent.change(target, { target: { value: 'org-b' } });
-    fireEvent.input(type, { target: { value: 'vm' } });
+    fireEvent.change(type, { target: { value: 'vm' } });
     fireEvent.input(id, { target: { value: '  vm-123  ' } });
     expect(target).not.toHaveAttribute('aria-invalid');
     expect(target).toHaveAccessibleDescription('Organization B · ID: org-b');
@@ -277,12 +274,10 @@ describe('OrganizationSharingPanel', () => {
       const panel = within(view.container);
       const target = await panel.findByRole('combobox', { name: 'Target Organization' });
       fireEvent.click(panel.getByRole('button', { name: 'Enter manually' }));
-      const type = panel.getByRole('textbox', { name: 'Resource Type' });
       const id = panel.getByRole('textbox', { name: 'Resource ID' });
       fireEvent.change(target, { target: { value: '' } });
-      fireEvent.input(type, { target: { value: 'invalid' } });
       fireEvent.input(id, { target: { value: ' ' } });
-      for (const field of [target, type, id]) {
+      for (const field of [target, id]) {
         const descriptionID = field.getAttribute('aria-describedby');
         expect(descriptionID).toBeTruthy();
         expect(field).toHaveAttribute('aria-invalid', 'true');
@@ -351,14 +346,14 @@ describe('OrganizationSharingPanel', () => {
 
     expect(labels).toEqual([
       'Select resource',
-      'Alpha VM (vm:vm-100)',
       'pve-1 (agent:host-1)',
+      'Alpha VM (vm:vm-100)',
       'Zulu VM (vm:vm-200)',
     ]);
     expect(Array.from(quickPick.options, (option) => option.value)).toEqual([
       '',
-      'vm::vm-100',
       'agent::host-1',
+      'vm::vm-100',
       'vm::vm-200',
     ]);
   });
@@ -380,7 +375,7 @@ describe('OrganizationSharingPanel', () => {
     expect(screen.getByLabelText('Resource Name')).toHaveValue('Alpha VM');
   });
 
-  it('validates manual resource type and clears the error for valid values', async () => {
+  it('offers only canonical resource types in the manual resource type selector', async () => {
     renderPanel();
 
     await waitFor(() => {
@@ -389,40 +384,13 @@ describe('OrganizationSharingPanel', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Enter manually' }));
 
-    const resourceTypeInput = screen.getByLabelText('Resource Type');
-    fireEvent.input(resourceTypeInput, { target: { value: 'invalid-type' } });
-
-    const invalidTypeError = screen.getByText(/Invalid resource type\. Valid types:/);
-    expect(invalidTypeError).toBeInTheDocument();
-    expect(invalidTypeError.textContent || '').toContain('system-container');
-    expect(invalidTypeError.textContent || '').toContain('app-container');
-    expect(invalidTypeError.textContent || '').not.toContain(', container,');
-
-    fireEvent.input(resourceTypeInput, { target: { value: 'vm' } });
-
-    await waitFor(() => {
-      expect(screen.queryByText(/Invalid resource type\. Valid types:/)).not.toBeInTheDocument();
-    });
-  });
-
-  it('rejects legacy host alias when creating shares manually', async () => {
-    renderPanel();
-
-    await waitFor(() => {
-      expect(screen.getByRole('heading', { name: 'Create Share' })).toBeInTheDocument();
-    });
-
-    fireEvent.click(screen.getByRole('button', { name: 'Enter manually' }));
-
-    fireEvent.input(screen.getByLabelText('Resource Type'), { target: { value: 'host' } });
-    fireEvent.input(screen.getByLabelText('Resource ID'), { target: { value: 'agent-123' } });
-
-    fireEvent.click(screen.getByRole('button', { name: 'Create Share' }));
-
-    await waitFor(() => {
-      expect(screen.getByText(/Invalid resource type\. Valid types:/)).toBeInTheDocument();
-    });
-    expect(createShareMock).not.toHaveBeenCalled();
+    const resourceTypeSelect = screen.getByLabelText('Resource Type') as HTMLSelectElement;
+    const optionValues = Array.from(resourceTypeSelect.options, (option) => option.value);
+    expect(optionValues).toContain('vm');
+    expect(optionValues).toContain('system-container');
+    expect(optionValues).toContain('app-container');
+    expect(optionValues).not.toContain('host');
+    expect(optionValues).not.toContain('container');
   });
 
   it('creates a share with the expected payload', async () => {
@@ -577,6 +545,8 @@ describe('OrganizationSharingPanel', () => {
     );
     expect(incomingAction('Decline')).toBeVisible();
     fireEvent.click(incomingAction('Decline'));
+    const declineDialog = screen.getByRole('dialog', { name: 'Decline incoming share?' });
+    fireEvent.click(within(declineDialog).getByRole('button', { name: 'Decline share' }));
 
     await waitFor(() => {
       expect(declineIncomingShareMock).toHaveBeenCalledWith(
@@ -1167,8 +1137,11 @@ describe('sharing changes require an admitted current snapshot', () => {
     {
       name: 'remove outgoing',
       mock: deleteShareMock,
-      run: (state: ReturnType<typeof useOrganizationSharingPanelState>) =>
-        state.deleteShare(state.outgoingShares()[0]),
+      run: (state: ReturnType<typeof useOrganizationSharingPanelState>) => {
+        state.deleteShare(state.outgoingShares()[0]);
+        const confirmation = state.shareConfirmation();
+        return confirmation ? state.confirmShareAction(confirmation) : Promise.resolve();
+      },
     },
     {
       name: 'accept incoming',
@@ -1179,8 +1152,11 @@ describe('sharing changes require an admitted current snapshot', () => {
     {
       name: 'decline incoming',
       mock: declineIncomingShareMock,
-      run: (state: ReturnType<typeof useOrganizationSharingPanelState>) =>
-        state.declineIncomingShare(state.incomingShares()[0]),
+      run: (state: ReturnType<typeof useOrganizationSharingPanelState>) => {
+        state.declineIncomingShare(state.incomingShares()[0]);
+        const confirmation = state.shareConfirmation();
+        return confirmation ? state.confirmShareAction(confirmation) : Promise.resolve();
+      },
     },
   ];
   const populate = () => {
@@ -1414,12 +1390,12 @@ describe('sharing changes require an admitted current snapshot', () => {
       populate();
       const { state } = renderState();
       await accepted(state);
-      vi.mocked(confirm).mockImplementation(() => {
-        getOrgIDMock.mockReturnValue('org-b');
-        return true;
-      });
-      if (kind === 'outgoing') await state.deleteShare(state.outgoingShares()[0]);
-      else await state.declineIncomingShare(state.incomingShares()[0]);
+      if (kind === 'outgoing') state.deleteShare(state.outgoingShares()[0]);
+      else state.declineIncomingShare(state.incomingShares()[0]);
+      const confirmation = state.shareConfirmation()!;
+      expect(confirmation).not.toBeNull();
+      getOrgIDMock.mockReturnValue('org-b');
+      await state.confirmShareAction(confirmation);
       expect(deleteShareMock).not.toHaveBeenCalled();
       expect(declineIncomingShareMock).not.toHaveBeenCalled();
     },
@@ -1517,6 +1493,14 @@ describe('keyboard continuation through sharing rereads', () => {
       const control = action(operation);
       control.focus();
       fireEvent.click(control);
+      if (operation !== 'accept incoming') {
+        const dialog = screen.getByRole('dialog');
+        fireEvent.click(
+          within(dialog).getByRole('button', {
+            name: operation === 'decline incoming' ? 'Decline share' : 'Remove share',
+          }),
+        );
+      }
       await waitFor(() => expect(method(operation)).toHaveBeenCalledTimes(1));
       pending.reject(new Error('Synthetic response unavailable'));
       await waitFor(() => expect(warning()).toHaveFocus());
@@ -1594,6 +1578,8 @@ describe('keyboard continuation through sharing rereads', () => {
           const control = action('remove outgoing');
           control.focus();
           fireEvent.click(control);
+          const dialog = screen.getByRole('dialog', { name: 'Remove outgoing share?' });
+          fireEvent.click(within(dialog).getByRole('button', { name: 'Remove share' }));
         } else {
           orgGetMock
             .mockRejectedValueOnce(new Error('Synthetic read unavailable'))
@@ -1641,6 +1627,8 @@ describe('keyboard continuation through sharing rereads', () => {
       const control = action('remove outgoing', removed);
       control.focus();
       fireEvent.click(control);
+      const dialog = screen.getByRole('dialog', { name: 'Remove outgoing share?' });
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Remove share' }));
       await waitFor(() => expect(deleteShareMock).toHaveBeenCalledTimes(1));
       outgoing = outgoing.filter((share) => share.id !== removed.id);
       pending.resolve(undefined);

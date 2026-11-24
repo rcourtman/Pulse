@@ -280,7 +280,13 @@ describe('RBAC paywall settings panels', () => {
       }
     }
     expect(auditor.getByText('Read-only')).toBeInTheDocument();
-    expect(auditor.queryByRole('button')).not.toBeInTheDocument();
+    expect(auditor.queryByRole('button', { name: /^Edit role / })).not.toBeInTheDocument();
+    expect(auditor.queryByRole('button', { name: /^Delete role / })).not.toBeInTheDocument();
+    expect(
+      auditor.getByRole('button', {
+        name: 'Duplicate role Saved auditor (Role ID: auditor)',
+      }),
+    ).toBeEnabled();
     const draft = within(screen.getByText('Draft role').closest('tr')!);
     expect(draft.getAllByText('No permissions').length).toBeGreaterThan(0);
     expect(draft.queryByRole('list')).not.toBeInTheDocument();

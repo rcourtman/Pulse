@@ -30,7 +30,10 @@ describe('settings switch labels', () => {
       />
     ));
 
-    expect(screen.getByRole('checkbox', { name: 'Automatic Stable Updates' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Automatic Stable Updates' })).toHaveAttribute(
+      'aria-pressed',
+      'false',
+    );
   });
 
   it('keeps the running release notes available from update settings', () => {
@@ -96,6 +99,9 @@ describe('settings switch labels', () => {
       />
     ));
 
-    expect(screen.getByRole('checkbox', { name: 'Enable backup polling' })).toBeChecked();
+    expect(screen.getByRole('button', { name: 'Enable backup polling' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
   });
 });

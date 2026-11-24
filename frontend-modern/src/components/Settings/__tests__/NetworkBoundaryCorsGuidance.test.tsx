@@ -75,4 +75,23 @@ describe('CORS settings guidance', () => {
     expect(setAllowedOrigins).not.toHaveBeenCalled();
     expect(setHasUnsavedChanges).not.toHaveBeenCalled();
   });
+
+  it('marks embed origins and webhook CIDRs dirty on input and validates malformed values', () => {
+    const { setHasUnsavedChanges } = setup();
+    const webhookInput = screen.getByLabelText('Allowed Private IP Ranges for Webhooks');
+    fireEvent.input(webhookInput, { target: { value: 'not-a-cidr' } });
+    expect(setHasUnsavedChanges).toHaveBeenCalledWith(true);
+    expect(screen.getByRole('alert')).toHaveTextContent(/Invalid CIDR range/);
+
+    const embedToggle = screen.getByRole('button', { name: 'Allow iframe embedding' });
+    fireEvent.click(embedToggle);
+    const embedInput = screen.getByLabelText('Allowed Embed Origins (optional)');
+    fireEvent.input(embedInput, { target: { value: 'https://home.example.com/path' } });
+    expect(setHasUnsavedChanges).toHaveBeenCalledWith(true);
+    expect(
+      screen
+        .getAllByRole('alert')
+        .some((el) => /no path or trailing slash/.test(el.textContent || '')),
+    ).toBe(true);
+  });
 });

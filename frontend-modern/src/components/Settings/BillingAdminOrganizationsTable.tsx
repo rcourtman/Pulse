@@ -1,4 +1,4 @@
-import { Show, createUniqueId, type Component } from 'solid-js';
+import { For, Show, createUniqueId, type Component } from 'solid-js';
 import { Button } from '@/components/shared/Button';
 import { PulseDataGrid } from '@/components/shared/PulseDataGrid';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
@@ -62,7 +62,7 @@ export const BillingAdminOrganizationsTable: Component<BillingAdminOrganizations
     return (
       <div class="flex flex-col sm:inline-flex sm:flex-row sm:items-center gap-2">
         <Button
-          variant="secondary"
+          variant="dangerOutline"
           size="sm"
           aria-label={`Suspend Org for ${organizationLabel(org)}`}
           onClick={() => props.onSuspendOrganization(orgID)}
@@ -200,6 +200,8 @@ export const BillingAdminOrganizationsTable: Component<BillingAdminOrganizations
       isRowExpanded={(org) => props.expandedOrgID === (org.org_id || '').trim()}
       expandedRender={(org) => {
         const orgID = (org.org_id || '').trim();
+        const billing = () => props.billingByOrgID[orgID];
+        const limitEntries = () => Object.entries(billing()?.limits ?? {});
         return (
           <div
             id={detailsID(orgID)}
@@ -207,9 +209,11 @@ export const BillingAdminOrganizationsTable: Component<BillingAdminOrganizations
             aria-label={detailsLabel(org)}
             class="px-3 pb-3 bg-surface-alt whitespace-normal"
           >
-            <div class="rounded-md border border-border bg-surface-alt p-3">
-              <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-2">
-                <div class="text-xs font-semibold text-muted">Billing state JSON</div>
+            <div class="rounded-md border border-border bg-surface p-3 space-y-3">
+              <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                <div class="text-xs font-semibold uppercase tracking-wide text-muted">
+                  Billing summary
+                </div>
                 <Button
                   variant="secondary"
                   size="xs"
@@ -223,16 +227,93 @@ export const BillingAdminOrganizationsTable: Component<BillingAdminOrganizations
                 </Button>
               </div>
               <Show
-                when={props.billingByOrgID[orgID]}
+                when={billing()}
                 fallback={
                   <p role="status" class="text-sm text-muted">
                     {props.billingErrorByOrgID[orgID] || 'Loading billing state...'}
                   </p>
                 }
               >
-                <pre class="text-xs overflow-x-auto whitespace-pre-wrap [overflow-wrap:anywhere] font-mono text-base-content">
-                  {JSON.stringify(props.billingByOrgID[orgID], null, 2)}
-                </pre>
+                {(state) => (
+                  <div class="space-y-3">
+                    <dl class="grid gap-2 text-xs sm:grid-cols-2 lg:grid-cols-4">
+                      <div class="rounded-md border border-border bg-surface-alt p-2.5">
+                        <dt class="text-muted">Subscription</dt>
+                        <dd class="mt-0.5 font-medium text-base-content">
+                          {
+                            getLicenseSubscriptionStatusPresentation(state().subscription_state)
+                              .label
+                          }
+                        </dd>
+                      </div>
+                      <div class="rounded-md border border-border bg-surface-alt p-2.5">
+                        <dt class="text-muted">Plan version</dt>
+                        <dd class="mt-0.5 font-mono text-base-content [overflow-wrap:anywhere]">
+                          {state().plan_version?.trim() || 'Not set'}
+                        </dd>
+                      </div>
+                      <div class="rounded-md border border-border bg-surface-alt p-2.5">
+                        <dt class="text-muted">Trial</dt>
+                        <dd class="mt-0.5 font-medium text-base-content">
+                          {getBillingAdminTrialStatus(state())}
+                        </dd>
+                      </div>
+                      <div class="rounded-md border border-border bg-surface-alt p-2.5">
+                        <dt class="text-muted">Stripe Customer</dt>
+                        <dd class="mt-0.5 font-mono text-base-content [overflow-wrap:anywhere]">
+                          {stripeCustomerCell(state())}
+                        </dd>
+                      </div>
+                    </dl>
+
+                    <div class="grid gap-3 text-xs sm:grid-cols-2">
+                      <div class="rounded-md border border-border bg-surface-alt p-2.5 space-y-1.5">
+                        <div class="font-medium text-muted">Capabilities</div>
+                        <Show
+                          when={state().capabilities.length > 0}
+                          fallback={<p class="text-muted">None enabled</p>}
+                        >
+                          <div class="flex flex-wrap gap-1.5">
+                            <For each={state().capabilities}>
+                              {(capability) => (
+                                <span class="rounded-sm border border-border bg-surface px-1.5 py-0.5 font-mono text-[11px] text-base-content">
+                                  {capability}
+                                </span>
+                              )}
+                            </For>
+                          </div>
+                        </Show>
+                      </div>
+                      <div class="rounded-md border border-border bg-surface-alt p-2.5 space-y-1.5">
+                        <div class="font-medium text-muted">Limits</div>
+                        <Show
+                          when={limitEntries().length > 0}
+                          fallback={<p class="text-muted">No explicit limits</p>}
+                        >
+                          <dl class="space-y-1">
+                            <For each={limitEntries()}>
+                              {([key, value]) => (
+                                <div class="flex items-center justify-between gap-2">
+                                  <dt class="font-mono text-muted">{key}</dt>
+                                  <dd class="font-medium text-base-content">{value}</dd>
+                                </div>
+                              )}
+                            </For>
+                          </dl>
+                        </Show>
+                      </div>
+                    </div>
+
+                    <details class="rounded-md border border-border bg-surface-alt px-2.5 py-2">
+                      <summary class="cursor-pointer text-xs font-medium text-muted hover:text-base-content">
+                        Raw billing payload
+                      </summary>
+                      <pre class="mt-2 text-xs overflow-x-auto whitespace-pre-wrap [overflow-wrap:anywhere] font-mono text-base-content">
+                        {JSON.stringify(state(), null, 2)}
+                      </pre>
+                    </details>
+                  </div>
+                )}
               </Show>
             </div>
           </div>
