@@ -340,7 +340,7 @@ func TestAgentEventBroadcaster_PublishApprovalPendingDelivers(t *testing.T) {
 
 	expires := time.Now().Add(5 * time.Minute).UTC()
 	requested := time.Now().UTC()
-	b.PublishApprovalPending(AgentEventApprovalPendingPayload{
+	b.PublishApprovalPending("default", AgentEventApprovalPendingPayload{
 		ApprovalID:  "appr-1",
 		ResourceID:  "container:web-1",
 		TargetType:  "container",
@@ -478,7 +478,7 @@ func TestAgentEventBroadcaster_PublishActionCompletedDelivers(t *testing.T) {
 	defer unsub()
 
 	completed := time.Now().UTC()
-	b.PublishActionCompleted(AgentEventActionCompletedPayload{
+	b.PublishActionCompleted("default", AgentEventActionCompletedPayload{
 		ActionID:       "action-1",
 		ResourceID:     "container:web-1",
 		CapabilityName: "pulse_docker",
@@ -535,7 +535,7 @@ func TestAgentEventBroadcaster_PublishActionCompletedPreservesRefusalToken(t *te
 	events, unsub := b.Subscribe()
 	defer unsub()
 
-	b.PublishActionCompleted(AgentEventActionCompletedPayload{
+	b.PublishActionCompleted("default", AgentEventActionCompletedPayload{
 		ActionID:     "action-refused",
 		ResourceID:   "vm:db-1",
 		State:        "failed",
@@ -580,7 +580,7 @@ func TestAgentEventBroadcaster_PublishActionCompletedRoundTripsVerification(t *t
 	defer unsub()
 
 	ranAt := time.Now().UTC()
-	b.PublishActionCompleted(AgentEventActionCompletedPayload{
+	b.PublishActionCompleted("default", AgentEventActionCompletedPayload{
 		ActionID:    "action-verify-1",
 		ResourceID:  "container:web-1",
 		State:       "completed",
@@ -616,7 +616,7 @@ func TestAgentEventBroadcaster_PublishActionCompletedRoundTripsVerification(t *t
 	recordBroadcaster := NewAgentEventBroadcaster()
 	recordEvents, recordUnsub := recordBroadcaster.Subscribe()
 	defer recordUnsub()
-	recordBroadcaster.PublishActionCompletedRecord(unifiedresources.ActionAuditRecord{
+	recordBroadcaster.PublishActionCompletedRecord("default", unifiedresources.ActionAuditRecord{
 		ID:        "action-verify-record",
 		UpdatedAt: ranAt,
 		State:     unifiedresources.ActionStateCompleted,
@@ -716,7 +716,7 @@ func TestAgentEventBroadcaster_PublishActionCompletedAbsentVerificationOmitsFiel
 	events, unsub := b.Subscribe()
 	defer unsub()
 
-	b.PublishActionCompleted(AgentEventActionCompletedPayload{
+	b.PublishActionCompleted("default", AgentEventActionCompletedPayload{
 		ActionID:     "action-refused-1",
 		ResourceID:   "vm:db-1",
 		State:        "failed",

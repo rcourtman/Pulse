@@ -491,6 +491,15 @@ request path. Do not substitute a display name or a Proxmox VM number.
 | `PUT /api/resources/{id}/operator-state` | `monitoring:write` | Replaces the entire state and returns the saved record. |
 | `DELETE /api/resources/{id}/operator-state` | `monitoring:write` | Removes the entire state, returning HTTP 204 even if it was already absent. |
 
+Scopes apply to API tokens. A signed-in browser or proxy user needs the same
+authority as reviewing actions (an administrator, or an explicit action approval
+grant) to change `neverAutoRemediate`, `lifecycleState` or
+`autoRemediationPolicy`, because Pulse obeys them when it approves and runs
+actions. Without it, a `PUT` must carry those three settings as saved, and a
+`DELETE` is refused with HTTP 403 while any of them differs from the default.
+Monitoring mode, maintenance windows, criticality and notes stay open to every
+signed-in user, as does reading.
+
 **PUT replaces the whole record, not just the fields supplied.** Read the current
 state first and preserve unrelated settings, such as monitoring mode, lifecycle,
 remediation policy, criticality and notes. Treat only `operator_state_not_set`
@@ -1200,6 +1209,14 @@ Common reporting error codes:
 
 Alert configuration and history (requires `monitoring:read`/`monitoring:write`).
 
+Scopes apply to API tokens. In a browser or proxy session, every signed-in user
+can read these routes and acknowledge, snooze or clear single alerts. Saving
+the alert configuration, the intent policies or the external watchdog,
+activating delivery and deleting alert history also need an administrator, with
+multiple organizations a manager of the organization, or, where RBAC roles are
+enforced, a role that grants `write` on `alerts` such as the built-in `operator`
+(`403` otherwise).
+
 For planned downtime, use [Resource Maintenance and Operator State](#resource-maintenance-and-operator-state).
 For an existing incident whose notifications should be paused without clearing
 it, use the snooze and unsnooze endpoints below.
@@ -1470,11 +1487,11 @@ Enable or disable mock data generation (dev/demo only).
 
 ### SSH Config (Temperature Monitoring)
 `POST /api/system/ssh-config`
-Writes the SSH config used for temperature collection (requires setup token or auth).
+Writes the SSH config used for temperature collection. Requires admin + `settings:write`. Setup tokens are not accepted. Only `Host`, `HostName`, `ProxyJump`, `User`, `IdentityFile` and `StrictHostKeyChecking` are allowed, with plain host, user and path values.
 
 ### Verify Temperature SSH
 `POST /api/system/verify-temperature-ssh`
-Tests SSH connectivity for temperature collection (requires setup token or auth).
+Tests SSH connectivity for temperature collection. Requires admin + `settings:write`. Setup tokens are not accepted.
 
 ### Scheduler Health
 `GET /api/monitoring/scheduler/health`
@@ -1541,6 +1558,11 @@ OIDC and SAML configuration is managed via SSO providers.
 - `GET /api/security/sso/providers/{id}` (admin, `settings:read`)
 - `PUT /api/security/sso/providers/{id}` (admin, `settings:write`)
 - `DELETE /api/security/sso/providers/{id}` (admin, `settings:write`)
+
+A provider decides who can sign in and which roles its groups receive, so an
+API token may create, update or delete one only if it has full-access scope
+(`*`) and is not bound to a non-default organization. Any other token gets
+`403`. Browser sessions are not limited this way.
 
 Provider mutation request contract:
 - Max request body: 1MB.
@@ -1641,7 +1663,7 @@ Returns organizations accessible to the authenticated user.
 ```json
 { "id": "acme-corp", "displayName": "Acme Corporation" }
 ```
-The creator becomes the owner and first member. Organization IDs use letters, digits, periods, underscores or hyphens, 1–64 characters, but cannot be `.` or `..`. Prefer a simple lowercase/hyphen ID such as the example.
+The creator becomes the owner and first member. A user who is not an instance administrator can own at most 20 organizations. Past that the request returns `409` with `organization_limit_reached`. Organization IDs use letters, digits, periods, underscores or hyphens, 1–64 characters, but cannot be `.` or `..`. Prefer a simple lowercase/hyphen ID such as the example.
 
 ### Get Organization
 `GET /api/orgs/{id}` (requires `settings:read`)
@@ -1667,7 +1689,7 @@ Returns all members with their roles. User must be a member of the org.
 ```json
 { "userId": "jane", "role": "editor" }
 ```
-Roles: `owner`, `admin`, `editor`, `viewer`. Admin or owner role required. A new user receives a pending invitation (`202`) and must accept it in Pulse before gaining membership. Posting an existing member's `userId` updates their role; there is no member PATCH endpoint. Setting role to `owner` transfers ownership only to an existing member, by the current owner after fresh sign-in. Default org members cannot be managed.
+Roles: `owner`, `admin`, `editor`, `viewer`. Admin or owner role required. A new user receives a pending invitation (`202`) and must accept it in Pulse before gaining membership. Posting an existing member's `userId` updates their role. There is no member PATCH endpoint. Setting role to `owner` transfers ownership only to an existing member, by the current owner after fresh sign-in. Unless either is an instance administrator, a new owner who already owns 20 organizations is refused with `409` `organization_limit_reached`. Default org members cannot be managed.
 
 ### Remove Member
 `DELETE /api/orgs/{id}/members/{userId}` (requires `settings:write`, session auth only)
@@ -1812,6 +1834,7 @@ Runs a focused investigation for an alert payload (used by the UI).
 - `POST /api/ai/patrol/attention/{id}/unacknowledge`
 - `POST /api/ai/patrol/attention/{id}/suppress`
   - Body: `{ "reason": "...", "expiresAt": "<RFC3339>" }`.
+  - The reason is required and is at most 240 characters.
   - The expiry must be in the future and no more than 30 days away.
 - `POST /api/ai/patrol/attention/{id}/unsuppress`
 - `POST /api/ai/patrol/attention/{id}/actions/restart/plan`
@@ -1829,7 +1852,7 @@ Runs a focused investigation for an alert payload (used by the UI).
 - `PUT /api/ai/patrol/autonomy`
 - `GET /api/ai/patrol/status`
 - `GET /api/ai/patrol/findings`
-- `DELETE /api/ai/patrol/findings` (clear all findings)
+- `DELETE /api/ai/patrol/findings` (clear all findings, in a session an administrator or organization manager)
 - `GET /api/ai/patrol/objectives`
 - `POST /api/ai/patrol/objectives`
 - `GET /api/ai/patrol/objectives/{id}`
@@ -1876,10 +1899,11 @@ Runs a focused investigation for an alert payload (used by the UI).
 - `POST /api/ai/patrol/findings/note` (`ai:execute`, and permission to execute actions: Patrol reads the note)
 - `POST /api/ai/patrol/resolve` (optional `resolution_note` requires permission to execute actions)
 - `POST /api/ai/patrol/snooze` (`ai:execute`)
-- `POST /api/ai/patrol/suppress` (`ai:execute`)
+- `POST /api/ai/patrol/suppress` (`ai:execute`, in a session an administrator or organization manager)
 - `GET /api/ai/patrol/suppressions` (`ai:execute`)
-- `POST /api/ai/patrol/suppressions` (`ai:execute`)
-- `DELETE /api/ai/patrol/suppressions/{id}` (`ai:execute`)
+- `POST /api/ai/patrol/suppressions` (`ai:execute`, in a session an administrator or organization manager)
+- `DELETE /api/ai/patrol/suppressions/{id}` (`ai:execute`, in a session an administrator or organization
+  manager, except a `finding_` row, which reopens a dismissed finding)
 - `GET /api/ai/patrol/dismissed` (`ai:execute`)
 
 Patrol itself and managing its findings (acknowledge, snooze, suppress,

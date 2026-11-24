@@ -211,7 +211,7 @@ func TestSessionReadLogoutLogsAndEvents(t *testing.T) {
 		primary := openAgentLifecycleStream(t, server, primaryRaw, "session")
 		control := openAgentLifecycleStream(t, server, controlRaw, "session")
 		logoutReadSession(t, server.URL, primaryRaw)
-		router.agentEventBroadcaster.PublishActionCompletedRecord(agentDisclosureRecord(t, false))
+		router.agentEventBroadcaster.PublishActionCompletedRecord("default", agentDisclosureRecord(t, false))
 		_ = control.next(t)
 		primary.wantClosed(t)
 	})

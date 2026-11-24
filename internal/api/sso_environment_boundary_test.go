@@ -254,7 +254,7 @@ func (p *environmentBoundaryEndpointProbe) HandleProviderItem(w http.ResponseWri
 func TestSSOEnvironmentBoundaryBeforeExtensionDispatch(t *testing.T) {
 	fixture := environmentBoundaryRouter(t)
 	const token = "sso-environment-boundary-synthetic-token.12345678"
-	record := newTokenRecord(t, token, []string{config.ScopeSettingsRead, config.ScopeSettingsWrite}, nil)
+	record := newTokenRecord(t, token, []string{config.ScopeWildcard}, nil)
 	cfg := newTestConfigWithTokens(t, record)
 	var probe *environmentBoundaryEndpointProbe
 	SetSSOAdminEndpointsBinder(func(defaults extensions.SSOAdminEndpoints, _ extensions.SSOAdminRuntime) extensions.SSOAdminEndpoints {

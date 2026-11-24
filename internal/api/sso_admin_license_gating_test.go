@@ -34,7 +34,7 @@ func ssoTestIP() string {
 //   - handleMetadataPreview (POST /api/security/sso/providers/metadata/preview)
 func TestSAMLAdminEndpointsAllowedWithoutPaidLicense(t *testing.T) {
 	rawToken := "sso-admin-license-test-token.12345678"
-	record := newTokenRecord(t, rawToken, []string{config.ScopeSettingsRead, config.ScopeSettingsWrite}, nil)
+	record := newTokenRecord(t, rawToken, []string{config.ScopeWildcard}, nil)
 	cfg := newTestConfigWithTokens(t, record)
 	router := newTestRouter(t, cfg, nil, nil, nil, nil, "1.0.0")
 	handler := router.Handler()
@@ -120,7 +120,7 @@ func TestSAMLAdminEndpointsAllowedWithoutPaidLicense(t *testing.T) {
 // part of the same Community SSO contract as SAML.
 func TestOIDCAdminEndpointsAllowedWithoutProLicense(t *testing.T) {
 	rawToken := "sso-admin-oidc-test-token.12345678"
-	record := newTokenRecord(t, rawToken, []string{config.ScopeSettingsRead, config.ScopeSettingsWrite}, nil)
+	record := newTokenRecord(t, rawToken, []string{config.ScopeWildcard}, nil)
 	cfg := newTestConfigWithTokens(t, record)
 	router := newTestRouter(t, cfg, nil, nil, nil, nil, "1.0.0")
 	handler := router.Handler()
@@ -157,7 +157,7 @@ func TestOIDCAdminEndpointsAllowedWithoutProLicense(t *testing.T) {
 // produce the old upgrade response shape.
 func TestSAMLAdminCreateDoesNotEmitUpgradeResponse(t *testing.T) {
 	rawToken := "sso-admin-format-test-token.12345678"
-	record := newTokenRecord(t, rawToken, []string{config.ScopeSettingsRead, config.ScopeSettingsWrite}, nil)
+	record := newTokenRecord(t, rawToken, []string{config.ScopeWildcard}, nil)
 	cfg := newTestConfigWithTokens(t, record)
 	router := newTestRouter(t, cfg, nil, nil, nil, nil, "1.0.0")
 	handler := router.Handler()

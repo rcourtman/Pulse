@@ -96,6 +96,30 @@ func TestDefaultActionAuthorityAllowsConfiguredAdminBrowserSession(t *testing.T)
 	}
 }
 
+func TestActionActorCredentialIDDoesNotDependOnBasicPassword(t *testing.T) {
+	actorFor := func(password string) unified.ActionActor {
+		t.Helper()
+		req := httptest.NewRequest(http.MethodPost, "/api/actions/plan", nil)
+		req.SetBasicAuth("admin", password)
+		req = req.WithContext(auth.WithUser(req.Context(), "admin"))
+		actor, err := actionActorForRequest(&config.Config{AuthUser: "admin"}, req, "default")
+		if err != nil {
+			t.Fatalf("resolve Basic auth action actor: %v", err)
+		}
+		return actor
+	}
+
+	first, second := actorFor("first-password"), actorFor("second-password")
+	if first.Kind != unified.ActionActorUser || first.SubjectID != "admin" || !strings.HasPrefix(first.CredentialID, "http-auth:") {
+		t.Fatalf("unexpected Basic auth action actor: %+v", first)
+	}
+	// The credential ID is persisted and returned to action readers, so it
+	// must not let them recognise a guessed password.
+	if first.CredentialID != second.CredentialID {
+		t.Fatalf("credential ID varies with the Basic auth password: %q vs %q", first.CredentialID, second.CredentialID)
+	}
+}
+
 func TestExplicitActionAuthorizerCanGrantNonAdminBrowserSession(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/api/actions/act-test/execute", nil)
 	req = req.WithContext(auth.WithUser(req.Context(), "operator"))
@@ -281,5 +305,70 @@ func TestHandleExecuteActionRejectsExecutorWithoutCurrentCapability(t *testing.T
 	err := authority.authorizeActor(actionAuthorityContext(record), "default", tokenActionActor(record), auth.ActionExecute)
 	if !errors.Is(err, actionlifecycle.ErrActionAuthorizationDenied) {
 		t.Fatalf("error=%v", err)
+	}
+}
+
+func TestActionAuthorityRereadsTheAdmittedToken(t *testing.T) {
+	const raw = "synthetic-action-executor.12345678"
+	for _, change := range []string{"revoked", "scope"} {
+		t.Run(change, func(t *testing.T) {
+			record := newTokenRecord(t, raw, []string{config.ScopeActionsExecute}, nil)
+			setAPITokenOwnerUserID(&record, "alice")
+			cfg := newTestConfigWithTokens(t, record)
+			req := httptest.NewRequest(http.MethodPost, "/api/actions/act-test/execute", nil)
+			req.Header.Set("X-API-Token", raw)
+			var ctx context.Context
+			var actor unified.ActionActor
+			AuthContextMiddleware(cfg, nil, http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+				var err error
+				if actor, err = actionActorForRequest(cfg, r, "default"); err != nil {
+					t.Fatal(err)
+				}
+				ctx = context.WithoutCancel(withLiveActionCredential(cfg, r))
+			})).ServeHTTP(httptest.NewRecorder(), req)
+			if ctx == nil {
+				t.Fatal("token admission failed")
+			}
+			authority := testActionAuthority()
+			if err := authority.AuthorizeExecution(ctx, "default", unified.ActionAuditRecord{}, actor); err != nil {
+				t.Fatal(err)
+			}
+			config.Mu.Lock()
+			if change == "revoked" {
+				cfg.RemoveAPIToken(cfg.APITokens[0].ID)
+			} else {
+				cfg.APITokens[0].Scopes = []string{config.ScopeActionsApprove}
+			}
+			config.Mu.Unlock()
+			// The request still carries the record it was admitted with.
+			if err := authority.AuthorizeExecution(ctx, "default", unified.ActionAuditRecord{}, actor); !errors.Is(err, actionlifecycle.ErrActionAuthorizationDenied) {
+				t.Fatalf("execute after %s=%v", change, err)
+			}
+		})
+	}
+}
+
+func TestActionAuthorityRereadsTheAdmittedSession(t *testing.T) {
+	InitSessionStore(t.TempDir())
+	const raw = "synthetic-action-session"
+	GetSessionStore().CreateSession(raw, time.Hour, "fixture", "127.0.0.1", "alice")
+	req := httptest.NewRequest(http.MethodPost, "http://127.0.0.1/api/actions/act-test/execute", nil)
+	req.AddCookie(&http.Cookie{Name: cookieNameSession, Value: raw})
+	if !CheckAuth(&config.Config{}, httptest.NewRecorder(), req) {
+		t.Fatal("session admission failed")
+	}
+	req = req.WithContext(auth.WithUser(req.Context(), "alice"))
+	actor, err := actionActorForRequest(&config.Config{}, req, "default")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.WithoutCancel(withLiveActionCredential(&config.Config{}, req))
+	authority := testActionAuthority()
+	if err := authority.AuthorizeExecution(ctx, "default", unified.ActionAuditRecord{}, actor); err != nil {
+		t.Fatal(err)
+	}
+	GetSessionStore().InvalidateSession(raw)
+	if err := authority.AuthorizeExecution(ctx, "default", unified.ActionAuditRecord{}, actor); !errors.Is(err, actionlifecycle.ErrActionAuthorizationDenied) {
+		t.Fatalf("execute after sign-out=%v", err)
 	}
 }

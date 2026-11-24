@@ -2,6 +2,7 @@ package alerts
 
 import (
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -234,6 +235,47 @@ func TestOperationalSuppressionSurvivesManagerRestart(t *testing.T) {
 	if current.LatestTransition == nil ||
 		current.LatestTransition.Cause != operationaltrust.TransitionSuppression {
 		t.Fatalf("reloaded transition = %+v", current.LatestTransition)
+	}
+}
+
+func TestSuppressOperationalAlertBoundsReason(t *testing.T) {
+	manager := newTestManager(t)
+	now := time.Now().UTC()
+	alert := &Alert{
+		ID:              "container-health",
+		CanonicalState:  "container-health",
+		CanonicalSpecID: "docker-container-health",
+		Type:            "docker-container-health",
+		Level:           AlertLevelWarning,
+		ResourceID:      "app-container:web",
+		ResourceName:    "web",
+		StartTime:       now.Add(-time.Minute),
+		LastSeen:        now,
+	}
+	manager.mu.Lock()
+	manager.setActiveAlertNoLock(alert.ID, alert)
+	manager.mu.Unlock()
+
+	oversized := strings.Repeat("x", MaxOperationalSuppressionReasonRunes+1)
+	if err := manager.SuppressOperationalAlert(alert.ID, "operator", oversized, nil); err == nil {
+		t.Fatal("SuppressOperationalAlert() accepted an oversized reason")
+	}
+	current := activeAlert(t, manager, alert.ID)
+	if current.OperationalRecord == nil ||
+		current.OperationalRecord.State == operationaltrust.OperationalSuppressed ||
+		current.OperationalRecord.Suppression != nil {
+		t.Fatalf("rejected suppression changed the record: %+v", current.OperationalRecord)
+	}
+
+	// The bound counts characters, and surrounding whitespace is not stored.
+	boundary := strings.Repeat("日", MaxOperationalSuppressionReasonRunes)
+	if err := manager.SuppressOperationalAlert(alert.ID, "operator", " "+boundary+" ", nil); err != nil {
+		t.Fatalf("SuppressOperationalAlert() error = %v", err)
+	}
+	current = activeAlert(t, manager, alert.ID)
+	if current.OperationalRecord == nil || current.OperationalRecord.Suppression == nil ||
+		current.OperationalRecord.Suppression.Reason != boundary {
+		t.Fatalf("boundary suppression = %+v", current.OperationalRecord)
 	}
 }
 

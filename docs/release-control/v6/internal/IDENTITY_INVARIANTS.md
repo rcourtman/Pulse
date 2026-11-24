@@ -110,9 +110,17 @@ principal once a stable user ID exists.
    should be canonicalized to stable user IDs when the stable ID is known.
 7. Self-hosted OIDC and SAML sessions bind to an opaque principal derived from
    provider type, provider ID, and the provider subject (`sub` or `NameID`).
-   RBAC may copy a legacy username/email assignment to that principal during
-   compatibility migration, but the browser session and tracked active-session
-   owner must be the stable SSO principal.
+   The subject is identity exactly as the provider asserted it: a blank or
+   whitespace-padded subject is refused at sign-in, never trimmed onto the
+   principal of another account. Each provider entry ID binds its original
+   issuer so pointing or recreating an entry against a different issuer yields
+   issuer-scoped principals without renaming existing users on the original
+   issuer. RBAC may copy a legacy username/email assignment to that principal
+   during compatibility migration, but the browser session and tracked
+   active-session owner must be the stable SSO principal. Migration candidates
+   are claim text the signing-in user may control: a candidate in the stable
+   `sso:` principal namespace names a current identity, not a legacy alias, and
+   must never select that principal's assignment.
 
 ## Current Explicit Exception
 

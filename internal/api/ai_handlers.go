@@ -3507,7 +3507,7 @@ func (h *AISettingsHandler) HandleTestProvider(w http.ResponseWriter, r *http.Re
 
 	var body aiProviderTestRequest
 	if r.ContentLength > 0 {
-		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20)).Decode(&body); err != nil {
 			http.Error(w, `{"error":"Invalid JSON body"}`, http.StatusBadRequest)
 			return
 		}
@@ -4057,7 +4057,7 @@ func (h *AISettingsHandler) HandleAnalyzeKubernetesCluster(w http.ResponseWriter
 
 	r.Body = http.MaxBytesReader(w, r.Body, 16*1024)
 	var req AIKubernetesAnalyzeRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20)).Decode(&req); err != nil {
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
@@ -4128,7 +4128,7 @@ func (h *AISettingsHandler) HandleExecuteStream(w http.ResponseWriter, r *http.R
 	// Parse request
 	r.Body = http.MaxBytesReader(w, r.Body, 64*1024) // 64KB max
 	var req AIExecuteRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20)).Decode(&req); err != nil {
 		log.Warn().Err(err).Msg("Failed to decode AI execute stream request")
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
@@ -4382,7 +4382,7 @@ func (h *AISettingsHandler) HandleSaveGuestNote(w http.ResponseWriter, r *http.R
 		Content   string `json:"content"`
 	}
 
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20)).Decode(&req); err != nil {
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
@@ -4431,7 +4431,7 @@ func (h *AISettingsHandler) HandleDeleteGuestNote(w http.ResponseWriter, r *http
 		NoteID  string `json:"note_id"`
 	}
 
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20)).Decode(&req); err != nil {
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
@@ -4520,7 +4520,7 @@ func (h *AISettingsHandler) HandleImportGuestKnowledge(w http.ResponseWriter, r 
 		Merge bool `json:"merge"` // If true, add to existing notes; if false, replace
 	}
 
-	if err := json.NewDecoder(r.Body).Decode(&importData); err != nil {
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4<<20)).Decode(&importData); err != nil {
 		http.Error(w, "Invalid import data", http.StatusBadRequest)
 		return
 	}
@@ -4622,7 +4622,7 @@ func (h *AISettingsHandler) HandleClearGuestKnowledge(w http.ResponseWriter, r *
 		Confirm bool   `json:"confirm"`
 	}
 
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20)).Decode(&req); err != nil {
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
@@ -4779,7 +4779,7 @@ func (h *AISettingsHandler) HandleInvestigateAlert(w http.ResponseWriter, r *htt
 	// Parse request
 	r.Body = http.MaxBytesReader(w, r.Body, 16*1024)
 	var req AIInvestigateAlertRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20)).Decode(&req); err != nil {
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
@@ -6052,7 +6052,7 @@ func (h *AISettingsHandler) HandleForcePatrol(w http.ResponseWriter, r *http.Req
 	// (consistent with automatic scoped runs) but still honour readiness above.
 	var scopedReq manualScopedPatrolRequest
 	if r.Body != nil {
-		decoder := json.NewDecoder(r.Body)
+		decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20))
 		decoder.DisallowUnknownFields()
 		decodeErr := decoder.Decode(&scopedReq)
 		if decodeErr == nil {
@@ -6209,7 +6209,7 @@ func (h *AISettingsHandler) HandlePatrolPreflight(w http.ResponseWriter, r *http
 	// allowed and means "use the configured Patrol provider+model".
 	var body aiPatrolPreflightRequest
 	if r.ContentLength > 0 {
-		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20)).Decode(&body); err != nil {
 			http.Error(w, `{"error":"Invalid JSON body"}`, http.StatusBadRequest)
 			return
 		}
@@ -6367,7 +6367,7 @@ func (h *AISettingsHandler) HandlePatrolModelReadiness(w http.ResponseWriter, r 
 
 	var body aiPatrolPreflightRequest
 	if r.ContentLength > 0 {
-		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20)).Decode(&body); err != nil {
 			http.Error(w, `{"error":"Invalid JSON body"}`, http.StatusBadRequest)
 			return
 		}
@@ -6420,7 +6420,7 @@ func (h *AISettingsHandler) HandleAcknowledgeFinding(w http.ResponseWriter, r *h
 	var req struct {
 		FindingID string `json:"finding_id"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20)).Decode(&req); err != nil {
 		writeFindingInvalidRequestResponse(w, "Invalid request body", nil)
 		return
 	}
@@ -6535,7 +6535,7 @@ func (h *AISettingsHandler) HandleSnoozeFinding(w http.ResponseWriter, r *http.R
 		FindingID     string `json:"finding_id"`
 		DurationHours int    `json:"duration_hours"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20)).Decode(&req); err != nil {
 		writeFindingInvalidRequestResponse(w, "Invalid request body", nil)
 		return
 	}
@@ -6662,7 +6662,7 @@ func (h *AISettingsHandler) HandleResolveFinding(w http.ResponseWriter, r *http.
 		FindingID      string `json:"finding_id"`
 		ResolutionNote string `json:"resolution_note"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20)).Decode(&req); err != nil {
 		writeFindingInvalidRequestResponse(w, "Invalid request body", nil)
 		return
 	}
@@ -6761,7 +6761,7 @@ func (h *AISettingsHandler) HandleSetFindingNote(w http.ResponseWriter, r *http.
 		FindingID string `json:"finding_id"`
 		Note      string `json:"note"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20)).Decode(&req); err != nil {
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
@@ -6818,7 +6818,7 @@ func (h *AISettingsHandler) HandleDismissFinding(w http.ResponseWriter, r *http.
 		Reason    string `json:"reason"` // "not_an_issue", "expected_behavior", "will_fix_later"
 		Note      string `json:"note"`   // Optional freeform note
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20)).Decode(&req); err != nil {
 		writeFindingInvalidRequestResponse(w, "Invalid request body", nil)
 		return
 	}
@@ -6970,7 +6970,7 @@ func (h *AISettingsHandler) HandleSuppressFinding(w http.ResponseWriter, r *http
 	var req struct {
 		FindingID string `json:"finding_id"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20)).Decode(&req); err != nil {
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
@@ -7505,7 +7505,7 @@ func (h *AISettingsHandler) HandleAddSuppressionRule(w http.ResponseWriter, r *h
 		Description     string `json:"description"`       // Required - user's reason
 		AllowBroadScope bool   `json:"allow_broad_scope"` // Required when resource or category is intentionally wildcarded
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20)).Decode(&req); err != nil {
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
@@ -7971,7 +7971,7 @@ func (h *AISettingsHandler) HandleDenyCommand(w http.ResponseWriter, r *http.Req
 		Reason string `json:"reason"`
 	}
 	if r.Body != nil {
-		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20)).Decode(&body); err != nil {
 			log.Warn().Err(err).Msg("Failed to decode deny request body")
 		}
 	}
@@ -8486,7 +8486,7 @@ func (h *AISettingsHandler) HandleUpdatePatrolAutonomyMonitorOnly(w http.Respons
 	}
 
 	var req PatrolAutonomySettings
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20)).Decode(&req); err != nil {
 		writeErrorResponse(w, http.StatusBadRequest, "invalid_request", "Invalid request body", nil)
 		return
 	}

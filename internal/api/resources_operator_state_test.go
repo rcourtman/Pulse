@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -28,7 +29,10 @@ func newOperatorStateHandlersWithDataDir(t *testing.T) (*ResourceHandlers, strin
 	t.Helper()
 	dataDir := t.TempDir()
 	cfg := &config.Config{DataPath: dataDir}
-	return NewResourceHandlers(cfg), dataDir
+	h := NewResourceHandlers(cfg)
+	// These fixtures call the handler as the router admits an administrator.
+	h.SetOperatorStateRemediationAuthority(func(*http.Request) bool { return true })
+	return h, dataDir
 }
 
 func dropOperatorStateTimelineTable(t *testing.T, dataDir string) {
@@ -410,6 +414,30 @@ func TestHandleResourceOperatorState_PutRejectsInvalidWith400(t *testing.T) {
 	}
 }
 
+func TestHandleResourceOperatorState_PutRejectsOversizedBody(t *testing.T) {
+	h := newOperatorStateHandlers(t)
+
+	// The decoder buffers the whole document and the note is persisted, so
+	// the body must be bounded before decode.
+	body, _ := json.Marshal(map[string]any{
+		"note": strings.Repeat("a", maxOperatorStateRequestBytes),
+	})
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPut, "/api/resources/vm:101/operator-state", bytes.NewReader(body))
+	h.HandleResourceOperatorState(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 on oversized body; got %d", rec.Code)
+	}
+
+	getRec := httptest.NewRecorder()
+	getReq := httptest.NewRequest(http.MethodGet, "/api/resources/vm:101/operator-state", nil)
+	h.HandleResourceOperatorState(getRec, getReq)
+	if getRec.Code != http.StatusNotFound {
+		t.Errorf("oversized PUT must not persist; GET should still 404; got %d", getRec.Code)
+	}
+}
+
 func TestHandleResourceOperatorState_DeleteIsIdempotent(t *testing.T) {
 	h := newOperatorStateHandlers(t)
 
@@ -534,5 +562,100 @@ func TestMaintenanceAlertSubjectsReadAndWriteCanonicalOperatorState(t *testing.T
 				}
 			}
 		})
+	}
+}
+
+// Part of the operator-state record is the per-resource policy every approval
+// and dispatch obeys. Token scopes do not bind sessions, so a signed-in viewer
+// must hold the action review capability to change the remediation lock, the
+// lifecycle state or the automatic remediation policy. The viewer keeps the
+// rest of the record and round-trips the policy an administrator saved; reads
+// stay open, and tokens keep the documented monitoring:write scope.
+func TestOperatorStateRemediationPolicyRequiresActionReviewForProxySessions(t *testing.T) {
+	rawToken := "operator-state-write-authority.12345678"
+	cfg := newTestConfigWithTokens(t, newTokenRecord(t, rawToken,
+		[]string{config.ScopeMonitoringRead, config.ScopeMonitoringWrite}, nil))
+	cfg.ProxyAuthSecret = "fixture-proxy-secret"
+	cfg.ProxyAuthUserHeader = "X-Remote-User"
+	cfg.ProxyAuthRoleHeader = "X-Remote-Roles"
+	cfg.ProxyAuthAdminRole = "admin"
+	router := newTestRouter(t, cfg, nil, nil, nil, nil, "1.0.0")
+	cleanupTestRouter(t, router)
+
+	serve := func(method, resource, body string, headers map[string]string) *httptest.ResponseRecorder {
+		t.Helper()
+		req := httptest.NewRequest(method, "/api/resources/"+resource+"/operator-state", bytes.NewBufferString(body))
+		for name, value := range headers {
+			req.Header.Set(name, value)
+		}
+		rec := httptest.NewRecorder()
+		router.Handler().ServeHTTP(rec, req)
+		return rec
+	}
+	proxyUser := func(role string) map[string]string {
+		return map[string]string{"X-Proxy-Secret": cfg.ProxyAuthSecret, "X-Remote-User": "fixture-" + role, "X-Remote-Roles": role}
+	}
+	admin, viewer := proxyUser("admin"), proxyUser("viewer")
+	saved := func(resource string) resourceOperatorStateAPI {
+		t.Helper()
+		rec := serve(http.MethodGet, resource, "", viewer)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("viewer GET %s: %d want 200: %s", resource, rec.Code, rec.Body.String())
+		}
+		var state resourceOperatorStateAPI
+		if err := json.Unmarshal(rec.Body.Bytes(), &state); err != nil {
+			t.Fatalf("decode state: %v", err)
+		}
+		return state
+	}
+
+	const locked = `{"neverAutoRemediate":true,"autoRemediationPolicy":{"enabled":true,"capabilityNames":["restart"]}}`
+	if rec := serve(http.MethodPut, "vm:101", locked, admin); rec.Code != http.StatusOK {
+		t.Fatalf("admin PUT: %d want 200: %s", rec.Code, rec.Body.String())
+	}
+	for name, write := range map[string]struct{ method, body string }{
+		"clear the record":  {http.MethodDelete, ""},
+		"lift the lock":     {http.MethodPut, `{"neverAutoRemediate":false,"autoRemediationPolicy":{"enabled":true,"capabilityNames":["restart"]}}`},
+		"widen the policy":  {http.MethodPut, `{"neverAutoRemediate":true,"autoRemediationPolicy":{"enabled":true,"capabilityNames":["restart","stop"]}}`},
+		"drop the policy":   {http.MethodPut, `{"neverAutoRemediate":true}`},
+		"retire the record": {http.MethodPut, `{"lifecycleState":"retired","neverAutoRemediate":true,"autoRemediationPolicy":{"enabled":true,"capabilityNames":["restart"]}}`},
+	} {
+		if rec := serve(write.method, "vm:101", write.body, viewer); rec.Code != http.StatusForbidden {
+			t.Fatalf("viewer %s: %d want 403: %s", name, rec.Code, rec.Body.String())
+		}
+	}
+	if state := saved("vm:101"); !state.NeverAutoRemediate || len(state.AutoRemediationPolicy.CapabilityNames) != 1 || state.SetBy != "fixture-admin" {
+		t.Fatalf("a refused viewer write changed the record: %+v", state)
+	}
+
+	// The viewer saves a note around the administrator's policy.
+	const lockedWithNote = `{"neverAutoRemediate":true,"autoRemediationPolicy":{"enabled":true,"capabilityNames":[" restart "]},"note":"checked"}`
+	if rec := serve(http.MethodPut, "vm:101", lockedWithNote, viewer); rec.Code != http.StatusOK {
+		t.Fatalf("viewer PUT preserving the policy: %d want 200: %s", rec.Code, rec.Body.String())
+	}
+	if state := saved("vm:101"); !state.NeverAutoRemediate || state.Note != "checked" {
+		t.Fatalf("viewer note around the lock: %+v", state)
+	}
+
+	// A resource with no record holds the default policy.
+	if rec := serve(http.MethodPut, "vm:102", `{"neverAutoRemediate":true}`, viewer); rec.Code != http.StatusForbidden {
+		t.Fatalf("viewer lock on an unset resource: %d want 403: %s", rec.Code, rec.Body.String())
+	}
+	if rec := serve(http.MethodPut, "vm:102", `{"monitoringMode":"muted","note":"lab"}`, viewer); rec.Code != http.StatusOK {
+		t.Fatalf("viewer monitoring mode on an unset resource: %d want 200: %s", rec.Code, rec.Body.String())
+	}
+	if rec := serve(http.MethodDelete, "vm:102", "", viewer); rec.Code != http.StatusNoContent {
+		t.Fatalf("viewer DELETE of a record with the default policy: %d want 204: %s", rec.Code, rec.Body.String())
+	}
+
+	token := map[string]string{"X-API-Token": rawToken}
+	if rec := serve(http.MethodPut, "vm:101", `{"neverAutoRemediate":false}`, token); rec.Code != http.StatusOK {
+		t.Fatalf("monitoring:write token PUT: %d want 200: %s", rec.Code, rec.Body.String())
+	}
+	if rec := serve(http.MethodPut, "vm:101", locked, admin); rec.Code != http.StatusOK {
+		t.Fatalf("admin PUT: %d want 200: %s", rec.Code, rec.Body.String())
+	}
+	if rec := serve(http.MethodDelete, "vm:101", "", admin); rec.Code != http.StatusNoContent {
+		t.Fatalf("admin DELETE: %d want 204: %s", rec.Code, rec.Body.String())
 	}
 }

@@ -4129,7 +4129,14 @@ assignments, writes the acting administrator to the RBAC changelog, rejects
 self-removal, and revokes every persisted session and matching CSRF record for
 that principal, including sessions restored after restart. Deprovisioning is
 not an IdP denylist: a later login that still passes provider restrictions may
-recreate the identity. Enterprise regression coverage in
+recreate the identity. The identity table also records whether a principal's
+current role list was written by an SSO group role mapping
+(`roles_from_mapping`, set only through `MappedRoleManager`). A mapped grant
+must not outlive its mapping: once the provider has no group role mappings,
+the principal's next login withdraws roles carrying that origin, while roles
+saved by an administrator or break-glass recovery clear the origin and are
+preserved. Rows that predate the column carry no origin until the next mapped
+login. Enterprise regression coverage in
 `pulse-enterprise/internal/rbac/rbac_test.go` must preserve the real startup
 order and prove that an OIDC principal assigned after initialization is
 authorized from the canonical manager.

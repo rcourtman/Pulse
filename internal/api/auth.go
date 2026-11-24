@@ -594,6 +594,19 @@ func validateAPITokenAgainstConfigsLocked(globalCfg, targetCfg *config.Config, t
 	return validateAPITokenLocked(globalCfg, token)
 }
 
+// tenantMonitorOutsideConfigLock requires config.Mu.RLock and returns with it
+// held again. Resolving a cold tenant constructs its monitor, which waits for
+// that tenant's connections and for the manager's settings lock. Holding
+// config.Mu across that wait stalls every request behind the first queued
+// token writer, and deadlocks against a settings save, which takes config.Mu
+// while holding the settings lock. Callers must recheck the owner after
+// validating against the returned monitor's config.
+func tenantMonitorOutsideConfigLock(mtm *monitoring.MultiTenantMonitor, orgID string) (*monitoring.Monitor, error) {
+	config.Mu.RUnlock()
+	defer config.Mu.RLock()
+	return mtm.GetMonitor(orgID)
+}
+
 // CheckProxyAuth validates proxy authentication headers
 func CheckProxyAuth(cfg *config.Config, r *http.Request) (bool, string, bool) {
 	// Check if proxy auth is configured
@@ -731,6 +744,14 @@ func checkAuth(cfg *config.Config, w http.ResponseWriter, r *http.Request, write
 	// long-lived read. A later proxy/token/basic admission must not inherit an
 	// earlier session marker if middleware checks this request again.
 	*r = *r.WithContext(context.WithValue(r.Context(), sessionReadAdmissionKey{}, (*sessionReadAdmission)(nil)))
+	// Admission sees only the headers. Bind the body, which may arrive much
+	// later, to that same credential. Registered before config.Mu is taken, so
+	// it runs after the read lock below has been released.
+	defer func() {
+		if allowed {
+			retainRequestBodyAuthority(cfg, r)
+		}
+	}()
 
 	// Dev mode bypass for all auth (disabled by default)
 	if adminBypassAppliesToRequest(r) {
@@ -880,6 +901,14 @@ func checkAuth(cfg *config.Config, w http.ResponseWriter, r *http.Request, write
 	if cfg.AuthUser == "" && cfg.AuthPass == "" && !cfg.HasAPITokens() && cfg.ProxyAuthSecret == "" {
 		if hasEnabledSSOProvidersForAuth(cfg) {
 			log.Debug().Msg("SSO enabled without local credentials, authentication required")
+		} else if hostedModeEnabledFromEnv() {
+			// A hosted runtime always enforces authentication, as
+			// configTransferAuthenticationConfigured already says. Its users
+			// arrive through the control plane handoff, so it holds no local
+			// credentials and never leaves this state through first-run setup.
+			// Nobody sits at its console either: its loopback peers are the
+			// requests this server sends for its tenants (webhooks, Apprise).
+			log.Debug().Msg("Hosted runtime without local credentials, authentication required")
 		} else {
 			if isDirectLoopbackRequest(r) {
 				anonymous = true
@@ -941,20 +970,7 @@ func checkAuth(cfg *config.Config, w http.ResponseWriter, r *http.Request, write
 							if ipLocked && ipLockedUntil.After(lockedUntil) {
 								lockedUntil = ipLockedUntil
 							}
-
-							remainingMinutes := int(time.Until(lockedUntil).Minutes())
-							if remainingMinutes < 1 {
-								remainingMinutes = 1
-							}
-
-							log.Warn().Str("user", parts[0]).Str("ip", clientIP).Msg("Account locked out")
-							LogAuditEventForTenant(GetOrgID(r.Context()), "login", parts[0], clientIP, r.URL.Path, false, "Account locked")
-							if w != nil {
-								w.Header().Set("Content-Type", "application/json")
-								w.WriteHeader(http.StatusForbidden)
-								w.Write([]byte(fmt.Sprintf(`{"error":"Account temporarily locked","message":"Too many failed attempts. Please try again in %d minutes.","lockedUntil":"%s"}`,
-									remainingMinutes, lockedUntil.Format(time.RFC3339))))
-							}
+							writeBasicAuthLockedOut(w, r, parts[0], clientIP, lockedUntil)
 							return false
 						}
 						cfgAuthUser, cfgAuthPass := snapshotLocalAuthCredentialsLocked(cfg)
@@ -968,11 +984,17 @@ func checkAuth(cfg *config.Config, w http.ResponseWriter, r *http.Request, write
 							Bool("pass_match", passMatch).
 							Msg("Auth check")
 
-						if userMatch && passMatch {
-							// Clear failed login attempts
-							ClearFailedLogins(parts[0])
-							ClearFailedLogins(GetClientIP(r))
+						// The lockout check above ran before the password was
+						// hashed, so attempts sent together all passed it. Count
+						// this one in the same step that asks whether the limit
+						// was reached meanwhile: if it was, the attempt is refused
+						// whatever its result. A success clears the failed attempts.
+						if lockedUntil, locked := RecordLoginAttempt(userMatch && passMatch, parts[0], clientIP); locked {
+							writeBasicAuthLockedOut(w, r, parts[0], clientIP, lockedUntil)
+							return false
+						}
 
+						if userMatch && passMatch {
 							// TenantMiddleware admitted this request's organization
 							// before these credentials were verified, so it could not
 							// apply the organization access policy to this principal.
@@ -1022,9 +1044,7 @@ func checkAuth(cfg *config.Config, w http.ResponseWriter, r *http.Request, write
 							w.Header().Set("X-Auth-Method", "basic")
 							return true
 						} else {
-							// Failed login
-							RecordFailedLogin(parts[0])
-							RecordFailedLogin(clientIP)
+							// Failed login, counted by RecordLoginAttempt above
 							LogAuditEventForTenant(GetOrgID(r.Context()), "login", parts[0], clientIP, r.URL.Path, false, "Invalid credentials")
 
 							// Get updated attempt counts
@@ -1061,6 +1081,24 @@ func checkAuth(cfg *config.Config, w http.ResponseWriter, r *http.Request, write
 		writeAuthenticationRequired(w, r)
 	}
 	return false
+}
+
+// writeBasicAuthLockedOut refuses a Basic sign-in for a username or address
+// that has used up its failed attempts.
+func writeBasicAuthLockedOut(w http.ResponseWriter, r *http.Request, username, clientIP string, lockedUntil time.Time) {
+	remainingMinutes := int(time.Until(lockedUntil).Minutes())
+	if remainingMinutes < 1 {
+		remainingMinutes = 1
+	}
+
+	log.Warn().Str("user", username).Str("ip", clientIP).Msg("Account locked out")
+	LogAuditEventForTenant(GetOrgID(r.Context()), "login", username, clientIP, r.URL.Path, false, "Account locked")
+	if w != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusForbidden)
+		w.Write([]byte(fmt.Sprintf(`{"error":"Account temporarily locked","message":"Too many failed attempts. Please try again in %d minutes.","lockedUntil":"%s"}`,
+			remainingMinutes, lockedUntil.Format(time.RFC3339))))
+	}
 }
 
 // RequireAuth middleware checks for authentication
@@ -1419,7 +1457,10 @@ func extractAndStoreAuthContext(cfg *config.Config, mtm *monitoring.MultiTenantM
 			}
 		}
 
-		if mtm != nil {
+		// A tenant inventory is consulted only for an explicit token. A request
+		// without one must not resolve, and so possibly start, the monitor of
+		// whichever organization it names.
+		if mtm != nil && explicitTokenProvided {
 			// Check for Tenant ID in header or cookie
 			orgID := "default"
 			if headerOrgID := r.Header.Get("X-Pulse-Org-ID"); headerOrgID != "" {
@@ -1432,7 +1473,7 @@ func extractAndStoreAuthContext(cfg *config.Config, mtm *monitoring.MultiTenantM
 			if orgID != "default" {
 				// Prevent DoS: Check if org exists before loading (which triggers directory creation)
 				if mtm.OrgExists(orgID) {
-					if m, err := mtm.GetMonitor(orgID); err == nil && m != nil {
+					if m, err := tenantMonitorOutsideConfigLock(mtm, orgID); err == nil && m != nil {
 						targetConfig = m.GetConfig()
 						targetOrgID = strings.TrimSpace(orgID)
 					}

@@ -41,7 +41,7 @@ func buildAggregatorInputsWithRuntimeSources(
 		if monitor != nil && monitor.GetConfig() == cfg {
 			inputs.apiTokens = monitor.APITokenSnapshot()
 		} else {
-			inputs.apiTokens = append([]config.APITokenRecord(nil), cfg.APITokens...)
+			inputs.apiTokens = snapshotAPITokenRecords(cfg)
 		}
 		inputs.agentTokenInventoryKnown = true
 		inputs.pvePollingInterval = cfg.PVEPollingInterval

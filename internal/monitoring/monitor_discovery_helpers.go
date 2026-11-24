@@ -13,13 +13,19 @@ var lookupConfiguredHostIP = net.LookupIP
 // getConfiguredHostIPs returns a list of IP addresses from all configured Proxmox hosts.
 // This is used to prevent discovery from probing hosts we already know about.
 func (m *Monitor) getConfiguredHostIPs() []string {
+	// DeepCopy clones the API token records, which token writers edit in
+	// place under config.Mu. It is taken before the monitor lock, as in
+	// request authentication.
+	config.Mu.RLock()
 	m.mu.RLock()
 	if m.config == nil {
 		m.mu.RUnlock()
+		config.Mu.RUnlock()
 		return nil
 	}
 	cfg := m.config.DeepCopy()
 	m.mu.RUnlock()
+	config.Mu.RUnlock()
 
 	return configuredHostIPsFromConfig(cfg)
 }
@@ -157,13 +163,17 @@ func mergeDiscoveryIPBlocklist(existing []string, discovered []string) []string 
 }
 
 func (m *Monitor) discoveryConfigSnapshot() config.DiscoveryConfig {
+	// As in getConfiguredHostIPs: the copy includes the API token records.
+	config.Mu.RLock()
 	m.mu.RLock()
 	if m.config == nil {
 		m.mu.RUnlock()
+		config.Mu.RUnlock()
 		return config.DefaultDiscoveryConfig()
 	}
 	cfg := m.config.DeepCopy()
 	m.mu.RUnlock()
+	config.Mu.RUnlock()
 
 	discoveryCfg := config.CloneDiscoveryConfig(cfg.Discovery)
 	discoveryCfg.IPBlocklist = mergeDiscoveryIPBlocklist(discoveryCfg.IPBlocklist, configuredHostIPsFromConfig(cfg))

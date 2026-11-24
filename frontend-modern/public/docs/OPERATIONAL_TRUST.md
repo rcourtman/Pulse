@@ -32,9 +32,9 @@ existing work to `stale`; permission or provider uncertainty moves it to
 detector evidence can confirm recovery.
 
 Acknowledgement is reversible and does not reduce the active issue truth.
-Suppression requires a non-empty reason and an expiry no more than 30 days in
-the future. The Patrol UI offers shorter 1-hour, 24-hour, and 7-day choices by
-default.
+Suppression requires a non-empty reason of at most 240 characters and an expiry
+no more than 30 days in the future. The Patrol UI offers shorter 1-hour,
+24-hour, and 7-day choices by default.
 
 ## Evidence
 

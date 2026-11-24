@@ -200,6 +200,7 @@ type SAMLAuthResult struct {
 	FirstName  string
 	LastName   string
 	NameID     string
+	Issuer     string
 	SessionIdx string
 	Attributes map[string][]string
 }
@@ -850,6 +851,7 @@ func (s *SAMLService) ProcessResponse(r *http.Request, browserKey string) (*SAML
 
 	// Extract user information from assertion
 	result := &SAMLAuthResult{
+		Issuer:     assertion.Issuer.Value,
 		Attributes: make(map[string][]string),
 	}
 

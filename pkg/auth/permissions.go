@@ -21,4 +21,5 @@ const (
 	ResourceAI        = "ai"
 	ResourceDiscovery = "discovery"
 	ResourceActions   = "actions"
+	ResourceAlerts    = "alerts"
 )

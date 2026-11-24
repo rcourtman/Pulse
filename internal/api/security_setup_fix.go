@@ -159,12 +159,8 @@ func ensureAdminSession(cfg *config.Config, w http.ResponseWriter, req *http.Req
 	if record := getAPITokenRecordFromRequest(req); record != nil && !refuseOrgBoundToken(w, req, record) {
 		return false
 	}
-	cookie, err := readSessionCookie(req)
-	if err != nil || cookie.Value == "" || !ValidateSession(cookie.Value) {
-		return true
-	}
-	sessionUser := strings.TrimSpace(GetSessionUsername(cookie.Value))
-	if sessionUserCarriesAdminPrivileges(cfg, sessionUser) {
+	sessionUser, bySession := requestSessionUser(req)
+	if !bySession || sessionUserCarriesAdminPrivileges(cfg, sessionUser) {
 		return true
 	}
 
@@ -177,6 +173,28 @@ func ensureAdminSession(cfg *config.Config, w http.ResponseWriter, req *http.Req
 	return false
 }
 
+// requestSessionUser reports whether a session decides this request's
+// administrator checks, and for which user. When checkAuth admitted the request
+// by its session, that session keeps deciding after it ends, as a user without
+// privileges: signing out, expiry or revocation between authentication and the
+// check must not turn the request into one that never had a session, which
+// these checks leave to the proxy, Basic and token rules. A request that
+// another credential admitted, or that has not passed checkAuth, is decided by
+// a live session cookie as before.
+func requestSessionUser(req *http.Request) (string, bool) {
+	if admitted, _ := req.Context().Value(sessionReadAdmissionKey{}).(*sessionReadAdmission); admitted != nil {
+		if !sessionReadRevalidator(req)() {
+			return "", true
+		}
+		return strings.TrimSpace(admitted.username), true
+	}
+	cookie, err := readSessionCookie(req)
+	if err != nil || cookie.Value == "" || !ValidateSession(cookie.Value) {
+		return "", false
+	}
+	return strings.TrimSpace(GetSessionUsername(cookie.Value)), true
+}
+
 // ensureOrgAdminSession is the session check for routes whose handlers read and
 // change only the request organization's own config and monitor state, such
 // as its infrastructure connections, agents and availability targets. It admits
@@ -185,8 +203,7 @@ func ensureAdminSession(cfg *config.Config, w http.ResponseWriter, req *http.Req
 // owner can connect the client's systems. Everything else uses
 // ensureAdminSession.
 func ensureOrgAdminSession(cfg *config.Config, w http.ResponseWriter, req *http.Request) bool {
-	if cookie, err := readSessionCookie(req); err == nil && cookie.Value != "" && ValidateSession(cookie.Value) {
-		sessionUser := strings.TrimSpace(GetSessionUsername(cookie.Value))
+	if sessionUser, bySession := requestSessionUser(req); bySession {
 		if sessionUserCarriesAdminPrivileges(cfg, sessionUser) || sessionUserHasSettingsAdminPrivileges(cfg, req, sessionUser) {
 			return true
 		}
@@ -219,11 +236,8 @@ func requestCarriesInstanceAuthority(cfg *config.Config, req *http.Request) bool
 	if record := getAPITokenRecordFromRequest(req); record != nil && !tokenActsForInstance(record) {
 		return false
 	}
-	cookie, err := readSessionCookie(req)
-	if err != nil || cookie.Value == "" || !ValidateSession(cookie.Value) {
-		return true
-	}
-	return sessionUserCarriesAdminPrivileges(cfg, strings.TrimSpace(GetSessionUsername(cookie.Value)))
+	sessionUser, bySession := requestSessionUser(req)
+	return !bySession || sessionUserCarriesAdminPrivileges(cfg, sessionUser)
 }
 
 // sessionUserHasSettingsAdminPrivileges is the session rule ensureOrgAdminSession
@@ -385,6 +399,26 @@ func ensureSettingsReadScope(cfg *config.Config, w http.ResponseWriter, req *htt
 
 func ensureSettingsWriteScope(cfg *config.Config, w http.ResponseWriter, req *http.Request) bool {
 	return ensureSettingsScope(cfg, w, req, config.ScopeSettingsWrite)
+}
+
+// ensureSSOProviderWrite guards changes to SSO providers. A provider decides
+// who can sign in and which roles its groups receive, the built-in
+// administrator role included, and the resulting session is not limited by
+// token scopes. That is instance-wide authority, so an API-token caller needs
+// it too; settings:write alone must not be enough to create an administrator.
+func ensureSSOProviderWrite(cfg *config.Config, w http.ResponseWriter, req *http.Request) bool {
+	if !ensureSettingsWriteScope(cfg, w, req) {
+		return false
+	}
+	if callerToken := getAPITokenRecordFromRequest(req); callerToken != nil && !tokenHasInstanceWideAuthority(callerToken) {
+		log.Warn().
+			Str("token_id", callerToken.ID).
+			Str("path", req.URL.Path).
+			Msg("API token without instance-wide authority attempted to change SSO providers")
+		http.Error(w, "SSO providers decide who can sign in and with which role, so changing them needs a full-access token that is not bound to any non-default organization.", http.StatusForbidden)
+		return false
+	}
+	return true
 }
 
 // handleQuickSecuritySetupFixed is the fixed version of the Quick Security Setup
@@ -636,6 +670,7 @@ func handleQuickSecuritySetupFixed(r *Router) http.HandlerFunc {
 		// Update runtime config immediately with hashed token - no restart needed!
 		config.Mu.Lock()
 		previousTokens := append([]config.APITokenRecord(nil), r.config.APITokens...)
+		previousAuthUser := r.config.AuthUser
 		r.config.AuthUser = setupRequest.Username
 		// Keep permission-gated routes aligned with the configured administrator
 		// immediately, including when token persistence below fails after the
@@ -649,12 +684,18 @@ func handleQuickSecuritySetupFixed(r *Router) http.HandlerFunc {
 				r.config.APITokens = previousTokens
 				r.config.SortAPITokens()
 				config.Mu.Unlock()
+				// The password is already replaced, so its sessions end here too.
+				invalidateAdminCredentialSessions(previousAuthUser, setupRequest.Username)
 				log.Error().Err(err).Msg("Failed to persist API tokens during security setup")
 				http.Error(w, "Password authentication was saved, but the API token could not be saved", http.StatusInternalServerError)
 				return
 			}
 		}
 		config.Mu.Unlock()
+		// Sessions opened with the replaced login must not outlive it, as after
+		// a password change or first-run reset. The caller gets a new session
+		// below.
+		invalidateAdminCredentialSessions(previousAuthUser, setupRequest.Username)
 		log.Info().Msg("Runtime config updated with new security settings - active immediately")
 
 		if err := r.establishSession(w, req, setupRequest.Username); err != nil {
@@ -801,6 +842,16 @@ func handleQuickSecuritySetupFixed(r *Router) http.HandlerFunc {
 			json.NewEncoder(w).Encode(response)
 		}
 	}
+}
+
+// invalidateAdminCredentialSessions ends every session of the administrator
+// login that quick setup replaced and of the login that replaces it, so a
+// session opened with the old password cannot keep acting as the administrator.
+func invalidateAdminCredentialSessions(previousUser, currentUser string) {
+	if previousUser != "" && previousUser != currentUser {
+		InvalidateUserSessions(previousUser)
+	}
+	InvalidateUserSessions(currentUser)
 }
 
 // tokenHasInstanceWideAuthority reports whether a token holds full-access scope

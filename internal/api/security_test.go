@@ -5,11 +5,14 @@ import (
 	"crypto/tls"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
+	"unsafe"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/auth"
@@ -515,6 +518,82 @@ func TestRecordFailedLogin(t *testing.T) {
 	})
 }
 
+func TestFailedLoginTrackingBoundsStoredIdentifiers(t *testing.T) {
+	storedKeys := func() []string {
+		failedMu.RLock()
+		defer failedMu.RUnlock()
+		keys := make([]string, 0, len(failedLogins))
+		for key := range failedLogins {
+			keys = append(keys, key)
+		}
+		return keys
+	}
+
+	t.Run("oversized identifier is tracked without being kept", func(t *testing.T) {
+		resetFailedLogins()
+		t.Cleanup(resetFailedLogins)
+		oversized := strings.Repeat("A", 700_000)
+		sibling := oversized[:len(oversized)-1] + "B"
+
+		for i := 0; i < maxFailedAttempts; i++ {
+			RecordFailedLogin(oversized)
+		}
+		RecordFailedLogin(sibling)
+
+		if attempts, _, isLocked := GetLockoutInfo(oversized); attempts != maxFailedAttempts || !isLocked {
+			t.Fatalf("oversized identifier: attempts = %d, locked = %v, want %d and locked", attempts, isLocked, maxFailedAttempts)
+		}
+		if attempts, _, isLocked := GetLockoutInfo(sibling); attempts != 1 || isLocked {
+			t.Fatalf("distinct oversized identifier: attempts = %d, locked = %v, want 1 and not locked", attempts, isLocked)
+		}
+
+		keys := storedKeys()
+		if len(keys) != 2 {
+			t.Fatalf("tracked %d identifiers, want 2", len(keys))
+		}
+		for _, key := range keys {
+			if len(key) > maxLockoutIdentifierBytes {
+				t.Fatalf("stored identifier has %d bytes, want at most %d", len(key), maxLockoutIdentifierBytes)
+			}
+		}
+
+		ClearFailedLogins(oversized)
+		ResetLockout(sibling)
+		if keys := storedKeys(); len(keys) != 0 {
+			t.Fatalf("%d identifiers still tracked after clear and reset", len(keys))
+		}
+	})
+
+	t.Run("identifier at the bound is tracked under its own text", func(t *testing.T) {
+		resetFailedLogins()
+		t.Cleanup(resetFailedLogins)
+		identifier := strings.Repeat("u", maxLockoutIdentifierBytes)
+
+		RecordFailedLogin(identifier)
+
+		if keys := storedKeys(); len(keys) != 1 || keys[0] != identifier {
+			t.Fatalf("stored identifiers = %d, want the identifier itself", len(keys))
+		}
+	})
+
+	t.Run("stored identifier does not retain the credentials it was cut from", func(t *testing.T) {
+		resetFailedLogins()
+		t.Cleanup(resetFailedLogins)
+		credentials := "admin:" + strings.Repeat("p", 700_000)
+		username := strings.SplitN(credentials, ":", 2)[0]
+
+		RecordFailedLogin(username)
+
+		keys := storedKeys()
+		if len(keys) != 1 || keys[0] != username {
+			t.Fatalf("stored identifiers = %q, want [%q]", keys, username)
+		}
+		if unsafe.StringData(keys[0]) == unsafe.StringData(username) {
+			t.Fatal("stored identifier shares memory with the request's credentials")
+		}
+	})
+}
+
 func TestClearFailedLogins(t *testing.T) {
 	resetFailedLogins()
 
@@ -645,6 +724,192 @@ func TestGetLockoutInfo(t *testing.T) {
 			t.Error("expected isLocked = false for expired lockout")
 		}
 	})
+}
+
+func TestRecordLoginAttempt(t *testing.T) {
+	t.Run("failure counts against every identifier", func(t *testing.T) {
+		resetFailedLogins()
+
+		if _, locked := RecordLoginAttempt(false, "attempt-user", "192.0.2.10"); locked {
+			t.Fatal("first failed attempt must not be refused as locked out")
+		}
+		for _, identifier := range []string{"attempt-user", "192.0.2.10"} {
+			if attempts, _, _ := GetLockoutInfo(identifier); attempts != 1 {
+				t.Errorf("%s attempts = %d, want 1", identifier, attempts)
+			}
+		}
+	})
+
+	t.Run("success clears every identifier", func(t *testing.T) {
+		resetFailedLogins()
+		RecordLoginAttempt(false, "attempt-user", "192.0.2.10")
+
+		if _, locked := RecordLoginAttempt(true, "attempt-user", "192.0.2.10"); locked {
+			t.Fatal("success below the limit must not be refused as locked out")
+		}
+		for _, identifier := range []string{"attempt-user", "192.0.2.10"} {
+			if attempts, _, _ := GetLockoutInfo(identifier); attempts != 0 {
+				t.Errorf("%s attempts = %d, want 0", identifier, attempts)
+			}
+		}
+	})
+
+	t.Run("attempt finishing after the limit is refused whatever its result", func(t *testing.T) {
+		resetFailedLogins()
+		// The address is locked by attempts under another username.
+		for i := 0; i < maxFailedAttempts; i++ {
+			RecordLoginAttempt(false, "other-user", "192.0.2.10")
+		}
+
+		for _, success := range []bool{false, true} {
+			lockedUntil, locked := RecordLoginAttempt(success, "attempt-user", "192.0.2.10")
+			if !locked {
+				t.Fatalf("success=%v: attempt finishing after the limit was not refused", success)
+			}
+			if !lockedUntil.After(time.Now()) {
+				t.Errorf("success=%v: lockedUntil = %v, want a time in the future", success, lockedUntil)
+			}
+		}
+		if attempts, _, _ := GetLockoutInfo("attempt-user"); attempts != 0 {
+			t.Errorf("refused attempts were counted against the username: %d", attempts)
+		}
+		if attempts, _, isLocked := GetLockoutInfo("192.0.2.10"); !isLocked || attempts != maxFailedAttempts {
+			t.Errorf("address lockout = (%d, %v), want (%d, true): a refused success must not clear it", attempts, isLocked, maxFailedAttempts)
+		}
+	})
+
+	t.Run("attempts verified together share one limit", func(t *testing.T) {
+		resetFailedLogins()
+		const inFlight = 64
+
+		var counted atomic.Int32
+		var wg sync.WaitGroup
+		start := make(chan struct{})
+		for i := 0; i < inFlight; i++ {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				<-start
+				if _, locked := RecordLoginAttempt(false, "attempt-user", "192.0.2.10"); !locked {
+					counted.Add(1)
+				}
+			}()
+		}
+		close(start)
+		wg.Wait()
+
+		if got := int(counted.Load()); got != maxFailedAttempts {
+			t.Errorf("%d of %d concurrent failures were answered as checked, want %d", got, inFlight, maxFailedAttempts)
+		}
+		if _, locked := RecordLoginAttempt(true, "attempt-user", "192.0.2.10"); !locked {
+			t.Error("correct password arriving with the burst was accepted after the limit")
+		}
+	})
+}
+
+// Password verification is slow, so attempts that arrive together all pass the
+// lockout check made before it. The limit has to hold for them anyway.
+func TestCheckAuthLockoutCoversConcurrentBasicAttempts(t *testing.T) {
+	resetFailedLogins()
+	t.Cleanup(resetFailedLogins)
+
+	hashedPass, err := auth.HashPassword("password123")
+	if err != nil {
+		t.Fatalf("hash password: %v", err)
+	}
+	cfg := &config.Config{AuthUser: "testuser", AuthPass: hashedPass}
+
+	const inFlight = 32
+	var unauthorized, lockedOut atomic.Int32
+	var wg sync.WaitGroup
+	start := make(chan struct{})
+	for i := 0; i < inFlight; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			req := httptest.NewRequest(http.MethodGet, "/api/state", nil)
+			req.RemoteAddr = "203.0.113.40:40000"
+			req.SetBasicAuth("testuser", "wrongpassword")
+			rec := httptest.NewRecorder()
+			<-start
+			if CheckAuth(cfg, rec, req) {
+				t.Error("wrong password was accepted")
+			}
+			switch rec.Code {
+			case http.StatusUnauthorized:
+				unauthorized.Add(1)
+			case http.StatusForbidden:
+				lockedOut.Add(1)
+			}
+		}()
+	}
+	close(start)
+	wg.Wait()
+
+	if got := int(unauthorized.Load()); got != maxFailedAttempts {
+		t.Errorf("%d of %d concurrent wrong passwords were answered as checked, want %d", got, inFlight, maxFailedAttempts)
+	}
+	if got := int(lockedOut.Load()); got != inFlight-maxFailedAttempts {
+		t.Errorf("%d of %d concurrent wrong passwords were refused as locked out, want %d", got, inFlight, inFlight-maxFailedAttempts)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/state", nil)
+	req.RemoteAddr = "203.0.113.40:40000"
+	req.SetBasicAuth("testuser", "password123")
+	rec := httptest.NewRecorder()
+	if CheckAuth(cfg, rec, req) {
+		t.Fatal("correct password was accepted while the account is locked")
+	}
+	if rec.Code != http.StatusForbidden || !strings.Contains(rec.Body.String(), "Account temporarily locked") {
+		t.Errorf("locked account answered %d %s, want 403 Account temporarily locked", rec.Code, rec.Body.String())
+	}
+}
+
+func TestHandleLoginLockoutCoversConcurrentAttempts(t *testing.T) {
+	resetFailedLogins()
+	t.Cleanup(resetFailedLogins)
+	const clientIP = "203.0.113.41"
+	authLimiter.Reset(clientIP)
+	t.Cleanup(func() { authLimiter.Reset(clientIP) })
+
+	hashedPass, err := auth.HashPassword("password123")
+	if err != nil {
+		t.Fatalf("hash password: %v", err)
+	}
+	router := &Router{config: &config.Config{AuthUser: "testuser", AuthPass: hashedPass}}
+
+	// Stay below the login rate limit so that only the lockout can refuse.
+	const inFlight = 8
+	var unauthorized, lockedOut atomic.Int32
+	var wg sync.WaitGroup
+	start := make(chan struct{})
+	for i := 0; i < inFlight; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			req := httptest.NewRequest(http.MethodPost, "/api/login",
+				strings.NewReader(`{"username":"testuser","password":"wrongpassword"}`))
+			req.RemoteAddr = clientIP + ":40000"
+			rec := httptest.NewRecorder()
+			<-start
+			router.handleLogin(rec, req)
+			switch {
+			case rec.Code == http.StatusUnauthorized:
+				unauthorized.Add(1)
+			case rec.Code == http.StatusForbidden && strings.Contains(rec.Body.String(), "account_locked"):
+				lockedOut.Add(1)
+			}
+		}()
+	}
+	close(start)
+	wg.Wait()
+
+	if got := int(unauthorized.Load()); got != maxFailedAttempts {
+		t.Errorf("%d of %d concurrent wrong passwords were answered as checked, want %d", got, inFlight, maxFailedAttempts)
+	}
+	if got := int(lockedOut.Load()); got != inFlight-maxFailedAttempts {
+		t.Errorf("%d of %d concurrent wrong passwords were refused as locked out, want %d", got, inFlight, inFlight-maxFailedAttempts)
+	}
 }
 
 func TestResetLockout(t *testing.T) {
@@ -802,6 +1067,9 @@ func TestClearCSRFCookie(t *testing.T) {
 }
 
 func TestIssueNewCSRFCookie(t *testing.T) {
+	initCSRFStoreForSecurityTest(t)
+	InitSessionStore(t.TempDir())
+
 	t.Run("nil writer returns empty string", func(t *testing.T) {
 		req := httptest.NewRequest("POST", "/api/test", nil)
 		token := issueNewCSRFCookie(nil, req, "session-id")
@@ -836,7 +1104,23 @@ func TestIssueNewCSRFCookie(t *testing.T) {
 		}
 	})
 
+	t.Run("unknown session returns empty string", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		req := httptest.NewRequest("POST", "/api/test", nil)
+		token := issueNewCSRFCookie(w, req, "made-up-session-id")
+		if token != "" {
+			t.Errorf("token = %q, want empty string for unknown session", token)
+		}
+		if cookies := w.Result().Cookies(); len(cookies) != 0 {
+			t.Errorf("expected no cookie for unknown session, got %v", cookies)
+		}
+		if count := csrfSessionCountForTest(); count != 0 {
+			t.Errorf("CSRF store tracks %d sessions, want 0 for unknown session", count)
+		}
+	})
+
 	t.Run("valid session returns non-empty token", func(t *testing.T) {
+		GetSessionStore().CreateSession("valid-session-id", time.Hour, "test-agent", "127.0.0.1", "admin")
 		w := httptest.NewRecorder()
 		req := httptest.NewRequest("POST", "/api/test", nil)
 		token := issueNewCSRFCookie(w, req, "valid-session-id")
@@ -1334,6 +1618,13 @@ func initCSRFStoreForSecurityTest(t *testing.T) {
 	})
 }
 
+func csrfSessionCountForTest() int {
+	store := GetCSRFStore()
+	store.mu.RLock()
+	defer store.mu.RUnlock()
+	return len(store.tokens)
+}
+
 func TestCheckCSRF_SafeMethods(t *testing.T) {
 	tests := []struct {
 		method string
@@ -1425,11 +1716,14 @@ func TestCheckCSRF_NoSessionCookie(t *testing.T) {
 
 func TestCheckCSRF_MissingCSRFToken(t *testing.T) {
 	initCSRFStoreForSecurityTest(t)
+	InitSessionStore(t.TempDir())
+	sessionID := "test-session-id-1234567890"
+	GetSessionStore().CreateSession(sessionID, time.Hour, "test-agent", "127.0.0.1", "admin")
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest("POST", "/api/test", nil)
 	req.AddCookie(&http.Cookie{
 		Name:  "pulse_session",
-		Value: "test-session-id-1234567890",
+		Value: sessionID,
 	})
 	// No CSRF token set
 
@@ -1448,11 +1742,14 @@ func TestCheckCSRF_MissingCSRFToken(t *testing.T) {
 
 func TestCheckCSRF_InvalidCSRFToken(t *testing.T) {
 	initCSRFStoreForSecurityTest(t)
+	InitSessionStore(t.TempDir())
+	sessionID := "test-session-id-1234567890"
+	GetSessionStore().CreateSession(sessionID, time.Hour, "test-agent", "127.0.0.1", "admin")
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest("POST", "/api/test", nil)
 	req.AddCookie(&http.Cookie{
 		Name:  "pulse_session",
-		Value: "test-session-id-1234567890",
+		Value: sessionID,
 	})
 	req.Header.Set("X-CSRF-Token", "invalid-csrf-token")
 
@@ -1466,6 +1763,40 @@ func TestCheckCSRF_InvalidCSRFToken(t *testing.T) {
 	newToken := w.Header().Get("X-CSRF-Token")
 	if newToken == "" {
 		t.Error("CheckCSRF should issue new CSRF token in header when invalid")
+	}
+}
+
+// A session cookie that names no live session must not mint CSRF state: the
+// value is client-supplied, and every issued token is tracked and persisted.
+func TestCheckCSRF_UnknownSessionDoesNotIssueToken(t *testing.T) {
+	initCSRFStoreForSecurityTest(t)
+	InitSessionStore(t.TempDir())
+
+	for _, csrfToken := range []string{"", "invalid-csrf-token"} {
+		w := httptest.NewRecorder()
+		req := httptest.NewRequest("POST", "/api/test", nil)
+		req.AddCookie(&http.Cookie{
+			Name:  "pulse_session",
+			Value: "made-up-session-id-1234567890",
+		})
+		if csrfToken != "" {
+			req.Header.Set("X-CSRF-Token", csrfToken)
+		}
+
+		if CheckCSRF(w, req) {
+			t.Errorf("CheckCSRF should return false for unknown session with token %q", csrfToken)
+		}
+		if newToken := w.Header().Get("X-CSRF-Token"); newToken != "" {
+			t.Errorf("CheckCSRF issued CSRF token %q for unknown session", newToken)
+		}
+		for _, c := range w.Result().Cookies() {
+			if c.Name == "pulse_csrf" && c.Value != "" {
+				t.Errorf("CheckCSRF set pulse_csrf cookie %q for unknown session", c.Value)
+			}
+		}
+	}
+	if count := csrfSessionCountForTest(); count != 0 {
+		t.Errorf("CSRF store tracks %d sessions, want 0 for unknown session", count)
 	}
 }
 
@@ -1493,21 +1824,45 @@ func TestCheckCSRF_ValidCSRFToken(t *testing.T) {
 	}
 }
 
-func TestCheckCSRF_CSRFTokenFromFormValue(t *testing.T) {
+func TestCheckCSRF_TokenOutsideHeaderIsRefused(t *testing.T) {
 	initCSRFStoreForSecurityTest(t)
-	w := httptest.NewRecorder()
-	req := httptest.NewRequest("POST", "/api/test?csrf_token=form-token-value", nil)
-	req.AddCookie(&http.Cookie{
-		Name:  "pulse_session",
-		Value: "test-session-id-1234567890",
-	})
-	// csrf_token is set as query param which is read by FormValue
+	sessionID := "valid-session-id-12345678"
 
-	// The token won't validate, but we're testing that FormValue is checked
-	result := CheckCSRF(w, req)
-	// Will fail because token doesn't match session
-	if result {
-		t.Error("CheckCSRF should still validate the token from FormValue")
+	// A query or form token needs no CORS preflight, so a valid one must not
+	// stand in for the X-CSRF-Token header.
+	tests := []struct {
+		name  string
+		build func(token string) *http.Request
+	}{
+		{"query", func(token string) *http.Request {
+			return httptest.NewRequest("POST", "/api/test?csrf_token="+url.QueryEscape(token), strings.NewReader(`{"force":true}`))
+		}},
+		{"form", func(token string) *http.Request {
+			req := httptest.NewRequest("POST", "/api/test", strings.NewReader("csrf_token="+url.QueryEscape(token)))
+			req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+			return req
+		}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			token := generateCSRFToken(sessionID)
+			req := tt.build(token)
+			req.AddCookie(&http.Cookie{Name: "pulse_session", Value: sessionID})
+			if CheckCSRF(httptest.NewRecorder(), req) {
+				t.Fatalf("CheckCSRF accepted a valid CSRF token from the %s", tt.name)
+			}
+			if req.Form != nil || req.PostForm != nil || req.MultipartForm != nil {
+				t.Error("CheckCSRF parsed the request body")
+			}
+
+			// The same token is still valid, and admitted, in the header.
+			req = tt.build(token)
+			req.AddCookie(&http.Cookie{Name: "pulse_session", Value: sessionID})
+			req.Header.Set("X-CSRF-Token", token)
+			if !CheckCSRF(httptest.NewRecorder(), req) {
+				t.Error("CheckCSRF refused the same token in X-CSRF-Token")
+			}
+		})
 	}
 }
 

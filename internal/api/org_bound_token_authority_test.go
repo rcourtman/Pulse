@@ -75,6 +75,7 @@ func TestInstanceSettingsScopeRequiresInstanceWideToken(t *testing.T) {
 				}{
 					{"ensureSettingsReadScope", ensureSettingsReadScope, binding.instance && hasSettings},
 					{"ensureSettingsWriteScope", ensureSettingsWriteScope, binding.instance && hasSettings},
+					{"ensureSSOProviderWrite", ensureSSOProviderWrite, binding.instance && scopes[0] == config.ScopeWildcard},
 					{"ensureOrgSettingsWriteScope", ensureOrgSettingsWriteScope, hasSettings},
 					{"ensureAdminSession", ensureAdminSession, binding.instance},
 					{"ensureOrgAdminSession", ensureOrgAdminSession, true},
@@ -167,7 +168,6 @@ func TestOrgBoundSettingsTokenRouterMatrix(t *testing.T) {
 	instanceRoutes := []struct{ method, path string }{
 		{http.MethodPost, "/api/system/settings/update"},
 		{http.MethodGet, "/api/system/settings"},
-		{http.MethodPost, "/api/security/sso/providers"},
 		{http.MethodGet, "/api/security/sso/providers"},
 		{http.MethodGet, "/api/security/tokens"},
 		{http.MethodPost, "/api/security/tokens"},

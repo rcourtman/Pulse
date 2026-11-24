@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"reflect"
 	"strings"
 	"time"
 
@@ -37,6 +38,12 @@ type resourceOperatorStateAPI struct {
 	SetAt                    time.Time                           `json:"setAt"`
 	SetBy                    string                              `json:"setBy,omitempty"`
 }
+
+// maxOperatorStateRequestBytes bounds the PUT body like the neighbouring
+// action decision routes. The record is a handful of enums, timestamps and
+// short free-text fields; the decoder buffers the whole document and the
+// note is persisted, so the body must be bounded before it is decoded.
+const maxOperatorStateRequestBytes = 64 << 10
 
 // resourceOperatorStateLookupAPI is the UI-safe read envelope. The canonical
 // agent/API contract keeps a missing explicit record as 404 so callers can
@@ -94,6 +101,10 @@ func toResourceOperatorStateAPI(state unified.ResourceOperatorState) resourceOpe
 //     audit attribution honest.
 //   - DELETE clears the entry, idempotent. Returns 204 whether or not
 //     an entry was present.
+//   - PUT and DELETE return 403 when they would change the remediation
+//     lock, lifecycle state or automatic remediation policy and the
+//     request lacks the authority set by
+//     SetOperatorStateRemediationAuthority.
 func (h *ResourceHandlers) HandleResourceOperatorState(w http.ResponseWriter, r *http.Request) {
 	resourceID := extractOperatorStateResourceID(r.URL.Path)
 	if resourceID == "" {
@@ -134,7 +145,7 @@ func (h *ResourceHandlers) HandleResourceOperatorState(w http.ResponseWriter, r 
 
 	case http.MethodPut:
 		var payload resourceOperatorStateAPI
-		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxOperatorStateRequestBytes)).Decode(&payload); err != nil {
 			http.Error(w, "Invalid JSON", http.StatusBadRequest)
 			return
 		}
@@ -159,13 +170,23 @@ func (h *ResourceHandlers) HandleResourceOperatorState(w http.ResponseWriter, r 
 			SetAt: time.Now().UTC(),
 			SetBy: getUserID(r),
 		}
+		mayChangeRemediation := h.operatorStateRemediation != nil && h.operatorStateRemediation(r)
 		var persisted unified.ResourceOperatorState
 		err := h.ActionLifecycle().WithPolicyMutation(func() error {
+			if !mayChangeRemediation {
+				if err := refuseOperatorStateRemediationChange(store, state); err != nil {
+					return err
+				}
+			}
 			var writeErr error
 			persisted, writeErr = unified.SetResourceOperatorStateWithMaintenanceLifecycle(store, state)
 			return writeErr
 		})
 		if err != nil {
+			if errors.Is(err, errOperatorStateRemediationAuthority) {
+				http.Error(w, operatorStateRemediationDenied, http.StatusForbidden)
+				return
+			}
 			if errors.Is(err, unified.ErrResourceOperatorStateInvalid) {
 				writeJSONError(w, http.StatusBadRequest, agentcapabilities.AgentErrCodeOperatorStateInvalid, err.Error())
 				return
@@ -181,9 +202,20 @@ func (h *ResourceHandlers) HandleResourceOperatorState(w http.ResponseWriter, r 
 	case http.MethodDelete:
 		observedAt := time.Now().UTC()
 		actor := getUserID(r)
+		mayChangeRemediation := h.operatorStateRemediation != nil && h.operatorStateRemediation(r)
 		if err := h.ActionLifecycle().WithPolicyMutation(func() error {
+			if !mayChangeRemediation {
+				// Clearing the record restores the default remediation policy.
+				if err := refuseOperatorStateRemediationChange(store, unified.ResourceOperatorState{CanonicalID: resourceID}); err != nil {
+					return err
+				}
+			}
 			return unified.ClearResourceOperatorStateWithMaintenanceLifecycle(store, resourceID, observedAt, actor)
 		}); err != nil {
+			if errors.Is(err, errOperatorStateRemediationAuthority) {
+				http.Error(w, operatorStateRemediationDenied, http.StatusForbidden)
+				return
+			}
 			http.Error(w, sanitizeErrorForClient(err, "Internal server error"), http.StatusInternalServerError)
 			return
 		}
@@ -195,6 +227,44 @@ func (h *ResourceHandlers) HandleResourceOperatorState(w http.ResponseWriter, r 
 	default:
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 	}
+}
+
+var errOperatorStateRemediationAuthority = errors.New("operator state remediation policy requires action review authority")
+
+// Only sessions are refused (tokens hold the authority by scope), so this is
+// not an agent-surface error code.
+const operatorStateRemediationDenied = "Administrator privileges or an explicit action grant are required to change the remediation lock, lifecycle or automatic remediation policy"
+
+// refuseOperatorStateRemediationChange returns
+// errOperatorStateRemediationAuthority when the write would change the
+// remediation policy the action lifecycle and Patrol obey, for a request that
+// may not (SetOperatorStateRemediationAuthority). A policy already saved adds
+// no authority, so anyone the route admits round-trips what an administrator
+// set while saving a maintenance window or a note. It must run inside
+// WithPolicyMutation: the record it compares is then the one the write
+// replaces, and a lock saved concurrently is refused instead of overwritten.
+func refuseOperatorStateRemediationChange(store unified.ResourceStore, requested unified.ResourceOperatorState) error {
+	// A missing record reads as the zero state, which is the default policy.
+	saved, _, err := store.GetResourceOperatorState(requested.CanonicalID)
+	if err != nil {
+		return err
+	}
+	if operatorStateRemediationPolicyChanged(saved, requested) {
+		return errOperatorStateRemediationAuthority
+	}
+	return nil
+}
+
+// operatorStateRemediationPolicyChanged reports whether two records differ in
+// the fields BlocksRemediation and AllowsAutoRemediationAt read: the Never
+// auto-remediate lock, the lifecycle state (Retired blocks remediation too)
+// and the automatic remediation policy.
+func operatorStateRemediationPolicyChanged(saved, requested unified.ResourceOperatorState) bool {
+	saved = unified.NormalizeResourceOperatorState(saved)
+	requested = unified.NormalizeResourceOperatorState(requested)
+	return saved.NeverAutoRemediate != requested.NeverAutoRemediate ||
+		saved.LifecycleState != requested.LifecycleState ||
+		!reflect.DeepEqual(saved.AutoRemediationPolicy, requested.AutoRemediationPolicy)
 }
 
 // resolveOperatorStateCanonicalID ensures every UI and agent entry point writes

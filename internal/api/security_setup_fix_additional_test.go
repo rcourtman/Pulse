@@ -582,6 +582,7 @@ func TestQuickSecuritySetupRestoresTokensWhenPersistenceFails(t *testing.T) {
 	resetTrustedProxyConfig()
 
 	dataDir := t.TempDir()
+	InitPersistentAuthStores(dataDir)
 	oldPasswordHash, err := internalauth.HashPassword("ExistingPassword!1")
 	if err != nil {
 		t.Fatalf("hash existing password: %v", err)

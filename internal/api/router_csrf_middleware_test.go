@@ -334,3 +334,41 @@ func TestRouterDoesNotIssueCSRFCookieWithoutSession(t *testing.T) {
 		}
 	}
 }
+
+// Public paths pass the global auth gate, so the cookie alone must not be
+// enough for the router to add a token to the persisted CSRF store.
+func TestRouterDoesNotIssueCSRFCookieForUnknownSession(t *testing.T) {
+	router, _ := newRouterWithSession(t)
+
+	router.mux.HandleFunc("/api/health", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+
+	for _, method := range []string{http.MethodGet, http.MethodPost} {
+		req := httptest.NewRequest(method, "/api/health", nil)
+		req.AddCookie(&http.Cookie{Name: "pulse_session", Value: "made-up-session"})
+		rec := httptest.NewRecorder()
+
+		router.ServeHTTP(rec, req)
+
+		wantStatus := http.StatusOK
+		if method == http.MethodPost {
+			wantStatus = http.StatusForbidden
+		}
+		if rec.Code != wantStatus {
+			t.Fatalf("%s: expected status %d, got %d (%s)", method, wantStatus, rec.Code, rec.Body.String())
+		}
+		if token := rec.Header().Get("X-CSRF-Token"); token != "" {
+			t.Fatalf("%s: did not expect a replacement CSRF token header, got %q", method, token)
+		}
+		for _, c := range rec.Result().Cookies() {
+			if c.Name == "pulse_csrf" && c.Value != "" {
+				t.Fatalf("%s: did not expect pulse_csrf cookie to be set", method)
+			}
+		}
+	}
+
+	if sessions := csrfSessionCountForTest(); sessions != 0 {
+		t.Fatalf("expected no CSRF records for unknown sessions, got %d", sessions)
+	}
+}

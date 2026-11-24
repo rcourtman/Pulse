@@ -967,3 +967,74 @@ func TestHandleHandoffExchangeKeyMissing(t *testing.T) {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusNotFound)
 	}
 }
+
+// The JWT parser decodes a token's header and claims before it checks the
+// signature, so the exchange must refuse an oversized token without parsing
+// it, wherever the token arrives. A correctly signed one shows it is the size
+// that is refused.
+func TestHandleHandoffExchangeBoundsTokenBeforeParsing(t *testing.T) {
+	key := []byte("test-handoff-key")
+	configDir := t.TempDir()
+	resetSessionStoreForTests()
+	t.Cleanup(resetSessionStoreForTests)
+	resetCSRFStoreForTests()
+	t.Cleanup(resetCSRFStoreForTests)
+	InitSessionStore(configDir)
+	InitCSRFStore(configDir)
+	secretsDir := filepath.Join(configDir, "secrets")
+	if err := os.MkdirAll(secretsDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll() error = %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(secretsDir, "handoff.key"), key, 0o600); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+
+	handler := HandleHandoffExchange(configDir)
+	tenantID := "tenant-bounded"
+	host := tenantID + ".example.com"
+	saveHandoffTestOrganization(t, configDir, &models.Organization{
+		ID:          tenantID,
+		OwnerUserID: "bounded@example.com",
+	})
+	sign := func(targetPath string) string {
+		return signHandoffToken(t, key, cloudHandoffClaims{
+			AccountID:  "acct-bounded",
+			Email:      "bounded@example.com",
+			Role:       "owner",
+			TargetPath: targetPath,
+			RegisteredClaims: jwt.RegisteredClaims{
+				ID:        "jti-bounded",
+				Subject:   "user-bounded",
+				Issuer:    cloudHandoffIssuer,
+				Audience:  jwt.ClaimStrings{tenantID},
+				ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Hour)),
+			},
+		})
+	}
+	exchange := func(target, body string) *httptest.ResponseRecorder {
+		req := httptest.NewRequest(http.MethodPost, target, strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		req.Host = host
+		req.RemoteAddr = "127.0.0.1:12345"
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+		return rec
+	}
+
+	oversized := sign("/" + strings.Repeat("a", maxHandoffTokenBytes))
+	if rec := exchange("/api/cloud/handoff/exchange?format=json", "token="+oversized); rec.Code != http.StatusUnauthorized {
+		t.Fatalf("oversized token in body: status = %d, want %d", rec.Code, http.StatusUnauthorized)
+	}
+	if rec := exchange("/api/cloud/handoff/exchange?format=json&token="+oversized, ""); rec.Code != http.StatusUnauthorized {
+		t.Fatalf("oversized token in query: status = %d, want %d", rec.Code, http.StatusUnauthorized)
+	}
+	padded := "token=" + sign("/") + "&pad=" + strings.Repeat("a", maxHandoffExchangeRequestBytes)
+	if rec := exchange("/api/cloud/handoff/exchange?format=json", padded); rec.Code != http.StatusBadRequest {
+		t.Fatalf("oversized request body: status = %d, want %d", rec.Code, http.StatusBadRequest)
+	}
+
+	// None of the refusals read the token: its jti is still unspent.
+	if rec := makeExchangeRequest(t, handler, host, sign("/")); rec.Code != http.StatusOK {
+		t.Fatalf("ordinary token: status = %d, want %d (body=%q)", rec.Code, http.StatusOK, rec.Body.String())
+	}
+}

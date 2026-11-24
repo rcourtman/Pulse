@@ -30,6 +30,14 @@ const apiTokenMetadataOwnerUserID = "owner_user_id"
 const apiTokenMetadataPurpose = "purpose"
 const apiTokenPurposeRelayMobileAccess = "relay_mobile_access"
 
+// apiTokenMetadataActionsWithheld marks a token minted by a caller who could
+// not review or run actions. The relay mobile scope stands in for the action
+// scopes (tokenHasActionCapabilityScope), and action routes judge a token by
+// its scopes where they would hold a session to the administrator boundary,
+// so the mark keeps the token from carrying more than its minter had
+// (tokenActionsWithheld). Rotation preserves it with the rest of the metadata.
+const apiTokenMetadataActionsWithheld = "actions_withheld"
+
 const maxAPITokenRequestBodySize = 64 * 1024
 
 func mergeAPITokenMetadata(record *config.APITokenRecord, metadata map[string]string) error {
@@ -653,12 +661,19 @@ func (r *Router) handleCreateRelayMobileAccessToken(w http.ResponseWriter, req *
 		return
 	}
 
+	metadata := map[string]string{apiTokenMetadataPurpose: apiTokenPurposeRelayMobileAccess}
+	// An organization manager may pair a phone, but the phone must not review
+	// or run actions that its owner's own session may not.
+	if !requestHasActionCapability(r.config, r.authorizer, req, internalauth.ActionApprove) ||
+		!requestHasActionCapability(r.config, r.authorizer, req, internalauth.ActionExecute) {
+		metadata[apiTokenMetadataActionsWithheld] = "true"
+	}
 	rawToken, record, err := r.createAPITokenRecord(
 		req,
 		defaultRelayMobileAccessTokenName(time.Now().UTC()),
 		relayMobileAccessTokenScopes(),
 		nil,
-		map[string]string{apiTokenMetadataPurpose: apiTokenPurposeRelayMobileAccess},
+		metadata,
 	)
 	if err != nil {
 		if failure, ok := err.(*tokenMutationFailure); ok {

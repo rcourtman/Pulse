@@ -278,6 +278,31 @@ func TestAgentTokenAutoRegisterRevokedWhileOpenChangesNothing(t *testing.T) {
 	}
 }
 
+// Both routes are public and read the body before the setup token is checked,
+// so the body is bounded before it is read.
+func TestAutoRegisterRejectsOversizedBody(t *testing.T) {
+	body := `{"type":"pve","host":"https://pve.example:8006","serverName":"` + strings.Repeat("a", 64*1024) + `"}`
+	for _, tc := range []struct {
+		path   string
+		handle func(*ConfigHandlers, http.ResponseWriter, *http.Request)
+	}{
+		{"/api/auto-register", (*ConfigHandlers).HandleAutoRegister},
+		{"/api/auto-unregister", (*ConfigHandlers).HandleAutoUnregister},
+	} {
+		t.Run(strings.TrimPrefix(tc.path, "/api/"), func(t *testing.T) {
+			handler := newTestConfigHandlers(t, &config.Config{DataPath: t.TempDir()})
+			req := httptest.NewRequest(http.MethodPost, tc.path, strings.NewReader(body))
+			req.Header.Set("Content-Type", "application/json")
+			rec := httptest.NewRecorder()
+			tc.handle(handler, rec, req)
+
+			if rec.Code != http.StatusBadRequest || strings.TrimSpace(rec.Body.String()) != "Failed to read request body" {
+				t.Fatalf("%s status = %d body=%q, want 400 Failed to read request body", tc.path, rec.Code, rec.Body.String())
+			}
+		})
+	}
+}
+
 // A malformed body is logged by size only: it may carry a setup token.
 func TestAutoRegisterParseFailuresDoNotLogTheBody(t *testing.T) {
 	const secret = "setup-token-must-not-be-logged-0123456789"

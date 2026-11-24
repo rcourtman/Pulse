@@ -1232,7 +1232,7 @@ func (r alertIdentifiersRequest) identifiers() []string {
 // POST /api/alerts/acknowledge with {"alertIdentifier": "alert-id"}
 func (h *AlertHandlers) AcknowledgeAlertByBody(w http.ResponseWriter, r *http.Request) {
 	var req alertIdentifierRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 16<<10)).Decode(&req); err != nil {
 		log.Error().Err(err).Msg("Failed to decode acknowledge request body")
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
@@ -1286,7 +1286,7 @@ func (h *AlertHandlers) AcknowledgeAlertByBody(w http.ResponseWriter, r *http.Re
 // POST /api/alerts/unacknowledge with {"alertIdentifier": "alert-id"}
 func (h *AlertHandlers) UnacknowledgeAlertByBody(w http.ResponseWriter, r *http.Request) {
 	var req alertIdentifierRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 16<<10)).Decode(&req); err != nil {
 		log.Error().Err(err).Msg("Failed to decode unacknowledge request body")
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
@@ -1414,7 +1414,7 @@ func (h *AlertHandlers) UnsnoozeAlertByBody(w http.ResponseWriter, r *http.Reque
 // POST /api/alerts/clear with {"alertIdentifier": "alert-id"}
 func (h *AlertHandlers) ClearAlertByBody(w http.ResponseWriter, r *http.Request) {
 	var req alertIdentifierRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 16<<10)).Decode(&req); err != nil {
 		log.Error().Err(err).Msg("Failed to decode clear request body")
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return

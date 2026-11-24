@@ -78,6 +78,4 @@ var authBypassAllowlist = []string{
 	"/api/config/export",
 	"/api/config/import",
 	"/api/setup-script",
-	"/api/system/ssh-config",
-	"/api/system/verify-temperature-ssh",
 }

@@ -234,6 +234,65 @@ func runConcurrentExecuteAdmitsExecutorExactlyOnce(t *testing.T, store unified.R
 	}
 }
 
+// An Execute that dispatches nothing is answered from the stored record, so
+// it is a read of what others planned, approved and ran. Execute authority
+// alone is refused with the lifecycle state, both while another call's
+// dispatch is in flight and after the action settled; the call that ran the
+// action still gets its own result.
+func TestExecuteReplaysStoredRecordOnlyToReviewers(t *testing.T) {
+	executor := &blockingExecutor{entered: make(chan struct{}), release: make(chan struct{})}
+	service := serviceForStore(t, unified.NewMemoryStore(), testResource(time.Now().UTC(), unified.ApprovalNone), executor)
+	service.DecisionAuthorizer = DecisionAuthorizerFunc(func(_ context.Context, _ string, _ unified.ActionAuditRecord, decision unified.ActionDecision) error {
+		if decision.Actor.SubjectID != "reviewer" {
+			return ErrActionAuthorizationDenied
+		}
+		return nil
+	})
+	plan, err := service.Plan(context.Background(), "default", restartRequest(), testActionActor("requester", "default"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	type outcome struct {
+		record unified.ActionAuditRecord
+		err    error
+	}
+	execute := func(subject string) outcome {
+		record, err := service.Execute(context.Background(), "default", plan.ActionID, testActionActor(subject, "default"), "")
+		return outcome{record, err}
+	}
+	assertRefused := func(got outcome, want error) {
+		t.Helper()
+		if !errors.Is(got.err, want) || got.record.ID != "" {
+			t.Fatalf("execute-only replay = record %q err %v, want no record and %v", got.record.ID, got.err, want)
+		}
+	}
+	assertReplayed := func(got outcome, want unified.ActionState) {
+		t.Helper()
+		if got.err != nil || got.record.ID != plan.ActionID || got.record.State != want {
+			t.Fatalf("reviewer replay = record %q state %q err %v, want state %q", got.record.ID, got.record.State, got.err, want)
+		}
+	}
+
+	ran := make(chan outcome, 1)
+	go func() { ran <- execute("runner") }()
+	<-executor.entered
+	assertRefused(execute("bystander"), unified.ErrActionAlreadyExecuting)
+	assertReplayed(execute("reviewer"), unified.ActionStateExecuting)
+	close(executor.release)
+	if own := <-ran; own.err != nil || own.record.State != unified.ActionStateCompleted || own.record.Result == nil {
+		t.Fatalf("dispatching call = state %q err %v, want its own completed result", own.record.State, own.err)
+	}
+
+	assertRefused(execute("bystander"), unified.ErrActionExecutionFinal)
+	assertRefused(execute("runner"), unified.ErrActionExecutionFinal)
+	assertReplayed(execute("reviewer"), unified.ActionStateCompleted)
+	service.DecisionAuthorizer = nil
+	assertRefused(execute("reviewer"), unified.ErrActionExecutionFinal)
+	if executor.calls.Load() != 1 {
+		t.Fatalf("executor calls=%d, want 1", executor.calls.Load())
+	}
+}
+
 func TestConcurrentExecuteAdmitsExecutorExactlyOnceMemoryStore(t *testing.T) {
 	runConcurrentExecuteAdmitsExecutorExactlyOnce(t, unified.NewMemoryStore())
 }
@@ -1047,7 +1106,7 @@ func newServiceEnv(t *testing.T, resource unified.Resource) *serviceEnv {
 		DecisionAuthorizer:  DecisionAuthorizerFunc(func(context.Context, string, unified.ActionAuditRecord, unified.ActionDecision) error { return nil }),
 		ExecutionAuthorizer: ExecutionAuthorizerFunc(func(context.Context, string, unified.ActionAuditRecord, unified.ActionActor) error { return nil }),
 		LiveCheckAuthorizer: LiveCheckAuthorizerFunc(func(context.Context, string, unified.ActionActor) error { return nil }),
-		OnActionCompleted: func(record unified.ActionAuditRecord) {
+		OnActionCompleted: func(_ string, record unified.ActionAuditRecord) {
 			env.completed = append(env.completed, record)
 		},
 	}
@@ -1312,6 +1371,34 @@ func TestApprovalRechecksAgentFeasibilityBeforePersistingDecision(t *testing.T) 
 	}
 }
 
+func TestApprovalRechecksAuthorityAfterTheAgentCheck(t *testing.T) {
+	now := time.Now().UTC()
+	env := newServiceEnv(t, testResource(now, unified.ApprovalAdmin))
+	plan, err := env.service.Plan(context.Background(), "default", restartRequest(), testActionActor("requester", "default"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The reviewer's authority is withdrawn while the agent answers.
+	asked := env.executor.feasibilityCalls
+	env.service.DecisionAuthorizer = DecisionAuthorizerFunc(func(context.Context, string, unified.ActionAuditRecord, unified.ActionDecision) error {
+		if env.executor.feasibilityCalls > asked {
+			return ErrActionAuthorizationDenied
+		}
+		return nil
+	})
+	decision := testActionDecision(t, env.service, "default", plan.ActionID, unified.ActionApprovalRecord{Actor: "operator", Outcome: unified.OutcomeApproved})
+	if _, err := env.service.Decide(context.Background(), "default", plan.ActionID, decision); !errors.Is(err, ErrActionAuthorizationDenied) {
+		t.Fatalf("approval error=%v", err)
+	}
+	if env.executor.feasibilityCalls == asked {
+		t.Fatal("the agent was not asked, so authority was not withdrawn during the check")
+	}
+	current := mustActionRecord(t, env.service, plan.ActionID)
+	if current.State != unified.ActionStatePending || len(current.Approvals) != 0 {
+		t.Fatalf("withdrawn approval mutated record: %#v", current)
+	}
+}
+
 func TestRefreshReplacesExpiredPlanAndPreservesTrustedOrigin(t *testing.T) {
 	now := time.Now().UTC()
 	env := newServiceEnv(t, testResource(now, unified.ApprovalAdmin))
@@ -1356,6 +1443,28 @@ func mustActionRecord(t *testing.T, service *Service, actionID string) unified.A
 		t.Fatalf("Get(%q): found=%v err=%v", actionID, found, err)
 	}
 	return record
+}
+
+// The completion publisher feeds the agent event stream, which delivers an
+// event only to the organization it is tagged with. The service must hand the
+// publisher the organization whose store holds the action.
+func TestCompletionPublisherReceivesOwningOrganization(t *testing.T) {
+	store := unified.NewMemoryStore()
+	executor := &stubExecutor{result: &unified.ExecutionResult{Success: true, Output: "restarted"}}
+	service := serviceForStore(t, store, testResource(time.Now().UTC(), unified.ApprovalNone), executor)
+	var orgs []string
+	service.OnActionCompleted = func(orgID string, _ unified.ActionAuditRecord) { orgs = append(orgs, orgID) }
+
+	plan, err := service.Plan(context.Background(), "tenant-b", restartRequest(), testActionActor("requester", "tenant-b"))
+	if err != nil {
+		t.Fatalf("Plan: %v", err)
+	}
+	if _, err := service.Execute(context.Background(), "tenant-b", plan.ActionID, testActionActor("operator", "tenant-b"), "restart"); err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	if len(orgs) != 1 || orgs[0] != "tenant-b" {
+		t.Fatalf("completion publisher organizations = %q, want [tenant-b]", orgs)
+	}
 }
 
 func TestExecuteRunsApprovedActionToTerminalAudit(t *testing.T) {
@@ -1430,6 +1539,48 @@ func TestExecuteRefusesLostReadinessBeforeAdmission(t *testing.T) {
 	}
 	if _, found, getErr := env.store.GetActionDispatchAttempt(plan.ActionID); getErr != nil || found {
 		t.Fatalf("dispatch attempt found=%v err=%v, want none", found, getErr)
+	}
+}
+
+func TestExecuteRechecksAuthorityAfterTheAgentCheck(t *testing.T) {
+	now := time.Now().UTC()
+	env := newServiceEnv(t, testResource(now, unified.ApprovalAdmin))
+	plan, err := env.service.Plan(context.Background(), "default", restartRequest(), testActionActor("requester", "default"))
+	if err != nil {
+		t.Fatalf("Plan: %v", err)
+	}
+	if _, err := env.service.Decide(context.Background(), "default", plan.ActionID, testActionDecision(t, env.service, "default", plan.ActionID, unified.ActionApprovalRecord{
+		Actor: "operator", Method: unified.MethodAPI, Outcome: unified.OutcomeApproved,
+	})); err != nil {
+		t.Fatalf("Decide: %v", err)
+	}
+	// The caller's authority is withdrawn while the agent answers.
+	asked := env.executor.feasibilityCalls
+	env.service.ExecutionAuthorizer = ExecutionAuthorizerFunc(func(context.Context, string, unified.ActionAuditRecord, unified.ActionActor) error {
+		if env.executor.feasibilityCalls > asked {
+			return ErrActionAuthorizationDenied
+		}
+		return nil
+	})
+
+	if _, err := env.service.Execute(context.Background(), "default", plan.ActionID, testActionActor("operator", "default"), ""); !errors.Is(err, ErrActionAuthorizationDenied) {
+		t.Fatalf("error = %v, want ErrActionAuthorizationDenied", err)
+	}
+	if env.executor.feasibilityCalls == asked {
+		t.Fatal("the agent was not asked, so authority was not withdrawn during the check")
+	}
+	if env.executor.calls != 0 {
+		t.Fatalf("executor calls = %d, want no dispatch", env.executor.calls)
+	}
+	// The action is not refused: a caller who may still run it can.
+	if current := mustActionRecord(t, env.service, plan.ActionID); current.State != unified.ActionStateApproved {
+		t.Fatalf("state = %q, want approved", current.State)
+	}
+	if _, found, getErr := env.store.GetActionDispatchAttempt(plan.ActionID); getErr != nil || found {
+		t.Fatalf("dispatch attempt found=%v err=%v, want none", found, getErr)
+	}
+	if len(env.completed) != 0 {
+		t.Fatalf("completion publisher observed %#v", env.completed)
 	}
 }
 
@@ -2042,7 +2193,7 @@ func TestIssue1649ForceFailTerminalizesWedgedExecutingActionWithAudit(t *testing
 	service := serviceForStore(t, store, testResource(time.Now().UTC(), unified.ApprovalNone), executor)
 	var completed []unified.ActionAuditRecord
 	var transitions []unified.ActionAuditRecord
-	service.OnActionCompleted = func(record unified.ActionAuditRecord) { completed = append(completed, record) }
+	service.OnActionCompleted = func(_ string, record unified.ActionAuditRecord) { completed = append(completed, record) }
 	service.OnActionTransition = func(_ string, record unified.ActionAuditRecord) { transitions = append(transitions, record) }
 	plan, err := service.Plan(context.Background(), "default", restartRequest(), testActionActor("requester", "default"))
 	if err != nil {

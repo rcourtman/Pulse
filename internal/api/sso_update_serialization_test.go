@@ -271,7 +271,7 @@ func TestSSOUpdateConcurrentRegisteredHTTP(t *testing.T) {
 			resetPersistentAuthStoresForTests()
 			t.Cleanup(resetPersistentAuthStoresForTests)
 			const token = "sso-serialized-save-fixture.12345678"
-			cfg := newTestConfigWithTokens(t, newTokenRecord(t, token, []string{config.ScopeSettingsRead, config.ScopeSettingsWrite}, nil))
+			cfg := newTestConfigWithTokens(t, newTokenRecord(t, token, []string{config.ScopeWildcard}, nil))
 			cfg.PublicURL = "https://pulse.example.test"
 			r := newTestRouter(t, cfg, nil, nil, nil, nil, "test")
 			cleanupTestRouter(t, r)

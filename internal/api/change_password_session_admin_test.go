@@ -90,6 +90,87 @@ func TestChangePasswordBasicAuthPathUnaffected(t *testing.T) {
 	}
 }
 
+func newChangePasswordRouterWithToken(t *testing.T, rawToken string, scopes []string) (*Router, *config.Config) {
+	t.Helper()
+	dir := t.TempDir()
+	hashed, err := bcrypt.GenerateFromPassword([]byte(changePasswordProbeCurrent), bcrypt.DefaultCost)
+	if err != nil {
+		t.Fatalf("bcrypt: %v", err)
+	}
+	record, err := config.NewAPITokenRecord(rawToken, "change-password-caller", scopes)
+	if err != nil {
+		t.Fatalf("NewAPITokenRecord: %v", err)
+	}
+	cfg := &config.Config{
+		DataPath: dir, ConfigPath: dir,
+		AuthUser: "admin", AuthPass: string(hashed),
+		APITokens: []config.APITokenRecord{*record},
+	}
+	cfg.SortAPITokens()
+	router := newTestRouter(t, cfg, nil, nil, nil, nil, "1.0.0")
+	cleanupTestRouter(t, router)
+	return router, cfg
+}
+
+// ensureAdminSession judges sessions and leaves a token's scope to the route,
+// and this route asked for none: the report token of one monitored host could
+// submit guesses at the admin password and replace it on a hit.
+func TestChangePasswordRefusesTokenWithoutSettingsWrite(t *testing.T) {
+	const rawToken = "change-password-agent-token.12345678"
+	router, cfg := newChangePasswordRouterWithToken(t, rawToken, []string{config.ScopeAgentReport, config.ScopeAgentConfigRead})
+	before := cfg.AuthPass
+
+	for _, current := range []string{"wrong-guess", changePasswordProbeCurrent} {
+		req := changePasswordRequest(t, current)
+		req.Header.Set("X-API-Token", rawToken)
+		rec := httptest.NewRecorder()
+		router.Handler().ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusForbidden {
+			t.Fatalf("agent token change-password (%q) = %d, want 403 (body %s)", current, rec.Code, rec.Body.String())
+		}
+	}
+	if cfg.AuthPass != before {
+		t.Fatal("agent token changed the admin password")
+	}
+}
+
+// Sign-in counts failures per account as well as per address. Password change
+// tests the same password, so guesses spread over addresses must meet the same
+// account lockout rather than five fresh attempts per address.
+func TestChangePasswordCountsFailuresAgainstTheAccount(t *testing.T) {
+	resetFailedLogins()
+	t.Cleanup(resetFailedLogins)
+
+	const rawToken = "change-password-settings-token.12345678"
+	router, cfg := newChangePasswordRouterWithToken(t, rawToken, []string{config.ScopeSettingsWrite})
+	before := cfg.AuthPass
+
+	guessFrom := func(address, current string) *httptest.ResponseRecorder {
+		req := changePasswordRequest(t, current)
+		req.RemoteAddr = address + ":54321"
+		req.Header.Set("X-API-Token", rawToken)
+		rec := httptest.NewRecorder()
+		router.Handler().ServeHTTP(rec, req)
+		return rec
+	}
+
+	for i := 0; i < maxFailedAttempts; i++ {
+		if rec := guessFrom("203.0.113."+strconv.Itoa(10+i), "wrong-guess"); rec.Code != http.StatusUnauthorized {
+			t.Fatalf("wrong guess %d = %d, want 401 (body %s)", i+1, rec.Code, rec.Body.String())
+		}
+	}
+	if _, _, locked := GetLockoutInfo(cfg.AuthUser); !locked {
+		t.Fatalf("%d wrong current passwords from different addresses did not lock the account", maxFailedAttempts)
+	}
+	if rec := guessFrom("203.0.113.200", changePasswordProbeCurrent); rec.Code != http.StatusForbidden {
+		t.Fatalf("change-password on a locked account = %d, want 403 (body %s)", rec.Code, rec.Body.String())
+	}
+	if cfg.AuthPass != before {
+		t.Fatal("password changed while the account was locked")
+	}
+}
+
 func TestChangePasswordFixtureOwnsRouterLifecycle(t *testing.T) {
 	var router *Router
 	workerDone := make(chan struct{})

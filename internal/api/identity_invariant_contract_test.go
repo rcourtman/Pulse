@@ -60,12 +60,12 @@ func TestContract_HostedIdentityUsesStablePrincipals(t *testing.T) {
 			"handoff user id must be a stable subject",
 		},
 		"oidc_handlers.go": {
-			"stableSSOPrincipal(config.SSOProviderTypeOIDC, providerID, idToken.Subject)",
+			"stableSSOPrincipalForIssuer(internalauth.GetManager(), config.SSOProviderTypeOIDC, providerID, verifiedIssuer, idToken.Subject)",
 			"applySSORoleAssignments(authManager, principal",
 			"establishOIDCSession(w, req, principal, username, oidcTokens)",
 		},
 		"saml_handlers.go": {
-			"stableSSOPrincipal(config.SSOProviderTypeSAML, providerID, result.NameID)",
+			"stableSSOPrincipalForIssuer(internalauth.GetManager(), config.SSOProviderTypeSAML, providerID, verifiedIssuer, result.NameID)",
 			"applySSORoleAssignments(authManager, principal",
 			"establishSAMLSession(w, req, principal, result.Username, samlSession)",
 		},

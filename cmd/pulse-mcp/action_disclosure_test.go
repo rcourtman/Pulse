@@ -135,7 +135,7 @@ func TestServer_ActionDisclosureThroughRealAgentHandlers(t *testing.T) {
 			case <-ctx.Done():
 				t.Fatal("MCP stream never subscribed")
 			}
-			b.PublishActionCompletedRecord(record)
+			b.PublishActionCompletedRecord("default", record)
 			select {
 			case <-out.received:
 			case <-ctx.Done():

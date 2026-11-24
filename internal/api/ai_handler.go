@@ -2452,7 +2452,7 @@ func (h *AIHandler) HandleChat(w http.ResponseWriter, r *http.Request) {
 
 	// Parse request
 	var req ChatRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20)).Decode(&req); err != nil {
 		http.Error(w, "Invalid request", http.StatusBadRequest)
 		return
 	}
@@ -2917,7 +2917,7 @@ func (h *AIHandler) HandleRenameSession(w http.ResponseWriter, r *http.Request, 
 	}
 
 	var req RenameSessionRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20)).Decode(&req); err != nil {
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}

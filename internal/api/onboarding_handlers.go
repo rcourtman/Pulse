@@ -135,7 +135,7 @@ func (r *Router) handleValidateOnboardingConnection(w http.ResponseWriter, req *
 	}
 
 	var payload onboardingValidationRequest
-	decoder := json.NewDecoder(req.Body)
+	decoder := json.NewDecoder(http.MaxBytesReader(w, req.Body, 16*1024))
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(&payload); err != nil {
 		http.Error(w, "Invalid request payload", http.StatusBadRequest)
