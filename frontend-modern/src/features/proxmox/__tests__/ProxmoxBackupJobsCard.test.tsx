@@ -204,14 +204,16 @@ describe('ProxmoxBackupJobsCard', () => {
     expect(bars[2]).toHaveClass('outline-blue-500');
     expect(bars[2]).not.toHaveClass('hover:outline-border');
     expect(container.querySelector('[data-backup-jobs-chosen-day]')).toHaveTextContent(
-      '2 failed: web, db',
+      'Guests with failures: web, db',
     );
 
     // Hover already named who failed, so a click can move on to the list.
     await fireEvent.click(bars[5]);
     expect(onSelectDay).toHaveBeenLastCalledWith('2026-10-24', { reveal: true });
-    await fireEvent.click(bars[2]);
+    await fireEvent.click(bars[2], { detail: 1 });
     expect(onSelectDay).toHaveBeenLastCalledWith('2026-10-21', { reveal: true });
+    await fireEvent.click(bars[2], { detail: 0 });
+    expect(onSelectDay).toHaveBeenLastCalledWith('2026-10-21', { reveal: false });
 
     // Without hover this card is the only place that says who failed.
     hoverCapable.value = false;
@@ -225,6 +227,47 @@ describe('ProxmoxBackupJobsCard', () => {
     }
   });
 
+  it('shows warning and failure names separately without replacing the selected day counts', async () => {
+    const names = Array.from({ length: 10 }, (_, i) => failure(`warning-guest-${i}`, 'warning'));
+    const onSelectDay = vi.fn();
+    const { container } = render(() => (
+      <ProxmoxBackupJobsCard
+        jobs={payload({
+          days: days({
+            2: {
+              counts: { ...counts(9, 1, 3), warning: 10, unknown: 2 },
+              historyState: 'partial',
+              failures: [failure('failed-guest'), ...names],
+            },
+          }),
+        })}
+        selectedDay="2026-10-21"
+        onSelectDay={onSelectDay}
+      />
+    ));
+    const detail = container.querySelector('[data-backup-jobs-chosen-day]')!;
+    expect(detail).toHaveTextContent('9 ok, 2 unknown, 3 running, 10 warnings, 1 failed');
+    expect(detail).toHaveTextContent('not fully observed');
+    expect(detail).toHaveTextContent('Guests with failures: failed-guest');
+    expect(detail).toHaveTextContent('Guests with warnings: warning-guest-0');
+    expect(detail).not.toHaveTextContent('warning-guest-9');
+    const bar = screen.getByRole('button', { name: /Oct 21: 9 ok/ });
+    expect(bar).toHaveAccessibleDescription(/Guests with warnings: warning-guest-0/);
+
+    await fireEvent.click(bar, { detail: 0 });
+    expect(onSelectDay).toHaveBeenLastCalledWith('2026-10-21', { reveal: false });
+    await fireEvent.click(bar, { detail: 1 });
+    expect(onSelectDay).toHaveBeenLastCalledWith('2026-10-21', { reveal: true });
+
+    const more = screen.getByRole('button', { name: 'Show 2 more guests with warnings' });
+    await fireEvent.click(more);
+    expect(more).toHaveAttribute('aria-expanded', 'true');
+    expect(detail).toHaveTextContent('warning-guest-9');
+    await fireEvent.click(more);
+    expect(more).toHaveAttribute('aria-expanded', 'false');
+    expect(detail).not.toHaveTextContent('warning-guest-9');
+  });
+
   it('opens the rest of the names and offers the list from a failed day', async () => {
     const onRevealRestorePoints = vi.fn();
     const names = Array.from({ length: 10 }, (_, i) => failure(`guest-${i}`));
@@ -236,12 +279,14 @@ describe('ProxmoxBackupJobsCard', () => {
       />
     ));
     const line = container.querySelector('[data-backup-jobs-chosen-day]')!;
-    expect(line).toHaveTextContent('10 failed: guest-0');
+    expect(line).toHaveTextContent('10 failed');
+    expect(line).toHaveTextContent('Guests with failures: guest-0');
     expect(line).not.toHaveTextContent('guest-9');
 
-    await fireEvent.click(screen.getByRole('button', { name: 'and 2 more' }));
+    const more = screen.getByRole('button', { name: 'Show 2 more guests with failures' });
+    await fireEvent.click(more);
     expect(line).toHaveTextContent('guest-9');
-    expect(screen.queryByRole('button', { name: /more$/ })).toBeNull();
+    expect(more).toHaveAccessibleName('Show fewer guests with failures');
 
     await fireEvent.click(screen.getByRole('button', { name: 'View restore points' }));
     expect(onRevealRestorePoints).toHaveBeenCalledOnce();
