@@ -164,6 +164,7 @@ func buildDefaultPolicy() *CommandPolicy {
 			// System inspection
 			`^ps(\s|$)`,
 			`^top\s+-bn`,
+			// df: directories and block devices only (see dfArgsSafe).
 			`^df(\s|$)`,
 			`^free(\s|$)`,
 			`^uptime$`,
@@ -197,7 +198,8 @@ func buildDefaultPolicy() *CommandPolicy {
 			`^systemctl\s+list-units`,
 			`^service\s+[a-z0-9][a-z0-9@._-]*\s+status$`,
 
-			// Docker inspection (read-only)
+			// Docker inspection (read-only). A --format template may only
+			// select fields (see formatTemplatesSelectFields).
 			`^docker\s+ps(\s|$)`,
 			`^docker\s+logs\s`,
 			`^docker\s+inspect\s`,
@@ -224,7 +226,7 @@ func buildDefaultPolicy() *CommandPolicy {
 			`^qm\s+status\s`,
 			`^pvesh\s+get\s`,
 
-			// Disk/storage info. du, file, find, blkid, sar and the other
+			// Disk/storage info. du, file, fdisk, find, blkid, sar and the other
 			// programs autoApprovedArgsSafe names also have their arguments
 			// checked.
 			`^lsblk(\s|$)`,
@@ -390,6 +392,25 @@ const (
 
 // Evaluate checks a command against the policy
 func (p *CommandPolicy) Evaluate(command string) PolicyDecision {
+	return p.evaluate(command, p.allowLogReads)
+}
+
+// EvaluateForTarget checks a command against the policy for the given target
+// type ("host", "container", "vm", or empty for host). Auto-approved /var/log
+// reads rely on the host agent confining file opens beneath /var/log with
+// os.Root; guest commands run inside pct exec or qm guest exec where the host
+// agent cannot confine guest symlinks, so guest log reads require approval.
+func (p *CommandPolicy) EvaluateForTarget(command, targetType string) PolicyDecision {
+	allowLogReads := p.allowLogReads
+	switch strings.ToLower(strings.TrimSpace(targetType)) {
+	case "", "host":
+	default:
+		allowLogReads = false
+	}
+	return p.evaluate(command, allowLogReads)
+}
+
+func (p *CommandPolicy) evaluate(command string, allowLogReads bool) PolicyDecision {
 	command = strings.TrimSpace(command)
 	// Options can differ only by case (grep -F and -f, ss -K and -k), so the
 	// log read and argument checks work on the original text.
@@ -434,7 +455,7 @@ func (p *CommandPolicy) Evaluate(command string) PolicyDecision {
 	}
 
 	// Check auto-approve
-	if p.allowLogReads && isAutoApprovedLogRead(argvCommand) {
+	if allowLogReads && isAutoApprovedLogRead(argvCommand) {
 		return PolicyAllow
 	}
 	for _, re := range p.autoApproveRe {

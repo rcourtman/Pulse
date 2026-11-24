@@ -292,12 +292,24 @@ const SingleCommandHint = "pulse_read runs a command only when the agent auto-ap
 	"command: for folder sizes, action disk_usage with the directory as path, or `du -xh -d 3 <directory>`, " +
 	"instead of piping du into sort or head."
 
+// DiskFreePathHint says which df forms the agent auto-approves. GNU df opens
+// every path it is given, which arms a watchdog or rewinds a tape when the
+// path is, or links to, such a device, so the agent's policy only approves
+// paths that can be nothing but a directory or a disk.
+const DiskFreePathHint = "df opens every path it is given, so the agent runs it without approval only for a directory " +
+	"written with a trailing slash, `df -h <directory>/`, or a disk such as /dev/sda1. " +
+	"`df -h` on its own reports every mounted filesystem."
+
 func approvalRequiredBlocked(command string) CallToolResult {
+	hint := SingleCommandHint
+	if strings.HasPrefix(command, "df ") && !strings.ContainsAny(command, "|;&$`") {
+		hint = DiskFreePathHint
+	}
 	return NewToolResponseResult(NewToolBlockedError(
 		"APPROVAL_REQUIRED",
 		fmt.Sprintf("Command '%s' needs approval, which pulse_read cannot request.", truncateCommand(command, 50)),
 		map[string]interface{}{
-			"hint":            SingleCommandHint,
+			"hint":            hint,
 			"policy_boundary": "pulse_read runs only commands the agent's policy auto-approves.",
 		},
 	))

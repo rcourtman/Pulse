@@ -264,7 +264,7 @@ func TestExecuteCommandSecurityValidation_RequiresApprovalIDWhenPolicyRequiresAp
 		done:  make(chan struct{}),
 	}
 	s.mu.Lock()
-	s.agents["a1"] = ac
+	s.agents[agentSessionKey(defaultOrganizationID, "a1")] = ac
 	s.mu.Unlock()
 
 	_, err := s.ExecuteCommand(context.Background(), "a1", ExecuteCommandPayload{
@@ -325,7 +325,7 @@ func TestExecuteCommand_TrustedSkipsApprovalGrantMint(t *testing.T) {
 		writeMu:          sync.Mutex{},
 	}
 	s.mu.Lock()
-	s.agents["a1"] = ac
+	s.agents[agentSessionKey(defaultOrganizationID, "a1")] = ac
 	s.mu.Unlock()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
@@ -450,8 +450,8 @@ func TestConnectedAgentLookups(t *testing.T) {
 	now := time.Now().Add(-1 * time.Minute)
 
 	s.mu.Lock()
-	s.agents["a1"] = &agentConn{agent: ConnectedAgent{AgentID: "a1", Hostname: "host1", ConnectedAt: now}}
-	s.agents["a2"] = &agentConn{agent: ConnectedAgent{AgentID: "a2", Hostname: "host2", ConnectedAt: now}}
+	s.agents[agentSessionKey(defaultOrganizationID, "a1")] = &agentConn{agent: ConnectedAgent{AgentID: "a1", Hostname: "host1", ConnectedAt: now}}
+	s.agents[agentSessionKey(defaultOrganizationID, "a2")] = &agentConn{agent: ConnectedAgent{AgentID: "a2", Hostname: "host2", ConnectedAt: now}}
 	s.mu.Unlock()
 
 	if !s.IsAgentConnected("a1") {

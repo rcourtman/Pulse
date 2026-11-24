@@ -1,6 +1,9 @@
 package agentexec
 
-import "testing"
+import (
+	"reflect"
+	"testing"
+)
 
 func TestDefaultPolicyLogReadsAllowPathsUnderVarLog(t *testing.T) {
 	p := DefaultPolicy()
@@ -132,5 +135,66 @@ func TestDefaultPolicyFixedReadsStillAllowed(t *testing.T) {
 	}
 	if got := p.Evaluate("cat /proc/self/environ"); got != PolicyBlock {
 		t.Errorf("Evaluate(cat /proc/self/environ) = %q, want %q", got, PolicyBlock)
+	}
+}
+
+// The agent opens the file operands itself instead of trusting their names,
+// so the policy has to say exactly which words those are.
+func TestAutoApprovedLogReadMarksFileOperands(t *testing.T) {
+	p := DefaultPolicy()
+
+	read, ok := p.AutoApprovedLogRead(`sudo grep -i -e "oom killer" -C 3 '/var/log/kern.log' /var/log/app/*.log`)
+	if !ok {
+		t.Fatal("AutoApprovedLogRead() refused an approved log read")
+	}
+	want := LogRead{Program: "grep", Args: []LogReadArg{
+		{Text: "-i"}, {Text: "-e"}, {Text: "oom killer"}, {Text: "-C"}, {Text: "3"},
+		{Text: "/var/log/kern.log", File: true},
+		{Text: "/var/log/app/*.log", File: true, Glob: true},
+	}}
+	if !reflect.DeepEqual(read, want) {
+		t.Errorf("AutoApprovedLogRead() = %+v, want %+v", read, want)
+	}
+
+	read, ok = p.AutoApprovedLogRead("grep /var/log/x '/var/log/*'")
+	want = LogRead{Program: "grep", Args: []LogReadArg{{Text: "/var/log/x"}, {Text: "/var/log/*", File: true}}}
+	if !ok || !reflect.DeepEqual(read, want) {
+		t.Errorf("AutoApprovedLogRead() = %+v, %v, want %+v", read, ok, want)
+	}
+
+	for _, command := range []string{
+		"ps aux",
+		"cat /etc/os-release",
+		"cat /var/log/syslog /etc/shadow",
+		"SUDO cat /var/log/syslog",
+		"sudo -u root cat /var/log/syslog",
+		"cat /var/log/syslog | cat",
+	} {
+		if read, ok := p.AutoApprovedLogRead(command); ok {
+			t.Errorf("AutoApprovedLogRead(%q) = %+v, want no log read", command, read)
+		}
+	}
+	custom := &CommandPolicy{AutoApprove: []string{`^cat\s`}}
+	custom.compile()
+	if read, ok := custom.AutoApprovedLogRead("cat /var/log/syslog"); ok {
+		t.Errorf("a policy without the log read rule returned %+v", read)
+	}
+}
+
+func TestDefaultPolicyEvaluateForTargetRequiresApprovalForGuestLogReads(t *testing.T) {
+	p := DefaultPolicy()
+
+	for _, targetType := range []string{"", "host"} {
+		if got := p.EvaluateForTarget("tail -n 20 /var/log/syslog", targetType); got != PolicyAllow {
+			t.Errorf("EvaluateForTarget(host log read, %q) = %q, want %q", targetType, got, PolicyAllow)
+		}
+	}
+	for _, targetType := range []string{"container", "vm"} {
+		if got := p.EvaluateForTarget("tail -n 20 /var/log/syslog", targetType); got != PolicyRequireApproval {
+			t.Errorf("EvaluateForTarget(guest log read, %q) = %q, want %q", targetType, got, PolicyRequireApproval)
+		}
+		if got := p.EvaluateForTarget("cat /etc/os-release", targetType); got != PolicyAllow {
+			t.Errorf("EvaluateForTarget(fixed guest read, %q) = %q, want %q", targetType, got, PolicyAllow)
+		}
 	}
 }

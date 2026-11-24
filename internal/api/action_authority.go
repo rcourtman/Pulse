@@ -268,15 +268,70 @@ type assistantActionPlanAuthorityContextKey struct{}
 //   - planning an action (pulse_control) needs action-plan, the capability
 //     POST /api/actions/plan requires.
 //
-// Everyone who can chat keeps the Assistant for Pulse's own data.
+// Everyone who can chat keeps the Assistant for Pulse's own data. The turn is
+// stored in a session, so the caller's session access is bound here as well.
+//
+// The routes that read back what Patrol's unbound runs got from hosts (run
+// tool calls, stream tool output, investigation transcripts) bind it too and
+// serve that output only with the host-command authority
+// (patrolToolOutputAllowed). Dismiss and resolve routes also bind it so
+// callers without host-command authority cannot write free-text notes into
+// Patrol's prompt context.
 func withAssistantActionAuthority(cfg *config.Config, authorizer auth.Authorizer, handler http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		hostCommands := requestHasActionCapability(cfg, authorizer, r, auth.ActionExecute)
 		plan := assistantRequestHasActionPlanCapability(cfg, authorizer, r)
 		ctx := chat.WithHostCommandAuthority(r.Context(), hostCommands)
 		ctx = context.WithValue(ctx, assistantActionPlanAuthorityContextKey{}, plan)
+		ctx = chat.WithSessionAccess(ctx, assistantSessionAccessForRequest(cfg, r, hostCommands))
 		handler(w, r.WithContext(ctx))
 	}
+}
+
+// assistantSessionAccessForRequest names the caller for Assistant session
+// ownership. A person owns sessions under their user name, whichever login
+// made them. An API token owns them under its own ID and not under the user
+// it is bound to: an ai:chat token of an administrator cannot have the
+// Assistant run host commands, so it must not read them out of that
+// administrator's sessions either. A caller that cannot be identified owns
+// nothing. hostCommands is the caller's action-execute capability; it opens
+// every session, since such a caller could run the same commands itself.
+func assistantSessionAccessForRequest(cfg *config.Config, r *http.Request, hostCommands bool) chat.SessionAccess {
+	access := chat.SessionAccess{All: hostCommands}
+	actor, err := actionActorForRequest(cfg, r, GetOrgID(r.Context()))
+	if err != nil {
+		return access
+	}
+	switch actor.Kind {
+	case unified.ActionActorAPIToken:
+		access.Owner = actor.CredentialID
+	case unified.ActionActorUser:
+		access.Owner = "user:" + strings.ToLower(actor.SubjectID)
+	}
+	return access
+}
+
+// withAssistantSessionAccess confines the Assistant session routes to the
+// caller's own sessions. Transcripts hold the output of host commands the
+// Assistant ran, so only a caller with the action-execute capability, who may
+// have the Assistant run them, sees the sessions of others.
+func withAssistantSessionAccess(cfg *config.Config, authorizer auth.Authorizer, handler http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		hostCommands := requestHasActionCapability(cfg, authorizer, r, auth.ActionExecute)
+		ctx := chat.WithSessionAccess(r.Context(), assistantSessionAccessForRequest(cfg, r, hostCommands))
+		handler(w, r.WithContext(ctx))
+	}
+}
+
+// assistantSessionContext returns the context the Assistant session handlers
+// hand to the chat service. A request that reached a handler without a bound
+// caller gets the zero access, which owns and sees nothing, because the chat
+// service reads an unbound context as Pulse's own work.
+func assistantSessionContext(ctx context.Context) context.Context {
+	if _, bound := chat.SessionAccessFromContext(ctx); bound {
+		return ctx
+	}
+	return chat.WithSessionAccess(ctx, chat.SessionAccess{})
 }
 
 // assistantRequestHasActionPlanCapability is the role half of the Assistant's

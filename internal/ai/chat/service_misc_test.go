@@ -11,14 +11,16 @@ func TestAbortSession(t *testing.T) {
 		t.Fatalf("expected error when service not started")
 	}
 
+	// A session with no running turn has nothing to abort. The service's own
+	// loop runs no turn and so never clears a flag: it must not collect IDs.
 	loop := &AgenticLoop{aborted: make(map[string]bool)}
 	svc.agenticLoop = loop
 	svc.started = true
 	if err := svc.AbortSession(context.Background(), "sess-2"); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if !loop.aborted["sess-2"] {
-		t.Fatalf("expected session to be marked aborted")
+	if len(loop.aborted) != 0 {
+		t.Fatalf("abort of an idle session was recorded: %v", loop.aborted)
 	}
 }
 

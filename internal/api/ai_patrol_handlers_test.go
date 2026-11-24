@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai"
+	"github.com/rcourtman/pulse-go-rewrite/internal/ai/chat"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
@@ -747,6 +748,7 @@ func TestHandleGetPatrolRun_ByID(t *testing.T) {
 			"/api/ai/patrol/runs/"+url.PathEscape("run/special")+"?include=tool_calls",
 			nil,
 		)
+		req = req.WithContext(chat.WithHostCommandAuthority(req.Context(), true))
 		rec := httptest.NewRecorder()
 
 		handler.HandleGetPatrolRun(rec, req)

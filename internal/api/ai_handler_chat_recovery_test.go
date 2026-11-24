@@ -174,6 +174,8 @@ func TestHandleChat_DefaultRecoverySnapshotsTolerateMalformedMetadata(t *testing
 	}
 
 	req := httptest.NewRequest(http.MethodPost, "/api/ai/chat", strings.NewReader(`{"prompt":"List recovery snapshots for guest 100 on pve1.","session_id":"http-default-snapshots"}`))
+	// The chat route binds the caller; an unbound request owns no session.
+	req = req.WithContext(chat.WithSessionAccess(req.Context(), chat.SessionAccess{Owner: "user:admin"}))
 	rec := httptest.NewRecorder()
 	handler.HandleChat(rec, req)
 
@@ -312,6 +314,7 @@ func TestHandleChat_TenantRecoveryBackupTasksTolerateMalformedMetadata(t *testin
 
 	req := httptest.NewRequest(http.MethodPost, "/api/ai/chat", strings.NewReader(`{"prompt":"List recovery backup tasks for guest 101 on tenant-pve.","session_id":"http-tenant-backup-tasks"}`))
 	req = req.WithContext(context.WithValue(req.Context(), OrgIDContextKey, "tenant-a"))
+	req = req.WithContext(chat.WithSessionAccess(req.Context(), chat.SessionAccess{Owner: "user:tenant-admin"}))
 	rec := httptest.NewRecorder()
 	handler.HandleChat(rec, req)
 
