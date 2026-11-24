@@ -119,7 +119,7 @@ func TestClient_DrainDuringInFlightData(t *testing.T) {
 			time.Sleep(50 * time.Millisecond)
 			chOpen, _ := NewControlFrame(FrameChannelOpen, 1, ChannelOpenPayload{
 				ChannelID: 1,
-				AuthToken: "valid-token",
+				AuthMode:  AuthModeEncrypted,
 			})
 			chOpenBytes, _ := EncodeFrame(chOpen)
 			_ = conn.WriteMessage(websocket.BinaryMessage, chOpenBytes)
@@ -138,10 +138,14 @@ func TestClient_DrainDuringInFlightData(t *testing.T) {
 			}
 			_ = conn.SetReadDeadline(time.Time{})
 
-			// Complete KEY_EXCHANGE as the app: DATA is only served on an encrypted channel
+			// Complete KEY_EXCHANGE and encrypted channel_auth as the app
 			appEnc, err := testAppKeyExchange(conn, 1, identityPub)
 			if err != nil {
 				t.Logf("key exchange: %v", err)
+				return
+			}
+			if err := testAppAuthenticateChannelDirect(conn, 1, appEnc, "valid-token"); err != nil {
+				t.Logf("channel auth: %v", err)
 				return
 			}
 
@@ -319,7 +323,7 @@ func TestClient_DrainWithMultipleInFlightChannels(t *testing.T) {
 			for _, chID := range []uint32{1, 2} {
 				chOpen, _ := NewControlFrame(FrameChannelOpen, chID, ChannelOpenPayload{
 					ChannelID: chID,
-					AuthToken: "valid-token",
+					AuthMode:  AuthModeEncrypted,
 				})
 				chOpenBytes, _ := EncodeFrame(chOpen)
 				_ = conn.WriteMessage(websocket.BinaryMessage, chOpenBytes)
@@ -336,12 +340,16 @@ func TestClient_DrainWithMultipleInFlightChannels(t *testing.T) {
 			}
 			_ = conn.SetReadDeadline(time.Time{})
 
-			// Complete KEY_EXCHANGE as the app on each channel: DATA is only served on an encrypted channel
+			// Complete KEY_EXCHANGE and encrypted channel_auth on each channel
 			appEncs := make(map[uint32]*ChannelEncryption)
 			for _, chID := range []uint32{1, 2} {
 				appEnc, err := testAppKeyExchange(conn, chID, identityPub)
 				if err != nil {
 					t.Logf("key exchange on channel %d: %v", chID, err)
+					return
+				}
+				if err := testAppAuthenticateChannelDirect(conn, chID, appEnc, "valid-token"); err != nil {
+					t.Logf("channel auth on channel %d: %v", chID, err)
 					return
 				}
 				appEncs[chID] = appEnc
@@ -501,7 +509,7 @@ func TestClient_DrainAfterCompletedData(t *testing.T) {
 			// Open channel
 			chOpen, _ := NewControlFrame(FrameChannelOpen, 1, ChannelOpenPayload{
 				ChannelID: 1,
-				AuthToken: "valid-token",
+				AuthMode:  AuthModeEncrypted,
 			})
 			chOpenBytes, _ := EncodeFrame(chOpen)
 			_ = conn.WriteMessage(websocket.BinaryMessage, chOpenBytes)
@@ -515,10 +523,14 @@ func TestClient_DrainAfterCompletedData(t *testing.T) {
 			}
 			_ = conn.SetReadDeadline(time.Time{})
 
-			// Complete KEY_EXCHANGE as the app: DATA is only served on an encrypted channel
+			// Complete KEY_EXCHANGE and encrypted channel_auth as the app
 			appEnc, err := testAppKeyExchange(conn, 1, identityPub)
 			if err != nil {
 				t.Logf("key exchange: %v", err)
+				return
+			}
+			if err := testAppAuthenticateChannelDirect(conn, 1, appEnc, "valid-token"); err != nil {
+				t.Logf("channel auth: %v", err)
 				return
 			}
 

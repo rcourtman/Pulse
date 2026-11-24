@@ -51,6 +51,11 @@ const (
 	ErrCodeDraining       = "SERVER_DRAINING"
 )
 
+// Channel authentication modes
+const (
+	AuthModeEncrypted = "encrypted"
+)
+
 var (
 	ErrFrameTooShort      = errors.New("frame too short: need at least 6 bytes")
 	ErrUnsupportedVersion = errors.New("unsupported protocol version")
@@ -150,7 +155,8 @@ type RegisterAckPayload struct {
 // ConnectPayload is sent by the app in CONNECT frames.
 type ConnectPayload struct {
 	InstanceID              string                       `json:"instance_id"`
-	AuthToken               string                       `json:"auth_token"`
+	AuthToken               string                       `json:"auth_token,omitempty"`
+	AuthMode                string                       `json:"auth_mode,omitempty"`
 	DeviceToken             string                       `json:"device_token,omitempty"`             // push notification device token (mobile apps only)
 	Platform                string                       `json:"platform,omitempty"`                 // "ios" or "android" (mobile apps only)
 	NotificationPreferences *PushNotificationPreferences `json:"notification_preferences,omitempty"` // server-enforced delivery preferences
@@ -167,12 +173,15 @@ type PushNotificationPreferences struct {
 type ConnectAckPayload struct {
 	ChannelID  uint32 `json:"channel_id"`
 	InstanceID string `json:"instance_id"`
+	AuthMode   string `json:"auth_mode,omitempty"`
 }
 
-// ChannelOpenPayload is sent by the relay to the instance in CHANNEL_OPEN frames.
+// ChannelOpenPayload is sent in CHANNEL_OPEN frames between relay and instance.
 type ChannelOpenPayload struct {
-	ChannelID uint32 `json:"channel_id"`
-	AuthToken string `json:"auth_token"`
+	ChannelID     uint32 `json:"channel_id"`
+	AuthToken     string `json:"auth_token,omitempty"`
+	AuthMode      string `json:"auth_mode,omitempty"`
+	Authenticated bool   `json:"authenticated,omitempty"`
 }
 
 // ChannelClosePayload is sent in CHANNEL_CLOSE frames.

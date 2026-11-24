@@ -119,7 +119,7 @@ func TestControlFrameRoundTrip(t *testing.T) {
 	t.Run("connect payload", func(t *testing.T) {
 		orig := ConnectPayload{
 			InstanceID:  "relay_abc123",
-			AuthToken:   "auth-token-xyz",
+			AuthMode:    AuthModeEncrypted,
 			DeviceToken: "device-token-123",
 			Platform:    "ios",
 			NotificationPreferences: &PushNotificationPreferences{
@@ -132,6 +132,9 @@ func TestControlFrameRoundTrip(t *testing.T) {
 		frame, err := NewControlFrame(FrameConnect, 0, orig)
 		if err != nil {
 			t.Fatalf("NewControlFrame() error = %v", err)
+		}
+		if bytes.Contains(frame.Payload, []byte("auth_token")) {
+			t.Fatalf("encrypted CONNECT unexpectedly serialized auth_token: %s", frame.Payload)
 		}
 
 		encoded, err := EncodeFrame(frame)
@@ -152,8 +155,11 @@ func TestControlFrameRoundTrip(t *testing.T) {
 		if got.InstanceID != orig.InstanceID {
 			t.Errorf("InstanceID: got %q, want %q", got.InstanceID, orig.InstanceID)
 		}
-		if got.AuthToken != orig.AuthToken {
-			t.Errorf("AuthToken: got %q, want %q", got.AuthToken, orig.AuthToken)
+		if got.AuthMode != orig.AuthMode {
+			t.Errorf("AuthMode: got %q, want %q", got.AuthMode, orig.AuthMode)
+		}
+		if got.AuthToken != "" {
+			t.Errorf("AuthToken: got %q, want empty", got.AuthToken)
 		}
 		if got.DeviceToken != orig.DeviceToken {
 			t.Errorf("DeviceToken: got %q, want %q", got.DeviceToken, orig.DeviceToken)
@@ -168,26 +174,30 @@ func TestControlFrameRoundTrip(t *testing.T) {
 			t.Errorf("NotificationPreferences: got %#v, want %#v", got.NotificationPreferences, orig.NotificationPreferences)
 		}
 
-		legacyFrame, err := NewControlFrame(FrameConnect, 0, ConnectPayload{
-			InstanceID: "relay_legacy",
-			AuthToken:  "legacy-auth",
+		minimalFrame, err := NewControlFrame(FrameConnect, 0, ConnectPayload{
+			InstanceID: "relay_minimal",
+			AuthMode:   AuthModeEncrypted,
 		})
 		if err != nil {
-			t.Fatalf("NewControlFrame(legacy CONNECT) error = %v", err)
+			t.Fatalf("NewControlFrame(minimal CONNECT) error = %v", err)
 		}
-		if bytes.Contains(legacyFrame.Payload, []byte("notification_preferences")) {
-			t.Fatalf("legacy CONNECT unexpectedly serialized notification preferences: %s", legacyFrame.Payload)
+		if bytes.Contains(minimalFrame.Payload, []byte("notification_preferences")) {
+			t.Fatalf("minimal CONNECT unexpectedly serialized notification preferences: %s", minimalFrame.Payload)
 		}
 	})
 
 	t.Run("channel open payload", func(t *testing.T) {
 		orig := ChannelOpenPayload{
-			ChannelID: 7,
-			AuthToken: "api-token-xyz",
+			ChannelID:     7,
+			AuthMode:      AuthModeEncrypted,
+			Authenticated: true,
 		}
 		frame, err := NewControlFrame(FrameChannelOpen, 7, orig)
 		if err != nil {
 			t.Fatalf("NewControlFrame() error = %v", err)
+		}
+		if bytes.Contains(frame.Payload, []byte("auth_token")) {
+			t.Fatalf("encrypted CHANNEL_OPEN unexpectedly serialized auth_token: %s", frame.Payload)
 		}
 
 		encoded, err := EncodeFrame(frame)
@@ -208,8 +218,11 @@ func TestControlFrameRoundTrip(t *testing.T) {
 		if got.ChannelID != orig.ChannelID {
 			t.Errorf("ChannelID: got %d, want %d", got.ChannelID, orig.ChannelID)
 		}
-		if got.AuthToken != orig.AuthToken {
-			t.Errorf("AuthToken: got %q, want %q", got.AuthToken, orig.AuthToken)
+		if got.AuthMode != orig.AuthMode {
+			t.Errorf("AuthMode: got %q, want %q", got.AuthMode, orig.AuthMode)
+		}
+		if got.Authenticated != orig.Authenticated {
+			t.Errorf("Authenticated: got %v, want %v", got.Authenticated, orig.Authenticated)
 		}
 	})
 

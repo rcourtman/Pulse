@@ -777,9 +777,9 @@ receive Pro features at their current price. Relay connects the app, not the
 web UI. For alerts afterwards, use an ntfy, Gotify or Pushover destination and
 open Pulse in the phone's browser.
 
-- **ECDH key exchange**: Existing app channels require ECDH key exchange before DATA frames are served, so the relay server does not see plaintext traffic on an active app channel.
-- **Relay trust boundary**: The relay server receives the phone's `relay:mobile:access` pairing token during channel admission and is therefore trusted with that mobile-scoped credential until Pulse Mobile retires.
-- **Per-channel authentication**: Each mobile session authenticates independently.
+- **ECDH key exchange**: App channels require ECDH key exchange verified against the server's pinned Ed25519 identity key before DATA frames are served, so the relay server never sees plaintext traffic.
+- **Zero-trust relay boundary**: The phone sends its `relay:mobile:access` API token only inside the encrypted channel after Ed25519 key verification. The relay server never sees the API token and cannot impersonate paired phones.
+- **Per-channel authentication**: Each mobile session authenticates independently inside its own encrypted channel, and push device tokens are registered only after the Pulse server confirms encrypted channel authentication.
 - **Back-pressure**: Data limiters prevent channel flooding.
 - **Existing access**: Paired-app access remains license-gated until retirement.
 

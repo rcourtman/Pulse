@@ -246,6 +246,8 @@ var protocolContractConstants = []string{
 	"ErrCodeDuplicate",
 	"ErrCodeChannelFull",
 	"ErrCodeDraining",
+	// Channel authentication modes
+	"AuthModeEncrypted",
 }
 
 // TestProtocolConstantsMatchRelayServer validates that frame type bytes,
