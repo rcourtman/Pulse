@@ -109,7 +109,10 @@ describe('Backup health unrated counts', () => {
       />
     ));
 
-    expect(view.container.querySelector('[data-backup-verdict]')).toHaveTextContent('1 / 1');
+    expect(view.container.querySelector('[data-backup-verdict="checking"]')).toHaveTextContent(
+      '1 / 1 protected (rated only)',
+    );
+    expect(screen.getByText('1 of 1 rated workload protected')).toBeInTheDocument();
     for (const label of [/1 checking/, /1 not evaluated/]) {
       const count = screen.getByText(label);
       expect(count).toBeVisible();
@@ -143,18 +146,27 @@ describe('Backup health unrated counts', () => {
     expect(screen.getByText(/1 not evaluated/)).toBeVisible();
     expect(screen.queryByText(/checking/)).not.toBeInTheDocument();
     expect(screen.getByText('Status unknown')).toBeVisible();
-    expect(view.container.querySelector('[data-backup-verdict]')).toHaveTextContent('0 / 1');
+    expect(view.container.querySelector('[data-backup-verdict]')).toHaveTextContent(
+      '0 / 1 protected (rated only)',
+    );
   });
 
-  it('retires the counts when assessment completes without keeping phantom separators', () => {
+  it('restores whole-estate success only when no workload is left out', () => {
     const [current, setCurrent] = createSignal(verdict(row('vm', 'checking')));
     const view = render(() => (
       <ProxmoxBackupsCoverageStrip title="Backup health" verdict={current()} />
     ));
     expect(screen.getByText(/1 checking/)).toBeVisible();
+    setCurrent(verdict(row('vm', 'protected'), row('host', 'not-evaluated')));
+    expect(view.container.querySelector('[data-backup-verdict="unknown"]')).toHaveTextContent(
+      '1 / 1 protected (rated only)',
+    );
+    expect(screen.getByText(/1 not evaluated/)).toBeVisible();
     setCurrent(verdict(row('vm', 'protected')));
-    expect(screen.queryByText(/checking|not evaluated/)).not.toBeInTheDocument();
-    expect(view.container.querySelector('[data-backup-verdict]')).toHaveTextContent('1 / 1');
+    expect(screen.queryByText(/checking|not evaluated|rated only/)).not.toBeInTheDocument();
+    expect(view.container.querySelector('[data-backup-verdict="protected"]')).toHaveTextContent(
+      '1 / 1 protected',
+    );
     expect(view.container.textContent).not.toContain('·');
     setCurrent(verdict());
     expect(screen.getAllByText('Nothing to rate yet')).toHaveLength(2);

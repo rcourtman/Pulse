@@ -146,18 +146,28 @@ export function buildBackupVerdict(
   }
   const exceptionCount = exceptions.reduce((sum, group) => sum + group.rows.length, 0);
   const rated = protectedCount + exceptionCount;
+  const hasUnrated = checking > 0 || notEvaluated > 0;
 
   let headline: string;
   let tone: BackupVerdictTone;
   if (rated === 0) {
     headline = checking > 0 ? 'Checking backups…' : 'Nothing to rate yet';
     tone = checking > 0 ? 'checking' : 'unknown';
-  } else if (exceptionCount === 0) {
+  } else if (exceptionCount === 0 && !hasUnrated) {
     headline = rated === 1 ? '1 of 1 protected' : `All ${rated} protected`;
     tone = 'protected';
   } else {
-    headline = `${protectedCount} of ${rated} protected`;
-    tone = hasUnprotected ? 'unprotected' : hasAttention ? 'attention' : 'unknown';
+    const scope = hasUnrated ? ` rated workload${rated === 1 ? '' : 's'}` : '';
+    headline = `${protectedCount} of ${rated}${scope} protected`;
+    // Pending work qualifies an otherwise healthy subset. It must not
+    // downgrade a known exception or turn an unevaluated target into a fault.
+    tone = hasUnprotected
+      ? 'unprotected'
+      : hasAttention
+        ? 'attention'
+        : exceptionCount === 0 && checking > 0
+          ? 'checking'
+          : 'unknown';
   }
 
   return {
