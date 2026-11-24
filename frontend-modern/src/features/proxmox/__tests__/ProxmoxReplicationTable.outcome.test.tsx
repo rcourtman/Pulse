@@ -150,4 +150,133 @@ describe('replication outcome evidence', () => {
     expect(screen.getByText('101 (new-worker)')).toBeInTheDocument();
     expect(screen.queryByText('100 (database)')).not.toBeInTheDocument();
   });
+
+  it.each([
+    ['data', 'database', false],
+    ['data', 'database', true],
+    ['100-', '100-0', false],
+    ['100-', '100-0', true],
+  ] as const)(
+    'completes %s to broad text %s before and after submission (namesake %s)',
+    (draft, completed, hasNamesake) => {
+      const primary = job({ lastSyncStatus: 'ok' });
+      const mirror = job({ id: 'mirror-site-a-100-0', instance: 'mirror-site-a', failCount: 2 });
+      const [jobs, setJobs] = createSignal(inventory(hasNamesake ? [primary, mirror] : [primary]));
+      mount(jobs);
+      const input = screen.getByPlaceholderText('Search jobs, guests, nodes');
+      const expectResults = (count: number) => {
+        expect(screen.getAllByText('100 (database)')).toHaveLength(count);
+        expect(screen.getByRole('button', { name: `All, ${count}` })).toBeVisible();
+      };
+
+      input.focus();
+      fireEvent.input(input, { target: { value: draft } });
+      expectResults(hasNamesake ? 2 : 1);
+      fireEvent.keyDown(input, { key: 'Tab' });
+      expect(input).toHaveValue(completed);
+      expectResults(hasNamesake ? 2 : 1);
+      fireEvent.keyDown(input, { key: 'Enter' });
+      expect(screen.getByRole('button', { name: `Remove search term ${completed}` })).toBeVisible();
+      expectResults(hasNamesake ? 2 : 1);
+
+      setJobs(inventory([primary, mirror]));
+      expectResults(2);
+    },
+  );
+
+  it('does not bind the shorter ID just because a shared prefix completed to it', () => {
+    const shorter = job({ jobId: '100-1', id: 'site-a-100-1', lastSyncStatus: 'ok' });
+    const longer = job({ jobId: '100-10', id: 'site-a-100-10', failCount: 2 });
+    mount(() => inventory([shorter, longer]));
+    const input = screen.getByPlaceholderText('Search jobs, guests, nodes');
+    input.focus();
+    fireEvent.input(input, { target: { value: 'site-a-100-' } });
+    fireEvent.keyDown(input, { key: 'Tab' });
+    expect(input).toHaveValue(shorter.id);
+    expect(screen.getByRole('button', { name: 'All, 2' })).toBeVisible();
+    fireEvent.keyDown(input, { key: 'Enter' });
+    expect(screen.getByRole('button', { name: `Remove search term ${shorter.id}` })).toBeVisible();
+    expect(screen.getByRole('button', { name: 'All, 2' })).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: `Remove search term ${shorter.id}` }));
+
+    fireEvent.input(input, { target: { value: '100-1 · site-a' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+    expect(screen.getByRole('button', { name: 'Remove search term 100-1 · site-a' })).toBeVisible();
+    expect(screen.getByRole('button', { name: 'All, 1' })).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Healthy, 1' })).toBeVisible();
+  });
+
+  it('keeps a canonical ID broad when it also names another guest', () => {
+    const primary = job({ lastSyncStatus: 'ok' });
+    const other = job({
+      jobId: '101-0',
+      id: 'site-a-101-0',
+      guestName: primary.id.toUpperCase(),
+      failCount: 2,
+    });
+    mount(() => inventory([primary, other]));
+    const input = screen.getByPlaceholderText('Search jobs, guests, nodes');
+    fireEvent.input(input, { target: { value: primary.id } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+    expect(screen.getByRole('button', { name: `Remove search term ${primary.id}` })).toBeVisible();
+    expect(screen.getByRole('button', { name: 'All, 2' })).toBeVisible();
+  });
+
+  it('completes each connection separately, keeps filters combinable, and never selects a namesake after refresh', () => {
+    const primary = job({ lastSyncStatus: 'ok' });
+    const mirror = job({
+      id: 'Mirror, Site-a-100-0',
+      instance: 'Mirror, Site-a',
+      lastSyncStatus: 'error',
+      failCount: 2,
+      error: 'Target temporarily unavailable',
+    });
+    const [jobs, setJobs] = createSignal(inventory([primary, mirror]));
+    mount(jobs);
+    const input = screen.getByPlaceholderText('Search jobs, guests, nodes');
+    const complete = (draft: string, completed: string) => {
+      input.focus();
+      fireEvent.input(input, { target: { value: draft } });
+      fireEvent.keyDown(input, { key: 'Tab' });
+      expect(input).toHaveValue(completed);
+      fireEvent.keyDown(input, { key: 'Enter' });
+    };
+
+    complete('site-a-100-', primary.id);
+    const onlyPrimary = screen.getByRole('button', {
+      name: 'Expand details for replication job 100-0 on site-a',
+    });
+    expect(onlyPrimary).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Healthy, 1' })).toBeVisible();
+    expect(screen.queryByText(mirror.instance, { exact: true })).not.toBeInTheDocument();
+
+    fireEvent.input(input, { target: { value: '-mirror' } });
+    expect(onlyPrimary).toBeVisible();
+    complete('Mirror, Site-a-100-', mirror.id);
+    expect(screen.getByRole('button', { name: 'All, 2' })).toBeVisible();
+    const mirrorToggle = screen.getByRole('button', {
+      name: 'Expand details for replication job 100-0 on Mirror, Site-a',
+    });
+    fireEvent.click(mirrorToggle);
+    const panel = screen.getByTestId('replication-job-detail');
+    expect(within(panel).getByRole('row', { name: /^Connection / })).toHaveTextContent(
+      mirror.instance,
+    );
+    expect(within(panel).getByText(mirror.error!)).toBeVisible();
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: 'Collapse details for replication job 100-0 on Mirror, Site-a',
+      }),
+    );
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Remove search term 100-0 · Mirror, Site-a' }),
+    );
+
+    setJobs(inventory([mirror]));
+    expect(screen.getByText('No replication jobs match current filters')).toBeInTheDocument();
+    expect(screen.queryByText('100 (database)')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Remove search term 100-0 · site-a' }));
+    expect(screen.getByText('100 (database)')).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Failed, 1' })).toBeVisible();
+  });
 });
