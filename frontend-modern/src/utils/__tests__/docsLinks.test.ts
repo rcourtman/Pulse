@@ -331,6 +331,19 @@ describe('docsLinks', () => {
     );
   });
 
+  it('documents the organization ownership limit where organizations are created and handed over', () => {
+    const api = apiReference();
+    expect(api).toContain(
+      'A user who is not an instance administrator can own at most 20 organizations. Past that the request returns `409` with `organization_limit_reached`.',
+    );
+    expect(api).toContain(
+      'a new owner who already owns 20 organizations is refused with `409` `organization_limit_reached`',
+    );
+    expect(readFileSync(path.join(repoRoot, 'docs', 'MULTI_TENANT.md'), 'utf8')).toContain(
+      'returns `409` with `organization_limit_reached`',
+    );
+  });
+
   it('separates server removal from persistent-data erasure', () => {
     const installation = readFileSync(path.join(repoRoot, 'docs', 'INSTALL.md'), 'utf8');
     const removal = installation.split('## 🗑️ Uninstall')[1];

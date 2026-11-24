@@ -2,6 +2,7 @@ package api
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -209,6 +210,78 @@ func TestHandleDiagnosticsDockerPrepareToken_Success(t *testing.T) {
 	}
 	if token.HasScope(config.ScopeAgentManage) {
 		t.Fatalf("default migration token retained cross-host management scope: %#v", token.Scopes)
+	}
+}
+
+// A token prepared in a tenant organization must land in the instance
+// inventory, bound to the organization: that is the only inventory the token
+// list, revoke and rotate routes manage. A record in the organization's own
+// config copy still authenticates requests that name the organization and
+// cannot be revoked.
+func TestHandleDiagnosticsDockerPrepareToken_TenantTokenJoinsInstanceInventory(t *testing.T) {
+	defaultMonitor, _, _ := newTestMonitor(t)
+	tenantMonitor, tenantState, _ := newTestMonitor(t)
+	tenantState.DockerHosts = []models.DockerHost{{ID: "host-1", DisplayName: "Docker Host"}}
+	tenantConfig := &config.Config{}
+	setUnexportedField(t, tenantMonitor, "config", tenantConfig)
+
+	mtm := &monitoring.MultiTenantMonitor{}
+	setUnexportedField(t, mtm, "monitors", map[string]*monitoring.Monitor{"org-a": tenantMonitor})
+
+	dataDir := t.TempDir()
+	mtp := config.NewMultiTenantPersistence(dataDir)
+	tenantPersistence, err := mtp.GetPersistence("org-a")
+	if err != nil {
+		t.Fatalf("tenant persistence: %v", err)
+	}
+	instancePersistence := config.NewConfigPersistence(dataDir)
+	router := &Router{
+		monitor:     defaultMonitor,
+		mtMonitor:   mtm,
+		multiTenant: mtp,
+		config:      &config.Config{PublicURL: "https://pulse.example.com"},
+		persistence: instancePersistence,
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/api/diagnostics/docker/prepare-token", strings.NewReader(`{"agentId":"host-1"}`))
+	req = req.WithContext(context.WithValue(req.Context(), OrgIDContextKey, "org-a"))
+	rec := httptest.NewRecorder()
+
+	router.handleDiagnosticsDockerPrepareToken(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d (body=%q)", rec.Code, http.StatusOK, rec.Body.String())
+	}
+	var payload struct {
+		Token string `json:"token"`
+	}
+	if err := json.NewDecoder(rec.Body).Decode(&payload); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if len(router.config.APITokens) != 1 || router.config.APITokens[0].OrgID != "org-a" {
+		t.Fatalf("instance inventory = %+v, want one token bound to org-a", router.config.APITokens)
+	}
+	tokenID := router.config.APITokens[0].ID
+	if len(tenantConfig.APITokens) != 0 {
+		t.Fatalf("tenant config copy holds %d token(s) no token route can revoke", len(tenantConfig.APITokens))
+	}
+	persisted, err := instancePersistence.LoadAPITokens()
+	if err != nil || len(persisted) != 1 || persisted[0].ID != tokenID {
+		t.Fatalf("persisted instance inventory = %+v (err=%v), want the prepared token", persisted, err)
+	}
+	if persisted, err := tenantPersistence.LoadAPITokens(); err != nil || len(persisted) != 0 {
+		t.Fatalf("persisted tenant inventory = %+v (err=%v), want none", persisted, err)
+	}
+
+	req = httptest.NewRequest(http.MethodDelete, "/api/security/tokens/"+tokenID, nil)
+	req = req.WithContext(context.WithValue(req.Context(), OrgIDContextKey, "org-a"))
+	rec = httptest.NewRecorder()
+	router.handleDeleteAPIToken(rec, req)
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("delete status = %d, want %d (body=%q)", rec.Code, http.StatusNoContent, rec.Body.String())
+	}
+	if router.config.IsValidAPIToken(payload.Token) || tenantConfig.IsValidAPIToken(payload.Token) {
+		t.Fatal("deleted prepared token still authenticates")
 	}
 }
 

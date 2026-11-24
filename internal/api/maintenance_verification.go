@@ -245,7 +245,7 @@ func (h *MaintenanceVerificationHandlers) HandleRerun(w http.ResponseWriter, r *
 		http.Error(w, "Resource ID required", http.StatusBadRequest)
 		return
 	}
-	report, err := h.sentinel.EvaluateOnce(r.Context(), resourceID)
+	report, err := h.sentinel.EvaluateOnce(r.Context(), GetOrgID(r.Context()), resourceID)
 	if err != nil {
 		if isMaintenanceWindowMissing(err) {
 			writeJSONError(w, http.StatusBadRequest, "maintenance_window_missing", err.Error())

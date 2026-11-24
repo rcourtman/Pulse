@@ -17,6 +17,7 @@ import (
 	"path"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -544,11 +545,9 @@ func (r *Router) setupRoutes() {
 		if r.config == nil {
 			return false
 		}
-		config.Mu.Lock()
-		tokens := make([]config.APITokenRecord, len(r.config.APITokens))
-		copy(tokens, r.config.APITokens)
-		config.Mu.Unlock()
-		return agentOperationsLoopExternalAgentTokenReady(manifest, tokens, now)
+		// A shallow copy still shares each record's Metadata map with the
+		// live inventory, and the readiness check clones every record.
+		return agentOperationsLoopExternalAgentTokenReady(manifest, snapshotAPITokenRecords(r.config), now)
 	}))
 	// Wire pending-approvals into the bundle. The provider resolves
 	// the approval store at request time so multi-tenant rebuilds
@@ -623,6 +622,7 @@ func (r *Router) setupRoutes() {
 	orgHandlers := NewOrgHandlers(r.multiTenant, r.mtMonitor, rbacProvider)
 	orgHandlers.SetHostedMode(r.hostedMode)
 	orgHandlers.SetAccessPolicy(r.orgAccess)
+	orgHandlers.SetCredentialRevoker(r.revokeTenantCredentials)
 	orgHandlers.SetOnDelete(func(ctx context.Context, orgID string) error {
 		return r.CleanupTenant(ctx, orgID)
 	})
@@ -1037,7 +1037,7 @@ func (r *Router) wireReportingAIResolvers() {
 	}
 }
 
-// CleanupTenant removes all per-tenant resources (RBAC, AI, License) for a deleted org.
+// CleanupTenant removes all per-tenant resources (credentials, RBAC, AI, License) for a deleted org.
 func (r *Router) CleanupTenant(ctx context.Context, orgID string) error {
 	orgID = strings.TrimSpace(orgID)
 	if orgID == "" || orgID == "default" {
@@ -1045,6 +1045,10 @@ func (r *Router) CleanupTenant(ctx context.Context, orgID string) error {
 	}
 
 	var errs []error
+
+	if err := r.revokeTenantCredentials(orgID); err != nil {
+		errs = append(errs, fmt.Errorf("credential cleanup: %w", err))
+	}
 
 	r.StopPatrolForOrg(orgID)
 
@@ -1084,6 +1088,78 @@ func (r *Router) CleanupTenant(ctx context.Context, orgID string) error {
 
 	if len(errs) > 0 {
 		return errors.Join(errs...)
+	}
+	return nil
+}
+
+// revokeTenantCredentials withdraws every instance API token from an
+// organization ID and ends its agent command sessions. It runs when the
+// organization is deleted and again before the ID is claimed by a new one.
+// Org-bound tokens (agent install tokens included) live in the instance
+// inventory, not in the organization's directory, and are matched to an
+// organization by ID alone. An ID is free to be claimed again once its
+// organization is gone, so a credential that outlived the deletion would be
+// valid in whichever organization takes the ID next. A save failure leaves the
+// inventory untouched and is returned so the caller can abort the change.
+func (r *Router) revokeTenantCredentials(orgID string) error {
+	orgID = strings.TrimSpace(orgID)
+	if r == nil || r.config == nil || orgID == "" || orgID == "default" {
+		return nil
+	}
+
+	config.Mu.Lock()
+	previousTokens := append([]config.APITokenRecord(nil), r.config.APITokens...)
+	keptTokens := make([]config.APITokenRecord, 0, len(previousTokens))
+	revoked := 0
+	for _, record := range previousTokens {
+		bound := record.GetBoundOrgs()
+		remaining := slices.DeleteFunc(slices.Clone(bound), func(boundOrgID string) bool {
+			return strings.TrimSpace(boundOrgID) == orgID
+		})
+		if len(remaining) == len(bound) {
+			keptTokens = append(keptTokens, record)
+			continue
+		}
+		revoked++
+		// A multi-org token keeps its other organizations.
+		narrowed := record.Clone()
+		narrowed.OrgIDs = remaining
+		if strings.TrimSpace(narrowed.OrgID) == orgID {
+			narrowed.OrgID = ""
+		}
+		// Losing the binding must never widen the token: with no organization
+		// left it would read as an unbound legacy token, and with only the
+		// default one left it would start acting for the instance. Remove it.
+		if len(remaining) == 0 || tokenActsForInstance(&narrowed) {
+			continue
+		}
+		keptTokens = append(keptTokens, narrowed)
+	}
+	if revoked > 0 {
+		r.config.APITokens = keptTokens
+		r.config.SortAPITokens()
+		if r.persistence != nil {
+			if err := r.persistence.SaveAPITokens(r.config.APITokens); err != nil {
+				r.config.APITokens = previousTokens
+				r.config.SortAPITokens()
+				config.Mu.Unlock()
+				return fmt.Errorf("persist API token revocation: %w", err)
+			}
+		}
+	}
+	config.Mu.Unlock()
+
+	if revoked > 0 {
+		log.Info().
+			Str("org_id", orgID).
+			Int("tokens", revoked).
+			Msg("Revoked API tokens bound to organization ID")
+	}
+
+	if r.agentExecServer != nil {
+		// Listing revalidates each of the organization's command sessions and
+		// closes those whose token is gone.
+		r.agentExecServer.GetConnectedAgentsForOrganization(orgID)
 	}
 	return nil
 }
@@ -8224,39 +8300,26 @@ func (r *Router) handleDiagnosticsDockerPrepareToken(w http.ResponseWriter, req 
 	}
 	setAPITokenOwnerUserID(record, apiTokenOwnerUserIDForRequest(r.config, req))
 
-	activeConfig := r.config
-	activePersistence := r.persistence
-	if orgID != "" && orgID != "default" {
-		activeConfig = monitor.GetConfig()
-		if activeConfig == nil {
-			writeErrorResponse(w, http.StatusInternalServerError, "tenant_config_unavailable", "Tenant config is not available", nil)
-			return
-		}
-		if r.multiTenant == nil {
-			writeErrorResponse(w, http.StatusInternalServerError, "tenant_persistence_unavailable", "Tenant persistence is not configured", nil)
-			return
-		}
-		tenantPersistence, err := r.multiTenant.GetPersistence(orgID)
-		if err != nil {
-			writeErrorResponse(w, http.StatusInternalServerError, "tenant_persistence_unavailable", "Failed to resolve tenant persistence", nil)
-			return
-		}
-		activePersistence = tenantPersistence
-	}
-	if activeConfig == nil {
+	// A tenant organization's record also goes into the instance inventory,
+	// bound to it by OrgID, the same as agenttokens.IssueAndPersistForOrganization.
+	// That is the inventory header-less agents authenticate against and the
+	// only one /api/security/tokens lists, revokes and rotates. A record kept
+	// in the organization's own config copy still authenticates requests that
+	// name the organization, and no token route can show or revoke it.
+	if r.config == nil {
 		writeErrorResponse(w, http.StatusInternalServerError, "config_unavailable", "Configuration is not loaded", nil)
 		return
 	}
 
 	config.Mu.Lock()
-	previousTokens := append([]config.APITokenRecord(nil), activeConfig.APITokens...)
-	activeConfig.APITokens = append(activeConfig.APITokens, *record)
-	activeConfig.SortAPITokens()
+	previousTokens := append([]config.APITokenRecord(nil), r.config.APITokens...)
+	r.config.APITokens = append(r.config.APITokens, *record)
+	r.config.SortAPITokens()
 
-	if activePersistence != nil {
-		if err := activePersistence.SaveAPITokens(activeConfig.APITokens); err != nil {
-			activeConfig.APITokens = previousTokens
-			activeConfig.SortAPITokens()
+	if r.persistence != nil {
+		if err := r.persistence.SaveAPITokens(r.config.APITokens); err != nil {
+			r.config.APITokens = previousTokens
+			r.config.SortAPITokens()
 			config.Mu.Unlock()
 			log.Error().Err(err).Msg("Failed to persist API tokens after container runtime migration generation")
 			writeErrorResponse(w, http.StatusInternalServerError, "token_persist_failed", "Failed to persist API token", nil)

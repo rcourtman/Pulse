@@ -1663,7 +1663,7 @@ Returns organizations accessible to the authenticated user.
 ```json
 { "id": "acme-corp", "displayName": "Acme Corporation" }
 ```
-The creator becomes the owner and first member. Organization IDs use letters, digits, periods, underscores or hyphens, 1–64 characters, but cannot be `.` or `..`. Prefer a simple lowercase/hyphen ID such as the example.
+The creator becomes the owner and first member. A user who is not an instance administrator can own at most 20 organizations. Past that the request returns `409` with `organization_limit_reached`. Organization IDs use letters, digits, periods, underscores or hyphens, 1–64 characters, but cannot be `.` or `..`. Prefer a simple lowercase/hyphen ID such as the example.
 
 ### Get Organization
 `GET /api/orgs/{id}` (requires `settings:read`)
@@ -1689,7 +1689,7 @@ Returns all members with their roles. User must be a member of the org.
 ```json
 { "userId": "jane", "role": "editor" }
 ```
-Roles: `owner`, `admin`, `editor`, `viewer`. Admin or owner role required. A new user receives a pending invitation (`202`) and must accept it in Pulse before gaining membership. Posting an existing member's `userId` updates their role; there is no member PATCH endpoint. Setting role to `owner` transfers ownership only to an existing member, by the current owner after fresh sign-in. Default org members cannot be managed.
+Roles: `owner`, `admin`, `editor`, `viewer`. Admin or owner role required. A new user receives a pending invitation (`202`) and must accept it in Pulse before gaining membership. Posting an existing member's `userId` updates their role. There is no member PATCH endpoint. Setting role to `owner` transfers ownership only to an existing member, by the current owner after fresh sign-in. Unless either is an instance administrator, a new owner who already owns 20 organizations is refused with `409` `organization_limit_reached`. Default org members cannot be managed.
 
 ### Remove Member
 `DELETE /api/orgs/{id}/members/{userId}` (requires `settings:write`, session auth only)

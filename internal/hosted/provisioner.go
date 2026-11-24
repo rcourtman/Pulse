@@ -177,7 +177,10 @@ func (p *Provisioner) findExistingOrganizationByOwnerEmail(email string) (*Provi
 		if org == nil {
 			continue
 		}
-		if strings.EqualFold(strings.TrimSpace(org.OwnerEmail), email) || strings.EqualFold(strings.TrimSpace(org.OwnerUserID), email) {
+		// Compare as the organization model does when it resolves a principal
+		// by email. Unicode case folding would also accept look-alike
+		// addresses that are not the owner's.
+		if strings.ToLower(strings.TrimSpace(org.OwnerEmail)) == email || strings.ToLower(strings.TrimSpace(org.OwnerUserID)) == email {
 			userID, err := p.ensureExistingOwnerStablePrincipal(org, email)
 			if err != nil {
 				return nil, err
@@ -201,10 +204,11 @@ func (p *Provisioner) ensureExistingOwnerStablePrincipal(org *models.Organizatio
 	if org == nil {
 		return "", &SystemError{Op: "canonicalize_existing_owner_identity", Err: errors.New("organization is nil")}
 	}
-	userID, _, ok := org.ResolvePrincipalByEmail(email)
-	userID = strings.TrimSpace(userID)
-	if ok && userID != "" && !strings.Contains(userID, "@") {
-		return userID, nil
+	// Only a legacy owner, one with no user ID or with an email in its place,
+	// is given a new one. Sessions, memberships and roles are bound to a stable
+	// owner ID, so a signup request never replaces it.
+	if ownerUserID := strings.TrimSpace(org.OwnerUserID); ownerUserID != "" && !strings.Contains(ownerUserID, "@") {
+		return ownerUserID, nil
 	}
 
 	return p.canonicalizeExistingOwnerPrincipal(org, email)

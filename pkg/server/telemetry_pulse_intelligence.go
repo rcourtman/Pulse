@@ -356,6 +356,9 @@ func applyPulseIntelligenceExternalAgentSnapshot(
 	if currentCfg != nil {
 		surfaceScopes := pulseIntelligenceExternalAgentSurfaceScopes(agentcapabilities.CanonicalManifest())
 		if len(surfaceScopes) > 0 {
+			// Token writers edit the inventory, and each record's Metadata
+			// map, in place under config.Mu; both checks clone the record.
+			config.Mu.RLock()
 			for _, token := range currentCfg.APITokens {
 				if pulseIntelligenceExternalAgentToken(token, surfaceScopes, now) {
 					snap.PulseIntelligenceExternalAgentEnabled = true
@@ -367,6 +370,7 @@ func applyPulseIntelligenceExternalAgentSnapshot(
 					break
 				}
 			}
+			config.Mu.RUnlock()
 		}
 	}
 	if persistence == nil {

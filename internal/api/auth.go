@@ -594,6 +594,19 @@ func validateAPITokenAgainstConfigsLocked(globalCfg, targetCfg *config.Config, t
 	return validateAPITokenLocked(globalCfg, token)
 }
 
+// tenantMonitorOutsideConfigLock requires config.Mu.RLock and returns with it
+// held again. Resolving a cold tenant constructs its monitor, which waits for
+// that tenant's connections and for the manager's settings lock. Holding
+// config.Mu across that wait stalls every request behind the first queued
+// token writer, and deadlocks against a settings save, which takes config.Mu
+// while holding the settings lock. Callers must recheck the owner after
+// validating against the returned monitor's config.
+func tenantMonitorOutsideConfigLock(mtm *monitoring.MultiTenantMonitor, orgID string) (*monitoring.Monitor, error) {
+	config.Mu.RUnlock()
+	defer config.Mu.RLock()
+	return mtm.GetMonitor(orgID)
+}
+
 // CheckProxyAuth validates proxy authentication headers
 func CheckProxyAuth(cfg *config.Config, r *http.Request) (bool, string, bool) {
 	// Check if proxy auth is configured
@@ -1444,7 +1457,10 @@ func extractAndStoreAuthContext(cfg *config.Config, mtm *monitoring.MultiTenantM
 			}
 		}
 
-		if mtm != nil {
+		// A tenant inventory is consulted only for an explicit token. A request
+		// without one must not resolve, and so possibly start, the monitor of
+		// whichever organization it names.
+		if mtm != nil && explicitTokenProvided {
 			// Check for Tenant ID in header or cookie
 			orgID := "default"
 			if headerOrgID := r.Header.Get("X-Pulse-Org-ID"); headerOrgID != "" {
@@ -1457,7 +1473,7 @@ func extractAndStoreAuthContext(cfg *config.Config, mtm *monitoring.MultiTenantM
 			if orgID != "default" {
 				// Prevent DoS: Check if org exists before loading (which triggers directory creation)
 				if mtm.OrgExists(orgID) {
-					if m, err := mtm.GetMonitor(orgID); err == nil && m != nil {
+					if m, err := tenantMonitorOutsideConfigLock(mtm, orgID); err == nil && m != nil {
 						targetConfig = m.GetConfig()
 						targetOrgID = strings.TrimSpace(orgID)
 					}

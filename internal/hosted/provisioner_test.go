@@ -597,6 +597,117 @@ func TestProvisionHostedSignupCanonicalizesBlankOwnerPrincipal(t *testing.T) {
 	}
 }
 
+// strings.EqualFold takes U+017F (long s) for "s", while the organization model
+// lowercases and compares. An address that differs from the owner's only by
+// such a fold is another address: it must neither select the owner's
+// organization nor have it taken for a legacy record in need of a new owner ID.
+func TestProvisionHostedSignupLookAlikeEmailLeavesExistingOwnerAlone(t *testing.T) {
+	baseDir := t.TempDir()
+	persistence := config.NewMultiTenantPersistence(baseDir)
+	authManager := &mockAuthManager{}
+	authProvider := &mockAuthProvider{manager: authManager}
+	provisioner := NewProvisioner(persistence, authProvider)
+	provisioner.newOrgID = func() string { return "look-alike-org" }
+	provisioner.newUserID = func() (string, error) { return "u_look_alike_owner", nil }
+
+	addedAt := time.Unix(1700000400, 0).UTC()
+	if err := persistence.SaveOrganization(&models.Organization{
+		ID:          "existing-org",
+		DisplayName: "Existing Org",
+		CreatedAt:   addedAt,
+		OwnerUserID: "u_existing_owner",
+		OwnerEmail:  "alice.smith@example.com",
+		Members: []models.OrganizationMember{
+			{
+				UserID:  "u_existing_owner",
+				Email:   "alice.smith@example.com",
+				Role:    models.OrgRoleOwner,
+				AddedAt: addedAt,
+				AddedBy: "u_existing_owner",
+			},
+		},
+	}); err != nil {
+		t.Fatalf("SaveOrganization returned error: %v", err)
+	}
+
+	result, err := provisioner.ProvisionHostedSignup(context.Background(), HostedSignupRequest{
+		Email:   "alice.\u017fmith@example.com",
+		OrgName: "Another Org",
+	})
+	if err != nil {
+		t.Fatalf("ProvisionHostedSignup returned error: %v", err)
+	}
+	if result.Status != ProvisionStatusCreated || result.OrgID != "look-alike-org" || result.UserID != "u_look_alike_owner" {
+		t.Fatalf("result = %+v, want a separate organization for the look-alike address", result)
+	}
+
+	org, err := persistence.LoadOrganization("existing-org")
+	if err != nil {
+		t.Fatalf("LoadOrganization returned error: %v", err)
+	}
+	if org.OwnerUserID != "u_existing_owner" || org.OwnerEmail != "alice.smith@example.com" {
+		t.Fatalf("owner identity = (%q, %q), want the existing owner unchanged", org.OwnerUserID, org.OwnerEmail)
+	}
+	if len(org.Members) != 1 || org.Members[0].UserID != "u_existing_owner" || org.Members[0].Email != "alice.smith@example.com" {
+		t.Fatalf("members = %+v, want the existing owner member unchanged", org.Members)
+	}
+	if authProvider.lastOrgID != "look-alike-org" || authManager.lastUser != "u_look_alike_owner" {
+		t.Fatalf("expected RBAC assignment only for the new organization, got org=%q user=%q", authProvider.lastOrgID, authManager.lastUser)
+	}
+}
+
+// Canonicalization repairs legacy owners only. An owner that already has a
+// stable ID keeps it even when its email does not resolve to one principal,
+// here because a member entry carries the same address under another ID.
+func TestProvisionHostedSignupKeepsStableOwnerPrincipal(t *testing.T) {
+	baseDir := t.TempDir()
+	persistence := config.NewMultiTenantPersistence(baseDir)
+	authManager := &mockAuthManager{}
+	authProvider := &mockAuthProvider{manager: authManager}
+	provisioner := NewProvisioner(persistence, authProvider)
+	provisioner.newUserID = func() (string, error) { return "u_must_not_be_used", nil }
+
+	addedAt := time.Unix(1700000500, 0).UTC()
+	if err := persistence.SaveOrganization(&models.Organization{
+		ID:          "stable-owner-org",
+		DisplayName: "Stable Owner Org",
+		CreatedAt:   addedAt,
+		OwnerUserID: "u_stable_owner",
+		OwnerEmail:  "owner@example.com",
+		Members: []models.OrganizationMember{
+			{UserID: "u_stable_owner", Email: "owner@example.com", Role: models.OrgRoleOwner, AddedAt: addedAt, AddedBy: "u_stable_owner"},
+			{UserID: "u_other_member", Email: "owner@example.com", Role: models.OrgRoleViewer, AddedAt: addedAt, AddedBy: "u_stable_owner"},
+		},
+	}); err != nil {
+		t.Fatalf("SaveOrganization returned error: %v", err)
+	}
+
+	result, err := provisioner.ProvisionHostedSignup(context.Background(), HostedSignupRequest{
+		Email:   "owner@example.com",
+		OrgName: "Another Org",
+	})
+	if err != nil {
+		t.Fatalf("ProvisionHostedSignup returned error: %v", err)
+	}
+	if result.Status != ProvisionStatusExisting || result.OrgID != "stable-owner-org" || result.UserID != "u_stable_owner" {
+		t.Fatalf("result = %+v, want the existing stable owner", result)
+	}
+
+	org, err := persistence.LoadOrganization("stable-owner-org")
+	if err != nil {
+		t.Fatalf("LoadOrganization returned error: %v", err)
+	}
+	if org.OwnerUserID != "u_stable_owner" || org.OwnerEmail != "owner@example.com" {
+		t.Fatalf("owner identity = (%q, %q), want the stable owner unchanged", org.OwnerUserID, org.OwnerEmail)
+	}
+	if len(org.Members) != 2 || org.Members[0].UserID != "u_stable_owner" || org.Members[1].UserID != "u_other_member" || org.Members[1].Role != models.OrgRoleViewer {
+		t.Fatalf("members = %+v, want both entries unchanged", org.Members)
+	}
+	if authProvider.calls != 0 || authManager.calls != 0 {
+		t.Fatalf("expected no RBAC calls for a stable owner, got provider=%d manager=%d", authProvider.calls, authManager.calls)
+	}
+}
+
 func TestCleanupOrgDirectorySkipsUnsafePath(t *testing.T) {
 	baseDir := t.TempDir()
 	p := &Provisioner{}

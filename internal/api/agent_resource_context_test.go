@@ -1475,6 +1475,64 @@ func TestAgentOperationsLoopExternalAgentTokenReadyUsesPulseMCPSurfaceScopes(t *
 	}
 }
 
+// The readiness check clones every token record until one covers the Pulse
+// MCP surface. A bound collector may repeat its own authority reduction, and
+// each call assigns keys of the live record's Metadata map under config.Mu, so
+// the provider must read a detached copy taken under that lock: a map shared
+// with the live inventory ends the process with "concurrent map iteration and
+// map write". Run with -race: a shared map is reported as a data race.
+func TestExternalAgentReadinessReadsTheTokenInventoryUnderTheConfigLock(t *testing.T) {
+	record, err := config.NewAPITokenRecord("readiness-collector-test.12345678", "collector", []string{
+		config.ScopeAgentReport, config.ScopeAgentConfigRead, config.ScopeAgentExec,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	record.OrgID = "default"
+	record.Metadata = map[string]string{"bound_agent_id": "agent-a", "bound_hostname": "node.example"}
+	cfg := &config.Config{DataPath: t.TempDir(), APITokens: []config.APITokenRecord{*record}}
+	router := newTestRouter(t, cfg, nil, nil, nil, nil, "test")
+
+	stop := make(chan struct{})
+	writerDone := make(chan struct{})
+	writerStatus := make(chan int, 1)
+	go func() {
+		defer close(writerDone)
+		for {
+			select {
+			case <-stop:
+				return
+			default:
+			}
+			req := httptest.NewRequest(http.MethodPost, "/api/agents/collector/reduce-authority",
+				strings.NewReader(`{"agentId":"agent-a","hostname":"node.example"}`))
+			req = req.WithContext(context.WithValue(req.Context(), OrgIDContextKey, "default"))
+			attachAPITokenRecord(req, record)
+			rec := httptest.NewRecorder()
+			router.handleReduceCollectorAuthority(rec, req)
+			if rec.Code != http.StatusNoContent {
+				writerStatus <- rec.Code
+				return
+			}
+		}
+	}()
+
+	manifest := agentcapabilities.CanonicalManifest()
+	for i := 0; i < 2000; i++ {
+		if router.agentContextHandler.agentOperationsLoopExternalAgentReady(context.Background(), manifest, time.Now().UTC()) {
+			t.Fatal("a collector credential must not satisfy external-agent readiness")
+		}
+	}
+
+	close(stop)
+	<-writerDone
+	select {
+	case status := <-writerStatus:
+		t.Fatalf("repeated collector authority reduction answered %d, want 204", status)
+	default:
+	}
+}
+
 func TestHandleAgentOperationsLoopStatus_AggregatesContentSafeLoopCounts(t *testing.T) {
 	h, findings, approvals := fleetFixtureHandlers(t, []unified.Resource{
 		{ID: "vm:101", Type: "vm", Name: "db-01"},

@@ -100,7 +100,10 @@ signed-in UI with its session and CSRF protection.
 {"id": "production-datacenter", "displayName": "Production Datacenter"}
 ```
 
-The creator becomes the owner. `id` is a stable ID of 1–64 characters using
+The creator becomes the owner. A user who is not an instance administrator
+can own at most 20 organizations: past that, creating one, or being handed one
+by another such user, returns `409` with `organization_limit_reached`.
+`id` is a stable ID of 1–64 characters using
 letters, digits, periods, underscores or hyphens, but not `.` or `..`; use a
 simple lowercase/hyphen ID such as the example. `displayName` is the name
 shown in Pulse. `name` and `description` are not the creation fields.

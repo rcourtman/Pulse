@@ -1967,13 +1967,16 @@ func (m *Monitor) RebuildTokenBindings() {
 		return
 	}
 
-	// Build a set of valid token IDs from the current config
+	// Build a set of valid token IDs from the current config. Token writers
+	// edit the inventory in place under config.Mu.
 	validTokens := make(map[string]struct{})
+	config.Mu.RLock()
 	for _, token := range m.config.APITokens {
 		if token.ID != "" {
 			validTokens[token.ID] = struct{}{}
 		}
 	}
+	config.Mu.RUnlock()
 
 	// Rebuild Docker token bindings
 	newDockerBindings := make(map[string]string)
