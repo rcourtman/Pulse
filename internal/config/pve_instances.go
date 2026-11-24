@@ -84,6 +84,14 @@ func ProxmoxFingerprintsConflict(a, b string) bool {
 	return fpA != "" && fpB != "" && fpA != fpB
 }
 
+// ProxmoxFingerprintsMatch reports whether two TLS fingerprints are both
+// known and agree. An unknown fingerprint matches nothing: the absence of a
+// conflict is not evidence that two addresses are the same machine.
+func ProxmoxFingerprintsMatch(a, b string) bool {
+	fpA := normalizeProxmoxFingerprint(a)
+	return fpA != "" && fpA == normalizeProxmoxFingerprint(b)
+}
+
 // pveClusterInstancesHaveFingerprintConflict reports whether two cluster
 // instances carry TOFU-captured TLS evidence that they are different clusters:
 // the instance authorities, a same-named endpoint, or a same-addressed
@@ -499,13 +507,33 @@ func endpointHostIdentityIP(raw string) string {
 	return key
 }
 
+// pveClusterInstancesHaveStrongOverlap reports whether two cluster views vouch
+// for each other. Member addresses are whatever a view's own endpoint answered
+// in /cluster/status, so an address only one side reports is that side's claim
+// about the other, not evidence from it. Folding on such a claim would send
+// the surviving view's credentials to endpoints the claimant supplied, or
+// retire a connection on a stranger's say-so. Each view's saved authority,
+// the one address Pulse itself dials for it, must therefore be an address the
+// other view already holds. The fail-safe direction matches the fingerprint
+// veto: two views of one cluster that cannot prove it to each other stay
+// separate.
 func pveClusterInstancesHaveStrongOverlap(a, b PVEInstance) bool {
 	aKeys := pveInstanceEndpointIdentityKeys(a)
-	if len(aKeys) == 0 {
-		return false
+	bKeys := pveInstanceEndpointIdentityKeys(b)
+	return pveInstanceAuthorityHeldBy(a, aKeys, bKeys) && pveInstanceAuthorityHeldBy(b, bKeys, aKeys)
+}
+
+// pveInstanceAuthorityHeldBy reports whether the address Pulse reaches the
+// instance at is among the other view's identity keys. A legacy row saved
+// without an authority is reached only through its endpoints, so any of its
+// own keys counts. A saved authority that cannot be normalized proves nothing.
+func pveInstanceAuthorityHeldBy(instance PVEInstance, own, other map[string]struct{}) bool {
+	if strings.TrimSpace(instance.Host) != "" {
+		_, held := other[normalizePVEEndpointIdentity(instance.Host)]
+		return held
 	}
-	for key := range pveInstanceEndpointIdentityKeys(b) {
-		if _, ok := aKeys[key]; ok {
+	for key := range own {
+		if _, held := other[key]; held {
 			return true
 		}
 	}
@@ -612,6 +640,12 @@ func mergeStandalonePVEIntoClusters(instances []PVEInstance) bool {
 // fingerprints do not prove identity, and conflicting ones always veto a fold.
 func standalonePVEEndpointMatchProven(standalone, cluster PVEInstance, endpoint ClusterEndpoint) bool {
 	if ProxmoxFingerprintsConflict(standalone.Fingerprint, endpoint.Fingerprint) {
+		return false
+	}
+	// A Proxmox cluster shares one secret per token ID, so equal token IDs
+	// with different secrets prove two distinct systems.
+	if standalone.TokenName != "" && standalone.TokenName == cluster.TokenName &&
+		standalone.TokenValue != "" && cluster.TokenValue != "" && standalone.TokenValue != cluster.TokenValue {
 		return false
 	}
 	key := normalizePVEEndpointIdentity(standalone.Host)
