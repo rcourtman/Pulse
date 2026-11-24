@@ -796,7 +796,12 @@ func clampMetricValue(value, min, max float64) float64 {
 // already carry percentage points, including 0..1, and must not use this.
 func percentFromCPUUsage(value float64) float64 {
 	if value <= 1.0 {
-		return value * 100
+		value *= 100
+	}
+	// Scaling a finite reported value can overflow, and a non-finite metric
+	// makes every response that carries the resource fail JSON encoding.
+	if math.IsNaN(value) || math.IsInf(value, 0) {
+		return 0
 	}
 	return value
 }

@@ -416,9 +416,83 @@ func TestResolveKubernetesNodeHostRejectsAmbiguousLegacyHostname(t *testing.T) {
 		{ID: "one", Hostname: "worker-1", MachineID: "machine-1"},
 		{ID: "two", Hostname: "worker-1", MachineID: "machine-2"},
 	}
-	lookup := buildKubernetesNodeHostLookup(hosts)
+	lookup := buildKubernetesNodeHostLookup(hosts, "")
 	if got := resolveKubernetesNodeHost(models.KubernetesNode{Name: "worker-1"}, lookup); got != nil {
 		t.Fatalf("ambiguous hostname selected host %+v", got)
+	}
+}
+
+func TestIngestSnapshotDoesNotLinkKubernetesNodeToHostFromAnotherToken(t *testing.T) {
+	now := time.Now().UTC()
+	const nodeMemory = 8 * 1024 * 1024 * 1024
+	snapshot := models.StateSnapshot{
+		Hosts: []models.Host{
+			// Claims worker-1's machine ID under an unrelated token.
+			{
+				ID: "edge-box", Hostname: "edge-box", MachineID: "machine-worker-1", TokenID: "token-edge",
+				Status: "online", LastSeen: now,
+				Memory: models.Memory{Total: nodeMemory, Used: nodeMemory / 4, Usage: 25},
+			},
+			// Claims the hostname of worker-2, which reports no machine ID.
+			{ID: "other-box", Hostname: "worker-2", TokenID: "token-edge", Status: "online", LastSeen: now},
+		},
+		KubernetesClusters: []models.KubernetesCluster{{
+			ID: "cluster-1", Name: "prod", TokenID: "token-cluster", Status: "online", LastSeen: now,
+			Nodes: []models.KubernetesNode{
+				{
+					UID: "node-1", Name: "worker-1", MachineID: "machine-worker-1", Ready: true,
+					AllocMemoryBytes: nodeMemory, UsageMemoryBytes: nodeMemory,
+				},
+				{UID: "node-2", Name: "worker-2", Ready: true},
+			},
+		}},
+	}
+
+	registry := NewRegistry(NewMemoryStore())
+	registry.IngestSnapshot(snapshot)
+
+	nodes := registry.ListByType(ResourceTypeK8sNode)
+	if len(nodes) != 2 {
+		t.Fatalf("expected both Kubernetes nodes to stay their own resources, got %d", len(nodes))
+	}
+	for _, node := range nodes {
+		if hasDataSource(node.Sources, SourceAgent) {
+			t.Fatalf("Kubernetes node %q linked to a host from another token: %+v", node.Name, node.Sources)
+		}
+		if node.Name == "worker-1" && (node.Metrics == nil || node.Metrics.Memory == nil || node.Metrics.Memory.Percent < 99) {
+			t.Fatalf("expected worker-1 to keep the memory usage its cluster reported, got %+v", node.Metrics)
+		}
+	}
+	for _, agent := range registry.ListByType(ResourceTypeAgent) {
+		if agent.Kubernetes != nil || agent.ParentID != nil || hasDataSource(agent.Sources, SourceK8s) {
+			t.Fatalf("host %q from another token absorbed a Kubernetes node: %+v", agent.Name, agent)
+		}
+	}
+}
+
+func TestResolveKubernetesNodeHostIgnoresClaimsFromAnotherToken(t *testing.T) {
+	hosts := []models.Host{
+		{ID: "right", Hostname: "worker-1", MachineID: "machine-worker-1", TokenID: "token-cluster"},
+		{ID: "claimant", Hostname: "worker-1", MachineID: "machine-worker-1", TokenID: "token-edge"},
+	}
+	nodes := []models.KubernetesNode{
+		{Name: "worker-1", MachineID: "machine-worker-1"},
+		{Name: "worker-1"},
+	}
+
+	lookup := buildKubernetesNodeHostLookup(hosts, "token-cluster")
+	for _, node := range nodes {
+		// The claimant must neither win the link nor make it ambiguous.
+		if got := resolveKubernetesNodeHost(node, lookup); got == nil || got.ID != "right" {
+			t.Fatalf("expected node %+v to link to the host sharing its cluster's token, got %+v", node, got)
+		}
+	}
+
+	lookup = buildKubernetesNodeHostLookup(hosts, "token-unrelated")
+	for _, node := range nodes {
+		if got := resolveKubernetesNodeHost(node, lookup); got != nil {
+			t.Fatalf("node %+v linked to host %+v from another token", node, got)
+		}
 	}
 }
 

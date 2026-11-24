@@ -5399,7 +5399,7 @@ func parseFloat64Any(value any) (float64, bool) {
 	case int:
 		return float64(typed), true
 	case json.Number:
-		if v, err := typed.Float64(); err == nil {
+		if v, err := typed.Float64(); err == nil && !math.IsNaN(v) && !math.IsInf(v, 0) {
 			return v, true
 		}
 	case string:
@@ -5407,7 +5407,7 @@ func parseFloat64Any(value any) (float64, bool) {
 		if s == "" {
 			return 0, false
 		}
-		if v, err := strconv.ParseFloat(s, 64); err == nil {
+		if v, err := strconv.ParseFloat(s, 64); err == nil && !math.IsNaN(v) && !math.IsInf(v, 0) {
 			return v, true
 		}
 	case map[string]any:

@@ -1,6 +1,7 @@
 package monitoring
 
 import (
+	"math"
 	"sort"
 	"sync"
 	"time"
@@ -226,8 +227,13 @@ func (mh *MetricsHistory) AddNodeMetric(nodeID string, metricType string, value 
 	}
 }
 
+const maxHistoryMetricMagnitude = 1e30
+
 // appendMetric appends a metric point and maintains max data points and retention
 func (mh *MetricsHistory) appendMetric(metrics []MetricPoint, point MetricPoint) []MetricPoint {
+	if math.IsNaN(point.Value) || math.IsInf(point.Value, 0) || math.Abs(point.Value) > maxHistoryMetricMagnitude {
+		return metrics
+	}
 	// Keep a single canonical value per timestamp so chart consumers never
 	// have to guess which duplicate tail point to render.
 	if len(metrics) > 0 && metrics[len(metrics)-1].Timestamp.Equal(point.Timestamp) {

@@ -1,6 +1,7 @@
 package unifiedresources
 
 import (
+	"encoding/json"
 	"math"
 	"strings"
 	"testing"
@@ -8,6 +9,24 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 )
+
+func TestPercentFromCPUUsageKeepsOverflowEncodable(t *testing.T) {
+	for _, usage := range []float64{-1e308, -math.MaxFloat64, math.Inf(-1), math.Inf(1), math.NaN()} {
+		got := percentFromCPUUsage(usage)
+		if math.IsNaN(got) || math.IsInf(got, 0) {
+			t.Fatalf("usage %v produced non-finite value %v", usage, got)
+		}
+		if _, err := json.Marshal(got); err != nil {
+			t.Fatalf("usage %v is not JSON encodable: %v", usage, err)
+		}
+	}
+	if got := percentFromCPUUsage(0.25); got != 25 {
+		t.Fatalf("ratio was not scaled to percent: %v", got)
+	}
+	if got := percentFromCPUUsage(42); got != 42 {
+		t.Fatalf("percent was not retained: %v", got)
+	}
+}
 
 func TestMetricsFromDockerContainerDistinguishesAbsentAndIdleIO(t *testing.T) {
 	for _, value := range []float64{0, 123, -1, math.NaN(), math.Inf(1)} {

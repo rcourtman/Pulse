@@ -51,6 +51,19 @@ func safeFloat(val float64) float64 {
 	return val
 }
 
+// reportedPercent clamps an agent-reported percentage to [0, 100] so extreme
+// finite values cannot overflow downstream scaling or chart aggregations.
+func reportedPercent(val float64) float64 {
+	val = safeFloat(val)
+	if val < 0 {
+		return 0
+	}
+	if val > 100 {
+		return 100
+	}
+	return val
+}
+
 // makeGuestID generates a stable, canonical guest ID that includes instance, node, and VMID.
 // Format: {instance}:{node}:{vmid} (e.g., "delly:minipc:201")
 //
@@ -350,7 +363,15 @@ func convertDockerNetworks(networks []agentsdocker.Network) []models.DockerNetwo
 		return nil
 	}
 	result := make([]models.DockerNetwork, 0, len(networks))
+	seenIDs := make(map[string]struct{}, len(networks))
 	for _, network := range networks {
+		netID := strings.TrimSpace(network.ID)
+		if netID != "" {
+			if _, dup := seenIDs[netID]; dup {
+				continue
+			}
+			seenIDs[netID] = struct{}{}
+		}
 		subnets := make([]models.DockerNetworkSubnet, 0, len(network.Subnets))
 		for _, subnet := range network.Subnets {
 			subnets = append(subnets, models.DockerNetworkSubnet{
@@ -959,7 +980,7 @@ func convertAgentCephToModels(ceph *agentshost.CephCluster) *models.HostCephClus
 			BytesUsed:      pool.BytesUsed,
 			BytesAvailable: pool.BytesAvailable,
 			Objects:        pool.Objects,
-			PercentUsed:    pool.PercentUsed,
+			PercentUsed:    reportedPercent(pool.PercentUsed),
 		})
 	}
 
@@ -1054,7 +1075,7 @@ func convertAgentCephToGlobalCluster(ceph *agentshost.CephCluster, hostname, hos
 			StoredBytes:    int64(pool.BytesUsed),
 			AvailableBytes: int64(pool.BytesAvailable),
 			Objects:        int64(pool.Objects),
-			PercentUsed:    pool.PercentUsed,
+			PercentUsed:    reportedPercent(pool.PercentUsed),
 		})
 	}
 

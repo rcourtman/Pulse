@@ -615,7 +615,7 @@ func TestNewSQLiteResourceStore_RecoversFromCorruptedDB(t *testing.T) {
 
 func TestNewSQLiteResourceStore_MigratesLegacyStore(t *testing.T) {
 	dataDir := t.TempDir()
-	orgID := "org.a"
+	orgID := "org_a"
 	legacyPath := filepath.Join(dataDir, "resources", legacyResourceStoreFileName(orgID))
 	if err := os.MkdirAll(filepath.Dir(legacyPath), 0o700); err != nil {
 		t.Fatalf("MkdirAll(%q) failed: %v", filepath.Dir(legacyPath), err)
@@ -644,6 +644,78 @@ func TestNewSQLiteResourceStore_MigratesLegacyStore(t *testing.T) {
 	}
 	if store.dbPath == legacyPath {
 		t.Fatalf("expected migrated store path to differ from legacy path: %q", store.dbPath)
+	}
+}
+
+func TestNewSQLiteResourceStore_DoesNotMigrateDefaultOrgStore(t *testing.T) {
+	dataDir := t.TempDir()
+	defaultStore, err := NewSQLiteResourceStore(dataDir, defaultOrgID)
+	if err != nil {
+		t.Fatalf("NewSQLiteResourceStore(default) returned error: %v", err)
+	}
+	defer defaultStore.Close()
+	if err := defaultStore.AddLink(ResourceLink{ResourceA: "default-a", ResourceB: "default-b", PrimaryID: "default-a", CreatedAt: time.Now().UTC()}); err != nil {
+		t.Fatalf("AddLink returned error: %v", err)
+	}
+
+	// Every ID here is a valid organization ID that the legacy naming scheme
+	// mapped onto the default organization's unified_resources.db.
+	for _, orgID := range []string{"default.", "default..", ".default", "-default-", "_.default._", "_", "-", "..."} {
+		t.Run(orgID, func(t *testing.T) {
+			store, err := NewSQLiteResourceStore(dataDir, orgID)
+			if err != nil {
+				t.Fatalf("NewSQLiteResourceStore returned error: %v", err)
+			}
+			defer store.Close()
+
+			if store.dbPath == defaultStore.dbPath {
+				t.Fatalf("org %q shares the default organization's store %q", orgID, store.dbPath)
+			}
+			links, err := store.GetLinks()
+			if err != nil {
+				t.Fatalf("GetLinks returned error: %v", err)
+			}
+			if len(links) != 0 {
+				t.Fatalf("org %q received the default organization's links: %+v", orgID, links)
+			}
+		})
+	}
+}
+
+func TestNewSQLiteResourceStore_DoesNotMigrateAnotherOrgsLegacyStore(t *testing.T) {
+	dataDir := t.TempDir()
+	legacyPath := filepath.Join(dataDir, "resources", legacyResourceStoreFileName("org_a"))
+	if err := os.MkdirAll(filepath.Dir(legacyPath), 0o700); err != nil {
+		t.Fatalf("MkdirAll(%q) failed: %v", filepath.Dir(legacyPath), err)
+	}
+	seedLegacyLinksTable(t, legacyPath)
+
+	for _, tc := range []struct {
+		orgID     string
+		wantLinks int
+	}{
+		{orgID: "org.a", wantLinks: 0},
+		{orgID: "org_a.", wantLinks: 0},
+		{orgID: ".org_a", wantLinks: 0},
+		{orgID: "-org_a-", wantLinks: 0},
+		{orgID: "_org_a", wantLinks: 0},
+		{orgID: "org_a", wantLinks: 1},
+	} {
+		t.Run(tc.orgID, func(t *testing.T) {
+			store, err := NewSQLiteResourceStore(dataDir, tc.orgID)
+			if err != nil {
+				t.Fatalf("NewSQLiteResourceStore returned error: %v", err)
+			}
+			defer store.Close()
+
+			links, err := store.GetLinks()
+			if err != nil {
+				t.Fatalf("GetLinks returned error: %v", err)
+			}
+			if len(links) != tc.wantLinks {
+				t.Fatalf("org %q has %d migrated links, want %d: %+v", tc.orgID, len(links), tc.wantLinks, links)
+			}
+		})
 	}
 }
 

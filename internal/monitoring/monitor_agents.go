@@ -2660,8 +2660,16 @@ func (m *Monitor) ApplyDockerReport(report agentsdocker.Report, tokenRecord *con
 	containers := make([]models.DockerContainer, 0, len(report.Containers))
 	// Legacy container fields remain numeric. Carry the current calculation's
 	// validity through to history so warmup and clock faults cannot become idle.
-	containerNetworkValidity := make([]models.IORateValidity, len(report.Containers))
-	for i, payload := range report.Containers {
+	containerNetworkValidity := make([]models.IORateValidity, 0, len(report.Containers))
+	seenContainerIDs := make(map[string]struct{}, len(report.Containers))
+	for _, payload := range report.Containers {
+		cid := strings.TrimSpace(payload.ID)
+		if cid != "" {
+			if _, dup := seenContainerIDs[cid]; dup {
+				continue
+			}
+			seenContainerIDs[cid] = struct{}{}
+		}
 		container := models.DockerContainer{
 			ID:                 truncateReportedUTF8(payload.ID, maxReportedDockerTextBytes),
 			Name:               truncateReportedUTF8(payload.Name, maxReportedDockerTextBytes),
@@ -2676,7 +2684,7 @@ func (m *Monitor) ApplyDockerReport(report agentsdocker.Report, tokenRecord *con
 			CPUPercent:         safeFloat(payload.CPUPercent),
 			MemoryUsage:        payload.MemoryUsageBytes,
 			MemoryLimit:        payload.MemoryLimitBytes,
-			MemoryPercent:      safeFloat(payload.MemoryPercent),
+			MemoryPercent:      reportedPercent(payload.MemoryPercent),
 			UptimeSeconds:      payload.UptimeSeconds,
 			RestartCount:       payload.RestartCount,
 			ExitCode:           payload.ExitCode,
@@ -2791,14 +2799,18 @@ func (m *Monitor) ApplyDockerReport(report agentsdocker.Report, tokenRecord *con
 				value := writeRate
 				container.BlockIO.WriteRateBytesPerSecond = &value
 			}
+			var netValidity models.IORateValidity
 			if netInRate >= 0 {
 				container.NetInRate = netInRate
-				containerNetworkValidity[i].NetworkIn = true
+				netValidity.NetworkIn = true
 			}
 			if netOutRate >= 0 {
 				container.NetOutRate = netOutRate
-				containerNetworkValidity[i].NetworkOut = true
+				netValidity.NetworkOut = true
 			}
+			containerNetworkValidity = append(containerNetworkValidity, netValidity)
+		} else {
+			containerNetworkValidity = append(containerNetworkValidity, models.IORateValidity{})
 		}
 
 		if len(payload.Mounts) > 0 {
@@ -2925,7 +2937,7 @@ func (m *Monitor) ApplyDockerReport(report agentsdocker.Report, tokenRecord *con
 		CPUs:              report.Host.TotalCPU,
 		TotalMemoryBytes:  report.Host.TotalMemoryBytes,
 		UptimeSeconds:     report.Host.UptimeSeconds,
-		CPUUsage:          safeFloat(report.Host.CPUUsagePercent),
+		CPUUsage:          reportedPercent(report.Host.CPUUsagePercent),
 		LoadAverage:       loadAverage,
 		Memory:            memory,
 		Disks:             disks,
@@ -3979,7 +3991,7 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 		KernelVersion:     strings.TrimSpace(report.Host.KernelVersion),
 		Architecture:      strings.TrimSpace(report.Host.Architecture),
 		CPUCount:          report.Host.CPUCount,
-		CPUUsage:          safeFloat(report.Metrics.CPUUsagePercent),
+		CPUUsage:          reportedPercent(report.Metrics.CPUUsagePercent),
 		LoadAverage:       append([]float64(nil), report.Host.LoadAverage...),
 		Memory:            memory,
 		Disks:             disks,
