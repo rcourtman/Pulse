@@ -58,10 +58,18 @@ const portSummary = (resource: Resource): { label: string; title: string } => {
 const selectorSummary = (resource: Resource): { label: string; title: string } => {
   const selector = resource.kubernetes?.selector;
   if (!selector || Object.keys(selector).length === 0) return { label: '—', title: '' };
-  const pairs = Object.entries(selector)
-    .sort(([left], [right]) => left.localeCompare(right))
-    .map(([key, value]) => `${key}=${value}`);
-  return summarizePlatformTableValues(pairs);
+  const sortedEntries = Object.entries(selector).sort(([left], [right]) =>
+    left.localeCompare(right),
+  );
+  const fullPairs = sortedEntries.map(([key, value]) => `${key}=${value}`);
+  const compactPairs = sortedEntries.map(([key, value]) => {
+    const shortKey = key.startsWith('app.kubernetes.io/')
+      ? key.slice('app.kubernetes.io/'.length)
+      : key;
+    return `${shortKey}=${value}`;
+  });
+  const compact = summarizePlatformTableValues(compactPairs);
+  return { label: compact.label, title: fullPairs.join(', ') };
 };
 
 const externalIpSummary = (resource: Resource): { label: string; title: string } =>

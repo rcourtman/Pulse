@@ -168,4 +168,47 @@ describe('KubernetesEventsTable', () => {
     fireEvent.click(detail.getByRole('button', { name: 'Collapse Pod/checkout-api-123 details' }));
     expect(document.querySelector('[data-testid="kubernetes-event-detail"]')).toBeNull();
   });
+  it('filters events with Warning and Normal domain pills instead of generic health pills', () => {
+    render(() => (
+      <KubernetesEventsTable
+        resources={[
+          makeResource({
+            id: 'warning-event',
+            type: 'k8s-event',
+            status: 'degraded',
+            kubernetes: {
+              eventType: 'Warning',
+              reason: 'BackOff',
+              involvedKind: 'Pod',
+              involvedName: 'api-0',
+              message: 'Back-off restarting failed container',
+            },
+          }),
+          makeResource({
+            id: 'normal-event',
+            type: 'k8s-event',
+            status: 'online',
+            kubernetes: {
+              eventType: 'Normal',
+              reason: 'Scheduled',
+              involvedKind: 'Pod',
+              involvedName: 'web-0',
+              message: 'Successfully assigned web-0',
+            },
+          }),
+        ]}
+        emptyIcon={<span />}
+        emptyTitle="No events"
+        emptyDescription="No events"
+      />
+    ));
+
+    expect(screen.getByRole('button', { name: /^Warning,\s*1$/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^Normal,\s*1$/i })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^Healthy/i })).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: /^Warning,\s*1$/i }));
+    expect(screen.getByText('BackOff')).toBeInTheDocument();
+    expect(screen.queryByText('Scheduled')).toBeNull();
+  });
 });

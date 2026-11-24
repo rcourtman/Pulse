@@ -488,4 +488,53 @@ describe('TrueNASStorageTopologyTable', () => {
       eventBus.emit('org_switched', 'default');
     }
   });
+  it('counts direct status matches so Healthy + Attention + Offline equals All when a degraded pool has healthy children', () => {
+    const degradedPool = makeStorageResource({
+      id: 'pool-archive',
+      name: 'archive',
+      status: 'degraded',
+      storage: { topology: 'pool', platform: 'truenas', path: 'archive' },
+    });
+    const degradedDataset = makeStorageResource({
+      id: 'dataset-cold',
+      name: 'archive/cold',
+      parentId: 'pool-archive',
+      status: 'degraded',
+      storage: { topology: 'dataset', platform: 'truenas', path: '/mnt/archive/cold' },
+    });
+    const healthyDataset = makeStorageResource({
+      id: 'dataset-backups',
+      name: 'archive/backups',
+      parentId: 'pool-archive',
+      status: 'online',
+      storage: { topology: 'dataset', platform: 'truenas', path: '/mnt/archive/backups' },
+    });
+    const healthyDisk = makeStorageResource({
+      id: 'disk-sdd',
+      name: 'sdd',
+      type: 'physical_disk',
+      parentId: 'pool-archive',
+      status: 'online',
+      storage: undefined,
+      physicalDisk: { devPath: '/dev/sdd', diskType: 'hdd' },
+    });
+    const resources = [degradedPool, degradedDataset, healthyDataset, healthyDisk];
+
+    render(() => (
+      <TrueNASStorageTopologyTable
+        resources={resources}
+        scope={resources}
+        emptyIcon={<span />}
+        emptyTitle="No storage"
+        emptyDescription="No storage"
+      />
+    ));
+
+    // All = 4, Healthy = 2 (archive/backups + sdd), Attention = 2 (archive + archive/cold), Offline = 0.
+    // The degraded pool must not be double-counted under Healthy even though it appears as context ancestor.
+    expect(screen.getAllByRole('button', { name: /^All,\s*4$/i }).length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByRole('button', { name: /^Healthy,\s*2$/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^Attention,\s*2$/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^Offline,\s*0$/i })).toBeInTheDocument();
+  });
 });

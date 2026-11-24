@@ -48,14 +48,14 @@ const mocks = vi.hoisted(() => ({
       hosts: Resource[];
       showToolbar?: boolean;
       externalSearch?: () => string;
-      externalStatus?: () => string;
+      externalFilter?: () => string;
     }) => (
       <div
         data-testid="docker-storage-usage-table"
         data-host-count={props.hosts.length}
         data-show-toolbar={String(props.showToolbar)}
         data-external-search={props.externalSearch?.() ?? ''}
-        data-external-status={props.externalStatus?.() ?? ''}
+        data-external-status={props.externalFilter?.() ?? ''}
       />
     ),
   ),
@@ -64,14 +64,14 @@ const mocks = vi.hoisted(() => ({
       resources: Resource[];
       showToolbar?: boolean;
       externalSearch?: () => string;
-      externalStatus?: () => string;
+      externalFilter?: () => string;
     }) => (
       <div
         data-testid="docker-volumes-table"
         data-resource-count={props.resources.length}
         data-show-toolbar={String(props.showToolbar)}
         data-external-search={props.externalSearch?.() ?? ''}
-        data-external-status={props.externalStatus?.() ?? ''}
+        data-external-status={props.externalFilter?.() ?? ''}
       />
     ),
   ),
@@ -793,16 +793,16 @@ describe('DockerPageSurface', () => {
       'checkout',
     );
 
-    fireEvent.click(screen.getByRole('button', { name: /^Offline, \d+$/ }));
+    fireEvent.click(screen.getByRole('button', { name: /^Reclaimable, \d+$/ }));
 
     expect(screen.getByText('1 of 2 rows')).toBeInTheDocument();
     expect(screen.getByTestId('docker-storage-usage-table')).toHaveAttribute(
       'data-external-status',
-      'offline',
+      'reclaimable',
     );
     expect(screen.getByTestId('docker-volumes-table')).toHaveAttribute(
       'data-external-status',
-      'offline',
+      'reclaimable',
     );
 
     fireEvent.click(screen.getByRole('button', { name: 'Clear filters' }));

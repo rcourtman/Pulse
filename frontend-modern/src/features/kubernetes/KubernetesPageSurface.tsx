@@ -21,6 +21,7 @@ import {
   PlatformTableEmptyState,
   PlatformTableLoadingState,
   PlatformTableToolbar,
+  type PlatformTableFilterOption,
   withPlatformStatusCounts,
 } from '@/features/platformPage/sharedPlatformPage';
 import type { Resource } from '@/types/resource';
@@ -41,15 +42,36 @@ import { KubernetesStorageTable } from './KubernetesStorageTable';
 import {
   KUBERNETES_TAB_SPECS,
   buildKubernetesPageModel,
-  buildKubernetesOverviewPosture,
   getKubernetesNodesNeedingAttention,
   filterKubernetesResources,
   getKubernetesPageTabSpecs,
+  isKubernetesWorkloadAttention,
+  matchesKubernetesConfigCategory,
+  matchesKubernetesServiceCategory,
   resolveKubernetesPageTabId,
+  type KubernetesConfigCategoryFilter,
   type KubernetesPageModel,
   type KubernetesPageTabId,
   type KubernetesResourceStatusFilter,
+  type KubernetesServiceCategoryFilter,
 } from './kubernetesPageModel';
+
+const KUBERNETES_SERVICE_CATEGORY_OPTIONS: PlatformTableFilterOption<KubernetesServiceCategoryFilter>[] =
+  [
+    { value: 'all', label: 'All' },
+    { value: 'service', label: 'Services' },
+    { value: 'ingress', label: 'Ingresses' },
+    { value: 'endpoint', label: 'Endpoints' },
+  ];
+
+const KUBERNETES_CONFIG_CATEGORY_OPTIONS: PlatformTableFilterOption<KubernetesConfigCategoryFilter>[] =
+  [
+    { value: 'all', label: 'All' },
+    { value: 'namespace', label: 'Namespaces' },
+    { value: 'config', label: 'Config & Secrets' },
+    { value: 'access', label: 'Access' },
+    { value: 'policy', label: 'Policy' },
+  ];
 
 // Include `agent` rows so K8s nodes that the backend registry merged onto
 // the linked agent host (sources=['agent','kubernetes']) still appear in the
@@ -447,6 +469,20 @@ function KubernetesWorkloads(props: {
   const scopeFilters = scope.scopeFilters;
   const countForStatus = (value: KubernetesResourceStatusFilter): number =>
     countKubernetesVisible(scope.scopedSections(), toolbar.search(), value);
+  const attentionCount = createMemo(() => {
+    if (props.attentionCount === undefined) return 0;
+    if (!toolbar.search().trim() && !scope.hasActiveScope()) return props.attentionCount;
+    return scope
+      .scopedSections()
+      .reduce(
+        (sum, rows) =>
+          sum +
+          filterKubernetesResources(rows, toolbar.search(), 'all').filter(
+            isKubernetesWorkloadAttention,
+          ).length,
+        0,
+      );
+  });
   const visibleRows = createMemo(() => countForStatus(toolbar.status()));
   const hasActiveFilters = () => toolbar.hasActiveFilters() || scope.hasActiveScope();
   const resetFilters = () =>
@@ -477,17 +513,22 @@ function KubernetesWorkloads(props: {
           statusOptions={withPlatformStatusCounts(PLATFORM_HEALTH_FILTER_OPTIONS, countForStatus)}
           filters={scopeFilters()}
           leadingControls={
-            <Show when={(props.attentionCount ?? 0) > 0}>
+            <Show when={attentionCount() > 0}>
               <div
                 class="inline-flex min-w-0 items-center gap-1.5 text-xs font-medium text-amber-700 dark:text-amber-300"
                 role="status"
               >
                 <span class="h-1.5 w-1.5 shrink-0 rounded-full bg-amber-500" aria-hidden="true" />
                 <span class="whitespace-nowrap">
-                  {props.attentionCount} workload{props.attentionCount === 1 ? '' : 's'}{' '}
-                  {props.attentionCount === 1 ? 'needs' : 'need'} attention
+                  {attentionCount()} workload{attentionCount() === 1 ? '' : 's'}{' '}
+                  {attentionCount() === 1 ? 'needs' : 'need'} attention
                 </span>
-                <ButtonLink href={buildKubernetesPath('workloads')} variant="warning" size="xs">
+                <ButtonLink
+                  href={buildKubernetesPath('workloads')}
+                  variant="warning"
+                  size="xs"
+                  class="shrink-0 whitespace-nowrap"
+                >
                   Review
                 </ButtonLink>
               </div>
@@ -553,6 +594,7 @@ function KubernetesServices(props: { model: KubernetesPageModel }) {
     () => props.model.services.length > 0 || props.model.serviceNetworking.length > 0,
   );
   const toolbar = createKubernetesSharedToolbar();
+  const [category, setCategory] = createSignal<KubernetesServiceCategoryFilter>('all');
   const sections = createMemo<Resource[][]>(() => [
     props.model.services,
     props.model.serviceNetworking,
@@ -562,17 +604,37 @@ function KubernetesServices(props: { model: KubernetesPageModel }) {
   );
   const totalRows = createMemo(() => sections().reduce((sum, rows) => sum + rows.length, 0));
   const scope = createKubernetesInventoryScope(sections);
-  const scopedServices = () => scope.scopedSections()[0];
-  const scopedNetworking = () => scope.scopedSections()[1];
-  const countForStatus = (value: KubernetesResourceStatusFilter): number =>
-    countKubernetesVisible(scope.scopedSections(), toolbar.search(), value);
-  const visibleRows = createMemo(() => countForStatus(toolbar.status()));
-  const hasActiveFilters = () => toolbar.hasActiveFilters() || scope.hasActiveScope();
-  const resetFilters = () =>
+  const scopedServices = createMemo(() =>
+    scope
+      .scopedSections()[0]
+      .filter((resource) => matchesKubernetesServiceCategory(resource, category())),
+  );
+  const scopedNetworking = createMemo(() =>
+    scope
+      .scopedSections()[1]
+      .filter((resource) => matchesKubernetesServiceCategory(resource, category())),
+  );
+  const countForCategory = (value: KubernetesServiceCategoryFilter): number =>
+    scope
+      .scopedSections()
+      .reduce(
+        (sum, rows) =>
+          sum +
+          filterKubernetesResources(rows, toolbar.search(), 'all').filter((resource) =>
+            matchesKubernetesServiceCategory(resource, value),
+          ).length,
+        0,
+      );
+  const visibleRows = createMemo(() => countForCategory(category()));
+  const hasActiveFilters = () =>
+    toolbar.hasActiveFilters() || scope.hasActiveScope() || category() !== 'all';
+  const resetFilters = () => {
+    setCategory('all');
     toolbar.resetFilters({
       [KUBERNETES_QUERY_PARAMS.cluster]: null,
       [KUBERNETES_QUERY_PARAMS.namespace]: null,
     });
+  };
 
   return (
     <Show
@@ -591,9 +653,12 @@ function KubernetesServices(props: { model: KubernetesPageModel }) {
           onSearchChange={toolbar.setSearch}
           searchPlaceholder="Search services and networking"
           searchSuggestions={searchSuggestions}
-          status={toolbar.status()}
-          onStatusChange={toolbar.setStatus}
-          statusOptions={withPlatformStatusCounts(PLATFORM_HEALTH_FILTER_OPTIONS, countForStatus)}
+          status={category()}
+          onStatusChange={setCategory}
+          statusOptions={withPlatformStatusCounts(
+            KUBERNETES_SERVICE_CATEGORY_OPTIONS,
+            countForCategory,
+          )}
           filters={scope.scopeFilters()}
           visible={visibleRows()}
           total={totalRows()}
@@ -609,7 +674,6 @@ function KubernetesServices(props: { model: KubernetesPageModel }) {
             emptyDescription="Services appear here once the agent can read Service resources."
             showToolbar={false}
             externalSearch={toolbar.search}
-            externalStatus={toolbar.status}
           />
         </Show>
         <Show when={scopedNetworking().length > 0}>
@@ -620,7 +684,6 @@ function KubernetesServices(props: { model: KubernetesPageModel }) {
             emptyDescription="Ingresses and endpoint slices appear here once the agent can read networking inventory."
             showToolbar={false}
             externalSearch={toolbar.search}
-            externalStatus={toolbar.status}
           />
         </Show>
       </div>
@@ -633,23 +696,44 @@ function KubernetesConfiguration(props: { model: KubernetesPageModel }) {
     () => props.model.config.length > 0 || props.model.policy.length > 0,
   );
   const toolbar = createKubernetesSharedToolbar();
+  const [category, setCategory] = createSignal<KubernetesConfigCategoryFilter>('all');
   const sections = createMemo<Resource[][]>(() => [props.model.config, props.model.policy]);
   const searchSuggestions = createMemo(() =>
     buildPlatformResourceSearchSuggestions(sections().flat()),
   );
   const totalRows = createMemo(() => sections().reduce((sum, rows) => sum + rows.length, 0));
   const scope = createKubernetesInventoryScope(sections);
-  const scopedConfig = () => scope.scopedSections()[0];
-  const scopedPolicy = () => scope.scopedSections()[1];
-  const countForStatus = (value: KubernetesResourceStatusFilter): number =>
-    countKubernetesVisible(scope.scopedSections(), toolbar.search(), value);
-  const visibleRows = createMemo(() => countForStatus(toolbar.status()));
-  const hasActiveFilters = () => toolbar.hasActiveFilters() || scope.hasActiveScope();
-  const resetFilters = () =>
+  const scopedConfig = createMemo(() =>
+    scope
+      .scopedSections()[0]
+      .filter((resource) => matchesKubernetesConfigCategory(resource, category())),
+  );
+  const scopedPolicy = createMemo(() =>
+    scope
+      .scopedSections()[1]
+      .filter((resource) => matchesKubernetesConfigCategory(resource, category())),
+  );
+  const countForCategory = (value: KubernetesConfigCategoryFilter): number =>
+    scope
+      .scopedSections()
+      .reduce(
+        (sum, rows) =>
+          sum +
+          filterKubernetesResources(rows, toolbar.search(), 'all').filter((resource) =>
+            matchesKubernetesConfigCategory(resource, value),
+          ).length,
+        0,
+      );
+  const visibleRows = createMemo(() => countForCategory(category()));
+  const hasActiveFilters = () =>
+    toolbar.hasActiveFilters() || scope.hasActiveScope() || category() !== 'all';
+  const resetFilters = () => {
+    setCategory('all');
     toolbar.resetFilters({
       [KUBERNETES_QUERY_PARAMS.cluster]: null,
       [KUBERNETES_QUERY_PARAMS.namespace]: null,
     });
+  };
 
   return (
     <Show
@@ -668,9 +752,12 @@ function KubernetesConfiguration(props: { model: KubernetesPageModel }) {
           onSearchChange={toolbar.setSearch}
           searchPlaceholder="Search configuration and policy"
           searchSuggestions={searchSuggestions}
-          status={toolbar.status()}
-          onStatusChange={toolbar.setStatus}
-          statusOptions={withPlatformStatusCounts(PLATFORM_HEALTH_FILTER_OPTIONS, countForStatus)}
+          status={category()}
+          onStatusChange={setCategory}
+          statusOptions={withPlatformStatusCounts(
+            KUBERNETES_CONFIG_CATEGORY_OPTIONS,
+            countForCategory,
+          )}
           filters={scope.scopeFilters()}
           visible={visibleRows()}
           total={totalRows()}
@@ -686,7 +773,7 @@ function KubernetesConfiguration(props: { model: KubernetesPageModel }) {
             emptyDescription="Namespaces, ConfigMaps, Secrets, and ServiceAccounts appear here once the agent can read cluster configuration inventory."
             showToolbar={false}
             externalSearch={toolbar.search}
-            externalStatus={toolbar.status}
+            showRoutineMetadataOnly={category() === 'config'}
           />
         </Show>
         <Show when={scopedPolicy().length > 0}>
@@ -697,7 +784,6 @@ function KubernetesConfiguration(props: { model: KubernetesPageModel }) {
             emptyDescription="NetworkPolicies, PodDisruptionBudgets, ResourceQuotas, and LimitRanges appear here once the agent can read policy inventory."
             showToolbar={false}
             externalSearch={toolbar.search}
-            externalStatus={toolbar.status}
           />
         </Show>
       </div>
@@ -713,11 +799,16 @@ function KubernetesOverview(props: KubernetesOverviewProps) {
     const value = searchParams[KUBERNETES_QUERY_PARAMS.cluster];
     return typeof value === 'string' ? value : '';
   };
-  const workloadAttention = createMemo(() => {
-    const posture = buildKubernetesOverviewPosture(props.model());
-    return posture.podAttention + posture.deploymentAttention;
-  });
 
+  const workloadAttention = createMemo(
+    () =>
+      [
+        ...props.model().deployments,
+        ...props.model().pods,
+        ...getKubernetesControllerResources(props.model()),
+        ...props.model().autoscaling,
+      ].filter(isKubernetesWorkloadAttention).length,
+  );
   const { activeAlerts } = useWebSocket();
   const alertsActivation = useAlertsActivation();
   const nodesNeedingAttention = createMemo(() =>

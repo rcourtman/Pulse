@@ -140,11 +140,11 @@ describe('TrueNAS protection completion evidence', () => {
     await vi.waitFor(() => expect(row('completed')).not.toBeNull());
 
     for (const id of ['running', 'started-only', 'failed-started-only', 'unknown']) {
-      expect(completion(id)).toHaveTextContent(/^\s*-\s*$/);
+      expect(completion(id)).toHaveTextContent(/^\s*—\s*$/);
     }
     expect(completion('invalid')).toHaveTextContent('Unknown');
     for (const id of ['completed', 'failed-completed']) {
-      expect(completion(id)).not.toHaveTextContent(/^\s*-\s*$/);
+      expect(completion(id)).not.toHaveTextContent(/^\s*—\s*$/);
     }
     expect(row('running')).toHaveAttribute('data-truenas-protection-outcome', 'running');
     expect(row('failed-started-only')).toHaveAttribute('data-truenas-protection-outcome', 'failed');
@@ -189,7 +189,7 @@ describe('TrueNAS protection completion evidence', () => {
     const recovery = mountProtection();
     await vi.waitFor(() => expect(row('active')).not.toBeNull());
     await fireEvent.click(row('active'));
-    expect(completion('active')).toHaveTextContent(/^\s*-\s*$/);
+    expect(completion('active')).toHaveTextContent(/^\s*—\s*$/);
     expect(
       within(screen.getByTestId('truenas-protection-detail')).queryByText('Completed', {
         exact: true,
@@ -199,7 +199,7 @@ describe('TrueNAS protection completion evidence', () => {
     apiFetchJSON.mockResolvedValueOnce({ data: [point('active', { completedAt })] });
     await recovery().refetch({ background: true });
     expect(row('active')).toHaveAttribute('data-truenas-protection-outcome', 'success');
-    expect(completion('active')).not.toHaveTextContent(/^\s*-\s*$/);
+    expect(completion('active')).not.toHaveTextContent(/^\s*—\s*$/);
     expect(
       within(screen.getByTestId('truenas-protection-detail')).getByText('Completed', {
         exact: true,
@@ -232,7 +232,7 @@ describe('TrueNAS protection completion evidence', () => {
     await fireEvent.click(screen.getByRole('button', { name: 'Running, 1' }));
     expect(button()).toBeInTheDocument();
     expect(rowIDs()).toEqual(['running']);
-    expect(completion('running')).toHaveTextContent(/^\s*-\s*$/);
+    expect(completion('running')).toHaveTextContent(/^\s*—\s*$/);
     const search = screen.getByPlaceholderText('Search snapshots or replication');
     await fireEvent.input(search, { target: { value: 'not-a-dataset' } });
     expect(screen.getByText('No protection events match current filters')).toBeInTheDocument();
