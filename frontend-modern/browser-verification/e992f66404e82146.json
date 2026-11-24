@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "base_sha": "54d42326bd16258726e8895815a7d25c28a375f8",
+  "verified_at": "2026-11-24T11:44:15Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Infrastructure/resourceDetailDrawerOverviewModel.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Infrastructure/resourceDetailDrawerOverviewModel.ts": "7a9ccd02b51ae00ad51ff5c45a65b72f1308d173350b073a98ba4addacd530e1"
+  },
+  "routes": [
+    "/standalone/machines"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Expanded degraded Unraid host drawer in dark and light themes with active warning alert in Needs attention",
+    "Expanded Details disclosure showing Observed state Warning preserved under Runtime context",
+    "Expanded offline host drawer with no active alerts verifying Worth checking still lifts Observed state Offline"
+  ],
+  "interactions": [
+    "Desktop Chromium 1440x900 dark and light: keyboard Enter expands Tower drawer, confirming Needs attention displays alert without redundant Worth checking box",
+    "Desktop Chromium Details toggle opens Runtime context showing Observed state Warning",
+    "Desktop Chromium keyboard Enter collapses Tower and expands offline BackupBox confirming Worth checking still surfaces Offline state",
+    "Mobile Chromium 390x844 dark: tap expands Tower drawer cleanly with zero horizontal overflow"
+  ]
+}
