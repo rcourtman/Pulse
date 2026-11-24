@@ -9,6 +9,14 @@ keywords:
   - monitoring
   - proxmox
   - observability
+  - kubernetes
+  - docker
+  - truenas
+  - alerting
+  - uptime
+  - homelab
+  - self-hosted
+  - mcp
 home: https://github.com/rcourtman/Pulse
 sources:
   - https://github.com/rcourtman/Pulse

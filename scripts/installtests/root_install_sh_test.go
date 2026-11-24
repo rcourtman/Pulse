@@ -1323,12 +1323,124 @@ func TestRootInstallUninstallWiresSensorProxyCleanup(t *testing.T) {
 	for _, needle := range []string{
 		`cleanup_local_sensor_proxy() {`,
 		`local_sensor_proxy_present() {`,
+		`retire_legacy_sensor_proxy_selfheal() {`,
 		`remove_local_sensor_proxy_managed_keys() {`,
 		`# pulse-(managed|proxy)-key$`,
 	} {
 		if !strings.Contains(script, needle) {
 			t.Fatalf("install.sh missing sensor-proxy cleanup contract: %s", needle)
 		}
+	}
+	if count := strings.Count(script, "retire_legacy_sensor_proxy_selfheal"); count < 5 {
+		t.Fatalf("expected retire_legacy_sensor_proxy_selfheal defined and wired into update paths (>=5 occurrences), got %d", count)
+	}
+}
+
+func TestRootInstallRetiresOrphanedSensorProxySelfhealOnUpgrade(t *testing.T) {
+	tmp := t.TempDir()
+	systemdDir := filepath.Join(tmp, "systemd")
+	installRoot := filepath.Join(tmp, "sensor-proxy")
+	selfhealScript := filepath.Join(installRoot, "bin", "pulse-sensor-proxy-selfheal.sh")
+	if err := os.MkdirAll(systemdDir, 0o755); err != nil {
+		t.Fatalf("mkdir systemd: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Dir(selfhealScript), 0o755); err != nil {
+		t.Fatalf("mkdir selfheal bin: %v", err)
+	}
+
+	retiredUnits := []string{
+		"pulse-sensor-proxy-selfheal.timer",
+		"pulse-sensor-proxy-selfheal.service",
+		"pulse-sensor-cleanup.path",
+		"pulse-sensor-cleanup.service",
+	}
+	for _, u := range retiredUnits {
+		if err := os.WriteFile(filepath.Join(systemdDir, u), []byte("[Unit]\n"), 0o644); err != nil {
+			t.Fatalf("write %s: %v", u, err)
+		}
+	}
+	if err := os.WriteFile(selfhealScript, []byte("#!/bin/sh\n"), 0o755); err != nil {
+		t.Fatalf("write selfheal script: %v", err)
+	}
+	// Preserve pulse-sensor-proxy.service (not removed by self-heal retirement).
+	mainUnit := filepath.Join(systemdDir, "pulse-sensor-proxy.service")
+	if err := os.WriteFile(mainUnit, []byte("[Unit]\n"), 0o644); err != nil {
+		t.Fatalf("write main unit: %v", err)
+	}
+
+	systemctlLog := filepath.Join(tmp, "systemctl.log")
+	env := `
+		SENSOR_PROXY_BINARY_PATH="` + filepath.Join(tmp, "missing-bin") + `"
+		SENSOR_PROXY_SYSTEMD_DIR="` + systemdDir + `"
+		SENSOR_PROXY_INSTALL_ROOT="` + installRoot + `"
+		SENSOR_PROXY_WORK_DIR="` + filepath.Join(tmp, "missing-work") + `"
+		SENSOR_PROXY_CONFIG_DIR="` + filepath.Join(tmp, "missing-cfg") + `"
+		print_info() { echo "INFO: $*"; }
+		systemctl() { return 0; }
+		safe_systemctl() { echo "$*" >> "` + systemctlLog + `"; return 0; }
+	`
+	funcs := extractRootInstallShellFunction(t, "local_sensor_proxy_present") + "\n" +
+		extractRootInstallShellFunction(t, "retire_legacy_sensor_proxy_selfheal")
+
+	// Standalone orphaned self-heal timer must be detected even without binary/dirs.
+	orphanDir := filepath.Join(t.TempDir(), "systemd")
+	if err := os.MkdirAll(orphanDir, 0o755); err != nil {
+		t.Fatalf("mkdir orphan systemd: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(orphanDir, "pulse-sensor-proxy-selfheal.timer"), []byte("[Timer]\n"), 0o644); err != nil {
+		t.Fatalf("write orphan timer: %v", err)
+	}
+	detectScript := `
+		SENSOR_PROXY_BINARY_PATH="` + filepath.Join(tmp, "missing-bin") + `"
+		SENSOR_PROXY_SYSTEMD_DIR="` + orphanDir + `"
+		SENSOR_PROXY_INSTALL_ROOT="` + filepath.Join(tmp, "missing-root") + `"
+		SENSOR_PROXY_WORK_DIR="` + filepath.Join(tmp, "missing-work") + `"
+		SENSOR_PROXY_CONFIG_DIR="` + filepath.Join(tmp, "missing-cfg") + `"
+	` + extractRootInstallShellFunction(t, "local_sensor_proxy_present") + "\nlocal_sensor_proxy_present\n"
+	if out, err := exec.Command("bash", "-c", detectScript).CombinedOutput(); err != nil {
+		t.Fatalf("expected local_sensor_proxy_present to detect orphaned selfheal timer: %v\n%s", err, out)
+	}
+
+	out, err := exec.Command("bash", "-c", env+funcs+"\nretire_legacy_sensor_proxy_selfheal\n").CombinedOutput()
+	if err != nil {
+		t.Fatalf("retire_legacy_sensor_proxy_selfheal failed: %v\n%s", err, out)
+	}
+	for _, u := range retiredUnits {
+		if _, statErr := os.Stat(filepath.Join(systemdDir, u)); !os.IsNotExist(statErr) {
+			t.Fatalf("expected %s to be removed, stat err = %v", u, statErr)
+		}
+	}
+	if _, statErr := os.Stat(selfhealScript); !os.IsNotExist(statErr) {
+		t.Fatalf("expected selfheal script to be removed, stat err = %v", statErr)
+	}
+	if _, statErr := os.Stat(mainUnit); statErr != nil {
+		t.Fatalf("expected main pulse-sensor-proxy.service to remain untouched, stat err = %v", statErr)
+	}
+	if !strings.Contains(string(out), "uninstall-sensor-proxy.sh") {
+		t.Fatalf("expected hint for remaining legacy sensor-proxy service, got:\n%s", out)
+	}
+	logBytes, err := os.ReadFile(systemctlLog)
+	if err != nil {
+		t.Fatalf("read systemctl log: %v", err)
+	}
+	logText := string(logBytes)
+	for _, expected := range []string{
+		"stop pulse-sensor-proxy-selfheal.timer",
+		"disable pulse-sensor-proxy-selfheal.timer",
+		"daemon-reload",
+	} {
+		if !strings.Contains(logText, expected) {
+			t.Fatalf("expected systemctl log to contain %q, got:\n%s", expected, logText)
+		}
+	}
+
+	// Second call when nothing remains must be a silent no-op.
+	noopOut, err := exec.Command("bash", "-c", env+funcs+"\nretire_legacy_sensor_proxy_selfheal\n").CombinedOutput()
+	if err != nil {
+		t.Fatalf("retire_legacy_sensor_proxy_selfheal no-op failed: %v\n%s", err, noopOut)
+	}
+	if strings.TrimSpace(string(noopOut)) != "" {
+		t.Fatalf("expected silent no-op when retired units are absent, got:\n%s", noopOut)
 	}
 }
 

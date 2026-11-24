@@ -1,0 +1,124 @@
+name: Publish Homebrew Tap
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Published stable release tag (e.g. v6.9.0)"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: publish-homebrew-tap
+  cancel-in-progress: false
+
+jobs:
+  publish_homebrew_formula:
+    name: Render and publish Formula/pulse.rb
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (!github.event.release.draft && !github.event.release.prerelease)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Resolve release tag
+        id: resolve
+        env:
+          INPUT_TAG: ${{ github.event.inputs.tag }}
+          EVENT_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          set -euo pipefail
+          TAG="${INPUT_TAG:-${EVENT_TAG}}"
+          if [[ -z "$TAG" ]]; then
+            echo "ERROR: could not resolve release tag" >&2
+            exit 1
+          fi
+          VERSION="${TAG#v}"
+          if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Skipping non-stable tag: $TAG"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "skip=false" >> "$GITHUB_OUTPUT"
+          echo "tag=v${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+
+      - name: Download and verify pulse-cli tarballs
+        if: steps.resolve.outputs.skip != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.resolve.outputs.tag }}
+          VERSION: ${{ steps.resolve.outputs.version }}
+        run: |
+          set -euo pipefail
+          mkdir -p release-cli
+          gh release download "$TAG" --repo "${GITHUB_REPOSITORY}" \
+            --dir release-cli \
+            --pattern "checksums.txt" \
+            --pattern "pulse-cli-v${VERSION}-darwin-arm64.tar.gz" \
+            --pattern "pulse-cli-v${VERSION}-darwin-amd64.tar.gz" \
+            --pattern "pulse-cli-v${VERSION}-linux-arm64.tar.gz" \
+            --pattern "pulse-cli-v${VERSION}-linux-amd64.tar.gz"
+
+          (
+            cd release-cli
+            grep -E "  pulse-cli-v${VERSION}-(darwin|linux)-(arm64|amd64)\.tar\.gz$" checksums.txt > cli-checksums.txt
+            test "$(wc -l < cli-checksums.txt)" -eq 4
+            sha256sum -c cli-checksums.txt
+          )
+
+      - name: Render Formula/pulse.rb
+        if: steps.resolve.outputs.skip != 'true'
+        env:
+          VERSION: ${{ steps.resolve.outputs.version }}
+        run: |
+          set -euo pipefail
+          bash scripts/render-homebrew-formula.sh \
+            --version "$VERSION" \
+            --release-dir release-cli \
+            --output rendered-homebrew/Formula/pulse.rb
+
+      - name: Upload rendered formula artifact
+        if: steps.resolve.outputs.skip != 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: homebrew-formula-${{ steps.resolve.outputs.tag }}
+          path: rendered-homebrew/Formula/pulse.rb
+          retention-days: 30
+
+      - name: Push Formula/pulse.rb to rcourtman/homebrew-tap
+        if: steps.resolve.outputs.skip != 'true'
+        env:
+          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          TAP_REPO: rcourtman/homebrew-tap
+          TAG: ${{ steps.resolve.outputs.tag }}
+          VERSION: ${{ steps.resolve.outputs.version }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${HOMEBREW_TAP_TOKEN}" ]]; then
+            echo "HOMEBREW_TAP_TOKEN is not configured. Rendered formula uploaded as workflow artifact; skipping tap push."
+            exit 0
+          fi
+
+          git clone "https://x-access-token:${HOMEBREW_TAP_TOKEN}@github.com/${TAP_REPO}.git" tap-repo
+          mkdir -p tap-repo/Formula
+          cp rendered-homebrew/Formula/pulse.rb tap-repo/Formula/pulse.rb
+
+          cd tap-repo
+          if git diff --quiet -- Formula/pulse.rb && [[ -z "$(git ls-files --others --exclude-standard Formula/pulse.rb)" ]]; then
+            echo "Formula/pulse.rb already up to date for ${TAG}"
+            exit 0
+          fi
+
+          git config user.name "pulse-release-bot"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Formula/pulse.rb
+          git commit -m "Update pulse formula to ${TAG}"
+          git push origin HEAD

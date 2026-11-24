@@ -53,6 +53,17 @@ volumes:
 
 Run with: `docker compose up -d`
 
+### First run (10-minute setup window)
+
+1. Open `http://<your-ip>:7655` within **10 minutes** of first boot to create your admin account directly in the browser.
+2. If the 10-minute window expires (or you set `PULSE_REQUIRE_BOOTSTRAP_TOKEN=true`), restart Pulse for a fresh window or retrieve the one-time token:
+
+```bash
+docker exec pulse /app/pulse bootstrap-token
+```
+
+3. After signing in, open **Settings → Infrastructure** to connect your first system. To monitor Docker or Podman hosts and Compose applications without mounting the Docker socket onto the Pulse server container, choose **Install on a host** and run the unified agent command on each Docker host.
+
 **Freeze-enabled VM backups:** API-only monitoring can still send QEMU Guest
 Agent requests. For an affected installation, follow the
 [planned server pause and checked restoration](VM_DISK_MONITORING.md#pause-a-docker-or-compose-server-for-a-planned-backup),

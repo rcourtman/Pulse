@@ -93,6 +93,7 @@ services:
       - pulse-data:/data
     environment:
       - TZ=\${TZ:-UTC}
+      - PULSE_DEPLOYMENT_METHOD=docker_compose
     healthcheck:
       # Use the image's HTTPS-aware probe; HTTP is only for images without it.
       test: ["CMD-SHELL", "if [ -x /docker-healthcheck.sh ]; then exec /docker-healthcheck.sh; else exec wget --quiet --tries=1 --spider http://localhost:7655/api/health; fi"]
@@ -142,11 +143,17 @@ echo "    --security-opt apparmor=unconfined \\"
 echo "    --restart unless-stopped \\"
 echo "    -p ${PULSE_PORT}:7655 \\"
 echo "    -v pulse-data:/data \\"
+echo "    -e PULSE_DEPLOYMENT_METHOD=docker_run \\"
 echo "    ${PULSE_IMAGE}"
 echo ""
 echo "Access Pulse at: http://$(hostname -I | awk '{print $1}'):${PULSE_PORT}"
 echo ""
+echo "First-time setup:"
+echo "  - Open Pulse within 10 minutes of first boot to create your admin account directly."
+echo "  - If the 10-minute window expires, restart the container or run: docker exec pulse /app/pulse bootstrap-token"
+echo "  - After login, open Settings -> Infrastructure to add Docker hosts, standalone Linux/Windows/macOS servers, Proxmox, TrueNAS, or Kubernetes."
+echo ""
 echo "Notes:"
-echo "  - For temperature monitoring, use the unified agent on Proxmox hosts."
+echo "  - For Docker container stats, host disk/SMART health, or temperature sensors, install the unified agent from Settings -> Infrastructure."
 echo "  - SSH-based temperature collection from containers is not recommended."
 echo ""

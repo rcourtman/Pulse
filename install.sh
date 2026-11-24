@@ -5789,6 +5789,7 @@ main() {
 
             setup_update_command
             install_systemd_service || return 1
+            retire_legacy_sensor_proxy_selfheal
 
             if [[ "$ENABLE_AUTO_UPDATES" == "true" ]]; then
                 setup_auto_updates
@@ -5837,6 +5838,7 @@ main() {
             setup_directories || return 1
             setup_update_command
             ensure_systemd_service_installed || return 1
+            retire_legacy_sensor_proxy_selfheal
 
             # Setup auto-updates if requested
             if [[ "$ENABLE_AUTO_UPDATES" == "true" ]]; then
@@ -6050,6 +6052,7 @@ main() {
                 setup_directories || return 1
                 setup_update_command
                 ensure_systemd_service_installed || return 1
+                retire_legacy_sensor_proxy_selfheal
 
                 # Setup auto-updates if requested during update; otherwise
                 # refresh assets a previous install already put in place so a
@@ -6080,6 +6083,7 @@ main() {
                 setup_directories || return 1
                 setup_update_command
                 install_systemd_service || return 1
+                retire_legacy_sensor_proxy_selfheal
                 
                 # Setup auto-updates if requested during reinstall; otherwise
                 # refresh assets a previous install already put in place
@@ -6227,10 +6231,63 @@ SENSOR_PROXY_SYSTEMD_DIR="${PULSE_SENSOR_PROXY_SYSTEMD_DIR:-/etc/systemd/system}
 local_sensor_proxy_present() {
     [[ -e "$SENSOR_PROXY_BINARY_PATH" ]] && return 0
     [[ -e "${SENSOR_PROXY_SYSTEMD_DIR}/pulse-sensor-proxy.service" ]] && return 0
+    [[ -e "${SENSOR_PROXY_SYSTEMD_DIR}/pulse-sensor-proxy-selfheal.timer" ]] && return 0
+    [[ -e "${SENSOR_PROXY_SYSTEMD_DIR}/pulse-sensor-proxy-selfheal.service" ]] && return 0
+    [[ -e "${SENSOR_PROXY_SYSTEMD_DIR}/pulse-sensor-cleanup.path" ]] && return 0
+    [[ -e "${SENSOR_PROXY_SYSTEMD_DIR}/pulse-sensor-cleanup.service" ]] && return 0
     [[ -d "$SENSOR_PROXY_INSTALL_ROOT" ]] && return 0
     [[ -d "$SENSOR_PROXY_WORK_DIR" ]] && return 0
     [[ -d "$SENSOR_PROXY_CONFIG_DIR" ]] && return 0
     return 1
+}
+
+# Retire deprecated v4 sensor-proxy self-heal / cleanup background units during
+# normal upgrades so an old Proxmox host does not keep polling GitHub in a loop.
+# Leaves any running pulse-sensor-proxy.service, LXC configs, and SSH keys
+# untouched (full removal stays behind --uninstall or uninstall-sensor-proxy.sh).
+retire_legacy_sensor_proxy_selfheal() {
+    local found=false
+    local unit=""
+    local selfheal_script="${SENSOR_PROXY_INSTALL_ROOT}/bin/pulse-sensor-proxy-selfheal.sh"
+    local -a retired_units=(
+        pulse-sensor-proxy-selfheal.timer
+        pulse-sensor-proxy-selfheal.service
+        pulse-sensor-cleanup.path
+        pulse-sensor-cleanup.service
+    )
+
+    for unit in "${retired_units[@]}"; do
+        if [[ -e "${SENSOR_PROXY_SYSTEMD_DIR}/${unit}" || -L "${SENSOR_PROXY_SYSTEMD_DIR}/${unit}" ]]; then
+            found=true
+            break
+        fi
+    done
+    if [[ "$found" == false && ( -e "$selfheal_script" || -L "$selfheal_script" ) ]]; then
+        found=true
+    fi
+    [[ "$found" == true ]] || return 0
+
+    print_info "Disabling retired legacy pulse-sensor-proxy-selfheal units..."
+    if command -v systemctl >/dev/null 2>&1; then
+        for unit in "${retired_units[@]}"; do
+            safe_systemctl stop "$unit" >/dev/null 2>&1 || true
+            safe_systemctl disable "$unit" >/dev/null 2>&1 || true
+        done
+    fi
+
+    for unit in "${retired_units[@]}"; do
+        rm -f "${SENSOR_PROXY_SYSTEMD_DIR}/${unit}" || true
+    done
+    rm -f "$selfheal_script" || true
+
+    if command -v systemctl >/dev/null 2>&1; then
+        safe_systemctl daemon-reload >/dev/null 2>&1 || true
+    fi
+
+    print_info "Removed retired pulse-sensor-proxy-selfheal timer and helper units."
+    if [[ -e "${SENSOR_PROXY_SYSTEMD_DIR}/pulse-sensor-proxy.service" || -e "$SENSOR_PROXY_BINARY_PATH" ]]; then
+        print_info "Legacy pulse-sensor-proxy is still installed. To remove it completely, run scripts/uninstall-sensor-proxy.sh."
+    fi
 }
 
 remove_local_sensor_proxy_managed_keys() {

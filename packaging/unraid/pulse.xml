@@ -1,0 +1,21 @@
+<?xml version="1.0"?>
+<Container version="2">
+  <Name>pulse</Name>
+  <Repository>rcourtman/pulse:latest</Repository>
+  <Registry>https://hub.docker.com/r/rcourtman/pulse</Registry>
+  <Network>bridge</Network>
+  <Shell>sh</Shell>
+  <Privileged>false</Privileged>
+  <Support>https://github.com/rcourtman/Pulse/discussions</Support>
+  <Project>https://github.com/rcourtman/Pulse</Project>
+  <Overview>Lightweight self-hosted monitoring and alerting dashboard for Unraid, Docker, Proxmox, Kubernetes, TrueNAS, and Linux/Windows/macOS hosts. Tracks host health, disk SMART vitals, Unraid array status, container stacks, backups, availability checks, and built-in metric history from one container. Open http://[IP]:7655 within 10 minutes of first boot to create your admin account, or run /app/pulse bootstrap-token in the container console if the window expires.</Overview>
+  <Category>Status:Stable Tools:System Network:Management</Category>
+  <WebUI>http://[IP]:[PORT:7655]</WebUI>
+  <Icon>https://raw.githubusercontent.com/rcourtman/Pulse/main/docs/images/pulse-logo.svg</Icon>
+  <ExtraParams>--restart=unless-stopped</ExtraParams>
+  <Description>Lightweight self-hosted monitoring and alerting for Docker, Unraid, Proxmox, Kubernetes, TrueNAS, and standalone hosts.</Description>
+  <Config Name="WebUI Port" Target="7655" Default="7655" Mode="tcp" Description="Pulse web interface and API port" Type="Port" Display="always" Required="true" Mask="false">7655</Config>
+  <Config Name="Data Directory" Target="/data" Default="/mnt/user/appdata/pulse" Mode="rw" Description="Persistent configuration, credentials, alerts, and metric history. Must stay on persistent storage so container updates do not reset Pulse." Type="Path" Display="always" Required="true" Mask="false">/mnt/user/appdata/pulse</Config>
+  <Config Name="Deployment Method" Target="PULSE_DEPLOYMENT_METHOD" Default="container_other" Mode="" Description="Deployment attribution label for container app UIs" Type="Variable" Display="advanced-hide" Required="false" Mask="false">container_other</Config>
+  <Config Name="Timezone" Target="TZ" Default="UTC" Mode="" Description="Timezone for alert schedules and history display (for example, Europe/London or America/New_York)" Type="Variable" Display="always" Required="false" Mask="false">UTC</Config>
+</Container>

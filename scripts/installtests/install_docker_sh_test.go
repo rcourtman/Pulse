@@ -879,8 +879,9 @@ func TestInstallDockerScriptPreparesWithoutPrivilegesOrDocker(t *testing.T) {
 			}
 			var config struct {
 				Services map[string]struct {
-					User    string   `yaml:"user"`
-					Volumes []string `yaml:"volumes"`
+					User        string   `yaml:"user"`
+					Volumes     []string `yaml:"volumes"`
+					Environment []string `yaml:"environment"`
 				} `yaml:"services"`
 			}
 			if err := yaml.Unmarshal(compose, &config); err != nil {
@@ -888,6 +889,18 @@ func TestInstallDockerScriptPreparesWithoutPrivilegesOrDocker(t *testing.T) {
 			}
 			if service := config.Services["pulse"]; service.User != "1000:1000" || len(service.Volumes) != 1 || service.Volumes[0] != "pulse-data:/data" {
 				t.Fatal("unprivileged preparation changed runtime identity or data volume")
+			}
+			hasDeployMethod := false
+			for _, envEntry := range config.Services["pulse"].Environment {
+				if envEntry == "PULSE_DEPLOYMENT_METHOD=docker_compose" {
+					hasDeployMethod = true
+				}
+			}
+			if !hasDeployMethod {
+				t.Fatalf("expected PULSE_DEPLOYMENT_METHOD=docker_compose in generated Compose:\n%s", compose)
+			}
+			if !strings.Contains(out, "docker exec pulse /app/pulse bootstrap-token") || !strings.Contains(out, "10 minutes") {
+				t.Fatalf("expected 10-minute first-boot and bootstrap-token guidance in output:\n%s", out)
 			}
 			if _, err := os.Stat(filepath.Join(workDir, "docker-calls")); !os.IsNotExist(err) {
 				t.Fatal("configuration preparation required Docker access")

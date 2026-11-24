@@ -16,6 +16,37 @@
 
 ## Purpose
 
+### Upgrade self-heal retirement, Docker preparation attribution, and CLI/Unraid packaging (23 November 2026)
+
+Existing-install upgrade and reinstall paths in `install.sh` now invoke
+`retire_legacy_sensor_proxy_selfheal` after ensuring the Pulse systemd service
+so orphaned v4 `pulse-sensor-proxy-selfheal.{timer,service}`,
+`pulse-sensor-cleanup.{path,service}`, and
+`/opt/pulse/sensor-proxy/bin/pulse-sensor-proxy-selfheal.sh` do not remain
+active polling GitHub after an upgrade. `local_sensor_proxy_present` now also
+detects those four auxiliary units standalone. Active
+`pulse-sensor-proxy.service`, LXC guest configs, and SSH keys remain untouched
+by upgrades (full removal stays behind `--uninstall` or
+`scripts/uninstall-sensor-proxy.sh`).
+
+`scripts/install-docker.sh` now emits `PULSE_DEPLOYMENT_METHOD=docker_compose`
+in the generated Compose file (and `docker_run` in the fallback command) plus
+10-minute first-boot and `bootstrap-token` guidance, matching `docs/DOCKER.md`
+and its shipped mirror `frontend-modern/public/docs/DOCKER.md`.
+`scripts/render-homebrew-formula.sh` and `.github/workflows/publish-homebrew-tap.yml`
+render and optionally push `Formula/pulse.rb` to `rcourtman/homebrew-tap` from
+verified stable CLI tarballs. `packaging/unraid/pulse.xml` defines an
+unprivileged Unraid Community Applications template with persistent `/data` and
+`PULSE_DEPLOYMENT_METHOD=container_other`, and `deploy/helm/pulse/Chart.yaml`
+broadens discovery keywords across supported platforms.
+
+Proof: `TestRootInstallRetiresOrphanedSensorProxySelfhealOnUpgrade`,
+`TestInstallDockerScriptPreparesWithoutPrivilegesOrDocker`,
+`TestRenderHomebrewFormulaRendersVerifiedDigests`,
+`TestRenderHomebrewFormulaRejectsPrereleaseAndMissingArchive`,
+`TestPublishHomebrewTapWorkflowContract`, and
+`TestUnraidCommunityAppTemplateContract` in `scripts/installtests/`.
+
 ### Published releases awaiting runtime delivery
 
 `UpdateInfo.availability` distinguishes `available`, `up_to_date`, `preparing`

@@ -47,11 +47,13 @@ Thresholds plus Ping, TCP, UDP, HTTP(S), and TLS expiry checks via email, Discor
 | Platform | What Pulse monitors |
 |---|---|
 | Proxmox VE, PBS & PMG | Nodes, VMs, LXCs, storage, backups, replication, Ceph, mail gateways |
-| Docker & Podman | Hosts, containers, Compose projects, Swarm services, image updates |
-| Kubernetes | Clusters, nodes, workloads, pods, services, storage, events |
-| TrueNAS SCALE & CORE | Pools, datasets, disks, snapshots, replication, apps, VMs |
-| Linux, Windows & macOS | Host health, filesystems, networking, temperatures, RAID, availability |
+| [Docker & Podman](docs/DOCKER.md) | Hosts, containers, Compose projects, Swarm services, image updates |
+| [Kubernetes](docs/KUBERNETES.md) | Clusters, nodes, workloads, pods, services, storage, events |
+| [TrueNAS SCALE & CORE](docs/TRUENAS.md) | Pools, datasets, disks, snapshots, replication, apps, VMs |
+| [Linux, Windows & macOS](docs/UNIFIED_AGENT.md) | Host health, filesystems, networking, temperatures, RAID, availability |
 | VMware vSphere *(early access)* | Hosts, clusters, VMs, datastores, networks, snapshots |
+
+No Proxmox required: Pulse runs standalone for Docker/Podman estates, Kubernetes clusters, TrueNAS appliances, or plain Linux/Windows/macOS fleets.
 
 <details>
 <summary><strong>More full-screen views: Docker and Podman, Kubernetes, and Pulse Patrol</strong></summary>
@@ -67,7 +69,7 @@ Multi-cluster health, degraded nodes, pods, deployments, storage, and events in 
 ![Kubernetes clusters and workloads](docs/images/pulse-kubernetes.webp)
 
 ### Optional AI & MCP
-[Pulse Patrol](docs/AI.md) runs scheduled checks with your own AI provider or local model. The `pulse` CLI (`pulse auth login`, `pulse connect`) and [`pulse-mcp`](cmd/pulse-mcp/README.md#quick-start) let Claude Code, Codex, OpenCode, or Claude Desktop [ask what changed overnight](docs/WHAT_HAPPENED_OVERNIGHT.md).
+[Pulse Patrol](docs/AI.md) runs scheduled checks with your own AI provider or local model (see the [local open-weight model matrix](docs/LOCAL_MODEL_MATRIX.md) for measured Ollama and `llama.cpp` results). The `pulse` CLI (`pulse auth login`, `pulse connect`) and [`pulse-mcp`](cmd/pulse-mcp/README.md#quick-start) let Claude Code, Codex, OpenCode, or Claude Desktop [ask what changed overnight](docs/WHAT_HAPPENED_OVERNIGHT.md).
 
 ![Pulse Patrol attention inbox](docs/images/pulse-patrol.webp)
 
@@ -143,9 +145,10 @@ pulse auth login https://your-pulse-host
 pulse connect claude-code   # or: codex, opencode, claude-desktop
 pulse doctor
 pulse changes --since 12h
+pulse config pull --output monitoring.yaml   # version alerts and checks in Git
 ```
 
-Then ask your agent *"What happened overnight?"* See the [agent integrations guide](docs/AGENT_SUBSTRATE.md) and [overnight walkthrough](docs/WHAT_HAPPENED_OVERNIGHT.md). Existing [`pulse-mcp`](cmd/pulse-mcp/README.md) setups continue to work.
+Then ask your agent *"What happened overnight?"* or manage alerts, availability checks, and notification routes declaratively via `pulse config diff` and `pulse config apply` ([declarative config guide](docs/CONFIGURATION.md#declarative-monitoring-configuration-as-code)). See the [agent integrations guide](docs/AGENT_SUBSTRATE.md) and [overnight walkthrough](docs/WHAT_HAPPENED_OVERNIGHT.md). Existing [`pulse-mcp`](cmd/pulse-mcp/README.md) setups continue to work.
 
 ### Do you need an agent?
 
