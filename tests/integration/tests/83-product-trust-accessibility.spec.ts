@@ -217,7 +217,11 @@ test(`representative authenticated surfaces have no automatically detectable WCA
       await expect(dialog).toBeHidden();
       await expect(addButton).toBeFocused();
 
-      const installAgent = page.getByRole("button", { name: "Add Pulse Agent hosts", exact: true });
+      const installAgent = page
+        .getByRole("button", {
+          name: /^Add (Linux|macOS|Windows|FreeBSD|Pulse Agent hosts)$/,
+        })
+        .first();
       await installAgent.focus();
       await page.keyboard.press("Enter");
       const installer = page.getByRole("dialog");

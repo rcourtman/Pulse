@@ -1,5 +1,5 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@solidjs/testing-library';
-import { createSignal } from 'solid-js';
+import { createSignal, type JSX } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Connection } from '@/api/connections';
 import { TrueNASAPI } from '@/api/truenas';
@@ -229,11 +229,12 @@ vi.mock('../InfrastructureInstallerSection', () => ({
 }));
 
 vi.mock('../ConnectionEditor/CredentialSlots/NodeCredentialSlot', () => ({
-  NodeCredentialSlot: (props: { nodeType: string }) => {
+  NodeCredentialSlot: (props: { nodeType: string; attachedAgentsContent?: JSX.Element }) => {
     nodeCredentialSlotState.mountCount += 1;
     return (
       <div data-testid="proxmox-section" data-node-type={props.nodeType}>
         <input aria-label="Authentication method" value="api" />
+        {props.attachedAgentsContent}
       </div>
     );
   },
@@ -1860,6 +1861,8 @@ describe('InfrastructureWorkspace', () => {
     expect(section).toHaveTextContent('Remote commands are off');
     expect(section).toHaveTextContent('Command access is granted on the host, not from Pulse');
     expect(section).toHaveTextContent('Allow Pulse to run commands on this host');
+    expect(screen.getByText('Linux / macOS / FreeBSD')).toBeInTheDocument();
+    expect(screen.queryByText('Windows PowerShell')).not.toBeInTheDocument();
 
     navigateSpy.mockClear();
     fireEvent.click(within(section).getByRole('button', { name: 'Get install command' }));
@@ -2155,10 +2158,8 @@ describe('infrastructureRowMonitoringPath', () => {
     );
   });
 
-  it('gives agent hosts and availability checks no single destination', () => {
-    // An agent host shows on Proxmox, Machines or Kubernetes depending on
-    // what it runs, so a fixed link would often be wrong.
-    expect(infrastructureRowMonitoringPath({ ownerType: 'agent' })).toBeUndefined();
+  it('sends standalone agent hosts to Machines and leaves availability unlinked', () => {
+    expect(infrastructureRowMonitoringPath({ ownerType: 'agent' })).toBe('/standalone/machines');
     expect(infrastructureRowMonitoringPath({ ownerType: 'availability' })).toBeUndefined();
   });
 });

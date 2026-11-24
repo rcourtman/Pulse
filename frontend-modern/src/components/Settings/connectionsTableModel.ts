@@ -18,6 +18,7 @@ import {
   buildDockerPath,
   buildKubernetesPath,
   buildProxmoxPath,
+  buildStandalonePath,
   buildTrueNASPath,
   buildVmwarePath,
 } from '@/routing/resourceLinks';
@@ -62,7 +63,11 @@ const prettifyPlatform = (platform?: string | null): string | null => {
   }
 };
 
-const connectionAgentHostProfileLabel = (
+export const connectionAgentPlatformFamilyLabel = (
+  identity?: ConnectionAgentIdentityPresentation | null,
+): string | null => prettifyPlatform(identity?.platform);
+
+export const connectionAgentHostProfileLabel = (
   identity?: ConnectionAgentIdentityPresentation | null,
 ): string | null => {
   const hostProfile = identity?.hostProfile?.trim();
@@ -190,6 +195,8 @@ const SURFACE_LABELS: Record<string, string> = {
   domainStats: 'Domain stats',
   host: 'Host telemetry',
   hosts: 'Hosts',
+  docker: 'Docker',
+  kubernetes: 'Kubernetes',
   datasets: 'Datasets',
   pools: 'Pools',
   replication: 'Replication',
@@ -1071,6 +1078,7 @@ const MONITORING_PATH_BY_CONNECTION_TYPE: Partial<Record<ConnectionType, string>
   truenas: buildTrueNASPath(),
   docker: buildDockerPath(),
   kubernetes: buildKubernetesPath(),
+  agent: buildStandalonePath(),
 };
 
 export const infrastructureRowMonitoringPath = (

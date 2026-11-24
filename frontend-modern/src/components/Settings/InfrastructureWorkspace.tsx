@@ -70,7 +70,10 @@ import {
   type InfrastructureAddStep,
   type InfrastructurePanelStep,
 } from './infrastructureWorkspaceModel';
-import { collectInfrastructureAgentDoctorTargets } from './infrastructureAgentUpdateCommandsModel';
+import {
+  collectInfrastructureAgentDoctorTargets,
+  resolveKnownAgentCommandPlatform,
+} from './infrastructureAgentUpdateCommandsModel';
 import type { InfrastructurePlatformSettingsProps } from './proxmoxSettingsModel';
 import { useConnectionsLedger } from './useConnectionsLedger';
 import { useAgentFleetDiagnostics } from './useAgentFleetDiagnostics';
@@ -129,6 +132,21 @@ const ADD_STEP_TO_INSTALLER_FOCUS: Partial<
 };
 
 const trimSentenceTerminal = (value: string): string => value.trim().replace(/\.+$/, '');
+
+const CONNECTION_STATE_BADGES: Record<string, string> = {
+  active: 'bg-green-100 text-green-800 dark:bg-green-900/25 dark:text-green-300',
+  degraded: 'bg-amber-100 text-amber-800 dark:bg-amber-900/25 dark:text-amber-300',
+  unauthorized: 'bg-amber-100 text-amber-800 dark:bg-amber-900/25 dark:text-amber-300',
+  unreachable: 'bg-rose-100 text-rose-800 dark:bg-rose-900/25 dark:text-rose-300',
+  offline: 'bg-rose-100 text-rose-800 dark:bg-rose-900/25 dark:text-rose-300',
+  error: 'bg-rose-100 text-rose-800 dark:bg-rose-900/25 dark:text-rose-300',
+};
+
+const formatConnectionStateLabel = (state?: string): string =>
+  state ? state.charAt(0).toUpperCase() + state.slice(1) : 'Unknown';
+
+const connectionStateBadgeClass = (state?: string): string =>
+  (state && CONNECTION_STATE_BADGES[state]) || 'bg-surface-alt text-muted';
 
 const describeManagedSourceType = (type: ConnectionType | null): string => {
   if (!type) return 'Infrastructure';
@@ -514,6 +532,13 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
         deletePending={connectionId ? rowActions.pendingAction(connectionId) === 'remove' : false}
         deleteConfirming={connectionId ? rowActions.confirmingRemove(connectionId) : false}
         deleteError={connectionId ? rowActions.actionError(connectionId) : null}
+        attachedAgentsContent={
+          editingRow ? (
+            <Show when={attachedAgentConnections().length > 0}>
+              {renderAttachedAgentAugmentations(attachedAgentConnections())}
+            </Show>
+          ) : undefined
+        }
       />
     );
   };
@@ -552,10 +577,23 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
   // from a compromised Pulse. The locked Docker update pill sends users to
   // this dialog, so it names the one host-side step and opens the installer
   // with that option already ticked.
-  const openCommandAccessInstaller = () => {
+  const commandAccessInstallerStep = (connection?: Connection): ManagedAddTypeStep => {
+    const profile = connection?.agentIdentity?.hostProfile?.trim().toLowerCase();
+    if (profile === 'unraid' || profile === 'docker' || profile === 'kubernetes') {
+      return profile;
+    }
+    return 'agent';
+  };
+
+  const openCommandAccessInstaller = (connection?: Connection) => {
     closeEditFlow();
     void operations.setEnableCommands(true);
-    openAddFlow('agent');
+    openAddFlow(commandAccessInstallerStep(connection));
+  };
+
+  const openAgentDoctorForConnection = (connectionId: string) => {
+    closeEditFlow();
+    navigate(buildInfrastructureAgentDoctorPath([connectionId]), { scroll: false });
   };
 
   const renderRemoteCommandsSetup = (connection: Connection) => (
@@ -579,7 +617,7 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
               // The install state ignores a command-access change while a token
               // is minting, so the installer would open without the option.
               disabled={operations.isGeneratingToken()}
-              onClick={openCommandAccessInstaller}
+              onClick={() => openCommandAccessInstaller(connection)}
             >
               Get install command
             </Button>
@@ -595,6 +633,13 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
     const error = () => rowActions.actionError(connection.id);
     const versionPresentation = () => connectionAgentVersionPresentation(connection);
     const identitySummary = () => connectionAgentIdentitySummary(connection);
+    const formattedLastSeen = () => {
+      if (!connection.lastSeen) return 'No activity yet';
+      const relative = connectionLastActivityText(connection);
+      const parsed = Date.parse(connection.lastSeen);
+      if (!Number.isFinite(parsed)) return relative;
+      return `${relative} (${new Date(parsed).toLocaleString()})`;
+    };
     const infoCard = (label: string, value: string) => (
       <div class="rounded-lg border border-border bg-surface-alt px-3 py-3">
         <div class="text-[11px] font-medium uppercase tracking-wide text-muted">{label}</div>
@@ -606,20 +651,40 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
       <div class="space-y-6 p-4">
         <section class="rounded-xl border border-border bg-surface p-4">
           <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {infoCard('Connection state', connection.state)}
-            {infoCard('Last seen', connection.lastSeen ? connection.lastSeen : 'No activity yet')}
+            <div class="rounded-lg border border-border bg-surface-alt px-3 py-3">
+              <div class="text-[11px] font-medium uppercase tracking-wide text-muted">
+                Connection state
+              </div>
+              <div class="mt-1.5">
+                <span
+                  class={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${connectionStateBadgeClass(connection.state)}`}
+                >
+                  {formatConnectionStateLabel(connection.state)}
+                </span>
+              </div>
+            </div>
+            {infoCard('Last seen', formattedLastSeen())}
             <Show when={versionPresentation()}>
               {(presentation) => (
                 <div class="rounded-lg border border-border bg-surface-alt px-3 py-3">
                   <div class="text-[11px] font-medium uppercase tracking-wide text-muted">
                     Pulse Agent version
                   </div>
-                  <div class="mt-2 flex flex-wrap items-center gap-2">
-                    <span class={presentation().badgeClassName}>{presentation().badgeLabel}</span>
-                    <span class="text-sm text-base-content" title={presentation().title}>
-                      {presentation().detail}
-                    </span>
-                  </div>
+                  <Show
+                    when={presentation().badgeLabel !== 'Agent version'}
+                    fallback={
+                      <div class="mt-1 text-sm text-base-content" title={presentation().title}>
+                        {presentation().detail}
+                      </div>
+                    }
+                  >
+                    <div class="mt-2 flex flex-wrap items-center gap-2">
+                      <span class={presentation().badgeClassName}>{presentation().badgeLabel}</span>
+                      <span class="text-sm text-base-content" title={presentation().title}>
+                        {presentation().detail}
+                      </span>
+                    </div>
+                  </Show>
                 </div>
               )}
             </Show>
@@ -663,41 +728,56 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
               </p>
             </div>
 
-            <div class="grid gap-3 lg:grid-cols-2">
-              <div class="rounded-lg border border-border bg-surface-alt px-3 py-3">
-                <div class="text-[11px] font-medium uppercase tracking-wide text-muted">
-                  Linux / macOS / FreeBSD
-                </div>
-                <div class="mt-1 line-clamp-3 break-all font-mono text-[11px] text-base-content">
-                  {agentUninstallCommands().linux}
-                </div>
-                <Button
-                  variant="outline"
-                  size="settingsAction"
-                  onClick={() => void handleCopy(agentUninstallCommands().linux)}
-                  class="mt-3"
+            {(() => {
+              const detectedPlatform = () =>
+                resolveKnownAgentCommandPlatform(connection.agentIdentity?.platform);
+              const showUnixUninstall = () => detectedPlatform() !== 'windows';
+              const showWindowsUninstall = () =>
+                detectedPlatform() === 'windows' || detectedPlatform() === null;
+              return (
+                <div
+                  class={`grid gap-3 ${showUnixUninstall() && showWindowsUninstall() ? 'lg:grid-cols-2' : ''}`}
                 >
-                  Copy uninstall command
-                </Button>
-              </div>
+                  <Show when={showUnixUninstall()}>
+                    <div class="rounded-lg border border-border bg-surface-alt px-3 py-3">
+                      <div class="text-[11px] font-medium uppercase tracking-wide text-muted">
+                        Linux / macOS / FreeBSD
+                      </div>
+                      <div class="mt-1 line-clamp-3 break-all font-mono text-[11px] text-base-content">
+                        {agentUninstallCommands().linux}
+                      </div>
+                      <Button
+                        variant="outline"
+                        size="settingsAction"
+                        onClick={() => void handleCopy(agentUninstallCommands().linux)}
+                        class="mt-3"
+                      >
+                        Copy uninstall command
+                      </Button>
+                    </div>
+                  </Show>
 
-              <div class="rounded-lg border border-border bg-surface-alt px-3 py-3">
-                <div class="text-[11px] font-medium uppercase tracking-wide text-muted">
-                  Windows PowerShell
+                  <Show when={showWindowsUninstall()}>
+                    <div class="rounded-lg border border-border bg-surface-alt px-3 py-3">
+                      <div class="text-[11px] font-medium uppercase tracking-wide text-muted">
+                        Windows PowerShell
+                      </div>
+                      <div class="mt-1 line-clamp-3 break-all font-mono text-[11px] text-base-content">
+                        {agentUninstallCommands().windows}
+                      </div>
+                      <Button
+                        variant="outline"
+                        size="settingsAction"
+                        onClick={() => void handleCopy(agentUninstallCommands().windows)}
+                        class="mt-3"
+                      >
+                        Copy uninstall command
+                      </Button>
+                    </div>
+                  </Show>
                 </div>
-                <div class="mt-1 line-clamp-3 break-all font-mono text-[11px] text-base-content">
-                  {agentUninstallCommands().windows}
-                </div>
-                <Button
-                  variant="outline"
-                  size="settingsAction"
-                  onClick={() => void handleCopy(agentUninstallCommands().windows)}
-                  class="mt-3"
-                >
-                  Copy uninstall command
-                </Button>
-              </div>
-            </div>
+              );
+            })()}
           </div>
         </section>
 
@@ -720,6 +800,15 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
         </Show>
 
         <div class="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+          <Show when={!readOnly()}>
+            <Button
+              variant="outline"
+              size="settingsAction"
+              onClick={() => openAgentDoctorForConnection(connection.id)}
+            >
+              Open in Agent Doctor
+            </Button>
+          </Show>
           <Button
             variant={removeConfirming() ? 'danger' : 'dangerOutline'}
             size="settingsAction"
@@ -779,8 +868,10 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
                     </Show>
                   </div>
                   <div class="flex items-center gap-2">
-                    <span class="inline-flex items-center rounded-full bg-green-100 px-2 py-0.5 text-[11px] font-medium text-green-800 dark:bg-green-900/25 dark:text-green-300">
-                      {connection.state === 'active' ? 'Active' : connection.state}
+                    <span
+                      class={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${connectionStateBadgeClass(connection.state)}`}
+                    >
+                      {formatConnectionStateLabel(connection.state)}
                     </span>
                     <span class="text-xs text-muted">{connectionLastActivityText(connection)}</span>
                   </div>
@@ -800,6 +891,15 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
                 </Show>
 
                 <div class="mt-4 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                  <Show when={!readOnly()}>
+                    <Button
+                      variant="outline"
+                      size="settingsAction"
+                      onClick={() => openAgentDoctorForConnection(connection.id)}
+                    >
+                      Open in Agent Doctor
+                    </Button>
+                  </Show>
                   <Button
                     variant="outline"
                     size="settingsAction"
@@ -1357,7 +1457,15 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
                               renderConnectionSlot({ mode: 'edit', type, onCancel, onSaved })
                             }
                           />
-                          <Show when={attachedAgentConnections().length > 0}>
+                          <Show
+                            when={
+                              attachedAgentConnections().length > 0 &&
+                              ((connection.type !== 'pve' &&
+                                connection.type !== 'pbs' &&
+                                connection.type !== 'pmg') ||
+                                !findEditableNode(connection))
+                            }
+                          >
                             {renderAttachedAgentAugmentations(attachedAgentConnections())}
                           </Show>
                         </div>

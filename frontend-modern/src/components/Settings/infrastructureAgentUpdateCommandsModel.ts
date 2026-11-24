@@ -9,7 +9,10 @@ import {
   buildUnixAgentInstallCommand,
   type AgentCommandPlatform,
 } from '@/utils/agentInstallCommand';
-import type { InfrastructureSystemRow } from './connectionsTableModel';
+import {
+  connectionAgentHostProfileLabel,
+  type InfrastructureSystemRow,
+} from './connectionsTableModel';
 import { shellQuoteArg } from './infrastructureOperationsModel';
 
 export type InfrastructureAgentUpdateTarget = {
@@ -112,7 +115,9 @@ const connectionDisplayName = (connection: Connection): string =>
 
 const rowContextLabel = (row: InfrastructureSystemRow): string => {
   if (row.isCluster && row.name.trim()) return row.name;
-  if (row.ownerType === 'agent') return 'Machine';
+  if (row.ownerType === 'agent') {
+    return connectionAgentHostProfileLabel(row.connection.agentIdentity) || 'Machine';
+  }
   return row.name.trim() || row.connection.name || row.ownerType;
 };
 
@@ -694,7 +699,12 @@ const diagnosticPrivilegeLabel = (diagnostic?: AgentFleetAgentDiagnostic): strin
       ? `least privilege (${user})`
       : 'least privilege';
   const authority = privilege.commandAuthority?.trim();
-  const base = authority ? `${process} · commands ${authority}` : process;
+  const formattedAuthority = authority
+    ? authority.toLowerCase().startsWith('command')
+      ? authority
+      : `commands ${authority}`
+    : '';
+  const base = formattedAuthority ? `${process} · ${formattedAuthority}` : process;
   const helpers: string[] = [];
   if (privilege.credentialKnown) {
     helpers.push(privilege.credentialExec ? 'credential grants exec' : 'monitoring credential');

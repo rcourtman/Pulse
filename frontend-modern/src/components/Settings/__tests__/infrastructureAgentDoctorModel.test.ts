@@ -237,6 +237,36 @@ describe('Agent Doctor model', () => {
     expect(target.privilegeLabel).toBe('root · commands monitoring-only · credential grants exec');
   });
 
+  it('avoids repeating the word commands for command-capable authority and uses OS context labels', () => {
+    const connection = connectionFixture({
+      agentIdentity: {
+        hostname: 'Tower',
+        platform: 'linux',
+        hostProfile: 'unraid',
+        osName: 'Unraid',
+      },
+    });
+    const [target] = collectInfrastructureAgentDoctorTargets({
+      rows: [rowFixture(connection)],
+      connections: [connection],
+      diagnostics: [
+        diagnosticFixture({
+          privilege: {
+            runningAsRoot: true,
+            commandAuthority: 'command-capable',
+            credentialKnown: true,
+            credentialExec: true,
+          },
+        }),
+      ],
+      diagnosticsAvailable: true,
+      targetVersion: '6.2.0',
+    });
+
+    expect(target.privilegeLabel).toBe('root · command-capable · credential grants exec');
+    expect(target.contextLabel).toBe('Unraid');
+  });
+
   it('classifies a safe collector only from the complete reported boundary', () => {
     const connection = connectionFixture();
     const safePrivilege = {

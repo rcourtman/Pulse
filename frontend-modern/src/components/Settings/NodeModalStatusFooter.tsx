@@ -130,7 +130,7 @@ export const NodeModalStatusFooter: Component<NodeModalStatusFooterProps> = (pro
         )}
       </Show>
 
-      <div class="flex flex-col gap-3 px-4 py-4 border-t border-border sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:px-6">
+      <div class="sticky bottom-0 z-10 -mx-4 -mb-4 mt-auto flex flex-col gap-3 border-t border-border bg-surface px-4 py-3 shadow-[0_-8px_16px_rgba(15,23,42,0.06)] sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:px-6">
         <div class="flex min-w-0 flex-wrap items-center gap-3">
           <Show when={state.isEditingExistingNode() && props.onDelete}>
             <button
