@@ -1,0 +1,37 @@
+{
+  "version": 1,
+  "base_sha": "d4878ad5a25cdc52de6270bc64242252446cffb3",
+  "verified_at": "2026-11-24T22:48:58Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/standalone/AgentsMachinesTable.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/standalone/AgentsMachinesTable.tsx": "7fb9456510efd0508e1ab302fc178b48a8177fc0363763bbe333208c3bb0cdd9"
+  },
+  "routes": [
+    "/standalone/machines"
+  ],
+  "viewports": [
+    {
+      "width": 1366,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Matched Chromium desktop/light and WebKit phone/dark route with a genuine assigned-missing disk and an independent healthy same-name machine",
+    "Matched no-parity warning (wraps at 390 px), expanded critical detail with empty stored History, and neutral recovered rows",
+    "Unassigned legacy slots, explicit and assigned missing members, disabled and invalid members and their recoveries through recorded synthetic producer frames",
+    "Acknowledged alert retains the underlying Degraded tooltip and full detail but no longer shows an unacknowledged inline cue"
+  ],
+  "interactions": [
+    "Focused the desktop disclosure and pressed Enter; tapped the owning machine name on the phone",
+    "Checked full severity/reason, column geometry and healthy namesake isolation",
+    "Fed acknowledgement and recovery through the WebSocket store without reload; confirmed the expanded attention section clears with the drawer still open",
+    "Inspected matched pixels for critical, no-parity warning, expanded and recovered states on both viewports"
+  ]
+}
