@@ -1,4 +1,4 @@
-import { For, Show, onCleanup, onMount } from 'solid-js';
+import { For, Show, onCleanup, onMount, type JSX } from 'solid-js';
 import ChevronsUpDownIcon from 'lucide-solid/icons/chevrons-up-down';
 import EllipsisIcon from 'lucide-solid/icons/ellipsis';
 import { type MobileNavBarProps, useMobileNavBarState } from './useMobileNavBarState';
@@ -26,6 +26,8 @@ const MOBILE_NAV_PLATFORM_SWITCHER_ID = 'mobile-navigation-platform-switcher';
 function MobileNavDestinationContent(props: {
   destination: MobileNavBarDestination;
   iconClass: string;
+  variant?: 'rail' | 'menu';
+  trailingIndicator?: JSX.Element;
 }) {
   const tab = () => props.destination.tab;
   const utilityTab = () =>
@@ -40,43 +42,74 @@ function MobileNavDestinationContent(props: {
     return utility.count;
   };
   const Icon = tab().icon;
+  const isMenu = () => props.variant === 'menu';
+
+  const renderCountBadges = () => (
+    <>
+      <Show when={alertBadges()}>
+        {(badges) => (
+          <span
+            aria-hidden="true"
+            data-mobile-nav-badge="alerts"
+            class={`inline-flex items-center gap-0.5 ${isMenu() ? 'order-3 ml-auto' : ''}`.trim()}
+          >
+            <Show when={badges().critical > 0}>
+              <span class="inline-flex h-3.5 min-w-[14px] items-center justify-center rounded-full bg-red-600 px-1 text-[9px] font-bold leading-none text-white">
+                {badges().critical}{' '}
+              </span>
+            </Show>
+            <Show when={badges().warning > 0}>
+              <span class="inline-flex h-3.5 min-w-[14px] items-center justify-center rounded-full bg-amber-200 px-1 text-[9px] font-semibold leading-none text-amber-900 dark:bg-amber-400 dark:text-slate-950">
+                {badges().warning}{' '}
+              </span>
+            </Show>
+          </span>
+        )}
+      </Show>
+      <Show when={genericCount()}>
+        {(count) => (
+          <span
+            aria-hidden="true"
+            data-mobile-nav-badge="count"
+            class={`inline-flex h-3.5 min-w-[14px] items-center justify-center rounded-full bg-amber-200 px-1 text-[9px] font-semibold leading-none text-amber-900 dark:bg-amber-400 dark:text-slate-950 ${isMenu() ? 'order-3 ml-auto' : ''}`.trim()}
+          >
+            {count()}
+          </span>
+        )}
+      </Show>
+    </>
+  );
 
   return (
     <>
       {/* Label first in source order, icon first visually. Badge numbers must
           follow the label in both the text alternative and the DOM text. */}
-      <span class="order-2 min-w-0 truncate">{tab().label} </span>
-      <span class="relative order-1 flex shrink-0 items-center justify-center">
+      <span
+        class={
+          isMenu()
+            ? 'order-2 min-w-0 truncate'
+            : 'order-2 inline-flex max-w-full min-w-0 items-center justify-center gap-0.5 leading-tight'
+        }
+      >
+        <span class="min-w-0 truncate">{tab().label} </span>
+        <Show when={!isMenu() && props.trailingIndicator}>{props.trailingIndicator}</Show>
+      </span>
+      <span class="order-1 flex shrink-0 items-center justify-center gap-1">
         <span aria-hidden="true" class="inline-flex items-center justify-center">
           <Icon class={props.iconClass} />
         </span>
-        <Show when={alertBadges()}>
-          {(badges) => (
-            <span aria-hidden="true" class="absolute -right-2 -top-1 flex items-center gap-1">
-              <Show when={badges().critical > 0}>
-                <span class="inline-flex h-4 min-w-[16px] items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-bold text-white">
-                  {badges().critical}{' '}
-                </span>
-              </Show>
-              <Show when={badges().warning > 0}>
-                <span class="inline-flex h-4 min-w-[16px] items-center justify-center rounded-full bg-amber-200 px-1 text-[10px] font-semibold text-amber-800">
-                  {badges().warning}{' '}
-                </span>
-              </Show>
-            </span>
-          )}
-        </Show>
-        <Show when={genericCount()}>
-          {(count) => (
+        <Show when={!isMenu()}>
+          {renderCountBadges()}
+          <Show when={utilityTab()?.badge === 'update'}>
             <span
               aria-hidden="true"
-              class="absolute -right-2 -top-1 inline-flex h-4 min-w-[16px] items-center justify-center rounded-full bg-amber-200 px-1 text-[10px] font-semibold text-amber-800"
-            >
-              {count()}
-            </span>
-          )}
+              data-mobile-nav-badge="update"
+              class="h-1.5 w-1.5 rounded-full bg-red-500"
+            ></span>
+          </Show>
         </Show>
       </span>
+      <Show when={isMenu()}>{renderCountBadges()}</Show>
       <Show when={props.destination.kind === 'primary' && !props.destination.tab.enabled}>
         <span class="order-3 rounded-full bg-amber-100 px-1.5 py-0.5 text-[9px] font-semibold text-amber-700 dark:bg-amber-900/25 dark:text-amber-200">
           Setup
@@ -87,7 +120,7 @@ function MobileNavDestinationContent(props: {
           {props.destination.kind === 'primary' ? props.destination.tab.badge : null}
         </span>
       </Show>
-      <Show when={utilityTab()?.badge === 'update'}>
+      <Show when={isMenu() && utilityTab()?.badge === 'update'}>
         <span aria-hidden="true" class="order-3 h-1.5 w-1.5 rounded-full bg-red-500"></span>
       </Show>
       <Show when={utilityTab()?.badge === 'pro'}>
@@ -108,7 +141,7 @@ export function MobileNavBar(props: MobileNavBarProps) {
   // Five call sites did, all at 5rem against a bar that measures ~45px, which
   // left a band below a drawer backdrop that was neither dimmed nor
   // click-blocked. Publish the measured height instead and let them read it.
-  // Reports 0 when the bar is hidden at xl, which is the correct clearance
+  // Reports 0 when the bar is hidden at lg, which is the correct clearance
   // there.
   let navElement: HTMLElement | undefined;
   let navObserver: ResizeObserver | undefined;
@@ -130,7 +163,7 @@ export function MobileNavBar(props: MobileNavBarProps) {
       navObserver.observe(navElement);
     }
     // The observer covers content-driven height changes, but the bar is
-    // xl:hidden, so crossing that breakpoint swaps between its real height and
+    // lg:hidden, so crossing that breakpoint swaps between its real height and
     // 0 via display alone. Observing a display:none element is the least
     // consistent case across engines, so listen for resize too rather than
     // leaving a stale clearance behind after a rotation or window drag.
@@ -197,13 +230,17 @@ export function MobileNavBar(props: MobileNavBarProps) {
                 }
                 onClick={(event) => handleDestinationLinkClick(event, destination)}
                 title={destination.tab.tooltip}
-                class={`flex min-h-11 w-full items-center gap-3 rounded-md px-3 py-2 text-left text-sm transition-colors ${
+                class={`flex min-h-11 w-full items-center gap-3 rounded-md px-3 py-2 text-left text-sm transition-colors focus-visible:outline-solid focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-blue-500 ${
                   active()
                     ? 'bg-blue-50 font-semibold text-blue-700 dark:bg-blue-900/25 dark:text-blue-300'
                     : 'text-base-content hover:bg-surface-hover'
                 } ${enabled() === false ? 'opacity-70' : ''}`.trim()}
               >
-                <MobileNavDestinationContent destination={destination} iconClass={tabIconClass} />
+                <MobileNavDestinationContent
+                  destination={destination}
+                  iconClass={tabIconClass}
+                  variant="menu"
+                />
               </a>
             );
           }}
@@ -215,7 +252,7 @@ export function MobileNavBar(props: MobileNavBarProps) {
   return (
     <nav
       ref={(element) => (navElement = element)}
-      class="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-surface pb-safe xl:hidden"
+      class="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-surface pb-safe lg:hidden"
       aria-label="Mobile navigation"
     >
       <Show when={mobileNav.isOverflowOpen()}>
@@ -256,8 +293,19 @@ export function MobileNavBar(props: MobileNavBarProps) {
             const canSwitch = () => mobileNav.platformDestinations().length > 1;
             const currentLabel = () => destination().tab.label;
 
-            const content = () => (
-              <MobileNavDestinationContent destination={destination()} iconClass={tabIconClass} />
+            const content = (showSwitcherIndicator: boolean) => (
+              <MobileNavDestinationContent
+                destination={destination()}
+                iconClass={tabIconClass}
+                trailingIndicator={
+                  showSwitcherIndicator ? (
+                    <ChevronsUpDownIcon
+                      aria-hidden="true"
+                      class="h-2.5 w-2.5 shrink-0 text-muted"
+                    />
+                  ) : undefined
+                }
+              />
             );
             const className = () =>
               getMobileNavTabButtonClass({
@@ -279,7 +327,7 @@ export function MobileNavBar(props: MobileNavBarProps) {
                     title={destination().tab.tooltip}
                     class={className()}
                   >
-                    {content()}
+                    {content(false)}
                   </a>
                 }
               >
@@ -298,11 +346,7 @@ export function MobileNavBar(props: MobileNavBarProps) {
                   title="Switch platform"
                   class={className()}
                 >
-                  {content()}
-                  <ChevronsUpDownIcon
-                    aria-hidden="true"
-                    class="absolute right-1 top-1 h-2.5 w-2.5 text-muted"
-                  />
+                  {content(true)}
                 </button>
               </Show>
             );

@@ -1,4 +1,4 @@
-import { cleanup, render, waitFor, within } from '@solidjs/testing-library';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@solidjs/testing-library';
 import { createSignal } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Resource, ResourcePBSDatastore } from '@/types/resource';
@@ -45,6 +45,16 @@ function usedCell(container: HTMLElement) {
   ] as HTMLElement;
 }
 
+const expandTank = () => {
+  const toggle = screen.getByRole('button', {
+    name: 'Expand details for pbs-capacity · datastore tank',
+  });
+  fireEvent.click(toggle);
+  return toggle;
+};
+
+const selectedTank = () => screen.getByRole('region', { name: 'Selected PBS datastore' });
+
 describe('PBS datastore capacity evidence', () => {
   it.each([
     [
@@ -80,6 +90,15 @@ describe('PBS datastore capacity evidence', () => {
     expect(container.innerHTML).not.toContain('PRIVATE_PROVIDER_ERROR_SENTINEL');
     // Connection health is on the server header, independent of capacity.
     expect(within(container).getByRole('img', { name: 'Healthy' })).toBeInTheDocument();
+
+    expandTank();
+    const detail = selectedTank();
+    const dot = within(detail).getByRole('img', {
+      name: `Datastore capacity ${label.toLowerCase()}`,
+    });
+    expect(dot).toHaveClass('bg-amber-500');
+    expect(detail).toHaveTextContent(`${label}. This does not mean the datastore is empty.`);
+    expect(detail.innerHTML).not.toContain('PRIVATE_PROVIDER_ERROR_SENTINEL');
   });
 
   it.each([NaN, -1, null, '0'])(
@@ -133,6 +152,27 @@ describe('PBS datastore capacity evidence', () => {
     expect(usedCell(container).textContent).toBe('No datastore data');
   });
 
+  it('keeps a known failed verification visible when capacity also fails', () => {
+    const resource = server(datastore({ status: 'unavailable' }));
+    resource.pbs!.jobHealthEvidence = [
+      {
+        id: 'verify-tank',
+        family: 'verify',
+        store: 'tank',
+        enabled: true,
+        confidence: 'config-last-run',
+        posture: 'critical',
+        postureReason: 'last-run-failed',
+      },
+    ];
+    render(() => <ProxmoxBackupServersTable servers={[resource]} layoutWidth={() => 360} />);
+    expandTank();
+    const detail = selectedTank();
+    expect(within(detail).getByRole('img', { name: 'Verify failed' })).toHaveClass('bg-red-500');
+    expect(detail).toHaveTextContent('Unavailable. This does not mean the datastore is empty.');
+    expect(within(detail).getByText('Verify failed')).toBeVisible();
+  });
+
   it.each(['direct', 'canonical'] as const)(
     'reconciles same-identity %s failure and recovery without remounting',
     async (transport) => {
@@ -148,14 +188,25 @@ describe('PBS datastore capacity evidence', () => {
       ));
       const cell = usedCell(container);
       await waitFor(() => expect(cell.textContent).toContain('40.0%'));
+      const toggle = expandTank();
+      toggle.focus();
+      const detail = selectedTank();
+      expect(within(detail).getByRole('img', { name: 'Healthy' })).toHaveClass('bg-emerald-500');
       setServers([
         present(datastore({ total: 0, used: 0, usagePercent: 0, status: 'unavailable' })),
       ]);
       await waitFor(() => expect(cell.textContent).toBe('Unavailable'));
       expect(usedCell(container)).toBe(cell);
+      expect(selectedTank()).toBe(detail);
+      expect(
+        within(detail).getByRole('img', { name: 'Datastore capacity unavailable' }),
+      ).toHaveClass('bg-amber-500');
       setServers([present(datastore({ used: 0, usagePercent: 0 }))]);
       await waitFor(() => expect(cell.textContent).toContain('0.0%'));
       expect(usedCell(container)).toBe(cell);
+      expect(selectedTank()).toBe(detail);
+      expect(within(detail).getByRole('img', { name: 'Healthy' })).toHaveClass('bg-emerald-500');
+      expect(toggle).toHaveFocus();
       setServers([present(datastore({ used: 950, usagePercent: 95 }))]);
       await waitFor(() => expect(cell.textContent).toContain('95.0%'));
       expect(cell.querySelector('.bg-red-500')).not.toBeNull();

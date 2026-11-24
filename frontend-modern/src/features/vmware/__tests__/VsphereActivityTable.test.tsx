@@ -216,7 +216,7 @@ describe('VsphereActivityTable', () => {
     expect(when?.getAttribute('title')).toMatch(/2026/);
 
     const unsetRow = screen.getByText('Alarm status changed on warehouse-api-01').closest('tr')!;
-    expect(unsetRow.querySelector('td:last-child')?.textContent).toBe('-');
+    expect(unsetRow.querySelector('td:last-child')?.textContent).toBe('—');
 
     await fireEvent.click(poweredRow);
     const detail = within(screen.getByTestId('vsphere-activity-detail'));

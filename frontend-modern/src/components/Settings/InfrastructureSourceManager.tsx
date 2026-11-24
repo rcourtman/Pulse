@@ -19,6 +19,7 @@ import {
   SlidersHorizontal,
 } from 'lucide-solid';
 import { Button } from '@/components/shared/Button';
+import { SearchInput } from '@/components/shared/SearchInput';
 import { getAPIReadAccessErrorMessage } from '@/utils/apiAccessError';
 import SettingsPanel from '@/components/shared/SettingsPanel';
 import {
@@ -122,6 +123,38 @@ const sortDiscoveredNodes = (nodes: readonly DiscoveredServer[]): DiscoveredServ
     const rightLabel = (right.hostname || right.ip).toLowerCase();
     return leftLabel.localeCompare(rightLabel);
   });
+
+const matchesInfrastructureRow = (row: InfrastructureSystemRow, query: string): boolean => {
+  const tokens = query.split(/\s+/).filter(Boolean);
+  if (tokens.length === 0) return true;
+  const haystack = [
+    row.name,
+    row.host,
+    row.ownerType,
+    row.subtitle,
+    row.identitySubtitle,
+    row.statusLabel,
+    row.coverageLabels.join(' '),
+    row.connection.address,
+    row.connection.agentIdentity?.hostProfile,
+    row.problem?.label,
+    ...row.members.flatMap((member) => [member.name, member.nativeName, member.host]),
+  ]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase();
+  return tokens.every((token) => haystack.includes(token));
+};
+
+const matchesDiscoveredServer = (server: DiscoveredServer, query: string): boolean => {
+  const tokens = query.split(/\s+/).filter(Boolean);
+  if (tokens.length === 0) return true;
+  const haystack = [server.hostname, server.ip, server.type, server.version, String(server.port)]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase();
+  return tokens.every((token) => haystack.includes(token));
+};
 
 const normalizeDiscoveryTimestamp = (value?: number): number | undefined => {
   if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) {
@@ -335,11 +368,25 @@ const agentHostProfileGroupLabel = (row: InfrastructureSystemRow): string | null
 
 export const InfrastructureSourceManager: Component<InfrastructureSourceManagerProps> = (props) => {
   let layoutContainerRef: HTMLDivElement | undefined;
+  const [searchQuery, setSearchQuery] = createSignal('');
   const products = createMemo(() => getInfrastructureSourceManagerProducts());
   const inventoryReadUncertain = () => Boolean(props.inventoryLoading || props.inventoryError);
   const infrastructureRows = createMemo(() =>
     props.rows().filter((row) => row.ownerType !== 'availability'),
   );
+  const normalizedSearchQuery = createMemo(() => searchQuery().trim().toLowerCase());
+  const hasSearchQuery = createMemo(() => normalizedSearchQuery().length > 0);
+  const filteredInfrastructureRows = createMemo(() => {
+    const query = normalizedSearchQuery();
+    return query
+      ? infrastructureRows().filter((row) => matchesInfrastructureRow(row, query))
+      : infrastructureRows();
+  });
+  const filteredDiscoveredNodes = createMemo(() => {
+    const nodes = inventoryReadUncertain() ? [] : props.discoveredNodes();
+    const query = normalizedSearchQuery();
+    return query ? nodes.filter((server) => matchesDiscoveredServer(server, query)) : nodes;
+  });
 
   const groupedConfiguredRows = createMemo(() => {
     const next = new Map<InfrastructureOnboardingConnectionType, InfrastructureSystemRow[]>();
@@ -347,7 +394,7 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
       next.set(product.type, []);
     }
 
-    for (const row of infrastructureRows()) {
+    for (const row of filteredInfrastructureRows()) {
       const productRows = next.get(row.ownerType as InfrastructureOnboardingConnectionType);
       if (!productRows) continue;
       productRows.push(row);
@@ -367,7 +414,7 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
     }
 
     // A failed inventory cannot establish that a discovered system is new.
-    for (const server of inventoryReadUncertain() ? [] : props.discoveredNodes()) {
+    for (const server of filteredDiscoveredNodes()) {
       const productRows = next.get(server.type as InfrastructureOnboardingConnectionType);
       if (!productRows) continue;
       productRows.push(server);
@@ -688,7 +735,7 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
     <section
       aria-label="Discover Proxmox systems"
       aria-live="polite"
-      class="border-t border-border px-4 py-3"
+      class="border-b border-border px-4 py-3"
     >
       <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <div class="min-w-0 flex-1">
@@ -910,6 +957,51 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
     </Show>
   );
 
+  const filterEmptyStateContent = () => (
+    <div class="mx-auto max-w-md space-y-2 whitespace-normal">
+      <div class="text-sm font-semibold text-base-content">No matching connected systems</div>
+      <p class="text-xs leading-5 text-muted">
+        No connected systems match &ldquo;{searchQuery().trim()}&rdquo;.
+      </p>
+      <button
+        type="button"
+        onClick={() => setSearchQuery('')}
+        class="text-xs font-medium text-blue-600 hover:underline dark:text-blue-400"
+      >
+        Clear filter
+      </button>
+    </div>
+  );
+
+  const searchFilterBand = () => (
+    <Show when={hasAnyConfigured() || hasAnyDiscovered()}>
+      <div class="flex flex-col gap-2 border-b border-border bg-surface px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+        <SearchInput
+          value={searchQuery}
+          onChange={setSearchQuery}
+          placeholder="Filter connected systems by name, address, platform, or status..."
+          class="sm:max-w-md"
+          typeToSearch={false}
+          clearOnFocusedEscape
+        />
+        <Show when={hasSearchQuery()}>
+          <div class="flex items-center gap-2 text-xs text-muted">
+            <span role="status">
+              Showing {filteredInfrastructureRows().length} of {connectedSystemCount()} systems
+            </span>
+            <button
+              type="button"
+              onClick={() => setSearchQuery('')}
+              class="font-medium text-blue-600 hover:underline dark:text-blue-400"
+            >
+              Clear filter
+            </button>
+          </div>
+        </Show>
+      </div>
+    </Show>
+  );
+
   return (
     <div ref={layoutContainerRef} class="min-w-0">
       <SettingsPanel
@@ -932,6 +1024,8 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
       >
         {inventoryReadNotice()}
         <Show when={!inventoryReadUncertain()}>{setupSummaryBand()}</Show>
+        <Show when={!inventoryReadUncertain()}>{discoveryMonitorBand()}</Show>
+        <Show when={!inventoryReadUncertain()}>{searchFilterBand()}</Show>
 
         <Show when={!useCardLayout() && (hasAnyConfigured() || !inventoryReadUncertain())}>
           <Table class="w-full min-w-[820px] table-fixed text-sm">
@@ -1499,6 +1593,23 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                   </TableCell>
                 </TableRow>
               </Show>
+
+              <Show
+                when={
+                  hasSearchQuery() &&
+                  (hasAnyConfigured() || hasAnyDiscovered()) &&
+                  sortedProducts().length === 0
+                }
+              >
+                <TableRow>
+                  <TableCell
+                    colspan={actionColumnVisible() ? 4 : 3}
+                    class="px-4 py-8 text-center text-sm text-muted"
+                  >
+                    {filterEmptyStateContent()}
+                  </TableCell>
+                </TableRow>
+              </Show>
             </TableBody>
           </Table>
         </Show>
@@ -1918,9 +2029,20 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                 {emptyStateContent()}
               </div>
             </Show>
+
+            <Show
+              when={
+                hasSearchQuery() &&
+                (hasAnyConfigured() || hasAnyDiscovered()) &&
+                sortedProducts().length === 0
+              }
+            >
+              <div class="rounded-md border border-dashed border-border px-3 py-6 text-center text-sm text-muted">
+                {filterEmptyStateContent()}
+              </div>
+            </Show>
           </div>
         </Show>
-        <Show when={!inventoryReadUncertain()}>{discoveryMonitorBand()}</Show>
         {/* Keyed so the dialog gets plain values: an install it started keeps
             running after close, and must not read a stale <Show> accessor. */}
         <Show when={clusterDeploy()} keyed>

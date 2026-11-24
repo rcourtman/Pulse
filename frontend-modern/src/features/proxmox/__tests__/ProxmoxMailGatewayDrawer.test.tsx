@@ -1,9 +1,14 @@
+import { Suspense } from 'solid-js';
 import { cleanup, fireEvent, render, screen, within } from '@solidjs/testing-library';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { resetCreateNonSuspendingQueryCacheForTest } from '@/hooks/createNonSuspendingQuery';
 import type { PMGInstance } from '@/types/api';
 import type { Resource } from '@/types/resource';
-import { ProxmoxMailGatewayMailFlow } from '../ProxmoxMailGatewayDrawer';
+import {
+  ProxmoxMailGatewayMailFlow,
+  describeMailGatewayDegradation,
+} from '../ProxmoxMailGatewayDrawer';
 
 const apiFetchMock = vi.hoisted(() => vi.fn());
 
@@ -87,7 +92,10 @@ const respond = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
 
 describe('ProxmoxMailGatewayMailFlow', () => {
-  beforeEach(() => apiFetchMock.mockReset());
+  beforeEach(() => {
+    apiFetchMock.mockReset();
+    resetCreateNonSuspendingQueryCacheForTest();
+  });
   afterEach(cleanup);
 
   it('shows every mail-flow figure as content cards under the drawer header', async () => {
@@ -96,7 +104,10 @@ describe('ProxmoxMailGatewayMailFlow', () => {
     render(() => <ProxmoxMailGatewayMailFlow resource={gateway} />);
 
     const flow = within(await screen.findByTestId('pmg-mail-flow-section'));
-    expect(apiFetchMock).toHaveBeenCalledWith('/api/pmg/instances?id=pmg-main');
+    expect(apiFetchMock).toHaveBeenCalledWith(
+      '/api/pmg/instances?id=pmg-main',
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    );
     expect(flow.getByText('Mail flow (day)')).toBeInTheDocument();
     expect(flow.getByText('1,200 / 300')).toBeInTheDocument();
     expect(flow.getByText('140 / 2')).toBeInTheDocument();
@@ -105,14 +116,20 @@ describe('ProxmoxMailGatewayMailFlow', () => {
     expect(flow.getByRole('img', { name: 'Inbound mail disposition breakdown' })).toBeVisible();
 
     const quarantine = within(screen.getByTestId('pmg-quarantine-section'));
-    expect(quarantine.getByText('Attachment')).toBeInTheDocument();
-    expect(quarantine.getByText('21')).toBeInTheDocument();
+    expect(quarantine.getAllByText('Attachment').length).toBeGreaterThanOrEqual(2);
+    expect(quarantine.getAllByText('21').length).toBeGreaterThanOrEqual(2);
+    expect(quarantine.getByText('87.5%')).toBeInTheDocument();
 
+    const spamSection = screen.getByTestId('pmg-spam-scores-section');
     expect(
-      within(screen.getByTestId('pmg-spam-scores-section')).getByRole('img', {
+      within(spamSection).getByRole('img', {
         name: 'Spam score distribution',
       }),
     ).toBeInTheDocument();
+    const bucketWrapper = spamSection.querySelector('[data-spam-histogram-bucket="0"]');
+    expect(bucketWrapper).toHaveClass('h-full', 'justify-end');
+    const bar = spamSection.querySelector('[data-spam-histogram-bar="0"]') as HTMLElement | null;
+    expect(bar?.style.height).toBe('100%');
     expect(
       within(screen.getByTestId('pmg-relay-domains-section')).getByText(
         'example.com (Primary), example.org',
@@ -122,6 +139,9 @@ describe('ProxmoxMailGatewayMailFlow', () => {
     const nodes = within(screen.getByTestId('pmg-cluster-nodes'));
     expect(nodes.getByText('pmg-node-1')).toBeInTheDocument();
     expect(nodes.getByText('1/2/0/0')).toBeInTheDocument();
+    expect(nodes.getByTestId('pmg-queue-legend')).toHaveTextContent(
+      'Queue: active / deferred / hold / incoming',
+    );
 
     // Domains are compared and copied, so they wrap rather than truncate.
     const domain = within(screen.getByTestId('pmg-top-domains')).getByText(longDomain);
@@ -161,5 +181,81 @@ describe('ProxmoxMailGatewayMailFlow', () => {
     expect(
       await screen.findByText('This gateway has not reported mail flow yet.'),
     ).toBeInTheDocument();
+  });
+
+  it('renders inline loading without suspending a parent Suspense boundary', async () => {
+    let resolveFetch!: (value: Response) => void;
+    apiFetchMock.mockReturnValue(
+      new Promise<Response>((resolve) => {
+        resolveFetch = resolve;
+      }),
+    );
+
+    render(() => (
+      <Suspense fallback={<div>Loading view...</div>}>
+        <ProxmoxMailGatewayMailFlow resource={gateway} />
+      </Suspense>
+    ));
+
+    expect(screen.getByText('Loading mail flow')).toBeInTheDocument();
+    expect(screen.queryByText('Loading view...')).toBeNull();
+
+    resolveFetch(respond({ data: [instance], meta: { total: 1 } }));
+    expect(await screen.findByTestId('pmg-mail-flow-section')).toBeInTheDocument();
+    expect(screen.queryByText('Loading view...')).toBeNull();
+  });
+
+  it('explains concrete degradation causes for degraded gateways', async () => {
+    const degradedGateway = {
+      ...gateway,
+      id: 'pmg-unified-us',
+      name: 'mail-gateway-us',
+      displayName: 'mail-gateway-us',
+      status: 'degraded',
+      pmg: {
+        instanceId: 'pmg-us',
+        version: '8.1.2',
+        nodeCount: 2,
+        connectionHealth: 'degraded',
+        queueDeferred: 7,
+        queueHold: 1,
+        queueTotal: 121,
+      },
+    } as unknown as Resource;
+    const degradedInstance: PMGInstance = {
+      ...instance,
+      id: 'pmg-us',
+      name: 'mail-gateway-us',
+      status: 'degraded',
+      connectionHealth: 'degraded',
+      nodes: [
+        {
+          ...instance.nodes![0],
+          name: 'pmg-us-node-2',
+          status: 'degraded',
+          queueStatus: {
+            active: 113,
+            deferred: 7,
+            hold: 1,
+            incoming: 0,
+            total: 121,
+            oldestAge: 1800,
+            updatedAt: '2026-10-22T10:00:00Z',
+          },
+        },
+      ],
+    };
+
+    expect(describeMailGatewayDegradation(degradedGateway, degradedInstance)).toEqual([
+      'Cluster node pmg-us-node-2 is degraded.',
+      'Mail queue backlog: 7 deferred, 1 on hold (121 total queued).',
+    ]);
+
+    apiFetchMock.mockResolvedValue(respond({ data: [degradedInstance], meta: { total: 1 } }));
+    render(() => <ProxmoxMailGatewayMailFlow resource={degradedGateway} />);
+
+    const notice = await screen.findByTestId('pmg-degradation-notice');
+    expect(notice).toHaveTextContent('Cluster node pmg-us-node-2 is degraded.');
+    expect(notice).toHaveTextContent('7 deferred');
   });
 });

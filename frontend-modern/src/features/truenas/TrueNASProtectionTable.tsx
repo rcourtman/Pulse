@@ -163,7 +163,7 @@ const targetLabel = (point: RecoveryPoint): string => {
     asTrimmedString(point.display?.repositoryLabel) ||
     detailString(point, 'targetDataset') ||
     asTrimmedString(point.repositoryRef?.name) ||
-    '-'
+    '—'
   );
 };
 
@@ -175,7 +175,7 @@ const targetSecondaryLabel = (point: RecoveryPoint): string => {
 };
 
 const sizeLabel = (point: RecoveryPoint): string =>
-  formatPlatformTableBytesValue(point.sizeBytes ?? undefined, '-');
+  formatPlatformTableBytesValue(point.sizeBytes ?? undefined, '—');
 
 // A start is not a finish. Running replication can also retain a last-run
 // timestamp in completedAt, which is not completion of the active run.
@@ -599,7 +599,7 @@ export const TrueNASProtectionTable: Component<{
                               >
                                 <PlatformTableDateTimeValue
                                   value={parseBackupTimestampMs(completionTimestamp(point))}
-                                  emptyText={completionTimestamp(point) ? 'Unknown' : '-'}
+                                  emptyText={completionTimestamp(point) ? 'Unknown' : '—'}
                                 />
                               </TableCell>
                               <TableCell

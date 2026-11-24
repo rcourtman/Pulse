@@ -71,7 +71,7 @@ export function AlertQuietHoursSection(props: AlertQuietHoursSectionProps) {
     >
       <Show when={props.quietHours.enabled}>
         <div class="space-y-4">
-          <div class="grid grid-cols-1 gap-4 sm:grid-cols-3">
+          <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div class={formField}>
               <label for={fieldIds.start} class={labelClass('text-xs uppercase tracking-[0.08em]')}>
                 {ALERT_CONFIG_QUIET_HOURS_START_TIME_LABEL}
@@ -100,6 +100,7 @@ export function AlertQuietHoursSection(props: AlertQuietHoursSectionProps) {
               id="alert-quiet-hours-timezone"
               label={ALERT_CONFIG_QUIET_HOURS_TIMEZONE_LABEL}
               labelClass="text-xs uppercase tracking-[0.08em]"
+              fieldClass="sm:col-span-2"
               value={props.quietHours.timezone}
               onChange={(event) => props.setQuietHoursTimezone(event.currentTarget.value)}
               selectBaseClass={controlClass('pr-8')}
@@ -143,11 +144,11 @@ export function AlertQuietHoursSection(props: AlertQuietHoursSectionProps) {
             <p class="text-xs text-muted">
               Critical alerts in selected categories will stay silent during quiet hours.
             </p>
-            <div class="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:gap-3">
+            <div class="grid grid-cols-1 gap-2 sm:grid-cols-2 sm:gap-3">
               <For each={props.quietHourSuppressOptions}>
                 {(option) => (
                   <label
-                    class={getAlertQuietSuppressCardClass(props.quietHours.suppress[option.key])}
+                    class={`${getAlertQuietSuppressCardClass(props.quietHours.suppress[option.key])} w-full`}
                   >
                     <input
                       type="checkbox"

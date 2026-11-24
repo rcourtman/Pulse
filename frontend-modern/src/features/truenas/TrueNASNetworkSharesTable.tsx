@@ -62,21 +62,21 @@ const formatAccess = (
     share?.auditEnabled ? 'Audit' : undefined,
     share?.exposeSnapshots ? 'Snapshots' : undefined,
   ];
-  return summarizePlatformTableValues(flags, { emptyText: '-', maxVisible: 3 });
+  return summarizePlatformTableValues(flags, { emptyText: '—', maxVisible: 3 });
 };
 
 const formatClients = (
   share: ResourceTrueNASShareMeta | undefined,
 ): { label: string; title: string } => {
-  const networks = summarizePlatformTableValues(share?.networks, { emptyText: '-' }).values;
-  const hosts = summarizePlatformTableValues(share?.hosts, { emptyText: '-' }).values;
-  const aliases = summarizePlatformTableValues(share?.aliases, { emptyText: '-' }).values;
+  const networks = summarizePlatformTableValues(share?.networks, { emptyText: '—' }).values;
+  const hosts = summarizePlatformTableValues(share?.hosts, { emptyText: '—' }).values;
+  const aliases = summarizePlatformTableValues(share?.aliases, { emptyText: '—' }).values;
   const values = [
     ...networks.map((network) => `net:${network}`),
     ...hosts.map((host) => `host:${host}`),
     ...aliases.map((alias) => `alias:${alias}`),
   ];
-  return summarizePlatformTableValues(values, { emptyText: '-' });
+  return summarizePlatformTableValues(values, { emptyText: '—' });
 };
 
 const formatSecurity = (
@@ -89,7 +89,7 @@ const formatSecurity = (
       share?.mapAllUser ? `all:${share.mapAllUser}` : undefined,
     ],
   ];
-  return summarizePlatformTableValues(values, { emptyText: '-' });
+  return summarizePlatformTableValues(values, { emptyText: '—' });
 };
 
 const shareName = (resource: Resource, share: ResourceTrueNASShareMeta | undefined): string =>

@@ -170,58 +170,60 @@ export default function AuditLogPanel(props: AuditLogPanelProps) {
       noPadding
       bodyClass="space-y-3 p-2.5 max-sm:pb-(--pulse-mobile-nav-height) sm:space-y-6 sm:p-6"
       action={
-        <div class="flex w-full flex-wrap items-center gap-2 sm:w-auto">
-          <button
-            type="button"
-            onClick={refresh}
-            disabled={!accessAllowed()}
-            class={AUDIT_REFRESH_BUTTON_CLASS}
-          >
-            <RefreshCw aria-hidden="true" class="w-4 h-4" />
-            {loading() && accessAllowed() ? 'Restart load' : 'Refresh'}
-          </button>
-          <button
-            onClick={verifyAll}
-            disabled={!isPersistent() || loading() || verifyingAll() || !hasSignedEvents()}
-            class={AUDIT_VERIFY_ALL_BUTTON_CLASS}
-          >
-            {(() => {
-              const presentation = getAuditEventStatusPresentation(true);
-              const Icon = presentation.icon;
-              return <Icon class="w-4 h-4" />;
-            })()}
-            {verifyAllLabel()}
-          </button>
-          <button
-            onClick={cancelVerification}
-            disabled={!verifyingAll()}
-            class={`${AUDIT_TOOLBAR_BUTTON_CLASS} text-muted`}
-          >
-            Cancel
-          </button>
-          <button
-            onClick={resumeVerification}
-            disabled={verifyingAll() || !hasResumeEvents()}
-            class={`${AUDIT_TOOLBAR_BUTTON_CLASS} text-muted`}
-            onMouseEnter={(e) => {
-              if (!hasResumeEvents()) return;
-              const rect = e.currentTarget.getBoundingClientRect();
-              showTooltip(
-                'Retries failed, error, or unchecked signatures on this page.',
-                rect.left + rect.width / 2,
-                rect.top,
-                { align: 'center', direction: 'up', maxWidth: 260 },
-              );
-            }}
-            onMouseLeave={() => hideTooltip()}
-          >
-            <Play class="w-4 h-4" />
-            Resume{resumeCount() > 0 ? ` (${resumeCount()})` : ''}
-          </button>
-          <Show when={verifyCanceled() && !verifyingAll()}>
-            <span class="text-xs text-amber-600 dark:text-amber-400">Verification canceled</span>
-          </Show>
-        </div>
+        <Show when={auditLoggingEnabled()}>
+          <div class="flex w-full flex-wrap items-center gap-2 sm:w-auto">
+            <button
+              type="button"
+              onClick={refresh}
+              disabled={!accessAllowed()}
+              class={AUDIT_REFRESH_BUTTON_CLASS}
+            >
+              <RefreshCw aria-hidden="true" class="w-4 h-4" />
+              {loading() && accessAllowed() ? 'Restart load' : 'Refresh'}
+            </button>
+            <button
+              onClick={verifyAll}
+              disabled={!isPersistent() || loading() || verifyingAll() || !hasSignedEvents()}
+              class={AUDIT_VERIFY_ALL_BUTTON_CLASS}
+            >
+              {(() => {
+                const presentation = getAuditEventStatusPresentation(true);
+                const Icon = presentation.icon;
+                return <Icon class="w-4 h-4" />;
+              })()}
+              {verifyAllLabel()}
+            </button>
+            <button
+              onClick={cancelVerification}
+              disabled={!verifyingAll()}
+              class={`${AUDIT_TOOLBAR_BUTTON_CLASS} text-muted`}
+            >
+              Cancel
+            </button>
+            <button
+              onClick={resumeVerification}
+              disabled={verifyingAll() || !hasResumeEvents()}
+              class={`${AUDIT_TOOLBAR_BUTTON_CLASS} text-muted`}
+              onMouseEnter={(e) => {
+                if (!hasResumeEvents()) return;
+                const rect = e.currentTarget.getBoundingClientRect();
+                showTooltip(
+                  'Retries failed, error, or unchecked signatures on this page.',
+                  rect.left + rect.width / 2,
+                  rect.top,
+                  { align: 'center', direction: 'up', maxWidth: 260 },
+                );
+              }}
+              onMouseLeave={() => hideTooltip()}
+            >
+              <Play class="w-4 h-4" />
+              Resume{resumeCount() > 0 ? ` (${resumeCount()})` : ''}
+            </button>
+            <Show when={verifyCanceled() && !verifyingAll()}>
+              <span class="text-xs text-amber-600 dark:text-amber-400">Verification canceled</span>
+            </Show>
+          </div>
+        </Show>
       }
     >
       <Show when={showUpgradePaywall()}>

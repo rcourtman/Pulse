@@ -24,19 +24,39 @@ matches the dot on its network's pill.
   to. Tiles it is connected to are ringed.
 - **Click** a tile to open it.
 - **With a keyboard**, Tab reaches the map and the arrow keys move between
-  tiles. Enter opens the tile, and Tab again leaves the map.
+  tiles. Enter opens a tile or a **+N** overflow drawer, Escape closes a
+  tooltip or drawer and returns focus, and Tab again leaves the map.
 - **On a touch screen**, the first tap reads the tile and the second opens it.
 
 The map fits the window. A long name is written out, on a wider tile or
-on two lines, wherever that leaves the map nearly as large; where it would
-not, the name is cut short, and hovering the tile reads it whole. When there is too much to name, the
-map switches to icons alone; **Names** and **Compact** choose for yourself. A box with more
-than it can draw ends in a **+N more** tile, and **Compact** draws more of
-them. On a very large estate the map can run past the screen and scroll.
+on two lines, wherever that leaves the map nearly as large. Where it would
+not, the name is cut short, and hovering the tile reads it whole. When there
+is too much to name, the map switches to icons alone. **Names** and
+**Compact** let you choose for yourself.
 
 On a phone the map is drawn at full size in one column and the page
 scrolls, so every tile is big enough to tap and every label to read. It
-opens with icons alone; **Names** writes every name out.
+opens with icons alone. **Names** writes every name out.
+
+## Search, filter, inspect and zoom
+
+Large estates can hold hundreds of guests, containers and networks. The map
+toolbar and drawers let you find any resource without leaving the map:
+
+- **Search map** filters across every monitored resource, including items
+  folded into a **+N** tile or switched-off summary. Matching items appear
+  directly on the map with a count bar above it.
+- **N need attention** beside the title is a filter button. Click it to show
+  only critical and degraded resources, and click it again (or choose **Clear
+  filters**) to return to the full estate.
+- **Group and network drawers** open when you click a **+N** overflow tile,
+  a box header, or any network pill (including the **+N more** networks
+  pill). Each drawer sorts items needing attention first, lets you search and
+  filter by status, opens any item directly, and lets you filter the whole
+  map to one network.
+- **Zoom and pan** controls (`-`, percentage reset, `+`, or Ctrl/Cmd with the
+  scroll wheel) zoom into dense maps up to 400%. While zoomed in, drag the
+  map to pan around and click **Fit** (or the zoom percentage) to reset.
 
 ## How Pulse recognises an app
 
@@ -56,7 +76,7 @@ Pulse cannot see network gear by itself. An
 
 **Your router.** A gateway nothing monitors is drawn as a dashed tile that
 says "not monitored". Click it. The check form opens as a router with the
-address filled in; save it, and you are back on the map with the tile as your
+address filled in. Save it, and you are back on the map with the tile as your
 router and a live status.
 
 **Anything else.** Add a check in **Settings → Monitoring → Availability
@@ -69,7 +89,7 @@ checks** and choose its type:
 
 The type decides, not the name. When a check's name says what it is ("Core
 switch"), or its address is exactly a monitored machine's default gateway,
-the form offers the matching type; nothing changes until you choose it. To
+the form offers the matching type. Nothing changes until you choose it. To
 move a check on the map, change its type.
 
 Click a check's tile to open that check.
@@ -81,14 +101,14 @@ and shown on hover:
 
 - a container that uses another container's network, such as a download
   client behind a VPN container, reads "via" that container, and they are
-  drawn side by side in the box most of them belong in;
-- a container routed by Traefik shows the hostname it answers on;
+  drawn side by side in the box most of them belong in,
+- a container routed by Traefik shows the hostname it answers on,
 - a machine's default gateway and DNS server are named on the tile that
-  answers at that address;
+  answers at that address,
 - a machine's hover counts what it runs by kind, such as "Media 5 ·
-  Monitoring 4", and rings every one of them and its storage;
+  Monitoring 4", and rings every one of them and its storage,
 - a backup target names the hosts it is set up on, and each host names the
-  targets it backs up to;
+  targets it backs up to,
 - a guest is joined to the pool its data is on, and to the pool a share or
   folder it mounts is on, such as a media server that mounts a NAS array.
 

@@ -248,10 +248,11 @@ describe('Backup jobs through the real restore-point inspection', () => {
     async ({ hover, automaticReveals }) => {
       pointer.hover = hover;
       const { restorePoints } = await mount();
-      await fireEvent.click(day(/Oct 2: 2 failed/));
+      await fireEvent.click(day(/Oct 2: 2 failed/), { detail: 1 });
       await settle();
       expect(dayParam()).toBe('2026-10-02');
-      expect(chosenDay()).toHaveTextContent('2 failed: database, mail');
+      expect(chosenDay()).toHaveTextContent('2 failed');
+      expect(chosenDay()).toHaveTextContent('Guests with failures: database, mail');
       expect(rows()).toHaveLength(0);
       expect(screen.getByText('No restore points from Oct 2, 2026')).toBeInTheDocument();
       expect(screen.getByText(/A failed backup usually leaves none/)).toBeInTheDocument();
@@ -267,6 +268,46 @@ describe('Backup jobs through the real restore-point inspection', () => {
       expectReadOnlyContext();
     },
   );
+
+  it('keeps a warning-only day in view on touch before showing its independent restore points', async () => {
+    pointer.hover = false;
+    jobs.days[1] = {
+      ...jobs.days[1],
+      historyState: 'partial',
+      counts: { ...counts(), warning: 2 },
+      failures: [
+        {
+          ...failure('database'),
+          at: '2026-10-03T20:00:00Z',
+          outcome: 'warning',
+        },
+      ],
+    };
+    const { restorePoints } = await mount('/proxmox/backups/coverage');
+    const warning = day(/Oct 3: 2 warnings \(not fully observed\)/);
+    await fireEvent.click(warning, { detail: 1 });
+    await settle();
+    expect(window.location.pathname).toBe('/proxmox/backups/date');
+    expect(dayParam()).toBe('2026-10-03');
+    expect(warning).toHaveAttribute('aria-pressed', 'true');
+    expect(chosenDay()).toHaveTextContent('Guests with warnings: database');
+    expect(chosenDay()).toHaveTextContent('2 warnings (not fully observed)');
+    expect(chosenDay()).not.toHaveTextContent('Guests with failures');
+    expect(rowIDs()).toEqual([expect.stringContaining('Identifier: archive-before-midnight')]);
+    expect(scrollIntoView).not.toHaveBeenCalled();
+
+    await fireEvent.click(within(card()).getByRole('button', { name: 'View restore points' }));
+    await settle();
+    expect(scrollIntoView).toHaveBeenCalledOnce();
+    expect(scrollIntoView.mock.contexts[0]).toBe(restorePoints);
+    await fireEvent.click(warning, { detail: 1 });
+    await settle();
+    expect(dayParam()).toBeNull();
+    expect(rows()).toHaveLength(2);
+    expect(chosenDay()).toBeNull();
+    expect(fetchMock).toHaveBeenCalledTimes(4);
+    expectReadOnlyContext();
+  });
 
   it('preserves saved filters and does not blame an observed day for their empty result', async () => {
     await mount('/proxmox/backups/date?q=no-such-guest&source=pbs');

@@ -248,4 +248,45 @@ describe('KubernetesConfigTable', () => {
     expect(detail.getByText('2 subjects')).toBeInTheDocument();
     expect(detail.getByText('Group, ServiceAccount')).toBeInTheDocument();
   });
+  it('collapses large sets of routine metadata-only ConfigMaps and Secrets behind an expandable summary strip', () => {
+    const routine = Array.from({ length: 6 }, (_, idx) =>
+      makeResource({
+        id: `cm-${idx}`,
+        name: `routine-config-${idx}`,
+        type: idx % 2 === 0 ? 'k8s-configmap' : 'k8s-secret',
+        status: 'online',
+        kubernetes: {
+          clusterId: 'cluster-1',
+          namespace: 'apps',
+          resourceKind: idx % 2 === 0 ? 'ConfigMap' : 'Secret',
+          metadataOnly: true,
+        },
+      }),
+    );
+    const ns = makeResource({
+      id: 'ns-prod',
+      name: 'prod',
+      type: 'k8s-namespace',
+      status: 'online',
+      kubernetes: { clusterId: 'cluster-1', resourceKind: 'Namespace', phase: 'Active' },
+    });
+
+    render(() => (
+      <KubernetesConfigTable
+        resources={[ns, ...routine]}
+        emptyIcon={<span />}
+        emptyTitle="No config"
+        emptyDescription="No config"
+        showToolbar={false}
+      />
+    ));
+
+    expect(screen.getByText('ns-prod')).toBeInTheDocument();
+    expect(screen.queryByText('cm-0')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Show all 6' })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Show all 6' }));
+    expect(screen.getByText('cm-0')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Hide routine metadata-only' })).toBeInTheDocument();
+  });
 });

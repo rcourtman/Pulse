@@ -234,9 +234,11 @@ body:
 
         If Pulse stopped, say whether the service or the whole container stopped. Give each stop's time and time zone, Pulse version and memory limit, if known. A high memory chart does not prove a kill. If you already have a kernel line naming Pulse as killed for lack of memory, share just that line after removing private details. Otherwise leave the cause unknown.
 
-        For Pulse CPU, memory or disk writes, use existing readings, screenshots or passive checks. Give the scope (Pulse process, container or host), units, measurement window and uptime. Add known CPU or memory limits, fleet size, polling interval and open dashboards. CPU averaged since start is not a recent sample. Database size is not a write rate.
+        For Pulse CPU, memory or disk writes, use existing readings, screenshots or passive checks. Give the scope (Pulse process, container or host), units, measurement window and uptime. Add known CPU limits, fleet size, polling interval and open dashboards. CPU averaged since start is not a recent sample. Database size is not a write rate.
 
-        A higher steady memory baseline matters, not just growth during one run. Compare at similar uptimes, noting versions, workload and enabled collectors or features. Write "unavailable" if you cannot measure safely. Do not restart, downgrade, add load or change limits, features, polling or retention to measure. Summarise reviewed counters, not raw profiles, heap dumps, databases or full process command lines.
+        A higher steady memory baseline matters, even without growth. Compare readings at similar uptimes and workloads. Note the Pulse version and enabled collectors or features for each. Give the RAM and swap limits that applied to each reading, if known. Say if a limit changed and whether a peak covers the measurement window or the whole run.
+
+        Write "unavailable" if you cannot measure safely. Do not restart, downgrade, add load or change limits, features, polling or retention to measure. Summarise reviewed counters, not raw profiles, heap dumps, databases or full process command lines.
 
         </details>
 

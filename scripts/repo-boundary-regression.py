@@ -13,6 +13,7 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 SUBJECT = "reporting_subject_alerts.go"
+WORKFLOW_PATH = ROOT / ".github/workflows/repo-boundary-audit.yml"
 MODES = (
     "report", "--enforce", "--enforce-api-imports", "--enforce-api-root-imports",
     "--enforce-nonapi-imports", "--enforce-api-pkg-licensing-imports",
@@ -70,6 +71,19 @@ class RunnerDependencyTests(unittest.TestCase):
             self.assertIn(message, result.stdout)
         return result.stdout
 
+    def workflow_audit(self, exitcode):
+        step = re.search(r"(?m)^        id: boundary\n"
+                         r"        run: \|\n((?:          [^\n]+\n)+)", WORKFLOW_PATH.read_text())
+        self.assertIsNotNone(step)
+        result = subprocess.run(
+            [shutil.which("bash"), "-e", "-c", textwrap.dedent(step[1])],
+            cwd=self.fixture, env=self.environment, capture_output=True, text=True, timeout=15,
+        )
+        self.assertEqual(result.returncode, exitcode, result.stdout + result.stderr)
+        report = (self.fixture / "repo-boundary-audit.txt").read_text()
+        self.assertEqual(report, result.stdout)
+        return report
+
     def test_all_modes_work_without_ripgrep_or_network_installation(self):
         for mode in MODES:
             with self.subTest(mode=mode):
@@ -100,13 +114,15 @@ exec "$TEST_REAL_GIT" "$@"
             ("grep", 1, "read failed", "", "", "scan API route paths"),
             ("grep", 1, "", "partial inventory", "", "scan API route paths"),
             ("grep", 0, "incomplete scan", "partial inventory", "", "scan API route paths"),
+            ("grep", 0, "incomplete scan", "partial inventory", "--no-index", "scan API route paths in non-ignored workspace files"),
             ("grep", 2, "read failed", "", ":(exclude)internal/api", "scan non-API licence imports"),
         )
         for command, status, diagnostic, output, match, phase in cases:
             with self.subTest(command=command, status=status, diagnostic=diagnostic, phase=phase):
                 self.inject_git_read_fault(command, status, diagnostic=diagnostic, output=output, match=match)
                 for mode in ("report", "--enforce"):
-                    result = self.audit(mode, 2, f"Boundary audit could not {phase} (git {command} exit {status})")
+                    result = self.audit(mode, 2, f"Boundary audit could not {phase}")
+                    self.assertIn(f"(git {command} exit {status})", result)
                     self.assertNotIn("Private boundary audit", result)
                     self.assertNotIn("partial inventory", result)
 
@@ -120,18 +136,18 @@ exec "$TEST_REAL_GIT" "$@"
                 path.write_text("")
 
     def test_workflow_report_propagates_failed_audit_through_tee(self):
-        workflow = (ROOT / ".github/workflows/repo-boundary-audit.yml").read_text()
-        step = re.search(r"(?m)^      - name: Run Boundary Audit \(report mode\)\n"
-                         r"        run: \|\n((?:          [^\n]+\n)+)", workflow)
-        self.assertIsNotNone(step)
         self.inject_git_read_fault("ls-files", 128, diagnostic="read failed")
-        result = subprocess.run(
-            [shutil.which("bash"), "-e", "-c", textwrap.dedent(step[1])],
-            cwd=self.fixture, env=self.environment, capture_output=True, text=True, timeout=15,
+        self.assertEqual(
+            self.workflow_audit(2),
+            "Boundary audit could not list candidate paths (git ls-files exit 128).\n",
         )
-        self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
-        self.assertIn("Boundary audit could not list candidate paths", result.stderr)
-        self.assertEqual((self.fixture / "repo-boundary-audit.txt").read_text(), "")
+
+    def test_workflow_keeps_all_policy_failures_in_one_report(self):
+        self.write("internal/api/reporting_extra.go", "package api\n")
+        self.write("scripts/repo-boundary-paid-surface.allowlist", "internal/api/missing.go\n")
+        report = self.workflow_audit(1)
+        self.assertIn("new production paid-domain implementation files are not baselined", report)
+        self.assertIn("paid-surface allowlist contains paths that no longer exist", report)
 
     def test_each_enforcement_mode_still_rejects_its_violation(self):
         variants = (
@@ -158,6 +174,7 @@ exec "$TEST_REAL_GIT" "$@"
                 original = target.read_text() if target.exists() else None
                 self.write(path, content)
                 self.audit(mode, 1, message)
+                self.assertIn(message, self.workflow_audit(1))
                 if original is None:
                     target.unlink()
                 else:
@@ -174,6 +191,23 @@ exec "$TEST_REAL_GIT" "$@"
     def test_exact_licensing_bridge_remains_allowed(self):
         self.write("internal/api/licensing_bridge.go", 'package api\nimport _ "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"\n')
         self.audit("--enforce-api-pkg-licensing-imports", 0, "API files importing pkg/licensing outside bridge: 0")
+
+    def test_tracks_content_independently_of_ignore_rules(self):
+        path = "internal/api/licensing_bridge.go"
+        self.write(path, 'package api\nimport _ "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"\n')
+        self.write("scripts/repo-boundary-paid-surface.allowlist", path + "\n")
+        staged = subprocess.run(
+            ["git", "add", "--", path], cwd=self.fixture, env=self.environment,
+            capture_output=True, text=True, timeout=10,
+        )
+        self.assertEqual(staged.returncode, 0, staged.stderr)
+        for ignore in ("", f"{path}\n"):
+            with self.subTest(ignore=bool(ignore)):
+                self.write(".gitignore", ignore)
+                report = self.workflow_audit(0)
+                self.assertIn("Production files in paid domains (allowlisted paid surface adapters): 1\n", report)
+                self.assertIn("API files importing pkg/licensing: 1\n", report)
+                self.assertIn("API files importing pkg/licensing outside bridge: 0\n", report)
 
     def test_semantic_routes_and_untracked_files_are_still_scanned(self):
         self.write("internal/api/handler.go", 'package api\nconst route = "/api/license"\n')
@@ -202,12 +236,12 @@ exec "$TEST_REAL_GIT" "$@"
         self.audit("--enforce", 2, "Run the boundary audit from the Git repository root")
 
     def test_workflow_keeps_all_checks_without_package_bootstrap(self):
-        workflow = (ROOT / ".github/workflows/repo-boundary-audit.yml").read_text()
+        workflow = WORKFLOW_PATH.read_text()
         self.assertIn("run: python3 scripts/repo-boundary-regression.py", workflow)
-        for mode in MODES:
-            if mode != "report":
-                self.assertIn(f"run: ./scripts/audit-private-boundary.sh {mode}\n", workflow)
-        self.assertIn("./scripts/audit-private-boundary.sh | tee repo-boundary-audit.txt", workflow)
+        self.assertEqual(workflow.count("./scripts/audit-private-boundary.sh"), 1)
+        self.assertIn("./scripts/audit-private-boundary.sh --enforce 2>&1 | tee repo-boundary-audit.txt", workflow)
+        self.assertIn("!cancelled() && (steps.boundary.outcome == 'success' || steps.boundary.outcome == 'failure')", workflow)
+        self.assertIn("path: repo-boundary-audit.txt\n          if-no-files-found: error", workflow)
         for dependency in ("apt-get", "ripgrep", "curl ", "wget ", "continue-on-error"):
             self.assertNotIn(dependency, workflow)
 

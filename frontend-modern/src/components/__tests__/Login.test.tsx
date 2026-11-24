@@ -83,6 +83,15 @@ describe('Login', () => {
     // Username and password fields should be visible
     expect(await screen.findByLabelText('Username')).toBeInTheDocument();
     expect(screen.getByLabelText('Password')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 1, name: 'Welcome to Pulse' })).toBeInTheDocument();
+    const usernameIcon = screen
+      .getByLabelText('Username')
+      .parentElement?.querySelector('[aria-hidden="true"]');
+    const passwordIcon = screen
+      .getByLabelText('Password')
+      .parentElement?.querySelector('[aria-hidden="true"]');
+    expect(usernameIcon).toHaveClass('z-10');
+    expect(passwordIcon).toHaveClass('z-10');
     // Older browser clients still find these inputs by placeholder.
     expect(screen.getByPlaceholderText('Username')).toBe(screen.getByLabelText('Username'));
     expect(screen.getByPlaceholderText('Password')).toBe(screen.getByLabelText('Password'));
@@ -849,6 +858,34 @@ describe('Login', () => {
     fireEvent.submit(form);
     await waitFor(() => expect(onLogin).toHaveBeenCalledOnce());
     expect(mockFetch.mock.calls.filter(([url]) => url === '/api/login')).toHaveLength(2);
+  });
+
+  it('preserves the entered username on wrong password even when Remember me is unchecked', async () => {
+    const onLogin = vi.fn();
+    mockFetch.mockResolvedValueOnce(
+      new Response(JSON.stringify({ success: false, message: 'Invalid username or password' }), {
+        status: 401,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    );
+
+    render(() => (
+      <Login
+        onLogin={onLogin}
+        securityStatus={{ hasAuthentication: true, requiresAuth: true, hideLocalLogin: false }}
+      />
+    ));
+
+    const username = (await screen.findByLabelText('Username')) as HTMLInputElement;
+    const password = screen.getByLabelText('Password') as HTMLInputElement;
+    fireEvent.input(username, { target: { value: 'admin' } });
+    fireEvent.input(password, { target: { value: 'wrong-pass' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Sign in to Pulse' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Invalid username or password');
+    expect(username).toHaveValue('admin');
+    expect(password).toHaveValue('');
+    expect(onLogin).not.toHaveBeenCalled();
   });
 
   describe('authentication discovery recovery', () => {

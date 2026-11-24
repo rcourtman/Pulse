@@ -1,4 +1,5 @@
-import { For, Show, createMemo, createResource, type Component } from 'solid-js';
+import { For, Show, createMemo, type Component } from 'solid-js';
+import { createNonSuspendingQuery } from '@/hooks/createNonSuspendingQuery';
 import {
   compactDetailRows,
   compactDetailSections,
@@ -49,8 +50,8 @@ interface PMGInstancesResponse {
   meta: { total: number };
 }
 
-async function fetchPMGInstance(id: string): Promise<PMGInstance | null> {
-  const response = await apiFetch(`/api/pmg/instances?id=${encodeURIComponent(id)}`);
+async function fetchPMGInstance(id: string, signal?: AbortSignal): Promise<PMGInstance | null> {
+  const response = await apiFetch(`/api/pmg/instances?id=${encodeURIComponent(id)}`, { signal });
   if (!response.ok) {
     throw new Error(`Failed to load PMG instance (${response.status})`);
   }
@@ -159,7 +160,7 @@ function StackedBar(props: { segments: StackedSegment[]; ariaLabel: string; lege
 function SpamHistogram(props: { buckets: PMGSpamBucket[] }) {
   const maxCount = createMemo(() => Math.max(0, ...props.buckets.map((b) => Math.max(0, b.count))));
   return (
-    <div class="flex items-end gap-1 h-16" role="img" aria-label="Spam score distribution">
+    <div class="flex h-20 items-end gap-1.5" role="img" aria-label="Spam score distribution">
       <For each={props.buckets}>
         {(bucket) => {
           const heightPct = maxCount() > 0 ? (bucket.count / maxCount()) * 100 : 0;
@@ -172,13 +173,21 @@ function SpamHistogram(props: { buckets: PMGSpamBucket[] }) {
                   ? 'bg-metric-warning-bg'
                   : 'bg-blue-500/60';
           return (
-            <div class="flex flex-1 min-w-[20px] flex-col items-center gap-1">
-              <div
-                class={`w-full rounded-xs ${tone}`}
-                style={{ height: `${Math.max(heightPct, 2)}%` }}
-                title={`Score ${bucket.score}: ${formatPlatformTableIntegerValue(bucket.count)}`}
-              />
-              <span class="text-[10px] text-muted font-mono tabular-nums">{bucket.score}</span>
+            <div
+              class="flex h-full min-w-[20px] flex-1 flex-col items-center justify-end gap-1"
+              data-spam-histogram-bucket={bucket.score}
+            >
+              <div class="flex w-full flex-1 items-end">
+                <div
+                  class={`min-h-[2px] w-full rounded-xs ${tone}`}
+                  style={{ height: `${Math.max(heightPct, 4)}%` }}
+                  data-spam-histogram-bar={bucket.score}
+                  title={`Score ${bucket.score}: ${formatPlatformTableIntegerValue(bucket.count)}`}
+                />
+              </div>
+              <span class="shrink-0 text-[10px] text-muted font-mono tabular-nums">
+                {bucket.score}
+              </span>
             </div>
           );
         }}
@@ -286,7 +295,7 @@ export const buildMailGatewayMailFlowSections = (instance: PMGInstance): DetailS
             <StackedBar
               segments={quarantineSegments(quarantine)}
               ariaLabel="Quarantine breakdown by category"
-              legend={false}
+              legend={true}
             />
           ),
         }
@@ -320,14 +329,124 @@ export const buildMailGatewayMailFlowSections = (instance: PMGInstance): DetailS
 
 const CARD_HEADING_CLASS = 'text-[10px] font-semibold uppercase tracking-wide text-base-content';
 
+type PMGRawNode = {
+  name?: string;
+  status?: string;
+  queueStatus?: {
+    active?: number;
+    deferred?: number;
+    hold?: number;
+    incoming?: number;
+    total?: number;
+    oldestAge?: number;
+  };
+};
+
+type PMGExtendedMeta = {
+  nodes?: PMGRawNode[];
+  connectionHealth?: string;
+  queueDeferred?: number;
+  queueHold?: number;
+  queueTotal?: number;
+};
+
+const readPmgExtendedMeta = (resource: Resource): PMGExtendedMeta | undefined => {
+  const direct = resource.pmg as (Resource['pmg'] & PMGExtendedMeta) | undefined;
+  if (direct) return direct;
+  const platformPmg = (resource.platformData as { pmg?: PMGExtendedMeta } | undefined)?.pmg;
+  return platformPmg;
+};
+
+export function describeMailGatewayDegradation(
+  resource: Resource,
+  instance?: PMGInstance | null,
+): string[] {
+  const status = (instance?.status || resource.status || '').trim().toLowerCase();
+  const meta = readPmgExtendedMeta(resource);
+  const connectionHealth = (instance?.connectionHealth || meta?.connectionHealth || '')
+    .trim()
+    .toLowerCase();
+  const isDegraded =
+    status === 'degraded' ||
+    status === 'warning' ||
+    status === 'offline' ||
+    status === 'error' ||
+    connectionHealth === 'degraded' ||
+    connectionHealth === 'warning' ||
+    connectionHealth === 'error' ||
+    connectionHealth === 'offline';
+  if (!isDegraded) return [];
+
+  const reasons: string[] = [];
+  const rawNodes: PMGRawNode[] = instance?.nodes ?? meta?.nodes ?? [];
+  const unhealthyNodes = rawNodes.filter((node) => {
+    const nodeStatus = (node.status ?? '').trim().toLowerCase();
+    return Boolean(nodeStatus) && nodeStatus !== 'online' && nodeStatus !== 'ok';
+  });
+  for (const node of unhealthyNodes) {
+    const label = asTrimmedString(node.name) || 'Cluster node';
+    const state = (node.status ?? 'degraded').trim().toLowerCase();
+    reasons.push(`Cluster node ${label} is ${state}.`);
+  }
+
+  const deferred =
+    rawNodes.length > 0
+      ? rawNodes.reduce((sum, node) => sum + (node.queueStatus?.deferred ?? 0), 0)
+      : (meta?.queueDeferred ?? 0);
+  const hold =
+    rawNodes.length > 0
+      ? rawNodes.reduce((sum, node) => sum + (node.queueStatus?.hold ?? 0), 0)
+      : (meta?.queueHold ?? 0);
+  const totalQueued =
+    rawNodes.length > 0
+      ? rawNodes.reduce((sum, node) => sum + (node.queueStatus?.total ?? 0), 0)
+      : (meta?.queueTotal ?? 0);
+
+  if (deferred > 0 || hold > 0) {
+    const parts: string[] = [];
+    if (deferred > 0) parts.push(`${formatPlatformTableIntegerValue(deferred)} deferred`);
+    if (hold > 0) parts.push(`${formatPlatformTableIntegerValue(hold)} on hold`);
+    const totalSuffix =
+      totalQueued > 0 ? ` (${formatPlatformTableIntegerValue(totalQueued)} total queued)` : '';
+    reasons.push(`Mail queue backlog: ${parts.join(', ')}${totalSuffix}.`);
+  }
+
+  if (
+    connectionHealth === 'degraded' ||
+    connectionHealth === 'warning' ||
+    connectionHealth === 'error' ||
+    connectionHealth === 'offline'
+  ) {
+    if (unhealthyNodes.length === 0) {
+      reasons.push(
+        `PMG API reported ${connectionHealth} connection health for this gateway (one or more polling checks or cluster services reported non-healthy status).`,
+      );
+    }
+  }
+
+  if (reasons.length === 0) {
+    reasons.push(
+      `Proxmox Mail Gateway reported ${status || 'degraded'} status with no active alert rules triggered. Check cluster nodes and mail queue posture in the Mail tab.`,
+    );
+  }
+
+  return reasons;
+}
+
 export const ProxmoxMailGatewayMailFlow: Component<{ resource: Resource }> = (props) => {
   const id = () => asTrimmedString(props.resource.pmg?.instanceId) || props.resource.id;
-  const [instance, { refetch }] = createResource<PMGInstance | null, string>(id, fetchPMGInstance);
+  const instanceQuery = createNonSuspendingQuery<PMGInstance | null, string>({
+    source: id,
+    fetcher: (instanceId, signal) => fetchPMGInstance(instanceId, signal),
+    initialValue: null,
+    cacheKey: (instanceId) => `pmg-instance:${instanceId}`,
+  });
 
-  // Solid rethrows a resource's error when it is read, so every read goes
-  // through this guard and the failure renders as a notice below.
-  const failed = () => instance.state === 'errored';
-  const loaded = createMemo(() => (failed() ? undefined : instance()));
+  const failed = () => Boolean(instanceQuery.error());
+  const isInitialLoading = () => !instanceQuery.resolvedOnce();
+  const loaded = createMemo(() =>
+    failed() || isInitialLoading() ? undefined : instanceQuery.value(),
+  );
   const nodes = createMemo<PMGNodeStatus[]>(() => loaded()?.nodes ?? []);
   const topDomains = createMemo(() =>
     (loaded()?.domainStats ?? [])
@@ -339,6 +458,9 @@ export const ProxmoxMailGatewayMailFlow: Component<{ resource: Resource }> = (pr
     const value = loaded();
     return value ? buildMailGatewayMailFlowSections(value) : [];
   });
+  const degradationReasons = createMemo(() =>
+    describeMailGatewayDegradation(props.resource, loaded() ?? null),
+  );
   const name = () =>
     asTrimmedString(props.resource.displayName) ||
     asTrimmedString(props.resource.name) ||
@@ -359,14 +481,14 @@ export const ProxmoxMailGatewayMailFlow: Component<{ resource: Resource }> = (pr
             role="alert"
             actionLabel="Retry"
             actionAriaLabel={`Retry loading mail flow for ${name()}`}
-            actionOnClick={() => void refetch()}
+            actionOnClick={() => void instanceQuery.refetch()}
           >
             Could not load mail flow for {name()}.
           </InlineNotice>
         }
       >
         <Show
-          when={loaded() !== undefined}
+          when={!isInitialLoading()}
           fallback={
             <p role="status" class="flex items-center gap-2 text-xs text-muted">
               <LoadingSpinner size="sm" tone="muted" />
@@ -382,6 +504,12 @@ export const ProxmoxMailGatewayMailFlow: Component<{ resource: Resource }> = (pr
               </InlineNotice>
             }
           >
+            <Show when={degradationReasons().length > 0}>
+              <InlineNotice tone="warning" role="status" data-testid="pmg-degradation-notice">
+                <span class="font-medium">Why degraded:</span> {degradationReasons().join(' ')}
+              </InlineNotice>
+            </Show>
+
             <Show when={facts().length > 0}>
               <div
                 data-testid="pmg-mail-flow-facts"
@@ -396,8 +524,13 @@ export const ProxmoxMailGatewayMailFlow: Component<{ resource: Resource }> = (pr
             </Show>
 
             <InfoCardFrame data-testid="pmg-cluster-nodes">
-              <div class="mb-2 flex items-baseline justify-between gap-2">
-                <h3 class={CARD_HEADING_CLASS}>Cluster nodes</h3>
+              <div class="mb-2 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+                <div class="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+                  <h3 class={CARD_HEADING_CLASS}>Cluster nodes</h3>
+                  <span class="text-[10px] text-muted" data-testid="pmg-queue-legend">
+                    Queue: active / deferred / hold / incoming
+                  </span>
+                </div>
                 <span class="text-[10px] text-muted tabular-nums">
                   {nodes().length} node{nodes().length === 1 ? '' : 's'}
                 </span>
@@ -430,8 +563,9 @@ export const ProxmoxMailGatewayMailFlow: Component<{ resource: Resource }> = (pr
                     </TableHead>
                     <TableHead
                       class={`${getPlatformTableHeadClassForKind('numeric-value')} platform-table-mobile-w-15 md:w-[15%]`}
+                      title="Queue (active / deferred / hold / incoming)"
                     >
-                      <PlatformResponsiveTableLabel compact="Q" full="Queue" />
+                      <PlatformResponsiveTableLabel compact="Queue" full="Queue" />
                     </TableHead>
                     <TableHead
                       class={`${getPlatformTableHeadClassForKind('numeric-value')} platform-table-mobile-w-10 platform-table-narrow-hidden md:w-[15%]`}

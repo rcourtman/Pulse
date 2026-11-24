@@ -56,6 +56,8 @@ describe('PricingHandoff', () => {
       'href',
       expectedDestination,
     );
+    expect(screen.getByText('Pulse')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Return to Pulse' })).toHaveAttribute('href', '/');
   });
 
   it('localizes the Pulse Account handoff without translating the destination name', async () => {

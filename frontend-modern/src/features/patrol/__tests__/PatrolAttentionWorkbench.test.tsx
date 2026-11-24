@@ -256,10 +256,17 @@ describe('PatrolAttentionWorkbench', () => {
     patrolAttentionStore.clear();
   });
 
-  const renderWorkbench = () =>
+  const renderWorkbench = (
+    workbenchProps: Partial<Parameters<typeof PatrolAttentionWorkbench>[0]> = {},
+  ) =>
     render(() => (
       <Router>
-        <Route path="/patrol" component={() => <PatrolAttentionWorkbench />} />
+        <Route
+          path="/patrol"
+          component={() => (
+            <PatrolAttentionWorkbench autonomyLevel="approval" {...workbenchProps} />
+          )}
+        />
       </Router>
     ));
 
@@ -1717,5 +1724,59 @@ describe('PatrolAttentionWorkbench', () => {
     ).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Close action review' }));
     await waitFor(() => expect(currentTrigger).toHaveFocus());
+  });
+
+  it('uses review-issue wording in Watch only mode and paginates beyond the 50-item first page', async () => {
+    const firstPage = Array.from({ length: 50 }, (_, index) =>
+      item({
+        id: `record-${index + 1}`,
+        operationalRecordId: `record-${index + 1}`,
+        title: `Alert item ${index + 1}`,
+        subjectResourceName: `host-${index + 1}`,
+      }),
+    );
+    const secondPage = Array.from({ length: 16 }, (_, index) =>
+      item({
+        id: `record-${51 + index}`,
+        operationalRecordId: `record-${51 + index}`,
+        title: `Alert item ${51 + index}`,
+        subjectResourceName: `host-${51 + index}`,
+      }),
+    );
+    const fullSummary = summary({ activeCount: 66, openCount: 66, calm: false });
+
+    apiMocks.getList.mockImplementation((_filter: string, page?: number) => {
+      if (page === 2) {
+        return Promise.resolve({
+          data: secondPage,
+          summary: fullSummary,
+          meta: { page: 2, limit: 50, total: 66, totalPages: 2 },
+        });
+      }
+      return Promise.resolve({
+        data: firstPage,
+        summary: fullSummary,
+        meta: { page: 1, limit: 50, total: 66, totalPages: 2 },
+      });
+    });
+
+    renderWorkbench({ autonomyLevel: 'approval', autonomyLocked: true });
+
+    expect(await screen.findByRole('heading', { name: '66 issues to review' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: /decisions need you/i })).not.toBeInTheDocument();
+    expect(screen.getByTestId('patrol-attention-pagination-summary')).toHaveTextContent(
+      'Showing 5 of 66 issues (50 loaded)',
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Show 50 of 66 issues' }));
+    expect(screen.getByTestId('patrol-attention-pagination-summary')).toHaveTextContent(
+      'Showing 50 of 66 issues (50 loaded)',
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Load more (16 remaining)' }));
+
+    await waitFor(() => expect(apiMocks.getList).toHaveBeenCalledWith('active', 2, 50));
+    expect(await screen.findByRole('button', { name: /Alert item 66/ })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Load more/ })).not.toBeInTheDocument();
   });
 });

@@ -119,7 +119,7 @@ describe('APT action presentation', () => {
       expect.arrayContaining([
         { label: 'Updates remaining', value: '0' },
         { label: 'Update system health', value: 'Known healthy' },
-        { label: 'Reboot required', value: 'Yes — fact only. No reboot was authorized' },
+        { label: 'Reboot required', value: 'Yes (fact only, no reboot was authorized)' },
       ]),
     );
     expect(presentation?.nextStep).toContain('separate governed action');
@@ -172,7 +172,7 @@ describe('APT action presentation', () => {
         { label: 'Downloaded package data before', value: '100 MB' },
         { label: 'Downloaded package data after', value: '50.0 MB' },
         { label: 'Space reclaimed', value: '50.0 MB' },
-        { label: 'Rollback', value: 'Unavailable — cleanup is irreversible' },
+        { label: 'Rollback', value: 'Unavailable (cleanup is irreversible)' },
         { label: 'Fresh rescan required', value: 'Yes' },
       ]),
     );

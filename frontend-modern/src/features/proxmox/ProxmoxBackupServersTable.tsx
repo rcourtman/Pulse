@@ -93,18 +93,58 @@ interface BackupServerGroup {
   online: boolean;
   connectionLabel: string;
   connectionVariant: StatusIndicatorVariant;
+  statusLabel: string;
+  statusVariant: StatusIndicatorVariant;
   datastoreCount: number;
 }
 
 type BackupServerTableItem =
   { kind: 'server'; group: BackupServerGroup } | { kind: 'datastore'; row: BackupServerRow };
 
+// Combine server reachability with datastore job outcomes so a reachable PBS
+// server with a failed or warned sync/verify/prune/GC job never displays a
+// healthy green status dot beside a red job failure.
+export function effectiveBackupServerStatus(
+  connectionVariant: StatusIndicatorVariant,
+  connectionLabel: string,
+  jobSummaries: readonly DatastoreJobSummary[],
+): { variant: StatusIndicatorVariant; label: string } {
+  if (connectionVariant === 'danger') {
+    return { variant: 'danger', label: connectionLabel };
+  }
+  const criticalJob = jobSummaries.find((summary) => summary.state === 'critical');
+  if (criticalJob) {
+    return { variant: 'danger', label: criticalJob.label };
+  }
+  if (connectionVariant === 'warning') {
+    return { variant: 'warning', label: connectionLabel };
+  }
+  const warningJob = jobSummaries.find((summary) => summary.state === 'warning');
+  if (warningJob) {
+    return { variant: 'warning', label: warningJob.label };
+  }
+  return { variant: connectionVariant, label: connectionLabel };
+}
+
 // Rows arrive sorted by server, so each server's header precedes its rows.
 export function groupBackupServerRows(rows: readonly BackupServerRow[]): BackupServerTableItem[] {
   const items: BackupServerTableItem[] = [];
   let current: BackupServerGroup | undefined;
+  let currentJobs: DatastoreJobSummary[] = [];
+  const finalizeCurrent = () => {
+    if (!current) return;
+    const status = effectiveBackupServerStatus(
+      current.connectionVariant,
+      current.connectionLabel,
+      currentJobs,
+    );
+    current.statusVariant = status.variant;
+    current.statusLabel = status.label;
+  };
   for (const row of rows) {
     if (current?.key !== row.resource.id) {
+      finalizeCurrent();
+      currentJobs = [];
       current = {
         key: row.resource.id,
         customUrl: row.resource.customUrl,
@@ -112,13 +152,17 @@ export function groupBackupServerRows(rows: readonly BackupServerRow[]): BackupS
         online: row.online,
         connectionLabel: row.connectionLabel,
         connectionVariant: row.connectionVariant,
+        statusLabel: row.connectionLabel,
+        statusVariant: row.connectionVariant,
         datastoreCount: 0,
       };
       items.push({ kind: 'server', group: current });
     }
+    currentJobs.push(row.jobs);
     if (row.datastore) current.datastoreCount += 1;
     items.push({ kind: 'datastore', row });
   }
+  finalizeCurrent();
   return items;
 }
 
@@ -278,10 +322,27 @@ function BackupServerDatastoreContext(props: {
 }) {
   const id = createUniqueId();
   const headingId = () => `backup-datastore-drawer-${id}`;
+  const capacity = createMemo(() =>
+    datastoreCapacity(props.row.datastore, props.row.connectionVariant),
+  );
+  const headingStatus = createMemo<{ variant: StatusIndicatorVariant; label: string }>(() => {
+    const status = effectiveBackupServerStatus(
+      props.row.connectionVariant,
+      props.row.connectionLabel,
+      [props.row.jobs],
+    );
+    const state = capacity().state;
+    // A healthy PBS connection can still fail to read an individual datastore.
+    // Keep the server's own connection indicator and any known job problem.
+    if (status.variant === 'success' && (state === 'unavailable' || state === 'unknown')) {
+      return { variant: 'warning', label: `Datastore capacity ${state}` };
+    }
+    return status;
+  });
   const capacityText = () => {
     const datastore = props.row.datastore;
     if (!datastore) return 'No datastore data';
-    const reading = datastoreCapacity(datastore, props.row.connectionVariant);
+    const reading = capacity();
     if (reading.state !== 'available') {
       return `${reading.state === 'unavailable' ? 'Unavailable' : 'Unknown'}. This does not mean the datastore is empty.`;
     }
@@ -299,7 +360,7 @@ function BackupServerDatastoreContext(props: {
     return props.historyIncomplete ? `${listed} · ${PBS_HISTORY_GAP}` : listed;
   };
   const capacityTone = (): DetailValueTone | undefined => {
-    const reading = datastoreCapacity(props.row.datastore, props.row.connectionVariant);
+    const reading = capacity();
     if (reading.state === 'unavailable' || reading.state === 'unknown') return 'warning';
     if (reading.percent !== undefined && reading.percent >= 90) return 'danger';
     if (reading.percent !== undefined && reading.percent >= 75) return 'warning';
@@ -320,8 +381,8 @@ function BackupServerDatastoreContext(props: {
             <DrawerSubjectHeading
               headingId={headingId()}
               title={datastore().name}
-              statusVariant={props.row.connectionVariant}
-              statusLabel={props.row.connectionLabel}
+              statusVariant={headingStatus().variant}
+              statusLabel={headingStatus().label}
               trailing={<span class="truncate text-xs text-muted">on {props.row.serverName}</span>}
             />
           </ObjectDrawerHeader>
@@ -634,11 +695,11 @@ function BackupServerGroupRow(props: { group: BackupServerGroup; colSpan: number
   return (
     <tr class={getGroupedTableRowClass()} data-backup-server-group={props.group.serverName}>
       <td colspan={props.colSpan} class={getGroupedTableRowCellClass()}>
-        <div class="flex min-w-0 items-center gap-2" title={props.group.connectionLabel}>
+        <div class="flex min-w-0 items-center gap-2" title={props.group.statusLabel}>
           <StatusDot
-            variant={props.group.connectionVariant}
-            title={props.group.connectionLabel}
-            ariaLabel={props.group.connectionLabel}
+            variant={props.group.statusVariant}
+            title={props.group.statusLabel}
+            ariaLabel={props.group.statusLabel}
             size="xs"
           />
           <ResourceNameWithWebInterfaceLink

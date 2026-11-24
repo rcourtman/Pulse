@@ -43,6 +43,7 @@ export interface ThresholdsTableProps {
   containerRuntimes: Resource[];
   dockerHosts: Resource[];
   allResources: Resource[];
+  resourcesLoading?: () => boolean;
   pbsInstances?: PBSInstance[]; // PBS instances derived from unified resources
   pmgInstances?: PMGInstance[]; // PMG instances derived from unified resources
   pmgThresholds: () => PMGThresholdDefaults;

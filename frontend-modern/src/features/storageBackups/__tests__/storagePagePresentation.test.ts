@@ -60,14 +60,16 @@ describe('storagePagePresentation', () => {
     expect(isStoragePoolColumnVisible('compact', 'host')).toBe(true);
     expect(isStoragePoolColumnVisible('compact', 'type')).toBe(false);
     expect(isStoragePoolColumnVisible('compact', 'protection')).toBe(false);
-    expect(getStoragePoolColumnWidthStyle('compact', 'name')).toEqual({ width: '37%' });
-    expect(getStoragePoolColumnWidthStyle('compact', 'host')).toEqual({ width: '31.5%' });
-    expect(getStoragePoolColumnWidthStyle('compact', 'usage')).toEqual({ width: '13%' });
+    expect(getStoragePoolColumnWidthStyle('compact', 'name')).toEqual({ width: '34%' });
+    expect(getStoragePoolColumnWidthStyle('compact', 'state')).toEqual({ width: '28%' });
+    expect(getStoragePoolColumnWidthStyle('compact', 'host')).toEqual({ width: '24%' });
+    expect(getStoragePoolColumnWidthStyle('compact', 'usage')).toEqual({ width: '14%' });
     expect(getStoragePoolColumnWidthStyle('compact', 'growth')).toEqual({ width: '0%' });
     expect(isStoragePoolColumnVisible('narrow', 'type')).toBe(false);
     expect(isStoragePoolColumnVisible('narrow', 'protection')).toBe(false);
-    expect(getStoragePoolColumnWidthStyle('narrow', 'name')).toEqual({ width: '35%' });
-    expect(getStoragePoolColumnWidthStyle('narrow', 'usage')).toEqual({ width: '13%' });
+    expect(getStoragePoolColumnWidthStyle('narrow', 'name')).toEqual({ width: '33%' });
+    expect(getStoragePoolColumnWidthStyle('narrow', 'state')).toEqual({ width: '29%' });
+    expect(getStoragePoolColumnWidthStyle('narrow', 'usage')).toEqual({ width: '14%' });
   });
 
   it('sheds the desktop cell gutter only on the phone pool layouts', () => {

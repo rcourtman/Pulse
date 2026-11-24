@@ -86,7 +86,7 @@ func readStorageContentInventory(resp *http.Response) ([]StorageContent, error) 
 		seen[name] = struct{}{}
 		if name == "data" {
 			var valid bool
-			contents, valid = decodeStorageContentRows(decoder)
+			contents, valid = decodeStorageContentRows(decoder, body)
 			if !valid {
 				return nil, errInvalidStorageInventoryResponse
 			}
@@ -107,23 +107,15 @@ func readStorageContentInventory(resp *http.Response) ([]StorageContent, error) 
 	return contents, nil
 }
 
-func decodeStorageContentRows(decoder *json.Decoder) ([]StorageContent, bool) {
+func decodeStorageContentRows(decoder *json.Decoder, body []byte) ([]StorageContent, bool) {
 	if start, err := decoder.Token(); err != nil || start != json.Delim('[') {
 		return nil, false
 	}
-	fields := []string{"volid", "content", "ctime", "format", "size", "used", "vmid", "notes", "protected", "encryption", "verification", "verified"}
 	seen := make(map[string]struct{})
-	var row json.RawMessage // reused across the array
 	var contents []StorageContent
 	for decoder.More() {
-		if decoder.Decode(&row) != nil {
-			return nil, false
-		}
-		if _, valid := inventoryResponseObject(row, fields...); !valid {
-			return nil, false
-		}
-		var content StorageContent
-		if json.Unmarshal(row, &content) != nil || strings.TrimSpace(content.Volid) == "" || strings.TrimSpace(content.Content) == "" {
+		content, valid := decodeStorageContentRow(decoder, body)
+		if !valid || strings.TrimSpace(content.Volid) == "" || strings.TrimSpace(content.Content) == "" {
 			return nil, false
 		}
 		if _, duplicate := seen[content.Volid]; duplicate {
@@ -140,6 +132,47 @@ func decodeStorageContentRows(decoder *json.Decoder) ([]StorageContent, bool) {
 		return nil, false
 	}
 	return contents, true
+}
+
+// The decoder validates value syntax before calling UnmarshalJSON. The key
+// check needs no copy of the value; the typed decode below reads it in place.
+type ignoredStorageContentValue struct{}
+
+func (*ignoredStorageContentValue) UnmarshalJSON([]byte) error { return nil }
+
+// body is the complete bounded response backing decoder. Use the offsets of
+// the two braces to decode the typed row without buffering a second copy or
+// keeping a map of raw values just to check duplicate and noncanonical keys.
+func decodeStorageContentRow(decoder *json.Decoder, body []byte) (StorageContent, bool) {
+	var content StorageContent
+	if start, err := decoder.Token(); err != nil || start != json.Delim('{') {
+		return content, false
+	}
+	rowStart := decoder.InputOffset() - 1 // include the opening brace
+	canonical := [...]string{"volid", "content", "ctime", "format", "size", "used", "vmid", "notes", "protected", "encryption", "verification", "verified"}
+	keys := make(map[string]struct{})
+	var ignored ignoredStorageContentValue
+	for decoder.More() {
+		token, err := decoder.Token()
+		name, named := token.(string)
+		if _, duplicate := keys[name]; err != nil || !named || duplicate {
+			return content, false
+		}
+		for _, field := range canonical {
+			if name != field && strings.EqualFold(name, field) {
+				return content, false
+			}
+		}
+		keys[name] = struct{}{}
+		if decoder.Decode(&ignored) != nil {
+			return content, false
+		}
+	}
+	if end, err := decoder.Token(); err != nil || end != json.Delim('}') {
+		return content, false
+	}
+	err := json.Unmarshal(body[rowStart:decoder.InputOffset()], &content)
+	return content, err == nil
 }
 
 func readStorageInventoryBody(resp *http.Response) ([]byte, error) {

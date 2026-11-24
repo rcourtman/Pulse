@@ -78,7 +78,6 @@ import {
   getPhysicalDiskHealthStatus,
   getPhysicalDiskTemperatureThresholds,
   getPhysicalDiskHealthSummary,
-  getPhysicalDiskHostLabel,
   getPhysicalDiskLifeLabel,
   getPhysicalDiskLifeTextClass,
   getPhysicalDiskParentLabel,
@@ -303,10 +302,9 @@ export const DiskList: Component<DiskListProps> = (props) => {
               <TableHead
                 class={columnClass(PHYSICAL_DISK_HEADER_PARENT_CLASS, 'parent', 'table-cell')}
                 data-storage-column="parent"
-                aria-label="Belongs To"
-                title="Belongs To"
+                title="Pool, array, or filesystem usage"
               >
-                Belongs
+                Usage
               </TableHead>
               <TableHead
                 class={columnClass(PHYSICAL_DISK_HEADER_HEALTH_CLASS, 'health', 'table-cell')}
@@ -344,7 +342,8 @@ export const DiskList: Component<DiskListProps> = (props) => {
                 // the row first mounts, so health and identity cannot go stale.
                 const data = createMemo(() => model.getDiskData(disk));
                 const status = createMemo(() => getPhysicalDiskHealthStatus(data()));
-                const hostLabel = createMemo(() => getPhysicalDiskHostLabel(data(), disk));
+                const hostLabel = createMemo(() => model.getDiskHostLabel(disk));
+                const hostTitle = createMemo(() => model.getDiskHostTitle(disk));
                 const healthSummary = createMemo(() => getPhysicalDiskHealthSummary(status()));
                 const temperature = createMemo(() =>
                   getPhysicalDiskTemperaturePresentation(data()),
@@ -428,7 +427,7 @@ export const DiskList: Component<DiskListProps> = (props) => {
                           when={hostLabel()}
                           fallback={<span class={PHYSICAL_DISK_MUTED_PLACEHOLDER_CLASS}>—</span>}
                         >
-                          <span class={PHYSICAL_DISK_VALUE_TEXT_CLASS} title={hostLabel()}>
+                          <span class={PHYSICAL_DISK_VALUE_TEXT_CLASS} title={hostTitle()}>
                             {hostLabel()}
                           </span>
                         </Show>

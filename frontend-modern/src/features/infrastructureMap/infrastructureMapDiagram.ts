@@ -7,6 +7,7 @@ import {
   mapHitMeta,
   wrapMapText,
   type MapCursor,
+  type MapInspectTarget,
   type MapLayoutOptions,
   type MapNetworkTone,
   type MapScene,
@@ -50,7 +51,7 @@ const NAME_LINE = 13;
 const NAMED: Metrics = {
   tileW: 92,
   tileH: 72,
-  icon: 32,
+  icon: 34,
   gap: 4,
   pad: 8,
   named: true,
@@ -69,7 +70,7 @@ const NAMED_WRAPPED: Metrics = {
 const COMPACT: Metrics = {
   tileW: 40,
   tileH: 40,
-  icon: 26,
+  icon: 29,
   gap: 4,
   pad: 8,
   named: false,
@@ -169,7 +170,14 @@ interface Painter {
   toneFor: (segmentId: string | undefined) => MapNetworkTone | undefined;
 }
 
-const drawTile = (painter: Painter, tile: DiagramTile, x: number, y: number, dashed = false) => {
+const drawTile = (
+  painter: Painter,
+  tile: DiagramTile,
+  x: number,
+  y: number,
+  dashed = false,
+  groupKey?: string,
+) => {
   const { out, metrics } = painter;
   const off = tile.health === 'off';
   const cx = x + metrics.tileW / 2;
@@ -245,7 +253,17 @@ const drawTile = (painter: Painter, tile: DiagramTile, x: number, y: number, das
     }
   }
   const tone = painter.toneFor(tile.segmentId);
-  if (tone) out.nodes.push({ kind: 'rect', x: x + 4, y: y + 6, w: 3, h: 10, r: 1.5, fill: tone });
+  if (tone) {
+    out.nodes.push({
+      kind: 'rect',
+      x: metrics.named ? x + 4 : x + 1.5,
+      y: y + 6,
+      w: 3,
+      h: 10,
+      r: 1.5,
+      fill: tone,
+    });
+  }
   // A dashed tile is a place, not a thing: only one with something to say
   // about its connections can be pointed at.
   if (dashed && !tile.links?.length) return;
@@ -257,6 +275,14 @@ const drawTile = (painter: Painter, tile: DiagramTile, x: number, y: number, das
     out.nodes.push({ kind: 'rect', x: dotX - 6, y: dotY - 6, w: 12, h: 12, r: 6, fill: 'surface' });
     out.nodes.push({ kind: 'dot', x: dotX, y: dotY, r: 4, health: tile.health });
   }
+  const inspectTarget: MapInspectTarget | undefined =
+    !real && !dashed && groupKey
+      ? tile.id === 'other:off'
+        ? { kind: 'group', groupKey: 'other', initialFilter: 'off' }
+        : tile.id.endsWith(':more')
+          ? { kind: 'group', groupKey }
+          : undefined
+      : undefined;
   out.hits.push({
     kind: 'hit',
     x,
@@ -282,6 +308,7 @@ const drawTile = (painter: Painter, tile: DiagramTile, x: number, y: number, das
       navigable: real,
       ...(tile.links?.length ? { links: tile.links } : {}),
       ...(tile.checkAddress ? { checkAddress: tile.checkAddress } : {}),
+      ...(inspectTarget ? { inspectTarget } : {}),
     },
   });
 };
@@ -343,6 +370,16 @@ const drawGroup = (painter: Painter, sized: Sized, x: number, y: number): Box =>
     weight: 600,
     fill: 'text',
   });
+  out.inspects?.push({
+    kind: 'inspect',
+    x,
+    y,
+    w: sized.w,
+    h: HEADER,
+    r: CARD_RADIUS,
+    label: `Inspect ${sized.group.label} (${count})`,
+    target: { kind: 'group', groupKey: sized.group.key },
+  });
   const pitchX = metrics.tileW + metrics.gap;
   const pitchY = metrics.tileH + metrics.gap;
   const tilesWidth = sized.columns * pitchX - metrics.gap;
@@ -353,6 +390,8 @@ const drawGroup = (painter: Painter, sized: Sized, x: number, y: number): Box =>
       tile,
       left + (index % sized.columns) * pitchX,
       y + HEADER + metrics.pad + Math.floor(index / sized.columns) * pitchY,
+      false,
+      sized.group.key,
     );
   });
   return { x, y, w: sized.w, h: sized.h };
@@ -460,15 +499,33 @@ const drawNetworks = (
 ): number => {
   const shown = networks.slice(0, DIAGRAM_MAX_NETWORKS);
   const hidden = networks.length - shown.length;
-  const pills = shown.map((network) => {
+  const pills: Array<{
+    text: string;
+    tone: MapTone;
+    w: number;
+    label: string;
+    target: MapInspectTarget;
+  }> = shown.map((network) => {
     // Cut by the measure the pill is sized with, so a long label ends in an
     // ellipsis inside the row and never makes a pill wider than the drawing.
     const text = fitMapText(networkText(network), width - 36, 12, 600);
-    return { text, tone: toneOf(network), w: labelWidth(text, 12) + 36 };
+    return {
+      text,
+      tone: toneOf(network),
+      w: labelWidth(text, 12) + 36,
+      label: `Inspect network ${network.label}`,
+      target: { kind: 'network', networkId: network.id },
+    };
   });
   if (hidden > 0) {
     const text = `+${hidden} more`;
-    pills.push({ text, tone: 'netOther', w: labelWidth(text, 12) + 36 });
+    pills.push({
+      text,
+      tone: 'netOther',
+      w: labelWidth(text, 12) + 36,
+      label: `Inspect all ${networks.length.toLocaleString()} networks`,
+      target: { kind: 'all-networks' },
+    });
   }
   const rows: Array<typeof pills> = [];
   let row: typeof pills = [];
@@ -518,6 +575,16 @@ const drawNetworks = (
         weight: 400,
         fill: 'text',
       });
+      out.inspects?.push({
+        kind: 'inspect',
+        x,
+        y: top,
+        w: pill.w,
+        h: PILL_HEIGHT,
+        r: PILL_HEIGHT / 2,
+        label: pill.label,
+        target: pill.target,
+      });
       x += pill.w + 8;
     }
     top += PILL_HEIGHT + 6;
@@ -535,7 +602,7 @@ export function layoutServiceDiagram(diagram: ServiceDiagram, options: MapLayout
   const width = Math.max(MIN_WIDTH + margin * 2, Math.floor(options.width));
   const left = margin + GUTTER;
   const inner = width - (margin + GUTTER) * 2;
-  const out: MapCursor = { nodes: [], hits: [] };
+  const out: MapCursor = { nodes: [], hits: [], inspects: [] };
   const lines: SceneNode[] = [];
   const labels: SceneNode[] = [];
   const mid = width / 2;
@@ -613,17 +680,10 @@ export function layoutServiceDiagram(diagram: ServiceDiagram, options: MapLayout
       // Where the last row drawn above the box ends.
       let tileBottom = y;
       if (gatewaysAbove) {
-        const x = mid + metrics.tileW / 2 + metrics.gap;
-        const room = Math.max(0, Math.floor((left + inner - x + metrics.gap) / gatewayPitch));
-        if (internetAbove && diagram.gateways.length <= room) {
-          // The Internet keeps the middle, over its arrow. Gateways follow it.
-          drawGateways(diagram.gateways, x, y);
-        } else {
-          // More than fit beside the Internet, or no Internet to sit beside:
-          // they take rows of their own, and the Internet the row under them.
-          tileBottom = drawGatewayRows(y);
-          if (internetAbove) y = tileBottom + metrics.gap;
-        }
+        // Gateways always centre cleanly in their own row(s) above the Internet
+        // icon, so the top icons never lean right on narrow viewports.
+        tileBottom = drawGatewayRows(y);
+        if (internetAbove) y = tileBottom + metrics.gap;
       }
       if (internetAbove) {
         drawTile(painter, internet, mid - metrics.tileW / 2, y, true);
@@ -888,7 +948,7 @@ export function layoutServiceDiagram(diagram: ServiceDiagram, options: MapLayout
   return {
     width,
     height: Math.ceil(height),
-    nodes: [...lines, ...out.nodes, ...labels, ...out.hits],
+    nodes: [...lines, ...out.nodes, ...labels, ...(out.inspects ?? []), ...out.hits],
   };
 }
 

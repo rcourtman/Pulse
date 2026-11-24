@@ -365,7 +365,7 @@ export const TrueNASVirtualMachinesTable: Component<{
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
                           >
-                            {formatPlatformTableBytesValue(vm()?.memoryBytes, '-')}
+                            {formatPlatformTableBytesValue(vm()?.memoryBytes, '—')}
                           </TableCell>
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content sm:table-cell`}

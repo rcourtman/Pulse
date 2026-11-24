@@ -7,7 +7,7 @@ package models
 // They cannot merge into a host. Nodes and workloads still contribute the
 // same identity, source selection, relationships and freshness evidence.
 func (s *State) GetAgentLookupSnapshot() StateSnapshot {
-	return s.getSnapshot(cloneKubernetesClustersForAgentLookup)
+	return s.getSnapshot(cloneKubernetesClustersForAgentLookup, clonePBSBackups)
 }
 
 func cloneKubernetesClustersForAgentLookup(src []KubernetesCluster) []KubernetesCluster {

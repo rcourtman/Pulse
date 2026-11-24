@@ -90,7 +90,7 @@ describe('describeAlertDeliveryStatus', () => {
     });
     const line = describeAlertDeliveryStatus(diagnosis, false);
     expect(line?.tone).toBe('muted');
-    expect(line?.label).toMatch(/^Quiet hours — notifies /);
+    expect(line?.label).toMatch(/^Quiet hours: notifies /);
   });
 
   it('treats cooldown as healthy and shows the next eligible time', () => {
@@ -102,12 +102,12 @@ describe('describeAlertDeliveryStatus', () => {
     });
     const line = describeAlertDeliveryStatus(diagnosis, false);
     expect(line?.tone).toBe('muted');
-    expect(line?.label).toMatch(/^Dispatch requested .* — next eligible /);
+    expect(line?.label).toMatch(/^Dispatch requested .*, next eligible /);
   });
 
   it.each([
     ['rate_limited', 'Hourly notification limit reached'],
-    ['flapping', 'Flapping — notifications paused'],
+    ['flapping', 'Flapping: notifications paused'],
     ['notifications_disabled', 'Notifications are turned off'],
     ['notifications_inactive', 'Notification delivery not turned on'],
   ] as const)('marks %s with the attention tone', (reason, label) => {
@@ -135,11 +135,11 @@ describe('describeAlertDeliveryStatus', () => {
 // A historic dispatch must not hide the reason a notification is held now.
 describe('current holds take precedence over historic dispatch', () => {
   it.each([
-    ['monitor_only', 'Monitor-only — no notifications', 'muted'],
+    ['monitor_only', 'Monitor-only: no notifications', 'muted'],
     ['notifications_disabled', 'Notifications are turned off', 'attention'],
     ['notifications_inactive', 'Notification delivery not turned on', 'attention'],
     ['rate_limited', 'Hourly notification limit reached', 'attention'],
-    ['flapping', 'Flapping — notifications paused', 'attention'],
+    ['flapping', 'Flapping: notifications paused', 'attention'],
     ['suppression_window', 'Notifications paused', 'attention'],
   ] as const)('preserves %s with a previous dispatch', (reason, label, tone) => {
     expect(
@@ -167,7 +167,7 @@ describe('current holds take precedence over historic dispatch', () => {
           }),
           false,
         ),
-      ).toEqual({ label: 'Quiet hours — notifies later', tone: 'muted' });
+      ).toEqual({ label: 'Quiet hours: notifies later', tone: 'muted' });
     },
   );
 

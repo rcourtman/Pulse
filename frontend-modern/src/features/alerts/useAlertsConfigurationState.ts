@@ -32,6 +32,7 @@ export interface AlertsConfigurationSurfaceProps {
   isCurrentReader?: Accessor<boolean>;
   activeTab: Accessor<AlertTab>;
   allResources: Accessor<Resource[]>;
+  resourcesLoading?: Accessor<boolean>;
   byType: (resourceType: ResourceType) => Resource[];
   children: (resourceId: string) => Resource[];
   activeAlerts: Record<string, Alert>;

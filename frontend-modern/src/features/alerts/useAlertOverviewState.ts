@@ -36,9 +36,37 @@ export interface UseAlertOverviewStateProps {
   acknowledgementRequests: AlertAcknowledgementRequests;
 }
 
+export type AlertOverviewSeverityFilter = 'all' | 'critical' | 'warning' | 'info';
+
+const matchesAlertOverviewSearch = (alert: Alert, query: string): boolean => {
+  const normalized = query.trim().toLowerCase();
+  if (!normalized) return true;
+  const fields = [
+    alert.resourceName,
+    alert.resourceId,
+    alert.nodeDisplayName,
+    alert.node,
+    alert.type,
+    alert.message,
+    alert.instance,
+  ];
+  return fields.some(
+    (field) => typeof field === 'string' && field.toLowerCase().includes(normalized),
+  );
+};
+
 export function useAlertOverviewState(props: UseAlertOverviewStateProps) {
   const now = useRelativeTimeNow();
   const activeAlerts = createMemo(() => Object.values(props.activeAlerts()));
+  const [searchTerm, setSearchTerm] = createSignal('');
+  const [severityFilter, setSeverityFilter] = createSignal<AlertOverviewSeverityFilter>('all');
+  const activeFilterCount = createMemo(
+    () => (searchTerm().trim() ? 1 : 0) + (severityFilter() !== 'all' ? 1 : 0),
+  );
+  const clearFilters = () => {
+    setSearchTerm('');
+    setSeverityFilter('all');
+  };
   const {
     unacknowledgedAlerts,
     processingAlerts,
@@ -129,9 +157,24 @@ export function useAlertOverviewState(props: UseAlertOverviewStateProps) {
     };
   });
 
-  const filteredAlerts = createMemo(() =>
-    effectiveAlerts()
-      .filter((alert) => props.showAcknowledged() || !alert.acknowledged)
+  const searchMatchedAlerts = createMemo(() =>
+    effectiveAlerts().filter(
+      (alert) =>
+        (props.showAcknowledged() || !alert.acknowledged) &&
+        matchesAlertOverviewSearch(alert, searchTerm()),
+    ),
+  );
+
+  const countForSeverity = (level: AlertOverviewSeverityFilter): number => {
+    const matched = searchMatchedAlerts();
+    if (level === 'all') return matched.length;
+    return matched.filter((alert) => alert.level === level).length;
+  };
+
+  const filteredAlerts = createMemo(() => {
+    const selectedSeverity = severityFilter();
+    return searchMatchedAlerts()
+      .filter((alert) => selectedSeverity === 'all' || alert.level === selectedSeverity)
       .sort((a, b) => {
         if (a.acknowledged !== b.acknowledged) {
           return a.acknowledged ? 1 : -1;
@@ -143,8 +186,8 @@ export function useAlertOverviewState(props: UseAlertOverviewStateProps) {
         const timeDiff = new Date(b.startTime).getTime() - new Date(a.startTime).getTime();
         if (timeDiff !== 0) return timeDiff;
         return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
-      }),
-  );
+      });
+  });
 
   const groupedAlerts = createMemo<AlertGroup[]>(() => {
     const sorted = filteredAlerts();
@@ -174,6 +217,13 @@ export function useAlertOverviewState(props: UseAlertOverviewStateProps) {
 
   return {
     alertStats,
+    searchTerm,
+    setSearchTerm,
+    severityFilter,
+    setSeverityFilter,
+    activeFilterCount,
+    clearFilters,
+    countForSeverity,
     filteredAlerts,
     groupedAlerts,
     unacknowledgedAlerts,

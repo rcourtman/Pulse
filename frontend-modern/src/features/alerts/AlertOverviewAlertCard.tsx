@@ -410,7 +410,7 @@ export function AlertOverviewAlertCard(props: AlertOverviewAlertCardProps) {
                 </span>
               </Show>
               <span
-                class={getAlertOverviewStartedAtClass()}
+                class={`${getAlertOverviewStartedAtClass()} shrink-0 whitespace-nowrap`}
                 title={getAlertOverviewStartedAtLabel(
                   new Date(props.alert.startTime).toLocaleString(),
                 )}
@@ -480,7 +480,7 @@ export function AlertOverviewAlertCard(props: AlertOverviewAlertCardProps) {
             </Show>
           </div>
         </div>
-        <div class="flex flex-wrap items-center gap-1.5 sm:ml-4 self-end sm:self-start justify-end">
+        <div class="flex flex-wrap items-center justify-end gap-1.5 self-end sm:ml-4 sm:shrink-0 sm:flex-nowrap sm:self-start">
           <button
             class={getAlertOverviewPrimaryActionClass(props.alert.acknowledged)}
             disabled={processing()}

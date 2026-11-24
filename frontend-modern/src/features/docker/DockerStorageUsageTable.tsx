@@ -17,9 +17,9 @@ import {
 } from '@/features/platformPage/PlatformResourceDetailTableRow';
 import { getSimpleStatusIndicator } from '@/utils/status';
 import { asTrimmedString } from '@/utils/stringUtils';
+import { filterChipStatusDot } from '@/components/shared/FilterBar';
 import {
   PlatformWindowedRows,
-  PLATFORM_HEALTH_FILTER_OPTIONS,
   PlatformResponsiveTableLabel,
   PlatformTableEmptyState,
   PlatformTableToolbar,
@@ -27,16 +27,33 @@ import {
   formatPlatformTableBytesValue,
   getPlatformTableCellClassForKind,
   getPlatformTableHeadClassForKind,
+  type PlatformTableFilterOption,
   PlatformTableShell,
   withPlatformStatusCounts,
 } from '@/features/platformPage/sharedPlatformPage';
 import type { DockerStorageUsageMeta, Resource } from '@/types/resource';
 import {
-  filterDockerResources,
+  filterDockerStorageResources,
   hasDockerEngineStorageUsage,
   hasDockerStorageUsageBucket,
-  type DockerResourceStatusFilter,
+  type DockerStorageFilter,
 } from './dockerPageModel';
+
+const DOCKER_STORAGE_USAGE_FILTER_OPTIONS: PlatformTableFilterOption<DockerStorageFilter>[] = [
+  { value: 'all', label: 'All' },
+  {
+    value: 'reclaimable',
+    label: 'Reclaimable',
+    tone: 'warning',
+    leading: filterChipStatusDot('bg-amber-500'),
+  },
+  {
+    value: 'active',
+    label: 'Active',
+    tone: 'success',
+    leading: filterChipStatusDot('bg-emerald-500'),
+  },
+];
 import { dockerResourceName } from './DockerNativeTableShared';
 import { useDockerHostIdentities } from './dockerHostIdentity';
 
@@ -124,15 +141,15 @@ export const DockerStorageUsageTable: Component<{
   emptyDescription: string;
   showToolbar?: boolean;
   externalSearch?: () => string;
-  externalStatus?: () => DockerResourceStatusFilter;
+  externalFilter?: () => DockerStorageFilter;
 }> = (props) => {
   const storageHosts = () => props.hosts.filter(hasDockerEngineStorageUsage);
   const tableState = createPlatformTableFilterState({
     resources: storageHosts,
-    initialStatus: 'all' as DockerResourceStatusFilter,
-    filter: filterDockerResources,
+    initialStatus: 'all' as DockerStorageFilter,
+    filter: filterDockerStorageResources,
     externalSearch: props.externalSearch,
-    externalStatus: props.externalStatus,
+    externalStatus: props.externalFilter,
   });
   const drawer = createPlatformResourceDetailState({ idPrefix: 'docker-storage-detail' });
   const hasFilteredSourceRows = () => (props.sourceCount ?? props.hosts.length) > 0;
@@ -162,7 +179,7 @@ export const DockerStorageUsageTable: Component<{
             status={tableState.status()}
             onStatusChange={tableState.setStatus}
             statusOptions={withPlatformStatusCounts(
-              PLATFORM_HEALTH_FILTER_OPTIONS,
+              DOCKER_STORAGE_USAGE_FILTER_OPTIONS,
               tableState.countForStatus,
             )}
             visible={tableState.visible()}

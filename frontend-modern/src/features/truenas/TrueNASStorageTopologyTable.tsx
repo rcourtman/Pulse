@@ -45,6 +45,7 @@ import { useAlertsActivation } from '@/stores/alertsActivation';
 import type { Resource } from '@/types/resource';
 import {
   buildTrueNASStorageTopologyRows,
+  countTrueNASStorageTopologyMatches,
   filterTrueNASStorageTopologyRows,
   filterTrueNASStorageTopologyRowsByKind,
   getTrueNASStorageDotStatus,
@@ -120,12 +121,12 @@ const capacityPercent = (resource: Resource): number | undefined => {
 
 const diskSizeLabel = (row: TrueNASStorageTopologyRow): string => {
   const size = row.resource.physicalDisk?.sizeBytes;
-  return formatPlatformTableBytesValue(size, '-');
+  return formatPlatformTableBytesValue(size, '—');
 };
 
 const capacitySublabel = (row: TrueNASStorageTopologyRow): string | undefined => {
   if (typeof row.resource.disk?.used === 'number' && typeof row.resource.disk?.total === 'number') {
-    return `${formatPlatformTableBytesValue(row.resource.disk.used, '-')} / ${formatPlatformTableBytesValue(row.resource.disk.total, '-')}`;
+    return `${formatPlatformTableBytesValue(row.resource.disk.used, '—')} / ${formatPlatformTableBytesValue(row.resource.disk.total, '—')}`;
   }
   return undefined;
 };
@@ -199,7 +200,7 @@ const DiskEnduranceCell: Component<{ row: TrueNASStorageTopologyRow }> = (props)
       class={`tabular-nums ${endurance()?.class ?? 'text-muted'}`}
       title={endurance() ? `Disk endurance: ${endurance()!.label}` : 'Endurance not reported'}
     >
-      {endurance()?.label ?? '-'}
+      {endurance()?.label ?? '—'}
     </span>
   );
 };
@@ -224,7 +225,7 @@ const DiskTemperatureCell: Component<{ row: TrueNASStorageTopologyRow }> = (prop
   return (
     <Show
       when={reading()?.current === false}
-      fallback={<PlatformTableTemperatureValue value={value()} emptyText="-" />}
+      fallback={<PlatformTableTemperatureValue value={value()} emptyText="—" />}
     >
       <span
         class={PHYSICAL_DISK_TEMPERATURE_LAST_KNOWN_CLASS}
@@ -418,6 +419,13 @@ export const TrueNASStorageTopologyTable: Component<{
     externalSearch: props.search,
     onExternalSearchChange: props.onSearchChange,
   });
+  const countForStatus = (status: TrueNASStorageStatusFilter): number =>
+    countTrueNASStorageTopologyMatches(
+      scopedRows(),
+      tableState.search(),
+      status,
+      getTrueNASDiskTemperatureThresholds,
+    );
   const kindFilters = createMemo<FilterDef[]>(() => [
     {
       id: 'storage-kind',
@@ -429,12 +437,12 @@ export const TrueNASStorageTopologyTable: Component<{
           value: option.value,
           label: option.label,
           compactLabel: option.compactLabel,
-          count: filterTrueNASStorageTopologyRows(
+          count: countTrueNASStorageTopologyMatches(
             filterTrueNASStorageTopologyRowsByKind(rows(), option.value),
             tableState.search(),
             tableState.status(),
             getTrueNASDiskTemperatureThresholds,
-          ).length,
+          ),
         })),
       value: kindFilter,
       setValue: (value) => setKindFilter(value === 'volumes' || value === 'disks' ? value : 'all'),
@@ -481,10 +489,7 @@ export const TrueNASStorageTopologyTable: Component<{
             searchSuggestions={tableState.searchSuggestions}
             status={tableState.status()}
             onStatusChange={tableState.setStatus}
-            statusOptions={withPlatformStatusCounts(
-              TRUENAS_STORAGE_STATUS_OPTIONS,
-              tableState.countForStatus,
-            )}
+            statusOptions={withPlatformStatusCounts(TRUENAS_STORAGE_STATUS_OPTIONS, countForStatus)}
             filters={kindFilters()}
             visible={tableState.visible()}
             total={tableState.total()}
@@ -612,7 +617,7 @@ export const TrueNASStorageTopologyTable: Component<{
                               fallback={
                                 <PlatformTableNumberValue
                                   value={row.kind === 'pool' ? row.counts.disks : undefined}
-                                  emptyText="-"
+                                  emptyText="—"
                                 />
                               }
                             >

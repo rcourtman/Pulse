@@ -96,6 +96,8 @@ describe('WhatsNewCard', () => {
     await waitFor(() => {
       expect(screen.getByTestId('whats-new-notice')).toBeInTheDocument();
     });
+    expect(screen.getByTestId('whats-new-notice')).toHaveClass('lg:bottom-4');
+    expect(screen.getByTestId('whats-new-notice')).not.toHaveClass('md:bottom-4');
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     expect(screen.getByText('Pulse updated to v6.1.0-rc.1')).toBeInTheDocument();
     expect(

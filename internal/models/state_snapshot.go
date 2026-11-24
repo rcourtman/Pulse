@@ -214,14 +214,36 @@ func (s StateSnapshot) Clone() StateSnapshot {
 
 // GetSnapshot returns a detached snapshot of the complete current state.
 func (s *State) GetSnapshot() StateSnapshot {
-	return s.getSnapshot(cloneKubernetesClusters)
+	return s.getSnapshot(cloneKubernetesClusters, clonePBSBackups)
 }
 
-func (s *State) getSnapshot(cloneClusters func([]KubernetesCluster) []KubernetesCluster) StateSnapshot {
+// GetSnapshotForResourceRefresh keeps PBS snapshot attribution and datastore
+// evidence for the canonical registry, but does not copy per-artifact file
+// lists or raw verification details. Use a full snapshot or a backup-specific
+// getter for consumers presenting the artifacts themselves.
+func (s *State) GetSnapshotForResourceRefresh() StateSnapshot {
+	return s.getSnapshot(cloneKubernetesClusters, clonePBSBackupsForResourceRefresh)
+}
+
+func clonePBSBackupsForResourceRefresh(src []PBSBackup) []PBSBackup {
+	if len(src) == 0 {
+		return nil
+	}
+	backups := make([]PBSBackup, len(src))
+	for i := range src {
+		backup := src[i]
+		backup.Files = nil
+		backup.VerificationRaw = nil
+		backups[i] = clonePBSBackup(backup)
+	}
+	return backups
+}
+
+func (s *State) getSnapshot(cloneClusters func([]KubernetesCluster) []KubernetesCluster, clonePBSRows func([]PBSBackup) []PBSBackup) StateSnapshot {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	pbsBackups := clonePBSBackups(s.PBSBackups)
+	pbsBackups := clonePBSRows(s.PBSBackups)
 	pmgBackups := clonePMGBackups(s.PMGBackups)
 	pveBackups := clonePVEBackups(s.PVEBackups)
 
@@ -376,6 +398,44 @@ func (s *State) GetLastUpdate() time.Time {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.LastUpdate
+}
+
+// StateInventoryCounts contains the raw row counts used by broadcast diagnostics.
+// These are counts from one state read, not deduplicated fleet totals.
+type StateInventoryCounts struct {
+	Nodes, VMs, Containers, Hosts, PBSInstances, PBSBackups, PhysicalDisks int
+}
+
+// InventoryCounts reads the diagnostic counts without copying the inventory.
+func (s *State) InventoryCounts() StateInventoryCounts {
+	if s == nil {
+		return StateInventoryCounts{}
+	}
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return StateInventoryCounts{
+		Nodes:         len(s.Nodes),
+		VMs:           len(s.VMs),
+		Containers:    len(s.Containers),
+		Hosts:         len(s.Hosts),
+		PBSInstances:  len(s.PBSInstances),
+		PBSBackups:    len(s.PBSBackups),
+		PhysicalDisks: len(s.PhysicalDisks),
+	}
+}
+
+// InventoryCounts reads the same counters from a detached snapshot, including
+// the backup list used by the existing broadcast diagnostic.
+func (s *StateSnapshot) InventoryCounts() StateInventoryCounts {
+	return StateInventoryCounts{
+		Nodes:         len(s.Nodes),
+		VMs:           len(s.VMs),
+		Containers:    len(s.Containers),
+		Hosts:         len(s.Hosts),
+		PBSInstances:  len(s.PBSInstances),
+		PBSBackups:    len(s.Backups.PBS),
+		PhysicalDisks: len(s.PhysicalDisks),
+	}
 }
 
 // ResourceLocation describes where a resource lives in the infrastructure hierarchy.

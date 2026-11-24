@@ -220,10 +220,10 @@ export const DockerHostsTable: Component<{
 
   const hasFilteredSourceRows = () => (props.sourceCount ?? props.resources.length) > 0;
   // A scoping table keeps the details chevron on phones, so the host column
-  // takes the width Uptime does not need.
+  // takes 38% while CPU/Mem/Disk/Uptime fit cleanly inside 100% without clipping.
   const phoneWidths = () =>
     props.containerScope
-      ? { host: 'platform-table-mobile-w-38', uptime: 'platform-table-mobile-w-10' }
+      ? { host: 'platform-table-mobile-w-38', uptime: 'platform-table-mobile-w-15' }
       : { host: 'platform-table-mobile-w-30', uptime: 'platform-table-mobile-w-20' };
 
   return (
@@ -287,7 +287,7 @@ export const DockerHostsTable: Component<{
                   kind="name"
                   sort={sort}
                   sortKey="host"
-                  class={`${phoneWidths().host} md:w-[13%]`}
+                  class={`${phoneWidths().host} md:w-[17.5%]`}
                 >
                   Host
                 </PlatformSortableTableHead>
@@ -295,7 +295,7 @@ export const DockerHostsTable: Component<{
                   kind="text"
                   sort={sort}
                   sortKey="system"
-                  class="hidden md:table-cell md:w-[7%]"
+                  class="hidden md:table-cell md:w-[6.5%]"
                 >
                   System
                 </PlatformSortableTableHead>
@@ -303,23 +303,15 @@ export const DockerHostsTable: Component<{
                   kind="text"
                   sort={sort}
                   sortKey="version"
-                  class="hidden md:table-cell md:w-[7%]"
+                  class="hidden md:table-cell md:w-[6%]"
                 >
                   Version
-                </PlatformSortableTableHead>
-                <PlatformSortableTableHead
-                  kind="numeric-value"
-                  sort={sort}
-                  sortKey="containers"
-                  class="hidden md:table-cell md:w-[9%]"
-                >
-                  Containers
                 </PlatformSortableTableHead>
                 <PlatformSortableTableHead
                   kind="metric-bar"
                   sort={sort}
                   sortKey="cpu"
-                  class="platform-table-mobile-w-15 w-[15%] min-[360px]:w-[13%] md:w-[14%]"
+                  class="platform-table-mobile-w-15 md:w-[12.5%]"
                 >
                   CPU
                 </PlatformSortableTableHead>
@@ -327,7 +319,7 @@ export const DockerHostsTable: Component<{
                   kind="metric-bar"
                   sort={sort}
                   sortKey="memory"
-                  class="platform-table-mobile-w-15 w-[15%] min-[360px]:w-[13%] md:w-[14%]"
+                  class="platform-table-mobile-w-15 md:w-[13.5%]"
                 >
                   <span class="md:hidden">Mem</span>
                   <span class="hidden md:inline">Memory</span>
@@ -336,32 +328,40 @@ export const DockerHostsTable: Component<{
                   kind="metric-bar"
                   sort={sort}
                   sortKey="disk"
-                  class="platform-table-mobile-w-15 w-[15%] min-[360px]:w-[13%] md:w-[14%]"
+                  class="platform-table-mobile-w-15 md:w-[13.5%]"
                 >
                   Disk
                 </PlatformSortableTableHead>
                 <PlatformSortableTableHead
                   kind="numeric-value"
                   sort={sort}
+                  sortKey="temp"
+                  class="hidden md:table-cell md:w-[6%]"
+                >
+                  <PlatformResponsiveTableLabel compact="Temp" full="Temp" />
+                </PlatformSortableTableHead>
+                <PlatformSortableTableHead
+                  kind="numeric-value"
+                  sort={sort}
                   sortKey="uptime"
-                  class={`${phoneWidths().uptime} w-[20%] min-[360px]:w-[11%] sm:hidden md:table-cell md:w-[6%]`}
+                  class={`${phoneWidths().uptime} platform-table-narrow-hidden sm:hidden md:table-cell md:w-[6%]`}
                 >
                   <PlatformResponsiveTableLabel compact="Up" full="Uptime" />
                 </PlatformSortableTableHead>
                 <PlatformSortableTableHead
                   kind="numeric-value"
                   sort={sort}
-                  sortKey="temp"
-                  class="platform-table-narrow-hidden hidden min-[360px]:table-cell min-[360px]:w-[16%] md:table-cell md:w-[6%]"
+                  sortKey="containers"
+                  class="hidden md:table-cell md:w-[10%]"
                 >
-                  <PlatformResponsiveTableLabel compact="Temp" full="Temp" />
+                  Containers
                 </PlatformSortableTableHead>
                 <Show when={showSwarmColumn()}>
                   <PlatformSortableTableHead
                     kind="text"
                     sort={sort}
                     sortKey="swarm"
-                    class="hidden md:table-cell md:w-[10%]"
+                    class="hidden md:table-cell md:w-[8.5%]"
                   >
                     Swarm role
                   </PlatformSortableTableHead>
@@ -503,11 +503,6 @@ export const DockerHostsTable: Component<{
                             {version()}
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClassForKind('numeric-value')} hidden text-base-content tabular-nums md:table-cell`}
-                          >
-                            {containerCount()}
-                          </TableCell>
-                          <TableCell
                             class={`${getPlatformTableCellClassForKind('metric-bar')} ${staleMetricClass()}`}
                           >
                             <ResponsiveMetricCell
@@ -552,7 +547,18 @@ export const DockerHostsTable: Component<{
                             </Show>
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content sm:hidden md:table-cell`}
+                            class={`${getPlatformTableCellClassForKind('numeric-value')} hidden text-base-content md:table-cell`}
+                          >
+                            <PlatformTableTemperatureValue
+                              value={
+                                canRenderMetrics()
+                                  ? (host.temperature ?? docker()?.temperature)
+                                  : undefined
+                              }
+                            />
+                          </TableCell>
+                          <TableCell
+                            class={`${getPlatformTableCellClassForKind('numeric-value')} platform-table-narrow-hidden text-base-content sm:hidden md:table-cell`}
                           >
                             <Show
                               when={staleness()}
@@ -574,15 +580,9 @@ export const DockerHostsTable: Component<{
                             </Show>
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClassForKind('numeric-value')} platform-table-narrow-hidden hidden text-base-content min-[360px]:table-cell md:table-cell`}
+                            class={`${getPlatformTableCellClassForKind('numeric-value')} hidden text-base-content tabular-nums md:table-cell`}
                           >
-                            <PlatformTableTemperatureValue
-                              value={
-                                canRenderMetrics()
-                                  ? (host.temperature ?? docker()?.temperature)
-                                  : undefined
-                              }
-                            />
+                            {containerCount()}
                           </TableCell>
                           <Show when={showSwarmColumn()}>
                             <TableCell

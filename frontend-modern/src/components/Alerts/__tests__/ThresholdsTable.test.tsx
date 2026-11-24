@@ -1492,4 +1492,42 @@ describe('ThresholdsTable V6 ID compatibility', () => {
       }),
     ).toBe(true);
   });
+
+  it('keeps platform tab names clean without duplicated SVG icon titles', () => {
+    render(() => <ThresholdsTable {...(baseProps() as any)} />);
+
+    expect(screen.getByRole('tab', { name: 'Proxmox' }).textContent?.trim()).toBe('Proxmox');
+    expect(screen.getByRole('tab', { name: 'Docker' }).textContent?.trim()).toBe('Docker');
+    expect(screen.getByRole('tab', { name: 'Kubernetes' }).textContent?.trim()).toBe('Kubernetes');
+    expect(screen.getByRole('tab', { name: 'TrueNAS' }).textContent?.trim()).toBe('TrueNAS');
+    expect(screen.getByRole('tab', { name: 'vSphere' }).textContent?.trim()).toBe('vSphere');
+    expect(screen.getByRole('tab', { name: 'Machines' }).textContent?.trim()).toBe('Machines');
+  });
+
+  it('keeps the help banner dismiss button always visible without hover-only hiding', () => {
+    localStorage.removeItem('pulse-thresholds-help-dismissed');
+    render(() => <ThresholdsTable {...(baseProps() as any)} />);
+
+    const dismissButton = screen.getByRole('button', { name: /dismiss/i });
+    expect(dismissButton.className).not.toContain('sm:opacity-0');
+    expect(dismissButton.className).not.toContain('opacity-0');
+  });
+
+  it('shows a loading skeleton while unified resources are still paginating', () => {
+    render(() => (
+      <ThresholdsTable {...(baseProps() as any)} allResources={[]} resourcesLoading={() => true} />
+    ));
+
+    const loadingCard = screen.getByTestId('thresholds-resources-loading');
+    expect(loadingCard).toHaveAttribute('role', 'status');
+    expect(loadingCard).toHaveTextContent('Loading monitored resources...');
+  });
+
+  it('vertically centers the Expand all | Collapse all controls and separator', () => {
+    setPathname('/alerts/thresholds/proxmox');
+    render(() => <ThresholdsTable {...(baseProps() as any)} />);
+
+    const expandButton = screen.getByRole('button', { name: 'Expand all' });
+    expect(expandButton.parentElement).toHaveClass('items-center');
+  });
 });

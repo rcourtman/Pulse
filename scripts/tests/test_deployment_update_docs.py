@@ -87,6 +87,25 @@ class DeploymentUpdateDocsTest(unittest.TestCase):
                        "does not guarantee restoration of Pulse data"):
             self.assertIn(phrase, updates)
 
+    def test_memory_limited_lxc_baseline_precedes_the_update_action(self):
+        linux = overview().split("### systemd and Proxmox LXC\n", 1)[1].split(
+            "\n### Docker", 1)[0]
+        before, action, after = linux.partition("**Settings → System → Updates**")
+        self.assertTrue(action)
+        self.assertIn("[server update guidance](AUTO_UPDATE.md)", after)
+        self.assertIn("inside the container, not on the Proxmox host", " ".join(after.split()))
+        before = " ".join(before.split())
+        for detail in ("**before** starting the update", "Pulse version and uptime",
+                       "usual busy polls", "peak memory for that window",
+                       "process RSS separate", "guest History timestamp",
+                       "archive count and date at an existing backup location",
+                       "same length at similar uptime",
+                       "same limit, swap allowance and workload",
+                       "leave memory headroom unverified",
+                       "Do not change limits, reset counters or start another backup"):
+            with self.subTest(detail=detail):
+                self.assertIn(detail, before)
+
     def test_install_entry_point_has_no_unscoped_update_shortcuts(self):
         install = guide("INSTALL").split("#### Manual Update\n", 1)[1].split(
             "\n### Pulse Agent updates", 1)[0]

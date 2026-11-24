@@ -43,6 +43,11 @@ export function useCommandPaletteState(props: CommandPaletteModalProps) {
       },
       platformVisibility: props.platformVisibility(),
       patrolVisible: aiAvailable(),
+      settingsVisible: props.hasSettingsAccess ? props.hasSettingsAccess() : true,
+      themePreference: props.themePreference?.(),
+      onSetTheme: props.onSetTheme,
+      kioskMode: props.kioskMode?.(),
+      onToggleKioskMode: props.onToggleKioskMode,
       navigate,
     }),
   );

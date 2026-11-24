@@ -161,4 +161,33 @@ describe('Actions queue size', () => {
     expect(list.querySelectorAll('[role="listitem"]').length).toBeLessThan(actions.length);
     expect(list.querySelectorAll('[data-platform-window-spacer]')).toHaveLength(2);
   });
+
+  it('stacks badges above the action title on mobile and avoids duplicate refresh spinners', async () => {
+    let resolveList!: (value: Awaited<ReturnType<typeof ResourceActionsAPI.listActions>>) => void;
+    vi.mocked(ResourceActionsAPI.listActions).mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveList = resolve;
+      }),
+    );
+
+    render(() => (
+      <Router>
+        <Route path="*" component={Actions} />
+      </Router>
+    ));
+
+    const refreshButton = screen.getByRole('button', { name: 'Refresh actions' });
+    expect(refreshButton).toBeDisabled();
+    expect(refreshButton.querySelectorAll('svg')).toHaveLength(1);
+
+    resolveList({
+      actions: [audit],
+      count: 1,
+      view: 'pending',
+      readOnly: false,
+    });
+
+    const title = await screen.findByText('Restart');
+    expect(title.parentElement).toHaveClass('flex-col', 'sm:flex-row');
+  });
 });

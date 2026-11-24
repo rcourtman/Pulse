@@ -130,7 +130,7 @@ export function WhatsNewCard() {
     <>
       <Show when={noticeVisible()}>
         <aside
-          class="fixed bottom-(--pulse-mobile-nav-height) left-4 right-4 z-30 max-w-sm md:right-auto md:bottom-4"
+          class="fixed bottom-[calc(var(--pulse-mobile-nav-height,0px)+0.75rem)] left-4 right-4 z-30 max-w-sm md:right-auto lg:bottom-4"
           aria-live="polite"
           data-testid="whats-new-notice"
         >

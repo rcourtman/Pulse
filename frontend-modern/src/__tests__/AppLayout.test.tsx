@@ -196,9 +196,11 @@ describe('AppLayout navigation icons', () => {
   it('renders fresh utility icons for both desktop and mobile navigation trees', () => {
     const { container } = renderLayout();
 
-    expect(container.querySelector('.pulse-shell')).toHaveClass('pb-safe-or-14');
+    expect(container.querySelector('.pulse-shell')).toHaveClass('pb-safe-or-14', 'lg:pb-0');
     expect(container.querySelector('.pulse-shell')).not.toHaveClass('pb-safe-or-16');
-    expect(container.querySelector('.header')).toHaveClass('mb-1', 'sm:mb-3');
+    const header = container.querySelector('header.header');
+    expect(header).toBeTruthy();
+    expect(header).toHaveClass('mb-1', 'sm:mb-3');
     const main = container.querySelector('main');
     expect(main).toHaveClass('mb-1', 'sm:mb-2');
     expect(main).toHaveAttribute('id', 'main');
@@ -208,6 +210,8 @@ describe('AppLayout navigation icons', () => {
     expect(container.querySelector('footer')).toHaveClass('pulse-footer', 'px-2', 'sm:px-4');
 
     const desktopNav = screen.getByRole('navigation', { name: 'Primary navigation' });
+    expect(desktopNav).toHaveClass('lg:flex');
+    expect(desktopNav).not.toHaveClass('overflow-y-hidden');
     const systemGroup = desktopNav.querySelector('[aria-label="System"]');
     expect(systemGroup).toBeTruthy();
 
@@ -216,11 +220,14 @@ describe('AppLayout navigation icons', () => {
     desktopTabs.forEach((tab) => {
       expect(tab.tagName).toBe('A');
       expect(tab.querySelector('svg')).toBeTruthy();
+      expect(tab.className).toContain('focus-visible:outline-blue-500');
+      expect(tab.querySelector('[class~="xs:hidden"]')).toBeNull();
     });
     const desktopPatrolTab = within(systemGroup as HTMLElement).getByRole('link', {
       name: 'Patrol',
     });
     expect(desktopPatrolTab.querySelector('svg')).toBeTruthy();
+    expect(desktopPatrolTab.textContent?.trim()).toBe('Patrol');
     expect(
       within(systemGroup as HTMLElement).getByRole('link', { name: 'Alerts 1' }),
     ).toHaveAccessibleDescription('1 warning');
@@ -232,7 +239,7 @@ describe('AppLayout navigation icons', () => {
     expect(within(systemGroup as HTMLElement).queryByRole('link', { name: 'Patrol P' })).toBeNull();
 
     const mobileNav = screen.getByRole('navigation', { name: 'Mobile navigation' });
-    ['alerts', 'ai', 'actions'].forEach((tabId) => {
+    ['alerts', 'ai', 'actions', 'settings'].forEach((tabId) => {
       const button = mobileNav.querySelector<HTMLElement>(`[data-tab-id="${tabId}"]`);
       expect(button).toBeTruthy();
       expect(button?.querySelector('svg')).toBeTruthy();
@@ -241,10 +248,8 @@ describe('AppLayout navigation icons', () => {
       name: 'Patrol',
     });
     expect(mobilePatrolTab.querySelector('svg')).toBeTruthy();
-
-    fireEvent.click(within(mobileNav).getByRole('button', { name: 'More navigation' }));
-    const mobileOverflow = screen.getByRole('menu', { name: 'More navigation destinations' });
-    const mobileSettingsTab = within(mobileOverflow).getByRole('menuitem', { name: 'Settings' });
+    expect(within(mobileNav).queryByRole('button', { name: 'More navigation' })).toBeNull();
+    const mobileSettingsTab = within(mobileNav).getByRole('link', { name: 'Settings' });
     expect(mobileSettingsTab.querySelector('svg')).toBeTruthy();
 
     expect(container).toHaveTextContent('Infrastructure body');
@@ -332,16 +337,7 @@ describe('AppLayout navigation icons', () => {
     const desktopPatrolTab = within(systemGroup as HTMLElement).getByRole('link', {
       name: 'Patrol: 2 active attention items',
     });
-    expect(desktopPatrolTab).toHaveTextContent('Patrol');
-    expect(desktopPatrolTab).toHaveTextContent('2');
-    // jsdom includes the hidden compact label and SVG title in textContent.
-    // Assert the actual word boundary before the badge instead.
-    expect(desktopPatrolTab.querySelector('[class~="xs:hidden"]')?.nextSibling?.textContent).toBe(
-      ' ',
-    );
-    expect(
-      desktopPatrolTab.querySelector('[class~="xs:hidden"]')?.nextElementSibling,
-    ).toHaveTextContent(/^2$/);
+    expect(desktopPatrolTab.textContent?.trim()).toBe('Patrol 2');
     expect(within(systemGroup as HTMLElement).queryByText('Needs Attention')).toBeNull();
 
     const mobileNav = screen.getByRole('navigation', { name: 'Mobile navigation' });
@@ -353,7 +349,9 @@ describe('AppLayout navigation icons', () => {
     // The visible label precedes the icon/badge wrapper in DOM order.
     expect(mobilePatrolTab.firstElementChild).toHaveClass('order-2');
     expect(mobilePatrolTab.firstElementChild?.textContent).toBe('Patrol ');
-    expect(mobilePatrolTab.querySelector('.absolute')).toHaveTextContent(/^2$/);
+    expect(mobilePatrolTab.querySelector('[data-mobile-nav-badge="count"]')).toHaveTextContent(
+      /^2$/,
+    );
     expect(within(mobileNav).queryByText('Needs Attention')).toBeNull();
   });
 
@@ -386,11 +384,7 @@ describe('AppLayout navigation icons', () => {
     expect(actionsTab.className).toContain('text-blue-600');
     expect(actionsTab).toHaveAttribute('href', '/actions');
     expect(actionsTab).toHaveAttribute('aria-current', 'page');
-    expect(actionsTab.querySelector('[class~="xs:hidden"]')?.nextSibling?.textContent).toBe(' ');
-    expect(actionsTab.querySelector('[class~="xs:inline"]')?.textContent).toBe('Actions');
-    expect(actionsTab.querySelector('[class~="xs:hidden"]')?.nextElementSibling).toHaveTextContent(
-      /^3$/,
-    );
+    expect(actionsTab.textContent?.trim()).toBe('Actions 3');
     expect(within(systemGroup as HTMLElement).getByRole('link', { name: 'Patrol' })).toBeTruthy();
 
     const mobileNav = screen.getByRole('navigation', { name: 'Mobile navigation' });
@@ -399,7 +393,9 @@ describe('AppLayout navigation icons', () => {
     });
     expect(mobileActionsTab).toHaveAttribute('aria-current', 'page');
     expect(mobileActionsTab.firstElementChild?.textContent).toBe('Actions ');
-    expect(mobileActionsTab.querySelector('.absolute')).toHaveTextContent(/^3$/);
+    expect(mobileActionsTab.querySelector('[data-mobile-nav-badge="count"]')).toHaveTextContent(
+      /^3$/,
+    );
     expect(document.title).toContain('Actions');
   });
 
@@ -782,5 +778,63 @@ describe('AppLayout map entry', () => {
 
     expect(screen.queryByTestId('infrastructure-map-edge-tab')).toBeNull();
     expect(screen.queryByTestId('infrastructure-map-header-button')).toBeNull();
+  });
+
+  it('renders a header command palette trigger and keeps decorative nav icons out of tab DOM text', () => {
+    const onOpenCommandPalette = vi.fn();
+    window.history.replaceState({}, '', '/proxmox/overview');
+    const LayoutRoute = () => (
+      <AppLayout
+        connectionStatus={() => ({
+          kind: 'connected',
+          label: 'Connected',
+          detail: 'Connected.',
+          tone: 'healthy',
+        })}
+        lastUpdateText={() => ''}
+        versionInfo={() => null}
+        hasAuth={() => true}
+        needsAuth={() => false}
+        proxyAuthInfo={() => null}
+        handleLogout={() => {}}
+        state={() =>
+          ({
+            activeAlerts: [],
+            resources: [
+              makeResource({ id: 'pve-1', type: 'agent', platformType: 'proxmox-pve' }),
+              makeResource({ id: 'docker-1', type: 'docker-host', platformType: 'docker' }),
+            ],
+          }) as unknown as State
+        }
+        tokenScopes={() => ['settings:read']}
+        organizations={() => []}
+        activeOrgID={() => 'default'}
+        orgsLoading={() => false}
+        organizationListIssue={() => null}
+        onRetryOrganizationList={() => {}}
+        showOrgSwitcher={() => false}
+        onSwitchOrg={() => {}}
+        onOpenCommandPalette={onOpenCommandPalette}
+      >
+        <div>Body</div>
+      </AppLayout>
+    );
+    render(() => (
+      <Router>
+        <Route path="/proxmox/overview" component={LayoutRoute} />
+      </Router>
+    ));
+
+    const trigger = screen.getByTestId('command-palette-trigger');
+    expect(trigger).toHaveAccessibleName('Search');
+    expect(trigger.querySelector('kbd')).toHaveAttribute('aria-hidden', 'true');
+    fireEvent.click(trigger);
+    expect(onOpenCommandPalette).toHaveBeenCalledOnce();
+
+    const desktopNav = screen.getByRole('navigation', { name: 'Primary navigation' });
+    const proxmoxLink = within(desktopNav).getByRole('link', { name: 'Proxmox' });
+    expect(proxmoxLink.textContent?.trim()).toBe('Proxmox');
+    const dockerLink = within(desktopNav).getByRole('link', { name: 'Docker' });
+    expect(dockerLink.textContent?.trim()).toBe('Docker');
   });
 });

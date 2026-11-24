@@ -175,7 +175,7 @@ export const VsphereHostsTable: Component<{
   // takes the width Uptime does not need.
   const phoneWidths = () =>
     props.vmScope
-      ? { host: 'platform-table-mobile-w-38', uptime: 'platform-table-mobile-w-10' }
+      ? { host: 'platform-table-mobile-w-38', uptime: 'platform-table-mobile-w-15' }
       : { host: 'platform-table-mobile-w-30', uptime: 'platform-table-mobile-w-20' };
 
   const vmCountByHost = createMemo(() => {
@@ -312,6 +312,14 @@ export const VsphereHostsTable: Component<{
                 <PlatformSortableTableHead
                   kind="numeric-value"
                   sort={sort}
+                  sortKey="uptime"
+                  class={`${phoneWidths().uptime} w-[16%] md:w-[6%]`}
+                >
+                  <PlatformResponsiveTableLabel compact="Up" full="Uptime" />
+                </PlatformSortableTableHead>
+                <PlatformSortableTableHead
+                  kind="numeric-value"
+                  sort={sort}
                   sortKey="datastores"
                   class="hidden md:table-cell md:w-[8%]"
                 >
@@ -324,14 +332,6 @@ export const VsphereHostsTable: Component<{
                   class="platform-table-mobile-w-10 w-[12%] md:w-[4%]"
                 >
                   VMs
-                </PlatformSortableTableHead>
-                <PlatformSortableTableHead
-                  kind="text"
-                  sort={sort}
-                  sortKey="uptime"
-                  class={`${phoneWidths().uptime} w-[16%] md:w-[6%]`}
-                >
-                  <PlatformResponsiveTableLabel compact="Up" full="Uptime" />
                 </PlatformSortableTableHead>
                 <Show when={!singleVcenter()}>
                   <PlatformSortableTableHead
@@ -534,6 +534,12 @@ export const VsphereHostsTable: Component<{
                             </Show>
                           </TableCell>
                           <TableCell
+                            class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content whitespace-nowrap tabular-nums`}
+                            title={uptimeFull()}
+                          >
+                            {uptimeLabel()}
+                          </TableCell>
+                          <TableCell
                             class={`${getPlatformTableCellClassForKind('numeric-value')} hidden text-base-content tabular-nums md:table-cell`}
                           >
                             {datastoreCount()}
@@ -542,12 +548,6 @@ export const VsphereHostsTable: Component<{
                             class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content tabular-nums`}
                           >
                             {vmCount()}
-                          </TableCell>
-                          <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} text-base-content whitespace-nowrap`}
-                            title={uptimeFull()}
-                          >
-                            {uptimeLabel()}
                           </TableCell>
                           <Show when={!singleVcenter()}>
                             <TableCell

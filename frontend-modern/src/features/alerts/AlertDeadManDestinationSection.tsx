@@ -172,7 +172,7 @@ export function AlertDeadManDestinationSection(props: AlertDeadManDestinationSec
               spellcheck={false}
               autocomplete="off"
               placeholder={
-                hasStoredUrl() ? 'Configured — enter a new URL to replace' : 'https://hc-ping.com/…'
+                hasStoredUrl() ? 'Configured. Enter a new URL to replace' : 'https://hc-ping.com/…'
               }
               aria-describedby={`${inputId}-help`}
               class="min-w-0 flex-1 rounded-md border border-border bg-surface px-3 py-2 font-mono text-sm text-base-content shadow-xs focus:border-blue-500 focus:outline-hidden focus:ring-2 focus:ring-blue-500/20"
@@ -263,8 +263,8 @@ export function AlertDeadManDestinationSection(props: AlertDeadManDestinationSec
 
         <p class="text-xs leading-5 text-muted">
           After a restart, Pulse reports any monitoring gap of two minutes or longer to the watchdog
-          and records it in alert history. The ping contains only Pulse health and UTC
-          timestamps—never infrastructure names, alert contents, or credentials.
+          and records it in alert history. The ping contains only Pulse health and UTC timestamps,
+          never infrastructure names, alert contents, or credentials.
         </p>
       </div>
     </SettingsPanel>

@@ -1242,7 +1242,7 @@ const AgentMachineSortableHead: Component<{
         {(sortKey) => (
           <button
             type="button"
-            class="-my-3 inline-flex min-h-11 max-w-full items-center gap-1 truncate py-3 hover:text-base-content focus:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500/60 sm:my-0 sm:min-h-0 sm:py-0"
+            class="-my-3 inline-flex min-h-11 max-w-full items-center gap-1 truncate py-3 uppercase tracking-wider hover:text-base-content focus:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500/60 sm:my-0 sm:min-h-0 sm:py-0"
             onClick={() => props.onSort(sortKey())}
             aria-label={`Sort by ${props.column.label}`}
           >

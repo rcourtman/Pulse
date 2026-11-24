@@ -488,4 +488,35 @@ describe('AvailabilityChecksTable', () => {
       expect(screen.getByText('99.73%')).toBeInTheDocument();
     });
   });
+  it('shows the Table and Fleet presentation switch directly in the toolbar and keeps the Add check CTA visible in Fleet view', () => {
+    const onViewChange = vi.fn();
+    render(() => (
+      <Router>
+        <Route
+          path="/"
+          component={() => (
+            <AvailabilityChecksTable
+              resources={[availabilityResource()]}
+              view="fleet"
+              onViewChange={onViewChange}
+              emptyIcon={<span />}
+              emptyTitle="No checks"
+              emptyDescription="Add checks"
+            />
+          )}
+        />
+      </Router>
+    ));
+
+    // Table | Fleet switch is directly accessible without opening the View menu
+    const tableBtn = screen.getByRole('button', { name: 'Table' });
+    const fleetBtn = screen.getByRole('button', { name: 'Fleet' });
+    expect(tableBtn).toBeInTheDocument();
+    expect(fleetBtn).toBeInTheDocument();
+    fireEvent.click(tableBtn);
+    expect(onViewChange).toHaveBeenCalledWith('table');
+
+    // + Add service/device check remains visible in Fleet view
+    expect(screen.getByRole('link', { name: /Add service\/device check/i })).toBeInTheDocument();
+  });
 });

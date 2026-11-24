@@ -65,7 +65,7 @@ export const describeAlertDeliveryStatus = (
   if (diagnosis.status === 'deferred') {
     const replayAt = formatShortTime(diagnosis.quietHoursReplayAt);
     return {
-      label: replayAt ? `Quiet hours — notifies ${replayAt}` : 'Quiet hours — notifies later',
+      label: replayAt ? `Quiet hours: notifies ${replayAt}` : 'Quiet hours: notifies later',
       tone: 'muted',
     };
   }
@@ -78,7 +78,7 @@ export const describeAlertDeliveryStatus = (
       const nextAt = formatShortTime(diagnosis.nextEligibleAt);
       if (notifiedAt && nextAt) {
         return {
-          label: `Dispatch requested ${notifiedAt} — next eligible ${nextAt}`,
+          label: `Dispatch requested ${notifiedAt}, next eligible ${nextAt}`,
           tone: 'muted',
         };
       }
@@ -88,7 +88,7 @@ export const describeAlertDeliveryStatus = (
     case 'rate_limited':
       return { label: 'Hourly notification limit reached', tone: 'attention' };
     case 'flapping':
-      return { label: 'Flapping — notifications paused', tone: 'attention' };
+      return { label: 'Flapping: notifications paused', tone: 'attention' };
     case 'suppression_window': {
       const until = formatShortTime(diagnosis.suppressedUntil);
       return {
@@ -101,7 +101,7 @@ export const describeAlertDeliveryStatus = (
     case 'notifications_inactive':
       return { label: 'Notification delivery not turned on', tone: 'attention' };
     case 'monitor_only':
-      return { label: 'Monitor-only — no notifications', tone: 'muted' };
+      return { label: 'Monitor-only: no notifications', tone: 'muted' };
     default:
       return null;
   }

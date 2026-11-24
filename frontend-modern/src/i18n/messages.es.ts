@@ -485,7 +485,7 @@ export const ES_MESSAGE_OVERRIDES = {
     'Inspecciona el flujo de logs de Pulse en vivo y descarga el búfer capturado para soporte.',
   'settings.header.supportLogs.title': 'Logs del sistema',
   'settings.header.supportReporting.description':
-    'Exporta datos de inventario y genera informes de rendimiento desde la consola canónica de ajustes.',
+    'Exporta datos de inventario y genera informes de rendimiento.',
   'settings.header.supportReporting.title': 'Datos e informes',
   'settings.nav.group.infrastructure': 'Infraestructura',
   'settings.nav.group.monitoring': 'Supervisión',

@@ -4927,46 +4927,60 @@ func (s *State) PBSExclusiveConfirmers() map[PBSSnapshotRef]string {
 // overlapping view has demonstrated it sees other clusters' snapshots, so
 // nothing it lists attributes anything (#1639).
 func pbsExclusiveConfirmers(confirmationsByInstance map[string]map[PBSGuestConfirmation]struct{}) map[PBSSnapshotRef]string {
-	type pbsStorageView struct {
-		instance string
-		storage  string
+	snapshotRef := func(confirmation PBSGuestConfirmation) PBSSnapshotRef {
+		return PBSSnapshotRef{BackupType: confirmation.BackupType, VMID: confirmation.VMID, Time: confirmation.Time}
 	}
-	viewsBySnapshot := make(map[PBSSnapshotRef][]pbsStorageView)
+
+	// Keep one compact connection ID per snapshot, regardless of how many
+	// storage views listed it. Zero means a cross-connection overlap.
+	connections := make([]string, 0, len(confirmationsByInstance))
+	seenBy := make(map[PBSSnapshotRef]int)
+	overlaps := 0
 	for instanceName, confirmations := range confirmationsByInstance {
+		connections = append(connections, instanceName)
+		id := len(connections)
 		for confirmation := range confirmations {
-			key := PBSSnapshotRef{BackupType: confirmation.BackupType, VMID: confirmation.VMID, Time: confirmation.Time}
-			viewsBySnapshot[key] = append(viewsBySnapshot[key], pbsStorageView{instance: instanceName, storage: confirmation.Storage})
+			ref := snapshotRef(confirmation)
+			if first, seen := seenBy[ref]; !seen {
+				seenBy[ref] = id
+			} else if first != 0 && first != id {
+				seenBy[ref] = 0
+				overlaps++
+			}
 		}
 	}
-	sharedViews := make(map[pbsStorageView]struct{})
-	for _, views := range viewsBySnapshot {
-		for i := range views {
-			for j := i + 1; j < len(views); j++ {
-				if views[i].instance == views[j].instance {
-					continue
+	if overlaps == len(seenBy) {
+		// Nothing can be confirmed when all sightings are shared.
+		return map[PBSSnapshotRef]string{}
+	}
+	owners := make(map[PBSSnapshotRef]string, len(seenBy)-overlaps)
+	if overlaps == 0 {
+		for ref, id := range seenBy {
+			owners[ref] = connections[id-1]
+		}
+		return owners
+	}
+
+	for instanceName, confirmations := range confirmationsByInstance {
+		// Every view that listed an overlapping snapshot is shared. Remove
+		// the entire view, not just the overlapping row, while preserving
+		// any other private view on this connection with the same snapshot.
+		var sharedStorages map[string]struct{}
+		for confirmation := range confirmations {
+			if seenBy[snapshotRef(confirmation)] == 0 {
+				if sharedStorages == nil {
+					sharedStorages = make(map[string]struct{})
 				}
-				sharedViews[views[i]] = struct{}{}
-				sharedViews[views[j]] = struct{}{}
+				sharedStorages[confirmation.Storage] = struct{}{}
+			}
+		}
+		for confirmation := range confirmations {
+			if _, shared := sharedStorages[confirmation.Storage]; !shared {
+				owners[snapshotRef(confirmation)] = instanceName
 			}
 		}
 	}
-	// A snapshot two connections both list makes both their views overlapping,
-	// so it has no exclusive confirmer at all.
-	exclusiveConfirmer := make(map[PBSSnapshotRef]string)
-	for key, views := range viewsBySnapshot {
-		exclusive := make(map[string]struct{}, len(views))
-		for _, view := range views {
-			if _, shared := sharedViews[view]; !shared {
-				exclusive[view.instance] = struct{}{}
-			}
-		}
-		if len(exclusive) == 1 {
-			for instanceName := range exclusive {
-				exclusiveConfirmer[key] = instanceName
-			}
-		}
-	}
-	return exclusiveConfirmer
+	return owners
 }
 
 // SyncGuestBackupTimes updates LastBackup and BackupInProgress on VMs and

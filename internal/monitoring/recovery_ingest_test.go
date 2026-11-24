@@ -2,8 +2,11 @@ package monitoring
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/binary"
 	"fmt"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -790,6 +793,34 @@ func TestRecoveryIngestForgetsUnsettledGuestsOfARemovedConnection(t *testing.T) 
 	m.ingestRecoveryPointsBestEffort(ctx, recoveryIngestBatch{points: points})
 	if got := state(); got != recovery.ProtectionStateUnprotected {
 		t.Fatalf("connection removed: state = %s, want unprotected", got)
+	}
+}
+
+func TestRecoveryIngestDigestPreservesBytesAcrossFlushesAndReuse(t *testing.T) {
+	h := recoveryDigestWriter{hash: sha256.New()}
+	payload := strings.Repeat("backup λ ", len(h.buf))
+	for _, n := range []int{0, len(h.buf) - 11, len(h.buf) - 9, len(h.buf) - 8, len(h.buf) + 7} {
+		prefix := strings.Repeat("a", n)
+		const value int64 = -42
+		wantBytes := binary.LittleEndian.AppendUint64(nil, uint64(len(prefix)))
+		wantBytes = append(wantBytes, prefix...)
+		wantBytes = append(wantBytes, 'X')
+		wantBytes = binary.LittleEndian.AppendUint64(wantBytes, uint64(value+int64(n)))
+		wantBytes = binary.LittleEndian.AppendUint64(wantBytes, uint64(len(payload)))
+		wantBytes = append(wantBytes, payload...)
+		wantBytes = append(wantBytes, 1)
+
+		hashWriteString(&h, prefix)
+		h.writeByte('X')
+		hashWriteInt64(&h, value+int64(n))
+		hashWriteString(&h, payload)
+		hashWriteBool(&h, true)
+		if got, want := h.sum256(), sha256.Sum256(wantBytes); got != want {
+			t.Fatalf("prefix length %d: digest = %x, want %x", n, got, want)
+		}
+	}
+	if got, want := h.sum256(), sha256.Sum256(nil); got != want {
+		t.Fatalf("empty stream after reuse: digest = %x, want %x", got, want)
 	}
 }
 

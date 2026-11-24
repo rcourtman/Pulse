@@ -51,9 +51,20 @@ changing the provider or Pulse's stored data.
 
 ## Why Proxmox backup counts differ
 
-In **Proxmox → Backups → By date**, the inventory and completed-point totals
-answer different questions:
+In **Proxmox → Backups**, the protection rating, job activity and restore-point
+counts answer different questions:
 
+- **Protected (rated only)** in **Backup health** compares protected workloads
+  with the workloads Pulse could include in the rating. **Unknown** counts
+  towards the total but not as protected. **Checking** means Pulse is still
+  waiting for a protection assessment. **Not evaluated** means Pulse has no
+  linked resource to assess for that row. Neither counts towards the rating,
+  and neither means a workload was deliberately excluded from backups. Unmatched
+  backups are also outside this ratio. For example, **2 / 2 protected (rated
+  only)** beside **1 checking** does not tell you whether the third workload
+  is protected. Select a reason such as **Backup history unreadable** to show
+  the affected rows in **Coverage** and check their
+  [protection evidence](#protection-posture).
 - **Backup entries** includes running and failed entries, kept for inspection.
   The **completed restore points** total in **Backup health** excludes both,
   even when an incomplete entry has a size or a verification flag. The total
@@ -63,8 +74,9 @@ answer different questions:
 - **Backup jobs** counts retained Proxmox tasks for current workloads, even
   failures. List filters don't change it. Failed jobs usually leave no point,
   and retention prunes old ones, so daily totals can differ. Hover or focus a
-  bar for outcomes and failed guests. Click to show that day's restore points
-  and again to clear. **Running** can mean a fresh read with
+  bar for outcomes and failed guests. Select a bar to show that day's restore
+  points in **By date**. Use **Clear day** above the list or select the same
+  bar again to remove the day filter. **Running** can mean a fresh read with
   [no guest result](#backup-task-results-and-backup-age).
   Stale reads count as **Unknown**.
 - Guest **snapshots** can contribute to completed-point totals. They are not
@@ -72,11 +84,12 @@ answer different questions:
   completed backup's date is unavailable or in the future, the latest backup
   age stays unknown rather than choosing an older dated backup.
 
-The list follows the **By date** search, **Node**, **Backup location**,
-**Type** and **Source** filters, including Verified or Unverified.
-**Backup health** still covers the loaded inventory: a non-zero total there
-can sit beside an empty filtered list. An unresolved or ambiguous saved backup
-location shows no matching points; choose the intended location again or clear
+The list follows the selected day and the **By date** search, **Node**,
+**Backup location**, **Type** and **Source** filters, including Verified or
+Unverified. The completed-point total in **Backup health** still covers the
+loaded inventory: a non-zero total there can sit beside an empty filtered
+list. An unresolved or ambiguous saved backup location shows no matching
+points; choose the intended location again or clear
 that filter, rather than treating the empty view as missing backups. An empty
 list is not proof that no backups exist; check any inventory loading or access
 warning first. None of these display controls changes collection, permissions,

@@ -414,7 +414,7 @@ describe('Audit Log rendered controls through the real HTTP client', () => {
     expect(
       screen.queryByRole('status', { name: 'Verification filter results' }),
     ).not.toBeInTheDocument();
-    expect(window.location.search).toBe('?event=login');
+    await waitFor(() => expect(window.location.search).toBe('?event=login'));
     // No delayed user-filter request should appear after the router change.
     await new Promise((resolve) => setTimeout(resolve, 350));
     expect(auditRequests()).toHaveLength(3);

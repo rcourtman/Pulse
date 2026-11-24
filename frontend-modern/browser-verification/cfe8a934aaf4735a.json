@@ -1,0 +1,57 @@
+{
+  "version": 1,
+  "base_sha": "f9a182714b672384eb7766195a45ae698ba57c53",
+  "verified_at": "2026-11-23T23:50:24Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Storage/DiskList.tsx",
+    "frontend-modern/src/components/Storage/useDiskListModel.ts",
+    "frontend-modern/src/features/proxmox/ProxmoxBackupJobsCard.tsx",
+    "frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx",
+    "frontend-modern/src/features/proxmox/ProxmoxCephTable.tsx",
+    "frontend-modern/src/features/proxmox/ProxmoxNodesTable.tsx",
+    "frontend-modern/src/features/proxmox/ProxmoxRecoverableTable.tsx",
+    "frontend-modern/src/features/proxmox/proxmoxBackupsTablePresentation.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Storage/DiskList.tsx": "6d99a2b86508eb66b80bee8d0825ca91fa05b6b0f79e2425b8b0aed66fa2c1f1",
+    "frontend-modern/src/components/Storage/useDiskListModel.ts": "ec5459bc9d26499e157b8ecd235cb9e400075fc88b1a77eec43b716e8f5f5f08",
+    "frontend-modern/src/features/proxmox/ProxmoxBackupJobsCard.tsx": "9af0b00e6f74070148ec077c58e5b4a146eee844c08d97b0961d8a39bca5fd4e",
+    "frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx": "049603ca97f07aa42aba849b7770063e496f27d1f1f5df94a2bd96a0429b61d9",
+    "frontend-modern/src/features/proxmox/ProxmoxCephTable.tsx": "068d172dd2f0f229c1f6d4817f2728004707d2a0f268eedd5afe16ddf9fe80e8",
+    "frontend-modern/src/features/proxmox/ProxmoxNodesTable.tsx": "166ccf11ddec4bd065c01419e86e2b633a9312599bfdeb0f5bae65199fd56200",
+    "frontend-modern/src/features/proxmox/ProxmoxRecoverableTable.tsx": "32bcba54ab9ed48a1d6b682229f14927d82678a38384991ced3fc41f093d252e",
+    "frontend-modern/src/features/proxmox/proxmoxBackupsTablePresentation.ts": "264ddc906892a16f3b70ceaacd634ac181fe687fbd6fb67c6f8447e7d86564d4"
+  },
+  "routes": [
+    "/proxmox",
+    "/proxmox/storage",
+    "/proxmox/ceph",
+    "/proxmox/backups/date",
+    "/proxmox/backups/coverage"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Proxmox Overview nodes table in dark and light themes at 1440x900 and mobile 390x844 with consistent horizontal aggregate disk bars across single-disk and multi-disk nodes",
+    "Proxmox Physical Disks table in dark and light themes at 1440x900 and mobile 390x844 with Usage column header and human-readable Proxmox node display names",
+    "Proxmox Ceph table in dark and light themes at 1440x900 and mobile 390x844 with distinct Quorum status and formatted Services counts highlighting degraded daemons",
+    "Proxmox Backups By date view at 1440x900 dark and light themes with widened Workload column, day-filter hint when no day is active, and active-day filter indicator with Clear day control",
+    "Proxmox Backups Coverage Backup jobs card at mobile 390x844 with all 24h outcome pills fitting cleanly on one row and 0px horizontal overflow across all tested views"
+  ],
+  "interactions": [
+    "Hovered multi-disk node bar in Proxmox Overview to confirm Disk Breakdown tooltip renders per-mount capacities",
+    "Switched Proxmox Storage to Physical Disks tab and inspected Host cell labels, raw-hostname hover titles, and Usage column",
+    "Inspected Ceph table Quorum verdicts and Services daemon summaries across healthy and degraded clusters",
+    "Clicked a Backup jobs day bar to filter By date, verified Filtered to active-day pill appeared, and clicked Clear day to restore unfiltered view and hint",
+    "Filtered By date to PVE backup files and verified workload names and connection labels render without aggressive truncation"
+  ]
+}

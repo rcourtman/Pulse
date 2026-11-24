@@ -3,6 +3,7 @@ package monitoring
 import (
 	"context"
 	"fmt"
+	"reflect"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -73,30 +74,42 @@ func TestLargePVEClusterPublishesCompleteGenerationWhenEnrichmentBudgetExpires(t
 	defer monitor.alertManager.Stop()
 	defer monitor.notificationMgr.Stop()
 	monitor.guestAgentWorkSlots = make(chan struct{}, defaultGuestAgentVMMaxConcurrent)
+	vmDisks := []models.Disk{{Device: "vda1", Mountpoint: "/", Type: "ext4", Total: 128, Used: 32, Free: 96, Usage: 25}}
+	containerDisks := []models.Disk{{Device: "rootfs", Mountpoint: "/", Type: "xfs", Total: 256, Used: 128, Free: 128, Usage: 50}}
+	vmInterfaces := []models.GuestNetworkInterface{{
+		Name: "ens18", Addresses: []string{"192.0.2.11"}, RXBytes: 123, TXBytes: 456, Bridge: "vmbr0", VLAN: 42, Firewall: true,
+	}}
+	containerInterfaces := []models.GuestNetworkInterface{{
+		Name: "eth0", Addresses: []string{"192.0.2.10"}, RXBytes: 234, TXBytes: 567, Bridge: "vmbr1", VLAN: 43,
+	}}
 	monitor.state.UpdateGuestsForInstance(
 		"large-cluster",
 		[]models.VM{{
-			ID:           "large-cluster:node-1:1001",
-			VMID:         1001,
-			Name:         "vm-1",
-			Node:         "node-1",
-			Instance:     "large-cluster",
-			Status:       "running",
-			IPAddresses:  []string{"10.0.0.11"},
-			OSName:       "Debian",
-			AgentVersion: "1.2.3",
+			ID:                "large-cluster:node-1:1001",
+			VMID:              1001,
+			Name:              "vm-1",
+			Node:              "node-1",
+			Instance:          "large-cluster",
+			Status:            "running",
+			IPAddresses:       []string{"192.0.2.11"},
+			NetworkInterfaces: vmInterfaces,
+			Disks:             vmDisks,
+			OSName:            "Debian",
+			AgentVersion:      "1.2.3",
 		}},
 		[]models.Container{{
-			ID:              "large-cluster:node-0:1000",
-			VMID:            1000,
-			Name:            "vm-0",
-			Node:            "node-0",
-			Instance:        "large-cluster",
-			Status:          "running",
-			IPAddresses:     []string{"10.0.0.10"},
-			OSName:          "Ubuntu",
-			HasDocker:       true,
-			DockerCheckedAt: time.Now(),
+			ID:                "large-cluster:node-0:1000",
+			VMID:              1000,
+			Name:              "vm-0",
+			Node:              "node-0",
+			Instance:          "large-cluster",
+			Status:            "running",
+			IPAddresses:       []string{"192.0.2.10"},
+			NetworkInterfaces: containerInterfaces,
+			Disks:             containerDisks,
+			OSName:            "Ubuntu",
+			HasDocker:         true,
+			DockerCheckedAt:   time.Now(),
 		}},
 	)
 
@@ -144,11 +157,23 @@ func TestLargePVEClusterPublishesCompleteGenerationWhenEnrichmentBudgetExpires(t
 			t.Fatalf("VM %d lost authoritative cluster identity: %+v", i, vm)
 		}
 	}
-	if vm := findVMByID(snapshot.VMs, 1001); vm == nil || len(vm.IPAddresses) != 1 || vm.OSName != "Debian" || vm.AgentVersion != "1.2.3" {
+	vm := findVMByID(snapshot.VMs, 1001)
+	if vm == nil || len(vm.IPAddresses) != 1 || vm.OSName != "Debian" || vm.AgentVersion != "1.2.3" {
 		t.Fatalf("budgeted VM lost previous optional enrichment: %+v", vm)
 	}
-	if container := findContainerByID(snapshot.Containers, 1000); container == nil || len(container.IPAddresses) != 1 || container.OSName != "Ubuntu" || !container.HasDocker {
+	if !reflect.DeepEqual(vm.Disks, vmDisks) || !reflect.DeepEqual(vm.NetworkInterfaces, vmInterfaces) {
+		t.Fatalf("budgeted VM lost disk or interface evidence: disks %v, interfaces %v", vm.Disks, vm.NetworkInterfaces)
+	}
+	container := findContainerByID(snapshot.Containers, 1000)
+	if container == nil || len(container.IPAddresses) != 1 || container.OSName != "Ubuntu" || !container.HasDocker {
 		t.Fatalf("budgeted container lost previous optional enrichment: %+v", container)
+	}
+	// Unlike the VM, the LXC listing already has a current root disk. Only
+	// missing interface enrichment should come from its previous poll.
+	listingTotal := int64(client.resources[0].MaxDisk)
+	wantContainerDisks := []models.Disk{{Total: listingTotal, Free: listingTotal, Mountpoint: "/", Type: "rootfs"}}
+	if !reflect.DeepEqual(container.Disks, wantContainerDisks) || !reflect.DeepEqual(container.NetworkInterfaces, containerInterfaces) {
+		t.Fatalf("budgeted container did not keep the listing disk and previous interfaces: disks %v, interfaces %v", container.Disks, container.NetworkInterfaces)
 	}
 }
 

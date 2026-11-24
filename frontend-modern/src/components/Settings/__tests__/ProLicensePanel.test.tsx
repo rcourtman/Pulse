@@ -911,7 +911,7 @@ describe('ProLicensePanel', () => {
     expect(screen.queryByText('Included Monitored Systems')).not.toBeInTheDocument();
     expect(screen.queryByText('Legacy monitoring continuity')).not.toBeInTheDocument();
     expect(screen.queryByText('Plan Monitored System Limit')).not.toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: 'Plan' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.queryByRole('tab', { name: 'Plan' })).not.toBeInTheDocument();
     expect(screen.queryByRole('tab', { name: 'Usage' })).not.toBeInTheDocument();
   });
 

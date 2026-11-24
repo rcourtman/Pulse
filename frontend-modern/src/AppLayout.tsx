@@ -1,9 +1,10 @@
 import { For, Show, Suspense, createEffect, createMemo, createSignal, onCleanup } from 'solid-js';
-import type { JSX } from 'solid-js';
+import type { Component, JSX } from 'solid-js';
 import { A, useLocation, useNavigate } from '@solidjs/router';
 import BellIcon from 'lucide-solid/icons/bell';
 import LoaderCircleIcon from 'lucide-solid/icons/loader-circle';
 import ListChecksIcon from 'lucide-solid/icons/list-checks';
+import SearchIcon from 'lucide-solid/icons/search';
 import SettingsIcon from 'lucide-solid/icons/settings';
 import Maximize2Icon from 'lucide-solid/icons/maximize-2';
 import Minimize2Icon from 'lucide-solid/icons/minimize-2';
@@ -16,6 +17,7 @@ import {
 import {
   getMobileNavTabAriaDescription,
   getMobileNavTabAriaLabel,
+  type MobileNavBarIcon,
 } from '@/components/shared/mobileNavBarModel';
 import {
   createStableTabList,
@@ -144,7 +146,33 @@ export function sessionHasSettingsAccess(scopes: string[] | undefined): boolean 
   if (!scopes || scopes.length === 0) return true;
   return scopes.includes('*') || scopes.includes(SETTINGS_READ_SCOPE);
 }
-const NAV_TAB_ICON_CLASS = 'w-4 h-4 shrink-0';
+const NAV_TAB_ICON_CLASS = 'w-3.5 h-3.5 xl:w-4 xl:h-4 shrink-0';
+
+const COMMAND_PALETTE_SHORTCUT_HINT =
+  typeof navigator !== 'undefined' &&
+  /Mac|iPhone|iPad|iPod/i.test(navigator.platform || navigator.userAgent)
+    ? '⌘K'
+    : 'Ctrl K';
+
+const makeDecorativePlatformIcon = (
+  key: Parameters<typeof getPlatformIcon>[0],
+): MobileNavBarIcon => {
+  const BaseIcon = getPlatformIcon(key) as Component<{ class?: string; title?: string }>;
+  return (props) => <BaseIcon class={props.class} title="" />;
+};
+
+const PRIMARY_TAB_ICONS: Record<PrimaryPlatformNavId, MobileNavBarIcon> = {
+  proxmox: makeDecorativePlatformIcon('proxmox'),
+  docker: makeDecorativePlatformIcon('docker'),
+  kubernetes: makeDecorativePlatformIcon('kubernetes'),
+  truenas: makeDecorativePlatformIcon('truenas'),
+  vmware: getPlatformIcon('vmware'),
+  standalone: getPlatformIcon('standalone'),
+};
+
+const DecorativePatrolIcon: MobileNavBarIcon = (props) => (
+  <PulsePatrolLogo class={props.class} decorative />
+);
 
 export interface AppLayoutProps {
   connectionStatus: () => AppConnectionStatus;
@@ -165,6 +193,7 @@ export interface AppLayoutProps {
   onRetryOrganizationList: () => void;
   showOrgSwitcher: () => boolean;
   onSwitchOrg: (orgID: string) => void;
+  onOpenCommandPalette?: () => void;
   children?: JSX.Element;
 }
 
@@ -265,7 +294,7 @@ export function AppLayout(props: AppLayoutProps) {
 
   const [headerVisible, setHeaderVisible] = createSignal(true);
   const [primaryRouteMemoryVersion, setPrimaryRouteMemoryVersion] = createSignal(0);
-  let headerEl: HTMLDivElement | undefined;
+  let headerEl: HTMLElement | undefined;
   let headerHideTimeout: ReturnType<typeof setTimeout> | undefined;
 
   const clearHeaderHideTimeout = () => {
@@ -485,7 +514,7 @@ export function AppLayout(props: AppLayoutProps) {
         tooltip: 'Proxmox VE, Backup Server, Mail Gateway, storage, backups, and guests',
         enabled: isVisible('proxmox'),
         live: isVisible('proxmox'),
-        icon: getPlatformIcon('proxmox'),
+        icon: PRIMARY_TAB_ICONS.proxmox,
         alwaysShow: false,
       },
       {
@@ -496,7 +525,7 @@ export function AppLayout(props: AppLayoutProps) {
         tooltip: 'Docker / Podman runtime lens: hosts, containers, and Swarm services',
         enabled: isVisible('docker'),
         live: isVisible('docker'),
-        icon: getPlatformIcon('docker'),
+        icon: PRIMARY_TAB_ICONS.docker,
         alwaysShow: false,
       },
       {
@@ -507,7 +536,7 @@ export function AppLayout(props: AppLayoutProps) {
         tooltip: 'Kubernetes clusters, nodes, pods, deployments, and services',
         enabled: isVisible('kubernetes'),
         live: isVisible('kubernetes'),
-        icon: getPlatformIcon('kubernetes'),
+        icon: PRIMARY_TAB_ICONS.kubernetes,
         alwaysShow: false,
       },
       {
@@ -518,7 +547,7 @@ export function AppLayout(props: AppLayoutProps) {
         tooltip: 'TrueNAS hosts, storage, and apps',
         enabled: isVisible('truenas'),
         live: isVisible('truenas'),
-        icon: getPlatformIcon('truenas'),
+        icon: PRIMARY_TAB_ICONS.truenas,
         alwaysShow: false,
       },
       {
@@ -529,7 +558,7 @@ export function AppLayout(props: AppLayoutProps) {
         tooltip: 'VMware vSphere hosts, virtual machines, datastores, and networks',
         enabled: isVisible('vmware'),
         live: isVisible('vmware'),
-        icon: getPlatformIcon('vmware'),
+        icon: PRIMARY_TAB_ICONS.vmware,
         alwaysShow: false,
       },
       {
@@ -540,7 +569,7 @@ export function AppLayout(props: AppLayoutProps) {
         tooltip: 'Pulse Agent machines, agentless computers, and availability checks',
         enabled: isVisible('standalone'),
         live: isVisible('standalone'),
-        icon: getPlatformIcon('standalone'),
+        icon: PRIMARY_TAB_ICONS.standalone,
         alwaysShow: false,
       },
     ];
@@ -597,7 +626,7 @@ export function AppLayout(props: AppLayoutProps) {
               count: patrolAttentionCount() || undefined,
               countLabel: patrolAttentionCountLabel(),
               breakdown: undefined,
-              icon: PulsePatrolLogo,
+              icon: DecorativePatrolIcon,
             },
           ]
         : []),
@@ -666,7 +695,7 @@ export function AppLayout(props: AppLayoutProps) {
     const targetRoute = () => getPrimaryTargetRoute(tab);
     const Icon = tab.icon;
     const baseClasses =
-      'tab relative px-1.5 xl:px-2 2xl:px-3 py-1.5 text-xs xl:text-sm font-medium flex items-center gap-1 2xl:gap-1.5 rounded-t border border-transparent transition-colors whitespace-nowrap cursor-pointer select-none';
+      'tab relative px-1.5 xl:px-2 2xl:px-3 py-1.5 text-xs xl:text-sm font-medium flex items-center gap-1 2xl:gap-1.5 rounded-t border border-transparent transition-colors whitespace-nowrap cursor-pointer select-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-blue-500';
 
     const className = () => {
       if (isActive()) {
@@ -694,7 +723,7 @@ export function AppLayout(props: AppLayoutProps) {
         <span aria-hidden="true" class="inline-flex items-center justify-center">
           <Icon class={NAV_TAB_ICON_CLASS} />
         </span>
-        <span class="hidden xs:inline-flex items-center gap-1">
+        <span class="inline-flex items-center gap-1">
           <span>{tab.label}</span>
           <Show when={tab.badge}>
             <span class="px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted bg-surface-hover rounded-sm">
@@ -702,14 +731,13 @@ export function AppLayout(props: AppLayoutProps) {
             </span>
           </Show>
         </span>
-        <span class="xs:hidden">{tab.label.charAt(0)}</span>
       </A>
     );
   };
 
   return (
     <div
-      class={`pulse-shell ${layoutStore.isFullWidth() || kioskMode() ? 'pulse-shell--full-width' : ''} ${!kioskMode() ? 'pb-safe-or-14 xl:pb-0' : ''}`}
+      class={`pulse-shell ${layoutStore.isFullWidth() || kioskMode() ? 'pulse-shell--full-width' : ''} ${!kioskMode() ? 'pb-safe-or-14 lg:pb-0' : ''}`}
     >
       {/* The skip-to-content link renders in App ahead of the global
           banners; #main below is its target. */}
@@ -727,7 +755,7 @@ export function AppLayout(props: AppLayoutProps) {
           }}
         />
       </Show>
-      <div
+      <header
         class={`header mb-1 flex flex-wrap items-center gap-1 sm:flex-nowrap sm:mb-3 sm:gap-2 ${
           kioskMode()
             ? 'fixed top-0 left-0 right-0 z-50 justify-end bg-surface shadow-xs'
@@ -766,10 +794,28 @@ export function AppLayout(props: AppLayoutProps) {
         }}
       >
         <Show when={!kioskMode()}>
-          <div class="flex items-center sm:col-start-1 sm:col-end-2 sm:justify-self-start">
+          <div class="flex items-center gap-1.5 sm:col-start-1 sm:col-end-2 sm:justify-self-start">
             {/* The slot stays, so the brand mark does not move when the map arrives. */}
             <Show when={isFeatureAvailable('infrastructureMap')}>
               <InfrastructureMapHeaderButton />
+            </Show>
+            <Show when={props.onOpenCommandPalette}>
+              <button
+                type="button"
+                onClick={() => props.onOpenCommandPalette?.()}
+                class="inline-flex h-9 items-center gap-1.5 rounded-md border border-border bg-surface px-2 text-xs font-medium text-muted shadow-xs transition-colors hover:bg-surface-hover hover:text-base-content focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 sm:px-2.5"
+                title="Search commands (Cmd+K / Ctrl+K)"
+                data-testid="command-palette-trigger"
+              >
+                <SearchIcon class="h-4 w-4 shrink-0" aria-hidden="true" />
+                <span class="sr-only sm:not-sr-only">Search</span>
+                <kbd
+                  aria-hidden="true"
+                  class="hidden rounded-sm border border-border bg-page px-1.5 py-0.5 font-sans text-[10px] font-medium text-muted md:inline-block"
+                >
+                  {COMMAND_PALETTE_SHORTCUT_HINT}
+                </kbd>
+              </button>
             </Show>
           </div>
           <div class="flex items-center gap-1.5 sm:col-start-2 sm:col-end-3 sm:flex-initial sm:justify-self-center sm:gap-2">
@@ -891,24 +937,24 @@ export function AppLayout(props: AppLayoutProps) {
             class={`shrink-0 ${compactWorkspaceHeader() ? 'max-sm:col-start-4 max-sm:row-start-1' : ''}`}
           />
         </div>
-      </div>
+      </header>
 
       <Show when={!kioskMode()}>
         <nav
-          class="tabs mb-2 hidden xl:flex items-end gap-2 overflow-x-auto overflow-y-hidden whitespace-nowrap border-b border-border scrollbar-hide"
+          class="tabs mb-2 hidden lg:flex items-end gap-1 xl:gap-2 overflow-x-auto whitespace-nowrap border-b border-border scrollbar-hide"
           aria-label="Primary navigation"
         >
-          <div class="flex items-end gap-1" role="group" aria-label="Infrastructure">
+          <div class="flex items-end gap-0.5 xl:gap-1" role="group" aria-label="Infrastructure">
             <For each={primaryTabs()}>{renderPrimaryNavigationTab}</For>
           </div>
-          <div class="flex items-end gap-1 ml-auto" role="group" aria-label="System">
-            <div class="flex items-end gap-1 pl-1 sm:pl-4">
+          <div class="flex items-end gap-0.5 xl:gap-1 ml-auto" role="group" aria-label="System">
+            <div class="flex items-end gap-0.5 xl:gap-1 pl-2 xl:pl-4">
               <For each={utilityTabs()}>
                 {(tab) => {
                   const isActive = () => getActiveTabDesktop() === tab.id;
                   const Icon = tab.icon;
                   const baseClasses =
-                    'tab relative px-1.5 xl:px-2 2xl:px-3 py-1.5 text-xs xl:text-sm font-medium flex items-center gap-1 2xl:gap-1.5 rounded-t border border-transparent transition-colors whitespace-nowrap cursor-pointer select-none';
+                    'tab relative px-1.5 xl:px-2 2xl:px-3 py-1.5 text-xs xl:text-sm font-medium flex items-center gap-1 2xl:gap-1.5 rounded-t border border-transparent transition-colors whitespace-nowrap cursor-pointer select-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-blue-500';
 
                   const className = () => {
                     if (isActive()) {
@@ -932,8 +978,7 @@ export function AppLayout(props: AppLayoutProps) {
                         <Icon class={NAV_TAB_ICON_CLASS} />
                       </span>
                       <span class="flex items-center gap-1">
-                        <span class="hidden xs:inline">{tab.label}</span>
-                        <span class="xs:hidden">{tab.label.charAt(0)}</span>{' '}
+                        <span>{tab.label}</span>{' '}
                         {(() => {
                           const total = tab.count ?? 0;
                           if (total <= 0) {
@@ -1016,7 +1061,7 @@ export function AppLayout(props: AppLayoutProps) {
               href="https://github.com/rcourtman/Pulse/releases"
               target="_blank"
               rel="noopener noreferrer"
-              class="inline-flex min-h-8 items-center break-all rounded-sm px-1 py-1 text-blue-600 hover:underline dark:text-blue-400 sm:min-h-9"
+              class="inline-flex min-h-8 items-center break-all rounded-sm px-1 py-1 text-blue-600 hover:underline focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 dark:text-blue-400 sm:min-h-9"
             >
               {props.versionInfo()?.version || 'loading...'}
             </a>
@@ -1035,7 +1080,7 @@ export function AppLayout(props: AppLayoutProps) {
             <Show when={isPro()}>
               <a
                 href={`mailto:support@pulserelay.pro?subject=${encodeURIComponent(`Support Request - Pulse ${props.versionInfo()?.version || ''}`)}`}
-                class="inline-flex min-h-8 items-center rounded-sm px-1 py-1 text-blue-600 hover:underline dark:text-blue-400 sm:min-h-9"
+                class="inline-flex min-h-8 items-center rounded-sm px-1 py-1 text-blue-600 hover:underline focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 dark:text-blue-400 sm:min-h-9"
               >
                 Get Support
               </a>

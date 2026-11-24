@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"strconv"
 	"strings"
@@ -30,26 +31,69 @@ func readGuestInventory[T any](resp *http.Response, decode func(*T, []byte, IOCo
 	if resp.StatusCode != http.StatusOK || !utf8.Valid(body) {
 		return nil, errInvalidGuestInventoryResponse
 	}
-	envelope, valid := inventoryResponseObject(body, "data", "errors")
-	if !valid {
+	decoder := json.NewDecoder(bytes.NewReader(body))
+	if start, err := decoder.Token(); err != nil || start != json.Delim('{') {
 		return nil, errInvalidGuestInventoryResponse
 	}
-	if failure, exists := envelope["errors"]; exists && !bytes.Equal(bytes.TrimSpace(failure), []byte("null")) {
+	seen := make(map[string]struct{})
+	var values []T
+	for decoder.More() {
+		token, err := decoder.Token()
+		name, named := token.(string)
+		if _, duplicate := seen[name]; err != nil || !named || duplicate {
+			return nil, errInvalidGuestInventoryResponse
+		}
+		seen[name] = struct{}{}
+		switch name {
+		case "data":
+			values, err = readGuestInventoryRows(decoder, body, decode, identity)
+			if err != nil {
+				return nil, err
+			}
+		case "errors":
+			failure, err := decoder.Token()
+			if err != nil || failure != nil {
+				return nil, errInvalidGuestInventoryResponse
+			}
+		default:
+			if strings.EqualFold(name, "data") || strings.EqualFold(name, "errors") {
+				return nil, errInvalidGuestInventoryResponse
+			}
+			if decoder.Decode(&discardedGuestInventoryMetadata{}) != nil {
+				return nil, errInvalidGuestInventoryResponse
+			}
+		}
+	}
+	// Rows are provisional until the entire envelope is accepted. An explicit
+	// scoped empty array returns a non-nil slice; missing data never does.
+	if end, err := decoder.Token(); err != nil || end != json.Delim('}') || values == nil {
 		return nil, errInvalidGuestInventoryResponse
 	}
-	data := bytes.TrimSpace(envelope["data"])
-	// Preserve a scoped empty array, never a missing/null inventory. Read and
-	// close the whole bounded HTTP body before publishing even a valid prefix.
-	if len(data) == 0 || data[0] != '[' {
+	if _, err := decoder.Token(); err != io.EOF {
 		return nil, errInvalidGuestInventoryResponse
 	}
-	var rows []json.RawMessage
-	if json.Unmarshal(data, &rows) != nil {
+	return values, nil
+}
+
+// The decoder checks syntax; provider metadata outside data has no consumer.
+type discardedGuestInventoryMetadata struct{}
+
+func (*discardedGuestInventoryMetadata) UnmarshalJSON([]byte) error { return nil }
+
+func readGuestInventoryRows[T any](decoder *json.Decoder, body []byte, decode func(*T, []byte, IOCounterPresence) error, identity func(T) (string, bool)) ([]T, error) {
+	if start, err := decoder.Token(); err != nil || start != json.Delim('[') {
 		return nil, errInvalidGuestInventoryResponse
 	}
-	values := make([]T, 0, len(rows))
-	seen := make(map[string]bool, len(rows))
-	for _, row := range rows {
+	start := decoder.InputOffset() - 1
+	// Keep only one raw row beside the decoded inventory. The type decoder
+	// owns any nested bytes it retains, so the scratch row can be reused.
+	var row json.RawMessage
+	values := make([]T, 0)
+	seen := make(map[string]bool)
+	for decoder.More() {
+		if err := decoder.Decode(&row); err != nil {
+			return nil, errInvalidGuestInventoryResponse
+		}
 		fields, valid := inventoryResponseObject(row, guestInventoryFields...)
 		if !valid {
 			return nil, errInvalidGuestInventoryResponse
@@ -66,6 +110,11 @@ func readGuestInventory[T any](resp *http.Response, decode func(*T, []byte, IOCo
 		}
 		seen[key] = true
 		values = append(values, value)
+	}
+	// Decoding a row separately does not count the array in the JSON nesting
+	// limit. Validate the array in place, as the bulk decoder did.
+	if end, err := decoder.Token(); err != nil || end != json.Delim(']') || !json.Valid(body[start:decoder.InputOffset()]) {
+		return nil, errInvalidGuestInventoryResponse
 	}
 	return values, nil
 }

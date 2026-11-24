@@ -32,8 +32,8 @@ export const DockerImageReferenceText: Component<{ reference: string; class?: st
       data-docker-image-reference
       onCopy={copyWithoutBreak}
     >
-      <span class="truncate">{parts().head}</span>
-      <span class="max-w-full shrink-0 truncate" data-docker-image-reference-tail>
+      <span class="truncate text-muted">{parts().head}</span>
+      <span class="max-w-full shrink-0 truncate text-base-content" data-docker-image-reference-tail>
         {parts().tail}
       </span>
     </span>

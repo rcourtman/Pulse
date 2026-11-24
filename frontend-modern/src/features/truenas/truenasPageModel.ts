@@ -578,6 +578,21 @@ function filterTrueNASStorageTopologyRow(
   return matchesTrueNASStorageSearch(row.resource, search);
 }
 
+export function countTrueNASStorageTopologyMatches(
+  rows: readonly TrueNASStorageTopologyRow[],
+  search: string,
+  status: TrueNASStorageStatusFilter,
+  resolveDiskTemperatureThresholds?: TrueNASDiskTemperatureThresholdResolver,
+): number {
+  let count = 0;
+  for (const row of rows) {
+    if (filterTrueNASStorageTopologyRow(row, search, status, resolveDiskTemperatureThresholds)) {
+      count += 1;
+    }
+  }
+  return count;
+}
+
 export function filterTrueNASStorageTopologyRows(
   rows: TrueNASStorageTopologyRow[],
   search: string,

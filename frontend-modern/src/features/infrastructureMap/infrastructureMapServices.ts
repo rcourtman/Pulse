@@ -87,6 +87,10 @@ export interface DiagramGroup {
   /** How many things the box holds, including any folded into one tile. */
   count: number;
   tiles: DiagramTile[];
+  /** Every individual resource tile in this group before capping or folding. */
+  allTiles: DiagramTile[];
+  /** How many tiles in this group have critical or attention health. */
+  attentionCount: number;
 }
 
 export interface DiagramNetwork {
@@ -122,9 +126,20 @@ export interface ServiceDiagram {
   serviceCount: number;
 }
 
+export interface ServiceDiagramFilter {
+  /** Keep only resources whose health is critical or attention. */
+  attentionOnly?: boolean;
+  /** Case-insensitive search query matched across names, types, hosts, addresses, and groups. */
+  query?: string;
+  /** Keep only resources belonging to this planned network id. */
+  networkId?: string;
+}
+
 export interface ServiceDiagramOptions {
   /** The most tiles one group draws before the rest fold into one. */
   maxTilesPerGroup?: number;
+  /** Optional filter applied across the full inventory before per-group capping. */
+  filter?: ServiceDiagramFilter;
 }
 
 export const DIAGRAM_MAX_TILES_PER_GROUP = 24;
@@ -334,6 +349,66 @@ const foldTile = (key: string, name: string, caption: string): DiagramTile => ({
   navigable: false,
 });
 
+export const isDiagramTileAttention = (health: MapHealth): boolean =>
+  health === 'critical' || health === 'attention';
+
+/** Sort tiles with Critical first, then Needs attention, then Stale/Unknown, Healthy, Off, then name. */
+export const compareDiagramTilesByAttention = (a: DiagramTile, b: DiagramTile): number =>
+  HEALTH_RANK[b.health] - HEALTH_RANK[a.health] || collator.compare(a.name, b.name);
+
+/** Multi-term case-insensitive search matcher across a tile's visible and contextual metadata. */
+export const matchesDiagramTileQuery = (
+  tile: DiagramTile,
+  query: string,
+  extraText = '',
+): boolean => {
+  const tokens = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  if (tokens.length === 0) return true;
+  const haystack = [
+    tile.name,
+    tile.caption,
+    tile.typeLabel,
+    tile.status,
+    tile.health,
+    tile.address,
+    tile.detail,
+    extraText,
+  ]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase();
+  return tokens.every((token) => haystack.includes(token));
+};
+
+/** Return every populated group in a service diagram in visual order. */
+export const collectDiagramGroups = (diagram: ServiceDiagram): DiagramGroup[] =>
+  [diagram.access, ...diagram.groups, diagram.storage, diagram.backups, diagram.hardware].filter(
+    (group): group is DiagramGroup => group !== undefined,
+  );
+
+/** Count all individual resources represented across every group in a service diagram. */
+export const countDiagramResources = (diagram: ServiceDiagram): number =>
+  collectDiagramGroups(diagram).reduce((sum, group) => sum + group.allTiles.length, 0);
+
+/** Return every individual resource tile attached to the given planned network id, sorted by attention. */
+export const collectNetworkTiles = (
+  diagram: ServiceDiagram,
+  networkId: string,
+): Array<{ tile: DiagramTile; groupLabel: string }> => {
+  const seen = new Set<string>();
+  const out: Array<{ tile: DiagramTile; groupLabel: string }> = [];
+  for (const group of collectDiagramGroups(diagram)) {
+    for (const tile of group.allTiles) {
+      if (seen.has(tile.id)) continue;
+      if (tile.segmentId === networkId) {
+        seen.add(tile.id);
+        out.push({ tile, groupLabel: group.label });
+      }
+    }
+  }
+  return out.sort((a, b) => compareDiagramTilesByAttention(a.tile, b.tile));
+};
+
 // Running things first, then by name, so the tiles that fold away when a
 // group is large are the ones that are switched off.
 const byRunningThenName = (a: DiagramTile, b: DiagramTile): number =>
@@ -351,13 +426,18 @@ const box = (
   label: string,
   tiles: DiagramTile[],
   max: number,
-  folded = 0,
-): DiagramGroup => ({
-  key,
-  label,
-  count: tiles.filter((tile) => tile.navigable).length + folded,
-  tiles: capTiles(key, tiles, max),
-});
+  foldedTiles: DiagramTile[] = [],
+): DiagramGroup => {
+  const allTiles = [...tiles.filter((tile) => tile.navigable), ...foldedTiles];
+  return {
+    key,
+    label,
+    count: allTiles.length,
+    tiles: capTiles(key, tiles, max),
+    allTiles,
+    attentionCount: allTiles.filter((tile) => isDiagramTileAttention(tile.health)).length,
+  };
+};
 
 interface PoolEntry {
   pool: MapPool;
@@ -512,6 +592,10 @@ export function buildServiceDiagram(
   options: ServiceDiagramOptions = {},
 ): ServiceDiagram {
   const max = Math.max(2, options.maxTilesPerGroup ?? DIAGRAM_MAX_TILES_PER_GROUP);
+  const attentionOnly = Boolean(options.filter?.attentionOnly);
+  const query = (options.filter?.query ?? '').trim();
+  const networkId = options.filter?.networkId?.trim() || undefined;
+  const hasFilter = attentionOnly || query.length > 0 || Boolean(networkId);
   const byCategory = new Map<MapCategoryId, DiagramTile[]>();
   const roles = new Set<MapAppRole>();
   const pools: PoolEntry[] = [];
@@ -522,8 +606,37 @@ export function buildServiceDiagram(
   const runsOn = new Map<string, Array<{ id: string; category: MapCategoryId }>>();
   const mountsOf = new Map<string, MapMount[]>();
   let serviceCount = 0;
-  let foldedOff = 0;
+  const foldedOffTiles: DiagramTile[] = [];
   const plan = planNetworks(model);
+  const networkSearchText = new Map(
+    plan.networks.map((network) => [
+      network.id,
+      [network.label, network.detail].filter(Boolean).join(' '),
+    ]),
+  );
+  const tileNetworkIds = new Map<string, string[]>();
+  const recordTileNetworks = (tileId: string, segmentIds: readonly string[] | undefined) => {
+    if (!segmentIds?.length) return;
+    const ids = [
+      ...new Set(
+        segmentIds.map((id) => plan.networkOf(id)).filter((id): id is string => Boolean(id)),
+      ),
+    ];
+    if (ids.length > 0) tileNetworkIds.set(tileId, ids);
+  };
+  const matchesFilter = (tile: DiagramTile, groupLabel: string): boolean => {
+    if (attentionOnly && !isDiagramTileAttention(tile.health)) return false;
+    const netIds = tileNetworkIds.get(tile.id) ?? (tile.segmentId ? [tile.segmentId] : []);
+    if (networkId && !netIds.includes(networkId)) {
+      return false;
+    }
+    if (!query) return true;
+    const netText = netIds
+      .map((id) => networkSearchText.get(id) ?? '')
+      .filter(Boolean)
+      .join(' ');
+    return matchesDiagramTileQuery(tile, query, `${groupLabel} ${netText}`);
+  };
   const hostNames = new Map<string, string>();
   for (const host of hostsOf(model)) if (host.isResource) hostNames.set(host.id, host.name);
   const hostName = (id: string) => hostNames.get(id);
@@ -544,15 +657,18 @@ export function buildServiceDiagram(
         services += 1;
         const category = item.category ?? 'other';
         runs.push({ id: item.id, category });
+        const tile = serviceTile(item, host, plan);
+        recordTileNetworks(tile.id, item.segmentIds);
         // Something switched off that the catalogue cannot name says nothing
-        // on a diagram of what the estate does, so those fold into one tile.
+        // on an unfiltered diagram of what the estate does, so those fold into
+        // one tile while staying searchable and inspectable in allTiles.
         if (category === 'other' && !item.app && item.health === 'off') {
-          foldedOff += 1;
+          foldedOffTiles.push(tile);
           continue;
         }
         if (item.app?.role && item.health !== 'off') roles.add(item.app.role);
         const list = byCategory.get(category) ?? [];
-        list.push(serviceTile(item, host, plan));
+        list.push(tile);
         byCategory.set(category, list);
         if (item.mounts?.length) mountsOf.set(item.id, item.mounts);
       }
@@ -570,10 +686,13 @@ export function buildServiceDiagram(
         for (const item of section.items) {
           if (isNetworkGearKind(item.checkKind)) {
             const list = byCategory.get('access') ?? [];
-            list.push(gearTile(item, item.checkKind));
+            const gear = gearTile(item, item.checkKind);
+            recordTileNetworks(gear.id, item.segmentIds);
+            list.push(gear);
             byCategory.set('access', list);
             continue;
           }
+          recordTileNetworks(item.id, item.segmentIds);
           checks.push({
             id: item.id,
             name: item.name,
@@ -596,6 +715,7 @@ export function buildServiceDiagram(
       });
     }
     if (!host.isResource) continue;
+    recordTileNetworks(host.id, host.ownSegmentIds);
     const tile: DiagramTile = {
       id: host.id,
       name: host.name,
@@ -650,15 +770,28 @@ export function buildServiceDiagram(
     categoryOf.set(provider, to);
   }
 
+  const filterTiles = (tiles: DiagramTile[], groupLabel: string): DiagramTile[] =>
+    hasFilter
+      ? tiles.filter((tile) => matchesFilter(tile, groupLabel)).sort(compareDiagramTilesByAttention)
+      : tiles;
+
+  const categoryTiles = (category: MapCategoryId): DiagramTile[] =>
+    withNetworkRuns([...(byCategory.get(category) ?? [])].sort(byRunningThenName), providerOf);
+
   const group = (category: MapCategoryId): DiagramGroup | undefined => {
-    const tiles = withNetworkRuns(
-      [...(byCategory.get(category) ?? [])].sort(byRunningThenName),
-      providerOf,
-    );
-    const folded = category === 'other' ? foldedOff : 0;
-    if (folded > 0) tiles.push(foldTile('other:off', `+${folded}`, 'switched off'));
+    const label = MAP_CATEGORY_LABEL[category];
+    const base = categoryTiles(category);
+    const extraOff = category === 'other' ? foldedOffTiles : [];
+    if (hasFilter) {
+      const matched = filterTiles([...base, ...extraOff], label);
+      if (matched.length === 0) return undefined;
+      return box(category, label, matched, max);
+    }
+    const tiles = [...base];
+    if (extraOff.length > 0)
+      tiles.push(foldTile('other:off', `+${extraOff.length}`, 'switched off'));
     if (tiles.length === 0) return undefined;
-    return box(category, MAP_CATEGORY_LABEL[category], tiles, max, folded);
+    return box(category, label, tiles, max, extraOff);
   };
 
   const groups: DiagramGroup[] = [];
@@ -667,7 +800,8 @@ export function buildServiceDiagram(
     const built = group(category);
     if (built) groups.push(built);
   }
-  if (checks.length > 0) groups.push(box('checks', 'Checks', checks, max));
+  const visibleChecks = filterTiles(checks, 'Checks');
+  if (visibleChecks.length > 0) groups.push(box('checks', 'Checks', visibleChecks, max));
 
   const storagePools = poolTiles(
     pools.filter(({ pool }) => !pool.backup),
@@ -679,12 +813,19 @@ export function buildServiceDiagram(
     'backup',
     hostName,
   );
-  const storageTiles = storagePools.map(({ tile }) => tile);
-  const backupTiles = [
+  const storageTilesAll = storagePools.map(({ tile }) => tile);
+  const storageTiles = filterTiles(storageTilesAll, 'Storage');
+
+  const backupTilesAll = [
     ...backupServers,
-    ...(group('backup')?.tiles ?? []),
+    ...categoryTiles('backup'),
     ...backupPools.map(({ tile }) => tile),
   ];
+  const backupTiles = filterTiles(backupTilesAll, 'Backups');
+
+  const hardwareSorted = [...hardware].sort((a, b) => collator.compare(a.name, b.name));
+  const hardwareTiles = filterTiles(hardwareSorted, 'Hardware');
+
   const access = group('access');
   const internetRoles = ROLE_ORDER.filter((role) => roles.has(role) && INTERNET_ROLES.has(role));
 
@@ -696,17 +837,11 @@ export function buildServiceDiagram(
   const backupBox =
     backupTiles.length > 0 ? box('backups', 'Backups', backupTiles, max) : undefined;
   const hardwareBox =
-    hardware.length > 0
-      ? box(
-          'hardware',
-          'Hardware',
-          hardware.sort((a, b) => collator.compare(a.name, b.name)),
-          max,
-        )
-      : undefined;
+    hardwareTiles.length > 0 ? box('hardware', 'Hardware', hardwareTiles, max) : undefined;
   const boxes = [access, ...groups, storageBox, backupBox, hardwareBox];
   for (const entry of boxes) {
-    for (const tile of entry?.tiles ?? []) if (tile.navigable) drawn.set(tile.id, tile);
+    if (!entry) continue;
+    for (const tile of entry.tiles) if (tile.navigable) drawn.set(tile.id, tile);
   }
   const say = (tile: DiagramTile, sentence: string) => {
     tile.links = [...(tile.links ?? []), sentence];
@@ -919,9 +1054,15 @@ export function buildServiceDiagram(
     if (owner && names.length > 0) say(owner, `Resolves names for ${nameList(names)}`);
   }
 
+  const visibleGateways = (
+    hasFilter ? gateways.filter((tile) => matchesFilter(tile, 'Gateway')) : gateways
+  ).slice(0, DIAGRAM_MAX_GATEWAYS);
+
   return {
-    ...(internetRoles.length > 0 ? { internet: { label: internetRoles.join(' · ') } } : {}),
-    gateways: gateways.slice(0, DIAGRAM_MAX_GATEWAYS),
+    ...(internetRoles.length > 0 && (!hasFilter || access !== undefined)
+      ? { internet: { label: internetRoles.join(' · ') } }
+      : {}),
+    gateways: visibleGateways,
     ...(access ? { access } : {}),
     links,
     networks: plan.networks,

@@ -1,0 +1,34 @@
+{
+  "version": 1,
+  "base_sha": "512716e436dcc2255ada2ddc65b044a32f6e7f88",
+  "verified_at": "2026-11-24T01:06:24Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx": "0ea8ccdabecc278b9050d9f65b6b4b5211b455826d1b194099a137bdfdb50bb6"
+  },
+  "routes": [
+    "/proxmox/backups/coverage"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 360,
+      "height": 800
+    }
+  ],
+  "states": [
+    "Playwright 1.56.1 on desktop Chromium 141.0.7390.37 (light) and touch WebKit 26.0 (dark). The production Backups surface reads synthetic REST resources, backup inventory, jobs and posture from loopback.",
+    "Matched selected datastore captures: healthy connection with unavailable or unknown capacity now has an amber, named capacity status in the drawer. Healthy sibling at 30%, the server's connection, independent backup count and job result stay visible.",
+    "Known failed verification remains red with the capacity warning below. A subsequent measured snapshot restores 42.0% with the same drawer still open."
+  ],
+  "interactions": [
+    "Open the selected datastore using keyboard Enter on desktop and a row tap on phone; close it with its existing control.",
+    "Refresh same-resource synthetic snapshots through the production REST reader with the datastore open. No added page width, remount, or loss of server disclosure."
+  ]
+}

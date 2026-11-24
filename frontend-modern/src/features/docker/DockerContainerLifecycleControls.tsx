@@ -171,7 +171,7 @@ export const DockerContainerLifecycleControls: Component<DockerContainerLifecycl
 
   return (
     <div
-      class={`inline-flex items-center justify-end gap-1 ${props.class ?? ''}`.trim()}
+      class={`inline-flex items-center justify-center gap-1 ${props.class ?? ''}`.trim()}
       data-prevent-toggle
       data-docker-container-actions-surface={props.surface ?? 'docker-page'}
       data-docker-lifecycle-menu-root

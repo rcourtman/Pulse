@@ -36,6 +36,7 @@ import { UpdatesAPI, type UpdateStatus } from './api/updates';
 import { aiAvailabilityStore } from './stores/aiAvailability';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 import { useKioskMode } from '@/hooks/useKioskMode';
+import { setKioskMode } from '@/utils/url';
 import {
   DOCKER_PATH,
   INFRASTRUCTURE_MAP_PATH,
@@ -581,6 +582,10 @@ function App() {
                               onRetryOrganizationList={runtime.retryOrganizationList}
                               showOrgSwitcher={runtime.showOrgSwitcher}
                               onSwitchOrg={runtime.handleOrgSwitch}
+                              onOpenCommandPalette={() => {
+                                setShortcutsOpen(false);
+                                setCommandPaletteOpen(true);
+                              }}
                             >
                               <RouteErrorBoundary>{props.children}</RouteErrorBoundary>
                             </AppLayout>
@@ -600,6 +605,13 @@ function App() {
                           isOpen={commandPaletteOpen()}
                           onClose={() => setCommandPaletteOpen(false)}
                           platformVisibility={platformNavigationVisibility}
+                          themePreference={runtime.themePreference}
+                          onSetTheme={(pref) => {
+                            void runtime.handleThemeChange(pref);
+                          }}
+                          kioskMode={kioskMode}
+                          onToggleKioskMode={() => setKioskMode(!kioskMode())}
+                          hasSettingsAccess={hasSettingsAccess}
                         />
                       </Show>
                       <Show when={tokenRevealStore.state() !== null}>

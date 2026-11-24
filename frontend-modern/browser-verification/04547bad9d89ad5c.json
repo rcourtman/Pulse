@@ -1,0 +1,38 @@
+{
+  "version": 1,
+  "base_sha": "c3bbe9addda44841492bdad87ee3d3eadbe456b6",
+  "verified_at": "2026-11-24T00:22:03Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/proxmox/ProxmoxBackupsCoverageStrip.tsx",
+    "frontend-modern/src/features/proxmox/proxmoxBackupVerdict.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/proxmox/ProxmoxBackupsCoverageStrip.tsx": "10c605d49e4be6d7fc1c8215d245057dd3b3a1729b4ef000a3081e6f907be93c",
+    "frontend-modern/src/features/proxmox/proxmoxBackupVerdict.ts": "e71d018fb7bc5b6e6aeb3f980638f340b54270986ff5737e3184aedd5287b272"
+  },
+  "routes": [
+    "/proxmox/backups/coverage",
+    "/proxmox/backups/date"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 360,
+      "height": 800
+    }
+  ],
+  "states": [
+    "Playwright 1.56.1, Chromium 141.0.7390.37 desktop light and WebKit 26.0 emulated phone dark; production Backups surface and query readers with synthetic loopback HTTP.",
+    "Matched all-rated state (4 / 4, still green); an inventory poll adds an unevaluated host. Candidate gives the same rated ratio and separate host count without the green all-clear.",
+    "Matched mixed results with incomplete history, a permission notice, a known unprotected row, a protected sibling and the unrated host; counts, shares and restore evidence remain visible."
+  ],
+  "interactions": [
+    "Hold and release the first posture read; then exercise ordinary inventory and protection polls through both mixed states.",
+    "Open What the counts mean and switch to By date with keyboard Enter or touch; retain all three listed restore points.",
+    "Select a reason from By date to open filtered Coverage with the correct workload; clear it to restore all five rows."
+  ]
+}
