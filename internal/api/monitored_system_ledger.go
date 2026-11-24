@@ -181,7 +181,7 @@ func (r *Router) handleMonitoredSystemLedger(w http.ResponseWriter, req *http.Re
 
 func (r *Router) handleMonitoredSystemLedgerPreview(w http.ResponseWriter, req *http.Request) {
 	var previewReq MonitoredSystemLedgerPreviewRequest
-	decoder := json.NewDecoder(req.Body)
+	decoder := json.NewDecoder(http.MaxBytesReader(w, req.Body, 64*1024))
 	if err := decoder.Decode(&previewReq); err != nil {
 		writeErrorResponse(w, http.StatusBadRequest, "invalid_request", "Invalid request body", map[string]string{"error": err.Error()})
 		return
@@ -225,7 +225,7 @@ func (r *Router) handleMonitoredSystemLedgerPreview(w http.ResponseWriter, req *
 
 func (r *Router) handleMonitoredSystemLedgerExplain(w http.ResponseWriter, req *http.Request) {
 	var explainReq MonitoredSystemLedgerExplainRequest
-	decoder := json.NewDecoder(req.Body)
+	decoder := json.NewDecoder(http.MaxBytesReader(w, req.Body, 64*1024))
 	if err := decoder.Decode(&explainReq); err != nil && err != io.EOF {
 		writeErrorResponse(w, http.StatusBadRequest, "invalid_request", "Invalid request body", map[string]string{"error": err.Error()})
 		return

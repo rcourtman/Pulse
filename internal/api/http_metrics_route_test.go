@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 )
 
 // This deliberately keeps the original split/join algorithm and classifiers
@@ -282,6 +283,127 @@ func TestErrorHandler_NormalizedRouteMetrics(t *testing.T) {
 	}
 	if series != len(cases) {
 		t.Errorf("%d distinct requests created %d series, want %d", requests*len(cases), series, len(cases))
+	}
+}
+
+func TestMuxRouteLabel(t *testing.T) {
+	mux := http.NewServeMux()
+	for _, pattern := range []string{"/api/state", "/api/agents/", "GET /api/orgs/{id}", "/api/tree/{id}/"} {
+		mux.HandleFunc(pattern, func(http.ResponseWriter, *http.Request) {})
+	}
+	for _, c := range []struct{ method, target, want string }{
+		{"GET", "/api/state", "/api/state"},
+		{"HEAD", "/api/state?secret=never/a/label", "/api/state"},
+		{"GET", "/api/state/made-up", unmatchedRouteLabel},
+		{"POST", "/api/agents/made-up/config", "/api/agents/"},
+		{"GET", "/api/orgs/made-up", "/api/orgs/{id}"},
+		{"DELETE", "/api/orgs/made-up", unmatchedRouteLabel},
+		{"GET", "/made-up/x", unmatchedRouteLabel},
+		{"MADEUP", "/made-up/x", unmatchedRouteLabel},
+		// Redirects to a registered subtree or to the cleaned path.
+		{"GET", "/api/agents", "/api/agents/"},
+		{"GET", "/api/tree/made-up", "/api/tree/{id}/"},
+		{"GET", "/api//state", "/api/state"},
+		{"GET", "/api//made-up", unmatchedRouteLabel},
+		// ServeMux names the redirect target, not a pattern, for CONNECT.
+		{"CONNECT", "/api/tree/made-up", unmatchedRouteLabel},
+		{"CONNECT", "/api/state", unmatchedRouteLabel},
+	} {
+		if got := muxRouteLabel(mux, httptest.NewRequest(c.method, c.target, nil)); got != c.want {
+			t.Errorf("muxRouteLabel(%s %s) = %q, want %q", c.method, c.target, got, c.want)
+		}
+	}
+}
+
+func TestMetricMethodLabel(t *testing.T) {
+	for method, want := range map[string]string{
+		"GET": "GET", "HEAD": "HEAD", "POST": "POST", "PUT": "PUT", "PATCH": "PATCH", "DELETE": "DELETE",
+		"CONNECT": "CONNECT", "OPTIONS": "OPTIONS", "TRACE": "TRACE",
+		"": "other", "get": "other", "MADEUP1": "other", "GET1": "other", "PROPFIND": "other",
+	} {
+		if got := metricMethodLabel(method); got != want {
+			t.Errorf("metricMethodLabel(%q) = %q, want %q", method, got, want)
+		}
+	}
+}
+
+type httpMetricSeries struct{ method, route string }
+
+// httpRequestTotals sums pulse_http_requests_total over status per method and route.
+func httpRequestTotals(t *testing.T) map[httpMetricSeries]float64 {
+	t.Helper()
+	registry := prometheus.NewRegistry()
+	registry.MustRegister(apiRequestTotal)
+	families, err := registry.Gather()
+	if err != nil {
+		t.Fatal(err)
+	}
+	totals := make(map[httpMetricSeries]float64)
+	for _, family := range families {
+		for _, metric := range family.Metric {
+			var series httpMetricSeries
+			for _, label := range metric.Label {
+				switch label.GetName() {
+				case "method":
+					series.method = label.GetValue()
+				case "route":
+					series.route = label.GetValue()
+				}
+			}
+			totals[series] += metric.GetCounter().GetValue()
+		}
+	}
+	return totals
+}
+
+// Path and method are whatever the client sends, before any authentication.
+// Behind the router neither becomes a label value: made-up ones are counted in
+// series that a fixed set of labels already allows, whatever the response.
+func TestRouter_MadeUpPathsAndMethodsAddNoMetricSeries(t *testing.T) {
+	httpMetricsOnce.Do(initHTTPMetrics)
+	router := newTestRouter(t, &config.Config{DataPath: t.TempDir()}, nil, nil, nil, nil, "test")
+	handler := router.Handler()
+	serve := func(method, target string) {
+		handler.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(method, target, nil))
+	}
+
+	const requests = 64
+	want := map[httpMetricSeries]float64{
+		{"HEAD", unmatchedRouteLabel}:   requests, // frontend paths
+		{"GET", unmatchedRouteLabel}:    requests, // unknown API paths
+		{"other", "/api/health"}:        requests,
+		{"other", "/api/agents/agent/"}: requests,
+		{"GET", "/api/health"}:          1,
+		{"GET", "/api/agents/agent/"}:   1,
+	}
+	before := httpRequestTotals(t)
+	for i := range requests {
+		id := strconv.Itoa(i)
+		serve("HEAD", "/metricroute-madeup"+id+"/x?secret="+id)
+		serve("GET", "/api/metricroute-madeup"+id)
+		serve("MADEUP"+id, "/api/health")
+		serve("MADEUP"+id, "/api/agents/agent/metricroute-madeup"+id+"/config")
+	}
+	serve("GET", "/api/health")
+	serve("GET", "/api/agents/agent/metricroute-madeup/config")
+	after := httpRequestTotals(t)
+
+	madeUp := 0
+	for series := range after {
+		if strings.Contains(series.route, "metricroute-madeup") || strings.HasPrefix(series.method, "MADEUP") {
+			madeUp++
+			if madeUp == 1 {
+				t.Errorf("client-chosen path or method became a label: %+v", series)
+			}
+		}
+	}
+	if madeUp != 0 {
+		t.Errorf("%d made-up requests created %d series, want 0", 4*requests, madeUp)
+	}
+	for series, count := range want {
+		if delta := after[series] - before[series]; delta < count {
+			t.Errorf("series %+v counted %v requests, want %v", series, delta, count)
+		}
 	}
 }
 

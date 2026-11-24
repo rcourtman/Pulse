@@ -26,6 +26,13 @@ const (
 	cloudHandoffIssuer     = "pulse-cloud-control-plane"
 	handoffPrivateDirPerm  = 0o700
 	handoffPrivateFilePerm = 0o600
+
+	// jwt.ParseWithClaims JSON-decodes the token header and claims before it
+	// checks the signature, so on a public route the sender decides how much
+	// memory that costs. A control-plane handoff token is a few hundred bytes
+	// plus its target path.
+	maxHandoffTokenBytes           = 8 * 1024
+	maxHandoffExchangeRequestBytes = 2 * maxHandoffTokenBytes
 )
 
 var errHandoffAuthorizationDenied = errors.New("handoff authorization denied")
@@ -335,6 +342,7 @@ func HandleHandoffExchange(configDir string) http.HandlerFunc {
 			return
 		}
 
+		r.Body = http.MaxBytesReader(w, r.Body, maxHandoffExchangeRequestBytes)
 		if err := r.ParseForm(); err != nil {
 			http.Error(w, "bad request", http.StatusBadRequest)
 			return
@@ -342,6 +350,11 @@ func HandleHandoffExchange(configDir string) http.HandlerFunc {
 		tokenStr := strings.TrimSpace(r.FormValue("token"))
 		if tokenStr == "" {
 			http.Error(w, "missing token", http.StatusBadRequest)
+			return
+		}
+		// FormValue also reads the query string, which the body limit does not cover.
+		if len(tokenStr) > maxHandoffTokenBytes {
+			http.Error(w, "invalid token", http.StatusUnauthorized)
 			return
 		}
 

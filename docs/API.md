@@ -1834,6 +1834,7 @@ Runs a focused investigation for an alert payload (used by the UI).
 - `POST /api/ai/patrol/attention/{id}/unacknowledge`
 - `POST /api/ai/patrol/attention/{id}/suppress`
   - Body: `{ "reason": "...", "expiresAt": "<RFC3339>" }`.
+  - The reason is required and is at most 240 characters.
   - The expiry must be in the future and no more than 30 days away.
 - `POST /api/ai/patrol/attention/{id}/unsuppress`
 - `POST /api/ai/patrol/attention/{id}/actions/restart/plan`

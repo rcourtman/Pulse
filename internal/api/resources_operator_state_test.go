@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -410,6 +411,30 @@ func TestHandleResourceOperatorState_PutRejectsInvalidWith400(t *testing.T) {
 	h.HandleResourceOperatorState(getRec, getReq)
 	if getRec.Code != http.StatusNotFound {
 		t.Errorf("rejected PUT must not persist; GET should still 404; got %d", getRec.Code)
+	}
+}
+
+func TestHandleResourceOperatorState_PutRejectsOversizedBody(t *testing.T) {
+	h := newOperatorStateHandlers(t)
+
+	// The decoder buffers the whole document and the note is persisted, so
+	// the body must be bounded before decode.
+	body, _ := json.Marshal(map[string]any{
+		"note": strings.Repeat("a", maxOperatorStateRequestBytes),
+	})
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPut, "/api/resources/vm:101/operator-state", bytes.NewReader(body))
+	h.HandleResourceOperatorState(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 on oversized body; got %d", rec.Code)
+	}
+
+	getRec := httptest.NewRecorder()
+	getReq := httptest.NewRequest(http.MethodGet, "/api/resources/vm:101/operator-state", nil)
+	h.HandleResourceOperatorState(getRec, getReq)
+	if getRec.Code != http.StatusNotFound {
+		t.Errorf("oversized PUT must not persist; GET should still 404; got %d", getRec.Code)
 	}
 }
 

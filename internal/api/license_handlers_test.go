@@ -1198,6 +1198,49 @@ func TestHandleCheckoutActivation_AllowsRetryAfterActivationFailure(t *testing.T
 	}
 }
 
+// The purchase return token is a JWT that is decoded before its signature is
+// checked, on a public route. A correctly signed one shows it is the size that
+// is refused, in the link and in the form.
+func TestHandleCheckoutActivation_RejectsOversizedPurchaseReturnToken(t *testing.T) {
+	handler := createTestHandler(t)
+	returnToken := issuePurchaseReturnToken(t, handler, "default", strings.Repeat("a", maxPurchaseReturnTokenBytes))
+
+	query := "session_id=cs_success&purchase_return_token=" + url.QueryEscape(returnToken)
+	for _, req := range []*http.Request{
+		httptest.NewRequest(http.MethodGet, "https://pulse.example.com"+licensePurchaseActivationPath+"?"+query, nil),
+		httptest.NewRequest(http.MethodPost, "https://pulse.example.com"+licensePurchaseActivationPath, strings.NewReader(query)),
+	} {
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		rec := httptest.NewRecorder()
+
+		handler.HandleCheckoutActivation(rec, req)
+
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("%s status = %d, want %d (body=%q)", req.Method, rec.Code, http.StatusBadRequest, rec.Body.String())
+		}
+		if !strings.Contains(rec.Body.String(), "expired or is invalid") {
+			t.Fatalf("%s body = %q, want invalid link message", req.Method, rec.Body.String())
+		}
+	}
+
+	req := httptest.NewRequest(
+		http.MethodPost,
+		"https://pulse.example.com"+licensePurchaseActivationPath,
+		strings.NewReader(query+"&pad="+strings.Repeat("a", maxLicensePurchaseActivationRequestBytes)),
+	)
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+
+	handler.HandleCheckoutActivation(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("oversized request status = %d, want %d (body=%q)", rec.Code, http.StatusBadRequest, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), "request was invalid") {
+		t.Fatalf("oversized request body = %q, want invalid request message", rec.Body.String())
+	}
+}
+
 func TestHandleCheckoutActivation_RejectsMissingPurchaseReturnToken(t *testing.T) {
 	handler := createTestHandler(t)
 	handler.SetConfig(&config.Config{PublicURL: "https://pulse.example.com"})

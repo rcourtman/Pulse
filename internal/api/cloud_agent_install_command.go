@@ -116,7 +116,7 @@ func (r *Router) handleHostedTenantAgentInstallCommand(w http.ResponseWriter, re
 	var payload struct {
 		Type string `json:"type"` // "pve" or "pbs"
 	}
-	if err := json.NewDecoder(req.Body).Decode(&payload); err != nil {
+	if err := json.NewDecoder(http.MaxBytesReader(w, req.Body, 4096)).Decode(&payload); err != nil {
 		writeErrorResponse(w, http.StatusBadRequest, "invalid_request", "Invalid request body", map[string]string{"error": err.Error()})
 		return
 	}

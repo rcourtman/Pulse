@@ -1,10 +1,12 @@
 package api
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -221,6 +223,45 @@ func TestMaintenanceVerification_ReviewMarksReportReviewed(t *testing.T) {
 	}
 	if reviewed.Status != seeded.Status {
 		t.Fatalf("status mutated: was %q, now %q", seeded.Status, reviewed.Status)
+	}
+}
+
+func TestMaintenanceVerification_ReviewRejectsOversizedBody(t *testing.T) {
+	h, store := newMaintenanceVerificationFixture(t)
+	now := time.Date(2026, 5, 12, 12, 0, 0, 0, time.UTC)
+	seedMaintenanceWindow(t, store, "vm:101", now.Add(-time.Hour), now.Add(-15*time.Minute))
+
+	rerunRec := httptest.NewRecorder()
+	rerunReq := withDefaultOrg(httptest.NewRequest(http.MethodPost, "/api/resources/vm:101/maintenance-verifications/rerun", nil))
+	h.HandleRerun(rerunRec, rerunReq)
+	if rerunRec.Code != http.StatusOK {
+		t.Fatalf("rerun status = %d body=%s", rerunRec.Code, rerunRec.Body.String())
+	}
+	var seeded maintenanceVerificationReportAPI
+	if err := json.Unmarshal(rerunRec.Body.Bytes(), &seeded); err != nil {
+		t.Fatalf("parse rerun: %v", err)
+	}
+
+	body, _ := json.Marshal(map[string]string{
+		"note": strings.Repeat("a", maxMaintenanceVerificationReviewRequestBytes),
+	})
+	rec := httptest.NewRecorder()
+	req := withDefaultOrg(httptest.NewRequest(
+		http.MethodPost,
+		"/api/maintenance-verifications/"+seeded.ID+"/review",
+		bytes.NewReader(body),
+	))
+	h.HandleReview(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 on oversized body, got %d", rec.Code)
+	}
+
+	persisted, found, err := store.GetLoopReport(seeded.ID)
+	if err != nil || !found {
+		t.Fatalf("get report: found=%v err=%v", found, err)
+	}
+	if persisted.UserOutcome == unified.LoopReportUserOutcomeReviewed || persisted.ReviewNote != "" {
+		t.Fatalf("oversized review must not persist; outcome=%q note length=%d", persisted.UserOutcome, len(persisted.ReviewNote))
 	}
 }
 

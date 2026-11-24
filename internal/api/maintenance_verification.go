@@ -63,6 +63,10 @@ type maintenanceVerificationReviewRequest struct {
 	Note string `json:"note,omitempty"`
 }
 
+// maxMaintenanceVerificationReviewRequestBytes bounds the review body, which
+// carries only the operator's review note and is persisted with the report.
+const maxMaintenanceVerificationReviewRequestBytes = 64 << 10
+
 // MaintenanceVerificationHandlers serves the Maintenance Verification
 // Report endpoints. Composes the resource store (for read/write of
 // LoopReport rows) with the sentinel runtime (for "rerun" requests).
@@ -177,7 +181,7 @@ func (h *MaintenanceVerificationHandlers) HandleReview(w http.ResponseWriter, r 
 	}
 	var payload maintenanceVerificationReviewRequest
 	if r.Body != nil && r.ContentLength != 0 {
-		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxMaintenanceVerificationReviewRequestBytes)).Decode(&payload); err != nil {
 			http.Error(w, "Invalid JSON", http.StatusBadRequest)
 			return
 		}

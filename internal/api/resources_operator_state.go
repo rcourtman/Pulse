@@ -39,6 +39,12 @@ type resourceOperatorStateAPI struct {
 	SetBy                    string                              `json:"setBy,omitempty"`
 }
 
+// maxOperatorStateRequestBytes bounds the PUT body like the neighbouring
+// action decision routes. The record is a handful of enums, timestamps and
+// short free-text fields; the decoder buffers the whole document and the
+// note is persisted, so the body must be bounded before it is decoded.
+const maxOperatorStateRequestBytes = 64 << 10
+
 // resourceOperatorStateLookupAPI is the UI-safe read envelope. The canonical
 // agent/API contract keeps a missing explicit record as 404 so callers can
 // branch on operator_state_not_set. Interactive clients use view=lookup to
@@ -139,7 +145,7 @@ func (h *ResourceHandlers) HandleResourceOperatorState(w http.ResponseWriter, r 
 
 	case http.MethodPut:
 		var payload resourceOperatorStateAPI
-		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxOperatorStateRequestBytes)).Decode(&payload); err != nil {
 			http.Error(w, "Invalid JSON", http.StatusBadRequest)
 			return
 		}

@@ -164,6 +164,7 @@ type Router struct {
 	checksumCache               map[string]checksumCacheEntry
 	unifiedAgentValidationCache sync.Map
 	installScriptClient         *http.Client
+	proxiedReleaseAssets        proxiedReleaseAssets
 	relayMu                     sync.RWMutex
 	relayClient                 relayRuntimeClient
 	relayCancel                 context.CancelFunc
@@ -320,7 +321,7 @@ func NewRouter(cfg *config.Config, monitor *monitoring.Monitor, mtMonitor *monit
 	// Note: TimeoutHandler breaks WebSocket upgrades
 	devMode := utils.GetenvTrim("FRONTEND_DEV_SERVER") != ""
 	handler := SecurityHeadersWithConfig(r, allowEmbedding, allowedOrigins, devMode)
-	handler = ErrorHandler(handler)
+	handler = errorHandler(handler, func(req *http.Request) string { return muxRouteLabel(r.mux, req) })
 	handler = DemoModeMiddleware(cfg, handler)
 
 	// Create tenant middleware with authorization checker.
@@ -8205,7 +8206,7 @@ func (r *Router) handleDiagnosticsDockerPrepareToken(w http.ResponseWriter, req 
 		EnableHost *bool  `json:"enableHost,omitempty"`
 	}
 
-	if err := json.NewDecoder(req.Body).Decode(&payload); err != nil {
+	if err := json.NewDecoder(http.MaxBytesReader(w, req.Body, 8*1024)).Decode(&payload); err != nil {
 		writeErrorResponse(w, http.StatusBadRequest, "invalid_json", "Failed to decode request body", nil)
 		return
 	}

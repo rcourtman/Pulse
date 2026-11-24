@@ -15,7 +15,9 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentidentity"
@@ -403,21 +405,26 @@ func (r *Router) proxyAgentHelperFromGitHub(w http.ResponseWriter, req *http.Req
 	if client == nil {
 		client = &http.Client{Timeout: 5 * time.Minute}
 	}
-	response, err := client.Get(assetURL)
+	asset, release, err := r.proxiedReleaseAssets.acquire(req.Context(), assetURL, func() ([]byte, string, string, error) {
+		response, err := client.Get(assetURL)
+		if err != nil {
+			return nil, "", "", &proxiedReleaseAssetError{http.StatusServiceUnavailable, "Failed to fetch agent helper binary"}
+		}
+		defer response.Body.Close()
+		if response.StatusCode != http.StatusOK {
+			return nil, "", "", &proxiedReleaseAssetError{http.StatusNotFound, "Agent helper binary not found on GitHub"}
+		}
+		content, checksum, err := readBinaryWithChecksum(response.Body)
+		if err != nil {
+			return nil, "", "", &proxiedReleaseAssetError{http.StatusInternalServerError, "Failed to read agent helper binary"}
+		}
+		return content, checksum, "github-proxy", nil
+	})
 	if err != nil {
-		http.Error(w, "Failed to fetch agent helper binary", http.StatusServiceUnavailable)
+		writeProxiedReleaseAssetError(w, err)
 		return
 	}
-	defer response.Body.Close()
-	if response.StatusCode != http.StatusOK {
-		http.Error(w, "Agent helper binary not found on GitHub", http.StatusNotFound)
-		return
-	}
-	content, checksum, err := readBinaryWithChecksum(response.Body)
-	if err != nil {
-		http.Error(w, "Failed to read agent helper binary", http.StatusInternalServerError)
-		return
-	}
+	defer release()
 	signature, err := fetchReleaseAssetContent(req.Context(), client, assetURL+".sig", 16*1024)
 	if err != nil {
 		http.Error(w, "Failed to fetch agent helper binary signature", http.StatusServiceUnavailable)
@@ -430,11 +437,11 @@ func (r *Router) proxyAgentHelperFromGitHub(w http.ResponseWriter, req *http.Req
 	}
 	serveProxiedAgentBinaryWithSignatures(
 		w,
-		content,
-		checksum,
+		asset.content,
+		asset.checksum,
 		strings.TrimSpace(string(signature)),
 		encodeSSHSignatureForHeader(sshSignature),
-		"github-proxy",
+		asset.servedFrom,
 	)
 }
 
@@ -510,21 +517,26 @@ func (r *Router) proxyAgentRunnerFromGitHub(w http.ResponseWriter, req *http.Req
 	if client == nil {
 		client = &http.Client{Timeout: 5 * time.Minute}
 	}
-	response, err := client.Get(assetURL)
+	asset, release, err := r.proxiedReleaseAssets.acquire(req.Context(), assetURL, func() ([]byte, string, string, error) {
+		response, err := client.Get(assetURL)
+		if err != nil {
+			return nil, "", "", &proxiedReleaseAssetError{http.StatusServiceUnavailable, "Failed to fetch agent runner binary"}
+		}
+		defer response.Body.Close()
+		if response.StatusCode != http.StatusOK {
+			return nil, "", "", &proxiedReleaseAssetError{http.StatusNotFound, "Agent runner binary not found on GitHub"}
+		}
+		content, checksum, err := readBinaryWithChecksum(response.Body)
+		if err != nil {
+			return nil, "", "", &proxiedReleaseAssetError{http.StatusInternalServerError, "Failed to read agent runner binary"}
+		}
+		return content, checksum, "github-proxy", nil
+	})
 	if err != nil {
-		http.Error(w, "Failed to fetch agent runner binary", http.StatusServiceUnavailable)
+		writeProxiedReleaseAssetError(w, err)
 		return
 	}
-	defer response.Body.Close()
-	if response.StatusCode != http.StatusOK {
-		http.Error(w, "Agent runner binary not found on GitHub", http.StatusNotFound)
-		return
-	}
-	content, checksum, err := readBinaryWithChecksum(response.Body)
-	if err != nil {
-		http.Error(w, "Failed to read agent runner binary", http.StatusInternalServerError)
-		return
-	}
+	defer release()
 	signature, err := fetchReleaseAssetContent(req.Context(), client, assetURL+".sig", 16*1024)
 	if err != nil {
 		http.Error(w, "Failed to fetch agent runner binary signature", http.StatusServiceUnavailable)
@@ -535,7 +547,7 @@ func (r *Router) proxyAgentRunnerFromGitHub(w http.ResponseWriter, req *http.Req
 		http.Error(w, "Failed to fetch agent runner binary SSH signature", http.StatusServiceUnavailable)
 		return
 	}
-	serveProxiedAgentBinaryWithSignatures(w, content, checksum, strings.TrimSpace(string(signature)), encodeSSHSignatureForHeader(sshSignature), "github-proxy")
+	serveProxiedAgentBinaryWithSignatures(w, asset.content, asset.checksum, strings.TrimSpace(string(signature)), encodeSSHSignatureForHeader(sshSignature), asset.servedFrom)
 }
 
 // validateUnifiedAgentBinary rejects a local agent binary that this server must
@@ -649,54 +661,15 @@ func (r *Router) proxyAgentBinaryFromGitHub(w http.ResponseWriter, req *http.Req
 		}
 	}
 
-	resp, err := client.Get(githubURL)
+	asset, release, err := r.proxiedReleaseAssets.acquire(req.Context(), githubURL, func() ([]byte, string, string, error) {
+		return r.fetchAgentBinaryFromGitHub(client, githubURL, normalized)
+	})
 	if err != nil {
-		log.Error().Err(err).Str("url", githubURL).Msg("Failed to fetch agent binary from GitHub")
-		http.Error(w, "Failed to fetch agent binary", http.StatusServiceUnavailable)
+		writeProxiedReleaseAssetError(w, err)
 		return
 	}
-	defer resp.Body.Close()
+	defer release()
 
-	if resp.StatusCode == http.StatusOK {
-		content, checksum, readErr := readBinaryWithChecksum(resp.Body)
-		if readErr != nil {
-			log.Error().Err(readErr).Msg("Failed to read agent binary from GitHub")
-			http.Error(w, "Failed to read agent binary", http.StatusInternalServerError)
-			return
-		}
-		signature, sigErr := fetchReleaseAssetContent(req.Context(), client, signatureURL, 16*1024)
-		if sigErr != nil {
-			log.Error().Err(sigErr).Str("url", signatureURL).Msg("Failed to fetch agent binary signature from GitHub")
-			http.Error(w, "Failed to fetch agent binary signature", http.StatusServiceUnavailable)
-			return
-		}
-		sshSignature, sshSigErr := fetchReleaseAssetContent(req.Context(), client, sshSignatureURL, 64*1024)
-		if sshSigErr != nil {
-			log.Error().Err(sshSigErr).Str("url", sshSignatureURL).Msg("Failed to fetch agent binary SSH signature from GitHub")
-			http.Error(w, "Failed to fetch agent binary SSH signature", http.StatusServiceUnavailable)
-			return
-		}
-		if err := agentidentity.ValidateReader(bytes.NewReader(content), expectedVersion, normalized); err != nil {
-			log.Error().Err(err).Str("asset_url", githubURL).Str("arch", normalized).Msg("Release agent executable identity mismatch")
-			http.Error(w, "Release agent executable identity mismatch", http.StatusConflict)
-			return
-		}
-		serveProxiedAgentBinaryWithSignatures(w, content, checksum, strings.TrimSpace(string(signature)), encodeSSHSignatureForHeader(sshSignature), "github-proxy")
-		return
-	}
-
-	if resp.StatusCode != http.StatusNotFound {
-		log.Error().Int("status", resp.StatusCode).Str("url", githubURL).Msg("GitHub returned non-200 status for agent binary")
-		http.Error(w, "Agent binary not found on GitHub", http.StatusNotFound)
-		return
-	}
-
-	archiveContent, checksum, archiveErr := r.fetchAgentBinaryFromReleaseArchive(client, normalized)
-	if archiveErr != nil {
-		log.Error().Err(archiveErr).Str("arch", normalized).Msg("Failed archive fallback for agent binary")
-		http.Error(w, "Agent binary not found on GitHub", http.StatusNotFound)
-		return
-	}
 	signature, sigErr := fetchReleaseAssetContent(req.Context(), client, signatureURL, 16*1024)
 	if sigErr != nil {
 		log.Error().Err(sigErr).Str("url", signatureURL).Msg("Failed to fetch agent binary signature from GitHub")
@@ -709,15 +682,200 @@ func (r *Router) proxyAgentBinaryFromGitHub(w http.ResponseWriter, req *http.Req
 		http.Error(w, "Failed to fetch agent binary SSH signature", http.StatusServiceUnavailable)
 		return
 	}
-	if err := agentidentity.ValidateReader(bytes.NewReader(archiveContent), expectedVersion, normalized); err != nil {
+	if err := agentidentity.ValidateReader(bytes.NewReader(asset.content), expectedVersion, normalized); err != nil {
 		log.Error().Err(err).Str("asset_url", githubURL).Str("arch", normalized).Msg("Release agent executable identity mismatch")
 		http.Error(w, "Release agent executable identity mismatch", http.StatusConflict)
 		return
 	}
-	serveProxiedAgentBinaryWithSignatures(w, archiveContent, checksum, strings.TrimSpace(string(signature)), encodeSSHSignatureForHeader(sshSignature), "github-proxy-archive")
+	serveProxiedAgentBinaryWithSignatures(w, asset.content, asset.checksum, strings.TrimSpace(string(signature)), encodeSSHSignatureForHeader(sshSignature), asset.servedFrom)
 }
 
-const maxAgentBinarySize = 100 * 1024 * 1024
+// fetchAgentBinaryFromGitHub fetches the standalone agent release asset, or
+// extracts it from the release archive when the standalone asset is absent.
+func (r *Router) fetchAgentBinaryFromGitHub(client *http.Client, githubURL, normalized string) ([]byte, string, string, error) {
+	resp, err := client.Get(githubURL)
+	if err != nil {
+		log.Error().Err(err).Str("url", githubURL).Msg("Failed to fetch agent binary from GitHub")
+		return nil, "", "", &proxiedReleaseAssetError{http.StatusServiceUnavailable, "Failed to fetch agent binary"}
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusOK {
+		content, checksum, readErr := readBinaryWithChecksum(resp.Body)
+		if readErr != nil {
+			log.Error().Err(readErr).Msg("Failed to read agent binary from GitHub")
+			return nil, "", "", &proxiedReleaseAssetError{http.StatusInternalServerError, "Failed to read agent binary"}
+		}
+		return content, checksum, "github-proxy", nil
+	}
+
+	if resp.StatusCode != http.StatusNotFound {
+		log.Error().Int("status", resp.StatusCode).Str("url", githubURL).Msg("GitHub returned non-200 status for agent binary")
+		return nil, "", "", &proxiedReleaseAssetError{http.StatusNotFound, "Agent binary not found on GitHub"}
+	}
+
+	archiveContent, checksum, archiveErr := r.fetchAgentBinaryFromReleaseArchive(client, normalized)
+	if archiveErr != nil {
+		log.Error().Err(archiveErr).Str("arch", normalized).Msg("Failed archive fallback for agent binary")
+		return nil, "", "", &proxiedReleaseAssetError{http.StatusNotFound, "Agent binary not found on GitHub"}
+	}
+	return archiveContent, checksum, "github-proxy-archive", nil
+}
+
+const (
+	maxAgentBinarySize = 100 * 1024 * 1024
+
+	// maxProxiedReleaseAssets is how many different release binaries the GitHub
+	// proxy fallback holds in memory at once. Every request for the same asset
+	// shares one copy, so this bounds the fallback's memory no matter how many
+	// downloads are in flight or how slowly their clients read.
+	maxProxiedReleaseAssets = 2
+
+	proxiedReleaseAssetRetryAfterSeconds = 30
+)
+
+var (
+	// proxiedReleaseAssetSlotWait is how long a request for another asset waits
+	// for one of those copies to be released before it is told to retry.
+	proxiedReleaseAssetSlotWait = 30 * time.Second
+	// proxiedReleaseAssetWriteTimeout matches the agent updater's download
+	// timeout. The server runs without a write timeout for its streams, so
+	// without a deadline of its own a client that never reads would keep the
+	// shared copy in memory indefinitely.
+	proxiedReleaseAssetWriteTimeout = 5 * time.Minute
+)
+
+var errProxiedReleaseAssetsBusy = errors.New("too many release assets are being proxied")
+
+// proxiedReleaseAssetError is a failed upstream fetch together with the
+// response that every request sharing the fetch receives.
+type proxiedReleaseAssetError struct {
+	status  int
+	message string
+}
+
+func (e *proxiedReleaseAssetError) Error() string { return e.message }
+
+func writeProxiedReleaseAssetError(w http.ResponseWriter, err error) {
+	var assetErr *proxiedReleaseAssetError
+	switch {
+	case errors.As(err, &assetErr):
+		http.Error(w, assetErr.message, assetErr.status)
+	case errors.Is(err, errProxiedReleaseAssetsBusy):
+		w.Header().Set("Retry-After", strconv.Itoa(proxiedReleaseAssetRetryAfterSeconds))
+		http.Error(w, "Release asset downloads are busy, retry shortly", http.StatusServiceUnavailable)
+	default:
+		http.Error(w, "Release asset download was interrupted", http.StatusServiceUnavailable)
+	}
+}
+
+// proxiedReleaseAsset is one release binary fetched from GitHub and shared by
+// the responses that are serving it.
+type proxiedReleaseAsset struct {
+	content    []byte
+	checksum   string
+	servedFrom string
+	err        error
+
+	ready chan struct{} // closed once the fields above are set
+	refs  int           // guarded by proxiedReleaseAssets.mu
+}
+
+// proxiedReleaseAssets holds the release binaries currently being proxied from
+// GitHub. A published release asset is immutable, so concurrent requests for
+// one URL share a single fetch and a single buffer, which is dropped when the
+// last response using it ends. The zero value is ready to use.
+type proxiedReleaseAssets struct {
+	mu     sync.Mutex
+	assets map[string]*proxiedReleaseAsset
+	freed  chan struct{} // closed when an asset is dropped
+}
+
+// acquire returns the shared copy of the asset at assetURL, calling fetch when
+// no request is holding one. The caller must call release once its response
+// has been written.
+func (p *proxiedReleaseAssets) acquire(ctx context.Context, assetURL string, fetch func() (content []byte, checksum, servedFrom string, err error)) (*proxiedReleaseAsset, func(), error) {
+	asset, shared, err := p.reserve(ctx, assetURL)
+	if err != nil {
+		return nil, nil, err
+	}
+	release := func() { p.release(assetURL, asset) }
+	acquired := false
+	defer func() {
+		if !acquired {
+			release()
+		}
+	}()
+
+	if !shared {
+		func() {
+			defer close(asset.ready)
+			asset.err = errors.New("release asset fetch did not complete")
+			asset.content, asset.checksum, asset.servedFrom, asset.err = fetch()
+		}()
+	}
+	select {
+	case <-asset.ready:
+	case <-ctx.Done():
+		return nil, nil, ctx.Err()
+	}
+	if asset.err != nil {
+		return nil, nil, asset.err
+	}
+	acquired = true
+	return asset, release, nil
+}
+
+// reserve takes a reference to the asset at assetURL, adding it when fewer
+// than maxProxiedReleaseAssets are held and otherwise waiting for room.
+// shared reports whether another request is already responsible for fetching it.
+func (p *proxiedReleaseAssets) reserve(ctx context.Context, assetURL string) (asset *proxiedReleaseAsset, shared bool, err error) {
+	timeout := time.NewTimer(proxiedReleaseAssetSlotWait)
+	defer timeout.Stop()
+	for {
+		p.mu.Lock()
+		asset, shared = p.assets[assetURL]
+		if !shared && len(p.assets) < maxProxiedReleaseAssets {
+			if p.assets == nil {
+				p.assets = make(map[string]*proxiedReleaseAsset)
+			}
+			asset = &proxiedReleaseAsset{ready: make(chan struct{})}
+			p.assets[assetURL] = asset
+		}
+		if asset != nil {
+			asset.refs++
+			p.mu.Unlock()
+			return asset, shared, nil
+		}
+		if p.freed == nil {
+			p.freed = make(chan struct{})
+		}
+		freed := p.freed
+		p.mu.Unlock()
+
+		select {
+		case <-freed:
+		case <-timeout.C:
+			return nil, false, errProxiedReleaseAssetsBusy
+		case <-ctx.Done():
+			return nil, false, ctx.Err()
+		}
+	}
+}
+
+func (p *proxiedReleaseAssets) release(assetURL string, asset *proxiedReleaseAsset) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	asset.refs--
+	if asset.refs > 0 {
+		return
+	}
+	delete(p.assets, assetURL)
+	if p.freed != nil {
+		close(p.freed)
+		p.freed = nil
+	}
+}
 
 func readBinaryWithChecksum(body io.Reader) ([]byte, string, error) {
 	limitedReader := io.LimitReader(body, maxAgentBinarySize+1)
@@ -742,6 +900,12 @@ func serveProxiedAgentBinaryWithSignatures(w http.ResponseWriter, content []byte
 	}
 	w.Header().Set("X-Served-From", servedFrom)
 	w.Header().Set("Content-Type", "application/octet-stream")
+	// content is shared with every other response for this asset; bound how
+	// long a slow or stalled client can keep it alive.
+	controller := http.NewResponseController(w)
+	if err := controller.SetWriteDeadline(time.Now().Add(proxiedReleaseAssetWriteTimeout)); err == nil {
+		defer func() { _ = controller.SetWriteDeadline(time.Time{}) }()
+	}
 	w.Write(content)
 }
 

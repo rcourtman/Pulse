@@ -1370,6 +1370,20 @@ func TestAlertHandlers_ErrorCases(t *testing.T) {
 		assert.Equal(t, 400, w.Code)
 	})
 
+	t.Run("ByBody_OversizedBody", func(t *testing.T) {
+		body := `{"alertIdentifier": "a1", "padding": "` + strings.Repeat("a", 16<<10) + `"}`
+		for path, handler := range map[string]http.HandlerFunc{
+			"/api/alerts/acknowledge":   h.AcknowledgeAlertByBody,
+			"/api/alerts/unacknowledge": h.UnacknowledgeAlertByBody,
+			"/api/alerts/clear":         h.ClearAlertByBody,
+		} {
+			req := httptest.NewRequest("POST", path, strings.NewReader(body))
+			w := httptest.NewRecorder()
+			handler(w, req)
+			assert.Equal(t, 400, w.Code, path)
+		}
+	})
+
 	t.Run("AcknowledgeAlertByBody_MissingID", func(t *testing.T) {
 		req := httptest.NewRequest("POST", "/api/alerts/acknowledge", strings.NewReader(`{"alertIdentifier": ""}`))
 		w := httptest.NewRecorder()

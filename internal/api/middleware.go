@@ -45,6 +45,13 @@ func (e *APIError) Error() string {
 
 // ErrorHandler is a middleware that handles panics and errors
 func ErrorHandler(next http.Handler) http.Handler {
+	return errorHandler(next, func(r *http.Request) string { return normalizeRoute(r.URL.Path) })
+}
+
+// errorHandler is ErrorHandler with the caller choosing the route label of the
+// HTTP metrics. The label must come from a fixed set when clients choose the
+// paths: every new label is a set of metric series kept until the process exits.
+func errorHandler(next http.Handler, metricRoute func(*http.Request) string) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Fix for issue #334: Normalize empty path to "/" before ServeMux processes it
 		// This prevents the automatic redirect from "" to "./"
@@ -70,7 +77,7 @@ func ErrorHandler(next http.Handler) http.Handler {
 		r, rw.bodyAuthority = withRequestBodyAuthority(r)
 
 		start := time.Now()
-		routeLabel := normalizeRoute(r.URL.Path)
+		routeLabel := metricRoute(r)
 		method := r.Method
 
 		defer func() {

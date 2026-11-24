@@ -836,6 +836,16 @@ describe('docsLinks', () => {
     expect(setup).not.toContain('token-bearing `commandWithEnv`');
   });
 
+  it('ships the attention suppression reason bound in the published API reference', () => {
+    const apiReference = readFileSync(path.join(repoRoot, 'docs', 'API.md'), 'utf8');
+    const shipped = readFileSync(path.join(frontendRoot, 'public', 'docs', 'API.md'), 'utf8');
+    const suppress = apiReference
+      .split('`POST /api/ai/patrol/attention/{id}/suppress`')[1]
+      .split('`POST /api/ai/patrol/attention/{id}/unsuppress`')[0];
+    expect(shipped).toBe(apiReference);
+    expect(suppress).toContain('The reason is required and is at most 240 characters.');
+  });
+
   it('ships the saved-credential probe TLS override contract', () => {
     const apiReference = readFileSync(path.join(repoRoot, 'docs', 'API.md'), 'utf8');
     const shipped = readFileSync(path.join(frontendRoot, 'public', 'docs', 'API.md'), 'utf8');

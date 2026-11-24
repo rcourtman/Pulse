@@ -172,7 +172,7 @@ func (h *ConfigProfileHandler) CreateProfile(w http.ResponseWriter, r *http.Requ
 		models.AgentProfile
 		ChangeNote string `json:"change_note,omitempty"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20)).Decode(&input); err != nil {
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
@@ -281,7 +281,7 @@ func (h *ConfigProfileHandler) UpdateProfile(w http.ResponseWriter, r *http.Requ
 		models.AgentProfile
 		ChangeNote string `json:"change_note,omitempty"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20)).Decode(&input); err != nil {
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
@@ -484,7 +484,7 @@ func (h *ConfigProfileHandler) ListAssignments(w http.ResponseWriter, r *http.Re
 // AssignProfile assigns a profile to an agent
 func (h *ConfigProfileHandler) AssignProfile(w http.ResponseWriter, r *http.Request) {
 	var input models.AgentProfileAssignment
-	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 64*1024)).Decode(&input); err != nil {
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
@@ -691,7 +691,7 @@ func (h *ConfigProfileHandler) GetConfigSchema(w http.ResponseWriter, r *http.Re
 // ValidateConfig validates a configuration without saving
 func (h *ConfigProfileHandler) ValidateConfig(w http.ResponseWriter, r *http.Request) {
 	var config models.AgentConfigMap
-	if err := json.NewDecoder(r.Body).Decode(&config); err != nil {
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20)).Decode(&config); err != nil {
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
@@ -783,7 +783,7 @@ func (h *ConfigProfileHandler) GetDeploymentStatus(w http.ResponseWriter, r *htt
 // UpdateDeploymentStatus updates deployment status from an agent
 func (h *ConfigProfileHandler) UpdateDeploymentStatus(w http.ResponseWriter, r *http.Request) {
 	var input models.ProfileDeploymentStatus
-	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 64*1024)).Decode(&input); err != nil {
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}

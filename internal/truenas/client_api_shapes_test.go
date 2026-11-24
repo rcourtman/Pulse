@@ -161,6 +161,48 @@ func TestPoolDiskMembersFromTopology(t *testing.T) {
 	}
 }
 
+func TestPoolTopologyBoundsApplianceControlledShape(t *testing.T) {
+	t.Run("oversized group name", func(t *testing.T) {
+		longName := strings.Repeat("g", maxPoolTopologyGroupNameBytes+1)
+		vdevs, members := poolTopologyFromTopology(map[string]any{
+			longName: []any{map[string]any{}, map[string]any{"disk": "sdz"}},
+			"data":   []any{map[string]any{"type": "DISK", "disk": "sda"}},
+			strings.Repeat("s", maxPoolTopologyGroupNameBytes): []any{map[string]any{}},
+		})
+		if len(vdevs) != 2 || vdevs[0].Role != "data" || vdevs[0].ID != "data:0:sda" || len(vdevs[1].Role) != maxPoolTopologyGroupNameBytes {
+			t.Fatalf("expected only the groups within the name bound, got %#v", vdevs)
+		}
+		if len(members) != 1 || members[0].Disk != "sda" {
+			t.Fatalf("expected only the data member, got %#v", members)
+		}
+	})
+
+	t.Run("nesting depth", func(t *testing.T) {
+		node := map[string]any{"type": "DISK", "disk": "sda"}
+		for level := 0; level < maxPoolTopologyDepth+8; level++ {
+			node = map[string]any{"type": "MIRROR", "children": []any{node}}
+		}
+		vdevs, members := poolTopologyFromTopology(map[string]any{"data": []any{node}})
+		if len(vdevs) != maxPoolTopologyDepth {
+			t.Fatalf("expected %d nested vdevs, got %d", maxPoolTopologyDepth, len(vdevs))
+		}
+		if len(members) != 0 {
+			t.Fatalf("expected the disk beyond the depth bound to be skipped, got %#v", members)
+		}
+	})
+
+	t.Run("vdev count", func(t *testing.T) {
+		nodes := make([]any, maxPoolTopologyVDevs+100)
+		for i := range nodes {
+			nodes[i] = map[string]any{}
+		}
+		vdevs, _ := poolTopologyFromTopology(map[string]any{"cache": nodes, "data": nodes})
+		if len(vdevs) != maxPoolTopologyVDevs {
+			t.Fatalf("expected %d vdevs, got %d", maxPoolTopologyVDevs, len(vdevs))
+		}
+	})
+}
+
 func TestParseBootPoolStateSupportsCOREGroupsShape(t *testing.T) {
 	item := map[string]any{
 		"id":      "freenas-boot",

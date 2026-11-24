@@ -2154,7 +2154,7 @@ func (h *ConfigHandlers) handleAutoUnregister(w http.ResponseWriter, r *http.Req
 	}
 
 	var req AutoUnregisterRequest
-	body, err := io.ReadAll(r.Body)
+	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, 64*1024))
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to read auto-unregister request body")
 		http.Error(w, "Failed to read request body", http.StatusBadRequest)
@@ -2278,7 +2278,7 @@ func (h *ConfigHandlers) handleAutoRegister(w http.ResponseWriter, r *http.Reque
 
 	// Parse request body first so the setup token can be validated early.
 	var req AutoRegisterRequest
-	body, err := io.ReadAll(r.Body)
+	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, 64*1024))
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to read request body")
 		http.Error(w, "Failed to read request body", http.StatusBadRequest)
@@ -3193,7 +3193,7 @@ func (h *ConfigHandlers) handleAgentInstallCommand(w http.ResponseWriter, r *htt
 	}
 
 	var req AgentInstallCommandRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 8*1024)).Decode(&req); err != nil {
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}

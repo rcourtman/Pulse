@@ -185,7 +185,7 @@ type SetLogLevelRequest struct {
 // HandleSetLevel changes the log level at runtime and persists it
 func (h *LogHandlers) HandleSetLevel(w http.ResponseWriter, r *http.Request) {
 	var req SetLogLevelRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4096)).Decode(&req); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}

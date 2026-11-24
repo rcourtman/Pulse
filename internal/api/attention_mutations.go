@@ -6,7 +6,9 @@ import (
 	"net/url"
 	"strings"
 	"time"
+	"unicode/utf8"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/auth"
 )
@@ -108,7 +110,9 @@ func (h *AttentionHandlers) handleAttentionMutation(
 			return
 		}
 		now := time.Now().UTC()
-		if strings.TrimSpace(request.Reason) == "" ||
+		reason := strings.TrimSpace(request.Reason)
+		if reason == "" ||
+			utf8.RuneCountInString(reason) > alerts.MaxOperationalSuppressionReasonRunes ||
 			request.ExpiresAt.IsZero() ||
 			!request.ExpiresAt.After(now) ||
 			request.ExpiresAt.After(now.Add(maxAttentionSuppressionDuration)) {
@@ -116,7 +120,7 @@ func (h *AttentionHandlers) handleAttentionMutation(
 				w,
 				http.StatusBadRequest,
 				"invalid_attention_suppression",
-				"Suppression requires a reason and an expiry within 30 days.",
+				"Suppression requires a reason of at most 240 characters and an expiry within 30 days.",
 			)
 			return
 		}
@@ -124,7 +128,7 @@ func (h *AttentionHandlers) handleAttentionMutation(
 		err = manager.SuppressOperationalAlert(
 			itemID,
 			actor,
-			request.Reason,
+			reason,
 			&expiresAt,
 		)
 	case attentionMutationUnsuppress:
