@@ -28,6 +28,15 @@ body:
 
         </details>
 
+        <details>
+        <summary>Dashboard stuck or readings stopped</summary>
+
+        Say whether you saw **Connecting to Pulse** or the dashboard opened but readings stopped changing. If known, give the last time you saw fresh readings and its time zone. Say whether one source or several stopped, whether any agent's **Last seen** time advanced, or whether new alerts appeared.
+
+        If you already have a Pulse health check from the same time, give only its status. HTTP 200 means Pulse answered, not that it was collecting data. Use what you saw or write "unknown". Do not run Diagnostics, restart Pulse or take a process dump just to report it. Keep full responses, network exports and dumps private.
+
+        </details>
+
   - type: textarea
     id: bug_description
     attributes:
