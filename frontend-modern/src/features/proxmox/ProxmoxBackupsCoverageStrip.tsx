@@ -162,7 +162,7 @@ export const ProxmoxBackupsCoverageStrip: Component<CoverageStripProps> = (props
           <span class="inline-flex max-w-full flex-wrap items-center gap-x-2 gap-y-1">
             <span class="whitespace-nowrap">{props.title}</span>
             <span
-              class="inline-flex items-center gap-1.5 normal-case tracking-normal"
+              class="inline-flex min-w-0 items-center gap-1.5 normal-case tracking-normal"
               data-backup-verdict={props.verdict.tone}
             >
               <span
@@ -182,7 +182,9 @@ export const ProxmoxBackupsCoverageStrip: Component<CoverageStripProps> = (props
                   <span class="font-semibold tabular-nums text-base-content">
                     {props.verdict.protected} / {rated()}
                   </span>{' '}
-                  <span class="font-medium">protected</span>
+                  <span class="font-medium">
+                    protected<Show when={asides().length > 0}> (rated only)</Show>
+                  </span>
                 </span>
               </Show>
             </span>
