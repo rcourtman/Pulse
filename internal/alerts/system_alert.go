@@ -1,10 +1,10 @@
 package alerts
 
 import (
-	"github.com/rcourtman/pulse-go-rewrite/internal/alerts/eventlog"
 	"strings"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/alerts/eventlog"
 	"github.com/rs/zerolog/log"
 )
 
@@ -91,6 +91,14 @@ func IsSystemAlert(alert *Alert) bool {
 //
 // It reports whether this call raised the alert or changed it.
 func (m *Manager) RaiseSystemAlert(input SystemAlertInput) bool {
+	return m.RaiseSystemAlertUnlessSuperseded(input, nil)
+}
+
+// RaiseSystemAlertUnlessSuperseded is for standing conditions that may be
+// replaced while waiting for the manager. A closed superseded channel vetoes
+// admission before any mutation, history or dispatch. A nil channel never
+// vetoes. After admission, the normal alert lifecycle owns the occurrence.
+func (m *Manager) RaiseSystemAlertUnlessSuperseded(input SystemAlertInput, superseded <-chan struct{}) bool {
 	alertType := strings.TrimSpace(input.Type)
 	if alertType == "" {
 		return false
@@ -99,6 +107,12 @@ func (m *Manager) RaiseSystemAlert(input SystemAlertInput) bool {
 	level := NormalizeAlertLevel(input.Level)
 
 	m.mu.Lock()
+	select {
+	case <-superseded:
+		m.mu.Unlock()
+		return false
+	default:
+	}
 
 	now := time.Now()
 	existing, exists := m.getActiveAlertNoLock(alertID)

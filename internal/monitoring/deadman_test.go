@@ -5,12 +5,18 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/http/httptest"
+	"net/url"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
+	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rcourtman/pulse-go-rewrite/internal/notifications"
+	"github.com/stretchr/testify/require"
 )
 
 type deadManRoundTripFunc func(*http.Request) (*http.Response, error)
@@ -55,7 +61,6 @@ func TestDeadManRunCycleSendsHealthySignalAndPersistsProgress(t *testing.T) {
 		context.Background(),
 		func() string { return "https://watchdog.example.com/ping/secret-token" },
 		func() time.Time { return now.Add(-5 * time.Second) },
-		nil,
 	)
 
 	if request == nil || request.Method != http.MethodGet || request.URL.String() != "https://watchdog.example.com/ping/secret-token" {
@@ -85,7 +90,7 @@ func TestDeadManRunCycleRejectsEncodedNonSuccessEndpoint(t *testing.T) {
 			}))
 			runtime.runCycle(context.Background(),
 				func() string { return "https://watchdog.example.com/ping/secret-token/" + suffix },
-				func() time.Time { return now }, nil)
+				func() time.Time { return now })
 			if calls != 0 {
 				t.Fatalf("invalid endpoint received %d requests", calls)
 			}
@@ -115,7 +120,6 @@ func TestDeadManRunCycleSignalsFailureWhenCanonicalMonitorStalls(t *testing.T) {
 		context.Background(),
 		func() string { return "https://watchdog.example.com/ping/secret-token" },
 		func() time.Time { return now.Add(-2 * time.Minute) },
-		nil,
 	)
 
 	if method != http.MethodPost || path != "/ping/secret-token/fail" || !strings.Contains(body, "monitoring loop has stopped") {
@@ -151,7 +155,7 @@ func TestDeadManMonitoringFreshnessBoundaries(t *testing.T) {
 			}))
 			runtime.runCycle(context.Background(), func() string {
 				return "https://watchdog.example.com/ping/test-token"
-			}, func() time.Time { return tc.progress }, nil)
+			}, func() time.Time { return tc.progress })
 
 			wantMethod, wantPath, wantState := http.MethodPost, "/ping/test-token/fail", "monitor_stalled"
 			if tc.healthy {
@@ -182,7 +186,7 @@ func TestDeadManRetriesTransientResponsesButNotPermanentRejections(t *testing.T)
 		runtime.retryDelays = []time.Duration{0, 0}
 		runtime.runCycle(context.Background(), func() string {
 			return "https://watchdog.example.com/ping/retry-token"
-		}, func() time.Time { return now }, nil)
+		}, func() time.Time { return now })
 		if attempts != 3 || runtime.statusSnapshot().State != "healthy" {
 			t.Fatalf("attempts = %d status = %+v", attempts, runtime.statusSnapshot())
 		}
@@ -199,7 +203,7 @@ func TestDeadManRetriesTransientResponsesButNotPermanentRejections(t *testing.T)
 		runtime.retryDelays = []time.Duration{0, 0}
 		runtime.runCycle(context.Background(), func() string {
 			return "https://watchdog.example.com/ping/never-forward-this-token"
-		}, func() time.Time { return now }, nil)
+		}, func() time.Time { return now })
 		status := runtime.statusSnapshot()
 		if attempts != 1 || status.State != "delivery_failed" || strings.Contains(status.LastError, "never-forward-this-token") {
 			t.Fatalf("attempts = %d status = %+v", attempts, status)
@@ -215,7 +219,7 @@ func TestDeadManRetriesTransientResponsesButNotPermanentRejections(t *testing.T)
 		runtime.retryDelays = []time.Duration{0, 0}
 		runtime.runCycle(context.Background(), func() string {
 			return "https://watchdog.example.com/ping/missing-token"
-		}, func() time.Time { return now }, nil)
+		}, func() time.Time { return now })
 		if attempts != 1 || runtime.statusSnapshot().State != "delivery_failed" {
 			t.Fatalf("attempts = %d status = %+v", attempts, runtime.statusSnapshot())
 		}
@@ -252,7 +256,8 @@ func TestDeadManRestartGapIsReportedExternallyAndRecordedInAlertHistory(t *testi
 	manager := alerts.NewManagerWithDataDir(t.TempDir(), alerts.WithoutPersistedAlertRestore())
 	t.Cleanup(manager.Stop)
 
-	runtime.runCycle(context.Background(), func() string { return endpoint }, func() time.Time { return startup }, manager)
+	runtime.runCycle(context.Background(), func() string { return endpoint }, func() time.Time { return startup })
+	runtime.alertProjection.drain(manager)
 
 	if method != http.MethodPost || !strings.Contains(body, "unexpected shutdown") || !strings.Contains(body, "5m0s") {
 		t.Fatalf("restart report = method %q body %q", method, body)
@@ -292,10 +297,10 @@ func TestDeadManStopWinsAgainstLaterHeartbeatWrites(t *testing.T) {
 		return deadManResponse(http.StatusOK, "OK"), nil
 	}))
 	endpoint := "https://watchdog.example.com/ping/stop-token"
-	runtime.runCycle(context.Background(), func() string { return endpoint }, func() time.Time { return now }, nil)
+	runtime.runCycle(context.Background(), func() string { return endpoint }, func() time.Time { return now })
 	stoppedAt := now.Add(30 * time.Second)
 	runtime.stop(stoppedAt, nil)
-	runtime.runCycle(context.Background(), func() string { return endpoint }, func() time.Time { return stoppedAt }, nil)
+	runtime.runCycle(context.Background(), func() string { return endpoint }, func() time.Time { return stoppedAt })
 
 	mu.Lock()
 	requestCount := requests
@@ -326,7 +331,7 @@ func TestDeadManConfigurationChangeCancelsActiveSignalWithoutRecordingFailure(t 
 		defer close(finished)
 		runtime.runCycle(context.Background(), func() string {
 			return "https://watchdog.example.com/ping/replaced-token"
-		}, func() time.Time { return now }, nil)
+		}, func() time.Time { return now })
 	}()
 
 	select {
@@ -395,7 +400,8 @@ func TestDeadManDeliveryRecoveryDoesNotClearMonitoringStall(t *testing.T) {
 	cycle := func() {
 		runtime.runCycle(context.Background(), func() string {
 			return "https://watchdog.example.com/ping/test-token"
-		}, func() time.Time { return progress }, manager)
+		}, func() time.Time { return progress })
+		runtime.alertProjection.drain(manager)
 	}
 	assertActive := func(alertType string, want bool) {
 		t.Helper()
@@ -440,4 +446,239 @@ func TestDeadManDeliveryRecoveryDoesNotClearMonitoringStall(t *testing.T) {
 	}
 	assertActive(alerts.DeadManDeliveryAlertType, false)
 	assertActive(alerts.DeadManMonitoringStalledAlertType, false)
+}
+
+func holdDeadManAlertManager(t *testing.T, manager *alerts.Manager) func() {
+	t.Helper()
+	entered, release, done := make(chan struct{}), make(chan struct{}), make(chan struct{})
+	var enterOnce, releaseOnce sync.Once
+	manager.SetOperatorIntentContextResolver(func(string, time.Time) (alerts.OperatorIntentContext, bool) {
+		enterOnce.Do(func() { close(entered) })
+		<-release
+		return alerts.OperatorIntentContext{}, false
+	})
+	go func() {
+		defer close(done)
+		// The preview invokes its resolver while holding the real manager
+		// lock; no timing guess or replacement for the manager is needed.
+		_, _ = manager.PreviewIntentPolicy(alerts.AlertIntentPolicyPreviewRequest{
+			ResourceID: "vm:fixture", ResourceType: "vm",
+			Signal: string(alerts.AlertIntentSignalOffline), ConditionActive: true,
+		})
+	}()
+	unblock := func() {
+		releaseOnce.Do(func() { close(release) })
+		<-done
+	}
+	t.Cleanup(unblock)
+	select {
+	case <-entered:
+	case <-time.After(3 * time.Second):
+		t.Fatal("fixture could not hold alert manager")
+	}
+	return unblock
+}
+
+func TestDeadManSignalsAndRecoversWhileAlertManagerIsBlocked(t *testing.T) {
+	start := time.Date(2026, 11, 24, 12, 0, 0, 0, time.UTC)
+	endpoint := "https://watchdog.example.com/ping/fixture"
+	dir := t.TempDir()
+	statePath := dir + "/alerts/deadman-state.json"
+	require.NoError(t, persistDeadManState(statePath, deadManPersistedState{
+		SchemaVersion: deadManStateSchemaVersion, EndpointFingerprint: deadManEndpointFingerprint(endpoint),
+		Enabled: true, StartedAt: start.Add(-time.Hour), LastHealthyAt: start.Add(-5 * time.Minute),
+	}))
+	type signal struct {
+		method, path, body string
+	}
+	received := make(chan signal, 4)
+	receiver := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Error(err)
+		}
+		received <- signal{r.Method, r.URL.Path, string(body)}
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer receiver.Close()
+	fixtureURL, err := url.Parse(receiver.URL)
+	require.NoError(t, err)
+
+	d := newDeadManRuntime(dir)
+	d.startupAt = start
+	d.interval = time.Hour // Step explicitly through the same run loop via its wake channel.
+	var clock, progress atomic.Int64
+	progress.Store(int64(-2 * time.Minute))
+	d.now = func() time.Time { return start.Add(time.Duration(clock.Load())) }
+	d.retryDelays = nil
+	d.client = &http.Client{Timeout: time.Second, Transport: deadManRoundTripFunc(func(r *http.Request) (*http.Response, error) {
+		// Only the test transport routes the validated fixture URL to the
+		// disposable receiver. Production DNS, TLS and host policy are intact.
+		if r.URL.Host != "watchdog.example.com" || r.URL.Scheme != "https" {
+			t.Errorf("unexpected fixture authority: %s", r.URL.Host)
+			return deadManResponse(http.StatusBadRequest, ""), nil
+		}
+		c := r.Clone(r.Context())
+		c.Host = ""
+		c.URL.Host = fixtureURL.Host
+		return receiver.Client().Transport.RoundTrip(c)
+	})}
+	manager := alerts.NewManagerWithDataDir(t.TempDir(), alerts.WithoutPersistedAlertRestore())
+	t.Cleanup(manager.Stop)
+	unblock := holdDeadManAlertManager(t, manager)
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		d.run(ctx, func() string { return endpoint }, func() time.Time { return start.Add(time.Duration(progress.Load())) }, manager)
+	}()
+	defer func() {
+		cancel()
+		unblock()
+		<-done
+	}()
+	expect := func(path, body string) {
+		t.Helper()
+		select {
+		case item := <-received:
+			require.Equal(t, http.MethodPost, item.method)
+			require.Equal(t, path, item.path)
+			require.Contains(t, item.body, body)
+			require.NotContains(t, item.body, "fixture")
+		case <-time.After(3 * time.Second):
+			t.Fatalf("external watchdog did not receive %s while the manager lock was held", path)
+		}
+	}
+	expect("/ping/fixture/fail", "monitoring loop has stopped")
+	clock.Store(int64(time.Minute))
+	d.wake <- struct{}{}
+	expect("/ping/fixture/fail", "monitoring loop has stopped")
+	clock.Store(int64(2 * time.Minute))
+	progress.Store(clock.Load())
+	d.wake <- struct{}{}
+	expect("/ping/fixture", "previous unexpected shutdown")
+	recoveredAt := start.Add(2 * time.Minute)
+	require.Eventually(t, func() bool {
+		s := d.statusSnapshot()
+		return s.State == "healthy" && s.LastSuccessAt != nil && s.LastSuccessAt.Equal(recoveredAt)
+	}, 3*time.Second, time.Millisecond)
+
+	// Cancellation stops sends first, but the watchdog must not release the
+	// store while its one projection worker still owns accepted updates.
+	cancel()
+	require.Eventually(t, func() bool {
+		d.alertProjection.mu.Lock()
+		defer d.alertProjection.mu.Unlock()
+		return d.alertProjection.closed
+	}, 3*time.Second, time.Millisecond)
+	select {
+	case <-done:
+		t.Fatal("watchdog released ownership during active projection")
+	default:
+	}
+	unblock()
+	<-done
+	require.Empty(t, manager.GetActiveAlerts())
+	var restartRecords int
+	for _, entry := range manager.GetAlertHistory(0) {
+		if entry.ID == alerts.SystemAlertID(alerts.DeadManInterruptionAlertType) {
+			restartRecords++
+		}
+	}
+	require.Equal(t, 1, restartRecords, "the first healthy report must not erase local restart history")
+	stored, err := loadDeadManState(statePath)
+	require.NoError(t, err)
+	require.NotNil(t, stored.LastInterruption)
+	require.EqualValues(t, 300, stored.LastInterruption.DurationSecs)
+	require.True(t, stored.LastSuccessfulPing.Equal(recoveredAt))
+}
+
+func TestDeadManConfigurationSaveDoesNotWaitForAlertProjection(t *testing.T) {
+	now := time.Date(2026, 11, 24, 12, 0, 0, 0, time.UTC)
+	receiving, cancelled := make(chan struct{}), make(chan struct{})
+	d := newDeadManTestRuntime(t, now, deadManRoundTripFunc(func(req *http.Request) (*http.Response, error) {
+		close(receiving)
+		<-req.Context().Done()
+		close(cancelled)
+		return nil, req.Context().Err()
+	}))
+	am := alerts.NewManagerWithDataDir(t.TempDir(), alerts.WithoutPersistedAlertRestore())
+	t.Cleanup(am.Stop)
+	unblock := holdDeadManAlertManager(t, am)
+	endpoint := "https://watchdog.example.com/ping/fixture"
+	persistence := config.NewConfigPersistence(t.TempDir())
+	m := &Monitor{
+		alertManager: am, configPersist: persistence, deadMan: d,
+		deadManConfig: notifications.DeadManConfig{PingURL: endpoint},
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	cycleDone := make(chan struct{})
+	go func() {
+		defer close(cycleDone)
+		d.runCycle(ctx, func() string { return m.deadManConfigSnapshot().PingURL }, func() time.Time { return now })
+	}()
+	select {
+	case <-receiving:
+	case <-time.After(3 * time.Second):
+		t.Fatal("initial request did not start")
+	}
+	saveDone := make(chan error, 1)
+	go func() { saveDone <- m.UpdateDeadManConfig(notifications.DeadManConfig{}) }()
+	select {
+	case err := <-saveDone:
+		require.NoError(t, err)
+	case <-time.After(3 * time.Second):
+		unblock()
+		<-saveDone
+		t.Fatal("saving removal was held by the alert manager")
+	}
+	select {
+	case <-cancelled:
+	case <-time.After(3 * time.Second):
+		t.Fatal("removed endpoint's request was not cancelled")
+	}
+	<-cycleDone
+	require.Zero(t, m.DeadManStatus().ConsecutiveFailures)
+	require.Equal(t, "disabled", m.DeadManStatus().State)
+	saved, err := persistence.LoadDeadManConfig()
+	require.NoError(t, err)
+	require.Empty(t, saved.PingURL)
+}
+
+func TestDeadManSupersededSnapshotDoesNotSend(t *testing.T) {
+	now := time.Date(2026, 11, 24, 12, 0, 0, 0, time.UTC)
+	d := newDeadManTestRuntime(t, now, deadManRoundTripFunc(func(req *http.Request) (*http.Response, error) {
+		t.Error("a superseded configuration must not initiate a request")
+		return deadManResponse(http.StatusOK, "OK"), nil
+	}))
+	d.runCycle(context.Background(), func() string {
+		// The saved config changes after the cycle has begun reading its
+		// snapshot but before it has ever admitted a request to transport.
+		d.notifyConfigChanged()
+		return "https://watchdog.example.com/ping/old-fixture"
+	}, func() time.Time { return now })
+	require.Nil(t, d.statusSnapshot().LastAttemptAt)
+}
+
+func TestDeadManSupersededProgressCannotQueueAStall(t *testing.T) {
+	now := time.Date(2026, 11, 24, 12, 0, 0, 0, time.UTC)
+	d := newDeadManTestRuntime(t, now, deadManRoundTripFunc(func(*http.Request) (*http.Response, error) {
+		t.Error("a removed destination must not receive a request")
+		return deadManResponse(http.StatusOK, ""), nil
+	}))
+	endpoint := "https://watchdog.example.com/ping/fixture"
+	m := &Monitor{deadMan: d, configPersist: config.NewConfigPersistence(t.TempDir()),
+		deadManConfig: notifications.DeadManConfig{PingURL: endpoint}}
+	d.runCycle(context.Background(), func() string { return m.deadManConfigSnapshot().PingURL }, func() time.Time {
+		// The old cycle already has a destination and is still reading
+		// progress when the operator completes removal.
+		require.NoError(t, m.UpdateDeadManConfig(notifications.DeadManConfig{}))
+		return now.Add(-2 * time.Minute)
+	})
+	require.Equal(t, "disabled", m.DeadManStatus().State)
+	for _, update := range d.alertProjection.pending {
+		require.False(t, update.alertType == alerts.DeadManMonitoringStalledAlertType && update.raise != nil,
+			"cancelled cycle queued an obsolete stall after saved removal")
+	}
 }

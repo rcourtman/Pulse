@@ -9277,6 +9277,16 @@ watchdog. A separate worker emits one success signal per minute, while a
 proves that the polling scheduler itself is still progressing. A stale marker
 causes the worker to send the provider's `/fail` signal and raise a critical
 system alert; the worker's own timer can never count as monitoring progress.
+The marker measures the canonical loop, not completion of dequeued polls,
+agent intake, or per-provider success. Ordinary idle time and provider backoff
+do not stop the loop's marker. HTTP liveness remains independent.
+The external sender never waits for the alert manager to raise, refresh, or
+clear a local watchdog alert. A single, bounded projection worker reconciles
+the latest standing condition. Recovery or a saved destination change makes
+an obsolete raise ineligible even if it has left the queue and is waiting
+for alert-manager admission. A real restart observation still goes to local
+history, even when the same signal reports recovery. Tenant shutdown cancels
+the sender and joins this projection before releasing the alert store.
 Every DNS answer is compared with all Pulse host interface addresses before
 dialing, in addition to the loopback, unspecified, and link-local exclusions.
 Local-interface enumeration failure rejects the signal rather than weakening
@@ -9293,6 +9303,17 @@ in-flight request before durable stop or replacement state is published, so a
 revoked endpoint receives no trailing heartbeat and a removed destination
 becomes disabled immediately. State corruption and write failure are visible
 system conditions rather than silent loss of future outage evidence.
+
+`TestDeadManSignalsAndRecoversWhileAlertManagerIsBlocked` holds the real alert
+manager lock while a fixture receiver accepts the first and later failure
+signals and the recovery report. It verifies the durable restart gap, local
+history and final alert state after release. Configuration tests verify that a
+saved removal cancels an active request under the same lock pressure, and
+that a superseded snapshot cannot start a request or queue a new stall.
+`TestDeadManStandingAlertAdmission` waits for the stall raise to leave the
+queue while holding the real alert-manager lock. Recovery and saved removal
+each prevent obsolete history, firing and delivery callbacks, and a webhook
+attempt. The same path still records and delivers a current stall.
 
 ### Agent removal keeps credential truth continuous across restart
 

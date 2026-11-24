@@ -2422,26 +2422,31 @@ func (m *Monitor) Start(ctx context.Context, wsHub *websocket.Hub) {
 	m.alertManager.SubscribeLifecycleCallback(m.handleAlertLifecycleEvent)
 	m.wireExternalAlertCallbacks(wsHub)
 	m.markDeadManMonitoringProgress(time.Now().UTC())
-	if err := m.deadManConfigurationLoadError(); err != nil {
-		m.alertManager.RaiseSystemAlert(alerts.SystemAlertInput{
-			Type:        alerts.DeadManStateAlertType,
-			Level:       alerts.AlertLevelWarning,
-			Message:     "Pulse could not read the encrypted external watchdog configuration. Watchdog monitoring is unavailable until the destination is saved again.",
-			Fingerprint: "configuration-load-failed",
-		})
-	}
 	if m.deadMan != nil {
-		go m.deadMan.run(
-			ctx,
-			func() string {
-				if m.alertManager == nil {
-					return ""
-				}
+		m.deadManConfigMu.RLock()
+		if m.deadManConfigLoadErr != nil {
+			m.deadMan.alertProjection.raise(alerts.SystemAlertInput{
+				Type:        alerts.DeadManStateAlertType,
+				Level:       alerts.AlertLevelWarning,
+				Message:     "Pulse could not read the encrypted external watchdog configuration. Watchdog monitoring is unavailable until the destination is saved again.",
+				Fingerprint: "configuration-load-failed",
+			})
+		}
+		m.deadManConfigMu.RUnlock()
+		watchdogCtx, stopWatchdog := context.WithCancel(ctx)
+		watchdogDone := make(chan struct{})
+		go func() {
+			defer close(watchdogDone)
+			m.deadMan.run(watchdogCtx, func() string {
 				return m.deadManConfigSnapshot().PingURL
-			},
-			m.deadManMonitoringProgress,
-			m.alertManager,
-		)
+			}, m.deadManMonitoringProgress, m.alertManager)
+		}()
+		// Tenant teardown cannot stop the alert store or remove its data
+		// while the watchdog still owns a projection into it.
+		defer func() {
+			stopWatchdog()
+			<-watchdogDone
+		}()
 	}
 
 	// Create separate tickers for polling and broadcasting using the configured cadence
