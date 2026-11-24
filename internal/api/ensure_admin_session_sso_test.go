@@ -106,3 +106,53 @@ func TestSessionUserHasRBACAdminGrant(t *testing.T) {
 		t.Fatal("unassigned user must not carry the admin grant")
 	}
 }
+
+// The session checkAuth admitted a request with decides the administrator
+// checks that follow. When it ended in between (sign-out, expiry, revocation)
+// the checks used to find no valid cookie and treat the request as one a
+// proxy, Basic or token credential had admitted, which handed a signed-out
+// viewer instance administration.
+func TestAdminSessionChecksRefuseSessionEndedAfterAdmission(t *testing.T) {
+	InitSessionStore(t.TempDir())
+	installTestRBACManager(t)
+	cfg := &config.Config{AuthUser: "richard", AuthPass: "unused-hash"}
+
+	admit := func(t *testing.T, username string) (*http.Request, string) {
+		t.Helper()
+		token := generateSessionToken()
+		GetSessionStore().CreateSession(token, time.Hour, "agent", "127.0.0.1", username)
+		req := httptest.NewRequest(http.MethodPut, "/api/security/sso/providers/company", nil)
+		req.AddCookie(&http.Cookie{Name: "pulse_session", Value: token})
+		if !checkAuth(cfg, httptest.NewRecorder(), req, false) {
+			t.Fatalf("session for %q was not admitted", username)
+		}
+		return req, token
+	}
+	checks := map[string]func(*http.Request) bool{
+		"ensureAdminSession": func(req *http.Request) bool {
+			return ensureAdminSession(cfg, httptest.NewRecorder(), req)
+		},
+		"ensureOrgAdminSession": func(req *http.Request) bool {
+			return ensureOrgAdminSession(cfg, httptest.NewRecorder(), req)
+		},
+		"requestCarriesInstanceAuthority": func(req *http.Request) bool {
+			return requestCarriesInstanceAuthority(cfg, req)
+		},
+	}
+
+	for name, check := range checks {
+		t.Run(name, func(t *testing.T) {
+			req, _ := admit(t, "richard")
+			if !check(req) {
+				t.Fatal("live administrator session was refused")
+			}
+			for _, user := range []string{"mallory", "richard"} {
+				req, token := admit(t, user)
+				GetSessionStore().DeleteSession(token)
+				if check(req) {
+					t.Fatalf("session of %q that ended after admission was admitted", user)
+				}
+			}
+		})
+	}
+}

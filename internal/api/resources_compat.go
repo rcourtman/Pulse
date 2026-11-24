@@ -35,6 +35,7 @@ type ResourceHandlers struct {
 	actionLiveCheckAuthorizer actionlifecycle.LiveCheckAuthorizer
 	actionRefreshPlanner      actionlifecycle.RefreshPlanner
 	operatorStateChanged      func(orgID, resourceID string)
+	operatorStateRemediation  func(*http.Request) bool
 }
 
 type SupplementalRecordsProvider = resourceapi.SupplementalRecordsProvider
@@ -129,6 +130,15 @@ func (h *ResourceHandlers) SetActionTransitionPublisher(publisher func(orgID str
 
 func (h *ResourceHandlers) SetOperatorStateChanged(callback func(orgID, resourceID string)) {
 	h.operatorStateChanged = callback
+}
+
+// SetOperatorStateRemediationAuthority sets who may change what a resource's
+// operator state tells the action lifecycle and Patrol: the Never
+// auto-remediate lock, the lifecycle state and the automatic remediation
+// policy. Without it nobody may. Everyone the route admits keeps the rest of
+// the record (monitoring mode, maintenance windows, criticality, notes).
+func (h *ResourceHandlers) SetOperatorStateRemediationAuthority(allowed func(*http.Request) bool) {
+	h.operatorStateRemediation = allowed
 }
 
 func (h *ResourceHandlers) buildRegistry(orgID string) (*unified.ResourceRegistry, error) {

@@ -3053,6 +3053,7 @@ func TestProxyAuthNonAdminDeniedAdminEndpoints(t *testing.T) {
 		{method: http.MethodPost, path: "/api/license/activate", body: `{}`},
 		{method: http.MethodPost, path: "/api/license/clear", body: `{}`},
 		{method: http.MethodGet, path: "/api/license/status", body: ""},
+		{method: http.MethodGet, path: "/auth/license-purchase-start", body: ""},
 		{method: http.MethodGet, path: "/api/notifications/queue/stats", body: ""},
 		{method: http.MethodGet, path: "/api/notifications/", body: ""},
 		{method: http.MethodGet, path: "/api/notifications/dlq", body: ""},

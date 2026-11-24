@@ -1,6 +1,7 @@
 package api
 
 import (
+	"crypto/ed25519"
 	"encoding/base64"
 	"encoding/json"
 	"net/http"
@@ -14,6 +15,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/license/entitlements"
 	internalauth "github.com/rcourtman/pulse-go-rewrite/pkg/auth"
+	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
 )
 
 func TestBillingStateGetReturnsDefaultWhenMissing(t *testing.T) {
@@ -238,6 +240,92 @@ func TestBillingStateGetHostedNonDefaultPrefersOrgBillingStateOverDefaultFallbac
 	if payload.PlanVersion != string(entitlements.SubStateTrial) {
 		t.Fatalf("expected plan_version %q, got %q", entitlements.SubStateTrial, payload.PlanVersion)
 	}
+}
+
+func TestBillingStateGetOmitsEntitlementCredentials(t *testing.T) {
+	router, baseDir := newBillingStateTestRouter(t, true)
+	store := config.NewFileBillingStore(baseDir)
+	lease := saveLeasedBillingStateForTest(t, store, "default")
+
+	// "default" reads its own record; "t-tenant" has none and inherits it.
+	for _, orgID := range []string{"default", "t-tenant"} {
+		rec := doBillingStateRequest(router, http.MethodGet, "/api/admin/orgs/"+orgID+"/billing-state", "")
+		if rec.Code != http.StatusOK {
+			t.Fatalf("%s: expected 200, got %d: %s", orgID, rec.Code, rec.Body.String())
+		}
+		body := rec.Body.String()
+		if strings.Contains(body, lease) || strings.Contains(body, "etr_hosted_default") ||
+			strings.Contains(body, "entitlement_jwt") || strings.Contains(body, "entitlement_refresh_token") {
+			t.Fatalf("%s: billing state response must not carry entitlement credentials, got %s", orgID, body)
+		}
+
+		var payload entitlements.BillingState
+		if err := decodeResponse(rec, &payload); err != nil {
+			t.Fatalf("%s: decode response: %v", orgID, err)
+		}
+		if payload.SubscriptionState != entitlements.SubStateActive || payload.PlanVersion != "msp_starter" {
+			t.Fatalf("%s: expected the leased plan to remain visible, got %+v", orgID, payload)
+		}
+	}
+}
+
+func TestBillingStatePutKeepsStoredEntitlementCredentialsWhenOmitted(t *testing.T) {
+	router, baseDir := newBillingStateTestRouter(t, true)
+	store := config.NewFileBillingStore(baseDir)
+	lease := saveLeasedBillingStateForTest(t, store, "acme")
+	logs := captureTestLogs(t)
+
+	// Write back what a read returns, as the billing admin panel does.
+	getRec := doBillingStateRequest(router, http.MethodGet, "/api/admin/orgs/acme/billing-state", "")
+	if getRec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", getRec.Code, getRec.Body.String())
+	}
+	putRec := doBillingStateRequest(router, http.MethodPut, "/api/admin/orgs/acme/billing-state", getRec.Body.String())
+	if putRec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", putRec.Code, putRec.Body.String())
+	}
+	if body := putRec.Body.String(); strings.Contains(body, lease) || strings.Contains(body, "etr_hosted_default") {
+		t.Fatalf("billing state response must not carry entitlement credentials, got %s", body)
+	}
+	if logged := logs.String(); !strings.Contains(logged, "Billing state updated") ||
+		strings.Contains(logged, lease) || strings.Contains(logged, "etr_hosted_default") {
+		t.Fatalf("billing state audit log must not carry entitlement credentials, got %s", logged)
+	}
+
+	stored, err := store.GetBillingState("acme")
+	if err != nil {
+		t.Fatalf("load stored billing state: %v", err)
+	}
+	if stored.EntitlementJWT != lease || stored.EntitlementRefreshToken != "etr_hosted_default" {
+		t.Fatalf("expected stored entitlement credentials to survive the write, got jwt=%q refresh=%q", stored.EntitlementJWT, stored.EntitlementRefreshToken)
+	}
+}
+
+func saveLeasedBillingStateForTest(t *testing.T, store *config.FileBillingStore, orgID string) string {
+	t.Helper()
+
+	pub, priv, err := ed25519.GenerateKey(nil)
+	if err != nil {
+		t.Fatalf("GenerateKey: %v", err)
+	}
+	t.Setenv(pkglicensing.TrialActivationPublicKeyEnvVar, base64.StdEncoding.EncodeToString(pub))
+	lease, err := pkglicensing.SignEntitlementLeaseToken(priv, pkglicensing.EntitlementLeaseClaims{
+		OrgID:             orgID,
+		InstanceHost:      "pulse.example.com",
+		PlanVersion:       "msp_starter",
+		SubscriptionState: pkglicensing.SubStateActive,
+		Capabilities:      []string{pkglicensing.FeatureRelay},
+	})
+	if err != nil {
+		t.Fatalf("SignEntitlementLeaseToken: %v", err)
+	}
+	if err := store.SaveBillingState(orgID, &entitlements.BillingState{
+		EntitlementJWT:          lease,
+		EntitlementRefreshToken: "etr_hosted_default",
+	}); err != nil {
+		t.Fatalf("save leased billing state: %v", err)
+	}
+	return lease
 }
 
 func TestBillingStatePutRejectsInvalidSubscriptionState(t *testing.T) {

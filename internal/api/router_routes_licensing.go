@@ -99,29 +99,33 @@ func (r *Router) registerOrgLicenseRoutesGroup(orgHandlers *OrgHandlers, rbacHan
 	}))
 
 	// RBAC routes (Phase 2 - Enterprise feature)
+	// Roles and assignments decide who is an instance administrator, so an API
+	// token needs full access (*) here: a narrower scope, settings:write
+	// included, could otherwise grant the admin role and exceed itself.
+	// ensureAdminSession already refuses organization-bound tokens.
 	r.mux.HandleFunc("/api/admin/roles", RequirePermission(r.config, r.authorizer, auth.ActionAdmin, auth.ResourceUsers, func(w http.ResponseWriter, req *http.Request) {
 		if !ensureAdminSession(r.config, w, req) {
 			return
 		}
-		RequireLicenseFeature(r.licenseHandlers, featureRBACValue, rbacHandlers.HandleRoles)(w, req)
+		RequireLicenseFeature(r.licenseHandlers, featureRBACValue, RequireScope(config.ScopeWildcard, rbacHandlers.HandleRoles))(w, req)
 	}))
 	r.mux.HandleFunc("/api/admin/roles/", RequirePermission(r.config, r.authorizer, auth.ActionAdmin, auth.ResourceUsers, func(w http.ResponseWriter, req *http.Request) {
 		if !ensureAdminSession(r.config, w, req) {
 			return
 		}
-		RequireLicenseFeature(r.licenseHandlers, featureRBACValue, rbacHandlers.HandleRoles)(w, req)
+		RequireLicenseFeature(r.licenseHandlers, featureRBACValue, RequireScope(config.ScopeWildcard, rbacHandlers.HandleRoles))(w, req)
 	}))
 	r.mux.HandleFunc("/api/admin/users", RequirePermission(r.config, r.authorizer, auth.ActionAdmin, auth.ResourceUsers, func(w http.ResponseWriter, req *http.Request) {
 		if !ensureAdminSession(r.config, w, req) {
 			return
 		}
-		RequireLicenseFeature(r.licenseHandlers, featureRBACValue, rbacHandlers.HandleGetUsers)(w, req)
+		RequireLicenseFeature(r.licenseHandlers, featureRBACValue, RequireScope(config.ScopeWildcard, rbacHandlers.HandleGetUsers))(w, req)
 	}))
 	r.mux.HandleFunc("/api/admin/users/", RequirePermission(r.config, r.authorizer, auth.ActionAdmin, auth.ResourceUsers, func(w http.ResponseWriter, req *http.Request) {
 		if !ensureAdminSession(r.config, w, req) {
 			return
 		}
-		RequireLicenseFeature(r.licenseHandlers, featureRBACValue, rbacHandlers.HandleUserRoleActions)(w, req)
+		RequireLicenseFeature(r.licenseHandlers, featureRBACValue, RequireScope(config.ScopeWildcard, rbacHandlers.HandleUserRoleActions))(w, req)
 	}))
 	rbacAdminEndpoints := resolveRBACAdminEndpoints(
 		rbacAdminEndpointAdapter{handlers: rbacHandlers},
@@ -140,13 +144,13 @@ func (r *Router) registerOrgLicenseRoutesGroup(orgHandlers *OrgHandlers, rbacHan
 		if !ensureAdminSession(r.config, w, req) {
 			return
 		}
-		RequireLicenseFeature(r.licenseHandlers, featureRBACValue, rbacAdminEndpoints.HandleIntegrityCheck)(w, req)
+		RequireLicenseFeature(r.licenseHandlers, featureRBACValue, RequireScope(config.ScopeWildcard, rbacAdminEndpoints.HandleIntegrityCheck))(w, req)
 	}))
 	r.mux.HandleFunc("POST /api/admin/rbac/reset-admin", RequirePermission(r.config, r.authorizer, auth.ActionAdmin, auth.ResourceUsers, func(w http.ResponseWriter, req *http.Request) {
 		if !ensureAdminSession(r.config, w, req) {
 			return
 		}
-		RequireLicenseFeature(r.licenseHandlers, featureRBACValue, rbacAdminEndpoints.HandleAdminReset)(w, req)
+		RequireLicenseFeature(r.licenseHandlers, featureRBACValue, RequireScope(config.ScopeWildcard, rbacAdminEndpoints.HandleAdminReset))(w, req)
 	}))
 
 	// Advanced Reporting routes. They are org-bound: every report reads only

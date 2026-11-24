@@ -73,7 +73,9 @@ func (r *Router) registerHostedRoutes(hostedSignupHandlers *HostedSignupHandlers
 	r.mux.HandleFunc("/auth/cloud-handoff", HandleCloudHandoff(routerConfig.DataPath))
 	if r.licenseHandlers != nil {
 		// Self-hosted commercial checkout handoff: mint a signed return token and redirect into Pulse Account.
-		r.mux.HandleFunc("GET /auth/license-purchase-start", RequireAuth(routerConfig, r.licenseHandlers.HandleCheckoutStart))
+		// The public activation return below trusts that token alone and replaces the active license,
+		// so minting it takes the same authority as /api/license/activate.
+		r.mux.HandleFunc("GET /auth/license-purchase-start", RequireAdmin(routerConfig, RequireScope(config.ScopeSettingsWrite, r.licenseHandlers.HandleCheckoutStart)))
 		// Self-hosted commercial checkout return: complete purchase activation without manual key entry.
 		r.mux.HandleFunc("/auth/license-purchase-activate", r.licenseHandlers.HandleCheckoutActivation)
 	}

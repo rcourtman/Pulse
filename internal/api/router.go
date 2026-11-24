@@ -1180,8 +1180,10 @@ func (r *Router) routeAIPatrolFindings(w http.ResponseWriter, req *http.Request)
 		if !ensureScope(w, req, config.ScopeAIExecute) {
 			return
 		}
-		// Clear all findings - doesn't require Pro license so users can clean up accumulated findings
-		r.aiSettingsHandler.HandleClearAllFindings(w, req)
+		// Clear all findings - doesn't require Pro license so users can clean up accumulated findings.
+		// It erases the organization's whole findings store, so a session
+		// caller must be one of its managers.
+		RequireOrgAdmin(r.config, r.aiSettingsHandler.HandleClearAllFindings)(w, req)
 	default:
 		if !ensureScope(w, req, config.ScopeAIExecute) {
 			return

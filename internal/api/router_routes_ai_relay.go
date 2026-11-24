@@ -198,7 +198,10 @@ func (r *Router) registerAIRelayRoutesGroup() {
 	// it needs the same capability as a knowledge note.
 	r.mux.HandleFunc("/api/ai/patrol/findings/note", RequireAuth(r.config, RequireScope(config.ScopeAIExecute,
 		requireActionCapability(r.config, r.authorizer, auth.ActionExecute, r.aiSettingsHandler.HandleSetFindingNote))))
-	r.mux.HandleFunc("/api/ai/patrol/suppress", RequireAuth(r.config, RequireScope(config.ScopeAIExecute, r.aiSettingsHandler.HandleSuppressFinding)))
+	// Suppressing a finding stores a standing rule for its resource and
+	// category, so like the rules below it belongs to the organization's
+	// managers in a session; the scope only binds tokens.
+	r.mux.HandleFunc("/api/ai/patrol/suppress", RequireOrgAdmin(r.config, RequireScope(config.ScopeAIExecute, r.aiSettingsHandler.HandleSuppressFinding)))
 	r.mux.HandleFunc("/api/ai/patrol/snooze", RequireAuth(r.config, requireRelayMobileRuntimeRoute(
 		relayMobileRoutePatrolSnooze,
 		r.withExternalAgentCapabilityActivity(
@@ -216,18 +219,28 @@ func (r *Router) registerAIRelayRoutesGroup() {
 	r.mux.HandleFunc("/api/ai/patrol/runs/", RequireAuth(r.config, RequireScope(config.ScopeAIExecute,
 		withAssistantActionAuthority(r.config, r.authorizer, r.aiSettingsHandler.HandleGetPatrolRun))))
 	r.mux.HandleFunc("/api/ai/patrol/digest", RequireAuth(r.config, RequireScope(config.ScopeAIExecute, r.aiSettingsHandler.HandleGetPatrolDigest)))
-	// Suppression rules management - require scope to prevent low-privilege tokens from creating suppression rules
+	// Suppression rules management - require scope to prevent low-privilege tokens from creating suppression rules.
+	// A rule makes Patrol drop every finding it matches, and scopes do not
+	// bind sessions, so adding or removing one also needs a manager of the
+	// organization (RequireOrgAdmin). Every signed-in user keeps the list and
+	// the finding_ rows, which only reopen a finding they could dismiss.
 	r.mux.HandleFunc("/api/ai/patrol/suppressions", RequireAuth(r.config, RequireScope(config.ScopeAIExecute, func(w http.ResponseWriter, req *http.Request) {
 		switch req.Method {
 		case http.MethodGet:
 			r.aiSettingsHandler.HandleGetSuppressionRules(w, req)
 		case http.MethodPost:
-			r.aiSettingsHandler.HandleAddSuppressionRule(w, req)
+			RequireOrgAdmin(r.config, r.aiSettingsHandler.HandleAddSuppressionRule)(w, req)
 		default:
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		}
 	})))
-	r.mux.HandleFunc("/api/ai/patrol/suppressions/", RequireAuth(r.config, RequireScope(config.ScopeAIExecute, r.aiSettingsHandler.HandleDeleteSuppressionRule)))
+	r.mux.HandleFunc("/api/ai/patrol/suppressions/", RequireAuth(r.config, RequireScope(config.ScopeAIExecute, func(w http.ResponseWriter, req *http.Request) {
+		if strings.HasPrefix(strings.TrimPrefix(req.URL.Path, "/api/ai/patrol/suppressions/"), "finding_") {
+			r.aiSettingsHandler.HandleDeleteSuppressionRule(w, req)
+			return
+		}
+		RequireOrgAdmin(r.config, r.aiSettingsHandler.HandleDeleteSuppressionRule)(w, req)
+	})))
 	r.mux.HandleFunc("/api/ai/patrol/dismissed", RequireAuth(r.config, RequireScope(config.ScopeAIExecute, r.aiSettingsHandler.HandleGetDismissedFindings)))
 
 	// Patrol Autonomy - GET stays in core; PUT is extension-gated for premium

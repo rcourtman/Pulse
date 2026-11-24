@@ -197,7 +197,7 @@ func (r *Router) registerAuthSecurityInstallRoutes() {
 				return
 			}
 		case http.MethodPost:
-			if !ensureSettingsWriteScope(r.config, w, req) {
+			if !ensureSSOProviderWrite(r.config, w, req) {
 				return
 			}
 		default:
@@ -219,7 +219,7 @@ func (r *Router) registerAuthSecurityInstallRoutes() {
 				return
 			}
 		case http.MethodPut, http.MethodDelete:
-			if !ensureSettingsWriteScope(r.config, w, req) {
+			if !ensureSSOProviderWrite(r.config, w, req) {
 				return
 			}
 			if !r.authorizeSSOManagement(w, req) {
@@ -542,8 +542,9 @@ func (r *Router) registerAuthSecurityInstallRoutes() {
 
 	// Recovery endpoint - requires localhost access OR valid recovery token
 	r.mux.HandleFunc("/api/security/recovery", func(w http.ResponseWriter, req *http.Request) {
-		// Get client IP
-		isLoopback := isDirectLoopbackRequest(req)
+		// Get client IP. A hosted runtime has no operator on its own host, so
+		// loopback earns no recovery there (see checkAuth).
+		isLoopback := !r.hostedMode && isDirectLoopbackRequest(req)
 		clientIP := GetClientIP(req)
 
 		// Check for recovery token in header

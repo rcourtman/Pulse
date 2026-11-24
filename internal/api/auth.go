@@ -880,6 +880,14 @@ func checkAuth(cfg *config.Config, w http.ResponseWriter, r *http.Request, write
 	if cfg.AuthUser == "" && cfg.AuthPass == "" && !cfg.HasAPITokens() && cfg.ProxyAuthSecret == "" {
 		if hasEnabledSSOProvidersForAuth(cfg) {
 			log.Debug().Msg("SSO enabled without local credentials, authentication required")
+		} else if hostedModeEnabledFromEnv() {
+			// A hosted runtime always enforces authentication, as
+			// configTransferAuthenticationConfigured already says. Its users
+			// arrive through the control plane handoff, so it holds no local
+			// credentials and never leaves this state through first-run setup.
+			// Nobody sits at its console either: its loopback peers are the
+			// requests this server sends for its tenants (webhooks, Apprise).
+			log.Debug().Msg("Hosted runtime without local credentials, authentication required")
 		} else {
 			if isDirectLoopbackRequest(r) {
 				anonymous = true

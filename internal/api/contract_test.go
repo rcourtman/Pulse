@@ -25895,7 +25895,7 @@ func TestContract_ConfigImportIncompleteRuntimeKeepsCommittedOutcome(t *testing.
 func TestContractSSOEnvironmentBoundaryConsumer(t *testing.T) {
 	fixture := environmentBoundaryRouter(t)
 	const token = "sso-environment-consumer-synthetic-token.12345678"
-	record := newTokenRecord(t, token, []string{config.ScopeSettingsRead, config.ScopeSettingsWrite}, nil)
+	record := newTokenRecord(t, token, []string{config.ScopeWildcard}, nil)
 	cfg := newTestConfigWithTokens(t, record)
 	cfg.PublicURL = "https://pulse.example.test"
 	var probe *environmentBoundaryEndpointProbe
