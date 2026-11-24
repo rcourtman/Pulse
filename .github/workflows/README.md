@@ -269,16 +269,17 @@ reads of one group cannot stand in for snapshot traffic. The per-build
 which synthetic guests exceeded the gap limit, and PBS group coverage by
 instance and datastore. It also counts completed PBS datastore status responses
 in the steady RSS window, with the longest gap per datastore including both
-edges. This distinguishes ongoing status traffic from silence after warmup,
-without making the memory comparison fail or assuming that cached snapshots
-should be requested again. An unfinished window has no gap
-observation. Status responses do not establish backup reads or Pulse accepting
-the response; served snapshot groups do not prove Pulse retained or displayed
-them. The summary reports the RSS change alongside any observed PVE sighting
-gaps, silent PBS datastores or missing coverage for either build. In those
-cases a smaller RSS reading does not establish lower memory use under
-equivalent polling. This does not change the watch's thresholds or make this
-estate gating. The observations are synthetic, not an installed LXC memory test.
+edges. Snapshot responses completed within that same window are shown
+separately per datastore, so full coverage earlier in the run or a current
+status response cannot stand in for a current snapshot listing. A zero does
+not mean a backup failure or require cached snapshots to be requested again.
+An unfinished window has no steady observation. Status responses do not
+establish backup reads; served snapshot groups do not prove Pulse accepted,
+retained or displayed them. The summary shows RSS beside gaps, differing
+snapshot-listing work or missing coverage. A smaller RSS reading alone does
+not establish lower memory use under equivalent polling. This does not change
+the watch's thresholds or make this estate gating. The observations are
+synthetic, not an installed LXC memory test.
 
 `dependency-advisory-watch.yml` strictly audits the product frontend on
 `main` every day. A newly disclosed advisory can affect an unchanged lockfile;

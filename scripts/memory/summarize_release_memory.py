@@ -227,6 +227,52 @@ def pbs_steady_datastore_status(stats: dict) -> str:
     return f"{seen}/{len(stores)} with a response; longest gap {longest:g} s in {coverage['window_s']} s"
 
 
+def pbs_steady_snapshot_groups(stats: dict | None, window_s: int) -> dict[tuple[str, str], tuple[int, int]]:
+    coverage = (stats or {}).get("pbs_steady_snapshot_group_coverage")
+    if not isinstance(coverage, dict) or coverage.get("window_s") != window_s:
+        return {}
+    datastores = coverage.get("datastores")
+    if not isinstance(datastores, dict):
+        return {}
+    counts = {}
+    for instance, stores in datastores.items():
+        if not isinstance(stores, dict):
+            continue
+        for store, row in stores.items():
+            if not isinstance(row, dict):
+                continue
+            served, expected = row.get("served_groups"), row.get("expected_groups")
+            if type(served) is int and type(expected) is int and 0 <= served <= expected:
+                counts[instance, store] = (served, expected)
+    return counts
+
+
+def pbs_snapshot_window_lines(baseline: dict | None, candidate: dict | None, window_s: int) -> list[str]:
+    base = pbs_steady_snapshot_groups(baseline, window_s)
+    cand = pbs_steady_snapshot_groups(candidate, window_s)
+    lines = ["", f"**PBS snapshot groups served/configured in the {window_s} s RSS window**", ""]
+    if not base and not cand:
+        return [*lines, "No same-window snapshot-listing evidence is available."]
+
+    lines += [
+        "Each group counts once per datastore after a nonempty fixture response completes. "
+        "This is not a freshness check. "
+        "Zero means no matching listing completed in the window, not a backup failure; "
+        "Pulse may use cached data. `n/a` means evidence was unavailable.",
+        "",
+        "| PBS datastore | Baseline | Candidate |",
+        "|---|---:|---:|",
+    ]
+    for instance, store in sorted(base.keys() | cand.keys()):
+        key = (instance, store)
+        cells = [f"{counts[key][0]}/{counts[key][1]}" if key in counts else "n/a" for counts in (base, cand)]
+        lines.append(f"| {instance}/{store} | {cells[0]} | {cells[1]} |")
+    if base != cand:
+        lines += ["", "**PBS snapshot-listing evidence differs between builds.** "
+                  "The RSS change alone does not establish how much memory equivalent backup-listing work would use."]
+    return lines
+
+
 def proxmox_polling_limits(label: str, stats: dict | None, window_s: int) -> list[str]:
     if not stats:
         return [f"- {label}: PVE/PBS polling evidence is unavailable."]
@@ -257,7 +303,7 @@ def proxmox_polling_limits(label: str, stats: dict | None, window_s: int) -> lis
     return notes
 
 
-def proxmox_lines(baseline: dict | None, candidate: dict | None) -> list[str]:
+def proxmox_lines(baseline: dict | None, candidate: dict | None, window_s: int) -> list[str]:
     shape = candidate or baseline
     if shape is None:
         return ["", "No Proxmox load statistics were written."]
@@ -290,7 +336,7 @@ def proxmox_lines(baseline: dict | None, candidate: dict | None) -> list[str]:
         ("PVE archive entries per response", pve_archive_entries),
         ("PVE archive responses by node (all / steady)", pve_archive_responses),
         ("PBS API requests", lambda d: d["pbs_requests"]),
-        ("PBS snapshot groups served/configured", pbs_snapshot_coverage),
+        ("PBS snapshot groups served/configured (whole run)", pbs_snapshot_coverage),
         ("PBS datastore status responses during steady RSS sampling", pbs_steady_datastore_status),
         ("Dashboard connections", lambda d: d["dashboard"]["connects"]),
         ("Dashboard application messages", lambda d: d["dashboard"]["messages"]),
@@ -301,6 +347,8 @@ def proxmox_lines(baseline: dict | None, candidate: dict | None) -> list[str]:
     for label, value in rows:
         cells = [str(value(d)) if d else "n/a" for d in (baseline, candidate)]
         lines.append(f"| {label} | {cells[0]} | {cells[1]} |")
+    if any(stats and stats["pbs_instances"] > 0 for stats in (baseline, candidate)):
+        lines += pbs_snapshot_window_lines(baseline, candidate, window_s)
     return lines
 
 
@@ -528,7 +576,7 @@ def main(argv: list[str]) -> int:
     if estate == "agents":
         lines += agent_lines(baseline_agents, candidate_agents)
     elif estate == "proxmox":
-        lines += proxmox_lines(baseline_proxmox, candidate_proxmox)
+        lines += proxmox_lines(baseline_proxmox, candidate_proxmox, duration - start)
     growth_file = out / "heap-growth.txt"
     if growth_file.exists() and growth_file.stat().st_size:
         top = growth_file.read_text().splitlines()[:30]
