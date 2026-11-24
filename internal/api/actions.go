@@ -19,7 +19,7 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-const maxActionPlanRequestBytes = 1 << 20
+const maxActionPlanRequestBytes = 64 << 10
 const maxActionDecisionRequestBytes = 64 << 10
 const maxActionExecutionRequestBytes = 64 << 10
 const maxActionRefreshRequestBytes = 64 << 10
@@ -523,7 +523,7 @@ func (h *ResourceHandlers) HandleDecideAction(w http.ResponseWriter, r *http.Req
 		Reason:   decision.Reason,
 		Evidence: approvalEvidenceForRequest(actor, record, decision.Outcome, time.Now().UTC()),
 	}
-	updated, err := lifecycle.Decide(r.Context(), orgID, actionID, canonicalDecision)
+	updated, err := lifecycle.Decide(withLiveActionCredential(h.cfg, r), orgID, actionID, canonicalDecision)
 	if err != nil {
 		writeActionLifecycleReadError(w, err, func() {
 			if writeActionReadinessError(w, err) {
@@ -739,7 +739,7 @@ func (h *ResourceHandlers) HandleExecuteAction(w http.ResponseWriter, r *http.Re
 	// finish, and a cancelled request context would abandon the committed
 	// dispatch mid-flight and strand the action in executing. The transport
 	// wait stays bounded by the per-operation timeout and server shutdown.
-	completed, err := h.ActionLifecycle().Execute(context.WithoutCancel(r.Context()), orgID, actionID, actor, execution.Reason)
+	completed, err := h.ActionLifecycle().Execute(context.WithoutCancel(withLiveActionCredential(h.cfg, r)), orgID, actionID, actor, execution.Reason)
 	if err != nil {
 		writeActionLifecycleReadError(w, err, func() {
 			writeActionExecuteError(w, err)

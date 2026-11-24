@@ -196,6 +196,42 @@ func TestPlannerRejectsUndeclaredParams(t *testing.T) {
 	}
 }
 
+func TestPlannerBoundsPersistedRequestText(t *testing.T) {
+	resource := unified.Resource{
+		ID:   "vm:42",
+		Type: unified.ResourceTypeVM,
+		Capabilities: []unified.ResourceCapability{
+			{Name: "restart", Type: unified.CapabilityTypeCommon, MinimumApprovalLevel: unified.ApprovalAdmin},
+		},
+	}
+	request := func(requestID, reason string) unified.ActionRequest {
+		return unified.ActionRequest{
+			RequestID:      requestID,
+			ResourceID:     "vm:42",
+			CapabilityName: "restart",
+			Reason:         reason,
+			Actor:          unified.ActionActor{SubjectID: "agent:oncall-helper", Kind: unified.ActionActorService, CredentialID: "service:test", OrgID: "default"},
+		}
+	}
+
+	if _, err := (Planner{}).Plan(request(strings.Repeat("r", MaxRequestIDBytes), strings.Repeat("w", MaxReasonBytes)), resource); err != nil {
+		t.Fatalf("Plan() at the limits error = %v", err)
+	}
+	for field, req := range map[string]unified.ActionRequest{
+		"requestId": request(strings.Repeat("r", MaxRequestIDBytes+1), "Recover after confirmed outage"),
+		"reason":    request("agent-run-123", strings.Repeat("w", MaxReasonBytes+1)),
+	} {
+		_, err := Planner{}.Plan(req, resource)
+		validationErr, ok := AsValidationError(err)
+		if !ok {
+			t.Fatalf("Plan() with oversized %s error = %v, want validation error", field, err)
+		}
+		if validationErr.Field != field {
+			t.Fatalf("validation field = %q, want %s", validationErr.Field, field)
+		}
+	}
+}
+
 func TestResourceVersionIgnoresObservationOnlyTimestamps(t *testing.T) {
 	base := unified.Resource{
 		ID:        "vm:42",

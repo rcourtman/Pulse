@@ -228,9 +228,9 @@ func TestAgentEventTokenRefreshKeepsBoundedContext(t *testing.T) {
 				}
 				config.Mu.Unlock()
 				if flushed%2 == 0 {
-					broadcaster.PublishApprovalPending(AgentEventApprovalPendingPayload{ApprovalID: "refresh-approval", Command: agentPrivateDetail})
+					broadcaster.PublishApprovalPending(orgID, AgentEventApprovalPendingPayload{ApprovalID: "refresh-approval", Command: agentPrivateDetail})
 				} else {
-					broadcaster.PublishActionCompletedRecord(record)
+					broadcaster.PublishActionCompletedRecord(orgID, record)
 				}
 				flushed++
 			}
@@ -277,7 +277,7 @@ func TestAgentEventTokenLifecycleRejectsWithdrawnAuthority(t *testing.T) {
 				}
 				config.Mu.Unlock()
 
-				router.agentEventBroadcaster.PublishActionCompletedRecord(agentDisclosureRecord(t, false))
+				router.agentEventBroadcaster.PublishActionCompletedRecord("default", agentDisclosureRecord(t, false))
 				primary.wantClosed(t)
 				event := control.next(t)
 				if event.Kind != AgentEventActionCompleted {
@@ -384,7 +384,7 @@ func TestAgentEventTokenLifecyclePreservesSessionDisclosure(t *testing.T) {
 	GetSessionStore().CreateSession(session, time.Hour, "fixture", "127.0.0.1", "operator")
 	t.Cleanup(func() { GetSessionStore().DeleteSession(session) })
 	stream := openAgentLifecycleStream(t, server, session, "session")
-	router.agentEventBroadcaster.PublishActionCompletedRecord(agentDisclosureRecord(t, false))
+	router.agentEventBroadcaster.PublishActionCompletedRecord("default", agentDisclosureRecord(t, false))
 	body, _ := json.Marshal(stream.next(t))
 	assertAgentDisclosureWire(t, body, false)
 }
@@ -432,7 +432,7 @@ func TestAgentEventTokenLifecycleMCPConsumer(t *testing.T) {
 	config.Mu.Lock()
 	cfg.RemoveAPIToken(cfg.APITokens[0].ID)
 	config.Mu.Unlock()
-	router.agentEventBroadcaster.PublishActionCompletedRecord(agentDisclosureRecord(t, false))
+	router.agentEventBroadcaster.PublishActionCompletedRecord("default", agentDisclosureRecord(t, false))
 	select {
 	case err := <-done:
 		if err != nil {

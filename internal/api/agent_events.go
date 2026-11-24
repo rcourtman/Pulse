@@ -377,10 +377,13 @@ func (b *AgentEventBroadcaster) PublishFindingCreated(orgID string, payload Agen
 // store's post-create hook routes through. Wraps the payload in the
 // canonical envelope and forwards to Publish — the broadcaster
 // stamps the timestamp and event id.
-func (b *AgentEventBroadcaster) PublishApprovalPending(payload AgentEventApprovalPendingPayload) {
+// The event reaches only orgID's subscribers: an approval belongs to the
+// organization that requested it.
+func (b *AgentEventBroadcaster) PublishApprovalPending(orgID string, payload AgentEventApprovalPendingPayload) {
 	b.Publish(AgentEvent{
 		Kind:    AgentEventApprovalPending,
 		Payload: payload,
+		orgID:   normalizeAgentEventOrgID(orgID),
 	})
 }
 
@@ -388,10 +391,13 @@ func (b *AgentEventBroadcaster) PublishApprovalPending(payload AgentEventApprova
 // post-completion hook routes through. Wraps the payload in the
 // canonical envelope and forwards to Publish — the broadcaster
 // stamps the timestamp and event id.
-func (b *AgentEventBroadcaster) PublishActionCompleted(payload AgentEventActionCompletedPayload) {
+// The event reaches only orgID's subscribers: an action belongs to the
+// organization whose action store holds it.
+func (b *AgentEventBroadcaster) PublishActionCompleted(orgID string, payload AgentEventActionCompletedPayload) {
 	b.Publish(AgentEvent{
 		Kind:    AgentEventActionCompleted,
 		Payload: payload,
+		orgID:   normalizeAgentEventOrgID(orgID),
 	})
 }
 
@@ -400,7 +406,7 @@ func (b *AgentEventBroadcaster) PublishActionCompleted(payload AgentEventActionC
 // API-owned execution endpoint route through this helper so agents hear the
 // same completion event regardless of which execution surface dispatched the
 // action.
-func (b *AgentEventBroadcaster) PublishActionCompletedRecord(record unifiedresources.ActionAuditRecord) {
+func (b *AgentEventBroadcaster) PublishActionCompletedRecord(orgID string, record unifiedresources.ActionAuditRecord) {
 	if b == nil {
 		return
 	}
@@ -426,7 +432,7 @@ func (b *AgentEventBroadcaster) PublishActionCompletedRecord(record unifiedresou
 	if v := projectAgentResourceVerification(unifiedresources.CanonicalActionVerification(record)); v != nil {
 		payload.Verification = v
 	}
-	b.PublishActionCompleted(payload)
+	b.PublishActionCompleted(orgID, payload)
 }
 
 // AgentEventBroadcasterContextKey is the context key used to plumb

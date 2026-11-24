@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/gorilla/websocket"
 	"github.com/rcourtman/pulse-go-rewrite/internal/actionlifecycle"
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
@@ -268,6 +269,87 @@ func TestDockerContainerActionExecutorUsesProductionDaemonObservationForIndepend
 	}
 	if len(truth.Verification.Evidence) != 1 || truth.Verification.Evidence[0].ObserverTrustDomain == truth.Verification.Evidence[0].ExecutorTrustDomain {
 		t.Fatalf("verification evidence=%#v", truth.Verification.Evidence)
+	}
+}
+
+// Two organizations can each hold a command session under the same agent ID.
+// The post-action daemon observation must be asked of the session in the
+// action's own organization, as the mutation it verifies was.
+func TestDockerContainerPostconditionObserverAsksTheActionsOwnOrganization(t *testing.T) {
+	server := agentexec.NewServerWithAdmissionValidator(
+		func(token, agentID, hostname string) (agentexec.AgentAdmission, bool) {
+			return agentexec.AgentAdmission{OrganizationID: token, TokenID: token, AgentID: agentID, Hostname: hostname}, true
+		},
+		func(agentexec.AgentAdmission) bool { return true },
+	)
+	websocketServer := httptest.NewServer(http.HandlerFunc(server.HandleWebSocket))
+	t.Cleanup(websocketServer.Close)
+
+	asked := make(chan string, 2)
+	connect := func(organizationID, state string) {
+		t.Helper()
+		conn, _, err := websocket.DefaultDialer.Dial("ws"+strings.TrimPrefix(websocketServer.URL, "http"), http.Header{"Origin": []string{websocketServer.URL}})
+		if err != nil {
+			t.Fatalf("dial agent websocket: %v", err)
+		}
+		t.Cleanup(func() { conn.Close() })
+		register, err := agentexec.NewMessage(agentexec.MsgTypeAgentRegister, "", agentexec.AgentRegisterPayload{
+			AgentID: "shared-agent-id", Hostname: organizationID + "-host", Token: organizationID,
+			DockerObservationVersion: agentexec.DockerContainerObservationProtocolVersion,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := conn.WriteJSON(register); err != nil {
+			t.Fatalf("write registration: %v", err)
+		}
+		var response agentexec.Message
+		var registered agentexec.RegisteredPayload
+		if err := conn.ReadJSON(&response); err != nil {
+			t.Fatalf("read registration response: %v", err)
+		}
+		if err := response.DecodePayload(&registered); err != nil || !registered.Success {
+			t.Fatalf("registration failed: payload=%+v err=%v", registered, err)
+		}
+		go func() {
+			for {
+				var message agentexec.Message
+				if err := conn.ReadJSON(&message); err != nil {
+					return
+				}
+				if message.Type != agentexec.MsgTypeDockerContainerObserve {
+					continue
+				}
+				var req agentexec.DockerContainerObservationPayload
+				if err := message.DecodePayload(&req); err != nil {
+					return
+				}
+				asked <- organizationID
+				reply, err := agentexec.NewMessage(agentexec.MsgTypeDockerContainerObserveResult, req.RequestID, agentexec.DockerContainerObservationResultPayload{
+					RequestID: req.RequestID, ActionID: req.ActionID, ProtocolVersion: req.ProtocolVersion, RequestDigest: req.RequestDigest,
+					Observed: true,
+					Snapshot: agentexec.DockerContainerObservationSnapshot{ContainerID: req.ContainerID, State: state, Running: state == "running", Health: agentexec.DockerContainerHealthNone, ObservedAt: time.Now().UTC()},
+				})
+				if err != nil || conn.WriteJSON(reply) != nil {
+					return
+				}
+			}
+		}()
+	}
+	connect("default", "running")
+	connect("acme", "exited")
+
+	ctx, cancel := context.WithTimeout(context.WithValue(context.Background(), OrgIDContextKey, "acme"), 5*time.Second)
+	defer cancel()
+	observation, err := agentDockerContainerPostconditionObserver{commander: server}.ObserveDockerContainer(ctx, "act_container", "shared-agent-id", "docker", strings.Repeat("a", 64))
+	if err != nil {
+		t.Fatalf("ObserveDockerContainer: %v", err)
+	}
+	if organizationID := <-asked; organizationID != "acme" || len(asked) != 0 {
+		t.Fatalf("observation was asked of organization %q (%d more), want only acme", organizationID, len(asked))
+	}
+	if observation.Snapshot.State != "exited" || observation.Snapshot.Running {
+		t.Fatalf("snapshot = %#v, want the acme daemon's answer", observation.Snapshot)
 	}
 }
 

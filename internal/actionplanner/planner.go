@@ -18,6 +18,17 @@ import (
 
 const DefaultPlanTTL = 5 * time.Minute
 
+// A request's ID and reason are persisted verbatim with the request, the ID
+// is repeated in the plan, and both are read back whenever the action is
+// listed, decided or migrated. Bound them here, the single validation every
+// planning transport shares, so caller-owned text cannot grow the action
+// audit store without limit. The ID limit leaves room for in-process request
+// IDs that embed resource identifiers (operational-trust IDs carry one twice).
+const (
+	MaxRequestIDBytes = 1 << 10
+	MaxReasonBytes    = 4 << 10
+)
+
 var ErrCapabilityNotFound = errors.New("resource capability is not advertised")
 
 type ValidationError struct {
@@ -269,6 +280,9 @@ func validateRequest(req unified.ActionRequest) error {
 	if req.RequestID == "" {
 		return &ValidationError{Field: "requestId", Message: "request id is required"}
 	}
+	if len(req.RequestID) > MaxRequestIDBytes {
+		return &ValidationError{Field: "requestId", Message: fmt.Sprintf("request id must be at most %d bytes", MaxRequestIDBytes)}
+	}
 	if req.ResourceID == "" {
 		return &ValidationError{Field: "resourceId", Message: "resource id is required"}
 	}
@@ -277,6 +291,9 @@ func validateRequest(req unified.ActionRequest) error {
 	}
 	if req.Reason == "" {
 		return &ValidationError{Field: "reason", Message: "reason is required"}
+	}
+	if len(req.Reason) > MaxReasonBytes {
+		return &ValidationError{Field: "reason", Message: fmt.Sprintf("reason must be at most %d bytes", MaxReasonBytes)}
 	}
 	if err := unified.ValidateActionActor(req.Actor); err != nil {
 		return &ValidationError{Field: "actor", Message: err.Error()}

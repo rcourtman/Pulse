@@ -771,7 +771,9 @@ func (r *Router) setupRoutes() {
 		})
 		r.aiSettingsHandler.SetProposalCatalogFactory(func(orgID string) tools.ProposalCatalog {
 			return func(ctx context.Context, resourceID string) ([]unifiedresources.ResourceCapability, error) {
-				return resourceHandlers.ActionLifecycle().Capabilities(ctx, orgID, resourceID)
+				// An investigation's context names no organization.
+				orgCtx := context.WithValue(ctx, OrgIDContextKey, approval.NormalizeOrgID(orgID))
+				return resourceHandlers.ActionLifecycle().Capabilities(orgCtx, orgID, resourceID)
 			}
 		})
 	}
@@ -818,7 +820,7 @@ func (r *Router) setupRoutes() {
 			if req == nil {
 				return
 			}
-			broadcaster.PublishApprovalPending(AgentEventApprovalPendingPayload{
+			broadcaster.PublishApprovalPending(req.OrgID, AgentEventApprovalPendingPayload{
 				ApprovalID:  req.ID,
 				ResourceID:  req.CanonicalResourceID(),
 				TargetType:  req.TargetType,
@@ -1543,7 +1545,11 @@ func (r *Router) recoverExecutingActions(actor string) {
 		if ctx.Err() != nil {
 			return
 		}
-		recovered, err := lifecycle.RecoverExecutingActions(ctx, orgID, actor, maxExecutingActionRecoveryBatch)
+		// Executors resolve the agent session and resources from the context's
+		// organization. The lifecycle context names none, which reads as the
+		// default organization, so bind the one whose records are recovered.
+		orgCtx := context.WithValue(ctx, OrgIDContextKey, orgID)
+		recovered, err := lifecycle.RecoverExecutingActions(orgCtx, orgID, actor, maxExecutingActionRecoveryBatch)
 		if err != nil {
 			log.Warn().Err(err).Str("org_id", orgID).Str("actor", actor).Msg("Executing-action recovery pass failed")
 			continue
@@ -3039,7 +3045,7 @@ func (r *Router) wireAIChatDependenciesForService(ctx context.Context, service A
 		if executor := chatService.GetExecutor(); executor != nil {
 			broadcaster := r.agentEventBroadcaster
 			executor.SetOnActionCompleted(func(record unifiedresources.ActionAuditRecord) {
-				r.publishActionCompletedAgentEvent(broadcaster, record)
+				r.publishActionCompletedAgentEvent(broadcaster, orgID, record)
 			})
 		}
 	}
@@ -3308,16 +3314,16 @@ func (w *forecastResourceIterator) ForecastStoragePools() []forecast.ResourceInf
 	return result
 }
 
-func (r *Router) publishActionCompletedAgentEvent(broadcaster *AgentEventBroadcaster, record unifiedresources.ActionAuditRecord) {
+func (r *Router) publishActionCompletedAgentEvent(broadcaster *AgentEventBroadcaster, orgID string, record unifiedresources.ActionAuditRecord) {
 	if broadcaster == nil {
 		return
 	}
 	payload, ok := projectAgentActionCompletedPayload(record)
 	if !ok {
-		broadcaster.PublishActionCompletedRecord(record)
+		broadcaster.PublishActionCompletedRecord(orgID, record)
 		return
 	}
-	broadcaster.PublishActionCompleted(payload)
+	broadcaster.PublishActionCompleted(orgID, payload)
 }
 
 func projectAgentActionCompletedPayload(record unifiedresources.ActionAuditRecord) (AgentEventActionCompletedPayload, bool) {

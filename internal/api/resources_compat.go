@@ -26,7 +26,7 @@ type ResourceHandlers struct {
 	tenantStateProvider       TenantStateProvider
 	actionExecutor            ActionExecutor
 	broadcastAvailability     atomic.Pointer[broadcastAvailabilityChecker]
-	actionCompleted           func(unified.ActionAuditRecord)
+	actionCompleted           func(orgID string, record unified.ActionAuditRecord)
 	actionTransition          func(orgID string, record unified.ActionAuditRecord)
 	policyAdmission           *actionlifecycle.PolicyAdmissionCoordinator
 	actionEmergencyStop       func(orgID string) (bool, error)
@@ -120,7 +120,7 @@ func (h *ResourceHandlers) SetActionRefreshPlanner(planner actionlifecycle.Refre
 	h.actionRefreshPlanner = planner
 }
 
-func (h *ResourceHandlers) SetActionCompletedPublisher(publisher func(unified.ActionAuditRecord)) {
+func (h *ResourceHandlers) SetActionCompletedPublisher(publisher func(orgID string, record unified.ActionAuditRecord)) {
 	h.actionCompleted = publisher
 }
 
