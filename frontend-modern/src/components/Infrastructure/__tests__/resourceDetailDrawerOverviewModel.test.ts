@@ -105,4 +105,52 @@ describe('buildResourceDrawerOverviewInventory', () => {
     expect(inventory.lifted).toEqual([]);
     expect(inventory.details[0].rows.map((row) => row.label)).toEqual(['Storage summary']);
   });
+
+  it('keeps generic Observed state Warning and Degraded in Details when Needs attention explains the issue', () => {
+    for (const value of ['Warning', 'Degraded']) {
+      const inventory = buildResourceDrawerOverviewInventory({
+        summarySections: [
+          {
+            label: 'Runtime context',
+            rows: [{ label: 'Observed state', value, tone: 'warning' }],
+          },
+        ],
+        platformSections: [],
+        statedMessages: ['Unraid array is running without parity protection'],
+      });
+      expect(inventory.lifted).toEqual([]);
+      expect(inventory.details[0].rows).toEqual([
+        { label: 'Observed state', value, tone: 'warning' },
+      ]);
+    }
+  });
+
+  it('still lifts Observed state when unexplained or when it carries a specific runtime state', () => {
+    const unexplained = buildResourceDrawerOverviewInventory({
+      summarySections: [
+        {
+          label: 'Runtime context',
+          rows: [{ label: 'Observed state', value: 'Warning', tone: 'warning' }],
+        },
+      ],
+      platformSections: [],
+      statedMessages: [],
+    });
+    expect(unexplained.lifted).toEqual([
+      { label: 'Observed state', value: 'Warning', tone: 'warning' },
+    ]);
+
+    for (const row of [
+      { label: 'Observed state', value: 'Offline · last seen 5m ago', tone: 'danger' as const },
+      { label: 'Observed state', value: 'Stale', tone: 'warning' as const },
+      { label: 'Observed state', value: 'Exited (1)', tone: 'danger' as const },
+    ]) {
+      const specific = buildResourceDrawerOverviewInventory({
+        summarySections: [{ label: 'Runtime context', rows: [row] }],
+        platformSections: [],
+        statedMessages: ['Memory usage above threshold'],
+      });
+      expect(specific.lifted).toEqual([row]);
+    }
+  });
 });

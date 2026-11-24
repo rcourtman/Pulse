@@ -327,6 +327,7 @@ describe('ResourceDetailDrawer TrueNAS details', () => {
     expect(lifted?.getByText('ZFS errors')).toBeInTheDocument();
     expect(lifted?.getByText('Read 1 · Write 0 · Checksum 2')).toBeInTheDocument();
     expect(lifted?.queryByText('ZFS pool archive is DEGRADED')).toBeNull();
+    expect(lifted?.queryByText('Observed state')).toBeNull();
 
     // Pool health is a content card outside the closed Details.
     const cards = getByTestId('resource-drawer-cards');
