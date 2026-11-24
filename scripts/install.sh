@@ -118,6 +118,7 @@ UNINSTALL="false"
 INSECURE="false"
 INSECURE_EXPLICIT="false"
 SERVER_FINGERPRINT="${PULSE_SERVER_FINGERPRINT:-}"
+CURL_PINNED_PUBKEY="" # curl --pinnedpubkey value derived from the verified --server-fingerprint certificate
 OBSERVERS_FILE="${PULSE_OBSERVERS_FILE:-}"
 AGENT_ID=""
 HOSTNAME_OVERRIDE=""
@@ -5117,6 +5118,8 @@ verify_pinned_server_certificate() {
     local host=""
     local target=""
     local actual=""
+    local certificate=""
+    local public_key_pin=""
     normalized=$(printf '%s' "$SERVER_FINGERPRINT" | tr -d ': \t\r\n\v\f' | LC_ALL=C tr 'ABCDEFGHIJKLMNOPQRSTUVWXYZ' 'abcdefghijklmnopqrstuvwxyz')
     if [[ ! "$normalized" =~ ^[a-f0-9]{64}$ ]]; then
         fail "Invalid --server-fingerprint value. Expected a SHA-256 certificate fingerprint (64 hexadecimal characters)." "$EXIT_PREFLIGHT_FAILED"
@@ -5135,7 +5138,9 @@ verify_pinned_server_certificate() {
         if [[ "$authority" != *:* ]]; then target="${authority}:443"; fi
     fi
 
-    actual=$(openssl s_client -connect "$target" -servername "$host" </dev/null 2>/dev/null \
+    certificate=$(openssl s_client -connect "$target" -servername "$host" </dev/null 2>/dev/null \
+        | openssl x509 2>/dev/null)
+    actual=$(printf '%s\n' "$certificate" \
         | openssl x509 -outform DER 2>/dev/null \
         | openssl dgst -sha256 2>/dev/null \
         | awk '{print tolower($NF)}')
@@ -5143,9 +5148,24 @@ verify_pinned_server_certificate() {
         fail "Pulse server certificate fingerprint mismatch. Expected ${normalized}, got ${actual:-unavailable}." "$EXIT_PREFLIGHT_FAILED"
     fi
 
+    # The probe authenticates only its own connection, and curl opens a new one
+    # for every request. Bind each of those to the public key of the certificate
+    # that matched the fingerprint, because -k alone would accept any peer.
+    public_key_pin=$(printf '%s\n' "$certificate" \
+        | openssl x509 -pubkey -noout 2>/dev/null \
+        | openssl pkey -pubin -outform DER 2>/dev/null \
+        | openssl dgst -sha256 -binary 2>/dev/null \
+        | openssl base64 2>/dev/null \
+        | tr -d '\r\n') || public_key_pin=""
+    if [[ ! "$public_key_pin" =~ ^[A-Za-z0-9+/]{43}=$ ]]; then
+        fail "Could not derive the public key pin of the verified Pulse server certificate. Refusing to download without it." "$EXIT_PREFLIGHT_FAILED"
+    fi
+
     SERVER_FINGERPRINT="$normalized"
-    # curl must accept the self-signed chain after the explicit pin check. The
-    # downloaded installer and binary still require their own signatures.
+    CURL_PINNED_PUBKEY="sha256//${public_key_pin}"
+    # curl must accept the self-signed chain after the explicit pin check, and
+    # still enforces --pinnedpubkey with -k. The downloaded installer and
+    # binary still require their own signatures.
     INSECURE="true"
     log_info "Pulse server certificate fingerprint verified."
 }
@@ -7502,6 +7522,7 @@ if [[ "$PREFLIGHT_ONLY" == "true" ]]; then
         # explicit installer trust flags and environment proxies still apply.
         CURL_TEST_ARGS=(-q -sfL --connect-timeout 5 --max-time 10 -o /dev/null)
         if [[ "$INSECURE" == "true" ]]; then CURL_TEST_ARGS+=(-k); fi
+        if [[ -n "${CURL_PINNED_PUBKEY:-}" ]]; then CURL_TEST_ARGS+=(--pinnedpubkey "$CURL_PINNED_PUBKEY"); fi
         if [[ -n "$CURL_CA_BUNDLE" ]]; then CURL_TEST_ARGS+=(--cacert "$CURL_CA_BUNDLE"); fi
         if curl "${CURL_TEST_ARGS[@]}" "${PULSE_URL}/api/health"; then
             json_event "preflight" "pulse_reachable" "Pulse URL reachable"
@@ -7514,6 +7535,7 @@ if [[ "$PREFLIGHT_ONLY" == "true" ]]; then
         TMP_FILES+=("$PREFLIGHT_HEADERS")
         CURL_DOWNLOAD_CHECK_ARGS=(-q -fsSIL --connect-timeout 5 --max-time 30 -D "$PREFLIGHT_HEADERS" -o /dev/null)
         if [[ "$INSECURE" == "true" ]]; then CURL_DOWNLOAD_CHECK_ARGS+=(-k); fi
+        if [[ -n "${CURL_PINNED_PUBKEY:-}" ]]; then CURL_DOWNLOAD_CHECK_ARGS+=(--pinnedpubkey "$CURL_PINNED_PUBKEY"); fi
         if [[ -n "$CURL_CA_BUNDLE" ]]; then CURL_DOWNLOAD_CHECK_ARGS+=(--cacert "$CURL_CA_BUNDLE"); fi
 
         DOWNLOAD_CHECK_URL="${PULSE_URL}/download/${BINARY_NAME}?arch=${PF_ARCH_PARAM}"
@@ -7615,11 +7637,13 @@ TMP_FILES+=("$TMP_HEADERS")
 # Build curl arguments as array for proper quoting
 CURL_ARGS=(-fsSL --connect-timeout 30 --max-time 300 -D "$TMP_HEADERS" -o "$TMP_BIN")
 if [[ "$INSECURE" == "true" ]]; then CURL_ARGS+=(-k); fi
+if [[ -n "${CURL_PINNED_PUBKEY:-}" ]]; then CURL_ARGS+=(--pinnedpubkey "$CURL_PINNED_PUBKEY"); fi
 if [[ -n "$CURL_CA_BUNDLE" ]]; then CURL_ARGS+=(--cacert "$CURL_CA_BUNDLE"); fi
 
 SERVER_VERSION=""
 VERSION_CURL_ARGS=(-fsSL --connect-timeout 10 --max-time 30)
 if [[ "$INSECURE" == "true" ]]; then VERSION_CURL_ARGS+=(-k); fi
+if [[ -n "${CURL_PINNED_PUBKEY:-}" ]]; then VERSION_CURL_ARGS+=(--pinnedpubkey "$CURL_PINNED_PUBKEY"); fi
 if [[ -n "$CURL_CA_BUNDLE" ]]; then VERSION_CURL_ARGS+=(--cacert "$CURL_CA_BUNDLE"); fi
 if server_version_json="$(curl -q "${VERSION_CURL_ARGS[@]}" "${PULSE_URL}/api/version" 2>/dev/null)"; then
     SERVER_VERSION="$(printf '%s' "$server_version_json" | sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -1)"
@@ -7669,6 +7693,7 @@ download_verified_privileged_helper() {
     TMP_FILES+=("$TMP_HELPER_BIN" "$helper_headers")
     helper_curl_args=(-fsSL --connect-timeout 30 --max-time 300 -D "$helper_headers" -o "$TMP_HELPER_BIN")
     if [[ "$INSECURE" == "true" ]]; then helper_curl_args+=(-k); fi
+    if [[ -n "${CURL_PINNED_PUBKEY:-}" ]]; then helper_curl_args+=(--pinnedpubkey "$CURL_PINNED_PUBKEY"); fi
     if [[ -n "$CURL_CA_BUNDLE" ]]; then helper_curl_args+=(--cacert "$CURL_CA_BUNDLE"); fi
 
     helper_url="${PULSE_URL}/download/${PRIVILEGED_HELPER_BINARY_NAME}?${DOWNLOAD_QUERY}"
@@ -7716,6 +7741,7 @@ download_verified_action_runner() {
     TMP_FILES+=("$TMP_ACTION_RUNNER_BIN" "$runner_headers")
     runner_curl_args=(-fsSL --connect-timeout 30 --max-time 300 -D "$runner_headers" -o "$TMP_ACTION_RUNNER_BIN")
     if [[ "$INSECURE" == "true" ]]; then runner_curl_args+=(-k); fi
+    if [[ -n "${CURL_PINNED_PUBKEY:-}" ]]; then runner_curl_args+=(--pinnedpubkey "$CURL_PINNED_PUBKEY"); fi
     if [[ -n "$CURL_CA_BUNDLE" ]]; then runner_curl_args+=(--cacert "$CURL_CA_BUNDLE"); fi
 
     runner_url="${PULSE_URL}/download/${ACTION_RUNNER_BINARY_NAME}?${DOWNLOAD_QUERY}"
