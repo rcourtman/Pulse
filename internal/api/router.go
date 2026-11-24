@@ -6622,12 +6622,15 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 		return nil
 	}
 
+	// Container history is addressed per Docker host, by the container's
+	// metrics target. The container ID alone is whatever a host's report says
+	// and may be reported by more than one host.
 	findDockerContainer := func(id string) (*models.DockerContainer, *models.DockerHost) {
 		loadFallbackState()
 		for i := range dockerHosts {
 			host := &dockerHosts[i]
 			for j := range host.Containers {
-				if host.Containers[j].ID == id {
+				if host.Containers[j].ID != "" && unifiedresources.DockerContainerMetricID(host.ID, host.Containers[j].ID) == id {
 					return &host.Containers[j], host
 				}
 			}

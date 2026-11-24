@@ -309,20 +309,20 @@ func TestBranchcov0722PM(t *testing.T) {
 		if got == nil {
 			t.Fatal("expected non-nil MetricsTarget resolved from source mapping")
 		}
-		// BuildMetricsTarget prefers the canonical ContainerID for
+		// BuildMetricsTarget hands out the host-scoped source ID for
 		// app-containers because that is the key the metrics writer uses.
 		if got.ResourceType != "app-container" {
 			t.Fatalf("ResourceType = %q, want %q", got.ResourceType, "app-container")
 		}
-		if got.ResourceID != "web-1" {
-			t.Fatalf("ResourceID = %q, want %q", got.ResourceID, "web-1")
+		if got.ResourceID != "host-1/container/web-1" {
+			t.Fatalf("ResourceID = %q, want %q", got.ResourceID, "host-1/container/web-1")
 		}
 
 		// Mutating the returned target must not mutate the registry's
 		// in-flight computation (clone isolation on the success path).
 		got.ResourceID = "MUTATED"
 		again := rr.MetricsTarget(resources[0].ID)
-		if again == nil || again.ResourceID != "web-1" {
+		if again == nil || again.ResourceID != "host-1/container/web-1" {
 			t.Fatalf("expected clone isolation on MetricsTarget success path, got %+v", again)
 		}
 	})

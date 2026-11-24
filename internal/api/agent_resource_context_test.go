@@ -760,7 +760,7 @@ func TestHandleAgentResourceContext_RecentActionsCarryRefusalTokens(t *testing.T
 
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/api/agent/resource-context/vm:locked", nil)
-	h.HandleResourceContext(rec, req)
+	serveWithAgentCommandDisclosure(h.HandleResourceContext, rec, req)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200; got %d", rec.Code)
 	}
@@ -816,7 +816,7 @@ func TestHandleAgentResourceContext_PendingApprovalsAreScopedToResource(t *testi
 
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/api/agent/resource-context/vm:101", nil)
-	h.HandleResourceContext(rec, req)
+	serveWithAgentCommandDisclosure(h.HandleResourceContext, rec, req)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status: got %d, body=%s", rec.Code, rec.Body.String())
 	}

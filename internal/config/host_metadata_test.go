@@ -156,3 +156,55 @@ func TestHostMetadataStore_SetCommandsEnabledKeepsRecord(t *testing.T) {
 	assert.Equal(t, "edge host", got.Description)
 	assert.Nil(t, got.CommandsEnabled)
 }
+
+func TestHostMetadataStore_UserMetadataAndCommandPolicyAreSeparateWriters(t *testing.T) {
+	tempDir := t.TempDir()
+	store := NewHostMetadataStore(tempDir, nil)
+	enabled, disabled := true, false
+
+	// A metadata write cannot create or change the command override.
+	require.NoError(t, store.SetUserMetadata("host1", &HostMetadata{Description: "edge", CommandsEnabled: &enabled}))
+	assert.Nil(t, store.Get("host1").CommandsEnabled)
+
+	require.NoError(t, store.SetCommandsEnabled("host1", &disabled))
+	require.NoError(t, store.SetUserMetadata("host1", &HostMetadata{
+		CustomURL:       "https://host1.internal",
+		Tags:            []string{"edge"},
+		Notes:           []string{"maintenance Sunday"},
+		CommandsEnabled: &enabled,
+	}))
+	got := store.Get("host1")
+	require.NotNil(t, got.CommandsEnabled)
+	assert.False(t, *got.CommandsEnabled)
+	assert.Equal(t, "https://host1.internal", got.CustomURL)
+	assert.Empty(t, got.Description)
+
+	// A policy write keeps the metadata, and the caller's pointer is not retained.
+	require.NoError(t, store.SetCommandsEnabled("host1", &enabled))
+	enabled = false
+	got = store.Get("host1")
+	require.NotNil(t, got.CommandsEnabled)
+	assert.True(t, *got.CommandsEnabled)
+	assert.Equal(t, "https://host1.internal", got.CustomURL)
+	assert.Equal(t, []string{"edge"}, got.Tags)
+	assert.Equal(t, []string{"maintenance Sunday"}, got.Notes)
+
+	// Deleting the metadata keeps the override, on disk too.
+	require.NoError(t, store.DeleteUserMetadata("host1"))
+	for _, s := range []*HostMetadataStore{store, NewHostMetadataStore(tempDir, nil)} {
+		got = s.Get("host1")
+		require.NotNil(t, got)
+		require.NotNil(t, got.CommandsEnabled)
+		assert.True(t, *got.CommandsEnabled)
+		assert.Empty(t, got.CustomURL)
+		assert.Empty(t, got.Tags)
+		assert.Empty(t, got.Notes)
+	}
+
+	// Clearing the override (nil = agent default) leaves nothing to keep.
+	require.NoError(t, store.SetCommandsEnabled("host1", nil))
+	require.NoError(t, store.DeleteUserMetadata("host1"))
+	assert.Nil(t, store.Get("host1"))
+
+	assert.Error(t, store.SetUserMetadata("host1", nil))
+}

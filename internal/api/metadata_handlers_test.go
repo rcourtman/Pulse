@@ -371,3 +371,86 @@ func TestMetadataHandlersUseLiveMonitorStoresForImmediateRoundTrips(t *testing.T
 		}
 	})
 }
+
+// commandsEnabled shares the host metadata record with the notes, tags and
+// URL, but it is the administrator's command policy: the admin-only agent
+// config route owns it. The metadata routes need only monitoring:write (and no
+// administrator for sessions), so they must neither change nor remove it.
+func TestAgentMetadataRoutesCannotChangeCommandPolicy(t *testing.T) {
+	const writeToken = "agent-metadata-write-scope.12345678"
+	cfg := newTestConfigWithTokens(t,
+		newTokenRecord(t, writeToken, []string{config.ScopeMonitoringWrite}, nil),
+	)
+	router := newTestRouter(t, cfg, nil, nil, nil, nil, "1.0.0")
+	persistence, err := router.multiTenant.GetPersistence("default")
+	if err != nil {
+		t.Fatalf("get default persistence: %v", err)
+	}
+	store := persistence.GetHostMetadataStore()
+
+	do := func(method, path, body string) *httptest.ResponseRecorder {
+		req := httptest.NewRequest(method, path, strings.NewReader(body))
+		req.Header.Set("X-API-Token", writeToken)
+		rec := httptest.NewRecorder()
+		router.Handler().ServeHTTP(rec, req)
+		return rec
+	}
+
+	// The config route refuses this token outright.
+	rec := do(http.MethodPatch, "/api/agents/agent/host-off/config", `{"commandsEnabled":true}`)
+	if rec.Code != http.StatusForbidden || !strings.Contains(rec.Body.String(), config.ScopeAgentManage) {
+		t.Fatalf("config route = %d %q, want 403 naming %s", rec.Code, rec.Body.String(), config.ScopeAgentManage)
+	}
+
+	disabled := false
+	if err := store.SetCommandsEnabled("host-off", &disabled); err != nil {
+		t.Fatalf("seed command policy: %v", err)
+	}
+	for _, body := range []string{
+		`{"commandsEnabled":true}`,
+		`{"commandsEnabled":null,"notes":["maintenance Sunday"]}`,
+	} {
+		rec := do(http.MethodPut, "/api/agents/metadata/host-off", body)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("PUT %s = %d, body = %s", body, rec.Code, rec.Body.String())
+		}
+		var echoed config.HostMetadata
+		if err := json.Unmarshal(rec.Body.Bytes(), &echoed); err != nil {
+			t.Fatalf("decode PUT %s response: %v", body, err)
+		}
+		got := store.Get("host-off")
+		if got == nil || got.CommandsEnabled == nil || *got.CommandsEnabled ||
+			echoed.CommandsEnabled == nil || *echoed.CommandsEnabled {
+			t.Fatalf("after PUT %s: stored = %#v, response = %s, want commandsEnabled false", body, got, rec.Body.String())
+		}
+	}
+	if got := store.Get("host-off"); len(got.Notes) != 1 || got.Notes[0] != "maintenance Sunday" {
+		t.Fatalf("metadata fields of the same patch were not saved: %#v", got)
+	}
+
+	// Without an override the agent keeps its own default; the route must not create one.
+	rec = do(http.MethodPut, "/api/agents/metadata/host-default", `{"commandsEnabled":true,"description":"edge"}`)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("PUT without stored policy = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	if got := store.Get("host-default"); got == nil || got.Description != "edge" || got.CommandsEnabled != nil {
+		t.Fatalf("metadata route created a command policy: %#v", got)
+	}
+
+	// Deleting metadata clears the user's fields and keeps the policy.
+	rec = do(http.MethodDelete, "/api/agents/metadata/host-off", "")
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("DELETE = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	got := store.Get("host-off")
+	if got == nil || got.CommandsEnabled == nil || *got.CommandsEnabled || len(got.Notes) != 0 {
+		t.Fatalf("after DELETE: stored = %#v, want only commandsEnabled false", got)
+	}
+	rec = do(http.MethodDelete, "/api/agents/metadata/host-default", "")
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("DELETE without stored policy = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	if got := store.Get("host-default"); got != nil {
+		t.Fatalf("record without a policy survived DELETE: %#v", got)
+	}
+}

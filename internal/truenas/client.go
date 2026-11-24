@@ -5399,7 +5399,7 @@ func parseFloat64Any(value any) (float64, bool) {
 	case int:
 		return float64(typed), true
 	case json.Number:
-		if v, err := typed.Float64(); err == nil {
+		if v, err := typed.Float64(); err == nil && !math.IsNaN(v) && !math.IsInf(v, 0) {
 			return v, true
 		}
 	case string:
@@ -5407,7 +5407,7 @@ func parseFloat64Any(value any) (float64, bool) {
 		if s == "" {
 			return 0, false
 		}
-		if v, err := strconv.ParseFloat(s, 64); err == nil {
+		if v, err := strconv.ParseFloat(s, 64); err == nil && !math.IsNaN(v) && !math.IsInf(v, 0) {
 			return v, true
 		}
 	case map[string]any:
@@ -5457,14 +5457,21 @@ func readTimeAny(record map[string]any, keys ...string) *time.Time {
 	return nil
 }
 
+func encodableTimePtr(t time.Time) *time.Time {
+	if t.IsZero() {
+		return nil
+	}
+	utc := t.UTC()
+	if y := utc.Year(); y < 0 || y > 9999 {
+		return nil
+	}
+	return &utc
+}
+
 func parseTimeAny(value any) *time.Time {
 	switch typed := value.(type) {
 	case time.Time:
-		if typed.IsZero() {
-			return nil
-		}
-		t := typed.UTC()
-		return &t
+		return encodableTimePtr(typed)
 	case string:
 		s := strings.TrimSpace(typed)
 		if s == "" {
@@ -5472,12 +5479,10 @@ func parseTimeAny(value any) *time.Time {
 		}
 		// Prefer RFC3339, but accept epoch millis/seconds as strings too.
 		if parsed, err := time.Parse(time.RFC3339, s); err == nil {
-			t := parsed.UTC()
-			return &t
+			return encodableTimePtr(parsed)
 		}
 		if parsed, err := time.Parse(time.RFC3339Nano, s); err == nil {
-			t := parsed.UTC()
-			return &t
+			return encodableTimePtr(parsed)
 		}
 		if n, ok := parseInt64Any(s); ok {
 			return epochToTimePtr(n)
@@ -5510,7 +5515,7 @@ func epochToTimePtr(value int64) *time.Time {
 	} else {
 		t = time.Unix(value, 0).UTC()
 	}
-	return &t
+	return encodableTimePtr(t)
 }
 
 func rawIDToString(raw json.RawMessage) (string, error) {

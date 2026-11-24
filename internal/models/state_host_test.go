@@ -824,6 +824,36 @@ func TestUpsertCephClusterKeepsProxmoxAPIWhenAgentRefreshArrives(t *testing.T) {
 	}
 }
 
+func TestUpsertCephClusterKeepsProxmoxAPIWhenAgentFSIDSpellsItsID(t *testing.T) {
+	state := NewState()
+
+	state.UpdateCephClustersForInstance("prod", []CephCluster{{
+		ID:       "prod-fsid-123",
+		Instance: "prod",
+		Source:   CephClusterSourceProxmoxAPI,
+		Name:     "Ceph",
+		FSID:     "fsid-123",
+		Health:   "HEALTH_ERR",
+	}})
+
+	stored := state.UpsertCephCluster(CephCluster{
+		ID:       "prod-fsid-123",
+		Instance: "lab",
+		Source:   CephClusterSourceHostAgent,
+		Name:     "lab Ceph",
+		FSID:     "prod-fsid-123",
+		Health:   "OK",
+	})
+
+	clusters := state.GetSnapshot().CephClusters
+	if len(clusters) != 1 || clusters[0].Source != CephClusterSourceProxmoxAPI || clusters[0].Health != "HEALTH_ERR" {
+		t.Fatalf("agent report of another FSID replaced the API cluster: %#v", clusters)
+	}
+	if stored.Source != CephClusterSourceProxmoxAPI || stored.Instance != "prod" {
+		t.Fatalf("expected upsert to return the kept API cluster, got %+v", stored)
+	}
+}
+
 func TestUpdateBackupTasksForInstance(t *testing.T) {
 	state := NewState()
 

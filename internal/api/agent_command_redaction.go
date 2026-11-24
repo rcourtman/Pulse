@@ -1,11 +1,13 @@
 package api
 
 import (
+	"context"
 	"net/http"
 	"strings"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	unified "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/auth"
 )
 
 // Context and history can wait for stores or providers after authentication.
@@ -26,12 +28,34 @@ func retainAgentCommandResponseAuthority(cfg *config.Config, next http.HandlerFu
 	}
 }
 
-func requestCanReadAgentCommandPayloads(r *http.Request) bool {
-	token := getAPITokenRecordFromRequest(r)
-	if token == nil {
-		return true
+type agentCommandDisclosureContextKey struct{}
+
+// withAgentCommandDisclosure binds, for callers without an API token, the
+// question GET /api/actions asks before it shows the same execution detail:
+// the action-approve capability answered by requestHasActionCapability. These
+// routes stay open to every signed-in reader; a session or proxy user who may
+// not review actions gets the redacted projection a monitoring:read token gets.
+// The answer is asked again at each disclosure so a long-lived stream follows
+// a withdrawn role, and it never widens past what the request was admitted with.
+func withAgentCommandDisclosure(cfg *config.Config, authorizer auth.Authorizer, next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		admitted := requestHasActionCapability(cfg, authorizer, r, auth.ActionApprove)
+		disclosure := func(current *http.Request) bool {
+			return admitted && requestHasActionCapability(cfg, authorizer, current, auth.ActionApprove)
+		}
+		next(w, r.WithContext(context.WithValue(r.Context(), agentCommandDisclosureContextKey{}, disclosure)))
 	}
-	return token.HasScope(config.ScopeAIExecute)
+}
+
+// requestCanReadAgentCommandPayloads keeps the token rule (ai:execute) and, for
+// every other caller, the answer bound by withAgentCommandDisclosure. An
+// unbound request fails closed.
+func requestCanReadAgentCommandPayloads(r *http.Request) bool {
+	if token := getAPITokenRecordFromRequest(r); token != nil {
+		return token.HasScope(config.ScopeAIExecute)
+	}
+	disclosure, _ := r.Context().Value(agentCommandDisclosureContextKey{}).(func(*http.Request) bool)
+	return disclosure != nil && disclosure(r)
 }
 
 func redactAgentEventCommandsForRequest(event AgentEvent, r *http.Request) AgentEvent {

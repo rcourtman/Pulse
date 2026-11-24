@@ -1000,10 +1000,11 @@ func seedMockMetricsHistory(ctx context.Context, mh *MetricsHistory, ms *metrics
 			if container.ID == "" {
 				continue
 			}
+			metricID := unifiedresources.DockerContainerMetricID(host.ID, container.ID)
 			recordGuest(
-				[]string{"docker:" + container.ID},
+				[]string{"docker:" + metricID},
 				"dockerContainer",
-				container.ID,
+				metricID,
 				true,
 				true,
 				true,
@@ -1729,14 +1730,15 @@ func recordMockStateToMetricsHistory(mh *MetricsHistory, ms *metrics.Store, grap
 				continue
 			}
 
-			metricKey := "docker:" + container.ID
-			cpu := sampler.SampleMetric("dockerContainer", container.ID, "cpu", ts)
-			memory := sampler.SampleMetric("dockerContainer", container.ID, "memory", ts)
-			disk := sampler.SampleMetric("dockerContainer", container.ID, "disk", ts)
-			diskRead := sampler.SampleMetric("dockerContainer", container.ID, "diskread", ts)
-			diskWrite := sampler.SampleMetric("dockerContainer", container.ID, "diskwrite", ts)
-			netIn := sampler.SampleMetric("dockerContainer", container.ID, "netin", ts)
-			netOut := sampler.SampleMetric("dockerContainer", container.ID, "netout", ts)
+			metricID := unifiedresources.DockerContainerMetricID(host.ID, container.ID)
+			metricKey := "docker:" + metricID
+			cpu := sampler.SampleMetric("dockerContainer", metricID, "cpu", ts)
+			memory := sampler.SampleMetric("dockerContainer", metricID, "memory", ts)
+			disk := sampler.SampleMetric("dockerContainer", metricID, "disk", ts)
+			diskRead := sampler.SampleMetric("dockerContainer", metricID, "diskread", ts)
+			diskWrite := sampler.SampleMetric("dockerContainer", metricID, "diskwrite", ts)
+			netIn := sampler.SampleMetric("dockerContainer", metricID, "netin", ts)
+			netOut := sampler.SampleMetric("dockerContainer", metricID, "netout", ts)
 			mh.AddGuestMetric(metricKey, "cpu", cpu, ts)
 			mh.AddGuestMetric(metricKey, "memory", memory, ts)
 			mh.AddGuestMetric(metricKey, "disk", disk, ts)
@@ -1746,13 +1748,13 @@ func recordMockStateToMetricsHistory(mh *MetricsHistory, ms *metrics.Store, grap
 			mh.AddGuestMetric(metricKey, "netout", netOut, ts)
 
 			if ms != nil {
-				ms.Write("dockerContainer", container.ID, "cpu", cpu, ts)
-				ms.Write("dockerContainer", container.ID, "memory", memory, ts)
-				ms.Write("dockerContainer", container.ID, "disk", disk, ts)
-				ms.Write("dockerContainer", container.ID, "diskread", diskRead, ts)
-				ms.Write("dockerContainer", container.ID, "diskwrite", diskWrite, ts)
-				ms.Write("dockerContainer", container.ID, "netin", netIn, ts)
-				ms.Write("dockerContainer", container.ID, "netout", netOut, ts)
+				ms.Write("dockerContainer", metricID, "cpu", cpu, ts)
+				ms.Write("dockerContainer", metricID, "memory", memory, ts)
+				ms.Write("dockerContainer", metricID, "disk", disk, ts)
+				ms.Write("dockerContainer", metricID, "diskread", diskRead, ts)
+				ms.Write("dockerContainer", metricID, "diskwrite", diskWrite, ts)
+				ms.Write("dockerContainer", metricID, "netin", netIn, ts)
+				ms.Write("dockerContainer", metricID, "netout", netOut, ts)
 			}
 		}
 	}

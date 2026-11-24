@@ -359,6 +359,14 @@ func resourceDBPath(dataDir, orgID string) string {
 }
 
 func migrateLegacyResourceStore(dataDir, orgID, newPath string) error {
+	// The legacy scheme named a store after the sanitized organization ID, so
+	// every ID that sanitizes to the same name shared one file, and IDs that
+	// sanitize to nothing or to "default" shared the default organization's
+	// live store. Only the organization a legacy file is named after owns it.
+	if orgID == defaultOrgID || sanitizeOrgID(orgID) != orgID {
+		return nil
+	}
+
 	legacyPath := filepath.Join(dataDir, "resources", legacyResourceStoreFileName(orgID))
 	if legacyPath == newPath {
 		return nil

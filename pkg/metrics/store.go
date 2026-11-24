@@ -925,9 +925,17 @@ func (s *Store) Write(resourceType, resourceID, metricType string, value float64
 	s.WriteWithTier(resourceType, resourceID, metricType, value, timestamp, TierRaw)
 }
 
+// maxStoredMetricMagnitude rejects implausible near-MaxFloat64 observations
+// whose downstream aggregation (sum/average) would overflow to Inf and break
+// JSON encoding.
+const maxStoredMetricMagnitude = 1e30
+
 // WriteWithTier adds a metric to the write buffer with a specific tier
 func (s *Store) WriteWithTier(resourceType, resourceID, metricType string, value float64, timestamp time.Time, tier Tier) {
 	if s.stopping.Load() {
+		return
+	}
+	if math.IsNaN(value) || math.IsInf(value, 0) || math.Abs(value) > maxStoredMetricMagnitude {
 		return
 	}
 

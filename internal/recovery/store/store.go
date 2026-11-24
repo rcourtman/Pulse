@@ -1139,6 +1139,9 @@ func millisToTimePtr(v sql.NullInt64) *time.Time {
 		return nil
 	}
 	t := time.UnixMilli(v.Int64).UTC()
+	if y := t.Year(); y < 0 || y > 9999 {
+		return nil
+	}
 	return &t
 }
 

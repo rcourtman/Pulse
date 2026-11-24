@@ -200,6 +200,10 @@ keep it private. A 404 can mean the agent has not registered, not that a profile
 was deleted. Config-signature validation and live readings remain separate
 checks; do not re-enrol or reset an agent just to obtain this response.
 
+Request bodies, passwords, bearer tokens and header values of HTTP checks
+assigned to the agent are returned only to the token that agent reports under.
+A management read with any other token lists those checks without them.
+
 ## Storage
 
 Profiles and assignments live in the selected organisation's Pulse config

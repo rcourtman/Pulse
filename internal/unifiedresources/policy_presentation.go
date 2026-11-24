@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"unicode"
+	"unicode/utf8"
 )
 
 // ResourcePolicyRedactedLabel is the canonical human-readable label used when
@@ -292,35 +294,186 @@ func ResourcePolicyRedactedText(value string, resource Resource) string {
 		return value
 	}
 
-	candidates := resourcePolicyRedactionCandidates(resource)
-	if len(candidates) == 0 {
+	return redactResourceIdentifiers(value, resourcePolicyRedactedIdentifiers(resource))
+}
+
+// ResourcePolicyTextRedactor redacts the identifiers of a set of governed
+// resources from text that is not only about them, such as a whole
+// provider-bound request. The identifiers are collected once and every text is
+// redacted in a single pass, so the label written for one resource is never
+// matched again by the identifiers of the next.
+type ResourcePolicyTextRedactor struct {
+	identifiers []string
+}
+
+// NewResourcePolicyTextRedactor collects the identifiers that policy hides for
+// resources. An identifier in shared is also the ID of a resource whose own
+// policy lets it through: the string is not confidential, and replacing it
+// would hide that other resource rather than one of these.
+func NewResourcePolicyTextRedactor(resources []Resource, shared map[string]struct{}) *ResourcePolicyTextRedactor {
+	redactor := &ResourcePolicyTextRedactor{}
+	seen := make(map[string]struct{})
+	for _, resource := range resources {
+		for _, identifier := range resourcePolicyRedactedIdentifiers(resource) {
+			if _, ok := shared[identifier]; ok {
+				continue
+			}
+			if _, ok := seen[identifier]; ok {
+				continue
+			}
+			seen[identifier] = struct{}{}
+			redactor.identifiers = append(redactor.identifiers, identifier)
+		}
+	}
+	return redactor
+}
+
+// RedactedText is ResourcePolicyRedactedText for every resource of the
+// redactor at once.
+func (r *ResourcePolicyTextRedactor) RedactedText(value string) string {
+	if r == nil || value == "" {
 		return value
 	}
+	return redactResourceIdentifiers(value, r.identifiers)
+}
 
-	sort.Slice(candidates, func(i, j int) bool {
-		if len(candidates[i].value) == len(candidates[j].value) {
-			return candidates[i].value < candidates[j].value
-		}
-		return len(candidates[i].value) > len(candidates[j].value)
-	})
-
-	redacted := value
-	seen := make(map[string]struct{}, len(candidates))
-	for _, candidate := range candidates {
-		if _, ok := seen[candidate.value]; ok {
-			continue
-		}
-		seen[candidate.value] = struct{}{}
+// resourcePolicyRedactedIdentifiers returns the identifiers of the resource
+// that its policy marks for redaction.
+func resourcePolicyRedactedIdentifiers(resource Resource) []string {
+	if resource.Policy == nil {
+		return nil
+	}
+	var identifiers []string
+	seen := make(map[string]struct{})
+	for _, candidate := range resourcePolicyRedactionCandidates(resource) {
 		if !resourcePolicyShouldRedactCandidate(resource.Policy, candidate.hint) {
 			continue
 		}
 		if len([]rune(candidate.value)) < 3 {
 			continue
 		}
-		redacted = strings.ReplaceAll(redacted, candidate.value, ResourcePolicyRedactedLabel)
+		if _, ok := seen[candidate.value]; ok {
+			continue
+		}
+		seen[candidate.value] = struct{}{}
+		identifiers = append(identifiers, candidate.value)
 	}
+	return identifiers
+}
 
-	return redacted
+// redactResourceIdentifiers replaces each identifier wherever it stands on its
+// own. An occurrence that runs on into more identifier characters belongs to a
+// different, longer identifier - the "agent" in "agent-4f2a", the "10.0.0.5"
+// in "10.0.0.50" - and cutting it out would corrupt a reference to something
+// these identifiers do not govern.
+//
+// Every identifier is matched against the original text and overlapping
+// matches share one label, so the result never depends on the order of the
+// identifiers and an inserted label is never scanned again.
+func redactResourceIdentifiers(text string, identifiers []string) string {
+	type match struct{ start, end int }
+	var matches []match
+	for _, identifier := range identifiers {
+		if identifier == "" {
+			continue
+		}
+		first, firstSize := utf8.DecodeRuneInString(identifier)
+		last, _ := utf8.DecodeLastRuneInString(identifier)
+		// An identifier that itself starts or ends with a delimiter, such as a
+		// path, cannot be the middle of a longer word on that side.
+		checkBefore, checkAfter := isResourceIdentifierRune(first), isResourceIdentifierRune(last)
+		for search := 0; ; {
+			offset := strings.Index(text[search:], identifier)
+			if offset < 0 {
+				break
+			}
+			start := search + offset
+			end := start + len(identifier)
+			if !(checkBefore && resourceIdentifierContinuesBefore(text[:start])) &&
+				!(checkAfter && resourceIdentifierContinuesAfter(text[end:])) {
+				matches = append(matches, match{start: start, end: end})
+			}
+			search = start + firstSize
+		}
+	}
+	if len(matches) == 0 {
+		return text
+	}
+	sort.Slice(matches, func(i, j int) bool { return matches[i].start < matches[j].start })
+
+	var redacted strings.Builder
+	covered := 0
+	for _, m := range matches {
+		if m.start >= covered {
+			redacted.WriteString(text[covered:m.start])
+			redacted.WriteString(ResourcePolicyRedactedLabel)
+		}
+		if m.end > covered {
+			covered = m.end
+		}
+	}
+	redacted.WriteString(text[covered:])
+	return redacted.String()
+}
+
+// isResourceIdentifierRune reports whether r next to a match makes it part of
+// a longer identifier. Scripts written without spaces between words have no
+// such boundary, so only digits and cased letters count and names in those
+// scripts keep matching anywhere.
+func isResourceIdentifierRune(r rune) bool {
+	return unicode.IsDigit(r) || unicode.IsLower(r) || unicode.IsUpper(r)
+}
+
+// Hyphens and underscores join the parts of one identifier only when another
+// part follows, so a name at the end of a sentence is still whole. Dots join
+// numeric segments (such as IPv4 octets) so 10.0.0.5 does not match inside
+// 192.10.0.0.5, while remaining boundaries for hostnames like payroll.lan.
+func isResourceIdentifierJoiner(r rune) bool {
+	return r == '-' || r == '_'
+}
+
+func endsWithJSONEscapeBoundary(prefix string) bool {
+	if len(prefix) < 2 {
+		return false
+	}
+	last := prefix[len(prefix)-1]
+	switch last {
+	case 'n', 'r', 't', 'f', 'b':
+	default:
+		return false
+	}
+	backslashes := 0
+	for i := len(prefix) - 2; i >= 0 && prefix[i] == '\\'; i-- {
+		backslashes++
+	}
+	return backslashes%2 == 1
+}
+
+func resourceIdentifierContinuesBefore(prefix string) bool {
+	if endsWithJSONEscapeBoundary(prefix) {
+		return false
+	}
+	r, size := utf8.DecodeLastRuneInString(prefix)
+	if size > 0 && r == '.' {
+		prev, prevSize := utf8.DecodeLastRuneInString(prefix[:len(prefix)-size])
+		return prevSize > 0 && unicode.IsDigit(prev)
+	}
+	if size > 0 && isResourceIdentifierJoiner(r) {
+		r, size = utf8.DecodeLastRuneInString(prefix[:len(prefix)-size])
+	}
+	return size > 0 && isResourceIdentifierRune(r)
+}
+
+func resourceIdentifierContinuesAfter(suffix string) bool {
+	r, size := utf8.DecodeRuneInString(suffix)
+	if size > 0 && r == '.' {
+		next, nextSize := utf8.DecodeRuneInString(suffix[size:])
+		return nextSize > 0 && unicode.IsDigit(next)
+	}
+	if size > 0 && isResourceIdentifierJoiner(r) {
+		r, size = utf8.DecodeRuneInString(suffix[size:])
+	}
+	return size > 0 && isResourceIdentifierRune(r)
 }
 
 // ResourcePolicyRedactedTextWithReferences redacts canonical resource
@@ -365,7 +518,7 @@ func ResourcePolicyRedactedTextWithReferences(value string, resource Resource, r
 		if !resourcePolicyShouldRedactReference(resource.Policy, candidate.Hints...) {
 			continue
 		}
-		redacted = strings.ReplaceAll(redacted, candidate.Value, ResourcePolicyRedactedLabel)
+		redacted = redactResourceIdentifiers(redacted, []string{candidate.Value})
 	}
 	return redacted
 }

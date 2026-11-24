@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"regexp"
 	"strings"
 	"time"
 
@@ -495,6 +496,9 @@ func (e dockerContainerActionExecutor) executableDockerContainerResource(_ conte
 	} else if capability.InternalHandler != dockerContainerOperationHandler(operation) {
 		return unified.Resource{}, fmt.Errorf("resource %q advertises %s through unsupported handler %q", resource.ID, operation, capability.InternalHandler)
 	}
+	if dockerContainerRef(resource) == "" {
+		return unified.Resource{}, fmt.Errorf("docker container resource %q has no executable container id", resource.ID)
+	}
 	return resource, nil
 }
 
@@ -508,8 +512,12 @@ func (e dockerContainerActionExecutor) connectedDockerCommandAgentID(ctx context
 	if unified.IsProxmoxLXCDockerHostID(resource.Docker.AgentID) {
 		return "", errDockerHostHasNoCommandAgent
 	}
-	tokenAgentID, _ := commandAgentForToken(ctx, e.agents, resource.Docker.TokenID)
+	tokenID := strings.TrimSpace(resource.Docker.TokenID)
+	tokenAgentID, _ := commandAgentForToken(ctx, e.agents, tokenID)
 	tokenAgentID = strings.TrimSpace(tokenAgentID)
+	if tokenID != "" && e.dockerTokenHasAmbiguousHosts(ctx, tokenID, strings.TrimSpace(resource.Docker.AgentID), tokenAgentID != "") {
+		return "", fmt.Errorf("docker container command agent is not connected: enrollment token %s is reporting multiple Docker hosts for this identity", tokenID)
+	}
 	if tokenAgentID != "" && tokenAgentID == strings.TrimSpace(resource.Docker.AgentID) {
 		return tokenAgentID, nil
 	}
@@ -517,9 +525,18 @@ func (e dockerContainerActionExecutor) connectedDockerCommandAgentID(ctx context
 	// A token miss may therefore use the live admission only when its tenant,
 	// agent ID, and hostname all match this resource. Never degrade this to an
 	// ID-only or hostname-only lookup: either could select a different identity.
-	if tokenID := strings.TrimSpace(resource.Docker.TokenID); tokenID != "" {
+	// That agent ID and hostname are only what the Docker report said, and a report
+	// proves no more than that its sender holds the report token. So they select
+	// a session only when Pulse itself ties the report token to that session.
+	// Otherwise any token that may report could write another machine's identity
+	// and have this action run there. Such a resource is refused outright: the
+	// token's own session below is not on the machine the resource names either.
+	if tokenID != "" {
 		if agentID, ok := commandAgentForIdentity(ctx, e.agents, resource.Docker.AgentID, resource.Docker.Hostname); ok {
-			return strings.TrimSpace(agentID), nil
+			if e.dockerReportTokenReachesCommandSession(ctx, tokenID, agentID, resource.Docker.Hostname) {
+				return strings.TrimSpace(agentID), nil
+			}
+			return "", fmt.Errorf("docker container command agent is not connected: enrollment token %s reported this container, but the live command session of the exact agent %q and hostname %q identity neither holds that token nor is an action runner whose host agent reports under it", tokenID, strings.TrimSpace(resource.Docker.AgentID), strings.TrimSpace(resource.Docker.Hostname))
 		}
 		// The report token finds this resource's agent even when its session registered
 		// under the commandAgentId Pulse acknowledged, not the ID its Docker module
@@ -540,6 +557,110 @@ func (e dockerContainerActionExecutor) connectedDockerCommandAgentID(ctx context
 		return agentID, nil
 	}
 	return "", fmt.Errorf("docker container command agent is not connected: no live command session for agent %q", strings.TrimSpace(resource.Docker.AgentID))
+}
+
+// agentLookupDockerReportSession memoizes one report token's answer for one
+// session for a pass, as agentLookupHostCommandsDisabled below does.
+const agentLookupDockerReportSession agentLookupKind = 102
+
+// dockerReportTokenReachesCommandSession reports whether Pulse itself ties a
+// Docker report's token to the command session that the report's agent ID and
+// hostname name. Both are copied from the report body, so on their own they say
+// nothing about which machine sent the report. Two ties count.
+//
+// The session was admitted under the report token. That is one token behind
+// several sessions, which the token lookup refuses to choose between.
+//
+// Or the session is an action runner, and the host agent Pulse resolved under
+// that agent ID and hostname reports with the report token. A runner holds a
+// credential of its own, which an operator issued for that host agent, and the
+// monitoring collector beside it is what reports.
+//
+// A full-trust agent reports with the credential its own session holds, so a
+// report under any other token is not that agent's, and no host agent row makes
+// it so. The row a rotated token leaves behind is such a report. It stays
+// refused until it ages out, and the row the agent reports under its new token
+// is found by that token.
+func (e dockerContainerActionExecutor) dockerReportTokenReachesCommandSession(ctx context.Context, tokenID, agentID, hostname string) bool {
+	tokenID = strings.TrimSpace(tokenID)
+	agentID = strings.TrimSpace(agentID)
+	hostname = strings.TrimSpace(hostname)
+	if tokenID == "" || agentID == "" || hostname == "" {
+		return false
+	}
+	return memoizedAgentLookup(ctx, agentLookupKey{kind: agentLookupDockerReportSession, first: tokenID, second: agentID + "\x00" + hostname}, func() agentLookupResult {
+		scoped, ok := e.agents.(scopedActionAdmissionAgentCommander)
+		if !ok {
+			return agentLookupResult{}
+		}
+		admission, found := scoped.GetAgentAdmissionForIdentityForOrganization(GetOrgID(ctx), agentID, hostname)
+		if !found {
+			return agentLookupResult{}
+		}
+		if strings.TrimSpace(admission.TokenID) == tokenID {
+			return agentLookupResult{ok: true}
+		}
+		if strings.TrimSpace(admission.RuntimeRole) != agentexec.RuntimeRoleActionRunner {
+			return agentLookupResult{}
+		}
+		return agentLookupResult{ok: e.hostAgentReportsUnderToken(ctx, tokenID, agentID, hostname)}
+	}).ok
+}
+
+// hostAgentReportsUnderToken reports whether the host agent Pulse resolved under
+// this agent ID and hostname reports with the given token. Pulse resolves a host
+// agent's ID itself, so the row is its own record of which token reports for
+// that machine.
+func (e dockerContainerActionExecutor) hostAgentReportsUnderToken(ctx context.Context, tokenID, agentID, hostname string) bool {
+	if e.resources == nil {
+		return false
+	}
+	registry, err := e.resources.buildRegistry(GetOrgID(ctx))
+	if err != nil {
+		return false
+	}
+	for _, host := range registry.Hosts() {
+		if host != nil && strings.TrimSpace(host.AgentID()) == agentID &&
+			strings.TrimSpace(host.TokenID()) == tokenID &&
+			unified.HostnamesEquivalent(host.Hostname(), hostname) {
+			return true
+		}
+	}
+	return false
+}
+
+// dockerTokenHasAmbiguousHosts reports whether the report token currently owns
+// more than one Docker host for this agent identity, or more than one Docker
+// host behind a single token-bound command session. A second host row under the
+// same token must not borrow the real host's session to act on containers
+// outside the operator lock on the real container resource.
+func (e dockerContainerActionExecutor) dockerTokenHasAmbiguousHosts(ctx context.Context, tokenID, agentID string, singleTokenSession bool) bool {
+	if e.resources == nil || tokenID == "" {
+		return false
+	}
+	registry, err := e.resources.buildRegistry(GetOrgID(ctx))
+	if err != nil {
+		return false
+	}
+	hostsForToken := make(map[string]struct{})
+	hostsForAgent := make(map[string]struct{})
+	for _, res := range registry.List() {
+		if res.Docker == nil || strings.TrimSpace(res.Docker.TokenID) != tokenID {
+			continue
+		}
+		hostSourceID := strings.TrimSpace(res.Docker.HostSourceID)
+		if hostSourceID == "" {
+			continue
+		}
+		hostsForToken[hostSourceID] = struct{}{}
+		if agentID != "" && strings.TrimSpace(res.Docker.AgentID) == agentID {
+			hostsForAgent[hostSourceID] = struct{}{}
+		}
+	}
+	if len(hostsForAgent) > 1 {
+		return true
+	}
+	return singleTokenSession && len(hostsForToken) > 1
 }
 
 // agentLookupHostCommandsDisabled memoizes one host's answer for a pass. It sits
@@ -649,11 +770,22 @@ func dockerContainerRuntime(resource unified.Resource) (string, error) {
 	}
 }
 
+// dockerContainerFullIDPattern is a container ID as Docker and Podman assign it
+// and the agent reports it: all 64 characters, in lower case.
+var dockerContainerFullIDPattern = regexp.MustCompile(`^[a-f0-9]{64}$`)
+
+// dockerContainerRef returns the container ID a typed action is sent with, or
+// "" when the resource does not carry one that names a single container. The
+// resource ID, and with it the operator's lock and limits, is derived from the
+// reported ID exactly as it is spelled, while the typed payload lower-cases it
+// and the daemon also resolves a prefix. Only the full lower-case ID is spelled
+// one way, so any other spelling is refused: it would be a second resource,
+// without the operator's row, for a container that already has one.
 func dockerContainerRef(resource unified.Resource) string {
 	if resource.Docker == nil {
 		return ""
 	}
-	if ref := strings.TrimSpace(resource.Docker.ContainerID); ref != "" {
+	if ref := strings.TrimSpace(resource.Docker.ContainerID); dockerContainerFullIDPattern.MatchString(ref) {
 		return ref
 	}
 	return ""

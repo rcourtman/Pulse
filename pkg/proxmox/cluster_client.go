@@ -176,6 +176,9 @@ func NewClusterClientWithContext(ctx context.Context, name string, config Client
 	// routing and first-use trust on the same membership snapshot registered for
 	// guest-command coordination, including during initial health checks.
 	endpoints = slices.Clone(endpoints)
+	if len(endpoints) > maxClusterNodes {
+		endpoints = endpoints[:maxClusterNodes]
+	}
 	registerGuestAgentEndpoints(config.Host, endpoints)
 	// The client owns subsequent first-use captures. Do not mutate the caller's
 	// saved trust map or let another client overwrite it without our mutex.
@@ -469,11 +472,15 @@ func (cc *ClusterClient) initialHealthCheck(ctx context.Context) {
 	// For multi-node clusters, do a very quick check but don't mark unhealthy immediately
 	// This prevents nodes from being marked unhealthy due to temporary startup conditions
 
+	const maxInitialHealthCheckWorkers = 16
+	sem := make(chan struct{}, maxInitialHealthCheckWorkers)
 	var wg sync.WaitGroup
 	for _, endpoint := range cc.endpoints {
 		wg.Add(1)
+		sem <- struct{}{}
 		go func(ep string) {
 			defer wg.Done()
+			defer func() { <-sem }()
 
 			// Try a quick connection test with slightly longer timeout for initial check
 			cfg := cc.config

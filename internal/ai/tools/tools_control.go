@@ -629,9 +629,16 @@ func connectedAgentForNode(rs unifiedresources.ReadState, node *unifiedresources
 		return agentexec.ConnectedAgent{}, false
 	}
 	nodeID := node.ID()
+	hostname := firstNonEmptyString(node.NodeName(), node.Name())
 	owned := unifiedresources.ResolveResourceContext(rs, nodeID)
 	if owned.Resource != nil && owned.Resource.Agent != nil && owned.Resource.Agent.AgentID != "" {
-		return connectedAgentByID(agents, owned.Resource.Agent.AgentID)
+		if agent, connected := connectedAgentByID(agents, owned.Resource.Agent.AgentID); connected {
+			if unifiedresources.HostnamesEquivalent(agent.Hostname, hostname) {
+				return agent, true
+			}
+		} else {
+			return agentexec.ConnectedAgent{}, false
+		}
 	}
 	var candidate agentexec.ConnectedAgent
 	linked, found := false, false
@@ -642,15 +649,19 @@ func connectedAgentForNode(rs unifiedresources.ReadState, node *unifiedresources
 		if canonicalLinkedResourceID(rs, host.LinkedNodeID()) != nodeID {
 			continue
 		}
-		linked = true
 		agent, connected := connectedAgentByID(agents, host.AgentID())
-		if !connected {
-			continue
+		if connected {
+			if !unifiedresources.HostnamesEquivalent(agent.Hostname, hostname) {
+				continue
+			}
+			linked = true
+			if found && candidate.AgentID != agent.AgentID {
+				return agentexec.ConnectedAgent{}, false
+			}
+			candidate, found = agent, true
+		} else {
+			linked = true
 		}
-		if found && candidate.AgentID != agent.AgentID {
-			return agentexec.ConnectedAgent{}, false
-		}
-		candidate, found = agent, true
 	}
 	// A linked node belongs to its agent. While that agent is offline, another
 	// machine with the same hostname cannot stand in for it.
@@ -658,7 +669,6 @@ func connectedAgentForNode(rs unifiedresources.ReadState, node *unifiedresources
 		return candidate, found
 	}
 	// A hostname can route an old unlinked node only when both sides are unique.
-	hostname := firstNonEmptyString(node.NodeName(), node.Name())
 	for _, other := range rs.Nodes() {
 		if other != nil && other.ID() != nodeID && unifiedresources.HostnamesEquivalent(other.NodeName(), hostname) {
 			return agentexec.ConnectedAgent{}, false

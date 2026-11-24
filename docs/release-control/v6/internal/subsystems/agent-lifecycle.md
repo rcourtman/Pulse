@@ -4256,6 +4256,12 @@ session must not impersonate a collector or read its assigned execution
 credentials. These checks preserve collector tokens and the existing local
 unauthenticated bootstrap behavior.
 
+An `agent:manage` or `settings:write` token resolves any host's desired
+configuration by agent ID, so holding one does not make its bearer that host's
+agent. The request body, credentials and header values of assigned HTTP checks
+are returned only to the token the host reports under. Any other token reads
+those checks without them. Administrator sessions keep the complete read.
+
 1. Add or change install-command generation, canonical /api/auto-register behavior, or installer download behavior through the owned `internal/api/` files above.
    Canonical `/api/auto-register` auth is split by intent: when the setup-token
    bootstrap path succeeds, lifecycle clients must complete registration with
@@ -10022,6 +10028,22 @@ resource. Independent ID-only or hostname-only fallback remains forbidden for
 token-named resources, preventing a stale report from crossing identities
 while restoring start, stop, restart, and update control for the same agent
 (#1728).
+
+That recovery also needs proof that the report came from that session's
+machine. The agent ID and hostname on a Docker / Podman resource are what its
+report said, and a report proves only that its sender holds the report token.
+The identity lookup therefore selects a session only when Pulse itself ties the
+report token to it. Either the session was admitted under that token, as when
+one token fronts several sessions, or the session is an action runner and the
+host agent Pulse resolved under the same agent ID and hostname reports with
+that token, as the monitoring collector beside a runner does. A full-trust
+agent reports with the credential its own session holds, so a report under any
+other token never reaches it. The row a rotated token leaves behind is such a
+report: it stays refused until it ages out, and the row the agent reports under
+its new token is found by that token. Any other report token is refused with
+`command_agent_disconnected`, and the action does not fall through to the
+token's own session, so a `docker:report` token cannot write another machine's
+identity into its report and have an action on its containers run there.
 
 Container resources carry their host's report token for that lookup. A token
 hit counts only when the session also holds the resource's agent ID or hostname,

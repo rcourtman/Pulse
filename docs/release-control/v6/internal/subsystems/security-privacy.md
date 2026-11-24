@@ -1115,7 +1115,10 @@ re-digested or invented, and a malformed canonical result remains inconclusive.
 Restricted legacy errors retain only an exact known refusal prefix (such as
 `plan_drift:`), never its arbitrary suffix or an unknown prefix. Verification
 notes follow the command redaction rule even when the command is absent.
-Session and existing `ai:execute` disclosure are unchanged. Per-request copies
+Existing `ai:execute` token disclosure is unchanged. Session and proxy callers
+keep full detail only with the action-approve capability `GET /api/actions`
+requires of them (`withAgentCommandDisclosure`). A signed-in user who may not
+review actions reads the same restricted projection. Per-request copies
 must preserve other subscribers' and stored evidence, auth and tenant boundaries.
 
 Ordinary-suite `agent_action_disclosure_test.go` checks both completion producers,

@@ -105,6 +105,12 @@ func (ws *windowsService) Execute(args []string, r <-chan svc.ChangeRequest, cha
 			UpdateStatus:        updater.Snapshot,
 			ModuleStatus:        runtimeStatus.moduleStatuses,
 			Observers:           hostObserverTargets(ws.cfg.Observers),
+
+			// Carry the installer's local command ceiling into the host module,
+			// as the foreground runtime does. hostagent.New reads an absent
+			// profile as legacy, which follows the server's desired command
+			// state and would let it enable commands on a monitoring-only service.
+			CommandAuthorityProfile: ws.cfg.CommandAuthorityProfile,
 		}
 		agent, err := hostagent.New(hostCfg)
 		if err != nil {
@@ -150,6 +156,11 @@ func (ws *windowsService) Execute(args []string, r <-chan svc.ChangeRequest, cha
 			IncludeTasks:       true,
 			CollectDiskMetrics: true,
 			Targets:            dockerReportTargets(ws.cfg),
+			MonitoringOnly:     ws.cfg.CommandAuthorityProfile == hostagent.CommandAuthorityMonitoringOnly,
+
+			// Local opt-outs restrict the service as they do the foreground runtime.
+			DisableUpdateChecks:        ws.cfg.DisableDockerUpdateChecks,
+			DisableRegistryCredentials: ws.cfg.DisableRegistryCredentials,
 		}
 
 		agent, err := dockeragent.New(dockerCfg)

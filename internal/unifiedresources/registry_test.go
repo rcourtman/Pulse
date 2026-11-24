@@ -5231,6 +5231,79 @@ func TestRegistryIngestSnapshotLinksDockerContainersToNetworks(t *testing.T) {
 	assertDockerNetworkAttachment(network)
 }
 
+// A report may list one container ID many times, or many network names under
+// one network ID. Every such entry resolves to the same resource, whose
+// attachments must be applied once: applying them once per entry made the
+// refresh quadratic in the size of one agent's report, and it runs for every
+// registry rebuild.
+func TestRegistryDockerNetworkAttachmentRefreshIsLinearInRepeatedEntries(t *testing.T) {
+	now := time.Date(2026, 6, 3, 9, 0, 0, 0, time.UTC)
+	repeatedContainer := func(entries int) models.DockerHost {
+		host := models.DockerHost{
+			ID: "docker-host-1", Hostname: "edge", Runtime: "docker", Status: "online", LastSeen: now,
+			Networks: []models.DockerNetwork{{ID: "network-1", Name: "frontend", Driver: "bridge"}},
+		}
+		for range entries {
+			host.Containers = append(host.Containers, models.DockerContainer{
+				ID: "container-1", Name: "api", State: "running",
+				Networks: []models.DockerContainerNetworkLink{{Name: "frontend"}},
+			})
+		}
+		return host
+	}
+	repeatedNetwork := func(entries int) models.DockerHost {
+		host := models.DockerHost{
+			ID: "docker-host-1", Hostname: "edge", Runtime: "docker", Status: "online", LastSeen: now,
+			Containers: []models.DockerContainer{{ID: "container-1", Name: "api", State: "running"}},
+		}
+		for entry := range entries {
+			name := fmt.Sprintf("frontend-%d", entry)
+			host.Networks = append(host.Networks, models.DockerNetwork{ID: "network-1", Name: name, Driver: "bridge"})
+			host.Containers[0].Networks = append(host.Containers[0].Networks, models.DockerContainerNetworkLink{Name: name})
+		}
+		return host
+	}
+
+	for name, build := range map[string]func(int) models.DockerHost{
+		"container id listed repeatedly": repeatedContainer,
+		"network id listed repeatedly":   repeatedNetwork,
+	} {
+		t.Run(name, func(t *testing.T) {
+			refreshAllocs := func(entries int) float64 {
+				host := build(entries)
+				rr := NewRegistry(NewMemoryStore())
+				rr.IngestSnapshot(models.StateSnapshot{DockerHosts: []models.DockerHost{host}})
+
+				containers := rr.ListByType(ResourceTypeAppContainer)
+				networks := rr.ListByType(ResourceTypeDockerNetwork)
+				if len(containers) != 1 || len(networks) != 1 {
+					t.Fatalf("expected one container and one network, got containers=%d networks=%d", len(containers), len(networks))
+				}
+				for _, resource := range []Resource{containers[0], networks[0]} {
+					attachments := 0
+					for _, relationship := range resource.Relationships {
+						if isDockerNetworkAttachmentRelationship(relationship) {
+							attachments++
+						}
+					}
+					if attachments != 1 {
+						t.Fatalf("expected one attachment on %s, got %d: %+v", resource.ID, attachments, resource.Relationships)
+					}
+				}
+				return testing.AllocsPerRun(5, func() { rr.refreshDockerNetworkAttachmentRelationships(host) })
+			}
+
+			// Eight times the entries costs eight times the allocations when each
+			// resource is applied once, and sixty-four times when it is applied
+			// once per entry.
+			small, large := refreshAllocs(50), refreshAllocs(400)
+			if large > 16*small {
+				t.Fatalf("refresh allocations grew from %.0f for 50 entries to %.0f for 400; want linear growth", small, large)
+			}
+		})
+	}
+}
+
 // A live source must override a metric held by a stale higher-priority source.
 func TestMergeMetric_LiveSourceOverridesStaleHigherPriority(t *testing.T) {
 	now := time.Now().UTC()

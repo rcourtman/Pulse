@@ -325,6 +325,62 @@ func TestProxmoxGuestActionRunsOnlyThroughTheGuestsOwnNodeRunner(t *testing.T) {
 	}
 }
 
+// Pulse links an agent to a node on the addresses the agent reports, with no
+// matching name, so a report token can take another node's link. The runner an
+// admin bound to that agent's host must not then change the other node's guest
+// with the same VMID.
+func TestProxmoxGuestActionRefusesLinkedRunnerNamedForAnotherNode(t *testing.T) {
+	now := time.Now().UTC()
+	resources := []unified.Resource{}
+	for _, name := range []string{"pve-a", "pve-b"} {
+		resources = append(resources, unified.Resource{
+			ID: "node-" + name, Type: unified.ResourceTypeAgent, Name: name, LastSeen: now,
+			Sources: []unified.DataSource{unified.SourceProxmox, unified.SourceAgent},
+			Proxmox: &unified.ProxmoxData{Instance: name, NodeName: name, SourceID: name + ":" + name},
+			// Both node records name pve-a's agent, as they do once its report
+			// lists pve-b's address.
+			Agent: &unified.AgentData{AgentID: "agent-pve-a", Hostname: "pve-a"},
+		})
+		guest := proxmoxGuestActionResource("vm:"+name, unified.ResourceTypeVM, "running", now)
+		guest.Proxmox.Instance = name
+		guest.Proxmox.NodeName = name
+		resources = append(resources, guest)
+	}
+	h := newActionTestResourceHandlers(t, &config.Config{DataPath: t.TempDir()})
+	h.SetStateProvider(resourceUnifiedSeedProvider{snapshot: models.StateSnapshot{LastUpdate: now}, resources: resources})
+	agents := &fakeProxmoxActionAgentCommander{runners: []agentexec.ConnectedAgent{{AgentID: "agent-pve-a", Hostname: "pve-a"}}}
+	executor := newProxmoxGuestActionExecutor(h, agents, nil).(proxmoxGuestActionExecutor)
+	check := func(resourceID string) unified.ResourceActionReadiness {
+		var guest unified.Resource
+		for _, candidate := range resources {
+			if candidate.ID == resourceID {
+				guest = candidate
+			}
+		}
+		return executor.CheckActionAvailable(context.Background(), unified.ActionRequest{
+			RequestID: "req", ResourceID: resourceID, CapabilityName: "stop", Reason: "operator requested stop", RequestedBy: "operator",
+		}, guest)
+	}
+
+	if readiness := check("vm:pve-b"); readiness.Available || readiness.ReasonCode != "action_runner_unavailable" {
+		t.Fatalf("pve-b's guest readiness through pve-a's runner = %+v", readiness)
+	}
+	if _, err := executor.ExecuteAction(actionDispatchTestContext(t, "act_other"), proxmoxGuestActionRecord("act_other", "vm:pve-b", "stop")); err == nil {
+		t.Fatal("pve-b's guest ran through pve-a's runner")
+	}
+	if len(agents.callAgents) != 0 {
+		t.Fatalf("pve-b's guest dispatched to %v", agents.callAgents)
+	}
+	if readiness := check("vm:pve-a"); !readiness.Available {
+		t.Fatalf("pve-a's guest readiness through its own runner = %+v", readiness)
+	}
+	// A credential bound to the node's full name is the same machine's.
+	agents.runners[0].Hostname = "pve-a.example.lan"
+	if readiness := check("vm:pve-a"); !readiness.Available {
+		t.Fatalf("pve-a's guest readiness through its runner's full name = %+v", readiness)
+	}
+}
+
 func TestProxmoxGuestActionExecutorVerificationContradictionDoesNotRewriteExecution(t *testing.T) {
 	now := time.Now().UTC()
 	h := newActionTestResourceHandlers(t, &config.Config{DataPath: t.TempDir()})

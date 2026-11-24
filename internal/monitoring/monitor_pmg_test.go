@@ -549,6 +549,58 @@ func TestPMGCollectionFailureEvidence(t *testing.T) {
 		})
 	}
 }
+
+// pmgManyMemberFixture answers like pmgScopeFixture, but lists the given
+// number of cluster members and refuses every per-member read.
+type pmgManyMemberFixture struct {
+	pmgScopeFixture
+	members int
+}
+
+func (f *pmgManyMemberFixture) GetClusterStatus(context.Context, bool) ([]pmg.ClusterStatusEntry, error) {
+	entries := make([]pmg.ClusterStatusEntry, f.members)
+	for i := range entries {
+		entries[i].Name = fmt.Sprintf("node-%d", i)
+	}
+	return entries, nil
+}
+func (f *pmgManyMemberFixture) GetQueueStatus(context.Context, string) (*pmg.QueueStatusEntry, error) {
+	return nil, errors.New("fixture queue read refused")
+}
+func (f *pmgManyMemberFixture) ListBackups(context.Context, string) ([]pmg.BackupEntry, error) {
+	return nil, errors.New("fixture backup read refused")
+}
+
+// The gateway chooses how many cluster members it lists. The read error a poll
+// leaves on the connection must not grow with that list, and the failure of a
+// later read must stay visible beside the per-member ones.
+func TestPMGReadErrorStaysBoundedForManyMembers(t *testing.T) {
+	const members = 2000
+	m := pmgScopeMonitor(allPMGScope())
+	f := &pmgManyMemberFixture{pmgScopeFixture: pmgScopeFixture{calls: map[string]int{}, fail: "mail"}, members: members}
+	m.pollPMGInstance(context.Background(), "gateway", f)
+
+	status := m.pollStatusMap["pmg::gateway"]
+	if status.ConsecutiveFailures != 0 || status.LastErrorCategory != pollReadErrorCategory {
+		t.Fatalf("failed reads not recorded as a partial poll: failures=%d category=%q", status.ConsecutiveFailures, status.LastErrorCategory)
+	}
+	message := status.LastErrorMessage
+	for _, operation := range []string{"pmg_queue_status", "pmg_backups"} {
+		if got := strings.Count(message, operation); got != maxPMGReadErrorsPerOperation+1 {
+			t.Errorf("%s appears %d times in a %d-byte read error, want %d", operation, got, len(message), maxPMGReadErrorsPerOperation+1)
+		}
+	}
+	if got := strings.Count(message, errPMGReadErrorsOmitted.Error()); got != 2 {
+		t.Errorf("omitted per-member failures noted %d times, want once per read", got)
+	}
+	if !strings.Contains(message, "pmg_mail_statistics") {
+		t.Error("mail statistics failure crowded out by per-member failures")
+	}
+	if nodes := len(m.state.GetSnapshot().PMGInstances[0].Nodes); nodes != members {
+		t.Fatalf("published %d nodes, want %d", nodes, members)
+	}
+}
+
 func TestPMGCollectionCancelledAndUnknown(t *testing.T) {
 	m := pmgScopeMonitor(allPMGScope())
 	f := &pmgScopeFixture{calls: map[string]int{}}

@@ -799,6 +799,7 @@ func run(ctx context.Context, args []string, getenv func(string) string) error {
 			Targets:                    dockerReportTargets(cfg),
 			HelperInventory:            helperContainerInventory,
 			HelperOperationStatus:      privilegeHelperStatus,
+			MonitoringOnly:             cfg.CommandAuthorityProfile == hostagent.CommandAuthorityMonitoringOnly,
 		}
 
 		dockerAgent, err = newDockerAgent(dockerCfg)

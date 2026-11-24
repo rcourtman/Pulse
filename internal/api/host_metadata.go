@@ -153,11 +153,11 @@ func (h *HostMetadataHandler) HandleUpdateMetadata(w http.ResponseWriter, r *htt
 	if metadataPatchHasField(fields, "notes") {
 		meta.Notes = cloneStringSlice(incoming.Notes)
 	}
-	if metadataPatchHasField(fields, "commandsEnabled") {
-		meta.CommandsEnabled = incoming.CommandsEnabled
-	}
 
-	if err := store.Set(hostID, meta); err != nil {
+	// commandsEnabled lives in this record but is the administrator's command
+	// policy, owned by PATCH /api/agents/agent/{id}/config. A value sent here is
+	// ignored and the store keeps its own.
+	if err := store.SetUserMetadata(hostID, meta); err != nil {
 		log.Error().Err(err).Str("hostID", hostID).Msg("Failed to save host metadata")
 		http.Error(w, metadataSaveErrorMessage(err), http.StatusInternalServerError)
 		return
@@ -182,7 +182,7 @@ func (h *HostMetadataHandler) HandleDeleteMetadata(w http.ResponseWriter, r *htt
 		return
 	}
 	store := h.getStore(r.Context())
-	if err := store.Delete(hostID); err != nil {
+	if err := store.DeleteUserMetadata(hostID); err != nil {
 		log.Error().Err(err).Str("hostID", hostID).Msg("Failed to delete host metadata")
 		http.Error(w, "Failed to delete metadata", http.StatusInternalServerError)
 		return

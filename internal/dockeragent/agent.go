@@ -85,6 +85,11 @@ type Config struct {
 	// HelperOperationStatus records source-classified typed-helper health. It
 	// must classify raw operation errors before they reach report state.
 	HelperOperationStatus HelperOperationStatusRecorder
+	// MonitoringOnly carries the local command-authority ceiling into this
+	// module. When the operator installed the agent as monitoring-only, no
+	// command in a report response may change a container, whatever the
+	// server sends.
+	MonitoringOnly bool
 }
 
 // HelperOperationStatusRecorder receives typed-helper operation outcomes.
@@ -214,6 +219,17 @@ type inactiveContainerInspectCacheEntry struct {
 
 // ErrStopRequested indicates the agent should terminate gracefully after acknowledging a stop command.
 var ErrStopRequested = errors.New("docker host stop requested")
+
+// errReportTooLarge marks a report that a destination refused for its size.
+// Sending the same report again gets the same answer, so it is never replayed.
+var errReportTooLarge = errors.New("report exceeds the size the destination accepts")
+
+// reportMetadataShedSteps are the per-object sizes of free-form metadata
+// (labels, driver options, environment) above which deliverReport sends an
+// object without that metadata when the report would otherwise exceed the
+// shared size contract. They are tried in order until the report fits; the
+// last step withholds all of it.
+var reportMetadataShedSteps = []int{32 * 1024, 4 * 1024, 0}
 
 const (
 	manualUpdateCheckResultTTL       = 10 * time.Minute
@@ -1206,19 +1222,24 @@ func (a *Agent) flushBuffer(ctx context.Context) {
 
 func (a *Agent) deliverReport(ctx context.Context, report agentsdocker.Report) error {
 	a.ensureReportBuffers()
-	payload, err := json.Marshal(report)
+	report, payload, compressed, err := a.encodeReportWithinSizeLimit(report)
 	if err != nil {
-		return fmt.Errorf("marshal report: %w", err)
+		return err
 	}
-	compressed, err := utils.CompressJSON(payload)
-	if err != nil {
-		return fmt.Errorf("compress report: %w", err)
-	}
+	a.logReportSize(len(report.Containers), int64(len(compressed)), int64(len(payload)))
 	for _, target := range a.targets {
 		if err := a.sendReportToTarget(ctx, target, compressed, len(report.Containers)); err != nil {
 			agenttarget.MarkDelivery("docker", target.Name, targetRole(target), false)
 			if errors.Is(err, ErrStopRequested) && target.Authoritative {
 				return nil
+			}
+			if errors.Is(err, errReportTooLarge) {
+				// Buffering it would replay a report that is refused every
+				// time and hold back whatever is queued behind it.
+				a.logger.Error().Err(err).Str("destination", target.Name).
+					Bool("authoritative", target.Authoritative).
+					Msg("Docker report was refused as too large and is not buffered for this destination")
+				continue
 			}
 			if report.InventoryComplete == nil || *report.InventoryComplete {
 				a.reportBuffers[target.Name].Push(report)
@@ -1233,6 +1254,164 @@ func (a *Agent) deliverReport(ctx context.Context, report agentsdocker.Report) e
 		a.flushTargetBuffer(ctx, target)
 	}
 	return nil
+}
+
+func encodeReport(report agentsdocker.Report) (payload, compressed []byte, err error) {
+	payload, err = json.Marshal(report)
+	if err != nil {
+		return nil, nil, fmt.Errorf("marshal report: %w", err)
+	}
+	compressed, err = utils.CompressJSON(payload)
+	if err != nil {
+		return nil, nil, fmt.Errorf("compress report: %w", err)
+	}
+	return payload, compressed, nil
+}
+
+// encodeReportWithinSizeLimit encodes a report for delivery. The server
+// refuses a whole host's report above the shared size contract, and whoever
+// builds an image or starts a container chooses its labels and environment, so
+// a report over the contract is sent without the free-form metadata of its
+// heaviest objects rather than not at all: container state, health and metrics
+// must not depend on that text. It returns the report as encoded.
+func (a *Agent) encodeReportWithinSizeLimit(report agentsdocker.Report) (agentsdocker.Report, []byte, []byte, error) {
+	payload, compressed, err := encodeReport(report)
+	if err != nil {
+		return report, nil, nil, err
+	}
+	for _, limit := range reportMetadataShedSteps {
+		if !agentsdocker.AssessReportSize(int64(len(compressed)), int64(len(payload))).ExceedsLimit() {
+			break
+		}
+		trimmed, withheld := withholdReportMetadata(report, limit)
+		if withheld == 0 {
+			continue
+		}
+		a.logger.Warn().
+			Int("objects", withheld).
+			Int("objectMetadataLimitBytes", limit).
+			Int("reportEncodedBytes", len(compressed)).
+			Int("reportDecodedBytes", len(payload)).
+			Msg("Docker / Podman report exceeds the server size limit, sending objects over the metadata limit without their labels, options and environment")
+		report = trimmed
+		if payload, compressed, err = encodeReport(report); err != nil {
+			return report, nil, nil, err
+		}
+	}
+	for _, limit := range []int{64, 0} {
+		if !agentsdocker.AssessReportSize(int64(len(compressed)), int64(len(payload))).ExceedsLimit() {
+			break
+		}
+		trimmed, withheld := withholdReportAttachments(report, limit)
+		if withheld == 0 {
+			continue
+		}
+		a.logger.Warn().
+			Int("containers", withheld).
+			Int("containerAttachmentLimit", limit).
+			Int("reportEncodedBytes", len(compressed)).
+			Int("reportDecodedBytes", len(payload)).
+			Msg("Docker / Podman report still exceeds the server size limit, sending containers over the attachment limit without their ports and mounts")
+		report = trimmed
+		if payload, compressed, err = encodeReport(report); err != nil {
+			return report, nil, nil, err
+		}
+	}
+	return report, payload, compressed, nil
+}
+
+func withholdReportAttachments(report agentsdocker.Report, limit int) (agentsdocker.Report, int) {
+	withheld := 0
+	report.Containers = append([]agentsdocker.Container(nil), report.Containers...)
+	for i := range report.Containers {
+		container := &report.Containers[i]
+		if len(container.Ports)+len(container.Mounts) > limit {
+			container.Ports = nil
+			container.Mounts = nil
+			withheld++
+		}
+	}
+	return report, withheld
+}
+
+// withholdReportMetadata returns a copy of report in which every object whose
+// labels, options and environment exceed limit bytes carries none of them, and
+// the number of such objects. Values derived from a withheld container's or
+// service's labels go with them. The caller's report is not modified.
+func withholdReportMetadata(report agentsdocker.Report, limit int) (agentsdocker.Report, int) {
+	size := func(maps ...map[string]string) int {
+		total := 0
+		for _, m := range maps {
+			for k, v := range m {
+				total += len(k) + len(v)
+			}
+		}
+		return total
+	}
+	withheld := 0
+
+	report.Containers = append([]agentsdocker.Container(nil), report.Containers...)
+	for i := range report.Containers {
+		container := &report.Containers[i]
+		total := size(container.Labels)
+		for _, entry := range container.Env {
+			total += len(entry)
+		}
+		if total > limit {
+			container.Labels, container.Env, container.Podman = nil, nil, nil
+			withheld++
+		}
+	}
+	report.Images = append([]agentsdocker.Image(nil), report.Images...)
+	for i := range report.Images {
+		if size(report.Images[i].Labels) > limit {
+			report.Images[i].Labels = nil
+			withheld++
+		}
+	}
+	report.Volumes = append([]agentsdocker.Volume(nil), report.Volumes...)
+	for i := range report.Volumes {
+		if size(report.Volumes[i].Labels, report.Volumes[i].Options) > limit {
+			report.Volumes[i].Labels, report.Volumes[i].Options = nil, nil
+			withheld++
+		}
+	}
+	report.Networks = append([]agentsdocker.Network(nil), report.Networks...)
+	for i := range report.Networks {
+		if size(report.Networks[i].Labels, report.Networks[i].Options) > limit {
+			report.Networks[i].Labels, report.Networks[i].Options = nil, nil
+			withheld++
+		}
+	}
+	report.Services = append([]agentsdocker.Service(nil), report.Services...)
+	for i := range report.Services {
+		if size(report.Services[i].Labels) > limit {
+			report.Services[i].Labels, report.Services[i].Stack = nil, ""
+			withheld++
+		}
+	}
+	report.Nodes = append([]agentsdocker.Node(nil), report.Nodes...)
+	for i := range report.Nodes {
+		if size(report.Nodes[i].Labels, report.Nodes[i].EngineLabels) > limit {
+			report.Nodes[i].Labels, report.Nodes[i].EngineLabels = nil, nil
+			withheld++
+		}
+	}
+	report.Secrets = append([]agentsdocker.Secret(nil), report.Secrets...)
+	for i := range report.Secrets {
+		if size(report.Secrets[i].Labels) > limit {
+			report.Secrets[i].Labels = nil
+			withheld++
+		}
+	}
+	report.Configs = append([]agentsdocker.Config(nil), report.Configs...)
+	for i := range report.Configs {
+		if size(report.Configs[i].Labels) > limit {
+			report.Configs[i].Labels = nil
+			withheld++
+		}
+	}
+	return report, withheld
 }
 
 func targetRole(target TargetConfig) string {
@@ -1262,7 +1441,9 @@ func (a *Agent) flushTargetBuffer(ctx context.Context, target TargetConfig) {
 		if err != nil {
 			return
 		}
-		if err := a.sendReportToTarget(ctx, target, compressed, len(report.Containers)); err != nil {
+		// A buffered report refused as too large is dropped like a delivered
+		// one: it can never be replayed and blocks the reports behind it.
+		if err := a.sendReportToTarget(ctx, target, compressed, len(report.Containers)); err != nil && !errors.Is(err, errReportTooLarge) {
 			return
 		}
 		queue.Pop()
@@ -1426,6 +1607,9 @@ func (a *Agent) sendReportToTarget(ctx context.Context, target TargetConfig, pay
 					"Each Docker host requires its own unique token. " +
 					"Generate a new token in Pulse Settings > Agents and reinstall with the new token.")
 		}
+		if resp.StatusCode == http.StatusRequestEntityTooLarge {
+			return fmt.Errorf("target %s: %w: pulse responded %s: %s", target.URL, errReportTooLarge, resp.Status, errMsg)
+		}
 		return fmt.Errorf("target %s: pulse responded %s: %s", target.URL, resp.Status, errMsg)
 	}
 
@@ -1466,6 +1650,17 @@ func (a *Agent) sendReportToTarget(ctx context.Context, target TargetConfig, pay
 
 func (a *Agent) handleCommand(ctx context.Context, target TargetConfig, command agentsdocker.Command) error {
 	commandType := strings.ToLower(command.Type)
+	if a.cfg.MonitoringOnly {
+		// Report responses are server-controlled, and these legacy commands
+		// do not travel over the host module's command channel, where the
+		// ceiling is otherwise enforced. Refuse them here so a server cannot
+		// update containers on an install that never granted that authority.
+		switch commandType {
+		case agentsdocker.CommandTypeUpdateContainer, agentsdocker.CommandTypeUpdateAll:
+			a.rejectMonitoringOnlyCommand(ctx, target, command)
+			return nil
+		}
+	}
 	if a.cfg.HelperInventory != nil {
 		switch commandType {
 		case agentsdocker.CommandTypeUpdateContainer, agentsdocker.CommandTypeUpdateAll, agentsdocker.CommandTypeCheckUpdates:

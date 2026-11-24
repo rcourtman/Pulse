@@ -119,6 +119,14 @@ type scopedActionIdentityAgentCommander interface {
 	GetAgentForIdentityForOrganization(organizationID, agentID, hostname string) (string, bool)
 }
 
+// scopedActionAdmissionAgentCommander names the credential behind the session
+// scopedActionIdentityAgentCommander resolves: the token it was admitted under
+// and its runtime role. It is separate so that a commander which cannot name
+// them never lets telemetry pass for that session's own.
+type scopedActionAdmissionAgentCommander interface {
+	GetAgentAdmissionForIdentityForOrganization(organizationID, agentID, hostname string) (agentexec.AgentAdmission, bool)
+}
+
 type scopedAgentOperationReceiptCapability interface {
 	AgentOperationReceiptVersionForOrganization(organizationID, agentID string) int
 }

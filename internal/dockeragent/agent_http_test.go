@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -673,6 +674,119 @@ func TestMonitoringOnlyCollectorRejectsForgedReportCommand(t *testing.T) {
 	}
 	if ack.Status != agentsdocker.CommandStatusFailed || !strings.Contains(ack.Message, "Monitoring-only collector") {
 		t.Fatalf("rejected command acknowledgement = %+v", ack)
+	}
+}
+
+// A monitoring-only install that reaches the runtime directly has no typed
+// helper, so the local ceiling is all that stands between a report response
+// and the legacy update handlers.
+func TestMonitoringOnlyAuthorityRejectsReportResponseUpdateCommands(t *testing.T) {
+	for _, tc := range []struct {
+		name           string
+		monitoringOnly bool
+	}{
+		{name: "monitoring-only ceiling", monitoringOnly: true},
+		{name: "no local ceiling", monitoringOnly: false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var mu sync.Mutex
+			acks := make(map[string][]agentsdocker.CommandAck)
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if strings.HasSuffix(r.URL.Path, "/report") {
+					w.Header().Set("Content-Type", "application/json")
+					_, _ = w.Write([]byte(`{"commands":[` +
+						`{"id":"forged-update","type":"update_container","payload":{"containerId":"container-1"}},` +
+						`{"id":"forged-update-all","type":"UPDATE_ALL","payload":{"containerIds":["container-1","container-2"]}}]}`))
+					return
+				}
+				for _, id := range []string{"forged-update", "forged-update-all"} {
+					if strings.HasSuffix(r.URL.Path, "/commands/"+id+"/ack") {
+						var ack agentsdocker.CommandAck
+						if err := json.NewDecoder(r.Body).Decode(&ack); err != nil {
+							http.Error(w, err.Error(), http.StatusBadRequest)
+							return
+						}
+						mu.Lock()
+						acks[id] = append(acks[id], ack)
+						mu.Unlock()
+						w.WriteHeader(http.StatusNoContent)
+						return
+					}
+				}
+				http.NotFound(w, r)
+			}))
+			defer server.Close()
+
+			runtimeCalls := 0
+			agent := &Agent{
+				cfg:    Config{MonitoringOnly: tc.monitoringOnly},
+				hostID: "direct-host",
+				docker: &fakeDockerClient{
+					containerInspectFn: func(context.Context, string) (containertypes.InspectResponse, error) {
+						runtimeCalls++
+						return containertypes.InspectResponse{}, errors.New("inspect refused")
+					},
+				},
+				httpClients: map[bool]*http.Client{false: server.Client()},
+				logger:      zerolog.Nop(),
+			}
+			target := TargetConfig{Name: "primary", URL: server.URL, Token: "token", Authoritative: true}
+			if err := agent.sendReportToTarget(context.Background(), target, []byte("ignored"), 0); err != nil {
+				t.Fatalf("report response: %v", err)
+			}
+
+			mu.Lock()
+			defer mu.Unlock()
+			if !tc.monitoringOnly {
+				// The ceiling is the only gate: without it the same response
+				// still reaches the runtime for both commands.
+				if runtimeCalls != 3 {
+					t.Fatalf("legacy update commands reached the runtime %d times, want 3", runtimeCalls)
+				}
+				return
+			}
+			if runtimeCalls != 0 {
+				t.Fatalf("forged report commands reached the direct runtime %d times", runtimeCalls)
+			}
+			for _, id := range []string{"forged-update", "forged-update-all"} {
+				if len(acks[id]) != 1 || acks[id][0].Status != agentsdocker.CommandStatusFailed || !strings.Contains(acks[id][0].Message, "Monitoring-only collector") {
+					t.Fatalf("rejected %s acknowledgements = %+v", id, acks[id])
+				}
+			}
+		})
+	}
+}
+
+// The ceiling covers commands that change containers. A registry re-check
+// changes nothing on the host and stays available to a monitoring-only install.
+func TestMonitoringOnlyAuthorityStillServesCheckUpdates(t *testing.T) {
+	registryChecker := NewRegistryChecker(zerolog.Nop())
+	registryChecker.MarkChecked()
+
+	agent := &Agent{
+		cfg:             Config{MonitoringOnly: true},
+		logger:          zerolog.Nop(),
+		hostID:          "direct-host",
+		registryChecker: registryChecker,
+		manualCheckCollect: func(context.Context) (agentsdocker.Report, error) {
+			return agentsdocker.Report{}, nil
+		},
+	}
+	t.Cleanup(func() { _ = agent.Close() })
+
+	err := agent.handleCommand(context.Background(), TargetConfig{URL: "http://example.com/\x7f", Token: "token"}, agentsdocker.Command{
+		ID:   "check-1",
+		Type: agentsdocker.CommandTypeCheckUpdates,
+	})
+	if err != nil {
+		t.Fatalf("check updates command: %v", err)
+	}
+
+	registryChecker.mu.RLock()
+	lastFullCheck := registryChecker.lastFullCheck
+	registryChecker.mu.RUnlock()
+	if !lastFullCheck.IsZero() {
+		t.Fatalf("monitoring-only ceiling blocked the registry re-check, lastFullCheck = %s", lastFullCheck)
 	}
 }
 

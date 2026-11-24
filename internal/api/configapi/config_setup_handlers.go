@@ -863,8 +863,14 @@ func (h *ConfigHandlers) handleSetupScript(w http.ResponseWriter, r *http.Reques
 		0,
 	)
 
-	// Get or generate SSH public key for temperature monitoring
-	sshKeys := h.getOrGenerateSSHKeys()
+	// Get or generate SSH public key for temperature monitoring. The key is the
+	// instance's own and only the default organization's monitor collects with
+	// it, so a script whose setup token is bound to another organization must
+	// not ask that organization's node to trust it.
+	var sshKeys SSHKeyPair
+	if !h.ValidateSetupToken(setupToken) || h.ValidateSetupTokenForOrg(setupToken, "default") {
+		sshKeys = h.getOrGenerateSSHKeys()
+	}
 
 	storagePerms := ""
 	storageRepairPerms := ""

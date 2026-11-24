@@ -94,6 +94,33 @@ func TestHostContinuityStoreRoundTripAndMatch(t *testing.T) {
 	}
 }
 
+func TestHostContinuityStoreMatchPrefersReportingTokenRecord(t *testing.T) {
+	store := NewHostContinuityStore(t.TempDir(), nil)
+	now := time.Now().UTC().Truncate(time.Second)
+	for _, entry := range []HostContinuityEntry{
+		{HostID: "machine-1", ReportHostID: "machine-1", Hostname: "web01", MachineID: "machine-1", TokenID: "owner-token", LastSeen: now.Add(-time.Minute)},
+		// Another token that named machine-1 reports under a derived ID and
+		// keeps machine-1 as an alias.
+		{HostID: "machine-1-fork", ReportHostID: "machine-1", Hostname: "other-host", TokenID: "other-token", LastSeen: now},
+	} {
+		if err := store.Upsert(entry); err != nil {
+			t.Fatalf("Upsert: %v", err)
+		}
+	}
+
+	for tokenID, want := range map[string]string{
+		"owner-token": "machine-1",
+		"other-token": "machine-1-fork",
+		"new-token":   "machine-1",
+		"":            "machine-1",
+	} {
+		entry, ok := store.Match("machine-1", "", "", "", tokenID, now.Add(-time.Hour))
+		if !ok || entry.HostID != want {
+			t.Fatalf("token %q matched %q (ok=%v), want %q", tokenID, entry.HostID, ok, want)
+		}
+	}
+}
+
 func TestHostContinuityStoreRecentEntriesFiltersStaleState(t *testing.T) {
 	dir := t.TempDir()
 	store := NewHostContinuityStore(dir, nil)

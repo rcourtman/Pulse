@@ -1583,9 +1583,17 @@ func (a *Agent) sendReportToDestination(ctx context.Context, report agentshost.R
 		a.persistAgentID(canonicalAgentID)
 	}
 
-	// Apply server config overrides
+	// Apply server config overrides. The acknowledgement carries no signature,
+	// so an agent that requires signed remote config lets it withdraw command
+	// execution but never grant it: enabling commands is left to the signed
+	// config endpoint, which the remote config refresh applies.
 	if reportResp.Config != nil && reportResp.Config.CommandsEnabled != nil {
-		a.applyRemoteConfig(*reportResp.Config.CommandsEnabled)
+		commandsEnabled := *reportResp.Config.CommandsEnabled
+		if commandsEnabled && remoteconfig.SignatureRequired() {
+			a.logger.Debug().Msg("Ignored unsigned command enablement in report response because signed remote config is required")
+		} else {
+			a.applyRemoteConfig(commandsEnabled)
+		}
 	}
 
 	// Only a real acknowledgement answers for this process's identity: one

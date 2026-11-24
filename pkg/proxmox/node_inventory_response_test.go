@@ -2,6 +2,7 @@ package proxmox
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -39,6 +40,7 @@ func TestNodeInventoryResponseAdmission(t *testing.T) {
 		{"case-node-field", `{"data":[{"node":"member","Node":"other"}]}`, true},
 		{"duplicate-node-row", `{"data":[{"node":"member"},{"node":"member"}]}`, true},
 		{"wrong-node-type", `{"data":[{"node":42}]}`, true},
+		{"more-nodes-than-a-cluster", `{"data":[` + nodeInventoryRows(maxClusterNodes+1) + `]}`, true},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -66,6 +68,31 @@ func TestNodeInventoryResponseAdmission(t *testing.T) {
 				t.Errorf("invalid success replayed: %d requests", requests.Load())
 			}
 		})
+	}
+}
+
+func nodeInventoryRows(count int) string {
+	rows := make([]string, count)
+	for i := range rows {
+		rows[i] = fmt.Sprintf(`{"node":"member%d","status":"online"}`, i)
+	}
+	return strings.Join(rows, ",")
+}
+
+func TestNodeInventoryBoundsNodes(t *testing.T) {
+	nodes, err := decodeNodeInventory([]byte(`{"data":[` + nodeInventoryRows(maxClusterNodes) + `]}`))
+	if err != nil || len(nodes) != maxClusterNodes {
+		t.Fatalf("inventory at the node limit refused: %d nodes, error %v", len(nodes), err)
+	}
+
+	nodes, err = decodeNodeInventory([]byte(`{"data":[` + nodeInventoryRows(maxClusterNodes+1) + `]}`))
+	if !errors.Is(err, errInvalidNodeInventoryResponse) || nodes != nil {
+		t.Fatalf("inventory beyond the node limit: %d nodes, error %v", len(nodes), err)
+	}
+	// The refusal is a failed read of a reachable endpoint: failover must not
+	// take it for a connectivity, authentication or rate limit failure.
+	if rateLimited, _ := isTransientRateLimitError(err); rateLimited || isAuthError(err) || isEndpointConnectivityError(err) {
+		t.Fatalf("refusal misclassified: %v", err)
 	}
 }
 

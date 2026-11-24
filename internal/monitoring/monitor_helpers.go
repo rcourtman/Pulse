@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/sensors"
@@ -46,6 +47,19 @@ func safePercentage(used, total float64) float64 {
 func safeFloat(val float64) float64 {
 	if math.IsNaN(val) || math.IsInf(val, 0) {
 		return 0
+	}
+	return val
+}
+
+// reportedPercent clamps an agent-reported percentage to [0, 100] so extreme
+// finite values cannot overflow downstream scaling or chart aggregations.
+func reportedPercent(val float64) float64 {
+	val = safeFloat(val)
+	if val < 0 {
+		return 0
+	}
+	if val > 100 {
+		return 100
 	}
 	return val
 }
@@ -349,7 +363,15 @@ func convertDockerNetworks(networks []agentsdocker.Network) []models.DockerNetwo
 		return nil
 	}
 	result := make([]models.DockerNetwork, 0, len(networks))
+	seenIDs := make(map[string]struct{}, len(networks))
 	for _, network := range networks {
+		netID := strings.TrimSpace(network.ID)
+		if netID != "" {
+			if _, dup := seenIDs[netID]; dup {
+				continue
+			}
+			seenIDs[netID] = struct{}{}
+		}
 		subnets := make([]models.DockerNetworkSubnet, 0, len(network.Subnets))
 		for _, subnet := range network.Subnets {
 			subnets = append(subnets, models.DockerNetworkSubnet{
@@ -663,13 +685,30 @@ func isLegacyAgent(agentType string) bool {
 	return agentType != "unified"
 }
 
+const (
+	maxReportedPhysicalDisks = 1024
+	maxHostCustomSensors     = 32
+)
+
+func truncateReportedUTF8(value string, maxBytes int) string {
+	if maxBytes <= 0 || len(value) <= maxBytes {
+		return value
+	}
+	truncated := value[:maxBytes]
+	for len(truncated) > 0 && !utf8.ValidString(truncated) {
+		truncated = truncated[:len(truncated)-1]
+	}
+	return truncated
+}
+
 // convertAgentSMARTToModels converts agent report S.M.A.R.T. data to the models.HostDiskSMART format.
 func convertAgentSMARTToModels(smart []agentshost.DiskSMART) []models.HostDiskSMART {
 	if len(smart) == 0 {
 		return nil
 	}
-	result := make([]models.HostDiskSMART, 0, len(smart))
-	for _, disk := range smart {
+	limit := min(len(smart), maxReportedPhysicalDisks)
+	result := make([]models.HostDiskSMART, 0, limit)
+	for _, disk := range smart[:limit] {
 		entry := models.HostDiskSMART{
 			Device:      disk.Device,
 			Model:       disk.Model,
@@ -728,20 +767,21 @@ func convertAgentCustomSensorsToModels(metrics []agentshost.CustomSensorMetric) 
 	if len(metrics) == 0 {
 		return nil
 	}
-	result := make([]models.HostCustomSensorMetric, len(metrics))
-	for i, metric := range metrics {
+	limit := min(len(metrics), maxHostCustomSensors)
+	result := make([]models.HostCustomSensorMetric, limit)
+	for i, metric := range metrics[:limit] {
 		result[i] = models.HostCustomSensorMetric{
-			ID:           strings.TrimSpace(metric.ID),
-			Name:         strings.TrimSpace(metric.Name),
-			Group:        strings.TrimSpace(metric.Group),
-			Subgroup:     strings.TrimSpace(metric.Subgroup),
-			Kind:         strings.TrimSpace(metric.Kind),
-			Unit:         strings.TrimSpace(metric.Unit),
+			ID:           truncateReportedUTF8(strings.TrimSpace(metric.ID), maxReportedIdentityBytes),
+			Name:         truncateReportedUTF8(strings.TrimSpace(metric.Name), maxReportedIdentityBytes),
+			Group:        truncateReportedUTF8(strings.TrimSpace(metric.Group), maxReportedIdentityBytes),
+			Subgroup:     truncateReportedUTF8(strings.TrimSpace(metric.Subgroup), maxReportedIdentityBytes),
+			Kind:         truncateReportedUTF8(strings.TrimSpace(metric.Kind), maxReportedIdentityBytes),
+			Unit:         truncateReportedUTF8(strings.TrimSpace(metric.Unit), maxReportedIdentityBytes),
 			Value:        cloneFloat64Ptr(metric.Value),
-			Status:       strings.TrimSpace(metric.Status),
+			Status:       truncateReportedUTF8(strings.TrimSpace(metric.Status), maxReportedIdentityBytes),
 			ObservedAt:   metric.ObservedAt,
 			EventAt:      cloneReportTimePtr(metric.EventAt),
-			Error:        strings.TrimSpace(metric.Error),
+			Error:        truncateReportedUTF8(strings.TrimSpace(metric.Error), maxReportedIdentityBytes),
 			AlertOnError: metric.AlertOnError,
 			Stale:        metric.Stale,
 		}
@@ -841,13 +881,25 @@ func convertAgentSMARTAttributes(src *agentshost.SMARTAttributes) *models.SMARTA
 	}
 }
 
+// maxAgentCephPools bounds the pools taken from one host agent's Ceph report.
+// Every pool becomes a storage resource with its own metrics history and alert
+// evaluation, which costs the server far more than the few bytes of JSON that
+// name it, so the report size limits do not bound what a pool list allocates.
+const maxAgentCephPools = 1024
+
 // convertAgentCephToModels converts agent report Ceph data to the models.HostCephCluster format.
 func convertAgentCephToModels(ceph *agentshost.CephCluster) *models.HostCephCluster {
 	if ceph == nil {
 		return nil
 	}
 
-	collectedAt, _ := time.Parse(time.RFC3339, ceph.CollectedAt)
+	var collectedAt time.Time
+	if parsed, err := time.Parse(time.RFC3339, strings.TrimSpace(ceph.CollectedAt)); err == nil {
+		utc := parsed.UTC()
+		if y := utc.Year(); y >= 0 && y <= 9999 {
+			collectedAt = utc
+		}
+	}
 
 	result := &models.HostCephCluster{
 		FSID: ceph.FSID,
@@ -919,13 +971,16 @@ func convertAgentCephToModels(ceph *agentshost.CephCluster) *models.HostCephClus
 
 	// Convert pools
 	for _, pool := range ceph.Pools {
+		if len(result.Pools) == maxAgentCephPools {
+			break
+		}
 		result.Pools = append(result.Pools, models.HostCephPool{
 			ID:             pool.ID,
 			Name:           pool.Name,
 			BytesUsed:      pool.BytesUsed,
 			BytesAvailable: pool.BytesAvailable,
 			Objects:        pool.Objects,
-			PercentUsed:    pool.PercentUsed,
+			PercentUsed:    reportedPercent(pool.PercentUsed),
 		})
 	}
 
@@ -955,17 +1010,20 @@ func agentCephServiceRunning(ceph *agentshost.CephCluster, svc agentshost.CephSe
 	return svc.Running
 }
 
+// agentCephClusterID returns the global CephCluster ID of an agent's Ceph report.
+func agentCephClusterID(ceph *agentshost.CephCluster, hostID string) string {
+	// Use FSID as the primary ID since it's unique per Ceph cluster
+	if ceph.FSID != "" {
+		return ceph.FSID
+	}
+	return "agent-ceph-" + hostID
+}
+
 // convertAgentCephToGlobalCluster converts agent Ceph data to the global CephCluster format
 // used by the State.CephClusters list.
 func convertAgentCephToGlobalCluster(ceph *agentshost.CephCluster, hostname, hostID string, timestamp time.Time) models.CephCluster {
-	// Use FSID as the primary ID since it's unique per Ceph cluster
-	clusterID := ceph.FSID
-	if clusterID == "" {
-		clusterID = "agent-ceph-" + hostID
-	}
-
 	cluster := models.CephCluster{
-		ID:             clusterID,
+		ID:             agentCephClusterID(ceph, hostID),
 		Instance:       hostname,
 		Source:         models.CephClusterSourceHostAgent,
 		Name:           hostname + " Ceph",
@@ -1008,13 +1066,16 @@ func convertAgentCephToGlobalCluster(ceph *agentshost.CephCluster, hostname, hos
 
 	// Convert pools
 	for _, pool := range ceph.Pools {
+		if len(cluster.Pools) == maxAgentCephPools {
+			break
+		}
 		cluster.Pools = append(cluster.Pools, models.CephPool{
 			ID:             pool.ID,
 			Name:           pool.Name,
 			StoredBytes:    int64(pool.BytesUsed),
 			AvailableBytes: int64(pool.BytesAvailable),
 			Objects:        int64(pool.Objects),
-			PercentUsed:    pool.PercentUsed,
+			PercentUsed:    reportedPercent(pool.PercentUsed),
 		})
 	}
 

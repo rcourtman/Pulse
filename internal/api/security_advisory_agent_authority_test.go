@@ -151,6 +151,79 @@ func TestAgentConfigProtectsAvailabilityCredentialsFromViewer(t *testing.T) {
 	}
 }
 
+func TestAgentConfigWithholdsAvailabilityCredentialsFromOtherTokens(t *testing.T) {
+	const agentToken = "agent-legacy-fixture.12345678"
+	const manageToken = "agent-manage-fixture.12345678"
+	const settingsToken = "settings-write-fixture.12345678"
+	const wildcardToken = "full-access-fixture.12345678"
+	// Host-agent install tokens carried agent:manage before the reporting
+	// preset dropped it; such a token still runs its own host's checks.
+	record := newTokenRecord(t, agentToken, []string{config.ScopeAgentReport, config.ScopeAgentConfigRead, config.ScopeAgentManage}, nil)
+	router, monitor := agentAuthorityRouter(t, true, record,
+		newTokenRecord(t, manageToken, []string{config.ScopeAgentManage}, nil),
+		newTokenRecord(t, settingsToken, []string{config.ScopeSettingsWrite}, nil),
+		newTokenRecord(t, wildcardToken, []string{config.ScopeWildcard}, nil),
+	)
+	hostID := seedUnifiedAgentHost(t, monitor)
+	for _, host := range monitor.GetLiveHostsSnapshot() {
+		if host.ID == hostID {
+			host.TokenID = record.ID
+			monitorState(t, monitor).UpsertHost(host)
+		}
+	}
+	monitor.SetLicenseChecker(func(string) bool { return true })
+	secrets := []string{"synthetic-probe-password", "synthetic-probe-header", "synthetic-probe-body"}
+	target := config.NormalizeAvailabilityTarget(config.AvailabilityTarget{
+		ID: "probe", Name: "fixture", Address: "example.invalid", Protocol: config.AvailabilityProbeHTTPS,
+		Enabled: true, ProbeAgentID: hostID,
+		HTTP: &config.AvailabilityHTTPConfig{
+			Method:  "POST",
+			Headers: []config.AvailabilityHTTPHeader{{ID: "header", Name: "X-Fixture-Key", Value: &secrets[1]}},
+			Authentication: config.AvailabilityHTTPAuthentication{
+				Type: config.AvailabilityHTTPAuthBasic, Username: "fixture-user", Password: &secrets[0],
+			},
+			Body: &secrets[2],
+		},
+	})
+	if err := config.NewConfigPersistence(router.config.DataPath).SaveAvailabilityTargets([]config.AvailabilityTarget{target}); err != nil {
+		t.Fatal(err)
+	}
+	path := "/api/agents/agent/" + hostID + "/config"
+	// The bound agent is read again last: withholding the values from another
+	// token must not change what the host's own agent is given.
+	for _, identity := range []struct {
+		name, token string
+		bound       bool
+	}{
+		{"bound agent", agentToken, true},
+		{"agent:manage token", manageToken, false},
+		{"settings:write token", settingsToken, false},
+		{"full-access token", wildcardToken, false},
+		{"bound agent after management reads", agentToken, true},
+	} {
+		t.Run(identity.name, func(t *testing.T) {
+			rec := httptest.NewRecorder()
+			router.Handler().ServeHTTP(rec, agentAuthorityRequest(t, http.MethodGet, path, "", "", identity.token))
+			body := rec.Body.String()
+			if rec.Code != http.StatusOK {
+				t.Fatalf("status=%d, want 200: %s", rec.Code, body)
+			}
+			// The management read of the desired configuration stays: only the
+			// write-only values are left out.
+			for _, kept := range []string{`"id":"probe"`, `"username":"fixture-user"`, `"name":"X-Fixture-Key"`} {
+				if !strings.Contains(body, kept) {
+					t.Fatalf("config lost %s: %s", kept, body)
+				}
+			}
+			for _, secret := range secrets {
+				if strings.Contains(body, secret) != identity.bound {
+					t.Fatalf("config carries %s = %t, want %t: %s", secret, !identity.bound, identity.bound, body)
+				}
+			}
+		})
+	}
+}
+
 func TestAgentReportRejectsViewerWithoutChangingState(t *testing.T) {
 	const token = "host-ingest-fixture.12345678"
 	router, monitor := agentAuthorityRouter(t, true,

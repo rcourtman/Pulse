@@ -1566,6 +1566,14 @@ type ClusterStatus struct {
 	Quorate int    `json:"quorate"` // 1 if cluster has quorum
 }
 
+// maxClusterNodes bounds the nodes an endpoint may report for its cluster in
+// /cluster/status and /nodes. The response size limit alone admits a reply
+// naming some hundred thousand of them, and every member Pulse learns of is
+// saved as a cluster endpoint with its own client and health probe, and every
+// listed node is polled on its own. The largest Proxmox VE clusters have some
+// tens of nodes.
+const maxClusterNodes = 256
+
 // GetClusterStatus returns the cluster status including all nodes
 func (c *Client) GetClusterStatus(ctx context.Context) ([]ClusterStatus, error) {
 	resp, err := c.get(ctx, "/cluster/status")
@@ -1580,6 +1588,12 @@ func (c *Client) GetClusterStatus(ctx context.Context) ([]ClusterStatus, error) 
 
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 		return nil, err
+	}
+	// The reply holds one entry for the cluster and one per member. Beyond the
+	// limit it is not a membership Pulse can act on; failing the read keeps the
+	// last-known members, as any other failed read does.
+	if len(result.Data) > maxClusterNodes+1 {
+		return nil, fmt.Errorf("cluster membership reply lists more than %d nodes", maxClusterNodes)
 	}
 
 	return result.Data, nil

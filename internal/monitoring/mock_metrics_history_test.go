@@ -194,11 +194,12 @@ func TestSeedMockMetricsHistory_PopulatesSeries(t *testing.T) {
 		t.Fatalf("expected last vm cpu point to match canonical sampler, got=%v want=%v", got, want)
 	}
 
-	dockerCPU := mh.GetGuestMetrics("docker:cont-1", "cpu", time.Hour)
+	dockerMetricID := unifiedresources.DockerContainerMetricID("host-1", "cont-1")
+	dockerCPU := mh.GetGuestMetrics("docker:"+dockerMetricID, "cpu", time.Hour)
 	if len(dockerCPU) < 10 {
 		t.Fatalf("expected seeded docker container cpu points, got %d", len(dockerCPU))
 	}
-	if got, want := dockerCPU[len(dockerCPU)-1].Value, mock.SampleMetric("dockerContainer", "cont-1", "cpu", dockerCPU[len(dockerCPU)-1].Timestamp); math.Abs(got-want) > 1e-9 {
+	if got, want := dockerCPU[len(dockerCPU)-1].Value, mock.SampleMetric("dockerContainer", dockerMetricID, "cpu", dockerCPU[len(dockerCPU)-1].Timestamp); math.Abs(got-want) > 1e-9 {
 		t.Fatalf("expected last docker cpu point to match canonical sampler, got=%v want=%v", got, want)
 	}
 
@@ -287,7 +288,7 @@ func TestSeedMockMetricsHistory_AppendsSingleTerminalNowPoint(t *testing.T) {
 	mh := NewMetricsHistory(1000, 24*time.Hour)
 	seedMockMetricsHistory(context.Background(), mh, nil, fixtureGraphWithState(state), now, time.Hour, interval)
 
-	memorySeries := mh.GetGuestMetrics("docker:cont-1", "memory", time.Hour)
+	memorySeries := mh.GetGuestMetrics("docker:"+unifiedresources.DockerContainerMetricID("host-1", "cont-1"), "memory", time.Hour)
 	if len(memorySeries) < 2 {
 		t.Fatalf("expected seeded docker memory points, got %d", len(memorySeries))
 	}
@@ -1133,7 +1134,7 @@ func TestStartMockMetricsSampler_SeedsCanonicalMockResourceHistory(t *testing.T)
 		t.Fatalf("expected downsampled proxmox disk chart history to stay within two points of target %d, got %d points for %q", want, got, proxmoxDiskID)
 	}
 
-	dockerMetricID := strings.TrimSpace(graph.State.DockerHosts[0].Containers[0].ID)
+	dockerMetricID := unifiedresources.DockerContainerMetricID(graph.State.DockerHosts[0].ID, graph.State.DockerHosts[0].Containers[0].ID)
 	if dockerMetricID == "" {
 		t.Fatal("expected docker app container metric id")
 	}
@@ -1986,10 +1987,11 @@ func TestRecordMockStateToMetricsHistory_UsesCanonicalMetricModelForStateBackedR
 	if got, want := mh.GetGuestMetrics("dockerHost:docker-host-live", "temperature", lookback)[0].Value, mock.SampleMetric("dockerHost", "docker-host-live", "temperature", ts); math.Abs(got-want) > 1e-9 {
 		t.Fatalf("expected docker host temperature live tick to use canonical metric model: got=%f want=%f", got, want)
 	}
-	if got, want := mh.GetGuestMetrics("docker:docker-cont-live", "cpu", lookback)[0].Value, mock.SampleMetric("dockerContainer", "docker-cont-live", "cpu", ts); math.Abs(got-want) > 1e-9 {
+	dockerContainerMetricID := unifiedresources.DockerContainerMetricID("docker-host-live", "docker-cont-live")
+	if got, want := mh.GetGuestMetrics("docker:"+dockerContainerMetricID, "cpu", lookback)[0].Value, mock.SampleMetric("dockerContainer", dockerContainerMetricID, "cpu", ts); math.Abs(got-want) > 1e-9 {
 		t.Fatalf("expected docker container cpu live tick to use canonical metric model: got=%f want=%f", got, want)
 	}
-	if got, want := mh.GetGuestMetrics("docker:docker-cont-live", "netin", lookback)[0].Value, mock.SampleMetric("dockerContainer", "docker-cont-live", "netin", ts); math.Abs(got-want) > 1e-9 {
+	if got, want := mh.GetGuestMetrics("docker:"+dockerContainerMetricID, "netin", lookback)[0].Value, mock.SampleMetric("dockerContainer", dockerContainerMetricID, "netin", ts); math.Abs(got-want) > 1e-9 {
 		t.Fatalf("expected docker container netin live tick to use canonical metric model: got=%f want=%f", got, want)
 	}
 	if got, want := mh.GetGuestMetrics("agent:agent-live", "netin", lookback)[0].Value, mock.SampleMetric("agent", "agent-live", "netin", ts); math.Abs(got-want) > 1e-9 {
@@ -2148,7 +2150,7 @@ func TestMockDockerContainerSeedCoversDrawerHistorySeries(t *testing.T) {
 	now := time.Now().UTC()
 	seedMockMetricsHistory(context.Background(), history, nil, graph, now, 2*time.Hour, time.Minute)
 
-	containerID := graph.State.DockerHosts[0].Containers[0].ID
+	containerID := unifiedresources.DockerContainerMetricID(graph.State.DockerHosts[0].ID, graph.State.DockerHosts[0].Containers[0].ID)
 	for _, metricType := range mockGuestChartMetricTypes {
 		points := history.GetGuestMetrics("docker:"+containerID, metricType, 2*time.Hour)
 		if len(points) == 0 {

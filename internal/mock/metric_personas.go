@@ -4,6 +4,7 @@ import (
 	"strings"
 	"sync/atomic"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/internal/vmware"
 )
 
@@ -177,7 +178,7 @@ func buildMetricRoleRegistry(graph FixtureGraph) map[string]string {
 			for key, value := range container.Labels {
 				hints = append(hints, key, value)
 			}
-			register("dockerContainer", container.ID, hints...)
+			register("dockerContainer", unifiedresources.DockerContainerMetricID(host.ID, container.ID), hints...)
 		}
 	}
 	for _, storage := range graph.State.Storage {

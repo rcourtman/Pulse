@@ -221,7 +221,16 @@ func dockerChildTargetID(resource Resource, target interface {
 	if target == nil || CanonicalResourceType(ResourceType(target.GetResourceType())) != CanonicalResourceType(resource.Type) {
 		return ""
 	}
-	return targetResourceID(target)
+	id := targetResourceID(target)
+	// A container's history key carries its Docker host
+	// (DockerContainerMetricID). Its identity stays the container ID.
+	if resource.Docker != nil {
+		if containerID := strings.TrimSpace(resource.Docker.ContainerID); containerID != "" &&
+			id == DockerContainerMetricID(resource.Docker.HostSourceID, containerID) {
+			return containerID
+		}
+	}
+	return id
 }
 
 func canonicalProxmoxNodeName(resource Resource) string {

@@ -1,6 +1,8 @@
 package modelboundary
 
 import (
+	"reflect"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -169,5 +171,122 @@ func TestRequestSanitizerForModelSkipsLocalModel(t *testing.T) {
 	}
 	if sanitizer := RequestSanitizerForModel("ollama:llama3", policySanitizerProvider{resources: []unifiedresources.Resource{resource}}); sanitizer != nil {
 		t.Fatal("expected no sanitizer for local Ollama model")
+	}
+}
+
+func TestRequestSanitizerForModelKeepsModelBoundResourceIDs(t *testing.T) {
+	// Anyone who may create a Secret in a monitored namespace chooses its name.
+	// That name must not take the ID of an unrelated host out of provider-bound
+	// text, neither as a part of the ID nor as the whole of it. A name that the
+	// host shares with a local-only resource stays redacted.
+	host := unifiedresources.Resource{
+		ID:   "agent-89b9f14dfbe851b7",
+		Type: unifiedresources.ResourceTypeAgent,
+		Name: "production",
+	}
+	secret := func(name string) unifiedresources.Resource {
+		return unifiedresources.Resource{
+			ID:         "k8s-secret-" + name,
+			Type:       unifiedresources.ResourceTypeK8sSecret,
+			Name:       name,
+			Identity:   unifiedresources.ResourceIdentity{Hostnames: []string{name, "team-a/" + name}},
+			Kubernetes: &unifiedresources.K8sData{Namespace: "team-a"},
+		}
+	}
+	provider := policySanitizerProvider{resources: []unifiedresources.Resource{
+		host, secret("production"), secret("agent"), secret("agent-89b9f14dfbe851b7"), secret("registry-password"),
+	}}
+
+	req := providers.ChatRequest{
+		System: "Resolved requested identity aliases: agent-89b9f14dfbe851b7, production-1\n| production | 0 | 0 | 0 |",
+		Messages: []providers.Message{{
+			Role: "assistant",
+			ToolCalls: []providers.ToolCall{{
+				ID:    "tool-1",
+				Input: map[string]interface{}{"host": "agent-89b9f14dfbe851b7"},
+			}},
+		}, {
+			Role:       "tool",
+			ToolResult: &providers.ToolResult{ToolUseID: "tool-1", Content: `{"host":"production","secrets":["team-a/production","registry-password"]}`},
+		}},
+	}
+
+	out := RequestSanitizerForModel("openai:gpt-4o", provider)(req)
+	label := unifiedresources.ResourcePolicyRedactedLabel
+	if want := "Resolved requested identity aliases: agent-89b9f14dfbe851b7, production-1\n| " + label + " | 0 | 0 | 0 |"; out.System != want {
+		t.Fatalf("system prompt = %q, want %q", out.System, want)
+	}
+	if got := out.Messages[0].ToolCalls[0].Input["host"]; got != "agent-89b9f14dfbe851b7" {
+		t.Fatalf("model-bound host ID was redacted in tool input: %q", got)
+	}
+	want := `{"host":"` + label + `","secrets":["` + label + `","` + label + `"]}`
+	if got := out.Messages[1].ToolResult.Content; got != want {
+		t.Fatalf("tool result = %q, want %q", got, want)
+	}
+}
+
+func TestRequestSanitizerForModelRedactsEachIdentifierOnce(t *testing.T) {
+	// The redaction label contains "redacted" and "policy". Local-only
+	// resources with those names must not keep replacing the words of the
+	// labels inserted for the resources before them.
+	var resources []unifiedresources.Resource
+	for i := 0; i < 24; i++ {
+		resources = append(resources, unifiedresources.Resource{
+			ID:   "k8s-secret-" + strconv.Itoa(i),
+			Type: unifiedresources.ResourceTypeK8sSecret,
+			Name: []string{"redacted", "policy"}[i%2],
+		})
+	}
+
+	req := providers.ChatRequest{System: "Apply the retention policy to k8s-secret-7."}
+	out := RequestSanitizerForModel("openai:gpt-4o", policySanitizerProvider{resources: resources})(req)
+	want := "Apply the retention " + unifiedresources.ResourcePolicyRedactedLabel + " to " + unifiedresources.ResourcePolicyRedactedLabel + "."
+	if out.System != want {
+		t.Fatalf("system prompt is %d bytes, want %q", len(out.System), want)
+	}
+}
+
+func TestRequestSanitizerForModelKeepsToolSchemaKeywords(t *testing.T) {
+	var resources []unifiedresources.Resource
+	for _, name := range []string{"object", "string", "array", "action", "vault"} {
+		resources = append(resources, unifiedresources.Resource{
+			ID:   "k8s-secret-" + name,
+			Type: unifiedresources.ResourceTypeK8sSecret,
+			Name: name,
+		})
+	}
+
+	req := providers.ChatRequest{Tools: []providers.Tool{{
+		Name:        "pulse_docker",
+		Description: "Run an action on vault",
+		InputSchema: map[string]interface{}{
+			"type": "object",
+			"properties": map[string]interface{}{
+				"action": map[string]interface{}{"type": "string", "enum": []string{"services", "vault"}},
+				"type":   map[string]interface{}{"type": []interface{}{"string", "null"}, "description": "Type of vault"},
+				"hosts":  map[string]interface{}{"type": "array", "items": map[string]interface{}{"type": "string"}},
+				"filter": map[string]interface{}{"anyOf": []interface{}{map[string]interface{}{"type": "object", "required": []interface{}{"action"}}}},
+			},
+			"required": []string{"action"},
+		},
+	}}}
+
+	got := RequestSanitizerForModel("openai:gpt-4o", policySanitizerProvider{resources: resources})(req).Tools[0]
+	label := unifiedresources.ResourcePolicyRedactedLabel
+	want := map[string]interface{}{
+		"type": "object",
+		"properties": map[string]interface{}{
+			"action": map[string]interface{}{"type": "string", "enum": []string{"services", label}},
+			"type":   map[string]interface{}{"type": []interface{}{"string", "null"}, "description": "Type of " + label},
+			"hosts":  map[string]interface{}{"type": "array", "items": map[string]interface{}{"type": "string"}},
+			"filter": map[string]interface{}{"anyOf": []interface{}{map[string]interface{}{"type": "object", "required": []interface{}{"action"}}}},
+		},
+		"required": []string{"action"},
+	}
+	if !reflect.DeepEqual(got.InputSchema, want) {
+		t.Fatalf("tool schema = %#v, want %#v", got.InputSchema, want)
+	}
+	if want := "Run an " + label + " on " + label; got.Description != want {
+		t.Fatalf("tool description = %q, want %q", got.Description, want)
 	}
 }

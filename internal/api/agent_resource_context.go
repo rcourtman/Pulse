@@ -63,8 +63,9 @@ type AgentResourceActionVerification struct {
 // action audit record. Includes the refusal-reason prefix tokens
 // (resource_remediation_locked:, plan_drift:) verbatim so agents can
 // branch on them without parsing the human message. Command is present
-// only for session callers or API tokens with action execution scope;
-// monitoring-read tokens receive commandRedacted instead.
+// only for API tokens with action execution scope or session and proxy
+// callers who may review actions; other callers receive commandRedacted
+// instead.
 type AgentResourceActionSummary struct {
 	ID                  string                           `json:"id"`
 	CapabilityName      string                           `json:"capabilityName"`
@@ -85,11 +86,12 @@ type AgentResourceActionSummary struct {
 // a pending approval request scoped to a specific resource. Carries
 // just enough for an agent that holds approval authority to decide
 // whether to act, fetch full context via /api/approvals/{id}, or
-// escalate. Command is present only for session callers or API tokens
-// with action execution scope; monitoring-read tokens receive
-// commandRedacted instead. Mirrors the shape of approval.pending SSE
-// events so "what's pending right now" (this bundle) and "what just
-// became pending" (the SSE stream) speak the same vocabulary.
+// escalate. Command is present only for API tokens with action execution
+// scope or session and proxy callers who may review actions; other
+// callers receive commandRedacted instead. Mirrors the shape of
+// approval.pending SSE events so "what's pending right now" (this
+// bundle) and "what just became pending" (the SSE stream) speak the
+// same vocabulary.
 type AgentResourceApprovalSummary struct {
 	ID              string    `json:"id"`
 	Command         string    `json:"command,omitempty"`

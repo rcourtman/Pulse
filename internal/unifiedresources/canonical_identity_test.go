@@ -159,6 +159,26 @@ func TestDockerChildIdentityDoesNotClaimItsCommandHost(t *testing.T) {
 	}
 }
 
+// A container's history is keyed per Docker host, so its metrics target
+// carries the host. The container is still identified by its own ID.
+func TestDockerContainerIdentityKeepsContainerIDUnderHostScopedMetricsTarget(t *testing.T) {
+	resource := Resource{
+		ID: "app-container-1", Type: ResourceTypeAppContainer, Name: "web",
+		Docker:          &DockerData{HostSourceID: "native-host", ContainerID: "abc123"},
+		MetricsTarget:   &MetricsTarget{ResourceType: string(ResourceTypeAppContainer), ResourceID: DockerContainerMetricID("native-host", "abc123")},
+		DiscoveryTarget: &DiscoveryTarget{ResourceType: string(ResourceTypeAppContainer), ResourceID: "web", AgentID: "native-host"},
+	}
+	RefreshCanonicalIdentity(&resource)
+	if resource.Canonical.PrimaryID != "app-container:abc123" || resource.Canonical.PlatformID != "abc123" {
+		t.Fatalf("container identity follows its history key: %+v", resource.Canonical)
+	}
+	for _, alias := range resource.Canonical.Aliases {
+		if strings.Contains(alias, "native-host") {
+			t.Fatalf("container claimed host-scoped alias %q: %+v", alias, resource.Canonical)
+		}
+	}
+}
+
 func TestDockerCollectionModeDoesNotChangeCanonicalIdentity(t *testing.T) {
 	resource := Resource{
 		ID:   "docker-host-1",

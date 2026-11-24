@@ -471,6 +471,16 @@ func (mtm *MultiTenantMonitor) newTenantMonitor(orgID string, tenantPersistence 
 	if err != nil {
 		return nil, fmt.Errorf("failed to create monitor for org %s: %w", orgID, err)
 	}
+	if orgID != "default" {
+		// New gives every monitor a collector for the instance's one sensors
+		// SSH key. Nodes trust that key whichever organization they belong to,
+		// and the collector logs in wherever the polled connection, or the
+		// cluster its server reports, points. The key is therefore instance
+		// authority, like the rest of the server's SSH configuration, and only
+		// the primary runtime collects with it. Agents keep reporting
+		// temperatures for every organization.
+		monitor.tempCollector = nil
+	}
 	return monitor, nil
 }
 

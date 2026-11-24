@@ -916,6 +916,49 @@ func TestApplyInitialRemoteCommandAuthority(t *testing.T) {
 	}
 }
 
+// The Docker module takes commands from its own report response, outside the
+// host module's command channel, so it needs the local ceiling handed to it.
+func TestRunCarriesCommandAuthorityCeilingIntoDockerModule(t *testing.T) {
+	for _, tc := range []struct {
+		profile            hostagent.CommandAuthorityProfile
+		wantMonitoringOnly bool
+	}{
+		{profile: hostagent.CommandAuthorityMonitoringOnly, wantMonitoringOnly: true},
+		{profile: hostagent.CommandAuthorityCommandCapable},
+		{profile: hostagent.CommandAuthorityLegacy},
+	} {
+		t.Run(string(tc.profile), func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path == "/api/agents/agent/lookup" {
+					http.NotFound(w, r)
+					return
+				}
+				// A server asking for commands must not lift the ceiling.
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = io.WriteString(w, `{"success":true,"config":{"commandsEnabled":true}}`)
+			}))
+			defer server.Close()
+			ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+			defer cancel()
+			evidence := spyIdentityStartup(t, cancel)
+			err := run(ctx, []string{
+				"--url", server.URL, "--state-dir", t.TempDir(), "--token", "synthetic-primary-token",
+				"--hostname", "synthetic-fixture-host", "--enable-host", "--enable-docker", "--enable-kubernetes",
+				"--disable-auto-update", "--health-addr", "", "--command-authority", string(tc.profile),
+			}, func(string) string { return "" })
+			if err != nil {
+				t.Fatalf("startup failed: %v", err)
+			}
+			if evidence.host.CommandAuthorityProfile != tc.profile {
+				t.Fatalf("host module authority = %q, want %q", evidence.host.CommandAuthorityProfile, tc.profile)
+			}
+			if evidence.docker.MonitoringOnly != tc.wantMonitoringOnly {
+				t.Fatalf("docker module MonitoringOnly = %v under %q, want %v", evidence.docker.MonitoringOnly, tc.profile, tc.wantMonitoringOnly)
+			}
+		})
+	}
+}
+
 func TestResolveToken(t *testing.T) {
 	customStateDir := filepath.Join(string(filepath.Separator), "custom", "pulse-agent")
 	fakeReadFile := func(path string) ([]byte, error) {
@@ -2983,6 +3026,22 @@ func TestWindowsServiceRuntimeStartsHealthServer(t *testing.T) {
 	}
 	for _, want := range required {
 		if !strings.Contains(text, want) {
+			t.Fatalf("expected Windows service runtime to include %q", want)
+		}
+	}
+
+	// The Windows service builds its own module configs. Restrictions the
+	// operator set locally must reach the modules as they do in the foreground
+	// runtime: a dropped command authority profile is read as legacy, which
+	// lets server configuration enable commands on a monitoring-only service.
+	normalized := strings.Join(strings.Fields(text), " ")
+	localRestrictions := []string{
+		`CommandAuthorityProfile: ws.cfg.CommandAuthorityProfile,`,
+		`DisableUpdateChecks: ws.cfg.DisableDockerUpdateChecks,`,
+		`DisableRegistryCredentials: ws.cfg.DisableRegistryCredentials,`,
+	}
+	for _, want := range localRestrictions {
+		if !strings.Contains(normalized, want) {
 			t.Fatalf("expected Windows service runtime to include %q", want)
 		}
 	}

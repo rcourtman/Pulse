@@ -841,6 +841,113 @@ func TestUnusedInstallTokenCannotBindAnotherTokensCommandIdentity(t *testing.T) 
 	}
 }
 
+// A monitoring-only install token never binds a command channel, so it keeps
+// looking like a fresh install command. Once it has enrolled its own host it
+// must not inherit a stopped host's identity by reporting that host's machine
+// ID and hostname, nor be handed the remote config stored under it. That has to
+// hold after the token's own host record is gone too: a Kubernetes report
+// keeps the credential valid through the host's uninstall.
+func TestHostInstallTokenInUseElsewhereCannotClaimStoppedHostIdentity(t *testing.T) {
+	for _, test := range []struct {
+		name          string
+		removeOwnHost bool
+	}{
+		{name: "own host still reports"},
+		{name: "own host uninstalled", removeOwnHost: true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			dataPath := t.TempDir()
+			const adminRaw = "install-handoff-admin-token-123.12345678"
+			admin := newTokenRecord(t, adminRaw, []string{config.ScopeWildcard}, nil)
+			if err := config.NewConfigPersistence(dataPath).SaveAPITokens([]config.APITokenRecord{admin}); err != nil {
+				t.Fatalf("SaveAPITokens: %v", err)
+			}
+			runtime := newHostRemovalLifecycleHTTPRuntime(t, dataPath, []config.APITokenRecord{admin})
+			t.Cleanup(runtime.stop)
+
+			mint := func(name string) AgentInstallCommandResponse {
+				t.Helper()
+				rec := serveHostRemovalLifecycleRequest(t, runtime, http.MethodPost, "/api/agent-install-command", adminRaw,
+					[]byte(`{"type":"host","enableCommands":false,"name":"`+name+`"}`))
+				install := decodeHostAgentInstallResponse(t, rec)
+				if install.Token == "" || install.Record == nil {
+					t.Fatalf("monitoring-only install omitted token record: %+v", install)
+				}
+				return install
+			}
+			report := func(machineID, hostname string) agentshost.Report {
+				return agentshost.Report{
+					Agent:     agentshost.AgentInfo{ID: machineID, Version: "6.5.0", Type: "unified", IntervalSeconds: 30},
+					Host:      agentshost.HostInfo{ID: machineID, MachineID: machineID, Hostname: hostname, Platform: "linux"},
+					Timestamp: time.Now().UTC(),
+				}
+			}
+
+			const (
+				stoppedMachineID = "machine-stopped-db01"
+				stoppedHostname  = "db01"
+				labMachineID     = "machine-lab"
+			)
+			stoppedInstall := mint("db01-install")
+			status, stoppedID, body := postHostRemovalLifecycleReport(t, runtime, stoppedInstall.Token, report(stoppedMachineID, stoppedHostname))
+			if status != http.StatusOK || stoppedID != stoppedMachineID {
+				t.Fatalf("db01 report = (%d, %q), want (200, %q): %s", status, stoppedID, stoppedMachineID, body)
+			}
+
+			labInstall := mint("lab-install")
+			status, labID, body := postHostRemovalLifecycleReport(t, runtime, labInstall.Token, report(labMachineID, "lab"))
+			if status != http.StatusOK || labID != labMachineID {
+				t.Fatalf("lab report = (%d, %q), want (200, %q): %s", status, labID, labMachineID, body)
+			}
+			if test.removeOwnHost {
+				rec := serveHostRemovalLifecycleRequest(t, runtime, http.MethodPost, "/api/agents/kubernetes/report", labInstall.Token,
+					[]byte(`{"agent":{"id":"lab-kubernetes","version":"6.5.0","type":"unified","intervalSeconds":30},"cluster":{"id":"lab-cluster","name":"lab-cluster"}}`))
+				if rec.Code != http.StatusOK {
+					t.Fatalf("lab kubernetes report status = %d: %s", rec.Code, rec.Body.String())
+				}
+				rec = serveHostRemovalLifecycleRequest(t, runtime, http.MethodPost, "/api/agents/agent/uninstall", labInstall.Token,
+					[]byte(`{"agentId":"`+labID+`"}`))
+				if rec.Code != http.StatusOK {
+					t.Fatalf("lab uninstall status = %d: %s", rec.Code, rec.Body.String())
+				}
+				if _, ok := runtime.config.ValidateAPIToken(labInstall.Token); !ok {
+					t.Fatal("test setup revoked the lab credential its Kubernetes report still uses")
+				}
+			}
+
+			status, claimedID, body := postHostRemovalLifecycleReport(t, runtime, labInstall.Token, report(stoppedMachineID, stoppedHostname))
+			if status != http.StatusOK {
+				t.Fatalf("claiming report status = %d: %s", status, body)
+			}
+			if claimedID == stoppedID {
+				t.Fatalf("install token in use on %q was filed as the stopped host %q", labID, stoppedID)
+			}
+			stoppedTokenID := ""
+			for _, host := range runtime.monitor.GetLiveHostsSnapshot() {
+				if host.ID == stoppedID {
+					stoppedTokenID = host.TokenID
+				}
+			}
+			if stoppedTokenID != stoppedInstall.Record.ID {
+				t.Fatalf("stopped host after the claim is held by token %q, want it kept under its own token %q", stoppedTokenID, stoppedInstall.Record.ID)
+			}
+
+			rec := serveHostRemovalLifecycleRequest(t, runtime, http.MethodGet, "/api/agents/agent/"+stoppedID+"/config", labInstall.Token, nil)
+			var fetched struct {
+				AgentID string `json:"agentId"`
+			}
+			if rec.Code == http.StatusOK {
+				if err := json.Unmarshal(rec.Body.Bytes(), &fetched); err != nil {
+					t.Fatalf("decode config response: %v", err)
+				}
+			}
+			if fetched.AgentID == stoppedID {
+				t.Fatalf("install token in use on %q was served the stopped host's remote config: %s", labID, rec.Body.String())
+			}
+		})
+	}
+}
+
 func tokenRecordByID(records []config.APITokenRecord, tokenID string) *config.APITokenRecord {
 	for index := range records {
 		if records[index].ID == tokenID {

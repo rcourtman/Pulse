@@ -37,13 +37,15 @@ func RequestSanitizerForModel(model string, provider UnifiedResourceProvider) fu
 	if !ModelUsesExternalProvider(model) {
 		return nil
 	}
-	resources := localOnlyRoutedResources(resourcePolicySanitizerResources(provider))
+	governed := resourcePolicySanitizerResources(provider)
+	resources := localOnlyRoutedResources(governed)
+	redactor := unifiedresources.NewResourcePolicyTextRedactor(resources, modelBoundResourceIDs(governed))
 	return func(req providers.ChatRequest) providers.ChatRequest {
 		req = sanitizeProviderRequestForPromptSecrets(req)
 		if len(resources) == 0 {
 			return req
 		}
-		return sanitizeProviderRequestForResources(req, resources)
+		return sanitizeProviderRequestForResources(req, redactor)
 	}
 }
 
@@ -125,94 +127,141 @@ func localOnlyRoutedResources(resources []unifiedresources.Resource) []unifiedre
 	return filtered
 }
 
-func sanitizeProviderRequestForResources(req providers.ChatRequest, resources []unifiedresources.Resource) providers.ChatRequest {
-	if len(resources) == 0 {
-		return req
+// modelBoundResourceIDs collects the ID of every resource that is not
+// local-only. An ID is the handle the model needs to look that resource up, so
+// a local-only resource that happens to carry the same string - a Kubernetes
+// Secret named after a host's ID - must not take it out of the request. Names
+// are not collected: a name that a local-only resource shares with another
+// resource stays behind the local-only floor.
+func modelBoundResourceIDs(resources []unifiedresources.Resource) map[string]struct{} {
+	ids := make(map[string]struct{})
+	for _, resource := range resources {
+		if resource.Policy == nil || resource.Policy.Routing.Scope == unifiedresources.ResourceRoutingScopeLocalOnly {
+			continue
+		}
+		if id := strings.TrimSpace(resource.ID); id != "" {
+			ids[id] = struct{}{}
+		}
 	}
-	req.System = sanitizeResourcePolicyText(req.System, resources)
+	return ids
+}
+
+func sanitizeProviderRequestForResources(req providers.ChatRequest, redactor *unifiedresources.ResourcePolicyTextRedactor) providers.ChatRequest {
+	req.System = sanitizeResourcePolicyText(req.System, redactor)
 
 	if len(req.Messages) > 0 {
 		req.Messages = append([]providers.Message(nil), req.Messages...)
 		for i := range req.Messages {
-			req.Messages[i] = sanitizeProviderMessageForResources(req.Messages[i], resources)
+			req.Messages[i] = sanitizeProviderMessageForResources(req.Messages[i], redactor)
 		}
 	}
 	if len(req.Tools) > 0 {
 		req.Tools = append([]providers.Tool(nil), req.Tools...)
 		for i := range req.Tools {
-			req.Tools[i] = sanitizeProviderToolForResources(req.Tools[i], resources)
+			req.Tools[i] = sanitizeProviderToolForResources(req.Tools[i], redactor)
 		}
 	}
 	return req
 }
 
-func sanitizeProviderMessageForResources(msg providers.Message, resources []unifiedresources.Resource) providers.Message {
-	msg.Content = sanitizeResourcePolicyText(msg.Content, resources)
-	msg.ReasoningContent = sanitizeResourcePolicyText(msg.ReasoningContent, resources)
+func sanitizeProviderMessageForResources(msg providers.Message, redactor *unifiedresources.ResourcePolicyTextRedactor) providers.Message {
+	msg.Content = sanitizeResourcePolicyText(msg.Content, redactor)
+	msg.ReasoningContent = sanitizeResourcePolicyText(msg.ReasoningContent, redactor)
 	if msg.ToolResult != nil {
 		toolResult := *msg.ToolResult
-		toolResult.Content = sanitizeResourcePolicyText(toolResult.Content, resources)
+		toolResult.Content = sanitizeResourcePolicyText(toolResult.Content, redactor)
 		msg.ToolResult = &toolResult
 	}
 	if len(msg.ToolCalls) > 0 {
 		msg.ToolCalls = append([]providers.ToolCall(nil), msg.ToolCalls...)
 		for i := range msg.ToolCalls {
-			msg.ToolCalls[i].Input = sanitizeResourcePolicyMap(msg.ToolCalls[i].Input, resources)
+			msg.ToolCalls[i].Input = sanitizeResourcePolicyMap(msg.ToolCalls[i].Input, redactor)
 		}
 	}
 	return msg
 }
 
-func sanitizeProviderToolForResources(tool providers.Tool, resources []unifiedresources.Resource) providers.Tool {
-	tool.Description = sanitizeResourcePolicyText(tool.Description, resources)
-	tool.InputSchema = sanitizeResourcePolicyMap(tool.InputSchema, resources)
+func sanitizeProviderToolForResources(tool providers.Tool, redactor *unifiedresources.ResourcePolicyTextRedactor) providers.Tool {
+	tool.Description = sanitizeResourcePolicyText(tool.Description, redactor)
+	tool.InputSchema = sanitizeResourcePolicySchema(tool.InputSchema, redactor)
 	return tool
 }
 
-func sanitizeResourcePolicyText(value string, resources []unifiedresources.Resource) string {
-	if strings.TrimSpace(value) == "" || len(resources) == 0 {
+func sanitizeResourcePolicyText(value string, redactor *unifiedresources.ResourcePolicyTextRedactor) string {
+	if strings.TrimSpace(value) == "" {
 		return value
 	}
-	redacted := value
-	for _, resource := range resources {
-		redacted = unifiedresources.ResourcePolicyRedactedText(redacted, resource)
-	}
-	return redacted
+	return redactor.RedactedText(value)
 }
 
-func sanitizeResourcePolicyMap(values map[string]interface{}, resources []unifiedresources.Resource) map[string]interface{} {
+// sanitizeResourcePolicySchema redacts a tool's JSON Schema. The values of the
+// "type" and "required" keywords are JSON Schema type names and the schema's
+// own property names, which are sent as keys anyway. They are kept as they
+// are: a resource named "object" or "string" must not turn the schema into one
+// the provider rejects.
+func sanitizeResourcePolicySchema(schema map[string]interface{}, redactor *unifiedresources.ResourcePolicyTextRedactor) map[string]interface{} {
+	if len(schema) == 0 {
+		return schema
+	}
+	sanitized := make(map[string]interface{}, len(schema))
+	for key, value := range schema {
+		sanitized[key] = sanitizeResourcePolicySchemaValue(key, value, redactor)
+	}
+	return sanitized
+}
+
+func sanitizeResourcePolicySchemaValue(keyword string, value interface{}, redactor *unifiedresources.ResourcePolicyTextRedactor) interface{} {
+	// A map is a nested schema, also when it belongs to a property that is
+	// itself called "type" or "required".
+	if nested, ok := value.(map[string]interface{}); ok {
+		return sanitizeResourcePolicySchema(nested, redactor)
+	}
+	if keyword == "type" || keyword == "required" {
+		return value
+	}
+	if list, ok := value.([]interface{}); ok {
+		out := make([]interface{}, len(list))
+		for i := range list {
+			out[i] = sanitizeResourcePolicySchemaValue(keyword, list[i], redactor)
+		}
+		return out
+	}
+	return sanitizeResourcePolicyValue(value, redactor)
+}
+
+func sanitizeResourcePolicyMap(values map[string]interface{}, redactor *unifiedresources.ResourcePolicyTextRedactor) map[string]interface{} {
 	if len(values) == 0 {
 		return values
 	}
 	sanitized := make(map[string]interface{}, len(values))
 	for key, value := range values {
-		sanitized[key] = sanitizeResourcePolicyValue(value, resources)
+		sanitized[key] = sanitizeResourcePolicyValue(value, redactor)
 	}
 	return sanitized
 }
 
-func sanitizeResourcePolicyValue(value interface{}, resources []unifiedresources.Resource) interface{} {
+func sanitizeResourcePolicyValue(value interface{}, redactor *unifiedresources.ResourcePolicyTextRedactor) interface{} {
 	switch typed := value.(type) {
 	case string:
-		return sanitizeResourcePolicyText(typed, resources)
+		return sanitizeResourcePolicyText(typed, redactor)
 	case []string:
 		out := make([]string, len(typed))
 		for i := range typed {
-			out[i] = sanitizeResourcePolicyText(typed[i], resources)
+			out[i] = sanitizeResourcePolicyText(typed[i], redactor)
 		}
 		return out
 	case []interface{}:
 		out := make([]interface{}, len(typed))
 		for i := range typed {
-			out[i] = sanitizeResourcePolicyValue(typed[i], resources)
+			out[i] = sanitizeResourcePolicyValue(typed[i], redactor)
 		}
 		return out
 	case map[string]interface{}:
-		return sanitizeResourcePolicyMap(typed, resources)
+		return sanitizeResourcePolicyMap(typed, redactor)
 	case map[string]string:
 		out := make(map[string]string, len(typed))
 		for key, nested := range typed {
-			out[key] = sanitizeResourcePolicyText(nested, resources)
+			out[key] = sanitizeResourcePolicyText(nested, redactor)
 		}
 		return out
 	default:

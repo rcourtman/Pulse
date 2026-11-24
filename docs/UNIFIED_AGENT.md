@@ -567,7 +567,7 @@ sudo chmod 0700 /usr/local/libexec/pulse-queue-depth
 | `--agent-id` | `PULSE_AGENT_ID` | Unique agent identifier | *(saved ID, then machine ID)* |
 | `--report-ip` | `PULSE_REPORT_IP` | Override reported IP (multi-NIC) | *(auto)* |
 | `--disable-ceph` | `PULSE_DISABLE_CEPH` | Disable local Ceph status polling | `false` |
-| `--tag` | `PULSE_TAGS` | Apply tags (repeatable or CSV) | *(none)* |
+| `--tag` | `PULSE_TAGS` | Apply tags (repeatable or CSV, at most 32, each up to 64 bytes) | *(none)* |
 | `--log-level` | `LOG_LEVEL` | Log verbosity (`debug`, `info`, `warn`, `error`) | `info` |
 | `--health-addr` | `PULSE_HEALTH_ADDR` | Health/metrics server address | `127.0.0.1:9191` |
 

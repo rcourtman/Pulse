@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"net/http"
 	"strings"
 	"sync"
@@ -642,6 +643,7 @@ func (h *UnifiedAgentHandlers) handleGetConfig(w http.ResponseWriter, r *http.Re
 
 	config := monitor.GetHostAgentConfig(agentID)
 	config = sanitizeHostAgentConfigForToken(config, record, host)
+	config = withholdProbeSecretsFromOtherTokens(config, record, host)
 	signedConfig, err := h.signAgentConfig(agentID, config)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to sign agent config payload")
@@ -692,6 +694,37 @@ func sanitizeHostAgentConfigForToken(cfg monitoring.HostAgentConfig, record *con
 
 	disabled := false
 	cfg.CommandsEnabled = &disabled
+	return cfg
+}
+
+// withholdProbeSecretsFromOtherTokens keeps the request body, credentials, and
+// header values of assigned HTTP checks in the answer to the token the host
+// itself reports under: the agent that runs them. resolveConfigAgent lets an
+// agent:manage or settings:write token read any host's config by ID, so such a
+// token gets another host's targets as the availability API returns them,
+// where those values are write-only. Session and proxy callers carry no token;
+// the route admits them only with administrative authority.
+func withholdProbeSecretsFromOtherTokens(cfg monitoring.HostAgentConfig, record *config.APITokenRecord, host models.Host) monitoring.HostAgentConfig {
+	assigned, present := cfg.Settings["availabilityTargets"]
+	if !present || record == nil || (host.TokenID != "" && host.TokenID == record.ID) {
+		return cfg
+	}
+
+	// Anything that is not the payload GetHostAgentConfig builds is dropped
+	// rather than passed through unredacted.
+	targets, _ := assigned.([]map[string]interface{})
+	redacted := make([]map[string]interface{}, 0, len(targets))
+	for _, target := range targets {
+		target = maps.Clone(target)
+		if contract, ok := target["http"].(*config.AvailabilityHTTPConfig); ok {
+			target["http"] = availabilityTargetWithoutHTTPSecrets(config.AvailabilityTarget{HTTP: contract}).HTTP
+		} else {
+			delete(target, "http")
+		}
+		redacted = append(redacted, target)
+	}
+	cfg.Settings = maps.Clone(cfg.Settings)
+	cfg.Settings["availabilityTargets"] = redacted
 	return cfg
 }
 

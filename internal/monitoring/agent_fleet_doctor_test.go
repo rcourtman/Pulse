@@ -547,7 +547,7 @@ func TestAgentFleetDiagnosticsTracksDockerOnlyHelperFailureAndRecovery(t *testin
 	degradedReport.Timestamp = now.Add(time.Second)
 	degradedReport.SequenceID = agentshost.FormatReportSequenceID("docker-only-stream", 2)
 	hostMetricCount := len(monitor.metricsHistory.GetGuestMetrics("dockerHost:docker-only-agent", "cpu", time.Hour))
-	containerMetricCount := len(monitor.metricsHistory.GetGuestMetrics("docker:container-1", "cpu", time.Hour))
+	containerMetricCount := len(monitor.metricsHistory.GetGuestMetrics("docker:docker-only-agent/container/container-1", "cpu", time.Hour))
 	activeAlertCount := len(monitor.alertManager.GetActiveAlerts())
 	degradedHost, err := monitor.ApplyDockerReport(degradedReport, nil)
 	if err != nil {
@@ -559,7 +559,7 @@ func TestAgentFleetDiagnosticsTracksDockerOnlyHelperFailureAndRecovery(t *testin
 	if got := len(monitor.metricsHistory.GetGuestMetrics("dockerHost:docker-only-agent", "cpu", time.Hour)); got != hostMetricCount {
 		t.Fatalf("incomplete helper status wrote host metrics: before=%d after=%d", hostMetricCount, got)
 	}
-	if got := len(monitor.metricsHistory.GetGuestMetrics("docker:container-1", "cpu", time.Hour)); got != containerMetricCount {
+	if got := len(monitor.metricsHistory.GetGuestMetrics("docker:docker-only-agent/container/container-1", "cpu", time.Hour)); got != containerMetricCount {
 		t.Fatalf("incomplete helper status wrote container metrics: before=%d after=%d", containerMetricCount, got)
 	}
 	if got := len(monitor.alertManager.GetActiveAlerts()); got != activeAlertCount {

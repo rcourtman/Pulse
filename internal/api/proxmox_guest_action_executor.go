@@ -454,7 +454,8 @@ func (e proxmoxGuestActionExecutor) executableProxmoxGuestResource(resource unif
 
 // connectedProxmoxNodeActionRunnerID finds the typed runner on the machine hosting
 // this guest. Node names and VMIDs repeat across connections, so a runner that only
-// shares the node's name could change a different guest with the same VMID.
+// shares the node's name could change a different guest with the same VMID. A runner
+// that is only linked to the node could too: it must also hold the node's name.
 func (e proxmoxGuestActionExecutor) connectedProxmoxNodeActionRunnerID(ctx context.Context, resource unified.Resource) (string, error) {
 	if resource.Proxmox == nil {
 		return "", fmt.Errorf("proxmox resource metadata missing")
@@ -472,7 +473,16 @@ func (e proxmoxGuestActionExecutor) connectedProxmoxNodeActionRunnerID(ctx conte
 			return agentLookupResult{}
 		}
 		agent, connected := tools.ConnectedAgentForGuestNode(registry, resource.ID, resource.Proxmox.Instance, resource.Proxmox.NodeName, runners.GetActionRunnersForOrganization(GetOrgID(ctx)))
-		return agentLookupResult{agentID: agent.AgentID, ok: connected}
+		// That answer follows the node's agent link first, and Pulse makes the link
+		// from what an agent reports: one of the node's addresses is enough, whatever
+		// the agent is called. A report token can list another node's address. The
+		// runner's hostname is the one an admin bound its credential to, so the link
+		// picks among runners holding the name of the guest's node and never stands
+		// in for that name.
+		if !connected || !unified.HostnamesEquivalent(agent.Hostname, resource.Proxmox.NodeName) {
+			return agentLookupResult{}
+		}
+		return agentLookupResult{agentID: agent.AgentID, ok: true}
 	})
 	if runner.ok && strings.TrimSpace(runner.agentID) != "" {
 		return runner.agentID, nil

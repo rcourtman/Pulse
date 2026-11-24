@@ -65,12 +65,13 @@ func TestApplyDockerReportPreservesDiskObservationPresence(t *testing.T) {
 				}
 			}
 			store.Flush()
+			metricID := unifiedresources.DockerContainerMetricID(host.ID, ct.ID)
 			for _, metric := range []string{"diskread", "diskwrite"} {
-				points := m.metricsHistory.GetGuestMetrics("docker:"+ct.ID, metric, time.Hour)
+				points := m.metricsHistory.GetGuestMetrics("docker:"+metricID, metric, time.Hour)
 				if len(points) != step.wantSamples {
 					t.Fatalf("%s history = %d, want %d", metric, len(points), step.wantSamples)
 				}
-				persisted, err := store.Query("dockerContainer", ct.ID, metric, start, time.Now().Add(time.Minute), 0)
+				persisted, err := store.Query("dockerContainer", metricID, metric, start, time.Now().Add(time.Minute), 0)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -81,10 +82,10 @@ func TestApplyDockerReportPreservesDiskObservationPresence(t *testing.T) {
 					t.Fatalf("lost persisted idle %s: %+v", metric, persisted)
 				}
 			}
-			if points := m.metricsHistory.GetGuestMetrics("docker:"+ct.ID, "disk", time.Hour); len(points) != 0 {
+			if points := m.metricsHistory.GetGuestMetrics("docker:"+metricID, "disk", time.Hour); len(points) != 0 {
 				t.Fatalf("layer sizes became capacity history: %+v", points)
 			}
-			points, err := store.Query("dockerContainer", ct.ID, "disk", start, time.Now().Add(time.Minute), 0)
+			points, err := store.Query("dockerContainer", metricID, "disk", start, time.Now().Add(time.Minute), 0)
 			if err != nil || len(points) != 0 {
 				t.Fatalf("layer sizes became persisted capacity: %+v, %v", points, err)
 			}
@@ -103,12 +104,14 @@ func TestApplyDockerReportPreservesIndependentZeroCounters(t *testing.T) {
 		Host:       agentsdocker.HostInfo{Hostname: "zero-host"},
 		Containers: []agentsdocker.Container{{ID: "zero-container", Name: "idle", BlockIO: &agentsdocker.ContainerBlockIO{ReadBytesPresent: &present, WriteBytesPresent: &absent}}},
 	}
+	var metricKey string
 	for i := 0; i < 2; i++ {
 		report.Timestamp = time.Now().Add(time.Duration(i) * time.Second)
 		host, err := m.ApplyDockerReport(report, nil)
 		if err != nil {
 			t.Fatal(err)
 		}
+		metricKey = "docker:" + unifiedresources.DockerContainerMetricID(host.ID, "zero-container")
 		io := host.Containers[0].BlockIO
 		if io == nil {
 			t.Fatal("explicit zero counter lost")
@@ -123,10 +126,10 @@ func TestApplyDockerReportPreservesIndependentZeroCounters(t *testing.T) {
 			t.Fatalf("measured zero lost: %+v", io)
 		}
 	}
-	if points := m.metricsHistory.GetGuestMetrics("docker:zero-container", "diskwrite", time.Hour); len(points) != 0 {
+	if points := m.metricsHistory.GetGuestMetrics(metricKey, "diskwrite", time.Hour); len(points) != 0 {
 		t.Fatalf("missing writes recorded: %+v", points)
 	}
-	if points := m.metricsHistory.GetGuestMetrics("docker:zero-container", "diskread", time.Hour); len(points) != 1 {
+	if points := m.metricsHistory.GetGuestMetrics(metricKey, "diskread", time.Hour); len(points) != 1 {
 		t.Fatalf("idle reading lost: %+v", points)
 	}
 }

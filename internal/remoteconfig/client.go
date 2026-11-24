@@ -131,7 +131,7 @@ func (c *Client) Fetch(ctx context.Context) (map[string]interface{}, *bool, erro
 	}
 
 	logger := c.logger()
-	signatureRequired := isConfigSignatureRequired()
+	signatureRequired := SignatureRequired()
 	agentID := c.cfg.AgentID
 	if resolved, err := c.resolveAgentID(ctx); err != nil {
 		return nil, nil, fmt.Errorf("resolve agent ID: %w", err)
@@ -283,7 +283,9 @@ func (c *Client) Fetch(ctx context.Context) (map[string]interface{}, *bool, erro
 	return configResp.Config.Settings, configResp.Config.CommandsEnabled, nil
 }
 
-func isConfigSignatureRequired() bool {
+// SignatureRequired reports whether this agent must refuse remote config that
+// does not carry a valid signature (PULSE_AGENT_CONFIG_SIGNATURE_REQUIRED).
+func SignatureRequired() bool {
 	return utils.ParseBool(utils.GetenvTrim("PULSE_AGENT_CONFIG_SIGNATURE_REQUIRED"))
 }
 

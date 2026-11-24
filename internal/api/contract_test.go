@@ -13424,10 +13424,12 @@ func TestContract_MetricsHistoryDockerContainerCPUFallbackUsesCapacityPercent(t 
 	setUnexportedField(t, monitor, "state", state)
 	setUnexportedField(t, monitor, "metricsHistory", monitoring.NewMetricsHistory(10, time.Hour))
 
+	// Container history is addressed per Docker host, by the metrics target.
+	metricID := unifiedresources.DockerContainerMetricID("docker-host-contract-cpu", "container-contract-cpu")
 	router := &Router{monitor: monitor}
 	req := httptest.NewRequest(
 		http.MethodGet,
-		"/api/metrics-store/history?resourceType=app-container&resourceId=container-contract-cpu&metric=cpu&range=5m",
+		"/api/metrics-store/history?resourceType=app-container&resourceId="+url.QueryEscape(metricID)+"&metric=cpu&range=5m",
 		nil,
 	)
 	rec := httptest.NewRecorder()
@@ -13441,7 +13443,7 @@ func TestContract_MetricsHistoryDockerContainerCPUFallbackUsesCapacityPercent(t 
 	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
 		t.Fatalf("unmarshal metrics history response: %v", err)
 	}
-	if resp.ResourceType != "app-container" || resp.ResourceId != "container-contract-cpu" || resp.Metric != "cpu" {
+	if resp.ResourceType != "app-container" || resp.ResourceId != metricID || resp.Metric != "cpu" {
 		t.Fatalf("unexpected metrics history identity: %+v", resp)
 	}
 	if resp.Source != "live" {
@@ -13834,8 +13836,8 @@ func TestContract_MetricsHistoryLivePointOnlyWhileSourceReports(t *testing.T) {
 		{"system-container", "pve:unreachable:201", "cpu"},
 		{"docker-host", "docker-silent", "cpu"},
 		{"docker-host", "docker-overdue", "cpu"},
-		{"app-container", "docker-silent-app", "memory"},
-		{"app-container", "docker-overdue-app", "memory"},
+		{"app-container", unifiedresources.DockerContainerMetricID("docker-silent", "docker-silent-app"), "memory"},
+		{"app-container", unifiedresources.DockerContainerMetricID("docker-overdue", "docker-overdue-app"), "memory"},
 	} {
 		target := "resourceType=" + tc.resourceType + "&resourceId=" + tc.resourceID
 		if resp, _ := history(target + "&metric=" + tc.metric); resp.Source == "live" || len(resp.Points) != 0 {
@@ -13872,8 +13874,8 @@ func TestContract_MetricsHistoryLivePointOnlyWhileSourceReports(t *testing.T) {
 		{"system-container", "pve:online:202", "cpu", 15},
 		{"docker-host", "docker-reporting", "cpu", 21},
 		{"docker-host", "docker-degraded", "cpu", 33},
-		{"app-container", "docker-reporting-app", "memory", 8},
-		{"app-container", "docker-degraded-app", "memory", 9},
+		{"app-container", unifiedresources.DockerContainerMetricID("docker-reporting", "docker-reporting-app"), "memory", 8},
+		{"app-container", unifiedresources.DockerContainerMetricID("docker-degraded", "docker-degraded-app"), "memory", 9},
 	} {
 		resp, _ := history("resourceType=" + tc.resourceType + "&resourceId=" + tc.resourceID + "&metric=" + tc.metric)
 		if resp.Source != "live" || len(resp.Points) != 1 || math.Abs(resp.Points[0].Value-tc.want) > 0.001 {
@@ -20480,6 +20482,12 @@ func TestContract_AgentCommandPayloadsRequireActionScope(t *testing.T) {
 	if !strings.Contains(src, "token.HasScope(config.ScopeAIExecute)") {
 		t.Error("agent command payloads must require ai:execute on API-token callers, not only monitoring:read")
 	}
+	if !strings.Contains(src, "requestHasActionCapability(cfg, authorizer, current, auth.ActionApprove)") {
+		t.Error("agent command payloads must require the action-approve capability on callers without an API token")
+	}
+	if !strings.Contains(src, "withAgentCommandDisclosure") {
+		t.Error("agent routes must bind command disclosure through withAgentCommandDisclosure")
+	}
 	if !strings.Contains(src, "redactAgentEventCommandsForRequest") {
 		t.Error("agent SSE events must pass through command redaction before serialization")
 	}
@@ -21200,8 +21208,10 @@ func TestContract_DockerLifecycleActionsResolveCommandAgentAndDispatchOneTypedOp
 	for _, snippet := range []string{
 		"func (e dockerContainerActionExecutor) connectedDockerCommandAgentID(ctx context.Context, resource unified.Resource) (string, error)",
 		"resource.Docker.TokenID",
-		"commandAgentForToken(ctx, e.agents, resource.Docker.TokenID)",
+		"commandAgentForToken(ctx, e.agents, tokenID)",
+		`e.dockerTokenHasAmbiguousHosts(ctx, tokenID, strings.TrimSpace(resource.Docker.AgentID), tokenAgentID != "")`,
 		"commandAgentForIdentity(ctx, e.agents, resource.Docker.AgentID, resource.Docker.Hostname)",
+		"e.dockerReportTokenReachesCommandSession(ctx, tokenID, agentID, resource.Docker.Hostname)",
 		"resource.Docker.AgentID",
 		"commandAgentForIdentity(ctx, e.agents, tokenAgentID, resource.Docker.Hostname)",
 		"ExecuteDockerContainerLifecycle(context.Context, string, agentexec.DockerContainerLifecyclePayload)",

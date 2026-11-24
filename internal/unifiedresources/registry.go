@@ -157,6 +157,11 @@ type ResourceRegistry struct {
 	// resource (noteReporterEraLocked). The pass epilogue takes them
 	// (takeReporterEras) and declares them as successions.
 	reporterEras []CanonicalIDSuccession
+	// disputedHostReporters holds, while a snapshot's host reports are
+	// ingested, the source IDs of those whose machine key a report under
+	// another API token gives too (disputedHostReportersLocked). ingestRecord
+	// ingests them without identity keys.
+	disputedHostReporters map[string]struct{}
 	// exclusionIDs holds every ID an entry of exclusions names, derived from
 	// it on first use (exclusionNamesLocked), so noteReporterEraLocked asks one
 	// lookup per reporter instead of scanning the splits. exclusions is fixed
@@ -401,10 +406,22 @@ func (rr *ResourceRegistry) ingestSnapshot(snapshot models.StateSnapshot, thresh
 		}
 		rr.ingestProxmoxNode(rr.splitProxmoxNodeLink(node, inferredLinkedHostByNodeID[strings.TrimSpace(node.ID)]))
 	}
-	for _, host := range snapshot.Hosts {
-		rr.ingestHost(host)
+	// Every host report is read before the first is ingested: which of them
+	// dispute a machine key must not depend on the order they arrive in.
+	hostRecords := make([]IngestRecord, len(snapshot.Hosts))
+	for i, host := range snapshot.Hosts {
+		hostRecords[i] = HostIngestRecord(host)
+	}
+	rr.mu.Lock()
+	rr.disputedHostReporters = rr.disputedHostReportersLocked(hostRecords)
+	rr.mu.Unlock()
+	for i, host := range snapshot.Hosts {
+		rr.ingest(SourceAgent, host.ID, hostRecords[i].Resource, hostRecords[i].Identity)
 		rr.ingestHostLibvirtDomains(host)
 	}
+	rr.mu.Lock()
+	rr.disputedHostReporters = nil
+	rr.mu.Unlock()
 	rr.ingestHostXCPNGVMs(snapshot.Hosts)
 	for _, host := range snapshot.Hosts {
 		rr.ingestHostUnraidStorage(host)
@@ -624,11 +641,11 @@ func (rr *ResourceRegistry) ingestSnapshot(snapshot models.StateSnapshot, thresh
 		}
 	}
 
-	kubernetesHostLookup := buildKubernetesNodeHostLookup(snapshot.Hosts)
 	for _, cluster := range snapshot.KubernetesClusters {
 		if cluster.Hidden {
 			continue
 		}
+		kubernetesHostLookup := buildKubernetesNodeHostLookup(snapshot.Hosts, cluster.TokenID)
 		linkedHosts := linkedHostsForKubernetesCluster(cluster, kubernetesHostLookup)
 		capabilities := kubernetesMetricCapabilities(cluster, linkedHosts)
 		clusterID := rr.ingestKubernetesCluster(cluster, linkedHosts, capabilities)
@@ -2067,11 +2084,6 @@ func (rr *ResourceRegistry) ingestProxmoxNode(node models.Node, linkedHost *mode
 	rr.ingest(SourceProxmox, node.ID, resource, identity)
 }
 
-func (rr *ResourceRegistry) ingestHost(host models.Host) {
-	resource, identity := resourceFromHost(host)
-	rr.ingest(SourceAgent, host.ID, resource, identity)
-}
-
 func (rr *ResourceRegistry) ingestHostUnraidStorage(host models.Host) {
 	if host.Unraid == nil {
 		return
@@ -2564,18 +2576,32 @@ func (rr *ResourceRegistry) refreshDockerNetworkAttachmentRelationships(host mod
 		}
 	}
 
+	// Report entries can resolve to the same resource: a container ID listed
+	// more than once, or network names that share an ID. Each resource's list
+	// already holds everything collected for it, so apply it once per resource;
+	// once per entry is quadratic in the size of an agent-supplied report.
+	appliedContainers := make(map[string]struct{}, len(host.Containers))
 	for _, container := range host.Containers {
 		containerID := dockerSource[normalizeSourceID(dockerContainerSourceID(host, container))]
 		if containerID == "" {
 			continue
 		}
+		if _, applied := appliedContainers[containerID]; applied {
+			continue
+		}
+		appliedContainers[containerID] = struct{}{}
 		rr.setDockerNetworkAttachmentRelationshipsLocked(
 			containerID,
 			relationshipsByContainer[containerID],
 			observedAt,
 		)
 	}
+	appliedNetworks := make(map[string]struct{}, len(networkIDByName))
 	for _, networkID := range networkIDByName {
+		if _, applied := appliedNetworks[networkID]; applied {
+			continue
+		}
+		appliedNetworks[networkID] = struct{}{}
 		rr.setDockerNetworkAttachmentRelationshipsLocked(
 			networkID,
 			relationshipsByNetwork[networkID],
@@ -3117,6 +3143,11 @@ func (rr *ResourceRegistry) ingestRecord(source DataSource, sourceID string, res
 	if source != SourceTrueNAS {
 		identity = rr.completeIdentityFromPins(source, sourceID, resource, identity)
 	}
+	// Host reports that give one machine key under several API tokens are
+	// not keyed by it, so their order cannot decide who holds its ID.
+	if _, disputed := rr.disputedHostReporters[sourceID]; disputed && source == SourceAgent && resource.Type == ResourceTypeAgent {
+		identity = withoutIdentityKeys(identity)
+	}
 	resource.Identity = identity
 	if !onlyMissing && rr.store != nil && resource.Type == ResourceTypeAgent && (source == SourceAgent || source == SourceDocker) {
 		defer func() { rr.noteReporterEraLocked(source, sourceID, identity, ingestedID) }()
@@ -3182,7 +3213,7 @@ func (rr *ResourceRegistry) ingestRecord(source DataSource, sourceID string, res
 	candidateID := rr.sourceSpecificID(resource.Type, source, sourceID)
 
 	if resource.Type == ResourceTypeAgent || resource.Type == ResourceTypePhysicalDisk {
-		if match, excluded := rr.findMatch(resource, candidateID); match != nil && match.ResourceB != refusedDiskID {
+		if match, excluded := rr.findMatch(resource, candidateID, onlyMissing); match != nil && match.ResourceB != refusedDiskID {
 			existing := rr.resources[match.ResourceB]
 			if existing != nil {
 				if onlyMissing {
@@ -3228,6 +3259,14 @@ func (rr *ResourceRegistry) ingestRecord(source DataSource, sourceID string, res
 	}
 	normalizeResourceRelationships(&resource)
 	if resource.ID == refusedDiskID {
+		resource.ID = candidateID
+	}
+	// An identity-derived ID can be the row findMatch just refused: reporters
+	// under different API tokens that give one identity key. The key stays
+	// with the row that holds it, so it keeps the key's pin and matches.
+	if !onlyMissing && reportersUnderDifferentTokens(rr.resources[resource.ID], &resource) {
+		identity = withoutIdentityKeys(identity)
+		resource.Identity = identity
 		resource.ID = candidateID
 	}
 	if existing := rr.resources[resource.ID]; existing != nil {
@@ -3432,9 +3471,9 @@ func (rr *ResourceRegistry) mergeLinkedKubernetesNode(
 	return true
 }
 
-func (rr *ResourceRegistry) findMatch(incoming Resource, candidateID string) (*MatchResult, bool) {
+func (rr *ResourceRegistry) findMatch(incoming Resource, candidateID string, onlyMissing bool) (*MatchResult, bool) {
 	excludedMatch := false
-	candidates := rr.matcher.FindCandidates(incoming.Identity)
+	candidates := rr.matcher.findCandidatesAtLeast(incoming.Identity, autoMergeThreshold)
 	for _, candidate := range candidates {
 		if candidate.ID == "" {
 			continue
@@ -3448,6 +3487,11 @@ func (rr *ResourceRegistry) findMatch(incoming Resource, candidateID string) (*M
 		}
 		if incoming.Type == ResourceTypePhysicalDisk &&
 			!physicalDiskMatchScopeCompatible(existing, &incoming) {
+			continue
+		}
+		// A saved enrollment is withheld when its machine is present and never
+		// merged, so it still matches a host that re-enrolled under a new token.
+		if !onlyMissing && reportersUnderDifferentTokens(existing, &incoming) {
 			continue
 		}
 		if rr.isExcluded(candidate.ID, candidateID) ||
@@ -3464,6 +3508,78 @@ func (rr *ResourceRegistry) findMatch(incoming Resource, candidateID string) (*M
 		}, false
 	}
 	return nil, excludedMatch
+}
+
+func reportersUnderDifferentTokens(existing, incoming *Resource) bool {
+	if existing == nil || incoming == nil || incoming.Type != ResourceTypeAgent {
+		return false
+	}
+	differ := func(a, b string) bool {
+		a, b = strings.TrimSpace(a), strings.TrimSpace(b)
+		return a != "" && b != "" && a != b
+	}
+	if existing.Agent != nil && incoming.Agent != nil &&
+		hasDataSource(existing.Sources, SourceAgent) && hasDataSource(incoming.Sources, SourceAgent) &&
+		differ(existing.Agent.TokenID, incoming.Agent.TokenID) {
+		return true
+	}
+	return existing.Docker != nil && incoming.Docker != nil &&
+		hasDataSource(existing.Sources, SourceDocker) && hasDataSource(incoming.Sources, SourceDocker) &&
+		differ(existing.Docker.TokenID, incoming.Docker.TokenID)
+}
+
+func (rr *ResourceRegistry) disputedHostReportersLocked(records []IngestRecord) map[string]struct{} {
+	type claim struct {
+		tokenID   string
+		sourceIDs []string
+		disputed  bool
+	}
+	claims := make(map[string]*claim)
+	for _, record := range records {
+		sourceID := normalizeSourceID(record.SourceID)
+		if sourceID == "" || record.Resource.Agent == nil {
+			continue
+		}
+		identity := rr.completeIdentityFromPins(SourceAgent, sourceID, record.Resource, record.Identity)
+		if identity.MachineID == "" && identity.DMIUUID == "" {
+			continue
+		}
+		id := rr.canonicalIDFromIdentity(ResourceTypeAgent, identity)
+		held := claims[id]
+		if held == nil {
+			held = &claim{}
+			claims[id] = held
+		}
+		held.sourceIDs = append(held.sourceIDs, sourceID)
+		tokenID := strings.TrimSpace(record.Resource.Agent.TokenID)
+		switch {
+		case tokenID == "":
+		case held.tokenID == "":
+			held.tokenID = tokenID
+		case held.tokenID != tokenID:
+			held.disputed = true
+		}
+	}
+	var disputed map[string]struct{}
+	for _, held := range claims {
+		if !held.disputed {
+			continue
+		}
+		if disputed == nil {
+			disputed = make(map[string]struct{})
+		}
+		for _, sourceID := range held.sourceIDs {
+			disputed[sourceID] = struct{}{}
+		}
+	}
+	return disputed
+}
+
+func withoutIdentityKeys(identity ResourceIdentity) ResourceIdentity {
+	identity.MachineID = ""
+	identity.DMIUUID = ""
+	identity.ClusterName = ""
+	return identity
 }
 
 func physicalDiskMatchScopeCompatible(existing, incoming *Resource) bool {
@@ -6381,11 +6497,20 @@ func canonicalKubernetesTypedSourceID(clusterSourceID, kind, uid, namespace, nam
 	return fmt.Sprintf("%s:%s:%s", clusterKey, kind, id)
 }
 
-func buildKubernetesNodeHostLookup(hosts []models.Host) map[string]*models.Host {
+// buildKubernetesNodeHostLookup indexes the host agents that may stand in for
+// the nodes of a cluster reported under clusterTokenID. Machine ID and hostname
+// are a host agent's own claims, so only hosts reporting with the cluster's
+// token are eligible: another token must never absorb a node by asserting its
+// identity, nor make a genuine link ambiguous.
+func buildKubernetesNodeHostLookup(hosts []models.Host, clusterTokenID string) map[string]*models.Host {
+	clusterTokenID = strings.TrimSpace(clusterTokenID)
 	lookup := make(map[string]*models.Host, len(hosts)*3)
 	for i := range hosts {
 		host := &hosts[i]
 		if host == nil {
+			continue
+		}
+		if strings.TrimSpace(host.TokenID) != clusterTokenID {
 			continue
 		}
 
@@ -6714,6 +6839,48 @@ func dockerConfigSourceID(host models.DockerHost, config models.DockerConfig) st
 	return hostID + "/config/" + configID
 }
 
+const maxMergedIdentityValues = 128
+
+func mergeBoundedUniqueStrings(existing, incoming []string, limit int) []string {
+	if len(incoming) == 0 {
+		return existing
+	}
+	if len(existing) >= limit {
+		return existing
+	}
+	seen := make(map[string]struct{}, len(existing))
+	out := make([]string, 0, min(len(existing)+len(incoming), limit))
+	for _, s := range existing {
+		s = strings.TrimSpace(s)
+		if s == "" {
+			continue
+		}
+		if _, ok := seen[s]; ok {
+			continue
+		}
+		seen[s] = struct{}{}
+		out = append(out, s)
+		if len(out) >= limit {
+			return out
+		}
+	}
+	for _, s := range incoming {
+		s = strings.TrimSpace(s)
+		if s == "" {
+			continue
+		}
+		if _, ok := seen[s]; ok {
+			continue
+		}
+		seen[s] = struct{}{}
+		out = append(out, s)
+		if len(out) >= limit {
+			break
+		}
+	}
+	return out
+}
+
 func mergeIdentity(existing ResourceIdentity, incoming ResourceIdentity) ResourceIdentity {
 	if existing.MachineID == "" {
 		existing.MachineID = incoming.MachineID
@@ -6727,9 +6894,9 @@ func mergeIdentity(existing ResourceIdentity, incoming ResourceIdentity) Resourc
 	if existing.ProxmoxGuestKey == "" {
 		existing.ProxmoxGuestKey = incoming.ProxmoxGuestKey
 	}
-	existing.Hostnames = uniqueStrings(append(existing.Hostnames, incoming.Hostnames...))
-	existing.IPAddresses = uniqueStrings(append(existing.IPAddresses, incoming.IPAddresses...))
-	existing.MACAddresses = uniqueStrings(append(existing.MACAddresses, incoming.MACAddresses...))
+	existing.Hostnames = mergeBoundedUniqueStrings(existing.Hostnames, incoming.Hostnames, maxMergedIdentityValues)
+	existing.IPAddresses = mergeBoundedUniqueStrings(existing.IPAddresses, incoming.IPAddresses, maxMergedIdentityValues)
+	existing.MACAddresses = mergeBoundedUniqueStrings(existing.MACAddresses, incoming.MACAddresses, maxMergedIdentityValues)
 	return existing
 }
 

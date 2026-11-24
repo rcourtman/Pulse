@@ -479,6 +479,9 @@ func TestGetAgentForIdentityForOrganizationRequiresOneExactLiveAdmission(t *test
 	if got, ok := s.GetAgentForIdentityForOrganization("org-a", "a1", "NODE"); !ok || got != "a1" {
 		t.Fatalf("exact identity lookup = %q, %v; want a1, true", got, ok)
 	}
+	if got, ok := s.GetAgentAdmissionForIdentityForOrganization("org-a", "a1", "NODE"); !ok || got.TokenID != "rotated-token" || got.AgentID != "a1" {
+		t.Fatalf("exact identity admission = %#v, %v; want the a1 session under rotated-token", got, ok)
+	}
 	for _, mismatch := range []struct{ org, agentID, hostname string }{
 		{"org-b", "a1", "node"},
 		{"org-a", "a2", "node"},
@@ -488,6 +491,9 @@ func TestGetAgentForIdentityForOrganizationRequiresOneExactLiveAdmission(t *test
 	} {
 		if got, ok := s.GetAgentForIdentityForOrganization(mismatch.org, mismatch.agentID, mismatch.hostname); ok {
 			t.Fatalf("mismatched identity unexpectedly resolved %q for %#v", got, mismatch)
+		}
+		if got, ok := s.GetAgentAdmissionForIdentityForOrganization(mismatch.org, mismatch.agentID, mismatch.hostname); ok {
+			t.Fatalf("mismatched identity unexpectedly resolved admission %#v for %#v", got, mismatch)
 		}
 	}
 }

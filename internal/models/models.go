@@ -5963,6 +5963,33 @@ func (s *State) UpsertCephCluster(cluster CephCluster) CephCluster {
 	return cloneCephCluster(stored)
 }
 
+// RemoveHostAgentCephCluster removes the Ceph cluster a host agent reported
+// under id, which is the record's ID or, in any case, its FSID. A record the
+// Proxmox API describes stays with its poller.
+func (s *State) RemoveHostAgentCephCluster(id string) {
+	key := strings.ToLower(strings.TrimSpace(id))
+	if key == "" {
+		return
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	filtered := make([]CephCluster, 0, len(s.CephClusters))
+	for _, cluster := range s.CephClusters {
+		if normalizeCephClusterSource(cluster.Source, cluster.Instance, "") == CephClusterSourceHostAgent &&
+			(strings.ToLower(strings.TrimSpace(cluster.ID)) == key || cephClusterFSIDKey(cluster) == key) {
+			continue
+		}
+		filtered = append(filtered, cluster)
+	}
+	if len(filtered) == len(s.CephClusters) {
+		return
+	}
+	s.CephClusters = filtered
+	s.LastUpdate = time.Now()
+}
+
 // SetHostStatus updates the status of a host if present.
 func (s *State) SetHostStatus(hostID, status string) bool {
 	s.mu.Lock()

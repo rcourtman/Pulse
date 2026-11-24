@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
 )
@@ -38,7 +39,7 @@ func (f *flexibleFloat) UnmarshalJSON(data []byte) error {
 	}
 
 	parsed, err := strconv.ParseFloat(str, 64)
-	if err != nil {
+	if err != nil || math.IsNaN(parsed) || math.IsInf(parsed, 0) {
 		return fmt.Errorf("failed to parse numeric string %q: %w", str, err)
 	}
 
@@ -87,7 +88,7 @@ func (i *flexibleInt) UnmarshalJSON(data []byte) error {
 	}
 
 	parsed, err := strconv.ParseFloat(str, 64)
-	if err != nil {
+	if err != nil || math.IsNaN(parsed) || math.IsInf(parsed, 0) {
 		return fmt.Errorf("failed to parse integer string %q: %w", str, err)
 	}
 

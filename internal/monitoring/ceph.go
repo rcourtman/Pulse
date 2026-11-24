@@ -72,6 +72,88 @@ func (m *Monitor) pollCephCluster(ctx context.Context, instanceName string, clie
 	}
 }
 
+// admitAgentCephCluster reports whether hostID's Ceph report may write the
+// global record of the cluster it names. An agent names the cluster by the
+// FSID in its own report, which every Ceph client can read, so the report
+// alone does not show that the host belongs to that cluster. The record
+// therefore stays with the agent that reported the cluster first for as long
+// as that agent keeps reporting it: a different host naming the same cluster
+// cannot replace its health, capacity or name, nor resolve or raise its
+// alerts. Agents on several nodes of one cluster describe the same cluster,
+// so the others take over only once the holder's reporting lease lapses, its
+// host is removed, or it reports a different cluster.
+func (m *Monitor) admitAgentCephCluster(clusterID, hostID string, now time.Time) bool {
+	// The state matches clusters by ID and by case-insensitive FSID; an
+	// agent's cluster ID is its FSID whenever it reports one.
+	key := strings.ToLower(strings.TrimSpace(clusterID))
+
+	m.cephAgentReportersMu.Lock()
+	defer m.cephAgentReportersMu.Unlock()
+
+	// An agent reports one cluster, so its hold on any other has ended, and
+	// no lease outlives the longest reporting window. That bounds the map by
+	// the number of reporting hosts, whatever FSIDs they send.
+	for other, holder := range m.cephAgentReporters {
+		if (other != key && holder.hostID == hostID) || now.Sub(holder.reportedAt) > hostMaximumHealthWindow {
+			delete(m.cephAgentReporters, other)
+		}
+	}
+
+	if holder, ok := m.cephAgentReporters[key]; ok && holder.hostID != hostID {
+		if host, registered := m.state.GetHost(holder.hostID); registered &&
+			hostAgentReportCurrent(holder.reportedAt, host.IntervalSeconds, now) {
+			log.Warn().
+				Str("hostId", hostID).
+				Str("clusterId", clusterID).
+				Str("reportingHostId", holder.hostID).
+				Msg("Ignored Ceph cluster from host agent: another agent is reporting this cluster")
+			return false
+		}
+	}
+
+	if m.cephAgentReporters == nil {
+		m.cephAgentReporters = make(map[string]cephAgentReporter)
+	}
+	m.cephAgentReporters[key] = cephAgentReporter{hostID: hostID, reportedAt: now}
+	return true
+}
+
+// trackAgentCephCluster records the Ceph cluster hostID reports and retires
+// the record of the cluster it reported before. A host belongs to one Ceph
+// cluster, so the cluster it names now replaces the one it named earlier; left
+// in state, every ID a host ever reported would keep a cluster and all of its
+// pools there. An empty clusterID retires the record of a host that is being
+// removed. A record another host agent still reports stays, and so does one
+// the Proxmox API describes.
+func (m *Monitor) trackAgentCephCluster(hostID, clusterID string) {
+	key := strings.ToLower(strings.TrimSpace(clusterID))
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	previous := m.hostCephClusters[hostID]
+	if previous == key {
+		return
+	}
+	if key == "" {
+		delete(m.hostCephClusters, hostID)
+	} else {
+		if m.hostCephClusters == nil {
+			m.hostCephClusters = make(map[string]string)
+		}
+		m.hostCephClusters[hostID] = key
+	}
+	if previous == "" {
+		return
+	}
+	for _, reported := range m.hostCephClusters {
+		if reported == previous {
+			return
+		}
+	}
+	m.state.RemoveHostAgentCephCluster(previous)
+}
+
 func (m *Monitor) checkCephPoolStorage(cluster models.CephCluster) {
 	storagePools := models.CephPoolStorage(cluster)
 	if len(storagePools) == 0 {
