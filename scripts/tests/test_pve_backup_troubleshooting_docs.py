@@ -190,7 +190,16 @@ class PVEBackupTroubleshootingDocsTest(unittest.TestCase):
         self.assertIn('fmt.Sprintf("%s:%s:%d", instanceName, node, vmid)', helpers)
         collector = (ROOT / "internal/monitoring/monitor_backups.go").read_text()
         self.assertIn("vm.Instance() == instanceName", collector)
-        self.assertIn("vm.Instance == instanceName", collector)
+        self.assertIn("ct.Instance() == instanceName", collector)
+        # Catch-up must use the same connection scope even before the registry
+        # has published the guest. The state snapshot owns that decision now.
+        self.assertIn("state.GetSnapshotIfGuestForInstance(instanceName)", collector)
+        state = (ROOT / "internal/models/state_snapshot.go").read_text()
+        signature = "func (s *State) GetSnapshotIfGuestForInstance("
+        self.assertIn(signature, state)
+        fallback = state.split(signature, 1)[1].split("\n}", 1)[0]
+        self.assertIn("s.VMs[i].Instance == instance", fallback)
+        self.assertIn("s.Containers[i].Instance == instance", fallback)
 
     def test_cross_installation_comparison_uses_existing_visible_agent_evidence(self):
         trouble = (ROOT / "docs/TROUBLESHOOTING.md").read_text()
