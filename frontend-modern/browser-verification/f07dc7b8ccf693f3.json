@@ -1,0 +1,42 @@
+{
+  "version": 1,
+  "base_sha": "d552007301dc87cb1f9bd425aa47680fbc0c66a3",
+  "verified_at": "2026-11-25T12:07:54Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx",
+    "frontend-modern/src/features/proxmox/ProxmoxPageSurface.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx": "3403c585c7940f3a7bd69153afc4b3eb7fc921a03dab57fd12ecbec749325b58",
+    "frontend-modern/src/features/proxmox/ProxmoxPageSurface.tsx": "b55a1bc4192ff09c55594b44507cef04355a4cd302ed43ee6bb3218e50ea18aa"
+  },
+  "routes": [
+    "/proxmox/backups/coverage",
+    "/proxmox/backups/date"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 950
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Matched production browser previews at 1440x950 Chromium light and 390x844 WebKit dark.",
+    "Backup-server resource read fails; the healthy workload, coverage verdict and jobs remain available.",
+    "Workload resource read fails; backup server and datastore stay visible, and guest protection is not assessed.",
+    "With workloads unreadable, By date lists the independently readable PBS and Proxmox VE restore points.",
+    "Coverage explains that matching and assessment are unavailable; recovered Coverage shows both sources again."
+  ],
+  "interactions": [
+    "Invoked the recovery control with Enter on desktop and tap on phone; only the failed resource read was repeated.",
+    "Checked disabled-while-pending state and suppression of a duplicate Enter while retry was pending.",
+    "Expanded a readable workload row or verified backup detail, then confirmed it remained open after successful retry.",
+    "Checked focus moves to the current Backups view on desktop when the retry control is removed.",
+    "Scrolled the actual app to the bottom to inspect the coverage message and phone restore-point rows."
+  ]
+}
