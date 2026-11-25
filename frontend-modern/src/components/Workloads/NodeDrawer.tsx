@@ -151,6 +151,15 @@ export const NodeDrawer: Component<NodeDrawerProps> = (props) => {
       <div class={`[overflow-anchor:none] ${activeTab() === 'manage' ? '' : 'hidden'}`}>
         <Show when={activeTab() === 'manage'}>
           <div data-testid="node-manage-tab">
+            <Show when={props.node.haMaintenance}>
+              <div
+                class="mb-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-800/70 dark:bg-amber-950/30 dark:text-amber-200"
+                data-testid="node-ha-maintenance-notice"
+              >
+                <span class="font-medium">Proxmox HA maintenance mode active.</span> Node alerts and
+                Patrol findings are suppressed automatically until maintenance ends in Proxmox.
+              </div>
+            </Show>
             <ResourceOperatorStateSection
               resourceId={props.node.id}
               resourceType="node"

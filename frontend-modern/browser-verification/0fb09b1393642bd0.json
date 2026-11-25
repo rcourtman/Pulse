@@ -1,0 +1,45 @@
+{
+  "version": 1,
+  "base_sha": "343fc6cb4b0093aa3d0adaca45ee9cbc5daa23f6",
+  "verified_at": "2026-11-25T20:43:25Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Workloads/NodeDrawer.tsx",
+    "frontend-modern/src/features/proxmox/ProxmoxNodesTable.tsx",
+    "frontend-modern/src/hooks/useUnifiedResources.ts",
+    "frontend-modern/src/types/api.ts",
+    "frontend-modern/src/types/resource.ts",
+    "frontend-modern/src/utils/resourceStateAdapters.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Workloads/NodeDrawer.tsx": "3699fd2c5521d948514cbc127d37c24f1714fa38e4307d850a4035395656cab0",
+    "frontend-modern/src/features/proxmox/ProxmoxNodesTable.tsx": "75a7906cc69fce4af234f54c81a8f32e569f6b1df6a6e3f6b877b5d0b129ff7c",
+    "frontend-modern/src/hooks/useUnifiedResources.ts": "bace63b53453a5cd60a70da44dae885dbda749c526a5d437ab8406d63a488107",
+    "frontend-modern/src/types/api.ts": "515fef180e2791fd1185fc494844208613dd30d4adbc37a9331f966eb7fdc84f",
+    "frontend-modern/src/types/resource.ts": "e819e6eff8416d23be96489a412d7d390fa9b2aa357f6a2c5bf6122cb616be21",
+    "frontend-modern/src/utils/resourceStateAdapters.ts": "bb9cae75363dccc8db3a964f0d67d15c8df477284fa05555d252c54feda22fa5"
+  },
+  "routes": [
+    "/proxmox"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Proxmox overview default mock state with zero Maintenance badges and zero console or page errors",
+    "Proxmox overview with node HA maintenance active showing Maintenance badge inline on desktop and stacked cleanly under full node name on mobile",
+    "Expanded NodeDrawer Manage tab showing read-only Proxmox HA maintenance notice without clipping or overflow on desktop and mobile"
+  ],
+  "interactions": [
+    "Loaded /proxmox and verified default node table with no maintenance badges",
+    "Injected haMaintenance and haState onto Analytics A over WebSocket and /api/resources and verified Maintenance badge rendering and bounding boxes on desktop and mobile",
+    "Clicked Expand details button on the maintenance node row, switched to the Manage tab, inspected the read-only HA maintenance notice pixels, and collapsed the drawer to verify cleanup"
+  ]
+}

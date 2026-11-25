@@ -89,6 +89,11 @@ func (m *Monitor) installOperatorIntentResolver(store ResourceStoreInterface) {
 			}
 			return ancestorState, ancestorFound
 		})
+		if !covered {
+			if readState, ok := identity.(unifiedresources.ReadState); ok {
+				coverage, covered = unifiedresources.ProviderMaintenanceCoverageAt(now, readState, resourceID)
+			}
+		}
 		if covered {
 			startAt, endAt := coverage.Occurrence.StartAt, coverage.Occurrence.EndAt
 			context.MaintenanceStartAt = &startAt

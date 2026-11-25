@@ -302,6 +302,8 @@ type Node struct {
 	ConnectionHealth             string                 `json:"connectionHealth"`
 	IsClusterMember              bool                   `json:"isClusterMember"` // True if part of a cluster
 	ClusterName                  string                 `json:"clusterName"`     // Name of cluster (empty if standalone)
+	HAMaintenance                bool                   `json:"haMaintenance,omitempty"`
+	HAState                      string                 `json:"haState,omitempty"`
 	ProviderScopedIdentity       bool                   `json:"providerScopedIdentity,omitempty"`
 	// TLSFingerprint is the TOFU-captured TLS certificate fingerprint recorded
 	// in configuration for this node's API endpoint, when known. It is machine

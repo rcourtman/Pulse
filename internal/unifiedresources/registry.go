@@ -4488,10 +4488,12 @@ func mergeProxmoxData(existing *ProxmoxData, incoming *ProxmoxData) *ProxmoxData
 	if !incoming.LastBackup.IsZero() {
 		merged.LastBackup = incoming.LastBackup
 	}
-	// A Proxmox facet is always built whole from the guest record, so the
-	// backup-running flag is authoritative in both directions: it must set
-	// when a backup starts and clear when it completes or aborts.
+	// A Proxmox facet is always built whole from the guest/node record, so
+	// live provider flags are authoritative in both directions: they must set
+	// when active and clear when completed or exited.
 	merged.BackupInProgress = incoming.BackupInProgress
+	merged.HAMaintenance = incoming.HAMaintenance
+	merged.HAState = incoming.HAState
 	if incoming.CPUInfo != nil {
 		cpuInfo := *incoming.CPUInfo
 		merged.CPUInfo = &cpuInfo

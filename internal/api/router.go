@@ -2262,6 +2262,9 @@ func (r *Router) patrolResourceOperatorStateProvider(orgID string) ai.ResourceOp
 				ancestorState, ancestorFound, ancestorErr := orgStore.GetResourceOperatorState(ancestorID)
 				return ancestorState, ancestorErr == nil && ancestorFound
 			})
+			if !covered && readState != nil {
+				coverage, covered = unifiedresources.ProviderMaintenanceCoverageAt(now, readState, canonicalID)
+			}
 			if covered {
 				projection.MaintenanceWindow = &ai.ResourceOperatorStateMaintenanceWindow{
 					StartAt:   coverage.Occurrence.StartAt,

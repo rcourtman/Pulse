@@ -754,4 +754,20 @@ describe('NodeDrawer Overview charts', () => {
       vi.useRealTimers();
     }
   });
+
+  it('shows the read-only Proxmox HA maintenance notice on the Manage tab when haMaintenance is active', () => {
+    render(() => <NodeDrawer node={makeNode({ haMaintenance: true, haState: 'maintenance' })} />);
+    fireEvent.click(screen.getByRole('tab', { name: 'Manage' }));
+    const notice = screen.getByTestId('node-ha-maintenance-notice');
+    expect(notice).toHaveTextContent('Proxmox HA maintenance mode active');
+    expect(notice).toHaveTextContent(
+      'Node alerts and Patrol findings are suppressed automatically',
+    );
+  });
+
+  it('omits the Proxmox HA maintenance notice when haMaintenance is false', () => {
+    render(() => <NodeDrawer node={makeNode({ haMaintenance: false })} />);
+    fireEvent.click(screen.getByRole('tab', { name: 'Manage' }));
+    expect(screen.queryByTestId('node-ha-maintenance-notice')).toBeNull();
+  });
 });

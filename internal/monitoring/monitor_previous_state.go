@@ -268,6 +268,8 @@ func previousNodeFromView(node *unifiedresources.NodeView) models.Node {
 		Uptime:            node.Uptime(),
 		IsClusterMember:   node.IsClusterMember(),
 		ClusterName:       node.ClusterName(),
+		HAMaintenance:     node.HAMaintenance(),
+		HAState:           node.HAState(),
 		LastSeen:          node.LastSeen(),
 		LoadAverage:       node.LoadAverage(),
 		PVEVersion:        node.PVEVersion(),

@@ -597,6 +597,8 @@ export const ProxmoxNodesTable: Component<{
                   const currentNode = drawerNode();
                   return currentNode ? hasCurrentProxmoxUpdateEvidence(currentNode) : false;
                 };
+                const haMaintenance = () =>
+                  Boolean(node.proxmox?.haMaintenance || drawerNode()?.haMaintenance);
                 // The node's own alerts, the set its drawer lists, as on every
                 // other host table. Matching on the node name would also tint
                 // the row for any guest's alert, with nothing in it to say why.
@@ -676,34 +678,45 @@ export const ProxmoxNodesTable: Component<{
                               title={readingState().detail ?? readingState().label}
                               ariaLabel={showReadings() ? readingState().label : undefined}
                             />
-                            <div class="min-w-0 flex-1">
-                              <ResourceNameWithWebInterfaceLink
-                                name={name()}
-                                url={externalUrl()}
-                                class={`min-w-0 ${usesCondensedIdentity() ? '[&>a]:hidden' : ''}`}
-                                nameClass="truncate font-semibold text-base-content"
-                                title={
-                                  nativeNodeName() && nativeNodeName() !== name()
-                                    ? `${name()} · Proxmox node ${nativeNodeName()}`
-                                    : `Open ${name()} web interface`
-                                }
-                              >
-                                <PlatformHostScopeNameButton
+                            <div class="flex min-w-0 flex-1 flex-col items-start gap-0.5 sm:flex-row sm:items-center sm:gap-2">
+                              <div class="min-w-0 max-w-full sm:flex-1">
+                                <ResourceNameWithWebInterfaceLink
                                   name={name()}
-                                  workloadNoun="guests"
-                                  controlsId="proxmox-guests-section"
-                                  selected={isGuestFilterSelected()}
-                                  onSelect={showGuests}
+                                  url={externalUrl()}
+                                  class={`min-w-0 ${usesCondensedIdentity() ? '[&>a]:hidden' : ''}`}
+                                  nameClass="truncate font-semibold text-base-content"
+                                  title={
+                                    nativeNodeName() && nativeNodeName() !== name()
+                                      ? `${name()} · Proxmox node ${nativeNodeName()}`
+                                      : `Open ${name()} web interface`
+                                  }
                                 >
-                                  {visibleNodeLabel()}
-                                </PlatformHostScopeNameButton>
-                              </ResourceNameWithWebInterfaceLink>
-                              <Show when={!showReadings()}>
+                                  <PlatformHostScopeNameButton
+                                    name={name()}
+                                    workloadNoun="guests"
+                                    controlsId="proxmox-guests-section"
+                                    selected={isGuestFilterSelected()}
+                                    onSelect={showGuests}
+                                  >
+                                    {visibleNodeLabel()}
+                                  </PlatformHostScopeNameButton>
+                                </ResourceNameWithWebInterfaceLink>
+                                <Show when={!showReadings()}>
+                                  <span
+                                    class="block text-[10px] leading-tight font-semibold text-base-content"
+                                    title={readingState().detail}
+                                  >
+                                    {readingState().label}
+                                  </span>
+                                </Show>
+                              </div>
+                              <Show when={haMaintenance()}>
                                 <span
-                                  class="block text-[10px] leading-tight font-semibold text-base-content"
-                                  title={readingState().detail}
+                                  class="inline-flex shrink-0 items-center rounded bg-amber-100 px-1.5 py-0.5 text-[9px] font-medium whitespace-nowrap text-amber-800 dark:bg-amber-900/30 dark:text-amber-300"
+                                  title="Proxmox HA maintenance mode is active. Node alerts are suppressed until maintenance ends in Proxmox."
+                                  data-testid="proxmox-node-ha-maintenance-badge"
                                 >
-                                  {readingState().label}
+                                  Maintenance
                                 </span>
                               </Show>
                             </div>

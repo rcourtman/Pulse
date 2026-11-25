@@ -350,6 +350,8 @@ type ProxmoxData struct {
 	Pool                         string              `json:"pool,omitempty"`
 	ClusterName                  string              `json:"clusterName,omitempty"`
 	IsClusterMember              bool                `json:"isClusterMember,omitempty"`
+	HAMaintenance                bool                `json:"haMaintenance,omitempty"`
+	HAState                      string              `json:"haState,omitempty"`
 	Instance                     string              `json:"instance,omitempty"`
 	HostURL                      string              `json:"host,omitempty"`
 	GuestURL                     string              `json:"guestUrl,omitempty"`

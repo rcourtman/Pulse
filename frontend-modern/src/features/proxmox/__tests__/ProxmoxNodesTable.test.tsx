@@ -1397,4 +1397,51 @@ describe('ProxmoxNodesTable', () => {
       '25.0%',
     );
   });
+
+  it('shows a Maintenance badge for Proxmox nodes in HA maintenance mode and passes haMaintenance to NodeDrawer', async () => {
+    const baseNode = makeNodeResource({
+      id: 'agent:pve-maint',
+      name: 'pve-maint',
+    });
+    const maintenanceNode = {
+      ...baseNode,
+      proxmox: {
+        ...baseNode.proxmox,
+        haMaintenance: true,
+        haState: 'maintenance',
+      },
+    };
+    const normalNode = makeNodeResource({
+      id: 'agent:pve-active',
+      name: 'pve-active',
+    });
+
+    render(() => (
+      <ProxmoxNodesTable
+        nodes={[maintenanceNode, normalNode]}
+        guests={[]}
+        layoutWidth={() => 1440}
+        metricDisplayMode={() => 'bars'}
+        metricHoverMode={() => 'details'}
+        emptyIcon={<span />}
+        emptyTitle="No Proxmox VE nodes"
+        emptyDescription="No nodes"
+      />
+    ));
+
+    const badges = screen.getAllByTestId('proxmox-node-ha-maintenance-badge');
+    expect(badges).toHaveLength(1);
+    expect(badges[0]).toHaveTextContent('Maintenance');
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Expand details for pve-maint' }));
+    expect(nodeDrawerMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        node: expect.objectContaining({
+          id: 'agent:pve-maint',
+          haMaintenance: true,
+          haState: 'maintenance',
+        }),
+      }),
+    );
+  });
 });

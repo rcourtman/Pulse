@@ -1553,6 +1553,76 @@ func (c *Client) GetContainerSnapshots(ctx context.Context, node string, vmid in
 	return readSnapshotInventory(resp, vmid)
 }
 
+// HAStatusEntry represents an entry returned by /cluster/ha/status/current.
+type HAStatusEntry struct {
+	ID        string `json:"id"`
+	Type      string `json:"type"`   // "quorum", "master", "lrm", "service"
+	Node      string `json:"node"`   // Node name for LRM/master/service entries
+	Status    string `json:"status"` // Human-readable status string (e.g. "pve1 (maintenance mode, ...)")
+	State     string `json:"state"`  // Structured state when present (e.g. "maintenance", "active", "idle")
+	Timestamp int64  `json:"timestamp"`
+}
+
+// NodeName returns the Proxmox node name associated with this HA status entry.
+func (e HAStatusEntry) NodeName() string {
+	if node := strings.TrimSpace(e.Node); node != "" {
+		return node
+	}
+	id := strings.TrimSpace(e.ID)
+	if strings.HasPrefix(strings.ToLower(id), "lrm:") {
+		return strings.TrimSpace(id[4:])
+	}
+	return ""
+}
+
+// IsLRMMaintenance reports whether this entry represents a node LRM in HA maintenance mode.
+func (e HAStatusEntry) IsLRMMaintenance() bool {
+	if !strings.EqualFold(strings.TrimSpace(e.Type), "lrm") {
+		return false
+	}
+	state := strings.ToLower(strings.TrimSpace(e.State))
+	if state == "maintenance" || strings.Contains(state, "maintenance") {
+		return true
+	}
+	status := strings.ToLower(strings.TrimSpace(e.Status))
+	return status == "maintenance" || strings.Contains(status, "maintenance mode")
+}
+
+// NormalizedLRMState returns a concise state token for an LRM entry.
+func (e HAStatusEntry) NormalizedLRMState() string {
+	if e.IsLRMMaintenance() {
+		return "maintenance"
+	}
+	if state := strings.ToLower(strings.TrimSpace(e.State)); state != "" {
+		return state
+	}
+	status := strings.TrimSpace(e.Status)
+	if start := strings.Index(status, "("); start >= 0 {
+		rest := status[start+1:]
+		if end := strings.IndexAny(rest, ",)"); end > 0 {
+			return strings.ToLower(strings.TrimSpace(rest[:end]))
+		}
+	}
+	return strings.ToLower(status)
+}
+
+// GetClusterHAStatus returns the current HA manager status entries (/cluster/ha/status/current).
+func (c *Client) GetClusterHAStatus(ctx context.Context) ([]HAStatusEntry, error) {
+	resp, err := c.get(ctx, "/cluster/ha/status/current")
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	var result struct {
+		Data []HAStatusEntry `json:"data"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, err
+	}
+	return result.Data, nil
+}
+
 // ClusterStatus represents the cluster status response
 type ClusterStatus struct {
 	Type    string `json:"type"`    // "cluster" or "node"

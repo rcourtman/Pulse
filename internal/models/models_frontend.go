@@ -38,6 +38,8 @@ type NodeFrontend struct {
 	ConnectionHealth             string       `json:"connectionHealth"`
 	IsClusterMember              bool         `json:"isClusterMember,omitempty"`
 	ClusterName                  string       `json:"clusterName,omitempty"`
+	HAMaintenance                bool         `json:"haMaintenance,omitempty"`
+	HAState                      string       `json:"haState,omitempty"`
 	TemperatureMonitoringEnabled *bool        `json:"temperatureMonitoringEnabled,omitempty"` // Per-node temperature monitoring override
 	LinkedAgentID                string       `json:"linkedAgentId,omitempty"`                // ID of linked agent (for "Via agent" badge)
 }

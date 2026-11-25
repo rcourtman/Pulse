@@ -3802,6 +3802,8 @@ func nodeFromReadStateView(view *unifiedresources.NodeView) models.Node {
 		ConnectionHealth:             view.ConnectionHealth(),
 		IsClusterMember:              view.IsClusterMember(),
 		ClusterName:                  view.ClusterName(),
+		HAMaintenance:                view.HAMaintenance(),
+		HAState:                      view.HAState(),
 		PendingUpdates:               view.PendingUpdates(),
 		PendingUpdatesCheckedAt:      view.PendingUpdatesCheckedAt(),
 		PendingUpdatesStatus:         view.PendingUpdatesStatus(),
