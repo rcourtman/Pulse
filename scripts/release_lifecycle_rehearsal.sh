@@ -331,10 +331,23 @@ fetch_and_verify_installer() {
 # Container
 # ---------------------------------------------------------------------------
 
+read_failed_units() {
+    cexec 'set -euo pipefail
+        systemctl list-units --state=failed --no-legend --plain --full --no-pager |
+            awk "{print \$1}" | LC_ALL=C sort -u'
+}
+
+record_failed_unit_baseline() {
+    if ! BASELINE_FAILED_UNITS=$(read_failed_units 2>/dev/null); then
+        echo "::error::systemd failed-unit baseline unavailable"
+        return 1
+    fi
+}
+
 start_container() {
     if [[ "$HOSTED_BROWSER" == true ]]; then
         CONTAINER_STARTED=true
-        BASELINE_FAILED_UNITS=$(cexec 'systemctl list-units --state=failed --no-legend --plain | awk "{print \$1}" | sort')
+        record_failed_unit_baseline || return 1
         # Keep the same telemetry opt-out, without changing deployment identity,
         # enabling Docker updates, mocking feeds or weakening authentication.
         cexec 'mkdir -p /etc/systemd/system/pulse.service.d && printf "[Service]\nEnvironment=PULSE_TELEMETRY=false\n" > /etc/systemd/system/pulse.service.d/50-rehearsal-no-telemetry.conf'
@@ -375,7 +388,7 @@ start_container() {
         fi
         sleep 2
     done
-    BASELINE_FAILED_UNITS=$(cexec 'systemctl list-units --state=failed --no-legend --plain | awk "{print \$1}" | sort')
+    record_failed_unit_baseline || return 1
     log "systemd is up (pre-existing failed units: ${BASELINE_FAILED_UNITS:-none})"
     if ! cexec 'export DEBIAN_FRONTEND=noninteractive; apt-get update -qq >/dev/null && apt-get install -y -qq curl ca-certificates jq >/dev/null'; then
         echo "::error::could not install curl/jq inside the container"
@@ -420,6 +433,33 @@ read_pulse_runtime_identity() {
         running=$(stat -Lc "%d:%i" -- "/proc/$pid/exe")
         [[ "$installed" == "$running" ]] || exit 1
         printf "%s %s %s\n" "$pid" "$started" "$running"
+    '
+}
+
+# An unreadable service is not an absent service or one with a zero start time.
+read_unattended_update_start() {
+    cexec '
+        set -euo pipefail
+        properties=$(systemctl show --all --no-pager -p LoadState \
+            -p ExecMainStartTimestampMonotonic pulse-update.service)
+        load="" started=""
+        while IFS="=" read -r field value; do
+            case "$field" in
+                LoadState) load="$value" ;;
+                ExecMainStartTimestampMonotonic) started="$value" ;;
+            esac
+        done <<< "$properties"
+        case "$load" in
+            loaded|masked)
+                [[ "$started" =~ ^(0|[1-9][0-9]*)$ ]] || exit 1
+                printf "%s\n" "$started"
+                ;;
+            not-found)
+                [[ -z "$started" || "$started" == 0 ]] || exit 1
+                printf "not-installed\n"
+                ;;
+            *) exit 1 ;;
+        esac
     '
 }
 
@@ -478,12 +518,16 @@ assert_runtime() {
         executable_status="verified"
     fi
 
-    local enabled failed_now new_failed
+    local enabled failed_now new_failed=""
     enabled=$(cexec 'systemctl is-enabled pulse' 2>/dev/null || true)
-    failed_now=$(cexec 'systemctl list-units --state=failed --no-legend --plain | awk "{print \$1}" | sort' 2>/dev/null || true)
-    new_failed=$(comm -13 <(printf '%s\n' "$BASELINE_FAILED_UNITS" | sed '/^$/d') \
-                          <(printf '%s\n' "$failed_now" | sed '/^$/d') | tr '\n' ' ')
     PHASE_UNITS="pulse ${active:-unknown}/${enabled:-unknown}, executable ${executable_status}"
+    if failed_now=$(read_failed_units 2>/dev/null); then
+        new_failed=$(LC_ALL=C comm -13 <(printf '%s\n' "$BASELINE_FAILED_UNITS" | sed '/^$/d') \
+                                       <(printf '%s\n' "$failed_now" | sed '/^$/d'))
+    else
+        PHASE_UNITS="${PHASE_UNITS}, failed units unverified"
+        note_failure "systemd failed-unit read unavailable; cannot rule out new failed units"
+    fi
     if [[ "$active" != "active" ]]; then
         note_failure "pulse.service is '${active:-unknown}', expected active"
     fi
@@ -514,8 +558,14 @@ assert_runtime() {
     # An unattended update firing mid-rehearsal would invalidate the version
     # assertions, so prove the timer-driven updater never started.
     local auto_update_started
-    auto_update_started=$(cexec 'systemctl show -p ExecMainStartTimestampMonotonic --value pulse-update.service 2>/dev/null || echo 0' 2>/dev/null || echo 0)
-    if [[ -n "$auto_update_started" && "$auto_update_started" != "0" ]]; then
+    if ! auto_update_started=$(read_unattended_update_start 2>/dev/null); then
+        PHASE_UNITS="${PHASE_UNITS}; unattended updater unverified"
+        note_failure "pulse-update.service start read unavailable; cannot rule out an unattended update"
+    elif [[ "$auto_update_started" == "not-installed" ]]; then
+        PHASE_UNITS="${PHASE_UNITS}; unattended updater not installed"
+    elif [[ "$auto_update_started" == 0 ]]; then
+        PHASE_UNITS="${PHASE_UNITS}; unattended updater not started"
+    else
         note_failure "pulse-update.service ran during the rehearsal; results are not attributable to the manual updater"
     fi
 }
