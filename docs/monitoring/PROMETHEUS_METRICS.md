@@ -44,14 +44,14 @@ a standard HTTP method, or `other` on builds that report registered patterns.
 | `pulse_monitor_poll_total` | Counter | Success/error counts per instance (`result` label). |
 | `pulse_monitor_poll_errors_total` | Counter | Poll failures by `error_type`. |
 | `pulse_monitor_poll_last_success_timestamp` | Gauge | Unix timestamp of last success. |
-| `pulse_monitor_poll_staleness_seconds` | Gauge | Age since success at last result. |
+| `pulse_monitor_poll_staleness_seconds` | Gauge | Seconds since the last successful connection poll, measured at scrape time. |
 | `pulse_monitor_poll_queue_depth` | Gauge | Global queue depth. |
 | `pulse_monitor_poll_inflight` | Gauge | In-flight polls by `instance_type`. |
 | `pulse_monitor_node_poll_duration_seconds` | Histogram | Per-node poll latency. |
 | `pulse_monitor_node_poll_total` | Counter | Success/error counts per node (`result` label). |
 | `pulse_monitor_node_poll_errors_total` | Counter | Node poll failures by `error_type`. |
 | `pulse_monitor_node_poll_last_success_timestamp` | Gauge | Unix timestamp of last node success. |
-| `pulse_monitor_node_poll_staleness_seconds` | Gauge | Age since success at last result. |
+| `pulse_monitor_node_poll_staleness_seconds` | Gauge | Seconds since the last successful node poll, measured at scrape time. |
 
 ### Check whether polling is still running
 
@@ -85,20 +85,22 @@ preserve exporter labels (`honor_labels: true`) or relabel metrics, inspect
 the actual series labels instead. A poll metric's `instance` may then be the
 connection name, not a label you can match to `up`.
 
-The staleness gauges above update when a poll result is recorded. The gauge
-is `-1` after a failure before the first success. If polls stop finishing
-after a success, the gauge can stay at zero.
-Instead, subtract the last successful poll time from the query time:
+The staleness gauges above measure age on every scrape, including when polls
+stop finishing. They show `-1` after an observed failure before the first
+success. An older exporter may update these gauges only when a result is
+recorded, so its gauges can stay at zero during a stall. For queries that work
+with either exporter, subtract the last successful poll time from query time:
 
 - **Per connection:** `time() - pulse_monitor_poll_last_success_timestamp`
 - **Per node:** `time() - pulse_monitor_node_poll_last_success_timestamp`
 
-Look at the connections and nodes you still expect Pulse to poll. Allow for
-their configured cadence, including adaptive polling, and normal poll duration.
-An age that keeps rising means no new success has been recorded. An absent
-series is not an age of zero: Pulse may not have completed a successful poll
-since it started, or Prometheus may not have a current scrape. Check the
-expected series and scrape gaps separately.
+Look at the connections and nodes you still expect Pulse to poll. Paused or
+removed targets can retain old series. Allow for the configured cadence,
+including adaptive polling, and normal poll duration. An age that keeps rising
+means no new success has been recorded. An absent series is not an age of zero:
+the exporter may not have recorded the required observation since startup, or
+Prometheus may not have a current scrape. Check expected series and scrape
+gaps separately.
 
 If the age keeps rising during successful scrapes, plot the matching
 `pulse_monitor_poll_total` for each connection, split by `result`. For a

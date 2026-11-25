@@ -2,14 +2,82 @@ package monitoring
 
 import (
 	"errors"
+	"net/http"
+	"net/http/httptest"
+	"strings"
 	"testing"
 	"testing/synctest"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	dto "github.com/prometheus/client_model/go"
 	internalerrors "github.com/rcourtman/pulse-go-rewrite/internal/monitoring/errors"
 )
+
+func TestPollStalenessGaugesAgeWithoutNewResults(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		reg := prometheus.NewRegistry()
+		pm := newPollMetrics(reg)
+		handler := promhttp.HandlerFor(reg, promhttp.HandlerOpts{})
+		const connection = `pulse_monitor_poll_staleness_seconds{instance="fixture-pve",instance_type="pve"}`
+		const node = `pulse_monitor_node_poll_staleness_seconds{instance="fixture-pve",instance_type="pve",node="fixture-node"}`
+		const never = `pulse_monitor_poll_staleness_seconds{instance="fixture-pbs",instance_type="pbs"}`
+		const neverNode = `pulse_monitor_node_poll_staleness_seconds{instance="fixture-pve",instance_type="pve",node="fixture-never"}`
+		scrape := func(phase string, want ...string) string {
+			t.Helper()
+			rec := httptest.NewRecorder()
+			handler.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/metrics", nil))
+			if rec.Code != http.StatusOK {
+				t.Fatalf("%s: scrape returned HTTP %d", phase, rec.Code)
+			}
+			body := rec.Body.String()
+			for _, line := range want {
+				if !strings.Contains(body, "\n"+line+"\n") {
+					t.Errorf("%s: missing exact sample %q", phase, line)
+				}
+			}
+			for line := range strings.SplitSeq(body, "\n") {
+				if strings.HasPrefix(line, "pulse_monitor_poll_staleness_seconds{") ||
+					strings.HasPrefix(line, "pulse_monitor_node_poll_staleness_seconds{") {
+					t.Log(phase + ": " + line)
+				}
+			}
+			return body
+		}
+		if body := scrape("before any observation"); strings.Contains(body, connection) || strings.Contains(body, node) {
+			t.Fatal("a source without an observed result must not export age zero")
+		}
+		record := func(ok bool, end time.Time) {
+			pm.RecordResult(PollResult{InstanceType: "pve", InstanceName: "fixture-pve", Success: ok, StartTime: end.Add(-time.Second), EndTime: end})
+			pm.RecordNodeResult(NodePollResult{InstanceType: "pve", InstanceName: "fixture-pve", NodeName: "fixture-node", Success: ok, StartTime: end.Add(-time.Second), EndTime: end})
+		}
+		// Distinguish an observed first failure from an unobserved source.
+		now := time.Now()
+		pm.RecordResult(PollResult{InstanceType: "pbs", InstanceName: "fixture-pbs", StartTime: now.Add(-time.Second), EndTime: now})
+		pm.RecordNodeResult(NodePollResult{InstanceType: "pve", InstanceName: "fixture-pve", NodeName: "fixture-never", StartTime: now.Add(-time.Second), EndTime: now})
+		scrape("first failure", never+" -1", neverNode+" -1")
+		if _, ok := pm.lastSuccessFor("pbs", "fixture-pbs"); ok {
+			t.Fatal("a failure without a success must not supply a scheduler timestamp")
+		}
+		record(true, now)
+		scrape("first success", connection+" 0", node+" 0", never+" -1", neverNode+" -1")
+
+		time.Sleep(45 * time.Second) // virtual time, no new poll results
+		oneSuccess := `pulse_monitor_poll_total{instance="fixture-pve",instance_type="pve",result="success"} 1`
+		scrape("no result for 45s", connection+" 45", node+" 45", never+" -1", neverNode+" -1", oneSuccess)
+		record(false, time.Now())
+		time.Sleep(15 * time.Second)
+		scrape("later failure did not refresh success", connection+" 60", node+" 60", never+" -1", neverNode+" -1", oneSuccess)
+
+		// A new accepted result refreshes age; a future timestamp (e.g. a wall
+		// clock step on a timestamp without monotonic time) never makes it negative.
+		record(true, time.Now().Add(10*time.Second))
+		scrape("new success", connection+" 0", node+" 0", never+" -1", neverNode+" -1")
+		time.Sleep(20 * time.Second)
+		scrape("age resumes after recovery", connection+" 10", node+" 10", never+" -1", neverNode+" -1")
+	})
+}
 
 // newTestPollMetrics creates a PollMetrics instance with an isolated registry for testing.
 func newTestPollMetrics(t *testing.T) *PollMetrics {
@@ -485,77 +553,7 @@ func TestSetBreakerState_WhitespaceOnlyLabelsSanitized(t *testing.T) {
 // newFullTestPollMetrics creates a PollMetrics instance with all fields for RecordResult testing.
 func newFullTestPollMetrics(t *testing.T) *PollMetrics {
 	t.Helper()
-
-	reg := prometheus.NewRegistry()
-
-	pm := &PollMetrics{
-		pollDuration: prometheus.NewHistogramVec(
-			prometheus.HistogramOpts{
-				Namespace: "pulse",
-				Subsystem: "monitor",
-				Name:      "poll_duration_seconds",
-				Help:      "Duration of polling operations per instance.",
-				Buckets:   []float64{0.1, 0.25, 0.5, 1, 2.5, 5, 10, 15, 20, 30},
-			},
-			[]string{"instance_type", "instance"},
-		),
-		pollResults: prometheus.NewCounterVec(
-			prometheus.CounterOpts{
-				Namespace: "pulse",
-				Subsystem: "monitor",
-				Name:      "poll_total",
-				Help:      "Total polling attempts partitioned by result.",
-			},
-			[]string{"instance_type", "instance", "result"},
-		),
-		pollErrors: prometheus.NewCounterVec(
-			prometheus.CounterOpts{
-				Namespace: "pulse",
-				Subsystem: "monitor",
-				Name:      "poll_errors_total",
-				Help:      "Polling failures grouped by error type.",
-			},
-			[]string{"instance_type", "instance", "error_type"},
-		),
-		lastSuccess: prometheus.NewGaugeVec(
-			prometheus.GaugeOpts{
-				Namespace: "pulse",
-				Subsystem: "monitor",
-				Name:      "poll_last_success_timestamp",
-				Help:      "Unix timestamp of the last successful poll.",
-			},
-			[]string{"instance_type", "instance"},
-		),
-		staleness: prometheus.NewGaugeVec(
-			prometheus.GaugeOpts{
-				Namespace: "pulse",
-				Subsystem: "monitor",
-				Name:      "poll_staleness_seconds",
-				Help:      "Seconds since the last successful poll.",
-			},
-			[]string{"instance_type", "instance"},
-		),
-		queueDepth: prometheus.NewGauge(
-			prometheus.GaugeOpts{
-				Namespace: "pulse",
-				Subsystem: "monitor",
-				Name:      "poll_queue_depth",
-				Help:      "Approximate number of poll tasks waiting.",
-			},
-		),
-		lastSuccessByKey: make(map[metricKey]time.Time),
-	}
-
-	reg.MustRegister(
-		pm.pollDuration,
-		pm.pollResults,
-		pm.pollErrors,
-		pm.lastSuccess,
-		pm.staleness,
-		pm.queueDepth,
-	)
-
-	return pm
+	return newPollMetrics(prometheus.NewRegistry())
 }
 
 // getCounterVecValue returns the value for specific labels from a CounterVec.
@@ -597,7 +595,7 @@ func getHistogramSampleSum(hv *prometheus.HistogramVec, labels ...string) float6
 	return m.GetHistogram().GetSampleSum()
 }
 
-func TestRecordResult_SuccessUpdatesLastSuccessAndStaleness(t *testing.T) {
+func TestRecordResult_SuccessUpdatesLastSuccess(t *testing.T) {
 	t.Parallel()
 
 	pm := newFullTestPollMetrics(t)
@@ -616,12 +614,6 @@ func TestRecordResult_SuccessUpdatesLastSuccessAndStaleness(t *testing.T) {
 	wantLastSuccess := float64(endTime.Unix())
 	if gotLastSuccess != wantLastSuccess {
 		t.Errorf("lastSuccess = %v, want %v", gotLastSuccess, wantLastSuccess)
-	}
-
-	// Check staleness is set to 0 on success
-	gotStaleness := getGaugeVecValue(pm.staleness, "pve", "my-instance")
-	if gotStaleness != 0 {
-		t.Errorf("staleness = %v, want 0 on success", gotStaleness)
 	}
 
 	// Check success counter incremented
@@ -794,61 +786,6 @@ func TestRecordResult_DecrementsPending(t *testing.T) {
 	gotQueueDepth := getGaugeValue(pm.queueDepth)
 	if gotQueueDepth != 4 {
 		t.Errorf("queueDepth gauge = %v, want 4", gotQueueDepth)
-	}
-}
-
-func TestRecordResult_FailureStalenessWithPreviousSuccess(t *testing.T) {
-	t.Parallel()
-
-	pm := newFullTestPollMetrics(t)
-
-	// First, record a successful poll
-	firstEndTime := time.Now().Add(-10 * time.Second)
-	pm.RecordResult(PollResult{
-		InstanceType: "pve",
-		InstanceName: "stale-test",
-		StartTime:    firstEndTime.Add(-time.Second),
-		EndTime:      firstEndTime,
-		Success:      true,
-	})
-
-	// Now record a failed poll
-	secondEndTime := time.Now()
-	pm.RecordResult(PollResult{
-		InstanceType: "pve",
-		InstanceName: "stale-test",
-		StartTime:    secondEndTime.Add(-time.Second),
-		EndTime:      secondEndTime,
-		Success:      false,
-		Error:        errors.New("failed"),
-	})
-
-	// Staleness should be ~10 seconds
-	gotStaleness := getGaugeVecValue(pm.staleness, "pve", "stale-test")
-	if gotStaleness < 9 || gotStaleness > 11 {
-		t.Errorf("staleness = %v, want ~10 seconds", gotStaleness)
-	}
-}
-
-func TestRecordResult_FailureStalenessWithoutPreviousSuccess(t *testing.T) {
-	t.Parallel()
-
-	pm := newFullTestPollMetrics(t)
-
-	// Record a failure without any prior success
-	pm.RecordResult(PollResult{
-		InstanceType: "pve",
-		InstanceName: "no-prior-success",
-		StartTime:    time.Now().Add(-time.Second),
-		EndTime:      time.Now(),
-		Success:      false,
-		Error:        errors.New("failed"),
-	})
-
-	// Staleness should be -1 (no prior success)
-	gotStaleness := getGaugeVecValue(pm.staleness, "pve", "no-prior-success")
-	if gotStaleness != -1 {
-		t.Errorf("staleness = %v, want -1 for no prior success", gotStaleness)
 	}
 }
 
@@ -1122,105 +1059,10 @@ func TestDecrementPending_MultipleDecrements(t *testing.T) {
 	}
 }
 
-func TestRecordResult_FailureNegativeStalenessClampedToZero(t *testing.T) {
-	t.Parallel()
-
-	pm := newFullTestPollMetrics(t)
-
-	// Record a success with a future timestamp
-	futureTime := time.Now().Add(10 * time.Second)
-	pm.RecordResult(PollResult{
-		InstanceType: "pve",
-		InstanceName: "negative-staleness",
-		StartTime:    futureTime.Add(-time.Second),
-		EndTime:      futureTime,
-		Success:      true,
-	})
-
-	// Now record a failure with an EndTime BEFORE the last success
-	// This creates a negative staleness calculation (EndTime - lastSuccess < 0)
-	pastTime := futureTime.Add(-5 * time.Second)
-	pm.RecordResult(PollResult{
-		InstanceType: "pve",
-		InstanceName: "negative-staleness",
-		StartTime:    pastTime.Add(-time.Second),
-		EndTime:      pastTime,
-		Success:      false,
-		Error:        errors.New("failed"),
-	})
-
-	// Staleness should be clamped to 0, not negative
-	gotStaleness := getGaugeVecValue(pm.staleness, "pve", "negative-staleness")
-	if gotStaleness != 0 {
-		t.Errorf("staleness = %v, want 0 for negative staleness calculation", gotStaleness)
-	}
-}
-
 // newNodeTestPollMetrics creates a PollMetrics instance with node-level metrics for testing.
 func newNodeTestPollMetrics(t *testing.T) *PollMetrics {
 	t.Helper()
-
-	reg := prometheus.NewRegistry()
-
-	pm := &PollMetrics{
-		nodePollDuration: prometheus.NewHistogramVec(
-			prometheus.HistogramOpts{
-				Namespace: "pulse",
-				Subsystem: "monitor",
-				Name:      "node_poll_duration_seconds",
-				Help:      "Duration of polling operations per node.",
-				Buckets:   []float64{0.1, 0.25, 0.5, 1, 2.5, 5, 10, 15, 20, 30},
-			},
-			[]string{"instance_type", "instance", "node"},
-		),
-		nodePollResults: prometheus.NewCounterVec(
-			prometheus.CounterOpts{
-				Namespace: "pulse",
-				Subsystem: "monitor",
-				Name:      "node_poll_total",
-				Help:      "Total polling attempts per node partitioned by result.",
-			},
-			[]string{"instance_type", "instance", "node", "result"},
-		),
-		nodePollErrors: prometheus.NewCounterVec(
-			prometheus.CounterOpts{
-				Namespace: "pulse",
-				Subsystem: "monitor",
-				Name:      "node_poll_errors_total",
-				Help:      "Polling failures per node grouped by error type.",
-			},
-			[]string{"instance_type", "instance", "node", "error_type"},
-		),
-		nodeLastSuccess: prometheus.NewGaugeVec(
-			prometheus.GaugeOpts{
-				Namespace: "pulse",
-				Subsystem: "monitor",
-				Name:      "node_poll_last_success_timestamp",
-				Help:      "Unix timestamp of the last successful poll for a node.",
-			},
-			[]string{"instance_type", "instance", "node"},
-		),
-		nodeStaleness: prometheus.NewGaugeVec(
-			prometheus.GaugeOpts{
-				Namespace: "pulse",
-				Subsystem: "monitor",
-				Name:      "node_poll_staleness_seconds",
-				Help:      "Seconds since the last successful poll for a node.",
-			},
-			[]string{"instance_type", "instance", "node"},
-		),
-		nodeLastSuccessByKey: make(map[nodeMetricKey]time.Time),
-	}
-
-	reg.MustRegister(
-		pm.nodePollDuration,
-		pm.nodePollResults,
-		pm.nodePollErrors,
-		pm.nodeLastSuccess,
-		pm.nodeStaleness,
-	)
-
-	return pm
+	return newPollMetrics(prometheus.NewRegistry())
 }
 
 func TestRecordNodeResult_SuccessUpdatesMetrics(t *testing.T) {
@@ -1243,12 +1085,6 @@ func TestRecordNodeResult_SuccessUpdatesMetrics(t *testing.T) {
 	wantLastSuccess := float64(endTime.Unix())
 	if gotLastSuccess != wantLastSuccess {
 		t.Errorf("nodeLastSuccess = %v, want %v", gotLastSuccess, wantLastSuccess)
-	}
-
-	// Check staleness is set to 0 on success
-	gotStaleness := getGaugeVecValue(pm.nodeStaleness, "pve", "my-pve", "node1")
-	if gotStaleness != 0 {
-		t.Errorf("nodeStaleness = %v, want 0 on success", gotStaleness)
 	}
 
 	// Check success counter incremented
@@ -1343,99 +1179,6 @@ func TestRecordNodeResult_EmptyNodeNameNormalized(t *testing.T) {
 	gotSuccessCount := getCounterVecValue(pm.nodePollResults, "pve", "pve1", "unknown-node", "success")
 	if gotSuccessCount != 1 {
 		t.Errorf("node_poll_total{node=unknown-node,result=success} = %v, want 1", gotSuccessCount)
-	}
-}
-
-func TestRecordNodeResult_FailureStalenessWithPreviousSuccess(t *testing.T) {
-	t.Parallel()
-
-	pm := newNodeTestPollMetrics(t)
-
-	// First, record a successful poll
-	firstEndTime := time.Now().Add(-10 * time.Second)
-	pm.RecordNodeResult(NodePollResult{
-		InstanceType: "pve",
-		InstanceName: "stale-test",
-		NodeName:     "node1",
-		StartTime:    firstEndTime.Add(-time.Second),
-		EndTime:      firstEndTime,
-		Success:      true,
-	})
-
-	// Now record a failed poll
-	secondEndTime := time.Now()
-	pm.RecordNodeResult(NodePollResult{
-		InstanceType: "pve",
-		InstanceName: "stale-test",
-		NodeName:     "node1",
-		StartTime:    secondEndTime.Add(-time.Second),
-		EndTime:      secondEndTime,
-		Success:      false,
-		Error:        errors.New("failed"),
-	})
-
-	// Staleness should be ~10 seconds
-	gotStaleness := getGaugeVecValue(pm.nodeStaleness, "pve", "stale-test", "node1")
-	if gotStaleness < 9 || gotStaleness > 11 {
-		t.Errorf("nodeStaleness = %v, want ~10 seconds", gotStaleness)
-	}
-}
-
-func TestRecordNodeResult_FailureStalenessWithoutPreviousSuccess(t *testing.T) {
-	t.Parallel()
-
-	pm := newNodeTestPollMetrics(t)
-
-	// Record a failure without any prior success
-	pm.RecordNodeResult(NodePollResult{
-		InstanceType: "pve",
-		InstanceName: "no-prior-success",
-		NodeName:     "node1",
-		StartTime:    time.Now().Add(-time.Second),
-		EndTime:      time.Now(),
-		Success:      false,
-		Error:        errors.New("failed"),
-	})
-
-	// Staleness should be -1 (no prior success)
-	gotStaleness := getGaugeVecValue(pm.nodeStaleness, "pve", "no-prior-success", "node1")
-	if gotStaleness != -1 {
-		t.Errorf("nodeStaleness = %v, want -1 for no prior success", gotStaleness)
-	}
-}
-
-func TestRecordNodeResult_FailureNegativeStalenessClampedToZero(t *testing.T) {
-	t.Parallel()
-
-	pm := newNodeTestPollMetrics(t)
-
-	// Record a success with a future timestamp
-	futureTime := time.Now().Add(10 * time.Second)
-	pm.RecordNodeResult(NodePollResult{
-		InstanceType: "pve",
-		InstanceName: "neg-stale",
-		NodeName:     "node1",
-		StartTime:    futureTime.Add(-time.Second),
-		EndTime:      futureTime,
-		Success:      true,
-	})
-
-	// Now record a failure with an EndTime BEFORE the last success
-	pastTime := futureTime.Add(-5 * time.Second)
-	pm.RecordNodeResult(NodePollResult{
-		InstanceType: "pve",
-		InstanceName: "neg-stale",
-		NodeName:     "node1",
-		StartTime:    pastTime.Add(-time.Second),
-		EndTime:      pastTime,
-		Success:      false,
-		Error:        errors.New("failed"),
-	})
-
-	// Staleness should be clamped to 0, not negative
-	gotStaleness := getGaugeVecValue(pm.nodeStaleness, "pve", "neg-stale", "node1")
-	if gotStaleness != 0 {
-		t.Errorf("nodeStaleness = %v, want 0 for negative staleness calculation", gotStaleness)
 	}
 }
 

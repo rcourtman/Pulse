@@ -36,6 +36,22 @@ records the exercised routes and controls.
 
 Docker hosts report their local live-log opt-in separately from failure capture. A runtime with conflicting identity cannot serve a live read.
 
+### Poll staleness grows even when results stop
+
+The existing connection and node `pulse_monitor_*poll_staleness_seconds`
+gauges report elapsed seconds since the last recorded success at scrape time.
+They no longer stop aging with the last poll result. No observed result leaves
+the series absent. A failure before the first success reports `-1`; later
+failures do not advance the success time. A future success timestamp is clamped
+to age zero until time catches up. Poll results, last-success timestamp
+metrics, label sets, scheduler decisions and access are unchanged. This is
+not proof that a connection is down, nor do the metrics remove historical
+series for paused or removed connections. The collector copies only the
+existing timestamps and first-failure markers and releases the metrics lock
+before emitting series. It does not take a provider or monitor lock.
+`TestPollStalenessGaugesAgeWithoutNewResults` checks the exported connection
+and node gauges against quiet, failure and recovery scrapes.
+
 ### Overdue claimed polls are visible while the work is still pending
 
 The existing Prometheus listener exports
