@@ -2129,6 +2129,15 @@ failure cannot turn that cap into an immediate retry or a past retry timestamp.
 A successful poll still resets the failure count, interval and outstanding
 error, and one connection's failures do not block another connection.
 
+The active queue places a transient retry at the later of its selected
+backoff and the breaker deadline. If a plan or explicit request is already
+due while the breaker still waits, the worker returns that claim to the
+queue at the breaker deadline. This does not consume the half-open probe,
+restart backoff, or record another dead letter from an old result. The
+existing breaker still admits or rejects the actual probe. Thresholds, the
+delay selected for genuine failures, terminal-failure routing and the
+dead-letter retention policy are unchanged.
+
 `TestCircuitBreaker_BackoffNeverOverflows` compares 130 failure transitions
 against an independent unbounded-integer oracle, including odd and maximum
 representable duration caps, exact retry boundaries and success/new-episode
@@ -2137,6 +2146,11 @@ failure through actual scheduler result/admission and health entry points,
 including unrelated-instance progress and cleared error state. These are
 in-memory source controls, not native guest recovery, appliance request repair
 or installed CPU/network relief. No database or provider operation is involved.
+`TestScheduledPollRespectsBreakerAndBackoff` drives planning, jitter and the
+real worker/collector path in fixed and adaptive modes. A healthy peer
+continues to report and the eligible recovery publishes new CPU and History.
+`TestBreakerDeferredClaimDoesNotRepeatDeadLetter` verifies both worker modes
+record only the actual exhausted result when planning revisits the open breaker.
 
 ### Active-alert state projection carries the live metric status — issue #2068
 
