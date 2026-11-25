@@ -16,6 +16,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts/eventlog"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rcourtman/pulse-go-rewrite/internal/mock"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/notifications"
 	unifiedresources "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
@@ -2036,4 +2037,138 @@ func TestAlertTimelineAnnouncesOnlyLiveLifecycleChanges(t *testing.T) {
 	recorded, err := store.GetRecentChangesFiltered(canonicalID, time.Time{}, 10, unifiedresources.ResourceChangeFilters{AlertIdentifiers: []string{alert.ID}})
 	require.NoError(t, err)
 	require.Len(t, recorded, 1, "the non-live projection still records the row")
+}
+
+func TestMonitorPollsWhileDeliveryHealthWaits(t *testing.T) {
+	withBlockedDeliveryHealth(t, func(t *testing.T, m *Monitor) {
+		nodes := m.state.GetSnapshot().Nodes
+		for _, node := range nodes {
+			if node.Name != "fixture-new-node" {
+				continue
+			}
+			if len(nodes) != 2 || node.CPU != 0.42 {
+				t.Fatalf("new node did not publish alongside its peer: nodes=%d CPU=%v", len(nodes), node.CPU)
+			}
+			history := m.GetNodeMetrics(node.ID, "cpu", time.Minute)
+			if len(history) != 1 || history[0].Value != 42 {
+				t.Fatalf("new node's first History sample = %+v, want 42%% CPU", history)
+			}
+			return
+		}
+		t.Fatalf("new connection did not publish while the delivery health projection waited: got %d nodes", len(nodes))
+	})
+}
+
+// Exercise the real Start tick, PVE collector and delivery-health projection.
+// The fixture supplies only the provider results and the projection contention.
+func withBlockedDeliveryHealth(t *testing.T, observe func(*testing.T, *Monitor)) {
+	t.Helper()
+	previousMock := mock.IsMockEnabled()
+	mustSetMockEnabled(t, false)
+	t.Cleanup(func() { mustSetMockEnabled(t, previousMock) })
+
+	const (
+		peer    = "fixture-peer"
+		newNode = "fixture-new-node"
+		cadence = 10 * time.Second
+	)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	origin := time.Now()
+	manager := alerts.NewManagerWithDataDir(t.TempDir())
+	defer manager.Stop()
+	alertConfig := manager.GetConfig()
+	alertConfig.ActivationState = alerts.ActivationPending
+	manager.UpdateConfig(alertConfig)
+	physicalDisks := false
+	instance := func(name string) config.PVEInstance {
+		return config.PVEInstance{
+			Name: name, Host: "https://" + name + ".invalid:8006", MonitorPhysicalDisks: &physicalDisks,
+		}
+	}
+	client := func(name string, cpu float64) PVEClientInterface {
+		return &pollWorkFixturePVE{getNodes: func(context.Context) ([]proxmox.Node, error) {
+			return []proxmox.Node{{Node: name, Status: "online", CPU: cpu, Uptime: 36000}}, nil
+		}}
+	}
+	m := &Monitor{
+		config:           &config.Config{PVEPollingInterval: cadence, PVEInstances: []config.PVEInstance{instance(peer)}},
+		state:            models.NewState(),
+		alertManager:     manager,
+		notificationMgr:  &notifications.NotificationManager{}, // No delivery queue or destinations.
+		startTime:        origin,
+		metricsHistory:   NewMetricsHistory(16, time.Hour),
+		taskQueue:        NewTaskQueue(),
+		pollStatusMap:    make(map[string]*pollStatus),
+		lastOutcome:      make(map[string]taskOutcome),
+		failureCounts:    make(map[string]int),
+		lastClusterCheck: map[string]time.Time{peer: origin, newNode: origin},
+		nodeLastOnline:   make(map[string]time.Time),
+		nodeRRDMemCache:  make(map[string]rrdMemCacheEntry),
+		pveClients:       map[string]PVEClientInterface{peer: client(peer, 0.24)},
+	}
+	m.executor = newRealExecutor(m)
+	m.deliveryHealthProjectionMu.Lock()
+	held := true
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		m.Start(ctx, nil)
+	}()
+	defer func() {
+		cancel()
+		if held {
+			m.deliveryHealthProjectionMu.Unlock()
+		}
+		select {
+		case <-done:
+		case <-time.After(5 * time.Second):
+			t.Error("monitor did not finish after releasing the health projection")
+		}
+	}()
+	require.Eventually(t, func() bool {
+		nodes := m.state.GetSnapshot().Nodes
+		return len(nodes) == 1 && nodes[0].Name == peer && nodes[0].CPU == 0.24
+	}, 5*time.Second, 10*time.Millisecond, "startup poll must publish the existing peer")
+
+	// The check stamps admission before it can enter the deliberately held
+	// projection. Use real time: a mutex wait isn't durable in synctest.
+	readCheckTime := func() time.Time {
+		m.mu.RLock()
+		defer m.mu.RUnlock()
+		return m.lastDeliveryHealthCheck
+	}
+	require.Eventually(t, func() bool { return !readCheckTime().IsZero() },
+		cadence+5*time.Second, 10*time.Millisecond, "periodic delivery check must reach projection")
+	checkTime := readCheckTime()
+	// Model a new connection becoming ready after health evaluation started.
+	// There is no pre-existing queued poll for this key.
+	m.mu.Lock()
+	m.config.PVEInstances = append(m.config.PVEInstances, instance(newNode))
+	m.pveClients[newNode] = client(newNode, 0.42)
+	m.mu.Unlock()
+	// Use the same observation boundary for both sources: one ordinary tick
+	// plus enough time for a worker to notice the newly queued task.
+	time.Sleep(time.Until(checkTime.Add(cadence + 2*time.Second)))
+	observe(t, m)
+
+	cancel()
+	select {
+	case <-done:
+		t.Fatal("monitor returned before its admitted health check finished")
+	case <-time.After(100 * time.Millisecond):
+	}
+	m.deliveryHealthProjectionMu.Unlock()
+	held = false
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("monitor did not return after the projection completed")
+	}
+	for _, alert := range manager.GetActiveAlerts() {
+		if alert.Type == alerts.NotificationDeliveryAlertType {
+			return
+		}
+	}
+	t.Fatal("the admitted check did not publish the unavailable queue warning")
 }

@@ -2449,6 +2449,16 @@ func (m *Monitor) Start(ctx context.Context, wsHub *websocket.Hub) {
 		}()
 	}
 
+	// A slow notification-health read or alert projection must not hold up
+	// poll planning or broadcast. Keep at most one pending tick and join an
+	// admitted check before Start returns ownership of the alert store.
+	deliveryHealthTicks := make(chan struct{}, 1)
+	deliveryHealthCtx, stopDeliveryHealth := context.WithCancel(ctx)
+	defer stopDeliveryHealth()
+	alertChecks.Go(func() {
+		m.runPeriodicNotificationDeliveryChecks(deliveryHealthCtx, deliveryHealthTicks)
+	})
+
 	// Create separate tickers for polling and broadcasting using the configured cadence
 
 	workerCount := m.totalClientCount()
@@ -2505,7 +2515,10 @@ func (m *Monitor) Start(ctx context.Context, wsHub *websocket.Hub) {
 			m.cleanupTrackingMaps(now)
 			m.cleanupMetricsHistory()
 			m.cleanupRateTracker(now)
-			m.evaluateNotificationDelivery(now)
+			select {
+			case deliveryHealthTicks <- struct{}{}:
+			default: // The worker already has a pending check.
+			}
 			if mock.IsMockEnabled() {
 				// In mock mode, keep synthetic alerts fresh
 				startAlertCheck(m.checkMockAlerts)

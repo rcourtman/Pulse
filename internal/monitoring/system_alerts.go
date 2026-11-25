@@ -1,6 +1,7 @@
 package monitoring
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"time"
@@ -12,8 +13,25 @@ import (
 // notificationDeliveryCheckInterval throttles the delivery-health evaluation.
 // The poll ticker runs on the configured polling cadence, which can be a few
 // seconds, and reading queue health costs a SQLite query, so the check runs on
-// its own slower schedule rather than on every poll.
+// a slower cadence than polling.
 const notificationDeliveryCheckInterval = 5 * time.Minute
+
+func (m *Monitor) runPeriodicNotificationDeliveryChecks(ctx context.Context, ticks <-chan struct{}) {
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticks:
+			if ctx.Err() != nil {
+				// The pending wake is not an admitted check on shutdown.
+				return
+			}
+			// A tick is only a wake-up. Apply the interval to the current
+			// time if an earlier projection held the worker for a while.
+			m.evaluateNotificationDelivery(time.Now())
+		}
+	}
+}
 
 // evaluateNotificationDelivery raises or clears the notification-delivery
 // system alert. A destination that has stopped delivering cannot announce
