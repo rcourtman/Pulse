@@ -227,6 +227,11 @@ jq -ne --slurpfile earlier "$earlier" --slurpfile later "$later" '
       {lastSuccess, lastErrorAt: .lastError.at, lastErrorCategory: .lastError.category,
        consecutiveFailures}
     end;
+  def retry_context:
+    if . == null then null else
+      {breaker: {state: .breaker.state, retryAt: .breaker.retryAt},
+       deadLetter: {present: .deadLetter.present, nextRetry: .deadLetter.nextRetry}}
+    end;
   ($earlier | snapshot) as $a | ($later | snapshot) as $b |
   if $a.updatedAt == $b.updatedAt then error("Use two different capture times") else . end |
   ($a | by_key) as $old | ($b | by_key) as $new |
@@ -234,6 +239,7 @@ jq -ne --slurpfile earlier "$earlier" --slurpfile later "$later" '
    polls: [($old + $new | keys[]) as $key |
      ($old[$key] | poll) as $before | ($new[$key] | poll) as $after |
      {key: $key, before: $before, after: $after,
+      retry: {before: ($old[$key] | retry_context), after: ($new[$key] | retry_context)},
       changes: (if $before == null or $after == null then null else
         [$before | keys[] as $field | select(.[$field] != $after[$field]) | $field]
       end)}]}'
@@ -244,6 +250,17 @@ names the fields that differ. It does not judge whether a timestamp advanced.
 An empty list means the recorded fields are unchanged. A null `before` or
 `after` means the connection was absent from that capture, not that its
 poll succeeded.
+
+If no result advanced, read `retry.after` beside the later snapshot's
+`updatedAt`. For an `open` or `half_open` breaker, `retryAt` is the earliest
+time the breaker would permit another attempt, not a scheduled start. After
+that time the breaker may still show the same state until work reaches it.
+If `deadLetter.present` is true, the scheduler has recorded this connection
+in its dead-letter queue. A null `nextRetry` means this snapshot has no retry
+time for it. A retry timestamp changing or passing does not mean a poll ran.
+Only the poll fields are included in `changes`. If neither result moved
+after the normal polling interval and any recorded wait, keep this as a
+gap in recorded results. Don't reset the breaker or retry just to check it.
 
 | What changes | What it tells you |
 | --- | --- |

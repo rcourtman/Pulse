@@ -329,6 +329,41 @@ class SchedulerPollingDocsTest(unittest.TestCase):
         self.assertIsNone(rows["pbs::removed"]["after"])
         self.assertIsNone(rows["pbs::added"]["before"])
 
+    def test_comparison_keeps_retry_context_separate_from_finished_polls(self):
+        before = snapshot(False)
+        before["instances"][1]["breaker"]["retryAt"] = "2026-10-03T12:00:12.25Z"
+        before["instances"][2]["breaker"]["retryAt"] = "2026-10-03T12:01:00Z"
+        before["instances"][2]["deadLetter"]["reason"] = "private fault text"
+        after = json.loads(json.dumps(before))
+        after["updatedAt"] = "2026-10-03T12:01:30Z"
+        after["instances"][1]["breaker"]["retryAt"] = "2026-10-03T12:01:40Z"
+        after["instances"][2]["deadLetter"]["nextRetry"] = "2026-10-03T12:02:00Z"
+        after["instances"].reverse()
+
+        result = self.compare(before, after)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertNotIn("private fault text", result.stdout)
+        rows = {row["key"]: row for row in json.loads(result.stdout)["polls"]}
+        self.assertTrue(all(row["changes"] == [] for row in rows.values()))
+        self.assertEqual(rows["pve::failed"]["retry"], {
+            "before": {
+                "breaker": {"state": "open", "retryAt": "2026-10-03T12:01:00Z"},
+                "deadLetter": {"present": True, "nextRetry": None},
+            },
+            "after": {
+                "breaker": {"state": "open", "retryAt": "2026-10-03T12:01:00Z"},
+                "deadLetter": {"present": True, "nextRetry": "2026-10-03T12:02:00Z"},
+            },
+        })
+        self.assertEqual(rows["pve::retrying"]["retry"]["after"], {
+            "breaker": {"state": "half_open", "retryAt": "2026-10-03T12:01:40Z"},
+            "deadLetter": {"present": False, "nextRetry": None},
+        })
+        self.assertEqual(rows["pve::healthy"]["retry"]["after"], {
+            "breaker": {"state": "closed", "retryAt": None},
+            "deadLetter": {"present": False, "nextRetry": None},
+        })
+
     def test_comparison_refuses_ambiguous_or_incomplete_captures(self):
         good = snapshot()
         later = dict(good, updatedAt="2026-10-03T12:03:00Z")
