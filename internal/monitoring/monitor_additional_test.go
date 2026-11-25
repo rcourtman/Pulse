@@ -2383,9 +2383,7 @@ func TestScheduledPollWorkProgressInExporter(t *testing.T) {
 		if len(starts) != 1 || starts[0] != defaultTaskTimeout+5*time.Second {
 			t.Fatalf("provider starts = %v", starts)
 		}
-		// Publish both controls before their due time. If they are inserted
-		// after the clock advances, the dispatcher may already have gone
-		// back to sleep on its empty-queue timer.
+		// Queue both controls in advance so they become eligible together.
 		controlsDue := time.Now().Add(defaultTaskTimeout + 5*time.Second)
 		queue(sibling, controlsDue)
 		queue(down, controlsDue)

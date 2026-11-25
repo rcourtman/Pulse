@@ -76,9 +76,10 @@ func (h *taskHeap) Pop() interface{} {
 // TaskQueue is a thread-safe min-heap over scheduled tasks. The index also
 // holds claimed tasks, which are not part of the heap or queue snapshots.
 type TaskQueue struct {
-	mu      sync.Mutex
-	entries map[string]*scheduledTaskEntry
-	heap    taskHeap
+	mu          sync.Mutex
+	entries     map[string]*scheduledTaskEntry
+	heap        taskHeap
+	earlierHead chan struct{} // lazily shared by workers waiting for new eligibility
 }
 
 // NewTaskQueue constructs an empty queue.
@@ -108,6 +109,7 @@ func (q *TaskQueue) upsert(task ScheduledTask, fromPlanner bool) {
 	q.mu.Lock()
 	defer q.mu.Unlock()
 
+	previous, hadHead := q.headTimeLocked()
 	if entry, ok := q.entries[key]; ok {
 		if entry.index < 0 {
 			if !fromPlanner {
@@ -133,12 +135,14 @@ func (q *TaskQueue) upsert(task ScheduledTask, fromPlanner bool) {
 		entry.task = task
 		entry.keepSchedule = !fromPlanner
 		heap.Fix(&q.heap, entry.index)
+		q.wakeEarlierHeadLocked(previous, hadHead)
 		return
 	}
 
 	entry := &scheduledTaskEntry{task: task, keepSchedule: !fromPlanner}
 	heap.Push(&q.heap, entry)
 	q.entries[key] = entry
+	q.wakeEarlierHeadLocked(previous, hadHead)
 }
 
 // completeClaim returns ownership and optionally queues its successor in the
@@ -169,7 +173,9 @@ func (q *TaskQueue) completeClaim(task, next ScheduledTask, reschedule pollResch
 		return
 	}
 	entry.followup = followWorkerSchedule
+	previous, hadHead := q.headTimeLocked()
 	heap.Push(&q.heap, entry)
+	q.wakeEarlierHeadLocked(previous, hadHead)
 }
 
 // Get returns the queued task for an instance, if present.
@@ -203,81 +209,69 @@ func (q *TaskQueue) Remove(instanceType InstanceType, instance string) {
 	delete(q.entries, key)
 }
 
+func (q *TaskQueue) headTimeLocked() (time.Time, bool) {
+	if len(q.heap) == 0 {
+		return time.Time{}, false
+	}
+	return q.heap[0].task.NextRun, true
+}
+
+// wakeEarlierHeadLocked is called after a queued insertion or replacement.
+// Changes that only delay work need no broadcast: waiters recheck the head
+// before claiming anything, even if a previously armed timer wakes them.
+func (q *TaskQueue) wakeEarlierHeadLocked(previous time.Time, hadHead bool) {
+	if q.earlierHead != nil && (!hadHead || q.heap[0].task.NextRun.Before(previous)) {
+		close(q.earlierHead)
+		q.earlierHead = nil
+	}
+}
+
 // WaitNext blocks until a task is due or context is cancelled. A successful
 // caller owns the target until it calls completeClaim, even after a deadline.
 func (q *TaskQueue) WaitNext(ctx context.Context) (ScheduledTask, bool) {
-	var (
-		timer      *time.Timer
-		resetTimer = func(d time.Duration) <-chan time.Time {
-			if d <= 0 {
-				d = time.Millisecond
-			}
-			if timer == nil {
-				timer = time.NewTimer(d)
-				return timer.C
-			}
-			if !timer.Stop() {
-				select {
-				case <-timer.C:
-				default:
-				}
-			}
-			timer.Reset(d)
-			return timer.C
+	var timer *time.Timer
+	defer func() {
+		if timer != nil {
+			timer.Stop()
 		}
-		stopTimer = func() {
-			if timer == nil {
-				return
-			}
-			if !timer.Stop() {
-				select {
-				case <-timer.C:
-				default:
-				}
-			}
-		}
-	)
-	defer stopTimer()
-
-	for {
-		select {
-		case <-ctx.Done():
-			return ScheduledTask{}, false
-		default:
-		}
-
+	}()
+	done := ctx.Done()
+	for ctx.Err() == nil {
 		q.mu.Lock()
-		if len(q.heap) == 0 {
-			q.mu.Unlock()
-			timerCh := resetTimer(100 * time.Millisecond)
-			select {
-			case <-ctx.Done():
-				return ScheduledTask{}, false
-			case <-timerCh:
-				continue
-			}
-		}
-
-		entry := q.heap[0]
-		delay := time.Until(entry.task.NextRun)
-		if delay <= 0 {
-			heap.Pop(&q.heap)
-			task := entry.task
+		next, hasHead := q.headTimeLocked()
+		if hasHead && time.Until(next) <= 0 {
+			task := heap.Pop(&q.heap).(*scheduledTaskEntry).task
 			q.mu.Unlock()
 			return task, true
 		}
-
-		q.mu.Unlock()
-		if delay > 250*time.Millisecond {
-			delay = 250 * time.Millisecond
+		// Observe the deadline and its change signal under the same lock so
+		// an insertion before this worker parks cannot lose its wakeup.
+		if q.earlierHead == nil {
+			q.earlierHead = make(chan struct{})
 		}
-		timerCh := resetTimer(delay)
+		earlier := q.earlierHead
+		q.mu.Unlock()
+
+		var timerCh <-chan time.Time
+		if hasHead {
+			delay := time.Until(next)
+			if timer == nil {
+				timer = time.NewTimer(delay)
+			} else {
+				timer.Reset(delay)
+			}
+			timerCh = timer.C
+		} else if timer != nil {
+			timer.Stop()
+		}
 		select {
-		case <-ctx.Done():
+		case <-done:
 			return ScheduledTask{}, false
+		case <-earlier:
 		case <-timerCh:
 		}
 	}
+	return ScheduledTask{}, false
 }
 
 // Size returns the number of tasks currently queued.
