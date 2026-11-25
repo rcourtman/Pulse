@@ -124,8 +124,9 @@ class ResolvePairTest(unittest.TestCase):
 
 class DiscoveryTest(unittest.TestCase):
     stream_error = "stream error: stream ID 1; CANCEL; received from peer\n"
+    gateway_timeout = "gh: We couldn't respond to your request in time. (HTTP 504)\n"
     inventory_command = ["gh", "api", "--method", "GET", "--paginate", "--slurp",
-                         "repos/rcourtman/Pulse/releases?per_page=100"]
+                         "repos/rcourtman/Pulse/releases?per_page=20"]
     latest_command = ["gh", "api", "--method", "GET", "repos/rcourtman/Pulse/releases/latest"]
     pages = [[release("v6.5.0"), release("v6.6.0")], [release("v6.7.0-beta.1")]]
 
@@ -236,7 +237,7 @@ class DiscoveryTest(unittest.TestCase):
             self.assertEqual(error.exception.code, 2)
         command.assert_not_called()
 
-    def workflow_resolution(self, outcomes, workflow=None):
+    def workflow_resolution(self, outcomes, workflow=None, *, inventory_page_limit=None):
         # Execute the actual workflow shell and Python CLI, replacing only gh
         # with a process fixture. No installation, network or token is used.
         if workflow is None:
@@ -245,15 +246,25 @@ class DiscoveryTest(unittest.TestCase):
         body = textwrap.dedent(step.split("        run: |\n", 1)[1])
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            (root / "outcomes.json").write_text(json.dumps(outcomes))
+            (root / "outcomes.json").write_text(json.dumps({
+                "responses": outcomes,
+                "inventory_page_limit": inventory_page_limit,
+                "gateway_timeout": self.gateway_timeout,
+            }))
             gh = root / "gh"
             gh.write_text(f"#!{sys.executable}\n" + '''import json, os, pathlib, sys
 root = pathlib.Path(os.environ['DISCOVERY_FIXTURE'])
 with (root / 'calls.jsonl').open('a') as out:
     out.write(json.dumps(sys.argv[1:]) + '\\n')
 count = len((root / 'calls.jsonl').read_text().splitlines())
-outcomes = json.loads((root / 'outcomes.json').read_text())
-status, output, error = outcomes[min(count - 1, len(outcomes) - 1)]
+fixture = json.loads((root / 'outcomes.json').read_text())
+responses = fixture['responses']
+status, output, error = responses[min(count - 1, len(responses) - 1)]
+limit = fixture['inventory_page_limit']
+endpoint, separator, page_size = sys.argv[-1].partition('?per_page=')
+if limit is not None and endpoint == 'repos/rcourtman/Pulse/releases':
+    if not separator or int(page_size) > limit:
+        status, output, error = 1, '', fixture['gateway_timeout']
 print(output, end='', file=sys.stdout)
 print(error, end='', file=sys.stderr)
 sys.exit(status)
@@ -282,6 +293,36 @@ sys.exit(status)
         self.assertNotIn("v99.0.0", output + summary)
         self.assertIn("v6.7.0-beta.1", summary)
         self.assertIn(self.stream_error, result.stderr)
+
+    def test_workflow_uses_smaller_pages_without_losing_previous_stable(self):
+        # Model a provider that cannot return wide release pages. The old
+        # stable remains eligible even when it only occurs on a later page.
+        pages = [[release("v6.9.0"), release("helm-chart-6.9.0"),
+                  release("v6.10.0-beta.1", draft=True)],
+                 [release("v6.9.0-rc.4")], [release("v6.7.0"), release("v6.8.0")]]
+        result, calls, output, summary = self.workflow_resolution([
+            (0, json.dumps(pages), ""), (0, json.dumps(release("v6.9.0")), ""),
+        ], inventory_page_limit=20)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(calls, [self.inventory_command[1:], self.latest_command[1:]])
+        self.assertRegex(output, r"from_tag<<[^\n]+\nv6\.8\.0\n")
+        self.assertRegex(output, r"to_tag<<[^\n]+\nv6\.9\.0\n")
+        self.assertIn("previous stable -> latest stable", summary)
+
+    def test_workflow_names_which_read_failed_without_retrying_504(self):
+        inventory = (0, json.dumps(self.pages), "")
+        timeout = (1, "", self.gateway_timeout)
+        for outcomes, label, expected_calls in (
+            ([timeout], "release inventory", [self.inventory_command[1:]]),
+            ([inventory, timeout], "latest release", [self.inventory_command[1:], self.latest_command[1:]]),
+        ):
+            with self.subTest(read=label):
+                result, calls, output, summary = self.workflow_resolution(outcomes)
+                self.assertEqual(result.returncode, 1, result.stderr)
+                self.assertIn(self.gateway_timeout, result.stderr)
+                self.assertIn(f"GitHub {label} metadata read failed (exit 1, attempt 1/3)", result.stderr)
+                self.assertEqual(calls, expected_calls)
+                self.assertEqual(output + summary, "")
 
     def test_workflow_refusal_and_malformed_metadata_emit_no_outputs(self):
         for outcome in ((1, "[]", "gh: Forbidden (HTTP 403)\n"), (0, "not json", "")):
