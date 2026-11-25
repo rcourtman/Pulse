@@ -52,16 +52,18 @@ def snapshot(enabled=True):
 
 
 @contextmanager
-def server(payload, status=200):
+def server(payload, status=200, *, incomplete_body=False):
     calls = []
 
     class Handler(BaseHTTPRequestHandler):
         def do_GET(self):
             calls.append({"path": self.path, "method": self.command, "headers": dict(self.headers)})
+            body = payload if isinstance(payload, bytes) else json.dumps(payload).encode()
             self.send_response(status)
             self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(body) + (10 if incomplete_body else 0)))
             self.end_headers()
-            self.wfile.write(payload if isinstance(payload, bytes) else json.dumps(payload).encode())
+            self.wfile.write(body)
 
         def log_message(self, *_args):
             pass
@@ -82,7 +84,7 @@ def server(payload, status=200):
 
 class SchedulerPollingDocsTest(unittest.TestCase):
     def exercise(self, payload=None, status=200, *, header="X-API-Token", missing_header=False,
-                 refused_connection=False):
+                 refused_connection=False, incomplete_body=False):
         payload = snapshot() if payload is None else payload
         with tempfile.TemporaryDirectory(prefix="pulse polling ") as temporary:
             directory = Path(temporary)
@@ -106,7 +108,7 @@ class SchedulerPollingDocsTest(unittest.TestCase):
             env = dict(os.environ, HOME=str(home), TMPDIR=str(directory),
                        PATH=f"{tools}:{os.environ['PATH']}", CURL_ARGV=str(argv_file),
                        REAL_CURL=shutil.which("curl"))
-            with server(payload, status) as (port, calls):
+            with server(payload, status, incomplete_body=incomplete_body) as (port, calls):
                 # A closed fixture port supplies an actual connection refusal.
                 if refused_connection:
                     with server(payload) as (closed_port, _):
@@ -148,17 +150,35 @@ class SchedulerPollingDocsTest(unittest.TestCase):
     def test_http_errors_and_redirects_never_become_successful_snapshots(self):
         for status in (301, 401, 403, 503):
             with self.subTest(status=status):
-                # Even a body shaped like health must not hide a failed request.
-                result, calls, _, _ = self.exercise(snapshot(), status)
+                # A plausible body cannot hide a failed read or leak its error text.
+                payload = dict(snapshot(), error="private fixture error")
+                result, calls, _, files = self.exercise(payload, status)
                 self.assertNotEqual(result.returncode, 0)
                 self.assertEqual(len(calls), 1)
-                self.assertNotIn("Saved scheduler snapshot:", result.stdout)
+                self.assertEqual(result.stdout, "")
+                expected = ("Check access to this Pulse instance." if status in (401, 403)
+                            else "No poll result.")
+                self.assertEqual(result.stderr,
+                                 f"Scheduler snapshot unavailable (HTTP {status}). {expected}\n")
+                self.assertEqual(len(files), 1)
+                self.assertEqual(json.loads(files[0][0]), payload)
+                self.assertEqual(files[0][1:], (0o600, 0o700))
 
     def test_transport_failure_is_not_an_empty_queue(self):
         result, calls, _, _ = self.exercise(refused_connection=True)
         self.assertNotEqual(result.returncode, 0)
         self.assertEqual(calls, [])
-        self.assertNotIn("Saved scheduler snapshot:", result.stdout)
+        self.assertEqual(result.stdout, "")
+        self.assertEqual(result.stderr, "Scheduler snapshot unavailable (curl exit 7). No poll result.\n")
+
+    def test_short_transfer_with_http_200_is_not_a_saved_snapshot(self):
+        result, calls, _, files = self.exercise(incomplete_body=True)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(result.stdout, "")
+        self.assertEqual(result.stderr, "Scheduler snapshot unavailable (curl exit 18). No poll result.\n")
+        self.assertEqual(json.loads(files[0][0]), snapshot())
+        self.assertEqual(files[0][1:], (0o600, 0o700))
 
     def test_missing_header_file_stops_without_an_anonymous_request(self):
         result, calls, _, _ = self.exercise(missing_header=True)
@@ -167,12 +187,15 @@ class SchedulerPollingDocsTest(unittest.TestCase):
         self.assertNotIn("Saved scheduler snapshot:", result.stdout)
 
     def test_invalid_json_and_unexpected_shapes_are_unavailable(self):
-        for payload in (b"<html>login</html>", {}, {"enabled": True},
+        for payload in (b"<html>login</html>", b"", b"{}\n" + json.dumps(snapshot()).encode(),
+                        {}, {"enabled": True},
                         dict(snapshot(), enabled="true"), dict(snapshot(), instances=None)):
             with self.subTest(payload=payload):
                 result, _, _, _ = self.exercise(payload)
                 self.assertNotEqual(result.returncode, 0)
-                self.assertNotIn("Saved scheduler snapshot:", result.stdout)
+                self.assertEqual(result.stdout, "")
+                self.assertEqual(result.stderr,
+                                 "Scheduler snapshot unavailable. The response was not a scheduler snapshot.\n")
 
     def test_fixed_timing_empty_queue_is_preserved_not_reported_as_healthy(self):
         payload = dict(snapshot(False), instances=[], queue={"depth": 0}, deadLetter={"count": 0})

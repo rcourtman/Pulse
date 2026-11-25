@@ -94,6 +94,8 @@ The scheduler's record of each connection's recent poll results.
 
 ### Top-Level Queue and DLQ
 *   **`queue`**: Snapshot of the active task queue (depth + per-type counts).
+    `dueWithinSeconds` counts tasks due now or within 12 seconds. It is not a
+    duration and does not include polls that have already left the queue.
 *   **`deadLetter`**: Aggregate DLQ summary plus up to 25 queued tasks.
 
 ### Optional Summaries
@@ -105,9 +107,9 @@ The scheduler's record of each connection's recent poll results.
 For a one-off check, open `/api/monitoring/scheduler/health` in your signed-in
 browser on that same Pulse instance. For curl, first prepare the private header
 file from [API authentication](../API.md#api-token-recommended), using a token
-with only the access needed for your monitoring task. These commands require
-curl 7.76 or later and jq. They make one read-only request and keep its response
-in a new private directory:
+with only the access needed for your monitoring task. The recipe requires curl
+7.55 or later and jq. It makes one read-only request and keeps its response in
+a new private directory:
 
 ```bash
 (
@@ -115,17 +117,28 @@ in a new private directory:
   umask 077
   snapshot_dir="$(mktemp -d "${TMPDIR:-/tmp}/pulse-scheduler.XXXXXX")"
   snapshot="$snapshot_dir/health.json"
-  status="$(curl --disable --fail-with-body --connect-timeout 5 --max-time 15 \
+  status="$(curl --disable --silent --connect-timeout 5 --max-time 15 \
     --header "@$HOME/.config/pulse/api-header" --output "$snapshot" \
-    --write-out '%{http_code}' http://127.0.0.1:7655/api/monitoring/scheduler/health)"
-  if [ "$status" != 200 ]; then
-    printf 'Scheduler snapshot unavailable (HTTP %s); no health conclusion.\n' "$status" >&2
+    --write-out '%{http_code}' http://127.0.0.1:7655/api/monitoring/scheduler/health)" || {
+    printf 'Scheduler snapshot unavailable (curl exit %s). No poll result.\n' "$?" >&2
+    exit 1
+  }
+  case "$status" in
+    200) ;;
+    401|403)
+      printf 'Scheduler snapshot unavailable (HTTP %s). Check access to this Pulse instance.\n' "$status" >&2
+      exit 1 ;;
+    *)
+      printf 'Scheduler snapshot unavailable (HTTP %s). No poll result.\n' "$status" >&2
+      exit 1 ;;
+  esac
+  if ! jq -es 'length == 1 and (.[0] | type == "object" and
+    (.updatedAt | type == "string") and (.enabled | type == "boolean") and
+    (.deadLetter.count | type == "number") and (.queue.depth | type == "number") and
+    (.instances | type == "array"))' "$snapshot" >/dev/null 2>&1; then
+    printf 'Scheduler snapshot unavailable. The response was not a scheduler snapshot.\n' >&2
     exit 1
   fi
-  jq -e 'type == "object" and (.updatedAt | type == "string") and
-    (.enabled | type == "boolean") and (.deadLetter.count | type == "number") and
-    (.queue.depth | type == "number") and (.instances | type == "array")' \
-    "$snapshot" >/dev/null
   printf 'Saved scheduler snapshot: %s\n' "$snapshot"
 )
 ```
@@ -133,9 +146,11 @@ in a new private directory:
 The loopback URL is only for curl running on the Pulse host. Elsewhere, use your
 Pulse HTTPS URL with certificate verification enabled, never `--insecure`.
 Keep `--disable` first to ignore curl configuration that could enable trace
-output. HTTP errors, transport failures and unexpected response shapes stop the
-recipe; none is a healthy or empty scheduler result. A 401/403 concerns access,
-not polling health. Do not use verbose/trace output or share the header file.
+output. A 401 or 403 is an access failure on this request, not a poll failure.
+A redirect, other non-200 status, curl error or unexpected response leaves no
+snapshot to compare. Do not use a partial file or treat it as an empty queue.
+Only continue if the recipe prints **Saved scheduler snapshot**. Do not enable
+verbose or trace output or share the header file.
 
 Use the printed filename in the following local queries. They make no further
 requests. Keep the raw response private: it includes infrastructure names,
