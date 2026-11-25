@@ -37,9 +37,14 @@ import {
   PlatformResourceDetailToggleButton,
 } from '@/features/platformPage/PlatformResourceDetailTableRow';
 import type { Resource } from '@/types/resource';
-import { describeMailGatewayDegradation } from './ProxmoxMailGatewayDrawer';
+import {
+  describeMailGatewayDegradation,
+  hasStaleMailGatewayReadings,
+} from './ProxmoxMailGatewayDrawer';
 
 type MailGatewayAlertColumn = 'queue' | 'deferred' | 'quarantine' | 'spam' | 'virus';
+const STALE_READINGS = 'Readings stale';
+const NUMERIC_CELL_CLASS = getPlatformTableCellClassForKind('numeric-value') + ' text-base-content';
 
 type PMGQuarantineLike =
   | number
@@ -153,11 +158,10 @@ const AlertedMetric: Component<{
   </Show>
 );
 
-export type MailGatewayPhoneColumn =
-  'instance' | 'nodes' | 'uptime' | 'mail' | 'queue' | 'deferred';
+export type MailGatewayPhoneColumn = 'instance' | 'uptime' | 'mail' | 'queue' | 'deferred';
 
 export type MailGatewayColumn =
-  MailGatewayPhoneColumn | 'version' | 'spam' | 'virus' | 'quarantine';
+  MailGatewayPhoneColumn | 'nodes' | 'version' | 'spam' | 'virus' | 'quarantine';
 
 // Phones carry five tracks. With node count as a sixth, gateway names that
 // share a prefix ("mail-gateway-eu", "mail-gateway-us") truncated to the same
@@ -170,28 +174,8 @@ export const MAIL_GATEWAY_PHONE_COLUMNS: readonly MailGatewayPhoneColumn[] = [
   'deferred',
 ];
 
-export const MAIL_GATEWAY_NARROW_PHONE_COLUMNS: readonly MailGatewayPhoneColumn[] = [
-  'instance',
-  'uptime',
-  'mail',
-  'queue',
-  'deferred',
-];
-
 export const MAIL_GATEWAY_PHONE_COLUMN_WIDTHS: Readonly<Record<MailGatewayPhoneColumn, number>> = {
   instance: 40,
-  nodes: 0,
-  uptime: 15,
-  mail: 15,
-  queue: 15,
-  deferred: 15,
-};
-
-export const MAIL_GATEWAY_NARROW_PHONE_COLUMN_WIDTHS: Readonly<
-  Record<MailGatewayPhoneColumn, number>
-> = {
-  instance: 40,
-  nodes: 0,
   uptime: 15,
   mail: 15,
   queue: 15,
@@ -263,24 +247,13 @@ export const ProxmoxMailGatewayTable: Component<{
   });
   const openAlertsFor = (resource: Resource): Alert[] => openAlertsById().get(resource.id) ?? [];
   // Filtering keeps the provider's buckets: an alerted, reachable gateway
-  // counts under attention (degraded), an unreachable one stays offline.
+  // or a gateway with stale readings counts under Degraded. Offline stays offline.
   const effectiveStatus = (resource: Resource): string | undefined => {
-    if (openAlertsFor(resource).length === 0) return resource.status;
+    if (!hasStaleMailGatewayReadings(resource) && openAlertsFor(resource).length === 0)
+      return resource.status;
     return getSimpleStatusIndicator(resource.status).variant === 'danger'
       ? resource.status
       : 'warning';
-  };
-  // The dot follows the most severe open alert, so a critical one reads red,
-  // and a reachable gateway with open alerts reads as needing attention. The
-  // drawer header repeats this indicator rather than judging again.
-  const indicatorFor = (resource: Resource): StatusIndicator => {
-    const base = getSimpleStatusIndicator(resource.status);
-    const alerts = openAlertsFor(resource);
-    if (alerts.length === 0 || base.variant === 'danger') return base;
-    return {
-      variant: alerts[0]?.level === 'critical' ? 'danger' : 'warning',
-      label: 'Needs attention',
-    };
   };
   const tableState = createPlatformTableFilterState({
     resources: () => props.resources,
@@ -293,26 +266,18 @@ export const ProxmoxMailGatewayTable: Component<{
   const layout = createMemo(() =>
     getPlatformTableContainerLayout(observedWidth.width() ?? 1920, [520, 720, 960, 1200]),
   );
-  const isNarrowPhone = createMemo(() => {
-    const width = observedWidth.width();
-    return typeof width === 'number' && width > 0 && width < 360;
-  });
   // Uptime and mail-flow counters remain in the phone projection; node count
   // moves into the existing instance detail expansion on phones.
   const showNodes = createMemo(() => layout() !== 'compact');
-  const showUptime = createMemo(() => true);
-  const showOperational = createMemo(() => ['operational', 'expanded', 'full'].includes(layout()));
-  const showVirus = createMemo(() => ['expanded', 'full'].includes(layout()));
+  const showOperational = createMemo(() => showNodes() && layout() !== 'basic');
   const showVersion = createMemo(() => layout() === 'full');
+  const showVirus = createMemo(() => showVersion() || layout() === 'expanded');
   const visibleColumns = createMemo<readonly MailGatewayColumn[]>(() => {
-    if (layout() === 'compact') {
-      return isNarrowPhone() ? MAIL_GATEWAY_NARROW_PHONE_COLUMNS : MAIL_GATEWAY_PHONE_COLUMNS;
-    }
+    if (layout() === 'compact') return MAIL_GATEWAY_PHONE_COLUMNS;
     const columns: MailGatewayColumn[] = ['instance'];
     if (showVersion()) columns.push('version');
     if (showNodes()) columns.push('nodes');
-    if (showUptime()) columns.push('uptime');
-    columns.push('mail');
+    columns.push('uptime', 'mail');
     if (showOperational()) columns.push('spam');
     if (showVirus()) columns.push('virus');
     if (showOperational()) columns.push('quarantine');
@@ -328,9 +293,8 @@ export const ProxmoxMailGatewayTable: Component<{
         visibleColumns(),
       );
     }
-    const phoneWidths: Partial<Record<MailGatewayColumn, number>> = isNarrowPhone()
-      ? MAIL_GATEWAY_NARROW_PHONE_COLUMN_WIDTHS
-      : MAIL_GATEWAY_PHONE_COLUMN_WIDTHS;
+    const phoneWidths: Partial<Record<MailGatewayColumn, number>> =
+      MAIL_GATEWAY_PHONE_COLUMN_WIDTHS;
     return { width: `${phoneWidths[column] ?? 0}%` };
   };
 
@@ -395,13 +359,11 @@ export const ProxmoxMailGatewayTable: Component<{
                     Nodes
                   </TableHead>
                 </Show>
-                <Show when={showUptime()}>
-                  <TableHead
-                    class={`${getPlatformTableHeadClassForKind('numeric-value')} platform-table-mobile-w-15`}
-                  >
-                    Uptime
-                  </TableHead>
-                </Show>
+                <TableHead
+                  class={`${getPlatformTableHeadClassForKind('numeric-value')} platform-table-mobile-w-15`}
+                >
+                  Uptime
+                </TableHead>
                 <TableHead
                   class={`${getPlatformTableHeadClassForKind('numeric-value')} platform-table-mobile-w-15`}
                 >
@@ -444,10 +406,26 @@ export const ProxmoxMailGatewayTable: Component<{
                     const rowAlerts = createMemo(() => openAlertsFor(instance));
                     const columnAlerts = (column: MailGatewayAlertColumn) =>
                       rowAlerts().filter((alert) => mailGatewayAlertColumn(alert.type) === column);
-                    const indicator = () => indicatorFor(instance);
+                    const topAlert = () => rowAlerts()[0];
+                    const readingsStale = () => hasStaleMailGatewayReadings(instance);
+                    // Offline and open alerts keep their severity, even while
+                    // the mail readings are stale. The drawer repeats the dot.
+                    const indicator = (): StatusIndicator => {
+                      const base = getSimpleStatusIndicator(instance.status);
+                      if (base.variant === 'danger') return base;
+                      const top = topAlert();
+                      if (top)
+                        return {
+                          variant: top.level === 'critical' ? 'danger' : 'warning',
+                          label: 'Needs attention',
+                        };
+                      return readingsStale() ? { variant: 'warning', label: STALE_READINGS } : base;
+                    };
+                    const degradation = () =>
+                      topAlert() ? '' : describeMailGatewayDegradation(instance).join(' ');
                     // Same tint as the other platform tables, from the cached alerts.
                     const rowAlertBg = () => {
-                      const top = rowAlerts()[0];
+                      const top = topAlert();
                       if (!top) return '';
                       return top.level === 'critical'
                         ? 'bg-red-50 dark:bg-red-950/25'
@@ -475,14 +453,21 @@ export const ProxmoxMailGatewayTable: Component<{
                               <StatusDot
                                 size="sm"
                                 variant={indicator().variant}
-                                title={rowAlerts()[0]?.message || instance.status || 'unknown'}
+                                title={topAlert()?.message || indicator().label}
                                 ariaHidden
                               />
-                              <span
-                                class="min-w-0 truncate font-semibold text-base-content"
-                                title={name()}
-                              >
-                                {name()}
+                              <span class="min-w-0">
+                                <span
+                                  class="block truncate font-semibold text-base-content"
+                                  title={name()}
+                                >
+                                  {name()}
+                                </span>
+                                <Show when={readingsStale()}>
+                                  <span class="block text-[11px] font-medium text-amber-700 dark:text-amber-300">
+                                    {STALE_READINGS}
+                                  </span>
+                                </Show>
                               </span>
                               <Show when={rowAlerts().length > 0}>
                                 <span class="sr-only" data-mail-gateway-alert-summary>
@@ -501,36 +486,26 @@ export const ProxmoxMailGatewayTable: Component<{
                             </TableCell>
                           </Show>
                           <Show when={showNodes()}>
-                            <TableCell
-                              class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
-                            >
+                            <TableCell class={NUMERIC_CELL_CLASS}>
                               <PlatformTableNumberValue
                                 value={pmg()?.nodeCount}
                                 format={formatPlatformTableIntegerValue}
                               />
                             </TableCell>
                           </Show>
-                          <Show when={showUptime()}>
-                            <TableCell
-                              class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
-                            >
-                              {formatPlatformTableUptimeValue(
-                                instance.uptime ?? pmg()?.uptimeSeconds,
-                              )}
-                            </TableCell>
-                          </Show>
-                          <TableCell
-                            class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
-                          >
+                          <TableCell class={NUMERIC_CELL_CLASS}>
+                            {formatPlatformTableUptimeValue(
+                              instance.uptime ?? pmg()?.uptimeSeconds,
+                            )}
+                          </TableCell>
+                          <TableCell class={NUMERIC_CELL_CLASS}>
                             <PlatformTableNumberValue
                               value={resolveMailGatewayMailIn(instance)}
                               format={formatPlatformTableIntegerValue}
                             />
                           </TableCell>
                           <Show when={showOperational()}>
-                            <TableCell
-                              class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
-                            >
+                            <TableCell class={NUMERIC_CELL_CLASS}>
                               <AlertedMetric alerts={columnAlerts('spam')} column="spam">
                                 <PlatformTableNumberValue
                                   value={pmg()?.spamIn}
@@ -540,9 +515,7 @@ export const ProxmoxMailGatewayTable: Component<{
                             </TableCell>
                           </Show>
                           <Show when={showVirus()}>
-                            <TableCell
-                              class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
-                            >
+                            <TableCell class={NUMERIC_CELL_CLASS}>
                               <AlertedMetric alerts={columnAlerts('virus')} column="virus">
                                 <PlatformTableNumberValue
                                   value={pmg()?.virusIn}
@@ -552,9 +525,7 @@ export const ProxmoxMailGatewayTable: Component<{
                             </TableCell>
                           </Show>
                           <Show when={showOperational()}>
-                            <TableCell
-                              class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
-                            >
+                            <TableCell class={NUMERIC_CELL_CLASS}>
                               <AlertedMetric
                                 alerts={columnAlerts('quarantine')}
                                 column="quarantine"
@@ -566,9 +537,7 @@ export const ProxmoxMailGatewayTable: Component<{
                               </AlertedMetric>
                             </TableCell>
                           </Show>
-                          <TableCell
-                            class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
-                          >
+                          <TableCell class={NUMERIC_CELL_CLASS}>
                             <AlertedMetric alerts={columnAlerts('queue')} column="queue">
                               <PlatformTableNumberValue
                                 value={pmg()?.queueTotal ?? pmg()?.queueActive}
@@ -576,9 +545,7 @@ export const ProxmoxMailGatewayTable: Component<{
                               />
                             </AlertedMetric>
                           </TableCell>
-                          <TableCell
-                            class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
-                          >
+                          <TableCell class={NUMERIC_CELL_CLASS}>
                             <AlertedMetric alerts={columnAlerts('deferred')} column="deferred">
                               <PlatformTableNumberValue
                                 value={pmg()?.queueDeferred}
@@ -595,16 +562,14 @@ export const ProxmoxMailGatewayTable: Component<{
                           colSpan={visibleColumnCount()}
                           onClose={() => detail.close(instance)}
                           context={
-                            <Show
-                              when={
-                                rowAlerts().length === 0 &&
-                                describeMailGatewayDegradation(instance).length > 0
-                              }
-                            >
+                            <Show when={readingsStale() || degradation()}>
                               <div class="mb-3" data-testid="pmg-drawer-degradation-context">
                                 <InlineNotice tone="warning" role="status">
-                                  <span class="font-medium">Why degraded:</span>{' '}
-                                  {describeMailGatewayDegradation(instance).join(' ')}
+                                  <span class="font-medium">
+                                    {readingsStale() ? STALE_READINGS : 'Why degraded:'}
+                                  </span>
+                                  {readingsStale() ? '. Showing the last poll. ' : ' '}
+                                  {degradation()}
                                 </InlineNotice>
                               </div>
                             </Show>

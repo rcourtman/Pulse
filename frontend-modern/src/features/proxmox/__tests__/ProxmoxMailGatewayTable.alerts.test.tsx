@@ -1,4 +1,5 @@
-import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
+import { cleanup, fireEvent, render, screen, within } from '@solidjs/testing-library';
+import { createSignal } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Alert } from '@/types/api';
 import type { Resource } from '@/types/resource';
@@ -267,6 +268,93 @@ describe('ProxmoxMailGatewayTable metrics reconciliation and degradation context
   afterEach(() => {
     cleanup();
     for (const key of Object.keys(activeAlerts)) delete activeAlerts[key];
+  });
+
+  it('does not let a passing check count as fresh mail readings and restores Healthy after a poll', async () => {
+    const quiet = {
+      ...gateway('pmg-eu', 'mail-east', 'pmg-main'),
+      sourceStatus: { pmg: { status: 'stale' }, availability: { status: 'online' } },
+    } satisfies Resource;
+    const peer = {
+      ...gateway('pmg-west', 'mail-west', 'pmg-peer'),
+      sourceStatus: { pmg: { status: 'online' }, availability: { status: 'stale' } },
+    } satisfies Resource;
+    const [resources, setResources] = createSignal([quiet, peer] as Resource[]);
+
+    render(() => (
+      <ProxmoxMailGatewayTable
+        resources={resources()}
+        emptyTitle="No gateways"
+        emptyDescription="No gateways"
+      />
+    ));
+
+    const east = within(screen.getByRole('row', { name: /mail-east/ }));
+    expect(east.getByText('Readings stale')).toBeVisible();
+    expect(east.getByTitle('Readings stale')).toHaveClass('bg-amber-500');
+    expect(east.getByText('3', { exact: true })).toBeVisible();
+    expect(east.getAllByRole('cell').at(-1)).toHaveTextContent('1');
+    const west = within(screen.getByRole('row', { name: /mail-west/ }));
+    expect(west.queryByText('Readings stale')).toBeNull();
+    expect(west.getByTitle('Online')).toHaveClass('bg-emerald-500');
+
+    fireEvent.click(screen.getByRole('button', { name: /details for mail-east/ }));
+    expect(await screen.findByText('Showing the last poll.', { exact: false })).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: /details for mail-east/ }));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Healthy, 1' }));
+    expect(screen.queryByText('mail-east')).toBeNull();
+    expect(screen.getByText('mail-west')).toBeVisible();
+
+    setResources([
+      {
+        ...quiet,
+        sourceStatus: { ...quiet.sourceStatus, pmg: { status: 'online' } },
+        pmg: { ...quiet.pmg!, queueTotal: 19 },
+      },
+      peer,
+    ]);
+    expect(screen.getByRole('button', { name: 'Healthy, 2' })).toBeVisible();
+    const recovered = within(screen.getByRole('row', { name: /mail-east/ }));
+    expect(recovered.getByText('19', { exact: true })).toBeVisible();
+    expect(recovered.queryByText('Readings stale')).toBeNull();
+  });
+
+  it('keeps a critical queue alert and an explicit offline state alongside stale readings', () => {
+    const stale = { pmg: { status: 'stale' } };
+    activeAlerts['pmg-main::deferred'] = {
+      id: 'pmg-main::deferred',
+      type: 'queue-deferred',
+      level: 'critical',
+      resourceId: 'pmg-main',
+      resourceName: 'mail-east',
+      message: 'Deferred queue above critical',
+      acknowledged: false,
+    } as unknown as Alert;
+
+    render(() => (
+      <ProxmoxMailGatewayTable
+        resources={[
+          { ...gateway('pmg-eu', 'mail-east', 'pmg-main'), sourceStatus: stale },
+          {
+            ...gateway('pmg-west', 'mail-west', 'pmg-peer'),
+            status: 'offline',
+            sourceStatus: stale,
+          },
+        ]}
+        emptyTitle="No gateways"
+        emptyDescription="No gateways"
+      />
+    ));
+
+    const east = within(screen.getByRole('row', { name: /mail-east/ }));
+    expect(east.getByText('Readings stale')).toBeVisible();
+    expect(east.getAllByTitle('Deferred queue above critical')[0]).toHaveClass('bg-red-500');
+    expect(east.getAllByTitle('Deferred queue above critical')[1]).toHaveTextContent('1');
+    fireEvent.click(screen.getByRole('button', { name: 'Offline, 1' }));
+    expect(screen.queryByText('mail-east')).toBeNull();
+    expect(screen.getByText('mail-west')).toBeVisible();
+    expect(screen.getByText('Readings stale')).toBeVisible();
   });
 
   it('reconciles object quarantine totals and mailStats.countIn with the Mail tab', () => {
