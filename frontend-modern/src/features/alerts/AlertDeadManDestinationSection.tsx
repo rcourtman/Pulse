@@ -1,4 +1,12 @@
-import { createSignal, createUniqueId, onCleanup, onMount, Show, type Accessor } from 'solid-js';
+import {
+  createMemo,
+  createSignal,
+  createUniqueId,
+  onCleanup,
+  onMount,
+  Show,
+  type Accessor,
+} from 'solid-js';
 
 import { AlertsAPI } from '@/api/alerts';
 import { Button } from '@/components/shared/Button';
@@ -22,11 +30,17 @@ export const DEAD_MAN_STATUS_POLL_MS = 30_000;
 // slack absorbs timer jitter: the next tick can land a few milliseconds short
 // of a full interval after the read the previous tick started.
 const DEAD_MAN_STATUS_STALE_MS = DEAD_MAN_STATUS_POLL_MS - 1_000;
+// Allow an ordinary background read time to settle. Starting another request
+// does not make the last received snapshot current.
+const DEAD_MAN_STATUS_READ_OVERDUE_MS = 2 * DEAD_MAN_STATUS_POLL_MS;
+
+const mutedStatusClass = 'bg-surface text-muted ring-1 ring-inset ring-border';
+const warningStatusClass = 'bg-amber-100 text-amber-900 dark:bg-amber-900/25 dark:text-amber-100';
 
 const statusPresentation: Record<DeadManStatus['state'], { label: string; class: string }> = {
   disabled: {
     label: 'Not configured',
-    class: 'bg-surface text-muted ring-1 ring-inset ring-border',
+    class: mutedStatusClass,
   },
   starting: {
     label: 'Starting',
@@ -38,7 +52,7 @@ const statusPresentation: Record<DeadManStatus['state'], { label: string; class:
   },
   delivery_failed: {
     label: 'Delivery failing',
-    class: 'bg-amber-100 text-amber-900 dark:bg-amber-900/25 dark:text-amber-100',
+    class: warningStatusClass,
   },
   monitor_stalled: {
     label: 'Monitoring stalled',
@@ -54,18 +68,28 @@ const statusPresentation: Record<DeadManStatus['state'], { label: string; class:
   },
 };
 
+const readPresentation = {
+  checking: { label: 'Checking status…', class: mutedStatusClass },
+  overdue: { label: 'Status read overdue', class: warningStatusClass },
+  unavailable: { label: 'Status unavailable', class: warningStatusClass },
+};
+
 export function AlertDeadManDestinationSection(props: AlertDeadManDestinationSectionProps) {
   const inputId = `alert-deadman-url-${createUniqueId()}`;
   const titleId = `${inputId}-title`;
-  const [status, setStatus] = createSignal<DeadManStatus | null>(null);
+  const [statusRead, setStatusRead] = createSignal({
+    snapshot: null as DeadManStatus | null,
+    checkedAt: Date.now(),
+    failed: false,
+  });
+  const status = () => statusRead().snapshot;
   const [loading, setLoading] = createSignal(false);
-  const [unavailable, setUnavailable] = createSignal(false);
   const [showUrl, setShowUrl] = createSignal(false);
 
   // The status read has no timeout. Every read gets a sequence number, and a
   // read's outcome applies only when it is newer than the last read that
-  // settled: a success shows its status and clears the unavailable mark, a
-  // failure sets it. A slow or hung read therefore cannot overwrite a newer
+  // settled: a success records a fresh snapshot, a failure keeps the last
+  // snapshot but marks the read unavailable. A slow or hung read cannot overwrite a newer
   // outcome or block later reads, and reads slower than the poll interval
   // still land in order. A background read waits while the newest read is
   // younger than one poll interval (less a second of timer slack); a Refresh
@@ -103,13 +127,12 @@ export function AlertDeadManDestinationSection(props: AlertDeadManDestinationSec
       const next = await AlertsAPI.getDeadManStatus();
       if (disposed || request < latestSettled) return;
       latestSettled = request;
-      setStatus(next);
-      setUnavailable(false);
+      setStatusRead({ snapshot: next, checkedAt: Date.now(), failed: false });
     } catch (error) {
       if (disposed || request < latestSettled) return;
       latestSettled = request;
       logger.error('Failed to load external watchdog status', error);
-      setUnavailable(true);
+      setStatusRead((previous) => ({ ...previous, failed: true }));
     } finally {
       if (!disposed) {
         if (request === latestStarted) pendingSince = undefined;
@@ -129,10 +152,20 @@ export function AlertDeadManDestinationSection(props: AlertDeadManDestinationSec
     onCleanup(() => clearInterval(timer));
   });
 
-  const presentation = () => {
-    const current = status();
-    return current ? statusPresentation[current.state] : statusPresentation.disabled;
+  const readIssue = createMemo(() => {
+    const { checkedAt, failed } = statusRead();
+    if (failed) return 'unavailable';
+    if (now() - checkedAt >= DEAD_MAN_STATUS_READ_OVERDUE_MS) return 'overdue';
+    return null;
+  });
+  const snapshotPresentation = () => {
+    const snapshot = status();
+    return snapshot ? statusPresentation[snapshot.state] : null;
   };
+  const presentation = createMemo(() => {
+    const issue = readIssue();
+    return issue ? readPresentation[issue] : (snapshotPresentation() ?? readPresentation.checking);
+  });
   const hasStoredUrl = () => props.pingUrl() === REDACTED_PING_URL;
   const inputValue = () => (hasStoredUrl() ? '' : props.pingUrl());
 
@@ -143,8 +176,11 @@ export function AlertDeadManDestinationSection(props: AlertDeadManDestinationSec
       description="Detect when Pulse itself stops monitoring by pinging a watchdog on a different host."
       action={
         <div class="flex items-center gap-2">
-          <span class={`rounded-full px-2.5 py-1 text-xs font-semibold ${presentation().class}`}>
-            {unavailable() ? 'Status unavailable' : presentation().label}
+          <span
+            role="status"
+            class={`rounded-full px-2.5 py-1 text-xs font-semibold ${presentation().class}`}
+          >
+            {presentation().label}
           </span>
           <Button
             variant="outline"
@@ -213,6 +249,14 @@ export function AlertDeadManDestinationSection(props: AlertDeadManDestinationSec
             failure. Clearing this field does not pause the remote check.
           </p>
         </div>
+
+        <Show when={readIssue()}>
+          <p class="text-xs leading-5 text-muted">
+            <Show when={snapshotPresentation()} fallback="No watchdog status received yet.">
+              {(lastKnown) => `Last known status: ${lastKnown().label}.`}
+            </Show>
+          </p>
+        </Show>
 
         <Show when={status()}>
           {(current) => (

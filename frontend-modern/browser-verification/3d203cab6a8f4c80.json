@@ -1,0 +1,35 @@
+{
+  "version": 1,
+  "base_sha": "8ed451bdbe7002e07e1c28ffe8721479e51a7023",
+  "verified_at": "2026-11-25T17:56:17Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/alerts/AlertDeadManDestinationSection.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/alerts/AlertDeadManDestinationSection.tsx": "1e6bd7a50b1eed55609c0164dea2949f6e5a56d185eafa4856781c5711faf858"
+  },
+  "routes": [
+    "/alerts/notifications"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 950
+    },
+    {
+      "width": 360,
+      "height": 820
+    }
+  ],
+  "states": [
+    "Playwright 1.56.1, Chromium 141 light desktop and touch WebKit 26 dark phone. Matched source-bound production-renderer captures using read-only synthetic API responses and a fixed clock.",
+    "No status response yet: Checking status rather than a premature Not configured. No progress or heartbeat invented; the masked saved URL and its Remove button remain.",
+    "Two poll intervals without a status response: amber Status read overdue replaces green. An explicit failed read is amber Status unavailable. Four retained readings stay visible, marked as last known.",
+    "A current monitor_stalled snapshot still shows the red Monitoring stalled badge. A recovered read moves Last success and Monitor progress to 0s and removes historical copy."
+  ],
+  "interactions": [
+    "Use Enter on desktop and tap on the phone to Refresh the existing panel, observing its disabled in-flight button, response, and re-enabled control.",
+    "Leave two older GETs pending while the manual reads return HTTP 503 and then a confirmed stall. A subsequent background read recovers. Fulfilling the two older reads after newer results does not restore green or rewind the recovered ages."
+  ]
+}
