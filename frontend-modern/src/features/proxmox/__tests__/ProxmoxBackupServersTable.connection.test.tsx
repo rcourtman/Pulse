@@ -1,6 +1,7 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@solidjs/testing-library';
 import { createSignal } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import type { Alert } from '@/types/api';
 import type { Resource } from '@/types/resource';
 import type { StatusIndicatorVariant } from '@/utils/status';
 import { canonicalizeRealtimeResource } from '@/utils/resourceStateAdapters';
@@ -58,6 +59,37 @@ const toneClass: Record<StatusIndicatorVariant, string> = {
   info: 'bg-blue-500',
 };
 
+const withReadings = (resource: Resource, pbs: 'online' | 'stale', agent = 'online') =>
+  transport(
+    {
+      ...resource,
+      sourceStatus: {
+        pbs: {
+          status: pbs,
+          lastSeen: pbs === 'stale' ? '2026-11-24T10:00:00Z' : '2026-11-24T12:00:00Z',
+        },
+        agent: { status: agent, lastSeen: '2026-11-24T12:00:00Z' },
+      },
+    },
+    true,
+  );
+
+const forecastAlert: Alert = {
+  id: 'fixture-forecast',
+  type: 'usage',
+  level: 'warning',
+  resourceId: 'pbs-connection-production',
+  resourceName: 'production',
+  node: '',
+  instance: 'pbs-connection',
+  value: 40,
+  threshold: 90,
+  message: 'Storage projected to fill in 4 days',
+  startTime: '2026-11-24T10:00:00Z',
+  acknowledged: false,
+  metadata: { forecastDaysToFull: 4.2, storagePolicyAliases: ['pbs-connection/production'] },
+};
+
 describe.each([false, true])('PBS connection presentation (canonical=%s)', (canonical) => {
   it.each(['healthy', 'ok', 'online', 'running', 'connected', ' ONLINE '])(
     'admits the successful %s state without calling its datastore unreachable',
@@ -108,6 +140,94 @@ describe.each([false, true])('PBS connection presentation (canonical=%s)', (cano
 });
 
 describe.each([390, 1200])('PBS connection rendering at %ipx', (width) => {
+  it('qualifies retained PBS readings and forecasts without closing the drawer', async () => {
+    const resource = server('healthy', 'warning');
+    resource.pbs!.datastores![0].used = 400;
+    const [snapshot, setSnapshot] = createSignal(withReadings(resource, 'online', 'stale'));
+    const { container } = render(() => (
+      <ProxmoxBackupServersTable
+        servers={[snapshot()]}
+        layoutWidth={() => width}
+        datastoreAlerts={() => [forecastAlert]}
+      />
+    ));
+    const label = () => connection(container);
+    expect(label()).toHaveAccessibleName('Healthy');
+    const toggle = screen.getByRole('button', { name: /Expand details.*production/ });
+    fireEvent.click(toggle);
+    toggle.focus();
+    const selected = screen.getByRole('region', { name: 'Selected PBS datastore' });
+    const cell = usedCell(container);
+    const forecast = () => container.querySelector('[data-backup-server-forecast]')!;
+
+    setSnapshot(withReadings(resource, 'stale'));
+    await waitFor(() => expect(screen.getByText('PBS data stale')).toBeVisible());
+    expect(label()).toHaveAccessibleName('PBS data stale · Last status: Healthy');
+    expect(label()).toHaveClass(toneClass.warning);
+    expect(cell).toHaveTextContent('40.0%');
+    expect(cell).toHaveTextContent('Last reading');
+    expect(cell.querySelector('.bg-emerald-500')).toBeNull();
+    expect(forecast()).toHaveTextContent('Full in ~4d');
+    expect(forecast().closest('td')).toHaveTextContent(
+      width < 520 ? 'Last forecast' : 'Last reading & forecast',
+    );
+    const staleSummary = 'Stale. Capacity, forecasts and jobs are last reported values.';
+    expect(selected).toHaveTextContent(staleSummary);
+    expect(selected).toHaveTextContent('40.0% used');
+    expect(selected).toHaveTextContent('Full in ~4 days');
+
+    setSnapshot(withReadings(server('healthy'), 'online'));
+    await waitFor(() => expect(screen.queryByText('PBS data stale')).toBeNull());
+    expect(label()).toHaveAccessibleName('Healthy');
+    expect(usedCell(container)).toBe(cell);
+    expect(cell).toHaveTextContent('94.0%');
+    expect(cell).not.toHaveTextContent('Last reading');
+    expect(screen.getByRole('region', { name: 'Selected PBS datastore' })).toBe(selected);
+    expect(selected).not.toHaveTextContent(staleSummary);
+    expect(toggle).toHaveFocus();
+  });
+
+  it('keeps a recorded failure separate from silence without promoting unread capacity', () => {
+    const resource = server('error', 'offline');
+    const { container } = render(() => (
+      <ProxmoxBackupServersTable
+        servers={[withReadings(resource, 'stale')]}
+        layoutWidth={() => width}
+        datastoreAlerts={() => [forecastAlert]}
+      />
+    ));
+    expect(screen.getByText('PBS data stale')).toBeVisible();
+    expect(screen.getByText('Error', { exact: true })).toBeVisible();
+    expect(connection(container)).toHaveClass(toneClass.danger);
+    expect(usedCell(container).textContent).toBe('Unavailable');
+    expect(container.querySelector('[data-backup-server-forecast]')).toBeNull();
+  });
+
+  it('keeps a known failed verify job and a separate datastore read failure visible', () => {
+    const resource = server('healthy', 'warning');
+    resource.pbs!.datastores![0].status = 'unavailable';
+    resource.pbs!.jobHealthEvidence = [
+      {
+        id: 'verify-production',
+        family: 'verify',
+        store: 'production',
+        enabled: true,
+        confidence: 'config-last-run',
+        posture: 'critical',
+      },
+    ];
+    const { container } = render(() => (
+      <ProxmoxBackupServersTable
+        servers={[withReadings(resource, 'stale')]}
+        layoutWidth={() => width}
+      />
+    ));
+    expect(screen.getByText('PBS data stale')).toBeVisible();
+    expect(screen.getByText('Verify failed', { exact: true })).toBeVisible();
+    expect(connection(container)).toHaveClass(toneClass.danger);
+    expect(usedCell(container).textContent).toBe('Unavailable');
+  });
+
   it.each([
     ['online', 'success', '94.0%'],
     ['connected', 'success', '94.0%'],

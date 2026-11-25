@@ -1,0 +1,34 @@
+{
+  "version": 1,
+  "base_sha": "64c6d6a82d1c8a08a9bcf1719d90c0e4865ba537",
+  "verified_at": "2026-11-25T17:20:09Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx": "7a36c65408680e0b94f5d5983b1a196ffefb4165b3191c7127663511fb408f78"
+  },
+  "routes": [
+    "/proxmox/backups/coverage"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 950
+    },
+    {
+      "width": 360,
+      "height": 820
+    }
+  ],
+  "states": [
+    "Playwright 1.56.1: Chromium 141.0.7390.37 (light desktop) and touch WebKit 26.0 (dark phone). Matched production-renderer captures from scoped synthetic REST and websocket fixtures.",
+    "Quiet PBS with last healthy connection: the server shows PBS data stale and last reading / last forecast instead of implying live data. The capacity bytes, percentage, forecast, job result, counts, and deduplication still render at their existing widths.",
+    "A fresh peer, explicit error, unread datastore, and independent Coverage point stay distinct. Expanded datastore keeps its full capacity, forecast, job and server disclosure. Fresh PBS evidence restores the current presentation in place."
+  ],
+  "interactions": [
+    "Open the same nightly datastore via Enter on desktop and datastore-row tap on touch WebKit. Observe keyboard focus and close with the existing drawer collapse control.",
+    "Send the same recovered resource over the existing realtime transport while the row is open. The reading moves from 42.0% to 44.5%, notes clear, and the selected datastore element and focus are retained."
+  ]
+}

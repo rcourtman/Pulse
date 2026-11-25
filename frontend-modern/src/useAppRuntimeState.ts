@@ -70,7 +70,13 @@ import {
 type EnhancedStore = ReturnType<typeof getGlobalWebSocketStore>;
 
 export type AppConnectionStatus = {
-  kind: 'connected' | 'sync-reconnecting' | 'backend-healthy' | 'reconnecting' | 'disconnected';
+  kind:
+    | 'connected'
+    | 'waiting-for-data'
+    | 'sync-reconnecting'
+    | 'backend-healthy'
+    | 'reconnecting'
+    | 'disconnected';
   label: string;
   detail: string;
   tone: 'healthy' | 'warning' | 'offline';
@@ -190,18 +196,6 @@ export const useAppRuntimeState = () => {
     lastUpdate: 0,
     resources: [],
   };
-  const hasRuntimeStatePayload = (candidate: State | undefined): boolean => {
-    if (!candidate) return false;
-    return (
-      candidate.lastUpdate > 0 ||
-      candidate.resources.length > 0 ||
-      candidate.connectedInfrastructure.length > 0 ||
-      candidate.activeAlerts.length > 0 ||
-      candidate.recentlyResolved.length > 0 ||
-      candidate.metrics.length > 0
-    );
-  };
-
   const [isLoading, setIsLoading] = createSignal(true);
   const [bootstrapFailed, setBootstrapFailed] = createSignal(false);
   const [needsAuth, setNeedsAuth] = createSignal(false);
@@ -235,24 +229,37 @@ export const useAppRuntimeState = () => {
     // It must not replace valid admission with an invented empty estate.
     return Boolean(store?.resourceSnapshotReceived()) || (store?.state.resources.length ?? 0) > 0;
   };
-  const state = (): State => {
-    const store = wsStore();
-    const liveState = store?.state;
-    if (liveState && (store.initialDataReceived() || hasRuntimeStatePayload(liveState))) {
-      return liveState;
-    }
-    return liveState || fallbackState;
-  };
+  // Expose partial state to callers; only runtimeStateResolved determines
+  // whether the resource snapshot has arrived.
+  const state = (): State => wsStore()?.state ?? fallbackState;
   const connected = () => wsStore()?.connected() || false;
   const reconnecting = () => wsStore()?.reconnecting() || false;
-  const [lastUpdateText, setLastUpdateText] = createSignal('');
+  const lastUpdateText = createMemo(() => {
+    // This is a dashboard refresh clock, not the age of a source reading.
+    const timestamp = state().lastUpdate;
+    if (!runtimeStateResolved() || !(timestamp > 0)) return '';
+    // Keep the viewer's locale, including their 12/24-hour clock (#1279).
+    return new Date(timestamp).toLocaleTimeString(undefined, {
+      hour: 'numeric',
+      minute: '2-digit',
+      second: '2-digit',
+    });
+  });
   const [versionInfo, setVersionInfo] = createSignal<VersionInfo | null>(null);
   const connectionStatus = createMemo<AppConnectionStatus>(() => {
     if (connected()) {
+      if (!runtimeStateResolved()) {
+        return {
+          kind: 'waiting-for-data',
+          label: 'Waiting for data',
+          detail: 'Live updates are connected. Waiting for the first dashboard snapshot.',
+          tone: 'warning',
+        };
+      }
       return {
         kind: 'connected',
         label: 'Connected',
-        detail: 'Backend and live data stream are connected.',
+        detail: 'Live updates are connected. Source readings may be older.',
         tone: 'healthy',
       };
     }
@@ -555,26 +562,6 @@ export const useAppRuntimeState = () => {
       showToast('error', 'Failed to switch organization');
     }
   };
-
-  const formatLastUpdate = (timestamp: number) => {
-    if (!timestamp) return '';
-    const date = new Date(timestamp);
-    // Passing undefined lets the runtime pick the viewer's locale, including
-    // whether it wants a 12 or 24 hour clock. #1279 made this change once; the
-    // v6 rewrite of this state hook reinstated the hardcoded form (#1685).
-    return date.toLocaleTimeString(undefined, {
-      hour: 'numeric',
-      minute: '2-digit',
-      second: '2-digit',
-    });
-  };
-
-  createEffect(() => {
-    const updateTime = state().lastUpdate;
-    if (updateTime > 0) {
-      setLastUpdateText(formatLastUpdate(updateTime));
-    }
-  });
 
   const syncVersionInfoFromUpdateStore = async () => {
     const cachedVersion = updateStore.versionInfo();
