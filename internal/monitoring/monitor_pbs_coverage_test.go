@@ -158,6 +158,13 @@ func TestPollPBSNodeStatusRecordsServiceHistory(t *testing.T) {
 		len(persisted["memory"]) != 1 || persisted["memory"][0].Value != 50 {
 		t.Fatalf("persisted PBS service history = %v, want CPU/memory samples", persisted)
 	}
+	now := time.Now()
+	alertMemory, err := monitor.metricWindowPoints(alerts.MetricWindowRequest{
+		ResourceType: "PBS", ResourceID: serviceID, Metric: "memory", Start: now.Add(-time.Hour), End: now,
+	})
+	if err != nil || len(alertMemory) != 1 || alertMemory[0].Value != 50 {
+		t.Fatalf("persisted PBS native alert memory = %v, err %v; want one 50%% sample", alertMemory, err)
+	}
 
 	fixture.setMode(pbsHealthTestNodeDenied)
 	monitor.pollPBSInstance(context.Background(), instance.Name, client)
@@ -194,6 +201,9 @@ func TestRecordPBSNodeHistoryRejectsInvalidMeasurements(t *testing.T) {
 	}
 	if got := monitor.GetGuestMetrics("agent:pbs-invalid", time.Hour); len(got) != 0 {
 		t.Fatalf("invalid PBS status produced history: %v", got)
+	}
+	if got := monitor.GetGuestMetrics("pbs:pbs-invalid", time.Hour); len(got) != 0 {
+		t.Fatalf("invalid PBS status produced alert history: %v", got)
 	}
 }
 
