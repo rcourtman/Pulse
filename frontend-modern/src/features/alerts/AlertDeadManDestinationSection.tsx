@@ -36,6 +36,7 @@ const DEAD_MAN_STATUS_READ_OVERDUE_MS = 2 * DEAD_MAN_STATUS_POLL_MS;
 
 const mutedStatusClass = 'bg-surface text-muted ring-1 ring-inset ring-border';
 const warningStatusClass = 'bg-amber-100 text-amber-900 dark:bg-amber-900/25 dark:text-amber-100';
+const dangerStatusClass = 'bg-red-100 text-red-900 dark:bg-red-900/25 dark:text-red-100';
 
 const statusPresentation: Record<DeadManStatus['state'], { label: string; class: string }> = {
   disabled: {
@@ -56,15 +57,15 @@ const statusPresentation: Record<DeadManStatus['state'], { label: string; class:
   },
   monitor_stalled: {
     label: 'Monitoring stalled',
-    class: 'bg-red-100 text-red-900 dark:bg-red-900/25 dark:text-red-100',
+    class: dangerStatusClass,
   },
   misconfigured: {
     label: 'Configuration invalid',
-    class: 'bg-red-100 text-red-900 dark:bg-red-900/25 dark:text-red-100',
+    class: dangerStatusClass,
   },
   configuration_unavailable: {
     label: 'Configuration unavailable',
-    class: 'bg-red-100 text-red-900 dark:bg-red-900/25 dark:text-red-100',
+    class: dangerStatusClass,
   },
 };
 
@@ -73,6 +74,7 @@ const readPresentation = {
   overdue: { label: 'Status read overdue', class: warningStatusClass },
   unavailable: { label: 'Status unavailable', class: warningStatusClass },
 };
+const oldHeartbeat = { label: 'No recent heartbeat', class: warningStatusClass };
 
 export function AlertDeadManDestinationSection(props: AlertDeadManDestinationSectionProps) {
   const inputId = `alert-deadman-url-${createUniqueId()}`;
@@ -104,9 +106,9 @@ export function AlertDeadManDestinationSection(props: AlertDeadManDestinationSec
   onCleanup(() => {
     disposed = true;
   });
-  const loadStatus = async (options: { background?: boolean } = {}) => {
+  const loadStatus = async (background = false) => {
     const startedAt = Date.now();
-    if (options.background) {
+    if (background) {
       if (loading() && startedAt - foregroundSince >= DEAD_MAN_STATUS_STALE_MS) {
         setLoading(false);
       }
@@ -118,7 +120,7 @@ export function AlertDeadManDestinationSection(props: AlertDeadManDestinationSec
     }
     const request = ++latestStarted;
     pendingSince = startedAt;
-    if (!options.background) {
+    if (!background) {
       foregroundRequest = request;
       foregroundSince = startedAt;
       setLoading(true);
@@ -148,7 +150,7 @@ export function AlertDeadManDestinationSection(props: AlertDeadManDestinationSec
   const now = useRelativeTimeNow();
   onMount(() => {
     void loadStatus();
-    const timer = setInterval(() => void loadStatus({ background: true }), DEAD_MAN_STATUS_POLL_MS);
+    const timer = setInterval(() => void loadStatus(true), DEAD_MAN_STATUS_POLL_MS);
     onCleanup(() => clearInterval(timer));
   });
 
@@ -158,13 +160,20 @@ export function AlertDeadManDestinationSection(props: AlertDeadManDestinationSec
     if (now() - checkedAt >= DEAD_MAN_STATUS_READ_OVERDUE_MS) return 'overdue';
     return null;
   });
-  const snapshotPresentation = () => {
-    const snapshot = status();
-    return snapshot ? statusPresentation[snapshot.state] : null;
-  };
   const presentation = createMemo(() => {
     const issue = readIssue();
-    return issue ? readPresentation[issue] : (snapshotPresentation() ?? readPresentation.checking);
+    if (issue) return readPresentation[issue];
+    const snapshot = status();
+    if (!snapshot) return readPresentation.checking;
+    // Reading status is not a heartbeat. Don't keep reporting a healthy
+    // heartbeat past Pulse's recommended grace if the sender hasn't advanced it.
+    if (
+      snapshot.state === 'healthy' &&
+      now() - Date.parse(snapshot.lastSuccessAt ?? '') >= snapshot.recommendedGraceSeconds * 1_000
+    ) {
+      return oldHeartbeat;
+    }
+    return statusPresentation[snapshot.state];
   });
   const hasStoredUrl = () => props.pingUrl() === REDACTED_PING_URL;
   const inputValue = () => (hasStoredUrl() ? '' : props.pingUrl());
@@ -252,8 +261,8 @@ export function AlertDeadManDestinationSection(props: AlertDeadManDestinationSec
 
         <Show when={readIssue()}>
           <p class="text-xs leading-5 text-muted">
-            <Show when={snapshotPresentation()} fallback="No watchdog status received yet.">
-              {(lastKnown) => `Last known status: ${lastKnown().label}.`}
+            <Show when={status()} fallback="No watchdog status received yet.">
+              {(lastKnown) => `Last known status: ${statusPresentation[lastKnown().state].label}.`}
             </Show>
           </p>
         </Show>
@@ -264,23 +273,16 @@ export function AlertDeadManDestinationSection(props: AlertDeadManDestinationSec
               <div>
                 <div class="font-medium text-muted">Last success</div>
                 <div class="mt-1 text-base-content">
-                  {current().lastSuccessAt
-                    ? formatRelativeTime(current().lastSuccessAt, {
-                        emptyText: 'Never',
-                        now: now(),
-                      })
-                    : 'Never'}
+                  {formatRelativeTime(current().lastSuccessAt, { emptyText: 'Never', now: now() })}
                 </div>
               </div>
               <div>
                 <div class="font-medium text-muted">Monitor progress</div>
                 <div class="mt-1 text-base-content">
-                  {current().lastMonitoringProgress
-                    ? formatRelativeTime(current().lastMonitoringProgress, {
-                        emptyText: 'Waiting',
-                        now: now(),
-                      })
-                    : 'Waiting'}
+                  {formatRelativeTime(current().lastMonitoringProgress, {
+                    emptyText: 'Waiting',
+                    now: now(),
+                  })}
                 </div>
               </div>
               <div>
@@ -290,9 +292,11 @@ export function AlertDeadManDestinationSection(props: AlertDeadManDestinationSec
               <div>
                 <div class="font-medium text-muted">Last interruption</div>
                 <div class="mt-1 text-base-content">
-                  {current().lastInterruption
-                    ? `${Math.max(1, Math.round(current().lastInterruption!.durationSeconds / 60))} min (${current().lastInterruption!.cleanShutdown ? 'clean restart' : 'unexpected stop'})`
-                    : 'None recorded'}
+                  <Show when={current().lastInterruption} fallback="None recorded">
+                    {(gap) =>
+                      `${Math.max(1, Math.round(gap().durationSeconds / 60))} min (${gap().cleanShutdown ? 'clean restart' : 'unexpected stop'})`
+                    }
+                  </Show>
                 </div>
               </div>
             </div>
@@ -300,9 +304,11 @@ export function AlertDeadManDestinationSection(props: AlertDeadManDestinationSec
         </Show>
 
         <Show when={status()?.lastError}>
-          <p class="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-700 dark:bg-amber-950/25 dark:text-amber-100">
-            {status()!.lastError}
-          </p>
+          {(message) => (
+            <p class="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-700 dark:bg-amber-950/25 dark:text-amber-100">
+              {message()}
+            </p>
+          )}
         </Show>
 
         <p class="text-xs leading-5 text-muted">
