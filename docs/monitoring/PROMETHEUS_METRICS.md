@@ -29,7 +29,12 @@ In Docker and Kubernetes you must expose `9091` explicitly if you want to scrape
 | `pulse_http_requests_total` | Counter | Total requests by `method`, `route`, `status`. |
 | `pulse_http_request_errors_total` | Counter | Error totals by `method`, `route`, `status_class` (`client_error`, `server_error`, `none`). |
 
-`route` is the registered route pattern that serves the request (for example `/api/state` or `/api/orgs/{id}`), not the requested path. Requests that match no pattern, including frontend pages and assets, are recorded as `unmatched`. `method` is a standard HTTP method or `other`.
+On builds that report registered route patterns, `route` identifies the
+pattern (for example `/api/state` or `/api/orgs/{id}`) rather than the
+requested path. Requests that match no pattern, including frontend pages and
+assets, are recorded as `unmatched`. Earlier builds use a normalised request
+path. The fixed paths in the agent example below work with both. `method` is
+a standard HTTP method, or `other` on builds that report registered patterns.
 
 ## 🔄 Polling & Nodes
 
@@ -110,9 +115,43 @@ backoff. Do not fill absent series with zero. For example, the
 
 When comparing runs before and after an update, check the same connections and
 nodes in both windows. A new poll timestamp does not prove every guest or
-backup datastore refreshed, that agent reports were accepted, or that alerts
-were evaluated. Check those paths separately, and treat a gap as unverified
-rather than a memory saving.
+backup datastore refreshed. [Check agent requests separately](#check-whether-agent-requests-finished).
+When measuring memory, treat a gap in collection or reporting as unverified
+work rather than a memory saving.
+
+### Check whether agent requests finished
+
+If you already scrape Pulse, graph this alongside the poll results, over the
+same window and for the same Pulse scrape target. It uses existing traffic.
+Do not re-register an agent or send a test report to make a counter move.
+
+```promql
+pulse_http_requests_total{
+  job="pulse", instance="pulse-a.example:9091", method="POST",
+  route=~"/api/auto-register|/api/agents/(agent|host)/report"
+}
+```
+
+Keep the lines separate by `route` and `status`. `/api/auto-register` includes
+Proxmox registration checks and is not a telemetry report. The unified-agent
+report route and its older host alias are separate lines. An increasing 2xx
+counter shows HTTP success for that route. It does not tell you whether a
+registration was confirmed, which agent reported, or whether a particular
+reading changed. Check the affected agent's **Last seen** and the reading in
+Pulse.
+
+Choose a window that covers the agents' normal request intervals. With fresh
+scrapes and no Pulse restart, a flat line shows no increase for that route and
+status between samples. A missing line gives you no reading, not zero. An HTTP
+request still waiting to return has not been counted. These counters alone
+cannot tell you whether requests stopped reaching Pulse or stopped finishing.
+If an agent's existing log shows timeouts at the same time, keep that timing
+with the poll results. If scrapes failed or are missing, do not infer a stall
+from a flat graph.
+
+Neither this graph nor a fresh reading proves that alert rules ran. Quiet
+alert counters can also mean nothing was due to alert. Keep alert evaluation
+unverified unless you have a result from an ordinary rule that should have run.
 
 ## 🧠 Scheduler Health
 
