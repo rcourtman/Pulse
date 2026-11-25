@@ -43,6 +43,7 @@ type agentLifecycleSnapshot struct {
 	online          bool
 	enrollmentCount int
 	reportCount     int
+	report503s      int
 	lastReportToken string
 	lastReportID    string
 	lastCommands    bool
@@ -104,6 +105,7 @@ func (s *agentLifecycleControlPlane) snapshot() agentLifecycleSnapshot {
 		online:          s.online,
 		enrollmentCount: s.enrollmentCount,
 		reportCount:     s.reportCount,
+		report503s:      s.requests["report/503"],
 		lastReportToken: s.lastReportToken,
 		lastReportID:    s.lastReportID,
 		lastCommands:    s.lastCommands,
@@ -592,14 +594,21 @@ func TestPulseAgentStateDirLifecycleIntegration(t *testing.T) {
 				t.Fatalf("ordinary restart re-enrolled unexpectedly: enrollments=%d", got)
 			}
 
+			beforeOutage := controlPlane.snapshot()
 			controlPlane.setOnline(false)
-			reportsBeforeOutage := controlPlane.snapshot().reportCount
-			time.Sleep(1500 * time.Millisecond)
+			// Do not reopen after a fixed sleep: a slow report cadence could
+			// otherwise make this just another successful steady-state report.
+			waitForLifecycleState(t, 20*time.Second, "HTTP 503 served for an agent report during the control-plane outage", func(state agentLifecycleSnapshot) bool {
+				return state.report503s > beforeOutage.report503s
+			}, controlPlane, proc)
+			beforeRecovery := controlPlane.snapshot()
 			controlPlane.setOnline(true)
-			waitForLifecycleState(t, 20*time.Second, "report recovery after server restart", func(state agentLifecycleSnapshot) bool {
-				return state.reportCount > reportsBeforeOutage && state.lastReportToken == "runtime-one"
+			waitForLifecycleState(t, 20*time.Second, "accepted report with the saved identity after recovery", func(state agentLifecycleSnapshot) bool {
+				return state.reportCount > beforeRecovery.reportCount && state.lastReportToken == "runtime-one" &&
+					state.lastReportID == "agent-one" && state.enrollmentCount == beforeOutage.enrollmentCount
 			}, controlPlane, proc)
 			logOutput += proc.stop(t)
+			t.Logf("control-plane outage and recovery: %s", controlPlane.snapshot().diagnostic())
 
 			renderLifecycleService(t, stateDir, stateSource, unitPath, server.URL, "bootstrap-one", tc.commandsEnabled, true)
 			if _, err := os.Stat(filepath.Join(stateDir, "runtime.token")); err != nil {
