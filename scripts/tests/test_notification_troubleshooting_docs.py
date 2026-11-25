@@ -11,7 +11,7 @@ from pathlib import Path
 import re
 import unittest
 
-from test_troubleshooting_logs import exercise_log_recipe
+from test_troubleshooting_logs import exercise_log_recipe, recipes as shared_log_recipes
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -57,8 +57,12 @@ class NotificationTroubleshootingDocsTest(unittest.TestCase):
             "journalctl": ["-u", "pulse", "--since", "15 minutes ago", "--lines", "200", "--no-pager"],
             "docker": ["logs", "--since", "15m", "--tail", "200", "pulse"],
         }
-        self.assertEqual(set(recipes()), set(expected))
-        for reader, copied in recipes().items():
+        copied_recipes = recipes()
+        # Bind this guide to the exact bytes executed by the shared live
+        # deadline matrix; keep its notification-specific stream tests here.
+        self.assertEqual(copied_recipes, shared_log_recipes("### Inspect Notification Logs"))
+        self.assertEqual(set(copied_recipes), set(expected))
+        for reader, copied in copied_recipes.items():
             with self.subTest(reader=reader):
                 result, argv = self.exercise(reader, stdout=SMTP_ERROR + WEBHOOK_ERROR)
                 self.assertEqual(result.returncode, 0, result.stderr)
@@ -86,20 +90,6 @@ class NotificationTroubleshootingDocsTest(unittest.TestCase):
                     self.assertEqual(result.stdout, "")
                     self.assertIn("Log read unavailable (exit 2)", result.stderr)
                     self.assertNotIn("synthetic reader access failure", result.stderr)
-
-    def test_hung_readers_withhold_partial_excerpts_and_stop_by_deadline(self):
-        for reader in recipes():
-            with self.subTest(reader=reader):
-                result, _ = self.exercise(reader, stdout=PARTIAL_EMAIL_LOG, hang="term")
-                self.assertEqual(result.returncode, 137, result.stderr)
-                self.assertEqual(result.stdout, "")
-                self.assertIn("Log read unavailable", result.stderr)
-
-    def test_reader_ignoring_term_is_killed_at_the_hard_deadline(self):
-        result, _ = self.exercise("docker", stdout=PARTIAL_EMAIL_LOG, hang="ignore-term")
-        self.assertEqual(result.returncode, 137, result.stderr)
-        self.assertEqual(result.stdout, "")
-        self.assertIn("Log read unavailable (exit 137)", result.stderr)
 
     def test_missing_timeout_does_not_run_a_reader_or_unbounded_fallback(self):
         for reader in recipes():
