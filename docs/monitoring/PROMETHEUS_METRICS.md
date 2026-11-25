@@ -149,9 +149,9 @@ If an agent's existing log shows timeouts at the same time, keep that timing
 with the poll results. If scrapes failed or are missing, do not infer a stall
 from a flat graph.
 
-Neither this graph nor a fresh reading proves that alert rules ran. Quiet
-alert counters can also mean nothing was due to alert. Keep alert evaluation
-unverified unless you have a result from an ordinary rule that should have run.
+Neither this graph nor a fresh reading proves that alert rules ran. If a
+threshold alert is already open, you can [check its evaluation time](#check-whether-an-open-threshold-alert-was-reevaluated)
+in the same window without changing a rule or sending a test notification.
 
 ## 🧠 Scheduler Health
 
@@ -201,6 +201,28 @@ evaluation, decide that a target is down, or send an alert.
 | `pulse_alerts_suppressed_total` | Counter | Alerts suppressed by `reason` (quiet_hours, rate_limit, duplicate, etc.). |
 | `pulse_alerts_rate_limited_total` | Counter | Alerts suppressed due to rate limiting. |
 | `pulse_alert_duration_seconds` | Histogram | Time from alert fire to resolve (by `type`). |
+
+### Check whether an open threshold alert was reevaluated
+
+An alert can be evaluated again without firing or clearing. The lifecycle
+metrics above do not count each evaluation. For a threshold alert that is
+already open, read `/api/alerts/active` in your signed-in Pulse browser. Take
+two readings on the same Pulse server and workspace, allowing for the normal
+interval of that rule's polls or agent reports. Match the alert by both `id`
+and `startTime`, since another firing of the same rule can reuse the ID.
+
+Compare `metricStatus.observedAt` for that alert. If it moves forward during
+your observation window, Pulse evaluated that threshold again. The value does
+not have to change. For example, a temperature alert can stay open at 78 °C
+with an alert level of 80 °C and a clear level of 75 °C. `lastSeen` still dates
+the last breach, even when the live `observedAt` advances.
+
+If the time does not advance, the alert is missing, or there is no live
+`metricStatus` (for example, just after a restart), this check does not
+establish progress. It does not prove a stall either. A failed request is not
+an empty alert list. This only checks the selected rule, not all alerts or
+whether a destination accepted a notification. Keep the full response private.
+Do not change thresholds or cause an alert just to run this check.
 
 ## Operational Trust
 
