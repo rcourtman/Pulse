@@ -257,3 +257,8 @@ also clear an outstanding error. Check agent reports and alert evaluation
 separately. If you already scrape Prometheus, compare
 [completed poll outcomes](../monitoring/PROMETHEUS_METRICS.md#check-whether-polling-is-still-running)
 alongside these snapshots.
+
+If poll results advance but a chart does not, compare
+[Bars, Trends and drawer History](../monitoring/METRICS_DATA_FLOW.md#if-the-views-disagree).
+They do not share the same read, and a successful poll does not prove a
+particular metric was stored or that the browser received it.
