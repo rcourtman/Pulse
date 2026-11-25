@@ -298,8 +298,22 @@ def proxmox_polling_limits(label: str, stats: dict | None, window_s: int) -> lis
         stores = pbs_datastore_rows(pbs) if pbs is not None and pbs["window_s"] == window_s else []
         if not stores:
             notes.append(f"- {label}: PBS datastore status evidence is unavailable for the RSS window.")
-        elif silent := sum(store["responses"] == 0 for store in stores):
-            notes.append(f"- {label}: {silent} of {len(stores)} PBS datastores had no status response in the RSS window.")
+        else:
+            silent = sum(store["responses"] == 0 for store in stores)
+            if silent:
+                notes.append(f"- {label}: {silent} of {len(stores)} PBS datastores had no status response in the RSS window.")
+            # A late response or several clustered completions can make all
+            # stores look covered even when much of the RSS window was quiet.
+            # This is an observation limit, not a PBS poll interval or gate.
+            for instance, datastores in sorted(pbs["datastores"].items()):
+                for store, observation in sorted(datastores.items()):
+                    count, gap_ms = observation["responses"], observation["longest_gap_ms"]
+                    if count == 1:
+                        notes.append(f"- {label}: PBS datastore {instance}/{store} had only one status response "
+                                     f"in the RSS window (longest gap {gap_ms / 1000:g} s).")
+                    elif count > 1 and 2 * gap_ms > window_s * 1000:
+                        notes.append(f"- {label}: PBS datastore {instance}/{store} had no status response for "
+                                     f"{gap_ms / 1000:g} s, more than half of the {window_s} s RSS window.")
     return notes
 
 

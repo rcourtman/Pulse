@@ -289,6 +289,38 @@ class ReleaseMemorySummaryTests(unittest.TestCase):
         self.assertNotIn("- Candidate:", mismatched)
         self.assertNotIn("PBS datastores had no status response in the RSS window.", mismatched)
 
+        # A completed reply near the end, or bursts on either side of a long
+        # gap, can coexist with lower RSS and complete snapshot group coverage.
+        for side, count, gap_ms, warning in (
+            ("candidate", 1, 150000, "had only one status response in the RSS window (longest gap 150 s)."),
+            ("baseline", 6, 150001, "had no status response for 150.001 s, more than half of the 300 s RSS window."),
+            ("candidate", 6, 150000, None),
+            ("candidate", 6, 60911, None),
+        ):
+            with self.subTest(side=side, count=count, gap_ms=gap_ms):
+                gap = {"responses": count, "longest_gap_ms": gap_ms}
+                changed = dict(baseline, pbs_steady_datastore_status={
+                    "window_s": 300,
+                    "datastores": {"pbs1": primary, "pbs2": {**primary, "store-archive": gap}},
+                })
+                stats = {"baseline": baseline, "candidate": baseline} | {side: changed}
+                code, result, text = self.run_summary(
+                    full, samples(98304, 25, 0), estate="proxmox", proxmox=stats,
+                    env={"PULSE_MEMORY_GATE": "0"}, wait_statuses=(0, 0),
+                )
+                self.assertEqual(code, 0)
+                self.assertEqual(result["status"], "measured")
+                self.assertEqual(result["rss_growth_kib"], -32768)
+                self.assertEqual(result[f"{side}_proxmox"], changed)
+                self.assertIn("| PBS snapshot groups served/configured (whole run) | 104/104 | 104/104 |", text)
+                self.assertIn("4/4 with a response", text)
+                if warning:
+                    self.assertIn(f"{side.title()}: PBS datastore pbs2/store-archive {warning}", text)
+                    self.assertIn("This RSS change does not establish memory use under equivalent polling.", text)
+                    self.assertNotIn("datastores had no status response in the RSS window.", text)
+                else:
+                    self.assertNotIn("Polling evidence limits the comparison", text)
+
     def test_archive_polling_limits_keep_rss_visible_and_do_not_grant_coverage_for_warmup(self):
         baseline = {
             "pve_nodes": 1, "guests": 35, "pbs_instances": 0, "total_pbs_snapshots": 0,
