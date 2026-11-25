@@ -2543,7 +2543,8 @@ func TestScheduledPollDoesNotTakeSiblingSlot(t *testing.T) {
 						{Name: peer, MonitorPhysicalDisks: &physicalDisks},
 					}},
 					state: models.NewState(), alertManager: &alerts.Manager{}, runtimeCtx: ctx,
-					taskQueue: NewTaskQueue(), pollTimeout: budget, startTime: start,
+					metricsHistory: NewMetricsHistory(16, time.Hour),
+					taskQueue:      NewTaskQueue(), pollTimeout: budget, startTime: start,
 					pollStatusMap: make(map[string]*pollStatus), lastOutcome: make(map[string]taskOutcome),
 					failureCounts: make(map[string]int), circuitBreakers: make(map[string]*circuitBreaker),
 					maxRetryAttempts: 5, backoffCfg: backoffConfig{Initial: backoff},
@@ -2607,6 +2608,12 @@ func TestScheduledPollDoesNotTakeSiblingSlot(t *testing.T) {
 				t.Logf("while slow poll is held: source calls=%d, peer rows=%d", slowStarts.Load(), len(nodes))
 				if slowStarts.Load() != 1 || len(nodes) != 1 || nodes[0].Name != peer || nodes[0].CPU != 0.42 {
 					t.Fatalf("the slow connection must use one worker while the peer publishes; calls=%d, nodes=%+v", slowStarts.Load(), nodes)
+				}
+				// A node can reach the snapshot before the rest of its poll runs.
+				// Require the ordinary history write as well.
+				history := m.metricsHistory.GetNodeMetrics(nodes[0].ID, "cpu", time.Minute)
+				if len(history) != 1 || history[0].Value != 42 {
+					t.Fatalf("healthy peer did not complete the CPU history write: %+v", history)
 				}
 
 				time.Sleep(budget)
