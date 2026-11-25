@@ -275,7 +275,10 @@ reads of one group cannot stand in for snapshot traffic. The per-build
 which synthetic guests exceeded the gap limit, and PBS group coverage by
 instance and datastore. It also counts completed PBS datastore status responses
 in the steady RSS window, with the longest gap per datastore including both
-edges. Snapshot responses completed within that same window are shown
+edges. A single status response or a gap longer than half that window limits
+the comparison even when every datastore responded. This describes the
+coverage of the observation, not a required poll cadence or a backup alarm.
+Snapshot responses completed within that same window are shown
 separately per datastore, so full coverage earlier in the run or a current
 status response cannot stand in for a current snapshot listing. A zero does
 not mean a backup failure or require cached snapshots to be requested again.
