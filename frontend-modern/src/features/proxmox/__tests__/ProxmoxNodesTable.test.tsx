@@ -949,7 +949,7 @@ describe('ProxmoxNodesTable', () => {
     expect(screen.queryByTitle('12 pending apt updates')).not.toBeInTheDocument();
   });
 
-  it('labels stale provider telemetry and does not present old metrics as current', () => {
+  it('marks an online node with a degraded Proxmox connection as a warning', () => {
     render(() => (
       <ProxmoxNodesTable
         nodes={[
@@ -973,7 +973,9 @@ describe('ProxmoxNodesTable', () => {
     ));
 
     const row = screen.getByText('pve-node-1').closest('tr');
-    expect(row).toHaveTextContent('Stale');
+    expect(screen.getByText('Stale · Degraded')).toBeVisible();
+    expect(screen.getByTitle('Stale · Degraded')).toHaveClass('bg-amber-500');
+    expect(screen.queryByRole('img', { name: 'Online' })).not.toBeInTheDocument();
     expect(row).toHaveTextContent('—');
     expect(row?.className).toContain('opacity-60');
     expect(screen.queryByTestId('metric-mini-sparkline')).not.toBeInTheDocument();
@@ -1118,13 +1120,14 @@ describe('ProxmoxNodesTable', () => {
     setState('nodes', 0, 'proxmox', 'connectionHealth', 'error');
 
     expect(row).toHaveTextContent('Offline');
+    expect(row?.querySelector('.bg-red-500')).toBeInTheDocument();
     expect(row).toHaveTextContent('—');
     expect(row).not.toHaveTextContent('2d 4h');
     expect(row?.className).toContain('opacity-60');
     expect(screen.queryByTestId('temperature-gauge')).not.toBeInTheDocument();
   });
 
-  it('treats a live linked agent with an unavailable Proxmox provider as stale, not powered off', () => {
+  it('shows a Proxmox API error without saying that the node is offline', () => {
     render(() => (
       <ProxmoxNodesTable
         nodes={[
@@ -1146,9 +1149,53 @@ describe('ProxmoxNodesTable', () => {
     ));
 
     const row = screen.getByText('pve-node-1').closest('tr');
-    expect(row).toHaveTextContent('Stale');
+    expect(screen.getByText('Stale · API error')).toBeVisible();
+    expect(screen.getByTitle('Stale · API error')).toHaveClass('bg-amber-500');
     expect(row).not.toHaveTextContent('Offline');
     expect(row).toHaveTextContent('—');
+  });
+
+  it('uses stale Proxmox evidence on a degraded row without showing its old readings', () => {
+    const [state, setState] = createStore({
+      nodes: [
+        makeNodeResource({
+          uptime: 187_200,
+          sourceType: 'api',
+          proxmox: { nodeName: 'pve-node-1', connectionHealth: 'healthy' },
+          sourceStatus: {
+            proxmox: { status: 'online' },
+          },
+        }),
+      ],
+    });
+    render(() => (
+      <ProxmoxNodesTable
+        nodes={state.nodes}
+        guests={[]}
+        emptyIcon={<span />}
+        emptyTitle="No Proxmox VE nodes"
+        emptyDescription="No nodes"
+      />
+    ));
+    const row = screen.getByText('pve-node-1').closest('tr');
+    expect(screen.getByRole('img', { name: 'Online' })).toHaveClass('bg-emerald-500');
+
+    setState('nodes', 0, 'status', 'degraded');
+    expect(screen.getByText('Degraded')).toBeVisible();
+
+    setState('nodes', 0, 'sourceStatus', 'proxmox', 'status', 'stale');
+    expect(screen.getByText('Stale')).toBeVisible();
+    expect(screen.queryByText('Degraded')).not.toBeInTheDocument();
+    expect(row?.querySelector('.bg-amber-500')).toBeInTheDocument();
+    expect(screen.queryByRole('img', { name: 'Online' })).not.toBeInTheDocument();
+    expect(row).not.toHaveTextContent('2d 4h');
+    expect(row?.className).toContain('opacity-60');
+
+    setState('nodes', 0, 'sourceStatus', 'proxmox', 'status', 'online');
+    setState('nodes', 0, 'status', 'online');
+    expect(screen.queryByText('Stale')).not.toBeInTheDocument();
+    expect(screen.getByRole('img', { name: 'Online' })).toBeInTheDocument();
+    expect(row).toHaveTextContent('2d 4h');
   });
 
   it('counts same-named-node guests only within the matching provider', () => {
