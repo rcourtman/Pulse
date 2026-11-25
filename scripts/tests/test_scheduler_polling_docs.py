@@ -205,8 +205,9 @@ class SchedulerPollingDocsTest(unittest.TestCase):
         self.assertNotIn("healthy", result.stdout.lower())
 
     def test_local_queries_reuse_one_snapshot_and_preserve_failing_instances(self):
-        queries = [block for block in blocks() if "jq " in block and ENDPOINT not in block]
-        self.assertEqual(len(queries), 5)
+        queries = [block for block in blocks()
+                   if "jq " in block and ENDPOINT not in block and "--slurpfile" not in block]
+        self.assertEqual(len(queries), 4)
         body = snapshot()
         body["instances"][1]["pollStatus"]["lastError"] = {
             "at": "2026-10-03T11:59:30Z", "category": "transient", "message": "private fixture error",
@@ -254,56 +255,103 @@ class SchedulerPollingDocsTest(unittest.TestCase):
             self.assertEqual(results[3], [{"key": "pve::retrying", "state": "half_open"},
                                           {"key": "pve::failed", "state": "open"}])
 
-    def test_fixed_timing_comparison_distinguishes_progress_failure_and_no_result(self):
-        first = "2026-10-03T12:00:00Z"
-        second = "2026-10-03T12:03:00Z"
-        query = next(block for block in blocks() if "polls: [" in block)
-
-        def payload(observed_at, healthy, failing, partial):
-            def row(key, status):
-                return {"key": key, "connection": "https://private-fixture.invalid", "pollStatus": status}
-
-            def error(at, category):
-                return {"at": at, "category": category, "message": "private fixture error"}
-
-            return dict(snapshot(False), updatedAt=observed_at, instances=[
-                row("pve::progress", {"lastSuccess": healthy, "consecutiveFailures": 0}),
-                row("pbs::failing", {"lastSuccess": first, "lastError": error(failing, "transient"),
-                                     "consecutiveFailures": 2}),
-                row("pve::partial", {"lastSuccess": partial, "lastError": error(partial, "partial"),
-                                     "consecutiveFailures": 0}),
-                row("pbs::unchanged", {"lastSuccess": first, "consecutiveFailures": 0}),
-                row("pbs::unseen", {"consecutiveFailures": 0}),
-            ])
-
+    def compare(self, before, after):
+        query = next(block for block in blocks() if "--slurpfile earlier" in block)
+        self.assertNotIn("curl", query)
         with tempfile.TemporaryDirectory(prefix="scheduler comparison ") as temporary:
-            path = Path(temporary) / "health.json"
-            results = []
-            for body in (payload(first, first, first, first), payload(second, second, second, second)):
-                path.write_text(json.dumps(body))
-                result = subprocess.run(
-                    ["bash", "-eu", "-c", query.replace("/absolute/path/to/health.json", str(path))],
-                    capture_output=True, text=True, timeout=5,
-                )
-                self.assertEqual(result.returncode, 0, result.stderr)
-                self.assertNotIn("private-fixture.invalid", result.stdout)
-                self.assertNotIn("private fixture error", result.stdout)
-                value = json.loads(result.stdout)
-                self.assertFalse(value["enabled"])
-                results.append((value["updatedAt"], {
-                    item["key"]: (item["lastSuccess"], item["lastErrorAt"], item["lastErrorCategory"],
-                                  item["consecutiveFailures"])
-                    for item in value["polls"]
-                }))
-            for snapshot_at, rows in results:
-                self.assertEqual(rows, {
-                    "pve::progress": (snapshot_at, None, None, 0),
-                    "pbs::failing": (first, snapshot_at, "transient", 2),
-                    "pve::partial": (snapshot_at, snapshot_at, "partial", 0),
-                    "pbs::unchanged": (first, None, None, 0),
-                    "pbs::unseen": (None, None, None, 0),
-                })
-            self.assertEqual([snapshot_at for snapshot_at, _ in results], [first, second])
+            code = query
+            for name, body in (("earlier", before), ("later", after)):
+                path = Path(temporary) / f"{name}.json"
+                path.write_bytes(body if isinstance(body, bytes) else json.dumps(body).encode())
+                code = code.replace(f"/absolute/path/to/{name}/health.json", str(path))
+            return subprocess.run(["bash", "-eu", "-c", code], capture_output=True,
+                                  text=True, timeout=5)
+
+    def test_fixed_timing_comparison_joins_reordered_keys_and_keeps_partial_results(self):
+        first = "2026-10-03T12:00:00.123456789+01:00"
+        second = "2026-10-03T12:03:00.3+01:00"
+
+        def row(key, success=None, *, failure=None, category=None, failures=0):
+            status = {"consecutiveFailures": failures}
+            if success is not None:
+                status["lastSuccess"] = success
+            if failure is not None:
+                status["lastError"] = {"at": failure, "category": category,
+                                       "message": "private fixture error"}
+            return {"key": key, "connection": "https://private-fixture.invalid", "pollStatus": status}
+
+        before = dict(snapshot(False), updatedAt=first, instances=[
+            row("pve::progress", first),
+            row("pbs::failing", first, failure=first, category="transient", failures=1),
+            row("pve::partial", first),
+            row("pbs::unchanged", first),
+            row("pbs::unseen"),
+            row("pbs::removed", first),
+            row("pve::recovered", first, failure=first, category="partial"),
+        ])
+        after = dict(snapshot(False), updatedAt=second, instances=[
+            row("pbs::unseen"),
+            row("pve::recovered", second),
+            row("pve::partial", second, failure=second, category="partial"),
+            row("pbs::failing", first, failure=second, category="transient", failures=2),
+            row("pbs::added", second),
+            row("pbs::unchanged", first),
+            row("pve::progress", second),
+        ])
+        result = self.compare(before, after)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertNotIn("private-fixture.invalid", result.stdout)
+        self.assertNotIn("private fixture error", result.stdout)
+        value = json.loads(result.stdout)
+        self.assertEqual(value["earlier"], {"updatedAt": first, "enabled": False})
+        self.assertEqual(value["later"], {"updatedAt": second, "enabled": False})
+        rows = {r["key"]: r for r in value["polls"]}
+        self.assertEqual(len(value["polls"]), 8)
+        self.assertEqual({key: r["changes"] for key, r in rows.items()}, {
+            "pve::progress": ["lastSuccess"],
+            "pbs::failing": ["consecutiveFailures", "lastErrorAt"],
+            "pve::partial": ["lastErrorAt", "lastErrorCategory", "lastSuccess"],
+            "pbs::unchanged": [],
+            "pbs::unseen": [],
+            "pbs::removed": None,
+            "pbs::added": None,
+            "pve::recovered": ["lastErrorAt", "lastErrorCategory", "lastSuccess"],
+        })
+        self.assertEqual(rows["pve::partial"]["after"], {
+            "lastSuccess": second, "lastErrorAt": second, "lastErrorCategory": "partial",
+            "consecutiveFailures": 0,
+        })
+        self.assertEqual(rows["pbs::failing"]["after"]["lastSuccess"], first)
+        self.assertEqual(rows["pbs::failing"]["after"]["lastErrorAt"], second)
+        self.assertIsNone(rows["pve::recovered"]["after"]["lastErrorAt"])
+        self.assertEqual(rows["pbs::unchanged"]["after"]["lastSuccess"], first)
+        self.assertIsNone(rows["pbs::unseen"]["after"]["lastSuccess"])
+        self.assertIsNone(rows["pbs::removed"]["after"])
+        self.assertIsNone(rows["pbs::added"]["before"])
+
+    def test_comparison_refuses_ambiguous_or_incomplete_captures(self):
+        good = snapshot()
+        later = dict(good, updatedAt="2026-10-03T12:03:00Z")
+        for bad, message in (
+            (b"", "one saved scheduler snapshot"),
+            (json.dumps(later).encode() * 2, "one saved scheduler snapshot"),
+            (dict(later, instances=None), "one saved scheduler snapshot"),
+            (dict(later, instances=[{"key": "", "pollStatus": {}}]), "one saved scheduler snapshot"),
+            (dict(later, instances=[later["instances"][0]] * 2), "Duplicate connection key"),
+            (good, "two different capture times"),
+        ):
+            with self.subTest(message=message):
+                result = self.compare(good, bad)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertEqual(result.stdout, "")
+                self.assertIn(message, result.stderr)
+
+    def test_comparison_preserves_two_empty_captures_as_no_rows(self):
+        empty = dict(snapshot(False), instances=[])
+        later = dict(empty, updatedAt="2026-10-03T12:03:00Z")
+        result = self.compare(empty, later)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(json.loads(result.stdout)["polls"], [])
 
     def test_response_example_is_valid_json_with_the_current_field_names(self):
         example = json.loads(re.findall(r"```json\n(.*?)```", DOC.read_text(), re.DOTALL)[0])

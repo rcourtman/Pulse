@@ -203,27 +203,57 @@ jq '.instances[] | select(.breaker.state != "closed") |
 Use two snapshots from the same running Pulse instance. Allow enough time for
 the connection's normal poll interval and any retry delay. If a snapshot
 request times out, keep that result and stop rather than repeatedly requesting
-it. This query reads each saved file locally and leaves out addresses and error
-messages. Keep the output private too: the connection keys can include names.
+it. Put the earlier capture first. This local query joins the saved results by
+connection key even if the row order changes. It leaves out addresses and error
+messages. Keep its output private too: the connection keys can include names.
 
 ```bash
-snapshot='/absolute/path/to/health.json' # use each saved filename in turn
-jq '{updatedAt, enabled, polls: [.instances[] |
-  {key, lastSuccess: .pollStatus.lastSuccess, lastErrorAt: .pollStatus.lastError.at,
-   lastErrorCategory: .pollStatus.lastError.category,
-   consecutiveFailures: .pollStatus.consecutiveFailures}]}' "$snapshot"
+earlier='/absolute/path/to/earlier/health.json'
+later='/absolute/path/to/later/health.json'
+jq -ne --slurpfile earlier "$earlier" --slurpfile later "$later" '
+  def snapshot:
+    if length == 1 and (.[0] | type == "object" and
+      (.updatedAt | type == "string" and length > 0) and
+      (.enabled | type == "boolean") and
+      (.instances | type == "array" and all(.[];
+        (.key | type == "string" and length > 0) and (.pollStatus | type == "object"))))
+    then .[0] else error("Expected one saved scheduler snapshot per file") end;
+  def by_key:
+    INDEX(.instances[]; .key) as $rows |
+    if ($rows | length) == (.instances | length)
+    then $rows else error("Duplicate connection key in a snapshot") end;
+  def poll:
+    if . == null then null else .pollStatus |
+      {lastSuccess, lastErrorAt: .lastError.at, lastErrorCategory: .lastError.category,
+       consecutiveFailures}
+    end;
+  ($earlier | snapshot) as $a | ($later | snapshot) as $b |
+  if $a.updatedAt == $b.updatedAt then error("Use two different capture times") else . end |
+  ($a | by_key) as $old | ($b | by_key) as $new |
+  {earlier: ($a | {updatedAt, enabled}), later: ($b | {updatedAt, enabled}),
+   polls: [($old + $new | keys[]) as $key |
+     ($old[$key] | poll) as $before | ($new[$key] | poll) as $after |
+     {key: $key, before: $before, after: $after,
+      changes: (if $before == null or $after == null then null else
+        [$before | keys[] as $field | select(.[$field] != $after[$field]) | $field]
+      end)}]}'
 ```
 
-Compare the same `key` in both results:
+Check the two `updatedAt` times before using the result. In each row, `changes`
+names the fields that differ. It does not judge whether a timestamp advanced.
+An empty list means the recorded fields are unchanged. A null `before` or
+`after` means the connection was absent from that capture, not that its
+poll succeeded.
 
 | What changes | What it tells you |
 | --- | --- |
-| `lastSuccess` advances | A poll completed successfully. A new `partial` error can still mean some readings were unavailable. |
-| Only `lastErrorAt` advances | Pulse is still recording failures for that connection. Check the error in your local snapshot. |
+| `lastSuccess` appears or advances | Pulse recorded a successful poll. A new `partial` error can still mean some readings were unavailable. |
+| `lastErrorAt` appears or advances without a newer success | Pulse is still recording failures for that connection. Check the error in your local snapshot. |
+| `lastSuccess` moves backwards or disappears | Check the capture order and whether Pulse restarted or its clock changed. This is not a newly recorded success. |
 | Neither advances during an expected poll window | You have no new recorded result. A slow poll, a pause or a wait for retry can look this way. Do not assume the target is offline. |
 
-A missing timestamp (`null` in this query) is not a fresh reading, and a
-missing connection is not proof that its poll succeeded. Check agent reports
-and alert evaluation separately. If you already scrape Prometheus, compare
+A missing success timestamp is not a fresh reading. A complete success can
+also clear an outstanding error. Check agent reports and alert evaluation
+separately. If you already scrape Prometheus, compare
 [completed poll outcomes](../monitoring/PROMETHEUS_METRICS.md#check-whether-polling-is-still-running)
 alongside these snapshots.
