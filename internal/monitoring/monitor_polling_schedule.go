@@ -92,26 +92,12 @@ func (m *Monitor) buildScheduledTasks(now time.Time) []ScheduledTask {
 			if interval <= 0 {
 				interval = DefaultSchedulerConfig().BaseInterval
 			}
-			// Planning passes run every poll tick, and Upsert overwrites the
-			// queued slot. Stamping NextRun=now here re-arms every instance as
-			// due immediately each tick, so a fixed-interval instance polls at
-			// the tick cadence instead of its configured interval (#1745).
-			// Keep a pending future slot, tightening only when the freshly
-			// computed interval justifies an earlier run, mirroring the
-			// adaptive path's #1437 handling.
-			nextRun := now
-			if m.taskQueue != nil {
-				if pending, ok := m.taskQueue.Get(desc.Type, desc.Name); ok && pending.NextRun.After(now) {
-					nextRun = pending.NextRun
-					if candidate := now.Add(interval); candidate.Before(nextRun) {
-						nextRun = candidate
-					}
-				}
-			}
+			// New targets are due immediately. The queue reconciles this
+			// proposal against any already queued target under its own lock.
 			tasks = append(tasks, ScheduledTask{
 				InstanceName: desc.Name,
 				InstanceType: desc.Type,
-				NextRun:      nextRun,
+				NextRun:      now,
 				Interval:     interval,
 			})
 		}
@@ -172,7 +158,7 @@ func (m *Monitor) poll(_ context.Context, wsHub *websocket.Hub) {
 
 // nextScheduledPoll computes the normal successor without unlocking the
 // current claim. The queue installs it only when that worker returns.
-func (m *Monitor) nextScheduledPoll(task ScheduledTask) (ScheduledTask, bool) {
+func (m *Monitor) nextScheduledPoll(task ScheduledTask) (ScheduledTask, pollReschedule) {
 	key := schedulerKey(task.InstanceType, task.InstanceName)
 	m.mu.Lock()
 	outcome, hasOutcome := m.lastOutcome[key]
@@ -182,7 +168,7 @@ func (m *Monitor) nextScheduledPoll(task ScheduledTask) (ScheduledTask, bool) {
 	if hasOutcome && !outcome.success {
 		if !outcome.transient || failureCount >= m.maxRetryAttempts {
 			m.sendToDeadLetter(task, outcome.err)
-			return ScheduledTask{}, false
+			return ScheduledTask{}, noPollReschedule
 		}
 		delay := m.backoffCfg.nextDelay(failureCount-1, m.randomFloat())
 		if delay <= 0 {
@@ -197,7 +183,7 @@ func (m *Monitor) nextScheduledPoll(task ScheduledTask) (ScheduledTask, bool) {
 		next := task
 		next.Interval = delay
 		next.NextRun = time.Now().Add(delay)
-		return next, true
+		return next, pollAfterBackoff
 	}
 
 	fixedInterval := m.fixedIntervalForInstance(task.InstanceType, task.InstanceName)
@@ -216,7 +202,7 @@ func (m *Monitor) nextScheduledPoll(task ScheduledTask) (ScheduledTask, bool) {
 		next := task
 		next.NextRun = time.Now().Add(nextInterval)
 		next.Interval = nextInterval
-		return next, true
+		return next, pollOnCadence
 	}
 
 	desc := InstanceDescriptor{
@@ -248,7 +234,7 @@ func (m *Monitor) nextScheduledPoll(task ScheduledTask) (ScheduledTask, bool) {
 		}
 		next.Interval = nextInterval
 		next.NextRun = time.Now().Add(nextInterval)
-		return next, true
+		return next, pollOnCadence
 	}
-	return tasks[0], true
+	return tasks[0], pollOnCadence
 }

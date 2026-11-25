@@ -15,10 +15,19 @@ const (
 	dropWorkerSchedule
 )
 
+type pollReschedule uint8
+
+const (
+	noPollReschedule pollReschedule = iota
+	pollOnCadence
+	pollAfterBackoff
+)
+
 type scheduledTaskEntry struct {
-	task     ScheduledTask // queued task, or the explicit successor of a claim
-	index    int           // -1 while a worker owns the entry
-	followup claimFollowup
+	task         ScheduledTask // queued task, or the explicit successor of a claim
+	index        int           // -1 while a worker owns the entry
+	followup     claimFollowup
+	keepSchedule bool // queued intent set by an explicit edit or a worker's retry
 }
 
 func (e *scheduledTaskEntry) key() string {
@@ -88,8 +97,8 @@ func (q *TaskQueue) Upsert(task ScheduledTask) {
 	q.upsert(task, false)
 }
 
-// upsertPlan refreshes the ordinary plan, but not the work the queue has
-// already dispatched. A slow provider cannot fill a second worker slot.
+// upsertPlan adds or refreshes periodic work without replacing an explicit
+// request, a retry, or the work the queue has already dispatched.
 func (q *TaskQueue) upsertPlan(task ScheduledTask) {
 	q.upsert(task, true)
 }
@@ -107,12 +116,27 @@ func (q *TaskQueue) upsert(task ScheduledTask, fromPlanner bool) {
 			}
 			return
 		}
+		if fromPlanner {
+			if entry.keepSchedule {
+				return
+			}
+			// The live queue owns eligibility. In particular, passing the due
+			// time does not mean a worker has run the poll. Only a shorter
+			// cadence can tighten a pending slot; it can never postpone it.
+			task.NextRun = entry.task.NextRun
+			if task.Interval > 0 {
+				if sooner := time.Now().Add(task.Interval); sooner.Before(task.NextRun) {
+					task.NextRun = sooner
+				}
+			}
+		}
 		entry.task = task
+		entry.keepSchedule = !fromPlanner
 		heap.Fix(&q.heap, entry.index)
 		return
 	}
 
-	entry := &scheduledTaskEntry{task: task}
+	entry := &scheduledTaskEntry{task: task, keepSchedule: !fromPlanner}
 	heap.Push(&q.heap, entry)
 	q.entries[key] = entry
 }
@@ -120,7 +144,7 @@ func (q *TaskQueue) upsert(task ScheduledTask, fromPlanner bool) {
 // completeClaim returns ownership and optionally queues its successor in the
 // same critical section. An explicit edit or removal made during the claim
 // takes precedence over the returning worker's normal schedule.
-func (q *TaskQueue) completeClaim(task, next ScheduledTask, scheduled bool) {
+func (q *TaskQueue) completeClaim(task, next ScheduledTask, reschedule pollReschedule) {
 	key := schedulerKey(task.InstanceType, task.InstanceName)
 	q.mu.Lock()
 	defer q.mu.Unlock()
@@ -132,12 +156,14 @@ func (q *TaskQueue) completeClaim(task, next ScheduledTask, scheduled bool) {
 	switch entry.followup {
 	case followExplicitSchedule:
 		// Upsert has already stored the replacement in the claimed entry.
+		entry.keepSchedule = true
 	case followWorkerSchedule:
-		if !scheduled {
+		if reschedule == noPollReschedule {
 			delete(q.entries, key)
 			return
 		}
 		entry.task = next
+		entry.keepSchedule = reschedule == pollAfterBackoff
 	case dropWorkerSchedule:
 		delete(q.entries, key)
 		return

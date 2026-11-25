@@ -52,11 +52,16 @@ not returned. A returned failure in backoff is not an active claim.
 Removing a due poll from the heap claims its provider type and connection
 within that monitor. Only one worker can own that key, including while waiting
 for a process slot. Periodic replanning cannot queue another attempt for a
-claimed key. Its next scheduled attempt becomes eligible when the original
-worker returns; the existing outcome, backoff and interval rules choose that
-successor. A direct queue edit retains the latest replacement, or cancels the
-successor on removal, without starting an overlapping read. Other keys,
-including the same name on another provider, remain independently eligible.
+claimed key. When the original worker returns, the outcome, backoff and
+interval rules choose when its successor is eligible. Replanning cannot move
+a still-queued periodic poll later, including one already due but not yet
+claimed. A shorter interval can tighten a future periodic slot. The live queue
+applies this rule in both fixed and adaptive modes. A worker's queued retry
+keeps its backoff; an explicit queue edit keeps its chosen time until dispatch
+or another explicit edit. An explicit edit during a claim retains the latest
+replacement or cancels the successor on removal, without starting an
+overlapping read. Other keys, including the same name on another provider,
+remain independently eligible.
 
 A panic escaping a scheduled task is recovered at the task boundary in both
 worker modes. It is logged with the task type and connection. Unwinding
@@ -77,7 +82,15 @@ and PVE reads with fixed and adaptive polling under both worker modes. A held
 read is not duplicated even after its context expires, an unrelated node
 still publishes, and the held connection enters its ordinary retry on return.
 `TestScheduledPollClaimPreservesExplicitEdits` checks queue replacement,
-removal, completion and provider identity.
+removal, completion, planner precedence and provider identity.
+`TestDueScheduledPollSurvivesPlanningTicks` drives ordinary PVE planning
+across the due time while a worker is unavailable. At the same observation
+time after worker admission, the next reading and its CPU History point
+advance in both scheduling and both worker modes.
+`TestScheduledRetryKeepsWorkerBackoffAcrossPlanningTicks` confirms a returned
+failure keeps its retry time until it collects again, with adaptive polling
+on and off. `TestFixedIntervalPlanPreservesPendingSlot` checks that a future
+periodic slot holds and can still tighten when the configured cadence shrinks.
 `TestScheduledPollTaskPanicDoesNotStopWorker` uses one slot at a time in
 each worker mode. After a different source panics during task preparation,
 the peer's next ordinary poll updates its PVE row and writes its next CPU
