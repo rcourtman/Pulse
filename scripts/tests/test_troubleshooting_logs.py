@@ -565,14 +565,15 @@ class LogByteBoundsTest(unittest.TestCase):
 
 
 class LogReaderDeadlineTest(unittest.TestCase):
-    # All seven waits are independent. Each owns its own directory, process
-    # group and reader pidfd. Limit overlap to these fixed fixtures; the other
-    # tests and their process-global mocks still run serially.
+    # This matrix owns the live deadlines for the general log recipes used by
+    # Help, Notifications and TrueNAS. Each case owns its own directory,
+    # process group and reader pidfd. The process-global mocks run serially.
     controls = (
         ("correlation", "journalctl"),
         ("correlation", "docker"),
         ("general", "journalctl"),
         ("general", "docker"),
+        ("term-resistant", "docker"),
         ("severity", "journalctl"),
         ("closed-pipe", "docker"),
         ("closed-pipe", "journalctl"),
@@ -583,6 +584,9 @@ class LogReaderDeadlineTest(unittest.TestCase):
             return TroubleshootingLogRecipesTest().exercise(reader, stdout=JSON_LOG, hang="term")
         if kind == "general":
             return GeneralLogEvidenceTest().exercise(reader, stdout="partial error\n", hang="term")
+        if kind == "term-resistant":
+            return GeneralLogEvidenceTest().exercise(reader, stdout="partial private log\n",
+                                                    hang="ignore-term")
         if kind == "severity":
             return SeverityLogEvidenceTest().exercise(stdout=JSON_LOG, hang="term")
         if kind == "closed-pipe":
@@ -605,13 +609,13 @@ class LogReaderDeadlineTest(unittest.TestCase):
                     result = future.result()
                     self.assertEqual(result.returncode, 137, result.stderr)
                     self.assertEqual(result.stdout, "")
-                    if kind == "closed-pipe":
+                    if kind == "correlation":
+                        self.assertIn("Log read unavailable", result.stderr)
+                    elif kind != "closed-pipe":
+                        self.assertIn("Log read unavailable (exit 137)", result.stderr)
+                    if kind in ("closed-pipe", "term-resistant"):
                         self.assertNotIn("partial private log", result.stderr)
                         self.assertEqual(len(result.log_cleanup), 1)
-                    elif kind == "correlation":
-                        self.assertIn("Log read unavailable", result.stderr)
-                    else:
-                        self.assertIn("Log read unavailable (exit 137)", result.stderr)
 
 
 class LogDeadlineSchedulingTest(unittest.TestCase):
@@ -649,6 +653,13 @@ class LogDeadlineSchedulingTest(unittest.TestCase):
         return result
 
     def test_each_deadline_result_still_gates_the_suite(self):
+        # The two guide suites no longer launch their own deadline runs for
+        # these same bytes. Keep both ordinary readers and the pipe-holding
+        # TERM-resistant Docker reader in the required matrix.
+        self.assertCountEqual(
+            [case for case in LogReaderDeadlineTest.controls if case[0] in ("general", "term-resistant")],
+            [("general", "journalctl"), ("general", "docker"), ("term-resistant", "docker")],
+        )
         self.assertTrue(self.run_control().wasSuccessful())
         for kind, reader in LogReaderDeadlineTest.controls:
             with self.subTest(kind=kind, reader=reader):

@@ -19,7 +19,7 @@ import tempfile
 import threading
 import unittest
 
-from test_troubleshooting_logs import exercise_log_recipe
+from test_troubleshooting_logs import exercise_log_recipe, recipes as shared_log_recipes
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -152,8 +152,12 @@ class TrueNASDocsTest(unittest.TestCase):
             "journalctl": ["-u", "pulse", "--since", "15 minutes ago", "--lines", "200", "--no-pager"],
             "docker": ["logs", "--since", "15m", "--tail", "200", "pulse"],
         }
-        self.assertEqual(set(self.log_recipes()), set(expected))
-        for reader, recipe in self.log_recipes().items():
+        copied_recipes = self.log_recipes()
+        # The linked commands are the same bytes as the shared live deadline
+        # cases. Continue to exercise TrueNAS-specific output and failures.
+        self.assertEqual(copied_recipes, shared_log_recipes("### Inspect Notification Logs"))
+        self.assertEqual(set(copied_recipes), set(expected))
+        for reader, recipe in copied_recipes.items():
             with self.subTest(reader=reader):
                 result, argv = self.exercise_log(reader, recipe, stdout="startup failed\n",
                                                 stderr="TrueNAS collection failed\n")
@@ -174,21 +178,6 @@ class TrueNASDocsTest(unittest.TestCase):
                     self.assertEqual(result.stdout, "")
                     self.assertIn("Log read unavailable (exit 2)", result.stderr)
                     self.assertNotIn("synthetic access failure", result.stderr)
-
-    def test_hung_readers_withhold_partial_nas_output_at_the_real_deadline(self):
-        for reader, recipe in self.log_recipes().items():
-            with self.subTest(reader=reader):
-                result, _ = self.exercise_log(reader, recipe, stdout="TrueNAS polling\n", hang="term")
-                self.assertEqual(result.returncode, 137, result.stderr)
-                self.assertEqual(result.stdout, "")
-                self.assertIn("Log read unavailable (exit 137)", result.stderr)
-
-    def test_reader_ignoring_term_is_killed_at_the_hard_deadline(self):
-        result, _ = self.exercise_log("docker", self.log_recipes()["docker"],
-                                     stdout="TrueNAS polling\n", hang="ignore-term")
-        self.assertEqual(result.returncode, 137, result.stderr)
-        self.assertEqual(result.stdout, "")
-        self.assertIn("Log read unavailable (exit 137)", result.stderr)
 
     def test_missing_timeout_stops_before_reading_without_an_unbounded_fallback(self):
         for reader, recipe in self.log_recipes().items():
