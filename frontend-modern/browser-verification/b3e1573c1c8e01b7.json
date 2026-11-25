@@ -1,0 +1,37 @@
+{
+  "version": 1,
+  "base_sha": "9d44db68ee4d88467faf35d3edc30bfbc2661622",
+  "verified_at": "2026-11-25T06:09:10Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/proxmox/proxmoxBackupUnreadSources.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/proxmox/proxmoxBackupUnreadSources.ts": "f214c78e9ae70a89a6a91daeaebe3d4d7f8bc44d04bec950810a4a7f5c4d563e"
+  },
+  "routes": [
+    "/proxmox/backups/coverage",
+    "/proxmox/backups/date"
+  ],
+  "viewports": [
+    {
+      "width": 1366,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Matched Chromium 141 desktop light and WebKit 26 phone dark (Playwright 1.56.1), with identical synthetic HTTP data, timezone, theme and viewport in each before/after pair",
+    "Only offsite PBS unread beside a healthy identically named datastore and namespace: warning identifies the affected connection; healthy row, counts, jobs and Coverage remain",
+    "Mixed denied PBS and unread PVE: separate scoped permission and reachability checks, intact warning and sibling evidence",
+    "Complete next observation clears the warning; the opened By date point remains verified and expanded; all 12 source-bound captures inspected"
+  ],
+  "interactions": [
+    "Observe the change from the first accepted posture to the mixed warning on the next ordinary refresh without changing the Coverage view",
+    "Use keyboard on desktop and touch on phone to select By date and open the healthy PBS restore point",
+    "Observe the read succeeding and clearing the warning without losing the open point, its provider and reported verification, or either listed restore point"
+  ]
+}

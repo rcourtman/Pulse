@@ -19,6 +19,7 @@ describe('unread backup sources', () => {
   it('collapses the same unread storage across guests into one actionable line', () => {
     const partial: Partial<ProtectionProviderState> = {
       provider: 'proxmox-pve',
+      source: 'pve-backup-enumeration',
       scope: 'homelab',
       historyCompleteness: 'partial',
       unreadScopes: [{ kind: 'storage', node: 'delly', storage: 'pbs-energy-offsite' }],
@@ -35,17 +36,18 @@ describe('unread backup sources', () => {
     );
   });
 
-  it('names connections only when the gap spans several, and reports denied access', () => {
+  it('distinguishes denied reads even when PVE and PBS use the same connection name', () => {
     const sources = collectUnreadBackupSources([
       withProvider('vm:1', {
         provider: 'proxmox-pve',
-        scope: 'east',
+        source: 'pve-backup-enumeration',
+        scope: 'site',
         historyCompleteness: 'partial',
         unreadScopes: [{ kind: 'node', node: 'pve2', accessDenied: true }],
       }),
       withProvider('vm:2', {
         provider: 'proxmox-pbs',
-        scope: 'west',
+        scope: 'site',
         historyCompleteness: 'partial',
         unreadScopes: [
           { kind: 'namespace', storage: 'archive', namespace: '', accessDenied: true },
@@ -53,12 +55,44 @@ describe('unread backup sources', () => {
       }),
     ]);
     expect(sources.map((source) => source.label)).toEqual([
-      'the root namespace of datastore archive (west)',
-      'the storage list on node pve2 (east)',
+      'the root namespace of datastore archive (PBS connection: site)',
+      'the storage list on node pve2 (PVE connection: site)',
     ]);
-    expect(describeUnreadBackupSources(sources)).toMatch(
-      /^Pulse does not have permission to read .* and .*\. Check the permissions of the Pulse API token\.$/,
+    const message = describeUnreadBackupSources(sources);
+    expect(message).toMatch(/^Pulse does not have permission to read .* and .*, so/);
+    expect(message).toContain(
+      "Check the Pulse API token's read permissions where access was denied.",
     );
+    expect(message).not.toContain('reachable');
+  });
+
+  it('names the denied reader even if it is the only known connection', () => {
+    const sources = collectUnreadBackupSources([
+      withProvider('vm:1', {
+        scope: ' offsite ',
+        historyCompleteness: 'partial',
+        unreadScopes: [{ kind: 'namespace', storage: 'vault', accessDenied: true }],
+      }),
+    ]);
+    expect(sources[0]?.label).toBe(
+      'the root namespace of datastore vault (PBS connection: offsite)',
+    );
+  });
+
+  it('does not interpret a legacy retained-point scope as a second configured reader', () => {
+    const sources = collectUnreadBackupSources([
+      withProvider('vm:1', {
+        scope: 'offsite',
+        historyCompleteness: 'partial',
+        unreadScopes: [{ kind: 'datastore', storage: 'vault' }],
+      }),
+      withProvider('vm:2', {
+        scope: 'another-scope',
+        source: 'legacy-recovery-point',
+        historyCompleteness: 'unknown',
+      }),
+    ]);
+    expect(sources[0]?.label).toBe('the namespace list of datastore vault');
   });
 
   it('points a direct PBS namespace read to the PBS connection, not the VE host', () => {
@@ -79,6 +113,7 @@ describe('unread backup sources', () => {
     const sources = collectUnreadBackupSources([
       withProvider('vm:1', {
         provider: 'proxmox-pve',
+        source: 'pve-backup-enumeration',
         scope: 'east',
         historyCompleteness: 'partial',
         unreadScopes: [{ kind: 'storage', node: 'pve1', storage: 'archive', accessDenied: true }],
@@ -91,7 +126,7 @@ describe('unread backup sources', () => {
       }),
     ]);
     expect(describeUnreadBackupSources(sources)).toBe(
-      'Pulse cannot read archive on pve1 (east) (access denied) and namespace team on datastore vault (offsite), so it cannot confirm the backups stored there. For the other unread sources, check that Pulse can reach the storage through its Proxmox Backup Server connection.',
+      "Pulse cannot read archive on pve1 (PVE connection: east) (access denied) and namespace team on datastore vault (PBS connection: offsite), so it cannot confirm the backups stored there. Check the Pulse API token's read permissions where access was denied. For the other unread sources, check that Pulse can reach the storage through its Proxmox Backup Server connection.",
     );
   });
 
@@ -99,6 +134,7 @@ describe('unread backup sources', () => {
     const sources = collectUnreadBackupSources([
       withProvider('vm:1', {
         provider: 'proxmox-pve',
+        source: 'pve-backup-enumeration',
         scope: 'east',
         historyCompleteness: 'partial',
         unreadScopes: [{ kind: 'storage', node: 'pve1', storage: 'archive' }],
@@ -111,7 +147,7 @@ describe('unread backup sources', () => {
       }),
     ]);
     expect(describeUnreadBackupSources(sources)).toBe(
-      'Pulse cannot read archive on pve1 (east) and the namespace list of datastore vault (offsite), so it cannot confirm the backups stored there. Check that the backup sources are reachable through their configured connections.',
+      'Pulse cannot read archive on pve1 (PVE connection: east) and the namespace list of datastore vault (PBS connection: offsite), so it cannot confirm the backups stored there. Check that the backup sources are reachable through their configured connections.',
     );
   });
 
@@ -119,6 +155,7 @@ describe('unread backup sources', () => {
     const sources = collectUnreadBackupSources([
       withProvider('vm:1', {
         provider: 'proxmox-pve',
+        source: 'pve-backup-enumeration',
         scope: 'east',
         historyCompleteness: 'partial',
         unreadScopes: [
@@ -133,7 +170,9 @@ describe('unread backup sources', () => {
     expect(describeUnreadBackupSources(sources)).toMatch(
       /^Pulse cannot read a, b, c and 2 more \(1 access denied\),/,
     );
-    expect(describeUnreadBackupSources(sources)).not.toMatch(/API token/);
+    expect(describeUnreadBackupSources(sources)).toContain(
+      'read permissions where access was denied',
+    );
   });
 
   it('shows nothing for complete history or when no scope is named', () => {

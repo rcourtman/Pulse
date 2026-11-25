@@ -204,6 +204,62 @@ describe('backup reads through the real HTTP and consuming page boundary', () =>
     expectReadOnlyTransport();
   });
 
+  it('keeps the affected reader and its next check distinct from a healthy namesake', async () => {
+    const posture = protectionPosture(guest.id);
+    const healthy = { ...posture.providerStates[0], scope: 'local' };
+    const offsite = { ...healthy, scope: 'offsite' };
+    const pve = { ...healthy, provider: 'proxmox-pve', source: 'pve-backup-enumeration' };
+    const unread = (accessDenied: boolean): (typeof posture.providerStates)[number] => ({
+      ...offsite,
+      jobState: 'warning',
+      historyCompleteness: 'partial',
+      permissions: accessDenied ? 'partial' : 'unknown',
+      unreadScopes: [{ kind: 'namespace', storage: 'vault', namespace: 'team', accessDenied }],
+    });
+    let providerStates = [healthy, unread(false)];
+    reply = async (source, org) =>
+      json(
+        source === 'posture'
+          ? { data: [{ ...posture, providerStates }], policy: protectionPolicy }
+          : payload(source, org),
+      );
+    const warning = () => document.querySelector('[data-unread-backup-sources]');
+
+    mount();
+    await settle();
+    expect(warning()).toHaveAttribute('role', 'status');
+    expect(warning()).toHaveTextContent(
+      'namespace team on datastore vault (PBS connection: offsite)',
+    );
+    expect(warning()).not.toHaveTextContent(/PBS connection: local|access denied|API token/i);
+    expect(warning()).toHaveTextContent('through its Proxmox Backup Server connection');
+    expect(rows()).toHaveLength(2);
+
+    providerStates = [
+      healthy,
+      unread(true),
+      {
+        ...pve,
+        scope: 'east',
+        jobState: 'warning',
+        historyCompleteness: 'partial',
+        unreadScopes: [{ kind: 'storage', node: 'pve-1', storage: 'vault' }],
+      },
+    ];
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(warning()).toHaveTextContent('(PBS connection: offsite) (access denied)');
+    expect(warning()).toHaveTextContent('vault on pve-1 (PVE connection: east)');
+    expect(warning()).toHaveTextContent(/read permissions where access was denied/);
+    expect(warning()).toHaveTextContent(/other unread sources, check .* reachable from Proxmox/);
+    expect(rows()).toHaveLength(2);
+
+    providerStates = [healthy, offsite, pve];
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(warning()).toBeNull();
+    expect(rows()).toHaveLength(2);
+    expectReadOnlyTransport();
+  });
+
   it.each(sources)(
     'lets a rate-limited %s poll settle across two other poll ticks',
     async (source) => {
