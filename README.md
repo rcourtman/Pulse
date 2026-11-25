@@ -85,7 +85,7 @@ docker run -d \
   -v pulse_data:/data \
   -e PULSE_DEPLOYMENT_METHOD=docker_run \
   --restart unless-stopped \
-  rcourtman/pulse:v6.8.0
+  rcourtman/pulse:v6.9.0
 ```
 
 <details>
@@ -94,7 +94,7 @@ docker run -d \
 ```yaml
 services:
   pulse:
-    image: rcourtman/pulse:v6.8.0
+    image: rcourtman/pulse:v6.9.0
     container_name: pulse
     ports:
       - "7655:7655"
@@ -114,7 +114,7 @@ volumes:
 Signed installer: downloads, verifies against the pinned `pulse-installer` key, then runs:
 
 ```bash
-export PULSE_VERSION=v6.8.0
+export PULSE_VERSION=v6.9.0
 curl -fsSLO "https://github.com/rcourtman/Pulse/releases/download/${PULSE_VERSION}/install.sh" &&
 curl -fsSLO "https://github.com/rcourtman/Pulse/releases/download/${PULSE_VERSION}/install.sh.sshsig" &&
 ssh-keygen -Y verify \
