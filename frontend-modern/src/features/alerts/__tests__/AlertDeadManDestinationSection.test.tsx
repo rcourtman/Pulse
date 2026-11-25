@@ -117,6 +117,99 @@ describe('AlertDeadManDestinationSection', () => {
     ).toBeInTheDocument();
   });
 
+  it('distinguishes an unanswered first read from a confirmed unconfigured watchdog', async () => {
+    vi.useFakeTimers({
+      toFake: ['Date', 'setInterval', 'clearInterval'],
+      now: Date.parse('2026-08-27T12:00:30Z'),
+    });
+    const readStatus = vi.mocked(AlertsAPI.getDeadManStatus);
+    const base = await readStatus();
+    readStatus.mockImplementation(() => new Promise(() => undefined));
+    const [pingUrl, setPingUrl] = createSignal('');
+
+    try {
+      render(() => (
+        <AlertDeadManDestinationSection
+          pingUrl={pingUrl}
+          setPingUrl={setPingUrl}
+          setHasUnsavedChanges={vi.fn()}
+        />
+      ));
+      expect(screen.getByText('Checking status…')).toBeInTheDocument();
+      expect(screen.queryByText('Not configured')).not.toBeInTheDocument();
+      await vi.advanceTimersByTimeAsync(DEAD_MAN_STATUS_POLL_MS);
+      expect(screen.getByText('Checking status…')).toBeInTheDocument();
+      await vi.advanceTimersByTimeAsync(DEAD_MAN_STATUS_POLL_MS);
+      expect(screen.getByText('Status read overdue')).toBeInTheDocument();
+      expect(screen.getByText('No watchdog status received yet.')).toBeInTheDocument();
+      expect(screen.queryByText('Last success')).not.toBeInTheDocument();
+
+      readStatus.mockResolvedValueOnce({
+        configured: false,
+        state: 'disabled',
+        heartbeatIntervalSeconds: base.heartbeatIntervalSeconds,
+        recommendedGraceSeconds: base.recommendedGraceSeconds,
+        consecutiveFailures: 0,
+      });
+      fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
+      await waitFor(() => expect(screen.getByText('Not configured')).toBeInTheDocument());
+      expect(screen.queryByText('Status read overdue')).not.toBeInTheDocument();
+      expect(screen.queryByText('No watchdog status received yet.')).not.toBeInTheDocument();
+    } finally {
+      cleanup();
+      vi.useRealTimers();
+    }
+  });
+
+  it('qualifies retained readings only after a quiet read window and distinguishes a confirmed stall', async () => {
+    vi.useFakeTimers({
+      toFake: ['Date', 'setInterval', 'clearInterval'],
+      now: Date.parse('2026-08-27T12:00:30Z'),
+    });
+    const readStatus = vi.mocked(AlertsAPI.getDeadManStatus);
+    const base = await readStatus();
+    readStatus
+      .mockResolvedValueOnce(base)
+      .mockResolvedValueOnce(base)
+      .mockImplementation(() => new Promise(() => undefined));
+    const [pingUrl, setPingUrl] = createSignal('***REDACTED***');
+
+    try {
+      render(() => (
+        <AlertDeadManDestinationSection
+          pingUrl={pingUrl}
+          setPingUrl={setPingUrl}
+          setHasUnsavedChanges={vi.fn()}
+        />
+      ));
+      await waitFor(() => expect(screen.getByText('Heartbeat healthy')).toBeInTheDocument());
+      await vi.advanceTimersByTimeAsync(2 * DEAD_MAN_STATUS_POLL_MS);
+      // A successful read at the first poll kept the status current even
+      // though the heartbeat timestamp in its body had not changed.
+      expect(screen.getByText('Heartbeat healthy')).toBeInTheDocument();
+      expect(screen.queryByText('Status read overdue')).not.toBeInTheDocument();
+
+      await vi.advanceTimersByTimeAsync(DEAD_MAN_STATUS_POLL_MS);
+      expect(screen.getByText('Status read overdue')).toBeInTheDocument();
+      expect(screen.getByRole('status')).toHaveTextContent('Status read overdue');
+      expect(screen.getByText('Last known status: Heartbeat healthy.')).toBeInTheDocument();
+      expect(screen.queryByText('Monitoring stalled')).not.toBeInTheDocument();
+      expect(screen.getByText('Last success').nextElementSibling).toHaveTextContent('2 mins ago');
+      expect(screen.getByText('Monitor progress')).toBeInTheDocument();
+      expect(screen.getByText('5 min (unexpected stop)')).toBeInTheDocument();
+
+      readStatus.mockResolvedValueOnce({ ...base, state: 'monitor_stalled' });
+      await vi.advanceTimersByTimeAsync(DEAD_MAN_STATUS_POLL_MS);
+      expect(screen.getByRole('status')).toHaveTextContent('Monitoring stalled');
+      expect(screen.queryByText('Status read overdue')).not.toBeInTheDocument();
+      expect(screen.queryByText(/Last known status:/)).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Refresh' })).not.toBeDisabled();
+    } finally {
+      cleanup();
+      vi.useRealTimers();
+    }
+  });
+
   it('keeps Last success aging and re-reads the status while the panel stays open', async () => {
     const start = Date.parse('2026-08-27T12:00:30Z');
     vi.useFakeTimers({ toFake: ['Date', 'setInterval', 'clearInterval'], now: start });
@@ -317,7 +410,8 @@ describe('AlertDeadManDestinationSection', () => {
         }),
     );
     const [pingUrl, setPingUrl] = createSignal('***REDACTED***');
-    const badge = () => screen.getByText(/^(Status unavailable|Heartbeat healthy|Not configured)$/);
+    const badge = () =>
+      screen.getByText(/^(Status unavailable|Heartbeat healthy|Status read overdue)$/);
     const settle = async () => {
       await Promise.resolve();
       await Promise.resolve();
@@ -343,6 +437,7 @@ describe('AlertDeadManDestinationSection', () => {
       await waitFor(() => expect(pending).toHaveLength(3));
       pending[1].reject(new Error('timeout'));
       await waitFor(() => expect(badge()).toHaveTextContent('Status unavailable'));
+      expect(screen.getByText('Last known status: Heartbeat healthy.')).toBeInTheDocument();
 
       // The newest read fails; an older read then succeeds late. The older
       // success must not report a recovery.
