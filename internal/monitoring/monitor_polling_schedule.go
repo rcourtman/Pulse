@@ -1,8 +1,15 @@
 package monitoring
 
 import (
+	"context"
 	"sort"
+	"sync/atomic"
 	"time"
+
+	"github.com/rcourtman/pulse-go-rewrite/internal/logging"
+	"github.com/rcourtman/pulse-go-rewrite/internal/websocket"
+	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 )
 
 func (m *Monitor) describeInstancesForScheduler() []InstanceDescriptor {
@@ -112,4 +119,136 @@ func (m *Monitor) buildScheduledTasks(now time.Time) []ScheduledTask {
 	}
 
 	return m.scheduler.BuildPlan(now, descriptors, queueDepth)
+}
+
+// poll fetches data from all configured instances
+func (m *Monitor) poll(_ context.Context, wsHub *websocket.Hub) {
+	defer recoverFromPanic("poll")
+
+	// Limit concurrent polls to 2 to prevent resource exhaustion
+	currentCount := atomic.AddInt32(&m.activePollCount, 1)
+	if currentCount > 2 {
+		atomic.AddInt32(&m.activePollCount, -1)
+		if logging.IsLevelEnabled(zerolog.DebugLevel) {
+			log.Debug().Int32("activePolls", currentCount-1).Msg("too many concurrent polls, skipping")
+		}
+		return
+	}
+	defer atomic.AddInt32(&m.activePollCount, -1)
+
+	if logging.IsLevelEnabled(zerolog.DebugLevel) {
+		log.Debug().Msg("starting polling cycle")
+	}
+	startTime := time.Now()
+	now := startTime
+
+	plannedTasks := m.buildScheduledTasks(now)
+	for _, task := range plannedTasks {
+		m.taskQueue.upsertPlan(task)
+	}
+	m.updateQueueDepthMetric()
+
+	// Update performance metrics atomically to prevent data races when
+	// multiple poll() goroutines run concurrently (e.g. mock mode transitions).
+	wsClients := 0
+	if wsHub != nil {
+		wsClients = wsHub.GetClientCount()
+	}
+	m.state.UpdatePollStats(
+		time.Since(startTime).Seconds(),
+		int64(time.Since(m.startTime).Seconds()),
+		wsClients,
+	)
+
+	// Sync alert state so broadcasts include the latest acknowledgement data
+	m.syncAlertsToState()
+
+	if logging.IsLevelEnabled(zerolog.DebugLevel) {
+		log.Debug().Dur("duration", time.Since(startTime)).Msg("polling cycle completed")
+	}
+
+	// Broadcasting is now handled by the timer in Start()
+}
+
+// nextScheduledPoll computes the normal successor without unlocking the
+// current claim. The queue installs it only when that worker returns.
+func (m *Monitor) nextScheduledPoll(task ScheduledTask) (ScheduledTask, bool) {
+	key := schedulerKey(task.InstanceType, task.InstanceName)
+	m.mu.Lock()
+	outcome, hasOutcome := m.lastOutcome[key]
+	failureCount := m.failureCounts[key]
+	m.mu.Unlock()
+
+	if hasOutcome && !outcome.success {
+		if !outcome.transient || failureCount >= m.maxRetryAttempts {
+			m.sendToDeadLetter(task, outcome.err)
+			return ScheduledTask{}, false
+		}
+		delay := m.backoffCfg.nextDelay(failureCount-1, m.randomFloat())
+		if delay <= 0 {
+			delay = 5 * time.Second
+		}
+		if m.config != nil && m.config.AdaptivePollingEnabled && m.config.AdaptivePollingMaxInterval > 0 && m.config.AdaptivePollingMaxInterval <= 15*time.Second {
+			maxDelay := 4 * time.Second
+			if delay > maxDelay {
+				delay = maxDelay
+			}
+		}
+		next := task
+		next.Interval = delay
+		next.NextRun = time.Now().Add(delay)
+		return next, true
+	}
+
+	fixedInterval := m.fixedIntervalForInstance(task.InstanceType, task.InstanceName)
+
+	if m.scheduler == nil {
+		nextInterval := fixedInterval
+		if nextInterval <= 0 {
+			nextInterval = task.Interval
+		}
+		if nextInterval <= 0 {
+			nextInterval = m.baseIntervalForInstanceType(task.InstanceType)
+		}
+		if nextInterval <= 0 {
+			nextInterval = DefaultSchedulerConfig().BaseInterval
+		}
+		next := task
+		next.NextRun = time.Now().Add(nextInterval)
+		next.Interval = nextInterval
+		return next, true
+	}
+
+	desc := InstanceDescriptor{
+		Name:          task.InstanceName,
+		Type:          task.InstanceType,
+		LastInterval:  task.Interval,
+		LastScheduled: task.NextRun,
+		FixedInterval: fixedInterval,
+	}
+	if m.stalenessTracker != nil {
+		if snap, ok := m.stalenessTracker.snapshot(task.InstanceType, task.InstanceName); ok {
+			desc.LastSuccess = snap.LastSuccess
+			desc.LastFailure = snap.LastError
+			if snap.ChangeHash != "" {
+				desc.Metadata = TaskMetadata{ChangeHash: snap.ChangeHash}
+			}
+		}
+	}
+
+	tasks := m.scheduler.BuildPlan(time.Now(), []InstanceDescriptor{desc}, m.taskQueue.Size())
+	if len(tasks) == 0 {
+		next := task
+		nextInterval := task.Interval
+		if nextInterval <= 0 && m.config != nil {
+			nextInterval = m.config.AdaptivePollingBaseInterval
+		}
+		if nextInterval <= 0 {
+			nextInterval = DefaultSchedulerConfig().BaseInterval
+		}
+		next.Interval = nextInterval
+		next.NextRun = time.Now().Add(nextInterval)
+		return next, true
+	}
+	return tasks[0], true
 }

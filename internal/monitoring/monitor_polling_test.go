@@ -302,7 +302,7 @@ func TestRescheduleTaskUsesInstanceIntervalWhenSchedulerDisabled(t *testing.T) {
 		NextRun:      time.Now(),
 	}
 
-	monitor.rescheduleTask(task)
+	scheduleFixtureSuccessor(monitor, task)
 
 	monitor.taskQueue.mu.Lock()
 	entry, ok := monitor.taskQueue.entries[schedulerKey(task.InstanceType, task.InstanceName)]
@@ -1972,7 +1972,7 @@ func TestRescheduleTask_SuccessfulOutcome(t *testing.T) {
 	// Record a successful outcome
 	m.lastOutcome[key] = taskOutcome{success: true}
 
-	m.rescheduleTask(task)
+	scheduleFixtureSuccessor(m, task)
 
 	// Task should be rescheduled at regular interval (no backoff)
 	m.taskQueue.mu.Lock()
@@ -2029,7 +2029,7 @@ func TestRescheduleTask_TransientFailureWithBackoff(t *testing.T) {
 		err:       errors.New("connection timeout"),
 	}
 
-	m.rescheduleTask(task)
+	scheduleFixtureSuccessor(m, task)
 
 	// Task should be rescheduled with backoff delay
 	m.taskQueue.mu.Lock()
@@ -2079,7 +2079,7 @@ func TestRescheduleTask_NonTransientFailureGoesToDeadLetter(t *testing.T) {
 		err:       errors.New("authentication failed"),
 	}
 
-	m.rescheduleTask(task)
+	scheduleFixtureSuccessor(m, task)
 
 	// Task should NOT be in the main queue
 	m.taskQueue.mu.Lock()
@@ -2133,7 +2133,7 @@ func TestRescheduleTask_ExceededRetryAttemptsGoesToDeadLetter(t *testing.T) {
 		err:       errors.New("connection timeout"),
 	}
 
-	m.rescheduleTask(task)
+	scheduleFixtureSuccessor(m, task)
 
 	// Task should be in dead letter queue
 	deadLetterQ.mu.Lock()
@@ -2168,7 +2168,7 @@ func TestRescheduleTask_NoOutcomeUsesDefaultInterval(t *testing.T) {
 	key := schedulerKey(task.InstanceType, task.InstanceName)
 
 	// No outcome recorded - hasOutcome will be false
-	m.rescheduleTask(task)
+	scheduleFixtureSuccessor(m, task)
 
 	m.taskQueue.mu.Lock()
 	entry, ok := m.taskQueue.entries[key]
@@ -2206,7 +2206,7 @@ func TestRescheduleTask_PBSInstance(t *testing.T) {
 
 	key := schedulerKey(task.InstanceType, task.InstanceName)
 
-	m.rescheduleTask(task)
+	scheduleFixtureSuccessor(m, task)
 
 	m.taskQueue.mu.Lock()
 	entry, ok := m.taskQueue.entries[key]
@@ -2243,7 +2243,7 @@ func TestRescheduleTask_PMGInstance(t *testing.T) {
 
 	key := schedulerKey(task.InstanceType, task.InstanceName)
 
-	m.rescheduleTask(task)
+	scheduleFixtureSuccessor(m, task)
 
 	m.taskQueue.mu.Lock()
 	entry, ok := m.taskQueue.entries[key]
@@ -2297,7 +2297,7 @@ func TestRescheduleTask_AdaptivePollingMaxIntervalLimit(t *testing.T) {
 		err:       errors.New("timeout"),
 	}
 
-	m.rescheduleTask(task)
+	scheduleFixtureSuccessor(m, task)
 
 	m.taskQueue.mu.Lock()
 	entry, ok := m.taskQueue.entries[key]
@@ -2337,7 +2337,7 @@ func TestRescheduleTask_UsesExistingIntervalWhenSet(t *testing.T) {
 
 	key := schedulerKey(task.InstanceType, task.InstanceName)
 
-	m.rescheduleTask(task)
+	scheduleFixtureSuccessor(m, task)
 
 	m.taskQueue.mu.Lock()
 	entry, ok := m.taskQueue.entries[key]
@@ -3061,5 +3061,13 @@ func TestSetProviderConnectionHealth_UsesProviderConnectionKey(t *testing.T) {
 	}
 	if _, exists := monitor.state.ConnectionHealth["xcp-"+instanceName]; exists {
 		t.Fatalf("did not expect fallback key %q when provider key override is set", "xcp-"+instanceName)
+	}
+}
+
+// These policy checks run the outcome calculation without a live worker.
+// The scheduled worker tests cover publishing a successor through its claim.
+func scheduleFixtureSuccessor(m *Monitor, task ScheduledTask) {
+	if next, ok := m.nextScheduledPoll(task); ok {
+		m.taskQueue.Upsert(next)
 	}
 }

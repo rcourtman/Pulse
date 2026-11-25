@@ -18,7 +18,7 @@ import (
 func pollAndReschedule(t *testing.T, m *Monitor, task ScheduledTask, poll func()) ScheduledTask {
 	t.Helper()
 	poll()
-	m.rescheduleTask(task)
+	scheduleFixtureSuccessor(m, task)
 	next, ok := m.taskQueue.Get(task.InstanceType, task.InstanceName)
 	if !ok {
 		if m.deadLetterQueue.Size() == 0 {

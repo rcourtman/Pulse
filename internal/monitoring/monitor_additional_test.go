@@ -2480,7 +2480,8 @@ func TestScheduledPollProgressClearsOnSlotCancellation(t *testing.T) {
 		defer cancel()
 		reg := prometheus.NewRegistry()
 		m := &Monitor{taskQueue: NewTaskQueue(), pollMetrics: newPollMetrics(reg)}
-		m.taskQueue.Upsert(ScheduledTask{InstanceType: InstanceTypePVE, InstanceName: "fixture-cancel", NextRun: time.Now()})
+		task := ScheduledTask{InstanceType: InstanceTypePVE, InstanceName: "fixture-cancel", NextRun: time.Now()}
+		m.taskQueue.Upsert(task)
 		limiter := newPollTaskWorkerLimiter(1)
 		if !limiter.acquire(ctx) {
 			t.Fatal("could not reserve fixture slot")
@@ -2494,8 +2495,208 @@ func TestScheduledPollProgressClearsOnSlotCancellation(t *testing.T) {
 		time.Sleep(defaultTaskTimeout + time.Second)
 		synctest.Wait()
 		assertClaimedPollOverdue(t, reg, 1, 0)
+		m.taskQueue.upsertPlan(task)
+		if m.taskQueue.Size() != 0 {
+			t.Fatal("a poll awaiting a process slot must keep owning the target")
+		}
 		cancel()
 		<-done
 		assertClaimedPollOverdue(t, reg, 0, 0)
+		m.taskQueue.upsertPlan(task)
+		if m.taskQueue.Size() != 1 {
+			t.Fatal("slot cancellation did not release the claim")
+		}
 	})
+}
+
+func TestScheduledPollDoesNotTakeSiblingSlot(t *testing.T) {
+	for _, tc := range []struct {
+		name             string
+		adaptive, shared bool
+	}{
+		{name: "fixed-local"},
+		{name: "fixed-process", shared: true},
+		{name: "adaptive-local", adaptive: true},
+		{name: "adaptive-process", adaptive: true, shared: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			synctest.Test(t, func(t *testing.T) {
+				const (
+					slow     = "fixture-slow"
+					peer     = "fixture-peer"
+					cadence  = 10 * time.Second
+					budget   = 30 * time.Second
+					backoff  = 5 * time.Second
+					fixtTick = 250 * time.Millisecond // Observe after the queue's empty timer.
+				)
+				ctx, cancel := context.WithCancel(context.Background())
+				defer cancel()
+				release := make(chan struct{})
+				unblock := sync.OnceFunc(func() { close(release) })
+				defer unblock()
+				start := time.Now()
+				var slowStarts atomic.Int32
+				physicalDisks := false
+				m := &Monitor{
+					config: &config.Config{PVEPollingInterval: cadence, PVEInstances: []config.PVEInstance{
+						{Name: slow, MonitorPhysicalDisks: &physicalDisks},
+						{Name: peer, MonitorPhysicalDisks: &physicalDisks},
+					}},
+					state: models.NewState(), alertManager: &alerts.Manager{}, runtimeCtx: ctx,
+					metricsHistory: NewMetricsHistory(16, time.Hour),
+					taskQueue:      NewTaskQueue(), pollTimeout: budget, startTime: start,
+					pollStatusMap: make(map[string]*pollStatus), lastOutcome: make(map[string]taskOutcome),
+					failureCounts: make(map[string]int), circuitBreakers: make(map[string]*circuitBreaker),
+					maxRetryAttempts: 5, backoffCfg: backoffConfig{Initial: backoff},
+					lastClusterCheck: map[string]time.Time{slow: start, peer: start},
+					nodeLastOnline:   make(map[string]time.Time),
+					nodeRRDMemCache:  make(map[string]rrdMemCacheEntry),
+					pveClients: map[string]PVEClientInterface{
+						slow: &pollWorkFixturePVE{getNodes: func(ctx context.Context) ([]proxmox.Node, error) {
+							// Both the original request and an erroneous second request
+							// hold their worker until the test releases the source.
+							slowStarts.Add(1)
+							select {
+							case <-release:
+								return []proxmox.Node{}, nil
+							default:
+								<-release
+								return nil, ctx.Err()
+							}
+						}},
+					},
+				}
+				retryDelay := backoff
+				if tc.adaptive {
+					m.config.AdaptivePollingEnabled = true
+					m.config.AdaptivePollingMaxInterval = cadence
+					retryDelay = 4 * time.Second // Existing tight-cadence cap.
+					m.scheduler = NewAdaptiveScheduler(SchedulerConfig{BaseInterval: cadence, MinInterval: cadence, MaxInterval: cadence}, nil, nil, nil)
+				}
+				m.executor = newRealExecutor(m)
+				if tc.shared {
+					go m.dispatchTaskWorkers(ctx, newPollTaskWorkerLimiter(2))
+				} else {
+					go m.taskWorker(ctx, 0)
+					go m.taskWorker(ctx, 1)
+				}
+
+				m.poll(ctx, nil)
+				time.Sleep(fixtTick)
+				synctest.Wait()
+				if n := slowStarts.Load(); n != 1 {
+					t.Fatalf("first ordinary poll did not hold exactly one worker: %d", n)
+				}
+
+				// A later planning tick sees the slow connection again. Only
+				// after the duplicate could enter the spare slot do we add a
+				// healthy peer as the next inventory change.
+				time.Sleep(cadence)
+				m.poll(ctx, nil)
+				time.Sleep(fixtTick)
+				synctest.Wait()
+				m.mu.Lock()
+				m.pveClients[peer] = &stubPVEClient{nodes: []proxmox.Node{
+					{Node: peer, Status: "online", CPU: 0.42, Uptime: 36000},
+				}}
+				m.mu.Unlock()
+				m.poll(ctx, nil)
+				time.Sleep(fixtTick)
+				synctest.Wait()
+
+				nodes := m.state.GetSnapshot().Nodes
+				t.Logf("while slow poll is held: source calls=%d, peer rows=%d", slowStarts.Load(), len(nodes))
+				if slowStarts.Load() != 1 || len(nodes) != 1 || nodes[0].Name != peer || nodes[0].CPU != 0.42 {
+					t.Fatalf("the slow connection must use one worker while the peer publishes; calls=%d, nodes=%+v", slowStarts.Load(), nodes)
+				}
+				// A node can reach the snapshot before the rest of its poll runs.
+				// Require the ordinary history write as well.
+				history := m.metricsHistory.GetNodeMetrics(nodes[0].ID, "cpu", time.Minute)
+				if len(history) != 1 || history[0].Value != 42 {
+					t.Fatalf("healthy peer did not complete the CPU history write: %+v", history)
+				}
+
+				time.Sleep(budget)
+				synctest.Wait()
+				m.poll(ctx, nil)
+				time.Sleep(fixtTick)
+				synctest.Wait()
+				if slowStarts.Load() != 1 {
+					t.Fatal("expiry released a claim before the original provider call returned")
+				}
+
+				unblock()
+				synctest.Wait()
+				retry, ok := m.taskQueue.Get(InstanceTypePVE, slow)
+				if !ok || retry.NextRun.Sub(time.Now()) != retryDelay {
+					t.Fatalf("returned timeout must enter its normal retry delay, got %+v, queued=%v", retry, ok)
+				}
+				time.Sleep(retryDelay)
+				synctest.Wait()
+				if n := slowStarts.Load(); n != 2 || m.pollStatusMap[schedulerKey(InstanceTypePVE, slow)].LastSuccess.IsZero() {
+					t.Fatalf("same connection did not resume its next scheduled poll, starts=%d", n)
+				}
+			})
+		})
+	}
+}
+
+func TestScheduledPollClaimPreservesExplicitEdits(t *testing.T) {
+	for _, action := range []string{"replace", "remove", "remove-then-replace", "replace-then-remove", "normal", "abandon"} {
+		t.Run(action, func(t *testing.T) {
+			q := NewTaskQueue()
+			target := ScheduledTask{InstanceType: InstanceTypeAvailability, InstanceName: "fixture-target", NextRun: time.Now()}
+			q.Upsert(target)
+			claimed, ok := q.WaitNext(t.Context())
+			if !ok || claimed != target {
+				t.Fatalf("initial claim = %+v, %v", claimed, ok)
+			}
+			next, edit, lastEdit := target, target, target
+			next.Interval = time.Minute
+			edit.Interval = 20 * time.Second
+			lastEdit.Interval = 30 * time.Second
+			switch action {
+			case "replace", "replace-then-remove":
+				q.Upsert(edit)
+				q.Upsert(lastEdit)
+			case "remove-then-replace":
+				q.Remove(target.InstanceType, target.InstanceName)
+				q.Upsert(lastEdit)
+			}
+			if action == "remove" || action == "replace-then-remove" {
+				q.Remove(target.InstanceType, target.InstanceName)
+			}
+			q.upsertPlan(target)
+			if got, available := q.Get(target.InstanceType, target.InstanceName); available || q.Size() != 0 {
+				t.Fatalf("claimed target is not queued, got %+v, %v, size %d", got, available, q.Size())
+			}
+			// Identity is not a global name lock: another provider with the
+			// same name can still dispatch while the first claim is held.
+			namesake := target
+			namesake.InstanceType = InstanceTypePVE
+			q.upsertPlan(namesake)
+			sibling, ok := q.WaitNext(t.Context())
+			if !ok || sibling != namesake {
+				t.Fatalf("namesake claim = %+v, %v", sibling, ok)
+			}
+			q.completeClaim(sibling, ScheduledTask{}, false)
+
+			q.completeClaim(claimed, next, action != "abandon")
+			got, queued := q.Get(target.InstanceType, target.InstanceName)
+			switch action {
+			case "replace", "remove-then-replace":
+				if !queued || got != lastEdit {
+					t.Fatalf("normal reschedule replaced the explicit edit: %+v, %v", got, queued)
+				}
+			case "remove", "replace-then-remove", "abandon":
+				if queued {
+					t.Fatalf("completion resurrected a discarded schedule: %+v", got)
+				}
+			case "normal":
+				if !queued || got != next {
+					t.Fatalf("ordinary successor = %+v, %v", got, queued)
+				}
+			}
+		})
+	}
 }

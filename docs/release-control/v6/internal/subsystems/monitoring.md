@@ -49,14 +49,30 @@ computed at scrape time from active claims, without taking a provider,
 monitor or queue lock. An expired context does not end a claim that has
 not returned. A returned failure in backoff is not an active claim.
 
+Removing a due poll from the heap claims its provider type and connection
+within that monitor. Only one worker can own that key, including while waiting
+for a process slot. Periodic replanning cannot queue another attempt for a
+claimed key. Its next scheduled attempt becomes eligible when the original
+worker returns; the existing outcome, backoff and interval rules choose that
+successor. A direct queue edit retains the latest replacement, or cancels the
+successor on removal, without starting an overlapping read. Other keys,
+including the same name on another provider, remain independently eligible.
+
 Both gauges are zero when nothing in their stage exceeds the budget. Neither
 gauge measures work still in the queue, agent ingestion, alert evaluation
-or successful data collection. Existing liveness/readiness, polling,
-backoff, alerting and metrics listener access are unchanged.
+or successful data collection. Liveness/readiness, alert rules, worker
+limits and metrics listener access are unchanged.
 `TestScheduledPollWorkProgressInExporter` drives the ordinary PVE
 poll path with controlled slot and provider holds, a healthy sibling, a
 returned failure and the next successful read. Cancellation, scraping during
 monitor lock contention and the oldest active claim are checked separately.
+`TestScheduledPollDoesNotTakeSiblingSlot` drives repeated real planning
+and PVE reads with fixed and adaptive polling under both worker modes. A held
+read is not duplicated even after its context expires, an unrelated node
+still publishes, and the held connection enters its ordinary retry on return.
+`TestScheduledPollClaimPreservesExplicitEdits` checks queue replacement,
+removal, completion and provider identity. These fixtures do not establish
+an installed outage's cause or recovery.
 
 ### Snapshot memory state comes from the snapshot, not its guest kind (14 November 2026)
 
