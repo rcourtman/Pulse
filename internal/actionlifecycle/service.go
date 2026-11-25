@@ -249,6 +249,8 @@ type PlanOptions struct {
 	// PolicyFactors are trusted, bounded plan-time authorities consulted by
 	// an internal broker in addition to the capability registry.
 	PolicyFactors []unified.ActionPolicyAuthorityFactor
+	// TTL overrides the planner's default plan expiration window when positive.
+	TTL time.Duration
 }
 
 type DecisionAuthorizer interface {
@@ -554,7 +556,7 @@ func (s *Service) PlanWithOptions(ctx context.Context, orgID string, req unified
 		}
 	}
 
-	planner := actionplanner.Planner{}
+	planner := actionplanner.Planner{TTL: opts.TTL}
 	var plan unified.ActionPlan
 	if opts.ApprovalRequirement != nil || len(opts.PolicyFactors) > 0 {
 		requirement := unified.ApprovalRequirement{}
