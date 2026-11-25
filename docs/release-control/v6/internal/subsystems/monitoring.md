@@ -4643,6 +4643,19 @@ Merged-source and single-observation regressions also cover loss of the live
 tail. The node alert-pass benchmark measures the source-resolution cost on
 already-readable live windows without relaxing their readiness policy.
 
+PBS CPU and memory alerts evaluate the configured instance's native
+node-status observations. The Backups chart keeps its existing target and
+host-agent preference. Its fallback `agent` compatibility series is not
+alert evidence: a host agent can have the same bare ID. Valid node-status
+samples also enter the dedicated `pbs` family, keyed by the PBS monitor's
+source ID, with a `pbs:` prefix in the in-memory ring. The native alert
+reader uses only this family, not the chart resolver, a peer connection, or
+pre-upgrade chart history. An installation must collect enough native samples
+after upgrading before its first rolling evaluation; a denied or incomplete
+node-status read fills no gap. Tests exercise the production poll writer,
+unchanged chart read, collision isolation, durable history after loss of the
+live tail, and the factory CPU rolling rule.
+
 Monitoring ingest keeps mock mode hermetic. The unified read path already
 substitutes the mock snapshot wholesale, so anything that runs after that
 substitution has to be suppressed explicitly rather than assumed hidden. Server

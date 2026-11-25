@@ -58,7 +58,11 @@ func (m *Monitor) metricWindowPoints(request alerts.MetricWindowRequest) ([]aler
 	if strings.EqualFold(resourceType, "agent") {
 		storeID = strings.TrimPrefix(resourceID, "agent:")
 	}
-	if target := m.metricWindowTarget(request.ResourceID, request.ResourceType); target != nil {
+	// CheckPBS supplies the native monitor ID. Its chart target is allowed
+	// to prefer a linked host; it cannot supply the PBS API alert's window.
+	if strings.EqualFold(resourceType, pbsNodeMetricsFamily) {
+		memoryID, storeType = pbsNodeMetricHistoryKey(resourceID), pbsNodeMetricsFamily
+	} else if target := m.metricWindowTarget(request.ResourceID, request.ResourceType); target != nil {
 		if strings.TrimSpace(target.ResourceType) != "" {
 			resourceType = strings.TrimSpace(target.ResourceType)
 		}

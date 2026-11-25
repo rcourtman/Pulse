@@ -14,6 +14,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	agentsdocker "github.com/rcourtman/pulse-go-rewrite/pkg/agents/docker"
 	agentshost "github.com/rcourtman/pulse-go-rewrite/pkg/agents/host"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/pbs"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 )
@@ -198,6 +199,82 @@ func TestMetricWindowPointsReadsHostAgentHistoryFromAlertReference(t *testing.T)
 
 			points, readAt := readCPUWindow(t, m, "agent:"+host.ID, "agent")
 			assertOneCPUSample(t, "host agent CPU", points, host.CPUUsage, reportedAt, readAt)
+		})
+	}
+}
+
+func TestFactoryPBSRollingCPUUsesOnlyNativeHistory(t *testing.T) {
+	useRealMetricWindowMode(t)
+	for _, persistent := range []bool{false, true} {
+		t.Run(persistenceName(persistent), func(t *testing.T) {
+			m := newMetricWindowRegistryMonitor(t, persistent)
+			m.alertManager.Stop()
+			m.alertManager = alerts.NewManagerWithDataDir(t.TempDir())
+			m.alertManager.SetMetricWindowProvider(m.metricWindowPoints)
+			const name = "backup"
+			instance := models.PBSInstance{
+				ID: PBSMonitorResourceID(name), Name: name,
+				Status: "online", ConnectionHealth: "healthy", CPU: 0.92, Memory: 25,
+			}
+			m.state.UpdatePBSInstance(instance)
+			m.SetResourceStore(newMetricWindowAdapter())
+
+			cfg := m.alertManager.GetConfig()
+			if cfg.MetricEvaluationWindows["all"]["cpu"] != 300 || cfg.PBSDefaults.CPU.Trigger != 80 {
+				t.Fatal("expected the factory five-minute CPU window and 80% PBS threshold")
+			}
+			// Confirmation delay is separate. This test controls sample
+			// coverage without waiting for the wall-clock grace period.
+			cfg.MetricTimeThresholds = map[string]map[string]int{"pbs": {"cpu": 0}}
+			m.alertManager.UpdateConfig(cfg)
+
+			at := time.Now().UTC().Truncate(time.Second)
+			ages := []time.Duration{285 * time.Second, 190 * time.Second, 95 * time.Second, 5 * time.Second}
+			peer := &pbs.NodeStatus{CPU: 0.99, Memory: pbs.Memory{Used: 1, Total: 4}}
+			for _, age := range ages {
+				taken := at.Add(-age)
+				// Agent history (or pre-upgrade PBS chart history) may have
+				// the same bare ID. A genuine PBS peer may also have a full
+				// window. Neither can make this PBS source eligible.
+				m.metricsHistory.AddGuestMetric("agent:"+instance.ID, "cpu", 99, taken)
+				if persistent {
+					m.metricsStore.Write("agent", instance.ID, "cpu", 99, taken)
+				}
+				m.recordPBSNodeHistory(PBSMonitorResourceID("other"), peer, taken)
+			}
+			if persistent {
+				dropInMemoryTail(m)
+			}
+			if points, _ := readCPUWindow(t, m, instance.ID, "PBS"); len(points) != 0 {
+				t.Fatalf("PBS borrowed a window without native history: %+v", points)
+			}
+			m.alertManager.CheckPBS(instance)
+			if got := m.alertManager.GetActiveAlerts(); len(got) != 0 {
+				t.Fatalf("PBS fired without native window coverage: %+v", got)
+			}
+
+			native := &pbs.NodeStatus{CPU: 0.92, Memory: pbs.Memory{Used: 1, Total: 4}}
+			for _, age := range ages {
+				m.recordPBSNodeHistory(instance.ID, native, at.Add(-age))
+			}
+			if persistent {
+				dropInMemoryTail(m)
+			}
+			points, _ := readCPUWindow(t, m, instance.ID, "PBS")
+			if len(points) != len(ages) {
+				t.Fatalf("PBS native window has %d points; want %d", len(points), len(ages))
+			}
+			for _, point := range points {
+				if point.Value != 92 {
+					t.Fatalf("PBS native window value = %v; want 92%%", point.Value)
+				}
+			}
+			m.alertManager.CheckPBS(instance)
+			got := m.alertManager.GetActiveAlerts()
+			if len(got) != 1 || got[0].ResourceID != instance.ID || got[0].Type != "cpu" ||
+				got[0].Value != 92 || got[0].Metadata["evaluationMode"] != "rolling_average" {
+				t.Fatalf("expected one rolling CPU alert for %s at 92%%: %+v", instance.ID, got)
+			}
 		})
 	}
 }

@@ -740,11 +740,16 @@ func (m *Monitor) pollPBSBackupsAsync(instanceName string, client *pbs.Client, i
 	}()
 }
 
-// recordPBSNodeHistory writes the API-observed CPU and memory measurements to
-// the PBS service's existing metrics target (agent:<PBS source ID>). When no
-// host agent can be corroborated, the Backups drawer still has useful history
-// instead of querying an unwritten key. Host-agent history remains separate and
-// takes precedence in the drawer when a unique host is linked. A failed or
+const pbsNodeMetricsFamily = "pbs"
+
+func pbsNodeMetricHistoryKey(serviceID string) string {
+	return pbsNodeMetricsFamily + ":" + serviceID
+}
+
+// recordPBSNodeHistory keeps the existing Backups drawer history target
+// (agent:<PBS source ID>) while keeping alert samples in their own family.
+// A host agent can use the same bare identifier: the chart's compatibility
+// series then cannot prove that a sample came from the PBS API. A failed or
 // incomplete node-status response must never produce an apparent zero sample.
 func (m *Monitor) recordPBSNodeHistory(serviceID string, status *pbs.NodeStatus, observedAt time.Time) {
 	serviceID = strings.TrimSpace(serviceID)
@@ -759,14 +764,17 @@ func (m *Monitor) recordPBSNodeHistory(serviceID string, status *pbs.NodeStatus,
 	}
 	memoryPercent := float64(status.Memory.Used) / float64(status.Memory.Total) * 100
 	if m.metricsHistory != nil {
-		key := "agent:" + serviceID
-		m.metricsHistory.AddGuestMetric(key, "cpu", cpuPercent, observedAt)
-		m.metricsHistory.AddGuestMetric(key, "memory", memoryPercent, observedAt)
+		for _, key := range [2]string{"agent:" + serviceID, pbsNodeMetricHistoryKey(serviceID)} {
+			m.metricsHistory.AddGuestMetric(key, "cpu", cpuPercent, observedAt)
+			m.metricsHistory.AddGuestMetric(key, "memory", memoryPercent, observedAt)
+		}
 	}
 	if m.metricsStore != nil {
 		m.metricsStore.WriteBatchBounded([]metrics.WriteMetric{
 			{ResourceType: "agent", ResourceID: serviceID, MetricType: "cpu", Value: cpuPercent, Timestamp: observedAt, Tier: metrics.TierRaw},
 			{ResourceType: "agent", ResourceID: serviceID, MetricType: "memory", Value: memoryPercent, Timestamp: observedAt, Tier: metrics.TierRaw},
+			{ResourceType: pbsNodeMetricsFamily, ResourceID: serviceID, MetricType: "cpu", Value: cpuPercent, Timestamp: observedAt, Tier: metrics.TierRaw},
+			{ResourceType: pbsNodeMetricsFamily, ResourceID: serviceID, MetricType: "memory", Value: memoryPercent, Timestamp: observedAt, Tier: metrics.TierRaw},
 		})
 	}
 }
