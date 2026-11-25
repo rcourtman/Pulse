@@ -26,8 +26,9 @@ func resourceFromProxmoxNode(node models.Node, linkedHost *models.Host) (Resourc
 
 	endpointHost := extractHostname(node.Host)
 	identity := ResourceIdentity{
-		Hostnames:   uniqueStrings(append([]string{node.Name}, node.NativeNameAliases...)),
-		ClusterName: proxmoxNodeIdentityClusterName(node),
+		Hostnames:        uniqueStrings(append([]string{node.Name}, node.NativeNameAliases...)),
+		ClusterName:      proxmoxNodeIdentityClusterName(node),
+		ProxmoxClusterID: strings.TrimSpace(node.ClusterID),
 	}
 	if endpointHost != "" {
 		if parsed := net.ParseIP(endpointHost); parsed != nil {
@@ -60,6 +61,7 @@ func resourceFromProxmoxNode(node models.Node, linkedHost *models.Host) (Resourc
 		NodeAliases:                  append([]string(nil), node.NativeNameAliases...),
 		NodeDisplayName:              nodeDisplayName,
 		ClusterName:                  node.ClusterName,
+		ClusterID:                    strings.TrimSpace(node.ClusterID),
 		IsClusterMember:              node.IsClusterMember,
 		Instance:                     node.Instance,
 		HostURL:                      node.Host,
@@ -1877,6 +1879,8 @@ func resourceFromVM(vm models.VM) (Resource, ResourceIdentity) {
 		Pool:               vm.Pool,
 		Instance:           vm.Instance,
 		VMID:               vm.VMID,
+		GuestUID:           strings.TrimSpace(vm.GuestUID),
+		GuestRTime:         vm.GuestRTime,
 		CPUs:               vm.CPUs,
 		Uptime:             vm.Uptime,
 		Template:           vm.Template,
@@ -1919,6 +1923,7 @@ func resourceFromVM(vm models.VM) (Resource, ResourceIdentity) {
 		Hostnames:       uniqueStrings([]string{vm.Name}),
 		IPAddresses:     uniqueStrings(vm.IPAddresses),
 		ProxmoxGuestKey: ProxmoxGuestIdentityKey(vm.Instance, vm.VMID),
+		ProxmoxGuestUID: strings.TrimSpace(vm.GuestUID),
 	}
 	return resource, identity
 }
@@ -1948,6 +1953,8 @@ func resourceFromContainer(ct models.Container) (Resource, ResourceIdentity) {
 		Pool:              ct.Pool,
 		Instance:          ct.Instance,
 		VMID:              ct.VMID,
+		GuestUID:          strings.TrimSpace(ct.GuestUID),
+		GuestRTime:        ct.GuestRTime,
 		ContainerType:     ct.Type,
 		IsOCI:             ct.IsOCI,
 		CPUs:              ct.CPUs,
@@ -1984,6 +1991,7 @@ func resourceFromContainer(ct models.Container) (Resource, ResourceIdentity) {
 		Hostnames:       uniqueStrings([]string{ct.Name}),
 		IPAddresses:     uniqueStrings(ct.IPAddresses),
 		ProxmoxGuestKey: ProxmoxGuestIdentityKey(ct.Instance, ct.VMID),
+		ProxmoxGuestUID: strings.TrimSpace(ct.GuestUID),
 	}
 	return resource, identity
 }

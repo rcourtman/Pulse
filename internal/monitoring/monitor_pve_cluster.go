@@ -400,6 +400,21 @@ func (m *Monitor) reconcilePVENodeInventory(
 			Msg("Cluster identity changed during membership read - retaining last-known Proxmox nodes")
 		return m.reconcileUncertainPVENodeInventory(instanceName, instanceCfg, current, previous)
 	}
+	clusterID := proxmox.ExtractClusterID(statuses)
+	if clusterID != "" {
+		for _, prevNode := range previous {
+			prevClusterID := strings.TrimSpace(prevNode.ClusterID)
+			if prevClusterID != "" && !strings.EqualFold(prevClusterID, clusterID) {
+				m.clearPVEMembershipMisses(instanceName)
+				log.Warn().
+					Str("instance", instanceName).
+					Str("previousClusterId", prevClusterID).
+					Str("observedClusterId", clusterID).
+					Msg("Proxmox cluster-id changed during membership read - retaining last-known Proxmox nodes")
+				return m.reconcileUncertainPVENodeInventory(instanceName, instanceCfg, current, previous)
+			}
+		}
+	}
 	members, pendingRemovals := m.confirmPVEMembershipRemovals(
 		instanceName,
 		members,
@@ -443,6 +458,13 @@ func (m *Monitor) reconcilePVENodeInventory(
 			node.CPU = 0
 			node.Uptime = 0
 			m.boundCarriedNodeTemperature(&node, time.Now())
+		}
+		if clusterID != "" {
+			node.ClusterID = clusterID
+		} else if node.ClusterID == "" {
+			if prevNode, ok := previousByName[key]; ok {
+				node.ClusterID = prevNode.ClusterID
+			}
 		}
 		reconciled[key] = node
 	}

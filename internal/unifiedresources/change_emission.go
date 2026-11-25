@@ -630,6 +630,8 @@ func resourceIdentityEquivalent(a, b ResourceIdentity) bool {
 		a.DMIUUID == b.DMIUUID &&
 		a.ClusterName == b.ClusterName &&
 		a.ProxmoxGuestKey == b.ProxmoxGuestKey &&
+		a.ProxmoxGuestUID == b.ProxmoxGuestUID &&
+		a.ProxmoxClusterID == b.ProxmoxClusterID &&
 		sameStringSet(a.Hostnames, b.Hostnames) &&
 		sameStringSet(a.IPAddresses, b.IPAddresses) &&
 		sameStringSet(a.MACAddresses, b.MACAddresses)

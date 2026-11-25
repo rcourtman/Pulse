@@ -144,11 +144,24 @@ func (m *Monitor) buildContainerFromClusterResource(
 		diskFree = 0
 	}
 
+	guestUID := strings.TrimSpace(res.UID)
+	guestRTime := res.RTime
+	if statusSnapshot != nil {
+		if guestUID == "" {
+			guestUID = strings.TrimSpace(statusSnapshot.UID)
+		}
+		if guestRTime == 0 {
+			guestRTime = statusSnapshot.RTime
+		}
+	}
+
 	lastSeen := time.Now()
 	container := models.Container{
-		ID:       guestID,
-		VMID:     res.VMID,
-		Name:     res.Name,
+		ID:         guestID,
+		VMID:       res.VMID,
+		GuestUID:   guestUID,
+		GuestRTime: guestRTime,
+		Name:       res.Name,
 		Node:     res.Node,
 		Pool:     strings.TrimSpace(res.Pool),
 		Instance: instanceName,

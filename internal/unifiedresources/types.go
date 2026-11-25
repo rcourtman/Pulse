@@ -294,6 +294,10 @@ type ResourceIdentity struct {
 	// a cluster, so canonical IDs derived from this key survive live
 	// migration between cluster nodes (#1669).
 	ProxmoxGuestKey string `json:"proxmoxGuestKey,omitempty"`
+	// ProxmoxGuestUID is the Proxmox VE 9.3 persistent 100-bit guest identity.
+	ProxmoxGuestUID string `json:"proxmoxGuestUid,omitempty"`
+	// ProxmoxClusterID is the Proxmox VE 9.3 persistent cluster or standalone host ID.
+	ProxmoxClusterID string `json:"proxmoxClusterId,omitempty"`
 }
 
 // MatchResult describes a potential identity match.
@@ -349,12 +353,15 @@ type ProxmoxData struct {
 	NodeDisplayName              string              `json:"nodeDisplayName,omitempty"`
 	Pool                         string              `json:"pool,omitempty"`
 	ClusterName                  string              `json:"clusterName,omitempty"`
+	ClusterID                    string              `json:"clusterId,omitempty"`
 	IsClusterMember              bool                `json:"isClusterMember,omitempty"`
 	Instance                     string              `json:"instance,omitempty"`
 	HostURL                      string              `json:"host,omitempty"`
 	GuestURL                     string              `json:"guestUrl,omitempty"`
 	ConnectionHealth             string              `json:"connectionHealth,omitempty"`
 	VMID                         int                 `json:"vmid,omitempty"`
+	GuestUID                     string              `json:"guestUid,omitempty"`
+	GuestRTime                   int64               `json:"guestRTime,omitempty"`
 	ContainerType                string              `json:"containerType,omitempty"`
 	IsOCI                        bool                `json:"isOci,omitempty"`
 	CPUs                         int                 `json:"cpus,omitempty"`

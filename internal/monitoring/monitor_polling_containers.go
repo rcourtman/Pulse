@@ -215,9 +215,11 @@ func (m *Monitor) collectContainersWithNodes(ctx context.Context, instanceName s
 
 				// Create container model
 				modelContainer := models.Container{
-					ID:       guestID,
-					VMID:     int(container.VMID),
-					Name:     container.Name,
+					ID:         guestID,
+					VMID:       int(container.VMID),
+					GuestUID:   strings.TrimSpace(container.UID),
+					GuestRTime: container.RTime,
+					Name:       container.Name,
 					Node:     n.Node,
 					Pool:     strings.TrimSpace(container.Pool),
 					Instance: instanceName,

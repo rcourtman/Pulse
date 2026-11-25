@@ -302,6 +302,7 @@ type Node struct {
 	ConnectionHealth             string                 `json:"connectionHealth"`
 	IsClusterMember              bool                   `json:"isClusterMember"` // True if part of a cluster
 	ClusterName                  string                 `json:"clusterName"`     // Name of cluster (empty if standalone)
+	ClusterID                    string                 `json:"clusterId,omitempty"`
 	ProviderScopedIdentity       bool                   `json:"providerScopedIdentity,omitempty"`
 	// TLSFingerprint is the TOFU-captured TLS certificate fingerprint recorded
 	// in configuration for this node's API endpoint, when known. It is machine
@@ -340,6 +341,8 @@ func (n Node) NormalizeCollections() Node {
 type VM struct {
 	ID                 string                  `json:"id"`
 	VMID               int                     `json:"vmid"`
+	GuestUID           string                  `json:"guestUid,omitempty"`
+	GuestRTime         int64                   `json:"guestRTime,omitempty"`
 	Name               string                  `json:"name"`
 	Node               string                  `json:"node"`
 	Pool               string                  `json:"pool,omitempty"`
@@ -402,6 +405,8 @@ func (v VM) NormalizeCollections() VM {
 type Container struct {
 	ID             string         `json:"id"`
 	VMID           int            `json:"vmid"`
+	GuestUID       string         `json:"guestUid,omitempty"`
+	GuestRTime     int64          `json:"guestRTime,omitempty"`
 	Name           string         `json:"name"`
 	Node           string         `json:"node"`
 	Pool           string         `json:"pool,omitempty"`

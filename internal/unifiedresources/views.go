@@ -176,6 +176,20 @@ func (v VMView) VMID() int {
 	return v.r.Proxmox.VMID
 }
 
+func (v VMView) GuestUID() string {
+	if v.r == nil || v.r.Proxmox == nil {
+		return ""
+	}
+	return strings.TrimSpace(v.r.Proxmox.GuestUID)
+}
+
+func (v VMView) GuestRTime() int64 {
+	if v.r == nil || v.r.Proxmox == nil {
+		return 0
+	}
+	return v.r.Proxmox.GuestRTime
+}
+
 func (v VMView) SourceID() string {
 	if v.r == nil || v.r.Proxmox == nil {
 		return ""
@@ -534,6 +548,20 @@ func (v ContainerView) VMID() int {
 	return v.r.Proxmox.VMID
 }
 
+func (v ContainerView) GuestUID() string {
+	if v.r == nil || v.r.Proxmox == nil {
+		return ""
+	}
+	return strings.TrimSpace(v.r.Proxmox.GuestUID)
+}
+
+func (v ContainerView) GuestRTime() int64 {
+	if v.r == nil || v.r.Proxmox == nil {
+		return 0
+	}
+	return v.r.Proxmox.GuestRTime
+}
+
 func (v ContainerView) SourceID() string {
 	if v.r == nil || v.r.Proxmox == nil {
 		return ""
@@ -860,6 +888,13 @@ func (v NodeView) ClusterName() string {
 		return ""
 	}
 	return strings.TrimSpace(v.r.Proxmox.ClusterName)
+}
+
+func (v NodeView) ClusterID() string {
+	if v.r == nil || v.r.Proxmox == nil {
+		return ""
+	}
+	return strings.TrimSpace(v.r.Proxmox.ClusterID)
 }
 
 func (v NodeView) IsClusterMember() bool {

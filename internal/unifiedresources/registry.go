@@ -220,6 +220,16 @@ type ResourceRegistry struct {
 	// stale pass without thresholds of its own and the presentation listing
 	// judge sightings by them; nil means the defaults.
 	staleThresholds map[DataSource]time.Duration
+
+	// proxmoxGuestSlotUIDs remembers the first persistent Proxmox VE 9.3+
+	// guest UID bound to an (type, instance, vmid) slot so a later guest that
+	// reuses the same VMID mints a fresh canonical ID even after the original
+	// guest was deleted.
+	proxmoxGuestSlotUIDs map[string]string
+	// proxmoxGuestUIDIndex maps (type, instance, guestUID) to its canonical ID
+	// so live migrations keep the same canonical ID whether it came from the
+	// slot key or a VMID-reuse UID key.
+	proxmoxGuestUIDIndex map[string]string
 }
 
 // agentNodeCandidate pairs a resources-map key with its entry so the indexed
@@ -273,6 +283,8 @@ func NewRegistryWithStaleThresholds(store ResourceStore, thresholds map[DataSour
 		exclusions:             make(map[string]time.Time),
 		canonicalMetadataDirty: true,
 		staleThresholds:        cloneStaleThresholds(thresholds),
+		proxmoxGuestSlotUIDs:   make(map[string]string),
+		proxmoxGuestUIDIndex:   make(map[string]string),
 	}
 
 	rr.bySource[SourceProxmox] = make(map[string]string)
@@ -2297,6 +2309,12 @@ func (rr *ResourceRegistry) declareGuestSupersededEras(newID string, resourceTyp
 		// derivation; there is no retired era to succeed from.
 		return successions
 	}
+	if expectedSlotID := ProxmoxGuestCanonicalID(resourceType, instance, vmid); expectedSlotID != "" && newID != expectedSlotID {
+		// A guest minted under a distinct PVE 9.3 UID canonical ID due to VMID
+		// reuse must never inherit the prior guest's node-scoped eras,
+		// operator overrides, or alert history.
+		return successions
+	}
 
 	// Project each alias directly instead of retaining a second slice of
 	// un-hashed source IDs for this guest.
@@ -3172,6 +3190,21 @@ func (rr *ResourceRegistry) ingestRecord(source DataSource, sourceID string, res
 		return rr.ingestAvailabilityCheckLocked(sourceID, resource, identity)
 	}
 
+	// If this Proxmox VE 9.3+ guest already has a canonical resource bound to
+	// its persistent UID, update it directly regardless of which cluster node
+	// currently hosts it.
+	if source == SourceProxmox && (resource.Type == ResourceTypeVM || resource.Type == ResourceTypeSystemContainer) {
+		if existing := rr.resolveProxmoxGuestUIDLocked(&resource); existing != nil {
+			if onlyMissing {
+				return ""
+			}
+			rr.mergeInto(existing, resource, source, sourceID)
+			rr.bySource[source][sourceID] = existing.ID
+			rr.recordProxmoxGuestUIDLocked(existing)
+			return existing.ID
+		}
+	}
+
 	// Rehydrated registries seed exact source mappings from the persisted
 	// unified snapshot. Honor that durable mapping before attempting weaker
 	// identity correlation, but fail closed if a colliding source key belongs
@@ -3179,19 +3212,24 @@ func (rr *ResourceRegistry) ingestRecord(source DataSource, sourceID string, res
 	// it is also refused when the slot now holds a different disk, and no
 	// later step may merge the observation into the refused disk either.
 	refusedDiskID := ""
+	refusedGuestID := ""
 	if mappedID := rr.bySource[source][sourceID]; mappedID != "" {
 		if existing := rr.resources[mappedID]; existing != nil &&
 			existing.Type == resource.Type &&
 			(resource.Type != ResourceTypePhysicalDisk ||
-				physicalDiskMatchScopeCompatible(existing, &resource)) {
+				physicalDiskMatchScopeCompatible(existing, &resource)) &&
+			!proxmoxNodesInDifferentClusters(existing, &resource) {
 			if source == SourceProxmox && resource.Type == ResourceTypePhysicalDisk &&
 				proxmoxDiskSlotHoldsAnotherDisk(existing, &resource) {
 				refusedDiskID = existing.ID
+			} else if source == SourceProxmox && proxmoxGuestSlotHoldsAnotherGuest(existing, &resource) {
+				refusedGuestID = existing.ID
 			} else {
 				if onlyMissing {
 					return ""
 				}
 				rr.mergeInto(existing, resource, source, sourceID)
+				rr.recordProxmoxGuestUIDLocked(existing)
 				return existing.ID
 			}
 		}
@@ -3257,6 +3295,26 @@ func (rr *ResourceRegistry) ingestRecord(source DataSource, sourceID string, res
 	if resource.Type == ResourceTypePhysicalDisk {
 		resource.ID = rr.physicalDiskIDForMachineLocked(resource.ID, candidateID, &resource, source, onlyMissing)
 	}
+	if source == SourceProxmox && (resource.Type == ResourceTypeVM || resource.Type == ResourceTypeSystemContainer) && resource.Proxmox != nil {
+		if guestUID := proxmoxGuestUID(&resource); guestUID != "" {
+			if resource.ID == refusedGuestID ||
+				proxmoxGuestSlotHoldsAnotherGuest(rr.resources[resource.ID], &resource) ||
+				rr.proxmoxGuestSlotConflictsLocked(&resource) {
+				if uidID := ProxmoxGuestUIDCanonicalID(resource.Type, resource.Proxmox.Instance, guestUID); uidID != "" {
+					resource.ID = uidID
+				}
+			}
+		}
+	}
+	if source == SourceProxmox && resource.Type == ResourceTypeAgent && resource.Proxmox != nil &&
+		proxmoxNodesInDifferentClusters(rr.resources[resource.ID], &resource) {
+		clusterID := strings.ToLower(strings.TrimSpace(resource.Proxmox.ClusterID))
+		if clusterID != "" {
+			resource.ID = buildHashID(resource.Type, fmt.Sprintf("proxmox-cluster:%s:%s", clusterID, sourceID))
+		} else {
+			resource.ID = candidateID
+		}
+	}
 	normalizeResourceRelationships(&resource)
 	if resource.ID == refusedDiskID {
 		resource.ID = candidateID
@@ -3275,6 +3333,7 @@ func (rr *ResourceRegistry) ingestRecord(source DataSource, sourceID string, res
 		}
 		rr.mergeInto(existing, resource, source, sourceID)
 		rr.bySource[source][sourceID] = existing.ID
+		rr.recordProxmoxGuestUIDLocked(existing)
 		rr.matcher.Add(existing.ID, existing.Identity)
 		return existing.ID
 	}
@@ -3283,6 +3342,7 @@ func (rr *ResourceRegistry) ingestRecord(source DataSource, sourceID string, res
 	rr.resources[resource.ID] = &resource
 	rr.indexPhysicalDiskHardwareLocked(&resource)
 	rr.bySource[source][sourceID] = resource.ID
+	rr.recordProxmoxGuestUIDLocked(&resource)
 	rr.matcher.Add(resource.ID, identity)
 
 	return resource.ID
@@ -3489,6 +3549,9 @@ func (rr *ResourceRegistry) findMatch(incoming Resource, candidateID string, onl
 			!physicalDiskMatchScopeCompatible(existing, &incoming) {
 			continue
 		}
+		if proxmoxNodesInDifferentClusters(existing, &incoming) {
+			continue
+		}
 		// A saved enrollment is withheld when its machine is present and never
 		// merged, so it still matches a host that re-enrolled under a new token.
 		if !onlyMissing && reportersUnderDifferentTokens(existing, &incoming) {
@@ -3598,6 +3661,120 @@ func physicalDiskMatchScopeCompatible(existing, incoming *Resource) bool {
 		return existingParent != "" && existingParent == incomingParent
 	}
 	return identitiesShareHostname(existing.Identity, incoming.Identity)
+}
+
+func proxmoxGuestUID(resource *Resource) string {
+	if resource == nil {
+		return ""
+	}
+	if resource.Proxmox != nil {
+		if uid := strings.TrimSpace(resource.Proxmox.GuestUID); uid != "" {
+			return strings.ToLower(uid)
+		}
+	}
+	return strings.ToLower(strings.TrimSpace(resource.Identity.ProxmoxGuestUID))
+}
+
+func proxmoxGuestSlotHoldsAnotherGuest(existing, incoming *Resource) bool {
+	if existing == nil || incoming == nil {
+		return false
+	}
+	if existing.Type != ResourceTypeVM && existing.Type != ResourceTypeSystemContainer {
+		return false
+	}
+	if incoming.Type != existing.Type {
+		return false
+	}
+	existingUID := proxmoxGuestUID(existing)
+	incomingUID := proxmoxGuestUID(incoming)
+	return existingUID != "" && incomingUID != "" && existingUID != incomingUID
+}
+
+func proxmoxNodesInDifferentClusters(existing, incoming *Resource) bool {
+	if existing == nil || incoming == nil || existing.Type != ResourceTypeAgent || incoming.Type != ResourceTypeAgent {
+		return false
+	}
+	existingID := ""
+	if existing.Proxmox != nil {
+		existingID = strings.TrimSpace(existing.Proxmox.ClusterID)
+	}
+	if existingID == "" {
+		existingID = strings.TrimSpace(existing.Identity.ProxmoxClusterID)
+	}
+	incomingID := ""
+	if incoming.Proxmox != nil {
+		incomingID = strings.TrimSpace(incoming.Proxmox.ClusterID)
+	}
+	if incomingID == "" {
+		incomingID = strings.TrimSpace(incoming.Identity.ProxmoxClusterID)
+	}
+	return existingID != "" && incomingID != "" && !strings.EqualFold(existingID, incomingID)
+}
+
+func (rr *ResourceRegistry) recordProxmoxGuestUIDLocked(resource *Resource) {
+	if resource == nil || resource.Proxmox == nil {
+		return
+	}
+	if resource.Type != ResourceTypeVM && resource.Type != ResourceTypeSystemContainer {
+		return
+	}
+	uid := proxmoxGuestUID(resource)
+	if uid == "" {
+		return
+	}
+	if rr.proxmoxGuestSlotUIDs == nil {
+		rr.proxmoxGuestSlotUIDs = make(map[string]string)
+	}
+	if rr.proxmoxGuestUIDIndex == nil {
+		rr.proxmoxGuestUIDIndex = make(map[string]string)
+	}
+	if slotKey := proxmoxGuestSlotKey(resource.Type, resource.Proxmox.Instance, resource.Proxmox.VMID); slotKey != "" {
+		if _, exists := rr.proxmoxGuestSlotUIDs[slotKey]; !exists {
+			rr.proxmoxGuestSlotUIDs[slotKey] = uid
+		}
+	}
+	if uidKey := proxmoxGuestUIDKey(resource.Type, resource.Proxmox.Instance, uid); uidKey != "" {
+		rr.proxmoxGuestUIDIndex[uidKey] = resource.ID
+	}
+}
+
+func (rr *ResourceRegistry) resolveProxmoxGuestUIDLocked(incoming *Resource) *Resource {
+	if incoming == nil || incoming.Proxmox == nil || rr.proxmoxGuestUIDIndex == nil {
+		return nil
+	}
+	uid := proxmoxGuestUID(incoming)
+	if uid == "" {
+		return nil
+	}
+	uidKey := proxmoxGuestUIDKey(incoming.Type, incoming.Proxmox.Instance, uid)
+	if uidKey == "" {
+		return nil
+	}
+	existingID := rr.proxmoxGuestUIDIndex[uidKey]
+	if existingID == "" {
+		return nil
+	}
+	existing := rr.resources[existingID]
+	if existing == nil || existing.Type != incoming.Type {
+		return nil
+	}
+	return existing
+}
+
+func (rr *ResourceRegistry) proxmoxGuestSlotConflictsLocked(incoming *Resource) bool {
+	if incoming == nil || incoming.Proxmox == nil || rr.proxmoxGuestSlotUIDs == nil {
+		return false
+	}
+	uid := proxmoxGuestUID(incoming)
+	if uid == "" {
+		return false
+	}
+	slotKey := proxmoxGuestSlotKey(incoming.Type, incoming.Proxmox.Instance, incoming.Proxmox.VMID)
+	if slotKey == "" {
+		return false
+	}
+	boundUID := rr.proxmoxGuestSlotUIDs[slotKey]
+	return boundUID != "" && boundUID != uid
 }
 
 // proxmoxDiskSlotHoldsAnotherDisk reports whether a Proxmox disk observed
@@ -4440,6 +4617,9 @@ func mergeProxmoxData(existing *ProxmoxData, incoming *ProxmoxData) *ProxmoxData
 	if incoming.ClusterName != "" {
 		merged.ClusterName = incoming.ClusterName
 	}
+	if incoming.ClusterID != "" {
+		merged.ClusterID = incoming.ClusterID
+	}
 	if incoming.IsClusterMember {
 		merged.IsClusterMember = true
 	}
@@ -4454,6 +4634,12 @@ func mergeProxmoxData(existing *ProxmoxData, incoming *ProxmoxData) *ProxmoxData
 	}
 	if incoming.VMID != 0 {
 		merged.VMID = incoming.VMID
+		if incoming.GuestUID != "" {
+			merged.GuestUID = incoming.GuestUID
+		}
+		if incoming.GuestRTime != 0 {
+			merged.GuestRTime = incoming.GuestRTime
+		}
 		// A native guest facet is a complete observation of admission state.
 		// Retaining the previous reason/status can hide a newly paused read or
 		// leave a recovered guest paused forever. Non-guest partial facets do
@@ -6893,6 +7079,12 @@ func mergeIdentity(existing ResourceIdentity, incoming ResourceIdentity) Resourc
 	}
 	if existing.ProxmoxGuestKey == "" {
 		existing.ProxmoxGuestKey = incoming.ProxmoxGuestKey
+	}
+	if existing.ProxmoxGuestUID == "" {
+		existing.ProxmoxGuestUID = incoming.ProxmoxGuestUID
+	}
+	if existing.ProxmoxClusterID == "" {
+		existing.ProxmoxClusterID = incoming.ProxmoxClusterID
 	}
 	existing.Hostnames = mergeBoundedUniqueStrings(existing.Hostnames, incoming.Hostnames, maxMergedIdentityValues)
 	existing.IPAddresses = mergeBoundedUniqueStrings(existing.IPAddresses, incoming.IPAddresses, maxMergedIdentityValues)
