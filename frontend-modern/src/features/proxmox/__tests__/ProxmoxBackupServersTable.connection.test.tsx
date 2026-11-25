@@ -171,9 +171,10 @@ describe.each([390, 1200])('PBS connection rendering at %ipx', (width) => {
     expect(forecast().closest('td')).toHaveTextContent(
       width < 520 ? 'Last forecast' : 'Last reading & forecast',
     );
-    expect(selected).toHaveTextContent('Pulse has not received a recent PBS update.');
-    expect(selected).toHaveTextContent('Last reading: 40.0% used');
-    expect(selected).toHaveTextContent('Last forecast: Full in ~4 days');
+    const staleSummary = 'Stale. Capacity, forecasts and jobs are last reported values.';
+    expect(selected).toHaveTextContent(staleSummary);
+    expect(selected).toHaveTextContent('40.0% used');
+    expect(selected).toHaveTextContent('Full in ~4 days');
 
     setSnapshot(withReadings(server('healthy'), 'online'));
     await waitFor(() => expect(screen.queryByText('PBS data stale')).toBeNull());
@@ -182,7 +183,7 @@ describe.each([390, 1200])('PBS connection rendering at %ipx', (width) => {
     expect(cell).toHaveTextContent('94.0%');
     expect(cell).not.toHaveTextContent('Last reading');
     expect(screen.getByRole('region', { name: 'Selected PBS datastore' })).toBe(selected);
-    expect(selected).not.toHaveTextContent('Last forecast:');
+    expect(selected).not.toHaveTextContent(staleSummary);
     expect(toggle).toHaveFocus();
   });
 
