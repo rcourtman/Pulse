@@ -3,6 +3,7 @@ import { fireEvent, render, renderHook, screen, waitFor } from '@solidjs/testing
 import { createSignal, onCleanup, onMount } from 'solid-js';
 import { Route, Router } from '@solidjs/router';
 import type { Resource } from '@/types/resource';
+import type { RuntimeInventorySourcesResponse } from '@/api/runtimeInventorySources';
 import { GuestMetadataAPI } from '@/api/guestMetadata';
 import type { GuestMetadata } from '@/api/guestMetadata';
 import { syncSessionSettingsCapabilities } from '@/stores/sessionSettingsCapabilities';
@@ -519,11 +520,55 @@ describe('Workloads performance contract', () => {
 
       render(() => <PageOwnedWorkloadsSurface />);
 
-      await waitFor(() => expect(runtimeInventorySourcesApiMocks.list).toHaveBeenCalledTimes(1));
+      const notice = await screen.findByRole('region', { name: 'Guest inventory status' });
+      expect(notice).toHaveTextContent('viewer-source');
+      expect(notice).toHaveTextContent('Collection stale');
+      expect(screen.getByTestId('guest-row-viewer-workload')).toBeInTheDocument();
+      expect(runtimeInventorySourcesApiMocks.list).toHaveBeenCalledTimes(1);
       expect(connectionsApiMocks.list).not.toHaveBeenCalled();
       expect(workloadsStateSource).not.toContain('/api/connections');
       expect(workloadsStateSource).not.toContain('ConnectionsAPI.list');
     });
+
+    it.each([
+      { platform: 'proxmox-all', guestScope: 'proxmox-pve', source: 'pve', unrelated: 'vmware' },
+      {
+        platform: 'vmware-vsphere',
+        guestScope: 'vmware-vsphere',
+        source: 'vmware',
+        unrelated: 'pve',
+      },
+    ] as const)(
+      'keeps $platform source issues beside guest rows until collection recovers',
+      ({ platform, guestScope, source, unrelated }) => {
+        mockWorkloads = [makeGuest(1, { name: 'readable-guest', platformScopes: [guestScope] })];
+        const [value, setValue] = createSignal<RuntimeInventorySourcesResponse>({
+          sources: [
+            { type: source, name: 'late-source', state: 'stale', surfaces: ['vms'] },
+            { type: source, name: 'down-source', state: 'unreachable', surfaces: ['vms'] },
+            { type: unrelated, name: 'other-platform', state: 'unauthorized', surfaces: ['vms'] },
+          ],
+        });
+
+        render(() => (
+          <PageOwnedWorkloadsSurface
+            forcedPlatform={platform}
+            inventorySourcesQuery={{ value, refetch: async () => value() }}
+          />
+        ));
+
+        const guest = screen.getByTestId('guest-row-readable-guest');
+        const notice = screen.getByRole('region', { name: 'Guest inventory status' });
+        expect(notice).toHaveTextContent('late-source · Collection stale (VMs)');
+        expect(notice).toHaveTextContent('down-source · Source unreachable (VMs)');
+        expect(notice).not.toHaveTextContent('other-platform');
+        expect(screen.queryByText('No workload inventory available')).not.toBeInTheDocument();
+
+        setValue({ sources: [value().sources[2]] });
+        expect(notice).not.toBeInTheDocument();
+        expect(screen.getByTestId('guest-row-readable-guest')).toBe(guest);
+      },
+    );
 
     it('surfaces blocked Proxmox inventory sources when the platform workloads table is empty', () => {
       render(() => (
@@ -532,7 +577,7 @@ describe('Workloads performance contract', () => {
             path="/"
             component={() => (
               <WorkloadsSurface
-                forcedPlatform="proxmox-pve"
+                forcedPlatform="proxmox-all"
                 emptyStateTitle="No Proxmox workloads"
                 emptyStateDescription="Proxmox VMs and LXCs appear here when inventory is available."
                 state={
