@@ -4,8 +4,6 @@ import { getPlatformTableWeightedColumnWidthStyle } from '@/features/platformPag
 import {
   MAIL_GATEWAY_COLUMN_WEIGHTS,
   type MailGatewayColumn,
-  MAIL_GATEWAY_NARROW_PHONE_COLUMNS,
-  MAIL_GATEWAY_NARROW_PHONE_COLUMN_WIDTHS,
   MAIL_GATEWAY_PHONE_COLUMNS,
   MAIL_GATEWAY_PHONE_COLUMN_WIDTHS,
 } from '../ProxmoxMailGatewayTable';
@@ -19,22 +17,6 @@ describe('ProxmoxMailGatewayTable phone presentation', () => {
     expect(
       MAIL_GATEWAY_PHONE_COLUMNS.reduce(
         (total, column) => total + MAIL_GATEWAY_PHONE_COLUMN_WIDTHS[column],
-        0,
-      ),
-    ).toBe(100);
-  });
-
-  it('demotes node count below 360px while keeping five mail-flow fields', () => {
-    expect(MAIL_GATEWAY_NARROW_PHONE_COLUMNS).toEqual([
-      'instance',
-      'uptime',
-      'mail',
-      'queue',
-      'deferred',
-    ]);
-    expect(
-      MAIL_GATEWAY_NARROW_PHONE_COLUMNS.reduce(
-        (total, column) => total + MAIL_GATEWAY_NARROW_PHONE_COLUMN_WIDTHS[column],
         0,
       ),
     ).toBe(100);

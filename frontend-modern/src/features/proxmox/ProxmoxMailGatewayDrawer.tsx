@@ -357,6 +357,14 @@ const readPmgExtendedMeta = (resource: Resource): PMGExtendedMeta | undefined =>
   return platformPmg;
 };
 
+// A passing availability check can keep the gateway online without updating
+// its mail readings. Use the PMG poll's own delivery state.
+export const hasStaleMailGatewayReadings = (resource: Resource): boolean =>
+  resource.sourceStatus?.pmg?.status === 'stale';
+
+const isBadMailGatewayConnection = (status: string): boolean =>
+  status === 'degraded' || status === 'warning' || status === 'offline' || status === 'error';
+
 export function describeMailGatewayDegradation(
   resource: Resource,
   instance?: PMGInstance | null,
@@ -366,16 +374,8 @@ export function describeMailGatewayDegradation(
   const connectionHealth = (instance?.connectionHealth || meta?.connectionHealth || '')
     .trim()
     .toLowerCase();
-  const isDegraded =
-    status === 'degraded' ||
-    status === 'warning' ||
-    status === 'offline' ||
-    status === 'error' ||
-    connectionHealth === 'degraded' ||
-    connectionHealth === 'warning' ||
-    connectionHealth === 'error' ||
-    connectionHealth === 'offline';
-  if (!isDegraded) return [];
+  const impairedConnection = isBadMailGatewayConnection(connectionHealth);
+  if (!impairedConnection && !isBadMailGatewayConnection(status)) return [];
 
   const reasons: string[] = [];
   const rawNodes: PMGRawNode[] = instance?.nodes ?? meta?.nodes ?? [];
@@ -411,20 +411,17 @@ export function describeMailGatewayDegradation(
     reasons.push(`Mail queue backlog: ${parts.join(', ')}${totalSuffix}.`);
   }
 
-  if (
-    connectionHealth === 'degraded' ||
-    connectionHealth === 'warning' ||
-    connectionHealth === 'error' ||
-    connectionHealth === 'offline'
-  ) {
-    if (unhealthyNodes.length === 0) {
-      reasons.push(
-        `PMG API reported ${connectionHealth} connection health for this gateway (one or more polling checks or cluster services reported non-healthy status).`,
-      );
-    }
+  if (impairedConnection && unhealthyNodes.length === 0) {
+    reasons.push(
+      `PMG API reported ${connectionHealth} connection health for this gateway (one or more polling checks or cluster services reported non-healthy status).`,
+    );
   }
 
-  if (reasons.length === 0) {
+  // The registry can set warning on a quiet source without any new provider
+  // verdict. Only the actual provider reasons above survive that distinction.
+  const quietWarning =
+    (status === 'degraded' || status === 'warning') && hasStaleMailGatewayReadings(resource);
+  if (reasons.length === 0 && !quietWarning) {
     reasons.push(
       `Proxmox Mail Gateway reported ${status || 'degraded'} status with no active alert rules triggered. Check cluster nodes and mail queue posture in the Mail tab.`,
     );

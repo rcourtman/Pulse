@@ -98,6 +98,26 @@ describe('ProxmoxMailGatewayMailFlow', () => {
   });
   afterEach(cleanup);
 
+  it('does not attribute an aggregate warning from a quiet poll to the gateway', () => {
+    const stale = {
+      ...gateway,
+      status: 'degraded',
+      sourceStatus: { pmg: { status: 'stale' } },
+      pmg: { ...gateway.pmg!, connectionHealth: 'healthy' },
+    } satisfies Resource;
+    expect(describeMailGatewayDegradation(stale)).toEqual([]);
+    expect(
+      describeMailGatewayDegradation(stale, { ...instance, status: 'warning', nodes: [] }),
+    ).toEqual([]);
+    expect(
+      describeMailGatewayDegradation(stale, {
+        ...instance,
+        connectionHealth: 'degraded',
+        nodes: [],
+      }),
+    ).toEqual([expect.stringContaining('PMG API reported degraded connection health')]);
+  });
+
   it('shows every mail-flow figure as content cards under the drawer header', async () => {
     apiFetchMock.mockResolvedValue(respond({ data: [instance], meta: { total: 1 } }));
 
