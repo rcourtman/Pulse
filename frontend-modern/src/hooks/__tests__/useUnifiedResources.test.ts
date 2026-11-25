@@ -3108,6 +3108,7 @@ describe('useUnifiedResources', () => {
     await flushAsync();
     await waitForValue(() => first!.loading(), false);
     expect(apiFetchMock).toHaveBeenCalledTimes(1);
+    expect(first!.hasSnapshot()).toBe(true);
     expect(first!.resources()).toEqual([]);
 
     disposeFirst();
@@ -3122,10 +3123,44 @@ describe('useUnifiedResources', () => {
     await flushAsync();
     expect(apiFetchMock).toHaveBeenCalledTimes(1);
     expect(second!.loading()).toBe(false);
+    expect(second!.hasSnapshot()).toBe(true);
     expect(second!.resources()).toEqual([]);
 
     disposeSecond();
   });
+
+  it.each([401, 403, 503])(
+    'retains HTTP %s on a failed resource read without treating it as a snapshot',
+    async (status) => {
+      setWsConnected(false);
+      const response = deferred<Response>();
+      apiFetchMock.mockReturnValueOnce(response.promise);
+      let dispose = () => {};
+      let result!: ReturnType<UseUnifiedResourcesModule['useUnifiedResources']>;
+      createRoot((d) => {
+        dispose = d;
+        result = useUnifiedResources({ query: 'source=pbs', cacheKey: 'backup-reader' });
+      });
+
+      try {
+        expect(result.resources()).toEqual([]);
+        expect(result.loading()).toBe(true);
+        expect(result.hasSnapshot()).toBe(false);
+        response.resolve(new Response('Read failed', { status }));
+        await waitForValue(() => result.loading(), false);
+        expect(result.error()).toMatchObject({ message: 'Read failed', status });
+        expect(result.hasSnapshot()).toBe(false);
+
+        apiFetchMock.mockResolvedValueOnce(resourceResponse([]));
+        await result.refetch();
+        expect(result.error()).toBeUndefined();
+        expect(result.resources()).toEqual([]);
+        expect(result.hasSnapshot()).toBe(true);
+      } finally {
+        dispose();
+      }
+    },
+  );
 
   it('coalesces burst websocket updates into a single delayed refetch for unsupported queries', async () => {
     let dispose = () => {};

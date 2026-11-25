@@ -1,0 +1,39 @@
+{
+  "version": 1,
+  "base_sha": "17e20f85a5e226eb6dab32bf5bb40e20657403c7",
+  "verified_at": "2026-11-25T14:14:54Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/proxmox/ProxmoxPageSurface.tsx",
+    "frontend-modern/src/hooks/useUnifiedResources.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/proxmox/ProxmoxPageSurface.tsx": "106856a9dcd7eeeecb5df952cdbd289a06fcac139a20a38cbeb07fbaea447ce7",
+    "frontend-modern/src/hooks/useUnifiedResources.ts": "657a21b9e2aab4b8b52e4a4f5979197e70ae1f7b5d12a572fee8823b060bb4bd"
+  },
+  "routes": [
+    "/proxmox/backups/coverage",
+    "/proxmox/backups/date"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 950
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Matched actual production renderer captures with synthetic scoped REST reads: Chromium 1440×950 light and WebKit 390×844 dark.",
+    "With the workload read at 503 and backup-server details readable but empty, the PVE restore point stays visible. Coverage and Backup health say the guest match and protection were not assessed.",
+    "With backup-server details at 503 and workloads readable but empty, the separate PBS point stays visible. The empty workload view is distinct from the server-details notice.",
+    "With the workload read at 403 and no resource rows, the existing error surface now names the permission problem; no backup inventory reads start."
+  ],
+  "interactions": [
+    "Follow Coverage and By date with Enter on desktop and touch on the phone. Filter the dated list and clear the search, then expand the actual PVE file or PBS snapshot by its identifier.",
+    "In both failure orientations, Retry reads only the failed resource scope. Pending state disables Retry, and the readable point stays inspectable. When that read returns, the error clears without remounting inspection or closing the open point.",
+    "On desktop the retiring Retry returns keyboard focus to the active By date link. The old page-level Refresh rereads both resource scopes before it shows points."
+  ]
+}
