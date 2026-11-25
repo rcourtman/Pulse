@@ -2,6 +2,7 @@ package monitoring
 
 import (
 	"context"
+	"slices"
 	"sync/atomic"
 	"testing"
 	"testing/synctest"
@@ -12,6 +13,42 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/proxmox"
 )
+
+type planningTestProvider struct {
+	testPollProvider
+	listCalls int
+}
+
+func (p *planningTestProvider) ListInstances(_ *Monitor) []string {
+	p.listCalls++
+	return p.instances
+}
+
+func (p *planningTestProvider) FixedInstanceInterval(_ *Monitor, name string) time.Duration {
+	if name == "alpha" {
+		return time.Minute
+	}
+	return 2 * time.Minute
+}
+
+func TestPlanningListsNonBatchProviderOnceWithoutMutatingRoster(t *testing.T) {
+	const providerType InstanceType = "fixture-provider"
+	provider := &planningTestProvider{testPollProvider: testPollProvider{
+		providerType: providerType, instances: []string{"zeta", "alpha"},
+	}}
+	m := &Monitor{pollProviders: map[InstanceType]PollProvider{providerType: provider}}
+	got := m.describeInstancesForScheduler()
+	want := []InstanceDescriptor{
+		{Name: "alpha", Type: providerType, FixedInterval: time.Minute},
+		{Name: "zeta", Type: providerType, FixedInterval: 2 * time.Minute},
+	}
+	if !slices.Equal(got, want) {
+		t.Errorf("descriptors = %+v, want %+v", got, want)
+	}
+	if provider.listCalls != 1 || !slices.Equal(provider.instances, []string{"zeta", "alpha"}) {
+		t.Errorf("provider roster was read %d times (want one), after plan: %v", provider.listCalls, provider.instances)
+	}
+}
 
 const (
 	scheduleFixtureNode    = "fixture-pve"
