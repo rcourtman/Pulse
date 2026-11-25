@@ -196,18 +196,6 @@ export const useAppRuntimeState = () => {
     lastUpdate: 0,
     resources: [],
   };
-  const hasRuntimeStatePayload = (candidate: State | undefined): boolean => {
-    if (!candidate) return false;
-    return (
-      candidate.lastUpdate > 0 ||
-      candidate.resources.length > 0 ||
-      candidate.connectedInfrastructure.length > 0 ||
-      candidate.activeAlerts.length > 0 ||
-      candidate.recentlyResolved.length > 0 ||
-      candidate.metrics.length > 0
-    );
-  };
-
   const [isLoading, setIsLoading] = createSignal(true);
   const [bootstrapFailed, setBootstrapFailed] = createSignal(false);
   const [needsAuth, setNeedsAuth] = createSignal(false);
@@ -241,14 +229,9 @@ export const useAppRuntimeState = () => {
     // It must not replace valid admission with an invented empty estate.
     return Boolean(store?.resourceSnapshotReceived()) || (store?.state.resources.length ?? 0) > 0;
   };
-  const state = (): State => {
-    const store = wsStore();
-    const liveState = store?.state;
-    if (liveState && (store.initialDataReceived() || hasRuntimeStatePayload(liveState))) {
-      return liveState;
-    }
-    return liveState || fallbackState;
-  };
+  // Expose partial state to callers; only runtimeStateResolved determines
+  // whether the resource snapshot has arrived.
+  const state = (): State => wsStore()?.state ?? fallbackState;
   const connected = () => wsStore()?.connected() || false;
   const reconnecting = () => wsStore()?.reconnecting() || false;
   const lastUpdateText = createMemo(() => {

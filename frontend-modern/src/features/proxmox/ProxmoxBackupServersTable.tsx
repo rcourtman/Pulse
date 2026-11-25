@@ -19,7 +19,6 @@ import {
   getPlatformTableCellClassForKind,
   getPlatformTableHeadClassForKind,
   PlatformResponsiveTableLabel,
-  PlatformTableNumberValue,
   PlatformTablePercentValue,
   PlatformTableShell,
   PlatformWindowedRows,
@@ -110,6 +109,11 @@ type BackupServerTableItem =
 
 const PBS_DATA_STALE = 'PBS data stale';
 const STALE_NOTE_CLASS = 'block text-[10px] font-medium text-amber-800 dark:text-amber-300';
+const UNREAD_CAPACITY_NOTE = 'This does not mean the datastore is empty.';
+const unreadCapacityLabel = (state: string) =>
+  state === 'unavailable' ? 'Unavailable' : 'Unknown';
+const datastoreByteUsage = (datastore: ResourcePBSDatastore) =>
+  `${formatPlatformTableBytesValue(datastore.used, '0 B')} / ${formatPlatformTableBytesValue(datastore.total)}`;
 
 function withPBSPollFreshness(
   status: { variant: StatusIndicatorVariant; label: string },
@@ -305,13 +309,17 @@ const PBS_HISTORY_GAP = 'Backup history is incomplete for this PBS connection.';
 const formatListedBackupEntries = (count: number): string =>
   `${formatPlatformTableIntegerValue(count)} listed`;
 
+type BackupInventoryState = 'available' | 'loading' | 'unavailable';
+const inventoryPendingLabel = (state: BackupInventoryState | undefined) =>
+  state && state !== 'available' ? (state === 'loading' ? 'Loading' : 'Unavailable') : undefined;
+
 // A server can have several identically prefixed datastore names. The compact
 // scan keeps its single-line cells, but hover titles are not an inspection path
 // on a phone. Keep the selected store's full identity and admitted readings in
 // its existing disclosure, without changing the host inspector's identity.
 function BackupServerDatastoreContext(props: {
   row: BackupServerRow;
-  inventoryState?: 'available' | 'loading' | 'unavailable';
+  inventoryState?: BackupInventoryState;
   historyIncomplete: boolean;
   forecast?: DatastoreFillForecast | null;
   onClose?: () => void;
@@ -341,18 +349,19 @@ function BackupServerDatastoreContext(props: {
     if (!datastore) return 'No datastore data';
     const reading = capacity();
     if (reading.state !== 'available') {
-      return `${reading.state === 'unavailable' ? 'Unavailable' : 'Unknown'}. This does not mean the datastore is empty.`;
+      return `${unreadCapacityLabel(reading.state)}. ${UNREAD_CAPACITY_NOTE}`;
     }
-    const free =
-      typeof datastore.total === 'number' && typeof datastore.used === 'number'
-        ? ` · ${formatPlatformTableBytesValue(Math.max(0, datastore.total - datastore.used), '0 B')} free`
-        : '';
-    return `${formatPlatformTablePercentValue(reading.percent)} used · ${formatPlatformTableBytesValue(datastore.used, '0 B')} / ${formatPlatformTableBytesValue(datastore.total)}${free}`;
+    // The available result already entails finite numeric used/total bytes.
+    const free = formatPlatformTableBytesValue(
+      Math.max(0, datastore.total - datastore.used),
+      '0 B',
+    );
+    return `${formatPlatformTablePercentValue(reading.percent)} used · ${datastoreByteUsage(datastore)} · ${free} free`;
   };
   const inventoryText = () => {
     if (!props.row.datastore) return 'Not reported';
-    if (props.inventoryState === 'loading') return 'Loading';
-    if (props.inventoryState === 'unavailable') return 'Unavailable';
+    const pending = inventoryPendingLabel(props.inventoryState);
+    if (pending) return pending;
     const listed = formatListedBackupEntries(props.row.backupCount);
     return props.historyIncomplete ? `${listed} · ${PBS_HISTORY_GAP}` : listed;
   };
@@ -719,7 +728,7 @@ function BackupServerGroupRow(props: { group: BackupServerGroup; colSpan: number
 export function ProxmoxBackupServersTable(props: {
   servers: readonly Resource[];
   backups?: readonly PBSBackup[];
-  backupInventoryState?: 'available' | 'loading' | 'unavailable';
+  backupInventoryState?: BackupInventoryState;
   incompleteHistoryReaders?: ReadonlySet<string>;
   emptyIcon?: JSX.Element;
   layoutWidth?: Accessor<number | null | undefined>;
@@ -744,6 +753,7 @@ export function ProxmoxBackupServersTable(props: {
   const columnVisible = (column: BackupServerColumnId) =>
     visibleColumns().some((candidate) => candidate.id === column);
   const serverCount = () => tableItems().filter((item) => item.kind === 'server').length;
+  const pendingInventory = () => inventoryPendingLabel(props.backupInventoryState);
   // Only the phone layout has State, because it has no Jobs column and no
   // room beside the percentage. State answers for the datastore: a fill
   // forecast or a job problem, else its job result. Connection health is the
@@ -851,13 +861,45 @@ export function ProxmoxBackupServersTable(props: {
                       ? fill
                       : null;
                   };
+                  const capacityLabel = () => unreadCapacityLabel(capacityEvidence().state);
                   const capacityNotice = () =>
-                    capacityEvidence().state === 'unavailable'
-                      ? 'Datastore capacity is unavailable. This does not mean the datastore is empty.'
-                      : 'Datastore capacity is unknown. This does not mean the datastore is empty.';
+                    `Datastore capacity is ${capacityLabel().toLowerCase()}. ${UNREAD_CAPACITY_NOTE}`;
+                  const compactState = createMemo(() => {
+                    const fill = compactForecast();
+                    if (fill) {
+                      return {
+                        label: fill.shortLabel,
+                        title: fill.detail,
+                        tone: `font-medium ${PRESSURE_TEXT[forecastDetailTone(fill)]}`,
+                        forecast: fill.level,
+                      };
+                    }
+                    if (row.online) {
+                      return {
+                        label: row.jobs.label,
+                        title: describeDatastoreJobs(row.jobs),
+                        tone: jobToneClass(row.jobs.state),
+                        jobs: row.jobs.state,
+                      };
+                    }
+                    return {
+                      label:
+                        row.connectionVariant === 'danger'
+                          ? 'Unreachable'
+                          : row.connectionVariant === 'warning'
+                            ? row.connectionLabel
+                            : 'Unknown',
+                      title: `${row.serverName}: ${row.connectionLabel}`,
+                      tone: connectionToneClass(row.connectionVariant),
+                    };
+                  });
                   const rowIdentity = { id: row.key };
                   const historyIncomplete = () =>
                     props.incompleteHistoryReaders?.has(row.serverName) === true;
+                  const deduplication = () => {
+                    const factor = availableDatastore()?.deduplicationFactor ?? 0;
+                    return Number.isFinite(factor) && factor > 0 ? `${factor.toFixed(1)}×` : '—';
+                  };
                   const isExpanded = () => detail.isExpanded(rowIdentity);
                   const detailRowId = () => detail.detailRowId(rowIdentity);
                   return (
@@ -893,47 +935,17 @@ export function ProxmoxBackupServersTable(props: {
                         </TableCell>
                         <Show when={columnVisible('status')}>
                           <TableCell class={getPlatformTableCellClassForKind('text')}>
-                            <Show
-                              when={compactForecast()}
-                              fallback={
-                                <Show
-                                  when={row.online}
-                                  fallback={
-                                    <span
-                                      class={`block truncate text-[11px] ${connectionToneClass(row.connectionVariant)}`}
-                                      title={`${row.serverName}: ${row.connectionLabel}`}
-                                    >
-                                      {row.connectionVariant === 'danger'
-                                        ? 'Unreachable'
-                                        : row.connectionVariant === 'warning'
-                                          ? row.connectionLabel
-                                          : 'Unknown'}
-                                    </span>
-                                  }
-                                >
-                                  <span
-                                    class={`block truncate text-[11px] ${jobToneClass(row.jobs.state)}`}
-                                    title={describeDatastoreJobs(row.jobs)}
-                                    data-backup-server-jobs={row.jobs.state}
-                                  >
-                                    {row.jobs.label}
-                                  </span>
-                                </Show>
-                              }
+                            <span
+                              class={`block truncate text-[11px] ${compactState().tone}`}
+                              title={compactState().title}
+                              data-backup-server-jobs={compactState().jobs}
+                              data-backup-server-forecast={compactState().forecast}
                             >
-                              {(fill) => (
-                                <span
-                                  class={`block truncate text-[11px] font-medium ${PRESSURE_TEXT[forecastDetailTone(fill())]}`}
-                                  title={fill().detail}
-                                  data-backup-server-forecast={fill().level}
-                                >
-                                  {fill().shortLabel}
-                                  <Show when={row.pollStale}>
-                                    <span class={STALE_NOTE_CLASS}>Last forecast</span>
-                                  </Show>
-                                </span>
-                              )}
-                            </Show>
+                              {compactState().label}
+                              <Show when={compactState().forecast && row.pollStale}>
+                                <span class={STALE_NOTE_CLASS}>Last forecast</span>
+                              </Show>
+                            </span>
                           </TableCell>
                         </Show>
                         <TableCell class={getPlatformTableCellClassForKind('numeric-value')}>
@@ -948,11 +960,7 @@ export function ProxmoxBackupServersTable(props: {
                                 }
                                 title={row.datastore ? capacityNotice() : undefined}
                               >
-                                {row.datastore
-                                  ? capacityEvidence().state === 'unavailable'
-                                    ? 'Unavailable'
-                                    : 'Unknown'
-                                  : 'No datastore data'}
+                                {row.datastore ? capacityLabel() : 'No datastore data'}
                               </span>
                             }
                           >
@@ -981,8 +989,7 @@ export function ProxmoxBackupServersTable(props: {
                                     fallback={
                                       <Show when={layoutMode() !== 'compact'}>
                                         <span class="truncate text-[10px] text-muted tabular-nums">
-                                          {formatPlatformTableBytesValue(datastore().used, '0 B')} /{' '}
-                                          {formatPlatformTableBytesValue(datastore().total)}
+                                          {datastoreByteUsage(datastore())}
                                         </span>
                                       </Show>
                                     }
@@ -990,7 +997,7 @@ export function ProxmoxBackupServersTable(props: {
                                     {(fill) => (
                                       <span
                                         class={`inline-flex items-center whitespace-nowrap rounded-md px-1.5 py-0.5 text-[11px] font-semibold tabular-nums ${FORECAST_PILL_CLASS[fill().level]}`}
-                                        title={`${fill().detail}. ${formatPlatformTableBytesValue(datastore().used, '0 B')} / ${formatPlatformTableBytesValue(datastore().total)} used.`}
+                                        title={`${fill().detail}. ${datastoreByteUsage(datastore())} used.`}
                                         data-backup-server-forecast={fill().level}
                                       >
                                         <span aria-hidden="true">{fill().shortLabel}</span>
@@ -1023,57 +1030,36 @@ export function ProxmoxBackupServersTable(props: {
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
                           >
-                            <Show when={row.datastore} fallback={<span class="text-muted">—</span>}>
+                            <div
+                              class={`text-[11px] leading-3 whitespace-normal tabular-nums ${row.datastore && !pendingInventory() ? '' : 'text-muted'}`}
+                              title={
+                                row.datastore && pendingInventory()
+                                  ? `PBS backup inventory is ${props.backupInventoryState}`
+                                  : undefined
+                              }
+                            >
+                              {row.datastore
+                                ? (pendingInventory() ?? formatListedBackupEntries(row.backupCount))
+                                : '—'}
                               <Show
-                                when={
-                                  !props.backupInventoryState ||
-                                  props.backupInventoryState === 'available'
-                                }
-                                fallback={
-                                  <span
-                                    class="text-muted text-[11px]"
-                                    title={`PBS backup inventory is ${props.backupInventoryState}`}
-                                  >
-                                    {props.backupInventoryState === 'loading'
-                                      ? 'Loading'
-                                      : 'Unavailable'}
-                                  </span>
-                                }
+                                when={row.datastore && !pendingInventory() && historyIncomplete()}
                               >
-                                <div class="text-[11px] leading-3 whitespace-normal">
-                                  <PlatformTableNumberValue
-                                    value={row.backupCount}
-                                    format={formatListedBackupEntries}
-                                  />
-                                  <Show when={historyIncomplete()}>
-                                    {' '}
-                                    <span
-                                      class="block text-[10px] font-medium text-amber-700 dark:text-amber-300"
-                                      title={PBS_HISTORY_GAP}
-                                    >
-                                      History gap
-                                    </span>
-                                  </Show>
-                                </div>
+                                {' '}
+                                <span
+                                  class="block text-[10px] font-medium text-amber-700 dark:text-amber-300"
+                                  title={PBS_HISTORY_GAP}
+                                >
+                                  History gap
+                                </span>
                               </Show>
-                            </Show>
+                            </div>
                           </TableCell>
                         </Show>
                         <Show when={columnVisible('dedup')}>
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('numeric-value')} text-muted tabular-nums text-[11px]`}
                           >
-                            <Show
-                              when={
-                                capacityEvidence().state === 'available' &&
-                                typeof row.datastore?.deduplicationFactor === 'number' &&
-                                Number.isFinite(row.datastore.deduplicationFactor) &&
-                                row.datastore.deduplicationFactor > 0
-                              }
-                              fallback={<span class="text-muted">—</span>}
-                            >
-                              {row.datastore?.deduplicationFactor?.toFixed(1)}×
-                            </Show>
+                            {deduplication()}
                           </TableCell>
                         </Show>
                       </TableRow>

@@ -1,0 +1,37 @@
+{
+  "version": 1,
+  "base_sha": "4da96fb2f10f633b397b67c95e99ecb4549c9689",
+  "verified_at": "2026-11-25T20:20:47Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx",
+    "frontend-modern/src/useAppRuntimeState.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx": "de7a89c8cf7e360b84e83d16d945e0de47218d4cee3784d8fd09a187e07112b0",
+    "frontend-modern/src/useAppRuntimeState.ts": "29c03e4de7a997ba20f9f36d032cffd9a4bf8bd62f98d20c2e25586b01b47fa9"
+  },
+  "routes": [
+    "/proxmox/backups/date"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 950
+    },
+    {
+      "width": 360,
+      "height": 820
+    }
+  ],
+  "states": [
+    "Matched read-only non-admin fixture, en-GB/UTC, Playwright 1.56.1 Chromium 141 light desktop and touch WebKit 26 dark phone.",
+    "An open socket with a stats-only update shows Waiting for data without a refresh time. The localized clock starts with the first resource snapshot.",
+    "A timestamped cache rebuild retains PBS 40% and the 4-day forecast; both are labelled as retained. Connection Error, Unavailable capacity, Verify failed, and the listed backup count stay distinct.",
+    "The same drawer advances to 57% on the next PBS observation; only that server loses its stale cue. No dashboard-wide reading age is inferred."
+  ],
+  "interactions": [
+    "Open the same datastore with Enter on desktop and by tapping its row name on the phone; keep the drawer mounted and desktop disclosure focused through a new reading.",
+    "Compare all four paired states at both widths, inspect all 16 PNGs, and verify no overflow, page exceptions, unmatched API reads, mutations, or external requests."
+  ]
+}
