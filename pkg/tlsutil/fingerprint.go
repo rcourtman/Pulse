@@ -329,6 +329,11 @@ func CreateHTTPClient(verifySSL bool, fingerprint string) *http.Client {
 
 // CreateHTTPClientWithTimeout creates an HTTP client with appropriate TLS configuration and custom timeout
 func CreateHTTPClientWithTimeout(verifySSL bool, fingerprint string, timeout time.Duration) *http.Client {
+	// Use provided timeout, or default to 60 seconds if not specified
+	if timeout <= 0 {
+		timeout = 60 * time.Second
+	}
+
 	transport := &http.Transport{
 		Proxy: proxyFromEnvironmentBypassingLocalInfrastructure,
 		// Performance optimizations for concurrent requests
@@ -341,7 +346,7 @@ func CreateHTTPClientWithTimeout(verifySSL bool, fingerprint string, timeout tim
 		// This prevents excessive DNS lookups for frequently accessed Proxmox hosts
 		DialContext:           DialContextWithCache,
 		TLSHandshakeTimeout:   10 * time.Second, // TLS handshake timeout
-		ResponseHeaderTimeout: 10 * time.Second, // Time to wait for response headers
+		ResponseHeaderTimeout: timeout,          // Honor configured client timeout for slow API response headers
 		ExpectContinueTimeout: 1 * time.Second,
 		TLSClientConfig:       &tls.Config{MinVersion: minimumTLSVersion},
 	}
@@ -354,11 +359,6 @@ func CreateHTTPClientWithTimeout(verifySSL bool, fingerprint string, timeout tim
 		transport.TLSClientConfig = FingerprintVerifier(fingerprint)
 	}
 	// else: default secure mode with system CA verification and explicit TLS floor
-
-	// Use provided timeout, or default to 60 seconds if not specified
-	if timeout <= 0 {
-		timeout = 60 * time.Second
-	}
 
 	return &http.Client{
 		Transport:     transport,
