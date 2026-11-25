@@ -12,7 +12,9 @@ import struct
 import sys
 import tempfile
 import threading
+import time
 import unittest
+from unittest.mock import patch
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -192,6 +194,23 @@ class AgentLoadTests(unittest.TestCase):
         self.assertIn(bytes([0x8A]) + b"ping", FakePulse.pongs)
         self.assertFalse(agent_load.DASHBOARD_SOCKETS)
 
+    def test_warmup_dashboard_cannot_validate_steady_memory_comparison(self):
+        since = int(time.time()) - 1
+        until = since + 5
+        record = agent_load.record_ws_message
+        with patch.object(agent_load, "record_ws_message", side_effect=lambda *args: record(*args, observed_at=since - 1)):
+            code, stats = self.drive(
+                "--duration", "5", "--steady-since", str(since), "--sample-until", str(until),
+            )
+        self.assertEqual(code, 1)
+        self.assertEqual(stats["dashboard"]["state_updates"], 1)
+        observed = stats["steady_traffic"]
+        self.assertTrue(observed["end_reached"])
+        self.assertEqual(observed["dashboard_state_updates"], 0)
+        self.assertEqual(observed["reports"]["host"]["agents_with_repeated_acceptance"], 4)
+        self.assertEqual(observed["reports"]["docker"]["agents_with_repeated_acceptance"], 2)
+        self.assertFalse(observed["complete"])
+
     def test_reports_without_live_state_traffic_fail_with_stats_preserved(self):
         for mode in ("reject", "idle", "control-only", "welcome", "initial-only", "raw-only", "empty-update", "invalid-state"):
             with self.subTest(mode=mode):
@@ -232,6 +251,51 @@ class AgentLoadTests(unittest.TestCase):
         self.assertEqual(code, 1)
         self.assertEqual(sum(stats["accepted"].values()), 0)
         self.assertEqual(stats["statuses"].keys(), {"400"})
+
+
+class AgentSteadyTrafficTests(unittest.TestCase):
+    def test_checks_each_report_stream_without_counting_warmup_or_late_responses(self):
+        window = agent_load.SteadyTraffic(100, 200)
+        stats = agent_load.Stats(steady=window)
+        expected = {"host": 2, "docker": 1}
+        for kind, index, status, at in (
+            ("host", 0, 200, 100), ("host", 0, 202, 130), ("host", 0, 200, 160),
+            ("host", 1, 200, 99.9), ("host", 1, 200, 101), ("host", 1, 200, 200),
+            ("docker", 0, 200, 110), ("docker", 0, 503, 125),
+        ):
+            stats.record(kind, status, agent_index=index, observed_at=at)
+
+        initial = b'{"type":"initialState","data":{"hosts":[]}}'
+        update = b'{"type":"rawData","data":{"hosts":[{"id":"fixture"}]}}'
+
+        def observe(message, initialized, at):
+            return agent_load.record_ws_message(0x1, message, stats, initialized, observed_at=at)
+
+        initialized = observe(initial, False, 90)
+        observe(update, initialized, 99)
+        observe(update, False, 150)  # A different connection has not initialized.
+        observe(update, initialized, 200)
+        partial = window.report(200, expected)
+        self.assertEqual(partial["dashboard_state_updates"], 0)
+        self.assertEqual(partial["reports"]["host"], {
+            "expected": 2, "accepted": 4, "agents_with_repeated_acceptance": 1,
+        })
+        self.assertEqual(partial["reports"]["docker"], {
+            "expected": 1, "accepted": 1, "agents_with_repeated_acceptance": 0,
+        })
+        self.assertFalse(partial["complete"])
+
+        stats.record("host", 200, agent_index=1, observed_at=190)
+        stats.record("docker", 200, agent_index=0, observed_at=190)
+        observe(update, initialized, 199.9)
+        self.assertFalse(window.report(199.9, expected)["complete"])
+        self.assertTrue(window.report(200, expected)["complete"])
+
+    def test_no_docker_stream_is_not_a_missing_docker_stream(self):
+        window = agent_load.SteadyTraffic(100, 200, accepted={"host": {0: 2}, "docker": {}}, dashboard_updates=1)
+        result = window.report(200, {"host": 1, "docker": 0})
+        self.assertTrue(result["complete"])
+        self.assertEqual(result["reports"]["docker"]["expected"], 0)
 
 
 if __name__ == "__main__":

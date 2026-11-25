@@ -20,6 +20,9 @@ It runs until --duration elapses or SIGTERM arrives, then writes a JSON stats
 file. It exits 1 when no report was accepted, more than 1% failed, or the
 dashboard never received an initial state followed by a nonempty state update.
 A handshake, welcome or heartbeat alone cannot pass as broadcast workload.
+When the memory sampler supplies a window, every configured agent report
+stream must also receive repeated HTTP acceptance inside that window, with
+at least one subsequent dashboard state update on an initialized connection.
 """
 
 from __future__ import annotations
@@ -51,6 +54,37 @@ DASHBOARD_LOCK = threading.Lock()
 
 
 @dataclass
+class SteadyTraffic:
+    since: int
+    until: int
+    accepted: dict[str, dict[int, int]] = field(default_factory=lambda: {"host": {}, "docker": {}})
+    dashboard_updates: int = 0
+
+    def contains(self, observed_at: float) -> bool:
+        return self.since <= observed_at < self.until
+
+    def report(self, observed_at: float, expected: dict[str, int]) -> dict:
+        reports = {
+            kind: {
+                "expected": count,
+                "accepted": sum(self.accepted[kind].values()),
+                "agents_with_repeated_acceptance": sum(n >= 2 for n in self.accepted[kind].values()),
+            }
+            for kind, count in expected.items()
+        }
+        end_reached = observed_at >= self.until
+        return {
+            "window_s": self.until - self.since,
+            "end_reached": end_reached,
+            "reports": reports,
+            "dashboard_state_updates": self.dashboard_updates,
+            "complete": end_reached and self.dashboard_updates > 0 and all(
+                row["agents_with_repeated_acceptance"] == row["expected"] for row in reports.values()
+            ),
+        }
+
+
+@dataclass
 class Stats:
     lock: threading.Lock = field(default_factory=threading.Lock)
     accepted: dict[str, int] = field(default_factory=lambda: {"host": 0, "docker": 0})
@@ -65,13 +99,22 @@ class Stats:
     ws_state_updates: int = 0
     ws_state_bytes: int = 0
     ws_errors: list[str] = field(default_factory=list)
+    steady: SteadyTraffic | None = None
 
-    def record(self, kind: str, status: int, error: str = "", seconds: float | None = None) -> None:
+    def record(
+        self, kind: str, status: int, error: str = "", seconds: float | None = None,
+        *, agent_index: int, observed_at: float,
+    ) -> None:
         with self.lock:
             if seconds is not None:
                 self.latencies[kind].append(seconds)
-            bucket = self.accepted if 200 <= status < 300 else self.failed
-            bucket[kind] += 1
+            if 200 <= status < 300:
+                self.accepted[kind] += 1
+                if self.steady is not None and self.steady.contains(observed_at):
+                    agents = self.steady.accepted[kind]
+                    agents[agent_index] = agents.get(agent_index, 0) + 1
+            else:
+                self.failed[kind] += 1
             self.statuses[str(status)] = self.statuses.get(str(status), 0) + 1
             if error:
                 self.errors[error] = self.errors.get(error, 0) + 1
@@ -199,7 +242,8 @@ def post_report(base: str, agent: Agent, path: str, payload: dict, kind: str, st
     status, _, error = request_detail(f"{base}{path}", body, {
         "Content-Type": "application/json", "Content-Encoding": "gzip", "X-API-Token": agent.token,
         "User-Agent": "pulse-footprint-agent-load"}, timeout=REPORT_TIMEOUT_S)
-    stats.record(kind, status, error, time.monotonic() - started)
+    stats.record(kind, status, error, time.monotonic() - started,
+                 agent_index=agent.index, observed_at=time.time())
 
 
 def run_agent(base: str, agent: Agent, deadline: float, stats: Stats) -> None:
@@ -237,8 +281,12 @@ def ws_send(sock: socket.socket, opcode: int, payload: bytes) -> None:
     sock.sendall(header + mask + bytes(b ^ mask[i % 4] for i, b in enumerate(payload)))
 
 
-def record_ws_message(opcode: int, payload: bytes, stats: Stats, has_initial_state: bool) -> bool:
+def record_ws_message(
+    opcode: int, payload: bytes, stats: Stats, has_initial_state: bool, *, observed_at: float | None = None,
+) -> bool:
     """Count complete application messages separately from usable state traffic."""
+    if observed_at is None and stats.steady is not None:
+        observed_at = time.time()
     with stats.lock:
         stats.ws_messages += 1
         stats.ws_bytes += len(payload)
@@ -256,6 +304,8 @@ def record_ws_message(opcode: int, payload: bytes, stats: Stats, has_initial_sta
             has_initial_state = True
         elif message.get("type") == "rawData" and has_initial_state:
             stats.ws_state_updates += 1
+            if stats.steady is not None and observed_at is not None and stats.steady.contains(observed_at):
+                stats.steady.dashboard_updates += 1
         else:
             return has_initial_state
         stats.ws_state_bytes += len(payload)
@@ -355,7 +405,14 @@ def main(argv: list[str]) -> int:
     parser.add_argument("--duration", type=float, required=True, help="seconds to drive load")
     parser.add_argument("--seed", type=int, default=2199)
     parser.add_argument("--stats", required=True, help="path of the JSON stats file to write")
+    parser.add_argument("--steady-since", type=int, help="epoch seconds at the start of steady RSS sampling")
+    parser.add_argument("--sample-until", type=int, help="epoch seconds at the end of RSS sampling")
     args = parser.parse_args(argv)
+    steady = None
+    if args.steady_since is not None or args.sample_until is not None:
+        if args.steady_since is None or args.sample_until is None or not 0 <= args.steady_since < args.sample_until:
+            parser.error("--steady-since and --sample-until must specify an ordered pair")
+        steady = SteadyTraffic(args.steady_since, args.sample_until)
 
     signal.signal(signal.SIGTERM, lambda *_: STOP.set())
     base = f"http://{args.host}:{args.port}"
@@ -366,7 +423,7 @@ def main(argv: list[str]) -> int:
               args.interval, random.Random(rng.randrange(1 << 32)))
         for i in range(args.agents)
     ]
-    stats = Stats()
+    stats = Stats(steady=steady)
     started = time.time()
     deadline = started + args.duration
     threads = [threading.Thread(target=run_dashboard, args=(args.host, args.port, deadline, stats), daemon=True)]
@@ -375,6 +432,7 @@ def main(argv: list[str]) -> int:
         thread.start()
     while not STOP.is_set() and time.time() < deadline:
         STOP.wait(1)
+    sampling_stopped_at = time.time()
     STOP.set()
     with DASHBOARD_LOCK:
         for sock in DASHBOARD_SOCKETS:
@@ -397,6 +455,10 @@ def main(argv: list[str]) -> int:
                       "state_messages": stats.ws_initial_states + stats.ws_state_updates, "state_bytes": stats.ws_state_bytes,
                       "errors": stats.ws_errors},
     }
+    if steady is not None:
+        result["steady_traffic"] = steady.report(
+            sampling_stopped_at, {"host": len(agents), "docker": sum(bool(a.containers) for a in agents)},
+        )
     with open(args.stats, "w") as handle:
         json.dump(result, handle, indent=2)
         handle.write("\n")
@@ -406,6 +468,10 @@ def main(argv: list[str]) -> int:
     if stats.ws_connects == 0 or stats.ws_initial_states == 0 or stats.ws_state_updates == 0:
         print(f"agent load did not exercise the dashboard state path: {stats.ws_connects} connections, "
               f"{stats.ws_initial_states} initial states, {stats.ws_state_updates} state updates", file=sys.stderr)
+        return 1
+    if steady is not None and not result["steady_traffic"]["complete"]:
+        print("agent load did not complete the steady RSS window with repeated report acceptance "
+              "and dashboard state traffic; see steady_traffic in the stats", file=sys.stderr)
         return 1
     return 0
 

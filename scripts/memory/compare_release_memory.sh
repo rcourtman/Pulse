@@ -28,8 +28,8 @@
 #           own install tokens, some with Docker, and one connected dashboard.
 #           Mock mode drops pushed agent reports, so only this estate reaches
 #           the per-report registry refresh and broadcast cost (#2199). The
-#           driver fails the run when reports were not accepted or the dashboard
-#           did not receive an initial state and a subsequent state update.
+#           driver requires repeated HTTP acceptance per configured agent
+#           report stream and dashboard state traffic during steady sampling.
 #   proxmox a real, non-mock Pulse with authentication configured, fed by
 #           proxmox_load.py: a synthetic 3-node Proxmox VE cluster (35 guests),
 #           a large shared archive containing backups, ISOs and templates,
@@ -197,7 +197,10 @@ run_tree() {
     # to the sampling window can expire as that signal arrives, and Python then
     # exits by the signal (143) instead of handling it, failing the run.
     driver_log="${OUT_DIR}/agents-${label}.log"
+    : > "${OUT_DIR}/agents-${label}.json"
     python3 "${SCRIPT_DIR}/agent_load.py" --port "${port}" --duration "$((DURATION + 120))" \
+      --steady-since "$((start + DURATION * 2 / 3))" \
+      --sample-until "$((start + DURATION))" \
       --stats "${OUT_DIR}/agents-${label}.json" > "${driver_log}" 2>&1 &
     driver=$!
   elif [[ "${ESTATE}" == proxmox ]]; then
