@@ -1895,11 +1895,14 @@ func stuckInvestigationResult(f *Finding, orchestrator InvestigationOrchestrator
 const abandonedRunError = "Patrol stopped waiting for this investigation after it ran past its time limit."
 
 // abandonedInvestigationSession is a run's session as the stuck-run sweep gives
-// the run up at now: failed, because it ran past its limit without closing.
-// The orchestrator's own session is left as it is.
+// the run up at now: failed and timed out, because it ran past its limit without
+// closing. The orchestrator's own session is left as it is.
 func abandonedInvestigationSession(session *InvestigationSession, now time.Time) *InvestigationSession {
 	abandoned := *session
 	abandoned.Status = aicontracts.InvestigationStatusFailed
+	if abandoned.Outcome == "" {
+		abandoned.Outcome = aicontracts.OutcomeTimedOut
+	}
 	abandoned.CompletedAt = &now
 	if strings.TrimSpace(abandoned.Error) == "" {
 		abandoned.Error = abandonedRunError

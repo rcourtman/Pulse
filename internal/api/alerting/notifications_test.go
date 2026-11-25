@@ -1286,63 +1286,70 @@ func TestClassifyNotificationError(t *testing.T) {
 		{
 			name:           "connection refused",
 			err:            "dial tcp smtp.gmail.com:587: connect: connection refused",
-			wantSummary:    "Could not connect to the server — check host, port, and firewall settings",
+			wantSummary:    "Could not connect to the server: check host, port, and firewall settings",
 			wantHasDetail:  true,
 			summaryMustNot: []string{"dial tcp"},
 		},
 		{
 			name:           "no such host",
 			err:            "dial tcp: lookup smtp.example.com: no such host",
-			wantSummary:    "Server hostname not found — check the server address",
+			wantSummary:    "Server hostname not found: check the server address",
 			wantHasDetail:  true,
 			summaryMustNot: []string{"dial tcp"},
 		},
 		{
 			name:           "i/o timeout",
 			err:            "dial tcp 10.0.0.1:587: i/o timeout",
-			wantSummary:    "Connection timed out — the server may be unreachable or the port may be blocked",
+			wantSummary:    "Connection timed out: the server may be unreachable or the port may be blocked",
 			wantHasDetail:  true,
 			summaryMustNot: []string{"dial tcp"},
 		},
 		{
 			name:           "context deadline exceeded",
 			err:            "context deadline exceeded",
-			wantSummary:    "Connection timed out — the server may be unreachable or the port may be blocked",
+			wantSummary:    "Connection timed out: the server may be unreachable or the port may be blocked",
 			wantHasDetail:  true,
 			summaryMustNot: []string{"context"},
 		},
 		{
 			name:           "x509 certificate error",
 			err:            "x509: certificate signed by unknown authority",
-			wantSummary:    "TLS certificate error — check certificate settings or try enabling 'Skip TLS Verify'",
+			wantSummary:    "TLS certificate error: check the server certificate and TLS settings",
 			wantHasDetail:  true,
-			summaryMustNot: []string{"x509:"},
+			summaryMustNot: []string{"x509:", "Skip TLS Verify"},
+		},
+		{
+			name:           "https client to http endpoint",
+			err:            `Post "https://192.168.1.50:8080/hook": http: server gave HTTP response to HTTPS client`,
+			wantSummary:    "TLS certificate error: check the server certificate and TLS settings",
+			wantHasDetail:  true,
+			summaryMustNot: []string{"Skip TLS Verify"},
 		},
 		{
 			name:           "smtp auth failure",
 			err:            "535 5.7.8 Username and Password not accepted",
-			wantSummary:    "Authentication failed — check username and password",
+			wantSummary:    "Authentication failed: check username and password",
 			wantHasDetail:  true,
 			summaryMustNot: []string{"535"},
 		},
 		{
 			name:           "executable not found",
 			err:            `exec: "apprise": executable file not found in $PATH`,
-			wantSummary:    "Required program not found — ensure it is installed on the server",
+			wantSummary:    "Required program not found: ensure it is installed on the server",
 			wantHasDetail:  true,
 			summaryMustNot: []string{"exec:"},
 		},
 		{
 			name:           "permission denied",
 			err:            "open /etc/ssl/certs: permission denied",
-			wantSummary:    "Permission denied — the server process lacks access to the required resource",
+			wantSummary:    "Permission denied: the server process lacks access to the required resource",
 			wantHasDetail:  true,
 			summaryMustNot: []string{"open /etc"},
 		},
 		{
 			name:           "eof",
 			err:            "read tcp 192.168.1.1:587: EOF",
-			wantSummary:    "The server closed the connection unexpectedly — check if TLS/StartTLS settings are correct",
+			wantSummary:    "The server closed the connection unexpectedly: check if TLS/StartTLS settings are correct",
 			wantHasDetail:  true,
 			summaryMustNot: []string{"read tcp"},
 		},
@@ -1381,7 +1388,7 @@ func TestWriteTestNotificationError(t *testing.T) {
 
 		var resp map[string]string
 		assert.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
-		assert.Equal(t, "Could not connect to the server — check host, port, and firewall settings", resp["error"])
+		assert.Equal(t, "Could not connect to the server: check host, port, and firewall settings", resp["error"])
 		assert.Equal(t, "dial tcp smtp.gmail.com:587: connect: connection refused", resp["detail"])
 	})
 
