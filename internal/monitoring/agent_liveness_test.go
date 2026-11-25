@@ -11,8 +11,8 @@ import (
 )
 
 func TestAgentLivenessSweepDoesNotCloneHealthyInventories(t *testing.T) {
-	empty, now := agentLivenessFixture(t, 0)
-	busy, _ := agentLivenessFixture(t, 50)
+	empty, now := agentLivenessFixture(0)
+	busy, _ := agentLivenessFixture(50)
 	for _, tc := range []struct {
 		name string
 		run  func(*Monitor, time.Time)
@@ -22,8 +22,15 @@ func TestAgentLivenessSweepDoesNotCloneHealthyInventories(t *testing.T) {
 		{"host", (*Monitor).evaluateHostAgents},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			emptyAllocs := testing.AllocsPerRun(10, func() { tc.run(empty, now) })
-			busyAllocs := testing.AllocsPerRun(10, func() { tc.run(busy, now) })
+			// Isolate the state sweep from alert manager background workers.
+			// AllocsPerRun is process-wide; take the lowest of three fixed
+			// samples so unrelated background allocations cannot decide this.
+			sample := func(m *Monitor) float64 {
+				run := func() { tc.run(m, now) }
+				return min(testing.AllocsPerRun(25, run), testing.AllocsPerRun(25, run), testing.AllocsPerRun(25, run))
+			}
+			emptyAllocs := sample(empty)
+			busyAllocs := sample(busy)
 			t.Logf("allocations per health check: empty=%.0f populated=%.0f", emptyAllocs, busyAllocs)
 			// Only the number of reporting agents, not the size of their
 			// inventories, should determine the cost of a healthy sweep.
@@ -134,7 +141,9 @@ func BenchmarkAgentLivenessSweep(b *testing.B) {
 			name = "populated"
 		}
 		b.Run(name, func(b *testing.B) {
-			m, now := agentLivenessFixture(b, workloadCount)
+			m, now := agentLivenessFixture(workloadCount)
+			m.alertManager = alerts.NewManagerWithDataDir(b.TempDir())
+			b.Cleanup(m.alertManager.Stop)
 			sweepAgentLivenessFixture(m, now)
 			b.ReportAllocs()
 			for b.Loop() {
@@ -150,9 +159,8 @@ func sweepAgentLivenessFixture(m *Monitor, now time.Time) {
 	m.evaluateHostAgents(now)
 }
 
-func agentLivenessFixture(tb testing.TB, workloads int) (*Monitor, time.Time) {
-	m := &Monitor{state: models.NewState(), alertManager: alerts.NewManagerWithDataDir(tb.TempDir())}
-	tb.Cleanup(m.alertManager.Stop)
+func agentLivenessFixture(workloads int) (*Monitor, time.Time) {
+	m := &Monitor{state: models.NewState()}
 	now := time.Unix(1780000000, 0).UTC()
 	for i := 0; i < 6; i++ {
 		host := models.DockerHost{
