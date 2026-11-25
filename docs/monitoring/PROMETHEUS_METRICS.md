@@ -166,7 +166,7 @@ in the same window without changing a rule or sending a test notification.
 | `pulse_scheduler_dead_letter_depth` | Gauge | DLQ depth by `instance_type` and `instance`. |
 | `pulse_scheduler_breaker_state` | Gauge | `0`=Closed, `1`=Half-Open, `2`=Open, `-1`=Unknown. |
 | `pulse_scheduler_breaker_failure_count` | Gauge | Consecutive failure count. |
-| `pulse_scheduler_breaker_retry_seconds` | Gauge | Seconds until next retry allowed. |
+| `pulse_scheduler_breaker_retry_seconds` | Gauge | Seconds remaining before a retry is allowed, as recorded at the last breaker update. Not a live countdown. |
 
 When expected results stop, check the two stages on successive scrapes:
 
@@ -183,6 +183,26 @@ cover claimed polls across the Pulse process, not individual connections or
 tasks still in the queue. Zero does not prove polling is healthy, and a
 missing series is not zero. This does not measure agent reports or rule
 evaluation, decide that a target is down, or send an alert.
+
+### Check whether backoff still explains the wait
+
+A fresh scrape can keep showing the same positive retry value even after
+the time has passed. To check an open breaker for one connection, use
+`instances[].breaker.retryAt` from a [saved scheduler snapshot](../api/SCHEDULER_HEALTH.md#-common-queries-jq).
+Match the connection by `key` and compare `retryAt` with the snapshot's
+`updatedAt`:
+
+- If `retryAt` is later, the breaker was still holding retries at the time
+  of the snapshot. That is the earliest time it could let a retry through,
+  not a promise that a worker will start then.
+- If `retryAt` has passed, check for a newer success or error in the
+  [two saved poll results](../api/SCHEDULER_HEALTH.md#compare-two-poll-snapshots).
+  An elapsed deadline means a retry is eligible, not that it ran. If no
+  result advanced, check the overdue stages above if available.
+
+A missing deadline or a failed snapshot does not establish a retry or a
+healthy connection. Allow for the normal poll interval before judging a gap.
+Do not reset the breaker, change settings or restart Pulse to make a result appear.
 
 ## ⚡ Diagnostics Cache
 
