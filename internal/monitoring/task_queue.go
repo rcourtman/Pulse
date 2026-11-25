@@ -283,9 +283,10 @@ func (q *TaskQueue) Size() int {
 
 // QueueSnapshot represents the current state of the task queue.
 type QueueSnapshot struct {
-	Depth            int            `json:"depth"`
-	DueWithinSeconds int            `json:"dueWithinSeconds"`
-	PerType          map[string]int `json:"perType"`
+	Depth                int            `json:"depth"`
+	DueWithinSeconds     int            `json:"dueWithinSeconds"`
+	PerType              map[string]int `json:"perType"`
+	OldestOverdueSeconds float64        `json:"oldestOverdueSeconds"`
 }
 
 func emptyQueueSnapshot() QueueSnapshot {
@@ -306,14 +307,22 @@ func (q *TaskQueue) Snapshot() QueueSnapshot {
 	snapshot.Depth = len(q.heap)
 
 	now := time.Now()
+	var oldestOverdue time.Duration
 	for _, entry := range q.heap {
 		typeStr := string(entry.task.InstanceType)
 		snapshot.PerType[typeStr]++
 
-		if entry.task.NextRun.Sub(now) <= 12*time.Second {
+		lateness := now.Sub(entry.task.NextRun)
+		if lateness >= -12*time.Second {
 			snapshot.DueWithinSeconds++
 		}
+		// A zero deadline means immediately eligible, not a measured wait
+		// since year one. Claimed work is not in the heap at all.
+		if !entry.task.NextRun.IsZero() {
+			oldestOverdue = max(oldestOverdue, lateness)
+		}
 	}
+	snapshot.OldestOverdueSeconds = oldestOverdue.Seconds()
 
 	return snapshot
 }

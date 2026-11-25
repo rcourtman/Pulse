@@ -8,6 +8,7 @@ import (
 	"sort"
 	"strings"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai"
@@ -202,6 +203,38 @@ func TestHandleSchedulerHealth_UsesCanonicalEmptyCollections(t *testing.T) {
 	if !strings.Contains(rec.Body.String(), `"staleness":[]`) {
 		t.Fatalf("expected staleness array to be retained, got %s", rec.Body.String())
 	}
+}
+
+func TestHandleSchedulerHealth_ReturnsQueuedOverdueAge(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		monitor := &monitoring.Monitor{}
+		queue := monitoring.NewTaskQueue()
+		setUnexportedField(t, monitor, "taskQueue", queue)
+		queue.Upsert(monitoring.ScheduledTask{
+			InstanceType: monitoring.InstanceTypePVE, InstanceName: "fixture",
+			NextRun: time.Now().Add(10 * time.Second),
+		})
+		router := &Router{monitor: monitor}
+		check := func(wantAge float64) {
+			t.Helper()
+			rec := httptest.NewRecorder()
+			router.handleSchedulerHealth(rec, httptest.NewRequest(http.MethodGet, "/api/monitoring/scheduler/health", nil))
+			var got struct {
+				Queue struct {
+					DueWithinSeconds     int      `json:"dueWithinSeconds"`
+					OldestOverdueSeconds *float64 `json:"oldestOverdueSeconds"`
+				} `json:"queue"`
+			}
+			if err := json.Unmarshal(rec.Body.Bytes(), &got); rec.Code != http.StatusOK || err != nil ||
+				got.Queue.DueWithinSeconds != 1 || got.Queue.OldestOverdueSeconds == nil || *got.Queue.OldestOverdueSeconds != wantAge {
+				t.Errorf("wanted one due-soon slot and age %g seconds: HTTP %d, decode %v, %s", wantAge, rec.Code, err, rec.Body)
+			}
+			t.Log(rec.Body.String())
+		}
+		check(0)
+		time.Sleep(100 * time.Second)
+		check(90)
+	})
 }
 
 func TestHandleHealth_NoMonitor(t *testing.T) {
