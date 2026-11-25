@@ -15,7 +15,8 @@
 #   7. assert FROM identity, health, unit state, seeded settings and data dir
 #
 # The result is a phase table on stdout and in $GITHUB_STEP_SUMMARY (when set).
-# Nothing is uploaded. Exit status is non-zero when any phase fails.
+# Nothing is uploaded. A failed phase or unverified container removal exits
+# non-zero.
 #
 # Usage:
 #   scripts/release_lifecycle_rehearsal.sh --from vX.Y.Z --to vX.Y.Z
@@ -119,7 +120,9 @@ esac
 README_PATH="${PULSE_REHEARSAL_README:-${ROOT_DIR}/README.md}"
 WORK_DIR="${PULSE_REHEARSAL_WORKDIR:-$(mktemp -d)}"
 mkdir -p "${WORK_DIR}/assets" "${WORK_DIR}/state"
-CONTAINER="pulse-lifecycle-rehearsal-$$"
+CONTAINER_NAME="pulse-lifecycle-rehearsal-$$"
+CONTAINER_ID=""
+CONTAINER_CIDFILE=""
 SUMMARY_FILE="${GITHUB_STEP_SUMMARY:-}"
 
 # Throwaway credentials for an ephemeral container. They never leave it.
@@ -160,7 +163,7 @@ cexec() {
         env -i PATH=/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin LANG=C.UTF-8 \
             "${@}" bash -c "$program"
     else
-        "$ENGINE" exec "${env_args[@]}" "$CONTAINER" bash -c "$program"
+        "$ENGINE" exec "${env_args[@]}" "$CONTAINER_ID" bash -c "$program"
     fi
 }
 
@@ -188,24 +191,66 @@ print_diagnostics() {
     done
 }
 
+read_container_id() {
+    local id
+    [[ -f "$CONTAINER_CIDFILE" && ! -L "$CONTAINER_CIDFILE" ]] || return 1
+    id=$(<"$CONTAINER_CIDFILE") || return 1
+    [[ "$id" =~ ^[a-f0-9]{64}$ ]] || return 1
+    printf '%s\n' "$id"
+}
+
+report_container_cleanup() {
+    log "Container cleanup: $1"
+    if [[ -n "$SUMMARY_FILE" ]]; then
+        printf '\nContainer cleanup: %s\n' "$1" >> "$SUMMARY_FILE" ||
+            echo "::warning::Could not write the container cleanup summary." >&2
+    fi
+}
+
+cleanup_container() {
+    local id="$CONTAINER_ID" remaining result
+    # The engine can allocate a container before reporting a failed start.
+    # Never fall back to the requested name, which could belong to another run.
+    if [[ -z "$id" ]] && ! id=$(read_container_id); then
+        report_container_cleanup "unverified; no container ID recorded by this launch. No removal attempted."
+        return 1
+    fi
+    if "$ENGINE" rm --force "$id" >/dev/null; then
+        if remaining=$("$ENGINE" ps --all --no-trunc --quiet --filter "id=$id"); then
+            if [[ -z "$remaining" ]]; then
+                report_container_cleanup "verified absent ($id)."
+                return 0
+            fi
+            report_container_cleanup "unverified; container lookup still returned a result for $id."
+        else
+            result=$?
+            report_container_cleanup "unverified; container lookup failed (exit $result, ID $id)."
+        fi
+    else
+        result=$?
+        report_container_cleanup "unverified; container removal failed (exit $result, ID $id)."
+    fi
+    return 1
+}
+
 cleanup() {
     local status=$?
     if [[ "$OVERALL_STATUS" -ne 0 || "$status" -ne 0 ]]; then
         print_diagnostics
     fi
-    if [[ "$CONTAINER_STARTED" == "true" ]]; then
-        if [[ "$HOSTED_BROWSER" == true ]]; then
-            local cleanup_status=0
-            systemctl stop pulse.service || cleanup_status=1
-            if [[ "$(systemctl show pulse-update.timer --property=LoadState --value)" != not-found ]]; then
-                systemctl stop pulse-update.timer || cleanup_status=1
-            fi
-            if systemctl is-active --quiet pulse.service; then cleanup_status=1; fi
-            if systemctl is-active --quiet pulse-update.timer; then cleanup_status=1; fi
-            printf '{"cleanup_exit":%s,"host_disposal":"github-hosted-job"}\n' "$cleanup_status" > "${WORK_DIR}/state/browser-cleanup.json"
-            [[ "$cleanup_status" == 0 ]] || status=1
-        else
-            "$ENGINE" rm -f "$CONTAINER" >/dev/null 2>&1 || true
+    if [[ "$HOSTED_BROWSER" == true && "$CONTAINER_STARTED" == "true" ]]; then
+        local cleanup_status=0
+        systemctl stop pulse.service || cleanup_status=1
+        if [[ "$(systemctl show pulse-update.timer --property=LoadState --value)" != not-found ]]; then
+            systemctl stop pulse-update.timer || cleanup_status=1
+        fi
+        if systemctl is-active --quiet pulse.service; then cleanup_status=1; fi
+        if systemctl is-active --quiet pulse-update.timer; then cleanup_status=1; fi
+        printf '{"cleanup_exit":%s,"host_disposal":"github-hosted-job"}\n' "$cleanup_status" > "${WORK_DIR}/state/browser-cleanup.json"
+        [[ "$cleanup_status" == 0 ]] || status=1
+    elif [[ "$HOSTED_BROWSER" == false && -n "$CONTAINER_CIDFILE" ]]; then
+        if ! cleanup_container && [[ "$status" -eq 0 ]]; then
+            status=1
         fi
     fi
     if [[ "$HOSTED_BROWSER" == true ]]; then
@@ -353,7 +398,13 @@ start_container() {
         cexec 'mkdir -p /etc/systemd/system/pulse.service.d && printf "[Service]\nEnvironment=PULSE_TELEMETRY=false\n" > /etc/systemd/system/pulse.service.d/50-rehearsal-no-telemetry.conf'
         return
     fi
-    local -a run_args=(run -d --name "$CONTAINER" --privileged
+    local cid_dir start_exit=0
+    if ! cid_dir=$(mktemp -d -- "${WORK_DIR}/container.XXXXXXXX"); then
+        echo "::error::could not create a fresh container ID directory"
+        return 1
+    fi
+    CONTAINER_CIDFILE="${cid_dir}/id"
+    local -a run_args=(run -d --cidfile "$CONTAINER_CIDFILE" --name "$CONTAINER_NAME" --privileged
         -v "${WORK_DIR}/assets:/rehearsal:ro")
     if [[ "$ENGINE" == "docker" ]]; then
         # GHA ubuntu-24.04 uses the cgroup v2 unified hierarchy; without
@@ -365,20 +416,25 @@ start_container() {
         # The pinned image is amd64-only.
         run_args+=(--systemd=always --arch amd64 --tmpfs /tmp:rw,size=2g)
     fi
-    CONTAINER_STARTED=true
-    if ! "$ENGINE" "${run_args[@]}" "$SYSTEMD_IMAGE" >/dev/null; then
-        echo "::error::${ENGINE} could not start ${SYSTEMD_IMAGE}"
+    "$ENGINE" "${run_args[@]}" "$SYSTEMD_IMAGE" >/dev/null || start_exit=$?
+    if [[ "$start_exit" -ne 0 ]]; then
+        echo "::error::${ENGINE} could not start ${SYSTEMD_IMAGE} (exit $start_exit)"
         return 1
     fi
+    if ! CONTAINER_ID=$(read_container_id); then
+        echo "::error::${ENGINE} did not record the disposable container ID"
+        return 1
+    fi
+    CONTAINER_STARTED=true
 
     local i state
     for i in $(seq 1 45); do
-        if ! "$ENGINE" inspect -f '{{.State.Running}}' "$CONTAINER" 2>/dev/null | grep -q true; then
-            "$ENGINE" logs "$CONTAINER" || true
+        if ! "$ENGINE" inspect -f '{{.State.Running}}' "$CONTAINER_ID" 2>/dev/null | grep -q true; then
+            "$ENGINE" logs "$CONTAINER_ID" || true
             echo "::error::systemd container exited during boot"
             return 1
         fi
-        state=$("$ENGINE" exec "$CONTAINER" systemctl is-system-running 2>/dev/null || true)
+        state=$("$ENGINE" exec "$CONTAINER_ID" systemctl is-system-running 2>/dev/null || true)
         if [[ "$state" == "running" || "$state" == "degraded" ]]; then
             break
         fi
