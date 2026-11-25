@@ -333,6 +333,14 @@ Returns a lightweight integration summary for external dashboards and checks. Re
 }
 ```
 
+`lastUpdate` dates a change to Pulse's shared monitoring state. A Docker
+report can move it forward while Proxmox readings stay unchanged. Do not use
+it to decide whether a particular connection is still polling or an alert rule
+has run. To check a connection, compare its own `pollStatus.lastSuccess` and
+`lastError` in [Scheduler Health](#scheduler-health) across its normal poll
+interval. For an agent or a missing reading, see the
+[missing-data checks](FAQ.md#no-data-showing).
+
 `verdicts` uses the canonical `ok`, `attention`, `critical`, `stale`, `off`,
 and `unknown` fleet-health vocabulary. `attention` is severity ordered and
 capped at 30 entries. Powered-off workloads are neutral (`off`), and stale or
