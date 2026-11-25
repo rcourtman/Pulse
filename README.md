@@ -74,7 +74,7 @@ Multi-cluster health, degraded nodes, pods, deployments, storage, and events in 
 
 ## Install
 
-Single container or Linux service on port `7655` (swap the tag if a [newer release](https://github.com/rcourtman/Pulse/releases/latest) is out).
+Single container or Linux service on port `7655` (swap the tag if a [newer release](https://github.com/rcourtman/Pulse/releases/latest) is out). Runs as one Go binary with built-in SQLite history (no external database): recommended baseline is 1-2 vCPU, 1 GiB RAM, and 4 GiB disk (~55 MiB idle RAM, ~200-250 MiB on a typical homelab, `amd64`/`arm64`, see [system requirements](docs/INSTALL.md#system-requirements)).
 
 ### Docker
 
