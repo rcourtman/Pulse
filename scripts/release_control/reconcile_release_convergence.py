@@ -48,6 +48,7 @@ TERMINAL_FAILURES = {
 }
 RETRYABLE_API_READS = frozenset({"http-502", "http-503", "http-504", "peer-cancel"})
 PUBLIC_RELEASE_INVENTORY = "repos/rcourtman/Pulse/releases"
+RELEASE_INVENTORY_PAGE_SIZE = 20
 
 
 class ReconciliationError(ValueError):
@@ -159,13 +160,13 @@ def latest_failed_runs(
     *,
     workflow_id: int,
     default_branch: str,
-) -> list[int]:
-    """Return the latest failed convergence for each current immutable channel."""
+) -> list[tuple[int, dict[str, Any]]]:
+    """Return each current immutable head's latest failed run and selected release."""
     # Never fall back to an older release when the advertised channel head is
     # mutable. That is continuity debt requiring a replacement, not a target
     # whose aliases should be promoted again.
-    current_tags = {
-        str(release["tag_name"])
+    current_releases = {
+        release["tag_name"]: release
         for release in current_channel_heads(releases).values()
         if release.get("immutable") is True
     }
@@ -175,7 +176,7 @@ def latest_failed_runs(
             continue
         title = value.get("display_title")
         match = DISPLAY_TITLE.fullmatch(title) if isinstance(title, str) else None
-        if match is None or match.group(1) not in current_tags:
+        if match is None or match.group(1) not in current_releases:
             continue
         if (
             value.get("workflow_id") != workflow_id
@@ -189,11 +190,12 @@ def latest_failed_runs(
         if tag not in newest or created > newest[tag][0]:
             newest[tag] = (created, value)
 
-    result: list[int] = []
-    for _, run in newest.values():
+    result: list[tuple[int, dict[str, Any]]] = []
+    for tag, (_, run) in newest.items():
         if run.get("status") == "completed" and run.get("conclusion") in TERMINAL_FAILURES:
-            result.append(positive_int(run.get("id"), "convergence run ID"))
-    return sorted(result)
+            run_id = positive_int(run.get("id"), "convergence run ID")
+            result.append((run_id, current_releases[tag]))
+    return sorted(result, key=lambda item: item[0])
 
 
 def api_read_subject(endpoint: str) -> str:
@@ -571,7 +573,13 @@ def report_decision(message: str) -> None:
             )
 
 
-def reconcile(github: GitHub, run_id: int, max_attempts: int) -> None:
+def reconcile(
+    github: GitHub,
+    run_id: int,
+    max_attempts: int,
+    *,
+    expected_head: dict[str, Any] | None = None,
+) -> None:
     repository = github.repository
     repository_state = github.api(f"repos/{repository}")
     default_branch = repository_state.get("default_branch")
@@ -601,6 +609,8 @@ def reconcile(github: GitHub, run_id: int, max_attempts: int) -> None:
     tag, source_text = match.groups()
     if RELEASE_TAG.fullmatch(tag) is None:
         raise ReconciliationError("convergence display title has an invalid release tag")
+    if expected_head is not None and tag != expected_head["tag_name"]:
+        raise ReconciliationError("convergence run no longer matches the selected channel tag")
     source_run_id = int(source_text)
 
     all_runs = flatten_pages(
@@ -626,6 +636,8 @@ def reconcile(github: GitHub, run_id: int, max_attempts: int) -> None:
     try:
         release = github.api(f"repos/{repository}/releases/tags/{tag}")
     except GitHubNotFound:
+        if expected_head is not None:
+            raise
         release = {}
     committed = (
         release.get("tag_name") == tag
@@ -634,7 +646,23 @@ def reconcile(github: GitHub, run_id: int, max_attempts: int) -> None:
         and isinstance(release.get("published_at"), str)
         and bool(release.get("published_at"))
     )
-    if not committed:
+    if expected_head is not None:
+        # A scheduled retry is debt for this selected publication only. Check
+        # the exact record here so a failure cannot stop the other channel or
+        # turn into an explicit pre-commit owner renewal.
+        if (
+            not committed
+            or positive_int(release.get("id"), "exact release ID")
+            != positive_int(expected_head.get("id"), "selected release ID")
+            or release.get("prerelease") is not expected_head["prerelease"]
+            or release.get("target_commitish") != expected_head.get("target_commitish")
+            or timestamp(release.get("published_at"), "exact release")
+            != timestamp(expected_head.get("published_at"), "selected release")
+        ):
+            raise ReconciliationError(
+                f"Exact release {tag} no longer matches the selected immutable channel head"
+            )
+    elif not committed:
         source = github.api(f"repos/{repository}/actions/runs/{source_run_id}")
         require_run_identity(
             source,
@@ -758,7 +786,7 @@ def reconcile(github: GitHub, run_id: int, max_attempts: int) -> None:
         )
 
 
-def discover(github: GitHub) -> list[int]:
+def discover(github: GitHub) -> list[tuple[int, dict[str, Any]]]:
     repository = github.repository
     repository_state = github.api(f"repos/{repository}")
     default_branch = repository_state.get("default_branch")
@@ -766,8 +794,10 @@ def discover(github: GitHub) -> list[int]:
         raise ReconciliationError("repository has no default branch")
     workflow = github.api(f"repos/{repository}/actions/workflows/release-convergence.yml")
     workflow_id = positive_int(workflow.get("id"), "workflow ID")
+    # Large asset arrays and notes make hundred-release responses expensive.
+    # Keep full pagination: a release can be published long after its creation.
     releases = flatten_pages(
-        github.pages(f"repos/{repository}/releases?per_page=100")
+        github.pages(f"repos/{repository}/releases?per_page={RELEASE_INVENTORY_PAGE_SIZE}")
     )
     for prerelease, release in current_channel_heads(releases).items():
         if release.get("immutable") is not True:
@@ -819,11 +849,11 @@ def main() -> int:
         private_token=os.environ.get("PRO_REPOSITORY_TOKEN", ""),
     )
     try:
-        run_ids = discover(github) if args.latest else [args.run_id]
+        debts = discover(github) if args.latest else [(args.run_id, None)]
     except (OSError, ReconciliationError) as exc:
         print(f"release convergence reconciliation failed: {exc}", file=sys.stderr)
         return 1
-    if not run_ids:
+    if not debts:
         report_decision(
             "No failed run selected for retry among current immutable channel heads. "
             "Mutable releases and missing convergence runs are not qualified by this check."
@@ -832,10 +862,10 @@ def main() -> int:
     # Each selected run is a separate channel's debt. One channel's broken
     # evidence must not starve the other channel's retry; it still fails the job.
     failed = False
-    for run_id in run_ids:
+    for run_id, expected_head in debts:
         assert run_id is not None
         try:
-            reconcile(github, run_id, args.max_attempts)
+            reconcile(github, run_id, args.max_attempts, expected_head=expected_head)
         except (OSError, ReconciliationError) as exc:
             failed = True
             print(
