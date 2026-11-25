@@ -19,6 +19,62 @@ func (c *backupRefreshCapture) PopulateSnapshotAndSupplemental(snapshot models.S
 	c.MonitorAdapter.PopulateSnapshotAndSupplemental(snapshot, records)
 }
 
+func TestBackupReadStateForInstance_RefreshesOnlyWhenGuestArrives(t *testing.T) {
+	for _, guestType := range []string{"vm", "container"} {
+		t.Run(guestType, func(t *testing.T) {
+			now := time.Now().UTC()
+			state := models.NewState()
+			state.UpdateVMsForInstance("peer", []models.VM{{
+				ID: "peer-vm-100", Instance: "peer", Node: "peer-node", VMID: 100, Name: "peer", Status: "running", LastSeen: now,
+			}})
+			state.UpdateStorage([]models.Storage{{
+				ID: "target-local", Instance: "target", Node: "target-node", Name: "local", Type: "dir", Content: "backup", Active: true, Enabled: true,
+			}})
+			state.UpdatePBSBackups("pbs", []models.PBSBackup{{
+				ID: "pbs-vm-100", Instance: "pbs", Datastore: "archive", BackupType: "vm", VMID: "100",
+				Files: []string{"index.json.blob", "drive.fidx"}, VerificationRaw: map[string]any{"state": "ok"},
+			}})
+			store := &backupRefreshCapture{MonitorAdapter: unifiedresources.NewMonitorAdapter(unifiedresources.NewRegistry(nil))}
+			store.MonitorAdapter.PopulateFromSnapshot(state.GetSnapshot())
+			m := &Monitor{state: state, resourceStore: store}
+
+			// No guest on target; still use the published storage view and
+			// leave the unrelated peer and its archives alone.
+			read := m.backupReadStateForInstance("target")
+			require.Same(t, store, read)
+			require.Zero(t, store.snapshot.LastUpdate, "an empty target must not republish the registry")
+			require.Equal(t, []string{"local"}, storageNamesForNode(read, "target", "target-node"))
+			nodes := map[int]string{}
+			populateGuestNodeMapFromReadState(read, "target", nodes)
+			require.Empty(t, nodes, "a same-ID peer must not stand in for target inventory")
+
+			// The next read after a real collection must still catch up the
+			// registry, with either kind of guest and no negative cache.
+			if guestType == "vm" {
+				state.UpdateVMsForInstance("target", []models.VM{{
+					ID: "target-vm-100", Instance: "target", Node: "target-node", VMID: 100, Name: "target", Status: "running", LastSeen: now,
+				}})
+			} else {
+				state.UpdateContainersForInstance("target", []models.Container{{
+					ID: "target-ct-100", Instance: "target", Node: "target-node", VMID: 100, Name: "target", Status: "running", LastSeen: now,
+				}})
+			}
+			full := state.GetSnapshot()
+			require.False(t, backupReadStateHasGuestForInstance(store, "target"), "registry is deliberately one update behind")
+			read = m.backupReadStateForInstance("target")
+			require.Same(t, store, read)
+			populateGuestNodeMapFromReadState(read, "target", nodes)
+			require.Equal(t, map[int]string{100: "target-node"}, nodes)
+			require.Equal(t, []string{"local"}, storageNamesForNode(read, "target", "target-node"))
+			require.Len(t, store.VMs(), len(full.VMs), "peer VM must survive catch-up")
+			require.Len(t, store.Containers(), len(full.Containers))
+			require.Equal(t, full, store.snapshot, "catch-up must publish the same complete snapshot")
+			store.snapshot.PBSBackups[0].Files[0] = "local edit"
+			require.Equal(t, full.PBSBackups, state.GetBackups().PBS, "published snapshot must stay detached")
+		})
+	}
+}
+
 func TestSyncGuestBackupTimesAndResourceStore_UsesLightweightPBSRows(t *testing.T) {
 	now := time.Now().UTC()
 	state := models.NewState()

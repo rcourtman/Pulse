@@ -845,13 +845,23 @@ func (m *Monitor) backupReadStateForInstance(instanceName string) unifiedresourc
 		return nil
 	}
 	readState := m.currentModeReadState()
-	if backupReadStateHasGuestForInstance(readState, instanceName) || m.state == nil {
+	if backupReadStateHasGuestForInstance(readState, instanceName) {
 		return readState
 	}
 
 	scope := m.mockModeFence.begin()
-	snapshot := m.state.GetSnapshot()
-	if !backupSnapshotHasGuestForInstance(snapshot, instanceName) {
+	m.mu.RLock()
+	state := m.state
+	m.mu.RUnlock()
+	if state == nil {
+		return readState
+	}
+
+	// The registry may briefly lag a guest update. Only pay for a full
+	// snapshot to catch it up when State actually has a guest it can add;
+	// a connected but empty instance can reuse the existing read view.
+	snapshot, found := state.GetSnapshotIfGuestForInstance(instanceName)
+	if !found {
 		return readState
 	}
 
@@ -875,20 +885,6 @@ func backupReadStateHasGuestForInstance(readState unifiedresources.ReadState, in
 	}
 	for _, ct := range readState.Containers() {
 		if ct != nil && ct.Instance() == instanceName {
-			return true
-		}
-	}
-	return false
-}
-
-func backupSnapshotHasGuestForInstance(snapshot models.StateSnapshot, instanceName string) bool {
-	for _, vm := range snapshot.VMs {
-		if vm.Instance == instanceName {
-			return true
-		}
-	}
-	for _, ct := range snapshot.Containers {
-		if ct.Instance == instanceName {
 			return true
 		}
 	}
