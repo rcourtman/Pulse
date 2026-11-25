@@ -76,7 +76,7 @@ func TestProjectionWatermarkSurvivesReopen(t *testing.T) {
 
 func TestWalkOldestAfterIDVisitsOnlyTail(t *testing.T) {
 	store := newTestStore(t)
-	base := time.Date(2026, 8, 31, 10, 0, 0, 0, time.UTC)
+	base := time.Now().UTC().Truncate(time.Second).Add(-time.Hour)
 
 	for i := 0; i < 3; i++ {
 		store.Append(Event{OccurredAt: base.Add(time.Duration(i) * time.Minute), Type: TypeFired, AlertID: "a1"})
