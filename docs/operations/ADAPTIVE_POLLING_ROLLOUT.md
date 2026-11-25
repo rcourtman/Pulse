@@ -32,8 +32,9 @@ There is no dedicated UI toggle. Choose one configuration source:
 An explicit environment value overrides `system.json`. Do not change both
 sources at once or assume a file edit took effect while an override remains.
 See [configuration](../monitoring/ADAPTIVE_POLLING.md#-configuration) for intervals.
-After restart, the health response's `enabled` field confirms the effective flag,
-not successful monitoring.
+After restart, the health response's `enabled` field confirms the effective
+adaptive timing flag, not whether polls are running or successful. Fixed-interval
+polls can still run when the flag is false.
 
 ## 🔍 Monitor (First 15m)
 
@@ -42,8 +43,9 @@ run the local jq queries against each saved file, not a separate HTTP request pe
 query. Stop collection if the system becomes unresponsive. Do not add an
 unbounded `watch` loop, enable Debug or expose a metrics port for this check.
 
-Compare per-instance `pollStatus.lastSuccess`, `consecutiveFailures`, breaker
-state and dead-letter tasks with the baseline. Last-success times should advance
+[Compare per-connection poll results](../api/SCHEDULER_HEALTH.md#compare-two-poll-snapshots)
+with the baseline, including whether the latest poll error advances. Check
+breaker state and dead-letter tasks as well. Last-success times should advance
 in line with the effective polling intervals. Check that the affected dashboard
 data still refreshes. A snapshot's `updatedAt` is its collection time, not a
 successful provider poll. There is no fleet-independent queue-depth success

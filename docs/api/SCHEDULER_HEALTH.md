@@ -4,7 +4,10 @@
 **Auth**: Required. Use a signed-in Pulse browser or an API token in a private
 header file; do not copy a session cookie or token into a command.
 
-Returns a real-time snapshot of the adaptive scheduler, including queue state, circuit breakers, and dead-letter tasks.
+Returns a snapshot of polling, including queue state, circuit breakers, and
+dead-letter tasks. `enabled: false` means adaptive timing is off. Configured
+connections can still poll at fixed intervals, and their queue and results still
+appear here. Neither `enabled` nor the queue depth is a health verdict.
 
 ## 📦 Response Format
 
@@ -83,9 +86,9 @@ Returns a real-time snapshot of the adaptive scheduler, including queue state, c
 ## 🔍 Key Fields
 
 ### Instances (`instances`)
-The authoritative source for per-instance health.
+The scheduler's record of each connection's recent poll results.
 
-*   **`pollStatus`**: `lastSuccess` timestamp, `lastError` details, `consecutiveFailures` count.
+*   **`pollStatus`**: `lastSuccess` timestamp, the current outstanding `lastError` if present, and `consecutiveFailures`. A complete success clears the error. A partial read can record both a success and a `partial` error with no consecutive failures.
 *   **`breaker`**: `state` (`closed`/`open`/`half_open`), `retryAt` next retry, `since` state start, `lastTransition` timestamp.
 *   **`deadLetter`**: `present` flag, `reason` (e.g., `permanent_failure`), `retryCount`, `nextRetry` if scheduled.
 
@@ -137,10 +140,9 @@ not polling health. Do not use verbose/trace output or share the header file.
 Use the printed filename in the following local queries. They make no further
 requests. Keep the raw response private: it includes infrastructure names,
 addresses and error text; redact these before sharing selected observations.
-Check `enabled` first: a disabled scheduler's empty queue is not a health pass.
-`updatedAt` is the snapshot time; per-instance `pollStatus.lastSuccess` records
-the last successful poll. Compare freshness with the effective poll intervals,
-not a universal queue-depth threshold.
+`updatedAt` is the snapshot time, not the time of the last successful poll.
+Use the per-connection timestamps to check for progress. Do not enable adaptive
+polling or restart Pulse just to collect this evidence.
 
 **Summarise the Snapshot:**
 ```bash
@@ -169,3 +171,33 @@ snapshot='/absolute/path/to/health.json' # use the printed filename
 jq '.instances[] | select(.breaker.state != "closed") |
   {key, state: .breaker.state}' "$snapshot"
 ```
+
+### Compare two poll snapshots
+
+Use two snapshots from the same running Pulse instance. Allow enough time for
+the connection's normal poll interval and any retry delay. If a snapshot
+request times out, keep that result and stop rather than repeatedly requesting
+it. This query reads each saved file locally and leaves out addresses and error
+messages. Keep the output private too: the connection keys can include names.
+
+```bash
+snapshot='/absolute/path/to/health.json' # use each saved filename in turn
+jq '{updatedAt, enabled, polls: [.instances[] |
+  {key, lastSuccess: .pollStatus.lastSuccess, lastErrorAt: .pollStatus.lastError.at,
+   lastErrorCategory: .pollStatus.lastError.category,
+   consecutiveFailures: .pollStatus.consecutiveFailures}]}' "$snapshot"
+```
+
+Compare the same `key` in both results:
+
+| What changes | What it tells you |
+| --- | --- |
+| `lastSuccess` advances | A poll completed successfully. A new `partial` error can still mean some readings were unavailable. |
+| Only `lastErrorAt` advances | Pulse is still recording failures for that connection. Check the error in your local snapshot. |
+| Neither advances during an expected poll window | You have no new recorded result. A slow poll, a pause or a wait for retry can look this way. Do not assume the target is offline. |
+
+A missing timestamp (`null` in this query) is not a fresh reading, and a
+missing connection is not proof that its poll succeeded. Check agent reports
+and alert evaluation separately. If you already scrape Prometheus, compare
+[completed poll outcomes](../monitoring/PROMETHEUS_METRICS.md#check-whether-polling-is-still-running)
+alongside these snapshots.
