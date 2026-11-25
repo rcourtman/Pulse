@@ -122,6 +122,7 @@ class ReleaseMemorySummaryTests(unittest.TestCase):
         self.assertIn("| Dashboard state messages | 450 | 450 |", text)
         self.assertIn("| Dashboard state updates | 449 | 449 |", text)
         self.assertIn("| Agents with repeated host report acceptance | n/a | n/a |", text)
+        self.assertIn("| Agents with repeated host state advances | n/a | n/a |", text)
         self.assertNotIn("Mock mode keeps", text)
 
     def test_incomplete_agent_measurement_keeps_window_traffic_without_an_rss_verdict(self):
@@ -133,14 +134,16 @@ class ReleaseMemorySummaryTests(unittest.TestCase):
         healthy = {
             "window_s": 300, "end_reached": True, "complete": True, "dashboard_state_updates": 41,
             "reports": {
-                "host": {"expected": 2, "accepted": 20, "agents_with_repeated_acceptance": 2},
+                "host": {"expected": 2, "accepted": 20, "agents_with_repeated_acceptance": 2,
+                         "agents_with_repeated_state_advances": 2},
                 "docker": {"expected": 1, "accepted": 10, "agents_with_repeated_acceptance": 1},
             },
         }
         thin = {
             **healthy, "complete": False, "dashboard_state_updates": 0,
             "reports": {**healthy["reports"], "host": {
-                "expected": 2, "accepted": 10, "agents_with_repeated_acceptance": 1,
+                "expected": 2, "accepted": 20, "agents_with_repeated_acceptance": 2,
+                "agents_with_repeated_state_advances": 0,
             }},
         }
         code, result, text = self.run_summary(
@@ -153,7 +156,9 @@ class ReleaseMemorySummaryTests(unittest.TestCase):
         self.assertNotIn("rss_growth_kib", result)
         self.assertEqual(result["candidate_agents"]["steady_traffic"], thin)
         self.assertIn("Candidate run did not complete successfully", text)
-        self.assertIn("| Agents with repeated host report acceptance | 2/2 (20 acceptances) | 1/2 (10 acceptances) |", text)
+        self.assertIn("| Agents with repeated host report acceptance | 2/2 (20 acceptances) | 2/2 (20 acceptances) |", text)
+        self.assertIn("| Agents with repeated host state advances | 2/2 | 0/2 |", text)
+        self.assertIn("| Agents with repeated docker state advances | n/a | n/a |", text)
         self.assertIn("| Dashboard state updates | 41 | 0 |", text)
 
     def test_legacy_frame_counts_are_not_reported_as_verified_state(self):

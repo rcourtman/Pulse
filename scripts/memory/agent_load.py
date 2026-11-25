@@ -21,8 +21,8 @@ file. It exits 1 when no report was accepted, more than 1% failed, or the
 dashboard never received an initial state followed by a nonempty state update.
 A handshake, welcome or heartbeat alone cannot pass as broadcast workload.
 When the memory sampler supplies a window, every configured agent report
-stream must also receive repeated HTTP acceptance inside that window, with
-at least one subsequent dashboard state update on an initialized connection.
+stream must also receive repeated HTTP acceptance and show an advancing
+source-specific report time on the connected dashboard inside that window.
 """
 
 from __future__ import annotations
@@ -57,20 +57,94 @@ DASHBOARD_LOCK = threading.Lock()
 class SteadyTraffic:
     since: int
     until: int
+    expected: dict[str, dict[str, int]]
     accepted: dict[str, dict[int, int]] = field(default_factory=lambda: {"host": {}, "docker": {}})
     dashboard_updates: int = 0
+    resource_identities: dict[str, dict[str, int]] = field(default_factory=dict)
+    applied: dict[str, dict[int, int]] = field(default_factory=lambda: {"host": {}, "docker": {}})
+    last_report_ms: dict[str, dict[int, int]] = field(default_factory=lambda: {"host": {}, "docker": {}})
 
     def contains(self, observed_at: float) -> bool:
         return self.since <= observed_at < self.until
 
-    def report(self, observed_at: float, expected: dict[str, int]) -> dict:
+    def observe_dashboard(self, data: dict, observed_at: float, *, initial: bool) -> None:
+        # Upserts are merge patches. Learn identities from the baseline, but
+        # only count clocks explicitly present in a subsequent state update.
+        if initial or "resources" in data:
+            self.resource_identities.clear()
+            rows = data.get("resources", [])
+        else:
+            delta = data.get("resourceDelta")
+            if not isinstance(delta, dict):
+                return
+            removed = delta.get("removed", [])
+            if not isinstance(removed, list) or not all(isinstance(key, str) for key in removed):
+                self.resource_identities.clear()
+                return
+            for key in removed:
+                self.resource_identities.pop(key, None)
+            rows = delta.get("upserts", [])
+        if not isinstance(rows, list):
+            self.resource_identities.clear()
+            return
+
+        in_window = not initial and self.contains(observed_at)
+        for row in rows:
+            if not isinstance(row, dict) or not isinstance(row.get("id"), str) or not row["id"]:
+                continue
+            key = row["id"]
+            identities = self.resource_identities.pop(key, {})
+            for kind, field_name, id_field in (
+                ("host", "agent", "machineId"),
+                ("docker", "docker", "containerId"),
+            ):
+                facet = row.get(field_name)
+                if field_name in row:
+                    if not isinstance(facet, dict):
+                        identities.pop(kind, None)
+                    elif id_field in facet:
+                        identity = facet[id_field]
+                        index = self.expected[kind].get(identity) if isinstance(identity, str) else None
+                        if index is None:
+                            identities.pop(kind, None)
+                        else:
+                            identities[kind] = index
+                if not in_window or kind not in identities:
+                    continue
+                if kind == "host":
+                    # A Docker report (or another monitoring source) can
+                    # refresh this same host row's shared lastSeen.
+                    timestamp = host_report_millis(facet.get("lastReportAt")) if isinstance(facet, dict) else None
+                else:
+                    # Only the known container row, not its merged host, has
+                    # lastSeen bound to that Docker agent's report time.
+                    timestamp = row.get("lastSeen")
+                index = identities[kind]
+                last = self.last_report_ms[kind]
+                if (
+                    type(timestamp) is int and timestamp > last.get(index, 0)
+                    and self.since * 1000 <= timestamp < self.until * 1000
+                    and timestamp <= int(observed_at * 1000)
+                ):
+                    last[index] = timestamp
+                    applied = self.applied[kind]
+                    applied[index] = applied.get(index, 0) + 1
+            if identities:
+                self.resource_identities[key] = identities
+
+    def report(self, observed_at: float) -> dict:
         reports = {
             kind: {
-                "expected": count,
+                "expected": len(identities),
                 "accepted": sum(self.accepted[kind].values()),
-                "agents_with_repeated_acceptance": sum(n >= 2 for n in self.accepted[kind].values()),
+                "agents_with_repeated_acceptance": sum(
+                    self.accepted[kind].get(index, 0) >= 2 for index in identities.values()
+                ),
+                "agents_with_repeated_state_advances": sum(
+                    self.applied[kind].get(index, 0) >= 2 for index in identities.values()
+                ),
             }
-            for kind, count in expected.items()
+            for kind, identities in self.expected.items()
         }
         end_reached = observed_at >= self.until
         return {
@@ -79,9 +153,22 @@ class SteadyTraffic:
             "reports": reports,
             "dashboard_state_updates": self.dashboard_updates,
             "complete": end_reached and self.dashboard_updates > 0 and all(
-                row["agents_with_repeated_acceptance"] == row["expected"] for row in reports.values()
+                row["agents_with_repeated_acceptance"] == row["agents_with_repeated_state_advances"] == row["expected"]
+                for row in reports.values()
             ),
         }
+
+
+def host_report_millis(value: object) -> int | None:
+    if not isinstance(value, str):
+        return None
+    try:
+        stamp = datetime.fromisoformat(value.removesuffix("Z") + "+00:00" if value.endswith("Z") else value)
+        if stamp.tzinfo is not None:
+            return int(stamp.timestamp() * 1000)
+    except (ValueError, OverflowError, OSError):
+        pass
+    return None
 
 
 @dataclass
@@ -296,18 +383,36 @@ def record_ws_message(
         message = json.loads(payload)
     except (ValueError, UnicodeError):
         return has_initial_state
-    if not isinstance(message, dict) or not isinstance(message.get("data"), dict) or not message["data"]:
+    if not isinstance(message, dict):
+        return has_initial_state
+    message_type = message.get("type")
+    if message_type == "stateTooLarge":
+        # The server no longer has a usable baseline for this connection.
+        if stats.steady is not None:
+            with stats.lock:
+                stats.steady.resource_identities.clear()
+        return False
+    data = message.get("data")
+    if not isinstance(data, dict) or not data:
         return has_initial_state
     with stats.lock:
-        if message.get("type") == "initialState":
+        initial = message_type == "initialState"
+        if initial:
             stats.ws_initial_states += 1
             has_initial_state = True
-        elif message.get("type") == "rawData" and has_initial_state:
+        elif message_type == "rawData" and has_initial_state:
             stats.ws_state_updates += 1
-            if stats.steady is not None and observed_at is not None and stats.steady.contains(observed_at):
-                stats.steady.dashboard_updates += 1
+        elif message_type == "rawData" and isinstance(data.get("resources"), list):
+            # Pulse can send a replacement full state as rawData after a
+            # stateTooLarge marker invalidates the baseline. It is not progress.
+            initial = True
+            has_initial_state = True
         else:
             return has_initial_state
+        if stats.steady is not None and observed_at is not None:
+            if not initial and stats.steady.contains(observed_at):
+                stats.steady.dashboard_updates += 1
+            stats.steady.observe_dashboard(data, observed_at, initial=initial)
         stats.ws_state_bytes += len(payload)
     return has_initial_state
 
@@ -408,11 +513,9 @@ def main(argv: list[str]) -> int:
     parser.add_argument("--steady-since", type=int, help="epoch seconds at the start of steady RSS sampling")
     parser.add_argument("--sample-until", type=int, help="epoch seconds at the end of RSS sampling")
     args = parser.parse_args(argv)
-    steady = None
     if args.steady_since is not None or args.sample_until is not None:
         if args.steady_since is None or args.sample_until is None or not 0 <= args.steady_since < args.sample_until:
             parser.error("--steady-since and --sample-until must specify an ordered pair")
-        steady = SteadyTraffic(args.steady_since, args.sample_until)
 
     signal.signal(signal.SIGTERM, lambda *_: STOP.set())
     base = f"http://{args.host}:{args.port}"
@@ -423,6 +526,12 @@ def main(argv: list[str]) -> int:
               args.interval, random.Random(rng.randrange(1 << 32)))
         for i in range(args.agents)
     ]
+    steady = None
+    if args.steady_since is not None:
+        steady = SteadyTraffic(args.steady_since, args.sample_until, {
+            "host": {agent.machine_id: agent.index for agent in agents},
+            "docker": {agent.containers[0]["id"]: agent.index for agent in agents if agent.containers},
+        })
     stats = Stats(steady=steady)
     started = time.time()
     deadline = started + args.duration
@@ -456,9 +565,7 @@ def main(argv: list[str]) -> int:
                       "errors": stats.ws_errors},
     }
     if steady is not None:
-        result["steady_traffic"] = steady.report(
-            sampling_stopped_at, {"host": len(agents), "docker": sum(bool(a.containers) for a in agents)},
-        )
+        result["steady_traffic"] = steady.report(sampling_stopped_at)
     with open(args.stats, "w") as handle:
         json.dump(result, handle, indent=2)
         handle.write("\n")
@@ -471,7 +578,7 @@ def main(argv: list[str]) -> int:
         return 1
     if steady is not None and not result["steady_traffic"]["complete"]:
         print("agent load did not complete the steady RSS window with repeated report acceptance "
-              "and dashboard state traffic; see steady_traffic in the stats", file=sys.stderr)
+              "and matching agent state advances; see steady_traffic in the stats", file=sys.stderr)
         return 1
     return 0
 

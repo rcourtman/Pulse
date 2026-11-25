@@ -401,9 +401,9 @@ def agent_lines(baseline: dict | None, candidate: dict | None, window_s: int | N
             "",
             f"**Agent traffic inside the planned {window_s} s RSS window**",
             "",
-            "Report acceptance means HTTP success, not proof of state application. "
-            "Dashboard updates must follow an initial state on the same connection; "
-            "they are not attributed to a particular report.",
+            "HTTP acceptance and applied state are observed separately. "
+            "An applied state advance is an in-window increase in a matched host agent's own report time "
+            "or its Docker counterpart's fixture container sighting, read from a live dashboard update.",
             "",
             "| | Baseline | Candidate |",
             "|---|---:|---:|",
@@ -418,14 +418,19 @@ def agent_lines(baseline: dict | None, candidate: dict | None, window_s: int | N
             cells = [str(value(d)) if d else "n/a" for d in steady]
             lines.append(f"| {label} | {cells[0]} | {cells[1]} |")
         for kind in ("host", "docker"):
-            cells = []
-            for d in steady:
-                row = d.get("reports", {}).get(kind)
-                cells.append(
-                    f"{row['agents_with_repeated_acceptance']}/{row['expected']} "
-                    f"({row['accepted']} acceptances)" if row else "n/a"
-                )
+            rows = [d.get("reports", {}).get(kind, {}) for d in steady]
+            cells = [
+                f"{row['agents_with_repeated_acceptance']}/{row['expected']} "
+                f"({row['accepted']} acceptances)" if row else "n/a"
+                for row in rows
+            ]
             lines.append(f"| Agents with repeated {kind} report acceptance | {cells[0]} | {cells[1]} |")
+            cells = [
+                f"{row['agents_with_repeated_state_advances']}/{row['expected']}"
+                if "agents_with_repeated_state_advances" in row else "n/a"
+                for row in rows
+            ]
+            lines.append(f"| Agents with repeated {kind} state advances | {cells[0]} | {cells[1]} |")
     return lines
 
 
