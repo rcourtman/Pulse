@@ -44,12 +44,18 @@ query. Stop collection if the system becomes unresponsive. Do not add an
 unbounded `watch` loop, enable Debug or expose a metrics port for this check.
 
 [Compare per-connection poll results](../api/SCHEDULER_HEALTH.md#compare-two-poll-snapshots)
-with the baseline, including whether the latest poll error advances. Check
-breaker state and dead-letter tasks as well. Last-success times should advance
-in line with the effective polling intervals. Check that the affected dashboard
-data still refreshes. A snapshot's `updatedAt` is its collection time, not a
-successful provider poll. There is no fleet-independent queue-depth success
-threshold, and an open breaker is a backoff state, not proof of a new regression.
+within the new run. The restart can reset the recorded results and counters.
+Use the pre-change baseline to identify which connections and readings to
+expect, not as the first capture of the new run. Check breaker state and
+dead-letter tasks, and allow for the configured intervals and retry delays.
+Confirm that the last-success times advance and the expected dashboard data
+refreshes. A new success with a partial error is not a complete read.
+
+A snapshot's `updatedAt` is its collection time, not a successful provider
+poll. A small queue can leave out overdue work a worker has already taken.
+See [where a poll stopped progressing](../monitoring/ADAPTIVE_POLLING.md#check-where-a-poll-stopped-progressing)
+before interpreting a flat result or changing the cadence again. An open
+breaker is a backoff state, not proof of a new regression.
 
 If using an already configured Prometheus scrape, compare queue and error
 metrics and the [age of the last recorded success](../monitoring/PROMETHEUS_METRICS.md#check-whether-polling-is-still-running)

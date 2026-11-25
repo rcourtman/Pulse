@@ -3,12 +3,39 @@
 Pulse uses an adaptive scheduler to optimize polling based on instance health and activity.
 
 ## 🧠 Architecture
-- **Scheduler**: Calculates intervals based on health/staleness.
-- **Priority Queue**: Min-heap keyed by `NextRun`.
-- **Circuit Breaker**: Prevents hot loops on failing instances using success/failure counters.
-- **Backoff**: Exponential retry delays (5s min to 5m max).
-- **Worker Pool**: One worker per configured instance (PVE/PBS/PMG), capped at 10.
-- **Global Concurrency Cap**: At most 2 polling cycles run at once to avoid resource spikes.
+- **Planning**: The monitor puts scheduled polls in a queue ordered by when
+  they are due. The limit of two concurrent planning passes per monitor does
+  not limit the number of polls workers can run.
+- **Workers**: By default each monitor sizes its worker pool from the targets
+  it can poll at startup, with at least one and at most ten workers. Workers
+  take due tasks from the queue. A worker is not reserved for each connection.
+  A positive `POLL_TASK_WORKERS` override instead caps concurrent poll tasks
+  across the whole Pulse process, including across workspaces. The override
+  is capped at 128. Both modes apply whether adaptive timing is on or off.
+- **Retries**: Backoff spaces out attempts after returned errors. A circuit
+  breaker can defer work for one connection without pausing the other
+  connections.
+
+### Check where a poll stopped progressing
+
+Queue depth and the number of tasks due soon describe work still in the queue
+at the time of the snapshot. A due poll that a worker or dispatcher has already
+taken is no longer counted. A snapshot with nothing due can therefore coexist
+with an overdue poll.
+
+[Compare recorded poll results](../api/SCHEDULER_HEALTH.md#compare-two-poll-snapshots)
+for the affected connection. A newer error without a newer success means Pulse
+recorded a failed poll. A newer success with a partial error means some
+readings are still missing. Neither a quiet queue nor a flat result counter
+shows that the target is down.
+
+If your build exposes [overdue poll stages](PROMETHEUS_METRICS.md#-scheduler-health)
+and you already scrape Pulse, a positive `waiting_for_slot` value means
+overdue work is waiting for a shared worker slot. A positive `running` value
+means a worker took the poll and has not returned within its time budget.
+Those are server-wide signals, not one connection's result. The queue alone cannot
+tell these stages apart. Do not change worker limits, timeouts or polling
+intervals just to identify the held stage.
 
 ## 🔬 Implementation Details (Developer Info)
 
@@ -78,12 +105,12 @@ diagnostics. A missing scrape is not evidence of zero errors.
 
 | Metric | Type | Description |
 | :--- | :--- | :--- |
-| `pulse_monitor_poll_total` | Counter | Total poll attempts. |
+| `pulse_monitor_poll_total` | Counter | Recorded poll outcomes, split by result. |
 | `pulse_monitor_poll_duration_seconds` | Histogram | Poll latency. |
 | `pulse_monitor_poll_staleness_seconds` | Gauge | Age since success at last result. |
 | `pulse_monitor_poll_queue_depth` | Gauge | Queue size. |
 | `pulse_monitor_poll_errors_total` | Counter | Error counts by category. |
-| `pulse_scheduler_queue_due_soon` | Gauge | Tasks due in the next 12 seconds. |
+| `pulse_scheduler_queue_due_soon` | Gauge | Tasks still queued that are due now or within 12 seconds. |
 
 If a scrape still works but polling stops producing results, use the
 [last-success timestamp](PROMETHEUS_METRICS.md#check-whether-polling-is-still-running)
