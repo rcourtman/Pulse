@@ -36,6 +36,28 @@ records the exercised routes and controls.
 
 Docker hosts report their local live-log opt-in separately from failure capture. A runtime with conflicting identity cannot serve a live read.
 
+### Overdue claimed polls are visible while the work is still pending
+
+The existing Prometheus listener exports
+`pulse_scheduler_claimed_poll_overdue_seconds` with two process-wide
+stages and no connection, provider or tenant identity. `waiting_for_slot`
+measures the maximum time beyond one task timeout from the scheduled due time
+for work dequeued by the process-limited dispatcher but not admitted.
+`running` measures the maximum time beyond one task timeout from worker
+admission through task preparation, polling and rescheduling. Values are
+computed at scrape time from active claims, without taking a provider,
+monitor or queue lock. An expired context does not end a claim that has
+not returned. A returned failure in backoff is not an active claim.
+
+Both gauges are zero when nothing in their stage exceeds the budget. Neither
+gauge measures work still in the queue, agent ingestion, alert evaluation
+or successful data collection. Existing liveness/readiness, polling,
+backoff, alerting and metrics listener access are unchanged.
+`TestScheduledPollWorkProgressInExporter` drives the ordinary PVE
+poll path with controlled slot and provider holds, a healthy sibling, a
+returned failure and the next successful read. Cancellation, scraping during
+monitor lock contention and the oldest active claim are checked separately.
+
 ### Snapshot memory state comes from the snapshot, not its guest kind (14 November 2026)
 
 The existing snapshot memory boolean is true only for a QEMU snapshot whose

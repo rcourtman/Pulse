@@ -3,6 +3,7 @@ package monitoring
 import (
 	"errors"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -1548,4 +1549,52 @@ func TestSetQueueDepth_ZeroWorks(t *testing.T) {
 	if got != 0 {
 		t.Errorf("queueDepth = %v, want 0", got)
 	}
+}
+
+func assertClaimedPollOverdue(t *testing.T, gatherer prometheus.Gatherer, waiting, running float64) {
+	t.Helper()
+	families, err := gatherer.Gather()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, family := range families {
+		if family.GetName() != "pulse_scheduler_claimed_poll_overdue_seconds" {
+			continue
+		}
+		want := map[string]float64{"waiting_for_slot": waiting, "running": running}
+		for _, metric := range family.GetMetric() {
+			labels := metric.GetLabel()
+			if len(labels) != 1 || labels[0].GetName() != "stage" {
+				t.Fatalf("only the bounded stage label is permitted: %v", labels)
+			}
+			stage := labels[0].GetValue()
+			value, ok := want[stage]
+			if !ok || metric.GetGauge() == nil || metric.GetGauge().GetValue() != value {
+				t.Fatalf("stage %q: got %v, wanted %g (expected stage=%v)", stage, metric.GetGauge(), value, ok)
+			}
+			delete(want, stage)
+		}
+		if len(want) != 0 {
+			t.Fatalf("missing stages: %v", want)
+		}
+		return
+	}
+	t.Fatal("no claimed poll overdue metric exposed")
+}
+
+func TestClaimedPollOverdueMetricKeepsTheOldestOutstandingWork(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		reg := prometheus.NewRegistry()
+		progress := newPollMetrics(reg).workProgress
+		now := time.Now()
+		oldest := progress.begin(pollWorkRunning, now.Add(-30*time.Second))
+		newer := progress.begin(pollWorkRunning, now.Add(-10*time.Second))
+		future := progress.begin(pollWorkWaitingForSlot, now.Add(time.Minute))
+		assertClaimedPollOverdue(t, reg, 0, 30)
+		progress.finish(oldest)
+		assertClaimedPollOverdue(t, reg, 0, 10)
+		progress.finish(newer)
+		assertClaimedPollOverdue(t, reg, 0, 0)
+		progress.finish(future)
+	})
 }
