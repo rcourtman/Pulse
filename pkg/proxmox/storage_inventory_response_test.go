@@ -10,6 +10,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+	"time"
 )
 
 func readTestStorageInventory(c *Client, kind string) (int, bool, error) {
@@ -251,5 +252,45 @@ func TestStorageInventoryRequiresCompletedResponse(t *testing.T) {
 		if err == nil || !body.closed {
 			t.Errorf("unfinished close established absence (content=%t): err=%v closed=%t", content, err, body.closed)
 		}
+	}
+}
+
+func TestProxmoxClient_ResponseHeaderTimeoutMatchesClientTimeout(t *testing.T) {
+	defaultClient, err := NewClient(ClientConfig{
+		Host:       "https://pve.example.invalid:8006",
+		TokenName:  "pulse@pam!token",
+		TokenValue: "secret",
+	})
+	if err != nil {
+		t.Fatalf("NewClient default failed: %v", err)
+	}
+	defer defaultClient.CloseIdleConnections()
+
+	transport, ok := defaultClient.httpClient.Transport.(*http.Transport)
+	if !ok {
+		t.Fatal("expected *http.Transport")
+	}
+	if transport.ResponseHeaderTimeout != defaultClientTimeout {
+		t.Fatalf("default ResponseHeaderTimeout = %v, want %v", transport.ResponseHeaderTimeout, defaultClientTimeout)
+	}
+
+	customTimeout := 45 * time.Second
+	customClient, err := NewClient(ClientConfig{
+		Host:       "https://pve.example.invalid:8006",
+		TokenName:  "pulse@pam!token",
+		TokenValue: "secret",
+		Timeout:    customTimeout,
+	})
+	if err != nil {
+		t.Fatalf("NewClient custom failed: %v", err)
+	}
+	defer customClient.CloseIdleConnections()
+
+	customTransport, ok := customClient.httpClient.Transport.(*http.Transport)
+	if !ok {
+		t.Fatal("expected *http.Transport")
+	}
+	if customTransport.ResponseHeaderTimeout != customTimeout {
+		t.Fatalf("custom ResponseHeaderTimeout = %v, want %v", customTransport.ResponseHeaderTimeout, customTimeout)
 	}
 }

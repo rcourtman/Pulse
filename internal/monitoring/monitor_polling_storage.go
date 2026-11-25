@@ -2,7 +2,9 @@ package monitoring
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"net"
 	"os"
 	"sort"
 	"strconv"
@@ -306,8 +308,7 @@ func (m *Monitor) pollStorageWithNodes(ctx context.Context, instanceName string,
 			}
 			if err != nil {
 				// Handle timeout gracefully - unavailable storage (e.g., NFS mounts) can cause this
-				errStr := err.Error()
-				if strings.Contains(errStr, "timeout") || strings.Contains(errStr, "deadline exceeded") {
+				if isStorageQueryTimeoutError(err) {
 					log.Warn().
 						Str("node", n.Node).
 						Str("instance", instanceName).
@@ -545,10 +546,14 @@ func (m *Monitor) pollStorageWithNodes(ctx context.Context, instanceName string,
 	}
 	successfulNodes := 0
 	failedNodes := 0
+	timedOutNodes := 0
 
 	for result := range resultChan {
 		if result.err != nil {
 			failedNodes++
+			if isStorageQueryTimeoutError(result.err) {
+				timedOutNodes++
+			}
 		} else {
 			successfulNodes++
 			polledNodes[result.node] = true // Mark this node as successfully polled
@@ -736,10 +741,18 @@ func (m *Monitor) pollStorageWithNodes(ctx context.Context, instanceName string,
 
 	// Warn if all nodes failed to get storage
 	if successfulNodes == 0 && failedNodes > 0 {
-		log.Error().
-			Str("instance", instanceName).
-			Int("failedNodes", failedNodes).
-			Msg("All nodes failed to retrieve storage - check Proxmox API permissions for Datastore.Audit on all storage")
+		if timedOutNodes == failedNodes {
+			log.Warn().
+				Str("instance", instanceName).
+				Int("failedNodes", failedNodes).
+				Msg("All nodes timed out retrieving storage - check for slow or unresponsive storage mounts")
+		} else {
+			log.Error().
+				Str("instance", instanceName).
+				Int("failedNodes", failedNodes).
+				Int("timedOutNodes", timedOutNodes).
+				Msg("All nodes failed to retrieve storage - check Proxmox API permissions for Datastore.Audit on all storage")
+		}
 	} else {
 		log.Debug().
 			Str("instance", instanceName).
@@ -750,6 +763,21 @@ func (m *Monitor) pollStorageWithNodes(ctx context.Context, instanceName string,
 			Dur("duration", duration).
 			Msg("Parallel storage polling completed")
 	}
+}
+
+func isStorageQueryTimeoutError(err error) bool {
+	if err == nil {
+		return false
+	}
+	if errors.Is(err, context.DeadlineExceeded) {
+		return true
+	}
+	var netErr net.Error
+	if errors.As(err, &netErr) && netErr.Timeout() {
+		return true
+	}
+	msg := strings.ToLower(err.Error())
+	return strings.Contains(msg, "timeout") || strings.Contains(msg, "deadline exceeded")
 }
 
 func shouldAttemptFallback(err error) bool {

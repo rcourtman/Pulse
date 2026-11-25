@@ -351,6 +351,63 @@ func TestCreateHTTPClient_TransportSettings(t *testing.T) {
 	if transport.TLSHandshakeTimeout != 10*time.Second {
 		t.Errorf("TLSHandshakeTimeout = %v, want 10s", transport.TLSHandshakeTimeout)
 	}
+	if transport.ResponseHeaderTimeout != 60*time.Second {
+		t.Errorf("ResponseHeaderTimeout = %v, want 60s", transport.ResponseHeaderTimeout)
+	}
+}
+
+func TestCreateHTTPClientWithTimeout_ResponseHeaderTimeoutTracksClientTimeout(t *testing.T) {
+	cases := []struct {
+		name     string
+		input    time.Duration
+		expected time.Duration
+	}{
+		{name: "default zero", input: 0, expected: 60 * time.Second},
+		{name: "negative defaults to 60s", input: -5 * time.Second, expected: 60 * time.Second},
+		{name: "custom 30s", input: 30 * time.Second, expected: 30 * time.Second},
+		{name: "custom 90s", input: 90 * time.Second, expected: 90 * time.Second},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			client := CreateHTTPClientWithTimeout(true, "", tc.input)
+			transport, ok := client.Transport.(*http.Transport)
+			if !ok {
+				t.Fatal("Transport is not *http.Transport")
+			}
+			if transport.ResponseHeaderTimeout != tc.expected {
+				t.Fatalf("ResponseHeaderTimeout = %v, want %v", transport.ResponseHeaderTimeout, tc.expected)
+			}
+		})
+	}
+}
+
+func TestCreateHTTPClientWithTimeout_SlowResponseHeadersHonorConfiguredTimeout(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		select {
+		case <-r.Context().Done():
+			return
+		case <-time.After(120 * time.Millisecond):
+		}
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("ok"))
+	}))
+	defer srv.Close()
+
+	shortClient := CreateHTTPClientWithTimeout(false, "", 50*time.Millisecond)
+	if resp, err := shortClient.Get(srv.URL); err == nil {
+		resp.Body.Close()
+		t.Fatal("expected short timeout client to fail on slow response headers")
+	}
+
+	longClient := CreateHTTPClientWithTimeout(false, "", 500*time.Millisecond)
+	resp, err := longClient.Get(srv.URL)
+	if err != nil {
+		t.Fatalf("expected longer timeout client to succeed on slow response headers, got %v", err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200", resp.StatusCode)
+	}
 }
 
 func TestShouldBypassProxyForTargetHost(t *testing.T) {
