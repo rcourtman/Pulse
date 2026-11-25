@@ -58,6 +58,12 @@ successor. A direct queue edit retains the latest replacement, or cancels the
 successor on removal, without starting an overlapping read. Other keys,
 including the same name on another provider, remain independently eligible.
 
+A panic escaping a scheduled task is recovered at the task boundary in both
+worker modes. It is logged with the task type and connection. Unwinding
+releases the claim and work marker, and the default worker keeps taking
+ordinary queued work. A preparation panic does not invent a provider result
+or start an immediate retry; the ordinary planner can schedule that key again.
+
 Both gauges are zero when nothing in their stage exceeds the budget. Neither
 gauge measures work still in the queue, agent ingestion, alert evaluation
 or successful data collection. Liveness/readiness, alert rules, worker
@@ -71,8 +77,12 @@ and PVE reads with fixed and adaptive polling under both worker modes. A held
 read is not duplicated even after its context expires, an unrelated node
 still publishes, and the held connection enters its ordinary retry on return.
 `TestScheduledPollClaimPreservesExplicitEdits` checks queue replacement,
-removal, completion and provider identity. These fixtures do not establish
-an installed outage's cause or recovery.
+removal, completion and provider identity.
+`TestScheduledPollTaskPanicDoesNotStopWorker` uses one slot at a time in
+each worker mode. After a different source panics during task preparation,
+the peer's next ordinary poll updates its PVE row and writes its next CPU
+History point. These fixtures do not establish an installed outage's cause
+or recovery.
 
 ### Snapshot memory state comes from the snapshot, not its guest kind (14 November 2026)
 
