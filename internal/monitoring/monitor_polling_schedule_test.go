@@ -2,6 +2,7 @@ package monitoring
 
 import (
 	"context"
+	"sync/atomic"
 	"testing"
 	"testing/synctest"
 	"time"
@@ -159,10 +160,9 @@ func TestScheduledRetryKeepsWorkerBackoffAcrossPlanningTicks(t *testing.T) {
 			synctest.Test(t, func(t *testing.T) {
 				ctx, cancel := context.WithCancel(t.Context())
 				defer cancel()
-				reads := 0
+				var reads atomic.Int32
 				m := newScheduleFixture(ctx, tc.adaptive, func(context.Context) ([]proxmox.Node, error) {
-					reads++
-					if reads == 1 {
+					if reads.Add(1) == 1 {
 						return nil, context.DeadlineExceeded
 					}
 					return []proxmox.Node{{Node: scheduleFixtureNode, Status: "online", CPU: 0.42, Uptime: 36000}}, nil
@@ -183,13 +183,13 @@ func TestScheduledRetryKeepsWorkerBackoffAcrossPlanningTicks(t *testing.T) {
 				go m.taskWorker(ctx, 0)
 				time.Sleep(89*time.Second - time.Millisecond)
 				synctest.Wait()
-				if reads != 1 {
-					t.Fatalf("the provider was retried before its backoff elapsed: reads=%d", reads)
+				if n := reads.Load(); n != 1 {
+					t.Fatalf("the provider was retried before its backoff elapsed: reads=%d", n)
 				}
 				time.Sleep(time.Millisecond)
 				synctest.Wait()
-				if nodes := m.state.GetSnapshot().Nodes; reads != 2 || len(nodes) != 1 || nodes[0].CPU != 0.42 {
-					t.Fatalf("the retry must collect at its scheduled time: reads=%d nodes=%+v", reads, nodes)
+				if n, nodes := reads.Load(), m.state.GetSnapshot().Nodes; n != 2 || len(nodes) != 1 || nodes[0].CPU != 0.42 {
+					t.Fatalf("the retry must collect at its scheduled time: reads=%d nodes=%+v", n, nodes)
 				}
 			})
 		})
