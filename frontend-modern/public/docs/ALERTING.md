@@ -138,3 +138,57 @@ If you already scrape Prometheus, compare `pulse_monitor_poll_total` by
 `result`. Rising errors mean Pulse is still recording poll outcomes. If
 several expected sources give no new results, check whether collection has
 stopped. [Check real alert delivery separately](#choose-where-notifications-go).
+
+### Warn when expected polls stop succeeding
+
+If you already scrape Pulse with Prometheus, set two alerts there rather than
+in the Pulse instance you want to watch. Keep the alert evaluator and its
+notification path outside the failure you want to detect. Use your existing
+protected scrape path. Do not open the metrics port to set up these rules.
+
+**Pulse metrics unavailable.** Alert when Prometheus cannot scrape the expected
+Pulse target or has no scrape series for it:
+
+```promql
+up{job="pulse", instance="pulse-a.example:9091"} == 0
+or absent(up{job="pulse", instance="pulse-a.example:9091"})
+```
+
+**No recent successful poll.** Alert for a connection you expect to keep
+polling. This checks for an old or missing success time only while the matching
+Pulse scrape works:
+
+```promql
+(
+  time() - pulse_monitor_poll_last_success_timestamp{
+    job="pulse", instance="pulse-a.example:9091",
+    instance_type="pve", exported_instance="home-pve"
+  } > 300
+  or absent(pulse_monitor_poll_last_success_timestamp{
+    job="pulse", instance="pulse-a.example:9091",
+    instance_type="pve", exported_instance="home-pve"
+  })
+)
+and on (job, instance)
+  (up{job="pulse", instance="pulse-a.example:9091"} == 1)
+```
+
+Replace the example labels and check that the timestamp series appears during
+normal polling before enabling the rule. With Prometheus's default label
+handling, `instance` is the Pulse scrape target and `exported_instance` is the
+connection name reported by Pulse. If you keep exporter labels or relabel
+metrics, use the actual labels and match on the labels that identify the scrape
+target. For PBS, use `instance_type="pbs"` and its own connection name.
+
+The 300 seconds is an example, not a Pulse default. Allow for the connection's
+normal poll interval, poll duration and retry delays. Give each alert a
+Prometheus `for` duration. For the poll alert, make it long enough to allow the
+first success after a normal restart. Update or pause the rule if you remove
+or intentionally pause the target.
+
+A poll warning means Pulse has not recorded a fresh success for that
+connection. An increasing `pulse_monitor_poll_total` series with
+`result="error"` means polls are still returning failures. No new results
+despite working scrapes does not tell you whether the poll is slow or stuck.
+Use the [missing-data checks](FAQ.md#no-data-showing) to narrow it down.
+Neither alert checks whether agents reported or Pulse evaluated its rules.
