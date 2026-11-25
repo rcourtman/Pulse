@@ -5520,10 +5520,8 @@ func (m *Monitor) cleanupTrackingMaps(now time.Time) {
 	const staleThreshold = 24 * time.Hour
 	cutoff := now.Add(-staleThreshold)
 	cleaned := 0
-	activeKeys := m.activeSchedulerKeys()
 
 	m.mu.Lock()
-	defer m.mu.Unlock()
 
 	// Clean up auth tracking maps - entries older than 24 hours
 	for nodeID, ts := range m.lastAuthAttempt {
@@ -5568,21 +5566,53 @@ func (m *Monitor) cleanupTrackingMaps(now time.Time) {
 		}
 	}
 
-	// Only clean up circuit breakers for inactive keys that have been idle
-	// for longer than the stale threshold
+	// Only ask providers whose breakers could expire. Listing providers can
+	// read persisted config; do not make an ordinary tick wait on an unrelated
+	// catalog, or hold the monitor lock across those reads.
+	type candidate struct {
+		key           string
+		breaker       *circuitBreaker
+		lastOutcomeAt time.Time
+	}
+	var candidates []candidate
+	var providerTypes map[InstanceType]struct{}
 	for key, breaker := range m.circuitBreakers {
-		if _, active := activeKeys[key]; !active {
-			// Key is not in active clients - check if breaker is stale
-			if breaker != nil {
-				_, _, _, _, lastTransition := breaker.stateDetails()
-				if now.Sub(lastTransition) > staleThreshold {
-					delete(m.circuitBreakers, key)
-					delete(m.failureCounts, key)
-					delete(m.lastOutcome, key)
-					cleaned++
+		if breaker == nil {
+			continue
+		}
+		_, _, _, _, lastTransition := breaker.stateDetails()
+		if lastTransition.Before(cutoff) {
+			candidates = append(candidates, candidate{key, breaker, m.lastOutcome[key].recordedAt})
+			if providerType, _, found := strings.Cut(key, "::"); found {
+				if providerTypes == nil {
+					providerTypes = make(map[InstanceType]struct{})
 				}
+				providerTypes[InstanceType(providerType)] = struct{}{}
 			}
 		}
+	}
+	m.mu.Unlock()
+
+	if len(candidates) > 0 {
+		activeKeys := m.activeSchedulerKeysForProviders(providerTypes)
+		m.mu.Lock()
+		for _, candidate := range candidates {
+			key := candidate.key
+			if _, active := activeKeys[key]; active || m.circuitBreakers[key] != candidate.breaker ||
+				!m.lastOutcome[key].recordedAt.Equal(candidate.lastOutcomeAt) {
+				continue
+			}
+			// A worker may have advanced or replaced this breaker while
+			// we were outside the lock to read provider membership.
+			_, _, _, _, lastTransition := candidate.breaker.stateDetails()
+			if lastTransition.Before(cutoff) {
+				delete(m.circuitBreakers, key)
+				delete(m.failureCounts, key)
+				delete(m.lastOutcome, key)
+				cleaned++
+			}
+		}
+		m.mu.Unlock()
 	}
 
 	if cleaned > 0 {

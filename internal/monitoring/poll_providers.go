@@ -601,13 +601,19 @@ func builtinPollProvider(instanceType InstanceType) PollProvider {
 	}
 }
 
-func (m *Monitor) activeSchedulerKeys() map[string]struct{} {
+func (m *Monitor) activeSchedulerKeysForProviders(providerTypes map[InstanceType]struct{}) map[string]struct{} {
+	if len(providerTypes) == 0 {
+		return nil
+	}
 	activeKeys := make(map[string]struct{})
 	for _, provider := range m.pollProviderSnapshotWithBuiltins() {
 		if provider == nil {
 			continue
 		}
 		instanceType := provider.Type()
+		if _, needed := providerTypes[instanceType]; !needed {
+			continue
+		}
 		for _, instanceName := range provider.ListInstances(m) {
 			name := strings.TrimSpace(instanceName)
 			if name == "" {
