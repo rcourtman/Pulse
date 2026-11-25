@@ -110,5 +110,7 @@ Returns:
 
 Use the [authenticated snapshot and local queries](../api/SCHEDULER_HEALTH.md#-common-queries-jq)
 to inspect it without putting credentials in command arguments or repeatedly
-requesting the same data. Follow the [rollout and rollback checks](../operations/ADAPTIVE_POLLING_ROLLOUT.md)
-when changing the flag; queue depth alone is not a monitoring-health verdict.
+requesting the same data. The response's `enabled` flag describes adaptive
+timing. You can still [compare poll results](../api/SCHEDULER_HEALTH.md#compare-two-poll-snapshots)
+when it is false. Follow the [rollout and rollback checks](../operations/ADAPTIVE_POLLING_ROLLOUT.md)
+when changing the flag. Queue depth alone is not a monitoring-health verdict.
