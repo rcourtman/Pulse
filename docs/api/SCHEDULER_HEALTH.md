@@ -263,7 +263,7 @@ show that the same task was late in both snapshots, or identify a connection
 or cause. `null` means the capture did not include this measurement (for
 example, from an older Pulse build). Zero does not rule out a poll already
 taken by a worker. If you have Prometheus, check the separate
-[claimed-poll stages](../monitoring/PROMETHEUS_METRICS.md#scheduler-health).
+[claimed-poll stages](../monitoring/PROMETHEUS_METRICS.md#-scheduler-health).
 
 If no result advanced, read `retry.after` beside the later snapshot's
 `updatedAt`. For an `open` or `half_open` breaker, `retryAt` is the earliest
