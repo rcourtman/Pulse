@@ -108,9 +108,9 @@ diagnostics. A missing scrape is not evidence of zero errors.
 | `pulse_monitor_poll_total` | Counter | Recorded poll outcomes, split by result. |
 | `pulse_monitor_poll_duration_seconds` | Histogram | Poll latency. |
 | `pulse_monitor_poll_staleness_seconds` | Gauge | Age since the last success. Older builds update it only when a result is recorded. |
-| `pulse_monitor_poll_queue_depth` | Gauge | Queue size. |
+| `pulse_monitor_poll_queue_depth` | Gauge | Total number of tasks still queued at scrape time. |
 | `pulse_monitor_poll_errors_total` | Counter | Error counts by category. |
-| `pulse_scheduler_queue_due_soon` | Gauge | Tasks still queued that are due now or within 12 seconds. |
+| `pulse_scheduler_queue_due_soon` | Gauge | Tasks still queued that are due now or within 12 seconds at scrape time. Older builds report the last recorded queue sample. |
 
 If a scrape still works but polling stops producing results, use the
 [last-success timestamp](PROMETHEUS_METRICS.md#check-whether-polling-is-still-running)

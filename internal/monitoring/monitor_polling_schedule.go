@@ -140,7 +140,6 @@ func (m *Monitor) poll(_ context.Context, wsHub *websocket.Hub) {
 	for _, task := range plannedTasks {
 		m.taskQueue.upsertPlan(task)
 	}
-	m.updateQueueDepthMetric()
 
 	// Update performance metrics atomically to prevent data races when
 	// multiple poll() goroutines run concurrently (e.g. mock mode transitions).

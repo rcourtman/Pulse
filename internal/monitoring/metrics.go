@@ -25,6 +25,7 @@ type PollMetrics struct {
 	nodeLastSuccess              *prometheus.GaugeVec
 	schedulerQueueReady          prometheus.Gauge
 	schedulerQueueDepthByType    *prometheus.GaugeVec
+	schedulerQueues              *pollQueueCollector
 	schedulerQueueWait           *prometheus.HistogramVec
 	workProgress                 *pollWorkProgress
 	schedulerDeadLetterDepth     *prometheus.GaugeVec
@@ -171,7 +172,7 @@ func newPollMetrics(reg prometheus.Registerer) *PollMetrics {
 				Namespace: "pulse",
 				Subsystem: "scheduler",
 				Name:      "queue_depth",
-				Help:      "Current scheduler queue depth partitioned by instance type.",
+				Help:      schedulerQueueDepthByTypeHelp,
 			},
 			[]string{"instance_type"},
 		),
@@ -227,21 +228,20 @@ func newPollMetrics(reg prometheus.Registerer) *PollMetrics {
 		lastQueueTypeKeys:    make(map[string]struct{}),
 		lastDLQKeys:          make(map[string]struct{}),
 	}
+	pm.schedulerQueues = newPollQueueCollector(pm)
 
 	reg.MustRegister(
 		pm.pollDuration,
 		pm.pollResults,
 		pm.pollErrors,
 		pm.lastSuccess,
-		pm.queueDepth,
 		pm.inflight,
 		pm.nodePollDuration,
 		pm.nodePollResults,
 		pm.nodePollErrors,
 		pm.nodeLastSuccess,
 		newPollAgeCollector(pm),
-		pm.schedulerQueueReady,
-		pm.schedulerQueueDepthByType,
+		pm.schedulerQueues,
 		pm.schedulerQueueWait,
 		pm.workProgress,
 		pm.schedulerDeadLetterDepth,
@@ -368,7 +368,7 @@ func (pm *PollMetrics) RecordQueueWait(instanceType string, wait time.Duration) 
 
 // UpdateQueueSnapshot updates scheduler queue depth metrics.
 func (pm *PollMetrics) UpdateQueueSnapshot(snapshot QueueSnapshot) {
-	if pm == nil {
+	if pm == nil || pm.usesLiveSchedulerQueues() {
 		return
 	}
 
@@ -486,7 +486,7 @@ func (pm *PollMetrics) RecordResult(result PollResult) {
 
 // ResetQueueDepth sets the pending queue depth for the next polling cycle.
 func (pm *PollMetrics) ResetQueueDepth(total int) {
-	if pm == nil {
+	if pm == nil || pm.usesLiveSchedulerQueues() {
 		return
 	}
 	if total < 0 {
@@ -501,7 +501,7 @@ func (pm *PollMetrics) ResetQueueDepth(total int) {
 
 // SetQueueDepth allows direct gauge control when needed.
 func (pm *PollMetrics) SetQueueDepth(depth int) {
-	if pm == nil {
+	if pm == nil || pm.usesLiveSchedulerQueues() {
 		return
 	}
 	if depth < 0 {
@@ -527,7 +527,7 @@ func (pm *PollMetrics) DecInFlight(instanceType string) {
 }
 
 func (pm *PollMetrics) decrementPending() {
-	if pm == nil {
+	if pm == nil || pm.usesLiveSchedulerQueues() {
 		return
 	}
 

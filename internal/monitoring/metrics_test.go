@@ -1,6 +1,7 @@
 package monitoring
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -14,6 +15,64 @@ import (
 	dto "github.com/prometheus/client_model/go"
 	internalerrors "github.com/rcourtman/pulse-go-rewrite/internal/monitoring/errors"
 )
+
+func TestSchedulerQueueScrapeCountsEachActiveQueueOnce(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		reg := prometheus.NewRegistry()
+		pm := newPollMetrics(reg)
+		left := &Monitor{pollMetrics: pm, taskQueue: NewTaskQueue()}
+		right := &Monitor{pollMetrics: pm, taskQueue: NewTaskQueue()}
+		due := time.Now().Add(time.Minute)
+		left.taskQueue.Upsert(ScheduledTask{InstanceType: InstanceTypePVE, InstanceName: "one", NextRun: due})
+		right.taskQueue.Upsert(ScheduledTask{InstanceType: InstanceTypePVE, InstanceName: "one", NextRun: due})
+		right.taskQueue.Upsert(ScheduledTask{InstanceType: InstanceTypePBS, InstanceName: "two", NextRun: due})
+
+		start := func(m *Monitor, id int) func() {
+			ctx, cancel := context.WithCancel(context.Background())
+			t.Cleanup(cancel)
+			done := make(chan struct{})
+			go func() {
+				defer close(done)
+				m.taskWorker(ctx, id)
+			}()
+			synctest.Wait()
+			return func() {
+				cancel()
+				<-done
+			}
+		}
+		stopLeftFirst := start(left, 1)
+		stopLeftLast := start(left, 2)
+		stopRight := start(right, 1)
+		handler := promhttp.HandlerFor(reg, promhttp.HandlerOpts{})
+		scrape := func(want ...string) {
+			t.Helper()
+			rec := httptest.NewRecorder()
+			handler.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/metrics", nil))
+			if rec.Code != http.StatusOK {
+				t.Fatalf("scrape returned HTTP %d", rec.Code)
+			}
+			for _, line := range want {
+				if !strings.Contains(rec.Body.String(), "\n"+line+"\n") {
+					t.Errorf("scrape did not contain %q:\n%s", line, rec.Body)
+				}
+			}
+		}
+		pveTwo := `pulse_scheduler_queue_depth{instance_type="pve"} 2`
+		pveOne := `pulse_scheduler_queue_depth{instance_type="pve"} 1`
+		pbsOne := `pulse_scheduler_queue_depth{instance_type="pbs"} 1`
+		// A one-monitor snapshot must not overwrite the process-wide gauges.
+		left.updateQueueDepthMetric()
+		scrape("pulse_monitor_poll_queue_depth 3", pveTwo, pbsOne)
+		stopLeftFirst()
+		scrape("pulse_monitor_poll_queue_depth 3", pveTwo, pbsOne)
+		stopLeftLast()
+		scrape("pulse_monitor_poll_queue_depth 2", pveOne, pbsOne)
+		stopRight()
+		scrape("pulse_monitor_poll_queue_depth 0", "pulse_scheduler_queue_due_soon 0",
+			`pulse_scheduler_queue_depth{instance_type="pve"} 0`, `pulse_scheduler_queue_depth{instance_type="pbs"} 0`)
+	})
+}
 
 func TestPollStalenessGaugesAgeWithoutNewResults(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
@@ -1339,5 +1398,85 @@ func TestClaimedPollOverdueMetricKeepsTheOldestOutstandingWork(t *testing.T) {
 		progress.finish(newer)
 		assertClaimedPollOverdue(t, reg, 0, 0)
 		progress.finish(future)
+	})
+}
+func TestSchedulerQueueScrapeWhileWorkerWaits(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		reg := prometheus.NewRegistry()
+		m := &Monitor{taskQueue: NewTaskQueue(), deadLetterQueue: NewTaskQueue(), pollMetrics: newPollMetrics(reg)}
+		limiter := newPollTaskWorkerLimiter(1)
+		if !limiter.acquire(ctx) {
+			t.Fatal("could not reserve the only worker slot")
+		}
+		defer limiter.release()
+
+		now := time.Now()
+		m.taskQueue.Upsert(ScheduledTask{InstanceType: InstanceTypePVE, InstanceName: "held", NextRun: now})
+		m.taskQueue.Upsert(ScheduledTask{InstanceType: InstanceTypePBS, InstanceName: "next", NextRun: now.Add(20 * time.Second)})
+		m.deadLetterQueue.Upsert(ScheduledTask{InstanceType: InstanceTypePMG, InstanceName: "parked", NextRun: now})
+		// Keep the worker slot occupied until the dispatcher exits. The
+		// PVE claim is waiting for that slot and no provider can run.
+		exited := make(chan struct{})
+		go func() {
+			defer close(exited)
+			m.dispatchTaskWorkers(ctx, limiter)
+		}()
+		synctest.Wait()
+		if depth := m.taskQueue.Size(); depth != 1 {
+			t.Fatalf("fixture must have one claimed poll and one queued poll; queued = %d", depth)
+		}
+		// Seed the pre-change exporter once so it has the same initial view.
+		// Neither the poll planner nor a completion refreshes it after this.
+		m.updateQueueDepthMetric()
+
+		handler := promhttp.HandlerFor(reg, promhttp.HandlerOpts{})
+		scrape := func(phase string, want ...string) {
+			t.Helper()
+			response := httptest.NewRecorder()
+			handler.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/metrics", nil))
+			if response.Code != http.StatusOK {
+				t.Fatalf("%s: HTTP %d", phase, response.Code)
+			}
+			body := response.Body.String()
+			for line := range strings.SplitSeq(body, "\n") {
+				if strings.HasPrefix(line, "pulse_monitor_poll_queue_depth ") ||
+					strings.HasPrefix(line, "pulse_scheduler_queue_due_soon ") ||
+					strings.HasPrefix(line, "pulse_scheduler_queue_depth{") {
+					t.Logf("%s at %s: %s", phase, time.Since(now), line)
+				}
+			}
+			for _, sample := range want {
+				if !strings.Contains(body, "\n"+sample+"\n") {
+					t.Errorf("%s: missing %s", phase, sample)
+				}
+			}
+			if strings.Contains(body, `pulse_scheduler_queue_depth{instance_type="pve"} 1`) ||
+				strings.Contains(body, `pulse_scheduler_queue_depth{instance_type="pmg"} 1`) {
+				t.Errorf("%s: claimed or dead-letter task counted in active queue", phase)
+			}
+		}
+		const onePBS = `pulse_scheduler_queue_depth{instance_type="pbs"} 1`
+		const depthOne = "pulse_monitor_poll_queue_depth 1"
+		const dueNone = "pulse_scheduler_queue_due_soon 0"
+		const dueOne = "pulse_scheduler_queue_due_soon 1"
+		scrape("20s from deadline", dueNone, depthOne, onePBS)
+		// Some providers record results outside the scheduler. Their
+		// independent progress cannot change the scheduled queue's depth.
+		m.pollMetrics.RecordResult(PollResult{InstanceType: "truenas", InstanceName: "peer", Success: true, StartTime: now, EndTime: now})
+		time.Sleep(8*time.Second - time.Nanosecond)
+		scrape("just outside 12s window", dueNone, depthOne, onePBS)
+		time.Sleep(time.Nanosecond)
+		scrape("at 12s window boundary", dueOne, depthOne, onePBS)
+		time.Sleep(13 * time.Second)
+		scrape("overdue while worker still waits", dueOne, depthOne, onePBS)
+
+		cancel()
+		<-exited
+		if m.taskQueue.Size() != 1 {
+			t.Fatal("fixture lost the undispatched PBS poll")
+		}
+		scrape("dispatcher stopped", dueNone, "pulse_monitor_poll_queue_depth 0", `pulse_scheduler_queue_depth{instance_type="pbs"} 0`)
 	})
 }
