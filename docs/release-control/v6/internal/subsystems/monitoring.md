@@ -97,6 +97,25 @@ the peer's next ordinary poll updates its PVE row and writes its next CPU
 History point. These fixtures do not establish an installed outage's cause
 or recovery.
 
+### Notification delivery health does not hold the monitoring tick
+
+Periodic notification-health evaluation still starts from the poll tick and
+uses the existing five-minute throttle. Each monitor signals one worker with
+at most one pending wake. A health check waiting to read or project its result
+does not itself hold the loop that schedules connection polls and broadcasts
+state. The worker reads current health when it runs, not a snapshot carried by
+the tick. A committed Retry or Dismiss still reconciles immediately through
+the same ordered read-and-project path; notification attempts and health
+verdicts are unchanged. Stopping monitoring skips any pending wake and joins
+an admitted check before the alert store can be released.
+
+`TestMonitorPollsWhileDeliveryHealthWaits` holds the delivery-health projection
+boundary while a new PVE client becomes available. The next ordinary tick
+collects the new node alongside its peer and records its first CPU History
+sample. Cancellation keeps ownership until the admitted check publishes its
+warning and finishes. This does not establish the cause of a field stall or
+independence from every shared alert/store lock.
+
 ### Snapshot memory state comes from the snapshot, not its guest kind (14 November 2026)
 
 The existing snapshot memory boolean is true only for a QEMU snapshot whose
