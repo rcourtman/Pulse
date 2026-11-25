@@ -47,18 +47,21 @@ class Selection:
 def _github_release_json(repository: str, *, latest: bool = False) -> object:
     """Read only release metadata; never retry a refusal or an unknown error."""
     endpoint = f"repos/{repository}/releases"
+    read = "latest release" if latest else "release inventory"
     command = ["gh", "api", "--method", "GET"]
     if latest:
         command.append(f"{endpoint}/latest")
     else:
-        command.extend(["--paginate", "--slurp", f"{endpoint}?per_page=100"])
+        # Release rows include bodies and asset lists. Bound the number of
+        # rows per response without omitting older pages from pair selection.
+        command.extend(["--paginate", "--slurp", f"{endpoint}?per_page=20"])
     for attempt in range(1, 4):
         try:
             result = subprocess.run(
                 command, capture_output=True, text=True, check=False, timeout=60,
             )
         except subprocess.TimeoutExpired as error:
-            raise ResolutionError("GitHub release metadata read timed out; not retrying") from error
+            raise ResolutionError(f"GitHub {read} metadata read timed out; not retrying") from error
         if result.stderr:
             print(result.stderr, end="", file=sys.stderr)
         if result.returncode == 0:
@@ -77,10 +80,10 @@ def _github_release_json(repository: str, *, latest: bool = False) -> object:
             ) is None
         ):
             raise ResolutionError(
-                f"GitHub release metadata read failed (exit {result.returncode}, attempt {attempt}/3)"
+                f"GitHub {read} metadata read failed (exit {result.returncode}, attempt {attempt}/3)"
             )
         print(
-            f"release lifecycle rehearsal: metadata stream cancelled by peer; "
+            f"release lifecycle rehearsal: {read} stream cancelled by peer; "
             f"retrying the same GET ({attempt}/2)", file=sys.stderr,
         )
         time.sleep(attempt * 2)
