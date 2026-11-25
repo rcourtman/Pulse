@@ -89,13 +89,30 @@ rather than a memory saving.
 
 | Metric | Type | Description |
 | :--- | :--- | :--- |
-| `pulse_scheduler_queue_due_soon` | Gauge | Tasks due within the next 12 seconds. |
+| `pulse_scheduler_queue_due_soon` | Gauge | Tasks still in the scheduler queue that are due now or within 12 seconds, at the last queue snapshot. |
 | `pulse_scheduler_queue_depth` | Gauge | Queue depth per `instance_type`. |
 | `pulse_scheduler_queue_wait_seconds` | Histogram | Wait time between task readiness and execution. |
+| `pulse_scheduler_claimed_poll_overdue_seconds` | Gauge | Seconds past one poll task timeout for the most overdue claimed poll, by stage. Zero if no claimed poll is over that budget. |
 | `pulse_scheduler_dead_letter_depth` | Gauge | DLQ depth by `instance_type` and `instance`. |
 | `pulse_scheduler_breaker_state` | Gauge | `0`=Closed, `1`=Half-Open, `2`=Open, `-1`=Unknown. |
 | `pulse_scheduler_breaker_failure_count` | Gauge | Consecutive failure count. |
 | `pulse_scheduler_breaker_retry_seconds` | Gauge | Seconds until next retry allowed. |
+
+When expected results stop, check the two stages on successive scrapes:
+
+- `waiting_for_slot`: a due poll left the scheduler queue but is still waiting
+  for a process-wide worker slot (`POLL_TASK_WORKERS`). The budget starts at
+  the poll's scheduled time.
+- `running`: a worker took the poll but has not returned, including task
+  preparation, provider calls and rescheduling. The budget starts at worker
+  admission. An execution deadline can expire before the work actually returns.
+
+Use this signal with the [result counters](#check-whether-polling-is-still-running).
+A returned error waiting for its next retry is not overdue work. The gauges
+cover claimed polls across the Pulse process, not individual connections or
+tasks still in the queue. Zero does not prove polling is healthy, and a
+missing series is not zero. This does not measure agent reports or rule
+evaluation, decide that a target is down, or send an alert.
 
 ## ⚡ Diagnostics Cache
 

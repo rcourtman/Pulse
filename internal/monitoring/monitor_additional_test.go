@@ -4,13 +4,18 @@ import (
 	"context"
 	"errors"
 	"net"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
+	"testing/synctest"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
@@ -2249,4 +2254,244 @@ func TestClusterTemperatureCadenceKeepsConnectionAndReporterIdentity(t *testing.
 	if got := m.getHostAgentTemperatureForNode(target); got == nil || got.CPUPackage != 62 {
 		t.Fatalf("unrelated report evicted valid slow sibling: %#v", got)
 	}
+}
+
+type pollWorkFixturePVE struct {
+	stubPVEClient
+	getNodes func(context.Context) ([]proxmox.Node, error)
+}
+
+func (c *pollWorkFixturePVE) GetNodes(ctx context.Context) ([]proxmox.Node, error) {
+	return c.getNodes(ctx)
+}
+
+func TestScheduledPollWorkProgressInExporter(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		const (
+			waiting      = "fixture-held"
+			sibling      = "fixture-sibling"
+			down         = "fixture-down"
+			longInterval = 10 * time.Minute
+		)
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		gate := make(chan struct{})
+		released := false
+		defer func() {
+			if !released {
+				close(gate)
+			}
+		}()
+		origin := time.Now()
+		var starts []time.Duration
+		physicalDiskMonitoring := false
+		okRead := func(context.Context) ([]proxmox.Node, error) { return []proxmox.Node{}, nil }
+		registry := prometheus.NewRegistry()
+		m := &Monitor{
+			config: &config.Config{PVEInstances: []config.PVEInstance{
+				{Name: waiting, MonitorPhysicalDisks: &physicalDiskMonitoring},
+				{Name: sibling, MonitorPhysicalDisks: &physicalDiskMonitoring},
+				{Name: down, MonitorPhysicalDisks: &physicalDiskMonitoring},
+			}},
+			state: models.NewState(), alertManager: &alerts.Manager{}, runtimeCtx: ctx,
+			taskQueue: NewTaskQueue(), pollMetrics: newPollMetrics(registry), pollTimeout: defaultTaskTimeout,
+			pollStatusMap: make(map[string]*pollStatus), lastOutcome: make(map[string]taskOutcome),
+			failureCounts: make(map[string]int), circuitBreakers: make(map[string]*circuitBreaker),
+			maxRetryAttempts: 5, backoffCfg: backoffConfig{Initial: 5 * time.Second},
+			lastClusterCheck: map[string]time.Time{waiting: origin, sibling: origin, down: origin},
+			pveClients: map[string]PVEClientInterface{
+				waiting: &pollWorkFixturePVE{getNodes: func(ctx context.Context) ([]proxmox.Node, error) {
+					starts = append(starts, time.Since(origin))
+					if len(starts) == 1 {
+						<-gate
+						return nil, ctx.Err()
+					}
+					return okRead(ctx)
+				}},
+				sibling: &pollWorkFixturePVE{getNodes: okRead},
+				down: &pollWorkFixturePVE{getNodes: func(context.Context) ([]proxmox.Node, error) {
+					return nil, errors.New("fixture target unavailable")
+				}},
+			},
+		}
+		m.executor = newRealExecutor(m)
+		limiter := newPollTaskWorkerLimiter(2)
+		if !limiter.acquire(ctx) || !limiter.acquire(ctx) {
+			t.Fatal("could not reserve fixture slots")
+		}
+		handler := promhttp.HandlerFor(registry, promhttp.HandlerOpts{})
+		queue := func(name string) {
+			m.taskQueue.Upsert(ScheduledTask{InstanceType: InstanceTypePVE, InstanceName: name, NextRun: time.Now(), Interval: longInterval})
+		}
+		observe := func(label string) string {
+			t.Helper()
+			synctest.Wait()
+			// Refresh the legacy heap-derived gauge; stale publication is not needed for the gap.
+			m.updateQueueDepthMetric()
+			rec := httptest.NewRecorder()
+			handler.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/metrics", nil))
+			if rec.Code != http.StatusOK {
+				t.Fatalf("scrape status %d", rec.Code)
+			}
+			body := rec.Body.String()
+			t.Logf("%s at %s: heap=%+v provider starts=%v", label, time.Since(origin), m.taskQueue.Snapshot(), starts)
+			for _, line := range strings.Split(body, "\n") {
+				if strings.HasPrefix(line, "pulse_scheduler_claimed_poll_overdue_seconds{") ||
+					strings.HasPrefix(line, "pulse_scheduler_queue_due_soon ") ||
+					strings.HasPrefix(line, "pulse_monitor_poll_inflight{instance_type=\"pve\"}") ||
+					strings.HasPrefix(line, "pulse_scheduler_queue_wait_seconds_count{instance_type=\"pve\"}") ||
+					(strings.HasPrefix(line, "pulse_monitor_poll_total{") && strings.Contains(line, "instance=\"fixture-")) {
+					t.Log(line)
+				}
+			}
+			return body
+		}
+		want := func(scrape string, lines ...string) {
+			t.Helper()
+			for _, line := range lines {
+				if !strings.Contains(scrape, "\n"+line+"\n") {
+					t.Errorf("missing sample %q", line)
+				}
+			}
+		}
+		wantOverdue := func(scrape, waiting, running string) {
+			t.Helper()
+			want(scrape,
+				`pulse_scheduler_claimed_poll_overdue_seconds{stage="waiting_for_slot"} `+waiting,
+				`pulse_scheduler_claimed_poll_overdue_seconds{stage="running"} `+running,
+			)
+		}
+		go m.dispatchTaskWorkers(ctx, limiter)
+		idle := observe("idle")
+		wantOverdue(idle, "0", "0")
+		want(idle, "pulse_scheduler_queue_due_soon 0")
+		queue(waiting)
+		t.Log("fixture-held due at 0s")
+		time.Sleep(defaultTaskTimeout + 5*time.Second)
+		held := observe("waiting for process slot")
+		wantOverdue(held, "5", "0")
+		want(held, "pulse_scheduler_queue_due_soon 0")
+		if m.taskQueue.Size() != 0 || len(starts) != 0 ||
+			strings.Contains(held, "pulse_scheduler_queue_wait_seconds_count{instance_type=\"pve\"}") ||
+			strings.Contains(held, "pulse_monitor_poll_inflight{instance_type=\"pve\"}") {
+			t.Fatal("slot-waiting task should be absent from the heap, admission histogram and provider gauge")
+		}
+		limiter.release()
+		admitted := observe("provider entered")
+		wantOverdue(admitted, "0", "0")
+		want(admitted, "pulse_monitor_poll_inflight{instance_type=\"pve\"} 1")
+		if len(starts) != 1 || starts[0] != defaultTaskTimeout+5*time.Second {
+			t.Fatalf("provider starts = %v", starts)
+		}
+		time.Sleep(defaultTaskTimeout + 5*time.Second)
+		limiter.release()
+		queue(sibling)
+		queue(down)
+		blocked := observe("provider over budget; sibling success and down target returned")
+		wantOverdue(blocked, "0", "5")
+		want(blocked,
+			"pulse_scheduler_queue_due_soon 1",
+			"pulse_monitor_poll_inflight{instance_type=\"pve\"} 1",
+			"pulse_monitor_poll_total{instance=\"fixture-sibling\",instance_type=\"pve\",result=\"success\"} 1",
+			"pulse_monitor_poll_total{instance=\"fixture-down\",instance_type=\"pve\",result=\"error\"} 1",
+		)
+		if strings.Contains(blocked, "pulse_monitor_poll_total{instance=\"fixture-held\",") {
+			t.Fatal("still-blocked provider reported a terminal result")
+		}
+		if retry, ok := m.taskQueue.Get(InstanceTypePVE, down); !ok || retry.NextRun.Sub(time.Now()) != 5*time.Second {
+			t.Fatalf("returned failure did not enter 5s backoff: %+v present=%v", retry, ok)
+		}
+		close(gate)
+		released = true
+		returned := observe("gate released; expired read recorded and backed off")
+		wantOverdue(returned, "0", "0")
+		want(returned,
+			"pulse_monitor_poll_inflight{instance_type=\"pve\"} 0",
+			"pulse_monitor_poll_total{instance=\"fixture-held\",instance_type=\"pve\",result=\"error\"} 1",
+		)
+		if retry, ok := m.taskQueue.Get(InstanceTypePVE, waiting); !ok || retry.NextRun.Sub(time.Now()) != 5*time.Second {
+			t.Fatalf("released read did not enter 5s backoff: %+v present=%v", retry, ok)
+		}
+		time.Sleep(5 * time.Second)
+		recovered := observe("same held target next ordinary read completed")
+		wantOverdue(recovered, "0", "0")
+		want(recovered, "pulse_monitor_poll_total{instance=\"fixture-held\",instance_type=\"pve\",result=\"success\"} 1")
+		if len(starts) != 2 || starts[1] != 2*defaultTaskTimeout+15*time.Second {
+			t.Fatalf("provider starts = %v", starts)
+		}
+	})
+}
+
+func TestScheduledPollProgressWhileMonitorIsLocked(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		reg := prometheus.NewRegistry()
+		release := make(chan struct{})
+		defer func() {
+			if release != nil {
+				close(release)
+			}
+		}()
+
+		entered := make(chan struct{})
+		gate := release
+		m := &Monitor{
+			taskQueue:   NewTaskQueue(),
+			pollMetrics: newPollMetrics(reg),
+			pollProviders: map[InstanceType]PollProvider{
+				InstanceTypePVE: pollProviderAdapter{
+					instanceType: InstanceTypePVE,
+					buildPollTask: func(m *Monitor, _ string) (PollTask, error) {
+						m.mu.Lock()
+						defer m.mu.Unlock()
+						close(entered)
+						<-gate
+						return PollTask{}, errors.New("fixture client no longer configured")
+					},
+				},
+			},
+		}
+		m.executor = newRealExecutor(m)
+		m.taskQueue.Upsert(ScheduledTask{
+			InstanceType: InstanceTypePVE, InstanceName: "fixture-preparing", NextRun: time.Now(), Interval: time.Hour,
+		})
+		go m.taskWorker(ctx, 0)
+		<-entered
+		time.Sleep(defaultTaskTimeout + time.Second)
+		synctest.Wait()
+		// The normal worker has not entered the provider and the monitor lock is
+		// deliberately unavailable. The actual exporter must still answer.
+		assertClaimedPollOverdue(t, reg, 0, 1)
+		close(release)
+		release = nil
+		synctest.Wait()
+		assertClaimedPollOverdue(t, reg, 0, 0)
+	})
+}
+
+func TestScheduledPollProgressClearsOnSlotCancellation(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		reg := prometheus.NewRegistry()
+		m := &Monitor{taskQueue: NewTaskQueue(), pollMetrics: newPollMetrics(reg)}
+		m.taskQueue.Upsert(ScheduledTask{InstanceType: InstanceTypePVE, InstanceName: "fixture-cancel", NextRun: time.Now()})
+		limiter := newPollTaskWorkerLimiter(1)
+		if !limiter.acquire(ctx) {
+			t.Fatal("could not reserve fixture slot")
+		}
+		defer limiter.release()
+		done := make(chan struct{})
+		go func() {
+			defer close(done)
+			m.dispatchTaskWorkers(ctx, limiter)
+		}()
+		time.Sleep(defaultTaskTimeout + time.Second)
+		synctest.Wait()
+		assertClaimedPollOverdue(t, reg, 1, 0)
+		cancel()
+		<-done
+		assertClaimedPollOverdue(t, reg, 0, 0)
+	})
 }

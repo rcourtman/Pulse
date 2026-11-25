@@ -27,6 +27,7 @@ type PollMetrics struct {
 	schedulerQueueReady          prometheus.Gauge
 	schedulerQueueDepthByType    *prometheus.GaugeVec
 	schedulerQueueWait           *prometheus.HistogramVec
+	workProgress                 *pollWorkProgress
 	schedulerDeadLetterDepth     *prometheus.GaugeVec
 	schedulerBreakerState        *prometheus.GaugeVec
 	schedulerBreakerFailureCount *prometheus.GaugeVec
@@ -58,12 +59,12 @@ var (
 
 func getPollMetrics() *PollMetrics {
 	pollMetricsOnce.Do(func() {
-		pollMetricsInstance = newPollMetrics()
+		pollMetricsInstance = newPollMetrics(prometheus.DefaultRegisterer)
 	})
 	return pollMetricsInstance
 }
 
-func newPollMetrics() *PollMetrics {
+func newPollMetrics(reg prometheus.Registerer) *PollMetrics {
 	pm := &PollMetrics{
 		pollDuration: prometheus.NewHistogramVec(
 			prometheus.HistogramOpts{
@@ -201,6 +202,7 @@ func newPollMetrics() *PollMetrics {
 			},
 			[]string{"instance_type"},
 		),
+		workProgress: newPollWorkProgress(),
 		schedulerDeadLetterDepth: prometheus.NewGaugeVec(
 			prometheus.GaugeOpts{
 				Namespace: "pulse",
@@ -243,7 +245,7 @@ func newPollMetrics() *PollMetrics {
 		lastDLQKeys:          make(map[string]struct{}),
 	}
 
-	prometheus.MustRegister(
+	reg.MustRegister(
 		pm.pollDuration,
 		pm.pollResults,
 		pm.pollErrors,
@@ -259,6 +261,7 @@ func newPollMetrics() *PollMetrics {
 		pm.schedulerQueueReady,
 		pm.schedulerQueueDepthByType,
 		pm.schedulerQueueWait,
+		pm.workProgress,
 		pm.schedulerDeadLetterDepth,
 		pm.schedulerBreakerState,
 		pm.schedulerBreakerFailureCount,
