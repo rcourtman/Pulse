@@ -1,0 +1,43 @@
+{
+  "version": 1,
+  "base_sha": "56074dd6a17f52b35aae8bab825a44394a9e2d52",
+  "verified_at": "2026-11-25T23:09:57Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/proxmox/ProxmoxMailGatewayDrawer.tsx",
+    "frontend-modern/src/features/proxmox/ProxmoxMailGatewayTable.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/proxmox/ProxmoxMailGatewayDrawer.tsx": "e6fc5e987f5562a93740da940b05314f0c31fdaa814c95ab0b7a3d56779b558c",
+    "frontend-modern/src/features/proxmox/ProxmoxMailGatewayTable.tsx": "c676e89195f45282071a53df8e52734086e19cbef4fb57a463f9773775374ee5"
+  },
+  "routes": [
+    "/proxmox/mail"
+  ],
+  "viewports": [
+    {
+      "width": 1536,
+      "height": 940,
+      "browser": "Chromium 141.0.7390.37",
+      "theme": "light"
+    },
+    {
+      "width": 360,
+      "height": 820,
+      "browser": "WebKit 26.0",
+      "theme": "dark"
+    }
+  ],
+  "states": [
+    "All gateways: independent HTTPS up with stale PMG queue, critical deferred alert, offline, degraded and fresh peers.",
+    "Healthy selected: stale gateway excluded, fresh peer stays visible.",
+    "Stale gateway Mail details: last-poll notice and retained mail, quarantine and node queue counts.",
+    "Fresh PMG websocket snapshot: queue 42 to 19, Healthy restored, other stale and critical signals retained."
+  ],
+  "interactions": [
+    "Read the scoped Mail Gateway resources and open the existing status filters on the phone.",
+    "Select Healthy, check membership, return to All.",
+    "Open and close the inline details with Enter on desktop and row taps on the phone, read the matching PMG instance, select the Mail tab.",
+    "Apply a matched fresh snapshot through the live websocket path without reloading."
+  ]
+}
