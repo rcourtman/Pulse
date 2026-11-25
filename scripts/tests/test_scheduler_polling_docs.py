@@ -209,6 +209,7 @@ class SchedulerPollingDocsTest(unittest.TestCase):
                    if "jq " in block and ENDPOINT not in block and "--slurpfile" not in block]
         self.assertEqual(len(queries), 4)
         body = snapshot()
+        body["queue"]["oldestOverdueSeconds"] = 0
         body["instances"][1]["pollStatus"]["lastError"] = {
             "at": "2026-10-03T11:59:30Z", "category": "transient", "message": "private fixture error",
         }
@@ -242,7 +243,8 @@ class SchedulerPollingDocsTest(unittest.TestCase):
                     text = text[end:].strip()
                 results.append(rows)
             self.assertEqual(results[0], [{"updatedAt": snapshot()["updatedAt"], "enabled": True,
-                                          "queueDepth": 3, "deadLetterCount": 1, "instanceCount": 5}])
+                                          "queueDepth": 3, "oldestQueuedOverdueSeconds": 0,
+                                          "deadLetterCount": 1, "instanceCount": 5}])
             self.assertEqual(results[1], [
                 {"key": "pve::retrying", "lastSuccess": "2026-10-03T11:59:00Z", "failures": 2,
                  "lastErrorAt": "2026-10-03T11:59:30Z", "lastErrorCategory": "transient"},
@@ -331,11 +333,13 @@ class SchedulerPollingDocsTest(unittest.TestCase):
 
     def test_comparison_keeps_retry_context_separate_from_finished_polls(self):
         before = snapshot(False)
+        before["queue"]["oldestOverdueSeconds"] = 0
         before["instances"][1]["breaker"]["retryAt"] = "2026-10-03T12:00:12.25Z"
         before["instances"][2]["breaker"]["retryAt"] = "2026-10-03T12:01:00Z"
         before["instances"][2]["deadLetter"]["reason"] = "private fault text"
         after = json.loads(json.dumps(before))
         after["updatedAt"] = "2026-10-03T12:01:30Z"
+        after["queue"]["oldestOverdueSeconds"] = 90
         after["instances"][1]["breaker"]["retryAt"] = "2026-10-03T12:01:40Z"
         after["instances"][2]["deadLetter"]["nextRetry"] = "2026-10-03T12:02:00Z"
         after["instances"].reverse()
@@ -343,7 +347,9 @@ class SchedulerPollingDocsTest(unittest.TestCase):
         result = self.compare(before, after)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertNotIn("private fault text", result.stdout)
-        rows = {row["key"]: row for row in json.loads(result.stdout)["polls"]}
+        value = json.loads(result.stdout)
+        self.assertEqual(value["oldestQueuedOverdueSeconds"], {"earlier": 0, "later": 90})
+        rows = {row["key"]: row for row in value["polls"]}
         self.assertTrue(all(row["changes"] == [] for row in rows.values()))
         self.assertEqual(rows["pve::failed"]["retry"], {
             "before": {
@@ -383,15 +389,19 @@ class SchedulerPollingDocsTest(unittest.TestCase):
 
     def test_comparison_preserves_two_empty_captures_as_no_rows(self):
         empty = dict(snapshot(False), instances=[])
-        later = dict(empty, updatedAt="2026-10-03T12:03:00Z")
+        later = dict(empty, updatedAt="2026-10-03T12:03:00Z",
+                     queue=dict(empty["queue"], oldestOverdueSeconds=0))
         result = self.compare(empty, later)
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(json.loads(result.stdout)["polls"], [])
+        value = json.loads(result.stdout)
+        self.assertEqual(value["polls"], [])
+        self.assertEqual(value["oldestQueuedOverdueSeconds"], {"earlier": None, "later": 0})
 
     def test_response_example_is_valid_json_with_the_current_field_names(self):
         example = json.loads(re.findall(r"```json\n(.*?)```", DOC.read_text(), re.DOTALL)[0])
         self.assertEqual(set(example), set(snapshot()))
         self.assertIsInstance(example["enabled"], bool)
+        self.assertEqual(example["queue"]["oldestOverdueSeconds"], 90)
         self.assertIn("lastSuccess", example["instances"][0]["pollStatus"])
 
     def test_rollout_restores_precedence_and_does_not_rewrite_shared_temp_settings(self):

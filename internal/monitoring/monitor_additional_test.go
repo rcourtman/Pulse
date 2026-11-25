@@ -2,6 +2,7 @@ package monitoring
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net"
 	"net/http"
@@ -2263,6 +2264,69 @@ type pollWorkFixturePVE struct {
 
 func (c *pollWorkFixturePVE) GetNodes(ctx context.Context) ([]proxmox.Node, error) {
 	return c.getNodes(ctx)
+}
+
+func TestSchedulerHealthDistinguishesOverdueQueuedPolls(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		m := &Monitor{taskQueue: NewTaskQueue(), deadLetterQueue: NewTaskQueue()}
+		start := time.Now()
+		first := ScheduledTask{InstanceType: InstanceTypePVE, InstanceName: "first", NextRun: start.Add(10 * time.Second)}
+		m.taskQueue.upsertPlan(first)
+		m.taskQueue.upsertPlan(ScheduledTask{InstanceType: InstanceTypePBS, InstanceName: "future", NextRun: start.Add(5 * time.Minute)})
+		m.deadLetterQueue.Upsert(ScheduledTask{InstanceType: InstanceTypePVE, InstanceName: "parked", NextRun: start.Add(-time.Hour)})
+
+		check := func(phase string, depth, dueSoon int, oldest float64) {
+			t.Helper()
+			// Assert the wire shape as well as the meaning: a measured zero
+			// must not be omitted or look like an older, unmeasured response.
+			snapshot := m.SchedulerHealth()
+			wire, err := json.Marshal(snapshot.Queue)
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Logf("%s: %s", phase, wire)
+			var queue struct {
+				Depth                int      `json:"depth"`
+				DueWithinSeconds     int      `json:"dueWithinSeconds"`
+				OldestOverdueSeconds *float64 `json:"oldestOverdueSeconds"`
+			}
+			if err := json.Unmarshal(wire, &queue); err != nil {
+				t.Fatal(err)
+			}
+			if queue.Depth != depth || queue.DueWithinSeconds != dueSoon {
+				t.Errorf("%s: queue depth/due soon = %d/%d, want %d/%d", phase, queue.Depth, queue.DueWithinSeconds, depth, dueSoon)
+			}
+			if queue.OldestOverdueSeconds == nil || *queue.OldestOverdueSeconds != oldest {
+				t.Errorf("%s: want oldest overdue %g seconds in %s", phase, oldest, wire)
+			}
+		}
+
+		check("due soon, not late", 2, 1, 0)
+		time.Sleep(100 * time.Second)
+		check("unclaimed, same counts but 90 seconds late", 2, 1, 90)
+
+		newer := ScheduledTask{InstanceType: InstanceTypePBS, InstanceName: "newer", NextRun: time.Now().Add(-2 * time.Second)}
+		m.taskQueue.upsertPlan(newer)
+		check("two overdue, use the oldest", 3, 2, 90)
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		claimed, ok := m.taskQueue.WaitNext(ctx)
+		if !ok || claimed != first {
+			t.Fatalf("expected the oldest scheduled task, got %+v (claimed = %v)", claimed, ok)
+		}
+		check("older task has been claimed", 2, 1, 2)
+
+		retry := first
+		retry.NextRun = time.Now().Add(5 * time.Second)
+		m.taskQueue.completeClaim(claimed, retry, pollAfterBackoff)
+		m.taskQueue.Remove(newer.InstanceType, newer.InstanceName)
+		check("only future work including the retry", 2, 1, 0)
+		time.Sleep(5 * time.Second)
+		check("exactly at the retry deadline", 2, 1, 0)
+		time.Sleep(500 * time.Millisecond)
+		m.taskQueue.Upsert(ScheduledTask{InstanceType: InstanceTypePBS, InstanceName: "immediate-without-timestamp"})
+		check("untimestamped work cannot inflate the retry's measured age", 3, 2, 0.5)
+	})
 }
 
 func TestScheduledPollWorkProgressInExporter(t *testing.T) {

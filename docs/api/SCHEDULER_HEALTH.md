@@ -18,7 +18,8 @@ appear here. Neither `enabled` nor the queue depth is a health verdict.
   "queue": {
     "depth": 7,
     "dueWithinSeconds": 2,
-    "perType": { "pve": 4, "pbs": 2 }
+    "perType": { "pve": 4, "pbs": 3 },
+    "oldestOverdueSeconds": 90
   },
   "deadLetter": {
     "count": 1,
@@ -95,7 +96,10 @@ The scheduler's record of each connection's recent poll results.
 ### Top-Level Queue and DLQ
 *   **`queue`**: Snapshot of the active task queue (depth + per-type counts).
     `dueWithinSeconds` counts tasks due now or within 12 seconds. It is not a
-    duration and does not include polls that have already left the queue.
+    duration. `oldestOverdueSeconds` is how far past its scheduled time the
+    most overdue timestamped poll still in the queue was at capture. Zero
+    means none was past its scheduled time. It does not count future work
+    (including a future scheduled retry), claimed work or dead-letter entries.
 *   **`deadLetter`**: Aggregate DLQ summary plus up to 25 queued tasks.
 
 ### Optional Summaries
@@ -163,6 +167,7 @@ polling or restart Pulse just to collect this evidence.
 ```bash
 snapshot='/absolute/path/to/health.json' # use the printed filename
 jq '{updatedAt, enabled, queueDepth: .queue.depth, deadLetterCount: .deadLetter.count,
+  oldestQueuedOverdueSeconds: .queue.oldestOverdueSeconds,
   instanceCount: (.instances | length)}' "$snapshot"
 ```
 
@@ -236,6 +241,7 @@ jq -ne --slurpfile earlier "$earlier" --slurpfile later "$later" '
   if $a.updatedAt == $b.updatedAt then error("Use two different capture times") else . end |
   ($a | by_key) as $old | ($b | by_key) as $new |
   {earlier: ($a | {updatedAt, enabled}), later: ($b | {updatedAt, enabled}),
+   oldestQueuedOverdueSeconds: {earlier: $a.queue.oldestOverdueSeconds, later: $b.queue.oldestOverdueSeconds},
    polls: [($old + $new | keys[]) as $key |
      ($old[$key] | poll) as $before | ($new[$key] | poll) as $after |
      {key: $key, before: $before, after: $after,
@@ -250,6 +256,14 @@ names the fields that differ. It does not judge whether a timestamp advanced.
 An empty list means the recorded fields are unchanged. A null `before` or
 `after` means the connection was absent from that capture, not that its
 poll succeeded.
+
+An increasing `oldestQueuedOverdueSeconds` shows the queue has work further
+past its scheduled time, even if the task counts did not change. It does not
+show that the same task was late in both snapshots, or identify a connection
+or cause. `null` means the capture did not include this measurement (for
+example, from an older Pulse build). Zero does not rule out a poll already
+taken by a worker. If you have Prometheus, check the separate
+[claimed-poll stages](../monitoring/PROMETHEUS_METRICS.md#-scheduler-health).
 
 If no result advanced, read `retry.after` beside the later snapshot's
 `updatedAt`. For an `open` or `half_open` breaker, `retryAt` is the earliest

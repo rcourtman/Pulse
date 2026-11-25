@@ -89,6 +89,20 @@ Both gauges are zero when nothing in their stage exceeds the budget. Neither
 gauge measures work still in the queue, agent ingestion, alert evaluation
 or successful data collection. Liveness/readiness, alert rules, worker
 limits and metrics listener access are unchanged.
+
+The existing authenticated Scheduler Health API reports `queue.oldestOverdueSeconds`
+in the active queue snapshot. It measures the maximum time past a scheduled
+`NextRun` among still-queued polls at capture, or zero when none with a
+timestamp is overdue. It excludes untimestamped slots, future work (including
+scheduled backoff), claims and dead letters. The value is scoped to the same
+queue as `depth` and `dueWithinSeconds`; the existing counts, scheduling and
+access rules are unchanged. Unlike the claimed-poll gauges, this age is from
+the scheduled time, not from a timeout budget. It does not identify a target,
+its breaker state or the cause of the delay. `TestSchedulerHealthDistinguishesOverdueQueuedPolls`
+checks equal queue counts before and after a scheduled time, selection of the
+oldest, claim exclusion and retry boundaries. `TestHandleSchedulerHealth_ReturnsQueuedOverdueAge`
+checks the same distinction through the HTTP response.
+
 `TestScheduledPollWorkProgressInExporter` drives the ordinary PVE
 poll path with controlled slot and provider holds, a healthy sibling, a
 returned failure and the next successful read. Cancellation, scraping during
