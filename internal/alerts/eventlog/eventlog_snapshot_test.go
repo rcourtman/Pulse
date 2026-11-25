@@ -126,7 +126,7 @@ func TestUnchangedDeliveryDecisionIsOneEpisode(t *testing.T) {
 	}
 	defer store.Close()
 
-	started := time.Date(2026, 8, 27, 20, 0, 0, 0, time.UTC)
+	started := time.Now().UTC().Truncate(time.Second).Add(-time.Hour)
 	base := Event{
 		OccurredAt:   started,
 		Type:         TypeNotificationSuppressed,
@@ -207,7 +207,9 @@ func TestQueryProjectsLegacyRepeatedDeliveryRowsAsEpisodes(t *testing.T) {
 	}
 	defer store.Close()
 
-	started := time.Date(2026, 8, 27, 20, 0, 0, 0, time.UTC)
+	// The store prunes on startup. Keep even the oldest inserted row
+	// inside retention so this exercises projection rather than expiry.
+	started := time.Now().UTC().Truncate(time.Second).Add(-time.Hour)
 	insert := func(alertID string, occurredAt time.Time, eventType, reason string) {
 		t.Helper()
 		if _, err := store.db.Exec(`
@@ -247,7 +249,7 @@ func TestDeliveryEpisodeCoalescingSurvivesRestart(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	started := time.Date(2026, 8, 27, 20, 0, 0, 0, time.UTC)
+	started := time.Now().UTC().Truncate(time.Second).Add(-time.Hour)
 	event := Event{
 		OccurredAt: started,
 		Type:       TypeNotificationSuppressed,
@@ -294,7 +296,7 @@ func TestConcurrentUnchangedDeliveryDecisionAdmitsOneEpisode(t *testing.T) {
 	defer store.Close()
 
 	event := Event{
-		OccurredAt: time.Date(2026, 8, 27, 20, 0, 0, 0, time.UTC),
+		OccurredAt: time.Now().UTC().Truncate(time.Second).Add(-time.Hour),
 		Type:       TypeNotificationSuppressed,
 		AlertID:    "concurrent-alert",
 		Reason:     "acknowledged",
