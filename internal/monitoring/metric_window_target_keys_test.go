@@ -3,6 +3,7 @@ package monitoring
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 	"os"
 	"strings"
 	"testing"
@@ -272,7 +273,7 @@ func TestFactoryPBSRollingCPUUsesOnlyNativeHistory(t *testing.T) {
 			m.alertManager.CheckPBS(instance)
 			got := m.alertManager.GetActiveAlerts()
 			if len(got) != 1 || got[0].ResourceID != instance.ID || got[0].Type != "cpu" ||
-				got[0].Value != 92 || got[0].Metadata["evaluationMode"] != "rolling_average" {
+				math.Abs(got[0].Value-92) > 0.001 || got[0].Metadata["evaluationMode"] != "rolling_average" {
 				t.Fatalf("expected one rolling CPU alert for %s at 92%%: %+v", instance.ID, got)
 			}
 		})
