@@ -31,16 +31,6 @@ identifying details removed. The security address is not a general support route
 
 ---
 
-## Security testing and audits
-
-Pulse has not undergone a formal paid third-party human security audit. Instead, security review combines automated continuous checks with public threat modeling:
-
-- **External automated vulnerability scanning:** Pulse is publicly enrolled in [Anthropic's OSS Scanner](https://github.com/anthropics/oss-scanner/tree/main/projects/pulse), which periodically builds Pulse in an isolated environment and runs automated exploit-reproducer scans against the published [threat model](.oss-scanner/threat_model.md). Automated scans complement, and do not replace, a human audit.
-- **Continuous CI checks:** Pull requests run CodeQL (Go, TypeScript, Python, and Actions), gitleaks secret scanning, digest-pinned container base verification, and automated security regression tests.
-- **Release and update integrity:** Shipped artifacts and agent updates are signed and verified per the [code signing policy](docs/CODE_SIGNING_POLICY.md).
-
----
-
 ## Critical Security Notice for Container Deployments
 
 ### Container SSH Key Handling
@@ -171,6 +161,16 @@ incident, defer live checks and follow [backup safety](docs/VM_DISK_MONITORING.m
 
 **Documentation:** [Critical security notice for container deployments](#critical-security-notice-for-container-deployments)
 **Issues:** <https://github.com/rcourtman/pulse/issues>
+
+---
+
+## Security testing and audits
+
+Pulse has not undergone a formal paid third-party human security audit. Instead, security review combines automated continuous checks with public threat modeling:
+
+- **External automated vulnerability scanning:** Pulse is publicly enrolled in [Anthropic's OSS Scanner](https://github.com/anthropics/oss-scanner/tree/main/projects/pulse), which periodically builds Pulse in an isolated environment and runs automated exploit-reproducer scans against the published [threat model](.oss-scanner/threat_model.md). Automated scans complement, and do not replace, a human audit.
+- **Continuous CI checks:** Pull requests run CodeQL (Go, TypeScript, Python, and Actions), gitleaks secret scanning, digest-pinned container base verification, and automated security regression tests.
+- **Release and update integrity:** Shipped artifacts and agent updates are signed and verified per the [code signing policy](docs/CODE_SIGNING_POLICY.md).
 
 ---
 
