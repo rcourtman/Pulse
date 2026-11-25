@@ -29,7 +29,7 @@
 #           Mock mode drops pushed agent reports, so only this estate reaches
 #           the per-report registry refresh and broadcast cost (#2199). The
 #           driver requires repeated HTTP acceptance per configured agent
-#           report stream and dashboard state traffic during steady sampling.
+#           report stream and advancing report state during steady sampling.
 #   proxmox a real, non-mock Pulse with authentication configured, fed by
 #           proxmox_load.py: a synthetic 3-node Proxmox VE cluster (35 guests),
 #           a large shared archive containing backups, ISOs and templates,

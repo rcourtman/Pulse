@@ -254,10 +254,19 @@ class AgentLoadTests(unittest.TestCase):
 
 
 class AgentSteadyTrafficTests(unittest.TestCase):
+    @staticmethod
+    def window():
+        return agent_load.SteadyTraffic(100, 200, {"host": {"machine-0": 0, "machine-1": 1}, "docker": {"ctr-0": 0}})
+
+    @staticmethod
+    def receive(stats, data, at, *, kind="rawData", connected=True):
+        return agent_load.record_ws_message(
+            0x1, json.dumps({"type": kind, "data": data}).encode(), stats, connected, observed_at=at,
+        )
+
     def test_checks_each_report_stream_without_counting_warmup_or_late_responses(self):
-        window = agent_load.SteadyTraffic(100, 200)
+        window = self.window()
         stats = agent_load.Stats(steady=window)
-        expected = {"host": 2, "docker": 1}
         for kind, index, status, at in (
             ("host", 0, 200, 100), ("host", 0, 202, 130), ("host", 0, 200, 160),
             ("host", 1, 200, 99.9), ("host", 1, 200, 101), ("host", 1, 200, 200),
@@ -275,25 +284,97 @@ class AgentSteadyTrafficTests(unittest.TestCase):
         observe(update, initialized, 99)
         observe(update, False, 150)  # A different connection has not initialized.
         observe(update, initialized, 200)
-        partial = window.report(200, expected)
+        partial = window.report(200)
         self.assertEqual(partial["dashboard_state_updates"], 0)
         self.assertEqual(partial["reports"]["host"], {
             "expected": 2, "accepted": 4, "agents_with_repeated_acceptance": 1,
+            "agents_with_repeated_state_advances": 0,
         })
         self.assertEqual(partial["reports"]["docker"], {
             "expected": 1, "accepted": 1, "agents_with_repeated_acceptance": 0,
+            "agents_with_repeated_state_advances": 0,
         })
         self.assertFalse(partial["complete"])
 
         stats.record("host", 200, agent_index=1, observed_at=190)
         stats.record("docker", 200, agent_index=0, observed_at=190)
         observe(update, initialized, 199.9)
-        self.assertFalse(window.report(199.9, expected)["complete"])
-        self.assertTrue(window.report(200, expected)["complete"])
+        # The old warrant accepted this: both streams have repeated HTTP
+        # success and rawData advanced, but not one matching row was applied.
+        unrelated = window.report(200)
+        self.assertEqual(unrelated["dashboard_state_updates"], 1)
+        self.assertEqual(unrelated["reports"]["host"]["agents_with_repeated_acceptance"], 2)
+        self.assertEqual(unrelated["reports"]["docker"]["agents_with_repeated_acceptance"], 1)
+        self.assertFalse(unrelated["complete"])
+
+    def test_requires_separate_advances_for_each_configured_stream(self):
+        window = self.window()
+        stats = agent_load.Stats(steady=window)
+        for at in (112, 152):
+            stats.record("host", 200, agent_index=0, observed_at=at)
+            stats.record("host", 202, agent_index=1, observed_at=at)
+            stats.record("docker", 200, agent_index=0, observed_at=at)
+
+        self.receive(stats, {"resources": [
+            {"id": "live-0", "agent": {"machineId": "machine-0"}},
+            {"id": "live-1", "agent": {"machineId": "machine-1"}},
+            {"id": "container", "docker": {"containerId": "ctr-0"}},
+        ]}, 99, kind="initialState", connected=False)
+
+        def update(report_time, at):
+            self.receive(stats, {"resourceDelta": {"upserts": [
+                {"id": "live-0", "agent": {"lastReportAt": report_time}},
+                # An unrelated source can update a shared host row's sighting.
+                {"id": "live-1", "lastSeen": at * 1000},
+                {"id": "container", "lastSeen": at * 1000 - 1},
+                {"id": "unrelated", "agent": {"machineId": "another", "lastReportAt": report_time}},
+            ]}}, at)
+
+        update("1970-01-01T00:01:39Z", 110)  # A warmup sighting replayed in a live frame.
+        update("1970-01-01T00:02:00.123456789Z", 121)
+        update("1970-01-01T00:02:00.123456789Z", 130)  # Same applied state in another frame.
+        update("1970-01-01T00:02:20Z", 135)  # A time ahead of this observation.
+        partial = window.report(200)
+        self.assertEqual(partial["reports"]["host"]["agents_with_repeated_state_advances"], 0)
+        self.assertEqual(partial["reports"]["docker"]["agents_with_repeated_state_advances"], 1)
+        self.assertFalse(partial["complete"])
+        update("1970-01-01T00:02:20Z", 145)
+        self.assertEqual(window.report(200)["reports"]["host"]["agents_with_repeated_state_advances"], 1)
+        self.assertFalse(window.report(200)["complete"])
+
+        for report_time, at in (("00:02:36", 158), ("00:03:00", 181)):
+            self.receive(stats, {"resourceDelta": {"upserts": [
+                {"id": "live-1", "agent": {"lastReportAt": f"1970-01-01T{report_time}Z"}},
+            ]}}, at)
+        self.assertFalse(window.report(199.9)["complete"])
+        self.assertTrue(window.report(200)["complete"])
+
+    def test_discards_removed_or_invalidated_dashboard_identities(self):
+        window = self.window()
+        stats = agent_load.Stats(steady=window)
+        host = {"id": "live", "agent": {"machineId": "machine-0", "lastReportAt": "1970-01-01T00:02:00Z"}}
+        patch = {"id": "live", "agent": {"lastReportAt": "1970-01-01T00:02:10Z"}}
+        self.receive(stats, {"resources": [host]}, 121, kind="initialState", connected=False)
+        self.receive(stats, {"resourceDelta": {"removed": ["live"], "upserts": [patch]}}, 131)
+        self.assertFalse(window.applied["host"])
+        self.receive(stats, {"resources": [host]}, 132)
+        self.assertEqual(window.applied["host"], {0: 1})
+        connected = self.receive(stats, {}, 133, kind="stateTooLarge")
+        self.assertFalse(connected)
+        self.assertFalse(self.receive(stats, {"resourceDelta": {"upserts": [patch]}}, 134, connected=connected))
+        self.assertEqual(window.applied["host"], {0: 1})
+        connected = self.receive(stats, {"resources": [host]}, 135, connected=connected)
+        self.assertTrue(connected)
+        self.assertEqual(window.applied["host"], {0: 1})
+        self.receive(stats, {"resourceDelta": {"upserts": [patch]}}, 136, connected=connected)
+        self.assertEqual(window.applied["host"], {0: 2})
 
     def test_no_docker_stream_is_not_a_missing_docker_stream(self):
-        window = agent_load.SteadyTraffic(100, 200, accepted={"host": {0: 2}, "docker": {}}, dashboard_updates=1)
-        result = window.report(200, {"host": 1, "docker": 0})
+        window = agent_load.SteadyTraffic(
+            100, 200, {"host": {"machine-0": 0}, "docker": {}}, accepted={"host": {0: 2}, "docker": {}},
+            dashboard_updates=2, applied={"host": {0: 2}, "docker": {}},
+        )
+        result = window.report(200)
         self.assertTrue(result["complete"])
         self.assertEqual(result["reports"]["docker"]["expected"], 0)
 
