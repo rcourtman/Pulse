@@ -39,9 +39,13 @@ describe('AlertDeadManDestinationSection', () => {
     });
   });
 
-  afterEach(cleanup);
+  afterEach(() => {
+    cleanup();
+    vi.useRealTimers();
+  });
 
   it('never places the stored credential in the DOM and makes removal explicit', async () => {
+    vi.useFakeTimers({ toFake: ['Date'], now: Date.parse('2026-08-27T12:00:30Z') });
     const [pingUrl, setPingUrl] = createSignal('***REDACTED***');
     const setHasUnsavedChanges = vi.fn();
     const { container } = render(() => (
@@ -210,7 +214,7 @@ describe('AlertDeadManDestinationSection', () => {
     }
   });
 
-  it('keeps Last success aging and re-reads the status while the panel stays open', async () => {
+  it('distinguishes an old success ping from an old status read', async () => {
     const start = Date.parse('2026-08-27T12:00:30Z');
     vi.useFakeTimers({ toFake: ['Date', 'setInterval', 'clearInterval'], now: start });
     const [pingUrl, setPingUrl] = createSignal('***REDACTED***');
@@ -223,6 +227,7 @@ describe('AlertDeadManDestinationSection', () => {
           setHasUnsavedChanges={vi.fn()}
         />
       ));
+      const badge = () => screen.getByRole('status');
       const lastSuccess = () => screen.getByText('Last success').nextElementSibling;
       await waitFor(() => expect(lastSuccess()).toHaveTextContent('30s ago'));
       expect(AlertsAPI.getDeadManStatus).toHaveBeenCalledTimes(1);
@@ -234,15 +239,27 @@ describe('AlertDeadManDestinationSection', () => {
         await waitFor(() => expect(AlertsAPI.getDeadManStatus).toHaveBeenCalledTimes(poll));
       }
       expect(lastSuccess()).toHaveTextContent('2 mins ago');
+      expect(badge()).toHaveTextContent('Heartbeat healthy');
+
+      // The status request succeeds again, but the same heartbeat is now
+      // older than the recommended grace. This is not a failed read or a
+      // server-confirmed monitoring stall.
+      await vi.advanceTimersByTimeAsync(DEAD_MAN_STATUS_POLL_MS);
+      expect(AlertsAPI.getDeadManStatus).toHaveBeenCalledTimes(6);
+      expect(lastSuccess()).toHaveTextContent('3 mins ago');
+      expect(badge()).toHaveTextContent('No recent heartbeat');
+      expect(screen.queryByText(/Last known status:/)).not.toBeInTheDocument();
+      expect(screen.getByText('5 min (unexpected stop)')).toBeInTheDocument();
       expect(screen.getByRole('button', { name: 'Refresh' })).not.toBeDisabled();
 
       // A later heartbeat lands: the next background re-read picks it up.
       vi.mocked(AlertsAPI.getDeadManStatus).mockResolvedValue({
         ...(await AlertsAPI.getDeadManStatus()),
-        lastSuccessAt: '2026-08-27T12:02:30Z',
+        lastSuccessAt: '2026-08-27T12:03:00Z',
       });
-      vi.advanceTimersByTime(DEAD_MAN_STATUS_POLL_MS);
+      await vi.advanceTimersByTimeAsync(DEAD_MAN_STATUS_POLL_MS);
       await waitFor(() => expect(lastSuccess()).toHaveTextContent('30s ago'));
+      expect(badge()).toHaveTextContent('Heartbeat healthy');
     } finally {
       vi.useRealTimers();
     }
@@ -395,7 +412,7 @@ describe('AlertDeadManDestinationSection', () => {
   });
 
   it('lets the newest settled read decide availability, even when reads outlast the poll', async () => {
-    const start = Date.parse('2026-08-27T12:10:00Z');
+    const start = Date.parse('2026-08-27T12:00:30Z');
     vi.useFakeTimers({ toFake: ['Date', 'setInterval', 'clearInterval'], now: start });
     const base = await AlertsAPI.getDeadManStatus();
     vi.mocked(AlertsAPI.getDeadManStatus).mockReset();

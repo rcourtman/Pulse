@@ -1,0 +1,35 @@
+{
+  "version": 1,
+  "base_sha": "f2f8d7dc4098a684b8e4b656c2129a36ca1d2004",
+  "verified_at": "2026-11-25T21:54:26Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/alerts/AlertDeadManDestinationSection.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/alerts/AlertDeadManDestinationSection.tsx": "5f3b8764877c1d434c9322125207e6569619c0c0e0bba3f7038a14a7434adc74"
+  },
+  "routes": [
+    "/alerts/notifications"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 940
+    },
+    {
+      "width": 360,
+      "height": 820
+    }
+  ],
+  "states": [
+    "Paired production previews in Playwright 1.56.1, light desktop Chromium 141 and dark touch WebKit 26. Fixture responses come from the exact base monitor runtime; separately checked the API status handler.",
+    "Fresh success is green; six background HTTP 200 reads return identical status bytes and a success ping at the recommended grace now reads No recent heartbeat in amber (not a status read failure or a diagnosed stall).",
+    "Current server-reported stall stays red with the explanation. A newly accepted success restores green and the original ages and restart detail remain.",
+    "Retained desktop and narrow captures were inspected. Masking, Remove, Refresh, monitor progress, failure count, and last interruption stay visible; no horizontal overflow in the watchdog panel."
+  ],
+  "interactions": [
+    "Advance the existing browser timers by 30 seconds per background status read, using the same app panel, browser clock and producer replies before and after.",
+    "Use Enter on desktop or tap on phone to Refresh after a current monitoring stall. A later background read of actual recovered fixture data updates the same panel. The browser does not send a heartbeat or modify settings."
+  ]
+}
