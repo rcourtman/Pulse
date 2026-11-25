@@ -911,6 +911,12 @@ update, open an outdated-agent notice or
 copy the command for each reported host. Pulse does not remotely execute those
 commands.
 
+If Agent Doctor asks you to **Generate token**, select the affected
+installation first if a list is shown. Generating the token opens a dialog
+with the token; it does not copy the command. Close the dialog, open that
+agent's details and use the copy button beside its update or
+authentication-repair command. Keep the token and the copied command private.
+
 **Keep a deliberate Proxmox opt-out on manual Linux updates.** If you
 installed with `--disable-proxmox`, include it alongside `--update` in the
 installer command, even when you copy it from Agent Doctor. The opt-out may
@@ -1122,6 +1128,13 @@ token prompt. Passing preflight is **not installation** or accepted reporting.
 Read the original error without rerunning. For a post-download URL error, see
 [URL and executable checks](#agent-url-and-executable-checks).
 
+- **Windows: `Could not establish trust relationship` while downloading
+  `install.ps1`:** PowerShell stopped before the installer or its preflight ran.
+  Have your administrator verify that the certificate covers the Pulse
+  hostname in the command and fix the server's certificate chain or configure
+  Windows to trust the verified chain on that machine. Do not bypass TLS
+  validation or import a certificate just because the failing server presented
+  it. Generating another token does not fix certificate trust.
 - **`stty: command not found`, followed by a terminal-required message:** the
   command's environment cannot run the tool used to prepare the private prompt.
   A real terminal can still produce this error. It does not establish that the
@@ -1475,6 +1488,10 @@ or repeat an update to fill the gap.
    Keep the requested and reported candidate versions, including any `v`
    prefix, only if already available. Do not bypass signature checks, relax
    permissions or replace the helper manually to force acceptance.
+   On Windows, `failed to sync staged binary` with a file-in-use error means
+   the updater could not access its staged file. The message does not identify
+   which process held it. Keep the time and redacted error without disabling
+   endpoint protection.
 3. **Activation, restart or rollback:** an accepted download or staged artifact
    is not a completed update. Preserve the original result and any rollback
    error, then compare fresh reporting from that same host with the intended
@@ -1482,7 +1499,8 @@ or repeat an update to fill the gap.
    automatic updates work. Do not repeat the attempt while its result or
    installed state is uncertain.
 
-If a copied manual command stopped at preflight or its private prompt, use
+If a copied manual command failed to download the installer, or stopped at
+preflight or its private prompt, use
 [command preparation checks](#copied-agent-command-fails-before-installation).
 That is a separate failure from the automatic updater; passing preflight is
 not installation. Do not substitute the public GitHub server installer or
