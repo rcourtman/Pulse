@@ -59,6 +59,18 @@ restore `SOURCE_SHA="$(cat release-source-sha.txt)"` and add
 the trusted root whenever importing newly signed material; an old copy cannot
 report later key revocation or rotation.
 
+## System Requirements
+
+Pulse runs as a single Go binary with built-in SQLite history and no external database stack.
+
+| Resource | Recommended baseline | Notes |
+|---|---|---|
+| **CPU** | 1-2 vCPU | `amd64` and `arm64` (plus `armv7`, `armv6`, and `386` Linux archives), suitable for standard x86 hosts, mini PCs, and Raspberry Pi 4/5 class boards |
+| **Memory** | 1 GiB RAM | Fresh idle server uses ~55 MiB RSS and boots in a 512 MiB container. A typical multi-node homelab runs around 200-250 MiB RSS, leaving headroom for spikes and updates |
+| **Disk** | 4 GiB | The `pulse` binary is ~63 MiB, and the full release archive (including bundled cross-platform agent binaries) is ~283 MiB compressed / ~750 MiB unpacked. Keep at least 1.2 GiB free for in-place upgrades and automatic config backups |
+
+For large multi-cluster estates, long metric or audit retention, or heavy AI Patrol usage, allocate more RAM and disk accordingly.
+
 ## 🚀 Quick Start (Recommended)
 
 The signed-installer commands below require Bash, curl and OpenSSH's
