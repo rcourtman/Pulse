@@ -47,7 +47,8 @@ unbounded `watch` loop, enable Debug or expose a metrics port for this check.
 within the new run. The restart can reset the recorded results and counters.
 Use the pre-change baseline to identify which connections and readings to
 expect, not as the first capture of the new run. Check breaker state and
-dead-letter tasks, and allow for the configured intervals and retry delays.
+allow for the configured intervals and retry delays. A
+[dead-letter entry can remain after a later poll succeeds](../monitoring/ADAPTIVE_POLLING.md#read-the-dead-letter-entry-alongside-poll-results).
 Confirm that the last-success times advance and the expected dashboard data
 refreshes. A new success with a partial error is not a complete read.
 

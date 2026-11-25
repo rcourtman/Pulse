@@ -54,14 +54,13 @@ Additional influences:
 - **Queue stretch**: large queues gently stretch intervals to avoid overload.
 
 ### Circuit Breaker Recovery
-The `circuitBreaker` (`internal/monitoring/circuit_breaker.go`) follows a standard state machine:
-1. **Closing the Circuit**: One successful poll moves *Half-Open* → *Closed* and resets failure count.
-2. **Backoff Calculation**: Retries use exponential backoff starting at 5s (multiplier 2, jitter 0.2) capped at 5m.
-3. **Transient vs. Permanent**:
-   - **Transient** errors (retryable) are retried until they fail 5 times in a row (the first attempt plus 4 retries), then move to the Dead Letter Queue.
-   - **Permanent** errors move directly to the Dead Letter Queue.
-
-**Note:** When `AdaptivePollingMaxInterval` is set to 15 seconds or less, the retry backoff is shortened (750ms initial, 4s max) to keep fast feedback loops during tight polling windows.
+The scheduler's retry delay and the circuit breaker's retry deadline are
+separate. For a retryable error, the scheduler uses exponential backoff with
+jitter, starting from a base of 5 seconds and capped at 5 minutes. With
+adaptive timing enabled and a maximum interval of 15 seconds or less, the
+scheduler uses a 750ms base and a 4-second cap. An open breaker can defer
+execution independently of that delay. Read the connection's recorded
+`breaker.retryAt` rather than calculating it from the scheduler backoff.
 
 ## ⚙️ Configuration
 Adaptive polling is **disabled by default**.
@@ -124,10 +123,37 @@ before attributing the gap to backoff.
 | State | Trigger | Recovery |
 | :--- | :--- | :--- |
 | **Closed** | Normal operation. | — |
-| **Open** | ≥3 failures. | Backoff (max 5m). |
-| **Half-open** | Retry window elapsed. | Success = Closed; Fail = Open. |
+| **Open** | Three consecutive poll failures while closed. | The recorded retry deadline must pass before the breaker admits a poll. |
+| **Half-open** | The breaker admits a poll after the open deadline. | A success closes the breaker and resets its failure count. A failure opens it again. |
 
-**Dead Letter Queue**: After 5 transient or 1 permanent failure, tasks move to DLQ (30m retry).
+### Read the dead-letter entry alongside poll results
+
+A permanent failure or five consecutive retryable failures moves the failed
+task to the Dead Letter Queue. Pulse records a retry time 30 minutes after
+that entry, but this is not a countdown to the next poll. The normal scheduler
+can poll the same connection sooner. The entry can still be present after a
+later poll succeeds.
+
+Use a [saved scheduler snapshot](../api/SCHEDULER_HEALTH.md#-common-queries-jq).
+This query shows the times for connections with a dead-letter entry. It makes
+no additional requests. Keep the output private because the key can contain
+the connection name.
+
+```bash
+snapshot='/absolute/path/to/health.json' # use the printed filename
+jq '.instances[] | select(.deadLetter.present == true) |
+  {key, deadLetterAt: .deadLetter.lastAttempt, recordedRetryAt: .deadLetter.nextRetry,
+   lastSuccess: .pollStatus.lastSuccess, currentErrorAt: .pollStatus.lastError.at,
+   currentErrorCategory: .pollStatus.lastError.category}' "$snapshot"
+```
+
+If `lastSuccess` is newer than `deadLetterAt` and there is no current error,
+Pulse recorded a later successful poll with no outstanding error. If a
+`partial` error remains, some readings are still missing. No rows means no
+entries in that snapshot, not that polling is healthy. To check a gap now,
+[compare two poll results](../api/SCHEDULER_HEALTH.md#compare-two-poll-snapshots)
+over the normal interval. Do not wait for the recorded retry time or reset
+the breaker just to find out whether polling has resumed.
 
 ## 🩺 Health API
 `GET /api/monitoring/scheduler/health` (Auth required)
