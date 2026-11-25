@@ -2700,3 +2700,114 @@ func TestScheduledPollClaimPreservesExplicitEdits(t *testing.T) {
 		})
 	}
 }
+
+func withScheduledPollPanicFixture(t *testing.T, processLimit bool, observe func(*testing.T, *Monitor)) {
+	t.Helper()
+	synctest.Test(t, func(t *testing.T) {
+		const (
+			peer    = "fixture-peer"
+			fault   = "fixture-task-preparation"
+			cadence = 45 * time.Second
+		)
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		origin := time.Now()
+		registry := prometheus.NewRegistry()
+		physicalDisks := false
+		peerReads, faultCalls := 0, 0
+		m := &Monitor{
+			config: &config.Config{PVEPollingInterval: cadence, PVEInstances: []config.PVEInstance{{
+				Name: peer, Host: "https://fixture-peer.invalid:8006", MonitorPhysicalDisks: &physicalDisks,
+			}}},
+			state: models.NewState(), alertManager: &alerts.Manager{}, runtimeCtx: ctx,
+			metricsHistory: NewMetricsHistory(16, time.Hour),
+			taskQueue:      NewTaskQueue(), pollMetrics: newPollMetrics(registry),
+			pollStatusMap: make(map[string]*pollStatus),
+			lastOutcome:   make(map[string]taskOutcome), failureCounts: make(map[string]int),
+			lastClusterCheck: map[string]time.Time{peer: origin},
+			nodeLastOnline:   make(map[string]time.Time),
+			nodeRRDMemCache:  make(map[string]rrdMemCacheEntry),
+			pveClients: map[string]PVEClientInterface{
+				peer: &pollWorkFixturePVE{getNodes: func(context.Context) ([]proxmox.Node, error) {
+					peerReads++
+					cpu := 0.24
+					if peerReads > 1 {
+						cpu = 0.42
+					}
+					return []proxmox.Node{{Node: peer, Status: "online", CPU: cpu, Uptime: 36000}}, nil
+				}},
+			},
+			pollProviders: map[InstanceType]PollProvider{
+				InstanceTypePBS: pollProviderAdapter{
+					instanceType: InstanceTypePBS,
+					buildPollTask: func(*Monitor, string) (PollTask, error) {
+						faultCalls++
+						panic("fixture panic during poll preparation")
+					},
+				},
+			},
+		}
+		m.executor = newRealExecutor(m)
+		m.taskQueue.Upsert(ScheduledTask{InstanceType: InstanceTypePVE, InstanceName: peer, NextRun: origin, Interval: cadence})
+		failed := ScheduledTask{InstanceType: InstanceTypePBS, InstanceName: fault, NextRun: origin.Add(time.Second), Interval: cadence}
+		m.taskQueue.Upsert(failed)
+		if processLimit {
+			go m.dispatchTaskWorkers(ctx, newPollTaskWorkerLimiter(1))
+		} else {
+			go m.taskWorker(ctx, 0)
+		}
+
+		synctest.Wait()
+		if next, ok := m.taskQueue.Get(InstanceTypePVE, peer); peerReads != 1 || !ok || next.NextRun != origin.Add(cadence) {
+			t.Fatalf("expected initial peer read and ordinary successor at %v: reads=%d queued=%v next=%+v", origin.Add(cadence), peerReads, ok, next)
+		}
+		time.Sleep(time.Second)
+		synctest.Wait()
+		if faultCalls != 1 {
+			t.Fatalf("fault did not run exactly once: %d", faultCalls)
+		}
+		if _, ok := m.taskQueue.Get(failed.InstanceType, failed.InstanceName); ok {
+			t.Fatal("panicking attempt should not immediately reschedule itself")
+		}
+		if _, ok := m.lastOutcome[schedulerKey(failed.InstanceType, failed.InstanceName)]; ok {
+			t.Fatal("poll preparation panic should not fabricate a provider outcome")
+		}
+
+		replanned := failed
+		replanned.NextRun = origin.Add(time.Hour)
+		m.taskQueue.upsertPlan(replanned)
+		if got, ok := m.taskQueue.Get(failed.InstanceType, failed.InstanceName); !ok || got != replanned {
+			t.Fatalf("panicking attempt left its claim behind: queued=%v task=%+v", ok, got)
+		}
+		time.Sleep(time.Until(origin.Add(cadence)))
+		synctest.Wait()
+		assertClaimedPollOverdue(t, registry, 0, 0)
+		observe(t, m)
+	})
+}
+
+func TestScheduledPollTaskPanicDoesNotStopWorker(t *testing.T) {
+	for _, tc := range []struct {
+		name         string
+		processLimit bool
+	}{
+		{name: "default-single-worker"},
+		{name: "process-limit-one", processLimit: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			withScheduledPollPanicFixture(t, tc.processLimit, func(t *testing.T, m *Monitor) {
+				nodes := m.state.GetSnapshot().Nodes
+				if len(nodes) != 1 || nodes[0].Name != "fixture-peer" {
+					t.Fatalf("expected only the fixture peer, got %d nodes", len(nodes))
+				}
+				if nodes[0].CPU != 0.42 {
+					t.Fatalf("the scheduled peer did not publish new CPU data after the fault: got %.0f%%, want 42%%", nodes[0].CPU*100)
+				}
+				history := m.GetNodeMetrics(nodes[0].ID, "cpu", time.Minute)
+				if len(history) != 2 || history[0].Value != 24 || history[1].Value != 42 {
+					t.Fatalf("the peer must complete both ordinary History writes: %+v", history)
+				}
+			})
+		})
+	}
+}

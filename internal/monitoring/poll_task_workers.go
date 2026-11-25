@@ -42,7 +42,6 @@ func (m *Monitor) dispatchTaskWorkers(ctx context.Context, limiter *pollTaskWork
 		progress.start(work, time.Now().Add(budget))
 		go func() {
 			defer limiter.release()
-			defer recoverFromPanic(fmt.Sprintf("taskWorker-%s-%s", task.InstanceType, task.InstanceName))
 			m.executeAndRescheduleTask(ctx, task, progress, work)
 		}()
 	}
@@ -70,6 +69,18 @@ func (m *Monitor) taskWorker(ctx context.Context, id int) {
 }
 
 func (m *Monitor) executeAndRescheduleTask(ctx context.Context, task ScheduledTask, progress *pollWorkProgress, work uint64) {
+	// Recover at the task boundary so one panic cannot end a reusable worker.
+	// The claim and work marker still unwind before this handler runs.
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			log.Error().
+				Str("type", string(task.InstanceType)).
+				Str("instance", task.InstanceName).
+				Interface("panic", recovered).
+				Stack().
+				Msg("Recovered from panic in scheduled poll task")
+		}
+	}()
 	// Do not clear this at context expiry. An unreturned worker is still busy.
 	defer progress.finish(work)
 	var next ScheduledTask
