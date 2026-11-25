@@ -2320,8 +2320,8 @@ func TestScheduledPollWorkProgressInExporter(t *testing.T) {
 			t.Fatal("could not reserve fixture slots")
 		}
 		handler := promhttp.HandlerFor(registry, promhttp.HandlerOpts{})
-		queue := func(name string) {
-			m.taskQueue.Upsert(ScheduledTask{InstanceType: InstanceTypePVE, InstanceName: name, NextRun: time.Now(), Interval: longInterval})
+		queue := func(name string, due time.Time) {
+			m.taskQueue.Upsert(ScheduledTask{InstanceType: InstanceTypePVE, InstanceName: name, NextRun: due, Interval: longInterval})
 		}
 		observe := func(label string) string {
 			t.Helper()
@@ -2365,7 +2365,7 @@ func TestScheduledPollWorkProgressInExporter(t *testing.T) {
 		idle := observe("idle")
 		wantOverdue(idle, "0", "0")
 		want(idle, "pulse_scheduler_queue_due_soon 0")
-		queue(waiting)
+		queue(waiting, origin)
 		t.Log("fixture-held due at 0s")
 		time.Sleep(defaultTaskTimeout + 5*time.Second)
 		held := observe("waiting for process slot")
@@ -2383,10 +2383,14 @@ func TestScheduledPollWorkProgressInExporter(t *testing.T) {
 		if len(starts) != 1 || starts[0] != defaultTaskTimeout+5*time.Second {
 			t.Fatalf("provider starts = %v", starts)
 		}
-		time.Sleep(defaultTaskTimeout + 5*time.Second)
+		// Publish both controls before their due time. If they are inserted
+		// after the clock advances, the dispatcher may already have gone
+		// back to sleep on its empty-queue timer.
+		controlsDue := time.Now().Add(defaultTaskTimeout + 5*time.Second)
+		queue(sibling, controlsDue)
+		queue(down, controlsDue)
 		limiter.release()
-		queue(sibling)
-		queue(down)
+		time.Sleep(time.Until(controlsDue))
 		blocked := observe("provider over budget; sibling success and down target returned")
 		wantOverdue(blocked, "0", "5")
 		want(blocked,
