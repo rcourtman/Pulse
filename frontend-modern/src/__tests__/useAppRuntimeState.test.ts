@@ -84,6 +84,7 @@ describe('useAppRuntimeState', () => {
   let websocketConnected: boolean;
   let websocketReconnecting: boolean;
   let websocketInitialDataReceived: boolean;
+  let websocketResourceSnapshotReceived: boolean | undefined;
   let onStoreAcquired: (() => void) | undefined;
   const mountedRoots = new Set<() => void>();
 
@@ -169,6 +170,7 @@ describe('useAppRuntimeState', () => {
     websocketConnected = false;
     websocketReconnecting = false;
     websocketInitialDataReceived = false;
+    websocketResourceSnapshotReceived = undefined;
     onStoreAcquired = undefined;
 
     vi.doMock('@/stores/websocket-global', () => ({
@@ -179,7 +181,8 @@ describe('useAppRuntimeState', () => {
           connected: () => websocketConnected,
           reconnecting: () => websocketReconnecting,
           initialDataReceived: () => websocketInitialDataReceived,
-          resourceSnapshotReceived: () => websocketInitialDataReceived,
+          resourceSnapshotReceived: () =>
+            websocketResourceSnapshotReceived ?? websocketInitialDataReceived,
           reconnect: vi.fn(),
           switchUrl: switchSocketMock,
         };
@@ -1440,6 +1443,28 @@ describe('useAppRuntimeState', () => {
 
     dispose();
   });
+
+  it.each([
+    [false, 'waiting-for-data', 'warning'],
+    [true, 'connected', 'healthy'],
+  ] as const)(
+    'treats an open socket with stats and resources=[] as resolved only when the resource snapshot has arrived (%s)',
+    async (snapshotReceived, kind, tone) => {
+      const tick = 1_700_000_000_000;
+      websocketState = makeWebSocketState({ lastUpdate: tick });
+      websocketConnected = true;
+      websocketInitialDataReceived = true;
+      websocketResourceSnapshotReceived = snapshotReceived;
+      const { hookState, dispose } = mountHook();
+
+      await waitFor(() => expect(hookState.connected()).toBe(true));
+      expect(hookState.runtimeStateResolved()).toBe(snapshotReceived);
+      expect(hookState.connectionStatus()).toMatchObject({ kind, tone });
+      expect(hookState.state().lastUpdate).toBe(tick);
+      expect(Boolean(hookState.lastUpdateText())).toBe(snapshotReceived);
+      dispose();
+    },
+  );
 
   it('keeps retained server resource state available during a transient WebSocket reconnect', async () => {
     const retainedResource: Resource = {

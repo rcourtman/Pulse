@@ -1,0 +1,37 @@
+{
+  "version": 1,
+  "base_sha": "8f79069c5576193868da44044bef7ae6f05c8d4c",
+  "verified_at": "2026-11-25T19:28:46Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx",
+    "frontend-modern/src/useAppRuntimeState.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx": "2bc58e6785e3c6b23ef9ec5bb14edb239fddd7783323a5054ad60efe09d2ba9f",
+    "frontend-modern/src/useAppRuntimeState.ts": "f23e9710cdbd1decdc3eaed7c2c8846bccfc305afe1dffc49e7e35c7d8ca2a18"
+  },
+  "routes": [
+    "/proxmox/backups/date"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 950
+    },
+    {
+      "width": 360,
+      "height": 820
+    }
+  ],
+  "states": [
+    "Matched Chromium 141 light desktop and touch WebKit 26 dark phone with Playwright 1.56.1, one read-only signed-in fixture, and the real Backups page.",
+    "Socket open with stats but no resource snapshot: the amber Waiting for data badge is shown without a dashboard refresh time. Version and controls remain visible; an empty snapshot is accepted by the existing state reader.",
+    "A cached monitor projection has a newer registry stamp, not a new reading. The connected badge describes transport. Retained 40% and its forecast are marked as such; an Error, unread capacity and Verify failed remain distinct.",
+    "A new PBS observation produces 57% and clears only that source's stale note. The backup count, peer errors, and controls remain."
+  ],
+  "interactions": [
+    "Open the datastore with Enter on desktop and by tapping its name on the touch row. Keep the same drawer open and the desktop toggle focused through the new reading.",
+    "Check the displayed refresh clock and source-status differences across an open socket, stats-only frame, timestamped cached projection and genuinely new observation. Separately check header, table and open drawer pixels at both widths."
+  ]
+}
