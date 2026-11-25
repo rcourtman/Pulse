@@ -76,6 +76,7 @@ interface BackupServerRow {
   resource: Resource;
   serverName: string;
   online: boolean;
+  pollStale: boolean;
   connectionLabel: string;
   connectionVariant: StatusIndicatorVariant;
   datastore?: ResourcePBSDatastore;
@@ -91,6 +92,7 @@ interface BackupServerGroup {
   customUrl?: string;
   serverName: string;
   online: boolean;
+  pollStale: boolean;
   connectionLabel: string;
   connectionVariant: StatusIndicatorVariant;
   statusLabel: string;
@@ -100,6 +102,28 @@ interface BackupServerGroup {
 
 type BackupServerTableItem =
   { kind: 'server'; group: BackupServerGroup } | { kind: 'datastore'; row: BackupServerRow };
+
+const PBS_DATA_STALE = 'PBS data stale';
+const PBS_STALE_EXPLANATION = 'Pulse has not received a recent PBS update.';
+
+function withPBSPollFreshness(
+  status: { variant: StatusIndicatorVariant; label: string },
+  pollStale: boolean,
+): { variant: StatusIndicatorVariant; label: string } {
+  if (!pollStale) return status;
+  return {
+    variant: status.variant === 'danger' ? 'danger' : 'warning',
+    label: `${PBS_DATA_STALE} · Last status: ${status.label}`,
+  };
+}
+
+function BackupServerStaleNote(props: { children: JSX.Element }) {
+  return (
+    <span class="mt-0.5 block text-[10px] leading-tight font-medium text-amber-800 dark:text-amber-300">
+      {props.children}
+    </span>
+  );
+}
 
 // Combine server reachability with datastore job outcomes so a reachable PBS
 // server with a failed or warned sync/verify/prune/GC job never displays a
@@ -133,10 +157,9 @@ export function groupBackupServerRows(rows: readonly BackupServerRow[]): BackupS
   let currentJobs: DatastoreJobSummary[] = [];
   const finalizeCurrent = () => {
     if (!current) return;
-    const status = effectiveBackupServerStatus(
-      current.connectionVariant,
-      current.connectionLabel,
-      currentJobs,
+    const status = withPBSPollFreshness(
+      effectiveBackupServerStatus(current.connectionVariant, current.connectionLabel, currentJobs),
+      current.pollStale,
     );
     current.statusVariant = status.variant;
     current.statusLabel = status.label;
@@ -150,6 +173,7 @@ export function groupBackupServerRows(rows: readonly BackupServerRow[]): BackupS
         customUrl: row.resource.customUrl,
         serverName: row.serverName,
         online: row.online,
+        pollStale: row.pollStale,
         connectionLabel: row.connectionLabel,
         connectionVariant: row.connectionVariant,
         statusLabel: row.connectionLabel,
@@ -268,11 +292,11 @@ function datastoreCapacity(
 }
 
 // >=90% is the silent-backup-failure danger zone; >=75% is the early warning.
-function usageVariant(pct: number | undefined): StatusIndicatorVariant {
+function usageVariant(pct: number | undefined, pollStale: boolean): StatusIndicatorVariant {
   if (pct === undefined) return 'muted';
   if (pct >= 90) return 'danger';
   if (pct >= 75) return 'warning';
-  return 'success';
+  return pollStale ? 'muted' : 'success';
 }
 
 function jobToneClass(state: DatastoreJobState): string {
@@ -334,10 +358,11 @@ function BackupServerDatastoreContext(props: {
     const state = capacity().state;
     // A healthy PBS connection can still fail to read an individual datastore.
     // Keep the server's own connection indicator and any known job problem.
-    if (status.variant === 'success' && (state === 'unavailable' || state === 'unknown')) {
-      return { variant: 'warning', label: `Datastore capacity ${state}` };
-    }
-    return status;
+    const displayStatus =
+      status.variant === 'success' && (state === 'unavailable' || state === 'unknown')
+        ? { variant: 'warning' as const, label: `Datastore capacity ${state}` }
+        : status;
+    return withPBSPollFreshness(displayStatus, props.row.pollStale);
   });
   const capacityText = () => {
     const datastore = props.row.datastore;
@@ -350,7 +375,8 @@ function BackupServerDatastoreContext(props: {
       typeof datastore.total === 'number' && typeof datastore.used === 'number'
         ? ` · ${formatPlatformTableBytesValue(Math.max(0, datastore.total - datastore.used), '0 B')} free`
         : '';
-    return `${formatPlatformTablePercentValue(reading.percent)} used · ${formatPlatformTableBytesValue(datastore.used, '0 B')} / ${formatPlatformTableBytesValue(datastore.total)}${free}`;
+    const prefix = props.row.pollStale ? 'Last reading: ' : '';
+    return `${prefix}${formatPlatformTablePercentValue(reading.percent)} used · ${formatPlatformTableBytesValue(datastore.used, '0 B')} / ${formatPlatformTableBytesValue(datastore.total)}${free}`;
   };
   const inventoryText = () => {
     if (!props.row.datastore) return 'Not reported';
@@ -394,18 +420,29 @@ function BackupServerDatastoreContext(props: {
           {
             label: 'Datastore',
             rows: [
+              ...(props.row.pollStale
+                ? [
+                    {
+                      label: 'PBS data',
+                      value: `Stale. ${PBS_STALE_EXPLANATION}`,
+                      tone: 'warning' as const,
+                    },
+                  ]
+                : []),
               { label: 'Capacity', value: capacityText(), tone: capacityTone() },
               ...(props.forecast
                 ? [
                     {
                       label: 'Fill forecast',
-                      value: props.forecast.detail,
+                      value: props.row.pollStale
+                        ? `Last forecast: ${props.forecast.detail}`
+                        : props.forecast.detail,
                       tone: forecastDetailTone(props.forecast),
                     },
                   ]
                 : []),
               {
-                label: 'Jobs',
+                label: props.row.pollStale ? 'Last job results' : 'Jobs',
                 value: describeDatastoreJobs(props.row.jobs),
                 tone: jobDetailTone(props.row.jobs.state),
               },
@@ -654,6 +691,9 @@ export function buildBackupServerRows(
       .sort((left, right) => left.name.localeCompare(right.name));
     const host = {
       serverName: server.name,
+      // Use the registry's PBS cadence, not aggregate status or lastSeen
+      // (which can still advance from a linked host agent).
+      pollStale: server.sourceStatus?.pbs?.status === 'stale',
       ...serverConnection(server),
     };
     // Each keyed row has a reconciled Solid store. Give it its own JSON DTO
@@ -725,6 +765,11 @@ function BackupServerGroupRow(props: { group: BackupServerGroup; colSpan: number
             </span>
           </Show>
         </div>
+        <Show when={props.group.pollStale}>
+          <div class="pl-3.5">
+            <BackupServerStaleNote>{PBS_DATA_STALE}</BackupServerStaleNote>
+          </div>
+        </Show>
       </td>
     </tr>
   );
@@ -971,10 +1016,17 @@ export function ProxmoxBackupServersTable(props: {
                               {(fill) => (
                                 <span
                                   class={`block truncate text-[11px] font-medium ${forecastToneClass(fill())}`}
-                                  title={fill().detail}
+                                  title={
+                                    row.pollStale
+                                      ? `Last forecast: ${fill().detail}`
+                                      : fill().detail
+                                  }
                                   data-backup-server-forecast={fill().level}
                                 >
                                   {fill().shortLabel}
+                                  <Show when={row.pollStale}>
+                                    <BackupServerStaleNote>Last forecast</BackupServerStaleNote>
+                                  </Show>
                                 </span>
                               )}
                             </Show>
@@ -1005,7 +1057,7 @@ export function ProxmoxBackupServersTable(props: {
                                   >
                                     <StatusDot
                                       size="sm"
-                                      variant={usageVariant(pct())}
+                                      variant={usageVariant(pct(), row.pollStale)}
                                       title={`Datastore ${formatPlatformTablePercentValue(pct())} used`}
                                       ariaHidden
                                     />
@@ -1013,9 +1065,8 @@ export function ProxmoxBackupServersTable(props: {
                                   <span class={`tabular-nums font-medium ${usageToneClass(pct())}`}>
                                     <PlatformTablePercentValue value={pct()} />
                                   </span>
-                                  {/* A fill forecast is the more urgent answer, so it
-                                      takes the bytes' place; they stay in the title
-                                      and the drawer, and the row stays one line. */}
+                                  {/* Keep the forecast in its existing position and
+                                      qualify it along with any retained capacity. */}
                                   <Show
                                     when={layoutMode() !== 'compact' && forecast()}
                                     fallback={
@@ -1030,7 +1081,7 @@ export function ProxmoxBackupServersTable(props: {
                                     {(fill) => (
                                       <span
                                         class={`inline-flex items-center whitespace-nowrap rounded-md px-1.5 py-0.5 text-[11px] font-semibold tabular-nums ${FORECAST_PILL_CLASS[fill().level]}`}
-                                        title={`${fill().detail}. ${formatPlatformTableBytesValue(datastore().used, '0 B')} / ${formatPlatformTableBytesValue(datastore().total)} used.`}
+                                        title={`${row.pollStale ? 'Last forecast: ' : ''}${fill().detail}. ${formatPlatformTableBytesValue(datastore().used, '0 B')} / ${formatPlatformTableBytesValue(datastore().total)} used.`}
                                         data-backup-server-forecast={fill().level}
                                       >
                                         <span aria-hidden="true">{fill().shortLabel}</span>
@@ -1041,6 +1092,13 @@ export function ProxmoxBackupServersTable(props: {
                                 </div>
                               </Show>
                             )}
+                          </Show>
+                          <Show when={row.pollStale && capacityEvidence().state === 'available'}>
+                            <BackupServerStaleNote>
+                              {layoutMode() !== 'compact' && forecast()
+                                ? 'Last reading & forecast'
+                                : 'Last reading'}
+                            </BackupServerStaleNote>
                           </Show>
                         </TableCell>
                         <Show when={columnVisible('jobs')}>
@@ -1112,10 +1170,10 @@ export function ProxmoxBackupServersTable(props: {
                       </TableRow>
                       <PlatformResourceDetailTableRow
                         resource={row.resource}
-                        statusIndicator={{
-                          variant: row.connectionVariant,
-                          label: row.connectionLabel,
-                        }}
+                        statusIndicator={withPBSPollFreshness(
+                          { variant: row.connectionVariant, label: row.connectionLabel },
+                          row.pollStale,
+                        )}
                         open={isExpanded()}
                         detailRowId={detailRowId()}
                         colSpan={visibleColumns().length}
