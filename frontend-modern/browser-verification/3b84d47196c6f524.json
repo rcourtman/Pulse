@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "base_sha": "51f9e91949465a9143ca2cc56afc6a6836b61b85",
+  "verified_at": "2026-11-25T05:19:58Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx": "b241d97d3e60bcb08bc7eff5911fc47e33f7e11a98cfb6772bee4752617b0d3f"
+  },
+  "routes": [
+    "/proxmox/backups/date"
+  ],
+  "viewports": [
+    {
+      "width": 1366,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Matched Chromium 141 desktop light and WebKit 26 phone dark, Playwright 1.56.1, identical UTC fixture reads and viewport/scroll within each pair",
+    "Empty selected day: unqualified absence before; scoped unknown-date count and dated-list limit after; chosen-day failures and totals preserved",
+    "Known-date result with active search: same verified record and count; only matching undated entries are flagged",
+    "Cleared day: search, Unknown date group and literal Reported date preserved; matching captures visually inspected on both widths"
+  ],
+  "interactions": [
+    "Choose failed and successful Backup jobs bars by keyboard or touch, including View restore points on phone",
+    "Open narrow Filters to verify counters and collapse again; narrow search to known date, then restore scope",
+    "Clear day without clearing search; expand the previously excluded unverified point and read its date evidence"
+  ]
+}
