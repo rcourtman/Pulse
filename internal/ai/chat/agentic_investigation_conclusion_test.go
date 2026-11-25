@@ -209,3 +209,60 @@ func TestInvestigationSummaryTimeoutUsesTheRemainingDeadline(t *testing.T) {
 		t.Fatalf("near-deadline summary timeout = %s, want %s (the deadline still bounds it)", got, base)
 	}
 }
+
+func TestInvestigationSummaryRetainsStreamIdleTimeout(t *testing.T) {
+	cases := []struct {
+		name         string
+		profile      tools.ExecutionProfile
+		providerName string
+		wantIdle     time.Duration
+	}{
+		{
+			name:         "streaming investigation preserves patrol idle budget on summary",
+			profile:      tools.ProfilePatrolInvestigation,
+			providerName: "openai",
+			wantIdle:     PatrolProviderStreamIdleTimeout,
+		},
+		{
+			name:         "subscription investigation widens idle budget on summary",
+			profile:      tools.ProfilePatrolInvestigation,
+			providerName: string(providers.SubscriptionAgentCodex),
+			wantIdle:     patrolSubscriptionInvestigationTurnTimeout,
+		},
+		{
+			name:         "interactive summary keeps provider default",
+			profile:      tools.ProfileInteractiveAssistant,
+			providerName: "openai",
+			wantIdle:     0,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var gotIdle time.Duration
+			provider := &stubStreamingProvider{chatStream: func(ctx context.Context, req providers.ChatRequest, cb providers.StreamCallback) error {
+				gotIdle = req.StreamIdleTimeout
+				cb(providers.StreamEvent{Type: "content", Data: providers.ContentEvent{Text: "Final summary."}})
+				cb(providers.StreamEvent{Type: "done", Data: providers.DoneEvent{}})
+				return nil
+			}}
+			loop := NewAgenticLoop(provider, tools.NewPulseToolExecutor(tools.ExecutorConfig{}), "Investigate")
+			loop.SetExecutionProfile(tc.profile)
+			loop.SetProviderInfo(tc.providerName, "test-model")
+
+			_, err := loop.ensureFinalTextResponse(
+				context.Background(),
+				"summary-idle",
+				nil,
+				[]providers.Message{{Role: "user", Content: "Check service"}},
+				func(StreamEvent) {},
+			)
+			if err != nil {
+				t.Fatalf("ensureFinalTextResponse returned error: %v", err)
+			}
+			if gotIdle != tc.wantIdle {
+				t.Fatalf("summary StreamIdleTimeout = %s, want %s", gotIdle, tc.wantIdle)
+			}
+		})
+	}
+}

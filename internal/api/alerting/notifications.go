@@ -939,21 +939,21 @@ func classifyNotificationError(err error) (summary, detail string) {
 
 	switch {
 	case strings.Contains(lower, "connection refused"):
-		summary = "Could not connect to the server — check host, port, and firewall settings"
+		summary = "Could not connect to the server: check host, port, and firewall settings"
 	case strings.Contains(lower, "no such host"):
-		summary = "Server hostname not found — check the server address"
+		summary = "Server hostname not found: check the server address"
 	case strings.Contains(lower, "i/o timeout") || strings.Contains(lower, "deadline exceeded"):
-		summary = "Connection timed out — the server may be unreachable or the port may be blocked"
-	case strings.Contains(lower, "x509:") || strings.Contains(lower, "certificate"):
-		summary = "TLS certificate error — check certificate settings or try enabling 'Skip TLS Verify'"
+		summary = "Connection timed out: the server may be unreachable or the port may be blocked"
+	case strings.Contains(lower, "x509:") || strings.Contains(lower, "certificate") || strings.Contains(lower, "server gave http response to https client"):
+		summary = "TLS certificate error: check the server certificate and TLS settings"
 	case strings.Contains(lower, "535") || strings.Contains(lower, "authentication"):
-		summary = "Authentication failed — check username and password"
+		summary = "Authentication failed: check username and password"
 	case strings.Contains(lower, "executable file not found"):
-		summary = "Required program not found — ensure it is installed on the server"
+		summary = "Required program not found: ensure it is installed on the server"
 	case strings.Contains(lower, "permission denied"):
-		summary = "Permission denied — the server process lacks access to the required resource"
+		summary = "Permission denied: the server process lacks access to the required resource"
 	case strings.Contains(lower, "eof"):
-		summary = "The server closed the connection unexpectedly — check if TLS/StartTLS settings are correct"
+		summary = "The server closed the connection unexpectedly: check if TLS/StartTLS settings are correct"
 	default:
 		summary = raw
 		detail = ""

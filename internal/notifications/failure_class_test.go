@@ -254,10 +254,10 @@ func TestFailureClassRetryable(t *testing.T) {
 		NotificationFailureAuthentication: false,
 		NotificationFailureConfiguration:  false,
 		NotificationFailureRejected:       false,
+		NotificationFailureTLS:            false,
 		NotificationFailureConnectivity:   true,
 		NotificationFailureRateLimited:    true,
 		NotificationFailureServerError:    true,
-		NotificationFailureTLS:            true,
 		NotificationFailureUnknown:        true,
 		NotificationFailureClass(""):      true,
 	}
@@ -292,6 +292,12 @@ func TestProcessNotificationDeadLettersDeterministicFailureImmediately(t *testin
 		{
 			name:          "rejection does not retry",
 			sendErr:       FailfWithClass(ClassFromHTTPStatus(422), "webhook returned HTTP 422: unprocessable"),
+			wantStatus:    QueueStatusDLQ,
+			wantCallCount: 1,
+		},
+		{
+			name:          "tls does not retry",
+			sendErr:       FailWithClass(NotificationFailureTLS, x509.UnknownAuthorityError{}),
 			wantStatus:    QueueStatusDLQ,
 			wantCallCount: 1,
 		},

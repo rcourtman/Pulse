@@ -301,3 +301,38 @@ func TestInvestigationRunCeilingFollowsTheConfiguredTimeout(t *testing.T) {
 		t.Fatalf("subscription ceiling = %s, want %s", got, want)
 	}
 }
+
+func TestRecoverStuckInvestigationsRecordsTimedOutOnAbandonedSession(t *testing.T) {
+	now := time.Now()
+	findings := NewFindingsStore()
+	findings.Add(runningInvestigationFinding("stuck", "chat-stuck", nil))
+
+	orchestrator := &sessionReportingOrchestrator{sessions: map[string]*InvestigationSession{
+		"stuck": {ID: "inv-stuck", FindingID: "stuck", SessionID: "chat-stuck", Status: aicontracts.InvestigationStatusRunning, StartedAt: now.Add(-time.Hour)},
+	}}
+	var closedSession *InvestigationSession
+	patrol := &PatrolService{
+		findings:                  findings,
+		investigationOrchestrator: orchestrator,
+		investigationRunCloser: func(findingID string, session *InvestigationSession) {
+			if findingID == "stuck" {
+				closedSession = session
+			}
+		},
+	}
+	patrol.recoverStuckInvestigations()
+
+	assertInvestigationState(t, findings, "stuck", InvestigationStatusFailed, InvestigationOutcomeTimedOut)
+	if closedSession == nil {
+		t.Fatal("expected abandoned session close callback to be invoked")
+	}
+	if closedSession.Status != aicontracts.InvestigationStatusFailed {
+		t.Fatalf("closed session status = %q, want %q", closedSession.Status, aicontracts.InvestigationStatusFailed)
+	}
+	if closedSession.Outcome != aicontracts.OutcomeTimedOut {
+		t.Fatalf("closed session outcome = %q, want %q", closedSession.Outcome, aicontracts.OutcomeTimedOut)
+	}
+	if closedSession.CompletedAt == nil || closedSession.CompletedAt.IsZero() {
+		t.Fatal("closed session CompletedAt was not set")
+	}
+}

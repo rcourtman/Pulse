@@ -74,18 +74,21 @@ func (a *AgenticLoop) ensureFinalTextResponseWithSystemPrompt(
 	if override := strings.TrimSpace(systemPromptOverride); override != "" {
 		summarySystemPrompt = override
 	}
+	a.mu.Lock()
+	providerName := a.providerName
+	requestSanitizer := a.requestSanitizer
+	streamIdleTimeout := a.streamIdleTimeout
+	a.mu.Unlock()
 	summaryReq := providers.ChatRequest{
-		Messages:    cleanMessages,
-		System:      summarySystemPrompt,
-		ExecutionID: a.executionID,
+		Messages:          cleanMessages,
+		System:            summarySystemPrompt,
+		ExecutionID:       a.executionID,
+		StreamIdleTimeout: investigationStreamIdleTimeout(a.currentExecutionProfile(), providerName, streamIdleTimeout),
 		// No Tools field: this is a final narrative turn, and Pulse avoids
 		// provider-specific tool_choice transport fields.
 	}
 	applyExecutionInferenceAllowance(&summaryReq, a.currentExecutionProfile(), true, a.totalOutputTokens)
 	applyExecutionRuntimeEnvelope(&summaryReq, a.currentExecutionProfile())
-	a.mu.Lock()
-	requestSanitizer := a.requestSanitizer
-	a.mu.Unlock()
 	if requestSanitizer != nil {
 		summaryReq = requestSanitizer(summaryReq)
 	}
