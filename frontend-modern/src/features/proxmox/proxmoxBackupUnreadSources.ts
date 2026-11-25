@@ -1,4 +1,9 @@
-import type { ProtectionPosture, ProtectionUnreadScope, RecoveryPlatform } from '@/types/recovery';
+import type {
+  ProtectionPosture,
+  ProtectionProviderState,
+  ProtectionUnreadScope,
+  RecoveryPlatform,
+} from '@/types/recovery';
 
 // The server names what each provider's latest backup read could not reach.
 // Every guest on that connection carries the same list, so collapse it to one
@@ -32,40 +37,51 @@ export interface UnreadBackupSource {
   accessDenied: boolean;
 }
 
+// Only collection observations are known to use a configured connection name.
+// A retained point's scope may instead be a datastore or another native ID.
+const readerLabel = ({ provider, source }: ProtectionProviderState, scope: string) => {
+  if (!scope) return undefined;
+  if (provider === 'proxmox-pve' && source === 'pve-backup-enumeration') {
+    return `PVE connection: ${scope}`;
+  }
+  if (provider === 'proxmox-pbs' && source === 'pbs-backup-enumeration') {
+    return `PBS connection: ${scope}`;
+  }
+  return undefined;
+};
+
 export const collectUnreadBackupSources = (
   postures: Iterable<ProtectionPosture>,
 ): UnreadBackupSource[] => {
-  const byKey = new Map<string, UnreadBackupSource & { connection: string; base: string }>();
+  const byKey = new Map<string, UnreadBackupSource & { reader?: string }>();
+  const readers = new Set<string>();
   for (const posture of postures) {
     for (const provider of posture.providerStates) {
+      const connection = provider.scope?.trim() ?? '';
+      const reader = readerLabel(provider, connection);
+      // A readable sibling can share the same node, datastore or namespace
+      // name. Consider it before skipping complete history.
+      if (reader) readers.add(reader);
       if (provider.historyCompleteness === 'complete') continue;
       for (const scope of provider.unreadScopes ?? []) {
-        const base = scopeLabel(scope);
-        if (!base) continue;
-        const connection = provider.scope?.trim() ?? '';
-        const key = `${provider.provider}\u0000${connection}\u0000${base}`;
+        const label = scopeLabel(scope);
+        if (!label) continue;
+        const key = `${provider.provider}\u0000${connection}\u0000${label}`;
         const existing = byKey.get(key);
         byKey.set(key, {
-          label: base,
-          base,
-          connection,
+          label,
+          reader: reader ?? existing?.reader,
           provider: provider.provider,
           accessDenied: Boolean(scope.accessDenied) || Boolean(existing?.accessDenied),
         });
       }
     }
   }
-  const entries = [...byKey.values()];
-  // Name the connection only when the gap spans more than one of them.
-  const connections = new Set(entries.map((entry) => entry.connection));
-  return entries
-    .map((entry) => ({
-      label:
-        connections.size > 1 && entry.connection
-          ? `${entry.base} (${entry.connection})`
-          : entry.base,
-      provider: entry.provider,
-      accessDenied: entry.accessDenied,
+  return [...byKey.values()]
+    .map(({ label, reader, provider, accessDenied }) => ({
+      label: reader && (readers.size > 1 || accessDenied) ? `${label} (${reader})` : label,
+      provider,
+      accessDenied,
     }))
     .sort((a, b) => a.label.localeCompare(b.label));
 };
@@ -104,8 +120,14 @@ export const describeUnreadBackupSources = (
       ? names[0]
       : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
   const verb = denied ? 'Pulse does not have permission to read' : 'Pulse cannot read';
-  const action = denied
-    ? 'Check the permissions of the Pulse API token.'
-    : `${mixed ? 'For the other unread sources, check' : 'Check'} ${reachabilityCheck(notDenied)}.`;
-  return `${verb} ${list}, so it cannot confirm the backups stored there. ${action}`;
+  const actions = [];
+  if (denied || mixed) {
+    actions.push("Check the Pulse API token's read permissions where access was denied.");
+  }
+  if (!denied) {
+    actions.push(
+      `${mixed ? 'For the other unread sources, check' : 'Check'} ${reachabilityCheck(notDenied)}.`,
+    );
+  }
+  return `${verb} ${list}, so it cannot confirm the backups stored there. ${actions.join(' ')}`;
 };
