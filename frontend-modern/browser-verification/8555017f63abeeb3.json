@@ -1,0 +1,42 @@
+{
+  "version": 1,
+  "base_sha": "343fc6cb4b0093aa3d0adaca45ee9cbc5daa23f6",
+  "verified_at": "2026-11-25T20:08:28Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Settings/NodeModalSetupGuideSection.tsx",
+    "frontend-modern/src/components/Settings/nodeModalModel.ts",
+    "frontend-modern/src/features/storageBackups/resourceStoragePresentation.ts",
+    "frontend-modern/src/utils/storageSources.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Settings/NodeModalSetupGuideSection.tsx": "b3df86ad1852f164588ce77875b49f2a14a27f65109f348adf88a99abf43a30d",
+    "frontend-modern/src/components/Settings/nodeModalModel.ts": "932936646817ebe1b809e4b04478cd2afdd2433a78903fe6545e6d7f3ff0d22f",
+    "frontend-modern/src/features/storageBackups/resourceStoragePresentation.ts": "45502927550cfb7cd4a7517bd2f0ab9c22c5b0da43beff6a11f806af52b8a7d9",
+    "frontend-modern/src/utils/storageSources.ts": "77c75d92fb60446de487308858017926e65ffe1c7c000cdb99ccc5fcea36dcc7"
+  },
+  "routes": [
+    "/settings/infrastructure",
+    "/proxmox/storage"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Add Proxmox VE modal default Connect via API tab",
+    "Add Proxmox VE modal Manual Token Setup tab showing --privsep 1 command, API Token Policy --expire hint, and token ACL grants for PVEAuditor, PulseMonitor, and PVEDatastoreAdmin",
+    "Proxmox Storage table on desktop and mobile viewports with zero console or page errors"
+  ],
+  "interactions": [
+    "Opened Add infrastructure dialog from /settings/infrastructure, chose Proxmox VE, switched from Connect via API to Manual Token Setup on 1440x900 and 390x844 viewports",
+    "Scrolled through Step 2 and Step 3 command blocks, verified geometry and screenshots, switched back to Connect via API, and dismissed with Escape",
+    "Navigated to /proxmox/storage on 1440x900 and 390x844 viewports with zero console or page errors"
+  ]
+}

@@ -985,7 +985,7 @@ func TestRootInstallScriptAutoRegisterUsesSecureContractShape(t *testing.T) {
 		`AUTO_NODE_REGISTERED_NAME="$register_node_name"`,
 		`curl -q --retry 3 --retry-delay 2 --connect-timeout 5 --max-time 15 -fsS -X POST "$pulse_url/api/setup-script-url" -H "Content-Type: application/json" -d "$setup_payload"`,
 		`printf %s "$register_payload" | curl -q --retry 3 --retry-delay 2 --connect-timeout 5 --max-time 60 -fsS -X POST "$pulse_url/api/auto-register" -H "Content-Type: application/json" -d @-`,
-		`token_output=$(pveum user token add pulse-monitor@pve "$token_name" --privsep 1 2>&1)`,
+		`token_output=$(pveum user token add pulse-monitor@pve "$token_name" --privsep 1 "${expire_args[@]}" 2>&1)`,
 		`pveum aclmod / -token "$token_id" -role PVEAuditor`,
 		`pveum aclmod / -token "$token_id" -role PulseMonitor`,
 		`pveum aclmod /storage -token "$token_id" -role PVEDatastoreAdmin`,
@@ -1534,8 +1534,10 @@ func TestRootInstallAutoRegisterPrefersJsonTokenForm(t *testing.T) {
 	script := string(content)
 
 	required := []string{
-		`pveum user token add pulse-monitor@pve "$token_name" --privsep 1 --output-format json 2>&1`,
-		`pveum user token add pulse-monitor@pve "$token_name" --privsep 1 2>&1`,
+		`pveum user token add pulse-monitor@pve "$token_name" --privsep 1 "${expire_args[@]}" --output-format json 2>&1`,
+		`pveum user token add pulse-monitor@pve "$token_name" --privsep 1 "${expire_args[@]}" 2>&1`,
+		`PULSE_PVE_TOKEN_EXPIRE`,
+		`API Token Policy`,
 		`token_value=$(extract_pve_token_value "$token_output"`,
 		`extract_pve_token_value() {`,
 	}
@@ -1545,8 +1547,8 @@ func TestRootInstallAutoRegisterPrefersJsonTokenForm(t *testing.T) {
 		}
 	}
 
-	jsonIdx := strings.Index(script, `--privsep 1 --output-format json 2>&1`)
-	bareIdx := strings.Index(script, "\n        token_output=$(pveum user token add pulse-monitor@pve \"$token_name\" --privsep 1 2>&1)")
+	jsonIdx := strings.Index(script, `--privsep 1 "${expire_args[@]}" --output-format json 2>&1`)
+	bareIdx := strings.Index(script, "\n        token_output=$(pveum user token add pulse-monitor@pve \"$token_name\" --privsep 1 \"${expire_args[@]}\" 2>&1)")
 	if jsonIdx < 0 || bareIdx < 0 || jsonIdx > bareIdx {
 		t.Fatalf("expected JSON token form to precede the legacy table fallback (json=%d bare=%d)", jsonIdx, bareIdx)
 	}

@@ -260,6 +260,9 @@ export const getResourceStorageTopologyLabel = (
     case 'iscsi':
     case 'iscsidirect':
       return 'iSCSI';
+    case 'nvmeof':
+    case 'nvme-of':
+      return 'NVMe-oF';
     case 'zfs':
       return 'ZFS';
     case 'btrfs':

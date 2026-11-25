@@ -24,6 +24,8 @@ func TestIsInherentlySharedStorageType(t *testing.T) {
 		{"smb is shared", "smb", true},
 		{"iscsi is shared", "iscsi", true},
 		{"iscsidirect is shared", "iscsidirect", true},
+		{"nvmeof is shared", "nvmeof", true},
+		{"NVMEOF uppercase is shared", "NVMEOF", true},
 		{"dir is not shared", "dir", false},
 		{"lvm is not shared", "lvm", false},
 		{"lvmthin is not shared", "lvmthin", false},
@@ -108,5 +110,35 @@ func TestStorageContentQueryable(t *testing.T) {
 				t.Fatalf("storageContentQueryable() = %v, want %v", got, tt.want)
 			}
 		})
+	}
+}
+
+func TestStorageVolumeContentHelpers(t *testing.T) {
+	tests := []struct {
+		content       string
+		wantGuestRoot bool
+		wantSnapshot  bool
+	}{
+		{"", false, false},
+		{"backup,iso,vztmpl", false, false},
+		{"none", false, false},
+		{"images", true, true},
+		{"rootdir", true, true},
+		{"vm-vol", true, true},
+		{"ct-vol", true, true},
+		{"backup,vm-vol", true, true},
+		{"CT-VOL,backup", true, true},
+		{"vm-state", false, true},
+		{"backup,vm-state", false, true},
+		{"vm-volx,ct-voly", false, false},
+	}
+
+	for _, tt := range tests {
+		if got := storageSupportsGuestRootVolumes(tt.content); got != tt.wantGuestRoot {
+			t.Errorf("storageSupportsGuestRootVolumes(%q) = %v, want %v", tt.content, got, tt.wantGuestRoot)
+		}
+		if got := storageSupportsSnapshotVolumes(tt.content); got != tt.wantSnapshot {
+			t.Errorf("storageSupportsSnapshotVolumes(%q) = %v, want %v", tt.content, got, tt.wantSnapshot)
+		}
 	}
 }

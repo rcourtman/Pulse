@@ -1675,8 +1675,7 @@ func (m *Monitor) collectSnapshotSizes(ctx context.Context, instanceName string,
 				break
 			}
 
-			contentTypes := strings.ToLower(storage.Content)
-			if !strings.Contains(contentTypes, "images") && !strings.Contains(contentTypes, "rootdir") {
+			if !storageSupportsSnapshotVolumes(storage.Content) {
 				continue
 			}
 			if !storageContentQueryable(storage) {

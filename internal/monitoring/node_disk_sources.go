@@ -76,7 +76,7 @@ func preferredNodeDiskFallbackRank(storage proxmox.Storage) (int, bool) {
 	name := strings.ToLower(strings.TrimSpace(storage.Storage))
 	storageType := strings.ToLower(strings.TrimSpace(storage.Type))
 	path := strings.TrimSpace(storage.Path)
-	supportsGuestRoots := storageContentIncludes(storage.Content, "images") || storageContentIncludes(storage.Content, "rootdir")
+	supportsGuestRoots := storageSupportsGuestRootVolumes(storage.Content)
 
 	switch name {
 	case "local-zfs":
@@ -111,15 +111,6 @@ func preferredNodeDiskFallbackRank(storage proxmox.Storage) (int, bool) {
 	}
 
 	return 0, false
-}
-
-func storageContentIncludes(content, want string) bool {
-	for _, part := range strings.Split(content, ",") {
-		if strings.EqualFold(strings.TrimSpace(part), want) {
-			return true
-		}
-	}
-	return false
 }
 
 func (m *Monitor) linkedHostForNode(instanceName, nodeID, nodeName string) *models.Host {

@@ -41,8 +41,11 @@ const PROXMOX_STORAGE_TYPES = new Set([
   'zfspool',
   'zfs',
   'iscsi',
+  'iscsidirect',
+  'nvmeof',
   'glusterfs',
   'btrfs',
+  'esxi',
 ]);
 
 const STORAGE_SOURCE_ORDER = [
@@ -121,11 +124,15 @@ export const resolveStorageSourceKey = (storage: Storage): string => {
     return 'ceph';
   }
 
+  if (platform === 'proxmox-pve') {
+    return 'proxmox-pve';
+  }
+
   if (PROXMOX_STORAGE_TYPES.has(type) || type === '' || type === 'storage') {
     return 'proxmox-pve';
   }
 
-  if (type.includes('k8s') || type.includes('kubernetes') || type.includes('csi')) {
+  if (type.includes('k8s') || type.includes('kubernetes') || /(^|-)csi($|-)/.test(type)) {
     return 'kubernetes';
   }
 

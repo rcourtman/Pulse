@@ -13,6 +13,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -228,6 +229,16 @@ func tokenAlreadyExists(err error, output string) bool {
 	lowerErr := strings.ToLower(fmt.Sprintf("%v", err))
 	lowerOutput := strings.ToLower(output)
 	return strings.Contains(lowerErr, "already exists") || strings.Contains(lowerOutput, "already exists")
+}
+
+func tokenPolicyRequiresExpiry(output string, err error) bool {
+	combined := strings.ToLower(output + " " + fmt.Sprintf("%v", err))
+	for _, needle := range []string{"expir", "lifetime", "token-policy", "token policy"} {
+		if strings.Contains(combined, needle) {
+			return true
+		}
+	}
+	return false
 }
 
 func privProbeRoleName(priv string) string {
@@ -870,16 +881,26 @@ func (p *ProxmoxSetup) setupPVEToken(ctx context.Context, tokenName string) (str
 	}
 
 	// Create token with privilege separation enabled, then mirror ACLs onto the token.
-	output, err := p.collector.CommandCombinedOutput(ctx, "pveum", "user", "token", "add", proxmoxUserPVE, tokenName, "--privsep", "1")
+	addArgs := []string{"user", "token", "add", proxmoxUserPVE, tokenName, "--privsep", "1"}
+	if expire := strings.TrimSpace(os.Getenv("PULSE_PVE_TOKEN_EXPIRE")); expire != "" {
+		if _, parseErr := strconv.ParseInt(expire, 10, 64); parseErr != nil {
+			return "", "", fmt.Errorf("invalid PULSE_PVE_TOKEN_EXPIRE %q: expected Unix timestamp in seconds", expire)
+		}
+		addArgs = append(addArgs, "--expire", expire)
+	}
+	output, err := p.collector.CommandCombinedOutput(ctx, "pveum", addArgs...)
 	if err != nil {
 		if tokenAlreadyExists(err, output) {
 			p.logger.Info().Str("token", tokenName).Msg("PVE monitoring token already exists; rotating token in place")
 			if _, deleteErr := p.collector.CommandCombinedOutput(ctx, "pveum", "user", "token", "remove", proxmoxUserPVE, tokenName); deleteErr != nil {
 				return "", "", fmt.Errorf("failed to delete existing token before rotation: %w", deleteErr)
 			}
-			output, err = p.collector.CommandCombinedOutput(ctx, "pveum", "user", "token", "add", proxmoxUserPVE, tokenName, "--privsep", "1")
+			output, err = p.collector.CommandCombinedOutput(ctx, "pveum", addArgs...)
 		}
 		if err != nil {
+			if tokenPolicyRequiresExpiry(output, err) {
+				return "", "", fmt.Errorf("failed to create token (cluster API Token Policy requires an expiration date; set PULSE_PVE_TOKEN_EXPIRE=<unix-timestamp> or enable default expiry in Proxmox Datacenter > Options > API Token Policy): %w", err)
+			}
 			return "", "", fmt.Errorf("failed to create token: %w", err)
 		}
 	}

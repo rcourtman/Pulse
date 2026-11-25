@@ -29,12 +29,43 @@ func isInherentlySharedStorageType(storageType string) bool {
 	case "cifs", "smb":
 		// CIFS/SMB - network shared storage
 		return true
-	case "iscsi", "iscsidirect":
-		// iSCSI - can be shared across nodes
+	case "iscsi", "iscsidirect", "nvmeof":
+		// iSCSI and NVMe-oF - network block storage shared across nodes
 		return true
 	default:
 		return false
 	}
+}
+
+func storageContentIncludes(content, want string) bool {
+	return storageContentIncludesAny(content, want)
+}
+
+func storageContentIncludesAny(content string, wants ...string) bool {
+	if strings.TrimSpace(content) == "" {
+		return false
+	}
+	for _, part := range strings.Split(content, ",") {
+		token := strings.TrimSpace(part)
+		for _, want := range wants {
+			if strings.EqualFold(token, want) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// storageSupportsGuestRootVolumes reports whether a Proxmox storage can hold
+// VM or container root disk volumes, including PVE 9.3 granular content types.
+func storageSupportsGuestRootVolumes(content string) bool {
+	return storageContentIncludesAny(content, "images", "rootdir", "vm-vol", "ct-vol")
+}
+
+// storageSupportsSnapshotVolumes reports whether a Proxmox storage can hold
+// guest disk or RAM state snapshot volumes, including PVE 9.3 granular types.
+func storageSupportsSnapshotVolumes(content string) bool {
+	return storageContentIncludesAny(content, "images", "rootdir", "vm-vol", "ct-vol", "vm-state")
 }
 
 // storageContentQueryable reports whether it's safe to inspect the contents of a storage target.

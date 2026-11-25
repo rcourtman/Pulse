@@ -950,6 +950,54 @@ func TestProxmoxSetup_SetupPVETokenUsesPrivilegeSeparatedTokenACLs(t *testing.T)
 	}
 }
 
+func TestProxmoxSetup_SetupPVETokenExpiryPolicy(t *testing.T) {
+	t.Run("passes --expire when PULSE_PVE_TOKEN_EXPIRE is set", func(t *testing.T) {
+		t.Setenv("PULSE_PVE_TOKEN_EXPIRE", "1893456000")
+		mc := &mockCollector{}
+		var calls []commandCall
+		mc.commandCombinedOutputFn = func(ctx context.Context, name string, arg ...string) (string, error) {
+			calls = append(calls, newCommandCall(name, arg...))
+			if name == "pveum" && len(arg) > 2 && arg[1] == "token" && arg[2] == "add" {
+				return "│ value │ pve-token-value │", nil
+			}
+			return "", nil
+		}
+
+		p := &ProxmoxSetup{logger: zerolog.Nop(), collector: mc}
+		if _, _, err := p.setupPVEToken(context.Background(), "pulse-node-1"); err != nil {
+			t.Fatalf("setupPVEToken() error = %v", err)
+		}
+		if !hasCommandCall(calls, "pveum", "user", "token", "add", proxmoxUserPVE, "pulse-node-1", "--privsep", "1", "--expire", "1893456000") {
+			t.Fatalf("expected --expire argument in token add call; calls=%#v", calls)
+		}
+	})
+
+	t.Run("rejects invalid non-numeric PULSE_PVE_TOKEN_EXPIRE", func(t *testing.T) {
+		t.Setenv("PULSE_PVE_TOKEN_EXPIRE", "not-a-timestamp")
+		mc := &mockCollector{}
+		p := &ProxmoxSetup{logger: zerolog.Nop(), collector: mc}
+		_, _, err := p.setupPVEToken(context.Background(), "pulse-node-1")
+		if err == nil || !strings.Contains(err.Error(), "invalid PULSE_PVE_TOKEN_EXPIRE") {
+			t.Fatalf("expected invalid PULSE_PVE_TOKEN_EXPIRE error, got %v", err)
+		}
+	})
+
+	t.Run("surfaces actionable API Token Policy error when expiry is required", func(t *testing.T) {
+		mc := &mockCollector{}
+		mc.commandCombinedOutputFn = func(ctx context.Context, name string, arg ...string) (string, error) {
+			if name == "pveum" && len(arg) > 2 && arg[1] == "token" && arg[2] == "add" {
+				return "400 Parameter verification failed: expire: API token policy requires an expiration date", fmt.Errorf("exit status 255")
+			}
+			return "", nil
+		}
+		p := &ProxmoxSetup{logger: zerolog.Nop(), collector: mc}
+		_, _, err := p.setupPVEToken(context.Background(), "pulse-node-1")
+		if err == nil || !strings.Contains(err.Error(), "API Token Policy") || !strings.Contains(err.Error(), "PULSE_PVE_TOKEN_EXPIRE") {
+			t.Fatalf("expected actionable API Token Policy error, got %v", err)
+		}
+	})
+}
+
 func TestPrivProbeRoleName_Sanitizes(t *testing.T) {
 	got := privProbeRoleName("VM.GuestAgent.Audit")
 	if got != "PulseTmpPrivCheck_VM_GuestAgent_Audit" {

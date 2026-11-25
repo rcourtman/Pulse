@@ -2382,16 +2382,20 @@ create_pve_auto_register_token() {
     local token_status_var="$3"
     local token_output=""
     local token_status=0
+    local expire_args=()
+    if [[ -n "${PULSE_PVE_TOKEN_EXPIRE:-}" ]]; then
+        expire_args=(--expire "$PULSE_PVE_TOKEN_EXPIRE")
+    fi
 
     set +e
-    token_output=$(pveum user token add pulse-monitor@pve "$token_name" --privsep 1 --output-format json 2>&1)
+    token_output=$(pveum user token add pulse-monitor@pve "$token_name" --privsep 1 "${expire_args[@]}" --output-format json 2>&1)
     token_status=$?
     set -e
 
     # Older pveum builds reject --output-format; fall back to the legacy table form.
     if [[ $token_status -ne 0 ]] && printf '%s\n' "$token_output" | grep -Eqi 'unknown option|unknown command|no such option|unable to parse option|output-format'; then
         set +e
-        token_output=$(pveum user token add pulse-monitor@pve "$token_name" --privsep 1 2>&1)
+        token_output=$(pveum user token add pulse-monitor@pve "$token_name" --privsep 1 "${expire_args[@]}" 2>&1)
         token_status=$?
         set -e
     fi
@@ -2750,7 +2754,11 @@ PY
     fi
     if [[ $token_status -ne 0 ]]; then
         AUTO_NODE_REGISTER_ERROR="failed to create token"
-        print_warn "Unable to create monitoring API token; skipping automatic node registration"
+        if printf '%s\n' "$token_output" | grep -Eqi 'expir|lifetime|token-policy|token policy'; then
+            print_warn "Unable to create monitoring API token because this Proxmox cluster enforces an API Token Policy expiration date. Rerun with PULSE_PVE_TOKEN_EXPIRE=<unix-timestamp> or enable the policy default expiry in Datacenter > Options > API Token Policy."
+        else
+            print_warn "Unable to create monitoring API token; skipping automatic node registration"
+        fi
         return
     fi
 

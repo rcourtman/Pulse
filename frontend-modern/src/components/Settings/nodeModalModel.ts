@@ -143,6 +143,7 @@ export const deriveNameFromHost = (host: string): string => {
 
 export const PVE_MANUAL_PERMISSION_COMMAND = `# Apply monitoring permissions - use built-in PVEAuditor role
 pveum aclmod / -user pulse-monitor@pve -role PVEAuditor
+pveum aclmod / -token 'pulse-monitor@pve!pulse-token' -role PVEAuditor
 
 # Gather additional privileges for VM metrics
 EXTRA_PRIVS=()
@@ -181,4 +182,5 @@ if [ \${#EXTRA_PRIVS[@]} -gt 0 ]; then
   PRIV_STRING="$(IFS=,; echo "\${EXTRA_PRIVS[*]}")"
   pveum role modify PulseMonitor -privs "$PRIV_STRING" 2>/dev/null || pveum role add PulseMonitor -privs "$PRIV_STRING" 2>/dev/null
   pveum aclmod / -user pulse-monitor@pve -role PulseMonitor
+  pveum aclmod / -token 'pulse-monitor@pve!pulse-token' -role PulseMonitor
 fi`;
