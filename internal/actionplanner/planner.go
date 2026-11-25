@@ -16,7 +16,10 @@ import (
 	unified "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
-const DefaultPlanTTL = 5 * time.Minute
+const (
+	DefaultPlanTTL       = 5 * time.Minute
+	DefaultPatrolPlanTTL = 24 * time.Hour
+)
 
 // A request's ID and reason are persisted verbatim with the request, the ID
 // is repeated in the plan, and both are read back whenever the action is

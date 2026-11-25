@@ -443,3 +443,46 @@ func TestPlannerCarriesCapabilityRollbackSupportIntoPlan(t *testing.T) {
 		t.Fatal("RollbackAvailable = true for a capability with no declared rollback support")
 	}
 }
+
+func TestPlannerPatrolPlanTTL(t *testing.T) {
+	if DefaultPatrolPlanTTL != 24*time.Hour {
+		t.Fatalf("DefaultPatrolPlanTTL = %v, want 24h", DefaultPatrolPlanTTL)
+	}
+	now := time.Date(2026, 11, 25, 12, 0, 0, 0, time.UTC)
+	resource := unified.Resource{
+		ID:        "vm:42",
+		Type:      unified.ResourceTypeVM,
+		Name:      "web-42",
+		Status:    unified.StatusWarning,
+		LastSeen:  now,
+		UpdatedAt: now,
+		Capabilities: []unified.ResourceCapability{
+			{
+				Name:                 "restart",
+				Type:                 unified.CapabilityTypeCommon,
+				Description:          "Restart this VM",
+				MinimumApprovalLevel: unified.ApprovalAdmin,
+			},
+		},
+	}
+	req := unified.ActionRequest{
+		RequestID:      "patrol-req-1",
+		ResourceID:     "vm:42",
+		CapabilityName: "restart",
+		Reason:         "Recover stuck web worker",
+		Actor: unified.ActionActor{
+			SubjectID:    "pulse_patrol",
+			Kind:         unified.ActionActorService,
+			CredentialID: "service:patrol-action-broker",
+			OrgID:        "default",
+		},
+	}
+
+	plan, err := (Planner{Now: func() time.Time { return now }, TTL: DefaultPatrolPlanTTL}).Plan(req, resource)
+	if err != nil {
+		t.Fatalf("Plan error = %v", err)
+	}
+	if gotTTL := plan.ExpiresAt.Sub(plan.PlannedAt); gotTTL != DefaultPatrolPlanTTL {
+		t.Fatalf("patrol plan TTL = %v, want %v", gotTTL, DefaultPatrolPlanTTL)
+	}
+}

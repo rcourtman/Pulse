@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/actionlifecycle"
+	"github.com/rcourtman/pulse-go-rewrite/internal/actionplanner"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/relay"
@@ -230,6 +231,97 @@ func TestPatrolRefreshRebindsCurrentPolicyAndTrustedOrigin(t *testing.T) {
 	}
 	if !detail.Readiness.Ready || len(replacement.Plan.PolicyDecision.Authorities) != 3 || replacement.Plan.PolicyDecision.Authorities[1].Revision == previous.Plan.PolicyDecision.Authorities[1].Revision {
 		t.Fatalf("readiness=%#v policy=%#v", detail.Readiness, replacement.Plan.PolicyDecision)
+	}
+	if gotTTL := previous.Plan.ExpiresAt.Sub(previous.Plan.PlannedAt); gotTTL != actionplanner.DefaultPatrolPlanTTL {
+		t.Fatalf("initial patrol plan TTL = %v, want %v", gotTTL, actionplanner.DefaultPatrolPlanTTL)
+	}
+	if gotTTL := replacement.Plan.ExpiresAt.Sub(replacement.Plan.PlannedAt); gotTTL != actionplanner.DefaultPatrolPlanTTL {
+		t.Fatalf("refreshed patrol plan TTL = %v, want %v", gotTTL, actionplanner.DefaultPatrolPlanTTL)
+	}
+}
+
+func TestPatrolActionBrokerUses24HourPlanTTLAndUpgradesLegacyRefreshTTL(t *testing.T) {
+	h, _ := newPatrolBrokerTestHandlers(t, unified.ApprovalAdmin)
+	broker, ok := NewPatrolActionBroker("default", h).(*patrolActionBroker)
+	if !ok {
+		t.Fatal("expected *patrolActionBroker")
+	}
+
+	planned, err := broker.Plan(context.Background(), patrolTestProposal())
+	if err != nil {
+		t.Fatal(err)
+	}
+	record, found, err := h.ActionLifecycle().Get("default", planned.ActionID)
+	if err != nil || !found {
+		t.Fatalf("planned action found=%v err=%v", found, err)
+	}
+	if gotTTL := record.Plan.ExpiresAt.Sub(record.Plan.PlannedAt); gotTTL != actionplanner.DefaultPatrolPlanTTL {
+		t.Fatalf("Patrol Plan TTL = %v, want %v", gotTTL, actionplanner.DefaultPatrolPlanTTL)
+	}
+
+	// Plan a legacy 5-minute Patrol action and verify refresh upgrades it to 24h.
+	legacyPlan, err := h.ActionLifecycle().PlanWithOptions(context.Background(), "default", unified.ActionRequest{
+		RequestID:      "proposal-legacy-5m",
+		ResourceID:     record.Request.ResourceID,
+		CapabilityName: record.Request.CapabilityName,
+		Params:         record.Request.Params,
+		Reason:         record.Request.Reason,
+		RequestedBy:    patrolActionBrokerActor,
+	}, actionlifecycle.PlanOptions{
+		Actor: record.Request.Actor,
+		Origin: &unified.ActionOrigin{
+			Surface:         patrolActionOriginSurface,
+			FindingID:       "finding-legacy",
+			InvestigationID: "inv-legacy",
+			ProposalID:      "proposal-legacy-5m",
+		},
+		TTL: actionplanner.DefaultPlanTTL,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	store, err := h.getStore("default")
+	if err != nil {
+		t.Fatal(err)
+	}
+	legacy, found, err := store.GetActionAudit(legacyPlan.ActionID)
+	if err != nil || !found {
+		t.Fatalf("legacy audit found=%v err=%v", found, err)
+	}
+	if gotTTL := legacy.Plan.ExpiresAt.Sub(legacy.Plan.PlannedAt); gotTTL != actionplanner.DefaultPlanTTL {
+		t.Fatalf("legacy plan TTL = %v, want %v", gotTTL, actionplanner.DefaultPlanTTL)
+	}
+	registry, err := h.buildRegistry("default")
+	if err != nil {
+		t.Fatal(err)
+	}
+	resource, found := registry.Get(legacy.Request.ResourceID)
+	if !found || resource == nil {
+		t.Fatal("planned resource missing")
+	}
+	changed := *resource
+	changed.UpdatedAt = changed.UpdatedAt.Add(time.Second)
+	changed.Name = changed.Name + " drifted"
+	h.SetStateProvider(resourceUnifiedSeedProvider{
+		snapshot:  models.StateSnapshot{LastUpdate: changed.UpdatedAt},
+		resources: []unified.Resource{changed},
+	})
+	h.invalidateCache("default")
+
+	h.SetActionRefreshPlanner(NewActionRefreshPlanner(h, nil))
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodPost, "/api/actions/"+legacy.ID+"/refresh", bytes.NewBufferString(`{"planHash":"`+legacy.Plan.PlanHash+`"}`))
+	request.SetPathValue("id", legacy.ID)
+	h.HandleRefreshAction(recorder, actionHandlerTestRequest(request, "operator@example.com"))
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("refresh status=%d body=%s", recorder.Code, recorder.Body.String())
+	}
+	var detail actionDetailResponse
+	if err := json.Unmarshal(recorder.Body.Bytes(), &detail); err != nil {
+		t.Fatal(err)
+	}
+	if gotTTL := detail.Audit.Plan.ExpiresAt.Sub(detail.Audit.Plan.PlannedAt); gotTTL != actionplanner.DefaultPatrolPlanTTL {
+		t.Fatalf("refreshed legacy patrol plan TTL = %v, want %v", gotTTL, actionplanner.DefaultPatrolPlanTTL)
 	}
 }
 

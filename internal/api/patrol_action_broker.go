@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/actionlifecycle"
+	"github.com/rcourtman/pulse-go-rewrite/internal/actionplanner"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/tools"
 	unified "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/aicontracts"
@@ -168,6 +169,7 @@ func NewActionRefreshPlanner(resources *ResourceHandlers, policy PatrolActionPol
 			OrgID:        orgID,
 		}
 		opts.PolicyFactors = factors
+		opts.TTL = actionplanner.DefaultPatrolPlanTTL
 		return req, opts, nil
 	}
 }
@@ -383,6 +385,7 @@ func (b *patrolActionBroker) submit(ctx context.Context, proposal aicontracts.Ac
 			EvidenceIDs:     append([]string(nil), proposal.EvidenceIDs...),
 		},
 		PolicyFactors: policyFactors,
+		TTL:           actionplanner.DefaultPatrolPlanTTL,
 	})
 	if err != nil {
 		return aicontracts.ActionDisposition{}, err
