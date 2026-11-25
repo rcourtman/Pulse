@@ -2,6 +2,7 @@ package monitoring
 
 import (
 	stdErrors "errors"
+	"maps"
 	"strings"
 	"sync"
 	"time"
@@ -16,14 +17,12 @@ type PollMetrics struct {
 	pollResults                  *prometheus.CounterVec
 	pollErrors                   *prometheus.CounterVec
 	lastSuccess                  *prometheus.GaugeVec
-	staleness                    *prometheus.GaugeVec
 	queueDepth                   prometheus.Gauge
 	inflight                     *prometheus.GaugeVec
 	nodePollDuration             *prometheus.HistogramVec
 	nodePollResults              *prometheus.CounterVec
 	nodePollErrors               *prometheus.CounterVec
 	nodeLastSuccess              *prometheus.GaugeVec
-	nodeStaleness                *prometheus.GaugeVec
 	schedulerQueueReady          prometheus.Gauge
 	schedulerQueueDepthByType    *prometheus.GaugeVec
 	schedulerQueueWait           *prometheus.HistogramVec
@@ -33,7 +32,9 @@ type PollMetrics struct {
 	schedulerBreakerFailureCount *prometheus.GaugeVec
 	schedulerBreakerRetrySeconds *prometheus.GaugeVec
 
-	mu                   sync.RWMutex
+	mu sync.RWMutex
+	// Missing keys have no result. A stored zero time is a first failure
+	// without a success; it is exposed as -1 only in the age series.
 	lastSuccessByKey     map[metricKey]time.Time
 	nodeLastSuccessByKey map[nodeMetricKey]time.Time
 	lastQueueTypeKeys    map[string]struct{}
@@ -103,15 +104,6 @@ func newPollMetrics(reg prometheus.Registerer) *PollMetrics {
 			},
 			[]string{"instance_type", "instance"},
 		),
-		staleness: prometheus.NewGaugeVec(
-			prometheus.GaugeOpts{
-				Namespace: "pulse",
-				Subsystem: "monitor",
-				Name:      "poll_staleness_seconds",
-				Help:      "Seconds since the last successful poll. -1 indicates no successes yet.",
-			},
-			[]string{"instance_type", "instance"},
-		),
 		queueDepth: prometheus.NewGauge(
 			prometheus.GaugeOpts{
 				Namespace: "pulse",
@@ -163,15 +155,6 @@ func newPollMetrics(reg prometheus.Registerer) *PollMetrics {
 				Subsystem: "monitor",
 				Name:      "node_poll_last_success_timestamp",
 				Help:      "Unix timestamp of the last successful poll for a node.",
-			},
-			[]string{"instance_type", "instance", "node"},
-		),
-		nodeStaleness: prometheus.NewGaugeVec(
-			prometheus.GaugeOpts{
-				Namespace: "pulse",
-				Subsystem: "monitor",
-				Name:      "node_poll_staleness_seconds",
-				Help:      "Seconds since the last successful poll for a node. -1 indicates no successes yet.",
 			},
 			[]string{"instance_type", "instance", "node"},
 		),
@@ -250,14 +233,13 @@ func newPollMetrics(reg prometheus.Registerer) *PollMetrics {
 		pm.pollResults,
 		pm.pollErrors,
 		pm.lastSuccess,
-		pm.staleness,
 		pm.queueDepth,
 		pm.inflight,
 		pm.nodePollDuration,
 		pm.nodePollResults,
 		pm.nodePollErrors,
 		pm.nodeLastSuccess,
-		pm.nodeStaleness,
+		newPollAgeCollector(pm),
 		pm.schedulerQueueReady,
 		pm.schedulerQueueDepthByType,
 		pm.schedulerQueueWait,
@@ -269,6 +251,61 @@ func newPollMetrics(reg prometheus.Registerer) *PollMetrics {
 	)
 
 	return pm
+}
+
+// pollAgeCollector measures freshness even when neither collector has
+// returned a result lately. It takes no provider or monitor lock.
+type pollAgeCollector struct {
+	metrics    *PollMetrics
+	connection *prometheus.Desc
+	node       *prometheus.Desc
+}
+
+func newPollAgeCollector(pm *PollMetrics) *pollAgeCollector {
+	return &pollAgeCollector{
+		metrics: pm,
+		connection: prometheus.NewDesc("pulse_monitor_poll_staleness_seconds",
+			"Seconds since the last successful poll. -1 indicates no successes yet.",
+			[]string{"instance_type", "instance"}, nil),
+		node: prometheus.NewDesc("pulse_monitor_node_poll_staleness_seconds",
+			"Seconds since the last successful poll for a node. -1 indicates no successes yet.",
+			[]string{"instance_type", "instance", "node"}, nil),
+	}
+}
+
+func (c *pollAgeCollector) Describe(ch chan<- *prometheus.Desc) {
+	ch <- c.connection
+	ch <- c.node
+}
+
+func (c *pollAgeCollector) Collect(ch chan<- prometheus.Metric) {
+	c.metrics.mu.RLock()
+	connections := maps.Clone(c.metrics.lastSuccessByKey)
+	nodes := maps.Clone(c.metrics.nodeLastSuccessByKey)
+	c.metrics.mu.RUnlock()
+
+	now := time.Now()
+	for key, last := range connections {
+		ch <- prometheus.MustNewConstMetric(c.connection, prometheus.GaugeValue,
+			pollAgeSeconds(now, last), key.instanceType, key.instance)
+	}
+	for key, last := range nodes {
+		ch <- prometheus.MustNewConstMetric(c.node, prometheus.GaugeValue,
+			pollAgeSeconds(now, last), key.instanceType, key.instance, key.node)
+	}
+}
+
+func pollAgeSeconds(now, last time.Time) float64 {
+	if last.IsZero() {
+		return -1
+	}
+	return max(now.Sub(last).Seconds(), 0)
+}
+
+func rememberFirstPollFailure[K comparable](lastSuccess map[K]time.Time, key K) {
+	if _, ok := lastSuccess[key]; !ok {
+		lastSuccess[key] = time.Time{}
+	}
 }
 
 // NodePollResult captures timing and outcome for a specific node within a poll cycle.
@@ -306,22 +343,15 @@ func (pm *PollMetrics) RecordNodeResult(result NodePollResult) {
 	if result.Success {
 		pm.nodeLastSuccess.WithLabelValues(instType, inst, nodeLabel).Set(float64(result.EndTime.Unix()))
 		pm.storeNodeLastSuccess(instType, inst, nodeLabel, result.EndTime)
-		pm.updateNodeStaleness(instType, inst, nodeLabel, 0)
 		return
 	}
 
 	errType := pm.classifyError(result.Error)
 	pm.nodePollErrors.WithLabelValues(instType, inst, nodeLabel, errType).Inc()
 
-	if last, ok := pm.lastNodeSuccessFor(instType, inst, nodeLabel); ok && !last.IsZero() {
-		staleness := result.EndTime.Sub(last).Seconds()
-		if staleness < 0 {
-			staleness = 0
-		}
-		pm.updateNodeStaleness(instType, inst, nodeLabel, staleness)
-	} else {
-		pm.updateNodeStaleness(instType, inst, nodeLabel, -1)
-	}
+	pm.mu.Lock()
+	rememberFirstPollFailure(pm.nodeLastSuccessByKey, makeNodeMetricKey(instType, inst, nodeLabel))
+	pm.mu.Unlock()
 }
 
 // RecordQueueWait observes the time a task spent waiting in the scheduler queue.
@@ -443,20 +473,12 @@ func (pm *PollMetrics) RecordResult(result PollResult) {
 	if result.Success {
 		pm.lastSuccess.WithLabelValues(instType, inst).Set(float64(result.EndTime.Unix()))
 		pm.storeLastSuccess(instType, inst, result.EndTime)
-		pm.updateStaleness(instType, inst, 0)
 	} else {
 		errType := pm.classifyError(result.Error)
 		pm.pollErrors.WithLabelValues(instType, inst, errType).Inc()
-
-		if last, ok := pm.lastSuccessFor(instType, inst); ok && !last.IsZero() {
-			staleness := result.EndTime.Sub(last).Seconds()
-			if staleness < 0 {
-				staleness = 0
-			}
-			pm.updateStaleness(instType, inst, staleness)
-		} else {
-			pm.updateStaleness(instType, inst, -1)
-		}
+		pm.mu.Lock()
+		rememberFirstPollFailure(pm.lastSuccessByKey, makeMetricKey(instType, inst))
+		pm.mu.Unlock()
 	}
 
 	pm.decrementPending()
@@ -529,12 +551,7 @@ func (pm *PollMetrics) lastSuccessFor(instanceType, instance string) (time.Time,
 	pm.mu.RLock()
 	ts, ok := pm.lastSuccessByKey[makeMetricKey(instanceType, instance)]
 	pm.mu.RUnlock()
-	return ts, ok
-}
-
-func (pm *PollMetrics) updateStaleness(instanceType, instance string, value float64) {
-	instType, inst := sanitizeInstanceLabels(instanceType, instance)
-	pm.staleness.WithLabelValues(instType, inst).Set(value)
+	return ts, ok && !ts.IsZero()
 }
 
 func (pm *PollMetrics) storeNodeLastSuccess(instanceType, instance, node string, ts time.Time) {
@@ -547,13 +564,7 @@ func (pm *PollMetrics) lastNodeSuccessFor(instanceType, instance, node string) (
 	pm.mu.RLock()
 	ts, ok := pm.nodeLastSuccessByKey[makeNodeMetricKey(instanceType, instance, node)]
 	pm.mu.RUnlock()
-	return ts, ok
-}
-
-func (pm *PollMetrics) updateNodeStaleness(instanceType, instance, node string, value float64) {
-	instType, inst := sanitizeInstanceLabels(instanceType, instance)
-	nodeLabel := normalizeLabel(node)
-	pm.nodeStaleness.WithLabelValues(instType, inst, nodeLabel).Set(value)
+	return ts, ok && !ts.IsZero()
 }
 
 func splitInstanceKey(key string) (string, string) {
