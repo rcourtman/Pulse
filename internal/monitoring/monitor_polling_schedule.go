@@ -144,7 +144,7 @@ func (m *Monitor) poll(_ context.Context, wsHub *websocket.Hub) {
 
 	plannedTasks := m.buildScheduledTasks(now)
 	for _, task := range plannedTasks {
-		m.taskQueue.Upsert(task)
+		m.taskQueue.upsertPlan(task)
 	}
 	m.updateQueueDepthMetric()
 
@@ -170,11 +170,9 @@ func (m *Monitor) poll(_ context.Context, wsHub *websocket.Hub) {
 	// Broadcasting is now handled by the timer in Start()
 }
 
-func (m *Monitor) rescheduleTask(task ScheduledTask) {
-	if m.taskQueue == nil {
-		return
-	}
-
+// nextScheduledPoll computes the normal successor without unlocking the
+// current claim. The queue installs it only when that worker returns.
+func (m *Monitor) nextScheduledPoll(task ScheduledTask) (ScheduledTask, bool) {
 	key := schedulerKey(task.InstanceType, task.InstanceName)
 	m.mu.Lock()
 	outcome, hasOutcome := m.lastOutcome[key]
@@ -184,7 +182,7 @@ func (m *Monitor) rescheduleTask(task ScheduledTask) {
 	if hasOutcome && !outcome.success {
 		if !outcome.transient || failureCount >= m.maxRetryAttempts {
 			m.sendToDeadLetter(task, outcome.err)
-			return
+			return ScheduledTask{}, false
 		}
 		delay := m.backoffCfg.nextDelay(failureCount-1, m.randomFloat())
 		if delay <= 0 {
@@ -199,8 +197,7 @@ func (m *Monitor) rescheduleTask(task ScheduledTask) {
 		next := task
 		next.Interval = delay
 		next.NextRun = time.Now().Add(delay)
-		m.taskQueue.Upsert(next)
-		return
+		return next, true
 	}
 
 	fixedInterval := m.fixedIntervalForInstance(task.InstanceType, task.InstanceName)
@@ -219,8 +216,7 @@ func (m *Monitor) rescheduleTask(task ScheduledTask) {
 		next := task
 		next.NextRun = time.Now().Add(nextInterval)
 		next.Interval = nextInterval
-		m.taskQueue.Upsert(next)
-		return
+		return next, true
 	}
 
 	desc := InstanceDescriptor{
@@ -252,10 +248,7 @@ func (m *Monitor) rescheduleTask(task ScheduledTask) {
 		}
 		next.Interval = nextInterval
 		next.NextRun = time.Now().Add(nextInterval)
-		m.taskQueue.Upsert(next)
-		return
+		return next, true
 	}
-	for _, next := range tasks {
-		m.taskQueue.Upsert(next)
-	}
+	return tasks[0], true
 }

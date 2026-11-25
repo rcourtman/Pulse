@@ -7,9 +7,18 @@ import (
 	"time"
 )
 
+type claimFollowup uint8
+
+const (
+	followWorkerSchedule claimFollowup = iota
+	followExplicitSchedule
+	dropWorkerSchedule
+)
+
 type scheduledTaskEntry struct {
-	task  ScheduledTask
-	index int
+	task     ScheduledTask // queued task, or the explicit successor of a claim
+	index    int           // -1 while a worker owns the entry
+	followup claimFollowup
 }
 
 func (e *scheduledTaskEntry) key() string {
@@ -49,12 +58,14 @@ func (h *taskHeap) Pop() interface{} {
 		return nil
 	}
 	entry := old[n-1]
+	old[n-1] = nil
 	entry.index = -1
 	*h = old[:n-1]
 	return entry
 }
 
-// TaskQueue is a thread-safe min-heap over scheduled tasks.
+// TaskQueue is a thread-safe min-heap over scheduled tasks. The index also
+// holds claimed tasks, which are not part of the heap or queue snapshots.
 type TaskQueue struct {
 	mu      sync.Mutex
 	entries map[string]*scheduledTaskEntry
@@ -71,13 +82,31 @@ func NewTaskQueue() *TaskQueue {
 	return tq
 }
 
-// Upsert inserts or updates a scheduled task in the queue.
+// Upsert schedules an explicit request. If a worker has already claimed the
+// target, retain the latest request for when that worker returns.
 func (q *TaskQueue) Upsert(task ScheduledTask) {
+	q.upsert(task, false)
+}
+
+// upsertPlan refreshes the ordinary plan, but not the work the queue has
+// already dispatched. A slow provider cannot fill a second worker slot.
+func (q *TaskQueue) upsertPlan(task ScheduledTask) {
+	q.upsert(task, true)
+}
+
+func (q *TaskQueue) upsert(task ScheduledTask, fromPlanner bool) {
 	key := schedulerKey(task.InstanceType, task.InstanceName)
 	q.mu.Lock()
 	defer q.mu.Unlock()
 
 	if entry, ok := q.entries[key]; ok {
+		if entry.index < 0 {
+			if !fromPlanner {
+				entry.task = task
+				entry.followup = followExplicitSchedule
+			}
+			return
+		}
 		entry.task = task
 		heap.Fix(&q.heap, entry.index)
 		return
@@ -88,6 +117,35 @@ func (q *TaskQueue) Upsert(task ScheduledTask) {
 	q.entries[key] = entry
 }
 
+// completeClaim returns ownership and optionally queues its successor in the
+// same critical section. An explicit edit or removal made during the claim
+// takes precedence over the returning worker's normal schedule.
+func (q *TaskQueue) completeClaim(task, next ScheduledTask, scheduled bool) {
+	key := schedulerKey(task.InstanceType, task.InstanceName)
+	q.mu.Lock()
+	defer q.mu.Unlock()
+
+	entry, ok := q.entries[key]
+	if !ok || entry.index >= 0 {
+		return
+	}
+	switch entry.followup {
+	case followExplicitSchedule:
+		// Upsert has already stored the replacement in the claimed entry.
+	case followWorkerSchedule:
+		if !scheduled {
+			delete(q.entries, key)
+			return
+		}
+		entry.task = next
+	case dropWorkerSchedule:
+		delete(q.entries, key)
+		return
+	}
+	entry.followup = followWorkerSchedule
+	heap.Push(&q.heap, entry)
+}
+
 // Get returns the queued task for an instance, if present.
 func (q *TaskQueue) Get(instanceType InstanceType, instance string) (ScheduledTask, bool) {
 	key := schedulerKey(instanceType, instance)
@@ -95,13 +153,13 @@ func (q *TaskQueue) Get(instanceType InstanceType, instance string) (ScheduledTa
 	defer q.mu.Unlock()
 
 	entry, ok := q.entries[key]
-	if !ok {
+	if !ok || entry.index < 0 {
 		return ScheduledTask{}, false
 	}
 	return entry.task, true
 }
 
-// Remove deletes a task by key if present.
+// Remove deletes a queued task or cancels the successor of a claimed task.
 func (q *TaskQueue) Remove(instanceType InstanceType, instance string) {
 	key := schedulerKey(instanceType, instance)
 	q.mu.Lock()
@@ -111,11 +169,16 @@ func (q *TaskQueue) Remove(instanceType InstanceType, instance string) {
 	if !ok {
 		return
 	}
+	if entry.index < 0 {
+		entry.followup = dropWorkerSchedule
+		return
+	}
 	heap.Remove(&q.heap, entry.index)
 	delete(q.entries, key)
 }
 
-// WaitNext blocks until a task is due or context is cancelled.
+// WaitNext blocks until a task is due or context is cancelled. A successful
+// caller owns the target until it calls completeClaim, even after a deadline.
 func (q *TaskQueue) WaitNext(ctx context.Context) (ScheduledTask, bool) {
 	var (
 		timer      *time.Timer
@@ -173,7 +236,6 @@ func (q *TaskQueue) WaitNext(ctx context.Context) (ScheduledTask, bool) {
 		delay := time.Until(entry.task.NextRun)
 		if delay <= 0 {
 			heap.Pop(&q.heap)
-			delete(q.entries, entry.key())
 			task := entry.task
 			q.mu.Unlock()
 			return task, true

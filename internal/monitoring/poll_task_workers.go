@@ -34,6 +34,7 @@ func (m *Monitor) dispatchTaskWorkers(ctx context.Context, limiter *pollTaskWork
 		}
 		work := progress.begin(pollWorkWaitingForSlot, due.Add(budget))
 		if !limiter.acquire(ctx) {
+			m.taskQueue.completeClaim(task, ScheduledTask{}, false)
 			progress.finish(work)
 			return
 		}
@@ -71,8 +72,16 @@ func (m *Monitor) taskWorker(ctx context.Context, id int) {
 func (m *Monitor) executeAndRescheduleTask(ctx context.Context, task ScheduledTask, progress *pollWorkProgress, work uint64) {
 	// Do not clear this at context expiry. An unreturned worker is still busy.
 	defer progress.finish(work)
+	var next ScheduledTask
+	var scheduled bool
+	defer func() {
+		m.taskQueue.completeClaim(task, next, scheduled)
+		m.updateQueueDepthMetric()
+	}()
 
+	if ctx.Err() != nil {
+		return
+	}
 	m.executeScheduledTask(ctx, task)
-	m.rescheduleTask(task)
-	m.updateQueueDepthMetric()
+	next, scheduled = m.nextScheduledPoll(task)
 }
