@@ -289,8 +289,12 @@ class PeerStreamCancellationTests(unittest.TestCase):
             ]})),
         ]
         with patch.object(subject.subprocess, "run", side_effect=results) as command, patch("time.sleep") as sleep:
-            self.assertEqual([77], subject.discover(github))
+            self.assertEqual([(77, current)], subject.discover(github))
         self.assertEqual(5, command.call_count)
+        self.assertEqual(
+            ["gh", "api", "--paginate", "repos/rcourtman/Pulse/releases?per_page=20"],
+            command.call_args_list[2].args[0],
+        )
         self.assertEqual(command.call_args_list[2], command.call_args_list[3])
         self.assertTrue(all("POST" not in call.args[0] for call in command.call_args_list))
         sleep.assert_called_once_with(1)
@@ -300,7 +304,7 @@ class PeerStreamCancellationTests(unittest.TestCase):
         stable = release("v6.8.0", "2026-11-13T02:55:36Z", prerelease=False)
         preview = release("v6.9.0-rc.4", "2026-11-24T00:10:00Z", prerelease=True)
         partial = release("v6.9.0-rc.5", "2026-11-24T00:30:00Z", prerelease=True)
-        inventory = "repos/rcourtman/Pulse/releases?per_page=100"
+        inventory = "repos/rcourtman/Pulse/releases?per_page=20"
         workflow = f"repos/rcourtman/Pulse/actions/workflows/{Path(subject.CONVERGENCE_PATH).name}"
         control_env = {"GH_TOKEN": "fixture-only", "GODEBUG": "http2client=1,netdns=go"}
 
@@ -325,7 +329,7 @@ class PeerStreamCancellationTests(unittest.TestCase):
         with patch.dict(os.environ, control_env, clear=True), patch.object(
             subject.subprocess, "run", side_effect=native_gh
         ) as command, patch("time.sleep") as sleep:
-            self.assertEqual([77, 80], subject.discover(github))
+            self.assertEqual([(77, stable), (80, preview)], subject.discover(github))
             self.assertEqual(control_env, dict(os.environ))
 
         self.assertEqual(6, command.call_count)
@@ -418,9 +422,10 @@ class FailedReadIdentityTests(unittest.TestCase):
 
 class LatestFailedRunsTests(unittest.TestCase):
     def select(self, releases, runs):
-        return subject.latest_failed_runs(
+        selected = subject.latest_failed_runs(
             releases, runs, workflow_id=WORKFLOW_ID, default_branch="main"
         )
+        return [run_id for run_id, _ in selected]
 
     def test_selects_failed_heads_of_stable_and_preview_channels(self):
         releases = [
@@ -669,7 +674,7 @@ class DecisionSummaryTests(unittest.TestCase):
                 selected = subject.discover(github)
             summary = path.read_text() if path.exists() else ""
         self.assertEqual([], github.posts)
-        return selected, output.getvalue(), summary
+        return [run_id for run_id, _ in selected], output.getvalue(), summary
 
     def test_mutable_stable_debt_visible_even_when_preview_retry_selected(self):
         selected, output, summary = self.discover_with_releases([
@@ -1135,24 +1140,101 @@ class ReconciliationTests(unittest.TestCase):
             subject.reconcile(github, github.run_id, 5)
         self.assertEqual([], github.posts)
 
-    def test_one_channel_failure_does_not_starve_the_other(self):
+    def test_latest_exact_release_failure_does_not_starve_the_other_channel(self):
         args = argparse.Namespace(repository="rcourtman/Pulse", run_id=None,
-                                  latest=True, max_attempts=5, dry_run=True)
-        attempted = []
+                                  latest=True, max_attempts=5, dry_run=False)
+        stable_tag, older_tag, preview_tag = "v6.5.0", "v6.4.1", "v6.5.0-rc.1"
+        stable_id, stable_owner_id, stable_source_id = 95, 91, 201
+        stable = release(stable_tag, "2026-09-03T00:00:00Z", prerelease=False)
+        stable.update(id=301, target_commitish="7" * 40)
+        cases = (
+            ("matched", stable, None),
+            ("missing", subject.GitHubNotFound("fixture exact release missing"),
+             "fixture exact release missing"),
+            ("read failed", subject.ReconciliationError("fixture exact release HTTP 504"),
+             "fixture exact release HTTP 504"),
+            ("replaced", dict(stable, id=302), "no longer matches"),
+            ("draft", dict(stable, draft=True), "no longer matches"),
+            ("mutable", dict(stable, immutable=False), "no longer matches"),
+            ("wrong channel", dict(stable, prerelease=True), "no longer matches"),
+            ("wrong publication", dict(stable, published_at="2026-09-03T00:01:00Z"), "no longer matches"),
+            ("wrong target", dict(stable, target_commitish="8" * 40), "no longer matches"),
+        )
+        for name, exact_stable, error in cases:
+            with self.subTest(name=name):
+                github = FakeGitHub(current_controls=True)
+                prefix = f"repos/{github.repository}"
+                stable_run = github.run(stable_id, github.main_sha)
+                stable_run["display_title"] = f"Release convergence {stable_tag} source {stable_source_id}"
+                older_run = github.run(94, github.main_sha)
+                older_run["display_title"] = f"Release convergence {older_tag} source 202"
+                github.runs.extend([stable_run, older_run])
+                fixture_api = github.api
+                fixture_pages = github.pages
+                preview = fixture_api(f"{prefix}/releases/tags/{preview_tag}")
+                older = release(older_tag, "2026-08-31T00:00:00Z", prerelease=False)
+                exact_reads, markers, source_reads = [], [], []
 
-        def reconcile(github, run_id, max_attempts):
-            attempted.append(run_id)
-            if run_id == 1:
-                raise subject.ReconciliationError("stable evidence is gone")
+                def pages(endpoint):
+                    if endpoint.startswith(f"{prefix}/releases?"):
+                        # Publication order, not page or creation order, selects the head.
+                        return [[preview, older], [stable]]
+                    return fixture_pages(endpoint)
 
-        stderr = io.StringIO()
-        with patch.object(subject, "parse_args", return_value=args), \
-                patch.object(subject, "discover", return_value=[1, 2]), \
-                patch.object(subject, "reconcile", side_effect=reconcile), \
-                contextlib.redirect_stderr(stderr):
-            self.assertEqual(1, subject.main())
-        self.assertEqual([1, 2], attempted)
-        self.assertIn("failed for run 1: stable evidence is gone", stderr.getvalue())
+                def api(endpoint):
+                    if endpoint.endswith(f"/releases/tags/{stable_tag}"):
+                        exact_reads.append(stable_tag)
+                        if isinstance(exact_stable, Exception):
+                            raise exact_stable
+                        return exact_stable
+                    if endpoint.endswith(f"/releases/tags/{preview_tag}"):
+                        exact_reads.append(preview_tag)
+                    if endpoint.endswith(f"/actions/runs/{stable_owner_id}"):
+                        return dict(stable_run, id=stable_owner_id, conclusion="success")
+                    if endpoint.endswith(f"/actions/runs/{stable_source_id}"):
+                        source_reads.append(stable_source_id)
+                        return {
+                            "id": stable_source_id,
+                            "repository": {"full_name": github.repository},
+                            "workflow_id": 43,
+                            "path": subject.CREATE_RELEASE_PATH,
+                            "event": "workflow_dispatch",
+                            "status": "in_progress",
+                        }
+                    return fixture_api(endpoint)
+
+                def marker(tag, _directory):
+                    markers.append(tag)
+                    if tag == stable_tag:
+                        return dict(
+                            github.marker, tag=stable_tag, release_id=str(stable["id"]),
+                            target_commitish=stable["target_commitish"],
+                            source_release_run_id=str(stable_source_id),
+                            convergence_run_id=str(stable_owner_id),
+                        )
+                    return github.marker
+
+                github.api, github.pages, github.download_marker = api, pages, marker
+                stderr = io.StringIO()
+                with (
+                    patch.object(subject, "parse_args", return_value=args),
+                    patch.object(subject, "GitHub", return_value=github),
+                    patch.dict(os.environ, {}, clear=True),
+                    contextlib.redirect_stdout(io.StringIO()),
+                    contextlib.redirect_stderr(stderr),
+                ):
+                    self.assertEqual(1 if error else 0, subject.main(), stderr.getvalue())
+                self.assertEqual([stable_tag, preview_tag], exact_reads)
+                expected = [github.run_id] if error else [stable_id, github.run_id]
+                self.assertEqual(
+                    [(f"{prefix}/actions/runs/{run_id}/rerun", None) for run_id in expected],
+                    github.posts,
+                )
+                self.assertEqual([preview_tag] if error else [stable_tag, preview_tag], markers)
+                self.assertEqual([], source_reads, "scheduled debt must never renew a pre-commit owner")
+                if error:
+                    self.assertIn(f"failed for run {stable_id}:", stderr.getvalue())
+                    self.assertIn(error, stderr.getvalue())
 
     def test_precommit_owner_is_renewed_without_using_committed_budget(self):
         github = FakeGitHub(committed=False)
