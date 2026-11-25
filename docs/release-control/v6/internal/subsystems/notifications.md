@@ -620,6 +620,16 @@ the resolved alerts, while retry, failure, cancellation, and dead-letter state
 remain inspectable in the queue and audit records. Destination identities are
 stable opaque routing identities and must not expose credentials.
 
+Diagnostic views (delivery log, dead-letter list and links, rehearsal reports,
+and receipt errors) use an opaque per-queue alias when the internal destination
+ID comes from delivery configuration. The alias key stays with the private
+queue; if that key cannot be persisted, a temporary key keeps diagnostics from
+exposing the internal ID without interrupting delivery. Named webhook IDs
+remain linkable to saved webhook names. Aliases are not accepted as delivery
+authority. Retained queue, audit and rehearsal joins, old retry/dismiss handles,
+and delivery receipts are not rewritten. New linked queue handles use the
+opaque alias when their destination ID is derived from configuration.
+
 4. Webhook URLs are credential-bearing (Gotify, ntfy and Telegram all
    carry tokens in the path or query), so every surface that emits one
    must pass it through `RedactWebhookURLSecrets` first. This covers logs

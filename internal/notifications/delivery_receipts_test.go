@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
+	"github.com/stretchr/testify/require"
 )
 
 func TestReceiptFailureLogsPublicDestinationWithoutReceiverDigest(t *testing.T) {
@@ -42,6 +43,27 @@ func TestReceiptFailureLogsPublicDestinationWithoutReceiverDigest(t *testing.T) 
 			t.Error("receipt diagnostic exposed an internal receiver digest or credential")
 		}
 	}
+}
+
+func TestReceiptFailureLogsDiagnosticAliasForEmail(t *testing.T) {
+	manager := NewNotificationManagerWithDeferredQueue("", t.TempDir())
+	t.Cleanup(manager.Stop)
+	q := manager.GetQueue()
+	require.NotNil(t, q)
+	job := notificationDeliveryJob{
+		Type: "email", Event: eventAlert, EmailConfig: &EmailConfig{To: []string{"ops@example.invalid"}},
+		Alerts: []*alerts.Alert{{ID: "receipt-log-email", StartTime: time.Now(), Level: alerts.AlertLevelCritical}},
+	}
+	raw := notificationDestinationIDForJob(job)
+	alias := q.diagnosticDestinationID(raw)
+	require.Contains(t, alias, destinationAliasPrefix)
+	_, err := q.db.Exec(`CREATE TRIGGER reject_email_receipt_log BEFORE INSERT ON notification_delivery_receipts BEGIN SELECT RAISE(ABORT,'synthetic receipt write fault'); END`)
+	require.NoError(t, err)
+	logs := captureAppriseLogs(t)
+	require.ErrorContains(t, recordFixtureSuccessfulDelivery(manager, job, time.Now()), "synthetic receipt write fault")
+	require.Contains(t, logs.String(), `"destination":"`+alias+`"`)
+	require.NotContains(t, logs.String(), raw)
+	require.NotContains(t, logs.String(), "ops@example.invalid")
 }
 
 func TestResolvedJobsRequireReceiptForSameOccurrenceAndDestination(t *testing.T) {

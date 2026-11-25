@@ -197,6 +197,7 @@ type NotificationQueue struct {
 	stopErr                 error
 	db                      *sql.DB
 	dbPath                  string
+	destinationAliasKey     []byte // Private, initialized before queue workers start; never used to authorize delivery.
 	stopChan                chan struct{}
 	wg                      sync.WaitGroup
 	processorTicker         *time.Ticker
@@ -286,6 +287,9 @@ func newNotificationQueueFromDSN(dbPath, dsn string) (*NotificationQueue, error)
 	if err := nq.initSchema(); err != nil {
 		db.Close()
 		return nil, fmt.Errorf("failed to initialize schema: %w", err)
+	}
+	if err := nq.initDestinationAliasKey(); err != nil {
+		log.Warn().Msg("Notification diagnostic IDs will change after restart: durable alias key unavailable")
 	}
 
 	// Reset any stuck "sending" items to "pending" (crash recovery)
@@ -807,7 +811,7 @@ func (nq *NotificationQueue) enqueueLocked(notif *QueuedNotification) error {
 		transitionIDs := notificationTransitionIDs(notif.Links)
 		if len(transitionIDs) > 0 && strings.TrimSpace(notif.DestinationID) != "" {
 			id, err := operationaltrust.NewNotificationID(
-				notif.DestinationID,
+				nq.diagnosticDestinationID(notif.DestinationID),
 				notif.Type,
 				notif.CreatedAt,
 				transitionIDs,
@@ -1396,7 +1400,8 @@ func (nq *NotificationQueue) MoveToDLQ(id string, reason string) error {
 	return nq.UpdateStatus(id, QueueStatusDLQ, reason)
 }
 
-// GetDLQ returns all notifications in the dead letter queue
+// GetDLQ returns dead-letter records for operator inspection. Delivery uses
+// the stored records, not these diagnostic destination aliases.
 func (nq *NotificationQueue) GetDLQ(limit int) ([]*QueuedNotification, error) {
 	nq.mu.RLock()
 	defer nq.mu.RUnlock()
@@ -1430,6 +1435,10 @@ func (nq *NotificationQueue) GetDLQ(limit int) ([]*QueuedNotification, error) {
 				Str("dbPath", nq.dbPath).
 				Msg("Failed to scan DLQ notification")
 			continue
+		}
+		notif.DestinationID = nq.diagnosticDestinationID(notif.DestinationID)
+		for i := range notif.Links {
+			notif.Links[i].DestinationID = nq.diagnosticDestinationID(notif.Links[i].DestinationID)
 		}
 		notifications = append(notifications, notif)
 	}

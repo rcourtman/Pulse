@@ -161,6 +161,7 @@ func (nq *NotificationQueue) GetDeliveryLog(since time.Time, limit int) ([]Deliv
 		if entry.DestinationID == "" {
 			entry.DestinationID = decodeAuditDestinationID(operationalLinks.String)
 		}
+		entry.DestinationID = nq.diagnosticDestinationID(entry.DestinationID)
 
 		entries = append(entries, entry)
 	}

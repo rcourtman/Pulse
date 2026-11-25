@@ -77,6 +77,40 @@ func TestDeliveryRehearsalRealQueueAndRecoverySurviveRestart(t *testing.T) {
 	require.NotContains(t, string(encoded), "owner")
 }
 
+func TestDeliveryRehearsalUsesStableDiagnosticAliasForSavedEmail(t *testing.T) {
+	dir := t.TempDir()
+	m := openRehearsalManager(t, dir, "")
+	// No provider send: the configured address is on a disabled destination.
+	require.NoError(t, m.SetEmailConfig(EmailConfig{To: []string{"alerts@example.invalid"}}))
+	saved := m.GetEmailConfig()
+	raw := notificationDestinationIDForJob(notificationDeliveryJob{Type: "email", EmailConfig: &saved})
+	input := RehearsalRequest{ID: uuid.NewString(), Level: alerts.AlertLevelWarning}
+	run, err := m.StartDeliveryRehearsal(input)
+	require.NoError(t, err)
+	require.Len(t, run.Destinations, 1)
+	got := run.Destinations[0]
+	require.Contains(t, got.ID, destinationAliasPrefix)
+	require.NotEqual(t, raw, got.ID)
+	require.Equal(t, "suppressed", got.Firing.Status)
+
+	q := m.GetQueue()
+	q.mu.RLock()
+	stored, err := q.readRehearsalLocked(input.ID)
+	q.mu.RUnlock()
+	require.NoError(t, err)
+	require.Equal(t, raw, stored.Destinations[0].ID, "readback must not replace the rehearsal's join ID")
+	m.Stop()
+
+	m = openRehearsalManager(t, dir, "")
+	runs, err := m.ListDeliveryRehearsals()
+	require.NoError(t, err)
+	require.Len(t, runs, 1)
+	require.Equal(t, []RehearsalDestination{got}, runs[0].Destinations)
+	stats, err := m.GetQueueStats()
+	require.NoError(t, err)
+	require.Zero(t, stats["pending"]+stats["sending"]+stats["sent"])
+}
+
 func TestDeliveryRehearsalKeepsMixedDestinationOutcomesSeparate(t *testing.T) {
 	var accepted, rejected atomic.Int32
 	server := newIPv4HTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

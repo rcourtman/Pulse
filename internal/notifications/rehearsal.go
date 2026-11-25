@@ -746,6 +746,11 @@ func (n *NotificationManager) GetDeliveryRehearsal(id string) (*DeliveryRehearsa
 	if run.Policy.Status == "pending" {
 		run.Policy = rehearsalOutcome("unavailable", "admission_unknown", "No completed notification admission was recorded. Refresh to reconcile this request before starting another rehearsal.")
 	}
+	// Use the retained join IDs until every queue outcome is attributed.
+	// Return their diagnostic aliases without rewriting the stored report.
+	for i := range run.Destinations {
+		run.Destinations[i].ID = q.diagnosticDestinationID(run.Destinations[i].ID)
+	}
 	result := run.DeliveryRehearsal
 	return &result, nil
 }
