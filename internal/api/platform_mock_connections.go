@@ -37,7 +37,7 @@ func mockKeepsRealPolling() bool {
 // entries wholesale and rejects node mutations outright, so the ledger is held
 // to the same rule. The one exception is the real-polling opt-in, where the
 // configured sources genuinely do collect and belong in the ledger.
-func applyMockLedgerInputs(inputs aggregatorInputs) aggregatorInputs {
+func applyMockLedgerInputs(inputs aggregatorInputs, includeAvailability bool) aggregatorInputs {
 	if !mockKeepsRealPolling() {
 		inputs.pveInstances = nil
 		inputs.pbsInstances = nil
@@ -49,9 +49,11 @@ func applyMockLedgerInputs(inputs aggregatorInputs) aggregatorInputs {
 		inputs.availabilityTargets = nil
 	}
 
-	mockTargets, mockStatuses := mockAvailabilityConnectionInputs()
-	inputs.availabilityTargets = mergeAvailabilityTargets(inputs.availabilityTargets, mockTargets)
-	inputs.availabilityStatuses = mergeAvailabilityStatuses(inputs.availabilityStatuses, mockStatuses)
+	if includeAvailability {
+		mockTargets, mockStatuses := mockAvailabilityConnectionInputs()
+		inputs.availabilityTargets = mergeAvailabilityTargets(inputs.availabilityTargets, mockTargets)
+		inputs.availabilityStatuses = mergeAvailabilityStatuses(inputs.availabilityStatuses, mockStatuses)
+	}
 
 	// Mock vSphere/TrueNAS pollers feed the fabric but never persistence, so
 	// without these the mock ledger has no platform source rows for the
