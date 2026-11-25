@@ -3,6 +3,7 @@ package monitoring
 import (
 	"context"
 	"math/rand"
+	"sync/atomic"
 	"testing"
 	"testing/synctest"
 	"time"
@@ -32,11 +33,11 @@ func observeBreakerSchedule(t *testing.T, fixture breakerScheduleFixture, observ
 		defer cancel()
 		start := time.Now()
 		obs := breakerScheduleObservation{}
+		var targetReads, peerReads atomic.Int32
 		m := newScheduleFixture(ctx, fixture.adaptive, func(context.Context) ([]proxmox.Node, error) {
-			obs.targetReads++
 			cpu := 0.24
-			if obs.targetReads > 1 {
-				if obs.targetReads <= 4 {
+			if reads := targetReads.Add(1); reads > 1 {
+				if reads <= 4 {
 					return nil, context.DeadlineExceeded
 				}
 				cpu = 0.42
@@ -51,7 +52,7 @@ func observeBreakerSchedule(t *testing.T, fixture breakerScheduleFixture, observ
 		m.config.PVEInstances = append(m.config.PVEInstances, peer)
 		m.lastClusterCheck[peer.Name] = start
 		m.pveClients[peer.Name] = &pollWorkFixturePVE{getNodes: func(context.Context) ([]proxmox.Node, error) {
-			obs.peerReads++
+			peerReads.Add(1)
 			return []proxmox.Node{{Node: breakerFixturePeer, Status: "online", CPU: 0.36, Uptime: 36000}}, nil
 		}}
 		m.deadLetterQueue = NewTaskQueue()
@@ -63,6 +64,11 @@ func observeBreakerSchedule(t *testing.T, fixture breakerScheduleFixture, observ
 		if fixture.terminal {
 			m.maxRetryAttempts = 3 // exhaust while the breaker opens
 		}
+		report := func(phase string) {
+			obs.targetReads = int(targetReads.Load())
+			obs.peerReads = int(peerReads.Load())
+			observe(phase, m, obs)
+		}
 
 		if fixture.shared {
 			go m.dispatchTaskWorkers(ctx, newPollTaskWorkerLimiter(1))
@@ -71,7 +77,7 @@ func observeBreakerSchedule(t *testing.T, fixture breakerScheduleFixture, observ
 		}
 		m.poll(ctx, nil)
 		synctest.Wait()
-		observe("initial", m, obs)
+		report("initial")
 
 		time.Sleep(scheduleFixtureCadence)
 		synctest.Wait()
@@ -81,9 +87,15 @@ func observeBreakerSchedule(t *testing.T, fixture breakerScheduleFixture, observ
 		}
 		opened := time.Now()
 		key := schedulerKey(InstanceTypePVE, scheduleFixtureNode)
-		state, failures, retryAt := m.circuitBreakers[key].State()
-		if state != "open" || failures != 3 || obs.targetReads != 4 || !retryAt.Equal(opened.Add(40*time.Second)) {
-			t.Fatalf("fixture did not reach the third genuine failure: %s failures=%d reads=%d retry=%v", state, failures, obs.targetReads, retryAt.Sub(opened))
+		m.mu.RLock()
+		breaker := m.circuitBreakers[key]
+		m.mu.RUnlock()
+		if breaker == nil {
+			t.Fatal("fixture did not create a breaker for its connection")
+		}
+		state, failures, retryAt := breaker.State()
+		if reads := targetReads.Load(); state != "open" || failures != 3 || reads != 4 || !retryAt.Equal(opened.Add(40*time.Second)) {
+			t.Fatalf("fixture did not reach the third genuine failure: %s failures=%d reads=%d retry=%v", state, failures, reads, retryAt.Sub(opened))
 		}
 		obs.retryAt = retryAt
 		obs.due = retryAt
@@ -92,27 +104,27 @@ func observeBreakerSchedule(t *testing.T, fixture breakerScheduleFixture, observ
 				obs.due = backoff
 			}
 		}
-		observe("opened", m, obs)
+		report("opened")
 
 		// A normal plan while the breaker is open. The healthy peer also has
 		// work due, with only one available slot.
 		time.Sleep(time.Until(start.Add(2 * scheduleFixtureCadence)))
 		m.poll(ctx, nil)
 		synctest.Wait()
-		observe("replanned", m, obs)
+		report("replanned")
 
 		time.Sleep(time.Until(obs.due) - time.Nanosecond)
 		synctest.Wait()
-		observe("waiting", m, obs)
+		report("waiting")
 		time.Sleep(time.Nanosecond)
 		synctest.Wait()
-		observe("eligible", m, obs)
+		report("eligible")
 
 		// Compare eventual recovery too: with ordinary jitter, the baseline
 		// runs its extra backoff and eventually makes the same successful read.
 		time.Sleep(12 * time.Second)
 		synctest.Wait()
-		observe("settled", m, obs)
+		report("settled")
 	})
 }
 
@@ -137,12 +149,20 @@ func TestScheduledPollRespectsBreakerAndBackoff(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			observeBreakerSchedule(t, tc.breakerScheduleFixture, func(phase string, m *Monitor, obs breakerScheduleObservation) {
 				key := schedulerKey(InstanceTypePVE, scheduleFixtureNode)
+				m.mu.RLock()
+				failureCount := m.failureCounts[key]
+				breaker := m.circuitBreakers[key]
+				var lastSuccess time.Time
+				if status := m.pollStatusMap[key]; status != nil {
+					lastSuccess = status.LastSuccess
+				}
+				m.mu.RUnlock()
 				switch phase {
 				case "opened", "replanned", "waiting":
 					queued, ok := m.taskQueue.Get(InstanceTypePVE, scheduleFixtureNode)
-					if obs.targetReads != 4 || m.failureCounts[key] != 3 || m.deadLetterQueue.Size() != 0 {
+					if obs.targetReads != 4 || failureCount != 3 || m.deadLetterQueue.Size() != 0 {
 						t.Errorf("%s: the deferred retry made or recorded another attempt: reads=%d failures=%d DLQ=%d",
-							phase, obs.targetReads, m.failureCounts[key], m.deadLetterQueue.Size())
+							phase, obs.targetReads, failureCount, m.deadLetterQueue.Size())
 					}
 					if !ok || !queued.NextRun.Equal(obs.due) {
 						t.Errorf("%s: next queued poll relative to breaker deadline = %v (queued=%v), want %v",
@@ -157,9 +177,9 @@ func TestScheduledPollRespectsBreakerAndBackoff(t *testing.T) {
 				case "eligible":
 					node, ok := breakerFixtureNode(m, scheduleFixtureNode)
 					points := m.metricsHistory.GetNodeMetrics(node.ID, "cpu", time.Hour)
-					state, failures, retryAt := m.circuitBreakers[key].State()
+					state, failures, retryAt := breaker.State()
 					if !ok || obs.targetReads != 5 || node.CPU != 0.42 || state != "closed" || failures != 0 ||
-						!retryAt.IsZero() || len(points) != 2 || points[1].Value != 42 || !m.pollStatusMap[key].LastSuccess.Equal(obs.due) {
+						!retryAt.IsZero() || len(points) != 2 || points[1].Value != 42 || !lastSuccess.Equal(obs.due) {
 						t.Errorf("eligible probe did not publish recovery and CPU History: reads=%d cpu=%.2f breaker=%s failures=%d points=%+v",
 							obs.targetReads, node.CPU, state, failures, points)
 					}
@@ -181,18 +201,24 @@ func TestBreakerDeferredClaimDoesNotRepeatDeadLetter(t *testing.T) {
 				key := schedulerKey(InstanceTypePVE, scheduleFixtureNode)
 				switch phase {
 				case "opened", "replanned", "waiting":
-					info := m.dlqInsightMap[key]
-					if info == nil || m.deadLetterQueue.Size() != 1 || obs.targetReads != 4 {
+					m.mu.RLock()
+					ptr := m.dlqInsightMap[key]
+					var info dlqInsight
+					if ptr != nil {
+						info = *ptr
+					}
+					m.mu.RUnlock()
+					if ptr == nil || m.deadLetterQueue.Size() != 1 || obs.targetReads != 4 {
 						t.Fatalf("%s: lost the one real terminal result: reads=%d DLQ=%d info=%+v", phase, obs.targetReads, m.deadLetterQueue.Size(), info)
 					}
 					if phase == "opened" {
-						original = *info
+						original = info
 						if original.RetryCount != 1 {
 							t.Fatalf("first exhausted read was recorded %d times", original.RetryCount)
 						}
 						return
 					}
-					if *info != original {
+					if info != original {
 						t.Errorf("%s: no new read, but dead-letter count changed from %d to %d and time moved %v",
 							phase, original.RetryCount, info.RetryCount, info.NextRetry.Sub(original.NextRetry))
 					}
@@ -201,8 +227,14 @@ func TestBreakerDeferredClaimDoesNotRepeatDeadLetter(t *testing.T) {
 						t.Errorf("%s: skipped claim did not return to the queue at the breaker deadline: queued=%v time=%v", phase, ok, queued.NextRun)
 					}
 				case "eligible":
-					if obs.targetReads != 5 || !m.pollStatusMap[key].LastSuccess.Equal(obs.retryAt) {
-						t.Errorf("the next probe at the breaker deadline did not recover: reads=%d success=%v", obs.targetReads, m.pollStatusMap[key].LastSuccess)
+					m.mu.RLock()
+					var lastSuccess time.Time
+					if status := m.pollStatusMap[key]; status != nil {
+						lastSuccess = status.LastSuccess
+					}
+					m.mu.RUnlock()
+					if obs.targetReads != 5 || !lastSuccess.Equal(obs.retryAt) {
+						t.Errorf("the next probe at the breaker deadline did not recover: reads=%d success=%v", obs.targetReads, lastSuccess)
 					}
 				}
 			})
