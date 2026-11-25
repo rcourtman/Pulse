@@ -48,7 +48,7 @@ import {
   PlatformTableEmptyState,
   PlatformTableLoadingState,
 } from '@/features/platformPage/sharedPlatformPage';
-import { ProxmoxBackupsTable } from './ProxmoxBackupsTable';
+import { ProxmoxBackupsTable, type BackupResourceReadIssue } from './ProxmoxBackupsTable';
 import { ProxmoxBackupJobsSection } from './ProxmoxBackupJobsCard';
 import { ProxmoxCephTable } from './ProxmoxCephTable';
 import { ProxmoxMailGatewayTable } from './ProxmoxMailGatewayTable';
@@ -258,20 +258,38 @@ export function ProxmoxPageSurface() {
       : resourceState().error();
   const refetch = () =>
     activeTab() === 'backups'
-      ? Promise.all([overviewResources.refetch(), backupResources.refetch()])
+      ? Promise.allSettled([overviewResources.refetch(), backupResources.refetch()])
       : resourceState().refetch();
   const normalizeSnapshot = (snapshot: Resource[] | undefined) =>
     Array.isArray(snapshot) ? snapshot : [];
   const buildModel = (snapshot: Resource[] | undefined) =>
     buildProxmoxPageModel(normalizeSnapshot(snapshot));
   const overviewModel = createMemo(() => buildModel(overviewResources.resources()));
+  const backupResourceReadIssue = createMemo<BackupResourceReadIssue | undefined>(() => {
+    if (overviewResources.error()) {
+      return {
+        scope: 'workloads',
+        loading: overviewResources.loading,
+        retry: overviewResources.refetch,
+      };
+    }
+    if (backupResources.error()) {
+      return {
+        scope: 'servers',
+        loading: backupResources.loading,
+        retry: backupResources.refetch,
+      };
+    }
+  });
+  // A failed snapshot can still have cached rows. Do not use those rows for
+  // guest matches or server health. The other read has its own result.
   const backupModel = createMemo(() =>
     buildModel(
       Array.from(
         new Map(
           [
-            ...normalizeSnapshot(overviewResources.resources()),
-            ...normalizeSnapshot(backupResources.resources()),
+            ...(overviewResources.error() ? [] : normalizeSnapshot(overviewResources.resources())),
+            ...(backupResources.error() ? [] : normalizeSnapshot(backupResources.resources())),
           ].map((resource) => [resource.id, resource]),
         ).values(),
       ),
@@ -351,7 +369,7 @@ export function ProxmoxPageSurface() {
         }
       >
         <Show
-          when={!error()}
+          when={!error() || (activeTab() === 'backups' && backupModel().resources.length > 0)}
           fallback={
             <PlatformErrorState
               title="Could not load Proxmox resources"
@@ -440,6 +458,7 @@ export function ProxmoxPageSurface() {
                 emptyIcon={<ProxmoxIcon class="h-6 w-6 text-slate-400" />}
                 workloads={model().guests}
                 servers={model().resources}
+                resourceReadIssue={backupResourceReadIssue()}
                 summaryAside={(days) => <ProxmoxBackupJobsSection {...days} />}
                 datastoreAlerts={(ids) =>
                   getAlertsForResource(ids, activeAlerts, alertsActivation.detectionEnabled())
