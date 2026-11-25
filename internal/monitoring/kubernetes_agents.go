@@ -1265,25 +1265,17 @@ func (m *Monitor) SetKubernetesClusterCustomDisplayName(clusterID, customName st
 	return cluster, nil
 }
 
+var kubernetesAgentReportLease = models.AgentReportLease{
+	MinimumWindow:   kubernetesMinimumHealthWindow,
+	MaximumWindow:   kubernetesMaximumHealthWindow,
+	GraceMultiplier: kubernetesOfflineGraceMultiplier,
+}
+
 func (m *Monitor) evaluateKubernetesAgents(now time.Time) {
-	clusters := m.state.GetKubernetesClusters()
-	for _, cluster := range clusters {
-		interval := cluster.IntervalSeconds
-		if interval <= 0 {
-			interval = int(kubernetesMinimumHealthWindow / time.Second)
-		}
-
-		window := time.Duration(interval) * time.Second * kubernetesOfflineGraceMultiplier
-		if window < kubernetesMinimumHealthWindow {
-			window = kubernetesMinimumHealthWindow
-		} else if window > kubernetesMaximumHealthWindow {
-			window = kubernetesMaximumHealthWindow
-		}
-
-		healthy := !cluster.LastSeen.IsZero() && now.Sub(cluster.LastSeen) <= window
+	for _, cluster := range m.state.KubernetesAgentLiveness(now, kubernetesAgentReportLease) {
 		key := kubernetesConnectionPrefix + cluster.ID
-		m.state.SetConnectionHealth(key, healthy)
-		if healthy {
+		m.state.SetConnectionHealth(key, cluster.Current)
+		if cluster.Current {
 			m.state.SetKubernetesClusterStatus(cluster.ID, "online")
 		} else {
 			m.state.SetKubernetesClusterStatus(cluster.ID, "offline")
