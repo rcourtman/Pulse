@@ -108,7 +108,14 @@ describe('Stopped agent-command help', () => {
   it('distinguishes stopped prompt, read-only inspection and destructive removal', () => {
     const section = docSection(source, 'UNIFIED_AGENT', failureId);
     const text = normalizedText(section);
-    expect(section.querySelectorAll(':scope > ul > li')).toHaveLength(3);
+    const diagnostics = [...section.querySelectorAll<HTMLLIElement>(':scope > ul > li')];
+    for (const label of [
+      'stty: command not found, followed by a terminal-required message',
+      'A terminal-required or interrupted-input message without that error',
+      'Safe-profile migration is unsupported on this platform',
+    ]) {
+      expect(diagnostics.filter((item) => normalizedText(item).startsWith(label))).toHaveLength(1);
+    }
     for (const fact of [
       'Passing preflight is not installation',
       'A real terminal can still produce this error',
@@ -128,6 +135,32 @@ describe('Stopped agent-command help', () => {
     const installer = readFileSync(path.join(frontendRoot, '../scripts/install.sh'), 'utf8');
     expect(installer).toContain('--safe-profile-inspect is a standalone read-only action');
     expect(installer).toContain('Safe-profile migration is unsupported on this platform');
+  });
+
+  it('keeps Windows installer trust separate from automatic updater file access', () => {
+    const manual = docSection(source, 'UNIFIED_AGENT', failureId);
+    const windows = [...manual.querySelectorAll<HTMLLIElement>(':scope > ul > li')].find(
+      (item) =>
+        item.querySelector('strong code')?.textContent === 'Could not establish trust relationship',
+    );
+    expect(windows).toBeDefined();
+    const trust = normalizedText(windows!);
+    expect(trust).toContain('while downloading install.ps1');
+    expect(trust).toContain('before the installer or its preflight ran');
+    expect(trust).toContain('Do not bypass TLS validation');
+    expect(trust).not.toContain('failed to sync staged binary');
+
+    const automatic = docSection(source, 'UNIFIED_AGENT', 'agent-not-updating');
+    const staging = [...automatic.querySelectorAll<HTMLLIElement>(':scope > ol > li')].find(
+      (item) =>
+        item.querySelector('strong')?.textContent === 'Download, validation or helper staging:',
+    );
+    expect(staging).toBeDefined();
+    const access = normalizedText(staging!);
+    expect(access).toContain('failed to sync staged binary');
+    expect(access).toContain('does not identify which process held it');
+    expect(access).toContain('without disabling endpoint protection');
+    expect(automatic.querySelector(`a[href="#${failureId}"]`)).not.toBeNull();
   });
 
   it('routes a successful download preflight to distinct executable and URL checks', () => {
