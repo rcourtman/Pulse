@@ -1394,7 +1394,7 @@ const fetchUnifiedResourcesPage = async (
       response,
       `Failed to fetch unified resources (HTTP ${response.status})`,
     );
-    throw new Error(message);
+    throw Object.assign(new Error(message), { status: response.status });
   }
 
   const payload = (await response.json()) as APIListResponse | APIResource[];
@@ -1550,6 +1550,9 @@ export function useUnifiedResources(options?: UseUnifiedResourcesOptions) {
     changedIds: ReadonlySet<string> | null;
   }>({ version: 0, changedIds: null });
   let resourceSnapshotVersion = 0;
+  // Zero rows can be a real snapshot. Keep readiness separate from its length
+  // and from loading, which is also false while a read is disabled.
+  const [hasSnapshot, setHasSnapshot] = createSignal(hasCachedResources);
   const [policyPosture, setPolicyPosture] = createSignal<ResourcePolicyPostureSummary | null>(
     initialPolicyPosture,
   );
@@ -1584,6 +1587,7 @@ export function useUnifiedResources(options?: UseUnifiedResourcesOptions) {
     setPolicyPosture(targetEntry.policyPosture);
     setAggregations(targetEntry.aggregations);
     setFacets(targetEntry.facets);
+    setHasSnapshot(true);
   };
 
   const runRefetch = async (options?: {
@@ -2076,6 +2080,7 @@ export function useUnifiedResources(options?: UseUnifiedResourcesOptions) {
       setPolicyPosture(cacheEntry.policyPosture);
       setAggregations(cacheEntry.aggregations);
       setFacets(cacheEntry.facets);
+      setHasSnapshot(true);
       // Realtime rows are not a successful canonical read. Opt-in selection
       // consumers keep a failed read (including on reconnect/remount) until
       // REST succeeds; other consumers retain their existing websocket policy.
@@ -2162,6 +2167,7 @@ export function useUnifiedResources(options?: UseUnifiedResourcesOptions) {
       setPolicyPosture(scopedPolicyPosture);
       setAggregations(scopedAggregations);
       setFacets(scopedFacets);
+      setHasSnapshot(cacheEntry.hasSnapshot);
       setLoading(enabled() && !cacheEntry.hasSnapshot);
     });
 
@@ -2212,6 +2218,7 @@ export function useUnifiedResources(options?: UseUnifiedResourcesOptions) {
     policyPosture,
     aggregations,
     facets,
+    hasSnapshot,
     refetch,
     mutate,
     loading,

@@ -300,6 +300,26 @@ export function ProxmoxPageSurface() {
     if (activeTab() === 'backups') return backupModel();
     return buildModel(resourceState().resources());
   });
+  // Once Backups is active, a readable peer with zero rows still lets the
+  // independent backup inventories speak for themselves. A pending/disabled
+  // read, both reads failing, or a denial is not that evidence.
+  const hasPageContent = createMemo(() => {
+    if (model().resources.length > 0) return true;
+    if (activeTab() !== 'backups') return false;
+    const workloadError = overviewResources.error();
+    const serverError = backupResources.error();
+    if (Boolean(workloadError) === Boolean(serverError)) return false;
+    if (getAPIReadAccessErrorMessage(workloadError || serverError)) return false;
+    return (workloadError ? backupResources : overviewResources).hasSnapshot();
+  });
+  const resourceErrorDescription = () => {
+    const accessError =
+      activeTab() === 'backups'
+        ? (getAPIReadAccessErrorMessage(overviewResources.error()) ??
+          getAPIReadAccessErrorMessage(backupResources.error()))
+        : null;
+    return accessError ?? 'Refresh the resource snapshot or check the API connection state.';
+  };
   const agentUpdateTargetVersion = createMemo(
     () => updateStore.versionInfo()?.agentUpdateTargetVersion,
   );
@@ -360,7 +380,7 @@ export function ProxmoxPageSurface() {
       <PlatformSectionTabs tabs={visibleTabs()} active={activeTab()} ariaLabel="Proxmox sections" />
 
       <Show
-        when={!loading() || model().resources.length > 0}
+        when={!loading() || hasPageContent()}
         fallback={
           <PlatformTableLoadingState
             title="Loading Proxmox resources"
@@ -369,17 +389,17 @@ export function ProxmoxPageSurface() {
         }
       >
         <Show
-          when={!error() || (activeTab() === 'backups' && backupModel().resources.length > 0)}
+          when={!error() || (activeTab() === 'backups' && hasPageContent())}
           fallback={
             <PlatformErrorState
               title="Could not load Proxmox resources"
-              description="Refresh the resource snapshot or check the API connection state."
+              description={resourceErrorDescription()}
               onRefresh={() => void refetch()}
             />
           }
         >
           <Show
-            when={model().resources.length > 0}
+            when={hasPageContent()}
             fallback={
               <PlatformTableEmptyState
                 icon={proxmoxIcon()}
