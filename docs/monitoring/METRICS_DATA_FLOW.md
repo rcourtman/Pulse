@@ -1,23 +1,41 @@
-# Metrics Data Flow (Sparklines vs History)
+# Metrics Data Flow (Bars, Trends and History)
 
-## Quick summary
-- Sparklines/trends toggle: client ring buffer + short-term in-memory server history via `/api/charts` (fast, not durable).
-- Guest History tab: persistent SQLite metrics store via `/api/metrics-store/history` (durable, long-range, downsampled).
+A chart that is still visible does not tell you that new readings are arriving.
+If a value stops updating or a chart is empty, identify the view before checking
+polling or storage. Keep the same connection, resource and metric in each view.
 
-## Path A: Sparklines ("Trends" toggle)
-1. Server polling writes to in-memory history: `monitor.go` -> `metricsHistory.AddGuestMetric/AddNodeMetric`.
-2. `/api/charts` (`handleCharts`) reads from `metricsHistory` via `monitor.GetGuestMetrics/GetNodeMetrics`.
-3. Client toggles to sparklines: `metricsViewMode.ts` -> `seedFromBackend()` -> `ChartsAPI.getCharts()` -> ring buffer in `metricsHistory.ts`.
-4. While in sparklines mode, `metricsSampler.ts` samples websocket state every 30s and appends to the ring buffer; localStorage saves periodically.
+| Where you see it | Where the readings come from |
+| --- | --- |
+| **Bars** in the Proxmox node or workload table | The latest resource state delivered to the page, not a query for stored points. Keep any stale, last-known or unavailable indication with the value. |
+| **Trends** in a workload or Proxmox node table | A separate server chart read. Workload summaries use `/api/charts/workloads` and node summaries use `/api/charts/infrastructure`. Some row previews read history for just that resource. The browser can retain an earlier result for the same selection while it refreshes. |
+| **Overview** charts in a resource drawer (or **History** on older layouts) | A read of `/api/metrics-store/history` for the selected resource and range. Check the chart's source label and observation time. A current or recent-only fallback is not stored coverage, and an empty range is not measured zero. |
 
-## Path B: Guest drawer History tab
-1. Server polling writes to SQLite store: `monitor.go` -> `metricsStore.Write(resourceType, ...)`.
-2. `/api/metrics-store/history` (`handleMetricsHistory`) queries `metrics.Store` (`Query/QueryAll`) with tiered downsampling and license gating.
-3. `GuestDrawer` History charts call `ChartsAPI.getMetricsHistory()` for CPU/memory/disk and ranges `24h/7d/30d/90d`.
+The summary reads use recent server samples when they cover the requested
+window. They can supplement shallow coverage with stored readings and, for
+supported resources, native provider history. There is no fixed two-hour
+boundary between recent and stored samples. The workload and node summary
+sparklines do not build a browser history by sampling the live dashboard.
+The resource drawer has its own range and coverage. No paid plan is needed
+for metric history. See [how to read a History panel](../METRICS_HISTORY.md#read-a-history-panel)
+and [what retention keeps](../METRICS_HISTORY.md#retention-and-accessible-range).
 
-## Architecture notes
-- In-memory retention is `NewMetricsHistory(1000, 24h)` (`monitor.go`). At 10s polling, 1000 points covers ~2.8h of data.
-- `/api/charts` uses a two-tier strategy: ranges ≤ 2h are served from the in-memory buffer; longer ranges (4h, 8h, 24h, 7d, 30d) fall back to the SQLite persistent store with LTTB downsampling to ~500 points per metric.
-- Frontend sparkline ring buffer keeps up to 8h locally (`metricsHistory.ts`).
-- Docker resource keys differ: in-memory uses `docker:<id>`, persistent store uses `resourceType=dockerContainer`. The `GetGuestMetricsForChart` method maps between these automatically.
-- History charts in the guest drawer use `/api/metrics-store/history` (SQLite) for ranges `24h/7d/30d/90d`.
+## If the views disagree
+
+- **Bars change but Trends or the drawer do not.** Start with the affected
+  history view. Compare the selected range, the most recent observation time
+  if shown, and whether the chart says it could not refresh. This is not by
+  itself evidence that the provider or agent stopped reporting. For example,
+  a newly changed node disk bar and an older stored disk point can both be
+  correct for their own times.
+- **Several views stop together.** A visible line or a working Pulse Health
+  response cannot settle this. Compare the affected connection's
+  [recorded poll results](../api/SCHEDULER_HEALTH.md#compare-two-poll-snapshots)
+  across its normal interval. Check agent reports and alert evaluation
+  separately. A poll for one connection or a point for one resource does not
+  prove that the other paths advanced.
+
+Use the readings already available. Do not restart Pulse, clear history or
+change polling or retention just to make the views agree. If you report a
+disagreement, keep the view, metric, range, last visible point time and any
+source or error label together. Use consistent private aliases and don't
+post raw API responses or network captures.
