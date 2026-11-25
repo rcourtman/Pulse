@@ -211,13 +211,18 @@ const providerEvidenceSourceLabel = (source: string | undefined): string => {
 const unmatchedBackupsNote = (count: number): string =>
   count === 1 ? '1 unmatched backup has this VMID.' : `${count} unmatched backups have this VMID.`;
 
-const postureExplanation = (row: WorkloadCoverageRow): string => {
+const postureExplanation = (
+  row: WorkloadCoverageRow,
+  guestMatchingUnavailable: boolean | undefined,
+): string => {
   const unmatched = row.unmatchedPBSEntries
     ? ` ${unmatchedBackupsNote(row.unmatchedPBSEntries)}`
     : '';
   if (row.protectionPosture?.explanation) return `${row.protectionPosture.explanation}${unmatched}`;
   if (row.posture === 'checking') return "Pulse is checking this guest's backups.";
   if (row.posture === 'not-evaluated') {
+    if (guestMatchingUnavailable && row.isOrphaned)
+      return 'Pulse could not check for a matching guest without the workload inventory.';
     const guests = row.sameVmidGuestLabels ?? [];
     return guests.length > 0
       ? `Guests with this VMID: ${guests.join(', ')}. Pulse cannot tell which one this backup belongs to, so it is not counted. A PBS namespace named after each connection can settle it.`
@@ -633,6 +638,8 @@ export function ProxmoxCoverageTable(props: {
   showTaskColumn: boolean;
   /** A pending/failed inventory or posture read cannot establish the latest point or absence. */
   historyReadIncomplete?: boolean;
+  /** An unread workload inventory cannot establish that a backup has no matching guest. */
+  guestMatchingUnavailable?: boolean;
   /** Resolved restore-evidence filter; assessments and tasks remain workload-wide. */
   evidenceLocationLabel?: string;
   layoutWidth?: Accessor<number | null | undefined>;
@@ -829,6 +836,7 @@ export function ProxmoxCoverageTable(props: {
               >
                 {(row) => {
                   const isExpanded = () => props.expandedKey === row.key;
+                  const explanation = () => postureExplanation(row, props.guestMatchingUnavailable);
                   const evidence = createMemo(() =>
                     selectCoverageRestoreEvidence(row.artifacts, evidenceLimit()),
                   );
@@ -953,11 +961,11 @@ export function ProxmoxCoverageTable(props: {
                             <StatusDot
                               size="sm"
                               variant={coveragePostureVariant(row.posture)}
-                              title={postureExplanation(row)}
+                              title={explanation()}
                               ariaHidden
                             />
                             <span
-                              title={postureExplanation(row)}
+                              title={explanation()}
                               class={`truncate text-[11px] font-medium ${statusWordToneClass(
                                 coveragePostureVariant(row.posture),
                               )}`}
@@ -967,8 +975,7 @@ export function ProxmoxCoverageTable(props: {
                                 fallback={getWorkloadRecoveryPostureLabel(row.posture)}
                               >
                                 <span class="sr-only">
-                                  {getWorkloadRecoveryPostureLabel(row.posture)}:{' '}
-                                  {postureExplanation(row)}
+                                  {getWorkloadRecoveryPostureLabel(row.posture)}: {explanation()}
                                 </span>
                                 <span aria-hidden="true">
                                   {compactBackupReasonLabel(row) ??
@@ -1093,7 +1100,7 @@ export function ProxmoxCoverageTable(props: {
                               variant: coveragePostureVariant(row.posture),
                               label: getWorkloadRecoveryPostureLabel(row.posture),
                             }}
-                            summary={postureExplanation(row)}
+                            summary={explanation()}
                             actions={
                               <RecordOwnerLink
                                 subject={proxmoxBackupWorkloadSubject(row.workload)}

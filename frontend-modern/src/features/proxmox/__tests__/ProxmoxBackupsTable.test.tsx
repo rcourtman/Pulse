@@ -1430,6 +1430,100 @@ const serverTable = () => document.querySelector('[data-proxmox-backups-table="s
 const sourceCalls = (source: 'pve' | 'pbs') =>
   apiFetchMock.mock.calls.filter(([url]) => url === `/api/backups/${source}`);
 
+it('keeps restore points inspectable without guessing coverage when the workload read fails', async () => {
+  mockBackupAPIs();
+  const retry = vi.fn().mockRejectedValue(new Error('Still unavailable'));
+  const [loading, setLoading] = createSignal(false);
+  renderInRouter(() => (
+    <ProxmoxBackupsTable
+      emptyIcon={<span />}
+      servers={[pbsServerResource]}
+      resourceReadIssue={{ scope: 'workloads', loading, retry }}
+    />
+  ));
+
+  expect(await screen.findByText('Workload coverage unavailable')).toBeVisible();
+  expect(screen.getAllByText('Guest protection not assessed')[0]).toBeInTheDocument();
+  expect(screen.queryByText('Nothing to check yet')).not.toBeInTheDocument();
+  expect(apiFetchJSONMock).not.toHaveBeenCalled();
+  const button = screen.getByRole('button', { name: 'Retry Proxmox workloads' });
+  await fireEvent.click(button);
+  expect(retry).toHaveBeenCalledTimes(1);
+  setLoading(true);
+  expect(button).toHaveAttribute('aria-disabled', 'true');
+  await fireEvent.click(button);
+  expect(retry).toHaveBeenCalledTimes(1);
+
+  await fireEvent.click(screen.getByRole('link', { name: 'By date' }));
+  expect(recoverableRows()).toHaveLength(3);
+  expect(screen.getByText(/3 completed restore points read/)).toBeVisible();
+  expect(screen.getByRole('button', { name: 'Retry Proxmox workloads' })).toBe(button);
+  expect(apiFetchJSONMock).not.toHaveBeenCalled();
+});
+
+it('does not count unassessed guest matches as unmatched during a workload retry', async () => {
+  const point = pbsPayload.data.backups[0];
+  mockBackupAPIs('protected', {
+    ...pbsPayload,
+    data: { backups: [point, { ...point, id: 'retired-913', vmid: '913' }] },
+  });
+  const [unavailable, setUnavailable] = createSignal(true);
+  const [loading, setLoading] = createSignal(false);
+  const reply = deferred<void>();
+  const retry = vi.fn(async () => {
+    setLoading(true);
+    await reply.promise;
+    setUnavailable(false);
+    setLoading(false);
+  });
+  renderInRouter(() => (
+    <ProxmoxBackupsTable
+      emptyIcon={<span />}
+      workloads={unavailable() ? [] : [workloadResource]}
+      servers={[pbsServerResource]}
+      resourceReadIssue={unavailable() ? { scope: 'workloads', loading, retry } : undefined}
+    />
+  ));
+
+  const health = () => document.querySelector('[data-coverage-strip]');
+  const group = await screen.findByRole('button', {
+    name: /3 backup groups · guest matching not assessed/i,
+  });
+  expect(health()).toHaveTextContent(/3 backup groups · guest matching not assessed/i);
+  expect(health()).not.toHaveTextContent('unmatched');
+  await fireEvent.click(group);
+  await fireEvent.click(screen.getAllByRole('button', { name: /expand details for .*112/i })[0]);
+  const detail = await screen.findByTestId('proxmox-coverage-detail');
+  expect(detail).toHaveTextContent('could not check for a matching guest');
+  expect(detail).not.toHaveTextContent('does not match');
+  expect(detail).toHaveTextContent('Restore points');
+
+  const retryButton = screen.getByRole('button', { name: 'Retry Proxmox workloads' });
+  await fireEvent.click(retryButton);
+  expect(retryButton).toHaveAttribute('aria-disabled', 'true');
+  expect(health()).not.toHaveTextContent('unmatched');
+  expect(apiFetchJSONMock).not.toHaveBeenCalled();
+  reply.resolve();
+
+  const unmatched = await screen.findByRole('button', { name: /1 unmatched backup/i });
+  expect(unmatched).toHaveAttribute('aria-expanded', 'true');
+  expect(health()).toHaveTextContent('1 unmatched');
+  expect(health()).not.toHaveTextContent(/guest matching not assessed/i);
+  expect(retryButton).not.toBeInTheDocument();
+  await waitFor(() =>
+    expect(health()?.querySelector('[data-backup-verdict]')).toHaveAttribute(
+      'data-backup-verdict',
+      'protected',
+    ),
+  );
+  await fireEvent.click(screen.getByRole('button', { name: /expand details for pbs-docker/i }));
+  const recoveredDetail = await screen.findByTestId('proxmox-coverage-detail');
+  expect(recoveredDetail).toHaveTextContent('PBS');
+  expect(recoveredDetail).toHaveTextContent('PVE file');
+  expect(screen.getByRole('button', { name: /expand details for .*913/i })).toBeVisible();
+  expect(retry).toHaveBeenCalledTimes(1);
+});
+
 describe('By date qualifies restore-point totals with provider collection evidence', () => {
   const posture = protectionPosture(workloadResource.id);
 

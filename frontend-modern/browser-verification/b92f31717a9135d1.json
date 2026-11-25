@@ -1,0 +1,39 @@
+{
+  "version": 1,
+  "base_sha": "03f6a48ef9c687ed66a6e3fa96195c06bee3cf3e",
+  "verified_at": "2026-11-25T12:35:29Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx",
+    "frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx": "e25b5229eef5ff0c68229135a3509376b00730d824605a14908346c23bdd5961",
+    "frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx": "6435af10b170271ee01464175d714dfaf963470e262cc828e6cca3f157052977"
+  },
+  "routes": [
+    "/proxmox/backups/coverage",
+    "/proxmox/backups/date"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 950
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Matched production renderer at Chromium desktop light and WebKit emulated phone dark using the same fixed clock and synthetic Proxmox reads.",
+    "With the PVE workload snapshot unreadable, Backup health and the collapsed Coverage group retain the counts without calling those backup groups unmatched.",
+    "An expanded VM 100 group explains why no match could be checked, and still shows the verified PBS point. By date keeps all three restore points inspectable.",
+    "After a successful scoped workload retry, the recovered guest is protected with its PVE and PBS points, and VM 999 remains the single genuinely unmatched group."
+  ],
+  "interactions": [
+    "Open the unassessed group, inspect VM 100 restore evidence, navigate to By date and expand the PBS point using Enter on desktop or touch on phone.",
+    "Retry while the By date detail is open. Only the failed workload snapshot is reread; the action is unavailable while pending, and the point stays open after recovery.",
+    "On desktop, the cleared Retry gives focus back to the active By date tab. Return to Coverage and inspect the recovered guest and the genuinely unmatched VM 999."
+  ]
+}
