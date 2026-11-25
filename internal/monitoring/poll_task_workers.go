@@ -93,6 +93,14 @@ func (m *Monitor) executeAndRescheduleTask(ctx context.Context, task ScheduledTa
 	if ctx.Err() != nil {
 		return
 	}
+	if retryAt := m.scheduledBreakerRetryAt(task); retryAt.After(time.Now()) {
+		// A plan or explicit request can be due before the breaker permits a
+		// probe. Nothing ran: don't reschedule from the previous result or
+		// record a second dead letter for the same failed read.
+		next, reschedule = task, pollAfterBackoff
+		next.NextRun = retryAt
+		return
+	}
 	m.executeScheduledTask(ctx, task)
 	next, reschedule = m.nextScheduledPoll(task)
 }

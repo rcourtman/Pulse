@@ -164,6 +164,20 @@ func (m *Monitor) poll(_ context.Context, wsHub *websocket.Hub) {
 	// Broadcasting is now handled by the timer in Start()
 }
 
+// scheduledBreakerRetryAt observes the admission fence without consuming its
+// half-open probe. executeScheduledTask still asks the breaker for admission.
+func (m *Monitor) scheduledBreakerRetryAt(task ScheduledTask) time.Time {
+	key := schedulerKey(task.InstanceType, task.InstanceName)
+	m.mu.RLock()
+	breaker := m.circuitBreakers[key]
+	m.mu.RUnlock()
+	if breaker == nil {
+		return time.Time{}
+	}
+	_, _, retryAt := breaker.State()
+	return retryAt
+}
+
 // nextScheduledPoll computes the normal successor without unlocking the
 // current claim. The queue installs it only when that worker returns.
 func (m *Monitor) nextScheduledPoll(task ScheduledTask) (ScheduledTask, pollReschedule) {
@@ -191,6 +205,9 @@ func (m *Monitor) nextScheduledPoll(task ScheduledTask) (ScheduledTask, pollResc
 		next := task
 		next.Interval = delay
 		next.NextRun = time.Now().Add(delay)
+		if retryAt := m.scheduledBreakerRetryAt(task); retryAt.After(next.NextRun) {
+			next.NextRun = retryAt
+		}
 		return next, pollAfterBackoff
 	}
 
