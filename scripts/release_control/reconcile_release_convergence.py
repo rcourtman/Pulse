@@ -154,24 +154,24 @@ def current_channel_heads(releases: Iterable[object]) -> dict[bool, dict[str, An
     return {channel: value for channel, (_, value) in latest_release.items()}
 
 
-def latest_failed_runs(
-    releases: Iterable[object],
-    runs: Iterable[object],
+def scheduled_channel_decisions(
+    heads: dict[bool, dict[str, Any]],
+    runs: Iterable[object] | None,
     *,
     workflow_id: int,
     default_branch: str,
-) -> list[tuple[int, dict[str, Any]]]:
-    """Return each current immutable head's latest failed run and selected release."""
+) -> tuple[list[tuple[int, dict[str, Any]]], list[str]]:
+    """Report each channel from the same evidence used to select its debt."""
     # Never fall back to an older release when the advertised channel head is
     # mutable. That is continuity debt requiring a replacement, not a target
     # whose aliases should be promoted again.
     current_releases = {
         release["tag_name"]: release
-        for release in current_channel_heads(releases).values()
+        for release in heads.values()
         if release.get("immutable") is True
     }
-    newest: dict[str, tuple[datetime, dict[str, Any]]] = {}
-    for index, value in enumerate(runs):
+    newest: dict[str, tuple[datetime, dict[str, Any], str]] = {}
+    for index, value in enumerate(runs if runs is not None else ()):
         if not isinstance(value, dict):
             continue
         title = value.get("display_title")
@@ -188,14 +188,57 @@ def latest_failed_runs(
         created = timestamp(value.get("created_at"), f"convergence run {index}")
         tag = match.group(1)
         if tag not in newest or created > newest[tag][0]:
-            newest[tag] = (created, value)
+            newest[tag] = (created, value, match.group(2))
 
-    result: list[tuple[int, dict[str, Any]]] = []
-    for tag, (_, run) in newest.items():
-        if run.get("status") == "completed" and run.get("conclusion") in TERMINAL_FAILURES:
-            run_id = positive_int(run.get("id"), "convergence run ID")
-            result.append((run_id, current_releases[tag]))
-    return sorted(result, key=lambda item: item[0])
+    debts = {
+        tag: (positive_int(run.get("id"), "convergence run ID"), current_releases[tag])
+        for tag, (_, run, _) in newest.items()
+        if run.get("status") == "completed" and run.get("conclusion") in TERMINAL_FAILURES
+    }
+    decisions: list[str] = []
+    for prerelease, channel in ((False, "stable"), (True, "preview")):
+        release = heads.get(prerelease)
+        if release is None:
+            decisions.append(f"No published {channel} Pulse release observed; no retry selected.")
+            continue
+
+        tag = release["tag_name"]
+        prefix = f"Current {channel} head {tag}"
+        if release.get("immutable") is not True:
+            decisions.append(
+                f"{prefix} has no confirmed immutable activation commit; continuity debt remains. "
+                "No retry or fallback to an older release is authorised by this check."
+            )
+            continue
+        if runs is None or tag not in newest:
+            evidence = (
+                "convergence run inventory unavailable" if runs is None
+                else "no matching convergence run observed"
+            )
+            decisions.append(
+                f"{prefix}: {evidence}; delivery unverified, no retry selected."
+            )
+            continue
+
+        _, run, source_run = newest[tag]
+        run_id = run.get("id")
+        status, conclusion = run.get("status"), run.get("conclusion")
+        if type(run_id) is not int or run_id <= 0:
+            decisions.append(f"{prefix}: latest matching run has no valid ID; delivery unverified.")
+            continue
+
+        prefix += f", convergence run {run_id} (release run {source_run})"
+        if tag in debts and debts[tag][1] is release:
+            reason = "terminal failure selected for reconciliation"
+        elif status == "completed" and conclusion == "success":
+            reason = "completed successfully; no retry selected"
+        elif status in ("queued", "in_progress", "waiting", "requested", "pending"):
+            reason = "not yet completed; no retry selected"
+        else:
+            reason = "no retryable terminal conclusion observed; delivery unverified"
+        decisions.append(f"{prefix}: {reason}.")
+
+    return sorted(debts.values(), key=lambda item: item[0]), decisions
 
 
 def api_read_subject(endpoint: str) -> str:
@@ -796,30 +839,35 @@ def discover(github: GitHub) -> list[tuple[int, dict[str, Any]]]:
     workflow_id = positive_int(workflow.get("id"), "workflow ID")
     # Large asset arrays and notes make hundred-release responses expensive.
     # Keep full pagination: a release can be published long after its creation.
-    releases = flatten_pages(
-        github.pages(f"repos/{repository}/releases?per_page={RELEASE_INVENTORY_PAGE_SIZE}")
+    heads = current_channel_heads(
+        flatten_pages(
+            github.pages(f"repos/{repository}/releases?per_page={RELEASE_INVENTORY_PAGE_SIZE}")
+        )
     )
-    for prerelease, release in current_channel_heads(releases).items():
-        if release.get("immutable") is not True:
-            channel = "preview" if prerelease else "stable"
-            report_decision(
-                f"Current {channel} head {release['tag_name']} has no confirmed "
-                "immutable activation commit; continuity debt remains. "
-                "No retry or fallback to an older release is authorised by this check."
-            )
-    runs = flatten_pages(
-        github.pages(
-            f"repos/{repository}/actions/workflows/release-convergence.yml/runs"
-            "?event=workflow_dispatch&per_page=100"
-        ),
-        "workflow_runs",
-    )
-    return latest_failed_runs(
-        releases,
+    try:
+        runs = flatten_pages(
+            github.pages(
+                f"repos/{repository}/actions/workflows/release-convergence.yml/runs"
+                "?event=workflow_dispatch&per_page=100"
+            ),
+            "workflow_runs",
+        )
+    except (OSError, ReconciliationError):
+        # Keep any channel head observations without treating a failed history
+        # read as a successful empty inventory. Still fail closed without retries.
+        _, decisions = scheduled_channel_decisions(
+            heads, None, workflow_id=workflow_id, default_branch=default_branch
+        )
+        report_decision("\n".join(decisions))
+        raise
+    debts, decisions = scheduled_channel_decisions(
+        heads,
         runs,
         workflow_id=workflow_id,
         default_branch=default_branch,
     )
+    report_decision("\n".join(decisions))
+    return debts
 
 
 def parse_args() -> argparse.Namespace:
