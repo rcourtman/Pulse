@@ -5,10 +5,12 @@ import { Portal } from 'solid-js/web';
 import { buildInfrastructureWorkspacePath } from '@/components/Settings/infrastructureWorkspaceModel';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { ActionIconButton, ButtonLink } from '@/components/shared/Button';
+import { InlineNotice } from '@/components/shared/InlineNotice';
 import { TableCard } from '@/components/shared/TableCard';
 import { TableCardHeader } from '@/components/shared/TableCardHeader';
 import { sessionCanReadInfrastructureSettings } from '@/stores/sessionSettingsCapabilities';
 import type { ViewMode } from '@/types/workloads';
+import { sourcePlatformScopeMatchesFilter } from '@/utils/sourcePlatforms';
 import { getWorkloadsNoInventoryState } from '@/utils/workloadEmptyStatePresentation';
 import { DEFAULT_WORKLOADS_VIEW_MODE, hasActiveWorkloadsFilters } from './workloadsFilterModel';
 import { WorkloadsTable } from './WorkloadsTable';
@@ -34,11 +36,11 @@ type TableOnlyEmptyState = {
   actionLabel?: string;
 };
 
-const PLATFORM_ISSUE_TYPES: Record<string, readonly WorkloadInventorySourceIssue['type'][]> = {
-  docker: ['docker'],
-  kubernetes: ['kubernetes'],
-  'proxmox-pve': ['pve'],
-  'vmware-vsphere': ['vmware'],
+const INVENTORY_ISSUE_SCOPES: Record<WorkloadInventorySourceIssue['type'], string> = {
+  docker: 'docker',
+  kubernetes: 'kubernetes',
+  pve: 'proxmox-pve',
+  vmware: 'vmware-vsphere',
 };
 
 function WorkloadInventoryIssueList(props: { issues: readonly WorkloadInventorySourceIssue[] }) {
@@ -72,16 +74,17 @@ function WorkloadInventoryIssueList(props: { issues: readonly WorkloadInventoryS
 
 export function WorkloadsSurface(props: WorkloadsSurfaceProps) {
   const state = props.state;
-  const visibleInventoryIssues = createMemo(() => {
-    // A filtered-empty table is not an inventory outage. Once inventory is
-    // present, unrelated source failures cannot explain an empty selection.
-    if (state.allGuests().length > 0) return [];
-    const issues = state.workloadInventoryIssues?.() ?? [];
-    const forcedPlatform = props.forcedPlatform?.trim().toLowerCase();
-    const platformIssueTypes = forcedPlatform ? PLATFORM_ISSUE_TYPES[forcedPlatform] : undefined;
-    if (!platformIssueTypes) return issues;
-    return issues.filter((issue) => platformIssueTypes.includes(issue.type));
-  });
+  const tableReady = () => state.surfaceConnected() && state.surfaceInitialDataReceived();
+  const platformInventoryIssues = createMemo(() =>
+    (state.workloadInventoryIssues?.() ?? []).filter((issue) =>
+      sourcePlatformScopeMatchesFilter(INVENTORY_ISSUE_SCOPES[issue.type], props.forcedPlatform),
+    ),
+  );
+  const hasInventory = () => state.allGuests().length > 0;
+  // Apply source health to the inventory, not to the search result. A
+  // filtered-empty table must still explain what the user's filters did.
+  const emptyInventoryIssues = () => (hasInventory() ? [] : platformInventoryIssues());
+  const hasManyInventoryIssues = () => platformInventoryIssues().length > 3;
   const tableOnlyFiltersActive = () =>
     hasActiveWorkloadsFilters({
       search: state.search(),
@@ -97,7 +100,7 @@ export function WorkloadsSurface(props: WorkloadsSurfaceProps) {
       return state.workloadsGuestsEmptyState();
     }
 
-    if (visibleInventoryIssues().length > 0) {
+    if (emptyInventoryIssues().length > 0) {
       // Falls back to the shared helper rather than a local literal so the
       // infrastructureRead gate cannot be bypassed by whichever path renders.
       return (
@@ -112,6 +115,13 @@ export function WorkloadsSurface(props: WorkloadsSurfaceProps) {
         props.emptyStateDescription ?? 'Workloads appear here when inventory is available.',
     };
   });
+  // Answer the active search first. The independent source warning must not
+  // push a filtered no-match explanation out of sight below an empty host table.
+  const compactFilteredEmpty = () =>
+    hasInventory() &&
+    tableOnlyFiltersActive() &&
+    state.filteredGuests().length === 0 &&
+    platformInventoryIssues().length > 0;
 
   return (
     <div ref={state.setClearSurfaceRootRef} class="space-y-3" data-testid="workloads-page">
@@ -130,13 +140,41 @@ export function WorkloadsSurface(props: WorkloadsSurfaceProps) {
         </Portal>
       </Show>
       <div class="space-y-3" data-testid="workloads-interaction-surface">
-        <Show
-          when={
-            state.surfaceConnected() &&
-            state.surfaceInitialDataReceived() &&
-            state.filteredGuests().length > 0
-          }
-        >
+        <Show when={tableReady() && compactFilteredEmpty()}>
+          <TableCard>
+            <TableCardHeader title={props.tableTitle} />
+            <div class="space-y-0.5 px-3 py-2">
+              <h3 class="text-sm font-semibold text-base-content">{tableOnlyEmptyState().title}</h3>
+              <p class="wrap-anywhere text-sm leading-5 text-muted">
+                {tableOnlyEmptyState().description}
+              </p>
+            </div>
+          </TableCard>
+        </Show>
+        <Show when={tableReady() && hasInventory() && platformInventoryIssues().length > 0}>
+          <InlineNotice tone="warning" role="region" aria-label="Guest inventory status">
+            <p class="font-semibold">Guest inventory may be incomplete or out of date</p>
+            <ul
+              class="mt-1 list-disc space-y-0.5 ps-4"
+              classList={{
+                'max-h-24 overflow-y-auto focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-current':
+                  hasManyInventoryIssues(),
+              }}
+              tabIndex={hasManyInventoryIssues() ? 0 : undefined}
+            >
+              <For each={platformInventoryIssues()}>
+                {(issue) => (
+                  <li class="wrap-anywhere">
+                    <span class="font-medium">{issue.name}</span>
+                    {' · '}
+                    {issue.stateLabel} ({issue.coverageLabel})
+                  </li>
+                )}
+              </For>
+            </ul>
+          </InlineNotice>
+        </Show>
+        <Show when={tableReady() && state.filteredGuests().length > 0}>
           <WorkloadsTable
             activeAlerts={state.activeAlerts}
             alertsEnabled={state.alertsEnabled}
@@ -199,25 +237,19 @@ export function WorkloadsSurface(props: WorkloadsSurfaceProps) {
             }
           />
         </Show>
-        <Show
-          when={
-            state.surfaceConnected() &&
-            state.surfaceInitialDataReceived() &&
-            state.filteredGuests().length === 0
-          }
-        >
+        <Show when={tableReady() && state.filteredGuests().length === 0 && !compactFilteredEmpty()}>
           <TableCard>
             <TableCardHeader title={props.tableTitle} />
             <div class="p-6">
               <EmptyState
                 title={tableOnlyEmptyState().title}
                 description={tableOnlyEmptyState().description}
-                tone={visibleInventoryIssues().length > 0 ? 'warning' : 'default'}
-                align={visibleInventoryIssues().length > 0 ? 'left' : 'center'}
+                tone={emptyInventoryIssues().length > 0 ? 'warning' : 'default'}
+                align={emptyInventoryIssues().length > 0 ? 'left' : 'center'}
                 actions={
                   <>
-                    <Show when={visibleInventoryIssues().length > 0}>
-                      <WorkloadInventoryIssueList issues={visibleInventoryIssues()} />
+                    <Show when={emptyInventoryIssues().length > 0}>
+                      <WorkloadInventoryIssueList issues={emptyInventoryIssues()} />
                     </Show>
                     <Show when={tableOnlyEmptyState().actionLabel}>
                       <ButtonLink

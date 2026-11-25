@@ -1,0 +1,41 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "8d69374df06456a6ada4daca05031dd7e334ed7c",
+  "changed_paths": [
+    "frontend-modern/src/features/proxmox/ProxmoxPageSurface.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/proxmox/ProxmoxPageSurface.tsx": "4329a1851140acca0dd25eaf19e24b12efca2755b6d28a319f3c34a1a291146c"
+  },
+  "verified_at": "2026-11-25T14:40:51Z",
+  "routes": [
+    "/proxmox/backups/date",
+    "/proxmox/backups/coverage"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 950,
+      "browser": "Chromium 141.0.7390.37",
+      "theme": "light"
+    },
+    {
+      "width": 390,
+      "height": 844,
+      "browser": "WebKit 26.0",
+      "theme": "dark"
+    }
+  ],
+  "states": [
+    "PVE workload resource read or PBS server resource read unavailable; its peer completed with zero rows and the scoped facets still offer Backups.",
+    "Each failed resource read returns an empty or a nonempty successful snapshot on Retry; the PVE file or verified PBS restore point remains expanded in By date.",
+    "Final HTTP 403 with a readable empty peer stays a permission error and starts neither backup inventory read."
+  ],
+  "interactions": [
+    "Open Coverage then By date, search for an absent point, clear the search, and expand the surviving restore point.",
+    "Activate Retry with Enter on desktop and by touch at narrow width. Verify the point survives pending and successful retry, the matching warning clears, and focus owned by Retry returns to By date.",
+    "Count one request to the failed scope, none to the peer and none to the independent PVE or PBS inventories during Retry. Compare matched before/after screenshots and inspect the actual pixels."
+  ],
+  "notes": "Playwright 1.56.1, fixed read-only synthetic responses on the real production renderer; not a live backup read, restore, or installed qualification."
+}

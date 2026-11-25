@@ -1,0 +1,40 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "500b69790707553646eb4735d078f4c4b87619fc",
+  "changed_paths": [
+    "frontend-modern/src/components/Workloads/WorkloadsSurface.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Workloads/WorkloadsSurface.tsx": "6935f514d4f2a6ae5c472326f4c95cc8ccbcc939088e3222fd7572954fa627b8"
+  },
+  "verified_at": "2026-11-25T15:21:20Z",
+  "routes": [
+    "/proxmox/overview",
+    "/vmware/overview"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 950,
+      "browser": "Chromium 141.0.7390.37",
+      "theme": "light"
+    },
+    {
+      "width": 390,
+      "height": 844,
+      "browser": "WebKit 26.0",
+      "theme": "dark"
+    }
+  ],
+  "states": [
+    "A readable guest and its metrics remain on screen with only its platform’s stale and unreachable source warnings.",
+    "No search matches: the compact result shows the existing text and count first, with both source warnings still visible.",
+    "After an ordinary inventory source refresh, the warning clears without replacing the readable row or changing its metric values."
+  ],
+  "interactions": [
+    "Enter and clear a no-match search on desktop and with phone touch emulation. Open and close View by keyboard on desktop and Filters by touch on phone.",
+    "Compare and inspect 24 matching PNGs at the same viewport, fixture values, theme, route and scroll position."
+  ],
+  "notes": "Playwright 1.56.1. Exact committed Vite browser previews with a synthetic read-only estate. Not a native provider or embedded-backend check."
+}
