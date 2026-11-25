@@ -29,7 +29,7 @@ import { hostOverrideIdCandidates } from '@/features/alerts/alertOverridesModel'
 import { getMetricAlertPresentation } from '@/features/alerts/metricAlertPresentation';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
 import { TableCell, TableRow } from '@/components/shared/Table';
-import { getSimpleStatusIndicator } from '@/utils/status';
+import type { StatusIndicator } from '@/utils/status';
 import { getNodeExternalUrl } from '@/utils/nodes';
 import { asTrimmedString } from '@/utils/stringUtils';
 import { formatPercent, normalizeDiskArray } from '@/utils/format';
@@ -123,6 +123,37 @@ const formatNodeBarPercent = (value: number): string =>
   formatLowNodePercent(value) ?? formatPercent(value);
 const formatNodeHistoryPercent = (value: number): string =>
   formatLowNodePercent(value) ?? formatPlatformTablePercentValue(value, { clamp: true });
+
+type NodeReadingState = StatusIndicator & { detail?: string };
+
+function getNodeReadingState(node: Resource): NodeReadingState {
+  const health = node.proxmox?.connectionHealth?.trim().toLowerCase();
+  if (node.status === 'offline' || (health === 'error' && node.status !== 'online')) {
+    return {
+      label: 'Offline',
+      variant: 'danger',
+      detail:
+        health === 'error'
+          ? 'Offline in Pulse. A failed Proxmox read does not prove the host is powered off.'
+          : undefined,
+    };
+  }
+  // Keep the existing stale-readings treatment when a linked agent is online
+  // but the Proxmox connection failed, or when the provider is degraded.
+  if (health === 'error') return { label: 'Stale · API error', variant: 'warning' };
+  if (health === 'degraded') return { label: 'Stale · Degraded', variant: 'warning' };
+  if (node.status === 'unknown' || health === 'stale') {
+    return { label: 'Stale', variant: 'warning' };
+  }
+  if (node.status === 'degraded' || node.status === 'warning') {
+    // Use the provider's observation, not a second clock or the age of a
+    // linked agent. An otherwise online row may still have current readings.
+    return node.sourceStatus?.proxmox?.status === 'stale'
+      ? { label: 'Stale', variant: 'warning', detail: 'Pulse has no recent Proxmox readings.' }
+      : { label: 'Degraded', variant: 'warning' };
+  }
+  return { label: 'Online', variant: 'success' };
+}
 
 type GuestCounts = { vms: number; containers: number };
 
@@ -490,29 +521,8 @@ export const ProxmoxNodesTable: Component<{
                   expanded: false,
                   onToggle: showGuests,
                 });
-                const indicator = () => getSimpleStatusIndicator(node.status);
-                const connectionHealth = createMemo(() =>
-                  (asTrimmedString(node.proxmox?.connectionHealth) ?? '').toLowerCase(),
-                );
-                const availabilityLabel = createMemo(() => {
-                  if (node.status === 'offline') return 'Offline';
-                  // A linked Pulse agent can still prove that a host is online
-                  // while the Proxmox provider path is unavailable. In that
-                  // hybrid case the provider metrics are stale, not evidence
-                  // that the host itself is powered off.
-                  if (connectionHealth() === 'error' && node.status === 'online') return 'Stale';
-                  if (connectionHealth() === 'error') return 'Offline';
-                  if (
-                    node.status === 'unknown' ||
-                    connectionHealth() === 'degraded' ||
-                    connectionHealth() === 'stale'
-                  ) {
-                    return 'Stale';
-                  }
-                  if (node.status === 'degraded' || node.status === 'warning') return 'Degraded';
-                  return 'Online';
-                });
-                const isOnline = createMemo(() => availabilityLabel() === 'Online');
+                const readingState = createMemo(() => getNodeReadingState(node));
+                const showReadings = () => readingState().variant === 'success';
                 const usesCompactMetrics = () =>
                   layoutMode() === 'narrow' ||
                   layoutMode() === 'phone' ||
@@ -520,9 +530,9 @@ export const ProxmoxNodesTable: Component<{
                 const usesCondensedIdentity = () =>
                   layoutMode() === 'narrow' || layoutMode() === 'phone';
                 const uptime = () =>
-                  formatNodeUptime(isOnline() ? node.uptime : undefined, usesCompactMetrics());
+                  formatNodeUptime(showReadings() ? node.uptime : undefined, usesCompactMetrics());
                 const fullUptime = () =>
-                  formatNodeUptime(isOnline() ? node.uptime : undefined).label;
+                  formatNodeUptime(showReadings() ? node.uptime : undefined).label;
                 const metricsKey = () => buildMetricKeyForUnifiedResource(node);
                 const temperature = () => node.temperature;
                 const alertResourceIds = () => hostOverrideIdCandidates(node);
@@ -662,9 +672,9 @@ export const ProxmoxNodesTable: Component<{
                             />
                             <StatusDot
                               size="sm"
-                              variant={indicator().variant}
-                              title={node.status || 'unknown'}
-                              ariaHidden
+                              variant={readingState().variant}
+                              title={readingState().detail ?? readingState().label}
+                              ariaLabel={showReadings() ? readingState().label : undefined}
                             />
                             <div class="min-w-0 flex-1">
                               <ResourceNameWithWebInterfaceLink
@@ -688,15 +698,18 @@ export const ProxmoxNodesTable: Component<{
                                   {visibleNodeLabel()}
                                 </PlatformHostScopeNameButton>
                               </ResourceNameWithWebInterfaceLink>
+                              <Show when={!showReadings()}>
+                                <span
+                                  class="block text-[10px] leading-tight font-semibold text-base-content"
+                                  title={readingState().detail}
+                                >
+                                  {readingState().label}
+                                </span>
+                              </Show>
                             </div>
-                            <Show when={!isOnline()}>
-                              <span class="hidden rounded-sm bg-surface-alt px-1.5 py-0.5 text-[10px] font-medium text-muted sm:inline-flex">
-                                {availabilityLabel()}
-                              </span>
-                            </Show>
                             <Show
                               when={
-                                isOnline() && pendingUpdatesAreCurrent() && pendingUpdates() > 0
+                                showReadings() && pendingUpdatesAreCurrent() && pendingUpdates() > 0
                               }
                             >
                               <span
@@ -739,7 +752,7 @@ export const ProxmoxNodesTable: Component<{
                     case 'cpu':
                       return (
                         <TableCell class={getPlatformTableCellClassForKind(column.kind)}>
-                          <Show when={isOnline()} fallback={<PlatformTableMetricFallback />}>
+                          <Show when={showReadings()} fallback={<PlatformTableMetricFallback />}>
                             <Show
                               when={showsHistory()}
                               fallback={
@@ -768,7 +781,9 @@ export const ProxmoxNodesTable: Component<{
                       return (
                         <TableCell class={getPlatformTableCellClassForKind(column.kind)}>
                           <Show
-                            when={isOnline() && (memoryTotal() > 0 || memoryPercentOnly() != null)}
+                            when={
+                              showReadings() && (memoryTotal() > 0 || memoryPercentOnly() != null)
+                            }
                             fallback={<PlatformTableMetricFallback />}
                           >
                             <Show
@@ -806,7 +821,7 @@ export const ProxmoxNodesTable: Component<{
                       return (
                         <TableCell class={getPlatformTableCellClassForKind(column.kind)}>
                           <Show
-                            when={isOnline() && (aggregateDisk() || node.agent?.disks?.length)}
+                            when={showReadings() && (aggregateDisk() || node.agent?.disks?.length)}
                             fallback={<PlatformTableMetricFallback />}
                           >
                             <Show
@@ -841,7 +856,7 @@ export const ProxmoxNodesTable: Component<{
                         <TableCell class={getPlatformTableCellClassForKind(column.kind)}>
                           <Show
                             when={
-                              isOnline() &&
+                              showReadings() &&
                               typeof temperature() === 'number' &&
                               (temperature() as number) > 0
                             }
@@ -927,7 +942,7 @@ export const ProxmoxNodesTable: Component<{
                     <TableRow
                       class={`host-row cursor-pointer text-[11px] sm:text-xs ${
                         isSelected() ? 'bg-surface-hover' : rowAlertBg()
-                      } ${isOnline() ? '' : 'opacity-60'}`}
+                      } ${showReadings() ? '' : 'opacity-60'}`}
                       data-proxmox-host-row={node.id}
                       data-workload-alert-accent={alertAccentTone()}
                       data-summary-row-active={isGuestFilterSelected() ? 'true' : undefined}

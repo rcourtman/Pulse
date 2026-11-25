@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "base_sha": "a18a41261bcc3b2da4c0e8286e8d76cbbaccebfc",
+  "verified_at": "2026-11-25T16:43:18Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/proxmox/ProxmoxNodesTable.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/proxmox/ProxmoxNodesTable.tsx": "7f3dd41be632a46a5b5a0dd152865aa89c984a82917aa42bbf34da78b3afe0b4"
+  },
+  "routes": [
+    "/proxmox/overview"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 950
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Matched desktop Chromium/light and touch WebKit/dark Overview with quiet provider, degraded link, API error, offline and online rows",
+    "Offline and stale rows still withhold live metrics. Healthy API and still-reporting hybrid rows keep their measured values",
+    "Matched collapsed and expanded node table states, including the existing empty stored History and current readings of the open node"
+  ],
+  "interactions": [
+    "Read the same synthetic canonical resource payload through the real Overview on both builds",
+    "Opened and closed node details by Enter and by touch; checked the existing web interface control without navigating",
+    "Selected the node and verified only its guest was shown; cleared the scope and verified the peer guest returned",
+    "Inspected all eight before and after captures, matching focus, scroll, viewport and theme for each pair"
+  ]
+}
