@@ -51,9 +51,38 @@ In Docker and Kubernetes you must expose `9091` explicitly if you want to scrape
 ### Check whether polling is still running
 
 Use your existing scrape. A successful scrape means Pulse served metrics, not
-that polling succeeded. The staleness gauges above update when a poll result
-is recorded. A recorded failure before the first success sets the gauge to
-`-1`. If polls stop finishing after a success, the gauge can stay at zero.
+that polling succeeded.
+
+First match the Pulse server and the monitored connection. With Prometheus's
+default `honor_labels: false`, the `instance` label on scraped poll metrics
+identifies the **Pulse scrape target**. Pulse's own `instance` label is renamed
+to `exported_instance` and identifies the **monitored connection**. Filter on
+both, especially if two Pulse servers use the same connection name. For
+example, check the scrape and the PVE poll results separately over the same
+window, replacing the example labels with yours:
+
+```promql
+up{job="pulse", instance="pulse-a.example:9091"}
+```
+
+```promql
+pulse_monitor_poll_total{
+  job="pulse", instance="pulse-a.example:9091",
+  instance_type="pve", exported_instance="home-pve"
+}
+```
+
+Keep the `result` series separate. For a PBS connection, select its `pbs`
+type and name. For the per-node counters, also select the expected `node`.
+If the scrape failed (`up` is `0`) or the matching `up` series is missing,
+you cannot tell from a flat poll graph whether collection stopped. If you
+preserve exporter labels (`honor_labels: true`) or relabel metrics, inspect
+the actual series labels instead. A poll metric's `instance` may then be the
+connection name, not a label you can match to `up`.
+
+The staleness gauges above update when a poll result is recorded. The gauge
+is `-1` after a failure before the first success. If polls stop finishing
+after a success, the gauge can stay at zero.
 Instead, subtract the last successful poll time from the query time:
 
 - **Per connection:** `time() - pulse_monitor_poll_last_success_timestamp`
