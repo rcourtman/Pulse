@@ -420,7 +420,7 @@ func (n *NotificationManager) recordSuccessfulDelivery(job notificationDeliveryJ
 				}
 			}
 			if err != nil {
-				log.Error().Err(err).Str("alertID", alert.ID).Str("destination", notificationDestinationIDForJob(job)).Msg("Failed to update notification delivery receipt")
+				log.Error().Err(err).Str("alertID", alert.ID).Str("destination", queue.diagnosticDestinationID(notificationDestinationIDForJob(job))).Msg("Failed to update notification delivery receipt")
 				receiptErrors = append(receiptErrors, err)
 			} else {
 				n.cacheDeliveryReceipt(alert, destinationKey, deliveredAt, job.Event)
@@ -942,6 +942,9 @@ func configJSONForNotificationDeliveryJob(job notificationDeliveryJob) ([]byte, 
 	}
 }
 
+// notificationDestinationIDForJob supplies the existing queue/audit and
+// rehearsal correlation ID. Project it through diagnosticDestinationID before
+// presenting it to an operator. Delivery authority uses a separate key.
 func notificationDestinationIDForJob(job notificationDeliveryJob) string {
 	parts := []string{job.Type}
 	switch job.Type {
@@ -984,7 +987,7 @@ func notificationDestinationIDForJob(job notificationDeliveryJob) string {
 		}
 	}
 	sum := sha256.Sum256([]byte(strings.Join(parts, "\x00")))
-	return "destination:" + hex.EncodeToString(sum[:16])
+	return destinationCorrelationPrefix + hex.EncodeToString(sum[:16])
 }
 
 func (n *NotificationManager) enqueueNotificationJobs(queue *NotificationQueue, jobs []notificationDeliveryJob) bool {
