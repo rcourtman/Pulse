@@ -15,11 +15,10 @@ type aggregatorRuntimeSources struct {
 	orgID         string
 	vmwarePoller  *monitoring.VMwarePoller
 	truenasPoller *monitoring.TrueNASPoller
-	// platformRowsOnly leaves out what only the agent rows and the PBS host
-	// aliases read: the monitor's hosts and PBS instances. A caller that keeps
-	// the platform rows alone (the connection-degraded alert feed) would
-	// otherwise ask the monitor for both, and in mock mode each ask rebuilds
-	// the whole estate view whenever a metric tick has made it stale.
+	// platformRowsOnly omits host/PBS alias snapshots and availability checks.
+	// Connection-degraded alerts consume none of those inputs. In particular,
+	// availability status projection would read and decode the saved checks
+	// again just to build rows the alert feed discards.
 	platformRowsOnly bool
 }
 
@@ -56,8 +55,10 @@ func buildAggregatorInputsWithRuntimeSources(
 		if tn, err := persistence.LoadTrueNASConfig(); err == nil {
 			inputs.truenasInstances = tn
 		}
-		if availability, err := persistence.LoadAvailabilityTargets(); err == nil {
-			inputs.availabilityTargets = availability
+		if !runtime.platformRowsOnly {
+			if availability, err := persistence.LoadAvailabilityTargets(); err == nil {
+				inputs.availabilityTargets = availability
+			}
 		}
 	}
 
@@ -81,7 +82,9 @@ func buildAggregatorInputsWithRuntimeSources(
 			inputs.pbsReportedNodeNames = pbsReportedNodeNamesByInstance(monitor.PBSInstancesSnapshot())
 		}
 		inputs.instanceHealth = instanceHealthByKey(monitor.SchedulerHealth())
-		inputs.availabilityStatuses = monitor.AvailabilityStatusSnapshot()
+		if !runtime.platformRowsOnly {
+			inputs.availabilityStatuses = monitor.AvailabilityStatusSnapshot()
+		}
 		// A non-default org's cfg is its monitor's detached config copy
 		// (#1619), which a settings save does not update: saved PBS and PMG
 		// intervals reach the monitor only as runtime overrides. Scale the
@@ -99,10 +102,12 @@ func buildAggregatorInputsWithRuntimeSources(
 	} else {
 		inputs.hosts = []models.Host{}
 		inputs.instanceHealth = map[string]monitoring.InstanceHealth{}
-		inputs.availabilityStatuses = map[string]monitoring.AvailabilityProbeStatus{}
+		if !runtime.platformRowsOnly {
+			inputs.availabilityStatuses = map[string]monitoring.AvailabilityProbeStatus{}
+		}
 	}
 	if mock.IsMockEnabled() {
-		inputs = applyMockLedgerInputs(inputs)
+		inputs = applyMockLedgerInputs(inputs, !runtime.platformRowsOnly)
 		inputs.agentTokenInventoryKnown = false
 	}
 	inputs.expectedAgentVersion = currentAgentTargetVersion()
@@ -205,8 +210,8 @@ func buildAlertConnectionSnapshotsWithRuntimeSources(
 	runtime aggregatorRuntimeSources,
 ) []alerts.ConnectionSnapshot {
 	// snapshotConnectionsForAlerts keeps the platform rows (PVE, PBS, PMG,
-	// VMware, TrueNAS) and drops every agent row, and a PBS row's reported node
-	// name only becomes a host alias that the snapshot does not carry.
+	// VMware, TrueNAS) and drops agent and availability rows. A PBS row's
+	// reported node name only becomes an alias the alert snapshot does not carry.
 	runtime.platformRowsOnly = true
 	inputs := buildAggregatorInputsWithRuntimeSources(ctx, cfg, persistence, monitor, runtime)
 	return snapshotConnectionsForAlerts(buildConnections(inputs))
