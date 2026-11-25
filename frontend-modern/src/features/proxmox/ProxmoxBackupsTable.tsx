@@ -421,11 +421,10 @@ export const ProxmoxBackupsTable: Component<{
 
   const [coverageSortKey, setCoverageSortKey] = createSignal<CoverageSortKey>('posture');
   const [coverageSortDirection, setCoverageSortDirection] = createSignal<'asc' | 'desc'>('asc');
-  // One workload drawer at a time, across the live and unmatched tables.
+  // One workload drawer at a time, across live and separately listed backup groups.
   const [expandedCoverageKey, setExpandedCoverageKey] = createSignal<string | null>(null);
-  // Unmatched backups (VM/LXC evidence without an unambiguous live identity)
-  // are collapsed by default so the main table is active backup targets, not a
-  // pile of unassigned artifacts sorted to the top.
+  // VM/LXC evidence without an assigned live identity is collapsed by default.
+  // A missing workload read leaves that identity unchecked, not unmatched.
   const [showOrphaned, setShowOrphaned] = createSignal(false);
 
   // Chronological feed sort.
@@ -620,9 +619,15 @@ export const ProxmoxBackupsTable: Component<{
   const orphanedTotalCount = createMemo(
     () => recoveryModel().coverageRows.filter((row) => row.isOrphaned).length,
   );
+  const unassessedMatchingSummary = () => {
+    const count = orphanedTotalCount();
+    return count > 0
+      ? `${count} backup ${count === 1 ? 'group' : 'groups'} · Guest matching not assessed`
+      : 'Guest matching not assessed';
+  };
 
-  // The verdict rates active backup targets only — orphaned records are all
-  // stale and would otherwise add dead data to the exceptions.
+  // The verdict rates active backup targets only. Records without a live
+  // guest match (including an unread inventory) cannot rate a guest.
   const backupVerdict = createMemo(() => {
     const verdict = buildBackupVerdict(recoveryModel().coverageRows, protectionPostures.policy());
     return workloadInventoryUnavailable() && verdict.rated === 0
@@ -1110,9 +1115,11 @@ export const ProxmoxBackupsTable: Component<{
                       {recoveryModel().coverageSummary.withPBS} with{' '}
                       {getProxmoxBackupSourcePresentation('pbs').filterLabel}
                     </Show>
-                    <Show when={orphanedTotalCount() > 0}>
+                    <Show when={workloadInventoryUnavailable() || orphanedTotalCount() > 0}>
                       {' · '}
-                      {orphanedTotalCount()} unmatched
+                      {workloadInventoryUnavailable()
+                        ? unassessedMatchingSummary()
+                        : `${orphanedTotalCount()} unmatched`}
                     </Show>
                     <Show when={restorePointListIssue()?.kind === 'protection-pending'}>
                       <span class="block">
@@ -1348,13 +1355,16 @@ export const ProxmoxBackupsTable: Component<{
                   class="flex w-full flex-wrap items-center justify-between gap-2 px-3 py-2 text-left"
                   aria-expanded={showOrphaned()}
                 >
-                  <span class="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted">
+                  <span class="flex min-w-0 items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted">
                     <ChevronRightIcon
-                      class={`h-3.5 w-3.5 transition-transform ${showOrphaned() ? 'rotate-90' : ''}`}
+                      class={`h-3.5 w-3.5 shrink-0 transition-transform ${showOrphaned() ? 'rotate-90' : ''}`}
                       aria-hidden="true"
                     />
-                    {orphanedTotalCount()} unmatched{' '}
-                    {orphanedTotalCount() === 1 ? 'backup' : 'backups'}
+                    <span>
+                      {workloadInventoryUnavailable()
+                        ? unassessedMatchingSummary()
+                        : `${orphanedTotalCount()} unmatched ${orphanedTotalCount() === 1 ? 'backup' : 'backups'}`}
+                    </span>
                   </span>
                   <span class="w-full text-[11px] text-muted sm:w-auto">
                     {workloadInventoryUnavailable()
@@ -1379,6 +1389,7 @@ export const ProxmoxBackupsTable: Component<{
                       showTaskColumn={coverageHasTask()}
                       showWorkloadConnection={showWorkloadConnection()}
                       evidenceLocationLabel={evidenceLocationLabel()}
+                      guestMatchingUnavailable={workloadInventoryUnavailable()}
                       historyReadIncomplete={
                         inventoryTransportIncomplete() ||
                         !protectionPostures.resolvedOnce() ||
