@@ -61,6 +61,8 @@ func resourceFromProxmoxNode(node models.Node, linkedHost *models.Host) (Resourc
 		NodeDisplayName:              nodeDisplayName,
 		ClusterName:                  node.ClusterName,
 		IsClusterMember:              node.IsClusterMember,
+		HAMaintenance:                node.HAMaintenance,
+		HAState:                      node.HAState,
 		Instance:                     node.Instance,
 		HostURL:                      node.Host,
 		GuestURL:                     node.GuestURL,

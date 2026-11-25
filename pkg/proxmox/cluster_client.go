@@ -1805,6 +1805,21 @@ func (cc *ClusterClient) GetNodePendingUpdates(ctx context.Context, node string)
 	return result, err
 }
 
+// GetClusterHAStatus returns the current HA manager status with failover support.
+func (cc *ClusterClient) GetClusterHAStatus(ctx context.Context) ([]HAStatusEntry, error) {
+	var result []HAStatusEntry
+	err := cc.executeWithFailover(ctx, func(client *Client) error {
+		entries, err := client.GetClusterHAStatus(ctx)
+		if err != nil {
+			return err
+		}
+		result = entries
+		return nil
+	})
+
+	return result, err
+}
+
 // GetClusterStatus returns the cluster status including all nodes with failover support.
 func (cc *ClusterClient) GetClusterStatus(ctx context.Context) ([]ClusterStatus, error) {
 	var result []ClusterStatus

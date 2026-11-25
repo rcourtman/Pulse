@@ -288,6 +288,8 @@ type APIResource = {
     balloon?: number;
     memoryCache?: number;
     lock?: string;
+    haMaintenance?: boolean;
+    haState?: string;
   };
   virtualMachine?: ResourceVirtualMachineMeta;
   agent?: {

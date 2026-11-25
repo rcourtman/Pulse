@@ -1507,6 +1507,8 @@ export const nodeFromResource = (resource: Resource): Node | null => {
     connectionHealth: asString(proxmox?.connectionHealth) || resource.status || 'unknown',
     isClusterMember: asBoolean(proxmox?.isClusterMember),
     clusterName: getExplicitResourceClusterName(resource),
+    haMaintenance: asBoolean(proxmox?.haMaintenance),
+    haState: asString(proxmox?.haState),
     linkedAgentId,
   };
 };

@@ -635,6 +635,8 @@ func (m *Monitor) pollPVENodesParallel(
 		diskSource      string
 	}
 
+	haStates := pollPVEClusterHAStates(ctx, instanceName, instanceCfg, client, nodes, prevInstanceNodes)
+
 	resultChan := make(chan nodePollResult, len(nodes))
 	var wg sync.WaitGroup
 
@@ -651,6 +653,10 @@ func (m *Monitor) pollPVENodesParallel(
 			defer wg.Done()
 
 			modelNode, effectiveStatus, diskSource, _ := m.pollPVENode(ctx, instanceName, instanceCfg, client, node, connectionHealthStr, prevInstanceNodes)
+			if haState, ok := haStates[strings.ToLower(strings.TrimSpace(modelNode.Name))]; ok {
+				modelNode.HAMaintenance = haState.maintenance
+				modelNode.HAState = haState.state
+			}
 
 			resultChan <- nodePollResult{
 				node:            modelNode,
@@ -670,6 +676,73 @@ func (m *Monitor) pollPVENodesParallel(
 	}
 
 	return modelNodes, nodeEffectiveStatus, nodeDiskSources
+}
+
+type clusterHAStatusGetter interface {
+	GetClusterHAStatus(context.Context) ([]proxmox.HAStatusEntry, error)
+}
+
+type pveNodeHAState struct {
+	maintenance bool
+	state       string
+}
+
+func pollPVEClusterHAStates(
+	ctx context.Context,
+	instanceName string,
+	instanceCfg *config.PVEInstance,
+	client PVEClientInterface,
+	nodes []proxmox.Node,
+	prevInstanceNodes []models.Node,
+) map[string]pveNodeHAState {
+	isCluster := (instanceCfg != nil && instanceCfg.IsCluster) || len(nodes) > 1
+	if !isCluster || client == nil {
+		return nil
+	}
+	getter, ok := client.(clusterHAStatusGetter)
+	if !ok {
+		return nil
+	}
+
+	haCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+
+	entries, err := getter.GetClusterHAStatus(haCtx)
+	if err != nil {
+		log.Debug().
+			Err(err).
+			Str("instance", instanceName).
+			Msg("Could not refresh Proxmox cluster HA status; retaining last-known HA maintenance state")
+		carried := make(map[string]pveNodeHAState, len(prevInstanceNodes))
+		for _, prev := range prevInstanceNodes {
+			if prev.HAMaintenance || prev.HAState != "" {
+				key := strings.ToLower(strings.TrimSpace(prev.Name))
+				if key != "" {
+					carried[key] = pveNodeHAState{
+						maintenance: prev.HAMaintenance,
+						state:       prev.HAState,
+					}
+				}
+			}
+		}
+		return carried
+	}
+
+	states := make(map[string]pveNodeHAState, len(nodes))
+	for _, entry := range entries {
+		if !strings.EqualFold(strings.TrimSpace(entry.Type), "lrm") {
+			continue
+		}
+		nodeName := strings.ToLower(entry.NodeName())
+		if nodeName == "" {
+			continue
+		}
+		states[nodeName] = pveNodeHAState{
+			maintenance: entry.IsLRMMaintenance(),
+			state:       entry.NormalizedLRMState(),
+		}
+	}
+	return states
 }
 
 // markPVEInstanceNodesUnreachable applies the node offline grace policy to an

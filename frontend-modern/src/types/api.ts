@@ -210,6 +210,8 @@ export interface Node {
   connectionHealth: string;
   isClusterMember?: boolean; // True if part of a cluster
   clusterName?: string; // Name of cluster (empty if standalone)
+  haMaintenance?: boolean; // True when Proxmox HA reports LRM maintenance mode
+  haState?: string; // Normalized Proxmox HA LRM state (e.g. "maintenance", "active")
   linkedAgentId?: string; // ID of Pulse agent running on this node (for merging)
 }
 

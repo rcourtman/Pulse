@@ -392,6 +392,39 @@ func ActiveMaintenanceCoverageAt(now time.Time, resourceID string, own *Resource
 	return coverage, covered
 }
 
+const ProxmoxHAMaintenanceReason = "Proxmox HA maintenance mode"
+
+// ProviderMaintenanceCoverageAt derives a read-only, resource-scoped
+// maintenance coverage window when a provider reports active maintenance mode
+// on the resource itself (for example Proxmox HA node maintenance). It never
+// inherits to descendants and never mutates operator-authored state.
+func ProviderMaintenanceCoverageAt(now time.Time, readState ReadState, canonicalID string) (MaintenanceCoverage, bool) {
+	if readState == nil || strings.TrimSpace(canonicalID) == "" {
+		return MaintenanceCoverage{}, false
+	}
+	for _, node := range readState.Nodes() {
+		if node == nil || node.ID() != canonicalID || !node.HAMaintenance() {
+			continue
+		}
+		if now.IsZero() {
+			now = time.Now().UTC()
+		} else {
+			now = now.UTC()
+		}
+		return MaintenanceCoverage{
+			Occurrence: MaintenanceWindowOccurrence{
+				StartAt: now.Add(-time.Minute),
+				EndAt:   now.Add(time.Hour),
+			},
+			Reason:    ProxmoxHAMaintenanceReason,
+			Scope:     MaintenanceScopeResource,
+			SourceID:  canonicalID,
+			Inherited: false,
+		}, true
+	}
+	return MaintenanceCoverage{}, false
+}
+
 // MaintenanceOccurrencesEndingBetween returns concrete occurrences whose end
 // is in (since, until]. It gives the maintenance sentinel a bounded,
 // restart-safe way to verify every recurring window without inventing a

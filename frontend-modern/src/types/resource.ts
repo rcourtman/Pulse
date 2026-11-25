@@ -751,6 +751,8 @@ export interface ResourceProxmoxMeta {
   pendingUpdatesReason?:
     'permission_denied' | 'source_unavailable' | 'check_failed' | 'node_offline';
   lock?: string;
+  haMaintenance?: boolean;
+  haState?: string;
   pveVersion?: string;
   kernelVersion?: string;
   // Narrow projection of the node's temperature payload. `legacySensorsFormat`

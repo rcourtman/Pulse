@@ -39,6 +39,8 @@ func (n Node) ToFrontend() NodeFrontend {
 		ConnectionHealth:             n.ConnectionHealth,
 		IsClusterMember:              n.IsClusterMember,
 		ClusterName:                  n.ClusterName,
+		HAMaintenance:                n.HAMaintenance,
+		HAState:                      n.HAState,
 		TemperatureMonitoringEnabled: n.TemperatureMonitoringEnabled,
 		LinkedAgentID:                n.LinkedAgentID,
 	}

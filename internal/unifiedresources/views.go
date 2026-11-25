@@ -1006,6 +1006,20 @@ func (v NodeView) PendingUpdatesReason() string {
 	return strings.TrimSpace(v.r.Proxmox.PendingUpdatesReason)
 }
 
+func (v NodeView) HAMaintenance() bool {
+	if v.r == nil || v.r.Proxmox == nil {
+		return false
+	}
+	return v.r.Proxmox.HAMaintenance
+}
+
+func (v NodeView) HAState() string {
+	if v.r == nil || v.r.Proxmox == nil {
+		return ""
+	}
+	return strings.TrimSpace(v.r.Proxmox.HAState)
+}
+
 func (v NodeView) CPUPercent() float64 {
 	if v.r == nil {
 		return 0
