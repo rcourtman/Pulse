@@ -130,17 +130,22 @@ Do not re-register an agent or send a test report to make a counter move.
 ```promql
 pulse_http_requests_total{
   job="pulse", instance="pulse-a.example:9091", method="POST",
-  route=~"/api/auto-register|/api/agents/(agent|host)/report"
+  route=~"/api/auto-register|/api/agents/(agent|host|docker)/report"
 }
 ```
 
 Keep the lines separate by `route` and `status`. `/api/auto-register` includes
-Proxmox registration checks and is not a telemetry report. The unified-agent
-report route and its older host alias are separate lines. An increasing 2xx
-counter shows HTTP success for that route. It does not tell you whether a
-registration was confirmed, which agent reported, or whether a particular
-reading changed. Check the affected agent's **Last seen** and the reading in
-Pulse.
+Proxmox registration checks and is not a telemetry report.
+`/api/agents/agent/report` and its older `/api/agents/host/report` alias are
+separate lines. `/api/agents/docker/report` is the Docker and Podman report
+stream, including when the same Pulse Agent also reports machine readings.
+Compare the lines your installation normally produces. New machine reports
+can keep arriving while Docker reports stop, so do not add the routes together.
+
+An increasing 2xx counter shows HTTP success for that route. It does not tell
+you whether a registration was confirmed, which agent reported, or whether a
+particular reading changed. Check **Last seen** and the readings for the same
+machine or Docker host in Pulse.
 
 Choose a window that covers the agents' normal request intervals. With fresh
 scrapes and no Pulse restart, a flat line shows no increase for that route and
