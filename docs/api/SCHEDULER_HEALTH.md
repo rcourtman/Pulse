@@ -166,12 +166,23 @@ jq '{updatedAt, enabled, queueDepth: .queue.depth, deadLetterCount: .deadLetter.
   instanceCount: (.instances | length)}' "$snapshot"
 ```
 
-**Find Failing Instances:**
+**Find incomplete and failed polls:**
+
+A poll can record a new `lastSuccess` and still leave a `partial` error.
+Pulse reached the connection, but some readings were unavailable. The
+consecutive failure count is zero in this case. Check which read failed in
+your private snapshot rather than treating the whole connection as down.
+
 ```bash
 snapshot='/absolute/path/to/health.json' # use the printed filename
-jq '.instances[] | select(.pollStatus.consecutiveFailures > 0) |
-  {key, lastSuccess: .pollStatus.lastSuccess, failures: .pollStatus.consecutiveFailures}' "$snapshot"
+jq '.instances[] | select(.pollStatus.lastError != null or .pollStatus.consecutiveFailures > 0) |
+  {key, lastSuccess: .pollStatus.lastSuccess, failures: .pollStatus.consecutiveFailures,
+   lastErrorAt: .pollStatus.lastError.at, lastErrorCategory: .pollStatus.lastError.category}' "$snapshot"
 ```
+
+No rows means the listed connections have no recorded poll error or consecutive
+failure in this snapshot. It does not show that their polls have run. Compare
+the last-success timestamps over the connection's normal poll interval.
 
 **Check Dead Letter Queue:**
 ```bash
