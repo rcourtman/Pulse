@@ -5681,59 +5681,48 @@ func (m *Monitor) cleanupRateTracker(now time.Time) {
 	}
 }
 
+var dockerAgentReportLease = models.AgentReportLease{
+	MinimumWindow:   dockerMinimumHealthWindow,
+	MaximumWindow:   dockerMaximumHealthWindow,
+	GraceMultiplier: dockerOfflineGraceMultiplier,
+}
+
 // evaluateDockerAgents updates health for Docker hosts based on last report time.
 func (m *Monitor) evaluateDockerAgents(now time.Time) {
-	hosts := m.state.GetDockerHosts()
-	for _, host := range hosts {
-		interval := host.IntervalSeconds
-		if interval <= 0 {
-			interval = int(dockerMinimumHealthWindow / time.Second)
-		}
-
-		window := time.Duration(interval) * time.Second * dockerOfflineGraceMultiplier
-		if window < dockerMinimumHealthWindow {
-			window = dockerMinimumHealthWindow
-		} else if window > dockerMaximumHealthWindow {
-			window = dockerMaximumHealthWindow
-		}
-
-		healthy := !host.LastSeen.IsZero() && now.Sub(host.LastSeen) <= window
+	for _, host := range m.state.DockerAgentLiveness(now, dockerAgentReportLease) {
+		healthy := host.Expired == nil
 		key := dockerConnectionPrefix + host.ID
 		m.state.SetConnectionHealth(key, healthy)
-		hostCopy := host
 		if healthy {
-			hostCopy.Status = "online"
 			m.state.SetDockerHostStatus(host.ID, "online")
 			if m.alertManager != nil {
-				m.alertManager.HandleDockerHostOnline(hostCopy)
+				// The online transition clears connectivity by host ID.
+				m.alertManager.HandleDockerHostOnline(models.DockerHost{ID: host.ID, Status: "online"})
 			}
 		} else {
-			hostCopy.Status = "offline"
 			m.state.SetDockerHostStatus(host.ID, "offline")
 			if m.alertManager != nil {
+				hostCopy := *host.Expired
+				hostCopy.Status = "offline"
 				m.alertManager.HandleDockerHostOffline(hostCopy)
 			}
 		}
 	}
 }
 
+var hostAgentReportLease = models.AgentReportLease{
+	MinimumWindow:   hostMinimumHealthWindow,
+	MaximumWindow:   hostMaximumHealthWindow,
+	GraceMultiplier: hostOfflineGraceMultiplier,
+}
+
 func hostAgentHealthWindow(interval int) time.Duration {
-	if interval <= 0 {
-		interval = int(hostMinimumHealthWindow / time.Second)
-	}
-	window := time.Duration(interval) * time.Second * hostOfflineGraceMultiplier
-	if window < hostMinimumHealthWindow {
-		return hostMinimumHealthWindow
-	}
-	if window > hostMaximumHealthWindow {
-		return hostMaximumHealthWindow
-	}
-	return window
+	return hostAgentReportLease.Window(interval)
 }
 
 // evaluateHostAgents updates health for host agents based on last report time.
 func (m *Monitor) evaluateHostAgents(now time.Time) {
-	hosts := m.state.GetHosts()
+	hosts := m.state.HostAgentLiveness(now, hostAgentReportLease)
 	// Only an offline host that names a linked node asks which node it is
 	// linked to, and only for the node's identity, so the nodes are listed when
 	// the first one does, from the structure view: this runs on every monitor
@@ -5747,22 +5736,18 @@ func (m *Monitor) evaluateHostAgents(now time.Time) {
 	resourceRefreshNeeded := false
 	for _, host := range hosts {
 		liveHostIDs[host.ID] = struct{}{}
-		window := hostAgentHealthWindow(host.IntervalSeconds)
-		age := now.Sub(host.LastSeen)
-		healthy := !host.LastSeen.IsZero() && age <= window
+		healthy := host.Expired == nil
 		key := hostConnectionPrefix + host.ID
 		m.state.SetConnectionHealth(key, healthy)
 
-		hostCopy := host
 		if healthy {
-			hostCopy.Status = "online"
 			// Log status transition from offline to online
 			if host.Status == "offline" {
 				log.Debug().
 					Str("hostID", host.ID).
 					Str("hostname", host.Hostname).
-					Dur("age", age).
-					Dur("window", window).
+					Dur("age", now.Sub(host.LastSeen)).
+					Dur("window", hostAgentHealthWindow(host.IntervalSeconds)).
 					Msg("Host agent back online")
 			}
 			if host.Status != "online" {
@@ -5770,17 +5755,19 @@ func (m *Monitor) evaluateHostAgents(now time.Time) {
 				resourceRefreshNeeded = true
 			}
 			if m.alertManager != nil {
-				m.alertManager.HandleHostOnline(hostCopy)
+				// The online transition clears connectivity by host ID.
+				m.alertManager.HandleHostOnline(models.Host{ID: host.ID, Status: "online"})
 			}
 		} else {
+			hostCopy := *host.Expired
 			// Log status transition from online to offline with diagnostic info
 			if host.Status == "online" || host.Status == "" {
 				log.Debug().
 					Str("hostID", host.ID).
 					Str("hostname", host.Hostname).
 					Time("lastSeen", host.LastSeen).
-					Dur("age", age).
-					Dur("window", window).
+					Dur("age", now.Sub(host.LastSeen)).
+					Dur("window", hostAgentHealthWindow(host.IntervalSeconds)).
 					Int("intervalSeconds", host.IntervalSeconds).
 					Bool("lastSeenZero", host.LastSeen.IsZero()).
 					Msg("Host agent appears offline")
