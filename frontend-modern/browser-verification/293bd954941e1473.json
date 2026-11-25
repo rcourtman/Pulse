@@ -1,0 +1,42 @@
+{
+  "version": 1,
+  "base_sha": "5c32244ccaa9e0943eb6755812b1231bbc0cad5f",
+  "result": "passed",
+  "verified_at": "2026-11-25T21:19:49Z",
+  "changed_paths": [
+    "frontend-modern/src/features/proxmox/ProxmoxCephTable.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/proxmox/ProxmoxCephTable.tsx": "1db13eece167f05137fa892eadc46b6b3e481c6e10ea37f76f0d839f6a3cb6fb"
+  },
+  "routes": [
+    "/proxmox/ceph"
+  ],
+  "states": [
+    "Missing and unrecognized health alongside known healthy, warning and critical observations",
+    "Healthy filter selected; All cluster inventory retained",
+    "Open cluster drawer with existing capacity, pools, services and fixture history",
+    "Recognized status in the same open drawer; the other unknown remains unknown"
+  ],
+  "interactions": [
+    "Select Healthy, then All, with matched inventory totals",
+    "Open Alder with Enter on desktop and a name tap on a phone",
+    "Keep the same open drawer and keyboard focus across a new reading"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 930,
+      "browser": "chromium 141.0.7390.37",
+      "theme": "light"
+    },
+    {
+      "width": 360,
+      "height": 844,
+      "browser": "webkit 26.0",
+      "theme": "dark"
+    }
+  ],
+  "playwright": "1.56.1",
+  "evidence_sha256": "7d5b7d8b2909e5c89f68d4ff3aa1b6cf9959dc8158314fb5cba5eaf2239aab6f"
+}

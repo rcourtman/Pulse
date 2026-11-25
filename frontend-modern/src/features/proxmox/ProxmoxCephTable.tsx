@@ -49,7 +49,8 @@ import { matchesSearchTermSplit, splitSearchExclusions } from '@/utils/searchQue
 // a Proxmox operator looks at: health, MON/MGR quorum, OSD up/in,
 // placement groups, pool count and capacity utilisation.
 
-type CephStatusFilter = 'all' | 'healthy' | 'warning' | 'critical';
+type CephHealth = 'healthy' | 'warning' | 'critical' | 'unknown';
+type CephStatusFilter = 'all' | Exclude<CephHealth, 'unknown'>;
 
 export type CephPhoneColumn = 'cluster' | 'health' | 'osds' | 'pools' | 'capacity';
 
@@ -113,44 +114,40 @@ const STATUS_FILTER_OPTIONS: PlatformTableFilterOption<CephStatusFilter>[] = [
   },
 ];
 
-function classify(resource: Resource): CephStatusFilter {
-  const raw = (resource.ceph?.healthStatus ?? resource.status ?? '').toUpperCase();
-  if (raw === 'HEALTH_OK' || raw === 'OK' || raw === 'ONLINE') return 'healthy';
-  if (
-    raw === 'HEALTH_ERR' ||
-    raw === 'ERR' ||
-    raw === 'ERROR' ||
-    raw === 'CRITICAL' ||
-    raw === 'OFFLINE'
-  ) {
-    return 'critical';
+function classify(resource: Resource): CephHealth {
+  // Prefer native health when reported; topology and capacity alone say
+  // nothing about whether the cluster is healthy.
+  const raw = (asTrimmedString(resource.ceph?.healthStatus) || resource.status || '').toUpperCase();
+  switch (raw) {
+    case 'HEALTH_OK':
+    case 'OK':
+    case 'ONLINE':
+      return 'healthy';
+    case 'HEALTH_WARN':
+    case 'WARN':
+    case 'WARNING':
+    case 'DEGRADED':
+      return 'warning';
+    case 'HEALTH_ERR':
+    case 'ERR':
+    case 'ERROR':
+    case 'CRITICAL':
+    case 'OFFLINE':
+      return 'critical';
+    default:
+      return 'unknown';
   }
-  if (raw === 'HEALTH_WARN' || raw === 'WARN' || raw === 'WARNING' || raw === 'DEGRADED') {
-    return 'warning';
-  }
-  return 'healthy';
 }
 
-function indicatorFor(category: CephStatusFilter): {
-  variant: StatusIndicatorVariant;
-  label: string;
-  tone: string;
-} {
-  switch (category) {
-    case 'healthy':
-      return {
-        variant: 'success',
-        label: 'Healthy',
-        tone: 'text-emerald-600 dark:text-emerald-300',
-      };
-    case 'warning':
-      return { variant: 'warning', label: 'Warning', tone: 'text-amber-600 dark:text-amber-300' };
-    case 'critical':
-      return { variant: 'danger', label: 'Critical', tone: 'text-red-600 dark:text-red-300' };
-    default:
-      return { variant: 'muted', label: '—', tone: 'text-muted' };
-  }
-}
+const HEALTH_INDICATORS: Record<
+  CephHealth,
+  { variant: StatusIndicatorVariant; label: string; tone: string }
+> = {
+  healthy: { variant: 'success', label: 'Healthy', tone: 'text-emerald-600 dark:text-emerald-300' },
+  warning: { variant: 'warning', label: 'Warning', tone: 'text-amber-600 dark:text-amber-300' },
+  critical: { variant: 'danger', label: 'Critical', tone: 'text-red-600 dark:text-red-300' },
+  unknown: { variant: 'muted', label: 'Unknown', tone: 'text-muted' },
+};
 
 function servicesCell(services: ResourceCephServiceMeta[] | undefined): JSX.Element {
   const reported = (services ?? []).filter((svc) => svc.total > 0);
@@ -363,18 +360,17 @@ export const ProxmoxCephTable: Component<{
   // The health message says what is wrong, so it outranks the daemon tally,
   // which needs the widest layout to fit and is itemised in the expansion.
   // The FSID is forensic detail: searchable, and shown whole in the expansion.
-  const showPgs = createMemo(() => ['expanded', 'full'].includes(layout()));
-  const showDetail = createMemo(() => ['expanded', 'full'].includes(layout()));
+  const showExpanded = createMemo(() => ['expanded', 'full'].includes(layout()));
   const showServices = createMemo(() => layout() === 'full');
   const visibleColumns = createMemo<readonly CephColumn[]>(() => {
     if (layout() === 'compact') return CEPH_PHONE_COLUMNS;
     const columns: CephColumn[] = ['cluster', 'health'];
     if (showQuorum()) columns.push('quorum');
     columns.push('osds');
-    if (showPgs()) columns.push('pgs');
+    if (showExpanded()) columns.push('pgs');
     columns.push('pools', 'capacity');
     if (showServices()) columns.push('services');
-    if (showDetail()) columns.push('detail');
+    if (showExpanded()) columns.push('detail');
     return columns;
   });
   const visibleColumnCount = createMemo(() => visibleColumns().length);
@@ -456,7 +452,7 @@ export const ProxmoxCephTable: Component<{
                 >
                   OSDs
                 </TableHead>
-                <Show when={showPgs()}>
+                <Show when={showExpanded()}>
                   <TableHead class={getPlatformTableHeadClassForKind('numeric-value')}>
                     PGs
                   </TableHead>
@@ -474,7 +470,7 @@ export const ProxmoxCephTable: Component<{
                 <Show when={showServices()}>
                   <TableHead class={getPlatformTableHeadClassForKind('text')}>Services</TableHead>
                 </Show>
-                <Show when={showDetail()}>
+                <Show when={showExpanded()}>
                   <TableHead class={getPlatformTableHeadClassForKind('text')}>Detail</TableHead>
                 </Show>
               </>
@@ -484,7 +480,7 @@ export const ProxmoxCephTable: Component<{
                 <PlatformWindowedRows items={filtered} estimatedRowHeight={32}>
                   {(cluster) => {
                     // One verdict for the row's dot and the drawer header.
-                    const ind = () => indicatorFor(classify(cluster));
+                    const ind = () => HEALTH_INDICATORS[classify(cluster)];
                     const name = asTrimmedString(cluster.name) || cluster.id;
                     const isOpen = () => selectedId() === cluster.id;
                     const detailRowId = () => `proxmox-ceph-detail-${cluster.id}`;
@@ -549,7 +545,7 @@ export const ProxmoxCephTable: Component<{
                           >
                             {osdLabel(cluster)}
                           </TableCell>
-                          <Show when={showPgs()}>
+                          <Show when={showExpanded()}>
                             <TableCell
                               class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content tabular-nums`}
                             >
@@ -578,7 +574,7 @@ export const ProxmoxCephTable: Component<{
                               {servicesCell(cluster.ceph?.services)}
                             </TableCell>
                           </Show>
-                          <Show when={showDetail()}>
+                          <Show when={showExpanded()}>
                             <TableCell
                               class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
                             >
@@ -594,7 +590,7 @@ export const ProxmoxCephTable: Component<{
                           >
                             <ProxmoxCephClusterDrawer
                               cluster={cluster}
-                              statusIndicator={{ variant: ind().variant, label: ind().label }}
+                              statusIndicator={ind()}
                               onClose={closeSelected}
                             />
                           </InlineDetailTableRow>
