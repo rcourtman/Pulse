@@ -25,9 +25,11 @@ writes extrapolated to a day (#2199, #1966). Those rates are reported, not
 gated, until measured budgets exist for them.
 
 The estate file names what was measured. For the agents estate the summary
-also shows each driver's accepted reports and dashboard traffic. Setting
-PULSE_MEMORY_GATE=0 reports memory without failing, for an estate whose noise
-is not yet known.
+also shows each driver's accepted reports and dashboard traffic. For the
+Proxmox estate it shows fixture polling and sightings. Those observations can
+be retained even when the RSS comparison is incomplete. Setting PULSE_MEMORY_GATE=0
+reports memory without failing on growth, for an estate whose noise is not yet
+known.
 """
 
 from __future__ import annotations
@@ -166,9 +168,17 @@ def read_agent_stats(out: Path, label: str) -> dict | None:
 
 def read_proxmox_stats(out: Path, label: str) -> dict | None:
     try:
-        return json.loads((out / f"proxmox-{label}.json").read_text())
+        stats = json.loads((out / f"proxmox-{label}.json").read_text())
     except (OSError, ValueError):
         return None
+    return stats if isinstance(stats, dict) and stats else None
+
+
+def sampling_end_reached(stats: dict) -> str:
+    reached = stats.get("sampling_end_reached")
+    if type(reached) is not bool:
+        return "n/a"
+    return "yes" if reached else "no"
 
 
 def pbs_snapshot_coverage(stats: dict) -> str:
@@ -269,7 +279,7 @@ def pbs_snapshot_window_lines(baseline: dict | None, candidate: dict | None, win
         lines.append(f"| {instance}/{store} | {cells[0]} | {cells[1]} |")
     if base != cand:
         lines += ["", "**PBS snapshot-listing evidence differs between builds.** "
-                  "The RSS change alone does not establish how much memory equivalent backup-listing work would use."]
+                  "These observations do not establish equivalent backup-listing work for an RSS comparison."]
     return lines
 
 
@@ -341,6 +351,7 @@ def proxmox_lines(baseline: dict | None, candidate: dict | None, window_s: int) 
         "|---|---:|---:|",
     ]
     rows = (
+        ("Reached end of planned sampling", sampling_end_reached),
         ("PVE API requests", lambda d: d["pve_requests"]),
         ("PVE guests observed in dashboard state", lambda d: d.get("pve_guests_observed", "n/a")),
         ("PVE guests with recent poll sightings at measurement end",
@@ -521,6 +532,8 @@ def main(argv: list[str]) -> int:
         heading += ["", f"Baseline: `{tag}` at `{baseline_sha}`. Candidate: `{candidate_sha}`."]
     baseline_agents = read_agent_stats(out, "baseline") if estate == "agents" else None
     candidate_agents = read_agent_stats(out, "candidate") if estate == "agents" else None
+    baseline_proxmox = read_proxmox_stats(out, "baseline") if estate == "proxmox" else None
+    candidate_proxmox = read_proxmox_stats(out, "candidate") if estate == "proxmox" else None
     if incomplete:
         result = {"status": "incomplete", "estate": estate, "sampling": sampling, **source}
         if failed_runs:
@@ -529,6 +542,11 @@ def main(argv: list[str]) -> int:
         if estate == "agents":
             result.update(baseline_agents=baseline_agents, candidate_agents=candidate_agents)
             load = agent_lines(baseline_agents, candidate_agents, duration - start)
+        elif estate == "proxmox":
+            result.update(baseline_proxmox=baseline_proxmox, candidate_proxmox=candidate_proxmox)
+            load = ["", "**Traffic observations only:** fixture responses and dashboard sightings do not "
+                    "establish an RSS comparison.",
+                    *proxmox_lines(baseline_proxmox, candidate_proxmox, duration - start)]
         write_observation(out, "\n".join([
             *heading, "", f"**Incomplete measurement:** no comparison for the planned {start}–{duration} s window.",
             "", *incomplete, *load, "",
@@ -567,8 +585,6 @@ def main(argv: list[str]) -> int:
     if any(baseline[column] is None or candidate[column] is None for column in COLUMNS[1:]):
         lines += ["", "Mapping breakdown is unavailable for at least one sample in that run's window. "
                   "The verdict uses the separately measured resident memory."]
-    baseline_proxmox = read_proxmox_stats(out, "baseline")
-    candidate_proxmox = read_proxmox_stats(out, "candidate")
     if estate == "proxmox":
         threshold = "past" if exceeded else "not past"
         verdict = (

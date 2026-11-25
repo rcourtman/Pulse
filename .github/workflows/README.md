@@ -212,7 +212,8 @@ or its load driver fails. The incomplete summary and `result.json` retain the
 affected side, sample coverage and observed wait statuses. These statuses do
 not identify the cause of a stop or establish a cgroup OOM kill. The optional
 heap profile request is limited to five seconds; partial downloads are not
-uploaded as profiles.
+uploaded as profiles. A local run must use a new output directory so a missing
+observation cannot be replaced by a prior run's profile or traffic data.
 If Linux cannot supply the mapping breakdown for every sample in a run's
 comparison window, the affected columns are unavailable rather than zero.
 A complete, valid `VmRSS` window still supplies the verdict; misaligned sample
@@ -282,13 +283,16 @@ Snapshot responses completed within that same window are shown
 separately per datastore, so full coverage earlier in the run or a current
 status response cannot stand in for a current snapshot listing. A zero does
 not mean a backup failure or require cached snapshots to be requested again.
-An unfinished window has no steady observation. Status responses do not
-establish backup reads; served snapshot groups do not prove Pulse accepted,
-retained or displayed them. The summary shows RSS beside gaps, differing
-snapshot-listing work or missing coverage. A smaller RSS reading alone does
-not establish lower memory use under equivalent polling. This does not change
-the watch's thresholds or make this estate gating. The observations are
-synthetic, not an installed LXC memory test.
+An unfinished window has no steady observation. If sampling or a worker fails,
+the summary and `result.json` still retain available Proxmox traffic separately
+from the failed RSS comparison. A recorded zero stays distinct from unavailable
+evidence; each side says whether its driver reached the planned sampling end.
+Status responses do not establish backup reads; served snapshot groups do not
+prove Pulse accepted, retained or displayed them. A completed comparison shows
+RSS beside gaps, differing snapshot-listing work or missing coverage. A smaller
+RSS reading alone does not establish lower memory use under equivalent polling.
+This does not change the watch's thresholds or make this estate gating. The
+observations are synthetic, not an installed LXC memory test.
 
 `dependency-advisory-watch.yml` strictly audits the product frontend on
 `main` every day. A newly disclosed advisory can affect an unchanged lockfile;
