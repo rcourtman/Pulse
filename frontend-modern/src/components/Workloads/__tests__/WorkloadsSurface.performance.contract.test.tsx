@@ -553,7 +553,7 @@ describe('Workloads performance contract', () => {
         render(() => (
           <PageOwnedWorkloadsSurface
             forcedPlatform={platform}
-            inventorySourcesQuery={{ value, refetch: async () => value() }}
+            inventorySourcesQuery={{ value, error: () => undefined, refetch: async () => value() }}
           />
         ));
 
