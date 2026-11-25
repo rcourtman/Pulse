@@ -1,5 +1,5 @@
 import { useLocation } from '@solidjs/router';
-import { Show, createEffect, createMemo, createSignal, type Accessor } from 'solid-js';
+import { Show, createEffect, createMemo, createSignal, onCleanup, type Accessor } from 'solid-js';
 import StorageSurface from '@/components/Storage/Storage';
 import { WorkloadsFilter } from '@/components/Workloads/WorkloadsFilter';
 import { WorkloadsSurface } from '@/components/Workloads/WorkloadsSurface';
@@ -59,6 +59,7 @@ import { getAPIReadAccessErrorMessage } from '@/utils/apiAccessError';
 import { useUnifiedResources } from '@/hooks/useUnifiedResources';
 import { useWebSocket } from '@/contexts/appRuntime';
 import { useAlertsActivation } from '@/stores/alertsActivation';
+import { eventBus } from '@/stores/events';
 import { getAlertsForResource } from '@/utils/alerts';
 import type { ReplicationJob } from '@/types/api';
 import type { Resource } from '@/types/resource';
@@ -300,18 +301,38 @@ export function ProxmoxPageSurface() {
     if (activeTab() === 'backups') return backupModel();
     return buildModel(resourceState().resources());
   });
-  // Once Backups is active, a readable peer with zero rows still lets the
-  // independent backup inventories speak for themselves. A pending/disabled
-  // read, both reads failing, or a denial is not that evidence.
-  const hasPageContent = createMemo(() => {
-    if (model().resources.length > 0) return true;
-    if (activeTab() !== 'backups') return false;
+  const [backupInspectionScope, setBackupInspectionScope] = createSignal(0);
+  onCleanup(eventBus.on('org_switched', () => setBackupInspectionScope((scope) => scope + 1)));
+
+  // The two restore-point reads are owned by the mounted Backups inspection,
+  // not these resource snapshots. Keep a partial inspection open when Retry
+  // clears the error but finds zero resources. Remember eligibility, not rows,
+  // and never use it to open a cold empty or no-longer-admitted inspection.
+  const emptyBackupInspection = createMemo<number | undefined>((previous) => {
+    if (activeTab() !== 'backups') return undefined;
+    const scope = backupInspectionScope();
     const workloadError = overviewResources.error();
     const serverError = backupResources.error();
-    if (Boolean(workloadError) === Boolean(serverError)) return false;
-    if (getAPIReadAccessErrorMessage(workloadError || serverError)) return false;
-    return (workloadError ? backupResources : overviewResources).hasSnapshot();
+    if (workloadError || serverError) {
+      if (
+        (workloadError && serverError) ||
+        getAPIReadAccessErrorMessage(workloadError || serverError)
+      ) {
+        return undefined;
+      }
+      const peer = workloadError ? backupResources : overviewResources;
+      return peer.hasSnapshot() ? scope : undefined;
+    }
+    return previous === scope &&
+      visibleTabIds().has('backups') &&
+      overviewResources.hasSnapshot() &&
+      backupResources.hasSnapshot()
+      ? scope
+      : undefined;
   });
+  const hasPageContent = createMemo(
+    () => model().resources.length > 0 || emptyBackupInspection() !== undefined,
+  );
   const resourceErrorDescription = () => {
     const accessError =
       activeTab() === 'backups'

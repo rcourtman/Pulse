@@ -1,8 +1,9 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
 import { Route, Router } from '@solidjs/router';
-import { createSignal } from 'solid-js';
+import { batch, createSignal } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { UnifiedResourceFacets } from '@/hooks/useUnifiedResources';
+import { eventBus } from '@/stores/events';
 import type { Resource } from '@/types/resource';
 import { ProxmoxPageSurface } from '../ProxmoxPageSurface';
 import { ReplicationInventoryFormatError } from '../proxmoxReplicationInventory';
@@ -642,9 +643,14 @@ describe('ProxmoxPageSurface contract', () => {
     },
   );
 
-  it.each(['workloads', 'servers'] as const)(
-    'keeps Backups mounted when %s fails and the readable peer has zero rows',
-    async (scope) => {
+  it.each([
+    ['workloads', 'nonempty'],
+    ['workloads', 'empty'],
+    ['servers', 'nonempty'],
+    ['servers', 'empty'],
+  ] as const)(
+    'keeps Backups mounted when %s fails, the peer is empty, and retry returns %s',
+    async (scope, result) => {
       mockPathname.mockReturnValue('/proxmox/backups');
       const isWorkloads = scope === 'workloads';
       const cached = makeResource({
@@ -657,6 +663,7 @@ describe('ProxmoxPageSurface contract', () => {
       const [peerReady, setPeerReady] = createSignal(false);
       const [peerLoading, setPeerLoading] = createSignal(true);
       const [retrying, setRetrying] = createSignal(false);
+      const [backupCount, setBackupCount] = createSignal(1);
       const retry = vi.fn(async () => setRetrying(true));
       const peerRefetch = vi.fn();
       const failed = {
@@ -676,7 +683,7 @@ describe('ProxmoxPageSurface contract', () => {
       mockUseUnifiedResources.mockImplementation(({ cacheKey }: { cacheKey: string }) => {
         if (cacheKey === 'proxmox-overview') return isWorkloads ? failed : peer;
         if (cacheKey === 'proxmox-backups-shell') return isWorkloads ? peer : failed;
-        return { ...peer, facets: () => ({ incidentCount: 0, byType: { pbs: 1 } }) };
+        return { ...peer, facets: () => ({ incidentCount: 0, byType: { pbs: backupCount() } }) };
       });
 
       renderSurface();
@@ -704,12 +711,72 @@ describe('ProxmoxPageSurface contract', () => {
       expect(props.servers).toEqual([]);
 
       const fresh = { ...cached, id: 'fresh-resource' };
-      setRows([fresh]);
-      setFailure(undefined);
+      const rowsAfterRetry = result === 'empty' ? [] : [fresh];
+      batch(() => {
+        setRows(rowsAfterRetry);
+        setFailure(undefined);
+      });
       setRetrying(false);
       expect(screen.getByTestId('backups-table')).toBe(table);
       expect(props.resourceReadIssue).toBeUndefined();
-      expect(props.servers).toEqual([fresh]);
+      expect(props.workloads).toEqual(isWorkloads ? rowsAfterRetry : []);
+      expect(props.servers).toEqual(rowsAfterRetry);
+      expect(peerRefetch).not.toHaveBeenCalled();
+
+      if (result === 'empty') {
+        setBackupCount(0);
+        expect(screen.getByTestId('platform-section-tabs')).toHaveAttribute(
+          'data-active',
+          'overview',
+        );
+        expect(screen.queryByTestId('backups-table')).not.toBeInTheDocument();
+        setBackupCount(1);
+        expect(screen.getByTestId('platform-table-empty-state')).toBeInTheDocument();
+        expect(screen.queryByTestId('backups-table')).not.toBeInTheDocument();
+      }
+    },
+  );
+
+  it.each([401, 403, 'both failures', 'organization change'] as const)(
+    'discards partial Backups eligibility after %s',
+    (reason) => {
+      mockPathname.mockReturnValue('/proxmox/backups');
+      const [workloadError, setWorkloadError] = createSignal<unknown>(new Error('Unavailable'));
+      const [serverError, setServerError] = createSignal<unknown>();
+      mockUseUnifiedResources.mockImplementation(({ cacheKey }: { cacheKey: string }) => ({
+        resources: () => [],
+        facets: () => ({ incidentCount: 0, byType: { pbs: 1 } }),
+        hasSnapshot: () => true,
+        loading: () => false,
+        error:
+          cacheKey === 'proxmox-overview'
+            ? workloadError
+            : cacheKey === 'proxmox-backups-shell'
+              ? serverError
+              : () => undefined,
+        refetch: vi.fn(),
+      }));
+
+      renderSurface();
+      expect(screen.getByTestId('backups-table')).toBeInTheDocument();
+
+      if (reason === 'organization change') {
+        setWorkloadError(undefined);
+        expect(screen.getByTestId('backups-table')).toBeInTheDocument();
+        eventBus.emit('org_switched', 'fixture-other-org');
+      } else {
+        if (reason === 'both failures') setServerError(new Error('Unavailable'));
+        else setWorkloadError(Object.assign(new Error('Read denied'), { status: reason }));
+        expect(screen.getByTestId('platform-error-state')).toBeInTheDocument();
+        expect(screen.queryByTestId('backups-table')).not.toBeInTheDocument();
+        batch(() => {
+          setWorkloadError(undefined);
+          setServerError(undefined);
+        });
+      }
+
+      expect(screen.getByTestId('platform-table-empty-state')).toBeInTheDocument();
+      expect(screen.queryByTestId('backups-table')).not.toBeInTheDocument();
     },
   );
 
