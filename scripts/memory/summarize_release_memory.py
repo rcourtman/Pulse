@@ -352,7 +352,7 @@ def proxmox_lines(baseline: dict | None, candidate: dict | None, window_s: int) 
     return lines
 
 
-def agent_lines(baseline: dict | None, candidate: dict | None) -> list[str]:
+def agent_lines(baseline: dict | None, candidate: dict | None, window_s: int | None = None) -> list[str]:
     shape = candidate or baseline
     if shape is None:
         return ["", "No agent load statistics were written."]
@@ -382,6 +382,36 @@ def agent_lines(baseline: dict | None, candidate: dict | None) -> list[str]:
     for label, value in rows:
         cells = [str(value(d)) if d else "n/a" for d in (baseline, candidate)]
         lines.append(f"| {label} | {cells[0]} | {cells[1]} |")
+    if window_s is not None:
+        lines += [
+            "",
+            f"**Agent traffic inside the planned {window_s} s RSS window**",
+            "",
+            "Report acceptance means HTTP success, not proof of state application. "
+            "Dashboard updates must follow an initial state on the same connection; "
+            "they are not attributed to a particular report.",
+            "",
+            "| | Baseline | Candidate |",
+            "|---|---:|---:|",
+        ]
+        steady = [(d or {}).get("steady_traffic") or {} for d in (baseline, candidate)]
+        steady = [d if d.get("window_s") == window_s else {} for d in steady]
+        steady_rows = [
+            ("Reached sampling end", lambda d: "yes" if d["end_reached"] else "no"),
+            ("Dashboard state updates", lambda d: d["dashboard_state_updates"]),
+        ]
+        for label, value in steady_rows:
+            cells = [str(value(d)) if d else "n/a" for d in steady]
+            lines.append(f"| {label} | {cells[0]} | {cells[1]} |")
+        for kind in ("host", "docker"):
+            cells = []
+            for d in steady:
+                row = d.get("reports", {}).get(kind)
+                cells.append(
+                    f"{row['agents_with_repeated_acceptance']}/{row['expected']} "
+                    f"({row['accepted']} acceptances)" if row else "n/a"
+                )
+            lines.append(f"| Agents with repeated {kind} report acceptance | {cells[0]} | {cells[1]} |")
     return lines
 
 
@@ -470,13 +500,19 @@ def main(argv: list[str]) -> int:
     heading = [f"## Pulse memory: candidate against baseline ({estate} estate)"]
     if source:
         heading += ["", f"Baseline: `{tag}` at `{baseline_sha}`. Candidate: `{candidate_sha}`."]
+    baseline_agents = read_agent_stats(out, "baseline") if estate == "agents" else None
+    candidate_agents = read_agent_stats(out, "candidate") if estate == "agents" else None
     if incomplete:
         result = {"status": "incomplete", "estate": estate, "sampling": sampling, **source}
         if failed_runs:
             result["failed_runs"] = failed_runs
+        load = []
+        if estate == "agents":
+            result.update(baseline_agents=baseline_agents, candidate_agents=candidate_agents)
+            load = agent_lines(baseline_agents, candidate_agents, duration - start)
         write_observation(out, "\n".join([
             *heading, "", f"**Incomplete measurement:** no comparison for the planned {start}–{duration} s window.",
-            "", *incomplete, "",
+            "", *incomplete, *load, "",
         ]), result)
         return 1
     baseline_rows, candidate_rows = windows["baseline"], windows["candidate"]
@@ -571,10 +607,8 @@ def main(argv: list[str]) -> int:
     for key, (label, unit) in ACTIVITY_LABELS.items():
         base, cand = baseline_activity[key], candidate_activity[key]
         lines.append(f"| {label} | {unit} | {format_rate(base)} | {format_rate(cand)} | {format_change(base, cand)} |")
-    baseline_agents = read_agent_stats(out, "baseline")
-    candidate_agents = read_agent_stats(out, "candidate")
     if estate == "agents":
-        lines += agent_lines(baseline_agents, candidate_agents)
+        lines += agent_lines(baseline_agents, candidate_agents, duration - start)
     elif estate == "proxmox":
         lines += proxmox_lines(baseline_proxmox, candidate_proxmox, duration - start)
     growth_file = out / "heap-growth.txt"

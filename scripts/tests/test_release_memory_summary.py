@@ -121,7 +121,40 @@ class ReleaseMemorySummaryTests(unittest.TestCase):
         self.assertIn("| Dashboard application messages | 452 | 452 |", text)
         self.assertIn("| Dashboard state messages | 450 | 450 |", text)
         self.assertIn("| Dashboard state updates | 449 | 449 |", text)
+        self.assertIn("| Agents with repeated host report acceptance | n/a | n/a |", text)
         self.assertNotIn("Mock mode keeps", text)
+
+    def test_incomplete_agent_measurement_keeps_window_traffic_without_an_rss_verdict(self):
+        stats = {
+            "agents": 2, "docker_agents": 1, "containers_per_docker_agent": 40, "interval_s": 30,
+            "accepted": {"host": 60, "docker": 30}, "failed": {"host": 0, "docker": 0},
+            "dashboard": {"connects": 1, "messages": 90, "bytes": 1024, "state_updates": 89},
+        }
+        healthy = {
+            "window_s": 300, "end_reached": True, "complete": True, "dashboard_state_updates": 41,
+            "reports": {
+                "host": {"expected": 2, "accepted": 20, "agents_with_repeated_acceptance": 2},
+                "docker": {"expected": 1, "accepted": 10, "agents_with_repeated_acceptance": 1},
+            },
+        }
+        thin = {
+            **healthy, "complete": False, "dashboard_state_updates": 0,
+            "reports": {**healthy["reports"], "host": {
+                "expected": 2, "accepted": 10, "agents_with_repeated_acceptance": 1,
+            }},
+        }
+        code, result, text = self.run_summary(
+            samples(130000, 25, 0), samples(95000, 25, 0), estate="agents",
+            agents={"baseline": dict(stats, steady_traffic=healthy), "candidate": dict(stats, steady_traffic=thin)},
+            env={"PULSE_MEMORY_GATE": "0"}, wait_statuses=(0, 1), child_wait_statuses={"candidate": {"driver_wait_status": 1}},
+        )
+        self.assertEqual(code, 1)
+        self.assertEqual(result["status"], "incomplete")
+        self.assertNotIn("rss_growth_kib", result)
+        self.assertEqual(result["candidate_agents"]["steady_traffic"], thin)
+        self.assertIn("Candidate run did not complete successfully", text)
+        self.assertIn("| Agents with repeated host report acceptance | 2/2 (20 acceptances) | 1/2 (10 acceptances) |", text)
+        self.assertIn("| Dashboard state updates | 41 | 0 |", text)
 
     def test_legacy_frame_counts_are_not_reported_as_verified_state(self):
         stats = {

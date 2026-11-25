@@ -238,14 +238,20 @@ reports with 40 containers each), and keeps one dashboard WebSocket connected.
 It records each report's latency and counts a report as failed after the
 agent's own 15-second timeout.
 Mock mode drops pushed agent reports, so only this estate reaches the
-per-report registry refresh and state broadcast that #2199 measured. The job
-fails when the driver's reports were not accepted or its dashboard did not
-receive an initial state followed by a nonempty state update on the same
-connection. A handshake, welcome or heartbeat is not state-traffic proof.
-The artifact keeps application-message and verified state-message/update
-counts separate; older counters without that distinction show `n/a` for state
-traffic. This establishes that the path ran, not uninterrupted delivery
-throughout the measurement or recovery of a reported estate. The job reports memory, CPU and
+per-report registry refresh and state broadcast that #2199 measured. The
+driver still checks report failures across the whole run. A memory comparison
+also requires both drivers to reach the end of the planned final third,
+with at least two accepted HTTP responses per configured host and Docker
+report stream and a nonempty dashboard state update in that window. The
+update must follow an initial state on the same connection. An initial
+state before the window is valid for that connection; a handshake, welcome,
+heartbeat or warmup-only update does not count. Missing traffic leaves
+the observation incomplete; the summary and artifact keep same-window
+counts separate from whole-run counts, including on failure. Older receipts
+without these counts show `n/a`.
+HTTP acceptance is not proof that Pulse applied any individual report, and
+these counts do not establish uninterrupted delivery or recovery on a real
+estate. The job reports memory, CPU and
 writes without gating, and uploads `memory-regression-agents`. The scheduled
 issue reporter reads only the mock job.
 
