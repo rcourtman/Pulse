@@ -115,6 +115,13 @@ export function WorkloadsSurface(props: WorkloadsSurfaceProps) {
         props.emptyStateDescription ?? 'Workloads appear here when inventory is available.',
     };
   });
+  // Answer the active search first. The independent source warning must not
+  // push a filtered no-match explanation out of sight below an empty host table.
+  const compactFilteredEmpty = () =>
+    hasInventory() &&
+    tableOnlyFiltersActive() &&
+    state.filteredGuests().length === 0 &&
+    platformInventoryIssues().length > 0;
 
   return (
     <div ref={state.setClearSurfaceRootRef} class="space-y-3" data-testid="workloads-page">
@@ -133,6 +140,17 @@ export function WorkloadsSurface(props: WorkloadsSurfaceProps) {
         </Portal>
       </Show>
       <div class="space-y-3" data-testid="workloads-interaction-surface">
+        <Show when={tableReady() && compactFilteredEmpty()}>
+          <TableCard>
+            <TableCardHeader title={props.tableTitle} />
+            <div class="space-y-0.5 px-3 py-2">
+              <h3 class="text-sm font-semibold text-base-content">{tableOnlyEmptyState().title}</h3>
+              <p class="wrap-anywhere text-sm leading-5 text-muted">
+                {tableOnlyEmptyState().description}
+              </p>
+            </div>
+          </TableCard>
+        </Show>
         <Show when={tableReady() && hasInventory() && platformInventoryIssues().length > 0}>
           <InlineNotice tone="warning" role="region" aria-label="Guest inventory status">
             <p class="font-semibold">Guest inventory may be incomplete or out of date</p>
@@ -219,7 +237,7 @@ export function WorkloadsSurface(props: WorkloadsSurfaceProps) {
             }
           />
         </Show>
-        <Show when={tableReady() && state.filteredGuests().length === 0}>
+        <Show when={tableReady() && state.filteredGuests().length === 0 && !compactFilteredEmpty()}>
           <TableCard>
             <TableCardHeader title={props.tableTitle} />
             <div class="p-6">

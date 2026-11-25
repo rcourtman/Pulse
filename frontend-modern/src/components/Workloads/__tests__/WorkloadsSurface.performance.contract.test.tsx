@@ -550,20 +550,41 @@ describe('Workloads performance contract', () => {
           ],
         });
 
-        render(() => (
-          <PageOwnedWorkloadsSurface
-            forcedPlatform={platform}
-            inventorySourcesQuery={{ value, error: () => undefined, refetch: async () => value() }}
-          />
-        ));
+        render(() => {
+          const state = useWorkloadsState({
+            forcedPlatform: platform,
+            inventorySourcesQuery: { value, error: () => undefined, refetch: async () => value() },
+          });
+          return (
+            <>
+              <button type="button" onClick={() => state.setSearch('no-such-guest')}>
+                Search without a match
+              </button>
+              <button type="button" onClick={() => state.setSearch('')}>
+                Clear workload search
+              </button>
+              <WorkloadsSurface state={state} forcedPlatform={platform} />
+            </>
+          );
+        });
 
-        const guest = screen.getByTestId('guest-row-readable-guest');
+        expect(screen.getByTestId('guest-row-readable-guest')).toBeInTheDocument();
         const notice = screen.getByRole('region', { name: 'Guest inventory status' });
         expect(notice).toHaveTextContent('late-source · Collection stale (VMs)');
         expect(notice).toHaveTextContent('down-source · Source unreachable (VMs)');
         expect(notice).not.toHaveTextContent('other-platform');
         expect(screen.queryByText('No workload inventory available')).not.toBeInTheDocument();
 
+        // A visible warning must not displace the result of the current search.
+        fireEvent.click(screen.getByRole('button', { name: 'Search without a match' }));
+        expect(screen.queryByTestId('guest-row-readable-guest')).not.toBeInTheDocument();
+        const noMatch = screen.getByText('No guests match your search "no-such-guest"');
+        expect(
+          noMatch.compareDocumentPosition(notice) & Node.DOCUMENT_POSITION_FOLLOWING,
+        ).toBeTruthy();
+
+        fireEvent.click(screen.getByRole('button', { name: 'Clear workload search' }));
+        const guest = screen.getByTestId('guest-row-readable-guest');
         setValue({ sources: [value().sources[2]] });
         expect(notice).not.toBeInTheDocument();
         expect(screen.getByTestId('guest-row-readable-guest')).toBe(guest);
