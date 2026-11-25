@@ -1,0 +1,41 @@
+{
+  "version": 1,
+  "result": "passed",
+  "base_sha": "438617522bee9a1b2ea92f3b5b5a49375d7dd420",
+  "changed_paths": [
+    "frontend-modern/src/components/Workloads/WorkloadsSurface.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Workloads/WorkloadsSurface.tsx": "666ade11acad155d21977b03911066c1521217c682b4e6d577318042bc904ac1"
+  },
+  "verified_at": "2026-11-25T13:38:59Z",
+  "routes": [
+    "/proxmox/overview",
+    "/vmware/overview"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 950,
+      "browser": "Chromium 141.0.7390.37",
+      "theme": "light"
+    },
+    {
+      "width": 390,
+      "height": 844,
+      "browser": "WebKit 26.0",
+      "theme": "dark"
+    }
+  ],
+  "states": [
+    "Read-only fixture: one readable guest and two blocked sources per platform. Stale collection is distinct from unreachable.",
+    "The search has no matches, independent of a platform-scoped warning.",
+    "On the next existing source-health refresh, current platform issues clear while the other platform remains flagged."
+  ],
+  "interactions": [
+    "Enter a non-matching guest search at desktop width and with phone touch emulation; the no-match explanation remains.",
+    "Clear the search to restore the guest row. The source-health refresh clears the warning without replacing that row.",
+    "Compare each matched before/after screenshot at the same route, viewport, theme, fixture data and interaction; inspect the actual PNGs."
+  ],
+  "notes": "Playwright 1.56.1. Production frontend assets with synthetic, read-only API replies; not a live estate or a release check."
+}
