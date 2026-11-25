@@ -49,10 +49,27 @@ describe('shipped missing-data FAQ', () => {
     expect(text).toContain('access error, not on a missing chart alone');
   });
 
+  it('routes a shared collection gap before asking readers to check individual sources', () => {
+    const element = section('no-data-showing');
+    const text = prose(element);
+    expect(text).toContain('History for a resource Pulse polls through its platform API');
+    expect(text).toContain('Seen time in Machines for a host that uses a Pulse agent');
+    expect(text).toContain('their usual poll and report intervals and any retry delays');
+    expect(text).toContain('does not tell you whether alert rules ran');
+
+    const link = element.querySelector(
+      'a[href="/docs/TROUBLESHOOTING#health-is-green-but-the-dashboard-is-stalled"]',
+    );
+    expect(link?.textContent).toBe('stalled-dashboard checks');
+    expect(link!.compareDocumentPosition(element.querySelector('table')!)).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING,
+    );
+  });
+
   it('routes each symptom to a real heading in a shipped guide', () => {
     const sections = [section('no-data-showing'), section('connection-refused')];
     const links = sections.flatMap((element) => [...element.querySelectorAll('a[href]')]);
-    expect(links).toHaveLength(10);
+    expect(links).toHaveLength(11);
     expect(
       sections[0].querySelector(
         'a[href="/docs/TROUBLESHOOTING#replication-jobs-are-pending-stale-or-missing"]',

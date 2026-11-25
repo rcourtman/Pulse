@@ -276,6 +276,17 @@ Pulse permissions. Keep your independent administrator login available.
 
 First distinguish what is missing; Pulse monitors more than Proxmox.
 
+**Several independent sources stopped together?** Note the latest stored time
+in **History** for a resource Pulse polls through its platform API and the
+**Seen** time in **Machines** for a host that uses a Pulse agent. Compare them
+over the same period, allowing for their usual poll and report intervals and
+any retry delays.
+
+If neither time advances while the monitored systems still respond, note when
+the gap began and use the [stalled-dashboard checks](TROUBLESHOOTING.md#health-is-green-but-the-dashboard-is-stalled)
+before changing a connection. A green Health check or a watchdog heartbeat
+does not tell you whether alert rules ran.
+
 | Missing item | Check existing evidence first |
 | --- | --- |
 | Whole page or resource | Open its platform page, not just Machines. Follow the [current navigation guide](TROUBLESHOOTING.md#old-bookmarks-dont-work) for moved pages and bookmarks. |
