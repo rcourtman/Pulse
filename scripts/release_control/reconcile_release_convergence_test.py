@@ -735,9 +735,11 @@ class DecisionSummaryTests(unittest.TestCase):
         self.assertEqual([], selected)
         for text in (output, summary):
             self.assertIn("Current stable head v6.9.0, convergence run 12 (release run 1234): "
-                          "completed successfully; no retry selected.", text)
+                          "workflow reported success; no retry selected "
+                          "(delivery not verified by this check).", text)
             self.assertIn("Current preview head v6.9.0-rc.4, convergence run 11 (release run 1234): "
-                          "completed successfully; no retry selected.", text)
+                          "workflow reported success; no retry selected "
+                          "(delivery not verified by this check).", text)
             self.assertNotIn("convergence run 10", text)
         self.assertIn("not evidence of successful release convergence", summary)
 
@@ -771,8 +773,33 @@ class DecisionSummaryTests(unittest.TestCase):
         for text in (output, summary):
             self.assertIn("not yet completed; no retry selected", text)
             self.assertIn("no retryable terminal conclusion observed; delivery unverified", text)
-            self.assertNotIn("completed successfully", text)
+            self.assertNotIn("workflow reported success", text)
             self.assertNotIn("untrusted text", text)
+
+    def test_unwritable_channel_summary_does_not_block_reconciliation(self):
+        github = FakeGitHub()
+        head = github.api(f"repos/{github.repository}/releases/tags/v6.5.0-rc.1")
+        github.pages = lambda endpoint: (
+            [[head]] if "/releases?" in endpoint else [{"workflow_runs": github.runs}]
+        )
+        args = argparse.Namespace(repository=github.repository, run_id=None,
+                                  latest=True, max_attempts=5, dry_run=False)
+        with (
+            tempfile.TemporaryDirectory() as summary_directory,
+            patch.dict(os.environ, {"GITHUB_STEP_SUMMARY": summary_directory}),
+            patch.object(subject, "parse_args", return_value=args),
+            patch.object(subject, "GitHub", return_value=github),
+            patch.object(subject, "reconcile") as reconcile,
+            contextlib.redirect_stdout(io.StringIO()) as output,
+            contextlib.redirect_stderr(io.StringIO()) as errors,
+        ):
+            status = subject.main()
+        self.assertEqual(0, status, errors.getvalue())
+        reconcile.assert_called_once()
+        self.assertEqual((github, 100, 5), reconcile.call_args.args)
+        self.assertIs(head, reconcile.call_args.kwargs["expected_head"])
+        self.assertIn("terminal failure selected for reconciliation", output.getvalue())
+        self.assertIn("Could not write scheduled channel decisions to the step summary", errors.getvalue())
 
     def test_unavailable_run_inventory_reports_heads_but_never_selects_a_retry(self):
         github = FakeGitHub()
@@ -783,6 +810,8 @@ class DecisionSummaryTests(unittest.TestCase):
         args = argparse.Namespace(repository=github.repository, run_id=None,
                                   latest=True, max_attempts=5, dry_run=False)
         with (
+            tempfile.TemporaryDirectory() as summary_directory,
+            patch.dict(os.environ, {"GITHUB_STEP_SUMMARY": summary_directory}),
             patch.object(subject, "parse_args", return_value=args),
             patch.object(subject, "GitHub", return_value=github),
             patch.object(github, "pages", side_effect=[
@@ -797,6 +826,7 @@ class DecisionSummaryTests(unittest.TestCase):
         self.assertIn("Current preview head v6.9.0-rc.4: convergence run inventory unavailable",
                       output.getvalue())
         self.assertNotIn("no matching convergence run observed", output.getvalue())
+        self.assertIn("Could not write scheduled channel decisions to the step summary", errors.getvalue())
         self.assertIn("GitHub run inventory read failed", errors.getvalue())
 
     def test_credential_hold_is_visible_without_retry(self):

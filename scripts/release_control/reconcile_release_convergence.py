@@ -231,7 +231,7 @@ def scheduled_channel_decisions(
         if tag in debts and debts[tag][1] is release:
             reason = "terminal failure selected for reconciliation"
         elif status == "completed" and conclusion == "success":
-            reason = "completed successfully; no retry selected"
+            reason = "workflow reported success; no retry selected (delivery not verified by this check)"
         elif status in ("queued", "in_progress", "waiting", "requested", "pending"):
             reason = "not yet completed; no retry selected"
         else:
@@ -602,18 +602,23 @@ def flatten_pages(pages: Iterable[object], key: str | None = None) -> list[objec
     return values
 
 
-def report_decision(message: str) -> None:
+def report_decision(message: str, *, summary_required: bool = True) -> None:
     """Expose safe decision text, not private API responses, in the run summary."""
     print(message)
     summary = os.environ.get("GITHUB_STEP_SUMMARY")
     if summary:
-        with open(summary, "a", encoding="utf-8") as output:
-            output.write(
-                "### Release convergence reconciliation\n\n"
-                "A successful reconciliation job is not evidence of successful "
-                "release convergence or installed customer health.\n\n"
-                f"<pre>{html.escape(message)}</pre>\n\n"
-            )
+        try:
+            with open(summary, "a", encoding="utf-8") as output:
+                output.write(
+                    "### Release convergence reconciliation\n\n"
+                    "A successful reconciliation job is not evidence of successful "
+                    "release convergence or installed customer health.\n\n"
+                    f"<pre>{html.escape(message)}</pre>\n\n"
+                )
+        except OSError:
+            if summary_required:
+                raise
+            print("Could not write scheduled channel decisions to the step summary.", file=sys.stderr)
 
 
 def reconcile(
@@ -858,7 +863,7 @@ def discover(github: GitHub) -> list[tuple[int, dict[str, Any]]]:
         _, decisions = scheduled_channel_decisions(
             heads, None, workflow_id=workflow_id, default_branch=default_branch
         )
-        report_decision("\n".join(decisions))
+        report_decision("\n".join(decisions), summary_required=False)
         raise
     debts, decisions = scheduled_channel_decisions(
         heads,
@@ -866,7 +871,8 @@ def discover(github: GitHub) -> list[tuple[int, dict[str, Any]]]:
         workflow_id=workflow_id,
         default_branch=default_branch,
     )
-    report_decision("\n".join(decisions))
+    # Summary I/O must not prevent the selected debts from reaching reconciliation.
+    report_decision("\n".join(decisions), summary_required=False)
     return debts
 
 
