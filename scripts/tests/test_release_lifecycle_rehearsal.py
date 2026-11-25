@@ -393,10 +393,15 @@ class HarnessContractTest(unittest.TestCase):
 
 
 class RunningExecutableReadbackTest(unittest.TestCase):
-    def check_runtime(self, *, matching: bool = True, unavailable: bool = False,
-                      after_pid: int = 123, after_started: int = 100) -> subprocess.CompletedProcess:
+    def run_systemd_fixture(self, tail: str, *, failed_units: str = "", failed_units_exit: int = 0,
+                            baseline: str = "", updater_properties: str = (
+                                "LoadState=loaded\nExecMainStartTimestampMonotonic=0\n"
+                            ), updater_exit: int = 0, hosted: bool = False,
+                            matching: bool = True, unavailable: bool = False,
+                            after_pid: int = 123, after_started: int = 100) -> subprocess.CompletedProcess:
         source = HARNESS_PATH.read_text(encoding="utf-8")
-        names = ("read_pulse_runtime_identity", "assert_runtime")
+        names = ("read_failed_units", "record_failed_unit_baseline", "start_container",
+                 "read_pulse_runtime_identity", "read_unattended_update_start", "assert_runtime")
         functions = "\n".join(
             f"{name}() {{" + source.split(f"{name}() {{", 1)[1].split("\n}\n", 1)[0] + "\n}"
             for name in names if f"{name}() {{" in source
@@ -414,15 +419,30 @@ class RunningExecutableReadbackTest(unittest.TestCase):
             program = textwrap.dedent(r'''
                 set -euo pipefail
                 API=http://unused.test
-                HOSTED_BROWSER=false
-                BASELINE_FAILED_UNITS=""
+                HOSTED_BROWSER="$FIXTURE_HOSTED"
+                BASELINE_FAILED_UNITS="$FIXTURE_BASELINE"
+                ENGINE=fake_engine
+                CONTAINER=fixture
+                CONTAINER_TOLERATED_UNITS="systemd-hostnamed.service systemd-timedated.service systemd-localed.service"
+                WORK_DIR="$FIXTURE"
+                SYSTEMD_IMAGE=unused
                 CURRENT_FAILURE=""
                 note_failure() { printf '%s\n' "$*" >&2; CURRENT_FAILURE=failed; }
                 log() { printf '%s\n' "$*"; }
+                fake_engine() {
+                    case "$1" in
+                        run) ;;
+                        inspect) printf 'true\n' ;;
+                        exec) printf 'running\n' ;;
+                        *) return 97 ;;
+                    esac
+                }
                 cexec() {
                     local program="$1"; shift
                     case "$program" in
                         '/opt/pulse/bin/pulse --version '*) printf 'v6.8.0\n' ;;
+                        'mkdir -p /etc/systemd/'* | 'export DEBIAN_FRONTEND='*)
+                            printf 'guest setup reached\n' ;;
                         *) env "$@" bash -c "$program" ;;
                     esac
                 }
@@ -430,11 +450,17 @@ class RunningExecutableReadbackTest(unittest.TestCase):
                     case "$1" in
                         is-active) printf 'active\n' ;;
                         is-enabled) printf 'enabled\n' ;;
-                        list-units) ;;
+                        list-units) printf '%s' "$FAILED_UNITS"; return "$FAILED_UNITS_EXIT" ;;
                         show)
                             case "$*" in
                                 *Environment*) printf 'PULSE_TELEMETRY=false\n'; return ;;
-                                *pulse-update.service) printf '0\n'; return ;;
+                                *pulse-update.service)
+                                    if [[ " $* " == *" --value "* ]]; then
+                                        sed -n 's/^ExecMainStartTimestampMonotonic=//p' <<<"$UPDATER_PROPERTIES"
+                                    else
+                                        printf '%s' "$UPDATER_PROPERTIES"
+                                    fi
+                                    return "$UPDATER_EXIT" ;;
                             esac
                             if [[ -f "$FIXTURE/version-read" ]]; then
                                 printf 'MainPID=%s\nExecMainStartTimestampMonotonic=%s\n' "$AFTER_PID" "$AFTER_STARTED"
@@ -466,20 +492,91 @@ class RunningExecutableReadbackTest(unittest.TestCase):
                 export -f systemctl stat curl
             ''')
             return subprocess.run(
-                ["bash", "-c", program + functions + '\nassert_runtime v6.8.0\n'
-                 'printf "%s / %s\n" "$PHASE_VERSION" "$PHASE_HEALTH"\n'
-                 'printf "%s\n" "$PHASE_UNITS"\n'
-                 '[[ -z "$CURRENT_FAILURE" ]]\n'],
+                ["bash", "-c", program + functions + "\n" + tail],
                 capture_output=True, text=True, timeout=15,
-                env={"PATH": os.environ["PATH"], "LC_ALL": "C", "FIXTURE": str(root), "AFTER_PID": str(after_pid),
-                     "AFTER_STARTED": str(after_started)},
+                env={"PATH": os.environ["PATH"], "LC_ALL": "C", "FIXTURE": str(root),
+                     "AFTER_PID": str(after_pid), "AFTER_STARTED": str(after_started),
+                     "FIXTURE_HOSTED": str(hosted).lower(), "FIXTURE_BASELINE": baseline,
+                     "FAILED_UNITS": failed_units, "FAILED_UNITS_EXIT": str(failed_units_exit),
+                     "UPDATER_PROPERTIES": updater_properties, "UPDATER_EXIT": str(updater_exit)},
             )
+
+    def check_runtime(self, **kwargs) -> subprocess.CompletedProcess:
+        return self.run_systemd_fixture(
+            'assert_runtime v6.8.0\n'
+            'printf "%s / %s\n" "$PHASE_VERSION" "$PHASE_HEALTH"\n'
+            'printf "%s\n" "$PHASE_UNITS"\n'
+            '[[ -z "$CURRENT_FAILURE" ]]\n', **kwargs,
+        )
+
+    def test_requires_failed_unit_baseline_before_guest_setup(self) -> None:
+        for hosted in (False, True):
+            for units in ("", "older.service loaded failed failed Synthetic\n"):
+                with self.subTest(hosted=hosted, partial=bool(units)):
+                    result = self.run_systemd_fixture(
+                        'if start_container; then printf "baseline=%s\n" "$BASELINE_FAILED_UNITS"; else exit 1; fi',
+                        hosted=hosted, failed_units=units, failed_units_exit=1,
+                    )
+                    self.assertEqual(1, result.returncode, result.stdout + result.stderr)
+                    self.assertIn("systemd failed-unit baseline unavailable", result.stdout)
+                    self.assertNotIn("guest setup reached", result.stdout)
+
+    def test_retains_a_read_baseline_before_guest_setup(self) -> None:
+        for hosted in (False, True):
+            with self.subTest(hosted=hosted):
+                result = self.run_systemd_fixture(
+                    'if start_container; then printf "baseline=%s\n" "$BASELINE_FAILED_UNITS"; else exit 1; fi',
+                    hosted=hosted, failed_units="older.service loaded failed failed Synthetic\n",
+                )
+                self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+                self.assertIn("baseline=older.service\n", result.stdout)
+                self.assertIn("guest setup reached", result.stdout)
+
+    def test_failed_unit_read_error_cannot_pass_empty_or_partial_result(self) -> None:
+        for units in ("", "older.service loaded failed failed Synthetic\n"):
+            with self.subTest(partial=bool(units)):
+                result = self.check_runtime(baseline="older.service", failed_units=units, failed_units_exit=1)
+                self.assertEqual(1, result.returncode, result.stdout + result.stderr)
+                self.assertIn("systemd failed-unit read unavailable", result.stderr)
+                self.assertIn("6.8.0 / healthy", result.stdout)
+
+    def test_checks_new_failed_units_without_counting_pre_existing_units(self) -> None:
+        result = self.check_runtime(
+            baseline="older.service",
+            failed_units="older.service loaded failed failed Already failed\npulse-worker.service loaded failed failed New failure\n",
+        )
+        self.assertEqual(1, result.returncode, result.stdout + result.stderr)
+        self.assertIn("systemd units failed during the rehearsal: pulse-worker.service", result.stderr)
+        self.assertNotIn("older.service", result.stderr)
+
+    def test_unattended_updater_read_error_cannot_pass_as_not_started(self) -> None:
+        for properties, status in (("", 1), ("", 0), ("LoadState=loaded\n", 0),
+                                   ("LoadState=loaded\nExecMainStartTimestampMonotonic=0\n", 1),
+                                   ("LoadState=loaded\nExecMainStartTimestampMonotonic=unknown\n", 0)):
+            with self.subTest(properties=properties, status=status):
+                result = self.check_runtime(updater_properties=properties, updater_exit=status)
+                self.assertEqual(1, result.returncode, result.stdout + result.stderr)
+                self.assertIn("pulse-update.service start read unavailable", result.stderr)
+                self.assertNotIn("pulse-update.service ran during the rehearsal", result.stderr)
+
+    def test_checks_explicitly_missing_and_started_unattended_updater(self) -> None:
+        for properties in ("LoadState=not-found\n", "LoadState=not-found\nExecMainStartTimestampMonotonic=0\n"):
+            with self.subTest(properties=properties):
+                missing = self.check_runtime(updater_properties=properties)
+                self.assertEqual(0, missing.returncode, missing.stdout + missing.stderr)
+                self.assertIn("unattended updater not installed", missing.stdout)
+        started = self.check_runtime(updater_properties=(
+            "ExecMainStartTimestampMonotonic=523\nLoadState=loaded\n"
+        ))
+        self.assertEqual(1, started.returncode, started.stdout + started.stderr)
+        self.assertIn("pulse-update.service ran during the rehearsal", started.stderr)
 
     def test_same_running_and_installed_file_passes(self) -> None:
         result = self.check_runtime()
         self.assertEqual(0, result.returncode, result.stderr)
         self.assertIn("6.8.0 / healthy", result.stdout)
         self.assertIn("active/enabled, executable verified", result.stdout)
+        self.assertIn("unattended updater not started", result.stdout)
 
     def test_matching_versions_do_not_hide_missing_or_detached_executables(self) -> None:
         for overrides in ({"matching": False}, {"unavailable": True}, {"after_pid": 0}):
