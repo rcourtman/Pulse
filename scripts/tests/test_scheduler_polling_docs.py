@@ -207,9 +207,22 @@ class SchedulerPollingDocsTest(unittest.TestCase):
     def test_local_queries_reuse_one_snapshot_and_preserve_failing_instances(self):
         queries = [block for block in blocks() if "jq " in block and ENDPOINT not in block]
         self.assertEqual(len(queries), 5)
+        body = snapshot()
+        body["instances"][1]["pollStatus"]["lastError"] = {
+            "at": "2026-10-03T11:59:30Z", "category": "transient", "message": "private fixture error",
+        }
+        body["instances"].extend([
+            {"key": "pmg::partial", "connection": "https://private-fixture.invalid",
+             "pollStatus": {"lastSuccess": "2026-10-03T11:59:58Z", "consecutiveFailures": 0,
+                            "lastError": {"at": "2026-10-03T11:59:58Z", "category": "partial",
+                                          "message": "private fixture error"}},
+             "breaker": {"state": "closed"}, "deadLetter": {"present": False}},
+            {"key": "pbs::no-result-yet", "pollStatus": {"consecutiveFailures": 0},
+             "breaker": {"state": "closed"}, "deadLetter": {"present": False}},
+        ])
         with tempfile.TemporaryDirectory(prefix="saved scheduler ") as temporary:
             path = Path(temporary) / "health.json"
-            path.write_text(json.dumps(snapshot()))
+            path.write_text(json.dumps(body))
             results = []
             for query in queries:
                 self.assertNotIn("curl", query)
@@ -217,6 +230,8 @@ class SchedulerPollingDocsTest(unittest.TestCase):
                 result = subprocess.run(["bash", "-eu", "-c", code], capture_output=True,
                                         text=True, timeout=5)
                 self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertNotIn("private fixture error", result.stdout)
+                self.assertNotIn("private-fixture.invalid", result.stdout)
                 decoder = json.JSONDecoder()
                 text = result.stdout.strip()
                 rows = []
@@ -226,8 +241,15 @@ class SchedulerPollingDocsTest(unittest.TestCase):
                     text = text[end:].strip()
                 results.append(rows)
             self.assertEqual(results[0], [{"updatedAt": snapshot()["updatedAt"], "enabled": True,
-                                          "queueDepth": 3, "deadLetterCount": 1, "instanceCount": 3}])
-            self.assertEqual([r["key"] for r in results[1]], ["pve::retrying", "pve::failed"])
+                                          "queueDepth": 3, "deadLetterCount": 1, "instanceCount": 5}])
+            self.assertEqual(results[1], [
+                {"key": "pve::retrying", "lastSuccess": "2026-10-03T11:59:00Z", "failures": 2,
+                 "lastErrorAt": "2026-10-03T11:59:30Z", "lastErrorCategory": "transient"},
+                {"key": "pve::failed", "lastSuccess": "2026-10-03T11:55:00Z", "failures": 5,
+                 "lastErrorAt": None, "lastErrorCategory": None},
+                {"key": "pmg::partial", "lastSuccess": "2026-10-03T11:59:58Z", "failures": 0,
+                 "lastErrorAt": "2026-10-03T11:59:58Z", "lastErrorCategory": "partial"},
+            ])
             self.assertEqual(results[2], [{"key": "pve::failed", "reason": "permanent_failure"}])
             self.assertEqual(results[3], [{"key": "pve::retrying", "state": "half_open"},
                                           {"key": "pve::failed", "state": "open"}])
@@ -235,7 +257,7 @@ class SchedulerPollingDocsTest(unittest.TestCase):
     def test_fixed_timing_comparison_distinguishes_progress_failure_and_no_result(self):
         first = "2026-10-03T12:00:00Z"
         second = "2026-10-03T12:03:00Z"
-        query = next(block for block in blocks() if "lastErrorAt:" in block)
+        query = next(block for block in blocks() if "polls: [" in block)
 
         def payload(observed_at, healthy, failing, partial):
             def row(key, status):
