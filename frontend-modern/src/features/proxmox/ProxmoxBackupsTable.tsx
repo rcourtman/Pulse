@@ -733,6 +733,15 @@ export const ProxmoxBackupsTable: Component<{
     });
   });
 
+  // Count only entries that clearing the day would reveal. An unknown date
+  // isn't evidence for or against any particular day.
+  const undatedEntryCount = createMemo(() =>
+    scopedRecoverableArtifacts().reduce(
+      (count, artifact) => (artifact.createdMs === undefined ? count + 1 : count),
+      0,
+    ),
+  );
+
   const filteredRecoverableArtifacts = createMemo(() => {
     const dateKey = selectedDateKey();
     const list = scopedRecoverableArtifacts().filter(
@@ -886,7 +895,9 @@ export const ProxmoxBackupsTable: Component<{
       return (
         issue?.dayDescription ??
         issue?.description ??
-        'A failed backup usually leaves none, and retention prunes older ones.'
+        (undatedEntryCount() > 0
+          ? 'Only entries with a known date can match this day.'
+          : 'A failed backup usually leaves none, and retention prunes older ones.')
       );
     }
     if (!issue) return undefined;
@@ -1151,15 +1162,16 @@ export const ProxmoxBackupsTable: Component<{
             </div>
           </Show>
 
-          <Show
-            when={
-              view() === 'date' &&
-              !selectedDateKey() &&
-              scopedRecoverableArtifacts().some((artifact) => artifact.createdMs === undefined)
-            }
-          >
+          <Show when={view() === 'date' && undatedEntryCount() > 0}>
             <p class="text-xs text-amber-700 dark:text-amber-300" role="status">
-              Backup entries with unavailable or future dates remain listed. Their ages are unknown.
+              <Show
+                when={selectedDateKey()}
+                fallback="Backup entries with unavailable or future dates remain listed. Their ages are unknown."
+              >
+                {undatedEntryCount() === 1
+                  ? '1 backup entry with an unknown date is hidden. Clear the day filter to see it.'
+                  : `${undatedEntryCount()} backup entries with unknown dates are hidden. Clear the day filter to see them.`}
+              </Show>
             </p>
           </Show>
 
@@ -1207,7 +1219,7 @@ export const ProxmoxBackupsTable: Component<{
               emptyIcon={props.emptyIcon}
               filteredEmptyTitle={
                 onlyDayFiltered()
-                  ? `No restore points ${qualifyRestorePointCounts() ? 'listed for' : 'from'} ${getRecoveryFilterDateLabel(selectedDateKey()!)}`
+                  ? `No restore points ${qualifyRestorePointCounts() || undatedEntryCount() > 0 ? 'listed for' : 'from'} ${getRecoveryFilterDateLabel(selectedDateKey()!)}`
                   : undefined
               }
               filteredEmptyDescription={filteredEmptyDescription()}

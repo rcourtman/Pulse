@@ -927,6 +927,88 @@ describe('ProxmoxBackupsTable', () => {
       await screen.findAllByText('pbs-docker');
     });
 
+    it('qualifies an empty day when admitted backup entries cannot be dated', async () => {
+      const known = pbsPayload.data.backups[0];
+      mockBackupAPIs('protected', {
+        ...pbsPayload,
+        data: {
+          backups: [
+            known,
+            { ...known, id: 'undated-pbs-point', backupTime: 'not-a-date' },
+            { ...known, id: 'zero-time-pbs-point', backupTime: '0001-01-01T00:00:00Z' },
+          ],
+        },
+      });
+      window.history.replaceState({}, '', '/proxmox/backups/date?day=2026-01-01');
+      renderWithDays();
+
+      expect(await screen.findByText('0 of 5 restore points')).toBeVisible();
+      expect(await screen.findByText('No restore points listed for Jan 1, 2026')).toBeVisible();
+      expect(screen.getByText(/2 backup entries with unknown dates are hidden/)).toHaveAttribute(
+        'role',
+        'status',
+      );
+      expect(screen.queryByText(/A failed backup usually leaves none/)).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /Identifier: undated-pbs-point/ })).toBeNull();
+
+      await fireEvent.click(screen.getByRole('button', { name: 'Clear day' }));
+      await waitFor(() => expect(dayParam()).toBeNull());
+      expect(screen.queryByText(/entries with unknown dates are hidden/)).not.toBeInTheDocument();
+      expect(screen.getByText('Unknown date', { exact: true })).toBeVisible();
+      expect(screen.getByRole('button', { name: /Identifier: undated-pbs-point/ })).toBeVisible();
+      expect(screen.getByRole('button', { name: /Identifier: zero-time-pbs-point/ })).toBeVisible();
+    });
+
+    it('explains dated results without counting unknown dates outside the active search', async () => {
+      const known = pbsPayload.data.backups[0];
+      mockBackupAPIs('protected', {
+        ...pbsPayload,
+        data: {
+          backups: [
+            {
+              ...known,
+              id: 'nightly-dated-point',
+              backupTime: new Date(2026, 4, 25, 12).toISOString(),
+            },
+            { ...known, id: 'nightly-undated-point', backupTime: '' },
+            { ...known, id: 'weekly-undated-point', backupTime: '' },
+          ],
+        },
+      });
+      window.history.replaceState(
+        {},
+        '',
+        '/proxmox/backups/date?day=2026-05-25&source=pbs&q=nightly',
+      );
+      renderWithDays();
+      expect(
+        await screen.findByRole('button', { name: /Identifier: nightly-dated-point/ }),
+      ).toBeVisible();
+      expect(screen.getByText(/1 backup entry with an unknown date is hidden/)).toBeVisible();
+      expect(
+        screen.queryByRole('button', { name: /Identifier: nightly-undated-point/ }),
+      ).toBeNull();
+
+      const search = screen.getByPlaceholderText(/Search backups by workload/);
+      fireEvent.input(search, { target: { value: 'nightly-dated' } });
+      await waitFor(() =>
+        expect(screen.queryByText(/unknown date is hidden/)).not.toBeInTheDocument(),
+      );
+      fireEvent.input(search, { target: { value: 'nightly' } });
+      expect(
+        await screen.findByText(/1 backup entry with an unknown date is hidden/),
+      ).toBeVisible();
+
+      await fireEvent.click(screen.getByRole('button', { name: 'Clear day' }));
+      await waitFor(() => expect(dayParam()).toBeNull());
+      expect(search).toHaveValue('nightly');
+      expect(new URLSearchParams(window.location.search).get('source')).toBe('pbs');
+      expect(
+        screen.getByRole('button', { name: /Identifier: nightly-undated-point/ }),
+      ).toBeVisible();
+      expect(screen.queryByRole('button', { name: /Identifier: weekly-undated-point/ })).toBeNull();
+    });
+
     it('does not blame the day when another filter hid its rows', async () => {
       mockBackupAPIs();
       window.history.replaceState({}, '', '/proxmox/backups/date?day=2026-05-25&q=no-such-guest');
