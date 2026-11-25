@@ -4,6 +4,19 @@ The unified agent (`pulse-agent`) is the single host-installed Pulse infrastruct
 Install it on standalone hosts and on machines where Pulse needs full node-local telemetry.
 For API-backed platforms, start with the platform connection first and add the agent only where local telemetry is needed.
 
+For remote Proxmox sites, plan for two separate connections:
+
+- **Pulse server → PVE or PBS API:** Pulse polls for platform data such as
+  guest inventory or backup history. The agent does not forward those API
+  reads, even if it helped register the connection.
+- **Host agent → Pulse server:** The agent sends host-local readings. A
+  connected agent does not mean Pulse can reach the APIs.
+
+Keep PVE and PBS off the public internet. A VPN can connect out from the
+remote site without a public port forward, but Pulse still needs access to the
+private API endpoints over the VPN. If you can't allow those API requests,
+run Pulse on the same private network as the APIs for that site's monitoring.
+
 For Proxmox, install the agent only where you need telemetry that the Proxmox
 API cannot provide, such as host SMART and temperature data, local
 ZFS/Ceph/mdadm detail, arbitrary host mount reads, or the full mounted

@@ -53,6 +53,11 @@ See [Agent Security](AGENT_SECURITY.md#proxmox-deployment-choices).
 
 ### Method 1: API-Only Connection (Recommended)
 
+The Pulse server must be able to reach the PBS HTTPS URL you save below. If
+Pulse runs at another site, use a private network or VPN. Do not forward the
+PBS API port to the public internet. A connected host agent can send local
+readings but does not carry PBS datastore status or backup history to Pulse.
+
 Use a dedicated PBS monitoring user and token, not a root password. On a new
 setup, run these commands in an administrator shell **on the PBS server**:
 
