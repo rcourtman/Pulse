@@ -61,6 +61,69 @@ func runInitialScheduleFixturePoll(t *testing.T, ctx context.Context, m *Monitor
 	m.executeAndRescheduleTask(ctx, task, nil, 0)
 }
 
+func TestScheduledPollWakesAnIdleWorker(t *testing.T) {
+	for _, tc := range []struct {
+		name                      string
+		future, adaptive, process bool
+	}{
+		{name: "empty-local"},
+		{name: "empty-process", process: true},
+		{name: "future-local", future: true, adaptive: true},
+		{name: "future-process", future: true, adaptive: true, process: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			synctest.Test(t, func(t *testing.T) {
+				ctx, cancel := context.WithCancel(t.Context())
+				defer cancel()
+				var readAt time.Time
+				m := newScheduleFixture(ctx, tc.adaptive, func(context.Context) ([]proxmox.Node, error) {
+					readAt = time.Now()
+					return []proxmox.Node{{Node: scheduleFixtureNode, Status: "online", CPU: 0.42, Uptime: 36000}}, nil
+				})
+				if tc.future {
+					m.taskQueue.Upsert(ScheduledTask{
+						InstanceType: InstanceTypePBS, InstanceName: "future-pbs",
+						NextRun: time.Now().Add(time.Minute),
+					})
+				}
+				if tc.process {
+					go m.dispatchTaskWorkers(ctx, newPollTaskWorkerLimiter(1))
+				} else {
+					go m.taskWorker(ctx, 0)
+				}
+				synctest.Wait()
+				time.Sleep(time.Millisecond)
+
+				due := time.Now()
+				m.poll(ctx, nil)
+				synctest.Wait()
+				publishedOnAdmission := len(m.state.GetSnapshot().Nodes)
+				// Keep observing through the old fixed recheck period so
+				// the baseline also has a comparable real poll result.
+				time.Sleep(250 * time.Millisecond)
+				synctest.Wait()
+				nodes := m.state.GetSnapshot().Nodes
+				if len(nodes) != 1 || nodes[0].CPU != 0.42 || readAt.IsZero() {
+					t.Fatalf("ordinary poll did not publish its node: %+v (read at %v)", nodes, readAt)
+				}
+				points := m.metricsHistory.GetNodeMetrics(nodes[0].ID, "cpu", time.Minute)
+				if len(points) != 1 || points[0].Value != 42 {
+					t.Fatalf("ordinary poll did not publish its CPU History point: %+v", points)
+				}
+				t.Logf("PVE read %s after due; node CPU %.0f%%, History points %d", readAt.Sub(due), nodes[0].CPU*100, len(points))
+				if publishedOnAdmission != 1 || !readAt.Equal(due) {
+					t.Errorf("newly due work waited %s despite an available worker", readAt.Sub(due))
+				}
+				if tc.future {
+					if _, ok := m.taskQueue.Get(InstanceTypePBS, "future-pbs"); !ok {
+						t.Error("a future peer must remain queued")
+					}
+				}
+			})
+		})
+	}
+}
+
 type lateScheduledPollFixture struct {
 	before               models.StateSnapshot
 	after                models.StateSnapshot

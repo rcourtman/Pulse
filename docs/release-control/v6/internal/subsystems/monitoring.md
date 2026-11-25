@@ -113,6 +113,28 @@ the peer's next ordinary poll updates its PVE row and writes its next CPU
 History point. These fixtures do not establish an installed outage's cause
 or recovery.
 
+### Idle poll workers wake when work becomes eligible sooner
+
+An empty active queue has no idle recheck timer. If its head is in the
+future, waiting workers sleep to that deadline. An insertion, a tightened
+schedule or a returned claim that puts new work at the head sooner wakes the
+waiting workers to recheck the live queue. A removal or postponement can
+leave one old timer wake; workers still claim only a due task under the
+queue lock. Cancellation still ends the wait. The same rules apply to local
+workers and the process-limited dispatcher; claim ownership, poll cadence,
+retry backoff, worker limits and published poll results are unchanged.
+
+`TestScheduledPollWakesAnIdleWorker` drives ordinary PVE planning and
+publication with an empty or future-only queue in both worker modes. It
+checks that the due node and its CPU History point are collected without
+waiting for an unrelated timer. `TestWaitNext_RearmsForShorterCadence` checks
+that a tightened head runs at, not before, its new deadline.
+`TestWaitNext_RechecksAfterHeadRemoval` checks that an obsolete timer
+does not claim a removed task or a future peer early.
+`TestWaitNext_WakesWhenClaimReturnsAnExplicitSuccessor` checks that one
+worker takes the replacement only after the original claim returns and that
+an independent peer can still wake the other worker.
+
 ### Notification delivery health does not hold the monitoring tick
 
 Periodic notification-health evaluation still starts from the poll tick and

@@ -3,6 +3,7 @@ package monitoring
 import (
 	"context"
 	"testing"
+	"testing/synctest"
 	"time"
 )
 
@@ -1130,4 +1131,132 @@ func TestWaitNext_MultipleTasks(t *testing.T) {
 	if queue.Size() != 2 {
 		t.Errorf("queue size should be 2, got %d", queue.Size())
 	}
+}
+
+func TestWaitNext_RearmsForShorterCadence(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		q := NewTaskQueue()
+		ctx, cancel := context.WithCancel(t.Context())
+		defer cancel()
+		now := time.Now()
+		task := ScheduledTask{
+			InstanceType: InstanceTypePVE, InstanceName: "fixture",
+			NextRun: now.Add(time.Minute), Interval: time.Minute,
+		}
+		q.upsertPlan(task)
+		claimed := make(chan ScheduledTask, 1)
+		go func() {
+			if task, ok := q.WaitNext(ctx); ok {
+				claimed <- task
+			}
+		}()
+		synctest.Wait()
+
+		// Change the planner's cadence while a worker is sleeping on the
+		// existing head. Neither the edit nor its wake makes the task due.
+		task.Interval = 20 * time.Millisecond
+		q.upsertPlan(task)
+		time.Sleep(task.Interval - time.Millisecond)
+		synctest.Wait()
+		if len(claimed) != 0 {
+			t.Fatal("shorter cadence ran before the tightened deadline")
+		}
+		time.Sleep(time.Millisecond)
+		synctest.Wait()
+		select {
+		case got := <-claimed:
+			if want := now.Add(task.Interval); !got.NextRun.Equal(want) {
+				t.Errorf("claimed deadline %v; want %v", got.NextRun, want)
+			}
+		default:
+			t.Fatal("worker did not wake at the tightened deadline")
+		}
+	})
+}
+
+func TestWaitNext_RechecksAfterHeadRemoval(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		q := NewTaskQueue()
+		ctx, cancel := context.WithCancel(t.Context())
+		defer cancel()
+		head := ScheduledTask{InstanceType: InstanceTypePVE, InstanceName: "head", NextRun: time.Now().Add(20 * time.Millisecond)}
+		peer := ScheduledTask{InstanceType: InstanceTypePBS, InstanceName: "peer", NextRun: time.Now().Add(40 * time.Millisecond)}
+		q.Upsert(head)
+		q.Upsert(peer)
+		claimed := make(chan ScheduledTask, 1)
+		go func() {
+			if task, ok := q.WaitNext(ctx); ok {
+				claimed <- task
+			}
+		}()
+		synctest.Wait()
+
+		q.Remove(head.InstanceType, head.InstanceName)
+		time.Sleep(20 * time.Millisecond)
+		synctest.Wait()
+		if len(claimed) != 0 {
+			t.Fatal("a stale deadline admitted removed or future work")
+		}
+		time.Sleep(20 * time.Millisecond)
+		synctest.Wait()
+		select {
+		case got := <-claimed:
+			if got != peer {
+				t.Errorf("claimed %+v; want %+v", got, peer)
+			}
+		default:
+			t.Fatal("remaining task did not run at its own deadline")
+		}
+	})
+}
+
+func TestWaitNext_WakesWhenClaimReturnsAnExplicitSuccessor(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		q := NewTaskQueue()
+		ctx, cancel := context.WithCancel(t.Context())
+		defer cancel()
+		task := ScheduledTask{InstanceType: InstanceTypePBS, InstanceName: "fixture", NextRun: time.Now()}
+		q.Upsert(task)
+		original, ok := q.WaitNext(ctx)
+		if !ok {
+			t.Fatal("first task was not claimed")
+		}
+		claimed := make(chan ScheduledTask, 2)
+		startWaiter := func() {
+			go func() {
+				if got, ok := q.WaitNext(ctx); ok {
+					claimed <- got
+				}
+			}()
+		}
+		startWaiter()
+		startWaiter()
+		synctest.Wait()
+
+		task.Interval = 3 * time.Minute
+		q.Upsert(task)
+		synctest.Wait()
+		if len(claimed) != 0 {
+			t.Fatal("explicit successor overlapped the original claim")
+		}
+		q.completeClaim(original, ScheduledTask{}, noPollReschedule)
+		synctest.Wait()
+		if len(claimed) != 1 {
+			t.Fatalf("want one immediate successor claim, got %d", len(claimed))
+		}
+		if got := <-claimed; got != task {
+			t.Errorf("lost explicit successor: got %+v, want %+v", got, task)
+		}
+		peer := ScheduledTask{InstanceType: InstanceTypePVE, InstanceName: task.InstanceName, NextRun: time.Now()}
+		q.Upsert(peer)
+		synctest.Wait()
+		select {
+		case got := <-claimed:
+			if got != peer {
+				t.Errorf("peer claim = %+v, want %+v", got, peer)
+			}
+		default:
+			t.Error("a now-due peer did not wake the remaining worker")
+		}
+	})
 }
