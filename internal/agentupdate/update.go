@@ -111,6 +111,7 @@ var (
 	chmodFn                      = os.Chmod
 	renameFn                     = os.Rename
 	closeFileFn                  = func(f *os.File) error { return f.Close() }
+	syncOpenFileFn               = (*os.File).Sync
 	syncFileFn                   = syncUpdateFile
 	syncDirFn                    = syncUpdateDirectory
 	removeFileFn                 = os.Remove
@@ -1015,8 +1016,20 @@ func (u *Updater) performUpdateWithExecPathForVersion(ctx context.Context, execP
 		}
 		return sizeErr
 	}
+	var syncErr error
+	if runtimeGOOS == goOSWindows {
+		// Windows has no execute mode bit to flush later. Use the original
+		// writable handle: reopening for write after the staged checks can
+		// fail with a sharing violation even though the download succeeded.
+		if err := syncOpenFileFn(tmpFile); err != nil {
+			syncErr = fmt.Errorf("failed to sync staged binary: %w", err)
+		}
+	}
 	if err := closeFileFn(tmpFile); err != nil {
-		return fmt.Errorf("failed to close temp file: %w", err)
+		return errors.Join(syncErr, fmt.Errorf("failed to close temp file: %w", err))
+	}
+	if syncErr != nil {
+		return syncErr
 	}
 
 	// Verify it's a valid executable (basic sanity check)
@@ -1060,10 +1073,12 @@ func (u *Updater) performUpdateWithExecPathForVersion(ctx context.Context, execP
 		return err
 	}
 
-	// Make the staged bytes and their final executable mode durable before a
-	// rename can expose them at the service path.
-	if err := syncFileFn(tmpPath); err != nil {
-		return fmt.Errorf("failed to sync staged binary: %w", err)
+	if runtimeGOOS != goOSWindows {
+		// Persist the final executable mode along with the staged bytes before
+		// a rename can expose them at the service path.
+		if err := syncFileFn(tmpPath); err != nil {
+			return fmt.Errorf("failed to sync staged binary: %w", err)
+		}
 	}
 
 	// Use realExecPath for rename operations
