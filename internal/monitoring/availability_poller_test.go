@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
@@ -321,55 +322,61 @@ func TestAvailabilityCertificateTrustIncidentsRespectSelfSignedExemptionAndOptOu
 	}
 }
 
-// Regression for #1745: with the adaptive scheduler disabled, planning passes
-// run every poll tick and Upsert overwrites the queued slot, so they must not
-// re-arm a pending fixed-interval task as due-now or availability targets poll
-// at the tick cadence instead of their configured interval.
-func TestBuildScheduledTasksWithoutSchedulerPreservesPendingFixedIntervalSlot(t *testing.T) {
-	monitor := availabilityFixedIntervalTestMonitor(t, []config.AvailabilityTarget{
-		{ID: "plex", Name: "Plex", Address: "plex.local", Protocol: config.AvailabilityProbeICMP, Enabled: true, PollIntervalSecs: 60},
-	})
-	monitor.taskQueue = NewTaskQueue()
+// Regression for #1745: a fixed-cadence check must not become due at every
+// planning tick, but a shorter configured cadence can still pull it forward.
+func TestFixedIntervalPlanPreservesPendingSlot(t *testing.T) {
+	for _, adaptive := range []bool{false, true} {
+		name := "fixed"
+		if adaptive {
+			name = "adaptive"
+		}
+		t.Run(name, func(t *testing.T) {
+			makeMonitor := func(interval int) *Monitor {
+				m := availabilityFixedIntervalTestMonitor(t, []config.AvailabilityTarget{
+					{ID: "plex", Name: "Plex", Address: "plex.local", Protocol: config.AvailabilityProbeICMP, Enabled: true, PollIntervalSecs: interval},
+				})
+				if adaptive {
+					m.scheduler = NewAdaptiveScheduler(DefaultSchedulerConfig(), nil, nil, nil)
+				}
+				return m
+			}
+			m, shortened := makeMonitor(60), makeMonitor(15)
+			synctest.Test(t, func(t *testing.T) {
+				q := NewTaskQueue()
+				m.taskQueue, shortened.taskQueue = q, q
+				applyPlan := func(m *Monitor) ScheduledTask {
+					t.Helper()
+					for _, task := range m.buildScheduledTasks(time.Now()) {
+						q.upsertPlan(task)
+					}
+					got, ok := q.Get(InstanceTypeAvailability, "plex")
+					if !ok {
+						t.Fatal("planning did not queue the availability target")
+					}
+					return got
+				}
+				start := time.Now()
+				first := applyPlan(m)
+				if first.NextRun != start || first.Interval != time.Minute {
+					t.Fatalf("expected a new check immediately, repeating each minute: %+v", first)
+				}
+				claimed, ok := q.WaitNext(t.Context())
+				if !ok {
+					t.Fatal("the first check was not eligible")
+				}
+				next := claimed
+				next.NextRun = start.Add(time.Minute)
+				q.completeClaim(claimed, next, pollOnCadence)
 
-	now := time.Now()
-	first := monitor.buildScheduledTasks(now)
-	if len(first) != 1 {
-		t.Fatalf("expected one planned task, got %d", len(first))
-	}
-	if !first[0].NextRun.Equal(now) {
-		t.Fatalf("new instance NextRun = %v, want immediate %v", first[0].NextRun, now)
-	}
-	if first[0].Interval != 60*time.Second {
-		t.Fatalf("Interval = %v, want 60s", first[0].Interval)
-	}
-
-	// Simulate the post-run reschedule parking the next slot in the future.
-	pending := first[0]
-	pending.NextRun = now.Add(60 * time.Second)
-	monitor.taskQueue.Upsert(pending)
-
-	replanned := monitor.buildScheduledTasks(now.Add(10 * time.Second))
-	if len(replanned) != 1 {
-		t.Fatalf("expected one replanned task, got %d", len(replanned))
-	}
-	if !replanned[0].NextRun.Equal(pending.NextRun) {
-		t.Fatalf("replanned NextRun = %v, want preserved %v", replanned[0].NextRun, pending.NextRun)
-	}
-
-	// A shortened configured interval still tightens the pending slot.
-	shortened := availabilityFixedIntervalTestMonitor(t, []config.AvailabilityTarget{
-		{ID: "plex", Name: "Plex", Address: "plex.local", Protocol: config.AvailabilityProbeICMP, Enabled: true, PollIntervalSecs: 15},
-	})
-	shortened.taskQueue = monitor.taskQueue
-	monitor.taskQueue.Upsert(pending)
-	tick := now.Add(10 * time.Second)
-	tightened := shortened.buildScheduledTasks(tick)
-	if len(tightened) != 1 {
-		t.Fatalf("expected one tightened task, got %d", len(tightened))
-	}
-	want := tick.Add(15 * time.Second)
-	if !tightened[0].NextRun.Equal(want) {
-		t.Fatalf("tightened NextRun = %v, want %v", tightened[0].NextRun, want)
+				time.Sleep(10 * time.Second)
+				if got := applyPlan(m); got.NextRun != next.NextRun {
+					t.Fatalf("replan moved the pending minute slot: %+v", got)
+				}
+				if got := applyPlan(shortened); got.NextRun != time.Now().Add(15*time.Second) || got.Interval != 15*time.Second {
+					t.Fatalf("shorter cadence did not tighten the slot: %+v", got)
+				}
+			})
+		})
 	}
 }
 

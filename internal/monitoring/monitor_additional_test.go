@@ -2655,6 +2655,7 @@ func TestScheduledPollClaimPreservesExplicitEdits(t *testing.T) {
 			next.Interval = time.Minute
 			edit.Interval = 20 * time.Second
 			lastEdit.Interval = 30 * time.Second
+			lastEdit.NextRun = time.Now().Add(lastEdit.Interval)
 			switch action {
 			case "replace", "replace-then-remove":
 				q.Upsert(edit)
@@ -2679,14 +2680,20 @@ func TestScheduledPollClaimPreservesExplicitEdits(t *testing.T) {
 			if !ok || sibling != namesake {
 				t.Fatalf("namesake claim = %+v, %v", sibling, ok)
 			}
-			q.completeClaim(sibling, ScheduledTask{}, false)
+			q.completeClaim(sibling, ScheduledTask{}, noPollReschedule)
 
-			q.completeClaim(claimed, next, action != "abandon")
+			reschedule := pollOnCadence
+			if action == "abandon" {
+				reschedule = noPollReschedule
+			}
+			q.completeClaim(claimed, next, reschedule)
 			got, queued := q.Get(target.InstanceType, target.InstanceName)
 			switch action {
 			case "replace", "remove-then-replace":
+				q.upsertPlan(target)
+				got, queued = q.Get(target.InstanceType, target.InstanceName)
 				if !queued || got != lastEdit {
-					t.Fatalf("normal reschedule replaced the explicit edit: %+v, %v", got, queued)
+					t.Fatalf("worker follow-up or periodic plan replaced the explicit edit: %+v, %v", got, queued)
 				}
 			case "remove", "replace-then-remove", "abandon":
 				if queued {

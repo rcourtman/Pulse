@@ -3067,7 +3067,7 @@ func TestSetProviderConnectionHealth_UsesProviderConnectionKey(t *testing.T) {
 // These policy checks run the outcome calculation without a live worker.
 // The scheduled worker tests cover publishing a successor through its claim.
 func scheduleFixtureSuccessor(m *Monitor, task ScheduledTask) {
-	if next, ok := m.nextScheduledPoll(task); ok {
+	if next, reschedule := m.nextScheduledPoll(task); reschedule != noPollReschedule {
 		m.taskQueue.Upsert(next)
 	}
 }
