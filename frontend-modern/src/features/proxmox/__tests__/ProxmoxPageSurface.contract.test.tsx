@@ -587,6 +587,76 @@ describe('ProxmoxPageSurface contract', () => {
     );
   });
 
+  it.each(['workloads', 'servers'] as const)(
+    'keeps the readable Backups snapshot mounted when the %s read fails',
+    (scope) => {
+      mockPathname.mockReturnValue('/proxmox/backups');
+      const guest = makeResource({ id: 'vm-100', type: 'vm', proxmox: { vmid: 100 } });
+      const server = makeResource({
+        id: 'pbs-1',
+        type: 'pbs',
+        platformType: 'proxmox-pbs',
+        sources: ['pbs'],
+      });
+      const [workloadError, setWorkloadError] = createSignal<Error>();
+      const [serverError, setServerError] = createSignal<Error>();
+      const retryWorkloads = vi.fn();
+      const retryServers = vi.fn();
+      mockUseUnifiedResources.mockImplementation(({ cacheKey }: { cacheKey: string }) => ({
+        resources: () =>
+          cacheKey === 'proxmox-overview'
+            ? [guest]
+            : cacheKey === 'proxmox-backups-shell'
+              ? [server]
+              : [],
+        loading: () => false,
+        error:
+          cacheKey === 'proxmox-overview'
+            ? workloadError
+            : cacheKey === 'proxmox-backups-shell'
+              ? serverError
+              : () => undefined,
+        refetch: cacheKey === 'proxmox-overview' ? retryWorkloads : retryServers,
+      }));
+      renderSurface();
+      const table = screen.getByTestId('backups-table');
+      const setError = scope === 'workloads' ? setWorkloadError : setServerError;
+      setError(new Error('Snapshot unavailable'));
+
+      expect(screen.queryByTestId('platform-error-state')).not.toBeInTheDocument();
+      expect(screen.getByTestId('backups-table')).toBe(table);
+      const props = mockBackupsTableProps.mock.lastCall?.[0];
+      expect(props.workloads).toEqual(scope === 'workloads' ? [] : [guest]);
+      expect(props.servers).toEqual(scope === 'workloads' ? [server] : [guest]);
+      expect(props.resourceReadIssue).toMatchObject({
+        scope,
+        retry: scope === 'workloads' ? retryWorkloads : retryServers,
+      });
+
+      setError(undefined);
+      expect(screen.getByTestId('backups-table')).toBe(table);
+      expect(props.resourceReadIssue).toBeUndefined();
+      expect(props.workloads).toEqual([guest]);
+      expect(props.servers).toEqual([guest, server]);
+    },
+  );
+
+  it('does not open Backups using only cached rows from failed resource reads', () => {
+    mockPathname.mockReturnValue('/proxmox/backups');
+    const guest = makeResource({ id: 'cached-vm', type: 'vm', proxmox: { vmid: 100 } });
+    mockUseUnifiedResources.mockReturnValue({
+      resources: () => [guest],
+      loading: () => false,
+      error: () => new Error('Snapshot unavailable'),
+      refetch: vi.fn(),
+    });
+
+    renderSurface();
+
+    expect(screen.getByTestId('platform-error-state')).toBeInTheDocument();
+    expect(screen.queryByTestId('backups-table')).not.toBeInTheDocument();
+  });
+
   it('hands the backups table a live alert lookup for datastore fill forecasts', () => {
     mockPathname.mockReturnValue('/proxmox/backups');
     const forecast = { id: 'a1', resourceId: 'pbs-main-store', level: 'warning' };
