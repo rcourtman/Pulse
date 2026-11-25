@@ -420,10 +420,11 @@ class FailedReadIdentityTests(unittest.TestCase):
         sleep.assert_not_called()
 
 
-class LatestFailedRunsTests(unittest.TestCase):
+class ScheduledChannelSelectionTests(unittest.TestCase):
     def select(self, releases, runs):
-        selected = subject.latest_failed_runs(
-            releases, runs, workflow_id=WORKFLOW_ID, default_branch="main"
+        selected, _ = subject.scheduled_channel_decisions(
+            subject.current_channel_heads(releases), runs,
+            workflow_id=WORKFLOW_ID, default_branch="main"
         )
         return [run_id for run_id, _ in selected]
 
@@ -661,11 +662,11 @@ class DecisionSummaryTests(unittest.TestCase):
         self.assertIn("No failed run selected for retry", message)
         self.assertIn("missing convergence runs are not qualified", message)
 
-    def discover_with_releases(self, releases):
+    def discover_with_releases(self, releases, runs=None):
         github = FakeGitHub()
         github.pages = lambda endpoint: (
             [releases] if "/releases?" in endpoint
-            else [{"workflow_runs": github.runs}]
+            else [{"workflow_runs": github.runs if runs is None else runs}]
         )
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "summary.md"
@@ -715,8 +716,118 @@ class DecisionSummaryTests(unittest.TestCase):
             draft,
         ])
         self.assertEqual([100], selected)
-        self.assertEqual("", output)
-        self.assertEqual("", summary)
+        for text in (output, summary):
+            self.assertIn("No published stable Pulse release observed", text)
+            self.assertIn("Current preview head v6.5.0-rc.1, convergence run 100", text)
+            self.assertIn("selected for reconciliation", text)
+            self.assertNotIn("continuity debt", text)
+            self.assertNotIn("helm-chart-6.5.0", text)
+
+    def test_green_inventory_names_both_latest_runs_in_the_log_and_summary(self):
+        stable = release("v6.9.0", "2026-11-25T02:43:34Z", prerelease=False)
+        preview = release("v6.9.0-rc.4", "2026-11-24T00:54:52Z", prerelease=True)
+        runs = [
+            run(10, preview["tag_name"], "2026-11-24T00:11:24Z"),
+            run(11, preview["tag_name"], "2026-11-24T02:45:11Z", conclusion="success"),
+            run(12, stable["tag_name"], "2026-11-25T02:37:24Z", conclusion="success"),
+        ]
+        selected, output, summary = self.discover_with_releases([preview, stable], runs)
+        self.assertEqual([], selected)
+        for text in (output, summary):
+            self.assertIn("Current stable head v6.9.0, convergence run 12 (release run 1234): "
+                          "workflow reported success; no retry selected "
+                          "(delivery not verified by this check).", text)
+            self.assertIn("Current preview head v6.9.0-rc.4, convergence run 11 (release run 1234): "
+                          "workflow reported success; no retry selected "
+                          "(delivery not verified by this check).", text)
+            self.assertNotIn("convergence run 10", text)
+        self.assertIn("not evidence of successful release convergence", summary)
+
+    def test_missing_channel_run_is_not_a_success_and_does_not_hide_the_failed_peer(self):
+        stable = release("v6.9.0", "2026-11-25T02:43:34Z", prerelease=False)
+        preview = release("v6.9.0-rc.4", "2026-11-24T00:54:52Z", prerelease=True)
+        unrelated = run(10, stable["tag_name"], "2026-11-25T02:37:24Z", conclusion="success")
+        unrelated["event"] = "push"
+        failed = run(11, preview["tag_name"], "2026-11-24T00:11:24Z")
+        selected, output, summary = self.discover_with_releases(
+            [stable, preview], [unrelated, failed]
+        )
+        self.assertEqual([11], selected)
+        for text in (output, summary):
+            self.assertIn("Current stable head v6.9.0: no matching convergence run observed; "
+                          "delivery unverified, no retry selected.", text)
+            self.assertIn("Current preview head v6.9.0-rc.4, convergence run 11 (release run 1234): "
+                          "terminal failure selected for reconciliation.", text)
+            self.assertNotIn("convergence run 10", text)
+
+    def test_pending_and_unrecognised_run_states_are_not_printed_as_success(self):
+        stable = release("v6.9.0", "2026-11-25T02:43:34Z", prerelease=False)
+        preview = release("v6.9.0-rc.4", "2026-11-24T00:54:52Z", prerelease=True)
+        runs = [
+            run(10, stable["tag_name"], "2026-11-25T02:37:24Z",
+                status="in_progress", conclusion=None),
+            run(11, preview["tag_name"], "2026-11-24T00:11:24Z", conclusion="untrusted text"),
+        ]
+        selected, output, summary = self.discover_with_releases([stable, preview], runs)
+        self.assertEqual([], selected)
+        for text in (output, summary):
+            self.assertIn("not yet completed; no retry selected", text)
+            self.assertIn("no retryable terminal conclusion observed; delivery unverified", text)
+            self.assertNotIn("workflow reported success", text)
+            self.assertNotIn("untrusted text", text)
+
+    def test_unwritable_channel_summary_does_not_block_reconciliation(self):
+        github = FakeGitHub()
+        head = github.api(f"repos/{github.repository}/releases/tags/v6.5.0-rc.1")
+        github.pages = lambda endpoint: (
+            [[head]] if "/releases?" in endpoint else [{"workflow_runs": github.runs}]
+        )
+        args = argparse.Namespace(repository=github.repository, run_id=None,
+                                  latest=True, max_attempts=5, dry_run=False)
+        with (
+            tempfile.TemporaryDirectory() as summary_directory,
+            patch.dict(os.environ, {"GITHUB_STEP_SUMMARY": summary_directory}),
+            patch.object(subject, "parse_args", return_value=args),
+            patch.object(subject, "GitHub", return_value=github),
+            patch.object(subject, "reconcile") as reconcile,
+            contextlib.redirect_stdout(io.StringIO()) as output,
+            contextlib.redirect_stderr(io.StringIO()) as errors,
+        ):
+            status = subject.main()
+        self.assertEqual(0, status, errors.getvalue())
+        reconcile.assert_called_once()
+        self.assertEqual((github, 100, 5), reconcile.call_args.args)
+        self.assertIs(head, reconcile.call_args.kwargs["expected_head"])
+        self.assertIn("terminal failure selected for reconciliation", output.getvalue())
+        self.assertIn("Could not write scheduled channel decisions to the step summary", errors.getvalue())
+
+    def test_unavailable_run_inventory_reports_heads_but_never_selects_a_retry(self):
+        github = FakeGitHub()
+        releases = [
+            release("v6.9.0", "2026-11-25T02:43:34Z", prerelease=False, immutable=False),
+            release("v6.9.0-rc.4", "2026-11-24T00:54:52Z", prerelease=True),
+        ]
+        args = argparse.Namespace(repository=github.repository, run_id=None,
+                                  latest=True, max_attempts=5, dry_run=False)
+        with (
+            tempfile.TemporaryDirectory() as summary_directory,
+            patch.dict(os.environ, {"GITHUB_STEP_SUMMARY": summary_directory}),
+            patch.object(subject, "parse_args", return_value=args),
+            patch.object(subject, "GitHub", return_value=github),
+            patch.object(github, "pages", side_effect=[
+                [releases], subject.ReconciliationError("GitHub run inventory read failed"),
+            ]),
+            contextlib.redirect_stdout(io.StringIO()) as output,
+            contextlib.redirect_stderr(io.StringIO()) as errors,
+        ):
+            self.assertEqual(1, subject.main())
+        self.assertEqual([], github.posts)
+        self.assertIn("Current stable head v6.9.0 has no confirmed immutable", output.getvalue())
+        self.assertIn("Current preview head v6.9.0-rc.4: convergence run inventory unavailable",
+                      output.getvalue())
+        self.assertNotIn("no matching convergence run observed", output.getvalue())
+        self.assertIn("Could not write scheduled channel decisions to the step summary", errors.getvalue())
+        self.assertIn("GitHub run inventory read failed", errors.getvalue())
 
     def test_credential_hold_is_visible_without_retry(self):
         github = FakeGitHub(current_controls=True)
