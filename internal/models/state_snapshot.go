@@ -217,6 +217,26 @@ func (s *State) GetSnapshot() StateSnapshot {
 	return s.getSnapshot(cloneKubernetesClusters, clonePBSBackups)
 }
 
+// GetSnapshotIfGuestForInstance returns a full detached snapshot only if a VM
+// or container belongs to instance. The check and copy use the same read lock
+// so a replacement cannot change which generation is handed to the registry.
+func (s *State) GetSnapshotIfGuestForInstance(instance string) (StateSnapshot, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	for i := range s.VMs {
+		if s.VMs[i].Instance == instance {
+			return s.snapshotLocked(cloneKubernetesClusters, clonePBSBackups), true
+		}
+	}
+	for i := range s.Containers {
+		if s.Containers[i].Instance == instance {
+			return s.snapshotLocked(cloneKubernetesClusters, clonePBSBackups), true
+		}
+	}
+	return StateSnapshot{}, false
+}
+
 // GetSnapshotForResourceRefresh keeps PBS snapshot attribution and datastore
 // evidence for the canonical registry, but does not copy per-artifact file
 // lists or raw verification details. Use a full snapshot or a backup-specific
@@ -242,7 +262,10 @@ func clonePBSBackupsForResourceRefresh(src []PBSBackup) []PBSBackup {
 func (s *State) getSnapshot(cloneClusters func([]KubernetesCluster) []KubernetesCluster, clonePBSRows func([]PBSBackup) []PBSBackup) StateSnapshot {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
+	return s.snapshotLocked(cloneClusters, clonePBSRows)
+}
 
+func (s *State) snapshotLocked(cloneClusters func([]KubernetesCluster) []KubernetesCluster, clonePBSRows func([]PBSBackup) []PBSBackup) StateSnapshot {
 	pbsBackups := clonePBSRows(s.PBSBackups)
 	pmgBackups := clonePMGBackups(s.PMGBackups)
 	pveBackups := clonePVEBackups(s.PVEBackups)
