@@ -2149,8 +2149,18 @@ due while the breaker still waits, the worker returns that claim to the
 queue at the breaker deadline. This does not consume the half-open probe,
 restart backoff, or record another dead letter from an old result. The
 existing breaker still admits or rejects the actual probe. Thresholds, the
-delay selected for genuine failures, terminal-failure routing and the
-dead-letter retention policy are unchanged.
+delay selected for genuine failures and terminal-failure routing are unchanged.
+
+A later scheduled result accepted as success retires that connection's
+terminal dead-letter entry, its per-connection retry context and its matching
+Prometheus depth. Clearing an entry does not reschedule the poll, grant
+breaker admission or clear a peer's failure. A partial result can end the
+terminal connection failure while retaining its outstanding reading error.
+The recorded dead-letter retry time is not a deadline in the active queue.
+`TestScheduledPollDeadLetterTracksLatestOutcome` checks both the settled
+Scheduler Health representation and the depth metric after ordinary worker
+recovery. `TestPMGPartialRecoveryRetiresTerminalDeadLetter` exercises the
+partial-read distinction through the provider collector.
 
 `TestCircuitBreaker_BackoffNeverOverflows` compares 130 failure transitions
 against an independent unbounded-integer oracle, including odd and maximum

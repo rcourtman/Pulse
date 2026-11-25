@@ -185,7 +185,21 @@ func (m *Monitor) nextScheduledPoll(task ScheduledTask) (ScheduledTask, pollResc
 	m.mu.Lock()
 	outcome, hasOutcome := m.lastOutcome[key]
 	failureCount := m.failureCounts[key]
+	// The worker still owns this connection's claim. A later result accepted
+	// as success by the scheduler ends the terminal failure episode. A partial
+	// read can do so too; its outstanding error still lives in pollStatusMap.
+	retiredDeadLetter := false
+	if hasOutcome && outcome.success && m.deadLetterQueue != nil {
+		if record := m.dlqInsightMap[key]; record != nil && !outcome.recordedAt.Before(record.LastAttempt) {
+			m.deadLetterQueue.Remove(task.InstanceType, task.InstanceName)
+			delete(m.dlqInsightMap, key)
+			retiredDeadLetter = true
+		}
+	}
 	m.mu.Unlock()
+	if retiredDeadLetter {
+		m.pollMetrics.clearDeadLetterCount(string(task.InstanceType), task.InstanceName)
+	}
 
 	if hasOutcome && !outcome.success {
 		if !outcome.transient || failureCount >= m.maxRetryAttempts {
