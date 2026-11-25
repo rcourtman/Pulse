@@ -107,14 +107,17 @@ diagnostics. A missing scrape is not evidence of zero errors.
 | :--- | :--- | :--- |
 | `pulse_monitor_poll_total` | Counter | Recorded poll outcomes, split by result. |
 | `pulse_monitor_poll_duration_seconds` | Histogram | Poll latency. |
-| `pulse_monitor_poll_staleness_seconds` | Gauge | Age since success at last result. |
+| `pulse_monitor_poll_staleness_seconds` | Gauge | Age since the last success. Older builds update it only when a result is recorded. |
 | `pulse_monitor_poll_queue_depth` | Gauge | Queue size. |
 | `pulse_monitor_poll_errors_total` | Counter | Error counts by category. |
 | `pulse_scheduler_queue_due_soon` | Gauge | Tasks still queued that are due now or within 12 seconds. |
 
 If a scrape still works but polling stops producing results, use the
 [last-success timestamp](PROMETHEUS_METRICS.md#check-whether-polling-is-still-running)
-to check age. A staleness gauge that stays at zero does not rule out a stall.
+to check age on either type of exporter. A staleness gauge that stays at zero
+on an older build does not rule out a stall. If a circuit breaker is open,
+[check its recorded retry time](PROMETHEUS_METRICS.md#check-whether-backoff-still-explains-the-wait)
+before attributing the gap to backoff.
 
 ## ⚡ Circuit Breaker
 
