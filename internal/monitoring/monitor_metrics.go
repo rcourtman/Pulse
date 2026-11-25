@@ -104,6 +104,16 @@ func (m *Monitor) GetGuestMetrics(guestID string, duration time.Duration) map[st
 		}
 	}
 
+	if siblingKeys := m.proxmoxGuestMetricSiblingKeys("", guestID); len(siblingKeys) > 0 {
+		for _, siblingKey := range siblingKeys {
+			sibling := m.metricsHistory.GetAllGuestMetrics(siblingKey, duration)
+			if len(sibling) == 0 {
+				continue
+			}
+			best = spliceGuestMetricHistory(best, sibling)
+		}
+	}
+
 	return best
 }
 
@@ -652,9 +662,30 @@ func (m *Monitor) GetGuestMetricsForChartBatch(
 	// point count, matching the single-resource alias resolution logic.
 	storeResults := make(map[string]map[string][]MetricPoint)
 	if m.metricsStore != nil {
+		queryIDs := make([]string, 0, len(needFallback))
+		querySeen := make(map[string]struct{}, len(needFallback))
+		siblingToPrimary := make(map[string]string)
+		for _, id := range needFallback {
+			if _, ok := querySeen[id]; !ok {
+				querySeen[id] = struct{}{}
+				queryIDs = append(queryIDs, id)
+			}
+			for _, siblingID := range m.proxmoxGuestMetricSiblingKeys(sqlResourceType, id) {
+				if _, ok := querySeen[siblingID]; !ok {
+					querySeen[siblingID] = struct{}{}
+					queryIDs = append(queryIDs, siblingID)
+					siblingToPrimary[siblingID] = id
+				}
+			}
+		}
+
 		for _, candidate := range monitorStoreResourceTypeCandidates(sqlResourceType) {
-			batch := m.queryStoreBatchMetricMapWithGapFill(candidate, needFallback, duration, requestedMetricTypes)
+			batch := m.queryStoreBatchMetricMapWithGapFill(candidate, queryIDs, duration, requestedMetricTypes)
 			for id, metricMap := range batch {
+				if primaryID, isSibling := siblingToPrimary[id]; isSibling {
+					storeResults[primaryID] = spliceGuestMetricHistory(storeResults[primaryID], metricMap)
+					continue
+				}
 				if existing, ok := storeResults[id]; ok {
 					newSpan := chartMapCoverageSpan(metricMap)
 					oldSpan := chartMapCoverageSpan(existing)
@@ -947,6 +978,19 @@ func (m *Monitor) queryStoreMetricMapWithGapFillAliases(resourceType, resourceID
 			bestSpan = span
 			bestPoints = points
 			found = true
+		}
+	}
+
+	if siblingKeys := m.proxmoxGuestMetricSiblingKeys(resourceType, resourceID); len(siblingKeys) > 0 {
+		for _, siblingKey := range siblingKeys {
+			for _, candidate := range monitorStoreResourceTypeCandidates(resourceType) {
+				sibling, ok := m.queryStoreMetricMapWithGapFill(candidate, siblingKey, duration)
+				if !ok || len(sibling) == 0 {
+					continue
+				}
+				best = spliceGuestMetricHistory(best, sibling)
+				found = true
+			}
 		}
 	}
 
@@ -1524,6 +1568,116 @@ func monitorGuestMetricKeyCandidates(key string) []string {
 		return []string{""}
 	}
 	return []string{trimmed}
+}
+
+// proxmoxGuestMetricSiblingKeys returns sibling node metric keys
+// ("instance:otherNode:vmid") for a Proxmox guest so chart reads survive live
+// migration across cluster nodes. If Proxmox VE 9.3 persistent guest identity
+// detected VMID reuse on this slot (a UID-separated canonical ID), sibling
+// history is withheld so a replacement guest never inherits the deleted guest's
+// charts.
+func (m *Monitor) proxmoxGuestMetricSiblingKeys(resourceType, resourceID string) []string {
+	if m == nil {
+		return nil
+	}
+	normalizedType := strings.TrimSpace(resourceType)
+	if normalizedType != "" && normalizedType != "vm" && normalizedType != "container" {
+		return nil
+	}
+	instance, currentNode, vmid, ok := unifiedresources.ParseProxmoxGuestSourceID(resourceID)
+	if !ok {
+		return nil
+	}
+	readState := m.GetUnifiedReadState()
+	if readState == nil {
+		return nil
+	}
+
+	if normalizedType == "" || normalizedType == "vm" {
+		expectedID := unifiedresources.ProxmoxGuestCanonicalID(unifiedresources.ResourceTypeVM, instance, vmid)
+		for _, vm := range readState.VMs() {
+			if vm == nil || vm.VMID() != vmid || !strings.EqualFold(vm.Instance(), instance) {
+				continue
+			}
+			if expectedID != "" && vm.ID() != expectedID {
+				return nil
+			}
+		}
+	}
+	if normalizedType == "" || normalizedType == "container" {
+		expectedID := unifiedresources.ProxmoxGuestCanonicalID(unifiedresources.ResourceTypeSystemContainer, instance, vmid)
+		for _, ct := range readState.Containers() {
+			if ct == nil || ct.VMID() != vmid || !strings.EqualFold(ct.Instance(), instance) {
+				continue
+			}
+			if expectedID != "" && ct.ID() != expectedID {
+				return nil
+			}
+		}
+	}
+
+	seen := make(map[string]struct{})
+	siblings := make([]string, 0)
+	for _, node := range readState.Nodes() {
+		if node == nil || !strings.EqualFold(node.Instance(), instance) {
+			continue
+		}
+		nodeName := strings.TrimSpace(node.NodeName())
+		if nodeName == "" || strings.EqualFold(nodeName, currentNode) {
+			continue
+		}
+		siblingKey := makeGuestID(instance, nodeName, vmid)
+		if _, dup := seen[siblingKey]; dup {
+			continue
+		}
+		seen[siblingKey] = struct{}{}
+		siblings = append(siblings, siblingKey)
+	}
+	sort.Strings(siblings)
+	return siblings
+}
+
+// spliceGuestMetricHistory merges chronological points from a guest's prior
+// cluster node (sibling) with its current node (primary), preferring primary on
+// identical timestamps.
+func spliceGuestMetricHistory(primary, sibling map[string][]MetricPoint) map[string][]MetricPoint {
+	if len(sibling) == 0 {
+		return primary
+	}
+	if len(primary) == 0 {
+		return cloneMetricPointMap(sibling)
+	}
+	out := cloneMetricPointMap(primary)
+	for metricType, sibSeries := range sibling {
+		if len(sibSeries) == 0 {
+			continue
+		}
+		primSeries := out[metricType]
+		if len(primSeries) == 0 {
+			out[metricType] = cloneMetricSeries(sibSeries)
+			continue
+		}
+		out[metricType] = spliceMetricPointSeries(primSeries, sibSeries)
+	}
+	return out
+}
+
+func spliceMetricPointSeries(primary, sibling []MetricPoint) []MetricPoint {
+	byTimestamp := make(map[int64]MetricPoint, len(primary)+len(sibling))
+	for _, pt := range sibling {
+		byTimestamp[pt.Timestamp.UnixNano()] = pt
+	}
+	for _, pt := range primary {
+		byTimestamp[pt.Timestamp.UnixNano()] = pt
+	}
+	merged := make([]MetricPoint, 0, len(byTimestamp))
+	for _, pt := range byTimestamp {
+		merged = append(merged, pt)
+	}
+	sort.Slice(merged, func(i, j int) bool {
+		return merged[i].Timestamp.Before(merged[j].Timestamp)
+	})
+	return merged
 }
 
 func monitorStoreResourceTypeCandidates(resourceType string) []string {

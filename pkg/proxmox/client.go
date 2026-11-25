@@ -1140,6 +1140,8 @@ type VM struct {
 	Tags       string            `json:"tags"`
 	Lock       string            `json:"lock"`
 	Agent      int               `json:"agent"`
+	UID        string            `json:"uid,omitempty"`
+	RTime      int64             `json:"rtime,omitempty"`
 	IOCounters IOCounterPresence `json:"-"`
 	ObservedAt time.Time         `json:"-"`
 }
@@ -1167,6 +1169,8 @@ type Container struct {
 	Template   int                               `json:"template"`
 	Tags       string                            `json:"tags"`
 	Lock       string                            `json:"lock"`
+	UID        string                            `json:"uid,omitempty"`
+	RTime      int64                             `json:"rtime,omitempty"`
 	Hostname   string                            `json:"hostname,omitempty"`
 	IP         string                            `json:"ip,omitempty"`
 	IP6        string                            `json:"ip6,omitempty"`
@@ -1555,15 +1559,38 @@ func (c *Client) GetContainerSnapshots(ctx context.Context, node string, vmid in
 
 // ClusterStatus represents the cluster status response
 type ClusterStatus struct {
-	Type    string `json:"type"`    // "cluster" or "node"
-	ID      string `json:"id"`      // Node ID or cluster name
-	Name    string `json:"name"`    // Node name
-	IP      string `json:"ip"`      // Node IP address
-	Local   int    `json:"local"`   // 1 if this is the local node
-	Nodeid  int    `json:"nodeid"`  // Node ID in cluster
-	Online  int    `json:"online"`  // 1 if online
-	Level   string `json:"level"`   // Connection level
-	Quorate int    `json:"quorate"` // 1 if cluster has quorum
+	Type      string `json:"type"`                 // "cluster" or "node"
+	ID        string `json:"id"`                   // Node ID or cluster name
+	Name      string `json:"name"`                 // Node name
+	IP        string `json:"ip"`                   // Node IP address
+	Local     int    `json:"local"`                // 1 if this is the local node
+	Nodeid    int    `json:"nodeid"`               // Node ID in cluster
+	Online    int    `json:"online"`               // 1 if online
+	Level     string `json:"level"`                // Connection level
+	Quorate   int    `json:"quorate"`              // 1 if cluster has quorum
+	ClusterID string `json:"cluster-id,omitempty"` // PVE 9.3 persistent cluster or standalone host ID
+}
+
+// ExtractClusterID returns the Proxmox VE 9.3 persistent cluster-id from a
+// /cluster/status response, preferring the cluster entry and falling back to a
+// node entry for standalone PVE 9.3 hosts.
+func ExtractClusterID(statuses []ClusterStatus) string {
+	nodeFallback := ""
+	for _, status := range statuses {
+		id := strings.TrimSpace(status.ClusterID)
+		if id == "" {
+			continue
+		}
+		switch strings.ToLower(strings.TrimSpace(status.Type)) {
+		case "cluster":
+			return id
+		case "node":
+			if nodeFallback == "" {
+				nodeFallback = id
+			}
+		}
+	}
+	return nodeFallback
 }
 
 // maxClusterNodes bounds the nodes an endpoint may report for its cluster in
@@ -2532,6 +2559,8 @@ type ClusterResource struct {
 	Uptime     uint64            `json:"uptime,omitempty"`
 	Template   int               `json:"template,omitempty"`
 	Tags       string            `json:"tags,omitempty"`
+	UID        string            `json:"uid,omitempty"`
+	RTime      int64             `json:"rtime,omitempty"`
 	IOCounters IOCounterPresence `json:"-"`
 	ObservedAt time.Time         `json:"-"`
 	Lock       string            `json:"lock,omitempty"`
@@ -2857,6 +2886,8 @@ type VMStatus struct {
 	NetOut      uint64            `json:"netout"`
 	Uptime      uint64            `json:"uptime"`
 	Agent       VMAgentField      `json:"agent"`
+	UID         string            `json:"uid,omitempty"`
+	RTime       int64             `json:"rtime,omitempty"`
 	IOCounters  IOCounterPresence `json:"-"`
 	ObservedAt  time.Time         `json:"-"`
 	Lock        string            `json:"lock,omitempty"`

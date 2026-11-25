@@ -61,6 +61,35 @@ func ProxmoxGuestCanonicalID(resourceType ResourceType, instance string, vmid in
 	return buildHashID(resourceType, "proxmox-guest:"+key)
 }
 
+// ProxmoxGuestUIDCanonicalID returns a distinct canonical ID for a Proxmox VE
+// 9.3+ guest whose VMID slot was previously held by a different persistent guest
+// UID, preventing overrides, metadata, and alerts from leaking across VMID reuse.
+func ProxmoxGuestUIDCanonicalID(resourceType ResourceType, instance, guestUID string) string {
+	instance = strings.TrimSpace(instance)
+	guestUID = strings.TrimSpace(guestUID)
+	if instance == "" || guestUID == "" {
+		return ""
+	}
+	return buildHashID(resourceType, fmt.Sprintf("proxmox-guest-uid:%s:%s", instance, strings.ToLower(guestUID)))
+}
+
+func proxmoxGuestSlotKey(resourceType ResourceType, instance string, vmid int) string {
+	key := ProxmoxGuestIdentityKey(instance, vmid)
+	if key == "" {
+		return ""
+	}
+	return fmt.Sprintf("%s|%s", CanonicalResourceType(resourceType), key)
+}
+
+func proxmoxGuestUIDKey(resourceType ResourceType, instance, guestUID string) string {
+	instance = strings.TrimSpace(instance)
+	guestUID = strings.TrimSpace(guestUID)
+	if instance == "" || guestUID == "" {
+		return ""
+	}
+	return fmt.Sprintf("%s|%s|%s", CanonicalResourceType(resourceType), instance, strings.ToLower(guestUID))
+}
+
 // ParseProxmoxGuestSourceID splits a node-scoped guest source ID
 // ("instance:node:vmid", the makeGuestID format) into its components. The
 // instance segment may itself contain colons, so the node and VMID are taken

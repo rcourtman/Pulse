@@ -19,7 +19,7 @@ var errInvalidGuestInventoryResponse = errors.New("invalid Proxmox guest invento
 // case-insensitive struct overwrites without excluding unique provider metadata
 // or changing the existing endpoint-specific decoders (notably LXC FlexInt).
 var guestInventoryFields = []string{
-	"id", "type", "node", "pool", "status", "name", "vmid", "cpu", "cpus", "maxcpu", "mem", "maxmem", "swap", "maxswap", "disk", "maxdisk", "netin", "netout", "diskread", "diskwrite", "uptime", "template", "tags", "lock", "agent", "hostname", "ip", "ip6", "ipv4", "ipv6", "network", "diskinfo", "rootfs",
+	"id", "type", "node", "pool", "status", "name", "vmid", "uid", "rtime", "cpu", "cpus", "maxcpu", "mem", "maxmem", "swap", "maxswap", "disk", "maxdisk", "netin", "netout", "diskread", "diskwrite", "uptime", "template", "tags", "lock", "agent", "hostname", "ip", "ip6", "ipv4", "ipv6", "network", "diskinfo", "rootfs",
 }
 
 func readGuestInventory[T any](resp *http.Response, decode func(*T, []byte, IOCounterPresence) error, identity func(T) (string, bool)) ([]T, error) {

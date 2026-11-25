@@ -565,10 +565,23 @@ func (m *Monitor) buildVMFromClusterResource(
 		linkedAgent: linkedAgent,
 	}, sampleTime)
 
+	guestUID := strings.TrimSpace(res.UID)
+	guestRTime := res.RTime
+	if state.detailedStatus != nil {
+		if guestUID == "" {
+			guestUID = strings.TrimSpace(state.detailedStatus.UID)
+		}
+		if guestRTime == 0 {
+			guestRTime = state.detailedStatus.RTime
+		}
+	}
+
 	vm := models.VM{
-		ID:       guestID,
-		VMID:     res.VMID,
-		Name:     res.Name,
+		ID:         guestID,
+		VMID:       res.VMID,
+		GuestUID:   guestUID,
+		GuestRTime: guestRTime,
+		Name:       res.Name,
 		Node:     res.Node,
 		Pool:     strings.TrimSpace(res.Pool),
 		Instance: instanceName,
