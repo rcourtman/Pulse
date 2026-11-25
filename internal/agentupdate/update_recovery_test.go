@@ -216,7 +216,7 @@ func TestCheckAndUpdateKeepsRunningWhenPreReplacementErrorMentionsRestart(t *tes
 }
 
 type fsStep struct {
-	op          string // create, close, chmod, syncfile, rename, remove, writefile, syncdir or restart
+	op          string // create, close, chmod, syncopen, syncfile, rename, remove, writefile, syncdir or restart
 	path, to    string
 	mode        os.FileMode
 	servicePath bool // whether the service path existed after the step
@@ -253,9 +253,11 @@ func recordUpdateFS(t *testing.T, servicePath string) *fsRecorder {
 	rec := &fsRecorder{servicePath: servicePath}
 	origCreate, origClose, origChmod, origRename := createTempFn, closeFileFn, chmodFn, renameFn
 	origRemove, origWrite, origSyncFile, origSyncDir, origRestart := removeFileFn, writeFileFn, syncFileFn, syncDirFn, restartProcessFn
+	origSyncOpenFile := syncOpenFileFn
 	t.Cleanup(func() {
 		createTempFn, closeFileFn, chmodFn, renameFn = origCreate, origClose, origChmod, origRename
 		removeFileFn, writeFileFn, syncFileFn, syncDirFn, restartProcessFn = origRemove, origWrite, origSyncFile, origSyncDir, origRestart
+		syncOpenFileFn = origSyncOpenFile
 	})
 	createTempFn = func(dir, pattern string) (*os.File, error) {
 		file, err := origCreate(dir, pattern)
@@ -307,6 +309,16 @@ func recordUpdateFS(t *testing.T, servicePath string) *fsRecorder {
 			return rec.syncFileErr
 		}
 		rec.record("syncfile", path, "", 0)
+		return nil
+	}
+	syncOpenFileFn = func(file *os.File) error {
+		if rec.syncFileErr != nil {
+			return rec.syncFileErr
+		}
+		if err := origSyncOpenFile(file); err != nil {
+			return err
+		}
+		rec.record("syncopen", file.Name(), "", 0)
 		return nil
 	}
 	syncDirFn = func(dir string) error {
@@ -595,8 +607,7 @@ func TestLocalReplacementDirectorySyncFailureKeepsBackupAndReplacesStaleEvidence
 
 // Windows cannot rename over a running image, so its path still moves the
 // running binary aside and the service path is empty until the second rename.
-// This pins that platform gap so it is not mistaken for solved; the barriers
-// around it are the same as elsewhere.
+// This pins that platform gap so it is not mistaken for solved.
 func TestWindowsReplacementPinsMissingServicePathGap(t *testing.T) {
 	isolateRecoveryPlatformProbes(t)
 	binary := useRecoveryPlatform(t, goOSWindows)
@@ -609,7 +620,7 @@ func TestWindowsReplacementPinsMissingServicePathGap(t *testing.T) {
 	if err := u.performUpdateWithExecPathForVersion(context.Background(), execPath, "6.0.0"); err != nil {
 		t.Fatalf("performUpdateWithExecPath: %v", err)
 	}
-	want := []string{"create", "close", "chmod", "syncfile", "rename", "rename", "syncdir", "remove", "writefile", "restart"}
+	want := []string{"create", "syncopen", "close", "chmod", "rename", "rename", "syncdir", "remove", "writefile", "restart"}
 	if got := rec.ops(); !reflect.DeepEqual(got, want) {
 		t.Fatalf("windows replacement steps = %v, want %v", got, want)
 	}
@@ -621,6 +632,89 @@ func TestWindowsReplacementPinsMissingServicePathGap(t *testing.T) {
 	}
 	if got, err := os.ReadFile(execPath); err != nil || !bytes.Equal(got, binary) {
 		t.Fatalf("executable after update = %q, %v", got, err)
+	}
+}
+
+// A process may allow reads and renames but refuse a new writable handle.
+// Windows can flush before that window without skipping either staged check.
+func TestWindowsUpdateDoesNotReopenStagedBinaryAfterSelfTest(t *testing.T) {
+	isolateRecoveryPlatformProbes(t)
+	binary := useRecoveryPlatform(t, goOSWindows)
+	_, execPath := writeTempExec(t)
+	exits := stubRecoveryProcess(t, execPath, nil)
+	rec := recordUpdateFS(t, execPath)
+	u := newUpdaterForTest("https://pulse.example.test")
+	u.client = recoveryUpdateClient("1.1.0", binary, http.StatusOK, "")
+
+	var checks []string
+	u.verifyIdentityFn = func(context.Context, string, string, string) error {
+		checks = append(checks, "identity")
+		return nil
+	}
+	u.selfTestFn = func(context.Context, string) error {
+		checks = append(checks, "self-test")
+		return nil
+	}
+	pathSync := syncFileFn
+	syncFileFn = func(path string) error {
+		if len(checks) > 0 {
+			return errors.New("fixture: the staged file is in use")
+		}
+		return pathSync(path)
+	}
+
+	u.CheckAndUpdate(context.Background())
+
+	status := u.Snapshot()
+	if status.State != UpdateStateIdle || status.LastSuccessAt == nil || status.LastError != "" {
+		t.Fatalf("update status = %+v, want success without a new write handle", status)
+	}
+	if want := []string{"identity", "self-test"}; !reflect.DeepEqual(checks, want) {
+		t.Fatalf("staged checks = %v, want %v", checks, want)
+	}
+	if len(*exits) != 0 || len(rec.steps) == 0 || rec.steps[len(rec.steps)-1].op != "restart" {
+		t.Fatalf("restart evidence = %v, exits = %v", rec.ops(), *exits)
+	}
+	if got, err := os.ReadFile(execPath); err != nil || !bytes.Equal(got, binary) {
+		t.Fatalf("executable after update = %q, %v", got, err)
+	}
+	if updatedFrom := GetUpdatedFromVersion(); updatedFrom != "1.0.0" {
+		t.Fatalf("reported previous version = %q, want 1.0.0", updatedFrom)
+	}
+}
+
+func TestWindowsUpdateStagedFlushFailureClosesAndKeepsServiceBinary(t *testing.T) {
+	isolateRecoveryPlatformProbes(t)
+	binary := useRecoveryPlatform(t, goOSWindows)
+	dir, execPath := writeTempExec(t)
+	exits := stubRecoveryProcess(t, execPath, nil)
+	rec := recordUpdateFS(t, execPath)
+	rec.syncFileErr = errors.New("fixture: staged flush failed")
+	u := newUpdaterForTest("https://pulse.example.test")
+	u.client = recoveryUpdateClient("1.1.0", binary, http.StatusOK, "")
+	u.verifyIdentityFn = func(context.Context, string, string, string) error {
+		t.Fatal("identity probe ran after failed flush")
+		return nil
+	}
+
+	u.CheckAndUpdate(context.Background())
+
+	status := u.Snapshot()
+	if status.State != UpdateStateError || status.LastSuccessAt != nil ||
+		status.LastError != "failed to sync staged binary: fixture: staged flush failed" {
+		t.Fatalf("status after failed Windows flush = %+v", status)
+	}
+	if want := []string{"create", "close"}; !reflect.DeepEqual(rec.ops(), want) || len(*exits) != 0 {
+		t.Fatalf("steps after failed Windows flush = %v, exits = %v", rec.ops(), *exits)
+	}
+	if got, err := os.ReadFile(execPath); err != nil || string(got) != "old-binary" {
+		t.Fatalf("executable after failed flush = %q, %v", got, err)
+	}
+	if leftover := GetUpdatedFromVersion(); leftover != "" {
+		t.Fatalf("previous version falsely reported after failed flush: %q", leftover)
+	}
+	if leftovers, err := filepath.Glob(filepath.Join(dir, "pulse-agent-*.tmp")); err != nil || len(leftovers) != 0 {
+		t.Fatalf("staged files after failed flush = %v, %v", leftovers, err)
 	}
 }
 
