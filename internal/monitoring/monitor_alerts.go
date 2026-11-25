@@ -176,10 +176,24 @@ func (m *Monitor) SetConnectionsSnapshotLister(lister func() []alerts.Connection
 	m.connectionsSnapshotLister = lister
 }
 
-// checkConnectionAlerts runs CheckConnection against every platform
-// connection snapshot the registered lister returns. Invoked from the main
-// poll tick so a wedged PVE / PBS / PMG / VMware / TrueNAS connection escalates
-// into the top-nav alert stream instead of staying behind on the Settings page.
+func (m *Monitor) runPeriodicConnectionAlertChecks(ctx context.Context, ticks <-chan struct{}) {
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticks:
+			if ctx.Err() != nil {
+				// A pending tick does not own a read on shutdown.
+				return
+			}
+			m.checkConnectionAlerts()
+		}
+	}
+}
+
+// checkConnectionAlerts reads the unified connections ledger and applies its
+// platform observations. The periodic worker owns both halves of the pass so
+// an older observation cannot apply after a later one.
 func (m *Monitor) checkConnectionAlerts() {
 	defer recoverFromPanic("checkConnectionAlerts")
 

@@ -456,6 +456,19 @@ func (m *Monitor) reconcilePVENodeInventory(
 	return sortedPVENodeInventory(reconciled)
 }
 
+func (m *Monitor) claimPVEClusterCheck(instanceName string) bool {
+	// Housekeeping and instance retirement also access lastClusterCheck
+	// under m.mu. Decide and stamp together, without holding it during I/O.
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	now := time.Now()
+	if now.Sub(m.lastClusterCheck[instanceName]) <= 5*time.Minute {
+		return false
+	}
+	m.lastClusterCheck[instanceName] = now
+	return true
+}
+
 func (m *Monitor) detectClusterMembership(ctx context.Context, instanceName string, instanceCfg *config.PVEInstance, client PVEClientInterface) {
 	_ = client
 
@@ -464,11 +477,9 @@ func (m *Monitor) detectClusterMembership(ctx context.Context, instanceName stri
 	// endpoints, because the addresses captured at add time go stale when the
 	// cluster re-IPs - without a refresh Pulse keeps dialing (and displaying)
 	// dead addresses forever (#1493).
-	if time.Since(m.lastClusterCheck[instanceName]) <= 5*time.Minute {
+	if !m.claimPVEClusterCheck(instanceName) {
 		return
 	}
-
-	m.lastClusterCheck[instanceName] = time.Now()
 
 	clientConfig := config.CreateProxmoxConfig(instanceCfg)
 	// Re-detection dials outside the cluster client; keep its endpoint trust.

@@ -1371,7 +1371,7 @@ type Monitor struct {
 	activePollCount            int32                                  // Number of active polling operations
 	authFailures               map[string]int                         // Track consecutive auth failures per node
 	lastAuthAttempt            map[string]time.Time                   // Track last auth attempt time
-	lastClusterCheck           map[string]time.Time                   // Track last cluster check for standalone nodes
+	lastClusterCheck           map[string]time.Time                   // Track last cluster check for each PVE instance; guarded by mu
 	lastPhysicalDiskPoll       map[string]time.Time                   // Track last physical disk poll time per instance
 	pveBackupPolls             map[string]*pveBackupPoll              // Owned runtime/client-scoped backup scans; guarded by mu
 	pveReplicationPolls        map[string]*pveReplicationPoll         // Owned runtime/client-scoped replication reads; guarded by mu
@@ -2452,11 +2452,19 @@ func (m *Monitor) Start(ctx context.Context, wsHub *websocket.Hub) {
 	// A slow notification-health read or alert projection must not hold up
 	// poll planning or broadcast. Keep at most one pending tick and join an
 	// admitted check before Start returns ownership of the alert store.
+	periodicAlertsCtx, stopPeriodicAlerts := context.WithCancel(ctx)
+	defer stopPeriodicAlerts()
 	deliveryHealthTicks := make(chan struct{}, 1)
-	deliveryHealthCtx, stopDeliveryHealth := context.WithCancel(ctx)
-	defer stopDeliveryHealth()
 	alertChecks.Go(func() {
-		m.runPeriodicNotificationDeliveryChecks(deliveryHealthCtx, deliveryHealthTicks)
+		m.runPeriodicNotificationDeliveryChecks(periodicAlertsCtx, deliveryHealthTicks)
+	})
+
+	// Read and apply connection snapshots in one worker. If a pass stalls,
+	// later ticks can request one fresh read, but cannot overtake its results
+	// or accumulate a backlog of confirmation samples.
+	connectionAlertTicks := make(chan struct{}, 1)
+	alertChecks.Go(func() {
+		m.runPeriodicConnectionAlertChecks(periodicAlertsCtx, connectionAlertTicks)
 	})
 
 	// Create separate tickers for polling and broadcasting using the configured cadence
@@ -2530,11 +2538,10 @@ func (m *Monitor) Start(ctx context.Context, wsHub *websocket.Hub) {
 				// Poll real infrastructure
 				go m.poll(ctx, wsHub)
 			}
-			// Connection-degraded alerts derive from the unified connections
-			// ledger, which lives behind the api layer. We invoke the
-			// registered lister here so a wedged PVE/PBS/PMG/VMware/TrueNAS
-			// connection escalates into the top-nav alert stream.
-			startAlertCheck(m.checkConnectionAlerts)
+			select {
+			case connectionAlertTicks <- struct{}{}:
+			default: // One fresh snapshot is already requested.
+			}
 
 		case <-broadcastTicker.C:
 			// Broadcast current state regardless of polling status
