@@ -137,7 +137,14 @@ func (m *Manager) CheckPBS(pbs models.PBSInstance) {
 	// and intent grace without changing an open alert's trusted evidence.
 	// Connectivity above and full-outage precedence remain independent.
 	if !pbs.NodeMetricsUnavailable {
-		input.CPU = &UnifiedResourceMetric{Percent: pbs.CPU}
+		// PBS polling retains the native capacity ratio. Evaluate in the
+		// same percentage points as History and the canonical PBS resource,
+		// while keeping already-normalized inputs and validation intact.
+		cpuPercent := pbs.CPU
+		if cpuPercent > 0 && cpuPercent <= 1 {
+			cpuPercent *= 100
+		}
+		input.CPU = &UnifiedResourceMetric{Percent: cpuPercent}
 		input.Memory = &UnifiedResourceMetric{Percent: pbs.Memory}
 	}
 	m.evaluateUnifiedMetrics(input, thresholds, nil)

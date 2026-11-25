@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"math"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -180,5 +181,58 @@ func TestPBSMetricGapKeepsImmediateCPURecoveryAndGlobalPause(t *testing.T) {
 	m.CheckPBS(pbs)
 	if len(m.GetActiveAlerts()) != 0 || len(queryAlertEvents(t, m, eventlog.Filter{Types: []string{eventlog.TypeResolved}})) != 1 {
 		t.Fatal("measured zero must retain immediate CPU recovery, not gain a new delay")
+	}
+}
+
+func TestPBSCPUThresholdUsesPercentagePoints(t *testing.T) {
+	for _, tc := range []struct {
+		name        string
+		raw         float64
+		unavailable bool
+		want        float64
+	}{
+		{name: "provider ratio", raw: 0.95, want: 95},
+		{name: "provider at capacity", raw: 1, want: 100},
+		{name: "normalized observation", raw: 95, want: 95},
+		{name: "below threshold", raw: 0.74},
+		{name: "unavailable", raw: 0.95, unavailable: true},
+		{name: "invalid", raw: math.Inf(1)},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			m, clock := pbsContinuityManager(t, false)
+			m.mu.Lock()
+			m.config.MetricTimeThresholds["all"]["cpu"] = 0
+			m.mu.Unlock()
+			pbs := pbsContinuitySample("pbs-primary", "cpu", tc.raw, tc.unavailable)
+			m.CheckPBS(pbs)
+			active := m.GetActiveAlerts()
+			if tc.want == 0 {
+				if len(active) != 0 {
+					t.Fatalf("invalid, unavailable, or sub-threshold CPU opened an alert: %+v", active)
+				}
+				return
+			}
+			if len(active) != 1 || active[0].Type != "cpu" || active[0].MetricStatus == nil ||
+				math.Abs(active[0].MetricStatus.Value-tc.want) > 0.01 {
+				t.Fatalf("CPU %v: want one alert evaluating %.0f%%, got %+v", tc.raw, tc.want, active)
+			}
+
+			// The next native sample is still high; it must update the
+			// existing incident, not complete the recovery as a tiny percent.
+			clock.Store(int64(time.Second))
+			pbs.CPU = 0.96
+			m.CheckPBS(pbs)
+			current := m.GetActiveAlerts()
+			if len(current) != 1 || current[0].ID != active[0].ID ||
+				current[0].MetricStatus == nil || math.Abs(current[0].MetricStatus.Value-96) > 0.01 {
+				t.Fatalf("native high sample did not update the same CPU incident: %+v", current)
+			}
+			clock.Store(int64(2 * time.Second))
+			pbs.CPU = 0.65
+			m.CheckPBS(pbs)
+			if len(m.GetActiveAlerts()) != 0 {
+				t.Fatal("native low CPU did not clear the incident under the existing recovery policy")
+			}
+		})
 	}
 }
