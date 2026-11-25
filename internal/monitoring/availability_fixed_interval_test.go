@@ -1,10 +1,16 @@
 package monitoring
 
 import (
+	"errors"
+	"maps"
+	"os"
+	"path/filepath"
+	"slices"
 	"testing"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/pbs"
 )
 
 // Regression tests for the provider half of #1582: the scheduler already pins
@@ -68,5 +74,115 @@ func TestDescribeInstancesForSchedulerPinsAvailabilityFixedInterval(t *testing.T
 	}
 	if found.FixedInterval != 120*time.Second {
 		t.Fatalf("descriptor FixedInterval = %v, want 120s", found.FixedInterval)
+	}
+}
+
+// Count real catalog reads without replacing the encrypted persistence or its
+// decoder. Only the reader uses this filesystem; the writer uses the real one.
+type availabilityPlanningReadCounter struct {
+	config.FileSystem
+	reads int
+	err   error
+}
+
+func (fs *availabilityPlanningReadCounter) ReadFile(path string) ([]byte, error) {
+	fs.reads++
+	if fs.err != nil {
+		return nil, fs.err
+	}
+	return os.ReadFile(path)
+}
+
+func newAvailabilityPlanningFixture(t testing.TB, targets []config.AvailabilityTarget) (*Monitor, *config.ConfigPersistence, *availabilityPlanningReadCounter) {
+	t.Helper()
+	dir := t.TempDir()
+	t.Setenv("PULSE_LEGACY_KEY_PATH", filepath.Join(dir, "absent-test-legacy.key"))
+	writer := config.NewConfigPersistence(dir)
+	if err := writer.SaveAvailabilityTargets(targets); err != nil {
+		t.Fatal(err)
+	}
+	reader := config.NewConfigPersistence(dir)
+	counter := &availabilityPlanningReadCounter{}
+	reader.SetFileSystem(counter)
+	monitor := &Monitor{
+		config:        &config.Config{PVEPollingInterval: 45 * time.Second, PBSPollingInterval: 90 * time.Second},
+		configPersist: reader,
+		pveClients:    map[string]PVEClientInterface{"pve-peer": nil},
+		pbsClients:    map[string]*pbs.Client{"pbs-peer": nil},
+		taskQueue:     NewTaskQueue(),
+	}
+	return monitor, writer, counter
+}
+
+func TestAvailabilityPlanningReadsSavedCatalogOnce(t *testing.T) {
+	for _, mode := range []string{"fixed", "adaptive"} {
+		t.Run(mode, func(t *testing.T) {
+			local := probeAgentTarget("local", "")
+			local.Name, local.PollIntervalSecs = "Z local", 120
+			both := probeAgentTarget("both", "")
+			both.ObservationLocationIDs = []string{config.AvailabilityObservationLocationLocal, config.AvailabilityAgentObservationLocationID("edge")}
+			remote := probeAgentTarget("remote", "edge")
+			paused := probeAgentTarget("paused", "")
+			paused.Enabled = false
+			push := config.AvailabilityTarget{ID: "push", Name: "Push", Protocol: config.AvailabilityProbePush, Enabled: true}
+			targets := []config.AvailabilityTarget{local, both, remote, paused, push}
+			monitor, writer, counter := newAvailabilityPlanningFixture(t, targets)
+			monitor.SetLicenseChecker(licenseWithExternalProbe(true))
+			pbsCadence := 90 * time.Second
+			if mode == "adaptive" {
+				monitor.scheduler = NewAdaptiveScheduler(SchedulerConfig{
+					BaseInterval: 45 * time.Second, MinInterval: 45 * time.Second, MaxInterval: 45 * time.Second,
+				}, nil, nil, nil)
+				pbsCadence = 45 * time.Second
+			}
+			now := time.Now()
+			checkPlan := func(phase string, want map[string]time.Duration) []string {
+				t.Helper()
+				counter.reads = 0
+				tasks := monitor.buildScheduledTasks(now)
+				now = now.Add(time.Second)
+				got := make(map[string]time.Duration)
+				var availabilityOrder []string
+				for _, task := range tasks {
+					got[task.InstanceName] = task.Interval
+					if task.InstanceType == InstanceTypeAvailability {
+						availabilityOrder = append(availabilityOrder, task.InstanceName)
+					}
+				}
+				want["pve-peer"], want["pbs-peer"] = 45*time.Second, pbsCadence
+				t.Logf("%s: catalog reads=%d; plan=%v", phase, counter.reads, got)
+				if counter.reads != 1 {
+					t.Errorf("%s: read saved availability catalog %d times, want one per planning pass", phase, counter.reads)
+				}
+				if !maps.Equal(got, want) || len(tasks) != len(want) {
+					t.Errorf("%s: %d tasks with intervals %v, want %v", phase, len(tasks), got, want)
+				}
+				return availabilityOrder
+			}
+
+			order := checkPlan("initial", map[string]time.Duration{
+				"local": 120 * time.Second, "both": 60 * time.Second, "push": availabilityPushEvalInterval,
+			})
+			if !slices.Equal(order, []string{"both", "local", "push"}) {
+				t.Errorf("initial availability plan order = %v, want instance-ID order", order)
+			}
+			// The next plan uses the new saved roster, not an enduring cache.
+			targets[0].Enabled = false
+			targets[1].PollIntervalSecs = 180
+			if err := writer.SaveAvailabilityTargets(targets); err != nil {
+				t.Fatal(err)
+			}
+			checkPlan("edited", map[string]time.Duration{"both": 180 * time.Second, "push": availabilityPushEvalInterval})
+			if _, ok := monitor.buildPollTask(ScheduledTask{InstanceName: local.ID, InstanceType: InstanceTypeAvailability}); ok {
+				t.Error("worker admitted a previously planned target after it was disabled")
+			}
+
+			monitor.SetLicenseChecker(licenseWithExternalProbe(false))
+			checkPlan("entitlement lapse", map[string]time.Duration{
+				"both": 180 * time.Second, "push": availabilityPushEvalInterval, "remote": 60 * time.Second,
+			})
+			counter.err = errors.New("fixture: catalog read unavailable")
+			checkPlan("unreadable", map[string]time.Duration{})
+		})
 	}
 }

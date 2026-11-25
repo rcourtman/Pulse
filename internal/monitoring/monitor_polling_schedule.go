@@ -2,7 +2,8 @@ package monitoring
 
 import (
 	"context"
-	"sort"
+	"slices"
+	"strings"
 	"sync/atomic"
 	"time"
 
@@ -12,59 +13,66 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+type pollPlanInstance struct {
+	name          string
+	fixedInterval time.Duration
+}
+
+// A provider that stores its roster and cadences together can return both from
+// one read. The planner owns the returned slice and sorts it by instance ID.
+// This is not a cache; a worker still checks the current saved target at dispatch.
+type pollPlanningRosterProvider interface {
+	pollPlanningRoster(m *Monitor) []pollPlanInstance
+}
+
 func (m *Monitor) describeInstancesForScheduler() []InstanceDescriptor {
-	providers := m.pollProviderSnapshotWithBuiltins()
-	if len(providers) == 0 {
-		return nil
-	}
-
-	total := 0
-	for _, provider := range providers {
+	var descriptors []InstanceDescriptor
+	for _, provider := range m.pollProviderSnapshotWithBuiltins() {
 		if provider == nil {
 			continue
 		}
-		total += len(provider.ListInstances(m))
-	}
-	if total == 0 {
-		return nil
-	}
-
-	descriptors := make([]InstanceDescriptor, 0, total)
-	for _, provider := range providers {
-		if provider == nil {
-			continue
-		}
-
-		names := append([]string(nil), provider.ListInstances(m)...)
-		if len(names) == 0 {
-			continue
-		}
-		sort.Strings(names)
-
 		providerType := provider.Type()
-		fixedProvider, _ := provider.(FixedIntervalPollProvider)
-		for _, name := range names {
-			desc := InstanceDescriptor{
-				Name: name,
-				Type: providerType,
+		first := len(descriptors)
+		if batch, ok := provider.(pollPlanningRosterProvider); ok {
+			roster := batch.pollPlanningRoster(m)
+			slices.SortFunc(roster, func(left, right pollPlanInstance) int {
+				return strings.Compare(left.name, right.name)
+			})
+			descriptors = slices.Grow(descriptors, len(roster))
+			for _, instance := range roster {
+				descriptors = append(descriptors, InstanceDescriptor{
+					Name: instance.name, Type: providerType, FixedInterval: instance.fixedInterval,
+				})
 			}
-			if fixedProvider != nil {
-				desc.FixedInterval = fixedProvider.FixedInstanceInterval(m, name)
+		} else {
+			names := slices.Clone(provider.ListInstances(m))
+			slices.Sort(names)
+			descriptors = slices.Grow(descriptors, len(names))
+			fixedProvider, _ := provider.(FixedIntervalPollProvider)
+			for _, name := range names {
+				desc := InstanceDescriptor{Name: name, Type: providerType}
+				if fixedProvider != nil {
+					desc.FixedInterval = fixedProvider.FixedInstanceInterval(m, name)
+				}
+				descriptors = append(descriptors, desc)
 			}
+		}
+
+		for i := first; i < len(descriptors); i++ {
+			desc := &descriptors[i]
 			if m.scheduler != nil {
-				if last, ok := m.scheduler.LastScheduled(providerType, name); ok {
+				if last, ok := m.scheduler.LastScheduled(providerType, desc.Name); ok {
 					desc.LastScheduled = last.NextRun
 					desc.LastInterval = last.Interval
 				}
 			}
 			if m.stalenessTracker != nil {
-				if snap, ok := m.stalenessTracker.snapshot(providerType, name); ok {
+				if snap, ok := m.stalenessTracker.snapshot(providerType, desc.Name); ok {
 					desc.LastSuccess = snap.LastSuccess
 					desc.LastFailure = snap.LastError
 					desc.Metadata = TaskMetadata{ChangeHash: snap.ChangeHash}
 				}
 			}
-			descriptors = append(descriptors, desc)
 		}
 	}
 

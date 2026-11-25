@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 	"net"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -119,22 +120,32 @@ func (availabilityPollProvider) Type() InstanceType {
 }
 
 func (availabilityPollProvider) ListInstances(m *Monitor) []string {
-	targets := m.availabilityTargets()
+	targets := m.localAvailabilityTargets()
 	names := make([]string, 0, len(targets))
 	for _, target := range targets {
-		if !target.Enabled {
-			continue
-		}
-		// A licensed probe assignment moves execution to the agent. When the
-		// entitlement lapses the effective assignment collapses to local, and
-		// the next polling cycle re-plans this instance without a restart.
-		if !m.targetUsesLocalObservation(target) {
-			continue
-		}
 		names = append(names, target.ID)
 	}
 	sort.Strings(names)
 	return names
+}
+
+func (availabilityPollProvider) pollPlanningRoster(m *Monitor) []pollPlanInstance {
+	targets := m.localAvailabilityTargets()
+	roster := make([]pollPlanInstance, 0, len(targets))
+	for _, target := range targets {
+		roster = append(roster, pollPlanInstance{
+			name: target.ID, fixedInterval: availabilityFixedPollInterval(target),
+		})
+	}
+	return roster
+}
+
+func (m *Monitor) localAvailabilityTargets() []config.AvailabilityTarget {
+	// A licensed probe assignment can move execution off the server. On
+	// entitlement lapse the existing policy makes a remote-only check local.
+	return slices.DeleteFunc(m.availabilityTargets(), func(target config.AvailabilityTarget) bool {
+		return !target.Enabled || !m.targetUsesLocalObservation(target)
+	})
 }
 
 func (availabilityPollProvider) BaseInterval(m *Monitor) time.Duration {
@@ -160,6 +171,10 @@ func (availabilityPollProvider) FixedInstanceInterval(m *Monitor, instanceName s
 	if !ok || !target.Enabled {
 		return 0
 	}
+	return availabilityFixedPollInterval(target)
+}
+
+func availabilityFixedPollInterval(target config.AvailabilityTarget) time.Duration {
 	if target.Protocol == config.AvailabilityProbePush {
 		return availabilityPushEvalInterval
 	}
@@ -408,15 +423,11 @@ func (m *Monitor) RefreshAvailabilityTargets() {
 		if m.taskQueue == nil {
 			continue
 		}
-		interval := clampInterval(time.Duration(target.EffectivePollIntervalSecs())*time.Second, 10*time.Second, time.Hour)
-		if target.Protocol == config.AvailabilityProbePush {
-			interval = availabilityPushEvalInterval
-		}
 		task := ScheduledTask{
 			InstanceName: target.ID,
 			InstanceType: InstanceTypeAvailability,
 			NextRun:      now,
-			Interval:     interval,
+			Interval:     availabilityFixedPollInterval(target),
 		}
 		if target.Enabled && m.targetUsesLocalObservation(target) {
 			m.taskQueue.Upsert(task)
