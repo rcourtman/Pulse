@@ -84,6 +84,7 @@ func TestPollPBSInstancePausedDoesNotFabricateSuccess(t *testing.T) {
 
 func TestPollPMGInstancePausedDoesNotFabricateSuccess(t *testing.T) {
 	m := pmgScopeMonitor(allPMGScope())
+	m.stalenessTracker = NewStalenessTracker(nil)
 	f := &pmgScopeFixture{calls: map[string]int{}, fail: "version"}
 
 	// Record a real connection failure first.
@@ -122,6 +123,7 @@ func TestPollPMGInstancePausedDoesNotFabricateSuccess(t *testing.T) {
 
 	// Fresh paused PMG instance must not fabricate poll status.
 	fresh := pmgScopeMonitor(config.PMGInstance{Name: "gateway", MonitoringConfigured: true, Disabled: true})
+	fresh.stalenessTracker = NewStalenessTracker(nil)
 	fresh.pollPMGInstance(context.Background(), "gateway", f)
 	if _, exists := fresh.pollStatusMap["pmg::gateway"]; exists {
 		t.Fatalf("fresh paused PMG instance created poll status entry: %+v", fresh.pollStatusMap["pmg::gateway"])
@@ -133,6 +135,7 @@ func TestPollPMGInstancePausedDoesNotFabricateSuccess(t *testing.T) {
 
 func TestPollPMGInstancePanicRecordsFailure(t *testing.T) {
 	m := pmgScopeMonitor(allPMGScope())
+	m.stalenessTracker = NewStalenessTracker(nil)
 	panicker := &pmgPanicClient{}
 
 	m.pollPMGInstance(context.Background(), "gateway", panicker)
@@ -140,6 +143,9 @@ func TestPollPMGInstancePanicRecordsFailure(t *testing.T) {
 	status := m.pollStatusMap["pmg::gateway"]
 	if status == nil || status.ConsecutiveFailures != 1 || !strings.Contains(status.LastErrorMessage, "panic while polling PMG instance") || !status.LastSuccess.IsZero() {
 		t.Fatalf("panicking PMG poll ledger = %+v, want recorded panic failure", status)
+	}
+	if snap, ok := m.stalenessTracker.snapshot(InstanceTypePMG, "gateway"); !ok || !snap.LastSuccess.IsZero() || snap.LastError.IsZero() {
+		t.Fatalf("panicking PMG poll staleness = (%+v, %v), want error-only snapshot", snap, ok)
 	}
 }
 
