@@ -237,7 +237,9 @@ def pbs_steady_datastore_status(stats: dict) -> str:
     return f"{seen}/{len(stores)} with a response; longest gap {longest:g} s in {coverage['window_s']} s"
 
 
-def pbs_steady_snapshot_groups(stats: dict | None, window_s: int) -> dict[tuple[str, str], tuple[int, int]]:
+def pbs_steady_snapshot_listings(
+    stats: dict | None, window_s: int,
+) -> dict[tuple[str, str], tuple[int, int, int | None]]:
     coverage = (stats or {}).get("pbs_steady_snapshot_group_coverage")
     if not isinstance(coverage, dict) or coverage.get("window_s") != window_s:
         return {}
@@ -253,33 +255,47 @@ def pbs_steady_snapshot_groups(stats: dict | None, window_s: int) -> dict[tuple[
                 continue
             served, expected = row.get("served_groups"), row.get("expected_groups")
             if type(served) is int and type(expected) is int and 0 <= served <= expected:
-                counts[instance, store] = (served, expected)
+                responses = row.get("completed_responses")
+                if (type(responses) is not int or responses < served
+                        or (served == 0 and responses != 0)):
+                    responses = None
+                counts[instance, store] = (served, expected, responses)
     return counts
 
 
 def pbs_snapshot_window_lines(baseline: dict | None, candidate: dict | None, window_s: int) -> list[str]:
-    base = pbs_steady_snapshot_groups(baseline, window_s)
-    cand = pbs_steady_snapshot_groups(candidate, window_s)
+    base = pbs_steady_snapshot_listings(baseline, window_s)
+    cand = pbs_steady_snapshot_listings(candidate, window_s)
     lines = ["", f"**PBS snapshot groups served/configured in the {window_s} s RSS window**", ""]
     if not base and not cand:
         return [*lines, "No same-window snapshot-listing evidence is available."]
 
     lines += [
         "Each group counts once per datastore after a nonempty fixture response completes. "
+        "Completed response counts include repeats of the same group. "
         "This is not a freshness check. "
         "Zero means no matching listing completed in the window, not a backup failure; "
         "Pulse may use cached data. `n/a` means evidence was unavailable.",
         "",
-        "| PBS datastore | Baseline | Candidate |",
-        "|---|---:|---:|",
+        "| PBS datastore | Baseline groups | Candidate groups | Baseline responses | Candidate responses |",
+        "|---|---:|---:|---:|---:|",
     ]
+    groups_differ = responses_differ = False
     for instance, store in sorted(base.keys() | cand.keys()):
-        key = (instance, store)
-        cells = [f"{counts[key][0]}/{counts[key][1]}" if key in counts else "n/a" for counts in (base, cand)]
-        lines.append(f"| {instance}/{store} | {cells[0]} | {cells[1]} |")
-    if base != cand:
+        rows = [side.get((instance, store)) for side in (base, cand)]
+        group_counts = [row[:2] if row is not None else None for row in rows]
+        groups = [f"{count[0]}/{count[1]}" if count is not None else "n/a" for count in group_counts]
+        responses = [row[2] if row is not None else None for row in rows]
+        counts = [str(count) if count is not None else "n/a" for count in responses]
+        lines.append(f"| {instance}/{store} | {' | '.join(groups + counts)} |")
+        groups_differ |= group_counts[0] != group_counts[1]
+        responses_differ |= None not in responses and responses[0] != responses[1]
+    if groups_differ:
         lines += ["", "**PBS snapshot-listing evidence differs between builds.** "
                   "These observations do not establish equivalent backup-listing work for an RSS comparison."]
+    if responses_differ:
+        lines += ["", "**PBS completed snapshot response counts differ between builds.** "
+                  "Matching group counts do not establish equivalent backup-listing traffic."]
     return lines
 
 

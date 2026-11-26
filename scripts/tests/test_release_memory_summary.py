@@ -470,6 +470,40 @@ class ReleaseMemorySummaryTests(unittest.TestCase):
         _, _, text = compare(baseline["pbs_steady_snapshot_group_coverage"])
         self.assertNotIn("PBS snapshot-listing evidence differs", text)
 
+    def test_pbs_snapshot_response_counts_disambiguate_equal_group_coverage(self):
+        def traffic(fast_count, archive_count):
+            return {
+                "pve_nodes": 1, "guests": 2, "pbs_instances": 1, "total_pbs_snapshots": 150,
+                "snapshots_per_group": 50, "pve_requests": 90, "pbs_requests": 50,
+                "dashboard": {"connects": 1, "messages": 60, "bytes": 1024},
+                "pbs_steady_snapshot_group_coverage": {"window_s": 300, "datastores": {"pbs1": {
+                    "store-fast": {"expected_groups": 2, "served_groups": 2, "completed_responses": fast_count},
+                    "store-archive": {"expected_groups": 1, "served_groups": 0, "completed_responses": archive_count},
+                }}},
+            }
+
+        full = samples(131072, 25, 0)
+        for fast_count, count_cell, differs in ((5, "5", True), (2, "2", False),
+                                                  (None, "n/a", False), (1, "n/a", False),
+                                                  (True, "n/a", False)):
+            with self.subTest(fast_count=fast_count):
+                baseline, candidate = traffic(2, 0), traffic(fast_count, 0)
+                if fast_count is None:
+                    del candidate["pbs_steady_snapshot_group_coverage"]["datastores"]["pbs1"]["store-fast"][
+                        "completed_responses"]
+                code, result, text = self.run_summary(
+                    full, full, estate="proxmox", proxmox={"baseline": baseline, "candidate": candidate},
+                    env={"PULSE_MEMORY_GATE": "0"}, wait_statuses=(0, 0),
+                )
+                self.assertEqual(code, 0)
+                self.assertEqual(result["status"], "measured")
+                self.assertFalse(result["gated"])
+                self.assertEqual(result["candidate_proxmox"], candidate)
+                self.assertIn(f"| pbs1/store-fast | 2/2 | 2/2 | 2 | {count_cell} |", text)
+                self.assertIn("| pbs1/store-archive | 0/1 | 0/1 | 0 | 0 |", text)
+                self.assertNotIn("PBS snapshot-listing evidence differs", text)
+                self.assertEqual("PBS completed snapshot response counts differ" in text, differs)
+
     def test_proxmox_unavailable_traffic_does_not_erase_adverse_rss(self):
         code, result, text = self.run_summary(
             samples(131072, 25, 0), samples(174080, 25, 0), estate="proxmox",

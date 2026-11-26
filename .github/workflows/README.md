@@ -279,10 +279,12 @@ in the steady RSS window, with the longest gap per datastore including both
 edges. A single status response or a gap longer than half that window limits
 the comparison even when every datastore responded. This describes the
 coverage of the observation, not a required poll cadence or a backup alarm.
-Snapshot responses completed within that same window are shown
-separately per datastore, so full coverage earlier in the run or a current
-status response cannot stand in for a current snapshot listing. A zero does
-not mean a backup failure or require cached snapshots to be requested again.
+The same window shows per-datastore distinct snapshot groups and completed
+nonempty snapshot responses separately. Repeat listings count as traffic, not
+as new groups, so equal coverage can still hide different work. Coverage from
+warmup or a current status response cannot stand in for a current listing.
+A zero does not mean a backup failure or require cached snapshots to be
+requested again; an older report without response counts shows `n/a`.
 An unfinished window has no steady observation. If sampling or a worker fails,
 the summary and `result.json` still retain available Proxmox traffic separately
 from the failed RSS comparison. A recorded zero stays distinct from unavailable
