@@ -383,15 +383,20 @@ func referenceWindowedHistory(t *testing.T, m *Manager, since time.Time, limit i
 	return m.applyCurrentNodeDisplayNames(canonicalizeAlertHistoryForOutput(results))
 }
 
+// recentHistoryParityBase anchors eventlog fixtures inside the 90-day
+// retention window so background startup pruning does not drop test rows.
+func recentHistoryParityBase() time.Time {
+	return time.Now().UTC().Truncate(time.Second).Add(-48 * time.Hour)
+}
+
 // writeRandomHistory appends a lifecycle history with acknowledgements on
 // both sides of window boundaries, out-of-order LastSeen values, uneven
 // fractional seconds (so RFC3339Nano text order and time order can differ),
 // same-instant events and a history clear. It returns every event time.
-func writeRandomHistory(t *testing.T, m *Manager, seed int64) []time.Time {
+func writeRandomHistory(t *testing.T, m *Manager, seed int64, base time.Time) []time.Time {
 	t.Helper()
 	rng := rand.New(rand.NewSource(seed))
 	store := m.eventLogStore()
-	base := time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC)
 	kinds := []string{
 		eventlog.TypeFired, eventlog.TypeRefired, eventlog.TypeAcknowledged,
 		eventlog.TypeUnacknowledged, eventlog.TypeSnoozed, eventlog.TypeEscalated, eventlog.TypeResolved,
@@ -439,12 +444,13 @@ func TestWindowedHistoryMatchesAWalkOfOnlyTheWindow(t *testing.T) {
 	for seed := int64(1); seed <= 25; seed++ {
 		t.Run(fmt.Sprintf("seed-%d", seed), func(t *testing.T) {
 			m := newHistoryParityManager(t)
-			times := writeRandomHistory(t, m, seed)
+			base := recentHistoryParityBase()
+			times := writeRandomHistory(t, m, seed, base)
 			// Live overlay: one alert the log knows (with a fresh value) and
 			// one it never saw fire.
 			m.mu.Lock()
 			m.activeAlerts["live-known"] = &Alert{ID: "alert-1", ResourceID: "vm-alert-1",
-				StartTime: time.Date(2026, 9, 1, 1, 0, 0, 0, time.UTC), LastSeen: times[len(times)-1], Value: 999}
+				StartTime: base.Add(time.Hour), LastSeen: times[len(times)-1], Value: 999}
 			m.activeAlerts["live-new"] = &Alert{ID: "alert-new", ResourceID: "vm-new",
 				StartTime: times[len(times)/2], LastSeen: times[len(times)-1], Value: 7}
 			m.mu.Unlock()
@@ -472,7 +478,7 @@ func TestWindowedHistoryMatchesAWalkOfOnlyTheWindow(t *testing.T) {
 
 func TestWindowedHistoryReusesTheFullHistoryFold(t *testing.T) {
 	m := newHistoryParityManager(t)
-	times := writeRandomHistory(t, m, 7)
+	times := writeRandomHistory(t, m, 7, recentHistoryParityBase())
 	if _, ok := m.AlertHistoryFromEvents(time.Time{}, 0); !ok {
 		t.Fatal("history unavailable")
 	}
@@ -497,10 +503,11 @@ func TestWindowedHistoryReusesTheFullHistoryFold(t *testing.T) {
 
 func TestHistoryReadResultsDoNotAliasTheSharedFold(t *testing.T) {
 	m := newHistoryParityManager(t)
-	times := writeRandomHistory(t, m, 11)
+	base := recentHistoryParityBase()
+	times := writeRandomHistory(t, m, 11, base)
 	m.mu.Lock()
 	m.activeAlerts["live-known"] = &Alert{ID: "alert-2", ResourceID: "vm-alert-2",
-		StartTime: time.Date(2026, 9, 1, 2, 0, 0, 0, time.UTC), LastSeen: times[len(times)-1]}
+		StartTime: base.Add(2 * time.Hour), LastSeen: times[len(times)-1]}
 	m.mu.Unlock()
 	for _, since := range []time.Time{{}, times[30], times[100]} {
 		first, _ := m.AlertHistoryFromEvents(since, 0)
@@ -522,7 +529,7 @@ func TestHistoryReadResultsDoNotAliasTheSharedFold(t *testing.T) {
 func TestLimitedHistoryReadCopiesOnlyReturnedRows(t *testing.T) {
 	m := newHistoryParityManager(t)
 	store := m.eventLogStore()
-	at := time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC)
+	at := recentHistoryParityBase()
 	metadata := map[string]interface{}{}
 	for i := 0; i < 40; i++ {
 		metadata[fmt.Sprintf("key-%d", i)] = fmt.Sprintf("value-%d-with-some-detail", i)
@@ -590,7 +597,7 @@ func TestNewestHistoryEvidenceChoosesByObservationTime(t *testing.T) {
 func TestHistoryEntriesKeepOnlyTheNewestEvidence(t *testing.T) {
 	m := newHistoryParityManager(t)
 	store := m.eventLogStore()
-	start := time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC)
+	start := recentHistoryParityBase()
 	ids := make([]string, 0, 64)
 	for i := 0; i < 64; i++ {
 		ids = append(ids, fmt.Sprintf("ev-%02d", i))
@@ -646,7 +653,7 @@ func TestHistoryEntriesKeepOnlyTheNewestEvidence(t *testing.T) {
 }
 
 func TestHistoryOverlayKeepsOnlyTheNewestEvidence(t *testing.T) {
-	start := time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC)
+	start := recentHistoryParityBase()
 	m := newHistoryParityManager(t)
 	m.mu.Lock()
 	m.activeAlerts["live"] = &Alert{ID: "cpu-1", ResourceID: "vm-2", StartTime: start, LastSeen: start,

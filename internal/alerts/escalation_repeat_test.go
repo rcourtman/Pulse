@@ -16,7 +16,8 @@ func TestCriticalEscalationRepeatsAtFinalLevelUntilAcknowledged(t *testing.T) {
 		t.Fatalf("open in-memory event log: %v", err)
 	}
 	m.SetEventLog(store)
-	now := time.Date(2026, time.August, 27, 18, 0, 0, 0, time.UTC)
+	// Keep fixture timestamps inside the 90-day eventlog retention window.
+	now := time.Now().UTC().Truncate(time.Second).Add(-2 * time.Hour)
 	m.now = func() time.Time { return now }
 
 	cfg := m.GetConfig()
@@ -97,7 +98,8 @@ func TestCriticalEscalationRepeatsAtFinalLevelUntilAcknowledged(t *testing.T) {
 
 func TestEscalationRepeatSkipsWarningAlerts(t *testing.T) {
 	m := newTestManager(t)
-	now := time.Date(2026, time.August, 27, 18, 0, 0, 0, time.UTC)
+	// Keep fixture timestamps inside the 90-day eventlog retention window.
+	now := time.Now().UTC().Truncate(time.Second).Add(-2 * time.Hour)
 	m.now = func() time.Time { return now }
 	m.mu.Lock()
 	m.config.Enabled = true

@@ -16,7 +16,7 @@ func shadowGuestManager(t *testing.T, grace bool) (*Manager, *atomic.Int64) {
 	t.Helper()
 	m := newShadowFeedManager(t)
 	configureUnifiedEvalManager(t, m, unifiedEvalBaseConfig())
-	epoch := time.Date(2026, 10, 25, 12, 0, 0, 0, time.UTC)
+	epoch := time.Now().UTC().Truncate(time.Second).Add(-2 * time.Hour)
 	tick := &atomic.Int64{}
 	m.mu.Lock()
 	m.now = func() time.Time { return epoch.Add(time.Duration(tick.Load())) }
