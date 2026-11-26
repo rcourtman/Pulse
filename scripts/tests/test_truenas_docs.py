@@ -278,6 +278,33 @@ class TrueNASDocsTest(unittest.TestCase):
         self.assertIn("not a reading of zero activity", prose)
         self.assertIn("Use the same window in TrueNAS **Reporting**", prose)
         self.assertIn("no need to wait through the read again", prose)
+        # Current resource drawers chart stored history directly on Overview
+        # with History range; there is no separate History tab to select.
+        drawer = (
+            ROOT / "frontend-modern/src/components/Infrastructure/useResourceDetailDrawerDerivedState.ts"
+        ).read_text()
+        self.assertIn("{ id: 'overview' as DrawerTab, label: 'Overview' }", drawer)
+        self.assertNotIn("id: 'history' as DrawerTab", drawer)
+        self.assertIn("stay on the drawer's **Overview** tab", prose)
+        self.assertIn("choose the affected **History range**", prose)
+        self.assertNotIn("select **History**", prose)
+
+    def test_stale_and_button_labels_match_current_truenas_ui(self):
+        text = DOC.read_text()
+        slot = (
+            ROOT / "frontend-modern/src/components/Settings/ConnectionEditor/CredentialSlots/TrueNASCredentialSlot.tsx"
+        ).read_text()
+        self.assertIn("'Test connection'", slot)
+        self.assertNotIn("**Test Connection**", text)
+        page_model = (ROOT / "frontend-modern/src/features/truenas/truenasPageModel.ts").read_text()
+        self.assertIn("hasImpairedResourceSource(resource, 'truenas') ? 'degraded'", page_model)
+        services_table = (ROOT / "frontend-modern/src/features/truenas/TrueNASServicesTable.tsx").read_text()
+        self.assertIn("short: 'not updated'", services_table)
+        stale_section = " ".join(
+            text.split("### Stale TrueNAS data", 1)[1].split("### Disabling", 1)[0].split()
+        )
+        self.assertIn("**Degraded**", stale_section)
+        self.assertIn("**not updated**", stale_section)
 
     def test_polling_guidance_preserves_evidence_before_a_manual_test(self):
         text = DOC.read_text().split("### Stale TrueNAS data", 1)[1].split("### Disabling", 1)[0]

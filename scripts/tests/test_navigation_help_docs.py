@@ -53,10 +53,13 @@ class NavigationHelpDocsTest(unittest.TestCase):
     def test_truenas_locations_match_the_actual_tab_labels_and_paths(self):
         model = source("features/truenas/truenasPageModel.ts")
         tabs = dict(re.findall(r"label: '([^']+)', path: '(/truenas/[^']+)'", model))
+        self.assertGreaterEqual(len(tabs), 7)
+        self.assertIn("Services", tabs)
+        self.assertIn("Shares", tabs)
         guide = doc_text("TRUENAS.md")
-        for label in ("Overview", "Storage", "Protection", "Apps", "VMs"):
+        for label, path in tabs.items():
             with self.subTest(tab=label):
-                self.assertIn(f"**TrueNAS → {label}** (`{tabs[label]}`)", guide)
+                self.assertIn(f"**TrueNAS → {label}** (`{path}`)", guide)
                 self.assertIn(f"| TrueNAS → {label} |", guide)
         self.assertNotIn("| Unified Page |", guide)
         self.assertNotIn("on the **Infrastructure** page", guide)
