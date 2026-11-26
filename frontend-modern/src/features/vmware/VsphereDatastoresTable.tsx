@@ -70,37 +70,24 @@ const VSPHERE_DATASTORE_STATUS_OPTIONS: PlatformTableFilterOption<VmwareDatastor
 const datastoreName = (resource: Resource): string =>
   asTrimmedString(resource.displayName) || asTrimmedString(resource.name) || resource.id;
 
-const datastoreType = (resource: Resource): string =>
+const datastoreType = (resource: Resource): string | undefined =>
   asTrimmedString(resource.vmware?.datastoreType) ||
-  asTrimmedString(resource.storage?.type)?.toUpperCase() ||
-  '—';
-
-const hostSummary = (resource: Resource): { label: string; title: string } =>
-  summarizePlatformTableValues(resource.storage?.nodes);
-
-const consumerSummary = (resource: Resource): { label: string; title: string } => {
-  const consumers = resource.storage?.topConsumers?.map((consumer) => consumer.name) ?? [];
-  return summarizePlatformTableValues(consumers);
-};
+  asTrimmedString(resource.storage?.type)?.toUpperCase();
 
 const consumerCount = (resource: Resource): number => resource.storage?.consumerCount ?? 0;
 
 const capacityDisk = (resource: Resource) => {
-  const total = getPlatformTableFiniteMetric(resource.disk?.total) ?? 0;
-  const used = getPlatformTableFiniteMetric(resource.disk?.used) ?? 0;
-  const free = getPlatformTableFiniteMetric(resource.disk?.free) ?? Math.max(0, total - used);
-  const current = getPlatformTableFiniteMetric(resource.disk?.current);
-  const usage = current !== undefined ? current : total > 0 ? (used / total) * 100 : 0;
-  return { total, used, free, usage };
-};
-
-const hasCapacityMetric = (resource: Resource): boolean => {
-  if (getPlatformTableFiniteMetric(resource.disk?.current) !== undefined) return true;
-  return (
-    typeof resource.disk?.used === 'number' &&
-    typeof resource.disk?.total === 'number' &&
-    resource.disk.total > 0
-  );
+  const { current, total, used, free } = resource.disk ?? {};
+  const size = getPlatformTableFiniteMetric(total) ?? 0;
+  const filled = getPlatformTableFiniteMetric(used);
+  const percent = getPlatformTableFiniteMetric(current);
+  if (percent === undefined && (size <= 0 || filled === undefined)) return null;
+  return {
+    total: size,
+    used: filled ?? 0,
+    free: getPlatformTableFiniteMetric(free) ?? Math.max(0, size - (filled ?? 0)),
+    usage: percent ?? ((filled ?? 0) / size) * 100,
+  };
 };
 
 // Columns a user can sort by. Hosts and Consumers summarize several names at
@@ -124,12 +111,10 @@ const getVsphereDatastoreSortValue = (
   switch (key) {
     case 'datastore':
       return datastoreName(resource);
-    case 'type': {
-      const type = datastoreType(resource);
-      return type === '—' ? null : type;
-    }
+    case 'type':
+      return datastoreType(resource) || null;
     case 'capacity':
-      return hasCapacityMetric(resource) ? capacityDisk(resource).usage : null;
+      return capacityDisk(resource)?.usage ?? null;
     case 'vms':
       return consumerCount(resource);
     case 'datacenter':
@@ -284,22 +269,30 @@ export const VsphereDatastoresTable: Component<{
               <>
                 <PlatformWindowedRows items={sortedRows} estimatedRowHeight={32}>
                   {(datastore) => {
-                    const hosts = createMemo(() => hostSummary(datastore));
-                    const consumers = createMemo(() => consumerSummary(datastore));
+                    const hosts = createMemo(() =>
+                      summarizePlatformTableValues(datastore.storage?.nodes),
+                    );
+                    const consumers = createMemo(() =>
+                      summarizePlatformTableValues(
+                        datastore.storage?.topConsumers?.map((consumer) => consumer.name),
+                      ),
+                    );
                     const issue = createMemo(() => getVmwareDatastoreIssue(datastore));
-                    const indicator = () => getVmwareRowIndicator(datastore, issue());
+                    const indicator = () =>
+                      getVmwareRowIndicator(datastore, issue(), datastore.status);
                     const name = () => datastoreName(datastore);
                     const datacenter = () =>
                       asTrimmedString(datastore.vmware?.datacenterName) || '—';
-                    const datastoreSubtitle = () =>
-                      asTrimmedString(datastore.vmware?.datastoreUrl) ||
-                      asTrimmedString(datastore.vmware?.folderName) ||
-                      asTrimmedString(datastore.vmware?.vcenterHost) ||
-                      '';
                     const datastoreTitle = () =>
-                      [name(), datastoreSubtitle()].filter(Boolean).join(' · ') || name();
+                      [
+                        name(),
+                        asTrimmedString(datastore.vmware?.datastoreUrl) ||
+                          asTrimmedString(datastore.vmware?.folderName) ||
+                          asTrimmedString(datastore.vmware?.vcenterHost),
+                      ]
+                        .filter(Boolean)
+                        .join(' · ');
                     const disk = createMemo(() => capacityDisk(datastore));
-                    const showCapacity = () => hasCapacityMetric(datastore);
                     const detailRowId = () => drawer.detailRowId(datastore);
                     const isExpanded = () => drawer.isExpanded(datastore);
                     return (
@@ -322,22 +315,29 @@ export const VsphereDatastoresTable: Component<{
                                 variant={indicator().variant}
                                 title={indicator().label}
                               />
-                              <span
-                                class="truncate font-medium text-base-content"
-                                title={datastoreTitle()}
-                              >
-                                {name()}
-                              </span>
+                              <div class="min-w-0">
+                                <span
+                                  class="block truncate font-medium text-base-content"
+                                  title={datastoreTitle()}
+                                >
+                                  {name()}
+                                </span>
+                                <Show when={issue()?.stale}>
+                                  <span class="block text-[10px] font-medium text-amber-800 dark:text-amber-300">
+                                    Stale data
+                                  </span>
+                                </Show>
+                              </div>
                             </div>
                           </TableCell>
                           <TableCell class={getPlatformTableCellClassForKind('text')}>
                             <span class="font-mono text-[11px] text-base-content">
-                              {datastoreType(datastore)}
+                              {datastoreType(datastore) || '—'}
                             </span>
                           </TableCell>
                           <TableCell class={getPlatformTableCellClassForKind('metric-bar')}>
-                            <Show when={showCapacity()} fallback={<PlatformTableMetricFallback />}>
-                              <StackedDiskBar aggregateDisk={disk()} />
+                            <Show when={disk()} fallback={<PlatformTableMetricFallback />}>
+                              {(capacity) => <StackedDiskBar aggregateDisk={capacity()} />}
                             </Show>
                           </TableCell>
                           <TableCell

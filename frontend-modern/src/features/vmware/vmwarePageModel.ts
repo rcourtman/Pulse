@@ -274,10 +274,7 @@ const vmwareSourceAlias = (
   return parts.join(':');
 };
 
-const vmwareDatastoreDisplayName = (resource: Resource): string =>
-  resource.displayName?.trim() || resource.name?.trim() || resource.id;
-
-const vmwareVirtualMachineDisplayName = (resource: Resource): string =>
+const vmwareShortName = (resource: Resource): string =>
   resource.displayName?.trim() || resource.name?.trim() || resource.id;
 
 const vmwareResourceDisplayName = (resource: Resource): string =>
@@ -287,87 +284,55 @@ const vmwareResourceDisplayName = (resource: Resource): string =>
   trimString(resource.vmware?.managedObjectId) ||
   resource.id;
 
-const vmwareDatastoreStatusRank = (resource: Resource): number => {
-  switch (mapVmwareDatastoreStatus(resource)) {
-    case 'inaccessible':
-      return 0;
-    case 'maintenance':
-      return 1;
-    case 'attention':
-      return 2;
-    case 'unknown':
-      return 3;
-    case 'accessible':
-      return 4;
-  }
+const DATASTORE_STATUS_RANK: Record<Exclude<VmwareDatastoreStatusFilter, 'all'>, number> = {
+  inaccessible: 0,
+  maintenance: 1,
+  attention: 2,
+  unknown: 3,
+  accessible: 4,
 };
 
-const compareVmwareDatastores = (left: Resource, right: Resource): number => {
-  const rankDelta = vmwareDatastoreStatusRank(left) - vmwareDatastoreStatusRank(right);
-  if (rankDelta !== 0) return rankDelta;
-  return vmwareDatastoreDisplayName(left).localeCompare(vmwareDatastoreDisplayName(right));
+const compareVmwareDatastores = (left: Resource, right: Resource): number =>
+  DATASTORE_STATUS_RANK[mapVmwareDatastoreStatus(left)] -
+    DATASTORE_STATUS_RANK[mapVmwareDatastoreStatus(right)] ||
+  vmwareShortName(left).localeCompare(vmwareShortName(right));
+
+const NETWORK_STATUS_RANK: Record<Exclude<VmwareNetworkStatusFilter, 'all'>, number> = {
+  attention: 0,
+  unknown: 1,
+  healthy: 2,
 };
 
-const vmwareNetworkDisplayName = (resource: Resource): string =>
-  resource.displayName?.trim() || resource.name?.trim() || resource.id;
-
-const vmwareNetworkStatusRank = (resource: Resource): number => {
-  switch (mapVmwareNetworkStatus(resource)) {
-    case 'attention':
-      return 0;
-    case 'unknown':
-      return 1;
-    case 'healthy':
-      return 2;
-  }
-};
-
-const compareVmwareNetworks = (left: Resource, right: Resource): number => {
-  const rankDelta = vmwareNetworkStatusRank(left) - vmwareNetworkStatusRank(right);
-  if (rankDelta !== 0) return rankDelta;
-  return vmwareNetworkDisplayName(left).localeCompare(vmwareNetworkDisplayName(right));
-};
+const compareVmwareNetworks = (left: Resource, right: Resource): number =>
+  NETWORK_STATUS_RANK[mapVmwareNetworkStatus(left)] -
+    NETWORK_STATUS_RANK[mapVmwareNetworkStatus(right)] ||
+  vmwareShortName(left).localeCompare(vmwareShortName(right));
 
 const vmwareVirtualMachineHostKey = (resource: Resource): string =>
   normalize(resource.vmware?.runtimeHostName || resource.parentName || 'unknown');
 
-const vmwareVirtualMachineStatusRank = (resource: Resource): number => {
-  switch (mapVmwareVirtualMachineStatus(resource)) {
-    case 'attention':
-      return 0;
-    case 'suspended':
-      return 1;
-    case 'powered-off':
-      return 2;
-    case 'unknown':
-      return 3;
-    case 'powered-on':
-      return 4;
-  }
+const VM_STATUS_RANK: Record<Exclude<VmwareVirtualMachineStatusFilter, 'all'>, number> = {
+  attention: 0,
+  suspended: 1,
+  'powered-off': 2,
+  unknown: 3,
+  'powered-on': 4,
 };
 
-const compareVmwareVirtualMachines = (left: Resource, right: Resource): number => {
-  const hostDelta = vmwareVirtualMachineHostKey(left).localeCompare(
-    vmwareVirtualMachineHostKey(right),
-  );
-  if (hostDelta !== 0) return hostDelta;
-  const rankDelta = vmwareVirtualMachineStatusRank(left) - vmwareVirtualMachineStatusRank(right);
-  if (rankDelta !== 0) return rankDelta;
-  return vmwareVirtualMachineDisplayName(left).localeCompare(
-    vmwareVirtualMachineDisplayName(right),
-  );
+const compareVmwareVirtualMachines = (left: Resource, right: Resource): number =>
+  vmwareVirtualMachineHostKey(left).localeCompare(vmwareVirtualMachineHostKey(right)) ||
+  VM_STATUS_RANK[mapVmwareVirtualMachineStatus(left)] -
+    VM_STATUS_RANK[mapVmwareVirtualMachineStatus(right)] ||
+  vmwareShortName(left).localeCompare(vmwareShortName(right));
+
+const SEVERITY_RANK: Record<VmwareIncidentSeverityBucket, number> = {
+  critical: 3,
+  warning: 2,
+  info: 1,
 };
 
-const incidentSeverityRank = (severity: string): number => {
-  switch (mapVmwareIncidentSeverity(severity)) {
-    case 'critical':
-      return 3;
-    case 'warning':
-      return 2;
-    case 'info':
-      return 1;
-  }
-};
+const incidentSeverityRank = (severity: string): number =>
+  SEVERITY_RANK[mapVmwareIncidentSeverity(severity)];
 
 export function mapVmwareIncidentSeverity(
   severity: string | undefined,
@@ -406,6 +371,11 @@ export function getVmwarePowerStateVariant(
   return 'muted';
 }
 
+const ATTENTION_STATUSES = new Set(['degraded', 'warning', 'critical', 'paused']);
+const ATTENTION_OVERALL_STATUSES = new Set(['red', 'yellow']);
+const isAttentionOverall = (overall: string): boolean =>
+  ATTENTION_OVERALL_STATUSES.has(overall) || ATTENTION_STATUSES.has(overall);
+
 export function mapVmwareVirtualMachineStatus(
   resource: Resource,
 ): Exclude<VmwareVirtualMachineStatusFilter, 'all'> {
@@ -415,11 +385,7 @@ export function mapVmwareVirtualMachineStatus(
   const overall = normalize(resource.vmware?.overallStatus);
   const activeAlarms = resource.vmware?.activeAlarmCount ?? 0;
 
-  if (
-    activeAlarms > 0 ||
-    ['red', 'yellow', 'degraded', 'warning', 'critical', 'paused'].includes(overall) ||
-    ['degraded', 'warning', 'critical', 'paused'].includes(status)
-  ) {
+  if (activeAlarms > 0 || isAttentionOverall(overall) || ATTENTION_STATUSES.has(status)) {
     return 'attention';
   }
   if (['poweredoff', 'off'].includes(powerState) || status === 'offline' || status === 'stopped') {
@@ -436,12 +402,18 @@ export function mapVmwareVirtualMachineStatus(
   return 'unknown';
 }
 
+// Realtime rows carry the vCenter sighting at the top level; older rows may
+// only carry the REST compatibility copy. A new poll wins over that old copy.
+const datastoreSighting = (resource: Resource): string | undefined =>
+  resource.sourceStatus?.vmware?.status;
+const datastoreInaccessible = (resource: Resource): boolean =>
+  resource.vmware?.datastoreAccessible === false || normalize(resource.status) === 'offline';
+
 export function mapVmwareDatastoreStatus(
   resource: Resource,
 ): Exclude<VmwareDatastoreStatusFilter, 'all'> {
-  if (hasImpairedResourceSource(resource, 'vmware-vsphere')) return 'attention';
   const maintenanceMode = normalize(resource.vmware?.maintenanceMode);
-  const status = normalize(getVmwareResourceDisplayStatus(resource));
+  const status = normalize(resource.status);
   const overall = normalize(resource.vmware?.overallStatus);
 
   if (
@@ -452,13 +424,12 @@ export function mapVmwareDatastoreStatus(
   ) {
     return 'maintenance';
   }
-  if (resource.vmware?.datastoreAccessible === false || status === 'offline') {
-    return 'inaccessible';
-  }
-  if (['red', 'yellow', 'degraded', 'warning', 'critical', 'paused'].includes(overall)) {
+  if (datastoreInaccessible(resource)) return 'inaccessible';
+  const sighting = datastoreSighting(resource);
+  if (sighting ? sighting !== 'online' : hasImpairedResourceSource(resource, 'vmware-vsphere')) {
     return 'attention';
   }
-  if (['degraded', 'warning', 'critical', 'paused'].includes(status)) return 'attention';
+  if (isAttentionOverall(overall) || ATTENTION_STATUSES.has(status)) return 'attention';
   if (resource.vmware?.datastoreAccessible === true || ['online', 'running'].includes(status)) {
     return 'accessible';
   }
@@ -474,8 +445,9 @@ export function mapVmwareNetworkStatus(
 
   if (
     activeAlarms > 0 ||
-    ['red', 'yellow', 'degraded', 'warning', 'critical', 'paused'].includes(overall) ||
-    ['degraded', 'warning', 'critical', 'paused', 'offline'].includes(status)
+    isAttentionOverall(overall) ||
+    ATTENTION_STATUSES.has(status) ||
+    status === 'offline'
   ) {
     return 'attention';
   }
@@ -483,24 +455,25 @@ export function mapVmwareNetworkStatus(
   return 'unknown';
 }
 
-const ATTENTION_OVERALL_STATUSES = new Set(['red', 'yellow']);
+const VCENTER_NO_RECENT_UPDATE = 'vCenter has not updated this recently';
 
-// Why a datastore or network row is not green, in the order a user should
-// read them. Stale vCenter data comes first, since everything else on the row
-// may be out of date; then vCenter's own alarms, worst first. vCenter's
-// overall colour only shows when no alarm explains it.
-const vmwareAttentionReasons = (resource: Resource, leading: string[] = []): string[] => {
-  const reasons: string[] = [];
+// The datastore table shows canonical staleness beside the name. Do not let
+// the compatibility copy supersede it or displace a visible alarm reason.
+const vmwareAttentionReasons = (
+  resource: Resource,
+  leading: string[] = [],
+  sighting?: string,
+): string[] => {
+  const reasons =
+    !sighting && hasImpairedResourceSource(resource, 'vmware-vsphere')
+      ? [VCENTER_NO_RECENT_UPDATE, ...leading]
+      : leading;
   const push = (value: unknown) => {
     const text = trimString(value);
     if (text && !reasons.some((existing) => existing.toLowerCase() === text.toLowerCase())) {
       reasons.push(text);
     }
   };
-  if (hasImpairedResourceSource(resource, 'vmware-vsphere')) {
-    push('vCenter has not updated this recently');
-  }
-  leading.forEach(push);
   const incidents = (resource.incidents ?? [])
     .filter(hasIncidentSignal)
     .sort(
@@ -516,6 +489,7 @@ const vmwareAttentionReasons = (resource: Resource, leading: string[] = []): str
     if (ATTENTION_OVERALL_STATUSES.has(overall)) push(`vCenter health is ${overall}`);
     else if (alarms > 0) push(`${alarms} active vCenter alarm${alarms === 1 ? '' : 's'}`);
   }
+  if (!reasons.length && sighting && sighting !== 'online') push(VCENTER_NO_RECENT_UPDATE);
   return reasons;
 };
 
@@ -531,10 +505,11 @@ const hasCriticalVmwareSignal = (resource: Resource): boolean =>
 export const getVmwareRowIndicator = (
   resource: Resource,
   issue: PlatformIssue | null,
+  status = getVmwareResourceDisplayStatus(resource),
 ): StatusIndicator =>
   issue
     ? { variant: issue.tone === 'danger' ? 'danger' : 'warning', label: issue.label }
-    : getSimpleStatusIndicator(getVmwareResourceDisplayStatus(resource));
+    : getSimpleStatusIndicator(status);
 
 // Health sorts the worst rows first: red, then amber, then healthy.
 export const vmwareIssueSortRank = (issue: PlatformIssue | null): number =>
@@ -546,17 +521,20 @@ const DATASTORE_ISSUE_LABELS = {
   attention: 'Attention',
 } as const;
 
-export function getVmwareDatastoreIssue(resource: Resource): PlatformIssue | null {
+export function getVmwareDatastoreIssue(
+  resource: Resource,
+): (PlatformIssue & { stale: boolean }) | null {
   const bucket = mapVmwareDatastoreStatus(resource);
   if (bucket === 'accessible' || bucket === 'unknown') return null;
   // The bucket picks one filter, but a datastore in maintenance can also be
   // unreachable or carry a critical alarm: each condition gives its reason,
   // and the worst sets the colour.
-  const inaccessible =
-    resource.vmware?.datastoreAccessible === false ||
-    normalize(getVmwareResourceDisplayStatus(resource)) === 'offline';
+  const sighting = datastoreSighting(resource);
+  const stale = sighting === 'stale';
+  const inaccessible = datastoreInaccessible(resource);
   const leading: string[] = [];
-  if (inaccessible) leading.push('vCenter reports it inaccessible');
+  if (inaccessible)
+    leading.push(stale ? 'Last reported inaccessible' : 'vCenter reports it inaccessible');
   if (bucket === 'maintenance') {
     leading.push(
       normalize(resource.vmware?.maintenanceMode).includes('entering')
@@ -564,11 +542,12 @@ export function getVmwareDatastoreIssue(resource: Resource): PlatformIssue | nul
         : 'In maintenance mode',
     );
   }
-  const reasons = vmwareAttentionReasons(resource, leading);
+  const reasons = vmwareAttentionReasons(resource, leading, sighting);
   return {
     tone: inaccessible || hasCriticalVmwareSignal(resource) ? 'danger' : 'warning',
     label: DATASTORE_ISSUE_LABELS[bucket],
-    reasons: reasons.length > 0 ? reasons : ['vCenter reports a problem'],
+    reasons: reasons.length ? reasons : ['vCenter reports a problem'],
+    stale,
   };
 }
 
@@ -583,8 +562,9 @@ export function getVmwareNetworkIssue(resource: Resource): PlatformIssue | null 
   };
 }
 
-const titleize = (value: string): string =>
+export const formatVmwareIdentifierLabel = (value: string): string =>
   value
+    .trim()
     .split(/[\s_-]+/)
     .filter(Boolean)
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
@@ -607,7 +587,7 @@ const vmwareIncidentLabel = (resource: Resource, incident: ResourceIncident): st
   const code = trimString(incident.code);
   if (code === 'vmware_alarm_state') return 'vSphere Alarm';
   if (code === 'vmware_health_state') return 'vSphere Health';
-  return code ? titleize(code.replace(/^vmware_/, '')) : 'vSphere Health';
+  return code ? formatVmwareIdentifierLabel(code.replace(/^vmware_/, '')) : 'vSphere Health';
 };
 
 const buildIncidentRow = (
@@ -950,101 +930,94 @@ export function buildVmwareActivityRows(
   });
 }
 
+const buildSearchHaystack = (parts: readonly unknown[]): string =>
+  parts
+    .filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
+    .join(' ')
+    .toLowerCase();
+
+const commonResourceSearchFields = (resource: Resource): readonly unknown[] => [
+  resource.id,
+  resource.name,
+  resource.displayName,
+  resource.parentName,
+  resource.status,
+  resource.vmware?.connectionName,
+  resource.vmware?.vcenterHost,
+  resource.vmware?.managedObjectId,
+  resource.vmware?.datacenterName,
+  resource.vmware?.folderName,
+  resource.vmware?.overallStatus,
+  ...(resource.tags ?? []),
+];
+
+const filterBySearch = <T>(
+  items: T[],
+  search: string,
+  matchesStatus: (item: T) => boolean,
+  haystack: (item: T) => string,
+): T[] => {
+  const needle = normalize(search);
+  return items.filter((item) => matchesStatus(item) && (!needle || haystack(item).includes(needle)));
+};
+
 const vmwareDatastoreSearchHaystack = (resource: Resource): string =>
-  [
-    resource.id,
-    resource.name,
-    resource.displayName,
-    resource.parentName,
-    resource.status,
-    resource.vmware?.connectionName,
-    resource.vmware?.vcenterHost,
-    resource.vmware?.managedObjectId,
-    resource.vmware?.datacenterName,
-    resource.vmware?.folderName,
+  buildSearchHaystack([
+    ...commonResourceSearchFields(resource),
     resource.vmware?.datastoreType,
     resource.vmware?.datastoreUrl,
     resource.vmware?.maintenanceMode,
-    resource.vmware?.overallStatus,
     resource.storage?.type,
     resource.storage?.topology,
     resource.storage?.platform,
     resource.storage?.nodes?.join(' '),
     resource.storage?.consumerTypes?.join(' '),
     resource.storage?.topConsumers?.map((consumer) => consumer.name).join(' '),
-    ...(resource.tags ?? []),
-  ]
-    .filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
-    .join(' ')
-    .toLowerCase();
+  ]);
 
 export function filterVmwareDatastores(
   datastores: Resource[],
   search: string,
   status: VmwareDatastoreStatusFilter,
 ): Resource[] {
-  const needle = normalize(search);
-  return datastores.filter((datastore) => {
-    if (status !== 'all' && mapVmwareDatastoreStatus(datastore) !== status) return false;
-    if (!needle) return true;
-    return vmwareDatastoreSearchHaystack(datastore).includes(needle);
-  });
+  return filterBySearch(
+    datastores,
+    search,
+    (datastore) => status === 'all' || mapVmwareDatastoreStatus(datastore) === status,
+    vmwareDatastoreSearchHaystack,
+  );
 }
 
 const vmwareNetworkSearchHaystack = (resource: Resource): string =>
-  [
-    resource.id,
-    resource.name,
-    resource.displayName,
-    resource.parentName,
-    resource.status,
-    resource.vmware?.connectionName,
-    resource.vmware?.vcenterHost,
-    resource.vmware?.managedObjectId,
-    resource.vmware?.datacenterName,
-    resource.vmware?.folderName,
+  buildSearchHaystack([
+    ...commonResourceSearchFields(resource),
     resource.vmware?.networkType,
-    resource.vmware?.overallStatus,
     resource.vmware?.networkHostNames?.join(' '),
     resource.vmware?.networkVmNames?.join(' '),
-    ...(resource.tags ?? []),
-  ]
-    .filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
-    .join(' ')
-    .toLowerCase();
+  ]);
 
 export function filterVmwareNetworks(
   networks: Resource[],
   search: string,
   status: VmwareNetworkStatusFilter,
 ): Resource[] {
-  const needle = normalize(search);
-  return networks.filter((network) => {
-    if (status !== 'all' && mapVmwareNetworkStatus(network) !== status) return false;
-    if (!needle) return true;
-    return vmwareNetworkSearchHaystack(network).includes(needle);
-  });
+  return filterBySearch(
+    networks,
+    search,
+    (network) => status === 'all' || mapVmwareNetworkStatus(network) === status,
+    vmwareNetworkSearchHaystack,
+  );
 }
 
 const vmwareVirtualMachineSearchHaystack = (resource: Resource): string =>
-  [
-    resource.id,
-    resource.name,
-    resource.displayName,
-    resource.parentName,
-    resource.status,
-    resource.vmware?.connectionName,
-    resource.vmware?.vcenterHost,
-    resource.vmware?.managedObjectId,
-    resource.vmware?.datacenterName,
+  buildSearchHaystack([
+    ...commonResourceSearchFields(resource),
     resource.vmware?.clusterName,
     formatVmwareClusterServices(resource.vmware),
     resource.vmware?.computeResourceName,
-    resource.vmware?.folderName,
     resource.vmware?.resourcePoolName,
     resource.vmware?.runtimeHostName,
     resource.vmware?.powerState,
-    resource.vmware?.overallStatus,
     resource.vmware?.instanceUuid,
     resource.vmware?.biosUuid,
     resource.vmware?.guestOsFamily,
@@ -1075,57 +1048,45 @@ const vmwareVirtualMachineSearchHaystack = (resource: Resource): string =>
           .join(' '),
       )
       .join(' '),
-    [
-      resource.vmware?.tools?.runState,
-      resource.vmware?.tools?.versionStatus,
-      resource.vmware?.tools?.version,
-      resource.vmware?.tools?.installType,
-      resource.vmware?.tools?.upgradePolicy,
-      resource.vmware?.tools?.errorMessage,
-      resource.vmware?.tools?.guestRebootComponents?.join(' '),
-    ]
-      .filter(Boolean)
-      .join(' '),
-    [
-      enumSearchValue(resource.vmware?.hardware?.guestOs),
-      enumSearchValue(resource.vmware?.hardware?.version),
-      enumSearchValue(resource.vmware?.hardware?.upgradePolicy),
-      enumSearchValue(resource.vmware?.hardware?.upgradeVersion),
-      enumSearchValue(resource.vmware?.hardware?.upgradeStatus),
-      resource.vmware?.hardware?.upgradeErrorMessage,
-      enumSearchValue(resource.vmware?.hardware?.bootType),
-      enumSearchValue(resource.vmware?.hardware?.bootNetworkProtocol),
-      resource.vmware?.hardware?.bootDevices
-        ?.map((device) =>
-          [device.type, device.nic, device.disks?.join(' ')].filter(Boolean).join(' '),
-        )
-        .join(' '),
-    ]
-      .filter(Boolean)
+    resource.vmware?.tools?.runState,
+    resource.vmware?.tools?.versionStatus,
+    resource.vmware?.tools?.version,
+    resource.vmware?.tools?.installType,
+    resource.vmware?.tools?.upgradePolicy,
+    resource.vmware?.tools?.errorMessage,
+    resource.vmware?.tools?.guestRebootComponents?.join(' '),
+    enumSearchValue(resource.vmware?.hardware?.guestOs),
+    enumSearchValue(resource.vmware?.hardware?.version),
+    enumSearchValue(resource.vmware?.hardware?.upgradePolicy),
+    enumSearchValue(resource.vmware?.hardware?.upgradeVersion),
+    enumSearchValue(resource.vmware?.hardware?.upgradeStatus),
+    resource.vmware?.hardware?.upgradeErrorMessage,
+    enumSearchValue(resource.vmware?.hardware?.bootType),
+    enumSearchValue(resource.vmware?.hardware?.bootNetworkProtocol),
+    resource.vmware?.hardware?.bootDevices
+      ?.map((device) =>
+        [device.type, device.nic, device.disks?.join(' ')].filter(Boolean).join(' '),
+      )
       .join(' '),
     resource.vmware?.activeAlarmSummary,
     resource.vmware?.recentTaskSummary,
-    ...(resource.tags ?? []),
-  ]
-    .filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
-    .join(' ')
-    .toLowerCase();
+  ]);
 
 export function filterVmwareVirtualMachines(
   vms: Resource[],
   search: string,
   status: VmwareVirtualMachineStatusFilter,
 ): Resource[] {
-  const needle = normalize(search);
-  return vms.filter((vm) => {
-    if (status !== 'all' && mapVmwareVirtualMachineStatus(vm) !== status) return false;
-    if (!needle) return true;
-    return vmwareVirtualMachineSearchHaystack(vm).includes(needle);
-  });
+  return filterBySearch(
+    vms,
+    search,
+    (vm) => status === 'all' || mapVmwareVirtualMachineStatus(vm) === status,
+    vmwareVirtualMachineSearchHaystack,
+  );
 }
 
 const incidentSearchHaystack = (row: VmwareIncidentRow): string =>
-  [
+  buildSearchHaystack([
     row.resourceId,
     row.resourceName,
     row.resourceType,
@@ -1145,35 +1106,27 @@ const incidentSearchHaystack = (row: VmwareIncidentRow): string =>
     row.resource.vmware?.runtimeHostName,
     row.resource.vmware?.activeAlarmSummary,
     ...(row.resource.tags ?? []),
-  ]
-    .filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
-    .join(' ')
-    .toLowerCase();
+  ]);
 
 export function filterVmwareIncidents(
   incidents: VmwareIncidentRow[],
   search: string,
   severity: VmwareIncidentSeverityFilter,
 ): VmwareIncidentRow[] {
-  const needle = normalize(search);
-  return incidents.filter((incident) => {
-    if (
-      severity === 'attention' &&
-      incident.severityBucket !== 'critical' &&
-      incident.severityBucket !== 'warning'
-    ) {
-      return false;
-    }
-    if (severity !== 'all' && severity !== 'attention' && incident.severityBucket !== severity) {
-      return false;
-    }
-    if (!needle) return true;
-    return incidentSearchHaystack(incident).includes(needle);
-  });
+  return filterBySearch(
+    incidents,
+    search,
+    (incident) =>
+      severity === 'all' ||
+      (severity === 'attention'
+        ? incident.severityBucket === 'critical' || incident.severityBucket === 'warning'
+        : incident.severityBucket === severity),
+    incidentSearchHaystack,
+  );
 }
 
 const activitySearchHaystack = (row: VmwareActivityRow): string =>
-  [
+  buildSearchHaystack([
     row.id,
     row.resourceId,
     row.resourceName,
@@ -1197,22 +1150,21 @@ const activitySearchHaystack = (row: VmwareActivityRow): string =>
     row.resource.vmware?.runtimeHostName,
     ...(row.change.relatedResources ?? []),
     ...(row.resource.tags ?? []),
-  ]
-    .filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
-    .join(' ')
-    .toLowerCase();
+  ]);
 
 export function filterVmwareActivity(
   activity: VmwareActivityRow[],
   search: string,
   status: VmwareActivityStatusFilter,
 ): VmwareActivityRow[] {
-  const needle = normalize(search);
-  return activity.filter((row) => {
-    if (status === 'tasks' && row.activityKind !== 'task') return false;
-    if (status === 'events' && row.activityKind !== 'event') return false;
-    if (status === 'failed' && row.stateBucket !== 'failed') return false;
-    if (!needle) return true;
-    return activitySearchHaystack(row).includes(needle);
-  });
+  return filterBySearch(
+    activity,
+    search,
+    (row) =>
+      status === 'all' ||
+      (status === 'tasks' && row.activityKind === 'task') ||
+      (status === 'events' && row.activityKind === 'event') ||
+      (status === 'failed' && row.stateBucket === 'failed'),
+    activitySearchHaystack,
+  );
 }
