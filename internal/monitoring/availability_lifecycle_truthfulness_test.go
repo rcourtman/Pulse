@@ -335,7 +335,7 @@ func TestRefreshAvailabilityTargetsPrunesDeletedSchedulerAndStalenessState(t *te
 	monitor.stalenessTracker = NewStalenessTracker(nil)
 	monitor.deadLetterQueue = NewTaskQueue()
 	monitor.dlqInsightMap = make(map[string]*dlqInsight)
-	monitor.instanceInfoCache = make(map[string]instanceMetadata)
+	monitor.instanceInfoCache = make(map[string]*instanceInfo)
 
 	availKey := schedulerKey(InstanceTypeAvailability, sharedID)
 	pveKey := schedulerKey(InstanceTypePVE, sharedID)
@@ -347,15 +347,15 @@ func TestRefreshAvailabilityTargetsPrunesDeletedSchedulerAndStalenessState(t *te
 	monitor.failureCounts[availKey] = 2
 	monitor.lastOutcome[availKey] = taskOutcome{success: true, recordedAt: now}
 	monitor.circuitBreakers[availKey] = newCircuitBreaker(3, time.Second, time.Minute, time.Second)
-	monitor.instanceInfoCache[availKey] = instanceMetadata{DisplayName: "Availability check"}
-	monitor.dlqInsightMap[availKey] = &dlqInsight{Key: availKey, Instance: sharedID, Type: string(InstanceTypeAvailability)}
+	monitor.instanceInfoCache[availKey] = &instanceInfo{}
+	monitor.dlqInsightMap[availKey] = &dlqInsight{Reason: "availability-failure", LastAttempt: now}
 
 	monitor.pollStatusMap[pveKey] = &pollStatus{LastSuccess: now}
 	monitor.failureCounts[pveKey] = 1
 	monitor.lastOutcome[pveKey] = taskOutcome{success: true, recordedAt: now}
 	monitor.circuitBreakers[pveKey] = newCircuitBreaker(3, time.Second, time.Minute, time.Second)
-	monitor.instanceInfoCache[pveKey] = instanceMetadata{DisplayName: "PVE peer"}
-	monitor.dlqInsightMap[pveKey] = &dlqInsight{Key: pveKey, Instance: sharedID, Type: string(InstanceTypePVE)}
+	monitor.instanceInfoCache[pveKey] = &instanceInfo{}
+	monitor.dlqInsightMap[pveKey] = &dlqInsight{Reason: "pve-failure", LastAttempt: now}
 	monitor.mu.Unlock()
 
 	monitor.deadLetterQueue.Upsert(ScheduledTask{InstanceType: InstanceTypeAvailability, InstanceName: sharedID, NextRun: now})
