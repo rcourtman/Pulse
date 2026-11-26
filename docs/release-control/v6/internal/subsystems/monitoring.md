@@ -10410,6 +10410,43 @@ browser proof. No poll interval, API limit, TLS setting, provider permissions
 or timeout threshold is waived. These synthetic controls are not vCenter 8.0.3
 or installed recovery, and do not attribute #2070's HTTP 500 to refresh duration.
 
+### Bounded TrueNAS whole-inventory refresh budget and fail-closed platform config sync
+
+`PULSE_TRUENAS_POLL_TIMEOUT` is an optional positive Go duration for the whole
+TrueNAS inventory refresh. The default is forty-five seconds. Empty values use
+the default; malformed, nonpositive and overflowing values warn without logging
+their raw contents, then keep the default bound. This changes neither the
+independent per-request HTTP/RPC timeout nor a shorter caller lifetime. Polls
+stay serial and cancellable; when a poll deadline or cancellation fires during
+best-effort optional reads (`service`, `app`, `vm`, shares, ZFS snapshots, or
+replication tasks), `FetchSnapshot` stops further reads and returns the context
+error instead of publishing a truncated snapshot as healthy. Failure retains
+last accepted cached records, observed inventory and last success time; only an
+accepted refresh replaces them and clears consecutive failures.
+
+When an active TrueNAS or VMware connection is edited and client or provider
+initialization fails, the poller immediately closes and removes the previous
+live provider, clears stale cached records and previous observed inventory, and
+keeps retrying initialization on later sync cycles instead of polling the old
+endpoint or trust settings. When client initialization succeeds for an edited
+connection, the previous live provider is closed and replaced while
+last-accepted cached records remain preserved until the rebuilt provider
+completes an accepted refresh, including when sibling connections in the same
+organization refresh first. Pruning removed or disabled connections operates on
+active config and status maps independently of live provider presence so
+connections that failed initialization cannot leak into readiness or wake
+scheduling after they are disabled or deleted.
+
+`TestTrueNASPollTimeoutConfiguration`,
+`TestTrueNASPollerFailedConfigEditClosesPreviousProviderAndStopsPollingOldHost`,
+`TestTrueNASPollerConfigEditPreservesCachedRecordsWhenRefreshFailsAlongsideSiblingRefresh`,
+`TestTrueNASPollerPrunesFailedInitConfigWhenDisabledOrDeleted`,
+`TestTrueNASPollerWholeRefreshTimeoutBoundsStalledOptionalEndpoints`,
+`TestSavedTrueNASOutboundPolicyBindsWarmAndColdPolls`, and
+`TestVMwarePollerPrunesFailedInitConfigAndStatusWhenDisabledOrDeleted` cover
+these contracts. These synthetic controls do not substitute for native TrueNAS
+or vCenter field proof.
+
 ### Mock memory personas preserve physical capacity (24 October 2026)
 
 Role-shaped mock memory ranges must stay below 100%: database/cache persona
