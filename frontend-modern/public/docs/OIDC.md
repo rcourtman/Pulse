@@ -78,6 +78,12 @@ At sign-in, every non-empty list must match. Entries within one list are alterna
 
 An address the IdP reports as unverified (`email_verified: false`) matches neither **Allowed Domains** nor **Allowed Emails**. Sign-in fails with `email_unverified` until the user verifies it at the IdP. An IdP that omits `email_verified` is not affected.
 
+In **Allowed Groups**, separate entries with commas or new lines. Spaces inside a
+group name are preserved. Wrap any exact directory group name containing commas
+or `=` in double quotes (for example, `"CN=Pulse Admins,OU=Groups,DC=example,DC=com"`)
+so punctuation inside the name is not split. Leaving a restriction field blank
+clears it on save. Separators alone or unmatched quotes are rejected before saving.
+
 ### Group-to-Role Mapping
 
 Automatically assign Pulse roles based on OIDC group membership. When a user logs in, Pulse checks their groups claim and assigns the corresponding roles. Mapping groups to the built-in `admin`, `operator`, and `viewer` roles is included with Community SSO. Creating custom roles and manually managing user assignments remain Pro RBAC features.
@@ -86,10 +92,15 @@ Automatically assign Pulse roles based on OIDC group membership. When a user log
 Group-role mappings are configured per SSO provider through the UI (or the
 SSO provider API for automated setup). Go to **Settings → Security → Single
 Sign-On**, edit the provider, and populate **Group Role Mappings** with
-entries like:
+`group=roleId` pairs separated by commas or new lines, such as:
 - `oidc-admins` → `admin`
 - `oidc-operators` → `operator`
 - `oidc-viewers` → `viewer`
+
+Wrap exact directory group names containing commas or `=` in double quotes (for
+example, `"Ops, East"=viewer`). Duplicate groups or incomplete `group=roleId`
+pairs are rejected before sending a save. Leaving the field blank clears saved
+mappings.
 
 The mappings persist on the provider record as a `groupRoleMappings` JSON
 field. Provider-level config (including this field) can be PUT through the
@@ -269,7 +280,10 @@ configuration files or restart Pulse to clear it.
 
 Compare the returned list with what you intended. If the provider is present,
 use that card's **Callback / Redirect URL**, not a duplicate provider. Open
-**Edit** without saving to review its login restrictions and role mappings.
+**Edit** without saving to review its login restrictions and role mappings. If
+opening **Edit** shows **Could not open settings. Try Edit again.** beside that
+provider's card, the read failed without submitting any change. Select **Edit**
+again to retry only that read.
 The read shows a snapshot at that time, not proof that an earlier request cannot
 still finish. A failed read means unknown, not empty or unchanged.
 

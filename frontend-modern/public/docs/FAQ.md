@@ -142,7 +142,11 @@ instruction; if no supported agent is available, use guest-local filesystem tool
 See [Missing-reading and setup guidance](VM_DISK_MONITORING.md#a-missing-reading-is-not-an-installation-diagnosis).
 
 ### Does Pulse monitor Ceph?
-Yes! If Pulse detects Ceph storage, it automatically queries cluster health, OSD status, and pool usage. No extra config needed.
+Yes. When Pulse detects Ceph storage on Proxmox, **Proxmox → Ceph** shows cluster
+health, quorum, OSDs, pools, and capacity automatically. If a cluster reports
+topology or capacity without a recognised health verdict, Pulse shows **Unknown**
+in both the table and cluster drawer and keeps that row out of the **Healthy**
+filter (visible under **All**).
 
 ### Does Pulse monitor TrueNAS?
 Yes. Pulse includes first-class TrueNAS SCALE/CORE integration. Add your
@@ -257,16 +261,21 @@ for OIDC. If your reverse proxy handles sign-in instead, see the
 [Proxy Auth Guide](PROXY_AUTH.md) for Authentik, Authelia and Cloudflare.
 
 **Keep an independent administrator login and leave its session open.**
-For SAML, use your identity provider's metadata or enter its SSO URL and
-certificate manually. **URL format OK** only checks the format of the URL.
-A passed metadata **Test** does not test sign-in. Read and resolve any warnings
-before relying on the provider.
+For SAML, use your identity provider's metadata URL or XML, or enter its SSO URL
+and certificate manually. When both are present, **Test** checks metadata first.
+**URL format OK** applies only to manual SSO URL checks, and a passed **Metadata
+read** still reports **Sign-in not tested**. Resolve **No signing cert read** or
+**Expired cert found** warnings before relying on the provider. A new SAML draft
+defaults the email attribute to `email`, while editing a saved provider keeps an
+unset email attribute blank.
 
-Use **SP Metadata** from the saved, enabled provider's card to configure Pulse
-in your identity provider. If it asks where to send the sign-in response, use
-**ACS URL** from the same card. Sign in with the new provider in a separate
-browser profile or private window and check that the account has the expected
-Pulse permissions. Keep your independent administrator login available.
+You can register Pulse in your identity provider before turning SAML sign-in on:
+open **Edit** on a saved disabled provider (or use the card once enabled) to copy
+its **SP Metadata** and **ACS URL**. If either URL is unavailable, check
+**Settings → System** public URL and the saved provider settings rather than
+inventing a URL. Sign in with the new provider in a separate browser profile or
+private window and check that the account has the expected Pulse permissions.
+Keep your independent administrator login available.
 
 ---
 
