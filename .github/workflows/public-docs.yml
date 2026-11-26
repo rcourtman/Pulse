@@ -21,6 +21,7 @@ on:
       - "scripts/tests/agent_installer_test_support.py"
       - "scripts/tests/run.sh"
       - "scripts/run-script-tests.py"
+      - "scripts/run-docs-shards.py"
       - "scripts/ci_docs_only.py"
       - "scripts/select-smoke-test-shard.py"
       - ".github/scripts/docs-test-seconds.txt"
@@ -45,6 +46,7 @@ on:
       - "scripts/tests/agent_installer_test_support.py"
       - "scripts/tests/run.sh"
       - "scripts/run-script-tests.py"
+      - "scripts/run-docs-shards.py"
       - "scripts/ci_docs_only.py"
       - "scripts/select-smoke-test-shard.py"
       - ".github/scripts/docs-test-seconds.txt"
@@ -61,31 +63,11 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  recipes:
-    name: Documentation recipes (${{ matrix.shard }})
-    runs-on: ubuntu-24.04
-    timeout-minutes: 10
-    strategy:
-      fail-fast: false
-      matrix:
-        shard: [0, 1, 3]
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-
-      # Build and Test skips smoke for docs-only changes. Discover the complete
-      # current docs suite here, including privacy, authentication and recovery.
-      # Measured whole-suite scheduling retains sorted, isolated execution and
-      # every recipe deadline; timing hints cannot add or omit coverage.
-      - name: Exercise documentation safety and diagnostic recipes
-        run: scripts/tests/run.sh --docs-shard "${{ matrix.shard }}"
-
-  # Use the fourth existing recipe runner for documentation validation and
-  # Help proof. This work no longer waits for the other three recipe shards.
-  docs-and-recipes:
-    name: Documentation recipes (2)
+  # Preserve the existing required check name on one ubuntu-24.04 runner.
+  # Fast static validations fail before recipe work; all four isolated recipe
+  # shards then run concurrently without dependency setup, followed by
+  # conditional Help assertions when guides change.
+  check:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
@@ -94,9 +76,6 @@ jobs:
         with:
           persist-credentials: false
           fetch-depth: 2
-
-      - name: Exercise documentation safety and diagnostic recipes
-        run: scripts/tests/run.sh --docs-shard 2
 
       - name: Validate public documentation
         env:
@@ -111,6 +90,13 @@ jobs:
 
       - name: Check documentation safety workflow contract
         run: python3 scripts/tests/test_public_docs_workflow.py
+
+      # Build and Test skips smoke for docs-only changes. Discover and run
+      # all four isolated docs shards concurrently inside this runner without
+      # dependency setup; measured whole-suite scheduling retains sorted,
+      # isolated execution and every recipe deadline.
+      - name: Exercise documentation safety and diagnostic recipes
+        run: python3 scripts/run-docs-shards.py
 
       # A byte-identical guide can still break a rendered Help assertion.
       # Build and Test skips its unit job for Markdown-only diffs. Exercise the
@@ -148,21 +134,3 @@ jobs:
         if: steps.help.outputs.required != 'false'
         working-directory: frontend-modern
         run: npm run test -- src/features/docs/__tests__ src/utils/__tests__/docsLinks.test.ts
-
-  # Preserve the existing required check name. Neither an unsuccessful
-  # recipe matrix nor missing documentation/Help proof counts as success.
-  check:
-    needs: [recipes, docs-and-recipes]
-    if: ${{ always() }}
-    runs-on: ubuntu-24.04
-    timeout-minutes: 10
-    steps:
-      - name: Require every documentation recipe shard and validation
-        env:
-          RECIPE_RESULT: ${{ needs.recipes.result }}
-          DOCS_RESULT: ${{ needs.docs-and-recipes.result }}
-        run: |
-          if [[ "$RECIPE_RESULT" != success || "$DOCS_RESULT" != success ]]; then
-            echo "Documentation checks did not all succeed: recipe matrix=$RECIPE_RESULT, recipes and validation=$DOCS_RESULT" >&2
-            exit 1
-          fi

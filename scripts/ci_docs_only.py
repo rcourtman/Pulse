@@ -30,6 +30,7 @@ DOC_SUITES = frozenset({
     b"scripts/tests/test_agent_storage_docs.py",
     b"scripts/tests/test_agent_uninstall_docs.py",
     b"scripts/tests/test_agent_unlink_docs.py",
+    b"scripts/tests/test_alerting_outage_help_docs.py",
     b"scripts/tests/test_api_auth_docs.py",
     b"scripts/tests/test_api_secret_body_docs.py",
     b"scripts/tests/test_audit_recovery_docs.py",
@@ -60,6 +61,7 @@ DOC_SUITES = frozenset({
     b"scripts/tests/test_node_api_docs.py",
     b"scripts/tests/test_notification_troubleshooting_docs.py",
     b"scripts/tests/test_oidc_session_docs.py",
+    b"scripts/tests/test_paid_docker_help_docs.py",
     b"scripts/tests/test_password_recovery_docs.py",
     b"scripts/tests/test_pbs_docs.py",
     b"scripts/tests/test_performance_troubleshooting_docs.py",
@@ -72,6 +74,7 @@ DOC_SUITES = frozenset({
     b"scripts/tests/test_recovery_api_docs.py",
     b"scripts/tests/test_repo_docs_link_drift.py",
     b"scripts/tests/test_running_version_help_docs.py",
+    b"scripts/tests/test_scheduler_health_api_help_docs.py",
     b"scripts/tests/test_scheduler_polling_docs.py",
     b"scripts/tests/test_security_docs.py",
     b"scripts/tests/test_server_https_docs.py",
@@ -84,6 +87,7 @@ DOC_SUITES = frozenset({
     b"scripts/tests/test_update_recovery_docs.py",
     b"scripts/tests/test_upgrade_v5_docs.py",
     b"scripts/tests/test_upgrade_v6_docs.py",
+    b"scripts/tests/test_watchdog_help_docs.py",
     b"scripts/tests/test_webhook_verification_docs.py",
 })
 DOCUMENT = re.compile(

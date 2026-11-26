@@ -9,24 +9,24 @@ from __future__ import annotations
 
 import ast
 import fnmatch
-from itertools import product
 import os
 from pathlib import Path
 import re
 import shlex
 import shutil
+import signal
 import subprocess
 import sys
 import tempfile
 import textwrap
+import time
 import unittest
 
 
 ROOT = Path(__file__).resolve().parents[2]
 WORKFLOW = ROOT / ".github/workflows/public-docs.yml"
 SAFETY_STEP = "Exercise documentation safety and diagnostic recipes"
-DOCS_JOB = "docs-and-recipes"
-VERDICT_STEP = "Require every documentation recipe shard and validation"
+DOCS_JOB = "check"
 HELP_DIFF_STEP = "Detect in-app Help changes"
 HELP_TEST_STEP = "Check in-app Help content and links"
 # Independent witnesses: all twelve formerly covered suites, plus the critical
@@ -112,13 +112,12 @@ def step_body(source: str, name: str) -> str:
     return source.split(marker, 1)[1].split("\n      - name:", 1)[0]
 
 
-def safety_command(source: str, shard: int) -> str:
-    job = DOCS_JOB if shard == 2 else "recipes"
-    body = step_body(job_body(source, job), SAFETY_STEP)
+def safety_command(source: str) -> str:
+    body = step_body(job_body(source, DOCS_JOB), SAFETY_STEP)
     run = re.findall(r"^        run: (.+)$", body, re.MULTILINE)
     if len(run) != 1:
-        raise AssertionError("expected one literal docs-shard command")
-    return run[0].replace("${{ matrix.shard }}", str(shard))
+        raise AssertionError("expected one literal docs-shard runner command")
+    return run[0]
 
 
 def step_script(source: str, job: str, name: str) -> str:
@@ -165,7 +164,8 @@ class PublicDocsWorkflowTest(unittest.TestCase):
             ".github/ISSUE_TEMPLATE/**", ".github/PULL_REQUEST_TEMPLATE.md",
             "scripts/check_public_docs.py", "scripts/check_docs_mirror.py",
             "scripts/readme_entrypoints_test.py", "scripts/tests/test_*docs*.py",
-            "scripts/tests/run.sh", "scripts/run-script-tests.py", "scripts/ci_docs_only.py",
+            "scripts/tests/run.sh", "scripts/run-script-tests.py", "scripts/run-docs-shards.py",
+            "scripts/ci_docs_only.py",
             "scripts/select-smoke-test-shard.py", ".github/scripts/docs-test-seconds.txt",
             "scripts/test-vm-disk.sh", ".github/workflows/public-docs.yml",
         }
@@ -209,12 +209,13 @@ class PublicDocsWorkflowTest(unittest.TestCase):
 
     def test_shards_discover_current_suites_without_dependency_setup(self):
         self.assertTrue(set(REQUIRED_SUITES).issubset(documentation_suites()))
-        for shard in range(4):
-            self.assertEqual(shlex.split(safety_command(self.source, shard)),
-                             ["scripts/tests/run.sh", "--docs-shard", str(shard)])
-        recipes = job_body(self.source, "recipes")
-        self.assertNotIn("actions/setup-", recipes)
-        self.assertNotRegex(recipes, r"\b(?:npm|pip|go) (?:ci|install|build|test)\b")
+        self.assertEqual(shlex.split(safety_command(self.source)),
+                         ["python3", "scripts/run-docs-shards.py"])
+        check = job_body(self.source, DOCS_JOB)
+        before_help = check.split(f"      - name: {HELP_DIFF_STEP}\n", 1)[0]
+        self.assertIn(f"      - name: {SAFETY_STEP}\n", before_help)
+        self.assertNotIn("actions/setup-", before_help)
+        self.assertNotRegex(before_help, r"\b(?:npm|pip|go) (?:ci|install|build|test)\b")
 
     def test_existing_document_admissions_are_preserved(self):
         validation = job_body(self.source, DOCS_JOB)
@@ -228,44 +229,19 @@ class PublicDocsWorkflowTest(unittest.TestCase):
                 step = step_body(validation, name)
                 self.assertIn(f"        run: {command}\n", step)
                 self.assertNotRegex(step, r"(?m)^        if:")
+                self.assertLess(validation.index(name), validation.index(SAFETY_STEP))
 
-    def test_all_four_isolated_shards_are_mandatory_and_bounded(self):
-        recipes = job_body(self.source, "recipes")
-        self.assertIn("        shard: [0, 1, 3]\n", recipes)
-        self.assertIn("      fail-fast: false\n", recipes)
-        self.assertNotRegex(recipes, r"(?m)^\s*(?:if|continue-on-error|exclude):")
-        validation = job_body(self.source, DOCS_JOB)
-        self.assertIn("    name: Documentation recipes (2)\n", validation)
-        self.assertNotRegex(validation, r"(?m)^    (?:if|needs|strategy):")
-        self.assertNotRegex(step_body(validation, SAFETY_STEP), r"(?m)^        if:")
-        self.assertLess(validation.index(SAFETY_STEP), validation.index("Validate public documentation"))
+    def test_single_required_check_job_is_mandatory_and_bounded(self):
+        jobs = self.source.split("\njobs:\n", 1)[1]
+        self.assertEqual(re.findall(r"(?m)^  ([a-z0-9_-]+):\s*$", jobs), [DOCS_JOB])
+        check = job_body(self.source, DOCS_JOB)
+        self.assertNotRegex(check, r"(?m)^    (?:if|needs|strategy):")
+        self.assertNotRegex(step_body(check, SAFETY_STEP), r"(?m)^        if:")
         self.assertNotIn("continue-on-error:", self.source)
-        for name in ("recipes", DOCS_JOB, "check"):
-            job = job_body(self.source, name)
-            self.assertIn("    runs-on: ubuntu-24.04\n", job)
-            self.assertIn("    timeout-minutes: 10\n", job)
-            if name != "check":
-                self.assertIn("          persist-credentials: false\n", job)
+        self.assertIn("    runs-on: ubuntu-24.04\n", check)
+        self.assertIn("    timeout-minutes: 10\n", check)
+        self.assertIn("          persist-credentials: false\n", check)
         self.assertIn("permissions:\n  contents: read\n", self.source)
-
-    def test_required_check_uses_both_jobs_without_queuing_another_checkout(self):
-        check = job_body(self.source, "check")
-        self.assertIn("    needs: [recipes, docs-and-recipes]\n", check)
-        self.assertEqual(re.findall(r"(?m)^    if: .+$", check), ["    if: ${{ always() }}"])
-        self.assertIn("          RECIPE_RESULT: ${{ needs.recipes.result }}\n", check)
-        self.assertIn("          DOCS_RESULT: ${{ needs.docs-and-recipes.result }}\n", check)
-        self.assertNotRegex(step_body(check, VERDICT_STEP), r"(?m)^        if:")
-        self.assertEqual(re.findall(r"(?m)^      - name: (.+)$", check), [VERDICT_STEP])
-        states = ("success", "failure", "cancelled", "skipped", "", "unknown")
-        command = step_script(self.source, "check", VERDICT_STEP)
-        for recipe, docs in product(states, repeat=2):
-            with self.subTest(recipe=recipe, docs=docs):
-                result = subprocess.run(["bash", "-e", "-o", "pipefail", "-c",
-                                         command],
-                                        env=dict(os.environ, RECIPE_RESULT=recipe, DOCS_RESULT=docs), text=True,
-                                        capture_output=True, timeout=5)
-                self.assertEqual(result.returncode == 0, recipe == docs == "success",
-                                 result.stdout + result.stderr)
 
     def test_help_proof_is_part_of_the_required_check(self):
         validation = job_body(self.source, DOCS_JOB)
@@ -376,56 +352,77 @@ class PublicDocsWorkflowTest(unittest.TestCase):
                     self.assertEqual(result.returncode, expected, result.stdout + result.stderr)
             self.assertEqual(calls.read_text().splitlines(), [name])
 
-    def run_adapters(self, shard: int, failing: str = ""):
+    def populate_adapter_tree(self, root: Path, failing: str = "") -> None:
+        tests = root / "scripts/tests"
+        tests.mkdir(parents=True)
+        shutil.copyfile(ROOT / "scripts/tests/run.sh", tests / "run.sh")
+        shutil.copyfile(ROOT / "scripts/run-script-tests.py", root / "scripts/run-script-tests.py")
+        shutil.copyfile(ROOT / "scripts/run-docs-shards.py", root / "scripts/run-docs-shards.py")
+        (tests / "run.sh").chmod(0o700)
+        shutil.copyfile(ROOT / "scripts/select-smoke-test-shard.py",
+                        root / "scripts/select-smoke-test-shard.py")
+        hints = root / ".github/scripts/docs-test-seconds.txt"
+        hints.parent.mkdir(parents=True)
+        shutil.copyfile(ROOT / ".github/scripts/docs-test-seconds.txt", hints)
+        for name in documentation_suites():
+            suite = tests / name
+            if name.endswith(".sh"):
+                status = int(name == failing)
+                suite.write_text(f'#!/bin/bash\nprintf "%s\\n" {shlex.quote(name)} >> "$CALLS" || exit 90\n'
+                                 f'exit {status}\n', encoding="utf-8")
+                suite.chmod(0o700)
+            else:
+                # Discovery sees a real file. Bypassing the interpreter
+                # contract must fail rather than silently log a pass.
+                suite.write_text("raise SystemExit(92)\n", encoding="utf-8")
+
+    def run_adapters(self, shard: int | None, failing: str = ""):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
-            tests = root / "scripts/tests"
-            tests.mkdir(parents=True)
-            shutil.copyfile(ROOT / "scripts/tests/run.sh", tests / "run.sh")
-            shutil.copyfile(ROOT / "scripts/run-script-tests.py", root / "scripts/run-script-tests.py")
-            (tests / "run.sh").chmod(0o700)
-            shutil.copyfile(ROOT / "scripts/select-smoke-test-shard.py",
-                            root / "scripts/select-smoke-test-shard.py")
-            hints = root / ".github/scripts/docs-test-seconds.txt"
-            hints.parent.mkdir(parents=True)
-            shutil.copyfile(ROOT / ".github/scripts/docs-test-seconds.txt", hints)
-            for name in documentation_suites():
-                suite = tests / name
-                if name.endswith(".sh"):
-                    status = int(name == failing)
-                    suite.write_text(f'#!/bin/bash\nprintf "%s\\n" {shlex.quote(name)} >> "$CALLS" || exit 90\n'
-                                     f'exit {status}\n', encoding="utf-8")
-                    suite.chmod(0o700)
-                else:
-                    # Discovery sees a real file. Bypassing the interpreter
-                    # contract must fail rather than silently log a pass.
-                    suite.write_text("raise SystemExit(92)\n", encoding="utf-8")
+            self.populate_adapter_tree(root, failing)
             calls = root / "calls"
-            result = subprocess.run(["bash", "-e", "-o", "pipefail", "-c", safety_command(self.source, shard)],
+            command = (
+                safety_command(self.source)
+                if shard is None
+                else f"scripts/tests/run.sh --docs-shard {shard}"
+            )
+            result = subprocess.run(["bash", "-e", "-o", "pipefail", "-c", command],
                                     cwd=root, env=workflow_fixture_environment(root, calls, failing),
-                                    text=True, capture_output=True, timeout=15)
+                                    text=True, capture_output=True, timeout=20)
             return result, calls.read_text().splitlines() if calls.exists() else []
 
-    def test_actual_workflow_commands_cover_every_suite_once(self):
+    def test_actual_workflow_command_covers_every_suite_once_in_deterministic_shard_order(self):
+        result, calls = self.run_adapters(None)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(sorted(calls), documentation_suites())
+        self.assertEqual(len(calls), len(set(calls)))
+        headers = re.findall(r"^=== Documentation shard (\d)/4 \(exit 0, [0-9.]+s\) ===$",
+                             result.stdout, re.MULTILINE)
+        self.assertEqual(headers, ["0", "1", "2", "3"])
+        self.assertIn("Documentation shards summary: 4/4 passed", result.stdout)
         seen = []
-        for shard in range(4):
-            result, calls = self.run_adapters(shard)
-            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-            self.assertTrue(calls)
-            self.assertEqual(calls, sorted(calls))
-            self.assertIn(f"Summary: {len(calls)}/{len(calls)} passed", result.stdout)
-            seen.extend(calls)
+        sections = re.split(r"(?m)^=== Documentation shard \d/4 .* ===\n", result.stdout)[1:]
+        self.assertEqual(len(sections), 4)
+        for section in sections:
+            names = [line.removeprefix("==> scripts/tests/") for line in section.splitlines()
+                     if line.startswith("==> scripts/tests/")]
+            self.assertTrue(names)
+            self.assertEqual(names, sorted(names))
+            self.assertIn(f"Summary: {len(names)}/{len(names)} passed", section)
+            seen.extend(names)
         self.assertEqual(sorted(seen), documentation_suites())
         self.assertEqual(len(seen), len(set(seen)))
 
-    def test_each_failed_suite_fails_its_actual_workflow_command(self):
+    def test_each_failed_suite_fails_its_shard_and_parallel_runner_verdict(self):
         seen = []
+        representative_by_shard = {}
         for shard in range(4):
             # Observe actual membership, not obsolete filename parity. The
             # complete-union assertion independently catches missing coverage.
             selected, names = self.run_adapters(shard)
             self.assertEqual(selected.returncode, 0, selected.stdout + selected.stderr)
             self.assertTrue(names)
+            representative_by_shard[shard] = names[0]
             for failing in names:
                 with self.subTest(failing=failing, shard=shard):
                     result, calls = self.run_adapters(shard, failing)
@@ -437,6 +434,134 @@ class PublicDocsWorkflowTest(unittest.TestCase):
                     seen.append(failing)
         self.assertEqual(sorted(seen), documentation_suites())
         self.assertEqual(len(seen), len(set(seen)))
+
+        for shard, failing in representative_by_shard.items():
+            with self.subTest(parallel_failing_shard=shard, failing=failing):
+                result, calls = self.run_adapters(None, failing)
+                self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+                self.assertEqual(sorted(calls), documentation_suites())
+                self.assertIn("Documentation shards summary: 3/4 passed", result.stdout)
+                self.assertIn(f"  shard {shard}/4 (exit 1)\n", result.stdout)
+
+    def test_parallel_runner_executes_all_four_shards_concurrently_without_fail_fast(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            (root / "scripts/tests").mkdir(parents=True)
+            shutil.copyfile(ROOT / "scripts/run-docs-shards.py", root / "scripts/run-docs-shards.py")
+            barrier = root / "arrived"
+            barrier.mkdir()
+            runner = root / "scripts/tests/run.sh"
+            runner.write_text(
+                '#!/usr/bin/env bash\n'
+                'set -euo pipefail\n'
+                'test "$1" = "--docs-shard"\n'
+                'shard="$2"\n'
+                'touch "$BARRIER_DIR/$shard"\n'
+                'for _ in $(seq 1 100); do\n'
+                '  if [ "$(ls -1 "$BARRIER_DIR" | wc -l)" -eq 4 ]; then\n'
+                '    printf "shard %s observed all 4 peers\\n" "$shard"\n'
+                '    if [ "$shard" = "$FAIL_SHARD_A" ] || [ "$shard" = "$FAIL_SHARD_B" ]; then\n'
+                '      exit 7\n'
+                '    fi\n'
+                '    exit 0\n'
+                '  fi\n'
+                '  sleep 0.05\n'
+                'done\n'
+                'echo "timed out waiting for concurrent shards" >&2\n'
+                'exit 9\n',
+                encoding="utf-8",
+            )
+            runner.chmod(0o700)
+            env = dict(os.environ, BARRIER_DIR=str(barrier), FAIL_SHARD_A="", FAIL_SHARD_B="")
+            passing = subprocess.run([sys.executable, str(root / "scripts/run-docs-shards.py")],
+                                     cwd=root, env=env, text=True, capture_output=True, timeout=15)
+            self.assertEqual(passing.returncode, 0, passing.stdout + passing.stderr)
+            for shard in range(4):
+                self.assertIn(f"shard {shard} observed all 4 peers", passing.stdout)
+            self.assertIn("Documentation shards summary: 4/4 passed", passing.stdout)
+
+            for entry in barrier.iterdir():
+                entry.unlink()
+            failing = subprocess.run(
+                [sys.executable, str(root / "scripts/run-docs-shards.py")],
+                cwd=root, env=dict(env, FAIL_SHARD_A="1", FAIL_SHARD_B="3"),
+                text=True, capture_output=True, timeout=15,
+            )
+            self.assertEqual(failing.returncode, 1, failing.stdout + failing.stderr)
+            for shard in range(4):
+                self.assertIn(f"shard {shard} observed all 4 peers", failing.stdout)
+            self.assertIn("Documentation shards summary: 2/4 passed", failing.stdout)
+            self.assertIn("  shard 1/4 (exit 7)\n", failing.stdout)
+            self.assertIn("  shard 3/4 (exit 7)\n", failing.stdout)
+
+    def test_parallel_runner_stops_shard_groups_on_sigterm_and_refuses_pass(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            (root / "scripts/tests").mkdir(parents=True)
+            shutil.copyfile(ROOT / "scripts/run-docs-shards.py", root / "scripts/run-docs-shards.py")
+            ready = root / "ready"
+            ready.mkdir()
+            runner = root / "scripts/tests/run.sh"
+            runner.write_text(
+                '#!/usr/bin/env bash\n'
+                'set -euo pipefail\n'
+                'if [ "$2" = "3" ]; then trap "" TERM; fi\n'
+                'sleep 60 &\n'
+                'child=$!\n'
+                'printf "%s %s\\n" "$$" "$child" > "$READY_DIR/$2"\n'
+                'wait "$child"\n',
+                encoding="utf-8",
+            )
+            runner.chmod(0o700)
+            process = subprocess.Popen(
+                [sys.executable, str(root / "scripts/run-docs-shards.py")],
+                cwd=root, env=dict(os.environ, READY_DIR=str(ready)),
+                text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                start_new_session=True,
+            )
+            try:
+                deadline = time.monotonic() + 5
+                while len(list(ready.iterdir())) < 4 and time.monotonic() < deadline:
+                    time.sleep(0.05)
+                self.assertEqual(len(list(ready.iterdir())), 4)
+                pids = []
+                for entry in ready.iterdir():
+                    pids.extend(int(token) for token in entry.read_text().split())
+                self.assertEqual(len(pids), 8)
+                process.send_signal(signal.SIGTERM)
+                stdout, stderr = process.communicate(timeout=15)
+            finally:
+                if process.poll() is None:
+                    os.killpg(process.pid, signal.SIGKILL)
+                    process.communicate(timeout=5)
+            self.assertEqual(process.returncode, 128 + signal.SIGTERM, stdout + stderr)
+            self.assertIn("interrupted (signal 15)", stderr)
+            self.assertNotIn("Documentation shards summary:", stdout)
+            for pid in pids:
+                stat = Path(f"/proc/{pid}/stat")
+                try:
+                    state = stat.read_text(encoding="utf-8").rsplit(") ", 1)[1].split()[0]
+                except (FileNotFoundError, ProcessLookupError):
+                    state = None
+                self.assertIn(state, (None, "Z"), f"pid {pid} survived SIGTERM cleanup in state {state}")
+
+    def test_parallel_runner_fails_closed_when_runner_missing_or_symlink(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            (root / "scripts/tests").mkdir(parents=True)
+            shutil.copyfile(ROOT / "scripts/run-docs-shards.py", root / "scripts/run-docs-shards.py")
+            missing = subprocess.run([sys.executable, str(root / "scripts/run-docs-shards.py")],
+                                     cwd=root, text=True, capture_output=True, timeout=5)
+            self.assertEqual(missing.returncode, 1)
+            self.assertIn("missing or not a regular file", missing.stderr)
+
+            target = root / "elsewhere.sh"
+            target.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+            (root / "scripts/tests/run.sh").symlink_to(target)
+            symlinked = subprocess.run([sys.executable, str(root / "scripts/run-docs-shards.py")],
+                                       cwd=root, text=True, capture_output=True, timeout=5)
+            self.assertEqual(symlinked.returncode, 1)
+            self.assertIn("missing or not a regular file", symlinked.stderr)
 
 
 if __name__ == "__main__":
