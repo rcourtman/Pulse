@@ -37,11 +37,13 @@ On your TrueNAS system:
 | Data | Pulse page / tab | Details |
 |---|---|---|
 | System info (hostname, version, uptime) | TrueNAS → Overview | CPU, [memory and ARC cache](#memory-usage-and-arc-cache), health status |
-| Virtual machines | TrueNAS → VMs | State, CPU, memory, boot mode, devices, and security flags from the TrueNAS VM API |
-| Apps | TrueNAS → Apps | Native app state, image/version, ports, volumes, networks, and runtime container details |
 | ZFS Pools | TrueNAS → Storage | [Total/used/free capacity](#pool-health-without-capacity), pool status (ONLINE/DEGRADED/FAULTED) |
 | ZFS Datasets | TrueNAS → Storage | Used/available space, mount status, read-only flag |
 | Physical Disks | TrueNAS → Storage | Model, serial, size, transport type, rotational flag, temperature, and native SMART failure/counter evidence when TrueNAS reports it |
+| System services | TrueNAS → Services | Service state (SMB, NFS, SSH, SMART, etc.), boot-start warnings (**should be running**), and stale-source **not updated** notices |
+| Apps | TrueNAS → Apps | Native app state, image/version, ports, volumes, networks, and runtime container details |
+| Virtual machines | TrueNAS → VMs | State, CPU, memory, boot mode, devices, and security flags from the TrueNAS VM API |
+| Network shares | TrueNAS → Shares | Protocol, path, access flags, allowed clients, security mapping, and share status |
 | [ZFS Snapshots](TRUENAS.md#collection-scope-and-snapshot-polling) | TrueNAS → Protection | Dataset, creation time, size, referenced data |
 | Replication Tasks | TrueNAS → Protection | Source/target datasets, direction, last run status |
 | TrueNAS Alerts | Alerts | Native TrueNAS alert messages and severity levels |
@@ -51,9 +53,11 @@ On your TrueNAS system:
 TrueNAS resources are mapped into the unified resource model:
 
 - **TrueNAS host** → appears as a resource with `source: truenas` under **TrueNAS → Overview** (`/truenas/overview`).
-- **TrueNAS VMs** → appear as canonical `vm` workloads under **TrueNAS → VMs** (`/truenas/vms`).
-- **TrueNAS apps** → appear as canonical `app-container` workloads under **TrueNAS → Apps** (`/truenas/apps`).
 - **ZFS pools, datasets and physical disks** → appear under **TrueNAS → Storage** (`/truenas/storage`).
+- **System services** → appear under **TrueNAS → Services** (`/truenas/services`).
+- **TrueNAS apps** → appear as canonical `app-container` workloads under **TrueNAS → Apps** (`/truenas/apps`).
+- **TrueNAS VMs** → appear as canonical `vm` workloads under **TrueNAS → VMs** (`/truenas/vms`).
+- **Network shares** → appear as canonical `network-share` resources under **TrueNAS → Shares** (`/truenas/shares`).
 - **ZFS snapshots and replication** → appear under **TrueNAS → Protection** (`/truenas/protection`) as recovery points.
 - **TrueNAS alerts** → surfaced on the **Alerts** page alongside Proxmox and other platform alerts.
 
@@ -340,11 +344,11 @@ Distinguish these other results before choosing an action:
 ### No data appearing after adding connection
 - Allow one configured polling cycle (60 seconds by default), not a fixed
   30-second wait. Check that the saved connection is enabled.
-- **Test Connection** reads system information on a separate connection. Pools,
+- **Test connection** reads system information on a separate connection. Pools,
   datasets, disks and alerts can still fail during ordinary polling, even when
   the test succeeds. A successful test also does not establish live CPU, memory
   or History readings. The legacy REST diagnostic is expected for recognized
-  CORE 13 systems; it is not itself a connection error.
+  CORE 13 systems, and it is not itself a connection error.
 - Preserve the existing error before testing or restarting. Follow the
   [polling checks](#stale-truenas-data) to distinguish a completed failure from
   missing or stale observations; a connection test is not a substitute.
@@ -489,7 +493,9 @@ A percentage alone doesn't give you the breakdown. If the bar is unavailable or
 cache row does not mean ARC is zero. CORE's **Active**, **Inactive**, **Wired**,
 **Laundry** and **Free** categories are not individual ARC measurements.
 
-Check **History** separately from the current Overview and Storage readings.
+Check the drawer's stored history charts (**Overview → History range**, or the
+**History** tab on older versions) separately from the current Overview and
+Storage table readings.
 A recovered current value does not establish that its historical series is
 available or that earlier missing samples were recovered. Keep existing
 versions, affected panels and original times in the same report; no new graph
@@ -524,24 +530,24 @@ console to collect this evidence.
 
 ### Stale TrueNAS data
 
-A **Pending** or **Stale** badge is not an authentication diagnosis. Keep the
-connection and key unchanged while checking whether ordinary polling still
-collects data; a working connection can have missing telemetry or a stalled
-collection step.
+A **Pending**, **Stale**, or **Degraded** badge (or **not updated** on a
+service row) is not an authentication diagnosis. Keep the connection and key
+unchanged while checking whether ordinary polling still collects data. A
+working connection can have missing telemetry or a stalled collection step.
 
 1. **Record the existing state before testing or restarting.** In your
    signed-in Pulse admin browser session, open `/api/truenas/connections` on
    the same Pulse origin. Inspect only the affected connection. This is a
-   read-only request using your existing session; do not copy a token or cookie.
+   read-only request using your existing session, so do not copy a token or cookie.
 2. Note `enabled`, `poll.intervalSeconds`, `poll.lastAttemptAt`,
    `poll.lastSuccessAt`, `poll.consecutiveFailures`, `poll.lastError`, and
    `observed.collectedAt`. When present, also note `transport.mode`,
    `transport.reconnects` and `transport.lastError`. If your build does not
    expose a field, record that rather than interpreting its absence as success.
 3. Compare the timestamps after two configured polling cycles, without
-   pressing **Test Connection**, saving changes or restarting between reads.
+   pressing **Test connection**, saving changes or restarting between reads.
    Slow requests can take longer than the interval. `lastAttemptAt` records a
-   completed attempt, not an in-flight request; a frozen value alone cannot
+   completed attempt, not an in-flight request. A frozen value alone cannot
    distinguish a blocked request from polling that has not run.
 
 | Existing evidence | What it distinguishes and what to check next |
@@ -551,7 +557,7 @@ collection step.
 | No timestamps advance, or no completed attempt is recorded | Check that the connection and integration are enabled, then preserve the bounded local error above. This is not proof of an invalid key. |
 | Reconnects or TrueNAS sign-ins increase while `observed.collectedAt` advances | Session turnover alone does not establish failed authentication or stopped polling. Record the timing and any existing close/error message separately from the data freshness. |
 
-**Test Connection** is not a complete poll. Some older builds, including Pulse
+**Test connection** is not a complete poll. Some older builds, including Pulse
 6.4.1 and 6.4.5, also let a saved-connection test update `lastAttemptAt` and
 `lastSuccessAt` and reset its failure count without refreshing
 `observed.collectedAt`. Record any manual test and its time separately, and
@@ -630,9 +636,10 @@ whether Pulse still reads snapshots.
 
 ## When only host Disk I/O History is blank
 
-Open the appliance from **TrueNAS → Overview**, select **History** and keep
-the affected range. On a phone, use the **Show** button that lists **Disk I/O**
-if the chart is folded.
+Open the appliance from **TrueNAS → Overview**, stay on the drawer's **Overview**
+tab and choose the affected **History range** beside the charts (older versions
+use a separate **History** tab). On a phone, use the **Show** button that lists
+**Disk I/O** if the chart is folded.
 
 **Loading history** means the read has not finished. If the chart switches
 to **No stored history in this range**, Pulse has no points to show for that
