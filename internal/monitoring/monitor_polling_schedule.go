@@ -115,6 +115,15 @@ func (m *Monitor) buildScheduledTasks(now time.Time) []ScheduledTask {
 	return m.scheduler.BuildPlan(now, descriptors, queueDepth)
 }
 
+func (m *Monitor) planScheduledPolls(now time.Time) {
+	// Bind queue admission to the roster revision before reading providers.
+	// A settings refresh can finish while an older planner is still reading.
+	revision := m.taskQueue.availabilityPlanRevision()
+	for _, task := range m.buildScheduledTasks(now) {
+		m.taskQueue.upsertPlan(task, revision)
+	}
+}
+
 // poll fetches data from all configured instances
 func (m *Monitor) poll(_ context.Context, wsHub *websocket.Hub) {
 	defer recoverFromPanic("poll")
@@ -134,12 +143,7 @@ func (m *Monitor) poll(_ context.Context, wsHub *websocket.Hub) {
 		log.Debug().Msg("starting polling cycle")
 	}
 	startTime := time.Now()
-	now := startTime
-
-	plannedTasks := m.buildScheduledTasks(now)
-	for _, task := range plannedTasks {
-		m.taskQueue.upsertPlan(task)
-	}
+	m.planScheduledPolls(startTime)
 
 	// Update performance metrics atomically to prevent data races when
 	// multiple poll() goroutines run concurrently (e.g. mock mode transitions).

@@ -260,12 +260,17 @@ func (availabilityPollProvider) SupplementalRecords(m *Monitor, orgID string) []
 }
 
 func (m *Monitor) availabilityTargets() []config.AvailabilityTarget {
+	targets, _ := m.readAvailabilityTargets()
+	return targets
+}
+
+func (m *Monitor) readAvailabilityTargets() ([]config.AvailabilityTarget, error) {
 	if m == nil || m.configPersist == nil {
-		return nil
+		return nil, nil
 	}
 	targets, err := m.configPersist.LoadAvailabilityTargets()
 	if err != nil {
-		return nil
+		return nil, err
 	}
 	out := make([]config.AvailabilityTarget, 0, len(targets))
 	for _, target := range targets {
@@ -283,7 +288,7 @@ func (m *Monitor) availabilityTargets() []config.AvailabilityTarget {
 		}
 		return left < right
 	})
-	return out
+	return out, nil
 }
 
 func (m *Monitor) availabilityTargetByID(id string) (config.AvailabilityTarget, bool) {
@@ -403,10 +408,30 @@ func adoptAvailabilityStatusAsLocal(status AvailabilityProbeStatus) Availability
 }
 
 func (m *Monitor) RefreshAvailabilityTargets() {
-	if m == nil {
-		return
+	if m.refreshAvailabilityRuntime() {
+		m.refreshInstanceInfoCacheFromProviders()
+		m.updateResourceStore(m.currentStateWithScope())
 	}
-	targets := m.availabilityTargets()
+}
+
+func (m *Monitor) refreshAvailabilityRuntime() bool {
+	if m == nil || m.configPersist == nil {
+		return false
+	}
+	q := m.taskQueue
+	if q != nil {
+		q.availabilityRefreshMu.Lock()
+		defer q.availabilityRefreshMu.Unlock()
+	}
+	targets, err := m.readAvailabilityTargets()
+	if err != nil {
+		// A failed configuration read is not evidence of a deletion.
+		return false
+	}
+	var localTasks map[string]ScheduledTask
+	if q != nil {
+		localTasks = make(map[string]ScheduledTask, len(targets))
+	}
 	activeIDs := make(map[string]struct{}, len(targets))
 	activeProbeIDs := make(map[string]struct{}, len(targets))
 	now := time.Now()
@@ -420,21 +445,22 @@ func (m *Monitor) RefreshAvailabilityTargets() {
 			activeProbeIDs[trackerID] = struct{}{}
 			m.availabilityProbeAssignmentReference(target.ID, locationID, now)
 		}
-		if m.taskQueue == nil {
+		if q == nil {
 			continue
 		}
-		task := ScheduledTask{
-			InstanceName: target.ID,
-			InstanceType: InstanceTypeAvailability,
-			NextRun:      now,
-			Interval:     availabilityFixedPollInterval(target),
-		}
 		if target.Enabled && m.targetUsesLocalObservation(target) {
-			m.taskQueue.Upsert(task)
+			localTasks[target.ID] = ScheduledTask{
+				InstanceName: target.ID,
+				InstanceType: InstanceTypeAvailability,
+				NextRun:      now,
+				Interval:     availabilityFixedPollInterval(target),
+			}
 		} else {
-			m.taskQueue.Remove(InstanceTypeAvailability, target.ID)
 			m.removeProviderConnectionHealth(InstanceTypeAvailability, target.ID)
 		}
+	}
+	if q != nil {
+		q.refreshAvailabilitySchedule(localTasks)
 	}
 
 	removedIDs := make([]string, 0)
@@ -465,8 +491,7 @@ func (m *Monitor) RefreshAvailabilityTargets() {
 		m.removeProviderConnectionHealth(InstanceTypeAvailability, id)
 	}
 
-	m.refreshInstanceInfoCacheFromProviders()
-	m.updateResourceStore(m.currentStateWithScope())
+	return true
 }
 
 func (m *Monitor) pollAvailabilityTarget(ctx context.Context, target config.AvailabilityTarget) {

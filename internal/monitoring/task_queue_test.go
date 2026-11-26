@@ -1143,7 +1143,7 @@ func TestWaitNext_RearmsForShorterCadence(t *testing.T) {
 			InstanceType: InstanceTypePVE, InstanceName: "fixture",
 			NextRun: now.Add(time.Minute), Interval: time.Minute,
 		}
-		q.upsertPlan(task)
+		q.upsertPlan(task, 0)
 		claimed := make(chan ScheduledTask, 1)
 		go func() {
 			if task, ok := q.WaitNext(ctx); ok {
@@ -1155,7 +1155,7 @@ func TestWaitNext_RearmsForShorterCadence(t *testing.T) {
 		// Change the planner's cadence while a worker is sleeping on the
 		// existing head. Neither the edit nor its wake makes the task due.
 		task.Interval = 20 * time.Millisecond
-		q.upsertPlan(task)
+		q.upsertPlan(task, 0)
 		time.Sleep(task.Interval - time.Millisecond)
 		synctest.Wait()
 		if len(claimed) != 0 {

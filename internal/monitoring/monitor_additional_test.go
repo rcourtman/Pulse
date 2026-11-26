@@ -2271,8 +2271,8 @@ func TestSchedulerHealthDistinguishesOverdueQueuedPolls(t *testing.T) {
 		m := &Monitor{taskQueue: NewTaskQueue(), deadLetterQueue: NewTaskQueue()}
 		start := time.Now()
 		first := ScheduledTask{InstanceType: InstanceTypePVE, InstanceName: "first", NextRun: start.Add(10 * time.Second)}
-		m.taskQueue.upsertPlan(first)
-		m.taskQueue.upsertPlan(ScheduledTask{InstanceType: InstanceTypePBS, InstanceName: "future", NextRun: start.Add(5 * time.Minute)})
+		m.taskQueue.upsertPlan(first, 0)
+		m.taskQueue.upsertPlan(ScheduledTask{InstanceType: InstanceTypePBS, InstanceName: "future", NextRun: start.Add(5 * time.Minute)}, 0)
 		m.deadLetterQueue.Upsert(ScheduledTask{InstanceType: InstanceTypePVE, InstanceName: "parked", NextRun: start.Add(-time.Hour)})
 
 		check := func(phase string, depth, dueSoon int, oldest float64) {
@@ -2306,7 +2306,7 @@ func TestSchedulerHealthDistinguishesOverdueQueuedPolls(t *testing.T) {
 		check("unclaimed, same counts but 90 seconds late", 2, 1, 90)
 
 		newer := ScheduledTask{InstanceType: InstanceTypePBS, InstanceName: "newer", NextRun: time.Now().Add(-2 * time.Second)}
-		m.taskQueue.upsertPlan(newer)
+		m.taskQueue.upsertPlan(newer, 0)
 		check("two overdue, use the oldest", 3, 2, 90)
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
@@ -2336,8 +2336,8 @@ func TestSchedulerQueuedPollOverdueFollowsActiveQueues(t *testing.T) {
 		left := &Monitor{pollMetrics: metrics, taskQueue: NewTaskQueue()}
 		right := &Monitor{pollMetrics: metrics, taskQueue: NewTaskQueue(), deadLetterQueue: NewTaskQueue()}
 		origin := time.Now()
-		left.taskQueue.upsertPlan(ScheduledTask{InstanceType: InstanceTypePBS, InstanceName: "store", NextRun: origin.Add(8 * time.Second)})
-		right.taskQueue.upsertPlan(ScheduledTask{InstanceType: InstanceTypePBS, InstanceName: "store", NextRun: origin.Add(10 * time.Second)})
+		left.taskQueue.upsertPlan(ScheduledTask{InstanceType: InstanceTypePBS, InstanceName: "store", NextRun: origin.Add(8 * time.Second)}, 0)
+		right.taskQueue.upsertPlan(ScheduledTask{InstanceType: InstanceTypePBS, InstanceName: "store", NextRun: origin.Add(10 * time.Second)}, 0)
 		right.deadLetterQueue.Upsert(ScheduledTask{InstanceType: InstanceTypePBS, InstanceName: "parked", NextRun: origin.Add(-time.Hour)})
 
 		handler := promhttp.HandlerFor(registry, promhttp.HandlerOpts{})
@@ -2655,14 +2655,14 @@ func TestScheduledPollProgressClearsOnSlotCancellation(t *testing.T) {
 		time.Sleep(defaultTaskTimeout + time.Second)
 		synctest.Wait()
 		assertClaimedPollOverdue(t, reg, 1, 0)
-		m.taskQueue.upsertPlan(task)
+		m.taskQueue.upsertPlan(task, 0)
 		if m.taskQueue.Size() != 0 {
 			t.Fatal("a poll awaiting a process slot must keep owning the target")
 		}
 		cancel()
 		<-done
 		assertClaimedPollOverdue(t, reg, 0, 0)
-		m.taskQueue.upsertPlan(task)
+		m.taskQueue.upsertPlan(task, 0)
 		if m.taskQueue.Size() != 1 {
 			t.Fatal("slot cancellation did not release the claim")
 		}
@@ -2827,7 +2827,7 @@ func TestScheduledPollClaimPreservesExplicitEdits(t *testing.T) {
 			if action == "remove" || action == "replace-then-remove" {
 				q.Remove(target.InstanceType, target.InstanceName)
 			}
-			q.upsertPlan(target)
+			q.upsertPlan(target, 0)
 			if got, available := q.Get(target.InstanceType, target.InstanceName); available || q.Size() != 0 {
 				t.Fatalf("claimed target is not queued, got %+v, %v, size %d", got, available, q.Size())
 			}
@@ -2835,7 +2835,7 @@ func TestScheduledPollClaimPreservesExplicitEdits(t *testing.T) {
 			// same name can still dispatch while the first claim is held.
 			namesake := target
 			namesake.InstanceType = InstanceTypePVE
-			q.upsertPlan(namesake)
+			q.upsertPlan(namesake, 0)
 			sibling, ok := q.WaitNext(t.Context())
 			if !ok || sibling != namesake {
 				t.Fatalf("namesake claim = %+v, %v", sibling, ok)
@@ -2850,7 +2850,7 @@ func TestScheduledPollClaimPreservesExplicitEdits(t *testing.T) {
 			got, queued := q.Get(target.InstanceType, target.InstanceName)
 			switch action {
 			case "replace", "remove-then-replace":
-				q.upsertPlan(target)
+				q.upsertPlan(target, 0)
 				got, queued = q.Get(target.InstanceType, target.InstanceName)
 				if !queued || got != lastEdit {
 					t.Fatalf("worker follow-up or periodic plan replaced the explicit edit: %+v, %v", got, queued)
@@ -2942,7 +2942,7 @@ func withScheduledPollPanicFixture(t *testing.T, processLimit bool, observe func
 
 		replanned := failed
 		replanned.NextRun = origin.Add(time.Hour)
-		m.taskQueue.upsertPlan(replanned)
+		m.taskQueue.upsertPlan(replanned, 0)
 		if got, ok := m.taskQueue.Get(failed.InstanceType, failed.InstanceName); !ok || got != replanned {
 			t.Fatalf("panicking attempt left its claim behind: queued=%v task=%+v", ok, got)
 		}
