@@ -107,7 +107,7 @@ func (m *Monitor) UpdateDeadManConfig(config notifications.DeadManConfig) error 
 		if wasUnreadable {
 			m.deadMan.alertProjection.clear(alerts.DeadManStateAlertType)
 		}
-		m.deadMan.notifyConfigChanged()
+		m.deadMan.notifyConfigChangedFor(config.PingURL)
 	}
 	m.deadManConfigMu.Unlock()
 	return nil
