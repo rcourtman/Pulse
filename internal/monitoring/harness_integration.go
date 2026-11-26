@@ -177,6 +177,7 @@ func (h *Harness) Run(ctx context.Context) HarnessReport {
 
 	runCtx, cancel := context.WithCancel(ctx)
 	h.cancel = cancel
+	defer h.Monitor.pollMetrics.trackDeadLetterQueue(runCtx, h.Monitor.deadLetterQueue)()
 
 	workerCount := len(h.scenario.Instances)
 	if workerCount < 1 {
