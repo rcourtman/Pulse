@@ -958,7 +958,9 @@ const filterBySearch = <T>(
   haystack: (item: T) => string,
 ): T[] => {
   const needle = normalize(search);
-  return items.filter((item) => matchesStatus(item) && (!needle || haystack(item).includes(needle)));
+  return items.filter(
+    (item) => matchesStatus(item) && (!needle || haystack(item).includes(needle)),
+  );
 };
 
 const vmwareDatastoreSearchHaystack = (resource: Resource): string =>
