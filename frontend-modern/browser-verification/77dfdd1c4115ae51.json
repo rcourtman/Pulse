@@ -1,0 +1,46 @@
+{
+  "version": 1,
+  "base_sha": "907a1d6f3454bac15122bccadad6a4892f6ab4a2",
+  "verified_at": "2026-11-26T17:19:52Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Infrastructure/resourceDetailDrawerMetricsHistoryModel.ts",
+    "frontend-modern/src/features/vmware/VsphereActivityTable.tsx",
+    "frontend-modern/src/features/vmware/VsphereDatastoresTable.tsx",
+    "frontend-modern/src/features/vmware/vmwarePageModel.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Infrastructure/resourceDetailDrawerMetricsHistoryModel.ts": "a9c757dba9cb4f44ebd0df0288440bc801f5d114940cb9a6407f97b393263e5f",
+    "frontend-modern/src/features/vmware/VsphereActivityTable.tsx": "1aa292ddbdb51e3b3c52c0dbdebd02d8a640777e9b56103de7d85033307c6a11",
+    "frontend-modern/src/features/vmware/VsphereDatastoresTable.tsx": "ade4f91be24256b65994b3de1be63c0be3d50fb7b057a77c65d47c459c7fd2b4",
+    "frontend-modern/src/features/vmware/vmwarePageModel.ts": "13d72df6d1d8c0572450279cd59ac778e4b2d0afad1f758e2cd0f658533c0e29"
+  },
+  "routes": [
+    "/vmware/storage",
+    "/vmware/activity"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 940
+    },
+    {
+      "width": 360,
+      "height": 820
+    }
+  ],
+  "states": [
+    "paired production builds of base 17139a188a02 (assets sha256 dff93a4cdec3...) and candidate 907a1d6f3454 (assets sha256 192235eb0c1a...) served over local HTTP/WebSocket fixture in Chromium 141.0.7390.37 (1440x940 light theme, en-GB, UTC) and WebKit 26.0 (360x820 mobile touch dark theme, en-GB, UTC)",
+    "/vmware/storage stale snapshot with six datastores (stale accessible nvme-east 78%, stale inaccessible+red archive-cold 64%, stale alarmed san-alarmed 85%, fresh maintenance maint-nfs 18%, fresh healthy nvme-west 41%, fresh unreadable unread-ds —): Inaccessible chip 0 -> 1, Attention chip 3 -> 2, archive-cold moves to top with red dot and 'Last reported inaccessible +1', san-alarmed surfaces 'Datastore latency above threshold', all three stale rows render non-colour 'Stale data' cue on desktop light and 360px phone dark (where Health column is hidden), capacity bars and '—' fallback preserved",
+    "/vmware/storage inline detail drawer on stale nvme-east: CAPACITY card displays 'Used reading: vCenter has not updated this datastore recently.' above the chart on both desktop light and 360px phone dark while preserving Latest stored 15:55, Used 78.1%, and 373 GB of 477 GB disk",
+    "/vmware/storage live WebSocket recovery on nvme-east (online, 57%, 270 GB/477 GB) while platformData.sourceStatus remains stale, without reload: base build remained amber with 'vCenter has not updated this recently'; candidate clears 'Stale data', restores green dot in row and drawer header, updates chips to Accessible 3 / Attention 1, updates disk summary to 270 GB of 477 GB disk, and clears the deferred Used reading notice from the inline CAPACITY chart",
+    "/vmware/activity host task and event rows with expanded Task detail panel (ACTIVITY, AFFECTED RESOURCE, SOURCE cards): pixel-identical before and after on desktop light and 360px phone dark; zero console errors, zero page errors, zero failed requests, zero horizontal overflow across all routes and viewports"
+  ],
+  "interactions": [
+    "loaded /vmware/storage and verified initial stale, inaccessible, alarmed, maintenance, healthy, and missing-capacity rows on desktop (1440x940) and phone (360x820)",
+    "clicked Accessible and All status filter pills on desktop to confirm stale rows stay excluded from Accessible (2 rows) while fresh healthy rows match",
+    "clicked nvme-east row to expand the inline Storage detail drawer and inspected the CAPACITY chart deferred-reading notice while stale",
+    "delivered a live WebSocket rawData frame updating nvme-east to online (57%, 270 GB/477 GB) without reloading and confirmed immediate row, chip, drawer header, and CAPACITY notice recovery",
+    "navigated to /vmware/activity and clicked the host Enter maintenance mode task row to expand and inspect ACTIVITY, AFFECTED RESOURCE, and SOURCE detail sections"
+  ]
+}
