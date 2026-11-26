@@ -75,6 +75,34 @@ class PMGDocsTest(unittest.TestCase):
         self.assertIn("compare the same window in PMG", self.guide)
         self.assertIn("Expand the intended gateway's row", self.guide)
 
+    def test_stale_readings_guidance_matches_table_and_drawer_contract(self):
+        table = frontend("features/proxmox/ProxmoxMailGatewayTable.tsx")
+        drawer = frontend("features/proxmox/ProxmoxMailGatewayDrawer.tsx")
+        self.assertIn("resource.sourceStatus?.pmg?.status === 'stale'", drawer)
+        self.assertIn("quietWarning", drawer)
+        self.assertIn("const STALE_READINGS = 'Readings stale';", table)
+        self.assertIn(". Showing the last poll. ", table)
+        self.assertIn("hasStaleMailGatewayReadings(resource)", table)
+        section = self.guide.split("When readings are stale", 1)[1].split("Alerts", 1)[0]
+        for phrase in (
+            "independent availability check",
+            "does not make mail, queue or quarantine counts current",
+            "keeps the retained mail, quarantine and node queue counts visible",
+            "labels the row Readings stale",
+            "out of Healthy into Degraded",
+            "Offline gateway remains under Offline",
+            "open critical alerts keep their alert indicator alongside Readings stale",
+            "Readings stale. Showing the last poll.",
+            "without attributing a quiet poll to PMG itself",
+            "clears Readings stale and restores Healthy",
+            "without reloading or restarting Pulse",
+            "Older published releases may not display Readings stale",
+        ):
+            self.assertIn(phrase, section)
+        self.assertIn("(ALERTING.md#warn-when-expected-polls-stop-succeeding)", self.text)
+        self.assertIn("(#when-readings-are-stale)", self.text)
+        self.assertNotRegex(section, r"```|\b(?:curl|wget)\b|upgrade to|fixed in|beta")
+
     def test_documented_thresholds_exist_and_keep_their_units(self):
         config = (ROOT / "internal/alerts/config/types.go").read_text()
         fields = config.split("type PMGThresholdConfig struct {", 1)[1].split("\n}", 1)[0]

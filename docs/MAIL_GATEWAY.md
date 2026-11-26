@@ -106,6 +106,37 @@ queue data can still raise the highest configured severity, but cannot clear
 or downgrade an existing alert; quarantine recovery requires both categories.
 These collector safeguards do not make every empty display a verified zero.
 
+### When readings are stale
+
+An independent availability check (such as an HTTPS or port check) can keep
+passing while the PMG poll stops or lags. A passing availability check does not
+make mail, queue or quarantine counts current.
+
+When the PMG poll is stale, **Proxmox → Mail Gateway** keeps the retained mail,
+quarantine and node queue counts visible so you do not lose the last known
+figures, labels the row **Readings stale**, and takes the gateway out of
+**Healthy** into **Degraded** in the status filter:
+
+- **Offline and critical alerts stay visible:** An explicitly **Offline**
+  gateway remains under **Offline**, and open critical alerts keep their alert
+  indicator alongside **Readings stale**.
+- **Row details separate quiet polls from PMG faults:** Expanding the row shows
+  **Readings stale. Showing the last poll.** together with any actual
+  PMG-reported degradation reason (such as unhealthy cluster nodes, queue
+  backlog or non-healthy connection health), without attributing a quiet poll to
+  PMG itself.
+- **Recovery updates live:** When a fresh PMG poll arrives, the view updates
+  the counts, clears **Readings stale** and restores **Healthy** (when no
+  offline state or open alert remains) without reloading or restarting Pulse.
+
+Older published releases may not display **Readings stale** when another source
+keeps the gateway online. On those builds, compare the reading time and PMG's
+own view directly. While PMG readings are stale, check whether the connection is
+paused in **Settings → Infrastructure**, check
+[poll-progress signals](ALERTING.md#warn-when-expected-polls-stop-succeeding)
+and the [bounded Pulse log readers](TROUBLESHOOTING.md#inspect-notification-logs),
+and rely on PMG's own queue view until fresh polls resume.
+
 ## Alerts
 
 Open **Alerts → Thresholds → Proxmox** and find **Mail Gateway Thresholds**.
@@ -132,6 +163,7 @@ or permissions:
 | Certificate validation error | The certificate name, expiry and trusted chain for that endpoint. Do not disable verification or change to HTTP. |
 | 401/403 | The configured account and its read permissions for the specific failed request, privately. Do not grant administrator access as a diagnostic shortcut. |
 | Gateway is present but statistics are missing | Clear view filters, check whether the connection is paused, and compare the particular dataset and time window with PMG. A successful test or version read does not establish dataset access. |
+| **Readings stale** appears while the gateway responds | An independent availability check can pass while the PMG poll is quiet. Follow [When readings are stale](#when-readings-are-stale) and check PMG's own queue view without restarting or re-adding the connection. |
 | Cluster nodes or node queues are missing | Compare the gateway's existing cluster inventory and each affected node's native queue view. One reachable node does not prove every node was collected. |
 
 ### Response decoding is not a network verdict
