@@ -104,7 +104,7 @@ describe('History interpretation help', () => {
     );
   });
 
-  it('distinguishes resumed collection from a line spanning an interval without readings', () => {
+  it('requires ordinary collection evidence separately from a later chart point', () => {
     const help = interpretation();
     const missing = [...help.querySelectorAll('tbody tr')].find(
       (row) => text(row.children[0]) === 'Missing observations',
@@ -118,15 +118,21 @@ describe('History interpretation help', () => {
     expect(check).toBeDefined();
     const checkText = text(check!);
     expect(checkText).toContain('shortest range that includes the stop');
-    expect(checkText).toContain(
-      'shows collection resumed for that resource, not that it was uninterrupted',
-    );
-    expect(checkText).toContain(
-      'A line can join points across an interval with no stored readings at all',
-    );
-    expect(checkText).toContain('without restarting again');
+    expect(checkText).toContain('Compare observation times');
+    expect(checkText).toContain('Lines can span gaps');
+    expect(checkText).toContain(getHistoryReadoutLabel('native', false));
+    expect(checkText).toContain('can show readings the device saved while Pulse was off');
+    expect(checkText).toContain(`${getHistoryReadoutLabel('mixed', false)} can mix sources`);
+    expect(checkText).toContain('A new chart point is not proof of a new Pulse poll');
+    const progress = check?.nextElementSibling;
+    expect(progress?.tagName).toBe('P');
+    expect(text(progress!)).toContain('the next ordinary poll or agent report');
+    expect(text(progress!)).toContain('a fresh live reading from the same connection');
+    expect(text(progress!)).toContain('Last seen and the reading you need both advance');
+    expect(text(progress!)).toContain('That checks only that source');
+    expect(text(progress!)).toContain('without restarting again');
     const stop = '/docs/TROUBLESHOOTING#after-a-memory-cgroup-kill';
-    expect(check?.querySelector(`a[href="${stop}"]`)?.textContent).toBe(
+    expect(progress?.querySelector(`a[href="${stop}"]`)?.textContent).toBe(
       'checks after a memory stop',
     );
     expect(
