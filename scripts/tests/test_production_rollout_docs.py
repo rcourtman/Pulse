@@ -225,6 +225,16 @@ class ProductionRolloutDocsTest(unittest.TestCase):
         self.assertIn("queue.ScheduleRetry(request.ID, 0)", queue)
         actions = (ROOT / "internal/api/actions.go").read_text()
         self.assertIn("h.ActionLifecycle().Execute(", actions)
+        # Recent delivery activity lives on Alerts -> Notifications, not History.
+        self.assertIn("**Recent delivery activity** in **Alerts → Notifications** (`/alerts/notifications`)", text)
+        self.assertIn("**Alerts → History** (`/alerts/history`)", text)
+        self.assertNotIn("Recent delivery activity** in Alert History", text)
+        destinations_tab = (ROOT / "frontend-modern/src/features/alerts/tabs/DestinationsTab.tsx").read_text()
+        self.assertIn("<AlertDeliveryLogCard", destinations_tab)
+        alert_tabs = (ROOT / "frontend-modern/src/utils/alertTabsPresentation.ts").read_text()
+        self.assertIn("ALERT_TAB_DESTINATIONS_LABEL = 'Notifications'", alert_tabs)
+        alert_types = (ROOT / "frontend-modern/src/features/alerts/types.ts").read_text()
+        self.assertIn("destinations: 'notifications'", alert_types)
 
     def test_operational_upgrade_preserves_recovery_and_access_boundaries(self):
         text = " ".join(TRUST_DOC.read_text().split("## Upgrade and compatibility\n", 1)[1].split())

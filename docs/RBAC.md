@@ -14,8 +14,8 @@ For plan details, see [PULSE_PRO.md](PULSE_PRO.md). For API endpoints, see [API 
 
 A role is a named set of permissions. Each permission is an `(action, resource)` pair:
 
-- **action**: `read`, `write`, `delete`, or `admin`
-- **resource**: A Pulse resource type (e.g., `alerts`, `settings`, `nodes`, `ai`)
+- **action**: `read`, `write`, `delete`, `admin`, or `*`
+- **resource**: A Pulse resource type. The **Settings → Security → Roles** editor lists `settings`, `audit_logs`, `nodes`, `users`, `license`, and `*`. Custom role definitions via the API also accept other resource names such as `alerts` and `ai`.
 
 Pulse ships with built-in roles: `admin` (full access), `operator` (manage alerts and resources), `viewer` (read-only), and `auditor` (audit log access). You can create additional custom roles for more granular control.
 
@@ -37,14 +37,14 @@ user merely because no local administrator is configured.
 
 ## Quick Start
 
-1. Confirm a Pro, grandfathered Pro+, Cloud, MSP, or Enterprise/custom license is active in **Settings → Plans & Billing**.
+1. Confirm a Pro, grandfathered Pro+, Cloud, MSP, or Enterprise/custom license is active in **Settings → System → Plans & Billing**.
 2. Go to **Settings → Security → Roles**.
 3. Create roles with the permissions you need.
 4. Assign roles to users.
 
 An active licence is not an administrator grant. For self-hosted Pulse, the
 public Community runtime also does not gain Pro-only hooks when a licence is
-activated. Check **Settings → Plans & Billing** for both the licence and runtime
+activated. Check **Settings → System → Plans & Billing** for both the licence and runtime
 status before changing access. If it shows **Pro runtime missing**, follow its
 **Open Pulse Pro downloads** action and the [plans guide](PULSE_PRO.md); do not
 buy a second licence or reset the data directory to clear this gate.

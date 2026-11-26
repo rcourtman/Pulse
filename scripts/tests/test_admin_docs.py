@@ -476,5 +476,32 @@ class AdminDocsTest(unittest.TestCase):
                         self.assertEqual(len(requests), before + 1, "do not follow redirects or retry partial reads")
 
 
+    def test_plans_and_rbac_editor_permissions_match_shipped_settings_ui(self):
+        nav = (ROOT / "frontend-modern/src/components/Settings/settingsNavCatalog.ts").read_text()
+        system_group = nav.split("id: 'system',", 1)[1].split("id: 'support',", 1)[0]
+        self.assertIn("id: 'system-billing'", system_group)
+        messages = (ROOT / "frontend-modern/src/i18n/messages.ts").read_text()
+        self.assertIn("'settings.nav.group.system': 'System'", messages)
+        self.assertIn("'settings.nav.item.plans': 'Plans & Billing'", messages)
+        for name in ("RBAC.md", "MULTI_TENANT.md"):
+            with self.subTest(guide=name):
+                guide = (DOCS / name).read_text()
+                self.assertIn("**Settings → System → Plans & Billing**", guide)
+                self.assertNotIn("**Settings → Plans & Billing**", guide)
+
+        rbac_perms = (ROOT / "frontend-modern/src/utils/rbacPermissions.ts").read_text()
+        actions = re.findall(r"'([^']+)'", rbac_perms.split("RBAC_PERMISSION_ACTIONS = [", 1)[1].split("]", 1)[0])
+        resources = re.findall(r"'([^']+)'", rbac_perms.split("RBAC_PERMISSION_RESOURCES = [", 1)[1].split("]", 1)[0])
+        self.assertGreaterEqual(len(actions), 5)
+        self.assertGreaterEqual(len(resources), 6)
+        rbac = (DOCS / "RBAC.md").read_text()
+        for action in actions:
+            with self.subTest(action=action):
+                self.assertIn(f"`{action}`", rbac)
+        for resource in resources:
+            with self.subTest(resource=resource):
+                self.assertIn(f"`{resource}`", rbac)
+
+
 if __name__ == "__main__":
     unittest.main()
