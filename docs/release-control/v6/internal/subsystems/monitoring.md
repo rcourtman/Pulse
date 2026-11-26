@@ -36,6 +36,36 @@ records the exercised routes and controls.
 
 Docker hosts report their local live-log opt-in separately from failure capture. A runtime with conflicting identity cannot serve a live read.
 
+### PMG startup recovery and context-bound client construction
+
+Proxmox Mail Gateway (PMG) clients participate in the same startup failure
+projection and capped reconnect recovery (`retryFailedConnections`) as PBS
+clients. `pmg.NewClientWithContext` binds initial password ticket
+authentication to the caller's context, validates and normalizes the host URL
+before logging HTTP warnings, and leaves subsequent polling independent of the
+construction context.
+
+When PMG client creation fails during startup (`initPMGClients`) or reconnect,
+Pulse records the failure in scheduler health (`pollStatusMap`, breaker state,
+and `stalenessTracker`), marks provider connection health false, publishes an
+offline `PMGInstance` (`status: "offline"`, `connectionHealth: "unhealthy"`) to
+state, and evaluates PMG offline alerting without auto-removing the configured
+gateway. Paused (`Disabled: true`) PMG gateways are skipped during both
+initialization and reconnect.
+
+When PMG client creation succeeds (during startup or reconnect), Pulse installs
+the client under the monitor lock (`replacePMGClient`) and waits for the first
+scheduled poll to establish online/healthy status rather than marking the
+connection healthy prior to polling. Saved TLS pins and credentials are
+preserved across retries, and caller cancellation aborts in-flight reconnect
+authentication without publishing a client or altering prior state.
+`TestNewClientWithContextHonoursCancellationAndTrust`,
+`TestNewClientWithContextDoesNotLogInvalidURLCredentials`,
+`TestPMGConnectionRetrySurvivesLongStartupOutage`,
+`TestPMGConnectionRetrySkipsPausedConnections`,
+`TestPMGStartupRecoveryKeepsTrustAndFirstPollBoundary`, and
+`TestPMGStartupCancellationHonoursContext` verify these boundaries.
+
 ### Poll staleness grows even when results stop
 
 The existing connection and node `pulse_monitor_*poll_staleness_seconds`

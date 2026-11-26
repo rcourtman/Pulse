@@ -160,12 +160,13 @@ func (m *Monitor) initPMGClients(cfg *config.Config) {
 				Bool("hasPassword", pmgInst.Password != "").
 				Bool("hasToken", pmgInst.TokenValue != "").
 				Msg("Failed to create PMG client - gateway will show as disconnected")
-			m.setProviderConnectionHealth(InstanceTypePMG, pmgInst.Name, false)
+			m.publishPMGStartupFailure(pmgInst, monErr)
 			continue
 		}
 
-		m.pmgClients[pmgInst.Name] = client
-		log.Info().Str("instance", pmgInst.Name).Msg("PMG client created successfully")
-		m.setProviderConnectionHealth(InstanceTypePMG, pmgInst.Name, true)
+		m.replacePMGClient(pmgInst.Name, client)
+		log.Info().
+			Str("instance", pmgInst.Name).
+			Msg("PMG client created; awaiting first connectivity poll")
 	}
 }

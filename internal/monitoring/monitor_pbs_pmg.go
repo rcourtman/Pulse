@@ -812,6 +812,54 @@ func (m *Monitor) publishPBSConnectionOutcome(instance models.PBSInstance, pollE
 	}
 }
 
+// replacePMGClient installs or clears a PMG client under the monitor lock so
+// startup initialization and reconnect recovery never race with polling reads.
+func (m *Monitor) replacePMGClient(instance string, client *pmg.Client) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.pmgClients == nil {
+		m.pmgClients = make(map[string]*pmg.Client)
+	}
+	if client == nil {
+		delete(m.pmgClients, instance)
+	} else {
+		m.pmgClients[instance] = client
+	}
+}
+
+// publishPMGStartupFailure records a PMG client construction failure across
+// scheduler health, staleness, connection health, state, and offline alerting,
+// matching PBS startup failure projection without auto-removing the gateway.
+func (m *Monitor) publishPMGStartupFailure(pmgInst config.PMGInstance, monErr error) {
+	m.mu.Lock()
+	if m.pollStatusMap == nil {
+		m.pollStatusMap = make(map[string]*pollStatus)
+	}
+	m.mu.Unlock()
+	m.recordTaskResult(InstanceTypePMG, pmgInst.Name, monErr)
+	if m.stalenessTracker != nil {
+		m.stalenessTracker.UpdateError(InstanceTypePMG, pmgInst.Name)
+	}
+	now := time.Now()
+	offline := models.PMGInstance{
+		ID:               PMGMonitorResourceID(pmgInst.Name),
+		Name:             pmgInst.Name,
+		Host:             pmgInst.Host,
+		GuestURL:         pmgInst.GuestURL,
+		Status:           "offline",
+		ConnectionHealth: "unhealthy",
+		LastSeen:         now,
+		LastUpdated:      now,
+	}
+	m.setProviderConnectionHealth(InstanceTypePMG, pmgInst.Name, false)
+	if m.state != nil {
+		m.state.UpdatePMGInstance(offline)
+	}
+	if m.alertManager != nil {
+		m.alertManager.CheckPMGWithNodeQueueObservations(offline, nil)
+	}
+}
+
 // pmgPollClient is the existing read-only PMG collection boundary.
 type pmgPollClient interface {
 	GetVersion(context.Context) (*pmg.VersionInfo, error)

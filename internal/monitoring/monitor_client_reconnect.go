@@ -8,9 +8,12 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	monitorerrors "github.com/rcourtman/pulse-go-rewrite/internal/monitoring/errors"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/pbs"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/pmg"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/proxmox"
 	"github.com/rs/zerolog/log"
 )
+
+var newPMGClientFunc = pmg.NewClientWithContext
 
 var connRetryDelays = []time.Duration{
 	5 * time.Second,
@@ -60,6 +63,7 @@ func (m *Monitor) retryFailedConnections(ctx context.Context) {
 		m.mu.Lock()
 		missingPVE := []config.PVEInstance{}
 		missingPBS := []config.PBSInstance{}
+		missingPMG := []config.PMGInstance{}
 		connectionTimeout := 0 * time.Second
 
 		if m.config != nil {
@@ -86,11 +90,22 @@ func (m *Monitor) retryFailedConnections(ctx context.Context) {
 					missingPBS = append(missingPBS, pbsInst)
 				}
 			}
+
+			// Find PMG instances without clients. Skip paused instances —
+			// a missing client for a paused instance is intentional, not a failure.
+			for _, pmgInst := range m.config.PMGInstances {
+				if pmgInst.Disabled {
+					continue
+				}
+				if _, exists := m.pmgClients[pmgInst.Name]; !exists {
+					missingPMG = append(missingPMG, pmgInst)
+				}
+			}
 		}
 		m.mu.Unlock()
 
 		// If no missing clients, we're done
-		if len(missingPVE) == 0 && len(missingPBS) == 0 {
+		if len(missingPVE) == 0 && len(missingPBS) == 0 && len(missingPMG) == 0 {
 			log.Info().Msg("all client connections established successfully")
 			return
 		}
@@ -98,6 +113,7 @@ func (m *Monitor) retryFailedConnections(ctx context.Context) {
 		log.Info().
 			Int("missingPVE", len(missingPVE)).
 			Int("missingPBS", len(missingPBS)).
+			Int("missingPMG", len(missingPMG)).
 			Dur("nextRetry", delay).
 			Msg("Attempting to reconnect failed clients")
 
@@ -191,6 +207,36 @@ func (m *Monitor) retryFailedConnections(ctx context.Context) {
 			log.Info().
 				Str("instance", pbsInst.Name).
 				Msg("PBS client recreated; awaiting connectivity poll")
+		}
+
+		// Try to recreate PMG clients
+		for _, pmgInst := range missingPMG {
+			if ctx.Err() != nil {
+				return
+			}
+			clientConfig := config.CreatePMGConfig(&pmgInst)
+			if clientConfig.Timeout <= 0 {
+				clientConfig.Timeout = 45 * time.Second
+			}
+			client, err := newPMGClientFunc(ctx, clientConfig)
+			if ctx.Err() != nil {
+				return
+			}
+			if err != nil {
+				monErr := monitorerrors.WrapConnectionError("recreate_pmg_client", pmgInst.Name, err)
+				log.Warn().
+					Err(monErr).
+					Str("instance", pmgInst.Name).
+					Msg("Failed to reconnect PMG client, will retry")
+				m.publishPMGStartupFailure(pmgInst, monErr)
+				continue
+			}
+
+			m.replacePMGClient(pmgInst.Name, client)
+
+			log.Info().
+				Str("instance", pmgInst.Name).
+				Msg("PMG client recreated; awaiting connectivity poll")
 		}
 	}
 }

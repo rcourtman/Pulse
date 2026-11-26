@@ -267,6 +267,18 @@ type RelayDomainEntry struct {
 
 // NewClient creates a new PMG (Proxmox Mail Gateway) API client.
 func NewClient(cfg ClientConfig) (*Client, error) {
+	return NewClientWithContext(context.Background(), cfg)
+}
+
+// NewClientWithContext binds initial password authentication to its caller.
+// Later polling remains independent of this construction context.
+func NewClientWithContext(ctx context.Context, cfg ClientConfig) (*Client, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	if cfg.Timeout <= 0 {
 		cfg.Timeout = 60 * time.Second
 	}
@@ -275,12 +287,13 @@ func NewClient(cfg ClientConfig) (*Client, error) {
 		cfg.Host = "https://" + cfg.Host
 	}
 
-	if strings.HasPrefix(cfg.Host, "http://") {
-		log.Warn().Str("host", cfg.Host).Msg("Using HTTP for PMG connection - consider enabling HTTPS")
-	}
 	baseHostURL, err := securityutil.NormalizeHTTPBaseURL(cfg.Host, "")
 	if err != nil {
 		return nil, fmt.Errorf("invalid PMG host: %w", err)
+	}
+	// Logs must use validated input: a refused host can contain credentials.
+	if baseHostURL.Scheme == "http" {
+		log.Warn().Str("host", baseHostURL.String()).Msg("Using HTTP for PMG connection - consider enabling HTTPS")
 	}
 	baseAPIURL := securityutil.AppendURLPath(baseHostURL, "api2", "json")
 
@@ -338,7 +351,7 @@ func NewClient(cfg ClientConfig) (*Client, error) {
 	}
 
 	if cfg.Password != "" && cfg.TokenName == "" {
-		if err := client.authenticate(context.Background()); err != nil {
+		if err := client.authenticate(ctx); err != nil {
 			return nil, fmt.Errorf("authentication failed: %w", err)
 		}
 	}
