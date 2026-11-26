@@ -85,6 +85,18 @@ func (t *StalenessTracker) UpdateError(instanceType InstanceType, instance strin
 	t.mergeSnapshot(snapshot)
 }
 
+// Remove deletes freshness metadata for a retired instance so deleted targets
+// do not linger in staleness snapshots.
+func (t *StalenessTracker) Remove(instanceType InstanceType, instance string) {
+	if t == nil {
+		return
+	}
+
+	t.mu.Lock()
+	delete(t.entries, trackerKey(instanceType, instance))
+	t.mu.Unlock()
+}
+
 // SetChangeHash updates the change fingerprint without affecting success timestamps.
 func (t *StalenessTracker) SetChangeHash(instanceType InstanceType, instance string, payload []byte) {
 	if t == nil || len(payload) == 0 {

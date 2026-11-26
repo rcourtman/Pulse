@@ -2,6 +2,7 @@ package monitoring
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math"
 	"net"
@@ -380,10 +381,12 @@ func (m *Monitor) availabilityStatusSnapshotForTargets(targets []config.Availabi
 				status = availabilityStatusFromTarget(target)
 				status.ProbeAgentID = config.AvailabilityObservationLocationAgentID(locationID)
 			}
-			if status.ProbeAgentID != "" {
-				status = m.deriveAvailabilityProbeStaleness(target, status, now)
-			} else if len(expected) > 1 {
-				status = deriveLocalAvailabilityObservationStaleness(target, status, now)
+			if target.Enabled {
+				if status.ProbeAgentID != "" {
+					status = m.deriveAvailabilityProbeStaleness(target, status, now)
+				} else if len(expected) > 1 {
+					status = deriveLocalAvailabilityObservationStaleness(target, status, now)
+				}
 			}
 			locations[locationID] = status
 		}
@@ -433,17 +436,22 @@ func (m *Monitor) refreshAvailabilityRuntime() bool {
 		localTasks = make(map[string]ScheduledTask, len(targets))
 	}
 	activeIDs := make(map[string]struct{}, len(targets))
+	pausedIDs := make(map[string]struct{})
 	activeProbeIDs := make(map[string]struct{}, len(targets))
 	now := time.Now()
 	for _, target := range targets {
 		activeIDs[target.ID] = struct{}{}
-		for _, locationID := range m.effectiveObservationLocationIDs(target) {
-			if config.AvailabilityObservationLocationAgentID(locationID) == "" {
-				continue
+		if target.Enabled {
+			for _, locationID := range m.effectiveObservationLocationIDs(target) {
+				if config.AvailabilityObservationLocationAgentID(locationID) == "" {
+					continue
+				}
+				trackerID := target.ID + "\x00" + locationID
+				activeProbeIDs[trackerID] = struct{}{}
+				m.availabilityProbeAssignmentReference(target.ID, locationID, now)
 			}
-			trackerID := target.ID + "\x00" + locationID
-			activeProbeIDs[trackerID] = struct{}{}
-			m.availabilityProbeAssignmentReference(target.ID, locationID, now)
+		} else {
+			pausedIDs[target.ID] = struct{}{}
 		}
 		if q == nil {
 			continue
@@ -463,16 +471,25 @@ func (m *Monitor) refreshAvailabilityRuntime() bool {
 		q.refreshAvailabilitySchedule(localTasks)
 	}
 
-	removedIDs := make([]string, 0)
+	availabilityKeyPrefix := schedulerKey(InstanceTypeAvailability, "")
+	retiredIDSet := make(map[string]struct{})
 	m.mu.Lock()
 	for id := range m.availabilityStatuses {
 		if _, ok := activeIDs[id]; !ok {
 			delete(m.availabilityStatuses, id)
-			removedIDs = append(removedIDs, id)
+			retiredIDSet[id] = struct{}{}
+		} else if _, paused := pausedIDs[id]; paused {
+			// Clear pre-pause observations so re-enabling a paused check
+			// receives a fresh grace window instead of presenting aged status
+			// or firing an immediate stale-probe alert.
+			delete(m.availabilityStatuses, id)
 		}
 	}
 	for id := range m.availabilityByLocation {
 		if _, ok := activeIDs[id]; !ok {
+			delete(m.availabilityByLocation, id)
+			retiredIDSet[id] = struct{}{}
+		} else if _, paused := pausedIDs[id]; paused {
 			delete(m.availabilityByLocation, id)
 		}
 	}
@@ -484,28 +501,148 @@ func (m *Monitor) refreshAvailabilityRuntime() bool {
 	for id := range m.availabilityPushStates {
 		if _, ok := activeIDs[id]; !ok {
 			delete(m.availabilityPushStates, id)
+			retiredIDSet[id] = struct{}{}
+		}
+	}
+	collectRetiredKey := func(key string) (string, bool) {
+		if !strings.HasPrefix(key, availabilityKeyPrefix) {
+			return "", false
+		}
+		id := strings.TrimPrefix(key, availabilityKeyPrefix)
+		if _, ok := activeIDs[id]; ok {
+			return "", false
+		}
+		retiredIDSet[id] = struct{}{}
+		return id, true
+	}
+	for key := range m.pollStatusMap {
+		if _, retired := collectRetiredKey(key); retired {
+			delete(m.pollStatusMap, key)
+		}
+	}
+	for key := range m.failureCounts {
+		if _, retired := collectRetiredKey(key); retired {
+			delete(m.failureCounts, key)
+		}
+	}
+	for key := range m.lastOutcome {
+		if _, retired := collectRetiredKey(key); retired {
+			delete(m.lastOutcome, key)
+		}
+	}
+	for key := range m.circuitBreakers {
+		if _, retired := collectRetiredKey(key); retired {
+			delete(m.circuitBreakers, key)
+		}
+	}
+	for key := range m.instanceInfoCache {
+		if _, retired := collectRetiredKey(key); retired {
+			delete(m.instanceInfoCache, key)
+		}
+	}
+	for key := range m.dlqInsightMap {
+		if _, retired := collectRetiredKey(key); retired {
+			delete(m.dlqInsightMap, key)
 		}
 	}
 	m.mu.Unlock()
-	for _, id := range removedIDs {
+
+	for id := range retiredIDSet {
+		if m.deadLetterQueue != nil {
+			m.deadLetterQueue.Remove(InstanceTypeAvailability, id)
+		}
+		if m.stalenessTracker != nil {
+			m.stalenessTracker.Remove(InstanceTypeAvailability, id)
+		}
+		if m.pollMetrics != nil {
+			m.pollMetrics.clearDeadLetterCount(string(InstanceTypeAvailability), id)
+		}
+		m.removeProviderConnectionHealth(InstanceTypeAvailability, id)
+	}
+	for id := range pausedIDs {
 		m.removeProviderConnectionHealth(InstanceTypeAvailability, id)
 	}
 
 	return true
 }
 
+func (m *Monitor) currentLocalAvailabilityTarget(target config.AvailabilityTarget) (config.AvailabilityTarget, bool) {
+	if !target.Enabled || !m.targetUsesLocalObservation(target) {
+		return config.AvailabilityTarget{}, false
+	}
+	if m == nil || m.configPersist == nil {
+		return target, true
+	}
+	targets, err := m.readAvailabilityTargets()
+	if err != nil {
+		// An unreadable catalog is not evidence of deletion or modification.
+		return target, true
+	}
+	for _, saved := range targets {
+		if saved.ID != target.ID {
+			continue
+		}
+		if !saved.Enabled || !m.targetUsesLocalObservation(saved) {
+			return config.AvailabilityTarget{}, false
+		}
+		if target.ConfigRevision > 0 && saved.ConfigRevision > 0 && saved.ConfigRevision != target.ConfigRevision {
+			return config.AvailabilityTarget{}, false
+		}
+		return saved, true
+	}
+	return config.AvailabilityTarget{}, false
+}
+
 func (m *Monitor) pollAvailabilityTarget(ctx context.Context, target config.AvailabilityTarget) {
+	if errors.Is(ctx.Err(), context.Canceled) {
+		return
+	}
 	target = config.NormalizeAvailabilityTarget(target)
 	if target.Protocol == config.AvailabilityProbePush {
+		if q := m.taskQueue; q != nil {
+			q.availabilityRefreshMu.Lock()
+			current, ok := m.currentLocalAvailabilityTarget(target)
+			if !ok || current.Protocol != config.AvailabilityProbePush {
+				q.availabilityRefreshMu.Unlock()
+				return
+			}
+			m.evaluatePushAvailabilityTarget(current, time.Now().UTC())
+			q.availabilityRefreshMu.Unlock()
+			return
+		}
 		m.evaluatePushAvailabilityTarget(target, time.Now().UTC())
 		return
 	}
 	start := time.Now()
 	result, err := ProbeAvailabilityTargetDetailedResult(ctx, target)
+	if errors.Is(ctx.Err(), context.Canceled) {
+		return
+	}
 	latency := time.Since(start)
 	checkedAt := time.Now().UTC()
-	m.applyAvailabilityObservationDetailed(target, uuid.NewString(), checkedAt, latency, result.Outcome, result.TransportOutcome, result.Application, err, result.Certificate, "", time.Time{})
-	m.updateResourceStore(m.currentStateWithScope())
+
+	// Serialize publication with RefreshAvailabilityTargets so a local probe
+	// that finished after the check was deleted, paused, edited, or reassigned
+	// to a remote-only probe cannot resurrect stale state or history.
+	if q := m.taskQueue; q != nil {
+		q.availabilityRefreshMu.Lock()
+		current, ok := m.currentLocalAvailabilityTarget(target)
+		if !ok {
+			q.availabilityRefreshMu.Unlock()
+			return
+		}
+		m.applyAvailabilityObservationDetailed(current, uuid.NewString(), checkedAt, latency, result.Outcome, result.TransportOutcome, result.Application, err, result.Certificate, "", time.Time{})
+		q.availabilityRefreshMu.Unlock()
+	} else {
+		current, ok := m.currentLocalAvailabilityTarget(target)
+		if !ok {
+			return
+		}
+		m.applyAvailabilityObservationDetailed(current, uuid.NewString(), checkedAt, latency, result.Outcome, result.TransportOutcome, result.Application, err, result.Certificate, "", time.Time{})
+	}
+	if m.state != nil {
+		m.updateResourceStore(m.currentStateWithScope())
+	}
 }
 
 // applyAvailabilityObservation records one availability observation regardless of

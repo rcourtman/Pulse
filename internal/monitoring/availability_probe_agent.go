@@ -162,17 +162,31 @@ func (m *Monitor) applyProbeAvailabilityResultsAt(hostID string, results []Probe
 	}
 
 	applied := 0
+	if q := m.taskQueue; q != nil {
+		q.availabilityRefreshMu.Lock()
+	}
+	targetsByID := make(map[string]config.AvailabilityTarget)
+	for _, target := range m.availabilityTargets() {
+		targetsByID[target.ID] = target
+	}
 	for _, result := range results {
 		targetID := strings.TrimSpace(result.TargetID)
 		if targetID == "" {
 			continue
 		}
-		target, ok := m.availabilityTargetByID(targetID)
+		target, ok := targetsByID[targetID]
 		if !ok {
 			log.Debug().
 				Str("hostID", hostID).
 				Str("targetID", targetID).
 				Msg("Rejecting probe availability result for unknown target")
+			continue
+		}
+		if !target.Enabled {
+			log.Debug().
+				Str("hostID", hostID).
+				Str("targetID", targetID).
+				Msg("Rejecting probe availability result for disabled target")
 			continue
 		}
 		if !m.targetAssignedToProbeAgent(target, hostID) {
@@ -208,11 +222,16 @@ func (m *Monitor) applyProbeAvailabilityResultsAt(hostID string, results []Probe
 		m.applyAvailabilityObservationDetailed(target, observationID, checkedAt.UTC(), latency, outcome, result.TransportOutcome, result.Application, probeErr, result.Certificate, hostID, receivedAt)
 		applied++
 	}
+	if q := m.taskQueue; q != nil {
+		q.availabilityRefreshMu.Unlock()
+	}
 
 	if applied == 0 {
 		return
 	}
-	m.updateResourceStore(m.currentStateWithScope())
+	if m.state != nil {
+		m.updateResourceStore(m.currentStateWithScope())
+	}
 }
 
 func applicationResultFromReport(entry agentshost.AvailabilityProbeResult) *availabilityprobe.ApplicationResult {
@@ -278,6 +297,9 @@ func (m *Monitor) deriveAvailabilityProbeStaleness(
 	status AvailabilityProbeStatus,
 	now time.Time,
 ) AvailabilityProbeStatus {
+	if !target.Enabled {
+		return status
+	}
 	agentID := strings.TrimSpace(status.ProbeAgentID)
 	if agentID == "" {
 		return status
@@ -334,6 +356,9 @@ func deriveLocalAvailabilityObservationStaleness(
 	status AvailabilityProbeStatus,
 	now time.Time,
 ) AvailabilityProbeStatus {
+	if !target.Enabled {
+		return status
+	}
 	if status.LastChecked.IsZero() || !availabilityProbeReportIsStale(target, status.LastChecked, now) {
 		return status
 	}
