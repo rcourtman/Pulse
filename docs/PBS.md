@@ -468,6 +468,13 @@ confirm thaw, fresh successful writes to every filesystem covered by the
 backup and workload liveness; restore only services and timers active before
 the pause. Monitoring and alerts are unavailable while Pulse is stopped.
 
+**Not verified recently, but backups are arriving:** Coverage expects a
+verified backup point no more than seven days old from a direct PBS connection,
+even if the datastore has no verify job. The verification window is not
+configurable. **Fresh Hours** and backup-age alert settings don't change it.
+Use **By date** to check when backups arrived and expand a point for its
+**Verification**. Pulse does not see the results of independent restore checks.
+
 ### PBS is connected but History stays empty
 
 Open **Proxmox → Backups**, choose the **Backup Server** row, then use the
