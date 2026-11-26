@@ -267,11 +267,16 @@ func (m *Monitor) carryPBSJobFailuresForInstance(instanceID, host string, curren
 	if err := m.pbsJobFailureStore.Set(instanceID, host, carried); err != nil {
 		log.Warn().Err(err).Str("instance", instanceID).Msg("Failed to record PBS job failures")
 	}
+	config.Mu.RLock()
+	var configured []string
 	if m.config != nil {
-		configured := make([]string, 0, len(m.config.PBSInstances))
+		configured = make([]string, 0, len(m.config.PBSInstances))
 		for _, cfg := range m.config.PBSInstances {
 			configured = append(configured, PBSMonitorResourceID(cfg.Name))
 		}
+	}
+	config.Mu.RUnlock()
+	if configured != nil {
 		if err := m.pbsJobFailureStore.Retain(configured); err != nil {
 			log.Warn().Err(err).Msg("Failed to prune PBS job failure record")
 		}
@@ -302,17 +307,25 @@ func (m *Monitor) pollPBSInstance(ctx context.Context, instanceName string, clie
 	var pollErr error
 	var pbsInst models.PBSInstance
 	publishResult := false
+	skipped := false
 	if m.pollMetrics != nil {
 		m.pollMetrics.IncInFlight("pbs")
 	}
 	defer func() {
 		if recovered := recover(); recovered != nil {
+			skipped = false
 			pollErr = fmt.Errorf("panic while polling PBS instance %q: %v", instanceName, recovered)
 			log.Error().
 				Str("goroutine", fmt.Sprintf("pollPBSInstance-%s", instanceName)).
 				Interface("panic", recovered).
 				Stack().
 				Msg("Recovered from panic in monitoring goroutine")
+		}
+		if m.pollMetrics != nil {
+			m.pollMetrics.DecInFlight("pbs")
+		}
+		if skipped {
+			return
 		}
 
 		m.recordTaskResult(InstanceTypePBS, instanceName, pollErr)
@@ -327,7 +340,6 @@ func (m *Monitor) pollPBSInstance(ctx context.Context, instanceName string, clie
 			m.publishPBSConnectionOutcome(pbsInst, pollErr)
 		}
 		if m.pollMetrics != nil {
-			m.pollMetrics.DecInFlight("pbs")
 			m.pollMetrics.RecordResult(PollResult{
 				InstanceName: instanceName,
 				InstanceType: "pbs",
@@ -339,26 +351,34 @@ func (m *Monitor) pollPBSInstance(ctx context.Context, instanceName string, clie
 		}
 	}()
 
-	// Get instance config
+	// Get instance config snapshot under config.Mu so concurrent edits/reloads
+	// cannot race with an in-flight PBS poll.
 	var instanceCfg *config.PBSInstance
-	for _, cfg := range m.config.PBSInstances {
-		if cfg.Name == instanceName {
-			instanceCfg = &cfg
-			if debugEnabled {
-				log.Debug().
-					Str("instance", instanceName).
-					Bool("monitorDatastores", cfg.MonitorDatastores).
-					Msg("Found PBS instance config")
+	config.Mu.RLock()
+	if m.config != nil {
+		for _, cfg := range m.config.PBSInstances {
+			if cfg.Name == instanceName {
+				snapshot := cfg
+				snapshot.ExcludeDatastores = append([]string(nil), cfg.ExcludeDatastores...)
+				instanceCfg = &snapshot
+				if debugEnabled {
+					log.Debug().
+						Str("instance", instanceName).
+						Bool("monitorDatastores", snapshot.MonitorDatastores).
+						Msg("Found PBS instance config")
+				}
+				break
 			}
-			break
 		}
 	}
+	config.Mu.RUnlock()
 	if instanceCfg == nil {
 		pollErr = fmt.Errorf("PBS instance config %q not found", instanceName)
 		log.Error().Str("instance", instanceName).Msg("PBS instance config not found")
 		return
 	}
 	if instanceCfg.Disabled {
+		skipped = true
 		if debugEnabled {
 			log.Debug().Str("instance", instanceName).Msg("Skipping PBS poll: instance is paused")
 		}
@@ -399,6 +419,8 @@ func (m *Monitor) pollPBSInstance(ctx context.Context, instanceName string, clie
 	}
 
 	// Try to get version first
+	var fallbackDatastores []pbs.Datastore
+	hasFallbackDatastores := false
 	version, versionErr := client.GetVersion(ctx)
 	if versionErr == nil {
 		pbsInst.Status = "online"
@@ -421,8 +443,10 @@ func (m *Monitor) pollPBSInstance(ctx context.Context, instanceName string, clie
 		// Use parent context for proper cancellation chain
 		ctx2, cancel2 := context.WithTimeout(ctx, 10*time.Second)
 		defer cancel2()
-		_, datastoreErr := client.GetDatastoresFiltered(ctx2, includeDatastore)
+		var datastoreErr error
+		fallbackDatastores, datastoreErr = client.GetDatastoresFiltered(ctx2, includeDatastore)
 		if datastoreErr == nil {
+			hasFallbackDatastores = true
 			pbsInst.Status = "online"
 			pbsInst.Version = "connected"
 			pbsInst.ConnectionHealth = "healthy"
@@ -454,12 +478,20 @@ func (m *Monitor) pollPBSInstance(ctx context.Context, instanceName string, clie
 		}
 	}
 
+	if ctxErr := ctx.Err(); ctxErr != nil {
+		pollErr = ctxErr
+		return
+	}
+
 	// The PBS-reported node hostname is machine-identity evidence: connected
 	// systems grouping merges the host agent running on this machine into
 	// this PBS connection through it, even when the configured connection
 	// address is an IP or DNS alias the agent never reports.
 	if nodeName, nodeNameErr := client.GetNodeName(ctx); nodeNameErr == nil {
 		pbsInst.NodeName = strings.TrimSpace(nodeName)
+	} else if ctxErr := ctx.Err(); ctxErr != nil {
+		pollErr = stderrors.Join(ctxErr, nodeNameErr)
+		return
 	} else if !stderrors.Is(nodeNameErr, pbs.ErrNodeNameUnavailableForAuth) && debugEnabled {
 		log.Debug().Err(nodeNameErr).Str("instance", instanceName).Msg("could not get PBS node name")
 	}
@@ -467,6 +499,10 @@ func (m *Monitor) pollPBSInstance(ctx context.Context, instanceName string, clie
 	// Get node status (CPU, memory, etc.)
 	nodeStatus, err := client.GetNodeStatus(ctx)
 	if err != nil {
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			pollErr = stderrors.Join(ctxErr, err)
+			return
+		}
 		if debugEnabled {
 			log.Debug().Err(err).Str("instance", instanceName).Msg("could not get PBS node status (may need Sys.Audit permission)")
 		}
@@ -495,9 +531,22 @@ func (m *Monitor) pollPBSInstance(ctx context.Context, instanceName string, clie
 	var datastoreDiscoveryErr error
 	// Poll datastores if enabled
 	if instanceCfg.MonitorDatastores {
-		datastores, err := client.GetDatastoresFiltered(ctx, includeDatastore)
+		var datastores []pbs.Datastore
+		var err error
+		if hasFallbackDatastores {
+			datastores = fallbackDatastores
+		} else {
+			datastores, err = client.GetDatastoresFiltered(ctx, includeDatastore)
+		}
 		if err != nil {
 			datastoreDiscoveryErr = err
+			if ctxErr := ctx.Err(); ctxErr != nil {
+				pollErr = stderrors.Join(ctxErr, err)
+				if !stderrors.Is(ctxErr, context.Canceled) && !stderrors.Is(datastoreDiscoveryErr, context.Canceled) {
+					m.pollPBSBackupsAsync(instanceName, client, instanceCfg, nil, nil, datastoreDiscoveryErr)
+				}
+				return
+			}
 			monErr := errors.WrapAPIError("get_datastores", instanceName, err, 0)
 			log.Error().Err(monErr).Str("instance", instanceName).Msg("failed to get datastores")
 		} else {
@@ -507,6 +556,11 @@ func (m *Monitor) pollPBSInstance(ctx context.Context, instanceName string, clie
 				Msg("Got PBS datastores")
 
 			for _, ds := range datastores {
+				if ctxErr := ctx.Err(); ctxErr != nil {
+					pollErr = ctxErr
+					pbsInst.Datastores = nil
+					return
+				}
 				// Skip excluded datastores (for removable/unmounted datastores)
 				if matchesDatastoreExclude(ds.Store, instanceCfg.ExcludeDatastores) {
 					log.Debug().
@@ -553,6 +607,11 @@ func (m *Monitor) pollPBSInstance(ctx context.Context, instanceName string, clie
 
 				namespaces, err := client.ListNamespaces(ctx, ds.Store, "", 0)
 				if err != nil {
+					if ctxErr := ctx.Err(); ctxErr != nil {
+						pollErr = stderrors.Join(ctxErr, err)
+						pbsInst.Datastores = nil
+						return
+					}
 					namespaceErrors[ds.Store] = err
 					log.Warn().Err(err).
 						Str("instance", instanceName).
@@ -594,6 +653,11 @@ func (m *Monitor) pollPBSInstance(ctx context.Context, instanceName string, clie
 	}
 
 	if instanceCfg.MonitorBackups || instanceCfg.MonitorSyncJobs || instanceCfg.MonitorVerifyJobs || instanceCfg.MonitorPruneJobs || instanceCfg.MonitorGarbageJobs {
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			pollErr = ctxErr
+			pbsInst.Datastores = nil
+			return
+		}
 		datastoreNames := make([]string, 0, len(pbsInst.Datastores))
 		for _, ds := range pbsInst.Datastores {
 			datastoreNames = append(datastoreNames, ds.Name)
@@ -605,6 +669,11 @@ func (m *Monitor) pollPBSInstance(ctx context.Context, instanceName string, clie
 			MonitorPruneJobs:   instanceCfg.MonitorPruneJobs,
 			MonitorGarbageJobs: instanceCfg.MonitorGarbageJobs,
 		})
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			pollErr = stderrors.Join(ctxErr, err)
+			pbsInst.Datastores = nil
+			return
+		}
 		if err != nil {
 			log.Warn().Err(err).
 				Str("instance", instanceName).
@@ -618,9 +687,20 @@ func (m *Monitor) pollPBSInstance(ctx context.Context, instanceName string, clie
 		)
 	}
 
-	// Convert PBS datastores to Storage entries for unified storage view
-	if len(pbsInst.Datastores) > 0 && instanceCfg.MonitorDatastores {
-		var pbsStorages []models.Storage
+	if ctxErr := ctx.Err(); ctxErr != nil {
+		pollErr = ctxErr
+		pbsInst.Datastores = nil
+		return
+	}
+
+	// Convert PBS datastores to Storage entries for unified storage view.
+	// Reconcile the instance's storage slice whenever datastore discovery
+	// succeeded, including an authoritative empty or fully excluded list, so
+	// removed or excluded datastores do not remain stuck in unified storage.
+	// Failed discovery skips this update to avoid erasing last-known storage
+	// on an unread error.
+	if instanceCfg.MonitorDatastores && datastoreDiscoveryErr == nil {
+		pbsStorages := make([]models.Storage, 0, len(pbsInst.Datastores))
 		for _, ds := range pbsInst.Datastores {
 			// Create a storage entry for this PBS datastore
 			storageID := fmt.Sprintf("pbs-%s-%s", instanceName, ds.Name)
@@ -647,7 +727,7 @@ func (m *Monitor) pollPBSInstance(ctx context.Context, instanceName string, clie
 			}
 			pbsStorages = append(pbsStorages, pbsStorage)
 		}
-		m.state.UpdateStorageForInstance("pbs-"+instanceName, pbsStorages)
+		m.state.UpdateStorageForInstance(pbsInst.ID, pbsStorages)
 		// PBS storage is not evaluated by the unified metric path (which
 		// handles TrueNAS and VMware storage). Evaluate fresh poll observations
 		// here, as the PVE storage poller does, rather than relying on mock ticks.
@@ -899,8 +979,6 @@ var errPMGReadErrorsOmitted = stderrors.New("further failures of this read are n
 
 // pollPMGInstance polls a single Proxmox Mail Gateway instance
 func (m *Monitor) pollPMGInstance(ctx context.Context, instanceName string, client pmgPollClient) {
-	defer recoverFromPanic(fmt.Sprintf("pollPMGInstance-%s", instanceName))
-
 	logger := pmgPollLogger(ctx)
 	start := time.Now()
 	debugEnabled := logging.IsLevelEnabled(zerolog.DebugLevel)
@@ -908,10 +986,35 @@ func (m *Monitor) pollPMGInstance(ctx context.Context, instanceName string, clie
 	// scheduler backoff. readErr collects downstream reads that failed after
 	// the connection succeeded; see recordTaskOutcome.
 	var pollErr, readErr error
+	skipped := false
 	if m.pollMetrics != nil {
 		m.pollMetrics.IncInFlight("pmg")
-		defer m.pollMetrics.DecInFlight("pmg")
-		defer func() {
+	}
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			skipped = false
+			pollErr = fmt.Errorf("panic while polling PMG instance %q: %v", instanceName, recovered)
+			log.Error().
+				Str("goroutine", fmt.Sprintf("pollPMGInstance-%s", instanceName)).
+				Interface("panic", recovered).
+				Stack().
+				Msg("Recovered from panic in monitoring goroutine")
+		}
+		if m.pollMetrics != nil {
+			m.pollMetrics.DecInFlight("pmg")
+		}
+		if skipped {
+			return
+		}
+		m.recordTaskOutcome(InstanceTypePMG, instanceName, pollErr, readErr)
+		if m.stalenessTracker != nil {
+			if pollErr == nil {
+				m.stalenessTracker.UpdateSuccess(InstanceTypePMG, instanceName, nil)
+			} else {
+				m.stalenessTracker.UpdateError(InstanceTypePMG, instanceName)
+			}
+		}
+		if m.pollMetrics != nil {
 			m.pollMetrics.RecordResult(PollResult{
 				InstanceName: instanceName,
 				InstanceType: "pmg",
@@ -920,19 +1023,7 @@ func (m *Monitor) pollPMGInstance(ctx context.Context, instanceName string, clie
 				StartTime:    start,
 				EndTime:      time.Now(),
 			})
-		}()
-	}
-	if m.stalenessTracker != nil {
-		defer func() {
-			if pollErr == nil {
-				m.stalenessTracker.UpdateSuccess(InstanceTypePMG, instanceName, nil)
-			} else {
-				m.stalenessTracker.UpdateError(InstanceTypePMG, instanceName)
-			}
-		}()
-	}
-	defer func() {
-		m.recordTaskOutcome(InstanceTypePMG, instanceName, pollErr, readErr)
+		}
 	}()
 
 	select {
@@ -970,6 +1061,7 @@ func (m *Monitor) pollPMGInstance(ctx context.Context, instanceName string, clie
 		return
 	}
 	if instanceCfg.Disabled {
+		skipped = true
 		if debugEnabled {
 			logger.Debug().Str("instance", instanceName).Msg("Skipping PMG poll: instance is paused")
 		}
