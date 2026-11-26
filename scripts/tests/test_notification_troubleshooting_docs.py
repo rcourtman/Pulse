@@ -253,6 +253,40 @@ class NotificationTroubleshootingDocsTest(unittest.TestCase):
                          "Alert delivery controls do not stop the separate"):
             self.assertIn(boundary, guide)
 
+    def test_webhook_retry_help_matches_non_retryable_tls_and_auto_recovery_bounds(self):
+        failure_class = (ROOT / "internal/notifications/failure_class.go").read_text()
+        retryable_body = failure_class.split("func (class NotificationFailureClass) Retryable() bool", 1)[1]
+        self.assertIn("NotificationFailureTLS:", retryable_body)
+        self.assertIn("return false", retryable_body)
+
+        queue_src = (ROOT / "internal/notifications/queue.go").read_text()
+        self.assertIn("autoReplayDLQWindow", queue_src)
+        self.assertIn("24 * time.Hour", queue_src)
+        self.assertIn("autoReplayDLQBatchLimit", queue_src)
+        self.assertIn("= 25", queue_src)
+        self.assertIn("autoReplayDLQCooldown", queue_src)
+        self.assertIn("5 * time.Minute", queue_src)
+        self.assertIn("if !fc.Retryable()", queue_src)
+
+        raw_guide = (ROOT / "docs/WEBHOOKS.md").read_text()
+        self.assertEqual(raw_guide, (ROOT / "frontend-modern/public/docs/WEBHOOKS.md").read_text())
+        retry_section = " ".join(
+            raw_guide.split("**Retries and retained failures.**", 1)[1]
+            .split("**Correlation header.**", 1)[0]
+            .split()
+        )
+        self.assertNotIn("Can retry within the saved budget", retry_section)
+        for boundary in (
+            "TLS failure (certificate trust, expiry, hostname or HTTP-on-HTTPS mismatch)",
+            "Stops as soon as this failure is classified, even with attempts left; retains the delivery as a terminal failure. Fix the server certificate or TLS settings rather than retrying, and do not disable verification.",
+            "exact same saved destination configuration",
+            "up to 25 recent (24-hour) retryable retained failures",
+            "five-minute cooldown per destination",
+            "Authentication, configuration, rejected and TLS failures, edited destinations, rehearsals and deliveries older than 24 hours are not automatically re-queued",
+            "a successful **Test** does not trigger this recovery either",
+        ):
+            self.assertIn(boundary, retry_section)
+
 
 if __name__ == "__main__":
     unittest.main()

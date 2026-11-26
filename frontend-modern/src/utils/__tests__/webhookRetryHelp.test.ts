@@ -78,7 +78,7 @@ describe('webhook retry help', () => {
     ]);
   });
 
-  it('bounds automatic recovery replay to recent retryable failures for the same saved destination', () => {
+  it('bounds automatic recovery to recent retryable failures on the same destination', () => {
     const retry = retryText();
     expect(retry).toContain('exact same saved destination configuration');
     expect(retry).toContain('up to 25 recent (24-hour) retryable retained failures');
