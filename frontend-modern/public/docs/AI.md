@@ -449,7 +449,7 @@ approved ones.
 ## Weekly summary and email
 
 Pulse's **This week** summary adds up retained Patrol activity over the last
-seven days. Open **Patrol → Activity** to read it; use **Settings → Support → Data & Reports** (`/settings/support/reporting`)
+seven days. Open **Patrol → Activity** to read it. Use **Settings → Support → Data & Reports** (`/settings/support/reporting`)
 to schedule the same summary by email. The card, weekly email and **Report type**
 selector are included in **v6.5.0**. An older build can lack these controls.
 

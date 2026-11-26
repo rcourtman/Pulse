@@ -267,7 +267,7 @@ query value (`:` becomes `%3A`; an ID's `&` must be `%26`, not another query
 parameter). Do not substitute a hostname or strip a provider prefix to guess
 an ID. The helper saves each response, including an error body, in a new
 owner-only file and prints only the HTTP status and file location. Open that
-file privately; do not print or post it. HTTP 400, 401, 403 and server errors,
+file privately. Do not print or post it. HTTP 400, 401, 403 and server errors,
 redirects, or incomplete transport are not an empty history or zero usage.
 There is no automatic retry. Never put a token in a command, URL or report;
 share only the relevant manually redacted error and bounded observations.
@@ -301,7 +301,7 @@ every historical interval is present.
   requested range. Metric history is free on every plan: on current releases an
   invalid or longer-than-`365d` range returns **HTTP 400** (not 402). If an
   older pre-v6.9.0 server returns **HTTP 402**, that is an old range limit, not
-  evidence that storage is empty; try a shorter range without buying another
+  evidence that storage is empty. Try a shorter range without buying another
   licence or resetting data.
 - **Storage warning**: inspect a bounded existing startup/runtime error and
   the deployment's persistent mount and service-account access privately.

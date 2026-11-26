@@ -205,9 +205,9 @@ has established why it failed. Keep that result as evidence.
 | --- | --- | --- |
 | **Not checked** | No verification result has been obtained. | Use **Verify** for the relevant event. |
 | **Unsigned** | No signature was stored. | Check whether signing was available when the event was captured. Later enabling signing cannot authenticate it retroactively. |
-| **Check failed** / `verified: false` | The stored event and signature do not verify with the current key and supported format. | Preserve the evidence; a different key, missing or damaged signature, unsupported format or modified signed fields can cause this. |
+| **Check failed** / `verified: false` | The stored event and signature do not verify with the current key and supported format. | Preserve the evidence. A different key, missing or damaged signature, unsupported format or modified signed fields can cause this. |
 | **Unavailable** / `available: false` | The current logger cannot offer verification. | Check the audit capability/runtime gate and bounded startup logs for persistent-store initialisation failures. |
-| **Check error** / non-successful HTTP response | The verification request did not return a usable result. | Keep the HTTP status and redacted error; it is not proof that the event failed verification. |
+| **Check error** / non-successful HTTP response | The verification request did not return a usable result. | Keep the HTTP status and redacted error. It is not proof that the event failed verification. |
 
 Start with the event's time, the last known working version and whether the
 data mount, service account, runtime or backup changed. Inspect a bounded
