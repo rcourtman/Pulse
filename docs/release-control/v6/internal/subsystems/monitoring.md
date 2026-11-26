@@ -149,6 +149,25 @@ does not claim a removed task or a future peer early.
 worker takes the replacement only after the original claim returns and that
 an independent peer can still wake the other worker.
 
+### Prometheus queue depth and readiness follow the live scheduler queues
+
+The existing total depth, depth by provider type, and number due now or within
+12 seconds are read from active scheduler queues during a scrape. Planning and
+worker completion no longer scan the queue to write these gauges. Queues are
+counted once per scheduler, not once per worker; stopping its last worker
+removes its backlog from later scrapes. A known provider type with no queued
+work reads zero. Claimed polls (including those waiting for a process slot)
+and dead letters never count in these gauges. An unrelated provider's poll
+result and a single-monitor Scheduler Health read do not overwrite them.
+Metric names, labels, listener access and poll admission remain unchanged.
+
+`TestSchedulerQueueScrapeWhileWorkerWaits` reads the existing Prometheus
+handler without any completed scheduled poll: a PBS poll enters the exact
+12-second window and then becomes overdue while another claim holds the only
+dispatcher. `TestSchedulerQueueScrapeCountsEachActiveQueueOnce` checks two
+schedulers, partial and final worker teardown, and per-type zeroes. These
+gauges do not measure provider success, applied reports or alert evaluation.
+
 ### Notification delivery health does not hold the monitoring tick
 
 Periodic notification-health evaluation still starts from the poll tick and

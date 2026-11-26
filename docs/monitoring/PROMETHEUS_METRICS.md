@@ -45,7 +45,7 @@ a standard HTTP method, or `other` on builds that report registered patterns.
 | `pulse_monitor_poll_errors_total` | Counter | Poll failures by `error_type`. |
 | `pulse_monitor_poll_last_success_timestamp` | Gauge | Unix timestamp of last success. |
 | `pulse_monitor_poll_staleness_seconds` | Gauge | Seconds since the last successful connection poll, measured at scrape time. |
-| `pulse_monitor_poll_queue_depth` | Gauge | Global queue depth. |
+| `pulse_monitor_poll_queue_depth` | Gauge | Total tasks still in active scheduler queues at scrape time. |
 | `pulse_monitor_poll_inflight` | Gauge | In-flight polls by `instance_type`. |
 | `pulse_monitor_node_poll_duration_seconds` | Histogram | Per-node poll latency. |
 | `pulse_monitor_node_poll_total` | Counter | Success/error counts per node (`result` label). |
@@ -164,8 +164,8 @@ in the same window without changing a rule or sending a test notification.
 
 | Metric | Type | Description |
 | :--- | :--- | :--- |
-| `pulse_scheduler_queue_due_soon` | Gauge | Tasks still in the scheduler queue that are due now or within 12 seconds, at the last queue snapshot. |
-| `pulse_scheduler_queue_depth` | Gauge | Queue depth per `instance_type`. |
+| `pulse_scheduler_queue_due_soon` | Gauge | Tasks still queued that are due now or within 12 seconds, measured at scrape time. |
+| `pulse_scheduler_queue_depth` | Gauge | Tasks still queued at scrape time, by `instance_type`. |
 | `pulse_scheduler_queue_wait_seconds` | Histogram | Wait time between task readiness and execution. |
 | `pulse_scheduler_claimed_poll_overdue_seconds` | Gauge | Seconds past one poll task timeout for the most overdue claimed poll, by stage. Zero if no claimed poll is over that budget. |
 | `pulse_scheduler_dead_letter_depth` | Gauge | DLQ depth by `instance_type` and `instance`. |
@@ -173,7 +173,12 @@ in the same window without changing a rule or sending a test notification.
 | `pulse_scheduler_breaker_failure_count` | Gauge | Consecutive failure count. |
 | `pulse_scheduler_breaker_retry_seconds` | Gauge | Seconds remaining before a retry is allowed, as recorded at the last breaker update. Not a live countdown. |
 
-When expected results stop, check the two stages on successive scrapes:
+The queue gauges count waiting tasks across the running schedulers, not work
+already claimed by a worker or parked in the dead-letter queue. Older builds
+publish the last recorded queue sample: a flat due-soon gauge on those builds
+does not show that nothing has become due.
+
+When expected results stop, check the two claimed-poll stages on successive scrapes:
 
 - `waiting_for_slot`: a due poll left the scheduler queue but is still waiting
   for a process-wide worker slot (`POLL_TASK_WORKERS`). The budget starts at
