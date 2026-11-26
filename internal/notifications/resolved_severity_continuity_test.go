@@ -240,7 +240,7 @@ func TestFilterResolvedJobsAlignsSeverityPerDestinationAndHandlesLegacyAndMemory
 		start := time.Now().Add(-5 * time.Minute)
 		firing := &alerts.Alert{ID: "mem-alert", Level: alerts.AlertLevelCritical, StartTime: start}
 		firingJob := notificationDeliveryJob{Type: "webhook", Event: eventAlert, Alerts: []*alerts.Alert{firing}, WebhookConfig: &hook}
-		require.NoError(t, nm.recordNotificationDeliveryReceipt(firingJob, time.Now()))
+		require.NoError(t, nm.recordSuccessfulDelivery(firingJob, time.Now()))
 
 		demoted := &alerts.Alert{ID: "mem-alert", Level: alerts.AlertLevelWarning, StartTime: start}
 		resolvedJob := notificationDeliveryJob{Type: "webhook", Event: eventResolved, Alerts: []*alerts.Alert{demoted}, WebhookConfig: &hook}
@@ -251,7 +251,7 @@ func TestFilterResolvedJobsAlignsSeverityPerDestinationAndHandlesLegacyAndMemory
 		require.Equal(t, alerts.AlertLevelWarning, demoted.Level)
 
 		// Recording resolved delivery clears both receipt presence and level.
-		require.NoError(t, nm.recordNotificationDeliveryReceipt(filtered[0], time.Now()))
+		require.NoError(t, nm.recordSuccessfulDelivery(filtered[0], time.Now()))
 		require.Empty(t, nm.filterResolvedJobsByDeliveryReceipt([]notificationDeliveryJob{resolvedJob}))
 	})
 }
