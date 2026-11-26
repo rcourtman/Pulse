@@ -33,10 +33,14 @@ func newPartialReadPMGMonitor(t *testing.T) (*Monitor, ScheduledTask) {
 	t.Helper()
 	cfg := allPMGScope()
 	cfg.Name = "gateway"
+	cfg.Host = "https://pmg.example.test:8006"
+	cfg.TokenName = "fixture@pmg!token"
+	cfg.TokenValue = "fixture-token"
 	m, err := New(&config.Config{PMGInstances: []config.PMGInstance{cfg}})
 	if err != nil {
 		t.Fatalf("failed to create monitor: %v", err)
 	}
+	t.Cleanup(m.Stop)
 	interval := m.baseIntervalForInstanceType(InstanceTypePMG)
 	if interval <= 0 {
 		t.Fatalf("no PMG base interval: %v", interval)
