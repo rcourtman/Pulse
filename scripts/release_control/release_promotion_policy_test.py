@@ -1959,6 +1959,99 @@ else:
                 assert_posts(calls, [1])
                 self.assertEqual([(i, n) for i, k, n in calls if k == "watch"], [(1, 300)])
 
+    def test_previous_private_stage_retries_transient_reads_and_sanitizes_errors(self) -> None:
+        """Transient GitHub API read failures retry boundedly while permanent errors stop
+        immediately with a sanitized stage and status classification."""
+        import importlib.util
+        from unittest import mock
+
+        spec = importlib.util.spec_from_file_location(
+            "previous_private_stage_under_test",
+            REPO_ROOT / "scripts/release_control/previous_private_stage.py",
+        )
+        assert spec and spec.loader
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+
+        jobs_payload = json.dumps({
+            "total_count": 1,
+            "jobs": [{
+                "name": "stage_private_pro_runtime",
+                "id": 101,
+                "run_id": 200,
+                "run_attempt": 1,
+                "head_sha": "a" * 40,
+                "status": "completed",
+                "conclusion": "failure",
+                "steps": [{
+                    "name": "Dispatch private Pro runtime staging",
+                    "status": "completed",
+                    "conclusion": "success",
+                }],
+            }],
+        }).encode("utf-8")
+        log_payload = (
+            b"2026-11-26T03:27:01.1208655Z "
+            b"Acknowledged private Pro build dispatch run 45748982422 in rcourtman/pulse-enterprise.\n"
+        )
+
+        # Transient HTTP 502 on the log read retries and recovers the exact child ID.
+        calls: list[list[str]] = []
+
+        def flaky_log(cmd, **kwargs):
+            calls.append(cmd)
+            endpoint = cmd[2]
+            if endpoint.endswith("/jobs?per_page=100"):
+                return subprocess.CompletedProcess(cmd, 0, stdout=jobs_payload, stderr=b"")
+            if len([c for c in calls if c[2].endswith("/logs")]) == 1:
+                raise subprocess.CalledProcessError(
+                    1, cmd, stderr=b"gh: Bad Gateway (HTTP 502)\n"
+                )
+            return subprocess.CompletedProcess(cmd, 0, stdout=log_payload, stderr=b"")
+
+        with mock.patch.object(mod.subprocess, "run", side_effect=flaky_log), \
+             mock.patch.object(mod, "RETRY_DELAYS", (0.0, 0.0)):
+            child = mod.previous_child("rcourtman/Pulse", "200", "2", "a" * 40)
+        self.assertEqual(child, "45748982422")
+        self.assertEqual(len([c for c in calls if c[2].endswith("/logs")]), 2)
+
+        # Persistent transient HTTP 503 exhausts bounded retries and fails closed.
+        calls.clear()
+
+        def persistent_503(cmd, **kwargs):
+            calls.append(cmd)
+            if cmd[2].endswith("/jobs?per_page=100"):
+                return subprocess.CompletedProcess(cmd, 0, stdout=jobs_payload, stderr=b"")
+            raise subprocess.CalledProcessError(
+                1, cmd, stderr=b"gh: Service Unavailable (HTTP 503)\n"
+            )
+
+        with mock.patch.object(mod.subprocess, "run", side_effect=persistent_503), \
+             mock.patch.object(mod, "RETRY_DELAYS", (0.0, 0.0)):
+            with self.assertRaises(mod.EvidenceError) as ctx:
+                mod.previous_child("rcourtman/Pulse", "200", "2", "a" * 40)
+        self.assertEqual(len([c for c in calls if c[2].endswith("/logs")]), mod.MAX_READ_ATTEMPTS)
+        self.assertIn("attempt 1 staging job 101 log: exit 1, HTTP 503", str(ctx.exception))
+
+        # Non-transient HTTP 403 stops on the first attempt without leaking raw stderr.
+        calls.clear()
+
+        def forbidden_log(cmd, **kwargs):
+            calls.append(cmd)
+            if cmd[2].endswith("/jobs?per_page=100"):
+                return subprocess.CompletedProcess(cmd, 0, stdout=jobs_payload, stderr=b"")
+            raise subprocess.CalledProcessError(
+                1, cmd, stderr=b"gh: Resource not accessible by integration (HTTP 403) secret-token-marker\n"
+            )
+
+        with mock.patch.object(mod.subprocess, "run", side_effect=forbidden_log), \
+             mock.patch.object(mod, "RETRY_DELAYS", (0.0, 0.0)):
+            with self.assertRaises(mod.EvidenceError) as ctx:
+                mod.previous_child("rcourtman/Pulse", "200", "2", "a" * 40)
+        self.assertEqual(len([c for c in calls if c[2].endswith("/logs")]), 1)
+        self.assertIn("attempt 1 staging job 101 log: exit 1, HTTP 403", str(ctx.exception))
+        self.assertNotIn("secret-token-marker", str(ctx.exception))
+
     def test_private_pro_promotion_redispatches_only_a_moved_main_source_refusal(self) -> None:
         """Run the real dispatch loop against doubles: only a pre-credential refusal caused by a
         pulse-pro main that moved after dispatch is re-dispatched, and only the terminal failure

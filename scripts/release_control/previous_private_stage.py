@@ -8,12 +8,26 @@ import os
 import re
 import subprocess
 import sys
+import time
 
 
 JOB_NAME = "stage_private_pro_runtime"
 DISPATCH_STEP = "Dispatch private Pro runtime staging"
 RUN_ID = r"[1-9][0-9]{0,18}"
 FINISHED_DISPATCH = {"success", "failure", "cancelled", "timed_out", "startup_failure"}
+MAX_READ_ATTEMPTS = 3
+RETRY_DELAYS = (1.0, 2.0)
+HTTP_STATUS = re.compile(r"\bHTTP\s+([1-5][0-9]{2})\b")
+TRANSIENT_HTTP_CODES = frozenset({429, 500, 502, 503, 504})
+TRANSIENT_NETWORK_MARKERS = (
+    "connection reset",
+    "unexpected eof",
+    "eof",
+    "tls handshake timeout",
+    "i/o timeout",
+    "temporary failure",
+    "no such host",
+)
 # GitHub's raw job log prefixes stdout lines with a UTC timestamp. Match
 # only the fixed acknowledgement from the POST step, not a later watcher,
 # script echoes, links, or child logs. Every attempt runs the same immutable
@@ -29,11 +43,42 @@ class EvidenceError(ValueError):
     pass
 
 
-def read_api(endpoint: str) -> str:
-    try:
-        response = subprocess.run(["gh", "api", endpoint], capture_output=True, timeout=30, check=True)
-    except (OSError, subprocess.SubprocessError):
-        raise EvidenceError("could not read the exact prior staging job evidence") from None
+def _classify_read_error(exc: Exception) -> tuple[str, bool]:
+    if isinstance(exc, subprocess.TimeoutExpired):
+        return "timeout", True
+    if isinstance(exc, subprocess.CalledProcessError):
+        raw_stderr = exc.stderr
+        if isinstance(raw_stderr, bytes):
+            stderr_text = raw_stderr.decode("utf-8", errors="replace")
+        else:
+            stderr_text = str(raw_stderr or "")
+        match = HTTP_STATUS.search(stderr_text)
+        if match:
+            status = int(match.group(1))
+            return f"exit {exc.returncode}, HTTP {status}", status in TRANSIENT_HTTP_CODES
+        lowered = stderr_text.lower()
+        if any(marker in lowered for marker in TRANSIENT_NETWORK_MARKERS):
+            return f"exit {exc.returncode}, transient network error", True
+        return f"exit {exc.returncode}", False
+    return "os-error", False
+
+
+def read_api(endpoint: str, label: str = "GitHub API") -> str:
+    last_cause = "unknown"
+    for attempt in range(MAX_READ_ATTEMPTS):
+        try:
+            response = subprocess.run(["gh", "api", endpoint], capture_output=True, timeout=30, check=True)
+            break
+        except (OSError, subprocess.SubprocessError) as exc:
+            last_cause, retryable = _classify_read_error(exc)
+            if retryable and attempt + 1 < MAX_READ_ATTEMPTS:
+                delay = RETRY_DELAYS[min(attempt, len(RETRY_DELAYS) - 1)]
+                if delay > 0:
+                    time.sleep(delay)
+                continue
+            raise EvidenceError(
+                f"could not read the exact prior staging job evidence ({label}: {last_cause})"
+            ) from None
     if len(response.stdout) > 2 * 1024 * 1024:
         raise EvidenceError("prior staging job evidence exceeded the read limit")
     return response.stdout.decode("utf-8")
@@ -50,7 +95,9 @@ def previous_child(repository: str, run_id: str, attempt: str, source: str) -> s
 
     root = f"repos/{repository}/actions"
     for earlier in range(int(attempt) - 1, 0, -1):
-        metadata = json.loads(read_api(f"{root}/runs/{run_id}/attempts/{earlier}/jobs?per_page=100"))
+        metadata = json.loads(
+            read_api(f"{root}/runs/{run_id}/attempts/{earlier}/jobs?per_page=100", f"attempt {earlier} job list")
+        )
         jobs = metadata["jobs"]
         if not isinstance(jobs, list) or metadata["total_count"] != len(jobs):
             raise EvidenceError(f"incomplete attempt {earlier} job evidence")
@@ -82,7 +129,9 @@ def previous_child(repository: str, run_id: str, attempt: str, source: str) -> s
         if job["conclusion"] == "skipped" or conclusion not in FINISHED_DISPATCH:
             raise EvidenceError(f"attempt {earlier} has no definite dispatch step result")
 
-        children = ACK.findall(read_api(f"{root}/jobs/{job_id}/logs"))
+        children = ACK.findall(
+            read_api(f"{root}/jobs/{job_id}/logs", f"attempt {earlier} staging job {job_id} log")
+        )
         if len(children) != 1:
             raise EvidenceError(f"attempt {earlier} has no unique child acknowledgement; dispatch may have been accepted")
         return children[0]

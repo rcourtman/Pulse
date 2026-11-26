@@ -27,7 +27,7 @@ func testActiveEvent(t *testing.T, eventType, alertID string, startedAt, occurre
 
 func TestLifecycleEventsTransactionallyProjectActiveState(t *testing.T) {
 	store := newTestStore(t)
-	startedAt := time.Date(2026, 8, 27, 8, 0, 0, 0, time.UTC)
+	startedAt := time.Now().UTC().Truncate(time.Second).Add(-2 * time.Hour)
 
 	if err := store.AppendDurable(testActiveEvent(t, TypeFired, "alert-1", startedAt, startedAt, 91)); err != nil {
 		t.Fatalf("append fired: %v", err)
@@ -71,7 +71,7 @@ func TestLifecycleEventsTransactionallyProjectActiveState(t *testing.T) {
 
 func TestDelayedResolutionCannotDeleteNewerOccurrence(t *testing.T) {
 	store := newTestStore(t)
-	oldStart := time.Date(2026, 8, 27, 8, 0, 0, 0, time.UTC)
+	oldStart := time.Now().UTC().Truncate(time.Second).Add(-2 * time.Hour)
 	newStart := oldStart.Add(time.Hour)
 
 	if err := store.AppendDurable(testActiveEvent(t, TypeFired, "reused-alert", oldStart, oldStart, 91)); err != nil {
@@ -95,7 +95,7 @@ func TestDelayedResolutionCannotDeleteNewerOccurrence(t *testing.T) {
 
 func TestStaleCheckpointCannotOverwriteLifecycleTransaction(t *testing.T) {
 	store := newTestStore(t)
-	startedAt := time.Date(2026, 8, 27, 8, 0, 0, 0, time.UTC)
+	startedAt := time.Now().UTC().Truncate(time.Second).Add(-2 * time.Hour)
 	activeEvent := testActiveEvent(t, TypeFired, "cas-alert", startedAt, startedAt, 91)
 	initial := ActiveStateSnapshot{
 		AlertID:             activeEvent.AlertID,

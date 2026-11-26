@@ -68,7 +68,7 @@ func shadowDivergenceEvents(t *testing.T, manager *Manager) []eventlog.Event {
 // shadow reducer tracks the live manager exactly through the hooked paths.
 func TestShadowFeedNoDivergenceThroughFullCycle(t *testing.T) {
 	manager := newShadowFeedManager(t)
-	epoch := time.Date(2026, 8, 26, 12, 0, 0, 0, time.UTC)
+	epoch := time.Now().UTC().Truncate(time.Second).Add(-2 * time.Hour)
 	resourceID := "shadow-pbs-1"
 
 	// Fire after three offline confirmations.
@@ -148,7 +148,7 @@ func TestShadowFeedSeedsFromActiveAlerts(t *testing.T) {
 	manager.config.Enabled = true
 	manager.mu.Unlock()
 
-	epoch := time.Date(2026, 8, 26, 12, 0, 0, 0, time.UTC)
+	epoch := time.Now().UTC().Truncate(time.Second).Add(-2 * time.Hour)
 	resourceID := "shadow-seeded-1"
 
 	// Fire before the feed exists (simulating restored state).

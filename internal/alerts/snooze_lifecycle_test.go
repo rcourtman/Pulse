@@ -17,7 +17,8 @@ func TestAlertSnoozeIsDurableAndEnforcedByDeliveryPolicy(t *testing.T) {
 	}
 	m.SetEventLog(store)
 
-	now := time.Date(2026, 8, 27, 12, 0, 0, 0, time.UTC)
+	// Keep fixture timestamps inside the 90-day eventlog retention window.
+	now := time.Now().UTC().Truncate(time.Second).Add(-2 * time.Hour)
 	m.now = func() time.Time { return now }
 	cfg := m.GetConfig()
 	cfg.Enabled = true
@@ -112,7 +113,8 @@ func TestUnsnoozeRestoresAcknowledgedState(t *testing.T) {
 
 func TestSnoozeExpiryResumesEscalationWithoutReplayingMissedLevels(t *testing.T) {
 	m := newTestManager(t)
-	now := time.Date(2026, 8, 27, 12, 0, 0, 0, time.UTC)
+	// Keep fixture timestamps inside the 90-day eventlog retention window.
+	now := time.Now().UTC().Truncate(time.Second).Add(-2 * time.Hour)
 	m.now = func() time.Time { return now }
 	cfg := m.GetConfig()
 	cfg.Enabled = true
