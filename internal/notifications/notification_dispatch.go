@@ -437,10 +437,17 @@ func (n *NotificationManager) recordSuccessfulDelivery(job notificationDeliveryJ
 		if n.deliveryReceipts == nil {
 			n.deliveryReceipts = make(map[string]struct{})
 		}
+		if n.deliveryReceiptLevels == nil {
+			n.deliveryReceiptLevels = make(map[string]alerts.AlertLevel)
+		}
 		if job.Event == eventResolved {
 			delete(n.deliveryReceipts, key)
+			delete(n.deliveryReceiptLevels, key)
 		} else {
 			n.deliveryReceipts[key] = struct{}{}
+			if notificationSeverityRank(alert.Level) > notificationSeverityRank(n.deliveryReceiptLevels[key]) {
+				n.deliveryReceiptLevels[key] = alerts.NormalizeAlertLevel(alert.Level)
+			}
 		}
 		n.mu.Unlock()
 		n.cacheDeliveryReceipt(alert, destinationKey, deliveredAt, job.Event)
@@ -479,26 +486,43 @@ func (n *NotificationManager) filterResolvedJobsByDeliveryReceipt(jobs []notific
 			}
 			eligible := false
 			epoch := ""
+			var notifiedLevel alerts.AlertLevel
 			if queue != nil {
+				var record notificationRecord
 				var err error
-				_, epoch, eligible, err = queue.deliveryReceiptWithEpoch(alert, key)
+				record, epoch, eligible, err = queue.deliveryReceiptWithEpoch(alert, key)
 				if err != nil {
 					log.Error().Err(err).Msg("Failed to read notification delivery receipt; suppressing recovery")
 					queue.rehearsalReceiptUnavailable(alert, notificationDestinationIDForJob(job))
 					continue
 				}
+				notifiedLevel = record.level
 			} else {
+				receiptKey := notificationDeliveryReceiptKey(alert, key)
 				n.mu.RLock()
-				_, eligible = n.deliveryReceipts[notificationDeliveryReceiptKey(alert, key)]
+				_, eligible = n.deliveryReceipts[receiptKey]
+				if eligible {
+					notifiedLevel = n.deliveryReceiptLevels[receiptKey]
+				}
 				n.mu.RUnlock()
 			}
 			if !eligible {
 				continue
 			}
+			// Keep each destination's resolved severity aligned with the firing
+			// notification it actually received (e.g. when an active metric alert
+			// silently demotes from critical to warning before clearing, #5191).
+			resolvedAlert := alert
+			if notificationSeverityRank(notifiedLevel) > 0 && alerts.NormalizeAlertLevel(resolvedAlert.Level) != notifiedLevel {
+				if cloned := resolvedAlert.Clone(); cloned != nil {
+					cloned.Level = notifiedLevel
+					resolvedAlert = cloned
+				}
+			}
 			if _, found := groups[epoch]; !found {
 				order = append(order, epoch)
 			}
-			groups[epoch] = append(groups[epoch], alert)
+			groups[epoch] = append(groups[epoch], resolvedAlert)
 		}
 		for _, epoch := range order {
 			copy := job
