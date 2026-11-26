@@ -82,11 +82,16 @@ from the line alone.
    warning. Follow [guest memory interpretation](TROUBLESHOOTING.md#guest-memory-is-high-but-available-memory-is-plentiful)
    when unlike readings suggest memory pressure.
 
-**Did collection resume after Pulse stopped?** In the shortest range that
-includes the stop, compare the stored times around it. A new point after
-restart shows collection resumed for that resource, not that it was
-uninterrupted. A line can join points across an interval with no stored
-readings at all. Compare with the [checks after a memory stop](TROUBLESHOOTING.md#after-a-memory-cgroup-kill)
+**Did collection resume after Pulse stopped?** Compare observation times in
+the shortest range that includes the stop. Lines can span gaps. **Latest from
+device** can show readings the device saved while Pulse was off, and **Latest
+recorded** can mix sources. A new chart point is not proof of a new Pulse poll.
+
+Wait for the next ordinary poll or agent report. Look for a fresh live reading
+from the same connection. For an agent, check that **Last seen** and the reading
+you need both advance. That checks only that source. If Pulse hit its memory
+limit, follow the
+[checks after a memory stop](TROUBLESHOOTING.md#after-a-memory-cgroup-kill)
 without restarting again.
 
 Use already available observations; do not run Diagnostics or guest-agent
