@@ -149,6 +149,9 @@ retry delays:
   the readings you need in **Machines**. Check **Docker** hosts separately:
   container reports use their own stream and can stall even while machine
   reports keep arriving from the same agent.
+- **Alert rule evaluation:** If a threshold alert is already open,
+  [check whether it was reevaluated](#check-whether-an-open-threshold-alert-was-reevaluated)
+  through `GET /api/alerts/active` without changing a rule or forcing an alert.
 - **Prometheus scrapes (if already enabled):** Compare
   `pulse_monitor_poll_total` by `result`. Rising errors mean Pulse is still
   recording poll outcomes. If several expected sources give no new results,
@@ -220,6 +223,12 @@ is not zero):
   and `stage="running"`) across fresh scrapes. Growing ages show queued or
   claimed polls falling behind their schedule or timeout budget. Zero does
   not prove polling recovered.
+- **Parked poll failures:** `pulse_scheduler_dead_letter_depth` counts terminal
+  poll entries still parked in running schedulers at scrape time by
+  `instance_type` and `instance`. After a connection recovers, or its scheduler
+  stops or is replaced, a previously scraped label returns to `0`. Zero does
+  not prove polling is running, so compare it with `pulse_monitor_poll_total`
+  and `pulse_monitor_poll_last_success_timestamp` in the same window.
 - **Agent reports:** inspect `pulse_http_requests_total` with `method="POST"`
   separately for `/api/agents/agent/report` (or legacy
   `/api/agents/host/report`) and `/api/agents/docker/report`, split by
@@ -229,3 +238,34 @@ is not zero):
 Use the [missing-data checks](FAQ.md#no-data-showing) to narrow it down
 without restarting Pulse or sending test traffic. Neither alert above checks
 whether Pulse evaluated its alert rules.
+
+### Check whether an open threshold alert was reevaluated
+
+An open alert can be evaluated again without firing a new notification or
+clearing. Active alert counts and notification history do not prove each
+evaluation ran.
+
+For a threshold alert that is already open, read
+[Active alerts](API.md#active-alerts) (`GET /api/alerts/active`) in your
+signed-in Pulse browser, or with a `monitoring:read` token from a private
+header file. Take two readings on the same Pulse server and workspace,
+separated by the normal poll or agent report interval for that rule.
+
+1. Match the same alert occurrence by both `id` and `startTime`, because a
+   later firing of the same rule can reuse `id`.
+2. Compare `metricStatus.observedAt` between the two readings. When it moves
+   forward, Pulse evaluated that threshold again even if the value stayed
+   inside the hysteresis band (`metricStatus.phase` set to `breaching`,
+   `latched`, or `recovering`).
+3. Keep `lastSeen` and `metricStatus.lastBreachAt` separate from `observedAt`:
+   they date the latest reading that met the trigger, not a newer latched or
+   recovery check.
+
+`metricStatus` is live in-memory state and is omitted from durable checkpoints,
+so it is absent immediately after a Pulse restart until the next evaluation.
+Non-threshold alerts and older builds can also omit it. A missing field,
+missing alert, unchanged timestamp, or failed request does not establish
+progress or prove a stall on its own. Checking one open rule does not prove
+other rules ran or that any destination accepted a notification. Keep the full
+response private, and do not lower thresholds or force a test alert just to
+run this check.
