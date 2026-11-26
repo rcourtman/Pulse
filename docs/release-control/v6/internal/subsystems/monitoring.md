@@ -149,7 +149,7 @@ does not claim a removed task or a future peer early.
 worker takes the replacement only after the original claim returns and that
 an independent peer can still wake the other worker.
 
-### Prometheus queue depth and readiness follow the live scheduler queues
+### Prometheus queue depth, readiness and age follow the live scheduler queues
 
 The existing total depth, depth by provider type, and number due now or within
 12 seconds are read from active scheduler queues during a scrape. Planning and
@@ -159,7 +159,17 @@ removes its backlog from later scrapes. A known provider type with no queued
 work reads zero. Claimed polls (including those waiting for a process slot)
 and dead letters never count in these gauges. An unrelated provider's poll
 result and a single-monitor Scheduler Health read do not overwrite them.
-Metric names, labels, listener access and poll admission remain unchanged.
+The existing count metrics, listener access and poll admission are unchanged.
+
+`pulse_scheduler_queued_poll_overdue_seconds` takes the maximum of the
+same `oldestOverdueSeconds` measurement over the live queue snapshots
+already read by the collector. It adds no queue scan, poll result dependency,
+or labels. Future work, untimestamped work, claimed polls and dead letters
+cannot contribute. With no overdue timestamped work in any live queue (or
+with no live queue), the series is zero, not a health verdict.
+`TestSchedulerQueuedPollOverdueFollowsActiveQueues` checks stable counts
+with growing age, maximum across two live queues, the claim and retry
+boundary, and teardown without a new poll result.
 
 `TestSchedulerQueueScrapeWhileWorkerWaits` reads the existing Prometheus
 handler without any completed scheduled poll: a PBS poll enters the exact

@@ -12,8 +12,9 @@ const schedulerQueueDepthByTypeHelp = "Current scheduler queue depth partitioned
 // pollQueueCollector reads the active scheduler queues, not the last
 // monitor to publish a result or answer Scheduler Health.
 type pollQueueCollector struct {
-	metrics     *PollMetrics
-	depthByType *prometheus.Desc
+	metrics       *PollMetrics
+	depthByType   *prometheus.Desc
+	queuedOverdue *prometheus.Desc
 
 	// The old sampled gauges support the integration harness, which drives
 	// its queue itself. Once a scheduler starts, a sampled value must never
@@ -29,6 +30,9 @@ func newPollQueueCollector(pm *PollMetrics) *pollQueueCollector {
 		metrics: pm,
 		depthByType: prometheus.NewDesc("pulse_scheduler_queue_depth", schedulerQueueDepthByTypeHelp,
 			[]string{"instance_type"}, nil),
+		queuedOverdue: prometheus.NewDesc("pulse_scheduler_queued_poll_overdue_seconds",
+			"Seconds past the scheduled time of the most overdue timestamped poll still queued in running schedulers; zero if none.",
+			nil, nil),
 		workers: make(map[*TaskQueue]int),
 		seen:    make(map[string]struct{}),
 	}
@@ -65,6 +69,7 @@ func (c *pollQueueCollector) Describe(ch chan<- *prometheus.Desc) {
 	ch <- c.metrics.queueDepth.Desc()
 	ch <- c.metrics.schedulerQueueReady.Desc()
 	ch <- c.depthByType
+	ch <- c.queuedOverdue
 }
 
 func (c *pollQueueCollector) Collect(ch chan<- prometheus.Metric) {
@@ -72,6 +77,8 @@ func (c *pollQueueCollector) Collect(ch chan<- prometheus.Metric) {
 		c.metrics.queueDepth.Collect(ch)
 		c.metrics.schedulerQueueReady.Collect(ch)
 		c.metrics.schedulerQueueDepthByType.Collect(ch)
+		// Legacy samples contain counts, not live queued work.
+		ch <- prometheus.MustNewConstMetric(c.queuedOverdue, prometheus.GaugeValue, 0)
 		return
 	}
 
@@ -83,6 +90,7 @@ func (c *pollQueueCollector) Collect(ch chan<- prometheus.Metric) {
 	c.mu.Unlock()
 
 	depth, due := 0, 0
+	var oldestOverdue float64
 	byType := make(map[string]int)
 	for _, q := range queues {
 		// Snapshot counts only heap entries, at the time of the read.
@@ -90,6 +98,7 @@ func (c *pollQueueCollector) Collect(ch chan<- prometheus.Metric) {
 		snapshot := q.Snapshot()
 		depth += snapshot.Depth
 		due += snapshot.DueWithinSeconds
+		oldestOverdue = max(oldestOverdue, snapshot.OldestOverdueSeconds)
 		for name, count := range snapshot.PerType {
 			byType[normalizeLabel(name)] += count
 		}
@@ -108,6 +117,7 @@ func (c *pollQueueCollector) Collect(ch chan<- prometheus.Metric) {
 
 	ch <- prometheus.MustNewConstMetric(c.metrics.queueDepth.Desc(), prometheus.GaugeValue, float64(depth))
 	ch <- prometheus.MustNewConstMetric(c.metrics.schedulerQueueReady.Desc(), prometheus.GaugeValue, float64(due))
+	ch <- prometheus.MustNewConstMetric(c.queuedOverdue, prometheus.GaugeValue, oldestOverdue)
 	for name, count := range byType {
 		ch <- prometheus.MustNewConstMetric(c.depthByType, prometheus.GaugeValue, float64(count), name)
 	}

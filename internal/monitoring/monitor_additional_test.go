@@ -2329,6 +2329,104 @@ func TestSchedulerHealthDistinguishesOverdueQueuedPolls(t *testing.T) {
 	})
 }
 
+func TestSchedulerQueuedPollOverdueFollowsActiveQueues(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		registry := prometheus.NewPedanticRegistry()
+		metrics := newPollMetrics(registry)
+		left := &Monitor{pollMetrics: metrics, taskQueue: NewTaskQueue()}
+		right := &Monitor{pollMetrics: metrics, taskQueue: NewTaskQueue(), deadLetterQueue: NewTaskQueue()}
+		origin := time.Now()
+		left.taskQueue.upsertPlan(ScheduledTask{InstanceType: InstanceTypePBS, InstanceName: "store", NextRun: origin.Add(8 * time.Second)})
+		right.taskQueue.upsertPlan(ScheduledTask{InstanceType: InstanceTypePBS, InstanceName: "store", NextRun: origin.Add(10 * time.Second)})
+		right.deadLetterQueue.Upsert(ScheduledTask{InstanceType: InstanceTypePBS, InstanceName: "parked", NextRun: origin.Add(-time.Hour)})
+
+		handler := promhttp.HandlerFor(registry, promhttp.HandlerOpts{})
+		scrape := func(phase, age, dueSoon string) {
+			t.Helper()
+			rec := httptest.NewRecorder()
+			handler.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/metrics", nil))
+			if rec.Code != http.StatusOK {
+				t.Fatalf("%s: HTTP %d: %s", phase, rec.Code, rec.Body)
+			}
+			body := rec.Body.String()
+			for _, sample := range []struct{ name, value string }{
+				{"pulse_scheduler_queued_poll_overdue_seconds", age},
+				{"pulse_scheduler_queue_due_soon", dueSoon},
+			} {
+				got := "<absent>"
+				for line := range strings.SplitSeq(body, "\n") {
+					if value, ok := strings.CutPrefix(line, sample.name+" "); ok {
+						got = value
+						break
+					}
+				}
+				t.Logf("%s: %s %s", phase, sample.name, got)
+				if got != sample.value {
+					t.Errorf("%s: %s = %s, want %s", phase, sample.name, got, sample.value)
+				}
+			}
+		}
+		scrape("before workers start", "0", "0")
+
+		limiter := newPollTaskWorkerLimiter(1)
+		if !limiter.acquire(context.Background()) {
+			t.Fatal("could not reserve the only worker slot")
+		}
+		defer limiter.release()
+		start := func(m *Monitor) func() {
+			// The dispatcher takes this claim, then blocks on the only slot.
+			// Its other work will stay in the heap without any result writes.
+			m.taskQueue.Upsert(ScheduledTask{InstanceType: InstanceTypePVE, InstanceName: "held", NextRun: origin.Add(-time.Minute)})
+			ctx, cancel := context.WithCancel(context.Background())
+			done := make(chan struct{})
+			go func() {
+				defer close(done)
+				m.dispatchTaskWorkers(ctx, limiter)
+			}()
+			return func() {
+				cancel()
+				<-done
+			}
+		}
+		stopLeft, stopRight := start(left), start(right)
+		defer stopLeft()
+		defer stopRight()
+		synctest.Wait()
+		left.taskQueue.Upsert(ScheduledTask{InstanceType: InstanceTypePMG, InstanceName: "no scheduled time"})
+
+		scrape("due soon but not late", "0", "3")
+		time.Sleep(8 * time.Second)
+		scrape("exactly due", "0", "3")
+		time.Sleep(7500 * time.Millisecond)
+		scrape("same count, use the oldest across both queues", "7.5", "3")
+
+		stopLeft()
+		if got := left.taskQueue.Snapshot().OldestOverdueSeconds; got != 7.5 {
+			t.Fatalf("retired queue should still retain the older work, got age %v", got)
+		}
+		scrape("older queue stopped", "5.5", "1")
+		claimCtx, cancelClaim := context.WithTimeout(context.Background(), time.Second)
+		claimed, ok := right.taskQueue.WaitNext(claimCtx)
+		cancelClaim()
+		if !ok || claimed.InstanceType != InstanceTypePBS || claimed.InstanceName != "store" {
+			t.Fatalf("fixture could not claim the remaining overdue poll: %+v (%v)", claimed, ok)
+		}
+		scrape("remaining overdue poll claimed", "0", "0")
+		retry := claimed
+		retry.NextRun = time.Now().Add(5 * time.Second)
+		right.taskQueue.completeClaim(claimed, retry, pollAfterBackoff)
+		scrape("retry queued for the future", "0", "1")
+		time.Sleep(5500 * time.Millisecond)
+		scrape("retry overdue, still unclaimed", "0.5", "1")
+
+		stopRight()
+		if got := right.taskQueue.Snapshot().OldestOverdueSeconds; got != 0.5 {
+			t.Fatalf("last queue should still retain the retry, got age %v", got)
+		}
+		scrape("last queue stopped", "0", "0")
+	})
+}
+
 func TestScheduledPollWorkProgressInExporter(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		const (

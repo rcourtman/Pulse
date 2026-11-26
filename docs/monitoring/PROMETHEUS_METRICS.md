@@ -165,6 +165,7 @@ in the same window without changing a rule or sending a test notification.
 | Metric | Type | Description |
 | :--- | :--- | :--- |
 | `pulse_scheduler_queue_due_soon` | Gauge | Tasks still queued that are due now or within 12 seconds, measured at scrape time. |
+| `pulse_scheduler_queued_poll_overdue_seconds` | Gauge | Seconds past the scheduled time of the most overdue timestamped poll still queued across running schedulers; zero if none. |
 | `pulse_scheduler_queue_depth` | Gauge | Tasks still queued at scrape time, by `instance_type`. |
 | `pulse_scheduler_queue_wait_seconds` | Histogram | Wait time between task readiness and execution. |
 | `pulse_scheduler_claimed_poll_overdue_seconds` | Gauge | Seconds past one poll task timeout for the most overdue claimed poll, by stage. Zero if no claimed poll is over that budget. |
@@ -177,6 +178,16 @@ The queue gauges count waiting tasks across the running schedulers, not work
 already claimed by a worker or parked in the dead-letter queue. Older builds
 publish the last recorded queue sample: a flat due-soon gauge on those builds
 does not show that nothing has become due.
+
+The overdue age can grow while the due-soon count stays flat. Check it
+on successive fresh scrapes: it measures delay **before a worker claims
+the poll**, from the scheduled time, not from the worker's timeout budget.
+It excludes future retries and queue entries without a scheduled time.
+The value has no connection or workspace labels. If the series is missing,
+or you need to check one workspace, use `queue.oldestOverdueSeconds` in a
+[Scheduler Health snapshot](../api/SCHEDULER_HEALTH.md#compare-two-poll-snapshots)
+when available. Neither a zero age nor an empty queue establishes that
+collection ran or recovered.
 
 Dead-letter depth adds the entries from running schedulers with the same
 labels. After a connection recovers, or after its scheduler is stopped or
