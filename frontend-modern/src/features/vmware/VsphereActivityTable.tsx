@@ -5,7 +5,6 @@ import {
   compactDetailSections,
   makeDetailRow,
   type DetailSection,
-  type DetailValueTone,
 } from '@/components/shared/DetailSectionTable';
 import { InlineDetailTableRow } from '@/components/shared/InlineDetailTableRow';
 import { StatusDot } from '@/components/shared/StatusDot';
@@ -38,11 +37,14 @@ import {
   getPlatformResourceDetailRowClass,
 } from '@/features/platformPage/PlatformResourceDetailTableRow';
 import { RecordOwnerLink } from '@/features/platformPage/RecordOwnerLink';
-import type { ResourceType } from '@/types/resource';
-import type { StatusIndicatorVariant } from '@/utils/status';
+import {
+  formatPlatformAlertDetailDateTime,
+  formatPlatformAlertEntityType,
+  formatPlatformAlertResourceType,
+} from '@/utils/alertDetailPresentation';
 import {
   filterVmwareActivity,
-  type VmwareActivityKind,
+  formatVmwareIdentifierLabel,
   type VmwareActivityRow,
   type VmwareActivityStateBucket,
   type VmwareActivityStatusFilter,
@@ -70,87 +72,21 @@ const VSPHERE_ACTIVITY_STATUS_OPTIONS: PlatformTableFilterOption<VmwareActivityS
   },
 ];
 
-const formatResourceType = (type: ResourceType): string => {
-  switch (type) {
-    case 'agent':
-      return 'Host';
-    case 'vm':
-      return 'VM';
-    case 'storage':
-      return 'Datastore';
-    default:
-      return type;
-  }
+const ACTIVITY_STATE_TONE: Record<
+  VmwareActivityStateBucket,
+  'success' | 'warning' | 'danger' | 'muted'
+> = {
+  success: 'success',
+  running: 'warning',
+  failed: 'danger',
+  unknown: 'muted',
 };
 
-const formatEntityType = (value: string): string => {
-  const normalized = value.trim().toLowerCase();
-  if (normalized === 'host') return 'Host';
-  if (normalized === 'vm') return 'VM';
-  if (normalized === 'datastore') return 'Datastore';
-  return normalized ? normalized.charAt(0).toUpperCase() + normalized.slice(1) : '—';
-};
-
-const formatActivityKind = (kind: VmwareActivityKind): string => {
-  switch (kind) {
-    case 'task':
-      return 'Task';
-    case 'event':
-      return 'Event';
-    case 'activity':
-      return 'Activity';
-  }
-};
-
-const activityStateVariant = (bucket: VmwareActivityStateBucket): StatusIndicatorVariant => {
-  switch (bucket) {
-    case 'success':
-      return 'success';
-    case 'running':
-      return 'warning';
-    case 'failed':
-      return 'danger';
-    case 'unknown':
-      return 'muted';
-  }
-};
-
-const formatIdentifierLabel = (value: string): string =>
-  value
-    .trim()
-    .split(/[\s_-]+/)
-    .filter(Boolean)
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
-    .join(' ');
+const formatEntityType = (value: string): string =>
+  value.trim() ? formatPlatformAlertEntityType(value) : '—';
 
 const formatActivityState = (row: VmwareActivityRow): string =>
-  row.state.trim() ? formatIdentifierLabel(row.state) : '—';
-
-const detailDateTime = (value?: string): string => {
-  if (!value) return '-';
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return value;
-  if (parsed.getUTCFullYear() < 2000) return '-';
-  return parsed.toLocaleString(undefined, {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-};
-
-type ActivityDetailTone = DetailValueTone;
-type ActivityDetailSection = DetailSection;
-
-const detailRow = makeDetailRow;
-
-const activityTone = (bucket: VmwareActivityStateBucket): ActivityDetailTone => {
-  if (bucket === 'success') return 'success';
-  if (bucket === 'running') return 'warning';
-  if (bucket === 'failed') return 'danger';
-  return 'muted';
-};
+  row.state.trim() ? formatVmwareIdentifierLabel(row.state) : '—';
 
 // An event's title is vCenter's own message when it sent one, so the message
 // and description rows would only repeat it.
@@ -166,43 +102,43 @@ const activityTimestamp = (activity: VmwareActivityRow): string | undefined => {
   return Number.isNaN(parsed.getTime()) || parsed.getUTCFullYear() < 2000 ? undefined : value;
 };
 
-const buildActivityDetailSections = (activity: VmwareActivityRow): ActivityDetailSection[] => {
+const buildActivityDetailSections = (activity: VmwareActivityRow): DetailSection[] => {
   const meta = activity.resource.vmware;
   return compactDetailSections([
     {
       label: 'Activity',
       rows: compactDetailRows([
-        detailRow('Kind', formatActivityKind(activity.activityKind)),
-        detailRow('State', formatActivityState(activity), {
-          tone: activityTone(activity.stateBucket),
+        makeDetailRow('Kind', formatPlatformTableTitleCaseValue(activity.activityKind)),
+        makeDetailRow('State', formatActivityState(activity), {
+          tone: ACTIVITY_STATE_TONE[activity.stateBucket],
         }),
-        detailRow('Activity', activity.title),
-        detailRow('Event type', activity.eventType),
-        detailRow('Message', distinctFromTitle(activity, activity.message)),
-        detailRow('Description', distinctFromTitle(activity, activity.description)),
+        makeDetailRow('Activity', activity.title),
+        makeDetailRow('Event type', activity.eventType),
+        makeDetailRow('Message', distinctFromTitle(activity, activity.message)),
+        makeDetailRow('Description', distinctFromTitle(activity, activity.description)),
       ]),
     },
     {
       label: 'Affected resource',
       rows: compactDetailRows([
-        detailRow('Resource', activity.resourceName),
-        detailRow('Type', formatResourceType(activity.resourceType)),
-        detailRow('Entity', formatEntityType(activity.entityType)),
-        detailRow('Managed object', activity.managedObjectId),
-        detailRow('vCenter', meta?.connectionName || meta?.vcenterHost),
-        detailRow('Datacenter', meta?.datacenterName),
-        detailRow('Cluster', meta?.clusterName || meta?.computeResourceName),
-        detailRow('Resource ID', activity.resourceId),
+        makeDetailRow('Resource', activity.resourceName),
+        makeDetailRow('Type', formatPlatformAlertResourceType(activity.resourceType, 'vmware')),
+        makeDetailRow('Entity', formatEntityType(activity.entityType)),
+        makeDetailRow('Managed object', activity.managedObjectId),
+        makeDetailRow('vCenter', meta?.connectionName || meta?.vcenterHost),
+        makeDetailRow('Datacenter', meta?.datacenterName),
+        makeDetailRow('Cluster', meta?.clusterName || meta?.computeResourceName),
+        makeDetailRow('Resource ID', activity.resourceId),
       ]),
     },
     {
       label: 'Source',
       rows: compactDetailRows([
-        detailRow('Native ID', activity.nativeId),
-        detailRow('Actor', activity.actor),
-        detailRow('Source', formatIdentifierLabel(activity.source)),
-        detailRow('Occurred', detailDateTime(activity.occurredAt)),
-        detailRow('Observed', detailDateTime(activity.observedAt)),
+        makeDetailRow('Native ID', activity.nativeId),
+        makeDetailRow('Actor', activity.actor),
+        makeDetailRow('Source', formatVmwareIdentifierLabel(activity.source)),
+        makeDetailRow('Occurred', formatPlatformAlertDetailDateTime(activity.occurredAt)),
+        makeDetailRow('Observed', formatPlatformAlertDetailDateTime(activity.observedAt)),
       ]),
     },
   ]);
@@ -214,10 +150,10 @@ const ActivityDetail: Component<{ activity: VmwareActivityRow; onClose: () => vo
     detailFor={props.activity.id}
     title={props.activity.resourceName || props.activity.title}
     status={{
-      variant: activityStateVariant(props.activity.stateBucket),
+      variant: ACTIVITY_STATE_TONE[props.activity.stateBucket],
       label: formatPlatformTableTitleCaseValue(props.activity.stateBucket),
     }}
-    summary={`${formatActivityKind(props.activity.activityKind)} · ${props.activity.title}`}
+    summary={`${formatPlatformTableTitleCaseValue(props.activity.activityKind)} · ${props.activity.title}`}
     actions={
       <RecordOwnerLink
         subject={{
@@ -256,7 +192,7 @@ const getVsphereActivitySortValue = (
     case 'resource':
       return activity.resourceName || null;
     case 'type':
-      return formatActivityKind(activity.activityKind);
+      return formatPlatformTableTitleCaseValue(activity.activityKind);
     case 'activity':
       return activity.title || null;
     case 'state': {
@@ -412,6 +348,7 @@ export const VsphereActivityTable: Component<{
                 <PlatformWindowedRows items={sortedRows} estimatedRowHeight={32}>
                   {(activity) => {
                     const meta = () => activity.resource.vmware;
+                    const tone = () => ACTIVITY_STATE_TONE[activity.stateBucket];
                     const detailRowId = () => drawer.detailRowId(activity);
                     const isExpanded = () => drawer.isExpanded(activity);
                     return (
@@ -431,7 +368,7 @@ export const VsphereActivityTable: Component<{
                               />
                               <StatusDot
                                 size="sm"
-                                variant={activityStateVariant(activity.stateBucket)}
+                                variant={tone()}
                                 title={formatActivityState(activity)}
                               />
                               <div class="flex min-w-0 flex-1 items-center gap-1.5">
@@ -439,7 +376,10 @@ export const VsphereActivityTable: Component<{
                                   class="min-w-0 truncate font-medium text-base-content"
                                   title={[
                                     activity.resourceName,
-                                    formatResourceType(activity.resourceType),
+                                    formatPlatformAlertResourceType(
+                                      activity.resourceType,
+                                      'vmware',
+                                    ),
                                     activity.resource.parentName
                                       ? `on ${activity.resource.parentName}`
                                       : '',
@@ -452,10 +392,8 @@ export const VsphereActivityTable: Component<{
                                 {/* A phone hides State; a state that needs attention joins the
                                     name on its line. */}
                                 <span
-                                  class={`platform-table-phone-only-inline text-[11px] ${getPlatformInlineStateClass(isPlatformAttentionVariant(activityStateVariant(activity.stateBucket)))} ${getPlatformStatusTextToneClass(activityStateVariant(activity.stateBucket))}`}
-                                  data-vsphere-activity-state-phone={activityStateVariant(
-                                    activity.stateBucket,
-                                  )}
+                                  class={`platform-table-phone-only-inline text-[11px] ${getPlatformInlineStateClass(isPlatformAttentionVariant(tone()))} ${getPlatformStatusTextToneClass(tone())}`}
+                                  data-vsphere-activity-state-phone={tone()}
                                 >
                                   <span class="min-w-0 truncate">
                                     {formatActivityState(activity)}
@@ -466,7 +404,7 @@ export const VsphereActivityTable: Component<{
                           </TableCell>
                           <TableCell class={getPlatformTableCellClassForKind('badge')}>
                             <span class="text-[11px] font-semibold text-base-content">
-                              {formatActivityKind(activity.activityKind)}
+                              {formatPlatformTableTitleCaseValue(activity.activityKind)}
                             </span>
                           </TableCell>
                           <TableCell class={getPlatformTableCellClassForKind('text')}>
@@ -488,10 +426,8 @@ export const VsphereActivityTable: Component<{
                             class={`${getPlatformTableCellClassForKind('badge')} platform-table-phone-hidden`}
                           >
                             <span
-                              class={`text-[11px] font-semibold ${getPlatformStatusTextToneClass(activityStateVariant(activity.stateBucket)) || 'text-base-content'}`}
-                              data-vsphere-activity-state={activityStateVariant(
-                                activity.stateBucket,
-                              )}
+                              class={`text-[11px] font-semibold ${getPlatformStatusTextToneClass(tone()) || 'text-base-content'}`}
+                              data-vsphere-activity-state={tone()}
                             >
                               {formatActivityState(activity)}
                             </span>
@@ -523,7 +459,9 @@ export const VsphereActivityTable: Component<{
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
                           >
-                            <span title={detailDateTime(activityTimestamp(activity))}>
+                            <span
+                              title={formatPlatformAlertDetailDateTime(activityTimestamp(activity))}
+                            >
                               <PlatformTableRelativeTimeValue
                                 value={activityTimestamp(activity)}
                                 emptyText="—"

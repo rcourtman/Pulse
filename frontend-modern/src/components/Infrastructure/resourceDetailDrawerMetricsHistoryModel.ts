@@ -226,6 +226,9 @@ const resourceTemperature = (resource: Resource): number | undefined =>
 const isResourceTemperatureCurrent = (resource: Resource): boolean =>
   isPhysicalDiskTemperatureCurrent(resource.physicalDisk?.collection);
 
+const hasRetainedVcenterCapacity = (resource: Resource): boolean =>
+  resource.type === 'storage' && resource.sourceStatus?.vmware?.status === 'stale';
+
 export const getResourceMetricsHistoryDeferredMetrics = (
   resource: Resource,
 ): Record<string, GuestDrawerHistoryDeferredMetric> => {
@@ -247,6 +250,12 @@ export const getResourceMetricsHistoryDeferredMetrics = (
           ? finiteMetric(getDiskPercent(resource))
           : undefined,
       message: disk.message,
+    };
+  }
+  if (hasRetainedVcenterCapacity(resource)) {
+    metrics.usage = {
+      lastKnownValue: finiteMetric(getDiskPercent(resource)),
+      message: 'vCenter has not updated this datastore recently.',
     };
   }
   if (!isResourceTemperatureCurrent(resource)) {
@@ -285,7 +294,7 @@ export const getResourceMetricsHistoryCurrentMetrics = (
         ? finiteMetric(getMemoryPercent(resource))
         : undefined,
     disk: diskPercent,
-    usage: diskPercent,
+    usage: hasRetainedVcenterCapacity(resource) ? undefined : diskPercent,
     netin: finiteMetric(resource.network?.rxBytes),
     netout: finiteMetric(resource.network?.txBytes),
     diskread: finiteMetric(resource.diskIO?.readRate),

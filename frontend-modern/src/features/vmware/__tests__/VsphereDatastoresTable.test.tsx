@@ -1,4 +1,5 @@
 import { cleanup, fireEvent, render, screen, within } from '@solidjs/testing-library';
+import { createSignal } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('@/contexts/appRuntime', async (importOriginal) => ({
@@ -50,6 +51,76 @@ afterEach(() => {
 });
 
 describe('VsphereDatastoresTable', () => {
+  it('qualifies retained realtime rows without hiding observations or the last reported outage', async () => {
+    const stale = { vmware: { status: 'stale' } };
+    const east = makeDatastore({ id: 'nvme-east', sourceStatus: stale });
+    const unavailable = makeDatastore({ id: 'archive', sourceStatus: stale, status: 'offline' });
+    const peer = makeDatastore({ id: 'nvme-west' });
+    const [rows, setRows] = createSignal([east, unavailable, peer]);
+
+    render(() => (
+      <VsphereDatastoresTable
+        datastores={rows()}
+        scope={rows()}
+        emptyIcon={<span />}
+        emptyTitle="No datastores"
+        emptyDescription="No datastores"
+      />
+    ));
+
+    const row = (name: string) => within(screen.getByText(name, { exact: true }).closest('tr')!);
+    expect(row('nvme-east').getByText('Stale data')).toBeInTheDocument();
+    expect(
+      row('nvme-east').getByTitle('vCenter has not updated this recently'),
+    ).toBeInTheDocument();
+    expect(row('nvme-east').getByTestId('stacked-disk-bar')).toBeInTheDocument();
+    expect(row('archive').getByTitle('Inaccessible')).toHaveClass('bg-red-500');
+    expect(row('archive').getByTitle('Last reported inaccessible')).toBeInTheDocument();
+    expect(row('archive').getByText('Stale data')).toBeInTheDocument();
+    expect(row('nvme-west').queryByText('Stale data')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Inaccessible, 1' })).toBeInTheDocument();
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Accessible, 1' }));
+    expect(screen.queryByText('nvme-east', { exact: true })).not.toBeInTheDocument();
+    expect(row('nvme-west').getByTitle('Online')).toBeInTheDocument();
+
+    setRows([
+      {
+        ...east,
+        sourceStatus: { vmware: { status: 'online' } },
+        platformData: { sourceStatus: stale },
+      },
+      unavailable,
+      peer,
+    ]);
+    expect(row('nvme-east').queryByText('Stale data')).not.toBeInTheDocument();
+    expect(row('nvme-east').getByTitle('Online')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Accessible, 2' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+  });
+
+  it('does not turn missing or non-finite capacity into an empty datastore', () => {
+    const rows = [
+      makeDatastore({ id: 'unread', disk: { current: Number.NaN, total: 1000, used: Number.NaN } }),
+      makeDatastore({ id: 'empty', disk: { current: Number.NaN, total: 1000, used: 0 } }),
+    ];
+    render(() => (
+      <VsphereDatastoresTable
+        datastores={rows}
+        scope={rows}
+        emptyIcon={<span />}
+        emptyTitle="No datastores"
+        emptyDescription="No datastores"
+      />
+    ));
+    const row = (name: string) => within(screen.getByText(name, { exact: true }).closest('tr')!);
+    expect(row('unread').getByText('—')).toBeInTheDocument();
+    expect(row('unread').queryByTestId('stacked-disk-bar')).not.toBeInTheDocument();
+    expect(row('empty').getByTestId('stacked-disk-bar')).toBeInTheDocument();
+  });
+
   it('renders vCenter datastore fields without generic storage protection columns', async () => {
     const nvme = makeDatastore({ id: 'nvme-primary', name: 'nvme-primary' });
     const inaccessible = makeDatastore({
