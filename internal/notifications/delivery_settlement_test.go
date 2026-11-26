@@ -847,6 +847,19 @@ func TestNotificationLegacyAnonymousWebhookInventoryRetainsAuthority(t *testing.
 	require.Error(t, ValidateWebhookInventory([]WebhookConfig{{ID: "same"}, {ID: "same"}}))
 }
 
+func TestValidateWebhookInventory(t *testing.T) {
+	require.NoError(t, ValidateWebhookInventory([]WebhookConfig{
+		{URL: "http://127.0.0.1:9/first"},
+		{ID: "   ", URL: "http://127.0.0.1:9/second"},
+		{ID: "ops-a", URL: "http://127.0.0.1:9/a"},
+		{ID: "ops-b", URL: "http://127.0.0.1:9/b"},
+	}))
+	require.Error(t, ValidateWebhookInventory([]WebhookConfig{
+		{ID: "ops-a", URL: "http://127.0.0.1:9/a"},
+		{ID: " ops-a ", URL: "http://127.0.0.1:9/b"},
+	}))
+}
+
 func TestNotificationRelayReceiverUpgradePreservesOnlyKnownReceiverScope(t *testing.T) {
 	cases := []struct {
 		id       string

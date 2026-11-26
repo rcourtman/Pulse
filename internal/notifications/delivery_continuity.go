@@ -627,14 +627,14 @@ func webhookInventoryIdentity(hook WebhookConfig) string {
 func ValidateWebhookInventory(webhooks []WebhookConfig) error {
 	seen := make(map[string]bool, len(webhooks))
 	for _, hook := range webhooks {
-		if strings.TrimSpace(hook.ID) == "" {
+		id := strings.TrimSpace(hook.ID)
+		if id == "" {
 			continue
 		}
-		identity := webhookInventoryIdentity(hook)
-		if seen[identity] {
+		if seen[id] {
 			return fmt.Errorf("duplicate webhook identity in destination inventory")
 		}
-		seen[identity] = true
+		seen[id] = true
 	}
 	return nil
 }
