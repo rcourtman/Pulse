@@ -2176,10 +2176,24 @@ Prometheus depth. Clearing an entry does not reschedule the poll, grant
 breaker admission or clear a peer's failure. A partial result can end the
 terminal connection failure while retaining its outstanding reading error.
 The recorded dead-letter retry time is not a deadline in the active queue.
+The Prometheus gauge reads current entries only from running scheduler
+runtimes at scrape time. Tenant shutdown or replacement stops contributing
+as soon as its runtime is cancelled, even if the old monitor and its queue
+are still reachable. Scrapes add the entries of all active runtimes with
+matching labels and retain zero for previously observed labels that no
+longer have entries. A delayed Health or worker refresh cannot restore
+retired entries or hide a still-active peer. Successful polling needs no
+metrics scan of the dead-letter queue.
+
 `TestScheduledPollDeadLetterTracksLatestOutcome` checks both the settled
 Scheduler Health representation and the depth metric after ordinary worker
-recovery. `TestPMGPartialRecoveryRetiresTerminalDeadLetter` exercises the
-partial-read distinction through the provider collector.
+recovery and overlapping refreshes. `TestSchedulerDeadLettersFollowTenantRuntime`
+scrapes through actual tenant reload, removal and shutdown, keeping a failed
+old queue alive and reusing labels across tenants and replacements.
+`TestSchedulerDeadLettersExcludeCancelledRuntimeBeforeDetach` covers
+cancellation before the registration is removed.
+`TestPMGPartialRecoveryRetiresTerminalDeadLetter` exercises the partial-read
+distinction through the provider collector and the scrape.
 
 `TestCircuitBreaker_BackoffNeverOverflows` compares 130 failure transitions
 against an independent unbounded-integer oracle, including odd and maximum

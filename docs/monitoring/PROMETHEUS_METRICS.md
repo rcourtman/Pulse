@@ -168,7 +168,7 @@ in the same window without changing a rule or sending a test notification.
 | `pulse_scheduler_queue_depth` | Gauge | Tasks still queued at scrape time, by `instance_type`. |
 | `pulse_scheduler_queue_wait_seconds` | Histogram | Wait time between task readiness and execution. |
 | `pulse_scheduler_claimed_poll_overdue_seconds` | Gauge | Seconds past one poll task timeout for the most overdue claimed poll, by stage. Zero if no claimed poll is over that budget. |
-| `pulse_scheduler_dead_letter_depth` | Gauge | DLQ depth by `instance_type` and `instance`. |
+| `pulse_scheduler_dead_letter_depth` | Gauge | Terminal poll entries still parked in running schedulers at scrape time, by `instance_type` and `instance`. |
 | `pulse_scheduler_breaker_state` | Gauge | `0`=Closed, `1`=Half-Open, `2`=Open, `-1`=Unknown. |
 | `pulse_scheduler_breaker_failure_count` | Gauge | Consecutive failure count. |
 | `pulse_scheduler_breaker_retry_seconds` | Gauge | Seconds remaining before a retry is allowed, as recorded at the last breaker update. Not a live countdown. |
@@ -177,6 +177,12 @@ The queue gauges count waiting tasks across the running schedulers, not work
 already claimed by a worker or parked in the dead-letter queue. Older builds
 publish the last recorded queue sample: a flat due-soon gauge on those builds
 does not show that nothing has become due.
+
+Dead-letter depth adds the entries from running schedulers with the same
+labels. After a connection recovers, or after its scheduler is stopped or
+replaced, its old entries no longer contribute. A previously scraped label
+with no remaining entries reads zero. Zero does not mean collection is running;
+compare it with the poll result counters and freshness in the same window.
 
 When expected results stop, check the two claimed-poll stages on successive scrapes:
 

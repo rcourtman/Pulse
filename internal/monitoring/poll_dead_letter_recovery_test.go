@@ -4,11 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"reflect"
+	"sync"
 	"testing"
 	"testing/synctest"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/proxmox"
 )
 
@@ -61,7 +63,10 @@ func TestScheduledPollDeadLetterTracksLatestOutcome(t *testing.T) {
 		}}
 		m.lastClusterCheck[peerName] = time.Now()
 		m.deadLetterQueue = NewTaskQueue()
-		m.pollMetrics = newPollMetrics(prometheus.NewRegistry())
+		reg := prometheus.NewRegistry()
+		m.pollMetrics = newPollMetrics(reg)
+		defer m.pollMetrics.trackDeadLetterQueue(ctx, m.deadLetterQueue)()
+		handler := promhttp.HandlerFor(reg, promhttp.HandlerOpts{})
 		m.circuitBreakers = make(map[string]*circuitBreaker)
 		m.backoffCfg = backoffConfig{Initial: 5 * time.Second, Multiplier: 2, Max: 5 * time.Minute}
 
@@ -74,23 +79,23 @@ func TestScheduledPollDeadLetterTracksLatestOutcome(t *testing.T) {
 			m.executeAndRescheduleTask(ctx, task, m.pollWorkProgress(), 0)
 			return task
 		}
-		gauges := func(phase string, wantTarget, wantPeer float64) {
+		gauges := func(phase string, wantTarget, wantPeer int) {
 			t.Helper()
-			gauge := m.pollMetrics.schedulerDeadLetterDepth
-			target := getGaugeVecValue(gauge, "pve", scheduleFixtureNode)
-			peer := getGaugeVecValue(gauge, "pve", peerName)
-			t.Logf("DEAD_LETTER_GAUGES %s fixture-pve=%.0f independent-peer=%.0f", phase, target, peer)
-			if target != wantTarget || peer != wantPeer {
-				t.Errorf("dead-letter gauges at %s: target=%v peer=%v, want %v/%v", phase, target, peer, wantTarget, wantPeer)
-			}
+			assertDeadLetterScrape(t, handler, phase, map[metricKey]int{
+				{"pve", scheduleFixtureNode}: wantTarget,
+				{"pve", peerName}:            wantPeer,
+			})
 		}
 
+		empty := m.deadLetterQueue.PeekAll(0)
 		m.poll(ctx, nil)
 		const terminalReads = 5
 		for i := 0; i < 2*terminalReads; i++ {
 			runNext()
 		}
 		gauges("failed", 1, 1)
+		m.pollMetrics.UpdateDeadLetterCounts(empty)
+		gauges("after-older-empty-refresh", 1, 1)
 		failed := captureDeadLetterHealth(t, m, "failed")
 		target := deadLetterHealthRow(t, failed, InstanceTypePVE, scheduleFixtureNode)
 		failedPeer := deadLetterHealthRow(t, failed, InstanceTypePVE, peerName)
@@ -117,11 +122,31 @@ func TestScheduledPollDeadLetterTracksLatestOutcome(t *testing.T) {
 			t.Fatal("a claim without a new reading changed a terminal failure")
 		}
 
+		captured := make(chan int, 1)
+		publishRefresh, publishedRefresh := make(chan struct{}), make(chan struct{})
+		go func() {
+			tasks := m.deadLetterQueue.PeekAll(m.deadLetterQueue.Size())
+			captured <- len(tasks)
+			<-publishRefresh
+			m.pollMetrics.UpdateDeadLetterCounts(tasks)
+			close(publishedRefresh)
+		}()
+		finishRefresh := sync.OnceFunc(func() {
+			close(publishRefresh)
+			<-publishedRefresh
+		})
+		defer finishRefresh()
+		if n := <-captured; n != 2 {
+			t.Fatalf("refresh captured %d terminal entries, want 2", n)
+		}
+
 		if task := runNext(); task.InstanceName != scheduleFixtureNode {
 			t.Fatalf("expected the target to be the first eligible probe, got %+v", task)
 		}
-		// Read the gauge before SchedulerHealth refreshes it.
 		gauges("recovered", 0, 1)
+		finishRefresh()
+		// The old refresh cannot put a recovered connection back in the gauge.
+		gauges("after-overlapping-refresh", 0, 1)
 		recovered := captureDeadLetterHealth(t, m, "recovered")
 		now := deadLetterHealthRow(t, recovered, InstanceTypePVE, scheduleFixtureNode)
 		peerNow := deadLetterHealthRow(t, recovered, InstanceTypePVE, peerName)
@@ -148,11 +173,17 @@ func TestScheduledPollDeadLetterTracksLatestOutcome(t *testing.T) {
 func TestPMGPartialRecoveryRetiresTerminalDeadLetter(t *testing.T) {
 	m, task := newPartialReadPMGMonitor(t)
 	t.Cleanup(m.Stop)
+	reg := prometheus.NewRegistry()
+	m.pollMetrics = newPollMetrics(reg)
+	defer m.pollMetrics.trackDeadLetterQueue(t.Context(), m.deadLetterQueue)()
+	handler := promhttp.HandlerFor(reg, promhttp.HandlerOpts{})
+	key := makeMetricKey("pmg", task.InstanceName)
 	fixture := &pmgScopeFixture{calls: map[string]int{}, fail: "version"}
 	poll := func() { m.pollPMGInstance(t.Context(), task.InstanceName, fixture) }
 	for i := 0; i < m.maxRetryAttempts && m.DeadLetterCount() == 0; i++ {
 		pollAndReschedule(t, m, task, poll)
 	}
+	assertDeadLetterScrape(t, handler, "pmg-failed-before-health", map[metricKey]int{key: 1})
 	before := captureDeadLetterHealth(t, m, "pmg-failed")
 	if before.DeadLetter.Count != 1 || deadLetterHealthRow(t, before, InstanceTypePMG, task.InstanceName).PollStatus.LastError == nil {
 		t.Fatal("fixture did not reach a terminal version error")
@@ -160,6 +191,7 @@ func TestPMGPartialRecoveryRetiresTerminalDeadLetter(t *testing.T) {
 
 	fixture.fail = "mail"
 	next := pollAndReschedule(t, m, task, poll)
+	assertDeadLetterScrape(t, handler, "pmg-partial-before-health", map[metricKey]int{key: 0})
 	after := captureDeadLetterHealth(t, m, "pmg-partial")
 	row := deadLetterHealthRow(t, after, InstanceTypePMG, task.InstanceName)
 	if after.DeadLetter.Count != 0 || len(after.DeadLetter.Tasks) != 0 || row.DeadLetter != (InstanceDLQ{}) {
@@ -174,4 +206,18 @@ func TestPMGPartialRecoveryRetiresTerminalDeadLetter(t *testing.T) {
 	if len(state) != 1 || state[0].MailStats != nil || state[0].Quarantine == nil {
 		t.Errorf("partial state hid healthy readings or published a failed one: %+v", state)
 	}
+}
+
+func TestSchedulerDeadLettersExcludeCancelledRuntimeBeforeDetach(t *testing.T) {
+	reg := prometheus.NewRegistry()
+	pm := newPollMetrics(reg)
+	handler := promhttp.HandlerFor(reg, promhttp.HandlerOpts{})
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	queue := NewTaskQueue()
+	defer pm.trackDeadLetterQueue(ctx, queue)()
+	queue.Upsert(ScheduledTask{InstanceType: InstanceTypePBS, InstanceName: "stopping"})
+	assertDeadLetterScrape(t, handler, "before-cancel", map[metricKey]int{{"pbs", "stopping"}: 1})
+	cancel() // The loop has not yet returned its registration.
+	assertDeadLetterScrape(t, handler, "after-cancel-before-detach", map[metricKey]int{{"pbs", "stopping"}: 0})
 }

@@ -326,8 +326,13 @@ func (mtm *MultiTenantMonitor) GetMonitor(orgID string) (*Monitor, error) {
 		mtm.mu.Unlock()
 		return nil, fmt.Errorf("organization %q initialization was cancelled", orgID)
 	}
+	// The scheduler's dead letters are current only while this runtime owns
+	// polling. Cancellation fences the metric before shutdown waits for the
+	// loop, even if another caller still holds the old monitor.
+	untrackDeadLetters := monitor.pollMetrics.trackDeadLetterQueue(tenantCtx, monitor.deadLetterQueue)
 	go func() {
 		defer close(tenantDone)
+		defer untrackDeadLetters()
 		monitor.Start(tenantCtx, mtm.wsHub)
 	}()
 	mtm.mu.Unlock()

@@ -29,6 +29,7 @@ type PollMetrics struct {
 	schedulerQueueWait           *prometheus.HistogramVec
 	workProgress                 *pollWorkProgress
 	schedulerDeadLetterDepth     *prometheus.GaugeVec
+	schedulerDeadLetters         *pollDeadLetterCollector
 	schedulerBreakerState        *prometheus.GaugeVec
 	schedulerBreakerFailureCount *prometheus.GaugeVec
 	schedulerBreakerRetrySeconds *prometheus.GaugeVec
@@ -192,7 +193,7 @@ func newPollMetrics(reg prometheus.Registerer) *PollMetrics {
 				Namespace: "pulse",
 				Subsystem: "scheduler",
 				Name:      "dead_letter_depth",
-				Help:      "Number of tasks currently parked in the dead-letter queue per instance.",
+				Help:      schedulerDeadLetterDepthHelp,
 			},
 			[]string{"instance_type", "instance"},
 		),
@@ -229,6 +230,7 @@ func newPollMetrics(reg prometheus.Registerer) *PollMetrics {
 		lastDLQKeys:          make(map[string]struct{}),
 	}
 	pm.schedulerQueues = newPollQueueCollector(pm)
+	pm.schedulerDeadLetters = newPollDeadLetterCollector(pm.schedulerDeadLetterDepth)
 
 	reg.MustRegister(
 		pm.pollDuration,
@@ -244,7 +246,7 @@ func newPollMetrics(reg prometheus.Registerer) *PollMetrics {
 		pm.schedulerQueues,
 		pm.schedulerQueueWait,
 		pm.workProgress,
-		pm.schedulerDeadLetterDepth,
+		pm.schedulerDeadLetters,
 		pm.schedulerBreakerState,
 		pm.schedulerBreakerFailureCount,
 		pm.schedulerBreakerRetrySeconds,
@@ -391,9 +393,11 @@ func (pm *PollMetrics) UpdateQueueSnapshot(snapshot QueueSnapshot) {
 	pm.mu.Unlock()
 }
 
-// UpdateDeadLetterCounts refreshes dead-letter queue gauges based on the provided tasks.
+// UpdateDeadLetterCounts reports a sample for monitors driven without a
+// runtime (for example, direct scheduler fixtures). Once a runtime has
+// registered its queue, a Health or worker snapshot is not a metric source.
 func (pm *PollMetrics) UpdateDeadLetterCounts(tasks []DeadLetterTask) {
-	if pm == nil {
+	if pm == nil || pm.usesLiveDeadLetters() {
 		return
 	}
 
@@ -431,7 +435,7 @@ func (pm *PollMetrics) UpdateDeadLetterCounts(tasks []DeadLetterTask) {
 // clearDeadLetterCount publishes the retirement of one terminal failure.
 // This is not a queue refresh: recovery must not clear other connections.
 func (pm *PollMetrics) clearDeadLetterCount(instanceType, instance string) {
-	if pm == nil {
+	if pm == nil || pm.usesLiveDeadLetters() {
 		return
 	}
 	instType, inst := sanitizeInstanceLabels(instanceType, instance)
