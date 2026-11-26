@@ -26,7 +26,8 @@ policies, or [check DNS answers](#check-that-dns-answers-correctly).
 
 ## Add a local check
 
-1. Open **Settings → Monitoring → Availability checks** and add a target.
+1. Open **Availability** in the main navigation and select **Add check**, or
+   open **Settings → Monitoring → Availability checks** to manage saved targets.
 2. Choose its **Target type**, give it a name, choose its protocol, and enter
    the address and any required port or path. The Pulse server must be able to
    resolve and reach that address.
@@ -36,6 +37,12 @@ policies, or [check DNS answers](#check-that-dns-answers-correctly).
    server** as the observation location for a local check.
 5. Configure [alert destinations and verify delivery](ALERTING.md#choose-where-notifications-go).
    A saved check alone does not establish that a recipient will be notified.
+
+From a check's detail drawer on **Availability**, administrators can run
+**Test now**, **Pause** or **Resume**, and **Edit**, and inspect its status
+timeline and response-time history across **24h**, **7d**, **30d** and **1y**.
+Pausing or deleting a saved check retires its pending local poll from the
+scheduler queue so removed checks do not keep scheduling follow-up polls.
 
 Keep credentials and private target addresses out of public screenshots and
 support reports. Use a service you own or are authorised to monitor.
@@ -49,7 +56,7 @@ The target type says what the check is on:
 | Router or firewall, Switch, Access point | Network gear |
 | Other device | A printer, a UPS, a sensor |
 
-A machine check does not add the computer to **Machines**; that takes a Pulse
+A machine check does not add the computer to **Machines**. That takes a Pulse
 agent.
 
 The router, switch and access point types need a Pulse server that knows
@@ -109,13 +116,21 @@ or longer and distinguishes a `clean restart` from an `unexpected stop`.
 
 ## Check that DNS answers correctly
 
-Use the **DNS** probe protocol (or the **DNS resolver** preset) to verify that a resolver such as Pi-hole, AdGuard Home, Technitium, or Unbound answers queries correctly.
+Choose the **DNS resolution** protocol (or the **DNS resolver (Pi-hole / AdGuard / Unbound)** preset) to verify that a resolver such as Pi-hole, AdGuard Home, Technitium, or Unbound answers queries correctly.
 
-1. Set **Address** to the DNS server IP or hostname (and **Port** if it listens on a port other than `53`).
+1. Set **DNS server address** to the DNS server IP or hostname (and **Port** if it listens on a port other than `53`).
 2. Set **Query hostname** to a domain the resolver should answer (for example, `example.com` or an internal hostname such as `nas.home.arpa`).
-3. Choose the **Record type** (`A`, `AAAA`, `CNAME`, `TXT`, `MX`, `NS`, `SRV`, or `PTR`) and **Transport** (`UDP` or `TCP`).
-4. Optionally set **Expected answer** to verify that at least one returned record matches a specific IP, target host, or TXT substring.
+3. Choose the **Record type** (`A`, `AAAA`, `CNAME`, `TXT`, `MX`, `NS`, `SRV`, or `PTR`) and **Transport** (**UDP (default)** or **TCP**).
+4. Optionally set **Expected answer (optional)** to verify that at least one returned record matches a specific IP, target host, or TXT substring.
 
-Pulse records transport reachability separately from DNS answer validation. A timeout or refused socket marks the resolver unreachable, while a `SERVFAIL`, `NXDOMAIN`, empty answer set, or value mismatch records that the resolver answered but failed the DNS check.
+Pulse checks that the resolver returns `NOERROR` with at least one matching record, and records transport reachability separately from DNS answer validation. A timeout or refused socket marks the resolver unreachable, while a `SERVFAIL`, `NXDOMAIN`, empty answer set, or value mismatch records that the resolver answered but failed the DNS check.
 
 Native DNS checks run locally on the Pulse server in Community, and run from remote host agents when **Observation locations** are configured with Pro. No Pulse agent is required on the DNS server itself.
+
+## Verify HTTPS certificates and credentials
+
+For an HTTPS check, **Monitor TLS certificate validity** and **Expiry warning (days)** (default `30`) track certificate expiry on the target.
+
+When an HTTPS check sends stored credentials, custom header values or a request body, Pulse does not send them to an untrusted certificate. The server certificate must be trusted by the checking host or match **Pinned certificate fingerprint (optional)** (SHA-256), unless you explicitly enable **Allow an unverified certificate**.
+
+If a test is refused for an untrusted certificate, Pulse reports the **presented certificate SHA-256** without sending stored values. Verify that fingerprint through an independent trusted path before pinning it, rather than turning off certificate verification.
