@@ -171,7 +171,7 @@ in the same window without changing a rule or sending a test notification.
 | `pulse_scheduler_dead_letter_depth` | Gauge | Terminal poll entries still parked in running schedulers at scrape time, by `instance_type` and `instance`. |
 | `pulse_scheduler_breaker_state` | Gauge | `0`=Closed, `1`=Half-Open, `2`=Open, `-1`=Unknown. |
 | `pulse_scheduler_breaker_failure_count` | Gauge | Consecutive failure count. |
-| `pulse_scheduler_breaker_retry_seconds` | Gauge | Seconds remaining before a retry is allowed, as recorded at the last breaker update. Not a live countdown. |
+| `pulse_scheduler_breaker_retry_seconds` | Gauge | Seconds left until the last recorded breaker retry deadline, measured at scrape time. Zero if that deadline has passed or none was recorded for this breaker. |
 
 The queue gauges count waiting tasks across the running schedulers, not work
 already claimed by a worker or parked in the dead-letter queue. Older builds
@@ -202,20 +202,22 @@ evaluation, decide that a target is down, or send an alert.
 
 ### Check whether backoff still explains the wait
 
-A fresh scrape can keep showing the same positive retry value even after
-the time has passed. To check an open breaker for one connection, use
-`instances[].breaker.retryAt` from a [saved scheduler snapshot](../api/SCHEDULER_HEALTH.md#-common-queries-jq).
-Match the connection by `key` and compare `retryAt` with the snapshot's
-`updatedAt`:
+On fresh scrapes, check `pulse_scheduler_breaker_retry_seconds` for the
+same expected connection as the poll results. A positive value means
+the recorded deadline is still ahead. It can count down to zero with the
+breaker still recorded as open: a scrape does not admit or run a poll.
+An elapsed deadline means this breaker delay no longer explains the wait,
+not that a worker is free or that collection recovered. Check poll
+results and the overdue stages above before drawing that conclusion.
+A missing series is not zero. Breaker series can outlive a removed
+connection, so check only targets you still expect Pulse to poll.
 
-- If `retryAt` is later, the breaker was still holding retries at the time
-  of the snapshot. That is the earliest time it could let a retry through,
-  not a promise that a worker will start then.
-- If `retryAt` has passed, check for a newer success or error in the
-  [two saved poll results](../api/SCHEDULER_HEALTH.md#compare-two-poll-snapshots).
-  An elapsed deadline means a retry is eligible, not that it ran. If no
-  result advanced, check the overdue stages above if available.
-
+Older exporters can keep reporting the last recorded positive value even
+after the deadline. If using an older exporter or checking a connection
+in a particular workspace, compare `instances[].breaker.retryAt` with
+`updatedAt` for the same connection `key` in a
+[saved scheduler snapshot](../api/SCHEDULER_HEALTH.md#-common-queries-jq).
+A future deadline is the earliest time the breaker could allow a probe.
 A missing deadline or a failed snapshot does not establish a retry or a
 healthy connection. Allow for the normal poll interval before judging a gap.
 Do not reset the breaker, change settings or restart Pulse to make a result appear.

@@ -5227,6 +5227,17 @@ cleanup so readers cannot retain orphaned runtime or alert projections.
 
 ## Shared Boundaries
 
+The existing Prometheus breaker gauges use one recorded state, failure
+count and retry deadline per connection label set. The retry gauge
+subtracts the scrape time from that deadline, clamping expired or unset
+deadlines to zero without refreshing through Scheduler Health or waiting
+on the monitor or breaker. No observation means no series. A zero can
+coexist with an open breaker: scraping cannot claim a probe, change
+breaker state, or prove a new result. The label scope and series
+lifetime are unchanged. `TestSchedulerBreakerRetryCountdownWithoutNewResults`
+checks the HTTP exporter across open and half-open windows, a successful
+probe, and a healthy peer with the same instance label.
+
 A targeted host History fallback passes the requested metric types through
 the monitor to the selected TrueNAS provider. When only Disk I/O is needed,
 legacy REST requests every disk graph in that catalogue and no unrelated

@@ -13,26 +13,24 @@ import (
 
 // PollMetrics manages Prometheus instrumentation for polling activity.
 type PollMetrics struct {
-	pollDuration                 *prometheus.HistogramVec
-	pollResults                  *prometheus.CounterVec
-	pollErrors                   *prometheus.CounterVec
-	lastSuccess                  *prometheus.GaugeVec
-	queueDepth                   prometheus.Gauge
-	inflight                     *prometheus.GaugeVec
-	nodePollDuration             *prometheus.HistogramVec
-	nodePollResults              *prometheus.CounterVec
-	nodePollErrors               *prometheus.CounterVec
-	nodeLastSuccess              *prometheus.GaugeVec
-	schedulerQueueReady          prometheus.Gauge
-	schedulerQueueDepthByType    *prometheus.GaugeVec
-	schedulerQueues              *pollQueueCollector
-	schedulerQueueWait           *prometheus.HistogramVec
-	workProgress                 *pollWorkProgress
-	schedulerDeadLetterDepth     *prometheus.GaugeVec
-	schedulerDeadLetters         *pollDeadLetterCollector
-	schedulerBreakerState        *prometheus.GaugeVec
-	schedulerBreakerFailureCount *prometheus.GaugeVec
-	schedulerBreakerRetrySeconds *prometheus.GaugeVec
+	pollDuration              *prometheus.HistogramVec
+	pollResults               *prometheus.CounterVec
+	pollErrors                *prometheus.CounterVec
+	lastSuccess               *prometheus.GaugeVec
+	queueDepth                prometheus.Gauge
+	inflight                  *prometheus.GaugeVec
+	nodePollDuration          *prometheus.HistogramVec
+	nodePollResults           *prometheus.CounterVec
+	nodePollErrors            *prometheus.CounterVec
+	nodeLastSuccess           *prometheus.GaugeVec
+	schedulerQueueReady       prometheus.Gauge
+	schedulerQueueDepthByType *prometheus.GaugeVec
+	schedulerQueues           *pollQueueCollector
+	schedulerQueueWait        *prometheus.HistogramVec
+	workProgress              *pollWorkProgress
+	schedulerDeadLetterDepth  *prometheus.GaugeVec
+	schedulerDeadLetters      *pollDeadLetterCollector
+	schedulerBreakers         *pollBreakerCollector
 
 	mu sync.RWMutex
 	// Missing keys have no result. A stored zero time is a first failure
@@ -197,33 +195,7 @@ func newPollMetrics(reg prometheus.Registerer) *PollMetrics {
 			},
 			[]string{"instance_type", "instance"},
 		),
-		schedulerBreakerState: prometheus.NewGaugeVec(
-			prometheus.GaugeOpts{
-				Namespace: "pulse",
-				Subsystem: "scheduler",
-				Name:      "breaker_state",
-				Help:      "Circuit breaker state encoded as 0=closed, 1=half-open, 2=open, -1=unknown.",
-			},
-			[]string{"instance_type", "instance"},
-		),
-		schedulerBreakerFailureCount: prometheus.NewGaugeVec(
-			prometheus.GaugeOpts{
-				Namespace: "pulse",
-				Subsystem: "scheduler",
-				Name:      "breaker_failure_count",
-				Help:      "Current consecutive failure count tracked by the circuit breaker.",
-			},
-			[]string{"instance_type", "instance"},
-		),
-		schedulerBreakerRetrySeconds: prometheus.NewGaugeVec(
-			prometheus.GaugeOpts{
-				Namespace: "pulse",
-				Subsystem: "scheduler",
-				Name:      "breaker_retry_seconds",
-				Help:      "Seconds until the circuit breaker will allow another attempt.",
-			},
-			[]string{"instance_type", "instance"},
-		),
+		schedulerBreakers:    newPollBreakerCollector(),
 		lastSuccessByKey:     make(map[metricKey]time.Time),
 		nodeLastSuccessByKey: make(map[nodeMetricKey]time.Time),
 		lastQueueTypeKeys:    make(map[string]struct{}),
@@ -247,9 +219,7 @@ func newPollMetrics(reg prometheus.Registerer) *PollMetrics {
 		pm.schedulerQueueWait,
 		pm.workProgress,
 		pm.schedulerDeadLetters,
-		pm.schedulerBreakerState,
-		pm.schedulerBreakerFailureCount,
-		pm.schedulerBreakerRetrySeconds,
+		pm.schedulerBreakers,
 	)
 
 	return pm
@@ -307,6 +277,66 @@ func pollAgeSeconds(now, last time.Time) float64 {
 func rememberFirstPollFailure[K comparable](lastSuccess map[K]time.Time, key K) {
 	if _, ok := lastSuccess[key]; !ok {
 		lastSuccess[key] = time.Time{}
+	}
+}
+
+type breakerMetricObservation struct {
+	state    float64
+	failures int
+	retryAt  time.Time
+}
+
+// pollBreakerCollector snapshots the recorded state, failures and deadline
+// together. Scraping neither waits for monitor or breaker locks nor advances
+// the breaker. Only the scheduler can admit a retry.
+type pollBreakerCollector struct {
+	state, failures, retrySeconds *prometheus.Desc
+	mu                            sync.RWMutex
+	observations                  map[metricKey]breakerMetricObservation
+}
+
+func newPollBreakerCollector() *pollBreakerCollector {
+	labels := []string{"instance_type", "instance"}
+	return &pollBreakerCollector{
+		state: prometheus.NewDesc("pulse_scheduler_breaker_state",
+			"Circuit breaker state encoded as 0=closed, 1=half-open, 2=open, -1=unknown.", labels, nil),
+		failures: prometheus.NewDesc("pulse_scheduler_breaker_failure_count",
+			"Current consecutive failure count tracked by the circuit breaker.", labels, nil),
+		retrySeconds: prometheus.NewDesc("pulse_scheduler_breaker_retry_seconds",
+			"Seconds remaining at scrape time until the last recorded breaker retry deadline; zero if reached or unset.", labels, nil),
+		observations: make(map[metricKey]breakerMetricObservation),
+	}
+}
+
+func (c *pollBreakerCollector) record(key metricKey, observation breakerMetricObservation) {
+	c.mu.Lock()
+	c.observations[key] = observation
+	c.mu.Unlock()
+}
+
+func (c *pollBreakerCollector) Describe(ch chan<- *prometheus.Desc) {
+	ch <- c.state
+	ch <- c.failures
+	ch <- c.retrySeconds
+}
+
+func (c *pollBreakerCollector) Collect(ch chan<- prometheus.Metric) {
+	c.mu.RLock()
+	observations := maps.Clone(c.observations)
+	c.mu.RUnlock()
+
+	now := time.Now()
+	for key, sample := range observations {
+		seconds := 0.0
+		if !sample.retryAt.IsZero() {
+			seconds = max(sample.retryAt.Sub(now).Seconds(), 0)
+		}
+		ch <- prometheus.MustNewConstMetric(c.state, prometheus.GaugeValue,
+			sample.state, key.instanceType, key.instance)
+		ch <- prometheus.MustNewConstMetric(c.failures, prometheus.GaugeValue,
+			float64(sample.failures), key.instanceType, key.instance)
+		ch <- prometheus.MustNewConstMetric(c.retrySeconds, prometheus.GaugeValue,
+			seconds, key.instanceType, key.instance)
 	}
 }
 
@@ -444,24 +474,13 @@ func (pm *PollMetrics) clearDeadLetterCount(instanceType, instance string) {
 
 // SetBreakerState updates circuit breaker metrics for a specific instance.
 func (pm *PollMetrics) SetBreakerState(instanceType, instance, state string, failures int, retryAt time.Time) {
-	if pm == nil {
+	if pm == nil || pm.schedulerBreakers == nil {
 		return
 	}
 
-	instType, inst := sanitizeInstanceLabels(instanceType, instance)
-
-	value := breakerStateToValue(state)
-	pm.schedulerBreakerState.WithLabelValues(instType, inst).Set(value)
-	pm.schedulerBreakerFailureCount.WithLabelValues(instType, inst).Set(float64(failures))
-
-	retrySeconds := 0.0
-	if !retryAt.IsZero() {
-		retrySeconds = time.Until(retryAt).Seconds()
-		if retrySeconds < 0 {
-			retrySeconds = 0
-		}
-	}
-	pm.schedulerBreakerRetrySeconds.WithLabelValues(instType, inst).Set(retrySeconds)
+	pm.schedulerBreakers.record(makeMetricKey(instanceType, instance), breakerMetricObservation{
+		state: breakerStateToValue(state), failures: failures, retryAt: retryAt,
+	})
 }
 
 // RecordResult records metrics for a polling result.
