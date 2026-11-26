@@ -122,6 +122,70 @@ class FAQDeploymentDocsTest(unittest.TestCase):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, text)
 
+    def test_saml_registration_and_test_warnings_match_source(self):
+        text = answer("Can I use Single Sign-On (SSO)?")
+        for phrase in (
+            "**Test** checks metadata first",
+            "**URL format OK** applies only to manual SSO URL checks",
+            "**Metadata read** still reports **Sign-in not tested**",
+            "**No signing cert read**",
+            "**Expired cert found**",
+            "defaults the email attribute to `email`",
+            "editing a saved provider keeps an unset email attribute blank",
+            "before turning SAML sign-in on",
+            "open **Edit** on a saved disabled provider",
+            "**SP Metadata** and **ACS URL**",
+            "check **Settings → System** public URL and the saved provider settings",
+        ):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, text)
+        self.assertNotIn("from the saved, enabled provider's card", text)
+
+        panel = (ROOT / "frontend-modern/src/components/Settings/SSOProvidersPanel.tsx").read_text()
+        for marker in (
+            "Open Edit to check this provider’s SP Metadata and ACS URLs.",
+            "const SamlEditorRegistration",
+            "isManual ? 'URL format OK' : isSaml ? 'Metadata read'",
+            "'No signing cert read'",
+            "'Expired cert found'",
+            "'Sign-in not tested'",
+        ):
+            self.assertIn(marker, panel)
+        model = (ROOT / "frontend-modern/src/components/Settings/ssoProvidersModel.ts").read_text()
+        self.assertIn("samlEmailAttr: 'email'", model)
+        self.assertIn("samlEmailAttr: full.saml?.emailAttr ?? ''", model)
+        self.assertIn("if (form.samlIdpMetadataUrl.trim()) return 'saml-metadata-url';", model)
+        self.assertIn("if (form.samlIdpMetadataXml.trim()) return 'saml-metadata-xml';", model)
+        presentation = (ROOT / "frontend-modern/src/utils/ssoProviderPresentation.ts").read_text()
+        self.assertIn(
+            "Check Settings > System public URL and saved provider settings.",
+            presentation,
+        )
+
+    def test_ceph_unknown_health_exclusion_matches_source(self):
+        text = answer("Does Pulse monitor Ceph?")
+        for phrase in (
+            "**Proxmox → Ceph**",
+            "without a recognised health verdict",
+            "**Unknown** in both the table and cluster drawer",
+            "out of the **Healthy** filter",
+            "visible under **All**",
+        ):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, text)
+
+        table = (ROOT / "frontend-modern/src/features/proxmox/ProxmoxCephTable.tsx").read_text()
+        for marker in (
+            "type CephHealth = 'healthy' | 'warning' | 'critical' | 'unknown';",
+            "type CephStatusFilter = 'all' | Exclude<CephHealth, 'unknown'>;",
+            "unknown: { variant: 'muted', label: 'Unknown', tone: 'text-muted' },",
+            "if (want !== 'all' && classify(cluster) !== want) return false;",
+            "const ind = () => HEALTH_INDICATORS[classify(cluster)];",
+        ):
+            self.assertIn(marker, table)
+        drawer = (ROOT / "frontend-modern/src/features/proxmox/ProxmoxCephClusterDrawer.tsx").read_text()
+        self.assertIn("statusLabel={props.statusIndicator.label}", drawer)
+
     def test_shipped_copy_and_detailed_destinations_exist(self):
         self.assertEqual(faq(), (ROOT / "frontend-modern/public/docs/FAQ.md").read_text())
         for guide, heading in (("TROUBLESHOOTING", "### Port change didn't take effect"),

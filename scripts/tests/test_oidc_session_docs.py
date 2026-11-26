@@ -532,6 +532,50 @@ class OIDCSessionDocsTest(unittest.TestCase):
         self.assertIn("### Removing User Access", rbac)
         self.assertIn("Requires:", rbac)
 
+    def test_exact_directory_groups_and_edit_read_retry_match_source(self):
+        access = guide_section("### Access Control", "### Group-to-Role Mapping")
+        for expected in (
+            "commas or new lines",
+            "containing commas or `=` in double quotes",
+            "Leaving a restriction field blank clears it on save",
+            "Separators alone or unmatched quotes are rejected before saving",
+        ):
+            self.assertIn(expected, access)
+        mapping = guide_section("### Group-to-Role Mapping", "### Sessions and `offline_access`")
+        for expected in (
+            "`group=roleId` pairs separated by commas or new lines",
+            "containing commas or `=` in double quotes",
+            '"Ops, East"=viewer',
+            "Duplicate groups or incomplete `group=roleId` pairs are rejected before sending a save",
+            "Leaving the field blank clears saved mappings",
+        ):
+            self.assertIn(expected, mapping)
+        recovery = guide_section("### A provider change could not be confirmed", "### Configuration sources")
+        for expected in (
+            "Could not open settings. Try Edit again.",
+            "read failed without submitting any change",
+            "Select **Edit** again to retry only that read",
+        ):
+            self.assertIn(expected, recovery)
+
+        model = (ROOT / "frontend-modern/src/components/Settings/ssoProvidersModel.ts").read_text()
+        for marker in (
+            "Allowed Groups: check the separators and double quotes.",
+            "Group Role Mappings: enter each group only once.",
+            "Group Role Mappings: enter complete group=roleId pairs. Check double quotes.",
+            "A blank field deliberately clears it. Separators alone are not a group list.",
+        ):
+            self.assertIn(marker, model)
+        panel = (ROOT / "frontend-modern/src/components/Settings/SSOProvidersPanel.tsx").read_text()
+        for marker in (
+            "Double-quote names with commas",
+            'e.g. "Ops, East"=viewer',
+            "getSSOProviderDetailsLoadErrorMessage()",
+        ):
+            self.assertIn(marker, panel)
+        presentation = (ROOT / "frontend-modern/src/utils/ssoProviderPresentation.ts").read_text()
+        self.assertIn("Could not open settings. Try Edit again.", presentation)
+
     def test_served_guide_matches_source(self):
         self.assertEqual(GUIDE.read_bytes(), (ROOT / "frontend-modern/public/docs/OIDC.md").read_bytes())
 
