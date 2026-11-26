@@ -120,6 +120,26 @@ class AlertingOutageHelpDocsTest(unittest.TestCase):
                 slugs = {heading_slug(h) for h in headings}
                 self.assertIn(fragment, slugs, f"missing anchor #{fragment} in {doc_path.name}")
 
+    def test_recovery_severity_continuity_help_matches_dispatch_receipts(self):
+        text = DOC.read_text(encoding="utf-8")
+        section = " ".join(
+            text.split("## Confirm recovery separately\n", 1)[1]
+            .split("\n## ", 1)[0]
+            .split()
+        )
+        dispatch = (
+            ROOT / "internal/notifications/notification_dispatch.go"
+        ).read_text(encoding="utf-8")
+        self.assertIn("filterResolvedJobsByDeliveryReceipt(", dispatch)
+        self.assertIn("notifiedLevel", dispatch)
+        self.assertIn("cloned.Level = notifiedLevel", dispatch)
+        for phrase in (
+            "keeps the severity level from the firing notification that destination actually received",
+            "stepped down from critical to warning before clearing",
+            "match on the alert `ID` rather than relying on severity alone",
+        ):
+            self.assertIn(phrase, section)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -329,6 +329,14 @@ Agent instead. In **Overview → Details**,
 check **Memory reading** for the source and time. Proxmox can count ARC as
 used. See [TrueNAS's ARC breakdown](TRUENAS.md#memory-usage-and-arc-cache).
 
+Newer Linux `qemu-guest-agent` packages (including 10.1.0+ as well as Rocky
+Linux and RHEL defaults) disable `guest-file-open` and `guest-file-read`. Pulse
+reads `/agent/info`, skips `/proc/meminfo` when either command is disabled, and
+backs off disabled-command rejections without triggering a guest-agent cooldown
+or deferring VM filesystem reads. Leave `guest-file-*` disabled in
+`qemu-guest-agent` rather than widening guest allowlists or token permissions
+just to keep disk usage working.
+
 Windows has no `/proc/meminfo`. A failure reading that Linux path is not evidence
 that Windows filesystem collection needs `VM.GuestAgent.FileRead` or that the
 guest agent is stopped. Keep memory-file access separate from filesystem access;
@@ -542,7 +550,7 @@ pass; do not clear or bypass a guest-read pause to test recovery.
 | **Disk shows “-”** | Read its explanation and observation time. Check the owning host, current VM options, guest-local service and configured API token access. |
 | **Permission denied** | First check whether this VM is an intended monitoring target. Preserve intentionally restricted access. For intended targets only, review the token and account's effective read privileges, including privilege-separated token ACLs, outside backups or guest incidents. A successful root command would not disprove this error; a denied read does not establish guest or filesystem health. |
 | **Timeout or backup lock** | Check the existing backup/task timeline and guest workload locally. Defer active guest-agent probes; increasing a timeout is not a contention or thaw repair. |
-| **Rocky Linux / RHEL memory missing** | Review `/etc/sysconfig/qemu-ga` inside the guest. File-read restrictions can explain memory collection failure; they do not by themselves prove why filesystem usage is absent. Change the guest's allowlist or restart its agent only through your normal maintenance procedure, outside backups. |
+| **Linux `guest-file-*` disabled (including Rocky Linux / RHEL)** | Newer `qemu-guest-agent` packages disable `guest-file-open` and `guest-file-read` by default. Pulse skips `/proc/meminfo` when `/agent/info` reports those commands disabled and backs off disabled-command errors without deferring VM filesystem reads. File-read restrictions can explain missing `/proc/meminfo` readings, not missing filesystem usage, so leave `guest-file-*` disabled unless your normal maintenance policy requires otherwise. |
 | **Windows service stopped** | Check the QEMU Guest Agent service inside Windows. Schedule any restart outside backups. |
 
 ### Passive host preflight

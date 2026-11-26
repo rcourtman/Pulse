@@ -105,6 +105,34 @@ class GuestDiskReadingDocsTest(unittest.TestCase):
             self.assertEqual((ROOT / "docs" / name).read_bytes(),
                              (ROOT / "frontend-modern/public/docs" / name).read_bytes())
 
+    def test_disabled_guest_file_help_matches_agent_info_skip_and_backoff(self):
+        guide = (ROOT / "docs/VM_DISK_MONITORING.md").read_text(encoding="utf-8")
+        self.assertEqual(
+            guide.encode("utf-8"),
+            (ROOT / "frontend-modern/public/docs/VM_DISK_MONITORING.md").read_bytes(),
+        )
+        permissions = " ".join(
+            guide.split("## ⚙️ Permissions\n", 1)[1].split("\n## ", 1)[0].split()
+        )
+        mem_agent = (ROOT / "internal/monitoring/guest_memory_agent.go").read_text(encoding="utf-8")
+        metadata = (ROOT / "internal/monitoring/guest_metadata.go").read_text(encoding="utf-8")
+        self.assertIn("guestFileReadDisabled(", mem_agent)
+        self.assertIn("IsGuestAgentCommandDisabled(err)", mem_agent)
+        self.assertIn("fileReadDisabled", metadata)
+        for phrase in (
+            "guest-file-open",
+            "guest-file-read",
+            "/agent/info",
+            "skips `/proc/meminfo` when either command is disabled",
+            "without triggering a guest-agent cooldown or deferring VM filesystem reads",
+            "Leave `guest-file-*` disabled in `qemu-guest-agent`",
+        ):
+            self.assertIn(phrase, permissions)
+        self.assertIn(
+            "File-read restrictions can explain missing `/proc/meminfo` readings, not missing filesystem usage",
+            guide,
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
