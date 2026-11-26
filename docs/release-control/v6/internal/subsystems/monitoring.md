@@ -148,6 +148,30 @@ saved API delete and Scheduler Health read. `TestAvailabilityRetirementRejectsOl
 and `TestAvailabilityRefreshPreservesQueueWhenRosterUnreadable` cover a held
 plan, a returning claim, the peer poll, and a failed catalog read.
 
+Local availability probes (`pollAvailabilityTarget`) drop results when caller
+context cancellation aborts the probe so shutdown or reload never fabricates
+`unreachable` failures or history. Before publishing a completed local probe or
+ingesting remote probe results (`applyProbeAvailabilityResultsAt`), publication
+serializes with `refreshAvailabilityRuntime` under `availabilityRefreshMu` and
+re-validates the saved target: observations for deleted, paused
+(`Enabled: false`), superseded-revision (`ConfigRevision` changed), or
+remote-only reassigned targets are discarded rather than resurrecting status,
+history, connection health, or scheduler state. Pausing an availability check
+clears its pre-pause observations and external-probe grace trackers without
+deriving stale-probe errors while paused, so resuming the check starts a fresh
+first-report grace window instead of immediately raising
+`ExternalProbeUnavailable`. Deleting an availability check also prunes its
+availability-scoped entries from `pollStatusMap`, `failureCounts`,
+`lastOutcome`, `circuitBreakers`, `instanceInfoCache`, `dlqInsightMap`,
+`deadLetterQueue`, and `stalenessTracker` while leaving unrelated provider
+entries sharing the same name untouched.
+`TestPollAvailabilityTargetDropsCancelledProbeWithoutFabricatingFailure`,
+`TestPollAvailabilityTargetDropsInFlightResultAfterLifecycleTransition`,
+`TestApplyProbeAvailabilityResultsRejectsDisabledTargets`,
+`TestPausedProbeTargetDoesNotBecomeStaleAndGetsFreshGraceOnResume`,
+`TestRefreshAvailabilityTargetsPrunesDeletedSchedulerAndStalenessState`, and
+`TestAvailabilityConcurrentPollAndRefreshIsRaceFree` verify these boundaries.
+
 A panic escaping a scheduled task is recovered at the task boundary in both
 worker modes. It is logged with the task type and connection. Unwinding
 releases the claim and work marker, and the default worker keeps taking
