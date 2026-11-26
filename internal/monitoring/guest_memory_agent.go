@@ -26,6 +26,7 @@ type agentMemCacheEntry struct {
 	info             proxmox.LinuxMemoryAvailability
 	negative         bool
 	permissionDenied bool // Only an observed HTTP 403 overrides known-Linux retry cadence.
+	commandDisabled  bool // QGA explicitly disabled guest-file-open/read for this instance.
 	fetchedAt        time.Time
 }
 
@@ -102,6 +103,12 @@ func (m *Monitor) getVMAgentMemoryAvailability(ctx context.Context, client PVECl
 		// independent status/balloon/linked-agent memory remains usable.
 		return proxmox.LinuxMemoryAvailability{}, fmt.Errorf("guest agent Linux meminfo unavailable for Windows")
 	}
+	if m.guestFileReadDisabled(instanceName, node, vmid, now) {
+		// /agent/info reported guest-file-open or guest-file-read disabled for
+		// this VM instance. Skip /agent/file-read rather than repeatedly
+		// issuing a command QGA is configured to reject.
+		return proxmox.LinuxMemoryAvailability{}, fmt.Errorf("guest agent file-read disabled for this instance")
+	}
 
 	// Cache admission and read ownership share the invalidation lock. A miss
 	// never grants permission to overlap another read, even after cancellation.
@@ -113,7 +120,7 @@ func (m *Monitor) getVMAgentMemoryAvailability(ctx context.Context, client PVECl
 	if entry, ok := m.vmAgentMemCache[cacheKey]; ok {
 		ttl := vmAgentMemCacheTTL
 		if entry.negative {
-			if entry.permissionDenied {
+			if entry.permissionDenied || entry.commandDisabled {
 				ttl = vmAgentMemPermissionDeniedTTL
 			} else {
 				ttl = m.vmAgentMemNegativeCacheTTL(instanceName, node, vmid)
@@ -190,6 +197,7 @@ func (m *Monitor) getVMAgentMemoryAvailability(ctx context.Context, client PVECl
 		m.vmAgentMemCache[cacheKey] = agentMemCacheEntry{
 			negative:         true,
 			permissionDenied: known && status == http.StatusForbidden,
+			commandDisabled:  proxmox.IsGuestAgentCommandDisabled(err),
 			fetchedAt:        now,
 		}
 		if err == nil {
@@ -222,6 +230,15 @@ func (m *Monitor) guestWindowsMeminfoUnsupported(instanceName, node string, vmid
 	// display strings cannot establish the current guest's OS.
 	return entry.windowsGuest && !entry.osInfoObservedAt.IsZero() && !entry.osInfoObservedAt.After(now) &&
 		now.Sub(entry.osInfoObservedAt) < vmAgentMemCleanupMaxAge
+}
+
+func (m *Monitor) guestFileReadDisabled(instanceName, node string, vmid int, now time.Time) bool {
+	key := guestMetadataCacheKey(instanceName, node, vmid)
+	m.guestMetadataMu.RLock()
+	entry := m.guestMetadataCache[key]
+	m.guestMetadataMu.RUnlock()
+	return entry.fileReadDisabled && !entry.agentInfoObservedAt.IsZero() && !entry.agentInfoObservedAt.After(now) &&
+		now.Sub(entry.agentInfoObservedAt) < vmAgentMemCleanupMaxAge
 }
 
 func (m *Monitor) vmAgentMemNegativeCacheTTL(instanceName, node string, vmid int) time.Duration {
