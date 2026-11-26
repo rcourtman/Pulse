@@ -75,7 +75,14 @@ class DocsScopeTest(unittest.TestCase):
 
     def test_exact_suites_and_document_paths(self):
         self.assertEqual(len(SCOPE.DOC_SUITES), len(set(SCOPE.DOC_SUITES)))
-        self.assertIn(SUITE.encode(), SCOPE.DOC_SUITES)
+        for suite in (
+            SUITE,
+            "scripts/tests/test_alerting_outage_help_docs.py",
+            "scripts/tests/test_paid_docker_help_docs.py",
+            "scripts/tests/test_scheduler_health_api_help_docs.py",
+            "scripts/tests/test_watchdog_help_docs.py",
+        ):
+            self.assertIn(suite.encode(), SCOPE.DOC_SUITES)
         self.assertTrue(SCOPE.docs_only_paths(list(SCOPE.DOC_SUITES)))
         self.assertFalse(SCOPE.docs_only_paths([]))
         for path in ("README.md", *GUIDES, "docs/help/nested-guide.md"):
@@ -86,6 +93,7 @@ class DocsScopeTest(unittest.TestCase):
         for path in (
             "scripts/tests/test_future_docs.py", "scripts/tests/test_ci_docs_only.py",
             "scripts/tests/test_public_docs_workflow.py", "scripts/tests/run.sh",
+            "scripts/run-script-tests.py", "scripts/run-docs-shards.py",
             "scripts/check_docs_mirror.py", "scripts/ci_docs_only.py",
             "scripts/select-smoke-test-shard.py", ".github/scripts/docs-test-seconds.txt",
             ".github/workflows/public-docs.yml", ".github/workflows/build-and-test.yml",
@@ -164,23 +172,19 @@ class OwningChecksTest(unittest.TestCase):
             block = re.split(r"\n  [a-z_]+:\n", triggers.split(f"  {event}:\n", 1)[1], maxsplit=1)[0]
             patterns = re.findall(r'^      - "([^"]+)"$', block, re.MULTILINE)
             for path in [*SCOPE.DOC_SUITES, *SCOPE.DIAGNOSTIC_RECIPES,
+                         b"scripts/run-docs-shards.py",
                          *(p.encode() for p in ("README.md", *GUIDES))]:
                 self.assertTrue(any(fnmatch.fnmatchcase(os.fsdecode(path), p) for p in patterns), path)
         self.assertIn("  push:\n    branches:\n      - main\n", triggers)
-        recipes, rest = source.split("\n  recipes:\n", 1)[1].split("\n  docs-and-recipes:\n", 1)
-        validation, verdict = rest.split("\n  check:\n", 1)
-        self.assertIn("        shard: [0, 1, 3]\n", recipes)
-        self.assertIn("      fail-fast: false\n", recipes)
-        self.assertIn('        run: scripts/tests/run.sh --docs-shard "${{ matrix.shard }}"\n', recipes)
-        self.assertIn("        run: scripts/tests/run.sh --docs-shard 2\n", validation)
-        self.assertNotRegex(validation, r"(?m)^    (?:if|needs):")
-        self.assertIn("    needs: [recipes, docs-and-recipes]\n    if: ${{ always() }}\n", verdict)
+        jobs = source.split("\njobs:\n", 1)[1]
+        self.assertEqual(re.findall(r"(?m)^  ([a-z0-9_-]+):\s*$", jobs), ["check"])
+        check = jobs.split("  check:\n", 1)[1]
+        self.assertNotRegex(check, r"(?m)^    (?:if|needs|strategy):")
         self.assertNotIn("continue-on-error:", source)
+        self.assertIn("        run: python3 scripts/run-docs-shards.py\n", check)
         for command in ("scripts/check_public_docs.py", "scripts/readme_entrypoints_test.py",
                         "scripts/check_docs_mirror.py", "scripts/tests/test_public_docs_workflow.py"):
-            self.assertIn(f"        run: python3 {command}\n", validation)
-        self.assertIn('if [[ "$RECIPE_RESULT" != success || "$DOCS_RESULT" != success ]]; then', verdict)
-        self.assertIn('            exit 1\n', verdict)
+            self.assertIn(f"        run: python3 {command}\n", check)
 
     def test_independent_secret_scan_and_governance_are_unchanged_gates(self):
         source = BUILD.read_text()
@@ -509,6 +513,7 @@ class GitClassifierTest(unittest.TestCase):
                 self.assertEqual(self.classify(self.base, docs, branch)["code"], "true")
         for path in ("scripts/tests/test_future_docs.py", "scripts/tests/test_ci_docs_only.py",
                      "scripts/tests/test_public_docs_workflow.py", "scripts/ci_docs_only.py",
+                     "scripts/run-docs-shards.py",
                      ".github/workflows/public-docs.yml", ".github/workflows/build-and-test.yml"):
             with self.subTest(path=path):
                 before = self.git("rev-parse", "HEAD")
