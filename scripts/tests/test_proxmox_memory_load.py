@@ -274,6 +274,7 @@ class ProxmoxMemoryLoadTests(unittest.TestCase):
         request(fast_vm, 0)
         request(fast_vm, 300)
         request(archive_vm, 301)
+        request(fast_vm.replace("?", "/extra?"), 20)  # not the snapshot listing path
         handler.send_json.side_effect = BrokenPipeError
         with self.assertRaises(BrokenPipeError):
             request(fast_ct, 15)
@@ -283,8 +284,8 @@ class ProxmoxMemoryLoadTests(unittest.TestCase):
         self.assertEqual(window.snapshot_report({"pbs1": stores}, END), {
             "window_s": 300,
             "datastores": {"pbs1": {
-                "store-fast": {"expected_groups": 2, "served_groups": 1},
-                "store-archive": {"expected_groups": 1, "served_groups": 0},
+                "store-fast": {"expected_groups": 2, "served_groups": 1, "completed_responses": 2},
+                "store-archive": {"expected_groups": 1, "served_groups": 0, "completed_responses": 0},
             }},
         })
         self.assertEqual(stores["store-fast"].counts(), {"expected_groups": 2, "served_groups": 2})

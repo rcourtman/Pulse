@@ -179,10 +179,14 @@ class SnapshotCoverage:
     expected_groups: int
     served_groups: set[tuple[str, str]] = field(default_factory=set)
     steady_groups: set[tuple[str, str]] = field(default_factory=set)
+    steady_responses: int = 0
 
     def counts(self, *, steady: bool = False) -> dict[str, int]:
         groups = self.steady_groups if steady else self.served_groups
-        return {"expected_groups": self.expected_groups, "served_groups": len(groups)}
+        result = {"expected_groups": self.expected_groups, "served_groups": len(groups)}
+        if steady:
+            result["completed_responses"] = self.steady_responses
+        return result
 
 
 def missing_snapshot_coverage(coverage: dict[str, dict[str, dict[str, int]]]) -> list[str]:
@@ -716,9 +720,9 @@ def make_pbs_handler(
                         snapshots = snaps_by_key.get((ds, btype, bid), [])
                         self.send_json(snapshots)
                         if snapshots:
-                            # Count only a completed, nonempty response. Retries
-                            # for the same group do not cover another group, and
-                            # a warmup response does not cover the RSS window.
+                            # Count only completed, nonempty fixture responses.
+                            # A repeat contributes traffic, not another group;
+                            # warmup does not count in the RSS window.
                             in_window = (observation_window is not None and len(parts) == 5
                                          and observation_window.includes(time.time_ns() // 1_000_000))
                             with lock:
@@ -727,6 +731,7 @@ def make_pbs_handler(
                                 row.served_groups.add(group)
                                 if in_window:
                                     row.steady_groups.add(group)
+                                    row.steady_responses += 1
                         return
                     if ep == "rrd":
                         return self.send_json([])
