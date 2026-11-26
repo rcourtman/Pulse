@@ -42,7 +42,6 @@ import {
   formatPlatformAlertEntityType,
   formatPlatformAlertResourceType,
 } from '@/utils/alertDetailPresentation';
-import type { StatusIndicatorVariant } from '@/utils/status';
 import {
   filterVmwareActivity,
   formatVmwareIdentifierLabel,
@@ -73,7 +72,10 @@ const VSPHERE_ACTIVITY_STATUS_OPTIONS: PlatformTableFilterOption<VmwareActivityS
   },
 ];
 
-const ACTIVITY_STATE_TONE: Record<VmwareActivityStateBucket, StatusIndicatorVariant> = {
+const ACTIVITY_STATE_TONE: Record<
+  VmwareActivityStateBucket,
+  'success' | 'warning' | 'danger' | 'muted'
+> = {
   success: 'success',
   running: 'warning',
   failed: 'danger',
