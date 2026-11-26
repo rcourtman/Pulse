@@ -50,6 +50,9 @@ func startPollerLoop(
 		}()
 
 		syncConnections()
+		if runCtx.Err() != nil {
+			return
+		}
 		pollAll(runCtx)
 		for {
 			wait := nextWaitDuration(time.Now())
@@ -65,6 +68,9 @@ func startPollerLoop(
 				return
 			case <-timer.C:
 				syncConnections()
+				if runCtx.Err() != nil {
+					return
+				}
 				pollAll(runCtx)
 			}
 		}

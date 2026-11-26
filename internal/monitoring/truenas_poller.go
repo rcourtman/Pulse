@@ -215,10 +215,14 @@ func (p *TrueNASPoller) syncConnections() {
 	// orgID -> connID -> instance
 	configured := make(map[string]map[string]config.TrueNASInstance, len(orgIDs))
 	active := make(map[string]map[string]config.TrueNASInstance, len(orgIDs))
+	// Track orgs whose persistence/config read failed transiently so pruning
+	// preserves their last-known providers, cached inventory, and status.
+	failedOrgs := make(map[string]struct{})
 
 	for _, orgID := range orgIDs {
 		persistence, err := p.multiTenant.GetPersistence(orgID)
 		if err != nil || persistence == nil {
+			failedOrgs[orgID] = struct{}{}
 			log.Warn().
 				Str("component", "truenas_poller").
 				Str("action", "get_persistence").
@@ -230,6 +234,7 @@ func (p *TrueNASPoller) syncConnections() {
 
 		instances, err := persistence.LoadTrueNASConfig()
 		if err != nil {
+			failedOrgs[orgID] = struct{}{}
 			log.Warn().
 				Str("component", "truenas_poller").
 				Str("action", "load_truenas_config").
@@ -329,10 +334,8 @@ func (p *TrueNASPoller) syncConnections() {
 			}
 
 			p.providersByOrg[orgID][connID] = truenas.NewLiveProviderForConnection(&truenas.APIFetcher{Client: client}, connID)
-			if existingProvider != nil {
-				if status := p.statusByOrg[orgID][connID]; status != nil {
-					status.nextPollAt = time.Now().UTC()
-				}
+			if status := p.statusByOrg[orgID][connID]; status != nil && !status.nextPollAt.IsZero() {
+				status.nextPollAt = time.Now().UTC()
 			}
 		}
 	}
@@ -340,8 +343,12 @@ func (p *TrueNASPoller) syncConnections() {
 	// Prune providers, active configs, and cached records for removed/disabled
 	// connections and removed orgs. Pruning configs independently of providers
 	// ensures a connection that failed client construction cannot remain active
-	// after it is disabled or deleted.
+	// after it is disabled or deleted. Orgs whose config read failed transiently
+	// are skipped so a temporary I/O error never wipes active monitoring state.
 	for orgID, providers := range p.providersByOrg {
+		if _, failed := failedOrgs[orgID]; failed {
+			continue
+		}
 		activeByConn := active[orgID]
 		for connID, provider := range providers {
 			if _, ok := activeByConn[connID]; ok {
@@ -357,6 +364,9 @@ func (p *TrueNASPoller) syncConnections() {
 		}
 	}
 	for orgID, byConn := range p.configsByOrg {
+		if _, failed := failedOrgs[orgID]; failed {
+			continue
+		}
 		activeByConn := active[orgID]
 		for connID := range byConn {
 			if _, ok := activeByConn[connID]; !ok {
@@ -368,6 +378,9 @@ func (p *TrueNASPoller) syncConnections() {
 		}
 	}
 	for orgID, byConn := range p.cachedRecordsByOrg {
+		if _, failed := failedOrgs[orgID]; failed {
+			continue
+		}
 		activeByConn := active[orgID]
 		for connID := range byConn {
 			if _, ok := activeByConn[connID]; !ok {
@@ -381,6 +394,9 @@ func (p *TrueNASPoller) syncConnections() {
 
 	// Prune runtime status only when the connection is truly gone from config.
 	for orgID, byConn := range p.statusByOrg {
+		if _, failed := failedOrgs[orgID]; failed {
+			continue
+		}
 		configuredByConn := configured[orgID]
 		for connID := range byConn {
 			if configuredByConn == nil {
@@ -515,13 +531,28 @@ func (p *TrueNASPoller) pollAll(ctx context.Context) {
 		if entry.provider == nil {
 			continue
 		}
+		if errors.Is(ctx.Err(), context.Canceled) {
+			break
+		}
 
 		start := time.Now().UTC()
 		pollCtx, cancel := context.WithTimeout(ctx, trueNASPollTimeout())
 		err := entry.provider.Refresh(pollCtx)
 		cancel()
 		end := time.Now().UTC()
+		if errors.Is(ctx.Err(), context.Canceled) {
+			break
+		}
 		if err != nil {
+			p.mu.Lock()
+			current := p.providersByOrg[entry.orgID][entry.id] == entry.provider
+			if current {
+				p.recordConnectionFailureLocked(entry.orgID, entry.id, entry.config, err, end)
+			}
+			p.mu.Unlock()
+			if !current {
+				continue
+			}
 			pm.RecordResult(PollResult{
 				InstanceName: entry.id,
 				InstanceType: "truenas",
@@ -530,9 +561,6 @@ func (p *TrueNASPoller) pollAll(ctx context.Context) {
 				StartTime:    start,
 				EndTime:      end,
 			})
-			p.mu.Lock()
-			p.recordConnectionFailureLocked(entry.orgID, entry.id, entry.config, err, end)
-			p.mu.Unlock()
 			log.Warn().
 				Str("component", "truenas_poller").
 				Str("action", "refresh_connection").
@@ -542,6 +570,16 @@ func (p *TrueNASPoller) pollAll(ctx context.Context) {
 			continue
 		}
 
+		snapshot := entry.provider.Snapshot()
+		p.mu.Lock()
+		current := p.providersByOrg[entry.orgID][entry.id] == entry.provider
+		if current {
+			p.recordConnectionSuccessLocked(entry.orgID, entry.id, entry.config, start, end, snapshot)
+		}
+		p.mu.Unlock()
+		if !current {
+			continue
+		}
 		pm.RecordResult(PollResult{
 			InstanceName: entry.id,
 			InstanceType: "truenas",
@@ -549,11 +587,6 @@ func (p *TrueNASPoller) pollAll(ctx context.Context) {
 			StartTime:    start,
 			EndTime:      end,
 		})
-
-		snapshot := entry.provider.Snapshot()
-		p.mu.Lock()
-		p.recordConnectionSuccessLocked(entry.orgID, entry.id, entry.config, start, end, snapshot)
-		p.mu.Unlock()
 		refreshedOrgs[entry.orgID] = struct{}{}
 		p.ingestRecoveryPoints(ctx, entry.orgID, entry.id, entry.provider)
 	}

@@ -131,6 +131,7 @@ type vmwarePollerProviderEntry struct {
 	orgID        string
 	connectionID string
 	provider     vmwarePollerProvider
+	tracked      bool
 }
 
 // NewVMwarePoller builds a new VMware poller with the provided interval.
@@ -221,9 +222,13 @@ func (p *VMwarePoller) syncConnections() {
 	}
 
 	active := make(map[string]map[string]config.VMwareVCenterInstance, len(orgIDs))
+	// Track orgs whose persistence/config read failed transiently so pruning
+	// preserves their last-known providers, cached inventory, and status.
+	failedOrgs := make(map[string]struct{})
 	for _, orgID := range orgIDs {
 		persistence, err := p.multiTenant.GetPersistence(orgID)
 		if err != nil || persistence == nil {
+			failedOrgs[orgID] = struct{}{}
 			log.Warn().
 				Str("component", "vmware_poller").
 				Str("action", "get_persistence").
@@ -235,6 +240,7 @@ func (p *VMwarePoller) syncConnections() {
 
 		instances, err := persistence.LoadVMwareConfig()
 		if err != nil {
+			failedOrgs[orgID] = struct{}{}
 			log.Warn().
 				Str("component", "vmware_poller").
 				Str("action", "load_vmware_config").
@@ -320,6 +326,9 @@ func (p *VMwarePoller) syncConnections() {
 	}
 
 	for orgID, providers := range p.providersByOrg {
+		if _, failed := failedOrgs[orgID]; failed {
+			continue
+		}
 		activeConnections := active[orgID]
 		for connectionID, provider := range providers {
 			if _, ok := activeConnections[connectionID]; ok {
@@ -335,6 +344,9 @@ func (p *VMwarePoller) syncConnections() {
 		}
 	}
 	for orgID, byConn := range p.configsByOrg {
+		if _, failed := failedOrgs[orgID]; failed {
+			continue
+		}
 		activeConnections := active[orgID]
 		for connectionID := range byConn {
 			if _, ok := activeConnections[connectionID]; !ok {
@@ -346,6 +358,9 @@ func (p *VMwarePoller) syncConnections() {
 		}
 	}
 	for orgID, byConn := range p.cachedRecordsByOrg {
+		if _, failed := failedOrgs[orgID]; failed {
+			continue
+		}
 		activeConnections := active[orgID]
 		for connectionID := range byConn {
 			if _, ok := activeConnections[connectionID]; !ok {
@@ -357,6 +372,9 @@ func (p *VMwarePoller) syncConnections() {
 		}
 	}
 	for orgID, byConn := range p.cachedChangesByOrg {
+		if _, failed := failedOrgs[orgID]; failed {
+			continue
+		}
 		activeConnections := active[orgID]
 		for connectionID := range byConn {
 			if _, ok := activeConnections[connectionID]; !ok {
@@ -368,6 +386,9 @@ func (p *VMwarePoller) syncConnections() {
 		}
 	}
 	for orgID, byConn := range p.statusByOrg {
+		if _, failed := failedOrgs[orgID]; failed {
+			continue
+		}
 		activeConnections := active[orgID]
 		for connectionID := range byConn {
 			if _, ok := activeConnections[connectionID]; !ok {
@@ -382,12 +403,15 @@ func (p *VMwarePoller) syncConnections() {
 
 func (p *VMwarePoller) pollAll(ctx context.Context) {
 	for _, entry := range p.providerEntries() {
+		if errors.Is(ctx.Err(), context.Canceled) {
+			return
+		}
 		p.pollConnection(ctx, entry)
 	}
 }
 
 func (p *VMwarePoller) pollConnection(ctx context.Context, entry vmwarePollerProviderEntry) {
-	if entry.provider == nil {
+	if entry.provider == nil || errors.Is(ctx.Err(), context.Canceled) {
 		return
 	}
 
@@ -396,7 +420,14 @@ func (p *VMwarePoller) pollConnection(ctx context.Context, entry vmwarePollerPro
 
 	at := time.Now().UTC()
 	if err := entry.provider.Refresh(pollCtx); err != nil {
+		if errors.Is(ctx.Err(), context.Canceled) {
+			return
+		}
 		p.mu.Lock()
+		if entry.tracked && p.providersByOrg[entry.orgID][entry.connectionID] != entry.provider {
+			p.mu.Unlock()
+			return
+		}
 		p.recordConnectionFailureLocked(entry.orgID, entry.connectionID, err, at)
 		p.mu.Unlock()
 		log.Warn().
@@ -409,11 +440,19 @@ func (p *VMwarePoller) pollConnection(ctx context.Context, entry vmwarePollerPro
 		return
 	}
 
+	if errors.Is(ctx.Err(), context.Canceled) {
+		return
+	}
+
 	records := cloneIngestRecords(entry.provider.Records())
 	changes := cloneResourceChanges(entry.provider.ActivityChanges())
 	snapshot := entry.provider.Snapshot()
 
 	p.mu.Lock()
+	if entry.tracked && p.providersByOrg[entry.orgID][entry.connectionID] != entry.provider {
+		p.mu.Unlock()
+		return
+	}
 	transition := p.recordConnectionSuccessLocked(entry.orgID, entry.connectionID, at, snapshot)
 	if p.cachedRecordsByOrg[entry.orgID] == nil {
 		p.cachedRecordsByOrg[entry.orgID] = make(map[string][]unifiedresources.IngestRecord)
@@ -458,6 +497,7 @@ func (p *VMwarePoller) providerEntries() []vmwarePollerProviderEntry {
 				orgID:        orgID,
 				connectionID: connectionID,
 				provider:     provider,
+				tracked:      true,
 			})
 		}
 	}
