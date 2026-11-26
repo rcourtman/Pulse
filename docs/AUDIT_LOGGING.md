@@ -69,9 +69,9 @@ as they are.
 
 ### UI
 
-**Settings → Security → Audit Log**
+**Settings → Security → Audit Log** (`/settings/security-audit`)
 
-The audit log panel shows events in reverse chronological order with filtering by event type, user, date range, and success/failure.
+The audit log panel shows paginated events in reverse chronological order with filtering by **User** (`Filter by user...`), **Event** (`All events`, `Login`, `Logout`, `Config change`, `Startup`), **Outcome** (`All`, `Success only`, `Failed only`), and **Verification** (`All verification`, `Needs verification`, `Verified`, `Check failed or error`, which filters the currently loaded page only). For date-range filters (`startTime`/`endTime`) or other event types such as `sso_oidc_login` or `agent_config_fetch`, use the API below. Configure SIEM forwarding separately under **Settings → Security → Audit Webhooks** (`/settings/security-webhooks`).
 
 ### API
 
@@ -205,9 +205,9 @@ has established why it failed. Keep that result as evidence.
 | --- | --- | --- |
 | **Not checked** | No verification result has been obtained. | Use **Verify** for the relevant event. |
 | **Unsigned** | No signature was stored. | Check whether signing was available when the event was captured. Later enabling signing cannot authenticate it retroactively. |
-| **Failed** / `verified: false` | The stored event and signature do not verify with the current key and supported format. | Preserve the evidence; a different key, missing or damaged signature, unsupported format or modified signed fields can cause this. |
+| **Check failed** / `verified: false` | The stored event and signature do not verify with the current key and supported format. | Preserve the evidence; a different key, missing or damaged signature, unsupported format or modified signed fields can cause this. |
 | **Unavailable** / `available: false` | The current logger cannot offer verification. | Check the audit capability/runtime gate and bounded startup logs for persistent-store initialisation failures. |
-| **Error** / non-successful HTTP response | The verification request did not return a usable result. | Keep the HTTP status and redacted error; it is not proof that the event failed verification. |
+| **Check error** / non-successful HTTP response | The verification request did not return a usable result. | Keep the HTTP status and redacted error; it is not proof that the event failed verification. |
 
 Start with the event's time, the last known working version and whether the
 data mount, service account, runtime or backup changed. Inspect a bounded

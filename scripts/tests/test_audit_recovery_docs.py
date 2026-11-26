@@ -27,13 +27,42 @@ class AuditRecoveryDocsTest(unittest.TestCase):
 
     def test_verification_results_are_not_conflated(self):
         guide = read_guide("AUDIT_LOGGING")
-        for result in ("**Not checked**", "**Unsigned**", "**Failed**", "**Unavailable**", "**Error**"):
+        for result in ("**Not checked**", "**Unsigned**", "**Check failed**", "**Unavailable**", "**Check error**"):
             with self.subTest(result=result):
                 self.assertIn(result, guide)
+        presentation = (ROOT / "frontend-modern/src/utils/auditLogPresentation.ts").read_text(encoding="utf-8")
+        for label in ("'Not checked'", "'Check failed'", "'Check error'", "'Unavailable'"):
+            with self.subTest(ui_label=label):
+                self.assertIn(label, presentation)
         self.assertIn("not that Pulse has established why it failed", guide)
         self.assertIn("not proof that the event failed verification", guide)
         self.assertIn("does not prove that the history is complete", guide)
         self.assertNotIn("the event data has been tampered with since it was recorded", guide)
+
+    def test_ui_filters_and_webhooks_nav_match_shipped_settings(self):
+        guide = read_guide("AUDIT_LOGGING")
+        self.assertNotIn("filtering by event type, user, date range, and success/failure", guide)
+        for marker in (
+            "**Settings → Security → Audit Log** (`/settings/security-audit`)",
+            "filtering by **User** (`Filter by user...`), **Event** (`All events`, `Login`, `Logout`, `Config change`, `Startup`), **Outcome** (`All`, `Success only`, `Failed only`), and **Verification** (`All verification`, `Needs verification`, `Verified`, `Check failed or error`, which filters the currently loaded page only)",
+            "For date-range filters (`startTime`/`endTime`) or other event types",
+            "**Settings → Security → Audit Webhooks** (`/settings/security-webhooks`)",
+        ):
+            with self.subTest(marker=marker):
+                self.assertIn(marker, guide)
+        panel = (ROOT / "frontend-modern/src/components/Settings/AuditLogPanel.tsx").read_text(encoding="utf-8")
+        for ui_marker in (
+            "placeholder: 'Filter by user...'",
+            "label: 'Event'",
+            "label: 'Outcome'",
+            "label: 'Verification'",
+            "Verification filters this page only:",
+        ):
+            with self.subTest(ui_marker=ui_marker):
+                self.assertIn(ui_marker, panel)
+        catalog = (ROOT / "frontend-modern/src/components/Settings/settingsNavCatalog.ts").read_text(encoding="utf-8")
+        self.assertIn("id: 'security-audit'", catalog)
+        self.assertIn("id: 'security-webhooks'", catalog)
 
     def test_recovery_preserves_history_and_both_keys(self):
         guide = read_guide("AUDIT_LOGGING")

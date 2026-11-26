@@ -69,6 +69,19 @@ class LicenseRecoveryDocsTest(unittest.TestCase):
         self.assertIn("This Pulse build cannot verify Pro licenses", handlers)
         self.assertIn("The license server is temporarily unavailable", handlers)
 
+    def test_license_recovery_points_to_system_plans_and_billing_route(self):
+        text = section((ROOT / "docs/PULSE_PRO.md").read_text())
+        self.assertIn(
+            "Open **Settings → System → Plans & Billing** (`/settings/system-billing/plan`, **Plan** tab)",
+            text,
+        )
+        self.assertNotIn("Open **Plans & Billing → Plan**", text)
+        catalog = (ROOT / "frontend-modern/src/components/Settings/settingsNavCatalog.ts").read_text(encoding="utf-8")
+        self.assertIn("id: 'system-billing'", catalog)
+        billing = (ROOT / "frontend-modern/src/components/Settings/selfHostedBillingPresentation.ts").read_text(encoding="utf-8")
+        self.assertIn("navLabel: 'Plans & Billing'", billing)
+        self.assertIn("planTabLabel: 'Plan'", billing)
+
 
 if __name__ == "__main__":
     unittest.main()
