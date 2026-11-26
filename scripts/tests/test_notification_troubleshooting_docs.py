@@ -278,12 +278,12 @@ class NotificationTroubleshootingDocsTest(unittest.TestCase):
         self.assertNotIn("Can retry within the saved budget", retry_section)
         for boundary in (
             "TLS failure (certificate trust, expiry, hostname or HTTP-on-HTTPS mismatch)",
-            "Stops as soon as this failure is classified, even with attempts left; retains the delivery as a terminal failure. Fix the server certificate or TLS settings rather than retrying, and do not disable verification.",
+            "Stops as soon as this failure is classified, even with attempts left. Retains the delivery as a terminal failure. Fix the server certificate or TLS settings rather than retrying, and do not disable verification.",
             "exact same saved destination configuration",
             "up to 25 recent (24-hour) retryable retained failures",
             "five-minute cooldown per destination",
             "Authentication, configuration, rejected and TLS failures, edited destinations, rehearsals and deliveries older than 24 hours are not automatically re-queued",
-            "a successful **Test** does not trigger this recovery either",
+            "A successful **Test** does not trigger this recovery either",
         ):
             self.assertIn(boundary, retry_section)
 
