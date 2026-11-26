@@ -24,6 +24,41 @@ const baseResource = (overrides: Partial<Resource>): Resource => ({
   ...overrides,
 });
 
+describe('vSphere datastore History capacity provenance', () => {
+  const quiet = baseResource({
+    type: 'storage',
+    platformType: 'vmware-vsphere',
+    sourceStatus: { vmware: { status: 'stale' } },
+    disk: { current: 78.125, used: 400, total: 512 },
+  });
+
+  it('moves the retained value to last known and restores current usage after the next poll', () => {
+    expect(getResourceMetricsHistoryCurrentMetrics(quiet).usage).toBeUndefined();
+    expect(getResourceMetricsHistoryDeferredMetrics(quiet).usage).toEqual({
+      lastKnownValue: 78.125,
+      message: 'vCenter has not updated this datastore recently.',
+    });
+    const fresh = {
+      ...quiet,
+      disk: { current: 56.64, used: 290, total: 512 },
+      sourceStatus: { vmware: { status: 'online' } },
+      platformData: { sourceStatus: quiet.sourceStatus },
+    };
+    // When both are valid, the byte pair is more precise than current.
+    expect(getResourceMetricsHistoryCurrentMetrics(fresh).usage).toBe((290 / 512) * 100);
+    expect(getResourceMetricsHistoryDeferredMetrics(fresh).usage).toBeUndefined();
+  });
+
+  it('does not invent zero for a missing reading or defer usage because another source is stale', () => {
+    expect(
+      getResourceMetricsHistoryDeferredMetrics({ ...quiet, disk: undefined }).usage.lastKnownValue,
+    ).toBeUndefined();
+    const unrelated = { ...quiet, sourceStatus: { availability: { status: 'stale' } } };
+    expect(getResourceMetricsHistoryCurrentMetrics(unrelated).usage).toBe(78.125);
+    expect(getResourceMetricsHistoryDeferredMetrics(unrelated).usage).toBeUndefined();
+  });
+});
+
 describe('canonical drawer History honours selected guest observation provenance', () => {
   const resource = (
     state: string,
