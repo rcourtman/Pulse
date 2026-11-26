@@ -428,6 +428,16 @@ func (pm *PollMetrics) UpdateDeadLetterCounts(tasks []DeadLetterTask) {
 	pm.mu.Unlock()
 }
 
+// clearDeadLetterCount publishes the retirement of one terminal failure.
+// This is not a queue refresh: recovery must not clear other connections.
+func (pm *PollMetrics) clearDeadLetterCount(instanceType, instance string) {
+	if pm == nil {
+		return
+	}
+	instType, inst := sanitizeInstanceLabels(instanceType, instance)
+	pm.schedulerDeadLetterDepth.WithLabelValues(instType, inst).Set(0)
+}
+
 // SetBreakerState updates circuit breaker metrics for a specific instance.
 func (pm *PollMetrics) SetBreakerState(instanceType, instance, state string, failures int, retryAt time.Time) {
 	if pm == nil {

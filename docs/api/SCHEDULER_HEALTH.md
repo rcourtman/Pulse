@@ -91,7 +91,11 @@ The scheduler's record of each connection's recent poll results.
 
 *   **`pollStatus`**: `lastSuccess` timestamp, the current outstanding `lastError` if present, and `consecutiveFailures`. A complete success clears the error. A partial read can record both a success and a `partial` error with no consecutive failures.
 *   **`breaker`**: `state` (`closed`/`open`/`half_open`), `retryAt` next retry, `since` state start, `lastTransition` timestamp.
-*   **`deadLetter`**: `present` flag, `reason` (e.g., `permanent_failure`), `retryCount`, `nextRetry` if scheduled.
+*   **`deadLetter`**: `present` flag, `reason` (e.g., `permanent_failure`),
+    `retryCount` and the recorded `nextRetry`. This time does not schedule a
+    poll. When a later scheduled result succeeds, Pulse removes the terminal
+    entry. A partial read can clear that entry and still leave a
+    `pollStatus.lastError` with category `partial`.
 
 ### Top-Level Queue and DLQ
 *   **`queue`**: Snapshot of the active task queue (depth + per-type counts).
@@ -270,8 +274,9 @@ If no result advanced, read `retry.after` beside the later snapshot's
 time the breaker would permit another attempt, not a scheduled start. After
 that time the breaker may still show the same state until work reaches it.
 If `deadLetter.present` is true, the scheduler has recorded this connection
-in its dead-letter queue. A null `nextRetry` means this snapshot has no retry
-time for it. A retry timestamp changing or passing does not mean a poll ran.
+in its dead-letter queue. Older builds may keep the entry after recovery.
+A null `nextRetry` means this snapshot has no recorded retry time for it.
+A retry timestamp changing or passing does not mean a poll ran.
 Only the poll fields are included in `changes`. If neither result moved
 after the normal polling interval and any recorded wait, keep this as a
 gap in recorded results. Don't reset the breaker or retry just to check it.

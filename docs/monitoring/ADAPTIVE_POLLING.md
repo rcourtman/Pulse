@@ -131,8 +131,10 @@ before attributing the gap to backoff.
 A permanent failure or five consecutive retryable failures moves the failed
 task to the Dead Letter Queue. Pulse records a retry time 30 minutes after
 that entry, but this is not a countdown to the next poll. The normal scheduler
-can poll the same connection sooner. The entry can still be present after a
-later poll succeeds.
+can poll the same connection sooner. A later scheduled success clears the
+entry for that connection. If a read is partial, the old terminal entry clears
+but the current partial error remains. Older builds can keep an entry even
+after a later poll succeeds.
 
 Use a [saved scheduler snapshot](../api/SCHEDULER_HEALTH.md#-common-queries-jq).
 This query shows the times for connections with a dead-letter entry. It makes
