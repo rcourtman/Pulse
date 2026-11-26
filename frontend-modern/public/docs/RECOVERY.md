@@ -110,6 +110,40 @@ loaded. Wait if Pulse is still checking protection status. If it says
 repeat just that read, not run a backup. Counts ending in **read** cover only
 the restore points Pulse could list.
 
+### Partial reads, unread sources and undated entries
+
+Pulse keeps readable backup evidence visible when another read on the page
+fails, instead of hiding the whole view or guessing guest coverage:
+
+- **Workload inventory unavailable:** **Backup health** shows **Guest
+  protection not assessed**, **Coverage** shows **Workload coverage
+  unavailable**, and collapsed backup groups show **Guest matching not
+  assessed** rather than calling them unmatched. Use **By date** to inspect
+  listed restore points and choose **Retry Proxmox workloads** to repeat only
+  that read.
+- **Backup server details unavailable:** **Coverage** and **By date** stay
+  usable. Choose **Retry backup server details** to repeat only that read.
+- **One backup inventory unavailable:** Pulse shows **Backup inventory is
+  incomplete** with **Retry PVE inventory** or **Retry PBS inventory** while
+  keeping the other source readable. Each retry repeats only that read and does
+  not run a backup.
+- **Unread backup sources:** When a provider reports partial or unavailable
+  backup history, Pulse shows **Backup list incomplete** and names the affected
+  storages, datastores or namespaces in a page-level notice. Permission
+  refusals read **Pulse does not have permission to read** and identify the
+  affected **PVE connection** or **PBS connection** even when only one reader
+  is configured, so you can check that token's read permissions without
+  widening unrelated access. Other unread sources read **Pulse cannot read**
+  and name the connection when multiple readers exist (including when a healthy
+  namesake shares the same storage or datastore name), pointing to connection
+  reachability rather than token permissions.
+- **Undated entries under a day filter:** Selecting a bar in **Backup jobs**
+  matches only entries with a known date. When matching entries have
+  unavailable or future dates, **By date** notes that entries with unknown
+  dates are hidden and labels an empty day **No restore points listed for**
+  that date. Choose **Clear day** to reveal those entries labelled **Unknown
+  date** while keeping your search and other filters.
+
 ## Restore-point sizes and unknown values
 
 In **Proxmox → Backups → By date**, **Unknown size** means no usable byte

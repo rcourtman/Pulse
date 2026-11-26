@@ -442,5 +442,85 @@ class ZFSMonitoringDocsTest(unittest.TestCase):
             self.assertIn(boundary, text)
 
 
+RECOVERY_DOC = ROOT / "docs/RECOVERY.md"
+
+
+class RecoveryPartialReadHelpDocsTest(unittest.TestCase):
+    """Keep RECOVERY.md aligned with Proxmox Backups partial-read, unread-source, and undated UI."""
+
+    heading = "### Partial reads, unread sources and undated entries\n"
+
+    def section(self):
+        text = RECOVERY_DOC.read_text(encoding="utf-8")
+        self.assertEqual(text.count(self.heading), 1)
+        body = text.split(self.heading, 1)[1].split("\n## ", 1)[0]
+        return " ".join(body.split())
+
+    def test_shipped_recovery_guide_matches_source(self):
+        self.assertEqual(
+            RECOVERY_DOC.read_bytes(),
+            (ROOT / "frontend-modern/public/docs/RECOVERY.md").read_bytes(),
+        )
+
+    def test_partial_read_notices_and_scoped_retries_match_backups_ui(self):
+        text = self.section()
+        table = (
+            ROOT / "frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx"
+        ).read_text(encoding="utf-8")
+        for label in (
+            "Guest protection not assessed",
+            "Workload coverage unavailable",
+            "Guest matching not assessed",
+            "Retry Proxmox workloads",
+            "Retry backup server details",
+            "Backup inventory is incomplete",
+        ):
+            with self.subTest(label=label):
+                self.assertIn(f"**{label}**", text)
+                self.assertIn(label, table)
+        for label in ("Retry PVE inventory", "Retry PBS inventory"):
+            self.assertIn(f"**{label}**", text)
+        self.assertIn("`Retry ${label} inventory`", table)
+        self.assertIn("rather than calling them unmatched", text)
+        self.assertIn("does not run a backup", text)
+
+    def test_unread_source_attribution_separates_denials_from_reachability(self):
+        text = self.section()
+        unread = (
+            ROOT / "frontend-modern/src/features/proxmox/proxmoxBackupUnreadSources.ts"
+        ).read_text(encoding="utf-8")
+        table = (
+            ROOT / "frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx"
+        ).read_text(encoding="utf-8")
+        self.assertIn("**Backup list incomplete**", text)
+        self.assertIn("Backup list incomplete", table)
+        for phrase in (
+            "Pulse does not have permission to read",
+            "Pulse cannot read",
+            "PVE connection",
+            "PBS connection",
+        ):
+            with self.subTest(phrase=phrase):
+                self.assertIn(f"**{phrase}**", text)
+                self.assertIn(phrase, unread)
+        self.assertIn("even when only one reader is configured", text)
+        self.assertIn("without widening unrelated access", text)
+        self.assertIn("healthy namesake", text)
+
+    def test_undated_entries_under_day_filter_match_backups_ui(self):
+        text = self.section()
+        table = (
+            ROOT / "frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx"
+        ).read_text(encoding="utf-8")
+        self.assertIn("unknown dates are hidden", text)
+        self.assertIn("**No restore points listed for**", text)
+        self.assertIn("**Clear day**", text)
+        self.assertIn("**Unknown date**", text)
+        self.assertIn("while keeping your search and other filters", text)
+        self.assertIn("unknown dates are hidden", table)
+        self.assertIn("Clear day", table)
+        self.assertIn("No restore points ${qualifyRestorePointCounts() || undatedEntryCount() > 0 ? 'listed for' : 'from'}", table)
+
+
 if __name__ == "__main__":
     unittest.main()
