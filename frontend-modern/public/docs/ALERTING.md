@@ -111,8 +111,13 @@ disabled rule or missing reading is not measured recovery.
 
 When recovery notifications are enabled, a destination needs a successful
 firing-delivery record for that same occurrence to receive an eligible recovery
-message. Acknowledgement, snooze, schedules and delivery failures can still
-prevent it. See [reminders and recovery](CONFIGURATION.md#alert-reminders-and-recovery-notifications).
+message. Each destination's recovery notification keeps the severity level from
+the firing notification that destination actually received, even if a metric
+alert stepped down from critical to warning before clearing. If an external
+automation pairs firing and recovery webhooks, match on the alert `ID` rather
+than relying on severity alone. Acknowledgement, snooze, schedules and delivery
+failures can still prevent recovery delivery. See
+[reminders and recovery](CONFIGURATION.md#alert-reminders-and-recovery-notifications).
 
 ## Detect an outage of Pulse itself
 
