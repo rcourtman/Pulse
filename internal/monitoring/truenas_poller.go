@@ -7,6 +7,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"os"
 	"sort"
 	"strings"
 	"sync"
@@ -23,7 +24,23 @@ import (
 
 const defaultTrueNASPollInterval = 60 * time.Second
 
+// defaultTrueNASPollTimeout bounds the whole inventory refresh, not each API read.
+const defaultTrueNASPollTimeout = 45 * time.Second
+
 const defaultTrueNASHistoryReadTimeout = 10 * time.Second
+
+func trueNASPollTimeout() time.Duration {
+	if raw := strings.TrimSpace(os.Getenv("PULSE_TRUENAS_POLL_TIMEOUT")); raw != "" {
+		if duration, err := time.ParseDuration(raw); err == nil && duration > 0 {
+			return duration
+		}
+		// Environment input can contain private text; diagnose the setting,
+		// not its value. A malformed value never disables the deadline.
+		log.Warn().Dur("timeout", defaultTrueNASPollTimeout).
+			Msg("Invalid PULSE_TRUENAS_POLL_TIMEOUT, using default")
+	}
+	return defaultTrueNASPollTimeout
+}
 
 // TrueNASConnectionPollError captures the last runtime poll error for one
 // configured TrueNAS connection.
@@ -164,7 +181,7 @@ func (p *TrueNASPoller) Stop() {
 
 	select {
 	case <-stopped:
-	case <-time.After(5 * time.Second):
+	case <-timer.C:
 		log.Warn().
 			Str("component", "truenas_poller").
 			Str("action", "stop").
@@ -273,6 +290,12 @@ func (p *TrueNASPoller) syncConnections() {
 				continue
 			}
 
+			if existingProvider != nil {
+				existingProvider.Close()
+				delete(p.providersByOrg[orgID], connID)
+				delete(p.cachedRecordsByOrg[orgID], connID)
+			}
+
 			client, err := truenas.NewClient(truenas.ClientConfig{
 				OutboundPolicy:     instance.OutboundPolicy,
 				Host:               instance.Host,
@@ -290,6 +313,11 @@ func (p *TrueNASPoller) syncConnections() {
 			if err != nil {
 				now := time.Now().UTC()
 				p.recordConnectionFailureLocked(orgID, connID, instance, err, now)
+				if existingProvider != nil {
+					if status := p.statusByOrg[orgID][connID]; status != nil {
+						status.observed = nil
+					}
+				}
 				log.Warn().
 					Str("component", "truenas_poller").
 					Str("action", "initialize_client").
@@ -300,48 +328,53 @@ func (p *TrueNASPoller) syncConnections() {
 				continue
 			}
 
-			if existingProvider != nil {
-				existingProvider.Close()
-			}
 			p.providersByOrg[orgID][connID] = truenas.NewLiveProviderForConnection(&truenas.APIFetcher{Client: client}, connID)
+			if existingProvider != nil {
+				if status := p.statusByOrg[orgID][connID]; status != nil {
+					status.nextPollAt = time.Now().UTC()
+				}
+			}
 		}
 	}
 
-	// Prune providers for removed/disabled connections and removed orgs.
+	// Prune providers, active configs, and cached records for removed/disabled
+	// connections and removed orgs. Pruning configs independently of providers
+	// ensures a connection that failed client construction cannot remain active
+	// after it is disabled or deleted.
 	for orgID, providers := range p.providersByOrg {
 		activeByConn := active[orgID]
 		for connID, provider := range providers {
-			if activeByConn == nil {
-				// Org no longer exists or has no active TrueNAS connections.
-				if provider != nil {
-					provider.Close()
-				}
-				delete(providers, connID)
-				if p.configsByOrg[orgID] != nil {
-					delete(p.configsByOrg[orgID], connID)
-				}
-				if p.cachedRecordsByOrg[orgID] != nil {
-					delete(p.cachedRecordsByOrg[orgID], connID)
-				}
+			if _, ok := activeByConn[connID]; ok {
 				continue
 			}
-			if _, ok := activeByConn[connID]; !ok {
-				if provider != nil {
-					provider.Close()
-				}
-				delete(providers, connID)
-				if p.configsByOrg[orgID] != nil {
-					delete(p.configsByOrg[orgID], connID)
-				}
-				if p.cachedRecordsByOrg[orgID] != nil {
-					delete(p.cachedRecordsByOrg[orgID], connID)
-				}
+			if provider != nil {
+				provider.Close()
 			}
+			delete(providers, connID)
 		}
-
 		if len(providers) == 0 {
 			delete(p.providersByOrg, orgID)
+		}
+	}
+	for orgID, byConn := range p.configsByOrg {
+		activeByConn := active[orgID]
+		for connID := range byConn {
+			if _, ok := activeByConn[connID]; !ok {
+				delete(byConn, connID)
+			}
+		}
+		if len(byConn) == 0 {
 			delete(p.configsByOrg, orgID)
+		}
+	}
+	for orgID, byConn := range p.cachedRecordsByOrg {
+		activeByConn := active[orgID]
+		for connID := range byConn {
+			if _, ok := activeByConn[connID]; !ok {
+				delete(byConn, connID)
+			}
+		}
+		if len(byConn) == 0 {
 			delete(p.cachedRecordsByOrg, orgID)
 		}
 	}
@@ -484,7 +517,9 @@ func (p *TrueNASPoller) pollAll(ctx context.Context) {
 		}
 
 		start := time.Now().UTC()
-		err := entry.provider.Refresh(ctx)
+		pollCtx, cancel := context.WithTimeout(ctx, trueNASPollTimeout())
+		err := entry.provider.Refresh(pollCtx)
+		cancel()
 		end := time.Now().UTC()
 		if err != nil {
 			pm.RecordResult(PollResult{

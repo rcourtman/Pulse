@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -2743,5 +2744,46 @@ func TestClientFixtureOwnsRPCSessionLifetime(t *testing.T) {
 	case <-session.keepaliveDone:
 	default:
 		t.Fatal("fixture cleanup did not join its session keepalive")
+	}
+}
+
+func TestFetchSnapshotReturnsContextErrorWhenDeadlineExpiresDuringOptionalReads(t *testing.T) {
+	var appCalls int
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/api/v2.0/system/info":
+			_, _ = w.Write([]byte(`{"hostname":"deadline-nas","version":"TrueNAS-13.0-U6.8","uptime_seconds":60}`))
+		case "/api/v2.0/pool":
+			_, _ = w.Write([]byte(`[{"id":1,"name":"tank","status":"ONLINE","size":1000,"allocated":400,"free":600}]`))
+		case "/api/v2.0/pool/dataset", "/api/v2.0/disk", "/api/v2.0/alert/list":
+			_, _ = w.Write([]byte(`[]`))
+		case "/api/v2.0/service":
+			<-r.Context().Done()
+			return
+		case "/api/v2.0/app":
+			appCalls++
+			_, _ = w.Write([]byte(`[]`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	client := mustClientForServer(t, server.URL, ClientConfig{APIKey: "fixture-key"})
+	defer client.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Millisecond)
+	defer cancel()
+
+	snapshot, err := client.FetchSnapshot(ctx)
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("FetchSnapshot() err = %v, want context.DeadlineExceeded (snapshot=%+v)", err, snapshot)
+	}
+	if snapshot != nil {
+		t.Fatalf("FetchSnapshot() returned non-nil snapshot on deadline expiry: %+v", snapshot)
+	}
+	if appCalls != 0 {
+		t.Fatalf("FetchSnapshot() continued optional reads after deadline expiry: appCalls=%d", appCalls)
 	}
 }
