@@ -160,6 +160,8 @@ Pulse uses platform-shaped top-level pages:
 
 - **Proxmox**, **Docker**, **Kubernetes**, **TrueNAS**, **vSphere**, and
   **Machines** keep platform-specific inventory and workflows together.
+- **Availability** (`/availability`) provides website, service, device, and TLS
+  certificate checks when availability checks are enabled or configured.
 - Storage, snapshots, backups, and replication appear inside the platform page
   they belong to.
 - **Alerts**, **Actions**, and **Patrol** provide cross-platform operational
@@ -304,6 +306,20 @@ does not tell you whether alert rules ran.
 
 A green connection badge, recent **Last seen** or successful **Test Connection**
 does not prove that every reading is fresh. Missing or unavailable is not zero.
+
+- **Proxmox nodes** show reading status beside the node name on both desktop and
+  phones, withholding live metrics and uptime when readings are not current:
+  **Offline** (a failed Proxmox read does not prove the host is powered off),
+  **Stale · API error** (a linked agent is online while the Proxmox connection
+  failed), **Stale · Degraded** (the Proxmox provider is degraded), **Stale**
+  (Pulse has no recent Proxmox readings), and **Degraded** (a node warning with
+  current Proxmox readings).
+- **vSphere datastores** keep their last reported capacity, active alarms,
+  maintenance state and **Last reported inaccessible** status visible while
+  marking stale rows **Stale data** beside the name (and noting `vCenter has not
+  updated this datastore recently.` on inline Capacity History). Missing or
+  unreadable capacity displays as a dash (`—`), not `0%`.
+
 Use the relevant checks for [stale TrueNAS data](TRUENAS.md#stale-truenas-data),
 [empty PBS History](PBS.md#pbs-is-connected-but-history-stays-empty),
 [missing or stale PVE replication jobs](TROUBLESHOOTING.md#replication-jobs-are-pending-stale-or-missing) or
