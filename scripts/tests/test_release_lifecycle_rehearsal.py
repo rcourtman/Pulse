@@ -392,6 +392,114 @@ class HarnessContractTest(unittest.TestCase):
                 self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
 
 
+class ShadowContainerCleanupTest(unittest.TestCase):
+    container_id = "a" * 64
+    removal = f"rm --force {container_id}"
+    lookup = f"ps --all --no-trunc --quiet --filter id={container_id}"
+
+    def run_cleanup(self, *, engine="docker", cid=container_id, start_exit=0, phase_exit=0,
+                    removal_exit=0, lookup_exit=0, remaining=""):
+        # Execute the actual launch and EXIT trap, skipping only the signed
+        # download and application phases. No Docker/Podman service is used.
+        source, separator, tail = HARNESS_PATH.read_text(encoding="utf-8").rpartition("\nmain\n")
+        self.assertTrue(separator)
+        self.assertEqual(tail, "")
+        engine_fixture = textwrap.dedent(r'''
+            docker() { fake_engine "$@"; }
+            podman() { fake_engine "$@"; }
+            print_diagnostics() { :; }
+            fake_engine() {
+                case "$1" in
+                    run)
+                        while [[ $# -gt 1 ]]; do
+                            if [[ "$1" == --cidfile && -n "$FIXTURE_CID" ]]; then
+                                printf '%s\n' "$FIXTURE_CID" > "$2"
+                                break
+                            fi
+                            shift
+                        done
+                        return "$START_EXIT"
+                        ;;
+                    inspect) printf 'true\n' ;;
+                    exec) if [[ "${!#}" == is-system-running ]]; then printf 'running\n'; fi ;;
+                    rm)
+                        printf '%s\n' "$*" >> "$CALLS"
+                        return "$REMOVAL_EXIT"
+                        ;;
+                    ps)
+                        printf '%s\n' "$*" >> "$CALLS"
+                        printf '%s' "$REMAINING"
+                        return "$LOOKUP_EXIT"
+                        ;;
+                    *) return 97 ;;
+                esac
+            }
+            if ! start_container; then exit 3; fi
+            printf 'Application phases reached (fixture).\n'
+            exit "$PHASE_EXIT"
+        ''')
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            script = root / "rehearsal.sh"
+            script.write_text(source + "\n" + engine_fixture, encoding="utf-8")
+            calls, summary = root / "calls", root / "summary"
+            result = subprocess.run(
+                ["bash", str(script), "--from", "v6.8.0", "--to", "v6.9.0"],
+                capture_output=True, text=True, timeout=10,
+                env={"PATH": os.environ["PATH"], "PULSE_REHEARSAL_ENGINE": engine,
+                     "PULSE_REHEARSAL_WORKDIR": str(root), "GITHUB_STEP_SUMMARY": str(summary),
+                     "FIXTURE_CID": cid, "START_EXIT": str(start_exit), "PHASE_EXIT": str(phase_exit),
+                     "CALLS": str(calls), "REMAINING": remaining,
+                     "REMOVAL_EXIT": str(removal_exit), "LOOKUP_EXIT": str(lookup_exit)},
+            )
+            return (result, calls.read_text().splitlines() if calls.exists() else [],
+                    summary.read_text() if summary.exists() else "")
+
+    def test_reports_verified_absence_only_after_exact_id_readback(self):
+        for engine in ("docker", "podman"):
+            with self.subTest(engine=engine):
+                result, calls, summary = self.run_cleanup(engine=engine)
+                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                self.assertEqual(calls, [self.removal, self.lookup])
+                self.assertIn(f"verified absent ({self.container_id})", summary)
+
+    def test_removal_error_never_passes_or_retries_and_keeps_an_earlier_failure(self):
+        for phase_exit, expected_exit in ((0, 1), (7, 7)):
+            with self.subTest(phase_exit=phase_exit):
+                result, calls, summary = self.run_cleanup(phase_exit=phase_exit, removal_exit=42)
+                self.assertIn("Application phases reached", result.stdout)
+                self.assertEqual(result.returncode, expected_exit, result.stdout + result.stderr)
+                self.assertEqual(calls, [self.removal])
+                self.assertIn("unverified; container removal failed (exit 42", summary)
+
+    def test_unconfirmed_absence_fails_even_after_remove_returned_zero(self):
+        for lookup_exit, remaining, message in (
+            (0, self.container_id, "container lookup still returned a result"),
+            (5, "", "container lookup failed (exit 5"),
+        ):
+            with self.subTest(lookup_exit=lookup_exit):
+                result, calls, summary = self.run_cleanup(lookup_exit=lookup_exit, remaining=remaining)
+                self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+                self.assertEqual(calls, [self.removal, self.lookup])
+                self.assertIn(f"unverified; {message}", summary)
+
+    def test_failed_start_cleans_up_only_its_recorded_container(self):
+        result, calls, summary = self.run_cleanup(start_exit=125)
+        self.assertEqual(result.returncode, 3, result.stdout + result.stderr)
+        self.assertNotIn("Application phases reached", result.stdout)
+        self.assertIn("(exit 125)", result.stdout)
+        self.assertEqual(calls, [self.removal, self.lookup])
+        self.assertIn("verified absent", summary)
+
+    def test_unknown_container_identity_never_falls_back_to_the_name(self):
+        for start_exit, cid in ((125, ""), (0, "disposable-fixture")):
+            with self.subTest(start_exit=start_exit):
+                result, calls, summary = self.run_cleanup(start_exit=start_exit, cid=cid)
+                self.assertEqual(result.returncode, 3, result.stdout + result.stderr)
+                self.assertEqual(calls, [])
+                self.assertIn("no container ID recorded by this launch. No removal attempted", summary)
+
+
 class RunningExecutableReadbackTest(unittest.TestCase):
     def run_systemd_fixture(self, tail: str, *, failed_units: str = "", failed_units_exit: int = 0,
                             baseline: str = "", updater_properties: str = (
@@ -400,7 +508,7 @@ class RunningExecutableReadbackTest(unittest.TestCase):
                             matching: bool = True, unavailable: bool = False,
                             after_pid: int = 123, after_started: int = 100) -> subprocess.CompletedProcess:
         source = HARNESS_PATH.read_text(encoding="utf-8")
-        names = ("read_failed_units", "record_failed_unit_baseline", "start_container",
+        names = ("read_container_id", "read_failed_units", "record_failed_unit_baseline", "start_container",
                  "read_pulse_runtime_identity", "read_unattended_update_start", "assert_runtime")
         functions = "\n".join(
             f"{name}() {{" + source.split(f"{name}() {{", 1)[1].split("\n}\n", 1)[0] + "\n}"
@@ -422,7 +530,7 @@ class RunningExecutableReadbackTest(unittest.TestCase):
                 HOSTED_BROWSER="$FIXTURE_HOSTED"
                 BASELINE_FAILED_UNITS="$FIXTURE_BASELINE"
                 ENGINE=fake_engine
-                CONTAINER=fixture
+                CONTAINER_NAME=fixture
                 CONTAINER_TOLERATED_UNITS="systemd-hostnamed.service systemd-timedated.service systemd-localed.service"
                 WORK_DIR="$FIXTURE"
                 SYSTEMD_IMAGE=unused
@@ -431,7 +539,11 @@ class RunningExecutableReadbackTest(unittest.TestCase):
                 log() { printf '%s\n' "$*"; }
                 fake_engine() {
                     case "$1" in
-                        run) ;;
+                        run)
+                            shift
+                            while [[ "$1" != --cidfile ]]; do shift; done
+                            printf '%064d\n' 1 > "$2"
+                            ;;
                         inspect) printf 'true\n' ;;
                         exec) printf 'running\n' ;;
                         *) return 97 ;;
