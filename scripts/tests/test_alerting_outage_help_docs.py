@@ -57,6 +57,7 @@ class AlertingOutageHelpDocsTest(unittest.TestCase):
         section = " ".join(outage_section().split())
         monitoring_metrics = (ROOT / "internal/monitoring/metrics.go").read_text(encoding="utf-8")
         queue_metrics = (ROOT / "internal/monitoring/poll_queue_metrics.go").read_text(encoding="utf-8")
+        dead_letter_metrics = (ROOT / "internal/monitoring/poll_dead_letter_metrics.go").read_text(encoding="utf-8")
         work_progress = (ROOT / "internal/monitoring/poll_work_progress.go").read_text(encoding="utf-8")
         http_metrics = (ROOT / "internal/api/http_metrics.go").read_text(encoding="utf-8")
         routes = (ROOT / "internal/api/router_routes_registration.go").read_text(encoding="utf-8")
@@ -67,6 +68,7 @@ class AlertingOutageHelpDocsTest(unittest.TestCase):
             ("pulse_scheduler_breaker_retry_seconds", monitoring_metrics),
             ("pulse_scheduler_queued_poll_overdue_seconds", queue_metrics),
             ("pulse_scheduler_claimed_poll_overdue_seconds", work_progress),
+            ("pulse_scheduler_dead_letter_depth", dead_letter_metrics),
             ("pulse_http_requests_total", http_metrics),
         ):
             with self.subTest(metric=metric):
@@ -139,6 +141,74 @@ class AlertingOutageHelpDocsTest(unittest.TestCase):
             "match on the alert `ID` rather than relying on severity alone",
         ):
             self.assertIn(phrase, section)
+
+    def test_active_alert_reevaluation_help_matches_runtime_contract(self):
+        alerting_section = " ".join(outage_section().split())
+        api_doc = (ROOT / "docs/API.md").read_text(encoding="utf-8")
+        shipped_api_doc = (ROOT / "frontend-modern/public/docs/API.md").read_text(encoding="utf-8")
+        self.assertEqual(api_doc, shipped_api_doc)
+
+        marker = "### Active alerts\n"
+        self.assertIn(marker, api_doc)
+        active_alerts_section = " ".join(
+            api_doc.split(marker, 1)[1].split("\n---", 1)[0].split()
+        )
+
+        alerts_handler = (ROOT / "internal/api/alerting/alerts.go").read_text(encoding="utf-8")
+        alert_model = (ROOT / "internal/alerts/model.go").read_text(encoding="utf-8")
+        models_go = (ROOT / "internal/models/models.go").read_text(encoding="utf-8")
+        persistence = (ROOT / "internal/alerts/active_persistence.go").read_text(encoding="utf-8")
+
+        self.assertIn('case path == "active" && r.Method == http.MethodGet:', alerts_handler)
+        self.assertIn("config.ScopeMonitoringRead", alerts_handler)
+        self.assertIn("h.GetActiveAlerts(w, r)", alerts_handler)
+        self.assertIn("clone.MetricStatus = nil", persistence)
+
+        for field, source in (
+            ("id", alert_model),
+            ("startTime", alert_model),
+            ("lastSeen", alert_model),
+            ("metricStatus", alert_model),
+            ("phase", models_go),
+            ("value", models_go),
+            ("observedAt", models_go),
+            ("trigger", models_go),
+            ("recovery", models_go),
+            ("lastBreachAt", models_go),
+        ):
+            with self.subTest(field=field):
+                self.assertRegex(
+                    source, rf'json:"{re.escape(field)}(?:,(?:omitempty|omitzero))?"'
+                )
+                self.assertIn(field, active_alerts_section)
+
+        for phase in ("breaching", "latched", "recovering"):
+            with self.subTest(phase=phase):
+                self.assertIn(f'"{phase}"', models_go)
+                self.assertIn(f"`{phase}`", active_alerts_section)
+                self.assertIn(f"`{phase}`", alerting_section)
+
+        for phrase in (
+            "GET /api/alerts/active",
+            "monitoring:read",
+            "both `id` and `startTime`",
+            "metricStatus.observedAt",
+            "metricStatus.lastBreachAt",
+            "omitted from durable checkpoints",
+            "do not lower thresholds or force a test alert",
+        ):
+            with self.subTest(alerting_phrase=phrase):
+                self.assertIn(phrase, alerting_section)
+
+        for phrase in (
+            "GET /api/alerts/active",
+            "monitoring:read",
+            "stripped from durable alert snapshots",
+            "never in a command line or URL",
+            "ALERTING.md#check-whether-an-open-threshold-alert-was-reevaluated",
+        ):
+            with self.subTest(api_phrase=phrase):
+                self.assertIn(phrase, active_alerts_section)
 
 
 if __name__ == "__main__":

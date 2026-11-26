@@ -1245,7 +1245,7 @@ it, use the snooze and unsnooze endpoints below.
   progress, sanitized delivery failure state, and the most recent restart
   interruption; never includes the URL or endpoint fingerprint
 - `POST /api/alerts/activate` enables notification delivery and can notify about existing unacknowledged critical alerts. It is not a maintenance toggle, and there is no matching `/api/alerts/deactivate` endpoint.
-- `GET /api/alerts/active`
+- `GET /api/alerts/active` (see [Active alerts](#active-alerts) for live `metricStatus` evaluation fields)
 - `GET /api/alerts/delivery-diagnosis?alertIdentifier=<alert-id>` (omit `alertIdentifier` to get the diagnosis array for every active alert)
 - `GET /api/alerts/events?alertIdentifier=<alert-id>&type=<event-type,...>&since=<RFC3339>&limit=<n>` — append-only alert event log: lifecycle transitions and notification decisions, including suppressions with reasons; all parameters optional, newest first
 - `GET /api/alerts/history` — each entry carries at most one `evidence` envelope, the newest; `operationalRecord.evidenceIds` keeps the full list, and `GET /api/alerts/active` returns an open alert's full evidence
@@ -1259,6 +1259,37 @@ it, use the snooze and unsnooze endpoints below.
 - `POST /api/alerts/snooze` (body: `{ "alertIdentifier": "alert-id", "until": "RFC3339 timestamp" }`; pauses delivery and escalation for up to 30 days while monitoring continues)
 - `POST /api/alerts/unsnooze` (body: `{ "alertIdentifier": "alert-id" }`; resumes normal policy without resolving the incident)
 - `POST /api/alerts/clear` (body: `{ "alertIdentifier": "alert-id" }`)
+
+### Active alerts
+`GET /api/alerts/active`
+
+Returns the JSON array of currently open alerts for the active workspace,
+including each alert's full `evidence` array. Requires a signed-in session or
+an API token with `monitoring:read` sent from a private header file as in
+[Authentication](#-authentication), never in a command line or URL. Keep saved
+responses private because they contain resource names, node identifiers, and
+alert messages.
+
+For an already-open threshold alert, live reevaluation fields help separate
+rule evaluation from polling and notification delivery:
+
+- **`id` and `startTime`**: match both fields when comparing two snapshots,
+  because a later firing of the same rule can reuse `id`.
+- **`lastSeen`**: timestamp of the latest reading that met the alert trigger.
+- **`metricStatus`**: live in-memory evaluation state for an open threshold
+  alert (`phase` is `breaching`, `latched`, or `recovering`, with `value`,
+  `observedAt`, `trigger`, `recovery`, and `lastBreachAt`). Advancing
+  `metricStatus.observedAt` across two readings shows Pulse evaluated that rule
+  again even when `value` stayed between `trigger` and `recovery` and
+  `lastSeen` did not move.
+
+`metricStatus` is volatile and stripped from durable alert snapshots, so it is
+absent right after a Pulse restart until the next evaluation runs. Non-threshold
+alerts and older builds also omit it. An absent field or failed request is not
+an empty alert list and does not establish whether rules ran or notifications
+were delivered. See
+[checking alert reevaluation](ALERTING.md#check-whether-an-open-threshold-alert-was-reevaluated)
+for the read-only comparison procedure.
 
 ---
 
@@ -1552,8 +1583,9 @@ This endpoint covers scheduled polling only. Zero overdue queued tasks or
 advancing `lastSuccess` does not prove that a poll claimed by a worker finished,
 that host or Docker agent reports arrived, that WebSocket state reached the
 browser or that alert rules ran. Check those paths separately with
-[System Health](#system-health), [missing-data checks](FAQ.md#no-data-showing)
-and [outage detection](ALERTING.md#detect-an-outage-of-pulse-itself). Do not
+[System Health](#system-health), [Active alerts](#active-alerts),
+[missing-data checks](FAQ.md#no-data-showing) and
+[outage detection](ALERTING.md#detect-an-outage-of-pulse-itself). Do not
 reset breakers, toggle adaptive polling or restart Pulse just to gather a
 reading.
 
