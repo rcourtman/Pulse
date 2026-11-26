@@ -1504,8 +1504,58 @@ Writes the SSH config used for temperature collection. Requires admin + `setting
 Tests SSH connectivity for temperature collection. Requires admin + `settings:write`. Setup tokens are not accepted.
 
 ### Scheduler Health
-`GET /api/monitoring/scheduler/health`
-Returns scheduler health, DLQ, and breaker status. Requires authentication (session or API token); no specific scope is enforced.
+`GET /api/monitoring/scheduler/health` (also accepts `HEAD`)
+
+Returns a read-only snapshot of scheduled polling for the active workspace,
+including queue backlog, circuit breakers, dead-letter tasks and per-connection
+poll outcomes. Requires authentication (a signed-in browser session or an API
+token). No specific scope is enforced. For automated requests, send the token
+from a private header file as in [Authentication](#-authentication), never in a
+command line or URL, and keep the saved JSON private because it contains
+infrastructure names, addresses and error messages.
+
+Key fields to compare across two snapshots separated by the connection's normal
+poll interval:
+
+- **`updatedAt` and `enabled`**: `updatedAt` is when the snapshot was captured,
+  not when a poll last succeeded. `enabled: false` means adaptive timing is off.
+  Configured connections still poll at fixed intervals, and their queue and
+  outcomes still appear here. Neither `enabled` nor `queue.depth` is a health
+  verdict.
+- **`queue`**: `depth` and `perType` count tasks currently waiting in the active
+  queue. `dueWithinSeconds` is a **task count** (tasks due now or within 12
+  seconds), not a duration. `oldestOverdueSeconds` is how many seconds past its
+  scheduled time the oldest timestamped queued poll was at capture. Zero means
+  no queued task was past its scheduled time, and older builds omit the field.
+  It excludes future retries, claimed work already held by a worker and
+  dead-letter entries. Deleting a saved availability check removes its queued
+  poll when Pulse reads the updated catalogue without disturbing other
+  providers, while a catalogue read failure leaves queued work unchanged.
+- **`instances[].pollStatus`**: Compare `lastSuccess`, `lastError` (`at`,
+  `category`, `message`) and `consecutiveFailures` for the same connection
+  `key`. A complete success clears `lastError`. A `partial` read can advance
+  `lastSuccess` while leaving `lastError` with `category: "partial"` and
+  `consecutiveFailures: 0`, meaning Pulse reached the target but some readings
+  were unavailable. Having no error rows does not prove polling ran.
+- **`instances[].breaker` and `breakers`**: `state` is `closed`, `open` or
+  `half_open`, and `retryAt` is the earliest time the breaker will allow the
+  next probe. Passing `retryAt` does not prove a poll ran, and the state can
+  stay `open` until scheduled work reaches it. Top-level `breakers` lists only
+  breakers outside the default `closed`/zero-failure state.
+- **`instances[].deadLetter` and `deadLetter`**: `deadLetter.count` and up to
+  25 `tasks` summarise terminal poll entries. Each instance entry exposes
+  `present`, `reason` and `nextRetry`. `nextRetry` does not schedule a poll. A
+  later successful scheduled poll clears the dead-letter entry on current
+  builds, though older builds may retain it after recovery.
+
+This endpoint covers scheduled polling only. Zero overdue queued tasks or
+advancing `lastSuccess` does not prove that a poll claimed by a worker finished,
+that host or Docker agent reports arrived, that WebSocket state reached the
+browser or that alert rules ran. Check those paths separately with
+[System Health](#system-health), [missing-data checks](FAQ.md#no-data-showing)
+and [outage detection](ALERTING.md#detect-an-outage-of-pulse-itself). Do not
+reset breakers, toggle adaptive polling or restart Pulse just to gather a
+reading.
 
 ### Updates (Admin)
 - `GET /api/updates/check`
