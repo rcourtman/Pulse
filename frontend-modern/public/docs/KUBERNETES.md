@@ -2,7 +2,7 @@
 
 This guide explains how to deploy the Pulse Server (Hub) and Pulse Agents on Kubernetes clusters, including immutable distributions like Talos Linux.
 
-> **Navigation note (v6):** Kubernetes has its own page at `/kubernetes`, with tabs for nodes, workloads (pods), services, storage, configuration, and events. Pods appear on the **Workloads** tab (`/kubernetes/workloads`).
+> **Navigation note (v6):** Kubernetes has its own page at `/kubernetes`, opening on **Kubernetes → Overview** (`/kubernetes/overview`) with tabs for **Overview** (`/kubernetes/overview`), **Nodes** (`/kubernetes/nodes`), **Workloads** (`/kubernetes/workloads`), **Services** (`/kubernetes/services`), **Storage** (`/kubernetes/storage`), **Configuration** (`/kubernetes/configuration`), and **Events** (`/kubernetes/events`). **Overview** leads with active health alerts, nodes needing attention, clusters, and workloads, while pods, Deployments, controllers, and autoscaling also appear under **Workloads**. Tabs outside **Overview** appear only when the agent reports inventory for them, so a minimal read-only RBAC role shows only the tabs it can collect.
 
 ## Prerequisites
 
@@ -128,8 +128,9 @@ For Kubernetes monitoring, use a custom DaemonSet as shown below.
 
 ### Prepare an agent Secret
 
-Complete setup on the running Pulse server, then create a token in **API Access**
-with `kubernetes:report`. Add `agent:report` only if you also enable host metrics.
+Complete setup on the running Pulse server, then create a token in
+**Settings → Security → API Access** (`/settings/security/api`) with
+`kubernetes:report`. Add `agent:report` only if you also enable host metrics.
 Do not reuse an administrator token. Pulse v6 does not provision API tokens from
 the legacy `API_TOKENS` server environment variable.
 
@@ -420,8 +421,10 @@ The Kubernetes module uses the pod's service account to read the cluster API.
 The minimal role below covers node, pod and Deployment inventory, their
 CPU/memory usage from `metrics.k8s.io`, and optional recovery records. It is
 not a complete role for every Kubernetes tab or resource type Pulse can collect.
-Other inventory needs its own explicit read permissions; a running pod or one
-populated tab does not establish complete collection.
+Other inventory needs its own explicit read permissions: tabs such as
+**Services**, **Storage**, **Configuration**, and **Events** stay hidden until
+the agent reports matching objects, and a running pod or one populated tab
+does not establish complete collection.
 
 For a new deployment, create the service account, role and binding in the
 intended cluster before applying the agent workload. For an existing one,

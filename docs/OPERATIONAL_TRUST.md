@@ -213,9 +213,11 @@ change to a workload, notification queue or alert lifecycle.
    stale, denied, partial or unknown state. Do not disconnect a collector or
    induce a fault to obtain a test case. A successful task or action is not
    fresh detector evidence of recovery, guest thaw or a tested restore.
-4. Inspect **Recent delivery activity** in Alert History and existing failed
-   delivery details, if any. Compare the original alert, queued attempt and
-   recipient's actual message separately; Test success does not establish
+4. Inspect **Recent delivery activity** in **Alerts → Notifications**
+   (`/alerts/notifications`) and existing failed delivery details, if any,
+   while using **Alerts → History** (`/alerts/history`) for fired and resolved
+   alert timelines. Compare the original alert, queued attempt and
+   recipient's actual message separately: Test success does not establish
    ordinary, grouped or resolved delivery. Use the
    [notification checks](TROUBLESHOOTING.md#test-succeeds-but-real-alerts-are-missing)
    for the actual symptom.

@@ -18,7 +18,7 @@ The Community, Relay, and Pro tiers do not include the `multi_tenant` capability
 ## Quick Start
 
 1. Set `PULSE_MULTI_TENANT_ENABLED=true` through your [deployment configuration](#applying-the-feature-flag).
-2. Activate your Enterprise license in **Settings → Plans & Billing**.
+2. Activate your Enterprise license in **Settings → System → Plans & Billing**.
 3. Create the organization with the session-authenticated `POST /api/orgs` endpoint (see [Creating an Organization](#creating-an-organization)). This build has no Create Organization button in **Settings → Organization**.
 4. Assign infrastructure to the organization.
 5. Use the **Org Switcher** in the header bar to switch between organizations.
@@ -259,7 +259,7 @@ Apply the flag in your [deployment configuration](#applying-the-feature-flag).
 
 ### "Multi-tenant access requires an Enterprise license" (402)
 
-Activate an Enterprise license with the `multi_tenant` capability in **Settings → Plans & Billing**.
+Activate an Enterprise license with the `multi_tenant` capability in **Settings → System → Plans & Billing**.
 
 ### Organization data not loading after switch
 

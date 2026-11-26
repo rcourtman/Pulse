@@ -92,8 +92,24 @@ class NavigationHelpDocsTest(unittest.TestCase):
         self.assertIn("{ id: 'backups', label: 'Backups'", source("features/proxmox/proxmoxPageModel.ts"))
         self.assertIn("PROXMOX_BACKUPS_PATH = `${PROXMOX_PATH}/backups`", source("routing/resourceLinks.ts"))
 
+    def test_kubernetes_locations_match_the_actual_tab_labels_and_paths(self):
+        model = source("features/kubernetes/kubernetesPageModel.ts")
+        tabs = dict(re.findall(r"label: '([^']+)', path: '(/kubernetes/[^']+)'", model))
+        self.assertGreaterEqual(len(tabs), 7)
+        self.assertIn("Overview", tabs)
+        self.assertIn("Workloads", tabs)
+        guide = doc_text("KUBERNETES.md")
+        for label, path in tabs.items():
+            with self.subTest(tab=label):
+                self.assertIn(f"**{label}** (`{path}`)", guide)
+        self.assertIn("**Kubernetes → Overview** (`/kubernetes/overview`)", guide)
+        self.assertIn("hasKubernetesTabInventory", model)
+        self.assertIn("Tabs outside **Overview** appear only when the agent reports inventory for them", guide)
+        self.assertIn("**Settings → Security → API Access** (`/settings/security/api`)", guide)
+        self.assertIn("SETTINGS_API_ACCESS_PATH = '/settings/security/api'", source("routing/resourceLinks.ts"))
+
     def test_all_changed_guides_match_their_shipped_copies(self):
-        for name in ("TROUBLESHOOTING.md", "TRUENAS.md", "PBS.md"):
+        for name in ("TROUBLESHOOTING.md", "TRUENAS.md", "PBS.md", "KUBERNETES.md"):
             with self.subTest(guide=name):
                 self.assertEqual(doc_text(name),
                                  (ROOT / "frontend-modern/public/docs" / name).read_text(encoding="utf-8"))
