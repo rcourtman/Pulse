@@ -197,6 +197,51 @@ class ReleaseMemorySummaryTests(unittest.TestCase):
         self.assertIn("| PBS datastore status responses during steady RSS sampling | n/a | n/a |", lines)
         self.assertIn("not snapshots Pulse retained or displayed", lines)
 
+    def test_incomplete_proxmox_measurement_keeps_traffic_without_an_rss_verdict(self):
+        baseline = {
+            "pve_nodes": 3, "guests": 35, "pbs_instances": 2, "total_pbs_snapshots": 5200,
+            "snapshots_per_group": 50, "pve_requests": 914, "pbs_requests": 210,
+            "sampling_end_reached": True,
+            "dashboard": {"connects": 1, "messages": 60, "bytes": 1024, "state_updates": 59},
+            "pve_archive_inventory": archive_stats(),
+            "pbs_steady_snapshot_group_coverage": {"window_s": 300, "datastores": {
+                "pbs1": {"store-archive": {"served_groups": 17, "expected_groups": 17}},
+            }},
+        }
+        undercovered = {
+            **baseline, "pve_requests": 900, "pbs_requests": 60,
+            "pbs_steady_snapshot_group_coverage": {"window_s": 300, "datastores": {
+                "pbs1": {"store-archive": {"served_groups": 0, "expected_groups": 17}},
+            }},
+        }
+        ended_early = {
+            **undercovered, "sampling_end_reached": False, "pve_requests": 25, "pbs_requests": 0,
+            "pbs_steady_snapshot_group_coverage": None,
+        }
+        for candidate, end_row, store_row in (
+            (undercovered, "yes | yes", "17/17 | 0/17"),
+            (ended_early, "yes | no", "17/17 | n/a"),
+            (None, "yes | n/a", "17/17 | n/a"),
+        ):
+            with self.subTest(candidate=end_row):
+                code, result, text = self.run_summary(
+                    samples(131072, 25, 0), samples(98304, 25, 0, end=900 if candidate is undercovered else 645),
+                    estate="proxmox", proxmox={"baseline": baseline, **({"candidate": candidate} if candidate else {})},
+                    env={"PULSE_MEMORY_GATE": "0"}, wait_statuses=(0, 1),
+                    child_wait_statuses={"candidate": {"driver_wait_status": 1}},
+                )
+                self.assertEqual(code, 1)
+                self.assertEqual(result["status"], "incomplete")
+                self.assertEqual(result["failed_runs"]["candidate"], {"worker_wait_status": 1, "driver_wait_status": 1})
+                self.assertNotIn("rss_growth_kib", result)
+                self.assertNotIn("Steady-state process RSS observation", text)
+                self.assertEqual(result["baseline_proxmox"], baseline)
+                self.assertEqual(result["candidate_proxmox"], candidate)
+                self.assertIn("Traffic observations only", text)
+                self.assertIn(f"| Reached end of planned sampling | {end_row} |", text)
+                self.assertIn(f"| pbs1/store-archive | {store_row} |", text)
+                self.assertNotIn("RSS change alone", text)
+
     def test_steady_proxmox_sighting_gap_is_reported_separately_from_the_rss_result(self):
         baseline = {
             "pve_nodes": 3, "guests": 35, "pbs_instances": 2, "total_pbs_snapshots": 5200,
@@ -633,6 +678,29 @@ class ReleaseMemorySummaryTests(unittest.TestCase):
 
 
 class ReleaseMemoryLauncherTests(unittest.TestCase):
+    def test_existing_output_directory_is_not_reused(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            stable, main, output = [Path(tmp) / name for name in ("stable", "main", "out")]
+            for directory in (stable, main, output):
+                directory.mkdir()
+            earlier_profile = output / "heap-baseline.pb.gz"
+            earlier_profile.write_bytes(b"previous-run-fixture")
+            result = subprocess.run(
+                ["bash", "-c", SOURCE_GIT_SHIM +
+                 'go() { echo "unexpected build" >&2; return 92; }; export -f go; exec bash "$@"', "memory-fixture",
+                 str(ROOT / "scripts/memory/compare_release_memory.sh"), str(stable), str(main),
+                 str(output), *SOURCE_ARGS],
+                env={**os.environ, **source_env(), "PULSE_FOOTPRINT_ESTATE": "mock"},
+                text=True, capture_output=True, timeout=5,
+            )
+            self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
+            self.assertIn("new output directory", result.stderr)
+            self.assertNotIn("unexpected build", result.stderr)
+            self.assertEqual(list(output.iterdir()), [earlier_profile])
+            self.assertEqual(earlier_profile.read_bytes(), b"previous-run-fixture")
+            self.assertEqual(list(stable.iterdir()), [])
+            self.assertEqual(list(main.iterdir()), [])
+
     def test_invalid_mismatched_or_dirty_source_never_creates_build_inputs(self):
         for args, dirty_source, message in (
             (SOURCE_ARGS[:1], "", "Usage:"),

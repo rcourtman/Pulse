@@ -7,6 +7,8 @@
 # Each tree is built from source with a placeholder frontend (release builds
 # refuse mock fixtures), started with telemetry off and no licence server, and
 # sampled every PULSE_MEMORY_INTERVAL seconds for PULSE_MEMORY_DURATION seconds.
+# Use a new output directory for each pair so optional observations cannot
+# carry over from an earlier run.
 # Samples split resident memory into the Go heap mapping, unnamed anonymous
 # memory (where the modernc SQLite driver allocates) and file pages. At the end
 # each run's heap profile is saved, and summarize_release_memory.py writes the
@@ -114,8 +116,12 @@ case "${ESTATE}" in
     ;;
 esac
 
-mkdir -p "${OUT_DIR}"
-OUT_DIR="$(cd "${OUT_DIR}" && pwd)"
+mkdir -p -- "$(dirname -- "${OUT_DIR}")"
+if ! mkdir -- "${OUT_DIR}"; then
+  printf 'Memory comparison requires a new output directory: %s\n' "${OUT_DIR}" >&2
+  exit 2
+fi
+OUT_DIR="$(cd -- "${OUT_DIR}" && pwd)"
 getconf CLK_TCK > "${OUT_DIR}/clk_tck"
 printf '%s\n' "${ESTATE}" > "${OUT_DIR}/estate"
 
@@ -176,7 +182,7 @@ run_tree() {
   local label=$1 port=$2
   local data="${OUT_DIR}/data-${label}" log="${OUT_DIR}/run-${label}.log"
   local samples="${OUT_DIR}/samples-${label}.tsv"
-  rm -rf "${data}" && mkdir -p "${data}"
+  mkdir -- "${data}"
   # A host with an installed Pulse can hold an unreadable /etc/pulse; point
   # the legacy key lookup at a path that does not exist instead.
   env -i HOME="${HOME}" PATH="${PATH}" "${ESTATE_ENV[@]}" \
