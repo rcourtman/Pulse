@@ -141,77 +141,7 @@ func TestPollStalenessGaugesAgeWithoutNewResults(t *testing.T) {
 // newTestPollMetrics creates a PollMetrics instance with an isolated registry for testing.
 func newTestPollMetrics(t *testing.T) *PollMetrics {
 	t.Helper()
-
-	reg := prometheus.NewRegistry()
-
-	pm := &PollMetrics{
-		schedulerQueueReady: prometheus.NewGauge(
-			prometheus.GaugeOpts{
-				Namespace: "pulse",
-				Subsystem: "scheduler",
-				Name:      "queue_due_soon",
-				Help:      "Number of tasks due to run within the immediate window.",
-			},
-		),
-		schedulerQueueDepthByType: prometheus.NewGaugeVec(
-			prometheus.GaugeOpts{
-				Namespace: "pulse",
-				Subsystem: "scheduler",
-				Name:      "queue_depth",
-				Help:      "Current scheduler queue depth partitioned by instance type.",
-			},
-			[]string{"instance_type"},
-		),
-		schedulerDeadLetterDepth: prometheus.NewGaugeVec(
-			prometheus.GaugeOpts{
-				Namespace: "pulse",
-				Subsystem: "scheduler",
-				Name:      "dead_letter_depth",
-				Help:      "Number of tasks currently parked in the dead-letter queue per instance.",
-			},
-			[]string{"instance_type", "instance"},
-		),
-		schedulerBreakerState: prometheus.NewGaugeVec(
-			prometheus.GaugeOpts{
-				Namespace: "pulse",
-				Subsystem: "scheduler",
-				Name:      "breaker_state",
-				Help:      "Circuit breaker state encoded as 0=closed, 1=half-open, 2=open, -1=unknown.",
-			},
-			[]string{"instance_type", "instance"},
-		),
-		schedulerBreakerFailureCount: prometheus.NewGaugeVec(
-			prometheus.GaugeOpts{
-				Namespace: "pulse",
-				Subsystem: "scheduler",
-				Name:      "breaker_failure_count",
-				Help:      "Current consecutive failure count tracked by the circuit breaker.",
-			},
-			[]string{"instance_type", "instance"},
-		),
-		schedulerBreakerRetrySeconds: prometheus.NewGaugeVec(
-			prometheus.GaugeOpts{
-				Namespace: "pulse",
-				Subsystem: "scheduler",
-				Name:      "breaker_retry_seconds",
-				Help:      "Seconds until the circuit breaker will allow another attempt.",
-			},
-			[]string{"instance_type", "instance"},
-		),
-		lastQueueTypeKeys: make(map[string]struct{}),
-		lastDLQKeys:       make(map[string]struct{}),
-	}
-
-	reg.MustRegister(
-		pm.schedulerQueueReady,
-		pm.schedulerQueueDepthByType,
-		pm.schedulerDeadLetterDepth,
-		pm.schedulerBreakerState,
-		pm.schedulerBreakerFailureCount,
-		pm.schedulerBreakerRetrySeconds,
-	)
-
-	return pm
+	return newPollMetrics(prometheus.NewRegistry())
 }
 
 // getGaugeValue returns the value of a prometheus gauge.
@@ -486,14 +416,42 @@ func TestUpdateDeadLetterCounts_MultipleInstancesSameType(t *testing.T) {
 	}
 }
 
+func breakerGaugeValue(t *testing.T, reg *prometheus.Registry, name, instanceType, instance string) float64 {
+	t.Helper()
+	families, err := reg.Gather()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, family := range families {
+		if family.GetName() != name {
+			continue
+		}
+		if family.GetType() != dto.MetricType_GAUGE {
+			t.Fatalf("%s: expected gauge, got %s", name, family.GetType())
+		}
+		for _, metric := range family.Metric {
+			labels := make(map[string]string, len(metric.Label))
+			for _, label := range metric.Label {
+				labels[label.GetName()] = label.GetValue()
+			}
+			if len(labels) == 2 && labels["instance_type"] == instanceType && labels["instance"] == instance {
+				return metric.GetGauge().GetValue()
+			}
+		}
+	}
+	t.Fatalf("%s: no sample for %q/%q", name, instanceType, instance)
+	return 0
+}
+
 func TestSetBreakerState_ZeroRetryAt(t *testing.T) {
 	t.Parallel()
 
-	pm := newTestPollMetrics(t)
+	reg := prometheus.NewRegistry()
+	pm := newPollMetrics(reg)
 
 	pm.SetBreakerState("pve", "pve1", "closed", 0, time.Time{})
 
-	got := getGaugeVecValue(pm.schedulerBreakerRetrySeconds, "pve", "pve1")
+	got := breakerGaugeValue(t, reg, "pulse_scheduler_breaker_retry_seconds", "pve", "pve1")
 	if got != 0 {
 		t.Fatalf("retrySeconds = %v, want 0 for zero retryAt", got)
 	}
@@ -502,13 +460,14 @@ func TestSetBreakerState_ZeroRetryAt(t *testing.T) {
 func TestSetBreakerState_FutureRetryAt(t *testing.T) {
 	t.Parallel()
 
-	pm := newTestPollMetrics(t)
+	reg := prometheus.NewRegistry()
+	pm := newPollMetrics(reg)
 
 	// Set retryAt 60 seconds in the future
 	retryAt := time.Now().Add(60 * time.Second)
 	pm.SetBreakerState("pve", "pve1", "open", 3, retryAt)
 
-	got := getGaugeVecValue(pm.schedulerBreakerRetrySeconds, "pve", "pve1")
+	got := breakerGaugeValue(t, reg, "pulse_scheduler_breaker_retry_seconds", "pve", "pve1")
 	// Allow some tolerance for test execution time
 	if got < 55 || got > 65 {
 		t.Fatalf("retrySeconds = %v, want ~60 for future retryAt", got)
@@ -518,13 +477,14 @@ func TestSetBreakerState_FutureRetryAt(t *testing.T) {
 func TestSetBreakerState_PastRetryAtClampsToZero(t *testing.T) {
 	t.Parallel()
 
-	pm := newTestPollMetrics(t)
+	reg := prometheus.NewRegistry()
+	pm := newPollMetrics(reg)
 
 	// Set retryAt 60 seconds in the past (already expired)
 	retryAt := time.Now().Add(-60 * time.Second)
 	pm.SetBreakerState("pve", "pve1", "half_open", 1, retryAt)
 
-	got := getGaugeVecValue(pm.schedulerBreakerRetrySeconds, "pve", "pve1")
+	got := breakerGaugeValue(t, reg, "pulse_scheduler_breaker_retry_seconds", "pve", "pve1")
 	if got != 0 {
 		t.Fatalf("retrySeconds = %v, want 0 for past retryAt", got)
 	}
@@ -553,10 +513,11 @@ func TestSetBreakerState_StateConversion(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.state, func(t *testing.T) {
-			pm := newTestPollMetrics(t)
+			reg := prometheus.NewRegistry()
+			pm := newPollMetrics(reg)
 			pm.SetBreakerState("pve", "pve1", tc.state, 0, time.Time{})
 
-			got := getGaugeVecValue(pm.schedulerBreakerState, "pve", "pve1")
+			got := breakerGaugeValue(t, reg, "pulse_scheduler_breaker_state", "pve", "pve1")
 			if got != tc.want {
 				t.Errorf("breakerState for %q = %v, want %v", tc.state, got, tc.want)
 			}
@@ -567,11 +528,12 @@ func TestSetBreakerState_StateConversion(t *testing.T) {
 func TestSetBreakerState_FailureCount(t *testing.T) {
 	t.Parallel()
 
-	pm := newTestPollMetrics(t)
+	reg := prometheus.NewRegistry()
+	pm := newPollMetrics(reg)
 
 	pm.SetBreakerState("pve", "pve1", "open", 7, time.Time{})
 
-	got := getGaugeVecValue(pm.schedulerBreakerFailureCount, "pve", "pve1")
+	got := breakerGaugeValue(t, reg, "pulse_scheduler_breaker_failure_count", "pve", "pve1")
 	if got != 7 {
 		t.Fatalf("failureCount = %v, want 7", got)
 	}
@@ -580,17 +542,18 @@ func TestSetBreakerState_FailureCount(t *testing.T) {
 func TestSetBreakerState_EmptyLabelsSanitized(t *testing.T) {
 	t.Parallel()
 
-	pm := newTestPollMetrics(t)
+	reg := prometheus.NewRegistry()
+	pm := newPollMetrics(reg)
 
 	pm.SetBreakerState("", "", "open", 5, time.Time{})
 
 	// Empty labels should be normalized to "unknown"
-	gotState := getGaugeVecValue(pm.schedulerBreakerState, "unknown", "unknown")
+	gotState := breakerGaugeValue(t, reg, "pulse_scheduler_breaker_state", "unknown", "unknown")
 	if gotState != 2 {
 		t.Errorf("breaker_state{unknown,unknown} = %v, want 2 (open)", gotState)
 	}
 
-	gotFailures := getGaugeVecValue(pm.schedulerBreakerFailureCount, "unknown", "unknown")
+	gotFailures := breakerGaugeValue(t, reg, "pulse_scheduler_breaker_failure_count", "unknown", "unknown")
 	if gotFailures != 5 {
 		t.Errorf("breaker_failure_count{unknown,unknown} = %v, want 5", gotFailures)
 	}
@@ -599,11 +562,12 @@ func TestSetBreakerState_EmptyLabelsSanitized(t *testing.T) {
 func TestSetBreakerState_WhitespaceOnlyLabelsSanitized(t *testing.T) {
 	t.Parallel()
 
-	pm := newTestPollMetrics(t)
+	reg := prometheus.NewRegistry()
+	pm := newPollMetrics(reg)
 
 	pm.SetBreakerState("  ", "   ", "closed", 0, time.Time{})
 
-	gotState := getGaugeVecValue(pm.schedulerBreakerState, "unknown", "unknown")
+	gotState := breakerGaugeValue(t, reg, "pulse_scheduler_breaker_state", "unknown", "unknown")
 	if gotState != 0 {
 		t.Errorf("breaker_state{unknown,unknown} = %v, want 0 (closed)", gotState)
 	}

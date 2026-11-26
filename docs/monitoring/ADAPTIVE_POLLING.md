@@ -115,8 +115,9 @@ If a scrape still works but polling stops producing results, use the
 [last-success timestamp](PROMETHEUS_METRICS.md#check-whether-polling-is-still-running)
 to check age on either type of exporter. A staleness gauge that stays at zero
 on an older build does not rule out a stall. If a circuit breaker is open,
-[check its recorded retry time](PROMETHEUS_METRICS.md#check-whether-backoff-still-explains-the-wait)
-before attributing the gap to backoff.
+[check the scrape-time retry countdown](PROMETHEUS_METRICS.md#check-whether-backoff-still-explains-the-wait)
+or, on an older exporter, compare the recorded retry time in Scheduler
+Health before attributing the gap to backoff.
 
 ## ⚡ Circuit Breaker
 
