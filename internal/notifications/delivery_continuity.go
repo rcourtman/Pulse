@@ -331,6 +331,7 @@ func (n *NotificationManager) retireMemoryDestinationsLocked(keys []string) {
 		for key := range n.deliveryReceipts {
 			if strings.HasSuffix(key, "\x00"+old) {
 				delete(n.deliveryReceipts, key)
+				delete(n.deliveryReceiptLevels, key)
 			}
 		}
 	}

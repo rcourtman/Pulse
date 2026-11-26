@@ -215,8 +215,9 @@ type NotificationManager struct {
 	deliveryCooldown    map[string]notificationRecord
 	initialTarget       notificationDeliveryTarget
 	notifyOnResolve     bool
-	lastNotified        map[string]notificationRecord
-	deliveryReceipts    map[string]struct{}
+	lastNotified          map[string]notificationRecord
+	deliveryReceipts      map[string]struct{}
+	deliveryReceiptLevels map[string]alerts.AlertLevel
 	groupWindow         time.Duration
 	groupingEnabled     bool
 	pendingAlerts       []*alerts.Alert
@@ -314,8 +315,9 @@ func newNotificationManagerWithDataDir(publicURL string, dataDir string, deferQu
 		cooldown:         5 * time.Minute,
 		initialTarget:    notificationDeliveryTargetAll,
 		notifyOnResolve:  true,
-		lastNotified:     make(map[string]notificationRecord),
-		deliveryReceipts: make(map[string]struct{}),
+		lastNotified:          make(map[string]notificationRecord),
+		deliveryReceipts:      make(map[string]struct{}),
+		deliveryReceiptLevels: make(map[string]alerts.AlertLevel),
 		webhooks:         []WebhookConfig{},
 		appriseConfig: AppriseConfig{
 			Enabled:        false,

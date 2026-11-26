@@ -24,6 +24,8 @@ type apiResponseError struct {
 func (e *apiResponseError) Error() string { return e.cause.Error() }
 func (e *apiResponseError) Unwrap() error { return e.cause }
 
+const guestAgentReasonCommandDisabled = "agent-command-disabled"
+
 // GuestAgentErrorReason preserves observed HTTP/command evidence for callers
 // without treating numbers or instructions quoted in an error body as status.
 // It returns only existing fixed disk-status reasons, never provider text.
@@ -40,10 +42,23 @@ func GuestAgentErrorReason(err error) string {
 		return "permission-denied"
 	case http.StatusInternalServerError:
 		if response.guestCommandRejected {
+			if response.guestFailureReason == guestAgentReasonCommandDisabled {
+				return "agent-error"
+			}
 			return response.guestFailureReason
 		}
 	}
 	return "agent-error"
+}
+
+// IsGuestAgentCommandDisabled reports whether a Proxmox HTTP 500 explicitly
+// rejected the requested guest-agent command as disabled for that VM instance.
+func IsGuestAgentCommandDisabled(err error) bool {
+	var response *apiResponseError
+	return errors.As(err, &response) &&
+		response.statusCode == http.StatusInternalServerError &&
+		response.guestCommandRejected &&
+		response.guestFailureReason == guestAgentReasonCommandDisabled
 }
 
 // Only specific, complete terminal failures from the command endpoint allow
@@ -60,20 +75,31 @@ func guestAgentTerminalFailureReason(path string, body []byte) string {
 	}
 	commandPath := strings.SplitN(path, "?", 2)[0]
 	command := "guest-" + commandPath[strings.LastIndex(commandPath, "/")+1:]
-	message = strings.TrimPrefix(message, fmt.Sprintf("VM %d qmp command '%s' failed - ", vmid, command))
-	switch message {
-	case "QEMU guest agent is not running":
-		return "agent-not-running"
-	case "unsupported command: " + command,
-		"The command " + command + " has not been found":
-		return "agent-error"
+	// PVE's /agent/file-read endpoint runs guest-file-open before
+	// guest-file-read, so a disabled or stopped agent rejects on guest-file-open.
+	commands := []string{command}
+	if command == "guest-file-read" {
+		commands = []string{"guest-file-read", "guest-file-open"}
+	}
+	for _, qmpCommand := range commands {
+		trimmed := strings.TrimPrefix(message, fmt.Sprintf("VM %d qmp command '%s' failed - ", vmid, qmpCommand))
+		switch trimmed {
+		case "QEMU guest agent is not running":
+			return "agent-not-running"
+		case "unsupported command: " + qmpCommand,
+			"The command " + qmpCommand + " has not been found":
+			return "agent-error"
+		case "The command " + qmpCommand + " has been disabled for this instance":
+			return guestAgentReasonCommandDisabled
+		}
 	}
 	// Preserve the existing OpenBSD OS-info skip rather than repeatedly probing
 	// its missing os-release file. Do not apply it to another guest command.
 	if command == "guest-get-osinfo" {
-		message = strings.TrimPrefix(message, "guest agent command failed: ")
+		trimmed := strings.TrimPrefix(message, fmt.Sprintf("VM %d qmp command '%s' failed - ", vmid, command))
+		trimmed = strings.TrimPrefix(trimmed, "guest agent command failed: ")
 		for _, filename := range []string{"/etc/os-release", "/usr/lib/os-release"} {
-			if message == "Failed to open file '"+filename+"': No such file or directory" {
+			if trimmed == "Failed to open file '"+filename+"': No such file or directory" {
 				return "agent-error"
 			}
 		}

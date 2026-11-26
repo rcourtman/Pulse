@@ -39,16 +39,22 @@ const (
 
 // guestMetadataCacheEntry holds cached guest agent metadata for a VM.
 type guestMetadataCacheEntry struct {
-	ipAddresses        []string
-	networkInterfaces  []models.GuestNetworkInterface
-	osName             string
-	osVersion          string
-	agentVersion       string
-	fetchedAt          time.Time // Last accepted useful metadata, not the last attempt.
-	windowsGuest       bool      // An actual OS reply, not retained display identity.
-	osInfoObservedAt   time.Time // Network/version refreshes cannot renew OS evidence.
-	osInfoFailureCount int       // Track consecutive OS info failures
-	osInfoSkip         bool      // Skip OS info calls after repeated failures (refs #692)
+	ipAddresses         []string
+	networkInterfaces   []models.GuestNetworkInterface
+	osName              string
+	osVersion           string
+	agentVersion        string
+	fetchedAt           time.Time // Last accepted useful metadata, not the last attempt.
+	windowsGuest        bool      // An actual OS reply, not retained display identity.
+	osInfoObservedAt    time.Time // Network/version refreshes cannot renew OS evidence.
+	fileReadDisabled    bool      // /agent/info reported guest-file-open or guest-file-read disabled.
+	agentInfoObservedAt time.Time // Independent of other metadata refresh timestamps.
+	osInfoFailureCount  int       // Track consecutive OS info failures
+	osInfoSkip          bool      // Skip OS info calls after repeated failures (refs #692)
+}
+
+type guestAgentInfoSummaryClient interface {
+	GetVMAgentInfoSummary(ctx context.Context, node string, vmid int) (proxmox.VMAgentInfo, error)
 }
 
 // A cancelled fetch still owns its key until it returns. Cancellation cannot
@@ -554,13 +560,23 @@ func (m *Monitor) fetchGuestAgentMetadata(ctx context.Context, client PVEClientI
 			Msg("Skipping guest agent OS info call (disabled after repeated failures)")
 	}
 
-	// Agent version with configurable timeout and retry (refs #592)
+	// Agent version and command capabilities with configurable timeout and retry (refs #592)
 	if m.guestMetadataFetchInvalidated(key) {
 		return nil, nil, "", "", "", true
 	}
-	versionRaw, err := m.retryGuestAgentCall(ctx, m.guestAgentVersionTimeout, m.guestAgentRetries, func(ctx context.Context) (interface{}, error) {
-		return client.GetVMAgentVersion(ctx, nodeName, vmid)
-	})
+	fileReadDisabled, agentInfoObservedAt := cached.fileReadDisabled, cached.agentInfoObservedAt
+	var versionRaw interface{}
+	var usedSummary bool
+	if summaryClient, ok := client.(guestAgentInfoSummaryClient); ok {
+		usedSummary = true
+		versionRaw, err = m.retryGuestAgentCall(ctx, m.guestAgentVersionTimeout, m.guestAgentRetries, func(ctx context.Context) (interface{}, error) {
+			return summaryClient.GetVMAgentInfoSummary(ctx, nodeName, vmid)
+		})
+	} else {
+		versionRaw, err = m.retryGuestAgentCall(ctx, m.guestAgentVersionTimeout, m.guestAgentRetries, func(ctx context.Context) (interface{}, error) {
+			return client.GetVMAgentVersion(ctx, nodeName, vmid)
+		})
+	}
 	if m.guestMetadataFetchInvalidated(key) {
 		return nil, nil, "", "", "", true
 	}
@@ -585,6 +601,23 @@ func (m *Monitor) fetchGuestAgentMetadata(ctx context.Context, client PVEClientI
 			Int("vmid", vmid).
 			Err(err).
 			Msg("Guest agent version unavailable")
+	} else if usedSummary {
+		if summary, ok := versionRaw.(proxmox.VMAgentInfo); ok {
+			if summary.Version != "" {
+				agentVersion = summary.Version
+				metadataObserved = true
+			} else if cached.agentVersion == "" {
+				agentVersion = ""
+			}
+			if summary.HasSupportedCommands {
+				fileReadDisabled = summary.FileReadDisabled
+				agentInfoObservedAt = time.Now()
+			} else {
+				fileReadDisabled, agentInfoObservedAt = false, time.Time{}
+			}
+		} else if cached.agentVersion == "" {
+			agentVersion = ""
+		}
 	} else if version, ok := versionRaw.(string); ok && version != "" {
 		agentVersion = version
 		metadataObserved = true
@@ -600,16 +633,18 @@ func (m *Monitor) fetchGuestAgentMetadata(ctx context.Context, client PVEClientI
 		fetchedAt = time.Now()
 	}
 	entry := guestMetadataCacheEntry{
-		ipAddresses:        cloneStringSlice(ipAddresses),
-		networkInterfaces:  cloneGuestNetworkInterfaces(networkIfaces),
-		osName:             osName,
-		osVersion:          osVersion,
-		agentVersion:       agentVersion,
-		fetchedAt:          fetchedAt,
-		windowsGuest:       windowsGuest,
-		osInfoObservedAt:   osInfoObservedAt,
-		osInfoFailureCount: osInfoFailureCount,
-		osInfoSkip:         osInfoSkip,
+		ipAddresses:         cloneStringSlice(ipAddresses),
+		networkInterfaces:   cloneGuestNetworkInterfaces(networkIfaces),
+		osName:              osName,
+		osVersion:           osVersion,
+		agentVersion:        agentVersion,
+		fetchedAt:           fetchedAt,
+		windowsGuest:        windowsGuest,
+		osInfoObservedAt:    osInfoObservedAt,
+		fileReadDisabled:    fileReadDisabled,
+		agentInfoObservedAt: agentInfoObservedAt,
+		osInfoFailureCount:  osInfoFailureCount,
+		osInfoSkip:          osInfoSkip,
 	}
 
 	if !m.updateGuestMetadataFetch(key, func(current *guestMetadataCacheEntry) { *current = entry }) {
@@ -826,6 +861,9 @@ func extractGuestOSInfo(data map[string]interface{}) (string, string) {
 func isGuestAgentOSInfoUnsupportedError(err error) bool {
 	if err == nil {
 		return false
+	}
+	if proxmox.IsGuestAgentCommandDisabled(err) {
+		return true
 	}
 
 	msg := strings.ToLower(err.Error())
