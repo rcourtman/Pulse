@@ -17,14 +17,10 @@ const asRecord = (value: unknown): Record<string, unknown> | undefined =>
 const normalizeStatus = (value: unknown): string =>
   typeof value === 'string' ? value.trim().toLowerCase() : '';
 
-export const getResourceSourceStatus = (
-  resource: Resource,
-  source: string,
+const findSourceStatusEntry = (
+  sourceStatus: Record<string, unknown> | undefined,
+  normalizedSource: string,
 ): SourceStatusEntry | undefined => {
-  const normalizedSource = normalizeSourcePlatformKey(source) || source.trim().toLowerCase();
-  if (!normalizedSource) return undefined;
-
-  const sourceStatus = asRecord(resource.platformData?.sourceStatus);
   if (!sourceStatus) return undefined;
 
   for (const [key, value] of Object.entries(sourceStatus)) {
@@ -34,6 +30,21 @@ export const getResourceSourceStatus = (
   }
 
   return undefined;
+};
+
+export const getResourceSourceStatus = (
+  resource: Resource,
+  source: string,
+): SourceStatusEntry | undefined => {
+  const normalizedSource = normalizeSourcePlatformKey(source) || source.trim().toLowerCase();
+  if (!normalizedSource) return undefined;
+
+  // Prefer the top-level sourceStatus written by live WebSocket and REST
+  // adaptation, falling back to platformData.sourceStatus for older fixtures.
+  return (
+    findSourceStatusEntry(asRecord(resource.sourceStatus), normalizedSource) ??
+    findSourceStatusEntry(asRecord(resource.platformData?.sourceStatus), normalizedSource)
+  );
 };
 
 export const getResourceSourceHealth = (

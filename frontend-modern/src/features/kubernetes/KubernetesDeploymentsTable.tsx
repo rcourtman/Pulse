@@ -1,17 +1,13 @@
-import { Show, createMemo, type Component, type JSX } from 'solid-js';
-import { StatusDot } from '@/components/shared/StatusDot';
+import { createMemo, type Component, type JSX } from 'solid-js';
 import { TableCell, TableRow } from '@/components/shared/Table';
 import { ResourceNameWithWebInterfaceLink } from '@/components/shared/WebInterfaceLink';
 import { asTrimmedString } from '@/utils/stringUtils';
 import {
   PlatformWindowedRows,
-  PLATFORM_HEALTH_FILTER_OPTIONS,
   PlatformSortableTableHead,
   PlatformTableNumberValue,
   PlatformTableRelativeTimeValue,
   PlatformResponsiveTableLabel,
-  PlatformTableToolbar,
-  PlatformTableEmptyState,
   createPlatformTableFilterState,
   createPlatformTableSortState,
   formatPlatformTableTextValue,
@@ -19,12 +15,9 @@ import {
   getPlatformTableDateTimeSortValue,
   PlatformTableShell,
   type PlatformTableSortValue,
-  withPlatformStatusCounts,
 } from '@/features/platformPage/sharedPlatformPage';
 import { getPlatformStatusTextToneClass } from '@/features/platformPage/platformStatusTone';
 import {
-  PlatformResourceDetailToggleButton,
-  PlatformResourceDetailTableRow,
   createPlatformResourceDetailState,
   createPlatformResourceLabelResolver,
   getPlatformResourceDetailRowClass,
@@ -33,10 +26,17 @@ import type { Resource } from '@/types/resource';
 import {
   compareKubernetesDeployments,
   filterKubernetesResources,
+  hasStaleKubernetesReadings,
   kubernetesClusterLabel,
   mapKubernetesDeploymentStatus,
   type KubernetesResourceStatusFilter,
 } from './kubernetesPageModel';
+import {
+  KubernetesDetailRow,
+  KubernetesRowLead,
+  KubernetesStaleDataCue,
+  KubernetesTableFrame,
+} from './KubernetesRecordDetail';
 
 // Kubernetes Deployments are scheduling abstractions over their controlled
 // pods, so the generic infrastructure table's CPU / Memory / Disk I/O /
@@ -125,51 +125,21 @@ export const KubernetesDeploymentsTable: Component<{
   const resolveResourceLabel = createPlatformResourceLabelResolver(() => props.resources);
 
   return (
-    <Show
-      when={props.resources.length > 0}
-      fallback={
-        <PlatformTableEmptyState
-          icon={props.emptyIcon}
-          title={props.emptyTitle}
-          description={props.emptyDescription}
-        />
-      }
+    <KubernetesTableFrame
+      hasResources={props.resources.length > 0}
+      emptyIcon={props.emptyIcon}
+      emptyTitle={props.emptyTitle}
+      emptyDescription={props.emptyDescription}
+      showToolbar={props.showToolbar}
+      rowNoun="deployments"
+      tableState={tableState}
     >
-      <div class="space-y-3">
-        <Show when={props.showToolbar !== false}>
-          <PlatformTableToolbar
-            search={tableState.search}
-            onSearchChange={tableState.setSearch}
-            searchPlaceholder="Search deployments"
-            searchSuggestions={tableState.searchSuggestions}
-            status={tableState.status()}
-            onStatusChange={tableState.setStatus}
-            statusOptions={withPlatformStatusCounts(
-              PLATFORM_HEALTH_FILTER_OPTIONS,
-              tableState.countForStatus,
-            )}
-            visible={tableState.visible()}
-            total={tableState.total()}
-            rowNoun="deployments"
-          />
-        </Show>
-
-        <Show
-          when={tableState.filtered().length > 0}
-          fallback={
-            <PlatformTableEmptyState
-              icon={props.emptyIcon}
-              title="No deployments match current filters"
-              description="Adjust the search or status filter to see more deployments."
-            />
-          }
-        >
-          <PlatformTableShell
-            title={props.title ?? 'Deployments'}
-            tableClass="min-w-full table-fixed text-xs md:min-w-[1320px]"
-            header={
-              <>
-                {/*
+      <PlatformTableShell
+        title={props.title ?? 'Deployments'}
+        tableClass="min-w-full table-fixed text-xs md:min-w-[1320px]"
+        header={
+          <>
+            {/*
                     Desktop widths: Deployment, Namespace, and Cluster take
                     the biggest shares because their content can be long.
                     The integer-count columns (Desired / Updated / Ready /
@@ -181,189 +151,181 @@ export const KubernetesDeploymentsTable: Component<{
                     md widths, where a long deployment name needs about a
                     third of the row and the counts need little.
                   */}
-                <PlatformSortableTableHead
-                  kind="name"
-                  sort={sort}
-                  sortKey="deployment"
-                  class="platform-table-mobile-w-30 md:w-[25%]"
-                  bandWidth={36}
-                >
-                  Deployment
-                </PlatformSortableTableHead>
-                <PlatformSortableTableHead
-                  kind="text"
-                  sort={sort}
-                  sortKey="namespace"
-                  class="platform-table-mobile-w-15 md:w-[18%]"
-                  bandWidth={16}
-                >
-                  Namespace
-                </PlatformSortableTableHead>
-                <PlatformSortableTableHead
-                  kind="text"
-                  sort={sort}
-                  sortKey="cluster"
-                  class="hidden md:table-cell md:w-[17%]"
-                >
-                  Cluster
-                </PlatformSortableTableHead>
-                <PlatformSortableTableHead
-                  kind="numeric-value"
-                  sort={sort}
-                  sortKey="desired"
-                  class="hidden md:table-cell md:w-[8%]"
-                >
-                  <PlatformResponsiveTableLabel compact="Des" full="Desired" />
-                </PlatformSortableTableHead>
-                <PlatformSortableTableHead
-                  kind="numeric-value"
-                  sort={sort}
-                  sortKey="updated"
-                  class="platform-table-phone-hidden md:w-[8%]"
-                  bandWidth={12}
-                >
-                  <PlatformResponsiveTableLabel compact="Upd" full="Updated" />
-                </PlatformSortableTableHead>
-                <PlatformSortableTableHead
-                  kind="numeric-value"
-                  sort={sort}
-                  sortKey="ready"
-                  class="platform-table-mobile-w-10 md:w-[7%]"
-                  bandWidth={9.5}
-                >
-                  <PlatformResponsiveTableLabel compact="Rdy" full="Ready" />
-                </PlatformSortableTableHead>
-                <PlatformSortableTableHead
-                  kind="numeric-value"
-                  sort={sort}
-                  sortKey="available"
-                  class="platform-table-phone-hidden md:w-[9%]"
-                  bandWidth={14}
-                >
-                  <PlatformResponsiveTableLabel compact="Avail" full="Available" />
-                </PlatformSortableTableHead>
-                <PlatformSortableTableHead
-                  kind="numeric-value"
-                  sort={sort}
-                  sortKey="age"
-                  class="platform-table-mobile-w-15 md:w-[8%] platform-table-narrow-hidden"
-                  bandWidth={12.5}
-                >
-                  Age
-                </PlatformSortableTableHead>
-              </>
-            }
-            body={
-              <>
-                <PlatformWindowedRows items={sortedRows} estimatedRowHeight={32}>
-                  {(deployment) => {
-                    const name = () => asTrimmedString(deployment.name) || deployment.id;
-                    const ns = () => formatPlatformTableTextValue(deployment.kubernetes?.namespace);
-                    const cluster = () => kubernetesClusterLabel(deployment) || '—';
-                    const indicator = () => mapKubernetesDeploymentStatus(deployment);
-                    const detailRowId = () => drawer.detailRowId(deployment);
-                    const isExpanded = () => drawer.isExpanded(deployment);
-                    return (
-                      <>
-                        <TableRow
-                          class={`${getPlatformResourceDetailRowClass(isExpanded())} text-[11px] sm:text-xs`}
-                          data-kubernetes-deployment-row={deployment.id}
-                          onClick={() => drawer.toggle(deployment)}
-                        >
-                          <TableCell class={getPlatformTableCellClassForKind('name')}>
-                            <div class="flex min-w-0 items-center gap-2">
-                              <PlatformResourceDetailToggleButton
-                                expanded={isExpanded()}
-                                resourceLabel={name()}
-                                controlsId={detailRowId()}
-                                onToggle={() => drawer.toggle(deployment)}
-                              />
-                              <StatusDot
-                                size="sm"
-                                variant={indicator().variant}
-                                title={indicator().label}
-                                ariaHidden
-                              />
-                              <ResourceNameWithWebInterfaceLink
-                                name={name()}
-                                url={deployment.customUrl}
-                                class="min-w-0"
-                                nameClass="truncate font-semibold text-base-content"
-                              />
-                            </div>
-                          </TableCell>
-                          <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
-                          >
-                            {ns()}
-                          </TableCell>
-                          <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}
-                          >
-                            {cluster()}
-                          </TableCell>
-                          <TableCell
-                            class={`${getPlatformTableCellClassForKind('numeric-value')} hidden text-base-content md:table-cell`}
-                          >
-                            <PlatformTableNumberValue
-                              value={deployment.kubernetes?.desiredReplicas ?? 0}
-                            />
-                          </TableCell>
-                          <TableCell
-                            class={`${getPlatformTableCellClassForKind('numeric-value')} platform-table-phone-hidden text-base-content`}
-                          >
-                            <PlatformTableNumberValue
-                              value={deployment.kubernetes?.updatedReplicas ?? 0}
-                            />
-                          </TableCell>
-                          {/* Ready is the count behind the dot's replica verdict. */}
-                          <TableCell
-                            class={`${getPlatformTableCellClassForKind('numeric-value')} ${getPlatformStatusTextToneClass(indicator().variant) || 'text-base-content'}`}
-                            data-kubernetes-deployment-ready={indicator().variant}
-                          >
-                            <PlatformTableNumberValue
-                              value={deployment.kubernetes?.readyReplicas ?? 0}
-                            />
-                            <span class="k8s-deployment-ready-total">
-                              /{deployment.kubernetes?.desiredReplicas ?? 0}
-                            </span>
-                          </TableCell>
-                          <TableCell
-                            class={`${getPlatformTableCellClassForKind('numeric-value')} platform-table-phone-hidden text-base-content`}
-                          >
-                            <PlatformTableNumberValue
-                              value={deployment.kubernetes?.availableReplicas ?? 0}
-                            />
-                          </TableCell>
-                          <TableCell
-                            class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content platform-table-narrow-hidden`}
-                          >
-                            <span title={deployment.kubernetes?.createdAt || ''}>
-                              <PlatformTableRelativeTimeValue
-                                value={deployment.kubernetes?.createdAt}
-                              />
-                            </span>
-                          </TableCell>
-                        </TableRow>
-                        <PlatformResourceDetailTableRow
+            <PlatformSortableTableHead
+              kind="name"
+              sort={sort}
+              sortKey="deployment"
+              class="platform-table-mobile-w-30 md:w-[25%]"
+              bandWidth={36}
+            >
+              Deployment
+            </PlatformSortableTableHead>
+            <PlatformSortableTableHead
+              kind="text"
+              sort={sort}
+              sortKey="namespace"
+              class="platform-table-mobile-w-15 md:w-[18%]"
+              bandWidth={16}
+            >
+              Namespace
+            </PlatformSortableTableHead>
+            <PlatformSortableTableHead
+              kind="text"
+              sort={sort}
+              sortKey="cluster"
+              class="hidden md:table-cell md:w-[17%]"
+            >
+              Cluster
+            </PlatformSortableTableHead>
+            <PlatformSortableTableHead
+              kind="numeric-value"
+              sort={sort}
+              sortKey="desired"
+              class="hidden md:table-cell md:w-[8%]"
+            >
+              <PlatformResponsiveTableLabel compact="Des" full="Desired" />
+            </PlatformSortableTableHead>
+            <PlatformSortableTableHead
+              kind="numeric-value"
+              sort={sort}
+              sortKey="updated"
+              class="platform-table-phone-hidden md:w-[8%]"
+              bandWidth={12}
+            >
+              <PlatformResponsiveTableLabel compact="Upd" full="Updated" />
+            </PlatformSortableTableHead>
+            <PlatformSortableTableHead
+              kind="numeric-value"
+              sort={sort}
+              sortKey="ready"
+              class="platform-table-mobile-w-10 md:w-[7%]"
+              bandWidth={9.5}
+            >
+              <PlatformResponsiveTableLabel compact="Rdy" full="Ready" />
+            </PlatformSortableTableHead>
+            <PlatformSortableTableHead
+              kind="numeric-value"
+              sort={sort}
+              sortKey="available"
+              class="platform-table-phone-hidden md:w-[9%]"
+              bandWidth={14}
+            >
+              <PlatformResponsiveTableLabel compact="Avail" full="Available" />
+            </PlatformSortableTableHead>
+            <PlatformSortableTableHead
+              kind="numeric-value"
+              sort={sort}
+              sortKey="age"
+              class="platform-table-mobile-w-15 md:w-[8%] platform-table-narrow-hidden"
+              bandWidth={12.5}
+            >
+              Age
+            </PlatformSortableTableHead>
+          </>
+        }
+        body={
+          <>
+            <PlatformWindowedRows items={sortedRows} estimatedRowHeight={32}>
+              {(deployment) => {
+                const name = () => asTrimmedString(deployment.name) || deployment.id;
+                const ns = () => formatPlatformTableTextValue(deployment.kubernetes?.namespace);
+                const cluster = () => kubernetesClusterLabel(deployment) || '—';
+                const indicator = () => mapKubernetesDeploymentStatus(deployment);
+                const readingsStale = () => hasStaleKubernetesReadings(deployment);
+                const isExpanded = () => drawer.isExpanded(deployment);
+                return (
+                  <>
+                    <TableRow
+                      class={`${getPlatformResourceDetailRowClass(isExpanded())} text-[11px] sm:text-xs`}
+                      data-kubernetes-deployment-row={deployment.id}
+                      onClick={() => drawer.toggle(deployment)}
+                    >
+                      <TableCell class={getPlatformTableCellClassForKind('name')}>
+                        <KubernetesRowLead
                           resource={deployment}
-                          statusIndicator={indicator()}
-                          open={isExpanded()}
-                          detailRowId={detailRowId()}
-                          colSpan={8}
-                          resolveResourceLabel={resolveResourceLabel}
-                          onClose={() => drawer.close(deployment)}
+                          drawer={drawer}
+                          label={name()}
+                          status={indicator()}
+                        >
+                          <div class="min-w-0">
+                            <ResourceNameWithWebInterfaceLink
+                              name={name()}
+                              url={deployment.customUrl}
+                              class="min-w-0"
+                              nameClass="truncate font-semibold text-base-content"
+                            />
+                            <KubernetesStaleDataCue when={readingsStale()} scope="deployment" />
+                          </div>
+                        </KubernetesRowLead>
+                      </TableCell>
+                      <TableCell
+                        class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
+                      >
+                        {ns()}
+                      </TableCell>
+                      <TableCell
+                        class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}
+                      >
+                        {cluster()}
+                      </TableCell>
+                      <TableCell
+                        class={`${getPlatformTableCellClassForKind('numeric-value')} hidden text-base-content md:table-cell`}
+                      >
+                        <PlatformTableNumberValue
+                          value={deployment.kubernetes?.desiredReplicas ?? 0}
                         />
-                      </>
-                    );
-                  }}
-                </PlatformWindowedRows>
-              </>
-            }
-          />
-        </Show>
-      </div>
-    </Show>
+                      </TableCell>
+                      <TableCell
+                        class={`${getPlatformTableCellClassForKind('numeric-value')} platform-table-phone-hidden text-base-content`}
+                      >
+                        <PlatformTableNumberValue
+                          value={deployment.kubernetes?.updatedReplicas ?? 0}
+                        />
+                      </TableCell>
+                      {/* Ready is the count behind the dot's replica verdict. */}
+                      <TableCell
+                        class={`${getPlatformTableCellClassForKind('numeric-value')} ${getPlatformStatusTextToneClass(indicator().variant) || 'text-base-content'}`}
+                        data-kubernetes-deployment-ready={indicator().variant}
+                      >
+                        <PlatformTableNumberValue
+                          value={deployment.kubernetes?.readyReplicas ?? 0}
+                        />
+                        <span class="k8s-deployment-ready-total">
+                          /{deployment.kubernetes?.desiredReplicas ?? 0}
+                        </span>
+                      </TableCell>
+                      <TableCell
+                        class={`${getPlatformTableCellClassForKind('numeric-value')} platform-table-phone-hidden text-base-content`}
+                      >
+                        <PlatformTableNumberValue
+                          value={deployment.kubernetes?.availableReplicas ?? 0}
+                        />
+                      </TableCell>
+                      <TableCell
+                        class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content platform-table-narrow-hidden`}
+                      >
+                        <span title={deployment.kubernetes?.createdAt || ''}>
+                          <PlatformTableRelativeTimeValue
+                            value={deployment.kubernetes?.createdAt}
+                          />
+                        </span>
+                      </TableCell>
+                    </TableRow>
+                    <KubernetesDetailRow
+                      resource={deployment}
+                      statusIndicator={indicator()}
+                      drawer={drawer}
+                      colSpan={8}
+                      resolveResourceLabel={resolveResourceLabel}
+                    />
+                  </>
+                );
+              }}
+            </PlatformWindowedRows>
+          </>
+        }
+      />
+    </KubernetesTableFrame>
   );
 };
 

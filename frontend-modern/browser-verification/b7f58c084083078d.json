@@ -1,0 +1,69 @@
+{
+  "version": 1,
+  "base_sha": "6dba752ca9cb66629fb2906e34afbe50edb46004",
+  "verified_at": "2026-11-26T21:00:49Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/kubernetes/KubernetesAutoscalingTable.tsx",
+    "frontend-modern/src/features/kubernetes/KubernetesClustersTable.tsx",
+    "frontend-modern/src/features/kubernetes/KubernetesConfigTable.tsx",
+    "frontend-modern/src/features/kubernetes/KubernetesControllersTable.tsx",
+    "frontend-modern/src/features/kubernetes/KubernetesDeploymentsTable.tsx",
+    "frontend-modern/src/features/kubernetes/KubernetesEventsTable.tsx",
+    "frontend-modern/src/features/kubernetes/KubernetesNetworkingTable.tsx",
+    "frontend-modern/src/features/kubernetes/KubernetesNodesTable.tsx",
+    "frontend-modern/src/features/kubernetes/KubernetesPodsTable.tsx",
+    "frontend-modern/src/features/kubernetes/KubernetesPolicyTable.tsx",
+    "frontend-modern/src/features/kubernetes/KubernetesRecordDetail.tsx",
+    "frontend-modern/src/features/kubernetes/KubernetesServicesTable.tsx",
+    "frontend-modern/src/features/kubernetes/KubernetesStorageTable.tsx",
+    "frontend-modern/src/features/kubernetes/kubernetesPageModel.ts",
+    "frontend-modern/src/utils/resourceSourceHealth.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/kubernetes/KubernetesAutoscalingTable.tsx": "e7ffccba8a914c2f5ea936d923dab3ce0f078cb534f419336aa6943aa7752016",
+    "frontend-modern/src/features/kubernetes/KubernetesClustersTable.tsx": "7e95c7f8be44c806f51532706fdbbc6a3a2abf5e0fb692ee67d9f850761b95ec",
+    "frontend-modern/src/features/kubernetes/KubernetesConfigTable.tsx": "b91f4eff5204f1122198fbc02091b26892ff591ec7366d2df79862d5de6041f7",
+    "frontend-modern/src/features/kubernetes/KubernetesControllersTable.tsx": "051f40fd6c1262ad97eb08bbed8a595fede62e1578750b2fdb4a03f07f2825ee",
+    "frontend-modern/src/features/kubernetes/KubernetesDeploymentsTable.tsx": "95cd230826b0dbc40e275b39154d2ce25eeb9f4bc18249a0e448ff9042e8afbe",
+    "frontend-modern/src/features/kubernetes/KubernetesEventsTable.tsx": "74de15a9c3be8ba2bd24e37061f7ba28d7565c3dcb8ff0b1433235583a4faa66",
+    "frontend-modern/src/features/kubernetes/KubernetesNetworkingTable.tsx": "ba7602a7c82d95ddef3f8f198354b417a18a8ae726945f02e39008031bf98210",
+    "frontend-modern/src/features/kubernetes/KubernetesNodesTable.tsx": "496aaff825884226a85d7605043b6404eefd2cbec5f49a740112d49c38909c64",
+    "frontend-modern/src/features/kubernetes/KubernetesPodsTable.tsx": "9dbeadf023aa63e1ea60a8f05a1ce793dfffef314ea74f28b3af92fcd79dd271",
+    "frontend-modern/src/features/kubernetes/KubernetesPolicyTable.tsx": "ebdc9114ed8f70ac760b2949a8f33305c909a1b696949509d739937c61ccc9bc",
+    "frontend-modern/src/features/kubernetes/KubernetesRecordDetail.tsx": "479b8782961e48cb11fbf082410761f9381eaf96447faaff8c0ddb847090d7f9",
+    "frontend-modern/src/features/kubernetes/KubernetesServicesTable.tsx": "2b7a5cfbb2cc28ebe4f3a7b2da91323abb023ddfa2d3dec0af6364917a3d55b8",
+    "frontend-modern/src/features/kubernetes/KubernetesStorageTable.tsx": "213d21880ee682a853564affbe05ec1dadce48cf4395fef26d5d9e9de43b662e",
+    "frontend-modern/src/features/kubernetes/kubernetesPageModel.ts": "12a0e1e959bda3c793820e06b7548d8614b8eec63c1d65f864befb9bb7b28955",
+    "frontend-modern/src/utils/resourceSourceHealth.ts": "a37001dc6018b355f4faf5d0fdd0e15ad413c92e768736bef24bc36a36f9f747"
+  },
+  "routes": [
+    "/kubernetes/overview",
+    "/kubernetes/nodes",
+    "/kubernetes/workloads"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 940
+    },
+    {
+      "width": 360,
+      "height": 820
+    }
+  ],
+  "states": [
+    "before and after /kubernetes/overview with stale prod-eu cluster, merged agent+kubernetes node eu-worker-01, NotReady eu-worker-02, stale checkout-api deployment/pod, CrashLoopBackOff payments-worker pod, stale billing-rollup CronJob, and fresh staging-us controls",
+    "before and after expanded prod-eu cluster inline detail drawer showing amber stale-readings notice and last error while preserving metrics and tabs",
+    "before and after /kubernetes/nodes showing Stale data badge on desktop, stacked unclipped NotReady and Stale data labels below full node names on 360x820 phone, and Healthy/Degraded/Offline filter counts shifting from 2/0/1 to 1/1/1",
+    "before and after /kubernetes/workloads showing Stale data on checkout-api deployment, checkout-api pod, and billing-rollup CronJob while preserving CrashLoopBackOff precedence, stacked unclipped phone pod names and attention labels at 360x820, and fresh Running controls",
+    "live WebSocket recovery on /kubernetes/overview clearing all stale cues without reload while preserving NotReady and CrashLoopBackOff"
+  ],
+  "interactions": [
+    "loaded /kubernetes/overview on production Vite builds (before base 6dba752ca9cb and after) in Chromium 141.0.7390.37 (1440x940 light) and touch WebKit 26.0 (360x820 dark)",
+    "clicked prod-eu cluster row to expand inline detail drawer and inspected stale-readings notice",
+    "navigated to /kubernetes/nodes and inspected status badges, phone stacked labels, filter counts, and retained CPU/memory bars",
+    "navigated to /kubernetes/workloads and inspected deployments, pods (including unclipped stacked phone pod names and CrashLoopBackOff/Stale data labels at 360x820), and CronJob stale/error precedence",
+    "pushed live rawData WebSocket recovery frame on /kubernetes/overview and verified stale cues cleared without page reload"
+  ]
+}
