@@ -417,6 +417,45 @@ class PBSDocsTest(unittest.TestCase):
                 self.run_curl(Path(temporary), unsafe, port, self.cert)
             self.assertEqual(len(requests), 1)
 
+    def test_stale_readings_and_unread_capacity_match_backup_servers_table(self):
+        table = (
+            ROOT / "frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx"
+        ).read_text(encoding="utf-8")
+        section = " ".join(
+            DOC.read_text(encoding="utf-8")
+            .split("### Stale PBS readings and unread datastore capacity\n", 1)[1]
+            .split("\n### ", 1)[0]
+            .replace("**", "")
+            .replace("`", "")
+            .split()
+        )
+        for source_token in (
+            "const PBS_DATA_STALE = 'PBS data stale'",
+            "const UNREAD_CAPACITY_NOTE = 'This does not mean the datastore is empty.'",
+            "server.sourceStatus?.pbs?.status === 'stale'",
+            "Stale. Capacity, forecasts and jobs are last reported values.",
+            "Last reading & forecast",
+            "Last reading",
+            "Last forecast",
+        ):
+            with self.subTest(source_token=source_token):
+                self.assertIn(source_token, table)
+        for phrase in (
+            "Backup servers",
+            "PBS data stale",
+            "linked host agent still updates the host's last-seen time",
+            "PBS data stale · Last status: ...",
+            "Last reading",
+            "Last reading & forecast",
+            "Last forecast",
+            "Stale. Capacity, forecasts and jobs are last reported values.",
+            "Unavailable or Unknown capacity",
+            "This does not mean the datastore is empty.",
+            "suppresses fill forecasts until a valid capacity read returns",
+        ):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, section)
+
 
 if __name__ == "__main__":
     unittest.main()

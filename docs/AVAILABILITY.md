@@ -91,6 +91,22 @@ delivery in an authorised test environment. A healthy heartbeat indicates
 monitoring-loop progress, not successful delivery of every alert or external
 availability of every service.
 
+The status badge in **External watchdog** separates live heartbeats from a quiet
+sender or a stale browser status read:
+
+| Status badge | What it means |
+| --- | --- |
+| **Heartbeat healthy** | Pulse sent an accepted success ping within the recommended 3-minute grace period. |
+| **No recent heartbeat** | The browser read status from Pulse, but **Last success** has reached or passed the recommended grace period. A live status read does not mean a heartbeat was sent. |
+| **Status read overdue** | The browser has not received a fresh watchdog status read for two 30-second poll intervals (60 seconds). Displayed figures are the last known snapshot until a new read succeeds. |
+| **Status unavailable** | The latest watchdog status request failed. Use **Refresh** to retry. Any figures shown below remain the last known snapshot. |
+| **Delivery failing** | Pulse could not deliver a heartbeat to the configured watchdog URL. Check **Consecutive failures** and any recorded error message. |
+| **Monitoring stalled** | Pulse's monitoring loop stalled and sent a `/fail` signal to the watchdog. |
+| **Starting** / **Not configured** / **Configuration invalid** / **Configuration unavailable** | Startup or watchdog configuration states before ordinary heartbeats can run. |
+
+After a restart, **Last interruption** records any monitoring gap of two minutes
+or longer and distinguishes a `clean restart` from an `unexpected stop`.
+
 ## Check that DNS answers correctly
 
 Use the **DNS** probe protocol (or the **DNS resolver** preset) to verify that a resolver such as Pi-hole, AdGuard Home, Technitium, or Unbound answers queries correctly.

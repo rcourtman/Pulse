@@ -230,6 +230,25 @@ class PMGDocsTest(unittest.TestCase):
             self.assertIn(phrase, section)
         self.assertNotRegex(section, r"https?://|```|\b(?:curl|wget)\b")
 
+    def test_stale_readings_guidance_matches_table_and_drawer(self):
+        table = frontend("features/proxmox/ProxmoxMailGatewayTable.tsx")
+        drawer = frontend("features/proxmox/ProxmoxMailGatewayDrawer.tsx")
+        self.assertIn("const STALE_READINGS = 'Readings stale'", table)
+        self.assertIn("'. Showing the last poll. '", table)
+        self.assertIn("resource.sourceStatus?.pmg?.status === 'stale'", drawer)
+        self.assertIn("hasStaleMailGatewayReadings(resource)", drawer)
+        for phrase in (
+            "Readings stale is not a healthy zero",
+            "independent availability check still passes",
+            "labels the row Readings stale under the gateway name",
+            "moves the gateway out of the Healthy filter into Degraded",
+            "rather than replacing them with zeros",
+            "Readings stale. Showing the last poll.",
+            "Offline gateways and open warning or critical alerts keep their own severity",
+        ):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, self.guide)
+
 
 if __name__ == "__main__":
     unittest.main()

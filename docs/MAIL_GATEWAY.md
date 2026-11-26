@@ -106,6 +106,15 @@ queue data can still raise the highest configured severity, but cannot clear
 or downgrade an existing alert; quarantine recovery requires both categories.
 These collector safeguards do not make every empty display a verified zero.
 
+**Readings stale is not a healthy zero.** If the PMG poll feed goes quiet while
+an independent availability check still passes, Pulse labels the row
+**Readings stale** under the gateway name, moves the gateway out of the
+**Healthy** filter into **Degraded**, and keeps the last reported mail and queue
+counts visible rather than replacing them with zeros. Expanding the row shows
+**Readings stale. Showing the last poll.** without attributing a quiet-source
+aggregate warning to PMG. Offline gateways and open warning or critical alerts
+keep their own severity alongside the stale-readings label.
+
 ## Alerts
 
 Open **Alerts → Thresholds → Proxmox** and find **Mail Gateway Thresholds**.
