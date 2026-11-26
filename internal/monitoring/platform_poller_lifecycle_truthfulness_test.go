@@ -64,172 +64,6 @@ func TestStartPollerLoopSkipsPollAllWhenCancelledDuringSync(t *testing.T) {
 	}
 }
 
-func TestTrueNASPollerSyncPreservesOrgStateOnTransientConfigLoadError(t *testing.T) {
-	previous := truenas.IsFeatureEnabled()
-	truenas.SetFeatureEnabled(true)
-	t.Cleanup(func() { truenas.SetFeatureEnabled(previous) })
-
-	mockServer := newTrueNASMockServer(t, "stable-nas")
-	t.Cleanup(mockServer.Close)
-
-	dataDir := t.TempDir()
-	mtp := config.NewMultiTenantPersistence(dataDir)
-	persistence, err := mtp.GetPersistence("default")
-	if err != nil {
-		t.Fatalf("GetPersistence(default) error = %v", err)
-	}
-
-	connection := trueNASInstanceForServer(t, "tn-transient", mockServer.URL(), true)
-	if err := persistence.SaveTrueNASConfig([]config.TrueNASInstance{connection}); err != nil {
-		t.Fatalf("SaveTrueNASConfig() error = %v", err)
-	}
-
-	poller := NewTrueNASPoller(mtp, 0, nil)
-	t.Cleanup(func() {
-		poller.mu.Lock()
-		for _, byConn := range poller.providersByOrg {
-			for _, provider := range byConn {
-				provider.Close()
-			}
-		}
-		poller.mu.Unlock()
-	})
-
-	poller.syncConnections()
-	poller.pollAll(context.Background())
-
-	before := poller.ConnectionSummaries("default", []config.TrueNASInstance{connection})[connection.ID]
-	if before.Poll == nil || before.Poll.LastSuccessAt == nil || before.Observed == nil || before.Observed.Host != "stable-nas" {
-		t.Fatalf("expected healthy initial TrueNAS summary, got %+v", before)
-	}
-	if !hasTrueNASHostForOrg(poller, "default", "stable-nas") {
-		t.Fatal("expected cached records for stable-nas before transient read error")
-	}
-
-	// Corrupt truenas.enc to simulate a transient config-load failure.
-	configPath := filepath.Join(dataDir, "truenas.enc")
-	if err := os.WriteFile(configPath, []byte("{corrupt-truenas-config"), 0o600); err != nil {
-		t.Fatalf("WriteFile(%s) error = %v", configPath, err)
-	}
-
-	poller.syncConnections()
-
-	if !pollerHasProvider(poller, connection.ID) {
-		t.Fatal("transient LoadTrueNASConfig error wiped active TrueNAS provider")
-	}
-	if !hasTrueNASHostForOrg(poller, "default", "stable-nas") {
-		t.Fatal("transient LoadTrueNASConfig error wiped cached TrueNAS records")
-	}
-	during := poller.ConnectionSummaries("default", []config.TrueNASInstance{connection})[connection.ID]
-	if during.Poll == nil || during.Poll.LastSuccessAt == nil || !during.Poll.LastSuccessAt.Equal(*before.Poll.LastSuccessAt) || during.Observed == nil || during.Observed.Host != "stable-nas" {
-		t.Fatalf("transient LoadTrueNASConfig error wiped runtime summary: before=%+v during=%+v", before, during)
-	}
-
-	// A subsequent genuine empty config save must still prune everything cleanly.
-	if err := persistence.SaveTrueNASConfig(nil); err != nil {
-		t.Fatalf("SaveTrueNASConfig(nil) error = %v", err)
-	}
-	poller.syncConnections()
-
-	if pollerHasProvider(poller, connection.ID) {
-		t.Fatal("expected provider to be pruned after genuine empty config save")
-	}
-	if records := poller.GetCurrentRecordsForOrg("default"); len(records) != 0 {
-		t.Fatalf("expected cached records to be pruned after genuine delete, got %d", len(records))
-	}
-	poller.mu.Lock()
-	_, statusPresent := poller.statusByOrg["default"][connection.ID]
-	poller.mu.Unlock()
-	if statusPresent {
-		t.Fatal("expected runtime status to be pruned after genuine delete")
-	}
-}
-
-func TestVMwarePollerSyncPreservesOrgStateOnTransientConfigLoadError(t *testing.T) {
-	previous := vmware.IsFeatureEnabled()
-	vmware.SetFeatureEnabled(true)
-	t.Cleanup(func() { vmware.SetFeatureEnabled(previous) })
-
-	dataDir := t.TempDir()
-	mtp := config.NewMultiTenantPersistence(dataDir)
-	persistence, err := mtp.GetPersistence("default")
-	if err != nil {
-		t.Fatalf("GetPersistence(default) error = %v", err)
-	}
-
-	connection := config.NewVMwareVCenterInstance()
-	connection.ID = "vc-transient"
-	connection.Name = "Transient vCenter"
-	connection.Host = "vc-transient.lab.local"
-	connection.Username = "administrator@vsphere.local"
-	connection.Password = "secret"
-	if err := persistence.SaveVMwareConfig([]config.VMwareVCenterInstance{connection}); err != nil {
-		t.Fatalf("SaveVMwareConfig() error = %v", err)
-	}
-
-	poller := NewVMwarePoller(mtp, time.Minute)
-	poller.newProvider = func(instance config.VMwareVCenterInstance) (vmwarePollerProvider, error) {
-		return vmware.NewProvider(vmware.InventorySnapshot{
-			ConnectionID:   instance.ID,
-			ConnectionName: instance.Name,
-			VCenterHost:    instance.Host,
-			CollectedAt:    time.Now().UTC(),
-			Hosts:          []vmware.InventoryHost{{Host: "host-1", Name: "esxi-01"}},
-			VMs:            []vmware.InventoryVM{{VM: "vm-1", Name: "app-01", PowerState: "POWERED_ON"}},
-		}), nil
-	}
-
-	poller.syncConnections()
-	poller.pollAll(context.Background())
-
-	before := poller.ConnectionSummaries("default", []config.VMwareVCenterInstance{connection})[connection.ID]
-	if before.Poll == nil || before.Poll.LastSuccessAt == nil || before.Observed == nil || before.Observed.Hosts != 1 {
-		t.Fatalf("expected healthy initial VMware summary, got %+v", before)
-	}
-	if got := len(poller.GetCurrentRecordsForOrg("default")); got == 0 {
-		t.Fatal("expected cached VMware records before transient read error")
-	}
-
-	// Corrupt vmware.enc to simulate a transient config-load failure.
-	configPath := filepath.Join(dataDir, "vmware.enc")
-	if err := os.WriteFile(configPath, []byte("{corrupt-vmware-config"), 0o600); err != nil {
-		t.Fatalf("WriteFile(%s) error = %v", configPath, err)
-	}
-
-	poller.syncConnections()
-
-	poller.mu.Lock()
-	_, providerPresent := poller.providersByOrg["default"][connection.ID]
-	_, configPresent := poller.configsByOrg["default"][connection.ID]
-	poller.mu.Unlock()
-	if !providerPresent || !configPresent {
-		t.Fatalf("transient LoadVMwareConfig error wiped provider/config: provider=%t config=%t", providerPresent, configPresent)
-	}
-	if got := len(poller.GetCurrentRecordsForOrg("default")); got == 0 {
-		t.Fatal("transient LoadVMwareConfig error wiped cached VMware records")
-	}
-	during := poller.ConnectionSummaries("default", []config.VMwareVCenterInstance{connection})[connection.ID]
-	if during.Poll == nil || during.Poll.LastSuccessAt == nil || !during.Poll.LastSuccessAt.Equal(*before.Poll.LastSuccessAt) || during.Observed == nil || during.Observed.Hosts != 1 {
-		t.Fatalf("transient LoadVMwareConfig error wiped runtime summary: before=%+v during=%+v", before, during)
-	}
-
-	// A genuine empty config save must still prune everything cleanly.
-	if err := persistence.SaveVMwareConfig(nil); err != nil {
-		t.Fatalf("SaveVMwareConfig(nil) error = %v", err)
-	}
-	poller.syncConnections()
-
-	poller.mu.Lock()
-	_, providerAfter := poller.providersByOrg["default"][connection.ID]
-	_, configAfter := poller.configsByOrg["default"][connection.ID]
-	_, statusAfter := poller.statusByOrg["default"][connection.ID]
-	poller.mu.Unlock()
-	if providerAfter || configAfter || statusAfter || len(poller.GetCurrentRecordsForOrg("default")) != 0 {
-		t.Fatalf("expected genuine delete to prune VMware state, got provider=%t config=%t status=%t records=%d",
-			providerAfter, configAfter, statusAfter, len(poller.GetCurrentRecordsForOrg("default")))
-	}
-}
-
 func TestTrueNASPollerPollAllDropsCancelledRefreshWithoutFabricatingFailure(t *testing.T) {
 	previous := truenas.IsFeatureEnabled()
 	truenas.SetFeatureEnabled(true)
@@ -296,16 +130,12 @@ func TestTrueNASPollerPollAllDropsCancelledRefreshWithoutFabricatingFailure(t *t
 		t.Fatalf("expected initial polls to succeed, got %+v", before)
 	}
 
-	// Make both connections due again and cancel while the first connection is blocked.
+	// A pre-canceled context skips all connections without dialing or recording failures.
 	poller.mu.Lock()
 	poller.statusByOrg["default"][firstConn.ID].nextPollAt = time.Unix(1, 0)
 	poller.statusByOrg["default"][secondConn.ID].nextPollAt = time.Unix(1, 0)
-	// Keep only firstConn if map iteration order varies? Instead block on firstServer
-	// and verify whichever runs, or run with single-connection deterministic order below.
 	poller.mu.Unlock()
 
-	// Exercise deterministic cancellation on a single connection first, then verify
-	// a pre-canceled context skips all connections without recording failures.
 	secondBeforeCancel := secondRequests.Load()
 	canceledCtx, cancelImmediately := context.WithCancel(context.Background())
 	cancelImmediately()
@@ -481,7 +311,7 @@ func TestVMwarePollerPollAllDropsCancelledRefreshWithoutFabricatingFailure(t *te
 	}
 }
 
-func TestTrueNASPollerInFlightRefreshCannotResurrectDeletedDisabledOrReplacedConnection(t *testing.T) {
+func TestTrueNASPollerInFlightRefreshCannotResurrectRevokedOrReplacedConnection(t *testing.T) {
 	previous := truenas.IsFeatureEnabled()
 	truenas.SetFeatureEnabled(true)
 	t.Cleanup(func() { truenas.SetFeatureEnabled(previous) })
@@ -493,6 +323,8 @@ func TestTrueNASPollerInFlightRefreshCannotResurrectDeletedDisabledOrReplacedCon
 	}{
 		{name: "deleted_on_success", transition: "deleted", failPoll: false},
 		{name: "deleted_on_failure", transition: "deleted", failPoll: true},
+		{name: "unreadable_config_on_success", transition: "unreadable_config", failPoll: false},
+		{name: "unreadable_config_on_failure", transition: "unreadable_config", failPoll: true},
 		{name: "disabled_on_success", transition: "disabled", failPoll: false},
 		{name: "disabled_on_failure", transition: "disabled", failPoll: true},
 		{name: "replaced_on_success", transition: "replaced", failPoll: false},
@@ -567,6 +399,11 @@ func TestTrueNASPollerInFlightRefreshCannotResurrectDeletedDisabledOrReplacedCon
 					close(release)
 					t.Fatalf("SaveTrueNASConfig(delete) error = %v", err)
 				}
+			case "unreadable_config":
+				if err := os.WriteFile(filepath.Join(persistence.GetConfigDir(), "truenas.enc"), []byte("{broken"), 0o600); err != nil {
+					close(release)
+					t.Fatalf("WriteFile(truenas.enc) error = %v", err)
+				}
 			case "disabled":
 				disabled := conn
 				disabled.Enabled = false
@@ -591,14 +428,14 @@ func TestTrueNASPollerInFlightRefreshCannotResurrectDeletedDisabledOrReplacedCon
 			}
 
 			switch tc.transition {
-			case "deleted":
+			case "deleted", "unreadable_config":
 				poller.mu.Lock()
 				_, statusPresent := poller.statusByOrg["default"][conn.ID]
 				_, providerPresent := poller.providersByOrg["default"][conn.ID]
 				poller.mu.Unlock()
 				if statusPresent || providerPresent || len(poller.GetCurrentRecordsForOrg("default")) != 0 {
-					t.Fatalf("in-flight refresh resurrected deleted TrueNAS connection: status=%t provider=%t records=%d",
-						statusPresent, providerPresent, len(poller.GetCurrentRecordsForOrg("default")))
+					t.Fatalf("in-flight refresh resurrected %s TrueNAS connection: status=%t provider=%t records=%d",
+						tc.transition, statusPresent, providerPresent, len(poller.GetCurrentRecordsForOrg("default")))
 				}
 			case "disabled":
 				summary := poller.ConnectionSummaries("default", []config.TrueNASInstance{conn})[conn.ID]
@@ -621,7 +458,7 @@ func TestTrueNASPollerInFlightRefreshCannotResurrectDeletedDisabledOrReplacedCon
 	}
 }
 
-func TestVMwarePollerInFlightRefreshCannotResurrectDeletedDisabledOrReplacedConnection(t *testing.T) {
+func TestVMwarePollerInFlightRefreshCannotResurrectRevokedOrReplacedConnection(t *testing.T) {
 	previous := vmware.IsFeatureEnabled()
 	vmware.SetFeatureEnabled(true)
 	t.Cleanup(func() { vmware.SetFeatureEnabled(previous) })
@@ -633,6 +470,8 @@ func TestVMwarePollerInFlightRefreshCannotResurrectDeletedDisabledOrReplacedConn
 	}{
 		{name: "deleted_on_success", transition: "deleted", failPoll: false},
 		{name: "deleted_on_failure", transition: "deleted", failPoll: true},
+		{name: "unreadable_config_on_success", transition: "unreadable_config", failPoll: false},
+		{name: "unreadable_config_on_failure", transition: "unreadable_config", failPoll: true},
 		{name: "disabled_on_success", transition: "disabled", failPoll: false},
 		{name: "disabled_on_failure", transition: "disabled", failPoll: true},
 		{name: "replaced_on_success", transition: "replaced", failPoll: false},
@@ -703,6 +542,11 @@ func TestVMwarePollerInFlightRefreshCannotResurrectDeletedDisabledOrReplacedConn
 					close(oldProvider.release)
 					t.Fatalf("SaveVMwareConfig(delete) error = %v", err)
 				}
+			case "unreadable_config":
+				if err := os.WriteFile(filepath.Join(persistence.GetConfigDir(), "vmware.enc"), []byte("{broken"), 0o600); err != nil {
+					close(oldProvider.release)
+					t.Fatalf("WriteFile(vmware.enc) error = %v", err)
+				}
 			case "disabled":
 				disabled := conn
 				disabled.Enabled = false
@@ -729,7 +573,7 @@ func TestVMwarePollerInFlightRefreshCannotResurrectDeletedDisabledOrReplacedConn
 			}
 
 			switch tc.transition {
-			case "deleted", "disabled":
+			case "deleted", "unreadable_config", "disabled":
 				poller.mu.Lock()
 				_, statusPresent := poller.statusByOrg["default"][conn.ID]
 				_, providerPresent := poller.providersByOrg["default"][conn.ID]

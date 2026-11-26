@@ -222,13 +222,9 @@ func (p *VMwarePoller) syncConnections() {
 	}
 
 	active := make(map[string]map[string]config.VMwareVCenterInstance, len(orgIDs))
-	// Track orgs whose persistence/config read failed transiently so pruning
-	// preserves their last-known providers, cached inventory, and status.
-	failedOrgs := make(map[string]struct{})
 	for _, orgID := range orgIDs {
 		persistence, err := p.multiTenant.GetPersistence(orgID)
 		if err != nil || persistence == nil {
-			failedOrgs[orgID] = struct{}{}
 			log.Warn().
 				Str("component", "vmware_poller").
 				Str("action", "get_persistence").
@@ -240,7 +236,6 @@ func (p *VMwarePoller) syncConnections() {
 
 		instances, err := persistence.LoadVMwareConfig()
 		if err != nil {
-			failedOrgs[orgID] = struct{}{}
 			log.Warn().
 				Str("component", "vmware_poller").
 				Str("action", "load_vmware_config").
@@ -326,9 +321,6 @@ func (p *VMwarePoller) syncConnections() {
 	}
 
 	for orgID, providers := range p.providersByOrg {
-		if _, failed := failedOrgs[orgID]; failed {
-			continue
-		}
 		activeConnections := active[orgID]
 		for connectionID, provider := range providers {
 			if _, ok := activeConnections[connectionID]; ok {
@@ -344,9 +336,6 @@ func (p *VMwarePoller) syncConnections() {
 		}
 	}
 	for orgID, byConn := range p.configsByOrg {
-		if _, failed := failedOrgs[orgID]; failed {
-			continue
-		}
 		activeConnections := active[orgID]
 		for connectionID := range byConn {
 			if _, ok := activeConnections[connectionID]; !ok {
@@ -358,9 +347,6 @@ func (p *VMwarePoller) syncConnections() {
 		}
 	}
 	for orgID, byConn := range p.cachedRecordsByOrg {
-		if _, failed := failedOrgs[orgID]; failed {
-			continue
-		}
 		activeConnections := active[orgID]
 		for connectionID := range byConn {
 			if _, ok := activeConnections[connectionID]; !ok {
@@ -372,9 +358,6 @@ func (p *VMwarePoller) syncConnections() {
 		}
 	}
 	for orgID, byConn := range p.cachedChangesByOrg {
-		if _, failed := failedOrgs[orgID]; failed {
-			continue
-		}
 		activeConnections := active[orgID]
 		for connectionID := range byConn {
 			if _, ok := activeConnections[connectionID]; !ok {
@@ -386,9 +369,6 @@ func (p *VMwarePoller) syncConnections() {
 		}
 	}
 	for orgID, byConn := range p.statusByOrg {
-		if _, failed := failedOrgs[orgID]; failed {
-			continue
-		}
 		activeConnections := active[orgID]
 		for connectionID := range byConn {
 			if _, ok := activeConnections[connectionID]; !ok {

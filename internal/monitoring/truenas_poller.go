@@ -215,14 +215,10 @@ func (p *TrueNASPoller) syncConnections() {
 	// orgID -> connID -> instance
 	configured := make(map[string]map[string]config.TrueNASInstance, len(orgIDs))
 	active := make(map[string]map[string]config.TrueNASInstance, len(orgIDs))
-	// Track orgs whose persistence/config read failed transiently so pruning
-	// preserves their last-known providers, cached inventory, and status.
-	failedOrgs := make(map[string]struct{})
 
 	for _, orgID := range orgIDs {
 		persistence, err := p.multiTenant.GetPersistence(orgID)
 		if err != nil || persistence == nil {
-			failedOrgs[orgID] = struct{}{}
 			log.Warn().
 				Str("component", "truenas_poller").
 				Str("action", "get_persistence").
@@ -234,7 +230,6 @@ func (p *TrueNASPoller) syncConnections() {
 
 		instances, err := persistence.LoadTrueNASConfig()
 		if err != nil {
-			failedOrgs[orgID] = struct{}{}
 			log.Warn().
 				Str("component", "truenas_poller").
 				Str("action", "load_truenas_config").
@@ -343,12 +338,8 @@ func (p *TrueNASPoller) syncConnections() {
 	// Prune providers, active configs, and cached records for removed/disabled
 	// connections and removed orgs. Pruning configs independently of providers
 	// ensures a connection that failed client construction cannot remain active
-	// after it is disabled or deleted. Orgs whose config read failed transiently
-	// are skipped so a temporary I/O error never wipes active monitoring state.
+	// after it is disabled or deleted.
 	for orgID, providers := range p.providersByOrg {
-		if _, failed := failedOrgs[orgID]; failed {
-			continue
-		}
 		activeByConn := active[orgID]
 		for connID, provider := range providers {
 			if _, ok := activeByConn[connID]; ok {
@@ -364,9 +355,6 @@ func (p *TrueNASPoller) syncConnections() {
 		}
 	}
 	for orgID, byConn := range p.configsByOrg {
-		if _, failed := failedOrgs[orgID]; failed {
-			continue
-		}
 		activeByConn := active[orgID]
 		for connID := range byConn {
 			if _, ok := activeByConn[connID]; !ok {
@@ -378,9 +366,6 @@ func (p *TrueNASPoller) syncConnections() {
 		}
 	}
 	for orgID, byConn := range p.cachedRecordsByOrg {
-		if _, failed := failedOrgs[orgID]; failed {
-			continue
-		}
 		activeByConn := active[orgID]
 		for connID := range byConn {
 			if _, ok := activeByConn[connID]; !ok {
@@ -394,9 +379,6 @@ func (p *TrueNASPoller) syncConnections() {
 
 	// Prune runtime status only when the connection is truly gone from config.
 	for orgID, byConn := range p.statusByOrg {
-		if _, failed := failedOrgs[orgID]; failed {
-			continue
-		}
 		configuredByConn := configured[orgID]
 		for connID := range byConn {
 			if configuredByConn == nil {
