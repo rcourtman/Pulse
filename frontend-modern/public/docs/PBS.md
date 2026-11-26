@@ -584,6 +584,27 @@ A count is not protection, verification, restore readiness or guest thaw. If a
 guest is unresponsive or freeze/thaw is uncertain, stop the display comparison
 and follow [Backup safety](VM_DISK_MONITORING.md#backup-safety).
 
+### Stale PBS readings and unread datastore capacity
+
+In **Proxmox → Backups**, the **Backup servers** table separates fresh PBS
+polls from retained snapshots and unread datastores:
+
+- **PBS data stale:** When direct PBS polling goes quiet (even if a linked host
+  agent still updates the host's last-seen time), the server header and expanded
+  datastore header show **PBS data stale** (preserving any existing connection
+  error or failed job status as `PBS data stale · Last status: ...`). Datastore
+  capacity cells label retained figures as **Last reading** (or **Last reading &
+  forecast**, and **Last forecast** in compact narrow layouts), and the expanded
+  datastore details note **Stale. Capacity, forecasts and jobs are last reported
+  values.** Existing capacity figures, job findings, backup counts, and
+  connection errors stay visible rather than being hidden or replaced with zeros.
+- **Unavailable or Unknown capacity:** A reachable PBS server can still fail to
+  read an individual datastore. When a datastore read fails or lacks valid
+  capacity bytes, Pulse shows **Unavailable** or **Unknown** with the note
+  **This does not mean the datastore is empty.** instead of rendering zero bytes
+  as `0%` used, and suppresses fill forecasts until a valid capacity read
+  returns.
+
 ### Slow Backup Loading
 
 A slow backup list does not establish an encrypted-datastore or PVE-proxy
