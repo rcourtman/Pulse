@@ -2,6 +2,8 @@ package monitoring
 
 import (
 	"context"
+	stderrors "errors"
+	"net/url"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
@@ -51,9 +53,7 @@ func (m *Monitor) initPVEClients(cfg *config.Config) {
 				Str("instance", pve.Name).
 				Str("cluster", pve.ClusterName).
 				Int("endpoints", len(endpoints)).
-				Msg("Cluster client created successfully")
-			// Set initial connection health to true for cluster
-			m.setProviderConnectionHealth(InstanceTypePVE, pve.Name, true)
+				Msg("Cluster client created; awaiting first connectivity poll")
 			continue
 		}
 
@@ -62,7 +62,7 @@ func (m *Monitor) initPVEClients(cfg *config.Config) {
 		clientConfig.Timeout = cfg.ConnectionTimeout
 		client, err := newProxmoxClientFunc(context.Background(), clientConfig)
 		if err != nil {
-			monErr := errors.WrapConnectionError("create_pve_client", pve.Name, err)
+			monErr := errors.WrapConnectionError("create_pve_client", pve.Name, pveStartupFailureError(err))
 			log.Error().
 				Err(monErr).
 				Str("instance", pve.Name).
@@ -71,15 +71,41 @@ func (m *Monitor) initPVEClients(cfg *config.Config) {
 				Bool("hasPassword", pve.Password != "").
 				Bool("hasToken", pve.TokenValue != "").
 				Msg("Failed to create PVE client - node will show as disconnected")
-			// Set initial connection health to false for this node
-			m.setProviderConnectionHealth(InstanceTypePVE, pve.Name, false)
+			m.publishPVEStartupFailure(pve, monErr)
 			continue
 		}
 		m.replacePVEClient(pve.Name, client)
-		log.Info().Str("instance", pve.Name).Msg("PVE client created successfully")
-		// Set initial connection health to true
-		m.setProviderConnectionHealth(InstanceTypePVE, pve.Name, true)
+		log.Info().Str("instance", pve.Name).Msg("PVE client created; awaiting first connectivity poll")
 	}
+}
+
+// pveStartupFailureError unwraps transport and TLS *url.Error failures that
+// proxmox.NewClientWithContext wraps under "authentication failed: %w", so an
+// unreachable or TLS-mismatched host is surfaced as Unreachable rather than
+// misclassified as Unauthorized (invalid credentials).
+func pveStartupFailureError(err error) error {
+	var urlErr *url.Error
+	if stderrors.As(err, &urlErr) && urlErr != nil {
+		return urlErr
+	}
+	return err
+}
+
+// publishPVEStartupFailure records a PVE client construction or reconnect
+// failure in scheduler health, staleness tracking, and connection health so
+// Settings -> Infrastructure and connection-degraded alerts surface the real
+// failure instead of staying indefinitely pending.
+func (m *Monitor) publishPVEStartupFailure(pve config.PVEInstance, monErr error) {
+	m.mu.Lock()
+	if m.pollStatusMap == nil {
+		m.pollStatusMap = make(map[string]*pollStatus)
+	}
+	m.mu.Unlock()
+	m.recordTaskResult(InstanceTypePVE, pve.Name, monErr)
+	if m.stalenessTracker != nil {
+		m.stalenessTracker.UpdateError(InstanceTypePVE, pve.Name)
+	}
+	m.setProviderConnectionHealth(InstanceTypePVE, pve.Name, false)
 }
 
 func (m *Monitor) initPBSClients(cfg *config.Config) {

@@ -36,6 +36,35 @@ records the exercised routes and controls.
 
 Docker hosts report their local live-log opt-in separately from failure capture. A runtime with conflicting identity cannot serve a live read.
 
+### PVE startup and reconnect health authority
+
+Proxmox VE (PVE) client initialization (`initPVEClients`) and startup reconnect
+(`retryFailedConnections`) follow the same health-authority boundary as PBS and
+PMG clients. Constructing or recreating a PVE standalone or cluster client does
+not publish `ConnectionHealth = true` before the first connectivity poll
+completes: token-authenticated and cluster constructors perform no full poll, so
+connection status stays disconnected/pending until a poll succeeds.
+
+When PVE client construction or reconnect fails (for example, unreachable host,
+401/403 authentication failure, TLS fingerprint refusal, or invalid host URL),
+`publishPVEStartupFailure` records the wrapped error in scheduler health
+(`pollStatusMap`, circuit breaker state, and `stalenessTracker`) and marks
+provider connection health false. Transport and TLS `*url.Error` causes are
+unwrapped from `proxmox.NewClientWithContext`'s `"authentication failed: %w"`
+prefix via `pveStartupFailureError` so unreachable or TLS-mismatched hosts
+surface as `unreachable` rather than being misclassified as `unauthorized`.
+Settings -> Infrastructure (`/api/connections`) and connection-degraded alerts
+(`CheckConnection`) therefore surface the real `unauthorized` or `unreachable`
+failure and error detail rather than leaving the instance indefinitely `pending`
+("awaiting first poll"). Caller cancellation during reconnect returns before
+recording a failure or publishing a client, and paused (`Disabled: true`) PVE
+instances remain skipped.
+`TestPVEClientConstructionCannotPublishConnectedHealth`,
+`TestInitPVEClientsDoesNotTreatClientConstructionAsConnectivity`,
+`TestPVEStartupRecoveryKeepsTrustAndFirstPollBoundary`,
+`TestPVEConnectionsLedgerSurfacesStartupFailuresAndAlerts` verify these
+boundaries.
+
 ### PMG startup recovery and context-bound client construction
 
 Proxmox Mail Gateway (PMG) clients participate in the same startup failure

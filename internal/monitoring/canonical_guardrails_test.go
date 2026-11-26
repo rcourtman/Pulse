@@ -119,6 +119,19 @@ func TestPBSClientConstructionCannotPublishConnectedHealth(t *testing.T) {
 	}
 }
 
+func TestPVEClientConstructionCannotPublishConnectedHealth(t *testing.T) {
+	for _, name := range []string{"monitor_client_init.go", "monitor_client_reconnect.go"} {
+		data, err := os.ReadFile(name)
+		if err != nil {
+			t.Fatalf("read %s: %v", name, err)
+		}
+		source := string(data)
+		if strings.Contains(source, "setProviderConnectionHealth(InstanceTypePVE, pve.Name, true)") {
+			t.Fatalf("%s must wait for a completed PVE poll before publishing connected health", name)
+		}
+	}
+}
+
 // Keep the registered monitoring proof connected to executable lifecycle,
 // trust and actual producer controls, not a source-text expiry assertion.
 func TestStartupConnectionRecoveryCanonicalContract(t *testing.T) {
