@@ -95,10 +95,15 @@ class UpdateRecoveryDocsTest(unittest.TestCase):
         text = " ".join(section("AUTO_UPDATE", "Check that monitoring resumed", "###").split())
         self.assertIn("next scheduled poll", text)
         self.assertIn("sample dated after Pulse restarted", text)
+        self.assertIn("each connection you rely on", text)
+        self.assertIn("check the live reading separately", text)
+        self.assertIn("**Machines**", text)
+        self.assertIn("**Last seen** advances and that the agent reading you need has a new sample", text)
         self.assertIn("Do not restart again or raise the limit", text)
         self.assertNotIn("```", text, "These are observational checks, not an update recipe")
         for name, anchor, heading in (
             ("METRICS_HISTORY", "read-a-history-panel", "## Read a History panel"),
+            ("ALERTING", "choose-where-notifications-go", "## Choose where notifications go"),
             ("PRODUCTION_SECURITY", "production-rollout-checklist", "## Production rollout checklist"),
             ("TROUBLESHOOTING", "after-a-memory-cgroup-kill", "##### After a memory-cgroup kill"),
         ):
@@ -106,6 +111,24 @@ class UpdateRecoveryDocsTest(unittest.TestCase):
                 self.assertIn(f"]({name}.md#{anchor})", text)
                 shipped = (ROOT / "frontend-modern/public/docs" / f"{name}.md").read_text()
                 self.assertIn(f"\n{heading}\n", shipped)
+
+    def test_post_update_alert_check_matches_overview_and_does_not_send_a_test(self):
+        text = section("AUTO_UPDATE", "Check that monitoring resumed", "###")
+        alerts = " ".join(text.split("- **Alerts:** ", 1)[1].split("\n\n", 1)[0].split())
+        # Overview presents the live summary or the saved message, not the
+        # model's phase label. Even static current-looking text cannot date a
+        # new evaluation. Only check ordinary delivery when a send was due.
+        self.assertIn("**Alerts → Overview**", alerts)
+        self.assertIn("threshold alert to change after restart", alerts)
+        self.assertIn("**now, recovering**", alerts)
+        self.assertIn("**Last reading:** marks a stale value", alerts)
+        self.assertIn(
+            "A saved alert message, an unchanged summary or an empty list "
+            "does not confirm a new evaluation.", alerts
+        )
+        self.assertNotIn("No recent reading", alerts)
+        self.assertIn("If a notification was due, [check delivery separately]", alerts)
+        self.assertIn("Don't trigger an alert or send a Test", alerts)
 
     def test_chart_selection_help_preserves_evidence_and_exact_installer_trust(self):
         text = " ".join(section("AUTO_UPDATE", "A helper selects a Helm-chart release", "###").split())

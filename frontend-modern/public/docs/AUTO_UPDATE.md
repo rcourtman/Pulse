@@ -59,9 +59,22 @@ A real-time progress modal shows:
 
 ### Check that monitoring resumed
 
-After the next scheduled poll, open a [History chart](METRICS_HISTORY.md#read-a-history-panel)
-for a resource that was already reporting. Look for a sample dated after Pulse
-restarted. A value from before the restart is not enough.
+Check the same resources you relied on before the update. Allow for the next
+scheduled poll or agent report, including normal retry delays.
+
+- **Polled systems:** Check [History](METRICS_HISTORY.md#read-a-history-panel)
+  for a sample dated after Pulse restarted. Check a resource from each connection
+  you rely on. A fresh Proxmox guest reading does not show that PBS was polled.
+  If the chart shows native provider history, check the live reading separately.
+- **Agents:** Open the host in **Machines**. Check that **Last seen** advances
+  and that the agent reading you need has a new sample. A new check-in alone
+  does not prove that reading arrived.
+- **Alerts:** In **Alerts → Overview**, look for the live summary on an open
+  threshold alert to change after restart, for example to **now, recovering**.
+  **Last reading:** marks a stale value. A saved alert message, an unchanged
+  summary or an empty list does not confirm a new evaluation. If a notification
+  was due, [check delivery separately](ALERTING.md#choose-where-notifications-go).
+  Don't trigger an alert or send a Test just to check the update.
 
 If Pulse runs in a memory-limited Proxmox LXC, check that the same guests and
 any backup datastores you already monitor report again. Before widening the
