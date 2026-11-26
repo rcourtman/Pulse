@@ -133,17 +133,18 @@ func (m *Monitor) retryFailedConnections(ctx context.Context) {
 					return
 				}
 				if err != nil {
-					log.Warn().Err(err).Str("instance", pve.Name).Msg("Failed to reconnect cluster client, will retry")
+					monErr := monitorerrors.WrapConnectionError("recreate_pve_cluster_client", pve.Name, pveStartupFailureError(err))
+					log.Warn().Err(monErr).Str("instance", pve.Name).Msg("Failed to reconnect cluster client, will retry")
+					m.publishPVEStartupFailure(pve, monErr)
 					continue
 				}
 
 				m.replacePVEClient(pve.Name, clusterClient)
-				m.setProviderConnectionHealth(InstanceTypePVE, pve.Name, true)
 
 				log.Info().
 					Str("instance", pve.Name).
 					Str("cluster", pve.ClusterName).
-					Msg("Successfully reconnected cluster client")
+					Msg("Cluster client recreated; awaiting connectivity poll")
 				continue
 			}
 
@@ -155,19 +156,20 @@ func (m *Monitor) retryFailedConnections(ctx context.Context) {
 				return
 			}
 			if err != nil {
+				monErr := monitorerrors.WrapConnectionError("recreate_pve_client", pve.Name, pveStartupFailureError(err))
 				log.Warn().
-					Err(err).
+					Err(monErr).
 					Str("instance", pve.Name).
 					Msg("Failed to reconnect PVE client, will retry")
+				m.publishPVEStartupFailure(pve, monErr)
 				continue
 			}
 
 			m.replacePVEClient(pve.Name, client)
-			m.setProviderConnectionHealth(InstanceTypePVE, pve.Name, true)
 
 			log.Info().
 				Str("instance", pve.Name).
-				Msg("Successfully reconnected PVE client")
+				Msg("PVE client recreated; awaiting connectivity poll")
 		}
 
 		// Try to recreate PBS clients
