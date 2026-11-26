@@ -4,6 +4,13 @@ This changelog describes the changes since `v6.9.0`. Stable `v6.9.0` remains the
 
 ## Changes since v6.9.0
 
+- Keep alert eventlog test fixtures inside normal retention (#5193)
+- Retire deleted availability checks from the poll queue (#5190)
+- Distinguish device history from resumed Pulse collection (#5189)
+- Expose overdue queued polls in Prometheus (#5188)
+- Check post-update monitoring with the readings Pulse shows (#5187)
+- Release v6.10.0-beta.1 (#5186)
+- Age the scheduler breaker retry gauge on scrape (#5185)
 - Distinguish PBS listing volume from snapshot coverage (#5184)
 - Clear poll dead letters when collection resumes (#5182)
 - Explain intentional PBS non-verification in Coverage Help (#5183)
