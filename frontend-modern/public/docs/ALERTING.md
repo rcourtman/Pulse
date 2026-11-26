@@ -131,13 +131,25 @@ sends it based on recent activity in the monitoring loop, not on whether polls
 finished, agent reports were accepted or alert rules ran. A `200` from
 `/api/health` only means the web server answered.
 
-If readings look frozen while the monitored systems still respond, compare the
-newest sample times in **History** and the reporting agents' **Seen** times in
-**Machines**. Allow for normal poll and report intervals, including retry delays.
-If you already scrape Prometheus, compare `pulse_monitor_poll_total` by
-`result`. Rising errors mean Pulse is still recording poll outcomes. If
-several expected sources give no new results, check whether collection has
-stopped. [Check real alert delivery separately](#choose-where-notifications-go).
+If readings look frozen while the monitored systems still respond, check each
+collection path separately, allowing for normal poll and report intervals and
+retry delays:
+
+- **Polled platforms:** Check the newest stored sample times in
+  [History](METRICS_HISTORY.md#read-a-history-panel) and the live readings on
+  each expected connection. **Latest from device** and **Latest recorded** can
+  include points the device kept during a Pulse outage, so a new chart point
+  alone does not prove Pulse polled again.
+- **Agents:** Check **Last seen** (shown as **Seen** on narrow screens) and
+  the readings you need in **Machines**. Check **Docker** hosts separately:
+  container reports use their own stream and can stall even while machine
+  reports keep arriving from the same agent.
+- **Prometheus scrapes (if already enabled):** Compare
+  `pulse_monitor_poll_total` by `result`. Rising errors mean Pulse is still
+  recording poll outcomes. If several expected sources give no new results,
+  check whether collection has stopped.
+
+[Check real alert delivery separately](#choose-where-notifications-go).
 
 ### Warn when expected polls stop succeeding
 
@@ -188,7 +200,27 @@ or intentionally pause the target.
 
 A poll warning means Pulse has not recorded a fresh success for that
 connection. An increasing `pulse_monitor_poll_total` series with
-`result="error"` means polls are still returning failures. No new results
-despite working scrapes does not tell you whether the poll is slow or stuck.
-Use the [missing-data checks](FAQ.md#no-data-showing) to narrow it down.
-Neither alert checks whether agents reported or Pulse evaluated its rules.
+`result="error"` means polls are still returning failures.
+
+If scrapes keep succeeding with no new poll outcomes, check the scheduler and
+agent series already on that scrape target (an absent series on an older build
+is not zero):
+
+- **Backoff still active:** `pulse_scheduler_breaker_retry_seconds` for the
+  same connection shows time left until the recorded retry deadline. Zero
+  means the deadline has passed or none was recorded, not that a poll ran.
+- **Poll waiting in queue or on a worker:** compare
+  `pulse_scheduler_queued_poll_overdue_seconds` and
+  `pulse_scheduler_claimed_poll_overdue_seconds` (`stage="waiting_for_slot"`
+  and `stage="running"`) across fresh scrapes. Growing ages show queued or
+  claimed polls falling behind their schedule or timeout budget. Zero does
+  not prove polling recovered.
+- **Agent reports:** inspect `pulse_http_requests_total` with `method="POST"`
+  separately for `/api/agents/agent/report` (or legacy
+  `/api/agents/host/report`) and `/api/agents/docker/report`, split by
+  `status`. Do not add the routes together: machine reports can keep
+  succeeding while Docker reports stop.
+
+Use the [missing-data checks](FAQ.md#no-data-showing) to narrow it down
+without restarting Pulse or sending test traffic. Neither alert above checks
+whether Pulse evaluated its alert rules.
