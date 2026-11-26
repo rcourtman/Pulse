@@ -186,8 +186,12 @@ class PMGDocsTest(unittest.TestCase):
             self.assertIn(phrase, self.guide)
         self.assertIn("if instanceCfg.Disabled", poll)
         self.assertLess(poll.index("if instanceCfg.Disabled"), poll.index("client.GetVersion"))
+        self.assertIn("Skipping PMG poll: instance is paused", poll)
+        self.assertIn("if skipped {", poll)
+        self.assertIn("panic while polling PMG instance", poll)
         for phrase in ("pause the PMG connection", "does not cancel a request already in flight",
-                       "arrange independent coverage", "only the connection you deliberately paused"):
+                       "arrange independent coverage", "only the connection you deliberately paused",
+                       "skipped PMG polls do not record synthetic poll successes or clear an earlier failure"):
             self.assertIn(phrase, self.guide)
 
     def test_published_warning_is_bounded_to_the_named_release(self):

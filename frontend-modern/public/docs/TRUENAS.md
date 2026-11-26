@@ -180,6 +180,7 @@ Add as many TrueNAS connections as needed. Each connection is polled independent
 | Variable | Description | Default |
 |---|---|---|
 | `PULSE_ENABLE_TRUENAS` | Enable/disable TrueNAS integration | `true` |
+| `PULSE_TRUENAS_POLL_TIMEOUT` | Maximum duration for one full TrueNAS inventory refresh (Go duration, such as `45s` or `2m`). Bounds the whole refresh rather than individual API requests. Invalid or non-positive values log a warning without printing the value and keep the `45s` default. | `45s` |
 
 ### Storage
 
@@ -556,6 +557,17 @@ working connection can have missing telemetry or a stalled collection step.
 | `observed.collectedAt` advances, but some usage or History panels stay empty | Inventory is refreshing, not necessarily every metric. Follow the [missing-telemetry checks](#inventory-works-but-cpu-memory-or-history-is-missing); do not replace a working key to populate a chart. |
 | No timestamps advance, or no completed attempt is recorded | Check that the connection and integration are enabled, then preserve the bounded local error above. This is not proof of an invalid key. |
 | Reconnects or TrueNAS sign-ins increase while `observed.collectedAt` advances | Session turnover alone does not establish failed authentication or stopped polling. Record the timing and any existing close/error message separately from the data freshness. |
+
+Each whole inventory refresh is bounded by `PULSE_TRUENAS_POLL_TIMEOUT`
+(`45s` default). If that deadline or a cancellation fires during optional
+reads (services, apps, VMs, shares, snapshots or replication tasks), Pulse
+stops further reads instead of publishing a truncated snapshot as healthy
+and keeps the last accepted cached records and `poll.lastSuccessAt` until a
+full refresh succeeds. When an edited TrueNAS connection fails client
+initialization, Pulse closes the previous live connection and clears stale
+cached records rather than continuing to poll the old endpoint. A valid edit
+that builds a new client preserves the last accepted cached records until
+the rebuilt connection completes an accepted refresh.
 
 **Test connection** is not a complete poll. Some older builds, including Pulse
 6.4.1 and 6.4.5, also let a saved-connection test update `lastAttemptAt` and

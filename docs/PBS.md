@@ -604,6 +604,17 @@ polls from retained snapshots and unread datastores:
   **This does not mean the datastore is empty.** instead of rendering zero bytes
   as `0%` used, and suppresses fill forecasts until a valid capacity read
   returns.
+- **Paused connections and mid-poll timeouts:** Pausing a PBS connection skips
+  polling without recording a synthetic poll success or clearing a prior
+  failure. If a poll times out or is cancelled after version discovery succeeds,
+  Pulse stops remaining reads, records the poll failure without publishing a
+  truncated datastore list and keeps the last accepted unified storage entries
+  until a complete poll succeeds.
+- **Removed or excluded datastores:** When datastore discovery completes
+  normally with no matching datastores (for example after all datastores are
+  removed or excluded), Pulse clears the removed entries from unified storage
+  instead of leaving stale datastores behind. A failed datastore read still
+  preserves the last known storage entries.
 
 ### Slow Backup Loading
 

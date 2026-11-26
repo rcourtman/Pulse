@@ -306,6 +306,29 @@ class TrueNASDocsTest(unittest.TestCase):
         self.assertIn("**Degraded**", stale_section)
         self.assertIn("**not updated**", stale_section)
 
+    def test_poll_timeout_and_config_edit_boundaries_match_source(self):
+        poller = (ROOT / "internal/monitoring/truenas_poller.go").read_text(encoding="utf-8")
+        client = (ROOT / "internal/truenas/client.go").read_text(encoding="utf-8")
+        self.assertIn('os.Getenv("PULSE_TRUENAS_POLL_TIMEOUT")', poller)
+        self.assertIn("const defaultTrueNASPollTimeout = 45 * time.Second", poller)
+        self.assertIn("Invalid PULSE_TRUENAS_POLL_TIMEOUT, using default", poller)
+        self.assertIn("delete(p.cachedRecordsByOrg[orgID], connID)", poller)
+        self.assertIn('fmt.Errorf("fetch truenas snapshot: %w", err)', client)
+
+        prose = " ".join(DOC.read_text(encoding="utf-8").replace("**", "").replace("`", "").split())
+        for phrase in (
+            "PULSE_TRUENAS_POLL_TIMEOUT",
+            "Bounds the whole refresh rather than individual API requests",
+            "Invalid or non-positive values log a warning without printing the value and keep the 45s default",
+            "Each whole inventory refresh is bounded by PULSE_TRUENAS_POLL_TIMEOUT (45s default)",
+            "stops further reads instead of publishing a truncated snapshot as healthy",
+            "keeps the last accepted cached records and poll.lastSuccessAt until a full refresh succeeds",
+            "fails client initialization, Pulse closes the previous live connection and clears stale cached records",
+            "valid edit that builds a new client preserves the last accepted cached records",
+        ):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, prose)
+
     def test_polling_guidance_preserves_evidence_before_a_manual_test(self):
         text = DOC.read_text().split("### Stale TrueNAS data", 1)[1].split("### Disabling", 1)[0]
         # Markdown wrapping and sentence capitalization do not change the

@@ -452,9 +452,26 @@ class PBSDocsTest(unittest.TestCase):
             "Unavailable or Unknown capacity",
             "This does not mean the datastore is empty.",
             "suppresses fill forecasts until a valid capacity read returns",
+            "Pausing a PBS connection skips polling without recording a synthetic poll success",
+            "stops remaining reads, records the poll failure without publishing a truncated datastore list",
+            "clears the removed entries from unified storage instead of leaving stale datastores behind",
+            "failed datastore read still preserves the last known storage entries",
         ):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, section)
+
+        monitor = (ROOT / "internal/monitoring/monitor_pbs_pmg.go").read_text(encoding="utf-8")
+        pbs_poll = monitor.split("func (m *Monitor) pollPBSInstance(", 1)[1].split(
+            "func (m *Monitor) pollPMGInstance(", 1
+        )[0]
+        for token in (
+            "Skipping PBS poll: instance is paused",
+            "if skipped {",
+            "if ctxErr := ctx.Err(); ctxErr != nil {",
+            "if instanceCfg.MonitorDatastores && datastoreDiscoveryErr == nil {",
+        ):
+            with self.subTest(monitor_token=token):
+                self.assertIn(token, pbs_poll)
 
 
 if __name__ == "__main__":
