@@ -347,7 +347,7 @@ func TestFixedIntervalPlanPreservesPendingSlot(t *testing.T) {
 				applyPlan := func(m *Monitor) ScheduledTask {
 					t.Helper()
 					for _, task := range m.buildScheduledTasks(time.Now()) {
-						q.upsertPlan(task)
+						q.upsertPlan(task, 0)
 					}
 					got, ok := q.Get(InstanceTypeAvailability, "plex")
 					if !ok {

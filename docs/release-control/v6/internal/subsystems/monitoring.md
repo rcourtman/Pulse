@@ -79,6 +79,16 @@ replacement or cancels the successor on removal, without starting an
 overlapping read. Other keys, including the same name on another provider,
 remain independently eligible.
 
+Refreshing the saved availability catalog reconciles its local queue entries,
+including checks deleted before their first observation. A returning worker
+does not reschedule a retired check, and a planner that read the old catalog
+cannot queue it again after refresh. Other providers' work is independent.
+An unreadable catalog leaves the last local schedule intact; it is not an
+empty roster. `TestDeleteAvailabilityTargetRetiresScheduledPoll` checks the
+saved API delete and Scheduler Health read. `TestAvailabilityRetirementRejectsOldPlansAndWorkerSuccessors`
+and `TestAvailabilityRefreshPreservesQueueWhenRosterUnreadable` cover a held
+plan, a returning claim, the peer poll, and a failed catalog read.
+
 A panic escaping a scheduled task is recovered at the task boundary in both
 worker modes. It is logged with the task type and connection. Unwinding
 releases the claim and work marker, and the default worker keeps taking

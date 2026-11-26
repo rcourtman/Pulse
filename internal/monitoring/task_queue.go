@@ -80,6 +80,11 @@ type TaskQueue struct {
 	entries     map[string]*scheduledTaskEntry
 	heap        taskHeap
 	earlierHead chan struct{} // lazily shared by workers waiting for new eligibility
+
+	// Serialize availability settings refreshes from catalog read through
+	// reconciliation. Planners and workers never need the refresh mutex.
+	availabilityRefreshMu        sync.Mutex
+	availabilityScheduleRevision uint64
 }
 
 // NewTaskQueue constructs an empty queue.
@@ -95,20 +100,24 @@ func NewTaskQueue() *TaskQueue {
 // Upsert schedules an explicit request. If a worker has already claimed the
 // target, retain the latest request for when that worker returns.
 func (q *TaskQueue) Upsert(task ScheduledTask) {
-	q.upsert(task, false)
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	q.upsertLocked(task, false)
 }
 
 // upsertPlan adds or refreshes periodic work without replacing an explicit
 // request, a retry, or the work the queue has already dispatched.
-func (q *TaskQueue) upsertPlan(task ScheduledTask) {
-	q.upsert(task, true)
-}
-
-func (q *TaskQueue) upsert(task ScheduledTask, fromPlanner bool) {
-	key := schedulerKey(task.InstanceType, task.InstanceName)
+func (q *TaskQueue) upsertPlan(task ScheduledTask, availabilityRevision uint64) {
 	q.mu.Lock()
 	defer q.mu.Unlock()
+	if task.InstanceType == InstanceTypeAvailability && availabilityRevision != q.availabilityScheduleRevision {
+		return // A settings refresh superseded the planner's availability roster.
+	}
+	q.upsertLocked(task, true)
+}
 
+func (q *TaskQueue) upsertLocked(task ScheduledTask, fromPlanner bool) {
+	key := schedulerKey(task.InstanceType, task.InstanceName)
 	previous, hadHead := q.headTimeLocked()
 	if entry, ok := q.entries[key]; ok {
 		if entry.index < 0 {
@@ -143,6 +152,34 @@ func (q *TaskQueue) upsert(task ScheduledTask, fromPlanner bool) {
 	heap.Push(&q.heap, entry)
 	q.entries[key] = entry
 	q.wakeEarlierHeadLocked(previous, hadHead)
+}
+
+func (q *TaskQueue) availabilityPlanRevision() uint64 {
+	if q == nil {
+		return 0
+	}
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	return q.availabilityScheduleRevision
+}
+
+// refreshAvailabilitySchedule applies one successfully read local roster. An
+// unavailable roster must not be sent here as an empty set. The caller
+// serializes settings refreshes without holding q.mu during catalog reads.
+func (q *TaskQueue) refreshAvailabilitySchedule(localTasks map[string]ScheduledTask) {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	q.availabilityScheduleRevision++
+	for key, entry := range q.entries {
+		if entry.task.InstanceType == InstanceTypeAvailability {
+			if _, keep := localTasks[entry.task.InstanceName]; !keep {
+				q.removeLocked(key, entry)
+			}
+		}
+	}
+	for _, task := range localTasks {
+		q.upsertLocked(task, false)
+	}
 }
 
 // completeClaim returns ownership and optionally queues its successor in the
@@ -197,10 +234,12 @@ func (q *TaskQueue) Remove(instanceType InstanceType, instance string) {
 	q.mu.Lock()
 	defer q.mu.Unlock()
 
-	entry, ok := q.entries[key]
-	if !ok {
-		return
+	if entry, ok := q.entries[key]; ok {
+		q.removeLocked(key, entry)
 	}
+}
+
+func (q *TaskQueue) removeLocked(key string, entry *scheduledTaskEntry) {
 	if entry.index < 0 {
 		entry.followup = dropWorkerSchedule
 		return
