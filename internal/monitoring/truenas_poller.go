@@ -329,10 +329,8 @@ func (p *TrueNASPoller) syncConnections() {
 			}
 
 			p.providersByOrg[orgID][connID] = truenas.NewLiveProviderForConnection(&truenas.APIFetcher{Client: client}, connID)
-			if existingProvider != nil {
-				if status := p.statusByOrg[orgID][connID]; status != nil {
-					status.nextPollAt = time.Now().UTC()
-				}
+			if status := p.statusByOrg[orgID][connID]; status != nil && !status.nextPollAt.IsZero() {
+				status.nextPollAt = time.Now().UTC()
 			}
 		}
 	}
@@ -515,13 +513,28 @@ func (p *TrueNASPoller) pollAll(ctx context.Context) {
 		if entry.provider == nil {
 			continue
 		}
+		if errors.Is(ctx.Err(), context.Canceled) {
+			break
+		}
 
 		start := time.Now().UTC()
 		pollCtx, cancel := context.WithTimeout(ctx, trueNASPollTimeout())
 		err := entry.provider.Refresh(pollCtx)
 		cancel()
 		end := time.Now().UTC()
+		if errors.Is(ctx.Err(), context.Canceled) {
+			break
+		}
 		if err != nil {
+			p.mu.Lock()
+			current := p.providersByOrg[entry.orgID][entry.id] == entry.provider
+			if current {
+				p.recordConnectionFailureLocked(entry.orgID, entry.id, entry.config, err, end)
+			}
+			p.mu.Unlock()
+			if !current {
+				continue
+			}
 			pm.RecordResult(PollResult{
 				InstanceName: entry.id,
 				InstanceType: "truenas",
@@ -530,9 +543,6 @@ func (p *TrueNASPoller) pollAll(ctx context.Context) {
 				StartTime:    start,
 				EndTime:      end,
 			})
-			p.mu.Lock()
-			p.recordConnectionFailureLocked(entry.orgID, entry.id, entry.config, err, end)
-			p.mu.Unlock()
 			log.Warn().
 				Str("component", "truenas_poller").
 				Str("action", "refresh_connection").
@@ -542,6 +552,16 @@ func (p *TrueNASPoller) pollAll(ctx context.Context) {
 			continue
 		}
 
+		snapshot := entry.provider.Snapshot()
+		p.mu.Lock()
+		current := p.providersByOrg[entry.orgID][entry.id] == entry.provider
+		if current {
+			p.recordConnectionSuccessLocked(entry.orgID, entry.id, entry.config, start, end, snapshot)
+		}
+		p.mu.Unlock()
+		if !current {
+			continue
+		}
 		pm.RecordResult(PollResult{
 			InstanceName: entry.id,
 			InstanceType: "truenas",
@@ -549,11 +569,6 @@ func (p *TrueNASPoller) pollAll(ctx context.Context) {
 			StartTime:    start,
 			EndTime:      end,
 		})
-
-		snapshot := entry.provider.Snapshot()
-		p.mu.Lock()
-		p.recordConnectionSuccessLocked(entry.orgID, entry.id, entry.config, start, end, snapshot)
-		p.mu.Unlock()
 		refreshedOrgs[entry.orgID] = struct{}{}
 		p.ingestRecoveryPoints(ctx, entry.orgID, entry.id, entry.provider)
 	}

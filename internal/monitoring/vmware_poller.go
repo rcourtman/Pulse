@@ -131,6 +131,7 @@ type vmwarePollerProviderEntry struct {
 	orgID        string
 	connectionID string
 	provider     vmwarePollerProvider
+	tracked      bool
 }
 
 // NewVMwarePoller builds a new VMware poller with the provided interval.
@@ -382,12 +383,15 @@ func (p *VMwarePoller) syncConnections() {
 
 func (p *VMwarePoller) pollAll(ctx context.Context) {
 	for _, entry := range p.providerEntries() {
+		if errors.Is(ctx.Err(), context.Canceled) {
+			return
+		}
 		p.pollConnection(ctx, entry)
 	}
 }
 
 func (p *VMwarePoller) pollConnection(ctx context.Context, entry vmwarePollerProviderEntry) {
-	if entry.provider == nil {
+	if entry.provider == nil || errors.Is(ctx.Err(), context.Canceled) {
 		return
 	}
 
@@ -396,7 +400,14 @@ func (p *VMwarePoller) pollConnection(ctx context.Context, entry vmwarePollerPro
 
 	at := time.Now().UTC()
 	if err := entry.provider.Refresh(pollCtx); err != nil {
+		if errors.Is(ctx.Err(), context.Canceled) {
+			return
+		}
 		p.mu.Lock()
+		if entry.tracked && p.providersByOrg[entry.orgID][entry.connectionID] != entry.provider {
+			p.mu.Unlock()
+			return
+		}
 		p.recordConnectionFailureLocked(entry.orgID, entry.connectionID, err, at)
 		p.mu.Unlock()
 		log.Warn().
@@ -409,11 +420,19 @@ func (p *VMwarePoller) pollConnection(ctx context.Context, entry vmwarePollerPro
 		return
 	}
 
+	if errors.Is(ctx.Err(), context.Canceled) {
+		return
+	}
+
 	records := cloneIngestRecords(entry.provider.Records())
 	changes := cloneResourceChanges(entry.provider.ActivityChanges())
 	snapshot := entry.provider.Snapshot()
 
 	p.mu.Lock()
+	if entry.tracked && p.providersByOrg[entry.orgID][entry.connectionID] != entry.provider {
+		p.mu.Unlock()
+		return
+	}
 	transition := p.recordConnectionSuccessLocked(entry.orgID, entry.connectionID, at, snapshot)
 	if p.cachedRecordsByOrg[entry.orgID] == nil {
 		p.cachedRecordsByOrg[entry.orgID] = make(map[string][]unifiedresources.IngestRecord)
@@ -458,6 +477,7 @@ func (p *VMwarePoller) providerEntries() []vmwarePollerProviderEntry {
 				orgID:        orgID,
 				connectionID: connectionID,
 				provider:     provider,
+				tracked:      true,
 			})
 		}
 	}
