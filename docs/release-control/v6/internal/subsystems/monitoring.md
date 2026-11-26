@@ -10684,3 +10684,40 @@ UTC cron schedule plus grace window, `/start` duration measurement, explicit
 reuse the unified `availability_unreachable` incident path. Verified by
 `availability_cron_test.go`, `availability_test.go`, `availability_push_test.go`,
 and `availability_poller_test.go`.
+
+### PBS and PMG poll truthfulness, pause isolation, and unified storage reconciliation
+
+`pollPBSInstance` and `pollPMGInstance` in `internal/monitoring/monitor_pbs_pmg.go`
+enforce truthful poll accounting across pause, timeout/cancellation, config edits,
+and datastore removal:
+
+- **Paused instances never fabricate poll successes:** returning early on
+  `instanceCfg.Disabled` decrements in-flight metrics without calling
+  `recordTaskResult`/`recordTaskOutcome`, `stalenessTracker.UpdateSuccess`, or
+  `pollMetrics.RecordResult`, preserving prior failure or never-polled state.
+  Panics in `pollPMGInstance` are caught inside the same deferred boundary so
+  they record a failure rather than a nil-error success.
+- **Mid-poll context expiry fails the PBS poll cleanly:** if `ctx.Err()` fires
+  after `GetVersion` succeeds (during node, datastore, namespace, or job reads),
+  `pollPBSInstance` stops further reads, records the context failure in
+  `pollStatusMap`/`stalenessTracker`/`pollMetrics`, publishes offline/error
+  connectivity without a truncated datastore slice, and preserves previously
+  accepted unified `state.Storage` entries.
+- **Authoritative empty or fully excluded PBS datastore discovery reconciles
+  unified storage:** whenever `MonitorDatastores` is enabled and datastore
+  discovery succeeds without context expiry, `UpdateStorageForInstance` runs
+  even when the resulting datastore list is empty so removed or excluded PBS
+  datastores do not remain stuck in `state.Storage`; failed discovery still
+  skips overwriting last-known storage.
+- **Synchronized config snapshots and single fallback fetch:** `pollPBSInstance`
+  and `carryPBSJobFailuresForInstance` read `m.config.PBSInstances` under
+  `config.Mu.RLock()` (cloning `ExcludeDatastores` and guarding `m.config == nil`),
+  and a successful `GetVersion`-fallback datastore read is reused instead of
+  fetching `/admin/datastore` a second time.
+
+Verified by `TestPollPBSInstancePausedDoesNotFabricateSuccess`,
+`TestPollPMGInstancePausedDoesNotFabricateSuccess`,
+`TestPollPBSInstanceMidPollContextExpiryRecordsFailureWithoutTruncatedPublish`,
+`TestPollPBSInstanceEmptyOrExcludedDatastoresClearUnifiedStorage`,
+`TestPollPBSInstanceConcurrentConfigEditIsRaceFree`, and
+`TestPollPBSInstanceFallbackReusesDatastoresWithoutDuplicateFetch`.
