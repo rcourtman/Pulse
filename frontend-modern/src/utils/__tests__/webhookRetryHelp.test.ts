@@ -73,7 +73,7 @@ describe('webhook retry help', () => {
       ],
       [
         'TLS failure (certificate trust, expiry, hostname or HTTP-on-HTTPS mismatch)',
-        'Stops as soon as this failure is classified, even with attempts left; retains the delivery as a terminal failure. Fix the server certificate or TLS settings rather than retrying, and do not disable verification.',
+        'Stops as soon as this failure is classified, even with attempts left. Retains the delivery as a terminal failure. Fix the server certificate or TLS settings rather than retrying, and do not disable verification.',
       ],
     ]);
   });
@@ -86,7 +86,7 @@ describe('webhook retry help', () => {
     expect(retry).toContain(
       'Authentication, configuration, rejected and TLS failures, edited destinations, rehearsals and deliveries older than 24 hours are not automatically re-queued',
     );
-    expect(retry).toContain('a successful Test does not trigger this recovery either');
+    expect(retry).toContain('A successful Test does not trigger this recovery either');
   });
 
   it('distinguishes terminal failure from success, history removal and held delivery', () => {
