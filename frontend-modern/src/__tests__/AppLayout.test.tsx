@@ -782,8 +782,7 @@ describe('AppLayout map entry', () => {
     expect(screen.queryByTestId('infrastructure-map-header-button')).toBeNull();
   });
 
-  it('renders a header command palette trigger and keeps decorative nav icons out of tab DOM text', () => {
-    const onOpenCommandPalette = vi.fn();
+  it('omits a header command palette trigger and keeps decorative nav icons out of tab DOM text', () => {
     window.history.replaceState({}, '', '/proxmox/overview');
     const LayoutRoute = () => (
       <AppLayout
@@ -816,7 +815,6 @@ describe('AppLayout map entry', () => {
         onRetryOrganizationList={() => {}}
         showOrgSwitcher={() => false}
         onSwitchOrg={() => {}}
-        onOpenCommandPalette={onOpenCommandPalette}
       >
         <div>Body</div>
       </AppLayout>
@@ -827,11 +825,7 @@ describe('AppLayout map entry', () => {
       </Router>
     ));
 
-    const trigger = screen.getByTestId('command-palette-trigger');
-    expect(trigger).toHaveAccessibleName('Search');
-    expect(trigger.querySelector('kbd')).toHaveAttribute('aria-hidden', 'true');
-    fireEvent.click(trigger);
-    expect(onOpenCommandPalette).toHaveBeenCalledOnce();
+    expect(screen.queryByTestId('command-palette-trigger')).toBeNull();
 
     const desktopNav = screen.getByRole('navigation', { name: 'Primary navigation' });
     const proxmoxLink = within(desktopNav).getByRole('link', { name: 'Proxmox' });
