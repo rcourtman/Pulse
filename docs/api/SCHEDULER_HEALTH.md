@@ -104,6 +104,9 @@ The scheduler's record of each connection's recent poll results.
     most overdue timestamped poll still in the queue was at capture. Zero
     means none was past its scheduled time. It does not count future work
     (including a future scheduled retry), claimed work or dead-letter entries.
+    Deleting a saved availability check retires its queued poll on catalogue
+    refresh without disturbing unrelated providers, while a failed catalogue
+    read leaves existing scheduled work unchanged.
 *   **`deadLetter`**: Aggregate DLQ summary plus up to 25 queued tasks.
 
 ### Optional Summaries
