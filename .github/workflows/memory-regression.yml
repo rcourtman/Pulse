@@ -88,18 +88,40 @@ jobs:
           path: candidate
           persist-credentials: false
 
-      - name: Checkout baseline
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          ref: ${{ needs.resolve-stable.outputs.sha }}
-          path: baseline
-          persist-credentials: false
-
       - name: Set up Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: candidate/go.mod
           cache: false
+
+      - name: Checkout verified stable baseline
+        env:
+          BASELINE_TAG: ${{ needs.resolve-stable.outputs.tag }}
+          BASELINE_SHA: ${{ needs.resolve-stable.outputs.sha }}
+        run: |
+          set -euo pipefail
+          [[ "${BASELINE_TAG}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || {
+            echo "Invalid stable release tag: ${BASELINE_TAG}" >&2
+            exit 1
+          }
+          [[ "${BASELINE_SHA}" =~ ^[0-9a-f]{40}$ ]] || {
+            echo "Invalid stable release commit: ${BASELINE_SHA}" >&2
+            exit 1
+          }
+          [[ ! -e baseline ]] || {
+            echo "Baseline checkout directory already exists." >&2
+            exit 1
+          }
+          git -c init.defaultBranch=main init baseline
+          git -C baseline fetch --no-tags --no-recurse-submodules --depth=1 \
+            https://github.com/rcourtman/Pulse.git \
+            "refs/tags/${BASELINE_TAG}:refs/remotes/baseline/${BASELINE_TAG}"
+          resolved="$(git -C baseline rev-parse --verify "refs/remotes/baseline/${BASELINE_TAG}^{commit}")"
+          if [[ "${resolved}" != "${BASELINE_SHA}" ]]; then
+            echo "Stable tag ${BASELINE_TAG} resolved to ${resolved}, expected ${BASELINE_SHA}." >&2
+            exit 1
+          fi
+          git -C baseline checkout --detach "${resolved}"
 
       - name: Measure both builds
         env:
@@ -155,18 +177,40 @@ jobs:
           path: candidate
           persist-credentials: false
 
-      - name: Checkout baseline
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          ref: ${{ needs.resolve-stable.outputs.sha }}
-          path: baseline
-          persist-credentials: false
-
       - name: Set up Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: candidate/go.mod
           cache: false
+
+      - name: Checkout verified stable baseline
+        env:
+          BASELINE_TAG: ${{ needs.resolve-stable.outputs.tag }}
+          BASELINE_SHA: ${{ needs.resolve-stable.outputs.sha }}
+        run: |
+          set -euo pipefail
+          [[ "${BASELINE_TAG}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || {
+            echo "Invalid stable release tag: ${BASELINE_TAG}" >&2
+            exit 1
+          }
+          [[ "${BASELINE_SHA}" =~ ^[0-9a-f]{40}$ ]] || {
+            echo "Invalid stable release commit: ${BASELINE_SHA}" >&2
+            exit 1
+          }
+          [[ ! -e baseline ]] || {
+            echo "Baseline checkout directory already exists." >&2
+            exit 1
+          }
+          git -c init.defaultBranch=main init baseline
+          git -C baseline fetch --no-tags --no-recurse-submodules --depth=1 \
+            https://github.com/rcourtman/Pulse.git \
+            "refs/tags/${BASELINE_TAG}:refs/remotes/baseline/${BASELINE_TAG}"
+          resolved="$(git -C baseline rev-parse --verify "refs/remotes/baseline/${BASELINE_TAG}^{commit}")"
+          if [[ "${resolved}" != "${BASELINE_SHA}" ]]; then
+            echo "Stable tag ${BASELINE_TAG} resolved to ${resolved}, expected ${BASELINE_SHA}." >&2
+            exit 1
+          fi
+          git -C baseline checkout --detach "${resolved}"
 
       - name: Measure both builds under agent load
         env:
@@ -225,18 +269,40 @@ jobs:
           path: candidate
           persist-credentials: false
 
-      - name: Checkout baseline
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          ref: ${{ needs.resolve-stable.outputs.sha }}
-          path: baseline
-          persist-credentials: false
-
       - name: Set up Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: candidate/go.mod
           cache: false
+
+      - name: Checkout verified stable baseline
+        env:
+          BASELINE_TAG: ${{ needs.resolve-stable.outputs.tag }}
+          BASELINE_SHA: ${{ needs.resolve-stable.outputs.sha }}
+        run: |
+          set -euo pipefail
+          [[ "${BASELINE_TAG}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || {
+            echo "Invalid stable release tag: ${BASELINE_TAG}" >&2
+            exit 1
+          }
+          [[ "${BASELINE_SHA}" =~ ^[0-9a-f]{40}$ ]] || {
+            echo "Invalid stable release commit: ${BASELINE_SHA}" >&2
+            exit 1
+          }
+          [[ ! -e baseline ]] || {
+            echo "Baseline checkout directory already exists." >&2
+            exit 1
+          }
+          git -c init.defaultBranch=main init baseline
+          git -C baseline fetch --no-tags --no-recurse-submodules --depth=1 \
+            https://github.com/rcourtman/Pulse.git \
+            "refs/tags/${BASELINE_TAG}:refs/remotes/baseline/${BASELINE_TAG}"
+          resolved="$(git -C baseline rev-parse --verify "refs/remotes/baseline/${BASELINE_TAG}^{commit}")"
+          if [[ "${resolved}" != "${BASELINE_SHA}" ]]; then
+            echo "Stable tag ${BASELINE_TAG} resolved to ${resolved}, expected ${BASELINE_SHA}." >&2
+            exit 1
+          fi
+          git -C baseline checkout --detach "${resolved}"
 
       - name: Measure both builds under Proxmox + PBS load
         env:

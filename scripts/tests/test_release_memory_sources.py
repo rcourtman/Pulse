@@ -117,10 +117,20 @@ class MemoryWatchSources(unittest.TestCase):
                 self.assertNotIn("permissions", job)
                 checkouts = [step["with"] for step in job["steps"] if step.get("uses", "").startswith("actions/checkout@")]
                 self.assertEqual([(step["path"], step["ref"]) for step in checkouts],
-                                 [("candidate", "${{ github.sha }}"), ("baseline", stable_sha)])
+                                 [("candidate", "${{ github.sha }}")])
                 self.assertTrue(all(step.get("persist-credentials") is False for step in checkouts))
-                setup_go, = [step for step in job["steps"] if step.get("uses", "").startswith("actions/setup-go@")]
+                setup_go_index, setup_go = next(
+                    (idx, step) for idx, step in enumerate(job["steps"])
+                    if step.get("uses", "").startswith("actions/setup-go@")
+                )
                 self.assertIs(setup_go["with"].get("cache"), False)
+                baseline_index, baseline_step = next(
+                    (idx, step) for idx, step in enumerate(job["steps"])
+                    if step.get("name") == "Checkout verified stable baseline"
+                )
+                self.assertLess(setup_go_index, baseline_index)
+                self.assertEqual(baseline_step["env"]["BASELINE_TAG"], stable_tag)
+                self.assertEqual(baseline_step["env"]["BASELINE_SHA"], stable_sha)
                 step, = [step for step in job["steps"] if step["name"].startswith("Measure both builds")]
                 self.assertEqual(step["env"]["BASELINE_TAG"], stable_tag)
                 self.assertEqual(step["env"]["BASELINE_SHA"], stable_sha)
@@ -141,6 +151,77 @@ class MemoryWatchSources(unittest.TestCase):
                                             capture_output=True, timeout=5)
                     self.assertNotEqual(result.returncode, 0)
                     self.assertEqual(result.stdout, b"")
+
+    def test_verified_baseline_checkout_checks_identity_and_canonical_tag(self):
+        baseline_step, = [
+            step for step in self.jobs["compare"]["steps"]
+            if step.get("name") == "Checkout verified stable baseline"
+        ]
+        for job_name in ("compare-agents", "compare-proxmox"):
+            other, = [
+                step for step in self.jobs[job_name]["steps"]
+                if step.get("name") == "Checkout verified stable baseline"
+            ]
+            self.assertEqual(other["run"], baseline_step["run"])
+
+        def run_baseline_checkout(tag, expected_sha, *, resolved_sha=SHA, precreate_baseline=False):
+            with tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                bin_dir = root / "bin"
+                bin_dir.mkdir()
+                calls = root / "git-calls"
+                git_stub = bin_dir / "git"
+                git_stub.write_text(
+                    '#!/bin/bash\nset -eu\n'
+                    'printf "%s\\n" "$*" >> "$CALLS"\n'
+                    'if [[ "$*" == *" init baseline" ]]; then mkdir -p baseline; exit 0; fi\n'
+                    'if [[ "$*" == *" rev-parse --verify "* ]]; then printf "%s\\n" "$RESOLVED_SHA"; exit 0; fi\n'
+                    'exit 0\n'
+                )
+                git_stub.chmod(0o700)
+                workdir = root / "work"
+                workdir.mkdir()
+                if precreate_baseline:
+                    (workdir / "baseline").mkdir()
+                result = subprocess.run(
+                    ["bash", "-c", baseline_step["run"]],
+                    cwd=workdir,
+                    env={
+                        "PATH": f"{bin_dir}:{os.environ['PATH']}",
+                        "CALLS": str(calls),
+                        "RESOLVED_SHA": resolved_sha,
+                        "BASELINE_TAG": tag,
+                        "BASELINE_SHA": expected_sha,
+                    },
+                    capture_output=True, text=True, timeout=10,
+                )
+                recorded = calls.read_text().splitlines() if calls.exists() else []
+                return result, recorded
+
+        result, calls = run_baseline_checkout(TAG, SHA, resolved_sha=SHA)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(calls, [
+            "-c init.defaultBranch=main init baseline",
+            f"-C baseline fetch --no-tags --no-recurse-submodules --depth=1 https://github.com/rcourtman/Pulse.git refs/tags/{TAG}:refs/remotes/baseline/{TAG}",
+            f"-C baseline rev-parse --verify refs/remotes/baseline/{TAG}^{{commit}}",
+            f"-C baseline checkout --detach {SHA}",
+        ])
+
+        result, calls = run_baseline_checkout(TAG, SHA, resolved_sha=TAG_SHA)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("resolved to", result.stderr)
+        self.assertFalse(any("checkout" in call for call in calls))
+
+        for case, tag, expected_sha, precreate in (
+            ("invalid_tag_branch", "refs/heads/main", SHA, False),
+            ("invalid_tag_prerelease", "v6.9.0-rc.1", SHA, False),
+            ("invalid_sha", TAG, "not-a-sha", False),
+            ("existing_baseline", TAG, SHA, True),
+        ):
+            with self.subTest(rejected=case):
+                result, calls = run_baseline_checkout(tag, expected_sha, precreate_baseline=precreate)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertEqual(calls, [])
 
     def test_resolution_failure_remains_a_scheduled_watch_failure(self):
         reporter = self.jobs["report-scheduled-result"]
