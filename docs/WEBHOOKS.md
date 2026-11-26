@@ -127,7 +127,7 @@ HTTP 429 or 503, a usable `Retry-After` can extend the usual wait up to
 | --- | --- |
 | Authentication, configuration or rejected request (most HTTP 4xx, including 400, 401 and 403) | Stops as soon as this failure is classified, even with attempts left; retains the delivery as a terminal failure. |
 | HTTP 408, 421, 423, 425 or 429; HTTP 5xx; connectivity or unknown failure | Can retry with backoff while the saved attempt budget remains; exhaustion retains a terminal failure. |
-| TLS failure | Can retry within the saved budget, but retrying does not repair certificate trust, expiry or hostname errors. Do not disable verification. |
+| TLS failure (certificate trust, expiry, hostname or HTTP-on-HTTPS mismatch) | Stops as soon as this failure is classified, even with attempts left; retains the delivery as a terminal failure. Fix the server certificate or TLS settings rather than retrying, and do not disable verification. |
 
 A terminal failure means **no further automatic retry**, not that the delivery
 was successful or its history was deleted. In **Alerts → Notifications**, use
@@ -135,6 +135,14 @@ was successful or its history was deleted. In **Alerts → Notifications**, use
 and HTTP status. A pending or held delivery is not a terminal failure; quiet
 hours and other delivery policies can postpone it. There is no fixed delivery
 deadline promised by the attempt count.
+
+When a later live alert or recovery succeeds for the **exact same saved
+destination configuration**, Pulse can automatically re-queue up to 25 recent
+(24-hour) retryable retained failures for that destination once, subject to a
+five-minute cooldown per destination. Authentication, configuration, rejected
+and TLS failures, edited destinations, rehearsals and deliveries older than 24
+hours are not automatically re-queued; a successful **Test** does not trigger
+this recovery either.
 
 Alert-webhook response text is deliberately withheld from delivery errors,
 logs and Test summaries because receivers can echo credentials or alert content.
