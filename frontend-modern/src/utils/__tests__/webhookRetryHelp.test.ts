@@ -72,10 +72,21 @@ describe('webhook retry help', () => {
         'Can retry with backoff while the saved attempt budget remains; exhaustion retains a terminal failure.',
       ],
       [
-        'TLS failure',
-        'Can retry within the saved budget, but retrying does not repair certificate trust, expiry or hostname errors. Do not disable verification.',
+        'TLS failure (certificate trust, expiry, hostname or HTTP-on-HTTPS mismatch)',
+        'Stops as soon as this failure is classified, even with attempts left; retains the delivery as a terminal failure. Fix the server certificate or TLS settings rather than retrying, and do not disable verification.',
       ],
     ]);
+  });
+
+  it('bounds automatic recovery to recent retryable failures on the same destination', () => {
+    const retry = retryText();
+    expect(retry).toContain('exact same saved destination configuration');
+    expect(retry).toContain('up to 25 recent (24-hour) retryable retained failures');
+    expect(retry).toContain('five-minute cooldown per destination');
+    expect(retry).toContain(
+      'Authentication, configuration, rejected and TLS failures, edited destinations, rehearsals and deliveries older than 24 hours are not automatically re-queued',
+    );
+    expect(retry).toContain('a successful Test does not trigger this recovery either');
   });
 
   it('distinguishes terminal failure from success, history removal and held delivery', () => {
