@@ -2232,18 +2232,41 @@ func (c *Client) FetchSnapshot(ctx context.Context) (*FixtureSnapshot, error) {
 		return nil, fmt.Errorf("fetch truenas alerts: %w", err)
 	}
 
-	// Recovery artifacts are best-effort: do not fail monitoring if additional endpoints are unavailable.
+	// Recovery artifacts are best-effort: do not fail monitoring if additional
+	// endpoints are unavailable, but never publish a truncated snapshot as healthy
+	// after the caller's poll deadline or cancellation fires.
+	if err := ctx.Err(); err != nil {
+		return nil, fmt.Errorf("fetch truenas snapshot: %w", err)
+	}
 	services, _ := c.GetServices(ctx)
+	if err := ctx.Err(); err != nil {
+		return nil, fmt.Errorf("fetch truenas snapshot: %w", err)
+	}
 	apps, _ := c.GetApps(ctx)
+	if err := ctx.Err(); err != nil {
+		return nil, fmt.Errorf("fetch truenas snapshot: %w", err)
+	}
 	vms, _ := c.GetVMs(ctx)
+	if err := ctx.Err(); err != nil {
+		return nil, fmt.Errorf("fetch truenas snapshot: %w", err)
+	}
 	shares, _ := c.GetNetworkShares(ctx)
+	if err := ctx.Err(); err != nil {
+		return nil, fmt.Errorf("fetch truenas snapshot: %w", err)
+	}
 	var zfsSnapshots []ZFSSnapshot
 	if !c.config.SkipDatasets {
 		zfsSnapshots, _ = c.GetZFSSnapshots(ctx)
+		if err := ctx.Err(); err != nil {
+			return nil, fmt.Errorf("fetch truenas snapshot: %w", err)
+		}
 	}
 	var replicationTasks []ReplicationTask
 	if !c.config.SkipReplication {
 		replicationTasks, _ = c.GetReplicationTasks(ctx)
+		if err := ctx.Err(); err != nil {
+			return nil, fmt.Errorf("fetch truenas snapshot: %w", err)
+		}
 	}
 
 	return &FixtureSnapshot{

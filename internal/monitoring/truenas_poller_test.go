@@ -3078,3 +3078,321 @@ func TestTrueNASProviderConfigChangedOnCollectionScope(t *testing.T) {
 		}
 	}
 }
+
+func TestTrueNASPollTimeoutConfiguration(t *testing.T) {
+	for _, tc := range []struct {
+		raw     string
+		want    time.Duration
+		warning bool
+	}{
+		{"", defaultTrueNASPollTimeout, false},
+		{" \t", defaultTrueNASPollTimeout, false},
+		{"90s", 90 * time.Second, false},
+		{" 2m ", 2 * time.Minute, false},
+		{"250ms", 250 * time.Millisecond, false},
+		{"0", defaultTrueNASPollTimeout, true},
+		{"-1s", defaultTrueNASPollTimeout, true},
+		{"synthetic-private-value", defaultTrueNASPollTimeout, true},
+		{"9999999999999999999h", defaultTrueNASPollTimeout, true},
+	} {
+		t.Run(fmt.Sprintf("case-%d", len(tc.raw))+"/"+tc.want.String(), func(t *testing.T) {
+			t.Setenv("PULSE_TRUENAS_POLL_TIMEOUT", tc.raw)
+			captured := captureVMwarePollerLogs(t)
+			if got := trueNASPollTimeout(); got != tc.want {
+				t.Fatalf("timeout=%s want %s", got, tc.want)
+			}
+			text := captured.String()
+			if strings.Contains(text, "synthetic-private-value") {
+				t.Fatal("warning copied environment contents")
+			}
+			if strings.Contains(text, "Invalid PULSE_TRUENAS_POLL_TIMEOUT") != tc.warning {
+				t.Fatalf("warning=%q want warning=%t", text, tc.warning)
+			}
+		})
+	}
+}
+
+func TestTrueNASPollerFailedConfigEditClosesPreviousProviderAndStopsPollingOldHost(t *testing.T) {
+	previous := truenas.IsFeatureEnabled()
+	truenas.SetFeatureEnabled(true)
+	t.Cleanup(func() { truenas.SetFeatureEnabled(previous) })
+
+	oldMock := newTrueNASMockServer(t, "old-nas")
+	t.Cleanup(oldMock.Close)
+	newMock := newTrueNASMockServer(t, "new-nas")
+	t.Cleanup(newMock.Close)
+
+	mtp, persistence := newTestTenantPersistence(t)
+	connection := trueNASInstanceForServer(t, "tn-edit", oldMock.URL(), true)
+	if err := persistence.SaveTrueNASConfig([]config.TrueNASInstance{connection}); err != nil {
+		t.Fatalf("SaveTrueNASConfig() error = %v", err)
+	}
+
+	poller := NewTrueNASPoller(mtp, 0, nil)
+	t.Cleanup(func() {
+		poller.mu.Lock()
+		for _, byConn := range poller.providersByOrg {
+			for _, provider := range byConn {
+				provider.Close()
+			}
+		}
+		poller.mu.Unlock()
+	})
+
+	poller.syncConnections()
+	poller.pollAll(context.Background())
+
+	initial := poller.ConnectionSummaries("default", []config.TrueNASInstance{connection})[connection.ID]
+	if initial.Poll == nil || initial.Poll.LastSuccessAt == nil || initial.Poll.LastError != nil || initial.Observed == nil || initial.Observed.Host != "old-nas" {
+		t.Fatalf("expected healthy initial poll against old-nas, got %+v", initial)
+	}
+	if !hasTrueNASHostForOrg(poller, "default", "old-nas") {
+		t.Fatal("expected old-nas cached records after initial poll")
+	}
+
+	oldRequestsBeforeEdit := oldMock.RequestCount()
+
+	// Edit the connection to an invalid TLS fingerprint so truenas.NewClient fails.
+	broken := connection
+	broken.UseHTTPS = true
+	broken.Fingerprint = "not-a-valid-sha256-fingerprint"
+	if err := persistence.SaveTrueNASConfig([]config.TrueNASInstance{broken}); err != nil {
+		t.Fatalf("SaveTrueNASConfig(broken) error = %v", err)
+	}
+
+	// Run two sync+poll cycles: the old provider must stay closed and never be
+	// polled again, cached records must be cleared, and sync must keep retrying
+	// client initialization rather than treating the old provider as current.
+	for cycle := 1; cycle <= 2; cycle++ {
+		poller.syncConnections()
+		poller.pollAll(context.Background())
+
+		if got := oldMock.RequestCount(); got != oldRequestsBeforeEdit {
+			t.Fatalf("cycle %d: old host received %d unexpected requests after failed config edit", cycle, got-oldRequestsBeforeEdit)
+		}
+		if pollerProviderCount(poller) != 0 {
+			t.Fatalf("cycle %d: expected failed config edit to remove old provider, got %d", cycle, pollerProviderCount(poller))
+		}
+		if records := poller.GetCurrentRecordsForOrg("default"); len(records) != 0 {
+			t.Fatalf("cycle %d: expected stale records from old host to be cleared, got %d", cycle, len(records))
+		}
+		summary := poller.ConnectionSummaries("default", []config.TrueNASInstance{broken})[broken.ID]
+		if summary.Poll == nil || summary.Poll.LastError == nil || summary.Poll.ConsecutiveFailures != cycle {
+			t.Fatalf("cycle %d: expected truthful init failure with consecutiveFailures=%d, got %+v", cycle, cycle, summary.Poll)
+		}
+		if summary.Observed != nil {
+			t.Fatalf("cycle %d: expected old host observed summary to be cleared on failed edit, got %+v", cycle, summary.Observed)
+		}
+	}
+
+	// Repair the connection to point to new-nas and verify immediate recovery.
+	repaired := trueNASInstanceForServer(t, "tn-edit", newMock.URL(), true)
+	if err := persistence.SaveTrueNASConfig([]config.TrueNASInstance{repaired}); err != nil {
+		t.Fatalf("SaveTrueNASConfig(repaired) error = %v", err)
+	}
+	poller.syncConnections()
+	poller.mu.Lock()
+	poller.statusByOrg["default"][repaired.ID].nextPollAt = time.Unix(1, 0)
+	poller.mu.Unlock()
+	poller.pollAll(context.Background())
+
+	recovered := poller.ConnectionSummaries("default", []config.TrueNASInstance{repaired})[repaired.ID]
+	if recovered.Poll == nil || recovered.Poll.LastError != nil || recovered.Poll.ConsecutiveFailures != 0 || recovered.Observed == nil || recovered.Observed.Host != "new-nas" {
+		t.Fatalf("expected repaired connection to recover on new-nas, got %+v", recovered)
+	}
+	if !hasTrueNASHostForOrg(poller, "default", "new-nas") || hasTrueNASHostForOrg(poller, "default", "old-nas") {
+		t.Fatalf("expected only new-nas records after recovery, got %d records", len(poller.GetCurrentRecordsForOrg("default")))
+	}
+	if got := oldMock.RequestCount(); got != oldRequestsBeforeEdit {
+		t.Fatalf("old host received %d unexpected requests after recovery to new-nas", got-oldRequestsBeforeEdit)
+	}
+}
+
+func TestTrueNASPollerPrunesFailedInitConfigWhenDisabledOrDeleted(t *testing.T) {
+	previous := truenas.IsFeatureEnabled()
+	truenas.SetFeatureEnabled(true)
+	t.Cleanup(func() { truenas.SetFeatureEnabled(previous) })
+
+	goodMock := newTrueNASMockServer(t, "good-nas")
+	t.Cleanup(goodMock.Close)
+
+	mtp, persistence := newTestTenantPersistence(t)
+	goodConn := trueNASInstanceForServer(t, "tn-good", goodMock.URL(), true)
+	badConn := trueNASInstanceForServer(t, "tn-bad", goodMock.URL(), true)
+	badConn.UseHTTPS = true
+	badConn.Fingerprint = "invalid-fingerprint"
+	if err := persistence.SaveTrueNASConfig([]config.TrueNASInstance{goodConn, badConn}); err != nil {
+		t.Fatalf("SaveTrueNASConfig() error = %v", err)
+	}
+
+	poller := NewTrueNASPoller(mtp, 0, nil)
+	t.Cleanup(func() {
+		poller.mu.Lock()
+		for _, byConn := range poller.providersByOrg {
+			for _, provider := range byConn {
+				provider.Close()
+			}
+		}
+		poller.mu.Unlock()
+	})
+
+	poller.syncConnections()
+	if pollerHasProvider(poller, badConn.ID) {
+		t.Fatal("expected broken TrueNAS connection to have no provider")
+	}
+	poller.mu.Lock()
+	_, badConfigPresent := poller.configsByOrg["default"][badConn.ID]
+	poller.mu.Unlock()
+	if !badConfigPresent {
+		t.Fatal("expected active broken connection to be tracked in configsByOrg before disable")
+	}
+
+	// Disable the broken connection while goodConn remains active.
+	badConn.Enabled = false
+	if err := persistence.SaveTrueNASConfig([]config.TrueNASInstance{goodConn, badConn}); err != nil {
+		t.Fatalf("SaveTrueNASConfig(disable) error = %v", err)
+	}
+	poller.syncConnections()
+
+	poller.mu.Lock()
+	_, badConfigAfterDisable := poller.configsByOrg["default"][badConn.ID]
+	_, badStatusAfterDisable := poller.statusByOrg["default"][badConn.ID]
+	poller.mu.Unlock()
+	if badConfigAfterDisable {
+		t.Fatal("expected disabled failed-init TrueNAS connection to be pruned from configsByOrg")
+	}
+	if !badStatusAfterDisable {
+		t.Fatal("expected disabled connection to retain status until deleted from config")
+	}
+
+	poller.pollAll(context.Background())
+	if readyAt, settled := poller.SupplementalInventoryReadyAt(nil, "default"); !settled || readyAt.IsZero() {
+		t.Fatalf("expected SupplementalInventoryReadyAt to settle with only goodConn active, got (%v, %t)", readyAt, settled)
+	}
+
+	// Deleting the broken connection must also prune statusByOrg.
+	if err := persistence.SaveTrueNASConfig([]config.TrueNASInstance{goodConn}); err != nil {
+		t.Fatalf("SaveTrueNASConfig(delete) error = %v", err)
+	}
+	poller.syncConnections()
+
+	poller.mu.Lock()
+	_, badStatusAfterDelete := poller.statusByOrg["default"][badConn.ID]
+	poller.mu.Unlock()
+	if badStatusAfterDelete {
+		t.Fatal("expected deleted failed-init TrueNAS connection to be pruned from statusByOrg")
+	}
+}
+
+func TestTrueNASPollerWholeRefreshTimeoutBoundsStalledOptionalEndpoints(t *testing.T) {
+	previous := truenas.IsFeatureEnabled()
+	truenas.SetFeatureEnabled(true)
+	t.Cleanup(func() { truenas.SetFeatureEnabled(previous) })
+	t.Setenv("PULSE_TRUENAS_POLL_TIMEOUT", "180ms")
+
+	var stallServices atomic.Bool
+	var appRequestsDuringStall atomic.Int64
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/api/v2.0/system/info":
+			_, _ = w.Write([]byte(`{"hostname":"bounded-nas","version":"TrueNAS-13.0-U6.8","uptime_seconds":3600,"system_serial":"SER-BOUNDED"}`))
+		case "/api/v2.0/pool":
+			_, _ = w.Write([]byte(`[{"id":1,"name":"tank","status":"ONLINE","size":1000,"allocated":400,"free":600}]`))
+		case "/api/v2.0/pool/dataset":
+			_, _ = w.Write([]byte(`[{"id":"tank/data","name":"tank/data","pool":"tank","used":{"parsed":123},"available":{"parsed":456},"mountpoint":"/mnt/tank/data"}]`))
+		case "/api/v2.0/disk":
+			_, _ = w.Write([]byte(`[{"identifier":"{uuid}disk-1","name":"da0","serial":"S1","size":1000}]`))
+		case "/api/v2.0/alert/list":
+			_, _ = w.Write([]byte(`[]`))
+		case "/api/v2.0/service":
+			if stallServices.Load() {
+				<-r.Context().Done()
+				return
+			}
+			_, _ = w.Write([]byte(`[{"id":1,"service":"smb","state":"RUNNING"}]`))
+		case "/api/v2.0/app":
+			if stallServices.Load() {
+				appRequestsDuringStall.Add(1)
+			}
+			_, _ = w.Write([]byte(`[{"id":"nextcloud","name":"nextcloud","state":"RUNNING"}]`))
+		case "/api/v2.0/vm":
+			_, _ = w.Write([]byte(`[{"id":7,"name":"nas-vm","memory":1024,"vcpus":2,"status":{"state":"RUNNING"}}]`))
+		case "/api/v2.0/zfs/snapshot":
+			_, _ = w.Write([]byte(`[{"id":"tank/data@daily","dataset":"tank/data","snapshot_name":"daily","created_at":1707400000}]`))
+		case "/api/v2.0/sharing/smb", "/api/v2.0/sharing/nfs", "/api/v2.0/replication":
+			_, _ = w.Write([]byte(`[]`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(server.Close)
+
+	mtp, persistence := newTestTenantPersistence(t)
+	connection := trueNASInstanceForServer(t, "tn-bounded", server.URL, true)
+	if err := persistence.SaveTrueNASConfig([]config.TrueNASInstance{connection}); err != nil {
+		t.Fatalf("SaveTrueNASConfig() error = %v", err)
+	}
+
+	poller := NewTrueNASPoller(mtp, 0, nil)
+	t.Cleanup(func() {
+		poller.mu.Lock()
+		for _, byConn := range poller.providersByOrg {
+			for _, provider := range byConn {
+				provider.Close()
+			}
+		}
+		poller.mu.Unlock()
+	})
+
+	poller.syncConnections()
+	poller.pollAll(context.Background())
+
+	before := poller.ConnectionSummaries("default", []config.TrueNASInstance{connection})[connection.ID]
+	if before.Poll == nil || before.Poll.LastSuccessAt == nil || before.Observed == nil || before.Observed.Apps != 1 || before.Observed.VMs != 1 || before.Observed.RecoveryArtifacts != 1 {
+		t.Fatalf("initial poll did not populate complete observed inventory: %+v", before)
+	}
+	recordsBefore := len(poller.GetCurrentRecordsForOrg("default"))
+
+	// Stall /api/v2.0/service past the 180ms whole-refresh budget.
+	stallServices.Store(true)
+	poller.mu.Lock()
+	poller.statusByOrg["default"][connection.ID].nextPollAt = time.Unix(1, 0)
+	poller.mu.Unlock()
+
+	started := time.Now()
+	poller.pollAll(context.Background())
+	elapsed := time.Since(started)
+	if elapsed >= 2*time.Second {
+		t.Fatalf("whole-refresh timeout did not bound stalled optional endpoint: elapsed=%s", elapsed)
+	}
+	if appRequestsDuringStall.Load() != 0 {
+		t.Fatalf("expected FetchSnapshot to stop optional reads after deadline expiry, got %d app calls", appRequestsDuringStall.Load())
+	}
+
+	failed := poller.ConnectionSummaries("default", []config.TrueNASInstance{connection})[connection.ID]
+	if failed.Poll == nil || failed.Poll.LastError == nil || failed.Poll.LastError.Category != "timeout" || failed.Poll.ConsecutiveFailures != 1 {
+		t.Fatalf("expected truthful timeout failure on stalled optional read, got %+v", failed.Poll)
+	}
+	if failed.Poll.LastSuccessAt == nil || !failed.Poll.LastSuccessAt.Equal(*before.Poll.LastSuccessAt) {
+		t.Fatalf("timeout overwrote previous lastSuccessAt: before=%v after=%v", before.Poll.LastSuccessAt, failed.Poll.LastSuccessAt)
+	}
+	if failed.Observed == nil || failed.Observed.Apps != 1 || failed.Observed.VMs != 1 || failed.Observed.RecoveryArtifacts != 1 {
+		t.Fatalf("timeout wiped last complete observed inventory: %+v", failed.Observed)
+	}
+	if got := len(poller.GetCurrentRecordsForOrg("default")); got != recordsBefore {
+		t.Fatalf("timeout dropped cached records: before=%d after=%d", recordsBefore, got)
+	}
+
+	// Clearing the stall must recover cleanly on the next poll.
+	stallServices.Store(false)
+	poller.mu.Lock()
+	poller.statusByOrg["default"][connection.ID].nextPollAt = time.Unix(1, 0)
+	poller.mu.Unlock()
+	poller.pollAll(context.Background())
+
+	recovered := poller.ConnectionSummaries("default", []config.TrueNASInstance{connection})[connection.ID]
+	if recovered.Poll == nil || recovered.Poll.LastError != nil || recovered.Poll.ConsecutiveFailures != 0 || recovered.Poll.LastSuccessAt == nil || !recovered.Poll.LastSuccessAt.After(*before.Poll.LastSuccessAt) {
+		t.Fatalf("expected next poll to recover after stall cleared, got %+v", recovered.Poll)
+	}
+}

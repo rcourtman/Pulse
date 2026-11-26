@@ -285,6 +285,7 @@ func (p *VMwarePoller) syncConnections() {
 				continue
 			}
 
+			hadProvider := p.providersByOrg[orgID][connectionID] != nil
 			if provider := p.providersByOrg[orgID][connectionID]; provider != nil {
 				provider.Close()
 			}
@@ -293,6 +294,12 @@ func (p *VMwarePoller) syncConnections() {
 			if err != nil {
 				at := time.Now().UTC()
 				p.recordConnectionFailureLocked(orgID, connectionID, err, at)
+				if hadProvider {
+					if status := p.statusByOrg[orgID][connectionID]; status != nil {
+						status.observed = nil
+						status.observedIssueKey = ""
+					}
+				}
 				log.Warn().
 					Str("component", "vmware_poller").
 					Str("action", "build_provider").
@@ -322,26 +329,53 @@ func (p *VMwarePoller) syncConnections() {
 				provider.Close()
 			}
 			delete(providers, connectionID)
-			if p.cachedRecordsByOrg[orgID] != nil {
-				delete(p.cachedRecordsByOrg[orgID], connectionID)
-			}
-			if p.cachedChangesByOrg[orgID] != nil {
-				delete(p.cachedChangesByOrg[orgID], connectionID)
-			}
-			if p.configsByOrg[orgID] != nil {
-				delete(p.configsByOrg[orgID], connectionID)
-			}
-			if p.statusByOrg[orgID] != nil {
-				delete(p.statusByOrg[orgID], connectionID)
-			}
 		}
-
 		if len(providers) == 0 && len(activeConnections) == 0 {
 			delete(p.providersByOrg, orgID)
+		}
+	}
+	for orgID, byConn := range p.configsByOrg {
+		activeConnections := active[orgID]
+		for connectionID := range byConn {
+			if _, ok := activeConnections[connectionID]; !ok {
+				delete(byConn, connectionID)
+			}
+		}
+		if len(byConn) == 0 && len(activeConnections) == 0 {
 			delete(p.configsByOrg, orgID)
-			delete(p.statusByOrg, orgID)
+		}
+	}
+	for orgID, byConn := range p.cachedRecordsByOrg {
+		activeConnections := active[orgID]
+		for connectionID := range byConn {
+			if _, ok := activeConnections[connectionID]; !ok {
+				delete(byConn, connectionID)
+			}
+		}
+		if len(byConn) == 0 && len(activeConnections) == 0 {
 			delete(p.cachedRecordsByOrg, orgID)
+		}
+	}
+	for orgID, byConn := range p.cachedChangesByOrg {
+		activeConnections := active[orgID]
+		for connectionID := range byConn {
+			if _, ok := activeConnections[connectionID]; !ok {
+				delete(byConn, connectionID)
+			}
+		}
+		if len(byConn) == 0 && len(activeConnections) == 0 {
 			delete(p.cachedChangesByOrg, orgID)
+		}
+	}
+	for orgID, byConn := range p.statusByOrg {
+		activeConnections := active[orgID]
+		for connectionID := range byConn {
+			if _, ok := activeConnections[connectionID]; !ok {
+				delete(byConn, connectionID)
+			}
+		}
+		if len(byConn) == 0 && len(activeConnections) == 0 {
+			delete(p.statusByOrg, orgID)
 		}
 	}
 }

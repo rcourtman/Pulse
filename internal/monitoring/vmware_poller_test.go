@@ -785,3 +785,85 @@ func testVMwarePollRefreshBudgetAndProjection(t *testing.T) {
 		}
 	})
 }
+
+func TestVMwarePollerPrunesFailedInitConfigAndStatusWhenDisabledOrDeleted(t *testing.T) {
+	mtp, persistence := newTestTenantPersistence(t)
+	goodConn := config.NewVMwareVCenterInstance()
+	goodConn.ID = "vc-good"
+	goodConn.Name = "Good vCenter"
+	goodConn.Host = "vc-good.lab.local"
+	goodConn.Username = "administrator@vsphere.local"
+	goodConn.Password = "secret"
+
+	badConn := config.NewVMwareVCenterInstance()
+	badConn.ID = "vc-bad"
+	badConn.Name = "Broken vCenter"
+	badConn.Host = "vc-bad.lab.local"
+	badConn.Username = "administrator@vsphere.local"
+	badConn.Password = "secret"
+
+	if err := persistence.SaveVMwareConfig([]config.VMwareVCenterInstance{goodConn, badConn}); err != nil {
+		t.Fatalf("SaveVMwareConfig() error = %v", err)
+	}
+
+	failBad := true
+	poller := NewVMwarePoller(mtp, time.Minute)
+	poller.newProvider = func(instance config.VMwareVCenterInstance) (vmwarePollerProvider, error) {
+		if instance.ID == badConn.ID && failBad {
+			return nil, &vmware.ConnectionError{Category: "auth", Message: "rejected credentials"}
+		}
+		return vmware.NewProvider(vmware.InventorySnapshot{
+			ConnectionID:   instance.ID,
+			ConnectionName: instance.Name,
+			VCenterHost:    instance.Host,
+			CollectedAt:    time.Now().UTC(),
+			Hosts:          []vmware.InventoryHost{{Host: "host-1", Name: "esxi-01"}},
+		}), nil
+	}
+
+	poller.syncConnections()
+	if _, ok := poller.configsByOrg["default"][badConn.ID]; !ok {
+		t.Fatal("expected broken VMware connection to be tracked in configsByOrg before disable")
+	}
+	if _, ok := poller.statusByOrg["default"][badConn.ID]; !ok {
+		t.Fatal("expected broken VMware connection to record status before disable")
+	}
+
+	// Disable badConn while goodConn stays active; failed-init maps must still be pruned.
+	badConn.Enabled = false
+	if err := persistence.SaveVMwareConfig([]config.VMwareVCenterInstance{goodConn, badConn}); err != nil {
+		t.Fatalf("SaveVMwareConfig(disable) error = %v", err)
+	}
+	poller.syncConnections()
+
+	if _, ok := poller.configsByOrg["default"][badConn.ID]; ok {
+		t.Fatal("expected disabled failed-init VMware connection to be pruned from configsByOrg")
+	}
+	if _, ok := poller.statusByOrg["default"][badConn.ID]; ok {
+		t.Fatal("expected disabled failed-init VMware connection to be pruned from statusByOrg")
+	}
+
+	poller.pollAll(context.Background())
+	if readyAt, settled := poller.SupplementalInventoryReadyAt(nil, "default"); !settled || readyAt.IsZero() {
+		t.Fatalf("expected SupplementalInventoryReadyAt to settle with only goodConn active, got (%v, %t)", readyAt, settled)
+	}
+
+	// Editing goodConn to a config whose provider construction fails must clear stale observed counts.
+	beforeEdit := poller.ConnectionSummaries("default", []config.VMwareVCenterInstance{goodConn})[goodConn.ID]
+	if beforeEdit.Observed == nil || beforeEdit.Observed.Hosts != 1 {
+		t.Fatalf("expected goodConn observed summary before edit, got %+v", beforeEdit)
+	}
+	poller.newProvider = func(config.VMwareVCenterInstance) (vmwarePollerProvider, error) {
+		return nil, &vmware.ConnectionError{Category: "configuration", Message: "invalid host"}
+	}
+	goodConn.Host = "vc-invalid.lab.local"
+	if err := persistence.SaveVMwareConfig([]config.VMwareVCenterInstance{goodConn}); err != nil {
+		t.Fatalf("SaveVMwareConfig(edit) error = %v", err)
+	}
+	poller.syncConnections()
+
+	afterEdit := poller.ConnectionSummaries("default", []config.VMwareVCenterInstance{goodConn})[goodConn.ID]
+	if afterEdit.Poll == nil || afterEdit.Poll.LastError == nil || afterEdit.Observed != nil {
+		t.Fatalf("expected failed config edit to preserve error and clear stale observed summary, got %+v", afterEdit)
+	}
+}
