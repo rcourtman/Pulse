@@ -293,7 +293,6 @@ func (p *TrueNASPoller) syncConnections() {
 			if existingProvider != nil {
 				existingProvider.Close()
 				delete(p.providersByOrg[orgID], connID)
-				delete(p.cachedRecordsByOrg[orgID], connID)
 			}
 
 			client, err := truenas.NewClient(truenas.ClientConfig{
@@ -313,6 +312,7 @@ func (p *TrueNASPoller) syncConnections() {
 			if err != nil {
 				now := time.Now().UTC()
 				p.recordConnectionFailureLocked(orgID, connID, instance, err, now)
+				delete(p.cachedRecordsByOrg[orgID], connID)
 				if existingProvider != nil {
 					if status := p.statusByOrg[orgID][connID]; status != nil {
 						status.observed = nil
@@ -603,6 +603,9 @@ func (p *TrueNASPoller) rebuildCachedRecordsForOrg(orgID string) {
 	targetsByConnection := expectedTrueNASReplicationReadOnlyTargets(connections)
 	recordsByConnection := make(map[string][]unifiedresources.IngestRecord, len(connections))
 	for _, connection := range connections {
+		if connection.snapshot == nil {
+			continue
+		}
 		provider := providersByConnection[connection.connectionID]
 		classified := applyTrueNASReplicationReadOnlyTargets(
 			connection.snapshot,

@@ -21,6 +21,7 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/securityutil"
 	"github.com/rcourtman/pulse-go-rewrite/internal/truenas"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/metrics"
@@ -3394,5 +3395,78 @@ func TestTrueNASPollerWholeRefreshTimeoutBoundsStalledOptionalEndpoints(t *testi
 	recovered := poller.ConnectionSummaries("default", []config.TrueNASInstance{connection})[connection.ID]
 	if recovered.Poll == nil || recovered.Poll.LastError != nil || recovered.Poll.ConsecutiveFailures != 0 || recovered.Poll.LastSuccessAt == nil || !recovered.Poll.LastSuccessAt.After(*before.Poll.LastSuccessAt) {
 		t.Fatalf("expected next poll to recover after stall cleared, got %+v", recovered.Poll)
+	}
+}
+
+func TestTrueNASPollerConfigEditPreservesCachedRecordsWhenRefreshFailsAlongsideSiblingRefresh(t *testing.T) {
+	previous := truenas.IsFeatureEnabled()
+	truenas.SetFeatureEnabled(true)
+	t.Cleanup(func() { truenas.SetFeatureEnabled(previous) })
+
+	primaryMock := newTrueNASMockServer(t, "primary-nas")
+	t.Cleanup(primaryMock.Close)
+	siblingMock := newTrueNASMockServer(t, "sibling-nas")
+	t.Cleanup(siblingMock.Close)
+
+	mtp, persistence := newTestTenantPersistence(t)
+	primary := trueNASInstanceForServer(t, "tn-primary", primaryMock.URL(), true)
+	sibling := trueNASInstanceForServer(t, "tn-sibling", siblingMock.URL(), true)
+	if err := persistence.SaveTrueNASConfig([]config.TrueNASInstance{primary, sibling}); err != nil {
+		t.Fatalf("SaveTrueNASConfig() error = %v", err)
+	}
+
+	poller := NewTrueNASPoller(mtp, time.Nanosecond, nil)
+	t.Cleanup(func() {
+		poller.Stop()
+		poller.mu.Lock()
+		for _, byConn := range poller.providersByOrg {
+			for _, provider := range byConn {
+				provider.Close()
+			}
+		}
+		poller.mu.Unlock()
+	})
+
+	poller.syncConnections()
+	poller.pollAll(context.Background())
+
+	before := poller.ConnectionSummaries("default", []config.TrueNASInstance{primary, sibling})[primary.ID]
+	if before.Poll == nil || before.Poll.LastSuccessAt == nil || before.Poll.LastError != nil {
+		t.Fatalf("expected initial poll for primary-nas to succeed, got %+v", before.Poll)
+	}
+	if !hasTrueNASHostForOrg(poller, "default", "primary-nas") || !hasTrueNASHostForOrg(poller, "default", "sibling-nas") {
+		t.Fatal("expected cached records for both primary-nas and sibling-nas after initial poll")
+	}
+
+	primaryRequestsBefore := primaryMock.RequestCount()
+	siblingRequestsBefore := siblingMock.RequestCount()
+
+	// Edit primary's outbound policy so client construction succeeds, the warm
+	// client is replaced, and the new client fails on dial while sibling-nas
+	// succeeds and triggers rebuildCachedRecordsForOrg("default").
+	primary.OutboundPolicy = securityutil.ConnectionOutboundTenantLAN
+	if err := persistence.SaveTrueNASConfig([]config.TrueNASInstance{primary, sibling}); err != nil {
+		t.Fatalf("SaveTrueNASConfig(edit) error = %v", err)
+	}
+
+	poller.syncConnections()
+	poller.pollAll(context.Background())
+
+	if got := primaryMock.RequestCount(); got != primaryRequestsBefore {
+		t.Fatalf("expected tenant-restricted primary client not to dial loopback: before=%d after=%d", primaryRequestsBefore, got)
+	}
+	if got := siblingMock.RequestCount(); got <= siblingRequestsBefore {
+		t.Fatalf("expected sibling-nas to refresh during same pollAll cycle: before=%d after=%d", siblingRequestsBefore, got)
+	}
+
+	after := poller.ConnectionSummaries("default", []config.TrueNASInstance{primary, sibling})[primary.ID]
+	if after.Poll == nil || after.Poll.LastError == nil || after.Poll.LastSuccessAt == nil || !after.Poll.LastSuccessAt.Equal(*before.Poll.LastSuccessAt) {
+		t.Fatalf("expected primary-nas error with preserved lastSuccessAt, got %+v", after.Poll)
+	}
+	if !hasTrueNASHostForOrg(poller, "default", "primary-nas") {
+		t.Fatal("sibling refresh wiped last-accepted cached records for edited primary-nas whose first refresh failed")
+	}
+	if !hasTrueNASHostForOrg(poller, "default", "sibling-nas") {
+		t.Fatal("expected sibling-nas cached records to remain present")
 	}
 }

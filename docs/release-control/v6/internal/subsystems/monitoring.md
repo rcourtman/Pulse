@@ -10399,15 +10399,21 @@ When an active TrueNAS or VMware connection is edited and client or provider
 initialization fails, the poller immediately closes and removes the previous
 live provider, clears stale cached records and previous observed inventory, and
 keeps retrying initialization on later sync cycles instead of polling the old
-endpoint or trust settings. Pruning removed or disabled connections operates on
+endpoint or trust settings. When client initialization succeeds for an edited
+connection, the previous live provider is closed and replaced while
+last-accepted cached records remain preserved until the rebuilt provider
+completes an accepted refresh, including when sibling connections in the same
+organization refresh first. Pruning removed or disabled connections operates on
 active config and status maps independently of live provider presence so
 connections that failed initialization cannot leak into readiness or wake
 scheduling after they are disabled or deleted.
 
 `TestTrueNASPollTimeoutConfiguration`,
 `TestTrueNASPollerFailedConfigEditClosesPreviousProviderAndStopsPollingOldHost`,
+`TestTrueNASPollerConfigEditPreservesCachedRecordsWhenRefreshFailsAlongsideSiblingRefresh`,
 `TestTrueNASPollerPrunesFailedInitConfigWhenDisabledOrDeleted`,
-`TestTrueNASPollerWholeRefreshTimeoutBoundsStalledOptionalEndpoints`, and
+`TestTrueNASPollerWholeRefreshTimeoutBoundsStalledOptionalEndpoints`,
+`TestSavedTrueNASOutboundPolicyBindsWarmAndColdPolls`, and
 `TestVMwarePollerPrunesFailedInitConfigAndStatusWhenDisabledOrDeleted` cover
 these contracts. These synthetic controls do not substitute for native TrueNAS
 or vCenter field proof.
