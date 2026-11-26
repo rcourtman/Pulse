@@ -384,9 +384,10 @@ storage nodes to avoid duplicate or ambiguously correlated readings.
 ## External Probes (Pro)
 
 With the Pro `external_probe` entitlement, availability checks configured in
-Pulse can run from one or more connected agents. In **Settings → Monitoring →
-Availability checks**, select the agents under **Observation locations** in the
-check editor. Keep **This Pulse server** selected for a local observation too,
+Pulse can run from one or more connected agents. Open **Availability**
+(`/availability`, or **Settings → Monitoring → Availability checks** on earlier
+releases) and select the agents under **Observation locations** in the check
+editor. Keep **This Pulse server** selected for a local observation too,
 or deselect it for agent-only checks. Each location keeps its own evidence; a
 failure on one path is not a universal outage.
 
@@ -930,13 +931,16 @@ with the token; it does not copy the command. Close the dialog, open that
 agent's details and use the copy button beside its update or
 authentication-repair command. Keep the token and the copied command private.
 
-**Keep a deliberate Proxmox opt-out on manual Linux updates.** If you
-installed with `--disable-proxmox`, include it alongside `--update` in the
-installer command, even when you copy it from Agent Doctor. The opt-out may
-not be in the saved service arguments, so the installer can detect Proxmox
-again without the flag. This is separate from the built-in binary updater.
-The flag does not change PVE or PBS API connections you added in Pulse. Keep
-your existing local S.M.A.R.T. and LXC filesystem settings and permissions.
+**Keep a deliberate Proxmox opt-out on manual Linux updates.** Current
+installers preserve the selected agent's installed Proxmox setup choice during
+`--update` (keeping an unmarked install off with `--enable-proxmox=false`).
+Older installers (including v6.8.0 and v6.9.0) may detect Proxmox again when
+the opt-out is absent from saved service arguments, so passing
+`--disable-proxmox` alongside `--update` remains safe across versions,
+including commands copied from Agent Doctor. This is separate from the built-in
+binary updater. The flag does not change PVE or PBS API connections you added
+in Pulse. Keep your existing local S.M.A.R.T. and LXC filesystem settings and
+permissions.
 
 If an already-installed v5 `pulse-agent` follows its legacy automatic updater
 path instead of the supported manual installer path, the first hop is performed
