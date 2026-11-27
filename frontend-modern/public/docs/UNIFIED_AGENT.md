@@ -989,9 +989,9 @@ Behavior:
 - Removing an assignment does not undo settings already applied to a running
   process, revoke its token or stop monitoring. Keep incident recovery separate
   from profile rollout; do not restart or re-enrol solely to diagnose a reading.
-- Command execution (`commandsEnabled`) is controlled per agent from the Infrastructure agent controls and can change live.
+- Command execution (`commandsEnabled`) is controlled per agent from the Infrastructure agent controls and can change live, subject to the agent's local command-authority ceiling (a `monitoring-only` install cannot be promoted remotely, including in the Docker module and Windows service runtimes).
 - Remote config responses can be signed with `PULSE_AGENT_CONFIG_SIGNING_KEY` (base64 Ed25519 private key).
-- To require signed payloads, set `PULSE_AGENT_CONFIG_SIGNATURE_REQUIRED=true` on Pulse and agents.
+- To require signed payloads, set `PULSE_AGENT_CONFIG_SIGNATURE_REQUIRED=true` on Pulse and agents. With signature verification required, unsigned `commandsEnabled` overrides carried in report acknowledgements can disable command execution, but cannot enable it. Enabling commands requires a verified response from the signed remote configuration endpoint.
 - If you use a custom signing key, set `PULSE_AGENT_CONFIG_PUBLIC_KEYS` on agents to trust the matching public key.
 
 See [Centralized Agent Management](CENTRALIZED_MANAGEMENT.md) for supported keys and profile setup.
@@ -1759,6 +1759,23 @@ Exit `124` means the check timed out; stop rather than loop or restart the host.
 Review output before posting and redact any private endpoint in an error. Do not
 change LXC privilege, `keyctl`, socket permissions or Docker versions merely to
 test a guess.
+
+### Oversized Docker or Podman reports
+
+Pulse enforces a shared report size limit of **2 MiB** encoded HTTP body or
+**10 MiB** decoded JSON on Docker and Podman reports (logging an early warning
+at 80% of either ceiling). If a host's report exceeds that limit, the agent
+automatically trims oversized free-form metadata (labels, driver options, and
+environment variables) in progressive steps (objects over **32 KiB**, then
+**4 KiB**, then all free-form metadata). If the report still exceeds the limit,
+the agent sheds container port and mount attachments (containers with more than
+**64** attachments, then all ports and mounts) so container state, health, and
+metrics continue delivering.
+
+If a destination still rejects a report with HTTP **413** (`report exceeds the
+size the destination accepts`), the agent logs the refusal and drops that report
+without buffering or replaying it so one oversized host cannot stall telemetry
+behind it.
 
 ### Commands enabled but remote control blocked
 

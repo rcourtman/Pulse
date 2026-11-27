@@ -77,7 +77,16 @@ finding, and a finding can be sent as a notification.
 
 Fresh installs use a local `monitoring-only` command-authority ceiling and a
 credential without `agent:exec`. Remote configuration cannot promote that
-service. Selecting **Allow Pulse to run commands on this host** at install time (the combined
+service. That ceiling also governs the Docker agent module in both foreground
+and Windows service runtimes, rejecting legacy `update_container` and
+`update_all` commands in server report responses regardless of server settings.
+On Windows services, the local `CommandAuthorityProfile`,
+`DisableUpdateChecks`, and `DisableRegistryCredentials` settings are forwarded
+to match foreground behavior. When signed remote configuration is required
+(`PULSE_AGENT_CONFIG_SIGNATURE_REQUIRED=true`), an unsigned `commandsEnabled`
+flag in a host report acknowledgement can still turn command execution off, but
+cannot enable it. Enabling commands then waits for a verified response from the
+signed remote configuration endpoint. Selecting **Allow Pulse to run commands on this host** at install time (the combined
 command profile) adds `--enable-commands`, records `command-capable`, and issues an execution-
 scoped credential. The root monitoring process can then also accept server
 command requests through the existing policy and approval surfaces. Existing

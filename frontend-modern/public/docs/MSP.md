@@ -56,11 +56,18 @@ sudo docker compose run --rm control-plane provider-msp bootstrap \
 sudo docker compose run --rm control-plane provider-msp portal-link --email teammate@example.com
 ```
 
-Teammates are invited from the portal Access tab; without an email provider
+Teammates are invited from the portal Access tab. Without an email provider
 the invitation email is not sent, so print their first sign-in link with
 `portal-link` after inviting them. To let the portal send sign-in links and
 invitations itself, set `RESEND_API_KEY` (plus `PULSE_EMAIL_FROM` and
 `PULSE_EMAIL_REPLY_TO`) in `.env` and restart the control plane.
+
+Membership changes in the portal propagate into every client workspace
+organization record first. Removing a teammate or lowering their role revokes
+or reduces their workspace authority immediately, while promoting or
+re-inviting them syncs workspace access cleanly. Once an account has members,
+the stored checkout contact email cannot re-seed a removed member through a
+tenant-bound sign-in link.
 
 Portal sessions last 7 days on provider-hosted control planes; override with
 `CP_SESSION_TTL` (Go duration, e.g. `12h`, `168h`).
@@ -317,8 +324,8 @@ that client's resources:
   explains the missing scope. Browser sessions and server-run schedules keep
   their existing narration behaviour. AI budgets still apply. GET and CSV
   never use AI narration: `GET /api/admin/reports/generate` with query
-  parameters still returns a single-resource report without the Pulse
-  Assistant narrative.
+  parameters still returns a single-resource report without an AI-generated
+  narrative.
 - **Schedules**: `GET`/`POST /api/admin/reports/schedules`,
   `PUT`/`DELETE /api/admin/reports/schedules/{id}`, and
   `POST /api/admin/reports/schedules/{id}/run`. Schedules can target explicit
@@ -366,7 +373,7 @@ every paid plan are self-service: you evaluate on your own host and buy from
 ### Evaluating without a licence
 
 Self-service evaluation is available from the signed provider bundle published
-with Pulse v6.8.0. Use this exact release asset and its integrity sidecars; do
+with Pulse v6.9.0. Use this exact release asset and its integrity sidecars. Do
 **not** download the moving `main` branch archive or run its `setup.sh` as
 root. For a later release, first confirm its release page contains the
 versioned provider archive, checksum, and SSH signature before changing the
@@ -378,7 +385,7 @@ failed download, signature or checksum stops before anything is extracted or
 run as root:
 
 ```bash
-export PULSE_VERSION=v6.8.0
+export PULSE_VERSION=v6.9.0
 export PULSE_MSP_BUNDLE="pulse-provider-msp-${PULSE_VERSION}.tar.gz"
 export PULSE_RELEASE_BASE="https://github.com/rcourtman/Pulse/releases/download/${PULSE_VERSION}"
 

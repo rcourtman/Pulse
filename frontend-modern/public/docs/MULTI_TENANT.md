@@ -104,9 +104,14 @@ The creator becomes the owner. A user who is not an instance administrator
 can own at most 20 organizations: past that, creating one, or being handed one
 by another such user, returns `409` with `organization_limit_reached`.
 `id` is a stable ID of 1–64 characters using
-letters, digits, periods, underscores or hyphens, but not `.` or `..`; use a
+letters, digits, periods, underscores or hyphens, but not `.` or `..`. Use a
 simple lowercase/hyphen ID such as the example. `displayName` is the name
 shown in Pulse. `name` and `description` are not the creation fields.
+
+Deleting an organization revokes API tokens bound to that organization ID
+before removing its data. Creating an organization also clears any stale
+credentials left bound to that ID, so old tokens cannot carry over if an ID is
+reused.
 
 ### Switching Organizations
 
@@ -242,7 +247,9 @@ All data-fetching endpoints respect the active organization context. The active 
 3. Falls back to the `default` organization
 
 Neither the active context nor a token scope overrides organization membership
-or a token's organization binding.
+or a token's organization binding. A request without an explicit API token does
+not resolve or start a cold non-default organization monitor merely by sending
+`X-Pulse-Org-ID` or a session cookie.
 
 ## Storage
 
