@@ -93,9 +93,15 @@ assume that every configured webhook receives both events.
 
 **Severity.** Metric alerts commonly use `"warning"` or `"critical"`;
 informational conditions can use `"info"`. Event and severity are separate:
-an informational firing still has event `"alert"`. Preserve and flag an
-unrecognised level rather than silently dropping the notification. Minimum
-severity and other delivery policies still apply.
+an informational firing still has event `"alert"`. Each destination's
+`resolved` webhook carries the highest firing severity that destination
+actually received for that occurrence, even if a metric alert stepped down from
+`"critical"` to `"warning"` before clearing (older releases, including v6.9.0,
+could emit the stepped-down level instead). When pairing firing and resolved
+webhooks in an external automation, match on alert `ID` (and occurrence
+`startedAt` where present) rather than relying on severity alone. Preserve and
+flag an unrecognised level rather than silently dropping the notification.
+Minimum severity and other delivery policies still apply.
 
 **Alert type.** `{{.Type}}` is the metric or condition that fired: `cpu`, `memory`, `disk`, `diskRead`, `diskWrite`, `networkIn`, `networkOut`, `connectivity`, and similar. The alert ID (`{{.ID}}`) correlates firing and recovery, but can be reused when the same condition fires again. It is not a unique incident or delivery ID.
 

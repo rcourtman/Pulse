@@ -336,6 +336,21 @@ does not prove that every reading is fresh. Missing or unavailable is not zero.
   attention**, and expanded object drawers show
   `Showing the last Kubernetes report — no fresh update received recently.`
   without hiding retained metrics or counts.
+- **Docker Compose applications and Swarm** (`/docker/applications` and
+  `/docker/swarm`, covering Services, Tasks, Nodes, Configs and Secrets) show
+  **Stale data** when Docker reporting goes quiet or hits a collection error,
+  turning stale healthy or muted snapshots amber instead of green while keeping
+  worse states (**Failed**, **Rejected**, **Orphaned**, **Manager unreachable**,
+  **Down**, **Drained**, **Update paused**, **Rolling back**, **Rollback
+  paused**, and `0 / N running`) ahead of staleness. Stale Compose applications
+  move out of **Healthy** into **Attention**, stale Swarm resources move out of
+  **Healthy** into **Degraded**, and expanded detail panels show an inline
+  warning notice
+  (`Showing the last Docker report — no fresh update received recently.`,
+  `No Docker report for <age> — showing the last values received.`, or
+  `Docker collection error — showing the last report received.`, plus
+  `Last error:` when reported) without hiding retained counts, states or
+  metadata.
 
 Use the relevant checks for [stale TrueNAS data](TRUENAS.md#stale-truenas-data),
 [stale Kubernetes readings](KUBERNETES.md#stale-kubernetes-readings),

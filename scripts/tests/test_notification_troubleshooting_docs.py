@@ -287,6 +287,31 @@ class NotificationTroubleshootingDocsTest(unittest.TestCase):
         ):
             self.assertIn(boundary, retry_section)
 
+    def test_webhook_delivery_contract_documents_resolved_severity_continuity(self):
+        dispatch_src = (ROOT / "internal/notifications/notification_dispatch.go").read_text()
+        for marker in (
+            "deliveryReceiptLevels",
+            "notificationSeverityRank(alert.Level) > notificationSeverityRank(n.deliveryReceiptLevels[key])",
+            "notifiedLevel = record.level",
+            "cloned.Level = notifiedLevel",
+        ):
+            self.assertIn(marker, dispatch_src)
+
+        raw_guide = (ROOT / "docs/WEBHOOKS.md").read_text()
+        self.assertEqual(raw_guide, (ROOT / "frontend-modern/public/docs/WEBHOOKS.md").read_text())
+        severity_section = " ".join(
+            raw_guide.split("**Severity.**", 1)[1]
+            .split("**Alert type.**", 1)[0]
+            .split()
+        )
+        for boundary in (
+            "Each destination's `resolved` webhook carries the highest firing severity that destination actually received for that occurrence",
+            'even if a metric alert stepped down from `"critical"` to `"warning"` before clearing',
+            "older releases, including v6.9.0, could emit the stepped-down level instead",
+            "match on alert `ID` (and occurrence `startedAt` where present) rather than relying on severity alone",
+        ):
+            self.assertIn(boundary, severity_section)
+
 
 if __name__ == "__main__":
     unittest.main()

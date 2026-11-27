@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Bind Proxmox, vSphere, Kubernetes stale-reading, Availability nav, and agent opt-out Help to live source.
+"""Bind Proxmox, vSphere, Kubernetes, Docker stale-reading, Availability nav, and agent opt-out Help to live source.
 
-Documentation consistency checks only, not live Proxmox, vSphere, Kubernetes, or agent runtime tests.
+Documentation consistency checks only, not live Proxmox, vSphere, Kubernetes, Docker, or agent runtime tests.
 """
 
 from pathlib import Path
@@ -172,6 +172,44 @@ class StaleReadingAndAgentHelpDocsTest(unittest.TestCase):
         self.assertIn("KubernetesStaleDataCue", k8s_detail)
         self.assertIn('data-testid="kubernetes-stale-readings-notice"', k8s_detail)
         self.assertIn('title="Nodes needing attention"', k8s_surface)
+
+    def test_faq_documents_docker_compose_and_swarm_stale_readings(self):
+        faq = doc_text("docs/FAQ.md")
+        faq_section = norm(
+            faq.split("### No data showing?\n", 1)[1].split("\n### ", 1)[0]
+        )
+        for phrase in (
+            "**Docker Compose applications and Swarm**",
+            "`/docker/applications` and `/docker/swarm`",
+            "Services, Tasks, Nodes, Configs and Secrets",
+            "**Stale data**",
+            "**Failed**, **Rejected**, **Orphaned**, **Manager unreachable**, **Down**, **Drained**, **Update paused**, **Rolling back**, **Rollback paused**, and `0 / N running`",
+            "Stale Compose applications move out of **Healthy** into **Attention**",
+            "stale Swarm resources move out of **Healthy** into **Degraded**",
+            "`Showing the last Docker report — no fresh update received recently.`",
+            "`No Docker report for <age> — showing the last values received.`",
+            "`Docker collection error — showing the last report received.`",
+            "`Last error:`",
+        ):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, faq_section)
+
+        docker_model = doc_text("frontend-modern/src/features/docker/dockerPageModel.ts")
+        docker_apps = doc_text("frontend-modern/src/features/docker/DockerApplications.tsx")
+        docker_shared = doc_text("frontend-modern/src/features/docker/DockerNativeTableShared.tsx")
+        for marker in (
+            "export const DOCKER_STALE_READINGS_LABEL = 'Stale data';",
+            "'Docker collection error — showing the last report received.'",
+            "`No Docker report for ${age} — showing the last values received.`",
+            "'Showing the last Docker report — no fresh update received recently.'",
+            "Last error: ${sourceError}",
+            "if ((triad === 'online' || triad === 'unknown') && getDockerStaleNotice(resource)) {",
+            "return 'degraded';",
+        ):
+            self.assertIn(marker, docker_model)
+        self.assertIn("label: 'Attention'", docker_apps)
+        self.assertIn('data-testid="docker-application-stale-notice"', docker_apps)
+        self.assertIn('data-testid="docker-stale-readings-notice"', docker_shared)
 
     def test_unified_agent_aligns_external_probes_nav_and_proxmox_opt_out_preservation(
         self,
