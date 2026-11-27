@@ -1,0 +1,50 @@
+{
+  "version": 1,
+  "base_sha": "1761e98eb372333b904f5315e9514e362eb36e52",
+  "verified_at": "2026-11-27T17:22:15Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/docker/DockerImagesTable.tsx",
+    "frontend-modern/src/features/docker/DockerNativeTableShared.tsx",
+    "frontend-modern/src/features/docker/DockerNetworksTable.tsx",
+    "frontend-modern/src/features/docker/DockerStorageUsageTable.tsx",
+    "frontend-modern/src/features/docker/DockerVolumesTable.tsx",
+    "frontend-modern/src/features/docker/dockerPageModel.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/docker/DockerImagesTable.tsx": "fa5a0363e653d3b49098652d2cecff6b7c3afcaf4cbc9ca094ef27344767efdc",
+    "frontend-modern/src/features/docker/DockerNativeTableShared.tsx": "0a40ada17084d6db7a08075af3694859326541bc41175f477f006c6755d5f59e",
+    "frontend-modern/src/features/docker/DockerNetworksTable.tsx": "a5edad24f8db434c425da0ebb866de4cc5fd1897edd51ffb36c2dfd93fa987c9",
+    "frontend-modern/src/features/docker/DockerStorageUsageTable.tsx": "62dcd970b20fc8a0460e9d7d4b9acf7048a3eb1c9413dabfc22c913a7e2f0b1a",
+    "frontend-modern/src/features/docker/DockerVolumesTable.tsx": "7dc77eaa3431eea3c4ceca8f0aaebfa6a47c100c8629ce99b110f3f980ba6361",
+    "frontend-modern/src/features/docker/dockerPageModel.ts": "dc5b5d8d8d7c3f87671985c3796b992e35399004aadc1f39a831a2fa9c04fb4d"
+  },
+  "routes": [
+    "/docker/images",
+    "/docker/storage",
+    "/docker/networks"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 940
+    },
+    {
+      "width": 360,
+      "height": 820
+    }
+  ],
+  "states": [
+    "Playwright 1.56.1 paired production builds (before 1761e98eb372 vs after) on desktop Chromium 141.0.7390.37 (1440x940 light) and touch WebKit 26.0 (360x820 dark); all 14 paired screenshots visually inspected with 0 console errors, 0 failed/4xx+ requests, 0 off-origin requests, 0px horizontal overflow, and exact 32px single-line phone rows across all three tabs.",
+    "/docker/images stale host ops-stale-01 (19m telemetry_stale, docker socket timed out) with postgres:16-alpine (Current), redis:7-alpine (Update available), and fresh caddy:2-alpine on ops-fresh-01: stale rows gain amber Stale data cues on desktop and touch phone, postgres:16-alpine Current pill softens from green to muted while redis:7-alpine retains amber Update available and caddy:2-alpine retains green Current, and expanded postgres:16-alpine drawer shows amber header dot plus Stale data warning banner.",
+    "/docker/storage stale host ops-stale-01 and volume pg_billing_data vs fresh ops-fresh-01 and caddy_certs: Engine Storage Usage ops-stale-01 moves from false green row/drawer dots to amber Stale data dots, inline Stale data cue, and warning banner above preserved usage buckets; Volumes pg_billing_data gains inline Stale data cue and drawer warning banner on desktop and exact 32px single-line stale rows on touch phone.",
+    "/docker/networks stale billing-net (billing-worker Unhealthy + billing-db last-reported Healthy) and stale metrics-net (prometheus last-reported Healthy) vs fresh public-net: Attention/In use chips shift from 1/2 to 2/1, stale rows gain inline Stale data cues plus 2 need attention and 1 needs attention on desktop and touch phone, and expanded billing-net drawer moves billing-db from green Running into Attention as amber Stale data while preserving red Unhealthy plus Stale data cue on billing-worker.",
+    "/docker/networks live WebSocket rawData recovery frame without reload (top-level sourceStatus.docker online and health.verdict ok while platformData.sourceStatus remains stale): clears all Stale data cues and drawer warning banner, restores Attention 1 / In use 2 and 1 needs attention, and returns billing-db to green Healthy under Running."
+  ],
+  "interactions": [
+    "Loaded /docker/images on desktop light (1440x940) and touch phone dark (360x820), expanded postgres:16-alpine detail drawer on desktop, and verified stale cues, muted stale Current pill, preserved amber Update available, drawer warning notice, 32px phone rows, and 0px overflow.",
+    "Loaded /docker/storage on desktop light (1440x940) and touch phone dark (360x820), expanded ops-stale-01 engine storage drawer and pg_billing_data volume drawer on desktop, and verified amber dots, warning notices, preserved storage buckets, 32px phone rows, and 0px overflow.",
+    "Loaded /docker/networks on desktop light (1440x940) and touch phone dark (360x820), expanded billing-net drawer on desktop, and verified Attention/In use chip counts, attached container stale classification, preserved Unhealthy severity, 32px phone rows, and 0px overflow.",
+    "Delivered live RFC 6455 WebSocket rawData recovery frame on /docker/networks while billing-net drawer remained open and verified immediate clearance of stale cues and warning banner without page reload."
+  ]
+}

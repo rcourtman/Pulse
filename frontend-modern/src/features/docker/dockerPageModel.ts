@@ -553,7 +553,8 @@ export function buildDockerNetworkAttachmentRows(
       const state = asTrimmedString(container.docker?.containerState || container.status) || '—';
       const health = asTrimmedString(container.docker?.health) || '—';
       const ports = dockerContainerPortsSummary(container);
-      const status = mapDockerContainerStatus(container);
+      const staleNotice = getDockerStaleNotice(container);
+      const status = applyDockerSourceFreshness(container, mapDockerContainerStatus(container));
       const searchText = [
         name,
         networkName,
@@ -562,6 +563,8 @@ export function buildDockerNetworkAttachmentRows(
         state,
         health,
         ports,
+        staleNotice?.label,
+        staleNotice?.detail,
         container.id,
         ...(container.tags ?? []),
       ]

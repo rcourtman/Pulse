@@ -24,13 +24,19 @@ import {
 } from '@/features/platformPage/PlatformResourceDetailTableRow';
 import {
   DockerResourceNameCell,
+  DockerStaleDataCue,
+  DockerStaleReadingsNotice,
   dockerByteValue,
   dockerHostName,
   dockerResourceName,
   type DockerNativeTableProps,
 } from './DockerNativeTableShared';
 import { useDockerHostIdentities } from './dockerHostIdentity';
-import { filterDockerResources } from './dockerPageModel';
+import {
+  applyDockerSourceFreshness,
+  filterDockerResources,
+  getDockerStaleNotice,
+} from './dockerPageModel';
 
 type DockerImageFilter = 'all' | 'updates' | 'in-use' | 'unused';
 
@@ -249,6 +255,22 @@ export const DockerImagesTable: Component<
                         resource,
                         props.relatedContainers ?? [],
                       );
+                    const staleNotice = () => getDockerStaleNotice(resource);
+                    const indicator = () =>
+                      applyDockerSourceFreshness(
+                        resource,
+                        getSimpleStatusIndicator(resource.status),
+                      );
+                    const updateBadgeTone = (): DockerImageUpdateTone => {
+                      const tone = operational().updateTone;
+                      return staleNotice() && tone === 'success' ? 'muted' : tone;
+                    };
+                    const updateBadgeTitle = () => {
+                      const stale = staleNotice();
+                      return stale
+                        ? `${operational().updateDetail} ${stale.detail}`
+                        : operational().updateDetail;
+                    };
                     const detailRowId = () => drawer.detailRowId(resource);
                     const isExpanded = () => drawer.isExpanded(resource);
                     return (
@@ -260,7 +282,9 @@ export const DockerImagesTable: Component<
                         >
                           <DockerResourceNameCell
                             resource={resource}
+                            indicator={indicator()}
                             imageReference
+                            detail={<DockerStaleDataCue notice={staleNotice()} scope="image" />}
                             detailToggle={
                               <PlatformResourceDetailToggleButton
                                 expanded={isExpanded()}
@@ -294,8 +318,9 @@ export const DockerImagesTable: Component<
                               when={operational().updateTone === 'danger'}
                               fallback={
                                 <span
-                                  class={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-medium ${updateToneClass[operational().updateTone]}`}
-                                  title={operational().updateDetail}
+                                  class={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-medium ${updateToneClass[updateBadgeTone()]}`}
+                                  title={updateBadgeTitle()}
+                                  data-docker-image-update-tone={updateBadgeTone()}
                                 >
                                   {operational().updateLabel}
                                 </span>
@@ -307,7 +332,7 @@ export const DockerImagesTable: Component<
                                 aria-label={`Check failed for ${dockerResourceName(resource)}. Details`}
                                 aria-expanded={isExpanded()}
                                 aria-controls={detailRowId()}
-                                title={operational().updateDetail}
+                                title={updateBadgeTitle()}
                                 onClick={(event) => {
                                   event.stopPropagation();
                                   drawer.toggle(resource);
@@ -320,11 +345,14 @@ export const DockerImagesTable: Component<
                         </TableRow>
                         <PlatformResourceDetailTableRow
                           resource={resource}
-                          statusIndicator={getSimpleStatusIndicator(resource.status)}
+                          statusIndicator={indicator()}
                           open={isExpanded()}
                           detailRowId={detailRowId()}
                           colSpan={5}
                           resolveResourceLabel={resolveResourceLabel}
+                          context={
+                            <DockerStaleReadingsNotice notice={staleNotice()} class="mb-3" />
+                          }
                           onClose={() => drawer.close(resource)}
                         />
                       </>

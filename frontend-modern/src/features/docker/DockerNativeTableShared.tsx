@@ -90,8 +90,23 @@ export const dockerResourceName = (resource: Resource): string =>
 export const dockerStateTextToneClass = (variant: StatusIndicatorVariant | null): string =>
   getPlatformStatusTextToneClass(variant);
 
-// Compact single-line stale-data cue placed beside names on Swarm and
-// Compose rows so phone tables stay 32px tall while flagging retained values.
+export const DockerStaleReadingsNotice: Component<{
+  notice: DockerStaleNotice | null | undefined;
+  class?: string;
+}> = (props) => (
+  <Show when={props.notice}>
+    {(stale) => (
+      <div class={props.class} data-testid="docker-stale-readings-notice">
+        <InlineNotice tone="warning" role="status">
+          <span class="font-medium">{stale().label}.</span> {stale().detail}
+        </InlineNotice>
+      </div>
+    )}
+  </Show>
+);
+
+// Compact single-line stale-data cue placed beside names on Docker native
+// rows so phone tables stay 32px tall while flagging retained values.
 export const DockerStaleDataCue: Component<{
   notice: DockerStaleNotice | null | undefined;
   scope: string;
@@ -203,15 +218,7 @@ export const DockerNativeDetailPanel: Component<{
       sections={compactDetailSections(props.sections(now()))}
       onClose={props.onClose}
     >
-      <Show when={staleNotice()}>
-        {(stale) => (
-          <div data-testid="docker-stale-readings-notice">
-            <InlineNotice tone="warning" role="status">
-              <span class="font-medium">{stale().label}.</span> {stale().detail}
-            </InlineNotice>
-          </div>
-        )}
-      </Show>
+      <DockerStaleReadingsNotice notice={staleNotice()} />
       {props.children}
     </InlineDetailPanel>
   );

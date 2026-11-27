@@ -33,7 +33,9 @@ import {
 } from '@/features/platformPage/sharedPlatformPage';
 import type { DockerStorageUsageMeta, Resource } from '@/types/resource';
 import {
+  applyDockerSourceFreshness,
   filterDockerStorageResources,
+  getDockerStaleNotice,
   hasDockerEngineStorageUsage,
   hasDockerStorageUsageBucket,
   type DockerStorageFilter,
@@ -54,7 +56,11 @@ const DOCKER_STORAGE_USAGE_FILTER_OPTIONS: PlatformTableFilterOption<DockerStora
     leading: filterChipStatusDot('bg-emerald-500'),
   },
 ];
-import { dockerResourceName } from './DockerNativeTableShared';
+import {
+  DockerStaleDataCue,
+  DockerStaleReadingsNotice,
+  dockerResourceName,
+} from './DockerNativeTableShared';
 import { useDockerHostIdentities } from './dockerHostIdentity';
 
 const bucketValue = (bucket?: DockerStorageUsageMeta): JSX.Element => {
@@ -111,6 +117,9 @@ const storageSummary = (host: Resource): string => {
 
 const StorageUsageDetail: Component<{ host: Resource; onClose: () => void }> = (props) => {
   const hostIdentities = useDockerHostIdentities();
+  const staleNotice = () => getDockerStaleNotice(props.host);
+  const indicator = () =>
+    applyDockerSourceFreshness(props.host, getSimpleStatusIndicator(props.host.status));
   const hostname = () =>
     asTrimmedString(props.host.docker?.hostname)
       ? hostIdentities().labelFor(props.host)
@@ -120,7 +129,7 @@ const StorageUsageDetail: Component<{ host: Resource; onClose: () => void }> = (
       testId="docker-storage-detail"
       detailFor={props.host.id}
       title={dockerResourceName(props.host)}
-      status={getSimpleStatusIndicator(props.host.status)}
+      status={indicator()}
       summary={storageSummary(props.host)}
       actions={
         <RecordOwnerLink subject={{ id: props.host.id, name: hostname(), type: 'docker-host' }} />
@@ -129,7 +138,9 @@ const StorageUsageDetail: Component<{ host: Resource; onClose: () => void }> = (
         STORAGE_BUCKETS.map((entry) => bucketSection(entry.label, entry.bucket(props.host))),
       )}
       onClose={props.onClose}
-    />
+    >
+      <DockerStaleReadingsNotice notice={staleNotice()} />
+    </InlineDetailPanel>
   );
 };
 
@@ -237,7 +248,9 @@ export const DockerStorageUsageTable: Component<{
                 <PlatformWindowedRows items={tableState.filtered} estimatedRowHeight={32}>
                   {(host) => {
                     const name = () => asTrimmedString(host.name) || host.id;
-                    const indicator = () => getSimpleStatusIndicator(host.status);
+                    const staleNotice = () => getDockerStaleNotice(host);
+                    const indicator = () =>
+                      applyDockerSourceFreshness(host, getSimpleStatusIndicator(host.status));
                     const detailRowId = () => drawer.detailRowId(host);
                     const isExpanded = () => drawer.isExpanded(host);
                     return (
@@ -258,12 +271,18 @@ export const DockerStorageUsageTable: Component<{
                               <StatusDot
                                 size="sm"
                                 variant={indicator().variant}
-                                title={host.status || 'unknown'}
+                                title={indicator().label}
                                 ariaHidden
                               />
-                              <span class="truncate font-semibold text-base-content" title={name()}>
-                                {name()}
-                              </span>
+                              <div class="flex min-w-0 flex-1 items-center gap-1.5">
+                                <span
+                                  class="truncate font-semibold text-base-content"
+                                  title={name()}
+                                >
+                                  {name()}
+                                </span>
+                                <DockerStaleDataCue notice={staleNotice()} scope="storage-usage" />
+                              </div>
                             </div>
                           </TableCell>
                           <TableCell
