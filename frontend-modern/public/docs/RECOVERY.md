@@ -38,6 +38,9 @@ There is no top-level Recovery page. Open the existing platform view:
   artifacts; **Coverage** groups them by workload. Expand a coverage row to
   inspect its protection reason and individual artifacts. Backup servers have
   their own rows on the same page.
+- **Proxmox → Replication** (`/proxmox/replication`): scheduled ZFS
+  replication jobs between Proxmox VE nodes, read separately from PBS backups.
+  See [Proxmox replication freshness](#proxmox-replication-freshness).
 - **TrueNAS → Protection** (`/truenas/protection`): snapshots and replication
   activity reported by the TrueNAS connection.
 - **Kubernetes**: recovery records depend on the agent reporting VolumeSnapshot
@@ -482,6 +485,43 @@ badge.** If a guest is unresponsive or freeze/thaw is uncertain, stop this
 display comparison and follow [Backup safety](VM_DISK_MONITORING.md#backup-safety).
 An OK task or a corrected posture does not establish guest thaw, successful
 writes to every covered filesystem or workload liveness.
+
+## Proxmox replication freshness
+
+**Proxmox → Replication** (`/proxmox/replication`) shows scheduled ZFS
+replication jobs between Proxmox VE nodes from `/api/replication/jobs`, not
+PBS backups. A replication row does not establish backup coverage, restore
+readiness or guest thaw.
+
+Because `/api/replication/jobs` carries no per-job source-health envelope,
+Pulse derives each job's freshness from its owning Proxmox VE source node (or
+the owning PVE connection when every node on that connection is stale or
+impaired), using backend Proxmox staleness and poll health rather than a
+fixed browser timer:
+
+- **Healthy jobs when the source goes stale:** Jobs whose last reported sync
+  succeeded move out of **Healthy** into the amber **Stale** filter chip and
+  display **Stale data** (**Stale** on compact phone layouts), instead of
+  remaining green while polling is impaired.
+- **Impaired or non-healthy jobs:** **Failed**, **Pending**, **Unknown** and
+  **Disabled** jobs keep their primary status and add a compact inline amber
+  **Stale** cue beside it so existing failures are never masked by staleness.
+- **Finding affected jobs:** Select the **Stale** filter chip (shown whenever
+  at least one job is stale) or search for `stale` to list stale jobs.
+- **Inspecting an affected job:** Expand the row to read the amber **Stale
+  data.** warning banner, **Last reported** (**Healthy** for stale jobs whose
+  last sync succeeded), **Failures**, **Route**, **Last sync**, **Next sync**
+  and **Last polled** (when supplied by `/api/replication/jobs`). A changing
+  relative **Last sync** or overdue **Next sync** countdown follows the
+  browser clock and is not proof of a new poll.
+
+When live Proxmox polling resumes, incoming node updates clear the stale
+banner, inline cues and **Stale** filter count automatically without
+reloading the page. While readings are stale or **Unknown**, check the owning
+PVE connection's health and confirm existing job status directly in Proxmox.
+Do not restart Pulse, trigger a manual sync, change schedules or widen token
+permissions just to clear a stale badge. For an unresponsive guest or
+uncertain freeze/thaw, follow [Backup safety](VM_DISK_MONITORING.md#backup-safety).
 
 ## Missing or inconsistent evidence
 
