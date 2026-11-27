@@ -48,11 +48,14 @@ export interface MapHit {
   netTxBytes?: number;
   latencyMs?: number;
   linkSpeedMbps?: number;
+  linkUtilizationPercent?: number;
   linkDownCount?: number;
   firewallEnabled?: boolean;
   dockerNetworks?: string[];
   probeSummary?: string;
   certWarning?: string;
+  /** Opaque planned network IDs this tile belongs to, for interactive network hover rings. */
+  segmentIds?: string[];
   address?: string;
   detail?: string;
   /** What the thing's connections say about it, one sentence each. */

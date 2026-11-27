@@ -11849,3 +11849,22 @@ combined probe/latency metrics, and `MetadataBadge` certificate warning pills
 Shared primitives are unchanged. Verified by `InfrastructureMapSurface.test.tsx`,
 `InfrastructureMapScale.test.tsx`, `tests/integration/tests/71-infrastructure-map.spec.ts`,
 and Playwright browser verification.
+
+### Infrastructure Map network pill hover rings, active traffic filter, and link saturation badges (27 November 2026)
+
+`InfrastructureMapSurface.tsx` adds mutually exclusive network pill hover and
+focus handling (rendering colour-matched `.pulse-map-network-ring` highlights
+via `renderMapNetworkRings` and a `TooltipPortal` summary card with network
+detail, member count, live traffic, max link speed, and link-down count),
+adds an `activeTrafficOnly` map filter surfaced as a removable `Active traffic`
+pill in `infrastructure-map-filter-bar`, and formats full-duplex link
+utilization and `Link busy` warnings (`>= 80%`) in tile tooltips.
+`InfrastructureMapDrawer.tsx` adds a `Filter map` / `Show all` button to the
+`Live traffic` drawer header wired to `activeTrafficOnly`, formats link
+utilization alongside NIC speed in `tileMetrics`, and renders `Link busy (N%)`
+warning `MetadataBadge` pills when a link is saturated. `infrastructureMap.css`
+sets `pointer-events: none` on `.pulse-map-network-ring` and
+`.pulse-map-link-halo`. Shared primitives are unchanged. Verified by
+`InfrastructureMapSurface.test.tsx`, `InfrastructureMapScale.test.tsx`,
+`tests/integration/tests/71-infrastructure-map.spec.ts`, and Playwright browser
+verification.

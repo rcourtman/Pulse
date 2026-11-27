@@ -65,10 +65,12 @@ import {
   type MapDensity,
   type MapHit,
   type MapInspectTarget,
+  type MapNetworkTone,
 } from './infrastructureMapLayout';
 import {
   anonymizeInfrastructureMapModel,
   buildInfrastructureMapModel,
+  MAP_LINK_SATURATED_PERCENT,
   MAP_TRAFFIC_ACTIVE_BYTES,
 } from './infrastructureMapModel';
 import {
@@ -77,6 +79,7 @@ import {
   MAP_PAGE_PALETTES,
   MAP_RINGS_ATTRIBUTE,
   renderMapLinkRings,
+  renderMapNetworkRings,
   renderMapSceneBody,
   renderMapTappedTile,
 } from './infrastructureMapRender';
@@ -85,6 +88,7 @@ import {
   countDiagramResources,
   formatMapLatency,
   formatMapLinkSpeed,
+  type DiagramNetwork,
   type ServiceDiagramFilter,
 } from './infrastructureMapServices';
 
@@ -151,6 +155,39 @@ const formatProbeAndLatency = (probeSummary?: string, latencyMs?: number): strin
   return latency ? `Latency ${latency}` : '';
 };
 
+const NETWORK_TONES: readonly MapNetworkTone[] = ['net0', 'net1', 'net2', 'net3', 'net4', 'net5'];
+
+const networkTone = (colorIndex: number): MapNetworkTone => NETWORK_TONES[colorIndex] ?? 'netOther';
+
+const formatHitLinkSpeed = (speedMbps?: number, utilizationPercent?: number): string => {
+  if (!speedMbps) return '';
+  if (utilizationPercent === undefined) return `Link ${formatMapLinkSpeed(speedMbps)}`;
+  const base = `Link ${formatMapLinkSpeed(speedMbps)} (${utilizationPercent}%)`;
+  return utilizationPercent >= MAP_LINK_SATURATED_PERCENT ? `${base} · Link busy` : base;
+};
+
+const networkTooltipLines = (network: DiagramNetwork): string[] => {
+  const count =
+    network.kind === 'bridge'
+      ? `${network.memberCount.toLocaleString()} connected`
+      : `${network.memberCount.toLocaleString()} ${network.memberCount === 1 ? 'address' : 'addresses'}`;
+  return [
+    [network.detail, count].filter(Boolean).join(' · '),
+    [
+      network.netTotalBytes !== undefined && network.netTotalBytes >= 1024
+        ? `Traffic ${formatSpeed(network.netTotalBytes)}`
+        : '',
+      network.linkSpeedMbps ? `${formatMapLinkSpeed(network.linkSpeedMbps)} link` : '',
+      network.linkDownCount && network.linkDownCount > 0
+        ? `${network.linkDownCount} link down`
+        : '',
+    ]
+      .filter(Boolean)
+      .join(' · '),
+    'Click to inspect or filter',
+  ].filter(Boolean);
+};
+
 /** What a tile's card says under its name: what it is, where, what it is connected to, how busy. */
 const hitLines = (hit: MapHit, density?: MapDensity): string[] =>
   [
@@ -165,7 +202,7 @@ const hitLines = (hit: MapHit, density?: MapDensity): string[] =>
       hit.address && !hit.meta.includes(hit.address) ? hit.address : '',
       hit.detail ? `Published ${hit.detail}` : '',
       formatDockerNetworks(hit.dockerNetworks),
-      hit.linkSpeedMbps ? `Link ${formatMapLinkSpeed(hit.linkSpeedMbps)}` : '',
+      formatHitLinkSpeed(hit.linkSpeedMbps, hit.linkUtilizationPercent),
       hit.linkDownCount && hit.linkDownCount > 0 ? `${hit.linkDownCount} link down` : '',
       hit.firewallEnabled ? 'NIC firewall flag' : '',
     ]
@@ -199,6 +236,7 @@ export function InfrastructureMapSurface() {
   const [namesHidden, setNamesHidden] = createSignal(false);
   const [exporting, setExporting] = createSignal(false);
   const [attentionOnly, setAttentionOnly] = createSignal(false);
+  const [activeTrafficOnly, setActiveTrafficOnly] = createSignal(false);
   const [searchQuery, setSearchQuery] = createSignal('');
   const [networkFilter, setNetworkFilter] = createSignal<string | null>(null);
   const [drawerTarget, setDrawerTarget] = createSignal<MapInspectTarget | null>(null);
@@ -207,6 +245,12 @@ export function InfrastructureMapSurface() {
   const [dragging, setDragging] = createSignal(false);
   const [hover, setHover] = createSignal<{
     hit: MapHit;
+    x: number;
+    y: number;
+    direction: 'up' | 'down';
+  } | null>(null);
+  const [hoveredNetwork, setHoveredNetwork] = createSignal<{
+    networkId: string;
     x: number;
     y: number;
     direction: 'up' | 'down';
@@ -233,14 +277,19 @@ export function InfrastructureMapSurface() {
   const palette = createMemo(() => (darkMode() ? MAP_PAGE_PALETTES.dark : MAP_PAGE_PALETTES.light));
 
   const hasActiveFilter = createMemo(
-    () => attentionOnly() || searchQuery().trim().length > 0 || networkFilter() !== null,
+    () =>
+      attentionOnly() ||
+      activeTrafficOnly() ||
+      searchQuery().trim().length > 0 ||
+      networkFilter() !== null,
   );
   const activeFilter = createMemo<ServiceDiagramFilter | undefined>(() => {
     const query = searchQuery().trim();
     const net = networkFilter();
-    if (!attentionOnly() && !query && !net) return undefined;
+    if (!attentionOnly() && !activeTrafficOnly() && !query && !net) return undefined;
     return {
       ...(attentionOnly() ? { attentionOnly: true } : {}),
+      ...(activeTrafficOnly() ? { activeTrafficOnly: true } : {}),
       ...(query ? { query } : {}),
       ...(net ? { networkId: net } : {}),
     };
@@ -426,12 +475,23 @@ export function InfrastructureMapSurface() {
     return current ? renderMapSceneBody(current, palette(), hrefForHit) : '';
   });
 
+  const hoveredNetworkInfo = createMemo<DiagramNetwork | null>(() => {
+    const hovered = hoveredNetwork();
+    if (!hovered) return null;
+    const list = activeDiagram()?.networks ?? fullDiagram()?.networks ?? [];
+    return list.find((network) => network.id === hovered.networkId) ?? null;
+  });
+
   // Hoisted memos for TooltipPortal props so Solid never compiles an inline
   // memo() inside requestAnimationFrame (which triggers a createRoot warning).
-  const showHoverTooltip = createMemo(() => hover() !== null && armed() === null);
-  const tooltipX = createMemo(() => hover()?.x ?? 0);
-  const tooltipY = createMemo(() => hover()?.y ?? 0);
-  const tooltipDirection = createMemo<'up' | 'down'>(() => hover()?.direction ?? 'up');
+  const showHoverTooltip = createMemo(
+    () => armed() === null && (hover() !== null || hoveredNetworkInfo() !== null),
+  );
+  const tooltipX = createMemo(() => hover()?.x ?? hoveredNetwork()?.x ?? 0);
+  const tooltipY = createMemo(() => hover()?.y ?? hoveredNetwork()?.y ?? 0);
+  const tooltipDirection = createMemo<'up' | 'down'>(
+    () => hover()?.direction ?? hoveredNetwork()?.direction ?? 'up',
+  );
 
   const clampPan = (next: { x: number; y: number }, scaleValue: number) => {
     if (scaleValue <= MIN_ZOOM) return { x: 0, y: 0 };
@@ -457,6 +517,7 @@ export function InfrastructureMapSurface() {
   };
   const clearFilters = () => {
     setAttentionOnly(false);
+    setActiveTrafficOnly(false);
     setSearchQuery('');
     setNetworkFilter(null);
     resetZoom();
@@ -494,6 +555,7 @@ export function InfrastructureMapSurface() {
     if (!dragging()) {
       setDragging(true);
       setHover(null);
+      setHoveredNetwork(null);
       suppressNextClick = true;
     }
     setPan(clampPan({ x: dragStart.panX + dx, y: dragStart.panY + dy }, zoom()));
@@ -570,24 +632,36 @@ export function InfrastructureMapSurface() {
 
   // The map draws no permanent lines between tiles. While one is pointed at or
   // focused, the tiles its connections join it to are ringed with curved
-  // connection arcs, and its card says what each connection is. Declared after
-  // the effect above, so it runs once the drawing it adds to has been replaced.
+  // connection arcs, and its card says what each connection is. While a network
+  // pill is pointed at or focused, every member tile on that network is ringed
+  // in the network's own colour. Declared after the effect above, so it runs
+  // once the drawing it adds to has been replaced.
   createEffect(() => {
     body();
     const current = scene();
     const shown = hover();
+    const hoveredNet = hoveredNetworkInfo();
     const showLiveTraffic = liveTraffic();
     const layer = svgElement()?.querySelector(`[${MAP_RINGS_ATTRIBUTE}]`);
     if (!layer) return;
-    if (!current || !shown) {
+    if (!current) {
       layer.innerHTML = '';
       return;
     }
-    // A tapped tile is marked as well: no pointer rests on it to show which
-    // tile the card is about.
-    layer.innerHTML =
-      (armed() === null ? '' : renderMapTappedTile(current, shown.hit, palette())) +
-      renderMapLinkRings(current, shown.hit, palette(), { liveTraffic: showLiveTraffic });
+    if (shown) {
+      // A tapped tile is marked as well: no pointer rests on it to show which
+      // tile the card is about.
+      layer.innerHTML =
+        (armed() === null ? '' : renderMapTappedTile(current, shown.hit, palette())) +
+        renderMapLinkRings(current, shown.hit, palette(), { liveTraffic: showLiveTraffic });
+      return;
+    }
+    if (hoveredNet) {
+      const color = palette()[networkTone(hoveredNet.colorIndex)];
+      layer.innerHTML = renderMapNetworkRings(current, hoveredNet.id, color);
+      return;
+    }
+    layer.innerHTML = '';
   });
 
   const hitFromEvent = (event: Event): { hit: MapHit; element: Element } | null => {
@@ -596,24 +670,40 @@ export function InfrastructureMapSurface() {
     const hit = hits()[Number(element.getAttribute(MAP_HIT_ATTRIBUTE))];
     return hit ? { hit, element } : null;
   };
-  const inspectFromEvent = (event: Event): MapInspectTarget | null => {
+  const inspectHitFromEvent = (
+    event: Event,
+  ): { target: MapInspectTarget; element: Element } | null => {
     const element = (event.target as Element | null)?.closest?.(`[${MAP_INSPECT_ATTRIBUTE}]`);
     if (!element) return null;
-    return inspectTargets()[Number(element.getAttribute(MAP_INSPECT_ATTRIBUTE))] ?? null;
+    const target = inspectTargets()[Number(element.getAttribute(MAP_INSPECT_ATTRIBUTE))];
+    return target ? { target, element } : null;
   };
-  const point = (found: { hit: MapHit; element: Element }) => {
-    const box = found.element.getBoundingClientRect();
+  const tooltipAnchor = (element: Element): { x: number; y: number; direction: 'up' | 'down' } => {
+    const box = element.getBoundingClientRect();
     const frameRect = frameRef?.getBoundingClientRect();
     const hasRealFrame = Boolean(frameRect && frameRect.height > 0);
     const safeTop = hasRealFrame && frameRect ? Math.max(frameRect.top, 0) : 0;
     const roomBelow = typeof window !== 'undefined' ? window.innerHeight - box.bottom : 0;
     const flipDown =
       hasRealFrame && box.top - safeTop < TOOLTIP_TOP_CLEARANCE && roomBelow > TOOLTIP_BOTTOM_ROOM;
-    setHover({
-      hit: found.hit,
+    return {
       x: box.left + box.width / 2,
       y: flipDown ? box.bottom : box.top,
       direction: flipDown ? 'down' : 'up',
+    };
+  };
+  const point = (found: { hit: MapHit; element: Element }) => {
+    setHoveredNetwork(null);
+    setHover({
+      hit: found.hit,
+      ...tooltipAnchor(found.element),
+    });
+  };
+  const pointNetwork = (networkId: string, element: Element) => {
+    setHover(null);
+    setHoveredNetwork({
+      networkId,
+      ...tooltipAnchor(element),
     });
   };
   const isTouch = (event: Event): boolean => (event as PointerEvent).pointerType === 'touch';
@@ -622,8 +712,17 @@ export function InfrastructureMapSurface() {
     // tap, below.
     if (isTouch(event) || dragging()) return;
     const found = hitFromEvent(event);
-    if (found) point(found);
-    else setHover(null);
+    if (found) {
+      point(found);
+      return;
+    }
+    const inspected = inspectHitFromEvent(event);
+    if (inspected?.target.kind === 'network') {
+      pointNetwork(inspected.target.networkId, inspected.element);
+      return;
+    }
+    setHover(null);
+    setHoveredNetwork(null);
   };
   const handleFocusIn = (event: FocusEvent) => {
     const found = hitFromEvent(event);
@@ -645,6 +744,7 @@ export function InfrastructureMapSurface() {
     drawerReturnElement =
       active instanceof HTMLElement || active instanceof SVGElement ? active : null;
     setHover(null);
+    setHoveredNetwork(null);
     setDrawerTarget(target);
   };
   const closeDrawer = () => {
@@ -679,9 +779,10 @@ export function InfrastructureMapSurface() {
   const handleKey = (event: KeyboardEvent) => {
     if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
     if (event.key === 'Escape') {
-      if (hover() !== null || armed() !== null) {
+      if (hover() !== null || hoveredNetwork() !== null || armed() !== null) {
         event.preventDefault();
         setHover(null);
+        setHoveredNetwork(null);
         disarm();
       }
       return;
@@ -721,6 +822,7 @@ export function InfrastructureMapSurface() {
     if (armed() === null) return;
     setArmed(null);
     setHover(null);
+    setHoveredNetwork(null);
   };
   onMount(() => {
     // The next press anywhere, or a scroll, ends what a tap showed. The
@@ -733,8 +835,13 @@ export function InfrastructureMapSurface() {
     };
     const typed = (event: KeyboardEvent) => {
       keyedLast = true;
-      if (event.key === 'Escape' && !drawerTarget() && (hover() !== null || armed() !== null)) {
+      if (
+        event.key === 'Escape' &&
+        !drawerTarget() &&
+        (hover() !== null || hoveredNetwork() !== null || armed() !== null)
+      ) {
         setHover(null);
+        setHoveredNetwork(null);
         disarm();
       }
     };
@@ -748,6 +855,7 @@ export function InfrastructureMapSurface() {
       disarm();
       const within = event.target;
       if (within instanceof Element && frameRef && !within.contains(frameRef)) return;
+      if (hoveredNetwork() !== null) setHoveredNetwork(null);
       const shown = hover();
       const focused = document.activeElement?.closest?.(`[${MAP_HIT_ATTRIBUTE}]`);
       const held = focused ? hits()[Number(focused.getAttribute(MAP_HIT_ATTRIBUTE))] : undefined;
@@ -781,10 +889,10 @@ export function InfrastructureMapSurface() {
       event.stopPropagation();
       return;
     }
-    const inspectTarget = inspectFromEvent(event);
-    if (inspectTarget) {
+    const inspected = inspectHitFromEvent(event);
+    if (inspected) {
       event.preventDefault();
-      openDrawer(inspectTarget);
+      openDrawer(inspected.target);
       return;
     }
     const found = hitFromEvent(event);
@@ -1023,6 +1131,19 @@ export function InfrastructureMapSurface() {
               Critical &amp; Warning
             </span>
           </Show>
+          <Show when={activeTrafficOnly()}>
+            <span class="inline-flex items-center gap-1 rounded-full border border-blue-300 bg-blue-50 px-2 py-0.5 text-[11px] font-medium text-blue-700 dark:border-blue-700 dark:bg-blue-950/60 dark:text-blue-300">
+              Active traffic
+              <button
+                type="button"
+                aria-label="Clear active traffic filter"
+                class="hover:text-blue-900 dark:hover:text-blue-100"
+                onClick={() => setActiveTrafficOnly(false)}
+              >
+                <XIcon class="h-3 w-3" aria-hidden="true" />
+              </button>
+            </span>
+          </Show>
           <Show when={activeNetworkLabel()}>
             {(label) => (
               <span class="inline-flex items-center gap-1 rounded-full border border-blue-300 bg-blue-50 px-2 py-0.5 text-[11px] font-medium text-blue-700 dark:border-blue-700 dark:bg-blue-950/60 dark:text-blue-300">
@@ -1169,12 +1290,18 @@ export function InfrastructureMapSurface() {
                       showFor(event);
                     }}
                     onPointerLeave={(event) => {
-                      if (!isTouch(event)) setHover(null);
+                      if (!isTouch(event)) {
+                        setHover(null);
+                        setHoveredNetwork(null);
+                      }
                     }}
                     onKeyDown={handleKey}
                     onFocusIn={handleFocusIn}
                     onFocusOut={() => {
-                      if (armed() === null) setHover(null);
+                      if (armed() === null) {
+                        setHover(null);
+                        setHoveredNetwork(null);
+                      }
                     }}
                   />
                 </div>
@@ -1248,9 +1375,11 @@ export function InfrastructureMapSurface() {
         target={drawerTarget()}
         diagram={drawerDiagram()}
         activeNetworkId={networkFilter()}
+        activeTrafficOnly={activeTrafficOnly()}
         hrefForResourceId={hrefForResourceId}
         onSelectTarget={(next) => setDrawerTarget(next)}
         onFilterByNetwork={(next) => setNetworkFilter(next)}
+        onFilterByActiveTraffic={(active) => setActiveTrafficOnly(active)}
         onClose={closeDrawer}
       />
 
@@ -1261,7 +1390,21 @@ export function InfrastructureMapSurface() {
         y={tooltipY()}
         direction={tooltipDirection()}
       >
-        <Show when={hover()}>
+        <Show
+          when={hover()}
+          fallback={
+            <Show when={hoveredNetworkInfo()}>
+              {(network) => (
+                <div class="flex flex-col gap-0.5">
+                  <span class="text-[11px] font-semibold">{network().label}</span>
+                  <For each={networkTooltipLines(network())}>
+                    {(line) => <span class="text-muted">{line}</span>}
+                  </For>
+                </div>
+              )}
+            </Show>
+          }
+        >
           {(current) => (
             <div class="flex flex-col gap-0.5">
               <span class="text-[11px] font-semibold">{current().hit.name}</span>

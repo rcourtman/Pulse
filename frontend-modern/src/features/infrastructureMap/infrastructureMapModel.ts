@@ -30,6 +30,32 @@ export type MapTrafficTier = 'low' | 'medium' | 'high';
 /** Minimum combined throughput (10 KB/s) before a tile or network counts as active. */
 export const MAP_TRAFFIC_ACTIVE_BYTES = 10 * 1024;
 
+/** Full-duplex peak utilization threshold (%) at which a physical link is flagged as busy. */
+export const MAP_LINK_SATURATED_PERCENT = 80;
+
+export const computeMapLinkUtilizationPercent = (
+  rxBytes: number | undefined,
+  txBytes: number | undefined,
+  speedMbps: number | undefined,
+): number | undefined => {
+  const safeRx =
+    typeof rxBytes === 'number' && Number.isFinite(rxBytes) && rxBytes >= 0 ? rxBytes : 0;
+  const safeTx =
+    typeof txBytes === 'number' && Number.isFinite(txBytes) && txBytes >= 0 ? txBytes : 0;
+  const peakBytes = Math.max(safeRx, safeTx);
+  if (
+    typeof speedMbps !== 'number' ||
+    !Number.isFinite(speedMbps) ||
+    !(speedMbps > 0) ||
+    !(peakBytes > 0)
+  ) {
+    return undefined;
+  }
+  const pct = ((peakBytes * 8) / (speedMbps * 1_000_000)) * 100;
+  if (!Number.isFinite(pct) || pct < 1) return undefined;
+  return Math.min(100, Math.round(pct));
+};
+
 export const resolveMapTrafficTier = (
   bytesPerSec: number | undefined,
 ): MapTrafficTier | undefined => {
@@ -68,6 +94,8 @@ export interface MapItem {
   latencyMs?: number;
   /** Fastest reported physical link speed in Mbps across non-host-local interfaces. */
   linkSpeedMbps?: number;
+  /** Full-duplex peak link utilization percentage (1 to 100) when speed and live rate are known. */
+  linkUtilizationPercent?: number;
   /** Number of non-host-local interfaces currently reporting link down. */
   linkDownCount?: number;
   /** True when a Proxmox guest has firewall enabled on any network interface. */
@@ -76,6 +104,8 @@ export interface MapItem {
   linkedResourceId?: string;
   /** Sorted unique user-defined Docker networks a container is attached to. */
   dockerNetworks?: string[];
+  /** Sorted unique lowercase Kubernetes Ingress hostnames routing to a pod via a matching Service. */
+  ingressHosts?: string[];
   /** Concise factual summary of an availability check probe (e.g. `HTTPS 200`, `TCP :443`). */
   probeSummary?: string;
   /** Concise TLS certificate warning for an availability check, when unhealthy or expiring. */
@@ -148,6 +178,8 @@ export interface MapHost {
   netTxBytes?: number;
   /** Fastest reported physical link speed in Mbps across non-host-local interfaces. */
   linkSpeedMbps?: number;
+  /** Full-duplex peak link utilization percentage (1 to 100) when speed and live rate are known. */
+  linkUtilizationPercent?: number;
   /** Number of non-host-local interfaces currently reporting link down. */
   linkDownCount?: number;
   sections: MapSection[];
@@ -455,20 +487,167 @@ const hostPlatform = (resource: Resource): MapPlatform | null => {
 
 type Attachments = ReadonlyMap<string, MapAttachment[]>;
 
-const publishedPorts = (resource: Resource): string | undefined => {
-  const ports = new Set<number>();
-  for (const port of resource.docker?.ports ?? []) {
-    if (typeof port.publicPort === 'number' && port.publicPort > 0) ports.add(port.publicPort);
+interface PodExposure {
+  detail?: string;
+  ingressHosts?: string[];
+}
+
+type PodExposures = ReadonlyMap<string, PodExposure>;
+
+const formatPortList = (ports: Iterable<number>): string | undefined => {
+  const unique = new Set<number>();
+  for (const port of ports) {
+    if (typeof port === 'number' && Number.isFinite(port) && port > 0) {
+      unique.add(Math.round(port));
+    }
   }
-  if (ports.size === 0) return undefined;
-  const sorted = [...ports].sort((a, b) => a - b);
+  if (unique.size === 0) return undefined;
+  const sorted = [...unique].sort((a, b) => a - b);
   const shown = sorted.slice(0, 3).join(', ');
   return sorted.length > 3 ? `:${shown} +${sorted.length - 3}` : `:${shown}`;
 };
 
-const toItem = (resource: Resource, typeLabel: string, attachments: Attachments): MapItem => {
+const publishedPorts = (resource: Resource): string | undefined => {
+  const ports: number[] = [];
+  for (const port of resource.docker?.ports ?? []) {
+    if (typeof port.publicPort === 'number' && port.publicPort > 0) ports.push(port.publicPort);
+  }
+  for (const port of resource.docker?.endpointPorts ?? []) {
+    if (typeof port.publishedPort === 'number' && port.publishedPort > 0) {
+      ports.push(port.publishedPort);
+    }
+  }
+  for (const port of resource.truenas?.app?.usedPorts ?? []) {
+    for (const hostPort of port.hostPorts ?? []) {
+      if (typeof hostPort.hostPort === 'number' && hostPort.hostPort > 0) {
+        ports.push(hostPort.hostPort);
+      }
+    }
+  }
+  for (const container of resource.truenas?.app?.containers ?? []) {
+    for (const port of container.portConfig ?? []) {
+      for (const hostPort of port.hostPorts ?? []) {
+        if (typeof hostPort.hostPort === 'number' && hostPort.hostPort > 0) {
+          ports.push(hostPort.hostPort);
+        }
+      }
+    }
+  }
+  return formatPortList(ports);
+};
+
+interface IndexedK8sService {
+  selectorEntries: Array<[string, string]>;
+  names: string[];
+  exposedPorts: number[];
+}
+
+const resolveKubernetesPodExposures = (resources: readonly Resource[]): PodExposures => {
+  const servicesByScope = new Map<string, IndexedK8sService[]>();
+  const ingressHostsByService = new Map<string, Set<string>>();
+
+  for (const resource of resources) {
+    const parentId = clean(resource.parentId);
+    if (!parentId) continue;
+    const namespace = clean(resource.kubernetes?.namespace) || 'default';
+    if (resource.type === 'k8s-service') {
+      const selectorEntries = Object.entries(resource.kubernetes?.selector ?? {});
+      if (selectorEntries.length === 0) continue;
+      const names = [
+        ...new Set(
+          [
+            clean(resource.name).toLowerCase(),
+            clean(resource.kubernetes?.serviceName).toLowerCase(),
+          ].filter(Boolean),
+        ),
+      ];
+      const serviceType = clean(resource.kubernetes?.serviceType).toLowerCase();
+      const exposedPorts: number[] = [];
+      if (serviceType === 'nodeport') {
+        for (const port of resource.kubernetes?.servicePorts ?? []) {
+          if (
+            typeof port.nodePort === 'number' &&
+            Number.isFinite(port.nodePort) &&
+            port.nodePort > 0
+          ) {
+            exposedPorts.push(port.nodePort);
+          }
+        }
+      } else if (serviceType === 'loadbalancer') {
+        for (const port of resource.kubernetes?.servicePorts ?? []) {
+          if (typeof port.port === 'number' && Number.isFinite(port.port) && port.port > 0) {
+            exposedPorts.push(port.port);
+          }
+        }
+      }
+      const scopeKey = `${parentId}\0${namespace}`;
+      const list = servicesByScope.get(scopeKey) ?? [];
+      list.push({ selectorEntries, names, exposedPorts });
+      servicesByScope.set(scopeKey, list);
+    } else if (resource.type === 'k8s-ingress') {
+      const serviceName = clean(resource.kubernetes?.serviceName).toLowerCase();
+      if (!serviceName) continue;
+      const hosts = (resource.kubernetes?.hosts ?? [])
+        .map((host) => clean(host).toLowerCase())
+        .filter((host) => Boolean(host) && host !== '*');
+      if (hosts.length === 0) continue;
+      const key = `${parentId}\0${namespace}\0${serviceName}`;
+      const set = ingressHostsByService.get(key) ?? new Set<string>();
+      for (const host of hosts) set.add(host);
+      ingressHostsByService.set(key, set);
+    }
+  }
+
+  const exposures = new Map<string, PodExposure>();
+  if (servicesByScope.size === 0) return exposures;
+
+  for (const resource of resources) {
+    if (resource.type !== 'pod') continue;
+    const parentId = clean(resource.parentId);
+    const labels = resource.kubernetes?.labels;
+    if (!parentId || !labels) continue;
+    const namespace = clean(resource.kubernetes?.namespace) || 'default';
+    const scopeServices = servicesByScope.get(`${parentId}\0${namespace}`);
+    if (!scopeServices?.length) continue;
+
+    const ports: number[] = [];
+    const hosts = new Set<string>();
+    for (const service of scopeServices) {
+      if (!service.selectorEntries.every(([key, value]) => labels[key] === value)) continue;
+      for (const port of service.exposedPorts) ports.push(port);
+      for (const serviceName of service.names) {
+        const matchedHosts = ingressHostsByService.get(`${parentId}\0${namespace}\0${serviceName}`);
+        if (!matchedHosts) continue;
+        for (const host of matchedHosts) hosts.add(host);
+      }
+    }
+    const detail = formatPortList(ports);
+    const ingressHosts = hosts.size > 0 ? [...hosts].sort(collator.compare) : undefined;
+    if (detail || ingressHosts) {
+      exposures.set(resource.id, {
+        ...(detail ? { detail } : {}),
+        ...(ingressHosts ? { ingressHosts } : {}),
+      });
+    }
+  }
+  return exposures;
+};
+
+const toItem = (
+  resource: Resource,
+  typeLabel: string,
+  attachments: Attachments,
+  podExposure?: PodExposure,
+): MapItem => {
   const attached = attachments.get(resource.id) ?? [];
   const health = resolveMapHealth(resource);
+  const rates = networkRatesOf(resource);
+  const nic = interfaceTelemetryOf(resource, health);
+  const linkUtilizationPercent = computeMapLinkUtilizationPercent(
+    rates.netRxBytes,
+    rates.netTxBytes,
+    nic.linkSpeedMbps,
+  );
   const latencyMs = latencyOf(resource);
   const firewallEnabled = proxmoxFirewallEnabled(resource);
   const linkedResourceId =
@@ -478,6 +657,13 @@ const toItem = (resource: Resource, typeLabel: string, attachments: Attachments)
   const dockerNetworks = dockerNetworksOf(resource);
   const probeSummary = probeSummaryOf(resource);
   const certWarning = certWarningOf(resource);
+  const detail =
+    resource.type === 'app-container'
+      ? publishedPorts(resource)
+      : resource.type === 'pod'
+        ? podExposure?.detail
+        : undefined;
+  const ingressHosts = resource.type === 'pod' ? podExposure?.ingressHosts : undefined;
   return {
     id: resource.id,
     name: displayName(resource),
@@ -486,19 +672,19 @@ const toItem = (resource: Resource, typeLabel: string, attachments: Attachments)
     status: resource.status,
     cpu: finitePercent(resource.cpu?.current),
     memory: finitePercent(getMemoryPercent(resource)),
-    ...networkRatesOf(resource),
-    ...interfaceTelemetryOf(resource, health),
+    ...rates,
+    ...nic,
+    ...(linkUtilizationPercent !== undefined ? { linkUtilizationPercent } : {}),
     ...(latencyMs !== undefined ? { latencyMs } : {}),
     ...(firewallEnabled ? { firewallEnabled: true } : {}),
     ...(linkedResourceId ? { linkedResourceId } : {}),
     ...(dockerNetworks ? { dockerNetworks } : {}),
+    ...(ingressHosts ? { ingressHosts } : {}),
     ...(probeSummary ? { probeSummary } : {}),
     ...(certWarning ? { certWarning } : {}),
     ...(attached[0]?.address ? { address: attached[0].address } : {}),
     ...(attached.length > 0 ? { segmentIds: attached.map((entry) => entry.segmentId) } : {}),
-    ...(resource.type === 'app-container' && publishedPorts(resource)
-      ? { detail: publishedPorts(resource) }
-      : {}),
+    ...(detail ? { detail } : {}),
   };
 };
 
@@ -539,11 +725,16 @@ const mountsOf = (resource: Resource): MapMount[] => {
 
 // A guest or container is what the service diagram draws as one tile, so it
 // also carries the app it is and the group that puts it in.
-const toService = (resource: Resource, typeLabel: string, attachments: Attachments): MapItem => {
+const toService = (
+  resource: Resource,
+  typeLabel: string,
+  attachments: Attachments,
+  podExposure?: PodExposure,
+): MapItem => {
   const app = resolveMapApp({ name: displayName(resource), image: resource.docker?.image });
   const mounts = mountsOf(resource);
   return {
-    ...toItem(resource, typeLabel, attachments),
+    ...toItem(resource, typeLabel, attachments, podExposure),
     ...(app ? { app } : {}),
     category: resolveMapCategory(app, resource.tags),
     ...(mounts.length > 0 ? { mounts } : {}),
@@ -602,6 +793,7 @@ const placeChild = (
   draft: HostDraft,
   child: Resource,
   attachments: Attachments,
+  podExposures: PodExposures,
 ): 'placed' | 'pool' | 'skipped' => {
   const platform = draft.host.platform;
   if (child.type === 'vm') {
@@ -625,7 +817,7 @@ const placeChild = (
   if (child.type === 'pod') {
     const namespace = clean(child.kubernetes?.namespace) || 'default';
     sectionFor(draft, `ns:${namespace}`, namespace).items.push(
-      toService(child, 'Pod', attachments),
+      toService(child, 'Pod', attachments, podExposures.get(child.id)),
     );
     return 'placed';
   }
@@ -656,6 +848,7 @@ export function buildInfrastructureMapModel(
   for (const resource of resources) byId.set(resource.id, resource);
   const networks = resolveMapNetworks(resources);
   const attachments = networks.attachments;
+  const podExposures = resolveKubernetesPodExposures(resources);
 
   const drafts = new Map<string, HostDraft>();
   for (const resource of resources) {
@@ -667,6 +860,13 @@ export function buildInfrastructureMapModel(
     if (resource.type === 'agent' && parent?.type === 'k8s-cluster') continue;
     const own = attachments.get(resource.id) ?? [];
     const health = resolveMapHealth(resource);
+    const rates = networkRatesOf(resource);
+    const nic = interfaceTelemetryOf(resource, health);
+    const linkUtilizationPercent = computeMapLinkUtilizationPercent(
+      rates.netRxBytes,
+      rates.netTxBytes,
+      nic.linkSpeedMbps,
+    );
     drafts.set(resource.id, {
       resource,
       sections: new Map(),
@@ -680,8 +880,9 @@ export function buildInfrastructureMapModel(
         status: resource.status,
         cpu: finitePercent(resource.cpu?.current),
         memory: finitePercent(getMemoryPercent(resource)),
-        ...networkRatesOf(resource),
-        ...interfaceTelemetryOf(resource, health),
+        ...rates,
+        ...nic,
+        ...(linkUtilizationPercent !== undefined ? { linkUtilizationPercent } : {}),
         sections: [],
         pools: [],
         ...(own[0]?.address ? { address: own[0].address } : {}),
@@ -708,7 +909,7 @@ export function buildInfrastructureMapModel(
     }
     const draft = owningDraft(resource);
     if (draft) {
-      placeChild(draft, resource, attachments);
+      placeChild(draft, resource, attachments, podExposures);
       continue;
     }
     if (!resource.parentId && POOL_TYPES.has(resource.type)) sharedPools.push(resource);
@@ -988,17 +1189,24 @@ export function anonymizeInfrastructureMapModel(
   const anonymizePools = (pools: MapPool[]): MapPool[] =>
     pools.map((pool) => ({ ...pool, name: nameFor(`pool-name:${pool.name}`, 'Pool') }));
   const anonymizeItems = (items: MapItem[]): MapItem[] =>
-    items.map(({ address: _address, dockerNetworks: _dockerNetworks, ...item }) => ({
-      ...item,
-      // A well-known app keeps its own name: it says what runs here and
-      // gives nothing away about the estate.
-      name: item.app
-        ? item.app.label
-        : nameFor(
-            item.id,
-            (item.checkKind && CHECK_STAND_IN[item.checkKind]) || itemStandIn(item.typeLabel),
-          ),
-    }));
+    items.map(
+      ({
+        address: _address,
+        dockerNetworks: _dockerNetworks,
+        ingressHosts: _ingressHosts,
+        ...item
+      }) => ({
+        ...item,
+        // A well-known app keeps its own name: it says what runs here and
+        // gives nothing away about the estate.
+        name: item.app
+          ? item.app.label
+          : nameFor(
+              item.id,
+              (item.checkKind && CHECK_STAND_IN[item.checkKind]) || itemStandIn(item.typeLabel),
+            ),
+      }),
+    );
   const anonymizeHost = ({ address: _address, ...host }: MapHost): MapHost => ({
     ...host,
     name: host.isResource ? nameFor(host.id, HOST_STAND_IN[host.platform]) : host.name,

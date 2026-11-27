@@ -20,12 +20,17 @@ Each tile has a status dot: healthy, needs attention, critical, not reporting
 or off. When there is more than one network, a coloured mark beside a tile
 matches the dot on its network's pill.
 
-- **Hover** a tile to read what it is, its address, Docker user-defined
+- **Hover** a tile to read what it is, its address, published ports (Docker,
+  Docker Swarm, TrueNAS apps and Kubernetes Services), Docker user-defined
   networks, what it is connected to, and collected metrics (CPU, memory, live
   network throughput, check protocol and HTTP status with latency, TLS
-  certificate warnings, NIC link speed, link-down count and Proxmox firewall
-  status). Tiles it is connected to are ringed and joined by curved connection
-  arcs (with gentle animated flow when **Live traffic** is on).
+  certificate warnings, NIC link speed with full-duplex utilization and
+  **Link busy** warnings, link-down count and Proxmox firewall status). Tiles
+  it is connected to are ringed and joined by curved connection arcs with a
+  subtle halo (plus gentle animated flow when **Live traffic** is on).
+- **Hover a network pill** to highlight every tile on that network in the
+  network's colour and read its subnet or VLAN detail, connected count, live
+  aggregate throughput, max link speed and any link-down warnings.
 - **Click** a tile to open it.
 - **With a keyboard**, Tab reaches the map and the arrow keys move between
   tiles. Enter opens a tile or a **+N** overflow drawer, Escape closes a
@@ -57,6 +62,9 @@ toolbar and drawers let you find any resource without leaving the map:
   network throughput across the estate reaches at least 10 KB/s. Click it to
   open the **Live traffic** drawer and inspect the busiest talkers across
   every group, sorted by throughput by default (or switch to **Attention**).
+  Click **Filter map** inside that drawer to narrow the whole map to active
+  talkers (showing a removable **Active traffic** chip in the filter bar), and
+  click **Show all** or clear the chip to return to the full estate.
 - **Group and network drawers** open when you click a **+N** overflow tile,
   a box header, or any network pill (including the **+N more** networks
   pill). Each drawer sorts items needing attention first, lets you switch
@@ -80,13 +88,23 @@ Pulse surfaces real network telemetry it already collects across your estate:
 - **Estate live traffic summary and Top Talkers** aggregate throughput across
   workloads and standalone hosts without double-counting Proxmox hosts
   alongside their guests. Click the speed pill beside the title to open the
-  **Live traffic** drawer and jump straight to the busiest resources.
+  **Live traffic** drawer, jump straight to the busiest resources, or click
+  **Filter map** to isolate active talkers directly on the map.
 - **Network throughput** appears on active tiles (in **Names** mode, while
-  preserving stated connection captions such as `via` a container or a Traefik
-  or Caddy hostname), on active network pills, in hover tooltips
-  (`Net ↓ ... ↑ ...`), and on rows and network summaries in the slide-over
-  drawer. Inside group and network drawers, switch the sort toggle from
-  **Attention** to **Traffic** to bring the busiest talkers to the top.
+  preserving stated connection captions such as `via` a container, a Traefik
+  or Caddy hostname, or a Kubernetes Ingress hostname), on active network
+  pills and their hover tooltips, in tile tooltips (`Net ↓ ... ↑ ...`), and on
+  rows and network summaries in the slide-over drawer. Inside group and
+  network drawers, switch the sort toggle from **Attention** to **Traffic** to
+  bring the busiest talkers to the top.
+- **Published ports and Kubernetes Ingress routes** appear in tooltips and
+  drawer rows (`Published ...`) for Docker containers, Docker Swarm services,
+  TrueNAS apps and Kubernetes `NodePort` or `LoadBalancer` Services (matched
+  strictly by pod label selectors in the same cluster and namespace, without
+  exposing external IPs). Kubernetes Ingresses linked to a pod's matching
+  Service surface their hostnames directly under the pod tile and on hover
+  (`Ingress: ...`). Enabling **Hide names** strips Ingress hostnames while
+  keeping numeric ports.
 - **Docker user-defined networks** appear in container tooltips and drawer
   rows (`Docker net: ...`), omitting default Docker bridges such as `bridge`
   and `host`. Enabling **Hide names** strips user-defined Docker network names
@@ -96,9 +114,12 @@ Pulse surfaces real network telemetry it already collects across your estate:
   tooltips (such as `HTTPS 200 · 14 ms`), and in drawer rows. Expiring,
   expired, invalid or untrusted certificates also surface as warning or danger
   badges in drawer rows.
-- **NIC link speed and link-down warnings** appear in host tooltips, drawer
-  rows, and network drawer summaries (for example `10G` link speed and a
-  **Link down** warning badge when an online host has a down interface).
+- **NIC link speed, full-duplex utilization and link-down warnings** appear in
+  host tooltips, drawer rows and network hover tooltips and summaries (for
+  example `10G link`, `1G link (88%)`, a **Link busy** warning when peak rx or
+  tx throughput reaches at least 80% of link speed, and a **Link down**
+  warning badge when an online host has a down interface). Sub-1% utilization
+  is omitted so idle links stay uncluttered.
 - **Proxmox NIC firewall flag** appears as **NIC firewall flag** in guest
   tooltips and a **NIC firewall** badge in drawer rows when a Proxmox guest
   interface has its firewall flag enabled (it does not claim active firewall
@@ -158,6 +179,8 @@ targets remain ringed):
   drawn side by side in the box most of them belong in,
 - a container routed by Traefik or Caddy Docker Proxy (`caddy` labels) shows
   the hostname it answers on and links to its proxy container,
+- a Kubernetes pod exposed by a matching Service and Ingress shows its Ingress
+  hostname under the tile and lists the route on hover,
 - an availability check linked to a monitored resource connects to that
   resource on hover and names the check and latency on the resource's card,
 - a machine's default gateway (including an unmonitored dashed gateway tile)

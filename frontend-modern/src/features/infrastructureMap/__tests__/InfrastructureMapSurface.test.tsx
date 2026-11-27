@@ -605,8 +605,8 @@ describe('InfrastructureMapSurface connections', () => {
     expect(rings(container).slice(1).map(place).sort()).toEqual(
       [place(tile(container, 'gluetun')), place(tile(container, 'Tower'))].sort(),
     );
-    expect(rings(container)[0].getAttribute('fill')).not.toBe('none');
-    expect(rings(container)[1].getAttribute('fill')).toBe('none');
+    expect(rings(container)[0].getAttribute('fill-opacity')).toBe('0.2');
+    expect(rings(container)[1].getAttribute('fill-opacity')).toBe('0.06');
   });
 
   it('opens the tile on a second tap', () => {
@@ -1153,5 +1153,135 @@ describe('InfrastructureMapSurface live traffic and network telemetry', () => {
 
     render(() => <InfrastructureMapSurface />);
     expect(screen.queryByTestId('infrastructure-map-traffic-summary')).not.toBeInTheDocument();
+  });
+
+  it('highlights member tiles and shows a rich tooltip when hovering a network pill', async () => {
+    resourcesMock.value = [
+      resource({
+        id: 'pve-net',
+        type: 'agent',
+        name: 'pve-net',
+        platformType: 'proxmox-pve',
+        network: { rxBytes: 2_097_152, txBytes: 524_288 },
+        agent: {
+          networkInterfaces: [
+            { name: 'eno1', addresses: ['192.168.10.11/24'], speedMbps: 10000, linkUp: true },
+            { name: 'eno2', speedMbps: 1000, linkUp: false },
+          ],
+        },
+      }),
+      resource({
+        id: 'vm-busy',
+        type: 'vm',
+        name: 'busy-guest',
+        platformType: 'proxmox-pve',
+        parentId: 'pve-net',
+        status: 'running',
+        identity: { ips: ['192.168.10.50'] },
+        network: { rxBytes: 10_485_760, txBytes: 2_097_152 },
+      }),
+      resource({
+        id: 'vm-peer',
+        type: 'vm',
+        name: 'peer-guest',
+        platformType: 'proxmox-pve',
+        parentId: 'pve-net',
+        status: 'running',
+        identity: { ips: ['192.168.10.51'] },
+      }),
+    ];
+
+    const { container } = render(() => <InfrastructureMapSurface />);
+    const networkPill = container.querySelector(
+      '[data-map-inspect][aria-label^="Inspect network "]',
+    );
+    expect(networkPill).not.toBeNull();
+
+    // Hovering a network pill draws colour-matched rings on member tiles and shows its summary card.
+    fireEvent.pointerOver(networkPill!);
+    expect(
+      container.querySelectorAll('[data-map-rings] .pulse-map-network-ring').length,
+    ).toBeGreaterThanOrEqual(2);
+    expect(await screen.findByText('Click to inspect or filter')).toBeInTheDocument();
+    expect(screen.getByText(/Traffic 12\.0 MB\/s/)).toBeInTheDocument();
+    expect(screen.getByText(/10G link/)).toBeInTheDocument();
+    expect(screen.getByText(/1 link down/)).toBeInTheDocument();
+
+    // Hovering a tile clears network rings and switches cleanly to the tile tooltip.
+    fireEvent.pointerOver(tile(container, 'busy-guest'));
+    expect(container.querySelectorAll('[data-map-rings] .pulse-map-network-ring')).toHaveLength(0);
+    expect(screen.queryByText('Click to inspect or filter')).not.toBeInTheDocument();
+    expect(await screen.findByText(/Net ↓ 10\.0 MB\/s ↑ 2\.00 MB\/s/)).toBeInTheDocument();
+
+    // Hovering the network pill again restores network rings, and Escape dismisses them.
+    fireEvent.pointerOver(networkPill!);
+    expect(
+      container.querySelectorAll('[data-map-rings] .pulse-map-network-ring').length,
+    ).toBeGreaterThanOrEqual(2);
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(container.querySelectorAll('[data-map-rings] .pulse-map-network-ring')).toHaveLength(0);
+    expect(screen.queryByText('Click to inspect or filter')).not.toBeInTheDocument();
+
+    // Pointer leave also clears network hover rings and tooltip.
+    fireEvent.pointerOver(networkPill!);
+    expect(
+      container.querySelectorAll('[data-map-rings] .pulse-map-network-ring').length,
+    ).toBeGreaterThanOrEqual(2);
+    fireEvent.pointerLeave(container.querySelector('svg[role="group"]')!);
+    expect(container.querySelectorAll('[data-map-rings] .pulse-map-network-ring')).toHaveLength(0);
+  });
+
+  it('shows full-duplex link utilization and Link busy warning in tile tooltips', async () => {
+    resourcesMock.value = [
+      resource({
+        id: 'host-sat',
+        type: 'agent',
+        name: 'sat-host',
+        platformType: 'proxmox-pve',
+        network: { rxBytes: 110_000_000, txBytes: 5_000_000 },
+        agent: {
+          networkInterfaces: [
+            { name: 'eno1', addresses: ['10.40.0.10/24'], speedMbps: 1000, linkUp: true },
+          ],
+        },
+      }),
+      resource({
+        id: 'host-mod',
+        type: 'agent',
+        name: 'mod-host',
+        platformType: 'proxmox-pve',
+        network: { rxBytes: 50_000_000, txBytes: 250_000_000 },
+        agent: {
+          networkInterfaces: [
+            { name: 'eno1', addresses: ['10.40.0.11/24'], speedMbps: 10000, linkUp: true },
+          ],
+        },
+      }),
+      resource({
+        id: 'host-idle',
+        type: 'agent',
+        name: 'idle-host',
+        platformType: 'proxmox-pve',
+        network: { rxBytes: 10_000, txBytes: 5_000 },
+        agent: {
+          networkInterfaces: [
+            { name: 'eno1', addresses: ['10.40.0.12/24'], speedMbps: 10000, linkUp: true },
+          ],
+        },
+      }),
+    ];
+
+    const { container } = render(() => <InfrastructureMapSurface />);
+
+    fireEvent.pointerOver(tile(container, 'sat-host'));
+    expect(await screen.findByText(/Link 1G \(88%\) · Link busy/)).toBeInTheDocument();
+
+    fireEvent.pointerOver(tile(container, 'mod-host'));
+    expect(await screen.findByText(/Link 10G \(20%\)/)).toBeInTheDocument();
+    expect(screen.queryByText(/Link busy/)).not.toBeInTheDocument();
+
+    fireEvent.pointerOver(tile(container, 'idle-host'));
+    expect(await screen.findByText(/Link 10G/)).toBeInTheDocument();
+    expect(screen.queryByText(/Link 10G \(/)).not.toBeInTheDocument();
   });
 });

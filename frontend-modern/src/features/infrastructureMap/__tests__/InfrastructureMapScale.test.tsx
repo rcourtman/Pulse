@@ -667,4 +667,111 @@ describe('InfrastructureMapSurface scale interactions', () => {
     expect(checksList.textContent).toContain('HTTPS 200 · 14 ms');
     expect(checksList.textContent).toContain('Cert expired');
   });
+
+  it('filters the map to active talkers from the Live traffic drawer and clears via the filter chip or Show all', () => {
+    resourcesMock.value = [
+      resource({
+        id: 'pve-filter-host',
+        type: 'agent',
+        name: 'pve-filter-host',
+        platformType: 'proxmox-pve',
+      }),
+      resource({
+        id: 'vm-active-one',
+        type: 'vm',
+        name: 'active-talker',
+        platformType: 'proxmox-pve',
+        parentId: 'pve-filter-host',
+        status: 'running',
+        network: { rxBytes: 12_582_912, txBytes: 2_097_152 },
+      }),
+      resource({
+        id: 'vm-idle-one',
+        type: 'vm',
+        name: 'quiet-vm',
+        platformType: 'proxmox-pve',
+        parentId: 'pve-filter-host',
+        status: 'running',
+        network: { rxBytes: 0, txBytes: 0 },
+      }),
+    ];
+
+    const { container } = render(() => <InfrastructureMapSurface />);
+    expect(container.querySelector('[aria-label^="active-talker,"]')).toBeInTheDocument();
+    expect(container.querySelector('[aria-label^="quiet-vm,"]')).toBeInTheDocument();
+
+    // Open Live traffic drawer and click Filter map.
+    fireEvent.click(screen.getByTestId('infrastructure-map-traffic-summary'));
+    expect(screen.getByTestId('infrastructure-map-drawer')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Filter map' }));
+
+    // Drawer closes, Active traffic chip appears, and idle VMs are filtered out.
+    expect(screen.queryByTestId('infrastructure-map-drawer')).not.toBeInTheDocument();
+    const filterBar = screen.getByTestId('infrastructure-map-filter-bar');
+    expect(filterBar.textContent).toContain('Active traffic');
+    expect(container.querySelector('[aria-label^="active-talker,"]')).toBeInTheDocument();
+    expect(container.querySelector('[aria-label^="quiet-vm,"]')).not.toBeInTheDocument();
+
+    // Clearing the Active traffic chip restores the idle VM.
+    fireEvent.click(screen.getByRole('button', { name: 'Clear active traffic filter' }));
+    expect(screen.queryByTestId('infrastructure-map-filter-bar')).not.toBeInTheDocument();
+    expect(container.querySelector('[aria-label^="quiet-vm,"]')).toBeInTheDocument();
+
+    // Filtering again and clicking Show all inside the Live traffic drawer also restores all items.
+    fireEvent.click(screen.getByTestId('infrastructure-map-traffic-summary'));
+    fireEvent.click(screen.getByRole('button', { name: 'Filter map' }));
+    expect(screen.getByTestId('infrastructure-map-filter-bar').textContent).toContain(
+      'Active traffic',
+    );
+    fireEvent.click(screen.getByTestId('infrastructure-map-traffic-summary'));
+    fireEvent.click(screen.getByRole('button', { name: 'Show all' }));
+    expect(screen.queryByTestId('infrastructure-map-filter-bar')).not.toBeInTheDocument();
+    expect(container.querySelector('[aria-label^="quiet-vm,"]')).toBeInTheDocument();
+  });
+
+  it('shows link utilization percentages and Link busy warning badges in drawer rows', () => {
+    resourcesMock.value = [
+      resource({
+        id: 'host-saturated',
+        type: 'agent',
+        name: 'saturated-node',
+        platformType: 'proxmox-pve',
+        network: { rxBytes: 110_000_000, txBytes: 10_000_000 },
+        agent: {
+          networkInterfaces: [
+            { name: 'eno1', addresses: ['10.50.0.10/24'], speedMbps: 1000, linkUp: true },
+          ],
+        },
+      }),
+      resource({
+        id: 'host-normal',
+        type: 'agent',
+        name: 'moderate-node',
+        platformType: 'proxmox-pve',
+        network: { rxBytes: 250_000_000, txBytes: 20_000_000 },
+        agent: {
+          networkInterfaces: [
+            { name: 'eno1', addresses: ['10.50.0.11/24'], speedMbps: 10000, linkUp: true },
+          ],
+        },
+      }),
+    ];
+
+    const { container } = render(() => <InfrastructureMapSurface />);
+    const hardwareHeader = container.querySelector(
+      `[${MAP_INSPECT_ATTRIBUTE}][aria-label^="Inspect Hardware"]`,
+    );
+    expect(hardwareHeader).not.toBeNull();
+    fireEvent.click(hardwareHeader!);
+
+    const list = screen.getByTestId('infrastructure-map-drawer-list');
+    const items = [...list.querySelectorAll('li')];
+    const satRow = items.find((item) => item.textContent?.includes('saturated-node'));
+    const modRow = items.find((item) => item.textContent?.includes('moderate-node'));
+
+    expect(satRow?.textContent).toContain('1G link (88%)');
+    expect(satRow?.textContent).toContain('Link busy (88%)');
+    expect(modRow?.textContent).toContain('10G link (20%)');
+    expect(modRow?.textContent).not.toContain('Link busy');
+  });
 });
