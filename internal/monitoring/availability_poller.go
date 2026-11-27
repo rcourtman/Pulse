@@ -155,14 +155,31 @@ func (m *Monitor) localAvailabilityTargets() []config.AvailabilityTarget {
 }
 
 func (m *Monitor) readLocalAvailabilityTargets() ([]config.AvailabilityTarget, error) {
-	targets, err := m.readAvailabilityTargets()
+	if m == nil || m.configPersist == nil {
+		return nil, nil
+	}
+	targets, err := m.configPersist.LoadAvailabilityTargets()
 	if err != nil {
 		return nil, err
+	}
+	// Persistence already normalizes the catalog. Planning and breaker cleanup
+	// order their output by ID, so don't sort the whole catalog by display name
+	// first. Preserve the old tie order if a saved catalog has duplicate IDs.
+	seen := make(map[string]struct{}, len(targets))
+	for _, target := range targets {
+		if target.ID == "" {
+			continue
+		}
+		if _, duplicate := seen[target.ID]; duplicate {
+			targets = orderAvailabilityTargets(targets)
+			break
+		}
+		seen[target.ID] = struct{}{}
 	}
 	// A licensed probe assignment can move execution off the server. On
 	// entitlement lapse the existing policy makes a remote-only check local.
 	return slices.DeleteFunc(targets, func(target config.AvailabilityTarget) bool {
-		return !target.Enabled || !m.targetUsesLocalObservation(target)
+		return target.ID == "" || !target.Enabled || !m.targetUsesLocalObservation(target)
 	}), nil
 }
 
