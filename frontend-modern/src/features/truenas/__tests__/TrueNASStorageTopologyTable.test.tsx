@@ -537,4 +537,55 @@ describe('TrueNASStorageTopologyTable', () => {
     expect(screen.getByRole('button', { name: /^Attention,\s*2$/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /^Offline,\s*0$/i })).toBeInTheDocument();
   });
+
+  it('shows Stale data beside stale storage names and clears it when top-level sourceStatus recovers', () => {
+    const stalePool = makeStorageResource({
+      id: 'pool-stale',
+      name: 'tank',
+      status: 'online',
+      sourceStatus: { truenas: { status: 'stale' } },
+      storage: { topology: 'pool', platform: 'truenas', zfsPoolState: 'ONLINE' },
+    });
+    const staleOfflinePool = makeStorageResource({
+      id: 'pool-offline-stale',
+      name: 'vault',
+      status: 'offline',
+      sourceStatus: { truenas: { status: 'error', error: 'API unreachable' } },
+      storage: { topology: 'pool', platform: 'truenas', zfsPoolState: 'OFFLINE' },
+    });
+    const recoveredPool = makeStorageResource({
+      id: 'pool-recovered',
+      name: 'media',
+      status: 'online',
+      sourceStatus: { truenas: { status: 'online' } },
+      platformData: { sourceStatus: { truenas: { status: 'stale' } } },
+      storage: { topology: 'pool', platform: 'truenas', zfsPoolState: 'ONLINE' },
+    });
+    const resources = [stalePool, staleOfflinePool, recoveredPool];
+
+    const { container } = render(() => (
+      <TrueNASStorageTopologyTable
+        resources={resources}
+        scope={resources}
+        emptyIcon={<span />}
+        emptyTitle="No storage"
+        emptyDescription="No storage"
+      />
+    ));
+
+    const row = (id: string) =>
+      container.querySelector(`[data-truenas-storage-resource="${id}"]`) as HTMLElement;
+
+    expect(
+      row('pool-stale').querySelector('[data-truenas-storage-stale="true"]'),
+    ).toHaveTextContent('Stale data');
+    expect(
+      row('pool-offline-stale').querySelector('[data-truenas-storage-stale="true"]'),
+    ).toHaveAttribute('title', 'TrueNAS collection error: API unreachable');
+    expect(
+      row('pool-offline-stale').querySelector('[data-truenas-storage-health="offline"]'),
+    ).not.toBeNull();
+    expect(row('pool-recovered').querySelector('[data-truenas-storage-stale="true"]')).toBeNull();
+    expect(row('pool-recovered').querySelector('[data-truenas-storage-health]')).toBeNull();
+  });
 });

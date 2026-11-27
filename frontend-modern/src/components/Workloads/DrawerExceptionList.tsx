@@ -34,7 +34,7 @@ export const DrawerExceptionList: Component<DrawerExceptionListProps> = (props) 
                   {row.label}
                 </th>
                 <td
-                  class={`py-0.5 font-medium wrap-break-word [&>*]:mt-0 [&>*]:inline [&>*+*]:ml-1.5 ${detailValueToneClass(row.tone)}`}
+                  class={`py-0.5 font-medium whitespace-normal! overflow-visible! text-clip! wrap-break-word [&>*]:mt-0 [&>*]:inline [&>*+*]:ml-1.5 ${detailValueToneClass(row.tone)}`}
                   title={row.title}
                 >
                   {row.valueContent ?? row.value}

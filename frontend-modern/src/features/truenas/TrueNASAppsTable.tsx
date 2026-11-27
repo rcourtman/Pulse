@@ -1,5 +1,4 @@
 import { Show, createMemo, type Component, type JSX } from 'solid-js';
-import { StatusDot } from '@/components/shared/StatusDot';
 import { ResponsiveMetricCell } from '@/components/shared/responsive';
 import { StackedMemoryBar } from '@/components/Workloads/StackedMemoryBar';
 import { TableCell, TableRow } from '@/components/shared/Table';
@@ -14,27 +13,29 @@ import {
   PlatformSortableTableHead,
   PlatformResponsiveTableLabel,
   PlatformTableMetricFallback,
-  PlatformTableEmptyState,
-  PlatformTableToolbar,
   createPlatformTableFilterState,
   createPlatformTableSortState,
   formatPlatformTableTitleCaseValue,
   getPlatformTableFiniteMetric,
   getPlatformTableCellClassForKind,
+  summarizePlatformTableValues,
   type PlatformTableFilterOption,
   type PlatformTableSortValue,
-  PlatformTableShell,
-  withPlatformStatusCounts,
 } from '@/features/platformPage/sharedPlatformPage';
+import {
+  TrueNASResourceDetailRow,
+  TrueNASRowLead,
+  TrueNASTableFrame,
+  createTrueNASDetailState,
+  getTrueNASMemoryDisplay,
+  getTrueNASMemoryPercentSortValue,
+} from './TrueNASTableFrame';
 import {
   getPlatformInlineStateClass,
   getPlatformStatusTextToneClass,
   isPlatformAttentionVariant,
 } from '@/features/platformPage/platformStatusTone';
 import {
-  PlatformResourceDetailToggleButton,
-  PlatformResourceDetailTableRow,
-  createPlatformResourceDetailState,
   createPlatformResourceLabelResolver,
   getPlatformResourceDetailRowClass,
 } from '@/features/platformPage/PlatformResourceDetailTableRow';
@@ -42,6 +43,7 @@ import type { Resource, ResourceTrueNASAppMeta, ResourceTrueNASAppPort } from '@
 import {
   filterTrueNASApps,
   getTrueNASResourceDisplayStatus,
+  getTrueNASStaleNotice,
   type TrueNASAppStatusFilter,
 } from './truenasPageModel';
 
@@ -83,26 +85,21 @@ const formatHostPort = (port: ResourceTrueNASAppPort): string => {
     .join(', ');
 };
 
-const formatPorts = (app: ResourceTrueNASAppMeta | undefined): { label: string; title: string } => {
-  const ports = app?.usedPorts ?? [];
-  const labels = ports.map(formatHostPort).filter(Boolean);
-  if (labels.length === 0) return { label: '—', title: '' };
-  const visible = labels.slice(0, 2);
-  const suffix = labels.length > visible.length ? ` +${labels.length - visible.length}` : '';
-  return { label: `${visible.join(', ')}${suffix}`, title: labels.join(', ') };
-};
-
-const shortImage = (image: string): string => getShortImageName(image) || image;
+const formatPorts = (app: ResourceTrueNASAppMeta | undefined): { label: string; title: string } =>
+  summarizePlatformTableValues((app?.usedPorts ?? []).map(formatHostPort), {
+    emptyText: '—',
+    maxVisible: 2,
+  });
 
 const formatImages = (
   app: ResourceTrueNASAppMeta | undefined,
 ): { label: string; title: string } => {
   const images = app?.images?.filter((image) => asTrimmedString(image)) ?? [];
-  if (images.length === 0) return { label: '—', title: '' };
-  const labels = images.map(shortImage);
-  const visible = labels.slice(0, 2);
-  const suffix = labels.length > visible.length ? ` +${labels.length - visible.length}` : '';
-  return { label: `${visible.join(', ')}${suffix}`, title: images.join(', ') };
+  const summary = summarizePlatformTableValues(
+    images.map((image) => getShortImageName(image) || image),
+    { emptyText: '—', maxVisible: 2 },
+  );
+  return { label: summary.label, title: images.join(', ') };
 };
 
 const UpdatePills: Component<{ app: ResourceTrueNASAppMeta | undefined }> = (props) => {
@@ -139,6 +136,42 @@ const UpdatePills: Component<{ app: ResourceTrueNASAppMeta | undefined }> = (pro
   );
 };
 
+const APP_ATTENTION_STATES = new Set(['crashed', 'deploying', 'stopping', 'error', 'failed']);
+const APP_DANGER_STATES = new Set(['crashed', 'error', 'failed']);
+
+const appStatePresentation = (
+  resource: Resource,
+  app: ResourceTrueNASAppMeta | undefined,
+  fallbackVariant: ReturnType<typeof getSimpleStatusIndicator>['variant'],
+  fallbackLabel: string,
+): {
+  label: string;
+  title?: string;
+  variant: ReturnType<typeof getSimpleStatusIndicator>['variant'];
+} => {
+  const rawState = formatPlatformTableTitleCaseValue(app?.state, '');
+  const normalized = (asTrimmedString(app?.state) ?? '').toLowerCase();
+  const stale = getTrueNASStaleNotice(resource);
+  if (stale) {
+    if (APP_ATTENTION_STATES.has(normalized)) {
+      return {
+        label: `${rawState} · ${stale.badge}`,
+        title: `Last reported ${rawState} · ${stale.detail}`,
+        variant: APP_DANGER_STATES.has(normalized) ? 'danger' : 'warning',
+      };
+    }
+    return {
+      label: stale.badge,
+      title: rawState ? `Last reported ${rawState} · ${stale.detail}` : stale.detail,
+      variant: fallbackVariant === 'danger' ? 'danger' : 'warning',
+    };
+  }
+  return {
+    label: rawState || fallbackLabel,
+    variant: APP_DANGER_STATES.has(normalized) ? 'danger' : fallbackVariant,
+  };
+};
+
 // Columns a user can sort by. Ports and Images summarize several values at
 // once, so they carry no single scalar to order on. Updates orders on how
 // many update kinds (app / image) are pending so outdated apps surface first.
@@ -165,13 +198,8 @@ const getTrueNASAppSortValue = (
     }
     case 'cpu':
       return getPlatformTableFiniteMetric(resource.cpu?.current) ?? null;
-    case 'memory': {
-      const total = getPlatformTableFiniteMetric(resource.memory?.total) ?? 0;
-      if (total > 0) {
-        return ((getPlatformTableFiniteMetric(resource.memory?.used) ?? 0) / total) * 100;
-      }
-      return getPlatformTableFiniteMetric(resource.memory?.current) ?? null;
-    }
+    case 'memory':
+      return getTrueNASMemoryPercentSortValue(resource);
     case 'containers':
       return appContainerCount(app);
     case 'updates':
@@ -203,7 +231,7 @@ export const TrueNASAppsTable: Component<{
     externalSearch: props.search,
     onExternalSearchChange: props.onSearchChange,
   });
-  const drawer = createPlatformResourceDetailState({ idPrefix: 'truenas-app-drawer' });
+  const drawer = createTrueNASDetailState('truenas-app-drawer');
   const resolveResourceLabel = createPlatformResourceLabelResolver(() => props.scope);
   const sort = createPlatformTableSortState({
     storageKey: 'truenasApps',
@@ -213,275 +241,226 @@ export const TrueNASAppsTable: Component<{
   const sortedRows = createMemo(() => sort.sortRows(tableState.filtered(), getTrueNASAppSortValue));
 
   return (
-    <Show
-      when={props.apps.length > 0}
-      fallback={
-        <PlatformTableEmptyState
-          icon={props.emptyIcon}
-          title={props.emptyTitle}
-          description={props.emptyDescription}
-        />
+    <TrueNASTableFrame
+      hasItems={props.apps.length > 0}
+      tableState={tableState}
+      common={props}
+      searchPlaceholder="Search TrueNAS apps"
+      statusOptions={TRUENAS_APP_STATUS_OPTIONS}
+      rowNoun="apps"
+      title="Apps"
+      tableClass="min-w-full table-fixed text-xs md:min-w-[960px]"
+      header={
+        <>
+          <PlatformSortableTableHead
+            kind="name"
+            sort={sort}
+            sortKey="app"
+            class="platform-table-mobile-w-30 truenas-app-name-column md:w-[17%]"
+          >
+            App
+          </PlatformSortableTableHead>
+          <PlatformSortableTableHead
+            kind="text"
+            sort={sort}
+            sortKey="version"
+            class="truenas-app-version-column hidden md:table-cell md:w-[10%]"
+          >
+            Version
+          </PlatformSortableTableHead>
+          <PlatformSortableTableHead
+            kind="metric-bar"
+            sort={sort}
+            sortKey="cpu"
+            class="platform-table-mobile-w-15 truenas-app-cpu-column md:w-[9%]"
+          >
+            CPU
+          </PlatformSortableTableHead>
+          <PlatformSortableTableHead
+            kind="metric-bar"
+            sort={sort}
+            sortKey="memory"
+            class="platform-table-mobile-w-20 truenas-app-memory-column md:w-[12%]"
+          >
+            <PlatformResponsiveTableLabel compact="Mem" full="Memory" />
+          </PlatformSortableTableHead>
+          <PlatformSortableTableHead
+            kind="numeric-value"
+            sort={sort}
+            sortKey="containers"
+            class="platform-table-mobile-w-15 truenas-app-containers-column md:w-[12%]"
+          >
+            <PlatformResponsiveTableLabel compact="Ctrs" full="Containers" />
+          </PlatformSortableTableHead>
+          <PlatformSortableTableHead
+            kind="text"
+            sort={sort}
+            class="truenas-app-ports-column hidden md:table-cell md:w-[18%]"
+          >
+            Ports
+          </PlatformSortableTableHead>
+          <PlatformSortableTableHead
+            kind="text"
+            sort={sort}
+            class="truenas-app-images-column hidden lg:table-cell md:w-[12%]"
+          >
+            Images
+          </PlatformSortableTableHead>
+          <PlatformSortableTableHead
+            kind="badge"
+            sort={sort}
+            sortKey="updates"
+            class="platform-table-mobile-w-20 truenas-app-updates-column md:w-[10%]"
+          >
+            <PlatformResponsiveTableLabel compact="Upd." full="Updates" />
+          </PlatformSortableTableHead>
+        </>
       }
-    >
-      <div class="space-y-3">
-        <Show when={props.showToolbar !== false}>
-          <PlatformTableToolbar
-            search={tableState.search}
-            onSearchChange={tableState.setSearch}
-            searchPlaceholder="Search TrueNAS apps"
-            searchSuggestions={tableState.searchSuggestions}
-            status={tableState.status()}
-            onStatusChange={tableState.setStatus}
-            statusOptions={withPlatformStatusCounts(
-              TRUENAS_APP_STATUS_OPTIONS,
-              tableState.countForStatus,
-            )}
-            visible={tableState.visible()}
-            total={tableState.total()}
-            rowNoun="apps"
-          />
-        </Show>
-
-        <Show
-          when={tableState.filtered().length > 0}
-          fallback={
-            <PlatformTableEmptyState
-              icon={props.emptyIcon}
-              title="No apps match current filters"
-              description="Adjust the search or status filter to see more TrueNAS apps."
-            />
-          }
-        >
-          <PlatformTableShell
-            title="Apps"
-            tableClass="min-w-full table-fixed text-xs md:min-w-[960px]"
-            header={
-              <>
-                <PlatformSortableTableHead
-                  kind="name"
-                  sort={sort}
-                  sortKey="app"
-                  class="platform-table-mobile-w-30 truenas-app-name-column md:w-[17%]"
-                >
-                  App
-                </PlatformSortableTableHead>
-                <PlatformSortableTableHead
-                  kind="text"
-                  sort={sort}
-                  sortKey="version"
-                  class="truenas-app-version-column hidden md:table-cell md:w-[10%]"
-                >
-                  Version
-                </PlatformSortableTableHead>
-                <PlatformSortableTableHead
-                  kind="metric-bar"
-                  sort={sort}
-                  sortKey="cpu"
-                  class="platform-table-mobile-w-15 truenas-app-cpu-column md:w-[9%]"
-                >
-                  CPU
-                </PlatformSortableTableHead>
-                <PlatformSortableTableHead
-                  kind="metric-bar"
-                  sort={sort}
-                  sortKey="memory"
-                  class="platform-table-mobile-w-20 truenas-app-memory-column md:w-[12%]"
-                >
-                  <PlatformResponsiveTableLabel compact="Mem" full="Memory" />
-                </PlatformSortableTableHead>
-                <PlatformSortableTableHead
-                  kind="numeric-value"
-                  sort={sort}
-                  sortKey="containers"
-                  class="platform-table-mobile-w-15 truenas-app-containers-column md:w-[12%]"
-                >
-                  <PlatformResponsiveTableLabel compact="Ctrs" full="Containers" />
-                </PlatformSortableTableHead>
-                <PlatformSortableTableHead
-                  kind="text"
-                  sort={sort}
-                  class="truenas-app-ports-column hidden md:table-cell md:w-[18%]"
-                >
-                  Ports
-                </PlatformSortableTableHead>
-                <PlatformSortableTableHead
-                  kind="text"
-                  sort={sort}
-                  class="truenas-app-images-column hidden lg:table-cell md:w-[12%]"
-                >
-                  Images
-                </PlatformSortableTableHead>
-                <PlatformSortableTableHead
-                  kind="badge"
-                  sort={sort}
-                  sortKey="updates"
-                  class="platform-table-mobile-w-20 truenas-app-updates-column md:w-[10%]"
-                >
-                  <PlatformResponsiveTableLabel compact="Upd." full="Updates" />
-                </PlatformSortableTableHead>
-              </>
-            }
-            body={
-              <>
-                <PlatformWindowedRows items={sortedRows} estimatedRowHeight={32}>
-                  {(resource) => {
-                    const app = () => appMeta(resource);
-                    const name = () =>
-                      asTrimmedString(app()?.name) ||
-                      asTrimmedString(resource.displayName) ||
-                      asTrimmedString(resource.name) ||
-                      resource.id;
-                    const displayStatus = () => getTrueNASResourceDisplayStatus(resource);
-                    const indicator = () => getSimpleStatusIndicator(displayStatus());
-                    const metricsKey = () => buildMetricKeyForUnifiedResource(resource);
-                    const alertResourceIds = () => unifiedPlatformOverrideIdCandidates(resource);
-                    const cpuThresholds = () =>
-                      alertsActivation.getMetricThresholds('truenas', 'cpu', alertResourceIds());
-                    const memoryThresholds = () =>
-                      alertsActivation.getMetricThresholds('truenas', 'memory', alertResourceIds());
-                    const cpuPercent = () => getPlatformTableFiniteMetric(resource.cpu?.current);
-                    const memoryTotal = () =>
-                      getPlatformTableFiniteMetric(resource.memory?.total) ?? 0;
-                    const memoryUsed = () =>
-                      getPlatformTableFiniteMetric(resource.memory?.used) ?? 0;
-                    const memoryPercentOnly = () =>
-                      memoryTotal() > 0
-                        ? undefined
-                        : getPlatformTableFiniteMetric(resource.memory?.current);
-                    const hasMemoryMetric = () =>
-                      memoryTotal() > 0 || memoryPercentOnly() !== undefined;
-                    const canRenderMetrics = () => indicator().variant !== 'muted';
-                    const ports = createMemo(() => formatPorts(app()));
-                    const images = createMemo(() => formatImages(app()));
-                    const detailRowId = () => drawer.detailRowId(resource);
-                    const isExpanded = () => drawer.isExpanded(resource);
-                    return (
-                      <>
-                        <TableRow
-                          class={`${getPlatformResourceDetailRowClass(isExpanded())} text-[11px] sm:text-xs`}
-                          data-truenas-app-row={resource.id}
-                          onClick={() => drawer.toggle(resource)}
+      body={
+        <>
+          <PlatformWindowedRows items={sortedRows} estimatedRowHeight={32}>
+            {(resource) => {
+              const app = () => appMeta(resource);
+              const name = () =>
+                asTrimmedString(app()?.name) ||
+                asTrimmedString(resource.displayName) ||
+                asTrimmedString(resource.name) ||
+                resource.id;
+              const displayStatus = () => getTrueNASResourceDisplayStatus(resource);
+              const indicator = () => getSimpleStatusIndicator(displayStatus());
+              const appState = () =>
+                appStatePresentation(resource, app(), indicator().variant, indicator().label);
+              const showAppState = () => isPlatformAttentionVariant(appState().variant);
+              const metricsKey = () => buildMetricKeyForUnifiedResource(resource);
+              const alertResourceIds = () => unifiedPlatformOverrideIdCandidates(resource);
+              const cpuThresholds = () =>
+                alertsActivation.getMetricThresholds('truenas', 'cpu', alertResourceIds());
+              const memoryThresholds = () =>
+                alertsActivation.getMetricThresholds('truenas', 'memory', alertResourceIds());
+              const cpuPercent = () => getPlatformTableFiniteMetric(resource.cpu?.current);
+              const memory = () => getTrueNASMemoryDisplay(resource);
+              const canRenderMetrics = () => indicator().variant !== 'muted';
+              const ports = createMemo(() => formatPorts(app()));
+              const images = createMemo(() => formatImages(app()));
+              const isExpanded = () => drawer.isExpanded(resource);
+              return (
+                <>
+                  <TableRow
+                    class={`${getPlatformResourceDetailRowClass(isExpanded())} text-[11px] sm:text-xs`}
+                    data-truenas-app-row={resource.id}
+                    onClick={() => drawer.toggle(resource)}
+                  >
+                    <TableCell class={getPlatformTableCellClassForKind('name')}>
+                      <TrueNASRowLead
+                        item={resource}
+                        drawer={drawer}
+                        label={name()}
+                        variant={appState().variant}
+                        dotTitle={appState().title ?? indicator().label}
+                      >
+                        <div
+                          class={
+                            showAppState()
+                              ? 'min-w-0 flex-1 sm:flex sm:items-center sm:gap-1.5'
+                              : 'flex min-w-0 flex-1 items-center gap-1.5'
+                          }
                         >
-                          <TableCell class={getPlatformTableCellClassForKind('name')}>
-                            <div class="flex min-w-0 items-center gap-2">
-                              <PlatformResourceDetailToggleButton
-                                expanded={isExpanded()}
-                                resourceLabel={name()}
-                                controlsId={detailRowId()}
-                                onToggle={() => drawer.toggle(resource)}
-                              />
-                              <StatusDot
-                                size="sm"
-                                variant={indicator().variant}
-                                title={indicator().label}
-                              />
-                              <div class="flex min-w-0 flex-1 items-center gap-1.5">
-                                <div
-                                  class="truenas-app-name-value min-w-0 truncate font-medium text-base-content"
-                                  title={[
-                                    name(),
-                                    `${formatPlatformTableTitleCaseValue(app()?.state)} on ${
-                                      resource.parentName || 'TrueNAS'
-                                    }${app()?.customApp ? ' · Custom' : ''}`,
-                                  ]
-                                    .filter(Boolean)
-                                    .join(' · ')}
-                                >
-                                  {name()}
-                                </div>
-                                {/* The app has no State column: a state that needs attention joins
-                                    the name on its line, in its dot's colour, so a crashed app
-                                    says so without a hover. */}
-                                <div
-                                  class={`text-[11px] ${getPlatformInlineStateClass(isPlatformAttentionVariant(indicator().variant))} ${getPlatformStatusTextToneClass(indicator().variant)}`}
-                                  data-truenas-app-state={indicator().variant}
-                                >
-                                  {formatPlatformTableTitleCaseValue(app()?.state, '') ||
-                                    indicator().label}
-                                </div>
-                              </div>
-                            </div>
-                          </TableCell>
-                          <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} hidden md:table-cell`}
+                          <div
+                            class="truenas-app-name-value min-w-0 truncate font-medium text-base-content"
+                            title={[
+                              name(),
+                              `${formatPlatformTableTitleCaseValue(app()?.state)} on ${
+                                resource.parentName || 'TrueNAS'
+                              }${app()?.customApp ? ' · Custom' : ''}`,
+                              appState().title,
+                            ]
+                              .filter(Boolean)
+                              .join(' · ')}
                           >
-                            <span class="block truncate" title={appVersionLabel(app())}>
-                              {appVersionLabel(app())}
-                            </span>
-                          </TableCell>
-                          <TableCell class={getPlatformTableCellClassForKind('metric-bar')}>
-                            <Show
-                              when={cpuPercent() !== undefined}
-                              fallback={<PlatformTableMetricFallback />}
-                            >
-                              <ResponsiveMetricCell
-                                value={cpuPercent()!}
-                                type="cpu"
-                                resourceId={metricsKey()}
-                                isRunning={canRenderMetrics()}
-                                fallback={<PlatformTableMetricFallback />}
-                                thresholds={cpuThresholds()}
-                              />
-                            </Show>
-                          </TableCell>
-                          <TableCell class={getPlatformTableCellClassForKind('metric-bar')}>
-                            <Show
-                              when={hasMemoryMetric()}
-                              fallback={<PlatformTableMetricFallback />}
-                            >
-                              <StackedMemoryBar
-                                used={memoryUsed()}
-                                total={memoryTotal()}
-                                percentOnly={memoryPercentOnly()}
-                                thresholds={memoryThresholds()}
-                              />
-                            </Show>
-                          </TableCell>
-                          <TableCell
-                            class={`${getPlatformTableCellClassForKind('numeric-value')} tabular-nums`}
+                            {name()}
+                          </div>
+                          {/* The app has no State column: a state that needs attention joins
+                                    the name in its dot's colour, stacking on narrow phones so
+                                    neither name nor stale/crashed label clips. */}
+                          <div
+                            class={`text-[10px] leading-tight sm:text-[11px] ${getPlatformInlineStateClass(showAppState())} ${getPlatformStatusTextToneClass(appState().variant)}`}
+                            title={appState().title}
+                            data-truenas-app-state={appState().variant}
                           >
-                            {appContainerCount(app()) || '-'}
-                          </TableCell>
-                          <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} hidden md:table-cell`}
-                          >
-                            <span
-                              class="block truncate font-mono text-[11px]"
-                              title={ports().title}
-                            >
-                              {ports().label}
-                            </span>
-                          </TableCell>
-                          <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} hidden lg:table-cell`}
-                          >
-                            <span class="block truncate" title={images().title}>
-                              {images().label}
-                            </span>
-                          </TableCell>
-                          <TableCell class={getPlatformTableCellClassForKind('badge')}>
-                            <UpdatePills app={app()} />
-                          </TableCell>
-                        </TableRow>
-                        <PlatformResourceDetailTableRow
-                          resource={resource}
-                          statusIndicator={indicator()}
-                          open={isExpanded()}
-                          detailRowId={detailRowId()}
-                          colSpan={8}
-                          resolveResourceLabel={resolveResourceLabel}
-                          onClose={() => drawer.close(resource)}
+                            {appState().label}
+                          </div>
+                        </div>
+                      </TrueNASRowLead>
+                    </TableCell>
+                    <TableCell
+                      class={`${getPlatformTableCellClassForKind('text')} hidden md:table-cell`}
+                    >
+                      <span class="block truncate" title={appVersionLabel(app())}>
+                        {appVersionLabel(app())}
+                      </span>
+                    </TableCell>
+                    <TableCell class={getPlatformTableCellClassForKind('metric-bar')}>
+                      <Show
+                        when={cpuPercent() !== undefined}
+                        fallback={<PlatformTableMetricFallback />}
+                      >
+                        <ResponsiveMetricCell
+                          value={cpuPercent()!}
+                          type="cpu"
+                          resourceId={metricsKey()}
+                          isRunning={canRenderMetrics()}
+                          fallback={<PlatformTableMetricFallback />}
+                          thresholds={cpuThresholds()}
                         />
-                      </>
-                    );
-                  }}
-                </PlatformWindowedRows>
-              </>
-            }
-          />
-        </Show>
-      </div>
-    </Show>
+                      </Show>
+                    </TableCell>
+                    <TableCell class={getPlatformTableCellClassForKind('metric-bar')}>
+                      <Show when={memory().hasMetric} fallback={<PlatformTableMetricFallback />}>
+                        <StackedMemoryBar
+                          used={memory().used}
+                          total={memory().total}
+                          percentOnly={memory().percentOnly}
+                          thresholds={memoryThresholds()}
+                        />
+                      </Show>
+                    </TableCell>
+                    <TableCell
+                      class={`${getPlatformTableCellClassForKind('numeric-value')} tabular-nums`}
+                    >
+                      {appContainerCount(app()) || '-'}
+                    </TableCell>
+                    <TableCell
+                      class={`${getPlatformTableCellClassForKind('text')} hidden md:table-cell`}
+                    >
+                      <span class="block truncate font-mono text-[11px]" title={ports().title}>
+                        {ports().label}
+                      </span>
+                    </TableCell>
+                    <TableCell
+                      class={`${getPlatformTableCellClassForKind('text')} hidden lg:table-cell`}
+                    >
+                      <span class="block truncate" title={images().title}>
+                        {images().label}
+                      </span>
+                    </TableCell>
+                    <TableCell class={getPlatformTableCellClassForKind('badge')}>
+                      <UpdatePills app={app()} />
+                    </TableCell>
+                  </TableRow>
+                  <TrueNASResourceDetailRow
+                    resource={resource}
+                    indicator={indicator()}
+                    drawer={drawer}
+                    colSpan={8}
+                    resolveResourceLabel={resolveResourceLabel}
+                  />
+                </>
+              );
+            }}
+          </PlatformWindowedRows>
+        </>
+      }
+    />
   );
 };
 

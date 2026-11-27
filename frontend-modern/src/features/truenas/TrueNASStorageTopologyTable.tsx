@@ -1,6 +1,5 @@
 import { Show, createMemo, createSignal, type Component, type JSX } from 'solid-js';
 import type { FilterDef } from '@/components/shared/FilterBar';
-import { StatusDot } from '@/components/shared/StatusDot';
 import { ResponsiveMetricCell } from '@/components/shared/responsive';
 import { TableCell, TableRow } from '@/components/shared/Table';
 import { filterChipStatusDot } from '@/components/shared/FilterBar';
@@ -11,10 +10,8 @@ import {
   PlatformWindowedRows,
   PlatformSortableTableHead,
   PlatformResponsiveTableLabel,
-  PlatformTableEmptyState,
   PlatformTableNumberValue,
   PlatformTableTemperatureValue,
-  PlatformTableToolbar,
   createPlatformTableFilterState,
   createPlatformTableSortState,
   formatPlatformTableBytesValue,
@@ -22,18 +19,20 @@ import {
   type PlatformTableFilterOption,
   type PlatformTableSortState,
   type PlatformTableSortValue,
-  PlatformTableShell,
-  withPlatformStatusCounts,
 } from '@/features/platformPage/sharedPlatformPage';
+import {
+  TrueNASResourceDetailRow,
+  TrueNASRowLead,
+  TrueNASStaleBadge,
+  TrueNASTableFrame,
+  createTrueNASDetailState,
+} from './TrueNASTableFrame';
 import {
   PlatformIssueReason,
   type PlatformIssue,
   type PlatformIssueTone,
 } from '@/features/platformPage/PlatformIssueReason';
 import {
-  PlatformResourceDetailToggleButton,
-  PlatformResourceDetailTableRow,
-  createPlatformResourceDetailState,
   createPlatformResourceLabelResolver,
   getPlatformResourceDetailRowClass,
 } from '@/features/platformPage/PlatformResourceDetailTableRow';
@@ -48,6 +47,7 @@ import {
   countTrueNASStorageTopologyMatches,
   filterTrueNASStorageTopologyRows,
   filterTrueNASStorageTopologyRowsByKind,
+  getTrueNASStaleNotice,
   getTrueNASStorageDotStatus,
   getTrueNASStorageIssue,
   type TrueNASDiskTemperatureThresholdResolver,
@@ -353,35 +353,6 @@ export const getTrueNASStorageTopologyIndentClass = (depth: number): string => {
   return 'pl-8 sm:pl-16';
 };
 
-const ResourceCell: Component<{ row: TrueNASStorageTopologyRow; detailToggle?: JSX.Element }> = (
-  props,
-) => {
-  const { getTrueNASDiskTemperatureThresholds } = useAlertsActivation();
-  const displayStatus = () =>
-    getTrueNASStorageDotStatus(props.row.resource, getTrueNASDiskTemperatureThresholds);
-  const indicator = () => getSimpleStatusIndicator(displayStatus());
-  const name = () => resourceName(props.row.resource);
-  return (
-    <div
-      class={`flex min-w-0 items-center gap-2 ${getTrueNASStorageTopologyIndentClass(
-        props.row.depth,
-      )}`}
-      data-truenas-storage-indent-depth={props.row.depth}
-    >
-      {props.detailToggle}
-      <StatusDot size="sm" variant={indicator().variant} title={indicator().label} />
-      <div class="min-w-0">
-        <div
-          class="truncate font-medium text-base-content"
-          title={[name(), subtitle(props.row)].filter(Boolean).join(' · ')}
-        >
-          {name()}
-        </div>
-      </div>
-    </div>
-  );
-};
-
 export const TrueNASStorageTopologyTable: Component<{
   resources: Resource[];
   scope: Resource[];
@@ -454,7 +425,7 @@ export const TrueNASStorageTopologyTable: Component<{
     tableState.resetFilters();
     setKindFilter('all');
   };
-  const drawer = createPlatformResourceDetailState({ idPrefix: 'truenas-storage-drawer' });
+  const drawer = createTrueNASDetailState('truenas-storage-drawer');
   const resolveResourceLabel = createPlatformResourceLabelResolver(() => props.scope);
   const sort = createPlatformTableSortState({
     storageKey: 'truenasStorage',
@@ -470,200 +441,178 @@ export const TrueNASStorageTopologyTable: Component<{
   );
 
   return (
-    <Show
-      when={rows().length > 0}
-      fallback={
-        <PlatformTableEmptyState
-          icon={props.emptyIcon}
-          title={props.emptyTitle}
-          description={props.emptyDescription}
-        />
+    <TrueNASTableFrame
+      hasItems={rows().length > 0}
+      tableState={tableState}
+      common={props}
+      filteredEmptyTitle="No storage items match current filters"
+      filteredEmptyDescription="Adjust the search, status, or storage type filter to see more TrueNAS storage."
+      searchPlaceholder="Search TrueNAS pools, datasets, or disks"
+      statusOptions={TRUENAS_STORAGE_STATUS_OPTIONS}
+      countForStatus={countForStatus}
+      filters={kindFilters()}
+      rowNoun="items"
+      hasActiveFilters={hasActiveFilters()}
+      onResetFilters={resetFilters}
+      title="Storage"
+      tableClass="min-w-full table-fixed text-xs md:min-w-[960px]"
+      header={
+        <>
+          <PlatformSortableTableHead
+            kind="name"
+            sort={sort}
+            sortKey="resource"
+            class="platform-table-mobile-w-30 md:w-[32%]"
+          >
+            Resource
+          </PlatformSortableTableHead>
+          <PlatformSortableTableHead
+            kind="text"
+            sort={sort}
+            sortKey="kind"
+            class={`${
+              kindFilter() === 'disks' ? 'hidden md:table-cell' : 'table-cell'
+            } platform-table-mobile-w-15 md:w-[10%]`}
+          >
+            Kind
+          </PlatformSortableTableHead>
+          <PlatformSortableTableHead
+            kind="metric-bar"
+            sort={sort}
+            sortKey="usage"
+            class="platform-table-mobile-w-25 md:w-[20%]"
+          >
+            <PlatformResponsiveTableLabel compact="Usage" full="Usage / Size" />
+          </PlatformSortableTableHead>
+          <PlatformSortableTableHead
+            kind="numeric-value"
+            sort={sort}
+            sortKey={kindFilter() === 'disks' ? 'endurance' : 'disks'}
+            class="platform-table-mobile-w-15 md:w-[7%]"
+          >
+            {kindFilter() === 'disks' ? 'Endurance' : 'Disks'}
+          </PlatformSortableTableHead>
+          <PlatformSortableTableHead
+            kind="numeric-value"
+            sort={sort}
+            sortKey="temp"
+            class={`${kindFilter() === 'disks' ? 'table-cell' : 'hidden lg:table-cell'} md:w-[7%]`}
+          >
+            Temp
+          </PlatformSortableTableHead>
+          <PlatformSortableTableHead
+            kind="text"
+            sort={sort}
+            sortKey="health"
+            class="platform-table-phone-hidden md:w-[24%]"
+          >
+            <PlatformResponsiveTableLabel compact="H" full="Health" />
+          </PlatformSortableTableHead>
+        </>
       }
-    >
-      <div class="space-y-3">
-        <Show when={props.showToolbar !== false}>
-          <PlatformTableToolbar
-            search={tableState.search}
-            onSearchChange={tableState.setSearch}
-            searchPlaceholder="Search TrueNAS pools, datasets, or disks"
-            searchSuggestions={tableState.searchSuggestions}
-            status={tableState.status()}
-            onStatusChange={tableState.setStatus}
-            statusOptions={withPlatformStatusCounts(TRUENAS_STORAGE_STATUS_OPTIONS, countForStatus)}
-            filters={kindFilters()}
-            visible={tableState.visible()}
-            total={tableState.total()}
-            rowNoun="items"
-            hasActiveFilters={hasActiveFilters()}
-            onResetFilters={resetFilters}
-          />
-        </Show>
-
-        <Show
-          when={tableState.filtered().length > 0}
-          fallback={
-            <PlatformTableEmptyState
-              icon={props.emptyIcon}
-              title="No storage items match current filters"
-              description="Adjust the search, status, or storage type filter to see more TrueNAS storage."
-            />
-          }
-        >
-          <PlatformTableShell
-            title="Storage"
-            tableClass="min-w-full table-fixed text-xs md:min-w-[960px]"
-            header={
-              <>
-                <PlatformSortableTableHead
-                  kind="name"
-                  sort={sort}
-                  sortKey="resource"
-                  class="platform-table-mobile-w-30 md:w-[32%]"
-                >
-                  Resource
-                </PlatformSortableTableHead>
-                <PlatformSortableTableHead
-                  kind="text"
-                  sort={sort}
-                  sortKey="kind"
-                  class={`${
-                    kindFilter() === 'disks' ? 'hidden md:table-cell' : 'table-cell'
-                  } platform-table-mobile-w-15 md:w-[10%]`}
-                >
-                  Kind
-                </PlatformSortableTableHead>
-                <PlatformSortableTableHead
-                  kind="metric-bar"
-                  sort={sort}
-                  sortKey="usage"
-                  class="platform-table-mobile-w-25 md:w-[20%]"
-                >
-                  <PlatformResponsiveTableLabel compact="Usage" full="Usage / Size" />
-                </PlatformSortableTableHead>
-                <PlatformSortableTableHead
-                  kind="numeric-value"
-                  sort={sort}
-                  sortKey={kindFilter() === 'disks' ? 'endurance' : 'disks'}
-                  class="platform-table-mobile-w-15 md:w-[7%]"
-                >
-                  {kindFilter() === 'disks' ? 'Endurance' : 'Disks'}
-                </PlatformSortableTableHead>
-                <PlatformSortableTableHead
-                  kind="numeric-value"
-                  sort={sort}
-                  sortKey="temp"
-                  class={`${kindFilter() === 'disks' ? 'table-cell' : 'hidden lg:table-cell'} md:w-[7%]`}
-                >
-                  Temp
-                </PlatformSortableTableHead>
-                <PlatformSortableTableHead
-                  kind="text"
-                  sort={sort}
-                  sortKey="health"
-                  class="platform-table-phone-hidden md:w-[24%]"
-                >
-                  <PlatformResponsiveTableLabel compact="H" full="Health" />
-                </PlatformSortableTableHead>
-              </>
-            }
-            body={
-              <>
-                <PlatformWindowedRows items={sortedRows} estimatedRowHeight={32}>
-                  {(row) => {
-                    const resource = () => row.resource;
-                    const issue = createMemo(() =>
-                      getTrueNASStorageIssue(resource(), getTrueNASDiskTemperatureThresholds),
-                    );
-                    const detailRowId = () => drawer.detailRowId(resource());
-                    const isExpanded = () => drawer.isExpanded(resource());
-                    return (
-                      <>
-                        <TableRow
-                          class={`${getPlatformResourceDetailRowClass(isExpanded())} text-[11px] sm:text-xs`}
-                          data-truenas-storage-row={row.id}
-                          data-truenas-storage-kind={row.kind}
-                          data-truenas-storage-resource={resource().id}
-                          data-truenas-storage-depth={row.depth}
-                          onClick={() => drawer.toggle(resource())}
-                        >
-                          <TableCell class={getPlatformTableCellClassForKind('name')}>
-                            <ResourceCell
-                              row={row}
-                              detailToggle={
-                                <PlatformResourceDetailToggleButton
-                                  expanded={isExpanded()}
-                                  resourceLabel={resourceName(resource())}
-                                  controlsId={detailRowId()}
-                                  onToggle={() => drawer.toggle(resource())}
-                                />
-                              }
-                            />
-                          </TableCell>
-                          <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} ${
-                              kindFilter() === 'disks' ? 'hidden md:table-cell' : 'table-cell'
-                            }`}
+      body={
+        <>
+          <PlatformWindowedRows items={sortedRows} estimatedRowHeight={32}>
+            {(row) => {
+              const resource = () => row.resource;
+              const name = () => resourceName(resource());
+              const indicator = () =>
+                getSimpleStatusIndicator(
+                  getTrueNASStorageDotStatus(resource(), getTrueNASDiskTemperatureThresholds),
+                );
+              const issue = createMemo(() =>
+                getTrueNASStorageIssue(resource(), getTrueNASDiskTemperatureThresholds),
+              );
+              const isExpanded = () => drawer.isExpanded(resource());
+              return (
+                <>
+                  <TableRow
+                    class={`${getPlatformResourceDetailRowClass(isExpanded())} text-[11px] sm:text-xs`}
+                    data-truenas-storage-row={row.id}
+                    data-truenas-storage-kind={row.kind}
+                    data-truenas-storage-resource={resource().id}
+                    data-truenas-storage-depth={row.depth}
+                    onClick={() => drawer.toggle(resource())}
+                  >
+                    <TableCell class={getPlatformTableCellClassForKind('name')}>
+                      <TrueNASRowLead
+                        item={resource()}
+                        drawer={drawer}
+                        label={name()}
+                        variant={indicator().variant}
+                        dotTitle={indicator().label}
+                        class={getTrueNASStorageTopologyIndentClass(row.depth)}
+                        indentDepth={row.depth}
+                      >
+                        <div class="min-w-0">
+                          <div
+                            class="truncate font-medium text-base-content"
+                            title={[name(), subtitle(row)].filter(Boolean).join(' · ')}
                           >
-                            <span class="text-base-content">{kindLabel(row.kind)}</span>
-                          </TableCell>
-                          <TableCell class={getPlatformTableCellClassForKind('metric-bar')}>
-                            <CapacityCell row={row} />
-                          </TableCell>
-                          <TableCell
-                            class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
-                          >
-                            <Show
-                              when={kindFilter() === 'disks'}
-                              fallback={
-                                <PlatformTableNumberValue
-                                  value={row.kind === 'pool' ? row.counts.disks : undefined}
-                                  emptyText="—"
-                                />
-                              }
-                            >
-                              <DiskEnduranceCell row={row} />
-                            </Show>
-                          </TableCell>
-                          <TableCell
-                            class={`${getPlatformTableCellClassForKind('numeric-value')} ${
-                              kindFilter() === 'disks' ? 'table-cell' : 'hidden lg:table-cell'
-                            } text-base-content`}
-                          >
-                            <DiskTemperatureCell row={row} />
-                          </TableCell>
-                          <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} platform-table-phone-hidden`}
-                          >
-                            <PlatformIssueReason
-                              issue={toPlatformIssue(issue())}
-                              data-truenas-storage-health={issue()?.status}
-                            />
-                          </TableCell>
-                        </TableRow>
-                        <PlatformResourceDetailTableRow
-                          resource={resource()}
-                          statusIndicator={getSimpleStatusIndicator(
-                            getTrueNASStorageDotStatus(
-                              resource(),
-                              getTrueNASDiskTemperatureThresholds,
-                            ),
-                          )}
-                          open={isExpanded()}
-                          detailRowId={detailRowId()}
-                          colSpan={6}
-                          resolveResourceLabel={resolveResourceLabel}
-                          onClose={() => drawer.close(resource())}
-                        />
-                      </>
-                    );
-                  }}
-                </PlatformWindowedRows>
-              </>
-            }
-          />
-        </Show>
-      </div>
-    </Show>
+                            {name()}
+                          </div>
+                          <TrueNASStaleBadge
+                            notice={getTrueNASStaleNotice(resource())}
+                            attr="storage"
+                          />
+                        </div>
+                      </TrueNASRowLead>
+                    </TableCell>
+                    <TableCell
+                      class={`${getPlatformTableCellClassForKind('text')} ${
+                        kindFilter() === 'disks' ? 'hidden md:table-cell' : 'table-cell'
+                      }`}
+                    >
+                      <span class="text-base-content">{kindLabel(row.kind)}</span>
+                    </TableCell>
+                    <TableCell class={getPlatformTableCellClassForKind('metric-bar')}>
+                      <CapacityCell row={row} />
+                    </TableCell>
+                    <TableCell
+                      class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
+                    >
+                      <Show
+                        when={kindFilter() === 'disks'}
+                        fallback={
+                          <PlatformTableNumberValue
+                            value={row.kind === 'pool' ? row.counts.disks : undefined}
+                            emptyText="—"
+                          />
+                        }
+                      >
+                        <DiskEnduranceCell row={row} />
+                      </Show>
+                    </TableCell>
+                    <TableCell
+                      class={`${getPlatformTableCellClassForKind('numeric-value')} ${
+                        kindFilter() === 'disks' ? 'table-cell' : 'hidden lg:table-cell'
+                      } text-base-content`}
+                    >
+                      <DiskTemperatureCell row={row} />
+                    </TableCell>
+                    <TableCell
+                      class={`${getPlatformTableCellClassForKind('text')} platform-table-phone-hidden`}
+                    >
+                      <PlatformIssueReason
+                        issue={toPlatformIssue(issue())}
+                        data-truenas-storage-health={issue()?.status}
+                      />
+                    </TableCell>
+                  </TableRow>
+                  <TrueNASResourceDetailRow
+                    resource={resource()}
+                    indicator={indicator()}
+                    drawer={drawer}
+                    colSpan={6}
+                    resolveResourceLabel={resolveResourceLabel}
+                  />
+                </>
+              );
+            }}
+          </PlatformWindowedRows>
+        </>
+      }
+    />
   );
 };
 

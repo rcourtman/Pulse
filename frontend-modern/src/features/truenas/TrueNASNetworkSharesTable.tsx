@@ -1,5 +1,4 @@
-import { Show, createMemo, type Component, type JSX } from 'solid-js';
-import { StatusDot } from '@/components/shared/StatusDot';
+import { createMemo, type Component, type JSX } from 'solid-js';
 import { TableCell, TableRow } from '@/components/shared/Table';
 import { getSimpleStatusIndicator } from '@/utils/status';
 import { asTrimmedString } from '@/utils/stringUtils';
@@ -7,8 +6,6 @@ import {
   PlatformWindowedRows,
   PlatformResponsiveTableLabel,
   PlatformSortableTableHead,
-  PlatformTableEmptyState,
-  PlatformTableToolbar,
   createPlatformTableFilterState,
   createPlatformTableSortState,
   formatPlatformTableTitleCaseValue,
@@ -16,18 +13,21 @@ import {
   summarizePlatformTableValues,
   type PlatformTableFilterOption,
   type PlatformTableSortValue,
-  PlatformTableShell,
-  withPlatformStatusCounts,
 } from '@/features/platformPage/sharedPlatformPage';
+import {
+  TrueNASResourceDetailRow,
+  TrueNASRowLead,
+  TrueNASStateNoteDetails,
+  TrueNASTableFrame,
+  createTrueNASDetailState,
+  type TrueNASStateNote,
+} from './TrueNASTableFrame';
 import {
   getPlatformInlineStateClass,
   getPlatformStatusTextToneClass,
   isPlatformAttentionVariant,
 } from '@/features/platformPage/platformStatusTone';
 import {
-  PlatformResourceDetailToggleButton,
-  PlatformResourceDetailTableRow,
-  createPlatformResourceDetailState,
   createPlatformResourceLabelResolver,
   getPlatformResourceDetailRowClass,
 } from '@/features/platformPage/PlatformResourceDetailTableRow';
@@ -35,6 +35,7 @@ import type { Resource, ResourceTrueNASShareMeta } from '@/types/resource';
 import {
   filterTrueNASShares,
   getTrueNASResourceDisplayStatus,
+  getTrueNASStaleNotice,
   mapTrueNASShareStatus,
   type TrueNASShareStatusFilter,
 } from './truenasPageModel';
@@ -65,19 +66,23 @@ const formatAccess = (
   return summarizePlatformTableValues(flags, { emptyText: '—', maxVisible: 3 });
 };
 
+const prefixedValues = (values: readonly string[] | undefined, prefix: string): string[] =>
+  (values ?? [])
+    .map((value) => asTrimmedString(value))
+    .filter((value): value is string => Boolean(value))
+    .map((value) => `${prefix}:${value}`);
+
 const formatClients = (
   share: ResourceTrueNASShareMeta | undefined,
-): { label: string; title: string } => {
-  const networks = summarizePlatformTableValues(share?.networks, { emptyText: '—' }).values;
-  const hosts = summarizePlatformTableValues(share?.hosts, { emptyText: '—' }).values;
-  const aliases = summarizePlatformTableValues(share?.aliases, { emptyText: '—' }).values;
-  const values = [
-    ...networks.map((network) => `net:${network}`),
-    ...hosts.map((host) => `host:${host}`),
-    ...aliases.map((alias) => `alias:${alias}`),
-  ];
-  return summarizePlatformTableValues(values, { emptyText: '—' });
-};
+): { label: string; title: string } =>
+  summarizePlatformTableValues(
+    [
+      ...prefixedValues(share?.networks, 'net'),
+      ...prefixedValues(share?.hosts, 'host'),
+      ...prefixedValues(share?.aliases, 'alias'),
+    ],
+    { emptyText: '—' },
+  );
 
 const formatSecurity = (
   share: ResourceTrueNASShareMeta | undefined,
@@ -97,6 +102,20 @@ const shareName = (resource: Resource, share: ResourceTrueNASShareMeta | undefin
   asTrimmedString(resource.displayName) ||
   asTrimmedString(resource.name) ||
   resource.id;
+
+const shareReportedState = (
+  resource: Resource,
+  share: ResourceTrueNASShareMeta | undefined,
+): string => {
+  if (share?.locked) return 'Locked';
+  if (share?.enabled === false || resource.status === 'offline' || resource.status === 'stopped') {
+    return 'Disabled';
+  }
+  if (share?.enabled === true || resource.status === 'online' || resource.status === 'running') {
+    return 'Active';
+  }
+  return 'Attention';
+};
 
 // Columns a user can sort by. Access and Clients summarize several flags or
 // endpoints at once, so they carry no single scalar to order on.
@@ -144,7 +163,7 @@ export const TrueNASNetworkSharesTable: Component<{
     externalSearch: props.search,
     onExternalSearchChange: props.onSearchChange,
   });
-  const drawer = createPlatformResourceDetailState({ idPrefix: 'truenas-share-drawer' });
+  const drawer = createTrueNASDetailState('truenas-share-drawer');
   const resolveResourceLabel = createPlatformResourceLabelResolver(() => props.scope);
   const sort = createPlatformTableSortState({
     storageKey: 'truenasShares',
@@ -155,216 +174,202 @@ export const TrueNASNetworkSharesTable: Component<{
   );
 
   return (
-    <Show
-      when={props.shares.length > 0}
-      fallback={
-        <PlatformTableEmptyState
-          icon={props.emptyIcon}
-          title={props.emptyTitle}
-          description={props.emptyDescription}
-        />
+    <TrueNASTableFrame
+      hasItems={props.shares.length > 0}
+      tableState={tableState}
+      common={props}
+      searchPlaceholder="Search TrueNAS shares"
+      statusOptions={TRUENAS_SHARE_STATUS_OPTIONS}
+      rowNoun="shares"
+      title="Network Shares"
+      tableClass="min-w-full table-fixed text-xs md:min-w-[960px]"
+      header={
+        <>
+          <PlatformSortableTableHead
+            kind="name"
+            sort={sort}
+            sortKey="share"
+            class="platform-table-mobile-w-30 md:w-[23%]"
+          >
+            Share
+          </PlatformSortableTableHead>
+          <PlatformSortableTableHead
+            kind="text"
+            sort={sort}
+            sortKey="protocol"
+            class="platform-table-mobile-w-15 md:w-[11%]"
+          >
+            <PlatformResponsiveTableLabel compact="Proto" full="Protocol" />
+          </PlatformSortableTableHead>
+          <PlatformSortableTableHead
+            kind="text"
+            sort={sort}
+            sortKey="path"
+            class="platform-table-mobile-w-25 md:w-[23%]"
+          >
+            Path
+          </PlatformSortableTableHead>
+          <PlatformSortableTableHead
+            kind="text"
+            sort={sort}
+            class="platform-table-phone-hidden md:w-[16%]"
+          >
+            <PlatformResponsiveTableLabel compact="ACL" full="Access" />
+          </PlatformSortableTableHead>
+          <PlatformSortableTableHead
+            kind="text"
+            sort={sort}
+            class="hidden lg:table-cell md:w-[13%]"
+          >
+            Clients
+          </PlatformSortableTableHead>
+          <PlatformSortableTableHead
+            kind="badge"
+            sort={sort}
+            sortKey="state"
+            class="platform-table-phone-hidden md:w-[14%]"
+          >
+            State
+          </PlatformSortableTableHead>
+        </>
       }
-    >
-      <div class="space-y-3">
-        <Show when={props.showToolbar !== false}>
-          <PlatformTableToolbar
-            search={tableState.search}
-            onSearchChange={tableState.setSearch}
-            searchPlaceholder="Search TrueNAS shares"
-            searchSuggestions={tableState.searchSuggestions}
-            status={tableState.status()}
-            onStatusChange={tableState.setStatus}
-            statusOptions={withPlatformStatusCounts(
-              TRUENAS_SHARE_STATUS_OPTIONS,
-              tableState.countForStatus,
-            )}
-            visible={tableState.visible()}
-            total={tableState.total()}
-            rowNoun="shares"
-          />
-        </Show>
-
-        <Show
-          when={tableState.filtered().length > 0}
-          fallback={
-            <PlatformTableEmptyState
-              icon={props.emptyIcon}
-              title="No shares match current filters"
-              description="Adjust the search or status filter to see more TrueNAS shares."
-            />
-          }
-        >
-          <PlatformTableShell
-            title="Network Shares"
-            tableClass="min-w-full table-fixed text-xs md:min-w-[960px]"
-            header={
-              <>
-                <PlatformSortableTableHead
-                  kind="name"
-                  sort={sort}
-                  sortKey="share"
-                  class="platform-table-mobile-w-30 md:w-[23%]"
-                >
-                  Share
-                </PlatformSortableTableHead>
-                <PlatformSortableTableHead
-                  kind="text"
-                  sort={sort}
-                  sortKey="protocol"
-                  class="platform-table-mobile-w-15 md:w-[11%]"
-                >
-                  <PlatformResponsiveTableLabel compact="Proto" full="Protocol" />
-                </PlatformSortableTableHead>
-                <PlatformSortableTableHead
-                  kind="text"
-                  sort={sort}
-                  sortKey="path"
-                  class="platform-table-mobile-w-25 md:w-[27%]"
-                >
-                  Path
-                </PlatformSortableTableHead>
-                <PlatformSortableTableHead
-                  kind="text"
-                  sort={sort}
-                  class="platform-table-phone-hidden md:w-[19%]"
-                >
-                  <PlatformResponsiveTableLabel compact="ACL" full="Access" />
-                </PlatformSortableTableHead>
-                <PlatformSortableTableHead
-                  kind="text"
-                  sort={sort}
-                  class="hidden lg:table-cell md:w-[13%]"
-                >
-                  Clients
-                </PlatformSortableTableHead>
-                <PlatformSortableTableHead
-                  kind="badge"
-                  sort={sort}
-                  sortKey="state"
-                  class="platform-table-phone-hidden md:w-[7%]"
-                >
-                  State
-                </PlatformSortableTableHead>
-              </>
-            }
-            body={
-              <>
-                <PlatformWindowedRows items={sortedRows} estimatedRowHeight={32}>
-                  {(resource) => {
-                    const share = () => shareMeta(resource);
-                    const name = () => shareName(resource, share());
-                    const displayStatus = () => getTrueNASResourceDisplayStatus(resource);
-                    const indicator = () => getSimpleStatusIndicator(displayStatus());
-                    const access = createMemo(() => formatAccess(share()));
-                    const clients = createMemo(() => formatClients(share()));
-                    const security = createMemo(() => formatSecurity(share()));
-                    const stateLabel = () =>
-                      formatPlatformTableTitleCaseValue(mapTrueNASShareStatus(resource));
-                    const detailRowId = () => drawer.detailRowId(resource);
-                    const isExpanded = () => drawer.isExpanded(resource);
-                    return (
-                      <>
-                        <TableRow
-                          class={`${getPlatformResourceDetailRowClass(isExpanded())} text-[11px] sm:text-xs`}
-                          data-truenas-share-row={resource.id}
-                          onClick={() => drawer.toggle(resource)}
+      body={
+        <>
+          <PlatformWindowedRows items={sortedRows} estimatedRowHeight={32}>
+            {(resource) => {
+              const share = () => shareMeta(resource);
+              const name = () => shareName(resource, share());
+              const displayStatus = () => getTrueNASResourceDisplayStatus(resource);
+              const staleNotice = () => getTrueNASStaleNotice(resource);
+              const indicator = () =>
+                share()?.locked && !staleNotice()
+                  ? { variant: 'warning' as const, label: 'Locked' }
+                  : getSimpleStatusIndicator(displayStatus());
+              const access = createMemo(() => formatAccess(share()));
+              const clients = createMemo(() => formatClients(share()));
+              const security = createMemo(() => formatSecurity(share()));
+              const stateLabel = () => shareReportedState(resource, share());
+              const showPhoneState = () =>
+                Boolean(staleNotice()) || isPlatformAttentionVariant(indicator().variant);
+              const phoneStateLabel = () => {
+                const stale = staleNotice();
+                if (!stale) return stateLabel();
+                return share()?.locked ? `Locked · ${stale.badge}` : stale.badge;
+              };
+              const stateTitle = () =>
+                staleNotice()?.detail ??
+                (share()?.locked ? 'Encrypted dataset is locked' : undefined);
+              const isExpanded = () => drawer.isExpanded(resource);
+              return (
+                <>
+                  <TableRow
+                    class={`${getPlatformResourceDetailRowClass(isExpanded())} text-[11px] sm:text-xs`}
+                    data-truenas-share-row={resource.id}
+                    onClick={() => drawer.toggle(resource)}
+                  >
+                    <TableCell class={getPlatformTableCellClassForKind('name')}>
+                      <TrueNASRowLead
+                        item={resource}
+                        drawer={drawer}
+                        label={name()}
+                        variant={indicator().variant}
+                        dotTitle={stateTitle() ?? indicator().label}
+                      >
+                        <div
+                          class={
+                            showPhoneState()
+                              ? 'min-w-0 flex-1 sm:flex sm:items-center sm:gap-1.5'
+                              : 'flex min-w-0 flex-1 items-center gap-1.5'
+                          }
                         >
-                          <TableCell class={getPlatformTableCellClassForKind('name')}>
-                            <div class="flex min-w-0 items-center gap-2">
-                              <PlatformResourceDetailToggleButton
-                                expanded={isExpanded()}
-                                resourceLabel={name()}
-                                controlsId={detailRowId()}
-                                onToggle={() => drawer.toggle(resource)}
-                              />
-                              <StatusDot
-                                size="sm"
-                                variant={indicator().variant}
-                                title={indicator().label}
-                              />
-                              <div class="flex min-w-0 flex-1 items-center gap-1.5">
-                                <div
-                                  class="min-w-0 truncate font-medium text-base-content"
-                                  title={[
-                                    name(),
-                                    share()?.dataset ||
-                                      share()?.path ||
-                                      resource.parentName ||
-                                      'TrueNAS',
-                                  ]
-                                    .filter(Boolean)
-                                    .join(' · ')}
-                                >
-                                  {name()}
-                                </div>
-                                {/* A phone hides State; a state that needs attention joins the
-                                    name on its line. */}
-                                <span
-                                  class={`platform-table-phone-only-inline text-[11px] ${getPlatformInlineStateClass(isPlatformAttentionVariant(indicator().variant))} ${getPlatformStatusTextToneClass(indicator().variant)}`}
-                                  data-truenas-share-state-phone={indicator().variant}
-                                >
-                                  <span class="min-w-0 truncate">{stateLabel()}</span>
-                                </span>
-                              </div>
-                            </div>
-                          </TableCell>
-                          <TableCell class={getPlatformTableCellClassForKind('text')}>
-                            <span class="font-mono text-[11px] text-base-content">
-                              {formatProtocol(share())}
-                            </span>
-                          </TableCell>
-                          <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
+                          <div
+                            class="min-w-0 truncate font-medium text-base-content"
+                            title={[
+                              name(),
+                              share()?.dataset || share()?.path || resource.parentName || 'TrueNAS',
+                              stateTitle(),
+                            ]
+                              .filter(Boolean)
+                              .join(' · ')}
                           >
-                            <span
-                              class="block truncate font-mono text-[11px]"
-                              title={share()?.path}
-                            >
-                              {share()?.path || '-'}
-                            </span>
-                          </TableCell>
-                          <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} platform-table-phone-hidden text-base-content`}
-                            title={[access().title, security().title].filter(Boolean).join(' | ')}
+                            {name()}
+                          </div>
+                          {/* A phone hides State; an attention or stale share stacks
+                                    its cue under the name so neither label clips. */}
+                          <span
+                            class={`platform-table-phone-only-inline text-[10px] leading-tight ${getPlatformInlineStateClass(showPhoneState())} ${getPlatformStatusTextToneClass(indicator().variant)}`}
+                            title={stateTitle()}
+                            data-truenas-share-state-phone={indicator().variant}
                           >
-                            <span class="block truncate">{access().label}</span>
-                          </TableCell>
-                          <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content lg:table-cell`}
-                            title={clients().title}
-                          >
-                            <span class="block truncate">{clients().label}</span>
-                          </TableCell>
-                          <TableCell
-                            class={`${getPlatformTableCellClassForKind('badge')} platform-table-phone-hidden`}
-                          >
-                            <span
-                              class={`text-[11px] font-medium ${getPlatformStatusTextToneClass(indicator().variant) || 'text-base-content'}`}
-                              data-truenas-share-state={indicator().variant}
-                            >
-                              {stateLabel()}
-                            </span>
-                          </TableCell>
-                        </TableRow>
-                        <PlatformResourceDetailTableRow
-                          resource={resource}
-                          statusIndicator={indicator()}
-                          open={isExpanded()}
-                          detailRowId={detailRowId()}
-                          colSpan={6}
-                          resolveResourceLabel={resolveResourceLabel}
-                          onClose={() => drawer.close(resource)}
-                        />
-                      </>
-                    );
-                  }}
-                </PlatformWindowedRows>
-              </>
-            }
-          />
-        </Show>
-      </div>
-    </Show>
+                            <span class="min-w-0 truncate">{phoneStateLabel()}</span>
+                          </span>
+                        </div>
+                      </TrueNASRowLead>
+                    </TableCell>
+                    <TableCell class={getPlatformTableCellClassForKind('text')}>
+                      <span class="font-mono text-[11px] text-base-content">
+                        {formatProtocol(share())}
+                      </span>
+                    </TableCell>
+                    <TableCell
+                      class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
+                    >
+                      <span class="block truncate font-mono text-[11px]" title={share()?.path}>
+                        {share()?.path || '-'}
+                      </span>
+                    </TableCell>
+                    <TableCell
+                      class={`${getPlatformTableCellClassForKind('text')} platform-table-phone-hidden text-base-content`}
+                      title={[access().title, security().title].filter(Boolean).join(' | ')}
+                    >
+                      <span class="block truncate">{access().label}</span>
+                    </TableCell>
+                    <TableCell
+                      class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content lg:table-cell`}
+                      title={clients().title}
+                    >
+                      <span class="block truncate">{clients().label}</span>
+                    </TableCell>
+                    <TableCell
+                      class={`${getPlatformTableCellClassForKind('badge')} platform-table-phone-hidden`}
+                    >
+                      <TrueNASStateNoteDetails
+                        note={
+                          staleNotice()
+                            ? ({
+                                short: 'not updated',
+                                full: staleNotice()!.detail,
+                                tone: 'warning',
+                              } satisfies TrueNASStateNote)
+                            : null
+                        }
+                        title={stateTitle()}
+                        label={stateLabel()}
+                        labelClass={`shrink-0 text-[11px] font-medium ${
+                          staleNotice() && !share()?.locked
+                            ? 'text-base-content'
+                            : getPlatformStatusTextToneClass(indicator().variant) ||
+                              'text-base-content'
+                        }`}
+                        dataAttr="share"
+                        shareVariant={indicator().variant}
+                      />
+                    </TableCell>
+                  </TableRow>
+                  <TrueNASResourceDetailRow
+                    resource={resource}
+                    indicator={indicator()}
+                    drawer={drawer}
+                    colSpan={6}
+                    resolveResourceLabel={resolveResourceLabel}
+                  />
+                </>
+              );
+            }}
+          </PlatformWindowedRows>
+        </>
+      }
+    />
   );
 };
 

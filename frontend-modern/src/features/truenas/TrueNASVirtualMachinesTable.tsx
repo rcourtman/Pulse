@@ -1,15 +1,11 @@
 import { Show, createMemo, type Component, type JSX } from 'solid-js';
-import { StatusDot } from '@/components/shared/StatusDot';
 import { TableCell, TableRow } from '@/components/shared/Table';
 import { getSimpleStatusIndicator } from '@/utils/status';
 import { asTrimmedString } from '@/utils/stringUtils';
-import { hasImpairedResourceSource } from '@/utils/resourceSourceHealth';
 import {
   PlatformWindowedRows,
   PlatformResponsiveTableLabel,
   PlatformSortableTableHead,
-  PlatformTableEmptyState,
-  PlatformTableToolbar,
   createPlatformTableFilterState,
   createPlatformTableSortState,
   formatPlatformTableBytesValue,
@@ -17,17 +13,18 @@ import {
   getPlatformTableCellClassForKind,
   type PlatformTableFilterOption,
   type PlatformTableSortValue,
-  PlatformTableShell,
-  withPlatformStatusCounts,
 } from '@/features/platformPage/sharedPlatformPage';
 import {
-  getPlatformInlineStateClass,
-  getPlatformStatusTextToneClass,
-} from '@/features/platformPage/platformStatusTone';
+  TrueNASPhoneStateNote,
+  TrueNASResourceDetailRow,
+  TrueNASRowLead,
+  TrueNASStateNoteDetails,
+  TrueNASTableFrame,
+  createTrueNASDetailState,
+  resolveTrueNASAttentionNote,
+  type TrueNASStateNote,
+} from './TrueNASTableFrame';
 import {
-  PlatformResourceDetailToggleButton,
-  PlatformResourceDetailTableRow,
-  createPlatformResourceDetailState,
   createPlatformResourceLabelResolver,
   getPlatformResourceDetailRowClass,
 } from '@/features/platformPage/PlatformResourceDetailTableRow';
@@ -80,27 +77,19 @@ const flagLabels = (vm: ResourceTrueNASVMMeta | undefined): string[] => {
 // for a state TrueNAS flags. Rows stay single-line (the shared platform-table
 // rhythm), so the full sentence rides on the title. Bootloader and device
 // counts are configuration, not condition, so they live in the drawer.
-type VMStateNote = { short: string | null; full: string; tone: 'danger' | 'warning' };
-
-const vmStateNote = (resource: Resource): VMStateNote | null => {
+const vmStateNote = (resource: Resource): TrueNASStateNote | null => {
   const status = mapTrueNASVMStatus(resource);
   if (status === 'stopped') {
     return vmMeta(resource)?.autostart
       ? { short: 'should be running', full: 'Set to start at boot but stopped', tone: 'danger' }
       : null;
   }
-  if (status !== 'attention') return null;
-  if (hasImpairedResourceSource(resource, 'truenas')) {
-    return { short: 'not updated', full: 'TrueNAS has not updated this recently', tone: 'warning' };
-  }
-  const state = asTrimmedString(vmMeta(resource)?.state || vmMeta(resource)?.domainState);
-  return {
-    short: state ? null : 'not reported',
-    full: state
-      ? `TrueNAS reports ${formatPlatformTableTitleCaseValue(state)}`
-      : 'TrueNAS has not reported a state',
-    tone: 'warning',
-  };
+  return status === 'attention'
+    ? resolveTrueNASAttentionNote(
+        resource,
+        vmMeta(resource)?.state || vmMeta(resource)?.domainState,
+      )
+    : null;
 };
 
 // Columns a user can sort by. Flags summarize several values at once, so they
@@ -171,7 +160,7 @@ export const TrueNASVirtualMachinesTable: Component<{
     externalSearch: props.search,
     onExternalSearchChange: props.onSearchChange,
   });
-  const drawer = createPlatformResourceDetailState({ idPrefix: 'truenas-vm-drawer' });
+  const drawer = createTrueNASDetailState('truenas-vm-drawer');
   const resolveResourceLabel = createPlatformResourceLabelResolver(() => props.scope);
   const sort = createPlatformTableSortState({
     storageKey: 'truenasVms',
@@ -181,223 +170,155 @@ export const TrueNASVirtualMachinesTable: Component<{
   const sortedRows = createMemo(() => sort.sortRows(tableState.filtered(), getTrueNASVMSortValue));
 
   return (
-    <Show
-      when={props.vms.length > 0}
-      fallback={
-        <PlatformTableEmptyState
-          icon={props.emptyIcon}
-          title={props.emptyTitle}
-          description={props.emptyDescription}
-        />
+    <TrueNASTableFrame
+      hasItems={props.vms.length > 0}
+      tableState={tableState}
+      common={props}
+      searchPlaceholder="Search TrueNAS VMs"
+      statusOptions={TRUENAS_VM_STATUS_OPTIONS}
+      rowNoun="VMs"
+      title="Virtual Machines"
+      tableClass="min-w-full table-fixed text-xs md:min-w-[960px]"
+      header={
+        <>
+          <PlatformSortableTableHead
+            kind="name"
+            sort={sort}
+            sortKey="vm"
+            class="platform-table-mobile-w-30 md:w-[34%]"
+          >
+            VM
+          </PlatformSortableTableHead>
+          <PlatformSortableTableHead
+            kind="badge"
+            sort={sort}
+            sortKey="state"
+            class="platform-table-phone-hidden md:w-[14%]"
+          >
+            State
+          </PlatformSortableTableHead>
+          <PlatformSortableTableHead
+            kind="numeric-value"
+            sort={sort}
+            sortKey="cpu"
+            class="platform-table-mobile-w-15 md:w-[12%]"
+          >
+            CPU
+          </PlatformSortableTableHead>
+          <PlatformSortableTableHead
+            kind="numeric-value"
+            sort={sort}
+            sortKey="memory"
+            class="platform-table-mobile-w-15 md:w-[14%]"
+          >
+            <PlatformResponsiveTableLabel compact="Mem" full="Memory" />
+          </PlatformSortableTableHead>
+          <PlatformSortableTableHead
+            kind="text"
+            sort={sort}
+            class="hidden sm:table-cell md:w-[26%]"
+          >
+            Flags
+          </PlatformSortableTableHead>
+        </>
       }
-    >
-      <div class="space-y-3">
-        <Show when={props.showToolbar !== false}>
-          <PlatformTableToolbar
-            search={tableState.search}
-            onSearchChange={tableState.setSearch}
-            searchPlaceholder="Search TrueNAS VMs"
-            searchSuggestions={tableState.searchSuggestions}
-            status={tableState.status()}
-            onStatusChange={tableState.setStatus}
-            statusOptions={withPlatformStatusCounts(
-              TRUENAS_VM_STATUS_OPTIONS,
-              tableState.countForStatus,
-            )}
-            visible={tableState.visible()}
-            total={tableState.total()}
-            rowNoun="VMs"
-          />
-        </Show>
-
-        <Show
-          when={tableState.filtered().length > 0}
-          fallback={
-            <PlatformTableEmptyState
-              icon={props.emptyIcon}
-              title="No VMs match current filters"
-              description="Adjust the search or status filter to see more TrueNAS VMs."
-            />
-          }
-        >
-          <PlatformTableShell
-            title="Virtual Machines"
-            tableClass="min-w-full table-fixed text-xs md:min-w-[960px]"
-            header={
-              <>
-                <PlatformSortableTableHead
-                  kind="name"
-                  sort={sort}
-                  sortKey="vm"
-                  class="platform-table-mobile-w-30 md:w-[34%]"
-                >
-                  VM
-                </PlatformSortableTableHead>
-                <PlatformSortableTableHead
-                  kind="badge"
-                  sort={sort}
-                  sortKey="state"
-                  class="platform-table-phone-hidden md:w-[14%]"
-                >
-                  State
-                </PlatformSortableTableHead>
-                <PlatformSortableTableHead
-                  kind="numeric-value"
-                  sort={sort}
-                  sortKey="cpu"
-                  class="platform-table-mobile-w-15 md:w-[12%]"
-                >
-                  CPU
-                </PlatformSortableTableHead>
-                <PlatformSortableTableHead
-                  kind="numeric-value"
-                  sort={sort}
-                  sortKey="memory"
-                  class="platform-table-mobile-w-15 md:w-[14%]"
-                >
-                  <PlatformResponsiveTableLabel compact="Mem" full="Memory" />
-                </PlatformSortableTableHead>
-                <PlatformSortableTableHead
-                  kind="text"
-                  sort={sort}
-                  class="hidden sm:table-cell md:w-[26%]"
-                >
-                  Flags
-                </PlatformSortableTableHead>
-              </>
-            }
-            body={
-              <>
-                <PlatformWindowedRows items={sortedRows} estimatedRowHeight={32}>
-                  {(resource) => {
-                    const vm = () => vmMeta(resource);
-                    const name = () =>
-                      asTrimmedString(vm()?.name) ||
-                      asTrimmedString(resource.displayName) ||
-                      asTrimmedString(resource.name) ||
-                      resource.id;
-                    const displayStatus = () => getTrueNASResourceDisplayStatus(resource);
-                    const indicator = () => getSimpleStatusIndicator(displayStatus());
-                    const stateLabel = () =>
-                      formatPlatformTableTitleCaseValue(vm()?.state || vm()?.domainState);
-                    const note = () => vmStateNote(resource);
-                    const flags = createMemo(() => flagLabels(vm()));
-                    const detailRowId = () => drawer.detailRowId(resource);
-                    const isExpanded = () => drawer.isExpanded(resource);
-                    return (
-                      <>
-                        <TableRow
-                          class={`${getPlatformResourceDetailRowClass(isExpanded())} text-[11px] sm:text-xs`}
-                          data-truenas-vm-row={resource.id}
-                          onClick={() => drawer.toggle(resource)}
-                        >
-                          <TableCell class={getPlatformTableCellClassForKind('name')}>
-                            <div class="flex min-w-0 items-center gap-2">
-                              <PlatformResourceDetailToggleButton
-                                expanded={isExpanded()}
-                                resourceLabel={name()}
-                                controlsId={detailRowId()}
-                                onToggle={() => drawer.toggle(resource)}
-                              />
-                              <StatusDot
-                                size="sm"
-                                variant={indicator().variant}
-                                title={indicator().label}
-                              />
-                              <div class="flex min-w-0 flex-1 items-center gap-1.5">
-                                <div
-                                  class="min-w-0 truncate font-medium text-base-content"
-                                  title={[
-                                    name(),
-                                    vm()?.description ||
-                                      vm()?.uuid ||
-                                      resource.parentName ||
-                                      'TrueNAS',
-                                  ]
-                                    .filter(Boolean)
-                                    .join(' · ')}
-                                >
-                                  {name()}
-                                </div>
-                                {/* A phone hides State; a state that needs attention joins the
+      body={
+        <>
+          <PlatformWindowedRows items={sortedRows} estimatedRowHeight={32}>
+            {(resource) => {
+              const vm = () => vmMeta(resource);
+              const name = () =>
+                asTrimmedString(vm()?.name) ||
+                asTrimmedString(resource.displayName) ||
+                asTrimmedString(resource.name) ||
+                resource.id;
+              const displayStatus = () => getTrueNASResourceDisplayStatus(resource);
+              const indicator = () => getSimpleStatusIndicator(displayStatus());
+              const stateLabel = () =>
+                formatPlatformTableTitleCaseValue(vm()?.state || vm()?.domainState);
+              const note = () => vmStateNote(resource);
+              const flags = createMemo(() => flagLabels(vm()));
+              const isExpanded = () => drawer.isExpanded(resource);
+              return (
+                <>
+                  <TableRow
+                    class={`${getPlatformResourceDetailRowClass(isExpanded())} text-[11px] sm:text-xs`}
+                    data-truenas-vm-row={resource.id}
+                    onClick={() => drawer.toggle(resource)}
+                  >
+                    <TableCell class={getPlatformTableCellClassForKind('name')}>
+                      <TrueNASRowLead
+                        item={resource}
+                        drawer={drawer}
+                        label={name()}
+                        variant={indicator().variant}
+                        dotTitle={indicator().label}
+                      >
+                        <div class="flex min-w-0 flex-1 items-center gap-1.5">
+                          <div
+                            class="min-w-0 truncate font-medium text-base-content"
+                            title={[
+                              name(),
+                              vm()?.description || vm()?.uuid || resource.parentName || 'TrueNAS',
+                            ]
+                              .filter(Boolean)
+                              .join(' · ')}
+                          >
+                            {name()}
+                          </div>
+                          {/* A phone hides State; a state that needs attention joins the
                                     name on its line. */}
-                                <span
-                                  class={`platform-table-phone-only-inline text-[11px] ${getPlatformInlineStateClass(Boolean(note()))} ${note() ? getPlatformStatusTextToneClass(note()!.tone) : ''}`}
-                                  data-truenas-vm-state-phone={note() ? note()!.tone : 'none'}
-                                >
-                                  <span class="min-w-0 truncate">
-                                    {[stateLabel(), note()?.short].filter(Boolean).join(' · ')}
-                                  </span>
-                                </span>
-                              </div>
-                            </div>
-                          </TableCell>
-                          <TableCell
-                            class={`${getPlatformTableCellClassForKind('badge')} platform-table-phone-hidden`}
-                          >
-                            <div
-                              class="inline-flex max-w-full min-w-0 items-center gap-1.5"
-                              title={note()?.full}
-                              data-truenas-vm-state-note={note() ? note()!.tone : undefined}
-                            >
-                              <span class="shrink-0 text-[11px] font-medium text-base-content">
-                                {stateLabel()}
-                              </span>
-                              <Show when={note()?.short}>
-                                {(short) => (
-                                  <span
-                                    class={`min-w-0 truncate text-[11px] font-medium ${getPlatformStatusTextToneClass(note()!.tone)}`}
-                                  >
-                                    {short()}
-                                  </span>
-                                )}
-                              </Show>
-                              <Show when={note()}>
-                                {(current) => <span class="sr-only">{current().full}</span>}
-                              </Show>
-                            </div>
-                          </TableCell>
-                          <TableCell
-                            class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
-                          >
-                            {formatCPU(vm())}
-                          </TableCell>
-                          <TableCell
-                            class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
-                          >
-                            {formatPlatformTableBytesValue(vm()?.memoryBytes, '—')}
-                          </TableCell>
-                          <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content sm:table-cell`}
-                            title={flags().join(', ')}
-                          >
-                            <Show
-                              when={flags().length > 0}
-                              fallback={<span class="text-muted">-</span>}
-                            >
-                              <span class="truncate">{flags().slice(0, 2).join(', ')}</span>
-                            </Show>
-                          </TableCell>
-                        </TableRow>
-                        <PlatformResourceDetailTableRow
-                          resource={resource}
-                          statusIndicator={indicator()}
-                          open={isExpanded()}
-                          detailRowId={detailRowId()}
-                          colSpan={5}
-                          resolveResourceLabel={resolveResourceLabel}
-                          onClose={() => drawer.close(resource)}
-                        />
-                      </>
-                    );
-                  }}
-                </PlatformWindowedRows>
-              </>
-            }
-          />
-        </Show>
-      </div>
-    </Show>
+                          <TrueNASPhoneStateNote
+                            note={note()}
+                            stateLabel={stateLabel()}
+                            dataAttr="vm"
+                          />
+                        </div>
+                      </TrueNASRowLead>
+                    </TableCell>
+                    <TableCell
+                      class={`${getPlatformTableCellClassForKind('badge')} platform-table-phone-hidden`}
+                    >
+                      <TrueNASStateNoteDetails
+                        note={note()}
+                        labelClass="shrink-0 text-[11px] font-medium text-base-content"
+                        label={stateLabel()}
+                        dataAttr="vm"
+                      />
+                    </TableCell>
+                    <TableCell
+                      class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
+                    >
+                      {formatCPU(vm())}
+                    </TableCell>
+                    <TableCell
+                      class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
+                    >
+                      {formatPlatformTableBytesValue(vm()?.memoryBytes, '—')}
+                    </TableCell>
+                    <TableCell
+                      class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content sm:table-cell`}
+                      title={flags().join(', ')}
+                    >
+                      <Show when={flags().length > 0} fallback={<span class="text-muted">-</span>}>
+                        <span class="truncate">{flags().slice(0, 2).join(', ')}</span>
+                      </Show>
+                    </TableCell>
+                  </TableRow>
+                  <TrueNASResourceDetailRow
+                    resource={resource}
+                    indicator={indicator()}
+                    drawer={drawer}
+                    colSpan={5}
+                    resolveResourceLabel={resolveResourceLabel}
+                  />
+                </>
+              );
+            }}
+          </PlatformWindowedRows>
+        </>
+      }
+    />
   );
 };
 

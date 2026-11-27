@@ -1448,4 +1448,40 @@ describe('pool identity boundary', () => {
 
     expect(rows.find((row) => row.resource.id === malformed.id)).toBeUndefined();
   });
+
+  it('prefers top-level sourceStatus over stale platformData and preserves worse status while stale', () => {
+    const staleTopLevel = makeResource({
+      id: 'pool-top-stale',
+      type: 'storage',
+      status: 'online',
+      sourceStatus: { truenas: { status: 'stale' } },
+      storage: { topology: 'pool', platform: 'truenas', zfsPoolState: 'ONLINE' },
+    });
+    expect(getTrueNASResourceDisplayStatus(staleTopLevel)).toBe('degraded');
+    expect(mapTrueNASStorageStatus(staleTopLevel)).toBe('attention');
+
+    const recoveredTopLevel = makeResource({
+      id: 'pool-recovered',
+      type: 'storage',
+      status: 'online',
+      sourceStatus: { truenas: { status: 'online' } },
+      platformData: { sourceStatus: { truenas: { status: 'stale' } } },
+      storage: { topology: 'pool', platform: 'truenas', zfsPoolState: 'ONLINE' },
+    });
+    expect(getTrueNASResourceDisplayStatus(recoveredTopLevel)).toBe('online');
+    expect(mapTrueNASStorageStatus(recoveredTopLevel)).toBe('healthy');
+
+    const staleOffline = makeResource({
+      id: 'pool-offline-stale',
+      type: 'storage',
+      status: 'offline',
+      sourceStatus: { truenas: { status: 'error', error: 'timeout' } },
+      storage: { topology: 'pool', platform: 'truenas', zfsPoolState: 'OFFLINE' },
+    });
+    expect(getTrueNASResourceDisplayStatus(staleOffline)).toBe('offline');
+    expect(mapTrueNASStorageStatus(staleOffline)).toBe('offline');
+    expect(getTrueNASStorageIssue(staleOffline)?.reasons).toContain(
+      'TrueNAS collection error: timeout',
+    );
+  });
 });

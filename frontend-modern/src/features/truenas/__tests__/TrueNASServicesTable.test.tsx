@@ -138,4 +138,53 @@ describe('TrueNASServicesTable', () => {
     expect(detail.getByText('Condition')).toBeInTheDocument();
     expect(detail.getByText('Should be running')).toBeInTheDocument();
   });
+
+  it('uses top-level sourceStatus for stale service notices and clears staleness on live recovery', () => {
+    const staleRows = buildTrueNASServiceRows([
+      makeSystem({
+        id: 'sys-stale',
+        name: 'nas-stale',
+        displayName: 'nas-stale',
+        sourceStatus: { truenas: { status: 'error', error: 'connection refused' } },
+        truenas: {
+          hostname: 'nas-stale',
+          services: [{ id: '1', service: 'smb', enabled: true, state: 'RUNNING' }],
+        },
+      }),
+      makeSystem({
+        id: 'sys-fresh',
+        name: 'nas-fresh',
+        displayName: 'nas-fresh',
+        sourceStatus: { truenas: { status: 'online' } },
+        platformData: { sourceStatus: { truenas: { status: 'stale' } } },
+        truenas: {
+          hostname: 'nas-fresh',
+          services: [{ id: '2', service: 'nfs', enabled: true, state: 'RUNNING' }],
+        },
+      }),
+    ]);
+
+    render(() => (
+      <TrueNASServicesTable
+        services={staleRows}
+        emptyIcon={<span />}
+        emptyTitle="No services"
+        emptyDescription="No services"
+        showToolbar={false}
+      />
+    ));
+
+    const smbNote = screen
+      .getByText('SMB')
+      .closest('tr')
+      ?.querySelector('[data-truenas-service-state-note]');
+    expect(smbNote).toHaveTextContent('Runningnot updated');
+    expect(smbNote).toHaveAttribute('title', 'TrueNAS collection error: connection refused');
+
+    const nfsNote = screen
+      .getByText('NFS')
+      .closest('tr')
+      ?.querySelector('[data-truenas-service-state-note]');
+    expect(nfsNote).toBeNull();
+  });
 });

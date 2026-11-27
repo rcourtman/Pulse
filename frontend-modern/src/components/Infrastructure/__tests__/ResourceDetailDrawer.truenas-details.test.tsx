@@ -370,4 +370,38 @@ describe('ResourceDetailDrawer TrueNAS details', () => {
     expect(worthChecking(queryByTestId)?.getByText('Reallocated')).toBeInTheDocument();
     expect(details(getByTestId).getByText('WD-WX12A3456')).toBeInTheDocument();
   });
+
+  it('lifts stale TrueNAS readings into Worth checking across drawers and clears on live recovery', () => {
+    const staleSystem = baseResource({
+      id: 'truenas-stale-sys',
+      type: 'agent',
+      displayName: 'truenas-stale',
+      sourceStatus: { truenas: { status: 'error', error: 'WebSocket read timed out' } },
+      truenas: { hostname: 'truenas-stale', version: 'TrueNAS-SCALE-25.04' },
+    });
+    const { queryByTestId, unmount } = render(() => (
+      <ResourceDetailDrawer resource={staleSystem} presentation="table-row" />
+    ));
+    const lifted = worthChecking(queryByTestId);
+    expect(lifted?.getByText('Readings')).toBeInTheDocument();
+    const readingValue = lifted?.getByText('TrueNAS collection error: WebSocket read timed out');
+    expect(readingValue).toBeInTheDocument();
+    expect(readingValue?.closest('td')).toHaveClass('whitespace-normal!');
+    unmount();
+
+    const recoveredApp = baseResource({
+      id: 'truenas-recovered-app',
+      type: 'app-container',
+      displayName: 'nextcloud',
+      sourceStatus: { truenas: { status: 'online' } },
+      platformData: { sourceStatus: { truenas: { status: 'stale' } } },
+      truenas: {
+        app: { id: 'nextcloud', name: 'Nextcloud', state: 'RUNNING', containerCount: 2 },
+      },
+    });
+    const recovered = render(() => (
+      <ResourceDetailDrawer resource={recoveredApp} presentation="table-row" />
+    ));
+    expect(worthChecking(recovered.queryByTestId)).toBeNull();
+  });
 });

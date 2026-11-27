@@ -1,8 +1,14 @@
 import { resolveResourcePlatformType } from '@/utils/sourcePlatforms';
 import { asTrimmedString } from '@/utils/stringUtils';
 import { parseBackupTimestampMs } from '@/utils/backupTimestamp';
-import { hasImpairedResourceSource } from '@/utils/resourceSourceHealth';
-import { getTrueNASDatasetStateSummary } from '@/utils/truenasDatasetState';
+import {
+  getTrueNASDatasetStateSummary,
+  getTrueNASStaleNotice,
+  isTrueNASSourceImpaired,
+  type TrueNASStaleNotice,
+} from '@/utils/truenasDatasetState';
+
+export { getTrueNASStaleNotice, isTrueNASSourceImpaired, type TrueNASStaleNotice };
 import type { MetricDisplayThresholds } from '@/utils/metricThresholds';
 import {
   getPhysicalDiskHeatSummary,
@@ -156,19 +162,27 @@ const emptyTrueNASStorageChildCounts = (): TrueNASStorageChildCounts => ({
 });
 
 export function buildTrueNASPageModel(resources: Resource[]): TrueNASPageModel {
-  const trueNasResources = resources.filter(
-    (resource) => isTrueNASPlatform(resource) && TRUENAS_RESOURCE_TYPES.has(resource.type),
-  );
+  const trueNasResources: Resource[] = [];
+  const systems: Resource[] = [];
+  const pools: Resource[] = [];
+  const datasets: Resource[] = [];
+  const disks: Resource[] = [];
+  const shares: Resource[] = [];
+  const vms: Resource[] = [];
+  const apps: Resource[] = [];
 
-  const systems = trueNasResources.filter((resource) => resource.type === 'agent');
-  const pools = trueNasResources.filter(isTrueNASPoolResource);
-  const datasets = trueNasResources.filter(isTrueNASDatasetResource);
-  const disks = trueNasResources.filter((resource) => resource.type === 'physical_disk');
-  const shares = trueNasResources.filter((resource) => resource.type === 'network-share');
-  const vms = trueNasResources.filter((resource) => resource.type === 'vm');
-  const apps = trueNasResources.filter((resource) => resource.type === 'app-container');
-  const services = buildTrueNASServiceRows(systems);
-  const incidents = buildTrueNASIncidentRows(trueNasResources);
+  for (const resource of resources) {
+    if (!isTrueNASPlatform(resource) || !TRUENAS_RESOURCE_TYPES.has(resource.type)) continue;
+    trueNasResources.push(resource);
+    if (resource.type === 'agent') systems.push(resource);
+    else if (resource.type === 'physical_disk') disks.push(resource);
+    else if (resource.type === 'network-share') shares.push(resource);
+    else if (resource.type === 'vm') vms.push(resource);
+    else if (resource.type === 'app-container') apps.push(resource);
+    else if (isTrueNASPoolResource(resource)) pools.push(resource);
+    else if (isTrueNASDatasetResource(resource)) datasets.push(resource);
+  }
+
   return {
     resources: trueNasResources,
     systems,
@@ -178,8 +192,8 @@ export function buildTrueNASPageModel(resources: Resource[]): TrueNASPageModel {
     shares,
     vms,
     apps,
-    services,
-    incidents,
+    services: buildTrueNASServiceRows(systems),
+    incidents: buildTrueNASIncidentRows(trueNasResources),
   };
 }
 
@@ -242,35 +256,46 @@ const firstTrueNASStoragePathSegment = (value?: string | null): string => {
   return normalized.split('/').filter(Boolean)[0] ?? '';
 };
 
+const normalizedPathSet = (values: readonly (string | undefined | null)[]): Set<string> =>
+  new Set(values.map(normalizeTrueNASStoragePath).filter(Boolean));
+
 const trueNASPoolAliases = (resource: Resource): Set<string> =>
-  new Set(
-    [
-      normalizeTrueNASStoragePath(resource.storage?.pool),
-      normalizeTrueNASStoragePath(resource.storage?.path),
-      normalizeTrueNASStoragePath(resource.name),
-      normalizeTrueNASStoragePath(resource.displayName),
-    ].filter(Boolean),
-  );
+  normalizedPathSet([
+    resource.storage?.pool,
+    resource.storage?.path,
+    resource.name,
+    resource.displayName,
+  ]);
 
 const trueNASDatasetAliases = (resource: Resource): Set<string> =>
-  new Set(
-    [
-      normalizeTrueNASStoragePath(resource.storage?.path),
-      normalizeTrueNASStoragePath(resource.name),
-      normalizeTrueNASStoragePath(resource.displayName),
-    ].filter(Boolean),
-  );
+  normalizedPathSet([resource.storage?.path, resource.name, resource.displayName]);
 
 const trueNASResourceDatasetAliases = (resource: Resource): Set<string> =>
-  new Set(
-    [
-      normalizeTrueNASStoragePath(resource.truenas?.share?.dataset),
-      normalizeTrueNASStoragePath(resource.truenas?.share?.path),
-      normalizeTrueNASStoragePath(resource.storage?.path),
-      normalizeTrueNASStoragePath(resource.name),
-      normalizeTrueNASStoragePath(resource.displayName),
-    ].filter(Boolean),
-  );
+  normalizedPathSet([
+    resource.truenas?.share?.dataset,
+    resource.truenas?.share?.path,
+    resource.storage?.path,
+    resource.name,
+    resource.displayName,
+  ]);
+
+const findParentInChain = (
+  resource: Resource,
+  resourceById: Map<string, Resource>,
+  match: (parentId: string, parent: Resource | undefined) => 'hit' | 'stop' | 'continue',
+): string => {
+  let parentId = asTrimmedString(resource.parentId);
+  const visited = new Set<string>();
+  while (parentId && !visited.has(parentId)) {
+    const parent = resourceById.get(parentId);
+    const verdict = match(parentId, parent);
+    if (verdict === 'hit') return parentId;
+    if (verdict === 'stop') return '';
+    visited.add(parentId);
+    parentId = asTrimmedString(parent?.parentId);
+  }
+  return '';
+};
 
 const inferTrueNASPoolName = (resource: Resource): string =>
   normalizeTrueNASStoragePath(resource.physicalDisk?.storageGroup) ||
@@ -300,16 +325,10 @@ export function buildTrueNASSystemChildCounts(
   const resourceById = new Map(resources.map((resource) => [resource.id, resource]));
   const fallbackSystemId = systems.length === 1 ? asTrimmedString(systems[0]?.id) : '';
 
-  const owningSystemId = (resource: Resource): string => {
-    let parentId = asTrimmedString(resource.parentId);
-    const visited = new Set<string>();
-    while (parentId && !visited.has(parentId)) {
-      if (systemIds.has(parentId)) return parentId;
-      visited.add(parentId);
-      parentId = asTrimmedString(resourceById.get(parentId)?.parentId);
-    }
-    return fallbackSystemId && resource.id !== fallbackSystemId ? fallbackSystemId : '';
-  };
+  const owningSystemId = (resource: Resource): string =>
+    findParentInChain(resource, resourceById, (parentId) =>
+      systemIds.has(parentId) ? 'hit' : 'continue',
+    ) || (fallbackSystemId && resource.id !== fallbackSystemId ? fallbackSystemId : '');
 
   for (const resource of resources) {
     if (resource.type === 'agent') continue;
@@ -318,19 +337,12 @@ export function buildTrueNASSystemChildCounts(
     const counts = countsBySystem.get(systemId);
     if (!counts) continue;
 
-    if (resource.type === 'pool' || resource.storage?.topology === 'pool') {
-      counts.pools += 1;
-    } else if (resource.type === 'dataset' || resource.storage?.topology === 'dataset') {
-      counts.datasets += 1;
-    } else if (resource.type === 'network-share') {
-      counts.shares += 1;
-    } else if (resource.type === 'vm') {
-      counts.vms += 1;
-    } else if (resource.type === 'app-container') {
-      counts.apps += 1;
-    } else if (resource.type === 'physical_disk') {
-      counts.disks += 1;
-    }
+    if (isTrueNASPoolResource(resource)) counts.pools += 1;
+    else if (isTrueNASDatasetResource(resource)) counts.datasets += 1;
+    else if (resource.type === 'network-share') counts.shares += 1;
+    else if (resource.type === 'vm') counts.vms += 1;
+    else if (resource.type === 'app-container') counts.apps += 1;
+    else if (resource.type === 'physical_disk') counts.disks += 1;
   }
 
   for (const system of systems) {
@@ -356,16 +368,12 @@ export function buildTrueNASStorageChildCounts(
     countsByStorage.set(storage.id, emptyTrueNASStorageChildCounts());
   }
 
-  const hasAncestor = (resource: Resource, ancestorId: string): boolean => {
-    let parentId = asTrimmedString(resource.parentId);
-    const visited = new Set<string>();
-    while (parentId && !visited.has(parentId)) {
-      if (parentId === ancestorId) return true;
-      visited.add(parentId);
-      parentId = asTrimmedString(resourceById.get(parentId)?.parentId);
-    }
-    return false;
-  };
+  const hasAncestor = (resource: Resource, ancestorId: string): boolean =>
+    Boolean(
+      findParentInChain(resource, resourceById, (parentId) =>
+        parentId === ancestorId ? 'hit' : 'continue',
+      ),
+    );
 
   const hasInferredStorageRelationship = (resource: Resource, storage: Resource): boolean => {
     if (isTrueNASPoolResource(storage)) {
@@ -428,14 +436,10 @@ export function buildTrueNASStorageTopologyRows(
     .sort(compareStorageResources);
 
   const owningPoolId = (resource: Resource): string => {
-    let parentId = asTrimmedString(resource.parentId);
-    const visited = new Set<string>();
-    while (parentId && !visited.has(parentId)) {
-      const parent = resourceById.get(parentId);
-      if (parent && isTrueNASPoolResource(parent)) return parent.id;
-      visited.add(parentId);
-      parentId = asTrimmedString(parent?.parentId);
-    }
+    const direct = findParentInChain(resource, resourceById, (_id, parent) =>
+      parent && isTrueNASPoolResource(parent) ? 'hit' : 'continue',
+    );
+    if (direct) return direct;
     const poolName = inferTrueNASPoolName(resource);
     if (poolName) {
       const inferredPool = pools.find((pool) => trueNASPoolAliases(pool).has(poolName));
@@ -446,15 +450,14 @@ export function buildTrueNASStorageTopologyRows(
   };
 
   const owningDatasetId = (resource: Resource): string => {
-    let parentId = asTrimmedString(resource.parentId);
-    const visited = new Set<string>();
-    while (parentId && !visited.has(parentId)) {
-      const parent = resourceById.get(parentId);
-      if (parent && isTrueNASDatasetResource(parent)) return parent.id;
-      if (parent && isTrueNASPoolResource(parent)) return '';
-      visited.add(parentId);
-      parentId = asTrimmedString(parent?.parentId);
-    }
+    const direct = findParentInChain(resource, resourceById, (_id, parent) =>
+      parent && isTrueNASDatasetResource(parent)
+        ? 'hit'
+        : parent && isTrueNASPoolResource(parent)
+          ? 'stop'
+          : 'continue',
+    );
+    if (direct) return direct;
 
     const resourceAliases = trueNASDatasetAliases(resource);
     const resourcePoolId = owningPoolId(resource);
@@ -543,19 +546,17 @@ export function buildTrueNASStorageTopologyRows(
     for (const dataset of rootDatasetsByPool.get(pool.id) ?? []) {
       appendDatasetTree(dataset, 1, poolRowId);
     }
-    for (const disk of disks.filter((candidate) => owningPoolId(candidate) === pool.id)) {
-      appendRow(disk, 'disk', 1, poolRowId);
+    for (const disk of disks) {
+      if (owningPoolId(disk) === pool.id) appendRow(disk, 'disk', 1, poolRowId);
     }
   }
 
-  for (const dataset of rootDatasets) {
-    appendDatasetTree(dataset, 0, undefined);
+  for (const dataset of rootDatasets) appendDatasetTree(dataset, 0, undefined);
+  for (const dataset of datasets) {
+    if (!emitted.has(dataset.id)) appendDatasetTree(dataset, 0, undefined);
   }
-  for (const dataset of datasets.filter((resource) => !emitted.has(resource.id))) {
-    appendDatasetTree(dataset, 0, undefined);
-  }
-  for (const disk of disks.filter((resource) => !emitted.has(resource.id))) {
-    appendRow(disk, 'disk', 0);
+  for (const disk of disks) {
+    if (!emitted.has(disk.id)) appendRow(disk, 'disk', 0);
   }
 
   return rows;
@@ -635,8 +636,20 @@ export function filterTrueNASStorageTopologyRowsByKind(
 const normalize = (value: unknown): string =>
   typeof value === 'string' ? value.trim().toLowerCase() : '';
 
-export const getTrueNASResourceDisplayStatus = (resource: Resource): string =>
-  hasImpairedResourceSource(resource, 'truenas') ? 'degraded' : resource.status;
+const WORSE_THAN_DEGRADED_STATUSES = new Set([
+  'offline',
+  'stopped',
+  'faulted',
+  'critical',
+  'failed',
+]);
+
+export const getTrueNASResourceDisplayStatus = (resource: Resource): string => {
+  if (!isTrueNASSourceImpaired(resource)) return resource.status;
+  return WORSE_THAN_DEGRADED_STATUSES.has(normalize(resource.status))
+    ? resource.status
+    : 'degraded';
+};
 
 const normalizeProtectionOutcome = (value: unknown): TrueNASProtectionStatusBucket => {
   const normalized = normalize(value);
@@ -852,8 +865,9 @@ export function getTrueNASStorageIssue(
   };
 
   // Stale TrueNAS data is why the row left Healthy, whatever else it says.
-  if (hasImpairedResourceSource(resource, 'truenas')) {
-    push('TrueNAS has not updated this recently');
+  const staleNotice = getTrueNASStaleNotice(resource);
+  if (staleNotice) {
+    push(staleNotice.detail);
   }
   const leading = reasons.length;
   for (const incident of resource.incidents ?? []) push(incident.summary);
@@ -935,13 +949,10 @@ export function mapTrueNASProtectionKind(point: RecoveryPoint): TrueNASProtectio
   return 'other';
 }
 
-const trueNASProtectionSearchTokens = (point: RecoveryPoint): string[] => {
+const trueNASProtectionSearchTokens = (point: RecoveryPoint): string => {
   const details = point.details ?? {};
-  const sourceDatasets = Array.isArray(details.sourceDatasets)
-    ? details.sourceDatasets.filter((value): value is string => typeof value === 'string')
-    : [];
-
-  return [
+  const sourceDatasets = Array.isArray(details.sourceDatasets) ? details.sourceDatasets : [];
+  return joinSearchTokens([
     point.id,
     point.platform,
     point.kind,
@@ -951,25 +962,9 @@ const trueNASProtectionSearchTokens = (point: RecoveryPoint): string[] => {
     point.cluster,
     point.node,
     point.namespace,
-    point.display?.itemLabel,
-    point.display?.itemType,
-    point.display?.clusterLabel,
-    point.display?.nodeHostLabel,
-    point.display?.nodeAgentLabel,
-    point.display?.namespaceLabel,
-    point.display?.entityIdLabel,
-    point.display?.repositoryLabel,
-    point.display?.detailsSummary,
-    point.itemRef?.type,
-    point.itemRef?.namespace,
-    point.itemRef?.name,
-    point.itemRef?.uid,
-    point.itemRef?.id,
-    point.repositoryRef?.type,
-    point.repositoryRef?.namespace,
-    point.repositoryRef?.name,
-    point.repositoryRef?.uid,
-    point.repositoryRef?.id,
+    ...Object.values(point.display ?? {}),
+    ...Object.values(point.itemRef ?? {}),
+    ...Object.values(point.repositoryRef ?? {}),
     details.connectionId,
     details.dataset,
     details.direction,
@@ -983,7 +978,7 @@ const trueNASProtectionSearchTokens = (point: RecoveryPoint): string[] => {
     details.taskId,
     details.taskName,
     ...sourceDatasets,
-  ].filter((value): value is string => typeof value === 'string' && value.trim().length > 0);
+  ]);
 };
 
 const trueNASProtectionAttentionRank = (point: RecoveryPoint): number => {
@@ -1028,21 +1023,17 @@ export function filterTrueNASProtectionPoints(
     if (status !== 'all' && status !== 'attention' && pointStatus !== status) return false;
     if (!needle) return true;
     if (mapTrueNASProtectionKind(point).includes(needle)) return true;
-    return trueNASProtectionSearchTokens(point).join(' ').toLowerCase().includes(needle);
+    return trueNASProtectionSearchTokens(point).includes(needle);
   });
 }
 
 const matchesTrueNASStorageSearch = (resource: Resource, search: string): boolean => {
-  const needle = search.trim().toLowerCase();
+  const needle = normalize(search);
   if (!needle) return true;
   const storage = resource.storage;
   const disk = resource.physicalDisk;
-  const incidents = resource.incidents ?? [];
-  const haystack = [
-    resource.name,
-    resource.displayName,
-    resource.id,
-    resource.parentName,
+  return joinSearchTokens([
+    ...resourceSearchBase(resource),
     resource.status,
     resource.metricsTarget?.resourceId,
     storage?.type,
@@ -1065,13 +1056,8 @@ const matchesTrueNASStorageSearch = (resource: Resource, search: string): boolea
     disk?.storageRole,
     disk?.storageState,
     ...(resource.tags ?? []),
-    ...incidents.map((incident) => incident.summary),
-    ...incidents.map((incident) => incident.code),
-  ]
-    .filter((value): value is string => typeof value === 'string')
-    .join(' ')
-    .toLowerCase();
-  return haystack.includes(needle);
+    ...(resource.incidents ?? []).flatMap((incident) => [incident.summary, incident.code]),
+  ]).includes(needle);
 };
 
 const resourceIncidentLabel = (resource: Resource, incident: ResourceIncident): string => {
@@ -1222,7 +1208,7 @@ export function buildTrueNASIncidentRows(resources: Resource[]): TrueNASIncident
 }
 
 export function mapTrueNASAppStatus(resource: Resource): Exclude<TrueNASAppStatusFilter, 'all'> {
-  if (hasImpairedResourceSource(resource, 'truenas')) return 'attention';
+  if (isTrueNASSourceImpaired(resource)) return 'attention';
   const state = normalize(resource.truenas?.app?.state);
   if (state === 'running') return 'running';
   if (state === 'stopped') return 'stopped';
@@ -1237,7 +1223,7 @@ export function mapTrueNASAppStatus(resource: Resource): Exclude<TrueNASAppStatu
 export function mapTrueNASServiceStatus(
   row: TrueNASServiceRow,
 ): Exclude<TrueNASServiceStatusFilter, 'all'> {
-  if (hasImpairedResourceSource(row.system, 'truenas')) return 'attention';
+  if (isTrueNASSourceImpaired(row.system)) return 'attention';
   const state = normalize(row.service.state);
   if (['running', 'started', 'active'].includes(state)) return 'running';
   if (['failed', 'error', 'crashed', 'degraded', 'unknown'].includes(state)) return 'attention';
@@ -1249,7 +1235,7 @@ export function mapTrueNASServiceStatus(
 }
 
 export function mapTrueNASVMStatus(resource: Resource): Exclude<TrueNASVMStatusFilter, 'all'> {
-  if (hasImpairedResourceSource(resource, 'truenas')) return 'attention';
+  if (isTrueNASSourceImpaired(resource)) return 'attention';
   const state = normalize(resource.truenas?.vm?.state || resource.truenas?.vm?.domainState);
   if (state === 'running' || state === 'active') return 'running';
   if (state === 'stopped' || state === 'shutoff' || state === 'shutdown' || state === 'poweroff') {
@@ -1267,7 +1253,7 @@ export function mapTrueNASVMStatus(resource: Resource): Exclude<TrueNASVMStatusF
 export function mapTrueNASShareStatus(
   resource: Resource,
 ): Exclude<TrueNASShareStatusFilter, 'all'> {
-  if (hasImpairedResourceSource(resource, 'truenas')) return 'attention';
+  if (isTrueNASSourceImpaired(resource)) return 'attention';
   const share = resource.truenas?.share;
   if (share?.enabled === false || resource.status === 'offline' || resource.status === 'stopped') {
     return 'disabled';
@@ -1301,18 +1287,42 @@ const portSearchTokens = (resource: Resource): string[] => {
   return tokens;
 };
 
+const joinSearchTokens = (tokens: readonly unknown[]): string =>
+  tokens
+    .filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
+    .join(' ')
+    .toLowerCase();
+
+const resourceSearchBase = (resource: Resource): (string | undefined)[] => [
+  resource.name,
+  resource.displayName,
+  resource.id,
+  resource.parentName,
+  resource.platformId,
+  resource.platformType,
+  resource.truenas?.hostname,
+];
+
+const filterByStatusAndSearch = <T, TStatus extends string>(
+  items: T[],
+  search: string,
+  status: TStatus,
+  getStatus: (item: T) => string,
+  getHaystack: (item: T) => string,
+): T[] => {
+  const needle = normalize(search);
+  return items.filter((item) => {
+    if (status !== 'all' && getStatus(item) !== status) return false;
+    return !needle || getHaystack(item).includes(needle);
+  });
+};
+
 const appSearchHaystack = (resource: Resource): string => {
   const app = resource.truenas?.app;
-  return [
-    resource.name,
-    resource.displayName,
-    resource.id,
-    resource.parentName,
-    resource.platformId,
-    resource.platformType,
+  return joinSearchTokens([
+    ...resourceSearchBase(resource),
     resource.docker?.runtime,
     resource.docker?.image,
-    resource.truenas?.hostname,
     app?.id,
     app?.name,
     app?.state,
@@ -1336,10 +1346,7 @@ const appSearchHaystack = (resource: Resource): string => {
     ...(app?.networks?.flatMap((network) => [network.id, network.name]) ?? []),
     ...portSearchTokens(resource),
     ...(resource.tags ?? []),
-  ]
-    .filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
-    .join(' ')
-    .toLowerCase();
+  ]);
 };
 
 export function filterTrueNASApps(
@@ -1347,16 +1354,11 @@ export function filterTrueNASApps(
   search: string,
   status: TrueNASAppStatusFilter,
 ): Resource[] {
-  const needle = normalize(search);
-  return apps.filter((app) => {
-    if (status !== 'all' && mapTrueNASAppStatus(app) !== status) return false;
-    if (!needle) return true;
-    return appSearchHaystack(app).includes(needle);
-  });
+  return filterByStatusAndSearch(apps, search, status, mapTrueNASAppStatus, appSearchHaystack);
 }
 
 const serviceSearchHaystack = (row: TrueNASServiceRow): string =>
-  [
+  joinSearchTokens([
     row.id,
     row.systemId,
     row.systemName,
@@ -1366,34 +1368,26 @@ const serviceSearchHaystack = (row: TrueNASServiceRow): string =>
     row.service.state,
     row.service.enabled === true ? 'enabled boot start' : 'disabled no boot',
     ...(row.service.pids ?? []).map(String),
-  ]
-    .filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
-    .join(' ')
-    .toLowerCase();
+  ]);
 
 export function filterTrueNASServices(
   services: TrueNASServiceRow[],
   search: string,
   status: TrueNASServiceStatusFilter,
 ): TrueNASServiceRow[] {
-  const needle = normalize(search);
-  return services.filter((service) => {
-    if (status !== 'all' && mapTrueNASServiceStatus(service) !== status) return false;
-    if (!needle) return true;
-    return serviceSearchHaystack(service).includes(needle);
-  });
+  return filterByStatusAndSearch(
+    services,
+    search,
+    status,
+    mapTrueNASServiceStatus,
+    serviceSearchHaystack,
+  );
 }
 
 const vmSearchHaystack = (resource: Resource): string => {
   const vm = resource.truenas?.vm;
-  return [
-    resource.name,
-    resource.displayName,
-    resource.id,
-    resource.parentName,
-    resource.platformId,
-    resource.platformType,
-    resource.truenas?.hostname,
+  return joinSearchTokens([
+    ...resourceSearchBase(resource),
     vm?.id,
     vm?.name,
     vm?.description,
@@ -1407,10 +1401,7 @@ const vmSearchHaystack = (resource: Resource): string => {
     vm?.machineType,
     vm?.uuid,
     ...(resource.tags ?? []),
-  ]
-    .filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
-    .join(' ')
-    .toLowerCase();
+  ]);
 };
 
 export function filterTrueNASVMs(
@@ -1418,24 +1409,13 @@ export function filterTrueNASVMs(
   search: string,
   status: TrueNASVMStatusFilter,
 ): Resource[] {
-  const needle = normalize(search);
-  return vms.filter((vm) => {
-    if (status !== 'all' && mapTrueNASVMStatus(vm) !== status) return false;
-    if (!needle) return true;
-    return vmSearchHaystack(vm).includes(needle);
-  });
+  return filterByStatusAndSearch(vms, search, status, mapTrueNASVMStatus, vmSearchHaystack);
 }
 
 const shareSearchHaystack = (resource: Resource): string => {
   const share = resource.truenas?.share;
-  return [
-    resource.name,
-    resource.displayName,
-    resource.id,
-    resource.parentName,
-    resource.platformId,
-    resource.platformType,
-    resource.truenas?.hostname,
+  return joinSearchTokens([
+    ...resourceSearchBase(resource),
     share?.id,
     share?.name,
     share?.protocol,
@@ -1443,26 +1423,19 @@ const shareSearchHaystack = (resource: Resource): string => {
     share?.dataset,
     share?.relativePath,
     share?.comment,
-    share?.enabled === false ? 'disabled' : share?.enabled === true ? 'enabled active' : undefined,
-    share?.readOnly === true
-      ? 'read-only readonly'
-      : share?.readOnly === false
-        ? 'read-write'
-        : undefined,
-    share?.browsable ? 'browsable' : undefined,
-    share?.locked ? 'locked' : undefined,
-    share?.accessBasedEnumeration ? 'access based enumeration abe' : undefined,
-    share?.auditEnabled ? 'audit audited' : undefined,
-    share?.exposeSnapshots ? 'snapshots' : undefined,
+    share?.enabled === false ? 'disabled' : share?.enabled && 'enabled active',
+    share?.readOnly === true ? 'read-only readonly' : share?.readOnly === false && 'read-write',
+    share?.browsable && 'browsable',
+    share?.locked && 'locked',
+    share?.accessBasedEnumeration && 'access based enumeration abe',
+    share?.auditEnabled && 'audit audited',
+    share?.exposeSnapshots && 'snapshots',
     ...(share?.aliases ?? []),
     ...(share?.hosts ?? []),
     ...(share?.networks ?? []),
     ...(share?.security ?? []),
     ...(resource.tags ?? []),
-  ]
-    .filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
-    .join(' ')
-    .toLowerCase();
+  ]);
 };
 
 export function filterTrueNASShares(
@@ -1470,16 +1443,17 @@ export function filterTrueNASShares(
   search: string,
   status: TrueNASShareStatusFilter,
 ): Resource[] {
-  const needle = normalize(search);
-  return shares.filter((share) => {
-    if (status !== 'all' && mapTrueNASShareStatus(share) !== status) return false;
-    if (!needle) return true;
-    return shareSearchHaystack(share).includes(needle);
-  });
+  return filterByStatusAndSearch(
+    shares,
+    search,
+    status,
+    mapTrueNASShareStatus,
+    shareSearchHaystack,
+  );
 }
 
 const incidentSearchHaystack = (row: TrueNASIncidentRow): string =>
-  [
+  joinSearchTokens([
     row.resourceName,
     row.resourceId,
     row.resourceType,
@@ -1494,20 +1468,18 @@ const incidentSearchHaystack = (row: TrueNASIncidentRow): string =>
     row.category,
     row.action,
     ...(row.resource.tags ?? []),
-  ]
-    .filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
-    .join(' ')
-    .toLowerCase();
+  ]);
 
 export function filterTrueNASIncidents(
   incidents: TrueNASIncidentRow[],
   search: string,
   severity: TrueNASIncidentSeverityFilter,
 ): TrueNASIncidentRow[] {
-  const needle = normalize(search);
-  return incidents.filter((incident) => {
-    if (severity !== 'all' && incident.severityBucket !== severity) return false;
-    if (!needle) return true;
-    return incidentSearchHaystack(incident).includes(needle);
-  });
+  return filterByStatusAndSearch(
+    incidents,
+    search,
+    severity,
+    (incident) => incident.severityBucket,
+    incidentSearchHaystack,
+  );
 }
