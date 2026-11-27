@@ -1,0 +1,57 @@
+{
+  "version": 1,
+  "base_sha": "76358e5371c2493e147f2bd15c0ea79a7ca304be",
+  "verified_at": "2026-11-27T14:19:40Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/infrastructureMap/InfrastructureMapDrawer.tsx",
+    "frontend-modern/src/features/infrastructureMap/InfrastructureMapSurface.tsx",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMap.css",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapDiagram.ts",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapHostDiagram.ts",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapLayout.ts",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapModel.ts",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapRender.ts",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapServices.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/infrastructureMap/InfrastructureMapDrawer.tsx": "71ddf1e4c4a331b3f9d559d96298ba1687b59b0786ea7df65f49e1b4a96b8634",
+    "frontend-modern/src/features/infrastructureMap/InfrastructureMapSurface.tsx": "70a2043befd1a39af6f1c71c1e3cddd5c9cf553a49fdf7966c5b3f41eb8cd4d0",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMap.css": "b7ee8fb78b013ad210c5b2adf945f3c44a97b4303ecfc6534c68f75fd95cd0dc",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapDiagram.ts": "9c2a8fff6069df8a5fbc8b95d92e9587b8009b021c1163505e3c27a15b1e0ad9",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapHostDiagram.ts": "98c387caeb81315b358d542172a49232e8bf00007fd9f8db812a0fe882082bc2",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapLayout.ts": "cf2a207a7a78c02de5270b461a4e3b96b01b838fcfb7a8b05baa6d13cb9a57e0",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapModel.ts": "ad1672971331dfd88b83cbbb2513c840b955f6e60b6f68eecd8f56027c061184",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapRender.ts": "4df885df9a7e2790b31c0beafdd8a3eef09ee39d39856b64e5f910f853156e24",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapServices.ts": "2785896c1355dafc50ab56b4bed6a41d58d35e42877b720c02832bcfca124c1c"
+  },
+  "routes": [
+    "/map"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "By host default view in dark and light themes with zero-truncation host specs (PVE 8.3, Docker 27.3, TrueNAS 24.10), host thermal readout (48C), DISKS physical-drive footer strips (2x NVMe, 1x NVMe 4x HDD with max temp), and equal-height sibling host frames inside cluster containers",
+    "Hover spotlight dimming lighting only hovered tile and connected peers with curved labelled arcs while unrelated tiles dim to 28 percent opacity",
+    "Network pill hover spotlight lighting member tiles in network colour",
+    "Live traffic drawer showing proportional throughput bars across 13 active talkers with thermal, link busy, and disk badges",
+    "Hide names redaction with zero leaked hostnames, IPs, VMIDs, or Compose stacks",
+    "Mobile 390x844 dark view"
+  ],
+  "interactions": [
+    "Hovered reverse proxy tile to verify spotlight dimming, midpoint relationship pills, flow arcs, and tooltip",
+    "Hovered network pill to verify member spotlight dimming and network rings",
+    "Opened Live traffic drawer to verify proportional traffic bars and closed with Escape",
+    "Opened Published and routed drawer and closed with Escape",
+    "Toggled By host, By role, and Hide names",
+    "Inspected desktop dark, spotlight hover, Live traffic drawer, desktop light, and mobile dark Playwright screenshots"
+  ]
+}

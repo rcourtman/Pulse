@@ -184,6 +184,14 @@ export interface MapHost {
   memoryTotalBytes?: number;
   /** Short truthful platform or OS version label (e.g. `PVE 8.3`, `Docker 27.3`, `Debian 12`). */
   versionLabel?: string;
+  /** Host primary temperature in degrees Celsius, rounded to the nearest integer. */
+  temperatureC?: number;
+  /** Compact physical disk inventory summary (e.g. `2× NVMe · 4× HDD`). */
+  diskSummary?: string;
+  /** Highest reported physical disk temperature in degrees Celsius, rounded to integer. */
+  diskMaxTempC?: number;
+  /** Count of child physical disks reporting unhealthy, degraded, or failing health. */
+  unhealthyDiskCount?: number;
   cpu?: number;
   memory?: number;
   /** Live inbound network rate in bytes per second, when collected. */
@@ -326,6 +334,84 @@ const positiveInt = (value: number | undefined): number | undefined =>
 
 const positiveFinite = (value: number | undefined): number | undefined =>
   typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : undefined;
+
+const validTemperature = (value: unknown, min: number, max: number): number | undefined =>
+  typeof value === 'number' && Number.isFinite(value) && value >= min && value <= max
+    ? value
+    : undefined;
+
+const hostTemperatureOf = (resource: Resource): number | undefined => {
+  const direct =
+    validTemperature(resource.proxmox?.temperature, 1, 150) ??
+    validTemperature(resource.docker?.temperature, 1, 150) ??
+    validTemperature(resource.temperature, 1, 150);
+  if (direct !== undefined) return Math.round(direct);
+
+  const sensorTemps = resource.agent?.sensors?.temperatureCelsius;
+  if (!sensorTemps) return undefined;
+  let maxTemp: number | undefined;
+  for (const reading of Object.values(sensorTemps)) {
+    const valid = validTemperature(reading, 1, 150);
+    if (valid !== undefined && (maxTemp === undefined || valid > maxTemp)) {
+      maxTemp = valid;
+    }
+  }
+  return maxTemp !== undefined ? Math.round(maxTemp) : undefined;
+};
+
+type DiskBucket = 'NVMe' | 'SSD' | 'HDD' | 'Disk';
+
+const DISK_BUCKET_ORDER: readonly DiskBucket[] = ['NVMe', 'SSD', 'HDD', 'Disk'];
+
+const UNHEALTHY_DISK_HEALTH =
+  /^(FAIL|FAILED|CRITICAL|DEGRADED|PREFAIL|WARN|WARNING|UNHEALTHY|ERROR)/;
+
+const diskBucketOf = (diskType: string | undefined): DiskBucket => {
+  switch (clean(diskType).toLowerCase()) {
+    case 'nvme':
+      return 'NVMe';
+    case 'ssd':
+      return 'SSD';
+    case 'hdd':
+      return 'HDD';
+    default:
+      return 'Disk';
+  }
+};
+
+const summarizeHostDisks = (
+  disks: readonly Resource[],
+): { diskSummary?: string; diskMaxTempC?: number; unhealthyDiskCount?: number } => {
+  if (disks.length === 0) return {};
+  const counts: Record<DiskBucket, number> = { NVMe: 0, SSD: 0, HDD: 0, Disk: 0 };
+  let maxTemp: number | undefined;
+  let unhealthyCount = 0;
+
+  for (const disk of disks) {
+    counts[diskBucketOf(disk.physicalDisk?.diskType)] += 1;
+    const temp = validTemperature(disk.physicalDisk?.temperature, 1, 120);
+    if (temp !== undefined && (maxTemp === undefined || temp > maxTemp)) {
+      maxTemp = temp;
+    }
+    const diskHealth = clean(disk.physicalDisk?.health).toUpperCase();
+    if (isProblem(resolveMapHealth(disk)) || UNHEALTHY_DISK_HEALTH.test(diskHealth)) {
+      unhealthyCount += 1;
+    }
+  }
+
+  const diskSummary =
+    counts.NVMe === 0 && counts.SSD === 0 && counts.HDD === 0
+      ? `${counts.Disk} ${counts.Disk === 1 ? 'disk' : 'disks'}`
+      : DISK_BUCKET_ORDER.filter((bucket) => counts[bucket] > 0)
+          .map((bucket) => `${counts[bucket]}× ${bucket}`)
+          .join(' · ');
+
+  return {
+    diskSummary,
+    ...(maxTemp !== undefined ? { diskMaxTempC: Math.round(maxTemp) } : {}),
+    ...(unhealthyCount > 0 ? { unhealthyDiskCount: unhealthyCount } : {}),
+  };
+};
 
 const extractMajorMinor = (raw: string | undefined): string | undefined => {
   const value = clean(raw);
@@ -862,6 +948,7 @@ interface HostDraft {
   host: MapHost;
   resource: Resource;
   sections: Map<string, MapSection>;
+  disks: Resource[];
 }
 
 const sectionFor = (draft: HostDraft, key: string, label: string): MapSection => {
@@ -962,9 +1049,11 @@ export function buildInfrastructureMapModel(
     const cpuCores = hostCpuCoresOf(resource);
     const memoryTotalBytes = hostMemoryTotalBytesOf(resource);
     const versionLabel = hostVersionLabelOf(resource);
+    const temperatureC = hostTemperatureOf(resource);
     drafts.set(resource.id, {
       resource,
       sections: new Map(),
+      disks: [],
       host: {
         id: resource.id,
         isResource: true,
@@ -976,6 +1065,7 @@ export function buildInfrastructureMapModel(
         ...(cpuCores !== undefined ? { cpuCores } : {}),
         ...(memoryTotalBytes !== undefined ? { memoryTotalBytes } : {}),
         ...(versionLabel ? { versionLabel } : {}),
+        ...(temperatureC !== undefined ? { temperatureC } : {}),
         cpu: finitePercent(resource.cpu?.current),
         memory: finitePercent(getMemoryPercent(resource)),
         ...rates,
@@ -992,6 +1082,12 @@ export function buildInfrastructureMapModel(
   // The host a resource sits on is the parent the registry gives it.
   const owningDraft = (resource: Resource): HostDraft | undefined =>
     resource.parentId ? drafts.get(resource.parentId) : undefined;
+  const owningDiskDraft = (resource: Resource): HostDraft | undefined => {
+    const direct = owningDraft(resource);
+    if (direct) return direct;
+    const parent = resource.parentId ? byId.get(resource.parentId) : undefined;
+    return parent && POOL_TYPES.has(parent.type) ? owningDraft(parent) : undefined;
+  };
 
   const sharedPools: Resource[] = [];
   const checks: MapItem[] = [];
@@ -1003,6 +1099,11 @@ export function buildInfrastructureMapModel(
         ...toItem(resource, 'Check', attachments),
         ...(checkKind ? { checkKind } : {}),
       });
+      continue;
+    }
+    if (resource.type === 'physical_disk') {
+      const diskHost = owningDiskDraft(resource);
+      if (diskHost) diskHost.disks.push(resource);
       continue;
     }
     const draft = owningDraft(resource);
@@ -1018,6 +1119,12 @@ export function buildInfrastructureMapModel(
   const hostGroup = new Map<string, MapGroup>();
   for (const draft of drafts.values()) {
     const host = draft.host;
+    const diskMeta = summarizeHostDisks(draft.disks);
+    if (diskMeta.diskSummary) host.diskSummary = diskMeta.diskSummary;
+    if (diskMeta.diskMaxTempC !== undefined) host.diskMaxTempC = diskMeta.diskMaxTempC;
+    if (diskMeta.unhealthyDiskCount !== undefined) {
+      host.unhealthyDiskCount = diskMeta.unhealthyDiskCount;
+    }
     host.sections = [...draft.sections.values()]
       .map((section) => ({
         ...section,

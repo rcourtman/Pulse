@@ -5,6 +5,7 @@ import {
   fitMapName,
   fitMapText,
   mapHitMeta,
+  tagMapNodesSince,
   type MapCursor,
   type MapHit,
   type MapInspectTarget,
@@ -67,7 +68,12 @@ const STACK_PAD_BOTTOM = 6;
 const STACK_GAP = 8;
 const POOL_BAR_H = 30;
 const POOL_GAP = 6;
+const DISK_STRIP_H = 22;
 const OVERFLOW_BAR_H = 26;
+const HOST_METER_BAR_W = 24;
+const HOST_METER_INNER_GAP = 4;
+const HOST_METER_PAIR_GAP = 8;
+const HOST_ONE_COL_MAX_W = 336;
 
 const COMPACT_SIZE = 40;
 const COMPACT_ICON = 29;
@@ -243,6 +249,12 @@ const buildHit = (
     ...(tile.dockerNetworks?.length ? { dockerNetworks: tile.dockerNetworks } : {}),
     ...(tile.probeSummary ? { probeSummary: tile.probeSummary } : {}),
     ...(tile.certWarning ? { certWarning: tile.certWarning } : {}),
+    ...(tile.temperatureC !== undefined ? { temperatureC: tile.temperatureC } : {}),
+    ...(tile.diskSummary ? { diskSummary: tile.diskSummary } : {}),
+    ...(tile.diskMaxTempC !== undefined ? { diskMaxTempC: tile.diskMaxTempC } : {}),
+    ...(tile.unhealthyDiskCount !== undefined
+      ? { unhealthyDiskCount: tile.unhealthyDiskCount }
+      : {}),
     ...(segmentIds ? { segmentIds } : {}),
     address: tile.address,
     detail: tile.detail,
@@ -262,6 +274,7 @@ const drawHorizontalTile = (
   options: { dashed?: boolean; inStack?: boolean; groupKey?: string } = {},
 ) => {
   const { out } = painter;
+  const startIndex = out.nodes.length;
   const off = tile.health === 'off';
   const dashed = Boolean(options.dashed);
   const inStack = Boolean(options.inStack);
@@ -458,6 +471,8 @@ const drawHorizontalTile = (
     });
   }
 
+  tagMapNodesSince(out.nodes, startIndex, tile.id);
+
   if (dashed && !tile.links?.length && !tile.checkAddress) return;
 
   out.hits.push({
@@ -479,6 +494,7 @@ const drawCompactTile = (
   options: { dashed?: boolean; groupKey?: string } = {},
 ) => {
   const { out } = painter;
+  const startIndex = out.nodes.length;
   const off = tile.health === 'off';
   const dashed = Boolean(options.dashed);
   const cx = x + COMPACT_SIZE / 2;
@@ -543,7 +559,10 @@ const drawCompactTile = (
     });
   }
 
-  if (dashed && !tile.links?.length && !tile.checkAddress) return;
+  if (dashed && !tile.links?.length && !tile.checkAddress) {
+    tagMapNodesSince(out.nodes, startIndex, tile.id);
+    return;
+  }
 
   if (tile.navigable) {
     const dotX = cx + COMPACT_ICON / 2 - 1;
@@ -551,6 +570,8 @@ const drawCompactTile = (
     out.nodes.push({ kind: 'rect', x: dotX - 6, y: dotY - 6, w: 12, h: 12, r: 6, fill: 'surface' });
     out.nodes.push({ kind: 'dot', x: dotX, y: dotY, r: 4, health: tile.health });
   }
+
+  tagMapNodesSince(out.nodes, startIndex, tile.id);
 
   out.hits.push({
     kind: 'hit',
@@ -572,6 +593,8 @@ const drawOverflowBar = (
   groupKey: string,
   label?: string,
 ) => {
+  const startIndex = out.nodes.length;
+  const overflowId = `${groupKey}:more`;
   const text = label ?? `+${count.toLocaleString()} more`;
   out.nodes.push({
     kind: 'rect',
@@ -595,6 +618,7 @@ const drawOverflowBar = (
     fill: 'muted',
     anchor: 'middle',
   });
+  tagMapNodesSince(out.nodes, startIndex, overflowId);
   out.hits.push({
     kind: 'hit',
     x,
@@ -603,7 +627,7 @@ const drawOverflowBar = (
     h: OVERFLOW_BAR_H,
     r: INNER_RADIUS,
     hit: {
-      id: `${groupKey}:more`,
+      id: overflowId,
       name: `+${count}`,
       meta: `${count.toLocaleString()} more`,
       health: 'off',
@@ -622,6 +646,7 @@ const drawStorageBar = (
   groupKey?: string,
 ) => {
   const { out } = painter;
+  const startIndex = out.nodes.length;
   out.nodes.push({
     kind: 'rect',
     x,
@@ -736,6 +761,8 @@ const drawStorageBar = (
     }
   }
 
+  tagMapNodesSince(out.nodes, startIndex, tile.id);
+
   out.hits.push({
     kind: 'hit',
     x,
@@ -785,6 +812,35 @@ const hostSingleNetworkTone = (
 
 const meterTone = (pct: number): MapHealth =>
   pct >= 90 ? 'critical' : pct >= 75 ? 'attention' : 'ok';
+
+const hostTempTone = (tempC: number): MapTone | MapHealth =>
+  tempC >= 85 ? 'critical' : tempC >= 75 ? 'attention' : 'muted';
+
+const diskTempTone = (tempC: number): MapTone | MapHealth =>
+  tempC >= 65 ? 'critical' : tempC >= 55 ? 'attention' : 'muted';
+
+const hostMetersOf = (frame: DiagramHostFrame): Array<{ label: string; pct: number }> => {
+  const meters: Array<{ label: string; pct: number }> = [];
+  if (frame.host.cpu !== undefined && Number.isFinite(frame.host.cpu)) {
+    meters.push({ label: 'CPU', pct: Math.max(0, Math.min(100, Math.round(frame.host.cpu))) });
+  }
+  if (frame.host.memory !== undefined && Number.isFinite(frame.host.memory)) {
+    meters.push({ label: 'MEM', pct: Math.max(0, Math.min(100, Math.round(frame.host.memory))) });
+  }
+  return meters;
+};
+
+const hostMetersWidth = (meters: ReadonlyArray<{ label: string; pct: number }>): number => {
+  if (meters.length === 0) return 0;
+  let total = 0;
+  meters.forEach((meter, idx) => {
+    const pctW = Math.max(19, textWidth(`${meter.pct}%`, 9.5, 400));
+    const lblW = textWidth(meter.label, 9, 500);
+    total += lblW + HOST_METER_INNER_GAP + HOST_METER_BAR_W + HOST_METER_INNER_GAP + pctW;
+    if (idx > 0) total += HOST_METER_PAIR_GAP;
+  });
+  return total;
+};
 
 interface LooseCategoryGroup {
   label: string;
@@ -892,6 +948,12 @@ const sizeHostFrame = (
       : '';
   const countLabel =
     frame.totalCount > 0 ? `${frame.totalCount} ${frame.totalCount === 1 ? 'item' : 'items'}` : '';
+  const tempC =
+    frame.host.temperatureC !== undefined && Number.isFinite(frame.host.temperatureC)
+      ? Math.round(frame.host.temperatureC)
+      : undefined;
+  const tempText = tempC !== undefined ? `${tempC}°C` : '';
+  const tempHot = tempC !== undefined && tempC >= 75;
 
   const row1DesiredW =
     42 +
@@ -901,16 +963,39 @@ const sizeHostFrame = (
     (countLabel ? Math.max(22, textWidth(countLabel, 10, 500) + 12) + 8 : 0) +
     (rateRaw ? textWidth(rateRaw, 11, 600) + 8 : 0) +
     (busyText ? textWidth(busyText, 9.5, 600) + 18 : 0) +
-    (downText ? textWidth(downText, 9.5, 600) + 18 : 0);
+    (downText ? textWidth(downText, 9.5, 600) + 18 : 0) +
+    (tempText
+      ? textWidth(tempText, tempHot ? 9.5 : 10, tempHot ? 600 : 500) + (tempHot ? 18 : 8)
+      : 0);
 
-  const meterCount =
-    Number(frame.host.cpu !== undefined && Number.isFinite(frame.host.cpu)) +
-    Number(frame.host.memory !== undefined && Number.isFinite(frame.host.memory));
+  const meters = hostMetersOf(frame);
+  const metersW = hostMetersWidth(meters);
+  const specW = specRaw ? textWidth(specRaw, 10, 400) : 0;
   const row2DesiredW =
     density === 'names'
-      ? 24 + (specRaw ? textWidth(specRaw, 10, 400) + 14 : 0) + meterCount * 78
+      ? specW > 0 && metersW > 0
+        ? specW + metersW + 26
+        : specW > 0
+          ? specW + 22
+          : metersW > 0
+            ? metersW + 22
+            : 0
       : 0;
-  const headerDesiredW = Math.max(row1DesiredW, row2DesiredW);
+  const diskStripDesiredW =
+    density === 'names' && frame.host.diskSummary
+      ? CARD_PAD * 2 +
+        textWidth('DISKS', 9, 600) +
+        'DISKS'.length * 0.6 +
+        6 +
+        textWidth(frame.host.diskSummary, 10, 400) +
+        (frame.host.diskMaxTempC !== undefined && Number.isFinite(frame.host.diskMaxTempC)
+          ? 8 + textWidth(`max ${Math.round(frame.host.diskMaxTempC)}°C`, 10, 500)
+          : 0) +
+        (frame.host.unhealthyDiskCount !== undefined && frame.host.unhealthyDiskCount > 0
+          ? 8 + textWidth(`${frame.host.unhealthyDiskCount} WARN`, 10, 600)
+          : 0)
+      : 0;
+  const headerDesiredW = Math.max(row1DesiredW, row2DesiredW, diskStripDesiredW);
 
   if (density === 'marks') {
     const pitch = COMPACT_SIZE + COMPACT_GAP;
@@ -999,7 +1084,10 @@ const sizeHostFrame = (
   const rawBodyW = columns * baseRowW + (columns - 1) * COL_GAP;
   const minWForHeader =
     columns === 1
-      ? Math.min(inner, Math.min(460, Math.max(baseRowW + CARD_PAD * 2, headerDesiredW)))
+      ? Math.min(
+          inner,
+          Math.min(HOST_ONE_COL_MAX_W, Math.max(baseRowW + CARD_PAD * 2, headerDesiredW)),
+        )
       : 0;
   const cardW = Math.min(inner, Math.max(rawBodyW + CARD_PAD * 2, minWForHeader));
   const bodyW = cardW - CARD_PAD * 2;
@@ -1070,6 +1158,11 @@ const sizeHostFrame = (
     h += poolRows * POOL_BAR_H + Math.max(0, poolRows - 1) * POOL_GAP + CARD_PAD;
   }
 
+  if (frame.host.diskSummary) {
+    if (hasWorkloads || frame.pools.length > 0) h += 1;
+    h += DISK_STRIP_H;
+  }
+
   return {
     frame,
     w: cardW,
@@ -1088,9 +1181,11 @@ const drawHostFrame = (
   x: number,
   y: number,
   inCluster = false,
+  forcedH?: number,
 ): Box => {
   const { out } = painter;
-  const { frame, w, h } = sized;
+  const { frame, w } = sized;
+  const h = forcedH !== undefined ? Math.max(sized.h, forcedH) : sized.h;
   const headerH = hostHeaderH(painter.density);
   const isNamed = painter.density === 'names';
   const hasBody = h > headerH;
@@ -1137,6 +1232,10 @@ const drawHostFrame = (
       fill: 'border',
     });
   }
+
+  // Tag every visual node inside the host header with `frame.host.id` so hovering
+  // any guest, pool, or network lights up the owning host header alongside it.
+  const headerStart = out.nodes.length;
 
   // Left vertical network accent bar if host sits on a single named network
   const hostTone = hostSingleNetworkTone(frame, painter.networkCount, painter.toneFor);
@@ -1305,6 +1404,57 @@ const drawHostFrame = (
     }
   }
 
+  // 5. Inline host thermal readout/badge when temperature telemetry is reported
+  if (frame.host.temperatureC !== undefined && Number.isFinite(frame.host.temperatureC)) {
+    const tempC = Math.round(frame.host.temperatureC);
+    const tempText = `${tempC}°C`;
+    const tone = hostTempTone(tempC);
+    if (tone !== 'muted') {
+      const tempW = textWidth(tempText, 9.5, 600) + 10;
+      const tempH = 16;
+      if (rightCursor - tempW > leftStart + minNameReserve) {
+        const tx = rightCursor - tempW;
+        out.nodes.push({
+          kind: 'rect',
+          x: tx,
+          y: row1PillY,
+          w: tempW,
+          h: tempH,
+          r: 4,
+          fill: tone,
+          opacity: 0.18,
+          stroke: tone,
+        });
+        out.nodes.push({
+          kind: 'text',
+          x: tx + tempW / 2,
+          y: row1PillY + 11.5,
+          text: tempText,
+          size: 9.5,
+          weight: 600,
+          fill: tone,
+          anchor: 'middle',
+        });
+        rightCursor = tx - 6;
+      }
+    } else {
+      const tempW = textWidth(tempText, 10, 500);
+      if (rightCursor - tempW > leftStart + minNameReserve) {
+        out.nodes.push({
+          kind: 'text',
+          x: rightCursor,
+          y: row1TextY,
+          text: tempText,
+          size: 10,
+          weight: 500,
+          fill: 'muted',
+          anchor: 'end',
+        });
+        rightCursor -= tempW + 6;
+      }
+    }
+  }
+
   // Row 1 left: host name, status dot, and standalone cluster suffix
   const leftRoom = Math.max(40, rightCursor - leftStart);
   const fittedHostName = fitMapName(frame.host.name, Math.max(32, leftRoom - 14), 13, 600);
@@ -1351,26 +1501,20 @@ const drawHostFrame = (
     const row2Left = x + (hostTone ? 11 : 10);
     let row2Right = x + w - 8;
 
-    const meters: Array<{ label: string; pct: number }> = [];
-    if (frame.host.cpu !== undefined && Number.isFinite(frame.host.cpu)) {
-      meters.push({ label: 'CPU', pct: Math.max(0, Math.min(100, Math.round(frame.host.cpu))) });
-    }
-    if (frame.host.memory !== undefined && Number.isFinite(frame.host.memory)) {
-      meters.push({ label: 'MEM', pct: Math.max(0, Math.min(100, Math.round(frame.host.memory))) });
-    }
+    const meters = hostMetersOf(frame);
 
     if (meters.length > 0) {
       if (w >= 250) {
         for (let idx = meters.length - 1; idx >= 0; idx -= 1) {
           const meter = meters[idx];
           const pctText = `${meter.pct}%`;
-          const pctW = Math.max(22, textWidth(pctText, 9.5, 400));
-          const barW = 32;
+          const pctW = Math.max(19, textWidth(pctText, 9.5, 400));
+          const barW = HOST_METER_BAR_W;
           const barH = 5;
           const lblW = textWidth(meter.label, 9, 500);
-          const barX = row2Right - pctW - 4 - barW;
+          const barX = row2Right - pctW - HOST_METER_INNER_GAP - barW;
           const barY = row2Y - 5.5;
-          if (barX - 4 - lblW < row2Left + 16) break;
+          if (barX - HOST_METER_INNER_GAP - lblW < row2Left + 16) break;
 
           out.nodes.push({
             kind: 'text',
@@ -1405,7 +1549,7 @@ const drawHostFrame = (
           }
           out.nodes.push({
             kind: 'text',
-            x: barX - 4,
+            x: barX - HOST_METER_INNER_GAP,
             y: row2Y,
             text: meter.label,
             size: 9,
@@ -1413,7 +1557,7 @@ const drawHostFrame = (
             fill: 'muted',
             anchor: 'end',
           });
-          row2Right = barX - 4 - lblW - 8;
+          row2Right = barX - HOST_METER_INNER_GAP - lblW - (idx > 0 ? HOST_METER_PAIR_GAP : 6);
         }
       } else {
         const compactMeters = meters.map((m) => `${m.label} ${m.pct}%`).join(' · ');
@@ -1451,6 +1595,8 @@ const drawHostFrame = (
       }
     }
   }
+
+  tagMapNodesSince(out.nodes, headerStart, frame.host.id);
 
   // Clickable & hoverable host header hit (excludes right-hand count pill so inspect receives clicks)
   out.hits.push({
@@ -1697,6 +1843,86 @@ const drawHostFrame = (
         groupKey,
       );
     });
+    const poolRows = Math.ceil(frame.pools.length / sized.poolColumns);
+    curY += poolRows * POOL_BAR_H + Math.max(0, poolRows - 1) * POOL_GAP + CARD_PAD;
+  }
+
+  // Automatic physical disk footer strip (names mode)
+  if (isNamed && frame.host.diskSummary) {
+    let stripTop = curY;
+    if (hasWorkloads || frame.pools.length > 0) {
+      const dividerY = Math.max(curY, y + h - DISK_STRIP_H - 1);
+      out.nodes.push({ kind: 'rect', x, y: dividerY, w, h: 1, r: 0, fill: 'border' });
+      stripTop = dividerY + 1;
+    }
+    const diskStart = out.nodes.length;
+    const stripY = stripTop + 14.5;
+    let stripRight = x + w - CARD_PAD;
+
+    if (frame.host.unhealthyDiskCount !== undefined && frame.host.unhealthyDiskCount > 0) {
+      const warnText = `${frame.host.unhealthyDiskCount} WARN`;
+      const warnW = textWidth(warnText, 10, 600);
+      if (stripRight - warnW > bodyX + 64) {
+        out.nodes.push({
+          kind: 'text',
+          x: stripRight,
+          y: stripY,
+          text: warnText,
+          size: 10,
+          weight: 600,
+          fill: 'attention',
+          anchor: 'end',
+        });
+        stripRight -= warnW + 8;
+      }
+    }
+
+    if (frame.host.diskMaxTempC !== undefined && Number.isFinite(frame.host.diskMaxTempC)) {
+      const maxTemp = Math.round(frame.host.diskMaxTempC);
+      const tempTone = diskTempTone(maxTemp);
+      const tempText = `max ${maxTemp}°C`;
+      const tempWeight: 400 | 500 = tempTone === 'muted' ? 400 : 500;
+      const tempW = textWidth(tempText, 10, tempWeight);
+      if (stripRight - tempW > bodyX + 64) {
+        out.nodes.push({
+          kind: 'text',
+          x: stripRight,
+          y: stripY,
+          text: tempText,
+          size: 10,
+          weight: tempWeight,
+          fill: tempTone,
+          anchor: 'end',
+        });
+        stripRight -= tempW + 8;
+      }
+    }
+
+    out.nodes.push({
+      kind: 'text',
+      x: bodyX,
+      y: stripY,
+      text: 'DISKS',
+      size: 9,
+      weight: 600,
+      fill: 'muted',
+      caps: true,
+    });
+    const disksLabelW = textWidth('DISKS', 9, 600) + 'DISKS'.length * 0.6;
+    const summaryX = bodyX + disksLabelW + 6;
+    const summaryBudget = stripRight - summaryX;
+    if (summaryBudget >= 24) {
+      out.nodes.push({
+        kind: 'text',
+        x: summaryX,
+        y: stripY,
+        text: fitMapText(frame.host.diskSummary, summaryBudget, 10, 400),
+        size: 10,
+        weight: 400,
+        fill: 'muted',
+      });
+    }
+    tagMapNodesSince(out.nodes, diskStart, frame.host.id);
   }
 
   return { x, y, w, h };
@@ -1886,10 +2112,10 @@ const drawClusterUnit = (
 
   childRows.forEach((row, rowIdx) => {
     const rowW = row.reduce((sum, entry) => sum + entry.w, 0) + CLUSTER_GAP * (row.length - 1);
+    const rowMaxH = Math.max(...row.map((entry) => entry.h));
     let cx = x + CLUSTER_PAD + Math.max(0, (bodyW - rowW) / 2);
-    let rowH = 0;
     for (const entry of row) {
-      const childBox = drawHostFrame(painter, entry, cx, curY, true);
+      const childBox = drawHostFrame(painter, entry, cx, curY, true, rowMaxH);
       const childTier = activeTier(frameTrafficTier(entry.frame));
       tiers.push(childTier);
       drops.push({
@@ -1898,10 +2124,9 @@ const drawClusterUnit = (
         tier: childTier,
         ...(rowIdx > 0 ? { clusterLeftRailX: x + 5 } : {}),
       });
-      rowH = Math.max(rowH, childBox.h);
       cx += entry.w + CLUSTER_GAP;
     }
-    curY += rowH;
+    curY += rowMaxH;
     if (rowIdx < childRows.length - 1) curY += CLUSTER_WRAP_GAP;
   });
 

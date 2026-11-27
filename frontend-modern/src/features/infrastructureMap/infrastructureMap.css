@@ -62,6 +62,15 @@
   opacity: 0.9;
 }
 
+svg.pulse-map-spotlight [data-map-tile] {
+  opacity: 0.28;
+  transition: opacity 120ms ease-out;
+}
+
+svg.pulse-map-spotlight [data-map-tile].pulse-map-spotlight-lit {
+  opacity: 1;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .pulse-map-flow,
   .pulse-map-flow-low,
@@ -71,5 +80,9 @@
   .pulse-map-active-high,
   .pulse-map-link-flow {
     animation: none !important;
+  }
+
+  svg.pulse-map-spotlight [data-map-tile] {
+    transition: none !important;
   }
 }

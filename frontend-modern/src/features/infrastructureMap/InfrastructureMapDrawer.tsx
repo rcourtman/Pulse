@@ -130,6 +130,7 @@ const tileSubtitle = (entry: DrawerEntry): string =>
       ? entry.tile.address
       : '',
     entry.tile.detail ? `Published ${entry.tile.detail}` : '',
+    entry.tile.diskSummary ? `Disks: ${entry.tile.diskSummary}` : '',
     formatDockerNetworks(entry.tile.dockerNetworks),
   ]
     .filter(Boolean)
@@ -146,6 +147,7 @@ const tileMetrics = (tile: DiagramTile): string =>
   [
     tile.cpu !== undefined ? `CPU ${Math.round(tile.cpu)}%` : '',
     tile.memory !== undefined ? `Mem ${Math.round(tile.memory)}%` : '',
+    tile.temperatureC !== undefined ? `${Math.round(tile.temperatureC)}°C` : '',
     formatDrawerNet(tile),
     formatProbeAndLatency(tile.probeSummary, tile.latencyMs),
     formatDrawerLinkSpeed(tile),
@@ -248,6 +250,18 @@ export function InfrastructureMapDrawer(props: InfrastructureMapDrawerProps) {
       return [...filtered].sort((a, b) => compareDiagramTilesByAttention(a.tile, b.tile));
     }
     return filtered;
+  });
+
+  const maxEntryTrafficBytes = createMemo(() => {
+    const showBars =
+      props.target?.kind === 'traffic' || (sortMode() === 'traffic' && hasTrafficEntries());
+    if (!showBars) return 0;
+    let max = 0;
+    for (const entry of filteredEntries()) {
+      const bytes = entry.tile.netTotalBytes ?? 0;
+      if (bytes > max) max = bytes;
+    }
+    return max;
   });
 
   const exposedEntries = createMemo<DiagramExposedEntry[]>(() => {
@@ -646,6 +660,12 @@ export function InfrastructureMapDrawer(props: InfrastructureMapDrawerProps) {
                       const href = () => props.hrefForResourceId(entry.tile.id);
                       const badge = () => healthBadge(entry.tile.health);
                       const metrics = () => tileMetrics(entry.tile);
+                      const trafficBarPercent = () => {
+                        const maxBytes = maxEntryTrafficBytes();
+                        const bytes = entry.tile.netTotalBytes ?? 0;
+                        if (maxBytes <= 0 || bytes <= 0) return 0;
+                        return Math.min(100, Math.max(4, Math.round((bytes / maxBytes) * 100)));
+                      };
                       const rowContent = () => (
                         <>
                           <span class="mt-1 shrink-0">
@@ -690,6 +710,13 @@ export function InfrastructureMapDrawer(props: InfrastructureMapDrawerProps) {
                                   Link busy ({entry.tile.linkUtilizationPercent}%)
                                 </MetadataBadge>
                               </Show>
+                              <Show when={(entry.tile.unhealthyDiskCount ?? 0) > 0}>
+                                <MetadataBadge tone="warning" size="xs" shape="pill">
+                                  {entry.tile.unhealthyDiskCount === 1
+                                    ? '1 disk unhealthy'
+                                    : `${entry.tile.unhealthyDiskCount} disks unhealthy`}
+                                </MetadataBadge>
+                              </Show>
                               <Show when={entry.tile.firewallEnabled}>
                                 <MetadataBadge
                                   tone="neutral"
@@ -715,6 +742,18 @@ export function InfrastructureMapDrawer(props: InfrastructureMapDrawerProps) {
                             <p class="mt-0.5 truncate text-xs text-muted">{tileSubtitle(entry)}</p>
                             <Show when={metrics()}>
                               <p class="mt-0.5 text-[11px] text-muted">{metrics()}</p>
+                            </Show>
+                            <Show when={trafficBarPercent() > 0}>
+                              <div
+                                class="mt-1.5 h-1 w-full overflow-hidden rounded-full bg-border/60"
+                                data-testid="infrastructure-map-traffic-bar"
+                                aria-hidden="true"
+                              >
+                                <div
+                                  class="h-full rounded-full bg-blue-500/80 dark:bg-blue-400/80"
+                                  style={{ width: `${trafficBarPercent()}%` }}
+                                />
+                              </div>
                             </Show>
                           </div>
                           <Show when={href()}>

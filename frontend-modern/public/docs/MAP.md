@@ -22,15 +22,17 @@ Each tile has a status dot: healthy, needs attention, critical, not reporting
 or off. When there is more than one network, a coloured mark beside a tile
 matches the dot on its network's pill.
 
-- **Hover** a tile to read what it is, its address, published ports (Docker,
+- **Hover** a tile to spotlight it and its connected peers (softly dimming
+  unrelated tiles), read what it is, its address, published ports (Docker,
   Docker Swarm, TrueNAS apps and Kubernetes Services), Docker user-defined
-  networks, what it is connected to, and collected metrics (CPU, memory, live
-  network throughput, check protocol and HTTP status with latency, TLS
-  certificate warnings, NIC link speed with full-duplex utilization and
-  **Link busy** warnings, link-down count and Proxmox firewall status). Tiles
-  it is connected to are ringed and joined by curved connection arcs with a
-  subtle halo (plus gentle animated flow when **Live traffic** is on).
-- **Hover a network pill** to highlight every tile on that network in the
+  networks, what it is connected to, and collected metrics (CPU, memory, host
+  temperature, physical disk summary and health, live network throughput, check
+  protocol and HTTP status with latency, TLS certificate warnings, NIC link
+  speed with full-duplex utilization and **Link busy** warnings, link-down
+  count and Proxmox firewall status). Tiles it is connected to are ringed and
+  joined by curved connection arcs with relationship labels and a subtle halo
+  (plus gentle animated flow when **Live traffic** is on).
+- **Hover a network pill** to spotlight every tile on that network in the
   network's colour and read its subnet or VLAN detail, connected count, live
   aggregate throughput, max link speed and any link-down warnings.
 - **Click** a tile to open it.

@@ -1595,3 +1595,238 @@ describe('InfrastructureMapSurface layout toggle, exposed drawer, and enriched t
     expect(linkLabels().join(' ')).not.toContain('notes.home.arpa');
   });
 });
+
+describe('InfrastructureMapSurface spotlight, thermal/disk telemetry, and traffic proportion bars', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    resourcesMock.read = undefined;
+  });
+  afterEach(cleanup);
+
+  const tile = (container: HTMLElement, name: string) => {
+    const found = container.querySelector(`[aria-label^="${name},"]`);
+    if (!found) throw new Error(`no tile for ${name}`);
+    return found;
+  };
+
+  it('applies spotlight dimming for linked tiles and network pills, and clears on pointerLeave', () => {
+    resourcesMock.value = [
+      resource({
+        id: 'pve-a',
+        type: 'agent',
+        name: 'pve-a',
+        platformType: 'proxmox-pve',
+        agent: {
+          networkInterfaces: [
+            { name: 'vmbr0', addresses: ['10.30.0.10/24'], speedMbps: 10000, linkUp: true },
+          ],
+        },
+      }),
+      resource({
+        id: 'vm-alpha',
+        type: 'vm',
+        name: 'alpha-vm',
+        platformType: 'proxmox-pve',
+        parentId: 'pve-a',
+        status: 'running',
+        identity: { ips: ['10.30.0.50'] },
+      }),
+      resource({
+        id: 'pve-b',
+        type: 'agent',
+        name: 'pve-b',
+        platformType: 'proxmox-pve',
+        agent: {
+          networkInterfaces: [
+            { name: 'vmbr1', addresses: ['10.40.0.10/24'], speedMbps: 1000, linkUp: true },
+          ],
+        },
+      }),
+      resource({
+        id: 'vm-beta',
+        type: 'vm',
+        name: 'beta-vm',
+        platformType: 'proxmox-pve',
+        parentId: 'pve-b',
+        status: 'running',
+        identity: { ips: ['10.40.0.50'] },
+      }),
+    ];
+
+    const { container } = render(() => <InfrastructureMapSurface />);
+    const svg = container.querySelector('svg[role="group"]')!;
+    expect(svg.classList.contains('pulse-map-spotlight')).toBe(false);
+
+    // Hovering a linked tile spotlights it and its linked host while dimming unrelated tiles.
+    fireEvent.pointerOver(tile(container, 'alpha-vm'));
+    expect(svg.classList.contains('pulse-map-spotlight')).toBe(true);
+    expect(
+      svg
+        .querySelector('[data-map-tile="vm-alpha"]')
+        ?.classList.contains('pulse-map-spotlight-lit'),
+    ).toBe(true);
+    expect(
+      svg.querySelector('[data-map-tile="pve-a"]')?.classList.contains('pulse-map-spotlight-lit'),
+    ).toBe(true);
+    expect(
+      svg.querySelector('[data-map-tile="vm-beta"]')?.classList.contains('pulse-map-spotlight-lit'),
+    ).toBe(false);
+
+    // Pointer leave restores all tiles to full brightness.
+    fireEvent.pointerLeave(svg);
+    expect(svg.classList.contains('pulse-map-spotlight')).toBe(false);
+    expect(svg.querySelectorAll('.pulse-map-spotlight-lit')).toHaveLength(0);
+
+    // Hovering a network pill spotlights all member tiles on that subnet.
+    const networkPill = container.querySelector(
+      '[data-map-inspect][aria-label^="Inspect network "]',
+    );
+    expect(networkPill).not.toBeNull();
+    fireEvent.pointerOver(networkPill!);
+    expect(svg.classList.contains('pulse-map-spotlight')).toBe(true);
+    expect(svg.querySelectorAll('.pulse-map-spotlight-lit').length).toBeGreaterThanOrEqual(2);
+
+    fireEvent.pointerLeave(svg);
+    expect(svg.classList.contains('pulse-map-spotlight')).toBe(false);
+    expect(svg.querySelectorAll('.pulse-map-spotlight-lit')).toHaveLength(0);
+  });
+
+  it('displays host temperature and physical disk summary in hover tooltips and drawer rows', async () => {
+    resourcesMock.value = [
+      resource({
+        id: 'pve-therm',
+        type: 'agent',
+        name: 'pve-therm',
+        platformType: 'proxmox-pve',
+        proxmox: { cpus: 16, pveVersion: '8.3.1', temperature: 48 },
+        agent: {
+          networkInterfaces: [
+            { name: 'eno1', addresses: ['10.50.0.10/24'], speedMbps: 10000, linkUp: true },
+          ],
+        },
+      }),
+      resource({
+        id: 'vm-therm',
+        type: 'vm',
+        name: 'therm-guest',
+        platformType: 'proxmox-pve',
+        parentId: 'pve-therm',
+        status: 'running',
+        identity: { ips: ['10.50.0.50'] },
+      }),
+      resource({
+        id: 'disk-nvme-1',
+        type: 'physical_disk',
+        name: 'nvme0n1',
+        platformType: 'proxmox-pve',
+        parentId: 'pve-therm',
+        physicalDisk: { diskType: 'nvme', temperature: 44, health: 'PASSED' },
+      }),
+      resource({
+        id: 'disk-nvme-2',
+        type: 'physical_disk',
+        name: 'nvme1n1',
+        platformType: 'proxmox-pve',
+        parentId: 'pve-therm',
+        physicalDisk: { diskType: 'nvme', temperature: 41, health: 'PASSED' },
+      }),
+      resource({
+        id: 'disk-hdd-1',
+        type: 'physical_disk',
+        name: 'sda',
+        platformType: 'proxmox-pve',
+        parentId: 'pve-therm',
+        physicalDisk: { diskType: 'hdd', temperature: 36, health: 'PASSED' },
+      }),
+      resource({
+        id: 'disk-hdd-2',
+        type: 'physical_disk',
+        name: 'sdb',
+        platformType: 'proxmox-pve',
+        parentId: 'pve-therm',
+        physicalDisk: { diskType: 'hdd', temperature: 35, health: 'PASSED' },
+      }),
+      resource({
+        id: 'disk-hdd-3',
+        type: 'physical_disk',
+        name: 'sdc',
+        platformType: 'proxmox-pve',
+        parentId: 'pve-therm',
+        physicalDisk: { diskType: 'hdd', temperature: 37, health: 'PASSED' },
+      }),
+      resource({
+        id: 'disk-hdd-4',
+        type: 'physical_disk',
+        name: 'sdd',
+        platformType: 'proxmox-pve',
+        parentId: 'pve-therm',
+        physicalDisk: { diskType: 'hdd', temperature: 38, health: 'FAILED' },
+      }),
+    ];
+
+    const { container } = render(() => <InfrastructureMapSurface />);
+
+    fireEvent.pointerOver(tile(container, 'pve-therm'));
+    expect(await screen.findByText(/48°C/, { selector: 'span' })).toBeInTheDocument();
+    expect(
+      screen.getByText(/Disks: 2× NVMe · 4× HDD · max 44°C · 1 unhealthy/, { selector: 'span' }),
+    ).toBeInTheDocument();
+
+    // Open the network drawer to verify thermal and physical disk info in drawer rows.
+    const networkPill = container.querySelector(
+      '[data-map-inspect][aria-label^="Inspect network "]',
+    );
+    expect(networkPill).not.toBeNull();
+    fireEvent.click(networkPill!);
+    const drawerList = screen.getByTestId('infrastructure-map-drawer-list');
+    expect(drawerList).toHaveTextContent('48°C');
+    expect(drawerList).toHaveTextContent('Disks: 2× NVMe · 4× HDD');
+    expect(drawerList).toHaveTextContent('1 disk unhealthy');
+  });
+
+  it('renders proportional traffic bars in the Live traffic drawer scaled relative to the top talker', () => {
+    resourcesMock.value = [
+      resource({
+        id: 'pve-flow',
+        type: 'agent',
+        name: 'pve-flow',
+        platformType: 'proxmox-pve',
+      }),
+      resource({
+        id: 'vm-top',
+        type: 'vm',
+        name: 'top-talker',
+        platformType: 'proxmox-pve',
+        parentId: 'pve-flow',
+        status: 'running',
+        network: { rxBytes: 8_000_000, txBytes: 2_000_000 },
+      }),
+      resource({
+        id: 'vm-half',
+        type: 'vm',
+        name: 'half-talker',
+        platformType: 'proxmox-pve',
+        parentId: 'pve-flow',
+        status: 'running',
+        network: { rxBytes: 4_000_000, txBytes: 1_000_000 },
+      }),
+      resource({
+        id: 'vm-trickle',
+        type: 'vm',
+        name: 'trickle-talker',
+        platformType: 'proxmox-pve',
+        parentId: 'pve-flow',
+        status: 'running',
+        network: { rxBytes: 10_000, txBytes: 10_000 },
+      }),
+    ];
+
+    render(() => <InfrastructureMapSurface />);
+    fireEvent.click(screen.getByTestId('infrastructure-map-traffic-summary'));
+
+    const bars = screen.getAllByTestId('infrastructure-map-traffic-bar');
+    expect(bars).toHaveLength(3);
+    const widths = bars.map((bar) => (bar.firstElementChild as HTMLElement | null)?.style.width);
+    expect(widths).toEqual(['100%', '50%', '4%']);
+  });
+});

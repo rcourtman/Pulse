@@ -65,6 +65,10 @@ export interface MapHit {
   dockerNetworks?: string[];
   probeSummary?: string;
   certWarning?: string;
+  temperatureC?: number;
+  diskSummary?: string;
+  diskMaxTempC?: number;
+  unhealthyDiskCount?: number;
   /** Opaque planned network IDs this tile belongs to, for interactive network hover rings. */
   segmentIds?: string[];
   address?: string;
@@ -96,6 +100,7 @@ export type SceneNode =
       stroke?: MapTone | MapHealth;
       dashed?: boolean;
       activity?: MapTrafficTier;
+      tileId?: string;
     }
   | {
       kind: 'text';
@@ -109,9 +114,10 @@ export type SceneNode =
       /** Uppercase section labels are tracked out, as table headers are. */
       caps?: boolean;
       dim?: boolean;
+      tileId?: string;
     }
-  | { kind: 'dot'; x: number; y: number; r: number; health: MapHealth }
-  | { kind: 'icon'; x: number; y: number; size: number; platform: MapGlyphKey }
+  | { kind: 'dot'; x: number; y: number; r: number; health: MapHealth; tileId?: string }
+  | { kind: 'icon'; x: number; y: number; size: number; platform: MapGlyphKey; tileId?: string }
   | {
       /** An app's logo on its brand colour, or its initials when it has none. */
       kind: 'app';
@@ -121,6 +127,7 @@ export type SceneNode =
       icon?: string;
       letters: string;
       dim?: boolean;
+      tileId?: string;
     }
   | {
       /** A connector through the given corners, with an arrowhead at the end. */
@@ -178,6 +185,22 @@ export interface MapCursor {
   hits: SceneNode[];
   inspects?: SceneNode[];
 }
+
+/** Stamps `tileId` onto every visual node pushed since `startIndex` for interactive spotlight dimming. */
+export const tagMapNodesSince = (nodes: SceneNode[], startIndex: number, tileId: string): void => {
+  for (let i = startIndex; i < nodes.length; i += 1) {
+    const node = nodes[i];
+    if (
+      node.kind === 'rect' ||
+      node.kind === 'text' ||
+      node.kind === 'dot' ||
+      node.kind === 'icon' ||
+      node.kind === 'app'
+    ) {
+      node.tileId = tileId;
+    }
+  }
+};
 
 /** Estates up to this many guests and containers read best with every name drawn. */
 export const MAP_NAMES_ITEM_LIMIT = 220;
