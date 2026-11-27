@@ -155,11 +155,30 @@ func (s *AdaptiveScheduler) BuildPlan(now time.Time, inventory []InstanceDescrip
 		return nil
 	}
 
+	tasks := s.buildUnsortedPlan(now, inventory, queueDepth)
+	// The worker's successor plan has one task. A full plan must still be
+	// ordered, but its private slice doesn't need the shared planner lock.
+	if len(tasks) > 1 {
+		sort.Slice(tasks, func(i, j int) bool {
+			if tasks[i].NextRun.Equal(tasks[j].NextRun) {
+				if tasks[i].Priority == tasks[j].Priority {
+					return tasks[i].InstanceName < tasks[j].InstanceName
+				}
+				return tasks[i].Priority > tasks[j].Priority
+			}
+			return tasks[i].NextRun.Before(tasks[j].NextRun)
+		})
+	}
+	return tasks
+}
+
+func (s *AdaptiveScheduler) buildUnsortedPlan(now time.Time, inventory []InstanceDescriptor, queueDepth int) []ScheduledTask {
+	tasks := make([]ScheduledTask, 0, len(inventory))
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	tasks := make([]ScheduledTask, 0, len(inventory))
 	for _, inst := range inventory {
+		key := schedulerKey(inst.Type, inst.Name)
 		score, ok := s.staleness.StalenessScore(inst.Type, inst.Name)
 		if !ok {
 			score = 0
@@ -167,7 +186,7 @@ func (s *AdaptiveScheduler) BuildPlan(now time.Time, inventory []InstanceDescrip
 
 		lastScheduled := inst.LastScheduled
 		lastInterval := inst.LastInterval
-		if cached, exists := s.lastPlan[schedulerKey(inst.Type, inst.Name)]; exists {
+		if cached, exists := s.lastPlan[key]; exists {
 			if lastScheduled.IsZero() {
 				lastScheduled = cached.NextRun
 			}
@@ -191,7 +210,7 @@ func (s *AdaptiveScheduler) BuildPlan(now time.Time, inventory []InstanceDescrip
 			StalenessScore: score,
 			ErrorCount:     inst.ErrorCount,
 			QueueDepth:     currentDepth,
-			InstanceKey:    schedulerKey(inst.Type, inst.Name),
+			InstanceKey:    key,
 			InstanceType:   inst.Type,
 		}
 
@@ -244,19 +263,9 @@ func (s *AdaptiveScheduler) BuildPlan(now time.Time, inventory []InstanceDescrip
 			Metadata:     inst.Metadata,
 		}
 
-		s.lastPlan[schedulerKey(inst.Type, inst.Name)] = task
+		s.lastPlan[key] = task
 		tasks = append(tasks, task)
 	}
-
-	sort.Slice(tasks, func(i, j int) bool {
-		if tasks[i].NextRun.Equal(tasks[j].NextRun) {
-			if tasks[i].Priority == tasks[j].Priority {
-				return tasks[i].InstanceName < tasks[j].InstanceName
-			}
-			return tasks[i].Priority > tasks[j].Priority
-		}
-		return tasks[i].NextRun.Before(tasks[j].NextRun)
-	})
 
 	return tasks
 }

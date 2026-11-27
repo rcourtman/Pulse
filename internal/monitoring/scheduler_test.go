@@ -1907,9 +1907,10 @@ func TestBuildPlan_MultipleInstances(t *testing.T) {
 	// Use staleness source to control priority ordering
 	staleness := mockStalenessSource{
 		scores: map[string]float64{
-			"pve:pve1": 0.8,
-			"pbs:pbs1": 0.5,
-			"pmg:pmg1": 0.2,
+			"pve:pve1":   0.8,
+			"pbs:pbs1":   0.5,
+			"pmg:pmg1":   0.5,
+			"pve:future": 1,
 		},
 	}
 
@@ -1917,23 +1918,29 @@ func TestBuildPlan_MultipleInstances(t *testing.T) {
 
 	now := time.Now()
 	inventory := []InstanceDescriptor{
-		{Name: "pve1", Type: InstanceTypePVE},
-		{Name: "pbs1", Type: InstanceTypePBS},
+		{Name: "future", Type: InstanceTypePVE, LastScheduled: now.Add(time.Second)},
 		{Name: "pmg1", Type: InstanceTypePMG},
+		{Name: "pbs1", Type: InstanceTypePBS},
+		{Name: "pve1", Type: InstanceTypePVE},
 	}
 
 	tasks := scheduler.BuildPlan(now, inventory, 0)
 
-	if len(tasks) != 3 {
-		t.Fatalf("expected 3 tasks, got %d", len(tasks))
+	want := []string{"pve1", "pbs1", "pmg1", "future"}
+	if len(tasks) != len(want) {
+		t.Fatalf("expected %d tasks, got %d", len(want), len(tasks))
 	}
 
-	// All tasks should have the same NextRun (now), so they should be sorted by priority (descending)
-	if tasks[0].Priority < tasks[1].Priority {
-		t.Errorf("expected first task to have higher priority: first=%v, second=%v", tasks[0].Priority, tasks[1].Priority)
-	}
-	if tasks[1].Priority < tasks[2].Priority {
-		t.Errorf("expected second task to have higher priority than third: second=%v, third=%v", tasks[1].Priority, tasks[2].Priority)
+	// Earliest due first, then highest priority, then name for tied tasks.
+	for i, name := range want {
+		task := tasks[i]
+		if task.InstanceName != name {
+			t.Errorf("plan[%d] = %q, want %q", i, task.InstanceName, name)
+		}
+		cached, ok := scheduler.LastScheduled(task.InstanceType, task.InstanceName)
+		if !ok || cached != task {
+			t.Errorf("cached plan for %q = %+v (present: %t), want %+v", task.InstanceName, cached, ok, task)
+		}
 	}
 }
 
