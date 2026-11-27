@@ -1083,6 +1083,12 @@ func (rr *ResourceRegistry) ingestResources(resources []Resource, thresholds map
 			}
 		}
 
+		primarySource := DataSource("")
+		if len(resource.Sources) == 1 {
+			primarySource = resource.Sources[0]
+		}
+		stampInitialRateObservations(resource, primarySource)
+
 		rr.mu.Lock()
 		rr.canonicalIdentityIndex = nil
 		rr.resources[resource.ID] = resource
@@ -3294,6 +3300,7 @@ func (rr *ResourceRegistry) ingestRecord(source DataSource, sourceID string, res
 			}
 			resource.continuityOnly = onlyMissing
 			stampPhysicalDiskTemperatureReading(&resource, source, sourceID)
+			stampInitialRateObservations(&resource, source)
 			rr.resources[resource.ID] = &resource
 			rr.indexPhysicalDiskHardwareLocked(&resource)
 			rr.bySource[source][sourceID] = resource.ID
@@ -3350,6 +3357,7 @@ func (rr *ResourceRegistry) ingestRecord(source DataSource, sourceID string, res
 	}
 	resource.continuityOnly = onlyMissing
 	stampPhysicalDiskTemperatureReading(&resource, source, sourceID)
+	stampInitialRateObservations(&resource, source)
 	rr.resources[resource.ID] = &resource
 	rr.indexPhysicalDiskHardwareLocked(&resource)
 	rr.bySource[source][sourceID] = resource.ID
@@ -7140,6 +7148,93 @@ func removeDataSource(sources []DataSource, source DataSource) []DataSource {
 	return out
 }
 
+func hydrateRateMetric(m *MetricValue, persisted *time.Time) *MetricValue {
+	if m == nil || !m.ObservedAt.IsZero() || persisted == nil || persisted.IsZero() {
+		return m
+	}
+	copied := *m
+	copied.ObservedAt = persisted.UTC()
+	return &copied
+}
+
+func hydrateRateMetricObservations(metrics *ResourceMetrics) {
+	if metrics == nil {
+		return
+	}
+	metrics.NetIn = hydrateRateMetric(metrics.NetIn, metrics.NetInObservedAt)
+	metrics.NetOut = hydrateRateMetric(metrics.NetOut, metrics.NetOutObservedAt)
+	metrics.DiskRead = hydrateRateMetric(metrics.DiskRead, metrics.DiskReadObservedAt)
+	metrics.DiskWrite = hydrateRateMetric(metrics.DiskWrite, metrics.DiskWriteObservedAt)
+}
+
+func stampRateMetricObservation(m *MetricValue, source DataSource, observedAt time.Time) *MetricValue {
+	if m == nil {
+		return nil
+	}
+	copied := *m
+	if copied.Source == "" {
+		copied.Source = source
+	}
+	if copied.ObservedAt.IsZero() && !observedAt.IsZero() {
+		copied.ObservedAt = observedAt.UTC()
+	}
+	return &copied
+}
+
+func rateObservationInstant(m *MetricValue, status map[DataSource]SourceStatus, fallbackLastSeen time.Time) time.Time {
+	if m == nil {
+		return time.Time{}
+	}
+	if !m.ObservedAt.IsZero() {
+		return m.ObservedAt
+	}
+	if m.Source != "" && status != nil {
+		if st, ok := status[m.Source]; ok && !st.LastSeen.IsZero() {
+			return st.LastSeen
+		}
+	}
+	return fallbackLastSeen
+}
+
+func observedAtPtr(value time.Time) *time.Time {
+	if value.IsZero() {
+		return nil
+	}
+	t := value.UTC()
+	return &t
+}
+
+func populateRateObservedAt(metrics *ResourceMetrics, status map[DataSource]SourceStatus, fallbackLastSeen time.Time) {
+	if metrics == nil {
+		return
+	}
+	hydrateRateMetricObservations(metrics)
+	metrics.NetInObservedAt = observedAtPtr(rateObservationInstant(metrics.NetIn, status, fallbackLastSeen))
+	metrics.NetOutObservedAt = observedAtPtr(rateObservationInstant(metrics.NetOut, status, fallbackLastSeen))
+	metrics.DiskReadObservedAt = observedAtPtr(rateObservationInstant(metrics.DiskRead, status, fallbackLastSeen))
+	metrics.DiskWriteObservedAt = observedAtPtr(rateObservationInstant(metrics.DiskWrite, status, fallbackLastSeen))
+}
+
+func stampInitialRateObservations(resource *Resource, source DataSource) {
+	if resource == nil || resource.Metrics == nil {
+		return
+	}
+	observedAt := resource.LastSeen
+	if source != "" && resource.SourceStatus != nil {
+		if st, ok := resource.SourceStatus[source]; ok && !st.LastSeen.IsZero() {
+			observedAt = st.LastSeen
+		}
+	}
+	m := *resource.Metrics
+	hydrateRateMetricObservations(&m)
+	m.NetIn = stampRateMetricObservation(m.NetIn, source, observedAt)
+	m.NetOut = stampRateMetricObservation(m.NetOut, source, observedAt)
+	m.DiskRead = stampRateMetricObservation(m.DiskRead, source, observedAt)
+	m.DiskWrite = stampRateMetricObservation(m.DiskWrite, source, observedAt)
+	populateRateObservedAt(&m, resource.SourceStatus, observedAt)
+	resource.Metrics = &m
+}
+
 func mergeMetrics(
 	target *Resource,
 	existing *ResourceMetrics,
@@ -7150,19 +7245,34 @@ func mergeMetrics(
 	thresholds map[DataSource]time.Duration,
 ) *ResourceMetrics {
 	if incoming == nil {
-		return existing
+		if existing == nil {
+			return nil
+		}
+		merged := *existing
+		populateRateObservedAt(&merged, status, time.Time{})
+		return &merged
 	}
 	var merged ResourceMetrics
 	if existing != nil {
 		merged = *existing
+		hydrateRateMetricObservations(&merged)
 	}
-	merged.CPU = mergeCPUMetric(target, merged.CPU, incoming.CPU, source, now, status, thresholds)
-	merged.Memory = mergeMetric(target, merged.Memory, incoming.Memory, source, now, status, thresholds)
-	merged.Disk = mergeMetric(target, merged.Disk, incoming.Disk, source, now, status, thresholds)
-	merged.NetIn = mergeMetric(target, merged.NetIn, incoming.NetIn, source, now, status, thresholds)
-	merged.NetOut = mergeMetric(target, merged.NetOut, incoming.NetOut, source, now, status, thresholds)
-	merged.DiskRead = mergeMetric(target, merged.DiskRead, incoming.DiskRead, source, now, status, thresholds)
-	merged.DiskWrite = mergeMetric(target, merged.DiskWrite, incoming.DiskWrite, source, now, status, thresholds)
+	incomingCopy := *incoming
+	hydrateRateMetricObservations(&incomingCopy)
+	var incomingObservedAt time.Time
+	if source != "" && status != nil {
+		if st, ok := status[source]; ok && !st.LastSeen.IsZero() {
+			incomingObservedAt = st.LastSeen
+		}
+	}
+	merged.CPU = mergeCPUMetric(target, merged.CPU, incomingCopy.CPU, source, now, status, thresholds)
+	merged.Memory = mergeMetric(target, merged.Memory, incomingCopy.Memory, source, now, status, thresholds)
+	merged.Disk = mergeMetric(target, merged.Disk, incomingCopy.Disk, source, now, status, thresholds)
+	merged.NetIn = mergeMetric(target, merged.NetIn, stampRateMetricObservation(incomingCopy.NetIn, source, incomingObservedAt), source, now, status, thresholds)
+	merged.NetOut = mergeMetric(target, merged.NetOut, stampRateMetricObservation(incomingCopy.NetOut, source, incomingObservedAt), source, now, status, thresholds)
+	merged.DiskRead = mergeMetric(target, merged.DiskRead, stampRateMetricObservation(incomingCopy.DiskRead, source, incomingObservedAt), source, now, status, thresholds)
+	merged.DiskWrite = mergeMetric(target, merged.DiskWrite, stampRateMetricObservation(incomingCopy.DiskWrite, source, incomingObservedAt), source, now, status, thresholds)
+	populateRateObservedAt(&merged, status, time.Time{})
 	return &merged
 }
 

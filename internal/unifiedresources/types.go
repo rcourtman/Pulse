@@ -318,13 +318,17 @@ type SourceTarget struct {
 
 // ResourceMetrics contains unified metrics derived from available sources.
 type ResourceMetrics struct {
-	CPU       *MetricValue `json:"cpu,omitempty"`
-	Memory    *MetricValue `json:"memory,omitempty"`
-	Disk      *MetricValue `json:"disk,omitempty"`
-	NetIn     *MetricValue `json:"netIn,omitempty"`
-	NetOut    *MetricValue `json:"netOut,omitempty"`
-	DiskRead  *MetricValue `json:"diskRead,omitempty"`
-	DiskWrite *MetricValue `json:"diskWrite,omitempty"`
+	CPU                 *MetricValue `json:"cpu,omitempty"`
+	Memory              *MetricValue `json:"memory,omitempty"`
+	Disk                *MetricValue `json:"disk,omitempty"`
+	NetIn               *MetricValue `json:"netIn,omitempty"`
+	NetOut              *MetricValue `json:"netOut,omitempty"`
+	DiskRead            *MetricValue `json:"diskRead,omitempty"`
+	DiskWrite           *MetricValue `json:"diskWrite,omitempty"`
+	NetInObservedAt     *time.Time   `json:"netInObservedAt,omitempty"`
+	NetOutObservedAt    *time.Time   `json:"netOutObservedAt,omitempty"`
+	DiskReadObservedAt  *time.Time   `json:"diskReadObservedAt,omitempty"`
+	DiskWriteObservedAt *time.Time   `json:"diskWriteObservedAt,omitempty"`
 }
 
 // MetricValue represents a metric value, optionally with totals.

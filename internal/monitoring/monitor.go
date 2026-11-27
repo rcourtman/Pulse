@@ -7394,7 +7394,23 @@ func monitorResourceToConvertInput(resource unifiedresources.Resource) models.Re
 	input.HasNetwork = hasNetwork
 	input.NetworkRX = rx
 	input.NetworkTX = tx
+	if hasNetwork && resource.Metrics != nil {
+		if resource.Metrics.NetInObservedAt != nil && !resource.Metrics.NetInObservedAt.IsZero() {
+			input.NetworkRXObservedAt = resource.Metrics.NetInObservedAt.UnixMilli()
+		}
+		if resource.Metrics.NetOutObservedAt != nil && !resource.Metrics.NetOutObservedAt.IsZero() {
+			input.NetworkTXObservedAt = resource.Metrics.NetOutObservedAt.UnixMilli()
+		}
+	}
 	input.DiskReadRate, input.DiskWriteRate = monitorDiskIOMetricInput(resource.Metrics)
+	if (input.DiskReadRate != nil || input.DiskWriteRate != nil) && resource.Metrics != nil {
+		if resource.Metrics.DiskReadObservedAt != nil && !resource.Metrics.DiskReadObservedAt.IsZero() {
+			input.DiskReadObservedAt = resource.Metrics.DiskReadObservedAt.UnixMilli()
+		}
+		if resource.Metrics.DiskWriteObservedAt != nil && !resource.Metrics.DiskWriteObservedAt.IsZero() {
+			input.DiskWriteObservedAt = resource.Metrics.DiskWriteObservedAt.UnixMilli()
+		}
+	}
 
 	return input
 }

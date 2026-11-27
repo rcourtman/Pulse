@@ -3008,5 +3008,58 @@ describe('buildServiceDiagram', () => {
         label: 'talks :5432',
       });
     });
+
+    it('avoids double-counting dual-homed workloads across distinct networks and includes disk-only workloads in active traffic lists', () => {
+      const resources: Resource[] = [
+        resource({
+          id: 'pve-dual',
+          type: 'agent',
+          name: 'pve-dual',
+          platformType: 'proxmox-pve',
+          agent: {
+            networkInterfaces: [
+              { name: 'eno1', addresses: ['10.10.0.10/24'], speedMbps: 10000, linkUp: true },
+              { name: 'eno2', addresses: ['10.20.0.10/24'], speedMbps: 1000, linkUp: true },
+            ],
+          },
+        }),
+        guest('single-net', 'pve-dual', {
+          identity: { ips: ['10.10.0.50'] },
+          network: { rxBytes: 4_000_000, txBytes: 1_000_000 },
+        }),
+        guest('dual-homed', 'pve-dual', {
+          identity: { ips: ['10.10.0.60', '10.20.0.60'] },
+          network: { rxBytes: 20_000_000, txBytes: 0 },
+        }),
+        guest('disk-only', 'pve-dual', {
+          identity: { ips: ['10.20.0.70'] },
+          diskIO: { readRate: 16_000_000, writeRate: 0 },
+        }),
+      ];
+
+      const model = buildInfrastructureMapModel(resources);
+      const diagram = buildServiceDiagram(model);
+
+      // Network 10.10.0.0/24 only attributes the unambiguous single-network guest (5 MB/s), not the dual-homed guest's 20 MB/s.
+      const netA = diagram.networks.find((n) => n.id === 'net:10.10.0.0/24');
+      const netB = diagram.networks.find((n) => n.id === 'net:10.20.0.0/24');
+      expect(netA?.netTotalBytes).toBe(5_000_000);
+      expect(netB?.netTotalBytes).toBeUndefined();
+
+      // Active traffic list and activeTrafficOnly filter include disk-only workloads and sort by combined activity descending.
+      const active = collectActiveTrafficTiles(diagram);
+      expect(active.map(({ tile }) => tile.id)).toEqual([
+        'ct-dual-homed',
+        'ct-disk-only',
+        'ct-single-net',
+      ]);
+
+      const filtered = buildServiceDiagram(model, { filter: { activeTrafficOnly: true } });
+      const filteredIds = collectDiagramGroups(filtered)
+        .flatMap((group) => group.allTiles)
+        .map((tile) => tile.id)
+        .sort();
+      expect(filteredIds).toEqual(['ct-disk-only', 'ct-dual-homed', 'ct-single-net']);
+    });
   });
 });

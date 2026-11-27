@@ -10854,3 +10854,12 @@ Verified by `TestRefreshHostSocketPeerRelationships_MatchesMonitoredPeersOnly`,
 Verified by the Infrastructure Map Vitest suite, `tsc --noEmit`,
 `vite build`, bundle size and lint gates, and Playwright desktop/light/mobile
 plus live homelab preview verification.
+
+
+### Per-direction rate observation timestamps and Infrastructure Map live activity layer (27 November 2026)
+
+- `internal/unifiedresources/types.go` and `clone.go` add optional per-direction `NetInObservedAt`, `NetOutObservedAt`, `DiskReadObservedAt`, and `DiskWriteObservedAt` pointers on `ResourceMetrics`.
+- `internal/unifiedresources/registry.go`, `presentation_coalesce.go`, `metrics.go`, and `adapters.go` stamp, hydrate, and propagate per-direction rate observation timestamps across normal inserts, merge-excluded host inserts, JSON rehydration (`IngestResources`), metric merges, presentation coalescing, Docker incomplete inventory snapshots (`dockerInventoryObservedAt`), and Kubernetes cluster/node linked-host rollups without changing existing metric retention contracts.
+- `frontend-modern/src/types/resource.ts`, `frontend-modern/src/hooks/useUnifiedResources.ts`, and `frontend-modern/src/features/infrastructureMap/` carry `rxObservedAt`, `txObservedAt`, `readObservedAt`, and `writeObservedAt` across REST and WebSocket views, gate live map rates per direction at the 120-second boundary, unify network and disk I/O across the `Live:` pill, `Active traffic` filter, and `Live traffic` drawer, restrict By-host directional uplink animation strictly to host-owned counters, prevent dual-homed network double-counting, keep hover arcs static, and clear filters/search on `Hide names`.
+
+Verified by `TestMergeMetrics_TracksRateObservedAtAcrossHeartbeatsAndPresentationCoalesce`, `TestBroadcastConversionPropagatesRateObservedAt`, `TestCOREMixedAgeReportingGraphPreservesPerDirectionRateObservedAt`, `go test -count=1 ./internal/truenas/... ./internal/unifiedresources/... ./internal/models/... ./internal/api/resourceapi/...`, 408/408 Vitest tests, `tsc --noEmit`, `npm run build`, and Playwright Chromium and WebKit verification.

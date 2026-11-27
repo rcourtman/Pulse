@@ -30,6 +30,14 @@ export type MapTrafficTier = 'low' | 'medium' | 'high';
 /** Minimum combined throughput (10 KB/s) before a tile or network counts as active. */
 export const MAP_TRAFFIC_ACTIVE_BYTES = 10 * 1024;
 
+/** Minimum combined disk I/O rate (256 KB/s) before a workload counts as disk-active. */
+export const MAP_DISK_ACTIVE_BYTES = 256 * 1024;
+
+/** Maximum age (2 minutes) before a real-timestamped telemetry sample expires from live indicators. */
+export const MAP_LIVE_SAMPLE_MAX_AGE_MS = 2 * 60 * 1000;
+
+const REAL_EPOCH_MS_FLOOR = 1_000_000_000_000;
+
 /** Full-duplex peak utilization threshold (%) at which a physical link is flagged as busy. */
 export const MAP_LINK_SATURATED_PERCENT = 80;
 
@@ -66,6 +74,14 @@ export const resolveMapTrafficTier = (
   return 'high';
 };
 
+export const resolveMapDiskTier = (bytesPerSec: number | undefined): MapTrafficTier | undefined => {
+  if (typeof bytesPerSec !== 'number' || !Number.isFinite(bytesPerSec)) return undefined;
+  if (bytesPerSec < MAP_DISK_ACTIVE_BYTES) return undefined;
+  if (bytesPerSec < 2 * 1024 * 1024) return 'low';
+  if (bytesPerSec < 20 * 1024 * 1024) return 'medium';
+  return 'high';
+};
+
 export type MapPlatform =
   | 'proxmox'
   | 'vmware'
@@ -94,6 +110,10 @@ export interface MapItem {
   netRxBytes?: number;
   /** Live outbound network rate in bytes per second, when collected. */
   netTxBytes?: number;
+  /** Live disk read rate in bytes per second, when collected. */
+  diskReadBytes?: number;
+  /** Live disk write rate in bytes per second, when collected. */
+  diskWriteBytes?: number;
   /** Live uptime in whole seconds when the resource is running or online. */
   uptimeSeconds?: number;
   /** Count of pending package or image updates reported for the resource, when positive. */
@@ -222,6 +242,10 @@ export interface MapHost {
   netRxBytes?: number;
   /** Live outbound network rate in bytes per second, when collected. */
   netTxBytes?: number;
+  /** Live disk read rate in bytes per second, when collected. */
+  diskReadBytes?: number;
+  /** Live disk write rate in bytes per second, when collected. */
+  diskWriteBytes?: number;
   /** Fastest reported physical link speed in Mbps across non-host-local interfaces. */
   linkSpeedMbps?: number;
   /** Full-duplex peak link utilization percentage (1 to 100) when speed and live rate are known. */
@@ -266,6 +290,10 @@ export interface InfrastructureMapModel {
   totals: MapTotal[];
   attentionCount: number;
   isEmpty: boolean;
+  /** Newest real Unix ms `lastSeen` timestamp across resources, when present. */
+  latestSampleAtMs?: number;
+  /** True when live telemetry samples have expired beyond MAP_LIVE_SAMPLE_MAX_AGE_MS. */
+  liveSamplesExpired?: boolean;
 }
 
 const PLATFORM_ORDER: readonly MapPlatform[] = [
@@ -638,12 +666,73 @@ const hostVersionLabelOf = (resource: Resource): string | undefined => {
 const HOST_LOCAL_INTERFACE =
   /^(lo|docker\d*|podman\d*|br-[0-9a-f]{12}|veth.*|virbr\d*|cni.*|flannel.*|cali.*|kube-ipvs\d*)$/i;
 
-const networkRatesOf = (resource: Resource): { netRxBytes?: number; netTxBytes?: number } => {
-  const netRxBytes = finiteNonNegative(resource.network?.rxBytes);
-  const netTxBytes = finiteNonNegative(resource.network?.txBytes);
+const isRealEpochMs = (value: number | undefined): value is number =>
+  typeof value === 'number' && Number.isFinite(value) && value >= REAL_EPOCH_MS_FLOOR;
+
+/** Single canonical sample expiry comparison used by both model gating and UI timers. */
+export const isSampleTimestampExpired = (lastSeenMs: number | undefined, nowMs: number): boolean =>
+  isRealEpochMs(lastSeenMs) && nowMs - lastSeenMs >= MAP_LIVE_SAMPLE_MAX_AGE_MS;
+
+const isLiveTelemetryFresh = (
+  resource: Resource,
+  health: MapHealth,
+  nowMs: number,
+  rateObservedAtMs?: number,
+): boolean => {
+  if (
+    health === 'off' ||
+    health === 'stale' ||
+    health === 'unknown' ||
+    resource.status === 'stopped' ||
+    resource.status === 'offline' ||
+    resource.status === 'paused'
+  ) {
+    return false;
+  }
+  const sampleAtMs = isRealEpochMs(rateObservedAtMs) ? rateObservedAtMs : resource.lastSeen;
+  if (isSampleTimestampExpired(sampleAtMs, nowMs)) {
+    return false;
+  }
+  return true;
+};
+
+const networkRatesOf = (
+  resource: Resource,
+  health: MapHealth,
+  nowMs: number,
+): { netRxBytes?: number; netTxBytes?: number } => {
+  if (!resource.network) return {};
+  const rxObservedAt = resource.network.rxObservedAt ?? resource.network.observedAt;
+  const txObservedAt = resource.network.txObservedAt ?? resource.network.observedAt;
+  const netRxBytes = isLiveTelemetryFresh(resource, health, nowMs, rxObservedAt)
+    ? finiteNonNegative(resource.network.rxBytes)
+    : undefined;
+  const netTxBytes = isLiveTelemetryFresh(resource, health, nowMs, txObservedAt)
+    ? finiteNonNegative(resource.network.txBytes)
+    : undefined;
   return {
     ...(netRxBytes !== undefined ? { netRxBytes } : {}),
     ...(netTxBytes !== undefined ? { netTxBytes } : {}),
+  };
+};
+
+const diskRatesOf = (
+  resource: Resource,
+  health: MapHealth,
+  nowMs: number,
+): { diskReadBytes?: number; diskWriteBytes?: number } => {
+  if (!resource.diskIO) return {};
+  const readObservedAt = resource.diskIO.readObservedAt ?? resource.diskIO.observedAt;
+  const writeObservedAt = resource.diskIO.writeObservedAt ?? resource.diskIO.observedAt;
+  const diskReadBytes = isLiveTelemetryFresh(resource, health, nowMs, readObservedAt)
+    ? finiteNonNegative(resource.diskIO.readRate)
+    : undefined;
+  const diskWriteBytes = isLiveTelemetryFresh(resource, health, nowMs, writeObservedAt)
+    ? finiteNonNegative(resource.diskIO.writeRate)
+    : undefined;
+  return {
+    ...(diskReadBytes !== undefined ? { diskReadBytes } : {}),
+    ...(diskWriteBytes !== undefined ? { diskWriteBytes } : {}),
   };
 };
 
@@ -967,11 +1056,12 @@ const toItem = (
   resource: Resource,
   typeLabel: string,
   attachments: Attachments,
+  nowMs: number,
   podExposure?: PodExposure,
 ): MapItem => {
   const attached = attachments.get(resource.id) ?? [];
   const health = resolveMapHealth(resource);
-  const rates = networkRatesOf(resource);
+  const rates = networkRatesOf(resource, health, nowMs);
   const nic = interfaceTelemetryOf(resource, health);
   const uptimeSeconds = uptimeSecondsOf(resource, health);
   const pendingUpdates = pendingUpdatesOf(resource);
@@ -1016,6 +1106,7 @@ const toItem = (
     cpu: finitePercent(resource.cpu?.current),
     memory: finitePercent(getMemoryPercent(resource)),
     ...rates,
+    ...diskRatesOf(resource, health, nowMs),
     ...(uptimeSeconds !== undefined ? { uptimeSeconds } : {}),
     ...(pendingUpdates !== undefined ? { pendingUpdates } : {}),
     ...(lastBackupAt ? { lastBackupAt } : {}),
@@ -1076,12 +1167,13 @@ const toService = (
   resource: Resource,
   typeLabel: string,
   attachments: Attachments,
+  nowMs: number,
   podExposure?: PodExposure,
 ): MapItem => {
   const app = resolveMapApp({ name: displayName(resource), image: resource.docker?.image });
   const mounts = mountsOf(resource);
   return {
-    ...toItem(resource, typeLabel, attachments, podExposure),
+    ...toItem(resource, typeLabel, attachments, nowMs, podExposure),
     ...(app ? { app } : {}),
     category: resolveMapCategory(app, resource.tags),
     ...(mounts.length > 0 ? { mounts } : {}),
@@ -1152,30 +1244,31 @@ const placeChild = (
   child: Resource,
   attachments: Attachments,
   podExposures: PodExposures,
+  nowMs: number,
 ): 'placed' | 'pool' | 'skipped' => {
   const platform = draft.host.platform;
   if (child.type === 'vm') {
-    sectionFor(draft, 'vms', 'VMs').items.push(toService(child, 'VM', attachments));
+    sectionFor(draft, 'vms', 'VMs').items.push(toService(child, 'VM', attachments, nowMs));
     return 'placed';
   }
   if (SYSTEM_CONTAINER_TYPES.has(child.type)) {
     const proxmox = platform === 'proxmox';
     sectionFor(draft, 'lxcs', proxmox ? 'LXCs' : 'System containers').items.push(
-      toService(child, proxmox ? 'LXC' : SYSTEM_CONTAINER_LABEL, attachments),
+      toService(child, proxmox ? 'LXC' : SYSTEM_CONTAINER_LABEL, attachments, nowMs),
     );
     return 'placed';
   }
   if (child.type === 'app-container') {
     const app = platform === 'truenas';
     sectionFor(draft, 'containers', app ? 'Apps' : 'Containers').items.push(
-      toService(child, app ? 'App' : 'Container', attachments),
+      toService(child, app ? 'App' : 'Container', attachments, nowMs),
     );
     return 'placed';
   }
   if (child.type === 'pod') {
     const namespace = clean(child.kubernetes?.namespace) || 'default';
     sectionFor(draft, `ns:${namespace}`, namespace).items.push(
-      toService(child, 'Pod', attachments, podExposures.get(child.id)),
+      toService(child, 'Pod', attachments, nowMs, podExposures.get(child.id)),
     );
     return 'placed';
   }
@@ -1201,9 +1294,21 @@ const isProblem = (health: MapHealth): boolean => health === 'attention' || heal
 
 export function buildInfrastructureMapModel(
   resources: readonly Resource[],
+  options?: { nowMs?: number },
 ): InfrastructureMapModel {
+  const nowMs = options?.nowMs ?? Date.now();
+  let latestSampleAtMs: number | undefined;
   const byId = new Map<string, Resource>();
-  for (const resource of resources) byId.set(resource.id, resource);
+  for (const resource of resources) {
+    byId.set(resource.id, resource);
+    if (
+      isRealEpochMs(resource.lastSeen) &&
+      (latestSampleAtMs === undefined || resource.lastSeen > latestSampleAtMs)
+    ) {
+      latestSampleAtMs = resource.lastSeen;
+    }
+  }
+  const liveSamplesExpired = isSampleTimestampExpired(latestSampleAtMs, nowMs);
   const networks = resolveMapNetworks(resources);
   const attachments = networks.attachments;
   const podExposures = resolveKubernetesPodExposures(resources);
@@ -1218,7 +1323,7 @@ export function buildInfrastructureMapModel(
     if (resource.type === 'agent' && parent?.type === 'k8s-cluster') continue;
     const own = attachments.get(resource.id) ?? [];
     const health = resolveMapHealth(resource);
-    const rates = networkRatesOf(resource);
+    const rates = networkRatesOf(resource, health, nowMs);
     const nic = interfaceTelemetryOf(resource, health);
     const linkUtilizationPercent = computeMapLinkUtilizationPercent(
       rates.netRxBytes,
@@ -1254,6 +1359,7 @@ export function buildInfrastructureMapModel(
         cpu: finitePercent(resource.cpu?.current),
         memory: finitePercent(getMemoryPercent(resource)),
         ...rates,
+        ...diskRatesOf(resource, health, nowMs),
         ...nic,
         ...(linkUtilizationPercent !== undefined ? { linkUtilizationPercent } : {}),
         sections: [],
@@ -1281,7 +1387,7 @@ export function buildInfrastructureMapModel(
     if (resource.type === 'network-endpoint') {
       const checkKind = normalizeAvailabilityTargetKind(resource.availability?.targetKind);
       checks.push({
-        ...toItem(resource, 'Check', attachments),
+        ...toItem(resource, 'Check', attachments, nowMs),
         ...(checkKind ? { checkKind } : {}),
       });
       continue;
@@ -1293,7 +1399,7 @@ export function buildInfrastructureMapModel(
     }
     const draft = owningDraft(resource);
     if (draft) {
-      placeChild(draft, resource, attachments, podExposures);
+      placeChild(draft, resource, attachments, podExposures, nowMs);
       continue;
     }
     if (!resource.parentId && POOL_TYPES.has(resource.type)) sharedPools.push(resource);
@@ -1449,7 +1555,13 @@ export function buildInfrastructureMapModel(
     });
   }
 
-  return summarize(blocks, networks.segments, ownedConnections(resources, attachments));
+  return summarize(
+    blocks,
+    networks.segments,
+    ownedConnections(resources, attachments),
+    latestSampleAtMs,
+    liveSamplesExpired,
+  );
 }
 
 // A gateway or resolver address that exactly one thing on the map answers on
@@ -1505,6 +1617,8 @@ function summarize(
   blocks: MapBlock[],
   segments: MapSegment[],
   connections: MapConnections,
+  latestSampleAtMs?: number,
+  liveSamplesExpired?: boolean,
 ): InfrastructureMapModel {
   const counts = new Map<string, number>();
   const add = (key: string, by: number) => counts.set(key, (counts.get(key) ?? 0) + by);
@@ -1546,7 +1660,16 @@ function summarize(
     count: counts.get(key) ?? 0,
   })).filter((total) => total.count > 0);
 
-  return { blocks, segments, connections, totals, attentionCount, isEmpty: blocks.length === 0 };
+  return {
+    blocks,
+    segments,
+    connections,
+    totals,
+    attentionCount,
+    isEmpty: blocks.length === 0,
+    ...(latestSampleAtMs !== undefined ? { latestSampleAtMs } : {}),
+    ...(liveSamplesExpired ? { liveSamplesExpired: true } : {}),
+  };
 }
 
 /**

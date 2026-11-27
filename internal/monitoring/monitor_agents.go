@@ -2965,6 +2965,9 @@ func (m *Monitor) ApplyDockerReport(report agentsdocker.Report, tokenRecord *con
 	}
 	host.FailureLogsEnabled = report.Agent.FailureLogsEnabled
 	host.LiveLogsEnabled = report.Agent.LiveLogsEnabled
+	if inventoryComplete {
+		host.InventoryObservedAt = observedAt
+	}
 	if !inventoryComplete && previousState.ID != "" {
 		preserveDockerInventorySnapshot(&host, previousState)
 	}
@@ -3197,6 +3200,11 @@ func preserveDockerInventorySnapshot(current *models.DockerHost, previous models
 	current.NetOutRate = previous.NetOutRate
 	current.DiskReadRate = previous.DiskReadRate
 	current.DiskWriteRate = previous.DiskWriteRate
+	if !previous.InventoryObservedAt.IsZero() {
+		current.InventoryObservedAt = previous.InventoryObservedAt
+	} else if !previous.LastSeen.IsZero() {
+		current.InventoryObservedAt = previous.LastSeen
+	}
 }
 
 const dockerAuthorizationPluginBlockReasonFormat = "Pulse blocks Docker daemon-mutating commands while Docker authorization plugins are configured (%s) because advisory GO-2026-4887 does not yet provide a fixed Docker Go module line."

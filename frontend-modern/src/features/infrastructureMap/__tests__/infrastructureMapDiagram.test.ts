@@ -9,11 +9,13 @@ import { buildMapExportSvg } from '../infrastructureMapExport';
 import {
   elevatedLoadTone,
   fitCardTitle,
+  formatLiveActivitySubtitle,
   hostCountLabel,
   isSpikingServiceTile,
   layoutHostDiagram,
   proportionalStorageTrackWidth,
   strokeWidthForLinkSpeed,
+  tileActivityTier,
 } from '../infrastructureMapHostDiagram';
 import {
   fitMapName,
@@ -41,6 +43,7 @@ import {
   renderMapNetworkRings,
   renderMapSceneBody,
   renderMapSceneToSvg,
+  resolveFlowVisualProfile,
 } from '../infrastructureMapRender';
 import { buildServiceDiagram } from '../infrastructureMapServices';
 
@@ -1663,20 +1666,32 @@ describe('layoutServiceDiagram', () => {
     it('emits flow overlays and active tile classes on the live page, and never in exported SVG', () => {
       const model = buildInfrastructureMapModel(liveEstate());
       const diagram = buildServiceDiagram(model);
-      const liveScene = layoutServiceDiagram(diagram, {
+      const roleScene = layoutServiceDiagram(diagram, {
+        width: 1400,
+        density: 'names',
+        liveTraffic: true,
+      });
+      const hostScene = layoutHostDiagram(diagram, {
         width: 1400,
         density: 'names',
         liveTraffic: true,
       });
 
-      const liveBody = renderMapSceneBody(liveScene, MAP_PAGE_PALETTES.dark, () => null);
+      // Logical By-role connectors glow/thicken bidirectionally without inventing one-way arrows.
+      const roleBody = renderMapSceneBody(roleScene, MAP_PAGE_PALETTES.dark, () => null);
+      expect(roleBody).toContain('class="pulse-map-active pulse-map-active-');
+      expect(roleBody).not.toContain('class="pulse-map-flow ');
+      expect(roleBody).not.toContain('pulse-map-packet');
+
+      // Measured host uplinks in By-host emit directional flow overlays and active tile classes.
+      const liveBody = renderMapSceneBody(hostScene, MAP_PAGE_PALETTES.dark, () => null);
       expect(liveBody).toContain('class="pulse-map-flow pulse-map-flow-');
-      expect(liveBody).toContain('stroke-dasharray="5 10"');
+      expect(liveBody).toMatch(/stroke-dasharray="\d+ \d+"/);
       expect(liveBody).toContain('stroke-linecap="round"');
       expect(liveBody).toContain('class="pulse-map-active pulse-map-active-');
 
       // Direct renderMapSceneToSvg on a live scene stays completely static with zero animation classes.
-      const staticSvgFromLive = renderMapSceneToSvg(liveScene, MAP_PALETTES.dark);
+      const staticSvgFromLive = renderMapSceneToSvg(hostScene, MAP_PALETTES.dark);
       expect(staticSvgFromLive).not.toContain('pulse-map-flow');
       expect(staticSvgFromLive).not.toContain('pulse-map-active');
       expect(staticSvgFromLive).not.toContain('class=');
@@ -1730,8 +1745,8 @@ describe('layoutServiceDiagram', () => {
         .filter((node): node is Extract<typeof node, { kind: 'text' }> => node.kind === 'text')
         .map((node) => node.text);
       expect(texts).toContain('via gluetun');
-      expect(texts).toContain('1.9M/s');
-      expect(texts).not.toContain('7.6M/s');
+      expect(texts).toContain('↓ 1.9M/s');
+      expect(texts).not.toContain('↓ 7.6M/s');
       const activeRects = scene.nodes.filter(
         (node) => node.kind === 'rect' && node.activity !== undefined,
       );
@@ -1818,40 +1833,30 @@ describe('layoutServiceDiagram', () => {
       expect(hostHit.linked).toHaveLength(21);
       expect(gatewayHit.linked).toEqual(['docker-1']);
 
-      // Static mode: all 21 linked tiles get tinted rings, curved halos and arcs capped at MAP_MAX_LINK_ARCS (16), no flow overlay.
-      const staticOverlay = renderMapLinkRings(scene, hostHit, palette);
-      expect(staticOverlay.match(/<rect /g)).toHaveLength(21);
-      expect(staticOverlay).toContain(`fill="${palette.accent}" fill-opacity="0.06"`);
-      expect(staticOverlay.match(/class="pulse-map-link-halo"/g)).toHaveLength(MAP_MAX_LINK_ARCS);
-      expect(staticOverlay).toContain(
+      // Static relationship arcs: all 21 linked tiles get tinted rings, curved halos and static arcs capped at MAP_MAX_LINK_ARCS (16), never animated.
+      const overlay = renderMapLinkRings(scene, hostHit, palette);
+      expect(overlay.match(/<rect /g)).toHaveLength(21);
+      expect(overlay).toContain(`fill="${palette.accent}" fill-opacity="0.06"`);
+      expect(overlay.match(/class="pulse-map-link-halo"/g)).toHaveLength(MAP_MAX_LINK_ARCS);
+      expect(overlay).toContain(
         `stroke="${palette.surface}" stroke-width="4" stroke-opacity="0.72" class="pulse-map-link-halo"`,
       );
-      expect(staticOverlay.match(/class="pulse-map-link-arc"/g)).toHaveLength(MAP_MAX_LINK_ARCS);
-      expect(staticOverlay.indexOf('pulse-map-link-halo')).toBeLessThan(
-        staticOverlay.indexOf('pulse-map-link-arc'),
+      expect(overlay.match(/class="pulse-map-link-arc"/g)).toHaveLength(MAP_MAX_LINK_ARCS);
+      expect(overlay.indexOf('pulse-map-link-halo')).toBeLessThan(
+        overlay.indexOf('pulse-map-link-arc'),
       );
-      expect(staticOverlay).toMatch(/d="M[\d.]+ [\d.]+ Q[\d.]+ [\d.]+ [\d.]+ [\d.]+"/);
-      expect(staticOverlay.match(/<circle /g)).toHaveLength(MAP_MAX_LINK_ARCS + 1);
-      expect(staticOverlay).not.toContain('pulse-map-link-flow');
+      expect(overlay).toMatch(/d="M[\d.]+ [\d.]+ Q[\d.]+ [\d.]+ [\d.]+ [\d.]+"/);
+      expect(overlay.match(/<circle /g)).toHaveLength(MAP_MAX_LINK_ARCS + 1);
+      expect(overlay).not.toContain('pulse-map-link-flow');
 
-      // Live traffic mode: emits matching animated flow paths alongside base arcs and halos.
-      const liveOverlay = renderMapLinkRings(scene, hostHit, palette, { liveTraffic: true });
-      expect(liveOverlay.match(/class="pulse-map-link-halo"/g)).toHaveLength(MAP_MAX_LINK_ARCS);
-      expect(liveOverlay.match(/class="pulse-map-link-arc"/g)).toHaveLength(MAP_MAX_LINK_ARCS);
-      expect(liveOverlay.match(/class="pulse-map-link-flow"/g)).toHaveLength(MAP_MAX_LINK_ARCS);
-      expect(liveOverlay.indexOf('pulse-map-link-halo')).toBeLessThan(
-        liveOverlay.indexOf('pulse-map-link-arc'),
-      );
-      expect(liveOverlay).toContain('stroke-dasharray="4 10"');
-
-      // Unmonitored gateway hover draws 1 ring, 1 halo, 1 curved arc, and 1 factual relationship pill.
-      const gatewayOverlay = renderMapLinkRings(scene, gatewayHit, palette, { liveTraffic: true });
+      // Unmonitored gateway hover draws 1 ring, 1 halo, 1 static curved arc, and 1 factual relationship pill.
+      const gatewayOverlay = renderMapLinkRings(scene, gatewayHit, palette);
       expect(gatewayOverlay.match(/<rect /g)).toHaveLength(2);
       expect(gatewayOverlay.match(/class="pulse-map-link-label"/g)).toHaveLength(1);
       expect(gatewayOverlay).toContain('>gateway</text>');
       expect(gatewayOverlay.match(/class="pulse-map-link-halo"/g)).toHaveLength(1);
       expect(gatewayOverlay.match(/class="pulse-map-link-arc"/g)).toHaveLength(1);
-      expect(gatewayOverlay.match(/class="pulse-map-link-flow"/g)).toHaveLength(1);
+      expect(gatewayOverlay).not.toContain('pulse-map-link-flow');
 
       // Exported SVG never contains hover rings, halos, or arcs.
       const exported = renderMapSceneToSvg(scene, MAP_PALETTES.dark);
@@ -2116,7 +2121,7 @@ describe('layoutServiceDiagram', () => {
       const liveBody = renderMapSceneBody(miniScene, MAP_PAGE_PALETTES.dark, () => null);
       expect(liveBody).toContain('fill-opacity="0.45"');
       expect(liveBody).toContain('stroke-width="2.75"');
-      expect(liveBody).toContain('stroke-width="3.25"');
+      expect(liveBody).toContain('stroke-width="3.4"');
     });
 
     it('renders host frames with hardware specs, VMID, last octet, VLAN stripes, Compose stacks, storage bars, and speed drops', () => {
@@ -3631,6 +3636,289 @@ describe('layoutServiceDiagram', () => {
       expect(hostHit?.gpuSummary).toBe('RTX 4090');
       const frigateHit = ofKind(scene, 'hit').find((node) => node.hit.id === 'c-frigate')?.hit;
       expect(frigateHit?.accelerators).toEqual(['iGPU', 'TPU']);
+    });
+
+    it('wires diskIO into directional tile readouts, spike halos, and ambient at-rest flow arcs', () => {
+      const poolTotal = 20 * 1024 ** 4;
+      const poolUsed = Math.round(poolTotal * 0.42);
+      const resources: Resource[] = [
+        resource({
+          id: 'host-tower',
+          type: 'agent',
+          name: 'Tower',
+          platformType: 'unraid',
+          status: 'online',
+        }),
+        resource({
+          id: 'pool-array',
+          type: 'storage',
+          name: 'Tower Array',
+          platformType: 'unraid',
+          parentId: 'host-tower',
+          status: 'online',
+          disk: { current: 42, total: poolTotal, used: poolUsed },
+          storage: { path: '/mnt/user' },
+        }),
+        resource({
+          id: 'c-jellyfin',
+          type: 'app-container',
+          name: 'jellyfin',
+          platformType: 'docker',
+          parentId: 'host-tower',
+          status: 'running',
+          network: { rxBytes: 40 * 1024, txBytes: 2.4 * 1024 * 1024 },
+          diskIO: { readRate: 14 * 1024 * 1024, writeRate: 64 * 1024 },
+          docker: {
+            image: 'jellyfin/jellyfin:latest',
+            mounts: [{ type: 'bind', source: '/mnt/user/media', destination: '/media' }],
+          },
+        }),
+        resource({
+          id: 'c-idle',
+          type: 'app-container',
+          name: 'uptime-kuma',
+          platformType: 'docker',
+          parentId: 'host-tower',
+          status: 'running',
+          network: { rxBytes: 4 * 1024, txBytes: 4 * 1024 },
+          diskIO: { readRate: 8 * 1024, writeRate: 8 * 1024 },
+          docker: { image: 'louislam/uptime-kuma:latest' },
+        }),
+      ];
+
+      const diagram = buildServiceDiagram(buildInfrastructureMapModel(resources));
+      const jellyfinTile = diagram.hostFrames[0].allTiles.find((t) => t.id === 'c-jellyfin')!;
+      const idleTile = diagram.hostFrames[0].allTiles.find((t) => t.id === 'c-idle')!;
+
+      expect(jellyfinTile.diskReadBytes).toBe(14 * 1024 * 1024);
+      expect(tileActivityTier(jellyfinTile)).toBe('medium');
+      expect(tileActivityTier(idleTile)).toBeUndefined();
+      expect(
+        isSpikingServiceTile(
+          jellyfinTile,
+          jellyfinTile.netTotalBytes ?? 0,
+          true,
+          jellyfinTile.diskTotalBytes ?? 0,
+        ),
+      ).toBe(true);
+      expect(
+        isSpikingServiceTile(
+          idleTile,
+          jellyfinTile.netTotalBytes ?? 0,
+          true,
+          jellyfinTile.diskTotalBytes ?? 0,
+        ),
+      ).toBe(false);
+
+      const subtitle = formatLiveActivitySubtitle(jellyfinTile, 180);
+      expect(subtitle).toContain('↑');
+      expect(subtitle).toContain('Read');
+
+      const scene = layoutHostDiagram(diagram, {
+        width: 1440,
+        density: 'names',
+        liveTraffic: true,
+      });
+
+      const liveSvg = renderMapSceneBody(scene, MAP_PAGE_PALETTES.dark, () => null);
+      expect(liveSvg).toContain('pulse-map-spike-halo');
+
+      // Balanced net & disk subtitles always retain /s units.
+      const balancedNet = formatLiveActivitySubtitle(
+        {
+          ...jellyfinTile,
+          netRxBytes: 1.2 * 1024 * 1024,
+          netTxBytes: 2.4 * 1024 * 1024,
+          netTotalBytes: 3.6 * 1024 * 1024,
+          trafficTier: 'medium',
+          diskReadBytes: undefined,
+          diskWriteBytes: undefined,
+          diskTotalBytes: undefined,
+          diskTier: undefined,
+        },
+        180,
+      );
+      expect(balancedNet).toContain('/s');
+      expect(balancedNet).toMatch(/↓.*\/s.*↑.*\/s/);
+
+      const balancedDisk = formatLiveActivitySubtitle(
+        {
+          ...jellyfinTile,
+          netRxBytes: undefined,
+          netTxBytes: undefined,
+          netTotalBytes: undefined,
+          trafficTier: undefined,
+          diskReadBytes: 4 * 1024 * 1024,
+          diskWriteBytes: 3 * 1024 * 1024,
+          diskTotalBytes: 7 * 1024 * 1024,
+          diskTier: 'medium',
+        },
+        180,
+      );
+      expect(balancedDisk).toMatch(/R .*\/s.*W .*\/s/);
+
+      // Static export keeps packets and spike halos out
+      const staticSvg = renderMapSceneToSvg(scene, MAP_PALETTES.dark);
+      expect(staticSvg).not.toContain('pulse-map-spike-halo');
+      expect(staticSvg).not.toContain('pulse-map-packet');
+      expect(staticSvg).not.toContain('animateMotion');
+
+      // Flow visual profile scales strictly from trickle -> stream -> heavy -> massive
+      const trickle = resolveFlowVisualProfile(64 * 1024);
+      const stream = resolveFlowVisualProfile(2.4 * 1024 * 1024);
+      const heavy = resolveFlowVisualProfile(18 * 1024 * 1024);
+      const massive = resolveFlowVisualProfile(95 * 1024 * 1024);
+      expect(trickle.intensity).toBe('trickle');
+      expect(trickle.packetCount).toBe(0);
+      expect(stream.intensity).toBe('stream');
+      expect(heavy.intensity).toBe('heavy');
+      expect(massive.intensity).toBe('massive');
+      expect(massive.flowWidth).toBeGreaterThan(heavy.flowWidth);
+      expect(heavy.flowWidth).toBeGreaterThan(stream.flowWidth);
+      expect(stream.flowWidth).toBeGreaterThan(trickle.flowWidth);
+      expect(massive.packetRadius).toBeGreaterThan(heavy.packetRadius);
+      expect(heavy.packetRadius).toBeGreaterThan(stream.packetRadius);
+      expect(massive.packetSpeedPxPerSec).toBeGreaterThan(heavy.packetSpeedPxPerSec);
+      expect(heavy.packetSpeedPxPerSec).toBeGreaterThan(stream.packetSpeedPxPerSec);
+    });
+
+    it('orients host bus connectors by measured upload/download direction and emits one animateMotion per packet group', () => {
+      const resources: Resource[] = [
+        resource({
+          id: 'host-down',
+          type: 'agent',
+          name: 'downloader',
+          platformType: 'proxmox-pve',
+          status: 'online',
+          network: { rxBytes: 60 * 1024 * 1024, txBytes: 1 * 1024 * 1024 },
+          agent: {
+            networkInterfaces: [{ name: 'eno1', addresses: ['10.20.0.10/24'], speedMbps: 10000 }],
+          },
+        }),
+        resource({
+          id: 'host-up',
+          type: 'agent',
+          name: 'uploader',
+          platformType: 'proxmox-pve',
+          status: 'online',
+          network: { rxBytes: 1 * 1024 * 1024, txBytes: 40 * 1024 * 1024 },
+          agent: {
+            networkInterfaces: [{ name: 'eno1', addresses: ['10.20.0.11/24'], speedMbps: 10000 }],
+          },
+        }),
+        resource({
+          id: 'host-even',
+          type: 'agent',
+          name: 'balanced',
+          platformType: 'proxmox-pve',
+          status: 'online',
+          network: { rxBytes: 15 * 1024 * 1024, txBytes: 15 * 1024 * 1024 },
+          agent: {
+            networkInterfaces: [{ name: 'eno1', addresses: ['10.20.0.12/24'], speedMbps: 10000 }],
+          },
+        }),
+      ];
+
+      const diagram = buildServiceDiagram(buildInfrastructureMapModel(resources));
+      const scene = layoutHostDiagram(diagram, {
+        width: 1440,
+        density: 'names',
+        liveTraffic: true,
+      });
+
+      const verticalDrops = ofKind(scene, 'line').filter(
+        (node) =>
+          node.points.length === 2 &&
+          node.points[0][0] === node.points[1][0] &&
+          node.flowBytes !== undefined &&
+          node.points[0][1] !== node.points[1][1],
+      );
+      const downDrop = verticalDrops.find(
+        (node) => !node.bidirectional && node.points[1][1] > node.points[0][1],
+      );
+      const upDrop = verticalDrops.find(
+        (node) => !node.bidirectional && node.points[1][1] < node.points[0][1],
+      );
+      const evenDrop = verticalDrops.find((node) => node.bidirectional && node.arrow !== true);
+
+      expect(downDrop).toBeDefined();
+      expect(upDrop).toBeDefined();
+      expect(evenDrop).toBeDefined();
+
+      // Each packet group carries exactly one <animateMotion> instead of duplicating it across 3 circles.
+      const svg = renderMapSceneBody(scene, MAP_PAGE_PALETTES.dark, () => null);
+      const packetGroups = (svg.match(/class="pulse-map-packet /g) ?? []).length;
+      const motionTags = (svg.match(/<animateMotion /g) ?? []).length;
+      expect(packetGroups).toBeGreaterThan(0);
+      expect(motionTags).toBe(packetGroups);
+    });
+
+    it('never invents host uplink, Ways in, or By-role directional arrows from guest-only or TX-only traffic', () => {
+      const resources: Resource[] = [
+        // Host reports 0 B/s on its physical uplink while its guest uploads 40 MB/s (e.g., intra-host traffic).
+        resource({
+          id: 'pve-idle-nic',
+          type: 'agent',
+          name: 'pve-idle-nic',
+          platformType: 'proxmox-pve',
+          status: 'online',
+          network: { rxBytes: 0, txBytes: 0 },
+          agent: {
+            networkInterfaces: [{ name: 'eno1', addresses: ['10.40.0.10/24'], speedMbps: 10000 }],
+          },
+        }),
+        resource({
+          id: 'c-traefik',
+          type: 'app-container',
+          name: 'traefik',
+          platformType: 'docker',
+          parentId: 'pve-idle-nic',
+          status: 'running',
+          network: { rxBytes: 0, txBytes: 20 * 1024 * 1024 },
+          docker: { image: 'traefik:latest' },
+        }),
+        resource({
+          id: 'vm-jellyfin',
+          type: 'vm',
+          name: 'jellyfin',
+          platformType: 'proxmox-pve',
+          parentId: 'pve-idle-nic',
+          status: 'running',
+          network: { rxBytes: 0, txBytes: 40 * 1024 * 1024 },
+          identity: { ips: ['10.40.0.50'] },
+        }),
+      ];
+
+      const diagram = buildServiceDiagram(buildInfrastructureMapModel(resources));
+
+      // By host: zero directional flow or packets on either the idle host uplink or the Ways in connector.
+      const hostScene = layoutHostDiagram(diagram, {
+        width: 1440,
+        density: 'names',
+        liveTraffic: true,
+      });
+      const directionalHostLines = ofKind(hostScene, 'line').filter(
+        (node) => node.activity !== undefined && !node.bidirectional,
+      );
+      expect(directionalHostLines).toEqual([]);
+      const hostSvg = renderMapSceneBody(hostScene, MAP_PAGE_PALETTES.dark, () => null);
+      expect(hostSvg).not.toContain('pulse-map-packet');
+      expect(hostSvg).not.toContain('pulse-map-flow ');
+
+      // By role: zero directional flow or downward arrows into Media for a TX-only workload.
+      const roleScene = layoutServiceDiagram(diagram, {
+        width: 1440,
+        density: 'names',
+        liveTraffic: true,
+        layoutMode: 'roles',
+      });
+      const directionalRoleLines = ofKind(roleScene, 'line').filter(
+        (node) => node.activity !== undefined && !node.bidirectional,
+      );
+      expect(directionalRoleLines).toEqual([]);
+      const roleSvg = renderMapSceneBody(roleScene, MAP_PAGE_PALETTES.dark, () => null);
+      expect(roleSvg).not.toContain('pulse-map-packet');
+      expect(roleSvg).not.toContain('pulse-map-flow ');
     });
   });
 });

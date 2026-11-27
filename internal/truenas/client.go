@@ -424,30 +424,34 @@ func systemInfoFromMetricHistory(history *SystemMetricHistory) *SystemInfo {
 		}
 	}
 
-	if value, ok := latestTimeSeriesValue(history.NetInRate); ok {
-		system.NetInRate = value
+	if point, ok := latestTimeSeriesPoint(history.NetInRate); ok {
+		system.NetInRate = point.Value
+		system.NetInObservedAt = point.Timestamp
 		system.Telemetry.NetIn = true
 	}
-	if value, ok := latestTimeSeriesValue(history.NetOutRate); ok {
-		system.NetOutRate = value
+	if point, ok := latestTimeSeriesPoint(history.NetOutRate); ok {
+		system.NetOutRate = point.Value
+		system.NetOutObservedAt = point.Timestamp
 		system.Telemetry.NetOut = true
 	}
-	if value, ok := latestTimeSeriesValue(history.DiskReadRate); ok {
-		system.DiskReadRate = value
+	if point, ok := latestTimeSeriesPoint(history.DiskReadRate); ok {
+		system.DiskReadRate = point.Value
+		system.DiskReadObservedAt = point.Timestamp
 		system.Telemetry.DiskRead = true
 	}
-	if value, ok := latestTimeSeriesValue(history.DiskWriteRate); ok {
-		system.DiskWriteRate = value
+	if point, ok := latestTimeSeriesPoint(history.DiskWriteRate); ok {
+		system.DiskWriteRate = point.Value
+		system.DiskWriteObservedAt = point.Timestamp
 		system.Telemetry.DiskWrite = true
 	}
 	return system
 }
 
-// latestTimeSeriesValue returns the most recent sample in a series by
+// latestTimeSeriesPoint returns the most recent sample in a series by
 // timestamp, so an unordered reporting payload cannot select a stale point.
-func latestTimeSeriesValue(series []TimeSeriesPoint) (float64, bool) {
+func latestTimeSeriesPoint(series []TimeSeriesPoint) (TimeSeriesPoint, bool) {
 	if len(series) == 0 {
-		return 0, false
+		return TimeSeriesPoint{}, false
 	}
 	latest := series[0]
 	for _, point := range series[1:] {
@@ -455,7 +459,16 @@ func latestTimeSeriesValue(series []TimeSeriesPoint) (float64, bool) {
 			latest = point
 		}
 	}
-	return latest.Value, true
+	return latest, true
+}
+
+// latestTimeSeriesValue returns the value of the most recent sample in a series.
+func latestTimeSeriesValue(series []TimeSeriesPoint) (float64, bool) {
+	point, ok := latestTimeSeriesPoint(series)
+	if !ok {
+		return 0, false
+	}
+	return point.Value, true
 }
 
 // reportingGraph builds a reporting.get_data graph entry in the shape the
@@ -2307,6 +2320,10 @@ func mergeSystemTelemetry(system *SystemInfo, telemetry *SystemInfo) {
 	system.NetOutRate = telemetry.NetOutRate
 	system.DiskReadRate = telemetry.DiskReadRate
 	system.DiskWriteRate = telemetry.DiskWriteRate
+	system.NetInObservedAt = telemetry.NetInObservedAt
+	system.NetOutObservedAt = telemetry.NetOutObservedAt
+	system.DiskReadObservedAt = telemetry.DiskReadObservedAt
+	system.DiskWriteObservedAt = telemetry.DiskWriteObservedAt
 	system.DiskReadRates = cloneDeviceRates(telemetry.DiskReadRates)
 	system.DiskWriteRates = cloneDeviceRates(telemetry.DiskWriteRates)
 	system.coreDiskRateWindow = telemetry.coreDiskRateWindow

@@ -1,0 +1,59 @@
+{
+  "version": 1,
+  "base_sha": "5960eb3709b71b215abcda77f65c3b44787b9a92",
+  "verified_at": "2026-11-27T23:08:50Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/infrastructureMap/InfrastructureMapDrawer.tsx",
+    "frontend-modern/src/features/infrastructureMap/InfrastructureMapSurface.tsx",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMap.css",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapDiagram.ts",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapHostDiagram.ts",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapLayout.ts",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapModel.ts",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapRender.ts",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapServices.ts",
+    "frontend-modern/src/hooks/useUnifiedResources.ts",
+    "frontend-modern/src/types/resource.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/infrastructureMap/InfrastructureMapDrawer.tsx": "304e1de46670c84a71438bc6f13c932b211320a2fd3ad68fc3a3ae5861fd22b3",
+    "frontend-modern/src/features/infrastructureMap/InfrastructureMapSurface.tsx": "61d9f30eaed3909751c3bc5aac709401354e7c1b7346552115534880cfca2c72",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMap.css": "8eb5f480caf3f4f511d1d9e1bb93447bebe90b8f23da8c01c4ac8876cd8142d3",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapDiagram.ts": "dc6840c168431f4b70ce4b7dfcb97bc8fe9a65f5c5d14ebc83ff965c86efaff1",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapHostDiagram.ts": "542480fe4bb7930cbdb03ab0871c6921f32c6cd7294aebdfb83efa71311e2c47",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapLayout.ts": "303cf8d6ae9e7db482d7d29089fb684995301b972b44c62f7aedf3ad72084671",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapModel.ts": "ed905a417ba35a98bdeb2311ca6ff49d89c59ba945e964ad8e8b1e84f5e38c55",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapRender.ts": "6739cc57ea4bd2db390ae98de71a534e0d5bf3e335e0f686410dd7d7eee286f6",
+    "frontend-modern/src/features/infrastructureMap/infrastructureMapServices.ts": "d5d270e457630926b02d8b36b8d0917e4e5f44e35f5af382f512321c2bbfd47e",
+    "frontend-modern/src/hooks/useUnifiedResources.ts": "bdefb5c130ebc82a5eb6535493fecd040ab6c1593aa2fa8e6d9060e8e6c0cd36",
+    "frontend-modern/src/types/resource.ts": "b4f0fe537693ac1aa3323764e5a7ac9b46c336e5e94e960bfcc908cab32cd869"
+  },
+  "routes": [
+    "/map"
+  ],
+  "viewports": [
+    {
+      "width": 1280,
+      "height": 800
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Chromium dark and light desktop (1280x800) and mobile (390x844) with active network and disk IO rates",
+    "WebKit dark desktop (1280x800) with SVG animateMotion packet verification",
+    "Disk-only activity state showing Live pill and unified Live traffic drawer row without network traffic",
+    "Expired telemetry state (>120s) showing Last sample age badge with zero live flow lines or packets",
+    "Hide names privacy state with pre-selected network filter and search query"
+  ],
+  "interactions": [
+    "Verified animated flow packets move along measured directional host connectors in Chromium and WebKit",
+    "Verified zero fabricated ambient peer arcs and purely static hover relationship links on tile hover",
+    "Opened Live traffic drawer from Live header pill and verified combined network and disk IO rows",
+    "Verified disk-only workload opens in Live traffic drawer and matches activeTrafficOnly filter",
+    "Toggled Hide names while search and network filter were active and verified search, filter bar, and private names cleared with zero leakage"
+  ]
+}

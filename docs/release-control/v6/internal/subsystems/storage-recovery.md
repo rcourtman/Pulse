@@ -10251,3 +10251,8 @@ read/write paths are unchanged.
 through `convertAPIResource` so the Infrastructure Map can render canonical
 relationships (including `communicates_with` and `stores_on`). Storage,
 backup, and recovery persistence paths are unchanged.
+
+
+### Per-direction rate observation timestamps during REST hydration (27 November 2026)
+
+`frontend-modern/src/hooks/useUnifiedResources.ts` maps optional `netInObservedAt`, `netOutObservedAt`, `diskReadObservedAt`, and `diskWriteObservedAt` timestamps from `/api/resources` onto `ResourceNetwork` and `ResourceDiskIO`, and `internal/unifiedresources/` preserves those per-direction timestamps across registry merges and presentation coalescing. Storage, backup, and recovery persistence formats and read/write paths are unchanged.

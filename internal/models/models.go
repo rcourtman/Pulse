@@ -1190,53 +1190,54 @@ type DiskIO struct {
 
 // DockerHost represents a Docker host reporting metrics via the external agent.
 type DockerHost struct {
-	ID                string                   `json:"id"`
-	AgentID           string                   `json:"agentId"`
-	Hostname          string                   `json:"hostname"`
-	DisplayName       string                   `json:"displayName"`
-	CustomDisplayName string                   `json:"customDisplayName,omitempty"` // User-defined custom name
-	MachineID         string                   `json:"machineId,omitempty"`
-	OS                string                   `json:"os,omitempty"`
-	KernelVersion     string                   `json:"kernelVersion,omitempty"`
-	Architecture      string                   `json:"architecture,omitempty"`
-	Runtime           string                   `json:"runtime,omitempty"`
-	RuntimeVersion    string                   `json:"runtimeVersion,omitempty"`
-	DockerVersion     string                   `json:"dockerVersion,omitempty"`
-	CollectionMode    string                   `json:"collectionMode,omitempty"`
-	CPUs              int                      `json:"cpus"`
-	TotalMemoryBytes  int64                    `json:"totalMemoryBytes"`
-	UptimeSeconds     int64                    `json:"uptimeSeconds"`
-	CPUUsage          float64                  `json:"cpuUsagePercent"`
-	LoadAverage       []float64                `json:"loadAverage,omitempty"`
-	Memory            Memory                   `json:"memory"`
-	Disks             []Disk                   `json:"disks,omitempty"`
-	NetworkInterfaces []HostNetworkInterface   `json:"networkInterfaces,omitempty"`
-	Status            string                   `json:"status"`
-	LastSeen          time.Time                `json:"lastSeen"`
-	IntervalSeconds   int                      `json:"intervalSeconds"`
-	AgentVersion      string                   `json:"agentVersion,omitempty"`
-	AgentModules      []AgentModuleStatus      `json:"agentModules,omitempty"`
-	Containers        []DockerContainer        `json:"containers"`
-	Images            []DockerImage            `json:"images,omitempty"`
-	Volumes           []DockerVolume           `json:"volumes,omitempty"`
-	Networks          []DockerNetwork          `json:"networks,omitempty"`
-	Services          []DockerService          `json:"services,omitempty"`
-	Tasks             []DockerTask             `json:"tasks,omitempty"`
-	Nodes             []DockerNode             `json:"nodes,omitempty"`
-	Secrets           []DockerSecret           `json:"secrets,omitempty"`
-	Configs           []DockerConfig           `json:"configs,omitempty"`
-	StorageUsage      *DockerStorageUsage      `json:"storageUsage,omitempty"`
-	Swarm             *DockerSwarmInfo         `json:"swarm,omitempty"`
-	Security          *DockerHostSecurity      `json:"security,omitempty"`
-	Temperature       *float64                 `json:"temperature,omitempty"` // Optional host temperature in Celsius
-	TokenID           string                   `json:"tokenId,omitempty"`
-	TokenName         string                   `json:"tokenName,omitempty"`
-	TokenHint         string                   `json:"tokenHint,omitempty"`
-	TokenLastUsedAt   *time.Time               `json:"tokenLastUsedAt,omitempty"`
-	Hidden            bool                     `json:"hidden"`
-	PendingUninstall  bool                     `json:"pendingUninstall"`
-	Command           *DockerHostCommandStatus `json:"command,omitempty"`
-	IsLegacy          bool                     `json:"isLegacy,omitempty"`
+	ID                  string                   `json:"id"`
+	AgentID             string                   `json:"agentId"`
+	Hostname            string                   `json:"hostname"`
+	DisplayName         string                   `json:"displayName"`
+	CustomDisplayName   string                   `json:"customDisplayName,omitempty"` // User-defined custom name
+	MachineID           string                   `json:"machineId,omitempty"`
+	OS                  string                   `json:"os,omitempty"`
+	KernelVersion       string                   `json:"kernelVersion,omitempty"`
+	Architecture        string                   `json:"architecture,omitempty"`
+	Runtime             string                   `json:"runtime,omitempty"`
+	RuntimeVersion      string                   `json:"runtimeVersion,omitempty"`
+	DockerVersion       string                   `json:"dockerVersion,omitempty"`
+	CollectionMode      string                   `json:"collectionMode,omitempty"`
+	CPUs                int                      `json:"cpus"`
+	TotalMemoryBytes    int64                    `json:"totalMemoryBytes"`
+	UptimeSeconds       int64                    `json:"uptimeSeconds"`
+	CPUUsage            float64                  `json:"cpuUsagePercent"`
+	LoadAverage         []float64                `json:"loadAverage,omitempty"`
+	Memory              Memory                   `json:"memory"`
+	Disks               []Disk                   `json:"disks,omitempty"`
+	NetworkInterfaces   []HostNetworkInterface   `json:"networkInterfaces,omitempty"`
+	Status              string                   `json:"status"`
+	LastSeen            time.Time                `json:"lastSeen"`
+	InventoryObservedAt time.Time                `json:"inventoryObservedAt,omitempty"`
+	IntervalSeconds     int                      `json:"intervalSeconds"`
+	AgentVersion        string                   `json:"agentVersion,omitempty"`
+	AgentModules        []AgentModuleStatus      `json:"agentModules,omitempty"`
+	Containers          []DockerContainer        `json:"containers"`
+	Images              []DockerImage            `json:"images,omitempty"`
+	Volumes             []DockerVolume           `json:"volumes,omitempty"`
+	Networks            []DockerNetwork          `json:"networks,omitempty"`
+	Services            []DockerService          `json:"services,omitempty"`
+	Tasks               []DockerTask             `json:"tasks,omitempty"`
+	Nodes               []DockerNode             `json:"nodes,omitempty"`
+	Secrets             []DockerSecret           `json:"secrets,omitempty"`
+	Configs             []DockerConfig           `json:"configs,omitempty"`
+	StorageUsage        *DockerStorageUsage      `json:"storageUsage,omitempty"`
+	Swarm               *DockerSwarmInfo         `json:"swarm,omitempty"`
+	Security            *DockerHostSecurity      `json:"security,omitempty"`
+	Temperature         *float64                 `json:"temperature,omitempty"` // Optional host temperature in Celsius
+	TokenID             string                   `json:"tokenId,omitempty"`
+	TokenName           string                   `json:"tokenName,omitempty"`
+	TokenHint           string                   `json:"tokenHint,omitempty"`
+	TokenLastUsedAt     *time.Time               `json:"tokenLastUsedAt,omitempty"`
+	Hidden              bool                     `json:"hidden"`
+	PendingUninstall    bool                     `json:"pendingUninstall"`
+	Command             *DockerHostCommandStatus `json:"command,omitempty"`
+	IsLegacy            bool                     `json:"isLegacy,omitempty"`
 	// IdentityConflict is set while multiple distinct machines appear to be
 	// reporting under this host's identity (e.g. cloned VMs sharing the same
 	// /etc/machine-id). Nil when no conflict is active.

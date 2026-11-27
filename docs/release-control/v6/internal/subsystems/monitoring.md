@@ -10827,3 +10827,12 @@ Verified by `TestPollPBSInstancePausedDoesNotFabricateSuccess`,
 Verified by `TestHostActivePeersFromReport`, `TestDockerAcceleratorsFromReport`,
 `TestParseProxmoxVMConfigAccelerators`, `TestParseProxmoxLXCConfigAccelerators`,
 and `TestApplyHostReportCarriesActivePeers`.
+
+
+### Per-direction network and disk IO rate observation timestamps (27 November 2026)
+
+- `internal/models/models.go` adds `DockerHost.InventoryObservedAt` and `internal/monitoring/monitor_agents.go` stamps it on complete Docker inventory reports while `preserveDockerInventorySnapshot` retains it across repeated incomplete status-only reports so retained host and container rates never inherit a later heartbeat timestamp.
+- `internal/models/models_frontend.go`, `internal/models/converters.go`, and `internal/monitoring/monitor.go` propagate optional `rxObservedAt`, `txObservedAt`, `readObservedAt`, and `writeObservedAt` Unix ms timestamps on `ResourceNetworkFrontend` and `ResourceDiskIOFrontend` for WebSocket parity with `/api/resources`.
+- `internal/truenas/` (`types.go`, `client.go`, `provider.go`) retains each reporting graph direction's latest sample timestamp (`NetInObservedAt`, `NetOutObservedAt`, `DiskReadObservedAt`, `DiskWriteObservedAt`) through `systemInfoFromMetricHistory`, `mergeSystemTelemetry`, and `metricsFromTrueNASSystem` so mixed-age TrueNAS CORE reporting graphs do not refresh expired RX or disk-read samples.
+
+Verified by `TestBroadcastConversionPropagatesRateObservedAt`, `TestPreserveDockerInventorySnapshotRetainsInventoryObservedAt`, and `TestCOREMixedAgeReportingGraphPreservesPerDirectionRateObservedAt`.

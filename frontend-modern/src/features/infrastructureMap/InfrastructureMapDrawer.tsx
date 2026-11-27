@@ -22,8 +22,10 @@ import {
   findDiagramGroup,
   formatMapLatency,
   formatMapLinkSpeed,
+  isDiagramTileActive,
   isDiagramTileAttention,
   matchesDiagramTileQuery,
+  tileActivityBytes,
   type DiagramExposedEntry,
   type DiagramNetwork,
   type DiagramTile,
@@ -89,6 +91,19 @@ const formatDrawerNet = (tile: DiagramTile): string => {
   if (total <= 0) return '';
   if (total < 1024) return 'Net <1 KB/s';
   return `Net ↓ ${formatSpeed(rx)} ↑ ${formatSpeed(tx)}`;
+};
+
+const formatDrawerDisk = (tile: DiagramTile): string => {
+  if (tile.diskReadBytes === undefined && tile.diskWriteBytes === undefined) return '';
+  const read = tile.diskReadBytes ?? 0;
+  const write = tile.diskWriteBytes ?? 0;
+  const total = tile.diskTotalBytes ?? read + write;
+  if (total <= 0) return '';
+  if (total < 1024) return 'Disk <1 KB/s';
+  const parts: string[] = [];
+  if (read > 0) parts.push(`R ${formatSpeed(read)}`);
+  if (write > 0) parts.push(`W ${formatSpeed(write)}`);
+  return `Disk ${parts.join(' ')}`;
 };
 
 const networkSubtitle = (network: DiagramNetwork): string => {
@@ -182,6 +197,7 @@ const tileMetrics = (tile: DiagramTile): string =>
     tile.temperatureC !== undefined ? `${Math.round(tile.temperatureC)}°C` : '',
     formatDrawerGpu(tile),
     formatDrawerNet(tile),
+    formatDrawerDisk(tile),
     formatProbeAndLatency(tile.probeSummary, tile.latencyMs),
     formatDrawerLinkSpeed(tile),
     formatCompactUptime(tile.uptimeSeconds),
@@ -266,9 +282,7 @@ export function InfrastructureMapDrawer(props: InfrastructureMapDrawerProps) {
   });
 
   const hasTrafficEntries = createMemo(() =>
-    allEntries().some(
-      (entry) => entry.tile.netTotalBytes !== undefined && entry.tile.netTotalBytes > 0,
-    ),
+    allEntries().some((entry) => isDiagramTileActive(entry.tile)),
   );
 
   const filteredEntries = createMemo(() => {
@@ -296,7 +310,7 @@ export function InfrastructureMapDrawer(props: InfrastructureMapDrawerProps) {
     if (!showBars) return 0;
     let max = 0;
     for (const entry of filteredEntries()) {
-      const bytes = entry.tile.netTotalBytes ?? 0;
+      const bytes = tileActivityBytes(entry.tile);
       if (bytes > max) max = bytes;
     }
     return max;
@@ -404,10 +418,9 @@ export function InfrastructureMapDrawer(props: InfrastructureMapDrawerProps) {
     }
     if (current.kind === 'traffic') {
       const total = allEntries().length;
-      if (total === 0) return 'No active network traffic reported';
+      if (total === 0) return 'No active network or disk activity reported';
       const estateBytes = props.diagram?.estateTrafficBytes;
-      const totalRate =
-        estateBytes && estateBytes > 0 ? ` · ${formatSpeed(estateBytes)} total` : '';
+      const totalRate = estateBytes && estateBytes > 0 ? ` · ${formatSpeed(estateBytes)} net` : '';
       return `${total.toLocaleString()} active ${total === 1 ? 'resource' : 'resources'}${totalRate}`;
     }
     if (current.kind === 'exposed') {
@@ -709,7 +722,7 @@ export function InfrastructureMapDrawer(props: InfrastructureMapDrawerProps) {
                       const metrics = () => tileMetrics(entry.tile);
                       const trafficBarPercent = () => {
                         const maxBytes = maxEntryTrafficBytes();
-                        const bytes = entry.tile.netTotalBytes ?? 0;
+                        const bytes = tileActivityBytes(entry.tile);
                         if (maxBytes <= 0 || bytes <= 0) return 0;
                         return Math.min(100, Math.max(4, Math.round((bytes / maxBytes) * 100)));
                       };

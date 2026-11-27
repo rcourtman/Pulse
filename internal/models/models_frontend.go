@@ -1159,14 +1159,18 @@ type ResourceMetricFrontend struct {
 
 // ResourceNetworkFrontend represents network metrics for the frontend.
 type ResourceNetworkFrontend struct {
-	RXBytes int64 `json:"rxBytes"`
-	TXBytes int64 `json:"txBytes"`
+	RXBytes      int64 `json:"rxBytes"`
+	TXBytes      int64 `json:"txBytes"`
+	RXObservedAt int64 `json:"rxObservedAt,omitempty"`
+	TXObservedAt int64 `json:"txObservedAt,omitempty"`
 }
 
 // ResourceDiskIOFrontend represents aggregate disk I/O rates for the frontend.
 type ResourceDiskIOFrontend struct {
-	ReadRate  *int64 `json:"readRate,omitempty"`
-	WriteRate *int64 `json:"writeRate,omitempty"`
+	ReadRate        *int64 `json:"readRate,omitempty"`
+	WriteRate       *int64 `json:"writeRate,omitempty"`
+	ReadObservedAt  int64  `json:"readObservedAt,omitempty"`
+	WriteObservedAt int64  `json:"writeObservedAt,omitempty"`
 }
 
 // ResourceIdentityFrontend contains identity info for deduplication.

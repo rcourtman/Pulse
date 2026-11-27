@@ -11897,3 +11897,8 @@ workload hardware accelerator pills and drawer badges, and hover arcs for
 Docker shared volumes, shared non-system bind mounts, bind-mount-to-pool
 links, Compose stack data backends, and canonical `resource.relationships`
 using existing semantic palette tokens and `MetadataBadge` primitives.
+
+
+### Infrastructure Map live network and disk IO activity layer (27 November 2026)
+
+`frontend-modern/src/features/infrastructureMap/` renders intensity-scaled animated connectors and directional SVG packet motion strictly on measured host uplinks, keeps hover relationship arcs static, uses neutral `Link speed` legend swatches alongside a `Live flow: light -> heavy` scale indicator, unifies combined network and disk I/O across the `Live:` header pill, `Active traffic` filter, and `Live traffic` drawer, gates live telemetry per direction at the 120-second boundary with an isolated stale-age timer, and clears search queries, network filters, hover state, and network drawers when toggling `Hide names`. Verified by the 7-file Infrastructure Map Vitest suite, `tsc --noEmit`, `npm run build`, and Playwright Chromium (dark and light, desktop and mobile) plus WebKit verification.

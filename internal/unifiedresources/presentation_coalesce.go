@@ -485,9 +485,7 @@ func mergePresentationHostResources(left, right Resource, thresholds map[DataSou
 	if merged.Storage == nil {
 		merged.Storage = secondary.Storage
 	}
-	if merged.Metrics == nil {
-		merged.Metrics = secondary.Metrics
-	} else if secondary.Metrics != nil {
+	if merged.Metrics != nil || secondary.Metrics != nil {
 		now := time.Now().UTC()
 		combinedStatus := make(map[DataSource]SourceStatus, len(primary.SourceStatus)+len(secondary.SourceStatus))
 		for source, status := range secondary.SourceStatus {
@@ -503,7 +501,14 @@ func mergePresentationHostResources(left, right Resource, thresholds map[DataSou
 		stale := func(source DataSource) bool {
 			return metricSourceStale(now, combinedStatus, source, thresholds)
 		}
-		merged.Metrics = mergePresentationMetrics(merged.Metrics, secondary.Metrics, stale)
+		merged.Metrics = mergePresentationMetrics(
+			merged.Metrics,
+			secondary.Metrics,
+			stale,
+			combinedStatus,
+			primary.LastSeen,
+			secondary.LastSeen,
+		)
 	}
 	if merged.DiscoveryTarget == nil {
 		merged.DiscoveryTarget = secondary.DiscoveryTarget
@@ -619,21 +624,57 @@ func mergePresentationMetric(left, right *MetricValue, stale func(DataSource) bo
 	return left
 }
 
-func mergePresentationMetrics(left, right *ResourceMetrics, stale func(DataSource) bool) *ResourceMetrics {
+func presentationRateInstant(
+	chosen, left, right *MetricValue,
+	status map[DataSource]SourceStatus,
+	leftLastSeen, rightLastSeen time.Time,
+) time.Time {
+	if chosen == nil {
+		return time.Time{}
+	}
+	fallback := leftLastSeen
+	if chosen == right && chosen != left {
+		fallback = rightLastSeen
+	}
+	return rateObservationInstant(chosen, status, fallback)
+}
+
+func mergePresentationMetrics(
+	left, right *ResourceMetrics,
+	stale func(DataSource) bool,
+	status map[DataSource]SourceStatus,
+	leftLastSeen, rightLastSeen time.Time,
+) *ResourceMetrics {
+	if left == nil && right == nil {
+		return nil
+	}
+	var merged ResourceMetrics
 	if left == nil {
-		return right
+		merged = *right
+		populateRateObservedAt(&merged, status, rightLastSeen)
+		return &merged
 	}
 	if right == nil {
-		return left
+		merged = *left
+		populateRateObservedAt(&merged, status, leftLastSeen)
+		return &merged
 	}
-	merged := *left
-	merged.CPU = mergePresentationMetric(left.CPU, right.CPU, stale)
-	merged.Memory = mergePresentationMetric(left.Memory, right.Memory, stale)
-	merged.Disk = mergePresentationMetric(left.Disk, right.Disk, stale)
-	merged.NetIn = mergePresentationMetric(left.NetIn, right.NetIn, stale)
-	merged.NetOut = mergePresentationMetric(left.NetOut, right.NetOut, stale)
-	merged.DiskRead = mergePresentationMetric(left.DiskRead, right.DiskRead, stale)
-	merged.DiskWrite = mergePresentationMetric(left.DiskWrite, right.DiskWrite, stale)
+	leftCopy := *left
+	hydrateRateMetricObservations(&leftCopy)
+	rightCopy := *right
+	hydrateRateMetricObservations(&rightCopy)
+	merged = leftCopy
+	merged.CPU = mergePresentationMetric(leftCopy.CPU, rightCopy.CPU, stale)
+	merged.Memory = mergePresentationMetric(leftCopy.Memory, rightCopy.Memory, stale)
+	merged.Disk = mergePresentationMetric(leftCopy.Disk, rightCopy.Disk, stale)
+	merged.NetIn = mergePresentationMetric(leftCopy.NetIn, rightCopy.NetIn, stale)
+	merged.NetOut = mergePresentationMetric(leftCopy.NetOut, rightCopy.NetOut, stale)
+	merged.DiskRead = mergePresentationMetric(leftCopy.DiskRead, rightCopy.DiskRead, stale)
+	merged.DiskWrite = mergePresentationMetric(leftCopy.DiskWrite, rightCopy.DiskWrite, stale)
+	merged.NetInObservedAt = observedAtPtr(presentationRateInstant(merged.NetIn, leftCopy.NetIn, rightCopy.NetIn, status, leftLastSeen, rightLastSeen))
+	merged.NetOutObservedAt = observedAtPtr(presentationRateInstant(merged.NetOut, leftCopy.NetOut, rightCopy.NetOut, status, leftLastSeen, rightLastSeen))
+	merged.DiskReadObservedAt = observedAtPtr(presentationRateInstant(merged.DiskRead, leftCopy.DiskRead, rightCopy.DiskRead, status, leftLastSeen, rightLastSeen))
+	merged.DiskWriteObservedAt = observedAtPtr(presentationRateInstant(merged.DiskWrite, leftCopy.DiskWrite, rightCopy.DiskWrite, status, leftLastSeen, rightLastSeen))
 	return &merged
 }
 

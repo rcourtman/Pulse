@@ -12,6 +12,7 @@ import {
 import { mapRouteLabel } from './infrastructureMapConnections';
 import type { MapGlyphKey } from './infrastructureMapLayout';
 import {
+  resolveMapDiskTier,
   resolveMapTrafficTier,
   type InfrastructureMapModel,
   type MapHealth,
@@ -102,6 +103,12 @@ export interface DiagramTile {
   netTxBytes?: number;
   netTotalBytes?: number;
   trafficTier?: MapTrafficTier;
+  diskReadBytes?: number;
+  diskWriteBytes?: number;
+  diskTotalBytes?: number;
+  diskTier?: MapTrafficTier;
+  /** True for guest, container, and pod workload tiles (as opposed to hosts, pools, or checks). */
+  isWorkload?: boolean;
   latencyMs?: number;
   linkSpeedMbps?: number;
   linkUtilizationPercent?: number;
@@ -293,7 +300,13 @@ export const formatMapLatency = (latencyMs: number): string => {
 const tileNetworkTelemetry = (
   source: Pick<
     MapHost,
-    'netRxBytes' | 'netTxBytes' | 'linkSpeedMbps' | 'linkUtilizationPercent' | 'linkDownCount'
+    | 'netRxBytes'
+    | 'netTxBytes'
+    | 'diskReadBytes'
+    | 'diskWriteBytes'
+    | 'linkSpeedMbps'
+    | 'linkUtilizationPercent'
+    | 'linkDownCount'
   > & {
     latencyMs?: number;
     firewallEnabled?: boolean;
@@ -304,6 +317,10 @@ const tileNetworkTelemetry = (
   | 'netTxBytes'
   | 'netTotalBytes'
   | 'trafficTier'
+  | 'diskReadBytes'
+  | 'diskWriteBytes'
+  | 'diskTotalBytes'
+  | 'diskTier'
   | 'latencyMs'
   | 'linkSpeedMbps'
   | 'linkUtilizationPercent'
@@ -313,11 +330,20 @@ const tileNetworkTelemetry = (
   const hasNet = source.netRxBytes !== undefined || source.netTxBytes !== undefined;
   const netTotalBytes = hasNet ? (source.netRxBytes ?? 0) + (source.netTxBytes ?? 0) : undefined;
   const trafficTier = resolveMapTrafficTier(netTotalBytes);
+  const hasDisk = source.diskReadBytes !== undefined || source.diskWriteBytes !== undefined;
+  const diskTotalBytes = hasDisk
+    ? (source.diskReadBytes ?? 0) + (source.diskWriteBytes ?? 0)
+    : undefined;
+  const diskTier = resolveMapDiskTier(diskTotalBytes);
   return {
     ...(source.netRxBytes !== undefined ? { netRxBytes: source.netRxBytes } : {}),
     ...(source.netTxBytes !== undefined ? { netTxBytes: source.netTxBytes } : {}),
     ...(netTotalBytes !== undefined ? { netTotalBytes } : {}),
     ...(trafficTier !== undefined ? { trafficTier } : {}),
+    ...(source.diskReadBytes !== undefined ? { diskReadBytes: source.diskReadBytes } : {}),
+    ...(source.diskWriteBytes !== undefined ? { diskWriteBytes: source.diskWriteBytes } : {}),
+    ...(diskTotalBytes !== undefined ? { diskTotalBytes } : {}),
+    ...(diskTier !== undefined ? { diskTier } : {}),
     ...(source.latencyMs !== undefined ? { latencyMs: source.latencyMs } : {}),
     ...(source.linkSpeedMbps !== undefined ? { linkSpeedMbps: source.linkSpeedMbps } : {}),
     ...(source.linkUtilizationPercent !== undefined
@@ -371,9 +397,11 @@ const annotateNetworkMetrics = (
     if (host.isResource) {
       const hostHasNet = host.netRxBytes !== undefined || host.netTxBytes !== undefined;
       const hostTotal = hostHasNet ? (host.netRxBytes ?? 0) + (host.netTxBytes ?? 0) : 0;
-      for (const id of plannedIds(host.ownSegmentIds)) {
+      const hostNetworkIds = plannedIds(host.ownSegmentIds);
+      const singleHostNetwork = hostNetworkIds.length === 1;
+      for (const id of hostNetworkIds) {
         const stats = statsFor(id);
-        if (hostHasNet) {
+        if (hostHasNet && singleHostNetwork) {
           stats.hasHostNet = true;
           stats.hostNetSum += hostTotal;
         }
@@ -390,12 +418,14 @@ const annotateNetworkMetrics = (
       for (const item of section.items) {
         const itemHasNet = item.netRxBytes !== undefined || item.netTxBytes !== undefined;
         if (!itemHasNet) continue;
+        const itemNetworkIds = plannedIds(item.segmentIds);
+        // Only attribute resource-total traffic when it belongs to one planned network.
+        // Dual-homed workloads report combined NIC counters, not per-network splits.
+        if (itemNetworkIds.length !== 1) continue;
         const itemTotal = (item.netRxBytes ?? 0) + (item.netTxBytes ?? 0);
-        for (const id of plannedIds(item.segmentIds)) {
-          const stats = statsFor(id);
-          stats.hasWorkloadNet = true;
-          stats.workloadNetSum += itemTotal;
-        }
+        const stats = statsFor(itemNetworkIds[0]);
+        stats.hasWorkloadNet = true;
+        stats.workloadNetSum += itemTotal;
       }
     }
   }
@@ -584,6 +614,7 @@ const serviceTile = (item: MapItem, host: MapHost, plan: NetworkPlan): DiagramTi
     ...(item.pendingUpdates !== undefined ? { pendingUpdates: item.pendingUpdates } : {}),
     ...(item.lastBackupAt ? { lastBackupAt: item.lastBackupAt } : {}),
     ...tileNetworkTelemetry(item),
+    isWorkload: true,
     ...(item.accelerators?.length ? { accelerators: item.accelerators } : {}),
     ...(item.dockerNetworks?.length ? { dockerNetworks: item.dockerNetworks } : {}),
     address: plan.where(item.address, item.segmentIds),
@@ -641,9 +672,23 @@ export const isDiagramTileAttention = (health: MapHealth): boolean =>
 export const compareDiagramTilesByAttention = (a: DiagramTile, b: DiagramTile): number =>
   HEALTH_RANK[b.health] - HEALTH_RANK[a.health] || collator.compare(a.name, b.name);
 
-/** Sort tiles by live combined network throughput descending, then attention and name. */
+/** Combined live network + disk throughput (bytes/sec) for one tile, or 0 when idle. */
+export const tileActivityBytes = (tile: DiagramTile): number =>
+  (tile.netTotalBytes ?? 0) + (tile.diskTotalBytes ?? 0);
+
+/** True when a tile reports any positive live network or disk throughput. */
+export const isDiagramTileActive = (tile: DiagramTile): boolean =>
+  (tile.netTotalBytes !== undefined && tile.netTotalBytes > 0) ||
+  (tile.diskTotalBytes !== undefined && tile.diskTotalBytes > 0);
+
+const measuredActivityBytes = (tile: DiagramTile): number =>
+  tile.netTotalBytes !== undefined || tile.diskTotalBytes !== undefined
+    ? tileActivityBytes(tile)
+    : -1;
+
+/** Sort tiles by combined live network and disk throughput descending, then attention and name. */
 export const compareDiagramTilesByTraffic = (a: DiagramTile, b: DiagramTile): number =>
-  (b.netTotalBytes ?? -1) - (a.netTotalBytes ?? -1) || compareDiagramTilesByAttention(a, b);
+  measuredActivityBytes(b) - measuredActivityBytes(a) || compareDiagramTilesByAttention(a, b);
 
 /** Multi-term case-insensitive search matcher across a tile's visible and contextual metadata. */
 export const matchesDiagramTileQuery = (
@@ -742,7 +787,7 @@ export const collectNetworkTiles = (
   return out.sort((a, b) => compareDiagramTilesByAttention(a.tile, b.tile));
 };
 
-/** Return every unique navigable tile across the diagram with live traffic (> 0 B/s), busiest first. */
+/** Return every unique navigable tile across the diagram with live network or disk activity (> 0 B/s), busiest first. */
 export const collectActiveTrafficTiles = (
   diagram: ServiceDiagram,
 ): Array<{ tile: DiagramTile; groupLabel: string }> => {
@@ -751,7 +796,7 @@ export const collectActiveTrafficTiles = (
   for (const group of collectDiagramGroups(diagram)) {
     for (const tile of group.allTiles) {
       if (!tile.navigable || seen.has(tile.id)) continue;
-      if (tile.netTotalBytes !== undefined && tile.netTotalBytes > 0) {
+      if (isDiagramTileActive(tile)) {
         seen.add(tile.id);
         out.push({ tile, groupLabel: group.label });
       }
@@ -1069,7 +1114,7 @@ export function buildServiceDiagram(
   };
   const matchesFilter = (tile: DiagramTile, groupLabel: string): boolean => {
     if (attentionOnly && !isDiagramTileAttention(tile.health)) return false;
-    if (activeTrafficOnly && !(tile.netTotalBytes !== undefined && tile.netTotalBytes > 0)) {
+    if (activeTrafficOnly && !isDiagramTileActive(tile)) {
       return false;
     }
     const netIds = tileNetworkIds.get(tile.id) ?? (tile.segmentId ? [tile.segmentId] : []);

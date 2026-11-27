@@ -57,6 +57,10 @@ export interface MapHit {
   vdevLayout?: string;
   netRxBytes?: number;
   netTxBytes?: number;
+  diskReadBytes?: number;
+  diskWriteBytes?: number;
+  /** True for guest, container, and pod workload tiles (as opposed to hosts, pools, or checks). */
+  isWorkload?: boolean;
   latencyMs?: number;
   linkSpeedMbps?: number;
   linkUtilizationPercent?: number;
@@ -150,6 +154,8 @@ export type SceneNode =
       arrow?: boolean;
       activity?: MapTrafficTier;
       flowBytes?: number;
+      /** True for shared or balanced bidirectional trunks: scales thickness/glow without one-way directional packets. */
+      bidirectional?: boolean;
     }
   | {
       /** Clickable header or network pill target that opens the inspector drawer. */

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { Resource } from '@/types/resource';
 import {
   MAP_LINK_SATURATED_PERCENT,
+  MAP_LIVE_SAMPLE_MAX_AGE_MS,
   MAP_TRAFFIC_ACTIVE_BYTES,
   anonymizeInfrastructureMapModel,
   buildInfrastructureMapModel,
@@ -1778,5 +1779,142 @@ describe('live network telemetry extraction', () => {
     expect(anonHost.gpuUtilPercent).toBe(64);
     expect(anonHost.gpuTempC).toBe(68);
     expect(JSON.stringify(anon)).not.toContain('RTX 4090');
+  });
+
+  it('drops live network and disk rates for stopped, stale, unknown, or expired telemetry samples', () => {
+    const nowMs = Date.parse('2026-11-27T21:00:00Z');
+    const freshTs = nowMs - 15_000;
+    const expiredTs = nowMs - MAP_LIVE_SAMPLE_MAX_AGE_MS - 30_000;
+
+    const mixedModel = buildInfrastructureMapModel(
+      [
+        resource({
+          id: 'host-fresh',
+          type: 'agent',
+          name: 'fresh-host',
+          platformType: 'proxmox-pve',
+          status: 'online',
+          lastSeen: freshTs,
+          network: { rxBytes: 25_000_000, txBytes: 5_000_000 },
+          agent: {
+            networkInterfaces: [{ name: 'eno1', addresses: ['10.1.0.10/24'], speedMbps: 1000 }],
+          },
+        }),
+        resource({
+          id: 'vm-fresh',
+          type: 'vm',
+          name: 'fresh-vm',
+          platformType: 'proxmox-pve',
+          parentId: 'host-fresh',
+          status: 'running',
+          lastSeen: freshTs,
+          network: { rxBytes: 10_000_000, txBytes: 1_000_000 },
+          diskIO: { readRate: 8_000_000, writeRate: 500_000 },
+        }),
+        resource({
+          id: 'vm-expired',
+          type: 'vm',
+          name: 'expired-vm',
+          platformType: 'proxmox-pve',
+          parentId: 'host-fresh',
+          status: 'running',
+          lastSeen: expiredTs,
+          network: { rxBytes: 50_000_000, txBytes: 2_000_000 },
+          diskIO: { readRate: 15_000_000, writeRate: 1_000_000 },
+        }),
+        resource({
+          id: 'vm-stale-health',
+          type: 'vm',
+          name: 'stale-health-vm',
+          platformType: 'proxmox-pve',
+          parentId: 'host-fresh',
+          status: 'running',
+          health: { verdict: 'stale', reasons: [] },
+          lastSeen: freshTs,
+          network: { rxBytes: 40_000_000, txBytes: 0 },
+          diskIO: { readRate: 12_000_000, writeRate: 0 },
+        }),
+        resource({
+          id: 'vm-stopped',
+          type: 'vm',
+          name: 'stopped-vm',
+          platformType: 'proxmox-pve',
+          parentId: 'host-fresh',
+          status: 'stopped',
+          lastSeen: freshTs,
+          network: { rxBytes: 20_000_000, txBytes: 0 },
+          diskIO: { readRate: 9_000_000, writeRate: 0 },
+        }),
+      ],
+      { nowMs },
+    );
+
+    expect(mixedModel.latestSampleAtMs).toBe(freshTs);
+    expect(mixedModel.liveSamplesExpired).toBeUndefined();
+    const host = hostNamed(mixedModel.blocks, 'fresh-host');
+    expect(host.netRxBytes).toBe(25_000_000);
+    const items = host.sections.flatMap((section) => section.items);
+    const freshVm = items.find((item) => item.id === 'vm-fresh')!;
+    expect(freshVm.netRxBytes).toBe(10_000_000);
+    expect(freshVm.diskReadBytes).toBe(8_000_000);
+
+    for (const id of ['vm-expired', 'vm-stale-health', 'vm-stopped']) {
+      const dropped = items.find((item) => item.id === id)!;
+      expect(dropped.netRxBytes).toBeUndefined();
+      expect(dropped.netTxBytes).toBeUndefined();
+      expect(dropped.diskReadBytes).toBeUndefined();
+      expect(dropped.diskWriteBytes).toBeUndefined();
+    }
+
+    // When every real timestamp is older than MAP_LIVE_SAMPLE_MAX_AGE_MS, the model flags liveSamplesExpired.
+    const expiredModel = buildInfrastructureMapModel(
+      [
+        resource({
+          id: 'host-old',
+          type: 'agent',
+          name: 'old-host',
+          platformType: 'proxmox-pve',
+          status: 'online',
+          lastSeen: expiredTs,
+          network: { rxBytes: 80_000_000, txBytes: 0 },
+        }),
+      ],
+      { nowMs },
+    );
+    expect(expiredModel.latestSampleAtMs).toBe(expiredTs);
+    expect(expiredModel.liveSamplesExpired).toBe(true);
+    expect(hostNamed(expiredModel.blocks, 'old-host').netRxBytes).toBeUndefined();
+
+    // A fresh TX or Write sample never revives an expired RX or Read sample on the same resource.
+    const splitRateModel = buildInfrastructureMapModel(
+      [
+        resource({
+          id: 'host-split',
+          type: 'agent',
+          name: 'split-host',
+          platformType: 'proxmox-pve',
+          status: 'online',
+          lastSeen: freshTs,
+          network: {
+            rxBytes: 80_000_000,
+            txBytes: 2_048,
+            rxObservedAt: expiredTs,
+            txObservedAt: freshTs,
+          },
+          diskIO: {
+            readRate: 50_000_000,
+            writeRate: 4_096,
+            readObservedAt: expiredTs,
+            writeObservedAt: freshTs,
+          },
+        }),
+      ],
+      { nowMs },
+    );
+    const splitHost = hostNamed(splitRateModel.blocks, 'split-host');
+    expect(splitHost.netRxBytes).toBeUndefined();
+    expect(splitHost.netTxBytes).toBe(2_048);
+    expect(splitHost.diskReadBytes).toBeUndefined();
+    expect(splitHost.diskWriteBytes).toBe(4_096);
   });
 });
