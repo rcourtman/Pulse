@@ -43,6 +43,23 @@ sourceStatus:
 
 The aggregate `status` is computed from all contributing sources.
 
+### Proxmox VE 9.3 persistent identity
+
+On Proxmox VE 9.3 and later, Pulse reads persistent guest identity (`uid` and
+`rtime`) and cluster identity (`cluster-id` from `GET /cluster/status`, for
+both clustered and standalone hosts):
+
+- **Upgrade continuity and live migration:** Existing guests keep their
+  pre-9.3 canonical ID when they receive their first `uid`, and live migrations
+  between nodes in the same cluster stay pinned to that same canonical ID.
+- **VMID reuse isolation:** When a VMID slot on the same Proxmox instance is
+  reused by a different guest with a new `uid`, Pulse mints a distinct
+  UID-based canonical ID so overrides, metadata, alerts, and sibling-node
+  History do not leak from the deleted guest.
+- **Cluster identity guard:** Differing `cluster-id` values prevent independent
+  clusters or standalone nodes that share a cluster or node name from
+  auto-merging during membership reconciliation or unified node matching.
+
 ### Data Sources
 
 | Source | What it feeds |

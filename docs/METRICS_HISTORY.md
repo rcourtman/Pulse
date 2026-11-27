@@ -103,6 +103,19 @@ inspection. When reporting a display disagreement, keep the panel, time,
 range, labels and relevant values with consistent private aliases; do not
 share raw responses, credentials or a full network export.
 
+### Proxmox live migration and VMID reuse
+
+When a Proxmox VE guest migrates to another node in the same cluster, Pulse
+splices stored history chronologically across the cluster's sibling nodes so the
+guest's History charts stay continuous across the move.
+
+On Proxmox VE 9.3 and later, Pulse reads each guest's persistent `uid` from the
+Proxmox API. If a VMID is deleted and later reused for a different guest with a
+new `uid`, Pulse gives the replacement guest its own canonical identity and
+withholds sibling-node history from the previous guest so old metrics do not
+blend into the new workload's charts. Guests upgraded to Proxmox VE 9.3 keep
+their existing identity and history when they receive their first `uid`.
+
 ## Retention and accessible range
 
 Metric history is free on every plan. Charts can show any supported range,
