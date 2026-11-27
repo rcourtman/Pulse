@@ -54,11 +54,20 @@ asset to update a systemd or LXC server.
 
 ## Post-Upgrade Checklist
 
-- Confirm version: `GET /api/version`
-- Confirm scheduler health: `GET /api/monitoring/scheduler/health`
-- Confirm nodes are polling and no breakers are stuck open
-- Confirm notifications still send (send a test)
-- Confirm agents are connected (if used)
+- Confirm the running version and edition with `GET /api/version` (public).
+- Confirm scheduler health with an authenticated browser session or a
+  `monitoring:read` token against `GET /api/monitoring/scheduler/health` using
+  the private `pulse_api` helper in [API authentication](API.md#-authentication).
+- Confirm ordinary polling, applied agent reports and circuit-breaker state
+  from normal observation times. A responding process or `/api/version` check
+  alone does not confirm that collection or alert evaluation progressed.
+- Inspect **Alerts → Notifications** (**Recent delivery activity**) and
+  **Alerts → History** rather than sending a Test notification merely to
+  validate an upgrade. Test success does not confirm ordinary, grouped or
+  resolved alert delivery. See
+  [read-only checks after upgrading](OPERATIONAL_TRUST.md#read-only-checks-after-upgrading).
+- Confirm existing agents continue sending fresh reports without reinstalling
+  them or running manual guest-agent probes.
 
 ## Notes and Common Gotchas
 

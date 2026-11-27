@@ -291,6 +291,22 @@ class ProductionRolloutDocsTest(unittest.TestCase):
         router_go = (ROOT / "internal/api/router.go").read_text(encoding="utf-8")
         self.assertIn("InvalidateUserSessions(r.config.AuthUser)", router_go)
 
+    def test_operational_trust_plan_ttl_receipts_route_and_mobile_retirement_match_runtime(self):
+        trust = " ".join(TRUST_DOC.read_text(encoding="utf-8").split())
+        for phrase in (
+            "Background Patrol action plans, including refreshed Patrol plans, stay open for approval for 24 hours before expiring.",
+            "Direct API and interactive action plans keep the 5-minute default expiry.",
+            "GET /api/ai/patrol/attention/receipts",
+            "until Pulse Mobile retires on 31 March 2027",
+        ):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, trust)
+        planner = (ROOT / "internal/actionplanner/planner.go").read_text(encoding="utf-8")
+        self.assertIn("DefaultPlanTTL       = 5 * time.Minute", planner)
+        self.assertIn("DefaultPatrolPlanTTL = 24 * time.Hour", planner)
+        attention = (ROOT / "internal/api/attention_handlers.go").read_text(encoding="utf-8")
+        self.assertIn('case path == "/receipts":', attention)
+
 
 if __name__ == "__main__":
     unittest.main()

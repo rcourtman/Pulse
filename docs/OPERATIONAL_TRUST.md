@@ -113,12 +113,18 @@ declared executor readiness, the required authorization scope, and the
 `ai_autofix` entitlement. The action framework owns plan hashing, approval,
 idempotent execution, durable audit, restart reconciliation, and verification.
 
+Background Patrol action plans, including refreshed Patrol plans, stay open for
+approval for 24 hours before expiring. Direct API and interactive action plans
+keep the 5-minute default expiry. Live freshness, policy, and emergency-stop
+checks still run when an approved plan executes.
+
 ## API and authorization
 
 Read routes require `monitoring:read`:
 
 - `GET /api/ai/patrol/attention`
 - `GET /api/ai/patrol/attention/summary`
+- `GET /api/ai/patrol/attention/receipts`
 - `GET /api/ai/patrol/attention/{id}`
 - `GET /api/ai/patrol/attention/{id}/evidence/{evidenceId}`
 
@@ -176,8 +182,9 @@ canonical lifecycle, recovery, unified-resource, notification, and action
 owners.
 
 The Pulse Mobile primary backlog uses `/api/ai/patrol/attention` and preserves
-operational record, evidence, and action-verification identity. Its old finding
-shape is now a local display adapter, not a writable source of truth.
+operational record, evidence, and action-verification identity until Pulse
+Mobile retires on 31 March 2027. Its old finding shape is now a local display
+adapter, not a writable source of truth.
 
 Before upgrading:
 

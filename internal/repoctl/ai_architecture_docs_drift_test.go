@@ -216,6 +216,24 @@ func TestAssistantArchitectureDocMatchesLoopBounds(t *testing.T) {
 	if !strings.Contains(doc, "capped at four") {
 		t.Errorf("%s no longer states the tool execution concurrency cap", assistantArchitectureDoc)
 	}
+	if !strings.Contains(source, "No profile offers pulse_question: no Pulse client can answer it.") {
+		t.Errorf("pulse_question retirement contract in internal/ai/chat/agentic.go changed; check %s", assistantArchitectureDoc)
+	}
+	for _, phrase := range []string{
+		"No profile offers `pulse_question`",
+		"refuses it",
+	} {
+		if !strings.Contains(strings.Join(strings.Fields(doc), " "), phrase) {
+			t.Errorf("%s does not document retired pulse_question refusal (%q)", assistantArchitectureDoc, phrase)
+		}
+	}
+	if strings.Contains(doc, "never runs in parallel") {
+		t.Errorf("%s still describes retired pulse_question as an active sequential interactive tool", assistantArchitectureDoc)
+	}
+	shipped := readRepoFile(t, "frontend-modern/public/docs/ASSISTANT_ARCHITECTURE.md")
+	if shipped != doc {
+		t.Errorf("frontend-modern/public/docs/ASSISTANT_ARCHITECTURE.md differs from %s", assistantArchitectureDoc)
+	}
 }
 
 // docTableCodeValues returns the backticked values in the first column of the

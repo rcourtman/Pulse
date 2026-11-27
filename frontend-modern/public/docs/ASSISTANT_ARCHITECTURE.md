@@ -42,13 +42,16 @@ would mean writing against a precondition that had not been checked.
 Independent reads and independent finding writes still run in parallel. The
 provider's original call order stays authoritative.
 
-Interactive input is also excluded. `pulse_question` never runs in parallel
-with other tools, since asking you something is not an independent operation.
+Interactive tool prompts are retired alongside the in-app chat window. No
+profile offers `pulse_question` because no Pulse client can answer it. If a
+model calls `pulse_question` anyway, the loop keeps it out of the tool stream
+and refuses it, telling the model to ask in reply text or continue with the
+available evidence in non-interactive runs.
 
 ## Questions and conclusions
 
-The model may ask for information when that is the useful next step, including
-on the first turn. It may repeat an evidence read or conclude with uncertainty.
+The model may repeat an evidence read or conclude with uncertainty when the
+available evidence is incomplete.
 An arbitrary successful read does not validate a diagnosis or verify a change.
 The saved conclusion preserves the streamed response without a later rewrite
 based on tool-name sequences or words such as restart or shutdown.
@@ -61,7 +64,10 @@ The codes are declared in `internal/agentcapabilities/errors.go` and include
 `resource_not_found`, `operator_state_not_set`, `operator_state_invalid`,
 `invalid_finding_request`, `finding_not_found`, `finding_action_not_allowed`,
 `patrol_unavailable`, `invalid_action_request`, `capability_not_found`,
-`action_execution_unavailable`, `action_actor_unavailable`, and `missing_id`.
+`action_execution_unavailable`, `action_actor_unavailable`, `missing_id`,
+`action_plan_expired`, `action_plan_drift`, `action_separation_required`,
+`action_emergency_stop`, `resource_remediation_locked`, `action_dry_run_only`,
+and `raw_command_retired`.
 
 The same codes are published in the capability manifest at
 `/api/agent/capabilities`, and a contract test fails the build if a handler
