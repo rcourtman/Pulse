@@ -2,7 +2,6 @@ import { Show, createMemo, type Component, type JSX } from 'solid-js';
 import { Button } from '@/components/shared/Button';
 import { InlineNotice } from '@/components/shared/InlineNotice';
 import { InlineDetailTableRow } from '@/components/shared/InlineDetailTableRow';
-import { StatusDot } from '@/components/shared/StatusDot';
 import { TableCell, TableRow } from '@/components/shared/Table';
 import {
   getRecoveryOutcomeBadgeClass,
@@ -18,9 +17,7 @@ import {
   PlatformResponsiveTableLabel,
   PlatformSortableTableHead,
   PlatformTableDateTimeValue,
-  PlatformTableEmptyState,
   PlatformTableLoadingState,
-  PlatformTableToolbar,
   createPlatformTableFilterState,
   createPlatformTableSortState,
   formatPlatformTableBytesValue,
@@ -28,13 +25,9 @@ import {
   withPlatformStatusCounts,
   type PlatformTableFilterOption,
   type PlatformTableSortValue,
-  PlatformTableShell,
 } from '@/features/platformPage/sharedPlatformPage';
-import {
-  PlatformResourceDetailToggleButton,
-  createPlatformResourceDetailState,
-  getPlatformResourceDetailRowClass,
-} from '@/features/platformPage/PlatformResourceDetailTableRow';
+import { TrueNASRowLead, TrueNASTableFrame, createTrueNASDetailState } from './TrueNASTableFrame';
+import { getPlatformResourceDetailRowClass } from '@/features/platformPage/PlatformResourceDetailTableRow';
 import type { RecoveryPoint } from '@/types/recovery';
 import {
   filterTrueNASProtectionPoints,
@@ -72,6 +65,14 @@ const TRUENAS_PROTECTION_STATUS_OPTIONS: PlatformTableFilterOption<TrueNASProtec
     { value: 'unknown', label: 'Unknown', compactLabel: 'Unk', tone: 'muted' },
   ];
 
+const firstText = (...values: unknown[]): string => {
+  for (const value of values) {
+    const trimmed = asTrimmedString(value);
+    if (trimmed) return trimmed;
+  }
+  return '';
+};
+
 const detailString = (point: RecoveryPoint, key: string): string =>
   asTrimmedString(point.details?.[key]) || '';
 
@@ -82,97 +83,88 @@ const detailStringList = (point: RecoveryPoint, key: string): string[] => {
     : [];
 };
 
-const kindLabel = (kind: TrueNASProtectionKind): string => {
-  if (kind === 'snapshot') return 'Snapshot';
-  if (kind === 'replication') return 'Replication';
-  return 'Protection';
-};
+const kindLabel = (kind: TrueNASProtectionKind): string =>
+  kind === 'snapshot' ? 'Snapshot' : kind === 'replication' ? 'Replication' : 'Protection';
 
-const protectionVariant = (status: TrueNASProtectionStatusBucket): StatusIndicatorVariant => {
-  switch (status) {
-    case 'success':
-      return 'success';
-    case 'warning':
-      return 'warning';
-    case 'failed':
-      return 'danger';
-    case 'running':
-    case 'unknown':
-      return 'muted';
-  }
-};
+const protectionVariant = (status: TrueNASProtectionStatusBucket): StatusIndicatorVariant =>
+  status === 'success'
+    ? 'success'
+    : status === 'warning'
+      ? 'warning'
+      : status === 'failed'
+        ? 'danger'
+        : 'muted';
 
 const datasetLabel = (point: RecoveryPoint): string =>
-  asTrimmedString(point.display?.itemLabel) ||
-  asTrimmedString(point.itemRef?.name) ||
-  detailString(point, 'dataset') ||
-  detailStringList(point, 'sourceDatasets')[0] ||
-  point.id;
+  firstText(
+    point.display?.itemLabel,
+    point.itemRef?.name,
+    point.details?.dataset,
+    detailStringList(point, 'sourceDatasets')[0],
+    point.id,
+  );
 
 const hostLabel = (point: RecoveryPoint): string =>
-  asTrimmedString(point.display?.nodeHostLabel) ||
-  asTrimmedString(point.display?.nodeAgentLabel) ||
-  asTrimmedString(point.display?.clusterLabel) ||
-  detailString(point, 'hostname') ||
-  asTrimmedString(point.node) ||
-  asTrimmedString(point.cluster) ||
-  'TrueNAS';
+  firstText(
+    point.display?.nodeHostLabel,
+    point.display?.nodeAgentLabel,
+    point.display?.clusterLabel,
+    point.details?.hostname,
+    point.node,
+    point.cluster,
+  ) || 'TrueNAS';
 
 const artifactLabel = (point: RecoveryPoint): string => {
   const kind = mapTrueNASProtectionKind(point);
   if (kind === 'replication') {
     return (
-      detailString(point, 'taskName') ||
-      asTrimmedString(point.display?.detailsSummary) ||
-      asTrimmedString(point.repositoryRef?.name) ||
-      'Replication task'
+      firstText(
+        point.details?.taskName,
+        point.display?.detailsSummary,
+        point.repositoryRef?.name,
+      ) || 'Replication task'
     );
   }
   if (kind === 'snapshot') {
     return (
-      detailString(point, 'snapshot') ||
-      detailString(point, 'fullName') ||
-      asTrimmedString(point.display?.detailsSummary) ||
+      firstText(point.details?.snapshot, point.details?.fullName, point.display?.detailsSummary) ||
       'ZFS snapshot'
     );
   }
-  return asTrimmedString(point.display?.detailsSummary) || point.kind || 'Protection point';
+  return firstText(point.display?.detailsSummary, point.kind) || 'Protection point';
 };
 
 const artifactSecondaryLabel = (point: RecoveryPoint): string => {
   const kind = mapTrueNASProtectionKind(point);
   if (kind === 'replication') {
-    return (
-      detailString(point, 'lastSnapshot') ||
-      detailString(point, 'lastState') ||
-      asTrimmedString(point.display?.detailsSummary) ||
-      ''
+    return firstText(
+      point.details?.lastSnapshot,
+      point.details?.lastState,
+      point.display?.detailsSummary,
     );
   }
   if (kind === 'snapshot') {
     const fullName = detailString(point, 'fullName');
-    const snapshot = detailString(point, 'snapshot');
-    return fullName && fullName !== snapshot ? fullName : '';
+    return fullName && fullName !== detailString(point, 'snapshot') ? fullName : '';
   }
   return '';
 };
 
-const targetLabel = (point: RecoveryPoint): string => {
-  if (mapTrueNASProtectionKind(point) === 'snapshot') return 'Local ZFS';
-  return (
-    asTrimmedString(point.display?.repositoryLabel) ||
-    detailString(point, 'targetDataset') ||
-    asTrimmedString(point.repositoryRef?.name) ||
-    '—'
-  );
-};
+const targetLabel = (point: RecoveryPoint): string =>
+  mapTrueNASProtectionKind(point) === 'snapshot'
+    ? 'Local ZFS'
+    : firstText(
+        point.display?.repositoryLabel,
+        point.details?.targetDataset,
+        point.repositoryRef?.name,
+      ) || '—';
 
-const targetSecondaryLabel = (point: RecoveryPoint): string => {
-  if (mapTrueNASProtectionKind(point) === 'snapshot') return datasetLabel(point);
-  const direction = detailString(point, 'direction');
-  const state = detailString(point, 'lastState');
-  return [direction, state].filter(Boolean).join(' / ');
-};
+const targetSecondaryLabel = (point: RecoveryPoint): string =>
+  mapTrueNASProtectionKind(point) === 'snapshot'
+    ? datasetLabel(point)
+    : [detailString(point, 'direction'), detailString(point, 'lastState')]
+        .filter(Boolean)
+        .join(' / ');
 
 const sizeLabel = (point: RecoveryPoint): string =>
   formatPlatformTableBytesValue(point.sizeBytes ?? undefined, '—');
@@ -311,58 +303,6 @@ const buildProtectionDetailSections = (point: RecoveryPoint): ProtectionDetailSe
   ]);
 };
 
-const DatasetCell: Component<{ point: RecoveryPoint; detailToggle?: JSX.Element }> = (props) => {
-  const status = () => mapTrueNASProtectionStatus(props.point);
-  const kind = () => mapTrueNASProtectionKind(props.point);
-  const name = () => datasetLabel(props.point);
-  const subtitle = () => `${kindLabel(kind())} on ${hostLabel(props.point)}`;
-
-  return (
-    <div class="flex min-w-0 items-center gap-2">
-      {props.detailToggle}
-      <StatusDot
-        size="sm"
-        variant={protectionVariant(status())}
-        pulse={status() === 'running'}
-        title={getRecoveryOutcomeLabel(normalizeRecoveryOutcome(props.point.outcome))}
-      />
-      <div class="min-w-0">
-        <div
-          class="truncate font-medium text-base-content"
-          title={[name(), subtitle()].filter(Boolean).join(' · ')}
-        >
-          {name()}
-        </div>
-      </div>
-    </div>
-  );
-};
-
-const ProtectionDetailTable: Component<{ point: RecoveryPoint; onClose: () => void }> = (props) => (
-  <InlineDetailPanel
-    testId="truenas-protection-detail"
-    detailFor={props.point.id}
-    title={datasetLabel(props.point)}
-    status={{
-      variant: protectionVariant(mapTrueNASProtectionStatus(props.point)),
-      label: getRecoveryOutcomeLabel(normalizeRecoveryOutcome(props.point.outcome)),
-    }}
-    summary={`${kindLabel(mapTrueNASProtectionKind(props.point))} on ${hostLabel(props.point)}`}
-    actions={
-      <RecordOwnerLink
-        subject={{
-          id: asTrimmedString(props.point.itemRef?.id) || datasetLabel(props.point),
-          name: datasetLabel(props.point),
-          type: 'truenas-dataset',
-        }}
-      />
-    }
-    sections={buildProtectionDetailSections(props.point)}
-    detailAttributes={{ 'data-truenas-protection-detail-for': props.point.id }}
-    onClose={props.onClose}
-  />
-);
-
 export const TrueNASProtectionTable: Component<{
   points: RecoveryPoint[];
   loading?: boolean;
@@ -378,7 +318,7 @@ export const TrueNASProtectionTable: Component<{
 }> = (props) => {
   const rows = createMemo(() => sortTrueNASProtectionPoints(props.points));
   const posture = createMemo(() => buildTrueNASProtectionPosture(rows()));
-  const detail = createPlatformResourceDetailState({ idPrefix: 'truenas-protection-detail' });
+  const detail = createTrueNASDetailState('truenas-protection-detail');
   const tableState = createPlatformTableFilterState({
     resources: rows,
     initialStatus: 'all' as TrueNASProtectionStatusFilter,
@@ -421,17 +361,17 @@ export const TrueNASProtectionTable: Component<{
           />
         }
       >
-        <Show
-          when={rows().length > 0}
-          fallback={
-            <PlatformTableEmptyState
-              icon={props.emptyIcon}
-              title={props.emptyTitle}
-              description={props.emptyDescription}
-            />
-          }
-        >
-          <div class="space-y-3">
+        <TrueNASTableFrame
+          hasItems={rows().length > 0}
+          tableState={tableState}
+          common={props}
+          filteredEmptyTitle="No protection events match current filters"
+          filteredEmptyDescription="Adjust the search or outcome filter to see more TrueNAS snapshots and replication tasks."
+          searchPlaceholder="Search snapshots or replication"
+          statusOptions={statusOptions()}
+          precounted
+          rowNoun="events"
+          notice={
             <Show when={props.error}>
               <InlineNotice role="alert" tone="warning" aria-label="Protection refresh failed">
                 <p class="font-medium">Could not refresh TrueNAS protection.</p>
@@ -452,190 +392,189 @@ export const TrueNASProtectionTable: Component<{
                 </Show>
               </InlineNotice>
             </Show>
-            <Show when={props.showToolbar !== false}>
-              <PlatformTableToolbar
-                search={tableState.search}
-                onSearchChange={tableState.setSearch}
-                searchPlaceholder="Search snapshots or replication"
-                searchSuggestions={tableState.searchSuggestions}
-                status={tableState.status()}
-                onStatusChange={tableState.setStatus}
-                statusOptions={statusOptions()}
-                visible={tableState.visible()}
-                total={tableState.total()}
-                rowNoun="events"
-              />
-            </Show>
-
-            <Show
-              when={tableState.filtered().length > 0}
-              fallback={
-                <PlatformTableEmptyState
-                  icon={props.emptyIcon}
-                  title="No protection events match current filters"
-                  description="Adjust the search or outcome filter to see more TrueNAS snapshots and replication tasks."
-                />
-              }
-            >
-              <PlatformTableShell
-                title="Snapshots & Replication"
-                actions={
-                  <span class="text-[10px] font-medium text-muted">
-                    {tableState.total()} event{tableState.total() === 1 ? '' : 's'}
-                  </span>
-                }
-                tableClass="min-w-full table-fixed text-xs md:min-w-[960px]"
-                header={
-                  <>
-                    {/* On phones, keep identity, completion and outcome readable.
+          }
+          title="Snapshots & Replication"
+          actions={
+            <span class="text-[10px] font-medium text-muted">
+              {tableState.total()} event{tableState.total() === 1 ? '' : 's'}
+            </span>
+          }
+          tableClass="min-w-full table-fixed text-xs md:min-w-[960px]"
+          header={
+            <>
+              {/* On phones, keep identity, completion and outcome readable.
                         Artifact and target remain in the existing wrapping details. */}
-                    <PlatformSortableTableHead
-                      kind="name"
-                      sort={sort}
-                      sortKey="dataset"
-                      class="platform-table-mobile-w-30 md:w-[22%]"
-                    >
-                      Dataset
-                    </PlatformSortableTableHead>
-                    <PlatformSortableTableHead
-                      kind="text"
-                      sort={sort}
-                      sortKey="artifact"
-                      class="platform-table-phone-hidden md:w-[25%]"
-                    >
-                      Artifact
-                    </PlatformSortableTableHead>
-                    <PlatformSortableTableHead
-                      kind="text"
-                      sort={sort}
-                      sortKey="target"
-                      class="platform-table-phone-hidden md:w-[23%]"
-                    >
-                      Target
-                    </PlatformSortableTableHead>
-                    <PlatformSortableTableHead
-                      kind="numeric-value"
-                      sort={sort}
-                      sortKey="completed"
-                      class="platform-table-mobile-w-30 md:w-[12%]"
-                    >
-                      <PlatformResponsiveTableLabel compact="Finished" full="Completed" />
-                    </PlatformSortableTableHead>
-                    <PlatformSortableTableHead
-                      kind="numeric-value"
-                      sort={sort}
-                      sortKey="size"
-                      class="hidden lg:table-cell md:w-[8%]"
-                    >
-                      Size
-                    </PlatformSortableTableHead>
-                    <PlatformSortableTableHead
-                      kind="badge"
-                      sort={sort}
-                      sortKey="outcome"
-                      class="platform-table-mobile-w-30 md:w-[9%]"
-                    >
-                      Outcome
-                    </PlatformSortableTableHead>
-                  </>
-                }
-                body={
-                  <>
-                    <PlatformWindowedRows items={sortedRows} estimatedRowHeight={32}>
-                      {(point) => {
-                        const outcome = () => normalizeRecoveryOutcome(point.outcome);
-                        const artifact = () => artifactLabel(point);
-                        const artifactSecondary = () => artifactSecondaryLabel(point);
-                        const target = () => targetLabel(point);
-                        const targetSecondary = () => targetSecondaryLabel(point);
-                        const detailRowId = () => detail.detailRowId(point);
-                        const isExpanded = () => detail.isExpanded(point);
-                        return (
-                          <>
-                            <TableRow
-                              class={`${getPlatformResourceDetailRowClass(isExpanded())} text-[11px] sm:text-xs`}
-                              data-truenas-protection-row={point.id}
-                              data-truenas-protection-kind={mapTrueNASProtectionKind(point)}
-                              data-truenas-protection-outcome={mapTrueNASProtectionStatus(point)}
-                              onClick={() => detail.toggle(point)}
-                            >
-                              <TableCell class={getPlatformTableCellClassForKind('name')}>
-                                <DatasetCell
-                                  point={point}
-                                  detailToggle={
-                                    <PlatformResourceDetailToggleButton
-                                      expanded={isExpanded()}
-                                      resourceLabel={datasetLabel(point)}
-                                      controlsId={detailRowId()}
-                                      onToggle={() => detail.toggle(point)}
-                                    />
-                                  }
-                                />
-                              </TableCell>
-                              <TableCell
-                                class={`${getPlatformTableCellClassForKind('text')} platform-table-phone-hidden`}
+              <PlatformSortableTableHead
+                kind="name"
+                sort={sort}
+                sortKey="dataset"
+                class="platform-table-mobile-w-30 md:w-[22%]"
+              >
+                Dataset
+              </PlatformSortableTableHead>
+              <PlatformSortableTableHead
+                kind="text"
+                sort={sort}
+                sortKey="artifact"
+                class="platform-table-phone-hidden md:w-[25%]"
+              >
+                Artifact
+              </PlatformSortableTableHead>
+              <PlatformSortableTableHead
+                kind="text"
+                sort={sort}
+                sortKey="target"
+                class="platform-table-phone-hidden md:w-[23%]"
+              >
+                Target
+              </PlatformSortableTableHead>
+              <PlatformSortableTableHead
+                kind="numeric-value"
+                sort={sort}
+                sortKey="completed"
+                class="platform-table-mobile-w-30 md:w-[12%]"
+              >
+                <PlatformResponsiveTableLabel compact="Finished" full="Completed" />
+              </PlatformSortableTableHead>
+              <PlatformSortableTableHead
+                kind="numeric-value"
+                sort={sort}
+                sortKey="size"
+                class="hidden lg:table-cell md:w-[8%]"
+              >
+                Size
+              </PlatformSortableTableHead>
+              <PlatformSortableTableHead
+                kind="badge"
+                sort={sort}
+                sortKey="outcome"
+                class="platform-table-mobile-w-30 md:w-[9%]"
+              >
+                Outcome
+              </PlatformSortableTableHead>
+            </>
+          }
+          body={
+            <>
+              <PlatformWindowedRows items={sortedRows} estimatedRowHeight={32}>
+                {(point) => {
+                  const outcome = () => normalizeRecoveryOutcome(point.outcome);
+                  const artifact = () => artifactLabel(point);
+                  const artifactSecondary = () => artifactSecondaryLabel(point);
+                  const target = () => targetLabel(point);
+                  const targetSecondary = () => targetSecondaryLabel(point);
+                  const detailRowId = () => detail.detailRowId(point);
+                  const isExpanded = () => detail.isExpanded(point);
+                  return (
+                    <>
+                      <TableRow
+                        class={`${getPlatformResourceDetailRowClass(isExpanded())} text-[11px] sm:text-xs`}
+                        data-truenas-protection-row={point.id}
+                        data-truenas-protection-kind={mapTrueNASProtectionKind(point)}
+                        data-truenas-protection-outcome={mapTrueNASProtectionStatus(point)}
+                        onClick={() => detail.toggle(point)}
+                      >
+                        <TableCell class={getPlatformTableCellClassForKind('name')}>
+                          <TrueNASRowLead
+                            item={point}
+                            drawer={detail}
+                            label={datasetLabel(point)}
+                            variant={protectionVariant(mapTrueNASProtectionStatus(point))}
+                            pulse={mapTrueNASProtectionStatus(point) === 'running'}
+                            dotTitle={getRecoveryOutcomeLabel(outcome())}
+                          >
+                            <div class="min-w-0">
+                              <div
+                                class="truncate font-medium text-base-content"
+                                title={[
+                                  datasetLabel(point),
+                                  `${kindLabel(mapTrueNASProtectionKind(point))} on ${hostLabel(point)}`,
+                                ]
+                                  .filter(Boolean)
+                                  .join(' · ')}
                               >
-                                <span
-                                  class="block truncate text-base-content"
-                                  title={[artifact(), artifactSecondary()]
-                                    .filter(Boolean)
-                                    .join(' · ')}
-                                >
-                                  {artifact()}
-                                </span>
-                              </TableCell>
-                              <TableCell
-                                class={`${getPlatformTableCellClassForKind('text')} platform-table-phone-hidden`}
-                              >
-                                <span
-                                  class="block truncate text-base-content"
-                                  title={[target(), targetSecondary()].filter(Boolean).join(' · ')}
-                                >
-                                  {target()}
-                                </span>
-                              </TableCell>
-                              <TableCell
-                                class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
-                              >
-                                <PlatformTableDateTimeValue
-                                  value={parseBackupTimestampMs(completionTimestamp(point))}
-                                  emptyText={completionTimestamp(point) ? 'Unknown' : '—'}
-                                />
-                              </TableCell>
-                              <TableCell
-                                class={`${getPlatformTableCellClassForKind('numeric-value')} hidden text-base-content lg:table-cell`}
-                              >
-                                {sizeLabel(point)}
-                              </TableCell>
-                              <TableCell class={getPlatformTableCellClassForKind('badge')}>
-                                <span class={getRecoveryOutcomeBadgeClass(outcome())}>
-                                  {getRecoveryOutcomeLabel(outcome())}
-                                </span>
-                              </TableCell>
-                            </TableRow>
-                            <Show when={isExpanded()}>
-                              <InlineDetailTableRow
-                                cellId={detailRowId()}
-                                colspan={6}
-                                data-inline-detail-for={point.id}
-                                data-truenas-protection-detail-row={point.id}
-                              >
-                                <ProtectionDetailTable
-                                  point={point}
-                                  onClose={() => detail.close(point)}
-                                />
-                              </InlineDetailTableRow>
-                            </Show>
-                          </>
-                        );
-                      }}
-                    </PlatformWindowedRows>
-                  </>
-                }
-              />
-            </Show>
-          </div>
-        </Show>
+                                {datasetLabel(point)}
+                              </div>
+                            </div>
+                          </TrueNASRowLead>
+                        </TableCell>
+                        <TableCell
+                          class={`${getPlatformTableCellClassForKind('text')} platform-table-phone-hidden`}
+                        >
+                          <span
+                            class="block truncate text-base-content"
+                            title={[artifact(), artifactSecondary()].filter(Boolean).join(' · ')}
+                          >
+                            {artifact()}
+                          </span>
+                        </TableCell>
+                        <TableCell
+                          class={`${getPlatformTableCellClassForKind('text')} platform-table-phone-hidden`}
+                        >
+                          <span
+                            class="block truncate text-base-content"
+                            title={[target(), targetSecondary()].filter(Boolean).join(' · ')}
+                          >
+                            {target()}
+                          </span>
+                        </TableCell>
+                        <TableCell
+                          class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
+                        >
+                          <PlatformTableDateTimeValue
+                            value={parseBackupTimestampMs(completionTimestamp(point))}
+                            emptyText={completionTimestamp(point) ? 'Unknown' : '—'}
+                          />
+                        </TableCell>
+                        <TableCell
+                          class={`${getPlatformTableCellClassForKind('numeric-value')} hidden text-base-content lg:table-cell`}
+                        >
+                          {sizeLabel(point)}
+                        </TableCell>
+                        <TableCell class={getPlatformTableCellClassForKind('badge')}>
+                          <span class={getRecoveryOutcomeBadgeClass(outcome())}>
+                            {getRecoveryOutcomeLabel(outcome())}
+                          </span>
+                        </TableCell>
+                      </TableRow>
+                      <Show when={isExpanded()}>
+                        <InlineDetailTableRow
+                          cellId={detailRowId()}
+                          colspan={6}
+                          data-inline-detail-for={point.id}
+                          data-truenas-protection-detail-row={point.id}
+                        >
+                          <InlineDetailPanel
+                            testId="truenas-protection-detail"
+                            detailFor={point.id}
+                            title={datasetLabel(point)}
+                            status={{
+                              variant: protectionVariant(mapTrueNASProtectionStatus(point)),
+                              label: getRecoveryOutcomeLabel(outcome()),
+                            }}
+                            summary={`${kindLabel(mapTrueNASProtectionKind(point))} on ${hostLabel(point)}`}
+                            actions={
+                              <RecordOwnerLink
+                                subject={{
+                                  id: asTrimmedString(point.itemRef?.id) || datasetLabel(point),
+                                  name: datasetLabel(point),
+                                  type: 'truenas-dataset',
+                                }}
+                              />
+                            }
+                            sections={buildProtectionDetailSections(point)}
+                            detailAttributes={{ 'data-truenas-protection-detail-for': point.id }}
+                            onClose={() => detail.close(point)}
+                          />
+                        </InlineDetailTableRow>
+                      </Show>
+                    </>
+                  );
+                }}
+              </PlatformWindowedRows>
+            </>
+          }
+        />
       </Show>
     </Show>
   );

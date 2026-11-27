@@ -90,31 +90,10 @@ export function TrueNASPageSurface() {
       enabled: () => shouldHydrateTab(tab),
       realtimeEnabled: () => shouldHydrateTab(tab),
     });
-  const overviewResources = createTabResources('overview');
-  const storageResources = createTabResources('storage');
-  const serviceResources = createTabResources('services');
-  const appResources = createTabResources('apps');
-  const vmResources = createTabResources('vms');
-  const shareResources = createTabResources('shares');
-  const protectionResources = createTabResources('protection');
-  const resourceState = createMemo(() => {
-    switch (activeTab()) {
-      case 'storage':
-        return storageResources;
-      case 'services':
-        return serviceResources;
-      case 'apps':
-        return appResources;
-      case 'vms':
-        return vmResources;
-      case 'shares':
-        return shareResources;
-      case 'protection':
-        return protectionResources;
-      default:
-        return overviewResources;
-    }
-  });
+  const tabResources = Object.fromEntries(
+    TRUENAS_TAB_SPECS.map((tab) => [tab.id, createTabResources(tab.id)]),
+  ) as Record<TrueNASPageTabId, ReturnType<typeof createTabResources>>;
+  const resourceState = createMemo(() => tabResources[activeTab()]);
   const resources = () => resourceState().resources();
   const loading = () => resourceState().loading();
   const error = () => resourceState().error();
@@ -206,7 +185,23 @@ export function TrueNASPageSurface() {
             />
             <Show when={activeTab() === 'overview'}>
               <div class="space-y-4">
-                <TrueNASOverview model={model} />
+                <TrueNASSystemsTable
+                  systems={model().systems}
+                  scope={model().resources}
+                  emptyIcon={truenasIcon()}
+                  emptyTitle="No TrueNAS systems"
+                  emptyDescription="TrueNAS systems appear here once a TrueNAS connection reports its top-level appliance."
+                  showToolbar={false}
+                />
+                <Show when={model().incidents.length > 0}>
+                  <TrueNASAlertsTable
+                    incidents={model().incidents}
+                    scope={model().resources}
+                    emptyIcon={truenasIcon()}
+                    emptyTitle="No active TrueNAS alerts"
+                    emptyDescription="TrueNAS health alerts appear here when the TrueNAS API reports active system, pool, or disk incidents."
+                  />
+                </Show>
               </div>
             </Show>
             <Show when={activeTab() === 'storage'}>
@@ -218,16 +213,43 @@ export function TrueNASPageSurface() {
               />
             </Show>
             <Show when={activeTab() === 'services'}>
-              <TrueNASServices model={model} {...tableSearch} />
+              <TrueNASServicesTable
+                {...tableSearch}
+                services={model().services}
+                emptyIcon={truenasIcon()}
+                emptyTitle="No TrueNAS services"
+                emptyDescription="System services appear here once the TrueNAS API reports service.query inventory."
+              />
             </Show>
             <Show when={activeTab() === 'apps'}>
-              <TrueNASApps model={model} {...tableSearch} />
+              <TrueNASAppsTable
+                {...tableSearch}
+                apps={model().apps}
+                scope={model().resources}
+                emptyIcon={truenasIcon()}
+                emptyTitle="No TrueNAS apps"
+                emptyDescription="Apps appear here once the TrueNAS API reports app.query inventory."
+              />
             </Show>
             <Show when={activeTab() === 'vms'}>
-              <TrueNASVMs model={model} {...tableSearch} />
+              <TrueNASVirtualMachinesTable
+                {...tableSearch}
+                vms={model().vms}
+                scope={model().resources}
+                emptyIcon={truenasIcon()}
+                emptyTitle="No TrueNAS VMs"
+                emptyDescription="VMs appear here once the TrueNAS API reports vm.query inventory."
+              />
             </Show>
             <Show when={activeTab() === 'shares'}>
-              <TrueNASShares model={model} {...tableSearch} />
+              <TrueNASNetworkSharesTable
+                {...tableSearch}
+                shares={model().shares}
+                scope={model().resources}
+                emptyIcon={truenasIcon()}
+                emptyTitle="No TrueNAS shares"
+                emptyDescription="Shares appear here once the TrueNAS API reports SMB or NFS sharing inventory."
+              />
             </Show>
             <Show when={activeTab() === 'protection'}>
               <TrueNASProtection recoveryPoints={protection} {...tableSearch} />
@@ -239,18 +261,13 @@ export function TrueNASPageSurface() {
   );
 }
 
-interface TrueNASOverviewProps {
-  model: Accessor<TrueNASPageModel>;
-}
-
 interface TrueNASTableSearchProps {
   search?: () => string;
   onSearchChange?: (value: string) => void;
 }
 
-type TrueNASTabProps = TrueNASOverviewProps & TrueNASTableSearchProps;
-
-interface TrueNASStorageProps extends TrueNASTabProps {
+interface TrueNASStorageProps extends TrueNASTableSearchProps {
+  model: Accessor<TrueNASPageModel>;
   kindFilter: TrueNASStorageKindFilter;
   onKindFilterChange: (value: TrueNASStorageKindFilter) => void;
 }
@@ -271,61 +288,6 @@ function TrueNASStorage(props: TrueNASStorageProps) {
   );
 }
 
-function TrueNASApps(props: TrueNASTabProps) {
-  return (
-    <TrueNASAppsTable
-      search={props.search}
-      onSearchChange={props.onSearchChange}
-      apps={props.model().apps}
-      scope={props.model().resources}
-      emptyIcon={truenasIcon()}
-      emptyTitle="No TrueNAS apps"
-      emptyDescription="Apps appear here once the TrueNAS API reports app.query inventory."
-    />
-  );
-}
-
-function TrueNASServices(props: TrueNASTabProps) {
-  return (
-    <TrueNASServicesTable
-      search={props.search}
-      onSearchChange={props.onSearchChange}
-      services={props.model().services}
-      emptyIcon={truenasIcon()}
-      emptyTitle="No TrueNAS services"
-      emptyDescription="System services appear here once the TrueNAS API reports service.query inventory."
-    />
-  );
-}
-
-function TrueNASVMs(props: TrueNASTabProps) {
-  return (
-    <TrueNASVirtualMachinesTable
-      search={props.search}
-      onSearchChange={props.onSearchChange}
-      vms={props.model().vms}
-      scope={props.model().resources}
-      emptyIcon={truenasIcon()}
-      emptyTitle="No TrueNAS VMs"
-      emptyDescription="VMs appear here once the TrueNAS API reports vm.query inventory."
-    />
-  );
-}
-
-function TrueNASShares(props: TrueNASTabProps) {
-  return (
-    <TrueNASNetworkSharesTable
-      search={props.search}
-      onSearchChange={props.onSearchChange}
-      shares={props.model().shares}
-      scope={props.model().resources}
-      emptyIcon={truenasIcon()}
-      emptyTitle="No TrueNAS shares"
-      emptyDescription="Shares appear here once the TrueNAS API reports SMB or NFS sharing inventory."
-    />
-  );
-}
-
 function TrueNASProtection(
   props: { recoveryPoints: ReturnType<typeof useRecoveryPoints> } & TrueNASTableSearchProps,
 ) {
@@ -341,30 +303,6 @@ function TrueNASProtection(
       emptyTitle="No TrueNAS protection activity"
       emptyDescription="ZFS snapshots and replication tasks appear here once the TrueNAS API reports snapshot or replication activity."
     />
-  );
-}
-
-function TrueNASOverview(props: TrueNASOverviewProps) {
-  return (
-    <div class="space-y-4">
-      <TrueNASSystemsTable
-        systems={props.model().systems}
-        scope={props.model().resources}
-        emptyIcon={truenasIcon()}
-        emptyTitle="No TrueNAS systems"
-        emptyDescription="TrueNAS systems appear here once a TrueNAS connection reports its top-level appliance."
-        showToolbar={false}
-      />
-      <Show when={props.model().incidents.length > 0}>
-        <TrueNASAlertsTable
-          incidents={props.model().incidents}
-          scope={props.model().resources}
-          emptyIcon={truenasIcon()}
-          emptyTitle="No active TrueNAS alerts"
-          emptyDescription="TrueNAS health alerts appear here when the TrueNAS API reports active system, pool, or disk incidents."
-        />
-      </Show>
-    </div>
   );
 }
 

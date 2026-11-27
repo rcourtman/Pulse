@@ -76,4 +76,42 @@ describe('TrueNASVirtualMachinesTable', () => {
     expect(headers).not.toContain('Devices');
     expect(container.querySelector('tbody')).not.toHaveTextContent('UEFI');
   });
+
+  it('surfaces top-level sourceStatus staleness on VMs and clears it on live recovery', () => {
+    const vms = [
+      makeVM('stale-vm', { state: 'RUNNING' }, { sourceStatus: { truenas: { status: 'stale' } } }),
+      makeVM(
+        'recovered-vm',
+        { state: 'RUNNING' },
+        {
+          sourceStatus: { truenas: { status: 'online' } },
+          platformData: { sourceStatus: { truenas: { status: 'stale' } } },
+        },
+      ),
+    ];
+
+    render(() => (
+      <TrueNASVirtualMachinesTable
+        vms={vms}
+        scope={vms}
+        emptyIcon={<span />}
+        emptyTitle="No VMs"
+        emptyDescription="No VMs"
+        showToolbar={false}
+      />
+    ));
+
+    const staleNote = screen
+      .getByText('stale-vm')
+      .closest('tr')
+      ?.querySelector('[data-truenas-vm-state-note]');
+    expect(staleNote).toHaveTextContent('Runningnot updated');
+    expect(staleNote).toHaveAttribute('title', 'TrueNAS has not updated this recently');
+
+    const recoveredNote = screen
+      .getByText('recovered-vm')
+      .closest('tr')
+      ?.querySelector('[data-truenas-vm-state-note]');
+    expect(recoveredNote).toBeNull();
+  });
 });

@@ -1,0 +1,65 @@
+{
+  "version": 1,
+  "base_sha": "3b67873ea3097ee0e8897401e09e9a4ecd57ef63",
+  "verified_at": "2026-11-27T00:51:01Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Infrastructure/resourceDetailDrawerTrueNASModel.ts",
+    "frontend-modern/src/components/Workloads/DrawerExceptionList.tsx",
+    "frontend-modern/src/features/truenas/TrueNASAppsTable.tsx",
+    "frontend-modern/src/features/truenas/TrueNASNetworkSharesTable.tsx",
+    "frontend-modern/src/features/truenas/TrueNASPageSurface.tsx",
+    "frontend-modern/src/features/truenas/TrueNASProtectionTable.tsx",
+    "frontend-modern/src/features/truenas/TrueNASServicesTable.tsx",
+    "frontend-modern/src/features/truenas/TrueNASStorageTopologyTable.tsx",
+    "frontend-modern/src/features/truenas/TrueNASSystemsTable.tsx",
+    "frontend-modern/src/features/truenas/TrueNASTableFrame.tsx",
+    "frontend-modern/src/features/truenas/TrueNASVirtualMachinesTable.tsx",
+    "frontend-modern/src/features/truenas/truenasPageModel.ts",
+    "frontend-modern/src/utils/truenasDatasetState.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Infrastructure/resourceDetailDrawerTrueNASModel.ts": "afc49d0c8b70c22094c40d5b3bdb9ff260cb8446ddac2b455955e12fb96b69b3",
+    "frontend-modern/src/components/Workloads/DrawerExceptionList.tsx": "fb6da454cfaf60bb697ece9bfc47cda862a760917560e7f43354d5f072f58f92",
+    "frontend-modern/src/features/truenas/TrueNASAppsTable.tsx": "21aa976c839ce8e5c811ca4d915eef96eaf0d7efac2d948a346d1436275a86e7",
+    "frontend-modern/src/features/truenas/TrueNASNetworkSharesTable.tsx": "bfa2c9cb3645ce3e870e8b7ce3763aa2e1cd99b0c59132867e8143fd686ce327",
+    "frontend-modern/src/features/truenas/TrueNASPageSurface.tsx": "2819389b5f9e1791b040af8bd7db5a50f00ec2a0a7afa95833a4eb5bd6143290",
+    "frontend-modern/src/features/truenas/TrueNASProtectionTable.tsx": "b1e25cf64dfc21104fe1ff198a43588ad8b56e62582e159a434d93a3cd604630",
+    "frontend-modern/src/features/truenas/TrueNASServicesTable.tsx": "96cbf13bba5ef9aca794cb50e95f8d1930d1fd848f7f19561401fc4cd5d9ca9a",
+    "frontend-modern/src/features/truenas/TrueNASStorageTopologyTable.tsx": "d34c36a77b00b5b5b7ec38bcc3e97c019aa754f499c4455e86e0fea97bc1e32f",
+    "frontend-modern/src/features/truenas/TrueNASSystemsTable.tsx": "7165a84385a1ff1764b232fc9935c2e080e0536e6597e11662d8365a80ac0037",
+    "frontend-modern/src/features/truenas/TrueNASTableFrame.tsx": "d21616ac329fab8857588f7fb5b3e445c0e408f9d984a7f09142b97d20eeae28",
+    "frontend-modern/src/features/truenas/TrueNASVirtualMachinesTable.tsx": "ffbc04d69d5cddaf865dd7cadeb5f4d06c8acae52ad29cb6225dfe32e886eb00",
+    "frontend-modern/src/features/truenas/truenasPageModel.ts": "5ca0904154155ca55f2a1ff588f4a3eefb6dcb441c6f6ef83e585aee8d00aee7",
+    "frontend-modern/src/utils/truenasDatasetState.ts": "a7aee9723ce3b2fbfb3be8ee59860f5374d778a00dd5820023a0fb124152a94e"
+  },
+  "routes": [
+    "/truenas/overview",
+    "/truenas/storage",
+    "/truenas/apps",
+    "/truenas/shares"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 940
+    },
+    {
+      "width": 360,
+      "height": 820
+    }
+  ],
+  "states": [
+    "paired production build comparison (unpatched base 3b67873ea3 dist sha256 f1d6278e7ecb vs final patched dist sha256 af81144c423e, Total JS 1553.52 kB <= 1553.76 kB) in offline Playwright 1.56.1 on desktop Chromium 141.0.7390.37 (1440x940 light) and touch WebKit 26.0 (360x820 dark), zero horizontal overflow and zero console/request errors across all 6 states",
+    "overview-stale: stale hybrid system nas-prod shows amber Stale data cue below name on both desktop and 360px phone (unclipped) while preserving CPU, memory, capacity, temperature, inventory, shares, VMs/apps and services counts and healthy green nas-standby",
+    "overview-drawer-stale: expanded nas-prod inline drawer lifts Readings warning (TrueNAS collection error: WebSocket read timed out) into Worth checking; pixel review on 360px phone caught and verified fixing .table-fixed td nowrap overflow in DrawerExceptionList.tsx (worthCheckingOverflow 11px -> 0px, wrapped cleanly inside card border)",
+    "overview-recovered: live WebSocket rawData update clears nas-prod stale cue, turns table and drawer status dots green, and removes Worth checking without reload even while stale platformData.sourceStatus remains",
+    "storage-stale: faulted+stale pool vault stays red Offline (Offline 1 instead of downgraded amber Attention 4 / Offline 0) while stale pool tank, dataset tank/media, disk sda and vault all display non-colour Stale data cue on both desktop and phone",
+    "apps-stale and shares-stale: stale running app nextcloud shows amber Stale data instead of contradictory amber Running, crashed+stale immich keeps red danger severity (Crashed \u00b7 Stale data), fresh locked share vault-share shows amber Locked instead of green-dot Attention, and stale shares show Active/Locked + not updated on desktop (Stale data / Locked \u00b7 Stale data on phone)"
+  ],
+  "interactions": [
+    "navigated /truenas/overview, clicked nas-prod system row to open inline ResourceDetailDrawer and verified Worth checking Readings error row on desktop and 360px phone",
+    "broadcast live WebSocket rawData recovery while nas-prod drawer remained open and verified immediate status dot, Stale data cue, and Worth checking recovery without page reload",
+    "navigated /truenas/storage, /truenas/apps, and /truenas/shares and visually inspected all 24 paired before/after PNGs via native image reader"
+  ]
+}
