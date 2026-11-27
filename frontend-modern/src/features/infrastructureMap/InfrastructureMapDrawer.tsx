@@ -121,6 +121,27 @@ const formatProbeAndLatency = (probeSummary?: string, latencyMs?: number): strin
 const certWarningTone = (warning: string): 'danger' | 'warning' =>
   warning === 'Cert expired' || warning === 'Cert invalid' ? 'danger' : 'warning';
 
+const zfsStateTone = (state: string): 'danger' | 'warning' =>
+  /FAULT|OFFLINE|UNAVAIL|FAIL/i.test(state) ? 'danger' : 'warning';
+
+export const formatCompactUptime = (seconds?: number): string => {
+  if (seconds === undefined || !Number.isFinite(seconds) || seconds <= 0) return '';
+  if (seconds < 3600) return `Up ${Math.max(1, Math.floor(seconds / 60))}m`;
+  if (seconds < 86400) return `Up ${Math.floor(seconds / 3600)}h`;
+  return `Up ${Math.floor(seconds / 86400)}d`;
+};
+
+export const formatBackupAge = (iso?: string): string => {
+  if (!iso) return '';
+  const parsed = Date.parse(iso);
+  if (!Number.isFinite(parsed)) return '';
+  const diffSeconds = Math.floor((Date.now() - parsed) / 1000);
+  if (diffSeconds < 0) return '';
+  if (diffSeconds < 3600) return 'Backed up <1h ago';
+  if (diffSeconds < 86400) return `Backed up ${Math.floor(diffSeconds / 3600)}h ago`;
+  return `Backed up ${Math.floor(diffSeconds / 86400)}d ago`;
+};
+
 const tileSubtitle = (entry: DrawerEntry): string =>
   [
     entry.groupLabel,
@@ -151,6 +172,11 @@ const tileMetrics = (tile: DiagramTile): string =>
     formatDrawerNet(tile),
     formatProbeAndLatency(tile.probeSummary, tile.latencyMs),
     formatDrawerLinkSpeed(tile),
+    formatCompactUptime(tile.uptimeSeconds),
+    formatBackupAge(tile.lastBackupAt),
+    tile.pendingUpdates && tile.pendingUpdates > 0
+      ? `${tile.pendingUpdates.toLocaleString()} ${tile.pendingUpdates === 1 ? 'update' : 'updates'}`
+      : '',
   ]
     .filter(Boolean)
     .join(' · ');
@@ -332,6 +358,15 @@ export function InfrastructureMapDrawer(props: InfrastructureMapDrawerProps) {
         .toLowerCase();
       return tokens.every((token) => text.includes(token));
     });
+  });
+
+  const maxNetworkTrafficBytes = createMemo(() => {
+    let max = 0;
+    for (const network of filteredNetworks()) {
+      const bytes = network.netTotalBytes ?? 0;
+      if (bytes > max) max = bytes;
+    }
+    return max;
   });
 
   const title = createMemo(() => {
@@ -717,6 +752,35 @@ export function InfrastructureMapDrawer(props: InfrastructureMapDrawerProps) {
                                     : `${entry.tile.unhealthyDiskCount} disks unhealthy`}
                                 </MetadataBadge>
                               </Show>
+                              <Show when={entry.tile.rebuildInProgress}>
+                                <MetadataBadge tone="warning" size="xs" shape="pill">
+                                  Rebuilding
+                                </MetadataBadge>
+                              </Show>
+                              <Show
+                                when={
+                                  entry.tile.zfsState &&
+                                  !(
+                                    entry.tile.rebuildInProgress &&
+                                    /^(rebuild|resilver)/i.test(entry.tile.zfsState)
+                                  )
+                                }
+                              >
+                                <MetadataBadge
+                                  tone={zfsStateTone(entry.tile.zfsState!)}
+                                  size="xs"
+                                  shape="pill"
+                                >
+                                  {entry.tile.zfsState}
+                                </MetadataBadge>
+                              </Show>
+                              <Show when={(entry.tile.zfsErrorCount ?? 0) > 0}>
+                                <MetadataBadge tone="danger" size="xs" shape="pill">
+                                  {entry.tile.zfsErrorCount === 1
+                                    ? '1 ZFS error'
+                                    : `${entry.tile.zfsErrorCount!.toLocaleString()} ZFS errors`}
+                                </MetadataBadge>
+                              </Show>
                               <Show when={entry.tile.firewallEnabled}>
                                 <MetadataBadge
                                   tone="neutral"
@@ -936,6 +1000,12 @@ export function InfrastructureMapDrawer(props: InfrastructureMapDrawerProps) {
                   <For each={filteredNetworks()}>
                     {(network) => {
                       const isActive = () => props.activeNetworkId === network.id;
+                      const trafficBarPercent = () => {
+                        const maxBytes = maxNetworkTrafficBytes();
+                        const bytes = network.netTotalBytes ?? 0;
+                        if (maxBytes <= 0 || bytes <= 0) return 0;
+                        return Math.min(100, Math.max(4, Math.round((bytes / maxBytes) * 100)));
+                      };
                       return (
                         <li class="flex items-center gap-2 px-2 py-2">
                           <button
@@ -962,6 +1032,18 @@ export function InfrastructureMapDrawer(props: InfrastructureMapDrawerProps) {
                               <div class="truncate text-xs text-muted">
                                 {networkSubtitle(network)}
                               </div>
+                              <Show when={trafficBarPercent() > 0}>
+                                <div
+                                  class="mt-1.5 h-1 w-full overflow-hidden rounded-full bg-border/60"
+                                  data-testid="infrastructure-map-network-traffic-bar"
+                                  aria-hidden="true"
+                                >
+                                  <div
+                                    class="h-full rounded-full bg-teal-500/80 dark:bg-teal-400/80"
+                                    style={{ width: `${trafficBarPercent()}%` }}
+                                  />
+                                </div>
+                              </Show>
                             </div>
                             <ChevronRightIcon
                               class="h-4 w-4 shrink-0 text-muted"
@@ -971,12 +1053,14 @@ export function InfrastructureMapDrawer(props: InfrastructureMapDrawerProps) {
                           <Button
                             variant={isActive() ? 'primaryFlat' : 'secondary'}
                             size="xs"
-                            onClick={() => {
+                            aria-pressed={isActive()}
+                            onClick={(event) => {
+                              event.stopPropagation();
                               props.onFilterByNetwork(isActive() ? null : network.id);
                               props.onClose();
                             }}
                           >
-                            {isActive() ? 'Filtered' : 'Filter'}
+                            {isActive() ? 'Active' : 'Filter'}
                           </Button>
                         </li>
                       );

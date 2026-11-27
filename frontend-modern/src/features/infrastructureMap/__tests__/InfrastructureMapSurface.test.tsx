@@ -14,7 +14,10 @@ import type { Resource } from '@/types/resource';
 import { showError, showSuccess } from '@/utils/toast';
 import { fitServiceDiagram, flowServiceDiagram } from '../infrastructureMapDiagram';
 import { buildMapExportSvg, downloadMapImage } from '../infrastructureMapExport';
-import { InfrastructureMapSurface } from '../InfrastructureMapSurface';
+import {
+  INFRASTRUCTURE_MAP_PREFS_KEY,
+  InfrastructureMapSurface,
+} from '../InfrastructureMapSurface';
 
 const resourcesMock = vi.hoisted(() => ({
   value: [] as Resource[],
@@ -116,6 +119,7 @@ const administrator = () => signedInWith({ availabilityRead: true, infrastructur
 describe('InfrastructureMapSurface use counting', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    localStorage.removeItem(INFRASTRUCTURE_MAP_PREFS_KEY);
     resourcesMock.value = lab();
     vi.mocked(downloadMapImage).mockResolvedValue('png');
   });
@@ -194,6 +198,7 @@ describe('InfrastructureMapSurface fit to the window', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    localStorage.removeItem(INFRASTRUCTURE_MAP_PREFS_KEY);
     WatchedBoxes.all = [];
     vi.stubGlobal('ResizeObserver', WatchedBoxes);
     resourcesMock.value = lab();
@@ -318,6 +323,7 @@ const behindVpn = (): Resource[] => {
 describe('InfrastructureMapSurface connections', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    localStorage.removeItem(INFRASTRUCTURE_MAP_PREFS_KEY);
     resourcesMock.value = behindVpn();
   });
   afterEach(() => {
@@ -798,6 +804,7 @@ describe('InfrastructureMapSurface connections', () => {
 describe('InfrastructureMapSurface with nothing to draw', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    localStorage.removeItem(INFRASTRUCTURE_MAP_PREFS_KEY);
     resourcesMock.read = undefined;
     resourcesMock.value = [];
   });
@@ -863,6 +870,7 @@ describe('InfrastructureMapSurface on a phone', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    localStorage.removeItem(INFRASTRUCTURE_MAP_PREFS_KEY);
     resourcesMock.read = undefined;
     resourcesMock.value = lab();
   });
@@ -927,6 +935,7 @@ describe('InfrastructureMapSurface on a phone', () => {
 describe('InfrastructureMapSurface live traffic and network telemetry', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    localStorage.removeItem(INFRASTRUCTURE_MAP_PREFS_KEY);
     resourcesMock.read = undefined;
     resourcesMock.value = [
       resource({
@@ -1298,6 +1307,7 @@ describe('InfrastructureMapSurface live traffic and network telemetry', () => {
 describe('InfrastructureMapSurface layout toggle, exposed drawer, and enriched tooltips', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    localStorage.removeItem(INFRASTRUCTURE_MAP_PREFS_KEY);
     resourcesMock.read = undefined;
     vi.mocked(downloadMapImage).mockResolvedValue('png');
     resourcesMock.value = [
@@ -1599,6 +1609,7 @@ describe('InfrastructureMapSurface layout toggle, exposed drawer, and enriched t
 describe('InfrastructureMapSurface spotlight, thermal/disk telemetry, and traffic proportion bars', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    localStorage.removeItem(INFRASTRUCTURE_MAP_PREFS_KEY);
     resourcesMock.read = undefined;
   });
   afterEach(cleanup);
@@ -1828,5 +1839,278 @@ describe('InfrastructureMapSurface spotlight, thermal/disk telemetry, and traffi
     expect(bars).toHaveLength(3);
     const widths = bars.map((bar) => (bar.firstElementChild as HTMLElement | null)?.style.width);
     expect(widths).toEqual(['100%', '50%', '4%']);
+  });
+});
+
+describe('InfrastructureMapSurface persisted preferences, networks summary, keyboard shortcuts, and operational telemetry', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    localStorage.removeItem(INFRASTRUCTURE_MAP_PREFS_KEY);
+    resourcesMock.read = undefined;
+  });
+  afterEach(() => {
+    cleanup();
+    localStorage.removeItem(INFRASTRUCTURE_MAP_PREFS_KEY);
+  });
+
+  const tile = (container: HTMLElement, name: string) => {
+    const found = container.querySelector(`[aria-label^="${name},"]`);
+    if (!found) throw new Error(`no tile for ${name}`);
+    return found;
+  };
+
+  it('persists layout mode, density, and live traffic to localStorage and restores on remount without persisting Hide names', () => {
+    resourcesMock.value = lab();
+
+    const first = render(() => <InfrastructureMapSurface />);
+    fireEvent.click(screen.getByRole('button', { name: 'By role' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Compact' }));
+    fireEvent.click(screen.getByTestId('infrastructure-map-live-traffic'));
+    fireEvent.click(screen.getByRole('button', { name: 'Hide names' }));
+
+    const saved = JSON.parse(localStorage.getItem(INFRASTRUCTURE_MAP_PREFS_KEY) ?? '{}');
+    expect(saved).toEqual({
+      layoutMode: 'roles',
+      density: 'marks',
+      liveTraffic: false,
+    });
+    expect(saved).not.toHaveProperty('namesHidden');
+
+    first.unmount();
+
+    const second = render(() => <InfrastructureMapSurface />);
+    expect(screen.getByRole('button', { name: 'By role' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: 'Compact' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByTestId('infrastructure-map-live-traffic')).toHaveAttribute(
+      'aria-pressed',
+      'false',
+    );
+    expect(screen.getByRole('button', { name: 'Hide names' })).toHaveAttribute(
+      'aria-pressed',
+      'false',
+    );
+    second.unmount();
+
+    // Corrupt JSON falls back cleanly to defaults.
+    localStorage.setItem(INFRASTRUCTURE_MAP_PREFS_KEY, '{not-valid-json');
+    render(() => <InfrastructureMapSurface />);
+    expect(screen.getByRole('button', { name: 'By host' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByTestId('infrastructure-map-live-traffic')).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+  });
+
+  it('shows the networks summary pill when multiple networks exist, renders proportional traffic bars, and filters in one click', () => {
+    resourcesMock.value = lab();
+    const singleNet = render(() => <InfrastructureMapSurface />);
+    expect(screen.queryByTestId('infrastructure-map-networks-summary')).not.toBeInTheDocument();
+    singleNet.unmount();
+
+    resourcesMock.value = [
+      resource({
+        id: 'pve-lan',
+        type: 'agent',
+        name: 'pve-lan',
+        platformType: 'proxmox-pve',
+        agent: {
+          networkInterfaces: [
+            { name: 'vmbr0', addresses: ['10.10.0.10/24'], speedMbps: 10000, linkUp: true },
+          ],
+        },
+      }),
+      resource({
+        id: 'vm-lan-busy',
+        type: 'vm',
+        name: 'lan-busy',
+        platformType: 'proxmox-pve',
+        parentId: 'pve-lan',
+        status: 'running',
+        identity: { ips: ['10.10.0.50'] },
+        network: { rxBytes: 8_000_000, txBytes: 2_000_000 },
+      }),
+      resource({
+        id: 'pve-iot',
+        type: 'agent',
+        name: 'pve-iot',
+        platformType: 'proxmox-pve',
+        agent: {
+          networkInterfaces: [
+            { name: 'vmbr1', addresses: ['10.20.0.10/24'], speedMbps: 1000, linkUp: true },
+          ],
+        },
+      }),
+      resource({
+        id: 'vm-iot-light',
+        type: 'vm',
+        name: 'iot-light',
+        platformType: 'proxmox-pve',
+        parentId: 'pve-iot',
+        status: 'running',
+        identity: { ips: ['10.20.0.50'] },
+        network: { rxBytes: 2_000_000, txBytes: 500_000 },
+      }),
+    ];
+
+    render(() => <InfrastructureMapSurface />);
+
+    const summaryPill = screen.getByTestId('infrastructure-map-networks-summary');
+    expect(summaryPill).toHaveTextContent('2 networks');
+
+    fireEvent.click(summaryPill);
+    expect(screen.getByTestId('infrastructure-map-drawer')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Networks' })).toBeInTheDocument();
+
+    const networkList = screen.getByTestId('infrastructure-map-network-list');
+    expect(networkList.querySelectorAll('li')).toHaveLength(2);
+
+    const bars = screen.getAllByTestId('infrastructure-map-network-traffic-bar');
+    expect(bars).toHaveLength(2);
+    const widths = bars
+      .map((bar) => (bar.firstElementChild as HTMLElement | null)?.style.width)
+      .sort();
+    expect(widths).toEqual(['100%', '25%']);
+
+    const filterButtons = screen.getAllByRole('button', { name: 'Filter' });
+    expect(filterButtons).toHaveLength(2);
+    fireEvent.click(filterButtons[0]!);
+
+    expect(screen.queryByTestId('infrastructure-map-drawer')).not.toBeInTheDocument();
+    expect(screen.getByTestId('infrastructure-map-filter-bar')).toHaveTextContent('Network:');
+
+    // Reopening the networks drawer marks the filtered network as Active.
+    fireEvent.click(screen.getByTestId('infrastructure-map-networks-summary'));
+    expect(screen.getByRole('button', { name: 'Active' })).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  it('supports keyboard shortcuts for search focus and zoom while ignoring keys typed in search input', () => {
+    resourcesMock.value = lab();
+    render(() => <InfrastructureMapSurface />);
+
+    const searchInput = screen.getByTestId('infrastructure-map-search') as HTMLInputElement;
+    const zoomReset = screen.getByTestId('infrastructure-map-zoom-reset');
+    expect(searchInput.title).toContain('Press / to focus.');
+    expect(zoomReset).toHaveTextContent('100%');
+
+    // '+' and '=' zoom in, '-' zooms out, '0' resets zoom.
+    fireEvent.keyDown(document.body, { key: '+' });
+    expect(zoomReset).toHaveTextContent('125%');
+
+    fireEvent.keyDown(document.body, { key: '=' });
+    expect(zoomReset).toHaveTextContent('150%');
+
+    fireEvent.keyDown(document.body, { key: '-' });
+    expect(zoomReset).toHaveTextContent('125%');
+
+    fireEvent.keyDown(document.body, { key: '0' });
+    expect(zoomReset).toHaveTextContent('100%');
+
+    // '/' focuses the map search input.
+    fireEvent.keyDown(document.body, { key: '/' });
+    expect(document.activeElement).toBe(searchInput);
+
+    // Shortcuts typed inside the search input must not alter zoom.
+    fireEvent.keyDown(searchInput, { key: '+' });
+    fireEvent.keyDown(searchInput, { key: '=' });
+    fireEvent.keyDown(searchInput, { key: '-' });
+    expect(zoomReset).toHaveTextContent('100%');
+
+    // Modifier-held shortcuts are ignored.
+    searchInput.blur();
+    fireEvent.keyDown(document.body, { key: '+', ctrlKey: true });
+    expect(zoomReset).toHaveTextContent('100%');
+  });
+
+  it('surfaces uptime, backup recency, pending updates, and ZFS pool anomalies in hover tooltips and drawer rows', async () => {
+    const threeHoursAgo = new Date(Date.now() - 3 * 3600 * 1000).toISOString();
+    resourcesMock.value = [
+      resource({
+        id: 'pve-ops',
+        type: 'agent',
+        name: 'pve-ops',
+        platformType: 'proxmox-pve',
+        proxmox: { cpus: 8, uptime: 14 * 86400, pendingUpdates: 3 },
+        agent: {
+          networkInterfaces: [
+            { name: 'vmbr0', addresses: ['10.60.0.10/24'], speedMbps: 10000, linkUp: true },
+          ],
+        },
+      }),
+      resource({
+        id: 'vm-ops',
+        type: 'vm',
+        name: 'ops-vm',
+        platformType: 'proxmox-pve',
+        parentId: 'pve-ops',
+        status: 'running',
+        identity: { ips: ['10.60.0.50'] },
+        proxmox: {
+          vmid: 201,
+          uptime: 14 * 86400,
+          pendingUpdates: 3,
+          lastBackup: threeHoursAgo,
+        },
+      }),
+      resource({
+        id: 'pool-zfs',
+        type: 'pool',
+        name: 'tank-zfs',
+        platformType: 'proxmox-pve',
+        parentId: 'pve-ops',
+        status: 'degraded',
+        disk: {
+          current: 72,
+          total: 8 * 1024 ** 4,
+          used: Math.round(5.76 * 1024 ** 4),
+        },
+        storage: {
+          vdevLayout: 'raidz1',
+          type: 'zfspool',
+          zfsPoolState: 'DEGRADED',
+          rebuildInProgress: true,
+          zfsReadErrors: 1,
+          zfsChecksumErrors: 1,
+        },
+      }),
+    ];
+
+    const { container } = render(() => <InfrastructureMapSurface />);
+
+    // Hovering ops-vm surfaces uptime, backup recency, and pending updates.
+    fireEvent.pointerOver(tile(container, 'ops-vm'));
+    expect(await screen.findByText(/Up 14d/, { selector: 'span' })).toBeInTheDocument();
+    expect(screen.getByText(/Backed up 3h ago/, { selector: 'span' })).toBeInTheDocument();
+    expect(screen.getByText(/3 updates/, { selector: 'span' })).toBeInTheDocument();
+
+    // Hovering tank-zfs surfaces ZFS pool anomalies.
+    fireEvent.pointerOver(tile(container, 'tank-zfs'));
+    expect(await screen.findByText(/DEGRADED/, { selector: 'span' })).toBeInTheDocument();
+    expect(screen.getByText(/Rebuilding/, { selector: 'span' })).toBeInTheDocument();
+    expect(screen.getByText(/2 ZFS errors/, { selector: 'span' })).toBeInTheDocument();
+
+    // Open host drawer to verify uptime, backup age, and pending updates in resource rows.
+    const hostInspect = container.querySelector(
+      '[data-map-inspect][aria-label="Inspect pve-ops (1)"]',
+    );
+    expect(hostInspect).not.toBeNull();
+    fireEvent.click(hostInspect!);
+    const hostList = screen.getByTestId('infrastructure-map-drawer-list');
+    expect(hostList).toHaveTextContent('Up 14d');
+    expect(hostList).toHaveTextContent('Backed up 3h ago');
+    expect(hostList).toHaveTextContent('3 updates');
+
+    // Close drawer, switch to By role, and inspect Storage group for ZFS anomaly badges.
+    fireEvent.keyDown(document, { key: 'Escape' });
+    fireEvent.click(screen.getByRole('button', { name: 'By role' }));
+    const storageInspect = container.querySelector(
+      '[data-map-inspect][aria-label^="Inspect Storage"]',
+    );
+    expect(storageInspect).not.toBeNull();
+    fireEvent.click(storageInspect!);
+
+    const storageList = screen.getByTestId('infrastructure-map-drawer-list');
+    expect(storageList).toHaveTextContent('DEGRADED');
+    expect(storageList).toHaveTextContent('Rebuilding');
+    expect(storageList).toHaveTextContent('2 ZFS errors');
   });
 });

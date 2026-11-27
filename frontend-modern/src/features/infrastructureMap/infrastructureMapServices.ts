@@ -85,6 +85,12 @@ export interface DiagramTile {
   sizeLabel?: string;
   vdevLayout?: string;
   storageType?: string;
+  uptimeSeconds?: number;
+  pendingUpdates?: number;
+  lastBackupAt?: string;
+  zfsState?: string;
+  rebuildInProgress?: boolean;
+  zfsErrorCount?: number;
   cpu?: number;
   memory?: number;
   netRxBytes?: number;
@@ -569,6 +575,9 @@ const serviceTile = (item: MapItem, host: MapHost, plan: NetworkPlan): DiagramTi
     ...(host.isResource ? { hostId: host.id, hostName: host.name } : {}),
     cpu: item.cpu,
     memory: item.memory,
+    ...(item.uptimeSeconds !== undefined ? { uptimeSeconds: item.uptimeSeconds } : {}),
+    ...(item.pendingUpdates !== undefined ? { pendingUpdates: item.pendingUpdates } : {}),
+    ...(item.lastBackupAt ? { lastBackupAt: item.lastBackupAt } : {}),
     ...tileNetworkTelemetry(item),
     ...(item.dockerNetworks?.length ? { dockerNetworks: item.dockerNetworks } : {}),
     address: plan.where(item.address, item.segmentIds),
@@ -652,6 +661,8 @@ export const matchesDiagramTileQuery = (
     tile.sizeLabel,
     tile.vdevLayout,
     tile.storageType,
+    tile.zfsState,
+    tile.rebuildInProgress ? 'rebuilding' : undefined,
     tile.address,
     tile.detail,
     ...(tile.dockerNetworks ?? []),
@@ -839,6 +850,12 @@ const poolTiles = (
       const sizeLabel = members.find((member) => member.sizeLabel)?.sizeLabel;
       const vdevLayout = members.find((member) => member.vdevLayout)?.vdevLayout;
       const storageType = members.find((member) => member.storageType)?.storageType;
+      const zfsState =
+        members.find(
+          (member) => member.zfsState && /FAULT|OFFLINE|UNAVAIL|FAIL/i.test(member.zfsState),
+        )?.zfsState ?? members.find((member) => member.zfsState)?.zfsState;
+      const rebuildInProgress = members.some((member) => member.rebuildInProgress === true);
+      const zfsErrorTotal = members.reduce((sum, member) => sum + (member.zfsErrorCount ?? 0), 0);
       return {
         tile: {
           id: pool.id,
@@ -854,6 +871,9 @@ const poolTiles = (
           ...(sizeLabel ? { sizeLabel } : {}),
           ...(vdevLayout ? { vdevLayout } : {}),
           ...(storageType ? { storageType } : {}),
+          ...(zfsState ? { zfsState } : {}),
+          ...(rebuildInProgress ? { rebuildInProgress: true } : {}),
+          ...(zfsErrorTotal > 0 ? { zfsErrorCount: zfsErrorTotal } : {}),
           navigable: true,
         },
         pools: members,
@@ -895,6 +915,9 @@ const localPoolTile = (
     ...(pool.sizeLabel ? { sizeLabel: pool.sizeLabel } : {}),
     ...(pool.vdevLayout ? { vdevLayout: pool.vdevLayout } : {}),
     ...(pool.storageType ? { storageType: pool.storageType } : {}),
+    ...(pool.zfsState ? { zfsState: pool.zfsState } : {}),
+    ...(pool.rebuildInProgress ? { rebuildInProgress: true } : {}),
+    ...(pool.zfsErrorCount !== undefined ? { zfsErrorCount: pool.zfsErrorCount } : {}),
     ...(links?.length ? { links: [...links] } : {}),
     navigable: true,
   };
@@ -1173,6 +1196,8 @@ export function buildServiceDiagram(
       ...(host.unhealthyDiskCount !== undefined
         ? { unhealthyDiskCount: host.unhealthyDiskCount }
         : {}),
+      ...(host.uptimeSeconds !== undefined ? { uptimeSeconds: host.uptimeSeconds } : {}),
+      ...(host.pendingUpdates !== undefined ? { pendingUpdates: host.pendingUpdates } : {}),
       cpu: host.cpu,
       memory: host.memory,
       ...tileNetworkTelemetry(host),

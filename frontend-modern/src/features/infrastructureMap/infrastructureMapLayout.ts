@@ -69,6 +69,12 @@ export interface MapHit {
   diskSummary?: string;
   diskMaxTempC?: number;
   unhealthyDiskCount?: number;
+  uptimeSeconds?: number;
+  pendingUpdates?: number;
+  lastBackupAt?: string;
+  zfsState?: string;
+  rebuildInProgress?: boolean;
+  zfsErrorCount?: number;
   /** Opaque planned network IDs this tile belongs to, for interactive network hover rings. */
   segmentIds?: string[];
   address?: string;

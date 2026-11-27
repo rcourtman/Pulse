@@ -392,6 +392,12 @@ const drawTile = (
       ...(tile.unhealthyDiskCount !== undefined
         ? { unhealthyDiskCount: tile.unhealthyDiskCount }
         : {}),
+      ...(tile.uptimeSeconds !== undefined ? { uptimeSeconds: tile.uptimeSeconds } : {}),
+      ...(tile.pendingUpdates !== undefined ? { pendingUpdates: tile.pendingUpdates } : {}),
+      ...(tile.lastBackupAt ? { lastBackupAt: tile.lastBackupAt } : {}),
+      ...(tile.zfsState ? { zfsState: tile.zfsState } : {}),
+      ...(tile.rebuildInProgress ? { rebuildInProgress: true } : {}),
+      ...(tile.zfsErrorCount !== undefined ? { zfsErrorCount: tile.zfsErrorCount } : {}),
       ...(segmentIds ? { segmentIds } : {}),
       address: tile.address,
       detail: tile.detail,
