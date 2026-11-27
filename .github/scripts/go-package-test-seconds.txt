@@ -1,50 +1,48 @@
-# Median full-package task seconds from eight successful full PR runs on
-# 18 November 2026. Each pair observed all 174 ordinary packages.
-# Runs: 44332548810, 44349621937, 44351978505, 44353083596,
-# 44360372572, 44367958281, 44369545573 and 44380374444.
+# Median full-package task seconds from four successful full PR runs on
+# 26 November 2026: 45911943897, 45912118332, 45913294212 and 45914027359.
+# Each run observed all 174 ordinary packages. Unseen holdout 45932014391 did
+# not feed these estimates; combined 3-way modeled task-seconds improve from
+# 1497.2/1642.5/1793.7 (spread 296.5s) to 1670.9/1617.1/1645.5 (spread 53.8s),
+# and 2-way from 2434.9/2498.6 (spread 63.7s) to 2461.0/2472.4 (spread 11.4s).
 # Weights schedule the source-listed inventory. New and small packages use
 # the mean of the medians below 20 seconds. The release queue runs monitoring
 # and installtests whole, so keep their separate whole-package estimates.
-DEFAULT_WEIGHT 4.916
-# The two CI rest workers each start a fixed monitoring and installer slice before
-# this ordinary queue. Before the workload estimate, their combined task-time
-# offsets (rest-1 minus rest-0) were 290s and 275s in 44450687537 and 44520279000.
-# Rounded to 300 task-seconds. This is scheduling, not a hosted time claim.
-REST_SHARD_FIXED_SECONDS 0 300
-# Full PRs to main use a separate three-way slice layout. In runs 45101097230
-# and 45102015045 the combined monitoring/installer costs above the lightest
-# shard were [125.121, 0, 13.693] and [45.108, 0, 1.928] task-seconds.
-# Use the medians rounded to 5 seconds. These account for work already
-# assigned to each shard; they do not estimate actual PR wall time.
-REST_SHARD_FIXED_SECONDS_3 85 0 10
-github.com/rcourtman/pulse-go-rewrite/cmd/pulse-agent 203.709
-github.com/rcourtman/pulse-go-rewrite/internal/agentidentity 32.225
-github.com/rcourtman/pulse-go-rewrite/internal/agentupdate 77.294
-github.com/rcourtman/pulse-go-rewrite/internal/ai 53.632
-github.com/rcourtman/pulse-go-rewrite/internal/ai/chat 30.404
-github.com/rcourtman/pulse-go-rewrite/internal/alerts 213.951
-github.com/rcourtman/pulse-go-rewrite/internal/alerts/eventlog 42.145
-github.com/rcourtman/pulse-go-rewrite/internal/api/alerting 22.09
-github.com/rcourtman/pulse-go-rewrite/internal/api/chartapi 20.086
-github.com/rcourtman/pulse-go-rewrite/internal/api/configapi 140.727
-github.com/rcourtman/pulse-go-rewrite/internal/config 268.792
-github.com/rcourtman/pulse-go-rewrite/internal/dockeragent 106.686
-github.com/rcourtman/pulse-go-rewrite/internal/hostagent 63.727
-github.com/rcourtman/pulse-go-rewrite/internal/mock 132.296
-github.com/rcourtman/pulse-go-rewrite/internal/monitoring 314.522
-github.com/rcourtman/pulse-go-rewrite/internal/notifications 316.0
-github.com/rcourtman/pulse-go-rewrite/internal/recovery/store 28.547
-github.com/rcourtman/pulse-go-rewrite/internal/relay 74.407
-github.com/rcourtman/pulse-go-rewrite/internal/telemetry 52.173
-github.com/rcourtman/pulse-go-rewrite/internal/truenas 51.508
-github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources 160.342
-github.com/rcourtman/pulse-go-rewrite/internal/updates 25.208
-github.com/rcourtman/pulse-go-rewrite/internal/websocket 53.7
-github.com/rcourtman/pulse-go-rewrite/pkg/auth 29.492
-github.com/rcourtman/pulse-go-rewrite/pkg/db 39.436
-github.com/rcourtman/pulse-go-rewrite/pkg/metrics 292.331
-github.com/rcourtman/pulse-go-rewrite/pkg/proxmox 37.659
-github.com/rcourtman/pulse-go-rewrite/pkg/pulsecli 37.216
-github.com/rcourtman/pulse-go-rewrite/pkg/server 60.347
-github.com/rcourtman/pulse-go-rewrite/scripts/installtests 360.228
-github.com/rcourtman/pulse-go-rewrite/tests/migration 63.606
+DEFAULT_WEIGHT 4.233
+# With monitoring-test-seconds.txt and installtests-test-seconds.txt
+# refreshed together, the two-way and three-way fixed slices are balanced
+# without artificial pre-assigned offsets. Re-measure after hosted runs if
+# fixed slice costs diverge again. This is scheduling, not a wall-time claim.
+REST_SHARD_FIXED_SECONDS 0 0
+REST_SHARD_FIXED_SECONDS_3 0 0 0
+github.com/rcourtman/pulse-go-rewrite/cmd/pulse-agent 305.940
+github.com/rcourtman/pulse-go-rewrite/internal/agentidentity 29.392
+github.com/rcourtman/pulse-go-rewrite/internal/agentupdate 73.203
+github.com/rcourtman/pulse-go-rewrite/internal/ai 52.610
+github.com/rcourtman/pulse-go-rewrite/internal/ai/chat 24.489
+github.com/rcourtman/pulse-go-rewrite/internal/alerts 232.816
+github.com/rcourtman/pulse-go-rewrite/internal/alerts/eventlog 41.546
+github.com/rcourtman/pulse-go-rewrite/internal/api/alerting 24.057
+github.com/rcourtman/pulse-go-rewrite/internal/api/chartapi 20.123
+github.com/rcourtman/pulse-go-rewrite/internal/api/configapi 142.825
+github.com/rcourtman/pulse-go-rewrite/internal/config 322.996
+github.com/rcourtman/pulse-go-rewrite/internal/dockeragent 104.608
+github.com/rcourtman/pulse-go-rewrite/internal/hostagent 52.153
+github.com/rcourtman/pulse-go-rewrite/internal/kubernetesagent 24.444
+github.com/rcourtman/pulse-go-rewrite/internal/mock 96.831
+github.com/rcourtman/pulse-go-rewrite/internal/monitoring 1260.860
+github.com/rcourtman/pulse-go-rewrite/internal/notifications 341.424
+github.com/rcourtman/pulse-go-rewrite/internal/recovery/store 33.988
+github.com/rcourtman/pulse-go-rewrite/internal/relay 73.048
+github.com/rcourtman/pulse-go-rewrite/internal/telemetry 38.939
+github.com/rcourtman/pulse-go-rewrite/internal/truenas 51.237
+github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources 190.243
+github.com/rcourtman/pulse-go-rewrite/internal/updates 23.723
+github.com/rcourtman/pulse-go-rewrite/internal/websocket 54.477
+github.com/rcourtman/pulse-go-rewrite/pkg/auth 26.592
+github.com/rcourtman/pulse-go-rewrite/pkg/db 34.878
+github.com/rcourtman/pulse-go-rewrite/pkg/metrics 260.591
+github.com/rcourtman/pulse-go-rewrite/pkg/proxmox 37.562
+github.com/rcourtman/pulse-go-rewrite/pkg/pulsecli 39.691
+github.com/rcourtman/pulse-go-rewrite/pkg/server 53.419
+github.com/rcourtman/pulse-go-rewrite/scripts/installtests 645.270
+github.com/rcourtman/pulse-go-rewrite/tests/migration 25.482
