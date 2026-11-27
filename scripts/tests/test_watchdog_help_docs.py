@@ -108,9 +108,12 @@ class WatchdogHelpDocsTest(unittest.TestCase):
             with self.subTest(deadman_token=token):
                 self.assertIn(token, deadman)
 
+        self.assertIn("Last success", self.component)
+        self.assertNotIn("Last attempt", self.component)
+        self.assertIn('json:"lastAttemptAt,omitempty"', deadman)
         for phrase in (
             "Monitoring stalled clears immediately and moves to Starting or Delivery failing if the recovery heartbeat fails to deliver",
-            "Replacing, removing, or saving an invalid watchdog URL clears prior Last success and Last attempt timestamps",
+            "Replacing, removing, or saving an invalid watchdog URL clears prior Last success and API lastAttemptAt timestamps",
             "clears prior delivery alerts on replacement",
             "re-saving the same configured URL preserves its Last success",
             "Concurrent shutdown or configuration replacement cancels superseded watchdog cycles",
