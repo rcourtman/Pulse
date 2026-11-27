@@ -8,7 +8,7 @@ Pulse Cloud is for a hosted Pulse instance. Pulse MSP is a separate provider pat
 
 1. **Sign up** at the Pulse Cloud portal.
 2. **Connect your agents** — install the Pulse agent on your infrastructure pointing to your cloud URL.
-3. **Monitor** — access your dashboard from any browser on desktop or phone.
+3. **Monitor:** access your dashboard from any browser on desktop or phone.
 
 Each Cloud account gets a dedicated, isolated Pulse instance with its own subdomain (e.g., `yourname.cloud.pulserelay.pro`).
 
@@ -198,7 +198,7 @@ state need separate handling. Verify the destination before retiring the source.
 
 ## See Also
 
-- [Plans & Entitlements](PULSE_PRO.md) — feature comparison across Community, Pro, legacy Relay/Pro+, and Cloud
+- [Plans & Entitlements](PULSE_PRO.md): feature comparison across Community, Pro, legacy Relay/Pro+, and Cloud
 - [Installation (Self-Hosted)](INSTALL.md) — self-hosted installation guide
-- [Relay / Mobile Access](RELAY.md) — retirement schedule and existing paired-phone guidance
+- [Relay / Mobile Access](RELAY.md): retirement schedule and existing paired-phone guidance
 - [Multi-Tenant](MULTI_TENANT.md), Enterprise/internal multi-organization mode

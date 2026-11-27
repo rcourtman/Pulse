@@ -1,6 +1,6 @@
 # Unified Resource Model
 
-Pulse v6 introduces a **unified resource model** that normalizes all monitored infrastructure — Proxmox VE, Proxmox Backup Server, Proxmox Mail Gateway, Docker, host agents, Kubernetes, TrueNAS, VMware vSphere, and Availability checks — into a single, consistent data structure.
+Pulse v6 introduces a **unified resource model** that normalizes all monitored infrastructure (Proxmox VE, Proxmox Backup Server, Proxmox Mail Gateway, Docker, host agents, Kubernetes, TrueNAS, VMware vSphere, and Availability checks) into a single, consistent data structure.
 
 ## Why Unified Resources?
 
@@ -54,8 +54,8 @@ The aggregate `status` is computed from all contributing sources.
 | `docker` | Docker/Podman — containers, images, networks |
 | `kubernetes` | Kubernetes — clusters, nodes, pods, deployments |
 | `truenas` | TrueNAS — system info, ZFS pools, datasets, snapshots, replication |
-| `vmware` | VMware vSphere — vCenter and ESXi hosts, VMs, datastores, networks |
-| `availability` | Availability checks — website, service, device, and TLS certificate checks |
+| `vmware` | VMware vSphere: vCenter and ESXi hosts, VMs, datastores, networks |
+| `availability` | Availability checks: website, service, device, and TLS certificate checks |
 
 ## Unified Navigation
 

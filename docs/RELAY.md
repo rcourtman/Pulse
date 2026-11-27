@@ -53,7 +53,7 @@ Relay operates on a zero-trust transport model:
 
 ### UI
 
-**Settings → Security → Pulse Mobile** — toggle on/off, view QR code, and manage relay pairing sessions.
+**Settings → Security → Pulse Mobile**: toggle on/off, view QR code, and manage relay pairing sessions.
 
 ### Environment Variables
 
