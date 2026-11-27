@@ -168,6 +168,7 @@ func cloneVM(src VM) VM {
 	dest.IPAddresses = append([]string(nil), src.IPAddresses...)
 	dest.Tags = append([]string(nil), src.Tags...)
 	dest.NetworkInterfaces = cloneGuestNetworkInterfaces(src.NetworkInterfaces)
+	dest.Accelerators = append([]string(nil), src.Accelerators...)
 	return dest.NormalizeCollections()
 }
 
@@ -188,6 +189,7 @@ func cloneContainer(src Container) Container {
 	dest.IPAddresses = append([]string(nil), src.IPAddresses...)
 	dest.Tags = append([]string(nil), src.Tags...)
 	dest.NetworkInterfaces = cloneGuestNetworkInterfaces(src.NetworkInterfaces)
+	dest.Accelerators = append([]string(nil), src.Accelerators...)
 	return dest.NormalizeCollections()
 }
 
@@ -417,6 +419,7 @@ func cloneHost(src Host) Host {
 	dest.Sensors = cloneHostSensorSummary(src.Sensors)
 	dest.DefaultGateways = append([]HostDefaultGateway(nil), src.DefaultGateways...)
 	dest.DNSServers = append([]string(nil), src.DNSServers...)
+	dest.ActivePeers = append([]HostNetworkPeer(nil), src.ActivePeers...)
 	dest.RAID = cloneHostRAIDArrays(src.RAID)
 	dest.Unraid = cloneHostUnraidStorage(src.Unraid)
 	dest.Ceph = cloneHostCephCluster(src.Ceph)
@@ -517,6 +520,7 @@ func cloneDockerContainer(src DockerContainer) DockerContainer {
 	dest.Networks = append([]DockerContainerNetworkLink(nil), src.Networks...)
 	dest.BlockIO = cloneDockerContainerBlockIO(src.BlockIO)
 	dest.Mounts = append([]DockerContainerMount(nil), src.Mounts...)
+	dest.Accelerators = append([]string(nil), src.Accelerators...)
 	dest.Filesystems = filesystem.Clone(src.Filesystems)
 	dest.Podman = cloneDockerPodmanContainer(src.Podman)
 	dest.UpdateStatus = cloneDockerContainerUpdateStatus(src.UpdateStatus)

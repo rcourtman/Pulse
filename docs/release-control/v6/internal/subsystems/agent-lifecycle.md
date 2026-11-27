@@ -12331,3 +12331,19 @@ Remote Pro host agents inherit native DNS probing automatically through the shar
 keep `protocol: "push"` availability targets strictly local to the Pulse server
 (`pulse:local`). Push checks are never assigned to remote host agents and do not
 change agent polling or wire contracts.
+
+
+### Passive internal socket peer discovery and Docker accelerator reporting (27 November 2026)
+
+`pkg/agents/host/report.go` adds optional `ActivePeers []NetworkPeer` populated
+by `internal/hostmetrics/socket_peers.go` from Linux `/proc/net/tcp` and
+`/proc/net/tcp6` (`ESTABLISHED` rows, using `LISTEN` rows to distinguish
+inbound vs outbound service ports). Public internet, loopback, link-local,
+multicast, and self-IP entries are discarded on the host before transmission,
+bounded at 128 unique internal pairs (RFC 1918, IPv6 ULA, and `100.64.0.0/10`
+CGNAT/Tailscale). `pkg/agents/docker/report.go` and
+`internal/dockeragent/collect.go` add optional `Accelerators []string` extracted
+from Docker `HostConfig.DeviceRequests`, `HostConfig.Devices`, and device bind
+mounts (`GPU`, `AMD GPU`, `iGPU`, `TPU`, `NPU`). Older agents remain wire
+compatible. Verified by `TestReadActivePeersFrom_FiltersPrivacyAndDetectsDirection`,
+`TestContainerAccelerators`, and `TestApplyHostReportCarriesActivePeers`.

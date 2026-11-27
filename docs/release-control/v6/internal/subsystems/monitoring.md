@@ -10810,3 +10810,20 @@ Verified by `TestPollPBSInstancePausedDoesNotFabricateSuccess`,
 `TestPollPBSInstanceEmptyOrExcludedDatastoresClearUnifiedStorage`,
 `TestPollPBSInstanceConcurrentConfigEditIsRaceFree`, and
 `TestPollPBSInstanceFallbackReusesDatastoresWithoutDuplicateFetch`.
+
+
+### Passive internal socket peers and guest hardware accelerator ingestion (27 November 2026)
+
+- `internal/monitoring/host_network_peers.go` validates and bounds
+  `Report.ActivePeers` onto `models.Host.ActivePeers` (re-enforcing private
+  RFC 1918, IPv6 ULA, and `100.64.0.0/10` filtering and the 128-peer cap on
+  receipt).
+- `internal/monitoring/guest_accelerators.go` sanitizes Docker container
+  `Accelerators` (`models.DockerContainer.Accelerators`) and extracts Proxmox
+  VM `hostpciN` and LXC device passthrough labels (`models.VM.Accelerators`,
+  `models.Container.Accelerators`) from the existing cached `GetVMConfig` and
+  `GetContainerConfig` reads with zero extra Proxmox API calls.
+
+Verified by `TestHostActivePeersFromReport`, `TestDockerAcceleratorsFromReport`,
+`TestParseProxmoxVMConfigAccelerators`, `TestParseProxmoxLXCConfigAccelerators`,
+and `TestApplyHostReportCarriesActivePeers`.

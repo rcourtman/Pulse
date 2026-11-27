@@ -10235,3 +10235,12 @@ are unchanged.
 persist `protocol: "push"` schedules and 256-bit tokens inside the existing
 encrypted `availability_targets.enc` store without altering backup, snapshot, or
 recovery persistence contracts.
+
+
+### Passive internal socket peers and hardware accelerator metadata (27 November 2026)
+
+`internal/unifiedresources/types.go` adds optional `Accelerators []string` on
+`ProxmoxData` and `DockerData`, and `internal/unifiedresources/relationships.go`
+adds `RelCommunicatesWith` (`communicates_with`) projected strictly between
+monitored resources. Storage, backup, and recovery persistence formats and
+read/write paths are unchanged.

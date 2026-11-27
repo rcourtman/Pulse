@@ -36,6 +36,8 @@ func RelationshipTypeLabel(t RelationshipType) string {
 		return "Attached to"
 	case RelChecks:
 		return "Checks"
+	case RelCommunicatesWith:
+		return "Communicates with"
 	default:
 		raw := strings.TrimSpace(strings.ReplaceAll(string(t), "_", " "))
 		if raw == "" {

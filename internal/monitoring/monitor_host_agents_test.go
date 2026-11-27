@@ -9624,3 +9624,25 @@ func TestApplyHostReportRetainsSiblingSensorsInsideMaximumLease(t *testing.T) {
 		t.Fatalf("evicted temperature survived: %#v", got)
 	}
 }
+
+func TestApplyHostReportCarriesActivePeers(t *testing.T) {
+	monitor := newTestMonitor(t)
+	host, err := monitor.ApplyHostReport(agentshost.Report{
+		Agent: agentshost.AgentInfo{ID: "agent-peers", IntervalSeconds: 30},
+		Host:  agentshost.HostInfo{ID: "machine-peers", Hostname: "peers-host", Platform: "linux"},
+		ActivePeers: []agentshost.NetworkPeer{
+			{LocalIP: "192.168.0.10", RemoteIP: "192.168.0.20", RemotePort: 5432, Protocol: "tcp"},
+			{LocalIP: "192.168.0.10", RemoteIP: "8.8.8.8", RemotePort: 443, Protocol: "tcp"},
+		},
+		Timestamp: time.Now().UTC(),
+	}, nil)
+	if err != nil {
+		t.Fatalf("ApplyHostReport() error = %v", err)
+	}
+	want := []models.HostNetworkPeer{
+		{LocalIP: "192.168.0.10", RemoteIP: "192.168.0.20", RemotePort: 5432, Protocol: "tcp"},
+	}
+	if !reflect.DeepEqual(host.ActivePeers, want) {
+		t.Fatalf("host.ActivePeers = %#v, want %#v", host.ActivePeers, want)
+	}
+}

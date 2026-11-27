@@ -21,9 +21,10 @@ const (
 	RelAttachedTo  RelationshipType = "attached_to" // e.g., container attached_to network
 	RelChecks      RelationshipType = "checks"      // e.g., availability check checks resource
 	RelHostedBy    RelationshipType = "hosted_by"
-	RelStoresOn    RelationshipType = "stores_on"
-	RelProtectedBy RelationshipType = "protected_by"
-	RelMemberOf    RelationshipType = "member_of"
+	RelStoresOn         RelationshipType = "stores_on"
+	RelProtectedBy      RelationshipType = "protected_by"
+	RelMemberOf         RelationshipType = "member_of"
+	RelCommunicatesWith RelationshipType = "communicates_with" // e.g., host communicates_with monitored peer
 )
 
 // ResourceRelationship represents a typed relationship edge between two unified resources.

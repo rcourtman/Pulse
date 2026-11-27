@@ -53,7 +53,12 @@ type Report struct {
 	// Routing is the host's default gateways and DNS servers, as the host's own
 	// tables state them. Optional: older agents omit it, and so does an agent
 	// on a platform it cannot read them on.
-	Routing        *NetworkRouting      `json:"routing,omitempty"`
+	Routing *NetworkRouting `json:"routing,omitempty"`
+	// ActivePeers lists established internal TCP peers read passively from the
+	// kernel socket table (/proc/net/tcp and /proc/net/tcp6). Public internet
+	// and loopback addresses are discarded on the host before transmission.
+	// Optional: older agents and non-Linux hosts omit it.
+	ActivePeers    []NetworkPeer        `json:"activePeers,omitempty"`
 	Sensors        Sensors              `json:"sensors,omitempty"`
 	RAID           []RAIDArray          `json:"raid,omitempty"`
 	Unraid         *UnraidStorage       `json:"unraid,omitempty"`
@@ -408,6 +413,28 @@ func (r *NetworkRouting) Clone() *NetworkRouting {
 		DefaultGateways: append([]NetworkGateway(nil), r.DefaultGateways...),
 		DNSServers:      append([]string(nil), r.DNSServers...),
 	}
+}
+
+// NetworkPeer describes one established internal TCP peer observed passively
+// in the host's kernel socket table. When Inbound is false, this host opened
+// an outbound connection to RemoteIP:RemotePort. When Inbound is true,
+// RemoteIP connected to this host's listening LocalPort.
+type NetworkPeer struct {
+	LocalIP    string `json:"localIp,omitempty"`
+	LocalPort  uint16 `json:"localPort,omitempty"`
+	RemoteIP   string `json:"remoteIp"`
+	RemotePort uint16 `json:"remotePort,omitempty"`
+	Protocol   string `json:"protocol,omitempty"`
+	Inbound    bool   `json:"inbound,omitempty"`
+}
+
+// CloneNetworkPeers returns a copy of peers that shares no backing array.
+// Nil or empty slices return nil so older/unreported payloads stay omitted.
+func CloneNetworkPeers(peers []NetworkPeer) []NetworkPeer {
+	if len(peers) == 0 {
+		return nil
+	}
+	return append([]NetworkPeer(nil), peers...)
 }
 
 // Sensors captures optional sensor readings reported by the agent.
