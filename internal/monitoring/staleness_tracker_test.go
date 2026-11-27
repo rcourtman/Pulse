@@ -369,7 +369,7 @@ func TestStalenessTracker_ConcurrentAccess(t *testing.T) {
 func TestStalenessTracker_StalenessScore_ZeroMaxStaleUsesDefault(t *testing.T) {
 	// Create tracker and directly set maxStale to 0 to test the defensive fallback
 	tracker := &StalenessTracker{
-		entries:  make(map[string]FreshnessSnapshot),
+		entries:  make(map[freshnessTarget]FreshnessSnapshot),
 		maxStale: 0, // Force zero to test default fallback
 	}
 
@@ -449,7 +449,7 @@ func TestStalenessTracker_PeerMetricsCannotSupplyFirstSuccess(t *testing.T) {
 func TestStalenessTracker_StalenessScore_NegativeMaxStaleUsesDefault(t *testing.T) {
 	// Create tracker and directly set maxStale to negative to test the defensive fallback
 	tracker := &StalenessTracker{
-		entries:  make(map[string]FreshnessSnapshot),
+		entries:  make(map[freshnessTarget]FreshnessSnapshot),
 		maxStale: -5 * time.Minute, // Force negative to test default fallback
 	}
 
@@ -549,24 +549,41 @@ func TestStalenessTracker_StalenessScore_ScoreClampedBetweenZeroAndOne(t *testin
 // 3. Therefore score = age.Seconds() / max.Seconds() is always non-negative
 // This is defensive code that guards against future refactoring mistakes.
 
-func TestTrackerKey(t *testing.T) {
-	tests := []struct {
-		instanceType InstanceType
-		instance     string
-		want         string
-	}{
-		{InstanceTypePVE, "test1", "pve::test1"},
-		{InstanceTypePBS, "test2", "pbs::test2"},
-		{InstanceTypePMG, "pmg-host", "pmg::pmg-host"},
-		{InstanceTypePVE, "", "pve::"},
-	}
+func TestStalenessTracker_StoresExactTargetIdentity(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		tracker := NewStalenessTracker(nil)
+		const pveName = "lab::main"
+		firstSuccess := time.Now()
+		tracker.UpdateSuccess(InstanceTypePVE, pveName, nil)
 
-	for _, tt := range tests {
-		got := trackerKey(tt.instanceType, tt.instance)
-		if got != tt.want {
-			t.Errorf("trackerKey(%v, %q) = %q, want %q", tt.instanceType, tt.instance, got, tt.want)
+		time.Sleep(time.Minute)
+		failedAt := time.Now()
+		tracker.UpdateError(InstanceTypePBS, pveName)
+		// A provider-defined type and an instance can each contain the old
+		// key delimiter. Neither should share the other's freshness.
+		const otherType = InstanceType("pve::lab")
+		tracker.SetChangeHash(otherType, "main", []byte("changed"))
+		tracker.UpdateError(otherType, "main")
+
+		if snap, ok := tracker.snapshot(InstanceTypePVE, pveName); !ok ||
+			!snap.LastSuccess.Equal(firstSuccess) || !snap.LastError.IsZero() || snap.ChangeHash != "" {
+			t.Fatalf("PVE success was overwritten by a peer: %+v (present: %v)", snap, ok)
 		}
-	}
+		if score, ok := tracker.StalenessScore(InstanceTypePBS, pveName); !ok || score != 1 {
+			t.Fatalf("failed PBS target got a successful peer's freshness: score=%v present=%v", score, ok)
+		}
+		tracker.Remove(InstanceTypePVE, pveName)
+		if _, ok := tracker.StalenessScore(InstanceTypePVE, pveName); ok {
+			t.Fatal("removed target still has freshness")
+		}
+		if snap, ok := tracker.snapshot(otherType, "main"); !ok ||
+			!snap.LastError.Equal(failedAt) || snap.ChangeHash == "" {
+			t.Fatalf("removal discarded the other provider's freshness: %+v (present: %v)", snap, ok)
+		}
+		if rows := tracker.Snapshot(); len(rows) != 2 {
+			t.Fatalf("remaining snapshot rows = %d, want 2", len(rows))
+		}
+	})
 }
 
 func TestStalenessTracker_MergeSnapshot_TableDriven(t *testing.T) {

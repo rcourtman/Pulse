@@ -17,10 +17,17 @@ type FreshnessSnapshot struct {
 	ChangeHash   string
 }
 
+// freshnessTarget keeps the scheduler's exact target identity without
+// joining the strings on each poll result or freshness lookup.
+type freshnessTarget struct {
+	kind InstanceType
+	name string
+}
+
 // StalenessTracker maintains freshness metadata and exposes normalized staleness scores.
 type StalenessTracker struct {
 	mu       sync.RWMutex
-	entries  map[string]FreshnessSnapshot
+	entries  map[freshnessTarget]FreshnessSnapshot
 	baseTTL  time.Duration
 	maxStale time.Duration
 }
@@ -30,7 +37,7 @@ type StalenessTracker struct {
 // a monitor's connection, and exporter samples must not feed back into polling.
 func NewStalenessTracker(_ *PollMetrics) *StalenessTracker {
 	return &StalenessTracker{
-		entries:  make(map[string]FreshnessSnapshot),
+		entries:  make(map[freshnessTarget]FreshnessSnapshot),
 		baseTTL:  10 * time.Second,
 		maxStale: 5 * time.Minute,
 	}
@@ -93,7 +100,7 @@ func (t *StalenessTracker) Remove(instanceType InstanceType, instance string) {
 	}
 
 	t.mu.Lock()
-	delete(t.entries, trackerKey(instanceType, instance))
+	delete(t.entries, freshnessTarget{instanceType, instance})
 	t.mu.Unlock()
 }
 
@@ -110,7 +117,7 @@ func (t *StalenessTracker) SetChangeHash(instanceType InstanceType, instance str
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
-	key := trackerKey(instanceType, instance)
+	key := freshnessTarget{instanceType, instance}
 	snap := t.entries[key]
 	snap.InstanceType = instanceType
 	snap.Instance = instance
@@ -126,7 +133,7 @@ func (t *StalenessTracker) StalenessScore(instanceType InstanceType, instance st
 	}
 
 	t.mu.RLock()
-	snap, ok := t.entries[trackerKey(instanceType, instance)]
+	snap, ok := t.entries[freshnessTarget{instanceType, instance}]
 	maxStale := t.maxStale
 	t.mu.RUnlock()
 	if !ok {
@@ -155,7 +162,7 @@ func stalenessAt(now, lastSuccess time.Time, maxStale time.Duration) float64 {
 func (t *StalenessTracker) setSnapshot(snapshot FreshnessSnapshot) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	key := trackerKey(snapshot.InstanceType, snapshot.Instance)
+	key := freshnessTarget{snapshot.InstanceType, snapshot.Instance}
 	t.entries[key] = snapshot
 }
 
@@ -163,7 +170,7 @@ func (t *StalenessTracker) mergeSnapshot(snapshot FreshnessSnapshot) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
-	key := trackerKey(snapshot.InstanceType, snapshot.Instance)
+	key := freshnessTarget{snapshot.InstanceType, snapshot.Instance}
 	existing := t.entries[key]
 
 	if snapshot.LastSuccess.After(existing.LastSuccess) {
@@ -188,12 +195,8 @@ func (t *StalenessTracker) mergeSnapshot(snapshot FreshnessSnapshot) {
 func (t *StalenessTracker) snapshot(instanceType InstanceType, instance string) (FreshnessSnapshot, bool) {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
-	snap, ok := t.entries[trackerKey(instanceType, instance)]
+	snap, ok := t.entries[freshnessTarget{instanceType, instance}]
 	return snap, ok
-}
-
-func trackerKey(instanceType InstanceType, instance string) string {
-	return string(instanceType) + "::" + instance
 }
 
 // StalenessSnapshot represents staleness data for a single instance.
