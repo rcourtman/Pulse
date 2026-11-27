@@ -352,7 +352,7 @@ func TestTaskQueue_Upsert(t *testing.T) {
 
 		// Verify the task was updated
 		queue.mu.Lock()
-		key := schedulerKey(InstanceTypePVE, "pve-1")
+		key := taskQueueKey{InstanceTypePVE, "pve-1"}
 		entry := queue.entries[key]
 		if !entry.task.NextRun.Equal(task2.NextRun) {
 			t.Errorf("NextRun not updated: got %v, want %v", entry.task.NextRun, task2.NextRun)
@@ -707,7 +707,7 @@ func TestTaskQueue_Remove(t *testing.T) {
 
 		// Verify pve-2 is not in entries map
 		queue.mu.Lock()
-		key := schedulerKey(InstanceTypePVE, "pve-2")
+		key := taskQueueKey{InstanceTypePVE, "pve-2"}
 		if _, exists := queue.entries[key]; exists {
 			t.Errorf("pve-2 still exists in entries map")
 		}
@@ -852,7 +852,7 @@ func TestTaskQueue_Remove(t *testing.T) {
 
 		// Verify PVE instance still exists
 		queue.mu.Lock()
-		key := schedulerKey(InstanceTypePVE, "pve-1")
+		key := taskQueueKey{InstanceTypePVE, "pve-1"}
 		if _, exists := queue.entries[key]; !exists {
 			t.Errorf("pve-1 should still exist in entries map")
 		}
@@ -964,11 +964,11 @@ func verifyHeapInvariant(t *testing.T, queue *TaskQueue) {
 	// Check each entry's index is correct
 	for _, entry := range queue.heap {
 		if entry.index < 0 || entry.index >= len(queue.heap) {
-			t.Errorf("entry %s has invalid index %d (heap size: %d)", entry.key(), entry.index, len(queue.heap))
+			t.Errorf("entry %s/%s has invalid index %d (heap size: %d)", entry.task.InstanceType, entry.task.InstanceName, entry.index, len(queue.heap))
 			continue
 		}
 		if queue.heap[entry.index] != entry {
-			t.Errorf("entry %s has index %d but is not at that position in heap", entry.key(), entry.index)
+			t.Errorf("entry %s/%s has index %d but is not at that position in heap", entry.task.InstanceType, entry.task.InstanceName, entry.index)
 		}
 	}
 
@@ -982,7 +982,7 @@ func verifyHeapInvariant(t *testing.T, queue *TaskQueue) {
 			}
 		}
 		if !found {
-			t.Errorf("entry %s in map but not in heap", key)
+			t.Errorf("entry %s/%s in map but not in heap", key.kind, key.name)
 		}
 	}
 
@@ -1005,51 +1005,32 @@ func verifyHeapInvariant(t *testing.T, queue *TaskQueue) {
 	}
 }
 
-// TestScheduledTaskEntry_Key tests the key() method on scheduledTaskEntry
-func TestScheduledTaskEntry_Key(t *testing.T) {
-	t.Parallel()
+func TestTaskQueue_KeepsSameNameTargetsIndependent(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		q := NewTaskQueue()
+		now := time.Now()
+		pve := ScheduledTask{InstanceType: InstanceTypePVE, InstanceName: "shared::target", NextRun: now}
+		pbs := ScheduledTask{InstanceType: InstanceTypePBS, InstanceName: pve.InstanceName, NextRun: now.Add(time.Minute)}
+		q.upsertPlan(pve, 0)
+		q.upsertPlan(pbs, 0)
 
-	tests := []struct {
-		name     string
-		instType InstanceType
-		instName string
-		wantKey  string
-	}{
-		{
-			name:     "PVE instance",
-			instType: InstanceTypePVE,
-			instName: "pve1",
-			wantKey:  "pve::pve1",
-		},
-		{
-			name:     "PBS instance",
-			instType: InstanceTypePBS,
-			instName: "pbs-cluster",
-			wantKey:  "pbs::pbs-cluster",
-		},
-		{
-			name:     "PMG instance",
-			instType: InstanceTypePMG,
-			instName: "pmg-01",
-			wantKey:  "pmg::pmg-01",
-		},
-	}
+		claim, ok := q.WaitNext(t.Context())
+		if !ok || claim != pve {
+			t.Fatalf("first claim = %+v, %t; want %+v", claim, ok, pve)
+		}
+		q.Remove(pbs.InstanceType, pbs.InstanceName)
+		retry := pve
+		retry.NextRun = now.Add(2 * time.Minute)
+		q.completeClaim(claim, retry, pollAfterBackoff)
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			entry := &scheduledTaskEntry{
-				task: ScheduledTask{
-					InstanceType: tt.instType,
-					InstanceName: tt.instName,
-				},
-			}
-
-			got := entry.key()
-			if got != tt.wantKey {
-				t.Errorf("key() = %q, want %q", got, tt.wantKey)
-			}
-		})
-	}
+		got, ok := q.Get(pve.InstanceType, pve.InstanceName)
+		if !ok || got != retry {
+			t.Errorf("queued PVE = %+v, %t; want its own retry %+v", got, ok, retry)
+		}
+		if _, ok := q.Get(pbs.InstanceType, pbs.InstanceName); ok {
+			t.Error("retired PBS target is still queued")
+		}
+	})
 }
 
 // TestWaitNext_ContextCancelled tests WaitNext returns when context is cancelled
