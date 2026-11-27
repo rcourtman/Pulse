@@ -2,6 +2,7 @@ package monitoring
 
 import (
 	"context"
+	"maps"
 	"testing"
 	"testing/synctest"
 	"time"
@@ -232,6 +233,77 @@ func TestTaskQueue_Snapshot(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestTaskQueue_SnapshotTracksHeapMembershipAndAge(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		q := NewTaskQueue()
+		now := time.Now()
+		urgent := ScheduledTask{InstanceType: InstanceTypePVE, InstanceName: "a-immediate"}
+		otherUrgent := ScheduledTask{InstanceType: InstanceTypePBS, InstanceName: "b-immediate"}
+		overdue := ScheduledTask{InstanceType: InstanceTypePVE, InstanceName: "overdue", NextRun: now.Add(-7 * time.Second)}
+		boundary := ScheduledTask{InstanceType: InstanceTypeAvailability, InstanceName: "boundary", NextRun: now.Add(12 * time.Second)}
+		future := ScheduledTask{InstanceType: InstanceTypeAvailability, InstanceName: "future", NextRun: now.Add(13 * time.Second)}
+		assert := func(label string, due int, age float64, counts map[string]int) {
+			t.Helper()
+			got := q.Snapshot()
+			depth := 0
+			for _, count := range counts {
+				depth += count
+			}
+			if got.Depth != depth || got.DueWithinSeconds != due || got.OldestOverdueSeconds != age ||
+				got.PerType == nil || !maps.Equal(got.PerType, counts) {
+				t.Fatalf("%s: snapshot = %+v, want depth %d, due %d, age %g, counts %v", label, got, depth, due, age, counts)
+			}
+		}
+		for _, task := range []ScheduledTask{boundary, future, otherUrgent, urgent, overdue} {
+			q.Upsert(task)
+		}
+		availability := string(InstanceTypeAvailability)
+		assert("zero deadlines count as due but do not supply age", 4, 7, map[string]int{"pve": 2, "pbs": 1, availability: 2})
+		exposed := q.Snapshot()
+		clear(exposed.PerType)
+		assert("returned map does not alias queue counts", 4, 7, map[string]int{"pve": 2, "pbs": 1, availability: 2})
+
+		revision := q.availabilityPlanRevision()
+		q.refreshAvailabilitySchedule(map[string]ScheduledTask{future.InstanceName: future})
+		q.upsertPlan(boundary, revision) // stale catalog cannot bring the removed target back
+		assert("refresh removes the deleted target and preserves its peer", 3, 7, map[string]int{"pve": 2, "pbs": 1, availability: 1})
+		time.Sleep(time.Second)
+		assert("future target becomes due soon without any mutation", 4, 8, map[string]int{"pve": 2, "pbs": 1, availability: 1})
+
+		claim := func(want ScheduledTask) {
+			t.Helper()
+			current, ok := q.WaitNext(t.Context())
+			if !ok || current != want {
+				t.Fatalf("claim = %+v (ok=%t), want %+v", current, ok, want)
+			}
+		}
+		claim(urgent)
+		next := urgent
+		next.NextRun = now.Add(time.Minute)
+		q.Upsert(next) // held off the heap until the claim completes
+		assert("explicit successor is not counted while claimed", 3, 8, map[string]int{"pve": 1, "pbs": 1, availability: 1})
+		q.completeClaim(urgent, ScheduledTask{}, noPollReschedule)
+
+		claim(otherUrgent)
+		q.Remove(otherUrgent.InstanceType, otherUrgent.InstanceName)
+		q.completeClaim(otherUrgent, otherUrgent, pollOnCadence)
+		assert("explicit successor returned, removed claim did not", 2, 8, map[string]int{"pve": 2, availability: 1})
+		claim(overdue)
+		assert("claimed overdue work leaves both the age and per-type counts", 1, 0, map[string]int{"pve": 1, availability: 1})
+		retry := overdue
+		retry.NextRun = time.Now().Add(5 * time.Second)
+		q.completeClaim(overdue, retry, pollAfterBackoff)
+		assert("worker retry returns to the heap", 2, 0, map[string]int{"pve": 2, availability: 1})
+
+		q.Remove(future.InstanceType, future.InstanceName)
+		q.Remove(urgent.InstanceType, urgent.InstanceName)
+		q.Remove(overdue.InstanceType, overdue.InstanceName)
+		assert("empty snapshot drops the last counts", 0, 0, map[string]int{})
+		q.Upsert(urgent)
+		assert("only untimestamped work", 1, 0, map[string]int{"pve": 1})
+	})
 }
 
 func TestTaskQueue_Upsert(t *testing.T) {
