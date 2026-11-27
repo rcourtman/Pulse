@@ -46,7 +46,13 @@ export default defineConfig(({ mode }) => ({
   // the whole app incl. all Settings panels and every locale) at cold start,
   // defeating route-level code splitting on slow devices. Dynamic-import SRI
   // is still enforced through the generated import map integrity block.
-  plugins: [tailwindcss(), solid(), sri({ algorithm: 'sha384', preloadDynamicChunks: false })],
+  // Vitest unit tests do not emit bundles or process Tailwind stylesheets;
+  // keeping build-only plugins out of test mode trims per-file transform and
+  // import overhead without altering dev or production builds.
+  plugins:
+    mode === 'test'
+      ? [solid()]
+      : [tailwindcss(), solid(), sri({ algorithm: 'sha384', preloadDynamicChunks: false })],
   resolve: {
     alias: {
       '@': srcAlias,
@@ -282,6 +288,11 @@ export default defineConfig(({ mode }) => ({
   },
   test: {
     environment: 'jsdom',
+    // Worker threads preserve full per-file isolation without Vitest 4's
+    // per-worker child-process fork/IPC overhead; unit tests do not rely on
+    // compiled CSS imports.
+    pool: 'threads',
+    css: false,
     globals: true,
     setupFiles: ['./src/test/setup.ts'],
     alias: {
