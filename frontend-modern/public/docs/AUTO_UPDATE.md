@@ -64,12 +64,13 @@ checks before proceeding, even though they do not disable installation.
 
 ### Update Process
 
-1. **Download**: New version is downloaded, its signature and checksum are verified
-2. **Validate**: The new binary is executed with `--version` to prove it runs on this host and reports the expected version, before anything is touched
-3. **Backup**: Current installation is backed up
-4. **Apply**: Files are updated
-5. **Restart**: Service restarts automatically
-6. **Verify**: Pulse checks that the updated server responds. That does not
+1. **Prepare space**: Before staging, Pulse removes stale `pulse-update-*` temporary directories older than one hour and prunes retained `backup-*` snapshots down to the three most recent, clearing pruned paths from `update-history.jsonl`. It picks the staging root (`PULSE_DATA_DIR`, `/tmp`, or the working directory) with the most free space (at least 128 MiB free) and rejects target versions at or below the running version. Use **Update History** rollback rather than an in-app update to return to an earlier version.
+2. **Download**: The new version is downloaded (up to 512 MiB), retrying transient network errors, retryable HTTP responses, per-attempt timeouts, and mid-stream disconnects or truncated transfers up to three attempts with partial-file cleanup between attempts. Its SSHSIG signature and SHA-256 checksum are verified before extraction.
+3. **Extract and validate**: If the download directory lacks enough free space (`extracted size + 32 MiB`), Pulse falls back to an alternate temporary root with enough headroom. Immediately after extraction, Pulse deletes the downloaded archive to preserve free space for backup creation on small disks and LXCs, then executes the new binary with `--version` to prove it runs on this host and reports the expected version before anything is touched.
+4. **Backup**: Current installation is backed up (requiring estimated backup size plus 32 MiB free, preferring `PULSE_DATA_DIR` before `/tmp`).
+5. **Apply**: Files are updated.
+6. **Restart**: Service restarts automatically.
+7. **Verify**: Pulse checks that the updated server responds. That does not
    check that monitoring has resumed. [Check for fresh readings](#check-that-monitoring-resumed)
    after the restart.
 
@@ -455,11 +456,16 @@ not contain the installer failure. Missing logs are unavailable evidence, not
 proof that no change occurred. Do not enable Debug or repeat the failing action.
 
 If the error names disk space, check headroom on the actual staging, installation
-and data filesystems before planning another attempt; the release payload and
-rollback snapshot both need space. Do not delete configuration backups, keys or
-history to clear the error. A download error needs its original HTTP, connectivity
-or certificate evidence; do not disable TLS verification or switch a paid Pro
-installation to the public Community runtime as a workaround.
+and data filesystems before planning another attempt. The updater already prunes
+stale `pulse-update-*` temporary directories older than one hour and excess
+retained `backup-*` snapshots beyond three, reclaims the downloaded archive
+immediately after extraction, and falls back to an alternate temporary root when
+extraction needs more space, yet the release payload and rollback snapshot still
+need headroom. Do not delete configuration backups, keys or history to clear the
+error. A download error surfaces only after up to three automatic attempts on
+transient transport or mid-stream failures, and needs its original HTTP,
+connectivity or certificate evidence, so do not disable TLS verification or switch a
+paid Pro installation to the public Community runtime as a workaround.
 
 Share only the relevant times, versions, failed step and redacted error. Keep
 full logs, service environments, configuration, credentials and private backup
