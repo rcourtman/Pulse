@@ -180,7 +180,9 @@ class FAQDeploymentDocsTest(unittest.TestCase):
             "type CephStatusFilter = 'all' | Exclude<CephHealth, 'unknown'>;",
             "unknown: { variant: 'muted', label: 'Unknown', tone: 'text-muted' },",
             "if (want !== 'all' && classify(cluster) !== want) return false;",
-            "const ind = () => HEALTH_INDICATORS[classify(cluster)];",
+            "return HEALTH_INDICATORS[reported];",
+            "const ind = () => getClusterIndicator(cluster, staleNotice());",
+            "statusIndicator={ind()}",
         ):
             self.assertIn(marker, table)
         drawer = (ROOT / "frontend-modern/src/features/proxmox/ProxmoxCephClusterDrawer.tsx").read_text()
