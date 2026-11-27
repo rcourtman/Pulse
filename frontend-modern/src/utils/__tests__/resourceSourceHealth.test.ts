@@ -47,4 +47,20 @@ describe('resourceSourceHealth', () => {
       );
     }
   });
+
+  it('prefers top-level resource.sourceStatus over platformData.sourceStatus', () => {
+    const topLevelOnly = {
+      ...makeResource(undefined),
+      sourceStatus: { kubernetes: { status: 'stale', lastSeen: '2026-11-26T10:00:00Z' } },
+    } as Resource;
+    expect(getResourceSourceStatus(topLevelOnly, 'kubernetes')).toMatchObject({ status: 'stale' });
+    expect(hasImpairedResourceSource(topLevelOnly, 'kubernetes')).toBe(true);
+
+    const recovered = {
+      ...makeResource({ kubernetes: { status: 'stale' } }),
+      sourceStatus: { kubernetes: { status: 'online', lastSeen: '2026-11-26T12:00:00Z' } },
+    } as Resource;
+    expect(getResourceSourceHealth(recovered, 'kubernetes')).toBe('connected');
+    expect(hasImpairedResourceSource(recovered, 'kubernetes')).toBe(false);
+  });
 });

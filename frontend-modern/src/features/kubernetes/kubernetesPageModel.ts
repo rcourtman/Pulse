@@ -5,8 +5,13 @@ import type {
   ResourceType,
 } from '@/types/resource';
 import type { Alert } from '@/types/api';
-import type { StatusIndicator, StatusIndicatorVariant } from '@/utils/status';
+import {
+  getSimpleStatusIndicator,
+  type StatusIndicator,
+  type StatusIndicatorVariant,
+} from '@/utils/status';
 import { getUnifiedResourceAlertStyles } from '@/utils/alerts';
+import { getResourceSourceStatus, hasImpairedResourceSource } from '@/utils/resourceSourceHealth';
 import { resolveResourcePlatformType } from '@/utils/sourcePlatforms';
 import { matchesSearchTermSplit, splitSearchExclusions } from '@/utils/searchQuery';
 
@@ -158,6 +163,48 @@ export const kubernetesScopeDisplayLabel = (resource: Resource, singleCluster: b
     ? asTrimmedString(resource.kubernetes?.namespace) || 'Cluster'
     : kubernetesScopeLabel(resource);
 
+export const KUBERNETES_STALE_READINGS_LABEL = 'Stale data';
+
+export const hasStaleKubernetesReadings = (resource: Resource): boolean =>
+  normalizeKubernetesToken(getResourceSourceStatus(resource, 'kubernetes')?.status) === 'stale';
+
+const hasImpairedKubernetesSource = (resource: Resource): boolean =>
+  hasImpairedResourceSource(resource, 'kubernetes');
+
+const getKubernetesSourceError = (resource: Resource): string =>
+  asTrimmedString(getResourceSourceStatus(resource, 'kubernetes')?.error);
+
+export const describeKubernetesStaleReadings = (resource: Resource): string => {
+  if (!hasStaleKubernetesReadings(resource)) return '';
+  const sourceError = getKubernetesSourceError(resource);
+  const base = 'Showing the last Kubernetes report — no fresh update received recently.';
+  return sourceError ? `${base} Last error: ${sourceError}` : base;
+};
+
+// Keep real failure/attention verdicts ahead of staleness so an operator still
+// sees NotReady, CrashLoopBackOff, or an under-replicated rollout, while
+// preventing retained healthy snapshots from reading green when Kubernetes
+// stops updating.
+const applyKubernetesSourceFreshness = (
+  resource: Resource,
+  base: StatusIndicator,
+): StatusIndicator => {
+  if (base.variant === 'danger' || base.variant === 'warning') return base;
+  if (hasStaleKubernetesReadings(resource)) {
+    return { variant: 'warning', label: KUBERNETES_STALE_READINGS_LABEL };
+  }
+  if (hasImpairedKubernetesSource(resource)) {
+    return { variant: 'warning', label: 'Degraded' };
+  }
+  return base;
+};
+
+export function mapKubernetesClusterStatus(resource: Resource): StatusIndicator {
+  const base = getSimpleStatusIndicator(resource.status);
+  if (base.variant === 'danger') return base;
+  return applyKubernetesSourceFreshness(resource, base);
+}
+
 export function mapKubernetesPodStatus(resource: Resource): StatusIndicator {
   const phase = normalizeKubernetesToken(
     resource.kubernetes?.podPhase || resource.kubernetes?.phase,
@@ -171,17 +218,21 @@ export function mapKubernetesPodStatus(resource: Resource): StatusIndicator {
   }
   if (phase === 'pending') return { variant: 'warning', label: 'Pending' };
   if (phase === 'running') {
-    if (containers.length === 0) return { variant: 'success', label: 'Running' };
-    if (podAllContainersReady(containers)) return { variant: 'success', label: 'Running' };
+    if (containers.length === 0 || podAllContainersReady(containers)) {
+      return applyKubernetesSourceFreshness(resource, { variant: 'success', label: 'Running' });
+    }
     return { variant: 'warning', label: 'Not ready' };
   }
-  if (phase === 'succeeded') return { variant: 'success', label: 'Succeeded' };
-  if (phase === 'unknown') return { variant: 'muted', label: 'Unknown' };
-  if (!phase) return { variant: 'muted', label: 'Unknown' };
-  return {
+  if (phase === 'succeeded') {
+    return applyKubernetesSourceFreshness(resource, { variant: 'success', label: 'Succeeded' });
+  }
+  if (phase === 'unknown' || !phase) {
+    return applyKubernetesSourceFreshness(resource, { variant: 'muted', label: 'Unknown' });
+  }
+  return applyKubernetesSourceFreshness(resource, {
     variant: 'muted',
     label: eventTypeLabel(resource.kubernetes?.podPhase ?? '', 'Unknown'),
-  };
+  });
 }
 
 export function mapKubernetesNodeStatus(resource: Resource): StatusIndicator {
@@ -192,14 +243,20 @@ export function mapKubernetesNodeStatus(resource: Resource): StatusIndicator {
   if (resource.kubernetes?.unschedulable === true) {
     return { variant: 'warning', label: 'Unschedulable' };
   }
+  const status = normalizeKubernetesToken(resource.status);
+  if (status === 'offline' || status === 'stopped' || status === 'failed') {
+    return { variant: 'danger', label: ready === true ? 'Offline' : 'NotReady' };
+  }
+  if (hasStaleKubernetesReadings(resource)) {
+    return { variant: 'warning', label: KUBERNETES_STALE_READINGS_LABEL };
+  }
+  if (hasImpairedKubernetesSource(resource)) {
+    return { variant: 'warning', label: 'Degraded' };
+  }
   if (ready === true) return { variant: 'success', label: 'Ready' };
 
-  const status = normalizeKubernetesToken(resource.status);
   if (status === 'online' || status === 'running' || status === 'healthy') {
     return { variant: 'success', label: 'Ready' };
-  }
-  if (status === 'offline' || status === 'stopped' || status === 'failed') {
-    return { variant: 'danger', label: 'NotReady' };
   }
   if (status === 'degraded' || status === 'warning' || status === 'pending') {
     return { variant: 'warning', label: 'Degraded' };
@@ -221,16 +278,14 @@ const replicaIndicator = (
 };
 
 export function mapKubernetesDeploymentStatus(resource: Resource): StatusIndicator {
-  return replicaIndicator(resource.kubernetes?.desiredReplicas, resource.kubernetes?.readyReplicas);
+  return applyKubernetesSourceFreshness(
+    resource,
+    replicaIndicator(resource.kubernetes?.desiredReplicas, resource.kubernetes?.readyReplicas),
+  );
 }
 
-export function mapKubernetesReplicaSetStatus(resource: Resource): StatusIndicator {
-  return replicaIndicator(resource.kubernetes?.desiredReplicas, resource.kubernetes?.readyReplicas);
-}
-
-export function mapKubernetesStatefulSetStatus(resource: Resource): StatusIndicator {
-  return replicaIndicator(resource.kubernetes?.desiredReplicas, resource.kubernetes?.readyReplicas);
-}
+export const mapKubernetesReplicaSetStatus = mapKubernetesDeploymentStatus;
+export const mapKubernetesStatefulSetStatus = mapKubernetesDeploymentStatus;
 
 export function mapKubernetesDaemonSetStatus(resource: Resource): StatusIndicator {
   const desired = resource.kubernetes?.desiredNumberScheduled;
@@ -240,7 +295,7 @@ export function mapKubernetesDaemonSetStatus(resource: Resource): StatusIndicato
   if (base.variant === 'success' && misscheduled > 0) {
     return { variant: 'warning', label: `${misscheduled} misscheduled` };
   }
-  return base;
+  return applyKubernetesSourceFreshness(resource, base);
 }
 
 export function mapKubernetesJobStatus(resource: Resource): StatusIndicator {
@@ -249,13 +304,17 @@ export function mapKubernetesJobStatus(resource: Resource): StatusIndicator {
   const active = resource.kubernetes?.active ?? 0;
   if (failed > 0) return { variant: 'danger', label: `${failed} failed` };
   if (active > 0) return { variant: 'warning', label: `${active} active` };
-  if (succeeded > 0) return { variant: 'success', label: 'Succeeded' };
-  return { variant: 'muted', label: 'Idle' };
+  if (succeeded > 0) {
+    return applyKubernetesSourceFreshness(resource, { variant: 'success', label: 'Succeeded' });
+  }
+  return applyKubernetesSourceFreshness(resource, { variant: 'muted', label: 'Idle' });
 }
 
 export function mapKubernetesCronJobStatus(resource: Resource): StatusIndicator {
-  if (resource.kubernetes?.suspend === true) return { variant: 'muted', label: 'Suspended' };
-  return { variant: 'success', label: 'Scheduled' };
+  if (resource.kubernetes?.suspend === true) {
+    return applyKubernetesSourceFreshness(resource, { variant: 'muted', label: 'Suspended' });
+  }
+  return applyKubernetesSourceFreshness(resource, { variant: 'success', label: 'Scheduled' });
 }
 
 export function mapKubernetesControllerStatus(resource: Resource): StatusIndicator {
@@ -357,12 +416,6 @@ const kubernetesIncidentLabel = (resource: Resource, incident: ResourceIncident)
   return code ? titleCaseIncidentCode(code.replace(/^k8s_/, '')) : 'Kubernetes Alert';
 };
 
-const kubernetesIncidentResourceDisplayName = (resource: Resource): string =>
-  asTrimmedString(resource.displayName) ||
-  asTrimmedString(resource.name) ||
-  asTrimmedString(resource.kubernetes?.podName) ||
-  resource.id;
-
 const hasKubernetesIncidentSignal = (incident: ResourceIncident): boolean =>
   Boolean(asTrimmedString(incident.code) || asTrimmedString(incident.summary));
 
@@ -393,7 +446,7 @@ const buildKubernetesIncidentRow = (
     id: `${resource.id}:incident:${rowKey}:${index}`,
     resource,
     resourceId: resource.id,
-    resourceName: kubernetesIncidentResourceDisplayName(resource),
+    resourceName: displayName(resource),
     resourceType: resource.type,
     severity,
     severityBucket: mapKubernetesIncidentSeverity(severity),
@@ -514,6 +567,7 @@ const mapResourceStatusToTriad = (
 // have to know which platforms exist.
 export function kubernetesResourceSearchHaystack(resource: Resource): string {
   const k = resource.kubernetes;
+  const ci = resource.canonicalIdentity;
   return [
     resource.id,
     resource.name,
@@ -523,58 +577,54 @@ export function kubernetesResourceSearchHaystack(resource: Resource): string {
     resource.platformType,
     resource.agent?.hostname,
     resource.identity?.hostname,
-    resource.canonicalIdentity?.displayName,
-    resource.canonicalIdentity?.hostname,
-    resource.canonicalIdentity?.primaryId,
-    ...(resource.canonicalIdentity?.aliases ?? []),
-    k?.clusterId,
-    k?.clusterName,
-    k?.context,
-    k?.namespace,
-    k?.podName,
-    k?.podPhase,
-    k?.podReason,
-    k?.podMessage,
-    k?.ownerKind,
-    k?.ownerName,
-    k?.image,
-    k?.nodeName,
-    k?.resourceKind,
-    k?.serviceName,
-    k?.serviceType,
-    k?.clusterIp,
-    k?.storageClass,
-    k?.phase,
-    k?.reason,
-    k?.message,
-    k?.involvedKind,
-    k?.involvedName,
-    k?.eventType,
-    k?.volumeName,
-    k?.version,
-    k?.kubeletVersion,
-    k?.containerRuntimeVersion,
-    k?.osImage,
-    k?.architecture,
-    k?.provisioner,
-    k?.addressType,
-    k?.secretType,
-    k?.targetKind,
-    k?.targetName,
-    k?.server,
-    ...(k?.externalIps ?? []),
-    ...(k?.hosts ?? []),
-    ...(k?.addresses ?? []),
-    ...(k?.accessModes ?? []),
-    ...(k?.roles ?? []),
-    ...(k?.policyTypes ?? []),
-    ...(k?.metricTypes ?? []),
-    ...(k?.podContainers?.flatMap((container) => [
-      container.name,
-      container.image,
-      container.state,
-      container.reason,
-    ]) ?? []),
+    ...(ci ? [ci.displayName, ci.hostname, ci.primaryId, ...(ci.aliases ?? [])] : []),
+    ...(k
+      ? [
+          k.clusterId,
+          k.clusterName,
+          k.context,
+          k.namespace,
+          k.podName,
+          k.podPhase,
+          k.podReason,
+          k.podMessage,
+          k.ownerKind,
+          k.ownerName,
+          k.image,
+          k.nodeName,
+          k.resourceKind,
+          k.serviceName,
+          k.serviceType,
+          k.clusterIp,
+          k.storageClass,
+          k.phase,
+          k.reason,
+          k.message,
+          k.involvedKind,
+          k.involvedName,
+          k.eventType,
+          k.volumeName,
+          k.version,
+          k.kubeletVersion,
+          k.containerRuntimeVersion,
+          k.osImage,
+          k.architecture,
+          k.provisioner,
+          k.addressType,
+          k.secretType,
+          k.targetKind,
+          k.targetName,
+          k.server,
+          ...(k.externalIps ?? []),
+          ...(k.hosts ?? []),
+          ...(k.addresses ?? []),
+          ...(k.accessModes ?? []),
+          ...(k.roles ?? []),
+          ...(k.policyTypes ?? []),
+          ...(k.metricTypes ?? []),
+          ...(k.podContainers?.flatMap((c) => [c.name, c.image, c.state, c.reason]) ?? []),
+        ]
+      : []),
     ...(resource.tags ?? []),
   ]
     .filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
@@ -636,6 +686,37 @@ export function filterKubernetesStorageResources(
   });
 }
 
+const K8S_CONTROLLER_TYPES: readonly ResourceType[] = [
+  'k8s-replicaset',
+  'k8s-statefulset',
+  'k8s-daemonset',
+  'k8s-job',
+  'k8s-cronjob',
+];
+const K8S_ACCESS_TYPES: readonly ResourceType[] = [
+  'k8s-serviceaccount',
+  'k8s-role',
+  'k8s-cluster-role',
+  'k8s-role-binding',
+  'k8s-cluster-role-binding',
+];
+const K8S_POLICY_TYPES: readonly ResourceType[] = [
+  'k8s-network-policy',
+  'k8s-pod-disruption-budget',
+  'k8s-resource-quota',
+  'k8s-limit-range',
+];
+const K8S_STORAGE_TYPES: readonly ResourceType[] = [
+  'k8s-storage-class',
+  'k8s-persistent-volume',
+  'k8s-persistent-volume-claim',
+];
+const K8S_NETWORKING_TYPES: readonly ResourceType[] = ['k8s-ingress', 'k8s-endpoint-slice'];
+const K8S_CONFIG_OBJECT_TYPES: readonly ResourceType[] = ['k8s-configmap', 'k8s-secret'];
+
+const KUBERNETES_CONTROLLER_TYPES = new Set<ResourceType>(K8S_CONTROLLER_TYPES);
+const KUBERNETES_ACCESS_TYPES = new Set<ResourceType>(K8S_ACCESS_TYPES);
+
 export function matchesKubernetesConfigCategory(
   resource: Resource,
   category: KubernetesConfigCategoryFilter,
@@ -645,35 +726,33 @@ export function matchesKubernetesConfigCategory(
   if (category === 'config') {
     return resource.type === 'k8s-configmap' || resource.type === 'k8s-secret';
   }
-  if (category === 'access') {
-    return (
-      resource.type === 'k8s-serviceaccount' ||
-      resource.type === 'k8s-role' ||
-      resource.type === 'k8s-cluster-role' ||
-      resource.type === 'k8s-role-binding' ||
-      resource.type === 'k8s-cluster-role-binding'
-    );
-  }
-  return (
-    resource.type === 'k8s-network-policy' ||
-    resource.type === 'k8s-pod-disruption-budget' ||
-    resource.type === 'k8s-resource-quota' ||
-    resource.type === 'k8s-limit-range'
-  );
+  if (category === 'access') return KUBERNETES_ACCESS_TYPES.has(resource.type);
+  return K8S_POLICY_TYPES.includes(resource.type);
 }
 
-export function isKubernetesWorkloadAttention(resource: Resource): boolean {
+const effectiveKubernetesFilterStatus = (
+  resource: Resource,
+): Exclude<KubernetesResourceStatusFilter, 'all'> | 'unknown' => {
   const triad = mapResourceStatusToTriad(resource.status);
+  if (triad === 'offline') return 'offline';
+  if (hasStaleKubernetesReadings(resource) || hasImpairedKubernetesSource(resource)) {
+    return 'degraded';
+  }
+  return triad;
+};
+
+export function isKubernetesWorkloadAttention(resource: Resource): boolean {
+  const triad = effectiveKubernetesFilterStatus(resource);
   if (triad === 'degraded' || triad === 'offline') return true;
-  if (resource.type === 'pod') {
-    const variant = mapKubernetesPodStatus(resource).variant;
-    return variant === 'warning' || variant === 'danger';
-  }
-  if (resource.type === 'k8s-deployment') {
-    const variant = mapKubernetesDeploymentStatus(resource).variant;
-    return variant === 'warning' || variant === 'danger';
-  }
-  return false;
+  const indicator =
+    resource.type === 'pod'
+      ? mapKubernetesPodStatus(resource)
+      : resource.type === 'k8s-deployment'
+        ? mapKubernetesDeploymentStatus(resource)
+        : KUBERNETES_CONTROLLER_TYPES.has(resource.type)
+          ? mapKubernetesControllerStatus(resource)
+          : null;
+  return indicator?.variant === 'warning' || indicator?.variant === 'danger';
 }
 
 export function filterKubernetesResources(
@@ -686,7 +765,7 @@ export function filterKubernetesResources(
   const result: Resource[] = [];
   for (const resource of resources) {
     if (status !== 'all') {
-      const triad = mapResourceStatusToTriad(resource.status);
+      const triad = effectiveKubernetesFilterStatus(resource);
       if (triad !== status) continue;
     }
     if (!hasSearch) {
@@ -723,59 +802,40 @@ const hasKubernetesTabInventory = (
   tab: KubernetesPageTabId,
   typeCounts?: Partial<Record<ResourceType, number>>,
 ): boolean => {
-  const hasType = (...types: ResourceType[]) => types.some((type) => (typeCounts?.[type] ?? 0) > 0);
+  const hasType = (types: readonly ResourceType[]) =>
+    types.some((type) => (typeCounts?.[type] ?? 0) > 0);
   switch (tab) {
     case 'overview':
       return true;
     case 'nodes':
-      return model.nodes.length > 0 || hasType('k8s-node', 'agent');
+      return model.nodes.length > 0 || hasType(['k8s-node', 'agent']);
     case 'workloads':
       return (
         model.workloads.length > 0 ||
         model.autoscaling.length > 0 ||
-        hasType(
-          'pod',
-          'k8s-deployment',
-          'k8s-replicaset',
-          'k8s-statefulset',
-          'k8s-daemonset',
-          'k8s-job',
-          'k8s-cronjob',
-          'k8s-horizontal-pod-autoscaler',
-        )
+        hasType(['pod', 'k8s-deployment', ...K8S_CONTROLLER_TYPES, 'k8s-horizontal-pod-autoscaler'])
       );
     case 'services':
       return (
         model.services.length > 0 ||
         model.serviceNetworking.length > 0 ||
-        hasType('k8s-service', 'k8s-ingress', 'k8s-endpoint-slice')
+        hasType(['k8s-service', ...K8S_NETWORKING_TYPES])
       );
     case 'storage':
-      return (
-        model.storage.length > 0 ||
-        hasType('k8s-persistent-volume', 'k8s-persistent-volume-claim', 'k8s-storage-class')
-      );
+      return model.storage.length > 0 || hasType(K8S_STORAGE_TYPES);
     case 'configuration':
       return (
         model.config.length > 0 ||
         model.policy.length > 0 ||
-        hasType(
+        hasType([
           'k8s-namespace',
-          'k8s-configmap',
-          'k8s-secret',
-          'k8s-serviceaccount',
-          'k8s-role',
-          'k8s-cluster-role',
-          'k8s-role-binding',
-          'k8s-cluster-role-binding',
-          'k8s-resource-quota',
-          'k8s-limit-range',
-          'k8s-network-policy',
-          'k8s-pod-disruption-budget',
-        )
+          ...K8S_CONFIG_OBJECT_TYPES,
+          ...K8S_ACCESS_TYPES,
+          ...K8S_POLICY_TYPES,
+        ])
       );
     case 'events':
-      return model.events.length > 0 || hasType('k8s-event');
+      return model.events.length > 0 || hasType(['k8s-event']);
   }
 };
 
@@ -790,31 +850,16 @@ const KUBERNETES_RESOURCE_TYPES = new Set<ResourceType>([
   'k8s-node',
   'pod',
   'k8s-deployment',
-  'k8s-replicaset',
   'k8s-namespace',
   'k8s-service',
-  'k8s-statefulset',
-  'k8s-daemonset',
-  'k8s-job',
-  'k8s-cronjob',
-  'k8s-ingress',
-  'k8s-endpoint-slice',
-  'k8s-network-policy',
-  'k8s-persistent-volume',
-  'k8s-persistent-volume-claim',
-  'k8s-storage-class',
-  'k8s-configmap',
-  'k8s-secret',
-  'k8s-serviceaccount',
-  'k8s-role',
-  'k8s-cluster-role',
-  'k8s-role-binding',
-  'k8s-cluster-role-binding',
-  'k8s-resource-quota',
-  'k8s-limit-range',
-  'k8s-pod-disruption-budget',
   'k8s-horizontal-pod-autoscaler',
   'k8s-event',
+  ...K8S_CONTROLLER_TYPES,
+  ...K8S_NETWORKING_TYPES,
+  ...K8S_STORAGE_TYPES,
+  ...K8S_CONFIG_OBJECT_TYPES,
+  ...K8S_ACCESS_TYPES,
+  ...K8S_POLICY_TYPES,
 ]);
 
 const isKubernetesPlatform = (resource: Resource): boolean => {
@@ -1057,112 +1102,59 @@ export function buildKubernetesClusterChildCounts(
 
 export function buildKubernetesPageModel(resources: Resource[]): KubernetesPageModel {
   const k8sResources = resources.filter(isKubernetesPlatform);
-  const clusters = k8sResources.filter((resource) => resource.type === 'k8s-cluster');
-  const nodes = k8sResources.filter(isKubernetesNodeRow).sort(compareKubernetesNodes);
-  const pods = k8sResources
-    .filter((resource) => resource.type === 'pod')
-    .sort(compareKubernetesPods);
-  const deployments = k8sResources
-    .filter((resource) => resource.type === 'k8s-deployment')
-    .sort(compareKubernetesDeployments);
-  const replicaSets = k8sResources.filter((resource) => resource.type === 'k8s-replicaset');
-  const namespaces = k8sResources.filter((resource) => resource.type === 'k8s-namespace');
-  const services = k8sResources.filter((resource) => resource.type === 'k8s-service');
-  const statefulSets = k8sResources.filter((resource) => resource.type === 'k8s-statefulset');
-  const daemonSets = k8sResources.filter((resource) => resource.type === 'k8s-daemonset');
-  const jobs = k8sResources.filter((resource) => resource.type === 'k8s-job');
-  const cronJobs = k8sResources.filter((resource) => resource.type === 'k8s-cronjob');
-  const ingresses = k8sResources.filter((resource) => resource.type === 'k8s-ingress');
-  const endpointSlices = k8sResources.filter((resource) => resource.type === 'k8s-endpoint-slice');
-  const networkPolicies = k8sResources.filter((resource) => resource.type === 'k8s-network-policy');
-  const persistentVolumes = k8sResources.filter(
-    (resource) => resource.type === 'k8s-persistent-volume',
-  );
-  const persistentVolumeClaims = k8sResources.filter(
-    (resource) => resource.type === 'k8s-persistent-volume-claim',
-  );
-  const storageClasses = k8sResources.filter((resource) => resource.type === 'k8s-storage-class');
-  const configMaps = k8sResources.filter((resource) => resource.type === 'k8s-configmap');
-  const secrets = k8sResources.filter((resource) => resource.type === 'k8s-secret');
-  const serviceAccounts = k8sResources.filter((resource) => resource.type === 'k8s-serviceaccount');
-  const roles = k8sResources.filter((resource) => resource.type === 'k8s-role');
-  const clusterRoles = k8sResources.filter((resource) => resource.type === 'k8s-cluster-role');
-  const roleBindings = k8sResources.filter((resource) => resource.type === 'k8s-role-binding');
-  const clusterRoleBindings = k8sResources.filter(
-    (resource) => resource.type === 'k8s-cluster-role-binding',
-  );
-  const resourceQuotas = k8sResources.filter((resource) => resource.type === 'k8s-resource-quota');
-  const limitRanges = k8sResources.filter((resource) => resource.type === 'k8s-limit-range');
-  const podDisruptionBudgets = k8sResources.filter(
-    (resource) => resource.type === 'k8s-pod-disruption-budget',
-  );
-  const horizontalPodAutoscalers = k8sResources.filter(
-    (resource) => resource.type === 'k8s-horizontal-pod-autoscaler',
-  );
-  const events = k8sResources
-    .filter((resource) => resource.type === 'k8s-event')
-    .sort(compareKubernetesEvents);
-  const sortedControllers = [
-    ...replicaSets,
-    ...statefulSets,
-    ...daemonSets,
-    ...jobs,
-    ...cronJobs,
-  ].sort(compareKubernetesControllers);
-  const workloads = [...deployments, ...sortedControllers, ...pods];
-  const storage = [...storageClasses, ...persistentVolumes, ...persistentVolumeClaims];
-  const serviceNetworking = [...ingresses, ...endpointSlices];
-  const config = [
-    ...namespaces,
-    ...configMaps,
-    ...secrets,
-    ...serviceAccounts,
-    ...roles,
-    ...clusterRoles,
-    ...roleBindings,
-    ...clusterRoleBindings,
-  ];
-  const policy = [...networkPolicies, ...podDisruptionBudgets, ...resourceQuotas, ...limitRanges];
-  const autoscaling = [...horizontalPodAutoscalers];
-  const incidents = buildKubernetesIncidentRows(k8sResources);
+  const byType = new Map<ResourceType, Resource[]>();
+  const nodes: Resource[] = [];
+  for (const resource of k8sResources) {
+    const bucket = byType.get(resource.type);
+    if (bucket) bucket.push(resource);
+    else byType.set(resource.type, [resource]);
+    if (isKubernetesNodeRow(resource)) nodes.push(resource);
+  }
+  const of = (type: ResourceType): Resource[] => byType.get(type) ?? [];
+  const allOf = (types: readonly ResourceType[]): Resource[] => types.flatMap(of);
+  nodes.sort(compareKubernetesNodes);
+  const pods = [...of('pod')].sort(compareKubernetesPods);
+  const deployments = [...of('k8s-deployment')].sort(compareKubernetesDeployments);
+  const sortedControllers = allOf(K8S_CONTROLLER_TYPES).sort(compareKubernetesControllers);
+  const horizontalPodAutoscalers = of('k8s-horizontal-pod-autoscaler');
 
   return {
     resources: k8sResources,
-    clusters,
+    clusters: of('k8s-cluster'),
     nodes,
     pods,
     deployments,
-    replicaSets,
-    namespaces,
-    services,
-    statefulSets,
-    daemonSets,
-    jobs,
-    cronJobs,
-    ingresses,
-    endpointSlices,
-    networkPolicies,
-    persistentVolumes,
-    persistentVolumeClaims,
-    storageClasses,
-    configMaps,
-    secrets,
-    serviceAccounts,
-    roles,
-    clusterRoles,
-    roleBindings,
-    clusterRoleBindings,
-    resourceQuotas,
-    limitRanges,
-    podDisruptionBudgets,
+    replicaSets: of('k8s-replicaset'),
+    namespaces: of('k8s-namespace'),
+    services: of('k8s-service'),
+    statefulSets: of('k8s-statefulset'),
+    daemonSets: of('k8s-daemonset'),
+    jobs: of('k8s-job'),
+    cronJobs: of('k8s-cronjob'),
+    ingresses: of('k8s-ingress'),
+    endpointSlices: of('k8s-endpoint-slice'),
+    networkPolicies: of('k8s-network-policy'),
+    persistentVolumes: of('k8s-persistent-volume'),
+    persistentVolumeClaims: of('k8s-persistent-volume-claim'),
+    storageClasses: of('k8s-storage-class'),
+    configMaps: of('k8s-configmap'),
+    secrets: of('k8s-secret'),
+    serviceAccounts: of('k8s-serviceaccount'),
+    roles: of('k8s-role'),
+    clusterRoles: of('k8s-cluster-role'),
+    roleBindings: of('k8s-role-binding'),
+    clusterRoleBindings: of('k8s-cluster-role-binding'),
+    resourceQuotas: of('k8s-resource-quota'),
+    limitRanges: of('k8s-limit-range'),
+    podDisruptionBudgets: of('k8s-pod-disruption-budget'),
     horizontalPodAutoscalers,
-    events,
-    workloads,
-    storage,
-    serviceNetworking,
-    config,
-    policy,
-    autoscaling,
-    incidents,
+    events: [...of('k8s-event')].sort(compareKubernetesEvents),
+    workloads: [...deployments, ...sortedControllers, ...pods],
+    storage: allOf(K8S_STORAGE_TYPES),
+    serviceNetworking: allOf(K8S_NETWORKING_TYPES),
+    config: [...of('k8s-namespace'), ...allOf(K8S_CONFIG_OBJECT_TYPES), ...allOf(K8S_ACCESS_TYPES)],
+    policy: allOf(K8S_POLICY_TYPES),
+    autoscaling: [...horizontalPodAutoscalers],
+    incidents: buildKubernetesIncidentRows(k8sResources),
   };
 }
