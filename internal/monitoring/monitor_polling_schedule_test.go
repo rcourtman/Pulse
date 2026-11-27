@@ -252,6 +252,76 @@ func TestScheduledPollWakesAnIdleWorker(t *testing.T) {
 	}
 }
 
+func TestScheduledPollWorkerKeepsCadenceAcrossWaits(t *testing.T) {
+	for _, pooled := range []bool{false, true} {
+		name := "local"
+		if pooled {
+			name = "process"
+		}
+		t.Run(name, func(t *testing.T) {
+			synctest.Test(t, func(t *testing.T) {
+				ctx, cancel := context.WithCancel(t.Context())
+				defer cancel()
+				start := time.Now()
+				reads := make(chan time.Duration, 4)
+				m := newScheduleFixture(ctx, false, func(context.Context) ([]proxmox.Node, error) {
+					reads <- time.Since(start)
+					return []proxmox.Node{{Node: scheduleFixtureNode, Status: "online", Uptime: 36000}}, nil
+				})
+				task := ScheduledTask{
+					InstanceType: InstanceTypePVE, InstanceName: scheduleFixtureNode,
+					NextRun: start.Add(scheduleFixtureCadence), Interval: scheduleFixtureCadence,
+				}
+				m.taskQueue.Upsert(task)
+				done := make(chan struct{})
+				go func() {
+					defer close(done)
+					if pooled {
+						m.dispatchTaskWorkers(ctx, newPollTaskWorkerLimiter(1))
+					} else {
+						m.taskWorker(ctx, 0)
+					}
+				}()
+				assertRead := func(want ...time.Duration) {
+					t.Helper()
+					synctest.Wait()
+					if len(reads) != len(want) {
+						t.Fatalf("at %s, observed %d reads; want %d", time.Since(start), len(reads), len(want))
+					}
+					for _, at := range want {
+						if got := <-reads; got != at {
+							t.Fatalf("poll ran at %s; want exactly %s", got, at)
+						}
+					}
+				}
+				assertRead()
+
+				for i := 1; i <= 2; i++ {
+					time.Sleep(scheduleFixtureCadence - time.Nanosecond)
+					assertRead()
+					time.Sleep(time.Nanosecond)
+					assertRead(time.Duration(i) * scheduleFixtureCadence)
+				}
+
+				// The worker is now waiting on its third periodic slot.
+				// An earlier explicit slot must still wake and rearm it.
+				task.NextRun = time.Now().Add(time.Second)
+				m.taskQueue.Upsert(task)
+				assertRead()
+				time.Sleep(time.Second)
+				assertRead(2*scheduleFixtureCadence + time.Second)
+				cancel()
+				synctest.Wait()
+				select {
+				case <-done:
+				default:
+					t.Fatal("worker did not exit when its wait was cancelled")
+				}
+			})
+		})
+	}
+}
+
 type lateScheduledPollFixture struct {
 	before               models.StateSnapshot
 	after                models.StateSnapshot
