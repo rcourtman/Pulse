@@ -1,0 +1,62 @@
+{
+  "version": 1,
+  "base_sha": "c1d36efb6fa647ec9677a70c41078a4d16f30f4b",
+  "verified_at": "2026-11-27T06:40:35Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/components/Infrastructure/resourceDetailDrawerMetricsHistoryModel.ts",
+    "frontend-modern/src/components/Infrastructure/resourceDetailDrawerOperationalModel.ts",
+    "frontend-modern/src/components/Infrastructure/resourceDetailDrawerVmwareModel.ts",
+    "frontend-modern/src/components/Infrastructure/resourceDetailMappers.ts",
+    "frontend-modern/src/components/Infrastructure/useResourceDetailDrawerDerivedState.ts",
+    "frontend-modern/src/features/vmware/VmwarePageSurface.tsx",
+    "frontend-modern/src/features/vmware/VsphereHostsTable.tsx",
+    "frontend-modern/src/features/vmware/VsphereNetworksTable.tsx",
+    "frontend-modern/src/features/vmware/vmwarePageModel.ts",
+    "frontend-modern/src/utils/truenasDatasetState.ts",
+    "frontend-modern/src/utils/vmwareDisplay.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/components/Infrastructure/resourceDetailDrawerMetricsHistoryModel.ts": "908cfdd98f224e2fc036d7aca5e14d4121bb4ffd0823cb7ea3df51e79ceb29f4",
+    "frontend-modern/src/components/Infrastructure/resourceDetailDrawerOperationalModel.ts": "b0372daa5397c8ba2ef51a3f2b27d1901795f4eae66c1203e7831dcfbe4158ae",
+    "frontend-modern/src/components/Infrastructure/resourceDetailDrawerVmwareModel.ts": "57fa06a078e5cbe6f1c35ee148f214f747b7c0cfdf1711e4b728a3ab240326b4",
+    "frontend-modern/src/components/Infrastructure/resourceDetailMappers.ts": "a077e69076aef90d07a04590f94b57bdeb547612d092bb6fb8433d04a25418c4",
+    "frontend-modern/src/components/Infrastructure/useResourceDetailDrawerDerivedState.ts": "9e375bcded981ae8866a3e43f4ee3fc8724f0d33a5895486112b8f807b3a7c71",
+    "frontend-modern/src/features/vmware/VmwarePageSurface.tsx": "ac73716b7efd6ab779c02faa62b7bb8da86593f24357a1b7708f17a5ceb5ac7a",
+    "frontend-modern/src/features/vmware/VsphereHostsTable.tsx": "c174f43ff214b212ed3228881530894a40e054cb677964734339b8606ff9cfd0",
+    "frontend-modern/src/features/vmware/VsphereNetworksTable.tsx": "5f8a2573f4ff0539522ff00e9b3d91407cd0e0c4dbfa94075df12a91bb412dba",
+    "frontend-modern/src/features/vmware/vmwarePageModel.ts": "4ed3eb2e49b6316098d1dd80cdd24c15f07dd0b41e202b9e7acc54887597fcbf",
+    "frontend-modern/src/utils/truenasDatasetState.ts": "00eb02dbd8a720e544a2b84c5c672d03117f9377420763d8c9b1418523669253",
+    "frontend-modern/src/utils/vmwareDisplay.ts": "b5a422705ee515611fb3a46b9b50898578522ce287e91bc59c3ad6c270e09510"
+  },
+  "routes": [
+    "/vmware/overview",
+    "/vmware/networks",
+    "/vmware/storage",
+    "/truenas/overview"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 940
+    },
+    {
+      "width": 360,
+      "height": 820
+    }
+  ],
+  "states": [
+    "paired production builds of base c1d36efb6fa6 (dist sha256 49a3a5c3aba5...) and candidate (dist sha256 904a27314625...) served over local HTTP/WebSocket fixture in Chromium 141.0.7390.37 (1440x940 light theme, en-GB, UTC) and WebKit 26.0 (360x820 mobile touch dark theme, en-GB, UTC)",
+    "/vmware/overview with stale collection-error host esxi-edge-01.lab (43% CPU, 68% Memory), offline+stale host esxi-edge-02.lab, and fresh host esxi-core-01.lab: candidate adds non-colour 'Stale data' cues beneath both stale hosts while retaining CPU/Memory bars and uptime, preserves red danger dot on offline+stale esxi-edge-02.lab (base downgraded it to amber), lifts wrapped 'Readings: vCenter collection error: vCenter session expired (401)' into the inline drawer Worth checking banner, and shows deferred CPU and Memory reading notices above the UTILIZATION chart",
+    "/vmware/overview live WebSocket recovery of esxi-edge-01.lab (sourceStatus.vmware online, CPU 27%, Memory 55%) while platformData.sourceStatus remains stale without page reload: base stayed stuck amber in both row and drawer header; candidate clears 'Stale data', restores green status dots in row and drawer header, removes Worth checking Readings and deferred chart notices, and updates CPU/Memory bars live",
+    "/vmware/networks with stale collection-error Edge-Trunk-VLAN40, offline+stale Backup-VLAN99, and fresh VM-Prod-Network: candidate adds non-colour 'Stale data' cues on both desktop light and 360px dark phone (where Health column is hidden), leads Backup-VLAN99 Health with red 'Last reported offline +1' (base hid it behind 'vCenter has not updated this recently +1'), surfaces the specific vCenter error in Health and drawer Worth checking, and recovers Edge-Trunk-VLAN40 to green dot and Healthy 2 / Attention 1 on live WebSocket update without reload",
+    "/vmware/storage stale datastore nvme-edge-01 and /truenas/overview stale system truenas-prod-01: datastore Stale data cue, inline CAPACITY deferred notice, and TrueNAS Stale data cue remain intact with zero console errors, zero page errors, zero failed requests, and 0px horizontal overflow across all routes and viewports"
+  ],
+  "interactions": [
+    "loaded /vmware/overview on desktop (1440x940 light) and touch phone (360x820 dark), verified stale and offline+stale ESXi host rows, and expanded esxi-edge-01.lab inline drawer via its chevron toggle button",
+    "delivered a live WebSocket rawData recovery frame for esxi-edge-01.lab while platformData.sourceStatus remained stale without reloading and verified immediate row, status dot, drawer Worth checking, and UTILIZATION chart recovery",
+    "loaded /vmware/networks on desktop and phone, verified stale and offline+stale network rows, expanded Edge-Trunk-VLAN40 inline drawer, and delivered a live WebSocket rawData recovery frame verifying Healthy chip count, green dot, and drawer clearance without reload",
+    "loaded /vmware/storage and expanded nvme-edge-01 inline drawer to confirm datastore stale cue and CAPACITY deferred notice parity",
+    "loaded /truenas/overview on desktop and phone to confirm shared stale-notice helper preserves TrueNAS Stale data cue"
+  ]
+}

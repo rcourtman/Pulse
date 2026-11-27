@@ -3,7 +3,7 @@ import {
   buildVMwareDetailSections,
   buildVMwareDetailsSummary,
 } from '@/components/Infrastructure/resourceDetailDrawerVmwareModel';
-import type { ResourceVMwareMeta } from '@/types/resource';
+import type { Resource, ResourceVMwareMeta } from '@/types/resource';
 
 const findSection = (sections: ReturnType<typeof buildVMwareDetailSections>, label: string) =>
   sections.find((section) => section.label === label);
@@ -280,5 +280,45 @@ describe('resourceDetailDrawerVmwareModel', () => {
     expect(
       running.flatMap((section) => section.rows).find((row) => row.label === 'Run state')?.tone,
     ).toBe('warning');
+  });
+
+  it('lifts a Readings warning when vCenter is stale and clears it on live recovery', () => {
+    const vmware: ResourceVMwareMeta = {
+      connectionName: 'Lab VC',
+      entityType: 'host',
+      overallStatus: 'green',
+    };
+    const staleHost = {
+      id: 'esxi-01',
+      type: 'agent',
+      name: 'esxi-01',
+      displayName: 'esxi-01',
+      platformId: 'vmware-1',
+      platformType: 'vmware-vsphere',
+      sourceType: 'api',
+      status: 'online',
+      lastSeen: 1_700_000_000_000,
+      sourceStatus: { vmware: { status: 'error', error: 'vCenter API timeout' } },
+      vmware,
+    } as Resource;
+
+    const staleState = findSection(buildVMwareDetailSections('agent', vmware, staleHost), 'State');
+    expect(staleState?.rows[0]).toEqual({
+      label: 'Readings',
+      value: 'vCenter collection error: vCenter API timeout',
+      tone: 'warning',
+      wrap: true,
+    });
+
+    const recoveredHost: Resource = {
+      ...staleHost,
+      sourceStatus: { vmware: { status: 'online' } },
+      platformData: { sourceStatus: staleHost.sourceStatus },
+    };
+    const recoveredState = findSection(
+      buildVMwareDetailSections('agent', vmware, recoveredHost),
+      'State',
+    );
+    expect(recoveredState?.rows.find((row) => row.label === 'Readings')).toBeUndefined();
   });
 });

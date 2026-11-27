@@ -1,4 +1,5 @@
 import { cleanup, fireEvent, render, screen, within } from '@solidjs/testing-library';
+import { createSignal } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { VsphereNetworksTable } from '@/features/vmware/VsphereNetworksTable';
@@ -145,5 +146,58 @@ describe('VsphereNetworksTable', () => {
     expect(dot('VM Network')).toHaveAttribute('title', 'Online');
     expect(health('Archive Network')).toHaveAttribute('data-vsphere-health', 'danger');
     expect(health('Archive Network')).toHaveAttribute('title', 'vCenter health is red');
+  });
+
+  it('qualifies stale realtime networks, preserves offline severity, and clears on live recovery', async () => {
+    const stale = { vmware: { status: 'error', error: 'vCenter session expired' } };
+    const quiet = makeNetwork({ id: 'Edge Trunk', sourceStatus: stale });
+    const down = makeNetwork({ id: 'Backup VLAN', status: 'offline', sourceStatus: stale });
+    const fresh = makeNetwork({ id: 'VM Network' });
+    const [networks, setNetworks] = createSignal([quiet, down, fresh]);
+
+    render(() => (
+      <VsphereNetworksTable
+        networks={networks()}
+        scope={networks()}
+        emptyIcon={<span />}
+        emptyTitle="No networks"
+        emptyDescription="No networks"
+      />
+    ));
+
+    const row = (name: string) => within(screen.getByText(name, { exact: true }).closest('tr')!);
+    expect(row('Edge Trunk').getByText('Stale data')).toBeInTheDocument();
+    expect(
+      row('Edge Trunk').getByTitle('vCenter collection error: vCenter session expired'),
+    ).toBeInTheDocument();
+    expect(row('Backup VLAN').getByText('Stale data')).toBeInTheDocument();
+    expect(row('Backup VLAN').getByTitle('Attention')).toHaveClass('bg-red-500');
+    expect(
+      screen.getByText('Backup VLAN').closest('tr')?.querySelector('[data-vsphere-health]'),
+    ).toHaveAttribute(
+      'title',
+      'Last reported offline\nvCenter collection error: vCenter session expired',
+    );
+    expect(row('VM Network').queryByText('Stale data')).not.toBeInTheDocument();
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Healthy, 1' }));
+    expect(screen.queryByText('Edge Trunk', { exact: true })).not.toBeInTheDocument();
+
+    setNetworks([
+      {
+        ...quiet,
+        sourceStatus: { vmware: { status: 'online' } },
+        platformData: { sourceStatus: stale },
+      },
+      down,
+      fresh,
+    ]);
+
+    expect(row('Edge Trunk').queryByText('Stale data')).not.toBeInTheDocument();
+    expect(row('Edge Trunk').getByTitle('Online')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Healthy, 2' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
   });
 });

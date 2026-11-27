@@ -57,6 +57,45 @@ describe('vSphere datastore History capacity provenance', () => {
     expect(getResourceMetricsHistoryCurrentMetrics(unrelated).usage).toBe(78.125);
     expect(getResourceMetricsHistoryDeferredMetrics(unrelated).usage).toBeUndefined();
   });
+
+  it('defers retained ESXi host metrics while vCenter is stale and restores live readings on recovery', () => {
+    const staleHost = baseResource({
+      id: 'esxi-01',
+      type: 'agent',
+      platformType: 'vmware-vsphere',
+      sourceStatus: { vmware: { status: 'stale' } },
+      cpu: { current: 42 },
+      memory: { current: 64, used: 64, total: 100 },
+      network: { rxBytes: 1200, txBytes: 800 },
+    });
+
+    expect(getResourceMetricsHistoryCurrentMetrics(staleHost)).toMatchObject({
+      cpu: undefined,
+      memory: undefined,
+      netin: undefined,
+      netout: undefined,
+    });
+    expect(getResourceMetricsHistoryDeferredMetrics(staleHost)).toMatchObject({
+      cpu: { lastKnownValue: 42, message: 'vCenter has not updated this host recently.' },
+      memory: { lastKnownValue: 64, message: 'vCenter has not updated this host recently.' },
+      netin: { lastKnownValue: 1200, message: 'vCenter has not updated this host recently.' },
+      netout: { lastKnownValue: 800, message: 'vCenter has not updated this host recently.' },
+    });
+
+    const recoveredHost = {
+      ...staleHost,
+      sourceStatus: { vmware: { status: 'online' } },
+      platformData: { sourceStatus: staleHost.sourceStatus },
+    };
+    expect(getResourceMetricsHistoryCurrentMetrics(recoveredHost)).toMatchObject({
+      cpu: 42,
+      memory: 64,
+      netin: 1200,
+      netout: 800,
+    });
+    expect(getResourceMetricsHistoryDeferredMetrics(recoveredHost).cpu).toBeUndefined();
+    expect(getResourceMetricsHistoryDeferredMetrics(recoveredHost).memory).toBeUndefined();
+  });
 });
 
 describe('canonical drawer History honours selected guest observation provenance', () => {

@@ -284,6 +284,24 @@ describe('vmwarePageModel', () => {
     });
 
     expect(mapVmwareNetworkStatus(staleConnection)).toBe('attention');
+
+    const offlineStaleHost = makeResource({
+      id: 'esxi-offline-stale',
+      type: 'agent',
+      status: 'offline',
+      sourceStatus: { vmware: { status: 'stale' } },
+    });
+    expect(getVmwareResourceDisplayStatus(offlineStaleHost)).toBe('offline');
+
+    const recoveredNetwork = makeResource({
+      id: 'network-recovered',
+      type: 'network',
+      vmware: { entityType: 'network', overallStatus: 'green' },
+      sourceStatus: { vmware: { status: 'online' } },
+      platformData: { sourceStatus: { 'vmware-vsphere': { status: 'stale' } } },
+    });
+    expect(getVmwareResourceDisplayStatus(recoveredNetwork)).toBe('online');
+    expect(mapVmwareNetworkStatus(recoveredNetwork)).toBe('healthy');
   });
 
   it('filters vSphere VMs using vCenter VM metadata', () => {
