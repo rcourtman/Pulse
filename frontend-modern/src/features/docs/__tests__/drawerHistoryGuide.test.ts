@@ -89,9 +89,7 @@ describe('stored-chart navigation and interpretation help', () => {
     expect(text).toContain('No stored history in this range');
     expect(text).toContain('no plotted stored samples for the selected range');
     expect(text).toContain('not zero usage or proof that collection stopped');
-    expect(text).toContain(
-      'Loading, an access error, History unavailable and (on older pre-v6.9.0 builds) a locked range',
-    );
+    expect(text).toContain('Loading, an access error, a locked range and History unavailable');
     expect(prose(pbs())).toContain('secondary panels may be collapsed behind Show …');
     expect(prose(pbs())).toContain('CPU and memory are in Utilization');
     expect(prose(pbs())).toContain('button is not a fix for an empty CPU or memory chart');
