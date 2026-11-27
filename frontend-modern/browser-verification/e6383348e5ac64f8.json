@@ -1,0 +1,50 @@
+{
+  "version": 1,
+  "base_sha": "b9fd005f9ca7d9772db77d01702174a4643d8803",
+  "verified_at": "2026-11-27T19:06:08Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/features/docker/dockerPageModel.ts",
+    "frontend-modern/src/features/platformPage/PlatformAlertsTable.tsx",
+    "frontend-modern/src/features/platformPage/resourceStaleness.ts",
+    "frontend-modern/src/features/truenas/truenasPageModel.ts",
+    "frontend-modern/src/features/vmware/VsphereActivityTable.tsx",
+    "frontend-modern/src/features/vmware/vmwarePageModel.ts"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/features/docker/dockerPageModel.ts": "69c9154925e4efe6a9431795181c83d90f868db47a46eb805936ddeeb12afba8",
+    "frontend-modern/src/features/platformPage/PlatformAlertsTable.tsx": "b742c7fd91a0b4c401961e0db32ac3df2df2f7c6f3464dbef2377b8d2048af77",
+    "frontend-modern/src/features/platformPage/resourceStaleness.ts": "96ddf63a5d69f8a35d8de22ac38c015e46a948f395f982d19c88da4d8f87e124",
+    "frontend-modern/src/features/truenas/truenasPageModel.ts": "92e0b60ebc6c926ba5a694cbbd62020d2bbe7e990f6cd8b610b9138a685204f9",
+    "frontend-modern/src/features/vmware/VsphereActivityTable.tsx": "00a748633e43315d3897040b9079fb06112e5a9149516a9e76949b3719c4e291",
+    "frontend-modern/src/features/vmware/vmwarePageModel.ts": "30d5c8b9585ec3f389f55e30f5b125b1f3a0761aeb65255f58fe5bef95a74321"
+  },
+  "routes": [
+    "/vmware/health",
+    "/vmware/activity",
+    "/truenas/overview",
+    "/docker/overview",
+    "/kubernetes/overview"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 940
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "Paired production builds (before b9fd005f9ca7 vs after) verified via pulse-worker-browser on desktop Chromium (1440x940 light and dark) and touch WebKit phone (390x844 dark); all 15 screenshots visually inspected with 0 console errors, 0 page errors, 0 failed/4xx+ requests, 0 off-origin requests, and 0px horizontal overflow.",
+    "/vmware/health stale critical host alarm on esxi-01.lab.local (vCenter session expired, 16m telemetry_stale) vs fresh warning on esxi-02.lab.local: stale row gains amber Stale data cue while preserving red Critical dot and badge, expanded drawer gains amber InlineNotice warning above Signal/Affected Resource/Source/Action cards, search for collection error matches 1 row (0 before), and live RFC 6455 WebSocket rawData recovery clears both cue and banner without reload.",
+    "/vmware/activity stale Running and Error tasks on warehouse-api-01 (i/o timeout, 18m telemetry_stale) vs fresh event on billing-worker-01: stale rows gain amber Stale data cues on desktop light and touch WebKit phone dark while preserving Running/Error states and inline phone state label, and expanded ActivityDetail drawer displays amber InlineNotice warning above Activity/Affected Resource/Source cards.",
+    "/truenas/overview, /docker/overview, and /kubernetes/overview active alert tables: stale alerts gain amber Stale data row cues matching their sibling Systems/Hosts/Clusters tables while preserving Critical/Warning severity dots and badges, and expanded drawers display provider-specific amber InlineNotice warnings; fresh alert rows stay unchanged."
+  ],
+  "interactions": [
+    "Loaded /vmware/health on desktop light (1440x940) and touch phone dark (390x844), expanded esxi-01.lab.local alert drawer, searched by collection error text, and delivered a live RFC 6455 WebSocket rawData recovery frame while the drawer remained open.",
+    "Loaded /vmware/activity on desktop light (1440x940) and touch phone dark (390x844), expanded warehouse-api-01 Running task drawer, and verified stale cues, preserved task state tones, drawer warning notice, and 0px overflow.",
+    "Loaded /truenas/overview (1440x940 dark), /docker/overview (1440x940 light), and /kubernetes/overview (1440x940 dark), expanded each stale alert drawer, and verified provider-specific Stale data cues and warning notices alongside unchanged fresh rows."
+  ]
+}
