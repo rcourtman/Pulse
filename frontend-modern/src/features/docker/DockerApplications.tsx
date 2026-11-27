@@ -4,6 +4,7 @@ import LayersIcon from 'lucide-solid/icons/layers';
 import { For, Show, createEffect, createMemo, createSignal } from 'solid-js';
 import { createStore, reconcile } from 'solid-js/store';
 import { filterChipStatusDot } from '@/components/shared/FilterBar';
+import { InlineNotice } from '@/components/shared/InlineNotice';
 import { StatusDot } from '@/components/shared/StatusDot';
 import { TableCell, TableHead, TableRow } from '@/components/shared/Table';
 import {
@@ -29,12 +30,14 @@ import {
   composeActivity,
   composeAttentionCount,
   composeGuestLocation,
+  getDockerComposeApplicationStaleness,
   type DockerComposeApplication,
 } from './dockerComposeApplication';
 import { useDockerHostIdentities } from './dockerHostIdentity';
-import { dockerComposeMembership } from './dockerPageModel';
+import { dockerComposeMembership, type DockerStaleNotice } from './dockerPageModel';
 import { DockerComposeDeployments } from './DockerComposeDeployments';
 import { DockerLiveLogs } from './DockerLiveLogs';
+import { DockerStaleDataCue } from './DockerNativeTableShared';
 import { DockerPortChecksNotice } from './DockerPortChecksNotice';
 import { DockerContainersTable } from './DockerContainersTable';
 import { DockerHostsTable } from './DockerHostsTable';
@@ -150,6 +153,7 @@ function ApplicationDetail(props: { app: DockerComposeApplication; refresh: () =
     ),
   );
   const hosts = createMemo(() => (props.app.host ? [props.app.host] : []));
+  const staleness = createMemo(() => getDockerComposeApplicationStaleness(props.app));
   return (
     <div class="space-y-4">
       <div>
@@ -161,6 +165,15 @@ function ApplicationDetail(props: { app: DockerComposeApplication; refresh: () =
           {(location) => <p class="mt-1 break-words text-sm text-muted">{location()}</p>}
         </Show>
       </div>
+      <Show when={staleness()}>
+        {(stale) => (
+          <div data-testid="docker-application-stale-notice">
+            <InlineNotice tone="warning" role="status">
+              <span class="font-medium">{stale().label}.</span> {stale().detail}
+            </InlineNotice>
+          </div>
+        )}
+      </Show>
       <Show when={hosts().length}>
         <DockerHostsTable
           title="Runtime host"
@@ -239,9 +252,12 @@ function ApplicationDetail(props: { app: DockerComposeApplication; refresh: () =
   );
 }
 
-function applicationStatusVariant(app: DockerComposeApplication): 'success' | 'warning' | 'danger' {
+function applicationStatusVariant(
+  app: DockerComposeApplication,
+  staleness: DockerStaleNotice | null,
+): 'success' | 'warning' | 'danger' {
   const attention = composeAttentionCount(app);
-  if (attention === 0) return 'success';
+  if (attention === 0) return staleness ? 'warning' : 'success';
   const hasCritical = app.containers.some(
     (container) => getSimpleStatusIndicator(container.status).variant === 'danger',
   );
@@ -270,10 +286,14 @@ export function DockerApplications(props: {
             .filter(Boolean),
         ).size;
         const attentionCount = composeAttentionCount(app);
-        const variant = applicationStatusVariant(app);
+        const staleness = getDockerComposeApplicationStaleness(app);
+        const needsAttention = attentionCount > 0 || Boolean(staleness);
+        const variant = applicationStatusVariant(app, staleness);
         const searchHaystack = [
           app.project,
           hostLabel,
+          staleness?.label ?? '',
+          staleness?.detail ?? '',
           ...app.containers.map((container) => container.name),
         ]
           .join(' ')
@@ -284,6 +304,8 @@ export function DockerApplications(props: {
           hostLabel,
           serviceCount,
           attentionCount,
+          staleness,
+          needsAttention,
           variant,
           searchHaystack,
         };
@@ -291,6 +313,7 @@ export function DockerApplications(props: {
       .sort(
         (left, right) =>
           right.attentionCount - left.attentionCount ||
+          Number(Boolean(right.staleness)) - Number(Boolean(left.staleness)) ||
           left.app.project.localeCompare(right.app.project),
       ),
   );
@@ -309,8 +332,8 @@ export function DockerApplications(props: {
   const filterEntries = (filter: DockerApplicationStatusFilter) => {
     const needle = search().trim().toLowerCase();
     return appEntries().filter((entry) => {
-      if (filter === 'attention' && entry.attentionCount === 0) return false;
-      if (filter === 'healthy' && entry.attentionCount > 0) return false;
+      if (filter === 'attention' && !entry.needsAttention) return false;
+      if (filter === 'healthy' && entry.needsAttention) return false;
       if (!needle) return true;
       return entry.searchHaystack.includes(needle);
     });
@@ -417,8 +440,8 @@ export function DockerApplications(props: {
                               variant={entry.variant}
                               title={
                                 entry.attentionCount > 0
-                                  ? `${entry.attentionCount} ${entry.attentionCount === 1 ? 'needs' : 'need'} attention`
-                                  : 'Healthy'
+                                  ? `${entry.attentionCount} ${entry.attentionCount === 1 ? 'needs' : 'need'} attention${entry.staleness ? ` · ${entry.staleness.detail}` : ''}`
+                                  : (entry.staleness?.detail ?? 'Healthy')
                               }
                               ariaHidden
                             />
@@ -429,6 +452,9 @@ export function DockerApplications(props: {
                             >
                               {entry.app.project}
                             </A>
+                            <Show when={entry.attentionCount > 0 && entry.staleness}>
+                              <DockerStaleDataCue notice={entry.staleness} scope="application" />
+                            </Show>
                           </div>
                         </TableCell>
                         <TableCell class={getPlatformTableCellClassForKind('text')}>
@@ -450,9 +476,24 @@ export function DockerApplications(props: {
                           <Show
                             when={entry.attentionCount > 0}
                             fallback={
-                              <span class="inline-flex items-center rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-medium text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300">
-                                Healthy
-                              </span>
+                              <Show
+                                when={entry.staleness}
+                                fallback={
+                                  <span class="inline-flex items-center rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-medium text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300">
+                                    Healthy
+                                  </span>
+                                }
+                              >
+                                {(stale) => (
+                                  <span
+                                    class="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-800 dark:bg-amber-950/50 dark:text-amber-300"
+                                    title={stale().detail}
+                                    data-docker-application-stale-pill
+                                  >
+                                    {stale().label}
+                                  </span>
+                                )}
+                              </Show>
                             }
                           >
                             <span

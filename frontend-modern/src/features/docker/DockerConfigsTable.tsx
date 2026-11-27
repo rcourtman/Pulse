@@ -31,6 +31,7 @@ import { getSimpleStatusIndicator } from '@/utils/status';
 import {
   DockerNativeDetailPanel,
   DockerResourceNameCell,
+  DockerStaleDataCue,
   dockerDetailTimestampRow,
   dockerLabelsSection,
   dockerReportedBySection,
@@ -41,7 +42,11 @@ import {
   type DockerNativeTableProps,
 } from './DockerNativeTableShared';
 import { useDockerHostIdentities } from './dockerHostIdentity';
-import { filterDockerResources, type DockerResourceStatusFilter } from './dockerPageModel';
+import {
+  filterDockerResources,
+  getDockerStaleNotice,
+  type DockerResourceStatusFilter,
+} from './dockerPageModel';
 import type { Resource } from '@/types/resource';
 
 const DOCKER_CONFIG_SORT_KEYS = ['config', 'template', 'created', 'host'] as const;
@@ -207,6 +212,12 @@ export const DockerConfigsTable: Component<DockerNativeTableProps> = (props) => 
                         >
                           <DockerResourceNameCell
                             resource={resource}
+                            detail={
+                              <DockerStaleDataCue
+                                notice={getDockerStaleNotice(resource)}
+                                scope="config"
+                              />
+                            }
                             detailToggle={
                               <PlatformResourceDetailToggleButton
                                 expanded={isExpanded()}

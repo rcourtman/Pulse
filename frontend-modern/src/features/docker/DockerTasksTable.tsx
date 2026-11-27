@@ -31,6 +31,7 @@ import {
 import {
   DockerNativeDetailPanel,
   DockerResourceNameCell,
+  DockerStaleDataCue,
   dockerDetailTimestampRow,
   dockerDetailToneForVariant,
   dockerLabelsSection,
@@ -44,6 +45,8 @@ import {
 import {
   compareDockerTasks,
   filterDockerResources,
+  getDockerStaleNotice,
+  mapDockerTaskReportedStatus,
   mapDockerTaskStatus,
   type DockerResourceStatusFilter,
 } from './dockerPageModel';
@@ -100,7 +103,7 @@ const taskSummary = (resource: Resource): string => {
 };
 
 const buildTaskDetailSections = (resource: Resource, now: number): Array<DetailSection | null> => {
-  const status = mapDockerTaskStatus(resource);
+  const status = mapDockerTaskReportedStatus(resource);
   return [
     {
       label: 'Task',
@@ -268,6 +271,19 @@ export const DockerTasksTable: Component<DockerNativeTableProps> = (props) => {
                   {(resource) => {
                     const detailRowId = () => drawer.detailRowId(resource);
                     const isExpanded = () => drawer.isExpanded(resource);
+                    const indicator = () => mapDockerTaskStatus(resource);
+                    const reported = () => mapDockerTaskReportedStatus(resource);
+                    const staleNotice = () => getDockerStaleNotice(resource);
+                    const currentTitle = () => {
+                      const raw = dockerTextValue(
+                        resource.docker?.error ||
+                          resource.docker?.message ||
+                          resource.docker?.currentState,
+                      );
+                      const stale = staleNotice();
+                      if (!stale) return raw;
+                      return raw === '—' ? stale.detail : `${raw} · ${stale.detail}`;
+                    };
                     return (
                       <>
                         <TableRow
@@ -277,7 +293,8 @@ export const DockerTasksTable: Component<DockerNativeTableProps> = (props) => {
                         >
                           <DockerResourceNameCell
                             resource={resource}
-                            indicator={mapDockerTaskStatus(resource)}
+                            indicator={indicator()}
+                            detail={<DockerStaleDataCue notice={staleNotice()} scope="task" />}
                             detailToggle={
                               <PlatformResourceDetailToggleButton
                                 expanded={isExpanded()}
@@ -310,20 +327,16 @@ export const DockerTasksTable: Component<DockerNativeTableProps> = (props) => {
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
                           >
-                            {/* The dot's own words and colour; Docker's raw state, error
-                                or message stays on hover. */}
+                            {/* Preserve the last reported task state at a glance; stale
+                                snapshots surface their warning on the row dot and cue. */}
                             <span
                               class={`block truncate ${dockerStateTextToneClass(
-                                mapDockerTaskStatus(resource).variant,
+                                reported().variant,
                               )}`}
-                              title={dockerTextValue(
-                                resource.docker?.error ||
-                                  resource.docker?.message ||
-                                  resource.docker?.currentState,
-                              )}
-                              data-docker-task-state={mapDockerTaskStatus(resource).variant}
+                              title={currentTitle()}
+                              data-docker-task-state={reported().variant}
                             >
-                              {mapDockerTaskStatus(resource).label}
+                              {reported().label}
                             </span>
                           </TableCell>
                           <TableCell
@@ -350,7 +363,7 @@ export const DockerTasksTable: Component<DockerNativeTableProps> = (props) => {
                             <DockerNativeDetailPanel
                               testId="docker-task-detail"
                               resource={resource}
-                              status={mapDockerTaskStatus(resource)}
+                              status={indicator()}
                               summary={taskSummary(resource)}
                               sections={(now) => buildTaskDetailSections(resource, now)}
                               onClose={() => drawer.close(resource)}

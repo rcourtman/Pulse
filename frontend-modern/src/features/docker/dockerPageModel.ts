@@ -1,3 +1,5 @@
+import { getResourceStaleness } from '@/features/platformPage/resourceStaleness';
+import { getResourceSourceStatus } from '@/utils/resourceSourceHealth';
 import { resolveResourcePlatformType } from '@/utils/sourcePlatforms';
 import { matchesSearchTermSplit, splitSearchExclusions } from '@/utils/searchQuery';
 import type {
@@ -223,15 +225,73 @@ export const dockerServiceReplicaStatus = (resource: Resource): StatusIndicator 
   return { variant: 'warning', label: `${running} / ${desired} running` };
 };
 
+export const DOCKER_STALE_READINGS_LABEL = 'Stale data';
+
+export interface DockerStaleNotice {
+  label: string;
+  age: string | null;
+  detail: string;
+}
+
+const DOCKER_ERROR_SOURCE_STATUSES = new Set(['error', 'failed', 'unauthorized']);
+
+// Backend owns staleness via `health` (`verdict === 'stale'` or `telemetry_stale`)
+// and per-source freshness (`sourceStatus.docker` / `sourceStatus.agent`). Keep
+// last-reported values visible while preventing stale snapshots from reading green.
+export const getDockerStaleNotice = (
+  resource: Resource | undefined | null,
+): DockerStaleNotice | null => {
+  if (!resource) return null;
+  const healthStale = getResourceStaleness(resource);
+  const dockerSource = getResourceSourceStatus(resource, 'docker');
+  const agentSource = getResourceSourceStatus(resource, 'agent');
+  const dockerStatus = normalizeDockerToken(dockerSource?.status);
+  const agentStatus = normalizeDockerToken(agentSource?.status);
+  const isStale = Boolean(healthStale) || dockerStatus === 'stale' || agentStatus === 'stale';
+  const isError =
+    DOCKER_ERROR_SOURCE_STATUSES.has(dockerStatus) ||
+    DOCKER_ERROR_SOURCE_STATUSES.has(agentStatus);
+  if (!isStale && !isError) return null;
+
+  const sourceError =
+    asTrimmedString(dockerSource?.error) || asTrimmedString(agentSource?.error);
+  const age = healthStale?.age ?? null;
+  const base =
+    isError && !isStale
+      ? 'Docker collection error — showing the last report received.'
+      : age
+        ? `No Docker report for ${age} — showing the last values received.`
+        : 'Showing the last Docker report — no fresh update received recently.';
+  return {
+    label: DOCKER_STALE_READINGS_LABEL,
+    age,
+    detail: sourceError ? `${base} Last error: ${sourceError}` : base,
+  };
+};
+
+// Keep failure/attention verdicts ahead of staleness so operators still see
+// 0/3 running, rollbacks, failed tasks, or unreachable managers, while turning
+// stale healthy/muted snapshots amber.
+export const applyDockerSourceFreshness = (
+  resource: Resource,
+  base: StatusIndicator,
+): StatusIndicator => {
+  if (base.variant === 'danger' || base.variant === 'warning') return base;
+  if (getDockerStaleNotice(resource)) {
+    return { variant: 'warning', label: DOCKER_STALE_READINGS_LABEL };
+  }
+  return base;
+};
+
 // The row dot: no replicas running outranks a rollout in progress, which
-// outranks a partial count.
+// outranks a partial count; stale snapshots never read healthy.
 export function mapDockerServiceStatus(resource: Resource): StatusIndicator {
   const replicas = dockerServiceReplicaStatus(resource);
   if (replicas.variant === 'danger') return replicas;
-  return dockerServiceUpdateAttention(resource) ?? replicas;
+  return applyDockerSourceFreshness(resource, dockerServiceUpdateAttention(resource) ?? replicas);
 }
 
-export function mapDockerTaskStatus(resource: Resource): StatusIndicator {
+export function mapDockerTaskReportedStatus(resource: Resource): StatusIndicator {
   const current = normalizeDockerToken(resource.docker?.currentState);
   const desired = normalizeDockerToken(resource.docker?.desiredState);
   if (current === 'failed' || current === 'rejected' || current === 'orphaned') {
@@ -256,6 +316,10 @@ export function mapDockerTaskStatus(resource: Resource): StatusIndicator {
   return { variant: 'muted', label: titleCase(current) };
 }
 
+export function mapDockerTaskStatus(resource: Resource): StatusIndicator {
+  return applyDockerSourceFreshness(resource, mapDockerTaskReportedStatus(resource));
+}
+
 export function mapDockerSwarmNodeStatus(resource: Resource): StatusIndicator {
   const availability = normalizeDockerToken(resource.docker?.availability);
   const reachability = normalizeDockerToken(resource.docker?.managerReachability);
@@ -269,14 +333,19 @@ export function mapDockerSwarmNodeStatus(resource: Resource): StatusIndicator {
     return { variant: 'danger', label: 'Down' };
   }
   if (availability === 'drain') return { variant: 'warning', label: 'Drained' };
-  if (availability === 'pause') return { variant: 'muted', label: 'Paused' };
+  if (availability === 'pause') {
+    return applyDockerSourceFreshness(resource, { variant: 'muted', label: 'Paused' });
+  }
   if (status === 'degraded' || status === 'warning') {
     return { variant: 'warning', label: 'Degraded' };
   }
   if (availability === 'active' || status === 'online' || status === 'running') {
-    return { variant: 'success', label: resource.docker?.leader ? 'Leader' : 'Ready' };
+    return applyDockerSourceFreshness(resource, {
+      variant: 'success',
+      label: resource.docker?.leader ? 'Leader' : 'Ready',
+    });
   }
-  return { variant: 'muted', label: 'Unknown' };
+  return applyDockerSourceFreshness(resource, { variant: 'muted', label: 'Unknown' });
 }
 
 const titleCase = (value: string): string =>
@@ -332,6 +401,9 @@ const dockerResourceStatusTriad = (
   resource: Resource,
 ): Exclude<DockerResourceStatusFilter, 'all'> | 'unknown' => {
   const triad = mapResourceStatusToTriad(resource.status);
+  if ((triad === 'online' || triad === 'unknown') && getDockerStaleNotice(resource)) {
+    return 'degraded';
+  }
   if (triad === 'online' && resource.type === 'app-container') {
     return dockerContainerNotResponding(resource) ? 'degraded' : triad;
   }
@@ -646,6 +718,8 @@ export function dockerResourceSearchHaystack(resource: Resource): string {
       ? Object.entries(docker.labels).flatMap(([key, value]) => [key, value])
       : []),
     dockerServiceStack(resource),
+    getDockerStaleNotice(resource)?.label,
+    getDockerStaleNotice(resource)?.detail,
     ...(resource.tags ?? []),
   ]
     .filter((value): value is string => typeof value === 'string' && value.trim().length > 0)

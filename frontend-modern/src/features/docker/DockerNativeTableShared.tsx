@@ -8,6 +8,7 @@ import {
   type DetailSection,
   type DetailValueTone,
 } from '@/components/shared/DetailSectionTable';
+import { InlineNotice } from '@/components/shared/InlineNotice';
 import { StatusDot } from '@/components/shared/StatusDot';
 import { TableCell } from '@/components/shared/Table';
 import { ResourceNameWithWebInterfaceLink } from '@/components/shared/WebInterfaceLink';
@@ -26,7 +27,12 @@ import { RecordOwnerLink } from '@/features/platformPage/RecordOwnerLink';
 import { useRelativeTimeNow } from '@/utils/relativeTimeClock';
 import type { Resource } from '@/types/resource';
 import { getPlatformStatusTextToneClass } from '@/features/platformPage/platformStatusTone';
-import type { DockerResourceStatusFilter } from './dockerPageModel';
+import {
+  applyDockerSourceFreshness,
+  getDockerStaleNotice,
+  type DockerResourceStatusFilter,
+  type DockerStaleNotice,
+} from './dockerPageModel';
 import { DockerImageReferenceText } from './DockerImageReferenceText';
 import { makeDetailTimestampRow } from '@/features/platformPage/platformDetailTimestampRow';
 
@@ -84,6 +90,25 @@ export const dockerResourceName = (resource: Resource): string =>
 export const dockerStateTextToneClass = (variant: StatusIndicatorVariant | null): string =>
   getPlatformStatusTextToneClass(variant);
 
+// Compact single-line stale-data cue placed beside names on Swarm and
+// Compose rows so phone tables stay 32px tall while flagging retained values.
+export const DockerStaleDataCue: Component<{
+  notice: DockerStaleNotice | null | undefined;
+  scope: string;
+}> = (props) => (
+  <Show when={props.notice}>
+    {(stale) => (
+      <span
+        class="shrink-0 whitespace-nowrap text-[10px] font-medium text-amber-700 dark:text-amber-300"
+        title={stale().detail}
+        data-docker-stale={props.scope}
+      >
+        {stale().label}
+      </span>
+    )}
+  </Show>
+);
+
 export const DockerResourceNameCell: Component<{
   resource: Resource;
   // When set, the row pulls its StatusDot variant and tooltip text from a
@@ -99,7 +124,8 @@ export const DockerResourceNameCell: Component<{
   detail?: JSX.Element;
 }> = (props) => {
   const resolvedIndicator = (): StatusIndicator =>
-    props.indicator ?? getSimpleStatusIndicator(props.resource.status);
+    props.indicator ??
+    applyDockerSourceFreshness(props.resource, getSimpleStatusIndicator(props.resource.status));
   const name = () => dockerResourceName(props.resource);
   const nameLink = () => (
     <ResourceNameWithWebInterfaceLink
@@ -152,12 +178,14 @@ export const DockerNativeDetailPanel: Component<{
 }> = (props) => {
   const now = useRelativeTimeNow();
   const hostname = () => asTrimmedString(props.resource.docker?.hostname);
+  const staleNotice = () => getDockerStaleNotice(props.resource);
+  const resolvedStatus = () => applyDockerSourceFreshness(props.resource, props.status);
   return (
     <InlineDetailPanel
       testId={props.testId}
       detailFor={props.resource.id}
       title={dockerResourceName(props.resource)}
-      status={props.status}
+      status={resolvedStatus()}
       summary={props.summary}
       actions={
         <Show when={hostname()}>
@@ -175,6 +203,15 @@ export const DockerNativeDetailPanel: Component<{
       sections={compactDetailSections(props.sections(now()))}
       onClose={props.onClose}
     >
+      <Show when={staleNotice()}>
+        {(stale) => (
+          <div data-testid="docker-stale-readings-notice">
+            <InlineNotice tone="warning" role="status">
+              <span class="font-medium">{stale().label}.</span> {stale().detail}
+            </InlineNotice>
+          </div>
+        )}
+      </Show>
       {props.children}
     </InlineDetailPanel>
   );

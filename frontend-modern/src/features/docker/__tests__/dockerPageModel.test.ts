@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
 import type { Resource } from '@/types/resource';
-import { buildDockerComposeApplications, composeActivity } from '../dockerComposeApplication';
+import {
+  buildDockerComposeApplications,
+  composeActivity,
+  getDockerComposeApplicationStaleness,
+} from '../dockerComposeApplication';
 import {
   DOCKER_TAB_SPECS,
   buildDockerIncidentRows,
@@ -17,6 +21,7 @@ import {
   filterDockerResources,
   getDockerHostSystemBadge,
   getDockerPageTabSpecs,
+  getDockerStaleNotice,
   hasDockerEngineStorageUsage,
   hasDockerSwarmEvidence,
   hasDockerSwarmInventory,
@@ -24,6 +29,7 @@ import {
   mapDockerIncidentSeverity,
   mapDockerServiceStatus,
   mapDockerSwarmNodeStatus,
+  mapDockerTaskReportedStatus,
   mapDockerTaskStatus,
   resolveDockerPageTabId,
 } from '../dockerPageModel';
@@ -1306,5 +1312,200 @@ describe('container status without a reported container state', () => {
     expect(container('unknown')).toEqual({ variant: 'muted', label: 'Unknown' });
     // A reported state still wins, so a cleanly exited container on a lost host stays muted.
     expect(container('offline', 'exited')).toEqual({ variant: 'muted', label: 'Exited' });
+  });
+});
+
+describe('Docker stale-reading detection and Swarm / Compose freshness', () => {
+  it('reads staleness from health telemetry_stale and sourceStatus, including error detail', () => {
+    expect(getDockerStaleNotice(makeResource({ id: 'fresh', type: 'docker-service' }))).toBeNull();
+
+    const aged = getDockerStaleNotice(
+      makeResource({
+        id: 'aged',
+        type: 'docker-service',
+        health: { verdict: 'stale', reasons: [{ code: 'telemetry_stale', detail: '18m' }] },
+      }),
+    );
+    expect(aged).toEqual({
+      label: 'Stale data',
+      age: '18m',
+      detail: 'No Docker report for 18m — showing the last values received.',
+    });
+
+    const sourceError = getDockerStaleNotice(
+      makeResource({
+        id: 'errored',
+        type: 'docker-service',
+        sourceStatus: {
+          docker: {
+            status: 'error',
+            lastSeen: '2026-11-27T10:00:00Z',
+            error: 'daemon socket timeout',
+          },
+        },
+      }),
+    );
+    expect(sourceError).toEqual({
+      label: 'Stale data',
+      age: null,
+      detail:
+        'Docker collection error — showing the last report received. Last error: daemon socket timeout',
+    });
+
+    const platformFallback = getDockerStaleNotice(
+      makeResource({
+        id: 'legacy-fixture',
+        type: 'docker-task',
+        platformData: {
+          sourceStatus: { docker: { status: 'stale', lastSeen: '2026-11-27T10:00:00Z' } },
+        },
+      }),
+    );
+    expect(platformFallback?.label).toBe('Stale data');
+  });
+
+  it('surfaces stale healthy Swarm services, tasks, and nodes as warning while preserving worse verdicts', () => {
+    const staleSource = {
+      docker: { status: 'stale', lastSeen: '2026-11-27T10:00:00Z' },
+    };
+
+    expect(
+      mapDockerServiceStatus(
+        makeResource({
+          id: 'svc-stale-ok',
+          type: 'docker-service',
+          sourceStatus: staleSource,
+          docker: { desiredTasks: 3, runningTasks: 3 },
+        }),
+      ),
+    ).toEqual({ variant: 'warning', label: 'Stale data' });
+    expect(
+      mapDockerServiceStatus(
+        makeResource({
+          id: 'svc-stale-down',
+          type: 'docker-service',
+          sourceStatus: staleSource,
+          docker: { desiredTasks: 3, runningTasks: 0 },
+        }),
+      ),
+    ).toEqual({ variant: 'danger', label: '0 / 3 running' });
+    expect(
+      mapDockerServiceStatus(
+        makeResource({
+          id: 'svc-stale-rollback',
+          type: 'docker-service',
+          sourceStatus: staleSource,
+          docker: { desiredTasks: 3, runningTasks: 3, serviceUpdate: { state: 'rollback_started' } },
+        }),
+      ),
+    ).toEqual({ variant: 'warning', label: 'Rolling back' });
+
+    const staleRunningTask = makeResource({
+      id: 'task-stale-run',
+      type: 'docker-task',
+      sourceStatus: staleSource,
+      docker: { currentState: 'running', desiredState: 'running' },
+    });
+    expect(mapDockerTaskStatus(staleRunningTask)).toEqual({
+      variant: 'warning',
+      label: 'Stale data',
+    });
+    expect(mapDockerTaskReportedStatus(staleRunningTask)).toEqual({
+      variant: 'success',
+      label: 'Running',
+    });
+    expect(
+      mapDockerTaskStatus(
+        makeResource({
+          id: 'task-stale-fail',
+          type: 'docker-task',
+          sourceStatus: staleSource,
+          docker: { currentState: 'failed' },
+        }),
+      ),
+    ).toEqual({ variant: 'danger', label: 'Failed' });
+
+    expect(
+      mapDockerSwarmNodeStatus(
+        makeResource({
+          id: 'node-stale-leader',
+          type: 'docker-swarm-node',
+          status: 'online',
+          sourceStatus: staleSource,
+          docker: { availability: 'active', leader: true },
+        }),
+      ),
+    ).toEqual({ variant: 'warning', label: 'Stale data' });
+    expect(
+      mapDockerSwarmNodeStatus(
+        makeResource({
+          id: 'node-stale-unreachable',
+          type: 'docker-swarm-node',
+          sourceStatus: staleSource,
+          docker: { nodeRole: 'manager', managerReachability: 'unreachable' },
+        }),
+      ),
+    ).toEqual({ variant: 'danger', label: 'Manager unreachable' });
+  });
+
+  it('moves stale online Docker resources into the Degraded filter and matches stale search', () => {
+    const staleService = makeResource({
+      id: 'svc-stale',
+      type: 'docker-service',
+      name: 'payments-api',
+      status: 'online',
+      health: { verdict: 'stale', reasons: [{ code: 'telemetry_stale', detail: '14m' }] },
+      docker: { desiredTasks: 2, runningTasks: 2 },
+    });
+    const freshService = makeResource({
+      id: 'svc-fresh',
+      type: 'docker-service',
+      name: 'edge-proxy',
+      status: 'online',
+      docker: { desiredTasks: 2, runningTasks: 2 },
+    });
+
+    expect(filterDockerResources([staleService, freshService], '', 'online').map((r) => r.id)).toEqual([
+      'svc-fresh',
+    ]);
+    expect(
+      filterDockerResources([staleService, freshService], '', 'degraded').map((r) => r.id),
+    ).toEqual(['svc-stale']);
+    expect(filterDockerResources([staleService, freshService], 'stale', 'all').map((r) => r.id)).toEqual(
+      ['svc-stale'],
+    );
+  });
+
+  it('detects Compose application staleness from either the runtime host or its containers', () => {
+    const staleHost = makeResource({
+      id: 'host-1',
+      type: 'agent',
+      health: { verdict: 'stale', reasons: [{ code: 'telemetry_stale', detail: '22m' }] },
+      docker: { hostSourceId: 'host-1', hostname: 'ops-01' },
+    });
+    const freshContainer = makeResource({
+      id: 'c-1',
+      type: 'app-container',
+      docker: {
+        hostSourceId: 'host-1',
+        hostname: 'ops-01',
+        labels: { 'com.docker.compose.project': 'billing' },
+      },
+    });
+    const [appFromStaleHost] = buildDockerComposeApplications([staleHost], [freshContainer]);
+    expect(getDockerComposeApplicationStaleness(appFromStaleHost)?.age).toBe('22m');
+
+    const staleContainer = makeResource({
+      id: 'c-2',
+      type: 'app-container',
+      sourceStatus: { docker: { status: 'stale', lastSeen: '2026-11-27T10:00:00Z' } },
+      docker: {
+        hostSourceId: 'host-2',
+        hostname: 'ops-02',
+        labels: { 'com.docker.compose.project': 'metrics' },
+      },
+    });
+    const [appFromStaleContainer] = buildDockerComposeApplications([], [staleContainer]);
+    expect(getDockerComposeApplicationStaleness(appFromStaleContainer)?.label).toBe('Stale data');
   });
 });

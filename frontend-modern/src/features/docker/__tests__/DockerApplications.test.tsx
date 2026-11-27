@@ -158,4 +158,124 @@ describe('DockerApplications', () => {
     expect(result).not.toBeNull();
     expect(result?.className).toContain('bg-red-100');
   });
+
+  it('classifies stale Compose applications under Attention, renders Stale data, and warns in detail view', () => {
+    window.history.replaceState({}, '', '/docker/applications');
+    const staleHost: Resource = {
+      ...makeHost('host-stale', 'ops-stale-01'),
+      status: 'warning',
+      health: { verdict: 'stale', reasons: [{ code: 'telemetry_stale', detail: '18m' }] },
+      sourceStatus: { docker: { status: 'stale', lastSeen: '2026-11-27T10:00:00Z' } },
+    };
+    const freshHost = makeHost('host-fresh', 'ops-fresh-01');
+    const hosts = [staleHost, freshHost];
+    const containers = [
+      makeContainer({
+        id: 'c-stale-ok',
+        name: 'billing-web',
+        status: 'online',
+        docker: {
+          hostSourceId: 'host-stale',
+          hostname: 'ops-stale-01',
+          containerId: 'c-stale-ok',
+          containerState: 'running',
+          labels: {
+            'com.docker.compose.project': 'billing-stack',
+            'com.docker.compose.service': 'web',
+          },
+        },
+      }),
+      makeContainer({
+        id: 'c-stale-bad',
+        name: 'jobs-worker',
+        status: 'degraded',
+        docker: {
+          hostSourceId: 'host-stale',
+          hostname: 'ops-stale-01',
+          containerId: 'c-stale-bad',
+          containerState: 'restarting',
+          labels: {
+            'com.docker.compose.project': 'jobs-stack',
+            'com.docker.compose.service': 'worker',
+          },
+        },
+      }),
+      makeContainer({
+        id: 'c-fresh-ok',
+        name: 'proxy-web',
+        status: 'online',
+        docker: {
+          hostSourceId: 'host-fresh',
+          hostname: 'ops-fresh-01',
+          containerId: 'c-fresh-ok',
+          containerState: 'running',
+          labels: {
+            'com.docker.compose.project': 'edge-proxy',
+            'com.docker.compose.service': 'proxy',
+          },
+        },
+      }),
+    ];
+
+    render(() => (
+      <DockerHostIdentitiesProvider value={() => buildDockerHostIdentities(hosts)}>
+        <Router>
+          <Route
+            path="*"
+            component={() => (
+              <DockerApplications hosts={hosts} containers={containers} refresh={vi.fn()} />
+            )}
+          />
+        </Router>
+      </DockerHostIdentitiesProvider>
+    ));
+
+    // Both the failing stale app and the otherwise-healthy stale app sit under Attention.
+    expect(screen.getByRole('button', { name: /^Attention,\s*2$/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^Healthy,\s*1$/i })).toBeInTheDocument();
+
+    const billingRow = document.querySelector('[data-docker-application-row="billing-stack"]')!;
+    expect(billingRow.querySelector('[data-docker-application-stale-pill]')).toHaveTextContent(
+      'Stale data',
+    );
+    expect(billingRow.textContent).not.toContain('Healthy');
+
+    // A stale app that also has a failing container keeps its attention pill and shows Stale data.
+    const jobsRow = document.querySelector('[data-docker-application-row="jobs-stack"]')!;
+    expect(jobsRow.querySelector('[data-docker-application-attention-pill]')).toHaveTextContent(
+      '1 needs attention',
+    );
+    expect(jobsRow.querySelector('[data-docker-stale="application"]')).toHaveTextContent(
+      'Stale data',
+    );
+
+    // Filtering by Healthy shows only the fresh app.
+    fireEvent.click(screen.getByRole('button', { name: /^Healthy,\s*1$/i }));
+    expect(screen.getByText('edge-proxy')).toBeInTheDocument();
+    expect(screen.queryByText('billing-stack')).toBeNull();
+    expect(screen.queryByText('jobs-stack')).toBeNull();
+
+    cleanup();
+    window.history.replaceState(
+      {},
+      '',
+      '/docker/applications?runtime=host-stale&project=billing-stack',
+    );
+    render(() => (
+      <DockerHostIdentitiesProvider value={() => buildDockerHostIdentities(hosts)}>
+        <Router>
+          <Route
+            path="*"
+            component={() => (
+              <DockerApplications hosts={hosts} containers={containers} refresh={vi.fn()} />
+            )}
+          />
+        </Router>
+      </DockerHostIdentitiesProvider>
+    ));
+
+    const notice = screen.getByTestId('docker-application-stale-notice');
+    expect(notice).toHaveTextContent('Stale data.');
+    expect(notice).toHaveTextContent('No Docker report for 18m');
+  });
 });
