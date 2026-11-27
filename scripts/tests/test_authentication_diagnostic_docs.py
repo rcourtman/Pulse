@@ -161,6 +161,19 @@ class AuthenticationDiagnosticDocsTest(unittest.TestCase):
             with self.subTest(boundary=boundary):
                 self.assertIn(boundary, guide)
 
+    def test_ai_autonomy_verification_timeout_and_autopilot_gate_match_runtime(self):
+        source = DOCUMENTS["AI_AUTONOMY"].read_text()
+        guide = " ".join(source.split())
+        self.assertIn("human-session acknowledgement", guide)
+        self.assertIn("1500 for subscription CLIs", guide)
+        self.assertIn("codex-subscription", source)
+        self.assertIn("claude-subscription", source)
+        self.assertIn("const DefaultPatrolSubscriptionInvestigationTimeoutSec = 1500",
+                      (ROOT / "internal/config/ai.go").read_text())
+        self.assertNotIn("cannot return to idle state without verification", guide)
+        self.assertIn("ActionResultV2", source)
+        self.assertIn("ASSISTANT_SAFETY.md#evidence-and-outcomes", source)
+
     def test_ai_recipes_send_only_the_intended_method_path_and_body(self):
         recipes = blocks("AI_AUTONOMY")
         self.assertEqual(len(recipes), len(EXPECTED_AI))

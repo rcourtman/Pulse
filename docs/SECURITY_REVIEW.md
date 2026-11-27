@@ -133,6 +133,7 @@ engineering evidence, not as a production certification.
 Starting points:
 
 - `internal/api/load_test.go`
+- `internal/api/resourceapi/load_test.go`
 - `pkg/metrics/store_loadtest_test.go`
 - `pkg/metrics/store_slo_test.go`
 
@@ -145,7 +146,7 @@ go test ./internal/crypto ./pkg/auth ./internal/agentupdate \
   ./internal/agentexec ./internal/discovery ./pkg/discovery \
   ./internal/securityutil ./pkg/securityutil
 
-go test ./internal/api \
+go test ./internal/api ./internal/api/resourceapi \
   -run '^TestLoad_500Node_(ConcurrentResources|ConcurrentMetricsHistory|MixedEndpoints)$' \
   -count=1
 

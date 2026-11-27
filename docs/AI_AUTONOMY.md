@@ -32,7 +32,7 @@ Patrol mode sets how far Pulse can go when Patrol finds something that needs att
 - **Watch only**: Patrol creates findings but takes no action. This is the Community and Relay baseline and the default without Pro. Suitable for learning what Patrol detects before enabling investigation or fix execution.
 - **Ask first** (Pro and above): Patrol investigates findings and proposes fixes. All fixes queue for manual approval before execution.
 - **Safe auto-fix** (Pro and above): Warning-level safe fix plans can execute automatically. Critical findings still require approval. This is the recommended starting point for most Pro and legacy Pro+ users who enable fix execution.
-- **Autopilot** (Pro and above): Safe fix plans can execute without approval. Requires an explicit toggle and a Pro, legacy Pro+, or Cloud license. Recommended only for environments with thorough alert coverage.
+- **Autopilot** (Pro and above): Safe fix plans can execute without approval. Activation requires an explicit human-session acknowledgement and a Pro, legacy Pro+, or Cloud license. Recommended only for environments with thorough alert coverage.
 
 On Pro, an install that has never chosen a mode runs **Ask first**, so new warning and critical findings are investigated without an extra step. Until you choose, the Patrol page explains this and offers to keep Ask first or switch to Watch only; either choice is saved and the notice goes away. Investigations use your AI provider and count toward the 30-day budget. A mode you have saved, including Watch only, is never changed.
 
@@ -158,7 +158,7 @@ When Patrol mode is `approval`, `assisted`, or `full`, Patrol investigates findi
 | Setting | Default | Range | Description |
 |---------|---------|-------|-------------|
 | `patrol_investigation_budget` | 10 | 5–30 | Maximum evidence-tool calls per investigation; Patrol derives a separate model-response safety ceiling |
-| `patrol_investigation_timeout_sec` | 600 | 60–1800 | Maximum seconds per investigation |
+| `patrol_investigation_timeout_sec` | 600 (1500 for subscription CLIs) | 60–1800 | Maximum seconds per investigation. Subscription agent CLIs (`codex-subscription`, `claude-subscription`) default to 1500 seconds (25 minutes) when unset. |
 
 The following limits are fixed and cannot be changed: up to 3 investigations run in parallel, up to 3 attempts per finding, a 1 hour cooldown before re-investigating a finding, and a shorter 10 minute cooldown after a timeout failure.
 
@@ -189,7 +189,7 @@ The AI runtime cannot operate on resources it hasn't first discovered. This prev
 
 ### Verification-After-Write
 
-After executing any control action, the AI runtime must verify the result with a read operation before reporting success. This is enforced by the FSM — the runtime cannot return to idle state without verification.
+An execution receipt reports only what the executor ran, not that the underlying problem is resolved. Patrol tracks independent verification separately in the canonical action record (`ActionResultV2`) rather than inferring verification from a tool-call sequence or forcing an unrelated read after every write. See [Shared AI runtime safety model](ASSISTANT_SAFETY.md#evidence-and-outcomes).
 
 ### Keep a Resource Off-Limits
 

@@ -231,11 +231,14 @@ indicators describe configuration checks, not a complete security audit. A
 strong score does not establish that every file is encrypted, a backup is safe
 to share, or stored credentials can be recovered without their encryption key.
 
-### Dismissing Warnings
-If you're comfortable with your security setup, you can dismiss warnings:
-- **For 1 day** – reminder tomorrow
-- **For 1 week** – reminder next week
-- **Forever** – won't show again
+### Hardening Recommendations and Access
+
+The security score and hardening checks read instance configuration and require
+an administrator session. Non-administrator sessions receive a reduced status
+response and a notice that security posture requires an admin session, rather
+than false-negative checks. When hardening items remain, **Security Overview**
+lists them as **Hardening priorities** or **Recommended hardening steps** with
+direct links to **Authentication**, **API Access**, or this security guide.
 
 ## Credential Security
 
@@ -249,8 +252,12 @@ the **active data directory** include:
 | Proxmox VE, PBS and PMG connection credentials | `nodes.enc` |
 | SMTP settings, including passwords | `email.enc` |
 | Webhook URLs and authentication headers | `webhooks.enc` |
+| Apprise notification settings | `apprise.enc` |
+| External dead-man's switch watchdog settings | `deadman.enc` |
 | TrueNAS and vSphere connection credentials | `truenas.enc`, `vmware.enc` |
+| Availability check targets and probe credentials | `availability_targets.enc` |
 | AI provider credentials and SSO configuration | `ai.enc`, `sso.enc` |
+| Existing retiring Relay/mobile pairing identity | `relay.enc` |
 
 The directory is normally `/etc/pulse` for systemd or `/data` inside Docker;
 `PULSE_DATA_DIR` and deployment configuration can select another location.
@@ -384,9 +391,9 @@ discarding state. Do not test exposure by making a public export.
   - Exports: 5 requests per 5 minutes per IP
   - Recovery operations: 3 requests per 10 minutes per IP
   - Update checks/actions: 60 requests/minute per IP
-  - WebSocket connects: 30 requests/minute per IP
   - General API: 500 requests/minute per IP
-  - Public endpoints: 1000 requests/minute per IP
+  - Public endpoints and configuration reads: 1000 requests/minute per IP
+  - Direct loopback requests (without proxy headers) and real-time UI streams (`/api/state`, `/api/guests/metadata`, `/ws`) bypass the universal middleware limiter so live updates and reconnects are not throttled
   - 429 responses include rate limit headers:
     - `X-RateLimit-Limit`: Maximum requests per window
     - `X-RateLimit-Remaining`: Requests remaining in current window
@@ -404,9 +411,9 @@ discarding state. Do not test exposure by making a public export.
   - Session invalidation on password change
 - **Security headers**
   - Content-Security-Policy
-  - X-Frame-Options: `DENY` by default (adjusted when `allowEmbedding` is enabled in system settings)
+  - X-Frame-Options: `DENY` by default (omitted when `allowEmbedding` is enabled in system settings)
   - X-Content-Type-Options: nosniff
-  - X-XSS-Protection: 1; mode=block
+  - X-XSS-Protection: `0` (disables legacy browser XSS auditors in favour of Content-Security-Policy)
   - Referrer-Policy: strict-origin-when-cross-origin
   - Permissions-Policy restricting sensitive APIs
 - **Audit logging**
@@ -501,7 +508,7 @@ legacy token for `api_tokens.json` does not erase a raw value from a deployment
 file, shell history or process environment. Rotate exposed credentials rather
 than assuming a later hash removed those copies.
 
-#### Token Management (Settings → API Tokens)
+#### Token Management (Settings → Security → API Access)
 - Issue dedicated tokens for automation/agents without sharing a global credential
 - View prefixes/suffixes and last-used timestamps for auditing
 - Revoke tokens individually without downtime
@@ -608,7 +615,7 @@ organization selected by the request.
 
 ### Scoped API Tokens
 
-API tokens can be scoped to limit access. Available scopes:
+API tokens can be scoped to limit access. Available canonical scopes:
 
 | Scope | Purpose |
 |---|---|
@@ -616,14 +623,22 @@ API tokens can be scoped to limit access. Available scopes:
 | `monitoring:write` | Update metadata, trigger discovery |
 | `settings:read` | Read configuration, export |
 | `settings:write` | Modify settings, import, manage nodes |
-| `ai:chat` | Use the AI chat assistant |
-| `ai:execute` | Run AI commands, view patrol findings |
+| `audit:read` | Read audit log entries |
+| `ai:execute` | Run AI operations and view Patrol findings |
+| `ai:chat` | Existing Pulse Mobile chat access until retirement on 31 March 2027 (in-app chat is retired) |
+| `actions:plan` | Create governed action plans |
+| `actions:approve` | Approve governed action plans |
+| `actions:execute` | Execute approved governed actions |
 | `docker:report` | Docker agent metric reporting |
 | `kubernetes:report` | Kubernetes agent metric reporting |
 | `agent:report` | Agent metric reporting |
+| `agent:config:read` | Read an agent's desired profile configuration |
+| `agent:enroll` | Enrol agents through supported setup flows |
+| `agent:exec` | Agent command-execution credential scope (requires local host opt-in) |
 | `docker:manage` | Docker host management actions |
 | `kubernetes:manage` | Kubernetes cluster management actions |
 | `agent:manage` | Agent configuration updates |
+| `relay:mobile:access` | Existing paired Pulse Mobile channel access until retirement on 31 March 2027 |
 
 Endpoints enforce scope checks before processing. A token without the required scope receives `403 Forbidden`.
 
@@ -732,9 +747,9 @@ ALLOWED_ORIGINS="http://localhost:5173"
 
 Notes:
 
-- `ALLOWED_ORIGINS` supports a single origin or `*` (it is written directly to `Access-Control-Allow-Origin`).
-- In production, set a specific origin to avoid exposing the API to arbitrary sites.
-- For local dev, Pulse auto-allows `http://localhost:5173` and `http://localhost:7655` when `NODE_ENV=development` or `PULSE_DEV=true`.
+- `ALLOWED_ORIGINS` supports `*` or a comma-separated list of exact origins. When specific origins are configured, Pulse matches the request's `Origin` header against that list, writes only the matched origin to `Access-Control-Allow-Origin`, adds `Vary: Origin`, and enables `Access-Control-Allow-Credentials: true`. A wildcard `*` never enables credentialed requests.
+- In production, set specific origins to avoid exposing the API to arbitrary sites.
+- For local dev, Pulse auto-allows `http://localhost:5173,http://localhost:7655` when `NODE_ENV=development` or `PULSE_DEV=true`.
 
 ## Monitoring and Observability
 
@@ -795,12 +810,12 @@ open Pulse in the phone's browser.
 
 ### Agent Command Security
 
-**Agent commands are disabled by default.** This prevents the AI subsystem from executing arbitrary commands on monitored hosts.
+**Agent commands are disabled by default.** Fresh installations mark the agent `monitoring-only` and omit `agent:exec` from its token so remote configuration cannot turn a monitoring agent into a command executor.
 
-- Operators must explicitly opt in with `--enable-commands` on the agent.
-- Even when enabled, commands require `ai:execute` scope and admin privileges.
-- All command executions are logged to the audit trail.
-- Circuit breakers automatically halt execution when error thresholds are exceeded.
+- Operators must explicitly opt in on the host with the combined command profile (`--enable-commands`) and an agent token carrying `agent:exec` bound to that agent.
+- Server-side command admission still enforces tenant, target, policy, and single-use approval checks before dispatching an approval-gated command, alongside operator action scopes (`actions:plan`, `actions:approve`, `actions:execute`, or `ai:execute`) and administrator authority.
+- Command executions are logged to the audit trail, and circuit breakers halt automated AI runs after consecutive provider errors.
+- See [Agent Security](docs/AGENT_SECURITY.md) for full privilege and command boundaries.
 
 ## Security Best Practices
 
@@ -893,7 +908,7 @@ JSON
 **Export blocked?** Check the [transfer access and direct-loopback requirements](#exportimport-protection). Do not enable unprotected network export just to clear an error.<br>
 **Rate limited?** Wait 1 minute and try again  
 **Can't login?** Check `PULSE_AUTH_USER` and `PULSE_AUTH_PASS` environment variables  
-**API access denied?** Verify the token you supplied matches one of the values created in *Settings → API Tokens* (use the original token, not the hash)  
+**API access denied?** Verify the token you supplied matches one of the values created in *Settings → Security → API Access* (use the original token, not the hash)  
 **CORS errors?** Configure Allowed Origins in the UI or set `ALLOWED_ORIGINS` for your domain  
 **Forgot password?** Follow the [deployment-specific recovery guide](docs/TROUBLESHOOTING.md#i-forgot-my-password). Deployment-managed credentials and identity-provider accounts need their own recovery path; deleting `.env` is not a universal reset.
 
