@@ -289,8 +289,9 @@ class SecurityDocsTest(unittest.TestCase):
         guide = " ".join(DOC.read_text().split())
         persistence = (ROOT / "internal/config/persistence.go").read_text()
         crypto = (ROOT / "internal/crypto/crypto.go").read_text()
-        for filename in ("nodes.enc", "email.enc", "webhooks.enc", "truenas.enc",
-                         "vmware.enc", "ai.enc", "sso.enc"):
+        for filename in ("nodes.enc", "email.enc", "webhooks.enc", "apprise.enc",
+                         "deadman.enc", "truenas.enc", "vmware.enc",
+                         "availability_targets.enc", "ai.enc", "sso.enc", "relay.enc"):
             with self.subTest(filename=filename):
                 self.assertIn(f'resolveLeaf("{filename}")', persistence)
                 self.assertIn(f"`{filename}`", guide)
@@ -401,6 +402,36 @@ class SecurityDocsTest(unittest.TestCase):
         for section in (logging, observability):
             self.assertIn("docs/TROUBLESHOOTING.md#collect-diagnostics-safely", section)
         self.assertIn("not proof that every workload or collector is healthy", observability)
+
+    def test_security_headers_cors_scopes_and_review_baseline_match_source(self):
+        source = DOC.read_text()
+        guide = " ".join(source.split())
+        self.assertNotIn("X-XSS-Protection: 1; mode=block", source)
+        self.assertIn("X-XSS-Protection: `0`", source)
+        self.assertIn('w.Header().Set("X-XSS-Protection", "0")',
+                      (ROOT / "internal/api/security.go").read_text())
+        self.assertNotIn("Settings → API Tokens", source)
+        self.assertNotIn("### Dismissing Warnings", source)
+        self.assertIn("Hardening priorities", source)
+        self.assertIn("Recommended hardening steps", source)
+        self.assertIn("comma-separated list of exact origins", guide)
+        self.assertIn("Vary: Origin", source)
+        self.assertIn("agent:exec", source)
+        self.assertIn("monitoring-only", source)
+        scopes_go = (ROOT / "pkg/auth/scopes.go").read_text()
+        canonical_scopes = re.findall(r'Scope[A-Za-z0-9_]+\s*=\s*"([^"]+)"', scopes_go)
+        for scope in canonical_scopes:
+            if scope == "*":
+                continue
+            with self.subTest(scope=scope):
+                self.assertIn(f"`{scope}`", source)
+        review = (ROOT / "docs/SECURITY_REVIEW.md").read_text()
+        self.assertEqual(review.encode("utf-8"),
+                         (ROOT / "frontend-modern/public/docs/SECURITY_REVIEW.md").read_bytes())
+        self.assertIn("internal/api/resourceapi/load_test.go", review)
+        self.assertIn("go test ./internal/api ./internal/api/resourceapi", review)
+        self.assertIn("func TestLoad_500Node_ConcurrentResources(",
+                      (ROOT / "internal/api/resourceapi/load_test.go").read_text())
 
 
 if __name__ == "__main__":
