@@ -98,11 +98,18 @@ toolbar and drawers let you find any resource without leaving the map:
 Pulse surfaces real network telemetry it already collects across your estate:
 
 - **Live traffic** in the toolbar is on by default. When enabled, active tiles
-  and network pills carrying at least 10 KB/s get a subtle accent highlight
-  and live throughput readout, connectors feeding active groups and networks
-  show gentle rate-paced motion, and hover connection arcs carry a subtle
-  animated flow overlay. Click **Live traffic** to turn highlights and motion
-  off at any time.
+  and network pills carrying at least 10 KB/s get a subtle accent highlight, a
+  2px proportional bottom traffic bar, and a live throughput readout. Active
+  connectors scale their flow speed smoothly with real throughput (with a soft
+  glow above 5 MB/s), spiking services pulse gently so bursts stand out without
+  hovering, and hover connection arcs carry a subtle animated flow overlay.
+  Click **Live traffic** to turn highlights and motion off at any time.
+- **Elevated load cues and proportional storage bars** stay quiet when
+  resources are calm and add a thin top heat strip only when a host or workload
+  crosses 75% CPU or memory (or 75 °C on a host, turning red at 90% or 85 °C).
+  Inline storage pool bars scale their track width smoothly by total capacity so
+  multi-terabyte arrays read as larger than small boot volumes while keeping
+  usage percentages clear.
 - **Estate live traffic summary and Top Talkers** aggregate throughput across
   workloads and standalone hosts without double-counting Proxmox hosts
   alongside their guests. Click the speed pill beside the title to open the

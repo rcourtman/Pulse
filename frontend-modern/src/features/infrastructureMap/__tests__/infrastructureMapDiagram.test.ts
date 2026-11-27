@@ -7,8 +7,12 @@ import {
 } from '../infrastructureMapDiagram';
 import { buildMapExportSvg } from '../infrastructureMapExport';
 import {
+  elevatedLoadTone,
+  fitCardTitle,
   hostCountLabel,
+  isSpikingServiceTile,
   layoutHostDiagram,
+  proportionalStorageTrackWidth,
   strokeWidthForLinkSpeed,
 } from '../infrastructureMapHostDiagram';
 import {
@@ -25,6 +29,8 @@ import {
 } from '../infrastructureMapModel';
 import {
   applyMapSpotlight,
+  flowDurationForBytes,
+  MAP_FLOW_GLOW_MIN_BYTES,
   MAP_MAX_LINK_ARCS,
   MAP_PAGE_PALETTES,
   MAP_PALETTES,
@@ -3248,6 +3254,335 @@ describe('layoutServiceDiagram', () => {
           zfsErrorCount: 5,
         });
       }
+    });
+
+    it('preserves distinguishing suffixes on overflowing card titles, keeps pool capacity units intact, aligns cluster storage footers, connects beside-gateways, and derives workload-aware counts on machine hosts', () => {
+      // 1. Suffix-preserving truncation keeps distinguishing suffixes readable
+      const a = fitCardTitle('pulse-backup-lab-1', 110, 12, 600);
+      const b = fitCardTitle('pulse-backup-lab-2', 110, 12, 600);
+      expect(a).toContain('…');
+      expect(a.endsWith('-1')).toBe(true);
+      expect(b.endsWith('-2')).toBe(true);
+      expect(a).not.toBe(b);
+
+      // 2. Machine host with mixed containers and VMs gets "workloads", all-container gets "containers"
+      const towerResources: Resource[] = [
+        resource({
+          id: 'tower',
+          type: 'agent',
+          name: 'Tower',
+          platformType: 'generic',
+          status: 'online',
+          agent: {
+            osName: 'Unraid',
+            networkInterfaces: [
+              { name: 'br0', addresses: ['192.168.0.10/24'], speedMbps: 1000, linkUp: true },
+            ],
+            defaultGateways: [{ address: '192.168.0.1', interface: 'br0' }],
+          },
+        }),
+        resource({
+          id: 'c-1',
+          type: 'app-container',
+          name: 'sonarr',
+          platformType: 'docker',
+          parentId: 'tower',
+          status: 'running',
+        }),
+        resource({
+          id: 'vm-1',
+          type: 'vm',
+          name: 'pulse-dev',
+          platformType: 'generic',
+          parentId: 'tower',
+          status: 'running',
+        }),
+        resource({
+          id: 'adguard',
+          type: 'system-container',
+          name: 'adguard',
+          platformType: 'proxmox-pve',
+          parentId: 'pve-tall',
+          status: 'running',
+          proxmox: {
+            networkInterfaces: [{ name: 'eth0', bridge: 'vmbr0', addresses: ['192.168.0.53/24'] }],
+          },
+        }),
+        resource({
+          id: 'pve-tall',
+          type: 'agent',
+          name: 'delly',
+          platformType: 'proxmox-pve',
+          clusterId: 'homelab',
+          status: 'online',
+          proxmox: {
+            clusterName: 'homelab',
+            isClusterMember: true,
+            nodeName: 'delly',
+            pveVersion: '8.3.1',
+          },
+          agent: {
+            networkInterfaces: [
+              { name: 'vmbr0', addresses: ['192.168.0.5/24'], speedMbps: 1000, linkUp: true },
+            ],
+            defaultGateways: [{ address: '192.168.0.1', interface: 'vmbr0' }],
+          },
+        }),
+        ...Array.from({ length: 8 }, (_, idx) =>
+          resource({
+            id: `tall-vm-${idx}`,
+            type: 'vm',
+            name: `pulse-backup-lab-${idx + 1}`,
+            platformType: 'proxmox-pve',
+            parentId: 'pve-tall',
+            status: 'running',
+          }),
+        ),
+        resource({
+          id: 'pve-short',
+          type: 'agent',
+          name: 'delly2',
+          platformType: 'proxmox-pve',
+          clusterId: 'homelab',
+          status: 'online',
+          proxmox: {
+            clusterName: 'homelab',
+            isClusterMember: true,
+            nodeName: 'delly2',
+            pveVersion: '8.3.1',
+          },
+          agent: {
+            networkInterfaces: [
+              { name: 'vmbr0', addresses: ['192.168.0.6/24'], speedMbps: 1000, linkUp: true },
+            ],
+          },
+        }),
+        resource({
+          id: 'short-vm',
+          type: 'vm',
+          name: 'tiny-guest',
+          platformType: 'proxmox-pve',
+          parentId: 'pve-short',
+          status: 'running',
+        }),
+        resource({
+          id: 'pool-tall',
+          type: 'storage',
+          name: 'local-zfs',
+          platformType: 'proxmox-pve',
+          parentId: 'pve-tall',
+          disk: { total: 442 * 1024 ** 3, used: 238 * 1024 ** 3, current: 54 },
+        }),
+        resource({
+          id: 'pool-short',
+          type: 'storage',
+          name: 'local-zfs',
+          platformType: 'proxmox-pve',
+          parentId: 'pve-short',
+          disk: { total: 442 * 1024 ** 3, used: 238 * 1024 ** 3, current: 54 },
+        }),
+        resource({
+          id: 'pool-short-2',
+          type: 'storage',
+          name: 'frigate-storage',
+          platformType: 'proxmox-pve',
+          parentId: 'pve-short',
+          disk: { total: 12 * 1024 ** 3, used: 8 * 1024 ** 3, current: 64 },
+        }),
+        resource({
+          id: 'disk-tall',
+          type: 'physical_disk',
+          name: 'nvme0',
+          platformType: 'proxmox-pve',
+          parentId: 'pve-tall',
+          physicalDisk: { diskType: 'nvme', temperature: 45, health: 'PASSED' },
+        }),
+        resource({
+          id: 'disk-short',
+          type: 'physical_disk',
+          name: 'nvme1',
+          platformType: 'proxmox-pve',
+          parentId: 'pve-short',
+          physicalDisk: { diskType: 'nvme', temperature: 48, health: 'PASSED' },
+        }),
+      ];
+
+      const diagram = buildServiceDiagram(buildInfrastructureMapModel(towerResources));
+      const towerFrame = diagram.hostFrames.find((entry) => entry.id === 'tower')!;
+      expect(hostCountLabel('machine', 2, towerFrame)).toBe('2 workloads');
+
+      const scene = layoutHostDiagram(diagram, { width: 1440, density: 'names' });
+      const drawnTexts = texts(scene);
+      expect(drawnTexts).toContain('2 workloads');
+      // Capacity strings never get chopped into "442…"
+      expect(drawnTexts.some((t) => /^442…$/.test(t))).toBe(false);
+      // Beside-gateway connects via dashed elbow line
+      const dashedLines = ofKind(scene, 'line').filter(
+        (line) => line.dashed && line.points.length === 3,
+      );
+      expect(dashedLines.length).toBeGreaterThanOrEqual(1);
+      // Both cluster siblings align their bottom STORAGE pool bars cleanly above DISKS
+      const tallPoolHit = ofKind(scene, 'hit').find((node) => node.hit.id === 'pool-tall')!;
+      const shortPoolHit = ofKind(scene, 'hit').find((node) => node.hit.id === 'pool-short')!;
+      expect(Math.abs(shortPoolHit.y - tallPoolHit.y)).toBeLessThanOrEqual(40);
+    });
+
+    it('scales connector flow speed and glow by throughput, highlights spiking services, draws elevated-only load heat strips, and log-scales storage tracks', () => {
+      // 1. Continuous flow duration decreases monotonically with throughput
+      expect(flowDurationForBytes(5_000)).toBeUndefined();
+      const slowDur = flowDurationForBytes(20_000)!;
+      const medDur = flowDurationForBytes(2_000_000)!;
+      const fastDur = flowDurationForBytes(50_000_000)!;
+      expect(slowDur).toBeGreaterThan(medDur);
+      expect(medDur).toBeGreaterThan(fastDur);
+      expect(fastDur).toBeGreaterThanOrEqual(0.45);
+
+      // 2. Elevated-only load tone stays quiet below 75% / 75C
+      expect(elevatedLoadTone(40, 65, 55)).toBeUndefined();
+      expect(elevatedLoadTone(78, 40, 50)).toBe('attention');
+      expect(elevatedLoadTone(20, 86, 50)).toBe('attention');
+      expect(elevatedLoadTone(20, 30, 76)).toBe('attention');
+      expect(elevatedLoadTone(92, 40, 50)).toBe('critical');
+      expect(elevatedLoadTone(20, 30, 88)).toBe('critical');
+
+      // 3. Log-scaled storage track grows monotonically with capacity within bounds
+      const tinyTrack = proportionalStorageTrackWidth(5 * 1024 ** 3, 32, 72);
+      const midTrack = proportionalStorageTrackWidth(500 * 1024 ** 3, 32, 72);
+      const hugeTrack = proportionalStorageTrackWidth(37 * 1024 ** 4, 32, 72);
+      expect(tinyTrack).toBe(32);
+      expect(midTrack).toBeGreaterThan(tinyTrack);
+      expect(hugeTrack).toBeGreaterThan(midTrack);
+      expect(hugeTrack).toBeLessThanOrEqual(72);
+
+      // 4. End-to-end live scene vs static export verification
+      const resources: Resource[] = [
+        resource({
+          id: 'pve-hot',
+          type: 'agent',
+          name: 'pve-hot',
+          platformType: 'proxmox-pve',
+          status: 'online',
+          cpu: { current: 22 },
+          memory: { current: 86, total: 64 * 1024 ** 3, used: 55 * 1024 ** 3 },
+          network: { rxBytes: 24 * 1024 * 1024, txBytes: 2 * 1024 * 1024 },
+          agent: {
+            networkInterfaces: [
+              { name: 'vmbr0', addresses: ['10.30.0.10/24'], speedMbps: 10000, linkUp: true },
+            ],
+          },
+        }),
+        resource({
+          id: 'vm-spike',
+          type: 'vm',
+          name: 'jellyfin',
+          platformType: 'proxmox-pve',
+          parentId: 'pve-hot',
+          status: 'running',
+          cpu: { current: 94 },
+          memory: { current: 45 },
+          network: { rxBytes: 22 * 1024 * 1024, txBytes: 1 * 1024 * 1024 },
+        }),
+        resource({
+          id: 'vm-calm',
+          type: 'vm',
+          name: 'grafana',
+          platformType: 'proxmox-pve',
+          parentId: 'pve-hot',
+          status: 'running',
+          cpu: { current: 8 },
+          memory: { current: 24 },
+          network: { rxBytes: 80 * 1024, txBytes: 20 * 1024 },
+        }),
+        resource({
+          id: 'pool-small',
+          type: 'storage',
+          name: 'local',
+          platformType: 'proxmox-pve',
+          parentId: 'pve-hot',
+          disk: { total: 5 * 1024 ** 3, used: 1 * 1024 ** 3, current: 20 },
+        }),
+        resource({
+          id: 'pool-big',
+          type: 'storage',
+          name: 'tank',
+          platformType: 'proxmox-pve',
+          parentId: 'pve-hot',
+          disk: { total: 37 * 1024 ** 4, used: 20 * 1024 ** 4, current: 54 },
+        }),
+      ];
+
+      const diagram = buildServiceDiagram(buildInfrastructureMapModel(resources));
+      const spikeTile = diagram.hostFrames[0].allTiles.find((t) => t.id === 'vm-spike')!;
+      const calmTile = diagram.hostFrames[0].allTiles.find((t) => t.id === 'vm-calm')!;
+      expect(isSpikingServiceTile(spikeTile, spikeTile.netTotalBytes ?? 0, true)).toBe(true);
+      expect(isSpikingServiceTile(calmTile, spikeTile.netTotalBytes ?? 0, true)).toBe(false);
+      expect(isSpikingServiceTile(spikeTile, spikeTile.netTotalBytes ?? 0, false)).toBe(false);
+
+      const scene = layoutHostDiagram(diagram, {
+        width: 1440,
+        density: 'names',
+        liveTraffic: true,
+      });
+
+      // Spiking tile gets spike highlight + wider 2px bottom traffic strip than calm tile
+      const spikeRect = ofKind(scene, 'rect').find(
+        (node) => node.tileId === 'vm-spike' && node.spike === true,
+      );
+      expect(spikeRect).toBeDefined();
+      const spikeTrafficBar = ofKind(scene, 'rect').find(
+        (node) => node.tileId === 'vm-spike' && node.h === 2 && node.fill === 'accent',
+      );
+      const calmTrafficBar = ofKind(scene, 'rect').find(
+        (node) => node.tileId === 'vm-calm' && node.h === 2 && node.fill === 'accent',
+      );
+      expect(spikeTrafficBar).toBeDefined();
+      expect(calmTrafficBar).toBeDefined();
+      expect(spikeTrafficBar!.w).toBeGreaterThan(calmTrafficBar!.w);
+
+      // Elevated-only load heat bars appear on hot host (86% MEM -> attention) and hot VM (94% CPU -> critical), never on calm VM
+      expect(
+        ofKind(scene, 'rect').some(
+          (node) => node.tileId === 'pve-hot' && node.h === 2 && node.fill === 'attention',
+        ),
+      ).toBe(true);
+      expect(
+        ofKind(scene, 'rect').some(
+          (node) => node.tileId === 'vm-spike' && node.h === 2 && node.fill === 'critical',
+        ),
+      ).toBe(true);
+      expect(
+        ofKind(scene, 'rect').some(
+          (node) =>
+            node.tileId === 'vm-calm' &&
+            node.h === 2 &&
+            (node.fill === 'attention' || node.fill === 'critical'),
+        ),
+      ).toBe(false);
+
+      // Big pool track is wider than small pool track
+      const smallTrackRect = ofKind(scene, 'rect').find(
+        (node) => node.tileId === 'pool-small' && node.h === 6 && node.fill === 'border',
+      )!;
+      const bigTrackRect = ofKind(scene, 'rect').find(
+        (node) => node.tileId === 'pool-big' && node.h === 6 && node.fill === 'border',
+      )!;
+      expect(bigTrackRect.w).toBeGreaterThan(smallTrackRect.w);
+
+      // Live SVG emits continuous animation-duration, flow glow (>= 5 MB/s), and pulse-map-spike; static export omits all live motion/glow
+      const heavyLine = ofKind(scene, 'line').find(
+        (line) => (line.flowBytes ?? 0) >= MAP_FLOW_GLOW_MIN_BYTES,
+      );
+      expect(heavyLine).toBeDefined();
+
+      const liveSvg = renderMapSceneBody(scene, MAP_PAGE_PALETTES.dark, () => null);
+      expect(liveSvg).toContain('pulse-map-flow-glow');
+      expect(liveSvg).toContain('animation-duration:');
+      expect(liveSvg).toContain('pulse-map-spike');
+
+      const staticSvg = renderMapSceneToSvg(scene, MAP_PALETTES.dark);
+      expect(staticSvg).not.toContain('pulse-map-flow-glow');
+      expect(staticSvg).not.toContain('pulse-map-spike');
+      expect(staticSvg).not.toContain('animation-duration:');
     });
   });
 });

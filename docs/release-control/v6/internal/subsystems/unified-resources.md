@@ -4344,6 +4344,10 @@ application resource-provider or WebSocket lifecycle.
 
 ## Current State
 
+### Infrastructure Map macOS host version normalization and storage capacity bytes projection (27 November 2026)
+
+`hostVersionLabelOf` in `infrastructureMapModel.ts` now normalizes raw `darwin` agent OS names cleanly to `macOS` instead of exposing raw Darwin kernel major numbers (`darwin 27`) on host frame headers, and `buildServiceDiagram` (`infrastructureMapServices.ts`) propagates positive storage pool `totalBytes` onto `DiagramTile` (taking the max across merged pools) so host storage bars can scale track width proportionally by capacity.
+
 ### Infrastructure Map operational telemetry: uptime, backup recency, pending updates, and ZFS pool health (27 November 2026)
 
 `buildInfrastructureMapModel` (`infrastructureMapModel.ts`) now extracts truthful operational telemetry already present on unified resources without altering `model.totals` or `attentionCount`: `uptimeSeconds` on hosts and workloads, `pendingUpdates` on hosts and guests, `lastBackupAt` on guests, and non-healthy ZFS/storage pool cues (`zfsState` excluding healthy states like `ONLINE`/`OK`/`HEALTHY`, `rebuildInProgress`, and positive `zfsErrorCount`). All six fields survive `anonymizeInfrastructureMapModel` because they contain no hostnames, addresses, or identifiers, and `buildServiceDiagram` propagates them onto `DiagramTile` (aggregating across merged pools) and `matchesDiagramTileQuery`.

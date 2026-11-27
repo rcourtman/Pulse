@@ -81,9 +81,9 @@ const COMPACT_ICON = 29;
 const COMPACT_GAP = 4;
 
 const GROUP_GAP = 16;
-const LAYER_GAP = 40;
-const FRAME_ROW_GAP = 40;
-const BUS_DROP = 28;
+const LAYER_GAP = 44;
+const FRAME_ROW_GAP = 44;
+const BUS_DROP = 32;
 const GUTTER = 16;
 const PILL_HEIGHT = 24;
 const MIN_WIDTH = 300;
@@ -96,6 +96,59 @@ const TRAFFIC_TIER_RANK: Record<MapTrafficTier, number> = {
   high: 3,
 };
 
+const SPIKE_ABSOLUTE_BYTES = 5 * 1024 * 1024;
+const SPIKE_RELATIVE_MIN_BYTES = 2 * 1024 * 1024;
+const POOL_LOG_MIN = Math.log10(10 * 1024 ** 3); // 10 GiB
+const POOL_LOG_MAX = Math.log10(100 * 1024 ** 4); // 100 TiB
+
+/** Returns an elevated load tone only when CPU, memory, or temperature crosses warning/critical thresholds. */
+export const elevatedLoadTone = (
+  cpu?: number,
+  memory?: number,
+  temperatureC?: number,
+): 'critical' | 'attention' | undefined => {
+  const peakPct = Math.max(
+    typeof cpu === 'number' && Number.isFinite(cpu) ? cpu : 0,
+    typeof memory === 'number' && Number.isFinite(memory) ? memory : 0,
+  );
+  const temp = typeof temperatureC === 'number' && Number.isFinite(temperatureC) ? temperatureC : 0;
+  if (peakPct >= 90 || temp >= 85) return 'critical';
+  if (peakPct >= 75 || temp >= 75) return 'attention';
+  return undefined;
+};
+
+/** Log-scales a storage pool's progress track width cleanly by total capacity within [minTrackW, maxTrackW]. */
+export const proportionalStorageTrackWidth = (
+  totalBytes: number | undefined,
+  minTrackW: number,
+  maxTrackW: number,
+): number => {
+  const lo = Math.min(minTrackW, maxTrackW);
+  const hi = Math.max(minTrackW, maxTrackW);
+  if (totalBytes === undefined || !Number.isFinite(totalBytes) || !(totalBytes > 0)) {
+    return Math.round((lo + hi) / 2);
+  }
+  const t = Math.max(
+    0,
+    Math.min(1, (Math.log10(totalBytes) - POOL_LOG_MIN) / (POOL_LOG_MAX - POOL_LOG_MIN)),
+  );
+  return Math.round(lo + t * (hi - lo));
+};
+
+/** True when a workload tile is driving a clear live network burst relative to the estate. */
+export const isSpikingServiceTile = (
+  tile: DiagramTile,
+  peakServiceBytes: number,
+  liveTraffic: boolean,
+): boolean => {
+  if (!liveTraffic || !tile.trafficTier) return false;
+  const bytes = tile.netTotalBytes ?? 0;
+  if (!(bytes >= SPIKE_RELATIVE_MIN_BYTES)) return false;
+  return (
+    bytes >= SPIKE_ABSOLUTE_BYTES || (peakServiceBytes > 0 && bytes >= peakServiceBytes * 0.75)
+  );
+};
+
 /** Maps a reported interface speed (Mbps) to a connector stroke width. */
 export const strokeWidthForLinkSpeed = (speedMbps?: number): number => {
   if (speedMbps === undefined || !(speedMbps > 0)) return 1.5;
@@ -106,7 +159,11 @@ export const strokeWidthForLinkSpeed = (speedMbps?: number): number => {
 };
 
 /** Platform-aware host workload count label for host frame headers. */
-export const hostCountLabel = (platform: MapGlyphKey | undefined, count: number): string => {
+export const hostCountLabel = (
+  platform: MapGlyphKey | undefined,
+  count: number,
+  frame?: DiagramHostFrame,
+): string => {
   switch (platform) {
     case 'proxmox':
     case 'vmware':
@@ -117,9 +174,53 @@ export const hostCountLabel = (platform: MapGlyphKey | undefined, count: number)
       return `${count} ${count === 1 ? 'pod' : 'pods'}`;
     case 'truenas':
       return `${count} ${count === 1 ? 'app' : 'apps'}`;
-    default:
+    default: {
+      if (frame) {
+        const tiles = frame.allTiles;
+        if (tiles.length > 0) {
+          const allContainers = tiles.every((tile) => /\b(container|app)\b/i.test(tile.typeLabel));
+          if (allContainers) return `${count} ${count === 1 ? 'container' : 'containers'}`;
+          const allGuests = tiles.every((tile) => /\b(vm|lxc|guest)\b/i.test(tile.typeLabel));
+          if (allGuests) return `${count} ${count === 1 ? 'guest' : 'guests'}`;
+          return `${count} ${count === 1 ? 'workload' : 'workloads'}`;
+        }
+      }
       return `${count} ${count === 1 ? 'item' : 'items'}`;
+    }
   }
+};
+
+const DISTINGUISHING_SUFFIX_RE = /([-_.][A-Za-z0-9]{1,5}|\d{1,3})$/;
+
+/** Truncates overflowing card titles while keeping short distinguishing suffixes intact. */
+export const fitCardTitle = (
+  name: string,
+  maxWidth: number,
+  size: number,
+  weight: 400 | 500 | 600 = 600,
+): string => {
+  if (textWidth(name, size, weight) <= maxWidth) return name;
+  const suffixMatch = DISTINGUISHING_SUFFIX_RE.exec(name);
+  if (suffixMatch) {
+    const suffix = suffixMatch[0];
+    const headRaw = name.slice(0, name.length - suffix.length);
+    const suffixW = textWidth(`…${suffix}`, size, weight);
+    if (headRaw.length >= 6 && maxWidth - suffixW >= textWidth(headRaw.slice(0, 6), size, weight)) {
+      let lo = 6;
+      let hi = headRaw.length;
+      while (lo < hi) {
+        const mid = Math.ceil((lo + hi) / 2);
+        const candidate = `${headRaw.slice(0, mid).trimEnd()}…${suffix}`;
+        if (textWidth(candidate, size, weight) <= maxWidth) lo = mid;
+        else hi = mid - 1;
+      }
+      const trimmedHead = headRaw.slice(0, lo).replace(/[-_.\s]+$/, '');
+      if (trimmedHead.length >= 4) {
+        return `${trimmedHead}…${suffix}`;
+      }
+    }
+  }
+  return fitMapName(name, maxWidth, size, weight);
 };
 
 const textWidth = (text: string, size: number, weight: 400 | 500 | 600 = 600): number =>
@@ -184,6 +285,15 @@ const groupTrafficTier = (group: DiagramGroup | undefined): MapTrafficTier | und
       )
     : undefined;
 
+const groupTrafficBytes = (group: DiagramGroup | undefined): number | undefined => {
+  if (!group) return undefined;
+  let total = 0;
+  for (const tile of group.allTiles) {
+    if (tile.netTotalBytes && tile.netTotalBytes > 0) total += tile.netTotalBytes;
+  }
+  return total > 0 ? total : undefined;
+};
+
 const frameTrafficTier = (frame: DiagramHostFrame): MapTrafficTier | undefined =>
   maxTrafficTier(
     frame.trafficTier,
@@ -191,6 +301,29 @@ const frameTrafficTier = (frame: DiagramHostFrame): MapTrafficTier | undefined =
     ...frame.allTiles.map((tile) => tile.trafficTier),
     ...frame.pools.map((pool) => pool.trafficTier),
   );
+
+const frameTrafficBytes = (frame: DiagramHostFrame): number | undefined => {
+  const hostBytes = frame.host.netTotalBytes ?? 0;
+  let workloadSum = 0;
+  for (const tile of frame.allTiles) {
+    if (tile.netTotalBytes && tile.netTotalBytes > 0) workloadSum += tile.netTotalBytes;
+  }
+  const best = Math.max(hostBytes, workloadSum);
+  return best > 0 ? best : undefined;
+};
+
+const peakServiceTrafficBytes = (diagram: ServiceDiagram): number => {
+  let peak = 0;
+  for (const frame of diagram.hostFrames ?? []) {
+    for (const tile of frame.allTiles) {
+      if (tile.netTotalBytes && tile.netTotalBytes > peak) peak = tile.netTotalBytes;
+    }
+  }
+  for (const tile of diagram.access?.allTiles ?? []) {
+    if (tile.netTotalBytes && tile.netTotalBytes > peak) peak = tile.netTotalBytes;
+  }
+  return peak;
+};
 
 interface Box {
   x: number;
@@ -208,6 +341,7 @@ interface HostPainter {
   toneFor: (segmentId: string | undefined) => MapNetworkTone | undefined;
   liveTraffic: boolean;
   networkCount: number;
+  peakServiceBytes: number;
 }
 
 const buildHit = (
@@ -328,6 +462,7 @@ const drawHorizontalTile = (
       stroke: 'border',
     });
     if (painter.liveTraffic && tile.trafficTier) {
+      const spiking = isSpikingServiceTile(tile, painter.peakServiceBytes, painter.liveTraffic);
       out.nodes.push({
         kind: 'rect',
         x,
@@ -337,7 +472,45 @@ const drawHorizontalTile = (
         r: INNER_RADIUS,
         fill: 'none',
         activity: tile.trafficTier,
+        ...(spiking ? { spike: true } : {}),
       });
+      if (
+        tile.netTotalBytes !== undefined &&
+        tile.netTotalBytes > 0 &&
+        painter.peakServiceBytes > 0
+      ) {
+        const maxBarW = Math.max(10, w - 12);
+        const ratio = Math.sqrt(Math.min(1, tile.netTotalBytes / painter.peakServiceBytes));
+        const barW = Math.max(10, Math.round(maxBarW * ratio));
+        out.nodes.push({
+          kind: 'rect',
+          x: x + 6,
+          y: y + ROW_H - 3.5,
+          w: barW,
+          h: 2,
+          r: 1,
+          fill: 'accent',
+          opacity: spiking ? 0.92 : 0.52,
+        });
+      }
+    }
+    if (!off) {
+      const heatTone = elevatedLoadTone(tile.cpu, tile.memory);
+      if (heatTone) {
+        const peakLoad = Math.min(100, Math.max(tile.cpu ?? 0, tile.memory ?? 0));
+        const maxBarW = Math.max(14, w - 12);
+        const barW = Math.max(14, Math.round((maxBarW * peakLoad) / 100));
+        out.nodes.push({
+          kind: 'rect',
+          x: x + 6,
+          y: y + 1.5,
+          w: barW,
+          h: 2,
+          r: 1,
+          fill: heatTone,
+          opacity: heatTone === 'critical' ? 0.92 : 0.78,
+        });
+      }
     }
   }
 
@@ -475,7 +648,7 @@ const drawHorizontalTile = (
     kind: 'text',
     x: textX,
     y: subText ? y + 18 : y + 26,
-    text: fitMapName(tile.name, textMaxW, 12, 600),
+    text: fitCardTitle(tile.name, textMaxW, 12, 600),
     size: 12,
     weight: 600,
     fill: off ? 'muted' : 'text',
@@ -537,6 +710,7 @@ const drawCompactTile = (
       dashed: true,
     });
   } else if (painter.liveTraffic && tile.trafficTier) {
+    const spiking = isSpikingServiceTile(tile, painter.peakServiceBytes, painter.liveTraffic);
     out.nodes.push({
       kind: 'rect',
       x,
@@ -546,7 +720,24 @@ const drawCompactTile = (
       r: INNER_RADIUS,
       fill: 'none',
       activity: tile.trafficTier,
+      ...(spiking ? { spike: true } : {}),
     });
+  }
+
+  if (!dashed && !off) {
+    const heatTone = elevatedLoadTone(tile.cpu, tile.memory);
+    if (heatTone) {
+      out.nodes.push({
+        kind: 'rect',
+        x: x + 6,
+        y: y + 1.5,
+        w: COMPACT_SIZE - 12,
+        h: 2,
+        r: 1,
+        fill: heatTone,
+        opacity: heatTone === 'critical' ? 0.92 : 0.8,
+      });
+    }
   }
 
   if (tile.platform) {
@@ -709,13 +900,15 @@ const drawStorageBar = (
     const pct = Math.max(0, Math.min(100, tile.usedPercent!));
     const pctText = `${Math.round(pct)}%`;
     const pctW = Math.max(24, textWidth(pctText, 10, 500));
-    const trackW = anomalyPill
+    const minTrackW = w >= 260 ? 32 : 28;
+    const maxTrackW = anomalyPill
       ? w >= 260
-        ? 68
-        : Math.max(36, Math.min(48, w - 132))
-      : w >= 208
-        ? 68
-        : Math.max(36, Math.min(68, w - 132));
+        ? 58
+        : Math.max(32, Math.min(44, w - 132))
+      : w >= 260
+        ? 72
+        : Math.max(36, Math.min(54, w - 132));
+    const trackW = proportionalStorageTrackWidth(tile.totalBytes, minTrackW, maxTrackW);
     const trackX = x + w - 8 - pctW - 6 - trackW;
     const trackY = y + 12;
 
@@ -832,22 +1025,31 @@ const drawStorageBar = (
   let remW = textStart + textBudget - cursorX - 6;
 
   if (metaParts) {
-    const metaBudget = errText ? (remW >= errW + 6 + 28 ? remW - errW - 6 : 0) : remW;
-    if (metaBudget >= 28) {
-      const fittedMeta = fitMapText(metaParts, metaBudget, 10, 400);
-      if (fittedMeta) {
-        out.nodes.push({
-          kind: 'text',
-          x: cursorX + 6,
-          y: y + 19,
-          text: fittedMeta,
-          size: 10,
-          weight: 400,
-          fill: 'muted',
-        });
-        cursorX += 6 + textWidth(fittedMeta, 10, 400);
-        remW = textStart + textBudget - cursorX - 6;
+    const metaBudget = errText ? (remW >= errW + 6 + 24 ? remW - errW - 6 : 0) : remW;
+    // Never chop a capacity string like "442 GB" into "442…": prefer full layout+size,
+    // fall back to full sizeLabel intact, and only truncate non-size layout text.
+    let metaText = '';
+    if (metaBudget >= 24) {
+      if (textWidth(metaParts, 10, 400) <= metaBudget) {
+        metaText = metaParts;
+      } else if (tile.sizeLabel && textWidth(tile.sizeLabel, 10, 400) <= metaBudget) {
+        metaText = tile.sizeLabel;
+      } else if (tile.vdevLayout && !tile.sizeLabel) {
+        metaText = fitMapText(tile.vdevLayout, metaBudget, 10, 400);
       }
+    }
+    if (metaText) {
+      out.nodes.push({
+        kind: 'text',
+        x: cursorX + 6,
+        y: y + 19,
+        text: metaText,
+        size: 10,
+        weight: 400,
+        fill: 'muted',
+      });
+      cursorX += 6 + textWidth(metaText, 10, 400);
+      remW = textStart + textBudget - cursorX - 6;
     }
   }
 
@@ -1052,7 +1254,7 @@ const sizeHostFrame = (
     frame.totalCount > 0
       ? density === 'marks'
         ? String(frame.totalCount)
-        : hostCountLabel(frame.host.platform, frame.totalCount)
+        : hostCountLabel(frame.host.platform, frame.totalCount, frame)
       : '';
   const tempC =
     frame.host.temperatureC !== undefined && Number.isFinite(frame.host.temperatureC)
@@ -1080,11 +1282,11 @@ const sizeHostFrame = (
   const row2DesiredW =
     density === 'names'
       ? specW > 0 && metersW > 0
-        ? specW + metersW + 26
+        ? specW + metersW + 38
         : specW > 0
-          ? specW + 22
+          ? specW + 24
           : metersW > 0
-            ? metersW + 22
+            ? metersW + 24
             : 0
       : 0;
   const diskStripDesiredW =
@@ -1198,7 +1400,7 @@ const sizeHostFrame = (
     };
   }
 
-  // Named mode: Goblinmine-inspired horizontal service cards
+  // Named mode: dense horizontal service cards
   const baseRowW = inner < 520 ? Math.min(216, Math.max(180, inner - CARD_PAD * 2)) : 228;
   const maxFitCols = Math.max(
     1,
@@ -1362,6 +1564,27 @@ const drawHostFrame = (
   // any guest, pool, or network lights up the owning host header alongside it.
   const headerStart = out.nodes.length;
 
+  // Elevated-only top load heat accent on host frames (quiet below 75% / 75°C)
+  if (frame.host.health !== 'off') {
+    const hostHeatTone = elevatedLoadTone(
+      frame.host.cpu,
+      frame.host.memory,
+      frame.host.temperatureC,
+    );
+    if (hostHeatTone) {
+      out.nodes.push({
+        kind: 'rect',
+        x: x + CARD_RADIUS,
+        y: y + 0.5,
+        w: Math.max(24, w - CARD_RADIUS * 2),
+        h: 2,
+        r: 1,
+        fill: hostHeatTone,
+        opacity: hostHeatTone === 'critical' ? 0.92 : 0.78,
+      });
+    }
+  }
+
   // Left vertical network accent bar if host sits on a single named network
   const hostTone = hostSingleNetworkTone(frame, painter.networkCount, painter.toneFor);
   if (hostTone) {
@@ -1415,7 +1638,7 @@ const drawHostFrame = (
 
   let hitW = w;
   if (frame.totalCount > 0) {
-    const fullLabel = hostCountLabel(frame.host.platform, frame.totalCount);
+    const fullLabel = hostCountLabel(frame.host.platform, frame.totalCount, frame);
     const fullPillW = Math.max(22, textWidth(fullLabel, 10, 500) + 12);
     const compactLabel = String(frame.totalCount);
     const compactPillW = Math.max(22, textWidth(compactLabel, 10, 500) + 12);
@@ -1949,8 +2172,20 @@ const drawHostFrame = (
     curY += CARD_PAD;
   }
 
-  // Inline storage / ZFS pool usage bar strip
+  // Inline storage / ZFS pool usage bar strip (anchored cleanly above DISKS when stretched in a cluster row)
   if (frame.pools.length > 0) {
+    const poolRows = Math.ceil(frame.pools.length / sized.poolColumns);
+    const poolsBlockH =
+      (hasWorkloads ? 1 : 0) +
+      8 +
+      15 +
+      poolRows * POOL_BAR_H +
+      Math.max(0, poolRows - 1) * POOL_GAP +
+      CARD_PAD;
+    const disksBlockH = isNamed && frame.host.diskSummary ? 1 + DISK_STRIP_H : 0;
+    if (forcedH !== undefined) {
+      curY = Math.max(curY, y + h - poolsBlockH - disksBlockH);
+    }
     if (hasWorkloads) {
       out.nodes.push({ kind: 'rect', x, y: curY, w, h: 1, r: 0, fill: 'border' });
       curY += 1;
@@ -1980,7 +2215,6 @@ const drawHostFrame = (
         groupKey,
       );
     });
-    const poolRows = Math.ceil(frame.pools.length / sized.poolColumns);
     curY += poolRows * POOL_BAR_H + Math.max(0, poolRows - 1) * POOL_GAP + CARD_PAD;
   }
 
@@ -2096,6 +2330,7 @@ interface HostDropTarget {
   box: Box;
   frame: DiagramHostFrame;
   tier?: MapTrafficTier;
+  flowBytes?: number;
   clusterLeftRailX?: number;
 }
 
@@ -2254,11 +2489,13 @@ const drawClusterUnit = (
     for (const entry of row) {
       const childBox = drawHostFrame(painter, entry, cx, curY, true, rowMaxH);
       const childTier = activeTier(frameTrafficTier(entry.frame));
+      const childFlowBytes = childTier ? frameTrafficBytes(entry.frame) : undefined;
       tiers.push(childTier);
       drops.push({
         box: childBox,
         frame: entry.frame,
         tier: childTier,
+        ...(childFlowBytes !== undefined ? { flowBytes: childFlowBytes } : {}),
         ...(rowIdx > 0 ? { clusterLeftRailX: x + 5 } : {}),
       });
       cx += entry.w + CLUSTER_GAP;
@@ -2551,6 +2788,7 @@ const addLine = (
     arrow?: boolean;
     dashed?: boolean;
     activity?: MapTrafficTier;
+    flowBytes?: number;
     strokeWidth?: number;
   } = {},
 ) => {
@@ -2562,6 +2800,9 @@ const addLine = (
     ...(options.arrow ? { arrow: true } : {}),
     ...(options.dashed ? { dashed: true } : {}),
     ...(options.activity && !options.dashed ? { activity: options.activity } : {}),
+    ...(options.activity && !options.dashed && options.flowBytes !== undefined
+      ? { flowBytes: options.flowBytes }
+      : {}),
   });
 };
 
@@ -2573,6 +2814,7 @@ const drawHorizontalBus = (
   feedX: number,
   activeXs: number[],
   activity: MapTrafficTier | undefined,
+  flowBytes?: number,
 ) => {
   if (!activity || activeXs.length === 0 || leftX >= rightX) {
     addLine(lines, [
@@ -2596,7 +2838,7 @@ const drawHorizontalBus = (
         [feedX, busY],
         [activeMin, busY],
       ],
-      { activity },
+      { activity, flowBytes },
     );
   }
   if (feedX < activeMax) {
@@ -2606,7 +2848,7 @@ const drawHorizontalBus = (
         [feedX, busY],
         [activeMax, busY],
       ],
-      { activity },
+      { activity, flowBytes },
     );
   }
   if (activeMax < rightX) {
@@ -2800,7 +3042,7 @@ const lowerConnectorLabel = (group: DiagramGroup): string => {
   return 'disks and volumes';
 };
 
-/** Lays out the service diagram with Goblinmine-inspired architectural host frames. */
+/** Lays out the service diagram inside architectural host frames. */
 export function layoutHostDiagram(diagram: ServiceDiagram, options: MapLayoutOptions): MapScene {
   const margin = options.header ? 28 : 0;
   const width = Math.max(MIN_WIDTH + margin * 2, Math.floor(options.width));
@@ -2825,6 +3067,8 @@ export function layoutHostDiagram(diagram: ServiceDiagram, options: MapLayoutOpt
   const activeTier = (tier: MapTrafficTier | undefined): MapTrafficTier | undefined =>
     liveTraffic ? tier : undefined;
 
+  const peakServiceBytes = liveTraffic ? peakServiceTrafficBytes(diagram) : 0;
+
   const painter: HostPainter = {
     out,
     density: options.density,
@@ -2832,11 +3076,13 @@ export function layoutHostDiagram(diagram: ServiceDiagram, options: MapLayoutOpt
       diagram.networks.length > 1 && segmentId ? toneByNetwork.get(segmentId) : undefined,
     liveTraffic,
     networkCount: diagram.networks.length,
+    peakServiceBytes,
   };
 
   let y = drawPosterHeader(out, options.header, margin, width - margin * 2);
   let source: { x: number; y: number } | null = null;
   let lastBottom = 0;
+  const besideGatewayBoxes: Box[] = [];
 
   // Layer 1: Internet, Ways in, and Default Gateways
   const isCompact = options.density === 'marks';
@@ -2949,7 +3195,9 @@ export function layoutHostDiagram(diagram: ServiceDiagram, options: MapLayoutOpt
       const gx = boxX + accessSized.w + GROUP_GAP;
       const gy = accessBox.y + accessBox.h / 2 - gatewayH / 2;
       diagram.gateways.forEach((gateway, index) => {
-        drawGatewayCard(gateway, gx + index * gatewayPitch, gy);
+        const cardX = gx + index * gatewayPitch;
+        drawGatewayCard(gateway, cardX, gy);
+        besideGatewayBoxes.push({ x: cardX, y: gy, w: gatewayW, h: gatewayH });
       });
     }
 
@@ -2963,6 +3211,7 @@ export function layoutHostDiagram(diagram: ServiceDiagram, options: MapLayoutOpt
   }
 
   const accessTier = activeTier(groupTrafficTier(diagram.access));
+  const accessBytes = accessTier ? groupTrafficBytes(diagram.access) : undefined;
 
   // Layer 2: Networks strip
   if (diagram.networks.length > 0) {
@@ -2982,8 +3231,22 @@ export function layoutHostDiagram(diagram: ServiceDiagram, options: MapLayoutOpt
           [source.x, source.y],
           [mid, y],
         ],
-        { arrow: true, activity: accessTier },
+        { arrow: true, activity: accessTier, flowBytes: accessBytes },
       );
+      if (besideGatewayBoxes.length > 0) {
+        const joinY = source.y + Math.round((y - source.y) / 2);
+        besideGatewayBoxes.forEach((gwBox) => {
+          addLine(
+            lines,
+            [
+              [centreX(gwBox), bottomOf(gwBox)],
+              [centreX(gwBox), joinY],
+              [mid, joinY],
+            ],
+            { dashed: true },
+          );
+        });
+      }
     }
     lastBottom = Math.max(lastBottom, bandBottom);
     source = { x: mid, y: bandBottom };
@@ -3015,9 +3278,15 @@ export function layoutHostDiagram(diagram: ServiceDiagram, options: MapLayoutOpt
       } else {
         const box = drawHostFrame(painter, entry.sized, x, rowTop, false);
         const tier = activeTier(frameTrafficTier(entry.sized.frame));
+        const flowBytes = tier ? frameTrafficBytes(entry.sized.frame) : undefined;
         boxes.push(box);
         tiers.push(tier);
-        drops.push({ box, frame: entry.sized.frame, tier });
+        drops.push({
+          box,
+          frame: entry.sized.frame,
+          tier,
+          ...(flowBytes !== undefined ? { flowBytes } : {}),
+        });
       }
       x += entry.w + GROUP_GAP;
     }
@@ -3033,10 +3302,18 @@ export function layoutHostDiagram(diagram: ServiceDiagram, options: MapLayoutOpt
   const leftRail = margin + GUTTER / 2;
   const rightRail = width - margin - GUTTER / 2;
   const rowMaxTiers = placedUnitTiers.map((tiers) => maxTrafficTier(...tiers));
+  const rowMaxBytes = placedDrops.map((drops) => {
+    const peak = drops.reduce((maxB, drop) => Math.max(maxB, drop.flowBytes ?? 0), 0);
+    return peak > 0 ? peak : undefined;
+  });
   const allHostsTier = maxTrafficTier(...rowMaxTiers);
+  const allHostsBytes = (() => {
+    const peak = rowMaxBytes.reduce<number>((maxB, b) => Math.max(maxB, b ?? 0), 0);
+    return peak > 0 ? peak : undefined;
+  })();
 
   const drawHostDrop = (drop: HostDropTarget, busY: number) => {
-    const { box, frame, tier, clusterLeftRailX } = drop;
+    const { box, frame, tier, flowBytes, clusterLeftRailX } = drop;
     const speed = frame.linkSpeedMbps ?? frame.host.linkSpeedMbps;
     const strokeWidth = strokeWidthForLinkSpeed(speed);
     const utilPct = frame.host.linkUtilizationPercent;
@@ -3063,7 +3340,7 @@ export function layoutHostDiagram(diagram: ServiceDiagram, options: MapLayoutOpt
           [centreX(box), turnY],
           [centreX(box), box.y],
         ],
-        { tone, arrow: true, activity: tier, strokeWidth },
+        { tone, arrow: true, activity: tier, flowBytes, strokeWidth },
       );
       if (pillText) {
         connectorLabel(labels, pillText, centreX(box), turnY, 10, pillFill);
@@ -3077,10 +3354,10 @@ export function layoutHostDiagram(diagram: ServiceDiagram, options: MapLayoutOpt
         [centreX(box), busY],
         [centreX(box), box.y],
       ],
-      { tone, arrow: true, activity: tier, strokeWidth },
+      { tone, arrow: true, activity: tier, flowBytes, strokeWidth },
     );
     if (pillText) {
-      connectorLabel(labels, pillText, centreX(box), busY + 12, 10, pillFill);
+      connectorLabel(labels, pillText, centreX(box), busY + 13, 10, pillFill);
     }
   };
 
@@ -3101,7 +3378,7 @@ export function layoutHostDiagram(diagram: ServiceDiagram, options: MapLayoutOpt
           [source.x, source.y],
           [source.x, busY],
         ],
-        { activity: allHostsTier },
+        { activity: allHostsTier, flowBytes: allHostsBytes },
       );
       const xs = [...dropBusXs(drops), source.x];
       const activeXs = activeDropBusXs(drops);
@@ -3113,12 +3390,17 @@ export function layoutHostDiagram(diagram: ServiceDiagram, options: MapLayoutOpt
         source.x,
         activeXs,
         allHostsTier,
+        allHostsBytes,
       );
       drops.forEach((drop) => drawHostDrop(drop, busY));
     } else {
       const firstBus = placedUnits[0][0].y - BUS_DROP;
       const lastBus = placedUnits[placedUnits.length - 1][0].y - BUS_DROP;
       const lowerRowsTier = maxTrafficTier(...rowMaxTiers.slice(1));
+      const lowerRowsBytes = (() => {
+        const peak = rowMaxBytes.slice(1).reduce<number>((maxB, b) => Math.max(maxB, b ?? 0), 0);
+        return peak > 0 ? peak : undefined;
+      })();
       let lastActiveRow = -1;
       for (let rowIndex = 1; rowIndex < rowMaxTiers.length; rowIndex += 1) {
         if (rowMaxTiers[rowIndex]) lastActiveRow = rowIndex;
@@ -3129,7 +3411,7 @@ export function layoutHostDiagram(diagram: ServiceDiagram, options: MapLayoutOpt
           [source.x, source.y],
           [source.x, firstBus],
         ],
-        { activity: allHostsTier },
+        { activity: allHostsTier, flowBytes: allHostsBytes },
       );
       if (lastActiveRow > 0 && lowerRowsTier) {
         const activeRailBottom = placedUnits[lastActiveRow][0].y - BUS_DROP;
@@ -3139,7 +3421,7 @@ export function layoutHostDiagram(diagram: ServiceDiagram, options: MapLayoutOpt
             [leftRail, firstBus],
             [leftRail, activeRailBottom],
           ],
-          { activity: lowerRowsTier },
+          { activity: lowerRowsTier, flowBytes: lowerRowsBytes },
         );
         if (activeRailBottom < lastBus) {
           addLine(lines, [
@@ -3169,6 +3451,7 @@ export function layoutHostDiagram(diagram: ServiceDiagram, options: MapLayoutOpt
             source!.x,
             row0Targets,
             maxTrafficTier(rowMaxTiers[0], lowerRowsTier),
+            allHostsBytes,
           );
         } else {
           drawHorizontalBus(
@@ -3179,6 +3462,7 @@ export function layoutHostDiagram(diagram: ServiceDiagram, options: MapLayoutOpt
             leftRail,
             activeXs,
             rowMaxTiers[rowIndex],
+            rowMaxBytes[rowIndex],
           );
         }
         drops.forEach((drop) => drawHostDrop(drop, busY));
