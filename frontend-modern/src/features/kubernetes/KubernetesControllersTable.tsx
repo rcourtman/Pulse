@@ -1,16 +1,12 @@
-import { Show, createMemo, type Component, type JSX } from 'solid-js';
-import { StatusDot } from '@/components/shared/StatusDot';
+import { createMemo, type Component, type JSX } from 'solid-js';
 import { TableCell, TableRow } from '@/components/shared/Table';
 import { getResourceTypeLabel } from '@/utils/resourceTypePresentation';
 import { asTrimmedString } from '@/utils/stringUtils';
 import {
   PlatformWindowedRows,
-  PLATFORM_HEALTH_FILTER_OPTIONS,
   PlatformResponsiveTableLabel,
   PlatformSortableTableHead,
-  PlatformTableEmptyState,
   PlatformTableNumberValue,
-  PlatformTableToolbar,
   createPlatformTableFilterState,
   createPlatformTableSortState,
   formatPlatformTableDateTimeValue,
@@ -20,13 +16,9 @@ import {
   getPlatformTableCellClassForKind,
   PlatformTableShell,
   type PlatformTableSortValue,
-  withPlatformStatusCounts,
 } from '@/features/platformPage/sharedPlatformPage';
 import { getPlatformStatusTextToneClass } from '@/features/platformPage/platformStatusTone';
 import {
-  PlatformResourceDetailToggleButton,
-  PlatformResourceDetailTableRow,
-  createPlatformResourceDetailState,
   createPlatformResourceLabelResolver,
   getPlatformResourceDetailRowClass,
 } from '@/features/platformPage/PlatformResourceDetailTableRow';
@@ -35,6 +27,7 @@ import { useRelativeTimeNow } from '@/utils/relativeTimeClock';
 import {
   compareKubernetesControllers,
   filterKubernetesResources,
+  hasStaleKubernetesReadings,
   kubernetesScopeLabel,
   mapKubernetesControllerStatus,
   type KubernetesResourceStatusFilter,
@@ -42,6 +35,13 @@ import {
 } from './kubernetesPageModel';
 import { KubernetesScopeText } from './KubernetesScopeText';
 import { KubernetesNameText } from './KubernetesNameText';
+import {
+  KubernetesDetailRow,
+  KubernetesRowLead,
+  KubernetesStaleDataCue,
+  KubernetesTableFrame,
+  createKubernetesDetailState,
+} from './KubernetesRecordDetail';
 
 const controllerName = (resource: Resource): string =>
   asTrimmedString(resource.displayName) || asTrimmedString(resource.name) || resource.id;
@@ -55,79 +55,65 @@ const countedTarget = (count: number | undefined, noun: string): string => {
 };
 
 const targetValue = (resource: Resource): string => {
+  const k = resource.kubernetes;
   switch (resource.type) {
     case 'k8s-replicaset':
     case 'k8s-statefulset':
-      return countedTarget(resource.kubernetes?.desiredReplicas, 'pods');
+      return countedTarget(k?.desiredReplicas, 'pods');
     case 'k8s-daemonset':
-      return countedTarget(resource.kubernetes?.desiredNumberScheduled, 'nodes');
+      return countedTarget(k?.desiredNumberScheduled, 'nodes');
     case 'k8s-job':
-      return countedTarget(resource.kubernetes?.desiredReplicas, 'completions');
+      return countedTarget(k?.desiredReplicas, 'completions');
     case 'k8s-cronjob':
-      return formatPlatformTableTextValue(resource.kubernetes?.schedule);
+      return formatPlatformTableTextValue(k?.schedule);
     default:
       return '—';
   }
 };
 
 const currentValue = (resource: Resource): number | undefined => {
-  switch (resource.type) {
-    case 'k8s-daemonset':
-      return resource.kubernetes?.currentNumberScheduled;
-    case 'k8s-job':
-    case 'k8s-cronjob':
-      return resource.kubernetes?.active;
-    default:
-      return resource.kubernetes?.currentReplicas;
-  }
+  const k = resource.kubernetes;
+  if (resource.type === 'k8s-daemonset') return k?.currentNumberScheduled;
+  if (resource.type === 'k8s-job' || resource.type === 'k8s-cronjob') return k?.active;
+  return k?.currentReplicas;
 };
 
 const readyOrDoneValue = (resource: Resource): number | undefined => {
-  switch (resource.type) {
-    case 'k8s-daemonset':
-      return resource.kubernetes?.numberReady;
-    case 'k8s-job':
-      return resource.kubernetes?.succeeded;
-    case 'k8s-cronjob':
-      return undefined;
-    default:
-      return resource.kubernetes?.readyReplicas;
-  }
+  const k = resource.kubernetes;
+  if (resource.type === 'k8s-daemonset') return k?.numberReady;
+  if (resource.type === 'k8s-job') return k?.succeeded;
+  return resource.type === 'k8s-cronjob' ? undefined : k?.readyReplicas;
 };
 
 const availableValue = (resource: Resource): number | undefined => {
-  switch (resource.type) {
-    case 'k8s-replicaset':
-    case 'k8s-statefulset':
-      return resource.kubernetes?.availableReplicas;
-    case 'k8s-daemonset':
-      return resource.kubernetes?.numberAvailable;
-    default:
-      return undefined;
+  const k = resource.kubernetes;
+  if (resource.type === 'k8s-replicaset' || resource.type === 'k8s-statefulset') {
+    return k?.availableReplicas;
   }
+  return resource.type === 'k8s-daemonset' ? k?.numberAvailable : undefined;
 };
 
 const exceptionSummary = (resource: Resource): string => {
+  const k = resource.kubernetes;
   switch (resource.type) {
     case 'k8s-replicaset':
     case 'k8s-statefulset': {
-      const desired = resource.kubernetes?.desiredReplicas ?? 0;
-      const ready = resource.kubernetes?.readyReplicas ?? 0;
-      const notReady = Math.max(0, desired - ready);
+      const notReady = Math.max(0, (k?.desiredReplicas ?? 0) - (k?.readyReplicas ?? 0));
       return notReady > 0 ? `${notReady} not ready` : '—';
     }
     case 'k8s-daemonset': {
-      const unavailable = resource.kubernetes?.numberUnavailable ?? 0;
-      const misscheduled = resource.kubernetes?.numberMisscheduled ?? 0;
-      if (unavailable === 0 && misscheduled === 0) return '—';
-      return `Unavailable: ${unavailable} / Misscheduled: ${misscheduled}`;
+      const unavailable = k?.numberUnavailable ?? 0;
+      const misscheduled = k?.numberMisscheduled ?? 0;
+      return unavailable === 0 && misscheduled === 0
+        ? '—'
+        : `Unavailable: ${unavailable} / Misscheduled: ${misscheduled}`;
     }
     case 'k8s-job': {
-      const failed = resource.kubernetes?.failed ?? 0;
+      const failed = k?.failed ?? 0;
       return failed > 0 ? `Failed: ${failed}` : '—';
     }
     case 'k8s-cronjob':
-      return resource.kubernetes?.suspend ? 'Suspended' : '—';
+      return k?.suspend ? 'Suspended' : '—';
     default:
       return '—';
   }
@@ -151,40 +137,28 @@ const timeDetail = (label: string, timestamp: string, now: number): ControllerDe
 };
 
 const apiDetail = (resource: Resource, now: number): ControllerDetail => {
+  const k = resource.kubernetes;
   switch (resource.type) {
-    case 'k8s-replicaset': {
-      if (typeof resource.kubernetes?.fullyLabeledReplicas === 'number') {
-        return plainDetail(`Fully labeled: ${resource.kubernetes.fullyLabeledReplicas}`);
+    case 'k8s-replicaset':
+      if (typeof k?.fullyLabeledReplicas === 'number') {
+        return plainDetail(`Fully labeled: ${k.fullyLabeledReplicas}`);
       }
       return plainDetail(
-        typeof resource.kubernetes?.observedGeneration === 'number'
-          ? `Observed: ${resource.kubernetes.observedGeneration}`
-          : '—',
+        typeof k?.observedGeneration === 'number' ? `Observed: ${k.observedGeneration}` : '—',
       );
-    }
     case 'k8s-statefulset':
-      return plainDetail(
-        resource.kubernetes?.serviceName ? `Service: ${resource.kubernetes.serviceName}` : '—',
-      );
+      return plainDetail(k?.serviceName ? `Service: ${k.serviceName}` : '—');
     case 'k8s-daemonset':
       return plainDetail(
-        typeof resource.kubernetes?.updatedReplicas === 'number'
-          ? `Updated: ${resource.kubernetes.updatedReplicas}`
-          : '—',
+        typeof k?.updatedReplicas === 'number' ? `Updated: ${k.updatedReplicas}` : '—',
       );
     case 'k8s-job':
-      if (resource.kubernetes?.completionTime) {
-        return timeDetail('Completed', resource.kubernetes.completionTime, now);
-      }
-      return resource.kubernetes?.startTime
-        ? timeDetail('Started', resource.kubernetes.startTime, now)
-        : plainDetail('—');
+      if (k?.completionTime) return timeDetail('Completed', k.completionTime, now);
+      return k?.startTime ? timeDetail('Started', k.startTime, now) : plainDetail('—');
     case 'k8s-cronjob':
-      if (resource.kubernetes?.lastSuccessfulTime) {
-        return timeDetail('Last success', resource.kubernetes.lastSuccessfulTime, now);
-      }
-      return resource.kubernetes?.lastScheduleTime
-        ? timeDetail('Last run', resource.kubernetes.lastScheduleTime, now)
+      if (k?.lastSuccessfulTime) return timeDetail('Last success', k.lastSuccessfulTime, now);
+      return k?.lastScheduleTime
+        ? timeDetail('Last run', k.lastScheduleTime, now)
         : plainDetail('—');
     default:
       return plainDetail('—');
@@ -271,253 +245,216 @@ export const KubernetesControllersTable: Component<{
       getKubernetesControllerSortValue,
     ),
   );
-  const drawer = createPlatformResourceDetailState({ idPrefix: 'kubernetes-controller-drawer' });
+  const drawer = createKubernetesDetailState('kubernetes-controller-drawer');
   const resolveResourceLabel = createPlatformResourceLabelResolver(() => props.resources);
 
   return (
-    <Show
-      when={props.resources.length > 0}
-      fallback={
-        <PlatformTableEmptyState
-          icon={props.emptyIcon}
-          title={props.emptyTitle}
-          description={props.emptyDescription}
-        />
-      }
+    <KubernetesTableFrame
+      hasResources={props.resources.length > 0}
+      emptyIcon={props.emptyIcon}
+      emptyTitle={props.emptyTitle}
+      emptyDescription={props.emptyDescription}
+      showToolbar={props.showToolbar}
+      rowNoun="controllers"
+      filteredEmptyNoun="Kubernetes controllers"
+      tableState={tableState}
     >
-      <div class="space-y-3">
-        <Show when={props.showToolbar !== false}>
-          <PlatformTableToolbar
-            search={tableState.search}
-            onSearchChange={tableState.setSearch}
-            searchPlaceholder="Search controllers"
-            searchSuggestions={tableState.searchSuggestions}
-            status={tableState.status()}
-            onStatusChange={tableState.setStatus}
-            statusOptions={withPlatformStatusCounts(
-              PLATFORM_HEALTH_FILTER_OPTIONS,
-              tableState.countForStatus,
-            )}
-            visible={tableState.visible()}
-            total={tableState.total()}
-            rowNoun="controllers"
-          />
-        </Show>
-
-        <Show
-          when={tableState.filtered().length > 0}
-          fallback={
-            <PlatformTableEmptyState
-              icon={props.emptyIcon}
-              title="No controllers match current filters"
-              description="Adjust the search or status filter to see more Kubernetes controllers."
-            />
-          }
-        >
-          <PlatformTableShell
-            title={props.title ?? 'Workload Controllers'}
-            tableClass="min-w-full table-fixed text-xs md:min-w-[1120px]"
-            header={
-              <>
-                <PlatformSortableTableHead
-                  kind="name"
-                  sort={sort}
-                  sortKey="controller"
-                  class="platform-table-mobile-w-30 md:w-[22%]"
-                >
-                  Controller
-                </PlatformSortableTableHead>
-                <PlatformSortableTableHead
-                  kind="text"
-                  sort={sort}
-                  sortKey="kind"
-                  class="platform-table-mobile-w-25 md:w-[8%]"
-                >
-                  Kind
-                </PlatformSortableTableHead>
-                <PlatformSortableTableHead
-                  kind="text"
-                  sort={sort}
-                  sortKey="scope"
-                  class="hidden lg:table-cell md:w-[14%]"
-                >
-                  Scope
-                </PlatformSortableTableHead>
-                {/* The phone row keeps controller, kind, ready and issues. A
+      <PlatformTableShell
+        title={props.title ?? 'Workload Controllers'}
+        tableClass="min-w-full table-fixed text-xs md:min-w-[1120px]"
+        header={
+          <>
+            <PlatformSortableTableHead
+              kind="name"
+              sort={sort}
+              sortKey="controller"
+              class="platform-table-mobile-w-30 md:w-[22%]"
+            >
+              Controller
+            </PlatformSortableTableHead>
+            <PlatformSortableTableHead
+              kind="text"
+              sort={sort}
+              sortKey="kind"
+              class="platform-table-mobile-w-25 md:w-[8%]"
+            >
+              Kind
+            </PlatformSortableTableHead>
+            <PlatformSortableTableHead
+              kind="text"
+              sort={sort}
+              sortKey="scope"
+              class="hidden lg:table-cell md:w-[14%]"
+            >
+              Scope
+            </PlatformSortableTableHead>
+            {/* The phone row keeps controller, kind, ready and issues. A
                     15% kind track clipped "DaemonSet" and "StatefulSet" and the
                     target track clipped "1 completions", so target moves to the
                     row expansion, which also carries the schedule and job
                     timestamps the narrower layouts drop. */}
-                <PlatformSortableTableHead
-                  kind="text"
-                  sort={sort}
-                  sortKey="target"
-                  class="platform-table-phone-hidden md:w-[12%]"
-                >
-                  Target
-                </PlatformSortableTableHead>
-                <PlatformSortableTableHead
-                  kind="numeric-value"
-                  sort={sort}
-                  sortKey="current"
-                  class="hidden sm:table-cell md:w-[7%]"
-                >
-                  Current
-                </PlatformSortableTableHead>
-                <PlatformSortableTableHead
-                  kind="numeric-value"
-                  sort={sort}
-                  sortKey="ready"
-                  class="platform-table-mobile-w-15 md:w-[10%]"
-                >
-                  <PlatformResponsiveTableLabel compact="Ready" full="Ready/Done" />
-                </PlatformSortableTableHead>
-                <PlatformSortableTableHead
-                  kind="numeric-value"
-                  sort={sort}
-                  sortKey="available"
-                  class="hidden md:table-cell md:w-[8%]"
-                >
-                  Available
-                </PlatformSortableTableHead>
-                <PlatformSortableTableHead
-                  kind="text"
-                  sort={sort}
-                  sortKey="exceptions"
-                  class="platform-table-mobile-w-30 md:w-[11%]"
-                >
-                  <PlatformResponsiveTableLabel compact="Issues" full="Exceptions" />
-                </PlatformSortableTableHead>
-                <PlatformSortableTableHead
-                  kind="text"
-                  sort={sort}
-                  class="hidden lg:table-cell md:w-[12%]"
-                >
-                  Detail
-                </PlatformSortableTableHead>
-              </>
-            }
-            body={
-              <>
-                <PlatformWindowedRows items={sortedRows} estimatedRowHeight={32}>
-                  {(resource) => {
-                    const indicator = () => mapKubernetesControllerStatus(resource);
-                    const name = () => controllerName(resource);
-                    const kind = () => controllerKind(resource);
-                    const target = () => targetValue(resource);
-                    const exceptions = () => exceptionSummary(resource);
-                    const detail = () => apiDetail(resource, now());
-                    const detailRowId = () => drawer.detailRowId(resource);
-                    const isExpanded = () => drawer.isExpanded(resource);
+            <PlatformSortableTableHead
+              kind="text"
+              sort={sort}
+              sortKey="target"
+              class="platform-table-phone-hidden md:w-[12%]"
+            >
+              Target
+            </PlatformSortableTableHead>
+            <PlatformSortableTableHead
+              kind="numeric-value"
+              sort={sort}
+              sortKey="current"
+              class="hidden sm:table-cell md:w-[7%]"
+            >
+              Current
+            </PlatformSortableTableHead>
+            <PlatformSortableTableHead
+              kind="numeric-value"
+              sort={sort}
+              sortKey="ready"
+              class="platform-table-mobile-w-15 md:w-[10%]"
+            >
+              <PlatformResponsiveTableLabel compact="Ready" full="Ready/Done" />
+            </PlatformSortableTableHead>
+            <PlatformSortableTableHead
+              kind="numeric-value"
+              sort={sort}
+              sortKey="available"
+              class="hidden md:table-cell md:w-[8%]"
+            >
+              Available
+            </PlatformSortableTableHead>
+            <PlatformSortableTableHead
+              kind="text"
+              sort={sort}
+              sortKey="exceptions"
+              class="platform-table-mobile-w-30 md:w-[11%]"
+            >
+              <PlatformResponsiveTableLabel compact="Issues" full="Exceptions" />
+            </PlatformSortableTableHead>
+            <PlatformSortableTableHead
+              kind="text"
+              sort={sort}
+              class="hidden lg:table-cell md:w-[12%]"
+            >
+              Detail
+            </PlatformSortableTableHead>
+          </>
+        }
+        body={
+          <>
+            <PlatformWindowedRows items={sortedRows} estimatedRowHeight={32}>
+              {(resource) => {
+                const indicator = () => mapKubernetesControllerStatus(resource);
+                const readingsStale = () => hasStaleKubernetesReadings(resource);
+                const name = () => controllerName(resource);
+                const kind = () => controllerKind(resource);
+                const target = () => targetValue(resource);
+                const exceptions = () => exceptionSummary(resource);
+                const detail = () => apiDetail(resource, now());
+                const isExpanded = () => drawer.isExpanded(resource);
 
-                    return (
-                      <>
-                        <TableRow
-                          class={`${getPlatformResourceDetailRowClass(isExpanded())} text-[11px] sm:text-xs`}
-                          data-kubernetes-controller-row={resource.id}
-                          onClick={() => drawer.toggle(resource)}
-                        >
-                          <TableCell class={getPlatformTableCellClassForKind('name')}>
-                            <div class="flex min-w-0 items-center gap-2">
-                              <PlatformResourceDetailToggleButton
-                                expanded={isExpanded()}
-                                resourceLabel={name()}
-                                controlsId={detailRowId()}
-                                onToggle={() => drawer.toggle(resource)}
-                              />
-                              <StatusDot
-                                size="sm"
-                                variant={indicator().variant}
-                                title={indicator().label}
-                                ariaHidden
-                              />
-                              <KubernetesNameText
-                                name={name()}
-                                class="font-semibold text-base-content"
-                              />
-                            </div>
-                          </TableCell>
-                          <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
-                          >
-                            {kind()}
-                          </TableCell>
-                          <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content lg:table-cell`}
-                          >
-                            <KubernetesScopeText
-                              resource={resource}
-                              singleCluster={singleCluster()}
-                              class="block truncate"
-                            />
-                          </TableCell>
-                          <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} platform-table-phone-hidden text-base-content`}
-                          >
-                            <span class="block truncate" title={target()}>
-                              {target()}
-                            </span>
-                          </TableCell>
-                          <TableCell
-                            class={`${getPlatformTableCellClassForKind('numeric-value')} hidden text-base-content sm:table-cell`}
-                          >
-                            <PlatformTableNumberValue value={currentValue(resource)} />
-                          </TableCell>
-                          <TableCell
-                            class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
-                          >
-                            <PlatformTableNumberValue value={readyOrDoneValue(resource)} />
-                          </TableCell>
-                          <TableCell
-                            class={`${getPlatformTableCellClassForKind('numeric-value')} hidden text-base-content md:table-cell`}
-                          >
-                            <PlatformTableNumberValue value={availableValue(resource)} />
-                          </TableCell>
-                          <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
-                          >
-                            {/* The exception is why the dot is not green: its colour. */}
-                            <span
-                              class={`block truncate ${
-                                exceptions() === '—'
-                                  ? ''
-                                  : getPlatformStatusTextToneClass(indicator().variant)
-                              }`}
-                              title={exceptions()}
-                              data-kubernetes-controller-exception={
-                                exceptions() === '—' ? 'none' : indicator().variant
-                              }
-                            >
-                              {exceptions()}
-                            </span>
-                          </TableCell>
-                          <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content lg:table-cell`}
-                          >
-                            <span class="block truncate" title={detail().title}>
-                              {detail().text}
-                            </span>
-                          </TableCell>
-                        </TableRow>
-                        <PlatformResourceDetailTableRow
+                return (
+                  <>
+                    <TableRow
+                      class={`${getPlatformResourceDetailRowClass(isExpanded())} text-[11px] sm:text-xs`}
+                      data-kubernetes-controller-row={resource.id}
+                      onClick={() => drawer.toggle(resource)}
+                    >
+                      <TableCell class={getPlatformTableCellClassForKind('name')}>
+                        <KubernetesRowLead
                           resource={resource}
-                          statusIndicator={indicator()}
-                          open={isExpanded()}
-                          detailRowId={detailRowId()}
-                          colSpan={9}
-                          resolveResourceLabel={resolveResourceLabel}
-                          onClose={() => drawer.close(resource)}
+                          drawer={drawer}
+                          label={name()}
+                          status={indicator()}
+                        >
+                          <div class="min-w-0">
+                            <KubernetesNameText
+                              name={name()}
+                              class="font-semibold text-base-content"
+                            />
+                            <KubernetesStaleDataCue when={readingsStale()} scope="controller" />
+                          </div>
+                        </KubernetesRowLead>
+                      </TableCell>
+                      <TableCell
+                        class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
+                      >
+                        {kind()}
+                      </TableCell>
+                      <TableCell
+                        class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content lg:table-cell`}
+                      >
+                        <KubernetesScopeText
+                          resource={resource}
+                          singleCluster={singleCluster()}
+                          class="block truncate"
                         />
-                      </>
-                    );
-                  }}
-                </PlatformWindowedRows>
-              </>
-            }
-          />
-        </Show>
-      </div>
-    </Show>
+                      </TableCell>
+                      <TableCell
+                        class={`${getPlatformTableCellClassForKind('text')} platform-table-phone-hidden text-base-content`}
+                      >
+                        <span class="block truncate" title={target()}>
+                          {target()}
+                        </span>
+                      </TableCell>
+                      <TableCell
+                        class={`${getPlatformTableCellClassForKind('numeric-value')} hidden text-base-content sm:table-cell`}
+                      >
+                        <PlatformTableNumberValue value={currentValue(resource)} />
+                      </TableCell>
+                      <TableCell
+                        class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
+                      >
+                        <PlatformTableNumberValue value={readyOrDoneValue(resource)} />
+                      </TableCell>
+                      <TableCell
+                        class={`${getPlatformTableCellClassForKind('numeric-value')} hidden text-base-content md:table-cell`}
+                      >
+                        <PlatformTableNumberValue value={availableValue(resource)} />
+                      </TableCell>
+                      <TableCell
+                        class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
+                      >
+                        {/* The exception is why the dot is not green: its colour. */}
+                        <span
+                          class={`block truncate ${
+                            exceptions() === '—'
+                              ? ''
+                              : getPlatformStatusTextToneClass(indicator().variant)
+                          }`}
+                          title={exceptions()}
+                          data-kubernetes-controller-exception={
+                            exceptions() === '—' ? 'none' : indicator().variant
+                          }
+                        >
+                          {exceptions()}
+                        </span>
+                      </TableCell>
+                      <TableCell
+                        class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content lg:table-cell`}
+                      >
+                        <span class="block truncate" title={detail().title}>
+                          {detail().text}
+                        </span>
+                      </TableCell>
+                    </TableRow>
+                    <KubernetesDetailRow
+                      resource={resource}
+                      statusIndicator={indicator()}
+                      drawer={drawer}
+                      colSpan={9}
+                      resolveResourceLabel={resolveResourceLabel}
+                    />
+                  </>
+                );
+              }}
+            </PlatformWindowedRows>
+          </>
+        }
+      />
+    </KubernetesTableFrame>
   );
 };
 

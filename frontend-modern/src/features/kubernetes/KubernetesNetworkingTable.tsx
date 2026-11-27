@@ -1,15 +1,11 @@
-import { Show, createMemo, type Component, type JSX } from 'solid-js';
-import { StatusDot } from '@/components/shared/StatusDot';
+import { createMemo, type Component, type JSX } from 'solid-js';
 import { TableCell, TableRow } from '@/components/shared/Table';
 import { getSimpleStatusIndicator } from '@/utils/status';
 import { asTrimmedString } from '@/utils/stringUtils';
 import {
   PlatformWindowedRows,
-  PLATFORM_HEALTH_FILTER_OPTIONS,
   PlatformResponsiveTableLabel,
   PlatformSortableTableHead,
-  PlatformTableEmptyState,
-  PlatformTableToolbar,
   createPlatformTableFilterState,
   createPlatformTableSortState,
   formatPlatformTableCountRatioValue,
@@ -18,12 +14,8 @@ import {
   summarizePlatformTableValues,
   PlatformTableShell,
   type PlatformTableSortValue,
-  withPlatformStatusCounts,
 } from '@/features/platformPage/sharedPlatformPage';
 import {
-  PlatformResourceDetailToggleButton,
-  PlatformResourceDetailTableRow,
-  createPlatformResourceDetailState,
   createPlatformResourceLabelResolver,
   getPlatformResourceDetailRowClass,
 } from '@/features/platformPage/PlatformResourceDetailTableRow';
@@ -35,6 +27,12 @@ import {
   isSingleKubernetesCluster,
 } from './kubernetesPageModel';
 import { KubernetesScopeText } from './KubernetesScopeText';
+import {
+  KubernetesDetailRow,
+  KubernetesRowLead,
+  KubernetesTableFrame,
+  createKubernetesDetailState,
+} from './KubernetesRecordDetail';
 
 const resourceName = (resource: Resource): string =>
   asTrimmedString(resource.displayName) || asTrimmedString(resource.name) || resource.id;
@@ -152,7 +150,7 @@ export const KubernetesNetworkingTable: Component<{
     externalSearch: props.externalSearch,
     externalStatus: props.externalStatus,
   });
-  const drawer = createPlatformResourceDetailState({ idPrefix: 'kubernetes-networking-drawer' });
+  const drawer = createKubernetesDetailState('kubernetes-networking-drawer');
   const resolveResourceLabel = createPlatformResourceLabelResolver(() => props.resources);
   const sort = createPlatformTableSortState({
     storageKey: 'kubernetesNetworking',
@@ -163,206 +161,167 @@ export const KubernetesNetworkingTable: Component<{
   );
 
   return (
-    <Show
-      when={props.resources.length > 0}
-      fallback={
-        <PlatformTableEmptyState
-          icon={props.emptyIcon}
-          title={props.emptyTitle}
-          description={props.emptyDescription}
-        />
-      }
+    <KubernetesTableFrame
+      hasResources={props.resources.length > 0}
+      emptyIcon={props.emptyIcon}
+      emptyTitle={props.emptyTitle}
+      emptyDescription={props.emptyDescription}
+      showToolbar={props.showToolbar}
+      rowNoun="network resources"
+      searchPlaceholder="Search networking inventory"
+      filteredEmptyNoun="Kubernetes network resources"
+      tableState={tableState}
     >
-      <div class="space-y-3">
-        <Show when={props.showToolbar !== false}>
-          <PlatformTableToolbar
-            search={tableState.search}
-            onSearchChange={tableState.setSearch}
-            searchPlaceholder="Search networking inventory"
-            searchSuggestions={tableState.searchSuggestions}
-            status={tableState.status()}
-            onStatusChange={tableState.setStatus}
-            statusOptions={withPlatformStatusCounts(
-              PLATFORM_HEALTH_FILTER_OPTIONS,
-              tableState.countForStatus,
-            )}
-            visible={tableState.visible()}
-            total={tableState.total()}
-            rowNoun="network resources"
-          />
-        </Show>
+      <PlatformTableShell
+        title={props.title ?? 'Ingresses and EndpointSlices'}
+        tableClass="min-w-full table-fixed text-xs md:min-w-[1180px]"
+        header={
+          <>
+            <PlatformSortableTableHead
+              kind="name"
+              sort={sort}
+              sortKey="resource"
+              class="kubernetes-network-name-column platform-table-mobile-w-30 md:w-[19%]"
+            >
+              Resource
+            </PlatformSortableTableHead>
+            <PlatformSortableTableHead
+              kind="text"
+              sort={sort}
+              sortKey="kind"
+              class="kubernetes-network-kind-column platform-table-mobile-w-15 md:w-[12%]"
+            >
+              Kind
+            </PlatformSortableTableHead>
+            <PlatformSortableTableHead
+              kind="text"
+              sort={sort}
+              sortKey="scope"
+              class="platform-table-mobile-w-20 md:w-[14%]"
+            >
+              Scope
+            </PlatformSortableTableHead>
+            <PlatformSortableTableHead
+              kind="text"
+              sort={sort}
+              sortKey="typeClass"
+              class="kubernetes-network-class-column platform-table-mobile-w-15 md:w-[12%]"
+            >
+              <PlatformResponsiveTableLabel compact="Cls" full="Type / class" />
+            </PlatformSortableTableHead>
+            <PlatformSortableTableHead
+              kind="text"
+              sort={sort}
+              class="hidden md:table-cell md:w-[18%]"
+            >
+              Address / hosts
+            </PlatformSortableTableHead>
+            <PlatformSortableTableHead
+              kind="text"
+              sort={sort}
+              class="kubernetes-network-ports-column platform-table-mobile-w-20 md:w-[12%]"
+            >
+              Ports
+            </PlatformSortableTableHead>
+            <PlatformSortableTableHead
+              kind="text"
+              sort={sort}
+              class="hidden md:table-cell md:w-[13%]"
+            >
+              Targets
+            </PlatformSortableTableHead>
+          </>
+        }
+        body={
+          <>
+            <PlatformWindowedRows items={sortedRows} estimatedRowHeight={32}>
+              {(resource) => {
+                const indicator = () => getSimpleStatusIndicator(resource.status);
+                const name = () => resourceName(resource);
+                const address = () => addressOrHosts(resource);
+                const ports = () => portLabel(resource);
+                const targets = () => targetSummary(resource);
+                const isExpanded = () => drawer.isExpanded(resource);
 
-        <Show
-          when={tableState.filtered().length > 0}
-          fallback={
-            <PlatformTableEmptyState
-              icon={props.emptyIcon}
-              title="No network resources match current filters"
-              description="Adjust the search or status filter to see more Kubernetes network resources."
-            />
-          }
-        >
-          <PlatformTableShell
-            title={props.title ?? 'Ingresses and EndpointSlices'}
-            tableClass="min-w-full table-fixed text-xs md:min-w-[1180px]"
-            header={
-              <>
-                <PlatformSortableTableHead
-                  kind="name"
-                  sort={sort}
-                  sortKey="resource"
-                  class="kubernetes-network-name-column platform-table-mobile-w-30 md:w-[19%]"
-                >
-                  Resource
-                </PlatformSortableTableHead>
-                <PlatformSortableTableHead
-                  kind="text"
-                  sort={sort}
-                  sortKey="kind"
-                  class="kubernetes-network-kind-column platform-table-mobile-w-15 md:w-[12%]"
-                >
-                  Kind
-                </PlatformSortableTableHead>
-                <PlatformSortableTableHead
-                  kind="text"
-                  sort={sort}
-                  sortKey="scope"
-                  class="platform-table-mobile-w-20 md:w-[14%]"
-                >
-                  Scope
-                </PlatformSortableTableHead>
-                <PlatformSortableTableHead
-                  kind="text"
-                  sort={sort}
-                  sortKey="typeClass"
-                  class="kubernetes-network-class-column platform-table-mobile-w-15 md:w-[12%]"
-                >
-                  <PlatformResponsiveTableLabel compact="Cls" full="Type / class" />
-                </PlatformSortableTableHead>
-                <PlatformSortableTableHead
-                  kind="text"
-                  sort={sort}
-                  class="hidden md:table-cell md:w-[18%]"
-                >
-                  Address / hosts
-                </PlatformSortableTableHead>
-                <PlatformSortableTableHead
-                  kind="text"
-                  sort={sort}
-                  class="kubernetes-network-ports-column platform-table-mobile-w-20 md:w-[12%]"
-                >
-                  Ports
-                </PlatformSortableTableHead>
-                <PlatformSortableTableHead
-                  kind="text"
-                  sort={sort}
-                  class="hidden md:table-cell md:w-[13%]"
-                >
-                  Targets
-                </PlatformSortableTableHead>
-              </>
-            }
-            body={
-              <>
-                <PlatformWindowedRows items={sortedRows} estimatedRowHeight={32}>
-                  {(resource) => {
-                    const indicator = () => getSimpleStatusIndicator(resource.status);
-                    const name = () => resourceName(resource);
-                    const address = () => addressOrHosts(resource);
-                    const ports = () => portLabel(resource);
-                    const targets = () => targetSummary(resource);
-                    const detailRowId = () => drawer.detailRowId(resource);
-                    const isExpanded = () => drawer.isExpanded(resource);
-
-                    return (
-                      <>
-                        <TableRow
-                          class={`${getPlatformResourceDetailRowClass(isExpanded())} text-[11px] sm:text-xs`}
-                          data-kubernetes-networking-row={resource.id}
-                          onClick={() => drawer.toggle(resource)}
-                        >
-                          <TableCell class={getPlatformTableCellClassForKind('name')}>
-                            <div class="flex min-w-0 items-center gap-2">
-                              <PlatformResourceDetailToggleButton
-                                expanded={isExpanded()}
-                                resourceLabel={name()}
-                                controlsId={detailRowId()}
-                                onToggle={() => drawer.toggle(resource)}
-                              />
-                              <StatusDot
-                                size="sm"
-                                variant={indicator().variant}
-                                title={resource.status || 'unknown'}
-                                ariaHidden
-                              />
-                              <span
-                                class="kubernetes-network-name-value truncate font-semibold text-base-content"
-                                title={name()}
-                              >
-                                {name()}
-                              </span>
-                            </div>
-                          </TableCell>
-                          <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
-                          >
-                            {networkKind(resource)}
-                          </TableCell>
-                          <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
-                          >
-                            <KubernetesScopeText
-                              resource={resource}
-                              singleCluster={singleCluster()}
-                              class="block truncate"
-                            />
-                          </TableCell>
-                          <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
-                          >
-                            {typeOrClass(resource)}
-                          </TableCell>
-                          <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}
-                          >
-                            <span class="block truncate" title={address().title}>
-                              {address().label}
-                            </span>
-                          </TableCell>
-                          <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
-                          >
-                            <span class="block truncate" title={ports().title}>
-                              {ports().label}
-                            </span>
-                          </TableCell>
-                          <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}
-                          >
-                            <span class="block truncate" title={targets().title}>
-                              {targets().label}
-                            </span>
-                          </TableCell>
-                        </TableRow>
-                        <PlatformResourceDetailTableRow
+                return (
+                  <>
+                    <TableRow
+                      class={`${getPlatformResourceDetailRowClass(isExpanded())} text-[11px] sm:text-xs`}
+                      data-kubernetes-networking-row={resource.id}
+                      onClick={() => drawer.toggle(resource)}
+                    >
+                      <TableCell class={getPlatformTableCellClassForKind('name')}>
+                        <KubernetesRowLead
                           resource={resource}
-                          statusIndicator={indicator()}
-                          open={isExpanded()}
-                          detailRowId={detailRowId()}
-                          colSpan={7}
-                          resolveResourceLabel={resolveResourceLabel}
-                          onClose={() => drawer.close(resource)}
+                          drawer={drawer}
+                          label={name()}
+                          status={indicator()}
+                          dotTitle={resource.status || 'unknown'}
+                        >
+                          <span
+                            class="kubernetes-network-name-value truncate font-semibold text-base-content"
+                            title={name()}
+                          >
+                            {name()}
+                          </span>
+                        </KubernetesRowLead>
+                      </TableCell>
+                      <TableCell
+                        class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
+                      >
+                        {networkKind(resource)}
+                      </TableCell>
+                      <TableCell
+                        class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
+                      >
+                        <KubernetesScopeText
+                          resource={resource}
+                          singleCluster={singleCluster()}
+                          class="block truncate"
                         />
-                      </>
-                    );
-                  }}
-                </PlatformWindowedRows>
-              </>
-            }
-          />
-        </Show>
-      </div>
-    </Show>
+                      </TableCell>
+                      <TableCell
+                        class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
+                      >
+                        {typeOrClass(resource)}
+                      </TableCell>
+                      <TableCell
+                        class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}
+                      >
+                        <span class="block truncate" title={address().title}>
+                          {address().label}
+                        </span>
+                      </TableCell>
+                      <TableCell
+                        class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
+                      >
+                        <span class="block truncate" title={ports().title}>
+                          {ports().label}
+                        </span>
+                      </TableCell>
+                      <TableCell
+                        class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}
+                      >
+                        <span class="block truncate" title={targets().title}>
+                          {targets().label}
+                        </span>
+                      </TableCell>
+                    </TableRow>
+                    <KubernetesDetailRow
+                      resource={resource}
+                      statusIndicator={indicator()}
+                      drawer={drawer}
+                      colSpan={7}
+                      resolveResourceLabel={resolveResourceLabel}
+                    />
+                  </>
+                );
+              }}
+            </PlatformWindowedRows>
+          </>
+        }
+      />
+    </KubernetesTableFrame>
   );
 };
 

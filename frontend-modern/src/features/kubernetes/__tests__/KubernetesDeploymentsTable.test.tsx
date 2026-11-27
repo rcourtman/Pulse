@@ -165,4 +165,42 @@ describe('KubernetesDeploymentsTable', () => {
     expect(desired).toHaveClass('hidden', 'md:table-cell');
     expect(desired?.style.getPropertyValue('--platform-table-band-width')).toBe('');
   });
+
+  it('surfaces stale readings on retained ready deployments while keeping shortfall severity first', () => {
+    const staleReady = makeResource({
+      id: 'stale-ready',
+      sourceStatus: { kubernetes: { status: 'stale', lastSeen: '2026-11-26T10:00:00Z' } },
+      kubernetes: { desiredReplicas: 3, readyReplicas: 3 },
+    });
+    const staleBroken = makeResource({
+      id: 'stale-broken',
+      sourceStatus: { kubernetes: { status: 'stale', lastSeen: '2026-11-26T10:00:00Z' } },
+      kubernetes: { desiredReplicas: 3, readyReplicas: 0 },
+    });
+
+    const { container } = render(() => (
+      <KubernetesDeploymentsTable
+        resources={[staleReady, staleBroken]}
+        emptyIcon={<span />}
+        emptyTitle="No deployments"
+        emptyDescription="No deployments"
+        showToolbar={false}
+      />
+    ));
+
+    const readyRow = container.querySelector('[data-kubernetes-deployment-row="stale-ready"]');
+    expect(readyRow?.querySelector('[title="Stale data"]')).toHaveClass('bg-amber-500');
+    expect(readyRow?.querySelector('[data-kubernetes-stale="deployment"]')).toHaveTextContent(
+      'Stale data',
+    );
+    expect(readyRow?.querySelector('[data-kubernetes-deployment-ready="warning"]')).toHaveClass(
+      'text-amber-700',
+    );
+
+    const brokenRow = container.querySelector('[data-kubernetes-deployment-row="stale-broken"]');
+    expect(brokenRow?.querySelector('[title="0 / 3 ready"]')).toHaveClass('bg-red-500');
+    expect(brokenRow?.querySelector('[data-kubernetes-stale="deployment"]')).toHaveTextContent(
+      'Stale data',
+    );
+  });
 });

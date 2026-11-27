@@ -230,4 +230,46 @@ describe('KubernetesNodesTable', () => {
     setActiveAlerts(reconcile({}));
     expect(row('node-2')).not.toHaveClass('bg-yellow-50');
   });
+
+  it('shows Stale data in desktop Status, phone inline cue, and drawer notice for stale merged nodes', () => {
+    const staleMergedNode = makeNodeResource({
+      id: 'node-stale-merged',
+      name: 'worker-stale',
+      type: 'agent',
+      status: 'online',
+      sources: ['agent', 'kubernetes'],
+      sourceStatus: {
+        agent: { status: 'online', lastSeen: '2026-11-26T12:00:00Z' },
+        kubernetes: { status: 'stale', lastSeen: '2026-11-26T10:00:00Z' },
+      },
+      kubernetes: {
+        ...makeNodeResource().kubernetes,
+        nodeName: 'worker-stale',
+        ready: true,
+      },
+    });
+
+    const { container } = render(() => (
+      <KubernetesNodesTable
+        resources={[staleMergedNode]}
+        emptyIcon={<span />}
+        emptyTitle="No nodes"
+        emptyDescription="No nodes"
+        showToolbar={true}
+      />
+    ));
+
+    const labels = screen.getAllByText('Stale data');
+    expect(labels).toHaveLength(2);
+    expect(labels.some((label) => label.closest('.platform-table-phone-hidden'))).toBe(true);
+    const phoneStatus = container.querySelector('[data-kubernetes-node-status-phone="warning"]');
+    expect(phoneStatus).toHaveTextContent('Stale data');
+    expect(phoneStatus).toHaveClass('platform-table-phone-only-inline', 'text-amber-700');
+    expect(phoneStatus).not.toHaveClass('sr-only');
+
+    fireEvent.click(
+      container.querySelector('[data-kubernetes-node-row="node-stale-merged"]') as HTMLElement,
+    );
+    expect(screen.getByTestId('kubernetes-stale-readings-notice')).toHaveTextContent('Stale data.');
+  });
 });

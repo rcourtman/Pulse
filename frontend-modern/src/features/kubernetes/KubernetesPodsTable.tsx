@@ -1,22 +1,17 @@
-import { Show, createMemo, type Component, type JSX } from 'solid-js';
-import { StatusDot } from '@/components/shared/StatusDot';
+import { createMemo, type Component, type JSX } from 'solid-js';
 import { TableCell, TableRow } from '@/components/shared/Table';
 import { ResourceNameWithWebInterfaceLink } from '@/components/shared/WebInterfaceLink';
 import { asTrimmedString } from '@/utils/stringUtils';
 import {
   PlatformWindowedRows,
-  PLATFORM_HEALTH_FILTER_OPTIONS,
   PlatformSortableTableHead,
-  PlatformTableEmptyState,
   PlatformTableNumberValue,
-  PlatformTableToolbar,
   createPlatformTableFilterState,
   createPlatformTableSortState,
   formatPlatformTableTextValue,
   getPlatformTableCellClassForKind,
   PlatformTableShell,
   type PlatformTableSortValue,
-  withPlatformStatusCounts,
 } from '@/features/platformPage/sharedPlatformPage';
 import {
   getPlatformInlineStateClass,
@@ -24,9 +19,6 @@ import {
   isPlatformAttentionVariant,
 } from '@/features/platformPage/platformStatusTone';
 import {
-  PlatformResourceDetailToggleButton,
-  PlatformResourceDetailTableRow,
-  createPlatformResourceDetailState,
   createPlatformResourceLabelResolver,
   getPlatformResourceDetailRowClass,
 } from '@/features/platformPage/PlatformResourceDetailTableRow';
@@ -41,6 +33,12 @@ import {
 } from './kubernetesPageModel';
 import { KubernetesScopeText } from './KubernetesScopeText';
 import { KubernetesNameText } from './KubernetesNameText';
+import {
+  KubernetesDetailRow,
+  KubernetesRowLead,
+  KubernetesTableFrame,
+  createKubernetesDetailState,
+} from './KubernetesRecordDetail';
 
 const podName = (resource: Resource): string =>
   asTrimmedString(resource.kubernetes?.podName) ||
@@ -172,264 +170,224 @@ export const KubernetesPodsTable: Component<{
       getKubernetesPodSortValue,
     ),
   );
-  const drawer = createPlatformResourceDetailState({ idPrefix: 'kubernetes-pod-drawer' });
+  const drawer = createKubernetesDetailState('kubernetes-pod-drawer');
   const resolveResourceLabel = createPlatformResourceLabelResolver(() => props.resources);
 
   return (
-    <Show
-      when={props.resources.length > 0}
-      fallback={
-        <PlatformTableEmptyState
-          icon={props.emptyIcon}
-          title={props.emptyTitle}
-          description={props.emptyDescription}
-        />
-      }
+    <KubernetesTableFrame
+      hasResources={props.resources.length > 0}
+      emptyIcon={props.emptyIcon}
+      emptyTitle={props.emptyTitle}
+      emptyDescription={props.emptyDescription}
+      showToolbar={props.showToolbar}
+      rowNoun="pods"
+      filteredEmptyNoun="Kubernetes pods"
+      tableState={tableState}
     >
-      <div class="space-y-3">
-        <Show when={props.showToolbar !== false}>
-          <PlatformTableToolbar
-            search={tableState.search}
-            onSearchChange={tableState.setSearch}
-            searchPlaceholder="Search pods"
-            searchSuggestions={tableState.searchSuggestions}
-            status={tableState.status()}
-            onStatusChange={tableState.setStatus}
-            statusOptions={withPlatformStatusCounts(
-              PLATFORM_HEALTH_FILTER_OPTIONS,
-              tableState.countForStatus,
-            )}
-            visible={tableState.visible()}
-            total={tableState.total()}
-            rowNoun="pods"
-          />
-        </Show>
-
-        <Show
-          when={tableState.filtered().length > 0}
-          fallback={
-            <PlatformTableEmptyState
-              icon={props.emptyIcon}
-              title="No pods match current filters"
-              description="Adjust the search or status filter to see more Kubernetes pods."
-            />
-          }
-        >
-          <PlatformTableShell
-            title={props.title ?? 'Pods'}
-            tableClass="min-w-full table-fixed text-xs md:min-w-[1240px]"
-            header={
-              <>
-                <PlatformSortableTableHead
-                  kind="name"
-                  sort={sort}
-                  sortKey="pod"
-                  class="platform-table-mobile-w-30 md:w-[20%]"
-                >
-                  Pod
-                </PlatformSortableTableHead>
-                <PlatformSortableTableHead
-                  kind="text"
-                  sort={sort}
-                  sortKey="scope"
-                  class="platform-table-mobile-w-15 md:w-[13%]"
-                >
-                  Scope
-                </PlatformSortableTableHead>
-                <PlatformSortableTableHead
-                  kind="text"
-                  sort={sort}
-                  sortKey="node"
-                  class="platform-table-phone-hidden md:w-[12%]"
-                >
-                  Node
-                </PlatformSortableTableHead>
-                {/* Status names the failure ("CrashLoopBackOff", about 115px
+      <PlatformTableShell
+        title={props.title ?? 'Pods'}
+        tableClass="min-w-full table-fixed text-xs md:min-w-[1240px]"
+        header={
+          <>
+            <PlatformSortableTableHead
+              kind="name"
+              sort={sort}
+              sortKey="pod"
+              class="platform-table-mobile-w-30 md:w-[20%]"
+            >
+              Pod
+            </PlatformSortableTableHead>
+            <PlatformSortableTableHead
+              kind="text"
+              sort={sort}
+              sortKey="scope"
+              class="platform-table-mobile-w-15 md:w-[13%]"
+            >
+              Scope
+            </PlatformSortableTableHead>
+            <PlatformSortableTableHead
+              kind="text"
+              sort={sort}
+              sortKey="node"
+              class="platform-table-phone-hidden md:w-[12%]"
+            >
+              Node
+            </PlatformSortableTableHead>
+            {/* Status names the failure ("CrashLoopBackOff", about 115px
                     with padding), so it takes room from Node, Restarts and
                     Image, which truncate harmlessly. */}
-                <PlatformSortableTableHead
-                  kind="text"
-                  sort={sort}
-                  sortKey="status"
-                  class="platform-table-phone-hidden md:w-[12%]"
-                >
-                  Status
-                </PlatformSortableTableHead>
-                <PlatformSortableTableHead
-                  kind="numeric-value"
-                  sort={sort}
-                  sortKey="ready"
-                  class="platform-table-mobile-w-10 md:w-[7%]"
-                >
-                  Ready
-                </PlatformSortableTableHead>
-                <PlatformSortableTableHead
-                  kind="numeric-value"
-                  sort={sort}
-                  sortKey="restarts"
-                  class="platform-table-mobile-w-10 md:w-[7%] platform-table-narrow-hidden"
-                >
-                  Restarts
-                </PlatformSortableTableHead>
-                <PlatformSortableTableHead
-                  kind="text"
-                  sort={sort}
-                  sortKey="owner"
-                  class="hidden md:table-cell md:w-[13%]"
-                >
-                  Owner
-                </PlatformSortableTableHead>
-                <PlatformSortableTableHead
-                  kind="text"
-                  sort={sort}
-                  sortKey="image"
-                  class="hidden md:table-cell md:w-[12%]"
-                >
-                  Image
-                </PlatformSortableTableHead>
-                <PlatformSortableTableHead
-                  kind="text"
-                  sort={sort}
-                  sortKey="age"
-                  class="platform-table-mobile-w-10 md:w-[4%] platform-table-narrow-hidden"
-                >
-                  Age
-                </PlatformSortableTableHead>
-              </>
-            }
-            body={
-              <>
-                <PlatformWindowedRows items={sortedRows} estimatedRowHeight={32}>
-                  {(resource) => {
-                    const indicator = () => mapKubernetesPodStatus(resource);
-                    const name = () => podName(resource);
-                    const node = () => formatPlatformTableTextValue(resource.kubernetes?.nodeName);
-                    const owner = () => ownerValue(resource);
-                    const image = () => imageValue(resource);
-                    const age = () => ageValue(resource);
-                    const detailRowId = () => drawer.detailRowId(resource);
-                    const isExpanded = () => drawer.isExpanded(resource);
+            <PlatformSortableTableHead
+              kind="text"
+              sort={sort}
+              sortKey="status"
+              class="platform-table-phone-hidden md:w-[12%]"
+            >
+              Status
+            </PlatformSortableTableHead>
+            <PlatformSortableTableHead
+              kind="numeric-value"
+              sort={sort}
+              sortKey="ready"
+              class="platform-table-mobile-w-10 md:w-[7%]"
+            >
+              Ready
+            </PlatformSortableTableHead>
+            <PlatformSortableTableHead
+              kind="numeric-value"
+              sort={sort}
+              sortKey="restarts"
+              class="platform-table-mobile-w-10 md:w-[7%] platform-table-narrow-hidden"
+            >
+              Restarts
+            </PlatformSortableTableHead>
+            <PlatformSortableTableHead
+              kind="text"
+              sort={sort}
+              sortKey="owner"
+              class="hidden md:table-cell md:w-[13%]"
+            >
+              Owner
+            </PlatformSortableTableHead>
+            <PlatformSortableTableHead
+              kind="text"
+              sort={sort}
+              sortKey="image"
+              class="hidden md:table-cell md:w-[12%]"
+            >
+              Image
+            </PlatformSortableTableHead>
+            <PlatformSortableTableHead
+              kind="text"
+              sort={sort}
+              sortKey="age"
+              class="platform-table-mobile-w-10 md:w-[4%] platform-table-narrow-hidden"
+            >
+              Age
+            </PlatformSortableTableHead>
+          </>
+        }
+        body={
+          <>
+            <PlatformWindowedRows items={sortedRows} estimatedRowHeight={32}>
+              {(resource) => {
+                const indicator = () => mapKubernetesPodStatus(resource);
+                const name = () => podName(resource);
+                const node = () => formatPlatformTableTextValue(resource.kubernetes?.nodeName);
+                const owner = () => ownerValue(resource);
+                const image = () => imageValue(resource);
+                const age = () => ageValue(resource);
+                const isExpanded = () => drawer.isExpanded(resource);
 
-                    return (
-                      <>
-                        <TableRow
-                          class={`${getPlatformResourceDetailRowClass(isExpanded())} text-[11px] sm:text-xs`}
-                          data-kubernetes-pod-row={resource.id}
-                          onClick={() => drawer.toggle(resource)}
+                return (
+                  <>
+                    <TableRow
+                      class={`${getPlatformResourceDetailRowClass(isExpanded())} text-[11px] sm:text-xs`}
+                      data-kubernetes-pod-row={resource.id}
+                      onClick={() => drawer.toggle(resource)}
+                    >
+                      <TableCell class={getPlatformTableCellClassForKind('name')}>
+                        <KubernetesRowLead
+                          resource={resource}
+                          drawer={drawer}
+                          label={name()}
+                          status={indicator()}
                         >
-                          <TableCell class={getPlatformTableCellClassForKind('name')}>
-                            <div class="flex min-w-0 items-center gap-2">
-                              <PlatformResourceDetailToggleButton
-                                expanded={isExpanded()}
-                                resourceLabel={name()}
-                                controlsId={detailRowId()}
-                                onToggle={() => drawer.toggle(resource)}
-                              />
-                              <StatusDot
-                                size="sm"
-                                variant={indicator().variant}
-                                title={indicator().label}
-                                ariaHidden
-                              />
-                              <div class="flex min-w-0 flex-1 items-center gap-1.5">
-                                <ResourceNameWithWebInterfaceLink
-                                  name={name()}
-                                  url={resource.customUrl}
-                                  class="min-w-0"
-                                  nameClass="flex min-w-0 font-semibold text-base-content"
-                                >
-                                  <KubernetesNameText name={name()} />
-                                </ResourceNameWithWebInterfaceLink>
-                                {/* A phone hides the Status column, and its dot can be
-                                    neither hovered nor read aloud, so a reason that
-                                    needs attention ("CrashLoopBackOff") joins the name
-                                    on its line; screen readers always get the words. */}
-                                <span
-                                  class={`platform-table-phone-only-inline ${getPlatformInlineStateClass(isPlatformAttentionVariant(indicator().variant))} ${getPlatformStatusTextToneClass(indicator().variant)}`}
-                                  data-kubernetes-pod-status-phone={indicator().variant}
-                                >
-                                  <span class="min-w-0 truncate">{indicator().label}</span>
-                                </span>
-                              </div>
-                            </div>
-                          </TableCell>
-                          <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
-                          >
-                            <KubernetesScopeText
-                              resource={resource}
-                              singleCluster={singleCluster()}
-                              class="block max-w-full truncate"
-                            />
-                          </TableCell>
-                          <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} platform-table-phone-hidden text-base-content`}
-                          >
-                            <KubernetesNameText name={node()} class="max-w-full" />
-                          </TableCell>
-                          <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} platform-table-phone-hidden text-base-content`}
-                          >
-                            {/* The mapped label carries the container failure reason
-                              (CrashLoopBackOff, ImagePullBackOff, ...) where the raw
-                              phase would still read "Running". */}
+                          <div class="flex min-w-0 flex-1 flex-col">
+                            <ResourceNameWithWebInterfaceLink
+                              name={name()}
+                              url={resource.customUrl}
+                              class="min-w-0"
+                              nameClass="flex min-w-0 font-semibold text-base-content"
+                            >
+                              <KubernetesNameText name={name()} />
+                            </ResourceNameWithWebInterfaceLink>
+                            {/* A phone hides the Status column, and its dot can be
+                                neither hovered nor read aloud, so attention states
+                                ("Stale data", "CrashLoopBackOff") stack below the name
+                                so pod names and status words stay unclipped; screen
+                                readers always get the words. */}
                             <span
-                              class={`block max-w-full truncate ${getPlatformStatusTextToneClass(indicator().variant)}`}
-                              title={indicator().label}
-                              data-kubernetes-pod-status={indicator().variant}
+                              class={`platform-table-phone-only-inline text-[11px] leading-tight ${getPlatformInlineStateClass(isPlatformAttentionVariant(indicator().variant))} ${getPlatformStatusTextToneClass(indicator().variant)}`}
+                              data-kubernetes-pod-status-phone={indicator().variant}
                             >
                               {indicator().label}
                             </span>
-                          </TableCell>
-                          <TableCell
-                            class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
-                          >
-                            {readySummary(resource)}
-                          </TableCell>
-                          <TableCell
-                            class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content platform-table-narrow-hidden`}
-                          >
-                            <PlatformTableNumberValue value={restartCount(resource)} />
-                          </TableCell>
-                          <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}
-                          >
-                            <span class="block max-w-full truncate" title={owner()}>
-                              {owner()}
-                            </span>
-                          </TableCell>
-                          <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}
-                          >
-                            <span class="block max-w-full truncate" title={image()}>
-                              {image()}
-                            </span>
-                          </TableCell>
-                          <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} text-base-content platform-table-narrow-hidden`}
-                          >
-                            {age()}
-                          </TableCell>
-                        </TableRow>
-                        <PlatformResourceDetailTableRow
+                          </div>
+                        </KubernetesRowLead>
+                      </TableCell>
+                      <TableCell
+                        class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
+                      >
+                        <KubernetesScopeText
                           resource={resource}
-                          statusIndicator={indicator()}
-                          open={isExpanded()}
-                          detailRowId={detailRowId()}
-                          colSpan={9}
-                          resolveResourceLabel={resolveResourceLabel}
-                          onClose={() => drawer.close(resource)}
+                          singleCluster={singleCluster()}
+                          class="block max-w-full truncate"
                         />
-                      </>
-                    );
-                  }}
-                </PlatformWindowedRows>
-              </>
-            }
-          />
-        </Show>
-      </div>
-    </Show>
+                      </TableCell>
+                      <TableCell
+                        class={`${getPlatformTableCellClassForKind('text')} platform-table-phone-hidden text-base-content`}
+                      >
+                        <KubernetesNameText name={node()} class="max-w-full" />
+                      </TableCell>
+                      <TableCell
+                        class={`${getPlatformTableCellClassForKind('text')} platform-table-phone-hidden text-base-content`}
+                      >
+                        {/* The mapped label carries the container failure reason
+                              (CrashLoopBackOff, ImagePullBackOff, ...) where the raw
+                              phase would still read "Running". */}
+                        <span
+                          class={`block max-w-full truncate ${getPlatformStatusTextToneClass(indicator().variant)}`}
+                          title={indicator().label}
+                          data-kubernetes-pod-status={indicator().variant}
+                        >
+                          {indicator().label}
+                        </span>
+                      </TableCell>
+                      <TableCell
+                        class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
+                      >
+                        {readySummary(resource)}
+                      </TableCell>
+                      <TableCell
+                        class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content platform-table-narrow-hidden`}
+                      >
+                        <PlatformTableNumberValue value={restartCount(resource)} />
+                      </TableCell>
+                      <TableCell
+                        class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}
+                      >
+                        <span class="block max-w-full truncate" title={owner()}>
+                          {owner()}
+                        </span>
+                      </TableCell>
+                      <TableCell
+                        class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}
+                      >
+                        <span class="block max-w-full truncate" title={image()}>
+                          {image()}
+                        </span>
+                      </TableCell>
+                      <TableCell
+                        class={`${getPlatformTableCellClassForKind('text')} text-base-content platform-table-narrow-hidden`}
+                      >
+                        {age()}
+                      </TableCell>
+                    </TableRow>
+                    <KubernetesDetailRow
+                      resource={resource}
+                      statusIndicator={indicator()}
+                      drawer={drawer}
+                      colSpan={9}
+                      resolveResourceLabel={resolveResourceLabel}
+                    />
+                  </>
+                );
+              }}
+            </PlatformWindowedRows>
+          </>
+        }
+      />
+    </KubernetesTableFrame>
   );
 };
 

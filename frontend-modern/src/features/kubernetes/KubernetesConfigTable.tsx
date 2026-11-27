@@ -1,5 +1,4 @@
 import { Show, createMemo, createSignal, type Component, type JSX } from 'solid-js';
-import { StatusDot } from '@/components/shared/StatusDot';
 import {
   compactDetailRows,
   makeDetailRow,
@@ -26,9 +25,6 @@ import {
   withPlatformStatusCounts,
 } from '@/features/platformPage/sharedPlatformPage';
 import {
-  PlatformResourceDetailToggleButton,
-  PlatformResourceDetailTableRow,
-  createPlatformResourceDetailState,
   createPlatformResourceLabelResolver,
   getPlatformResourceDetailRowClass,
 } from '@/features/platformPage/PlatformResourceDetailTableRow';
@@ -57,7 +53,10 @@ const KUBERNETES_CONFIG_TABLE_CATEGORY_OPTIONS: PlatformTableFilterOption<Kubern
     { value: 'access', label: 'Access' },
   ];
 import {
+  KubernetesDetailRow,
   KubernetesRecordDetailPanel,
+  KubernetesRowLead,
+  createKubernetesDetailState,
   kubernetesLabelsSection,
   kubernetesObjectSection,
 } from './KubernetesRecordDetail';
@@ -379,7 +378,7 @@ export const KubernetesConfigTable: Component<{
     if (!shouldCollapseRoutineMetadataOnly()) return filtered;
     return filtered.filter((resource) => !isRoutineMetadataOnlyConfig(resource));
   });
-  const drawer = createPlatformResourceDetailState({ idPrefix: 'kubernetes-config-drawer' });
+  const drawer = createKubernetesDetailState('kubernetes-config-drawer');
   const resolveResourceLabel = createPlatformResourceLabelResolver(() => props.resources);
   const sort = createPlatformTableSortState({
     storageKey: 'kubernetesConfig',
@@ -554,23 +553,13 @@ export const KubernetesConfigTable: Component<{
                           onClick={() => drawer.toggle(resource)}
                         >
                           <TableCell class={getPlatformTableCellClassForKind('name')}>
-                            <div class="flex min-w-0 items-center gap-2">
-                              <PlatformResourceDetailToggleButton
-                                expanded={isExpanded()}
-                                resourceLabel={name()}
-                                controlsId={detailRowId()}
-                                onToggle={() => drawer.toggle(resource)}
-                              />
-                              <StatusDot
-                                size="sm"
-                                variant={indicator().variant}
-                                title={resource.status || 'unknown'}
-                                ariaHidden
-                              />
-                              <span class="truncate font-semibold text-base-content" title={name()}>
-                                {name()}
-                              </span>
-                            </div>
+                            <KubernetesRowLead
+                              resource={resource}
+                              drawer={drawer}
+                              label={name()}
+                              status={indicator()}
+                              dotTitle={resource.status || 'unknown'}
+                            />
                           </TableCell>
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
@@ -635,14 +624,12 @@ export const KubernetesConfigTable: Component<{
                             </Show>
                           }
                         >
-                          <PlatformResourceDetailTableRow
+                          <KubernetesDetailRow
                             resource={resource}
                             statusIndicator={indicator()}
-                            open={isExpanded()}
-                            detailRowId={detailRowId()}
+                            drawer={drawer}
                             colSpan={7}
                             resolveResourceLabel={resolveResourceLabel}
-                            onClose={() => drawer.close(resource)}
                           />
                         </Show>
                       </>

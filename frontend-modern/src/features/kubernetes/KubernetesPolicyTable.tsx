@@ -1,5 +1,4 @@
 import { createMemo, Show, type Component, type JSX } from 'solid-js';
-import { StatusDot } from '@/components/shared/StatusDot';
 import {
   compactDetailRows,
   makeDetailRow,
@@ -11,24 +10,16 @@ import { getSimpleStatusIndicator } from '@/utils/status';
 import { asTrimmedString } from '@/utils/stringUtils';
 import {
   PlatformWindowedRows,
-  PLATFORM_HEALTH_FILTER_OPTIONS,
   PlatformResponsiveTableLabel,
-  PlatformTableEmptyState,
-  PlatformTableToolbar,
   createPlatformTableFilterState,
   formatPlatformTableTextValue,
   getPlatformTableCellClassForKind,
   getPlatformTableHeadClassForKind,
   summarizePlatformTableValues,
   PlatformTableShell,
-  withPlatformStatusCounts,
   platformTableBandWidthStyle,
 } from '@/features/platformPage/sharedPlatformPage';
-import {
-  PlatformResourceDetailToggleButton,
-  createPlatformResourceDetailState,
-  getPlatformResourceDetailRowClass,
-} from '@/features/platformPage/PlatformResourceDetailTableRow';
+import { getPlatformResourceDetailRowClass } from '@/features/platformPage/PlatformResourceDetailTableRow';
 import type { Resource } from '@/types/resource';
 import {
   filterKubernetesResources,
@@ -37,6 +28,9 @@ import {
 } from './kubernetesPageModel';
 import {
   KubernetesRecordDetailPanel,
+  KubernetesRowLead,
+  KubernetesTableFrame,
+  createKubernetesDetailState,
   kubernetesLabelsSection,
   kubernetesObjectSection,
 } from './KubernetesRecordDetail';
@@ -286,207 +280,165 @@ export const KubernetesPolicyTable: Component<{
     externalSearch: props.externalSearch,
     externalStatus: props.externalStatus,
   });
-  const drawer = createPlatformResourceDetailState({ idPrefix: 'kubernetes-policy-drawer' });
+  const drawer = createKubernetesDetailState('kubernetes-policy-drawer');
 
   return (
-    <Show
-      when={props.resources.length > 0}
-      fallback={
-        <PlatformTableEmptyState
-          icon={props.emptyIcon}
-          title={props.emptyTitle}
-          description={props.emptyDescription}
-        />
-      }
+    <KubernetesTableFrame
+      hasResources={props.resources.length > 0}
+      emptyIcon={props.emptyIcon}
+      emptyTitle={props.emptyTitle}
+      emptyDescription={props.emptyDescription}
+      showToolbar={props.showToolbar}
+      rowNoun="policy resources"
+      filteredEmptyNoun="Kubernetes policy resources"
+      tableState={tableState}
     >
-      <div class="space-y-3">
-        <Show when={props.showToolbar !== false}>
-          <PlatformTableToolbar
-            search={tableState.search}
-            onSearchChange={tableState.setSearch}
-            searchPlaceholder="Search policy resources"
-            searchSuggestions={tableState.searchSuggestions}
-            status={tableState.status()}
-            onStatusChange={tableState.setStatus}
-            statusOptions={withPlatformStatusCounts(
-              PLATFORM_HEALTH_FILTER_OPTIONS,
-              tableState.countForStatus,
-            )}
-            visible={tableState.visible()}
-            total={tableState.total()}
-            rowNoun="policy resources"
-          />
-        </Show>
+      <PlatformTableShell
+        title={
+          props.title ?? 'NetworkPolicies, PodDisruptionBudgets, ResourceQuotas, and LimitRanges'
+        }
+        tableClass="min-w-full table-fixed text-xs md:min-w-[1180px]"
+        header={
+          <>
+            <TableHead
+              class={`${getPlatformTableHeadClassForKind('name')} platform-table-mobile-w-30 md:w-[22%]`}
+              style={platformTableBandWidthStyle(30)}
+            >
+              Resource
+            </TableHead>
+            <TableHead
+              class={`${getPlatformTableHeadClassForKind('text')} platform-table-mobile-w-15 md:w-[17%]`}
+              style={platformTableBandWidthStyle(23)}
+            >
+              Kind
+            </TableHead>
+            <TableHead
+              class={`${getPlatformTableHeadClassForKind('text')} platform-table-mobile-w-15 md:w-[12%]`}
+              style={platformTableBandWidthStyle(13)}
+            >
+              Scope
+            </TableHead>
+            <TableHead
+              class={`${getPlatformTableHeadClassForKind('text')} platform-table-mobile-w-20 md:w-[15%]`}
+              style={platformTableBandWidthStyle(18)}
+            >
+              <PlatformResponsiveTableLabel compact="Policy" full="Policy shape" />
+            </TableHead>
+            <TableHead
+              class={`${getPlatformTableHeadClassForKind('text')} platform-table-mobile-w-20 md:w-[15%]`}
+              style={platformTableBandWidthStyle(16)}
+            >
+              <PlatformResponsiveTableLabel compact="Limits" full="Spec / limits" />
+            </TableHead>
+            <TableHead
+              class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[14%]`}
+            >
+              Observed state
+            </TableHead>
+            <TableHead
+              class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[9%]`}
+            >
+              Labels
+            </TableHead>
+          </>
+        }
+        body={
+          <>
+            <PlatformWindowedRows items={tableState.filtered} estimatedRowHeight={32}>
+              {(resource) => {
+                const indicator = () => getSimpleStatusIndicator(resource.status);
+                const name = () => policyName(resource);
+                const shape = () => policyShape(resource);
+                const spec = () => policySpec(resource);
+                const state = () => policyState(resource);
+                const labels = () => labelSummary(resource);
+                const detailRowId = () => drawer.detailRowId(resource);
+                const isExpanded = () => drawer.isExpanded(resource);
 
-        <Show
-          when={tableState.filtered().length > 0}
-          fallback={
-            <PlatformTableEmptyState
-              icon={props.emptyIcon}
-              title="No policy resources match current filters"
-              description="Adjust the search or status filter to see more Kubernetes policy resources."
-            />
-          }
-        >
-          <PlatformTableShell
-            title={
-              props.title ??
-              'NetworkPolicies, PodDisruptionBudgets, ResourceQuotas, and LimitRanges'
-            }
-            tableClass="min-w-full table-fixed text-xs md:min-w-[1180px]"
-            header={
-              <>
-                <TableHead
-                  class={`${getPlatformTableHeadClassForKind('name')} platform-table-mobile-w-30 md:w-[22%]`}
-                  style={platformTableBandWidthStyle(30)}
-                >
-                  Resource
-                </TableHead>
-                <TableHead
-                  class={`${getPlatformTableHeadClassForKind('text')} platform-table-mobile-w-15 md:w-[17%]`}
-                  style={platformTableBandWidthStyle(23)}
-                >
-                  Kind
-                </TableHead>
-                <TableHead
-                  class={`${getPlatformTableHeadClassForKind('text')} platform-table-mobile-w-15 md:w-[12%]`}
-                  style={platformTableBandWidthStyle(13)}
-                >
-                  Scope
-                </TableHead>
-                <TableHead
-                  class={`${getPlatformTableHeadClassForKind('text')} platform-table-mobile-w-20 md:w-[15%]`}
-                  style={platformTableBandWidthStyle(18)}
-                >
-                  <PlatformResponsiveTableLabel compact="Policy" full="Policy shape" />
-                </TableHead>
-                <TableHead
-                  class={`${getPlatformTableHeadClassForKind('text')} platform-table-mobile-w-20 md:w-[15%]`}
-                  style={platformTableBandWidthStyle(16)}
-                >
-                  <PlatformResponsiveTableLabel compact="Limits" full="Spec / limits" />
-                </TableHead>
-                <TableHead
-                  class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[14%]`}
-                >
-                  Observed state
-                </TableHead>
-                <TableHead
-                  class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[9%]`}
-                >
-                  Labels
-                </TableHead>
-              </>
-            }
-            body={
-              <>
-                <PlatformWindowedRows items={tableState.filtered} estimatedRowHeight={32}>
-                  {(resource) => {
-                    const indicator = () => getSimpleStatusIndicator(resource.status);
-                    const name = () => policyName(resource);
-                    const shape = () => policyShape(resource);
-                    const spec = () => policySpec(resource);
-                    const state = () => policyState(resource);
-                    const labels = () => labelSummary(resource);
-                    const detailRowId = () => drawer.detailRowId(resource);
-                    const isExpanded = () => drawer.isExpanded(resource);
-
-                    return (
-                      <>
-                        <TableRow
-                          class={`${getPlatformResourceDetailRowClass(isExpanded())} text-[11px] sm:text-xs`}
-                          data-kubernetes-policy-row={resource.id}
-                          onClick={() => drawer.toggle(resource)}
-                        >
-                          <TableCell class={getPlatformTableCellClassForKind('name')}>
-                            <div class="flex min-w-0 items-center gap-2">
-                              <PlatformResourceDetailToggleButton
-                                expanded={isExpanded()}
-                                resourceLabel={name()}
-                                controlsId={detailRowId()}
-                                onToggle={() => drawer.toggle(resource)}
-                              />
-                              <StatusDot
-                                size="sm"
-                                variant={indicator().variant}
-                                title={resource.status || 'unknown'}
-                                ariaHidden
-                              />
-                              <span class="truncate font-semibold text-base-content" title={name()}>
-                                {name()}
-                              </span>
-                            </div>
-                          </TableCell>
-                          <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
-                          >
-                            {policyKind(resource)}
-                          </TableCell>
-                          <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
-                          >
-                            <KubernetesScopeText
-                              resource={resource}
-                              singleCluster={singleCluster()}
-                              class="block truncate"
-                            />
-                          </TableCell>
-                          <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
-                          >
-                            <span class="block truncate" title={shape().title}>
-                              {shape().label}
-                            </span>
-                          </TableCell>
-                          <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
-                          >
-                            <span class="block truncate" title={spec().title}>
-                              {spec().label}
-                            </span>
-                          </TableCell>
-                          <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}
-                          >
-                            <span class="block truncate" title={state().title}>
-                              {state().label}
-                            </span>
-                          </TableCell>
-                          <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}
-                          >
-                            <span class="block truncate" title={labels().title}>
-                              {labels().label}
-                            </span>
-                          </TableCell>
-                        </TableRow>
-                        <Show when={isExpanded()}>
-                          <InlineDetailTableRow
-                            cellId={detailRowId()}
-                            colspan={7}
-                            data-inline-kubernetes-policy-detail-for={resource.id}
-                          >
-                            <KubernetesRecordDetailPanel
-                              testId="kubernetes-policy-detail"
-                              resource={resource}
-                              title={name()}
-                              status={indicator()}
-                              summary={policySummary(resource)}
-                              sections={(now) => buildPolicyDetailSections(resource, now)}
-                              onClose={() => drawer.close(resource)}
-                            />
-                          </InlineDetailTableRow>
-                        </Show>
-                      </>
-                    );
-                  }}
-                </PlatformWindowedRows>
-              </>
-            }
-          />
-        </Show>
-      </div>
-    </Show>
+                return (
+                  <>
+                    <TableRow
+                      class={`${getPlatformResourceDetailRowClass(isExpanded())} text-[11px] sm:text-xs`}
+                      data-kubernetes-policy-row={resource.id}
+                      onClick={() => drawer.toggle(resource)}
+                    >
+                      <TableCell class={getPlatformTableCellClassForKind('name')}>
+                        <KubernetesRowLead
+                          resource={resource}
+                          drawer={drawer}
+                          label={name()}
+                          status={indicator()}
+                          dotTitle={resource.status || 'unknown'}
+                        />
+                      </TableCell>
+                      <TableCell
+                        class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
+                      >
+                        {policyKind(resource)}
+                      </TableCell>
+                      <TableCell
+                        class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
+                      >
+                        <KubernetesScopeText
+                          resource={resource}
+                          singleCluster={singleCluster()}
+                          class="block truncate"
+                        />
+                      </TableCell>
+                      <TableCell
+                        class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
+                      >
+                        <span class="block truncate" title={shape().title}>
+                          {shape().label}
+                        </span>
+                      </TableCell>
+                      <TableCell
+                        class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
+                      >
+                        <span class="block truncate" title={spec().title}>
+                          {spec().label}
+                        </span>
+                      </TableCell>
+                      <TableCell
+                        class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}
+                      >
+                        <span class="block truncate" title={state().title}>
+                          {state().label}
+                        </span>
+                      </TableCell>
+                      <TableCell
+                        class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}
+                      >
+                        <span class="block truncate" title={labels().title}>
+                          {labels().label}
+                        </span>
+                      </TableCell>
+                    </TableRow>
+                    <Show when={isExpanded()}>
+                      <InlineDetailTableRow
+                        cellId={detailRowId()}
+                        colspan={7}
+                        data-inline-kubernetes-policy-detail-for={resource.id}
+                      >
+                        <KubernetesRecordDetailPanel
+                          testId="kubernetes-policy-detail"
+                          resource={resource}
+                          title={name()}
+                          status={indicator()}
+                          summary={policySummary(resource)}
+                          sections={(now) => buildPolicyDetailSections(resource, now)}
+                          onClose={() => drawer.close(resource)}
+                        />
+                      </InlineDetailTableRow>
+                    </Show>
+                  </>
+                );
+              }}
+            </PlatformWindowedRows>
+          </>
+        }
+      />
+    </KubernetesTableFrame>
   );
 };
 
