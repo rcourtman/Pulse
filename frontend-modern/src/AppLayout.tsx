@@ -4,7 +4,6 @@ import { A, useLocation, useNavigate } from '@solidjs/router';
 import BellIcon from 'lucide-solid/icons/bell';
 import LoaderCircleIcon from 'lucide-solid/icons/loader-circle';
 import ListChecksIcon from 'lucide-solid/icons/list-checks';
-import SearchIcon from 'lucide-solid/icons/search';
 import SettingsIcon from 'lucide-solid/icons/settings';
 import Maximize2Icon from 'lucide-solid/icons/maximize-2';
 import Minimize2Icon from 'lucide-solid/icons/minimize-2';
@@ -164,12 +163,6 @@ export function sessionHasSettingsAccess(scopes: string[] | undefined): boolean 
 }
 const NAV_TAB_ICON_CLASS = 'w-3.5 h-3.5 xl:w-4 xl:h-4 shrink-0';
 
-const COMMAND_PALETTE_SHORTCUT_HINT =
-  typeof navigator !== 'undefined' &&
-  /Mac|iPhone|iPad|iPod/i.test(navigator.platform || navigator.userAgent)
-    ? '⌘K'
-    : 'Ctrl K';
-
 const makeDecorativePlatformIcon = (
   key: Parameters<typeof getPlatformIcon>[0],
 ): MobileNavBarIcon => {
@@ -210,7 +203,6 @@ export interface AppLayoutProps {
   onRetryOrganizationList: () => void;
   showOrgSwitcher: () => boolean;
   onSwitchOrg: (orgID: string) => void;
-  onOpenCommandPalette?: () => void;
   children?: JSX.Element;
 }
 
@@ -826,28 +818,10 @@ export function AppLayout(props: AppLayoutProps) {
         }}
       >
         <Show when={!kioskMode()}>
-          <div class="flex items-center gap-1.5 sm:col-start-1 sm:col-end-2 sm:justify-self-start">
+          <div class="flex items-center sm:col-start-1 sm:col-end-2 sm:justify-self-start">
             {/* The slot stays, so the brand mark does not move when the map arrives. */}
             <Show when={isFeatureAvailable('infrastructureMap')}>
               <InfrastructureMapHeaderButton />
-            </Show>
-            <Show when={props.onOpenCommandPalette}>
-              <button
-                type="button"
-                onClick={() => props.onOpenCommandPalette?.()}
-                class="inline-flex h-9 items-center gap-1.5 rounded-md border border-border bg-surface px-2 text-xs font-medium text-muted shadow-xs transition-colors hover:bg-surface-hover hover:text-base-content focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 sm:px-2.5"
-                title="Search commands (Cmd+K / Ctrl+K)"
-                data-testid="command-palette-trigger"
-              >
-                <SearchIcon class="h-4 w-4 shrink-0" aria-hidden="true" />
-                <span class="sr-only sm:not-sr-only">Search</span>
-                <kbd
-                  aria-hidden="true"
-                  class="hidden rounded-sm border border-border bg-page px-1.5 py-0.5 font-sans text-[10px] font-medium text-muted md:inline-block"
-                >
-                  {COMMAND_PALETTE_SHORTCUT_HINT}
-                </kbd>
-              </button>
             </Show>
           </div>
           <div class="flex items-center gap-1.5 sm:col-start-2 sm:col-end-3 sm:flex-initial sm:justify-self-center sm:gap-2">

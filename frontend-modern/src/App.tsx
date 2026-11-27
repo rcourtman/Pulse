@@ -588,10 +588,6 @@ function App() {
                               onRetryOrganizationList={runtime.retryOrganizationList}
                               showOrgSwitcher={runtime.showOrgSwitcher}
                               onSwitchOrg={runtime.handleOrgSwitch}
-                              onOpenCommandPalette={() => {
-                                setShortcutsOpen(false);
-                                setCommandPaletteOpen(true);
-                              }}
                             >
                               <RouteErrorBoundary>{props.children}</RouteErrorBoundary>
                             </AppLayout>

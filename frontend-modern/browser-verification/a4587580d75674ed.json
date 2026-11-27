@@ -1,0 +1,49 @@
+{
+  "version": 1,
+  "base_sha": "ac07eff7514b5bb85a2a1c67e864be31851786bc",
+  "verified_at": "2026-11-26T23:36:46Z",
+  "result": "passed",
+  "changed_paths": [
+    "frontend-modern/src/App.tsx",
+    "frontend-modern/src/AppLayout.tsx"
+  ],
+  "content_sha256": {
+    "frontend-modern/src/App.tsx": "af42697fc53807217bab273f01b35efa217c26cde048a6406dfa961d2f1187bb",
+    "frontend-modern/src/AppLayout.tsx": "02aadd9b6c712759565164ec7ebe10aa3f60b38bef14ead84a34ab328a30b48c"
+  },
+  "routes": [
+    "/proxmox/overview",
+    "/alerts",
+    "/map"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 1024,
+      "height": 768
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "states": [
+    "preview build (channel=rc) in dark and light themes with only the Map button in the top-left header slot, centered Pulse brand mark, and zero horizontal overflow",
+    "stable build (channel=stable) in dark theme at desktop and mobile viewports with neither Map nor Search in the top-left header slot and centered desktop Pulse brand mark",
+    "kiosk mode (?kiosk=1) hiding the top-left header slot and primary navigation",
+    "command palette dialog opened and focused cleanly via keyboard shortcut with zero console or page errors",
+    "keyboard shortcuts dialog documenting Cmd+K / Ctrl+K for opening the command palette"
+  ],
+  "interactions": [
+    "verified command-palette-trigger is absent in preview, stable, desktop, laptop, mobile, and kiosk states",
+    "pressed Meta+k to open CommandPaletteModal, verified combobox input focus, and pressed Meta+k again to toggle it closed",
+    "pressed Control+k to reopen CommandPaletteModal, filtered for Switch Theme: Light, and pressed Enter to switch themes live",
+    "pressed Meta+k, filtered for Go to Alerts, and pressed Enter to navigate to /alerts",
+    "pressed ? to open KeyboardShortcutsModal, verified Command Palette shortcut entry, and pressed Escape to close",
+    "clicked the top-left Map header button in preview build to navigate to /map with aria-current=page",
+    "verified Meta+k opens and Escape closes CommandPaletteModal on stable build"
+  ]
+}
