@@ -23,32 +23,43 @@ export const getTrueNASDatasetStateSummary = (
   return null;
 };
 
-const CONNECTED_STATUS = /^(online|running|healthy|connected|ok)$/;
-const ERROR_STATUS = /^(error|failed|unauthorized)$/;
+const CONNECTED_STATUS = /^(online|running|healthy|connected|ok)$/i;
+const ERROR_STATUS = /^(error|failed|unauthorized)$/i;
 
-export type TrueNASStaleNotice = {
+export type ProviderStaleNotice = {
   badge: string;
   detail: string;
+  error?: string;
+};
+
+export type TrueNASStaleNotice = ProviderStaleNotice;
+
+export const buildProviderStaleNotice = (
+  entry: { status?: unknown; error?: unknown } | undefined,
+  provider: string,
+): ProviderStaleNotice | null => {
+  const status = typeof entry?.status === 'string' ? entry.status.trim() : '';
+  if (!entry || CONNECTED_STATUS.test(status)) return null;
+  const error = asTrimmedString(entry.error);
+  const prefix =
+    error && ERROR_STATUS.test(status)
+      ? `${provider} collection error`
+      : `${provider} has not updated this recently`;
+  return {
+    badge: 'Stale data',
+    detail: error ? `${prefix}: ${error}` : prefix,
+    ...(error ? { error } : {}),
+  };
 };
 
 // Prefer top-level sourceStatus written by live WebSocket and REST adaptation,
 // falling back to platformData.sourceStatus for older fixtures so live recovery
 // clears a stale REST copy without waiting for a reload.
-export const getTrueNASStaleNotice = (resource: Resource): TrueNASStaleNotice | null => {
-  const entry = resource.sourceStatus?.truenas ?? getResourceSourceStatus(resource, 'truenas');
-  if (!entry) return null;
-  const status = typeof entry.status === 'string' ? entry.status.trim().toLowerCase() : '';
-  if (CONNECTED_STATUS.test(status)) return null;
-  const error = asTrimmedString(entry.error);
-  const prefix =
-    error && ERROR_STATUS.test(status)
-      ? 'TrueNAS collection error'
-      : 'TrueNAS has not updated this recently';
-  return {
-    badge: 'Stale data',
-    detail: error ? `${prefix}: ${error}` : prefix,
-  };
-};
+export const getTrueNASStaleNotice = (resource: Resource): TrueNASStaleNotice | null =>
+  buildProviderStaleNotice(
+    resource.sourceStatus?.truenas ?? getResourceSourceStatus(resource, 'truenas'),
+    'TrueNAS',
+  );
 
 export const isTrueNASSourceImpaired = (resource: Resource): boolean =>
   getTrueNASStaleNotice(resource) !== null;

@@ -280,12 +280,19 @@ export const VsphereNetworksTable: Component<{
                                 variant={indicator().variant}
                                 title={indicator().label}
                               />
-                              <span
-                                class="truncate font-medium text-base-content"
-                                title={networkTitle()}
-                              >
-                                {name()}
-                              </span>
+                              <div class="min-w-0">
+                                <span
+                                  class="block truncate font-medium text-base-content"
+                                  title={networkTitle()}
+                                >
+                                  {name()}
+                                </span>
+                                <Show when={issue()?.stale}>
+                                  <span class="block text-[10px] font-medium text-amber-800 dark:text-amber-300">
+                                    Stale data
+                                  </span>
+                                </Show>
+                              </div>
                             </div>
                           </TableCell>
                           <TableCell

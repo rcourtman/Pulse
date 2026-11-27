@@ -127,10 +127,10 @@ export const useResourceDetailDrawerDerivedState = (
   const lastSeen = createMemo(() => formatRelativeTime(resource().lastSeen, { now: now() }));
   const lastSeenAbsolute = createMemo(() => formatAbsoluteTime(resource().lastSeen));
 
-  const platformBadge = createMemo(() => getPlatformBadge(resource().platformType));
-  const sourceBadge = createMemo(() => getSourceBadge(resource().sourceType));
-  const typeBadge = createMemo(() => getTypeBadge(resource().type));
-  const platformData = createMemo(() => resource().platformData as PlatformData | undefined);
+  const platformBadge = () => getPlatformBadge(resource().platformType);
+  const sourceBadge = () => getSourceBadge(resource().sourceType);
+  const typeBadge = () => getTypeBadge(resource().type);
+  const platformData = () => resource().platformData as PlatformData | undefined;
   const unifiedSourceBadges = createMemo(() => {
     const sources = resource().sources;
     return getUnifiedSourceBadges(
@@ -138,7 +138,7 @@ export const useResourceDetailDrawerDerivedState = (
     );
   });
   const systemIdentityBadges = createMemo(() => getInfrastructureSystemIdentityBadges(resource()));
-  const hasUnifiedSources = createMemo(() => unifiedSourceBadges().length > 0);
+  const hasUnifiedSources = () => unifiedSourceBadges().length > 0;
   const headerBadges = createMemo(() => {
     const identityBadges =
       systemIdentityBadges().length > 0
@@ -181,34 +181,27 @@ export const useResourceDetailDrawerDerivedState = (
       (policyBadges().length > 0 || Boolean(governanceSummary())),
   );
 
-  const agentMeta = createMemo(
-    () => resource().agent ?? (platformData()?.agent as AgentPlatformData | undefined),
-  );
-  const kubernetesMeta = createMemo(
-    () =>
-      resource().kubernetes ?? (platformData()?.kubernetes as KubernetesPlatformData | undefined),
-  );
-  const vmwareData = createMemo(
-    () => resource().vmware ?? (platformData()?.vmware as ResourceVMwareMeta | undefined),
-  );
+  const agentMeta = () =>
+    resource().agent ?? (platformData()?.agent as AgentPlatformData | undefined);
+  const kubernetesMeta = () =>
+    resource().kubernetes ?? (platformData()?.kubernetes as KubernetesPlatformData | undefined);
+  const vmwareData = () =>
+    resource().vmware ?? (platformData()?.vmware as ResourceVMwareMeta | undefined);
   const kubernetesCapabilityBadges = createMemo(() =>
     buildKubernetesCapabilityBadges(kubernetesMeta()?.metricCapabilities),
   );
 
   const proxmoxNode = createMemo(() => toNodeFromProxmox(resource()));
-  const proxmoxNetworkInterfaces = createMemo(
-    () =>
-      resource().proxmox?.networkInterfaces ??
-      (platformData()?.proxmox as { networkInterfaces?: HostNetworkInterface[] } | undefined)
-        ?.networkInterfaces ??
-      [],
-  );
+  const proxmoxNetworkInterfaces = () =>
+    resource().proxmox?.networkInterfaces ??
+    (platformData()?.proxmox as { networkInterfaces?: HostNetworkInterface[] } | undefined)
+      ?.networkInterfaces ??
+    [];
   const agentInfo = createMemo(() => toAgentFromResource(resource(), agentMeta()));
   // A silent agent's sensors and disk usage are its last report, even on a
   // row another source keeps online.
-  const agentReadingsLastKnownReason = createMemo(() =>
-    resource().agent?.stale ? HOST_AGENT_STOPPED_REPORTING_REASON : undefined,
-  );
+  const agentReadingsLastKnownReason = () =>
+    resource().agent?.stale ? HOST_AGENT_STOPPED_REPORTING_REASON : undefined;
   const temperatureRows = createMemo(() =>
     buildTemperatureRows(agentInfo()?.sensors, {
       lastKnownReason: agentReadingsLastKnownReason(),
@@ -216,12 +209,10 @@ export const useResourceDetailDrawerDerivedState = (
   );
   const customSensorRows = createMemo(() => buildCustomSensorRows(agentInfo()?.sensors));
 
-  const dockerHostData = createMemo(() => platformData()?.docker as DockerPlatformData | undefined);
-  const dockerHostSourceId = createMemo(
-    () => (dockerHostData()?.hostSourceId || '').trim() || null,
-  );
-  const dockerUpdatesAvailable = createMemo(() => dockerHostData()?.updatesAvailableCount ?? 0);
-  const dockerContainerCount = createMemo(() => dockerHostData()?.containerCount ?? 0);
+  const dockerHostData = () => platformData()?.docker as DockerPlatformData | undefined;
+  const dockerHostSourceId = () => (dockerHostData()?.hostSourceId || '').trim() || null;
+  const dockerUpdatesAvailable = () => dockerHostData()?.updatesAvailableCount ?? 0;
+  const dockerContainerCount = () => dockerHostData()?.containerCount ?? 0;
   const dockerUpdatesCheckedRelative = createMemo(() => {
     const raw = dockerHostData()?.updatesLastCheckedAt;
     if (!raw) return '';
@@ -229,20 +220,19 @@ export const useResourceDetailDrawerDerivedState = (
     if (!Number.isFinite(parsed)) return '';
     return formatRelativeTime(parsed, { now: now() });
   });
-  const dockerHostCommand = createMemo(() => dockerHostData()?.command);
-  const dockerHostCommandActive = createMemo(() => {
-    const status = (dockerHostCommand()?.status || '').trim().toLowerCase();
-    return ['queued', 'dispatched', 'acknowledged', 'in_progress'].includes(status);
-  });
-  const dockerUpdateActionsDisabled = createMemo(() => shouldHideDockerUpdateActions());
-  const dockerUpdateActionsLoading = createMemo(() => !areSystemSettingsLoaded());
+  const dockerHostCommand = () => dockerHostData()?.command;
+  const dockerHostCommandActive = () =>
+    ['queued', 'dispatched', 'acknowledged', 'in_progress'].includes(
+      (dockerHostCommand()?.status || '').trim().toLowerCase(),
+    );
+  const dockerUpdateActionsDisabled = () => shouldHideDockerUpdateActions();
+  const dockerUpdateActionsLoading = () => !areSystemSettingsLoaded();
 
-  const resourceDependencies = createMemo(() => resourceIntelligence()?.dependencies ?? []);
-  const resourceDependents = createMemo(() => resourceIntelligence()?.dependents ?? []);
-  const resourceCorrelations = createMemo(() => resourceIntelligence()?.correlations ?? []);
-  const resourceRelationships = createMemo(
-    () => options.resourceRelationships?.() ?? resource().relationships ?? [],
-  );
+  const resourceDependencies = () => resourceIntelligence()?.dependencies ?? [];
+  const resourceDependents = () => resourceIntelligence()?.dependents ?? [];
+  const resourceCorrelations = () => resourceIntelligence()?.correlations ?? [];
+  const resourceRelationships = () =>
+    options.resourceRelationships?.() ?? resource().relationships ?? [];
   const hasMeaningfulResourceIntelligence = createMemo(() => {
     const intel = resourceIntelligence();
     if (!intel) return false;
@@ -281,10 +271,10 @@ export const useResourceDetailDrawerDerivedState = (
     return summary.join(' · ');
   });
 
-  const pbsData = createMemo(() => platformData()?.pbs);
-  const pmgData = createMemo(() => platformData()?.pmg);
-  const pbsJobTotal = createMemo(() => getPbsJobTotal(pbsData()));
-  const pmgQueueBacklog = createMemo(() => getPmgQueueBacklog(pmgData()));
+  const pbsData = () => platformData()?.pbs;
+  const pmgData = () => platformData()?.pmg;
+  const pbsJobTotal = () => getPbsJobTotal(pbsData());
+  const pmgQueueBacklog = () => getPmgQueueBacklog(pmgData());
   const pmgUpdatedRelative = createMemo(() => {
     const raw = pmgData()?.lastUpdated;
     if (!raw) return '';
@@ -294,24 +284,25 @@ export const useResourceDetailDrawerDerivedState = (
   });
   const pbsVisibleJobBreakdown = createMemo(() => buildPbsVisibleJobBreakdown(pbsData()));
   const pbsActiveTasks = createMemo(() => buildPbsActiveTasks(pbsData()));
-  const pbsActiveTaskCount = createMemo(() => pbsActiveTasks().length);
+  const pbsActiveTaskCount = () => pbsActiveTasks().length;
   const pmgVisibleQueueBreakdown = createMemo(() => buildPmgVisibleQueueBreakdown(pmgData()));
   const pmgVisibleMailBreakdown = createMemo(() => buildPmgVisibleMailBreakdown(pmgData()));
 
-  const mergedSources = createMemo(() => platformData()?.sources ?? []);
-  const sourceStatus = createMemo<NonNullable<PlatformData['sourceStatus']>>(
-    () => platformData()?.sourceStatus ?? {},
-  );
+  const mergedSources = () => platformData()?.sources ?? [];
+  const sourceStatus = createMemo<NonNullable<PlatformData['sourceStatus']>>(() => ({
+    ...platformData()?.sourceStatus,
+    ...resource().sourceStatus,
+  }));
   const sourceSummary = createMemo(() => buildSourceSummary(mergedSources(), sourceStatus()));
 
   const identityView = createMemo(() => buildResourceIdentityView(resource()));
-  const identityAliasValues = createMemo(() => identityView().identityAliasValues);
-  const identityIpValues = createMemo(() => identityView().identityIpValues);
-  const primaryIdentityRows = createMemo(() => identityView().primaryIdentityRows);
-  const identityCardHasRichData = createMemo(() => identityView().identityCardHasRichData);
-  const aliasPreviewValues = createMemo(() => identityView().aliasPreviewValues);
-  const hasAliasOverflow = createMemo(() => identityView().hasAliasOverflow);
-  const hasMergedSources = createMemo(() => mergedSources().length > 1);
+  const identityAliasValues = () => identityView().identityAliasValues;
+  const identityIpValues = () => identityView().identityIpValues;
+  const primaryIdentityRows = () => identityView().primaryIdentityRows;
+  const identityCardHasRichData = () => identityView().identityCardHasRichData;
+  const aliasPreviewValues = () => identityView().aliasPreviewValues;
+  const hasAliasOverflow = () => identityView().hasAliasOverflow;
+  const hasMergedSources = () => mergedSources().length > 1;
   const discoveryConfig = createMemo(() => toDiscoveryConfig(resource()));
   const guestReadPrecaution = createMemo(() => getResourceGuestReadPrecaution(resource()));
 
@@ -328,21 +319,19 @@ export const useResourceDetailDrawerDerivedState = (
       temperatureRowCount: temperatureRows().length + customSensorRows().length,
     }),
   );
-  const hasHostDetails = createMemo(() => hostDetailCards().length > 0);
-  const hostDetailSummary = createMemo(() => buildHostDetailSummary(hostDetailCards()));
-  const hasServiceDetails = createMemo(
-    () => resource().type === 'docker-host' || Boolean(pbsData()) || Boolean(pmgData()),
-  );
-  const serviceDetailsSummary = createMemo(() => {
-    return getServiceDetailsSummary({
+  const hasHostDetails = () => hostDetailCards().length > 0;
+  const hostDetailSummary = () => buildHostDetailSummary(hostDetailCards());
+  const hasServiceDetails = () =>
+    resource().type === 'docker-host' || Boolean(pbsData()) || Boolean(pmgData());
+  const serviceDetailsSummary = () =>
+    getServiceDetailsSummary({
       resourceType: resource().type,
       docker: dockerHostData(),
       pbs: pbsData(),
       pmg: pmgData(),
     });
-  });
   const vmwareDetailSections = createMemo(() =>
-    buildVMwareDetailSections(resource().type, vmwareData()),
+    buildVMwareDetailSections(resource().type, vmwareData(), resource()),
   );
   const { getTrueNASDiskTemperatureThresholds } = useAlertsActivation();
   const trueNASDetailSections = createMemo(() =>
@@ -357,20 +346,16 @@ export const useResourceDetailDrawerDerivedState = (
     getResourceMetricsHistoryDeferredMetrics(resource()),
   );
   const metricsHistoryGroups = createMemo(() => getResourceMetricsHistoryGroups(resource()));
-  const hasMetricsHistory = createMemo(() => resourceSupportsMetricsHistory(resource()));
+  const hasMetricsHistory = () => resourceSupportsMetricsHistory(resource());
   const relatedLinks = createMemo(() => buildRelatedLinks(resource(), displayName()));
-  const accessSummary = createMemo(() =>
+  const accessSummary = () =>
     buildAccessSummary({
       hasWebInterface: Boolean(discoveryConfig()),
       links: relatedLinks(),
-    }),
-  );
-  const hasAccessContext = createMemo(
-    () => Boolean(discoveryConfig()) || relatedLinks().length > 0,
-  );
-  const hasRuntimeOperationalContext = createMemo(() =>
-    buildHasRuntimeOperationalContext(kubernetesCapabilityBadges()),
-  );
+    });
+  const hasAccessContext = () => Boolean(discoveryConfig()) || relatedLinks().length > 0;
+  const hasRuntimeOperationalContext = () =>
+    buildHasRuntimeOperationalContext(kubernetesCapabilityBadges());
 
   const sourceSections = createMemo(() => buildSourceSections(platformData()));
   const identityMatchInfo = createMemo(() => buildIdentityMatchInfo(platformData()));

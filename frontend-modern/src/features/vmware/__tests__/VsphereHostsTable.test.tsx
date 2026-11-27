@@ -162,6 +162,60 @@ describe('VsphereHostsTable', () => {
     expect(container.querySelector('[data-vsphere-host-row="host-healthy"]')).toBeNull();
     expect(screen.getByText('1 of 2 hosts')).toBeInTheDocument();
   });
+
+  it('shows Stale data on live stale hosts, preserves offline danger, and clears on live recovery', () => {
+    const stale = { vmware: { status: 'stale', error: 'vCenter poll timed out' } };
+    const staleHost = makeHost({
+      id: 'host-stale',
+      name: 'esxi-stale.lab.local',
+      sourceStatus: stale,
+    });
+    const offlineStale = makeHost({
+      id: 'host-offline',
+      name: 'esxi-offline.lab.local',
+      status: 'offline',
+      sourceStatus: stale,
+    });
+    const healthyHost = makeHost({ id: 'host-fresh', name: 'esxi-fresh.lab.local' });
+    const [hosts, setHosts] = createSignal([staleHost, offlineStale, healthyHost]);
+
+    const { container } = render(() => (
+      <VsphereHostsTable
+        hosts={hosts()}
+        scope={hosts()}
+        emptyIcon={<span />}
+        emptyTitle="No hosts"
+        emptyDescription="No hosts"
+        showToolbar={false}
+      />
+    ));
+
+    const row = (id: string) => within(container.querySelector(`[data-vsphere-host-row="${id}"]`)!);
+    expect(row('host-stale').getByText('Stale data')).toHaveAttribute(
+      'title',
+      'vCenter has not updated this recently: vCenter poll timed out',
+    );
+    expect(row('host-stale').getByTitle('degraded')).toHaveClass('bg-amber-500');
+    expect(row('host-stale').getByTestId('responsive-metric-cell')).toBeInTheDocument();
+    expect(row('host-stale').getByTestId('stacked-memory-bar')).toBeInTheDocument();
+
+    expect(row('host-offline').getByText('Stale data')).toBeInTheDocument();
+    expect(row('host-offline').getByTitle('offline')).toHaveClass('bg-red-500');
+    expect(row('host-fresh').queryByText('Stale data')).not.toBeInTheDocument();
+
+    setHosts([
+      {
+        ...staleHost,
+        sourceStatus: { vmware: { status: 'online' } },
+        platformData: { sourceStatus: stale },
+      },
+      offlineStale,
+      healthyHost,
+    ]);
+
+    expect(row('host-stale').queryByText('Stale data')).not.toBeInTheDocument();
+    expect(row('host-stale').getByTitle('online')).toHaveClass('bg-emerald-500');
+  });
   it('shows the vCenter column by connection name only when several vCenters are connected', () => {
     const lab = makeHost({ id: 'host-1' });
     lab.vmware = { ...lab.vmware!, connectionId: 'vc-lab', connectionName: 'Lab vCenter' };
