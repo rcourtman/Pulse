@@ -189,6 +189,10 @@ uses its primary alert's ID, not a unique ID for every member or batch. **Do not
 deduplicate permanently on this header or on alert ID and event alone:** doing
 so can silently discard a later incident or a changed group. See
 [receiver correlation and deduplication](#receiver-correlation-and-deduplication).
+Alert-derived HTTP headers (`X-Pulse-Event-ID`, and `Title` on ntfy deliveries)
+percent-encode control bytes other than tab and deterministically shorten
+values over 2,048 bytes with a SHA-256 suffix so an unusual or oversized
+identifier cannot reject an entire grouped delivery.
 
 **Signed deliveries.** Set a `signingSecret` on the webhook config to enable HMAC signing. Signed requests carry:
 
@@ -331,6 +335,8 @@ actions. Do not cause a production outage or notification storm for this test.
 - **Private IPs**: By default, webhooks to private IPs are blocked. Allow them in **Settings → System → Network → Webhook Security**.
 - **Headers**: Add custom headers (e.g., `Authorization: Bearer ...`) in the webhook config.
 - **Signing**: Prefer `signingSecret` (above) over bare bearer headers when the receiver supports verification — it authenticates the payload itself, not just the connection.
+- **Saved headers and custom fields**: Masked values in custom headers and custom fields stay preserved only while editing the same webhook URL origin. Changing the webhook address to a different scheme, host, or port requires entering those saved values again. A masked `signingSecret` can still be kept across URL edits because it only signs the payload and is never sent to the receiver.
+- **Same-origin redirects**: Alert webhooks follow redirects only within the same scheme, host, and port, up to 3 redirects. Cross-origin redirects fail immediately as configuration errors without forwarding alert bodies, custom headers, or signatures.
 
 ## 🧾 Audit Webhooks (Pro/legacy Pro+/Cloud)
 

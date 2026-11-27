@@ -297,6 +297,91 @@ class AlertingOutageHelpDocsTest(unittest.TestCase):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, text)
 
+    def test_email_branding_help_matches_runtime_and_ui_source(self):
+        text = " ".join(DOC.read_text(encoding="utf-8").split())
+        email_template = (
+            ROOT / "internal/notifications/email_template.go"
+        ).read_text(encoding="utf-8")
+        continuity = (
+            ROOT / "internal/notifications/delivery_continuity.go"
+        ).read_text(encoding="utf-8")
+        presentation = (
+            ROOT / "frontend-modern/src/utils/alertEmailPresentation.ts"
+        ).read_text(encoding="utf-8")
+
+        for token in (
+            'DefaultEmailSubjectPrefix = "[Pulse Alert]"',
+            'DefaultEmailBrandName = "Pulse Monitoring"',
+            "MaxEmailSubjectPrefixRunes = 64",
+            "MaxEmailBrandNameRunes     = 80",
+            "MaxEmailFooterNoteRunes    = 240",
+            "func NormalizeEmailBranding(",
+            "html.EscapeString(branding.FooterNote)",
+        ):
+            self.assertIn(token, email_template)
+        for token in ('c.SubjectPrefix = ""', 'c.BrandName = ""', 'c.FooterNote = ""'):
+            self.assertIn(token, continuity)
+        for token in (
+            "Show advanced options",
+            "Email branding & subject",
+            "Subject prefix",
+            "Brand name",
+            "Footer note",
+            "Send test email",
+        ):
+            self.assertIn(token, presentation)
+
+        for phrase in (
+            "expand **Show advanced options** in the email settings form to open **Email branding & subject**",
+            "**Subject prefix** (up to 64 characters, default `[Pulse Alert]`)",
+            "**Brand name** (up to 80 characters, default `Pulse Monitoring`)",
+            "plain-text **Footer note** (up to 240 characters)",
+            "HTML-escapes those fields across single, grouped, resolved, and **Send test email** messages",
+            "Raw HTML and custom email template files are not supported",
+            "does not change the email destination continuity fingerprint",
+        ):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, text)
+
+    def test_saved_notification_credentials_and_auto_replay_help_match_source(self):
+        text = " ".join(DOC.read_text(encoding="utf-8").split())
+        saved_dest = (
+            ROOT / "internal/notifications/saved_credential_destination.go"
+        ).read_text(encoding="utf-8")
+        notifications_api = (
+            ROOT / "internal/api/alerting/notifications.go"
+        ).read_text(encoding="utf-8")
+        email_enhanced = (
+            ROOT / "internal/notifications/email_enhanced.go"
+        ).read_text(encoding="utf-8")
+        queue_go = (ROOT / "internal/notifications/queue.go").read_text(encoding="utf-8")
+
+        for token in ("func EmailConfigKeepsSMTPServer(", "func AppriseConfigKeepsServer("):
+            self.assertIn(token, saved_dest)
+        for token in (
+            "smtpServerChangeNeedsPasswordMessage",
+            "appriseServerChangeNeedsAPIKeyMessage",
+        ):
+            self.assertIn(token, notifications_api)
+        self.assertIn("configure an SMTP server in email notification settings", email_enhanced)
+        for token in (
+            "autoReplayDLQWindow                           = 24 * time.Hour",
+            "autoReplayDLQBatchLimit                       = 25",
+            "autoReplayDLQCooldown                         = 5 * time.Minute",
+        ):
+            self.assertIn(token, queue_go)
+
+        for phrase in (
+            "Saved SMTP passwords and Apprise API keys are write-only and stay preserved only while editing the same destination",
+            "Changing the SMTP server host or port, or turning off TLS or STARTTLS encryption on an encrypted SMTP configuration, requires entering the SMTP password again",
+            "Changing the Apprise server origin or turning off its certificate check requires entering the Apprise API key again",
+            "blank SMTP server host is refused as a configuration error instead of dialing loopback",
+            "automatically re-queues up to 25 recent (24-hour) retryable retained failures for that destination once, subject to a five-minute cooldown per destination",
+            "Authentication, configuration, rejected, and TLS failures, edited destinations, rehearsals, and **Test** sends do not trigger automatic replay",
+        ):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, text)
+
 
 if __name__ == "__main__":
     unittest.main()
