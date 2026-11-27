@@ -498,6 +498,52 @@ class UpdateRecoveryDocsTest(unittest.TestCase):
             with self.subTest(docker_phrase=phrase):
                 self.assertIn(phrase, docker_text)
 
+    def test_in_app_update_resilience_matches_manager_runtime(self):
+        process_text = " ".join(section("AUTO_UPDATE", "Update Process", "###").split())
+        failed_text = " ".join(section("AUTO_UPDATE", "Update failed", "###").split())
+        manager = (ROOT / "internal/updates/manager.go").read_text(encoding="utf-8")
+
+        for phrase in (
+            "stale `pulse-update-*` temporary directories older than one hour",
+            "retained `backup-*` snapshots down to the three most recent",
+            "at least 128 MiB free",
+            "rejects target versions at or below the running version",
+            "up to 512 MiB",
+            "up to three attempts",
+            "`extracted size + 32 MiB`",
+            "alternate temporary root",
+            "deletes the downloaded archive",
+            "estimated backup size plus 32 MiB free",
+        ):
+            with self.subTest(process_phrase=phrase):
+                self.assertIn(phrase, process_text)
+
+        for phrase in (
+            "stale `pulse-update-*` temporary directories older than one hour",
+            "excess retained `backup-*` snapshots beyond three",
+            "reclaims the downloaded archive immediately after extraction",
+            "alternate temporary root",
+            "up to three automatic attempts",
+        ):
+            with self.subTest(failed_phrase=phrase):
+                self.assertIn(phrase, failed_text)
+
+        for marker in (
+            "staleUpdateTempDirAge = time.Hour",
+            "updateHTTPAttempts    = 3",
+            "maxUpdateDownloadBytes   int64  = 512 << 20",
+            "minUpdateTempFreeBytes   int64  = 128 << 20",
+            "updateBackupSafetyBytes  int64  = 32 << 20",
+            "updateExtractSafetyBytes int64  = 32 << 20",
+            "maxRetainedUpdateBackups int    = 3",
+            "cleanupStaleUpdateTempDirs(time.Now())",
+            "prepareUpdateExtractionDir(ctx, tempDir, extractRequiredBytes)",
+            "_ = os.Remove(tarballPath)",
+            "func ensureApplyTargetIsNewer(",
+        ):
+            with self.subTest(marker=marker):
+                self.assertIn(marker, manager)
+
 
 if __name__ == "__main__":
     unittest.main()

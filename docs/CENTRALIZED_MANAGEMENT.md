@@ -12,6 +12,8 @@ agent's displayed hostname is not its unique Agent ID.
 ## Concepts
 
 - **Profile**: a named configuration, optionally inheriting from a parent profile.
+  Inheritance merges parent settings first and overrides them with child settings,
+  stops on cycles, and is bounded to 64 levels.
 - **Assignment**: the link from an existing Agent ID to a profile's actual `id`.
   Assigning a different profile replaces that agent's previous assignment.
 - **Precedence**: on a successful startup fetch, supported profile keys override
@@ -51,7 +53,10 @@ and evidence already available.
 ### Monitoring is not command authority
 
 `enable_host` controls metrics, not AI or container actions. `commandsEnabled`
-is a separate per-agent control, not a profile key. Command use also depends on
+is a separate per-agent administrator policy owned by
+`PATCH /api/agents/agent/{id}/config`, not a profile key. Updating or deleting
+user-editable host metadata with `monitoring:write` ignores `commandsEnabled` and
+preserves the saved command policy. Command use also depends on
 the installed local authority, the token's `agent:exec` scope and its permitted
 agent binding. A monitoring-only runtime rejects remote command enablement;
 changing a profile or adding a token scope cannot promote that runtime.
@@ -159,6 +164,10 @@ use GET only.
 | POST | `/api/admin/profiles/{id}/rollback/{version}` | Restore historical content as a new version |
 | GET | `/api/admin/profiles/changelog` | Recorded profile changes |
 | GET / POST | `/api/admin/profiles/deployments` | Read or record deployment status; not independent host acceptance |
+
+Request bodies are bounded to 1 MiB for profile creation, updates, and
+validation, and 64 KiB for assignments, deployment status updates, and AI
+suggestions.
 
 Example **request bodies**, not credential-bearing HTTP commands:
 

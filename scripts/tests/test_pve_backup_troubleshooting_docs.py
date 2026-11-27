@@ -360,6 +360,57 @@ PY
         self.assertEqual((ROOT / "docs/TEMPERATURE_MONITORING.md").read_bytes(),
                          (ROOT / "frontend-modern/public/docs/TEMPERATURE_MONITORING.md").read_bytes())
 
+    def test_temperature_help_matches_agent_lease_and_ssh_backoff_runtime(self):
+        doc = " ".join((ROOT / "docs/TEMPERATURE_MONITORING.md").read_text(encoding="utf-8").split())
+        for phrase in (
+            "SMART-only agent reports",
+            "stamped with the agent's own report time",
+            "6x the agent reporting interval, clamped between 60 seconds and 10 minutes",
+            "stops carrying its last sensor reading past that lease",
+            "linked Agent ID first",
+            "never borrows sensors from a same-named node on another connection",
+            "only right before `ssh` actually runs, and only once per target host",
+            "No warning is logged when no SSH key is configured",
+            "`PULSE_DEV_ALLOW_CONTAINER_SSH=true`",
+            "15-second timeout",
+            "1 MiB output limit",
+            "`~/.ssh/known_hosts_sensors`",
+            "starting at 30 seconds up to 15 minutes",
+            "hold at the 30-second floor",
+            "clears per-host SSH and host-key backoff automatically on the next poll cycle",
+        ):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, doc)
+
+        host_temps = (ROOT / "internal/monitoring/host_agent_temps.go").read_text(encoding="utf-8")
+        monitor_go = (ROOT / "internal/monitoring/monitor.go").read_text(encoding="utf-8")
+        temp_go = (ROOT / "internal/monitoring/temperature.go").read_text(encoding="utf-8")
+
+        for marker in (
+            "hasUsableSMARTTemperature",
+            "carriedTemperatureOutlivesAgentLease",
+            "hostAgentReportCurrent(agentStatus.LastSeen",
+            "otherProxmoxNodeHasName",
+        ):
+            self.assertIn(marker, host_temps)
+        for marker in (
+            "hostOfflineGraceMultiplier       = 6",
+            "hostMinimumHealthWindow          = 60 * time.Second",
+            "hostMaximumHealthWindow          = 10 * time.Minute",
+        ):
+            self.assertIn(marker, monitor_go)
+        for marker in (
+            "const maxTemperatureCommandOutputSize = 1 << 20",
+            "const defaultSSHCommandTimeout = 15 * time.Second",
+            "temperatureSSHFailureInitialBackoff = 30 * time.Second",
+            "temperatureSSHFailureMaxBackoff     = 15 * time.Minute",
+            "resetSSHFailuresOnKeyChange",
+            "known_hosts_sensors",
+            "tc.noteContainerSSHUse(host)",
+            "PULSE_DEV_ALLOW_CONTAINER_SSH",
+        ):
+            self.assertIn(marker, temp_go)
+
 
 ZFS_DOC = ROOT / "docs/ZFS_MONITORING.md"
 

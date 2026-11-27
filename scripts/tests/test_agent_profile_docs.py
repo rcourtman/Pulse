@@ -139,6 +139,32 @@ class AgentProfileDocsTest(unittest.TestCase):
                        "not an empty profile list", "accepts GET, POST, PUT and DELETE"):
             self.assertIn(phrase, self.guide)
 
+    def test_metadata_isolation_inheritance_bounds_and_body_limits_match_runtime(self):
+        for phrase in (
+            "stops on cycles, and is bounded to 64 levels",
+            "administrator policy owned by `PATCH /api/agents/agent/{id}/config`",
+            "host metadata with `monitoring:write` ignores `commandsEnabled`",
+            "preserves the saved command policy",
+            "bounded to 1 MiB for profile creation, updates, and validation",
+            "64 KiB for assignments, deployment status updates, and AI suggestions",
+        ):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, self.guide)
+
+        host_meta = (ROOT / "internal/api/host_metadata.go").read_text(encoding="utf-8")
+        profiles_model = (ROOT / "internal/models/profiles.go").read_text(encoding="utf-8")
+        profile_api = (ROOT / "internal/api/config_profiles.go").read_text(encoding="utf-8")
+        suggestions_api = (ROOT / "internal/api/profile_suggestions.go").read_text(encoding="utf-8")
+
+        self.assertIn("SetUserMetadata(hostID, meta)", host_meta)
+        self.assertIn("DeleteUserMetadata(hostID)", host_meta)
+        self.assertIn("PATCH /api/agents/agent/{id}/config", host_meta)
+        self.assertIn("const maxProfileInheritanceDepth = 64", profiles_model)
+        self.assertIn("Cycle detected; stop walking.", profiles_model)
+        self.assertIn("http.MaxBytesReader(w, r.Body, 1<<20)", profile_api)
+        self.assertIn("http.MaxBytesReader(w, r.Body, 64*1024)", profile_api)
+        self.assertIn("http.MaxBytesReader(w, r.Body, 64*1024)", suggestions_api)
+
 
 if __name__ == "__main__":
     unittest.main()

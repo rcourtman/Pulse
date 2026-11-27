@@ -33,7 +33,9 @@ Notes:
   zero. Other sensor types need their own supported driver/provider.
 - Check the active agent's version, last report and the affected host's reading
   before changing its setup. A current server does not upgrade every agent.
-- When a Proxmox host has recent usable agent temperature data, Pulse treats the agent as the source of truth and does not also try SSH temperature collection for that host.
+- When a Proxmox host has recent usable agent temperature data, Pulse treats the agent as the source of truth and does not also try SSH temperature collection for that host. SMART-only agent reports on hosts without a CPU sensor chip also count as usable agent temperature data.
+- Agent temperatures are stamped with the agent's own report time, not the merged Proxmox poll time, and stay valid only while the agent remains inside its reporting lease (6x the agent reporting interval, clamped between 60 seconds and 10 minutes). If the agent stops reporting, Pulse stops carrying its last sensor reading past that lease so stale temperatures do not keep feeding live views, alerts, or History, and falls back to an active sibling cluster sensor reading or configured SSH fallback when available.
+- Pulse matches a Proxmox node to its linked Agent ID first and falls back to an unlinked hostname match only when unambiguous across all Proxmox connections. It never borrows sensors from a same-named node on another connection, a linked guest agent, or an agent manually split from that node.
 
 ### Other Linux sensors and fan readings
 
@@ -163,11 +165,14 @@ With [multi-tenant organizations](MULTI_TENANT.md), the SSH key belongs to the P
 
 ### Containerized Pulse
 
-Prefer the local agent. A legacy configured key can still cause SSH fallback
-from a container, with a production-security warning; the development override
-changes that warning, not whether sensor data exists. Do not mount root SSH
-keys into the Pulse container or enable a development override to repair a
-missing reading.
+Prefer the local agent. Inside a container, Pulse emits the direct-SSH
+production-security warning only right before `ssh` actually runs, and only once
+per target host. No warning is logged when no SSH key is configured, when host-key
+verification refuses the host, or while failure backoff is active. The
+`PULSE_DEV_ALLOW_CONTAINER_SSH=true` development override replaces that warning
+with an info line in the same place and does not change whether sensor data
+exists. Do not mount root SSH keys into the Pulse container or enable a
+development override to repair a missing reading.
 
 ### Verification
 
@@ -208,6 +213,9 @@ the exit, relevant redacted error and affected sensor if help is needed.
 - If temperatures are unavailable, use the [local reading check](#check-existing-linux-readings-safely) before considering setup changes. An empty reading is not a reason for automatic hardware detection.
 - If the unified agent is already reporting temperatures for a Proxmox host, SSH collection is not required for that host.
 - Ensure the SSH key entry is present and restricted to `/usr/local/sbin/pulse-sensors`.
+- SSH temperature commands enforce a 15-second timeout, a 1 MiB output limit, and strict host-key checks against `~/.ssh/known_hosts_sensors`.
+- Repeated hard SSH failures (authentication failure, refusal, or unusable output) back off per host starting at 30 seconds up to 15 minutes. Transient timeouts hold at the 30-second floor, and host-key-scan backoff does not double it.
+- Replacing the configured SSH key file on disk clears per-host SSH and host-key backoff automatically on the next poll cycle, so you do not need to restart Pulse or wait out a 15-minute backoff after repairing a key.
 
 ## Legacy Cleanup (If Upgrading)
 
