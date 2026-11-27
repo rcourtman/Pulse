@@ -2690,6 +2690,7 @@ func (m *Monitor) ApplyDockerReport(report agentsdocker.Report, tokenRecord *con
 			ExitCode:           payload.ExitCode,
 			RestartPolicy:      strings.ToLower(strings.TrimSpace(payload.RestartPolicy)),
 			NetworkMode:        dockerNetworkModeFromReport(payload.NetworkMode),
+			Accelerators:       dockerAcceleratorsFromReport(payload.Accelerators),
 			OOMKilled:          cloneReportBoolPtr(payload.OOMKilled),
 			CreatedAt:          payload.CreatedAt,
 			StartedAt:          payload.StartedAt,
@@ -3840,6 +3841,7 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 	}
 
 	defaultGateways, dnsServers := hostRoutingFromReport(report.Routing)
+	activePeers := hostActivePeersFromReport(report.ActivePeers)
 
 	raid := make([]models.HostRAIDArray, 0, min(len(report.RAID), maxHostRAIDArrays))
 	for _, array := range report.RAID {
@@ -4000,6 +4002,7 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 		NetworkInterfaces: network,
 		DefaultGateways:   defaultGateways,
 		DNSServers:        dnsServers,
+		ActivePeers:       activePeers,
 		Sensors: models.HostSensorSummary{
 			TemperatureCelsius: cloneStringFloatMap(report.Sensors.TemperatureCelsius),
 			FanRPM:             cloneStringFloatMap(report.Sensors.FanRPM),

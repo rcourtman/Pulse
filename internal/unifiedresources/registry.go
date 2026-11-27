@@ -106,6 +106,11 @@ type ResourceRegistry struct {
 	// A registry seeded from resources never saw them, so the rollups its seed
 	// carries are the only answer it has.
 	pbsBackupsRead bool
+	// hostActivePeers holds the latest host-agent passive TCP peer lists from
+	// UpdateFromState so deferred link folds re-project communicates_with edges
+	// onto the folded canonical IDs.
+	hostActivePeers     []hostActivePeerSnapshot
+	hostActivePeersRead bool
 	// overridesUnreadable records that the store could not be read for the
 	// operator's links or exclusions when this registry loaded them, so
 	// links, linksByID and exclusions lack the decisions that read held
@@ -749,15 +754,19 @@ func (rr *ResourceRegistry) ingestSnapshot(snapshot models.StateSnapshot, thresh
 	}
 
 	pbsBackups := pbsGuestBackupsOf(snapshot)
+	hostActivePeers := hostActivePeerSnapshotsOf(snapshot.Hosts)
 	rr.mu.Lock()
 	rr.pbsBackups = pbsBackups
 	rr.pbsBackupsRead = true
+	rr.hostActivePeers = hostActivePeers
+	rr.hostActivePeersRead = true
 	if !rr.deferManualLinks {
 		rr.applyManualLinks(thresholds)
 	}
 	rr.refreshStorageConsumersLocked()
 	rr.refreshPBSRollupsLocked()
 	rr.refreshStoragePostureLocked()
+	rr.refreshHostSocketPeerRelationshipsLocked()
 	rr.refreshIncidentRollupsLocked()
 	rr.buildChildCounts()
 	rr.refreshProxmoxSensorSetupLocked()
@@ -835,6 +844,7 @@ func (rr *ResourceRegistry) ingestRecords(source DataSource, records []IngestRec
 	rr.refreshStorageConsumersLocked()
 	rr.refreshPBSRollupsLocked()
 	rr.refreshStoragePostureLocked()
+	rr.refreshHostSocketPeerRelationshipsLocked()
 	rr.refreshIncidentRollupsLocked()
 	rr.buildChildCounts()
 	rr.refreshProxmoxSensorSetupLocked()
@@ -1096,6 +1106,7 @@ func (rr *ResourceRegistry) ingestResources(resources []Resource, thresholds map
 	rr.refreshStorageConsumersLocked()
 	rr.refreshPBSRollupsLocked()
 	rr.refreshStoragePostureLocked()
+	rr.refreshHostSocketPeerRelationshipsLocked()
 	rr.refreshIncidentRollupsLocked()
 	rr.buildChildCounts()
 	rr.refreshProxmoxSensorSetupLocked()
@@ -5406,6 +5417,7 @@ func (rr *ResourceRegistry) applyDeferredManualLinks(thresholds map[DataSource]t
 	rr.refreshStorageConsumersLocked()
 	rr.refreshPBSRollupsLocked()
 	rr.refreshStoragePostureLocked()
+	rr.refreshHostSocketPeerRelationshipsLocked()
 	rr.refreshIncidentRollupsLocked()
 	rr.buildChildCounts()
 	rr.refreshProxmoxSensorSetupLocked()

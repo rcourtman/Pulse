@@ -43,6 +43,7 @@ type vmBuildState struct {
 	ipAddresses             []string
 	networkInterfaces       []models.GuestNetworkInterface
 	nicConfig               []containerNetworkDetails // From VM configuration; applied after agent evidence is judged.
+	accelerators            []string                  // Hardware accelerators parsed from the same VM configuration read.
 	osName                  string
 	osVersion               string
 	agentVersion            string
@@ -455,6 +456,7 @@ func (m *Monitor) buildVMFromClusterResource(
 	} else {
 		state.nicConfig = m.runningVMNICConfig(ctx, client, instanceName, res.Node, res.VMID)
 	}
+	state.accelerators = m.cachedVMAccelerators(instanceName, res.Node, res.VMID)
 
 	var snapshotNotes []string
 	if prevSnapshot != nil && (prevSnapshot.Raw.StatusMaxMem > 0 || prevSnapshot.Raw.ListingMaxMem > 0) {
@@ -608,6 +610,7 @@ func (m *Monitor) buildVMFromClusterResource(
 		OSVersion:          state.osVersion,
 		AgentVersion:       state.agentVersion,
 		NetworkInterfaces:  applyVMNICConfig(state.networkInterfaces, state.nicConfig),
+		Accelerators:       state.accelerators,
 		NetworkIn:          networkInValue,
 		NetworkOut:         networkOutValue,
 		DiskRead:           diskReadValue,

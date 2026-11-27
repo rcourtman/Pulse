@@ -112,6 +112,7 @@ type Container struct {
 	RootFilesystemBytes     int64                    `json:"rootFilesystemBytes,omitempty"`
 	BlockIO                 *ContainerBlockIO        `json:"blockIo,omitempty"`
 	Mounts                  []ContainerMount         `json:"mounts,omitempty"`
+	Accelerators            []string                 `json:"accelerators,omitempty"` // Hardware accelerators attached to the container (e.g. GPU, iGPU, AMD GPU, TPU, NPU); omitted when none
 	Filesystems             []filesystem.Observation `json:"filesystems,omitempty"`
 	Podman                  *PodmanContainer         `json:"podman,omitempty"`
 	ComposeSourceRegistered bool                     `json:"composeSourceRegistered,omitempty"`

@@ -33,12 +33,14 @@ const (
 
 var proxmoxNetDeviceKey = regexp.MustCompile(`^net\d+$`)
 
-// vmNICConfigEntry is the last accepted reading of one VM's network devices.
+// vmNICConfigEntry is the last accepted reading of one VM's network devices
+// and PCI passthrough accelerators.
 type vmNICConfigEntry struct {
-	devices     []containerNetworkDetails
-	readAt      time.Time // last successful read; zero until one succeeds
-	attemptedAt time.Time // last read of either outcome
-	failed      bool      // the last attempt failed; devices are the earlier reading
+	devices      []containerNetworkDetails
+	accelerators []string
+	readAt       time.Time // last successful read; zero until one succeeds
+	attemptedAt  time.Time // last read of either outcome
+	failed       bool      // the last attempt failed; devices are the earlier reading
 }
 
 // vmNICConfigCache is usable from its zero value.
@@ -80,17 +82,32 @@ func (c *vmNICConfigCache) due(key string, now time.Time) ([]containerNetworkDet
 }
 
 func (c *vmNICConfigCache) store(key string, devices []containerNetworkDetails, now time.Time) {
+	c.storeWithAccelerators(key, devices, nil, now)
+}
+
+func (c *vmNICConfigCache) storeWithAccelerators(key string, devices []containerNetworkDetails, accelerators []string, now time.Time) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if c.entries == nil {
 		c.entries = make(map[string]vmNICConfigEntry)
 	}
 	c.entries[key] = vmNICConfigEntry{
-		devices:     cloneContainerNetworkDetails(devices),
-		readAt:      now,
-		attemptedAt: now,
+		devices:      cloneContainerNetworkDetails(devices),
+		accelerators: append([]string(nil), accelerators...),
+		readAt:       now,
+		attemptedAt:  now,
 	}
 	c.sweepLocked(now)
+}
+
+func (c *vmNICConfigCache) accelerators(key string) []string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	entry, ok := c.entries[key]
+	if !ok || len(entry.accelerators) == 0 {
+		return nil
+	}
+	return append([]string(nil), entry.accelerators...)
 }
 
 func (c *vmNICConfigCache) fail(key string, now time.Time) {
@@ -135,8 +152,13 @@ func cloneContainerNetworkDetails(in []containerNetworkDetails) []containerNetwo
 // rememberVMNICConfig records a configuration this poll had to read anyway.
 func (m *Monitor) rememberVMNICConfig(instanceName, node string, vmid int, config map[string]interface{}) []containerNetworkDetails {
 	devices := parseVMConfigNetworks(config)
-	m.vmNICConfig.store(guestMetadataCacheKey(instanceName, node, vmid), devices, time.Now())
+	accelerators := parseProxmoxVMConfigAccelerators(config)
+	m.vmNICConfig.storeWithAccelerators(guestMetadataCacheKey(instanceName, node, vmid), devices, accelerators, time.Now())
 	return devices
+}
+
+func (m *Monitor) cachedVMAccelerators(instanceName, node string, vmid int) []string {
+	return m.vmNICConfig.accelerators(guestMetadataCacheKey(instanceName, node, vmid))
 }
 
 // runningVMNICConfig returns where a running VM's network devices are plugged

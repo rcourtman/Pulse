@@ -10651,3 +10651,73 @@ func TestMaintenanceAlertSubjectsRefuseAmbiguousOrUnownedReferences(t *testing.T
 		t.Errorf("stale single-owner index resolved ambiguous connection to %q", id)
 	}
 }
+
+func TestRegistryProjectsHostSocketPeersAndAccelerators(t *testing.T) {
+	now := time.Now().UTC()
+	rr := NewRegistry(nil)
+	rr.IngestSnapshot(models.StateSnapshot{
+		Hosts: []models.Host{
+			{
+				ID:        "host-web",
+				MachineID: "m-web",
+				Hostname:  "web",
+				Status:    "online",
+				LastSeen:  now,
+				NetworkInterfaces: []models.HostNetworkInterface{
+					{Name: "eth0", Addresses: []string{"10.10.0.10/24"}},
+				},
+				ActivePeers: []models.HostNetworkPeer{
+					{LocalIP: "10.10.0.10", RemoteIP: "10.10.0.20", RemotePort: 8086, Protocol: "tcp"},
+				},
+			},
+			{
+				ID:       "host-tsdb",
+				Hostname: "tsdb",
+				Status:   "online",
+				LastSeen: now,
+				NetworkInterfaces: []models.HostNetworkInterface{
+					{Name: "eth0", Addresses: []string{"10.10.0.20/24"}},
+				},
+			},
+		},
+		DockerHosts: []models.DockerHost{
+			{
+				ID:        "docker-web",
+				MachineID: "m-web",
+				Hostname:  "web",
+				Status:    "online",
+				LastSeen:  now,
+				Containers: []models.DockerContainer{
+					{
+						ID:           "c-frigate",
+						Name:         "frigate",
+						State:        "running",
+						Accelerators: []string{"TPU", "iGPU"},
+					},
+				},
+			},
+		},
+	})
+
+	byName := make(map[string]Resource)
+	for _, r := range rr.List() {
+		byName[r.Name] = r
+	}
+	if got := byName["frigate"].Docker.Accelerators; !reflect.DeepEqual(got, []string{"TPU", "iGPU"}) {
+		t.Fatalf("frigate Docker.Accelerators = %v, want [TPU iGPU]", got)
+	}
+	web := byName["web"]
+	tsdb := byName["tsdb"]
+	found := false
+	for _, rel := range web.Relationships {
+		if rel.Type == RelCommunicatesWith && rel.TargetID == tsdb.ID {
+			found = true
+			if rel.Metadata["port"] != 8086 {
+				t.Fatalf("expected port 8086, got %#v", rel.Metadata["port"])
+			}
+		}
+	}
+	if !found {
+		t.Fatalf("expected communicates_with edge from web to tsdb, got %+v", web.Relationships)
+	}
+}

@@ -252,6 +252,9 @@ func (m *Monitor) enrichContainerMetadata(ctx context.Context, client PVEClientI
 		if onBoot := parseProxmoxOnBoot(configData); onBoot != nil {
 			container.OnBoot = onBoot
 		}
+		if accelerators := parseProxmoxLXCConfigAccelerators(configData); len(accelerators) > 0 {
+			container.Accelerators = accelerators
+		}
 		// Detect OCI containers (Proxmox VE 9.1+)
 		// Method 1: Check ostemplate for OCI registry patterns
 		if osTemplate := extractContainerOSTemplate(configData); osTemplate != "" {

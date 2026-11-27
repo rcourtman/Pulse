@@ -364,6 +364,7 @@ type VM struct {
 	OSVersion          string                  `json:"osVersion,omitempty"`
 	AgentVersion       string                  `json:"agentVersion,omitempty"`
 	NetworkInterfaces  []GuestNetworkInterface `json:"networkInterfaces,omitempty"`
+	Accelerators       []string                `json:"accelerators,omitempty"` // Hardware accelerators passed through via Proxmox guest config (e.g. GPU, TPU, PCIe)
 	NetworkIn          int64                   `json:"networkIn"`
 	NetworkOut         int64                   `json:"networkOut"`
 	DiskRead           int64                   `json:"diskRead"`
@@ -436,6 +437,7 @@ type Container struct {
 	LastSeen          time.Time               `json:"lastSeen"`
 	IPAddresses       []string                `json:"ipAddresses,omitempty"`
 	NetworkInterfaces []GuestNetworkInterface `json:"networkInterfaces,omitempty"`
+	Accelerators      []string                `json:"accelerators,omitempty"` // Hardware accelerators passed through via Proxmox LXC config (e.g. iGPU, GPU, TPU, NPU)
 	OSName            string                  `json:"osName,omitempty"`
 	// OCI container support (Proxmox VE 9.1+)
 	IsOCI      bool   `json:"isOci,omitempty"`      // True if this is an OCI container
@@ -486,6 +488,7 @@ type Host struct {
 	Sensors                 HostSensorSummary       `json:"sensors,omitempty"`
 	DefaultGateways         []HostDefaultGateway    `json:"defaultGateways,omitempty"` // IPv4 default routes the host agent read from the host; nil when not reported
 	DNSServers              []string                `json:"dnsServers,omitempty"`      // Resolver addresses the host is configured with; nil when not reported
+	ActivePeers             []HostNetworkPeer       `json:"activePeers,omitempty"`     // Established internal TCP peers read passively from the kernel socket table; nil when not reported
 	RAID                    []HostRAIDArray         `json:"raid,omitempty"`
 	Unraid                  *HostUnraidStorage      `json:"unraid,omitempty"`
 	Ceph                    *HostCephCluster        `json:"ceph,omitempty"`
@@ -784,6 +787,17 @@ func (c HostIdentityConflict) NormalizeCollections() HostIdentityConflict {
 type HostDefaultGateway struct {
 	Address   string `json:"address"`
 	Interface string `json:"interface,omitempty"`
+}
+
+// HostNetworkPeer describes one established internal TCP peer read passively
+// from a host's kernel socket table.
+type HostNetworkPeer struct {
+	LocalIP    string `json:"localIp,omitempty"`
+	LocalPort  uint16 `json:"localPort,omitempty"`
+	RemoteIP   string `json:"remoteIp"`
+	RemotePort uint16 `json:"remotePort,omitempty"`
+	Protocol   string `json:"protocol,omitempty"`
+	Inbound    bool   `json:"inbound,omitempty"`
 }
 
 // HostNetworkInterface describes a host network adapter summary.
@@ -1407,6 +1421,7 @@ type DockerContainer struct {
 	RootFilesystemBytes     int64                            `json:"rootFilesystemBytes,omitempty"`
 	BlockIO                 *DockerContainerBlockIO          `json:"blockIo,omitempty"`
 	Mounts                  []DockerContainerMount           `json:"mounts,omitempty"`
+	Accelerators            []string                         `json:"accelerators,omitempty"` // Hardware accelerators attached to the container (e.g. GPU, iGPU, AMD GPU, TPU, NPU); nil when none
 	Filesystems             []filesystem.Observation         `json:"filesystems,omitempty"`
 	Podman                  *DockerPodmanContainer           `json:"podman,omitempty"`
 	ComposeSourceRegistered bool                             `json:"composeSourceRegistered,omitempty"`

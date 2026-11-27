@@ -786,6 +786,7 @@ func (a *Agent) collectContainerWithSource(ctx context.Context, summary containe
 		RootFilesystemBytes: rootFsBytes,
 		BlockIO:             blockIO,
 		Mounts:              mounts,
+		Accelerators:        containerAccelerators(inspect.HostConfig, mounts),
 		Filesystems:         a.collectContainerFilesystems(containerCtx, summary.ID, inspect, mounts),
 	}
 
@@ -1566,6 +1567,83 @@ func containerNetworkMode(hostConfig *containertypes.HostConfig) string {
 		return ""
 	}
 	return strings.TrimSpace(string(hostConfig.NetworkMode))
+}
+
+// containerAccelerators identifies hardware accelerators explicitly passed into
+// a container via Docker device requests, device mappings, or device bind
+// mounts (such as NVIDIA GPUs, /dev/dri render nodes, AMD /dev/kfd, Coral TPU
+// /dev/apex*, or Hailo NPU /dev/hailo*). Returns nil when none are attached.
+func containerAccelerators(hostConfig *containertypes.HostConfig, mounts []agentsdocker.ContainerMount) []string {
+	seen := make(map[string]struct{})
+	add := func(label string) {
+		if label != "" {
+			seen[label] = struct{}{}
+		}
+	}
+
+	classifyDevicePath := func(path string) {
+		normalized := strings.ToLower(strings.TrimSpace(path))
+		if normalized == "" {
+			return
+		}
+		switch {
+		case strings.HasPrefix(normalized, "/dev/nvidia"):
+			add("GPU")
+		case strings.HasPrefix(normalized, "/dev/kfd"):
+			add("AMD GPU")
+		case normalized == "/dev/dri" || strings.HasPrefix(normalized, "/dev/dri/"):
+			add("iGPU")
+		case strings.HasPrefix(normalized, "/dev/apex"):
+			add("TPU")
+		case strings.HasPrefix(normalized, "/dev/hailo"):
+			add("NPU")
+		}
+	}
+
+	if hostConfig != nil {
+		for _, req := range hostConfig.DeviceRequests {
+			driver := strings.ToLower(strings.TrimSpace(req.Driver))
+			hasGPUCap := false
+			for _, capGroup := range req.Capabilities {
+				for _, capability := range capGroup {
+					if strings.EqualFold(strings.TrimSpace(capability), "gpu") {
+						hasGPUCap = true
+						break
+					}
+				}
+			}
+			switch {
+			case strings.Contains(driver, "nvidia"):
+				add("GPU")
+			case strings.Contains(driver, "amd") || strings.Contains(driver, "rocm"):
+				add("AMD GPU")
+			case hasGPUCap:
+				add("GPU")
+			}
+		}
+		for _, dev := range hostConfig.Devices {
+			classifyDevicePath(dev.PathOnHost)
+			classifyDevicePath(dev.PathInContainer)
+		}
+		if strings.EqualFold(strings.TrimSpace(hostConfig.Runtime), "nvidia") {
+			add("GPU")
+		}
+	}
+
+	for _, mount := range mounts {
+		classifyDevicePath(mount.Source)
+		classifyDevicePath(mount.Destination)
+	}
+
+	if len(seen) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(seen))
+	for label := range seen {
+		out = append(out, label)
+	}
+	sort.Strings(out)
+	return out
 }
 
 // containerRestartPolicyName reports Docker's restart policy for a container

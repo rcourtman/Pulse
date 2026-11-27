@@ -160,6 +160,9 @@ type Snapshot struct {
 	// Routing is the host's default gateways and DNS servers; nil when the
 	// host states neither or the platform exposes neither.
 	Routing *agentshost.NetworkRouting
+	// ActivePeers lists established internal TCP peers read passively from the
+	// kernel socket table; nil when unavailable or empty.
+	ActivePeers []agentshost.NetworkPeer
 	// IOCountersCollectedAt is when the cumulative DiskIO and Network counters
 	// were read: stamped right after the network read, which follows the disk
 	// read with only the interface listing between them.
@@ -280,6 +283,7 @@ func (c *Collector) CollectWithDiskFilters(ctx context.Context, diskExclude, dis
 	snapshot.Network = collectNetwork(collectCtx)
 	snapshot.IOCountersCollectedAt = ioCountersReadNow()
 	snapshot.Routing = collectRouting()
+	snapshot.ActivePeers = collectActivePeers()
 
 	return snapshot, nil
 }

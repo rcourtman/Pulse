@@ -380,6 +380,7 @@ type ProxmoxData struct {
 	OSVersion                    string              `json:"osVersion,omitempty"`
 	AgentVersion                 string              `json:"agentVersion,omitempty"`
 	NetworkInterfaces            []NetworkInterface  `json:"networkInterfaces,omitempty"`
+	Accelerators                 []string            `json:"accelerators,omitempty"`
 	OSTemplate                   string              `json:"osTemplate,omitempty"`
 	HasDocker                    bool                `json:"hasDocker,omitempty"`
 	DockerCheckedAt              *time.Time          `json:"dockerCheckedAt,omitempty"`
@@ -1199,6 +1200,7 @@ type DockerData struct {
 	Networks                []DockerNetworkMeta              `json:"networks,omitempty"`
 	NetworkMode             string                           `json:"networkMode,omitempty"` // The runtime's network mode as the agent reported it; container:<id> means the container uses that container's network. Empty when not reported.
 	Mounts                  []DockerMountMeta                `json:"mounts,omitempty"`
+	Accelerators            []string                         `json:"accelerators,omitempty"`
 	Filesystems             []filesystem.Observation         `json:"filesystems,omitempty"`
 	ComposeSourceRegistered bool                             `json:"composeSourceRegistered,omitempty"`
 	ComposeUpdate           *agentsdocker.ComposeImageChange `json:"composeUpdate,omitempty"`

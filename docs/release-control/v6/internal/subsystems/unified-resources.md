@@ -10803,3 +10803,21 @@ resource fields:
 
 Verified by the 7-file Infrastructure Map Vitest suite, `tsc --noEmit`,
 `vite build`, and Playwright browser verification.
+
+
+### Passive internal socket peer relationships and accelerator metadata (27 November 2026)
+
+- `internal/unifiedresources/relationships.go` and
+  `internal/unifiedresources/relationship_presentation.go` add
+  `RelCommunicatesWith` (`"communicates_with"`, label `"Communicates with"`).
+- `internal/unifiedresources/host_socket_relationships.go` projects host agent
+  `ActivePeers` strictly against unambiguous internal IPs owned by monitored
+  resources in the registry (`Discoverer: "host_socket_table"`, `Confidence: 0.9`,
+  sorted `ports` metadata), skipping unmonitored LAN IPs, ambiguous shared IPs,
+  and direct parent-child pairs, and clearing stale edges when sockets close.
+- `internal/unifiedresources/types.go`, `adapters.go`, and `clone.go` carry and
+  deep-clone `Accelerators []string` on `ProxmoxData` and `DockerData`.
+
+Verified by `TestRefreshHostSocketPeerRelationships_MatchesMonitoredPeersOnly`,
+`TestRelationshipTypeLabel_CommunicatesWith`, and
+`TestRegistryProjectsHostSocketPeersAndAccelerators`.
