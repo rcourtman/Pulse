@@ -2916,4 +2916,415 @@ describe('Docker native tables', () => {
       'No Docker report for 16m',
     );
   });
+
+  it('surfaces stale readings across Docker images, volumes, engine storage usage, and networks without hiding last-reported values', () => {
+    const staleMeta = {
+      status: 'online' as const,
+      health: {
+        verdict: 'stale' as const,
+        reasons: [{ code: 'telemetry_stale', detail: '19m' }],
+      },
+      sourceStatus: {
+        docker: {
+          status: 'stale',
+          lastSeen: '2026-11-27T10:00:00Z',
+          error: 'docker socket timed out',
+        },
+      },
+    };
+
+    renderInRouter(() => (
+      <DockerImagesTable
+        resources={[
+          makeResource({
+            id: 'img-stale',
+            type: 'docker-image',
+            name: 'postgres:16-alpine',
+            ...staleMeta,
+            docker: {
+              hostname: 'edge-01',
+              image: 'postgres:16-alpine',
+              sizeBytes: 240 * 1024 * 1024,
+              imageContainers: 1,
+              updateStatus: { updateAvailable: false },
+            },
+          }),
+          makeResource({
+            id: 'img-stale-update',
+            type: 'docker-image',
+            name: 'redis:7-alpine',
+            ...staleMeta,
+            docker: {
+              hostname: 'edge-01',
+              image: 'redis:7-alpine',
+              sizeBytes: 42 * 1024 * 1024,
+              imageContainers: 1,
+              updateStatus: { updateAvailable: true },
+            },
+          }),
+          makeResource({
+            id: 'img-fresh',
+            type: 'docker-image',
+            name: 'caddy:2-alpine',
+            status: 'online',
+            docker: {
+              hostname: 'edge-02',
+              image: 'caddy:2-alpine',
+              sizeBytes: 51 * 1024 * 1024,
+              imageContainers: 1,
+              updateStatus: { updateAvailable: false },
+            },
+          }),
+        ]}
+        emptyIcon={<span />}
+        emptyTitle="No images"
+        emptyDescription="No images"
+      />
+    ));
+
+    const staleImageRow = document.querySelector('[data-docker-image-row="img-stale"]')!;
+    expect(staleImageRow.querySelector('[data-docker-stale="image"]')).toHaveTextContent(
+      'Stale data',
+    );
+    expect(staleImageRow.querySelector('[title="Stale data"]')).not.toBeNull();
+    // Stale Current pill softens to muted while keeping its label; Update available stays amber.
+    expect(
+      staleImageRow.querySelector('[data-docker-image-update-tone="muted"]'),
+    ).toHaveTextContent('Current');
+    const staleUpdateRow = document.querySelector('[data-docker-image-row="img-stale-update"]')!;
+    expect(
+      staleUpdateRow.querySelector('[data-docker-image-update-tone="warning"]'),
+    ).toHaveTextContent('Update available');
+    const freshImageRow = document.querySelector('[data-docker-image-row="img-fresh"]')!;
+    expect(freshImageRow.querySelector('[data-docker-stale="image"]')).toBeNull();
+    expect(
+      freshImageRow.querySelector('[data-docker-image-update-tone="success"]'),
+    ).toHaveTextContent('Current');
+
+    fireEvent.click(staleImageRow);
+    const imageDetail = document.querySelector<HTMLElement>(
+      '[data-inline-platform-resource-detail-for="img-stale"]',
+    )!;
+    expect(within(imageDetail).getByTestId('docker-stale-readings-notice')).toHaveTextContent(
+      'No Docker report for 19m — showing the last values received. Last error: docker socket timed out',
+    );
+    expect(within(imageDetail).getByLabelText('Stale data')).toBeInTheDocument();
+    cleanup();
+
+    renderInRouter(() => (
+      <DockerVolumesTable
+        resources={[
+          makeResource({
+            id: 'vol-stale',
+            type: 'docker-volume',
+            name: 'pg_data',
+            ...staleMeta,
+            docker: {
+              hostname: 'edge-01',
+              driver: 'local',
+              scope: 'local',
+              sizeBytes: 12 * 1024 * 1024 * 1024,
+              refCount: 1,
+              mountpoint: '/var/lib/docker/volumes/pg_data/_data',
+            },
+          }),
+          makeResource({
+            id: 'vol-fresh',
+            type: 'docker-volume',
+            name: 'caddy_data',
+            status: 'online',
+            docker: {
+              hostname: 'edge-02',
+              driver: 'local',
+              scope: 'local',
+              sizeBytes: 64 * 1024 * 1024,
+              refCount: 1,
+              mountpoint: '/var/lib/docker/volumes/caddy_data/_data',
+            },
+          }),
+        ]}
+        emptyIcon={<span />}
+        emptyTitle="No volumes"
+        emptyDescription="No volumes"
+      />
+    ));
+
+    const staleVolRow = document.querySelector('[data-docker-volume-row="vol-stale"]')!;
+    expect(staleVolRow.querySelector('[data-docker-stale="volume"]')).toHaveTextContent(
+      'Stale data',
+    );
+    expect(staleVolRow.querySelector('[title="Stale data"]')).not.toBeNull();
+    expect(staleVolRow.textContent).toContain('/var/lib/docker/volumes/pg_data/_data');
+    expect(
+      document
+        .querySelector('[data-docker-volume-row="vol-fresh"]')!
+        .querySelector('[data-docker-stale="volume"]'),
+    ).toBeNull();
+
+    fireEvent.click(staleVolRow);
+    const volDetail = document.querySelector<HTMLElement>(
+      '[data-inline-platform-resource-detail-for="vol-stale"]',
+    )!;
+    expect(within(volDetail).getByTestId('docker-stale-readings-notice')).toHaveTextContent(
+      'No Docker report for 19m',
+    );
+    cleanup();
+
+    renderInRouter(() => (
+      <DockerStorageUsageTable
+        hosts={[
+          makeResource({
+            id: 'host-stale',
+            type: 'docker-host',
+            name: 'edge-01',
+            ...staleMeta,
+            docker: {
+              hostname: 'edge-01',
+              imagesUsage: {
+                totalCount: 14,
+                activeCount: 9,
+                totalSizeBytes: 8 * 1024 * 1024 * 1024,
+                reclaimableBytes: 2 * 1024 * 1024 * 1024,
+              },
+              volumesUsage: {
+                totalCount: 6,
+                activeCount: 5,
+                totalSizeBytes: 20 * 1024 * 1024 * 1024,
+                reclaimableBytes: 512 * 1024 * 1024,
+              },
+            },
+          }),
+          makeResource({
+            id: 'host-fresh',
+            type: 'docker-host',
+            name: 'edge-02',
+            status: 'online',
+            docker: {
+              hostname: 'edge-02',
+              imagesUsage: {
+                totalCount: 4,
+                activeCount: 4,
+                totalSizeBytes: 2 * 1024 * 1024 * 1024,
+                reclaimableBytes: 0,
+              },
+            },
+          }),
+        ]}
+        emptyIcon={<span />}
+        emptyTitle="No storage"
+        emptyDescription="No storage"
+      />
+    ));
+
+    const staleStorageRow = document.querySelector('[data-docker-storage-row="host-stale"]')!;
+    expect(staleStorageRow.querySelector('[data-docker-stale="storage-usage"]')).toHaveTextContent(
+      'Stale data',
+    );
+    expect(staleStorageRow.querySelector('[title="Stale data"]')).not.toBeNull();
+    expect(staleStorageRow.textContent).toContain('9/14');
+    expect(
+      document
+        .querySelector('[data-docker-storage-row="host-fresh"]')!
+        .querySelector('[data-docker-stale="storage-usage"]'),
+    ).toBeNull();
+
+    fireEvent.click(staleStorageRow);
+    const storageDetail = within(
+      document.querySelector<HTMLElement>('[data-testid="docker-storage-detail"]')!,
+    );
+    expect(storageDetail.getByLabelText('Stale data')).toBeInTheDocument();
+    expect(storageDetail.getByTestId('docker-stale-readings-notice')).toHaveTextContent(
+      'No Docker report for 19m',
+    );
+    cleanup();
+
+    const staleNetwork = makeResource({
+      id: 'net-stale',
+      type: 'docker-network',
+      name: 'billing-net',
+      ...staleMeta,
+      docker: {
+        hostname: 'edge-01',
+        hostSourceId: 'host-stale',
+        networkId: 'net-stale-1',
+        driver: 'bridge',
+        scope: 'local',
+        enableIpv4: true,
+        subnets: [{ subnet: '10.90.0.0/24', gateway: '10.90.0.1' }],
+      },
+    });
+    const staleNetworkFreshContainer = makeResource({
+      id: 'net-stale-only',
+      type: 'docker-network',
+      name: 'archive-net',
+      ...staleMeta,
+      docker: {
+        hostname: 'edge-01',
+        hostSourceId: 'host-stale',
+        networkId: 'net-stale-2',
+        driver: 'bridge',
+        scope: 'local',
+        enableIpv4: true,
+      },
+    });
+    const freshNetwork = makeResource({
+      id: 'net-fresh',
+      type: 'docker-network',
+      name: 'public-net',
+      status: 'online',
+      docker: {
+        hostname: 'edge-02',
+        hostSourceId: 'host-fresh',
+        networkId: 'net-fresh-1',
+        driver: 'bridge',
+        scope: 'local',
+        enableIpv4: true,
+      },
+    });
+    const offlineStaleNetwork = makeResource({
+      id: 'net-offline-stale',
+      type: 'docker-network',
+      name: 'lost-net',
+      ...staleMeta,
+      status: 'offline',
+      docker: {
+        hostname: 'edge-03',
+        hostSourceId: 'host-lost',
+        networkId: 'net-lost-1',
+        driver: 'overlay',
+        scope: 'swarm',
+      },
+    });
+    const staleRunningContainer = makeResource({
+      id: 'ctr-stale-running',
+      type: 'app-container',
+      name: 'billing-api',
+      ...staleMeta,
+      status: 'running',
+      docker: {
+        hostname: 'edge-01',
+        hostSourceId: 'host-stale',
+        image: 'ghcr.io/acme/billing:1.0',
+        containerState: 'running',
+        health: 'healthy',
+        networks: [{ name: 'billing-net', ipv4: '10.90.0.10' }],
+      },
+    });
+    const staleUnhealthyContainer = makeResource({
+      id: 'ctr-stale-unhealthy',
+      type: 'app-container',
+      name: 'billing-worker',
+      ...staleMeta,
+      status: 'running',
+      docker: {
+        hostname: 'edge-01',
+        hostSourceId: 'host-stale',
+        image: 'ghcr.io/acme/worker:1.0',
+        containerState: 'running',
+        health: 'unhealthy',
+        networks: [{ name: 'billing-net', ipv4: '10.90.0.11' }],
+      },
+    });
+    const unflaggedContainer = makeResource({
+      id: 'ctr-archive',
+      type: 'app-container',
+      name: 'archive-sync',
+      status: 'running',
+      docker: {
+        hostname: 'edge-01',
+        hostSourceId: 'host-stale',
+        image: 'ghcr.io/acme/archive:1.0',
+        containerState: 'running',
+        networks: [{ name: 'archive-net', ipv4: '10.91.0.10' }],
+      },
+    });
+    const freshContainer = makeResource({
+      id: 'ctr-fresh',
+      type: 'app-container',
+      name: 'public-edge',
+      status: 'running',
+      docker: {
+        hostname: 'edge-02',
+        hostSourceId: 'host-fresh',
+        image: 'caddy:2-alpine',
+        containerState: 'running',
+        networks: [{ name: 'public-net', ipv4: '10.92.0.10' }],
+      },
+    });
+
+    renderInRouter(() => (
+      <DockerNetworksTable
+        resources={[staleNetwork, staleNetworkFreshContainer, freshNetwork, offlineStaleNetwork]}
+        relatedResources={[
+          staleNetwork,
+          staleNetworkFreshContainer,
+          freshNetwork,
+          offlineStaleNetwork,
+          staleRunningContainer,
+          staleUnhealthyContainer,
+          unflaggedContainer,
+          freshContainer,
+        ]}
+        emptyIcon={<span />}
+        emptyTitle="No networks"
+        emptyDescription="No networks"
+      />
+    ));
+
+    // All three stale/offline networks sit under Attention, leaving only public-net in In use.
+    const networkFilters = within(screen.getByRole('group', { name: 'Status' }));
+    expect(networkFilters.getByRole('button', { name: /^Attention, 3$/ })).toBeInTheDocument();
+    expect(networkFilters.getByRole('button', { name: /^In use, 1$/ })).toBeInTheDocument();
+
+    const staleNetRow = document.querySelector('[data-docker-network-row="net-stale"]')!;
+    expect(staleNetRow.querySelector('[data-docker-stale="network"]')).toHaveTextContent(
+      'Stale data',
+    );
+    expect(staleNetRow.querySelector('[title="Stale data"]')).not.toBeNull();
+    expect(staleNetRow.querySelector('[data-docker-network-state="warning"]')).toHaveTextContent(
+      '2 need attention',
+    );
+
+    // A stale network whose attached container is unflagged keeps its count without turning green.
+    const staleOnlyNetRow = document.querySelector('[data-docker-network-row="net-stale-only"]')!;
+    expect(staleOnlyNetRow.querySelector('[data-docker-network-state="muted"]')).toHaveTextContent(
+      '1 running',
+    );
+
+    // Offline + stale network preserves red Offline dot while still flagging Stale data.
+    const offlineNetRow = document.querySelector('[data-docker-network-row="net-offline-stale"]')!;
+    expect(offlineNetRow.querySelector('[title="Offline"]')).not.toBeNull();
+    expect(offlineNetRow.querySelector('[data-docker-stale="network"]')).toHaveTextContent(
+      'Stale data',
+    );
+
+    // Fresh network keeps green running state and no stale cue.
+    const freshNetRow = document.querySelector('[data-docker-network-row="net-fresh"]')!;
+    expect(freshNetRow.querySelector('[data-docker-stale="network"]')).toBeNull();
+    expect(freshNetRow.querySelector('[data-docker-network-state="success"]')).toHaveTextContent(
+      '1 running',
+    );
+
+    fireEvent.click(staleNetRow);
+    const netDetail = within(
+      document.querySelector<HTMLElement>('[data-testid="docker-network-detail"]')!,
+    );
+    expect(netDetail.getByLabelText('Stale data')).toBeInTheDocument();
+    expect(netDetail.getByTestId('docker-stale-readings-notice')).toHaveTextContent(
+      'No Docker report for 19m',
+    );
+    // Unhealthy stale container keeps its red Unhealthy state plus a Stale data cue;
+    // last-reported healthy stale container surfaces as amber Stale data under Attention.
+    expect(netDetail.getByText('Unhealthy')).toBeInTheDocument();
+    expect(
+      document
+        .querySelector('[data-testid="docker-network-detail"]')!
+        .querySelector('[data-docker-stale="network-attachment"]'),
+    ).toHaveTextContent('Stale data');
+    expect(
+      document
+        .querySelector('[data-testid="docker-network-detail"]')!
+        .querySelector('[data-docker-attachment-state="warning"]'),
+    ).toHaveTextContent('Stale data');
+  });
 });

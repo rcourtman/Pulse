@@ -36,6 +36,7 @@ import { getSimpleStatusIndicator, type StatusIndicator } from '@/utils/status';
 import {
   DockerNativeDetailPanel,
   DockerResourceNameCell,
+  DockerStaleDataCue,
   dockerLabelsSection,
   dockerReportedBySection,
   dockerJoinValues,
@@ -46,10 +47,14 @@ import {
 } from './DockerNativeTableShared';
 import { useDockerHostIdentities } from './dockerHostIdentity';
 import {
+  DOCKER_STALE_READINGS_LABEL,
+  applyDockerSourceFreshness,
   buildDockerNetworkAttachmentRows,
   dockerContainerRunState,
   dockerResourceSearchHaystack,
+  getDockerStaleNotice,
   type DockerNetworkAttachmentRow,
+  type DockerStaleNotice,
 } from './dockerPageModel';
 
 type DockerNetworkFilter = 'all' | 'attention' | 'in-use' | 'unused';
@@ -242,14 +247,30 @@ const NETWORK_DOT_RANK: Record<StatusIndicator['variant'], number> = {
 
 // A network has no health of its own: Docker reports it or the host is lost.
 // Its row dot says whether anything on it needs a look, unless the network's
-// own status is worse (its host stopped reporting). The health filter reads
-// the same verdict, so an amber row sits under Degraded, never Healthy.
+// own status is worse (its host stopped reporting or went stale). The domain
+// filter reads the same verdict, so stale or amber rows sit under Attention.
 const networkRowIndicator = (resource: Resource, attention: StatusIndicator): StatusIndicator => {
-  const own = getSimpleStatusIndicator(resource.status);
+  const own = applyDockerSourceFreshness(resource, getSimpleStatusIndicator(resource.status));
   const attachedProblem = attention.variant === 'danger' || attention.variant === 'warning';
   return attachedProblem && NETWORK_DOT_RANK[attention.variant] < NETWORK_DOT_RANK[own.variant]
     ? attention
     : own;
+};
+
+const networkStatePresentation = (
+  attention: StatusIndicator,
+  staleNotice: DockerStaleNotice | null,
+): { variant: StatusIndicator['variant']; label: string; title: string } => {
+  if (!staleNotice) {
+    return { variant: attention.variant, label: attention.label, title: attention.label };
+  }
+  return {
+    // Keep last-reported container counts visible while preventing a stale
+    // network row from painting its State column green.
+    variant: attention.variant === 'success' ? 'muted' : attention.variant,
+    label: attention.label,
+    title: `${attention.label} — ${staleNotice.detail}`,
+  };
 };
 
 const isNetworkRowAttention = (indicator: StatusIndicator): boolean =>
@@ -350,6 +371,9 @@ const AttachmentRowCard: Component<{ row: DockerNetworkAttachmentRow }> = (props
       type: props.row.resource.type,
       resource: props.row.resource,
     });
+  const staleNotice = () => getDockerStaleNotice(props.row.resource);
+  const showSeparateStaleCue = () =>
+    Boolean(staleNotice()) && props.row.status.label !== DOCKER_STALE_READINGS_LABEL;
   return (
     <div class="rounded-sm border border-border bg-surface px-3 py-2">
       <div class="grid gap-x-3 gap-y-1 text-[11px] md:grid-cols-[minmax(0,1.2fr)_7rem_9rem_minmax(0,1fr)] md:items-start">
@@ -360,28 +384,34 @@ const AttachmentRowCard: Component<{ row: DockerNetworkAttachmentRow }> = (props
             title={props.row.status.label}
             class="mt-1"
           />
-          <Show
-            when={containerPath()}
-            fallback={
-              <span class="min-w-0 font-semibold text-base-content wrap-anywhere">
-                {props.row.name}
-              </span>
-            }
-          >
-            {(path) => (
-              <A
-                href={path()}
-                class="min-w-0 font-semibold text-base-content wrap-anywhere hover:underline"
-                title={`Open ${props.row.name}`}
-                data-docker-attachment-link={props.row.resource.id}
-              >
-                {props.row.name}
-              </A>
-            )}
-          </Show>
+          <div class="flex min-w-0 flex-1 flex-wrap items-center gap-x-1.5 gap-y-0.5">
+            <Show
+              when={containerPath()}
+              fallback={
+                <span class="min-w-0 font-semibold text-base-content wrap-anywhere">
+                  {props.row.name}
+                </span>
+              }
+            >
+              {(path) => (
+                <A
+                  href={path()}
+                  class="min-w-0 font-semibold text-base-content wrap-anywhere hover:underline"
+                  title={`Open ${props.row.name}`}
+                  data-docker-attachment-link={props.row.resource.id}
+                >
+                  {props.row.name}
+                </A>
+              )}
+            </Show>
+            <Show when={showSeparateStaleCue()}>
+              <DockerStaleDataCue notice={staleNotice()} scope="network-attachment" />
+            </Show>
+          </div>
         </div>
         <span
           class={dockerStateTextToneClass(props.row.status.variant) || 'text-base-content'}
+          title={staleNotice()?.detail || props.row.status.label}
           data-docker-attachment-state={props.row.status.variant}
         >
           {props.row.status.label}
@@ -655,8 +685,11 @@ export const DockerNetworksTable: Component<DockerNetworksTableProps> = (props) 
                   {(resource) => {
                     const detailRowId = () => drawer.detailRowId(resource);
                     const isExpanded = () => drawer.isExpanded(resource);
+                    const staleNotice = () => getDockerStaleNotice(resource);
                     const attachments = () => networkAttachments(resource);
                     const attention = () => attachmentAttention(attachments());
+                    const indicator = () => networkRowIndicator(resource, attention());
+                    const stateDisplay = () => networkStatePresentation(attention(), staleNotice());
                     const subnets = () => networkSubnets(resource);
 
                     return (
@@ -668,7 +701,8 @@ export const DockerNetworksTable: Component<DockerNetworksTableProps> = (props) 
                         >
                           <DockerResourceNameCell
                             resource={resource}
-                            indicator={networkRowIndicator(resource, attention())}
+                            indicator={indicator()}
+                            detail={<DockerStaleDataCue notice={staleNotice()} scope="network" />}
                             detailToggle={
                               <PlatformResourceDetailToggleButton
                                 expanded={isExpanded()}
@@ -693,11 +727,12 @@ export const DockerNetworksTable: Component<DockerNetworksTableProps> = (props) 
                           >
                             <span
                               class={`block max-w-full truncate ${dockerStateTextToneClass(
-                                attention().variant,
+                                stateDisplay().variant,
                               )}`}
-                              title={attention().label}
+                              title={stateDisplay().title}
+                              data-docker-network-state={stateDisplay().variant}
                             >
-                              {attention().label}
+                              {stateDisplay().label}
                             </span>
                           </TableCell>
                           <Show when={showSubnet()}>
@@ -733,7 +768,7 @@ export const DockerNetworksTable: Component<DockerNetworksTableProps> = (props) 
                             <DockerNativeDetailPanel
                               testId="docker-network-detail"
                               resource={resource}
-                              status={networkRowIndicator(resource, attention())}
+                              status={indicator()}
                               summary={networkSummary(resource, attachments().length)}
                               sections={() => buildNetworkDetailSections(resource)}
                               onClose={() => drawer.close(resource)}

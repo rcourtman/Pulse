@@ -27,13 +27,20 @@ import {
 } from '@/features/platformPage/PlatformResourceDetailTableRow';
 import {
   DockerResourceNameCell,
+  DockerStaleDataCue,
+  DockerStaleReadingsNotice,
   dockerByteValue,
   dockerNumberValue,
   dockerResourceName,
   dockerTextValue,
   type DockerNativeTableProps,
 } from './DockerNativeTableShared';
-import { filterDockerStorageResources, type DockerStorageFilter } from './dockerPageModel';
+import {
+  applyDockerSourceFreshness,
+  filterDockerStorageResources,
+  getDockerStaleNotice,
+  type DockerStorageFilter,
+} from './dockerPageModel';
 
 const DOCKER_VOLUME_FILTER_OPTIONS: PlatformTableFilterOption<DockerStorageFilter>[] = [
   { value: 'all', label: 'All' },
@@ -224,6 +231,12 @@ export const DockerVolumesTable: Component<
               <>
                 <PlatformWindowedRows items={sortedRows} estimatedRowHeight={32}>
                   {(resource) => {
+                    const staleNotice = () => getDockerStaleNotice(resource);
+                    const indicator = () =>
+                      applyDockerSourceFreshness(
+                        resource,
+                        getSimpleStatusIndicator(resource.status),
+                      );
                     const detailRowId = () => drawer.detailRowId(resource);
                     const isExpanded = () => drawer.isExpanded(resource);
                     return (
@@ -235,6 +248,8 @@ export const DockerVolumesTable: Component<
                         >
                           <DockerResourceNameCell
                             resource={resource}
+                            indicator={indicator()}
+                            detail={<DockerStaleDataCue notice={staleNotice()} scope="volume" />}
                             detailToggle={
                               <PlatformResourceDetailToggleButton
                                 expanded={isExpanded()}
@@ -290,11 +305,14 @@ export const DockerVolumesTable: Component<
                         </TableRow>
                         <PlatformResourceDetailTableRow
                           resource={resource}
-                          statusIndicator={getSimpleStatusIndicator(resource.status)}
+                          statusIndicator={indicator()}
                           open={isExpanded()}
                           detailRowId={detailRowId()}
                           colSpan={7}
                           resolveResourceLabel={resolveResourceLabel}
+                          context={
+                            <DockerStaleReadingsNotice notice={staleNotice()} class="mb-3" />
+                          }
                           onClose={() => drawer.close(resource)}
                         />
                       </>

@@ -1512,4 +1512,48 @@ describe('Docker stale-reading detection and Swarm / Compose freshness', () => {
     const [appFromStaleContainer] = buildDockerComposeApplications([], [staleContainer]);
     expect(getDockerComposeApplicationStaleness(appFromStaleContainer)?.label).toBe('Stale data');
   });
+
+  it('applies Docker source freshness to attached network containers while preserving worse failure states', () => {
+    const network = makeResource({
+      id: 'net-1',
+      type: 'docker-network',
+      name: 'app-net',
+      docker: { hostname: 'edge-01', hostSourceId: 'host-1' },
+    });
+    const staleRunning = makeResource({
+      id: 'c-stale-ok',
+      type: 'app-container',
+      name: 'web',
+      status: 'running',
+      health: { verdict: 'stale', reasons: [{ code: 'telemetry_stale', detail: '15m' }] },
+      docker: {
+        hostname: 'edge-01',
+        hostSourceId: 'host-1',
+        containerState: 'running',
+        health: 'healthy',
+        networks: [{ name: 'app-net', ipv4: '10.10.0.2' }],
+      },
+    });
+    const staleUnhealthy = makeResource({
+      id: 'c-stale-bad',
+      type: 'app-container',
+      name: 'worker',
+      status: 'running',
+      health: { verdict: 'stale', reasons: [{ code: 'telemetry_stale', detail: '15m' }] },
+      docker: {
+        hostname: 'edge-01',
+        hostSourceId: 'host-1',
+        containerState: 'running',
+        health: 'unhealthy',
+        networks: [{ name: 'app-net', ipv4: '10.10.0.3' }],
+      },
+    });
+
+    const rows = buildDockerNetworkAttachmentRows(network, [network, staleRunning, staleUnhealthy]);
+    const byId = new Map(rows.map((row) => [row.resource.id, row]));
+    expect(byId.get('c-stale-ok')?.status).toEqual({ variant: 'warning', label: 'Stale data' });
+    expect(byId.get('c-stale-ok')?.searchText).toContain('stale data');
+    expect(byId.get('c-stale-ok')?.searchText).toContain('15m');
+    expect(byId.get('c-stale-bad')?.status).toEqual({ variant: 'danger', label: 'Unhealthy' });
+  });
 });
