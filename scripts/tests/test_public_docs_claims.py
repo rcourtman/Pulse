@@ -393,6 +393,50 @@ class AIAutonomyHelpDocsTest(unittest.TestCase):
         self.assertIn("10 minute cooldown after a timed-out outcome", normalized)
         self.assertIn("30-day budget (USD)", normalized)
 
+    def test_patrol_plan_approval_ttl_matches_actionplanner_source(self) -> None:
+        planner = (ROOT / "internal/actionplanner/planner.go").read_text(encoding="utf-8")
+        broker = (ROOT / "internal/api/patrol_action_broker.go").read_text(encoding="utf-8")
+        self.assertIn("DefaultPlanTTL       = 5 * time.Minute", planner)
+        self.assertIn("DefaultPatrolPlanTTL = 24 * time.Hour", planner)
+        self.assertIn("opts.TTL = actionplanner.DefaultPatrolPlanTTL", broker)
+
+        autonomy = (ROOT / "docs/AI_AUTONOMY.md").read_text(encoding="utf-8")
+        autonomy_mirror = (ROOT / "frontend-modern/public/docs/AI_AUTONOMY.md").read_text(
+            encoding="utf-8"
+        )
+        self.assertEqual(autonomy, autonomy_mirror)
+        autonomy_norm = " ".join(autonomy.split())
+        for phrase in (
+            "background Patrol plans stay open for approval for 24 hours",
+            "Background Patrol action plans, including refreshed Patrol plans, stay open for approval for 24 hours before expiring, matching investigation retention",
+            "Direct API and interactive action plans keep the 5-minute default expiry",
+            "Live freshness, policy, and emergency-stop checks still run when an approved plan executes",
+        ):
+            with self.subTest(autonomy_phrase=phrase):
+                self.assertIn(phrase, autonomy_norm)
+
+        api_doc = (ROOT / "docs/API.md").read_text(encoding="utf-8")
+        api_mirror = (ROOT / "frontend-modern/public/docs/API.md").read_text(encoding="utf-8")
+        self.assertEqual(api_doc, api_mirror)
+        api_norm = " ".join(api_doc.split())
+        self.assertIn(
+            "Direct API and interactive plans expire after 5 minutes by default, while background and refreshed Patrol plans stay open for approval for 24 hours.",
+            api_norm,
+        )
+
+    def test_agent_security_failure_log_disclosure_reflects_retired_web_assistant(self) -> None:
+        doc = (ROOT / "docs/AGENT_SECURITY.md").read_text(encoding="utf-8")
+        mirror = (ROOT / "frontend-modern/public/docs/AGENT_SECURITY.md").read_text(
+            encoding="utf-8"
+        )
+        self.assertEqual(doc, mirror)
+        normalized = " ".join(doc.split())
+        self.assertNotIn("when Patrol or the Assistant reads the container", normalized)
+        self.assertIn(
+            "when Patrol reads the container (or legacy Pulse Mobile chat until 31 March 2027)",
+            normalized,
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

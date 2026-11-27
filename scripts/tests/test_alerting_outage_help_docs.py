@@ -248,6 +248,55 @@ class AlertingOutageHelpDocsTest(unittest.TestCase):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, section)
 
+    def test_prometheus_freshness_and_stopped_scheduler_exclusion_match_source(self):
+        section = " ".join(outage_section().split())
+        monitoring_metrics = (ROOT / "internal/monitoring/metrics.go").read_text(encoding="utf-8")
+        queue_metrics = (ROOT / "internal/monitoring/poll_queue_metrics.go").read_text(
+            encoding="utf-8"
+        )
+
+        for token in ("func rememberPollSuccess[", "func emitPollFreshness(", "completedAt.After("):
+            self.assertIn(token, monitoring_metrics)
+        for token in ("func (r pollQueueRuntime) active() bool", "if !runtime.active() {"):
+            self.assertIn(token, queue_metrics)
+
+        for phrase in (
+            "from one snapshot of the latest successful completion",
+            "delayed older result still counts in `pulse_monitor_poll_total` without moving that completion backwards",
+            "A stopped scheduler drops out of `pulse_scheduler_queued_poll_overdue_seconds` even if a blocked worker has not returned yet",
+            "keep checking `pulse_scheduler_claimed_poll_overdue_seconds` for that worker",
+        ):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, section)
+
+    def test_non_retryable_tls_and_skip_verify_boundary_match_source(self):
+        text = " ".join(DOC.read_text(encoding="utf-8").split())
+        failure_class = (ROOT / "internal/notifications/failure_class.go").read_text(
+            encoding="utf-8"
+        )
+        notifications_api = (ROOT / "internal/api/alerting/notifications.go").read_text(
+            encoding="utf-8"
+        )
+
+        retryable_body = failure_class.split(
+            "func (class NotificationFailureClass) Retryable() bool", 1
+        )[1]
+        self.assertIn("NotificationFailureTLS:", retryable_body)
+        self.assertIn("return false", retryable_body)
+        self.assertIn(
+            'summary = "TLS certificate error: check the server certificate and TLS settings"',
+            notifications_api,
+        )
+
+        for phrase in (
+            "TLS certificate trust, expiry, hostname, and HTTP-on-HTTPS errors stop immediately as terminal failures across email, webhook, and Apprise destinations",
+            "instead of retrying across the delivery queue or SMTP retry budget",
+            "Fix the server certificate or TLS settings rather than disabling verification",
+            "Email and webhook destinations do not provide a Skip TLS Verify toggle",
+        ):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, text)
+
 
 if __name__ == "__main__":
     unittest.main()
